@@ -817,6 +817,391 @@ class TestSDPA(mlx_tests.MLXTestCase):
                 ).sum()
                 test_grad(loss_slow, loss_fast, [q, k, v])
 
+    def test_sdpa_grad_vector_path(self):
+        """Test VJP with short sequences using vector kernel (L <= 8)"""
+        tolerance = {"rtol": 1e-2, "atol": 1e-2}
+
+        def test_vjp(primals, scale):
+            slow = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale)
+            fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale
+            )
+            cotan = mx.ones_like(primals[0])
+            o1, vjp1 = mx.vjp(slow, primals, [cotan])
+            o2, vjp2 = mx.vjp(fast, primals, [cotan])
+
+            self.assertTrue(mx.allclose(o1[0], o2[0], **tolerance))
+            for i in range(3):
+                self.assertTrue(
+                    mx.allclose(vjp1[i], vjp2[i], **tolerance),
+                    f"VJP mismatch for input {i}",
+                )
+
+        B, H = 2, 8
+        for L in [1, 4, 7, 8]:
+            for D in [64, 128]:
+                with self.subTest(L=L, D=D):
+                    scale = D**-0.5
+                    q = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                    k = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                    v = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                    test_vjp([q, k, v], scale)
+
+    def test_sdpa_grad_steel_path(self):
+        """Test VJP with longer sequences using STEEL kernel (L > 8)"""
+        tolerance = {"rtol": 1e-2, "atol": 1e-2}
+
+        def test_vjp(primals, scale, mask=None):
+            slow = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+            fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, mask=mask
+            )
+            cotan = mx.ones_like(primals[0])
+            o1, vjp1 = mx.vjp(slow, primals, [cotan])
+            o2, vjp2 = mx.vjp(fast, primals, [cotan])
+
+            self.assertTrue(mx.allclose(o1[0], o2[0], **tolerance))
+            for i in range(3):
+                self.assertTrue(
+                    mx.allclose(vjp1[i], vjp2[i], **tolerance),
+                    f"VJP mismatch for input {i}",
+                )
+
+        B, H = 2, 8
+        for L in [16, 32, 128, 256]:
+            for D in [64, 128]:
+                with self.subTest(L=L, D=D):
+                    scale = D**-0.5
+                    q = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                    k = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                    v = mx.random.normal((B, H, L, D), dtype=mx.float16)
+
+                    # Test without mask
+                    test_vjp([q, k, v], scale)
+
+                    # Test with causal mask
+                    test_vjp([q, k, v], scale, mask="causal")
+
+    def test_sdpa_grad_head_dims(self):
+        """Test VJP across different head dimensions"""
+        tolerance = {"rtol": 1e-2, "atol": 1e-2}
+
+        def test_vjp(primals, scale):
+            slow = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale)
+            fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale
+            )
+            cotan = mx.ones_like(primals[0])
+            o1, vjp1 = mx.vjp(slow, primals, [cotan])
+            o2, vjp2 = mx.vjp(fast, primals, [cotan])
+
+            self.assertTrue(mx.allclose(o1[0], o2[0], **tolerance))
+            for i in range(3):
+                self.assertTrue(
+                    mx.allclose(vjp1[i], vjp2[i], **tolerance),
+                    f"VJP mismatch for input {i}",
+                )
+
+        B, H, L = 2, 8, 64
+        # D=256 not supported in vector VJP (threadgroup memory limit)
+        for D in [32, 64, 96, 128]:
+            with self.subTest(D=D):
+                scale = D**-0.5
+                q = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                k = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                v = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                test_vjp([q, k, v], scale)
+
+    def test_sdpa_grad_gqa(self):
+        """Test VJP with grouped query attention configurations"""
+        tolerance = {"rtol": 1e-2, "atol": 1e-2}
+
+        def test_vjp(primals, scale):
+            slow = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale)
+            fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale
+            )
+            cotan = mx.ones_like(primals[0])
+            o1, vjp1 = mx.vjp(slow, primals, [cotan])
+            o2, vjp2 = mx.vjp(fast, primals, [cotan])
+
+            self.assertTrue(mx.allclose(o1[0], o2[0], **tolerance))
+            for i in range(3):
+                self.assertTrue(
+                    mx.allclose(vjp1[i], vjp2[i], **tolerance),
+                    f"VJP mismatch for input {i}",
+                )
+
+        B, L, D = 2, 64, 64
+        scale = D**-0.5
+
+        # Test various GQA configurations
+        configs = [
+            (32, 8),  # 4:1 GQA
+            (32, 4),  # 8:1 GQA
+            (32, 2),  # 16:1 GQA
+            (8, 8),  # MHA (no GQA)
+            (16, 8),  # 2:1 GQA
+        ]
+        for n_q_heads, n_kv_heads in configs:
+            with self.subTest(n_q_heads=n_q_heads, n_kv_heads=n_kv_heads):
+                q = mx.random.normal((B, n_q_heads, L, D), dtype=mx.float16)
+                k = mx.random.normal((B, n_kv_heads, L, D), dtype=mx.float16)
+                v = mx.random.normal((B, n_kv_heads, L, D), dtype=mx.float16)
+                test_vjp([q, k, v], scale)
+
+    def test_sdpa_grad_dtypes(self):
+        """Test VJP with different precisions"""
+
+        def test_vjp(primals, scale, tolerance):
+            slow = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale)
+            fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale
+            )
+            cotan = mx.ones_like(primals[0])
+            o1, vjp1 = mx.vjp(slow, primals, [cotan])
+            o2, vjp2 = mx.vjp(fast, primals, [cotan])
+
+            self.assertTrue(mx.allclose(o1[0], o2[0], **tolerance))
+            for i in range(3):
+                self.assertTrue(
+                    mx.allclose(vjp1[i], vjp2[i], **tolerance),
+                    f"VJP mismatch for input {i}",
+                )
+
+        B, H, L, D = 2, 8, 64, 64
+        scale = D**-0.5
+
+        dtypes_and_tols = [
+            (mx.float16, {"rtol": 1e-2, "atol": 1e-2}),
+            # bfloat16 has lower precision (7 bits mantissa vs 10 for float16)
+            (mx.bfloat16, {"rtol": 5e-2, "atol": 5e-2}),
+            (mx.float32, {"rtol": 1e-4, "atol": 1e-4}),
+        ]
+
+        for dtype, tolerance in dtypes_and_tols:
+            with self.subTest(dtype=dtype):
+                q = mx.random.normal((B, H, L, D), dtype=dtype)
+                k = mx.random.normal((B, H, L, D), dtype=dtype)
+                v = mx.random.normal((B, H, L, D), dtype=dtype)
+                test_vjp([q, k, v], scale, tolerance)
+
+    def test_sdpa_grad_edge_cases(self):
+        """Test VJP edge cases"""
+        tolerance = {"rtol": 1e-2, "atol": 1e-2}
+
+        def test_vjp(primals, scale, mask=None):
+            slow = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+            fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, mask=mask
+            )
+            cotan = mx.ones_like(primals[0])
+            o1, vjp1 = mx.vjp(slow, primals, [cotan])
+            o2, vjp2 = mx.vjp(fast, primals, [cotan])
+
+            self.assertTrue(mx.allclose(o1[0], o2[0], **tolerance))
+            for i in range(3):
+                self.assertTrue(
+                    mx.allclose(vjp1[i], vjp2[i], **tolerance),
+                    f"VJP mismatch for input {i}",
+                )
+
+        D = 64
+        scale = D**-0.5
+
+        # Test single element (L=1)
+        with self.subTest(case="L=1"):
+            q = mx.random.normal((2, 8, 1, D), dtype=mx.float16)
+            k = mx.random.normal((2, 8, 1, D), dtype=mx.float16)
+            v = mx.random.normal((2, 8, 1, D), dtype=mx.float16)
+            test_vjp([q, k, v], scale)
+
+        # Test non-power-of-2 lengths
+        for L in [63, 129, 65]:
+            with self.subTest(case=f"L={L}"):
+                q = mx.random.normal((2, 8, L, D), dtype=mx.float16)
+                k = mx.random.normal((2, 8, L, D), dtype=mx.float16)
+                v = mx.random.normal((2, 8, L, D), dtype=mx.float16)
+                test_vjp([q, k, v], scale)
+
+        # Test large batch
+        with self.subTest(case="B=8"):
+            q = mx.random.normal((8, 8, 64, D), dtype=mx.float16)
+            k = mx.random.normal((8, 8, 64, D), dtype=mx.float16)
+            v = mx.random.normal((8, 8, 64, D), dtype=mx.float16)
+            test_vjp([q, k, v], scale)
+
+        # Test different Q and KV lengths
+        with self.subTest(case="qL!=kvL"):
+            q = mx.random.normal((2, 8, 32, D), dtype=mx.float16)
+            k = mx.random.normal((2, 8, 64, D), dtype=mx.float16)
+            v = mx.random.normal((2, 8, 64, D), dtype=mx.float16)
+            test_vjp([q, k, v], scale)
+
+    def test_sdpa_grad_with_mask(self):
+        """Test VJP with different mask types (boolean, additive, causal)"""
+        if not mx.is_available(mx.gpu):
+            return
+
+        tolerance = {"rtol": 1e-2, "atol": 1e-2}
+
+        def test_vjp(primals, scale, mask=None):
+            slow = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+            fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, mask=mask
+            )
+            cotan = mx.ones_like(primals[0])
+            o1, vjp1 = mx.vjp(slow, primals, [cotan])
+            o2, vjp2 = mx.vjp(fast, primals, [cotan])
+
+            self.assertTrue(mx.allclose(o1[0], o2[0], **tolerance))
+            for i in range(3):
+                self.assertTrue(
+                    mx.allclose(vjp1[i], vjp2[i], **tolerance),
+                    f"VJP mismatch for input {i}",
+                )
+
+        B, H, L, D = 2, 4, 32, 64
+        scale = D**-0.5
+
+        q = mx.random.normal((B, H, L, D), dtype=mx.float16)
+        k = mx.random.normal((B, H, L, D), dtype=mx.float16)
+        v = mx.random.normal((B, H, L, D), dtype=mx.float16)
+
+        # Test with boolean mask
+        with self.subTest(mask_type="boolean"):
+            bool_mask = mx.random.uniform(0, 1, (B, H, L, L)) < 0.5
+            test_vjp([q, k, v], scale, mask=bool_mask)
+
+        # Test with additive mask
+        with self.subTest(mask_type="additive"):
+            additive_mask = mx.random.normal((B, H, L, L), dtype=mx.float16)
+            test_vjp([q, k, v], scale, mask=additive_mask)
+
+        # Test with causal mask (mask=True/"causal")
+        with self.subTest(mask_type="causal"):
+            test_vjp([q, k, v], scale, mask="causal")
+
+        # Test with no mask
+        with self.subTest(mask_type="none"):
+            test_vjp([q, k, v], scale, mask=None)
+
+        # Test with broadcast mask (single head)
+        with self.subTest(mask_type="broadcast_head"):
+            broadcast_mask = mx.random.normal((B, 1, L, L), dtype=mx.float16)
+            test_vjp([q, k, v], scale, mask=broadcast_mask)
+
+        # Test with broadcast mask (single batch)
+        with self.subTest(mask_type="broadcast_batch"):
+            broadcast_mask = mx.random.normal((1, H, L, L), dtype=mx.float16)
+            test_vjp([q, k, v], scale, mask=broadcast_mask)
+
+    def test_sdpa_grad_short_seq(self):
+        """Test VJP for short sequences (L <= 8) that exercise fallback path"""
+        if not mx.is_available(mx.gpu):
+            return
+
+        tolerance = {"rtol": 1e-2, "atol": 1e-2}
+
+        def test_vjp(primals, scale):
+            slow = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale)
+            fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale
+            )
+            cotan = mx.ones_like(primals[0])
+            o1, vjp1 = mx.vjp(slow, primals, [cotan])
+            o2, vjp2 = mx.vjp(fast, primals, [cotan])
+
+            self.assertTrue(mx.allclose(o1[0], o2[0], **tolerance))
+            for i in range(3):
+                self.assertTrue(
+                    mx.allclose(vjp1[i], vjp2[i], **tolerance),
+                    f"VJP mismatch for input {i}",
+                )
+
+        B, H, D = 2, 4, 64
+        scale = D**-0.5
+
+        # Test edge cases for vector mode (L <= 8)
+        for L in [1, 4, 7, 8]:
+            with self.subTest(L=L):
+                q = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                k = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                v = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                test_vjp([q, k, v], scale)
+
+        # Test with GQA and short sequences
+        for L in [1, 4, 8]:
+            with self.subTest(L=L, gqa="4x"):
+                q = mx.random.normal((B, 8, L, D), dtype=mx.float16)
+                k = mx.random.normal((B, 2, L, D), dtype=mx.float16)
+                v = mx.random.normal((B, 2, L, D), dtype=mx.float16)
+                test_vjp([q, k, v], scale)
+
+    def test_sdpa_grad_noncontiguous_kv(self):
+        """Test VJP with non-contiguous K/V inputs (strided views).
+
+        This tests the fix for the stride mismatch bug where vector VJP
+        assumed K/V have the same strides as dK/dV outputs.
+        """
+        if not mx.is_available(mx.gpu):
+            return
+
+        tolerance = {"rtol": 1e-2, "atol": 1e-2}
+
+        def test_vjp(primals, scale):
+            slow = lambda q, k, v: mlx_ref_attn(q, k, v, scale=scale)
+            fast = lambda q, k, v: mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale
+            )
+            cotan = mx.ones_like(primals[0])
+            o1, vjp1 = mx.vjp(slow, primals, [cotan])
+            o2, vjp2 = mx.vjp(fast, primals, [cotan])
+
+            self.assertTrue(mx.allclose(o1[0], o2[0], **tolerance))
+            for i in range(3):
+                self.assertTrue(
+                    mx.allclose(vjp1[i], vjp2[i], **tolerance),
+                    f"VJP mismatch for input {i}",
+                )
+
+        B, H, D = 2, 4, 64
+        scale = D**-0.5
+
+        # Test short sequences (L <= 8) with non-contiguous K/V views
+        # This exercises the vector VJP path which had the stride mismatch bug
+        for L in [1, 4, 8]:
+            with self.subTest(L=L, case="strided_view"):
+                q = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                # Create non-contiguous K/V by slicing a larger array
+                k_full = mx.random.normal((B, H, L * 2, D), dtype=mx.float16)
+                v_full = mx.random.normal((B, H, L * 2, D), dtype=mx.float16)
+                k = k_full[:, :, ::2, :]  # Strided view, non-contiguous
+                v = v_full[:, :, ::2, :]  # Strided view, non-contiguous
+                test_vjp([q, k, v], scale)
+
+        # Test with transposed K/V (another form of non-contiguous)
+        for L in [4, 8]:
+            with self.subTest(L=L, case="transposed"):
+                q = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                # Create by transposing batch and head dims then transposing back
+                k_orig = mx.random.normal((H, B, L, D), dtype=mx.float16)
+                v_orig = mx.random.normal((H, B, L, D), dtype=mx.float16)
+                k = mx.transpose(k_orig, [1, 0, 2, 3])  # Non-contiguous
+                v = mx.transpose(v_orig, [1, 0, 2, 3])  # Non-contiguous
+                test_vjp([q, k, v], scale)
+
+        # Test longer sequences (L > 8) with non-contiguous K/V
+        # This exercises the STEEL VJP path
+        for L in [32, 64]:
+            with self.subTest(L=L, case="strided_view_long"):
+                q = mx.random.normal((B, H, L, D), dtype=mx.float16)
+                k_full = mx.random.normal((B, H, L * 2, D), dtype=mx.float16)
+                v_full = mx.random.normal((B, H, L * 2, D), dtype=mx.float16)
+                k = k_full[:, :, ::2, :]
+                v = v_full[:, :, ::2, :]
+                test_vjp([q, k, v], scale)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
