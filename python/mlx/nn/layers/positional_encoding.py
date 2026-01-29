@@ -133,40 +133,19 @@ class ALiBi(Module):
         return alibi_mask
 
     @staticmethod
-    def alibi_get_slopes(num_heads: int):
-        """Get the slopes for different attention heads defined in ALiBi paper.
-
-        This is a direct copy from ALiBi codebase.
-        Ref:
-        https://github.com/ofirpress/attention_with_linear_biases/tree/3b7c2eca/fairseq/models/transformer.py#L742-L752
-
-        Args:
-            num_heads: An integer for the number of attention heads.
-
-        Returns:
-            A tensor of slopes with shape of [num_heads]. Each value represents
-            a slope for one attention head.
-        """
-
-        def get_slopes_power_of_2(n: int):
-            start = 2 ** (-(2 ** -(math.log2(n) - 3)))
-            ratio = start
-            return [start * ratio**i for i in range(n)]
-
-        if math.log2(num_heads).is_integer():
-            return get_slopes_power_of_2(num_heads)
-        else:
-            closest_power_of_2 = 2 ** math.floor(math.log2(num_heads))
-            return (
-                get_slopes_power_of_2(closest_power_of_2)
-                + ALiBi.alibi_get_slopes(2 * closest_power_of_2)[0::2][
-                    : num_heads - closest_power_of_2
-                ]
-            )
-
-    @staticmethod
     def create_alibi_slope(num_heads, dtype):
-        slopes = ALiBi.alibi_get_slopes(num_heads)
+        def get_slopes(n: int):
+            if math.log2(n).is_integer():
+                start = 2 ** (-(2 ** -(math.log2(n) - 3)))
+                return [start * start**i for i in range(n)]
+            else:
+                closest_power_of_2 = 2 ** math.floor(math.log2(n))
+                return (
+                    get_slopes(closest_power_of_2)
+                    + get_slopes(2 * closest_power_of_2)[0::2][: n - closest_power_of_2]
+                )
+
+        slopes = get_slopes(num_heads)
         out = mx.array(slopes, dtype=dtype)
         return mx.expand_dims(out, axis=(-1, -2))
 
