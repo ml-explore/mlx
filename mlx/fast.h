@@ -55,7 +55,7 @@ MLX_API array scaled_dot_product_attention(
     StreamOrDevice s = {});
 
 /** Computes: `O = softmax(Q @ K.T) @ V` where K and V are quantized. **/
-array quantized_scaled_dot_product_attention(
+MLX_API array quantized_scaled_dot_product_attention(
     const array& queries,
     const array& keys,
     const array& key_scales,
