@@ -2127,6 +2127,13 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.imag.item(), 1.0)
         self.assertEqual(x.real.item(), 1.0)
 
+    def test_large_indices(self):
+        x = mx.array([0, 1, 2])
+        with self.assertRaises(ValueError):
+            x[: 2**32]
+        with self.assertRaises(ValueError):
+            x[2**32]
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
