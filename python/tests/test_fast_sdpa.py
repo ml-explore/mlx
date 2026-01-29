@@ -23,11 +23,12 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
         v = mx.expand_dims(v, 2)
 
     scores = q @ mx.swapaxes(k, -1, -2)
+    is_causal = mask == "causal"
     if mask is not None:
 
-        if mask == "causal":
-            q_offset = max(0, kL - L)
-            q_indices = mx.arange(q_offset, q_offset + L)
+        if is_causal:
+            offset = kL - L
+            q_indices = mx.arange(L) + offset
             k_indices = mx.arange(kL)
             mask = q_indices[:, None] >= k_indices[None]
 
@@ -58,7 +59,6 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     out = scores @ v
     if n_repeats > 1:
         out = mx.reshape(out, [B, n_q_heads, L, -1])
-
     return out
 
 
@@ -104,11 +104,14 @@ def prepare_inputs(B, qL, kL, D, qH, kH, mask, transpose, dtype):
 # SDPA for MHA (n_heads == n_kv_heads)
 def mlx_primitives_sdpa(q, k, v, scale, mask=None):
     p = (q * scale) @ k.transpose(0, 1, 3, 2)
+    qL = q.shape[2]
+    kL = k.shape[2]
+    is_causal = mask == "causal"
     if mask is not None:
-        if mask == "causal":
-            q_offset = max(0, k.shape[2] - q.shape[2])
-            q_indices = mx.arange(q_offset, q_offset + q.shape[2])
-            k_indices = mx.arange(k.shape[2])
+        if is_causal:
+            offset = kL - qL
+            q_indices = mx.arange(qL) + offset
+            k_indices = mx.arange(kL)
             mask = q_indices[:, None] >= k_indices[None]
             p = mx.where(mask, p, mx.finfo(mx.float32).min)
         elif mask.dtype == mx.bool_:
@@ -612,6 +615,17 @@ class TestSDPA(mlx_tests.MLXTestCase):
                                 mask,
                                 t,
                             )
+
+                            # For causal mask when qL > kL, first qL-kL rows are undefined
+                            # Compare only the valid portion
+                            if mask_str == "causal" and qL > kL:
+                                offset = qL - kL
+                                if t:  # transpose=True: shape is (B, qL, qH, D)
+                                    out_ref = out_ref[:, offset:, :, :]
+                                    out_fst = out_fst[:, offset:, :, :]
+                                else:  # transpose=False: shape is (B, qH, qL, D)
+                                    out_ref = out_ref[:, :, offset:, :]
+                                    out_fst = out_fst[:, :, offset:, :]
 
                             atol = 2e-5 if dtype == "float32" else 3e-4
 

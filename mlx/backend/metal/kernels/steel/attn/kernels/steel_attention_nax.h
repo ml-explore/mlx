@@ -461,7 +461,7 @@ template <
   metal::vec<AccumType, kRowsPT> rcp;
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < kRowsPT; ++i) {
-    rcp[i] = (1.f / sum_score[i]);
+    rcp[i] = 1.f / sum_score[i];
   }
 
   Otile.template row_bin_op<MulOp>(rcp);
