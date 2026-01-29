@@ -10,127 +10,92 @@
 
 enum class QuantMode { Affine, Mxfp4, Mxfp8, Nvfp4 };
 
+template <typename OutT, typename EncodedT>
+struct DecodeValue {
+  [[clang::always_inline]] OutT operator()(uint8_t v) const {
+    return OutT(*(thread EncodedT*)(&v));
+  }
+};
+
+// Specialization for Affine (plain integer cast)
+template <typename OutT>
+struct DecodeValue<OutT, void> {
+  [[clang::always_inline]] OutT operator()(uint8_t v) const {
+    return OutT(v);
+  }
+};
+
 template <QuantMode mode>
-struct QuantTraits;
+struct QuantConfig;
 
-// Affine quantization: scale * val + bias
 template <>
-struct QuantTraits<QuantMode::Affine> {
-  static constant constexpr int default_group_size = 64;
-  static constant constexpr int default_bits = 4;
-  static constant constexpr int group_size = default_group_size;
-  static constant constexpr int bits = default_bits;
+struct QuantConfig<QuantMode::Affine> {
   static constant constexpr bool has_bias = true;
-  template <typename T>
-  using scale_type = T;
+
+  using value_type = void;
+  using scale_type = void;
 
   template <typename T>
-  static inline T dequantize_scale(T s) {
-    return s;
-  }
-
-  // Single-arg version returns raw value (for use in dot_key where
-  // dequantization is applied separately)
-  template <typename T>
-  static inline T dequantize_value(uint8_t v) {
-    return T(v);
-  }
-
-  template <typename T>
-  static inline T dequantize_value(uint8_t v, T scale, T bias) {
-    return fma(scale, T(v), bias);
-  }
-
-  template <typename T>
-  static inline T dequantize(uint8_t v, T scale, T bias) {
-    return fma(scale, T(v), bias);
-  }
+  using scale_storage_t = T;
 };
 
-// MXFP4: fp4_e2m1 data, fp8_e8m0 scale (power-of-2), group_size=32
 template <>
-struct QuantTraits<QuantMode::Mxfp4> {
-  static constant constexpr int group_size = 32;
-  static constant constexpr int bits = 4;
+struct QuantConfig<QuantMode::Mxfp4> {
   static constant constexpr bool has_bias = false;
-  template <typename T>
-  using scale_type = uint8_t;
+
+  using value_type = fp4_e2m1;
+  using scale_type = fp8_e8m0;
 
   template <typename T>
-  static inline T dequantize_scale(uint8_t s) {
-    return T(*(thread fp8_e8m0*)(&s));
-  }
-
-  template <typename T>
-  static inline T dequantize_value(uint8_t v) {
-    return T(*(thread fp4_e2m1*)(&v));
-  }
-
-  template <typename T>
-  static inline T dequantize(uint8_t v, T scale, T /*bias*/) {
-    return scale * dequantize_value<T>(v);
-  }
+  using scale_storage_t = uint8_t;
 };
 
-// NVFP4: fp4_e2m1 data, fp8_e4m3 scale (with mantissa), group_size=16
 template <>
-struct QuantTraits<QuantMode::Nvfp4> {
-  static constant constexpr int group_size = 16;
-  static constant constexpr int bits = 4;
+struct QuantConfig<QuantMode::Nvfp4> {
   static constant constexpr bool has_bias = false;
-  template <typename T>
-  using scale_type = uint8_t;
+
+  using value_type = fp4_e2m1;
+  using scale_type = fp8_e4m3;
 
   template <typename T>
-  static inline T dequantize_scale(uint8_t s) {
-    return T(*(thread fp8_e4m3*)(&s));
-  }
-
-  template <typename T>
-  static inline T dequantize_value(uint8_t v) {
-    return T(*(thread fp4_e2m1*)(&v));
-  }
-
-  template <typename T>
-  static inline T dequantize(uint8_t v, T scale, T /*bias*/) {
-    return scale * dequantize_value<T>(v);
-  }
+  using scale_storage_t = uint8_t;
 };
 
-// MXFP8: fp8_e4m3 data, fp8_e8m0 scale, group_size=32
 template <>
-struct QuantTraits<QuantMode::Mxfp8> {
-  static constant constexpr int group_size = 32;
-  static constant constexpr int bits = 8;
+struct QuantConfig<QuantMode::Mxfp8> {
   static constant constexpr bool has_bias = false;
-  template <typename T>
-  using scale_type = uint8_t;
+
+  using value_type = fp8_e4m3;
+  using scale_type = fp8_e8m0;
 
   template <typename T>
-  static inline T dequantize_scale(uint8_t s) {
-    return T(*(thread fp8_e8m0*)(&s));
-  }
-
-  template <typename T>
-  static inline T dequantize_value(uint8_t v) {
-    return T(*(thread fp8_e4m3*)(&v));
-  }
-
-  template <typename T>
-  static inline T dequantize(uint8_t v, T scale, T /*bias*/) {
-    return scale * dequantize_value<T>(v);
-  }
+  using scale_storage_t = uint8_t;
 };
 
-// Compile-time LoadType selector by bit-width
-template <int bits>
-struct LoadType {
-  using type = uint32_t;
-};
+template <QuantMode mode, typename T>
+struct Dequant {
+  using Cfg = QuantConfig<mode>;
 
-template <>
-struct LoadType<4> {
-  using type = uint16_t;
+  [[clang::always_inline]] T raw(uint8_t v) const {
+    return DecodeValue<T, typename Cfg::value_type>{}(v);
+  }
+
+  [[clang::always_inline]] T scale(
+      typename Cfg::template scale_storage_t<T> s) const {
+    if constexpr (metal::is_same_v<typename Cfg::scale_type, void>) {
+      return s;
+    } else {
+      return DecodeValue<T, typename Cfg::scale_type>{}(s);
+    }
+  }
+
+  [[clang::always_inline]] T operator()(uint8_t v, T s, T bias) const {
+    if constexpr (Cfg::has_bias) {
+      return fma(s, raw(v), bias);
+    } else {
+      return s * raw(v);
+    }
+  }
 };
 
 // Pack metadata and unpackers for arbitrary bit-widths (wsize fixed at 32 bits)
@@ -148,132 +113,72 @@ struct PackInfo {
 };
 
 template <int bits>
-struct PackReader;
-
-template <>
-struct PackReader<2> {
-  static constant constexpr int pack_factor = PackInfo<2>::pack_factor;
-  static constant constexpr int bytes_per_pack = PackInfo<2>::bytes_per_pack;
+struct PackReader {
+  static constant constexpr int pack_factor = PackInfo<bits>::pack_factor;
+  static constant constexpr int bytes_per_pack = PackInfo<bits>::bytes_per_pack;
+  static constant constexpr uint64_t mask = (uint64_t(1) << bits) - 1;
 
   [[gnu::always_inline]] static void load(
-      const device uint8_t* p, thread uint8_t (&out)[pack_factor]) {
-    uint32_t v = *(reinterpret_cast<const device uint32_t*>(p));
+      const device uint8_t* p,
+      thread uint8_t (&out)[pack_factor]) {
+    uint64_t packed = load_packed(p);
 #pragma clang loop unroll(full)
     for (int i = 0; i < pack_factor; ++i) {
-      out[i] = (v >> (2 * i)) & 0x03;
+      out[i] = static_cast<uint8_t>((packed >> (bits * i)) & mask);
+    }
+  }
+
+ private:
+  [[gnu::always_inline]] static uint64_t load_packed(const device uint8_t* p) {
+    if constexpr (bytes_per_pack == 4) {
+      return static_cast<uint64_t>(
+          *(reinterpret_cast<const device uint32_t*>(p)));
+    } else {
+      uint64_t packed = 0;
+#pragma clang loop unroll(full)
+      for (int i = 0; i < bytes_per_pack; ++i) {
+        packed |= static_cast<uint64_t>(p[i]) << (8 * i);
+      }
+      return packed;
     }
   }
 };
 
-template <>
-struct PackReader<3> {
-  static constant constexpr int pack_factor = PackInfo<3>::pack_factor;
-  static constant constexpr int bytes_per_pack = PackInfo<3>::bytes_per_pack;
+// Pointer wrapper for quantized data that handles byte-level addressing
+// correctly for all bit widths. For non-4-byte-aligned packs (3, 5, 6-bit),
+// simple uint32_t pointer arithmetic truncates and causes misalignment.
+// This class uses byte-level arithmetic internally to ensure correctness.
+template <int bits>
+class QuantDataPtr {
+  const device uint8_t* byte_ptr_;
 
-  [[gnu::always_inline]] static void load(
-      const device uint8_t* p, thread uint8_t (&out)[pack_factor]) {
-    uint8_t w0 = p[0];
-    uint8_t w1 = p[1];
-    uint8_t w2 = p[2];
-    out[0] = w0 & 0x07;
-    out[1] = (w0 >> 3) & 0x07;
-    out[2] = ((w0 >> 6) | ((w1 & 0x01) << 2)) & 0x07;
-    out[3] = (w1 >> 1) & 0x07;
-    out[4] = (w1 >> 4) & 0x07;
-    out[5] = ((w1 >> 7) | ((w2 & 0x03) << 1)) & 0x07;
-    out[6] = (w2 >> 2) & 0x07;
-    out[7] = (w2 >> 5) & 0x07;
+ public:
+  static constant constexpr int pack_factor = PackInfo<bits>::pack_factor;
+  static constant constexpr int bytes_per_pack = PackInfo<bits>::bytes_per_pack;
+
+  // Initialize from base pointer, head stride (in uint32 units), head index,
+  // and element index
+  [[clang::always_inline]] QuantDataPtr(
+      const device uint32_t* base,
+      size_t head_stride,
+      int head_idx,
+      int elem_idx) {
+    int packed_idx = elem_idx / pack_factor;
+    byte_ptr_ = reinterpret_cast<const device uint8_t*>(base) +
+        head_idx * head_stride * 4 + // head_stride is in uint32 units
+        packed_idx * bytes_per_pack;
+  }
+
+  // Advance by number of elements
+  [[clang::always_inline]] void advance(int num_elements) {
+    byte_ptr_ += num_elements * bits / 8;
+  }
+
+  // Get raw pointer for passing to dot/accumulate functions
+  [[clang::always_inline]] const device uint32_t* ptr() const {
+    return reinterpret_cast<const device uint32_t*>(byte_ptr_);
   }
 };
-
-template <>
-struct PackReader<4> {
-  static constant constexpr int pack_factor = PackInfo<4>::pack_factor;
-  static constant constexpr int bytes_per_pack = PackInfo<4>::bytes_per_pack;
-
-  [[gnu::always_inline]] static void load(
-      const device uint8_t* p, thread uint8_t (&out)[pack_factor]) {
-    uint32_t v = *(reinterpret_cast<const device uint32_t*>(p));
-#pragma clang loop unroll(full)
-    for (int i = 0; i < pack_factor; ++i) {
-      out[i] = (v >> (4 * i)) & 0x0f;
-    }
-  }
-};
-
-template <>
-struct PackReader<5> {
-  static constant constexpr int pack_factor = PackInfo<5>::pack_factor;
-  static constant constexpr int bytes_per_pack = PackInfo<5>::bytes_per_pack;
-
-  [[gnu::always_inline]] static void load(
-      const device uint8_t* p, thread uint8_t (&out)[pack_factor]) {
-    uint8_t w0 = p[0];
-    uint8_t w1 = p[1];
-    uint8_t w2 = p[2];
-    uint8_t w3 = p[3];
-    uint8_t w4 = p[4];
-    out[0] = w0 & 0x1f;
-    out[1] = ((w0 >> 5) | ((w1 & 0x03) << 3)) & 0x1f;
-    out[2] = (w1 >> 2) & 0x1f;
-    out[3] = ((w1 >> 7) | ((w2 & 0x0f) << 1)) & 0x1f;
-    out[4] = ((w2 >> 4) | ((w3 & 0x01) << 4)) & 0x1f;
-    out[5] = (w3 >> 1) & 0x1f;
-    out[6] = ((w3 >> 6) | ((w4 & 0x07) << 2)) & 0x1f;
-    out[7] = (w4 >> 3) & 0x1f;
-  }
-};
-
-template <>
-struct PackReader<6> {
-  static constant constexpr int pack_factor = PackInfo<6>::pack_factor;
-  static constant constexpr int bytes_per_pack = PackInfo<6>::bytes_per_pack;
-
-  [[gnu::always_inline]] static void load(
-      const device uint8_t* p, thread uint8_t (&out)[pack_factor]) {
-    uint8_t w0 = p[0];
-    uint8_t w1 = p[1];
-    uint8_t w2 = p[2];
-    out[0] = w0 & 0x3f;
-    out[1] = ((w0 >> 6) | ((w1 & 0x0f) << 2)) & 0x3f;
-    out[2] = ((w1 >> 4) | ((w2 & 0x03) << 4)) & 0x3f;
-    out[3] = (w2 >> 2) & 0x3f;
-  }
-};
-
-template <>
-struct PackReader<8> {
-  static constant constexpr int pack_factor = PackInfo<8>::pack_factor;
-  static constant constexpr int bytes_per_pack = PackInfo<8>::bytes_per_pack;
-
-  [[gnu::always_inline]] static void load(
-      const device uint8_t* p, thread uint8_t (&out)[pack_factor]) {
-    uint32_t v = *(reinterpret_cast<const device uint32_t*>(p));
-    out[0] = v & 0xff;
-    out[1] = (v >> 8) & 0xff;
-    out[2] = (v >> 16) & 0xff;
-    out[3] = (v >> 24) & 0xff;
-  }
-};
-
-// Helpers to fetch mode-specific defaults (affine uses default_* values)
-template <QuantMode mode>
-constexpr int get_group_size() {
-  if constexpr (mode == QuantMode::Affine) {
-    return QuantTraits<mode>::default_group_size;
-  } else {
-    return QuantTraits<mode>::group_size;
-  }
-}
-
-template <QuantMode mode>
-constexpr int get_bits() {
-  if constexpr (mode == QuantMode::Affine) {
-    return QuantTraits<mode>::default_bits;
-  } else {
-    return QuantTraits<mode>::bits;
-  }
-}
 
 template <typename T, typename mma_t, typename loader_a_t, typename loader_b_t>
 METAL_FUNC void gemm_loop_aligned(

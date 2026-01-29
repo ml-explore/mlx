@@ -859,204 +859,148 @@ array quantized_scaled_dot_product_attention(
     const std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "mxfp4" */,
     StreamOrDevice s /* = {} */) {
-  for (const auto& tensor : {queries, keys, key_scales, values, value_scales}) {
-    if (tensor.ndim() != 4) {
-      std::ostringstream msg;
-      msg << "[quantized_scaled_dot_product_attention] input with shape "
-          << tensor.shape() << " expected to be rank 4";
-      throw std::invalid_argument(msg.str());
-    }
-  }
+  constexpr const char* tag = "quantized_scaled_dot_product_attention";
 
-  auto qmode = string_to_quantization_mode(
-      mode, "quantized_scaled_dot_product_attention");
-
+  // Parse mode and get parameters
+  auto qmode = string_to_quantization_mode(mode, tag);
   bool is_affine = qmode == QuantizationMode::Affine;
+  auto [group_size, bits] =
+      quantization_params_from_mode(qmode, group_size_, bits_);
 
-  // Validate biases for affine mode
-  if (is_affine) {
-    if (!key_biases.has_value() || !value_biases.has_value()) {
-      throw std::invalid_argument(
-          "[quantized_scaled_dot_product_attention] Affine mode requires key_biases and value_biases.");
-    }
-    if (key_biases->ndim() != 4 || value_biases->ndim() != 4) {
-      throw std::invalid_argument(
-          "[quantized_scaled_dot_product_attention] Biases must be rank 4.");
-    }
-  } else {
-    if (key_biases.has_value() || value_biases.has_value()) {
-      throw std::invalid_argument(
-          "[quantized_scaled_dot_product_attention] Biases should only be provided for affine mode.");
-    }
-  }
-
-  auto expected_params = [](QuantizationMode mode) -> std::pair<int, int> {
-    switch (mode) {
-      case QuantizationMode::Affine:
-        return {64, 4}; // default for affine
-      case QuantizationMode::Mxfp4:
-        return {32, 4};
-      case QuantizationMode::Mxfp8:
-        return {32, 8};
-      case QuantizationMode::Nvfp4:
-        return {16, 4};
-      default:
-        return {0, 0};
-    }
-  };
-
-  auto [expected_group_size, expected_bits] = expected_params(qmode);
-  int group_size = group_size_.value_or(expected_group_size);
-  int bits = bits_.value_or(expected_bits);
-
-  // For affine mode, allow flexible group_size and bits
-  if (!is_affine &&
-      (group_size != expected_group_size || bits != expected_bits)) {
-    std::ostringstream msg;
-    msg << "[quantized_scaled_dot_product_attention] Quantization mode '"
-        << mode << "' requires group_size " << expected_group_size
-        << " and bits " << expected_bits << " but received group_size "
-        << group_size << " and bits " << bits << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  // Validate affine group_size and bits
+  // Validate mode-specific group_size and bits
   if (is_affine) {
     if (group_size != 32 && group_size != 64 && group_size != 128) {
       std::ostringstream msg;
-      msg << "[quantized_scaled_dot_product_attention] Affine mode supports group_size 32, 64, or 128 but received "
-          << group_size << ".";
+      msg << "[" << tag << "] Affine mode supports group_size 32, 64, or 128 "
+          << "but received " << group_size << ".";
       throw std::invalid_argument(msg.str());
     }
     if (bits < 2 || bits > 8 || bits == 7) {
       std::ostringstream msg;
-      msg << "[quantized_scaled_dot_product_attention] Affine mode supports bits 2-6 or 8 but received "
+      msg << "[" << tag << "] Affine mode supports bits 2-6 or 8 but received "
           << bits << ".";
       throw std::invalid_argument(msg.str());
     }
+    if (!key_biases.has_value() || !value_biases.has_value()) {
+      throw std::invalid_argument(
+          "[quantized_scaled_dot_product_attention] Affine mode requires "
+          "key_biases and value_biases.");
+    }
+  } else {
+    // FP modes have fixed params - verify if user overrode them incorrectly
+    auto [expected_gs, expected_bits] =
+        quantization_params_from_mode(qmode, std::nullopt, std::nullopt);
+    if (group_size != expected_gs || bits != expected_bits) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Mode '" << mode << "' requires group_size "
+          << expected_gs << " and bits " << expected_bits << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (key_biases.has_value() || value_biases.has_value()) {
+      throw std::invalid_argument(
+          "[quantized_scaled_dot_product_attention] Biases should only be "
+          "provided for affine mode.");
+    }
   }
 
-  if (!is_affine && bits != 4 && bits != 8) {
-    std::ostringstream msg;
-    msg << "[quantized_scaled_dot_product_attention] Unsupported bits " << bits
-        << ". Supported bits are 4 and 8.";
-    throw std::invalid_argument(msg.str());
+  // Validate rank 4 for all inputs
+  for (const auto& t : {queries, keys, key_scales, values, value_scales}) {
+    if (t.ndim() != 4) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] input with shape " << t.shape()
+          << " expected to be rank 4.";
+      throw std::invalid_argument(msg.str());
+    }
   }
-
-  // For affine mode, scales are stored as the query type
-  // (float16/bfloat16/float32) For fp modes, scales are uint8
-  if (!is_affine &&
-      (key_scales.dtype() != uint8 || value_scales.dtype() != uint8)) {
+  if (is_affine && (key_biases->ndim() != 4 || value_biases->ndim() != 4)) {
     throw std::invalid_argument(
-        "[quantized_scaled_dot_product_attention] Scales must be uint8 for fp quantization.");
-  }
-  if (keys.dtype() != uint32 || values.dtype() != uint32) {
-    throw std::invalid_argument(
-        "[quantized_scaled_dot_product_attention] Keys and values must be packed quantized arrays of type uint32.");
+        "[quantized_scaled_dot_product_attention] Biases must be rank 4.");
   }
 
-  auto key_head_dim = (keys.shape(-1) * 32) / bits;
-  auto value_head_dim = (values.shape(-1) * 32) / bits;
-
-  const size_t batch_dim = queries.shape(0);
-  for (const auto& tensor : {keys, values, key_scales, value_scales}) {
-    if (tensor.shape(0) != batch_dim) {
-      std::ostringstream msg;
-      msg << "[quantized_scaled_dot_product_attention] mismatching batch dimension for input with shape "
-          << tensor.shape() << ".";
-      throw std::invalid_argument(msg.str());
-    }
-  }
-
-  auto n_q_heads = queries.shape(-3);
-  auto n_kv_heads = keys.shape(-3);
-  if (n_q_heads % n_kv_heads != 0) {
-    std::ostringstream msg;
-    msg << "[quantized_scaled_dot_product_attention] n_heads must be a multiple of n_kv_heads, found n_heads "
-        << n_q_heads << " for n_kv_heads " << n_kv_heads << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (keys.shape(-3) != values.shape(-3)) {
-    std::ostringstream msg;
-    msg << "[quantized_scaled_dot_product_attention] keys, values expected to have matching n_kv_heads; found keys with n_heads "
-        << keys.shape(-3) << " for values with n_heads " << values.shape(-3)
-        << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (queries.shape(-1) != key_head_dim) {
-    std::ostringstream msg;
-    msg << "[quantized_scaled_dot_product_attention] query, keys expected to have matching last dimension; found query shape "
-        << queries.shape() << " for keys shape " << keys.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (queries.shape(-1) != value_head_dim) {
-    std::ostringstream msg;
-    msg << "[quantized_scaled_dot_product_attention] query, values expected to have matching last dimension; found query shape "
-        << queries.shape() << " for values shape " << values.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (queries.shape(-1) % group_size != 0) {
-    std::ostringstream msg;
-    msg << "[quantized_scaled_dot_product_attention] head dimension "
-        << queries.shape(-1) << " must be divisible by group_size "
-        << group_size << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  auto expected_scale_dim = queries.shape(-1) / group_size;
-  for (const auto& tensor : {key_scales, value_scales}) {
-    if (tensor.shape(-1) != expected_scale_dim) {
-      std::ostringstream msg;
-      msg << "[quantized_scaled_dot_product_attention] Scales expected to have "
-          << expected_scale_dim << " elements in the last dimension but found "
-          << tensor.shape();
-      throw std::invalid_argument(msg.str());
-    }
-  }
-  if (key_scales.shape(-3) != keys.shape(-3) ||
-      key_scales.shape(-2) != keys.shape(-2) ||
-      value_scales.shape(-3) != values.shape(-3) ||
-      value_scales.shape(-2) != values.shape(-2)) {
-    throw std::invalid_argument(
-        "[quantized_scaled_dot_product_attention] Scale shapes must match key/value batch, head, and sequence dimensions.");
-  }
-
-  // Validate biases have same shape as scales
-  if (is_affine) {
-    if (key_biases->shape() != key_scales.shape()) {
-      std::ostringstream msg;
-      msg << "[quantized_scaled_dot_product_attention] key_biases shape "
-          << key_biases->shape() << " must match key_scales shape "
-          << key_scales.shape() << ".";
-      throw std::invalid_argument(msg.str());
-    }
-    if (value_biases->shape() != value_scales.shape()) {
-      std::ostringstream msg;
-      msg << "[quantized_scaled_dot_product_attention] value_biases shape "
-          << value_biases->shape() << " must match value_scales shape "
-          << value_scales.shape() << ".";
-      throw std::invalid_argument(msg.str());
-    }
-  }
-
+  // Validate dtypes
   auto final_type = queries.dtype();
   if (!issubdtype(final_type, floating)) {
     std::ostringstream msg;
-    msg << "[quantized_scaled_dot_product_attention] Received unsupported type "
+    msg << "[" << tag << "] queries must be floating type but got "
         << final_type << ".";
     throw std::invalid_argument(msg.str());
   }
+  if (keys.dtype() != uint32 || values.dtype() != uint32) {
+    throw std::invalid_argument(
+        "[quantized_scaled_dot_product_attention] Keys and values must be "
+        "uint32.");
+  }
+  if (!is_affine &&
+      (key_scales.dtype() != uint8 || value_scales.dtype() != uint8)) {
+    throw std::invalid_argument(
+        "[quantized_scaled_dot_product_attention] Scales must be uint8 for fp "
+        "quantization.");
+  }
 
+  // Compute and validate dimensions
+  auto key_head_dim = (keys.shape(-1) * 32) / bits;
+  auto value_head_dim = (values.shape(-1) * 32) / bits;
+  auto n_q_heads = queries.shape(-3);
+  auto n_kv_heads = keys.shape(-3);
+
+  if (queries.shape(0) != keys.shape(0) ||
+      queries.shape(0) != values.shape(0)) {
+    throw std::invalid_argument(
+        "[quantized_scaled_dot_product_attention] Batch dimensions must match.");
+  }
+  if (n_q_heads % n_kv_heads != 0) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] n_heads must be a multiple of n_kv_heads, found "
+        << n_q_heads << " vs " << n_kv_heads << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (keys.shape(-3) != values.shape(-3)) {
+    throw std::invalid_argument(
+        "[quantized_scaled_dot_product_attention] Keys and values must have "
+        "matching n_kv_heads.");
+  }
+  if (queries.shape(-1) != key_head_dim ||
+      queries.shape(-1) != value_head_dim) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Query head dim " << queries.shape(-1)
+        << " must match key (" << key_head_dim << ") and value ("
+        << value_head_dim << ").";
+    throw std::invalid_argument(msg.str());
+  }
+  if (queries.shape(-1) % group_size != 0) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Head dim " << queries.shape(-1)
+        << " must be divisible by group_size " << group_size << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Validate scale/bias shapes
+  auto expected_scale_dim = queries.shape(-1) / group_size;
+  for (const auto& [qdata, sc, bias, name] :
+       {std::tuple{&keys, &key_scales, &key_biases, "key"},
+        std::tuple{&values, &value_scales, &value_biases, "value"}}) {
+    if (sc->shape(-1) != expected_scale_dim ||
+        sc->shape(-3) != qdata->shape(-3) ||
+        sc->shape(-2) != qdata->shape(-2)) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] " << name << " scale shape mismatch.";
+      throw std::invalid_argument(msg.str());
+    }
+    if (is_affine && bias->has_value() && (*bias)->shape() != sc->shape()) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] " << name
+          << " bias shape must match scale shape.";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+
+  // Validate mask
   bool needs_mask = mask.has_value();
   bool has_bool_mask = needs_mask && mask->dtype() == bool_;
   if (needs_mask && mask->ndim() > 4) {
     std::ostringstream msg;
-    msg << "[quantized_scaled_dot_product_attention] the mask with shape "
-        << mask->shape() << " expected to have at most rank 4.";
+    msg << "[" << tag << "] Mask with shape " << mask->shape()
+        << " expected to have at most rank 4.";
     throw std::invalid_argument(msg.str());
   }
 

@@ -159,6 +159,13 @@ QuantizationMode string_to_quantization_mode(
     const std::string& mode,
     std::string_view error_tag = "");
 
+// Returns (group_size, bits) for a given quantization mode.
+// Uses provided values if given, otherwise returns mode defaults.
+std::pair<int, int> quantization_params_from_mode(
+    QuantizationMode mode,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt);
+
 class Abs : public UnaryPrimitive {
  public:
   explicit Abs(Stream stream) : UnaryPrimitive(stream) {}
