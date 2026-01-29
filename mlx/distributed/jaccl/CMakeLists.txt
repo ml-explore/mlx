@@ -5,7 +5,8 @@ if(MLX_BUILD_CPU
     mlx
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/jaccl.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/mesh.cpp)
+            ${CMAKE_CURRENT_SOURCE_DIR}/mesh.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/ring.cpp)
 else()
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/no_jaccl.cpp)
 endif()

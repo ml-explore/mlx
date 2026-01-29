@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2026 Apple Inc.
 
 #include "mlx/distributed/jaccl/mesh.h"
 #include "mlx/backend/cpu/encoder.h"
@@ -17,26 +17,11 @@ MeshGroup::MeshGroup(
       size_(device_names.size()),
       side_channel_(rank_, size_, coordinator_addr),
       connections_(create_connections(device_names)) {
-  if (rank_ >= size_ || rank_ < 0) {
-    std::ostringstream msg;
-    msg << "[jaccl] Invalid rank " << rank_ << ". It should be in [0, " << size_
-        << ").";
-    throw std::runtime_error(msg.str());
-  }
-
   if (size_ > MAX_PEERS) {
     std::ostringstream msg;
     msg << "[jaccl] The JACCL mesh supports up to " << MAX_PEERS
         << " peers but " << size_ << " were provided.";
     throw std::runtime_error(msg.str());
-  }
-
-  // Verify that we have 1 connection per peer
-  for (int i = 0; i < size_; i++) {
-    // either ourselves and null or peer and non null
-    if ((i == rank_) ^ (connections_[i].ctx == nullptr)) {
-      throw std::runtime_error("[jaccl] Malformed device file");
-    }
   }
 
   // Initialize all the connections and allocate buffers
