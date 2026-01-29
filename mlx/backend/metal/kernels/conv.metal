@@ -20,6 +20,7 @@ template <typename T, int N>
     const device T* in [[buffer(0)]],
     device T* out [[buffer(1)]],
     const constant MLXConvParams<N>* params [[buffer(2)]],
+    const constant int* row_offset_ptr [[buffer(3)]],
     uint3 gid [[thread_position_in_grid]]) {
   int filter_size = params->C;
   for (short i = 0; i < N; i++)
@@ -39,8 +40,10 @@ template <typename T, int N>
   // gid.y: wS (Filter location to unfold input)
   // gid.x: C (channel)
 
-  int n = (gid.z) / out_pixels;
-  int oS = (gid.z) % out_pixels;
+  int row_offset = *row_offset_ptr;
+  int global_row = row_offset + int(gid.z);
+  int n = (global_row) / out_pixels;
+  int oS = (global_row) % out_pixels;
   int wS = gid.y;
 
   bool valid = n < params->N;
@@ -83,6 +86,7 @@ template <typename T, int N>
     const device T* in [[buffer(0)]],
     device T* out [[buffer(1)]],
     const constant MLXConvParams<N>* params [[buffer(2)]],
+    const constant int* row_offset_ptr [[buffer(3)]],
     uint3 gid [[thread_position_in_grid]]) {
   int filter_size = params->C;
   for (short i = 0; i < N; i++)
@@ -102,8 +106,10 @@ template <typename T, int N>
   // gid.y: wS (Filter location to unfold input)
   // gid.x: C (channel)
 
-  int n = (gid.z) / out_pixels;
-  int oS = (gid.z) % out_pixels;
+  int row_offset = *row_offset_ptr;
+  int global_row = row_offset + int(gid.z);
+  int n = (global_row) / out_pixels;
+  int oS = (global_row) % out_pixels;
   int wS = gid.y;
 
   bool valid = n < params->N;
@@ -149,6 +155,7 @@ template <typename T, int N>
       const device itype* in [[buffer(0)]],                                    \
       device itype* out [[buffer(1)]],                                         \
       const constant MLXConvParams<n>* params [[buffer(2)]],                   \
+      const constant int* row_offset_ptr [[buffer(3)]],                        \
       uint3 gid [[thread_position_in_grid]]);                                  \
   template                                                                     \
       [[host_name("naive_unfold_transpose_nd_" #name "_" #n)]] [[kernel]] void \
@@ -156,6 +163,7 @@ template <typename T, int N>
           const device itype* in [[buffer(0)]],                                \
           device itype* out [[buffer(1)]],                                     \
           const constant MLXConvParams<n>* params [[buffer(2)]],               \
+          const constant int* row_offset_ptr [[buffer(3)]],                    \
           uint3 gid [[thread_position_in_grid]]);
 
 #define instantiate_naive_unfold_nd_dims(name, itype)                      \
