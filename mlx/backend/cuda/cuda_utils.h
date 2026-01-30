@@ -83,6 +83,7 @@ class CudaGraphExec : public CudaHandle<cudaGraphExec_t, cudaGraphExecDestroy> {
 
 class CudaStream : public CudaHandle<cudaStream_t, cudaStreamDestroy> {
  public:
+  using CudaHandle::CudaHandle;
   explicit CudaStream(cu::Device& device);
 };
 
