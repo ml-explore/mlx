@@ -489,10 +489,10 @@ class MLX_API array {
     int64_t offset{0};
 
     // The size in elements of the data buffer the array accesses
-    size_t data_size;
+    size_t data_size{0};
 
     // Contains useful meta data about the array
-    Flags flags;
+    Flags flags{true, true, true};
 
     std::vector<array> inputs;
     // An array to keep track of the siblings from a multi-output

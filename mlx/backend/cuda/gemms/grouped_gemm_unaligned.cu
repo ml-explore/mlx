@@ -124,12 +124,12 @@ struct GemmConfiguration : public CommonGemmConfiguration<T, Arch, 1> {
 };
 
 // Specialized GEMM configuration for sm80 and later.
-template <typename T, typename Arch, int kAlignmentC, bool kEnableTF32>
+template <typename T, typename Arch, int kAlignmentC>
 struct GemmConfiguration<
     T,
     Arch,
     kAlignmentC,
-    kEnableTF32,
+    true,
     std::enable_if_t<Arch::kMinComputeCapability >= 80 && sizeof(T) <= 4>>
     : public CommonGemmConfiguration<T, cutlass::arch::Sm80, kAlignmentC> {
   using OpClass = cutlass::arch::OpClassTensorOp;

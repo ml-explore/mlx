@@ -232,8 +232,8 @@ void fp_qmv(
     using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     if constexpr (!std::is_same_v<T, double>) {
       dim3 block_dims{WARP_SIZE, rows_per_block};
-      uint B = out.size() / (M * N);
-      uint blocks_y = (N + rows_per_block - 1) / rows_per_block;
+      uint32_t B = out.size() / (M * N);
+      uint32_t blocks_y = (N + rows_per_block - 1) / rows_per_block;
       const uint32_t* mat_ptr = gpu_ptr<uint32_t>(mat);
       const T* vec_ptr = gpu_ptr<T>(vec);
       int n = 1;
@@ -249,16 +249,17 @@ void fp_qmv(
       }
       dispatch_1_2_4(n, [&](auto n) {
         dispatch_bool(B > 1, [&](auto batched) {
-          if (!batched()) {
-            auto kernel = fp_qmv_single<T, rows_per_block, n(), 4, 32, true>;
+          if (!batched.value) {
+            auto kernel =
+                fp_qmv_single<T, rows_per_block, n.value, 4, 32, true>;
             if (bits == 8) {
-              kernel = fp_qmv_single<T, rows_per_block, n(), 8, 32, true>;
+              kernel = fp_qmv_single<T, rows_per_block, n.value, 8, 32, true>;
             } else if (group_size == 16) {
-              kernel = fp_qmv_single<T, rows_per_block, n(), 4, 16, false>;
+              kernel = fp_qmv_single<T, rows_per_block, n.value, 4, 16, false>;
             }
             encoder.add_kernel_node(
                 kernel,
-                {static_cast<uint>(M), blocks_y},
+                {static_cast<uint32_t>(M), blocks_y},
                 block_dims,
                 0,
                 mat_ptr,
@@ -268,15 +269,16 @@ void fp_qmv(
                 N,
                 K);
           } else {
-            auto kernel = fp_qmv_batched<T, rows_per_block, n(), 4, 32, true>;
+            auto kernel =
+                fp_qmv_batched<T, rows_per_block, n.value, 4, 32, true>;
             if (bits == 8) {
-              kernel = fp_qmv_batched<T, rows_per_block, n(), 8, 32, true>;
+              kernel = fp_qmv_batched<T, rows_per_block, n.value, 8, 32, true>;
             } else if (group_size == 16) {
-              kernel = fp_qmv_batched<T, rows_per_block, n(), 4, 16, false>;
+              kernel = fp_qmv_batched<T, rows_per_block, n.value, 4, 16, false>;
             }
             encoder.add_kernel_node(
                 kernel,
-                {static_cast<uint>(M), blocks_y, B},
+                {static_cast<uint32_t>(M), blocks_y, B},
                 block_dims,
                 0,
                 mat_ptr,

@@ -196,7 +196,7 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
       if (device == -1) {
         data = unified_malloc(size);
       } else {
-        if (free_streams_[device]) { // supports memory pools
+        if (mem_pools_[device]) { // supports memory pools
           CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
         } else {
           CHECK_CUDA_ERROR(cudaMalloc(&data, size));
@@ -283,12 +283,13 @@ void CudaAllocator::move_to_unified_memory(
   void* data = unified_malloc(buf.size);
   cudaMemcpyKind kind =
       supports_managed_memory() ? cudaMemcpyDefault : cudaMemcpyDeviceToHost;
-  if (stream) {
+  if (stream && mem_pools_[buf.device]) {
     CHECK_CUDA_ERROR(cudaMemcpyAsync(data, buf.data, buf.size, kind, stream));
+    free_async(buf, stream);
   } else {
     CHECK_CUDA_ERROR(cudaMemcpy(data, buf.data, buf.size, kind));
+    free_async(buf);
   }
-  cuda_free(buf);
   buf.data = data;
   buf.device = -1;
 }
@@ -298,17 +299,20 @@ void CudaAllocator::free_cuda_buffer(CudaBuffer* buf) {
   if (scalar_pool_.in_pool(buf)) {
     scalar_pool_.free(buf);
   } else {
-    cuda_free(*buf);
+    free_async(*buf);
     delete buf;
   }
 }
 
-void CudaAllocator::cuda_free(CudaBuffer& buf) {
+void CudaAllocator::free_async(CudaBuffer& buf, cudaStream_t stream) {
   if (buf.device == -1) {
     unified_free(buf.data);
   } else {
-    cudaStream_t stream = free_streams_[buf.device];
-    if (stream) {
+    // Free asynchronously when memory pools is supported.
+    if (mem_pools_[buf.device]) {
+      if (!stream) {
+        stream = free_streams_[buf.device];
+      }
       CHECK_CUDA_ERROR(cudaFreeAsync(buf.data, stream));
     } else {
       CHECK_CUDA_ERROR(cudaFree(buf.data));
