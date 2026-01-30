@@ -31,6 +31,9 @@ runs:
         # Pass the CMAKE_ARGS to following steps.
         echo CMAKE_ARGS="$CMAKE_ARGS" >> $GITHUB_OUTPUT
 
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+
     - name: Build CPP only
       shell: bash
       run: |
