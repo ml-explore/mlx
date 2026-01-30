@@ -15,6 +15,7 @@ constexpr int RECV_WR = 2;
 constexpr int MAX_SEND_WR = 32;
 constexpr int MAX_RECV_WR = 32;
 constexpr int BUFFER_SIZES = 8;
+constexpr int NUM_BUFFERS = 2;
 constexpr int FRAME_SIZE = 4096;
 
 namespace detail = mlx::core::distributed::detail;
@@ -239,6 +240,20 @@ inline int poll(
 
     completions += n;
   }
+  return completions;
+}
+
+inline int poll(
+    const std::vector<Connection>& connections_1,
+    const std::vector<Connection>& connections_2,
+    int num_completions,
+    ibv_wc* work_completions) {
+  int completions = 0;
+  completions += poll(connections_1, num_completions, work_completions);
+  completions += poll(
+      connections_2,
+      num_completions - completions,
+      work_completions + completions);
   return completions;
 }
 

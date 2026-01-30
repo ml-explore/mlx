@@ -7,6 +7,8 @@
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 
+constexpr int MAX_CONNS = 4;
+
 namespace mlx::core::distributed::jaccl {
 
 /**
@@ -74,11 +76,92 @@ class RingGroup : public GroupImpl {
    */
   void allocate_buffers();
 
+  void send_to(int sz, int left_right, int wire, int buff) {
+    if (left_right) {
+      left_[wire].post_send(
+          send_buffer_left(sz, buff, wire),
+          SEND_WR << 16 | buff << 8 | (MAX_CONNS + wire));
+    } else {
+      right_[wire].post_send(
+          send_buffer_right(sz, buff, wire), SEND_WR << 16 | buff << 8 | wire);
+    }
+  }
+
+  void recv_from(int sz, int left_right, int wire, int buff) {
+    if (left_right) {
+      right_[wire].post_recv(
+          recv_buffer_right(sz, buff, wire),
+          SEND_WR << 16 | buff << 8 | (MAX_CONNS + wire));
+    } else {
+      right_[wire].post_send(
+          recv_buffer_left(sz, buff, wire), SEND_WR << 16 | buff << 8 | wire);
+    }
+  }
+
+  SharedBuffer& send_buffer_right(int sz, int buff, int wire) {
+    return send_buffers_
+        [sz * NUM_BUFFERS * MAX_CONNS * 2 + buff * MAX_CONNS * 2 + wire];
+  }
+
+  SharedBuffer& send_buffer_left(int sz, int buff, int wire) {
+    return send_buffers_
+        [sz * NUM_BUFFERS * MAX_CONNS * 2 + buff * MAX_CONNS * 2 + MAX_CONNS +
+         wire];
+  }
+
+  SharedBuffer& send_buffer(int sz, int buff, int left_right, int wire) {
+    return send_buffers_
+        [sz * NUM_BUFFERS * MAX_CONNS * 2 + buff * MAX_CONNS * 2 +
+         left_right * MAX_CONNS + wire];
+  }
+
+  SharedBuffer& recv_buffer_left(int sz, int buff, int wire) {
+    return recv_buffers_
+        [sz * NUM_BUFFERS * MAX_CONNS * 2 + buff * MAX_CONNS * 2 + wire];
+  }
+
+  SharedBuffer& recv_buffer_right(int sz, int buff, int wire) {
+    return recv_buffers_
+        [sz * NUM_BUFFERS * MAX_CONNS * 2 + buff * MAX_CONNS * 2 + MAX_CONNS +
+         wire];
+  }
+
+  SharedBuffer& recv_buffer(int sz, int buff, int left_right, int wire) {
+    return recv_buffers_
+        [sz * NUM_BUFFERS * MAX_CONNS * 2 + buff * MAX_CONNS * 2 +
+         left_right * MAX_CONNS + wire];
+  }
+
+  void post_recv_all(int sz, int buff) {
+    int n_wires = left_.size();
+    for (int lr = 0; lr < 2; lr++) {
+      for (int lw = 0; lw < n_wires; lw++) {
+        recv_from(sz, lr, lw, buff);
+      }
+    }
+  }
+
+  void post_send_right_all(int sz, int buff) {
+    int n_wires = left_.size();
+    for (int lw = 0; lw < n_wires; lw++) {
+      send_to(sz, 0, lw, buff);
+    }
+  }
+
+  void post_send_left_all(int sz, int buff) {
+    int n_wires = left_.size();
+    for (int lw = 0; lw < n_wires; lw++) {
+      send_to(sz, 1, lw, buff);
+    }
+  }
+
   int rank_;
   int size_;
   SideChannel side_channel_;
   std::vector<Connection> left_;
   std::vector<Connection> right_;
+  std::vector<SharedBuffer> send_buffers_;
+  std::vector<SharedBuffer> recv_buffers_;
 };
 
 } // namespace mlx::core::distributed::jaccl

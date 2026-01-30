@@ -5,8 +5,6 @@
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/jaccl/utils.h"
 
-constexpr int NUM_BUFFERS = 2;
-
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 
 namespace mlx::core::distributed::jaccl {
