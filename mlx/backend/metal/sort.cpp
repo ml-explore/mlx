@@ -573,9 +573,6 @@ void gpu_radix_partition(
     kth += size_sorted_axis;
   }
 
-
-  
-
   auto in_nc_str = in.strides();
   in_nc_str.erase(in_nc_str.begin() + axis);
 

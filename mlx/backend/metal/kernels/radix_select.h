@@ -747,45 +747,60 @@ radix_select_large_streaming(
     // Build histogram - no prefix check needed on first pass
     if (is_contiguous) {
       // Process 4 elements at a time for better memory throughput
-      int n4 = n & ~3;  // Round down to multiple of 4
+      int n4 = n & ~3; // Round down to multiple of 4
       for (int i = lid.x * 4; i < n4; i += BLOCK_THREADS * 4) {
         ValT val0 = row_input[i];
         ValT val1 = row_input[i + 1];
         ValT val2 = row_input[i + 2];
         ValT val3 = row_input[i + 3];
-        
+
         UnsignedT key0 = Traits::to_radix(val0);
         UnsignedT key1 = Traits::to_radix(val1);
         UnsignedT key2 = Traits::to_radix(val2);
         UnsignedT key3 = Traits::to_radix(val3);
-        
-        if (is_nan_value(val0)) key0 = ~UnsignedT(0);
-        if (is_nan_value(val1)) key1 = ~UnsignedT(0);
-        if (is_nan_value(val2)) key2 = ~UnsignedT(0);
-        if (is_nan_value(val3)) key3 = ~UnsignedT(0);
-        
+
+        if (is_nan_value(val0))
+          key0 = ~UnsignedT(0);
+        if (is_nan_value(val1))
+          key1 = ~UnsignedT(0);
+        if (is_nan_value(val2))
+          key2 = ~UnsignedT(0);
+        if (is_nan_value(val3))
+          key3 = ~UnsignedT(0);
+
         int digit0 = extract_digit(key0, start_bit, RADIX_BITS);
         int digit1 = extract_digit(key1, start_bit, RADIX_BITS);
         int digit2 = extract_digit(key2, start_bit, RADIX_BITS);
         int digit3 = extract_digit(key3, start_bit, RADIX_BITS);
-        
+
         atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_hist[digit0], 1, memory_order_relaxed);
+            (threadgroup atomic_int*)&shared_hist[digit0],
+            1,
+            memory_order_relaxed);
         atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_hist[digit1], 1, memory_order_relaxed);
+            (threadgroup atomic_int*)&shared_hist[digit1],
+            1,
+            memory_order_relaxed);
         atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_hist[digit2], 1, memory_order_relaxed);
+            (threadgroup atomic_int*)&shared_hist[digit2],
+            1,
+            memory_order_relaxed);
         atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_hist[digit3], 1, memory_order_relaxed);
+            (threadgroup atomic_int*)&shared_hist[digit3],
+            1,
+            memory_order_relaxed);
       }
       // Handle remaining elements
       for (int i = n4 + lid.x; i < n; i += BLOCK_THREADS) {
         ValT val = row_input[i];
         UnsignedT key = Traits::to_radix(val);
-        if (is_nan_value(val)) key = ~UnsignedT(0);
+        if (is_nan_value(val))
+          key = ~UnsignedT(0);
         int digit = extract_digit(key, start_bit, RADIX_BITS);
         atomic_fetch_add_explicit(
-            (threadgroup atomic_int*)&shared_hist[digit], 1, memory_order_relaxed);
+            (threadgroup atomic_int*)&shared_hist[digit],
+            1,
+            memory_order_relaxed);
       }
     } else {
       for (int i = lid.x; i < n; i += BLOCK_THREADS) {
