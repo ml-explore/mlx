@@ -9,6 +9,13 @@
 
 namespace mlx::core::cu {
 
+struct Identity {
+  template <typename T>
+  __device__ __forceinline__ T operator()(T x) const {
+    return x;
+  }
+};
+
 // Reduce ops.
 struct And {
   __device__ __forceinline__ bool operator()(bool a, bool b) {
