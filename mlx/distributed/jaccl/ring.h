@@ -76,7 +76,7 @@ class RingGroup : public GroupImpl {
    */
   void allocate_buffers();
 
-  void send_to(int sz, int left_right, int wire, int buff) {
+  void send_to(int sz, int buff, int left_right, int wire) {
     if (left_right) {
       left_[wire].post_send(
           send_buffer_left(sz, buff, wire),
@@ -87,14 +87,14 @@ class RingGroup : public GroupImpl {
     }
   }
 
-  void recv_from(int sz, int left_right, int wire, int buff) {
+  void recv_from(int sz, int buff, int left_right, int wire) {
     if (left_right) {
       right_[wire].post_recv(
           recv_buffer_right(sz, buff, wire),
-          SEND_WR << 16 | buff << 8 | (MAX_CONNS + wire));
+          RECV_WR << 16 | buff << 8 | (MAX_CONNS + wire));
     } else {
-      right_[wire].post_send(
-          recv_buffer_left(sz, buff, wire), SEND_WR << 16 | buff << 8 | wire);
+      left_[wire].post_recv(
+          recv_buffer_left(sz, buff, wire), RECV_WR << 16 | buff << 8 | wire);
     }
   }
 
@@ -136,22 +136,17 @@ class RingGroup : public GroupImpl {
     int n_wires = left_.size();
     for (int lr = 0; lr < 2; lr++) {
       for (int lw = 0; lw < n_wires; lw++) {
-        recv_from(sz, lr, lw, buff);
+        recv_from(sz, buff, lr, lw);
       }
     }
   }
 
-  void post_send_right_all(int sz, int buff) {
+  void post_send_all(int sz, int buff) {
     int n_wires = left_.size();
-    for (int lw = 0; lw < n_wires; lw++) {
-      send_to(sz, 0, lw, buff);
-    }
-  }
-
-  void post_send_left_all(int sz, int buff) {
-    int n_wires = left_.size();
-    for (int lw = 0; lw < n_wires; lw++) {
-      send_to(sz, 1, lw, buff);
+    for (int lr = 0; lr < 2; lr++) {
+      for (int lw = 0; lw < n_wires; lw++) {
+        send_to(sz, buff, lr, lw);
+      }
     }
   }
 

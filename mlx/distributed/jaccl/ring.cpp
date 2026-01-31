@@ -106,6 +106,9 @@ void RingGroup::allocate_buffers() {
       for (int j = 0; j < MAX_CONNS * 2; j++) {
         int wire = j % MAX_CONNS;
         int lr = j / MAX_CONNS;
+        if (wire >= left_.size()) {
+          continue;
+        }
         if (lr) {
           send_buffers_[k * NUM_BUFFERS * MAX_CONNS * 2 + i * MAX_CONNS * 2 + j]
               .register_to_protection_domain(left_[wire].protection_domain);
@@ -182,24 +185,19 @@ void RingGroup::all_gather(const array& input, array& output, Stream stream) {
       int buff = 0;
       while (buff < n_steps && buff < PIPELINE) {
         post_recv_all(sz, buff);
-        for (int i = 0; i < n_wires; i++) {
-          int offset = i * N + buff * n_wires * N;
-          std::copy(
-              out_ptr + send_offset[0] + offset,
-              out_ptr + send_offset[0] + std::min(offset + N, limits[0]),
-              send_buffer_right(sz, buff, i).begin<char>());
-          send_count[i]++;
+        for (int lr = 0; lr < 2; lr++) {
+          for (int lw = 0; lw < n_wires; lw++) {
+            int offset = lw * N +
+                send_count[lr * MAX_CONNS + lw] * n_wires * N +
+                lr * n_wires * n_bytes_per_wire;
+            std::copy(
+                out_ptr + send_offset[lr] + offset,
+                out_ptr + send_offset[lr] + std::min(offset + N, limits[lr]),
+                send_buffer(sz, buff, lr, lw).begin<char>());
+            send_count[lr * MAX_CONNS + lw]++;
+          }
         }
-        post_send_right_all(sz, buff);
-        for (int i = 0; i < n_wires; i++) {
-          int offset = i * N + buff * n_wires * N + n_wires * n_bytes_per_wire;
-          std::copy(
-              out_ptr + send_offset[1] + offset,
-              out_ptr + send_offset[1] + std::min(offset + N, limits[1]),
-              send_buffer_left(sz, buff, i).begin<char>());
-          send_count[MAX_CONNS + i]++;
-        }
-        post_send_left_all(sz, buff);
+        post_send_all(sz, buff);
 
         buff++;
         in_flight += 2 * 2 * n_wires;
@@ -222,19 +220,19 @@ void RingGroup::all_gather(const array& input, array& output, Stream stream) {
 
           if (work_type == SEND_WR && send_count[wire] < n_steps) {
             int offset = lw * N + send_count[wire] * n_wires * N +
-                (1 - lr) * n_wires * n_bytes_per_wire;
+                lr * n_wires * n_bytes_per_wire;
             std::copy(
                 out_ptr + send_offset[lr] + offset,
                 out_ptr + send_offset[lr] + std::min(offset + N, limits[lr]),
                 send_buffer(sz, buff, lr, lw).begin<char>());
-            send_to(sz, lr, lw, buff);
+            send_to(sz, buff, lr, lw);
             in_flight++;
             send_count[wire]++;
           }
 
           else if (work_type == RECV_WR) {
             int offset = lw * N + recv_count[wire] * n_wires * N +
-                (1 - lr) * n_wires * n_bytes_per_wire;
+                lr * n_wires * n_bytes_per_wire;
             std::copy(
                 recv_buffer(sz, buff, lr, lw).begin<char>(),
                 recv_buffer(sz, buff, lr, lw).begin<char>() +
@@ -242,7 +240,7 @@ void RingGroup::all_gather(const array& input, array& output, Stream stream) {
                 out_ptr + recv_offset[lr] + offset);
             recv_count[wire]++;
             if (recv_count[wire] + (PIPELINE - 1) < n_steps) {
-              recv_from(sz, lr, lw, buff);
+              recv_from(sz, buff, lr, lw);
               in_flight++;
             }
           }
