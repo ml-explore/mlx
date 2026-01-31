@@ -573,57 +573,8 @@ void gpu_radix_partition(
     kth += size_sorted_axis;
   }
 
-  // For very small arrays, fall back to full sort
-  constexpr int RADIX_SELECT_THRESHOLD = 64;
-  if (size_sorted_axis <= RADIX_SELECT_THRESHOLD) {
-    gpu_merge_sort(s, d, in, out, axis_, arg_partition);
-    return;
-  }
 
-  // Prepare shapes
-  int n_rows = in.size() / in.shape(axis);
-
-  // Merge sort when:
-  // 1. N is small (fixed overhead dominates)
-  // 2. N is large but batch count is low (can't saturate GPU with radix)
-  constexpr int BLOCK_THREADS = 256;
-
-  // Number of radix passes depends on data type
-  int type_bits = size_of(in.dtype()) * 8;
-  int num_passes = (type_bits + 7) / 8;
-
-  // Radix select has fixed overhead: histogram init, multiple passes, prefix
-  // sum This overhead is ~O(num_passes * RADIX_SIZE) per row For small arrays,
-  // this overhead exceeds the O(N log N) cost of merge sort
-  //
-  // Crossover point: radix overhead ~ N * log2(N) / constant
-  // Empirically: radix wins when N > ~4096 for float32 (4 passes)
-  //              radix wins when N > ~2048 for float16 (2 passes)
-  int min_size_for_radix = 1024 * num_passes;
-
-  if (size_sorted_axis < min_size_for_radix) {
-    gpu_merge_sort(s, d, in, out, axis_, arg_partition);
-    return;
-  }
-
-  // For large arrays with low batch count, merge sort is used because it can
-  // use multiple threadgroups per row while radix is limited to one
-  int elements_per_thread =
-      (size_sorted_axis + BLOCK_THREADS - 1) / BLOCK_THREADS;
-  int radix_work_per_thread = elements_per_thread * (num_passes + 2);
-
-  constexpr int MAX_EFFICIENT_WORK_PER_THREAD = 64;
-  constexpr int MIN_ACTIVE_THREADS_FOR_RADIX = 8192;
-
-  bool radix_work_too_high =
-      radix_work_per_thread > MAX_EFFICIENT_WORK_PER_THREAD;
-  bool insufficient_parallelism =
-      (n_rows * BLOCK_THREADS) < MIN_ACTIVE_THREADS_FOR_RADIX;
-
-  if (radix_work_too_high && insufficient_parallelism) {
-    gpu_merge_sort(s, d, in, out, axis_, arg_partition);
-    return;
-  }
+  
 
   auto in_nc_str = in.strides();
   in_nc_str.erase(in_nc_str.begin() + axis);
