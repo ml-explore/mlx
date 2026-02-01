@@ -860,13 +860,13 @@ void compile_fuse(
         // Attach prefix to the Reduce primitive
         auto& reduce = static_cast<Reduce&>(arr.primitive());
         reduce.set_fused_prefix(
-            std::move(prefix_tape),
-            std::move(prefix_inputs),
-            std::move(constant_ids));
+            prefix_tape, prefix_inputs, std::move(constant_ids));
 
-        for (auto& p : reduce.prefix_tape()) {
+        for (auto& p : prefix_tape) {
           global_cache.insert(p.id());
+          parents_map.erase(p.id());
         }
+        arr.inputs() = std::move(prefix_inputs);
       }
 
       // Add the reduction to the new tape (with or without fused prefix)

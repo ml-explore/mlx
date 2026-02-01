@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/reduce/all_reduce.cuh"
+#include "mlx/backend/cuda/reduce/reduce.cuh"
 
 namespace mlx::core {
 

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "mlx/backend/cuda/reduce/reduce.cuh"
+#include "mlx/backend/cuda/device/config.h"
 #include "mlx/backend/cuda/reduce/reduce_ops.cuh"
 
 #include <cooperative_groups.h>

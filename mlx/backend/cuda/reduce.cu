@@ -12,6 +12,39 @@ namespace mlx::core {
 
 void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Reduce::eval_gpu");
+
+  if (has_fused_prefix()) {
+    array in = inputs[0];
+
+    auto& s = stream();
+    auto& encoder = cu::get_command_encoder(s);
+
+    if (in.size() == 0) {
+      init_reduce(encoder, in, out, reduce_type_);
+      return;
+    }
+
+    ReductionPlan plan = get_reduction_plan(in, axes_);
+
+    bool broadcasted = false;
+    for (int i = 0, j = 0; i < in.ndim() && !broadcasted; i++) {
+      if (j < axes_.size() && axes_[j] == i) {
+        j++;
+      } else {
+        broadcasted = in.strides(i) == 0;
+      }
+    }
+    if (plan.type == GeneralReduce || broadcasted || !in.flags().contiguous) {
+      array in_copy = contiguous_copy_gpu(in, s);
+      encoder.add_temporary(in_copy);
+      in = in_copy;
+      plan = get_reduction_plan(in, axes_);
+    }
+
+    fused_reduce(encoder, *this, inputs, out, axes_, plan, s);
+    return;
+  }
+
   assert(inputs.size() == 1);
   array in = inputs[0];
 
@@ -49,11 +82,6 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     encoder.add_temporary(in_copy);
     in = in_copy;
     plan = get_reduction_plan(in, axes_);
-  }
-
-  if (has_fused_prefix()) {
-    fused_reduce(encoder, *this, in, out, axes_, plan);
-    return;
   }
 
   if (plan.type == ContiguousAllReduce) {
