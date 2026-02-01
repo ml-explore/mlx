@@ -13,13 +13,13 @@ namespace mlx::core::cu {
 
 namespace cg = cooperative_groups;
 
-template <
-    typename T,
-    typename U,
-    typename ReduceOp,
-    int N = 4,
-    typename PrefixOp = Identity>
-__global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
+template <typename T, typename U, typename ReduceOp, int N, typename PrefixOp>
+__device__ void all_reduce_impl(
+    T* in,
+    U* out,
+    size_t block_step,
+    size_t size,
+    PrefixOp prefix) {
   // TODO: Process multiple "rows" in each thread
   constexpr int M = 1;
 
@@ -29,7 +29,6 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
 
   const U init = ReduceInit<ReduceOp, T>::value();
   ReduceOp op;
-  PrefixOp prefix;
 
   T vals[N];
   U accs[M];
@@ -50,8 +49,8 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   if (i < check) {
     cub::LoadDirectBlocked(
         block.thread_rank(), in + i, vals, check - i, cast_to<T>(init));
-    for (int i = 0; i < N; i++) {
-      accs[0] = op(accs[0], cast_to<U>(prefix(vals[i])));
+    for (int j = 0; j < N; j++) {
+      accs[0] = op(accs[0], cast_to<U>(prefix(vals[j])));
     }
   }
 
@@ -61,6 +60,24 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   if (block.thread_rank() == 0) {
     out[grid.block_rank()] = accs[0];
   }
+}
+
+template <typename T, typename U, typename ReduceOp, int N, typename PrefixOp>
+__global__ void
+all_reduce(T* in, U* out, size_t block_step, size_t size, PrefixOp prefix) {
+  all_reduce_impl<T, U, ReduceOp, N, PrefixOp>(
+      in, out, block_step, size, prefix);
+}
+
+template <
+    typename T,
+    typename U,
+    typename ReduceOp,
+    int N = 4,
+    typename PrefixOp = Identity>
+__global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
+  all_reduce_impl<T, U, ReduceOp, N, PrefixOp>(
+      in, out, block_step, size, PrefixOp{});
 }
 
 } // namespace mlx::core::cu

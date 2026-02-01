@@ -42,6 +42,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/all_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/col_reduce.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/reduce/fused_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/init_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce/row_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/rms_norm.cu
@@ -90,7 +91,8 @@ file(
   GLOB MLX_JIT_SOURCES
   RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
   "${CMAKE_CURRENT_SOURCE_DIR}/device/*.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/device/*.cuh")
+  "${CMAKE_CURRENT_SOURCE_DIR}/device/*.cuh"
+  "${CMAKE_CURRENT_SOURCE_DIR}/reduce/*.cuh")
 string(JOIN ":" MLX_JIT_SOURCES_ARG ${MLX_JIT_SOURCES})
 add_custom_command(
   OUTPUT gen/cuda_jit_sources.h

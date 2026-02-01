@@ -90,14 +90,15 @@ template <
     int NDIM,
     int BM,
     int BN,
-    int N_READS = 4,
-    int BLOCKS = 1,
-    typename PrefixOp = Identity>
-__global__ void col_reduce_looped(
+    int N_READS,
+    int BLOCKS,
+    typename PrefixOp>
+__device__ void col_reduce_looped_impl(
     T* in,
     U* out,
-    const __grid_constant__ ColReduceArgs args,
-    int64_t out_size) {
+    const ColReduceArgs& args,
+    int64_t out_size,
+    PrefixOp prefix) {
   auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
@@ -121,7 +122,6 @@ __global__ void col_reduce_looped(
 
   // Initialize the running totals
   Op op;
-  PrefixOp prefix;
   U totals[N_READS];
   for (int i = 0; i < N_READS; i++) {
     totals[i] = ReduceInit<Op, T>::value();
@@ -204,19 +204,56 @@ __global__ void col_reduce_looped(
   }
 }
 
+// Kernel with prefix parameter
 template <
     typename T,
     typename U,
     typename Op,
-    int N_READS = 4,
-    typename PrefixOp = Identity>
-__global__ void col_reduce_small(
-    const T* in,
+    int NDIM,
+    int BM,
+    int BN,
+    int N_READS,
+    int BLOCKS,
+    typename PrefixOp>
+__global__ void col_reduce_looped(
+    T* in,
     U* out,
     const __grid_constant__ ColReduceArgs args,
-    size_t total) {
+    int64_t out_size,
+    PrefixOp prefix) {
+  col_reduce_looped_impl<T, U, Op, NDIM, BM, BN, N_READS, BLOCKS, PrefixOp>(
+      in, out, args, out_size, prefix);
+}
+
+// Kernel without prefix parameter (default Identity)
+template <
+    typename T,
+    typename U,
+    typename Op,
+    int NDIM,
+    int BM,
+    int BN,
+    int N_READS = 4,
+    int BLOCKS = 1,
+    typename PrefixOp = Identity>
+__global__ void col_reduce_looped(
+    T* in,
+    U* out,
+    const __grid_constant__ ColReduceArgs args,
+    int64_t out_size) {
+  col_reduce_looped_impl<T, U, Op, NDIM, BM, BN, N_READS, BLOCKS, PrefixOp>(
+      in, out, args, out_size, PrefixOp{});
+}
+
+// Device function for col_reduce_small
+template <typename T, typename U, typename Op, int N_READS, typename PrefixOp>
+__device__ void col_reduce_small_impl(
+    const T* in,
+    U* out,
+    const ColReduceArgs& args,
+    size_t total,
+    PrefixOp prefix) {
   Op op;
-  PrefixOp prefix;
   auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
 
@@ -249,6 +286,34 @@ __global__ void col_reduce_small(
   }
 
   store_vector(out, 0, accumulator);
+}
+
+// Kernel with prefix parameter
+template <typename T, typename U, typename Op, int N_READS, typename PrefixOp>
+__global__ void col_reduce_small(
+    const T* in,
+    U* out,
+    const __grid_constant__ ColReduceArgs args,
+    size_t total,
+    PrefixOp prefix) {
+  col_reduce_small_impl<T, U, Op, N_READS, PrefixOp>(
+      in, out, args, total, prefix);
+}
+
+// Kernel without prefix parameter (default Identity)
+template <
+    typename T,
+    typename U,
+    typename Op,
+    int N_READS = 4,
+    typename PrefixOp = Identity>
+__global__ void col_reduce_small(
+    const T* in,
+    U* out,
+    const __grid_constant__ ColReduceArgs args,
+    size_t total) {
+  col_reduce_small_impl<T, U, Op, N_READS, PrefixOp>(
+      in, out, args, total, PrefixOp{});
 }
 
 } // namespace mlx::core::cu

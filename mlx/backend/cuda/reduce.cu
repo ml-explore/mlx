@@ -51,6 +51,11 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     plan = get_reduction_plan(in, axes_);
   }
 
+  if (has_fused_prefix()) {
+    fused_reduce(encoder, *this, in, out, axes_, plan);
+    return;
+  }
+
   if (plan.type == ContiguousAllReduce) {
     all_reduce(encoder, in, out, reduce_type_);
     return;

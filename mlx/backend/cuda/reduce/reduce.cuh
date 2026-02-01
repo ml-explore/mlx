@@ -68,4 +68,12 @@ void init_reduce(
     array& out,
     Reduce::ReduceType reduce_type);
 
+void fused_reduce(
+    cu::CommandEncoder& encoder,
+    const Reduce& reduce,
+    const array& in,
+    array& out,
+    const std::vector<int>& axes,
+    const ReductionPlan& plan);
+
 } // namespace mlx::core

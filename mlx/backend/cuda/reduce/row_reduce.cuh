@@ -84,18 +84,21 @@ template <
     typename T,
     typename U,
     typename ReduceOp,
-    int N = 4,
-    int M = 1,
-    typename PrefixOp = Identity>
-__global__ void
-row_reduce_simple(const T* in, U* out, size_t n_rows, int size) {
+    int N,
+    int M,
+    typename PrefixOp>
+__device__ void row_reduce_simple_impl(
+    const T* in,
+    U* out,
+    size_t n_rows,
+    int size,
+    PrefixOp prefix) {
   auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
 
   const U init = ReduceInit<ReduceOp, T>::value();
   ReduceOp op;
-  PrefixOp prefix;
 
   AlignedVector<T, N> vals[M];
   AlignedVector<U, M> accs;
@@ -153,17 +156,51 @@ row_reduce_simple(const T* in, U* out, size_t n_rows, int size) {
   }
 }
 
+// Kernel with prefix parameter
+template <
+    typename T,
+    typename U,
+    typename ReduceOp,
+    int N,
+    int M,
+    typename PrefixOp>
+__global__ void row_reduce_simple(
+    const T* in,
+    U* out,
+    size_t n_rows,
+    int size,
+    PrefixOp prefix) {
+  row_reduce_simple_impl<T, U, ReduceOp, N, M, PrefixOp>(
+      in, out, n_rows, size, prefix);
+}
+
+// Kernel without prefix parameter (default Identity)
+template <
+    typename T,
+    typename U,
+    typename ReduceOp,
+    int N = 4,
+    int M = 1,
+    typename PrefixOp = Identity>
+__global__ void
+row_reduce_simple(const T* in, U* out, size_t n_rows, int size) {
+  row_reduce_simple_impl<T, U, ReduceOp, N, M, PrefixOp>(
+      in, out, n_rows, size, PrefixOp{});
+}
+
+// Device function for row_reduce_looped
 template <
     typename T,
     typename U,
     typename Op,
     int NDIM,
-    int N_READS = 4,
-    typename PrefixOp = Identity>
-__global__ void row_reduce_looped(
+    int N_READS,
+    typename PrefixOp>
+__device__ void row_reduce_looped_impl(
     const T* in,
     U* out,
-    const __grid_constant__ RowReduceArgs args) {
+    const RowReduceArgs& args,
+    PrefixOp prefix) {
   auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
@@ -171,7 +208,6 @@ __global__ void row_reduce_looped(
   size_t out_idx = grid.block_rank();
 
   Op op;
-  PrefixOp prefix;
 
   U total[1];
   U init = ReduceInit<Op, T>::value();
@@ -239,6 +275,39 @@ __global__ void row_reduce_looped(
   if (block.thread_rank() == 0) {
     out[out_idx] = total[0];
   }
+}
+
+// Kernel with prefix parameter
+template <
+    typename T,
+    typename U,
+    typename Op,
+    int NDIM,
+    int N_READS,
+    typename PrefixOp>
+__global__ void row_reduce_looped(
+    const T* in,
+    U* out,
+    const __grid_constant__ RowReduceArgs args,
+    PrefixOp prefix) {
+  row_reduce_looped_impl<T, U, Op, NDIM, N_READS, PrefixOp>(
+      in, out, args, prefix);
+}
+
+// Kernel without prefix parameter (default Identity)
+template <
+    typename T,
+    typename U,
+    typename Op,
+    int NDIM,
+    int N_READS = 4,
+    typename PrefixOp = Identity>
+__global__ void row_reduce_looped(
+    const T* in,
+    U* out,
+    const __grid_constant__ RowReduceArgs args) {
+  row_reduce_looped_impl<T, U, Op, NDIM, N_READS, PrefixOp>(
+      in, out, args, PrefixOp{});
 }
 
 } // namespace mlx::core::cu
