@@ -24,6 +24,7 @@ METAL_FUNC void scatter_impl(
     const constant size_t& out_ndim,
     const constant int* axes,
     const constant size_t& idx_size,
+    device atomic<int32_t>* global_failure,
     const thread Indices<IdxT, NIDX>& indices,
     uint2 gid [[thread_position_in_grid]]) {
   Op op;
@@ -47,6 +48,11 @@ METAL_FUNC void scatter_impl(
                 indices.ndim);
       auto ax = axes[i];
       auto idx_val = offset_neg_idx(indices.buffers[i][idx_loc], out_shape[ax]);
+
+      if (!check_bounds(idx_val, out_shape[ax], global_failure)) {
+        return;
+      }
+
       out_idx +=
           static_cast<LocT>(idx_val) * static_cast<LocT>(out_strides[ax]);
     }

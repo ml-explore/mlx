@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include "mlx/array.h"
+#include "mlx/failure.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
@@ -132,7 +133,7 @@ bool array::is_available() const {
   if (status() == Status::available) {
     return true;
   } else if (
-      status() == Status::evaluated &&
+      status() == Status::evaluated && !global_failure() &&
       (!event().valid() || event().is_signaled())) {
     set_status(Status::available);
     return true;
@@ -145,6 +146,10 @@ void array::wait() {
     if (event().valid()) {
       event().wait();
       detach_event();
+    }
+    if (global_failure()) {
+      reset_global_failure();
+      throw std::out_of_range("Array index out of bounds");
     }
     set_status(Status::available);
   }

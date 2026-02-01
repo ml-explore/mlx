@@ -13,6 +13,7 @@ METAL_FUNC void gather_impl(
     const constant size_t& src_ndim [[buffer(4)]],
     const constant int* slice_sizes [[buffer(5)]],
     const constant int* axes [[buffer(6)]],
+    device atomic<int32_t>* global_failure [[buffer(7)]],
     const thread Indices<IdxT, NIDX>& indices,
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
@@ -35,6 +36,11 @@ METAL_FUNC void gather_impl(
     }
     auto ax = axes[i];
     auto idx_val = offset_neg_idx(indices.buffers[i][idx_loc], src_shape[ax]);
+
+    if (!check_bounds(idx_val, src_shape[ax], global_failure)) {
+      return;
+    }
+
     src_idx += static_cast<LocT>(idx_val) * static_cast<LocT>(src_strides[ax]);
   }
 

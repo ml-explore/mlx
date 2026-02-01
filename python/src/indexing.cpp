@@ -813,7 +813,14 @@ auto mlx_slice_update(
       throw std::invalid_argument(msg.str());
     }
     auto idx = nb::cast<int>(obj);
-    idx = idx < 0 ? idx + stops[0] : idx;
+    auto axis_size = stops[0];
+    if (idx < -axis_size || idx >= axis_size) {
+      std::ostringstream msg;
+      msg << "Index " << idx << " is out of bounds for axis 0 with size "
+          << axis_size << ".";
+      throw std::out_of_range(msg.str());
+    }
+    idx = idx < 0 ? idx + axis_size : idx;
     starts[0] = idx;
     stops[0] = idx + 1;
     auto out = slice_update(
@@ -874,7 +881,14 @@ auto mlx_slice_update(
       upd_ax--;
     } else if (nb::isinstance<nb::int_>(pyidx)) {
       int st = nb::cast<int>(pyidx);
-      st = (st < 0) ? st + src.shape(i) : st;
+      int axis_size = src.shape(ax);
+      if (st < -axis_size || st >= axis_size) {
+        std::ostringstream msg;
+        msg << "Index " << st << " is out of bounds for axis " << ax
+            << " with size " << axis_size << ".";
+        throw std::out_of_range(msg.str());
+      }
+      st = (st < 0) ? st + axis_size : st;
       starts[ax] = st;
       stops[ax] = st + 1;
       if (upd_ax >= 0) {

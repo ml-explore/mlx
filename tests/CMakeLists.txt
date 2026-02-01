@@ -18,6 +18,7 @@ target_sources(
           array_tests.cpp
           arg_reduce_tests.cpp
           autograd_tests.cpp
+          bounds_checks_tests.cpp
           blas_tests.cpp
           compile_tests.cpp
           custom_vjp_tests.cpp
