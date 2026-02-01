@@ -12,12 +12,12 @@ runs:
       run: |
         pip install --upgrade pip
         pip install cmake setuptools typing_extensions
-        pip install -e . -v
+        pip install -e ".[dev]" -v
 
     - name: Install tests dependencies
       shell: bash -l {0}
       run: |
-        pip install numpy torch tensorflow
+        pip install tensorflow
 
     - name: Run Python tests
       shell: bash -l {0}
