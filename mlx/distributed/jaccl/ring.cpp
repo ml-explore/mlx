@@ -267,6 +267,202 @@ void RingGroup::all_reduce(
     const array& input,
     array& output,
     Stream stream,
-    ReduceOp reduce_op) {}
+    ReduceOp reduce_op) {
+  auto in_ptr = input.data<T>();
+  auto out_ptr = output.data<T>();
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(input);
+  encoder.set_output_array(output);
+  encoder.dispatch([in_ptr, out_ptr, size = input.size(), this, reduce_op]() {
+    // If not inplace all reduce then copy the input to the output first
+    if (in_ptr != out_ptr) {
+      std::memcpy(out_ptr, in_ptr, size * sizeof(T));
+    }
+
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE * MAX_CONNS * 2 * 2;
+    int n_wires = left_.size();
+    size_t chunk_size = (size + size_ - 1) / size_;
+    size_t size_per_wire = (chunk_size + (2 * n_wires) - 1) / (2 * n_wires);
+    auto [sz, N] = buffer_size_from_message(size_per_wire * sizeof(T));
+    N /= sizeof(T);
+    int64_t n_steps = (size_per_wire + N - 1) / N;
+
+    // Counters to maintain the state of transfers
+    int in_flight = 0;
+    size_t send_offset[2];
+    size_t recv_offset[2];
+    int64_t limits[2];
+    int send_count[2 * MAX_CONNS] = {0};
+    int recv_count[2 * MAX_CONNS] = {0};
+    send_offset[0] = send_offset[1] = rank_ * chunk_size;
+    recv_offset[0] = ((rank_ + size_ - 1) % size_) * chunk_size;
+    recv_offset[1] = ((rank_ + 1) % size_) * chunk_size;
+    limits[0] = std::min(n_wires * size_per_wire, size - send_offset[0]);
+    limits[1] = std::min(chunk_size, size - send_offset[1]);
+
+    // First reduce scatter
+    //
+    // Possible perf improvement by not syncing at every step but running ahead
+    // as needed.
+    for (int k = 0; k < size_ - 1; k++) {
+      // Prefill the pipeline
+      int buff = 0;
+      while (buff < n_steps && buff < PIPELINE) {
+        post_recv_all(sz, buff);
+        for (int lr = 0; lr < 2; lr++) {
+          for (int lw = 0; lw < n_wires; lw++) {
+            int offset = lw * N +
+                send_count[lr * MAX_CONNS + lw] * n_wires * N +
+                lr * n_wires * size_per_wire;
+            std::copy(
+                out_ptr + send_offset[lr] + offset,
+                out_ptr + send_offset[lr] + std::min(offset + N, limits[lr]),
+                send_buffer(sz, buff, lr, lw).begin<T>());
+            send_count[lr * MAX_CONNS + lw]++;
+          }
+        }
+        post_send_all(sz, buff);
+
+        buff++;
+        in_flight += 2 * 2 * n_wires;
+      }
+
+      // Main loop
+      //
+      // Keep going until we have no longer data in flight.
+      while (in_flight > 0) {
+        ibv_wc wc[WC_NUM];
+        int n = poll(left_, right_, WC_NUM, wc);
+        for (int i = 0; i < n; i++) {
+          int work_type = wc[i].wr_id >> 16;
+          int buff = (wc[i].wr_id >> 8) & 0xff;
+          int wire = wc[i].wr_id & 0xff;
+          int lr = wire / MAX_CONNS;
+          int lw = wire % MAX_CONNS;
+
+          in_flight--;
+
+          if (work_type == SEND_WR && send_count[wire] < n_steps) {
+            int offset = lw * N + send_count[wire] * n_wires * N +
+                lr * n_wires * size_per_wire;
+            std::copy(
+                out_ptr + send_offset[lr] + offset,
+                out_ptr + send_offset[lr] + std::min(offset + N, limits[lr]),
+                send_buffer(sz, buff, lr, lw).begin<T>());
+            send_to(sz, buff, lr, lw);
+            in_flight++;
+            send_count[wire]++;
+          }
+
+          else if (work_type == RECV_WR) {
+            int offset = lw * N + recv_count[wire] * n_wires * N +
+                lr * n_wires * size_per_wire;
+            reduce_op(
+                recv_buffer(sz, buff, lr, lw).begin<T>(),
+                out_ptr + recv_offset[lr] + offset,
+                std::min(N, limits[lr] - offset));
+            recv_count[wire]++;
+            if (recv_count[wire] + (PIPELINE - 1) < n_steps) {
+              recv_from(sz, buff, lr, lw);
+              in_flight++;
+            }
+          }
+        }
+      }
+
+      send_offset[0] = (send_offset[0] + size - chunk_size) % size;
+      recv_offset[0] = (recv_offset[0] + size - chunk_size) % size;
+      send_offset[1] = (send_offset[1] + chunk_size) % size;
+      recv_offset[1] = (recv_offset[1] + chunk_size) % size;
+      for (int i = 0; i < 2 * MAX_CONNS; i++) {
+        send_count[i] = recv_count[i] = 0;
+      }
+      limits[0] = std::min(n_wires * size_per_wire, size - send_offset[0]);
+      limits[1] = std::min(chunk_size, size - send_offset[1]);
+    }
+
+    // Secondly all gather
+    //
+    // The offsets are correct from the scatter reduce
+    for (int k = 0; k < size_ - 1; k++) {
+      // Prefill the pipeline
+      int buff = 0;
+      while (buff < n_steps && buff < PIPELINE) {
+        post_recv_all(sz, buff);
+        for (int lr = 0; lr < 2; lr++) {
+          for (int lw = 0; lw < n_wires; lw++) {
+            int offset = lw * N +
+                send_count[lr * MAX_CONNS + lw] * n_wires * N +
+                lr * n_wires * size_per_wire;
+            std::copy(
+                out_ptr + send_offset[lr] + offset,
+                out_ptr + send_offset[lr] + std::min(offset + N, limits[lr]),
+                send_buffer(sz, buff, lr, lw).begin<T>());
+            send_count[lr * MAX_CONNS + lw]++;
+          }
+        }
+        post_send_all(sz, buff);
+
+        buff++;
+        in_flight += 2 * 2 * n_wires;
+      }
+
+      // Main loop
+      //
+      // Keep going until we have no longer data in flight.
+      while (in_flight > 0) {
+        ibv_wc wc[WC_NUM];
+        int n = poll(left_, right_, WC_NUM, wc);
+        for (int i = 0; i < n; i++) {
+          int work_type = wc[i].wr_id >> 16;
+          int buff = (wc[i].wr_id >> 8) & 0xff;
+          int wire = wc[i].wr_id & 0xff;
+          int lr = wire / MAX_CONNS;
+          int lw = wire % MAX_CONNS;
+
+          in_flight--;
+
+          if (work_type == SEND_WR && send_count[wire] < n_steps) {
+            int offset = lw * N + send_count[wire] * n_wires * N +
+                lr * n_wires * size_per_wire;
+            std::copy(
+                out_ptr + send_offset[lr] + offset,
+                out_ptr + send_offset[lr] + std::min(offset + N, limits[lr]),
+                send_buffer(sz, buff, lr, lw).begin<T>());
+            send_to(sz, buff, lr, lw);
+            in_flight++;
+            send_count[wire]++;
+          }
+
+          else if (work_type == RECV_WR) {
+            int offset = lw * N + recv_count[wire] * n_wires * N +
+                lr * n_wires * size_per_wire;
+            std::copy(
+                recv_buffer(sz, buff, lr, lw).begin<T>(),
+                recv_buffer(sz, buff, lr, lw).begin<T>() +
+                    std::min(N, limits[lr] - offset),
+                out_ptr + recv_offset[lr] + offset);
+            recv_count[wire]++;
+            if (recv_count[wire] + (PIPELINE - 1) < n_steps) {
+              recv_from(sz, buff, lr, lw);
+              in_flight++;
+            }
+          }
+        }
+      }
+
+      send_offset[0] = (send_offset[0] + size - chunk_size) % size;
+      recv_offset[0] = (recv_offset[0] + size - chunk_size) % size;
+      send_offset[1] = (send_offset[1] + chunk_size) % size;
+      recv_offset[1] = (recv_offset[1] + chunk_size) % size;
+      for (int i = 0; i < 2 * MAX_CONNS; i++) {
+        send_count[i] = recv_count[i] = 0;
+      }
+      limits[0] = std::min(n_wires * size_per_wire, size - send_offset[0]);
+      limits[1] = std::min(chunk_size, size - send_offset[1]);
+    }
+  });
+}
 
 } // namespace mlx::core::distributed::jaccl
