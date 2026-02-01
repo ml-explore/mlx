@@ -24,7 +24,6 @@ __global__ void sparse_matmul_csr_kernel(
     int n_rows,
     int n_cols,
     int dense_b_cols) {
-  // Each block processes one row of the sparse matrix
   int row = blockIdx.x;
 
   if (row >= n_rows) {
@@ -34,11 +33,9 @@ __global__ void sparse_matmul_csr_kernel(
   int row_start = row_ptr[row];
   int row_end = row_ptr[row + 1];
 
-  // Each thread processes multiple columns of the output
   for (int col = threadIdx.x; col < n_cols; col += BLOCK_SIZE) {
     T sum = 0;
 
-    // Iterate through nonzero elements in this row
     for (int idx = row_start; idx < row_end; idx++) {
       int k = col_indices[idx];
       T a_val = values[idx];
@@ -74,7 +71,6 @@ void SparseMatmulCSR::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   int dense_b_cols = dense_b.shape(1);
 
-  // Launch kernel
   dispatch_float_types(values.dtype(), "sparse_matmul_csr", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
 

@@ -4,7 +4,6 @@
 #include <metal_math>
 
 // clang-format off
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/sparse.h"
 

@@ -154,6 +154,7 @@ Operations
    slice_update
    softmax
    sort
+   sparse_matmul_csr
    split
    sqrt
    square

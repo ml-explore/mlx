@@ -41,24 +41,18 @@ TEST_CASE("test sparse matrix-dense matrix multiplication") {
   //  [4, 0, 5]]     [5, 6]]       [29, 38]]
   auto expected = matmul(dense_a, dense_b);
 
-  // Test on default device
   auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b, 3, 2);
   CHECK(allclose(result, expected, 1e-5).item<bool>());
 
-  // Test explicitly on CPU
-  auto result_cpu = sparse_matmul_csr(
-      row_ptr, col_indices, values, dense_b, 3, 2, Device::cpu);
-  eval(result_cpu);
-  CHECK(allclose(result_cpu, expected, 1e-5).item<bool>());
-
-  // Verify CPU result matches expected values
-  auto result_cpu_data = result_cpu.data<float>();
-  CHECK_EQ(result_cpu_data[0], 11.0f); // [0,0]
-  CHECK_EQ(result_cpu_data[1], 14.0f); // [0,1]
-  CHECK_EQ(result_cpu_data[2], 9.0f); // [1,0]
-  CHECK_EQ(result_cpu_data[3], 12.0f); // [1,1]
-  CHECK_EQ(result_cpu_data[4], 29.0f); // [2,0]
-  CHECK_EQ(result_cpu_data[5], 38.0f); // [2,1]
+  // Verify result matches expected values
+  eval(result);
+  auto result_data = result.data<float>();
+  CHECK_EQ(result_data[0], 11.0f); // [0,0]
+  CHECK_EQ(result_data[1], 14.0f); // [0,1]
+  CHECK_EQ(result_data[2], 9.0f); // [1,0]
+  CHECK_EQ(result_data[3], 12.0f); // [1,1]
+  CHECK_EQ(result_data[4], 29.0f); // [2,0]
+  CHECK_EQ(result_data[5], 38.0f); // [2,1]
 }
 
 TEST_CASE("test sparse matrix-vector multiplication") {
@@ -77,21 +71,15 @@ TEST_CASE("test sparse matrix-vector multiplication") {
 
   auto expected = matmul(dense_a, dense_b);
 
-  // Test on default device
   auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b, 3, 1);
   CHECK(allclose(result, expected, 1e-5).item<bool>());
 
-  // Test explicitly on CPU
-  auto result_cpu = sparse_matmul_csr(
-      row_ptr, col_indices, values, dense_b, 3, 1, Device::cpu);
-  eval(result_cpu);
-  CHECK(allclose(result_cpu, expected, 1e-5).item<bool>());
-
-  // Verify CPU result values (diagonal matrix times vector)
-  auto result_cpu_data = result_cpu.data<float>();
-  CHECK_EQ(result_cpu_data[0], 2.0f); // 2 * 1 = 2
-  CHECK_EQ(result_cpu_data[1], 6.0f); // 3 * 2 = 6
-  CHECK_EQ(result_cpu_data[2], 12.0f); // 4 * 3 = 12
+  // Verify result values (diagonal matrix times vector)
+  eval(result);
+  auto result_data = result.data<float>();
+  CHECK_EQ(result_data[0], 2.0f); // 2 * 1 = 2
+  CHECK_EQ(result_data[1], 6.0f); // 3 * 2 = 6
+  CHECK_EQ(result_data[2], 12.0f); // 4 * 3 = 12
 }
 
 TEST_CASE("test random sparse matrix") {
@@ -131,4 +119,81 @@ TEST_CASE("test random sparse matrix") {
       row_ptr, col_indices, values, dense_b, n_rows, dense_cols);
   CHECK_EQ(result.shape(0), n_rows);
   CHECK_EQ(result.shape(1), dense_cols);
+}
+
+TEST_CASE("test sparse matmul dtypes") {
+  auto row_ptr = array({0, 2, 3, 5}, int32);
+  auto col_indices = array({0, 2, 1, 0, 2}, int32);
+
+  auto values_f32 = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, float32);
+  auto dense_a_f32 =
+      array({1.0f, 0.0f, 2.0f, 0.0f, 3.0f, 0.0f, 4.0f, 0.0f, 5.0f}, {3, 3});
+  auto dense_b_f32 = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {3, 2});
+
+  for (auto t : {float16, bfloat16, float32}) {
+    auto values = astype(values_f32, t);
+    auto dense_a = astype(dense_a_f32, t);
+    auto dense_b = astype(dense_b_f32, t);
+
+    auto expected = matmul(dense_a, dense_b);
+
+    auto result =
+        sparse_matmul_csr(row_ptr, col_indices, values, dense_b, 3, 2);
+    CHECK(allclose(result, expected, 1e-2).item<bool>());
+  }
+}
+
+TEST_CASE("test sparse matmul sizes") {
+  struct TestCase {
+    int m; // sparse matrix rows
+    int k; // sparse matrix cols = dense_b rows
+    int n; // dense_b cols = output cols
+  };
+
+  std::vector<TestCase> test_cases = {
+      {1, 1, 1},
+      {4, 4, 4},
+      {8, 16, 4},
+      {16, 8, 32},
+      {64, 64, 64},
+      {128, 256, 32},
+  };
+
+  for (auto& tc : test_cases) {
+    std::vector<int> row_ptr_vec = {0};
+    std::vector<int> col_indices_vec;
+    std::vector<float> values_vec;
+    std::vector<float> dense_a_vec(tc.m * tc.k, 0.0f);
+
+    for (int i = 0; i < tc.m; i++) {
+      int nnz = std::min(3, tc.k);
+      for (int j = 0; j < nnz; j++) {
+        int col = (i + j) % tc.k;
+        float val = static_cast<float>((i + 1) * (j + 1));
+        col_indices_vec.push_back(col);
+        values_vec.push_back(val);
+        dense_a_vec[i * tc.k + col] += val;
+      }
+      row_ptr_vec.push_back(col_indices_vec.size());
+    }
+
+    auto row_ptr = array(
+        row_ptr_vec.data(), {static_cast<int>(row_ptr_vec.size())}, int32);
+    auto col_indices = array(
+        col_indices_vec.data(),
+        {static_cast<int>(col_indices_vec.size())},
+        int32);
+    auto values = array(
+        values_vec.data(), {static_cast<int>(values_vec.size())}, float32);
+    auto dense_a = array(dense_a_vec.data(), {tc.m, tc.k}, float32);
+    auto dense_b = ones({tc.k, tc.n});
+
+    auto expected = matmul(dense_a, dense_b);
+
+    auto result =
+        sparse_matmul_csr(row_ptr, col_indices, values, dense_b, tc.m, tc.n);
+    CHECK_EQ(result.shape(0), tc.m);
+    CHECK_EQ(result.shape(1), tc.n);
+    CHECK(allclose(result, expected, 1e-5).item<bool>());
+  }
 }

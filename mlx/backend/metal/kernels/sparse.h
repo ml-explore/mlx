@@ -1,7 +1,5 @@
 // Copyright © 2025 Apple Inc.
 
-// Sparse matrix-matrix multiplication: y = A @ B
-// where A is sparse (CSR format) and B is a dense matrix
 template <typename T>
 [[kernel]] void sparse_mm_csr(
     const device int* row_ptr [[buffer(0)]],
@@ -15,7 +13,6 @@ template <typename T>
   uint row_tid = gid.y;
   uint col_vec_idx = gid.x;
 
-  // Vector size
   constexpr int BM = 4;
   int col_idx = col_vec_idx * BM;
 
@@ -34,23 +31,19 @@ template <typename T>
       int k = col_indices[idx];
       float val_a = float(values[idx]);
 
-      // Vectorized read
       const device packed_vec<T, 4>* src =
           (const device packed_vec<T, 4>*)(dense_matrix + k * n_cols + col_idx);
       vec<T, 4> val_x_t = *src;
 
-      // Convert to float4 for math
       float4 val_x = float4(val_x_t);
 
       sum += val_a * val_x;
     }
 
-    // Store
     vec<T, 4> res = vec<T, 4>(sum);
     *((device packed_vec<T, 4>*)(output + row_tid * n_cols + col_idx)) = res;
 
   } else {
-    // Tail loop
     for (int idx = row_start; idx < row_end; idx++) {
       int k = col_indices[idx];
       float val_a = float(values[idx]);
