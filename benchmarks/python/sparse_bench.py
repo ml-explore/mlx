@@ -45,8 +45,6 @@ def time_sparse_matmul(dtype, dtype_name):
         col_indices,
         values,
         B,
-        n_rows=N,
-        n_cols=N,
         msg=f"sparse ({dtype_name})",
     )
     time_fn(mx.matmul, A, B, msg=f"dense  ({dtype_name})")

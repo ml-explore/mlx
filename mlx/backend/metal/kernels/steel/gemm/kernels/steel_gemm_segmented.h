@@ -16,7 +16,7 @@ template <
     bool transpose_a,
     bool transpose_b,
     typename AccumType = float>
-[[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void segmented_mm(
+[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void segmented_mm(
     const device T* A [[buffer(0)]],
     const device T* B [[buffer(1)]],
     const device uint32_t* segments [[buffer(2)]],

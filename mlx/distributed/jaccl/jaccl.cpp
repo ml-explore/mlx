@@ -468,11 +468,12 @@ class SideChannel {
         }
       }
     } else {
-      sockets_.push_back(detail::TCPSocket::connect(
-          IBV_TAG, address, 4, 1000, [](int attempt, int wait) {
-            std::cerr << IBV_TAG << " Connection attempt " << attempt
-                      << " waiting " << wait << " ms" << std::endl;
-          }));
+      sockets_.push_back(
+          detail::TCPSocket::connect(
+              IBV_TAG, address, 4, 1000, [](int attempt, int wait) {
+                std::cerr << IBV_TAG << " Connection attempt " << attempt
+                          << " waiting " << wait << " ms" << std::endl;
+              }));
       sockets_[0].send(IBV_TAG, reinterpret_cast<char*>(&rank_), sizeof(int));
     }
   }

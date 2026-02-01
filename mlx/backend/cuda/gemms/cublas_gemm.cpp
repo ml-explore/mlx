@@ -27,8 +27,9 @@ cublasComputeType_t dtype_to_compute_type(Dtype dtype) {
       return mlx::core::env::enable_tf32() ? CUBLAS_COMPUTE_32F_FAST_TF32
                                            : CUBLAS_COMPUTE_32F;
     default:
-      throw std::runtime_error(fmt::format(
-          "Unsupported dtype in CublasGemm: {}.", dtype_to_string(dtype)));
+      throw std::runtime_error(
+          fmt::format(
+              "Unsupported dtype in CublasGemm: {}.", dtype_to_string(dtype)));
   }
 }
 

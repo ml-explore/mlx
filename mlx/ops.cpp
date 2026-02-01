@@ -3036,8 +3036,6 @@ array sparse_matmul_csr(
     const array& col_indices,
     const array& values,
     const array& dense_b,
-    int n_rows,
-    int n_cols,
     StreamOrDevice s /* = {} */) {
   if (row_ptr.dtype() != int32) {
     throw std::invalid_argument("[sparse_matmul_csr] row_ptr must be int32");
@@ -3054,6 +3052,9 @@ array sparse_matmul_csr(
     throw std::invalid_argument(
         "[sparse_matmul_csr] values and dense_b must have the same dtype");
   }
+
+  int n_rows = row_ptr.shape(0) - 1;
+  int n_cols = dense_b.shape(1);
 
   return array(
       {n_rows, n_cols},

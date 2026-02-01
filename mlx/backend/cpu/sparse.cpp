@@ -45,7 +45,7 @@ void SparseMatmulCSR::eval_cpu(const std::vector<array>& inputs, array& out) {
                       n_cols,
                       dense_b_cols]() {
       for (int i = 0; i < n_rows * n_cols; i++) {
-        out_data[i] = static_cast<T>(0);
+        out_data[i] = T(0);
       }
 
       for (int row = 0; row < n_rows; row++) {
@@ -57,13 +57,12 @@ void SparseMatmulCSR::eval_cpu(const std::vector<array>& inputs, array& out) {
 
           for (int idx = row_start; idx < row_end; idx++) {
             int k = col_indices_data[idx];
-            float a_val = static_cast<float>(values_data[idx]);
-            float b_val =
-                static_cast<float>(dense_b_data[k * dense_b_cols + col]);
+            float a_val = float(values_data[idx]);
+            float b_val = float(dense_b_data[k * dense_b_cols + col]);
             sum += a_val * b_val;
           }
 
-          out_data[row * n_cols + col] = static_cast<T>(sum);
+          out_data[row * n_cols + col] = T(sum);
         }
       }
     });

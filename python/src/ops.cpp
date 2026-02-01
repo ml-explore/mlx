@@ -53,8 +53,9 @@ void init_ops(nb::module_& m) {
       "shape"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def reshape(a: array, /, shape: Sequence[int], *, stream: "
-              "Union[None, Stream, Device] = None) -> array"),
+      nb::sig(
+          "def reshape(a: array, /, shape: Sequence[int], *, stream: "
+          "Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Reshape an array while preserving the size.
 
@@ -80,8 +81,9 @@ void init_ops(nb::module_& m) {
       "end_axis"_a = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def flatten(a: array, /, start_axis: int = 0, end_axis: int = "
-              "-1, *, stream: Union[None, Stream, Device] = None) -> array"),
+      nb::sig(
+          "def flatten(a: array, /, start_axis: int = 0, end_axis: int = "
+          "-1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
       Flatten an array.
 
@@ -182,8 +184,9 @@ void init_ops(nb::module_& m) {
       "axis"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def expand_dims(a: array, /, axis: Union[int, Sequence[int]], "
-              "*, stream: Union[None, Stream, Device] = None) -> array"),
+      nb::sig(
+          "def expand_dims(a: array, /, axis: Union[int, Sequence[int]], "
+          "*, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Add a size one dimension at the given axis.
 
@@ -675,12 +678,10 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::arg(),
       nb::arg(),
-      "n_rows"_a,
-      "n_cols"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def sparse_matmul_csr(row_ptr: array, col_indices: array, values: array, dense_b: array, /, n_rows: int, n_cols: int, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def sparse_matmul_csr(row_ptr: array, col_indices: array, values: array, dense_b: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Sparse matrix-dense matrix multiplication using CSR format.
 
@@ -692,8 +693,6 @@ void init_ops(nb::module_& m) {
             col_indices (array): Column indices array.
             values (array): Non-zero values array.
             dense_b (array): Dense matrix to multiply with.
-            n_rows (int): Number of rows in the sparse matrix.
-            n_cols (int): Number of columns in the output.
 
         Returns:
             array: The result of the sparse-dense matrix multiplication.
@@ -1705,8 +1704,9 @@ void init_ops(nb::module_& m) {
       },
       nb::arg(),
       "dtype"_a = nb::none(),
-      nb::sig("def asarray(a: Union[scalar, array, Sequence], dtype: "
-              "Optional[Dtype] = None) -> array"),
+      nb::sig(
+          "def asarray(a: Union[scalar, array, Sequence], dtype: "
+          "Optional[Dtype] = None) -> array"),
       R"pbdoc(
         Convert the input to an array.
 

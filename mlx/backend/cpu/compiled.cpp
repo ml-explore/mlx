@@ -119,13 +119,15 @@ void* compile(
     source_file.close();
 
     try {
-      JitCompiler::exec(JitCompiler::build_command(
-          output_dir, source_file_name, shared_lib_name));
+      JitCompiler::exec(
+          JitCompiler::build_command(
+              output_dir, source_file_name, shared_lib_name));
     } catch (const std::exception& error) {
-      throw std::runtime_error(fmt::format(
-          "[Compile::eval_cpu] Failed to compile function {0}: {1}",
-          kernel_name,
-          error.what()));
+      throw std::runtime_error(
+          fmt::format(
+              "[Compile::eval_cpu] Failed to compile function {0}: {1}",
+              kernel_name,
+              error.what()));
     }
   }
 

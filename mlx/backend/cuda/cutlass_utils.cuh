@@ -13,10 +13,11 @@ namespace mlx::core {
 // Throw exception if the cutlass API does not succeed.
 inline void check_cutlass_error(const char* name, cutlass::Status status) {
   if (status != cutlass::Status::kSuccess) {
-    throw std::runtime_error(fmt::format(
-        "{} failed with code: {}.",
-        name,
-        cutlass::cutlassGetStatusString(status)));
+    throw std::runtime_error(
+        fmt::format(
+            "{} failed with code: {}.",
+            name,
+            cutlass::cutlassGetStatusString(status)));
   }
 }
 
