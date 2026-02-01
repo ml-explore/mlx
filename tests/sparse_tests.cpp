@@ -41,7 +41,7 @@ TEST_CASE("test sparse matrix-dense matrix multiplication") {
   //  [4, 0, 5]]     [5, 6]]       [29, 38]]
   auto expected = matmul(dense_a, dense_b);
 
-  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b, 3, 2);
+  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b);
   CHECK(allclose(result, expected, 1e-5).item<bool>());
 
   // Verify result matches expected values
@@ -71,7 +71,7 @@ TEST_CASE("test sparse matrix-vector multiplication") {
 
   auto expected = matmul(dense_a, dense_b);
 
-  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b, 3, 1);
+  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b);
   CHECK(allclose(result, expected, 1e-5).item<bool>());
 
   // Verify result values (diagonal matrix times vector)
@@ -115,8 +115,7 @@ TEST_CASE("test random sparse matrix") {
 
   auto dense_b = ones({n_cols, dense_cols});
 
-  auto result = sparse_matmul_csr(
-      row_ptr, col_indices, values, dense_b, n_rows, dense_cols);
+  auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b);
   CHECK_EQ(result.shape(0), n_rows);
   CHECK_EQ(result.shape(1), dense_cols);
 }
@@ -137,8 +136,7 @@ TEST_CASE("test sparse matmul dtypes") {
 
     auto expected = matmul(dense_a, dense_b);
 
-    auto result =
-        sparse_matmul_csr(row_ptr, col_indices, values, dense_b, 3, 2);
+    auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b);
     CHECK(allclose(result, expected, 1e-2).item<bool>());
   }
 }
@@ -190,8 +188,7 @@ TEST_CASE("test sparse matmul sizes") {
 
     auto expected = matmul(dense_a, dense_b);
 
-    auto result =
-        sparse_matmul_csr(row_ptr, col_indices, values, dense_b, tc.m, tc.n);
+    auto result = sparse_matmul_csr(row_ptr, col_indices, values, dense_b);
     CHECK_EQ(result.shape(0), tc.m);
     CHECK_EQ(result.shape(1), tc.n);
     CHECK(allclose(result, expected, 1e-5).item<bool>());
