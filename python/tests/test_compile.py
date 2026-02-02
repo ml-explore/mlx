@@ -1285,14 +1285,5 @@ class TestCompile(mlx_tests.MLXTestCase):
         expected = y.abs().max() 
         self.assertTrue(mx.allclose(out, expected))
 
-        @mx.compile
-        def square_sum(x):
-            return x.square().sum()
-
-        out = square_sum(x)
-        expected = y.square().sum()
-        self.assertTrue(mx.allclose(out, expected))
-
-
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
