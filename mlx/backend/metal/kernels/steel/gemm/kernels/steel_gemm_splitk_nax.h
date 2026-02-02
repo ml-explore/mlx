@@ -86,10 +86,14 @@ template <
   const short tm = SM * (simd_group_id / WN);
   const short tn = SN * (simd_group_id % WN);
 
-  const short sgp_sm = align_M ? SM : min(SM, short(params->M - (c_row + tm)));
+  const int sgp_sm_int =
+      align_M ? int(SM) : min(int(SM), params->M - (c_row + tm));
+  const short sgp_sm = short(sgp_sm_int);
   const bool is_unaligned_sm = align_M ? false : (sgp_sm != SM);
 
-  const short sgp_sn = align_N ? SN : min(SN, short(params->N - (c_col + tn)));
+  const int sgp_sn_int =
+      align_N ? int(SN) : min(int(SN), params->N - (c_col + tn));
+  const short sgp_sn = short(sgp_sn_int);
   const bool is_unaligned_sn = align_N ? false : (sgp_sn != SN);
 
   A += transpose_a ? tm : (tm * params->lda);
