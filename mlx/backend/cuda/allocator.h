@@ -54,6 +54,10 @@ class CudaAllocator : public allocator::Allocator {
   void free(Buffer buffer) override;
   size_t size(Buffer buffer) const override;
 
+  // Replace the memory of |buf| with unified memory (managed memory or pinned
+  // host memory), and copy the data over. Pass |stream| to copy asynchronously.
+  void move_to_unified_memory(CudaBuffer& buf, cudaStream_t stream = nullptr);
+
   size_t get_active_memory() const;
   size_t get_peak_memory() const;
   void reset_peak_memory();
@@ -64,7 +68,8 @@ class CudaAllocator : public allocator::Allocator {
   void clear_cache();
 
  private:
-  void cuda_free(CudaBuffer* buf);
+  void free_cuda_buffer(CudaBuffer* buf);
+  void free_async(CudaBuffer& buf, cudaStream_t stream = nullptr);
 
   CudaAllocator();
   friend CudaAllocator& allocator();
@@ -77,7 +82,7 @@ class CudaAllocator : public allocator::Allocator {
   BufferCache<CudaBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
-  std::vector<cudaStream_t> free_streams_;
+  std::vector<CudaStream> free_streams_;
   std::vector<cudaMemPool_t> mem_pools_;
   SmallSizePool scalar_pool_;
 };

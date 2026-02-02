@@ -172,6 +172,38 @@ class TestQuantized(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
 
+    def test_qqmv(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        tests = product(
+            [256, 512, 67],  # M
+            [64, 256],  # N
+        )
+        modes = ["nvfp4", "mxfp8"]
+        for M, N in tests:
+            for mode in modes:
+                with self.subTest(shape=(M, N), mode=mode):
+                    x_shape = (1, N)
+                    w_shape = (M, N)
+
+                    x = mx.random.normal(shape=x_shape, key=k1)
+                    x_hat = mx.dequantize(
+                        *mx.quantize(x, mode=mode), mode=mode, dtype=mx.float32
+                    )
+
+                    w = mx.random.normal(shape=w_shape, key=k2)
+                    w_q, scales = mx.quantize(w, mode=mode)
+                    w_hat = mx.dequantize(w_q, scales, mode=mode, dtype=mx.float32)
+                    y_q = mx.qqmm(
+                        x,
+                        w_q,
+                        scales,
+                        mode=mode,
+                    )
+                    y_hat = x_hat @ mx.swapaxes(w_hat, -1, -2)
+                    self.assertEqual(y_q.shape, y_hat.shape)
+                    self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
@@ -349,6 +381,50 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     y_hat = x @ mx.swapaxes(w_hat, -1, -2)
                     self.assertEqual(y_q.shape, y_hat.shape)
                     self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        # Test multiple of 16 but not 32
+        M = 128
+        N = 48
+        mode = "nvfp4"
+        with self.subTest(shape=(B, M, N), mode=mode):
+            x_shape = (1, N)
+            w_shape = (M, N)
+            x = mx.random.normal(shape=x_shape, key=k1)
+            w = mx.random.normal(shape=w_shape, key=k2)
+            w_q, scales = mx.quantize(w, mode=mode)
+            w_hat = mx.dequantize(w_q, scales, mode=mode)
+            y_q = mx.quantized_matmul(
+                x,
+                w_q,
+                scales,
+                transpose=True,
+                mode=mode,
+            )
+            y_hat = x @ mx.swapaxes(w_hat, -1, -2)
+            self.assertEqual(y_q.shape, y_hat.shape)
+            self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        # Test multiple of 16 but not 32
+        M = 128
+        N = 48
+        mode = "nvfp4"
+        with self.subTest(shape=(B, M, N), mode=mode):
+            x_shape = (1, N)
+            w_shape = (M, N)
+            x = mx.random.normal(shape=x_shape, key=k1)
+            w = mx.random.normal(shape=w_shape, key=k2)
+            w_q, scales = mx.quantize(w, mode=mode)
+            w_hat = mx.dequantize(w_q, scales, mode=mode)
+            y_q = mx.quantized_matmul(
+                x,
+                w_q,
+                scales,
+                transpose=True,
+                mode=mode,
+            )
+            y_hat = x @ mx.swapaxes(w_hat, -1, -2)
+            self.assertEqual(y_q.shape, y_hat.shape)
+            self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_qvm(self):
         key = mx.random.key(0)

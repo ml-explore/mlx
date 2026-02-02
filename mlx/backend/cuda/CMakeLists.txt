@@ -19,8 +19,8 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_conv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_grouped_conv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/cublas_utils.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/cuda.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/cudnn_utils.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/device_info.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cu
@@ -56,7 +56,10 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/fp_quantize.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_utils.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
@@ -66,12 +69,12 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 # fp4 is not available on < 12.8
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.8.0)
   target_include_directories(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/)
+  target_sources(mlx
+                 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/no_qqmm_impl.cpp)
 else()
   target_sources(
-    mlx
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_utils.cu)
+    mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_impl.cpp
+                ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp)
 endif()
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
@@ -113,22 +116,16 @@ target_compile_options(mlx
 target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>")
 
-# CUDA 12.8 emits warning #20280-D for copy kernels which is a false positive.
-# Explicitly pass this flag to suppress the warning, it is safe to set it to
-# true but the warning wouldn't be suppressed.
-if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8.0)
-  target_compile_options(
-    mlx
-    PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--static-global-template-stub=false>")
-endif()
-
-# Suppress warning when building for compute capability 7 used by V100.
+# Suppress nvcc warnings on C++ headers.
 target_compile_options(
-  mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--Wno-deprecated-gpu-targets>")
+  mlx
+  PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=27,997,1394,20011,20208">
+)
 
-# Suppress nvcc warnings on MLX headers.
-target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe
-                                   --diag_suppress=997>)
+# Ignore some valid nvcc warnings, we might want to fix them in future.
+target_compile_options(
+  mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=177,550">)
 
 # Use stronger binaries compression. This feature was introduced in CUDA 12.8
 # and requires drivers released after CUDA 12.4.
@@ -157,16 +154,46 @@ message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
 
-if(MLX_BUILD_PYTHON_BINDINGS)
-  set_property(
-    TARGET mlx
-    APPEND
-    PROPERTY INSTALL_RPATH
-             # The paths here should match the install_requires in setup.py.
-             "$ORIGIN/../../nvidia/cublas/lib"
-             "$ORIGIN/../../nvidia/cuda_nvrtc/lib"
-             "$ORIGIN/../../nvidia/cudnn/lib"
-             "$ORIGIN/../../nvidia/nccl/lib")
+# Search CUDA libs from installed python packages.
+if(WIN32)
+  # Resolve paths of unfound DLL at runtime.
+  if(BUILD_SHARED_LIBS)
+    target_link_libraries(mlx PRIVATE "delayimp.lib")
+    target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/delayload.cpp)
+  else()
+    # For static library the delayload must be compiled into final executables.
+    target_link_libraries(mlx PUBLIC "delayimp.lib")
+    target_sources(
+      mlx PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/delayload.cpp>)
+  endif()
+  # Get all the CUDA DLLs we could link with.
+  file(
+    GLOB CUDA_DLL_NAMES
+    RELATIVE "${CUDAToolkit_BIN_DIR}/x64"
+    "${CUDAToolkit_BIN_DIR}/x64/*.dll")
+  # Delay load CUDA and cuDNN libs.
+  foreach(CUDA_DLL ${CUDA_DLL_NAMES} ${CUDNN_DLL_NAMES})
+    target_link_options(mlx PUBLIC "/DELAYLOAD:${CUDA_DLL}")
+  endforeach()
+  # Pass the locations where CUDA DLLs are placed.
+  if(NOT MLX_LOAD_CUDA_LIBS_FROM_PYTHON)
+    target_compile_definitions(
+      mlx PUBLIC MLX_CUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}/x64"
+                 MLX_CUDNN_BIN_DIR="${CUDNN_BIN_DIR}")
+  endif()
+else()
+  # For POSIX we rely on RPATH to search for CUDA libs.
+  if(MLX_LOAD_CUDA_LIBS_FROM_PYTHON)
+    set_property(
+      TARGET mlx
+      APPEND
+      PROPERTY INSTALL_RPATH
+               # The paths here should match the install_requires in setup.py.
+               "$ORIGIN/../../nvidia/cublas/lib"
+               "$ORIGIN/../../nvidia/cuda_nvrtc/lib"
+               "$ORIGIN/../../nvidia/cudnn/lib"
+               "$ORIGIN/../../nvidia/nccl/lib")
+  endif()
 endif()
 
 # ------------------------ Dependencies ------------------------
@@ -224,16 +251,15 @@ set(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS OFF)
 FetchContent_MakeAvailable(cudnn)
 target_link_libraries(mlx PRIVATE cudnn_frontend)
 # Link with the actual cuDNN libraries.
-include(${cudnn_frontend_SOURCE_DIR}/cmake/cuDNN.cmake)
 target_link_libraries(mlx PRIVATE CUDNN::cudnn_all)
 
 # Use header-only CUTLASS.
 FetchContent_Declare(
   cutlass
   GIT_REPOSITORY https://github.com/NVIDIA/cutlass.git
-  GIT_TAG v4.3.2
+  GIT_TAG v4.3.5
   GIT_SHALLOW TRUE
   SOURCE_SUBDIR include EXCLUDE_FROM_ALL)
 FetchContent_MakeAvailable(cutlass)
 target_include_directories(
-  mlx PRIVATE $<BUILD_INTERFACE:${cutlass_SOURCE_DIR}/include>)
+  mlx SYSTEM PRIVATE $<BUILD_INTERFACE:${cutlass_SOURCE_DIR}/include>)

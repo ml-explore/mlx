@@ -20,7 +20,7 @@ using MTLFCList =
 
 struct DeviceStream;
 
-struct CommandEncoder {
+struct MLX_API CommandEncoder {
   explicit CommandEncoder(DeviceStream& stream);
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
@@ -146,7 +146,7 @@ struct DeviceStream {
   std::vector<array> temporaries;
 };
 
-class Device {
+class MLX_API Device {
  public:
   Device();
   Device(const Device&) = delete;
@@ -261,7 +261,7 @@ class Device {
   int max_mb_per_buffer_;
 };
 
-Device& device(mlx::core::Device);
+MLX_API Device& device(mlx::core::Device);
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 
@@ -275,8 +275,10 @@ inline bool is_nax_available() {
             macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
       can_use_nax = true;
     }
-    can_use_nax &=
-        metal::device(mlx::core::Device::gpu).get_architecture_gen() >= 17;
+    auto& d = metal::device(mlx::core::Device::gpu);
+    auto arch = d.get_architecture().back();
+    auto gen = d.get_architecture_gen();
+    can_use_nax &= gen >= (arch == 'p' ? 18 : 17);
     return can_use_nax;
   };
   static bool is_nax_available_ = _check_nax();

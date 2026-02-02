@@ -113,5 +113,38 @@ class TestStream(mlx_tests.MLXTestCase):
         self.assertEqual(a.item(), b.item())
 
 
+class TestDeviceInfo(mlx_tests.MLXTestCase):
+    def test_device_count(self):
+        cpu_count = mx.device_count(mx.cpu)
+        self.assertIsInstance(cpu_count, int)
+        self.assertEqual(cpu_count, 1)
+
+        gpu_count = mx.device_count(mx.gpu)
+        self.assertIsInstance(gpu_count, int)
+        self.assertGreaterEqual(gpu_count, 0)
+
+    def test_device_info_cpu(self):
+        info = mx.device_info(mx.cpu)
+        self.assertIsInstance(info, dict)
+        self.assertIn("device_name", info)
+        self.assertTrue(len(info["device_name"]) > 0)
+        self.assertIn("architecture", info)
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    def test_device_info_gpu(self):
+        gpu_count = mx.device_count(mx.gpu)
+        for i in range(gpu_count):
+            info = mx.device_info(mx.Device(mx.gpu, i))
+            self.assertIsInstance(info, dict)
+            self.assertIn("device_name", info)
+            self.assertTrue(len(info["device_name"]) > 0)
+            self.assertIn("architecture", info)
+
+    def test_device_info_default(self):
+        info = mx.device_info()
+        self.assertIsInstance(info, dict)
+        self.assertIn("device_name", info)
+
+
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

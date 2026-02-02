@@ -22,7 +22,7 @@ project(
 
 # ----------------------------- Setup -----------------------------
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_INSTALL_MESSAGE NEVER)
@@ -155,6 +155,7 @@ target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 if(MLX_BUILD_CUDA)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
+  find_package(CUDNN REQUIRED)
 endif()
 
 if(MLX_BUILD_METAL)
@@ -322,16 +323,13 @@ target_include_directories(
   mlx PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
              $<INSTALL_INTERFACE:include>)
 
-# Do not add mlx_EXPORTS define for shared library.
-set_target_properties(mlx PROPERTIES DEFINE_SYMBOL "")
-
 if(USE_SYSTEM_FMT)
   find_package(fmt REQUIRED)
 else()
   FetchContent_Declare(
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    GIT_TAG 10.2.1
+    GIT_TAG 12.1.0
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(fmt)
 endif()

@@ -62,8 +62,9 @@ inline fe::DataType_t dtype_to_cudnn_type(Dtype dtype) {
     case float64:
       return fe::DataType_t::DOUBLE;
     default:
-      throw std::runtime_error(fmt::format(
-          "Unsupported dtype in cuDNN: {}.", dtype_to_string(dtype)));
+      throw std::runtime_error(
+          fmt::format(
+              "Unsupported dtype in cuDNN: {}.", dtype_to_string(dtype)));
   }
 }
 
@@ -72,13 +73,13 @@ inline fe::DataType_t dtype_to_cudnn_type(Dtype dtype) {
 // There are 2 differences from the const_param util from kernel_utils.cuh:
 // 1. The rest of array is filled with 0.
 // 2. This util can be used in .cpp files.
-template <int NDIM = MAX_NDIM, typename T, template <typename U> class Vec>
-inline std::array<T, NDIM> vector_key(const Vec<T>& vec) {
+template <int NDIM = MAX_NDIM, typename Vec>
+inline std::array<typename Vec::value_type, NDIM> vector_key(const Vec& vec) {
   if (vec.size() > NDIM) {
     throw std::runtime_error(
         fmt::format("ndim can not be larger than {}.", NDIM));
   }
-  std::array<T, NDIM> result = {};
+  std::array<typename Vec::value_type, NDIM> result = {};
   std::copy_n(vec.begin(), vec.size(), result.begin());
   return result;
 }
@@ -124,13 +125,14 @@ class DnnGraph : public fe::graph::Graph {
 
   // Create a cuDNN tensor for scalar.
   auto scalar(const char* name, int64_t uid, Dtype dtype) {
-    return Graph::tensor(fe::graph::Tensor_attributes()
-                             .set_name(name)
-                             .set_uid(uid)
-                             .set_dim({1, 1, 1, 1})
-                             .set_stride({1, 1, 1, 1})
-                             .set_is_pass_by_value(true)
-                             .set_data_type(dtype_to_cudnn_type(dtype)));
+    return Graph::tensor(
+        fe::graph::Tensor_attributes()
+            .set_name(name)
+            .set_uid(uid)
+            .set_dim({1, 1, 1, 1})
+            .set_stride({1, 1, 1, 1})
+            .set_is_pass_by_value(true)
+            .set_data_type(dtype_to_cudnn_type(dtype)));
   }
 
   // Call this before setting notes.

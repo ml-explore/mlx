@@ -1618,6 +1618,11 @@ class TestArray(mlx_tests.MLXTestCase):
                     self.assertEqual(mv_mx.format, "Q", f"{mlx_dtype}{np_dtype}")
                 elif np_dtype == np.int64:
                     self.assertEqual(mv_mx.format, "q", f"{mlx_dtype}{np_dtype}")
+                # for windows long is 32bit and numpy returns L/l.
+                elif np_dtype == np.uint32 and platform.system() == "Windows":
+                    self.assertEqual(mv_mx.format, "I", f"{mlx_dtype}{np_dtype}")
+                elif np_dtype == np.int32 and platform.system() == "Windows":
+                    self.assertEqual(mv_mx.format, "i", f"{mlx_dtype}{np_dtype}")
                 else:
                     self.assertEqual(
                         mv_mx.format, mv_np.format, f"{mlx_dtype}{np_dtype}"
@@ -2121,6 +2126,13 @@ class TestArray(mlx_tests.MLXTestCase):
         x = mx.array([1.0 + 1.0j])
         self.assertEqual(x.imag.item(), 1.0)
         self.assertEqual(x.real.item(), 1.0)
+
+    def test_large_indices(self):
+        x = mx.array([0, 1, 2])
+        with self.assertRaises(ValueError):
+            x[: 2**32]
+        with self.assertRaises(ValueError):
+            x[2**32]
 
 
 if __name__ == "__main__":

@@ -12,7 +12,6 @@
 
 #include <fmt/format.h>
 #include <nvrtc.h>
-#include <unistd.h>
 
 namespace mlx::core::cu {
 
@@ -32,7 +31,10 @@ const std::vector<std::string>& include_path_args() {
   static std::vector<std::string> cached_args = []() {
     std::vector<std::string> args;
     // Add path to bundled CCCL headers.
-    auto root_dir = current_binary_dir().parent_path();
+    auto root_dir = current_binary_dir();
+#if !defined(_WIN32)
+    root_dir = root_dir.parent_path();
+#endif
     auto path = root_dir / "include" / "cccl";
 #if defined(MLX_CCCL_DIR)
     if (!std::filesystem::exists(path)) {
@@ -80,6 +82,18 @@ const std::filesystem::path& ptx_cache_dir() {
       cache =
           std::filesystem::temp_directory_path() / "mlx" / version() / "ptx";
     }
+
+#if defined(_WIN32)
+    // Add "\\?\" prefix to support long file path.
+    const wchar_t* long_path_prefix = L"\\\\?\\";
+    if (cache.is_relative()) {
+      cache = std::filesystem::absolute(cache);
+    }
+    if (!cache.native().starts_with(long_path_prefix)) {
+      cache = long_path_prefix + cache.native();
+    }
+#endif
+
     if (!std::filesystem::exists(cache)) {
       std::error_code error;
       if (!std::filesystem::create_directories(cache, error)) {
@@ -94,12 +108,7 @@ const std::filesystem::path& ptx_cache_dir() {
 std::filesystem::path get_ptx_path(
     const std::filesystem::path& cache_dir,
     const std::string& module_name) {
-#ifdef _WIN32
-  constexpr int max_file_name_length = 140;
-#else
   constexpr int max_file_name_length = 245;
-#endif
-
   if (module_name.size() <= max_file_name_length) {
     return cache_dir / (module_name + ".ptx");
   }
@@ -272,7 +281,7 @@ void compile(
   std::vector<const char*> args;
   bool use_sass = compiler_supports_device_sass(device);
   auto cc = device.compute_capability_major();
-  std::string arch_tag = (cc == 90 || cc == 100 || cc == 121) ? "a" : "";
+  std::string arch_tag = (cc >= 9) ? "a" : "";
   std::string compute = fmt::format(
       "--gpu-architecture={}_{}{}{}",
       use_sass ? "sm" : "compute",
@@ -321,7 +330,7 @@ void load_module(
     const std::string& ptx,
     const std::vector<std::pair<std::string, std::string>>& ptx_kernels,
     CUmodule& module_,
-    std::unordered_map<std::string, std::tuple<CUfunction, bool, uint>>&
+    std::unordered_map<std::string, std::tuple<CUfunction, bool, uint32_t>>&
         kernels) {
   // Load module.
   char jit_log[4089] = {};
@@ -331,8 +340,9 @@ void load_module(
   CUresult jit_result = cuModuleLoadDataEx(
       &module_, ptx.data(), std::size(options), options, values);
   if (jit_result != CUDA_SUCCESS) {
-    throw std::runtime_error(fmt::format(
-        "Failed to load compiled {} kernel: {}.", module_name, jit_log));
+    throw std::runtime_error(
+        fmt::format(
+            "Failed to load compiled {} kernel: {}.", module_name, jit_log));
   }
 
   // Load kernels.
@@ -383,7 +393,7 @@ JitModule::~JitModule() {
   CHECK_CUDA_ERROR(cuModuleUnload(module_));
 }
 
-std::pair<CUfunction, uint> JitModule::get_kernel_and_dims(
+std::pair<CUfunction, uint32_t> JitModule::get_kernel_and_dims(
     const std::string& kernel_name,
     std::function<void(CUfunction)> configure_kernel) {
   auto it = kernels_.find(kernel_name);

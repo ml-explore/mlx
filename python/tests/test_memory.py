@@ -18,8 +18,8 @@ class TestMemory(mlx_tests.MLXTestCase):
         self.assertEqual(mx.set_cache_limit(old_limit), old_limit)
 
         old_limit = mx.set_memory_limit(10)
-        self.assertTrue(mx.set_memory_limit(old_limit), 10)
-        self.assertTrue(mx.set_memory_limit(old_limit), old_limit)
+        self.assertEqual(mx.set_memory_limit(old_limit), 10)
+        self.assertEqual(mx.set_memory_limit(old_limit), old_limit)
 
         # Query active and peak memory
         a = mx.zeros((4096,))
@@ -54,7 +54,7 @@ class TestMemory(mlx_tests.MLXTestCase):
         old_limit = mx.set_wired_limit(0)
         self.assertEqual(old_limit, 1000)
 
-        max_size = mx.metal.device_info()["max_recommended_working_set_size"]
+        max_size = mx.device_info(mx.gpu)["max_recommended_working_set_size"]
         with self.assertRaises(ValueError):
             mx.set_wired_limit(max_size + 10)
 

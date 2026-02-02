@@ -3,11 +3,13 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/utils.h"
+#include "mlx/backend/gpu/device_info.h"
+#include "mlx/memory.h"
+#include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
 #include <cuda_runtime.h>
 #include <fmt/format.h>
-#include <unistd.h>
 
 #include <cassert>
 
@@ -19,6 +21,49 @@ constexpr int page_size = 16384;
 
 // Any allocations smaller than this will try to use the small pool
 constexpr int small_block_size = 8;
+
+// The small pool size in bytes. This should be a multiple of the host page
+// size and small_block_size.
+constexpr int small_pool_size = 4 * page_size;
+
+bool supports_managed_memory() {
+  static bool managed_memory = []() {
+    int device_count = gpu::device_count();
+    for (int i = 0; i < device_count; ++i) {
+      auto& d = cu::device(i);
+      if (!d.managed_memory()) {
+        return false;
+      }
+#if defined(_WIN32)
+      // Empirically on Windows if there is no concurrentManagedAccess the
+      // managed memory also does not work.
+      if (!d.concurrent_managed_access()) {
+        return false;
+      }
+#endif
+    }
+    return true;
+  }();
+  return managed_memory;
+}
+
+inline void* unified_malloc(size_t size) {
+  void* data = nullptr;
+  if (supports_managed_memory()) {
+    CHECK_CUDA_ERROR(cudaMallocManaged(&data, size));
+  } else {
+    CHECK_CUDA_ERROR(cudaMallocHost(&data, size));
+  }
+  return data;
+}
+
+inline void unified_free(void* data) {
+  if (supports_managed_memory()) {
+    CHECK_CUDA_ERROR(cudaFree(data));
+  } else {
+    CHECK_CUDA_ERROR(cudaFreeHost(data));
+  }
+}
 
 #if CUDART_VERSION >= 13000
 inline cudaMemLocation cuda_mem_loc(int i) {
@@ -33,24 +78,21 @@ inline int cuda_mem_loc(int i) {
 }
 #endif // CUDART_VERSION >= 13000
 
-// The small pool size in bytes. This should be a multiple of the host page
-// size and small_block_size.
-constexpr int small_pool_size = 4 * page_size;
-
 SmallSizePool::SmallSizePool() {
   auto num_blocks = small_pool_size / small_block_size;
   buffer_ = new Block[num_blocks];
-
   next_free_ = buffer_;
 
-  CHECK_CUDA_ERROR(cudaMallocManaged(&data_, small_pool_size));
-
-  int device_count = 0;
-  CHECK_CUDA_ERROR(cudaGetDeviceCount(&device_count));
-  for (int i = 0; i < device_count; ++i) {
-    auto loc = cuda_mem_loc(i);
-    CHECK_CUDA_ERROR(
-        cudaMemAdvise(data_, small_pool_size, cudaMemAdviseSetAccessedBy, loc));
+  data_ = unified_malloc(small_pool_size);
+  if (supports_managed_memory()) {
+    int device_count = gpu::device_count();
+    for (int i = 0; i < device_count; ++i) {
+      if (device(i).concurrent_managed_access()) {
+        auto loc = cuda_mem_loc(i);
+        CHECK_CUDA_ERROR(cudaMemAdvise(
+            data_, small_pool_size, cudaMemAdviseSetAccessedBy, loc));
+      }
+    }
   }
 
   auto curr = next_free_;
@@ -62,7 +104,7 @@ SmallSizePool::SmallSizePool() {
 }
 
 SmallSizePool::~SmallSizePool() {
-  CHECK_CUDA_ERROR(cudaFree(data_));
+  unified_free(data_);
   delete[] buffer_;
 }
 
@@ -96,39 +138,23 @@ CudaAllocator::CudaAllocator()
     : buffer_cache_(
           page_size,
           [](CudaBuffer* buf) { return buf->size; },
-          [this](CudaBuffer* buf) { cuda_free(buf); }) {
+          [this](CudaBuffer* buf) { free_cuda_buffer(buf); }) {
   size_t free;
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total_memory_));
   memory_limit_ = total_memory_ * 0.95;
   free_limit_ = total_memory_ - memory_limit_;
   max_pool_size_ = memory_limit_;
 
-  int device_count = 0;
-  CHECK_CUDA_ERROR(cudaGetDeviceCount(&device_count));
-  int curr;
-  CHECK_CUDA_ERROR(cudaGetDevice(&curr));
+  int device_count = gpu::device_count();
+  free_streams_.resize(device_count);
+  mem_pools_.resize(device_count);
   for (int i = 0; i < device_count; ++i) {
-    CHECK_CUDA_ERROR(cudaSetDevice(i));
-    cudaStream_t s;
-    CHECK_CUDA_ERROR(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
-    free_streams_.push_back(s);
-
-    cudaMemPool_t mem_pool;
-    CHECK_CUDA_ERROR(cudaDeviceGetDefaultMemPool(&mem_pool, i));
-    mem_pools_.push_back(mem_pool);
+    auto& d = device(i);
+    if (d.memory_pools()) {
+      free_streams_[i] = CudaStream(d);
+      CHECK_CUDA_ERROR(cudaDeviceGetDefaultMemPool(&mem_pools_[i], i));
+    }
   }
-  CHECK_CUDA_ERROR(cudaSetDevice(curr));
-}
-
-void copy_to_managed(CudaBuffer& buf) {
-  // TODO maybe make this async on a i/o stream to avoid synchronizing the
-  // device on malloc/and free
-  void* new_data;
-  CHECK_CUDA_ERROR(cudaMallocManaged(&new_data, buf.size));
-  buf.device = -1;
-  CHECK_CUDA_ERROR(cudaMemcpy(new_data, buf.data, buf.size, cudaMemcpyDefault));
-  CHECK_CUDA_ERROR(cudaFree(buf.data));
-  buf.data = new_data;
 }
 
 Buffer
@@ -137,8 +163,6 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     return Buffer{new CudaBuffer{nullptr, 0, -1}};
   }
 
-  // Find available buffer from cache.
-  std::unique_lock lock(mutex_);
   if (size <= small_block_size) {
     size = 8;
   } else if (size < page_size) {
@@ -151,6 +175,8 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     device = -1;
   }
 
+  // Find available buffer from cache.
+  std::unique_lock lock(mutex_);
   CudaBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
     // If we have a lot of memory pressure try to reclaim memory from the cache.
@@ -168,9 +194,13 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     if (!buf) {
       void* data = nullptr;
       if (device == -1) {
-        CHECK_CUDA_ERROR(cudaMallocManaged(&data, size));
+        data = unified_malloc(size);
       } else {
-        CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
+        if (mem_pools_[device]) { // supports memory pools
+          CHECK_CUDA_ERROR(cudaMallocAsync(&data, size, stream));
+        } else {
+          CHECK_CUDA_ERROR(cudaMalloc(&data, size));
+        }
       }
       if (!data) {
         std::ostringstream msg;
@@ -186,12 +216,14 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
     // from OOM
     if (get_cache_memory() > 0) {
       for (auto p : mem_pools_) {
-        size_t used = 0;
-        CHECK_CUDA_ERROR(cudaMemPoolGetAttribute(
-            p, cudaMemPoolAttrReservedMemCurrent, &used));
-        if (used > (total_memory_ - free_limit_)) {
-          buffer_cache_.release_cached_buffers(free_limit_);
-          break;
+        if (p) {
+          size_t used = 0;
+          CHECK_CUDA_ERROR(cudaMemPoolGetAttribute(
+              p, cudaMemPoolAttrReservedMemCurrent, &used));
+          if (used > (total_memory_ - free_limit_)) {
+            buffer_cache_.release_cached_buffers(free_limit_);
+            break;
+          }
         }
       }
     }
@@ -203,9 +235,10 @@ CudaAllocator::malloc_async(size_t size, int device, cudaStream_t stream) {
   if (get_cache_memory() > max_pool_size_) {
     buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
-  // Copy to managed here if the buffer is not on the right device
+  lock.unlock();
+  // Copy to unified memory here if the buffer is not on the right device.
   if (buf->device >= 0 && buf->device != device) {
-    copy_to_managed(*buf);
+    move_to_unified_memory(*buf, stream);
   }
   return Buffer{buf};
 }
@@ -229,7 +262,7 @@ void CudaAllocator::free(Buffer buffer) {
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
-    cuda_free(buf);
+    free_cuda_buffer(buf);
   }
 }
 
@@ -241,17 +274,49 @@ size_t CudaAllocator::size(Buffer buffer) const {
   return buf->size;
 }
 
+void CudaAllocator::move_to_unified_memory(
+    CudaBuffer& buf,
+    cudaStream_t stream) {
+  if (buf.device == -1) {
+    return;
+  }
+  void* data = unified_malloc(buf.size);
+  cudaMemcpyKind kind =
+      supports_managed_memory() ? cudaMemcpyDefault : cudaMemcpyDeviceToHost;
+  if (stream && mem_pools_[buf.device]) {
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(data, buf.data, buf.size, kind, stream));
+    free_async(buf, stream);
+  } else {
+    CHECK_CUDA_ERROR(cudaMemcpy(data, buf.data, buf.size, kind));
+    free_async(buf);
+  }
+  buf.data = data;
+  buf.device = -1;
+}
+
 // This must be called with mutex_ aquired
-void CudaAllocator::cuda_free(CudaBuffer* buf) {
+void CudaAllocator::free_cuda_buffer(CudaBuffer* buf) {
   if (scalar_pool_.in_pool(buf)) {
     scalar_pool_.free(buf);
   } else {
-    if (buf->device >= 0) {
-      CHECK_CUDA_ERROR(cudaFreeAsync(buf->data, free_streams_[buf->device]));
-    } else {
-      CHECK_CUDA_ERROR(cudaFree(buf->data));
-    }
+    free_async(*buf);
     delete buf;
+  }
+}
+
+void CudaAllocator::free_async(CudaBuffer& buf, cudaStream_t stream) {
+  if (buf.device == -1) {
+    unified_free(buf.data);
+  } else {
+    // Free asynchronously when memory pools is supported.
+    if (mem_pools_[buf.device]) {
+      if (!stream) {
+        stream = free_streams_[buf.device];
+      }
+      CHECK_CUDA_ERROR(cudaFreeAsync(buf.data, stream));
+    } else {
+      CHECK_CUDA_ERROR(cudaFree(buf.data));
+    }
   }
 }
 
@@ -294,22 +359,20 @@ void CudaAllocator::clear_cache() {
 }
 
 CudaAllocator& allocator() {
-  // By creating the |allocator_| on heap, the destructor of CudaAllocator
-  // will not be called on exit and buffers in the cache will be leaked. This
-  // can save some time at program exit.
-  static CudaAllocator* allocator_ = new CudaAllocator;
+  static auto* allocator_ = []() {
+    // Ensure scheduler is created before allocator.
+    scheduler::scheduler();
+    // By creating the |allocator_| on heap, the destructor of CudaAllocator
+    // will not be called on exit and buffers in the cache will be leaked. This
+    // can save some time at program exit.
+    return new CudaAllocator();
+  }();
   return *allocator_;
 }
 
 Buffer malloc_async(size_t size, CommandEncoder& encoder) {
-  auto buffer = allocator().malloc_async(
+  return allocator().malloc_async(
       size, encoder.device().cuda_device(), encoder.stream());
-  if (size && !buffer.ptr()) {
-    std::ostringstream msg;
-    msg << "[malloc_async] Unable to allocate " << size << " bytes.";
-    throw std::runtime_error(msg.str());
-  }
-  return buffer;
 }
 
 } // namespace cu
@@ -325,9 +388,7 @@ void* Buffer::raw_ptr() {
     return nullptr;
   }
   auto& cbuf = *static_cast<cu::CudaBuffer*>(ptr_);
-  if (cbuf.device != -1) {
-    copy_to_managed(cbuf);
-  }
+  cu::allocator().move_to_unified_memory(cbuf);
   return cbuf.data;
 }
 

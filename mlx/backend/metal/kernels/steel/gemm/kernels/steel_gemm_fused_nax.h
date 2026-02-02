@@ -191,7 +191,15 @@ template <
             UM,
             UN,
             UK,
-            AccumType>(A, B, params, sgp_sm, sgp_sn);
+            AccumType>(
+            A,
+            B,
+            params->lda,
+            params->ldb,
+            params->K,
+            params->gemm_k_iterations_aligned,
+            sgp_sm,
+            sgp_sn);
         if (use_out_source) {
           gemm_epilogue<kAlignedM.value, kAlignedN.value>(
               Dtile, C, params, addmm_params, sgp_sm, sgp_sn);

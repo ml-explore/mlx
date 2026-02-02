@@ -54,25 +54,26 @@ class CudaEvent {
 // CudaEvent so the latter should always be preferred when possible.
 class AtomicEvent {
  public:
-  using Atomic = cuda::atomic<uint64_t>;
-
   AtomicEvent();
 
-  void wait(uint64_t value);
-  void wait(cudaStream_t stream, uint64_t value);
-  void wait(Stream s, uint64_t value);
-  void signal(uint64_t value);
-  void signal(cudaStream_t stream, uint64_t value);
-  void signal(Stream s, uint64_t value);
-  bool is_signaled(uint64_t value) const;
-  uint64_t value() const;
+  void wait(uint32_t value);
+  void wait(cudaStream_t stream, uint32_t value);
+  void wait(Stream s, uint32_t value);
+  void signal(uint32_t value);
+  void signal(cudaStream_t stream, uint32_t value);
+  void signal(Stream s, uint32_t value);
+  bool is_signaled(uint32_t value) const;
+  uint32_t value() const;
 
  private:
-  Atomic* atomic() const {
-    return static_cast<AtomicEvent::Atomic*>(buf_->raw_ptr());
+  const CudaStream& signal_stream();
+
+  uint32_t* ptr() const {
+    return static_cast<uint32_t*>(buf_.get());
   }
 
-  std::shared_ptr<allocator::Buffer> buf_;
+  bool coherent_;
+  std::shared_ptr<void> buf_;
 };
 
 } // namespace mlx::core::cu

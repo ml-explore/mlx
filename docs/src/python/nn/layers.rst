@@ -10,6 +10,7 @@ Layers
    :template: nn-module-template.rst
 
    ALiBi
+   AllToShardedLinear
    AvgPool1d
    AvgPool2d
    AvgPool3d
@@ -46,8 +47,10 @@ Layers
    Mish
    MultiHeadAttention
    PReLU
+   QuantizedAllToShardedLinear
    QuantizedEmbedding
    QuantizedLinear
+   QuantizedShardedToAllLinear
    RMSNorm
    ReLU
    ReLU2
@@ -56,6 +59,7 @@ Layers
    RoPE
    SELU
    Sequential
+   ShardedToAllLinear
    Sigmoid
    SiLU
    SinusoidalPositionalEncoding

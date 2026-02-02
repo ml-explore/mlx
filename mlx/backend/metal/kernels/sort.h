@@ -125,13 +125,17 @@ struct BlockMergeSort {
     short b_idx = 0;
 
     for (int i = 0; i < N_PER_THREAD; ++i) {
-      auto a = As[a_idx];
-      auto b = Bs[b_idx];
+      auto a = (a_idx < A_sz) ? As[a_idx] : ValT(CompareOp::init);
+      auto b = (b_idx < B_sz) ? Bs[b_idx] : ValT(CompareOp::init);
       bool pred = (b_idx < B_sz) && (a_idx >= A_sz || op(b, a));
 
       vals[i] = pred ? b : a;
       if (ARG_SORT) {
-        idxs[i] = pred ? Bs_idx[b_idx] : As_idx[a_idx];
+        if (pred) {
+          idxs[i] = Bs_idx[b_idx];
+        } else {
+          idxs[i] = (a_idx < A_sz) ? As_idx[a_idx] : IdxT(0);
+        }
       }
 
       b_idx += short(pred);

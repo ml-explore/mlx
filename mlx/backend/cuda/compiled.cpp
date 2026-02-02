@@ -36,14 +36,16 @@ struct FusedKernelBuilder {
       params.push_back(
           fmt::format("const {}* {}", dtype_to_cuda_type(x.dtype()), xname));
       if (!is_scalar(x) && !contiguous) {
-        params.push_back(fmt::format(
-            "const __grid_constant__ cuda::std::array<int64_t, NDIM> {}_strides",
-            xname));
+        params.push_back(
+            fmt::format(
+                "const __grid_constant__ cuda::std::array<int64_t, NDIM> {}_strides",
+                xname));
       }
     }
     for (const auto& x : outputs) {
-      params.push_back(fmt::format(
-          "{}* {}", dtype_to_cuda_type(x.dtype()), namer.get_name(x)));
+      params.push_back(
+          fmt::format(
+              "{}* {}", dtype_to_cuda_type(x.dtype()), namer.get_name(x)));
     }
     if (!contiguous) {
       params.push_back(
@@ -250,20 +252,30 @@ void Compiled::eval_gpu(
     builder.os += "\n} // namespace mlx::core::cu\n";
     // Build kernel names.
     std::vector<std::string> kernel_names;
-    kernel_names.push_back(fmt::format(
-        "mlx::core::cu::{}_contiguous<uint32_t, {}>",
-        lib_name(),
-        work_per_thread));
-    kernel_names.push_back(fmt::format(
-        "mlx::core::cu::{}_contiguous<int64_t, {}>",
-        lib_name(),
-        work_per_thread));
-    for (auto wpt : std::array<int, 2>{1, work_per_thread}) {
+    kernel_names.push_back(
+        fmt::format(
+            "mlx::core::cu::{}_contiguous<uint32_t, {}>",
+            lib_name(),
+            work_per_thread));
+    kernel_names.push_back(
+        fmt::format(
+            "mlx::core::cu::{}_contiguous<int64_t, {}>",
+            lib_name(),
+            work_per_thread));
+    for (int wpt : {1, work_per_thread}) {
       for (int i = 1; i <= MAX_NDIM; ++i) {
-        kernel_names.push_back(fmt::format(
-            "mlx::core::cu::{}_strided<{}, uint32_t, {}>", lib_name(), i, wpt));
-        kernel_names.push_back(fmt::format(
-            "mlx::core::cu::{}_strided<{}, int64_t, {}>", lib_name(), i, wpt));
+        kernel_names.push_back(
+            fmt::format(
+                "mlx::core::cu::{}_strided<{}, uint32_t, {}>",
+                lib_name(),
+                i,
+                wpt));
+        kernel_names.push_back(
+            fmt::format(
+                "mlx::core::cu::{}_strided<{}, int64_t, {}>",
+                lib_name(),
+                i,
+                wpt));
       }
     }
 

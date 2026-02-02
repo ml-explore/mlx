@@ -697,8 +697,8 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto lib = d.get_library(kernel_name, [&]() {
     std::string source = metal::utils();
     source += metal::masked_scatter();
-    source += fmt::format(
-        std::string(masked_assign_kernel), kernel_name, value_type, contiguous);
+    source +=
+        fmt::format(masked_assign_kernel, kernel_name, value_type, contiguous);
     return source;
   });
   auto kernel = d.get_kernel(kernel_name, lib);

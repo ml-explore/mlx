@@ -270,21 +270,20 @@ void steel_matmul_regular_axpby_nax(
   int swizzle_log = tm <= 3 ? 0 : 1;
 
   // Prepare steel matmul params
-  GEMMParams params{
-      /* const int M = */ M,
-      /* const int N = */ N,
-      /* const int K = */ K,
-      /* const int lda = */ lda,
-      /* const int ldb = */ ldb,
-      /* const int ldd = */ ldd,
-      /* const int tiles_n = */ tn,
-      /* const int tiles_m = */ tm,
-      /* const int64_t batch_stride_a = */ A_batch_stride,
-      /* const int64_t batch_stride_b = */ B_batch_stride,
-      /* const int64_t batch_stride_d = */ matrix_stride_out,
-      /* const int swizzle_log = */ swizzle_log,
-      /* const int gemm_k_iterations_aligned = */ (K / bk),
-      /* const int batch_ndim = */ int(batch_shape.size())};
+  GEMMParams params{/* const int M = */ M,
+                    /* const int N = */ N,
+                    /* const int K = */ K,
+                    /* const int lda = */ lda,
+                    /* const int ldb = */ ldb,
+                    /* const int ldd = */ ldd,
+                    /* const int tiles_n = */ tn,
+                    /* const int tiles_m = */ tm,
+                    /* const int64_t batch_stride_a = */ A_batch_stride,
+                    /* const int64_t batch_stride_b = */ B_batch_stride,
+                    /* const int64_t batch_stride_d = */ matrix_stride_out,
+                    /* const int swizzle_log = */ swizzle_log,
+                    /* const int gemm_k_iterations_aligned = */ (K / bk),
+                    /* const int batch_ndim = */ int(batch_shape.size())};
 
   // Prepare launch grid params
   int tile = 1 << swizzle_log;
@@ -310,12 +309,11 @@ void steel_matmul_regular_axpby_nax(
     int ldc = c.strides()[c.ndim() - 2];
     int fdc = c.strides()[c.ndim() - 1];
 
-    GEMMAddMMParams params{
-        /* const int ldc = */ ldc,
-        /* const int fdc = */ fdc,
-        /* const int64_t batch_stride_c = */ C_batch_stride,
-        /* const float alpha = */ alpha,
-        /* const float beta = */ beta};
+    GEMMAddMMParams params{/* const int ldc = */ ldc,
+                           /* const int fdc = */ fdc,
+                           /* const int64_t batch_stride_c = */ C_batch_stride,
+                           /* const float alpha = */ alpha,
+                           /* const float beta = */ beta};
 
     compute_encoder.set_input_array(c, 2);
     compute_encoder.set_bytes(params, 5);
@@ -457,21 +455,20 @@ void steel_matmul_regular_axpby(
   int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
 
   // Prepare steel matmul params
-  GEMMParams params{
-      /* const int M = */ M,
-      /* const int N = */ N,
-      /* const int K = */ K,
-      /* const int lda = */ lda,
-      /* const int ldb = */ ldb,
-      /* const int ldd = */ ldd,
-      /* const int tiles_n = */ tn,
-      /* const int tiles_m = */ tm,
-      /* const int64_t batch_stride_a = */ A_batch_stride,
-      /* const int64_t batch_stride_b = */ B_batch_stride,
-      /* const int64_t batch_stride_d = */ matrix_stride_out,
-      /* const int swizzle_log = */ swizzle_log,
-      /* const int gemm_k_iterations_aligned = */ (K / bk),
-      /* const int batch_ndim = */ int(batch_shape.size())};
+  GEMMParams params{/* const int M = */ M,
+                    /* const int N = */ N,
+                    /* const int K = */ K,
+                    /* const int lda = */ lda,
+                    /* const int ldb = */ ldb,
+                    /* const int ldd = */ ldd,
+                    /* const int tiles_n = */ tn,
+                    /* const int tiles_m = */ tm,
+                    /* const int64_t batch_stride_a = */ A_batch_stride,
+                    /* const int64_t batch_stride_b = */ B_batch_stride,
+                    /* const int64_t batch_stride_d = */ matrix_stride_out,
+                    /* const int swizzle_log = */ swizzle_log,
+                    /* const int gemm_k_iterations_aligned = */ (K / bk),
+                    /* const int batch_ndim = */ int(batch_shape.size())};
 
   // Prepare launch grid params
   int tile = 1 << swizzle_log;
@@ -497,12 +494,11 @@ void steel_matmul_regular_axpby(
     int ldc = c.strides()[c.ndim() - 2];
     int fdc = c.strides()[c.ndim() - 1];
 
-    GEMMAddMMParams params{
-        /* const int ldc = */ ldc,
-        /* const int fdc = */ fdc,
-        /* const int64_t batch_stride_c = */ C_batch_stride,
-        /* const float alpha = */ alpha,
-        /* const float beta = */ beta};
+    GEMMAddMMParams params{/* const int ldc = */ ldc,
+                           /* const int fdc = */ fdc,
+                           /* const int64_t batch_stride_c = */ C_batch_stride,
+                           /* const float alpha = */ alpha,
+                           /* const float beta = */ beta};
 
     compute_encoder.set_input_array(c, 2);
     compute_encoder.set_bytes(params, 5);
@@ -539,6 +535,8 @@ void steel_gemm_splitk_axpby(
     float beta = 0.0f) {
   using namespace mlx::steel;
 
+  int _tm = (M + 32 - 1) / 32;
+  int _tn = (N + 32 - 1) / 32;
   int _tk = K / 16;
 
   int bm = M < 40 ? 16 : 32;
@@ -546,7 +544,9 @@ void steel_gemm_splitk_axpby(
   int bk = 16;
   int wm = 2, wn = 2;
 
-  int split_k_partitions = _tk < 16 ? 2 : (_tk < 32 ? 4 : (_tk < 64 ? 8 : 16));
+  // As _tk grows use more partitions, as _tm * _tn grow use fewer partitions
+  int split_k_partitions =
+      std::min(std::max(2, next_power_of_2(_tk / (_tm * _tn))), 32);
   int split_k_partition_stride = M * N;
   int gemm_k_iterations = (K / bk) / split_k_partitions;
   int split_k_partition_size = gemm_k_iterations * bk;
@@ -608,10 +608,183 @@ void steel_gemm_splitk_axpby(
       /* const int split_k_partitions = */ split_k_partitions,
       /* const int split_k_partition_stride = */ split_k_partition_stride,
       /* const int split_k_partition_size = */ split_k_partition_size,
+      /* const int swizzle_log = */ 0, // no swizzle
       /* const int gemm_k_iterations_aligned = */ gemm_k_iterations};
 
   MTL::Size group_dims = MTL::Size(32, wn, wm);
   MTL::Size grid_dims = MTL::Size(tn, tm, split_k_partitions);
+
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(C_split, 2);
+
+  compute_encoder.set_bytes(params, 3);
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+  // Do accum kernel
+  {
+    const bool do_axpby = CHECK_AB && (alpha != 1.0f || beta != 0.0f);
+
+    auto kernel_name = "steel_gemm_splitk_accum_" + type_to_name(out) + "_" +
+        type_to_name(C_split);
+
+    if (do_axpby) {
+      kernel_name = kernel_name + "_axbpy";
+    }
+
+    auto kernel = get_steel_gemm_splitk_accum_kernel(
+        /* metal::Device& d = */ d,
+        /* const std::string& kernel_name = */ kernel_name,
+        /* const array& in = */ C_split,
+        /* const array& out = */ out,
+        /* bool axbpy = */ do_axpby);
+    compute_encoder.set_compute_pipeline_state(kernel);
+
+    // Set the arguments for the kernel
+    compute_encoder.set_input_array(C_split, 0);
+    compute_encoder.set_output_array(out, 1);
+    compute_encoder.set_bytes(split_k_partitions, 2);
+    compute_encoder.set_bytes(split_k_partition_stride, 3);
+    compute_encoder.set_bytes(N, 4);
+
+    if (do_axpby) {
+      int ldc = c.strides()[c.ndim() - 2];
+      int fdc = c.strides()[c.ndim() - 1];
+
+      compute_encoder.set_input_array(c, 5);
+      compute_encoder.set_bytes(ldc, 6);
+      compute_encoder.set_bytes(fdc, 7);
+      compute_encoder.set_bytes(alpha, 8);
+      compute_encoder.set_bytes(beta, 9);
+    }
+
+    // Launch enough thread groups for each output
+    MTL::Size grid_dims = MTL::Size(N, M, 1);
+    auto group_dims = get_block_dims(N, M, 1);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+  }
+
+  d.add_temporaries(std::move(copies), s.index);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// NAX Split k steel matmul
+///////////////////////////////////////////////////////////////////////////////
+
+template <bool CHECK_AB = true>
+void steel_gemm_splitk_axpby_nax(
+    const Stream& s,
+    metal::Device& d,
+    const array& a,
+    const array& b,
+    const array& c,
+    array& out,
+    int M,
+    int N,
+    int K,
+    int batch_size_out,
+    int lda,
+    int ldb,
+    bool transpose_a,
+    bool transpose_b,
+    std::vector<array>& copies,
+    float alpha = 1.0f,
+    float beta = 0.0f) {
+  using namespace mlx::steel;
+
+  constexpr int bm = 128, bn = 128, bk = 512;
+  constexpr int wm = 4, wn = 4;
+
+  // Determine how many partitions to split K into
+  constexpr int split_k_partition_size = 3072;
+  int split_k_partitions =
+      (K + split_k_partition_size - 1) / split_k_partition_size;
+
+  const int bk_iters_per_partition = split_k_partition_size / bk;
+  const int split_k_partition_stride = M * N;
+
+  array C_split({split_k_partitions, M, N}, float32, nullptr, {});
+  C_split.set_data(allocator::malloc(C_split.nbytes()));
+  copies.push_back(C_split);
+
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+
+  // Per-tile align_K is checked at runtime; only the last tile can be unaligned
+  metal::MTLFCList func_consts = {
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201}};
+
+  std::ostringstream kname;
+
+  // clang-format off
+  kname << "steel_gemm_splitk_nax_"
+        << (transpose_a ? 't' : 'n')
+        << (transpose_b ? 't' : 'n')
+        << "_" << type_to_name(a)
+        << "_" << type_to_name(C_split)
+        << "_bm" << bm << "_bn" << bn << "_bk" << bk
+        << "_wm" << wm << "_wn" << wn; // clang-format on
+
+  std::string base_name = kname.str();
+
+  // clang-format off
+  kname << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n')
+        << "_align_K_" << (align_K ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_steel_gemm_splitk_nax_kernel(
+      /* metal::Device& d = */ d,
+      /* const std::string& kernel_name = */ base_name,
+      /* const std::string& hash_name = */ hash_name,
+      /* const metal::MTLFCList& func_consts = */ func_consts,
+      /* const array& out = */ C_split,
+      /* bool transpose_a = */ transpose_a,
+      /* bool transpose_b = */ transpose_b,
+      /* int bm = */ bm,
+      /* int bn = */ bn,
+      /* int bk = */ bk,
+      /* int wm = */ wm,
+      /* int wn = */ wn);
+
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int tn = (N + bn - 1) / bn;
+  int tm = (M + bm - 1) / bm;
+
+  int swizzle_log = tm <= 3 ? 0 : 1;
+
+  // Compute swizzled tile counts
+  int tile = 1 << swizzle_log;
+  int tm_swizzled = (tm + tile - 1) / tile;
+  int tn_swizzled = tn * tile;
+
+  GEMMSpiltKParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ lda,
+      /* const int ldb = */ ldb,
+      /* const int ldc = */ N,
+      /* const int tiles_n = */ tn,
+      /* const int tiles_m = */ tm,
+      /* const int split_k_partitions = */ split_k_partitions,
+      /* const int split_k_partition_stride = */ split_k_partition_stride,
+      /* const int split_k_partition_size = */ split_k_partition_size,
+      /* const int swizzle_log = */ swizzle_log,
+      /* const int gemm_k_iterations_aligned = */ bk_iters_per_partition};
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  // Use 1D grid with K-partition-major layout: [Partition0: M×N
+  // tiles][Partition1: M×N tiles]... Grid size is 1D to prevent driver/HW from
+  // using its own heuristic to exploit 2D locality by launching threadgroups in
+  // a non-linear order
+  MTL::Size grid_dims =
+      MTL::Size(tn_swizzled * tm_swizzled * split_k_partitions, 1, 1);
 
   compute_encoder.set_input_array(a, 0);
   compute_encoder.set_input_array(b, 1);
@@ -740,12 +913,46 @@ void steel_matmul_axpby(
   /////////////////////////////////////////////////////////////////////////////
   // Split K specialization
 
-  int _tm = M / 16;
-  int _tn = N / 16;
+  int _tm = (M + 16 - 1) / 16;
+  int _tn = (N + 16 - 1) / 16;
   int _tk = K / 16;
 
-  if (batch_size_out == 1 && (_tm * _tn) <= 32 && _tk >= 8) {
+  // Case 1: Small M×N with large K, use SIMD split-K
+  char devc = d.get_architecture().back();
+  // Max and Ultra dispatch larger sizes to splitk
+  int min_tmn_threshold = (devc == 's' || devc == 'd') ? 2048 : 1024;
+  if (batch_size_out == 1 && (_tm * _tn) <= min_tmn_threshold && _tk >= 8 &&
+      K >= std::max(M, N)) {
     return steel_gemm_splitk_axpby<CHECK_AB>(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ a,
+        /* const array& b = */ b,
+        /* const array& c = */ c,
+        /* array& out = */ out,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* int batch_size_out = */ batch_size_out,
+        /* int lda = */ lda,
+        /* int ldb = */ ldb,
+        /* bool transpose_a = */ transpose_a,
+        /* bool transpose_b = */ transpose_b,
+        /* std::vector<array>& copies = */ copies,
+        /* float alpha = */ alpha,
+        /* float beta = */ beta);
+  }
+
+  // Case 2: Large K with sufficient M, N, and NAX is available, use NAX split-K
+  // TODO: Add device-specific tuning for more NAX GPUs in the future
+  constexpr int min_mn_threshold = 2048 * 2048;
+  constexpr int min_k_threshold = 10240;
+  if (batch_size_out == 1 && metal::is_nax_available() &&
+      !issubdtype(a.dtype(), complexfloating) &&
+      (env::enable_tf32() || a.dtype() != float32) &&
+      int64_t(M) * N >= min_mn_threshold && K >= min_k_threshold &&
+      K >= (3 * std::max(M, N))) {
+    return steel_gemm_splitk_axpby_nax<CHECK_AB>(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,
         /* const array& a = */ a,
@@ -1554,21 +1761,20 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
 
   // Prepare steel matmul params
-  GEMMParams params{
-      /* const int M = */ M,
-      /* const int N = */ N,
-      /* const int K = */ K,
-      /* const int lda = */ lda,
-      /* const int ldb = */ ldb,
-      /* const int ldd = */ N,
-      /* const int tiles_n = */ tn,
-      /* const int tiles_m = */ tm,
-      /* const int64_t batch_stride_a = */ A_batch_str,
-      /* const int64_t batch_stride_b = */ B_batch_str,
-      /* const int64_t batch_stride_d = */ matrix_stride_out,
-      /* const int swizzle_log = */ swizzle_log,
-      /* const int gemm_k_iterations_aligned = */ (K / bk),
-      /* const int batch_ndim = */ int(batch_shape.size())};
+  GEMMParams params{/* const int M = */ M,
+                    /* const int N = */ N,
+                    /* const int K = */ K,
+                    /* const int lda = */ lda,
+                    /* const int ldb = */ ldb,
+                    /* const int ldd = */ N,
+                    /* const int tiles_n = */ tn,
+                    /* const int tiles_m = */ tm,
+                    /* const int64_t batch_stride_a = */ A_batch_str,
+                    /* const int64_t batch_stride_b = */ B_batch_str,
+                    /* const int64_t batch_stride_d = */ matrix_stride_out,
+                    /* const int swizzle_log = */ swizzle_log,
+                    /* const int gemm_k_iterations_aligned = */ (K / bk),
+                    /* const int batch_ndim = */ int(batch_shape.size())};
 
   // Prepare launch grid params
   int tile = 1 << swizzle_log;
@@ -2113,23 +2319,22 @@ void gather_mm(
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Prepare the matmul params
-  steel::GEMMParams params{
-      /* const int M = */ M,
-      /* const int N = */ N,
-      /* const int K = */ K,
-      /* const int lda = */ static_cast<int>(lda),
-      /* const int ldb = */ static_cast<int>(ldb),
-      /* const int ldd = */ N,
-      /* const int tiles_n = */ (N + bn - 1) / bn,
-      /* const int tiles_m = */ (M + bm - 1) / bm,
-      /* const int64_t batch_stride_a = */
-      (batch_ndim > 0) ? lhs_indices.strides()[0] : 0,
-      /* const int64_t batch_stride_b = */
-      (batch_ndim > 0) ? rhs_indices.strides()[0] : 0,
-      /* const int64_t batch_stride_d = */ M * N,
-      /* const int swizzle_log = */ 0,
-      /* const int gemm_k_iterations_aligned = */ (K / bk),
-      /* const int batch_ndim = */ batch_ndim};
+  steel::GEMMParams params{/* const int M = */ M,
+                           /* const int N = */ N,
+                           /* const int K = */ K,
+                           /* const int lda = */ static_cast<int>(lda),
+                           /* const int ldb = */ static_cast<int>(ldb),
+                           /* const int ldd = */ N,
+                           /* const int tiles_n = */ (N + bn - 1) / bn,
+                           /* const int tiles_m = */ (M + bm - 1) / bm,
+                           /* const int64_t batch_stride_a = */
+                           (batch_ndim > 0) ? lhs_indices.strides()[0] : 0,
+                           /* const int64_t batch_stride_b = */
+                           (batch_ndim > 0) ? rhs_indices.strides()[0] : 0,
+                           /* const int64_t batch_stride_d = */ M * N,
+                           /* const int swizzle_log = */ 0,
+                           /* const int gemm_k_iterations_aligned = */ (K / bk),
+                           /* const int batch_ndim = */ batch_ndim};
 
   // Prepare the grid
   MTL::Size group_dims = MTL::Size(32, wn, wm);
@@ -2317,21 +2522,20 @@ void segmented_mm(
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Prepare the matmul params
-  steel::GEMMParams params{
-      /* const int M = */ M,
-      /* const int N = */ N,
-      /* const int K = */ K,
-      /* const int lda = */ static_cast<int>(lda),
-      /* const int ldb = */ static_cast<int>(ldb),
-      /* const int ldd = */ N,
-      /* const int tiles_n = */ (N + bn - 1) / bn,
-      /* const int tiles_m = */ (M + bm - 1) / bm,
-      /* const int64_t batch_stride_a = */ 0,
-      /* const int64_t batch_stride_b = */ 0,
-      /* const int64_t batch_stride_d = */ M * N,
-      /* const int swizzle_log = */ 0,
-      /* const int gemm_k_iterations_aligned = */ 0,
-      /* const int batch_ndim = */ 0};
+  steel::GEMMParams params{/* const int M = */ M,
+                           /* const int N = */ N,
+                           /* const int K = */ K,
+                           /* const int lda = */ static_cast<int>(lda),
+                           /* const int ldb = */ static_cast<int>(ldb),
+                           /* const int ldd = */ N,
+                           /* const int tiles_n = */ (N + bn - 1) / bn,
+                           /* const int tiles_m = */ (M + bm - 1) / bm,
+                           /* const int64_t batch_stride_a = */ 0,
+                           /* const int64_t batch_stride_b = */ 0,
+                           /* const int64_t batch_stride_d = */ M * N,
+                           /* const int swizzle_log = */ 0,
+                           /* const int gemm_k_iterations_aligned = */ 0,
+                           /* const int batch_ndim = */ 0};
 
   // Prepare the grid
   MTL::Size group_dims = MTL::Size(32, wn, wm);

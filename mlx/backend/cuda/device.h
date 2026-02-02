@@ -11,7 +11,6 @@
 #include <cublasLt.h>
 #include <cuda.h>
 #include <cudnn.h>
-#include <thrust/execution_policy.h>
 
 #include <unordered_map>
 
@@ -119,7 +118,7 @@ class CommandEncoder {
   CudaStream stream_;
   CudaGraph graph_;
   Worker worker_;
-  char node_count_{0};
+  int node_count_{0};
   bool in_concurrent_{false};
   std::vector<cudaGraphNode_t> from_nodes_;
   std::vector<cudaGraphNode_t> to_nodes_;
@@ -142,6 +141,7 @@ class Device {
   explicit Device(int device);
   ~Device();
 
+  Device(Device&&) = default;
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
 
@@ -149,6 +149,8 @@ class Device {
   void make_current();
 
   CommandEncoder& get_command_encoder(Stream s);
+  cublasLtHandle_t get_cublaslt_handle();
+  cudnnHandle_t get_cudnn_handle();
 
   int cuda_device() const {
     return device_;
@@ -159,31 +161,35 @@ class Device {
   int compute_capability_minor() const {
     return compute_capability_minor_;
   }
-  cublasLtHandle_t lt_handle() const {
-    return lt_;
+  bool concurrent_managed_access() const {
+    return concurrent_managed_access_ == 1;
   }
-  cudnnHandle_t cudnn_handle() const {
-    return cudnn_;
+  bool host_native_atomic() const {
+    return host_native_atomic_ == 1;
+  }
+  bool managed_memory() const {
+    return managed_memory_ == 1;
+  }
+  bool memory_pools() const {
+    return memory_pools_ == 1;
   }
 
  private:
   int device_;
   int compute_capability_major_;
   int compute_capability_minor_;
+  int concurrent_managed_access_;
+  int host_native_atomic_;
+  int managed_memory_;
+  int memory_pools_;
   std::string device_name_;
-  cublasLtHandle_t lt_;
-  cudnnHandle_t cudnn_;
+  cublasLtHandle_t cublaslt_handle_{nullptr};
+  cudnnHandle_t cudnn_handle_{nullptr};
   std::unordered_map<int, CommandEncoder> encoders_;
 };
 
-Device& device(mlx::core::Device device);
+Device& device(int cuda_device);
+Device& device(mlx::core::Device d);
 CommandEncoder& get_command_encoder(Stream s);
-
-// Return an execution policy that does not sync for result.
-// Note that not all thrust APIs support async policy, confirm before using.
-inline auto thrust_policy(cudaStream_t stream) {
-  // TODO: Connect thrust's custom allocator with mlx's allocator.
-  return thrust::cuda::par_nosync.on(stream);
-}
 
 } // namespace mlx::core::cu

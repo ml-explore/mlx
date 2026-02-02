@@ -124,12 +124,12 @@ struct GemmConfiguration : public CommonGemmConfiguration<T, Arch, 1> {
 };
 
 // Specialized GEMM configuration for sm80 and later.
-template <typename T, typename Arch, int kAlignmentC, bool kEnableTF32>
+template <typename T, typename Arch, int kAlignmentC>
 struct GemmConfiguration<
     T,
     Arch,
     kAlignmentC,
-    kEnableTF32,
+    true,
     std::enable_if_t<Arch::kMinComputeCapability >= 80 && sizeof(T) <= 4>>
     : public CommonGemmConfiguration<T, cutlass::arch::Sm80, kAlignmentC> {
   using OpClass = cutlass::arch::OpClassTensorOp;
@@ -160,7 +160,7 @@ class GemmGroupedEncoder
   void encode(cu::CommandEncoder& encoder) {
     encoder.add_kernel_node(
         cutlass::Kernel<GemmKernel>,
-        {static_cast<uint>(this->params_.threadblock_count), 1, 1},
+        {static_cast<uint32_t>(this->params_.threadblock_count), 1, 1},
         {GemmKernel::kThreadCount, 1, 1},
         sizeof(typename GemmKernel::SharedStorage),
         this->params_);
@@ -184,11 +184,11 @@ void grouped_gemm_v2(
   dispatch_bool(a_transposed, [&](auto a_transposed_tag) {
     dispatch_bool(b_transposed, [&](auto b_transposed_tag) {
       using LayoutA = std::conditional_t<
-          a_transposed_tag,
+          a_transposed_tag.value,
           cutlass::layout::ColumnMajor,
           cutlass::layout::RowMajor>;
       using LayoutB = std::conditional_t<
-          b_transposed_tag,
+          b_transposed_tag.value,
           cutlass::layout::ColumnMajor,
           cutlass::layout::RowMajor>;
       using GemmKernel = typename cutlass::gemm::kernel::DefaultGemmGrouped<
@@ -302,9 +302,9 @@ void cutlass_grouped_gemm_unaligned(
 
   // Fill the pointers by computing offsets from indices.
   constexpr int N_READS = 4;
-  size_t n_threads = cuda::ceil_div(indices.size(), N_READS);
+  int n_threads = cuda::ceil_div(indices.size(), N_READS);
   n_threads = group_count < n_threads ? n_threads : group_count;
-  dim3 block_dims(std::min(n_threads, 1024ul));
+  dim3 block_dims(std::min(n_threads, 1024));
   dim3 num_blocks(1);
 
   encoder.set_input_array(indices);

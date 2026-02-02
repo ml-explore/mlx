@@ -110,6 +110,8 @@ class CMakeBuild(build_ext):
                 )
             )
             cmake_args += [f"-DMLX_CUDA_ARCHITECTURES={cuda_archs}"]
+            # Search CUDA libs from python packages.
+            cmake_args += ["-DMLX_LOAD_CUDA_LIBS_FROM_PYTHON=ON"]
 
         # Some generators require explcitly passing config when building.
         build_args = ["--config", cfg]
@@ -229,6 +231,7 @@ if __name__ == "__main__":
         "dev": [
             "numpy>=2",
             "pre-commit",
+            "psutil",
             "torch>=2.9",
             "typing_extensions",
         ],

@@ -1,10 +1,11 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/quantized/cublas_qqmm.h"
+#include "mlx/backend/cuda/quantized/qmv.h"
+#include "mlx/backend/cuda/quantized/qqmm_impl.h"
 #include "mlx/backend/cuda/quantized/qqmm_utils.h"
 #include "mlx/backend/cuda/quantized/quantized.h"
-#include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/primitives.h"
 
 #include <nvtx3/nvtx3.hpp>
@@ -160,11 +161,45 @@ void run_qqmm(
 } // namespace
 
 void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(
+      (inputs.size() == 3 && inputs[1].dtype() == uint32) ||
+      (inputs.size() == 2));
   nvtx3::scoped_range r("QQMatmul::eval_gpu");
+
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
   auto& device = encoder.device();
-  int cc = device.compute_capability_major() * 100 +
+
+  bool w_quantized = (inputs[1].dtype() == uint32);
+  if (w_quantized && inputs[0].shape(-2) == 1) {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+    bool donate_x = inputs[0].is_donatable();
+    array x = ensure_row_contiguous(inputs[0], encoder, s);
+    // If x is a copy it should be donatable
+    donate_x |= x.is_donatable();
+    auto xhat = donate_x
+        ? x
+        : array(cu::malloc_async(x.nbytes(), encoder), x.shape(), x.dtype());
+    if (!donate_x) {
+      encoder.add_temporary(xhat);
+    }
+    fp_quantize_dequantize(x, xhat, group_size_, bits_, encoder, s);
+
+    // Make sure the last two dims of w and s are contiguous
+    array w = ensure_row_contiguous_matrix(inputs[1], encoder, s);
+    array scales = ensure_row_contiguous_matrix(inputs[2], encoder, s);
+
+    bool non_batched = w.ndim() == 2;
+    int K = x.shape(-1);
+    int M = non_batched ? x.size() / K : x.shape(-2);
+    int N = out.shape(-1);
+
+    fp_qmv(w, scales, xhat, out, bits_, group_size_, M, N, K, encoder);
+    return;
+  }
+
+  auto cc = device.compute_capability_major() * 100 +
       device.compute_capability_minor() * 10;
   if (cc < 1000) {
     throw std::runtime_error(

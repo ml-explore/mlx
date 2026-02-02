@@ -438,16 +438,48 @@ void sdpa_vector_2pass(
 
   // Compute the necessary sizes
   int gqa_factor = q.shape(1) / k.shape(1);
-  int N = k.shape(2);
-  int blocks = 32;
-  int B = q.shape(0) * q.shape(1);
+  int n_simds = gqa_factor * q.shape(2);
 
+  char devc = d.get_architecture().back();
+  int N = k.shape(2);
+  int blocks;
+  if (devc == 's') {
+    blocks = 64;
+    if (N > 1024 && n_simds > 4) {
+      if (N <= 8192) {
+        blocks = 128;
+      } else if (N <= 32768) {
+        blocks = 256;
+      } else if (N <= 65536) {
+        blocks = 512;
+      } else {
+        blocks = 1024;
+      }
+    }
+  } else if (devc == 'd') {
+    blocks = 128;
+    if (n_simds <= 2 && N > 8192) {
+      blocks = 256;
+    } else if (n_simds >= 6) {
+      if (N >= 16384 && N < 65536) {
+        blocks = 512;
+      } else if (N >= 65536) {
+        blocks = 1024;
+      }
+    }
+  } else {
+    if (n_simds >= 4) {
+      blocks = 64;
+    } else {
+      blocks = 32;
+    }
+  }
   size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
   size_t k_seq_stride = k.strides()[2];
   size_t v_head_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
   size_t v_seq_stride = v.strides()[2];
-  MTL::Size group_dims(8 * 32, 1, 1);
-  MTL::Size grid_dims(B, q.shape(2), blocks);
+  MTL::Size group_dims(32, gqa_factor, q.shape(2));
+  MTL::Size grid_dims(k.shape(1), q.shape(0), blocks);
 
   // Allocate the intermediates
   Shape intermediate_shape;
@@ -456,7 +488,7 @@ void sdpa_vector_2pass(
       intermediate_shape.end(), out.shape().begin(), out.shape().end() - 1);
   intermediate_shape.push_back(blocks);
   intermediate_shape.push_back(out.shape().back());
-  array intermediate(intermediate_shape, float32, nullptr, {});
+  array intermediate(intermediate_shape, q.dtype(), nullptr, {});
   intermediate_shape.pop_back();
   array sums(intermediate_shape, float32, nullptr, {});
   array maxs(std::move(intermediate_shape), float32, nullptr, {});
@@ -479,12 +511,14 @@ void sdpa_vector_2pass(
       {&bool_mask, MTL::DataType::DataTypeBool, 23},
       {&float_mask, MTL::DataType::DataTypeBool, 24},
       {&has_sinks, MTL::DataType::DataTypeBool, 25},
+      {&blocks, MTL::DataType::DataTypeInt, 26},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
   hash_name += do_causal ? "_c" : "_nc";
-  hash_name += has_sinks ? "_sinks" : "_nosinks";
+  hash_name += has_sinks ? "_sinks_" : "_nosinks_";
+  hash_name += std::to_string(blocks);
 
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -499,7 +533,6 @@ void sdpa_vector_2pass(
   compute_encoder.set_output_array(intermediate, 3);
   compute_encoder.set_output_array(sums, 4);
   compute_encoder.set_output_array(maxs, 5);
-  compute_encoder.set_bytes(gqa_factor, 6);
   compute_encoder.set_bytes(N, 7);
   compute_encoder.set_bytes(k_head_stride, 8);
   compute_encoder.set_bytes(k_seq_stride, 9);
@@ -519,7 +552,6 @@ void sdpa_vector_2pass(
   }
   if (has_sinks) {
     compute_encoder.set_input_array(*sinks, 18);
-    compute_encoder.set_bytes(q.shape(1), 19);
   }
 
   // Launch
@@ -527,13 +559,18 @@ void sdpa_vector_2pass(
 
   // Final pass
   kname.clear();
-  kname += "sdpa_vector_2pass_2_";
+  kname = "sdpa_vector_2pass_2_";
   kname += get_type_string(q.dtype());
   kname += "_";
   kname += std::to_string(v.shape(-1));
 
+  func_consts = {
+      {&blocks, MTL::DataType::DataTypeInt, 26},
+  };
+  hash_name = kname + "_" + std::to_string(blocks);
+
   // Get the kernel
-  kernel = d.get_kernel(kname);
+  kernel = d.get_kernel(kname, hash_name, func_consts);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Set its arguments
@@ -544,7 +581,7 @@ void sdpa_vector_2pass(
 
   // Launch
   group_dims = MTL::Size(1024, 1, 1);
-  grid_dims = MTL::Size(B, q.shape(2), 1);
+  grid_dims = MTL::Size(q.shape(0) * q.shape(1), q.shape(2), 1);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
@@ -576,6 +613,9 @@ bool ScaledDotProductAttention::use_fallback(
   const int query_head_dim = q.shape(-1);
   const int query_sequence_length = q.shape(2);
   const int key_sequence_length = k.shape(2);
+  const int num_query_heads = q.shape(1);
+  const int num_kv_heads = k.shape(1);
+  const int gqa_factor = num_query_heads / num_kv_heads;
 
   const bool sdpa_vector_supported_head_dim =
       query_head_dim == value_head_dim &&
@@ -592,7 +632,8 @@ bool ScaledDotProductAttention::use_fallback(
 
   const bool supports_sdpa_vector = (query_sequence_length <= 8) &&
       (query_sequence_length <= key_sequence_length) &&
-      sdpa_vector_supported_head_dim;
+      sdpa_vector_supported_head_dim &&
+      (query_sequence_length * gqa_factor) <= 32;
 
   return !(supports_sdpa_full || supports_sdpa_vector);
 }
@@ -699,7 +740,7 @@ void ScaledDotProductAttention::eval_gpu(
     // - The sequence length is even longer and we have gqa
     bool do_causal = do_causal_ && q.shape(2) > 1;
     char devc = d.get_architecture().back();
-    if ((devc == 'd' && k.shape(2) >= 1024) ||
+    if (((devc == 'd' || devc == 's') && k.shape(2) >= 1024) ||
         (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
       sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
     } else {

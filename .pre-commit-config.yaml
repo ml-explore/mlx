@@ -6,17 +6,17 @@ repos:
     # -   id: end-of-file-fixer
     # -   id: trailing-whitespace
 -   repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v19.1.7
+    rev: v21.1.8
     hooks:
     -   id: clang-format
 # Using this mirror lets us use mypyc-compiled black, which is about 2x faster
 -   repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 25.1.0
+    rev: 26.1.0
     hooks:
     -   id: black
     
 -   repo: https://github.com/pycqa/isort
-    rev: 6.0.0
+    rev: 7.0.0
     hooks:
     -   id: isort
         args:

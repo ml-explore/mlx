@@ -46,7 +46,7 @@
 namespace mlx::core {
 
 // Abstract base class
-class Primitive {
+class MLX_API Primitive {
  public:
   explicit Primitive(Stream stream) : stream_(stream) {}
 
@@ -173,7 +173,7 @@ class Abs : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
-class Add : public UnaryPrimitive {
+class MLX_API Add : public UnaryPrimitive {
  public:
   explicit Add(Stream stream) : UnaryPrimitive(stream) {}
 
@@ -624,7 +624,7 @@ class Ceil : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
-class Compiled : public Primitive {
+class MLX_API Compiled : public Primitive {
  public:
   /*
    * The inputs, outputs and tape are either tracers or constants.
@@ -1018,7 +1018,7 @@ class ErfInv : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
-class Exp : public UnaryPrimitive {
+class MLX_API Exp : public UnaryPrimitive {
  public:
   explicit Exp(Stream stream) : UnaryPrimitive(stream) {}
 
@@ -1768,7 +1768,7 @@ class Reshape : public UnaryPrimitive {
   Shape shape_;
 };
 
-class Reduce : public UnaryPrimitive {
+class MLX_API Reduce : public UnaryPrimitive {
  public:
   enum ReduceType { And, Or, Sum, Prod, Min, Max, AbsMax };
 

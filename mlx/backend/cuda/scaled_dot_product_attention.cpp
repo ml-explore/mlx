@@ -140,7 +140,7 @@ DnnGraph build_sdpa_graph(
     const std::optional<array>& mask_arr,
     bool output_logsumexp,
     const array& o,
-    const array& stats) {
+    const std::optional<array>& stats) {
   DnnGraph graph(handle, q.dtype());
 
   auto q_ = graph.tensor("Q", Q, q);
@@ -152,11 +152,7 @@ DnnGraph build_sdpa_graph(
                      .set_attn_scale(graph.scalar("Scale", SCALE, float32))
                      .set_generate_stats(output_logsumexp);
   if (do_causal) {
-    if (q.shape(2) > k.shape(2)) {
-      options.set_causal_mask(do_causal);
-    } else {
-      options.set_causal_mask_bottom_right(do_causal);
-    }
+    options.set_causal_mask_bottom_right(do_causal);
   }
   if (mask_arr) {
     options.set_bias(graph.tensor("BIAS", BIAS, *mask_arr));
@@ -165,7 +161,7 @@ DnnGraph build_sdpa_graph(
   auto [o_, stats_] = graph.sdpa(q_, k_, v_, options);
   graph.tensor(o_, O, o)->set_output(true);
   if (output_logsumexp) {
-    graph.tensor(stats_, STATS, stats)->set_output(true);
+    graph.tensor(stats_, STATS, *stats)->set_output(true);
   }
 
   CHECK_CUDNN_FE_ERROR(graph.prepare());
@@ -201,11 +197,7 @@ DnnGraph build_sdpa_backward_graph(
                      .set_name("sdpa_backward_cudnn")
                      .set_attn_scale(graph.scalar("Scale", SCALE, float32));
   if (do_causal) {
-    if (q.shape(2) > k.shape(2)) {
-      options.set_causal_mask(do_causal);
-    } else {
-      options.set_causal_mask_bottom_right(do_causal);
-    }
+    options.set_causal_mask_bottom_right(do_causal);
   }
   if (mask_arr) {
     options.set_bias(graph.tensor("BIAS", BIAS, *mask_arr));
@@ -247,6 +239,11 @@ bool supports_sdpa_cudnn(
     return false;
   }
 
+  // cuDNN does not support bottom right mask when T_q > T_kv.
+  if (do_causal && (q.shape(2) > k.shape(2))) {
+    return false;
+  }
+
   // D_qk and D_v must be a multiple of 8 with maximum value 128.
   if ((q.shape(-1) % 8 != 0) || (q.shape(-1) > 128) || (v.shape(-1) % 8 != 0) ||
       (v.shape(-1) > 128)) {
@@ -263,13 +260,13 @@ void sdpa_cudnn(
     const array& v,
     float scale,
     array& o,
-    array& stats,
+    std::optional<array>& stats,
     bool do_causal,
     const std::optional<array>& mask_arr,
     bool output_logsumexp,
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
-  auto handle = encoder.device().cudnn_handle();
+  auto handle = encoder.device().get_cudnn_handle();
 
   malloc_with_same_layout(encoder, o, q);
 
@@ -281,8 +278,8 @@ void sdpa_cudnn(
     encoder.set_input_array(*mask_arr);
   }
   if (output_logsumexp) {
-    stats.set_data(cu::malloc_async(stats.nbytes(), encoder));
-    encoder.set_output_array(stats);
+    stats->set_data(cu::malloc_async(stats->nbytes(), encoder));
+    encoder.set_output_array(*stats);
   }
 
   // Search cache.
@@ -306,7 +303,7 @@ void sdpa_cudnn(
     variant_pack[BIAS] = gpu_ptr<void>(*mask_arr);
   }
   if (output_logsumexp) {
-    variant_pack[STATS] = gpu_ptr<void>(stats);
+    variant_pack[STATS] = gpu_ptr<void>(*stats);
   }
 
   CHECK_CUDNN_FE_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
@@ -327,7 +324,7 @@ void sdpa_backward_cudnn(
     array& d_v,
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
-  auto handle = encoder.device().cudnn_handle();
+  auto handle = encoder.device().get_cudnn_handle();
 
   malloc_with_same_layout(encoder, d_q, q);
   malloc_with_same_layout(encoder, d_k, k);
@@ -428,14 +425,17 @@ void ScaledDotProductAttention::eval_gpu(
   array q = prepare_sdpa_input(inputs[0], s);
   array k = prepare_sdpa_input(inputs[1], s);
   array v = prepare_sdpa_input(inputs[2], s);
-  auto& out = outputs[0];
-  auto& stats = outputs[1];
+  array& out = outputs[0];
   bool has_mask = inputs.size() - has_sinks_ > 3;
   bool has_arr_mask = has_mask && !do_causal_;
 
   std::optional<array> mask_arr;
   if (has_arr_mask) {
     mask_arr = prepare_sdpa_input(inputs[3], s);
+  }
+  std::optional<array> stats;
+  if (output_logsumexp_) {
+    stats = outputs[1];
   }
 
   if (supports_sdpa_vector(
