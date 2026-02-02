@@ -212,13 +212,16 @@ install(DIRECTORY ${cccl_SOURCE_DIR}/include/cuda
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)
 install(DIRECTORY ${cccl_SOURCE_DIR}/include/nv
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)
+# CUB and Thrust are needed to JIT compile unary -> reduction kernels.
+install(DIRECTORY ${cccl_SOURCE_DIR}/include/cub
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)
+install(DIRECTORY ${cccl_SOURCE_DIR}/include/thrust
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)
 
-# The binary of C++ tests will not be installed so it can not find the CCCL
-# headers, and we have to hard-code the path.
-if(MLX_BUILD_TESTS)
-  target_compile_definitions(mlx
-                             PRIVATE MLX_CCCL_DIR="${cccl_SOURCE_DIR}/include")
-endif()
+# JIT cannot find the CCCL headers when compiling unary -> reduction kernels, so
+# we hard-code the path to the downloaded CCCL.
+target_compile_definitions(mlx
+                           PRIVATE MLX_CCCL_DIR="${cccl_SOURCE_DIR}/include")
 
 # Use fixed version of NVTX.
 FetchContent_Declare(

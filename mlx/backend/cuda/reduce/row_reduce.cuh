@@ -2,13 +2,16 @@
 
 #pragma once
 
-#include "mlx/backend/cuda/reduce/reduce.cuh"
+#include "mlx/backend/cuda/device/config.h"
 #include "mlx/backend/cuda/reduce/reduce_ops.cuh"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 
+#ifndef __CUDACC_RTC__
 #include <numeric>
+#include "mlx/backend/cuda/reduce/reduce.cuh"
+#endif
 
 namespace mlx::core::cu {
 
@@ -31,6 +34,7 @@ struct RowReduceArgs {
   // The number of rows we are reducing. Namely prod(reduce_shape).
   size_t non_row_reductions;
 
+#ifndef __CUDACC_RTC__
   RowReduceArgs(
       const array& in,
       const ReductionPlan& plan,
@@ -78,6 +82,7 @@ struct RowReduceArgs {
     strides = const_param(strides_vec);
     ndim = shape_vec.size();
   }
+#endif
 };
 
 template <

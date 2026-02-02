@@ -93,7 +93,6 @@ block_reduce(Block block, Warp warp, T (&vals)[N], T* smem, Op op, T init) {
 
 } // namespace cu
 
-// Host-only function
 #ifndef __CUDACC_RTC__
 inline void allocate_same_layout(
     array& out,

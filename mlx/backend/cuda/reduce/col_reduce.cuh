@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "mlx/backend/cuda/reduce/reduce.cuh"
+#include "mlx/backend/cuda/device/config.h"
 #include "mlx/backend/cuda/reduce/reduce_ops.cuh"
 
 #include <cooperative_groups.h>
@@ -10,7 +10,10 @@
 #include <cub/block/block_load.cuh>
 #include <cub/cub.cuh>
 
+#ifndef __CUDACC_RTC__
 #include <numeric>
+#include "mlx/backend/cuda/reduce/reduce.cuh"
+#endif
 
 namespace mlx::core::cu {
 
@@ -34,6 +37,7 @@ struct ColReduceArgs {
   // The number of column we are reducing. Namely prod(reduce_shape).
   size_t non_col_reductions;
 
+#ifndef __CUDACC_RTC__
   ColReduceArgs(
       const array& in,
       const ReductionPlan& plan,
@@ -81,6 +85,7 @@ struct ColReduceArgs {
       non_col_reductions *= reduce_shape[i];
     }
   }
+#endif
 };
 
 template <

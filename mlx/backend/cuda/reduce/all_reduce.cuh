@@ -62,13 +62,6 @@ __device__ void all_reduce_impl(
   }
 }
 
-template <typename T, typename U, typename ReduceOp, int N, typename PrefixOp>
-__global__ void
-all_reduce(T* in, U* out, size_t block_step, size_t size, PrefixOp prefix) {
-  all_reduce_impl<T, U, ReduceOp, N, PrefixOp>(
-      in, out, block_step, size, prefix);
-}
-
 template <
     typename T,
     typename U,

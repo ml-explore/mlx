@@ -819,12 +819,12 @@ void compile_fuse(
         }
         // Stop fusing if:
         // depth limit exceeded
-        // non fusable primitive
+        // non unary primitive
         // does not have primitive
         // stream mismatch
         // is a constant input
         if (depth >= max_prefix_depth || !a.has_primitive() ||
-            !is_fusable(a.primitive()) ||
+            !is_unary(a.primitive()) ||
             a.primitive().stream() != reduction_stream ||
             input_ids.count(a.id())) {
           prefix_inputs.push_back(a);
