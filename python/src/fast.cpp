@@ -272,8 +272,6 @@ void init_fast(nb::module_& parent_module) {
                can have at most 4 dimensions and must be broadcast-compatible with
                the shape ``[B, N, T_q, T_kv]``. If an additive mask is given its
                type must promote to the promoted type of ``q``, ``k``, and ``v``.
-               The ``"causal"`` mask uses lower-right alignment where the
-               last query aligns with the last key.
             sinks (array, optional): An optional array of attention sinks.
                Default: ``None``.
 
@@ -294,6 +292,50 @@ void init_fast(nb::module_& parent_module) {
             v = mx.random.normal(shape=(B, N_kv, T_kv, D))
             scale = D ** -0.5
             out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask="causal")
+      )pbdoc");
+
+  m.def(
+      "gru_cell",
+      [](const mx::array& input_proj,
+         const mx::array& hidden_proj,
+         const mx::array& hidden_prev,
+         mx::StreamOrDevice s) {
+        return mx::fast::gru_cell(input_proj, hidden_proj, hidden_prev, s);
+      },
+      "input_proj"_a,
+      "hidden_proj"_a,
+      "hidden_prev"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def gru_cell(input_proj: array, hidden_proj: array, hidden_prev: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Fused GRU cell (Metal RNN). One step: out = (1-z)*n + z*h_prev with r,z,n from gates.
+        input_proj [B, 3*H], hidden_proj [B, 3*H], hidden_prev [B, H]. Uses Metal kernel on Apple Silicon.
+      )pbdoc");
+
+  m.def(
+      "lstm_cell",
+      [](const mx::array& input_proj,
+         const mx::array& hidden_proj,
+         const mx::array& cell_prev,
+         const mx::array& hidden_prev,
+         mx::StreamOrDevice s) {
+        auto [c_new, h_new] = mx::fast::lstm_cell(
+            input_proj, hidden_proj, cell_prev, hidden_prev, s);
+        return nb::make_tuple(c_new, h_new);
+      },
+      "input_proj"_a,
+      "hidden_proj"_a,
+      "cell_prev"_a,
+      "hidden_prev"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def lstm_cell(input_proj: array, hidden_proj: array, cell_prev: array, hidden_prev: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
+      R"pbdoc(
+        Fused LSTM cell (Metal RNN). One step: cell_new = f*c_prev + i*g, hidden_new = o*tanh(cell_new).
+        Returns (cell_new, hidden_new). Uses Metal kernel on Apple Silicon.
       )pbdoc");
 
   m.def(

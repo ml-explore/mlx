@@ -444,6 +444,8 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(LayerNormVJP),
       SERIALIZE_PRIMITIVE(RoPE),
       SERIALIZE_PRIMITIVE(ScaledDotProductAttention),
+      SERIALIZE_PRIMITIVE(FastGruCell),
+      SERIALIZE_PRIMITIVE(FastLSTMCell),
       SERIALIZE_PRIMITIVE(CustomKernel)};
   std::unordered_map<std::string, std::string> name_remap;
 
