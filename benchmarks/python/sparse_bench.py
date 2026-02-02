@@ -6,9 +6,6 @@ import mlx.core as mx
 import numpy as np
 from time_utils import time_fn
 
-N = 1024
-SPARSITY = 0.05
-
 
 def to_csr(dense_np):
     rows, cols = np.nonzero(dense_np)
@@ -21,15 +18,15 @@ def to_csr(dense_np):
     return row_ptr, cols.astype(np.int32), values
 
 
-def time_sparse_matmul(dtype, dtype_name):
+def time_sparse_matmul(dtype, dtype_name, n, sparsity):
     np.random.seed(42)
 
-    A_np = np.random.randn(N, N).astype(np.float32)
-    mask = np.random.rand(N, N) < SPARSITY
+    A_np = np.random.randn(n, n).astype(np.float32)
+    mask = np.random.rand(n, n) < sparsity
     A_np = A_np * mask
 
     row_ptr_np, col_indices_np, values_np = to_csr(A_np)
-    B_np = np.random.randn(N, N).astype(np.float32)
+    B_np = np.random.randn(n, n).astype(np.float32)
 
     row_ptr = mx.array(row_ptr_np)
     col_indices = mx.array(col_indices_np)
@@ -59,11 +56,16 @@ if __name__ == "__main__":
     else:
         mx.set_default_device(mx.cpu)
 
-    print(f"Sparse matmul CSR benchmark ({N}x{N}, {SPARSITY*100:.0f}% nonzero)")
+    configs = [
+        (1024, 0.05),
+        (4096, 0.01),
+    ]
 
-    for dtype, name in [
-        (mx.float16, "float16"),
-        (mx.bfloat16, "bfloat16"),
-        (mx.float32, "float32"),
-    ]:
-        time_sparse_matmul(dtype, name)
+    for n, sparsity in configs:
+        print(f"Sparse matmul CSR benchmark ({n}x{n}, {sparsity*100:.0f}% nonzero)")
+        for dtype, name in [
+            (mx.float16, "float16"),
+            (mx.bfloat16, "bfloat16"),
+            (mx.float32, "float32"),
+        ]:
+            time_sparse_matmul(dtype, name, n, sparsity)
