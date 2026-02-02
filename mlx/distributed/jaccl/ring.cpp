@@ -274,31 +274,7 @@ void RingGroup::all_reduce(
   encoder.set_input_array(input);
   encoder.set_output_array(output);
   encoder.dispatch([in_ptr, out_ptr, size = input.size(), this, reduce_op]() {
-    if (size < size_) {
-      // TODO: Maybe allocate dynamically so we don't have the constraint
-      // below?
-      if (sizeof(T) * size_ > 1024) {
-        std::ostringstream msg;
-        msg << "Can't perform the ring all reduce of " << size
-            << " elements with a ring of size " << size_;
-        throw std::runtime_error(msg.str());
-      }
-
-      size_t nbytes = size * sizeof(T);
-      char buffer[1024];
-      std::memset(buffer, 0, size_ * sizeof(T));
-      std::memcpy(buffer, in_ptr, nbytes);
-      all_reduce_impl<1, T, ReduceOp>(
-          reinterpret_cast<T*>(buffer),
-          reinterpret_cast<T*>(buffer),
-          size_,
-          1,
-          reduce_op);
-      std::memcpy(out_ptr, buffer, nbytes);
-      return;
-    }
-
-    if (size < 2 * size_) {
+    if (size < size_ * 2 * left_.size()) {
       all_reduce_impl<1, T, ReduceOp>(in_ptr, out_ptr, size, 1, reduce_op);
       return;
     }
