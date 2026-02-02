@@ -296,7 +296,7 @@ TEST_CASE("test compile unary fused") {
     CHECK_EQ(out.size(), 1);
 
     auto& p = out[0].primitive();
-    // With fused-into-reduction, unary ops are fused into the Reduce primitive
+    // Unary ops are fused into the Reduce primitive
     CHECK_EQ(typeid(p), typeid(Reduce));
     auto cout = out[0].inputs()[0];
     auto& reduce = static_cast<Reduce&>(p);

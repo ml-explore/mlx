@@ -1272,16 +1272,25 @@ class TestCompile(mlx_tests.MLXTestCase):
             np.asarray(out, copy=False).__array_interface__["data"][0], in_ptr
         )
 
-    def test_compile_reduction(self):
-        x = mx.random.uniform(shape=(4, 4))
-        mx.eval(x)
+    def test_compile_unary_reduction(self):
+
+        x = mx.ones(shape=(4096, 4096))
+        y = mx.ones(shape=(4096, 4096))
 
         @mx.compile
-        def fun(x):
-            return mx.sum(x, axis=1)
+        def abs_max(x):
+            return mx.max(mx.abs(x))
 
-        out = fun(x)
-        expected = mx.sum(x, axis=1)
+        out = abs_max(x)
+        expected = y.abs().max() 
+        self.assertTrue(mx.allclose(out, expected))
+
+        @mx.compile
+        def square_sum(x):
+            return x.square().sum()
+
+        out = square_sum(x)
+        expected = y.square().sum()
         self.assertTrue(mx.allclose(out, expected))
 
 
