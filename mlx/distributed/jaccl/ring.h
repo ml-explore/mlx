@@ -64,6 +64,14 @@ class RingGroup : public GroupImpl {
       Stream stream,
       ReduceOp reduce_op);
 
+  template <int MAX_DIR, typename T, typename ReduceOp>
+  void all_reduce_impl(
+      const T* in_ptr,
+      T* out_ptr,
+      int64_t size,
+      int n_wires,
+      ReduceOp reduce_op);
+
   /**
    * Performs the connection initialization. Namely, after this call all
    * Connection objects should have a queue pair in RTS state and all buffers
@@ -132,22 +140,30 @@ class RingGroup : public GroupImpl {
          left_right * MAX_CONNS + wire];
   }
 
-  void post_recv_all(int sz, int buff) {
-    int n_wires = left_.size();
-    for (int lr = 0; lr < 2; lr++) {
+  template <int MAX_DIR>
+  void post_recv_all(int sz, int buff, int n_wires) {
+    for (int lr = 0; lr < MAX_DIR; lr++) {
       for (int lw = 0; lw < n_wires; lw++) {
         recv_from(sz, buff, lr, lw);
       }
     }
   }
 
-  void post_send_all(int sz, int buff) {
-    int n_wires = left_.size();
-    for (int lr = 0; lr < 2; lr++) {
+  void post_recv_all(int sz, int buff) {
+    post_recv_all<2>(sz, buff, left_.size());
+  }
+
+  template <int MAX_DIR>
+  void post_send_all(int sz, int buff, int n_wires) {
+    for (int lr = 0; lr < MAX_DIR; lr++) {
       for (int lw = 0; lw < n_wires; lw++) {
         send_to(sz, buff, lr, lw);
       }
     }
+  }
+
+  void post_send_all(int sz, int buff) {
+    post_send_all<2>(sz, buff, left_.size());
   }
 
   int rank_;
