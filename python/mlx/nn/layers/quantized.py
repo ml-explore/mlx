@@ -295,9 +295,8 @@ class QQLinear(Module):
     Compared to the :class:`mlx.nn.QuantizedLinear` layer, this layer
     quantizes the input as well and includes weights in gradient computations.
 
-    :obj:`QQLinear` also provides:
-     -  the class method :meth:`from_linear` to convert :class:`mlx.nn.Linear`
-     layers to :obj:`QQLinear` layers.
+    :obj:`QQLinear` also provides the class method :meth:`from_linear` to
+    convert :class:`mlx.nn.Linear` layers to :obj:`QQLinear` layers.
 
     Note: This layer does not support a bias term yet.
 
