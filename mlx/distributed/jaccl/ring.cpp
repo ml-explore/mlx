@@ -331,6 +331,7 @@ void RingGroup::all_reduce_impl(
 
   // Counters to maintain the state of transfers
   int in_flight = 0;
+  int64_t chunk_multiple_size = size_ * chunk_size;
   int64_t send_offset[MAX_DIR];
   int64_t recv_offset[MAX_DIR];
   int64_t send_limits[MAX_DIR];
@@ -429,11 +430,13 @@ void RingGroup::all_reduce_impl(
       }
     }
 
-    send_offset[0] = (send_offset[0] + size - chunk_size) % size;
-    recv_offset[0] = (recv_offset[0] + size - chunk_size) % size;
+    send_offset[0] = (send_offset[0] + chunk_multiple_size - chunk_size) %
+        chunk_multiple_size;
+    recv_offset[0] = (recv_offset[0] + chunk_multiple_size - chunk_size) %
+        chunk_multiple_size;
     if constexpr (MAX_DIR == 2) {
-      send_offset[1] = (send_offset[1] + chunk_size) % size;
-      recv_offset[1] = (recv_offset[1] + chunk_size) % size;
+      send_offset[1] = (send_offset[1] + chunk_size) % chunk_multiple_size;
+      recv_offset[1] = (recv_offset[1] + chunk_size) % chunk_multiple_size;
       send_limits[0] = std::min(
           n_wires * size_per_wire, std::max<int64_t>(0, size - send_offset[0]));
       send_limits[1] =
@@ -525,11 +528,13 @@ void RingGroup::all_reduce_impl(
       }
     }
 
-    send_offset[0] = (send_offset[0] + size - chunk_size) % size;
-    recv_offset[0] = (recv_offset[0] + size - chunk_size) % size;
+    send_offset[0] = (send_offset[0] + chunk_multiple_size - chunk_size) %
+        chunk_multiple_size;
+    recv_offset[0] = (recv_offset[0] + chunk_multiple_size - chunk_size) %
+        chunk_multiple_size;
     if constexpr (MAX_DIR == 2) {
-      send_offset[1] = (send_offset[1] + chunk_size) % size;
-      recv_offset[1] = (recv_offset[1] + chunk_size) % size;
+      send_offset[1] = (send_offset[1] + chunk_size) % chunk_multiple_size;
+      recv_offset[1] = (recv_offset[1] + chunk_size) % chunk_multiple_size;
       send_limits[0] = std::min(
           n_wires * size_per_wire, std::max<int64_t>(0, size - send_offset[0]));
       send_limits[1] =
