@@ -666,9 +666,6 @@ min(const array& a,
 MLX_API array
 min(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {});
 
-/** The maximum of absolute values of all elements of the array. */
-array absmax(const array& a, StreamOrDevice s = {});
-
 /** Returns the index of the minimum value in the array. */
 MLX_API array argmin(const array& a, bool keepdims, StreamOrDevice s = {});
 inline array argmin(const array& a, StreamOrDevice s = {}) {

@@ -2238,29 +2238,6 @@ array min(
   return min(a, std::vector<int>{axis}, keepdims, s);
 }
 
-// TODO: extend to row_reduce and col_reduce?
-array absmax(const array& a, StreamOrDevice s /* = {}*/) {
-  if (a.size() == 0) {
-    throw std::invalid_argument(
-        "[absmax] Cannot absmax reduce zero size array.");
-  }
-  if (!issubdtype(a.dtype(), floating)) {
-    throw std::invalid_argument(
-        "[absmax] absmax supported only for floating point types.");
-  }
-  auto stream = to_stream(s);
-  if (stream.device != Device::gpu || !cu::is_available()) {
-    return max(abs(a, s), false, s);
-  }
-  std::vector<int> axes(a.ndim());
-  std::iota(axes.begin(), axes.end(), 0);
-  return array(
-      {},
-      a.dtype(),
-      std::make_shared<Reduce>(stream, Reduce::AbsMax, axes),
-      {a});
-}
-
 array argmin(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
   auto result = argmin(flatten(a, s), 0, true, s);
   if (keepdims) {

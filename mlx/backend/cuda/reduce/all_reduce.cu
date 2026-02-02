@@ -13,15 +13,6 @@ namespace cu {
 
 namespace cg = cooperative_groups;
 
-template <typename T>
-__device__ __forceinline__ T abs_val(T x) {
-  if constexpr (cuda::std::is_unsigned_v<T>) {
-    return x; // No-op for unsigned types
-  } else {
-    return cuda::std::abs(x);
-  }
-}
-
 template <typename T, typename U, typename ReduceOp, int N = 4>
 __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   // TODO: Process multiple "rows" in each thread
@@ -46,11 +37,7 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
   for (; i + block.size() * N <= check; i += block.size() * N) {
     cub::LoadDirectBlockedVectorized<T, N>(block.thread_rank(), in + i, vals);
     for (int j = 0; j < N; j++) {
-      if constexpr (cuda::std::is_same_v<ReduceOp, AbsMax>) {
-        accs[0] = op(accs[0], abs_val(cast_to<U>(vals[j])));
-      } else {
-        accs[0] = op(accs[0], cast_to<U>(vals[j]));
-      }
+      accs[0] = op(accs[0], cast_to<U>(vals[j]));
     }
   }
 
@@ -58,11 +45,7 @@ __global__ void all_reduce(T* in, U* out, size_t block_step, size_t size) {
     cub::LoadDirectBlocked(
         block.thread_rank(), in + i, vals, check - i, cast_to<T>(init));
     for (int i = 0; i < N; i++) {
-      if constexpr (cuda::std::is_same_v<ReduceOp, AbsMax>) {
-        accs[0] = op(accs[0], abs_val(cast_to<U>(vals[i])));
-      } else {
-        accs[0] = op(accs[0], cast_to<U>(vals[i]));
-      }
+      accs[0] = op(accs[0], cast_to<U>(vals[i]));
     }
   }
 
