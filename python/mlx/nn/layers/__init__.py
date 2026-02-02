@@ -90,9 +90,9 @@ from mlx.nn.layers.positional_encoding import ALiBi, RoPE, SinusoidalPositionalE
 from mlx.nn.layers.quantized import QuantizedEmbedding, QuantizedLinear, quantize
 from mlx.nn.layers.recurrent import (
     GRU,
-    GRUResetAfter,
     LSTM,
     RNN,
+    GRUResetAfter,
     get_rnn_implementation,
 )
 from mlx.nn.layers.transformer import (

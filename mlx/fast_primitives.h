@@ -312,14 +312,16 @@ class FastGruCell : public Custom {
   DEFINE_NAME(FastGruCell);
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
-    return {inputs[2].shape()};  // output [B, H] = hidden_prev shape
+    return {
+        inputs[2].shape()}; // output [B, H] = hidden_prev shape (3 or 4 inputs)
   }
   auto state() const {
     return std::make_tuple(nullptr);
   }
 };
 
-// Fused LSTM cell (Metal RNN). One step: cell_new = f*c_prev + i*g, hidden_new = o*tanh(cell_new).
+// Fused LSTM cell (Metal RNN). One step: cell_new = f*c_prev + i*g, hidden_new
+// = o*tanh(cell_new).
 class FastLSTMCell : public Custom {
  public:
   explicit FastLSTMCell(
@@ -336,7 +338,7 @@ class FastLSTMCell : public Custom {
   DEFINE_NAME(FastLSTMCell);
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
-    return {inputs[2].shape(), inputs[3].shape()};  // cell [B,H], hidden [B,H]
+    return {inputs[2].shape(), inputs[3].shape()}; // cell [B,H], hidden [B,H]
   }
   auto state() const {
     return std::make_tuple(nullptr);

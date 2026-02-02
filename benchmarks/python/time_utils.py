@@ -26,13 +26,18 @@ def time_fn(fn, *args, **kwargs):
     print(f"{msec:.5f} msec")
 
 
-def measure_runtime(fn, **kwargs):
-    # Warmup
-    for _ in range(5):
+def measure_runtime(fn, num_warmup=15, num_iters=100, num_runs=5, **kwargs):
+    """Run fn repeatedly and return median ms per call. More stable than a single run."""
+    # Warmup (enough for GPU to settle)
+    for _ in range(num_warmup):
         fn(**kwargs)
 
-    tic = time.perf_counter()
-    iters = 100
-    for _ in range(iters):
-        fn(**kwargs)
-    return (time.perf_counter() - tic) * 1000 / iters
+    times_ms = []
+    for _ in range(num_runs):
+        tic = time.perf_counter()
+        for _ in range(num_iters):
+            fn(**kwargs)
+        toc = time.perf_counter()
+        times_ms.append((toc - tic) * 1000 / num_iters)
+    times_ms.sort()
+    return times_ms[num_runs // 2]  # median

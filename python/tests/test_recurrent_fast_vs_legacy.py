@@ -62,6 +62,7 @@ def _save_ref(ref_path: str) -> None:
 def _to_contiguous(arr) -> "mx.array":
     """Force contiguous layout + float32 (loaded arrays can have bad layout)."""
     import mlx.core as mx
+
     return mx.array(np.ascontiguousarray(np.array(arr, dtype=np.float32)))
 
 
@@ -75,19 +76,23 @@ def _run_fast_and_compare(ref_path: str) -> bool:
     gru = nn.GRU(INPUT_SIZE, HIDDEN_SIZE, bias=True)
     lstm = nn.LSTM(INPUT_SIZE, HIDDEN_SIZE, bias=True)
 
-    gru.update({
-        "Wx": _to_contiguous(data["gru_Wx"]),
-        "Wh": _to_contiguous(data["gru_Wh"]),
-        "b": _to_contiguous(data["gru_b"]),
-        "bhn": _to_contiguous(data["gru_bhn"]),
-    })
+    gru.update(
+        {
+            "Wx": _to_contiguous(data["gru_Wx"]),
+            "Wh": _to_contiguous(data["gru_Wh"]),
+            "b": _to_contiguous(data["gru_b"]),
+            "bhn": _to_contiguous(data["gru_bhn"]),
+        }
+    )
     mx.eval(gru.parameters())
 
-    lstm.update({
-        "Wx": _to_contiguous(data["lstm_Wx"]),
-        "Wh": _to_contiguous(data["lstm_Wh"]),
-        "bias": _to_contiguous(data["lstm_bias"]),
-    })
+    lstm.update(
+        {
+            "Wx": _to_contiguous(data["lstm_Wx"]),
+            "Wh": _to_contiguous(data["lstm_Wh"]),
+            "bias": _to_contiguous(data["lstm_bias"]),
+        }
+    )
     mx.eval(lstm.parameters())
 
     x = _to_contiguous(data["x"])
@@ -135,7 +140,11 @@ class TestRecurrentFastVsLegacy(mlx_tests.MLXTestCase):
                 text=True,
                 timeout=60,
             )
-            self.assertEqual(r2.returncode, 0, f"fast run_fast_and_compare failed (legacy vs fast differ): {r2.stderr}")
+            self.assertEqual(
+                r2.returncode,
+                0,
+                f"fast run_fast_and_compare failed (legacy vs fast differ): {r2.stderr}",
+            )
 
 
 if __name__ == "__main__":

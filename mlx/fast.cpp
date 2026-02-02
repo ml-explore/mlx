@@ -850,7 +850,8 @@ array gru_cell(
     const array& hidden_prev,
     StreamOrDevice s_ /* = {} */) {
   auto s = to_stream(s_);
-  if (input_proj.ndim() != 2 || hidden_proj.ndim() != 2 || hidden_prev.ndim() != 2) {
+  if (input_proj.ndim() != 2 || hidden_proj.ndim() != 2 ||
+      hidden_prev.ndim() != 2) {
     throw std::invalid_argument(
         "[gru_cell] input_proj, hidden_proj, hidden_prev must be 2D.");
   }
@@ -873,22 +874,69 @@ array gru_cell(
     const array& h_prev = inputs[2];
     auto px = split(x, 3, -1, s);
     auto ph = split(h, 3, -1, s);
+    array h_n = ph[2];
+    if (inputs.size() == 4) {
+      h_n = add(h_n, inputs[3], s); // add bhn to n-gate part
+    }
     array r = sigmoid(add(px[0], ph[0], s), s);
     array z = sigmoid(add(px[1], ph[1], s), s);
-    // n = tanh(x_n + r * h_n) with h_n = ph[2] (hidden_proj n-gate), not h_prev
-    array n = tanh(add(px[2], multiply(r, ph[2], s), s), s);
+    array n = tanh(add(px[2], multiply(r, h_n, s), s), s);
     array one_minus_z = subtract(full_like(z, 1.0f, s), z, s);
     return std::vector<array>{
         add(multiply(one_minus_z, n, s), multiply(z, h_prev, s), s)};
   };
   Shape out_shape{static_cast<int>(B), static_cast<int>(H)};
   auto primitive = std::make_shared<FastGruCell>(s, std::move(fallback));
-  std::vector<array> inputs = {input_proj, hidden_proj, hidden_prev};
+  std::vector<array> inps = {input_proj, hidden_proj, hidden_prev};
   return array(
       std::move(out_shape),
       result_type(input_proj, hidden_proj, hidden_prev),
       primitive,
-      std::move(inputs));
+      std::move(inps));
+}
+
+array gru_cell(
+    const array& input_proj,
+    const array& hidden_proj,
+    const array& hidden_prev,
+    const std::optional<array>& bhn,
+    StreamOrDevice s_) {
+  if (!bhn.has_value()) {
+    return gru_cell(input_proj, hidden_proj, hidden_prev, s_);
+  }
+  const array& b = bhn.value();
+  if (b.ndim() != 1 ||
+      b.shape(0) != static_cast<int>(input_proj.shape(1) / 3)) {
+    throw std::invalid_argument(
+        "[gru_cell] optional bhn must be 1D of length hidden_size.");
+  }
+  auto s = to_stream(s_);
+  size_t B = input_proj.shape(0);
+  size_t H = input_proj.shape(1) / 3;
+  auto fallback = [s](const std::vector<array>& inputs) {
+    using namespace mlx::core;
+    const array& x = inputs[0];
+    const array& h = inputs[1];
+    const array& h_prev = inputs[2];
+    const array& b = inputs[3];
+    auto px = split(x, 3, -1, s);
+    auto ph = split(h, 3, -1, s);
+    array h_n = add(ph[2], b, s);
+    array r = sigmoid(add(px[0], ph[0], s), s);
+    array z = sigmoid(add(px[1], ph[1], s), s);
+    array n = tanh(add(px[2], multiply(r, h_n, s), s), s);
+    array one_minus_z = subtract(full_like(z, 1.0f, s), z, s);
+    return std::vector<array>{
+        add(multiply(one_minus_z, n, s), multiply(z, h_prev, s), s)};
+  };
+  Shape out_shape{static_cast<int>(B), static_cast<int>(H)};
+  auto primitive = std::make_shared<FastGruCell>(s, std::move(fallback));
+  std::vector<array> inps = {input_proj, hidden_proj, hidden_prev, b};
+  return array(
+      std::move(out_shape),
+      result_type(std::vector<array>{input_proj, hidden_proj, hidden_prev, b}),
+      primitive,
+      std::move(inps));
 }
 
 std::pair<array, array> lstm_cell(
@@ -900,8 +948,7 @@ std::pair<array, array> lstm_cell(
   auto s = to_stream(s_);
   if (input_proj.ndim() != 2 || hidden_proj.ndim() != 2 ||
       cell_prev.ndim() != 2 || hidden_prev.ndim() != 2) {
-    throw std::invalid_argument(
-        "[lstm_cell] all inputs must be 2D.");
+    throw std::invalid_argument("[lstm_cell] all inputs must be 2D.");
   }
   size_t B = input_proj.shape(0);
   size_t H4 = input_proj.shape(1);
@@ -932,15 +979,11 @@ std::pair<array, array> lstm_cell(
   };
   Shape out_shape{static_cast<int>(B), static_cast<int>(H)};
   auto dtype = promote_types(
-      result_type(input_proj, hidden_proj, cell_prev),
-      hidden_prev.dtype());
+      result_type(input_proj, hidden_proj, cell_prev), hidden_prev.dtype());
   auto primitive = std::make_shared<FastLSTMCell>(s, std::move(fallback));
   std::vector<array> inputs = {input_proj, hidden_proj, cell_prev, hidden_prev};
   auto outputs = array::make_arrays(
-      {out_shape, out_shape},
-      {dtype, dtype},
-      primitive,
-      inputs);
+      {out_shape, out_shape}, {dtype, dtype}, primitive, inputs);
   return std::make_pair(std::move(outputs[0]), std::move(outputs[1]));
 }
 

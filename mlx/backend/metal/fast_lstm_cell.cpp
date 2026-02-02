@@ -40,7 +40,8 @@ void FastLSTMCell::eval_gpu(
 
   std::vector<array> copies;
   auto copy_if_needed = [&copies, &s](const array& a) -> const array& {
-    if (a.flags().row_contiguous) return a;
+    if (a.flags().row_contiguous)
+      return a;
     copies.push_back(contiguous_copy_gpu(a, s));
     return copies.back();
   };
@@ -54,9 +55,8 @@ void FastLSTMCell::eval_gpu(
   uint32_t h_quads = (static_cast<uint32_t>(hidden_size) + 3) / 4;
   uint32_t total_threads = static_cast<uint32_t>(batch_size) * h_quads;
 
-  std::string kname = (in_proj.dtype() == bfloat16)
-      ? "lstm_cell_fused_bfloat16"
-      : "lstm_cell_fused_float";
+  std::string kname = (in_proj.dtype() == bfloat16) ? "lstm_cell_fused_bfloat16"
+                                                    : "lstm_cell_fused_float";
 
   auto& enc = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname);
@@ -74,7 +74,8 @@ void FastLSTMCell::eval_gpu(
   enc.set_bytes(hs, 7);
 
   constexpr uint32_t threads_per_group = 512;
-  uint32_t num_groups = (total_threads + threads_per_group - 1) / threads_per_group;
+  uint32_t num_groups =
+      (total_threads + threads_per_group - 1) / threads_per_group;
   MTL::Size grid_dims(num_groups, 1, 1);
   MTL::Size group_dims(threads_per_group, 1, 1);
   enc.dispatch_threadgroups(grid_dims, group_dims);

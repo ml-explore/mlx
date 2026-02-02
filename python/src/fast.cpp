@@ -299,19 +299,28 @@ void init_fast(nb::module_& parent_module) {
       [](const mx::array& input_proj,
          const mx::array& hidden_proj,
          const mx::array& hidden_prev,
+         nb::object bhn,
          mx::StreamOrDevice s) {
-        return mx::fast::gru_cell(input_proj, hidden_proj, hidden_prev, s);
+        if (bhn.is_none()) {
+          return mx::fast::gru_cell(input_proj, hidden_proj, hidden_prev, s);
+        }
+        std::optional<mx::array> bhn_opt = nb::cast<mx::array>(bhn);
+        return mx::fast::gru_cell(
+            input_proj, hidden_proj, hidden_prev, bhn_opt, s);
       },
       "input_proj"_a,
       "hidden_proj"_a,
       "hidden_prev"_a,
+      "bhn"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def gru_cell(input_proj: array, hidden_proj: array, hidden_prev: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def gru_cell(input_proj: array, hidden_proj: array, hidden_prev: array, "
+          "bhn: Optional[array] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Fused GRU cell (Metal RNN). One step: out = (1-z)*n + z*h_prev with r,z,n from gates.
-        input_proj [B, 3*H], hidden_proj [B, 3*H], hidden_prev [B, H]. Uses Metal kernel on Apple Silicon.
+        input_proj [B, 3*H], hidden_proj [B, 3*H], hidden_prev [B, H]. Optional bhn [H] for n-gate
+        (avoids per-step add in Python). Uses Metal kernel on Apple Silicon.
       )pbdoc");
 
   m.def(

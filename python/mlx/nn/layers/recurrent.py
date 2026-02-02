@@ -176,30 +176,19 @@ class GRU(Module):
         x_rz = x[..., : -self.hidden_size]
         x_n = x[..., -self.hidden_size :]
         all_hidden = []
-        # legacy = Python-only; fast / fast_v2 = use Metal kernel when available
+        # legacy = Python-only; fast / fast_v2 = use Metal kernel when on GPU only
         use_fast_cell = (
-            _RNN_IMPL != "legacy" and hasattr(mx.fast, "gru_cell")
+            _RNN_IMPL != "legacy"
+            and hasattr(mx.fast, "gru_cell")
+            and mx.default_device() == mx.gpu
         )
-        # Precompute padded bhn once (like LSTM: no per-step extra work). No per-step
-        # mx.eval(h_proj) — it caused ~68x slowdown vs nn.LSTM (GPU sync every step).
-        # C++ fast_gru_cell does contiguous_copy_gpu; kernel handles layout.
-        bhn_padded = None
-        if use_fast_cell and hidden is not None and self.bhn is not None:
-            bhn_padded = mx.concatenate(
-                [mx.zeros((1, 2 * self.hidden_size)), mx.reshape(self.bhn, (1, -1))],
-                axis=-1,
-            )
-
         for idx in range(x.shape[-2]):
-            # Metal-accelerated path (GRUCell-style): fused kernel when hidden is set
+            # Metal-accelerated path (GRUCell-style): fused kernel when hidden is set.
+            # Pass bhn to kernel when bias is used so h_proj stays contiguous (no per-step copy).
             if hidden is not None and use_fast_cell:
                 input_proj = x[..., idx, :]
                 h_proj = hidden @ self.Wh.T
-                if bhn_padded is not None:
-                    h_proj = h_proj + bhn_padded
-                # C++ fast_gru_cell does contiguous_copy_gpu; for loaded/ref data
-                # use to_contiguous in the test (verify_fast_vs_legacy flow).
-                hidden = mx.fast.gru_cell(input_proj, h_proj, hidden)
+                hidden = mx.fast.gru_cell(input_proj, h_proj, hidden, bhn=self.bhn)
                 all_hidden.append(hidden)
                 continue
 
@@ -403,18 +392,18 @@ class LSTM(Module):
 
         all_hidden = []
         all_cell = []
-        # legacy = Python-only; fast / fast_v2 = use Metal kernel when available
+        # legacy = Python-only; fast / fast_v2 = use Metal kernel when on GPU only
         use_fast_cell = (
-            _RNN_IMPL != "legacy" and hasattr(mx.fast, "lstm_cell")
+            _RNN_IMPL != "legacy"
+            and hasattr(mx.fast, "lstm_cell")
+            and mx.default_device() == mx.gpu
         )
 
         for idx in range(x.shape[-2]):
             input_proj = x[..., idx, :]
             if hidden is not None and cell is not None and use_fast_cell:
                 hidden_proj = hidden @ self.Wh.T
-                cell, hidden = mx.fast.lstm_cell(
-                    input_proj, hidden_proj, cell, hidden
-                )
+                cell, hidden = mx.fast.lstm_cell(input_proj, hidden_proj, cell, hidden)
                 all_cell.append(cell)
                 all_hidden.append(hidden)
                 continue
