@@ -802,7 +802,9 @@ void compile_fuse(
       continue;
     }
     // If current op is a reduction, we may want to fuse prefix ops
-    if (arr.has_primitive() && is_reduction(arr.primitive())) {
+    // Only fuse for all_reduce
+    if (arr.has_primitive() && is_reduction(arr.primitive()) &&
+        arr.size() == 1) {
       auto& reduction_input = arr.inputs()[0];
       Stream reduction_stream = arr.primitive().stream();
       const int max_prefix_depth = max_compile_depth - 1; // 1 for reduction
