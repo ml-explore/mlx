@@ -1272,6 +1272,18 @@ class TestCompile(mlx_tests.MLXTestCase):
             np.asarray(out, copy=False).__array_interface__["data"][0], in_ptr
         )
 
+    def test_compile_reduction(self):
+        x = mx.random.uniform(shape=(4, 4))
+        mx.eval(x)
+
+        @mx.compile
+        def fun(x):
+            return mx.sum(x, axis=1)
+
+        out = fun(x)
+        expected = mx.sum(x, axis=1)
+        self.assertTrue(mx.allclose(out, expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

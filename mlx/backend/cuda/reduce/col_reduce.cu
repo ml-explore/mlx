@@ -1,21 +1,20 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/cuda/device/config.h"
-#include "mlx/backend/cuda/reduce/reduce_ops.cuh"
+#include <numeric>
+
+#include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/reduce/reduce.cuh"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cub/block/block_load.cuh>
 #include <cub/cub.cuh>
 
-#include <numeric>
-#include "mlx/backend/cuda/reduce/reduce.cuh"
-
 namespace mlx::core {
 
-namespace cg = cooperative_groups;
-
 namespace cu {
+
+namespace cg = cooperative_groups;
 
 struct ColReduceArgs {
   // The size of the contiguous column reduction.

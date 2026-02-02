@@ -1,19 +1,18 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/cuda/device/config.h"
-#include "mlx/backend/cuda/reduce/reduce_ops.cuh"
+#include <numeric>
+
+#include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/reduce/reduce.cuh"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 
-#include <numeric>
-#include "mlx/backend/cuda/reduce/reduce.cuh"
-
 namespace mlx::core {
 
-namespace cg = cooperative_groups;
-
 namespace cu {
+
+namespace cg = cooperative_groups;
 
 struct RowReduceArgs {
   // The size of the row being reduced, i.e. the size of last dimension.
@@ -88,7 +87,7 @@ row_reduce_simple(const T* in, U* out, size_t n_rows, int size) {
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
 
-  const U init = ReduceInit<ReduceOp, T>::value();
+  const U init = cu::ReduceInit<ReduceOp, T>::value();
   ReduceOp op;
 
   AlignedVector<T, N> vals[M];

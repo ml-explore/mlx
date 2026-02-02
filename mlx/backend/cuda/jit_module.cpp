@@ -238,10 +238,8 @@ constexpr const char* g_include_names[] = {
     INCLUDE_PREFIX "ternary_ops.cuh",
     INCLUDE_PREFIX "utils.cuh",
     REDUCE_PREFIX "all_reduce.cuh",
-    REDUCE_PREFIX "col_reduce.cuh",
     REDUCE_PREFIX "reduce_ops.cuh",
     REDUCE_PREFIX "reduce_utils.cuh",
-    REDUCE_PREFIX "row_reduce.cuh",
 };
 
 #undef INCLUDE_PREFIX
@@ -260,10 +258,8 @@ constexpr const char* g_headers[] = {
     jit_source_ternary_ops,
     jit_source_utils,
     jit_source_all_reduce,
-    jit_source_col_reduce,
     jit_source_reduce_ops,
     jit_source_reduce_utils,
-    jit_source_row_reduce,
 };
 
 void compile(
