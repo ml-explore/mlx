@@ -3,6 +3,7 @@
 #define _USE_MATH_DEFINES
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
@@ -14,7 +15,7 @@ namespace mlx::core {
 
 namespace rocm {
 
-constexpr int WARP_SIZE = 64;
+// WARP_SIZE is defined in device/config.h based on target architecture
 
 struct AttnParams {
   int B;

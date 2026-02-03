@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "mlx/array.h"
+#include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/device/utils.hpp"
 
 #include <hip/hip_bfloat16.h>
@@ -19,11 +20,10 @@
 
 namespace mlx::core {
 
-// Warp size for AMD GPUs (wavefront size)
-constexpr int WARP_SIZE = 64;
-
 // Maximum number of dimensions
 constexpr int MAX_NDIM = 8;
+
+// Note: WARP_SIZE is defined in device/config.h based on target architecture
 
 template <typename F>
 void dispatch_1_2_3(int n, F&& f) {

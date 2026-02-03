@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/reduce/reduce.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/device/fp16_math.hpp"
@@ -11,8 +12,6 @@
 namespace mlx::core {
 
 namespace rocm {
-
-constexpr int WARP_SIZE = 64;
 
 // Helper to handle warp shuffle for different types
 template <typename T>

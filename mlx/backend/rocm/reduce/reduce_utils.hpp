@@ -6,6 +6,7 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/device/utils.hpp"
 
 #include <hip/hip_runtime.h>
@@ -14,7 +15,7 @@ namespace mlx::core {
 
 namespace rocm {
 
-constexpr int WARP_SIZE = 64;
+// WARP_SIZE is defined in device/config.h based on target architecture
 
 template <size_t N>
 struct uint_by_size;

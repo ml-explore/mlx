@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/gemms/gemv.h"
 
@@ -14,6 +15,8 @@ namespace rocm {
 
 constexpr int GEMV_BLOCK_SIZE = 256;
 constexpr int GEMV_TILE_SIZE = 4;
+
+// WARP_SIZE is defined in device/config.h based on target architecture
 
 template <typename T, bool TransA>
 __global__ void gemv_kernel(
@@ -93,8 +96,6 @@ __global__ void gemv_warp_kernel(
     int lda,
     T alpha,
     T beta) {
-  constexpr int WARP_SIZE = 64;
-  
   int row = blockIdx.x;
   if (row >= M) return;
   
@@ -156,8 +157,6 @@ __global__ void gemv_gather_kernel(
     int K,
     int mat_ld,
     int batch_size) {
-  constexpr int WARP_SIZE = 64;
-  
   int batch_idx = blockIdx.x;
   if (batch_idx >= batch_size) return;
   
