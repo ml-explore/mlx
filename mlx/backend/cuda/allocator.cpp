@@ -40,8 +40,8 @@ bool is_windows() {
       std::string line;
       std::getline(version, line);
       return line.find("microsoft") != std::string::npos ||
-             line.find("Microsoft") != std::string::npos ||
-             line.find("WSL") != std::string::npos;
+          line.find("Microsoft") != std::string::npos ||
+          line.find("WSL") != std::string::npos;
     }
     return false;
   }();
