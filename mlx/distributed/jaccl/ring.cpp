@@ -371,11 +371,10 @@ void RingGroup::recv(array& out, int src, Stream stream) {
     // Prefill the pipeline
     for (int lw = 0; lw < n_wires; lw++) {
       int buff = 0;
-      while (write_offset[lw] < limits[lw] && buff < PIPELINE) {
+      while (N * buff < limits[lw] && buff < PIPELINE) {
         recv_from(sz, buff, dir, lw);
 
         buff++;
-        write_offset[lw] += N;
         in_flight++;
       }
     }
