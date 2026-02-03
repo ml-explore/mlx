@@ -34,8 +34,42 @@ get_target_property(ROCTHRUST_INCLUDES roc::rocthrust
 get_target_property(ROCPRIM_INCLUDES roc::rocprim INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(HIPRAND_INCLUDES hip::hiprand INTERFACE_INCLUDE_DIRECTORIES)
 
-# Build include flags
-set(HIP_INCLUDE_FLAGS "-I${CMAKE_SOURCE_DIR}" "-I${HIP_INCLUDE_DIRS}")
+# Find GCC installation for C++ standard library headers
+# ROCm's clang needs to know where to find libstdc++ headers
+execute_process(
+  COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=include/c++
+  OUTPUT_VARIABLE GCC_CXX_INCLUDE_BASE
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+get_filename_component(GCC_CXX_INCLUDE_BASE "${GCC_CXX_INCLUDE_BASE}" DIRECTORY)
+
+# Get GCC version for the target-specific include directory
+execute_process(
+  COMMAND ${CMAKE_CXX_COMPILER} -dumpversion
+  OUTPUT_VARIABLE GCC_VERSION
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(REGEX MATCH "^[0-9]+" GCC_MAJOR_VERSION "${GCC_VERSION}")
+
+# Build include flags - use PROJECT_SOURCE_DIR for correct path
+set(HIP_INCLUDE_FLAGS "-I${PROJECT_SOURCE_DIR}" "-I${HIP_INCLUDE_DIRS}")
+
+# Add C++ standard library include paths for HIP compiler
+if(EXISTS "${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}")
+  list(APPEND HIP_INCLUDE_FLAGS "-I${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}")
+  list(APPEND HIP_INCLUDE_FLAGS "-I${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}/x86_64-linux-gnu")
+  list(APPEND HIP_INCLUDE_FLAGS "-I${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}/backward")
+endif()
+
+# Also try to find system include directories
+if(EXISTS "/usr/include/c++/${GCC_MAJOR_VERSION}")
+  list(APPEND HIP_INCLUDE_FLAGS "-I/usr/include/c++/${GCC_MAJOR_VERSION}")
+  list(APPEND HIP_INCLUDE_FLAGS "-I/usr/include/x86_64-linux-gnu/c++/${GCC_MAJOR_VERSION}")
+  list(APPEND HIP_INCLUDE_FLAGS "-I/usr/include/c++/${GCC_MAJOR_VERSION}/backward")
+endif()
+
+# Add standard system include paths
+list(APPEND HIP_INCLUDE_FLAGS "-I/usr/include/x86_64-linux-gnu")
+list(APPEND HIP_INCLUDE_FLAGS "-I/usr/include")
+
 foreach(inc ${HIP_DEVICE_INCLUDES})
   if(inc)
     list(APPEND HIP_INCLUDE_FLAGS "-I${inc}")
@@ -56,6 +90,8 @@ foreach(inc ${HIPRAND_INCLUDES})
     list(APPEND HIP_INCLUDE_FLAGS "-I${inc}")
   endif()
 endforeach()
+
+message(STATUS "HIP include flags: ${HIP_INCLUDE_FLAGS}")
 
 # HIP source files
 set(HIP_SOURCES
