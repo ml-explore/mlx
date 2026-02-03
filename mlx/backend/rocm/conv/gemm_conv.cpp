@@ -123,7 +123,7 @@ void gemm_conv(
     // This is slow but correct
     
     // Zero-initialize the unfolded array
-    hipMemsetAsync(unfolded.data<void>(), 0, unfolded.nbytes(), stream);
+    (void)hipMemsetAsync(unfolded.data<void>(), 0, unfolded.nbytes(), stream);
   });
   
   // Reshape weight to (K, O) for GEMM

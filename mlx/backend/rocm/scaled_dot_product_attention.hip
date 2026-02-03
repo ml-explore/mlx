@@ -263,10 +263,10 @@ void sdpa_vector(
   int64_t o_strides[3] = {o.strides(0), o.strides(1), o.strides(2)};
 
   encoder.launch_kernel([&](hipStream_t stream) {
-    hipMemcpyAsync(Q_strides_arr.data<int64_t>(), q_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(K_strides_arr.data<int64_t>(), k_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(V_strides_arr.data<int64_t>(), v_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(O_strides_arr.data<int64_t>(), o_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(Q_strides_arr.data<int64_t>(), q_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(K_strides_arr.data<int64_t>(), k_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(V_strides_arr.data<int64_t>(), v_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(O_strides_arr.data<int64_t>(), o_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
 
     dim3 grid_dim(H, qL, B);
     dim3 block_dim(1024, 1, 1);

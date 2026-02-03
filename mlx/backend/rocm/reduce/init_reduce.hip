@@ -97,7 +97,7 @@ void init_reduce(
         break;
       default:
         // For unsupported types, just zero-fill
-        hipMemsetAsync(out.data<void>(), 0, out.nbytes(), stream);
+        (void)hipMemsetAsync(out.data<void>(), 0, out.nbytes(), stream);
         break;
     }
     #undef LAUNCH_INIT_REDUCE

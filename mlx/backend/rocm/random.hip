@@ -194,9 +194,9 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
       encoder.add_temporary(shape_arr);
       encoder.add_temporary(strides_arr);
       
-      hipMemcpyAsync(shape_arr.data<int32_t>(), keys.shape().data(), 
+      (void)hipMemcpyAsync(shape_arr.data<int32_t>(), keys.shape().data(), 
                      keys.ndim() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-      hipMemcpyAsync(strides_arr.data<int64_t>(), keys.strides().data(),
+      (void)hipMemcpyAsync(strides_arr.data<int64_t>(), keys.strides().data(),
                      keys.ndim() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
       
       hipLaunchKernelGGL(
