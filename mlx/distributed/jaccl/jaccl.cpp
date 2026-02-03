@@ -131,6 +131,7 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   const char* dev_file = std::getenv("MLX_IBV_DEVICES");
   const char* coordinator = std::getenv("MLX_JACCL_COORDINATOR");
   const char* rank_str = std::getenv("MLX_RANK");
+  const char* ring = std::getenv("MLX_JACCL_RING");
 
   if (!is_available() || !dev_file || !coordinator || !rank_str) {
     if (strict) {
@@ -147,6 +148,7 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   }
 
   auto rank = std::atoi(rank_str);
+  bool prefer_ring = ring != nullptr;
   DeviceFile devices(dev_file);
 
   if (rank >= devices.size() || rank < 0) {
@@ -156,7 +158,11 @@ std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
     throw std::runtime_error(msg.str());
   }
 
-  if (devices.is_valid_mesh()) {
+  if (prefer_ring && devices.is_valid_ring()) {
+    auto [left, right] = devices.extract_ring_connectivity(rank);
+    return std::make_shared<RingGroup>(
+        rank, devices.size(), left, right, coordinator);
+  } else if (devices.is_valid_mesh()) {
     auto device_names = devices.extract_mesh_connectivity(rank);
     return std::make_shared<MeshGroup>(rank, device_names, coordinator);
   } else if (devices.is_valid_ring()) {
