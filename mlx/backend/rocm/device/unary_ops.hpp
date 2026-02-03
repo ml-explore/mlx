@@ -116,7 +116,9 @@ struct Cosh {
 struct Erf {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, __half>) {
+    if constexpr (std::is_same_v<T, bool> || std::is_integral_v<T>) {
+      return static_cast<T>(erff(static_cast<float>(x)));
+    } else if constexpr (std::is_same_v<T, __half>) {
       return erf(x);
     } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
       return erf(x);
@@ -129,7 +131,9 @@ struct Erf {
 struct ErfInv {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, __half>) {
+    if constexpr (std::is_same_v<T, bool> || std::is_integral_v<T>) {
+      return static_cast<T>(erfinvf(static_cast<float>(x)));
+    } else if constexpr (std::is_same_v<T, __half>) {
       return erfinv(x);
     } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
       return erfinv(x);
@@ -149,7 +153,9 @@ struct Exp {
 struct Expm1 {
   template <typename T>
   __device__ T operator()(T x) {
-    if constexpr (std::is_same_v<T, __half>) {
+    if constexpr (std::is_same_v<T, bool> || std::is_integral_v<T>) {
+      return static_cast<T>(expm1f(static_cast<float>(x)));
+    } else if constexpr (std::is_same_v<T, __half>) {
       return expm1(x);
     } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
       return expm1(x);

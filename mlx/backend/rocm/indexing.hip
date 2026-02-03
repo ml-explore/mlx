@@ -322,21 +322,21 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   int32_t* d_indices_shape;
   int64_t* d_indices_strides;
 
-  hipMalloc(&d_src_shape, h_src_shape.size() * sizeof(int32_t));
-  hipMalloc(&d_src_strides, h_src_strides.size() * sizeof(int64_t));
-  hipMalloc(&d_slice_sizes, h_slice_sizes.size() * sizeof(int32_t));
-  hipMalloc(&d_axes, h_axes.size() * sizeof(int32_t));
-  hipMalloc(&d_indices, h_indices.size() * sizeof(void*));
-  hipMalloc(&d_indices_shape, h_indices_shape.size() * sizeof(int32_t));
-  hipMalloc(&d_indices_strides, h_indices_strides.size() * sizeof(int64_t));
+  (void)hipMalloc(&d_src_shape, h_src_shape.size() * sizeof(int32_t));
+  (void)hipMalloc(&d_src_strides, h_src_strides.size() * sizeof(int64_t));
+  (void)hipMalloc(&d_slice_sizes, h_slice_sizes.size() * sizeof(int32_t));
+  (void)hipMalloc(&d_axes, h_axes.size() * sizeof(int32_t));
+  (void)hipMalloc(&d_indices, h_indices.size() * sizeof(void*));
+  (void)hipMalloc(&d_indices_shape, h_indices_shape.size() * sizeof(int32_t));
+  (void)hipMalloc(&d_indices_strides, h_indices_strides.size() * sizeof(int64_t));
 
-  hipMemcpy(d_src_shape, h_src_shape.data(), h_src_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  hipMemcpy(d_src_strides, h_src_strides.data(), h_src_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
-  hipMemcpy(d_slice_sizes, h_slice_sizes.data(), h_slice_sizes.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  hipMemcpy(d_axes, h_axes.data(), h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  hipMemcpy(d_indices, h_indices.data(), h_indices.size() * sizeof(void*), hipMemcpyHostToDevice);
-  hipMemcpy(d_indices_shape, h_indices_shape.data(), h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  hipMemcpy(d_indices_strides, h_indices_strides.data(), h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_src_shape, h_src_shape.data(), h_src_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_src_strides, h_src_strides.data(), h_src_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_slice_sizes, h_slice_sizes.data(), h_slice_sizes.size() * sizeof(int32_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_axes, h_axes.data(), h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_indices, h_indices.data(), h_indices.size() * sizeof(void*), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_indices_shape, h_indices_shape.data(), h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_indices_strides, h_indices_strides.data(), h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
 
   encoder.launch_kernel([&](hipStream_t stream) {
     // Dispatch based on dtype and number of indices
@@ -394,13 +394,13 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Schedule cleanup of device memory
   encoder.add_completed_handler([=]() {
-    hipFree(d_src_shape);
-    hipFree(d_src_strides);
-    hipFree(d_slice_sizes);
-    hipFree(d_axes);
-    hipFree(d_indices);
-    hipFree(d_indices_shape);
-    hipFree(d_indices_strides);
+    (void)hipFree(d_src_shape);
+    (void)hipFree(d_src_strides);
+    (void)hipFree(d_slice_sizes);
+    (void)hipFree(d_axes);
+    (void)hipFree(d_indices);
+    (void)hipFree(d_indices_shape);
+    (void)hipFree(d_indices_strides);
   });
 }
 
@@ -474,26 +474,26 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   int32_t* d_indices_shape;
   int64_t* d_indices_strides;
 
-  hipMalloc(&d_upd_shape, h_upd_shape.size() * sizeof(int32_t));
-  hipMalloc(&d_upd_strides, h_upd_strides.size() * sizeof(int64_t));
-  hipMalloc(&d_out_shape, h_out_shape.size() * sizeof(int32_t));
-  hipMalloc(&d_out_strides, h_out_strides.size() * sizeof(int64_t));
-  hipMalloc(&d_axes, std::max((size_t)1, h_axes.size()) * sizeof(int32_t));
-  hipMalloc(&d_indices, std::max((size_t)1, h_indices.size()) * sizeof(void*));
-  hipMalloc(&d_indices_shape, std::max((size_t)1, h_indices_shape.size()) * sizeof(int32_t));
-  hipMalloc(&d_indices_strides, std::max((size_t)1, h_indices_strides.size()) * sizeof(int64_t));
+  (void)hipMalloc(&d_upd_shape, h_upd_shape.size() * sizeof(int32_t));
+  (void)hipMalloc(&d_upd_strides, h_upd_strides.size() * sizeof(int64_t));
+  (void)hipMalloc(&d_out_shape, h_out_shape.size() * sizeof(int32_t));
+  (void)hipMalloc(&d_out_strides, h_out_strides.size() * sizeof(int64_t));
+  (void)hipMalloc(&d_axes, std::max((size_t)1, h_axes.size()) * sizeof(int32_t));
+  (void)hipMalloc(&d_indices, std::max((size_t)1, h_indices.size()) * sizeof(void*));
+  (void)hipMalloc(&d_indices_shape, std::max((size_t)1, h_indices_shape.size()) * sizeof(int32_t));
+  (void)hipMalloc(&d_indices_strides, std::max((size_t)1, h_indices_strides.size()) * sizeof(int64_t));
 
-  hipMemcpy(d_upd_shape, h_upd_shape.data(), h_upd_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  hipMemcpy(d_upd_strides, h_upd_strides.data(), h_upd_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
-  hipMemcpy(d_out_shape, h_out_shape.data(), h_out_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  hipMemcpy(d_out_strides, h_out_strides.data(), h_out_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_upd_shape, h_upd_shape.data(), h_upd_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_upd_strides, h_upd_strides.data(), h_upd_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_out_shape, h_out_shape.data(), h_out_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_out_strides, h_out_strides.data(), h_out_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
   if (!h_axes.empty()) {
-    hipMemcpy(d_axes, h_axes.data(), h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice);
+    (void)hipMemcpy(d_axes, h_axes.data(), h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice);
   }
   if (!h_indices.empty()) {
-    hipMemcpy(d_indices, h_indices.data(), h_indices.size() * sizeof(void*), hipMemcpyHostToDevice);
-    hipMemcpy(d_indices_shape, h_indices_shape.data(), h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-    hipMemcpy(d_indices_strides, h_indices_strides.data(), h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
+    (void)hipMemcpy(d_indices, h_indices.data(), h_indices.size() * sizeof(void*), hipMemcpyHostToDevice);
+    (void)hipMemcpy(d_indices_shape, h_indices_shape.data(), h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
+    (void)hipMemcpy(d_indices_strides, h_indices_strides.data(), h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
   }
 
   int reduce_type = reduce_type_; // 0=Assign, 1=Sum, 2=Prod, 3=Max, 4=Min
@@ -555,14 +555,14 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Schedule cleanup
   encoder.add_completed_handler([=]() {
-    hipFree(d_upd_shape);
-    hipFree(d_upd_strides);
-    hipFree(d_out_shape);
-    hipFree(d_out_strides);
-    hipFree(d_axes);
-    hipFree(d_indices);
-    hipFree(d_indices_shape);
-    hipFree(d_indices_strides);
+    (void)hipFree(d_upd_shape);
+    (void)hipFree(d_upd_strides);
+    (void)hipFree(d_out_shape);
+    (void)hipFree(d_out_strides);
+    (void)hipFree(d_axes);
+    (void)hipFree(d_indices);
+    (void)hipFree(d_indices_shape);
+    (void)hipFree(d_indices_strides);
   });
 }
 

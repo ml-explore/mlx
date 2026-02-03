@@ -40,7 +40,7 @@ void Worker::commit(hipStream_t stream) {
     worker_tasks_[++committed_batch_] = std::move(pending_tasks_);
   }
   // Use hipLaunchHostFunc to signal when stream operations complete
-  hipLaunchHostFunc(stream, signal, this);
+  (void)hipLaunchHostFunc(stream, signal, this);
 }
 
 void Worker::thread_fn() {

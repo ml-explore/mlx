@@ -400,7 +400,7 @@ void Compiled::eval_gpu(
   int num_blocks = (total_work + block_size - 1) / block_size;
 
   encoder.launch_kernel([&](hipStream_t stream) {
-    hipModuleLaunchKernel(
+    (void)hipModuleLaunchKernel(
         kernel,
         num_blocks,
         1,

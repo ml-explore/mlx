@@ -54,13 +54,13 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
         break;
     }
   }
-  hipMemcpyAsync(
+  (void)hipMemcpyAsync(
       out.data<void>(),
       out_ptr,
       nbytes,
       hipMemcpyHostToDevice,
       encoder.stream());
-  hipLaunchHostFunc(encoder.stream(), hip_free_callback, out_ptr);
+  (void)hipLaunchHostFunc(encoder.stream(), hip_free_callback, out_ptr);
 }
 
 } // namespace mlx::core

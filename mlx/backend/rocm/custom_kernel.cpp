@@ -306,7 +306,7 @@ void CustomKernel::eval_gpu(
       args.push_back(out.data<void>());
     }
     
-    hipModuleLaunchKernel(
+    (void)hipModuleLaunchKernel(
         kernel,
         grid.x, grid.y, grid.z,
         block.x, block.y, block.z,

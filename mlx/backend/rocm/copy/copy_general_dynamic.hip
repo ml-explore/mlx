@@ -102,13 +102,13 @@ void copy_general_dynamic(
   int64_t* d_strides_in;
   int64_t* d_strides_out;
   
-  hipMalloc(&d_shape, ndim * sizeof(int32_t));
-  hipMalloc(&d_strides_in, ndim * sizeof(int64_t));
-  hipMalloc(&d_strides_out, ndim * sizeof(int64_t));
+  (void)hipMalloc(&d_shape, ndim * sizeof(int32_t));
+  (void)hipMalloc(&d_strides_in, ndim * sizeof(int64_t));
+  (void)hipMalloc(&d_strides_out, ndim * sizeof(int64_t));
   
-  hipMemcpy(d_shape, h_shape.data(), ndim * sizeof(int32_t), hipMemcpyHostToDevice);
-  hipMemcpy(d_strides_in, h_strides_in.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice);
-  hipMemcpy(d_strides_out, h_strides_out.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_shape, h_shape.data(), ndim * sizeof(int32_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_strides_in, h_strides_in.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice);
+  (void)hipMemcpy(d_strides_out, h_strides_out.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice);
   
   int block_size = 256;
   int num_blocks = (size + block_size - 1) / block_size;
@@ -181,9 +181,9 @@ void copy_general_dynamic(
   
   // Schedule cleanup
   encoder.add_completed_handler([=]() {
-    hipFree(d_shape);
-    hipFree(d_strides_in);
-    hipFree(d_strides_out);
+    (void)hipFree(d_shape);
+    (void)hipFree(d_strides_in);
+    (void)hipFree(d_strides_out);
   });
 }
 

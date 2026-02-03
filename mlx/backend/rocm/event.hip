@@ -58,15 +58,15 @@ HipEvent::~HipEvent() {
 }
 
 void HipEvent::wait() {
-  hipEventSynchronize(event_);
+  (void)hipEventSynchronize(event_);
 }
 
 void HipEvent::wait(hipStream_t stream) {
-  hipStreamWaitEvent(stream, event_, 0);
+  (void)hipStreamWaitEvent(stream, event_, 0);
 }
 
 void HipEvent::record(hipStream_t stream) {
-  hipEventRecord(event_, stream);
+  (void)hipEventRecord(event_, stream);
 }
 
 bool HipEvent::completed() const {
@@ -152,7 +152,7 @@ void AtomicEvent::wait(uint64_t value) {
 
 void AtomicEvent::wait(hipStream_t stream, uint64_t value) {
   // For HIP, we use host function callback for synchronization
-  hipStreamSynchronize(stream);
+  (void)hipStreamSynchronize(stream);
   wait(value);
 }
 
@@ -172,7 +172,7 @@ void AtomicEvent::signal(uint64_t value) {
 }
 
 void AtomicEvent::signal(hipStream_t stream, uint64_t value) {
-  hipStreamSynchronize(stream);
+  (void)hipStreamSynchronize(stream);
   signal(value);
 }
 

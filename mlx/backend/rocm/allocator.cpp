@@ -54,7 +54,7 @@ SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nu
     return;
   }
   
-  hipMemAdvise(data_, small_pool_size, hipMemAdviseSetReadMostly, 0);
+  (void)hipMemAdvise(data_, small_pool_size, hipMemAdviseSetReadMostly, 0);
 
   auto curr = next_free_;
   for (size_t i = 1; i < num_blocks; ++i) {
@@ -66,7 +66,7 @@ SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nu
 
 SmallSizePool::~SmallSizePool() {
   if (data_) {
-    hipFree(data_);
+    (void)hipFree(data_);
   }
   if (buffer_) {
     delete[] buffer_;
@@ -203,7 +203,7 @@ void RocmAllocator::rocm_free(RocmBuffer* buf) {
   if (scalar_pool_.in_pool(buf)) {
     scalar_pool_.free(buf);
   } else {
-    hipFree(buf->data);
+    (void)hipFree(buf->data);
     delete buf;
   }
 }

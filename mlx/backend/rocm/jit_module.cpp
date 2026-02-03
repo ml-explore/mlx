@@ -278,7 +278,7 @@ JitModule::JitModule(
 
 JitModule::~JitModule() {
   if (module_) {
-    hipModuleUnload(module_);
+    (void)hipModuleUnload(module_);
   }
 }
 

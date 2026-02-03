@@ -182,9 +182,9 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   
   encoder.launch_kernel([&](hipStream_t stream) {
     // Copy shape and stride data
-    hipMemcpyAsync(shape_arr.data<int32_t>(), shape.data(), ndim * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(in_strides_arr.data<int64_t>(), in_strides.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    hipMemcpyAsync(out_strides_arr.data<int64_t>(), out_strides.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(shape_arr.data<int32_t>(), shape.data(), ndim * sizeof(int32_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(in_strides_arr.data<int64_t>(), in_strides.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(out_strides_arr.data<int64_t>(), out_strides.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
     
     switch (in.dtype()) {
       case float32:

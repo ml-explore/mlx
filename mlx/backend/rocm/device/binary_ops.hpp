@@ -429,7 +429,9 @@ struct RightShift {
 struct ArcTan2 {
   template <typename T>
   __device__ T operator()(T y, T x) {
-    if constexpr (std::is_same_v<T, hip_bfloat16>) {
+    if constexpr (std::is_same_v<T, bool> || std::is_integral_v<T>) {
+      return static_cast<T>(atan2f(static_cast<float>(y), static_cast<float>(x)));
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
       return hip_bfloat16(atan2f(static_cast<float>(y), static_cast<float>(x)));
     } else if constexpr (std::is_same_v<T, __half>) {
       return __float2half(atan2f(__half2float(y), __half2float(x)));

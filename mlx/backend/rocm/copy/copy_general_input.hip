@@ -188,13 +188,13 @@ void copy_general_input(
 
   encoder.launch_kernel([&](hipStream_t stream) {
     // Copy shape and strides to device
-    hipMemcpyAsync(
+    (void)hipMemcpyAsync(
         shape_arr.data<int32_t>(),
         shape.data(),
         ndim * sizeof(int32_t),
         hipMemcpyHostToDevice,
         stream);
-    hipMemcpyAsync(
+    (void)hipMemcpyAsync(
         strides_arr.data<int64_t>(),
         strides_in.data(),
         ndim * sizeof(int64_t),

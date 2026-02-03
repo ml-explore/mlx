@@ -45,7 +45,7 @@ device_info_impl(int device_index) {
   static auto all_devices = []() {
     // Get device count
     int count = 0;
-    hipGetDeviceCount(&count);
+    (void)hipGetDeviceCount(&count);
 
     // Collect info for all devices
     struct DeviceInfo {
@@ -56,7 +56,7 @@ device_info_impl(int device_index) {
 
     for (int i = 0; i < count; ++i) {
       hipDeviceProp_t prop;
-      hipGetDeviceProperties(&prop, i);
+      (void)hipGetDeviceProperties(&prop, i);
 
       DeviceInfo dev;
       dev.info["device_name"] = std::string(prop.name);
@@ -105,10 +105,10 @@ device_info_impl(int device_index) {
   size_t free_mem, total_mem;
 
   int prev_device;
-  hipGetDevice(&prev_device);
-  hipSetDevice(device_index);
-  hipMemGetInfo(&free_mem, &total_mem);
-  hipSetDevice(prev_device);
+  (void)hipGetDevice(&prev_device);
+  (void)hipSetDevice(device_index);
+  (void)hipMemGetInfo(&free_mem, &total_mem);
+  (void)hipSetDevice(prev_device);
 
   device_info_copy["free_memory"] = free_mem;
   device_info_copy["total_memory"] = total_mem;
@@ -126,7 +126,7 @@ bool is_available() {
 
 int device_count() {
   int count = 0;
-  hipGetDeviceCount(&count);
+  (void)hipGetDeviceCount(&count);
   return count;
 }
 

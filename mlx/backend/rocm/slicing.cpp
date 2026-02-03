@@ -109,13 +109,13 @@ array compute_dynamic_offset(
   encoder.add_temporary(axes_arr);
 
   encoder.launch_kernel([&](hipStream_t stream) {
-    hipMemcpyAsync(
+    (void)hipMemcpyAsync(
         strides_arr.data<int64_t>(),
         strides.data(),
         strides.size() * sizeof(int64_t),
         hipMemcpyHostToDevice,
         stream);
-    hipMemcpyAsync(
+    (void)hipMemcpyAsync(
         axes_arr.data<int32_t>(),
         axes.data(),
         axes.size() * sizeof(int32_t),
@@ -129,7 +129,7 @@ array compute_dynamic_offset(
         strides_arr.data<void>(),
         axes_arr.data<void>()
     };
-    hipModuleLaunchKernel(kernel, 1, 1, 1, 1, 1, 1, 0, stream, args, nullptr);
+    (void)hipModuleLaunchKernel(kernel, 1, 1, 1, 1, 1, 1, 0, stream, args, nullptr);
   });
 
   return offset;

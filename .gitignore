@@ -79,3 +79,6 @@ uv.lock
 .cache/
 # vim
 *.swp
+
+# keys
+*.pem
