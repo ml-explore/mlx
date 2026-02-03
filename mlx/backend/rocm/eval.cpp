@@ -1,17 +1,12 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/gpu/eval.h"
-#include "mlx/backend/gpu/available.h"
 #include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/event.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core::gpu {
-
-bool is_available() {
-  return true;
-}
 
 void new_stream(Stream s) {
   // Force initialization of ROCm by creating an event, so the HIP runtime and
