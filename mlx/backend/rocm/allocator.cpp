@@ -2,6 +2,7 @@
 
 #include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/utils.h"
+#include "mlx/memory.h"
 #include "mlx/utils.h"
 
 #include <hip/hip_runtime.h>
