@@ -14,48 +14,6 @@ namespace mlx::core {
 
 namespace {
 
-struct GemmScalars {
-  std::optional<array> alpha_device;
-  std::optional<array> beta_device;
-
-  bool uses_device_pointers() const {
-    return alpha_device.has_value();
-  }
-};
-
-inline array
-ensure_contiguous(const array& x, cu::CommandEncoder& enc, const Stream& s) {
-  if (x.flags().row_contiguous || x.flags().col_contiguous) {
-    return x;
-  }
-  array x_copy = contiguous_copy_gpu(x, s);
-  enc.add_temporary(x_copy);
-  return x_copy;
-}
-
-array pad_and_swizzle_scales(
-    const array& scale,
-    cu::CommandEncoder& encoder,
-    const Stream& s) {
-  // Compute padded dimensions for full tiles (128 rows × 4 cols)
-  auto [pad_outer, pad_inner] =
-      get_padded_scale_dims(scale.shape(-2), scale.shape(-1));
-  // cuBLAS requirements for scale factor layout:
-  // 1. Dimensions must be padded to full tiles (128 rows × 4 cols)
-  // 2. Out-of-bounds values must be filled with zeros
-  // 3. Starting addresses must be 16-byte aligned
-  // https://docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
-  // Note: cu::malloc_async already provides 256-byte alignment
-  array scale_tiled(
-      cu::malloc_async(pad_outer * pad_inner, encoder),
-      Shape{pad_outer, pad_inner},
-      scale.dtype());
-  swizzle_scales(scale, scale_tiled, encoder, s);
-
-  encoder.add_temporary(scale_tiled);
-  return scale_tiled;
-}
-
 std::tuple<array, array> quantize_input(
     const array& input,
     cu::CommandEncoder& encoder,
@@ -109,70 +67,31 @@ GemmScalars create_nvfp4_scalars(
   return {alpha, beta};
 }
 
-void run_qqmm(
-    cu::CommandEncoder& encoder,
-    int M,
-    int N,
-    int K,
-    bool a_transposed,
-    int64_t lda,
-    bool b_transposed,
-    int64_t ldb,
-    array& out,
-    const array& a,
-    const array& b,
-    const array& a_scale,
-    const array& b_scale,
-    QuantizationMode mode,
-    const GemmScalars& scalars) {
-  std::string qmode = quantization_mode_to_string(mode);
-
-  CublasQQMM qqmm(
-      encoder.device(),
-      a_transposed,
-      M,
-      K,
-      lda,
-      b_transposed,
-      K,
-      N,
-      ldb,
-      1, // batch_count
-      0, // a_batch_stride
-      0, // b_batch_stride
-      out.dtype(),
-      qmode);
-
-  if (scalars.uses_device_pointers()) {
-    qqmm.run(
-        encoder,
-        out,
-        a,
-        b,
-        a_scale,
-        b_scale,
-        *scalars.alpha_device,
-        *scalars.beta_device);
-  } else {
-    qqmm.run(encoder, out, a, b, a_scale, b_scale);
-  }
-}
-
 } // namespace
 
 void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
-  assert(
-      (inputs.size() == 3 && inputs[1].dtype() == uint32) ||
-      (inputs.size() == 2));
   nvtx3::scoped_range r("QQMatmul::eval_gpu");
 
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
   auto& device = encoder.device();
-
   bool w_quantized = (inputs[1].dtype() == uint32);
+  int base_size = w_quantized ? 3 : 2;
+
+  assert(
+      inputs.size() == base_size ||
+      (mode_ == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2));
+
   if (w_quantized && inputs[0].shape(-2) == 1) {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+    // For nvfp4, get global scale for x from inputs if present
+    bool has_global_scales_m1 =
+        mode_ == QuantizationMode::Nvfp4 && inputs.size() > base_size;
+    std::optional<array> global_scale_x_m1 = std::nullopt;
+    if (has_global_scales_m1) {
+      global_scale_x_m1 = inputs[inputs.size() - 2];
+    }
 
     bool donate_x = inputs[0].is_donatable();
     array x = ensure_row_contiguous(inputs[0], encoder, s);
@@ -184,7 +103,8 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (!donate_x) {
       encoder.add_temporary(xhat);
     }
-    fp_quantize_dequantize(x, xhat, group_size_, bits_, encoder, s);
+    fp_quantize_dequantize(
+        x, xhat, group_size_, bits_, global_scale_x_m1, encoder, s);
 
     // Make sure the last two dims of w and s are contiguous
     array w = ensure_row_contiguous_matrix(inputs[1], encoder, s);
@@ -208,8 +128,6 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // - 2 inputs: x, w (non-quantized w)
   // - 3 inputs: x, w, scales_w (quantized w)
-  bool w_is_quantized = inputs[1].dtype() == uint32;
-  int base_size = w_is_quantized ? 3 : 2;
 
   // For nvfp4, global scales are optional but must be both present or both
   // absent If present, they add 2 more inputs (global_scale_x, global_scale_w)
@@ -227,7 +145,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Quantize inputs (or use pre-quantized)
   auto [x_q, scale_x_pre] = quantize_input(
       inputs[0], encoder, s, mode_, bits_, group_size_, global_scale_x);
-  auto [w_q, scale_w_pre] = !w_is_quantized
+  auto [w_q, scale_w_pre] = !w_quantized
       ? quantize_input(
             inputs[1], encoder, s, mode_, bits_, group_size_, global_scale_w)
       : std::make_tuple(
@@ -254,7 +172,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     scalars = create_nvfp4_scalars(*global_scale_x, *global_scale_w, encoder);
   }
 
-  run_qqmm(
+  qqmm_impl(
       encoder,
       M,
       N,

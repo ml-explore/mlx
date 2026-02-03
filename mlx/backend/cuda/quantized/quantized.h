@@ -50,6 +50,7 @@ void fp_quantize_dequantize(
     array& what,
     int group_size,
     int bits,
+    const std::optional<array>& global_scale,
     cu::CommandEncoder& enc,
     const Stream& s);
 

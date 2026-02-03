@@ -1,10 +1,22 @@
-// Copyright © 2026 Apple Inc.
+// Copyright © 2025 Apple Inc.
 #pragma once
 
 #include "mlx/backend/cuda/device.h"
 #include "mlx/primitives.h"
 
+#include <optional>
+
 namespace mlx::core {
+
+struct GemmScalars {
+  std::optional<array> alpha_device;
+  std::optional<array> beta_device;
+
+  bool uses_device_pointers() const {
+    return alpha_device.has_value();
+  }
+};
+
 void qqmm_impl(
     cu::CommandEncoder& encoder,
     int M,
@@ -19,8 +31,7 @@ void qqmm_impl(
     const array& b,
     const array& a_scale,
     const array& b_scale,
-    Dtype out_dtype,
     QuantizationMode mode,
-    float alpha = 1.0f);
+    const GemmScalars& scalars = {});
 
 } // namespace mlx::core

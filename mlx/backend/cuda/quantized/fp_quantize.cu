@@ -34,7 +34,13 @@ struct Dequantize {
 namespace cg = cooperative_groups;
 
 template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
-__global__ void fp_quantize_dequantize(T* w, T* out, size_t size) {
+__global__ void
+fp_quantize_dequantize(T* w, T* out, size_t size, float* global_scale = nullptr) {
+  const bool use_global_scale = global_scale != nullptr;
+  const float scale_enc =
+      use_global_scale ? (F8E4M3_MAX * F4E2M1_MAX) / *global_scale : 1.0f;
+  const float inv_scale_enc = use_global_scale ? 1.0f / scale_enc : 1.0f;
+
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
@@ -53,26 +59,28 @@ __global__ void fp_quantize_dequantize(T* w, T* out, size_t size) {
   }
 
   auto w_tile = load_vector<group_size, T>(w, thread_idx);
-  float scale = 0.0f;
+  float scale_dec_b = 0.0f;
 
   Tx2 amax_2x = Tx2{0.0f, 0.0f};
 
 #pragma unroll
   for (int i = 0; i < group_size; i += 2) {
     auto pair = Tx2{w_tile[i], w_tile[i + 1]};
-    abs_max_x2<Tx2>(amax_2x, amax_2x, pair);
+    absmax_x2<Tx2>(amax_2x, amax_2x, pair);
   }
 
-  scale = static_cast<float>(
+  scale_dec_b = static_cast<float>(
       max(fabsf(static_cast<float>(amax_2x.x)),
           fabsf(static_cast<float>(amax_2x.y))));
 
-  scale /= bits == 4 ? 6.0f : 448.0f;
+  scale_dec_b /= bits == 4 ? F4E2M1_MAX : F8E4M3_MAX;
+  scale_dec_b *= scale_enc;
   // Convert to mx scale or nv scale
   using ScaleType =
       std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
-  auto s = ScaleType(scale);
-  scale = float(s);
+  auto s = ScaleType(scale_dec_b);
+  float scale_enc_b = scale_enc / float(s);
+  float scale_dec = float(s) * inv_scale_enc;
   AlignedVector<T, group_size> w_hat;
 
 #pragma unroll
@@ -81,17 +89,17 @@ __global__ void fp_quantize_dequantize(T* w, T* out, size_t size) {
     float4 dq;
     if constexpr (bits == 8) {
       uint32_t quantized_val =
-          scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+          scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, scale_enc_b, rbits);
       dq = dequant_fp8(quantized_val);
     } else {
       uint16_t quantized_val =
-          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, scale_enc_b, rbits);
       dq = dequant_fp4(quantized_val);
     }
-    w_hat[i * 4] = static_cast<T>(dq.x * scale);
-    w_hat[i * 4 + 1] = static_cast<T>(dq.y * scale);
-    w_hat[i * 4 + 2] = static_cast<T>(dq.z * scale);
-    w_hat[i * 4 + 3] = static_cast<T>(dq.w * scale);
+    w_hat[i * 4] = static_cast<T>(dq.x * scale_dec);
+    w_hat[i * 4 + 1] = static_cast<T>(dq.y * scale_dec);
+    w_hat[i * 4 + 2] = static_cast<T>(dq.z * scale_dec);
+    w_hat[i * 4 + 3] = static_cast<T>(dq.w * scale_dec);
   }
   store_vector<group_size>(out, thread_idx, w_hat);
 }
@@ -378,9 +386,13 @@ void fp_quantize_dequantize(
     array& what,
     int group_size,
     int bits,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     cu::CommandEncoder& enc,
     const Stream& s) {
   enc.set_input_array(w);
+  if (global_scale.has_value()) {
+    enc.set_input_array(global_scale.value());
+  }
   enc.set_output_array(what);
   dispatch_float_types(w.dtype(), "fp_quantize_dequantize", [&](auto type_tag) {
     using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
@@ -402,7 +414,9 @@ void fp_quantize_dequantize(
           0,
           gpu_ptr<T>(w),
           gpu_ptr<T>(what),
-          w.size());
+          w.size(),
+          global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
+                                   : nullptr);
     }
   });
 }
