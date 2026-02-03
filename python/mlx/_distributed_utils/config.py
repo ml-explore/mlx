@@ -499,7 +499,7 @@ def configure_jaccl_ring(args, hosts, ips, ring, sshinfo):
             else:
                 rdma = []
                 for c in range(count):
-                    rdma.append(f"rdma_{ips.ips[i, j][0][0]}")
+                    rdma.append(f"rdma_{ips.ips[i, j][c][0]}")
                 rdmas.append(rdma[0] if count == 1 else rdma)
         jaccl_hosts.append(Host(i, h.ssh_hostname, h.ips, rdmas))
     hostfile = Hostfile(jaccl_hosts, "jaccl-ring", args.env)
