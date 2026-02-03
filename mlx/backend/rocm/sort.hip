@@ -42,7 +42,7 @@ __device__ __forceinline__ hip_bfloat16 nan_value<hip_bfloat16>() {
 template <typename T, typename = void>
 struct InitValue {
   __device__ __forceinline__ static T value() {
-    return Limits<T>::max;
+    return rocm::Limits<T>::max();
   }
 };
 
@@ -419,9 +419,11 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
       encoder.launch_kernel([&](hipStream_t hip_stream) {
         dim3 grid(1, n_rows, 1);
         
-        auto launch_kernel = [&]<bool ARG_SORT, int BLOCK_THREADS>() {
+        // Helper to launch kernel with specific template parameters
+        auto launch_sort = [&](auto argsort_tag, auto block_tag) {
+          constexpr bool ARG_SORT = decltype(argsort_tag)::value;
+          constexpr int BLOCK_THREADS = decltype(block_tag)::value;
           using OutT = std::conditional_t<ARG_SORT, uint32_t, ValT>;
-          constexpr int N_PER_BLOCK = BLOCK_THREADS * tn;
           
           hipLaunchKernelGGL(
               (rocm::block_sort_kernel<ValT, OutT, ARG_SORT, BLOCK_THREADS, tn>),
@@ -441,19 +443,19 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
         // Dispatch based on argsort and block size
         if (argsort) {
           switch (bn) {
-            case 32: launch_kernel.template operator()<true, 32>(); break;
-            case 64: launch_kernel.template operator()<true, 64>(); break;
-            case 128: launch_kernel.template operator()<true, 128>(); break;
-            case 256: launch_kernel.template operator()<true, 256>(); break;
-            case 512: launch_kernel.template operator()<true, 512>(); break;
+            case 32: launch_sort(std::true_type{}, std::integral_constant<int, 32>{}); break;
+            case 64: launch_sort(std::true_type{}, std::integral_constant<int, 64>{}); break;
+            case 128: launch_sort(std::true_type{}, std::integral_constant<int, 128>{}); break;
+            case 256: launch_sort(std::true_type{}, std::integral_constant<int, 256>{}); break;
+            case 512: launch_sort(std::true_type{}, std::integral_constant<int, 512>{}); break;
           }
         } else {
           switch (bn) {
-            case 32: launch_kernel.template operator()<false, 32>(); break;
-            case 64: launch_kernel.template operator()<false, 64>(); break;
-            case 128: launch_kernel.template operator()<false, 128>(); break;
-            case 256: launch_kernel.template operator()<false, 256>(); break;
-            case 512: launch_kernel.template operator()<false, 512>(); break;
+            case 32: launch_sort(std::false_type{}, std::integral_constant<int, 32>{}); break;
+            case 64: launch_sort(std::false_type{}, std::integral_constant<int, 64>{}); break;
+            case 128: launch_sort(std::false_type{}, std::integral_constant<int, 128>{}); break;
+            case 256: launch_sort(std::false_type{}, std::integral_constant<int, 256>{}); break;
+            case 512: launch_sort(std::false_type{}, std::integral_constant<int, 512>{}); break;
           }
         }
       });

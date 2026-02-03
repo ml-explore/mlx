@@ -195,6 +195,97 @@ struct numeric_limits<uint64_t> {
   }
 };
 
+template <>
+struct numeric_limits<int8_t> {
+  __device__ static constexpr int8_t lowest() {
+    return INT8_MIN;
+  }
+  __device__ static constexpr int8_t max() {
+    return INT8_MAX;
+  }
+};
+
+template <>
+struct numeric_limits<uint8_t> {
+  __device__ static constexpr uint8_t lowest() {
+    return 0;
+  }
+  __device__ static constexpr uint8_t max() {
+    return UINT8_MAX;
+  }
+};
+
+template <>
+struct numeric_limits<int16_t> {
+  __device__ static constexpr int16_t lowest() {
+    return INT16_MIN;
+  }
+  __device__ static constexpr int16_t max() {
+    return INT16_MAX;
+  }
+};
+
+template <>
+struct numeric_limits<uint16_t> {
+  __device__ static constexpr uint16_t lowest() {
+    return 0;
+  }
+  __device__ static constexpr uint16_t max() {
+    return UINT16_MAX;
+  }
+};
+
+template <>
+struct numeric_limits<bool> {
+  __device__ static constexpr bool lowest() {
+    return false;
+  }
+  __device__ static constexpr bool max() {
+    return true;
+  }
+};
+
+// Limits struct for sort operations (returns infinity for floats, max for integers)
+template <typename T, typename = void>
+struct Limits {
+  __device__ static T max() {
+    return numeric_limits<T>::max();
+  }
+  __device__ static T min() {
+    return numeric_limits<T>::lowest();
+  }
+};
+
+template <typename T>
+struct Limits<T, std::enable_if_t<std::is_same_v<T, float> || std::is_same_v<T, double>>> {
+  __device__ static T max() {
+    return numeric_limits<T>::infinity();
+  }
+  __device__ static T min() {
+    return -numeric_limits<T>::infinity();
+  }
+};
+
+template <typename T>
+struct Limits<T, std::enable_if_t<std::is_same_v<T, __half> || std::is_same_v<T, hip_bfloat16>>> {
+  __device__ static T max() {
+    return numeric_limits<T>::infinity();
+  }
+  __device__ static T min() {
+    return -numeric_limits<float>::infinity();
+  }
+};
+
+template <>
+struct Limits<bool> {
+  __device__ static bool max() {
+    return true;
+  }
+  __device__ static bool min() {
+    return false;
+  }
+};
+
 // Elem to loc conversion
 template <typename IdxT = int64_t>
 __device__ IdxT
