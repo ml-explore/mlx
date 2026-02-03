@@ -13,10 +13,13 @@ namespace mlx::core::rocm {
 
 using allocator::Buffer;
 
-// Stores ROCm-managed unified memory.
+// Stores ROCm memory buffer.
+// When managed memory is available, data is allocated with hipMallocManaged.
+// Otherwise, data is allocated with hipHostMalloc (pinned host memory).
 struct RocmBuffer {
   void* data;
   size_t size;
+  bool is_managed;  // true if allocated with hipMallocManaged
 };
 
 class SmallSizePool {

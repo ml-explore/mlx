@@ -66,7 +66,8 @@ SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nu
 
   next_free_ = buffer_;
 
-  // Try managed memory first, fall back to device memory
+  // Try managed memory first, fall back to host-pinned memory
+  // Host-pinned memory is accessible from both CPU and GPU
   hipError_t err;
   if (managed_memory_supported()) {
     err = hipMallocManaged(&data_, small_pool_size);
@@ -74,8 +75,9 @@ SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nu
       (void)hipMemAdvise(data_, small_pool_size, hipMemAdviseSetReadMostly, 0);
     }
   } else {
-    // Use regular device memory
-    err = hipMalloc(&data_, small_pool_size);
+    // Use host-pinned memory that's accessible from GPU
+    // hipHostMallocDefault makes memory accessible from device
+    err = hipHostMalloc(&data_, small_pool_size, hipHostMallocDefault);
   }
   
   if (err != hipSuccess) {
@@ -96,7 +98,11 @@ SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nu
 
 SmallSizePool::~SmallSizePool() {
   if (data_) {
-    (void)hipFree(data_);
+    if (managed_memory_supported()) {
+      (void)hipFree(data_);
+    } else {
+      (void)hipHostFree(data_);
+    }
   }
   if (buffer_) {
     delete[] buffer_;
@@ -112,6 +118,7 @@ RocmBuffer* SmallSizePool::malloc() {
   next_free_ = next_free_->next;
   b->buf.data = static_cast<char*>(data_) + i * small_block_size;
   b->buf.size = small_block_size;
+  b->buf.is_managed = managed_memory_supported();
   return &b->buf;
 }
 
@@ -185,14 +192,17 @@ Buffer RocmAllocator::malloc(size_t size) {
     }
     lock.unlock();
     if (!buf) {
-      buf = new RocmBuffer{nullptr, size};
+      buf = new RocmBuffer{nullptr, size, false};
       hipError_t err;
       
-      // Try managed memory first, fall back to device memory
+      // Try managed memory first, fall back to host-pinned memory
       if (managed_memory_supported()) {
         err = hipMallocManaged(&buf->data, size);
+        buf->is_managed = true;
       } else {
-        err = hipMalloc(&buf->data, size);
+        // Use host-pinned memory that's accessible from GPU
+        err = hipHostMalloc(&buf->data, size, hipHostMallocDefault);
+        buf->is_managed = false;
       }
       
       if (err != hipSuccess) {
@@ -242,7 +252,11 @@ void RocmAllocator::rocm_free(RocmBuffer* buf) {
   if (scalar_pool_.in_pool(buf)) {
     scalar_pool_.free(buf);
   } else {
-    (void)hipFree(buf->data);
+    if (buf->is_managed) {
+      (void)hipFree(buf->data);
+    } else {
+      (void)hipHostFree(buf->data);
+    }
     delete buf;
   }
 }
