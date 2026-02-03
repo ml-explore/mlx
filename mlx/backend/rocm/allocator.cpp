@@ -35,6 +35,27 @@ static bool rocm_available() {
   return available == 1;
 }
 
+// Check if managed memory is supported on this device
+static bool managed_memory_supported() {
+  static int supported = -1;
+  if (supported < 0) {
+    if (!rocm_available()) {
+      supported = 0;
+    } else {
+      // Try a small test allocation to see if managed memory works
+      void* test_ptr = nullptr;
+      hipError_t err = hipMallocManaged(&test_ptr, 64);
+      if (err == hipSuccess && test_ptr != nullptr) {
+        (void)hipFree(test_ptr);
+        supported = 1;
+      } else {
+        supported = 0;
+      }
+    }
+  }
+  return supported == 1;
+}
+
 SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nullptr) {
   if (!rocm_available()) {
     return;
@@ -45,7 +66,18 @@ SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nu
 
   next_free_ = buffer_;
 
-  hipError_t err = hipMallocManaged(&data_, small_pool_size);
+  // Try managed memory first, fall back to device memory
+  hipError_t err;
+  if (managed_memory_supported()) {
+    err = hipMallocManaged(&data_, small_pool_size);
+    if (err == hipSuccess) {
+      (void)hipMemAdvise(data_, small_pool_size, hipMemAdviseSetReadMostly, 0);
+    }
+  } else {
+    // Use regular device memory
+    err = hipMalloc(&data_, small_pool_size);
+  }
+  
   if (err != hipSuccess) {
     delete[] buffer_;
     buffer_ = nullptr;
@@ -53,8 +85,6 @@ SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nu
     data_ = nullptr;
     return;
   }
-  
-  (void)hipMemAdvise(data_, small_pool_size, hipMemAdviseSetReadMostly, 0);
 
   auto curr = next_free_;
   for (size_t i = 1; i < num_blocks; ++i) {
@@ -156,10 +186,19 @@ Buffer RocmAllocator::malloc(size_t size) {
     lock.unlock();
     if (!buf) {
       buf = new RocmBuffer{nullptr, size};
-      hipError_t err = hipMallocManaged(&buf->data, size);
-      if (err != hipSuccess && err != hipErrorMemoryAllocation) {
+      hipError_t err;
+      
+      // Try managed memory first, fall back to device memory
+      if (managed_memory_supported()) {
+        err = hipMallocManaged(&buf->data, size);
+      } else {
+        err = hipMalloc(&buf->data, size);
+      }
+      
+      if (err != hipSuccess) {
+        delete buf;
         std::ostringstream oss;
-        oss << "hipMallocManaged failed: " << hipGetErrorString(err) << ".";
+        oss << "hipMalloc failed: " << hipGetErrorString(err) << ".";
         throw std::runtime_error(oss.str());
       }
     }
