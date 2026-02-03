@@ -258,9 +258,160 @@ void RingGroup::all_gather(const array& input, array& output, Stream stream) {
   });
 }
 
-void RingGroup::send(const array& input, int dst, Stream stream) {}
+void RingGroup::send(const array& input, int dst, Stream stream) {
+  int right = (rank_ + 1) % size_;
+  int left = (rank_ + size_ - 1) % size_;
+  if (dst != right && dst != left) {
+    std::ostringstream msg;
+    msg << "[jaccl] In ring mode send is only supported to direct neighbors "
+        << "but tried to send to " << dst << " from " << rank_ << std::endl;
+    throw std::runtime_error(msg.str());
+  }
+  auto data = input.data<char>();
+  int64_t n_bytes = input.nbytes();
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(input);
+  encoder.dispatch([data, n_bytes, dst, left, this]() {
+    auto& conns = (dst == left) ? left_ : right_;
+    int dir = dst == left;
 
-void RingGroup::recv(array& out, int src, Stream stream) {}
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE * MAX_CONNS;
+
+    int n_wires = conns.size();
+    int64_t bytes_per_wire = (n_bytes + n_wires - 1) / n_wires;
+    auto [sz, N] = buffer_size_from_message(bytes_per_wire);
+
+    int in_flight = 0;
+    int64_t read_offset[MAX_CONNS];
+    int64_t limits[MAX_CONNS];
+    for (int lw = 0; lw < n_wires; lw++) {
+      read_offset[lw] = std::min(lw * bytes_per_wire, n_bytes);
+      limits[lw] = std::min((lw + 1) * bytes_per_wire, n_bytes);
+    }
+
+    // Prefill the pipeline
+    for (int lw = 0; lw < n_wires; lw++) {
+      int buff = 0;
+      while (read_offset[lw] < limits[lw] && buff < PIPELINE) {
+        std::copy(
+            data + read_offset[lw],
+            data + std::min(read_offset[lw] + N, limits[lw]),
+            send_buffer(sz, buff, dir, lw).begin<char>());
+        send_to(sz, buff, dir, lw);
+
+        buff++;
+        read_offset[lw] += N;
+        in_flight++;
+      }
+    }
+
+    // Main loop
+    while (in_flight > 0) {
+      // Poll the hardware for completions.
+      //
+      // If a send was completed and we have more data to send then go ahead
+      // and send them.
+      ibv_wc wc[WC_NUM];
+      int n = poll(conns, WC_NUM, wc);
+      for (int i = 0; i < n; i++) {
+        int buff = (wc[i].wr_id >> 8) & 0xff;
+        int wire = wc[i].wr_id & 0xff;
+        int lw = wire % MAX_CONNS;
+
+        in_flight--;
+
+        if (read_offset[lw] < limits[lw]) {
+          std::copy(
+              data + read_offset[lw],
+              data + std::min(read_offset[lw] + N, limits[lw]),
+              send_buffer(sz, buff, dir, lw).begin<char>());
+          send_to(sz, buff, dir, lw);
+
+          read_offset[lw] += N;
+          in_flight++;
+        }
+      }
+    }
+  });
+}
+
+void RingGroup::recv(array& out, int src, Stream stream) {
+  int right = (rank_ + 1) % size_;
+  int left = (rank_ + size_ - 1) % size_;
+  if (src != right && src != left) {
+    std::ostringstream msg;
+    msg << "[jaccl] In ring mode recv is only supported to direct neighbors "
+        << "but tried to recv from " << src << " to " << rank_ << std::endl;
+    throw std::runtime_error(msg.str());
+  }
+  auto data = out.data<char>();
+  int64_t n_bytes = out.nbytes();
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_output_array(out);
+  encoder.dispatch([data, n_bytes, src, left, this]() {
+    auto& conns = (src == left) ? left_ : right_;
+    int dir = src != left;
+
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE * MAX_CONNS;
+
+    int n_wires = conns.size();
+    int64_t bytes_per_wire = (n_bytes + n_wires - 1) / n_wires;
+    auto [sz, N] = buffer_size_from_message(bytes_per_wire);
+
+    int in_flight = 0;
+    int64_t write_offset[MAX_CONNS];
+    int64_t limits[MAX_CONNS];
+    for (int lw = 0; lw < n_wires; lw++) {
+      write_offset[lw] = std::min(lw * bytes_per_wire, n_bytes);
+      limits[lw] = std::min((lw + 1) * bytes_per_wire, n_bytes);
+    }
+
+    // Prefill the pipeline
+    for (int lw = 0; lw < n_wires; lw++) {
+      int buff = 0;
+      while (write_offset[lw] < limits[lw] && buff < PIPELINE) {
+        recv_from(sz, buff, dir, lw);
+
+        buff++;
+        write_offset[lw] += N;
+        in_flight++;
+      }
+    }
+
+    // Main loop
+    while (in_flight > 0) {
+      // Poll the hardware for completions.
+      //
+      // If a recv was completed copy it to the output and if we have more
+      // data to fetch post another recv.
+      ibv_wc wc[WC_NUM];
+      int n = poll(conns, WC_NUM, wc);
+      for (int i = 0; i < n; i++) {
+        int buff = (wc[i].wr_id >> 8) & 0xff;
+        int wire = wc[i].wr_id & 0xff;
+        int lw = wire % MAX_CONNS;
+
+        in_flight--;
+
+        std::copy(
+            recv_buffer(sz, buff, dir, lw).begin<char>(),
+            recv_buffer(sz, buff, dir, lw).begin<char>() +
+                std::max<int64_t>(
+                    0, std::min<int64_t>(limits[lw] - write_offset[lw], N)),
+            data + write_offset[lw]);
+        write_offset[lw] += N;
+
+        if (write_offset[lw] + (PIPELINE - 1) * N < limits[lw]) {
+          recv_from(sz, buff, dir, lw);
+
+          in_flight++;
+        }
+      }
+    }
+  });
+}
 
 template <typename T, typename ReduceOp>
 void RingGroup::all_reduce(
