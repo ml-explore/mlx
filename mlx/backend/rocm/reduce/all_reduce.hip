@@ -103,7 +103,7 @@ void all_reduce(
   
   auto get_args = [](size_t size, int N) {
     int threads = std::min(512, static_cast<int>((size + N - 1) / N));
-    threads = ((threads + rocm::WARP_SIZE - 1) / rocm::WARP_SIZE) * rocm::WARP_SIZE;
+    threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     int reductions_per_step = threads * N;
     size_t steps_needed = (size + reductions_per_step - 1) / reductions_per_step;
     

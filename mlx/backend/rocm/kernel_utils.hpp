@@ -20,10 +20,7 @@
 
 namespace mlx::core {
 
-// Maximum number of dimensions
-constexpr int MAX_NDIM = 8;
-
-// Note: WARP_SIZE is defined in device/config.h based on target architecture
+// Note: WARP_SIZE and MAX_NDIM are defined in device/config.h
 
 template <typename F>
 void dispatch_1_2_3(int n, F&& f) {

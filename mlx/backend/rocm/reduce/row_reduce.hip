@@ -181,8 +181,8 @@ void row_reduce(
   size_t out_size = out.size();
   
   // Calculate threads based on row size
-  int threads = std::min(256, ((row_size + 3) / 4 + rocm::WARP_SIZE_ROW - 1) / rocm::WARP_SIZE_ROW * rocm::WARP_SIZE_ROW);
-  threads = std::max(threads, rocm::WARP_SIZE_ROW);
+  int threads = std::min(256, ((row_size + 3) / 4 + WARP_SIZE_ROW - 1) / WARP_SIZE_ROW * WARP_SIZE_ROW);
+  threads = std::max(threads, WARP_SIZE_ROW);
   
   encoder.set_input_array(in);
   encoder.set_output_array(out);
