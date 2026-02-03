@@ -316,7 +316,7 @@ void Compiled::eval_gpu(
         std::string("mlx::core::rocm::") + lib_name() +
         "_contiguous<int64_t, " + std::to_string(work_per_thread) + ">");
     for (auto wpt : std::array<int, 2>{1, work_per_thread}) {
-      for (int i = 1; i <= rocm::MAX_NDIM; ++i) {
+      for (int i = 1; i <= MAX_NDIM; ++i) {
         kernel_names.push_back(
             std::string("mlx::core::rocm::") + lib_name() + "_strided<" +
             std::to_string(i) + ", uint32_t, " + std::to_string(wpt) + ">");
