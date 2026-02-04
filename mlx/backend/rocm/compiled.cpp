@@ -194,6 +194,13 @@ constexpr const char* g_jit_includes = R"(
 #include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
 
+// Standard type definitions for JIT compilation
+using uint32_t = unsigned int;
+using int32_t = signed int;
+using uint64_t = unsigned long long;
+using int64_t = signed long long;
+using size_t = unsigned long;
+
 // Simple array type for JIT compilation (hip/std/array not available in hiprtc)
 namespace hip {
 namespace std {
@@ -209,7 +216,7 @@ struct numeric_limits;
 
 template <>
 struct numeric_limits<float> {
-  __device__ static constexpr float infinity() { return __int_as_float(0x7f800000); }
+  __device__ static float infinity() { return __int_as_float(0x7f800000); }
 };
 } // namespace std
 } // namespace hip
