@@ -150,6 +150,23 @@ struct CastOp<SrcT, hip_bfloat16, std::enable_if_t<!std::is_same_v<SrcT, hip_bfl
   }
 };
 
+// Conversion between __half and hip_bfloat16
+template <>
+struct CastOp<__half, hip_bfloat16> {
+  static constexpr bool is_castable = true;
+  __device__ hip_bfloat16 operator()(__half x) {
+    return hip_bfloat16(__half2float(x));
+  }
+};
+
+template <>
+struct CastOp<hip_bfloat16, __half> {
+  static constexpr bool is_castable = true;
+  __device__ __half operator()(hip_bfloat16 x) {
+    return __float2half(static_cast<float>(x));
+  }
+};
+
 // Helper to deduce the SrcT
 template <typename DstT, typename SrcT>
 inline __device__ auto cast_to(SrcT x) {
