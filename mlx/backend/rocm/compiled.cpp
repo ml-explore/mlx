@@ -199,6 +199,10 @@ using uint32_t = unsigned int;
 using int32_t = signed int;
 using uint64_t = unsigned long long;
 using int64_t = signed long long;
+using uint16_t = unsigned short;
+using int16_t = signed short;
+using uint8_t = unsigned char;
+using int8_t = signed char;
 using size_t = unsigned long;
 
 // Simple array type for JIT compilation (hip/std/array not available in hiprtc)
