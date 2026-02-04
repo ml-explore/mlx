@@ -6,7 +6,7 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
-#include "mlx/backend/rocm/device/hip_complex_math.hpp"
+#include "mlx/backend/rocm/device/utils.hpp"
 
 #include <hip/hip_runtime.h>
 #include <type_traits>
@@ -14,16 +14,6 @@
 namespace mlx::core {
 
 namespace rocm {
-
-// Type trait for detecting complex types
-template <typename T>
-struct is_complex : std::false_type {};
-
-template <>
-struct is_complex<hipFloatComplex> : std::true_type {};
-
-template <typename T>
-inline constexpr bool is_complex_v = is_complex<T>::value;
 
 // Cast operation for copy - general case
 template <typename SrcT, typename DstT, typename = void>
