@@ -95,6 +95,9 @@ void copy_contiguous(
         OutType* out_ptr = gpu_ptr<OutType>(out) + out_offset;
         
         encoder.launch_kernel([&](hipStream_t stream) {
+          fprintf(stderr, "copy_contiguous: launching kernel, ctype=%d, in_ptr=%p, out_ptr=%p, size=%zu, stream=%p\n",
+                  (int)ctype, (void*)in_ptr, (void*)out_ptr, (size_t)size, (void*)stream);
+          hipError_t err;
           if (ctype == CopyType::Scalar) {
             hipLaunchKernelGGL(
                 (rocm::copy_s<InType, OutType, IdxT, N_READS>),
@@ -106,6 +109,11 @@ void copy_contiguous(
                 dim3(num_blocks), dim3(block_size), 0, stream,
                 in_ptr, out_ptr, static_cast<IdxT>(size));
           }
+          err = hipGetLastError();
+          if (err != hipSuccess) {
+            fprintf(stderr, "copy_contiguous: kernel launch failed: %s\n", hipGetErrorString(err));
+          }
+          fprintf(stderr, "copy_contiguous: kernel launched successfully\n");
         });
       });
     });
