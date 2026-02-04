@@ -65,7 +65,7 @@ void copy_contiguous(
   }
   
   // Debug: Check if buffers are valid
-  auto* in_buf = static_cast<rocm::RocmBuffer*>(in.buffer().ptr());
+  auto* in_buf = static_cast<const rocm::RocmBuffer*>(in.buffer().ptr());
   auto* out_buf = static_cast<rocm::RocmBuffer*>(out.buffer().ptr());
   
   if (!in_buf || !in_buf->data) {
