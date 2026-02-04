@@ -13,43 +13,6 @@ static constexpr int TILE_SIZE = 16;
 
 namespace rocm {
 
-// General copy kernel - strided input to contiguous output (N-dimensional)
-template <typename In, typename Out, typename IdxT, int NDIM>
-__global__ void copy_g_nd(
-    const In* in,
-    Out* out,
-    IdxT size_rest,
-    const int* shape,
-    const int64_t* strides) {
-  IdxT index_rest = blockIdx.y * blockDim.y + threadIdx.y;
-  if (index_rest >= size_rest) {
-    return;
-  }
-
-  int shape_x = shape[NDIM - 1];
-  int64_t stride_x = strides[NDIM - 1];
-  IdxT index_x = blockIdx.x * blockDim.x + threadIdx.x;
-  
-  if (index_x >= shape_x) {
-    return;
-  }
-
-  // Compute input offset
-  IdxT idx = 0;
-  IdxT tmp = index_rest;
-  #pragma unroll
-  for (int i = NDIM - 2; i >= 0; --i) {
-    IdxT coord = tmp % shape[i];
-    idx += coord * strides[i];
-    tmp /= shape[i];
-  }
-  idx += index_x * stride_x;
-
-  // Output is contiguous
-  IdxT out_idx = index_rest * shape_x + index_x;
-  out[out_idx] = cast_to<Out>(in[idx]);
-}
-
 // General copy kernel - strided input to contiguous output (dynamic ndim)
 template <typename In, typename Out, typename IdxT>
 __global__ void copy_g_dynamic(
@@ -121,6 +84,36 @@ __global__ void copy_col_row(
 
 } // namespace rocm
 
+// Macro to launch general input copy kernel
+#define LAUNCH_COPY_G(InT, OutT) \
+  do { \
+    encoder.launch_kernel([&](hipStream_t stream) { \
+      (void)hipMemcpyAsync( \
+          shape_arr.data<int32_t>(), \
+          shape.data(), \
+          ndim * sizeof(int32_t), \
+          hipMemcpyHostToDevice, \
+          stream); \
+      (void)hipMemcpyAsync( \
+          strides_arr.data<int64_t>(), \
+          strides_in.data(), \
+          ndim * sizeof(int64_t), \
+          hipMemcpyHostToDevice, \
+          stream); \
+      dim3 block(16, 16); \
+      dim3 grid((dim0 + block.x - 1) / block.x, (rest + block.y - 1) / block.y); \
+      hipLaunchKernelGGL( \
+          (rocm::copy_g_dynamic<InT, OutT, int64_t>), \
+          grid, block, 0, stream, \
+          reinterpret_cast<const InT*>(in.data<void>()) + offset_in, \
+          reinterpret_cast<OutT*>(out.data<void>()) + offset_out, \
+          static_cast<int64_t>(rest), \
+          shape_arr.data<int32_t>(), \
+          strides_arr.data<int64_t>(), \
+          ndim); \
+    }); \
+  } while(0)
+
 void copy_general_input(
     rocm::CommandEncoder& encoder,
     CopyType ctype,
@@ -138,22 +131,44 @@ void copy_general_input(
     return;
   }
 
-  // Column contiguous to row contiguous specialization
+  // Column contiguous to row contiguous specialization (same type only)
   if (ndim == 2 && strides_in[0] == 1 && strides_in[1] == shape[0] && in.dtype() == out.dtype()) {
-    dispatch_all_types(in.dtype(), [&](auto type_tag) {
-      using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
-      encoder.launch_kernel([&](hipStream_t stream) {
-        dim3 block(TILE_SIZE, TILE_SIZE);
-        dim3 grid((shape[0] + TILE_SIZE - 1) / TILE_SIZE,
-                  (shape[1] + TILE_SIZE - 1) / TILE_SIZE);
-        hipLaunchKernelGGL(
-            (rocm::copy_col_row<T, T>),
-            grid, block, 0, stream,
-            reinterpret_cast<const T*>(in.data<void>()) + offset_in,
-            reinterpret_cast<T*>(out.data<void>()) + offset_out,
-            static_cast<int64_t>(shape[0]),
-            static_cast<int64_t>(shape[1]));
-      });
+    encoder.launch_kernel([&](hipStream_t stream) {
+      dim3 block(TILE_SIZE, TILE_SIZE);
+      dim3 grid((shape[0] + TILE_SIZE - 1) / TILE_SIZE,
+                (shape[1] + TILE_SIZE - 1) / TILE_SIZE);
+
+      switch (in.dtype()) {
+        case float32:
+          hipLaunchKernelGGL(
+              (rocm::copy_col_row<float, float>),
+              grid, block, 0, stream,
+              in.data<float>() + offset_in,
+              out.data<float>() + offset_out,
+              static_cast<int64_t>(shape[0]),
+              static_cast<int64_t>(shape[1]));
+          break;
+        case float16:
+          hipLaunchKernelGGL(
+              (rocm::copy_col_row<__half, __half>),
+              grid, block, 0, stream,
+              in.data<__half>() + offset_in,
+              out.data<__half>() + offset_out,
+              static_cast<int64_t>(shape[0]),
+              static_cast<int64_t>(shape[1]));
+          break;
+        case int32:
+          hipLaunchKernelGGL(
+              (rocm::copy_col_row<int32_t, int32_t>),
+              grid, block, 0, stream,
+              in.data<int32_t>() + offset_in,
+              out.data<int32_t>() + offset_out,
+              static_cast<int64_t>(shape[0]),
+              static_cast<int64_t>(shape[1]));
+          break;
+        default:
+          break;
+      }
     });
     return;
   }
@@ -169,41 +184,71 @@ void copy_general_input(
   encoder.add_temporary(shape_arr);
   encoder.add_temporary(strides_arr);
 
-  dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
-    dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
-      using InType = hip_type_t<MLX_GET_TYPE(in_type_tag)>;
-      using OutType = hip_type_t<MLX_GET_TYPE(out_type_tag)>;
-      
-      encoder.launch_kernel([&](hipStream_t stream) {
-        // Copy shape and strides to device
-        (void)hipMemcpyAsync(
-            shape_arr.data<int32_t>(),
-            shape.data(),
-            ndim * sizeof(int32_t),
-            hipMemcpyHostToDevice,
-            stream);
-        (void)hipMemcpyAsync(
-            strides_arr.data<int64_t>(),
-            strides_in.data(),
-            ndim * sizeof(int64_t),
-            hipMemcpyHostToDevice,
-            stream);
+  // Handle same-type copies
+  if (in.dtype() == out.dtype()) {
+    switch (in.dtype()) {
+      case float32: LAUNCH_COPY_G(float, float); return;
+      case float16: LAUNCH_COPY_G(__half, __half); return;
+      case bfloat16: LAUNCH_COPY_G(hip_bfloat16, hip_bfloat16); return;
+      case int32: LAUNCH_COPY_G(int32_t, int32_t); return;
+      case int64: LAUNCH_COPY_G(int64_t, int64_t); return;
+      case uint32: LAUNCH_COPY_G(uint32_t, uint32_t); return;
+      case uint64: LAUNCH_COPY_G(uint64_t, uint64_t); return;
+      case int8: LAUNCH_COPY_G(int8_t, int8_t); return;
+      case uint8: LAUNCH_COPY_G(uint8_t, uint8_t); return;
+      case bool_: LAUNCH_COPY_G(bool, bool); return;
+      case float64: LAUNCH_COPY_G(double, double); return;
+      default: break;
+    }
+  }
 
-        dim3 block(16, 16);
-        dim3 grid((dim0 + block.x - 1) / block.x, (rest + block.y - 1) / block.y);
+  // Handle cross-type copies
+  switch (in.dtype()) {
+    case float32:
+      switch (out.dtype()) {
+        case float16: LAUNCH_COPY_G(float, __half); return;
+        case int32: LAUNCH_COPY_G(float, int32_t); return;
+        case bool_: LAUNCH_COPY_G(float, bool); return;
+        default: break;
+      }
+      break;
+    case float16:
+      switch (out.dtype()) {
+        case float32: LAUNCH_COPY_G(__half, float); return;
+        default: break;
+      }
+      break;
+    case int32:
+      switch (out.dtype()) {
+        case float32: LAUNCH_COPY_G(int32_t, float); return;
+        case int64: LAUNCH_COPY_G(int32_t, int64_t); return;
+        case bool_: LAUNCH_COPY_G(int32_t, bool); return;
+        default: break;
+      }
+      break;
+    case int64:
+      switch (out.dtype()) {
+        case int32: LAUNCH_COPY_G(int64_t, int32_t); return;
+        case float32: LAUNCH_COPY_G(int64_t, float); return;
+        default: break;
+      }
+      break;
+    case bool_:
+      switch (out.dtype()) {
+        case float32: LAUNCH_COPY_G(bool, float); return;
+        case int32: LAUNCH_COPY_G(bool, int32_t); return;
+        default: break;
+      }
+      break;
+    default:
+      break;
+  }
 
-        hipLaunchKernelGGL(
-            (rocm::copy_g_dynamic<InType, OutType, int64_t>),
-            grid, block, 0, stream,
-            reinterpret_cast<const InType*>(in.data<void>()) + offset_in,
-            reinterpret_cast<OutType*>(out.data<void>()) + offset_out,
-            static_cast<int64_t>(rest),
-            shape_arr.data<int32_t>(),
-            strides_arr.data<int64_t>(),
-            ndim);
-      });
-    });
-  });
+  throw std::runtime_error(
+      std::string("Unsupported type conversion in copy_general_input: ") + 
+      dtype_to_string(in.dtype()) + " -> " + dtype_to_string(out.dtype()));
 }
+
+#undef LAUNCH_COPY_G
 
 } // namespace mlx::core

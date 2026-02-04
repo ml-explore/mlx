@@ -2,6 +2,7 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/device/fp16_math.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/dtype_utils.h"
@@ -57,10 +58,11 @@ struct ArgMax {
   }
 };
 
-// Warp reduce for IndexValPair
+// Warp reduce for IndexValPair - uses runtime warp size
 template <typename T, typename Op>
 __device__ IndexValPair<T> warp_reduce_arg(IndexValPair<T> val, Op op) {
-  for (int offset = 32; offset > 0; offset /= 2) {
+  // Use warpSize which is a built-in variable in HIP
+  for (int offset = warpSize / 2; offset > 0; offset /= 2) {
     IndexValPair<T> other;
     other.index = __shfl_xor(val.index, offset);
     other.val = __shfl_xor(val.val, offset);
@@ -72,10 +74,13 @@ __device__ IndexValPair<T> warp_reduce_arg(IndexValPair<T> val, Op op) {
 // Block reduce for IndexValPair
 template <typename T, typename Op, int BLOCK_DIM>
 __device__ IndexValPair<T> block_reduce_arg(IndexValPair<T> val, Op op) {
-  __shared__ IndexValPair<T> shared[BLOCK_DIM / 64 + 1];
+  // Use warpSize built-in for correct behavior on both RDNA (32) and CDNA (64)
+  constexpr int MAX_WARPS = BLOCK_DIM / 32 + 1;  // Conservative estimate
+  __shared__ IndexValPair<T> shared[MAX_WARPS];
   
-  int lane = threadIdx.x % 64;
-  int warp_id = threadIdx.x / 64;
+  int lane = threadIdx.x % warpSize;
+  int warp_id = threadIdx.x / warpSize;
+  int num_warps = (BLOCK_DIM + warpSize - 1) / warpSize;
   
   // Warp-level reduction
   val = warp_reduce_arg(val, op);
@@ -88,7 +93,7 @@ __device__ IndexValPair<T> block_reduce_arg(IndexValPair<T> val, Op op) {
   
   // Final reduction in first warp
   if (warp_id == 0) {
-    val = (lane < (BLOCK_DIM + 63) / 64) ? shared[lane] : IndexValPair<T>{0, op.init()};
+    val = (lane < num_warps) ? shared[lane] : IndexValPair<T>{0, op.init()};
     val = warp_reduce_arg(val, op);
   }
   
