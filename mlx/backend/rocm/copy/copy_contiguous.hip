@@ -98,10 +98,50 @@ void copy_contiguous(
           fprintf(stderr, "copy_contiguous: launching kernel, ctype=%d, in_ptr=%p, out_ptr=%p, size=%zu, stream=%p\n",
                   (int)ctype, (void*)in_ptr, (void*)out_ptr, (size_t)size, (void*)stream);
           
-          // Synchronize before kernel launch to ensure all previous operations are complete
-          hipError_t sync_err = hipStreamSynchronize(stream);
-          if (sync_err != hipSuccess) {
-            fprintf(stderr, "copy_contiguous: stream sync failed: %s\n", hipGetErrorString(sync_err));
+          // For very small copies, use hipMemcpy instead of a kernel
+          if (size <= 16) {
+            hipError_t err;
+            if (ctype == CopyType::Scalar) {
+              // For scalar copy, we need to broadcast the value
+              InType scalar_val;
+              err = hipMemcpyAsync(&scalar_val, in_ptr, sizeof(InType), hipMemcpyDeviceToHost, stream);
+              if (err != hipSuccess) {
+                fprintf(stderr, "copy_contiguous: hipMemcpy (read scalar) failed: %s\n", hipGetErrorString(err));
+                return;
+              }
+              err = hipStreamSynchronize(stream);
+              if (err != hipSuccess) {
+                fprintf(stderr, "copy_contiguous: stream sync failed: %s\n", hipGetErrorString(err));
+                return;
+              }
+              OutType out_val = cast_to<OutType>(scalar_val);
+              for (size_t i = 0; i < size; ++i) {
+                err = hipMemcpyAsync(out_ptr + i, &out_val, sizeof(OutType), hipMemcpyHostToDevice, stream);
+                if (err != hipSuccess) {
+                  fprintf(stderr, "copy_contiguous: hipMemcpy (write) failed: %s\n", hipGetErrorString(err));
+                  return;
+                }
+              }
+            } else {
+              // Vector copy
+              for (size_t i = 0; i < size; ++i) {
+                InType in_val;
+                err = hipMemcpyAsync(&in_val, in_ptr + i, sizeof(InType), hipMemcpyDeviceToHost, stream);
+                if (err != hipSuccess) {
+                  fprintf(stderr, "copy_contiguous: hipMemcpy (read) failed: %s\n", hipGetErrorString(err));
+                  return;
+                }
+                err = hipStreamSynchronize(stream);
+                OutType out_val = cast_to<OutType>(in_val);
+                err = hipMemcpyAsync(out_ptr + i, &out_val, sizeof(OutType), hipMemcpyHostToDevice, stream);
+                if (err != hipSuccess) {
+                  fprintf(stderr, "copy_contiguous: hipMemcpy (write) failed: %s\n", hipGetErrorString(err));
+                  return;
+                }
+              }
+            }
+            fprintf(stderr, "copy_contiguous: small copy completed successfully\n");
+            return;
           }
           
           hipError_t err;
