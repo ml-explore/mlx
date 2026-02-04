@@ -193,8 +193,26 @@ constexpr const char* g_jit_includes = R"(
 #include <hip/hip_runtime.h>
 #include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
-#include <hip/std/array>
-#include <hip/std/limits>
+
+// Simple array type for JIT compilation (hip/std/array not available in hiprtc)
+namespace hip {
+namespace std {
+template <typename T, int N>
+struct array {
+  T data_[N];
+  __device__ T& operator[](int i) { return data_[i]; }
+  __device__ const T& operator[](int i) const { return data_[i]; }
+};
+
+template <typename T>
+struct numeric_limits;
+
+template <>
+struct numeric_limits<float> {
+  __device__ static constexpr float infinity() { return __int_as_float(0x7f800000); }
+};
+} // namespace std
+} // namespace hip
 
 // Include device operations
 namespace mlx::core::rocm {
