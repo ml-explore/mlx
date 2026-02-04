@@ -20,8 +20,10 @@ namespace mlx::core::rocm {
 
 class Device;
 
-// Maximum number of dimensions supported
-constexpr int MAX_NDIM = 8;
+// Maximum number of dimensions supported for JIT kernels
+// Note: device/config.h defines MAX_NDIM as a macro for device code
+// We use a different name here to avoid conflicts
+constexpr int JIT_MAX_NDIM = 8;
 
 using KernelBuilderResult = std::tuple<
     /* precompiled */ bool,
@@ -58,7 +60,7 @@ struct KernelArgs {
   }
 
   // Make sure the arg is copied to an array with size of NDIM.
-  template <size_t NDIM = MAX_NDIM, typename T>
+  template <size_t NDIM = JIT_MAX_NDIM, typename T>
   void append_ndim(SmallVector<T> vec) {
     if (vec.size() > NDIM) {
       std::ostringstream oss;

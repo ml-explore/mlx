@@ -55,43 +55,6 @@ __global__ void copy_gg_dynamic(
 
 } // namespace rocm
 
-// Macro to launch general copy kernel
-#define LAUNCH_COPY_GG(InT, OutT) \
-  do { \
-    encoder.launch_kernel([&](hipStream_t stream) { \
-      (void)hipMemcpyAsync( \
-          shape_arr.data<int32_t>(), \
-          shape.data(), \
-          ndim * sizeof(int32_t), \
-          hipMemcpyHostToDevice, \
-          stream); \
-      (void)hipMemcpyAsync( \
-          strides_in_arr.data<int64_t>(), \
-          strides_in.data(), \
-          ndim * sizeof(int64_t), \
-          hipMemcpyHostToDevice, \
-          stream); \
-      (void)hipMemcpyAsync( \
-          strides_out_arr.data<int64_t>(), \
-          strides_out.data(), \
-          ndim * sizeof(int64_t), \
-          hipMemcpyHostToDevice, \
-          stream); \
-      dim3 block(16, 16); \
-      dim3 grid((dim0 + block.x - 1) / block.x, (rest + block.y - 1) / block.y); \
-      hipLaunchKernelGGL( \
-          (rocm::copy_gg_dynamic<InT, OutT, int64_t>), \
-          grid, block, 0, stream, \
-          reinterpret_cast<const InT*>(in.data<void>()) + offset_in, \
-          reinterpret_cast<OutT*>(out.data<void>()) + offset_out, \
-          static_cast<int64_t>(rest), \
-          shape_arr.data<int32_t>(), \
-          strides_in_arr.data<int64_t>(), \
-          strides_out_arr.data<int64_t>(), \
-          ndim); \
-    }); \
-  } while(0)
-
 void copy_general(
     rocm::CommandEncoder& encoder,
     CopyType ctype,
@@ -127,71 +90,48 @@ void copy_general(
   encoder.add_temporary(strides_in_arr);
   encoder.add_temporary(strides_out_arr);
 
-  // Handle same-type copies
-  if (in.dtype() == out.dtype()) {
-    switch (in.dtype()) {
-      case float32: LAUNCH_COPY_GG(float, float); return;
-      case float16: LAUNCH_COPY_GG(__half, __half); return;
-      case bfloat16: LAUNCH_COPY_GG(hip_bfloat16, hip_bfloat16); return;
-      case int32: LAUNCH_COPY_GG(int32_t, int32_t); return;
-      case int64: LAUNCH_COPY_GG(int64_t, int64_t); return;
-      case uint32: LAUNCH_COPY_GG(uint32_t, uint32_t); return;
-      case uint64: LAUNCH_COPY_GG(uint64_t, uint64_t); return;
-      case int8: LAUNCH_COPY_GG(int8_t, int8_t); return;
-      case uint8: LAUNCH_COPY_GG(uint8_t, uint8_t); return;
-      case bool_: LAUNCH_COPY_GG(bool, bool); return;
-      case float64: LAUNCH_COPY_GG(double, double); return;
-      default: break;
-    }
-  }
+  dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
+    dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
+      using InType = hip_type_t<MLX_GET_TYPE(in_type_tag)>;
+      using OutType = hip_type_t<MLX_GET_TYPE(out_type_tag)>;
+      
+      encoder.launch_kernel([&](hipStream_t stream) {
+        // Copy shape and strides to device
+        (void)hipMemcpyAsync(
+            shape_arr.data<int32_t>(),
+            shape.data(),
+            ndim * sizeof(int32_t),
+            hipMemcpyHostToDevice,
+            stream);
+        (void)hipMemcpyAsync(
+            strides_in_arr.data<int64_t>(),
+            strides_in.data(),
+            ndim * sizeof(int64_t),
+            hipMemcpyHostToDevice,
+            stream);
+        (void)hipMemcpyAsync(
+            strides_out_arr.data<int64_t>(),
+            strides_out.data(),
+            ndim * sizeof(int64_t),
+            hipMemcpyHostToDevice,
+            stream);
 
-  // Handle cross-type copies
-  switch (in.dtype()) {
-    case float32:
-      switch (out.dtype()) {
-        case float16: LAUNCH_COPY_GG(float, __half); return;
-        case int32: LAUNCH_COPY_GG(float, int32_t); return;
-        case bool_: LAUNCH_COPY_GG(float, bool); return;
-        default: break;
-      }
-      break;
-    case float16:
-      switch (out.dtype()) {
-        case float32: LAUNCH_COPY_GG(__half, float); return;
-        default: break;
-      }
-      break;
-    case int32:
-      switch (out.dtype()) {
-        case float32: LAUNCH_COPY_GG(int32_t, float); return;
-        case int64: LAUNCH_COPY_GG(int32_t, int64_t); return;
-        case bool_: LAUNCH_COPY_GG(int32_t, bool); return;
-        default: break;
-      }
-      break;
-    case int64:
-      switch (out.dtype()) {
-        case int32: LAUNCH_COPY_GG(int64_t, int32_t); return;
-        case float32: LAUNCH_COPY_GG(int64_t, float); return;
-        default: break;
-      }
-      break;
-    case bool_:
-      switch (out.dtype()) {
-        case float32: LAUNCH_COPY_GG(bool, float); return;
-        case int32: LAUNCH_COPY_GG(bool, int32_t); return;
-        default: break;
-      }
-      break;
-    default:
-      break;
-  }
+        dim3 block(16, 16);
+        dim3 grid((dim0 + block.x - 1) / block.x, (rest + block.y - 1) / block.y);
 
-  throw std::runtime_error(
-      std::string("Unsupported type conversion in copy_general: ") + 
-      dtype_to_string(in.dtype()) + " -> " + dtype_to_string(out.dtype()));
+        hipLaunchKernelGGL(
+            (rocm::copy_gg_dynamic<InType, OutType, int64_t>),
+            grid, block, 0, stream,
+            reinterpret_cast<const InType*>(in.data<void>()) + offset_in,
+            reinterpret_cast<OutType*>(out.data<void>()) + offset_out,
+            static_cast<int64_t>(rest),
+            shape_arr.data<int32_t>(),
+            strides_in_arr.data<int64_t>(),
+            strides_out_arr.data<int64_t>(),
+            ndim);
+      });
+    });
+  });
 }
-
-#undef LAUNCH_COPY_GG
 
 } // namespace mlx::core
