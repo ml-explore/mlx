@@ -23,7 +23,7 @@ struct And {
   }
 
   __device__ void atomic_update(bool* x, bool y) {
-    atomic_reduce<bool, And>(x, y);
+    atomic_and(x, y);
   }
 };
 
@@ -38,7 +38,7 @@ struct Or {
   }
 
   __device__ void atomic_update(bool* x, bool y) {
-    atomic_reduce<bool, Or>(x, y);
+    atomic_or(x, y);
   }
 };
 
@@ -46,6 +46,11 @@ struct Sum {
   template <typename T>
   __device__ __forceinline__ T operator()(T a, T b) const {
     return a + b;
+  }
+
+  // Specialization for hipFloatComplex
+  __device__ __forceinline__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+    return make_hipFloatComplex(a.x + b.x, a.y + b.y);
   }
 
   template <typename T>
@@ -71,6 +76,11 @@ struct Prod {
   template <typename T>
   __device__ __forceinline__ T operator()(T a, T b) const {
     return a * b;
+  }
+
+  // Specialization for hipFloatComplex (complex multiplication)
+  __device__ __forceinline__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+    return make_hipFloatComplex(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
   }
 
   template <typename T>
@@ -171,10 +181,26 @@ struct ReduceInit<Sum, T> {
   }
 };
 
+// Specialization for hipFloatComplex
+template <>
+struct ReduceInit<Sum, hipFloatComplex> {
+  __device__ static hipFloatComplex value() {
+    return make_hipFloatComplex(0.0f, 0.0f);
+  }
+};
+
 template <typename T>
 struct ReduceInit<Prod, T> {
   __device__ static auto value() {
     return typename ReduceResult<Prod, T>::type(1);
+  }
+};
+
+// Specialization for hipFloatComplex
+template <>
+struct ReduceInit<Prod, hipFloatComplex> {
+  __device__ static hipFloatComplex value() {
+    return make_hipFloatComplex(1.0f, 0.0f);
   }
 };
 

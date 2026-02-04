@@ -109,7 +109,7 @@ inline auto thrust_policy(hipStream_t stream) {
 template <typename F>
 void CommandEncoder::launch_kernel(F&& func) {
   device_.make_current();
-  func(stream_);
+  func(static_cast<hipStream_t>(stream_));
 }
 
 } // namespace mlx::core::rocm

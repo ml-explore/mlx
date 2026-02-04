@@ -2,25 +2,24 @@
 
 #pragma once
 
-#include "mlx/array.h"
 #include "mlx/backend/rocm/device.h"
 
-namespace mlx::core {
+namespace mlx::core::rocm {
+
+bool can_use_gemv(int M, int N, int K, bool a_transposed, bool b_transposed);
 
 void gemv(
-    rocm::CommandEncoder& encoder,
-    bool transpose_a,
+    const array& a,
+    const array& b,
+    array& out,
     int M,
     int N,
-    float alpha,
-    const array& a,
-    int lda,
-    const array& x,
-    float beta,
-    array& y,
-    Dtype dtype);
-
-bool can_use_gemv(int M, int N, int K, bool trans_a, bool trans_b);
+    int K,
+    uint32_t batch_count,
+    const mlx::core::Shape& batch_shape,
+    const mlx::core::Strides& a_batch_strides,
+    const mlx::core::Strides& b_batch_strides,
+    CommandEncoder& encoder);
 
 void gather_mv(
     const array& mat,
@@ -28,8 +27,8 @@ void gather_mv(
     const array& mat_indices,
     const array& vec_indices,
     array& out,
-    int M,
+    int N,
     int K,
-    rocm::CommandEncoder& encoder);
+    CommandEncoder& encoder);
 
-} // namespace mlx::core
+} // namespace mlx::core::rocm

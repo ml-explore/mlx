@@ -17,6 +17,24 @@ namespace mlx::core {
 
 namespace rocm {
 
+// Type-safe shuffle wrappers for __shfl_xor
+template <typename T>
+__device__ __forceinline__ T shfl_xor_safe(T val, int lane_mask) {
+  return __shfl_xor(val, lane_mask);
+}
+
+// Specialization for hip_bfloat16 - __shfl_xor returns float
+template <>
+__device__ __forceinline__ hip_bfloat16 shfl_xor_safe(hip_bfloat16 val, int lane_mask) {
+  return hip_bfloat16(__shfl_xor(static_cast<float>(val), lane_mask));
+}
+
+// Specialization for __half - __shfl_xor returns float
+template <>
+__device__ __forceinline__ __half shfl_xor_safe(__half val, int lane_mask) {
+  return __half(__shfl_xor(__half2float(val), lane_mask));
+}
+
 template <typename T>
 inline __device__ T softmax_exp(T x) {
   // Softmax doesn't need high precision exponential cause x is gonna be in
@@ -35,7 +53,7 @@ template <typename T>
 __device__ T warp_reduce_max(T val) {
 #pragma unroll
   for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
-    T other = __shfl_xor(val, offset);
+    T other = shfl_xor_safe(val, offset);
     val = val > other ? val : other;
   }
   return val;
@@ -46,7 +64,7 @@ template <typename T>
 __device__ T warp_reduce_sum(T val) {
 #pragma unroll
   for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
-    T other = __shfl_xor(val, offset);
+    T other = shfl_xor_safe(val, offset);
     val = val + other;
   }
   return val;

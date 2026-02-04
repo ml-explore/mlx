@@ -359,7 +359,7 @@ void gemm_and_bias(
   }
 
   // Use GEMV when possible
-  if (can_use_gemv(M, N, K, a_transposed, b_transposed)) {
+  if (rocm::can_use_gemv(M, N, K, a_transposed, b_transposed)) {
     rocm::gemv(
         a,
         b,
@@ -560,15 +560,15 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [transposed_a, lda, a_] = check_transpose(encoder, s, a);
   auto [transposed_b, ldb, b_] = check_transpose(encoder, s, b);
   
-  auto use_gemv = can_use_gemv(M, N, K, transposed_a, transposed_b);
+  auto use_gemv = rocm::can_use_gemv(M, N, K, transposed_a, transposed_b);
   
   if (M == 1 && use_gemv) {
-    gather_mv(b_, a_, rhs_indices, lhs_indices, out, N, K, encoder);
+    rocm::gather_mv(b_, a_, rhs_indices, lhs_indices, out, N, K, encoder);
     return;
   }
 
   if (N == 1 && use_gemv) {
-    gather_mv(a_, b_, lhs_indices, rhs_indices, out, M, K, encoder);
+    rocm::gather_mv(a_, b_, lhs_indices, rhs_indices, out, M, K, encoder);
     return;
   }
 

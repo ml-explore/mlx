@@ -205,7 +205,7 @@ void binary_op_gpu_inplace(
     constexpr int N_READS = 4;
     int block_size = 256;
     int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
-    num_blocks = std::min(num_blocks, 65535);
+    num_blocks = std::max(1, std::min(num_blocks, 65535));
     
     encoder.launch_kernel([&](hipStream_t stream) {
       if (bopt == BinaryOpType::ScalarScalar) {

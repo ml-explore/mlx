@@ -169,14 +169,16 @@ if(MLX_BUILD_ROCM)
   # RDNA2: gfx1030 (RX 6000 series)
   # RDNA3: gfx1100 (RX 7900), gfx1101 (RX 7600)
   # RDNA4: gfx1200, gfx1201 (RX 8000 series)
-  if(DEFINED MLX_ROCM_ARCHITECTURES)
-    set(CMAKE_HIP_ARCHITECTURES
-        ${MLX_ROCM_ARCHITECTURES}
-        CACHE STRING "HIP architectures" FORCE)
-  else()
-    set(CMAKE_HIP_ARCHITECTURES
-        "gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101"
-        CACHE STRING "HIP architectures" FORCE)
+  if(NOT DEFINED CMAKE_HIP_ARCHITECTURES)
+    if(DEFINED MLX_ROCM_ARCHITECTURES)
+      set(CMAKE_HIP_ARCHITECTURES
+          ${MLX_ROCM_ARCHITECTURES}
+          CACHE STRING "HIP architectures")
+    else()
+      set(CMAKE_HIP_ARCHITECTURES
+          "gfx908;gfx90a;gfx942;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031;gfx1032;gfx1100;gfx1101;gfx1102"
+          CACHE STRING "HIP architectures")
+    endif()
   endif()
   message(
     STATUS "Setting CMAKE_HIP_ARCHITECTURES to: ${CMAKE_HIP_ARCHITECTURES}")

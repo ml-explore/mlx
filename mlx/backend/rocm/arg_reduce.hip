@@ -22,6 +22,24 @@ struct IndexValPair {
   T val;
 };
 
+// Type-safe shuffle wrappers for __shfl_xor
+template <typename T>
+__device__ __forceinline__ T shfl_xor_arg(T val, int lane_mask) {
+  return __shfl_xor(val, lane_mask);
+}
+
+// Specialization for __half - __shfl_xor returns float
+template <>
+__device__ __forceinline__ __half shfl_xor_arg(__half val, int lane_mask) {
+  return __half(__shfl_xor(__half2float(val), lane_mask));
+}
+
+// Specialization for hip_bfloat16
+template <>
+__device__ __forceinline__ hip_bfloat16 shfl_xor_arg(hip_bfloat16 val, int lane_mask) {
+  return hip_bfloat16(__shfl_xor(static_cast<float>(val), lane_mask));
+}
+
 template <typename T>
 struct ArgMin {
   __device__ T init() const {
@@ -65,7 +83,7 @@ __device__ IndexValPair<T> warp_reduce_arg(IndexValPair<T> val, Op op) {
   for (int offset = warpSize / 2; offset > 0; offset /= 2) {
     IndexValPair<T> other;
     other.index = __shfl_xor(val.index, offset);
-    other.val = __shfl_xor(val.val, offset);
+    other.val = shfl_xor_arg(val.val, offset);
     val = op(val, other);
   }
   return val;
@@ -119,12 +137,14 @@ __global__ void arg_reduce_general(
   // Compute input and output indices
   int64_t in_idx = 0;
   int64_t out_idx = 0;
-  int64_t tmp = index;
-  for (int i = ndim - 1; i >= 0; --i) {
-    int64_t coord = tmp % shape[i];
-    in_idx += coord * in_strides[i];
-    out_idx += coord * out_strides[i];
-    tmp /= shape[i];
+  if (ndim > 0 && shape != nullptr) {
+    int64_t tmp = index;
+    for (int i = ndim - 1; i >= 0; --i) {
+      int64_t coord = tmp % shape[i];
+      in_idx += coord * in_strides[i];
+      out_idx += coord * out_strides[i];
+      tmp /= shape[i];
+    }
   }
   in += in_idx;
 
@@ -155,6 +175,17 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc(out.nbytes()));
   auto& s = stream();
 
+  // Handle scalar case - just output 0
+  if (in.ndim() == 0 || in.size() == 1) {
+    auto& encoder = rocm::get_command_encoder(s);
+    encoder.set_output_array(out);
+    encoder.launch_kernel([&](hipStream_t stream) {
+      uint32_t zero = 0;
+      (void)hipMemcpyAsync(out.data<uint32_t>(), &zero, sizeof(uint32_t), hipMemcpyHostToDevice, stream);
+    });
+    return;
+  }
+
   // Prepare the shapes, strides and axis arguments.
   Shape shape = remove_index(in.shape(), axis_);
   Strides in_strides = remove_index(in.strides(), axis_);
@@ -168,6 +199,71 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = rocm::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
+  
+  // Handle case where output is scalar (reducing entire array along single axis)
+  if (ndim == 0) {
+    // Special case: reducing to scalar
+    constexpr int BLOCK_DIM = 256;
+    
+    encoder.launch_kernel([&](hipStream_t stream) {
+      switch (in.dtype()) {
+        case float32:
+          if (reduce_type_ == ArgReduce::ArgMax) {
+            hipLaunchKernelGGL(
+                (rocm::arg_reduce_general<float, rocm::ArgMax<float>, BLOCK_DIM, 4>),
+                dim3(1), dim3(BLOCK_DIM), 0, stream,
+                in.data<float>(), out.data<uint32_t>(), 1,
+                nullptr, nullptr, nullptr,
+                0, axis_stride, axis_size);
+          } else {
+            hipLaunchKernelGGL(
+                (rocm::arg_reduce_general<float, rocm::ArgMin<float>, BLOCK_DIM, 4>),
+                dim3(1), dim3(BLOCK_DIM), 0, stream,
+                in.data<float>(), out.data<uint32_t>(), 1,
+                nullptr, nullptr, nullptr,
+                0, axis_stride, axis_size);
+          }
+          break;
+        case int32:
+          if (reduce_type_ == ArgReduce::ArgMax) {
+            hipLaunchKernelGGL(
+                (rocm::arg_reduce_general<int32_t, rocm::ArgMax<int32_t>, BLOCK_DIM, 4>),
+                dim3(1), dim3(BLOCK_DIM), 0, stream,
+                in.data<int32_t>(), out.data<uint32_t>(), 1,
+                nullptr, nullptr, nullptr,
+                0, axis_stride, axis_size);
+          } else {
+            hipLaunchKernelGGL(
+                (rocm::arg_reduce_general<int32_t, rocm::ArgMin<int32_t>, BLOCK_DIM, 4>),
+                dim3(1), dim3(BLOCK_DIM), 0, stream,
+                in.data<int32_t>(), out.data<uint32_t>(), 1,
+                nullptr, nullptr, nullptr,
+                0, axis_stride, axis_size);
+          }
+          break;
+        case float16:
+          if (reduce_type_ == ArgReduce::ArgMax) {
+            hipLaunchKernelGGL(
+                (rocm::arg_reduce_general<__half, rocm::ArgMax<__half>, BLOCK_DIM, 4>),
+                dim3(1), dim3(BLOCK_DIM), 0, stream,
+                in.data<__half>(), out.data<uint32_t>(), 1,
+                nullptr, nullptr, nullptr,
+                0, axis_stride, axis_size);
+          } else {
+            hipLaunchKernelGGL(
+                (rocm::arg_reduce_general<__half, rocm::ArgMin<__half>, BLOCK_DIM, 4>),
+                dim3(1), dim3(BLOCK_DIM), 0, stream,
+                in.data<__half>(), out.data<uint32_t>(), 1,
+                nullptr, nullptr, nullptr,
+                0, axis_stride, axis_size);
+          }
+          break;
+        default:
+          throw std::runtime_error("Unsupported type for ArgReduce");
+      }
+    });
+    return;
+  }
   
   // Allocate device memory for shapes and strides
   constexpr int BLOCK_DIM = 256;

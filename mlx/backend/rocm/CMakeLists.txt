@@ -22,7 +22,7 @@ find_package(hiprand REQUIRED CONFIG)
 # RDNA4: gfx1200, gfx1201 (RX 8000 series)
 if(NOT CMAKE_HIP_ARCHITECTURES)
   set(CMAKE_HIP_ARCHITECTURES
-      "gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101"
+      "gfx908;gfx90a;gfx942;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031;gfx1032;gfx1100;gfx1101;gfx1102"
       CACHE STRING "HIP architectures" FORCE)
 endif()
 message(

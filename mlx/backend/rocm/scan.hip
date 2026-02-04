@@ -17,21 +17,6 @@ namespace mlx::core {
 
 namespace rocm {
 
-// LogAddExp operation for scan
-struct LogAddExp {
-  template <typename T>
-  __device__ __forceinline__ T operator()(T a, T b) const {
-    T max_val = a > b ? a : b;
-    T min_val = a > b ? b : a;
-    return max_val + log1p(exp(min_val - max_val));
-  }
-
-  template <typename T>
-  __device__ static T init() {
-    return Limits<T>::min();
-  }
-};
-
 // Scan result type trait - Sum on bool produces int32
 template <typename Op, typename T>
 struct ScanResult {
@@ -125,12 +110,65 @@ store_values(int index, T* out, T (&values)[N_READS], int size) {
   }
 }
 
+// Type-safe shuffle wrappers that handle bfloat16 and half types
+// For most types, __shfl_up returns the same type
+template <typename T>
+__device__ __forceinline__ T shfl_up_safe(T val, unsigned int delta) {
+  return __shfl_up(val, delta);
+}
+
+// Specialization for hip_bfloat16 - __shfl_up returns float
+template <>
+__device__ __forceinline__ hip_bfloat16 shfl_up_safe(hip_bfloat16 val, unsigned int delta) {
+  return hip_bfloat16(__shfl_up(static_cast<float>(val), delta));
+}
+
+// Specialization for __half - __shfl_up returns float
+template <>
+__device__ __forceinline__ __half shfl_up_safe(__half val, unsigned int delta) {
+  return __half(__shfl_up(__half2float(val), delta));
+}
+
+// Specialization for hipFloatComplex (complex type)
+template <>
+__device__ __forceinline__ hipFloatComplex shfl_up_safe(hipFloatComplex val, unsigned int delta) {
+  return make_hipFloatComplex(
+      __shfl_up(val.x, delta),
+      __shfl_up(val.y, delta));
+}
+
+// Type-safe shfl wrapper
+template <typename T>
+__device__ __forceinline__ T shfl_safe(T val, int src_lane) {
+  return __shfl(val, src_lane);
+}
+
+// Specialization for hip_bfloat16
+template <>
+__device__ __forceinline__ hip_bfloat16 shfl_safe(hip_bfloat16 val, int src_lane) {
+  return hip_bfloat16(__shfl(static_cast<float>(val), src_lane));
+}
+
+// Specialization for __half
+template <>
+__device__ __forceinline__ __half shfl_safe(__half val, int src_lane) {
+  return __half(__shfl(__half2float(val), src_lane));
+}
+
+// Specialization for hipFloatComplex (complex type)
+template <>
+__device__ __forceinline__ hipFloatComplex shfl_safe(hipFloatComplex val, int src_lane) {
+  return make_hipFloatComplex(
+      __shfl(val.x, src_lane),
+      __shfl(val.y, src_lane));
+}
+
 // Warp-level inclusive scan using shuffle
 template <typename T, typename Op>
 __device__ T warp_inclusive_scan(T val, Op op) {
 #pragma unroll
   for (int offset = 1; offset < WARP_SIZE; offset *= 2) {
-    T other = __shfl_up(val, offset);
+    T other = shfl_up_safe(val, offset);
     if ((threadIdx.x % WARP_SIZE) >= offset) {
       val = op(val, other);
     }
@@ -142,7 +180,7 @@ __device__ T warp_inclusive_scan(T val, Op op) {
 template <typename T, typename Op>
 __device__ T warp_exclusive_scan(T val, Op op, T init) {
   T inclusive = warp_inclusive_scan(val, op);
-  T exclusive = __shfl_up(inclusive, 1);
+  T exclusive = shfl_up_safe(inclusive, 1);
   return ((threadIdx.x % WARP_SIZE) == 0) ? init : exclusive;
 }
 
@@ -327,7 +365,7 @@ __global__ void strided_scan(
     for (int i = 0; i < n_scans; ++i) {
       values[i] = warp_inclusive_scan(values[i], op);
       values[i] = op(values[i], prefix[i]);
-      prefix[i] = __shfl(values[i], WARP_SIZE - 1);
+      prefix[i] = shfl_safe(values[i], WARP_SIZE - 1);
     }
 
     // Write to shared memory
@@ -426,11 +464,63 @@ constexpr bool supports_scan_op() {
   }
 }
 
+// Dispatch scan types - excludes complex types which don't support warp shuffle
+template <typename F>
+void dispatch_scan_types(Dtype dtype, F&& f) {
+  switch (dtype) {
+    case bool_:
+      f(type_identity<bool>{});
+      break;
+    case uint8:
+      f(type_identity<uint8_t>{});
+      break;
+    case uint16:
+      f(type_identity<uint16_t>{});
+      break;
+    case uint32:
+      f(type_identity<uint32_t>{});
+      break;
+    case uint64:
+      f(type_identity<uint64_t>{});
+      break;
+    case int8:
+      f(type_identity<int8_t>{});
+      break;
+    case int16:
+      f(type_identity<int16_t>{});
+      break;
+    case int32:
+      f(type_identity<int32_t>{});
+      break;
+    case int64:
+      f(type_identity<int64_t>{});
+      break;
+    case float16:
+      f(type_identity<float16_t>{});
+      break;
+    case float32:
+      f(type_identity<float>{});
+      break;
+    case bfloat16:
+      f(type_identity<bfloat16_t>{});
+      break;
+    default:
+      throw std::runtime_error(
+          "Scan operations are not supported for complex types on ROCm.");
+  }
+}
+
 void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto in = inputs[0];
   auto& s = stream();
   auto& encoder = rocm::get_command_encoder(s);
+
+  // Check for complex types early
+  if (in.dtype() == complex64) {
+    throw std::runtime_error(
+        "Scan operations are not supported for complex types on ROCm.");
+  }
 
   if (in.flags().contiguous && in.strides()[axis_] != 0) {
     if (in.is_donatable() && in.itemsize() == out.itemsize()) {
@@ -454,7 +544,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(in);
   encoder.set_output_array(out);
 
-  dispatch_all_types(in.dtype(), [&](auto type_tag) {
+  dispatch_scan_types(in.dtype(), [&](auto type_tag) {
     using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
     dispatch_scan_ops(reduce_type_, [&](auto scan_op_tag) {
       using Op = MLX_GET_TYPE(scan_op_tag);

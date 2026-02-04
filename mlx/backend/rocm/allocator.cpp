@@ -72,7 +72,12 @@ SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nu
   if (managed_memory_supported()) {
     err = hipMallocManaged(&data_, small_pool_size);
     if (err == hipSuccess) {
-      (void)hipMemAdvise(data_, small_pool_size, hipMemAdviseSetReadMostly, 0);
+      // Hint that this memory will be accessed by all devices
+      int device_count = 0;
+      (void)hipGetDeviceCount(&device_count);
+      for (int i = 0; i < device_count; ++i) {
+        (void)hipMemAdvise(data_, small_pool_size, hipMemAdviseSetAccessedBy, i);
+      }
     }
   } else {
     // Use host-pinned memory that's accessible from GPU
@@ -199,6 +204,14 @@ Buffer RocmAllocator::malloc(size_t size) {
       if (managed_memory_supported()) {
         err = hipMallocManaged(&buf->data, size);
         buf->is_managed = true;
+        if (err == hipSuccess) {
+          // Hint that this memory will be accessed by all devices
+          int device_count = 0;
+          (void)hipGetDeviceCount(&device_count);
+          for (int i = 0; i < device_count; ++i) {
+            (void)hipMemAdvise(buf->data, size, hipMemAdviseSetAccessedBy, i);
+          }
+        }
       } else {
         // Use host-pinned memory that's accessible from GPU
         err = hipHostMalloc(&buf->data, size, hipHostMallocDefault);
@@ -319,6 +332,10 @@ void* Buffer::raw_ptr() {
   if (!ptr_) {
     return nullptr;
   }
+  // Synchronize all streams before accessing managed memory from CPU
+  // This ensures all GPU operations have completed
+  // Note: For kernel access, use gpu_ptr() from kernel_utils.hpp instead
+  (void)hipDeviceSynchronize();
   return static_cast<rocm::RocmBuffer*>(ptr_)->data;
 }
 

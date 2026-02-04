@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "mlx/array.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/device/utils.hpp"
 
@@ -19,6 +20,24 @@
 #include <stdexcept>
 
 namespace mlx::core {
+
+// Get GPU pointer from array without synchronization.
+// This should be used when passing pointers to GPU kernels.
+// For CPU access to managed memory, use array::data<T>() which synchronizes.
+template <typename T>
+inline T* gpu_ptr(array& arr) {
+  return reinterpret_cast<T*>(
+      static_cast<char*>(
+          static_cast<rocm::RocmBuffer*>(arr.buffer().ptr())->data) +
+      arr.offset());
+}
+
+// For const array, keep constness in pointer unless it is untyped.
+template <typename T>
+inline std::conditional_t<std::is_same_v<T, void>, void*, const T*> gpu_ptr(
+    const array& arr) {
+  return gpu_ptr<T>(const_cast<array&>(arr));
+}
 
 // Note: WARP_SIZE and MAX_NDIM are defined in device/config.h
 

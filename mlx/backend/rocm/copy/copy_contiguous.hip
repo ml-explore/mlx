@@ -58,6 +58,12 @@ void copy_contiguous(
     int64_t in_offset,
     int64_t out_offset) {
   
+  // Handle empty arrays
+  size_t size = out.data_size();
+  if (size == 0) {
+    return;
+  }
+  
   dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
     dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
       dispatch_bool(out.data_size() > UINT32_MAX, [&](auto large) {
@@ -67,12 +73,11 @@ void copy_contiguous(
         constexpr int N_READS = 4;
         
         int block_size = 256;
-        size_t size = out.data_size();
         int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
-        num_blocks = std::min(num_blocks, 65535);
+        num_blocks = std::max(1, std::min(num_blocks, 65535));
         
-        const InType* in_ptr = reinterpret_cast<const InType*>(in.data<void>()) + in_offset;
-        OutType* out_ptr = reinterpret_cast<OutType*>(out.data<void>()) + out_offset;
+        const InType* in_ptr = gpu_ptr<const InType>(in) + in_offset;
+        OutType* out_ptr = gpu_ptr<OutType>(out) + out_offset;
         
         encoder.launch_kernel([&](hipStream_t stream) {
           if (ctype == CopyType::Scalar) {
