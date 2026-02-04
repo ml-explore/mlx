@@ -287,6 +287,10 @@ __device__ inline hip_bfloat16 tan(hip_bfloat16 x) {
 // exp(z) = exp(x) * (cos(y) + i*sin(y))
 __device__ inline hipFloatComplex exp(hipFloatComplex z) {
   float ex = expf(z.x);
+  // Handle special case: if real part is -inf, result is 0
+  if (isinf(z.x) && z.x < 0) {
+    return make_hipFloatComplex(0.0f, 0.0f);
+  }
   float s, c;
   sincosf(z.y, &s, &c);
   return make_hipFloatComplex(ex * c, ex * s);
