@@ -162,13 +162,20 @@ endif()
 if(MLX_BUILD_ROCM)
   # Set HIP architectures - these will be used by the ROCm backend
   # CMakeLists.txt
+  # 
+  # Supported architectures from ROCm 6.4.0 - 7.2.0 compatibility matrix:
+  # CDNA: gfx908 (MI100), gfx90a (MI200), gfx942 (MI300)
+  # CDNA4: gfx950 (MI400 series)
+  # RDNA2: gfx1030 (RX 6000 series)
+  # RDNA3: gfx1100 (RX 7900), gfx1101 (RX 7600)
+  # RDNA4: gfx1200, gfx1201 (RX 8000 series)
   if(DEFINED MLX_ROCM_ARCHITECTURES)
     set(CMAKE_HIP_ARCHITECTURES
         ${MLX_ROCM_ARCHITECTURES}
         CACHE STRING "HIP architectures" FORCE)
   else()
     set(CMAKE_HIP_ARCHITECTURES
-        "gfx906;gfx908;gfx90a;gfx1030;gfx1100"
+        "gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101"
         CACHE STRING "HIP architectures" FORCE)
   endif()
   message(
