@@ -844,7 +844,7 @@ METAL_FUNC void qmv_impl(
 
   // Adjust positions
   const int in_vec_size_w = in_vec_size * bytes_per_pack / pack_factor;
-  const int in_vec_size_g = in_vec_size / group_size;
+  const int in_vec_size_g = (in_vec_size + group_size - 1) / group_size;
   const int out_row = tid.y * (num_simdgroups * results_per_simdgroup) +
       simd_gid * results_per_simdgroup;
   const int used_out_row = min(out_vec_size - results_per_simdgroup, out_row);
@@ -898,8 +898,8 @@ METAL_FUNC void qmv_impl(
 
         U s = sl[0];
         U b = bl[0];
-        result[row] +=
-            qdot<U, values_per_thread, bits>(wl, x_thread, s, b, sum);
+        result[row] += qdot_safe<U, values_per_thread, bits>(
+            wl, x_thread, s, b, sum, remaining);
       }
     }
 

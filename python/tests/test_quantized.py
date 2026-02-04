@@ -681,6 +681,113 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertEqual(y_q.shape, y_hat.shape)
         self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    def test_small_non_multiples(self):
+        # Test very small K and N dimensions (e.g., [MxK] x [NxK].T = [MxN])
+        # Each tuple is (M, K, N) representing input rows, weight cols, weight rows
+        test_cases = [
+            (1, 8, 3),
+            (2, 8, 10),
+            (1, 16, 5),
+            (4, 24, 7),
+        ]
+
+        # Test different quantization settings (bits, group_size)
+        quantization_settings = [
+            (4, 32),
+            (4, 64),  # Default-like settings
+            (4, 128),
+            (3, 64),
+            (5, 64),
+            (6, 64),
+        ]
+
+        for M, K, N in test_cases:
+            for bits, group_size in quantization_settings:
+                # Test without batch dimension
+                with self.subTest(
+                    M=M, K=K, N=N, batch=None, group_size=group_size, bits=bits
+                ):
+                    w = mx.random.normal(shape=(N, K))
+                    w_q, scales, biases = mx.quantize(
+                        w, group_size=group_size, bits=bits
+                    )
+                    w_hat = mx.dequantize(
+                        w_q, scales, biases, group_size=group_size, bits=bits
+                    )
+
+                    # Test qmv/qmm_t (transpose=True): [MxK] @ [NxK].T = [MxN]
+                    x = mx.random.normal(shape=(M, K))
+                    y_q = mx.quantized_matmul(
+                        x,
+                        w_q,
+                        scales,
+                        biases,
+                        transpose=True,
+                        group_size=group_size,
+                        bits=bits,
+                    )
+                    y_hat = x @ mx.swapaxes(w_hat, -1, -2)
+                    self.assertEqual(y_q.shape, y_hat.shape)
+                    self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+                    # Test qvm/qmm (transpose=False): [MxN] @ [NxK] = [MxK]
+                    x = mx.random.normal(shape=(M, N))
+                    y_q = mx.quantized_matmul(
+                        x,
+                        w_q,
+                        scales,
+                        biases,
+                        transpose=False,
+                        group_size=group_size,
+                        bits=bits,
+                    )
+                    y_hat = x @ w_hat
+                    self.assertEqual(y_q.shape, y_hat.shape)
+                    self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+                # Test with batch dimension
+                for B in [1, 2]:
+                    with self.subTest(
+                        M=M, K=K, N=N, batch=B, group_size=group_size, bits=bits
+                    ):
+                        w = mx.random.normal(shape=(B, N, K))
+                        w_q, scales, biases = mx.quantize(
+                            w, group_size=group_size, bits=bits
+                        )
+                        w_hat = mx.dequantize(
+                            w_q, scales, biases, group_size=group_size, bits=bits
+                        )
+
+                        # Test qmv/qmm_t (transpose=True): [B, MxK] @ [B, NxK].T = [B, MxN]
+                        x = mx.random.normal(shape=(M, K))
+                        y_q = mx.quantized_matmul(
+                            x,
+                            w_q,
+                            scales,
+                            biases,
+                            transpose=True,
+                            group_size=group_size,
+                            bits=bits,
+                        )
+                        y_hat = x @ mx.swapaxes(w_hat, -1, -2)
+                        self.assertEqual(y_q.shape, y_hat.shape)
+                        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+                        # Test qvm/qmm (transpose=False): [B, MxN] @ [B, NxK] = [B, MxK]
+                        x = mx.random.normal(shape=(M, N))
+                        y_q = mx.quantized_matmul(
+                            x,
+                            w_q,
+                            scales,
+                            biases,
+                            transpose=False,
+                            group_size=group_size,
+                            bits=bits,
+                        )
+                        y_hat = x @ w_hat
+                        self.assertEqual(y_q.shape, y_hat.shape)
+                        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
     def test_gather_qmm(self):
         def quantize(w, transpose=True, group_size=None, bits=None, mode="affine"):
             if mode == "affine":
