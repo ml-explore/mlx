@@ -51,6 +51,21 @@ __device__ U warp_reduce(U val, Op op) {
   return val;
 }
 
+// Helper to cast input to accumulator type
+template <typename U, typename T>
+__device__ U cast_to_acc(T val) {
+  if constexpr (std::is_same_v<U, bool>) {
+    // For And/Or operations, convert to bool
+    if constexpr (is_complex_v<T>) {
+      return val.x != 0 || val.y != 0;
+    } else {
+      return static_cast<bool>(val);
+    }
+  } else {
+    return static_cast<U>(val);
+  }
+}
+
 template <typename T, typename U, typename Op, int N = 4>
 __global__ void all_reduce_kernel(
     const T* __restrict__ in,
@@ -71,7 +86,7 @@ __global__ void all_reduce_kernel(
   for (size_t i = start + threadIdx.x * N; i < end; i += blockDim.x * N) {
     #pragma unroll
     for (int j = 0; j < N && (i + j) < end; ++j) {
-      acc = op(acc, static_cast<U>(in[i + j]));
+      acc = op(acc, cast_to_acc<U>(in[i + j]));
     }
   }
   
@@ -133,34 +148,34 @@ struct ReduceResult {
   using type = T;
 };
 
-// Sum on bool produces int32
-template <>
-struct ReduceResult<rocm::Sum, bool> {
-  using type = int32_t;
+// And always produces bool
+template <typename T>
+struct ReduceResult<rocm::And, T> {
+  using type = bool;
 };
 
-// Sum on float16 accumulates in float
-template <>
-struct ReduceResult<rocm::Sum, __half> {
-  using type = float;
+// Or always produces bool
+template <typename T>
+struct ReduceResult<rocm::Or, T> {
+  using type = bool;
 };
 
-// Prod on float16 accumulates in float
-template <>
-struct ReduceResult<rocm::Prod, __half> {
-  using type = float;
+// Sum on small integers produces int32
+template <typename T>
+struct ReduceResult<rocm::Sum, T> {
+  using type = std::conditional_t<
+      (std::is_integral_v<T> && sizeof(T) <= 4),
+      int32_t,
+      T>;
 };
 
-// Sum on bfloat16 accumulates in float
-template <>
-struct ReduceResult<rocm::Sum, hip_bfloat16> {
-  using type = float;
-};
-
-// Prod on bfloat16 accumulates in float
-template <>
-struct ReduceResult<rocm::Prod, hip_bfloat16> {
-  using type = float;
+// Prod on small integers produces int32
+template <typename T>
+struct ReduceResult<rocm::Prod, T> {
+  using type = std::conditional_t<
+      (std::is_integral_v<T> && sizeof(T) <= 4),
+      int32_t,
+      T>;
 };
 
 void all_reduce(
