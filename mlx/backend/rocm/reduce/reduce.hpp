@@ -47,11 +47,21 @@ struct Prod {
 struct Max {
   template <typename T>
   __device__ T operator()(T a, T b) const {
-    // Handle NaN for floating point types
-    if constexpr (std::is_floating_point_v<T>) {
-      if (isnan(a) || isnan(b)) {
-        return numeric_limits<float>::quiet_NaN();
-      }
+    return a > b ? a : b;
+  }
+  
+  // Specialization for float with NaN handling
+  __device__ float operator()(float a, float b) const {
+    if (isnan(a) || isnan(b)) {
+      return numeric_limits<float>::quiet_NaN();
+    }
+    return a > b ? a : b;
+  }
+  
+  // Specialization for double with NaN handling
+  __device__ double operator()(double a, double b) const {
+    if (isnan(a) || isnan(b)) {
+      return numeric_limits<double>::quiet_NaN();
     }
     return a > b ? a : b;
   }
@@ -60,11 +70,21 @@ struct Max {
 struct Min {
   template <typename T>
   __device__ T operator()(T a, T b) const {
-    // Handle NaN for floating point types
-    if constexpr (std::is_floating_point_v<T>) {
-      if (isnan(a) || isnan(b)) {
-        return numeric_limits<float>::quiet_NaN();
-      }
+    return a < b ? a : b;
+  }
+  
+  // Specialization for float with NaN handling
+  __device__ float operator()(float a, float b) const {
+    if (isnan(a) || isnan(b)) {
+      return numeric_limits<float>::quiet_NaN();
+    }
+    return a < b ? a : b;
+  }
+  
+  // Specialization for double with NaN handling
+  __device__ double operator()(double a, double b) const {
+    if (isnan(a) || isnan(b)) {
+      return numeric_limits<double>::quiet_NaN();
     }
     return a < b ? a : b;
   }
