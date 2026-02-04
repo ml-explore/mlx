@@ -11,8 +11,9 @@ find_package(rocthrust REQUIRED CONFIG)
 find_package(rocprim REQUIRED CONFIG)
 find_package(hiprand REQUIRED CONFIG)
 
-# Ensure HIP architectures are set - respect user-provided value
-if(NOT DEFINED CMAKE_HIP_ARCHITECTURES OR CMAKE_HIP_ARCHITECTURES STREQUAL "")
+# Ensure HIP architectures are set - respect user-provided value from command line
+# The user can set this via -DCMAKE_HIP_ARCHITECTURES=gfx1011
+if(NOT CMAKE_HIP_ARCHITECTURES)
   set(CMAKE_HIP_ARCHITECTURES
       "gfx906;gfx908;gfx90a;gfx1030;gfx1100"
       CACHE STRING "HIP architectures" FORCE)
