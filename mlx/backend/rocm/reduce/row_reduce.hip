@@ -5,15 +5,13 @@
 #include "mlx/backend/rocm/reduce/reduce.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/device/fp16_math.hpp"
+#include "mlx/backend/rocm/device/utils.hpp"
 
 #include <hip/hip_runtime.h>
 
 namespace mlx::core {
 
 namespace rocm {
-
-// Use WARP_SIZE from config.h (architecture-dependent)
-constexpr int WARP_SIZE_ROW = WARP_SIZE;
 
 // Helper to handle warp shuffle for different types
 template <typename T>
@@ -62,11 +60,11 @@ __global__ void row_reduce_simple_kernel(
     }
   }
   
-  // Warp-level reduction using helper
-  int lane = threadIdx.x % WARP_SIZE_ROW;
-  int warp_id = threadIdx.x / WARP_SIZE_ROW;
+  // Warp-level reduction using runtime warpSize
+  int lane = threadIdx.x % warpSize;
+  int warp_id = threadIdx.x / warpSize;
   
-  for (int offset = WARP_SIZE_ROW / 2; offset > 0; offset /= 2) {
+  for (int offset = warpSize / 2; offset > 0; offset /= 2) {
     acc = op(acc, warp_shfl_down(acc, offset));
   }
   
@@ -76,10 +74,10 @@ __global__ void row_reduce_simple_kernel(
   __syncthreads();
   
   // Final reduction by first warp
-  int num_warps = (blockDim.x + WARP_SIZE_ROW - 1) / WARP_SIZE_ROW;
+  int num_warps = (blockDim.x + warpSize - 1) / warpSize;
   if (warp_id == 0) {
     acc = (lane < num_warps) ? shared_data[lane] : init;
-    for (int offset = WARP_SIZE_ROW / 2; offset > 0; offset /= 2) {
+    for (int offset = warpSize / 2; offset > 0; offset /= 2) {
       acc = op(acc, warp_shfl_down(acc, offset));
     }
     
@@ -89,18 +87,18 @@ __global__ void row_reduce_simple_kernel(
   }
 }
 
-template <typename T, typename U, typename Op>
+template <typename T, typename U, typename Op, int NDIM>
 __global__ void row_reduce_looped_kernel(
     const T* __restrict__ in,
     U* __restrict__ out,
     size_t out_size,
     int row_size,
-    const int64_t* __restrict__ in_strides,
-    const int* __restrict__ shape,
+    Shape shape,
+    Strides in_strides,
     int ndim,
     size_t non_row_reductions,
-    const int64_t* __restrict__ reduce_strides,
-    const int* __restrict__ reduce_shape,
+    Shape reduce_shape,
+    Strides reduce_strides,
     int reduce_ndim) {
   __shared__ U shared_data[32];
   
@@ -111,40 +109,28 @@ __global__ void row_reduce_looped_kernel(
   if (out_idx >= out_size) return;
   
   // Compute base input offset from output index
-  int64_t base_offset = 0;
-  size_t tmp = out_idx;
-  for (int i = ndim - 1; i >= 0; --i) {
-    int coord = tmp % shape[i];
-    base_offset += coord * in_strides[i];
-    tmp /= shape[i];
-  }
+  int64_t base_offset = elem_to_loc(out_idx, shape.data(), in_strides.data(), ndim);
   
   U acc = init;
   
   // Loop over non-row reductions
+  LoopedElemToLoc<NDIM, (NDIM > 2)> loop(reduce_ndim);
   for (size_t n = 0; n < non_row_reductions; ++n) {
-    // Compute reduction offset
-    int64_t reduce_offset = 0;
-    size_t rtmp = n;
-    for (int i = reduce_ndim - 1; i >= 0; --i) {
-      int coord = rtmp % reduce_shape[i];
-      reduce_offset += coord * reduce_strides[i];
-      rtmp /= reduce_shape[i];
-    }
-    
-    const T* row_in = in + base_offset + reduce_offset;
+    const T* row_in = in + base_offset + loop.location();
     
     // Reduce the row
     for (int i = threadIdx.x; i < row_size; i += blockDim.x) {
       acc = op(acc, static_cast<U>(row_in[i]));
     }
+    
+    loop.next(reduce_shape.data(), reduce_strides.data());
   }
   
   // Warp-level reduction
-  int lane = threadIdx.x % WARP_SIZE_ROW;
-  int warp_id = threadIdx.x / WARP_SIZE_ROW;
+  int lane = threadIdx.x % warpSize;
+  int warp_id = threadIdx.x / warpSize;
   
-  for (int offset = WARP_SIZE_ROW / 2; offset > 0; offset /= 2) {
+  for (int offset = warpSize / 2; offset > 0; offset /= 2) {
     acc = op(acc, warp_shfl_down(acc, offset));
   }
   
@@ -153,10 +139,10 @@ __global__ void row_reduce_looped_kernel(
   }
   __syncthreads();
   
-  int num_warps = (blockDim.x + WARP_SIZE_ROW - 1) / WARP_SIZE_ROW;
+  int num_warps = (blockDim.x + warpSize - 1) / warpSize;
   if (warp_id == 0) {
     acc = (lane < num_warps) ? shared_data[lane] : init;
-    for (int offset = WARP_SIZE_ROW / 2; offset > 0; offset /= 2) {
+    for (int offset = warpSize / 2; offset > 0; offset /= 2) {
       acc = op(acc, warp_shfl_down(acc, offset));
     }
     
@@ -167,6 +153,55 @@ __global__ void row_reduce_looped_kernel(
 }
 
 } // namespace rocm
+
+// Dispatch helper for reduce operations
+template <typename Func>
+void dispatch_reduce_ops_row(Reduce::ReduceType reduce_type, Func&& func) {
+  switch (reduce_type) {
+    case Reduce::Sum:
+      func(std::type_identity<rocm::Sum>{});
+      break;
+    case Reduce::Prod:
+      func(std::type_identity<rocm::Prod>{});
+      break;
+    case Reduce::Max:
+      func(std::type_identity<rocm::Max>{});
+      break;
+    case Reduce::Min:
+      func(std::type_identity<rocm::Min>{});
+      break;
+    case Reduce::And:
+      func(std::type_identity<rocm::And>{});
+      break;
+    case Reduce::Or:
+      func(std::type_identity<rocm::Or>{});
+      break;
+    default:
+      throw std::runtime_error("Unsupported reduce type");
+  }
+}
+
+// Dispatch helper for reduce ndim
+template <typename Func>
+void dispatch_reduce_ndim_row(int ndim, Func&& func) {
+  switch (ndim) {
+    case 1:
+      func(std::integral_constant<int, 1>{});
+      break;
+    case 2:
+      func(std::integral_constant<int, 2>{});
+      break;
+    case 3:
+      func(std::integral_constant<int, 3>{});
+      break;
+    case 4:
+      func(std::integral_constant<int, 4>{});
+      break;
+    default:
+      func(std::integral_constant<int, 5>{});
+      break;
+  }
+}
 
 void row_reduce(
     rocm::CommandEncoder& encoder,
@@ -181,103 +216,69 @@ void row_reduce(
   size_t out_size = out.size();
   
   // Calculate threads based on row size
-  int threads = std::min(256, ((row_size + 3) / 4 + rocm::WARP_SIZE_ROW - 1) / rocm::WARP_SIZE_ROW * rocm::WARP_SIZE_ROW);
-  threads = std::max(threads, rocm::WARP_SIZE_ROW);
+  int threads = std::min(256, ((row_size + 3) / 4 + 32 - 1) / 32 * 32);
+  threads = std::max(threads, 32);
   
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   
   // Simple row reduce for single reduction axis
   if (plan.shape.size() == 1) {
-    encoder.launch_kernel([&](hipStream_t stream) {
-      #define LAUNCH_ROW_REDUCE(T, U, OP) \
-        hipLaunchKernelGGL( \
-            (rocm::row_reduce_simple_kernel<T, U, rocm::OP, 4>), \
-            dim3(out_size), dim3(threads), 0, stream, \
-            in.data<T>(), out.data<U>(), out_size, row_size)
-      
-      switch (in.dtype()) {
-        case float32:
-          switch (reduce_type) {
-            case Reduce::Sum: LAUNCH_ROW_REDUCE(float, float, Sum); break;
-            case Reduce::Prod: LAUNCH_ROW_REDUCE(float, float, Prod); break;
-            case Reduce::Max: LAUNCH_ROW_REDUCE(float, float, Max); break;
-            case Reduce::Min: LAUNCH_ROW_REDUCE(float, float, Min); break;
-            default: break;
-          }
-          break;
-        case float16:
-          switch (reduce_type) {
-            case Reduce::Sum: LAUNCH_ROW_REDUCE(__half, __half, Sum); break;
-            case Reduce::Prod: LAUNCH_ROW_REDUCE(__half, __half, Prod); break;
-            case Reduce::Max: LAUNCH_ROW_REDUCE(__half, __half, Max); break;
-            case Reduce::Min: LAUNCH_ROW_REDUCE(__half, __half, Min); break;
-            default: break;
-          }
-          break;
-        case bfloat16:
-          switch (reduce_type) {
-            case Reduce::Sum: LAUNCH_ROW_REDUCE(hip_bfloat16, hip_bfloat16, Sum); break;
-            case Reduce::Prod: LAUNCH_ROW_REDUCE(hip_bfloat16, hip_bfloat16, Prod); break;
-            case Reduce::Max: LAUNCH_ROW_REDUCE(hip_bfloat16, hip_bfloat16, Max); break;
-            case Reduce::Min: LAUNCH_ROW_REDUCE(hip_bfloat16, hip_bfloat16, Min); break;
-            default: break;
-          }
-          break;
-        case int32:
-          switch (reduce_type) {
-            case Reduce::Sum: LAUNCH_ROW_REDUCE(int32_t, int32_t, Sum); break;
-            case Reduce::Prod: LAUNCH_ROW_REDUCE(int32_t, int32_t, Prod); break;
-            case Reduce::Max: LAUNCH_ROW_REDUCE(int32_t, int32_t, Max); break;
-            case Reduce::Min: LAUNCH_ROW_REDUCE(int32_t, int32_t, Min); break;
-            default: break;
-          }
-          break;
-        case int64:
-          switch (reduce_type) {
-            case Reduce::Sum: LAUNCH_ROW_REDUCE(int64_t, int64_t, Sum); break;
-            case Reduce::Prod: LAUNCH_ROW_REDUCE(int64_t, int64_t, Prod); break;
-            case Reduce::Max: LAUNCH_ROW_REDUCE(int64_t, int64_t, Max); break;
-            case Reduce::Min: LAUNCH_ROW_REDUCE(int64_t, int64_t, Min); break;
-            default: break;
-          }
-          break;
-        case bool_:
-          switch (reduce_type) {
-            case Reduce::And: LAUNCH_ROW_REDUCE(bool, bool, And); break;
-            case Reduce::Or: LAUNCH_ROW_REDUCE(bool, bool, Or); break;
-            default: break;
-          }
-          break;
-        default:
-          throw std::runtime_error("Unsupported type for row_reduce");
-      }
-      #undef LAUNCH_ROW_REDUCE
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      dispatch_reduce_ops_row(reduce_type, [&](auto reduce_type_tag) {
+        using OP = typename decltype(reduce_type_tag)::type;
+        using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
+        using U = typename rocm::ReduceResult<OP, T>::type;
+        
+        encoder.launch_kernel([&](hipStream_t stream) {
+          hipLaunchKernelGGL(
+              (rocm::row_reduce_simple_kernel<T, U, OP, 4>),
+              dim3(out_size), dim3(threads), 0, stream,
+              in.data<T>(), out.data<U>(), out_size, row_size);
+        });
+      });
     });
   } else {
     // Looped row reduce for multiple reduction axes
-    // For now, fall back to simple implementation
-    encoder.launch_kernel([&](hipStream_t stream) {
-      #define LAUNCH_ROW_REDUCE_SIMPLE(T, U, OP) \
-        hipLaunchKernelGGL( \
-            (rocm::row_reduce_simple_kernel<T, U, rocm::OP, 4>), \
-            dim3(out_size), dim3(threads), 0, stream, \
-            in.data<T>(), out.data<U>(), out_size, row_size)
-      
-      switch (in.dtype()) {
-        case float32:
-          switch (reduce_type) {
-            case Reduce::Sum: LAUNCH_ROW_REDUCE_SIMPLE(float, float, Sum); break;
-            case Reduce::Prod: LAUNCH_ROW_REDUCE_SIMPLE(float, float, Prod); break;
-            case Reduce::Max: LAUNCH_ROW_REDUCE_SIMPLE(float, float, Max); break;
-            case Reduce::Min: LAUNCH_ROW_REDUCE_SIMPLE(float, float, Min); break;
-            default: break;
-          }
-          break;
-        default:
-          throw std::runtime_error("Unsupported type for looped row_reduce");
-      }
-      #undef LAUNCH_ROW_REDUCE_SIMPLE
+    // Build shape/strides for non-reduction axes
+    auto [shape_vec, strides_vec] = shapes_without_reduction_axes(in, axes);
+    
+    rocm::Shape shape;
+    rocm::Strides strides;
+    int ndim = shape_vec.size();
+    for (int i = 0; i < ndim && i < MAX_NDIM; i++) {
+      shape[i] = shape_vec[i];
+      strides[i] = strides_vec[i];
+    }
+    
+    // Build reduce shape/strides (excluding last axis which is the row)
+    rocm::Shape reduce_shape;
+    rocm::Strides reduce_strides;
+    int reduce_ndim = plan.shape.size() - 1;
+    size_t non_row_reductions = 1;
+    for (int i = 0; i < reduce_ndim && i < MAX_NDIM; i++) {
+      reduce_shape[i] = plan.shape[i];
+      reduce_strides[i] = plan.strides[i];
+      non_row_reductions *= plan.shape[i];
+    }
+    
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      dispatch_reduce_ops_row(reduce_type, [&](auto reduce_type_tag) {
+        dispatch_reduce_ndim_row(reduce_ndim, [&](auto reduce_ndim_val) {
+          using OP = typename decltype(reduce_type_tag)::type;
+          using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
+          using U = typename rocm::ReduceResult<OP, T>::type;
+          
+          encoder.launch_kernel([&](hipStream_t stream) {
+            hipLaunchKernelGGL(
+                (rocm::row_reduce_looped_kernel<T, U, OP, reduce_ndim_val()>),
+                dim3(out_size), dim3(threads), 0, stream,
+                in.data<T>(), out.data<U>(), out_size, row_size,
+                shape, strides, ndim,
+                non_row_reductions, reduce_shape, reduce_strides, reduce_ndim);
+          });
+        });
+      });
     });
   }
 }
