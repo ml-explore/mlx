@@ -4,6 +4,7 @@
 
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/reduce/reduce.hpp"
+#include "mlx/backend/rocm/reduce/reduce_utils.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/device/utils.hpp"
 
