@@ -159,43 +159,43 @@ template <typename Func>
 void dispatch_reduce_types_row(Dtype dt, Func&& func) {
   switch (dt) {
     case bool_:
-      func(std::type_identity<bool>{});
+      func(type_identity<bool>{});
       break;
     case uint8:
-      func(std::type_identity<uint8_t>{});
+      func(type_identity<uint8_t>{});
       break;
     case uint16:
-      func(std::type_identity<uint16_t>{});
+      func(type_identity<uint16_t>{});
       break;
     case uint32:
-      func(std::type_identity<uint32_t>{});
+      func(type_identity<uint32_t>{});
       break;
     case uint64:
-      func(std::type_identity<uint64_t>{});
+      func(type_identity<uint64_t>{});
       break;
     case int8:
-      func(std::type_identity<int8_t>{});
+      func(type_identity<int8_t>{});
       break;
     case int16:
-      func(std::type_identity<int16_t>{});
+      func(type_identity<int16_t>{});
       break;
     case int32:
-      func(std::type_identity<int32_t>{});
+      func(type_identity<int32_t>{});
       break;
     case int64:
-      func(std::type_identity<int64_t>{});
+      func(type_identity<int64_t>{});
       break;
     case float16:
-      func(std::type_identity<float16_t>{});
+      func(type_identity<float16_t>{});
       break;
     case bfloat16:
-      func(std::type_identity<bfloat16_t>{});
+      func(type_identity<bfloat16_t>{});
       break;
     case float32:
-      func(std::type_identity<float>{});
+      func(type_identity<float>{});
       break;
     case float64:
-      func(std::type_identity<double>{});
+      func(type_identity<double>{});
       break;
     case complex64:
       throw std::runtime_error("Complex types not yet supported for reduce operations on ROCm");
@@ -209,21 +209,21 @@ template <typename T, typename Func>
 void dispatch_reduce_ops_row(Reduce::ReduceType reduce_type, Func&& func) {
   switch (reduce_type) {
     case Reduce::Sum:
-      func(std::type_identity<rocm::Sum>{});
+      func(type_identity<rocm::Sum>{});
       break;
     case Reduce::Prod:
-      func(std::type_identity<rocm::Prod>{});
+      func(type_identity<rocm::Prod>{});
       break;
     case Reduce::Max:
-      func(std::type_identity<rocm::Max>{});
+      func(type_identity<rocm::Max>{});
       break;
     case Reduce::Min:
-      func(std::type_identity<rocm::Min>{});
+      func(type_identity<rocm::Min>{});
       break;
     case Reduce::And:
       // And only works with bool
       if constexpr (std::is_same_v<T, bool>) {
-        func(std::type_identity<rocm::And>{});
+        func(type_identity<rocm::And>{});
       } else {
         throw std::runtime_error("And reduce only supported for bool type");
       }
@@ -231,7 +231,7 @@ void dispatch_reduce_ops_row(Reduce::ReduceType reduce_type, Func&& func) {
     case Reduce::Or:
       // Or only works with bool
       if constexpr (std::is_same_v<T, bool>) {
-        func(std::type_identity<rocm::Or>{});
+        func(type_identity<rocm::Or>{});
       } else {
         throw std::runtime_error("Or reduce only supported for bool type");
       }
