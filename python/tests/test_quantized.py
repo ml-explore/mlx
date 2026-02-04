@@ -161,6 +161,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(w_hat == 0))
 
         # Test nvfp4 quantize/dequantize with tensor-scale global_scale
+        # currently supported only on cpu and cuda
         if not mx.metal.is_available():
             global_scale = w.abs().max().astype(mx.float32)
         else:

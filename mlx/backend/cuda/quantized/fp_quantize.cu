@@ -34,8 +34,11 @@ struct Dequantize {
 namespace cg = cooperative_groups;
 
 template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
-__global__ void
-fp_quantize_dequantize(T* w, T* out, size_t size, float* global_scale = nullptr) {
+__global__ void fp_quantize_dequantize(
+    T* w,
+    T* out,
+    size_t size,
+    float* global_scale = nullptr) {
   const bool use_global_scale = global_scale != nullptr;
   const float scale_enc =
       use_global_scale ? (F8E4M3_MAX * F4E2M1_MAX) / *global_scale : 1.0f;

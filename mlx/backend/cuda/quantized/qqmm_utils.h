@@ -21,6 +21,12 @@ inline std::pair<int, int> get_padded_scale_dims(int num_rows, int num_cols) {
   return {padded_rows, padded_cols};
 }
 
+void swizzle_scales(
+    const array& scales,
+    array& scales_tiled,
+    cu::CommandEncoder& enc,
+    const Stream& s);
+
 inline array pad_and_swizzle_scales(
     const array& scale,
     cu::CommandEncoder& encoder,
@@ -44,15 +50,8 @@ inline array pad_and_swizzle_scales(
   return scale_tiled;
 }
 
-void swizzle_scales(
-    const array& scales,
-    array& scales_tiled,
-    cu::CommandEncoder& enc,
-    const Stream& s);
-
 // Compute alpha = tensor_amax_x * tensor_amax_w / (448 * 6)^2
 // Allocate beta zero on device as well
-
 void compute_qqmm_pointers(
     array& alpha_out,
     array& beta_out,
