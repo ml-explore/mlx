@@ -336,13 +336,6 @@ void binary_op_gpu_inplace(
     case bool_:
       launch_kernel(a.data<bool>(), b.data<bool>(), out.data<bool>(), out.data_size());
       break;
-    case complex64:
-      if (out.dtype() == bool_) {
-        launch_kernel(a.data<hipFloatComplex>(), b.data<hipFloatComplex>(), out.data<bool>(), out.data_size());
-      } else {
-        launch_kernel(a.data<hipFloatComplex>(), b.data<hipFloatComplex>(), out.data<hipFloatComplex>(), out.data_size());
-      }
-      break;
     default:
       throw std::runtime_error(
           std::string("Unsupported type for binary op ") + op);
