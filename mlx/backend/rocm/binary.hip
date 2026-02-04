@@ -146,10 +146,13 @@ constexpr bool supports_binary_op() {
       std::is_same_v<Op, Power> || std::is_same_v<Op, Remainder>) {
     return std::is_same_v<In, Out>;
   }
-  if constexpr (std::is_same_v<Op, Equal> || std::is_same_v<Op, Greater> ||
-      std::is_same_v<Op, GreaterEqual> || std::is_same_v<Op, Less> ||
-      std::is_same_v<Op, LessEqual> || std::is_same_v<Op, NotEqual>) {
+  if constexpr (std::is_same_v<Op, Equal> || std::is_same_v<Op, NotEqual>) {
     return std::is_same_v<Out, bool>;
+  }
+  if constexpr (std::is_same_v<Op, Greater> ||
+      std::is_same_v<Op, GreaterEqual> || std::is_same_v<Op, Less> ||
+      std::is_same_v<Op, LessEqual>) {
+    return std::is_same_v<Out, bool> && !is_complex_v<In>;
   }
   if constexpr (std::is_same_v<Op, LogicalAnd> || std::is_same_v<Op, LogicalOr>) {
     return std::is_same_v<Out, bool> && std::is_same_v<In, bool>;
