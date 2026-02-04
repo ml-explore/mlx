@@ -35,6 +35,11 @@ struct Sum {
   __device__ T operator()(T a, T b) const {
     return a + b;
   }
+  
+  // Specialization for hipFloatComplex
+  __device__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+    return make_hipFloatComplex(a.x + b.x, a.y + b.y);
+  }
 };
 
 struct Prod {
@@ -42,11 +47,33 @@ struct Prod {
   __device__ T operator()(T a, T b) const {
     return a * b;
   }
+  
+  // Specialization for hipFloatComplex (complex multiplication)
+  __device__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+    return make_hipFloatComplex(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+  }
 };
 
 struct Max {
   template <typename T>
   __device__ T operator()(T a, T b) const {
+    // Handle complex types
+    if constexpr (is_complex_v<T>) {
+      // Check for NaN
+      if (isnan(a.x) || isnan(a.y)) {
+        return a;
+      }
+      if (isnan(b.x) || isnan(b.y)) {
+        return b;
+      }
+      // Compare by magnitude (real^2 + imag^2), then by real part
+      float mag_a = a.x * a.x + a.y * a.y;
+      float mag_b = b.x * b.x + b.y * b.y;
+      if (mag_a != mag_b) {
+        return mag_a > mag_b ? a : b;
+      }
+      return a.x > b.x ? a : b;
+    }
     return a > b ? a : b;
   }
   
@@ -70,6 +97,23 @@ struct Max {
 struct Min {
   template <typename T>
   __device__ T operator()(T a, T b) const {
+    // Handle complex types
+    if constexpr (is_complex_v<T>) {
+      // Check for NaN
+      if (isnan(a.x) || isnan(a.y)) {
+        return a;
+      }
+      if (isnan(b.x) || isnan(b.y)) {
+        return b;
+      }
+      // Compare by magnitude (real^2 + imag^2), then by real part
+      float mag_a = a.x * a.x + a.y * a.y;
+      float mag_b = b.x * b.x + b.y * b.y;
+      if (mag_a != mag_b) {
+        return mag_a < mag_b ? a : b;
+      }
+      return a.x < b.x ? a : b;
+    }
     return a < b ? a : b;
   }
   
@@ -150,11 +194,27 @@ struct ReduceInit<Sum, T> {
   }
 };
 
+// Specialization for hipFloatComplex
+template <>
+struct ReduceInit<Sum, hipFloatComplex> {
+  static __device__ hipFloatComplex value() {
+    return make_hipFloatComplex(0.0f, 0.0f);
+  }
+};
+
 template <typename T>
 struct ReduceInit<Prod, T> {
   static __device__ auto value() {
     using ResultT = typename ReduceResult<Prod, T>::type;
     return ResultT(1);
+  }
+};
+
+// Specialization for hipFloatComplex
+template <>
+struct ReduceInit<Prod, hipFloatComplex> {
+  static __device__ hipFloatComplex value() {
+    return make_hipFloatComplex(1.0f, 0.0f);
   }
 };
 
@@ -165,10 +225,26 @@ struct ReduceInit<Max, T> {
   }
 };
 
+// Specialization for hipFloatComplex
+template <>
+struct ReduceInit<Max, hipFloatComplex> {
+  static __device__ hipFloatComplex value() {
+    return make_hipFloatComplex(Limits<float>::min(), Limits<float>::min());
+  }
+};
+
 template <typename T>
 struct ReduceInit<Min, T> {
   static __device__ T value() {
     return Limits<T>::max();
+  }
+};
+
+// Specialization for hipFloatComplex
+template <>
+struct ReduceInit<Min, hipFloatComplex> {
+  static __device__ hipFloatComplex value() {
+    return make_hipFloatComplex(Limits<float>::max(), Limits<float>::max());
   }
 };
 
