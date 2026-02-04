@@ -77,6 +77,15 @@ __global__ void unary_g(
   }
 }
 
+// Helper trait for floating point types (not complex)
+template <typename T>
+constexpr bool is_floating_v = std::is_same_v<T, float> || std::is_same_v<T, double> ||
+    std::is_same_v<T, __half> || std::is_same_v<T, hip_bfloat16>;
+
+// Helper trait for inexact types (floating point + complex)
+template <typename T>
+constexpr bool is_inexact_v = is_floating_v<T> || is_complex_v<T>;
+
 template <typename Op, typename In, typename Out>
 constexpr bool supports_unary_op() {
   if constexpr (std::is_same_v<Op, Abs> || std::is_same_v<Op, Negative> ||
@@ -87,7 +96,7 @@ constexpr bool supports_unary_op() {
       std::is_same_v<Op, ArcTanh> || std::is_same_v<Op, Erf> ||
       std::is_same_v<Op, ErfInv> || std::is_same_v<Op, Expm1> ||
       std::is_same_v<Op, Sigmoid>) {
-    return std::is_same_v<In, Out> && std::is_floating_point_v<In>;
+    return std::is_same_v<In, Out> && is_floating_v<In>;
   }
   if constexpr (std::is_same_v<Op, BitwiseInvert>) {
     return std::is_same_v<In, Out> && std::is_integral_v<In> &&
@@ -108,7 +117,7 @@ constexpr bool supports_unary_op() {
       std::is_same_v<Op, Sqrt> || std::is_same_v<Op, Sin> ||
       std::is_same_v<Op, Sinh> || std::is_same_v<Op, Tan> ||
       std::is_same_v<Op, Tanh>) {
-    return std::is_same_v<In, Out>;
+    return std::is_same_v<In, Out> && is_inexact_v<In>;
   }
   if constexpr (std::is_same_v<Op, Imag> || std::is_same_v<Op, Real>) {
     return is_complex_v<In> && std::is_same_v<Out, float>;
@@ -143,70 +152,37 @@ void unary_op_gpu_inplace(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   
-  // Simple dispatch for common types
-  auto launch_kernel = [&](auto in_ptr, auto out_ptr, auto size) {
-    using InType = std::remove_pointer_t<decltype(in_ptr)>;
-    using OutType = std::remove_pointer_t<decltype(out_ptr)>;
-    
-    constexpr int N_READS = 4;
-    int block_size = 256;
-    int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
-    num_blocks = std::min(num_blocks, 65535);
-    
-    encoder.launch_kernel([&](hipStream_t stream) {
-      if (large) {
-        hipLaunchKernelGGL(
-            (rocm::unary_v<Op, InType, OutType, int64_t, N_READS>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            in_ptr, out_ptr, static_cast<int64_t>(size));
-      } else {
-        hipLaunchKernelGGL(
-            (rocm::unary_v<Op, InType, OutType, uint32_t, N_READS>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            in_ptr, out_ptr, static_cast<uint32_t>(size));
+  // Dispatch based on input and output types
+  dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
+    dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
+      using CTYPE_IN = MLX_GET_TYPE(in_type_tag);
+      using CTYPE_OUT = MLX_GET_TYPE(out_type_tag);
+      using InType = hip_type_t<CTYPE_IN>;
+      using OutType = hip_type_t<CTYPE_OUT>;
+      
+      if constexpr (rocm::supports_unary_op<Op, InType, OutType>()) {
+        constexpr int N_READS = 4;
+        int block_size = 256;
+        auto size = out.data_size();
+        int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
+        num_blocks = std::min(num_blocks, 65535);
+        
+        encoder.launch_kernel([&](hipStream_t stream) {
+          if (large) {
+            hipLaunchKernelGGL(
+                (rocm::unary_v<Op, InType, OutType, int64_t, N_READS>),
+                dim3(num_blocks), dim3(block_size), 0, stream,
+                gpu_ptr<const InType>(in), gpu_ptr<OutType>(out), static_cast<int64_t>(size));
+          } else {
+            hipLaunchKernelGGL(
+                (rocm::unary_v<Op, InType, OutType, uint32_t, N_READS>),
+                dim3(num_blocks), dim3(block_size), 0, stream,
+                gpu_ptr<const InType>(in), gpu_ptr<OutType>(out), static_cast<uint32_t>(size));
+          }
+        });
       }
     });
-  };
-  
-  // Type dispatch
-  switch (in.dtype()) {
-    case float32:
-      launch_kernel(in.data<float>(), out.data<float>(), out.data_size());
-      break;
-    case float16:
-      launch_kernel(in.data<__half>(), out.data<__half>(), out.data_size());
-      break;
-    case bfloat16:
-      launch_kernel(in.data<hip_bfloat16>(), out.data<hip_bfloat16>(), out.data_size());
-      break;
-    case int32:
-      launch_kernel(in.data<int32_t>(), out.data<int32_t>(), out.data_size());
-      break;
-    case int64:
-      launch_kernel(in.data<int64_t>(), out.data<int64_t>(), out.data_size());
-      break;
-    case uint32:
-      launch_kernel(in.data<uint32_t>(), out.data<uint32_t>(), out.data_size());
-      break;
-    case uint64:
-      launch_kernel(in.data<uint64_t>(), out.data<uint64_t>(), out.data_size());
-      break;
-    case int8:
-      launch_kernel(in.data<int8_t>(), out.data<int8_t>(), out.data_size());
-      break;
-    case uint8:
-      launch_kernel(in.data<uint8_t>(), out.data<uint8_t>(), out.data_size());
-      break;
-    case bool_:
-      launch_kernel(in.data<bool>(), out.data<bool>(), out.data_size());
-      break;
-    case complex64:
-      launch_kernel(in.data<hipFloatComplex>(), out.data<hipFloatComplex>(), out.data_size());
-      break;
-    default:
-      throw std::runtime_error(
-          std::string("Unsupported type for unary op ") + op);
-  }
+  });
 }
 
 template <typename Op>
