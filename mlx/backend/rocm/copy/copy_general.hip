@@ -132,83 +132,47 @@ void copy_general(
   encoder.add_temporary(strides_in_arr);
   encoder.add_temporary(strides_out_arr);
 
-  encoder.launch_kernel([&](hipStream_t stream) {
-    // Copy shape and strides to device
-    (void)hipMemcpyAsync(
-        shape_arr.data<int32_t>(),
-        shape.data(),
-        ndim * sizeof(int32_t),
-        hipMemcpyHostToDevice,
-        stream);
-    (void)hipMemcpyAsync(
-        strides_in_arr.data<int64_t>(),
-        strides_in.data(),
-        ndim * sizeof(int64_t),
-        hipMemcpyHostToDevice,
-        stream);
-    (void)hipMemcpyAsync(
-        strides_out_arr.data<int64_t>(),
-        strides_out.data(),
-        ndim * sizeof(int64_t),
-        hipMemcpyHostToDevice,
-        stream);
+  dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
+    dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
+      using InType = hip_type_t<MLX_GET_TYPE(in_type_tag)>;
+      using OutType = hip_type_t<MLX_GET_TYPE(out_type_tag)>;
+      
+      encoder.launch_kernel([&](hipStream_t stream) {
+        // Copy shape and strides to device
+        (void)hipMemcpyAsync(
+            shape_arr.data<int32_t>(),
+            shape.data(),
+            ndim * sizeof(int32_t),
+            hipMemcpyHostToDevice,
+            stream);
+        (void)hipMemcpyAsync(
+            strides_in_arr.data<int64_t>(),
+            strides_in.data(),
+            ndim * sizeof(int64_t),
+            hipMemcpyHostToDevice,
+            stream);
+        (void)hipMemcpyAsync(
+            strides_out_arr.data<int64_t>(),
+            strides_out.data(),
+            ndim * sizeof(int64_t),
+            hipMemcpyHostToDevice,
+            stream);
 
-    dim3 block(16, 16);
-    dim3 grid((dim0 + block.x - 1) / block.x, (rest + block.y - 1) / block.y);
+        dim3 block(16, 16);
+        dim3 grid((dim0 + block.x - 1) / block.x, (rest + block.y - 1) / block.y);
 
-    #define LAUNCH_COPY_GG(InT, OutT) \
-      hipLaunchKernelGGL( \
-          (rocm::copy_gg_dynamic<InT, OutT, int64_t>), \
-          grid, block, 0, stream, \
-          in.data<InT>() + offset_in, \
-          out.data<OutT>() + offset_out, \
-          static_cast<int64_t>(rest), \
-          shape_arr.data<int32_t>(), \
-          strides_in_arr.data<int64_t>(), \
-          strides_out_arr.data<int64_t>(), \
-          ndim)
-
-    switch (in.dtype()) {
-      case float32:
-        switch (out.dtype()) {
-          case float32: LAUNCH_COPY_GG(float, float); break;
-          case float16: LAUNCH_COPY_GG(float, __half); break;
-          case int32: LAUNCH_COPY_GG(float, int32_t); break;
-          default: throw std::runtime_error("Unsupported output type for copy_general");
-        }
-        break;
-      case float16:
-        switch (out.dtype()) {
-          case float32: LAUNCH_COPY_GG(__half, float); break;
-          case float16: LAUNCH_COPY_GG(__half, __half); break;
-          default: throw std::runtime_error("Unsupported output type for copy_general");
-        }
-        break;
-      case int32:
-        switch (out.dtype()) {
-          case float32: LAUNCH_COPY_GG(int32_t, float); break;
-          case int32: LAUNCH_COPY_GG(int32_t, int32_t); break;
-          case int64: LAUNCH_COPY_GG(int32_t, int64_t); break;
-          default: throw std::runtime_error("Unsupported output type for copy_general");
-        }
-        break;
-      case int64:
-        switch (out.dtype()) {
-          case int64: LAUNCH_COPY_GG(int64_t, int64_t); break;
-          case int32: LAUNCH_COPY_GG(int64_t, int32_t); break;
-          default: throw std::runtime_error("Unsupported output type for copy_general");
-        }
-        break;
-      case bool_:
-        switch (out.dtype()) {
-          case bool_: LAUNCH_COPY_GG(bool, bool); break;
-          default: throw std::runtime_error("Unsupported output type for copy_general");
-        }
-        break;
-      default:
-        throw std::runtime_error("Unsupported input type for copy_general");
-    }
-    #undef LAUNCH_COPY_GG
+        hipLaunchKernelGGL(
+            (rocm::copy_gg_dynamic<InType, OutType, int64_t>),
+            grid, block, 0, stream,
+            reinterpret_cast<const InType*>(in.data<void>()) + offset_in,
+            reinterpret_cast<OutType*>(out.data<void>()) + offset_out,
+            static_cast<int64_t>(rest),
+            shape_arr.data<int32_t>(),
+            strides_in_arr.data<int64_t>(),
+            strides_out_arr.data<int64_t>(),
+            ndim);
+      });
+    });
   });
 }
 
