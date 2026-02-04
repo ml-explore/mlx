@@ -5,6 +5,8 @@
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/primitives.h"
 
+#include <hip/hip_bfloat16.h>
+#include <hip/hip_fp16.h>
 #include <hip/hip_runtime.h>
 
 namespace mlx::core {
@@ -32,6 +34,18 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
             rocm::arange_kernel<double>,
             dim3(num_blocks), dim3(block_size), 0, stream,
             out.data<double>(), start_, step_, size);
+        break;
+      case float16:
+        hipLaunchKernelGGL(
+            rocm::arange_kernel<__half>,
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            out.data<__half>(), __float2half(static_cast<float>(start_)), __float2half(static_cast<float>(step_)), size);
+        break;
+      case bfloat16:
+        hipLaunchKernelGGL(
+            rocm::arange_kernel<hip_bfloat16>,
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            out.data<hip_bfloat16>(), hip_bfloat16(static_cast<float>(start_)), hip_bfloat16(static_cast<float>(step_)), size);
         break;
       case int32:
         hipLaunchKernelGGL(
