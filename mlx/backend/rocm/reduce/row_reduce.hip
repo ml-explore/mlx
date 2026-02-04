@@ -154,6 +154,56 @@ __global__ void row_reduce_looped_kernel(
 
 } // namespace rocm
 
+// Dispatch for reduce types - excludes complex64 which doesn't support most reduce ops
+template <typename Func>
+void dispatch_reduce_types_row(Dtype dt, Func&& func) {
+  switch (dt) {
+    case bool_:
+      func(std::type_identity<bool>{});
+      break;
+    case uint8:
+      func(std::type_identity<uint8_t>{});
+      break;
+    case uint16:
+      func(std::type_identity<uint16_t>{});
+      break;
+    case uint32:
+      func(std::type_identity<uint32_t>{});
+      break;
+    case uint64:
+      func(std::type_identity<uint64_t>{});
+      break;
+    case int8:
+      func(std::type_identity<int8_t>{});
+      break;
+    case int16:
+      func(std::type_identity<int16_t>{});
+      break;
+    case int32:
+      func(std::type_identity<int32_t>{});
+      break;
+    case int64:
+      func(std::type_identity<int64_t>{});
+      break;
+    case float16:
+      func(std::type_identity<float16_t>{});
+      break;
+    case bfloat16:
+      func(std::type_identity<bfloat16_t>{});
+      break;
+    case float32:
+      func(std::type_identity<float>{});
+      break;
+    case float64:
+      func(std::type_identity<double>{});
+      break;
+    case complex64:
+      throw std::runtime_error("Complex types not yet supported for reduce operations on ROCm");
+    default:
+      throw std::runtime_error("Unsupported dtype for reduce");
+  }
+}
+
 // Dispatch helper for reduce operations
 template <typename T, typename Func>
 void dispatch_reduce_ops_row(Reduce::ReduceType reduce_type, Func&& func) {
@@ -234,8 +284,8 @@ void row_reduce(
   
   // Simple row reduce for single reduction axis
   if (plan.shape.size() == 1) {
-    dispatch_all_types(in.dtype(), [&](auto type_tag) {
-      using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
+    dispatch_reduce_types_row(in.dtype(), [&](auto type_tag) {
+      using T = hip_type_t<typename decltype(type_tag)::type>;
       dispatch_reduce_ops_row<T>(reduce_type, [&](auto reduce_type_tag) {
         using OP = typename decltype(reduce_type_tag)::type;
         using U = typename rocm::ReduceResult<OP, T>::type;
@@ -272,8 +322,8 @@ void row_reduce(
       non_row_reductions *= plan.shape[i];
     }
     
-    dispatch_all_types(in.dtype(), [&](auto type_tag) {
-      using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
+    dispatch_reduce_types_row(in.dtype(), [&](auto type_tag) {
+      using T = hip_type_t<typename decltype(type_tag)::type>;
       dispatch_reduce_ops_row<T>(reduce_type, [&](auto reduce_type_tag) {
         dispatch_reduce_ndim_row(reduce_ndim, [&](auto reduce_ndim_val) {
           using OP = typename decltype(reduce_type_tag)::type;

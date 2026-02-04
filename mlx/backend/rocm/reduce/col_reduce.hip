@@ -277,6 +277,56 @@ inline auto output_grid_for_col_reduce(
   return dim3(gx, gy, 1);
 }
 
+// Dispatch for reduce types - excludes complex64 which doesn't support most reduce ops
+template <typename Func>
+void dispatch_reduce_types(Dtype dt, Func&& func) {
+  switch (dt) {
+    case bool_:
+      func(std::type_identity<bool>{});
+      break;
+    case uint8:
+      func(std::type_identity<uint8_t>{});
+      break;
+    case uint16:
+      func(std::type_identity<uint16_t>{});
+      break;
+    case uint32:
+      func(std::type_identity<uint32_t>{});
+      break;
+    case uint64:
+      func(std::type_identity<uint64_t>{});
+      break;
+    case int8:
+      func(std::type_identity<int8_t>{});
+      break;
+    case int16:
+      func(std::type_identity<int16_t>{});
+      break;
+    case int32:
+      func(std::type_identity<int32_t>{});
+      break;
+    case int64:
+      func(std::type_identity<int64_t>{});
+      break;
+    case float16:
+      func(std::type_identity<float16_t>{});
+      break;
+    case bfloat16:
+      func(std::type_identity<bfloat16_t>{});
+      break;
+    case float32:
+      func(std::type_identity<float>{});
+      break;
+    case float64:
+      func(std::type_identity<double>{});
+      break;
+    case complex64:
+      throw std::runtime_error("Complex types not yet supported for reduce operations on ROCm");
+    default:
+      throw std::runtime_error("Unsupported dtype for reduce");
+  }
+}
+
 // Dispatch helper for reduce operations
 template <typename T, typename Func>
 void dispatch_reduce_ops(Reduce::ReduceType reduce_type, Func&& func) {
@@ -350,8 +400,8 @@ void col_reduce_looped(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   
-  dispatch_all_types(in.dtype(), [&](auto type_tag) {
-    using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
+  dispatch_reduce_types(in.dtype(), [&](auto type_tag) {
+    using T = hip_type_t<typename decltype(type_tag)::type>;
     dispatch_reduce_ops<T>(reduce_type, [&](auto reduce_type_tag) {
       dispatch_reduce_ndim(args.reduce_ndim, [&](auto reduce_ndim) {
         using OP = typename decltype(reduce_type_tag)::type;
@@ -391,8 +441,8 @@ void col_reduce_small(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   
-  dispatch_all_types(in.dtype(), [&](auto type_tag) {
-    using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
+  dispatch_reduce_types(in.dtype(), [&](auto type_tag) {
+    using T = hip_type_t<typename decltype(type_tag)::type>;
     dispatch_reduce_ops<T>(reduce_type, [&](auto reduce_type_tag) {
       using OP = typename decltype(reduce_type_tag)::type;
       using U = typename rocm::ReduceResult<OP, T>::type;
