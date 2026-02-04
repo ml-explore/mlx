@@ -86,11 +86,11 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
     // For nvfp4, get global scale for x from inputs if present
-    bool has_global_scales_m1 =
+    bool has_global_scale =
         mode_ == QuantizationMode::Nvfp4 && inputs.size() > base_size;
-    std::optional<array> global_scale_x_m1 = std::nullopt;
-    if (has_global_scales_m1) {
-      global_scale_x_m1 = inputs[inputs.size() - 2];
+    std::optional<array> global_scale = std::nullopt;
+    if (has_global_scale) {
+      global_scale = inputs[inputs.size() - 2];
     }
 
     bool donate_x = inputs[0].is_donatable();
@@ -104,7 +104,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       encoder.add_temporary(xhat);
     }
     fp_quantize_dequantize(
-        x, xhat, group_size_, bits_, global_scale_x_m1, encoder, s);
+        x, xhat, group_size_, bits_, global_scale, encoder, s);
 
     // Make sure the last two dims of w and s are contiguous
     array w = ensure_row_contiguous_matrix(inputs[1], encoder, s);
