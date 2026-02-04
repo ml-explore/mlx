@@ -143,38 +143,32 @@ constexpr bool supports_binary_op() {
   if constexpr (std::is_same_v<Op, Add> || std::is_same_v<Op, Divide> ||
       std::is_same_v<Op, Maximum> || std::is_same_v<Op, Minimum> ||
       std::is_same_v<Op, Multiply> || std::is_same_v<Op, Subtract> ||
-      std::is_same_v<Op, Power> || std::is_same_v<Op, Remainder>) {
+      std::is_same_v<Op, Power> || std::is_same_v<Op, Remainder> ||
+      std::is_same_v<Op, FloorDivide>) {
     return std::is_same_v<In, Out>;
-  }
-  if constexpr (std::is_same_v<Op, Equal> || std::is_same_v<Op, NotEqual>) {
+  } else if constexpr (std::is_same_v<Op, Equal> || std::is_same_v<Op, NotEqual>) {
     return std::is_same_v<Out, bool>;
-  }
-  if constexpr (std::is_same_v<Op, Greater> ||
+  } else if constexpr (std::is_same_v<Op, Greater> ||
       std::is_same_v<Op, GreaterEqual> || std::is_same_v<Op, Less> ||
       std::is_same_v<Op, LessEqual>) {
     return std::is_same_v<Out, bool> && !is_complex_v<In>;
-  }
-  if constexpr (std::is_same_v<Op, LogicalAnd> || std::is_same_v<Op, LogicalOr>) {
+  } else if constexpr (std::is_same_v<Op, LogicalAnd> || std::is_same_v<Op, LogicalOr>) {
     return std::is_same_v<Out, bool> && std::is_same_v<In, bool>;
-  }
-  if constexpr (std::is_same_v<Op, NaNEqual>) {
+  } else if constexpr (std::is_same_v<Op, NaNEqual>) {
     return std::is_same_v<Out, bool>;
-  }
-  if constexpr (std::is_same_v<Op, LogAddExp>) {
+  } else if constexpr (std::is_same_v<Op, LogAddExp>) {
     return std::is_same_v<In, Out>;
-  }
-  if constexpr (std::is_same_v<Op, ArcTan2>) {
+  } else if constexpr (std::is_same_v<Op, ArcTan2>) {
     return std::is_same_v<In, Out> && std::is_floating_point_v<In>;
-  }
-  if constexpr (std::is_same_v<Op, BitwiseAnd> || std::is_same_v<Op, BitwiseOr> ||
+  } else if constexpr (std::is_same_v<Op, BitwiseAnd> || std::is_same_v<Op, BitwiseOr> ||
       std::is_same_v<Op, BitwiseXor>) {
     return std::is_same_v<In, Out> && std::is_integral_v<In>;
-  }
-  if constexpr (std::is_same_v<Op, LeftShift> || std::is_same_v<Op, RightShift>) {
+  } else if constexpr (std::is_same_v<Op, LeftShift> || std::is_same_v<Op, RightShift>) {
     return std::is_same_v<In, Out> && std::is_integral_v<In> &&
         !std::is_same_v<In, bool>;
+  } else {
+    return false;
   }
-  return false;
 }
 
 } // namespace rocm
