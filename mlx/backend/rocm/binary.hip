@@ -199,67 +199,62 @@ void binary_op_gpu_inplace(
     using InType = std::remove_pointer_t<decltype(a_ptr)>;
     using OutType = std::remove_pointer_t<decltype(out_ptr)>;
     
-    if constexpr (!rocm::supports_binary_op<Op, InType, OutType>()) {
-      throw std::runtime_error(
-          std::string("Unsupported type for binary op ") + op);
-    } else {
-      constexpr int N_READS = 4;
-      int block_size = 256;
-      int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
-      num_blocks = std::max(1, std::min(num_blocks, 65535));
-      
-      encoder.launch_kernel([&](hipStream_t stream) {
-        if (bopt == BinaryOpType::ScalarScalar) {
-          if (large) {
-            hipLaunchKernelGGL(
-                (rocm::binary_ss<Op, InType, OutType, int64_t, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
-          } else {
-            hipLaunchKernelGGL(
-                (rocm::binary_ss<Op, InType, OutType, uint32_t, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
-          }
-        } else if (bopt == BinaryOpType::ScalarVector) {
-          if (large) {
-            hipLaunchKernelGGL(
-                (rocm::binary_sv<Op, InType, OutType, int64_t, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
-          } else {
-            hipLaunchKernelGGL(
-                (rocm::binary_sv<Op, InType, OutType, uint32_t, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
-          }
-        } else if (bopt == BinaryOpType::VectorScalar) {
-          if (large) {
-            hipLaunchKernelGGL(
-                (rocm::binary_vs<Op, InType, OutType, int64_t, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
-          } else {
-            hipLaunchKernelGGL(
-                (rocm::binary_vs<Op, InType, OutType, uint32_t, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
-          }
+    constexpr int N_READS = 4;
+    int block_size = 256;
+    int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
+    num_blocks = std::max(1, std::min(num_blocks, 65535));
+    
+    encoder.launch_kernel([&](hipStream_t stream) {
+      if (bopt == BinaryOpType::ScalarScalar) {
+        if (large) {
+          hipLaunchKernelGGL(
+              (rocm::binary_ss<Op, InType, OutType, int64_t, N_READS>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
         } else {
-          if (large) {
-            hipLaunchKernelGGL(
-                (rocm::binary_vv<Op, InType, OutType, int64_t, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
-          } else {
-            hipLaunchKernelGGL(
-                (rocm::binary_vv<Op, InType, OutType, uint32_t, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
-          }
+          hipLaunchKernelGGL(
+              (rocm::binary_ss<Op, InType, OutType, uint32_t, N_READS>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
         }
-      });
-    }
+      } else if (bopt == BinaryOpType::ScalarVector) {
+        if (large) {
+          hipLaunchKernelGGL(
+              (rocm::binary_sv<Op, InType, OutType, int64_t, N_READS>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
+        } else {
+          hipLaunchKernelGGL(
+              (rocm::binary_sv<Op, InType, OutType, uint32_t, N_READS>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
+        }
+      } else if (bopt == BinaryOpType::VectorScalar) {
+        if (large) {
+          hipLaunchKernelGGL(
+              (rocm::binary_vs<Op, InType, OutType, int64_t, N_READS>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
+        } else {
+          hipLaunchKernelGGL(
+              (rocm::binary_vs<Op, InType, OutType, uint32_t, N_READS>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
+        }
+      } else {
+        if (large) {
+          hipLaunchKernelGGL(
+              (rocm::binary_vv<Op, InType, OutType, int64_t, N_READS>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
+        } else {
+          hipLaunchKernelGGL(
+              (rocm::binary_vv<Op, InType, OutType, uint32_t, N_READS>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
+        }
+      }
+    });
   };
   
   // Type dispatch
