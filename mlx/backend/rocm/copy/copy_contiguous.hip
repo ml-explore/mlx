@@ -64,21 +64,6 @@ void copy_contiguous(
     return;
   }
   
-  // Debug: Check if buffers are valid
-  auto* in_buf = static_cast<const rocm::RocmBuffer*>(in.buffer().ptr());
-  auto* out_buf = static_cast<rocm::RocmBuffer*>(out.buffer().ptr());
-  
-  if (!in_buf || !in_buf->data) {
-    fprintf(stderr, "copy_contiguous: input buffer is null! in_buf=%p, in_buf->data=%p\n",
-            (void*)in_buf, in_buf ? in_buf->data : nullptr);
-    return;
-  }
-  if (!out_buf || !out_buf->data) {
-    fprintf(stderr, "copy_contiguous: output buffer is null! out_buf=%p, out_buf->data=%p\n",
-            (void*)out_buf, out_buf ? out_buf->data : nullptr);
-    return;
-  }
-  
   dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
     dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
       dispatch_bool(out.data_size() > UINT32_MAX, [&](auto large) {
@@ -95,10 +80,6 @@ void copy_contiguous(
         OutType* out_ptr = gpu_ptr<OutType>(out) + out_offset;
         
         encoder.launch_kernel([&](hipStream_t stream) {
-          fprintf(stderr, "copy_contiguous: launching kernel, ctype=%d, in_ptr=%p, out_ptr=%p, size=%zu, stream=%p\n",
-                  (int)ctype, (void*)in_ptr, (void*)out_ptr, (size_t)size, (void*)stream);
-          
-          hipError_t err;
           if (ctype == CopyType::Scalar) {
             hipLaunchKernelGGL(
                 (rocm::copy_s<InType, OutType, IdxT, N_READS>),
@@ -110,11 +91,6 @@ void copy_contiguous(
                 dim3(num_blocks), dim3(block_size), 0, stream,
                 in_ptr, out_ptr, static_cast<IdxT>(size));
           }
-          err = hipGetLastError();
-          if (err != hipSuccess) {
-            fprintf(stderr, "copy_contiguous: kernel launch failed: %s\n", hipGetErrorString(err));
-          }
-          fprintf(stderr, "copy_contiguous: kernel launched successfully\n");
         });
       });
     });
