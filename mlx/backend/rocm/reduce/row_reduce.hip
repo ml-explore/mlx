@@ -155,7 +155,7 @@ __global__ void row_reduce_looped_kernel(
 } // namespace rocm
 
 // Dispatch helper for reduce operations
-template <typename Func>
+template <typename T, typename Func>
 void dispatch_reduce_ops_row(Reduce::ReduceType reduce_type, Func&& func) {
   switch (reduce_type) {
     case Reduce::Sum:
@@ -171,10 +171,20 @@ void dispatch_reduce_ops_row(Reduce::ReduceType reduce_type, Func&& func) {
       func(std::type_identity<rocm::Min>{});
       break;
     case Reduce::And:
-      func(std::type_identity<rocm::And>{});
+      // And only works with bool
+      if constexpr (std::is_same_v<T, bool>) {
+        func(std::type_identity<rocm::And>{});
+      } else {
+        throw std::runtime_error("And reduce only supported for bool type");
+      }
       break;
     case Reduce::Or:
-      func(std::type_identity<rocm::Or>{});
+      // Or only works with bool
+      if constexpr (std::is_same_v<T, bool>) {
+        func(std::type_identity<rocm::Or>{});
+      } else {
+        throw std::runtime_error("Or reduce only supported for bool type");
+      }
       break;
     default:
       throw std::runtime_error("Unsupported reduce type");
@@ -225,9 +235,9 @@ void row_reduce(
   // Simple row reduce for single reduction axis
   if (plan.shape.size() == 1) {
     dispatch_all_types(in.dtype(), [&](auto type_tag) {
-      dispatch_reduce_ops_row(reduce_type, [&](auto reduce_type_tag) {
+      using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
+      dispatch_reduce_ops_row<T>(reduce_type, [&](auto reduce_type_tag) {
         using OP = typename decltype(reduce_type_tag)::type;
-        using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
         using U = typename rocm::ReduceResult<OP, T>::type;
         
         encoder.launch_kernel([&](hipStream_t stream) {
@@ -263,10 +273,10 @@ void row_reduce(
     }
     
     dispatch_all_types(in.dtype(), [&](auto type_tag) {
-      dispatch_reduce_ops_row(reduce_type, [&](auto reduce_type_tag) {
+      using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
+      dispatch_reduce_ops_row<T>(reduce_type, [&](auto reduce_type_tag) {
         dispatch_reduce_ndim_row(reduce_ndim, [&](auto reduce_ndim_val) {
           using OP = typename decltype(reduce_type_tag)::type;
-          using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
           using U = typename rocm::ReduceResult<OP, T>::type;
           
           encoder.launch_kernel([&](hipStream_t stream) {

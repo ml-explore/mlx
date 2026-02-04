@@ -5,6 +5,7 @@
 #include "mlx/backend/common/reduce.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
+#include "mlx/backend/rocm/device/utils.hpp"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
@@ -15,25 +16,17 @@ namespace mlx::core {
 namespace rocm {
 
 // Reduce operations for ROCm
+
+// And and Or only work with bool
 struct And {
-  template <typename T>
-  __device__ T operator()(T a, T b) const {
+  __device__ bool operator()(bool a, bool b) const {
     return a && b;
-  }
-  template <typename T>
-  __device__ static constexpr T init() {
-    return true;
   }
 };
 
 struct Or {
-  template <typename T>
-  __device__ T operator()(T a, T b) const {
+  __device__ bool operator()(bool a, bool b) const {
     return a || b;
-  }
-  template <typename T>
-  __device__ static constexpr T init() {
-    return false;
   }
 };
 
@@ -42,10 +35,6 @@ struct Sum {
   __device__ T operator()(T a, T b) const {
     return a + b;
   }
-  template <typename T>
-  __device__ static constexpr T init() {
-    return T(0);
-  }
 };
 
 struct Prod {
@@ -53,31 +42,31 @@ struct Prod {
   __device__ T operator()(T a, T b) const {
     return a * b;
   }
-  template <typename T>
-  __device__ static constexpr T init() {
-    return T(1);
-  }
 };
 
 struct Max {
   template <typename T>
   __device__ T operator()(T a, T b) const {
+    // Handle NaN for floating point types
+    if constexpr (std::is_floating_point_v<T>) {
+      if (isnan(a) || isnan(b)) {
+        return numeric_limits<float>::quiet_NaN();
+      }
+    }
     return a > b ? a : b;
-  }
-  template <typename T>
-  __device__ static constexpr T init() {
-    return numeric_limits<T>::lowest();
   }
 };
 
 struct Min {
   template <typename T>
   __device__ T operator()(T a, T b) const {
+    // Handle NaN for floating point types
+    if constexpr (std::is_floating_point_v<T>) {
+      if (isnan(a) || isnan(b)) {
+        return numeric_limits<float>::quiet_NaN();
+      }
+    }
     return a < b ? a : b;
-  }
-  template <typename T>
-  __device__ static constexpr T init() {
-    return numeric_limits<T>::max();
   }
 };
 
@@ -87,59 +76,79 @@ struct ReduceResult {
   using type = T;
 };
 
-// Specialization for Sum with bool - result is int32_t
-template <>
-struct ReduceResult<Sum, bool> {
-  using type = int32_t;
+// And and Or always return bool
+template <typename T>
+struct ReduceResult<And, T> {
+  using type = bool;
+};
+
+template <typename T>
+struct ReduceResult<Or, T> {
+  using type = bool;
+};
+
+// Sum and Prod promote small integers to int32_t
+template <typename T>
+struct ReduceResult<Sum, T> {
+  using type = std::conditional_t<
+      (std::is_integral_v<T> && sizeof(T) <= 4),
+      int32_t,
+      T>;
+};
+
+template <typename T>
+struct ReduceResult<Prod, T> {
+  using type = std::conditional_t<
+      (std::is_integral_v<T> && sizeof(T) <= 4),
+      int32_t,
+      T>;
 };
 
 // Reduce init value
 template <typename Op, typename T>
-struct ReduceInit {
-  static __device__ T value() {
-    return Op::template init<T>();
-  }
-};
-
-template <typename T>
-struct ReduceInit<Sum, T> {
-  static __device__ T value() {
-    return T(0);
-  }
-};
-
-template <typename T>
-struct ReduceInit<Prod, T> {
-  static __device__ T value() {
-    return T(1);
-  }
-};
-
-template <typename T>
-struct ReduceInit<Max, T> {
-  static __device__ T value() {
-    return numeric_limits<T>::lowest();
-  }
-};
-
-template <typename T>
-struct ReduceInit<Min, T> {
-  static __device__ T value() {
-    return numeric_limits<T>::max();
-  }
-};
+struct ReduceInit;
 
 template <typename T>
 struct ReduceInit<And, T> {
-  static __device__ T value() {
+  static __device__ bool value() {
     return true;
   }
 };
 
 template <typename T>
 struct ReduceInit<Or, T> {
-  static __device__ T value() {
+  static __device__ bool value() {
     return false;
+  }
+};
+
+template <typename T>
+struct ReduceInit<Sum, T> {
+  static __device__ auto value() {
+    using ResultT = typename ReduceResult<Sum, T>::type;
+    return ResultT(0);
+  }
+};
+
+template <typename T>
+struct ReduceInit<Prod, T> {
+  static __device__ auto value() {
+    using ResultT = typename ReduceResult<Prod, T>::type;
+    return ResultT(1);
+  }
+};
+
+template <typename T>
+struct ReduceInit<Max, T> {
+  static __device__ T value() {
+    return Limits<T>::min();
+  }
+};
+
+template <typename T>
+struct ReduceInit<Min, T> {
+  static __device__ T value() {
+    return Limits<T>::max();
   }
 };
 
