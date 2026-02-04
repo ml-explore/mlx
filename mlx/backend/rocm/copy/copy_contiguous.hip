@@ -97,6 +97,13 @@ void copy_contiguous(
         encoder.launch_kernel([&](hipStream_t stream) {
           fprintf(stderr, "copy_contiguous: launching kernel, ctype=%d, in_ptr=%p, out_ptr=%p, size=%zu, stream=%p\n",
                   (int)ctype, (void*)in_ptr, (void*)out_ptr, (size_t)size, (void*)stream);
+          
+          // Synchronize before kernel launch to ensure all previous operations are complete
+          hipError_t sync_err = hipStreamSynchronize(stream);
+          if (sync_err != hipSuccess) {
+            fprintf(stderr, "copy_contiguous: stream sync failed: %s\n", hipGetErrorString(sync_err));
+          }
+          
           hipError_t err;
           if (ctype == CopyType::Scalar) {
             hipLaunchKernelGGL(
