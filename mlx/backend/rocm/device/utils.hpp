@@ -491,6 +491,16 @@ struct Limits<bool> {
 };
 
 template <>
+struct numeric_limits<hipFloatComplex> {
+  __device__ static hipFloatComplex lowest() {
+    return make_hipFloatComplex(numeric_limits<float>::lowest(), numeric_limits<float>::lowest());
+  }
+  __device__ static hipFloatComplex max() {
+    return make_hipFloatComplex(numeric_limits<float>::max(), numeric_limits<float>::max());
+  }
+};
+
+template <>
 struct Limits<hipFloatComplex> {
   __device__ static hipFloatComplex max() {
     return make_hipFloatComplex(Limits<float>::max(), Limits<float>::max());

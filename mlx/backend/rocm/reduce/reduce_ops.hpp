@@ -97,8 +97,25 @@ struct Prod {
 struct Max {
   template <typename T>
   __device__ __forceinline__ T operator()(T a, T b) const {
+    // Handle complex types
+    if constexpr (is_complex_v<T>) {
+      // Check for NaN
+      if (isnan(a.x) || isnan(a.y)) {
+        return a;
+      }
+      if (isnan(b.x) || isnan(b.y)) {
+        return b;
+      }
+      // Compare by magnitude (real^2 + imag^2), then by real part
+      float mag_a = a.x * a.x + a.y * a.y;
+      float mag_b = b.x * b.x + b.y * b.y;
+      if (mag_a != mag_b) {
+        return mag_a > mag_b ? a : b;
+      }
+      return a.x > b.x ? a : b;
+    }
     // Handle NaN for floating point
-    if constexpr (std::is_floating_point_v<T>) {
+    else if constexpr (std::is_floating_point_v<T>) {
       if (isnan(a) || isnan(b)) {
         return a > b ? a : b;  // Propagate NaN
       }
@@ -120,8 +137,25 @@ struct Max {
 struct Min {
   template <typename T>
   __device__ __forceinline__ T operator()(T a, T b) const {
+    // Handle complex types
+    if constexpr (is_complex_v<T>) {
+      // Check for NaN
+      if (isnan(a.x) || isnan(a.y)) {
+        return a;
+      }
+      if (isnan(b.x) || isnan(b.y)) {
+        return b;
+      }
+      // Compare by magnitude (real^2 + imag^2), then by real part
+      float mag_a = a.x * a.x + a.y * a.y;
+      float mag_b = b.x * b.x + b.y * b.y;
+      if (mag_a != mag_b) {
+        return mag_a < mag_b ? a : b;
+      }
+      return a.x < b.x ? a : b;
+    }
     // Handle NaN for floating point
-    if constexpr (std::is_floating_point_v<T>) {
+    else if constexpr (std::is_floating_point_v<T>) {
       if (isnan(a) || isnan(b)) {
         return a < b ? a : b;  // Propagate NaN
       }
@@ -211,10 +245,26 @@ struct ReduceInit<Max, T> {
   }
 };
 
+// Specialization for hipFloatComplex
+template <>
+struct ReduceInit<Max, hipFloatComplex> {
+  __device__ static hipFloatComplex value() {
+    return numeric_limits<hipFloatComplex>::lowest();
+  }
+};
+
 template <typename T>
 struct ReduceInit<Min, T> {
   __device__ static T value() {
     return numeric_limits<T>::max();
+  }
+};
+
+// Specialization for hipFloatComplex
+template <>
+struct ReduceInit<Min, hipFloatComplex> {
+  __device__ static hipFloatComplex value() {
+    return numeric_limits<hipFloatComplex>::max();
   }
 };
 

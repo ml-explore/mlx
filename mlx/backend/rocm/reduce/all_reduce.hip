@@ -185,11 +185,7 @@ constexpr bool is_valid_reduce_op() {
   if constexpr (std::is_same_v<Op, rocm::And> || std::is_same_v<Op, rocm::Or>) {
     return std::is_same_v<T, bool>;
   }
-  // Max/Min don't work on complex types
-  if constexpr (std::is_same_v<Op, rocm::Max> || std::is_same_v<Op, rocm::Min>) {
-    return !is_complex_v<T>;
-  }
-  // Sum/Prod work on all types
+  // Sum/Prod/Max/Min work on all types (including complex)
   return true;
 }
 
