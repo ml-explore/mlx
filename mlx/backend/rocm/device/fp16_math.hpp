@@ -282,4 +282,147 @@ __device__ inline hip_bfloat16 tan(hip_bfloat16 x) {
   return float_to_bf16(tanf(bf16_to_float(x)));
 }
 
+// Complex math functions
+// exp(z) = exp(x) * (cos(y) + i*sin(y))
+__device__ inline hipFloatComplex exp(hipFloatComplex z) {
+  float ex = expf(z.x);
+  float s, c;
+  sincosf(z.y, &s, &c);
+  return make_hipFloatComplex(ex * c, ex * s);
+}
+
+// log(z) = log(|z|) + i*arg(z)
+__device__ inline hipFloatComplex log(hipFloatComplex z) {
+  float r = hypotf(z.x, z.y);
+  float theta = atan2f(z.y, z.x);
+  return make_hipFloatComplex(logf(r), theta);
+}
+
+// log10(z) = log(z) / log(10)
+__device__ inline hipFloatComplex log10(hipFloatComplex z) {
+  hipFloatComplex lz = log(z);
+  constexpr float ln10 = 2.302585092994045684017991454684364208f;
+  return make_hipFloatComplex(lz.x / ln10, lz.y / ln10);
+}
+
+// sin(z) = sin(x)*cosh(y) + i*cos(x)*sinh(y)
+__device__ inline hipFloatComplex sin(hipFloatComplex z) {
+  float sx, cx;
+  sincosf(z.x, &sx, &cx);
+  return make_hipFloatComplex(sx * coshf(z.y), cx * sinhf(z.y));
+}
+
+// cos(z) = cos(x)*cosh(y) - i*sin(x)*sinh(y)
+__device__ inline hipFloatComplex cos(hipFloatComplex z) {
+  float sx, cx;
+  sincosf(z.x, &sx, &cx);
+  return make_hipFloatComplex(cx * coshf(z.y), -sx * sinhf(z.y));
+}
+
+// tan(z) = sin(z) / cos(z)
+__device__ inline hipFloatComplex tan(hipFloatComplex z) {
+  return hipCdivf(sin(z), cos(z));
+}
+
+// sinh(z) = sinh(x)*cos(y) + i*cosh(x)*sin(y)
+__device__ inline hipFloatComplex sinh(hipFloatComplex z) {
+  float sy, cy;
+  sincosf(z.y, &sy, &cy);
+  return make_hipFloatComplex(sinhf(z.x) * cy, coshf(z.x) * sy);
+}
+
+// cosh(z) = cosh(x)*cos(y) + i*sinh(x)*sin(y)
+__device__ inline hipFloatComplex cosh(hipFloatComplex z) {
+  float sy, cy;
+  sincosf(z.y, &sy, &cy);
+  return make_hipFloatComplex(coshf(z.x) * cy, sinhf(z.x) * sy);
+}
+
+// tanh(z) = sinh(z) / cosh(z)
+__device__ inline hipFloatComplex tanh(hipFloatComplex z) {
+  return hipCdivf(sinh(z), cosh(z));
+}
+
+// sqrt(z) = sqrt(|z|) * (cos(arg(z)/2) + i*sin(arg(z)/2))
+__device__ inline hipFloatComplex sqrt(hipFloatComplex z) {
+  float r = hypotf(z.x, z.y);
+  float theta = atan2f(z.y, z.x);
+  float sr = sqrtf(r);
+  float half_theta = theta * 0.5f;
+  float s, c;
+  sincosf(half_theta, &s, &c);
+  return make_hipFloatComplex(sr * c, sr * s);
+}
+
+// abs(z) = |z| (returns complex with real part = magnitude, imag = 0)
+__device__ inline hipFloatComplex abs(hipFloatComplex z) {
+  return make_hipFloatComplex(hypotf(z.x, z.y), 0.0f);
+}
+
+// asin(z) = -i * log(i*z + sqrt(1 - z^2))
+__device__ inline hipFloatComplex asin(hipFloatComplex z) {
+  // i*z
+  hipFloatComplex iz = make_hipFloatComplex(-z.y, z.x);
+  // z^2
+  hipFloatComplex z2 = hipCmulf(z, z);
+  // 1 - z^2
+  hipFloatComplex one_minus_z2 = make_hipFloatComplex(1.0f - z2.x, -z2.y);
+  // sqrt(1 - z^2)
+  hipFloatComplex sqrt_term = sqrt(one_minus_z2);
+  // i*z + sqrt(1 - z^2)
+  hipFloatComplex sum = make_hipFloatComplex(iz.x + sqrt_term.x, iz.y + sqrt_term.y);
+  // log(...)
+  hipFloatComplex log_term = log(sum);
+  // -i * log(...) = (log.y, -log.x)
+  return make_hipFloatComplex(log_term.y, -log_term.x);
+}
+
+// acos(z) = pi/2 - asin(z)
+__device__ inline hipFloatComplex acos(hipFloatComplex z) {
+  hipFloatComplex asin_z = asin(z);
+  constexpr float pi_2 = 1.5707963267948966192313216916397514f;
+  return make_hipFloatComplex(pi_2 - asin_z.x, -asin_z.y);
+}
+
+// atan(z) = (i/2) * log((i+z)/(i-z))
+__device__ inline hipFloatComplex atan(hipFloatComplex z) {
+  // i + z
+  hipFloatComplex i_plus_z = make_hipFloatComplex(z.x, 1.0f + z.y);
+  // i - z
+  hipFloatComplex i_minus_z = make_hipFloatComplex(-z.x, 1.0f - z.y);
+  // (i+z)/(i-z)
+  hipFloatComplex ratio = hipCdivf(i_plus_z, i_minus_z);
+  // log(...)
+  hipFloatComplex log_term = log(ratio);
+  // (i/2) * log(...) = (-log.y/2, log.x/2)
+  return make_hipFloatComplex(-log_term.y * 0.5f, log_term.x * 0.5f);
+}
+
+// asinh(z) = log(z + sqrt(z^2 + 1))
+__device__ inline hipFloatComplex asinh(hipFloatComplex z) {
+  hipFloatComplex z2 = hipCmulf(z, z);
+  hipFloatComplex z2_plus_1 = make_hipFloatComplex(z2.x + 1.0f, z2.y);
+  hipFloatComplex sqrt_term = sqrt(z2_plus_1);
+  hipFloatComplex sum = make_hipFloatComplex(z.x + sqrt_term.x, z.y + sqrt_term.y);
+  return log(sum);
+}
+
+// acosh(z) = log(z + sqrt(z^2 - 1))
+__device__ inline hipFloatComplex acosh(hipFloatComplex z) {
+  hipFloatComplex z2 = hipCmulf(z, z);
+  hipFloatComplex z2_minus_1 = make_hipFloatComplex(z2.x - 1.0f, z2.y);
+  hipFloatComplex sqrt_term = sqrt(z2_minus_1);
+  hipFloatComplex sum = make_hipFloatComplex(z.x + sqrt_term.x, z.y + sqrt_term.y);
+  return log(sum);
+}
+
+// atanh(z) = (1/2) * log((1+z)/(1-z))
+__device__ inline hipFloatComplex atanh(hipFloatComplex z) {
+  hipFloatComplex one_plus_z = make_hipFloatComplex(1.0f + z.x, z.y);
+  hipFloatComplex one_minus_z = make_hipFloatComplex(1.0f - z.x, -z.y);
+  hipFloatComplex ratio = hipCdivf(one_plus_z, one_minus_z);
+  hipFloatComplex log_term = log(ratio);
+  return make_hipFloatComplex(log_term.x * 0.5f, log_term.y * 0.5f);
+}
+
 } // namespace mlx::core::rocm

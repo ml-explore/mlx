@@ -200,6 +200,9 @@ void unary_op_gpu_inplace(
     case bool_:
       launch_kernel(in.data<bool>(), out.data<bool>(), out.data_size());
       break;
+    case complex64:
+      launch_kernel(in.data<hipFloatComplex>(), out.data<hipFloatComplex>(), out.data_size());
+      break;
     default:
       throw std::runtime_error(
           std::string("Unsupported type for unary op ") + op);
