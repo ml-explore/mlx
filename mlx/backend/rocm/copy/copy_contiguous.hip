@@ -64,6 +64,21 @@ void copy_contiguous(
     return;
   }
   
+  // Debug: Check if buffers are valid
+  auto* in_buf = static_cast<rocm::RocmBuffer*>(in.buffer().ptr());
+  auto* out_buf = static_cast<rocm::RocmBuffer*>(out.buffer().ptr());
+  
+  if (!in_buf || !in_buf->data) {
+    fprintf(stderr, "copy_contiguous: input buffer is null! in_buf=%p, in_buf->data=%p\n",
+            (void*)in_buf, in_buf ? in_buf->data : nullptr);
+    return;
+  }
+  if (!out_buf || !out_buf->data) {
+    fprintf(stderr, "copy_contiguous: output buffer is null! out_buf=%p, out_buf->data=%p\n",
+            (void*)out_buf, out_buf ? out_buf->data : nullptr);
+    return;
+  }
+  
   dispatch_all_types(in.dtype(), [&](auto in_type_tag) {
     dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
       dispatch_bool(out.data_size() > UINT32_MAX, [&](auto large) {
