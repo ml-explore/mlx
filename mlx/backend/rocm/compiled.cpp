@@ -255,6 +255,66 @@ struct Minimum {
   __device__ T operator()(T x, T y) { return x < y ? x : y; }
 };
 
+struct Power {
+  template <typename T>
+  __device__ T operator()(T base, T exp) { return powf(base, exp); }
+};
+
+struct Equal {
+  template <typename T>
+  __device__ bool operator()(T x, T y) { return x == y; }
+};
+
+struct NotEqual {
+  template <typename T>
+  __device__ bool operator()(T x, T y) { return x != y; }
+};
+
+struct Greater {
+  template <typename T>
+  __device__ bool operator()(T x, T y) { return x > y; }
+};
+
+struct GreaterEqual {
+  template <typename T>
+  __device__ bool operator()(T x, T y) { return x >= y; }
+};
+
+struct Less {
+  template <typename T>
+  __device__ bool operator()(T x, T y) { return x < y; }
+};
+
+struct LessEqual {
+  template <typename T>
+  __device__ bool operator()(T x, T y) { return x <= y; }
+};
+
+struct LogicalAnd {
+  template <typename T>
+  __device__ bool operator()(T x, T y) { return x && y; }
+};
+
+struct LogicalOr {
+  template <typename T>
+  __device__ bool operator()(T x, T y) { return x || y; }
+};
+
+struct ArcTan2 {
+  template <typename T>
+  __device__ T operator()(T y, T x) { return atan2f(y, x); }
+};
+
+struct Remainder {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return fmodf(x, y); }
+};
+
+struct FloorDivide {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return truncf(x / y); }
+};
+
 // Unary ops
 struct Abs {
   template <typename T>
@@ -297,6 +357,116 @@ struct Sigmoid {
 struct Tanh {
   template <typename T>
   __device__ T operator()(T x) { return tanh(x); }
+};
+
+struct Sin {
+  template <typename T>
+  __device__ T operator()(T x) { return sin(x); }
+};
+
+struct Cos {
+  template <typename T>
+  __device__ T operator()(T x) { return cos(x); }
+};
+
+struct Tan {
+  template <typename T>
+  __device__ T operator()(T x) { return tan(x); }
+};
+
+struct Sinh {
+  template <typename T>
+  __device__ T operator()(T x) { return sinh(x); }
+};
+
+struct Cosh {
+  template <typename T>
+  __device__ T operator()(T x) { return cosh(x); }
+};
+
+struct Erf {
+  template <typename T>
+  __device__ T operator()(T x) { return erff(x); }
+};
+
+struct ErfInv {
+  template <typename T>
+  __device__ T operator()(T x) { return erfinvf(x); }
+};
+
+struct Expm1 {
+  template <typename T>
+  __device__ T operator()(T x) { return expm1f(x); }
+};
+
+struct Log1p {
+  template <typename T>
+  __device__ T operator()(T x) { return log1pf(x); }
+};
+
+struct Log2 {
+  template <typename T>
+  __device__ T operator()(T x) { return log2(x); }
+};
+
+struct Log10 {
+  template <typename T>
+  __device__ T operator()(T x) { return log10(x); }
+};
+
+struct Ceil {
+  template <typename T>
+  __device__ T operator()(T x) { return ceil(x); }
+};
+
+struct Floor {
+  template <typename T>
+  __device__ T operator()(T x) { return floor(x); }
+};
+
+struct Round {
+  template <typename T>
+  __device__ T operator()(T x) { return rint(x); }
+};
+
+struct Rsqrt {
+  template <typename T>
+  __device__ T operator()(T x) { return rsqrt(x); }
+};
+
+struct Sign {
+  template <typename T>
+  __device__ T operator()(T x) { return (x > T(0)) - (x < T(0)); }
+};
+
+struct Asin {
+  template <typename T>
+  __device__ T operator()(T x) { return asin(x); }
+};
+
+struct Acos {
+  template <typename T>
+  __device__ T operator()(T x) { return acos(x); }
+};
+
+struct Atan {
+  template <typename T>
+  __device__ T operator()(T x) { return atan(x); }
+};
+
+struct Asinh {
+  template <typename T>
+  __device__ T operator()(T x) { return asinh(x); }
+};
+
+struct Acosh {
+  template <typename T>
+  __device__ T operator()(T x) { return acosh(x); }
+};
+
+struct Atanh {
+  template <typename T>
+  __device__ T operator()(T x) { return atanh(x); }
 };
 
 // Ternary ops
