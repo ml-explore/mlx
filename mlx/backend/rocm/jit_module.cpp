@@ -137,9 +137,8 @@ std::string get_gpu_arch() {
   int device_id;
   CHECK_HIP_ERROR(hipGetDevice(&device_id));
   CHECK_HIP_ERROR(hipGetDeviceProperties(&props, device_id));
-  std::ostringstream oss;
-  oss << "gfx" << props.gcnArchName;
-  return oss.str();
+  // gcnArchName already contains the full architecture name like "gfx1011"
+  return std::string(props.gcnArchName);
 }
 
 void compile(
