@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2026 Apple Inc.
 
 #include "mlx/backend/cuda/quantized/qqmm_impl.h"
 #include "mlx/backend/cuda/quantized/cublas_qqmm.h"
