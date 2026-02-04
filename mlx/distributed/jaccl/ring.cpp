@@ -272,6 +272,9 @@ void RingGroup::send(const array& input, int dst, Stream stream) {
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(input);
   encoder.dispatch([data, n_bytes, dst, left, this]() {
+    // In the case that size_ == 2 then left == right so we bias send towards
+    // left and recv towards right so that the selections will be correct for
+    // the 2 node case.
     auto& conns = (dst == left) ? left_ : right_;
     int dir = dst == left;
 
@@ -349,9 +352,12 @@ void RingGroup::recv(array& out, int src, Stream stream) {
   int64_t n_bytes = out.nbytes();
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_output_array(out);
-  encoder.dispatch([data, n_bytes, src, left, this]() {
-    auto& conns = (src == left) ? left_ : right_;
-    int dir = src != left;
+  encoder.dispatch([data, n_bytes, src, right, this]() {
+    // In the case that size_ == 2 then left == right so we bias send towards
+    // left and recv towards right so that the selections will be correct for
+    // the 2 node case.
+    auto& conns = (src == right) ? right_ : left_;
+    int dir = src == right;
 
     constexpr int PIPELINE = 2;
     constexpr int WC_NUM = PIPELINE * MAX_CONNS;
