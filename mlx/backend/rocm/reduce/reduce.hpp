@@ -55,25 +55,8 @@ struct Prod {
 };
 
 struct Max {
-  template <typename T>
+  template <typename T, std::enable_if_t<!is_complex_v<T> && !std::is_same_v<T, float> && !std::is_same_v<T, double>, int> = 0>
   __device__ T operator()(T a, T b) const {
-    // Handle complex types
-    if constexpr (is_complex_v<T>) {
-      // Check for NaN
-      if (isnan(a.x) || isnan(a.y)) {
-        return a;
-      }
-      if (isnan(b.x) || isnan(b.y)) {
-        return b;
-      }
-      // Compare by magnitude (real^2 + imag^2), then by real part
-      float mag_a = a.x * a.x + a.y * a.y;
-      float mag_b = b.x * b.x + b.y * b.y;
-      if (mag_a != mag_b) {
-        return mag_a > mag_b ? a : b;
-      }
-      return a.x > b.x ? a : b;
-    }
     return a > b ? a : b;
   }
   
@@ -91,29 +74,30 @@ struct Max {
       return numeric_limits<double>::quiet_NaN();
     }
     return a > b ? a : b;
+  }
+  
+  // Specialization for hipFloatComplex
+  __device__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+    // Check for NaN
+    if (isnan(a.x) || isnan(a.y)) {
+      return a;
+    }
+    if (isnan(b.x) || isnan(b.y)) {
+      return b;
+    }
+    // Compare by magnitude (real^2 + imag^2), then by real part
+    float mag_a = a.x * a.x + a.y * a.y;
+    float mag_b = b.x * b.x + b.y * b.y;
+    if (mag_a != mag_b) {
+      return mag_a > mag_b ? a : b;
+    }
+    return a.x > b.x ? a : b;
   }
 };
 
 struct Min {
-  template <typename T>
+  template <typename T, std::enable_if_t<!is_complex_v<T> && !std::is_same_v<T, float> && !std::is_same_v<T, double>, int> = 0>
   __device__ T operator()(T a, T b) const {
-    // Handle complex types
-    if constexpr (is_complex_v<T>) {
-      // Check for NaN
-      if (isnan(a.x) || isnan(a.y)) {
-        return a;
-      }
-      if (isnan(b.x) || isnan(b.y)) {
-        return b;
-      }
-      // Compare by magnitude (real^2 + imag^2), then by real part
-      float mag_a = a.x * a.x + a.y * a.y;
-      float mag_b = b.x * b.x + b.y * b.y;
-      if (mag_a != mag_b) {
-        return mag_a < mag_b ? a : b;
-      }
-      return a.x < b.x ? a : b;
-    }
     return a < b ? a : b;
   }
   
@@ -131,6 +115,24 @@ struct Min {
       return numeric_limits<double>::quiet_NaN();
     }
     return a < b ? a : b;
+  }
+  
+  // Specialization for hipFloatComplex
+  __device__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+    // Check for NaN
+    if (isnan(a.x) || isnan(a.y)) {
+      return a;
+    }
+    if (isnan(b.x) || isnan(b.y)) {
+      return b;
+    }
+    // Compare by magnitude (real^2 + imag^2), then by real part
+    float mag_a = a.x * a.x + a.y * a.y;
+    float mag_b = b.x * b.x + b.y * b.y;
+    if (mag_a != mag_b) {
+      return mag_a < mag_b ? a : b;
+    }
+    return a.x < b.x ? a : b;
   }
 };
 

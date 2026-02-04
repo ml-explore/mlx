@@ -95,32 +95,43 @@ struct Prod {
 };
 
 struct Max {
-  template <typename T>
+  template <typename T, std::enable_if_t<!is_complex_v<T> && !std::is_same_v<T, float> && !std::is_same_v<T, double>, int> = 0>
   __device__ __forceinline__ T operator()(T a, T b) const {
-    // Handle complex types
-    if constexpr (is_complex_v<T>) {
-      // Check for NaN
-      if (isnan(a.x) || isnan(a.y)) {
-        return a;
-      }
-      if (isnan(b.x) || isnan(b.y)) {
-        return b;
-      }
-      // Compare by magnitude (real^2 + imag^2), then by real part
-      float mag_a = a.x * a.x + a.y * a.y;
-      float mag_b = b.x * b.x + b.y * b.y;
-      if (mag_a != mag_b) {
-        return mag_a > mag_b ? a : b;
-      }
-      return a.x > b.x ? a : b;
-    }
-    // Handle NaN for floating point
-    else if constexpr (std::is_floating_point_v<T>) {
-      if (isnan(a) || isnan(b)) {
-        return a > b ? a : b;  // Propagate NaN
-      }
+    return a > b ? a : b;
+  }
+
+  // Specialization for float with NaN handling
+  __device__ __forceinline__ float operator()(float a, float b) const {
+    if (isnan(a) || isnan(b)) {
+      return a > b ? a : b;  // Propagate NaN
     }
     return a > b ? a : b;
+  }
+
+  // Specialization for double with NaN handling
+  __device__ __forceinline__ double operator()(double a, double b) const {
+    if (isnan(a) || isnan(b)) {
+      return a > b ? a : b;  // Propagate NaN
+    }
+    return a > b ? a : b;
+  }
+
+  // Specialization for hipFloatComplex
+  __device__ __forceinline__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+    // Check for NaN
+    if (isnan(a.x) || isnan(a.y)) {
+      return a;
+    }
+    if (isnan(b.x) || isnan(b.y)) {
+      return b;
+    }
+    // Compare by magnitude (real^2 + imag^2), then by real part
+    float mag_a = a.x * a.x + a.y * a.y;
+    float mag_b = b.x * b.x + b.y * b.y;
+    if (mag_a != mag_b) {
+      return mag_a > mag_b ? a : b;
+    }
+    return a.x > b.x ? a : b;
   }
 
   template <typename T>
@@ -135,32 +146,43 @@ struct Max {
 };
 
 struct Min {
-  template <typename T>
+  template <typename T, std::enable_if_t<!is_complex_v<T> && !std::is_same_v<T, float> && !std::is_same_v<T, double>, int> = 0>
   __device__ __forceinline__ T operator()(T a, T b) const {
-    // Handle complex types
-    if constexpr (is_complex_v<T>) {
-      // Check for NaN
-      if (isnan(a.x) || isnan(a.y)) {
-        return a;
-      }
-      if (isnan(b.x) || isnan(b.y)) {
-        return b;
-      }
-      // Compare by magnitude (real^2 + imag^2), then by real part
-      float mag_a = a.x * a.x + a.y * a.y;
-      float mag_b = b.x * b.x + b.y * b.y;
-      if (mag_a != mag_b) {
-        return mag_a < mag_b ? a : b;
-      }
-      return a.x < b.x ? a : b;
-    }
-    // Handle NaN for floating point
-    else if constexpr (std::is_floating_point_v<T>) {
-      if (isnan(a) || isnan(b)) {
-        return a < b ? a : b;  // Propagate NaN
-      }
+    return a < b ? a : b;
+  }
+
+  // Specialization for float with NaN handling
+  __device__ __forceinline__ float operator()(float a, float b) const {
+    if (isnan(a) || isnan(b)) {
+      return a < b ? a : b;  // Propagate NaN
     }
     return a < b ? a : b;
+  }
+
+  // Specialization for double with NaN handling
+  __device__ __forceinline__ double operator()(double a, double b) const {
+    if (isnan(a) || isnan(b)) {
+      return a < b ? a : b;  // Propagate NaN
+    }
+    return a < b ? a : b;
+  }
+
+  // Specialization for hipFloatComplex
+  __device__ __forceinline__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+    // Check for NaN
+    if (isnan(a.x) || isnan(a.y)) {
+      return a;
+    }
+    if (isnan(b.x) || isnan(b.y)) {
+      return b;
+    }
+    // Compare by magnitude (real^2 + imag^2), then by real part
+    float mag_a = a.x * a.x + a.y * a.y;
+    float mag_b = b.x * b.x + b.y * b.y;
+    if (mag_a != mag_b) {
+      return mag_a < mag_b ? a : b;
+    }
+    return a.x < b.x ? a : b;
   }
 
   template <typename T>
