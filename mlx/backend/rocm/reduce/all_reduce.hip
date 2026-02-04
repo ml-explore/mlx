@@ -178,6 +178,21 @@ struct ReduceResult<rocm::Prod, T> {
       T>;
 };
 
+// Check if a reduce operation is valid for a type
+template <typename Op, typename T>
+constexpr bool is_valid_reduce_op() {
+  // And/Or only work on bool
+  if constexpr (std::is_same_v<Op, rocm::And> || std::is_same_v<Op, rocm::Or>) {
+    return std::is_same_v<T, bool>;
+  }
+  // Max/Min don't work on complex types
+  if constexpr (std::is_same_v<Op, rocm::Max> || std::is_same_v<Op, rocm::Min>) {
+    return !is_complex_v<T>;
+  }
+  // Sum/Prod work on all types
+  return true;
+}
+
 void all_reduce(
     rocm::CommandEncoder& encoder,
     const array& in,
@@ -235,12 +250,14 @@ void all_reduce(
         using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
         using U = typename ReduceResult<OP, T>::type;
         
-        encoder.launch_kernel([&](hipStream_t stream) {
-          hipLaunchKernelGGL(
-              (rocm::all_reduce_kernel<T, U, OP, N_READS>),
-              dim3(blocks), dim3(threads), 0, stream,
-              gpu_ptr<const T>(in), gpu_ptr<U>(intermediate), block_step, insize);
-        });
+        if constexpr (is_valid_reduce_op<OP, T>()) {
+          encoder.launch_kernel([&](hipStream_t stream) {
+            hipLaunchKernelGGL(
+                (rocm::all_reduce_kernel<T, U, OP, N_READS>),
+                dim3(blocks), dim3(threads), 0, stream,
+                gpu_ptr<const T>(in), gpu_ptr<U>(intermediate), block_step, insize);
+          });
+        }
       });
     });
     
@@ -258,12 +275,14 @@ void all_reduce(
         using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
         using U = typename ReduceResult<OP, T>::type;
         
-        encoder.launch_kernel([&](hipStream_t stream) {
-          hipLaunchKernelGGL(
-              (rocm::all_reduce_kernel<T, U, OP, N_READS>),
-              dim3(1), dim3(threads), 0, stream,
-              gpu_ptr<const T>(intermediate), gpu_ptr<U>(out), block_step, insize);
-        });
+        if constexpr (is_valid_reduce_op<OP, T>()) {
+          encoder.launch_kernel([&](hipStream_t stream) {
+            hipLaunchKernelGGL(
+                (rocm::all_reduce_kernel<T, U, OP, N_READS>),
+                dim3(1), dim3(threads), 0, stream,
+                gpu_ptr<const T>(intermediate), gpu_ptr<U>(out), block_step, insize);
+          });
+        }
       });
     });
   } else {
@@ -275,12 +294,14 @@ void all_reduce(
         using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
         using U = typename ReduceResult<OP, T>::type;
         
-        encoder.launch_kernel([&](hipStream_t stream) {
-          hipLaunchKernelGGL(
-              (rocm::all_reduce_kernel<T, U, OP, N_READS>),
-              dim3(1), dim3(threads), 0, stream,
-              gpu_ptr<const T>(in), gpu_ptr<U>(out), block_step, insize);
-        });
+        if constexpr (is_valid_reduce_op<OP, T>()) {
+          encoder.launch_kernel([&](hipStream_t stream) {
+            hipLaunchKernelGGL(
+                (rocm::all_reduce_kernel<T, U, OP, N_READS>),
+                dim3(1), dim3(threads), 0, stream,
+                gpu_ptr<const T>(in), gpu_ptr<U>(out), block_step, insize);
+          });
+        }
       });
     });
   }
