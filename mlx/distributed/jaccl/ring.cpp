@@ -167,8 +167,8 @@ void RingGroup::all_gather(const array& input, array& output, Stream stream) {
 
     // Counters to maintain the state of transfers
     int in_flight = 0;
-    size_t send_offset[2];
-    size_t recv_offset[2];
+    int64_t send_offset[2];
+    int64_t recv_offset[2];
     int64_t limits[2];
     int send_count[2 * MAX_CONNS] = {0};
     int recv_count[2 * MAX_CONNS] = {0};
@@ -187,12 +187,13 @@ void RingGroup::all_gather(const array& input, array& output, Stream stream) {
         post_recv_all(sz, buff);
         for (int lr = 0; lr < 2; lr++) {
           for (int lw = 0; lw < n_wires; lw++) {
-            int offset = lw * N +
+            int64_t offset = lw * N +
                 send_count[lr * MAX_CONNS + lw] * n_wires * N +
                 lr * n_wires * n_bytes_per_wire;
             std::copy(
                 out_ptr + send_offset[lr] + offset,
-                out_ptr + send_offset[lr] + std::min(offset + N, limits[lr]),
+                out_ptr + send_offset[lr] +
+                    std::max(offset, std::min(offset + N, limits[lr])),
                 send_buffer(sz, buff, lr, lw).begin<char>());
             send_count[lr * MAX_CONNS + lw]++;
           }
@@ -219,11 +220,12 @@ void RingGroup::all_gather(const array& input, array& output, Stream stream) {
           in_flight--;
 
           if (work_type == SEND_WR && send_count[wire] < n_steps) {
-            int offset = lw * N + send_count[wire] * n_wires * N +
+            int64_t offset = lw * N + send_count[wire] * n_wires * N +
                 lr * n_wires * n_bytes_per_wire;
             std::copy(
                 out_ptr + send_offset[lr] + offset,
-                out_ptr + send_offset[lr] + std::min(offset + N, limits[lr]),
+                out_ptr + send_offset[lr] +
+                    std::max(offset, std::min(offset + N, limits[lr])),
                 send_buffer(sz, buff, lr, lw).begin<char>());
             send_to(sz, buff, lr, lw);
             in_flight++;
@@ -231,12 +233,12 @@ void RingGroup::all_gather(const array& input, array& output, Stream stream) {
           }
 
           else if (work_type == RECV_WR) {
-            int offset = lw * N + recv_count[wire] * n_wires * N +
+            int64_t offset = lw * N + recv_count[wire] * n_wires * N +
                 lr * n_wires * n_bytes_per_wire;
             std::copy(
                 recv_buffer(sz, buff, lr, lw).begin<char>(),
                 recv_buffer(sz, buff, lr, lw).begin<char>() +
-                    std::min(N, limits[lr] - offset),
+                    std::max<int64_t>(0, std::min(N, limits[lr] - offset)),
                 out_ptr + recv_offset[lr] + offset);
             recv_count[wire]++;
             if (recv_count[wire] + (PIPELINE - 1) < n_steps) {
