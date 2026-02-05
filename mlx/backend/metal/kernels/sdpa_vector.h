@@ -323,6 +323,7 @@ template <typename T, int D>
     const device float* sums [[buffer(1)]],
     const device float* maxs [[buffer(2)]],
     device T* out [[buffer(3)]],
+    const constant int& blocks [[buffer(4)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -368,7 +369,7 @@ template <typename T, int D>
 
     // Update the output accumulator
     for (int i = 0; i < elem_per_thread; i++) {
-      o[i] += factor * partials[i];
+      o[i] += factor * static_cast<U>(partials[i]);
     }
     maxs += BN;
     sums += BN;
