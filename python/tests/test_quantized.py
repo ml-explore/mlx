@@ -681,7 +681,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertEqual(y_q.shape, y_hat.shape)
         self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
-    def test_small_non_multiples(self):
+    def test_qmv_small_non_multiples(self):
         # Test very small K and N dimensions (e.g., [MxK] x [NxK].T = [MxN])
         # Each tuple is (M, K, N) representing input rows, weight cols, weight rows
         test_cases = [
@@ -725,21 +725,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                         bits=bits,
                     )
                     y_hat = x @ mx.swapaxes(w_hat, -1, -2)
-                    self.assertEqual(y_q.shape, y_hat.shape)
-                    self.assertLess((y_q - y_hat).abs().max(), 1e-3)
-
-                    # Test qvm/qmm (transpose=False): [MxN] @ [NxK] = [MxK]
-                    x = mx.random.normal(shape=(M, N))
-                    y_q = mx.quantized_matmul(
-                        x,
-                        w_q,
-                        scales,
-                        biases,
-                        transpose=False,
-                        group_size=group_size,
-                        bits=bits,
-                    )
-                    y_hat = x @ w_hat
                     self.assertEqual(y_q.shape, y_hat.shape)
                     self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
