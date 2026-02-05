@@ -443,6 +443,7 @@ void sdpa_vector_2pass(
   char devc = d.get_architecture().back();
   int N = k.shape(2);
   int blocks;
+
   if (devc == 's') {
     blocks = 64;
     if (N > 1024 && n_simds > 4) {
@@ -474,6 +475,7 @@ void sdpa_vector_2pass(
       blocks = 32;
     }
   }
+
   size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
   size_t k_seq_stride = k.strides()[2];
   size_t v_head_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
