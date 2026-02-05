@@ -9,3 +9,10 @@
 #include "mlx/backend/cpu/simd/accelerate_simd.h"
 #endif
 #endif
+
+// x86 SIMD: AVX2 implementation
+#if !defined(MLX_USE_ACCELERATE)
+#if defined(__AVX2__)
+#include "mlx/backend/cpu/simd/avx_simd.h"
+#endif
+#endif

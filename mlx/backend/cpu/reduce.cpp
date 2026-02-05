@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include <cassert>
 #include <functional>
@@ -7,6 +7,7 @@
 #include "mlx/backend/common/reduce.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
+#include "mlx/backend/cpu/threading/common.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -95,20 +96,84 @@ void strided_reduce(
   }
 };
 
+// Accumulator type: use float for half-precision types to avoid precision loss
+template <typename U>
+struct AccumType {
+  using type = U;
+};
+template <>
+struct AccumType<bfloat16_t> {
+  using type = float;
+};
+template <>
+struct AccumType<float16_t> {
+  using type = float;
+};
+
 template <typename T, typename U, typename Op>
 void contiguous_reduce(const T* x, U* accumulator, int size, Op op, U init) {
-  constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
-  simd::Simd<U, N> accumulator_v(init);
+  using A = typename AccumType<U>::type;
+  constexpr int N = std::min(simd::max_size<T>, simd::max_size<A>);
+
+  simd::Simd<A, N> accumulator_v(static_cast<A>(init));
   while (size >= N) {
-    accumulator_v = op(accumulator_v, simd::Simd<U, N>(simd::load<T, N>(x)));
+    accumulator_v = op(accumulator_v, simd::Simd<A, N>(simd::load<T, N>(x)));
     x += N;
     size -= N;
   }
-  *accumulator = op(*accumulator, op(accumulator_v));
+
+  A simd_sum = op(accumulator_v); // horizontal reduction
+  A scalar_acc = op(static_cast<A>(*accumulator), simd_sum);
+
   while (size-- > 0) {
-    *accumulator = op(*accumulator, *x);
+    scalar_acc = op(scalar_acc, static_cast<A>(*x));
     x++;
   }
+  *accumulator = static_cast<U>(scalar_acc);
+}
+
+// Parallel version for large reductions
+template <typename T, typename U, typename Op>
+U parallel_contiguous_reduce(const T* x, size_t size, Op op, U init) {
+  auto& pool = cpu::ThreadPool::instance();
+  int max_threads = pool.max_threads();
+  int n_threads = cpu::effective_threads(size, max_threads);
+
+  if (n_threads <= 1) {
+    U result = init;
+    contiguous_reduce(x, &result, static_cast<int>(size), op, init);
+    return result;
+  }
+
+  // Each thread computes a partial reduction
+  // Use cache-line aligned storage to avoid false sharing
+  constexpr size_t CACHE_LINE = 64;
+  constexpr size_t PADDED_SIZE =
+      (sizeof(U) + CACHE_LINE - 1) / CACHE_LINE * CACHE_LINE;
+  std::vector<char> partial_storage(n_threads * PADDED_SIZE);
+
+  pool.parallel_for(n_threads, [&](int tid, int nth) {
+    size_t chunk = (size + nth - 1) / nth;
+    size_t start = chunk * tid;
+    size_t end = std::min(start + chunk, size);
+
+    U* partial =
+        reinterpret_cast<U*>(partial_storage.data() + tid * PADDED_SIZE);
+    *partial = init;
+
+    if (start < end) {
+      contiguous_reduce(
+          x + start, partial, static_cast<int>(end - start), op, init);
+    }
+  });
+
+  // Final reduction of partial results
+  U result = init;
+  for (int i = 0; i < n_threads; ++i) {
+    U* partial = reinterpret_cast<U*>(partial_storage.data() + i * PADDED_SIZE);
+    result = op(result, *partial);
+  }
+  return result;
 }
 
 // Helper for the ndimensional strided loop
@@ -146,16 +211,47 @@ void reduction_op(
   auto in_ptr = x.data<T>();
   auto out_ptr = out.data<U>();
   if (plan.type == ContiguousAllReduce) {
-    *out_ptr = init;
-    contiguous_reduce(in_ptr, out_ptr, x.size(), Op{}, init);
+    // Use parallel reduction for large arrays
+    *out_ptr = parallel_contiguous_reduce(in_ptr, x.size(), Op{}, init);
     return;
   }
 
   if (plan.type == ContiguousReduce && plan.shape.size() == 1) {
     int reduction_size = plan.shape[0];
-    for (int i = 0; i < out.size(); i++, out_ptr++, in_ptr += reduction_size) {
-      *out_ptr = init;
-      contiguous_reduce(in_ptr, out_ptr, reduction_size, Op{}, init);
+    int num_reductions = out.size();
+
+    // Parallelize over output elements (each is an independent reduction)
+    // Only parallelize if total work is large enough AND each thread gets
+    // enough work
+    auto& pool = cpu::ThreadPool::instance();
+    size_t total_elements =
+        static_cast<size_t>(num_reductions) * reduction_size;
+    int n_threads = cpu::effective_threads(total_elements, pool.max_threads());
+
+    // Also ensure each thread handles at least a few reductions to amortize
+    // overhead
+    n_threads = std::min(n_threads, std::max(1, num_reductions / 4));
+
+    if (n_threads <= 1) {
+      for (int i = 0; i < num_reductions;
+           i++, out_ptr++, in_ptr += reduction_size) {
+        *out_ptr = init;
+        contiguous_reduce(in_ptr, out_ptr, reduction_size, Op{}, init);
+      }
+    } else {
+      pool.parallel_for(n_threads, [&, in_ptr, out_ptr](int tid, int nth) {
+        int chunk = (num_reductions + nth - 1) / nth;
+        int start = chunk * tid;
+        int end = std::min(start + chunk, num_reductions);
+
+        const T* my_in = in_ptr + start * reduction_size;
+        U* my_out = out_ptr + start;
+
+        for (int i = start; i < end; i++, my_out++, my_in += reduction_size) {
+          *my_out = init;
+          contiguous_reduce(my_in, my_out, reduction_size, Op{}, init);
+        }
+      });
     }
     return;
   }

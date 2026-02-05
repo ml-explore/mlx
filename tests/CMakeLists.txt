@@ -34,6 +34,7 @@ target_sources(
           utils_tests.cpp
           vmap_tests.cpp
           linalg_tests.cpp
+          thread_pool_tests.cpp
           ${METAL_TEST_SOURCES})
 
 target_link_libraries(tests PRIVATE mlx doctest)
