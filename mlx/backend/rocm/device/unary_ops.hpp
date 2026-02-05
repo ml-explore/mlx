@@ -102,7 +102,13 @@ struct Conjugate {
 struct Cos {
   template <typename T>
   __device__ T operator()(T x) {
-    return cos(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return cosf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::cos(x);
+    } else {
+      return cos(x);
+    }
   }
 };
 
@@ -146,7 +152,13 @@ struct ErfInv {
 struct Exp {
   template <typename T>
   __device__ T operator()(T x) {
-    return exp(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return expf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::exp(x);
+    } else {
+      return exp(x);
+    }
   }
 };
 
@@ -193,7 +205,13 @@ struct Imag {
 struct Log {
   template <typename T>
   __device__ T operator()(T x) {
-    return log(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return logf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::log(x);
+    } else {
+      return log(x);
+    }
   }
 };
 
@@ -235,6 +253,10 @@ struct Log1p {
         float z0 = hypotf(x + 1, y);
         return {logf(z0), theta};
       }
+    } else if constexpr (std::is_same_v<T, float>) {
+      return log1pf(z);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::log1p(z);
     } else {
       return log1p(z);
     }
@@ -326,7 +348,13 @@ struct Sign {
 struct Sin {
   template <typename T>
   __device__ T operator()(T x) {
-    return sin(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return sinf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::sin(x);
+    } else {
+      return sin(x);
+    }
   }
 };
 
@@ -340,7 +368,11 @@ struct Sinh {
 struct Square {
   template <typename T>
   __device__ T operator()(T x) {
-    return x * x;
+    if constexpr (is_complex_v<T>) {
+      return hipCmulf(x, x);
+    } else {
+      return x * x;
+    }
   }
 };
 

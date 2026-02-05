@@ -11,7 +11,11 @@ namespace mlx::core::rocm {
 struct Add {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x + y;
+    if constexpr (is_complex_v<T>) {
+      return hipCaddf(x, y);
+    } else {
+      return x + y;
+    }
   }
 };
 
@@ -34,7 +38,11 @@ struct FloorDivide {
 struct Divide {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x / y;
+    if constexpr (is_complex_v<T>) {
+      return hipCdivf(x, y);
+    } else {
+      return x / y;
+    }
   }
 };
 
@@ -279,7 +287,11 @@ struct Minimum {
 struct Multiply {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x * y;
+    if constexpr (is_complex_v<T>) {
+      return hipCmulf(x, y);
+    } else {
+      return x * y;
+    }
   }
 };
 
@@ -336,7 +348,11 @@ struct Power {
 struct Subtract {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x - y;
+    if constexpr (is_complex_v<T>) {
+      return hipCsubf(x, y);
+    } else {
+      return x - y;
+    }
   }
 };
 

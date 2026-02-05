@@ -93,44 +93,70 @@ void copy_general_dynamic(
   int ndim = shape.size();
   size_t size = out.size();
   
-  // Allocate device memory for shape and strides
+  // Allocate device memory for shape and strides using allocator
+  array shape_arr({ndim}, int32, nullptr, {});
+  array strides_in_arr({ndim}, int64, nullptr, {});
+  array strides_out_arr({ndim}, int64, nullptr, {});
+  shape_arr.set_data(allocator::malloc(ndim * sizeof(int32_t)));
+  strides_in_arr.set_data(allocator::malloc(ndim * sizeof(int64_t)));
+  strides_out_arr.set_data(allocator::malloc(ndim * sizeof(int64_t)));
+  
+  encoder.add_temporary(shape_arr);
+  encoder.add_temporary(strides_in_arr);
+  encoder.add_temporary(strides_out_arr);
+  
+  // Prepare host data
   std::vector<int32_t> h_shape(shape.begin(), shape.end());
   std::vector<int64_t> h_strides_in(strides_in.begin(), strides_in.end());
   std::vector<int64_t> h_strides_out(strides_out.begin(), strides_out.end());
-  
-  int32_t* d_shape;
-  int64_t* d_strides_in;
-  int64_t* d_strides_out;
-  
-  (void)hipMalloc(&d_shape, ndim * sizeof(int32_t));
-  (void)hipMalloc(&d_strides_in, ndim * sizeof(int64_t));
-  (void)hipMalloc(&d_strides_out, ndim * sizeof(int64_t));
-  
-  (void)hipMemcpy(d_shape, h_shape.data(), ndim * sizeof(int32_t), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_strides_in, h_strides_in.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_strides_out, h_strides_out.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice);
   
   int block_size = 256;
   int num_blocks = (size + block_size - 1) / block_size;
   
   bool large = in.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
   
-  encoder.launch_kernel([&](hipStream_t stream) {
+  // Get GPU pointers before lambda to avoid synchronization issues
+  const void* in_ptr_base = gpu_ptr<void>(in);
+  void* out_ptr_base = gpu_ptr<void>(out);
+  int32_t* shape_ptr = gpu_ptr<int32_t>(shape_arr);
+  int64_t* strides_in_ptr = gpu_ptr<int64_t>(strides_in_arr);
+  int64_t* strides_out_ptr = gpu_ptr<int64_t>(strides_out_arr);
+  const int64_t* dyn_offset_in_ptr = gpu_ptr<int64_t>(dynamic_offset_in);
+  const int64_t* dyn_offset_out_ptr = gpu_ptr<int64_t>(dynamic_offset_out);
+  
+  fprintf(stderr, "DEBUG copy_general_dynamic: Starting launch_kernel\n");
+  encoder.launch_kernel([&, h_shape, h_strides_in, h_strides_out, 
+                         in_ptr_base, out_ptr_base, shape_ptr, strides_in_ptr, strides_out_ptr,
+                         dyn_offset_in_ptr, dyn_offset_out_ptr](hipStream_t stream) {
+    fprintf(stderr, "DEBUG copy_general_dynamic: Inside lambda, copying shape\n");
+    // Copy data to device asynchronously
+    (void)hipMemcpyAsync(shape_ptr, h_shape.data(), 
+                         ndim * sizeof(int32_t), hipMemcpyHostToDevice, stream);
+    fprintf(stderr, "DEBUG copy_general_dynamic: Copying strides_in\n");
+    (void)hipMemcpyAsync(strides_in_ptr, h_strides_in.data(), 
+                         ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    fprintf(stderr, "DEBUG copy_general_dynamic: Copying strides_out\n");
+    (void)hipMemcpyAsync(strides_out_ptr, h_strides_out.data(), 
+                         ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    fprintf(stderr, "DEBUG copy_general_dynamic: Launching kernel, ndim=%d, size=%zu\n", ndim, size);
+    
     #define LAUNCH_COPY_DYNAMIC(InT, OutT, IdxT, NDIM) \
       hipLaunchKernelGGL( \
           (rocm::copy_gg_dynamic_nd<InT, OutT, IdxT, NDIM>), \
           dim3(num_blocks), dim3(block_size), 0, stream, \
-          in.data<InT>() + offset_in, out.data<OutT>() + offset_out, \
-          static_cast<IdxT>(size), d_shape, d_strides_in, d_strides_out, \
-          dynamic_offset_in.data<int64_t>(), dynamic_offset_out.data<int64_t>())
+          static_cast<const InT*>(in_ptr_base) + offset_in, static_cast<OutT*>(out_ptr_base) + offset_out, \
+          static_cast<IdxT>(size), shape_ptr, \
+          strides_in_ptr, strides_out_ptr, \
+          dyn_offset_in_ptr, dyn_offset_out_ptr)
     
     #define LAUNCH_COPY_DYNAMIC_GENERAL(InT, OutT, IdxT) \
       hipLaunchKernelGGL( \
           (rocm::copy_gg_dynamic<InT, OutT, IdxT>), \
           dim3(num_blocks), dim3(block_size), 0, stream, \
-          in.data<InT>() + offset_in, out.data<OutT>() + offset_out, \
-          static_cast<IdxT>(size), d_shape, d_strides_in, d_strides_out, \
-          ndim, dynamic_offset_in.data<int64_t>(), dynamic_offset_out.data<int64_t>())
+          static_cast<const InT*>(in_ptr_base) + offset_in, static_cast<OutT*>(out_ptr_base) + offset_out, \
+          static_cast<IdxT>(size), shape_ptr, \
+          strides_in_ptr, strides_out_ptr, \
+          ndim, dyn_offset_in_ptr, dyn_offset_out_ptr)
     
     #define DISPATCH_NDIM(InT, OutT, IdxT) \
       switch (ndim) { \
@@ -171,6 +197,7 @@ void copy_general_dynamic(
     } else {
       DISPATCH_IN_TYPE(int32_t);
     }
+    fprintf(stderr, "DEBUG copy_general_dynamic: Kernel launched\n");
     
     #undef DISPATCH_IN_TYPE
     #undef DISPATCH_OUT_TYPE
@@ -178,13 +205,7 @@ void copy_general_dynamic(
     #undef LAUNCH_COPY_DYNAMIC_GENERAL
     #undef LAUNCH_COPY_DYNAMIC
   });
-  
-  // Schedule cleanup
-  encoder.add_completed_handler([=]() {
-    (void)hipFree(d_shape);
-    (void)hipFree(d_strides_in);
-    (void)hipFree(d_strides_out);
-  });
+  fprintf(stderr, "DEBUG copy_general_dynamic: Returning\n");
 }
 
 } // namespace mlx::core

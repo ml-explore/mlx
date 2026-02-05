@@ -45,6 +45,19 @@ void copy_gpu_inplace(
   if (dynamic_offset_in.has_value() || dynamic_offset_out.has_value()) {
     auto [shape_collapsed, strides_vec] = collapse_contiguous_dims(
         shape, std::vector{strides_in, strides_out}, INT32_MAX);
+    
+    // Create zero offset arrays for missing dynamic offsets
+    if (!dynamic_offset_in) {
+      dynamic_offset_in = array(0, int64);
+      encoder.add_temporary(*dynamic_offset_in);
+    }
+    if (!dynamic_offset_out) {
+      dynamic_offset_out = array(0, int64);
+      encoder.add_temporary(*dynamic_offset_out);
+    }
+    encoder.set_input_array(*dynamic_offset_in);
+    encoder.set_input_array(*dynamic_offset_out);
+    
     copy_general_dynamic(
         encoder,
         ctype,
@@ -55,8 +68,8 @@ void copy_gpu_inplace(
         shape_collapsed,
         strides_vec[0],
         strides_vec[1],
-        dynamic_offset_in.value(),
-        dynamic_offset_out.value());
+        *dynamic_offset_in,
+        *dynamic_offset_out);
     return;
   }
   

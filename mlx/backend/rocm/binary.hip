@@ -9,6 +9,7 @@
 #include "mlx/primitives.h"
 
 #include <hip/hip_runtime.h>
+#include <hip/hip_complex.h>
 
 namespace mlx::core {
 
@@ -121,11 +122,12 @@ __global__ void binary_g(
 template <typename Op, typename In, typename Out>
 constexpr bool supports_binary_op() {
   if constexpr (std::is_same_v<Op, Add> || std::is_same_v<Op, Divide> ||
-      std::is_same_v<Op, Maximum> || std::is_same_v<Op, Minimum> ||
       std::is_same_v<Op, Multiply> || std::is_same_v<Op, Subtract> ||
-      std::is_same_v<Op, Power> || std::is_same_v<Op, Remainder> ||
-      std::is_same_v<Op, FloorDivide>) {
+      std::is_same_v<Op, Power> || std::is_same_v<Op, Maximum> || 
+      std::is_same_v<Op, Minimum>) {
     return std::is_same_v<In, Out>;
+  } else if constexpr (std::is_same_v<Op, Remainder> || std::is_same_v<Op, FloorDivide>) {
+    return std::is_same_v<In, Out> && !is_complex_v<In>;
   } else if constexpr (std::is_same_v<Op, Equal> || std::is_same_v<Op, NotEqual>) {
     return std::is_same_v<Out, bool>;
   } else if constexpr (std::is_same_v<Op, Greater> ||
@@ -137,9 +139,10 @@ constexpr bool supports_binary_op() {
   } else if constexpr (std::is_same_v<Op, NaNEqual>) {
     return std::is_same_v<Out, bool>;
   } else if constexpr (std::is_same_v<Op, LogAddExp>) {
-    return std::is_same_v<In, Out>;
+    return std::is_same_v<In, Out> && !is_complex_v<In>;
   } else if constexpr (std::is_same_v<Op, ArcTan2>) {
-    return std::is_same_v<In, Out> && std::is_floating_point_v<In>;
+    return std::is_same_v<In, Out> && !is_complex_v<In> && 
+        (std::is_floating_point_v<In> || std::is_same_v<In, __half> || std::is_same_v<In, hip_bfloat16>);
   } else if constexpr (std::is_same_v<Op, BitwiseAnd> || std::is_same_v<Op, BitwiseOr> ||
       std::is_same_v<Op, BitwiseXor>) {
     return std::is_same_v<In, Out> && std::is_integral_v<In>;
@@ -242,209 +245,90 @@ void binary_op_gpu_inplace(
   auto bopt = get_binary_op_type(a, b);
   bool large = out.data_size() > UINT32_MAX;
   
-  // Simple dispatch for common types
-  auto launch_kernel = [&](auto a_ptr, auto b_ptr, auto out_ptr, auto size) {
-    using InType = std::remove_pointer_t<decltype(a_ptr)>;
-    using OutType = std::remove_pointer_t<decltype(out_ptr)>;
-    
-    constexpr int N_READS = 4;
-    int block_size = 256;
-    int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
-    num_blocks = std::max(1, std::min(num_blocks, 65535));
-    
-    encoder.launch_kernel([&](hipStream_t stream) {
-      if (bopt == BinaryOpType::ScalarScalar) {
-        if (large) {
-          hipLaunchKernelGGL(
-              (rocm::binary_ss<Op, InType, OutType, int64_t, N_READS>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
+  dispatch_all_types(a.dtype(), [&](auto in_type_tag) {
+    dispatch_all_types(out.dtype(), [&](auto out_type_tag) {
+      using CTYPE_IN = MLX_GET_TYPE(in_type_tag);
+      using CTYPE_OUT = MLX_GET_TYPE(out_type_tag);
+      using InType = hip_type_t<CTYPE_IN>;
+      using OutType = hip_type_t<CTYPE_OUT>;
+      
+      if constexpr (rocm::supports_binary_op<Op, InType, OutType>()) {
+        if (bopt == BinaryOpType::General) {
+          auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
+          rocm::launch_binary_general<Op, InType, OutType>(encoder, a, b, out, shape, strides_vec);
         } else {
-          hipLaunchKernelGGL(
-              (rocm::binary_ss<Op, InType, OutType, uint32_t, N_READS>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
-        }
-      } else if (bopt == BinaryOpType::ScalarVector) {
-        if (large) {
-          hipLaunchKernelGGL(
-              (rocm::binary_sv<Op, InType, OutType, int64_t, N_READS>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::binary_sv<Op, InType, OutType, uint32_t, N_READS>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
-        }
-      } else if (bopt == BinaryOpType::VectorScalar) {
-        if (large) {
-          hipLaunchKernelGGL(
-              (rocm::binary_vs<Op, InType, OutType, int64_t, N_READS>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::binary_vs<Op, InType, OutType, uint32_t, N_READS>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
+          constexpr int N_READS = 4;
+          int block_size = 256;
+          auto size = out.data_size();
+          int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
+          num_blocks = std::max(1, std::min(num_blocks, 65535));
+          
+          encoder.launch_kernel([=, &a, &b, &out](hipStream_t stream) {
+            if (bopt == BinaryOpType::ScalarScalar) {
+              if (large) {
+                hipLaunchKernelGGL(
+                    (rocm::binary_ss<Op, InType, OutType, int64_t, N_READS>),
+                    dim3(num_blocks), dim3(block_size), 0, stream,
+                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                    static_cast<int64_t>(size));
+              } else {
+                hipLaunchKernelGGL(
+                    (rocm::binary_ss<Op, InType, OutType, uint32_t, N_READS>),
+                    dim3(num_blocks), dim3(block_size), 0, stream,
+                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                    static_cast<uint32_t>(size));
+              }
+            } else if (bopt == BinaryOpType::ScalarVector) {
+              if (large) {
+                hipLaunchKernelGGL(
+                    (rocm::binary_sv<Op, InType, OutType, int64_t, N_READS>),
+                    dim3(num_blocks), dim3(block_size), 0, stream,
+                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                    static_cast<int64_t>(size));
+              } else {
+                hipLaunchKernelGGL(
+                    (rocm::binary_sv<Op, InType, OutType, uint32_t, N_READS>),
+                    dim3(num_blocks), dim3(block_size), 0, stream,
+                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                    static_cast<uint32_t>(size));
+              }
+            } else if (bopt == BinaryOpType::VectorScalar) {
+              if (large) {
+                hipLaunchKernelGGL(
+                    (rocm::binary_vs<Op, InType, OutType, int64_t, N_READS>),
+                    dim3(num_blocks), dim3(block_size), 0, stream,
+                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                    static_cast<int64_t>(size));
+              } else {
+                hipLaunchKernelGGL(
+                    (rocm::binary_vs<Op, InType, OutType, uint32_t, N_READS>),
+                    dim3(num_blocks), dim3(block_size), 0, stream,
+                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                    static_cast<uint32_t>(size));
+              }
+            } else {
+              if (large) {
+                hipLaunchKernelGGL(
+                    (rocm::binary_vv<Op, InType, OutType, int64_t, N_READS>),
+                    dim3(num_blocks), dim3(block_size), 0, stream,
+                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                    static_cast<int64_t>(size));
+              } else {
+                hipLaunchKernelGGL(
+                    (rocm::binary_vv<Op, InType, OutType, uint32_t, N_READS>),
+                    dim3(num_blocks), dim3(block_size), 0, stream,
+                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                    static_cast<uint32_t>(size));
+              }
+            }
+          });
         }
       } else {
-        if (large) {
-          hipLaunchKernelGGL(
-              (rocm::binary_vv<Op, InType, OutType, int64_t, N_READS>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              a_ptr, b_ptr, out_ptr, static_cast<int64_t>(size));
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::binary_vv<Op, InType, OutType, uint32_t, N_READS>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              a_ptr, b_ptr, out_ptr, static_cast<uint32_t>(size));
-        }
+        throw std::runtime_error(
+            std::string("Unsupported type for binary op ") + op);
       }
     });
-  };
-  
-  // Type dispatch
-  switch (a.dtype()) {
-    case float32:
-      if (bopt == BinaryOpType::General) {
-        auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
-        if (out.dtype() == bool_) {
-          rocm::launch_binary_general<Op, float, bool>(encoder, a, b, out, shape, strides_vec);
-        } else {
-          rocm::launch_binary_general<Op, float, float>(encoder, a, b, out, shape, strides_vec);
-        }
-      } else if (out.dtype() == bool_) {
-        launch_kernel(a.data<float>(), b.data<float>(), out.data<bool>(), out.data_size());
-      } else {
-        launch_kernel(a.data<float>(), b.data<float>(), out.data<float>(), out.data_size());
-      }
-      break;
-    case float16:
-      if (bopt == BinaryOpType::General) {
-        auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
-        if (out.dtype() == bool_) {
-          rocm::launch_binary_general<Op, __half, bool>(encoder, a, b, out, shape, strides_vec);
-        } else {
-          rocm::launch_binary_general<Op, __half, __half>(encoder, a, b, out, shape, strides_vec);
-        }
-      } else if (out.dtype() == bool_) {
-        launch_kernel(a.data<__half>(), b.data<__half>(), out.data<bool>(), out.data_size());
-      } else {
-        launch_kernel(a.data<__half>(), b.data<__half>(), out.data<__half>(), out.data_size());
-      }
-      break;
-    case bfloat16:
-      if (bopt == BinaryOpType::General) {
-        auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
-        if (out.dtype() == bool_) {
-          rocm::launch_binary_general<Op, hip_bfloat16, bool>(encoder, a, b, out, shape, strides_vec);
-        } else {
-          rocm::launch_binary_general<Op, hip_bfloat16, hip_bfloat16>(encoder, a, b, out, shape, strides_vec);
-        }
-      } else if (out.dtype() == bool_) {
-        launch_kernel(a.data<hip_bfloat16>(), b.data<hip_bfloat16>(), out.data<bool>(), out.data_size());
-      } else {
-        launch_kernel(a.data<hip_bfloat16>(), b.data<hip_bfloat16>(), out.data<hip_bfloat16>(), out.data_size());
-      }
-      break;
-    case int32:
-      if (bopt == BinaryOpType::General) {
-        auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
-        if (out.dtype() == bool_) {
-          rocm::launch_binary_general<Op, int32_t, bool>(encoder, a, b, out, shape, strides_vec);
-        } else {
-          rocm::launch_binary_general<Op, int32_t, int32_t>(encoder, a, b, out, shape, strides_vec);
-        }
-      } else if (out.dtype() == bool_) {
-        launch_kernel(a.data<int32_t>(), b.data<int32_t>(), out.data<bool>(), out.data_size());
-      } else {
-        launch_kernel(a.data<int32_t>(), b.data<int32_t>(), out.data<int32_t>(), out.data_size());
-      }
-      break;
-    case int64:
-      if (bopt == BinaryOpType::General) {
-        auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
-        if (out.dtype() == bool_) {
-          rocm::launch_binary_general<Op, int64_t, bool>(encoder, a, b, out, shape, strides_vec);
-        } else {
-          rocm::launch_binary_general<Op, int64_t, int64_t>(encoder, a, b, out, shape, strides_vec);
-        }
-      } else if (out.dtype() == bool_) {
-        launch_kernel(a.data<int64_t>(), b.data<int64_t>(), out.data<bool>(), out.data_size());
-      } else {
-        launch_kernel(a.data<int64_t>(), b.data<int64_t>(), out.data<int64_t>(), out.data_size());
-      }
-      break;
-    case uint32:
-      if (bopt == BinaryOpType::General) {
-        auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
-        if (out.dtype() == bool_) {
-          rocm::launch_binary_general<Op, uint32_t, bool>(encoder, a, b, out, shape, strides_vec);
-        } else {
-          rocm::launch_binary_general<Op, uint32_t, uint32_t>(encoder, a, b, out, shape, strides_vec);
-        }
-      } else if (out.dtype() == bool_) {
-        launch_kernel(a.data<uint32_t>(), b.data<uint32_t>(), out.data<bool>(), out.data_size());
-      } else {
-        launch_kernel(a.data<uint32_t>(), b.data<uint32_t>(), out.data<uint32_t>(), out.data_size());
-      }
-      break;
-    case uint64:
-      if (bopt == BinaryOpType::General) {
-        auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
-        if (out.dtype() == bool_) {
-          rocm::launch_binary_general<Op, uint64_t, bool>(encoder, a, b, out, shape, strides_vec);
-        } else {
-          rocm::launch_binary_general<Op, uint64_t, uint64_t>(encoder, a, b, out, shape, strides_vec);
-        }
-      } else if (out.dtype() == bool_) {
-        launch_kernel(a.data<uint64_t>(), b.data<uint64_t>(), out.data<bool>(), out.data_size());
-      } else {
-        launch_kernel(a.data<uint64_t>(), b.data<uint64_t>(), out.data<uint64_t>(), out.data_size());
-      }
-      break;
-    case int8:
-      if (bopt == BinaryOpType::General) {
-        auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
-        if (out.dtype() == bool_) {
-          rocm::launch_binary_general<Op, int8_t, bool>(encoder, a, b, out, shape, strides_vec);
-        } else {
-          rocm::launch_binary_general<Op, int8_t, int8_t>(encoder, a, b, out, shape, strides_vec);
-        }
-      } else if (out.dtype() == bool_) {
-        launch_kernel(a.data<int8_t>(), b.data<int8_t>(), out.data<bool>(), out.data_size());
-      } else {
-        launch_kernel(a.data<int8_t>(), b.data<int8_t>(), out.data<int8_t>(), out.data_size());
-      }
-      break;
-    case uint8:
-      if (bopt == BinaryOpType::General) {
-        auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
-        if (out.dtype() == bool_) {
-          rocm::launch_binary_general<Op, uint8_t, bool>(encoder, a, b, out, shape, strides_vec);
-        } else {
-          rocm::launch_binary_general<Op, uint8_t, uint8_t>(encoder, a, b, out, shape, strides_vec);
-        }
-      } else if (out.dtype() == bool_) {
-        launch_kernel(a.data<uint8_t>(), b.data<uint8_t>(), out.data<bool>(), out.data_size());
-      } else {
-        launch_kernel(a.data<uint8_t>(), b.data<uint8_t>(), out.data<uint8_t>(), out.data_size());
-      }
-      break;
-    case bool_:
-      if (bopt == BinaryOpType::General) {
-        auto [shape, strides_vec] = collapse_contiguous_dims(a, b, out);
-        rocm::launch_binary_general<Op, bool, bool>(encoder, a, b, out, shape, strides_vec);
-      } else {
-        launch_kernel(a.data<bool>(), b.data<bool>(), out.data<bool>(), out.data_size());
-      }
-      break;
-    default:
-      throw std::runtime_error(
-          std::string("Unsupported type for binary op ") + op);
-  }
+  });
 }
 
 template <typename Op>

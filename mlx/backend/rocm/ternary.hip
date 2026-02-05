@@ -1,6 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/ternary.h"
+#include "mlx/backend/common/utils.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/device/ternary_ops.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
@@ -15,26 +17,6 @@ namespace mlx::core {
 
 namespace rocm {
 
-// Helper function to copy a value byte-by-byte
-template <typename T>
-__device__ __forceinline__ void copy_value(T* dst, const T* src) {
-  // Use unsigned short for 2-byte types, unsigned int for 4-byte, etc.
-  if constexpr (sizeof(T) == 1) {
-    *reinterpret_cast<unsigned char*>(dst) = *reinterpret_cast<const unsigned char*>(src);
-  } else if constexpr (sizeof(T) == 2) {
-    *reinterpret_cast<unsigned short*>(dst) = *reinterpret_cast<const unsigned short*>(src);
-  } else if constexpr (sizeof(T) == 4) {
-    *reinterpret_cast<unsigned int*>(dst) = *reinterpret_cast<const unsigned int*>(src);
-  } else if constexpr (sizeof(T) == 8) {
-    *reinterpret_cast<unsigned long long*>(dst) = *reinterpret_cast<const unsigned long long*>(src);
-  } else {
-    // Fallback for other sizes
-    for (size_t i = 0; i < sizeof(T); ++i) {
-      reinterpret_cast<unsigned char*>(dst)[i] = reinterpret_cast<const unsigned char*>(src)[i];
-    }
-  }
-}
-
 template <typename Op, typename T, typename IdxT, int N_READS>
 __global__ void
 ternary_v(const bool* a, const T* b, const T* c, T* out, IdxT size) {
@@ -45,15 +27,11 @@ ternary_v(const bool* a, const T* b, const T* c, T* out, IdxT size) {
     if (i + N_READS <= size) {
       #pragma unroll
       for (int j = 0; j < N_READS; ++j) {
-        bool cond = a[i + j];
-        const T* src = cond ? &b[i + j] : &c[i + j];
-        copy_value(&out[i + j], src);
+        out[i + j] = Op{}(a[i + j], b[i + j], c[i + j]);
       }
     } else {
       for (IdxT j = i; j < size; ++j) {
-        bool cond = a[j];
-        const T* src = cond ? &b[j] : &c[j];
-        copy_value(&out[j], src);
+        out[j] = Op{}(a[j], b[j], c[j]);
       }
     }
   }
@@ -82,34 +60,36 @@ __global__ void ternary_g(
   auto c_stride_x = c_strides[ndim - 1];
   IdxT index_x = blockIdx.x * blockDim.x + threadIdx.x;
   
-  // Compute base offsets for this row
+  // Compute base offsets using elem_to_loc style calculation
+  IdxT elem = index_rest * shape_x;
   IdxT a_offset = 0;
   IdxT b_offset = 0;
   IdxT c_offset = 0;
-  IdxT out_offset = index_rest * shape_x;
-  
-  IdxT idx = index_rest;
-  for (int d = ndim - 2; d >= 0; --d) {
-    IdxT coord = idx % shape[d];
-    idx /= shape[d];
-    a_offset += coord * a_strides[d];
-    b_offset += coord * b_strides[d];
-    c_offset += coord * c_strides[d];
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
+    IdxT coord = elem % shape[i];
+    elem /= shape[i];
+    a_offset += coord * a_strides[i];
+    b_offset += coord * b_strides[i];
+    c_offset += coord * c_strides[i];
   }
+  
+  IdxT out_offset = index_rest * shape_x;
 
   for (IdxT i = index_x * N_READS; i < shape_x; i += blockDim.x * gridDim.x * N_READS) {
     if (i + N_READS <= shape_x) {
       #pragma unroll
       for (int j = 0; j < N_READS; ++j) {
         bool cond = a[a_offset + (i + j) * a_stride_x];
-        const T* src = cond ? &b[b_offset + (i + j) * b_stride_x] : &c[c_offset + (i + j) * c_stride_x];
-        copy_value(&out[out_offset + i + j], src);
+        T b_val = b[b_offset + (i + j) * b_stride_x];
+        T c_val = c[c_offset + (i + j) * c_stride_x];
+        out[out_offset + i + j] = Op{}(cond, b_val, c_val);
       }
     } else {
       for (IdxT j = i; j < shape_x; ++j) {
         bool cond = a[a_offset + j * a_stride_x];
-        const T* src = cond ? &b[b_offset + j * b_stride_x] : &c[c_offset + j * c_stride_x];
-        copy_value(&out[out_offset + j], src);
+        T b_val = b[b_offset + j * b_stride_x];
+        T c_val = c[c_offset + j * c_stride_x];
+        out[out_offset + j] = Op{}(cond, b_val, c_val);
       }
     }
   }
@@ -126,58 +106,135 @@ void ternary_op_gpu_inplace(
   const auto& b = inputs[1];
   const auto& c = inputs[2];
   
+  if (out.size() == 0) {
+    return;
+  }
+  
   auto& encoder = rocm::get_command_encoder(s);
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(c);
+  encoder.set_output_array(out);
   
   constexpr int N_READS = 4;
   int block_size = 256;
   
-  auto launch_kernel = [&](auto* b_ptr, auto* c_ptr, auto* out_ptr, size_t size) {
-    using T = std::remove_pointer_t<decltype(out_ptr)>;
-    int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
-    
-    encoder.launch_kernel([&](hipStream_t stream) {
-      hipLaunchKernelGGL(
-          (rocm::ternary_v<Op, T, int64_t, N_READS>),
-          dim3(num_blocks), dim3(block_size), 0, stream,
-          a.data<bool>(), b_ptr, c_ptr, out_ptr, static_cast<int64_t>(size));
-    });
-  };
+  auto topt = get_ternary_op_type(a, b, c);
   
-  switch (out.dtype()) {
-    case float32:
-      launch_kernel(b.data<float>(), c.data<float>(), out.data<float>(), out.data_size());
-      break;
-    case float16:
-      launch_kernel(b.data<__half>(), c.data<__half>(), out.data<__half>(), out.data_size());
-      break;
-    case bfloat16:
-      launch_kernel(b.data<hip_bfloat16>(), c.data<hip_bfloat16>(), out.data<hip_bfloat16>(), out.data_size());
-      break;
-    case int32:
-      launch_kernel(b.data<int32_t>(), c.data<int32_t>(), out.data<int32_t>(), out.data_size());
-      break;
-    case int64:
-      launch_kernel(b.data<int64_t>(), c.data<int64_t>(), out.data<int64_t>(), out.data_size());
-      break;
-    case uint32:
-      launch_kernel(b.data<uint32_t>(), c.data<uint32_t>(), out.data<uint32_t>(), out.data_size());
-      break;
-    case uint64:
-      launch_kernel(b.data<uint64_t>(), c.data<uint64_t>(), out.data<uint64_t>(), out.data_size());
-      break;
-    case int8:
-      launch_kernel(b.data<int8_t>(), c.data<int8_t>(), out.data<int8_t>(), out.data_size());
-      break;
-    case uint8:
-      launch_kernel(b.data<uint8_t>(), c.data<uint8_t>(), out.data<uint8_t>(), out.data_size());
-      break;
-    case bool_:
-      launch_kernel(b.data<bool>(), c.data<bool>(), out.data<bool>(), out.data_size());
-      break;
-    default:
-      throw std::runtime_error(
-          std::string("Unsupported type for ternary op: ") + dtype_to_string(out.dtype()));
-  }
+  dispatch_all_types(out.dtype(), [&](auto type_tag) {
+    using CTYPE = MLX_GET_TYPE(type_tag);
+    using DType = hip_type_t<CTYPE>;
+    
+    if (topt == TernaryOpType::VectorVectorVector ||
+        topt == TernaryOpType::ScalarScalarScalar) {
+      // Contiguous case - use ternary_v
+      auto size = out.data_size();
+      int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
+      num_blocks = std::min(num_blocks, 65535);
+      
+      encoder.launch_kernel([&](hipStream_t stream) {
+        hipLaunchKernelGGL(
+            (rocm::ternary_v<Op, DType, int64_t, N_READS>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            gpu_ptr<const bool>(a), gpu_ptr<const DType>(b), gpu_ptr<const DType>(c),
+            gpu_ptr<DType>(out), static_cast<int64_t>(size));
+      });
+    } else {
+      // General case - use ternary_g with strided access
+      Shape shape_vec;
+      std::vector<Strides> strides_vec;
+      std::tie(shape_vec, strides_vec) = collapse_contiguous_dims(a, b, c, out);
+      auto& a_strides_vec = strides_vec[0];
+      auto& b_strides_vec = strides_vec[1];
+      auto& c_strides_vec = strides_vec[2];
+      int ndim = shape_vec.size();
+      
+      // Allocate device memory for shape and strides
+      array shape_arr({ndim}, int32, nullptr, {});
+      array a_strides_arr({ndim}, int64, nullptr, {});
+      array b_strides_arr({ndim}, int64, nullptr, {});
+      array c_strides_arr({ndim}, int64, nullptr, {});
+      shape_arr.set_data(allocator::malloc(shape_arr.nbytes()));
+      a_strides_arr.set_data(allocator::malloc(a_strides_arr.nbytes()));
+      b_strides_arr.set_data(allocator::malloc(b_strides_arr.nbytes()));
+      c_strides_arr.set_data(allocator::malloc(c_strides_arr.nbytes()));
+      encoder.add_temporary(shape_arr);
+      encoder.add_temporary(a_strides_arr);
+      encoder.add_temporary(b_strides_arr);
+      encoder.add_temporary(c_strides_arr);
+      
+      // Copy to vectors for capture
+      std::vector<int32_t> shape_copy(shape_vec.begin(), shape_vec.end());
+      std::vector<int64_t> a_strides_copy(a_strides_vec.begin(), a_strides_vec.end());
+      std::vector<int64_t> b_strides_copy(b_strides_vec.begin(), b_strides_vec.end());
+      std::vector<int64_t> c_strides_copy(c_strides_vec.begin(), c_strides_vec.end());
+      
+      int dim0 = ndim > 0 ? shape_vec.back() : 1;
+      size_t rest = out.size() / dim0;
+      
+      int work_per_thread = (dim0 >= 4) ? 4 : 1;
+      dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
+      
+      int block_x = std::min(dim0, 32);
+      int block_y = std::min(static_cast<int>(rest), 256 / block_x);
+      int num_blocks_x = (dim0 + block_x - 1) / block_x;
+      int num_blocks_y = (rest + block_y - 1) / block_y;
+      
+      encoder.launch_kernel([=, &a, &b, &c, &out, &shape_arr, &a_strides_arr, &b_strides_arr, &c_strides_arr](hipStream_t stream) {
+        // Copy shape and strides to device
+        (void)hipMemcpyAsync(
+            shape_arr.data<int32_t>(),
+            shape_copy.data(),
+            ndim * sizeof(int32_t),
+            hipMemcpyHostToDevice,
+            stream);
+        (void)hipMemcpyAsync(
+            a_strides_arr.data<int64_t>(),
+            a_strides_copy.data(),
+            ndim * sizeof(int64_t),
+            hipMemcpyHostToDevice,
+            stream);
+        (void)hipMemcpyAsync(
+            b_strides_arr.data<int64_t>(),
+            b_strides_copy.data(),
+            ndim * sizeof(int64_t),
+            hipMemcpyHostToDevice,
+            stream);
+        (void)hipMemcpyAsync(
+            c_strides_arr.data<int64_t>(),
+            c_strides_copy.data(),
+            ndim * sizeof(int64_t),
+            hipMemcpyHostToDevice,
+            stream);
+        
+        if (work_per_thread == 4) {
+          hipLaunchKernelGGL(
+              (rocm::ternary_g<Op, DType, int64_t, 4>),
+              dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
+              gpu_ptr<const bool>(a), gpu_ptr<const DType>(b), gpu_ptr<const DType>(c),
+              gpu_ptr<DType>(out),
+              static_cast<int64_t>(rest),
+              shape_arr.data<int32_t>(),
+              a_strides_arr.data<int64_t>(),
+              b_strides_arr.data<int64_t>(),
+              c_strides_arr.data<int64_t>(),
+              ndim);
+        } else {
+          hipLaunchKernelGGL(
+              (rocm::ternary_g<Op, DType, int64_t, 1>),
+              dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
+              gpu_ptr<const bool>(a), gpu_ptr<const DType>(b), gpu_ptr<const DType>(c),
+              gpu_ptr<DType>(out),
+              static_cast<int64_t>(rest),
+              shape_arr.data<int32_t>(),
+              a_strides_arr.data<int64_t>(),
+              b_strides_arr.data<int64_t>(),
+              c_strides_arr.data<int64_t>(),
+              ndim);
+        }
+      });
+    }
+  });
 }
 
 template <typename Op>

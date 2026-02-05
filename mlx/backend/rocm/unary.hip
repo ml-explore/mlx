@@ -1,6 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/unary.h"
+#include "mlx/backend/common/utils.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/device/unary_ops.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
@@ -52,12 +54,13 @@ __global__ void unary_g(
   auto stride_x = strides[ndim - 1];
   IdxT index_x = blockIdx.x * blockDim.x + threadIdx.x;
   
-  // Compute base offset for this row
+  // Compute base offset for this row using elem_to_loc style calculation
+  // elem = index_rest * shape_x gives us the linear element index for the start of this row
+  IdxT elem = index_rest * shape_x;
   IdxT idx = 0;
-  IdxT tmp = index_rest * shape_x;
-  for (int i = ndim - 1; i >= 0; --i) {
-    idx += (tmp % shape[i]) * strides[i];
-    tmp /= shape[i];
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
+    idx += (elem % shape[i]) * strides[i];
+    elem /= shape[i];
   }
   
   // Process elements in this row
@@ -161,25 +164,115 @@ void unary_op_gpu_inplace(
       using OutType = hip_type_t<CTYPE_OUT>;
       
       if constexpr (rocm::supports_unary_op<Op, InType, OutType>()) {
-        constexpr int N_READS = 4;
-        int block_size = 256;
-        auto size = out.data_size();
-        int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
-        num_blocks = std::min(num_blocks, 65535);
-        
-        encoder.launch_kernel([&](hipStream_t stream) {
-          if (large) {
-            hipLaunchKernelGGL(
-                (rocm::unary_v<Op, InType, OutType, int64_t, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                gpu_ptr<const InType>(in), gpu_ptr<OutType>(out), static_cast<int64_t>(size));
-          } else {
-            hipLaunchKernelGGL(
-                (rocm::unary_v<Op, InType, OutType, uint32_t, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                gpu_ptr<const InType>(in), gpu_ptr<OutType>(out), static_cast<uint32_t>(size));
-          }
-        });
+        if (contig) {
+          // Contiguous case - use unary_v
+          constexpr int N_READS = 4;
+          int block_size = 256;
+          auto size = out.data_size();
+          int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
+          num_blocks = std::min(num_blocks, 65535);
+          
+          encoder.launch_kernel([&](hipStream_t stream) {
+            if (large) {
+              hipLaunchKernelGGL(
+                  (rocm::unary_v<Op, InType, OutType, int64_t, N_READS>),
+                  dim3(num_blocks), dim3(block_size), 0, stream,
+                  gpu_ptr<const InType>(in), gpu_ptr<OutType>(out), static_cast<int64_t>(size));
+            } else {
+              hipLaunchKernelGGL(
+                  (rocm::unary_v<Op, InType, OutType, uint32_t, N_READS>),
+                  dim3(num_blocks), dim3(block_size), 0, stream,
+                  gpu_ptr<const InType>(in), gpu_ptr<OutType>(out), static_cast<uint32_t>(size));
+            }
+          });
+        } else {
+          // Non-contiguous case - use unary_g with strided access
+          auto [shape_vec, strides_vec] = collapse_contiguous_dims(in);
+          int ndim = shape_vec.size();
+          
+          // Allocate device memory for shape and strides
+          array shape_arr({ndim}, int32, nullptr, {});
+          array strides_arr({ndim}, int64, nullptr, {});
+          shape_arr.set_data(allocator::malloc(shape_arr.nbytes()));
+          strides_arr.set_data(allocator::malloc(strides_arr.nbytes()));
+          encoder.add_temporary(shape_arr);
+          encoder.add_temporary(strides_arr);
+          
+          // Copy shape and strides to vectors for capture
+          std::vector<int32_t> shape_copy(shape_vec.begin(), shape_vec.end());
+          std::vector<int64_t> strides_copy(strides_vec.begin(), strides_vec.end());
+          
+          int dim0 = ndim > 0 ? shape_vec.back() : 1;
+          size_t rest = out.size() / dim0;
+          
+          constexpr int N_READS = 4;
+          int work_per_thread = (dim0 >= 4) ? 4 : 1;
+          dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
+          
+          // Calculate block and grid dimensions
+          int block_x = std::min(dim0, 32);
+          int block_y = std::min(static_cast<int>(rest), 256 / block_x);
+          int num_blocks_x = (dim0 + block_x - 1) / block_x;
+          int num_blocks_y = (rest + block_y - 1) / block_y;
+          
+          encoder.launch_kernel([=, &in, &out, &shape_arr, &strides_arr](hipStream_t stream) {
+            // Copy shape and strides to device
+            (void)hipMemcpyAsync(
+                shape_arr.data<int32_t>(),
+                shape_copy.data(),
+                ndim * sizeof(int32_t),
+                hipMemcpyHostToDevice,
+                stream);
+            (void)hipMemcpyAsync(
+                strides_arr.data<int64_t>(),
+                strides_copy.data(),
+                ndim * sizeof(int64_t),
+                hipMemcpyHostToDevice,
+                stream);
+            
+            if (large) {
+              if (work_per_thread == 4) {
+                hipLaunchKernelGGL(
+                    (rocm::unary_g<Op, InType, OutType, int64_t, 4>),
+                    dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
+                    gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
+                    static_cast<int64_t>(rest),
+                    shape_arr.data<int32_t>(),
+                    strides_arr.data<int64_t>(),
+                    ndim);
+              } else {
+                hipLaunchKernelGGL(
+                    (rocm::unary_g<Op, InType, OutType, int64_t, 1>),
+                    dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
+                    gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
+                    static_cast<int64_t>(rest),
+                    shape_arr.data<int32_t>(),
+                    strides_arr.data<int64_t>(),
+                    ndim);
+              }
+            } else {
+              if (work_per_thread == 4) {
+                hipLaunchKernelGGL(
+                    (rocm::unary_g<Op, InType, OutType, int32_t, 4>),
+                    dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
+                    gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
+                    static_cast<int32_t>(rest),
+                    shape_arr.data<int32_t>(),
+                    strides_arr.data<int64_t>(),
+                    ndim);
+              } else {
+                hipLaunchKernelGGL(
+                    (rocm::unary_g<Op, InType, OutType, int32_t, 1>),
+                    dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
+                    gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
+                    static_cast<int32_t>(rest),
+                    shape_arr.data<int32_t>(),
+                    strides_arr.data<int64_t>(),
+                    ndim);
+              }
+            }
+          });
+        }
       }
     });
   });

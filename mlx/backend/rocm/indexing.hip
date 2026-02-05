@@ -180,23 +180,18 @@ __global__ void scatter_general_kernel(
     return;
   }
 
-  // Compute update location
-  int64_t upd_loc = 0;
-  int64_t tmp = gid;
-  for (int i = upd_ndim - 1; i >= 0; --i) {
-    upd_loc += (tmp % upd_shape[i]) * upd_strides[i];
-    tmp /= upd_shape[i];
-  }
-
-  int64_t idx_elem = gid / upd_post_idx_size;
   int64_t out_elem = gid % upd_post_idx_size;
+  int64_t idx_elem = gid / upd_post_idx_size;
 
-  // Compute output location from out_elem
+  // Compute output location from out_elem using upd_shape after idx_ndim dimensions
+  // This matches the CUDA implementation: elem_to_loc(out_elem, upd_shape + IDX_NDIM, out_strides, out_ndim)
   int64_t out_loc = 0;
-  tmp = out_elem;
+  int64_t tmp = out_elem;
   for (int i = out_ndim - 1; i >= 0; --i) {
-    out_loc += (tmp % out_shape[i]) * out_strides[i];
-    tmp /= out_shape[i];
+    // Use upd_shape[idx_ndim + i] for the shape dimensions after the index dimensions
+    int32_t dim_size = (idx_ndim + i < upd_ndim) ? upd_shape[idx_ndim + i] : 1;
+    out_loc += (tmp % dim_size) * out_strides[i];
+    tmp /= dim_size;
   }
 
   // Add index contributions
@@ -220,6 +215,14 @@ __global__ void scatter_general_kernel(
     out_loc += idx_val * out_strides[axis];
   }
 
+  // Compute update location
+  int64_t upd_loc = 0;
+  tmp = out_elem + idx_elem * upd_post_idx_size;
+  for (int i = upd_ndim - 1; i >= 0; --i) {
+    upd_loc += (tmp % upd_shape[i]) * upd_strides[i];
+    tmp /= upd_shape[i];
+  }
+
   T val = upd[upd_loc];
   
   // Apply reduce operation
@@ -239,28 +242,124 @@ __global__ void scatter_general_kernel(
     } else if constexpr (std::is_same_v<T, uint64_t>) {
       atomicAdd(&out[out_loc], val);
     } else {
-      // Fallback for types without atomic support
-      out[out_loc] += val;
+      // Fallback for types without atomic support - use CAS loop
+      T* addr = &out[out_loc];
+      T old_val = *addr;
+      T new_val;
+      do {
+        new_val = old_val + val;
+      } while (!__hip_atomic_compare_exchange_strong(addr, &old_val, new_val, 
+               __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT));
     }
   } else if constexpr (ReduceType == 2) { // Prod
-    out[out_loc] *= val;
-  } else if constexpr (ReduceType == 3) { // Max
-    // Use atomicMax where available
-    if constexpr (std::is_same_v<T, int32_t>) {
-      atomicMax(&out[out_loc], val);
-    } else if constexpr (std::is_same_v<T, uint32_t>) {
-      atomicMax(&out[out_loc], val);
+    // Use CAS loop for atomic multiply
+    if constexpr (std::is_same_v<T, float>) {
+      float* addr = &out[out_loc];
+      float old_val = *addr;
+      float new_val;
+      do {
+        new_val = old_val * val;
+      } while (!__hip_atomic_compare_exchange_strong(addr, &old_val, new_val,
+               __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT));
+    } else if constexpr (std::is_same_v<T, int32_t>) {
+      int32_t* addr = &out[out_loc];
+      int32_t old_val = *addr;
+      int32_t new_val;
+      do {
+        new_val = old_val * val;
+      } while (!__hip_atomic_compare_exchange_strong(addr, &old_val, new_val,
+               __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT));
     } else {
-      // Fallback
-      if (val > out[out_loc]) out[out_loc] = val;
+      // Fallback for other types
+      T* addr = &out[out_loc];
+      T old_val = *addr;
+      T new_val;
+      do {
+        new_val = old_val * val;
+      } while (!__hip_atomic_compare_exchange_strong(addr, &old_val, new_val,
+               __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT));
+    }
+  } else if constexpr (ReduceType == 3) { // Max
+    // Use CAS loop for atomic max
+    if constexpr (std::is_same_v<T, int32_t>) {
+      int32_t* addr = &out[out_loc];
+      int32_t old_val = *addr;
+      while (val > old_val) {
+        if (__hip_atomic_compare_exchange_strong(addr, &old_val, val,
+            __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT)) {
+          break;
+        }
+      }
+    } else if constexpr (std::is_same_v<T, uint32_t>) {
+      uint32_t* addr = &out[out_loc];
+      uint32_t old_val = *addr;
+      while (val > old_val) {
+        if (__hip_atomic_compare_exchange_strong(addr, &old_val, val,
+            __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT)) {
+          break;
+        }
+      }
+    } else if constexpr (std::is_same_v<T, float>) {
+      // Use CAS loop for float max
+      float* addr = &out[out_loc];
+      float old_val = *addr;
+      while (val > old_val) {
+        if (__hip_atomic_compare_exchange_strong(addr, &old_val, val,
+            __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT)) {
+          break;
+        }
+      }
+    } else {
+      // Fallback for other types
+      T* addr = &out[out_loc];
+      T old_val = *addr;
+      while (val > old_val) {
+        if (__hip_atomic_compare_exchange_strong(addr, &old_val, val,
+            __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT)) {
+          break;
+        }
+      }
     }
   } else if constexpr (ReduceType == 4) { // Min
+    // Use CAS loop for atomic min
     if constexpr (std::is_same_v<T, int32_t>) {
-      atomicMin(&out[out_loc], val);
+      int32_t* addr = &out[out_loc];
+      int32_t old_val = *addr;
+      while (val < old_val) {
+        if (__hip_atomic_compare_exchange_strong(addr, &old_val, val,
+            __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT)) {
+          break;
+        }
+      }
     } else if constexpr (std::is_same_v<T, uint32_t>) {
-      atomicMin(&out[out_loc], val);
+      uint32_t* addr = &out[out_loc];
+      uint32_t old_val = *addr;
+      while (val < old_val) {
+        if (__hip_atomic_compare_exchange_strong(addr, &old_val, val,
+            __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT)) {
+          break;
+        }
+      }
+    } else if constexpr (std::is_same_v<T, float>) {
+      // Use CAS loop for float min
+      float* addr = &out[out_loc];
+      float old_val = *addr;
+      while (val < old_val) {
+        if (__hip_atomic_compare_exchange_strong(addr, &old_val, val,
+            __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT)) {
+          break;
+        }
+      }
     } else {
-      if (val < out[out_loc]) out[out_loc] = val;
+      // Fallback for other types
+      T* addr = &out[out_loc];
+      T old_val = *addr;
+      while (val < old_val) {
+        if (__hip_atomic_compare_exchange_strong(addr, &old_val, val,
+            __ATOMIC_RELAXED, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT)) {
+          break;
+        }
+      }
     }
   }
 }
@@ -285,16 +384,16 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   uint32_t slice_size = std::accumulate(
       slice_sizes_.begin(), slice_sizes_.end(), 1, std::multiplies<uint32_t>());
 
-  // Prepare device memory for parameters
+  // Prepare host data for parameters
   std::vector<int32_t> h_src_shape(src.shape().begin(), src.shape().end());
   std::vector<int64_t> h_src_strides(src.strides().begin(), src.strides().end());
   std::vector<int32_t> h_slice_sizes(slice_sizes_.begin(), slice_sizes_.end());
   std::vector<int32_t> h_axes(axes_.begin(), axes_.end());
 
   // Prepare indices pointers and metadata
-  std::vector<const void*> h_indices(nidx);
-  std::vector<int32_t> h_indices_shape(nidx * std::max(idx_ndim, 1));
-  std::vector<int64_t> h_indices_strides(nidx * std::max(idx_ndim, 1));
+  std::vector<const void*> h_indices(std::max(nidx, 1));
+  std::vector<int32_t> h_indices_shape(std::max(nidx, 1) * std::max(idx_ndim, 1));
+  std::vector<int64_t> h_indices_strides(std::max(nidx, 1) * std::max(idx_ndim, 1));
 
   for (int i = 0; i < nidx; ++i) {
     h_indices[i] = inputs[i + 1].data<void>();
@@ -313,45 +412,62 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   int block_size = 256;
   int num_blocks = (total + block_size - 1) / block_size;
 
-  // Allocate device memory for parameters
-  int32_t* d_src_shape;
-  int64_t* d_src_strides;
-  int32_t* d_slice_sizes;
-  int32_t* d_axes;
-  const void** d_indices;
-  int32_t* d_indices_shape;
-  int64_t* d_indices_strides;
+  // Allocate device memory using allocator
+  array src_shape_arr({static_cast<int>(h_src_shape.size())}, int32, nullptr, {});
+  src_shape_arr.set_data(allocator::malloc(h_src_shape.size() * sizeof(int32_t)));
+  
+  array src_strides_arr({static_cast<int>(h_src_strides.size())}, int64, nullptr, {});
+  src_strides_arr.set_data(allocator::malloc(h_src_strides.size() * sizeof(int64_t)));
+  
+  array slice_sizes_arr({static_cast<int>(h_slice_sizes.size())}, int32, nullptr, {});
+  slice_sizes_arr.set_data(allocator::malloc(h_slice_sizes.size() * sizeof(int32_t)));
+  
+  array axes_arr({static_cast<int>(h_axes.size())}, int32, nullptr, {});
+  axes_arr.set_data(allocator::malloc(std::max(h_axes.size(), (size_t)1) * sizeof(int32_t)));
+  
+  array indices_arr({static_cast<int>(h_indices.size())}, int64, nullptr, {});
+  indices_arr.set_data(allocator::malloc(h_indices.size() * sizeof(void*)));
+  
+  array indices_shape_arr({static_cast<int>(h_indices_shape.size())}, int32, nullptr, {});
+  indices_shape_arr.set_data(allocator::malloc(h_indices_shape.size() * sizeof(int32_t)));
+  
+  array indices_strides_arr({static_cast<int>(h_indices_strides.size())}, int64, nullptr, {});
+  indices_strides_arr.set_data(allocator::malloc(h_indices_strides.size() * sizeof(int64_t)));
 
-  (void)hipMalloc(&d_src_shape, h_src_shape.size() * sizeof(int32_t));
-  (void)hipMalloc(&d_src_strides, h_src_strides.size() * sizeof(int64_t));
-  (void)hipMalloc(&d_slice_sizes, h_slice_sizes.size() * sizeof(int32_t));
-  (void)hipMalloc(&d_axes, h_axes.size() * sizeof(int32_t));
-  (void)hipMalloc(&d_indices, h_indices.size() * sizeof(void*));
-  (void)hipMalloc(&d_indices_shape, h_indices_shape.size() * sizeof(int32_t));
-  (void)hipMalloc(&d_indices_strides, h_indices_strides.size() * sizeof(int64_t));
+  encoder.launch_kernel([&, h_src_shape, h_src_strides, h_slice_sizes, h_axes, 
+                         h_indices, h_indices_shape, h_indices_strides](hipStream_t stream) {
+    // Copy data to device asynchronously
+    (void)hipMemcpyAsync(src_shape_arr.data<int32_t>(), h_src_shape.data(), 
+                         h_src_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(src_strides_arr.data<int64_t>(), h_src_strides.data(), 
+                         h_src_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(slice_sizes_arr.data<int32_t>(), h_slice_sizes.data(), 
+                         h_slice_sizes.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
+    if (!h_axes.empty()) {
+      (void)hipMemcpyAsync(axes_arr.data<int32_t>(), h_axes.data(), 
+                           h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
+    }
+    (void)hipMemcpyAsync(indices_arr.data<void*>(), h_indices.data(), 
+                         h_indices.size() * sizeof(void*), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(indices_shape_arr.data<int32_t>(), h_indices_shape.data(), 
+                         h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(indices_strides_arr.data<int64_t>(), h_indices_strides.data(), 
+                         h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
 
-  (void)hipMemcpy(d_src_shape, h_src_shape.data(), h_src_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_src_strides, h_src_strides.data(), h_src_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_slice_sizes, h_slice_sizes.data(), h_slice_sizes.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_axes, h_axes.data(), h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_indices, h_indices.data(), h_indices.size() * sizeof(void*), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_indices_shape, h_indices_shape.data(), h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_indices_strides, h_indices_strides.data(), h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
-
-  encoder.launch_kernel([&](hipStream_t stream) {
     // Dispatch based on dtype and number of indices
     #define LAUNCH_GATHER(T, IdxT, NIDX) \
       hipLaunchKernelGGL( \
           (rocm::gather_general_kernel<T, IdxT, NIDX>), \
           dim3(num_blocks), dim3(block_size), 0, stream, \
           src.data<T>(), out.data<T>(), total, \
-          d_src_shape, d_src_strides, src.ndim(), \
-          d_slice_sizes, slice_size, d_axes, \
-          (const IdxT* const*)d_indices, d_indices_shape, d_indices_strides, idx_ndim)
+          src_shape_arr.data<int32_t>(), src_strides_arr.data<int64_t>(), src.ndim(), \
+          slice_sizes_arr.data<int32_t>(), slice_size, axes_arr.data<int32_t>(), \
+          (const IdxT* const*)indices_arr.data<void*>(), indices_shape_arr.data<int32_t>(), \
+          indices_strides_arr.data<int64_t>(), idx_ndim)
 
     #define DISPATCH_NIDX(T, IdxT) \
       switch (nidx) { \
-        case 0: LAUNCH_GATHER(T, IdxT, 1); break; \
+        case 0: LAUNCH_GATHER(T, IdxT, 0); break; \
         case 1: LAUNCH_GATHER(T, IdxT, 1); break; \
         case 2: LAUNCH_GATHER(T, IdxT, 2); break; \
         case 3: LAUNCH_GATHER(T, IdxT, 3); break; \
@@ -391,17 +507,6 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     #undef DISPATCH_NIDX
     #undef LAUNCH_GATHER
   });
-
-  // Schedule cleanup of device memory
-  encoder.add_completed_handler([=]() {
-    (void)hipFree(d_src_shape);
-    (void)hipFree(d_src_strides);
-    (void)hipFree(d_slice_sizes);
-    (void)hipFree(d_axes);
-    (void)hipFree(d_indices);
-    (void)hipFree(d_indices_shape);
-    (void)hipFree(d_indices_strides);
-  });
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -435,7 +540,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       1,
       std::multiplies<int32_t>());
 
-  // Prepare device memory for parameters
+  // Prepare host data for parameters
   std::vector<int32_t> h_upd_shape(upd.shape().begin(), upd.shape().end());
   std::vector<int64_t> h_upd_strides(upd.strides().begin(), upd.strides().end());
   std::vector<int32_t> h_out_shape(out.shape().begin(), out.shape().end());
@@ -443,9 +548,9 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::vector<int32_t> h_axes(axes_.begin(), axes_.end());
 
   // Prepare indices pointers and metadata
-  std::vector<const void*> h_indices(nidx);
-  std::vector<int32_t> h_indices_shape(nidx * std::max(idx_ndim, 1));
-  std::vector<int64_t> h_indices_strides(nidx * std::max(idx_ndim, 1));
+  std::vector<const void*> h_indices(std::max(nidx, 1));
+  std::vector<int32_t> h_indices_shape(std::max(nidx, 1) * std::max(idx_ndim, 1));
+  std::vector<int64_t> h_indices_strides(std::max(nidx, 1) * std::max(idx_ndim, 1));
 
   for (int i = 0; i < nidx; ++i) {
     h_indices[i] = inputs[i + 1].data<void>();
@@ -464,52 +569,79 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   int block_size = 256;
   int num_blocks = (total + block_size - 1) / block_size;
 
-  // Allocate device memory
-  int32_t* d_upd_shape;
-  int64_t* d_upd_strides;
-  int32_t* d_out_shape;
-  int64_t* d_out_strides;
-  int32_t* d_axes;
-  const void** d_indices;
-  int32_t* d_indices_shape;
-  int64_t* d_indices_strides;
+  // Allocate device memory using allocator
+  array upd_shape_arr({static_cast<int>(h_upd_shape.size())}, int32, nullptr, {});
+  upd_shape_arr.set_data(allocator::malloc(h_upd_shape.size() * sizeof(int32_t)));
+  
+  array upd_strides_arr({static_cast<int>(h_upd_strides.size())}, int64, nullptr, {});
+  upd_strides_arr.set_data(allocator::malloc(h_upd_strides.size() * sizeof(int64_t)));
+  
+  array out_shape_arr({static_cast<int>(h_out_shape.size())}, int32, nullptr, {});
+  out_shape_arr.set_data(allocator::malloc(h_out_shape.size() * sizeof(int32_t)));
+  
+  array out_strides_arr({static_cast<int>(h_out_strides.size())}, int64, nullptr, {});
+  out_strides_arr.set_data(allocator::malloc(h_out_strides.size() * sizeof(int64_t)));
+  
+  array axes_arr({static_cast<int>(std::max(h_axes.size(), (size_t)1))}, int32, nullptr, {});
+  axes_arr.set_data(allocator::malloc(std::max(h_axes.size(), (size_t)1) * sizeof(int32_t)));
+  
+  array indices_arr({static_cast<int>(h_indices.size())}, int64, nullptr, {});
+  indices_arr.set_data(allocator::malloc(h_indices.size() * sizeof(void*)));
+  
+  array indices_shape_arr({static_cast<int>(h_indices_shape.size())}, int32, nullptr, {});
+  indices_shape_arr.set_data(allocator::malloc(h_indices_shape.size() * sizeof(int32_t)));
+  
+  array indices_strides_arr({static_cast<int>(h_indices_strides.size())}, int64, nullptr, {});
+  indices_strides_arr.set_data(allocator::malloc(h_indices_strides.size() * sizeof(int64_t)));
 
-  (void)hipMalloc(&d_upd_shape, h_upd_shape.size() * sizeof(int32_t));
-  (void)hipMalloc(&d_upd_strides, h_upd_strides.size() * sizeof(int64_t));
-  (void)hipMalloc(&d_out_shape, h_out_shape.size() * sizeof(int32_t));
-  (void)hipMalloc(&d_out_strides, h_out_strides.size() * sizeof(int64_t));
-  (void)hipMalloc(&d_axes, std::max((size_t)1, h_axes.size()) * sizeof(int32_t));
-  (void)hipMalloc(&d_indices, std::max((size_t)1, h_indices.size()) * sizeof(void*));
-  (void)hipMalloc(&d_indices_shape, std::max((size_t)1, h_indices_shape.size()) * sizeof(int32_t));
-  (void)hipMalloc(&d_indices_strides, std::max((size_t)1, h_indices_strides.size()) * sizeof(int64_t));
-
-  (void)hipMemcpy(d_upd_shape, h_upd_shape.data(), h_upd_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_upd_strides, h_upd_strides.data(), h_upd_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_out_shape, h_out_shape.data(), h_out_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-  (void)hipMemcpy(d_out_strides, h_out_strides.data(), h_out_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
-  if (!h_axes.empty()) {
-    (void)hipMemcpy(d_axes, h_axes.data(), h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice);
+  int reduce_type = reduce_type_; // Scatter::ReduceType: Max=0, Min=1, Sum=2, Prod=3, None=4
+  // Map to kernel ReduceType: Assign=0, Sum=1, Prod=2, Max=3, Min=4
+  int kernel_reduce_type;
+  switch (reduce_type) {
+    case 0: kernel_reduce_type = 3; break; // Max
+    case 1: kernel_reduce_type = 4; break; // Min
+    case 2: kernel_reduce_type = 1; break; // Sum
+    case 3: kernel_reduce_type = 2; break; // Prod
+    case 4: kernel_reduce_type = 0; break; // None -> Assign
+    default: kernel_reduce_type = 0; break;
   }
-  if (!h_indices.empty()) {
-    (void)hipMemcpy(d_indices, h_indices.data(), h_indices.size() * sizeof(void*), hipMemcpyHostToDevice);
-    (void)hipMemcpy(d_indices_shape, h_indices_shape.data(), h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice);
-    (void)hipMemcpy(d_indices_strides, h_indices_strides.data(), h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice);
-  }
 
-  int reduce_type = reduce_type_; // 0=Assign, 1=Sum, 2=Prod, 3=Max, 4=Min
+  encoder.launch_kernel([&, h_upd_shape, h_upd_strides, h_out_shape, h_out_strides, 
+                         h_axes, h_indices, h_indices_shape, h_indices_strides, kernel_reduce_type](hipStream_t stream) {
+    // Copy data to device asynchronously
+    (void)hipMemcpyAsync(upd_shape_arr.data<int32_t>(), h_upd_shape.data(), 
+                         h_upd_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(upd_strides_arr.data<int64_t>(), h_upd_strides.data(), 
+                         h_upd_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(out_shape_arr.data<int32_t>(), h_out_shape.data(), 
+                         h_out_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
+    (void)hipMemcpyAsync(out_strides_arr.data<int64_t>(), h_out_strides.data(), 
+                         h_out_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    if (!h_axes.empty()) {
+      (void)hipMemcpyAsync(axes_arr.data<int32_t>(), h_axes.data(), 
+                           h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
+    }
+    if (nidx > 0) {
+      (void)hipMemcpyAsync(indices_arr.data<void*>(), h_indices.data(), 
+                           h_indices.size() * sizeof(void*), hipMemcpyHostToDevice, stream);
+      (void)hipMemcpyAsync(indices_shape_arr.data<int32_t>(), h_indices_shape.data(), 
+                           h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
+      (void)hipMemcpyAsync(indices_strides_arr.data<int64_t>(), h_indices_strides.data(), 
+                           h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
+    }
 
-  encoder.launch_kernel([&](hipStream_t stream) {
     #define LAUNCH_SCATTER(T, IdxT, NIDX, RT) \
       hipLaunchKernelGGL( \
           (rocm::scatter_general_kernel<T, IdxT, NIDX, RT>), \
           dim3(num_blocks), dim3(block_size), 0, stream, \
           upd.data<T>(), out.data<T>(), total, \
-          d_upd_shape, d_upd_strides, upd.ndim(), upd_post_idx_size, \
-          d_out_shape, d_out_strides, out.ndim(), \
-          d_axes, (const IdxT* const*)d_indices, d_indices_shape, d_indices_strides, idx_ndim)
+          upd_shape_arr.data<int32_t>(), upd_strides_arr.data<int64_t>(), upd.ndim(), upd_post_idx_size, \
+          out_shape_arr.data<int32_t>(), out_strides_arr.data<int64_t>(), out.ndim(), \
+          axes_arr.data<int32_t>(), (const IdxT* const*)indices_arr.data<void*>(), \
+          indices_shape_arr.data<int32_t>(), indices_strides_arr.data<int64_t>(), idx_ndim)
 
     #define DISPATCH_REDUCE(T, IdxT, NIDX) \
-      switch (reduce_type) { \
+      switch (kernel_reduce_type) { \
         case 0: LAUNCH_SCATTER(T, IdxT, NIDX, 0); break; \
         case 1: LAUNCH_SCATTER(T, IdxT, NIDX, 1); break; \
         case 2: LAUNCH_SCATTER(T, IdxT, NIDX, 2); break; \
@@ -520,7 +652,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     #define DISPATCH_NIDX(T, IdxT) \
       switch (nidx) { \
-        case 0: DISPATCH_REDUCE(T, IdxT, 1); break; \
+        case 0: DISPATCH_REDUCE(T, IdxT, 0); break; \
         case 1: DISPATCH_REDUCE(T, IdxT, 1); break; \
         case 2: DISPATCH_REDUCE(T, IdxT, 2); break; \
         case 3: DISPATCH_REDUCE(T, IdxT, 3); break; \
@@ -551,18 +683,6 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     #undef DISPATCH_NIDX
     #undef DISPATCH_REDUCE
     #undef LAUNCH_SCATTER
-  });
-
-  // Schedule cleanup
-  encoder.add_completed_handler([=]() {
-    (void)hipFree(d_upd_shape);
-    (void)hipFree(d_upd_strides);
-    (void)hipFree(d_out_shape);
-    (void)hipFree(d_out_strides);
-    (void)hipFree(d_axes);
-    (void)hipFree(d_indices);
-    (void)hipFree(d_indices_shape);
-    (void)hipFree(d_indices_strides);
   });
 }
 

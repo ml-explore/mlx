@@ -5,6 +5,7 @@
 #include "mlx/backend/gpu/slicing.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/jit_module.h"
+#include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/dtype_utils.h"
 
@@ -111,29 +112,43 @@ array compute_dynamic_offset(
   encoder.add_temporary(strides_arr);
   encoder.add_temporary(axes_arr);
 
-  encoder.launch_kernel([&](hipStream_t stream) {
+  // Get kernel before launching to avoid any potential issues
+  auto kernel = mod.get_kernel(kernel_name);
+
+  // Get GPU pointers before lambda to avoid synchronization issues
+  const void* indices_ptr = gpu_ptr<void>(indices);
+  void* offset_ptr = gpu_ptr<void>(offset);
+  void* strides_arr_ptr = gpu_ptr<void>(strides_arr);
+  void* axes_arr_ptr = gpu_ptr<void>(axes_arr);
+
+  encoder.launch_kernel([&, kernel, indices_ptr, offset_ptr, strides_arr_ptr, axes_arr_ptr](hipStream_t stream) {
+    fprintf(stderr, "DEBUG: Starting hipMemcpyAsync for strides\n");
     (void)hipMemcpyAsync(
-        strides_arr.data<int64_t>(),
+        strides_arr_ptr,
         strides.data(),
         strides.size() * sizeof(int64_t),
         hipMemcpyHostToDevice,
         stream);
+    fprintf(stderr, "DEBUG: Starting hipMemcpyAsync for axes\n");
     (void)hipMemcpyAsync(
-        axes_arr.data<int32_t>(),
+        axes_arr_ptr,
         axes.data(),
         axes.size() * sizeof(int32_t),
         hipMemcpyHostToDevice,
         stream);
 
-    auto kernel = mod.get_kernel(kernel_name);
+    fprintf(stderr, "DEBUG: Launching kernel\n");
     void* args[] = {
-        const_cast<void*>(indices.data<void>()),
-        offset.data<void>(),
-        strides_arr.data<void>(),
-        axes_arr.data<void>()
+        const_cast<void*>(indices_ptr),
+        offset_ptr,
+        strides_arr_ptr,
+        axes_arr_ptr
     };
     (void)hipModuleLaunchKernel(kernel, 1, 1, 1, 1, 1, 1, 0, stream, args, nullptr);
+    fprintf(stderr, "DEBUG: Kernel launched\n");
   });
+  
+  fprintf(stderr, "DEBUG: compute_dynamic_offset returning\n");
 
   return offset;
 }
