@@ -188,175 +188,183 @@ METAL_FUNC void load_queries(const device T* queries, thread U* q, U scale) {
 
 constant bool has_affine_bias [[function_constant(27)]];
 
-template <QuantMode mode, int bits>
-struct QuantFastOps {
-  using Cfg = QuantConfig<mode>;
-  using load_t = metal::conditional_t<bits == 4, uint16_t, uint32_t>;
+template <int group_size, int elem_per_thread, int granularity>
+struct GroupSlice {
+  enum : int {
+    value = (elem_per_thread < group_size) ? elem_per_thread : group_size,
+    num_groups = elem_per_thread / value,
+    iters_per_group = value / granularity
+  };
   static_assert(
-      bits == 4 || bits == 8,
-      "QuantFastOps only supports 4/8-bit packing");
-  static constant constexpr uint32_t mask = (1u << bits) - 1;
-
-  template <typename U, int elem_per_thread>
-  [[clang::always_inline]] static U
-  dot(const thread U* q, const device uint32_t* keys, U scale, U bias) {
-    Dequant<mode, U> dequant;
-    auto ks = reinterpret_cast<const device load_t*>(keys);
-    U score = 0;
-    [[maybe_unused]] U bias_acc = 0;
-
-#pragma clang loop unroll(full)
-    for (int j = 0; j < elem_per_thread / 4; j++) {
-      load_t p = ks[j];
-      U v0 = dequant.raw(p & mask);
-      U v1 = dequant.raw((p >> (bits * 1)) & mask);
-      U v2 = dequant.raw((p >> (bits * 2)) & mask);
-      U v3 = dequant.raw((p >> (bits * 3)) & mask);
-
-      score += q[4 * j + 0] * v0;
-      score += q[4 * j + 1] * v1;
-      score += q[4 * j + 2] * v2;
-      score += q[4 * j + 3] * v3;
-
-      if constexpr (Cfg::has_bias) {
-        bias_acc += (q[4 * j + 0] + q[4 * j + 1] + q[4 * j + 2] + q[4 * j + 3]);
-      }
-    }
-
-    if constexpr (Cfg::has_bias) {
-      return fma(scale, score, bias * bias_acc);
-    } else {
-      return scale * score;
-    }
-  }
-
-  template <typename U, int elem_per_thread>
-  [[clang::always_inline]] static void accumulate(
-      thread U* o,
-      const device uint32_t* values,
-      U factor,
-      U w_scale,
-      U bias) {
-    Dequant<mode, U> dequant;
-    auto vs = reinterpret_cast<const device load_t*>(values);
-#pragma clang loop unroll(full)
-    for (int j = 0; j < elem_per_thread / 4; j++) {
-      load_t p = vs[j];
-      U v0 = dequant.raw(p & mask);
-      U v1 = dequant.raw((p >> (bits * 1)) & mask);
-      U v2 = dequant.raw((p >> (bits * 2)) & mask);
-      U v3 = dequant.raw((p >> (bits * 3)) & mask);
-
-      if constexpr (Cfg::has_bias) {
-        o[4 * j + 0] = fma(o[4 * j + 0], factor, fma(w_scale, v0, bias));
-        o[4 * j + 1] = fma(o[4 * j + 1], factor, fma(w_scale, v1, bias));
-        o[4 * j + 2] = fma(o[4 * j + 2], factor, fma(w_scale, v2, bias));
-        o[4 * j + 3] = fma(o[4 * j + 3], factor, fma(w_scale, v3, bias));
-      } else {
-        o[4 * j + 0] = fma(o[4 * j + 0], factor, v0 * w_scale);
-        o[4 * j + 1] = fma(o[4 * j + 1], factor, v1 * w_scale);
-        o[4 * j + 2] = fma(o[4 * j + 2], factor, v2 * w_scale);
-        o[4 * j + 3] = fma(o[4 * j + 3], factor, v3 * w_scale);
-      }
-    }
-  }
+      (value % granularity) == 0,
+      "group slice must be divisible by granularity");
+  static_assert(
+      (elem_per_thread % value) == 0,
+      "elem_per_thread must be divisible by group slice");
 };
 
-// (Generic Path for 2, 3, 5, 6 bits)
-template <QuantMode mode, int bits>
+template <QuantMode mode, int bits, int group_size>
 struct QuantOps {
   using Cfg = QuantConfig<mode>;
+  static constant constexpr bool is_fast_path = (bits == 4 || bits == 8);
   static constant constexpr int pack_factor = PackInfo<bits>::pack_factor;
   static constant constexpr int bytes_per_pack = PackInfo<bits>::bytes_per_pack;
+  static constant constexpr int granularity = is_fast_path ? 4 : pack_factor;
+  using fast_load_t = metal::conditional_t<bits == 4, uint16_t, uint32_t>;
+  static constant constexpr uint32_t fast_mask = (1u << bits) - 1;
+  static_assert(bits == 4 || bits == 6 || bits == 8, "unsupported quant bits");
+  static_assert(
+      !is_fast_path || (group_size % 4) == 0,
+      "group_size must be divisible by 4 for 4/8-bit fast path");
 
-  template <typename U, int elem_per_thread>
-  [[clang::always_inline]] static U
-  dot(const thread U* q, const device uint32_t* keys, U scale, U bias) {
+  template <typename U, typename ScaleT, int elem_per_thread>
+  [[clang::always_inline]] static U dot(
+      const thread U* q,
+      const device uint32_t* keys,
+      const device ScaleT* scales,
+      [[maybe_unused]] const device ScaleT* biases) {
+    static_assert(
+        (elem_per_thread % granularity) == 0,
+        "elem_per_thread must be divisible by the granularity");
     Dequant<mode, U> dequant;
-    auto ks = reinterpret_cast<const device uint8_t*>(keys);
-    thread uint8_t raw[pack_factor];
     U score = 0;
-    [[maybe_unused]] U bias_acc = 0;
+
+    using Slice = GroupSlice<group_size, elem_per_thread, granularity>;
+    constexpr int group_slice = Slice::value;
+    constexpr int num_groups = Slice::num_groups;
+    constexpr int iters_per_group = Slice::iters_per_group;
 
 #pragma clang loop unroll(full)
-    for (int j = 0; j < elem_per_thread; j += pack_factor) {
-      PackReader<bits>::load(ks, raw);
-#pragma clang loop unroll(full)
-      for (int t = 0; t < pack_factor; ++t) {
-        U decoded = dequant.raw(raw[t]);
-        score += q[j + t] * decoded;
-        if constexpr (Cfg::has_bias)
-          bias_acc += q[j + t];
-      }
-      ks += bytes_per_pack;
-    }
-    return Cfg::has_bias ? fma(scale, score, bias * bias_acc) : scale * score;
-  }
+    for (int g = 0; g < num_groups; g++) {
+      U scale = dequant.scale(scales[g]);
+      U bias = 0;
+      if constexpr (Cfg::has_bias)
+        bias = static_cast<U>(biases[g]);
 
-  template <typename U, int elem_per_thread>
-  [[clang::always_inline]] static void accumulate(
-      thread U* o,
-      const device uint32_t* values,
-      U factor,
-      U w_scale,
-      U bias) {
-    Dequant<mode, U> dequant;
-    auto vs = reinterpret_cast<const device uint8_t*>(values);
-    thread uint8_t raw[pack_factor];
+      U group_score = 0;
+      U bias_acc = 0;
+
+      if constexpr (is_fast_path) {
+        auto ks = reinterpret_cast<const device fast_load_t*>(keys);
 #pragma clang loop unroll(full)
-    for (int j = 0; j < elem_per_thread; j += pack_factor) {
-      PackReader<bits>::load(vs, raw);
+        for (int j = 0; j < iters_per_group; j++) {
+          fast_load_t p = ks[g * iters_per_group + j];
+          int base = g * group_slice + 4 * j;
+
+          U v0 = dequant.raw(p & fast_mask);
+          U v1 = dequant.raw((p >> (bits * 1)) & fast_mask);
+          U v2 = dequant.raw((p >> (bits * 2)) & fast_mask);
+          U v3 = dequant.raw((p >> (bits * 3)) & fast_mask);
+
+          group_score += q[base + 0] * v0;
+          group_score += q[base + 1] * v1;
+          group_score += q[base + 2] * v2;
+          group_score += q[base + 3] * v3;
+          if constexpr (Cfg::has_bias) {
+            bias_acc += q[base + 0] + q[base + 1] + q[base + 2] + q[base + 3];
+          }
+        }
+      } else {
+        auto ks = reinterpret_cast<const device uint8_t*>(keys) +
+            g * (group_slice / pack_factor) * bytes_per_pack;
+        thread uint8_t raw[pack_factor];
+
 #pragma clang loop unroll(full)
-      for (int t = 0; t < pack_factor; ++t) {
-        U decoded = dequant.raw(raw[t]);
-        if constexpr (Cfg::has_bias) {
-          o[j + t] = fma(o[j + t], factor, fma(w_scale, decoded, bias));
-        } else {
-          o[j + t] = fma(o[j + t], factor, decoded * w_scale);
+        for (int j = 0; j < group_slice; j += pack_factor) {
+          PackReader<bits>::load(ks, raw);
+#pragma clang loop unroll(full)
+          for (int t = 0; t < pack_factor; ++t) {
+            U decoded = dequant.raw(raw[t]);
+            int q_idx = g * group_slice + j + t;
+            group_score += q[q_idx] * decoded;
+            if constexpr (Cfg::has_bias)
+              bias_acc += q[q_idx];
+          }
+          ks += bytes_per_pack;
         }
       }
-      vs += bytes_per_pack;
+
+      if constexpr (Cfg::has_bias) {
+        score += fma(scale, group_score, bias * bias_acc);
+      } else {
+        score += scale * group_score;
+      }
     }
+    return score;
   }
-};
 
-template <QuantMode mode>
-struct QuantOps<mode, 4> {
-  template <typename U, int elem_per_thread>
-  [[clang::always_inline]] static U
-  dot(const thread U* q, const device uint32_t* keys, U scale, U bias) {
-    return QuantFastOps<mode, 4>::template dot<U, elem_per_thread>(
-        q, keys, scale, bias);
-  }
-  template <typename U, int elem_per_thread>
+  // ACCUMULATE
+  template <typename U, typename ScaleT, int elem_per_thread>
   [[clang::always_inline]] static void accumulate(
       thread U* o,
       const device uint32_t* values,
       U factor,
-      U w_scale,
-      U bias) {
-    QuantFastOps<mode, 4>::template accumulate<U, elem_per_thread>(
-        o, values, factor, w_scale, bias);
-  }
-};
+      U exp_score,
+      const device ScaleT* scales,
+      [[maybe_unused]] const device ScaleT* biases) {
+    static_assert(
+        (elem_per_thread % granularity) == 0,
+        "elem_per_thread must be divisible by the granularity");
+    Dequant<mode, U> dequant;
 
-template <QuantMode mode>
-struct QuantOps<mode, 8> {
-  template <typename U, int elem_per_thread>
-  [[clang::always_inline]] static U
-  dot(const thread U* q, const device uint32_t* keys, U scale, U bias) {
-    return QuantFastOps<mode, 8>::template dot<U, elem_per_thread>(
-        q, keys, scale, bias);
-  }
-  template <typename U, int elem_per_thread>
-  [[clang::always_inline]] static void accumulate(
-      thread U* o,
-      const device uint32_t* values,
-      U factor,
-      U w_scale,
-      U bias) {
-    QuantFastOps<mode, 8>::template accumulate<U, elem_per_thread>(
-        o, values, factor, w_scale, bias);
+    using Slice = GroupSlice<group_size, elem_per_thread, granularity>;
+    constexpr int group_slice = Slice::value;
+    constexpr int num_groups = Slice::num_groups;
+    constexpr int iters_per_group = Slice::iters_per_group;
+
+#pragma clang loop unroll(full)
+    for (int g = 0; g < num_groups; g++) {
+      U w_scale = exp_score * dequant.scale(scales[g]);
+      U bias = 0;
+      if constexpr (Cfg::has_bias)
+        bias = exp_score * static_cast<U>(biases[g]);
+
+      if constexpr (is_fast_path) {
+        auto vs = reinterpret_cast<const device fast_load_t*>(values);
+#pragma clang loop unroll(full)
+        for (int j = 0; j < iters_per_group; j++) {
+          fast_load_t p = vs[g * iters_per_group + j];
+          int base = g * group_slice + 4 * j;
+
+          U v0 = dequant.raw(p & fast_mask);
+          U v1 = dequant.raw((p >> (bits * 1)) & fast_mask);
+          U v2 = dequant.raw((p >> (bits * 2)) & fast_mask);
+          U v3 = dequant.raw((p >> (bits * 3)) & fast_mask);
+
+          if constexpr (Cfg::has_bias) {
+            o[base + 0] = fma(o[base + 0], factor, fma(w_scale, v0, bias));
+            o[base + 1] = fma(o[base + 1], factor, fma(w_scale, v1, bias));
+            o[base + 2] = fma(o[base + 2], factor, fma(w_scale, v2, bias));
+            o[base + 3] = fma(o[base + 3], factor, fma(w_scale, v3, bias));
+          } else {
+            o[base + 0] = fma(o[base + 0], factor, v0 * w_scale);
+            o[base + 1] = fma(o[base + 1], factor, v1 * w_scale);
+            o[base + 2] = fma(o[base + 2], factor, v2 * w_scale);
+            o[base + 3] = fma(o[base + 3], factor, v3 * w_scale);
+          }
+        }
+      } else {
+        auto vs = reinterpret_cast<const device uint8_t*>(values) +
+            g * (group_slice / pack_factor) * bytes_per_pack;
+        thread uint8_t raw[pack_factor];
+
+#pragma clang loop unroll(full)
+        for (int j = 0; j < group_slice; j += pack_factor) {
+          PackReader<bits>::load(vs, raw);
+#pragma clang loop unroll(full)
+          for (int t = 0; t < pack_factor; ++t) {
+            U decoded = dequant.raw(raw[t]);
+            int idx = g * group_slice + j + t;
+            if constexpr (Cfg::has_bias) {
+              o[idx] = fma(o[idx], factor, fma(w_scale, decoded, bias));
+            } else {
+              o[idx] = fma(o[idx], factor, decoded * w_scale);
+            }
+          }
+          vs += bytes_per_pack;
+        }
+      }
+    }
   }
 };
 template <QuantMode mode, typename T>
@@ -401,12 +409,13 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
   // elem_per_thread=D/4 is large enough for all pack_factors (max 8).
   using Cfg = QuantConfig<mode>;
 
+  static_assert(
+      (D % group_size) == 0, "group_size must divide the head dimension");
   constexpr int BN = 8;
   constexpr int BD = 4;
   constexpr int elem_per_thread = D / BD;
 
   typedef float U;
-  [[maybe_unused]] Dequant<mode, U> dequant;
 
   thread U q[elem_per_thread];
   thread U o[elem_per_thread] = {0};
@@ -431,9 +440,15 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
 
   key_scales += k_group_idx;
   value_scales += v_group_idx;
+  const device ScaleTypeT<mode, T>* key_bias_ptr = nullptr;
+  const device ScaleTypeT<mode, T>* value_bias_ptr = nullptr;
   if constexpr (Cfg::has_bias) {
-    key_biases += k_group_idx;
-    value_biases += v_group_idx;
+    key_bias_ptr =
+        reinterpret_cast<const device ScaleTypeT<mode, T>*>(key_biases) +
+        k_group_idx;
+    value_bias_ptr =
+        reinterpret_cast<const device ScaleTypeT<mode, T>*>(value_biases) +
+        v_group_idx;
   }
 
   out += o_offset * blocks * D + block_idx * D + quad_lid * elem_per_thread;
@@ -451,12 +466,16 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
         q_seq_idx * mask_q_seq_stride;
   }
 
-  load_queries<T, U, elem_per_thread>(queries, q, static_cast<U>(scale));
-
   constexpr int stride = BN * D;
   const int data_step = blocks * stride;
   const int scale_step = data_step / group_size;
   const int mask_step = BN * blocks * mask_kv_seq_stride;
+
+  // Read the query
+#pragma clang loop unroll(full)
+  for (int i = 0; i < elem_per_thread; i++) {
+    q[i] = static_cast<U>(scale) * queries[i];
+  }
 
   U max_score = Limits<U>::finite_min;
   U sum_exp_score = 0;
@@ -473,16 +492,9 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
     }
 
     if (use_key) {
-      U key_scale, key_bias = 0;
-      if constexpr (Cfg::has_bias) {
-        key_scale = U(key_scales[0]);
-        key_bias = U(key_biases[0]);
-      } else {
-        key_scale = dequant.scale(key_scales[0]);
-      }
-
-      U score = QuantOps<mode, bits>::template dot<U, elem_per_thread>(
-          q, key_ptr.ptr(), key_scale, key_bias);
+      U score = QuantOps<mode, bits, group_size>::
+          template dot<U, ScaleTypeT<mode, T>, elem_per_thread>(
+              q, key_ptr.ptr(), key_scales, key_bias_ptr);
       score = quad_sum(score);
 
       if (float_mask) {
@@ -497,20 +509,14 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
       max_score = new_max;
       sum_exp_score = sum_exp_score * factor + exp_score;
 
-      U value_scale, value_bias = 0;
-      if constexpr (Cfg::has_bias) {
-        value_scale = U(value_scales[0]);
-        value_bias = U(value_biases[0]);
-      } else {
-        value_scale = dequant.scale(value_scales[0]);
-      }
-
-      QuantOps<mode, bits>::template accumulate<U, elem_per_thread>(
-          o,
-          value_ptr.ptr(),
-          factor,
-          exp_score * value_scale,
-          exp_score * value_bias);
+      QuantOps<mode, bits, group_size>::
+          template accumulate<U, ScaleTypeT<mode, T>, elem_per_thread>(
+              o,
+              value_ptr.ptr(),
+              factor,
+              exp_score,
+              value_scales,
+              value_bias_ptr);
     }
 
     // Advance pointers
@@ -519,8 +525,8 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
     key_scales += scale_step;
     value_scales += scale_step;
     if constexpr (Cfg::has_bias) {
-      key_biases += scale_step;
-      value_biases += scale_step;
+      key_bias_ptr += scale_step;
+      value_bias_ptr += scale_step;
     }
     if (bool_mask) {
       bmask += mask_step;
