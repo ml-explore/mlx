@@ -3,6 +3,7 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/rocm/copy/copy.hpp"
 #include "mlx/backend/rocm/allocator.h"
+#include "mlx/backend/rocm/kernel_utils.hpp"
 
 namespace mlx::core {
 
@@ -47,13 +48,26 @@ void copy_gpu_inplace(
         shape, std::vector{strides_in, strides_out}, INT32_MAX);
     
     // Create zero offset arrays for missing dynamic offsets
+    // We need to allocate and initialize on GPU to avoid hipDeviceSynchronize
     if (!dynamic_offset_in) {
-      dynamic_offset_in = array(0, int64);
+      dynamic_offset_in = array({1}, int64, nullptr, {});
+      dynamic_offset_in->set_data(allocator::malloc(sizeof(int64_t)));
       encoder.add_temporary(*dynamic_offset_in);
+      // Initialize to zero on GPU using hipMemset
+      int64_t* ptr = gpu_ptr<int64_t>(*dynamic_offset_in);
+      encoder.launch_kernel([ptr](hipStream_t stream) {
+        (void)hipMemsetAsync(ptr, 0, sizeof(int64_t), stream);
+      });
     }
     if (!dynamic_offset_out) {
-      dynamic_offset_out = array(0, int64);
+      dynamic_offset_out = array({1}, int64, nullptr, {});
+      dynamic_offset_out->set_data(allocator::malloc(sizeof(int64_t)));
       encoder.add_temporary(*dynamic_offset_out);
+      // Initialize to zero on GPU using hipMemset
+      int64_t* ptr = gpu_ptr<int64_t>(*dynamic_offset_out);
+      encoder.launch_kernel([ptr](hipStream_t stream) {
+        (void)hipMemsetAsync(ptr, 0, sizeof(int64_t), stream);
+      });
     }
     encoder.set_input_array(*dynamic_offset_in);
     encoder.set_input_array(*dynamic_offset_out);

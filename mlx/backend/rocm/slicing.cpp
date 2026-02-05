@@ -122,14 +122,12 @@ array compute_dynamic_offset(
   void* axes_arr_ptr = gpu_ptr<void>(axes_arr);
 
   encoder.launch_kernel([&, kernel, indices_ptr, offset_ptr, strides_arr_ptr, axes_arr_ptr](hipStream_t stream) {
-    fprintf(stderr, "DEBUG: Starting hipMemcpyAsync for strides\n");
     (void)hipMemcpyAsync(
         strides_arr_ptr,
         strides.data(),
         strides.size() * sizeof(int64_t),
         hipMemcpyHostToDevice,
         stream);
-    fprintf(stderr, "DEBUG: Starting hipMemcpyAsync for axes\n");
     (void)hipMemcpyAsync(
         axes_arr_ptr,
         axes.data(),
@@ -137,18 +135,14 @@ array compute_dynamic_offset(
         hipMemcpyHostToDevice,
         stream);
 
-    fprintf(stderr, "DEBUG: Launching kernel\n");
-    void* args[] = {
-        const_cast<void*>(indices_ptr),
-        offset_ptr,
-        strides_arr_ptr,
-        axes_arr_ptr
-    };
+    // hipModuleLaunchKernel expects args to be an array of pointers to the arguments
+    const void* arg0 = indices_ptr;
+    void* arg1 = offset_ptr;
+    void* arg2 = strides_arr_ptr;
+    void* arg3 = axes_arr_ptr;
+    void* args[] = {&arg0, &arg1, &arg2, &arg3};
     (void)hipModuleLaunchKernel(kernel, 1, 1, 1, 1, 1, 1, 0, stream, args, nullptr);
-    fprintf(stderr, "DEBUG: Kernel launched\n");
   });
-  
-  fprintf(stderr, "DEBUG: compute_dynamic_offset returning\n");
 
   return offset;
 }

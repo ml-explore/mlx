@@ -113,6 +113,7 @@ template <typename F>
 void CommandEncoder::launch_kernel(F&& func) {
   device_.make_current();
   func(static_cast<hipStream_t>(stream_));
+  node_count_++;
 }
 
 } // namespace mlx::core::rocm
