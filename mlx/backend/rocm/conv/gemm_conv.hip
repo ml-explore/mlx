@@ -270,14 +270,6 @@ void gemm_conv(
   
   int conv_ndim = in.ndim() - 2;
   
-  for (int i = 0; i < conv_ndim; ++i) {
-    if (input_dilation[i] != 1) {
-      throw std::runtime_error(
-          "[conv] ROCm GEMM-based convolution does not support input dilation. "
-          "Use CPU fallback.");
-    }
-  }
-  
   switch (conv_ndim) {
     case 1:
       gemm_conv_nd<1>(encoder, in, wt, out, strides, padding,
