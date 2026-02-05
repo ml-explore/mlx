@@ -132,10 +132,12 @@ set(HIP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ternary.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/unary.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/gemms/gemv.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/gemms/naive_gemm.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/quantized/fp_quantize.hip
     ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.hip
-    ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm.hip)
+    ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm.hip
+    ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_conv.hip)
 
 # Create output directory for compiled objects
 set(HIP_OBJ_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip_objs")
@@ -205,7 +207,6 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/conv/conv.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_conv.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/rocblas_gemm.cpp)
 
 target_compile_definitions(mlx PRIVATE MLX_USE_ROCM)

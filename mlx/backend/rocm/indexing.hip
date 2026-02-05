@@ -487,7 +487,9 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
         case uint32: DISPATCH_NIDX(uint32_t, int32_t); break;
         case uint64: DISPATCH_NIDX(uint64_t, int32_t); break;
         case int8: DISPATCH_NIDX(int8_t, int32_t); break;
+        case int16: DISPATCH_NIDX(int16_t, int32_t); break;
         case uint8: DISPATCH_NIDX(uint8_t, int32_t); break;
+        case uint16: DISPATCH_NIDX(uint16_t, int32_t); break;
         case bool_: DISPATCH_NIDX(bool, int32_t); break;
         default:
           throw std::runtime_error("Unsupported dtype for Gather");
@@ -499,6 +501,13 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
         case bfloat16: DISPATCH_NIDX(hip_bfloat16, int64_t); break;
         case int32: DISPATCH_NIDX(int32_t, int64_t); break;
         case int64: DISPATCH_NIDX(int64_t, int64_t); break;
+        case uint32: DISPATCH_NIDX(uint32_t, int64_t); break;
+        case uint64: DISPATCH_NIDX(uint64_t, int64_t); break;
+        case int8: DISPATCH_NIDX(int8_t, int64_t); break;
+        case int16: DISPATCH_NIDX(int16_t, int64_t); break;
+        case uint8: DISPATCH_NIDX(uint8_t, int64_t); break;
+        case uint16: DISPATCH_NIDX(uint16_t, int64_t); break;
+        case bool_: DISPATCH_NIDX(bool, int64_t); break;
         default:
           throw std::runtime_error("Unsupported dtype for Gather");
       }
@@ -665,16 +674,33 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       switch (out.dtype()) {
         case float32: DISPATCH_NIDX(float, int32_t); break;
         case float16: DISPATCH_NIDX(__half, int32_t); break;
+        case bfloat16: DISPATCH_NIDX(hip_bfloat16, int32_t); break;
         case int32: DISPATCH_NIDX(int32_t, int32_t); break;
         case int64: DISPATCH_NIDX(int64_t, int32_t); break;
+        case uint32: DISPATCH_NIDX(uint32_t, int32_t); break;
+        case uint64: DISPATCH_NIDX(uint64_t, int32_t); break;
+        case int8: DISPATCH_NIDX(int8_t, int32_t); break;
+        case int16: DISPATCH_NIDX(int16_t, int32_t); break;
+        case uint8: DISPATCH_NIDX(uint8_t, int32_t); break;
+        case uint16: DISPATCH_NIDX(uint16_t, int32_t); break;
+        case bool_: DISPATCH_NIDX(bool, int32_t); break;
         default:
           throw std::runtime_error("Unsupported dtype for Scatter");
       }
     } else {
       switch (out.dtype()) {
         case float32: DISPATCH_NIDX(float, int64_t); break;
+        case float16: DISPATCH_NIDX(__half, int64_t); break;
+        case bfloat16: DISPATCH_NIDX(hip_bfloat16, int64_t); break;
         case int32: DISPATCH_NIDX(int32_t, int64_t); break;
         case int64: DISPATCH_NIDX(int64_t, int64_t); break;
+        case uint32: DISPATCH_NIDX(uint32_t, int64_t); break;
+        case uint64: DISPATCH_NIDX(uint64_t, int64_t); break;
+        case int8: DISPATCH_NIDX(int8_t, int64_t); break;
+        case int16: DISPATCH_NIDX(int16_t, int64_t); break;
+        case uint8: DISPATCH_NIDX(uint8_t, int64_t); break;
+        case uint16: DISPATCH_NIDX(uint16_t, int64_t); break;
+        case bool_: DISPATCH_NIDX(bool, int64_t); break;
         default:
           throw std::runtime_error("Unsupported dtype for Scatter");
       }
@@ -737,11 +763,92 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
             src.shape(axis_), src.strides(axis_), idx.strides(axis_),
             out.strides(axis_));
         break;
+      case uint32:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<uint32_t, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<uint32_t>(), idx.data<int32_t>(), out.data<uint32_t>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      case int64:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<int64_t, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<int64_t>(), idx.data<int32_t>(), out.data<int64_t>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      case uint64:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<uint64_t, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<uint64_t>(), idx.data<int32_t>(), out.data<uint64_t>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
       case float16:
         hipLaunchKernelGGL(
             (rocm::gather_axis_kernel<__half, int32_t>),
             dim3(num_blocks), dim3(block_size), 0, stream,
             src.data<__half>(), idx.data<int32_t>(), out.data<__half>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      case bfloat16:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<hip_bfloat16, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<hip_bfloat16>(), idx.data<int32_t>(), out.data<hip_bfloat16>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      case int8:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<int8_t, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<int8_t>(), idx.data<int32_t>(), out.data<int8_t>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      case uint8:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<uint8_t, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<uint8_t>(), idx.data<int32_t>(), out.data<uint8_t>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      case int16:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<int16_t, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<int16_t>(), idx.data<int32_t>(), out.data<int16_t>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      case uint16:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<uint16_t, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<uint16_t>(), idx.data<int32_t>(), out.data<uint16_t>(),
+            idx_size_pre, idx_size_axis, idx_size_post,
+            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
+            out.strides(axis_));
+        break;
+      case bool_:
+        hipLaunchKernelGGL(
+            (rocm::gather_axis_kernel<bool, int32_t>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            src.data<bool>(), idx.data<int32_t>(), out.data<bool>(),
             idx_size_pre, idx_size_axis, idx_size_post,
             src.shape(axis_), src.strides(axis_), idx.strides(axis_),
             out.strides(axis_));

@@ -166,10 +166,11 @@ __device__ __forceinline__ hipFloatComplex shfl_safe(hipFloatComplex val, int sr
 // Warp-level inclusive scan using shuffle
 template <typename T, typename Op>
 __device__ T warp_inclusive_scan(T val, Op op) {
+  int lane = threadIdx.x % WARP_SIZE;
 #pragma unroll
   for (int offset = 1; offset < WARP_SIZE; offset *= 2) {
     T other = shfl_up_safe(val, offset);
-    if ((threadIdx.x % WARP_SIZE) >= offset) {
+    if (lane >= offset) {
       val = op(val, other);
     }
   }

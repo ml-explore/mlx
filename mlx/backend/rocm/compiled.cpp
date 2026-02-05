@@ -163,7 +163,7 @@ struct FusedKernelBuilder {
         os +=
             std::string("    ") + xname + "[index + i] = tmp_" + xname + ";\n";
       } else {
-        os += std::string("    ") + xname + "[index] = tmp_" + xname + ";\n";
+        os += std::string("    ") + xname + "[index + i] = tmp_" + xname + ";\n";
       }
     }
 
@@ -179,7 +179,6 @@ struct FusedKernelBuilder {
         os += std::string("    ") + xname + "_idx += " + xname +
             "_strides[NDIM - 1];\n";
       }
-      os += "    index++;\n";
     }
     os += "  }\n";
 

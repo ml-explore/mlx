@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/gemms/rocblas_gemm.h"
+#include "mlx/backend/rocm/gemms/naive_gemm.h"
 #include "mlx/backend/rocm/device.h"
 
 #include <rocblas/rocblas.h>
@@ -46,6 +47,13 @@ void rocblas_gemm(
     array& c,
     int ldc,
     Dtype dtype) {
+  
+  // Check if rocBLAS is available
+  if (!encoder.device().is_rocblas_available()) {
+    // Use naive GEMM fallback
+    naive_gemm(encoder, a, b, c, M, N, K, transpose_a, lda, transpose_b, ldb, alpha, beta);
+    return;
+  }
   
   encoder.launch_kernel([&](hipStream_t stream) {
     rocblas_handle handle = encoder.device().get_rocblas_handle();
@@ -114,6 +122,14 @@ void rocblas_gemm_batched(
     int64_t stride_c,
     int batch_count,
     Dtype dtype) {
+  
+  // Check if rocBLAS is available
+  if (!encoder.device().is_rocblas_available()) {
+    // Use naive batched GEMM fallback
+    naive_gemm_batched(encoder, a, b, c, M, N, K, transpose_a, lda, stride_a, 
+                       transpose_b, ldb, stride_b, stride_c, batch_count, alpha, beta);
+    return;
+  }
   
   encoder.launch_kernel([&](hipStream_t stream) {
     rocblas_handle handle = encoder.device().get_rocblas_handle();

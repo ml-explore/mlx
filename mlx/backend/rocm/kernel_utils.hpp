@@ -14,6 +14,7 @@
 #include "mlx/backend/rocm/device/utils.hpp"
 
 #include <hip/hip_bfloat16.h>
+#include <hip/hip_complex.h>
 #include <hip/hip_fp16.h>
 #include <hip/hip_runtime.h>
 #include <sstream>
@@ -115,7 +116,8 @@ inline constexpr bool is_floating_v =
 // Type traits for detecting complex numbers.
 template <typename T>
 inline constexpr bool is_complex_v =
-    std::is_same_v<T, complex64_t> || std::is_same_v<T, complex128_t>;
+    std::is_same_v<T, complex64_t> || std::is_same_v<T, complex128_t> ||
+    std::is_same_v<T, hipFloatComplex> || std::is_same_v<T, hipDoubleComplex>;
 
 // Type traits for detecting complex or real floating point numbers.
 template <typename T>
@@ -173,17 +175,34 @@ inline dim3 get_2d_grid_dims(const Shape& shape, const Strides& strides) {
 
 inline dim3
 get_2d_grid_dims(const Shape& shape, const Strides& strides, size_t divisor) {
-  if (shape.empty()) {
-    return dim3(1, 1, 1);
-  }
+  // Compute the 2d grid dimensions such that the total size of the grid is
+  // divided by divisor.
+  size_t grid_x = 1;
+  size_t grid_y = 1;
+  for (size_t i = 0; i < shape.size(); ++i) {
+    if (strides[i] == 0) {
+      continue;
+    }
 
-  int dim0 = (shape.back() + divisor - 1) / divisor;
-  int rest = 1;
-  for (size_t i = 0; i < shape.size() - 1; ++i) {
-    rest *= shape[i];
-  }
+    // No need to add this shape we can just remove it from the divisor.
+    if (divisor % shape[i] == 0) {
+      divisor /= shape[i];
+      continue;
+    }
 
-  return dim3((dim0 + 255) / 256, rest, 1);
+    if (grid_x * shape[i] < UINT32_MAX) {
+      grid_x *= shape[i];
+    } else {
+      grid_y *= shape[i];
+    }
+  }
+  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX) {
+    throw std::runtime_error("Unable to safely factor shape.");
+  }
+  if (grid_y > grid_x) {
+    std::swap(grid_x, grid_y);
+  }
+  return dim3(static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
 }
 
 inline std::pair<dim3, dim3> get_grid_and_block(int dim0, int dim1, int dim2) {

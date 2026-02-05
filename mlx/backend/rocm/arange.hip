@@ -59,6 +59,42 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
             dim3(num_blocks), dim3(block_size), 0, stream,
             out.data<int64_t>(), static_cast<int64_t>(start_), static_cast<int64_t>(step_), size);
         break;
+      case uint32:
+        hipLaunchKernelGGL(
+            rocm::arange_kernel<uint32_t>,
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            out.data<uint32_t>(), static_cast<uint32_t>(start_), static_cast<uint32_t>(step_), size);
+        break;
+      case uint64:
+        hipLaunchKernelGGL(
+            rocm::arange_kernel<uint64_t>,
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            out.data<uint64_t>(), static_cast<uint64_t>(start_), static_cast<uint64_t>(step_), size);
+        break;
+      case int8:
+        hipLaunchKernelGGL(
+            rocm::arange_kernel<int8_t>,
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            out.data<int8_t>(), static_cast<int8_t>(start_), static_cast<int8_t>(step_), size);
+        break;
+      case int16:
+        hipLaunchKernelGGL(
+            rocm::arange_kernel<int16_t>,
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            out.data<int16_t>(), static_cast<int16_t>(start_), static_cast<int16_t>(step_), size);
+        break;
+      case uint8:
+        hipLaunchKernelGGL(
+            rocm::arange_kernel<uint8_t>,
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            out.data<uint8_t>(), static_cast<uint8_t>(start_), static_cast<uint8_t>(step_), size);
+        break;
+      case uint16:
+        hipLaunchKernelGGL(
+            rocm::arange_kernel<uint16_t>,
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            out.data<uint16_t>(), static_cast<uint16_t>(start_), static_cast<uint16_t>(step_), size);
+        break;
       default:
         throw std::runtime_error("Unsupported type for arange");
     }

@@ -4,6 +4,7 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/gemms/gemv.h"
+#include "mlx/backend/rocm/gemms/naive_gemm.h"
 #include "mlx/primitives.h"
 #include "mlx/types/half_types.h"
 
@@ -375,92 +376,157 @@ void gemm_and_bias(
     return;
   }
 
+  // Check if rocBLAS is available
+  bool use_rocblas = encoder.device().is_rocblas_available();
+
   if (batch_count == 1) {
     // Simple single GEMM
-    gemm_rocblas(
-        encoder, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b, alpha, beta);
+    if (use_rocblas) {
+      gemm_rocblas(
+          encoder, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b, alpha, beta);
+    } else {
+      // Use naive GEMM fallback
+      rocm::naive_gemm(
+          encoder, a, b, out, M, N, K, a_transposed, lda, b_transposed, ldb, alpha, beta);
+    }
   } else if (batch_shape.size() == 1 && 
              a_batch_strides.back() > 0 && 
              b_batch_strides.back() > 0) {
     // Use strided batched GEMM for uniform batches
-    gemm_strided_batched_rocblas(
-        encoder,
-        M,
-        N,
-        K,
-        a_transposed,
-        lda,
-        a_batch_strides.back(),
-        b_transposed,
-        ldb,
-        b_batch_strides.back(),
-        M * N,
-        batch_count,
-        out,
-        a,
-        b,
-        alpha,
-        beta);
+    if (use_rocblas) {
+      gemm_strided_batched_rocblas(
+          encoder,
+          M,
+          N,
+          K,
+          a_transposed,
+          lda,
+          a_batch_strides.back(),
+          b_transposed,
+          ldb,
+          b_batch_strides.back(),
+          M * N,
+          batch_count,
+          out,
+          a,
+          b,
+          alpha,
+          beta);
+    } else {
+      // Use naive batched GEMM fallback
+      rocm::naive_gemm_batched(
+          encoder,
+          a,
+          b,
+          out,
+          M,
+          N,
+          K,
+          a_transposed,
+          lda,
+          a_batch_strides.back(),
+          b_transposed,
+          ldb,
+          b_batch_strides.back(),
+          M * N,
+          batch_count,
+          alpha,
+          beta);
+    }
   } else {
     // Fallback: loop over batches for non-uniform strides
-    for (int64_t batch = 0; batch < batch_count; ++batch) {
-      int64_t a_offset = 0, b_offset = 0;
-      int64_t batch_idx = batch;
-      for (int i = batch_shape.size() - 1; i >= 0; --i) {
-        int64_t idx = batch_idx % batch_shape[i];
-        batch_idx /= batch_shape[i];
-        a_offset += idx * a_batch_strides[i];
-        b_offset += idx * b_batch_strides[i];
-      }
-
-      encoder.launch_kernel([&, a_offset, b_offset, batch](hipStream_t stream) {
-        auto& device = encoder.device();
-        rocblas_handle handle = device.get_rocblas_handle();
-        rocblas_set_stream(handle, stream);
-
-        rocblas_operation trans_a =
-            b_transposed ? rocblas_operation_none : rocblas_operation_transpose;
-        rocblas_operation trans_b =
-            a_transposed ? rocblas_operation_none : rocblas_operation_transpose;
-
-        float alpha_f = alpha, beta_f = beta;
-
-        if (a.dtype() == float32) {
-          rocblas_sgemm(
-              handle,
-              trans_a,
-              trans_b,
-              N,
-              M,
-              K,
-              &alpha_f,
-              b.data<float>() + b_offset,
-              b_transposed ? K : N,
-              a.data<float>() + a_offset,
-              a_transposed ? M : K,
-              &beta_f,
-              out.data<float>() + batch * M * N,
-              N);
-        } else if (a.dtype() == float64) {
-          double alpha_d = static_cast<double>(alpha);
-          double beta_d = static_cast<double>(beta);
-          rocblas_dgemm(
-              handle,
-              trans_a,
-              trans_b,
-              N,
-              M,
-              K,
-              &alpha_d,
-              b.data<double>() + b_offset,
-              b_transposed ? K : N,
-              a.data<double>() + a_offset,
-              a_transposed ? M : K,
-              &beta_d,
-              out.data<double>() + batch * M * N,
-              N);
+    if (use_rocblas) {
+      for (int64_t batch = 0; batch < batch_count; ++batch) {
+        int64_t a_offset = 0, b_offset = 0;
+        int64_t batch_idx = batch;
+        for (int i = batch_shape.size() - 1; i >= 0; --i) {
+          int64_t idx = batch_idx % batch_shape[i];
+          batch_idx /= batch_shape[i];
+          a_offset += idx * a_batch_strides[i];
+          b_offset += idx * b_batch_strides[i];
         }
-      });
+
+        encoder.launch_kernel([&, a_offset, b_offset, batch](hipStream_t stream) {
+          auto& device = encoder.device();
+          rocblas_handle handle = device.get_rocblas_handle();
+          rocblas_set_stream(handle, stream);
+
+          rocblas_operation trans_a =
+              b_transposed ? rocblas_operation_none : rocblas_operation_transpose;
+          rocblas_operation trans_b =
+              a_transposed ? rocblas_operation_none : rocblas_operation_transpose;
+
+          float alpha_f = alpha, beta_f = beta;
+
+          if (a.dtype() == float32) {
+            rocblas_sgemm(
+                handle,
+                trans_a,
+                trans_b,
+                N,
+                M,
+                K,
+                &alpha_f,
+                b.data<float>() + b_offset,
+                b_transposed ? K : N,
+                a.data<float>() + a_offset,
+                a_transposed ? M : K,
+                &beta_f,
+                out.data<float>() + batch * M * N,
+                N);
+          } else if (a.dtype() == float64) {
+            double alpha_d = static_cast<double>(alpha);
+            double beta_d = static_cast<double>(beta);
+            rocblas_dgemm(
+                handle,
+                trans_a,
+                trans_b,
+                N,
+                M,
+                K,
+                &alpha_d,
+                b.data<double>() + b_offset,
+                b_transposed ? K : N,
+                a.data<double>() + a_offset,
+                a_transposed ? M : K,
+                &beta_d,
+                out.data<double>() + batch * M * N,
+                N);
+          }
+        });
+      }
+    } else {
+      // Use naive GEMM for each batch when rocBLAS is not available
+      // This is less efficient but provides correctness
+      for (int64_t batch = 0; batch < batch_count; ++batch) {
+        int64_t a_offset = 0, b_offset = 0;
+        int64_t batch_idx = batch;
+        for (int i = batch_shape.size() - 1; i >= 0; --i) {
+          int64_t idx = batch_idx % batch_shape[i];
+          batch_idx /= batch_shape[i];
+          a_offset += idx * a_batch_strides[i];
+          b_offset += idx * b_batch_strides[i];
+        }
+        
+        // Use naive GEMM with explicit offsets
+        rocm::naive_gemm_with_offset(
+            encoder,
+            a,
+            b,
+            out,
+            M,
+            N,
+            K,
+            a_transposed,
+            lda,
+            a_offset,
+            b_transposed,
+            ldb,
+            b_offset,
+            batch * M * N,
+            alpha,
+            beta);
+      }
     }
   }
 }
@@ -515,21 +581,28 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Copy C into out first, then do GEMM with beta
   copy_gpu(c, out, CopyType::General, s);
 
-  // Do GEMM with alpha and beta
-  gemm_rocblas(
-      encoder,
-      M,
-      N,
-      K,
-      a_transposed,
-      lda,
-      b_transposed,
-      ldb,
-      out,
-      a,
-      b,
-      alpha_,
-      beta_);
+  // Check if rocBLAS is available
+  if (encoder.device().is_rocblas_available()) {
+    // Do GEMM with alpha and beta
+    gemm_rocblas(
+        encoder,
+        M,
+        N,
+        K,
+        a_transposed,
+        lda,
+        b_transposed,
+        ldb,
+        out,
+        a,
+        b,
+        alpha_,
+        beta_);
+  } else {
+    // Use naive GEMM fallback
+    rocm::naive_gemm(
+        encoder, a, b, out, M, N, K, a_transposed, lda, b_transposed, ldb, alpha_, beta_);
+  }
 }
 
 void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -572,28 +645,27 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
+  // Check if rocBLAS is available
+  bool use_rocblas = encoder.device().is_rocblas_available();
+
   // Fallback: loop over batches with individual GEMMs
   int batch_size = lhs_indices.size();
   
-  // For small batch sizes, use individual GEMMs
-  if (batch_size <= 32) {
-    // Get indices on CPU (this is not optimal but provides correctness)
-    std::vector<uint32_t> lhs_idx(batch_size);
-    std::vector<uint32_t> rhs_idx(batch_size);
-    
-    // Synchronize to get indices
-    hipDeviceSynchronize();
-    
-    if (lhs_indices.dtype() == uint32) {
-      std::memcpy(lhs_idx.data(), lhs_indices.data<uint32_t>(), batch_size * sizeof(uint32_t));
-    }
-    if (rhs_indices.dtype() == uint32) {
-      std::memcpy(rhs_idx.data(), rhs_indices.data<uint32_t>(), batch_size * sizeof(uint32_t));
-    }
-    
-    int64_t a_batch_stride = a.size() / (M * K);
-    int64_t b_batch_stride = b.size() / (K * N);
-    
+  // Get indices on CPU (this is not optimal but provides correctness)
+  std::vector<uint32_t> lhs_idx(batch_size);
+  std::vector<uint32_t> rhs_idx(batch_size);
+  
+  // Synchronize to get indices
+  hipDeviceSynchronize();
+  
+  if (lhs_indices.dtype() == uint32) {
+    std::memcpy(lhs_idx.data(), lhs_indices.data<uint32_t>(), batch_size * sizeof(uint32_t));
+  }
+  if (rhs_indices.dtype() == uint32) {
+    std::memcpy(rhs_idx.data(), rhs_indices.data<uint32_t>(), batch_size * sizeof(uint32_t));
+  }
+  
+  if (use_rocblas) {
     for (int i = 0; i < batch_size; ++i) {
       int64_t a_offset = lhs_idx[i] * M * K;
       int64_t b_offset = rhs_idx[i] * K * N;
@@ -630,12 +702,33 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         }
       });
     }
-    return;
+  } else {
+    // Use naive GEMM for each batch
+    for (int i = 0; i < batch_size; ++i) {
+      int64_t a_offset = lhs_idx[i] * M * K;
+      int64_t b_offset = rhs_idx[i] * K * N;
+      int64_t out_offset = i * M * N;
+      
+      // Use naive GEMM with explicit offsets
+      rocm::naive_gemm_with_offset(
+          encoder,
+          a_,
+          b_,
+          out,
+          M,
+          N,
+          K,
+          transposed_a,
+          lda,
+          a_offset,
+          transposed_b,
+          ldb,
+          b_offset,
+          out_offset,
+          1.0f,
+          0.0f);
+    }
   }
-
-  throw std::runtime_error(
-      "GatherMM with large batch sizes not yet optimized for ROCm. "
-      "Consider using smaller batch sizes or GEMV path (M=1 or N=1).");
 }
 
 } // namespace mlx::core

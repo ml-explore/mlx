@@ -38,8 +38,9 @@ __device__ uint8_t float_to_fp8_e4m3(T val) {
   // Rebias for E4M3 (bias = 7)
   int32_t new_exp = exp + 7;
   
-  // Round mantissa to 3 bits
-  uint32_t new_mant = (mant + 0x100000) >> 20;
+  // Round mantissa to 3 bits (round to nearest, ties to even)
+  // We're discarding 20 bits, so add 0.5 ULP = 1 << 19 = 0x80000
+  uint32_t new_mant = (mant + 0x80000) >> 20;
   if (new_mant > 7) {
     new_mant = 0;
     new_exp++;
@@ -136,6 +137,12 @@ void fast::ConvertFP8::eval_gpu(
               dim3(num_blocks), dim3(block_size), 0, stream,
               in.data<__half>(), out.data<uint8_t>(), size);
           break;
+        case bfloat16:
+          hipLaunchKernelGGL(
+              (rocm::to_fp8_kernel<hip_bfloat16, uint8_t>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              in.data<hip_bfloat16>(), out.data<uint8_t>(), size);
+          break;
         default:
           throw std::runtime_error("Unsupported input type for ConvertFP8 (to_fp8)");
       }
@@ -153,6 +160,12 @@ void fast::ConvertFP8::eval_gpu(
               (rocm::from_fp8_kernel<uint8_t, __half>),
               dim3(num_blocks), dim3(block_size), 0, stream,
               in.data<uint8_t>(), out.data<__half>(), size);
+          break;
+        case bfloat16:
+          hipLaunchKernelGGL(
+              (rocm::from_fp8_kernel<uint8_t, hip_bfloat16>),
+              dim3(num_blocks), dim3(block_size), 0, stream,
+              in.data<uint8_t>(), out.data<hip_bfloat16>(), size);
           break;
         default:
           throw std::runtime_error("Unsupported output type for ConvertFP8 (from_fp8)");

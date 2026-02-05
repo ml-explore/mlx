@@ -139,7 +139,7 @@ constexpr bool supports_binary_op() {
   } else if constexpr (std::is_same_v<Op, NaNEqual>) {
     return std::is_same_v<Out, bool>;
   } else if constexpr (std::is_same_v<Op, LogAddExp>) {
-    return std::is_same_v<In, Out> && !is_complex_v<In>;
+    return std::is_same_v<In, Out> && is_inexact_v<In>;
   } else if constexpr (std::is_same_v<Op, ArcTan2>) {
     return std::is_same_v<In, Out> && !is_complex_v<In> && 
         (std::is_floating_point_v<In> || std::is_same_v<In, __half> || std::is_same_v<In, hip_bfloat16>);

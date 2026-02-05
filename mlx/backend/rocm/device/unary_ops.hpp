@@ -14,7 +14,18 @@ struct Abs {
   __device__ T operator()(T x) {
     if constexpr (std::is_unsigned_v<T>) {
       return x;
+    } else if constexpr (std::is_same_v<T, float>) {
+      return fabsf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return fabs(x);
+    } else if constexpr (std::is_same_v<T, __half>) {
+      return __habs(x);
+    } else if constexpr (std::is_same_v<T, hip_bfloat16>) {
+      return hip_bfloat16(fabsf(static_cast<float>(x)));
+    } else if constexpr (is_complex_v<T>) {
+      return make_hipFloatComplex(hypotf(x.x, x.y), 0.0f);
     } else {
+      // For integral types
       return abs(x);
     }
   }
@@ -23,42 +34,78 @@ struct Abs {
 struct ArcCos {
   template <typename T>
   __device__ T operator()(T x) {
-    return acos(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::acosf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::acos(x);
+    } else {
+      return acos(x);
+    }
   }
 };
 
 struct ArcCosh {
   template <typename T>
   __device__ T operator()(T x) {
-    return acosh(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::acoshf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::acosh(x);
+    } else {
+      return acosh(x);
+    }
   }
 };
 
 struct ArcSin {
   template <typename T>
   __device__ T operator()(T x) {
-    return asin(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::asinf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::asin(x);
+    } else {
+      return asin(x);
+    }
   }
 };
 
 struct ArcSinh {
   template <typename T>
   __device__ T operator()(T x) {
-    return asinh(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::asinhf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::asinh(x);
+    } else {
+      return asinh(x);
+    }
   }
 };
 
 struct ArcTan {
   template <typename T>
   __device__ T operator()(T x) {
-    return atan(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::atanf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::atan(x);
+    } else {
+      return atan(x);
+    }
   }
 };
 
 struct ArcTanh {
   template <typename T>
   __device__ T operator()(T x) {
-    return atanh(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::atanhf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::atanh(x);
+    } else {
+      return atanh(x);
+    }
   }
 };
 
@@ -80,7 +127,11 @@ struct Ceil {
     if constexpr (std::is_integral_v<T>) {
       return x;
     } else if constexpr (is_complex_v<T>) {
-      return T{ceil(x.x), ceil(x.y)};
+      return T{::ceilf(x.x), ::ceilf(x.y)};
+    } else if constexpr (std::is_same_v<T, float>) {
+      return ::ceilf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::ceil(x);
     } else {
       return ceil(x);
     }
@@ -115,7 +166,13 @@ struct Cos {
 struct Cosh {
   template <typename T>
   __device__ T operator()(T x) {
-    return cosh(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::coshf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::cosh(x);
+    } else {
+      return cosh(x);
+    }
   }
 };
 
@@ -183,7 +240,11 @@ struct Floor {
     if constexpr (std::is_integral_v<T>) {
       return x;
     } else if constexpr (is_complex_v<T>) {
-      return T{floor(x.x), floor(x.y)};
+      return T{::floorf(x.x), ::floorf(x.y)};
+    } else if constexpr (std::is_same_v<T, float>) {
+      return ::floorf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::floor(x);
     } else {
       return floor(x);
     }
@@ -222,6 +283,10 @@ struct Log2 {
       auto y = Log{}(x);
       constexpr float ln2 = 0.693147180559945309417232121458176568f;
       return {y.x / ln2, y.y / ln2};
+    } else if constexpr (std::is_same_v<T, float>) {
+      return ::log2f(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::log2(x);
     } else {
       return log2(x);
     }
@@ -231,7 +296,13 @@ struct Log2 {
 struct Log10 {
   template <typename T>
   __device__ T operator()(T x) {
-    return log10(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::log10f(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::log10(x);
+    } else {
+      return log10(x);
+    }
   }
 };
 
@@ -296,7 +367,11 @@ struct Round {
   template <typename T>
   __device__ T operator()(T x) {
     if constexpr (is_complex_v<T>) {
-      return {rint(x.x), rint(x.y)};
+      return {::rintf(x.x), ::rintf(x.y)};
+    } else if constexpr (std::is_same_v<T, float>) {
+      return ::rintf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::rint(x);
     } else {
       return rint(x);
     }
@@ -361,7 +436,13 @@ struct Sin {
 struct Sinh {
   template <typename T>
   __device__ T operator()(T x) {
-    return sinh(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::sinhf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::sinh(x);
+    } else {
+      return sinh(x);
+    }
   }
 };
 
@@ -379,7 +460,13 @@ struct Square {
 struct Sqrt {
   template <typename T>
   __device__ T operator()(T x) {
-    return sqrt(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::sqrtf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::sqrt(x);
+    } else {
+      return sqrt(x);
+    }
   }
 };
 
@@ -388,6 +475,10 @@ struct Rsqrt {
   __device__ T operator()(T x) {
     if constexpr (is_complex_v<T>) {
       return hipCdivf(make_hipFloatComplex(1.0f, 0.0f), Sqrt{}(x));
+    } else if constexpr (std::is_same_v<T, float>) {
+      return ::rsqrtf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::rsqrt(x);
     } else {
       return rsqrt(x);
     }
@@ -397,14 +488,26 @@ struct Rsqrt {
 struct Tan {
   template <typename T>
   __device__ T operator()(T x) {
-    return tan(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::tanf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::tan(x);
+    } else {
+      return tan(x);
+    }
   }
 };
 
 struct Tanh {
   template <typename T>
   __device__ T operator()(T x) {
-    return tanh(x);
+    if constexpr (std::is_same_v<T, float>) {
+      return ::tanhf(x);
+    } else if constexpr (std::is_same_v<T, double>) {
+      return ::tanh(x);
+    } else {
+      return tanh(x);
+    }
   }
 };
 

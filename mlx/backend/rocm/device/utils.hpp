@@ -32,6 +32,16 @@ struct is_complex<hipFloatComplex> : std::true_type {};
 template <typename T>
 inline constexpr bool is_complex_v = is_complex<T>::value;
 
+// Type traits for floating point types (including half precision)
+template <typename T>
+inline constexpr bool is_floating_v =
+    std::is_same_v<T, float> || std::is_same_v<T, double> ||
+    std::is_same_v<T, __half> || std::is_same_v<T, hip_bfloat16>;
+
+// Type traits for inexact types (floating point or complex)
+template <typename T>
+inline constexpr bool is_inexact_v = is_floating_v<T> || is_complex_v<T>;
+
 // Complex type alias
 template <typename T>
 using complex_t = hipFloatComplex;
