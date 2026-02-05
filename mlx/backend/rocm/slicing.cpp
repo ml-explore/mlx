@@ -61,8 +61,11 @@ array compute_dynamic_offset(
   rocm::JitModule& mod = rocm::get_jit_module(s.device, module_name, [&]() {
     std::ostringstream source;
     source << R"(
-        #include "mlx/backend/rocm/device/utils.hpp"
         #include <hip/hip_runtime.h>
+
+        // Standard type definitions for JIT compilation
+        using int64_t = signed long long;
+        using int32_t = signed int;
 
         namespace mlx::core::rocm {
 
@@ -75,7 +78,7 @@ array compute_dynamic_offset(
           int64_t acc = 0;
           #pragma unroll
           for (int i = 0; i < NIDX; ++i) {
-            acc += indices[i] * strides[axes[i]];
+            acc += static_cast<int64_t>(indices[i]) * strides[axes[i]];
           }
           *offset = acc;
         }

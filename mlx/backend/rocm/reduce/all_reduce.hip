@@ -181,11 +181,8 @@ struct ReduceResult<rocm::Prod, T> {
 // Check if a reduce operation is valid for a type
 template <typename Op, typename T>
 constexpr bool is_valid_reduce_op() {
-  // And/Or only work on bool
-  if constexpr (std::is_same_v<Op, rocm::And> || std::is_same_v<Op, rocm::Or>) {
-    return std::is_same_v<T, bool>;
-  }
-  // Sum/Prod/Max/Min work on all types (including complex)
+  // All reduce operations work on all types
+  // And/Or will cast to bool internally
   return true;
 }
 

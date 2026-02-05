@@ -35,6 +35,17 @@ __device__ __half warp_shfl_down(__half val, int offset) {
   return __float2half(f);
 }
 
+// Helper to cast input to accumulator type
+template <typename U, typename T>
+__device__ U cast_to_row(T val) {
+  if constexpr (std::is_same_v<U, bool>) {
+    // For And/Or operations, convert to bool
+    return static_cast<bool>(val);
+  } else {
+    return static_cast<U>(val);
+  }
+}
+
 template <typename T, typename U, typename Op, int N = 4>
 __global__ void row_reduce_simple_kernel(
     const T* __restrict__ in,
@@ -56,7 +67,7 @@ __global__ void row_reduce_simple_kernel(
   for (int i = threadIdx.x * N; i < row_size; i += blockDim.x * N) {
     #pragma unroll
     for (int j = 0; j < N && (i + j) < row_size; ++j) {
-      acc = op(acc, static_cast<U>(row_in[i + j]));
+      acc = op(acc, cast_to_row<U>(row_in[i + j]));
     }
   }
   
@@ -120,7 +131,7 @@ __global__ void row_reduce_looped_kernel(
     
     // Reduce the row
     for (int i = threadIdx.x; i < row_size; i += blockDim.x) {
-      acc = op(acc, static_cast<U>(row_in[i]));
+      acc = op(acc, cast_to_row<U>(row_in[i]));
     }
     
     loop.next(reduce_shape.data(), reduce_strides.data());
@@ -204,8 +215,9 @@ void dispatch_reduce_types_row(Dtype dt, Func&& func) {
   }
 }
 
-// Dispatch helper for reduce operations
-template <typename T, typename Func>
+// Dispatch helper for reduce operations - no type restrictions
+// The cast_to function handles conversion to bool for And/Or
+template <typename Func>
 void dispatch_reduce_ops_row(Reduce::ReduceType reduce_type, Func&& func) {
   switch (reduce_type) {
     case Reduce::Sum:
@@ -221,20 +233,10 @@ void dispatch_reduce_ops_row(Reduce::ReduceType reduce_type, Func&& func) {
       func(type_identity<rocm::Min>{});
       break;
     case Reduce::And:
-      // And only works with bool
-      if constexpr (std::is_same_v<T, bool>) {
-        func(type_identity<rocm::And>{});
-      } else {
-        throw std::runtime_error("And reduce only supported for bool type");
-      }
+      func(type_identity<rocm::And>{});
       break;
     case Reduce::Or:
-      // Or only works with bool
-      if constexpr (std::is_same_v<T, bool>) {
-        func(type_identity<rocm::Or>{});
-      } else {
-        throw std::runtime_error("Or reduce only supported for bool type");
-      }
+      func(type_identity<rocm::Or>{});
       break;
     default:
       throw std::runtime_error("Unsupported reduce type");
@@ -286,7 +288,7 @@ void row_reduce(
   if (plan.shape.size() == 1) {
     dispatch_reduce_types_row(in.dtype(), [&](auto type_tag) {
       using T = hip_type_t<typename decltype(type_tag)::type>;
-      dispatch_reduce_ops_row<T>(reduce_type, [&](auto reduce_type_tag) {
+      dispatch_reduce_ops_row(reduce_type, [&](auto reduce_type_tag) {
         using OP = typename decltype(reduce_type_tag)::type;
         using U = typename rocm::ReduceResult<OP, T>::type;
         
@@ -324,7 +326,7 @@ void row_reduce(
     
     dispatch_reduce_types_row(in.dtype(), [&](auto type_tag) {
       using T = hip_type_t<typename decltype(type_tag)::type>;
-      dispatch_reduce_ops_row<T>(reduce_type, [&](auto reduce_type_tag) {
+      dispatch_reduce_ops_row(reduce_type, [&](auto reduce_type_tag) {
         dispatch_reduce_ndim_row(reduce_ndim, [&](auto reduce_ndim_val) {
           using OP = typename decltype(reduce_type_tag)::type;
           using U = typename rocm::ReduceResult<OP, T>::type;

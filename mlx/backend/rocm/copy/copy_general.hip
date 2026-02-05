@@ -11,45 +11,58 @@ namespace mlx::core {
 
 namespace rocm {
 
+// Helper function to convert linear index to strided offset
+template <typename IdxT>
+__device__ IdxT linear_to_strided(
+    IdxT elem,
+    const int* shape,
+    const int64_t* strides,
+    int ndim) {
+  IdxT loc = 0;
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
+    loc += (elem % shape[i]) * IdxT(strides[i]);
+    elem /= shape[i];
+  }
+  return loc;
+}
+
+// Helper function to convert linear index to two strided offsets
+template <typename IdxT>
+__device__ void linear_to_strided_2(
+    IdxT elem,
+    const int* shape,
+    const int64_t* strides_in,
+    const int64_t* strides_out,
+    int ndim,
+    IdxT& loc_in,
+    IdxT& loc_out) {
+  loc_in = 0;
+  loc_out = 0;
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
+    IdxT dim_idx = elem % shape[i];
+    loc_in += dim_idx * IdxT(strides_in[i]);
+    loc_out += dim_idx * IdxT(strides_out[i]);
+    elem /= shape[i];
+  }
+}
+
 // General copy kernel - strided input to strided output (dynamic ndim)
 template <typename In, typename Out, typename IdxT>
 __global__ void copy_gg_dynamic(
     const In* in,
     Out* out,
-    IdxT size_rest,
+    IdxT size,
     const int* shape,
     const int64_t* strides_in,
     const int64_t* strides_out,
     int ndim) {
-  IdxT index_rest = blockIdx.y * blockDim.y + threadIdx.y;
-  if (index_rest >= size_rest) {
+  IdxT index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= size) {
     return;
   }
 
-  int shape_x = shape[ndim - 1];
-  int64_t in_stride_x = strides_in[ndim - 1];
-  int64_t out_stride_x = strides_out[ndim - 1];
-  IdxT index_x = blockIdx.x * blockDim.x + threadIdx.x;
-  
-  if (index_x >= shape_x) {
-    return;
-  }
-
-  // Compute base offsets for input and output
-  IdxT idx_in = 0;
-  IdxT idx_out = 0;
-  IdxT tmp = index_rest;
-  for (int i = ndim - 2; i >= 0; --i) {
-    IdxT coord = tmp % shape[i];
-    idx_in += coord * strides_in[i];
-    idx_out += coord * strides_out[i];
-    tmp /= shape[i];
-  }
-
-  // Add x-dimension offset
-  idx_in += index_x * in_stride_x;
-  idx_out += index_x * out_stride_x;
-
+  IdxT idx_in, idx_out;
+  linear_to_strided_2(index, shape, strides_in, strides_out, ndim, idx_in, idx_out);
   out[idx_out] = cast_to<Out>(in[idx_in]);
 }
 
@@ -75,9 +88,6 @@ void copy_general(
   if (data_size == 0) {
     return;
   }
-
-  auto dim0 = ndim > 0 ? shape.back() : 1;
-  auto rest = data_size / dim0;
 
   // Allocate device memory for shape and strides
   array shape_arr({ndim}, int32, nullptr, {});
@@ -116,15 +126,15 @@ void copy_general(
             hipMemcpyHostToDevice,
             stream);
 
-        dim3 block(16, 16);
-        dim3 grid((dim0 + block.x - 1) / block.x, (rest + block.y - 1) / block.y);
+        int block_size = 256;
+        int num_blocks = (data_size + block_size - 1) / block_size;
 
         hipLaunchKernelGGL(
             (rocm::copy_gg_dynamic<InType, OutType, int64_t>),
-            grid, block, 0, stream,
+            dim3(num_blocks), dim3(block_size), 0, stream,
             reinterpret_cast<const InType*>(in.data<void>()) + offset_in,
             reinterpret_cast<OutType*>(out.data<void>()) + offset_out,
-            static_cast<int64_t>(rest),
+            static_cast<int64_t>(data_size),
             shape_arr.data<int32_t>(),
             strides_in_arr.data<int64_t>(),
             strides_out_arr.data<int64_t>(),

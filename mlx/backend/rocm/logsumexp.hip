@@ -20,20 +20,20 @@ inline __device__ T logsumexp_exp(T x) {
   return __expf(x);
 }
 
-// Warp reduce for max
+// Warp reduce for max - use runtime warpSize
 template <typename T>
 __device__ T warp_reduce_max_lse(T val) {
-  for (int offset = 32; offset > 0; offset /= 2) {
+  for (int offset = warpSize / 2; offset > 0; offset /= 2) {
     T other = __shfl_xor(val, offset);
     val = val > other ? val : other;
   }
   return val;
 }
 
-// Warp reduce for sum
+// Warp reduce for sum - use runtime warpSize
 template <typename T>
 __device__ T warp_reduce_sum_lse(T val) {
-  for (int offset = 32; offset > 0; offset /= 2) {
+  for (int offset = warpSize / 2; offset > 0; offset /= 2) {
     val += __shfl_xor(val, offset);
   }
   return val;
@@ -46,70 +46,71 @@ __global__ void logsumexp_kernel(const T* in, T* out, int axis_size) {
   in += row * axis_size;
 
   // Thread reduce for max
+  AccT prevmax;
   AccT maxval = -1e38f;
-  for (int i = threadIdx.x * N_READS; i < axis_size; i += BLOCK_DIM * N_READS) {
+  AccT normalizer = 0;
+  
+  for (int r = 0; r < (axis_size + BLOCK_DIM * N_READS - 1) / (BLOCK_DIM * N_READS); r++) {
+    int base_idx = r * BLOCK_DIM * N_READS + threadIdx.x * N_READS;
+    prevmax = maxval;
+    
     #pragma unroll
-    for (int j = 0; j < N_READS && i + j < axis_size; ++j) {
-      AccT val = static_cast<AccT>(in[i + j]);
-      maxval = val > maxval ? val : maxval;
+    for (int j = 0; j < N_READS; ++j) {
+      int idx = base_idx + j;
+      if (idx < axis_size) {
+        AccT val = static_cast<AccT>(in[idx]);
+        maxval = val > maxval ? val : maxval;
+      }
+    }
+    
+    // Online normalizer calculation
+    normalizer = normalizer * logsumexp_exp(prevmax - maxval);
+    #pragma unroll
+    for (int j = 0; j < N_READS; ++j) {
+      int idx = base_idx + j;
+      if (idx < axis_size) {
+        normalizer += logsumexp_exp(static_cast<AccT>(in[idx]) - maxval);
+      }
     }
   }
 
-  // Block reduce for max
-  __shared__ AccT shared_max[BLOCK_DIM / 64 + 1];
+  // Block reduce for max using shared memory
+  __shared__ AccT shared_max[32];  // Max 32 warps
+  __shared__ AccT shared_norm[32];
   
-  AccT warp_max = warp_reduce_max_lse(maxval);
-  int lane = threadIdx.x % 64;
-  int warp_id = threadIdx.x / 64;
+  int lane = threadIdx.x % warpSize;
+  int warp_id = threadIdx.x / warpSize;
+  int num_warps = (BLOCK_DIM + warpSize - 1) / warpSize;
+  
+  // First warp reduce
+  prevmax = maxval;
+  maxval = warp_reduce_max_lse(maxval);
+  normalizer = normalizer * logsumexp_exp(prevmax - maxval);
+  normalizer = warp_reduce_sum_lse(normalizer);
   
   if (lane == 0) {
-    shared_max[warp_id] = warp_max;
+    shared_max[warp_id] = maxval;
+    shared_norm[warp_id] = normalizer;
   }
   __syncthreads();
   
+  // Second warp reduce (only first warp)
   if (warp_id == 0) {
-    maxval = (lane < (BLOCK_DIM + 63) / 64) ? shared_max[lane] : -1e38f;
+    prevmax = maxval;
+    maxval = (lane < num_warps) ? shared_max[lane] : -1e38f;
     maxval = warp_reduce_max_lse(maxval);
+    
+    normalizer = (lane < num_warps) ? shared_norm[lane] : 0;
+    normalizer = normalizer * logsumexp_exp(prevmax - maxval);
+    normalizer = warp_reduce_sum_lse(normalizer);
   }
-  __syncthreads();
-  
-  if (threadIdx.x == 0) {
-    shared_max[0] = maxval;
-  }
-  __syncthreads();
-  maxval = shared_max[0];
-
-  // Thread reduce for sum of exp(x - max)
-  AccT sumval = 0;
-  for (int i = threadIdx.x * N_READS; i < axis_size; i += BLOCK_DIM * N_READS) {
-    #pragma unroll
-    for (int j = 0; j < N_READS && i + j < axis_size; ++j) {
-      sumval += logsumexp_exp(static_cast<AccT>(in[i + j]) - maxval);
-    }
-  }
-
-  // Block reduce for sum
-  __shared__ AccT shared_sum[BLOCK_DIM / 64 + 1];
-  
-  AccT warp_sum = warp_reduce_sum_lse(sumval);
-  
-  if (lane == 0) {
-    shared_sum[warp_id] = warp_sum;
-  }
-  __syncthreads();
-  
-  if (warp_id == 0) {
-    sumval = (lane < (BLOCK_DIM + 63) / 64) ? shared_sum[lane] : 0;
-    sumval = warp_reduce_sum_lse(sumval);
-  }
-  __syncthreads();
   
   // Write output
   if (threadIdx.x == 0) {
     if (isinf(maxval)) {
       out[row] = static_cast<T>(maxval);
     } else {
-      out[row] = static_cast<T>(logf(sumval) + maxval);
+      out[row] = static_cast<T>(logf(normalizer) + maxval);
     }
   }
 }

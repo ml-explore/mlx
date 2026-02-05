@@ -97,6 +97,17 @@ __device__ T warp_reduce_col(T val, Op op) {
   return val;
 }
 
+// Helper to cast input to accumulator type
+template <typename U, typename T>
+__device__ U cast_to_col(T val) {
+  if constexpr (std::is_same_v<U, bool>) {
+    // For And/Or operations, convert to bool
+    return static_cast<bool>(val);
+  } else {
+    return static_cast<U>(val);
+  }
+}
+
 template <
     typename T,
     typename U,
@@ -159,7 +170,7 @@ __global__ void col_reduce_looped(
     for (int i = 0; i < N_READS; i++) {
       int idx = base_idx + i;
       if (idx < remaining) {
-        totals[i] = op(totals[i], static_cast<U>(in[loop.location() + idx]));
+        totals[i] = op(totals[i], cast_to_col<U>(in[loop.location() + idx]));
       }
     }
     loop.next(BM, args.reduce_shape.data(), args.reduce_strides.data());
@@ -230,7 +241,7 @@ __global__ void col_reduce_small(
     auto values = load_vector<N_READS>(in, 0);
 
     for (int j = 0; j < N_READS; j++) {
-      accumulator[j] = op(accumulator[j], static_cast<U>(values[j]));
+      accumulator[j] = op(accumulator[j], cast_to_col<U>(values[j]));
     }
 
     in += args.reduction_stride;
@@ -253,7 +264,7 @@ __global__ void col_reduce_simple_kernel(
   U val = ReduceInit<Op, T>::value();
   
   for (int row = 0; row < n_rows; row++) {
-    val = op(val, static_cast<U>(in[row * n_cols + col]));
+    val = op(val, cast_to_col<U>(in[row * n_cols + col]));
   }
   
   out[col] = val;
@@ -328,8 +339,9 @@ void dispatch_reduce_types(Dtype dt, Func&& func) {
   }
 }
 
-// Dispatch helper for reduce operations
-template <typename T, typename Func>
+// Dispatch helper for reduce operations - no type restrictions
+// The cast_to function handles conversion to bool for And/Or
+template <typename Func>
 void dispatch_reduce_ops(Reduce::ReduceType reduce_type, Func&& func) {
   switch (reduce_type) {
     case Reduce::Sum:
@@ -345,20 +357,10 @@ void dispatch_reduce_ops(Reduce::ReduceType reduce_type, Func&& func) {
       func(type_identity<rocm::Min>{});
       break;
     case Reduce::And:
-      // And only works with bool
-      if constexpr (std::is_same_v<T, bool>) {
-        func(type_identity<rocm::And>{});
-      } else {
-        throw std::runtime_error("And reduce only supported for bool type");
-      }
+      func(type_identity<rocm::And>{});
       break;
     case Reduce::Or:
-      // Or only works with bool
-      if constexpr (std::is_same_v<T, bool>) {
-        func(type_identity<rocm::Or>{});
-      } else {
-        throw std::runtime_error("Or reduce only supported for bool type");
-      }
+      func(type_identity<rocm::Or>{});
       break;
     default:
       throw std::runtime_error("Unsupported reduce type");
@@ -403,7 +405,7 @@ void col_reduce_looped(
   
   dispatch_reduce_types(in.dtype(), [&](auto type_tag) {
     using T = hip_type_t<typename decltype(type_tag)::type>;
-    dispatch_reduce_ops<T>(reduce_type, [&](auto reduce_type_tag) {
+    dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
       dispatch_reduce_ndim(args.reduce_ndim, [&](auto reduce_ndim) {
         using OP = typename decltype(reduce_type_tag)::type;
         using U = typename rocm::ReduceResult<OP, T>::type;
@@ -444,7 +446,7 @@ void col_reduce_small(
   
   dispatch_reduce_types(in.dtype(), [&](auto type_tag) {
     using T = hip_type_t<typename decltype(type_tag)::type>;
-    dispatch_reduce_ops<T>(reduce_type, [&](auto reduce_type_tag) {
+    dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {
       using OP = typename decltype(reduce_type_tag)::type;
       using U = typename rocm::ReduceResult<OP, T>::type;
 

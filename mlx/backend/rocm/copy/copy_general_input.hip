@@ -13,41 +13,37 @@ static constexpr int TILE_SIZE = 16;
 
 namespace rocm {
 
+// Helper function to convert linear index to strided offset
+template <typename IdxT>
+__device__ IdxT linear_to_strided(
+    IdxT elem,
+    const int* shape,
+    const int64_t* strides,
+    int ndim) {
+  IdxT loc = 0;
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
+    loc += (elem % shape[i]) * IdxT(strides[i]);
+    elem /= shape[i];
+  }
+  return loc;
+}
+
 // General copy kernel - strided input to contiguous output (dynamic ndim)
 template <typename In, typename Out, typename IdxT>
 __global__ void copy_g_dynamic(
     const In* in,
     Out* out,
-    IdxT size_rest,
+    IdxT size,
     const int* shape,
     const int64_t* strides,
     int ndim) {
-  IdxT index_rest = blockIdx.y * blockDim.y + threadIdx.y;
-  if (index_rest >= size_rest) {
+  IdxT index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= size) {
     return;
   }
 
-  int shape_x = shape[ndim - 1];
-  int64_t stride_x = strides[ndim - 1];
-  IdxT index_x = blockIdx.x * blockDim.x + threadIdx.x;
-  
-  if (index_x >= shape_x) {
-    return;
-  }
-
-  // Compute input offset
-  IdxT idx = 0;
-  IdxT tmp = index_rest;
-  for (int i = ndim - 2; i >= 0; --i) {
-    IdxT coord = tmp % shape[i];
-    idx += coord * strides[i];
-    tmp /= shape[i];
-  }
-  idx += index_x * stride_x;
-
-  // Output is contiguous
-  IdxT out_idx = index_rest * shape_x + index_x;
-  out[out_idx] = cast_to<Out>(in[idx]);
+  IdxT idx = linear_to_strided(index, shape, strides, ndim);
+  out[index] = cast_to<Out>(in[idx]);
 }
 
 // Column to row transpose kernel
@@ -121,9 +117,6 @@ void copy_general_input(
     return;
   }
 
-  auto dim0 = ndim > 0 ? shape.back() : 1;
-  auto rest = data_size / dim0;
-
   // Allocate device memory for shape and strides
   array shape_arr({ndim}, int32, nullptr, {});
   array strides_arr({ndim}, int64, nullptr, {});
@@ -152,15 +145,15 @@ void copy_general_input(
             hipMemcpyHostToDevice,
             stream);
 
-        dim3 block(16, 16);
-        dim3 grid((dim0 + block.x - 1) / block.x, (rest + block.y - 1) / block.y);
+        int block_size = 256;
+        int num_blocks = (data_size + block_size - 1) / block_size;
 
         hipLaunchKernelGGL(
             (rocm::copy_g_dynamic<InType, OutType, int64_t>),
-            grid, block, 0, stream,
+            dim3(num_blocks), dim3(block_size), 0, stream,
             reinterpret_cast<const InType*>(in.data<void>()) + offset_in,
             reinterpret_cast<OutType*>(out.data<void>()) + offset_out,
-            static_cast<int64_t>(rest),
+            static_cast<int64_t>(data_size),
             shape_arr.data<int32_t>(),
             strides_arr.data<int64_t>(),
             ndim);

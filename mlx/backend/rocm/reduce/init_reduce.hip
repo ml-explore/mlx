@@ -3,6 +3,7 @@
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/reduce/reduce.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
+#include "mlx/dtype_utils.h"
 
 #include <hip/hip_runtime.h>
 
@@ -20,6 +21,33 @@ __global__ void init_reduce_kernel(U* out, size_t size) {
 
 } // namespace rocm
 
+// Dispatch reduce operations
+template <typename F>
+void dispatch_reduce_ops_init(Reduce::ReduceType reduce_type, F&& f) {
+  switch (reduce_type) {
+    case Reduce::Sum:
+      f(type_identity<rocm::Sum>{});
+      break;
+    case Reduce::Prod:
+      f(type_identity<rocm::Prod>{});
+      break;
+    case Reduce::Max:
+      f(type_identity<rocm::Max>{});
+      break;
+    case Reduce::Min:
+      f(type_identity<rocm::Min>{});
+      break;
+    case Reduce::And:
+      f(type_identity<rocm::And>{});
+      break;
+    case Reduce::Or:
+      f(type_identity<rocm::Or>{});
+      break;
+    default:
+      throw std::runtime_error("Unsupported reduce type");
+  }
+}
+
 void init_reduce(
     rocm::CommandEncoder& encoder,
     const array& in,
@@ -35,72 +63,19 @@ void init_reduce(
   int block_size = 256;
   int num_blocks = (out.size() + block_size - 1) / block_size;
   
-  encoder.launch_kernel([&](hipStream_t stream) {
-    #define LAUNCH_INIT_REDUCE(T, U, OP) \
-      hipLaunchKernelGGL( \
-          (rocm::init_reduce_kernel<T, U, rocm::OP>), \
-          dim3(num_blocks), dim3(block_size), 0, stream, \
-          out.data<U>(), out.size())
-    
-    switch (in.dtype()) {
-      case float32:
-        switch (reduce_type) {
-          case Reduce::Sum: LAUNCH_INIT_REDUCE(float, float, Sum); break;
-          case Reduce::Prod: LAUNCH_INIT_REDUCE(float, float, Prod); break;
-          case Reduce::Max: LAUNCH_INIT_REDUCE(float, float, Max); break;
-          case Reduce::Min: LAUNCH_INIT_REDUCE(float, float, Min); break;
-          default: break;
-        }
-        break;
-      case float16:
-        switch (reduce_type) {
-          case Reduce::Sum: LAUNCH_INIT_REDUCE(__half, __half, Sum); break;
-          case Reduce::Prod: LAUNCH_INIT_REDUCE(__half, __half, Prod); break;
-          case Reduce::Max: LAUNCH_INIT_REDUCE(__half, __half, Max); break;
-          case Reduce::Min: LAUNCH_INIT_REDUCE(__half, __half, Min); break;
-          default: break;
-        }
-        break;
-      case bfloat16:
-        switch (reduce_type) {
-          case Reduce::Sum: LAUNCH_INIT_REDUCE(hip_bfloat16, hip_bfloat16, Sum); break;
-          case Reduce::Prod: LAUNCH_INIT_REDUCE(hip_bfloat16, hip_bfloat16, Prod); break;
-          case Reduce::Max: LAUNCH_INIT_REDUCE(hip_bfloat16, hip_bfloat16, Max); break;
-          case Reduce::Min: LAUNCH_INIT_REDUCE(hip_bfloat16, hip_bfloat16, Min); break;
-          default: break;
-        }
-        break;
-      case int32:
-        switch (reduce_type) {
-          case Reduce::Sum: LAUNCH_INIT_REDUCE(int32_t, int32_t, Sum); break;
-          case Reduce::Prod: LAUNCH_INIT_REDUCE(int32_t, int32_t, Prod); break;
-          case Reduce::Max: LAUNCH_INIT_REDUCE(int32_t, int32_t, Max); break;
-          case Reduce::Min: LAUNCH_INIT_REDUCE(int32_t, int32_t, Min); break;
-          default: break;
-        }
-        break;
-      case int64:
-        switch (reduce_type) {
-          case Reduce::Sum: LAUNCH_INIT_REDUCE(int64_t, int64_t, Sum); break;
-          case Reduce::Prod: LAUNCH_INIT_REDUCE(int64_t, int64_t, Prod); break;
-          case Reduce::Max: LAUNCH_INIT_REDUCE(int64_t, int64_t, Max); break;
-          case Reduce::Min: LAUNCH_INIT_REDUCE(int64_t, int64_t, Min); break;
-          default: break;
-        }
-        break;
-      case bool_:
-        switch (reduce_type) {
-          case Reduce::And: LAUNCH_INIT_REDUCE(bool, bool, And); break;
-          case Reduce::Or: LAUNCH_INIT_REDUCE(bool, bool, Or); break;
-          default: break;
-        }
-        break;
-      default:
-        // For unsupported types, just zero-fill
-        (void)hipMemsetAsync(out.data<void>(), 0, out.nbytes(), stream);
-        break;
-    }
-    #undef LAUNCH_INIT_REDUCE
+  dispatch_all_types(in.dtype(), [&](auto type_tag) {
+    dispatch_reduce_ops_init(reduce_type, [&](auto reduce_type_tag) {
+      using OP = MLX_GET_TYPE(reduce_type_tag);
+      using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
+      using U = typename rocm::ReduceResult<OP, T>::type;
+      
+      encoder.launch_kernel([&](hipStream_t stream) {
+        hipLaunchKernelGGL(
+            (rocm::init_reduce_kernel<T, U, OP>),
+            dim3(num_blocks), dim3(block_size), 0, stream,
+            out.data<U>(), out.size());
+      });
+    });
   });
 }
 

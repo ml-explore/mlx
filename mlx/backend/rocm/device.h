@@ -84,13 +84,16 @@ class Device {
     return device_;
   }
 
-  rocblas_handle get_rocblas_handle() const {
-    return rocblas_;
-  }
+  rocblas_handle get_rocblas_handle();
+  
+  // Check if rocBLAS is available for the current GPU architecture
+  bool is_rocblas_available();
 
  private:
   int device_;
   rocblas_handle rocblas_{nullptr};
+  bool rocblas_initialized_{false};
+  bool rocblas_available_{true};
   std::unordered_map<int, std::unique_ptr<CommandEncoder>> encoders_;
 };
 
