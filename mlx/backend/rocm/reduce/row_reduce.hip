@@ -284,8 +284,9 @@ void row_reduce(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   
-  // Simple row reduce for single reduction axis
-  if (plan.shape.size() == 1) {
+  // Simple row reduce for single reduction axis with contiguous data
+  // Only use simple kernel for ContiguousReduce (row-contiguous input)
+  if (plan.shape.size() == 1 && plan.type == ContiguousReduce) {
     dispatch_reduce_types_row(in.dtype(), [&](auto type_tag) {
       using T = hip_type_t<typename decltype(type_tag)::type>;
       dispatch_reduce_ops_row(reduce_type, [&](auto reduce_type_tag) {

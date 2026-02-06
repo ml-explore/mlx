@@ -85,6 +85,7 @@ rocm_skip = {
     "TestOps.test_sort",
     # ROCm-specific: Complex reduce operations not supported
     "TestReduce.test_nan_propagation_complex64",
+    "TestReduce.test_dtypes",  # Complex64 reduce not supported
     # ROCm-specific: vmap matmul fails on unsupported architectures
     "TestVmap.test_vmap_matmul",
     # ROCm-specific: group_norm has numerical precision issues
