@@ -39,7 +39,7 @@ struct AttnParams {
 };
 
 template <int N, typename T, typename U>
-__device__ void load(const T *src, U *dst, int idx) {
+__device__ void load(const T* src, U* dst, int idx) {
   if constexpr (N % 2 == 0) {
     auto local = load_vector<N>(src, idx);
     PRAGMA_LOOP_UNROLL
@@ -55,7 +55,7 @@ __device__ void load(const T *src, U *dst, int idx) {
 }
 
 template <int N, typename T, typename U>
-__device__ void store(T *src, U *dst, int idx) {
+__device__ void store(T* src, U* dst, int idx) {
   if constexpr (N % 2 == 0) {
     AlignedVector<U, N> local;
     PRAGMA_LOOP_UNROLL
