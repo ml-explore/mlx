@@ -25,6 +25,7 @@ def quantize(
     bits: int = None,
     *,
     mode: str = "affine",
+    quantize_input: bool = False,
     class_predicate: Optional[Callable[[str, Module], Union[bool, dict]]] = None,
 ):
     """Quantize the sub-modules of a module according to a predicate.
@@ -41,22 +42,39 @@ def quantize(
            :func:`mlx.core.quantize`). Default: ``None``.
         mode (str): The quantization method to use (see
            :func:`mlx.core.quantize`). Default: ``"affine"``.
+        quantize_input (bool): Whether to quantize an input. Default: ``False``.
         class_predicate (Optional[Callable]): A callable which receives the
           :obj:`Module` path and :obj:`Module` itself and returns ``True`` or a
           dict of params for `to_quantized` if it should be quantized and
           ``False`` otherwise. If ``None``, then all layers that define a
           ``to_quantized(group_size, bits)`` method are quantized.
           Default: ``None``.
+
+    Notes:
+        When ``quantize_input`` is ``True``, :class:`Embedding` layers are
+        skipped.
     """
-    class_predicate = class_predicate or (lambda _, m: hasattr(m, "to_quantized"))
+    # qqmm is not supported for Embedding layer
+    is_embedding = lambda m: m.__class__.__name__ == "Embedding"
+    class_predicate = class_predicate or (
+        lambda _, m: hasattr(m, "to_quantized")
+        and (not quantize_input or not is_embedding(m))
+    )
 
     def _maybe_quantize(path, m):
         if bool_or_params := class_predicate(path, m):
             if hasattr(m, "to_quantized"):
                 if isinstance(bool_or_params, bool):
-                    return m.to_quantized(group_size=group_size, bits=bits, mode=mode)
+                    return m.to_quantized(
+                        group_size=group_size,
+                        bits=bits,
+                        mode=mode,
+                        quantize_input=quantize_input,
+                    )
                 elif isinstance(bool_or_params, dict):
-                    return m.to_quantized(**bool_or_params)
+                    return m.to_quantized(
+                        **bool_or_params, quantize_input=quantize_input
+                    )
                 else:
                     raise ValueError(
                         "``class_predicate`` must return a bool"

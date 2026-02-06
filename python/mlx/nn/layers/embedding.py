@@ -45,6 +45,7 @@ class Embedding(Module):
         group_size: Optional[int] = None,
         bits: Optional[int] = None,
         mode: str = "affine",
+        **kwargs,
     ):
         """Return a :obj:`QuantizedEmbedding` layer that approximates this embedding layer."""
         return QuantizedEmbedding.from_embedding(self, group_size, bits, mode)
