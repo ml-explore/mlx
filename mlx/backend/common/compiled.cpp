@@ -84,13 +84,19 @@ std::string get_type_string(Dtype d) {
 
 bool compiled_check_contiguity(
     const std::vector<array>& inputs,
-    const Shape& shape) {
+    const Shape& shape,
+    const std::function<bool(size_t)>& is_constant) {
   bool contiguous = true;
   bool all_contig = true;
   bool all_row_contig = true;
   bool all_col_contig = true;
   int non_scalar_inputs = 0;
-  for (const auto& x : inputs) {
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    // Skip constants.
+    if (is_constant(i)) {
+      continue;
+    }
+    const auto& x = inputs[i];
     if (is_scalar(x)) {
       continue;
     }
@@ -175,7 +181,7 @@ std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
     const array& out,
     const std::function<bool(size_t)>& is_constant) {
   const Shape& shape = out.shape();
-  bool contiguous = compiled_check_contiguity(inputs, shape);
+  bool contiguous = compiled_check_contiguity(inputs, shape, is_constant);
   if (contiguous) {
     return {true, shape, {}};
   }

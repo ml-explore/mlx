@@ -1,0 +1,12 @@
+// Copyright © 2025 Apple Inc.
+
+#pragma once
+
+#include "mlx/api.h"
+
+namespace mlx::core::rocm {
+
+/* Check if the ROCm backend is available. */
+MLX_API bool is_available();
+
+} // namespace mlx::core::rocm

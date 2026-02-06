@@ -23,7 +23,7 @@ class MLXTestRunner(unittest.TestProgram):
     def createTests(self, *args, **kwargs):
         super().createTests(*args, **kwargs)
 
-        # Asume CUDA backend in this case
+        # Check if we're running on a non-Metal GPU backend (CUDA or ROCm)
         device = os.getenv("DEVICE", None)
         if device is not None:
             device = getattr(mx, device)
@@ -33,7 +33,20 @@ class MLXTestRunner(unittest.TestProgram):
         if not (device == mx.gpu and not mx.metal.is_available()):
             return
 
-        from cuda_skip import cuda_skip
+        # Determine which skip list to use based on available backend
+        skip_tests = set()
+
+        if mx.cuda.is_available():
+            from cuda_skip import cuda_skip
+
+            skip_tests = cuda_skip
+        elif mx.rocm.is_available():
+            from rocm_skip import rocm_skip
+
+            skip_tests = rocm_skip
+
+        if not skip_tests:
+            return
 
         filtered_suite = unittest.TestSuite()
 
@@ -43,7 +56,7 @@ class MLXTestRunner(unittest.TestProgram):
                     filter_and_add(sub_t)
             else:
                 t_id = ".".join(t.id().split(".")[-2:])
-                if t_id in cuda_skip:
+                if t_id in skip_tests:
                     print(f"Skipping {t_id}")
                 else:
                     filtered_suite.addTest(t)

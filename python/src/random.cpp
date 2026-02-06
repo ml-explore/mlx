@@ -18,30 +18,49 @@ using namespace nb::literals;
 
 class PyKeySequence {
  public:
-  explicit PyKeySequence(uint64_t seed) {
-    state_.append(mx::random::key(seed));
+  explicit PyKeySequence(uint64_t seed) : seed_(seed), initialized_(false) {
+    // Create empty state list - will be populated on first use
   }
 
   void seed(uint64_t seed) {
+    ensure_initialized();
     state_[0] = mx::random::key(seed);
   }
 
   mx::array next() {
+    ensure_initialized();
     auto out = mx::random::split(nb::cast<mx::array>(state_[0]));
     state_[0] = out.first;
     return out.second;
   }
 
-  nb::list state() {
+  nb::list& state() {
+    // Return the list reference - it may be empty if not initialized
+    // This allows mx.random.state to exist as an attribute
     return state_;
   }
 
+  void ensure_initialized() {
+    if (!initialized_) {
+      // Clear and repopulate the list
+      while (nb::len(state_) > 0) {
+        state_.attr("pop")();
+      }
+      state_.append(mx::random::key(seed_));
+      initialized_ = true;
+    }
+  }
+
   void release() {
-    nb::gil_scoped_acquire gil;
-    state_.release().dec_ref();
+    if (initialized_) {
+      nb::gil_scoped_acquire gil;
+      state_.release().dec_ref();
+    }
   }
 
  private:
+  uint64_t seed_;
+  bool initialized_;
   nb::list state_;
 };
 
@@ -52,8 +71,11 @@ PyKeySequence& default_key() {
                now.time_since_epoch())
         .count();
   };
-  static PyKeySequence ks(get_current_time_seed());
-  return ks;
+  static PyKeySequence* ks = nullptr;
+  if (!ks) {
+    ks = new PyKeySequence(get_current_time_seed());
+  }
+  return *ks;
 }
 
 void init_random(nb::module_& parent_module) {
@@ -61,7 +83,12 @@ void init_random(nb::module_& parent_module) {
       "random",
       "mlx.core.random: functionality related to random number generation");
 
+  // Set the 'state' attribute to the default key's state list
+  // This is accessed by mx.compile for random state tracking
+  // We set it here but the actual GPU allocation happens lazily in
+  // PyKeySequence
   m.attr("state") = default_key().state();
+
   m.def(
       "seed",
       [](uint64_t seed) { default_key().seed(seed); },
@@ -510,6 +537,7 @@ void init_random(nb::module_& parent_module) {
             array:
               The generated random permutation or randomly permuted input array.
       )pbdoc");
+
   // Register static Python object cleanup before the interpreter exits
   auto atexit = nb::module_::import_("atexit");
   atexit.attr("register")(nb::cpp_function([]() { default_key().release(); }));

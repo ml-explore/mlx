@@ -18,6 +18,7 @@ nanobind_add_module(
   ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/metal.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/cuda.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/rocm.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/memory.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/mlx_func.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp
@@ -48,6 +49,7 @@ if(MLX_BUILD_PYTHON_STUBS)
     OUTPUT
     "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/__init__.pyi"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/cuda.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/rocm.pyi"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/distributed.pyi"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/fast.pyi"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/fft.pyi"

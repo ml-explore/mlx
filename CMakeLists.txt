@@ -36,6 +36,7 @@ option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
 option(MLX_BUILD_METAL "Build metal backend" ON)
 option(MLX_BUILD_CPU "Build cpu backend" ON)
 option(MLX_BUILD_CUDA "Build cuda backend" OFF)
+option(MLX_BUILD_ROCM "Build rocm backend" OFF)
 option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
@@ -156,6 +157,43 @@ if(MLX_BUILD_CUDA)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   find_package(CUDNN REQUIRED)
+endif()
+
+if(MLX_BUILD_ROCM)
+  # Set HIP architectures - these will be used by the ROCm backend
+  # CMakeLists.txt
+  #
+  # Supported architectures from ROCm 6.4.0 - 7.2.0 compatibility matrix: CDNA:
+  # gfx908 (MI100), gfx90a (MI200), gfx942 (MI300) CDNA4: gfx950 (MI400 series)
+  # RDNA2: gfx1030 (RX 6000 series) RDNA3: gfx1100 (RX 7900), gfx1101 (RX 7600)
+  # RDNA4: gfx1200, gfx1201 (RX 8000 series)
+  if(NOT DEFINED CMAKE_HIP_ARCHITECTURES)
+    if(DEFINED MLX_ROCM_ARCHITECTURES)
+      set(CMAKE_HIP_ARCHITECTURES
+          ${MLX_ROCM_ARCHITECTURES}
+          CACHE STRING "HIP architectures")
+    else()
+      set(CMAKE_HIP_ARCHITECTURES
+          "gfx908;gfx90a;gfx942;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031;gfx1032;gfx1100;gfx1101;gfx1102"
+          CACHE STRING "HIP architectures")
+    endif()
+  endif()
+  message(
+    STATUS "Setting CMAKE_HIP_ARCHITECTURES to: ${CMAKE_HIP_ARCHITECTURES}")
+  # Note: We don't enable_language(HIP) here because it causes CMake to add -x
+  # hip to all CXX files in targets that link to HIP libraries. Instead, we
+  # compile HIP files using custom commands in the ROCm backend CMakeLists.txt.
+  # Find the HIP compiler
+  find_program(
+    CMAKE_HIP_COMPILER
+    NAMES hipcc clang++
+    PATHS /opt/rocm/bin /opt/rocm-6.0.0/bin /opt/rocm/llvm/bin
+    PATH_SUFFIXES bin
+    DOC "HIP compiler")
+  if(NOT CMAKE_HIP_COMPILER)
+    message(FATAL_ERROR "Could not find HIP compiler (hipcc or clang++)")
+  endif()
+  message(STATUS "Found HIP compiler: ${CMAKE_HIP_COMPILER}")
 endif()
 
 if(MLX_BUILD_METAL)
@@ -286,10 +324,12 @@ if(MLX_BUILD_CPU)
       message(FATAL_ERROR "Must have LAPACK installed")
     endif()
     find_path(LAPACK_INCLUDE_DIRS lapacke.h /usr/include /usr/local/include
-              /usr/local/opt/openblas/include)
+              /usr/local/opt/openblas/include /usr/include/openblas)
     message(STATUS "Lapack lib " ${LAPACK_LIBRARIES})
     message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
-    target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
+    if(LAPACK_INCLUDE_DIRS)
+      target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
+    endif()
     target_link_libraries(mlx PRIVATE ${LAPACK_LIBRARIES})
     # List blas after lapack otherwise we may accidentally incldue an old
     # version of lapack.h from the include dirs of blas.
