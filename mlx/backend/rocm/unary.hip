@@ -80,14 +80,10 @@ __global__ void unary_g(
   }
 }
 
-// Helper trait for floating point types (not complex)
-template <typename T>
-constexpr bool is_floating_v = std::is_same_v<T, float> || std::is_same_v<T, double> ||
-    std::is_same_v<T, __half> || std::is_same_v<T, hip_bfloat16>;
-
-// Helper trait for inexact types (floating point + complex)
-template <typename T>
-constexpr bool is_inexact_v = is_floating_v<T> || is_complex_v<T>;
+// Use type traits from rocm namespace
+using rocm::is_floating_v;
+using rocm::is_inexact_v;
+using rocm::is_complex_v;
 
 template <typename Op, typename In, typename Out>
 constexpr bool supports_unary_op() {

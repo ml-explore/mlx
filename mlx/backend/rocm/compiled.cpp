@@ -318,6 +318,40 @@ struct FloorDivide {
   __device__ T operator()(T x, T y) { return truncf(x / y); }
 };
 
+struct LogAddExp {
+  template <typename T>
+  __device__ T operator()(T x, T y) {
+    T maxval = x > y ? x : y;
+    T minval = x > y ? y : x;
+    return maxval + log1pf(expf(minval - maxval));
+  }
+};
+
+struct BitwiseAnd {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x & y; }
+};
+
+struct BitwiseOr {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x | y; }
+};
+
+struct BitwiseXor {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x ^ y; }
+};
+
+struct LeftShift {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x << y; }
+};
+
+struct RightShift {
+  template <typename T>
+  __device__ T operator()(T x, T y) { return x >> y; }
+};
+
 // Unary ops
 struct Abs {
   template <typename T>
@@ -472,10 +506,31 @@ struct Atanh {
   __device__ T operator()(T x) { return atanh(x); }
 };
 
+struct LogicalNot {
+  template <typename T>
+  __device__ bool operator()(T x) { return !x; }
+};
+
+struct BitwiseNot {
+  template <typename T>
+  __device__ T operator()(T x) { return ~x; }
+};
+
+struct Reciprocal {
+  template <typename T>
+  __device__ T operator()(T x) { return T(1) / x; }
+};
+
 // Ternary ops
 struct Select {
   template <typename T>
   __device__ T operator()(bool c, T x, T y) { return c ? x : y; }
+};
+
+// Broadcast is a no-op in fused kernels (handled by indexing)
+struct Broadcast {
+  template <typename T>
+  __device__ T operator()(T x) { return x; }
 };
 
 } // namespace mlx::core::rocm

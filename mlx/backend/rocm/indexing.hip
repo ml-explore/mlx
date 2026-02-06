@@ -3,6 +3,8 @@
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/jit_module.h"
+#include "mlx/backend/rocm/device/indexing.hpp"
+#include "mlx/backend/rocm/device/utils.hpp"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
@@ -73,8 +75,8 @@ __global__ void gather_general_kernel(
   out[out_idx] = src[src_loc];
 }
 
-// Simple gather kernel for axis-based gather
-template <typename T, typename IdxT>
+// Simple gather kernel for axis-based gather (for contiguous arrays)
+template <typename T, typename IdxT, int NDIM, bool SrcC, bool IdxC>
 __global__ void gather_axis_kernel(
     const T* src,
     const IdxT* idx,
@@ -82,39 +84,53 @@ __global__ void gather_axis_kernel(
     int64_t idx_size_pre,
     int64_t idx_size_axis,
     int64_t idx_size_post,
-    int64_t src_axis_size,
-    int64_t src_axis_stride,
-    int64_t idx_axis_stride,
-    int64_t out_axis_stride) {
-  int64_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+    const hip_array<int32_t, MAX_NDIM> shape,
+    const hip_array<int64_t, MAX_NDIM> src_strides,
+    const hip_array<int64_t, MAX_NDIM> idx_strides,
+    int32_t axis,
+    int32_t axis_size,
+    int64_t src_stride_axis,
+    int64_t idx_stride_axis) {
+  int64_t index = blockIdx.x * blockDim.x + threadIdx.x;
   int64_t total = idx_size_pre * idx_size_axis * idx_size_post;
-  if (gid >= total) return;
+  if (index >= total) return;
   
-  // Decompose index
-  int64_t post = gid % idx_size_post;
-  int64_t axis = (gid / idx_size_post) % idx_size_axis;
-  int64_t pre = gid / (idx_size_post * idx_size_axis);
+  // Decompose index into x (post), y (axis), z (pre) coordinates
+  int64_t x, y, z;
+  index_to_dims(index, idx_size_axis, idx_size_pre, x, y, z);
   
-  // Get index value
-  int64_t idx_offset = pre * idx_size_axis * idx_size_post + axis * idx_size_post + post;
-  IdxT idx_val = idx[idx_offset * idx_axis_stride / idx_size_post];
+  int64_t elem_idx = z * idx_size_post;
   
-  // Handle negative indices
-  if (idx_val < 0) {
-    idx_val += src_axis_size;
+  // Compute index location
+  int64_t idx_loc = y * idx_stride_axis;
+  if constexpr (IdxC) {
+    idx_loc += elem_idx * idx_size_axis + x;
+  } else {
+    idx_loc += elem_to_loc_nd<NDIM>(elem_idx + x, shape.data_, idx_strides.data_);
   }
   
-  // Compute source and output offsets
-  int64_t src_offset = pre * src_axis_stride * src_axis_size + 
-                       idx_val * src_axis_stride + post;
-  int64_t out_offset = pre * out_axis_stride * idx_size_axis +
-                       axis * out_axis_stride + post;
+  // Get index value and handle negative indices
+  IdxT idx_val = idx[idx_loc];
+  if (idx_val < 0) {
+    idx_val += axis_size;
+  }
   
-  out[out_offset] = src[src_offset];
+  // Compute source location
+  int64_t src_loc = idx_val * src_stride_axis;
+  if constexpr (SrcC) {
+    src_loc += elem_idx * axis_size + x;
+  } else {
+    src_loc += elem_to_loc_nd<NDIM>(elem_idx + x, shape.data_, src_strides.data_);
+  }
+  
+  // Output is always contiguous
+  int64_t out_idx = y * idx_size_post + elem_idx * idx_size_axis + x;
+  
+  out[out_idx] = src[src_loc];
 }
 
 // Simple scatter kernel for axis-based scatter
-template <typename T, typename IdxT, bool IS_SUM>
+template <typename T, typename IdxT, bool IS_SUM, int NDIM, bool UpdC, bool IdxC>
 __global__ void scatter_axis_kernel(
     const T* upd,
     const IdxT* idx,
@@ -122,38 +138,55 @@ __global__ void scatter_axis_kernel(
     int64_t idx_size_pre,
     int64_t idx_size_axis,
     int64_t idx_size_post,
-    int64_t out_axis_size,
-    int64_t upd_axis_stride,
-    int64_t idx_axis_stride,
-    int64_t out_axis_stride) {
-  int64_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+    const hip_array<int32_t, MAX_NDIM> shape,
+    const hip_array<int64_t, MAX_NDIM> upd_strides,
+    const hip_array<int64_t, MAX_NDIM> idx_strides,
+    const hip_array<int64_t, MAX_NDIM> out_strides,
+    int32_t axis,
+    int32_t axis_size,
+    int64_t upd_stride_axis,
+    int64_t idx_stride_axis,
+    int64_t out_stride_axis) {
+  int64_t index = blockIdx.x * blockDim.x + threadIdx.x;
   int64_t total = idx_size_pre * idx_size_axis * idx_size_post;
-  if (gid >= total) return;
+  if (index >= total) return;
   
-  // Decompose index
-  int64_t post = gid % idx_size_post;
-  int64_t axis = (gid / idx_size_post) % idx_size_axis;
-  int64_t pre = gid / (idx_size_post * idx_size_axis);
+  // Decompose index into x (post), y (axis), z (pre) coordinates
+  int64_t x, y, z;
+  index_to_dims(index, idx_size_axis, idx_size_pre, x, y, z);
   
-  // Get index value
-  int64_t idx_offset = pre * idx_size_axis * idx_size_post + axis * idx_size_post + post;
-  IdxT idx_val = idx[idx_offset * idx_axis_stride / idx_size_post];
+  int64_t elem_idx = z * idx_size_post;
   
-  // Handle negative indices
-  if (idx_val < 0) {
-    idx_val += out_axis_size;
+  // Compute index location
+  int64_t idx_loc = y * idx_stride_axis;
+  if constexpr (IdxC) {
+    idx_loc += elem_idx * idx_size_axis + x;
+  } else {
+    idx_loc += elem_to_loc_nd<NDIM>(elem_idx + x, shape.data_, idx_strides.data_);
   }
   
-  // Compute update and output offsets
-  int64_t upd_offset = pre * upd_axis_stride * idx_size_axis +
-                       axis * upd_axis_stride + post;
-  int64_t out_offset = pre * out_axis_stride * out_axis_size +
-                       idx_val * out_axis_stride + post;
+  // Get index value and handle negative indices
+  IdxT idx_val = idx[idx_loc];
+  if (idx_val < 0) {
+    idx_val += axis_size;
+  }
+  
+  // Compute update location
+  int64_t upd_loc = y * upd_stride_axis;
+  if constexpr (UpdC) {
+    upd_loc += elem_idx * idx_size_axis + x;
+  } else {
+    upd_loc += elem_to_loc_nd<NDIM>(elem_idx + x, shape.data_, upd_strides.data_);
+  }
+  
+  // Compute output location
+  int64_t out_loc = idx_val * out_stride_axis;
+  out_loc += elem_to_loc_nd<NDIM>(elem_idx + x, shape.data_, out_strides.data_);
   
   if constexpr (IS_SUM) {
-    atomicAdd(&out[out_offset], upd[upd_offset]);
+    atomicAdd(&out[out_loc], upd[upd_loc]);
   } else {
-    out[out_offset] = upd[upd_offset];
+    out[out_loc] = upd[upd_loc];
   }
 }
 
@@ -739,124 +772,109 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   size_t idx_size_axis = idx.shape(axis_);
   
+  // Create shape and strides with axis dimension removed
+  int ndim = src.ndim() - 1;
+  if (ndim == 0) {
+    ndim = 1;  // Ensure at least 1 dimension for elem_to_loc_nd
+  }
+  
+  std::vector<int32_t> shape_vec(ndim, 1);
+  std::vector<int64_t> src_strides_vec(ndim, 0);
+  std::vector<int64_t> idx_strides_vec(ndim, 0);
+  
+  for (int i = 0, j = 0; i < src.ndim(); ++i) {
+    if (i != axis_) {
+      if (j < ndim) {
+        shape_vec[j] = idx.shape(i);
+        src_strides_vec[j] = src.strides(i);
+        idx_strides_vec[j] = idx.strides(i);
+      }
+      ++j;
+    }
+  }
+  
+  // Use const_param to pass shape and strides by value (like CUDA)
+  auto shape_param = const_param(shape_vec);
+  auto src_strides_param = const_param(src_strides_vec);
+  auto idx_strides_param = const_param(idx_strides_vec);
+  
+  int64_t src_stride_axis = src.strides(axis_);
+  int64_t idx_stride_axis = idx.strides(axis_);
+  int32_t axis_size = src.shape(axis_);
+  
+  bool src_contiguous = src.flags().row_contiguous;
+  bool idx_contiguous = idx.flags().row_contiguous;
+  
   int64_t total = idx_size_pre * idx_size_axis * idx_size_post;
   int block_size = 256;
   int num_blocks = (total + block_size - 1) / block_size;
   
+  // Dispatch based on ndim, contiguity, and index type
+  #define LAUNCH_GATHER_KERNEL(T, IdxT, NDIM, SrcC, IdxC) \
+    hipLaunchKernelGGL( \
+        (rocm::gather_axis_kernel<T, IdxT, NDIM, SrcC, IdxC>), \
+        dim3(num_blocks), dim3(block_size), 0, stream, \
+        src.data<T>(), idx.data<IdxT>(), out.data<T>(), \
+        idx_size_pre, idx_size_axis, idx_size_post, \
+        shape_param, \
+        src_strides_param, \
+        idx_strides_param, \
+        axis_, axis_size, src_stride_axis, idx_stride_axis)
+  
+  #define DISPATCH_CONTIGUOUS(T, IdxT, NDIM) \
+    if (src_contiguous && idx_contiguous) { \
+      LAUNCH_GATHER_KERNEL(T, IdxT, NDIM, true, true); \
+    } else if (src_contiguous) { \
+      LAUNCH_GATHER_KERNEL(T, IdxT, NDIM, true, false); \
+    } else if (idx_contiguous) { \
+      LAUNCH_GATHER_KERNEL(T, IdxT, NDIM, false, true); \
+    } else { \
+      LAUNCH_GATHER_KERNEL(T, IdxT, NDIM, false, false); \
+    }
+  
+  #define DISPATCH_NDIM(T, IdxT) \
+    switch (ndim) { \
+      case 0: DISPATCH_CONTIGUOUS(T, IdxT, 1); break; \
+      case 1: DISPATCH_CONTIGUOUS(T, IdxT, 1); break; \
+      case 2: DISPATCH_CONTIGUOUS(T, IdxT, 2); break; \
+      case 3: DISPATCH_CONTIGUOUS(T, IdxT, 3); break; \
+      case 4: DISPATCH_CONTIGUOUS(T, IdxT, 4); break; \
+      case 5: DISPATCH_CONTIGUOUS(T, IdxT, 5); break; \
+      case 6: DISPATCH_CONTIGUOUS(T, IdxT, 6); break; \
+      case 7: DISPATCH_CONTIGUOUS(T, IdxT, 7); break; \
+      default: DISPATCH_CONTIGUOUS(T, IdxT, 8); break; \
+    }
+  
+  #define DISPATCH_IDX_TYPE(T) \
+    if (idx.dtype() == int32 || idx.dtype() == uint32) { \
+      DISPATCH_NDIM(T, int32_t); \
+    } else { \
+      DISPATCH_NDIM(T, int64_t); \
+    }
+  
   encoder.launch_kernel([&](hipStream_t stream) {
     switch (src.dtype()) {
-      case float32:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<float, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<float>(), idx.data<int32_t>(), out.data<float>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case int32:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<int32_t, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<int32_t>(), idx.data<int32_t>(), out.data<int32_t>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case uint32:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<uint32_t, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<uint32_t>(), idx.data<int32_t>(), out.data<uint32_t>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case int64:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<int64_t, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<int64_t>(), idx.data<int32_t>(), out.data<int64_t>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case uint64:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<uint64_t, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<uint64_t>(), idx.data<int32_t>(), out.data<uint64_t>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case float16:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<__half, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<__half>(), idx.data<int32_t>(), out.data<__half>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case bfloat16:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<hip_bfloat16, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<hip_bfloat16>(), idx.data<int32_t>(), out.data<hip_bfloat16>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case int8:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<int8_t, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<int8_t>(), idx.data<int32_t>(), out.data<int8_t>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case uint8:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<uint8_t, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<uint8_t>(), idx.data<int32_t>(), out.data<uint8_t>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case int16:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<int16_t, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<int16_t>(), idx.data<int32_t>(), out.data<int16_t>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case uint16:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<uint16_t, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<uint16_t>(), idx.data<int32_t>(), out.data<uint16_t>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
-      case bool_:
-        hipLaunchKernelGGL(
-            (rocm::gather_axis_kernel<bool, int32_t>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src.data<bool>(), idx.data<int32_t>(), out.data<bool>(),
-            idx_size_pre, idx_size_axis, idx_size_post,
-            src.shape(axis_), src.strides(axis_), idx.strides(axis_),
-            out.strides(axis_));
-        break;
+      case float32: DISPATCH_IDX_TYPE(float); break;
+      case int32: DISPATCH_IDX_TYPE(int32_t); break;
+      case uint32: DISPATCH_IDX_TYPE(uint32_t); break;
+      case int64: DISPATCH_IDX_TYPE(int64_t); break;
+      case uint64: DISPATCH_IDX_TYPE(uint64_t); break;
+      case float16: DISPATCH_IDX_TYPE(__half); break;
+      case bfloat16: DISPATCH_IDX_TYPE(hip_bfloat16); break;
+      case int8: DISPATCH_IDX_TYPE(int8_t); break;
+      case uint8: DISPATCH_IDX_TYPE(uint8_t); break;
+      case int16: DISPATCH_IDX_TYPE(int16_t); break;
+      case uint16: DISPATCH_IDX_TYPE(uint16_t); break;
+      case bool_: DISPATCH_IDX_TYPE(bool); break;
       default:
         throw std::runtime_error("Unsupported dtype for GatherAxis");
     }
   });
+  
+  #undef LAUNCH_GATHER_KERNEL
+  #undef DISPATCH_CONTIGUOUS
+  #undef DISPATCH_NDIM
+  #undef DISPATCH_IDX_TYPE
 }
 
 void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -897,61 +915,125 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   size_t idx_size_axis = idx.shape(axis_);
   
+  // Create shape and strides with axis dimension removed
+  int ndim = idx.ndim() - 1;
+  if (ndim == 0) {
+    ndim = 1;  // Ensure at least 1 dimension for elem_to_loc_nd
+  }
+  
+  std::vector<int32_t> shape_vec(ndim, 1);
+  std::vector<int64_t> upd_strides_vec(ndim, 0);
+  std::vector<int64_t> idx_strides_vec(ndim, 0);
+  std::vector<int64_t> out_strides_vec(ndim, 0);
+  
+  for (int i = 0, j = 0; i < idx.ndim(); ++i) {
+    if (i != axis_) {
+      if (j < ndim) {
+        shape_vec[j] = idx.shape(i);
+        upd_strides_vec[j] = upd.strides(i);
+        idx_strides_vec[j] = idx.strides(i);
+        out_strides_vec[j] = out.strides(i);
+      }
+      ++j;
+    }
+  }
+  
+  // Use const_param to pass shape and strides by value
+  auto shape_param = const_param(shape_vec);
+  auto upd_strides_param = const_param(upd_strides_vec);
+  auto idx_strides_param = const_param(idx_strides_vec);
+  auto out_strides_param = const_param(out_strides_vec);
+  
+  int64_t upd_stride_axis = upd.strides(axis_);
+  int64_t idx_stride_axis = idx.strides(axis_);
+  int64_t out_stride_axis = out.strides(axis_);
+  int32_t axis_size = out.shape(axis_);
+  
+  bool upd_contiguous = upd.flags().row_contiguous;
+  bool idx_contiguous = idx.flags().row_contiguous;
+  
   int64_t total = idx_size_pre * idx_size_axis * idx_size_post;
   int block_size = 256;
   int num_blocks = (total + block_size - 1) / block_size;
   
   bool is_sum = (reduce_type_ == ScatterAxis::Sum);
   
+  #define LAUNCH_SCATTER_KERNEL(T, IdxT, IS_SUM, NDIM, UpdC, IdxC) \
+    hipLaunchKernelGGL( \
+        (rocm::scatter_axis_kernel<T, IdxT, IS_SUM, NDIM, UpdC, IdxC>), \
+        dim3(num_blocks), dim3(block_size), 0, stream, \
+        upd.data<T>(), idx.data<IdxT>(), out.data<T>(), \
+        idx_size_pre, idx_size_axis, idx_size_post, \
+        shape_param, \
+        upd_strides_param, \
+        idx_strides_param, \
+        out_strides_param, \
+        axis_, axis_size, upd_stride_axis, idx_stride_axis, out_stride_axis)
+  
+  #define DISPATCH_CONTIGUOUS(T, IdxT, IS_SUM, NDIM) \
+    if (upd_contiguous && idx_contiguous) { \
+      LAUNCH_SCATTER_KERNEL(T, IdxT, IS_SUM, NDIM, true, true); \
+    } else if (upd_contiguous) { \
+      LAUNCH_SCATTER_KERNEL(T, IdxT, IS_SUM, NDIM, true, false); \
+    } else if (idx_contiguous) { \
+      LAUNCH_SCATTER_KERNEL(T, IdxT, IS_SUM, NDIM, false, true); \
+    } else { \
+      LAUNCH_SCATTER_KERNEL(T, IdxT, IS_SUM, NDIM, false, false); \
+    }
+  
+  #define DISPATCH_NDIM(T, IdxT, IS_SUM) \
+    switch (ndim) { \
+      case 0: DISPATCH_CONTIGUOUS(T, IdxT, IS_SUM, 1); break; \
+      case 1: DISPATCH_CONTIGUOUS(T, IdxT, IS_SUM, 1); break; \
+      case 2: DISPATCH_CONTIGUOUS(T, IdxT, IS_SUM, 2); break; \
+      case 3: DISPATCH_CONTIGUOUS(T, IdxT, IS_SUM, 3); break; \
+      case 4: DISPATCH_CONTIGUOUS(T, IdxT, IS_SUM, 4); break; \
+      case 5: DISPATCH_CONTIGUOUS(T, IdxT, IS_SUM, 5); break; \
+      case 6: DISPATCH_CONTIGUOUS(T, IdxT, IS_SUM, 6); break; \
+      case 7: DISPATCH_CONTIGUOUS(T, IdxT, IS_SUM, 7); break; \
+      default: DISPATCH_CONTIGUOUS(T, IdxT, IS_SUM, 8); break; \
+    }
+  
+  #define DISPATCH_IDX_TYPE(T, IS_SUM) \
+    if (idx.dtype() == int32 || idx.dtype() == uint32) { \
+      DISPATCH_NDIM(T, int32_t, IS_SUM); \
+    } else { \
+      DISPATCH_NDIM(T, int64_t, IS_SUM); \
+    }
+  
   encoder.launch_kernel([&](hipStream_t stream) {
     if (is_sum) {
+      // Note: atomicAdd only supports float32 and float64 on ROCm
+      // float16/bfloat16 would need custom atomic implementations
       switch (upd.dtype()) {
-        case float32:
-          hipLaunchKernelGGL(
-              (rocm::scatter_axis_kernel<float, int32_t, true>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              upd.data<float>(), idx.data<int32_t>(), out.data<float>(),
-              idx_size_pre, idx_size_axis, idx_size_post,
-              out.shape(axis_), upd.strides(axis_), idx.strides(axis_),
-              out.strides(axis_));
-          break;
+        case float32: DISPATCH_IDX_TYPE(float, true); break;
         default:
-          throw std::runtime_error("Unsupported dtype for ScatterAxis Sum");
+          throw std::runtime_error("Unsupported dtype for ScatterAxis Sum (only float32 supported)");
       }
     } else {
       switch (upd.dtype()) {
-        case float32:
-          hipLaunchKernelGGL(
-              (rocm::scatter_axis_kernel<float, int32_t, false>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              upd.data<float>(), idx.data<int32_t>(), out.data<float>(),
-              idx_size_pre, idx_size_axis, idx_size_post,
-              out.shape(axis_), upd.strides(axis_), idx.strides(axis_),
-              out.strides(axis_));
-          break;
-        case int32:
-          hipLaunchKernelGGL(
-              (rocm::scatter_axis_kernel<int32_t, int32_t, false>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              upd.data<int32_t>(), idx.data<int32_t>(), out.data<int32_t>(),
-              idx_size_pre, idx_size_axis, idx_size_post,
-              out.shape(axis_), upd.strides(axis_), idx.strides(axis_),
-              out.strides(axis_));
-          break;
-        case float16:
-          hipLaunchKernelGGL(
-              (rocm::scatter_axis_kernel<__half, int32_t, false>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              upd.data<__half>(), idx.data<int32_t>(), out.data<__half>(),
-              idx_size_pre, idx_size_axis, idx_size_post,
-              out.shape(axis_), upd.strides(axis_), idx.strides(axis_),
-              out.strides(axis_));
-          break;
+        case float32: DISPATCH_IDX_TYPE(float, false); break;
+        case float16: DISPATCH_IDX_TYPE(__half, false); break;
+        case bfloat16: DISPATCH_IDX_TYPE(hip_bfloat16, false); break;
+        case int32: DISPATCH_IDX_TYPE(int32_t, false); break;
+        case int64: DISPATCH_IDX_TYPE(int64_t, false); break;
+        case uint32: DISPATCH_IDX_TYPE(uint32_t, false); break;
+        case uint64: DISPATCH_IDX_TYPE(uint64_t, false); break;
+        case int8: DISPATCH_IDX_TYPE(int8_t, false); break;
+        case int16: DISPATCH_IDX_TYPE(int16_t, false); break;
+        case uint8: DISPATCH_IDX_TYPE(uint8_t, false); break;
+        case uint16: DISPATCH_IDX_TYPE(uint16_t, false); break;
+        case bool_: DISPATCH_IDX_TYPE(bool, false); break;
         default:
           throw std::runtime_error("Unsupported dtype for ScatterAxis Assign");
       }
     }
   });
+  
+  #undef LAUNCH_SCATTER_KERNEL
+  #undef DISPATCH_CONTIGUOUS
+  #undef DISPATCH_NDIM
+  #undef DISPATCH_IDX_TYPE
 }
 
 } // namespace mlx::core

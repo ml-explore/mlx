@@ -123,9 +123,9 @@ __global__ void arg_reduce_general(
     const T* in,
     uint32_t* out,
     size_t size,
-    const int* shape,
-    const int64_t* in_strides,
-    const int64_t* out_strides,
+    const Shape shape,
+    const Strides in_strides,
+    const Strides out_strides,
     int32_t ndim,
     int64_t axis_stride,
     int32_t axis_size) {
@@ -134,18 +134,9 @@ __global__ void arg_reduce_general(
     return;
   }
 
-  // Compute input and output indices
-  int64_t in_idx = 0;
-  int64_t out_idx = 0;
-  if (ndim > 0 && shape != nullptr) {
-    int64_t tmp = index;
-    for (int i = ndim - 1; i >= 0; --i) {
-      int64_t coord = tmp % shape[i];
-      in_idx += coord * in_strides[i];
-      out_idx += coord * out_strides[i];
-      tmp /= shape[i];
-    }
-  }
+  // Compute input and output indices using elem_to_loc
+  int64_t in_idx = elem_to_loc(index, shape.data_, in_strides.data_, ndim);
+  int64_t out_idx = elem_to_loc(index, shape.data_, out_strides.data_, ndim);
   in += in_idx;
 
   Op op;
@@ -200,93 +191,15 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   
-  // Handle case where output is scalar (reducing entire array along single axis)
-  if (ndim == 0) {
-    // Special case: reducing to scalar
-    constexpr int BLOCK_DIM = 256;
-    
-    encoder.launch_kernel([&](hipStream_t stream) {
-      switch (in.dtype()) {
-        case float32:
-          if (reduce_type_ == ArgReduce::ArgMax) {
-            hipLaunchKernelGGL(
-                (rocm::arg_reduce_general<float, rocm::ArgMax<float>, BLOCK_DIM, 4>),
-                dim3(1), dim3(BLOCK_DIM), 0, stream,
-                in.data<float>(), out.data<uint32_t>(), 1,
-                nullptr, nullptr, nullptr,
-                0, axis_stride, axis_size);
-          } else {
-            hipLaunchKernelGGL(
-                (rocm::arg_reduce_general<float, rocm::ArgMin<float>, BLOCK_DIM, 4>),
-                dim3(1), dim3(BLOCK_DIM), 0, stream,
-                in.data<float>(), out.data<uint32_t>(), 1,
-                nullptr, nullptr, nullptr,
-                0, axis_stride, axis_size);
-          }
-          break;
-        case int32:
-          if (reduce_type_ == ArgReduce::ArgMax) {
-            hipLaunchKernelGGL(
-                (rocm::arg_reduce_general<int32_t, rocm::ArgMax<int32_t>, BLOCK_DIM, 4>),
-                dim3(1), dim3(BLOCK_DIM), 0, stream,
-                in.data<int32_t>(), out.data<uint32_t>(), 1,
-                nullptr, nullptr, nullptr,
-                0, axis_stride, axis_size);
-          } else {
-            hipLaunchKernelGGL(
-                (rocm::arg_reduce_general<int32_t, rocm::ArgMin<int32_t>, BLOCK_DIM, 4>),
-                dim3(1), dim3(BLOCK_DIM), 0, stream,
-                in.data<int32_t>(), out.data<uint32_t>(), 1,
-                nullptr, nullptr, nullptr,
-                0, axis_stride, axis_size);
-          }
-          break;
-        case float16:
-          if (reduce_type_ == ArgReduce::ArgMax) {
-            hipLaunchKernelGGL(
-                (rocm::arg_reduce_general<__half, rocm::ArgMax<__half>, BLOCK_DIM, 4>),
-                dim3(1), dim3(BLOCK_DIM), 0, stream,
-                in.data<__half>(), out.data<uint32_t>(), 1,
-                nullptr, nullptr, nullptr,
-                0, axis_stride, axis_size);
-          } else {
-            hipLaunchKernelGGL(
-                (rocm::arg_reduce_general<__half, rocm::ArgMin<__half>, BLOCK_DIM, 4>),
-                dim3(1), dim3(BLOCK_DIM), 0, stream,
-                in.data<__half>(), out.data<uint32_t>(), 1,
-                nullptr, nullptr, nullptr,
-                0, axis_stride, axis_size);
-          }
-          break;
-        default:
-          throw std::runtime_error("Unsupported type for ArgReduce");
-      }
-    });
-    return;
-  }
-  
-  // Allocate device memory for shapes and strides
   constexpr int BLOCK_DIM = 256;
   dim3 num_blocks = get_2d_grid_dims(out.shape(), out.strides());
   
-  // Copy shapes and strides to device
-  array shape_arr({ndim}, int32);
-  array in_strides_arr({ndim}, int64);
-  array out_strides_arr({ndim}, int64);
-  shape_arr.set_data(allocator::malloc(shape_arr.nbytes()));
-  in_strides_arr.set_data(allocator::malloc(in_strides_arr.nbytes()));
-  out_strides_arr.set_data(allocator::malloc(out_strides_arr.nbytes()));
-  
-  encoder.add_temporary(shape_arr);
-  encoder.add_temporary(in_strides_arr);
-  encoder.add_temporary(out_strides_arr);
+  // Use const_param to pass shape and strides by value (like CUDA)
+  auto shape_param = const_param(shape);
+  auto in_strides_param = const_param(in_strides);
+  auto out_strides_param = const_param(out_strides);
   
   encoder.launch_kernel([&](hipStream_t stream) {
-    // Copy shape and stride data
-    (void)hipMemcpyAsync(shape_arr.data<int32_t>(), shape.data(), ndim * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(in_strides_arr.data<int64_t>(), in_strides.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(out_strides_arr.data<int64_t>(), out_strides.data(), ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    
     switch (in.dtype()) {
       case float32:
         if (reduce_type_ == ArgReduce::ArgMax) {
@@ -294,14 +207,14 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
               (rocm::arg_reduce_general<float, rocm::ArgMax<float>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
               in.data<float>(), out.data<uint32_t>(), out.size(),
-              shape_arr.data<int32_t>(), in_strides_arr.data<int64_t>(), out_strides_arr.data<int64_t>(),
+              shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         } else {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<float, rocm::ArgMin<float>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
               in.data<float>(), out.data<uint32_t>(), out.size(),
-              shape_arr.data<int32_t>(), in_strides_arr.data<int64_t>(), out_strides_arr.data<int64_t>(),
+              shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         }
         break;
@@ -311,14 +224,14 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
               (rocm::arg_reduce_general<int32_t, rocm::ArgMax<int32_t>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
               in.data<int32_t>(), out.data<uint32_t>(), out.size(),
-              shape_arr.data<int32_t>(), in_strides_arr.data<int64_t>(), out_strides_arr.data<int64_t>(),
+              shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         } else {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<int32_t, rocm::ArgMin<int32_t>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
               in.data<int32_t>(), out.data<uint32_t>(), out.size(),
-              shape_arr.data<int32_t>(), in_strides_arr.data<int64_t>(), out_strides_arr.data<int64_t>(),
+              shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         }
         break;
@@ -328,14 +241,14 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
               (rocm::arg_reduce_general<__half, rocm::ArgMax<__half>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
               in.data<__half>(), out.data<uint32_t>(), out.size(),
-              shape_arr.data<int32_t>(), in_strides_arr.data<int64_t>(), out_strides_arr.data<int64_t>(),
+              shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         } else {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<__half, rocm::ArgMin<__half>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
               in.data<__half>(), out.data<uint32_t>(), out.size(),
-              shape_arr.data<int32_t>(), in_strides_arr.data<int64_t>(), out_strides_arr.data<int64_t>(),
+              shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         }
         break;

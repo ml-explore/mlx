@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "mlx/array.h"
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/device/utils.hpp"
@@ -136,6 +137,19 @@ inline rocm::hip_array<T, NDIM> const_param(const SmallVector<T>& vec) {
   return result;
 }
 
+// Overload for std::vector
+template <int NDIM = MAX_NDIM, typename T = int32_t>
+inline rocm::hip_array<T, NDIM> const_param(const std::vector<T>& vec) {
+  if (vec.size() > NDIM) {
+    std::ostringstream oss;
+    oss << "ndim can not be larger than " << NDIM << ".";
+    throw std::runtime_error(oss.str());
+  }
+  rocm::hip_array<T, NDIM> result;
+  std::copy_n(vec.begin(), vec.size(), result.data_);
+  return result;
+}
+
 // Compute the grid and block dimensions
 inline dim3 get_block_dims(int dim0, int dim1, int dim2, int pow2 = 10) {
   int block_x = 1;
@@ -160,17 +174,8 @@ inline dim3 get_block_dims(int dim0, int dim1, int dim2, int pow2 = 10) {
 }
 
 inline dim3 get_2d_grid_dims(const Shape& shape, const Strides& strides) {
-  if (shape.empty()) {
-    return dim3(1, 1, 1);
-  }
-
-  int dim0 = shape.back();
-  int rest = 1;
-  for (size_t i = 0; i < shape.size() - 1; ++i) {
-    rest *= shape[i];
-  }
-
-  return dim3((dim0 + 255) / 256, rest, 1);
+  Dims dims = get_2d_grid_dims_common(shape, strides);
+  return dim3(std::get<0>(dims), std::get<1>(dims), std::get<2>(dims));
 }
 
 inline dim3
