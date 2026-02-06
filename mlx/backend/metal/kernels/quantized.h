@@ -867,7 +867,9 @@ METAL_FUNC void qmv_impl(
     for (; k < in_vec_size - block_size; k += block_size) {
       U sum = load_vector<T, U, values_per_thread, bits>(x, x_thread);
 
-      for (int row = 0; out_row + row < out_vec_size; row++) {
+      for (int row = 0;
+           row < results_per_simdgroup && out_row + row < out_vec_size;
+           row++) {
         auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
         const device T* sl = scales + row * in_vec_size_g;
         const device T* bl = biases + row * in_vec_size_g;
@@ -891,19 +893,23 @@ METAL_FUNC void qmv_impl(
       U sum = load_vector_safe<T, U, values_per_thread, bits>(
           x, x_thread, remaining);
 
-      for (int row = 0; out_row + row < out_vec_size; row++) {
+      for (int row = 0;
+           row < results_per_simdgroup && out_row + row < out_vec_size;
+           row++) {
         auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
         const device T* sl = scales + row * in_vec_size_g;
         const device T* bl = biases + row * in_vec_size_g;
 
         U s = sl[0];
         U b = bl[0];
-        result[row] +=
-            qdot<U, values_per_thread, bits>(wl, x_thread, s, b, sum);
+        result[row] += qdot_safe<U, values_per_thread, bits>(
+            wl, x_thread, s, b, sum, remaining);
       }
     }
 
-    for (int row = 0; out_row + row < out_vec_size; row++) {
+    for (int row = 0;
+         row < results_per_simdgroup && out_row + row < out_vec_size;
+         row++) {
       result[row] = simd_sum(result[row]);
       if (simd_lid == 0) {
         y[row] = static_cast<T>(result[row]);

@@ -681,6 +681,65 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertEqual(y_q.shape, y_hat.shape)
         self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    def test_qmv_small_non_multiples(self):
+        # Test very small K and N dimensions (e.g., [MxK] x [NxK].T = [MxN])
+        # Each tuple is (M, K, N) representing input rows, weight cols, weight rows
+        test_cases = [
+            (1, 32, 3),
+            (2, 32, 10),
+            (1, 32, 5),
+            (4, 32, 7),
+        ]
+
+        # Test different quantization settings (bits, group_size, mode)
+        quantization_settings = [
+            (4, 32, "affine"),
+            (6, 32, "affine"),
+            (4, 16, "nvfp4"),
+        ]
+
+        for M, K, N in test_cases:
+            for bits, group_size, mode in quantization_settings:
+                # Test without batch dimension
+                with self.subTest(
+                    M=M,
+                    K=K,
+                    N=N,
+                    batch=None,
+                    group_size=group_size,
+                    bits=bits,
+                    mode=mode,
+                ):
+                    w = mx.random.normal(shape=(N, K))
+                    w_q, *sb = mx.quantize(
+                        w,
+                        group_size=group_size,
+                        bits=bits,
+                        mode=mode,
+                    )
+                    w_hat = mx.dequantize(
+                        w_q,
+                        *sb,
+                        group_size=group_size,
+                        bits=bits,
+                        mode=mode,
+                    )
+
+                    # Test qmv/qmm_t (transpose=True): [MxK] @ [NxK].T = [MxN]
+                    x = mx.random.normal(shape=(M, K))
+                    y_q = mx.quantized_matmul(
+                        x,
+                        w_q,
+                        *sb,
+                        transpose=True,
+                        group_size=group_size,
+                        bits=bits,
+                        mode=mode,
+                    )
+                    y_hat = x @ mx.swapaxes(w_hat, -1, -2)
+                    self.assertEqual(y_q.shape, y_hat.shape)
+                    self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
     def test_gather_qmm(self):
         def quantize(w, transpose=True, group_size=None, bits=None, mode="affine"):
             if mode == "affine":
@@ -957,7 +1016,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     group_size=group_size,
                     mode=mode,
                     transpose=transpose,
-                    rhs_indices=indices
+                    rhs_indices=indices,
                 )
                 xs, idx, inv_order = gather_sort(x, indices)
                 y3 = mx.gather_mm(xs, w, rhs_indices=idx, sorted_indices=True)
@@ -969,7 +1028,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     mode=mode,
                     rhs_indices=idx,
                     transpose=transpose,
-                    sorted_indices=True
+                    sorted_indices=True,
                 )
                 y3 = scatter_unsort(y3, inv_order, indices.shape)
                 y4 = scatter_unsort(y4, inv_order, indices.shape)

@@ -523,6 +523,7 @@ void sdpa_vector_2pass(
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
+  check_kernel_threadgroup_size(kernel, group_dims, hash_name);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -564,13 +565,8 @@ void sdpa_vector_2pass(
   kname += "_";
   kname += std::to_string(v.shape(-1));
 
-  func_consts = {
-      {&blocks, MTL::DataType::DataTypeInt, 26},
-  };
-  hash_name = kname + "_" + std::to_string(blocks);
-
   // Get the kernel
-  kernel = d.get_kernel(kname, hash_name, func_consts);
+  kernel = d.get_kernel(kname);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Set its arguments
@@ -578,10 +574,12 @@ void sdpa_vector_2pass(
   compute_encoder.set_input_array(sums, 1);
   compute_encoder.set_input_array(maxs, 2);
   compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(blocks, 4);
 
   // Launch
   group_dims = MTL::Size(1024, 1, 1);
   grid_dims = MTL::Size(q.shape(0) * q.shape(1), q.shape(2), 1);
+  check_kernel_threadgroup_size(kernel, group_dims, kname);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 

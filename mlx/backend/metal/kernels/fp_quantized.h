@@ -434,7 +434,9 @@ METAL_FUNC void fp_qmv_impl(
     for (; k < in_vec_size - block_size; k += block_size) {
       load_vector<T, U, values_per_thread>(x, x_thread);
 
-      for (int row = 0; out_row + row < out_vec_size; row++) {
+      for (int row = 0;
+           row < results_per_simdgroup && out_row + row < out_vec_size;
+           row++) {
         auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
         const device auto* sl = scales + row * in_vec_size_g;
 
@@ -453,7 +455,9 @@ METAL_FUNC void fp_qmv_impl(
     if (remaining > 0) {
       load_vector_safe<T, U, values_per_thread>(x, x_thread, remaining);
 
-      for (int row = 0; out_row + row < out_vec_size; row++) {
+      for (int row = 0;
+           row < results_per_simdgroup && out_row + row < out_vec_size;
+           row++) {
         auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
         const device auto* sl = scales + row * in_vec_size_g;
 
@@ -462,7 +466,9 @@ METAL_FUNC void fp_qmv_impl(
       }
     }
 
-    for (int row = 0; out_row + row < out_vec_size; row++) {
+    for (int row = 0;
+         row < results_per_simdgroup && out_row + row < out_vec_size;
+         row++) {
       result[row] = simd_sum(result[row]);
       if (simd_lid == 0) {
         y[row] = static_cast<T>(result[row]);
