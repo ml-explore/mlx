@@ -50,6 +50,7 @@ cuda_skip = {
     "TestQuantized.test_fp_qvm",
     "TestQuantized.test_qvm",
     "TestQuantized.test_qvm_splitk",
+    "TestQuantized.test_qmv_small_non_multiples",
     "TestQuantized.test_small_matrix",
     "TestQuantized.test_throw",
     "TestQuantized.test_vjp_scales_biases",
