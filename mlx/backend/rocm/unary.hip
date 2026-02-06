@@ -80,11 +80,6 @@ __global__ void unary_g(
   }
 }
 
-// Use type traits from rocm namespace
-using rocm::is_floating_v;
-using rocm::is_inexact_v;
-using rocm::is_complex_v;
-
 template <typename Op, typename In, typename Out>
 constexpr bool supports_unary_op() {
   if constexpr (std::is_same_v<Op, Abs> || std::is_same_v<Op, Negative> ||
