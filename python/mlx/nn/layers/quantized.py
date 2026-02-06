@@ -34,15 +34,14 @@ def quantize(
     method will be quantized.
     Behavior of the function depends on `quantize_input` flag:
 
-    - quantize_input=False (default): Only weights are quantized,
-    input stays in higher precision.
-    Both :obj:`Linear` and :obj:`Embedding` layers will be quantized and
-    converted to :obj:`QuantizedLinear` and :obj:`QuantizedEmbedding`
-    respectively.
+    - quantize_input=False (default): Only weights are quantized.
+      Both :obj:`Linear` and :obj:`Embedding` layers will be quantized and
+      converted to :obj:`QuantizedLinear` and :obj:`QuantizedEmbedding`
+      respectively.
 
-    - quantize_input=True: Both weights and inputs are quantized.
-    :class:`Linear` layers are converted to :class:`QQLinear`.
-    :class:`Embedding` layers are not quantized in this case.
+    - quantize_input=True: Both weights and input are quantized.
+      :class:`Linear` layers are converted to :class:`QQLinear`.
+      :class:`Embedding` layers are not quantized in this case.
 
     Note also, the module is updated in-place.
 
