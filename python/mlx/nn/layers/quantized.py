@@ -31,8 +31,20 @@ def quantize(
     """Quantize the sub-modules of a module according to a predicate.
 
     By default all layers that define a ``to_quantized(group_size, bits)``
-    method will be quantized. Both :obj:`Linear` and :obj:`Embedding` layers
-    will be quantized. Note also, the module is updated in-place.
+    method will be quantized.
+    Behavior of the function depends on `quantize_input` flag:
+
+    - quantize_input=False (default): Only weights are quantized,
+    input stays in higher precision.
+    Both :obj:`Linear` and :obj:`Embedding` layers will be quantized and
+    converted to :obj:`QuantizedLinear` and :obj:`QuantizedEmbedding`
+    respectively.
+
+    - quantize_input=True: Both weights and inputs are quantized.
+    :class:`Linear` layers are converted to :class:`QQLinear`.
+    :class:`Embedding` layers are not quantized in this case.
+
+    Note also, the module is updated in-place.
 
     Args:
         model (mlx.nn.Module): The model whose leaf modules may be quantized.
@@ -49,10 +61,6 @@ def quantize(
           ``False`` otherwise. If ``None``, then all layers that define a
           ``to_quantized(group_size, bits)`` method are quantized.
           Default: ``None``.
-
-    Notes:
-        When ``quantize_input`` is ``True``, :class:`Embedding` layers are
-        skipped.
     """
     # qqmm is not supported for Embedding layer
     is_embedding = lambda m: m.__class__.__name__ == "Embedding"
