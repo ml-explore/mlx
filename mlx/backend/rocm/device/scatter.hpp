@@ -40,15 +40,13 @@ __global__ void scatter(
   LocT out_elem = upd_idx % upd_post_idx_size;
   LocT idx_elem = upd_idx / upd_post_idx_size;
 
-  LocT out_idx = elem_to_loc(
-      out_elem, upd_shape + IDX_NDIM, out_strides, out_ndim);
+  LocT out_idx =
+      elem_to_loc(out_elem, upd_shape + IDX_NDIM, out_strides, out_ndim);
 
 #pragma unroll
   for (int i = 0; i < NIDX; ++i) {
     LocT idx_loc = elem_to_loc_nd<IDX_NDIM>(
-        idx_elem,
-        indices_shape + i * IDX_NDIM,
-        indices_strides + i * IDX_NDIM);
+        idx_elem, indices_shape + i * IDX_NDIM, indices_strides + i * IDX_NDIM);
     int32_t axis = axes[i];
     LocT idx_val = absolute_index(indices[i][idx_loc], out_shape[axis]);
     out_idx += idx_val * out_strides[axis];

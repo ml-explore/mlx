@@ -249,7 +249,7 @@ template <typename T>
 #ifdef __HIPCC__
 __host__ __device__
 #endif
-T ceildiv(T a, T b) {
+    T ceildiv(T a, T b) {
   return (a + b - 1) / b;
 }
 
@@ -452,7 +452,9 @@ struct Limits {
 };
 
 template <typename T>
-struct Limits<T, std::enable_if_t<std::is_same_v<T, float> || std::is_same_v<T, double>>> {
+struct Limits<
+    T,
+    std::enable_if_t<std::is_same_v<T, float> || std::is_same_v<T, double>>> {
   __device__ static T max() {
     return numeric_limits<T>::infinity();
   }
@@ -468,7 +470,10 @@ struct Limits<T, std::enable_if_t<std::is_same_v<T, float> || std::is_same_v<T, 
 };
 
 template <typename T>
-struct Limits<T, std::enable_if_t<std::is_same_v<T, __half> || std::is_same_v<T, hip_bfloat16>>> {
+struct Limits<
+    T,
+    std::enable_if_t<
+        std::is_same_v<T, __half> || std::is_same_v<T, hip_bfloat16>>> {
   __device__ static T max() {
     return numeric_limits<T>::infinity();
   }
@@ -503,10 +508,12 @@ struct Limits<bool> {
 template <>
 struct numeric_limits<hipFloatComplex> {
   __device__ static hipFloatComplex lowest() {
-    return make_hipFloatComplex(numeric_limits<float>::lowest(), numeric_limits<float>::lowest());
+    return make_hipFloatComplex(
+        numeric_limits<float>::lowest(), numeric_limits<float>::lowest());
   }
   __device__ static hipFloatComplex max() {
-    return make_hipFloatComplex(numeric_limits<float>::max(), numeric_limits<float>::max());
+    return make_hipFloatComplex(
+        numeric_limits<float>::max(), numeric_limits<float>::max());
   }
 };
 

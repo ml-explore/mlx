@@ -1,7 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/rocm/device.h"
 #include "mlx/fast_primitives.h"
 
 #include <hip/hip_runtime.h>

@@ -46,7 +46,8 @@ __global__ void scatter_axis_kernel(
   if constexpr (IdxC) {
     idx_loc += elem_idx * idx_size_axis + x;
   } else {
-    idx_loc += elem_to_loc_nd<NDIM>(elem_idx + x, shape.data_, idx_strides.data_);
+    idx_loc +=
+        elem_to_loc_nd<NDIM>(elem_idx + x, shape.data_, idx_strides.data_);
   }
 
   auto idx_val = absolute_index(indices[idx_loc], axis_size);
@@ -55,7 +56,8 @@ __global__ void scatter_axis_kernel(
   if constexpr (UpdC) {
     upd_loc += elem_idx * idx_size_axis + x;
   } else {
-    upd_loc += elem_to_loc_nd<NDIM>(elem_idx + x, shape.data_, upd_strides.data_);
+    upd_loc +=
+        elem_to_loc_nd<NDIM>(elem_idx + x, shape.data_, upd_strides.data_);
   }
 
   LocT out_idx = idx_val * idx_size_post + elem_idx * axis_size + x;

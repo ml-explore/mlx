@@ -51,11 +51,12 @@ array compute_dynamic_offset(
   int nidx = axes.size();
 
   std::ostringstream module_name_ss;
-  module_name_ss << "compute_dynamic_offset_" << dtype_to_string(dtype) << "_" << nidx;
+  module_name_ss << "compute_dynamic_offset_" << dtype_to_string(dtype) << "_"
+                 << nidx;
   std::string module_name = module_name_ss.str();
-  
+
   std::ostringstream kernel_name_ss;
-  kernel_name_ss << "mlx::core::rocm::compute_dynamic_offset<" 
+  kernel_name_ss << "mlx::core::rocm::compute_dynamic_offset<"
                  << dtype_to_hip_type(dtype) << ", " << nidx << ">";
   std::string kernel_name = kernel_name_ss.str();
 
@@ -121,28 +122,32 @@ array compute_dynamic_offset(
   void* strides_arr_ptr = gpu_ptr<void>(strides_arr);
   void* axes_arr_ptr = gpu_ptr<void>(axes_arr);
 
-  encoder.launch_kernel([&, kernel, indices_ptr, offset_ptr, strides_arr_ptr, axes_arr_ptr](hipStream_t stream) {
-    (void)hipMemcpyAsync(
-        strides_arr_ptr,
-        strides.data(),
-        strides.size() * sizeof(int64_t),
-        hipMemcpyHostToDevice,
-        stream);
-    (void)hipMemcpyAsync(
-        axes_arr_ptr,
-        axes.data(),
-        axes.size() * sizeof(int32_t),
-        hipMemcpyHostToDevice,
-        stream);
+  encoder.launch_kernel(
+      [&, kernel, indices_ptr, offset_ptr, strides_arr_ptr, axes_arr_ptr](
+          hipStream_t stream) {
+        (void)hipMemcpyAsync(
+            strides_arr_ptr,
+            strides.data(),
+            strides.size() * sizeof(int64_t),
+            hipMemcpyHostToDevice,
+            stream);
+        (void)hipMemcpyAsync(
+            axes_arr_ptr,
+            axes.data(),
+            axes.size() * sizeof(int32_t),
+            hipMemcpyHostToDevice,
+            stream);
 
-    // hipModuleLaunchKernel expects args to be an array of pointers to the arguments
-    const void* arg0 = indices_ptr;
-    void* arg1 = offset_ptr;
-    void* arg2 = strides_arr_ptr;
-    void* arg3 = axes_arr_ptr;
-    void* args[] = {&arg0, &arg1, &arg2, &arg3};
-    (void)hipModuleLaunchKernel(kernel, 1, 1, 1, 1, 1, 1, 0, stream, args, nullptr);
-  });
+        // hipModuleLaunchKernel expects args to be an array of pointers to the
+        // arguments
+        const void* arg0 = indices_ptr;
+        void* arg1 = offset_ptr;
+        void* arg2 = strides_arr_ptr;
+        void* arg3 = axes_arr_ptr;
+        void* args[] = {&arg0, &arg1, &arg2, &arg3};
+        (void)hipModuleLaunchKernel(
+            kernel, 1, 1, 1, 1, 1, 1, 0, stream, args, nullptr);
+      });
 
   return offset;
 }

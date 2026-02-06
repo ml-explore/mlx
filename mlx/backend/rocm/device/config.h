@@ -21,26 +21,26 @@
 // For now, we default to 32 (RDNA) since that's the most common consumer GPU.
 // If targeting CDNA/GCN architectures, change this to 64.
 #if defined(__AMDGCN_WAVEFRONT_SIZE__)
-  // Device code: use the compiler-provided value
-  #define WARP_SIZE __AMDGCN_WAVEFRONT_SIZE__
+// Device code: use the compiler-provided value
+#define WARP_SIZE __AMDGCN_WAVEFRONT_SIZE__
 #elif defined(__HIP_DEVICE_COMPILE__)
-  // Device code without wavefront size macro - check architecture macros
-  #if defined(__gfx1010__) || defined(__gfx1011__) || defined(__gfx1012__) || \
-      defined(__gfx1030__) || defined(__gfx1031__) || defined(__gfx1032__) || \
-      defined(__gfx1033__) || defined(__gfx1034__) || defined(__gfx1035__) || \
-      defined(__gfx1036__) || defined(__gfx1100__) || defined(__gfx1101__) || \
-      defined(__gfx1102__) || defined(__gfx1103__) || defined(__gfx1150__) || \
-      defined(__gfx1151__) || defined(__gfx1200__) || defined(__gfx1201__)
-    #define WARP_SIZE 32
-  #else
-    #define WARP_SIZE 64
-  #endif
+// Device code without wavefront size macro - check architecture macros
+#if defined(__gfx1010__) || defined(__gfx1011__) || defined(__gfx1012__) || \
+    defined(__gfx1030__) || defined(__gfx1031__) || defined(__gfx1032__) || \
+    defined(__gfx1033__) || defined(__gfx1034__) || defined(__gfx1035__) || \
+    defined(__gfx1036__) || defined(__gfx1100__) || defined(__gfx1101__) || \
+    defined(__gfx1102__) || defined(__gfx1103__) || defined(__gfx1150__) || \
+    defined(__gfx1151__) || defined(__gfx1200__) || defined(__gfx1201__)
+#define WARP_SIZE 32
 #else
-  // Host code: use a fixed value that matches the target architecture.
-  // This MUST match the CMAKE_HIP_ARCHITECTURES setting.
-  // For RDNA (gfx10xx, gfx11xx, gfx12xx): 32
-  // For CDNA/GCN (gfx9xx): 64
-  #define WARP_SIZE 32
+#define WARP_SIZE 64
+#endif
+#else
+// Host code: use a fixed value that matches the target architecture.
+// This MUST match the CMAKE_HIP_ARCHITECTURES setting.
+// For RDNA (gfx10xx, gfx11xx, gfx12xx): 32
+// For CDNA/GCN (gfx9xx): 64
+#define WARP_SIZE 32
 #endif
 
 namespace mlx::core::rocm {

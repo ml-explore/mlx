@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/rocm/device.h"
 
 namespace mlx::core {
 

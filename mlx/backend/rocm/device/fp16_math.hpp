@@ -375,7 +375,8 @@ __device__ inline hipFloatComplex asin(hipFloatComplex z) {
   // sqrt(1 - z^2)
   hipFloatComplex sqrt_term = sqrt(one_minus_z2);
   // i*z + sqrt(1 - z^2)
-  hipFloatComplex sum = make_hipFloatComplex(iz.x + sqrt_term.x, iz.y + sqrt_term.y);
+  hipFloatComplex sum =
+      make_hipFloatComplex(iz.x + sqrt_term.x, iz.y + sqrt_term.y);
   // log(...)
   hipFloatComplex log_term = log(sum);
   // -i * log(...) = (log.y, -log.x)
@@ -408,7 +409,8 @@ __device__ inline hipFloatComplex asinh(hipFloatComplex z) {
   hipFloatComplex z2 = hipCmulf(z, z);
   hipFloatComplex z2_plus_1 = make_hipFloatComplex(z2.x + 1.0f, z2.y);
   hipFloatComplex sqrt_term = sqrt(z2_plus_1);
-  hipFloatComplex sum = make_hipFloatComplex(z.x + sqrt_term.x, z.y + sqrt_term.y);
+  hipFloatComplex sum =
+      make_hipFloatComplex(z.x + sqrt_term.x, z.y + sqrt_term.y);
   return log(sum);
 }
 
@@ -417,7 +419,8 @@ __device__ inline hipFloatComplex acosh(hipFloatComplex z) {
   hipFloatComplex z2 = hipCmulf(z, z);
   hipFloatComplex z2_minus_1 = make_hipFloatComplex(z2.x - 1.0f, z2.y);
   hipFloatComplex sqrt_term = sqrt(z2_minus_1);
-  hipFloatComplex sum = make_hipFloatComplex(z.x + sqrt_term.x, z.y + sqrt_term.y);
+  hipFloatComplex sum =
+      make_hipFloatComplex(z.x + sqrt_term.x, z.y + sqrt_term.y);
   return log(sum);
 }
 

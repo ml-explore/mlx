@@ -64,11 +64,10 @@ __device__ inline void atomic_add<unsigned long long>(
 
 // Specialization for int64_t (maps to long long on most platforms)
 template <>
-__device__ inline void atomic_add<long long>(
-    long long* addr,
-    long long val) {
-  atomicAdd(reinterpret_cast<unsigned long long*>(addr), 
-            static_cast<unsigned long long>(val));
+__device__ inline void atomic_add<long long>(long long* addr, long long val) {
+  atomicAdd(
+      reinterpret_cast<unsigned long long*>(addr),
+      static_cast<unsigned long long>(val));
 }
 
 // CAS-based atomic add for unsupported types
@@ -82,8 +81,10 @@ __device__ void atomic_add_general(T* addr, T val) {
     T new_val = assumed + val;
     // Reinterpret as unsigned int for CAS
     unsigned int* addr_as_uint = reinterpret_cast<unsigned int*>(addr);
-    unsigned int old_as_uint = __float_as_uint(*reinterpret_cast<float*>(&assumed));
-    unsigned int new_as_uint = __float_as_uint(*reinterpret_cast<float*>(&new_val));
+    unsigned int old_as_uint =
+        __float_as_uint(*reinterpret_cast<float*>(&assumed));
+    unsigned int new_as_uint =
+        __float_as_uint(*reinterpret_cast<float*>(&new_val));
     unsigned int result = atomicCAS(addr_as_uint, old_as_uint, new_as_uint);
     old = *reinterpret_cast<T*>(&result);
   } while (old != assumed);
@@ -96,43 +97,48 @@ __device__ inline void atomic_add<__half>(__half* addr, __half val) {
   unsigned int* addr_as_uint = reinterpret_cast<unsigned int*>(
       reinterpret_cast<size_t>(addr) & ~size_t(0x3));
   unsigned int shift = (reinterpret_cast<size_t>(addr) & 0x2) ? 16 : 0;
-  
+
   unsigned int old = *addr_as_uint;
   unsigned int assumed;
   do {
     assumed = old;
     __half old_half = __ushort_as_half((assumed >> shift) & 0xFFFF);
     __half new_half = __hadd(old_half, val);
-    unsigned int new_val = (assumed & ~(0xFFFF << shift)) | 
-                           (__half_as_ushort(new_half) << shift);
+    unsigned int new_val =
+        (assumed & ~(0xFFFF << shift)) | (__half_as_ushort(new_half) << shift);
     old = atomicCAS(addr_as_uint, assumed, new_val);
   } while (old != assumed);
 }
 
 // Specialization for hip_bfloat16 using CAS
 template <>
-__device__ inline void atomic_add<hip_bfloat16>(hip_bfloat16* addr, hip_bfloat16 val) {
+__device__ inline void atomic_add<hip_bfloat16>(
+    hip_bfloat16* addr,
+    hip_bfloat16 val) {
   // Use 32-bit CAS for bfloat16
   unsigned int* addr_as_uint = reinterpret_cast<unsigned int*>(
       reinterpret_cast<size_t>(addr) & ~size_t(0x3));
   unsigned int shift = (reinterpret_cast<size_t>(addr) & 0x2) ? 16 : 0;
-  
+
   unsigned int old = *addr_as_uint;
   unsigned int assumed;
   do {
     assumed = old;
     hip_bfloat16 old_bf16;
     old_bf16.data = (assumed >> shift) & 0xFFFF;
-    hip_bfloat16 new_bf16 = hip_bfloat16(static_cast<float>(old_bf16) + static_cast<float>(val));
-    unsigned int new_val = (assumed & ~(0xFFFF << shift)) | 
-                           (new_bf16.data << shift);
+    hip_bfloat16 new_bf16 =
+        hip_bfloat16(static_cast<float>(old_bf16) + static_cast<float>(val));
+    unsigned int new_val =
+        (assumed & ~(0xFFFF << shift)) | (new_bf16.data << shift);
     old = atomicCAS(addr_as_uint, assumed, new_val);
   } while (old != assumed);
 }
 
 // Specialization for hipFloatComplex using CAS
 template <>
-__device__ inline void atomic_add<hipFloatComplex>(hipFloatComplex* addr, hipFloatComplex val) {
+__device__ inline void atomic_add<hipFloatComplex>(
+    hipFloatComplex* addr,
+    hipFloatComplex val) {
   // Atomic add for real and imaginary parts separately
   atomic_add(&(addr->x), val.x);
   atomic_add(&(addr->y), val.y);

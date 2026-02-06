@@ -68,12 +68,8 @@ __device__ T warp_reduce(T val, Op op) {
 
 // Block-level reduction
 template <typename T, int N, typename Op>
-__device__ void block_reduce(
-    T (&vals)[N],
-    T* smem,
-    Op op,
-    T init,
-    int block_size) {
+__device__ void
+block_reduce(T (&vals)[N], T* smem, Op op, T init, int block_size) {
   int lane = threadIdx.x % WARP_SIZE;
   int warp_id = threadIdx.x / WARP_SIZE;
   int num_warps = (block_size + WARP_SIZE - 1) / WARP_SIZE;

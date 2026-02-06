@@ -112,7 +112,9 @@ class LRUCache {
  private:
   size_t capacity_;
   std::list<std::pair<size_t, Value>> cache_list_;
-  std::unordered_map<size_t, typename std::list<std::pair<size_t, Value>>::iterator>
+  std::unordered_map<
+      size_t,
+      typename std::list<std::pair<size_t, Value>>::iterator>
       cache_map_;
   mutable std::mutex mutex_;
 };

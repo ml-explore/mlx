@@ -35,27 +35,36 @@ rocblas_handle Device::get_rocblas_handle() {
   if (!rocblas_initialized_) {
     rocblas_initialized_ = true;
     make_current();
-    
+
     // Check if the GPU architecture is supported by rocBLAS
     hipDeviceProp_t props;
     hipGetDeviceProperties(&props, device_);
     std::string arch_name = props.gcnArchName;
-    
-    // List of architectures supported by rocBLAS (based on TensileLibrary files)
-    // These are the architectures that have TensileLibrary_lazy_*.dat files
+
+    // List of architectures supported by rocBLAS (based on TensileLibrary
+    // files) These are the architectures that have TensileLibrary_lazy_*.dat
+    // files
     static const std::vector<std::string> supported_archs = {
-        "gfx908", "gfx90a", "gfx942", "gfx950",
-        "gfx1030", "gfx1100", "gfx1101", "gfx1102",
-        "gfx1150", "gfx1151", "gfx1200", "gfx1201"
-    };
-    
+        "gfx908",
+        "gfx90a",
+        "gfx942",
+        "gfx950",
+        "gfx1030",
+        "gfx1100",
+        "gfx1101",
+        "gfx1102",
+        "gfx1150",
+        "gfx1151",
+        "gfx1200",
+        "gfx1201"};
+
     // Extract base architecture name (remove any suffix like :sramecc+:xnack-)
     std::string base_arch = arch_name;
     size_t colon_pos = base_arch.find(':');
     if (colon_pos != std::string::npos) {
       base_arch = base_arch.substr(0, colon_pos);
     }
-    
+
     bool arch_supported = false;
     for (const auto& supported : supported_archs) {
       if (base_arch == supported) {
@@ -63,11 +72,11 @@ rocblas_handle Device::get_rocblas_handle() {
         break;
       }
     }
-    
+
     if (!arch_supported) {
       rocblas_available_ = false;
       rocblas_ = nullptr;
-      std::cerr << "Warning: rocBLAS does not support GPU architecture '" 
+      std::cerr << "Warning: rocBLAS does not support GPU architecture '"
                 << arch_name << "'. "
                 << "Matrix multiplication operations will not be available. "
                 << "Supported architectures: gfx908, gfx90a, gfx942, gfx950, "
@@ -78,10 +87,11 @@ rocblas_handle Device::get_rocblas_handle() {
       if (status != rocblas_status_success) {
         rocblas_available_ = false;
         rocblas_ = nullptr;
-        std::cerr << "Warning: rocBLAS initialization failed (status " 
-                  << static_cast<int>(status) 
-                  << "). Matrix multiplication operations will not be available." 
-                  << std::endl;
+        std::cerr
+            << "Warning: rocBLAS initialization failed (status "
+            << static_cast<int>(status)
+            << "). Matrix multiplication operations will not be available."
+            << std::endl;
       }
     }
   }

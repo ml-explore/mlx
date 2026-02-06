@@ -5,8 +5,8 @@
 #include "mlx/array.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/device.h"
-#include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/device/utils.hpp"
+#include "mlx/backend/rocm/kernel_utils.hpp"
 
 #include <hip/hip_runtime.h>
 #include <type_traits>
@@ -40,23 +40,30 @@ struct CastOp<bool, hipFloatComplex> {
   static constexpr bool is_castable = true;
 
   __device__ hipFloatComplex operator()(bool x) {
-    return x ? make_hipFloatComplex(1.0f, 1.0f) : make_hipFloatComplex(0.0f, 0.0f);
+    return x ? make_hipFloatComplex(1.0f, 1.0f)
+             : make_hipFloatComplex(0.0f, 0.0f);
   }
 };
 
 // Converting a complex number to real number discards the imaginary part
 template <typename DstT>
-struct CastOp<hipFloatComplex, DstT, std::enable_if_t<!is_complex_v<DstT> && !std::is_same_v<DstT, bool>>> {
+struct CastOp<
+    hipFloatComplex,
+    DstT,
+    std::enable_if_t<!is_complex_v<DstT> && !std::is_same_v<DstT, bool>>> {
   static constexpr bool is_castable = true;
 
   __device__ DstT operator()(hipFloatComplex x) {
-    return static_cast<DstT>(x.x);  // x.x is the real part
+    return static_cast<DstT>(x.x); // x.x is the real part
   }
 };
 
 // Allow converting a real number to complex number
 template <typename SrcT>
-struct CastOp<SrcT, hipFloatComplex, std::enable_if_t<!is_complex_v<SrcT> && !std::is_same_v<SrcT, bool>>> {
+struct CastOp<
+    SrcT,
+    hipFloatComplex,
+    std::enable_if_t<!is_complex_v<SrcT> && !std::is_same_v<SrcT, bool>>> {
   static constexpr bool is_castable = true;
 
   __device__ hipFloatComplex operator()(SrcT x) {
@@ -109,7 +116,12 @@ struct CastOp<float, hip_bfloat16> {
 
 // Conversions through float for half types
 template <typename DstT>
-struct CastOp<__half, DstT, std::enable_if_t<!std::is_same_v<DstT, __half> && !std::is_same_v<DstT, float> && !is_complex_v<DstT>>> {
+struct CastOp<
+    __half,
+    DstT,
+    std::enable_if_t<
+        !std::is_same_v<DstT, __half> && !std::is_same_v<DstT, float> &&
+        !is_complex_v<DstT>>> {
   static constexpr bool is_castable = true;
   __device__ DstT operator()(__half x) {
     return static_cast<DstT>(__half2float(x));
@@ -117,7 +129,12 @@ struct CastOp<__half, DstT, std::enable_if_t<!std::is_same_v<DstT, __half> && !s
 };
 
 template <typename SrcT>
-struct CastOp<SrcT, __half, std::enable_if_t<!std::is_same_v<SrcT, __half> && !std::is_same_v<SrcT, float> && !is_complex_v<SrcT>>> {
+struct CastOp<
+    SrcT,
+    __half,
+    std::enable_if_t<
+        !std::is_same_v<SrcT, __half> && !std::is_same_v<SrcT, float> &&
+        !is_complex_v<SrcT>>> {
   static constexpr bool is_castable = true;
   __device__ __half operator()(SrcT x) {
     return __float2half(static_cast<float>(x));
@@ -125,7 +142,12 @@ struct CastOp<SrcT, __half, std::enable_if_t<!std::is_same_v<SrcT, __half> && !s
 };
 
 template <typename DstT>
-struct CastOp<hip_bfloat16, DstT, std::enable_if_t<!std::is_same_v<DstT, hip_bfloat16> && !std::is_same_v<DstT, float> && !is_complex_v<DstT>>> {
+struct CastOp<
+    hip_bfloat16,
+    DstT,
+    std::enable_if_t<
+        !std::is_same_v<DstT, hip_bfloat16> && !std::is_same_v<DstT, float> &&
+        !is_complex_v<DstT>>> {
   static constexpr bool is_castable = true;
   __device__ DstT operator()(hip_bfloat16 x) {
     return static_cast<DstT>(static_cast<float>(x));
@@ -133,7 +155,12 @@ struct CastOp<hip_bfloat16, DstT, std::enable_if_t<!std::is_same_v<DstT, hip_bfl
 };
 
 template <typename SrcT>
-struct CastOp<SrcT, hip_bfloat16, std::enable_if_t<!std::is_same_v<SrcT, hip_bfloat16> && !std::is_same_v<SrcT, float> && !is_complex_v<SrcT>>> {
+struct CastOp<
+    SrcT,
+    hip_bfloat16,
+    std::enable_if_t<
+        !std::is_same_v<SrcT, hip_bfloat16> && !std::is_same_v<SrcT, float> &&
+        !is_complex_v<SrcT>>> {
   static constexpr bool is_castable = true;
   __device__ hip_bfloat16 operator()(SrcT x) {
     return hip_bfloat16(static_cast<float>(x));

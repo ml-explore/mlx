@@ -49,7 +49,8 @@ struct Sum {
   }
 
   // Specialization for hipFloatComplex
-  __device__ __forceinline__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+  __device__ __forceinline__ hipFloatComplex
+  operator()(hipFloatComplex a, hipFloatComplex b) const {
     return make_hipFloatComplex(a.x + b.x, a.y + b.y);
   }
 
@@ -79,7 +80,8 @@ struct Prod {
   }
 
   // Specialization for hipFloatComplex (complex multiplication)
-  __device__ __forceinline__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+  __device__ __forceinline__ hipFloatComplex
+  operator()(hipFloatComplex a, hipFloatComplex b) const {
     return make_hipFloatComplex(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
   }
 
@@ -95,7 +97,12 @@ struct Prod {
 };
 
 struct Max {
-  template <typename T, std::enable_if_t<!is_complex_v<T> && !std::is_same_v<T, float> && !std::is_same_v<T, double>, int> = 0>
+  template <
+      typename T,
+      std::enable_if_t<
+          !is_complex_v<T> && !std::is_same_v<T, float> &&
+              !std::is_same_v<T, double>,
+          int> = 0>
   __device__ __forceinline__ T operator()(T a, T b) const {
     return a > b ? a : b;
   }
@@ -103,7 +110,7 @@ struct Max {
   // Specialization for float with NaN handling
   __device__ __forceinline__ float operator()(float a, float b) const {
     if (isnan(a) || isnan(b)) {
-      return a > b ? a : b;  // Propagate NaN
+      return a > b ? a : b; // Propagate NaN
     }
     return a > b ? a : b;
   }
@@ -111,13 +118,14 @@ struct Max {
   // Specialization for double with NaN handling
   __device__ __forceinline__ double operator()(double a, double b) const {
     if (isnan(a) || isnan(b)) {
-      return a > b ? a : b;  // Propagate NaN
+      return a > b ? a : b; // Propagate NaN
     }
     return a > b ? a : b;
   }
 
   // Specialization for hipFloatComplex
-  __device__ __forceinline__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+  __device__ __forceinline__ hipFloatComplex
+  operator()(hipFloatComplex a, hipFloatComplex b) const {
     // Check for NaN
     if (isnan(a.x) || isnan(a.y)) {
       return a;
@@ -146,7 +154,12 @@ struct Max {
 };
 
 struct Min {
-  template <typename T, std::enable_if_t<!is_complex_v<T> && !std::is_same_v<T, float> && !std::is_same_v<T, double>, int> = 0>
+  template <
+      typename T,
+      std::enable_if_t<
+          !is_complex_v<T> && !std::is_same_v<T, float> &&
+              !std::is_same_v<T, double>,
+          int> = 0>
   __device__ __forceinline__ T operator()(T a, T b) const {
     return a < b ? a : b;
   }
@@ -154,7 +167,7 @@ struct Min {
   // Specialization for float with NaN handling
   __device__ __forceinline__ float operator()(float a, float b) const {
     if (isnan(a) || isnan(b)) {
-      return a < b ? a : b;  // Propagate NaN
+      return a < b ? a : b; // Propagate NaN
     }
     return a < b ? a : b;
   }
@@ -162,13 +175,14 @@ struct Min {
   // Specialization for double with NaN handling
   __device__ __forceinline__ double operator()(double a, double b) const {
     if (isnan(a) || isnan(b)) {
-      return a < b ? a : b;  // Propagate NaN
+      return a < b ? a : b; // Propagate NaN
     }
     return a < b ? a : b;
   }
 
   // Specialization for hipFloatComplex
-  __device__ __forceinline__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+  __device__ __forceinline__ hipFloatComplex
+  operator()(hipFloatComplex a, hipFloatComplex b) const {
     // Check for NaN
     if (isnan(a.x) || isnan(a.y)) {
       return a;
@@ -214,12 +228,14 @@ struct ReduceResult<Or, T> {
 
 template <typename T>
 struct ReduceResult<Sum, T> {
-  using type = std::conditional_t<(std::is_integral_v<T> && sizeof(T) <= 4), int32_t, T>;
+  using type =
+      std::conditional_t<(std::is_integral_v<T> && sizeof(T) <= 4), int32_t, T>;
 };
 
 template <typename T>
 struct ReduceResult<Prod, T> {
-  using type = std::conditional_t<(std::is_integral_v<T> && sizeof(T) <= 4), int32_t, T>;
+  using type =
+      std::conditional_t<(std::is_integral_v<T> && sizeof(T) <= 4), int32_t, T>;
 };
 
 // Traits to get the init value of reduce op.

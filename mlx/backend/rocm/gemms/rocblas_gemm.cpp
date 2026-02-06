@@ -1,12 +1,12 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/gemms/rocblas_gemm.h"
-#include "mlx/backend/rocm/gemms/naive_gemm.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/gemms/naive_gemm.h"
 
-#include <rocblas/rocblas.h>
-#include <hip/hip_runtime.h>
 #include <hip/hip_fp16.h>
+#include <hip/hip_runtime.h>
+#include <rocblas/rocblas.h>
 
 namespace mlx::core::rocm {
 
@@ -47,35 +47,52 @@ void rocblas_gemm(
     array& c,
     int ldc,
     Dtype dtype) {
-  
   // Check if rocBLAS is available
   if (!encoder.device().is_rocblas_available()) {
     // Use naive GEMM fallback
-    naive_gemm(encoder, a, b, c, M, N, K, transpose_a, lda, transpose_b, ldb, alpha, beta);
+    naive_gemm(
+        encoder,
+        a,
+        b,
+        c,
+        M,
+        N,
+        K,
+        transpose_a,
+        lda,
+        transpose_b,
+        ldb,
+        alpha,
+        beta);
     return;
   }
-  
+
   encoder.launch_kernel([&](hipStream_t stream) {
     rocblas_handle handle = encoder.device().get_rocblas_handle();
     rocblas_set_stream(handle, stream);
-    
+
     rocblas_operation op_a = to_rocblas_op(transpose_a);
     rocblas_operation op_b = to_rocblas_op(transpose_b);
-    
+
     switch (dtype) {
       case float32: {
         float alpha_f = alpha;
         float beta_f = beta;
         rocblas_sgemm(
             handle,
-            op_b,  // Note: rocBLAS uses column-major, so we swap a and b
+            op_b, // Note: rocBLAS uses column-major, so we swap a and b
             op_a,
-            N, M, K,
+            N,
+            M,
+            K,
             &alpha_f,
-            b.data<float>(), ldb,
-            a.data<float>(), lda,
+            b.data<float>(),
+            ldb,
+            a.data<float>(),
+            lda,
             &beta_f,
-            c.data<float>(), ldc);
+            c.data<float>(),
+            ldc);
         break;
       }
       case float16: {
@@ -88,12 +105,17 @@ void rocblas_gemm(
             handle,
             op_b,
             op_a,
-            N, M, K,
+            N,
+            M,
+            K,
             &alpha_h,
-            reinterpret_cast<const rocblas_half*>(b.data<uint16_t>()), ldb,
-            reinterpret_cast<const rocblas_half*>(a.data<uint16_t>()), lda,
+            reinterpret_cast<const rocblas_half*>(b.data<uint16_t>()),
+            ldb,
+            reinterpret_cast<const rocblas_half*>(a.data<uint16_t>()),
+            lda,
             &beta_h,
-            reinterpret_cast<rocblas_half*>(c.data<uint16_t>()), ldc);
+            reinterpret_cast<rocblas_half*>(c.data<uint16_t>()),
+            ldc);
         break;
       }
       default:
@@ -122,22 +144,37 @@ void rocblas_gemm_batched(
     int64_t stride_c,
     int batch_count,
     Dtype dtype) {
-  
   // Check if rocBLAS is available
   if (!encoder.device().is_rocblas_available()) {
     // Use naive batched GEMM fallback
-    naive_gemm_batched(encoder, a, b, c, M, N, K, transpose_a, lda, stride_a, 
-                       transpose_b, ldb, stride_b, stride_c, batch_count, alpha, beta);
+    naive_gemm_batched(
+        encoder,
+        a,
+        b,
+        c,
+        M,
+        N,
+        K,
+        transpose_a,
+        lda,
+        stride_a,
+        transpose_b,
+        ldb,
+        stride_b,
+        stride_c,
+        batch_count,
+        alpha,
+        beta);
     return;
   }
-  
+
   encoder.launch_kernel([&](hipStream_t stream) {
     rocblas_handle handle = encoder.device().get_rocblas_handle();
     rocblas_set_stream(handle, stream);
-    
+
     rocblas_operation op_a = to_rocblas_op(transpose_a);
     rocblas_operation op_b = to_rocblas_op(transpose_b);
-    
+
     switch (dtype) {
       case float32: {
         float alpha_f = alpha;
@@ -146,12 +183,20 @@ void rocblas_gemm_batched(
             handle,
             op_b,
             op_a,
-            N, M, K,
+            N,
+            M,
+            K,
             &alpha_f,
-            b.data<float>(), ldb, stride_b,
-            a.data<float>(), lda, stride_a,
+            b.data<float>(),
+            ldb,
+            stride_b,
+            a.data<float>(),
+            lda,
+            stride_a,
             &beta_f,
-            c.data<float>(), ldc, stride_c,
+            c.data<float>(),
+            ldc,
+            stride_c,
             batch_count);
         break;
       }
@@ -164,12 +209,20 @@ void rocblas_gemm_batched(
             handle,
             op_b,
             op_a,
-            N, M, K,
+            N,
+            M,
+            K,
             &alpha_h,
-            reinterpret_cast<const rocblas_half*>(b.data<uint16_t>()), ldb, stride_b,
-            reinterpret_cast<const rocblas_half*>(a.data<uint16_t>()), lda, stride_a,
+            reinterpret_cast<const rocblas_half*>(b.data<uint16_t>()),
+            ldb,
+            stride_b,
+            reinterpret_cast<const rocblas_half*>(a.data<uint16_t>()),
+            lda,
+            stride_a,
             &beta_h,
-            reinterpret_cast<rocblas_half*>(c.data<uint16_t>()), ldc, stride_c,
+            reinterpret_cast<rocblas_half*>(c.data<uint16_t>()),
+            ldc,
+            stride_c,
             batch_count);
         break;
       }

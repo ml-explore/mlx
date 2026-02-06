@@ -39,7 +39,7 @@ class PyKeySequence {
     // This allows mx.random.state to exist as an attribute
     return state_;
   }
-  
+
   void ensure_initialized() {
     if (!initialized_) {
       // Clear and repopulate the list
@@ -85,9 +85,10 @@ void init_random(nb::module_& parent_module) {
 
   // Set the 'state' attribute to the default key's state list
   // This is accessed by mx.compile for random state tracking
-  // We set it here but the actual GPU allocation happens lazily in PyKeySequence
+  // We set it here but the actual GPU allocation happens lazily in
+  // PyKeySequence
   m.attr("state") = default_key().state();
-  
+
   m.def(
       "seed",
       [](uint64_t seed) { default_key().seed(seed); },
@@ -536,7 +537,7 @@ void init_random(nb::module_& parent_module) {
             array:
               The generated random permutation or randomly permuted input array.
       )pbdoc");
-  
+
   // Register static Python object cleanup before the interpreter exits
   auto atexit = nb::module_::import_("atexit");
   atexit.attr("register")(nb::cpp_function([]() { default_key().release(); }));

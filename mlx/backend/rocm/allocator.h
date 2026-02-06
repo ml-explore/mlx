@@ -19,7 +19,7 @@ using allocator::Buffer;
 struct RocmBuffer {
   void* data;
   size_t size;
-  bool is_managed;  // true if allocated with hipMallocManaged
+  bool is_managed; // true if allocated with hipMallocManaged
 };
 
 class SmallSizePool {

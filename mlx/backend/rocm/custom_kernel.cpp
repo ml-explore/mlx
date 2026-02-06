@@ -4,9 +4,9 @@
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/jit_module.h"
 #include "mlx/backend/rocm/utils.h"
-#include "mlx/backend/gpu/copy.h"
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 
@@ -65,8 +65,8 @@ std::string build_kernel(
   for (size_t i = 0; i < inputs.size(); ++i) {
     const auto& name = input_names[i];
     const auto& arr = inputs[i];
-    kernel_source << "    const " << dtype_to_hip_type(arr.dtype()) 
-                  << "* " << name << ",\n";
+    kernel_source << "    const " << dtype_to_hip_type(arr.dtype()) << "* "
+                  << name << ",\n";
     // Add input shape, strides and ndim if present in the source
     if (arr.ndim() > 0) {
       if (std::get<0>(shape_infos[i])) {
@@ -97,13 +97,13 @@ std::string build_kernel(
   if (!template_args.empty()) {
     for (const auto& [name, arg] : template_args) {
       if (std::holds_alternative<int>(arg)) {
-        kernel_source << "  constexpr int " << name << " = " 
+        kernel_source << "  constexpr int " << name << " = "
                       << std::get<int>(arg) << ";\n";
       } else if (std::holds_alternative<bool>(arg)) {
-        kernel_source << "  constexpr bool " << name << " = " 
+        kernel_source << "  constexpr bool " << name << " = "
                       << (std::get<bool>(arg) ? "true" : "false") << ";\n";
       } else {
-        kernel_source << "  using " << name << " = " 
+        kernel_source << "  using " << name << " = "
                       << dtype_to_hip_type(std::get<Dtype>(arg)) << ";\n";
       }
     }
@@ -284,7 +284,7 @@ void CustomKernel::eval_gpu(
   // Launch kernel
   encoder.launch_kernel([&](hipStream_t stream) {
     auto kernel = mod.get_kernel(kernel_name);
-    
+
     // Build argument list
     std::vector<void*> args;
     for (const auto& in : checked_inputs) {
@@ -292,10 +292,14 @@ void CustomKernel::eval_gpu(
       args.push_back(ptr);
       auto& shape_info = shape_infos_[&in - &checked_inputs[0]];
       if (std::get<0>(shape_info)) {
-        args.push_back(const_cast<int32_t*>(reinterpret_cast<const int32_t*>(in.shape().data())));
+        args.push_back(
+            const_cast<int32_t*>(
+                reinterpret_cast<const int32_t*>(in.shape().data())));
       }
       if (std::get<1>(shape_info)) {
-        args.push_back(const_cast<int64_t*>(reinterpret_cast<const int64_t*>(in.strides().data())));
+        args.push_back(
+            const_cast<int64_t*>(
+                reinterpret_cast<const int64_t*>(in.strides().data())));
       }
       if (std::get<2>(shape_info)) {
         int ndim = in.ndim();
@@ -305,11 +309,15 @@ void CustomKernel::eval_gpu(
     for (auto& out : outputs) {
       args.push_back(out.data<void>());
     }
-    
+
     (void)hipModuleLaunchKernel(
         kernel,
-        grid.x, grid.y, grid.z,
-        block.x, block.y, block.z,
+        grid.x,
+        grid.y,
+        grid.z,
+        block.x,
+        block.y,
+        block.z,
         shared_memory_,
         stream,
         args.data(),

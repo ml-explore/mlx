@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/conv/conv.h"
-#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/rocm/device.h"
 #include "mlx/primitives.h"
 
 #include <hip/hip_runtime.h>
@@ -39,17 +39,17 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (out.size() == 0) {
     return;
   }
-  
+
   auto& s = stream();
   auto& d = rocm::device(s.device);
   auto& encoder = d.get_command_encoder(s);
 
   array in = inputs[0];
   array wt = inputs[1];
-  
+
   // Allocate output
   out.set_data(allocator::malloc(out.nbytes()));
-  
+
   // Ensure inputs are contiguous
   if (!in.flags().row_contiguous) {
     in = contiguous_copy_gpu(in, s);
@@ -59,7 +59,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
     wt = contiguous_copy_gpu(wt, s);
     encoder.add_temporary(wt);
   }
-  
+
   // Use GEMM-based convolution
   if (groups_ == 1) {
     gemm_conv(

@@ -35,12 +35,14 @@ class MLXTestRunner(unittest.TestProgram):
 
         # Determine which skip list to use based on available backend
         skip_tests = set()
-        
+
         if mx.cuda.is_available():
             from cuda_skip import cuda_skip
+
             skip_tests = cuda_skip
         elif mx.rocm.is_available():
             from rocm_skip import rocm_skip
+
             skip_tests = rocm_skip
 
         if not skip_tests:

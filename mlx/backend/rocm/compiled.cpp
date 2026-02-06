@@ -163,7 +163,8 @@ struct FusedKernelBuilder {
         os +=
             std::string("    ") + xname + "[index + i] = tmp_" + xname + ";\n";
       } else {
-        os += std::string("    ") + xname + "[index + i] = tmp_" + xname + ";\n";
+        os +=
+            std::string("    ") + xname + "[index + i] = tmp_" + xname + ";\n";
       }
     }
 

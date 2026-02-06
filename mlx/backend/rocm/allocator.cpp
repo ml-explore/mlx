@@ -56,11 +56,12 @@ static bool managed_memory_supported() {
   return supported == 1;
 }
 
-SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nullptr) {
+SmallSizePool::SmallSizePool()
+    : buffer_(nullptr), data_(nullptr), next_free_(nullptr) {
   if (!rocm_available()) {
     return;
   }
-  
+
   auto num_blocks = small_pool_size / small_block_size;
   buffer_ = new Block[num_blocks];
 
@@ -76,7 +77,8 @@ SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nu
       int device_count = 0;
       (void)hipGetDeviceCount(&device_count);
       for (int i = 0; i < device_count; ++i) {
-        (void)hipMemAdvise(data_, small_pool_size, hipMemAdviseSetAccessedBy, i);
+        (void)hipMemAdvise(
+            data_, small_pool_size, hipMemAdviseSetAccessedBy, i);
       }
     }
   } else {
@@ -84,7 +86,7 @@ SmallSizePool::SmallSizePool() : buffer_(nullptr), data_(nullptr), next_free_(nu
     // hipHostMallocDefault makes memory accessible from device
     err = hipHostMalloc(&data_, small_pool_size, hipHostMallocDefault);
   }
-  
+
   if (err != hipSuccess) {
     delete[] buffer_;
     buffer_ = nullptr;
@@ -155,7 +157,7 @@ RocmAllocator::RocmAllocator()
   if (!rocm_available()) {
     return;
   }
-  
+
   size_t free, total;
   hipError_t err = hipMemGetInfo(&free, &total);
   if (err == hipSuccess) {
@@ -170,7 +172,7 @@ Buffer RocmAllocator::malloc(size_t size) {
         "Cannot allocate ROCm memory: no ROCm-capable device detected. "
         "Please use CPU backend instead.");
   }
-  
+
   // Find available buffer from cache.
   auto orig_size = size;
   std::unique_lock lock(mutex_);
@@ -199,7 +201,7 @@ Buffer RocmAllocator::malloc(size_t size) {
     if (!buf) {
       buf = new RocmBuffer{nullptr, size, false};
       hipError_t err;
-      
+
       // Try managed memory first, fall back to host-pinned memory
       if (managed_memory_supported()) {
         err = hipMallocManaged(&buf->data, size);
@@ -217,7 +219,7 @@ Buffer RocmAllocator::malloc(size_t size) {
         err = hipHostMalloc(&buf->data, size, hipHostMallocDefault);
         buf->is_managed = false;
       }
-      
+
       if (err != hipSuccess) {
         delete buf;
         std::ostringstream oss;

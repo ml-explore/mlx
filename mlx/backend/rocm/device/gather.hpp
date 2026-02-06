@@ -36,9 +36,7 @@ __global__ void gather(
 #pragma unroll
   for (int i = 0; i < NIDX; ++i) {
     LocT idx_loc = elem_to_loc_nd<IDX_NDIM>(
-        idx_elem,
-        indices_shape + i * IDX_NDIM,
-        indices_strides + i * IDX_NDIM);
+        idx_elem, indices_shape + i * IDX_NDIM, indices_strides + i * IDX_NDIM);
     int32_t axis = axes[i];
     LocT idx_val = absolute_index(indices[i][idx_loc], src_shape[axis]);
     src_loc += idx_val * src_strides[axis];

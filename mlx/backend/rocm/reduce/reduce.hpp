@@ -4,8 +4,8 @@
 
 #include "mlx/backend/common/reduce.h"
 #include "mlx/backend/rocm/device.h"
-#include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/device/utils.hpp"
+#include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
@@ -35,9 +35,10 @@ struct Sum {
   __device__ T operator()(T a, T b) const {
     return a + b;
   }
-  
+
   // Specialization for hipFloatComplex
-  __device__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+  __device__ hipFloatComplex
+  operator()(hipFloatComplex a, hipFloatComplex b) const {
     return make_hipFloatComplex(a.x + b.x, a.y + b.y);
   }
 };
@@ -47,19 +48,25 @@ struct Prod {
   __device__ T operator()(T a, T b) const {
     return a * b;
   }
-  
+
   // Specialization for hipFloatComplex (complex multiplication)
-  __device__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+  __device__ hipFloatComplex
+  operator()(hipFloatComplex a, hipFloatComplex b) const {
     return make_hipFloatComplex(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
   }
 };
 
 struct Max {
-  template <typename T, std::enable_if_t<!is_complex_v<T> && !std::is_same_v<T, float> && !std::is_same_v<T, double>, int> = 0>
+  template <
+      typename T,
+      std::enable_if_t<
+          !is_complex_v<T> && !std::is_same_v<T, float> &&
+              !std::is_same_v<T, double>,
+          int> = 0>
   __device__ T operator()(T a, T b) const {
     return a > b ? a : b;
   }
-  
+
   // Specialization for float with NaN handling
   __device__ float operator()(float a, float b) const {
     if (isnan(a) || isnan(b)) {
@@ -67,7 +74,7 @@ struct Max {
     }
     return a > b ? a : b;
   }
-  
+
   // Specialization for double with NaN handling
   __device__ double operator()(double a, double b) const {
     if (isnan(a) || isnan(b)) {
@@ -75,9 +82,10 @@ struct Max {
     }
     return a > b ? a : b;
   }
-  
+
   // Specialization for hipFloatComplex
-  __device__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+  __device__ hipFloatComplex
+  operator()(hipFloatComplex a, hipFloatComplex b) const {
     // Check for NaN
     if (isnan(a.x) || isnan(a.y)) {
       return a;
@@ -96,11 +104,16 @@ struct Max {
 };
 
 struct Min {
-  template <typename T, std::enable_if_t<!is_complex_v<T> && !std::is_same_v<T, float> && !std::is_same_v<T, double>, int> = 0>
+  template <
+      typename T,
+      std::enable_if_t<
+          !is_complex_v<T> && !std::is_same_v<T, float> &&
+              !std::is_same_v<T, double>,
+          int> = 0>
   __device__ T operator()(T a, T b) const {
     return a < b ? a : b;
   }
-  
+
   // Specialization for float with NaN handling
   __device__ float operator()(float a, float b) const {
     if (isnan(a) || isnan(b)) {
@@ -108,7 +121,7 @@ struct Min {
     }
     return a < b ? a : b;
   }
-  
+
   // Specialization for double with NaN handling
   __device__ double operator()(double a, double b) const {
     if (isnan(a) || isnan(b)) {
@@ -116,9 +129,10 @@ struct Min {
     }
     return a < b ? a : b;
   }
-  
+
   // Specialization for hipFloatComplex
-  __device__ hipFloatComplex operator()(hipFloatComplex a, hipFloatComplex b) const {
+  __device__ hipFloatComplex
+  operator()(hipFloatComplex a, hipFloatComplex b) const {
     // Check for NaN
     if (isnan(a.x) || isnan(a.y)) {
       return a;
@@ -156,18 +170,14 @@ struct ReduceResult<Or, T> {
 // Sum and Prod promote small integers to int32_t
 template <typename T>
 struct ReduceResult<Sum, T> {
-  using type = std::conditional_t<
-      (std::is_integral_v<T> && sizeof(T) <= 4),
-      int32_t,
-      T>;
+  using type =
+      std::conditional_t<(std::is_integral_v<T> && sizeof(T) <= 4), int32_t, T>;
 };
 
 template <typename T>
 struct ReduceResult<Prod, T> {
-  using type = std::conditional_t<
-      (std::is_integral_v<T> && sizeof(T) <= 4),
-      int32_t,
-      T>;
+  using type =
+      std::conditional_t<(std::is_integral_v<T> && sizeof(T) <= 4), int32_t, T>;
 };
 
 // Reduce init value

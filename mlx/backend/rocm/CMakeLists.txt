@@ -11,14 +11,12 @@ find_package(rocthrust REQUIRED CONFIG)
 find_package(rocprim REQUIRED CONFIG)
 find_package(hiprand REQUIRED CONFIG)
 
-# Ensure HIP architectures are set - respect user-provided value from command line
-# The user can set this via -DCMAKE_HIP_ARCHITECTURES=gfx1011
-# 
-# Supported architectures from ROCm 6.4.0 - 7.2.0 compatibility matrix:
-# CDNA: gfx908 (MI100), gfx90a (MI200), gfx942 (MI300)
-# CDNA4: gfx950 (MI400 series)
-# RDNA2: gfx1030 (RX 6000 series)
-# RDNA3: gfx1100 (RX 7900), gfx1101 (RX 7600)
+# Ensure HIP architectures are set - respect user-provided value from command
+# line The user can set this via -DCMAKE_HIP_ARCHITECTURES=gfx1011
+#
+# Supported architectures from ROCm 6.4.0 - 7.2.0 compatibility matrix: CDNA:
+# gfx908 (MI100), gfx90a (MI200), gfx942 (MI300) CDNA4: gfx950 (MI400 series)
+# RDNA2: gfx1030 (RX 6000 series) RDNA3: gfx1100 (RX 7900), gfx1101 (RX 7600)
 # RDNA4: gfx1200, gfx1201 (RX 8000 series)
 if(NOT CMAKE_HIP_ARCHITECTURES)
   set(CMAKE_HIP_ARCHITECTURES
@@ -42,8 +40,8 @@ get_target_property(ROCTHRUST_INCLUDES roc::rocthrust
 get_target_property(ROCPRIM_INCLUDES roc::rocprim INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(HIPRAND_INCLUDES hip::hiprand INTERFACE_INCLUDE_DIRECTORIES)
 
-# Find GCC installation for C++ standard library headers
-# ROCm's clang needs to know where to find libstdc++ headers
+# Find GCC installation for C++ standard library headers ROCm's clang needs to
+# know where to find libstdc++ headers
 execute_process(
   COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=include/c++
   OUTPUT_VARIABLE GCC_CXX_INCLUDE_BASE
@@ -62,16 +60,21 @@ set(HIP_INCLUDE_FLAGS "-I${PROJECT_SOURCE_DIR}" "-I${HIP_INCLUDE_DIRS}")
 
 # Add C++ standard library include paths for HIP compiler
 if(EXISTS "${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}")
-  list(APPEND HIP_INCLUDE_FLAGS "-I${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}")
-  list(APPEND HIP_INCLUDE_FLAGS "-I${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}/x86_64-linux-gnu")
-  list(APPEND HIP_INCLUDE_FLAGS "-I${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}/backward")
+  list(APPEND HIP_INCLUDE_FLAGS
+       "-I${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}")
+  list(APPEND HIP_INCLUDE_FLAGS
+       "-I${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}/x86_64-linux-gnu")
+  list(APPEND HIP_INCLUDE_FLAGS
+       "-I${GCC_CXX_INCLUDE_BASE}/c++/${GCC_MAJOR_VERSION}/backward")
 endif()
 
 # Also try to find system include directories
 if(EXISTS "/usr/include/c++/${GCC_MAJOR_VERSION}")
   list(APPEND HIP_INCLUDE_FLAGS "-I/usr/include/c++/${GCC_MAJOR_VERSION}")
-  list(APPEND HIP_INCLUDE_FLAGS "-I/usr/include/x86_64-linux-gnu/c++/${GCC_MAJOR_VERSION}")
-  list(APPEND HIP_INCLUDE_FLAGS "-I/usr/include/c++/${GCC_MAJOR_VERSION}/backward")
+  list(APPEND HIP_INCLUDE_FLAGS
+       "-I/usr/include/x86_64-linux-gnu/c++/${GCC_MAJOR_VERSION}")
+  list(APPEND HIP_INCLUDE_FLAGS
+       "-I/usr/include/c++/${GCC_MAJOR_VERSION}/backward")
 endif()
 
 # Add standard system include paths

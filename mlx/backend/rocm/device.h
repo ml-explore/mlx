@@ -85,7 +85,7 @@ class Device {
   }
 
   rocblas_handle get_rocblas_handle();
-  
+
   // Check if rocBLAS is available for the current GPU architecture
   bool is_rocblas_available();
 
