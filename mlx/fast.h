@@ -86,6 +86,15 @@ MLX_API CustomKernelFunction cuda_kernel(
     bool ensure_row_contiguous = true,
     int shared_memory = 0);
 
+MLX_API CustomKernelFunction hip_kernel(
+    const std::string& name,
+    const std::vector<std::string>& input_names,
+    const std::vector<std::string>& output_names,
+    const std::string& source,
+    const std::string& header = "",
+    bool ensure_row_contiguous = true,
+    int shared_memory = 0);
+
 MLX_API std::vector<array> precompiled_cuda_kernel(
     const std::string& name,
     const std::string& compiled_source,

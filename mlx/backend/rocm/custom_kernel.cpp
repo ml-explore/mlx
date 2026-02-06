@@ -16,10 +16,57 @@ namespace mlx::core::fast {
 
 namespace {
 
+// Inline the essential definitions for custom kernels
+// This avoids the need for include paths in JIT compilation
 constexpr const char* default_header = R"(
-#include "mlx/backend/rocm/device/utils.hpp"
+#include <hip/hip_runtime.h>
+#include <hip/hip_fp16.h>
+#include <hip/hip_bfloat16.h>
+#include <cstdint>
 
 #define inf (1.0f / 0.0f)
+
+namespace mlx::core::rocm {
+
+// Type aliases for convenience
+using float16_t = __half;
+using bfloat16_t = hip_bfloat16;
+
+// Ceil division
+template <typename T>
+__host__ __device__ T ceildiv(T a, T b) {
+  return (a + b - 1) / b;
+}
+
+// Thread/block index helpers
+__device__ inline int thread_index() {
+  return threadIdx.x + threadIdx.y * blockDim.x +
+      threadIdx.z * blockDim.x * blockDim.y;
+}
+
+__device__ inline int block_index() {
+  return blockIdx.x + blockIdx.y * gridDim.x +
+      blockIdx.z * gridDim.x * gridDim.y;
+}
+
+__device__ inline int global_thread_index() {
+  return thread_index() +
+      block_index() * (blockDim.x * blockDim.y * blockDim.z);
+}
+
+// Indexing helper
+template <typename IdxT = int64_t>
+__device__ IdxT
+elem_to_loc(IdxT elem, const int* shape, const int64_t* strides, int ndim) {
+  IdxT loc = 0;
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
+    loc += (elem % shape[i]) * IdxT(strides[i]);
+    elem /= shape[i];
+  }
+  return loc;
+}
+
+} // namespace mlx::core::rocm
 
 )";
 
@@ -264,6 +311,26 @@ void CustomKernel::eval_gpu(
       },
       false);
 
+  // Build argument list using KernelArgs helper
+  rocm::KernelArgs args;
+  for (int i = 0; i < checked_inputs.size(); i++) {
+    const array& in = checked_inputs[i];
+    auto& shape_info = shape_infos_[i];
+    args.append(in);
+    if (std::get<0>(shape_info)) {
+      args.append_ndim(in.shape());
+    }
+    if (std::get<1>(shape_info)) {
+      args.append_ndim(in.strides());
+    }
+    if (std::get<2>(shape_info)) {
+      args.append<int32_t>(in.ndim());
+    }
+  }
+  for (auto& out : outputs) {
+    args.append(out);
+  }
+
   // Make the grid
   const auto [tx, ty, tz] = threadgroup_;
   const auto [gx, gy, gz] = grid_;
@@ -285,31 +352,6 @@ void CustomKernel::eval_gpu(
   encoder.launch_kernel([&](hipStream_t stream) {
     auto kernel = mod.get_kernel(kernel_name);
 
-    // Build argument list
-    std::vector<void*> args;
-    for (const auto& in : checked_inputs) {
-      void* ptr = const_cast<void*>(in.data<void>());
-      args.push_back(ptr);
-      auto& shape_info = shape_infos_[&in - &checked_inputs[0]];
-      if (std::get<0>(shape_info)) {
-        args.push_back(
-            const_cast<int32_t*>(
-                reinterpret_cast<const int32_t*>(in.shape().data())));
-      }
-      if (std::get<1>(shape_info)) {
-        args.push_back(
-            const_cast<int64_t*>(
-                reinterpret_cast<const int64_t*>(in.strides().data())));
-      }
-      if (std::get<2>(shape_info)) {
-        int ndim = in.ndim();
-        args.push_back(&ndim);
-      }
-    }
-    for (auto& out : outputs) {
-      args.push_back(out.data<void>());
-    }
-
     (void)hipModuleLaunchKernel(
         kernel,
         grid.x,
@@ -320,7 +362,7 @@ void CustomKernel::eval_gpu(
         block.z,
         shared_memory_,
         stream,
-        args.data(),
+        args.args(),
         nullptr);
   });
 }

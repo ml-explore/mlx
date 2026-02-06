@@ -89,6 +89,13 @@ rocm_skip = {
     "TestVmap.test_vmap_matmul",
     # ROCm-specific: group_norm has numerical precision issues
     "TestLayers.test_group_norm",
+    # ROCm-specific: Custom kernel tests use Metal-specific APIs
+    # hip_kernel is available but tests are written for metal_kernel
+    "TestFast.test_custom_kernel_args",
+    "TestFast.test_custom_kernel_attributes",
+    "TestFast.test_custom_kernel_basic",
+    "TestFast.test_custom_kernel_helper",
+    "TestFast.test_custom_kernel_strides",
     # ROCm-specific: SDPA backward pass falls back to CPU
     # These tests may be slow but should still pass
 }
