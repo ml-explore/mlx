@@ -926,6 +926,15 @@ array quantized_scaled_dot_product_attention(
         << final_type << ".";
     throw std::invalid_argument(msg.str());
   }
+  if (!(final_type == float16 || final_type == bfloat16 ||
+        final_type == float32)) {
+    std::ostringstream msg;
+    msg << "[" << tag
+        << "] queries must be float16, bfloat16, or float32 for quantized "
+           "attention; received "
+        << final_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
   if (keys.dtype() != uint32 || values.dtype() != uint32) {
     throw std::invalid_argument(
         "[quantized_scaled_dot_product_attention] Keys and values must be "
@@ -1097,6 +1106,30 @@ array quantized_scaled_dot_product_attention(
   };
 
   auto stream = to_stream(s);
+  Shape full_mask_shape{
+      queries.shape(0), queries.shape(1), queries.shape(2), keys.shape(-2)};
+
+  auto normalize_mask = [&](const array& raw_mask) {
+    array m = raw_mask;
+    switch (m.ndim()) {
+      case 1: // [K]
+        m = reshape(m, {1, 1, 1, m.shape(0)}, stream);
+        break;
+      case 2: // [B, K]
+        m = reshape(m, {m.shape(0), 1, 1, m.shape(1)}, stream);
+        break;
+      case 3: // [B, L_q, K]
+        m = reshape(m, {m.shape(0), 1, m.shape(1), m.shape(2)}, stream);
+        break;
+      case 4: // [B, H, L_q, K]
+        break;
+      default:
+        throw std::invalid_argument(
+            "[quantized_scaled_dot_product_attention] Mask rank must be <= 4.");
+    }
+    return broadcast_to(m, full_mask_shape, stream);
+  };
+
   std::vector<array> inputs = {q, keys, key_scales};
   if (is_affine) {
     inputs.push_back(*key_biases);
@@ -1114,14 +1147,9 @@ array quantized_scaled_dot_product_attention(
           << final_type << ".";
       throw std::invalid_argument(msg.str());
     }
-    if (!has_bool_mask && mask->dtype() != final_type) {
-      inputs.push_back(astype(*mask, final_type, stream));
-    } else {
-      inputs.push_back(*mask);
-    }
-    auto mask_shape = queries.shape();
-    mask_shape.back() = keys.shape(-2);
-    inputs.back() = broadcast_to(inputs.back(), mask_shape, stream);
+    array normalized =
+        has_bool_mask ? *mask : astype(*mask, final_type, stream);
+    inputs.push_back(normalize_mask(normalized));
   }
 
   int out_dim = value_head_dim;
@@ -1133,7 +1161,6 @@ array quantized_scaled_dot_product_attention(
   int gqa_factor = queries.shape(1) / keys.shape(1);
   bool unsupported = detail::in_grad_tracing() ||
       stream.device == Device::cpu || queries.shape(2) > 8 ||
-      (queries.shape(2) > keys.shape(2)) ||
       !(queries.shape(-1) == 64 || queries.shape(-1) == 128) ||
       !supported_type || (queries.shape(2) * gqa_factor > 32);
 
