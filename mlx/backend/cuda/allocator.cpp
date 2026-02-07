@@ -168,6 +168,9 @@ CudaAllocator::CudaAllocator()
   free_limit_ = total_memory_ - memory_limit_;
   max_pool_size_ = memory_limit_;
 
+  int curr;
+  CHECK_CUDA_ERROR(cudaGetDevice(&curr));
+
   int device_count = gpu::device_count();
   free_streams_.resize(device_count);
   mem_pools_.resize(device_count);
@@ -178,6 +181,7 @@ CudaAllocator::CudaAllocator()
       CHECK_CUDA_ERROR(cudaDeviceGetDefaultMemPool(&mem_pools_[i], i));
     }
   }
+  CHECK_CUDA_ERROR(cudaSetDevice(curr));
 }
 
 Buffer
