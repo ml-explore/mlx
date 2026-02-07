@@ -146,8 +146,6 @@ struct PackReader {
 
 // Pointer wrapper for quantized data that handles byte-level addressing
 // correctly for all bit widths. For non-4-byte-aligned packs (3, 5, 6-bit),
-// simple uint32_t pointer arithmetic truncates and causes misalignment.
-// This class uses byte-level arithmetic internally to ensure correctness.
 template <int bits>
 class QuantDataPtr {
   const device uint8_t* byte_ptr_;

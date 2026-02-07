@@ -179,13 +179,6 @@ template <typename T, int D, int V = D>
   }
 }
 
-template <typename T, typename U, int elem_per_thread>
-METAL_FUNC void load_queries(const device T* queries, thread U* q, U scale) {
-  for (int i = 0; i < elem_per_thread; i++) {
-    q[i] = scale * queries[i];
-  }
-}
-
 constant bool has_affine_bias [[function_constant(27)]];
 constant int quant_mode_int [[function_constant(28)]];
 constant int quant_bits [[function_constant(29)]];
@@ -296,7 +289,6 @@ struct QuantOps {
     return score;
   }
 
-  // ACCUMULATE
   template <typename U, typename ScaleT, int elem_per_thread>
   [[clang::always_inline]] static void accumulate(
       thread U* o,
@@ -370,11 +362,12 @@ struct QuantOps {
     }
   }
 };
+
 template <QuantMode mode, typename T>
 using ScaleTypeT = typename QuantConfig<mode>::template scale_storage_t<T>;
 
 template <typename T, int D, QuantMode mode, int group_size, int bits>
-METAL_FUNC void quant_sdpa_inner(
+METAL_FUNC void quant_sdpa_vector_2pass_1_impl(
     const device T* queries,
     const device uint32_t* keys,
     const device uint8_t* key_scales_raw,
@@ -406,8 +399,7 @@ METAL_FUNC void quant_sdpa_inner(
   // elem_per_thread=D/4 is large enough for all pack_factors (max 8).
   //
   // GQA: multiple query heads sharing the same KV head are packed into the
-  // same threadgroup (along with q_seq_len). This lets them share L2 cache
-  // for KV data.
+  // same threadgroup (along with q_seq_len) to share L2 cache for KV data.
   //   Grid:  (num_kv_heads, batch, blocks)
   //   Group: (32, gqa_factor, q_seq_len)
   using Cfg = QuantConfig<mode>;
@@ -579,7 +571,6 @@ METAL_FUNC void quant_sdpa_inner(
     val += simd_shuffle_xor(val, 8); // sum quads 0-3, 4-7
     val += simd_shuffle_xor(val, 16); // sum quads 0-7
     // All lanes with same local_quad_lid now have the full sum;
-    // local_quad_gid=0 writes
     if (local_quad_gid == 0) {
       out[i] = static_cast<T>(val);
     }
@@ -622,7 +613,7 @@ template <typename T, int D>
 #define QUANT_SDPA_DISPATCH(MODE, GS, B)                                  \
   if (quant_mode_int == int(QuantMode::MODE) && quant_group_size == GS && \
       quant_bits == B) {                                                  \
-    quant_sdpa_inner<T, D, QuantMode::MODE, GS, B>(                       \
+    quant_sdpa_vector_2pass_1_impl<T, D, QuantMode::MODE, GS, B>(         \
         queries,                                                          \
         keys,                                                             \
         key_scales,                                                       \

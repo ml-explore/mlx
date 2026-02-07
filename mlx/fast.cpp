@@ -986,17 +986,17 @@ array quantized_scaled_dot_product_attention(
 
   // Validate scale/bias shapes
   auto expected_scale_dim = queries.shape(-1) / group_size;
-  for (const auto& [qdata, sc, bias, name] :
+  for (const auto& [qdata, scale, bias, name] :
        {std::tuple{&keys, &key_scales, &key_biases, "key"},
         std::tuple{&values, &value_scales, &value_biases, "value"}}) {
-    if (sc->shape(-1) != expected_scale_dim ||
-        sc->shape(-3) != qdata->shape(-3) ||
-        sc->shape(-2) != qdata->shape(-2)) {
+    if (scale->shape(-1) != expected_scale_dim ||
+        scale->shape(-3) != qdata->shape(-3) ||
+        scale->shape(-2) != qdata->shape(-2)) {
       std::ostringstream msg;
       msg << "[" << tag << "] " << name << " scale shape mismatch.";
       throw std::invalid_argument(msg.str());
     }
-    if (is_affine && bias->has_value() && (*bias)->shape() != sc->shape()) {
+    if (is_affine && bias->has_value() && (*bias)->shape() != scale->shape()) {
       std::ostringstream msg;
       msg << "[" << tag << "] " << name
           << " bias shape must match scale shape.";
