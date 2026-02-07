@@ -65,6 +65,7 @@ MLX_API array quantized_scaled_dot_product_attention(
     const std::optional<array>& value_biases,
     const float scale,
     const std::optional<array>& mask = std::nullopt,
+    const std::optional<array>& sinks = std::nullopt,
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "mxfp4",

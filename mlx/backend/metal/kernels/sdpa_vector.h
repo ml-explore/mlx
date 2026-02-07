@@ -389,6 +389,7 @@ METAL_FUNC void quant_sdpa_vector_2pass_1_impl(
     const constant int& mask_head_stride,
     const device uint8_t* key_biases_raw,
     const device uint8_t* value_biases_raw,
+    const device T* sinks,
     uint3 tid,
     uint3 tpg,
     uint3 tptg,
@@ -493,6 +494,10 @@ METAL_FUNC void quant_sdpa_vector_2pass_1_impl(
 
   U max_score = Limits<U>::finite_min;
   U sum_exp_score = 0;
+  if (has_sinks && block_idx == 0 && local_quad_gid == 0) {
+    max_score = static_cast<U>(sinks[q_head_idx]);
+    sum_exp_score = 1;
+  }
 
   // Main loop: each quad processes one key at a time
   for (int i = block_idx * BN + local_quad_gid; i < N; i += blocks * BN) {
@@ -605,6 +610,7 @@ template <typename T, int D>
     [[buffer(20), function_constant(has_affine_bias)]],
     const device uint8_t* value_biases
     [[buffer(21), function_constant(has_affine_bias)]],
+    const device T* sinks [[buffer(22), function_constant(has_sinks)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
     uint3 tptg [[threads_per_threadgroup]],
@@ -635,6 +641,7 @@ template <typename T, int D>
         mask_head_stride,                                                 \
         key_biases,                                                       \
         value_biases,                                                     \
+        sinks,                                                            \
         tid,                                                              \
         tpg,                                                              \
         tptg,                                                             \

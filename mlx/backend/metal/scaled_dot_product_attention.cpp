@@ -648,6 +648,7 @@ void quant_sdpa_vector_2pass(
     int bits,
     bool do_causal,
     const std::optional<array>& mask,
+    const std::optional<array>& sinks,
     QuantizationMode mode) {
   std::string kname;
   kname.reserve(64);
@@ -696,7 +697,7 @@ void quant_sdpa_vector_2pass(
   bool bool_mask = has_mask && (*mask).dtype() == bool_;
   bool float_mask = has_mask && !bool_mask;
   bool query_transposed = !q.flags().row_contiguous;
-  bool has_sinks = false;
+  bool has_sinks = sinks.has_value();
   bool has_affine_bias = mode == QuantizationMode::Affine;
   int quant_mode_int = quant_mode_to_int(mode);
   metal::MTLFCList func_consts = {
@@ -716,6 +717,7 @@ void quant_sdpa_vector_2pass(
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
   hash_name += do_causal ? "_c" : "_nc";
+  hash_name += has_sinks ? "_s" : "_ns";
   hash_name += has_affine_bias ? "_affine_" : "_noaffine_";
   hash_name += std::to_string(quant_mode_int) + "_";
   hash_name += std::to_string(bits) + "_";
@@ -756,6 +758,9 @@ void quant_sdpa_vector_2pass(
   if (has_affine_bias) {
     compute_encoder.set_input_array(*k_biases, 20);
     compute_encoder.set_input_array(*v_biases, 21);
+  }
+  if (has_sinks) {
+    compute_encoder.set_input_array(*sinks, 22);
   }
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
@@ -1017,7 +1022,7 @@ void QuantizedScaledDotProductAttention::eval_gpu(
 
   // Inputs layout:
   // [q, k, k_scales, k_biases (if affine), v, v_scales, v_biases (if affine),
-  // mask (if present)]
+  // mask (if present), sinks (if present)]
   auto& q_pre = inputs[0];
   auto& k_pre = inputs[1];
   auto& k_scales_pre = inputs[2];
@@ -1046,6 +1051,10 @@ void QuantizedScaledDotProductAttention::eval_gpu(
     } else {
       return arr;
     }
+  };
+
+  auto is_matrix_contiguous = [](const array& arr) {
+    return arr.strides(-1) == 1;
   };
 
   auto q_copy_unless = [](const array& arr) {
@@ -1096,7 +1105,12 @@ void QuantizedScaledDotProductAttention::eval_gpu(
       return arr.flags().row_contiguous || q.shape(0) == 1 || q.shape(1) == 1 ||
           (strides[0] == strides[1] * shape[1]);
     };
-    mask = copy_unless(mask_copy_unless, inputs.back());
+    mask = copy_unless(mask_copy_unless, inputs[idx++]);
+  }
+
+  std::optional<array> sinks = std::nullopt;
+  if (has_sinks_) {
+    sinks = copy_unless(is_matrix_contiguous, inputs[idx++]);
   }
 
   if (q.is_donatable() && q.flags().row_contiguous && q.size() == o.size()) {
@@ -1121,6 +1135,7 @@ void QuantizedScaledDotProductAttention::eval_gpu(
       bits_,
       do_causal_,
       mask,
+      sinks,
       mode_);
 
   d.add_temporaries(std::move(copies), s.index);

@@ -868,6 +868,7 @@ array quantized_scaled_dot_product_attention(
     const std::optional<array>& value_biases,
     const float scale,
     const std::optional<array>& mask /* = std::nullopt */,
+    const std::optional<array>& sinks /* = std::nullopt */,
     const std::optional<int> group_size_ /* = std::nullopt */,
     const std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "mxfp4" */,
@@ -1021,6 +1022,7 @@ array quantized_scaled_dot_product_attention(
   // Validate mask
   bool do_causal = causal;
   bool has_arr_mask = mask.has_value();
+  bool has_sinks = sinks.has_value();
   if (do_causal && has_arr_mask) {
     throw std::invalid_argument(
         "[quantized_scaled_dot_product_attention] Received both causal=true "
@@ -1036,12 +1038,13 @@ array quantized_scaled_dot_product_attention(
   auto q = astype(queries, final_type, s);
   // Inputs layout:
   // [q, k, k_scales, k_biases (if affine), v, v_scales, v_biases (if affine),
-  // mask (if present)]
+  // mask (if present), sinks (if present)]
   auto fallback = [scale,
                    n_q_heads,
                    n_kv_heads,
                    do_causal,
                    has_arr_mask,
+                   has_sinks,
                    is_affine,
                    group_size,
                    bits,
@@ -1065,10 +1068,12 @@ array quantized_scaled_dot_product_attention(
     }
 
     std::optional<array> arr_mask =
-        has_arr_mask ? std::optional<array>{inputs[idx]} : std::nullopt;
+        has_arr_mask ? std::optional<array>{inputs[idx++]} : std::nullopt;
+    std::optional<array> sinks_opt =
+        has_sinks ? std::optional<array>{inputs[idx++]} : std::nullopt;
 
     if (n_repeats > 1) {
-      q = reshape(q, {q.shape(0), n_kv_heads, n_repeats, q.shape(2), -1}, s);
+      q = unflatten(q, 1, {n_kv_heads, n_repeats}, s);
       k = expand_dims(k, 2, s);
       k_scales = expand_dims(k_scales, 2, s);
       if (k_biases) {
@@ -1121,7 +1126,24 @@ array quantized_scaled_dot_product_attention(
       }
     }
 
+    if (has_sinks) {
+      auto sinks = *sinks_opt;
+      // scores has shape B N_q N_k L_q L_k
+      sinks = expand_dims(sinks, {0, 2, 3}, s);
+      if (scores.ndim() == 5) {
+        sinks = unflatten(sinks, 1, {n_kv_heads, n_repeats}, s);
+      }
+      auto bsx_shape = scores.shape();
+      bsx_shape.back() = 1;
+      scores = concatenate({broadcast_to(sinks, bsx_shape, s), scores}, -1, s);
+    }
     scores = softmax(scores, std::vector<int>{-1}, true, s);
+    if (has_sinks) {
+      auto start = Shape(scores.ndim(), 0);
+      start.back() = 1;
+      auto stop = scores.shape();
+      scores = slice(scores, std::move(start), std::move(stop), s);
+    }
     auto out = quantized_matmul(
         scores,
         v,
@@ -1156,6 +1178,21 @@ array quantized_scaled_dot_product_attention(
         *mask, final_type, full_mask_shape, tag, stream);
     inputs.push_back(std::move(prepared_mask.first));
   }
+  if (has_sinks) {
+    if (promote_types(sinks->dtype(), final_type) != final_type) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Type of sinks must promote to output type "
+          << final_type << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (sinks->ndim() != 1 || sinks->shape(0) != n_q_heads) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Received invalid shape for sinks "
+          << sinks->shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    inputs.push_back(astype(*sinks, final_type, stream));
+  }
 
   int out_dim = value_head_dim;
   Shape out_shape{
@@ -1171,6 +1208,7 @@ array quantized_scaled_dot_product_attention(
       fallback,
       scale,
       has_arr_mask,
+      has_sinks,
       do_causal,
       group_size,
       bits,
@@ -1237,8 +1275,9 @@ bool QuantizedScaledDotProductAttention::is_equivalent(
   const QuantizedScaledDotProductAttention& a_other =
       static_cast<const QuantizedScaledDotProductAttention&>(other);
   return scale_ == a_other.scale_ && has_arr_mask_ == a_other.has_arr_mask_ &&
-      do_causal_ == a_other.do_causal_ && group_size_ == a_other.group_size_ &&
-      bits_ == a_other.bits_ && mode_ == a_other.mode_;
+      has_sinks_ == a_other.has_sinks_ && do_causal_ == a_other.do_causal_ &&
+      group_size_ == a_other.group_size_ && bits_ == a_other.bits_ &&
+      mode_ == a_other.mode_;
 }
 
 bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
