@@ -187,6 +187,9 @@ METAL_FUNC void load_queries(const device T* queries, thread U* q, U scale) {
 }
 
 constant bool has_affine_bias [[function_constant(27)]];
+constant int quant_mode_int [[function_constant(28)]];
+constant int quant_bits [[function_constant(29)]];
+constant int quant_group_size [[function_constant(30)]];
 
 template <int group_size, int elem_per_thread, int granularity>
 struct GroupSlice {
@@ -371,43 +374,44 @@ template <QuantMode mode, typename T>
 using ScaleTypeT = typename QuantConfig<mode>::template scale_storage_t<T>;
 
 template <typename T, int D, QuantMode mode, int group_size, int bits>
-[[kernel]] void quant_sdpa_vector_2pass_1(
-    const device T* queries [[buffer(0)]],
-    const device uint32_t* keys [[buffer(1)]],
-    const device ScaleTypeT<mode, T>* key_scales [[buffer(2)]],
-    const device uint32_t* values [[buffer(3)]],
-    const device ScaleTypeT<mode, T>* value_scales [[buffer(4)]],
-    device T* out [[buffer(5)]],
-    device float* sums [[buffer(6)]],
-    device float* maxs [[buffer(7)]],
-    const constant int& gqa_factor [[buffer(8)]],
-    const constant int& N [[buffer(9)]],
-    const constant size_t& k_stride [[buffer(10)]],
-    const constant size_t& v_stride [[buffer(11)]],
-    const constant size_t& k_group_stride [[buffer(12)]],
-    const constant size_t& v_group_stride [[buffer(13)]],
-    const constant float& scale [[buffer(14)]],
-    const device bool* bmask [[buffer(15), function_constant(bool_mask)]],
-    const device T* fmask [[buffer(16), function_constant(float_mask)]],
-    const constant int& mask_kv_seq_stride
-    [[buffer(17), function_constant(has_mask)]],
-    const constant int& mask_q_seq_stride
-    [[buffer(18), function_constant(has_mask)]],
-    const constant int& mask_head_stride
-    [[buffer(19), function_constant(has_mask)]],
-    const device T* key_biases
-    [[buffer(20), function_constant(has_affine_bias)]],
-    const device T* value_biases
-    [[buffer(21), function_constant(has_affine_bias)]],
-    uint3 tid [[threadgroup_position_in_grid]],
-    uint3 tpg [[threadgroups_per_grid]],
-    uint simd_lid [[thread_index_in_simdgroup]],
-    uint quad_gid [[quadgroup_index_in_threadgroup]],
-    uint quad_lid [[thread_index_in_quadgroup]]) {
+METAL_FUNC void quant_sdpa_inner(
+    const device T* queries,
+    const device uint32_t* keys,
+    const device uint8_t* key_scales_raw,
+    const device uint32_t* values,
+    const device uint8_t* value_scales_raw,
+    device T* out,
+    device float* sums,
+    device float* maxs,
+    const constant int& N,
+    const constant size_t& k_stride,
+    const constant size_t& v_stride,
+    const constant size_t& k_group_stride,
+    const constant size_t& v_group_stride,
+    const constant float& scale,
+    const device bool* bmask,
+    const device T* fmask,
+    const constant int& mask_kv_seq_stride,
+    const constant int& mask_q_seq_stride,
+    const constant int& mask_head_stride,
+    const device uint8_t* key_biases_raw,
+    const device uint8_t* value_biases_raw,
+    uint3 tid,
+    uint3 tpg,
+    uint3 tptg,
+    uint3 tidtg,
+    uint simd_lid) {
   // Quadgroup approach: BN=8 quads × BD=4 lanes = 32 threads = 1 simdgroup
   // Each quad processes one key, lanes split D dimension.
   // elem_per_thread=D/4 is large enough for all pack_factors (max 8).
+  //
+  // GQA: multiple query heads sharing the same KV head are packed into the
+  // same threadgroup (along with q_seq_len). This lets them share L2 cache
+  // for KV data.
+  //   Grid:  (num_kv_heads, batch, blocks)
+  //   Group: (32, gqa_factor, q_seq_len)
   using Cfg = QuantConfig<mode>;
+  using ScaleT = ScaleTypeT<mode, T>;
 
   static_assert(
       (D % group_size) == 0, "group_size must divide the head dimension");
@@ -415,54 +419,72 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
   constexpr int BD = 4;
   constexpr int elem_per_thread = D / BD;
 
+  // Derive quad indices from simd_lid (replaces quad_gid/quad_lid attributes)
+  const int local_quad_gid = simd_lid / 4; // 0-7
+  const int local_quad_lid = simd_lid % 4; // 0-3
+
   typedef float U;
+
+  // Cast raw byte pointers to typed scale pointers
+  auto key_scales = reinterpret_cast<const device ScaleT*>(key_scales_raw);
+  auto value_scales = reinterpret_cast<const device ScaleT*>(value_scales_raw);
 
   thread U q[elem_per_thread];
   thread U o[elem_per_thread] = {0};
 
+  // Head/batch from grid + threadgroup position
+  const int kv_head_idx = tid.x;
+  const int batch_idx = tid.y;
   const int block_idx = tid.z;
-  const int q_batch_head_idx = tid.x;
-  const int q_seq_idx = tid.y;
-  const int kv_head_idx = q_batch_head_idx / gqa_factor;
-  const int o_offset = q_batch_head_idx * tpg.y + q_seq_idx;
+  const int gqa_factor = tptg.y;
+  const int q_seq_len = tptg.z;
+  const int gqa_offset = tidtg.y;
+  const int q_seq_idx = tidtg.z;
+  const int num_kv_heads = tpg.x;
+  const int num_q_heads = num_kv_heads * gqa_factor;
+  const int q_head_idx = gqa_factor * kv_head_idx + gqa_offset;
+  const int q_batch_head_idx = batch_idx * num_q_heads + q_head_idx;
+  const int o_offset = q_batch_head_idx * q_seq_len + q_seq_idx;
   const int q_offset =
-      query_transposed ? tpg.x * q_seq_idx + q_batch_head_idx : o_offset;
+      query_transposed ? num_q_heads * q_seq_idx + q_batch_head_idx : o_offset;
 
-  queries += q_offset * D + quad_lid * elem_per_thread;
+  queries += q_offset * D + local_quad_lid * elem_per_thread;
 
+  const int kv_batch_head_idx = batch_idx * num_kv_heads + kv_head_idx;
   const int kv_idx =
-      (block_idx * BN + quad_gid) * D + quad_lid * elem_per_thread;
-  const int k_group_idx = kv_head_idx * k_group_stride + kv_idx / group_size;
-  const int v_group_idx = kv_head_idx * v_group_stride + kv_idx / group_size;
+      (block_idx * BN + local_quad_gid) * D + local_quad_lid * elem_per_thread;
+  const int k_group_idx =
+      kv_batch_head_idx * k_group_stride + kv_idx / group_size;
+  const int v_group_idx =
+      kv_batch_head_idx * v_group_stride + kv_idx / group_size;
 
-  QuantDataPtr<bits> key_ptr(keys, k_stride, kv_head_idx, kv_idx);
-  QuantDataPtr<bits> value_ptr(values, v_stride, kv_head_idx, kv_idx);
+  QuantDataPtr<bits> key_ptr(keys, k_stride, kv_batch_head_idx, kv_idx);
+  QuantDataPtr<bits> value_ptr(values, v_stride, kv_batch_head_idx, kv_idx);
 
   key_scales += k_group_idx;
   value_scales += v_group_idx;
-  const device ScaleTypeT<mode, T>* key_bias_ptr = nullptr;
-  const device ScaleTypeT<mode, T>* value_bias_ptr = nullptr;
+  const device ScaleT* key_bias_ptr = nullptr;
+  const device ScaleT* value_bias_ptr = nullptr;
   if constexpr (Cfg::has_bias) {
     key_bias_ptr =
-        reinterpret_cast<const device ScaleTypeT<mode, T>*>(key_biases) +
-        k_group_idx;
+        reinterpret_cast<const device ScaleT*>(key_biases_raw) + k_group_idx;
     value_bias_ptr =
-        reinterpret_cast<const device ScaleTypeT<mode, T>*>(value_biases) +
-        v_group_idx;
+        reinterpret_cast<const device ScaleT*>(value_biases_raw) + v_group_idx;
   }
 
-  out += o_offset * blocks * D + block_idx * D + quad_lid * elem_per_thread;
+  out +=
+      o_offset * blocks * D + block_idx * D + local_quad_lid * elem_per_thread;
   sums += o_offset * blocks + block_idx;
   maxs += o_offset * blocks + block_idx;
 
   if (bool_mask) {
     bmask += q_batch_head_idx * mask_head_stride +
-        (block_idx * BN + quad_gid) * mask_kv_seq_stride +
+        (block_idx * BN + local_quad_gid) * mask_kv_seq_stride +
         q_seq_idx * mask_q_seq_stride;
   }
   if (float_mask) {
     fmask += q_batch_head_idx * mask_head_stride +
-        (block_idx * BN + quad_gid) * mask_kv_seq_stride +
+        (block_idx * BN + local_quad_gid) * mask_kv_seq_stride +
         q_seq_idx * mask_q_seq_stride;
   }
 
@@ -481,10 +503,10 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
   U sum_exp_score = 0;
 
   // Main loop: each quad processes one key at a time
-  for (int i = block_idx * BN + quad_gid; i < N; i += blocks * BN) {
+  for (int i = block_idx * BN + local_quad_gid; i < N; i += blocks * BN) {
     bool use_key = true;
     if (do_causal) {
-      use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
+      use_key = i <= (N - q_seq_len + int(q_seq_idx));
     } else if (bool_mask) {
       use_key = bmask[0];
     } else if (float_mask) {
@@ -493,7 +515,7 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
 
     if (use_key) {
       U score = QuantOps<mode, bits, group_size>::
-          template dot<U, ScaleTypeT<mode, T>, elem_per_thread>(
+          template dot<U, ScaleT, elem_per_thread>(
               q, key_ptr.ptr(), key_scales, key_bias_ptr);
       score = quad_sum(score);
 
@@ -510,7 +532,7 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
       sum_exp_score = sum_exp_score * factor + exp_score;
 
       QuantOps<mode, bits, group_size>::
-          template accumulate<U, ScaleTypeT<mode, T>, elem_per_thread>(
+          template accumulate<U, ScaleT, elem_per_thread>(
               o,
               value_ptr.ptr(),
               factor,
@@ -536,11 +558,12 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
     }
   }
 
-  U sg_max = (quad_lid == 0) ? max_score : Limits<U>::finite_min;
+  U sg_max = (local_quad_lid == 0) ? max_score : Limits<U>::finite_min;
   U global_max = simd_max(sg_max);
 
-  U sg_sum =
-      (quad_lid == 0) ? sum_exp_score * fast::exp(max_score - global_max) : 0;
+  U sg_sum = (local_quad_lid == 0)
+      ? sum_exp_score * fast::exp(max_score - global_max)
+      : 0;
   U global_sum = simd_sum(sg_sum);
 
   if (simd_lid == 0) {
@@ -548,18 +571,93 @@ template <typename T, int D, QuantMode mode, int group_size, int bits>
     maxs[0] = global_max;
   }
 
-  // Output reduction: sum across quads (same quad_lid only)
+  // Output reduction: sum across quads (same local_quad_lid only)
   U rescale = fast::exp(max_score - global_max);
   for (int i = 0; i < elem_per_thread; i++) {
     U val = o[i] * rescale;
     val += simd_shuffle_xor(val, 4); // sum quads 0+1, 2+3, 4+5, 6+7
     val += simd_shuffle_xor(val, 8); // sum quads 0-3, 4-7
     val += simd_shuffle_xor(val, 16); // sum quads 0-7
-    // All lanes with same quad_lid now have the full sum; quad_gid=0 writes
-    if (quad_gid == 0) {
+    // All lanes with same local_quad_lid now have the full sum;
+    // local_quad_gid=0 writes
+    if (local_quad_gid == 0) {
       out[i] = static_cast<T>(val);
     }
   }
+}
+
+template <typename T, int D>
+[[kernel]] void quant_sdpa_vector_2pass_1(
+    const device T* queries [[buffer(0)]],
+    const device uint32_t* keys [[buffer(1)]],
+    const device uint8_t* key_scales [[buffer(2)]],
+    const device uint32_t* values [[buffer(3)]],
+    const device uint8_t* value_scales [[buffer(4)]],
+    device T* out [[buffer(5)]],
+    device float* sums [[buffer(6)]],
+    device float* maxs [[buffer(7)]],
+    const constant int& N [[buffer(9)]],
+    const constant size_t& k_stride [[buffer(10)]],
+    const constant size_t& v_stride [[buffer(11)]],
+    const constant size_t& k_group_stride [[buffer(12)]],
+    const constant size_t& v_group_stride [[buffer(13)]],
+    const constant float& scale [[buffer(14)]],
+    const device bool* bmask [[buffer(15), function_constant(bool_mask)]],
+    const device T* fmask [[buffer(16), function_constant(float_mask)]],
+    const constant int& mask_kv_seq_stride
+    [[buffer(17), function_constant(has_mask)]],
+    const constant int& mask_q_seq_stride
+    [[buffer(18), function_constant(has_mask)]],
+    const constant int& mask_head_stride
+    [[buffer(19), function_constant(has_mask)]],
+    const device uint8_t* key_biases
+    [[buffer(20), function_constant(has_affine_bias)]],
+    const device uint8_t* value_biases
+    [[buffer(21), function_constant(has_affine_bias)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 tpg [[threadgroups_per_grid]],
+    uint3 tptg [[threads_per_threadgroup]],
+    uint3 tidtg [[thread_position_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+#define QUANT_SDPA_DISPATCH(MODE, GS, B)                                  \
+  if (quant_mode_int == int(QuantMode::MODE) && quant_group_size == GS && \
+      quant_bits == B) {                                                  \
+    quant_sdpa_inner<T, D, QuantMode::MODE, GS, B>(                       \
+        queries,                                                          \
+        keys,                                                             \
+        key_scales,                                                       \
+        values,                                                           \
+        value_scales,                                                     \
+        out,                                                              \
+        sums,                                                             \
+        maxs,                                                             \
+        N,                                                                \
+        k_stride,                                                         \
+        v_stride,                                                         \
+        k_group_stride,                                                   \
+        v_group_stride,                                                   \
+        scale,                                                            \
+        bmask,                                                            \
+        fmask,                                                            \
+        mask_kv_seq_stride,                                               \
+        mask_q_seq_stride,                                                \
+        mask_head_stride,                                                 \
+        key_biases,                                                       \
+        value_biases,                                                     \
+        tid,                                                              \
+        tpg,                                                              \
+        tptg,                                                             \
+        tidtg,                                                            \
+        simd_lid);                                                        \
+    return;                                                               \
+  }
+  QUANT_SDPA_DISPATCH(Affine, 32, 4)
+  QUANT_SDPA_DISPATCH(Affine, 32, 6)
+  QUANT_SDPA_DISPATCH(Affine, 32, 8)
+  QUANT_SDPA_DISPATCH(Mxfp4, 32, 4)
+  QUANT_SDPA_DISPATCH(Nvfp4, 16, 4)
+  QUANT_SDPA_DISPATCH(Mxfp8, 32, 8)
+#undef QUANT_SDPA_DISPATCH
 }
 
 template <typename T, int D, int V = D>

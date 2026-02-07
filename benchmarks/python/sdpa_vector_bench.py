@@ -17,10 +17,10 @@ def time_fn(fn, *args, warmup=5, iters=100, **kwargs):
     return 1e3 * (toc - tic) / iters
 
 
-def quant_sdpa(q, k, v, bits, mode, loops=1):
+def quant_sdpa(q, k, v, bits, mode, group_size=None, loops=1):
     for _ in range(loops):
         q = mx.fast.quantized_scaled_dot_product_attention(
-            q, *k, *v, scale=1.0, mask=None, bits=bits, mode=mode
+            q, *k, *v, scale=1.0, mask=None, bits=bits, mode=mode, group_size=group_size
         )
     return q
 
@@ -69,8 +69,13 @@ def run_benchmark(
 
         # Benchmark each quant mode
         for mode, bits in modes:
-            k_quant = mx.quantize(k, bits=bits, mode=mode)
-            v_quant = mx.quantize(v, bits=bits, mode=mode)
+            gs = 32 if mode == "affine" else None
+            k_quant = mx.quantize(
+                k, bits=bits, mode=mode, **({"group_size": gs} if gs else {})
+            )
+            v_quant = mx.quantize(
+                v, bits=bits, mode=mode, **({"group_size": gs} if gs else {})
+            )
             mx.eval(k_quant, v_quant)
 
             ms = time_fn(
@@ -80,6 +85,7 @@ def run_benchmark(
                 v_quant,
                 bits,
                 mode,
+                group_size=gs,
                 loops=loops,
                 warmup=warmup,
                 iters=iters,
