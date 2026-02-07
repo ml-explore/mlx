@@ -15,7 +15,7 @@ namespace rocm {
 
 // Warp reduce for sum
 __device__ float warp_reduce_sum_f(float val) {
-  for (int offset = 32; offset > 0; offset /= 2) {
+  for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
     val += __shfl_xor(val, offset);
   }
   return val;
@@ -27,7 +27,7 @@ struct float3_sum {
 };
 
 __device__ float3_sum warp_reduce_sum_f3(float3_sum val) {
-  for (int offset = 32; offset > 0; offset /= 2) {
+  for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
     val.x += __shfl_xor(val.x, offset);
     val.y += __shfl_xor(val.y, offset);
     val.z += __shfl_xor(val.z, offset);
@@ -60,11 +60,11 @@ __global__ void layer_norm_kernel(
   }
 
   // Block reduce for sum
-  __shared__ float shared_sum[BLOCK_DIM / 64 + 1];
+  __shared__ float shared_sum[BLOCK_DIM / WARP_SIZE + 1];
   
   float warp_sum = warp_reduce_sum_f(sum);
-  int lane = threadIdx.x % 64;
-  int warp_id = threadIdx.x / 64;
+  int lane = threadIdx.x % WARP_SIZE;
+  int warp_id = threadIdx.x / WARP_SIZE;
   
   if (lane == 0) {
     shared_sum[warp_id] = warp_sum;
@@ -72,7 +72,7 @@ __global__ void layer_norm_kernel(
   __syncthreads();
   
   if (warp_id == 0) {
-    sum = (lane < (BLOCK_DIM + 63) / 64) ? shared_sum[lane] : 0;
+    sum = (lane < (BLOCK_DIM + WARP_SIZE - 1) / WARP_SIZE) ? shared_sum[lane] : 0;
     sum = warp_reduce_sum_f(sum);
   }
   __syncthreads();
@@ -102,7 +102,7 @@ __global__ void layer_norm_kernel(
   __syncthreads();
   
   if (warp_id == 0) {
-    var_sum = (lane < (BLOCK_DIM + 63) / 64) ? shared_sum[lane] : 0;
+    var_sum = (lane < (BLOCK_DIM + WARP_SIZE - 1) / WARP_SIZE) ? shared_sum[lane] : 0;
     var_sum = warp_reduce_sum_f(var_sum);
   }
   __syncthreads();
@@ -153,12 +153,12 @@ __global__ void layer_norm_vjp_kernel(
   }
 
   // Block reduce for sum
-  __shared__ float shared_sum[BLOCK_DIM / 64 + 1];
-  __shared__ float3_sum shared_f3[BLOCK_DIM / 64 + 1];
+  __shared__ float shared_sum[BLOCK_DIM / WARP_SIZE + 1];
+  __shared__ float3_sum shared_f3[BLOCK_DIM / WARP_SIZE + 1];
   
   float warp_sum = warp_reduce_sum_f(sum);
-  int lane = threadIdx.x % 64;
-  int warp_id = threadIdx.x / 64;
+  int lane = threadIdx.x % WARP_SIZE;
+  int warp_id = threadIdx.x / WARP_SIZE;
   
   if (lane == 0) {
     shared_sum[warp_id] = warp_sum;
@@ -166,7 +166,7 @@ __global__ void layer_norm_vjp_kernel(
   __syncthreads();
   
   if (warp_id == 0) {
-    sum = (lane < (BLOCK_DIM + 63) / 64) ? shared_sum[lane] : 0;
+    sum = (lane < (BLOCK_DIM + WARP_SIZE - 1) / WARP_SIZE) ? shared_sum[lane] : 0;
     sum = warp_reduce_sum_f(sum);
   }
   __syncthreads();
@@ -202,7 +202,7 @@ __global__ void layer_norm_vjp_kernel(
   __syncthreads();
   
   if (warp_id == 0) {
-    factors = (lane < (BLOCK_DIM + 63) / 64) ? shared_f3[lane] : float3_sum{0, 0, 0};
+    factors = (lane < (BLOCK_DIM + WARP_SIZE - 1) / WARP_SIZE) ? shared_f3[lane] : float3_sum{0, 0, 0};
     factors = warp_reduce_sum_f3(factors);
   }
   __syncthreads();
