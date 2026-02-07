@@ -843,6 +843,29 @@ bool ScaledDotProductAttention::supports_bool_mask() {
   return true;
 }
 
+bool QuantizedScaledDotProductAttention::use_fallback(
+    const array& q,
+    const array& k,
+    bool is_training,
+    Stream s) {
+  if (is_training || s.device == Device::cpu) {
+    return true;
+  }
+
+  bool supported_type = (q.dtype() == float32) || (q.dtype() == float16) ||
+      (q.dtype() == bfloat16);
+  if (!supported_type) {
+    return true;
+  }
+
+  int query_sequence_length = q.shape(2);
+  int query_head_dim = q.shape(-1);
+  int gqa_factor = q.shape(1) / k.shape(1);
+  return query_sequence_length > 8 ||
+      !(query_head_dim == 64 || query_head_dim == 128) ||
+      (query_sequence_length * gqa_factor > 32);
+}
+
 void ScaledDotProductAttention::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
