@@ -9,6 +9,7 @@
 #include "mlx/dtype_utils.h"
 
 #include <hip/hip_runtime.h>
+#include <hip/hip_bfloat16.h>
 #include <cmath>
 
 namespace mlx::core {
@@ -207,6 +208,11 @@ bool supports_sdpa_vector(
     return false;
   }
 
+  // Check for supported dtypes
+  if (q.dtype() != float32 && q.dtype() != float16 && q.dtype() != bfloat16) {
+    return false;
+  }
+
   const int value_head_dim = v.shape(-1);
   const int query_head_dim = q.shape(-1);
   const int query_sequence_length = q.shape(2);
@@ -312,6 +318,16 @@ void sdpa_vector(
         if (D == 64) launch_kernel(__half(), std::false_type(), std::integral_constant<int, 64>());
         else if (D == 96) launch_kernel(__half(), std::false_type(), std::integral_constant<int, 96>());
         else if (D == 128) launch_kernel(__half(), std::false_type(), std::integral_constant<int, 128>());
+      }
+    } else if (o.dtype() == bfloat16) {
+      if (do_causal) {
+        if (D == 64) launch_kernel(hip_bfloat16(), std::true_type(), std::integral_constant<int, 64>());
+        else if (D == 96) launch_kernel(hip_bfloat16(), std::true_type(), std::integral_constant<int, 96>());
+        else if (D == 128) launch_kernel(hip_bfloat16(), std::true_type(), std::integral_constant<int, 128>());
+      } else {
+        if (D == 64) launch_kernel(hip_bfloat16(), std::false_type(), std::integral_constant<int, 64>());
+        else if (D == 96) launch_kernel(hip_bfloat16(), std::false_type(), std::integral_constant<int, 96>());
+        else if (D == 128) launch_kernel(hip_bfloat16(), std::false_type(), std::integral_constant<int, 128>());
       }
     }
   });
