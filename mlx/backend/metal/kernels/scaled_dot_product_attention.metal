@@ -43,31 +43,17 @@ instantiate_sdpa_vector_heads(bfloat16_t)
 instantiate_sdpa_vector_heads(float16_t)
 
 // Quantized SDPA vector instantiations
-// Uses QuantMode enum for explicit mode selection
-#define instantiate_quant_sdpa_vector(type, head_dim, mode, group_size, bits)      \
-  instantiate_kernel(                                                              \
-      "quant_sdpa_vector_2pass_1_" #type "_" #head_dim "_" #mode "_" #group_size "_" #bits, \
-      quant_sdpa_vector_2pass_1,                                                   \
-      type,                                                                        \
-      head_dim,                                                                    \
-      QuantMode::mode,                                                             \
-      group_size,                                                                  \
-      bits)
-
-#define instantiate_quant_sdpa_vector_affine(type, head_dim) \
-  instantiate_quant_sdpa_vector(type, head_dim, Affine, 32, 4)  \
-  instantiate_quant_sdpa_vector(type, head_dim, Affine, 32, 6)  \
-  instantiate_quant_sdpa_vector(type, head_dim, Affine, 32, 8)
-
-#define instantiate_quant_sdpa_vector_all_modes(type, head_dim) \
-  instantiate_quant_sdpa_vector(type, head_dim, Mxfp4, 32, 4)   \
-  instantiate_quant_sdpa_vector(type, head_dim, Nvfp4, 16, 4)   \
-  instantiate_quant_sdpa_vector(type, head_dim, Mxfp8, 32, 8)   \
-  instantiate_quant_sdpa_vector_affine(type, head_dim)
+// mode/bits/group_size are now function constants (indices 28-30)
+#define instantiate_quant_sdpa_vector(type, head_dim)          \
+  instantiate_kernel(                                          \
+      "quant_sdpa_vector_2pass_1_" #type "_" #head_dim,        \
+      quant_sdpa_vector_2pass_1,                               \
+      type,                                                    \
+      head_dim)
 
 #define instantiate_quant_sdpa_vector_heads(type) \
-  instantiate_quant_sdpa_vector_all_modes(type, 64)    \
-  instantiate_quant_sdpa_vector_all_modes(type, 128)
+  instantiate_quant_sdpa_vector(type, 64)         \
+  instantiate_quant_sdpa_vector(type, 128)
 
 instantiate_quant_sdpa_vector_heads(float)
 instantiate_quant_sdpa_vector_heads(bfloat16_t)

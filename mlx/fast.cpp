@@ -1130,10 +1130,12 @@ array quantized_scaled_dot_product_attention(
 
   bool supported_type = (queries.dtype() == float32) ||
       (queries.dtype() == float16) || (queries.dtype() == bfloat16);
+  int gqa_factor = queries.shape(1) / keys.shape(1);
   bool unsupported = detail::in_grad_tracing() ||
       stream.device == Device::cpu || queries.shape(2) > 8 ||
       (queries.shape(2) > keys.shape(2)) ||
-      !(queries.shape(-1) == 64 || queries.shape(-1) == 128) || !supported_type;
+      !(queries.shape(-1) == 64 || queries.shape(-1) == 128) ||
+      !supported_type || (queries.shape(2) * gqa_factor > 32);
 
   if (unsupported) {
     return fallback(std::move(inputs))[0];

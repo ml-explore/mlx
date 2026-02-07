@@ -585,16 +585,16 @@ void sdpa_vector_2pass(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
-std::string quant_mode_to_kernel_suffix(QuantizationMode mode) {
+int quant_mode_to_int(QuantizationMode mode) {
   switch (mode) {
     case QuantizationMode::Affine:
-      return "Affine";
+      return 0;
     case QuantizationMode::Mxfp4:
-      return "Mxfp4";
-    case QuantizationMode::Nvfp4:
-      return "Nvfp4";
+      return 1;
     case QuantizationMode::Mxfp8:
-      return "Mxfp8";
+      return 2;
+    case QuantizationMode::Nvfp4:
+      return 3;
     default:
       throw std::invalid_argument(
           "[quant_sdpa_vector_2pass] Unsupported quantization mode.");
@@ -619,22 +619,15 @@ void quant_sdpa_vector_2pass(
     const std::optional<array>& mask,
     QuantizationMode mode) {
   std::string kname;
-  kname.reserve(96);
+  kname.reserve(64);
   kname += "quant_sdpa_vector_2pass_1_";
   kname += get_type_string(q.dtype());
   kname += "_";
   kname += std::to_string(q.shape(-1));
-  kname += "_";
-  kname += quant_mode_to_kernel_suffix(mode);
-  kname += "_";
-  kname += std::to_string(group_size);
-  kname += "_";
-  kname += std::to_string(bits);
 
-  int gqa_factor = q.shape(1) / k.shape(1);
   int N = k.shape(2);
+  int gqa_factor = q.shape(1) / k.shape(1);
   int n_simds = gqa_factor * q.shape(2);
-  int B = q.shape(0) * q.shape(1);
 
   // TODO: tune block sizes for different devices
   char devc = d.get_architecture().back();
@@ -679,8 +672,8 @@ void quant_sdpa_vector_2pass(
   size_t v_group_stride =
       v_scales.shape(1) == 1 ? v_scales.strides(0) : v_scales.strides(1);
 
-  MTL::Size group_dims(32, 1, 1); // 1 simdgroup, like non-quant
-  MTL::Size grid_dims(B, q.shape(2), blocks);
+  MTL::Size group_dims(32, gqa_factor, q.shape(2));
+  MTL::Size grid_dims(k.shape(1), q.shape(0), blocks);
 
   Shape intermediate_shape;
   intermediate_shape.reserve(out.ndim() + 1);
@@ -705,6 +698,7 @@ void quant_sdpa_vector_2pass(
   bool query_transposed = !q.flags().row_contiguous;
   bool has_sinks = false;
   bool has_affine_bias = mode == QuantizationMode::Affine;
+  int quant_mode_int = quant_mode_to_int(mode);
   metal::MTLFCList func_consts = {
       {&has_mask, MTL::DataType::DataTypeBool, 20},
       {&query_transposed, MTL::DataType::DataTypeBool, 21},
@@ -714,12 +708,18 @@ void quant_sdpa_vector_2pass(
       {&has_sinks, MTL::DataType::DataTypeBool, 25},
       {&blocks, MTL::DataType::DataTypeInt, 26},
       {&has_affine_bias, MTL::DataType::DataTypeBool, 27},
+      {&quant_mode_int, MTL::DataType::DataTypeInt, 28},
+      {&bits, MTL::DataType::DataTypeInt, 29},
+      {&group_size, MTL::DataType::DataTypeInt, 30},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
   hash_name += query_transposed ? "_qt" : "_qnt";
   hash_name += do_causal ? "_c" : "_nc";
   hash_name += has_affine_bias ? "_affine_" : "_noaffine_";
+  hash_name += std::to_string(quant_mode_int) + "_";
+  hash_name += std::to_string(bits) + "_";
+  hash_name += std::to_string(group_size) + "_";
   hash_name += std::to_string(blocks);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -734,7 +734,6 @@ void quant_sdpa_vector_2pass(
   compute_encoder.set_output_array(intermediate, 5);
   compute_encoder.set_output_array(sums, 6);
   compute_encoder.set_output_array(maxs, 7);
-  compute_encoder.set_bytes(gqa_factor, 8);
   compute_encoder.set_bytes(N, 9);
   compute_encoder.set_bytes(k_stride, 10);
   compute_encoder.set_bytes(v_stride, 11);
@@ -782,7 +781,7 @@ void quant_sdpa_vector_2pass(
   compute_encoder.set_output_array(out, 3);
 
   group_dims = MTL::Size(1024, 1, 1);
-  grid_dims = MTL::Size(B, q.shape(2), 1);
+  grid_dims = MTL::Size(q.shape(0) * q.shape(1), q.shape(2), 1);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
