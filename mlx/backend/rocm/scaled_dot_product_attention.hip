@@ -204,26 +204,13 @@ bool supports_sdpa_vector(
     bool has_arr_mask,
     bool do_causal,
     bool output_logsumexp) {
-  if (output_logsumexp) {
-    return false;
-  }
-
-  // Check for supported dtypes
-  if (q.dtype() != float32 && q.dtype() != float16 && q.dtype() != bfloat16) {
-    return false;
-  }
-
-  const int value_head_dim = v.shape(-1);
-  const int query_head_dim = q.shape(-1);
-  const int query_sequence_length = q.shape(2);
-
-  const bool sdpa_supported_head_dim = query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128);
-
-  const bool supported_vector_config =
-      sdpa_supported_head_dim && query_sequence_length < 4;
-
-  return supported_vector_config && !has_arr_mask;
+  // Disable optimized SDPA kernel for now - the kernel has warp size assumptions
+  // that don't work correctly across all ROCm architectures (RDNA vs CDNA).
+  // The kernel assumes 32 warps with 32 threads each (1024 total), but CDNA
+  // architectures use 64-wide wavefronts, resulting in only 16 warps.
+  // This causes out-of-bounds shared memory access.
+  // TODO: Rewrite kernel to be warp-size agnostic.
+  return false;
 }
 
 void sdpa_vector(
