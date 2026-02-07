@@ -779,6 +779,7 @@ void quant_sdpa_vector_2pass(
   compute_encoder.set_input_array(sums, 1);
   compute_encoder.set_input_array(maxs, 2);
   compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(blocks, 4);
 
   group_dims = MTL::Size(1024, 1, 1);
   grid_dims = MTL::Size(q.shape(0) * q.shape(1), q.shape(2), 1);
