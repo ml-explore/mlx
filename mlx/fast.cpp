@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cassert>
 #include <numeric>
+#include <string_view>
 
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
@@ -593,6 +594,23 @@ bool RoPE::is_equivalent(const Primitive& other) const {
       forward_ == a_other.forward_);
 }
 
+std::pair<array, bool> prepare_sdpa_array_mask(
+    const array& mask,
+    Dtype out_type,
+    const Shape& full_mask_shape,
+    std::string_view tag,
+    Stream s) {
+  bool has_bool_mask = mask.dtype() == bool_;
+  if (!has_bool_mask && promote_types(mask.dtype(), out_type) != out_type) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Mask type must promote to output type " << out_type
+        << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  auto prepared_mask = has_bool_mask ? mask : astype(mask, out_type, s);
+  return {broadcast_to(prepared_mask, full_mask_shape, s), has_bool_mask};
+}
+
 /** Computes: O = softmax(Q @ K.T) @ V **/
 array scaled_dot_product_attention(
     const array& queries,
@@ -637,7 +655,6 @@ array scaled_dot_product_attention(
   } else if (mask_arr) {
     has_mask = true;
     has_arr_mask = true;
-    has_bool_mask = mask_arr->dtype() == bool_;
   }
 
   if (has_arr_mask && mask_arr->ndim() > 4) {
@@ -775,20 +792,16 @@ array scaled_dot_product_attention(
   auto stream = to_stream(s);
   std::vector<array> inputs = {q, k, v};
   if (has_arr_mask) {
-    // Check type
-    has_bool_mask = mask_arr->dtype() == bool_;
-    if (promote_types(mask_arr->dtype(), final_type) != final_type) {
-      std::ostringstream msg;
-      msg << "[scaled_dot_product_attention] Mask type must promote to output type "
-          << final_type << ".";
-      throw std::invalid_argument(msg.str());
-    } else if (!has_bool_mask) {
-      mask_arr = astype(*mask_arr, final_type, stream);
-    }
-    // Broadcast mask
     auto mask_shape = queries.shape();
     mask_shape.back() = keys.shape(-2);
-    inputs.push_back(broadcast_to(*mask_arr, mask_shape, stream));
+    auto [prepared_mask, prepared_bool_mask] = prepare_sdpa_array_mask(
+        *mask_arr,
+        final_type,
+        mask_shape,
+        "scaled_dot_product_attention",
+        stream);
+    has_bool_mask = prepared_bool_mask;
+    inputs.push_back(std::move(prepared_mask));
   }
   if (has_sinks) {
     if (promote_types(sinks->dtype(), final_type) != final_type) {
@@ -1006,7 +1019,6 @@ array quantized_scaled_dot_product_attention(
 
   // Validate mask
   bool needs_mask = mask.has_value();
-  bool has_bool_mask = needs_mask && mask->dtype() == bool_;
   if (needs_mask && mask->ndim() > 4) {
     std::ostringstream msg;
     msg << "[" << tag << "] Mask with shape " << mask->shape()
@@ -1100,7 +1112,7 @@ array quantized_scaled_dot_product_attention(
         mode,
         s);
     if (n_repeats > 1) {
-      out = reshape(out, {out.shape(0), n_q_heads, out.shape(2), -1}, s);
+      out = flatten(out, 1, 2, s);
     }
     return std::vector<array>{out};
   };
@@ -1108,27 +1120,6 @@ array quantized_scaled_dot_product_attention(
   auto stream = to_stream(s);
   Shape full_mask_shape{
       queries.shape(0), queries.shape(1), queries.shape(2), keys.shape(-2)};
-
-  auto normalize_mask = [&](const array& raw_mask) {
-    array m = raw_mask;
-    switch (m.ndim()) {
-      case 1: // [K]
-        m = reshape(m, {1, 1, 1, m.shape(0)}, stream);
-        break;
-      case 2: // [B, K]
-        m = reshape(m, {m.shape(0), 1, 1, m.shape(1)}, stream);
-        break;
-      case 3: // [B, L_q, K]
-        m = reshape(m, {m.shape(0), 1, m.shape(1), m.shape(2)}, stream);
-        break;
-      case 4: // [B, H, L_q, K]
-        break;
-      default:
-        throw std::invalid_argument(
-            "[quantized_scaled_dot_product_attention] Mask rank must be <= 4.");
-    }
-    return broadcast_to(m, full_mask_shape, stream);
-  };
 
   std::vector<array> inputs = {q, keys, key_scales};
   if (is_affine) {
@@ -1140,31 +1131,17 @@ array quantized_scaled_dot_product_attention(
     inputs.push_back(*value_biases);
   }
   if (needs_mask) {
-    if (promote_types(mask->dtype(), final_type) != final_type &&
-        mask->dtype() != bool_) {
-      std::ostringstream msg;
-      msg << "[quantized_scaled_dot_product_attention] Mask type must promote to output type "
-          << final_type << ".";
-      throw std::invalid_argument(msg.str());
-    }
-    array normalized =
-        has_bool_mask ? *mask : astype(*mask, final_type, stream);
-    inputs.push_back(normalize_mask(normalized));
+    auto prepared_mask = prepare_sdpa_array_mask(
+        *mask, final_type, full_mask_shape, tag, stream);
+    inputs.push_back(std::move(prepared_mask.first));
   }
 
   int out_dim = value_head_dim;
   Shape out_shape{
       queries.shape(0), queries.shape(1), queries.shape(2), out_dim};
 
-  bool supported_type = (queries.dtype() == float32) ||
-      (queries.dtype() == float16) || (queries.dtype() == bfloat16);
-  int gqa_factor = queries.shape(1) / keys.shape(1);
-  bool unsupported = detail::in_grad_tracing() ||
-      stream.device == Device::cpu || queries.shape(2) > 8 ||
-      !(queries.shape(-1) == 64 || queries.shape(-1) == 128) ||
-      !supported_type || (queries.shape(2) * gqa_factor > 32);
-
-  if (unsupported) {
+  if (QuantizedScaledDotProductAttention::use_fallback(
+          q, keys, detail::in_grad_tracing(), stream)) {
     return fallback(std::move(inputs))[0];
   }
 

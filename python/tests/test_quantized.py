@@ -819,6 +819,115 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     tol = 2e-2
                 self.assertLess((out - ref).abs().max(), tol)
 
+    def test_quantized_sdpa_masked(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Quantized fast attention is only available on GPU.")
+
+        mx.random.seed(0)
+        B, Hq, Hkv = 1, 2, 1
+        Lk, D = 640, 128
+
+        for mode in ["mxfp4", "mxfp8", "nvfp4"]:
+            bits = 8 if mode == "mxfp8" else 4
+            for Lq in [4, 9]:
+                q = 0.1 * mx.random.normal(shape=(B, Hq, Lq, D))
+                k = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
+                v = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
+
+                bool_mask = mx.random.uniform(shape=(Lq, Lk)) > 0.2
+                additive_mask = mx.where(
+                    bool_mask,
+                    mx.zeros((Lq, Lk), dtype=mx.float32),
+                    mx.full((Lq, Lk), -1e9, dtype=mx.float32),
+                )
+
+                k_q, k_scales = mx.quantize(k, mode=mode)
+                v_q, v_scales = mx.quantize(v, mode=mode)
+
+                for mask_name, mask in {
+                    "bool": bool_mask,
+                    "additive": additive_mask,
+                }.items():
+                    with self.subTest(mode=mode, bits=bits, Lq=Lq, mask=mask_name):
+                        ref = mx.fast.scaled_dot_product_attention(
+                            q, k, v, scale=1.0, mask=mask
+                        )
+                        out = mx.fast.quantized_scaled_dot_product_attention(
+                            q,
+                            k_q,
+                            k_scales,
+                            v_q,
+                            v_scales,
+                            scale=1.0,
+                            mode=mode,
+                            bits=bits,
+                            mask=mask,
+                        )
+
+                        self.assertEqual(out.shape, ref.shape)
+                        tol = 5e-2 if bits == 4 else 2e-2
+                        self.assertLess((out - ref).abs().max(), tol)
+
+    def test_quantized_sdpa_affine_masked(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Quantized fast attention is only available on GPU.")
+
+        mx.random.seed(0)
+        B, Hq, Hkv = 1, 2, 1
+        Lk, D = 640, 128
+
+        for bits in [4, 6, 8]:
+            for Lq in [4, 9]:
+                q = 0.1 * mx.random.normal(shape=(B, Hq, Lq, D))
+                k = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
+                v = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
+
+                bool_mask = mx.random.uniform(shape=(Lq, Lk)) > 0.2
+                additive_mask = mx.where(
+                    bool_mask,
+                    mx.zeros((Lq, Lk), dtype=mx.float32),
+                    mx.full((Lq, Lk), -1e9, dtype=mx.float32),
+                )
+
+                k_q, k_scales, k_biases = mx.quantize(
+                    k, group_size=32, bits=bits, mode="affine"
+                )
+                v_q, v_scales, v_biases = mx.quantize(
+                    v, group_size=32, bits=bits, mode="affine"
+                )
+
+                for mask_name, mask in {
+                    "bool": bool_mask,
+                    "additive": additive_mask,
+                }.items():
+                    with self.subTest(bits=bits, Lq=Lq, mask=mask_name):
+                        ref = mx.fast.scaled_dot_product_attention(
+                            q, k, v, scale=1.0, mask=mask
+                        )
+                        out = mx.fast.quantized_scaled_dot_product_attention(
+                            q,
+                            k_q,
+                            k_scales,
+                            k_biases,
+                            v_q,
+                            v_scales,
+                            v_biases,
+                            scale=1.0,
+                            mode="affine",
+                            group_size=32,
+                            bits=bits,
+                            mask=mask,
+                        )
+
+                        self.assertEqual(out.shape, ref.shape)
+                        if bits == 6:
+                            tol = 1e-1
+                        elif bits == 4:
+                            tol = 5e-2
+                        else:
+                            tol = 2e-2
+                        self.assertLess((out - ref).abs().max(), tol)
+
     def test_gather_qmm(self):
         def quantize(w, transpose=True, group_size=None, bits=None, mode="affine"):
             if mode == "affine":

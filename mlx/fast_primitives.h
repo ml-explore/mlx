@@ -284,6 +284,9 @@ class QuantizedScaledDotProductAttention : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
+  static bool
+  use_fallback(const array& q, const array& k, bool is_training, Stream s);
+
   bool is_equivalent(const Primitive& other) const override;
 
   DEFINE_NAME(QuantizedScaledDotProductAttention);
