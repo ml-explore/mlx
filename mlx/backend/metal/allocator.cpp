@@ -226,6 +226,7 @@ void MetalAllocator::release(Buffer buffer) {
   std::unique_lock lk(mutex_);
   active_memory_ -= buf->length();
   num_resources_--;
+  residency_set_.erase(buf);
   lk.unlock();
   auto pool = metal::new_scoped_memory_pool();
   buf->release();
