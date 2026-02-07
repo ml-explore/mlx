@@ -871,6 +871,7 @@ array quantized_scaled_dot_product_attention(
     const std::optional<int> group_size_ /* = std::nullopt */,
     const std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "mxfp4" */,
+    bool causal /* = false */,
     StreamOrDevice s /* = {} */) {
   constexpr const char* tag = "quantized_scaled_dot_product_attention";
 
@@ -1018,8 +1019,14 @@ array quantized_scaled_dot_product_attention(
   }
 
   // Validate mask
-  bool needs_mask = mask.has_value();
-  if (needs_mask && mask->ndim() > 4) {
+  bool do_causal = causal;
+  bool has_arr_mask = mask.has_value();
+  if (do_causal && has_arr_mask) {
+    throw std::invalid_argument(
+        "[quantized_scaled_dot_product_attention] Received both causal=true "
+        "and an array mask. Please provide only one mask type.");
+  }
+  if (has_arr_mask && mask->ndim() > 4) {
     std::ostringstream msg;
     msg << "[" << tag << "] Mask with shape " << mask->shape()
         << " expected to have at most rank 4.";
@@ -1033,7 +1040,8 @@ array quantized_scaled_dot_product_attention(
   auto fallback = [scale,
                    n_q_heads,
                    n_kv_heads,
-                   needs_mask,
+                   do_causal,
+                   has_arr_mask,
                    is_affine,
                    group_size,
                    bits,
@@ -1056,8 +1064,8 @@ array quantized_scaled_dot_product_attention(
       v_biases = inputs[idx++];
     }
 
-    std::optional<array> mask =
-        needs_mask ? std::optional<array>{inputs[idx]} : std::nullopt;
+    std::optional<array> arr_mask =
+        has_arr_mask ? std::optional<array>{inputs[idx]} : std::nullopt;
 
     if (n_repeats > 1) {
       q = reshape(q, {q.shape(0), n_kv_heads, n_repeats, q.shape(2), -1}, s);
@@ -1083,8 +1091,21 @@ array quantized_scaled_dot_product_attention(
         bits,
         mode,
         s);
-    if (mask) {
-      auto m = *mask;
+    if (has_arr_mask || do_causal) {
+      auto make_or_fetch_mask = [&]() {
+        if (do_causal) {
+          int kL = k.shape(-2);
+          int qL = q.shape(-2);
+          int offset = kL - qL;
+          auto q_idx = arange(offset, qL + offset, s);
+          auto k_idx = arange(0, kL, s);
+          q_idx = expand_dims(q_idx, 1, s);
+          k_idx = expand_dims(k_idx, 0, s);
+          return greater_equal(q_idx, k_idx, s);
+        }
+        return *arr_mask;
+      };
+      auto m = make_or_fetch_mask();
       if (n_repeats > 1 && m.ndim() >= 3) {
         if (m.shape(-3) == 1) {
           m = expand_dims(m, -3, s);
@@ -1130,7 +1151,7 @@ array quantized_scaled_dot_product_attention(
   if (is_affine) {
     inputs.push_back(*value_biases);
   }
-  if (needs_mask) {
+  if (has_arr_mask) {
     auto prepared_mask = prepare_sdpa_array_mask(
         *mask, final_type, full_mask_shape, tag, stream);
     inputs.push_back(std::move(prepared_mask.first));
@@ -1146,7 +1167,14 @@ array quantized_scaled_dot_product_attention(
   }
 
   auto primitive = std::make_shared<QuantizedScaledDotProductAttention>(
-      stream, fallback, scale, needs_mask, group_size, bits, qmode);
+      stream,
+      fallback,
+      scale,
+      has_arr_mask,
+      do_causal,
+      group_size,
+      bits,
+      qmode);
   return array(std::move(out_shape), final_type, primitive, std::move(inputs));
 }
 
@@ -1208,9 +1236,9 @@ bool QuantizedScaledDotProductAttention::is_equivalent(
     const Primitive& other) const {
   const QuantizedScaledDotProductAttention& a_other =
       static_cast<const QuantizedScaledDotProductAttention&>(other);
-  return scale_ == a_other.scale_ && needs_mask_ == a_other.needs_mask_ &&
-      group_size_ == a_other.group_size_ && bits_ == a_other.bits_ &&
-      mode_ == a_other.mode_;
+  return scale_ == a_other.scale_ && has_arr_mask_ == a_other.has_arr_mask_ &&
+      do_causal_ == a_other.do_causal_ && group_size_ == a_other.group_size_ &&
+      bits_ == a_other.bits_ && mode_ == a_other.mode_;
 }
 
 bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {

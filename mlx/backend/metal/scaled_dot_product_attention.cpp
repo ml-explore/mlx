@@ -1089,7 +1089,7 @@ void QuantizedScaledDotProductAttention::eval_gpu(
   }
 
   std::optional<array> mask = std::nullopt;
-  if (needs_mask_) {
+  if (has_arr_mask_) {
     auto mask_copy_unless = [&q](const array& arr) {
       auto& strides = arr.strides();
       auto& shape = arr.shape();
@@ -1119,7 +1119,7 @@ void QuantizedScaledDotProductAttention::eval_gpu(
       scale_,
       group_size_,
       bits_,
-      /* do_causal = */ false,
+      do_causal_,
       mask,
       mode_);
 

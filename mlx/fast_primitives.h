@@ -266,13 +266,15 @@ class QuantizedScaledDotProductAttention : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float scale,
-      bool needs_mask,
+      bool has_arr_mask,
+      bool do_causal,
       int group_size,
       int bits,
       QuantizationMode mode)
       : Custom(stream, std::move(fallback)),
         scale_(scale),
-        needs_mask_(needs_mask),
+        has_arr_mask_(has_arr_mask),
+        do_causal_(do_causal),
         group_size_(group_size),
         bits_(bits),
         mode_(mode) {}
@@ -293,12 +295,13 @@ class QuantizedScaledDotProductAttention : public Custom {
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
     return std::make_tuple(
-        nullptr, scale_, needs_mask_, group_size_, bits_, mode_);
+        nullptr, scale_, has_arr_mask_, do_causal_, group_size_, bits_, mode_);
   }
 
  private:
   float scale_;
-  bool needs_mask_;
+  bool has_arr_mask_;
+  bool do_causal_;
   int group_size_;
   int bits_;
   QuantizationMode mode_;

@@ -68,6 +68,7 @@ MLX_API array quantized_scaled_dot_product_attention(
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "mxfp4",
+    bool causal = false,
     StreamOrDevice s = {});
 
 using TemplateArg = std::variant<int, bool, Dtype>;

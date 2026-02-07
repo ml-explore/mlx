@@ -310,6 +310,7 @@ void init_fast(nb::module_& parent_module) {
          std::optional<int> group_size,
          std::optional<int> bits,
          const std::string& mode,
+         bool causal,
          mx::StreamOrDevice s) {
         return mx::fast::quantized_scaled_dot_product_attention(
             q,
@@ -324,6 +325,7 @@ void init_fast(nb::module_& parent_module) {
             group_size,
             bits,
             mode,
+            causal,
             s);
       },
       "q"_a,
@@ -339,9 +341,10 @@ void init_fast(nb::module_& parent_module) {
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "mxfp4",
+      "causal"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantized_scaled_dot_product_attention(q: array, k: array, k_scales: array, v: array, v_scales: array, *, k_biases: Optional[array] = None, v_biases: Optional[array] = None, scale: float,  mask: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = \"mxfp4\", stream: Union[None, Stream, Device] = None) -> array"));
+          "def quantized_scaled_dot_product_attention(q: array, k: array, k_scales: array, v: array, v_scales: array, *, k_biases: Optional[array] = None, v_biases: Optional[array] = None, scale: float,  mask: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = \"mxfp4\", causal: bool = False, stream: Union[None, Stream, Device] = None) -> array"));
 
   m.def(
       "quantized_scaled_dot_product_attention",
@@ -359,9 +362,10 @@ void init_fast(nb::module_& parent_module) {
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "mxfp4",
+      "causal"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantized_scaled_dot_product_attention(q: array, k: array, k_scales: array, k_biases: Optional[array] = None, v: array, v_scales: array, v_biases: Optional[array] = None, *, scale: float,  mask: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = \"mxfp4\", stream: Union[None, Stream, Device] = None) -> array"),
+          "def quantized_scaled_dot_product_attention(q: array, k: array, k_scales: array, k_biases: Optional[array] = None, v: array, v_scales: array, v_biases: Optional[array] = None, *, scale: float,  mask: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = \"mxfp4\", causal: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         A fast implementation of multi-head attention where the keys and values are quantized.
 
@@ -380,6 +384,8 @@ void init_fast(nb::module_& parent_module) {
             group_size (int, optional): The group size used in the KV quantization. Defaults follow the quantization ``mode``.
             bits (int, optional): The bits used in the KV quantization. Defaults follow the quantization ``mode``.
             mode (str, optional): The quantization mode: ``"mxfp4"``, ``"mxfp8"``, ``"nvfp4"``, or ``"affine"``.
+            causal (bool, optional): Whether to apply lower-right aligned causal masking.
+              Cannot be used together with ``mask``.
         Returns:
             array: The output array.
       )pbdoc");
