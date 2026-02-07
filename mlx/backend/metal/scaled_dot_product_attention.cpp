@@ -15,6 +15,68 @@ namespace mlx::core::fast {
 
 namespace {
 
+// Select block count for vector 2-pass attention kernels.
+int select_sdpa_blocks(
+    char devc,
+    int N,
+    int n_simds,
+    int head_dim,
+    [[maybe_unused]] bool quantized) {
+  if (devc == 's') {
+    int blocks = 64;
+    if (N > 1024 && n_simds > 4) {
+      if (N <= 8192) {
+        blocks = 128;
+      } else if (N <= 32768) {
+        blocks = 256;
+      } else if (N <= 65536) {
+        blocks = 512;
+      } else {
+        blocks = 1024;
+      }
+    }
+    return blocks;
+  }
+
+  if (devc == 'd') {
+    int blocks = 128;
+    if (n_simds <= 2 && N > 8192) {
+      blocks = 256;
+    } else if (n_simds >= 6) {
+      if (N >= 16384 && N < 65536) {
+        blocks = 512;
+      } else if (N >= 65536) {
+        blocks = 1024;
+      }
+    }
+    return blocks;
+  }
+
+  if (devc == 'g' || devc == 'p') {
+    if (n_simds <= 1) {
+      if (N <= 2048) {
+        return 32;
+      } else if (N <= 8192) {
+        return 64;
+      } else {
+        return 128;
+      }
+    }
+    if (head_dim >= 128) {
+      return 32;
+    }
+    if (N <= 8192) {
+      return 32;
+    } else if (N <= 32768) {
+      return 64;
+    } else {
+      return 128;
+    }
+  }
+
+  return (n_simds >= 4) ? 64 : 32;
+}
+
 void sdpa_full_self_attention_nax(
     const Stream& s,
     metal::Device& d,
@@ -442,39 +504,8 @@ void sdpa_vector_2pass(
 
   char devc = d.get_architecture().back();
   int N = k.shape(2);
-  int blocks;
-
-  if (devc == 's') {
-    blocks = 64;
-    if (N > 1024 && n_simds > 4) {
-      if (N <= 8192) {
-        blocks = 128;
-      } else if (N <= 32768) {
-        blocks = 256;
-      } else if (N <= 65536) {
-        blocks = 512;
-      } else {
-        blocks = 1024;
-      }
-    }
-  } else if (devc == 'd') {
-    blocks = 128;
-    if (n_simds <= 2 && N > 8192) {
-      blocks = 256;
-    } else if (n_simds >= 6) {
-      if (N >= 16384 && N < 65536) {
-        blocks = 512;
-      } else if (N >= 65536) {
-        blocks = 1024;
-      }
-    }
-  } else {
-    if (n_simds >= 4) {
-      blocks = 64;
-    } else {
-      blocks = 32;
-    }
-  }
+  int blocks =
+      select_sdpa_blocks(devc, N, n_simds, q.shape(-1), /*quantized=*/false);
 
   size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
   size_t k_seq_stride = k.strides()[2];
@@ -629,40 +660,9 @@ void quant_sdpa_vector_2pass(
   int gqa_factor = q.shape(1) / k.shape(1);
   int n_simds = gqa_factor * q.shape(2);
 
-  // TODO: tune block sizes for different devices
   char devc = d.get_architecture().back();
-  int blocks;
-  if (devc == 's') {
-    blocks = 64;
-    if (N > 1024 && n_simds > 4) {
-      if (N <= 8192) {
-        blocks = 128;
-      } else if (N <= 32768) {
-        blocks = 256;
-      } else if (N <= 65536) {
-        blocks = 512;
-      } else {
-        blocks = 1024;
-      }
-    }
-  } else if (devc == 'd') {
-    blocks = 128;
-    if (n_simds <= 2 && N > 8192) {
-      blocks = 256;
-    } else if (n_simds >= 6) {
-      if (N >= 16384 && N < 65536) {
-        blocks = 512;
-      } else if (N >= 65536) {
-        blocks = 1024;
-      }
-    }
-  } else {
-    if (n_simds >= 4) {
-      blocks = 64;
-    } else {
-      blocks = 32;
-    }
-  }
+  int blocks =
+      select_sdpa_blocks(devc, N, n_simds, q.shape(-1), /*quantized=*/true);
 
   // Head strides for quantized data (in uint32 units) and scales
   size_t k_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
