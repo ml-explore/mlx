@@ -2,6 +2,8 @@
 
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
+#include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
+#include "mlx/backend/metal/kernels/quantized_utils.h"
 #include "mlx/backend/metal/kernels/steel/gemm/nax.h"
 #include "mlx/backend/metal/kernels/fp_quantized_nax.h"
 
