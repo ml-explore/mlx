@@ -17,13 +17,14 @@ runs:
       shell: bash
       env:
         CMAKE_ARGS: -DMLX_BUILD_CUDA=ON
+        PLATFORM_ARCH: ${{ inputs.arch }}
       run: |
         pip install auditwheel build patchelf setuptools
         python setup.py clean --all
         MLX_BUILD_STAGE=2 python -m build -w
 
         auditwheel repair dist/mlx_cuda*.whl \
-          --plat manylinux_2_35_${{ inputs.arch }} \
+          --plat manylinux_2_35_"$PLATFORM_ARCH" \
           --exclude libcublas* \
           --exclude libcuda* \
           --exclude libcudnn* \
