@@ -16,7 +16,9 @@ namespace mlx::core {
 
 namespace rocm {
 
-// WARP_SIZE is defined in device/config.h based on target architecture
+// Virtual warp size for SDPA - always 32 threads for consistent behavior
+// across RDNA (32-wide) and CDNA (64-wide) architectures
+constexpr int SDPA_TILE_SIZE = 32;
 
 struct AttnParams {
   int B;
@@ -32,24 +34,32 @@ struct AttnParams {
   int64_t O_strides[3];
 };
 
+// Tile-based reduction for 32-thread groups (works on both RDNA and CDNA)
 template <typename T>
-__device__ T warp_reduce_sum(T val) {
-  for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
-    val += __shfl_down(val, offset);
-  }
+__device__ __forceinline__ T tile_reduce_sum_32(T val) {
+  // Reduce within a 32-thread tile using shuffle operations
+  val += __shfl_xor(val, 16);
+  val += __shfl_xor(val, 8);
+  val += __shfl_xor(val, 4);
+  val += __shfl_xor(val, 2);
+  val += __shfl_xor(val, 1);
   return val;
 }
 
 template <typename T>
-__device__ T warp_reduce_max(T val) {
-  for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
-    T other = __shfl_down(val, offset);
-    val = val > other ? val : other;
-  }
+__device__ __forceinline__ T tile_reduce_max_32(T val) {
+  // Reduce within a 32-thread tile using shuffle operations
+  T other;
+  other = __shfl_xor(val, 16); val = val > other ? val : other;
+  other = __shfl_xor(val, 8);  val = val > other ? val : other;
+  other = __shfl_xor(val, 4);  val = val > other ? val : other;
+  other = __shfl_xor(val, 2);  val = val > other ? val : other;
+  other = __shfl_xor(val, 1);  val = val > other ? val : other;
   return val;
 }
 
 // Single-pass SDPA kernel for short sequences
+// Uses 32-thread tiles for consistent behavior across architectures
 template <typename T, bool do_causal, int D>
 __global__ void kernel_sdpav_1pass(
     const T* Q,
@@ -57,19 +67,15 @@ __global__ void kernel_sdpav_1pass(
     const T* V,
     T* O,
     const T* sinks,
-    int B, int H, int qL, int kL,
-    int gqa_factor, float scale,
-    const int64_t* Q_strides,
-    const int64_t* K_strides,
-    const int64_t* V_strides,
-    const int64_t* O_strides) {
+    const AttnParams params) {
   
-  constexpr int BN = 32;
-  constexpr int BD = 32;
+  // BN = number of 32-thread tiles, BD = tile size (32)
+  constexpr int BN = 32;  // Number of tiles processing keys in parallel
+  constexpr int BD = 32;  // Tile size (always 32 for consistency)
   constexpr int v_per_thread = D / BD;
 
-  const int inner_k_stride = BN * K_strides[2];
-  const int inner_v_stride = BN * V_strides[2];
+  const int inner_k_stride = BN * params.K_strides[2];
+  const int inner_v_stride = BN * params.V_strides[2];
 
   typedef float U;
 
@@ -81,21 +87,22 @@ __global__ void kernel_sdpav_1pass(
   __shared__ U max_scores[BN];
   __shared__ U sum_exp_scores[BN];
 
-  const U scale_log2 = scale * 1.44269504089f; // M_LOG2E
+  const U scale_log2 = params.scale * 1.44269504089f; // M_LOG2E
 
-  const int lane_idx = threadIdx.x % WARP_SIZE;
-  const int warp_idx = threadIdx.x / WARP_SIZE;
+  // Use virtual 32-thread tiles instead of hardware warps
+  const int lane_idx = threadIdx.x % SDPA_TILE_SIZE;  // 0-31 within tile
+  const int tile_idx = threadIdx.x / SDPA_TILE_SIZE;  // Which tile (0-31)
 
   const int batch_idx = blockIdx.z;
   const int head_idx = blockIdx.x;
-  const int kv_head_idx = head_idx / gqa_factor;
+  const int kv_head_idx = head_idx / params.gqa_factor;
   const int q_seq_idx = blockIdx.y;
-  const int kv_seq_idx = warp_idx;
+  const int kv_seq_idx = tile_idx;
 
-  const T* Q_ptr = Q + batch_idx * Q_strides[0] + head_idx * Q_strides[1] + q_seq_idx * Q_strides[2];
-  const T* K_ptr = K + batch_idx * K_strides[0] + kv_head_idx * K_strides[1] + kv_seq_idx * K_strides[2];
-  const T* V_ptr = V + batch_idx * V_strides[0] + kv_head_idx * V_strides[1] + kv_seq_idx * V_strides[2];
-  T* O_ptr = O + batch_idx * O_strides[0] + head_idx * O_strides[1] + q_seq_idx * O_strides[2];
+  const T* Q_ptr = Q + batch_idx * params.Q_strides[0] + head_idx * params.Q_strides[1] + q_seq_idx * params.Q_strides[2];
+  const T* K_ptr = K + batch_idx * params.K_strides[0] + kv_head_idx * params.K_strides[1] + kv_seq_idx * params.K_strides[2];
+  const T* V_ptr = V + batch_idx * params.V_strides[0] + kv_head_idx * params.V_strides[1] + kv_seq_idx * params.V_strides[2];
+  T* O_ptr = O + batch_idx * params.O_strides[0] + head_idx * params.O_strides[1] + q_seq_idx * params.O_strides[2];
 
   // Read query and initialize output
   #pragma unroll
@@ -108,10 +115,10 @@ __global__ void kernel_sdpav_1pass(
   U sum_exp_score = 0.f;
 
   // Process keys
-  for (int i = kv_seq_idx; i < kL; i += BN) {
+  for (int i = kv_seq_idx; i < params.kL; i += BN) {
     bool use_key = true;
     if constexpr (do_causal) {
-      use_key = i <= (kL - qL + q_seq_idx);
+      use_key = i <= (params.kL - params.qL + q_seq_idx);
     }
 
     if (use_key) {
@@ -126,7 +133,8 @@ __global__ void kernel_sdpav_1pass(
         score += q[j] * static_cast<U>(k[j]);
       }
 
-      score = warp_reduce_sum(score);
+      // Reduce within 32-thread tile
+      score = tile_reduce_sum_32(score);
 
       U new_max = max(max_score, score);
       U factor = exp2f(max_score - new_max);
@@ -145,31 +153,35 @@ __global__ void kernel_sdpav_1pass(
     V_ptr += inner_v_stride;
   }
 
+  // Store per-tile results to shared memory
   if (lane_idx == 0) {
-    max_scores[warp_idx] = max_score;
-    sum_exp_scores[warp_idx] = sum_exp_score;
+    max_scores[tile_idx] = max_score;
+    sum_exp_scores[tile_idx] = sum_exp_score;
   }
   __syncthreads();
 
+  // Cross-tile reduction
   max_score = max_scores[lane_idx % BN];
-  U new_max = warp_reduce_max(max_score);
+  U new_max = tile_reduce_max_32(max_score);
   U factor = exp2f(max_score - new_max);
-  sum_exp_score = warp_reduce_sum(sum_exp_scores[lane_idx % BN] * factor);
+  sum_exp_score = tile_reduce_sum_32(sum_exp_scores[lane_idx % BN] * factor);
   sum_exp_score = sum_exp_score == 0 ? 0 : 1.0f / sum_exp_score;
 
+  // Aggregate outputs across tiles
   #pragma unroll
   for (int i = 0; i < v_per_thread; i++) {
-    outputs[lane_idx][warp_idx] = o[i];
+    outputs[lane_idx][tile_idx] = o[i];
     __syncthreads();
-    U ot = outputs[warp_idx][lane_idx] * factor;
-    o[i] = warp_reduce_sum(ot) * sum_exp_score;
+    U ot = outputs[tile_idx][lane_idx] * factor;
+    o[i] = tile_reduce_sum_32(ot) * sum_exp_score;
     __syncthreads();
   }
 
+  // Write final output
   if (lane_idx == 0) {
     #pragma unroll
     for (int i = 0; i < v_per_thread; i++) {
-      O_ptr[v_per_thread * warp_idx + i] = static_cast<T>(o[i]);
+      O_ptr[v_per_thread * tile_idx + i] = static_cast<T>(o[i]);
     }
   }
 }
@@ -204,13 +216,26 @@ bool supports_sdpa_vector(
     bool has_arr_mask,
     bool do_causal,
     bool output_logsumexp) {
-  // Disable optimized SDPA kernel for now - the kernel has warp size assumptions
-  // that don't work correctly across all ROCm architectures (RDNA vs CDNA).
-  // The kernel assumes 32 warps with 32 threads each (1024 total), but CDNA
-  // architectures use 64-wide wavefronts, resulting in only 16 warps.
-  // This causes out-of-bounds shared memory access.
-  // TODO: Rewrite kernel to be warp-size agnostic.
-  return false;
+  if (output_logsumexp) {
+    return false;
+  }
+
+  // Check for supported dtypes
+  if (q.dtype() != float32 && q.dtype() != float16 && q.dtype() != bfloat16) {
+    return false;
+  }
+
+  const int value_head_dim = v.shape(-1);
+  const int query_head_dim = q.shape(-1);
+  const int query_sequence_length = q.shape(2);
+
+  const bool sdpa_supported_head_dim = query_head_dim == value_head_dim &&
+      (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128);
+
+  const bool supported_vector_config =
+      sdpa_supported_head_dim && query_sequence_length < 4;
+
+  return supported_vector_config && !has_arr_mask;
 }
 
 void sdpa_vector(
@@ -235,35 +260,31 @@ void sdpa_vector(
   // Allocate output
   o.set_data(allocator::malloc(o.nbytes()));
 
-  // Allocate stride arrays on device
-  array Q_strides_arr({3}, int64, nullptr, {});
-  array K_strides_arr({3}, int64, nullptr, {});
-  array V_strides_arr({3}, int64, nullptr, {});
-  array O_strides_arr({3}, int64, nullptr, {});
-  
-  Q_strides_arr.set_data(allocator::malloc(Q_strides_arr.nbytes()));
-  K_strides_arr.set_data(allocator::malloc(K_strides_arr.nbytes()));
-  V_strides_arr.set_data(allocator::malloc(V_strides_arr.nbytes()));
-  O_strides_arr.set_data(allocator::malloc(O_strides_arr.nbytes()));
-  
-  encoder.add_temporary(Q_strides_arr);
-  encoder.add_temporary(K_strides_arr);
-  encoder.add_temporary(V_strides_arr);
-  encoder.add_temporary(O_strides_arr);
-
-  int64_t q_strides[3] = {q.strides(0), q.strides(1), q.strides(2)};
-  int64_t k_strides[3] = {k.strides(0), k.strides(1), k.strides(2)};
-  int64_t v_strides[3] = {v.strides(0), v.strides(1), v.strides(2)};
-  int64_t o_strides[3] = {o.strides(0), o.strides(1), o.strides(2)};
+  // Build params struct
+  rocm::AttnParams params;
+  params.B = B;
+  params.H = H;
+  params.D = D;
+  params.qL = qL;
+  params.kL = kL;
+  params.gqa_factor = gqa_factor;
+  params.scale = scale;
+  params.Q_strides[0] = q.strides(0);
+  params.Q_strides[1] = q.strides(1);
+  params.Q_strides[2] = q.strides(2);
+  params.K_strides[0] = k.strides(0);
+  params.K_strides[1] = k.strides(1);
+  params.K_strides[2] = k.strides(2);
+  params.V_strides[0] = v.strides(0);
+  params.V_strides[1] = v.strides(1);
+  params.V_strides[2] = v.strides(2);
+  params.O_strides[0] = o.strides(0);
+  params.O_strides[1] = o.strides(1);
+  params.O_strides[2] = o.strides(2);
 
   encoder.launch_kernel([&](hipStream_t stream) {
-    (void)hipMemcpyAsync(Q_strides_arr.data<int64_t>(), q_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(K_strides_arr.data<int64_t>(), k_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(V_strides_arr.data<int64_t>(), v_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(O_strides_arr.data<int64_t>(), o_strides, 3 * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-
     dim3 grid_dim(H, qL, B);
-    dim3 block_dim(1024, 1, 1);
+    dim3 block_dim(1024, 1, 1);  // 32 tiles * 32 threads = 1024
 
     auto launch_kernel = [&](auto type_tag, auto causal_tag, auto headdim_tag) {
       using DataType = decltype(type_tag);
@@ -278,11 +299,7 @@ void sdpa_vector(
           v.data<DataType>(),
           o.data<DataType>(),
           sinks ? sinks->data<DataType>() : nullptr,
-          B, H, qL, kL, gqa_factor, scale,
-          Q_strides_arr.data<int64_t>(),
-          K_strides_arr.data<int64_t>(),
-          V_strides_arr.data<int64_t>(),
-          O_strides_arr.data<int64_t>());
+          params);
     };
 
     // Dispatch based on dtype, causal, and head dimension
