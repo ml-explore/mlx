@@ -42,16 +42,17 @@ instantiate_sdpa_vector_heads(float)
 instantiate_sdpa_vector_heads(bfloat16_t)
 instantiate_sdpa_vector_heads(float16_t)
 
-#define instantiate_quant_sdpa_vector(type, head_dim)          \
-  instantiate_kernel(                                          \
-      "quant_sdpa_vector_2pass_1_" #type "_" #head_dim,        \
-      quant_sdpa_vector_2pass_1,                               \
-      type,                                                    \
-      head_dim)
+#define instantiate_quant_sdpa_vector(type, qk_dim, value_dim)   \
+  instantiate_kernel(                                             \
+      "quant_sdpa_vector_2pass_1_" #type "_" #qk_dim "_" #value_dim, \
+      quant_sdpa_vector_2pass_1,                                  \
+      type,                                                       \
+      qk_dim)
 
 #define instantiate_quant_sdpa_vector_heads(type) \
-  instantiate_quant_sdpa_vector(type, 64)         \
-  instantiate_quant_sdpa_vector(type, 128)
+  instantiate_quant_sdpa_vector(type, 64, 64)     \
+  instantiate_quant_sdpa_vector(type, 128, 128)   \
+  instantiate_quant_sdpa_vector(type, 256, 256)
 
 instantiate_quant_sdpa_vector_heads(float)
 instantiate_quant_sdpa_vector_heads(bfloat16_t)
