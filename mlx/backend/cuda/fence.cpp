@@ -14,7 +14,8 @@ struct FenceImpl {
 
 Fence::Fence(Stream s) {
   fence_ = std::shared_ptr<void>(
-      new FenceImpl{0}, [](void* ptr) { delete static_cast<FenceImpl*>(ptr); });
+      new FenceImpl{0, cu::device(s.device)},
+      [](void* ptr) { delete static_cast<FenceImpl*>(ptr); });
 }
 
 void Fence::wait(Stream s, const array&) {
