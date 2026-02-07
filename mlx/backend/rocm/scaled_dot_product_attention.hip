@@ -216,9 +216,26 @@ bool supports_sdpa_vector(
     bool has_arr_mask,
     bool do_causal,
     bool output_logsumexp) {
-  // Temporarily disable optimized SDPA to debug memory fault
-  // The memory fault occurs even with SDPA disabled, so the issue is elsewhere
-  return false;
+  if (output_logsumexp) {
+    return false;
+  }
+
+  // Check for supported dtypes
+  if (q.dtype() != float32 && q.dtype() != float16 && q.dtype() != bfloat16) {
+    return false;
+  }
+
+  const int value_head_dim = v.shape(-1);
+  const int query_head_dim = q.shape(-1);
+  const int query_sequence_length = q.shape(2);
+
+  const bool sdpa_supported_head_dim = query_head_dim == value_head_dim &&
+      (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128);
+
+  const bool supported_vector_config =
+      sdpa_supported_head_dim && query_sequence_length < 4;
+
+  return supported_vector_config && !has_arr_mask;
 }
 
 void sdpa_vector(
