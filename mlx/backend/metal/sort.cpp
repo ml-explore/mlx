@@ -567,6 +567,7 @@ void gpu_radix_partition(
     bool arg_partition) {
   int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
   int size_sorted_axis = in.shape(axis);
+  int n_rows = out.size() / size_sorted_axis;
 
   // Normalize kth
   if (kth < 0) {
