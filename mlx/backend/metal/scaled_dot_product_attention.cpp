@@ -656,6 +656,8 @@ void quant_sdpa_vector_2pass(
   kname += get_type_string(q.dtype());
   kname += "_";
   kname += std::to_string(q.shape(-1));
+  kname += "_";
+  kname += std::to_string(q.shape(-1));
 
   int N = k.shape(2);
   int gqa_factor = q.shape(1) / k.shape(1);
@@ -726,6 +728,7 @@ void quant_sdpa_vector_2pass(
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
+  check_kernel_threadgroup_size(kernel, group_dims, hash_name);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   compute_encoder.set_input_array(q, 0);
@@ -770,7 +773,7 @@ void quant_sdpa_vector_2pass(
   kname += "sdpa_vector_2pass_2_";
   kname += get_type_string(q.dtype());
   kname += "_";
-  kname += std::to_string(q.shape(-1));
+  kname += std::to_string(out.shape(-1));
 
   func_consts = {
       {&blocks, MTL::DataType::DataTypeInt, 26},
@@ -788,6 +791,7 @@ void quant_sdpa_vector_2pass(
 
   group_dims = MTL::Size(1024, 1, 1);
   grid_dims = MTL::Size(q.shape(0) * q.shape(1), q.shape(2), 1);
+  check_kernel_threadgroup_size(kernel, group_dims, kname);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
@@ -864,10 +868,13 @@ bool QuantizedScaledDotProductAttention::use_fallback(
   }
 
   int query_sequence_length = q.shape(2);
+  int key_sequence_length = k.shape(2);
   int query_head_dim = q.shape(-1);
   int gqa_factor = q.shape(1) / k.shape(1);
   return query_sequence_length > 8 ||
-      !(query_head_dim == 64 || query_head_dim == 128) ||
+      query_sequence_length > key_sequence_length ||
+      !(query_head_dim == 64 || query_head_dim == 128 ||
+        query_head_dim == 256) ||
       (query_sequence_length * gqa_factor > 32);
 }
 
@@ -1119,6 +1126,7 @@ void QuantizedScaledDotProductAttention::eval_gpu(
     o.set_data(allocator::malloc(o.nbytes()));
   }
 
+  bool do_causal = do_causal_ && q.shape(2) > 1;
   quant_sdpa_vector_2pass(
       s,
       d,
@@ -1133,7 +1141,7 @@ void QuantizedScaledDotProductAttention::eval_gpu(
       scale_,
       group_size_,
       bits_,
-      do_causal_,
+      do_causal,
       mask,
       sinks,
       mode_);
