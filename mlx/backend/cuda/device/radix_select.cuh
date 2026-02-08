@@ -270,10 +270,10 @@ __global__ void radix_select_small_kernel(
     OutT* output,
     int kth,
     int n,
-    int in_stride,
-    int out_stride,
-    int in_segment_stride,
-    int out_segment_stride) {
+    int64_t in_stride,
+    int64_t out_stride,
+    int64_t in_segment_stride,
+    int64_t out_segment_stride) {
   using Traits = RadixTraits<ValT>;
   using UnsignedT = typename Traits::UnsignedT;
 
@@ -423,8 +423,8 @@ __global__ void radix_select_small_nc_kernel(
     OutT* output,
     int kth,
     int n,
-    int in_stride,
-    int out_stride,
+    int64_t in_stride,
+    int64_t out_stride,
     const __grid_constant__ Shape nc_shape,
     const __grid_constant__ Strides in_nc_strides,
     const __grid_constant__ Strides out_nc_strides,
@@ -572,17 +572,23 @@ __global__ void radix_select_large_streaming_kernel(
     OutT* output,
     int n,
     int kth,
-    int in_stride,
-    int out_stride,
-    int in_segment_stride,
-    int out_segment_stride) {
+    int64_t in_stride,
+    int64_t out_stride,
+    const __grid_constant__ Shape nc_shape,
+    const __grid_constant__ Strides in_nc_strides,
+    const __grid_constant__ Strides out_nc_strides,
+    int nc_dim) {
   using Traits = RadixTraits<ValT>;
   using UnsignedT = typename Traits::UnsignedT;
   constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
 
   int row = blockIdx.y;
-  const ValT* row_input = input + row * in_segment_stride;
-  OutT* row_output = output + row * out_segment_stride;
+  int64_t in_block_idx =
+      elem_to_loc(int64_t(row), nc_shape.data(), in_nc_strides.data(), nc_dim);
+  int64_t out_block_idx = elem_to_loc(
+      int64_t(row), nc_shape.data(), out_nc_strides.data(), nc_dim);
+  const ValT* row_input = input + in_block_idx;
+  OutT* row_output = output + out_block_idx;
 
   // Shared memory
   __shared__ int shared_hist[RADIX_SIZE];
@@ -783,8 +789,8 @@ __global__ void radix_select_large_streaming_nc_kernel(
     OutT* output,
     int n,
     int kth,
-    int in_stride,
-    int out_stride,
+    int64_t in_stride,
+    int64_t out_stride,
     const __grid_constant__ Shape nc_shape,
     const __grid_constant__ Strides in_nc_strides,
     const __grid_constant__ Strides out_nc_strides,
