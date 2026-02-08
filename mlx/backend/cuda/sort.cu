@@ -1085,6 +1085,47 @@ void gpu_radix_partition_small(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
 
+  const int32_t* nc_shape_ptr = nullptr;
+  const int64_t* in_nc_strides_ptr = nullptr;
+  const int64_t* out_nc_strides_ptr = nullptr;
+  if (!contiguous && nc_dim > 0) {
+    array nc_shape_dev({nc_dim}, int32, nullptr, {});
+    array in_nc_strides_dev({nc_dim}, int64, nullptr, {});
+    array out_nc_strides_dev({nc_dim}, int64, nullptr, {});
+    nc_shape_dev.set_data(cu::malloc_async(nc_shape_dev.nbytes(), encoder));
+    in_nc_strides_dev.set_data(
+        cu::malloc_async(in_nc_strides_dev.nbytes(), encoder));
+    out_nc_strides_dev.set_data(
+        cu::malloc_async(out_nc_strides_dev.nbytes(), encoder));
+
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(
+        gpu_ptr<int32_t>(nc_shape_dev),
+        nc_shape.data(),
+        nc_shape_dev.nbytes(),
+        cudaMemcpyHostToDevice,
+        encoder.stream()));
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(
+        gpu_ptr<int64_t>(in_nc_strides_dev),
+        in_nc_str.data(),
+        in_nc_strides_dev.nbytes(),
+        cudaMemcpyHostToDevice,
+        encoder.stream()));
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(
+        gpu_ptr<int64_t>(out_nc_strides_dev),
+        out_nc_str.data(),
+        out_nc_strides_dev.nbytes(),
+        cudaMemcpyHostToDevice,
+        encoder.stream()));
+
+    nc_shape_ptr = gpu_ptr<int32_t>(nc_shape_dev);
+    in_nc_strides_ptr = gpu_ptr<int64_t>(in_nc_strides_dev);
+    out_nc_strides_ptr = gpu_ptr<int64_t>(out_nc_strides_dev);
+
+    encoder.add_temporary(nc_shape_dev);
+    encoder.add_temporary(in_nc_strides_dev);
+    encoder.add_temporary(out_nc_strides_dev);
+  }
+
   dispatch_all_types(in.dtype(), [&](auto type_tag) {
     using CTYPE = MLX_GET_TYPE(type_tag);
     if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
@@ -1141,10 +1182,6 @@ void gpu_radix_partition_small(
               BLOCK_THREADS,
               ITEMS_PER_THREAD>;
 
-          auto nc_shape_param = const_param(nc_shape);
-          auto in_nc_strides_param = const_param(in_nc_str);
-          auto out_nc_strides_param = const_param(out_nc_str);
-
           encoder.add_kernel_node(
               kernel,
               grid,
@@ -1156,9 +1193,9 @@ void gpu_radix_partition_small(
               size_sorted_axis,
               in_stride_sorted_axis,
               out_stride_sorted_axis,
-              nc_shape_param,
-              in_nc_strides_param,
-              out_nc_strides_param,
+              nc_shape_ptr,
+              in_nc_strides_ptr,
+              out_nc_strides_ptr,
               nc_dim);
         }
       });
@@ -1210,6 +1247,47 @@ void gpu_radix_partition_large(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
 
+  const int32_t* nc_shape_ptr = nullptr;
+  const int64_t* in_nc_strides_ptr = nullptr;
+  const int64_t* out_nc_strides_ptr = nullptr;
+  if (nc_dim > 0) {
+    array nc_shape_dev({nc_dim}, int32, nullptr, {});
+    array in_nc_strides_dev({nc_dim}, int64, nullptr, {});
+    array out_nc_strides_dev({nc_dim}, int64, nullptr, {});
+    nc_shape_dev.set_data(cu::malloc_async(nc_shape_dev.nbytes(), encoder));
+    in_nc_strides_dev.set_data(
+        cu::malloc_async(in_nc_strides_dev.nbytes(), encoder));
+    out_nc_strides_dev.set_data(
+        cu::malloc_async(out_nc_strides_dev.nbytes(), encoder));
+
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(
+        gpu_ptr<int32_t>(nc_shape_dev),
+        nc_shape.data(),
+        nc_shape_dev.nbytes(),
+        cudaMemcpyHostToDevice,
+        encoder.stream()));
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(
+        gpu_ptr<int64_t>(in_nc_strides_dev),
+        in_nc_str.data(),
+        in_nc_strides_dev.nbytes(),
+        cudaMemcpyHostToDevice,
+        encoder.stream()));
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(
+        gpu_ptr<int64_t>(out_nc_strides_dev),
+        out_nc_str.data(),
+        out_nc_strides_dev.nbytes(),
+        cudaMemcpyHostToDevice,
+        encoder.stream()));
+
+    nc_shape_ptr = gpu_ptr<int32_t>(nc_shape_dev);
+    in_nc_strides_ptr = gpu_ptr<int64_t>(in_nc_strides_dev);
+    out_nc_strides_ptr = gpu_ptr<int64_t>(out_nc_strides_dev);
+
+    encoder.add_temporary(nc_shape_dev);
+    encoder.add_temporary(in_nc_strides_dev);
+    encoder.add_temporary(out_nc_strides_dev);
+  }
+
   dispatch_all_types(in.dtype(), [&](auto type_tag) {
     using CTYPE = MLX_GET_TYPE(type_tag);
     if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
@@ -1231,10 +1309,6 @@ void gpu_radix_partition_large(
               ARG_PARTITION,
               BLOCK_THREADS>;
 
-          auto nc_shape_param = const_param(nc_shape);
-          auto in_nc_strides_param = const_param(in_nc_str);
-          auto out_nc_strides_param = const_param(out_nc_str);
-
           encoder.add_kernel_node(
               kernel,
               grid,
@@ -1246,9 +1320,9 @@ void gpu_radix_partition_large(
               kth,
               in_stride_sorted_axis,
               out_stride_sorted_axis,
-              nc_shape_param,
-              in_nc_strides_param,
-              out_nc_strides_param,
+              nc_shape_ptr,
+              in_nc_strides_ptr,
+              out_nc_strides_ptr,
               nc_dim);
         } else {
           auto kernel = cu::radix_select_large_streaming_nc_kernel<
@@ -1257,10 +1331,6 @@ void gpu_radix_partition_large(
               ARG_PARTITION,
               BLOCK_THREADS>;
 
-          auto nc_shape_param = const_param(nc_shape);
-          auto in_nc_strides_param = const_param(in_nc_str);
-          auto out_nc_strides_param = const_param(out_nc_str);
-
           encoder.add_kernel_node(
               kernel,
               grid,
@@ -1272,9 +1342,9 @@ void gpu_radix_partition_large(
               kth,
               in_stride_sorted_axis,
               out_stride_sorted_axis,
-              nc_shape_param,
-              in_nc_strides_param,
-              out_nc_strides_param,
+              nc_shape_ptr,
+              in_nc_strides_ptr,
+              out_nc_strides_ptr,
               nc_dim);
         }
       });
@@ -1293,7 +1363,8 @@ struct FallbackLinearModel {
 };
 
 int axis_threshold(const FallbackLinearModel& model, int n_rows) {
-  return std::max(model.axis_min, model.axis_intercept + model.axis_slope * n_rows);
+  return std::max(
+      model.axis_min, model.axis_intercept + model.axis_slope * n_rows);
 }
 
 bool should_use_merge_sort_fallback_model(
@@ -1314,42 +1385,45 @@ bool is_integer_dtype(Dtype dtype) {
 FallbackLinearModel float_fallback_model(int dtype_size) {
   return {
       8,
-      24576,
+      22528,
       16384 / dtype_size,
-      102400 / dtype_size,
+      94208 / dtype_size,
   };
 }
 
 FallbackLinearModel integer_fallback_model(int dtype_size) {
   return {
       dtype_size == 8 ? 12 : 6,
-      53248 / dtype_size,
+      51200 / dtype_size,
       16384 / dtype_size,
-      8192 / dtype_size,
+      6144 / dtype_size,
   };
 }
 
 bool should_use_merge_sort_fallback(
     Dtype dtype,
     int n_rows,
-    int size_sorted_axis) 
-{
+    int size_sorted_axis) {
   int dtype_size = size_of(dtype);
 
   if (dtype == float32) {
     // Use fallback model or for small axis always use merge sort
-    return should_use_merge_sort_fallback_model(float_fallback_model(dtype_size), n_rows, size_sorted_axis) ||
-           size_sorted_axis <= 512 || (n_rows <= 48 && size_sorted_axis <= 2048);
+    return should_use_merge_sort_fallback_model(
+               float_fallback_model(dtype_size), n_rows, size_sorted_axis) ||
+        size_sorted_axis <= 512 || (n_rows <= 64 && size_sorted_axis <= 4096);
   } else if (dtype == bfloat16 || dtype == float16) {
-    // Use fallback model or when batch is large and axis is small, merge sort wins
-    return should_use_merge_sort_fallback_model(float_fallback_model(dtype_size), n_rows, size_sorted_axis) ||
-           (n_rows >= 512 && size_sorted_axis <= 512);
+    // Use fallback model or when batch is large and axis is small, merge sort
+    // wins
+    return should_use_merge_sort_fallback_model(
+               float_fallback_model(dtype_size), n_rows, size_sorted_axis) ||
+        (n_rows >= 512 && size_sorted_axis <= 512);
   } else if (dtype == float64) {
     // float64 is not supported on the GPU
     return true;
   } else if (is_integer_dtype(dtype) || dtype == bool_) {
     // Use fallback model for all integer types and bool
-    return should_use_merge_sort_fallback_model(integer_fallback_model(dtype_size), n_rows, size_sorted_axis);
+    return should_use_merge_sort_fallback_model(
+        integer_fallback_model(dtype_size), n_rows, size_sorted_axis);
   } else {
     // Fallback for unknown or unsupported types
     return true;
