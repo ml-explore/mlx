@@ -657,7 +657,7 @@ void quant_sdpa_vector_2pass(
   kname += "_";
   kname += std::to_string(q.shape(-1));
   kname += "_";
-  kname += std::to_string(q.shape(-1));
+  kname += std::to_string(v.shape(-1));
 
   int N = k.shape(2);
   int gqa_factor = q.shape(1) / k.shape(1);
