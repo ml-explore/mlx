@@ -6,6 +6,7 @@
 
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/fp16_math.cuh"
+#include "mlx/backend/cuda/device/radix_select.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
@@ -1039,6 +1040,279 @@ void gpu_merge_sort(
   return single_block_sort(s, in, out, axis, bn, argsort);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Radix partition functions
+///////////////////////////////////////////////////////////////////////////////
+
+void gpu_radix_partition_small(
+    const Stream& s,
+    const array& in,
+    array& out,
+    int axis,
+    int kth,
+    bool arg_partition) {
+  int n_rows = in.size() / in.shape(axis);
+
+  auto in_nc_str = in.strides();
+  in_nc_str.erase(in_nc_str.begin() + axis);
+
+  auto out_nc_str = out.strides();
+  out_nc_str.erase(out_nc_str.begin() + axis);
+
+  auto nc_shape = in.shape();
+  nc_shape.erase(nc_shape.begin() + axis);
+
+  int nc_dim = nc_shape.size();
+
+  int size_sorted_axis = in.shape(axis);
+  int64_t in_stride_sorted_axis = in.strides()[axis];
+  int64_t out_stride_sorted_axis = out.strides()[axis];
+
+  bool contiguous = in.flags().contiguous;
+  auto check_strides = [](const array& x, int64_t sort_stride) {
+    int64_t min_stride =
+        *std::min_element(x.strides().begin(), x.strides().end());
+    int64_t max_stride =
+        *std::max_element(x.strides().begin(), x.strides().end());
+    return sort_stride == min_stride || sort_stride == max_stride;
+  };
+  contiguous &= check_strides(in, in_stride_sorted_axis);
+  contiguous &= check_strides(out, out_stride_sorted_axis);
+
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+
+  dispatch_all_types(in.dtype(), [&](auto type_tag) {
+    using CTYPE = MLX_GET_TYPE(type_tag);
+    if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
+      using ValT = cuda_type_t<CTYPE>;
+
+      constexpr int BLOCK_THREADS = 256;
+      constexpr int ITEMS_PER_THREAD = 8;
+
+      dim3 grid(1, n_rows, 1);
+      dim3 block(BLOCK_THREADS, 1, 1);
+
+      dispatch_bool(arg_partition, [&](auto arg_tag) {
+        constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
+        using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
+
+        if (contiguous) {
+          auto kernel = cu::radix_select_small_kernel<
+              ValT,
+              OutT,
+              ARG_PARTITION,
+              BLOCK_THREADS,
+              ITEMS_PER_THREAD>;
+
+          int64_t in_stride_segment_axis = INT64_MAX;
+          int64_t out_stride_segment_axis = INT64_MAX;
+          for (size_t i = 0; i < nc_shape.size(); i++) {
+            if (nc_shape[i] == 1) {
+              continue;
+            }
+            if (in_nc_str[i] > INT32_MAX || out_nc_str[i] > INT32_MAX) {
+              throw std::runtime_error(
+                  "[Partition::eval_gpu] Stride too large.");
+            }
+            in_stride_segment_axis =
+                std::min(in_stride_segment_axis, in_nc_str[i]);
+            out_stride_segment_axis =
+                std::min(out_stride_segment_axis, out_nc_str[i]);
+          }
+
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              0,
+              gpu_ptr<ValT>(in),
+              gpu_ptr<OutT>(out),
+              kth,
+              size_sorted_axis,
+              static_cast<int>(in_stride_sorted_axis),
+              static_cast<int>(out_stride_sorted_axis),
+              static_cast<int>(in_stride_segment_axis),
+              static_cast<int>(out_stride_segment_axis));
+        } else {
+          auto kernel = cu::radix_select_small_nc_kernel<
+              ValT,
+              OutT,
+              ARG_PARTITION,
+              BLOCK_THREADS,
+              ITEMS_PER_THREAD>;
+
+          auto nc_shape_param = const_param(nc_shape);
+          auto in_nc_strides_param = const_param(in_nc_str);
+          auto out_nc_strides_param = const_param(out_nc_str);
+
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              0,
+              gpu_ptr<ValT>(in),
+              gpu_ptr<OutT>(out),
+              kth,
+              size_sorted_axis,
+              static_cast<int>(in_stride_sorted_axis),
+              static_cast<int>(out_stride_sorted_axis),
+              nc_shape_param,
+              in_nc_strides_param,
+              out_nc_strides_param,
+              nc_dim);
+        }
+      });
+    } else {
+      throw std::runtime_error(
+          "CUDA backend does not support sorting complex numbers");
+    }
+  });
+}
+
+void gpu_radix_partition_large(
+    const Stream& s,
+    const array& in,
+    array& out,
+    int axis,
+    int kth,
+    bool arg_partition) {
+  int n_rows = in.size() / in.shape(axis);
+
+  int size_sorted_axis = in.shape(axis);
+  int64_t in_stride_sorted_axis = in.strides()[axis];
+  int64_t out_stride_sorted_axis = out.strides()[axis];
+
+  auto in_nc_str = in.strides();
+  in_nc_str.erase(in_nc_str.begin() + axis);
+
+  auto out_nc_str = out.strides();
+  out_nc_str.erase(out_nc_str.begin() + axis);
+
+  auto nc_shape = in.shape();
+  nc_shape.erase(nc_shape.begin() + axis);
+
+  int nc_dim = nc_shape.size();
+
+  bool contiguous = in.flags().contiguous;
+  auto check_strides = [](const array& x, int64_t sort_stride) {
+    int64_t min_stride =
+        *std::min_element(x.strides().begin(), x.strides().end());
+    int64_t max_stride =
+        *std::max_element(x.strides().begin(), x.strides().end());
+    return sort_stride == min_stride || sort_stride == max_stride;
+  };
+  contiguous &= check_strides(in, in_stride_sorted_axis);
+  contiguous &= check_strides(out, out_stride_sorted_axis);
+
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+
+  dispatch_all_types(in.dtype(), [&](auto type_tag) {
+    using CTYPE = MLX_GET_TYPE(type_tag);
+    if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
+      using ValT = cuda_type_t<CTYPE>;
+
+      constexpr int BLOCK_THREADS = 256;
+
+      dim3 grid(1, n_rows, 1);
+      dim3 block(BLOCK_THREADS, 1, 1);
+
+      dispatch_bool(arg_partition, [&](auto arg_tag) {
+        constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
+        using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
+
+        if (contiguous) {
+          auto kernel = cu::radix_select_large_streaming_kernel<
+              ValT,
+              OutT,
+              ARG_PARTITION,
+              BLOCK_THREADS>;
+
+          int64_t in_stride_segment_axis = INT64_MAX;
+          int64_t out_stride_segment_axis = INT64_MAX;
+          for (size_t i = 0; i < nc_shape.size(); i++) {
+            if (nc_shape[i] == 1) {
+              continue;
+            }
+            in_stride_segment_axis =
+                std::min(in_stride_segment_axis, in_nc_str[i]);
+            out_stride_segment_axis =
+                std::min(out_stride_segment_axis, out_nc_str[i]);
+          }
+
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              0,
+              gpu_ptr<ValT>(in),
+              gpu_ptr<OutT>(out),
+              size_sorted_axis,
+              kth,
+              static_cast<int>(in_stride_sorted_axis),
+              static_cast<int>(out_stride_sorted_axis),
+              static_cast<int>(in_stride_segment_axis),
+              static_cast<int>(out_stride_segment_axis));
+        } else {
+          auto kernel = cu::radix_select_large_streaming_nc_kernel<
+              ValT,
+              OutT,
+              ARG_PARTITION,
+              BLOCK_THREADS>;
+
+          auto nc_shape_param = const_param(nc_shape);
+          auto in_nc_strides_param = const_param(in_nc_str);
+          auto out_nc_strides_param = const_param(out_nc_str);
+
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              0,
+              gpu_ptr<ValT>(in),
+              gpu_ptr<OutT>(out),
+              size_sorted_axis,
+              kth,
+              static_cast<int>(in_stride_sorted_axis),
+              static_cast<int>(out_stride_sorted_axis),
+              nc_shape_param,
+              in_nc_strides_param,
+              out_nc_strides_param,
+              nc_dim);
+        }
+      });
+    } else {
+      throw std::runtime_error(
+          "CUDA backend does not support sorting complex numbers");
+    }
+  });
+}
+
+void gpu_radix_partition(
+    const Stream& s,
+    const array& in,
+    array& out,
+    int axis_,
+    int kth_,
+    bool arg_partition) {
+  int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
+  int size_sorted_axis = in.shape(axis);
+  int kth = kth_ < 0 ? kth_ + size_sorted_axis : kth_;
+
+  // Dispatch based on size
+  if (size_sorted_axis <= 2048) {
+    return gpu_radix_partition_small(s, in, out, axis, kth, arg_partition);
+  } else {
+    return gpu_radix_partition_large(s, in, out, axis, kth, arg_partition);
+  }
+}
+
 void gpu_sort(
     const Stream& s,
     const array& in,
@@ -1065,12 +1339,12 @@ void Sort::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("ArgPartition::eval_gpu");
-  gpu_sort(stream(), inputs[0], out, axis_, true);
+  gpu_radix_partition(stream(), inputs[0], out, axis_, kth_, true);
 }
 
 void Partition::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Partition::eval_gpu");
-  gpu_sort(stream(), inputs[0], out, axis_, false);
+  gpu_radix_partition(stream(), inputs[0], out, axis_, kth_, false);
 }
 
 } // namespace mlx::core
