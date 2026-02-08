@@ -213,7 +213,7 @@ auto check_gpu_coherency() {
   return coherency;
 }
 
-AtomicEvent::AtomicEvent() {
+AtomicEvent::AtomicEvent(Device& d) {
   void* buf;
   cudaError_t (*cuda_free)(void*);
   // There are 3 kinds of systems we are implementing for:
@@ -223,6 +223,7 @@ AtomicEvent::AtomicEvent() {
   //    => use cuda::atom_ref on pinned host memory
   // 2. no hardware cpu/gpu coherency
   //    => use cuda::atom_ref on device memory
+  d.make_current();
   auto [concurrent_managed_access, host_native_atomic] = check_gpu_coherency();
   if (concurrent_managed_access) {
     CHECK_CUDA_ERROR(cudaMallocManaged(&buf, sizeof(uint32_t)));
@@ -347,11 +348,12 @@ struct EventImpl {
     if (is_created()) {
       return;
     }
+    auto& d = cu::device(s.device);
     if (s.device == mlx::core::Device::cpu || signal_value > 1) {
       nvtx3::mark("Using slow AtomicEvent");
-      atomic = std::make_unique<cu::AtomicEvent>();
+      atomic = std::make_unique<cu::AtomicEvent>(d);
     } else {
-      cuda = std::make_unique<cu::CopyableCudaEvent>(cu::device(s.device));
+      cuda = std::make_unique<cu::CopyableCudaEvent>(d);
     }
   }
 };

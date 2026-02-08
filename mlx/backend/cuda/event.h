@@ -54,7 +54,7 @@ class CudaEvent {
 // CudaEvent so the latter should always be preferred when possible.
 class AtomicEvent {
  public:
-  AtomicEvent();
+  AtomicEvent(Device& d);
 
   void wait(uint32_t value);
   void wait(cudaStream_t stream, uint32_t value);
