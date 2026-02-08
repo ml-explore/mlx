@@ -1109,10 +1109,6 @@ void gpu_radix_partition_small(
             if (nc_shape[i] == 1) {
               continue;
             }
-            if (in_nc_str[i] > INT32_MAX || out_nc_str[i] > INT32_MAX) {
-              throw std::runtime_error(
-                  "[Partition::eval_gpu] Stride too large.");
-            }
             in_stride_segment_axis =
                 std::min(in_stride_segment_axis, in_nc_str[i]);
             out_stride_segment_axis =
@@ -1128,10 +1124,10 @@ void gpu_radix_partition_small(
               gpu_ptr<OutT>(out),
               kth,
               size_sorted_axis,
-              static_cast<int>(in_stride_sorted_axis),
-              static_cast<int>(out_stride_sorted_axis),
-              static_cast<int>(in_stride_segment_axis),
-              static_cast<int>(out_stride_segment_axis));
+              in_stride_sorted_axis,
+              out_stride_sorted_axis,
+              in_stride_segment_axis,
+              out_stride_segment_axis);
         } else {
           auto kernel = cu::radix_select_small_nc_kernel<
               ValT,
@@ -1153,8 +1149,8 @@ void gpu_radix_partition_small(
               gpu_ptr<OutT>(out),
               kth,
               size_sorted_axis,
-              static_cast<int>(in_stride_sorted_axis),
-              static_cast<int>(out_stride_sorted_axis),
+              in_stride_sorted_axis,
+              out_stride_sorted_axis,
               nc_shape_param,
               in_nc_strides_param,
               out_nc_strides_param,
@@ -1230,17 +1226,9 @@ void gpu_radix_partition_large(
               ARG_PARTITION,
               BLOCK_THREADS>;
 
-          int64_t in_stride_segment_axis = INT64_MAX;
-          int64_t out_stride_segment_axis = INT64_MAX;
-          for (size_t i = 0; i < nc_shape.size(); i++) {
-            if (nc_shape[i] == 1) {
-              continue;
-            }
-            in_stride_segment_axis =
-                std::min(in_stride_segment_axis, in_nc_str[i]);
-            out_stride_segment_axis =
-                std::min(out_stride_segment_axis, out_nc_str[i]);
-          }
+          auto nc_shape_param = const_param(nc_shape);
+          auto in_nc_strides_param = const_param(in_nc_str);
+          auto out_nc_strides_param = const_param(out_nc_str);
 
           encoder.add_kernel_node(
               kernel,
@@ -1251,10 +1239,12 @@ void gpu_radix_partition_large(
               gpu_ptr<OutT>(out),
               size_sorted_axis,
               kth,
-              static_cast<int>(in_stride_sorted_axis),
-              static_cast<int>(out_stride_sorted_axis),
-              static_cast<int>(in_stride_segment_axis),
-              static_cast<int>(out_stride_segment_axis));
+              in_stride_sorted_axis,
+              out_stride_sorted_axis,
+              nc_shape_param,
+              in_nc_strides_param,
+              out_nc_strides_param,
+              nc_dim);
         } else {
           auto kernel = cu::radix_select_large_streaming_nc_kernel<
               ValT,
@@ -1275,8 +1265,8 @@ void gpu_radix_partition_large(
               gpu_ptr<OutT>(out),
               size_sorted_axis,
               kth,
-              static_cast<int>(in_stride_sorted_axis),
-              static_cast<int>(out_stride_sorted_axis),
+              in_stride_sorted_axis,
+              out_stride_sorted_axis,
               nc_shape_param,
               in_nc_strides_param,
               out_nc_strides_param,
