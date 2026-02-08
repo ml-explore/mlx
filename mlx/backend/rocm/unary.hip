@@ -52,6 +52,7 @@ __global__ void unary_g(
 
   auto shape_x = shape[ndim - 1];
   auto stride_x = strides[ndim - 1];
+  
   IdxT index_x = blockIdx.x * blockDim.x + threadIdx.x;
   
   // Compute base offset for this row using elem_to_loc style calculation
