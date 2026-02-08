@@ -9,6 +9,7 @@
 #include "mlx/backend/cuda/device/radix_select.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/dtype.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
@@ -1294,6 +1295,77 @@ void gpu_radix_partition_large(
   });
 }
 
+struct FallbackLinearModel {
+  int max_rows;
+  int axis_intercept;
+  int axis_slope;
+  int axis_min;
+};
+
+int axis_threshold(const FallbackLinearModel& model, int n_rows) {
+  return std::max(model.axis_min, model.axis_intercept + model.axis_slope * n_rows);
+}
+
+bool should_use_merge_sort_fallback_model(
+    const FallbackLinearModel& model,
+    int n_rows,
+    int size_sorted_axis) {
+  if (n_rows <= 0 || n_rows > model.max_rows) {
+    return false;
+  }
+  return size_sorted_axis >= axis_threshold(model, n_rows);
+}
+
+bool is_integer_dtype(Dtype dtype) {
+  return dtype == int8 || dtype == int16 || dtype == int32 || dtype == int64 ||
+      dtype == uint8 || dtype == uint16 || dtype == uint32 || dtype == uint64;
+}
+
+FallbackLinearModel float_fallback_model(int dtype_size) {
+  return {
+      8,
+      24576,
+      16384 / dtype_size,
+      102400 / dtype_size,
+  };
+}
+
+FallbackLinearModel integer_fallback_model(int dtype_size) {
+  return {
+      dtype_size == 8 ? 12 : 6,
+      53248 / dtype_size,
+      16384 / dtype_size,
+      8192 / dtype_size,
+  };
+}
+
+bool should_use_merge_sort_fallback(
+    Dtype dtype,
+    int n_rows,
+    int size_sorted_axis) 
+{
+  int dtype_size = size_of(dtype);
+
+  if (dtype == float32) {
+    // Use fallback model or for small axis always use merge sort
+    return should_use_merge_sort_fallback_model(float_fallback_model(dtype_size), n_rows, size_sorted_axis) ||
+           size_sorted_axis <= 512 || (n_rows <= 48 && size_sorted_axis <= 2048);
+  } else if (dtype == bfloat16 || dtype == float16) {
+    // Use fallback model or when batch is large and axis is small, merge sort wins
+    return should_use_merge_sort_fallback_model(float_fallback_model(dtype_size), n_rows, size_sorted_axis) ||
+           (n_rows >= 512 && size_sorted_axis <= 512);
+  } else if (dtype == float64) {
+    // float64 is not supported on the GPU
+    return true;
+  } else if (is_integer_dtype(dtype) || dtype == bool_) {
+    // Use fallback model for all integer types and bool
+    return should_use_merge_sort_fallback_model(integer_fallback_model(dtype_size), n_rows, size_sorted_axis);
+  } else {
+    // Fallback for unknown or unsupported types
+    return true;
+  }
+}
+
 void gpu_radix_partition(
     const Stream& s,
     const array& in,
@@ -1303,7 +1375,12 @@ void gpu_radix_partition(
     bool arg_partition) {
   int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
   int size_sorted_axis = in.shape(axis);
+  int n_rows = in.size() / size_sorted_axis;
   int kth = kth_ < 0 ? kth_ + size_sorted_axis : kth_;
+
+  if (should_use_merge_sort_fallback(in.dtype(), n_rows, size_sorted_axis)) {
+    return gpu_merge_sort(s, in, out, axis, arg_partition);
+  }
 
   // Dispatch based on size
   if (size_sorted_axis <= 2048) {
