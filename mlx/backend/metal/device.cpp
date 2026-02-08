@@ -370,13 +370,15 @@ void Device::new_queue(int index) {
     throw std::runtime_error(
         "[metal::Device] Failed to make new command queue.");
   }
+  attach_residency_set_to_existing_queues_if_needed_();
   stream_map_.emplace(index, q);
-  if (residency_set_ != nullptr) {
-    q->addResidencySet(residency_set_);
+  if (residency_set_ != nullptr && !metal::is_capture_active()) {
+    attach_residency_set_to_stream_(stream_map_.find(index)->second);
   }
 }
 
 MTL::CommandQueue* Device::get_queue(Stream stream) {
+  attach_residency_set_to_existing_queues_if_needed_();
   return get_stream_(stream.index).queue;
 }
 
@@ -387,6 +389,7 @@ bool Device::command_buffer_needs_commit(int index) {
 }
 
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
+  attach_residency_set_to_existing_queues_if_needed_();
   auto& stream = get_stream_(index);
   if (stream.buffer == nullptr) {
     stream.buffer = stream.queue->commandBufferWithUnretainedReferences();
@@ -785,6 +788,28 @@ MTL::ComputePipelineState* Device::get_kernel(
       base_name, default_library_, hash_name, func_consts, linked_functions);
 }
 
+void Device::attach_residency_set_to_stream_(DeviceStream& stream) {
+  if (residency_set_ == nullptr || stream.residency_set_attached ||
+      !metal::residency_sets_enabled() || metal::is_capture_active()) {
+    return;
+  }
+  stream.queue->addResidencySet(residency_set_);
+  stream.residency_set_attached = true;
+}
+
+void Device::attach_residency_set_to_existing_queues_if_needed_() {
+  if (!residency_set_pending_attach_ || residency_set_ == nullptr) {
+    return;
+  }
+  if (!metal::residency_sets_enabled() || metal::is_capture_active()) {
+    return;
+  }
+  for (auto& [_, stream] : stream_map_) {
+    attach_residency_set_to_stream_(stream);
+  }
+  residency_set_pending_attach_ = false;
+}
+
 void Device::set_residency_set(const MTL::ResidencySet* residency_set) {
   if (residency_set_ != nullptr) {
     throw std::runtime_error(
@@ -794,10 +819,35 @@ void Device::set_residency_set(const MTL::ResidencySet* residency_set) {
     return;
   }
   residency_set_ = residency_set;
+  if (!metal::residency_sets_enabled() || metal::is_capture_active()) {
+    residency_set_pending_attach_ = true;
+    return;
+  }
   // Attach residency set to existing command queues
   for (auto& [_, stream] : stream_map_) {
-    stream.queue->addResidencySet(residency_set_);
+    attach_residency_set_to_stream_(stream);
   }
+  residency_set_pending_attach_ = false;
+}
+
+void Device::on_capture_start() {
+  if (residency_set_ == nullptr) {
+    return;
+  }
+  // Avoid queue-level residency state in captures; this can break
+  // derived-counter replay in Xcode.
+  for (auto& [_, stream] : stream_map_) {
+    if (!stream.residency_set_attached) {
+      continue;
+    }
+    stream.queue->removeResidencySet(residency_set_);
+    stream.residency_set_attached = false;
+  }
+  residency_set_pending_attach_ = true;
+}
+
+void Device::on_capture_stop() {
+  attach_residency_set_to_existing_queues_if_needed_();
 }
 
 Device& device(mlx::core::Device) {

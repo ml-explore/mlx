@@ -1,17 +1,32 @@
 // Copyright © 2024 Apple Inc.
 
 #include "mlx/backend/metal/resident.h"
+#include "mlx/backend/metal/metal.h"
 
 namespace mlx::core::metal {
 
-ResidencySet::ResidencySet(MTL::Device* d) {
-  if (!d->supportsFamily(MTL::GPUFamilyMetal3)) {
+ResidencySet::ResidencySet(MTL::Device* d) : device_(d) {}
+
+void ResidencySet::ensure_wired_set_() {
+  if (wired_set_ != nullptr || device_ == nullptr) {
     return;
-  } else if (__builtin_available(macOS 15, iOS 18, *)) {
+  }
+  if (!metal::residency_sets_enabled()) {
+    return;
+  }
+  if (!device_->supportsFamily(MTL::GPUFamilyMetal3)) {
+    return;
+  }
+  if (__builtin_available(macOS 15, iOS 18, *)) {
+    // Avoid creating residency sets while a Metal capture is active since this
+    // can make derived-counter replay unstable in Xcode.
+    if (metal::is_capture_active()) {
+      return;
+    }
     auto pool = new_scoped_memory_pool();
     auto desc = MTL::ResidencySetDescriptor::alloc()->init();
     NS::Error* error;
-    wired_set_ = d->newResidencySet(desc, &error);
+    wired_set_ = device_->newResidencySet(desc, &error);
     desc->release();
     if (!wired_set_) {
       std::ostringstream msg;
@@ -27,6 +42,7 @@ ResidencySet::ResidencySet(MTL::Device* d) {
 
 void ResidencySet::insert(MTL::Allocation* buf) {
   if (!wired_set_) {
+    unwired_set_.insert(buf);
     return;
   }
   if (wired_set_->allocatedSize() + buf->allocatedSize() <= capacity_) {
@@ -38,26 +54,26 @@ void ResidencySet::insert(MTL::Allocation* buf) {
 }
 
 void ResidencySet::erase(MTL::Allocation* buf) {
-  if (!wired_set_) {
-    return;
-  }
   if (auto it = unwired_set_.find(buf); it != unwired_set_.end()) {
     unwired_set_.erase(it);
   } else {
+    if (!wired_set_) {
+      return;
+    }
     wired_set_->removeAllocation(buf);
     wired_set_->commit();
   }
 }
 
 void ResidencySet::resize(size_t size) {
-  if (!wired_set_) {
-    return;
-  }
-
   if (capacity_ == size) {
     return;
   }
   capacity_ = size;
+  ensure_wired_set_();
+  if (!wired_set_) {
+    return;
+  }
 
   size_t current_size = wired_set_->allocatedSize();
 
