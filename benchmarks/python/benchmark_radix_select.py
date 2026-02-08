@@ -140,17 +140,15 @@ def main():
 
     for dtype, dtype_name in dtypes:
         print(f"\nDtype: {dtype_name}")
-        print(
-            f"{'Config':<25} {'ArgPartition':>14} {'ArgSort':>12} {'Speedup':>10}"
-        )
+        print(f"{'Config':<25} {'ArgPartition':>14} {'ArgSort':>12} {'Speedup':>10}")
         print("-" * 80)
 
         for b, v, k in configs:
             try:
-                argpart_ms = benchmark_argpartition(b, v, k, dtype, warmup=3, iterations=50)
-                argsort_ms = benchmark_argsort(
-                    b, v, dtype, warmup=3, iterations=50
+                argpart_ms = benchmark_argpartition(
+                    b, v, k, dtype, warmup=3, iterations=50
                 )
+                argsort_ms = benchmark_argsort(b, v, dtype, warmup=3, iterations=50)
                 speedup = argsort_ms / argpart_ms
                 config_str = f"b={b}, v={v}, k={k}"
                 print(
