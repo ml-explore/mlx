@@ -4602,8 +4602,9 @@ std::vector<array> fp_quantize(
         divide(max(abs(wq, s), -1, true, s), array(maxval, w.dtype()), s);
     if (group_size == 16) {
       // convert to e4m3
-      auto scale_encode =
-          inputs.size() > 1 ? 448.0f * 6.0f / inputs[1] : array(1.0f, float32);
+      auto scale_encode = inputs.size() > 1
+          ? divide(array(448.0f * 6.0f, float32), inputs[1], s)
+          : array(1.0f, float32);
       scales = multiply(scales, scale_encode, s);
       scales = to_fp8(scales, s);
       wq = multiply(
