@@ -4427,15 +4427,11 @@ array qqmm(
   if (scales_w.has_value()) {
     inputs.push_back(*scales_w);
   }
-  // if
-  if (global_scale_x.has_value()) {
-    // Stop gradient through global scales
-    inputs.push_back(stop_gradient(*global_scale_x));
+  if (global_scale_x.has_value() && global_scale_w.has_value()) {
+    inputs.push_back(*global_scale_x);
+    inputs.push_back(*global_scale_w);
   }
-  if (global_scale_w.has_value()) {
-    // Stop gradient through global scales
-    inputs.push_back(stop_gradient(*global_scale_w));
-  }
+
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
   auto out = array(
@@ -4598,19 +4594,20 @@ std::vector<array> fp_quantize(
   auto fallback = [bits = bits, group_size = group_size, s](
                       const std::vector<array>& inputs) -> std::vector<array> {
     auto& w = inputs[0];
-    auto scale_encode =
-        inputs.size() > 1 ? 448.0f * 6.0f / inputs[1] : array(1.0f, float32);
     float maxval = (bits == 4) ? 6.0f : 448.0f;
     auto new_shape = w.shape();
     new_shape.back() = -1;
     auto wq = reshape(w, {-1, group_size}, s);
     auto scales =
-        divide(max(abs(wq, s), -1, true, s), array(maxval, w.dtype()), s) *
-        scale_encode;
+        divide(max(abs(wq, s), -1, true, s), array(maxval, w.dtype()), s);
     if (group_size == 16) {
       // convert to e4m3
+      auto scale_encode =
+          inputs.size() > 1 ? 448.0f * 6.0f / inputs[1] : array(1.0f, float32);
+      scales = multiply(scales, scale_encode, s);
       scales = to_fp8(scales, s);
-      wq = divide(wq, from_fp8(scales, w.dtype(), s), s) * scale_encode;
+      wq = multiply(
+          divide(wq, from_fp8(scales, w.dtype(), s), s), scale_encode, s);
     } else {
       // convert to e8m0
       auto z = array(0, scales.dtype());
@@ -4877,9 +4874,6 @@ array fp_dequantize(
        s](const std::vector<array>& inputs) mutable -> std::vector<array> {
     auto out = inputs[0];
     auto scales = inputs[1];
-    array inv_scale_enc = inputs.size() > 2
-        ? divide(inputs[2], array(448.0f * 6.0f, out_type), s)
-        : array(1.0f, out_type);
     if (bits == 4) {
       auto lut = array(
           {
@@ -4913,10 +4907,11 @@ array fp_dequantize(
     out = reshape(out, {-1, group_size}, s);
     scales = reshape(scales, {-1, 1}, s);
     if (group_size == 16) {
-      // NVFP4: scales are E4M3, apply inv_scale_enc
+      array inv_scale_enc = inputs.size() > 2
+          ? divide(inputs[2], array(448.0f * 6.0f, out_type), s)
+          : array(1.0f, out_type);
       scales = multiply(from_fp8(scales, out_type, s), inv_scale_enc, s);
     } else {
-      // MXFP: scales are E8M0 (power of 2)
       scales = subtract(astype(scales, out_type, s), array(127, out_type), s);
       scales = power(array(2.0f, out_type), scales, s);
     }

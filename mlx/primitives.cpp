@@ -3490,18 +3490,8 @@ std::vector<array> QQMatmul::vjp(
     const std::vector<array>& cotangents, // non quantized upstream grads
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  bool is_nvfp4 = (mode_ == QuantizationMode::Nvfp4);
-  auto expected_size = is_nvfp4 ? 4 : 2;
-  if (primals.size() != expected_size) {
-    auto msg = std::ostringstream();
-    msg << "[QQMatmul::vjp] Expected exactly " << expected_size
-        << " non-quantized primal inputs (x, w";
-    if (mode_ == QuantizationMode::Nvfp4) {
-      msg << ", global_scale_x, global_scale_w";
-    }
-    msg << ").";
-    throw std::runtime_error(msg.str());
-  }
+  bool is_nvfp4 = mode_ == QuantizationMode::Nvfp4;
+  assert(primals.size() == 2 || (is_nvfp4 && primals.size() == 4));
 
   std::vector<array> vjps;
   auto& cotan = cotangents[0];
@@ -3515,7 +3505,8 @@ std::vector<array> QQMatmul::vjp(
       : std::nullopt;
 
   auto get_primal_scale = [&](int idx) {
-    return is_nvfp4 ? std::make_optional(primals[idx]) : std::nullopt;
+    return (is_nvfp4 && primals.size() == 4) ? std::make_optional(primals[idx])
+                                             : std::nullopt;
   };
 
   for (auto arg : argnums) {
@@ -3542,6 +3533,8 @@ std::vector<array> QQMatmul::vjp(
           cotan_amax,
           get_primal_scale(2), // global_scale_x (for x.T)
           s));
+    } else {
+      vjps.push_back(zeros_like(primals[arg], s));
     }
   }
   return vjps;
