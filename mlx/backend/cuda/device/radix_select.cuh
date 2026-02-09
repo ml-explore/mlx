@@ -35,6 +35,9 @@ struct RadixTraits<float> {
 
   __device__ __forceinline__ static UnsignedT to_radix(float val) {
     uint32_t bits = __float_as_uint(val);
+    if ((bits << 1) == 0) {
+      bits = 0; // Canonicalize +/-0.0 to +0.0 for stable equal-value ties.
+    }
     uint32_t mask = -int32_t(bits >> 31) | 0x80000000u;
     return bits ^ mask;
   }
@@ -52,6 +55,9 @@ struct RadixTraits<double> {
 
   __device__ __forceinline__ static UnsignedT to_radix(double val) {
     uint64_t bits = __double_as_longlong(val);
+    if ((bits << 1) == 0) {
+      bits = 0; // Canonicalize +/-0.0 to +0.0 for stable equal-value ties.
+    }
     uint64_t mask = -int64_t(bits >> 63) | 0x8000000000000000ull;
     return bits ^ mask;
   }
@@ -69,6 +75,9 @@ struct RadixTraits<__half> {
 
   __device__ __forceinline__ static UnsignedT to_radix(__half val) {
     uint16_t bits = __half_as_ushort(val);
+    if ((bits & 0x7FFFu) == 0) {
+      bits = 0; // Canonicalize +/-0 to +0 for stable equal-value ties.
+    }
     uint16_t mask = -int16_t(bits >> 15) | 0x8000u;
     return bits ^ mask;
   }
@@ -86,6 +95,9 @@ struct RadixTraits<__nv_bfloat16> {
 
   __device__ __forceinline__ static UnsignedT to_radix(__nv_bfloat16 val) {
     uint16_t bits = __bfloat16_as_ushort(val);
+    if ((bits & 0x7FFFu) == 0) {
+      bits = 0; // Canonicalize +/-0 to +0 for stable equal-value ties.
+    }
     uint16_t mask = -int16_t(bits >> 15) | 0x8000u;
     return bits ^ mask;
   }
