@@ -241,6 +241,17 @@ __device__ __forceinline__ bool is_nan_value(T val) {
   }
 }
 
+template <typename ValT>
+__device__ __forceinline__ typename RadixTraits<ValT>::UnsignedT
+radix_key_with_nan_last(ValT val) {
+  using UnsignedT = typename RadixTraits<ValT>::UnsignedT;
+  UnsignedT key = RadixTraits<ValT>::to_radix(val);
+  if (is_nan_value(val)) {
+    key = ~UnsignedT(0);
+  }
+  return key;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Warp-level utilities
 ///////////////////////////////////////////////////////////////////////////////
@@ -653,6 +664,323 @@ __global__ void radix_select_large_streaming_kernel(
         row_output[pos * out_stride] = val;
       }
     }
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Tiled large-array kernels
+//
+// These kernels run with a 2D launch:
+// - x-dimension tiles one row across multiple blocks (multi-block-per-row)
+// - y-dimension packs multiple rows into one block group (multi-row-per-block)
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename UnsignedT>
+__global__ void radix_select_tiled_init_state_kernel(
+    UnsignedT* target_prefix,
+    UnsignedT* prefix_mask,
+    int* k_values,
+    int* row_hist,
+    int kth,
+    int n_rows,
+    int rows_per_block) {
+  int row_start = blockIdx.y * rows_per_block;
+  int row_end = min(n_rows, row_start + rows_per_block);
+  for (int row = row_start; row < row_end; ++row) {
+    if (threadIdx.x == 0) {
+      target_prefix[row] = UnsignedT(0);
+      prefix_mask[row] = UnsignedT(0);
+      k_values[row] = kth + 1;
+    }
+    int* hist = row_hist + row * RADIX_SIZE;
+    for (int i = threadIdx.x; i < RADIX_SIZE; i += blockDim.x) {
+      hist[i] = 0;
+    }
+  }
+}
+
+template <typename ValT, int BLOCK_THREADS>
+__global__ void radix_select_tiled_histogram_kernel(
+    const ValT* input,
+    int n,
+    int64_t in_stride,
+    int64_t in_segment_stride,
+    const typename RadixTraits<ValT>::UnsignedT* target_prefix,
+    const typename RadixTraits<ValT>::UnsignedT* prefix_mask,
+    int start_bit,
+    int blocks_per_row,
+    int n_rows,
+    int rows_per_block,
+    int* row_hist) {
+  using Traits = RadixTraits<ValT>;
+  using UnsignedT = typename Traits::UnsignedT;
+
+  int block_in_row = blockIdx.x;
+  int row_start = blockIdx.y * rows_per_block;
+  int row_end = min(n_rows, row_start + rows_per_block);
+
+  int chunk = (n + blocks_per_row - 1) / blocks_per_row;
+  int start = block_in_row * chunk;
+  int end = min(n, start + chunk);
+  if (start >= n || row_start >= row_end) {
+    return;
+  }
+
+  __shared__ int shared_hist[RADIX_SIZE];
+  for (int row = row_start; row < row_end; ++row) {
+    const ValT* row_input = input + row * in_segment_stride;
+    UnsignedT row_prefix = target_prefix[row];
+    UnsignedT row_mask = prefix_mask[row];
+
+    for (int i = threadIdx.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
+      shared_hist[i] = 0;
+    }
+    __syncthreads();
+
+    for (int i = start + threadIdx.x; i < end; i += BLOCK_THREADS) {
+      ValT val = row_input[i * in_stride];
+      UnsignedT key = radix_key_with_nan_last(val);
+      if ((key & row_mask) == row_prefix) {
+        int digit = extract_digit(key, start_bit, RADIX_BITS);
+        atomicAdd(&shared_hist[digit], 1);
+      }
+    }
+    __syncthreads();
+
+    int* hist = row_hist + row * RADIX_SIZE;
+    for (int i = threadIdx.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
+      atomicAdd(&hist[i], shared_hist[i]);
+    }
+    __syncthreads();
+  }
+}
+
+template <typename UnsignedT>
+__global__ void radix_select_tiled_select_bin_kernel(
+    int* row_hist,
+    UnsignedT* target_prefix,
+    UnsignedT* prefix_mask,
+    int* k_values,
+    int clear_hist_for_next_pass,
+    int start_bit,
+    int n_rows,
+    int rows_per_block) {
+  int row_start = blockIdx.y * rows_per_block;
+  int row_end = min(n_rows, row_start + rows_per_block);
+  for (int row = row_start; row < row_end; ++row) {
+    int* hist = row_hist + row * RADIX_SIZE;
+
+    if (threadIdx.x == 0) {
+      int k = k_values[row];
+      int cumsum = 0;
+      int target_bin = 0;
+      for (int bin = 0; bin < RADIX_SIZE; bin++) {
+        int count = hist[bin];
+        if (cumsum + count >= k) {
+          target_bin = bin;
+          k -= cumsum;
+          break;
+        }
+        cumsum += count;
+      }
+      k_values[row] = k;
+
+      UnsignedT digit_mask =
+          (UnsignedT((UnsignedT(1) << RADIX_BITS) - UnsignedT(1)) << start_bit);
+      target_prefix[row] |= UnsignedT(target_bin) << start_bit;
+      prefix_mask[row] |= digit_mask;
+    }
+    __syncthreads();
+
+    if (clear_hist_for_next_pass) {
+      for (int i = threadIdx.x; i < RADIX_SIZE; i += blockDim.x) {
+        hist[i] = 0;
+      }
+    }
+    __syncthreads();
+  }
+}
+
+template <typename ValT, int BLOCK_THREADS>
+__global__ void radix_select_tiled_count_kernel(
+    const ValT* input,
+    int n,
+    int64_t in_stride,
+    int64_t in_segment_stride,
+    const typename RadixTraits<ValT>::UnsignedT* target_prefix,
+    int blocks_per_row,
+    int n_rows,
+    int rows_per_block,
+    int* block_less,
+    int* block_equal) {
+  using Traits = RadixTraits<ValT>;
+  using UnsignedT = typename Traits::UnsignedT;
+
+  int block_in_row = blockIdx.x;
+  int row_start = blockIdx.y * rows_per_block;
+  int row_end = min(n_rows, row_start + rows_per_block);
+
+  int chunk = (n + blocks_per_row - 1) / blocks_per_row;
+  int start = block_in_row * chunk;
+  int end = min(n, start + chunk);
+  if (row_start >= row_end) {
+    return;
+  }
+
+  __shared__ int shared_counts[2];
+  for (int row = row_start; row < row_end; ++row) {
+    int block_idx = row * blocks_per_row + block_in_row;
+    const ValT* row_input = input + row * in_segment_stride;
+    UnsignedT row_prefix = target_prefix[row];
+
+    int local_less = 0;
+    int local_equal = 0;
+    for (int i = start + threadIdx.x; i < end; i += BLOCK_THREADS) {
+      ValT val = row_input[i * in_stride];
+      UnsignedT key = radix_key_with_nan_last(val);
+      if (key < row_prefix) {
+        local_less++;
+      } else if (key == row_prefix) {
+        local_equal++;
+      }
+    }
+
+    local_less = warp_reduce_sum(local_less);
+    local_equal = warp_reduce_sum(local_equal);
+
+    if (threadIdx.x == 0) {
+      shared_counts[0] = 0;
+      shared_counts[1] = 0;
+    }
+    __syncthreads();
+
+    if ((threadIdx.x % WARP_SIZE) == 0) {
+      atomicAdd(&shared_counts[0], local_less);
+      atomicAdd(&shared_counts[1], local_equal);
+    }
+    __syncthreads();
+
+    if (threadIdx.x == 0) {
+      block_less[block_idx] = shared_counts[0];
+      block_equal[block_idx] = shared_counts[1];
+    }
+    __syncthreads();
+  }
+}
+
+__global__ void radix_select_tiled_prefix_kernel(
+    int n,
+    int blocks_per_row,
+    int n_rows,
+    int rows_per_block,
+    const int* block_less,
+    const int* block_equal,
+    int* less_base,
+    int* equal_base,
+    int* greater_base) {
+  if (threadIdx.x != 0) {
+    return;
+  }
+
+  int row_start = blockIdx.y * rows_per_block;
+  int row_end = min(n_rows, row_start + rows_per_block);
+  int chunk = (n + blocks_per_row - 1) / blocks_per_row;
+
+  for (int row = row_start; row < row_end; ++row) {
+    int row_off = row * blocks_per_row;
+    int total_less = 0;
+    int total_equal = 0;
+    for (int b = 0; b < blocks_per_row; b++) {
+      int idx = row_off + b;
+      total_less += block_less[idx];
+      total_equal += block_equal[idx];
+    }
+
+    int run_less = 0;
+    int run_equal = 0;
+    int run_greater = 0;
+    for (int b = 0; b < blocks_per_row; b++) {
+      int idx = row_off + b;
+      less_base[idx] = run_less;
+      equal_base[idx] = total_less + run_equal;
+      greater_base[idx] = total_less + total_equal + run_greater;
+
+      int start = b * chunk;
+      int end = min(n, start + chunk);
+      int chunk_size = max(0, end - start);
+      int greater_count = chunk_size - block_less[idx] - block_equal[idx];
+
+      run_less += block_less[idx];
+      run_equal += block_equal[idx];
+      run_greater += greater_count;
+    }
+  }
+}
+
+template <typename ValT, typename OutT, bool ARG_PARTITION, int BLOCK_THREADS>
+__global__ void radix_select_tiled_scatter_kernel(
+    const ValT* input,
+    OutT* output,
+    int n,
+    int64_t in_stride,
+    int64_t out_stride,
+    int64_t in_segment_stride,
+    int64_t out_segment_stride,
+    const typename RadixTraits<ValT>::UnsignedT* target_prefix,
+    int blocks_per_row,
+    int n_rows,
+    int rows_per_block,
+    const int* less_base,
+    const int* equal_base,
+    const int* greater_base) {
+  using Traits = RadixTraits<ValT>;
+  using UnsignedT = typename Traits::UnsignedT;
+
+  int block_in_row = blockIdx.x;
+  int row_start = blockIdx.y * rows_per_block;
+  int row_end = min(n_rows, row_start + rows_per_block);
+
+  int chunk = (n + blocks_per_row - 1) / blocks_per_row;
+  int start = block_in_row * chunk;
+  int end = min(n, start + chunk);
+  if (start >= n || row_start >= row_end) {
+    return;
+  }
+
+  __shared__ int shared_out[3];
+  for (int row = row_start; row < row_end; ++row) {
+    int block_idx = row * blocks_per_row + block_in_row;
+    const ValT* row_input = input + row * in_segment_stride;
+    OutT* row_output = output + row * out_segment_stride;
+    UnsignedT row_prefix = target_prefix[row];
+
+    if (threadIdx.x == 0) {
+      shared_out[0] = 0;
+      shared_out[1] = 0;
+      shared_out[2] = 0;
+    }
+    __syncthreads();
+
+    for (int i = start + threadIdx.x; i < end; i += BLOCK_THREADS) {
+      ValT val = row_input[i * in_stride];
+      UnsignedT key = radix_key_with_nan_last(val);
+
+      int pos;
+      if (key < row_prefix) {
+        pos = less_base[block_idx] + atomicAdd(&shared_out[0], 1);
+      } else if (key == row_prefix) {
+        pos = equal_base[block_idx] + atomicAdd(&shared_out[1], 1);
+      } else {
+        pos = greater_base[block_idx] + atomicAdd(&shared_out[2], 1);
+      }
+
+      if (ARG_PARTITION) {
+        row_output[pos * out_stride] = static_cast<OutT>(i);
+      } else {
+        row_output[pos * out_stride] = static_cast<OutT>(val);
+      }
+    }
+    __syncthreads();
   }
 }
 
