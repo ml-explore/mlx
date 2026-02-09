@@ -3500,13 +3500,13 @@ std::vector<array> QQMatmul::vjp(
   // primal[0] -- non quantized activations (M, K)
   // cotan -- non quantized grads (M, N)
   auto qmode = quantization_mode_to_string(mode_);
-  std::optional<array> cotan_amax = is_nvfp4
+  std::optional<array> cotan_amax = (primals.size() == 4)
       ? std::make_optional(astype(max(abs(cotan, s), s), float32))
       : std::nullopt;
 
   auto get_primal_scale = [&](int idx) {
-    return (is_nvfp4 && primals.size() == 4) ? std::make_optional(primals[idx])
-                                             : std::nullopt;
+    return (primals.size() == 4) ? std::make_optional(primals[idx])
+                                 : std::nullopt;
   };
 
   for (auto arg : argnums) {
