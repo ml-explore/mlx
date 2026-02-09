@@ -10,6 +10,10 @@
 
 namespace mlx::core::metal {
 
+/* Set a custom path to mlx.metallib. Must be called before any MLX operation.
+ */
+void set_metallib_path(const std::string& path);
+
 /* Check if the Metal backend is available. */
 MLX_API bool is_available();
 
