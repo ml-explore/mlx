@@ -1166,11 +1166,20 @@ void gpu_radix_partition_small(
               BLOCK_THREADS,
               ITEMS_PER_THREAD>;
 
+          // Calculate dynamic shared memory size
+          using UnsignedT = typename cu::RadixTraits<ValT>::UnsignedT;
+          constexpr int TILE_SIZE_VAL = BLOCK_THREADS * ITEMS_PER_THREAD;
+          constexpr size_t shared_mem_bytes =
+              TILE_SIZE_VAL * sizeof(UnsignedT) + // shared_keys
+              TILE_SIZE_VAL * sizeof(uint32_t) + // shared_idxs
+              256 * sizeof(int) + // shared_hist (RADIX_SIZE=256)
+              2 * sizeof(int); // shared_count
+
           encoder.add_kernel_node(
               kernel,
               grid,
               block,
-              0,
+              shared_mem_bytes,
               gpu_ptr<ValT>(in),
               gpu_ptr<OutT>(out),
               kth,
