@@ -544,19 +544,24 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, sinks=sinks)
 
-        for T_kv in [128, 4096]:
-            for T_q in [1, 128]:
-                for N_kv in [2, 8]:
-                    q = mx.random.normal(shape=(B, N_q, T_q, D))
-                    k = mx.random.normal(shape=(B, N_kv, T_kv, D))
-                    v = mx.random.normal(shape=(B, N_kv, T_kv, D))
-                    sinks = 10 * mx.random.normal(shape=(N_q,))
+        for T_q, T_kv, N_kv, dtype in product(
+            (1, 128),
+            (128, 4096),
+            (2, 8),
+            (mx.float16, mx.float32),
+        ):
+            with self.subTest(T_q=T_q, T_kv=T_kv, N_kv=N_kv, dtype=dtype):
+                q = mx.random.normal(shape=(B, N_q, T_q, D), dtype=dtype)
+                k = mx.random.normal(shape=(B, N_kv, T_kv, D), dtype=dtype)
+                v = mx.random.normal(shape=(B, N_kv, T_kv, D), dtype=dtype)
+                sinks = 10 * mx.random.normal(shape=(N_q,), dtype=dtype)
 
-                    expected = mlx_ref_attn(q, k, v, scale, sinks=sinks)
-                    out = mx.fast.scaled_dot_product_attention(
-                        q, k, v, scale=scale, sinks=sinks
-                    )
-                    self.assertTrue(mx.allclose(out, expected, atol=1e-5))
+                expected = mlx_ref_attn(q, k, v, scale, sinks=sinks)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, sinks=sinks
+                )
+                atol = 1e-5 if dtype == mx.float32 else 1e-2
+                self.assertTrue(mx.allclose(out, expected, atol=atol))
 
     def test_sdpa_grad(self):
         # High tolerance due to cuDNN SDPA kernel requiring tf32.

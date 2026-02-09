@@ -25,6 +25,18 @@ array prepare_sdpa_input(const array& x, Stream s) {
   return x;
 }
 
+array prepare_sdpa_sinks(const array& sinks, Stream s) {
+  // cuDNN requires sinks to be float32.
+  if (sinks.dtype() == float32) {
+    return sinks;
+  }
+  array sinks_f32(sinks.shape(), float32, nullptr, {});
+  copy_gpu(sinks, sinks_f32, CopyType::Vector, s);
+  auto& encoder = cu::get_command_encoder(s);
+  encoder.add_temporary(sinks_f32);
+  return sinks_f32;
+}
+
 void malloc_with_same_layout(
     cu::CommandEncoder& encoder,
     array& o,
@@ -123,6 +135,7 @@ struct SDPACacheKey {
   bool do_causal;
   std::array<int, QKV_NDIM> mask_shape;
   std::array<int64_t, QKV_NDIM> mask_strides;
+  bool has_sinks;
   bool output_logsumexp;
 };
 
@@ -133,6 +146,7 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
     const array& v,
     bool do_causal,
     const std::optional<array>& mask_arr,
+    const std::optional<array>& sinks,
     bool decoding = false,
     bool output_logsumexp = false) {
   BytesKey<SDPACacheKey> cache_key;
@@ -148,6 +162,7 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
       do_causal,
       {},
       {},
+      sinks.has_value(),
       output_logsumexp,
   };
   if (mask_arr) {
@@ -182,6 +197,7 @@ enum UIDS {
   V,
   SCALE,
   BIAS,
+  SINKS,
   SEQ_LEN_Q,
   SEQ_LEN_KV,
   O,
@@ -200,6 +216,7 @@ DnnGraph build_sdpa_graph(
     const array& v,
     bool do_causal,
     const std::optional<array>& mask_arr,
+    const std::optional<array>& sinks,
     const std::optional<array>& seq_len_q,
     const std::optional<array>& seq_len_kv,
     bool output_logsumexp,
@@ -220,6 +237,9 @@ DnnGraph build_sdpa_graph(
   }
   if (mask_arr) {
     options.set_bias(graph.tensor("BIAS", BIAS, *mask_arr));
+  }
+  if (sinks) {
+    options.set_sink_token(graph.tensor_4d("SINKS", SINKS, *sinks, 1));
   }
   if (seq_len_q && seq_len_kv) {
     options.set_padding_mask(true);
@@ -247,6 +267,7 @@ DnnGraph build_sdpa_backward_graph(
     const array& v,
     bool do_causal,
     const std::optional<array>& mask_arr,
+    const std::optional<array>& sinks,
     const array& o,
     const array& d_o,
     const array& stats,
@@ -270,6 +291,9 @@ DnnGraph build_sdpa_backward_graph(
   }
   if (mask_arr) {
     options.set_bias(graph.tensor("BIAS", BIAS, *mask_arr));
+  }
+  if (sinks) {
+    options.set_sink_token(graph.tensor_4d("SINKS", SINKS, *sinks, 1));
   }
 
   auto [d_q_, d_k_, d_v_] =
@@ -333,6 +357,7 @@ void sdpa_cudnn(
     std::optional<array>& stats,
     bool do_causal,
     const std::optional<array>& mask_arr,
+    const std::optional<array>& sinks,
     bool output_logsumexp,
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
@@ -365,6 +390,9 @@ void sdpa_cudnn(
   if (mask_arr) {
     encoder.set_input_array(*mask_arr);
   }
+  if (sinks) {
+    encoder.set_input_array(*sinks);
+  }
   if (seq_len_q && seq_len_kv) {
     encoder.set_input_array(*seq_len_q);
     encoder.set_input_array(*seq_len_kv);
@@ -376,7 +404,7 @@ void sdpa_cudnn(
 
   // Search cache.
   auto cache_key = build_sdpa_cache_key(
-      encoder, q, k, v, do_causal, mask_arr, decoding, output_logsumexp);
+      encoder, q, k, v, do_causal, mask_arr, sinks, decoding, output_logsumexp);
   auto it = sdpa_cache().find(cache_key);
   if (it == sdpa_cache().end()) {
     auto graph = build_sdpa_graph(
@@ -386,6 +414,7 @@ void sdpa_cudnn(
         v,
         do_causal,
         mask_arr,
+        sinks,
         seq_len_q,
         seq_len_kv,
         output_logsumexp,
@@ -403,6 +432,9 @@ void sdpa_cudnn(
       {O, gpu_ptr<void>(o)}};
   if (mask_arr) {
     variant_pack[BIAS] = gpu_ptr<void>(*mask_arr);
+  }
+  if (sinks) {
+    variant_pack[SINKS] = gpu_ptr<void>(*sinks);
   }
   if (seq_len_q && seq_len_kv) {
     variant_pack[SEQ_LEN_Q] = gpu_ptr<void>(*seq_len_q);
@@ -424,6 +456,7 @@ void sdpa_backward_cudnn(
     const array& stats,
     bool do_causal,
     const std::optional<array>& mask_arr,
+    const std::optional<array>& sinks,
     const array& d_o,
     array& d_q,
     array& d_k,
@@ -448,13 +481,29 @@ void sdpa_backward_cudnn(
   if (mask_arr) {
     encoder.set_input_array(*mask_arr);
   }
+  if (sinks) {
+    encoder.set_input_array(*sinks);
+  }
 
   // Search cache.
-  auto cache_key = build_sdpa_cache_key(encoder, q, k, v, do_causal, mask_arr);
+  auto cache_key =
+      build_sdpa_cache_key(encoder, q, k, v, do_causal, mask_arr, sinks);
   auto it = sdpa_backward_cache().find(cache_key);
   if (it == sdpa_backward_cache().end()) {
     auto graph = build_sdpa_backward_graph(
-        handle, q, k, v, do_causal, mask_arr, o, d_o, stats, d_q, d_k, d_v);
+        handle,
+        q,
+        k,
+        v,
+        do_causal,
+        mask_arr,
+        sinks,
+        o,
+        d_o,
+        stats,
+        d_q,
+        d_k,
+        d_v);
     it = sdpa_backward_cache().emplace(cache_key, std::move(graph)).first;
   }
   auto& graph = it->second;
@@ -472,6 +521,9 @@ void sdpa_backward_cudnn(
       {D_V, gpu_ptr<void>(d_v)}};
   if (mask_arr) {
     variant_pack[BIAS] = gpu_ptr<void>(*mask_arr);
+  }
+  if (sinks) {
+    variant_pack[SINKS] = gpu_ptr<void>(*sinks);
   }
 
   CHECK_CUDNN_FE_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
@@ -536,12 +588,19 @@ void ScaledDotProductAttention::eval_gpu(
   if (has_arr_mask) {
     mask_arr = prepare_sdpa_input(inputs[3], s);
   }
+  std::optional<array> sinks;
+  if (has_sinks_) {
+    sinks = inputs.back();
+  }
   std::optional<array> stats;
   if (output_logsumexp_) {
     stats = outputs[1];
   }
 
   if (supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal_, s)) {
+    if (sinks) {
+      sinks = prepare_sdpa_sinks(*sinks, s);
+    }
     sdpa_cudnn(
         q,
         k,
@@ -551,14 +610,11 @@ void ScaledDotProductAttention::eval_gpu(
         stats,
         do_causal_,
         mask_arr,
+        sinks,
         output_logsumexp_,
         s);
   } else {
-    if (has_sinks_) {
-      sdpa_vector(q, k, v, scale_, out, do_causal_, inputs.back(), s);
-    } else {
-      sdpa_vector(q, k, v, scale_, out, do_causal_, std::nullopt, s);
-    }
+    sdpa_vector(q, k, v, scale_, out, do_causal_, sinks, s);
   }
 }
 
@@ -593,6 +649,10 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   if (has_arr_mask) {
     mask_arr = prepare_sdpa_input(inputs[3], s);
   }
+  std::optional<array> sinks;
+  if (has_sinks_) {
+    sinks = prepare_sdpa_sinks(inputs.back(), s);
+  }
 
   assert(outputs.size() == 3);
   auto& d_q = outputs[0];
@@ -600,7 +660,20 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   auto& d_v = outputs[2];
 
   sdpa_backward_cudnn(
-      q, k, v, scale_, o, stats, do_causal_, mask_arr, d_o, d_q, d_k, d_v, s);
+      q,
+      k,
+      v,
+      scale_,
+      o,
+      stats,
+      do_causal_,
+      mask_arr,
+      sinks,
+      d_o,
+      d_q,
+      d_k,
+      d_v,
+      s);
 }
 
 } // namespace fast
