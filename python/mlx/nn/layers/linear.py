@@ -102,7 +102,7 @@ class Linear(Module):
         if quantize_input:
             if mode not in ["nvfp4", "mxfp8"]:
                 raise ValueError(
-                    f"[Linear] Quantized activations are only supported for 'nvfp4' and 'mxfp8' modes, got {mode}."
+                    f"Quantized activations are only supported for 'nvfp4' and 'mxfp8' modes, got {mode}."
                 )
             return QQLinear.from_linear(self, group_size, bits, mode)
         return QuantizedLinear.from_linear(self, group_size, bits, mode)

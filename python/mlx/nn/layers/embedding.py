@@ -49,5 +49,5 @@ class Embedding(Module):
     ):
         """Return a :obj:`QuantizedEmbedding` layer that approximates this embedding layer."""
         if quantize_input:
-            raise ValueError("[Embedding] Quantized input is not supported.")
+            raise ValueError("Quantized input is not supported.")
         return QuantizedEmbedding.from_embedding(self, group_size, bits, mode)
