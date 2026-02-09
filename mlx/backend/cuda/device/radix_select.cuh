@@ -257,6 +257,15 @@ __device__ __forceinline__ T warp_reduce_sum(T val) {
 // Single-pass Radix Select for small arrays (fits in shared memory)
 ///////////////////////////////////////////////////////////////////////////////
 
+// Helper to calculate required shared memory size for small kernel
+template <typename UnsignedT, int TILE_SIZE>
+constexpr size_t radix_select_small_shared_mem_size() {
+  return TILE_SIZE * sizeof(UnsignedT) + // shared_keys
+      TILE_SIZE * sizeof(uint32_t) + // shared_idxs
+      RADIX_SIZE * sizeof(int) + // shared_hist
+      2 * sizeof(int); // shared_count
+}
+
 template <
     typename ValT,
     typename OutT,
@@ -283,11 +292,14 @@ __global__ void radix_select_small_kernel(
   constexpr int TILE_SIZE = BLOCK_THREADS * ITEMS_PER_THREAD;
   constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
 
-  // Shared memory
-  __shared__ UnsignedT shared_keys[TILE_SIZE];
-  __shared__ uint32_t shared_idxs[TILE_SIZE];
-  __shared__ int shared_hist[RADIX_SIZE];
-  __shared__ int shared_count[2];
+  // Dynamic shared memory layout
+  extern __shared__ char shared_mem[];
+
+  // Calculate offsets for different arrays in shared memory
+  UnsignedT* shared_keys = reinterpret_cast<UnsignedT*>(shared_mem);
+  uint32_t* shared_idxs = reinterpret_cast<uint32_t*>(shared_keys + TILE_SIZE);
+  int* shared_hist = reinterpret_cast<int*>(shared_idxs + TILE_SIZE);
+  int* shared_count = shared_hist + RADIX_SIZE;
 
   int row = blockIdx.y;
 
