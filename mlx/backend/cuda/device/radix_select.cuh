@@ -261,6 +261,7 @@ template <
     typename ValT,
     typename OutT,
     bool ARG_PARTITION,
+    bool USE_SIMPLE_STRIDE,
     int BLOCK_THREADS,
     int ITEMS_PER_THREAD>
 __global__ void radix_select_small_kernel(
@@ -271,7 +272,11 @@ __global__ void radix_select_small_kernel(
     int64_t in_stride,
     int64_t out_stride,
     int64_t in_segment_stride,
-    int64_t out_segment_stride) {
+    int64_t out_segment_stride,
+    const int32_t* nc_shape,
+    const int64_t* in_nc_strides,
+    const int64_t* out_nc_strides,
+    int nc_dim) {
   using Traits = RadixTraits<ValT>;
   using UnsignedT = typename Traits::UnsignedT;
 
@@ -285,8 +290,21 @@ __global__ void radix_select_small_kernel(
   __shared__ int shared_count[2];
 
   int row = blockIdx.y;
-  const ValT* row_input = input + row * in_segment_stride;
-  OutT* row_output = output + row * out_segment_stride;
+
+  // Compute row pointers based on addressing mode
+  const ValT* row_input;
+  OutT* row_output;
+  if constexpr (USE_SIMPLE_STRIDE) {
+    row_input = input + row * in_segment_stride;
+    row_output = output + row * out_segment_stride;
+  } else {
+    int64_t in_block_idx =
+        elem_to_loc(int64_t(row), nc_shape, in_nc_strides, nc_dim);
+    int64_t out_block_idx =
+        elem_to_loc(int64_t(row), nc_shape, out_nc_strides, nc_dim);
+    row_input = input + in_block_idx;
+    row_output = output + out_block_idx;
+  }
 
   int tile_n = min(n, TILE_SIZE);
 
@@ -394,152 +412,6 @@ __global__ void radix_select_small_kernel(
   __syncthreads();
 
   // Phase 3: output elements greater than pivot
-  for (int i = threadIdx.x; i < tile_n; i += BLOCK_THREADS) {
-    UnsignedT key = shared_keys[i];
-    if (key > target_prefix) {
-      int pos = atomicAdd(&shared_count[0], 1);
-      if (ARG_PARTITION) {
-        row_output[pos * out_stride] = shared_idxs[i];
-      } else {
-        row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];
-      }
-    }
-  }
-}
-
-template <
-    typename ValT,
-    typename OutT,
-    bool ARG_PARTITION,
-    int BLOCK_THREADS,
-    int ITEMS_PER_THREAD>
-__global__ void radix_select_small_nc_kernel(
-    const ValT* input,
-    OutT* output,
-    int kth,
-    int n,
-    int64_t in_stride,
-    int64_t out_stride,
-    const int32_t* nc_shape,
-    const int64_t* in_nc_strides,
-    const int64_t* out_nc_strides,
-    int nc_dim) {
-  using Traits = RadixTraits<ValT>;
-  using UnsignedT = typename Traits::UnsignedT;
-
-  constexpr int TILE_SIZE = BLOCK_THREADS * ITEMS_PER_THREAD;
-  constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
-
-  __shared__ UnsignedT shared_keys[TILE_SIZE];
-  __shared__ uint32_t shared_idxs[TILE_SIZE];
-  __shared__ int shared_hist[RADIX_SIZE];
-  __shared__ int shared_count[2];
-
-  int row = blockIdx.y;
-  int64_t in_block_idx =
-      elem_to_loc(int64_t(row), nc_shape, in_nc_strides, nc_dim);
-  int64_t out_block_idx =
-      elem_to_loc(int64_t(row), nc_shape, out_nc_strides, nc_dim);
-  const ValT* row_input = input + in_block_idx;
-  OutT* row_output = output + out_block_idx;
-
-  int tile_n = min(n, TILE_SIZE);
-
-  for (int i = threadIdx.x; i < TILE_SIZE; i += BLOCK_THREADS) {
-    if (i < tile_n) {
-      ValT val = row_input[i * in_stride];
-      UnsignedT key = Traits::to_radix(val);
-      if (is_nan_value(val)) {
-        key = ~UnsignedT(0);
-      }
-      shared_keys[i] = key;
-      shared_idxs[i] = i;
-    } else {
-      shared_keys[i] = ~UnsignedT(0);
-      shared_idxs[i] = i;
-    }
-  }
-  __syncthreads();
-
-  int k = kth + 1;
-  UnsignedT target_prefix = 0;
-  UnsignedT prefix_mask = 0;
-
-  for (int pass = NUM_PASSES - 1; pass >= 0; pass--) {
-    int start_bit = pass * RADIX_BITS;
-
-    for (int i = threadIdx.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
-      shared_hist[i] = 0;
-    }
-    __syncthreads();
-
-    for (int i = threadIdx.x; i < tile_n; i += BLOCK_THREADS) {
-      UnsignedT key = shared_keys[i];
-      if ((key & prefix_mask) == target_prefix) {
-        int digit = extract_digit(key, start_bit, RADIX_BITS);
-        atomicAdd(&shared_hist[digit], 1);
-      }
-    }
-    __syncthreads();
-
-    if (threadIdx.x == 0) {
-      int cumsum = 0;
-      int target_bin = 0;
-      for (int bin = 0; bin < RADIX_SIZE; bin++) {
-        int count = shared_hist[bin];
-        if (cumsum + count >= k) {
-          target_bin = bin;
-          k = k - cumsum;
-          break;
-        }
-        cumsum += count;
-      }
-      shared_count[0] = target_bin;
-      shared_count[1] = k;
-    }
-    __syncthreads();
-
-    int target_bin = shared_count[0];
-    k = shared_count[1];
-
-    UnsignedT digit_mask = UnsignedT((1 << RADIX_BITS) - 1) << start_bit;
-    target_prefix |= UnsignedT(target_bin) << start_bit;
-    prefix_mask |= digit_mask;
-
-    __syncthreads();
-  }
-
-  if (threadIdx.x == 0) {
-    shared_count[0] = 0;
-  }
-  __syncthreads();
-
-  for (int i = threadIdx.x; i < tile_n; i += BLOCK_THREADS) {
-    UnsignedT key = shared_keys[i];
-    if (key < target_prefix) {
-      int pos = atomicAdd(&shared_count[0], 1);
-      if (ARG_PARTITION) {
-        row_output[pos * out_stride] = shared_idxs[i];
-      } else {
-        row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];
-      }
-    }
-  }
-  __syncthreads();
-
-  for (int i = threadIdx.x; i < tile_n; i += BLOCK_THREADS) {
-    UnsignedT key = shared_keys[i];
-    if (key == target_prefix) {
-      int pos = atomicAdd(&shared_count[0], 1);
-      if (ARG_PARTITION) {
-        row_output[pos * out_stride] = shared_idxs[i];
-      } else {
-        row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];
-      }
-    }
-  }
-  __syncthreads();
-
   for (int i = threadIdx.x; i < tile_n; i += BLOCK_THREADS) {
     UnsignedT key = shared_keys[i];
     if (key > target_prefix) {
@@ -768,148 +640,6 @@ __global__ void radix_select_large_streaming_kernel(
       } else {
         row_output[pos * out_stride] = val;
       }
-    }
-  }
-}
-
-template <typename ValT, typename OutT, bool ARG_PARTITION, int BLOCK_THREADS>
-__global__ void radix_select_large_streaming_nc_kernel(
-    const ValT* input,
-    OutT* output,
-    int n,
-    int kth,
-    int64_t in_stride,
-    int64_t out_stride,
-    const int32_t* nc_shape,
-    const int64_t* in_nc_strides,
-    const int64_t* out_nc_strides,
-    int nc_dim) {
-  using Traits = RadixTraits<ValT>;
-  using UnsignedT = typename Traits::UnsignedT;
-  constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
-
-  int row = blockIdx.y;
-  int64_t in_block_idx =
-      elem_to_loc(int64_t(row), nc_shape, in_nc_strides, nc_dim);
-  int64_t out_block_idx =
-      elem_to_loc(int64_t(row), nc_shape, out_nc_strides, nc_dim);
-  const ValT* row_input = input + in_block_idx;
-  OutT* row_output = output + out_block_idx;
-
-  __shared__ int shared_hist[RADIX_SIZE];
-  __shared__ int shared_pivot_info[2];
-  __shared__ int shared_counts[2];
-  __shared__ int shared_output_counters[3];
-
-  int k = kth + 1;
-  UnsignedT target_prefix = 0;
-  UnsignedT prefix_mask = 0;
-
-  for (int pass = NUM_PASSES - 1; pass >= 0; pass--) {
-    int start_bit = pass * RADIX_BITS;
-
-    for (int i = threadIdx.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
-      shared_hist[i] = 0;
-    }
-    __syncthreads();
-
-    for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
-      ValT val = row_input[i * in_stride];
-      UnsignedT key = Traits::to_radix(val);
-      if (is_nan_value(val)) {
-        key = ~UnsignedT(0);
-      }
-      if ((key & prefix_mask) == target_prefix) {
-        int digit = extract_digit(key, start_bit, RADIX_BITS);
-        atomicAdd(&shared_hist[digit], 1);
-      }
-    }
-    __syncthreads();
-
-    if (threadIdx.x == 0) {
-      int cumsum = 0;
-      int target_bin = 0;
-      for (int bin = 0; bin < RADIX_SIZE; bin++) {
-        int count = shared_hist[bin];
-        if (cumsum + count >= k) {
-          target_bin = bin;
-          k = k - cumsum;
-          break;
-        }
-        cumsum += count;
-      }
-      shared_pivot_info[0] = target_bin;
-      shared_pivot_info[1] = k;
-    }
-    __syncthreads();
-
-    int target_bin = shared_pivot_info[0];
-    k = shared_pivot_info[1];
-
-    UnsignedT digit_mask = UnsignedT((1 << RADIX_BITS) - 1) << start_bit;
-    target_prefix |= UnsignedT(target_bin) << start_bit;
-    prefix_mask |= digit_mask;
-
-    if (threadIdx.x == 0) {
-      shared_counts[0] = 0;
-      shared_counts[1] = 0;
-    }
-    __syncthreads();
-  }
-
-  int local_less = 0, local_equal = 0;
-  for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
-    ValT val = row_input[i * in_stride];
-    UnsignedT key = Traits::to_radix(val);
-    if (is_nan_value(val)) {
-      key = ~UnsignedT(0);
-    }
-    if (key < target_prefix)
-      local_less++;
-    else if (key == target_prefix)
-      local_equal++;
-  }
-
-  local_less = warp_reduce_sum(local_less);
-  local_equal = warp_reduce_sum(local_equal);
-
-  int lane = threadIdx.x % WARP_SIZE;
-  if (lane == 0) {
-    atomicAdd(&shared_counts[0], local_less);
-    atomicAdd(&shared_counts[1], local_equal);
-  }
-  __syncthreads();
-
-  int less_count = shared_counts[0];
-  int equal_count = shared_counts[1];
-
-  if (threadIdx.x == 0) {
-    shared_output_counters[0] = 0;
-    shared_output_counters[1] = 0;
-    shared_output_counters[2] = 0;
-  }
-  __syncthreads();
-
-  for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
-    ValT val = row_input[i * in_stride];
-    UnsignedT key = Traits::to_radix(val);
-    if (is_nan_value(val)) {
-      key = ~UnsignedT(0);
-    }
-
-    int pos;
-    if (key < target_prefix) {
-      pos = atomicAdd(&shared_output_counters[0], 1);
-    } else if (key == target_prefix) {
-      pos = less_count + atomicAdd(&shared_output_counters[1], 1);
-    } else {
-      pos = less_count + equal_count + atomicAdd(&shared_output_counters[2], 1);
-    }
-
-    if (ARG_PARTITION) {
-      row_output[pos * out_stride] = i;
-    } else {
-      row_output[pos * out_stride] = val;
     }
   }
 }
