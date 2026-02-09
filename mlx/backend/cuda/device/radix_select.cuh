@@ -264,6 +264,53 @@ __device__ __forceinline__ T warp_reduce_sum(T val) {
   return val;
 }
 
+template <int BLOCK_THREADS>
+__device__ __forceinline__ int block_exclusive_scan(
+    int val,
+    int* shared_warp_sums,
+    int* block_total = nullptr) {
+  static_assert(BLOCK_THREADS % WARP_SIZE == 0);
+  constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
+
+  int lane = threadIdx.x & (WARP_SIZE - 1);
+  int warp = threadIdx.x / WARP_SIZE;
+
+  int inclusive = val;
+#pragma unroll
+  for (int offset = 1; offset < WARP_SIZE; offset <<= 1) {
+    int n = __shfl_up_sync(0xFFFFFFFF, inclusive, offset);
+    if (lane >= offset) {
+      inclusive += n;
+    }
+  }
+
+  if (lane == WARP_SIZE - 1) {
+    shared_warp_sums[warp] = inclusive;
+  }
+  __syncthreads();
+
+  if (warp == 0) {
+    int warp_scan = (lane < NUM_WARPS) ? shared_warp_sums[lane] : 0;
+#pragma unroll
+    for (int offset = 1; offset < WARP_SIZE; offset <<= 1) {
+      int n = __shfl_up_sync(0xFFFFFFFF, warp_scan, offset);
+      if (lane >= offset) {
+        warp_scan += n;
+      }
+    }
+
+    if (lane < NUM_WARPS) {
+      shared_warp_sums[lane] = warp_scan - shared_warp_sums[lane];
+    }
+    if (block_total != nullptr && lane == NUM_WARPS - 1) {
+      *block_total = warp_scan;
+    }
+  }
+  __syncthreads();
+
+  return shared_warp_sums[warp] + inclusive - val;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Single-pass Radix Select for small arrays (fits in shared memory)
 ///////////////////////////////////////////////////////////////////////////////
@@ -400,50 +447,48 @@ __global__ void radix_select_small_kernel(
     __syncthreads();
   }
 
-  // Output partitioned array
-  if (threadIdx.x == 0) {
-    shared_count[0] = 0;
-  }
-  __syncthreads();
-
-  // Phase 1: output elements less than pivot
+  // Count per-thread bucket sizes once, then scatter in a single pass with
+  // deterministic per-thread offsets.
+  int local_less = 0;
+  int local_equal = 0;
   for (int i = threadIdx.x; i < tile_n; i += BLOCK_THREADS) {
     UnsignedT key = shared_keys[i];
     if (key < target_prefix) {
-      int pos = atomicAdd(&shared_count[0], 1);
-      if (ARG_PARTITION) {
-        row_output[pos * out_stride] = shared_idxs[i];
-      } else {
-        row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];
-      }
+      local_less++;
+    } else if (key == target_prefix) {
+      local_equal++;
     }
   }
-  __syncthreads();
 
-  // Phase 2: output elements equal to pivot
+  int less_thread_offset = block_exclusive_scan<BLOCK_THREADS>(
+      local_less, shared_hist, &shared_count[0]);
+  int equal_thread_offset = block_exclusive_scan<BLOCK_THREADS>(
+      local_equal, shared_hist, &shared_count[1]);
+
+  int q = tile_n / BLOCK_THREADS;
+  int r = tile_n - q * BLOCK_THREADS;
+  int prefix_total = int(threadIdx.x) * q + min(int(threadIdx.x), r);
+  int greater_thread_offset =
+      prefix_total - less_thread_offset - equal_thread_offset;
+
+  int less_count = shared_count[0];
+  int equal_count = shared_count[1];
+
   for (int i = threadIdx.x; i < tile_n; i += BLOCK_THREADS) {
     UnsignedT key = shared_keys[i];
-    if (key == target_prefix) {
-      int pos = atomicAdd(&shared_count[0], 1);
-      if (ARG_PARTITION) {
-        row_output[pos * out_stride] = shared_idxs[i];
-      } else {
-        row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];
-      }
+    int pos;
+    if (key < target_prefix) {
+      pos = less_thread_offset++;
+    } else if (key == target_prefix) {
+      pos = less_count + equal_thread_offset++;
+    } else {
+      pos = less_count + equal_count + greater_thread_offset++;
     }
-  }
-  __syncthreads();
 
-  // Phase 3: output elements greater than pivot
-  for (int i = threadIdx.x; i < tile_n; i += BLOCK_THREADS) {
-    UnsignedT key = shared_keys[i];
-    if (key > target_prefix) {
-      int pos = atomicAdd(&shared_count[0], 1);
-      if (ARG_PARTITION) {
-        row_output[pos * out_stride] = shared_idxs[i];
-      } else {
-        row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];
-      }
+    if (ARG_PARTITION) {
+      row_output[pos * out_stride] = shared_idxs[i];
+    } else {
+      row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];
     }
   }
 }
@@ -480,7 +525,6 @@ __global__ void radix_select_large_streaming_kernel(
   __shared__ int shared_hist[RADIX_SIZE];
   __shared__ int shared_pivot_info[2];
   __shared__ int shared_counts[2];
-  __shared__ int shared_output_counters[3];
 
   int k = kth + 1;
   UnsignedT target_prefix = 0;
@@ -551,16 +595,9 @@ __global__ void radix_select_large_streaming_kernel(
     UnsignedT digit_mask = UnsignedT((1 << RADIX_BITS) - 1) << start_bit;
     target_prefix |= UnsignedT(target_bin) << start_bit;
     prefix_mask |= digit_mask;
-
-    // Initialize counters for next phase
-    if (threadIdx.x == 0) {
-      shared_counts[0] = 0;
-      shared_counts[1] = 0;
-    }
-    __syncthreads();
   }
 
-  // Count partition sizes with warp reduction
+  // Count partition sizes.
   int local_less = 0, local_equal = 0;
   bool is_contiguous = (in_stride == 1);
 
@@ -590,80 +627,136 @@ __global__ void radix_select_large_streaming_kernel(
     }
   }
 
-  // Warp reduction
   local_less = warp_reduce_sum(local_less);
   local_equal = warp_reduce_sum(local_equal);
 
-  // First lane of each warp aggregates to shared memory
-  int lane = threadIdx.x % WARP_SIZE;
-  if (lane == 0) {
+  if (threadIdx.x == 0) {
+    shared_counts[0] = 0;
+    shared_counts[1] = 0;
+  }
+  __syncthreads();
+
+  if ((threadIdx.x & (WARP_SIZE - 1)) == 0) {
     atomicAdd(&shared_counts[0], local_less);
     atomicAdd(&shared_counts[1], local_equal);
   }
   __syncthreads();
 
-  // Read final counts
   int less_count = shared_counts[0];
   int equal_count = shared_counts[1];
 
-  // Initialize output counters
+  // Deterministic scatter in iteration order (0..n): this keeps output stable
+  // without thread-contention atomics in the hot scatter path.
+  constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
+  int lane = threadIdx.x & (WARP_SIZE - 1);
+  int warp = threadIdx.x / WARP_SIZE;
+
+  int* warp_less = shared_hist;
+  int* warp_equal = shared_hist + NUM_WARPS;
+  int* warp_greater = shared_hist + 2 * NUM_WARPS;
+  int* iter_counts = shared_hist + 3 * NUM_WARPS;
+  int* running_bases = iter_counts + 3;
+
   if (threadIdx.x == 0) {
-    shared_output_counters[0] = 0;
-    shared_output_counters[1] = 0;
-    shared_output_counters[2] = 0;
+    running_bases[0] = 0;
+    running_bases[1] = less_count;
+    running_bases[2] = less_count + equal_count;
   }
   __syncthreads();
 
-  // Output partitioned elements
-  if (is_contiguous && out_stride == 1) {
-    // Fast path: both input and output are contiguous
-    for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
-      ValT val = row_input[i];
-      UnsignedT key = Traits::to_radix(val);
+  for (int base_i = 0; base_i < n; base_i += BLOCK_THREADS) {
+    int i = base_i + threadIdx.x;
+    bool active = i < n;
+
+    ValT val{};
+    UnsignedT key = 0;
+    if (active) {
+      val = is_contiguous ? row_input[i] : row_input[i * in_stride];
+      key = Traits::to_radix(val);
       if (is_nan_value(val)) {
         key = ~UnsignedT(0);
       }
+    }
 
+    bool is_less = active && (key < target_prefix);
+    bool is_equal = active && (key == target_prefix);
+    bool is_greater = active && !is_less && !is_equal;
+
+    unsigned less_mask = __ballot_sync(0xFFFFFFFF, is_less);
+    unsigned equal_mask = __ballot_sync(0xFFFFFFFF, is_equal);
+    unsigned greater_mask = __ballot_sync(0xFFFFFFFF, is_greater);
+
+    unsigned lane_mask = (1u << lane) - 1u;
+    int less_rank = __popc(less_mask & lane_mask);
+    int equal_rank = __popc(equal_mask & lane_mask);
+    int greater_rank = __popc(greater_mask & lane_mask);
+
+    if (lane == 0) {
+      warp_less[warp] = __popc(less_mask);
+      warp_equal[warp] = __popc(equal_mask);
+      warp_greater[warp] = __popc(greater_mask);
+    }
+    __syncthreads();
+
+    if (threadIdx.x == 0) {
+      int run = 0;
+      for (int w = 0; w < NUM_WARPS; ++w) {
+        int c = warp_less[w];
+        warp_less[w] = run;
+        run += c;
+      }
+      iter_counts[0] = run;
+
+      run = 0;
+      for (int w = 0; w < NUM_WARPS; ++w) {
+        int c = warp_equal[w];
+        warp_equal[w] = run;
+        run += c;
+      }
+      iter_counts[1] = run;
+
+      run = 0;
+      for (int w = 0; w < NUM_WARPS; ++w) {
+        int c = warp_greater[w];
+        warp_greater[w] = run;
+        run += c;
+      }
+      iter_counts[2] = run;
+    }
+    __syncthreads();
+
+    if (active) {
       int pos;
-      if (key < target_prefix) {
-        pos = atomicAdd(&shared_output_counters[0], 1);
-      } else if (key == target_prefix) {
-        pos = less_count + atomicAdd(&shared_output_counters[1], 1);
+      if (is_less) {
+        pos = running_bases[0] + warp_less[warp] + less_rank;
+      } else if (is_equal) {
+        pos = running_bases[1] + warp_equal[warp] + equal_rank;
       } else {
-        pos =
-            less_count + equal_count + atomicAdd(&shared_output_counters[2], 1);
+        pos = running_bases[2] + warp_greater[warp] + greater_rank;
       }
 
       if (ARG_PARTITION) {
-        row_output[pos] = i;
+        if (out_stride == 1) {
+          row_output[pos] = i;
+        } else {
+          row_output[pos * out_stride] = i;
+        }
       } else {
-        row_output[pos] = val;
+        if (out_stride == 1) {
+          row_output[pos] = val;
+        } else {
+          row_output[pos * out_stride] = val;
+        }
       }
     }
-  } else {
-    for (int i = threadIdx.x; i < n; i += BLOCK_THREADS) {
-      ValT val = row_input[i * in_stride];
-      UnsignedT key = Traits::to_radix(val);
-      if (is_nan_value(val)) {
-        key = ~UnsignedT(0);
-      }
+    __syncthreads();
 
-      int pos;
-      if (key < target_prefix) {
-        pos = atomicAdd(&shared_output_counters[0], 1);
-      } else if (key == target_prefix) {
-        pos = less_count + atomicAdd(&shared_output_counters[1], 1);
-      } else {
-        pos =
-            less_count + equal_count + atomicAdd(&shared_output_counters[2], 1);
-      }
-
-      if (ARG_PARTITION) {
-        row_output[pos * out_stride] = i;
-      } else {
-        row_output[pos * out_stride] = val;
-      }
+    if (threadIdx.x == 0) {
+      running_bases[0] += iter_counts[0];
+      running_bases[1] += iter_counts[1];
+      running_bases[2] += iter_counts[2];
     }
+    __syncthreads();
   }
 }
 
@@ -947,7 +1040,18 @@ __global__ void radix_select_tiled_scatter_kernel(
     return;
   }
 
-  __shared__ int shared_out[3];
+  constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
+  __shared__ int shared_warp_offsets[3 * NUM_WARPS];
+  __shared__ int shared_iter_counts[3];
+  __shared__ int shared_running_bases[3];
+
+  int lane = threadIdx.x & (WARP_SIZE - 1);
+  int warp = threadIdx.x / WARP_SIZE;
+
+  int* warp_less = shared_warp_offsets;
+  int* warp_equal = shared_warp_offsets + NUM_WARPS;
+  int* warp_greater = shared_warp_offsets + 2 * NUM_WARPS;
+
   for (int row = row_start; row < row_end; ++row) {
     int block_idx = row * blocks_per_row + block_in_row;
     const ValT* row_input = input + row * in_segment_stride;
@@ -955,30 +1059,93 @@ __global__ void radix_select_tiled_scatter_kernel(
     UnsignedT row_prefix = target_prefix[row];
 
     if (threadIdx.x == 0) {
-      shared_out[0] = 0;
-      shared_out[1] = 0;
-      shared_out[2] = 0;
+      shared_running_bases[0] = less_base[block_idx];
+      shared_running_bases[1] = equal_base[block_idx];
+      shared_running_bases[2] = greater_base[block_idx];
     }
     __syncthreads();
 
-    for (int i = start + threadIdx.x; i < end; i += BLOCK_THREADS) {
-      ValT val = row_input[i * in_stride];
-      UnsignedT key = radix_key_with_nan_last(val);
+    for (int base_i = start; base_i < end; base_i += BLOCK_THREADS) {
+      int i = base_i + threadIdx.x;
+      bool active = i < end;
 
-      int pos;
-      if (key < row_prefix) {
-        pos = less_base[block_idx] + atomicAdd(&shared_out[0], 1);
-      } else if (key == row_prefix) {
-        pos = equal_base[block_idx] + atomicAdd(&shared_out[1], 1);
-      } else {
-        pos = greater_base[block_idx] + atomicAdd(&shared_out[2], 1);
+      ValT val{};
+      UnsignedT key = 0;
+      if (active) {
+        val = row_input[i * in_stride];
+        key = radix_key_with_nan_last(val);
       }
 
-      if (ARG_PARTITION) {
-        row_output[pos * out_stride] = static_cast<OutT>(i);
-      } else {
-        row_output[pos * out_stride] = static_cast<OutT>(val);
+      bool is_less = active && (key < row_prefix);
+      bool is_equal = active && (key == row_prefix);
+      bool is_greater = active && !is_less && !is_equal;
+
+      unsigned less_mask = __ballot_sync(0xFFFFFFFF, is_less);
+      unsigned equal_mask = __ballot_sync(0xFFFFFFFF, is_equal);
+      unsigned greater_mask = __ballot_sync(0xFFFFFFFF, is_greater);
+
+      unsigned lane_mask = (1u << lane) - 1u;
+      int less_rank = __popc(less_mask & lane_mask);
+      int equal_rank = __popc(equal_mask & lane_mask);
+      int greater_rank = __popc(greater_mask & lane_mask);
+
+      if (lane == 0) {
+        warp_less[warp] = __popc(less_mask);
+        warp_equal[warp] = __popc(equal_mask);
+        warp_greater[warp] = __popc(greater_mask);
       }
+      __syncthreads();
+
+      if (threadIdx.x == 0) {
+        int run = 0;
+        for (int w = 0; w < NUM_WARPS; ++w) {
+          int c = warp_less[w];
+          warp_less[w] = run;
+          run += c;
+        }
+        shared_iter_counts[0] = run;
+
+        run = 0;
+        for (int w = 0; w < NUM_WARPS; ++w) {
+          int c = warp_equal[w];
+          warp_equal[w] = run;
+          run += c;
+        }
+        shared_iter_counts[1] = run;
+
+        run = 0;
+        for (int w = 0; w < NUM_WARPS; ++w) {
+          int c = warp_greater[w];
+          warp_greater[w] = run;
+          run += c;
+        }
+        shared_iter_counts[2] = run;
+      }
+      __syncthreads();
+
+      if (active) {
+        int pos;
+        if (is_less) {
+          pos = shared_running_bases[0] + warp_less[warp] + less_rank;
+        } else if (is_equal) {
+          pos = shared_running_bases[1] + warp_equal[warp] + equal_rank;
+        } else {
+          pos = shared_running_bases[2] + warp_greater[warp] + greater_rank;
+        }
+        if (ARG_PARTITION) {
+          row_output[pos * out_stride] = static_cast<OutT>(i);
+        } else {
+          row_output[pos * out_stride] = static_cast<OutT>(val);
+        }
+      }
+      __syncthreads();
+
+      if (threadIdx.x == 0) {
+        shared_running_bases[0] += shared_iter_counts[0];
+        shared_running_bases[1] += shared_iter_counts[1];
+        shared_running_bases[2] += shared_iter_counts[2];
+      }
+      __syncthreads();
     }
     __syncthreads();
   }
