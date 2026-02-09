@@ -1141,16 +1141,9 @@ void gpu_radix_partition_small(
         constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
         using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
 
+        int64_t in_stride_segment_axis = INT64_MAX;
+        int64_t out_stride_segment_axis = INT64_MAX;
         if (contiguous) {
-          auto kernel = cu::radix_select_small_kernel<
-              ValT,
-              OutT,
-              ARG_PARTITION,
-              BLOCK_THREADS,
-              ITEMS_PER_THREAD>;
-
-          int64_t in_stride_segment_axis = INT64_MAX;
-          int64_t out_stride_segment_axis = INT64_MAX;
           for (size_t i = 0; i < nc_shape.size(); i++) {
             if (nc_shape[i] == 1) {
               continue;
@@ -1160,6 +1153,18 @@ void gpu_radix_partition_small(
             out_stride_segment_axis =
                 std::min(out_stride_segment_axis, out_nc_str[i]);
           }
+        }
+
+        dispatch_bool(contiguous, [&](auto contiguous_tag) {
+          constexpr bool USE_SIMPLE_STRIDE = decltype(contiguous_tag)::value;
+
+          auto kernel = cu::radix_select_small_kernel<
+              ValT,
+              OutT,
+              ARG_PARTITION,
+              USE_SIMPLE_STRIDE,
+              BLOCK_THREADS,
+              ITEMS_PER_THREAD>;
 
           encoder.add_kernel_node(
               kernel,
@@ -1173,31 +1178,12 @@ void gpu_radix_partition_small(
               in_stride_sorted_axis,
               out_stride_sorted_axis,
               in_stride_segment_axis,
-              out_stride_segment_axis);
-        } else {
-          auto kernel = cu::radix_select_small_nc_kernel<
-              ValT,
-              OutT,
-              ARG_PARTITION,
-              BLOCK_THREADS,
-              ITEMS_PER_THREAD>;
-
-          encoder.add_kernel_node(
-              kernel,
-              grid,
-              block,
-              0,
-              gpu_ptr<ValT>(in),
-              gpu_ptr<OutT>(out),
-              kth,
-              size_sorted_axis,
-              in_stride_sorted_axis,
-              out_stride_sorted_axis,
+              out_stride_segment_axis,
               nc_shape_ptr,
               in_nc_strides_ptr,
               out_nc_strides_ptr,
               nc_dim);
-        }
+        });
       });
     } else {
       throw std::runtime_error(
@@ -1302,51 +1288,28 @@ void gpu_radix_partition_large(
         constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
         using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
 
-        if (contiguous) {
-          auto kernel = cu::radix_select_large_streaming_kernel<
-              ValT,
-              OutT,
-              ARG_PARTITION,
-              BLOCK_THREADS>;
+        // Large kernel always uses elem_to_loc addressing
+        auto kernel = cu::radix_select_large_streaming_kernel<
+            ValT,
+            OutT,
+            ARG_PARTITION,
+            BLOCK_THREADS>;
 
-          encoder.add_kernel_node(
-              kernel,
-              grid,
-              block,
-              0,
-              gpu_ptr<ValT>(in),
-              gpu_ptr<OutT>(out),
-              size_sorted_axis,
-              kth,
-              in_stride_sorted_axis,
-              out_stride_sorted_axis,
-              nc_shape_ptr,
-              in_nc_strides_ptr,
-              out_nc_strides_ptr,
-              nc_dim);
-        } else {
-          auto kernel = cu::radix_select_large_streaming_nc_kernel<
-              ValT,
-              OutT,
-              ARG_PARTITION,
-              BLOCK_THREADS>;
-
-          encoder.add_kernel_node(
-              kernel,
-              grid,
-              block,
-              0,
-              gpu_ptr<ValT>(in),
-              gpu_ptr<OutT>(out),
-              size_sorted_axis,
-              kth,
-              in_stride_sorted_axis,
-              out_stride_sorted_axis,
-              nc_shape_ptr,
-              in_nc_strides_ptr,
-              out_nc_strides_ptr,
-              nc_dim);
-        }
+        encoder.add_kernel_node(
+            kernel,
+            grid,
+            block,
+            0,
+            gpu_ptr<ValT>(in),
+            gpu_ptr<OutT>(out),
+            size_sorted_axis,
+            kth,
+            in_stride_sorted_axis,
+            out_stride_sorted_axis,
+            nc_shape_ptr,
+            in_nc_strides_ptr,
+            out_nc_strides_ptr,
+            nc_dim);
       });
     } else {
       throw std::runtime_error(
