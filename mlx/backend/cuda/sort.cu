@@ -1201,6 +1201,292 @@ void gpu_radix_partition_small(
   });
 }
 
+int64_t segment_stride_for_contiguous(
+    const Shape& shape_no_axis,
+    const Strides& strides_no_axis) {
+  int64_t stride = INT64_MAX;
+  for (size_t i = 0; i < shape_no_axis.size(); ++i) {
+    if (shape_no_axis[i] == 1) {
+      continue;
+    }
+    stride = std::min(stride, strides_no_axis[i]);
+  }
+  return (stride == INT64_MAX) ? int64_t(0) : stride;
+}
+
+struct RadixLaunchPlan {
+  int blocks_per_row{1};
+  int rows_per_block{1};
+
+  bool uses_tiled_launch() const {
+    return blocks_per_row > 1;
+  }
+};
+
+RadixLaunchPlan make_radix_tiled_launch_plan(
+    const Stream& s,
+    int n_rows,
+    int size_sorted_axis) {
+  if (n_rows <= 0 || size_sorted_axis <= 0 || size_sorted_axis < 8192) {
+    return {};
+  }
+
+  constexpr int kBlocksPerSmTarget = 4;
+  constexpr int kMinElemsPerBlock = 1024;
+  constexpr int kMaxBlocksPerRow = 32;
+  constexpr int kMaxRowsPerBlock = 4;
+
+  int sm_count = 0;
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &sm_count, cudaDevAttrMultiProcessorCount, s.device.index));
+  sm_count = std::max(sm_count, 1);
+
+  int target_blocks = std::max(1, sm_count * kBlocksPerSmTarget);
+  int needed_blocks_per_row =
+      std::max(1, (target_blocks + n_rows - 1) / n_rows);
+
+  int max_blocks_by_work = std::max(
+      1, std::min(kMaxBlocksPerRow, size_sorted_axis / kMinElemsPerBlock));
+  int blocks_per_row = std::min(needed_blocks_per_row, max_blocks_by_work);
+
+  if (blocks_per_row <= 1) {
+    return {};
+  }
+
+  int total_blocks = n_rows * blocks_per_row;
+  int chunk = (size_sorted_axis + blocks_per_row - 1) / blocks_per_row;
+
+  int rows_per_block = 1;
+  if (total_blocks > target_blocks && chunk <= 2 * kMinElemsPerBlock) {
+    rows_per_block = std::min(
+        {kMaxRowsPerBlock,
+         n_rows,
+         std::max(1, (total_blocks + target_blocks - 1) / target_blocks)});
+  }
+  return {blocks_per_row, rows_per_block};
+}
+
+Dtype unsigned_dtype_for_size(int size) {
+  switch (size) {
+    case 1:
+      return uint8;
+    case 2:
+      return uint16;
+    case 4:
+      return uint32;
+    case 8:
+      return uint64;
+    default:
+      throw std::runtime_error("Unsupported radix key size");
+  }
+}
+
+void gpu_radix_partition_large_tiled(
+    const Stream& s,
+    const array& in,
+    array& out,
+    int kth,
+    int n_rows,
+    int size_sorted_axis,
+    int64_t in_stride_sorted_axis,
+    int64_t out_stride_sorted_axis,
+    int64_t in_stride_segment_axis,
+    int64_t out_stride_segment_axis,
+    int blocks_per_row,
+    int rows_per_block,
+    bool arg_partition) {
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+
+  dispatch_all_types(in.dtype(), [&](auto type_tag) {
+    using CTYPE = MLX_GET_TYPE(type_tag);
+    if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
+      using ValT = cuda_type_t<CTYPE>;
+      constexpr int BLOCK_THREADS = 256;
+      constexpr int NUM_PASSES =
+          (cu::RadixTraits<ValT>::BITS + cu::RADIX_BITS - 1) / cu::RADIX_BITS;
+      using UnsignedT = typename cu::RadixTraits<ValT>::UnsignedT;
+
+      Dtype unsigned_dtype = unsigned_dtype_for_size(sizeof(UnsignedT));
+
+      array target_prefix_dev({n_rows}, unsigned_dtype, nullptr, {});
+      array prefix_mask_dev({n_rows}, unsigned_dtype, nullptr, {});
+      array k_values_dev({n_rows}, int32, nullptr, {});
+      array row_hist_dev({n_rows, cu::RADIX_SIZE}, int32, nullptr, {});
+
+      int total_blocks = n_rows * blocks_per_row;
+      array block_less_dev({total_blocks}, int32, nullptr, {});
+      array block_equal_dev({total_blocks}, int32, nullptr, {});
+      array less_base_dev({total_blocks}, int32, nullptr, {});
+      array equal_base_dev({total_blocks}, int32, nullptr, {});
+      array greater_base_dev({total_blocks}, int32, nullptr, {});
+
+      auto allocate_temporary = [&](array& a) {
+        a.set_data(cu::malloc_async(a.nbytes(), encoder));
+        encoder.add_temporary(a);
+      };
+      allocate_temporary(target_prefix_dev);
+      allocate_temporary(prefix_mask_dev);
+      allocate_temporary(k_values_dev);
+      allocate_temporary(row_hist_dev);
+      allocate_temporary(block_less_dev);
+      allocate_temporary(block_equal_dev);
+      allocate_temporary(less_base_dev);
+      allocate_temporary(equal_base_dev);
+      allocate_temporary(greater_base_dev);
+
+      int row_groups = (n_rows + rows_per_block - 1) / rows_per_block;
+      dim3 row_grid(1, row_groups, 1);
+      dim3 grid(blocks_per_row, row_groups, 1);
+
+      encoder.set_output_array(target_prefix_dev);
+      encoder.set_output_array(prefix_mask_dev);
+      encoder.set_output_array(k_values_dev);
+      encoder.set_output_array(row_hist_dev);
+      encoder.add_kernel_node(
+          cu::radix_select_tiled_init_state_kernel<UnsignedT>,
+          row_grid,
+          dim3(32, 1, 1),
+          0,
+          gpu_ptr<UnsignedT>(target_prefix_dev),
+          gpu_ptr<UnsignedT>(prefix_mask_dev),
+          gpu_ptr<int>(k_values_dev),
+          gpu_ptr<int>(row_hist_dev),
+          kth,
+          n_rows,
+          rows_per_block);
+
+      for (int pass = NUM_PASSES - 1; pass >= 0; --pass) {
+        int start_bit = pass * cu::RADIX_BITS;
+
+        encoder.set_input_array(in);
+        encoder.set_input_array(row_hist_dev);
+        encoder.set_input_array(target_prefix_dev);
+        encoder.set_input_array(prefix_mask_dev);
+        encoder.set_output_array(row_hist_dev);
+        encoder.add_kernel_node(
+            cu::radix_select_tiled_histogram_kernel<ValT, BLOCK_THREADS>,
+            grid,
+            dim3(BLOCK_THREADS, 1, 1),
+            0,
+            gpu_ptr<ValT>(in),
+            size_sorted_axis,
+            in_stride_sorted_axis,
+            in_stride_segment_axis,
+            gpu_ptr<UnsignedT>(target_prefix_dev),
+            gpu_ptr<UnsignedT>(prefix_mask_dev),
+            start_bit,
+            blocks_per_row,
+            n_rows,
+            rows_per_block,
+            gpu_ptr<int>(row_hist_dev));
+
+        encoder.set_input_array(row_hist_dev);
+        encoder.set_input_array(target_prefix_dev);
+        encoder.set_input_array(prefix_mask_dev);
+        encoder.set_input_array(k_values_dev);
+        encoder.set_input_array(row_hist_dev);
+        encoder.set_output_array(target_prefix_dev);
+        encoder.set_output_array(prefix_mask_dev);
+        encoder.set_output_array(k_values_dev);
+        encoder.set_output_array(row_hist_dev);
+        encoder.add_kernel_node(
+            cu::radix_select_tiled_select_bin_kernel<UnsignedT>,
+            row_grid,
+            dim3(32, 1, 1),
+            0,
+            gpu_ptr<int>(row_hist_dev),
+            gpu_ptr<UnsignedT>(target_prefix_dev),
+            gpu_ptr<UnsignedT>(prefix_mask_dev),
+            gpu_ptr<int>(k_values_dev),
+            pass > 0 ? 1 : 0,
+            start_bit,
+            n_rows,
+            rows_per_block);
+      }
+
+      encoder.set_input_array(in);
+      encoder.set_input_array(target_prefix_dev);
+      encoder.set_output_array(block_less_dev);
+      encoder.set_output_array(block_equal_dev);
+      encoder.add_kernel_node(
+          cu::radix_select_tiled_count_kernel<ValT, BLOCK_THREADS>,
+          grid,
+          dim3(BLOCK_THREADS, 1, 1),
+          0,
+          gpu_ptr<ValT>(in),
+          size_sorted_axis,
+          in_stride_sorted_axis,
+          in_stride_segment_axis,
+          gpu_ptr<UnsignedT>(target_prefix_dev),
+          blocks_per_row,
+          n_rows,
+          rows_per_block,
+          gpu_ptr<int>(block_less_dev),
+          gpu_ptr<int>(block_equal_dev));
+
+      encoder.set_input_array(block_less_dev);
+      encoder.set_input_array(block_equal_dev);
+      encoder.set_output_array(less_base_dev);
+      encoder.set_output_array(equal_base_dev);
+      encoder.set_output_array(greater_base_dev);
+      encoder.add_kernel_node(
+          cu::radix_select_tiled_prefix_kernel,
+          row_grid,
+          dim3(1, 1, 1),
+          0,
+          size_sorted_axis,
+          blocks_per_row,
+          n_rows,
+          rows_per_block,
+          gpu_ptr<int>(block_less_dev),
+          gpu_ptr<int>(block_equal_dev),
+          gpu_ptr<int>(less_base_dev),
+          gpu_ptr<int>(equal_base_dev),
+          gpu_ptr<int>(greater_base_dev));
+
+      dispatch_bool(arg_partition, [&](auto arg_tag) {
+        constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
+        using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
+        encoder.set_input_array(in);
+        encoder.set_input_array(target_prefix_dev);
+        encoder.set_input_array(less_base_dev);
+        encoder.set_input_array(equal_base_dev);
+        encoder.set_input_array(greater_base_dev);
+        encoder.set_output_array(out);
+        encoder.add_kernel_node(
+            cu::radix_select_tiled_scatter_kernel<
+                ValT,
+                OutT,
+                ARG_PARTITION,
+                BLOCK_THREADS>,
+            grid,
+            dim3(BLOCK_THREADS, 1, 1),
+            0,
+            gpu_ptr<ValT>(in),
+            gpu_ptr<OutT>(out),
+            size_sorted_axis,
+            in_stride_sorted_axis,
+            out_stride_sorted_axis,
+            in_stride_segment_axis,
+            out_stride_segment_axis,
+            gpu_ptr<UnsignedT>(target_prefix_dev),
+            blocks_per_row,
+            n_rows,
+            rows_per_block,
+            gpu_ptr<int>(less_base_dev),
+            gpu_ptr<int>(equal_base_dev),
+            gpu_ptr<int>(greater_base_dev));
+      });
+    } else {
+      throw std::runtime_error(
+          "CUDA backend does not support sorting complex numbers");
+    }
+  });
+}
+
 void gpu_radix_partition_large(
     const Stream& s,
     const array& in,
@@ -1236,9 +1522,32 @@ void gpu_radix_partition_large(
   contiguous &= check_strides(in, in_stride_sorted_axis);
   contiguous &= check_strides(out, out_stride_sorted_axis);
 
+  if (contiguous) {
+    const auto plan = make_radix_tiled_launch_plan(s, n_rows, size_sorted_axis);
+    if (plan.uses_tiled_launch()) {
+      const int64_t in_stride_segment_axis =
+          segment_stride_for_contiguous(nc_shape, in_nc_str);
+      const int64_t out_stride_segment_axis =
+          segment_stride_for_contiguous(nc_shape, out_nc_str);
+      return gpu_radix_partition_large_tiled(
+          s,
+          in,
+          out,
+          kth,
+          n_rows,
+          size_sorted_axis,
+          in_stride_sorted_axis,
+          out_stride_sorted_axis,
+          in_stride_segment_axis,
+          out_stride_segment_axis,
+          plan.blocks_per_row,
+          plan.rows_per_block,
+          arg_partition);
+    }
+  }
+
   auto& encoder = cu::get_command_encoder(s);
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
-
   encoder.set_input_array(in);
   encoder.set_output_array(out);
 
@@ -1327,81 +1636,6 @@ void gpu_radix_partition_large(
   });
 }
 
-struct FallbackLinearModel {
-  int max_rows;
-  int axis_intercept;
-  int axis_slope;
-  int axis_min;
-};
-
-int axis_threshold(const FallbackLinearModel& model, int n_rows) {
-  return std::max(
-      model.axis_min, model.axis_intercept + model.axis_slope * n_rows);
-}
-
-bool should_use_merge_sort_fallback_model(
-    const FallbackLinearModel& model,
-    int n_rows,
-    int size_sorted_axis) {
-  if (n_rows <= 0 || n_rows > model.max_rows) {
-    return false;
-  }
-  return size_sorted_axis >= axis_threshold(model, n_rows);
-}
-
-bool is_integer_dtype(Dtype dtype) {
-  return dtype == int8 || dtype == int16 || dtype == int32 || dtype == int64 ||
-      dtype == uint8 || dtype == uint16 || dtype == uint32 || dtype == uint64;
-}
-
-FallbackLinearModel float_fallback_model(int dtype_size) {
-  return {
-      8,
-      22528,
-      16384 / dtype_size,
-      94208 / dtype_size,
-  };
-}
-
-FallbackLinearModel integer_fallback_model(int dtype_size) {
-  return {
-      dtype_size == 8 ? 12 : 6,
-      51200 / dtype_size,
-      16384 / dtype_size,
-      6144 / dtype_size,
-  };
-}
-
-bool should_use_merge_sort_fallback(
-    Dtype dtype,
-    int n_rows,
-    int size_sorted_axis) {
-  int dtype_size = size_of(dtype);
-
-  if (dtype == float32) {
-    // Use fallback model or for small axis always use merge sort
-    return should_use_merge_sort_fallback_model(
-               float_fallback_model(dtype_size), n_rows, size_sorted_axis) ||
-        size_sorted_axis <= 512 || (n_rows <= 64 && size_sorted_axis <= 4096);
-  } else if (dtype == bfloat16 || dtype == float16) {
-    // Use fallback model or when batch is large and axis is small, merge sort
-    // wins
-    return should_use_merge_sort_fallback_model(
-               float_fallback_model(dtype_size), n_rows, size_sorted_axis) ||
-        (n_rows >= 512 && size_sorted_axis <= 512);
-  } else if (dtype == float64) {
-    // float64 is not supported on the GPU
-    return true;
-  } else if (is_integer_dtype(dtype) || dtype == bool_) {
-    // Use fallback model for all integer types and bool
-    return should_use_merge_sort_fallback_model(
-        integer_fallback_model(dtype_size), n_rows, size_sorted_axis);
-  } else {
-    // Fallback for unknown or unsupported types
-    return true;
-  }
-}
-
 void gpu_radix_partition(
     const Stream& s,
     const array& in,
@@ -1411,12 +1645,7 @@ void gpu_radix_partition(
     bool arg_partition) {
   int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
   int size_sorted_axis = in.shape(axis);
-  int n_rows = in.size() / size_sorted_axis;
   int kth = kth_ < 0 ? kth_ + size_sorted_axis : kth_;
-
-  if (should_use_merge_sort_fallback(in.dtype(), n_rows, size_sorted_axis)) {
-    return gpu_merge_sort(s, in, out, axis, arg_partition);
-  }
 
   // Dispatch based on size
   if (size_sorted_axis <= 2048) {
