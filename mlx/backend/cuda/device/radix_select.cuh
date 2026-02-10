@@ -352,9 +352,9 @@ __global__ void radix_select_small_kernel(
     int64_t out_stride,
     int64_t in_segment_stride,
     int64_t out_segment_stride,
-    const int32_t* nc_shape,
-    const int64_t* in_nc_strides,
-    const int64_t* out_nc_strides,
+    const __grid_constant__ Shape nc_shape,
+    const __grid_constant__ Strides in_nc_strides,
+    const __grid_constant__ Strides out_nc_strides,
     int nc_dim) {
   using Traits = RadixTraits<ValT>;
   using UnsignedT = typename Traits::UnsignedT;
@@ -380,10 +380,10 @@ __global__ void radix_select_small_kernel(
     row_input = input + row * in_segment_stride;
     row_output = output + row * out_segment_stride;
   } else {
-    int64_t in_block_idx =
-        elem_to_loc(int64_t(row), nc_shape, in_nc_strides, nc_dim);
-    int64_t out_block_idx =
-        elem_to_loc(int64_t(row), nc_shape, out_nc_strides, nc_dim);
+    int64_t in_block_idx = elem_to_loc(
+        int64_t(row), nc_shape.data(), in_nc_strides.data(), nc_dim);
+    int64_t out_block_idx = elem_to_loc(
+        int64_t(row), nc_shape.data(), out_nc_strides.data(), nc_dim);
     row_input = input + in_block_idx;
     row_output = output + out_block_idx;
   }
@@ -595,9 +595,9 @@ __global__ void radix_select_large_streaming_kernel(
     int kth,
     int64_t in_stride,
     int64_t out_stride,
-    const int32_t* nc_shape,
-    const int64_t* in_nc_strides,
-    const int64_t* out_nc_strides,
+    const __grid_constant__ Shape nc_shape,
+    const __grid_constant__ Strides in_nc_strides,
+    const __grid_constant__ Strides out_nc_strides,
     int nc_dim) {
   using Traits = RadixTraits<ValT>;
   using UnsignedT = typename Traits::UnsignedT;
@@ -605,9 +605,9 @@ __global__ void radix_select_large_streaming_kernel(
 
   int row = blockIdx.y;
   int64_t in_block_idx =
-      elem_to_loc(int64_t(row), nc_shape, in_nc_strides, nc_dim);
+      elem_to_loc(int64_t(row), nc_shape.data(), in_nc_strides.data(), nc_dim);
   int64_t out_block_idx =
-      elem_to_loc(int64_t(row), nc_shape, out_nc_strides, nc_dim);
+      elem_to_loc(int64_t(row), nc_shape.data(), out_nc_strides.data(), nc_dim);
   const ValT* row_input = input + in_block_idx;
   OutT* row_output = output + out_block_idx;
 
