@@ -605,6 +605,38 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 ).sum()
                 test_grad(loss_slow, loss_fast, [q, k, v])
 
+    def test_sdpa_sliced(self):
+        N = 8
+        D = 64
+        scale = D**-0.5
+
+        for B, T_q, T_kv, offset, mask in product(
+            (1, 2, 4),
+            (1, 8),
+            (256, 512),
+            (8, 9, 64, 79),
+            (None, "causal"),
+        ):
+            with self.subTest(B=B, T_q=T_q, T_kv=T_kv, offset=offset, mask=mask):
+                q = mx.random.normal((B, N, T_q, D), mx.float16)
+                k = mx.random.normal((B, N, T_kv, D), mx.float16)
+                v = mx.random.normal((B, N, T_kv, D), mx.float16)
+
+                k = k[..., :offset, :]
+                v = v[..., :offset, :]
+
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+
+                for i in range(2):
+                    out = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask
+                    )
+                    if B == 1:
+                        tolerance = {"rtol": 1e-3, "atol": 1e-3}
+                    else:
+                        tolerance = {"rtol": 1e-2, "atol": 1e-2}
+                    self.assertTrue(mx.allclose(ref, out, **tolerance))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
