@@ -174,7 +174,7 @@ __global__ void fp_quantize_columnwise(
   auto block_idx = cg::this_thread_block().group_index();
   auto idx_in_block = cg::this_thread_block().thread_index();
 
-  constexpr int BLOCK_X = 32;
+  constexpr int BLOCK_X = 16;
   constexpr int BLOCK_Y = 32;
   constexpr int elem_per_byte = (bits == 8) ? 1 : 2;
   constexpr int bytes_per_group = group_size / elem_per_byte;
@@ -323,7 +323,7 @@ fp_dequantize(const uint8_t* w, const uint8_t* scales, T* out, size_t size) {
 
 inline std::tuple<dim3, dim3>
 get_columnwise_quantize_launch_args(size_t size, int group_size, int M, int K) {
-  constexpr int BLOCK_X = 32;
+  constexpr int BLOCK_X = 16;
   constexpr int BLOCK_Y = 32;
   int rows_per_block = BLOCK_X;
   int cols_per_block = BLOCK_Y * group_size;
