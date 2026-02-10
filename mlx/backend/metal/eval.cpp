@@ -4,6 +4,7 @@
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/failure.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 
@@ -25,12 +26,17 @@ inline void check_error(MTL::CommandBuffer* cbuf) {
 }
 
 void eval(array& arr) {
+  if (global_failure()) {
+    return;
+  }
+
   auto pool = metal::new_scoped_memory_pool();
   auto s = arr.primitive().stream();
   auto& d = metal::device(s.device);
   auto command_buffer = d.get_command_buffer(s.index);
 
   auto outputs = arr.outputs();
+
   {
     // If the array is a tracer hold a reference
     // to its inputs so they don't get donated

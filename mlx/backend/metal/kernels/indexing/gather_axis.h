@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "mlx/backend/metal/kernels/indexing/indexing.h"
+
 template <typename T, typename IdxT, typename LocT, bool SrcC, bool IdxC>
 [[kernel]] void gather_axis(
     const device T* src [[buffer(0)]],
@@ -15,6 +17,7 @@ template <typename T, typename IdxT, typename LocT, bool SrcC, bool IdxC>
     const constant int& axis_size [[buffer(8)]],
     const constant size_t& src_ax_stride [[buffer(9)]],
     const constant size_t& idx_ax_stride [[buffer(10)]],
+    device atomic<int32_t>* global_failure [[buffer(11)]],
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
   LocT elem_idx = index.z * static_cast<LocT>(grid_dim.x);
@@ -30,6 +33,10 @@ template <typename T, typename IdxT, typename LocT, bool SrcC, bool IdxC>
   auto idx_val = indices[idx_loc];
   if (is_signed_v<IdxT>) {
     idx_val = (idx_val < 0) ? idx_val + axis_size : idx_val;
+  }
+
+  if (!check_bounds(idx_val, axis_size, global_failure)) {
+    return;
   }
 
   LocT src_idx = idx_val * static_cast<LocT>(src_ax_stride);

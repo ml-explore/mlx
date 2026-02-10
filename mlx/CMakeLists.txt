@@ -7,6 +7,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/dtype_utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/export.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/einsum.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/failure.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fast.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp
