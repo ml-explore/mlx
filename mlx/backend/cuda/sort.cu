@@ -1085,46 +1085,9 @@ void gpu_radix_partition_small(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
 
-  const int32_t* nc_shape_ptr = nullptr;
-  const int64_t* in_nc_strides_ptr = nullptr;
-  const int64_t* out_nc_strides_ptr = nullptr;
-  if (!contiguous && nc_dim > 0) {
-    array nc_shape_dev({nc_dim}, int32, nullptr, {});
-    array in_nc_strides_dev({nc_dim}, int64, nullptr, {});
-    array out_nc_strides_dev({nc_dim}, int64, nullptr, {});
-    nc_shape_dev.set_data(cu::malloc_async(nc_shape_dev.nbytes(), encoder));
-    in_nc_strides_dev.set_data(
-        cu::malloc_async(in_nc_strides_dev.nbytes(), encoder));
-    out_nc_strides_dev.set_data(
-        cu::malloc_async(out_nc_strides_dev.nbytes(), encoder));
-
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(
-        gpu_ptr<int32_t>(nc_shape_dev),
-        nc_shape.data(),
-        nc_shape_dev.nbytes(),
-        cudaMemcpyHostToDevice,
-        encoder.stream()));
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(
-        gpu_ptr<int64_t>(in_nc_strides_dev),
-        in_nc_str.data(),
-        in_nc_strides_dev.nbytes(),
-        cudaMemcpyHostToDevice,
-        encoder.stream()));
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(
-        gpu_ptr<int64_t>(out_nc_strides_dev),
-        out_nc_str.data(),
-        out_nc_strides_dev.nbytes(),
-        cudaMemcpyHostToDevice,
-        encoder.stream()));
-
-    nc_shape_ptr = gpu_ptr<int32_t>(nc_shape_dev);
-    in_nc_strides_ptr = gpu_ptr<int64_t>(in_nc_strides_dev);
-    out_nc_strides_ptr = gpu_ptr<int64_t>(out_nc_strides_dev);
-
-    encoder.add_temporary(nc_shape_dev);
-    encoder.add_temporary(in_nc_strides_dev);
-    encoder.add_temporary(out_nc_strides_dev);
-  }
+  auto nc_shape_param = const_param(nc_shape);
+  auto in_nc_strides_param = const_param(in_nc_str);
+  auto out_nc_strides_param = const_param(out_nc_str);
 
   dispatch_all_types(in.dtype(), [&](auto type_tag) {
     using CTYPE = MLX_GET_TYPE(type_tag);
@@ -1188,9 +1151,9 @@ void gpu_radix_partition_small(
               out_stride_sorted_axis,
               in_stride_segment_axis,
               out_stride_segment_axis,
-              nc_shape_ptr,
-              in_nc_strides_ptr,
-              out_nc_strides_ptr,
+              nc_shape_param,
+              in_nc_strides_param,
+              out_nc_strides_param,
               nc_dim);
         });
       });
@@ -1551,46 +1514,9 @@ void gpu_radix_partition_large(
   encoder.set_input_array(in);
   encoder.set_output_array(out);
 
-  const int32_t* nc_shape_ptr = nullptr;
-  const int64_t* in_nc_strides_ptr = nullptr;
-  const int64_t* out_nc_strides_ptr = nullptr;
-  if (nc_dim > 0) {
-    array nc_shape_dev({nc_dim}, int32, nullptr, {});
-    array in_nc_strides_dev({nc_dim}, int64, nullptr, {});
-    array out_nc_strides_dev({nc_dim}, int64, nullptr, {});
-    nc_shape_dev.set_data(cu::malloc_async(nc_shape_dev.nbytes(), encoder));
-    in_nc_strides_dev.set_data(
-        cu::malloc_async(in_nc_strides_dev.nbytes(), encoder));
-    out_nc_strides_dev.set_data(
-        cu::malloc_async(out_nc_strides_dev.nbytes(), encoder));
-
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(
-        gpu_ptr<int32_t>(nc_shape_dev),
-        nc_shape.data(),
-        nc_shape_dev.nbytes(),
-        cudaMemcpyHostToDevice,
-        encoder.stream()));
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(
-        gpu_ptr<int64_t>(in_nc_strides_dev),
-        in_nc_str.data(),
-        in_nc_strides_dev.nbytes(),
-        cudaMemcpyHostToDevice,
-        encoder.stream()));
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(
-        gpu_ptr<int64_t>(out_nc_strides_dev),
-        out_nc_str.data(),
-        out_nc_strides_dev.nbytes(),
-        cudaMemcpyHostToDevice,
-        encoder.stream()));
-
-    nc_shape_ptr = gpu_ptr<int32_t>(nc_shape_dev);
-    in_nc_strides_ptr = gpu_ptr<int64_t>(in_nc_strides_dev);
-    out_nc_strides_ptr = gpu_ptr<int64_t>(out_nc_strides_dev);
-
-    encoder.add_temporary(nc_shape_dev);
-    encoder.add_temporary(in_nc_strides_dev);
-    encoder.add_temporary(out_nc_strides_dev);
-  }
+  auto nc_shape_param = const_param(nc_shape);
+  auto in_nc_strides_param = const_param(in_nc_str);
+  auto out_nc_strides_param = const_param(out_nc_str);
 
   dispatch_all_types(in.dtype(), [&](auto type_tag) {
     using CTYPE = MLX_GET_TYPE(type_tag);
@@ -1624,9 +1550,9 @@ void gpu_radix_partition_large(
             kth,
             in_stride_sorted_axis,
             out_stride_sorted_axis,
-            nc_shape_ptr,
-            in_nc_strides_ptr,
-            out_nc_strides_ptr,
+            nc_shape_param,
+            in_nc_strides_param,
+            out_nc_strides_param,
             nc_dim);
       });
     } else {
@@ -1646,6 +1572,12 @@ void gpu_radix_partition(
   int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
   int size_sorted_axis = in.shape(axis);
   int kth = kth_ < 0 ? kth_ + size_sorted_axis : kth_;
+  int nc_dim = static_cast<int>(in.ndim()) - 1;
+
+  // Fixed-size const_param metadata is capped by MAX_NDIM.
+  if (nc_dim > MAX_NDIM) {
+    return gpu_merge_sort(s, in, out, axis, arg_partition);
+  }
 
   // Dispatch based on size
   if (size_sorted_axis <= 2048) {
