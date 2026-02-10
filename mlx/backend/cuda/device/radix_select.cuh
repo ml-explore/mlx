@@ -472,36 +472,114 @@ __global__ void radix_select_small_kernel(
     }
   }
 
-  int less_thread_offset = block_exclusive_scan<BLOCK_THREADS>(
+  (void)block_exclusive_scan<BLOCK_THREADS>(
       local_less, shared_hist, &shared_count[0]);
-  int equal_thread_offset = block_exclusive_scan<BLOCK_THREADS>(
+  (void)block_exclusive_scan<BLOCK_THREADS>(
       local_equal, shared_hist, &shared_count[1]);
-
-  int q = tile_n / BLOCK_THREADS;
-  int r = tile_n - q * BLOCK_THREADS;
-  int prefix_total = int(threadIdx.x) * q + min(int(threadIdx.x), r);
-  int greater_thread_offset =
-      prefix_total - less_thread_offset - equal_thread_offset;
 
   int less_count = shared_count[0];
   int equal_count = shared_count[1];
 
-  for (int i = threadIdx.x; i < tile_n; i += BLOCK_THREADS) {
-    UnsignedT key = shared_keys[i];
-    int pos;
-    if (key < target_prefix) {
-      pos = less_thread_offset++;
-    } else if (key == target_prefix) {
-      pos = less_count + equal_thread_offset++;
-    } else {
-      pos = less_count + equal_count + greater_thread_offset++;
+  // Scatter in increasing i order to keep tie behavior aligned with merge sort.
+  constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
+  static_assert(3 * NUM_WARPS + 6 <= RADIX_SIZE);
+
+  int lane = threadIdx.x & (WARP_SIZE - 1);
+  int warp = threadIdx.x / WARP_SIZE;
+
+  int* warp_less = shared_hist;
+  int* warp_equal = shared_hist + NUM_WARPS;
+  int* warp_greater = shared_hist + 2 * NUM_WARPS;
+  int* iter_counts = shared_hist + 3 * NUM_WARPS;
+  int* running_bases = iter_counts + 3;
+
+  if (threadIdx.x == 0) {
+    running_bases[0] = 0;
+    running_bases[1] = less_count;
+    running_bases[2] = less_count + equal_count;
+  }
+  __syncthreads();
+
+  for (int base_i = 0; base_i < tile_n; base_i += BLOCK_THREADS) {
+    int i = base_i + threadIdx.x;
+    bool active = i < tile_n;
+
+    UnsignedT key = 0;
+    if (active) {
+      key = shared_keys[i];
     }
 
-    if (ARG_PARTITION) {
-      row_output[pos * out_stride] = shared_idxs[i];
-    } else {
-      row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];
+    bool is_less = active && (key < target_prefix);
+    bool is_equal = active && (key == target_prefix);
+    bool is_greater = active && !is_less && !is_equal;
+
+    unsigned less_mask = __ballot_sync(0xFFFFFFFF, is_less);
+    unsigned equal_mask = __ballot_sync(0xFFFFFFFF, is_equal);
+    unsigned greater_mask = __ballot_sync(0xFFFFFFFF, is_greater);
+
+    unsigned lane_mask = (1u << lane) - 1u;
+    int less_rank = __popc(less_mask & lane_mask);
+    int equal_rank = __popc(equal_mask & lane_mask);
+    int greater_rank = __popc(greater_mask & lane_mask);
+
+    if (lane == 0) {
+      warp_less[warp] = __popc(less_mask);
+      warp_equal[warp] = __popc(equal_mask);
+      warp_greater[warp] = __popc(greater_mask);
     }
+    __syncthreads();
+
+    if (threadIdx.x == 0) {
+      int run = 0;
+      for (int w = 0; w < NUM_WARPS; ++w) {
+        int c = warp_less[w];
+        warp_less[w] = run;
+        run += c;
+      }
+      iter_counts[0] = run;
+
+      run = 0;
+      for (int w = 0; w < NUM_WARPS; ++w) {
+        int c = warp_equal[w];
+        warp_equal[w] = run;
+        run += c;
+      }
+      iter_counts[1] = run;
+
+      run = 0;
+      for (int w = 0; w < NUM_WARPS; ++w) {
+        int c = warp_greater[w];
+        warp_greater[w] = run;
+        run += c;
+      }
+      iter_counts[2] = run;
+    }
+    __syncthreads();
+
+    if (active) {
+      int pos;
+      if (is_less) {
+        pos = running_bases[0] + warp_less[warp] + less_rank;
+      } else if (is_equal) {
+        pos = running_bases[1] + warp_equal[warp] + equal_rank;
+      } else {
+        pos = running_bases[2] + warp_greater[warp] + greater_rank;
+      }
+
+      if (ARG_PARTITION) {
+        row_output[pos * out_stride] = shared_idxs[i];
+      } else {
+        row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];
+      }
+    }
+    __syncthreads();
+
+    if (threadIdx.x == 0) {
+      running_bases[0] += iter_counts[0];
+      running_bases[1] += iter_counts[1];
+      running_bases[2] += iter_counts[2];
+    }
+    __syncthreads();
   }
 }
 

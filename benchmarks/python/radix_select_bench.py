@@ -156,6 +156,16 @@ def verify_tie_determinism(b=64, v=1024, k=None, dtype=mx.float32, axis=-1):
             f"{unique_outputs}/8 unique outputs for all-equal input "
             f"(shape=({b}, {v}), kth={k}, dtype={dtype})"
         )
+
+    # If deterministic, verify tie ordering matches original merge-sort order.
+    expected = mx.argsort(x, axis=axis)
+    mx.eval(expected)
+    expected_np = np.array(expected)
+    if not np.array_equal(outputs[0], expected_np):
+        raise AssertionError(
+            "Deterministic tie ordering does not match merge-sort baseline "
+            f"(shape=({b}, {v}), kth={k}, dtype={dtype})"
+        )
     return True
 
 
