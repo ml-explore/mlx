@@ -82,8 +82,7 @@ void RMSNorm::eval_gpu(
 
     uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(
-        x.data_shared_ptr() == nullptr ? out : x, 0);
+    compute_encoder.set_input_array(x, 0);
     compute_encoder.set_input_array(w, 1);
     compute_encoder.set_output_array(out, 2);
     compute_encoder.set_bytes(eps_, 3);
@@ -287,8 +286,7 @@ void LayerNorm::eval_gpu(
     uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     uint32_t b_stride = (b.ndim() == 1) ? b.strides()[0] : 0;
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(
-        x.data_shared_ptr() == nullptr ? out : x, 0);
+    compute_encoder.set_input_array(x, 0);
     compute_encoder.set_input_array(w, 1);
     compute_encoder.set_input_array(b, 2);
     compute_encoder.set_output_array(out, 3);
