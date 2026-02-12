@@ -1403,6 +1403,21 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK_EQ(exp(x).item<complex64_t>(), complex64_t{0, 0});
   }
 
+  // float64 exp
+  if (default_device() == Device::cpu) {
+    array x(0.0, float64);
+    auto out = exp(x);
+    CHECK_EQ(out.dtype(), float64);
+    CHECK_EQ(out.item<double>(), 1.0);
+
+    x = array(2.0, float64);
+    CHECK_EQ(exp(x).item<double>(), doctest::Approx(std::exp(2.0)));
+
+    x = array(1.2345678901234567, float64);
+    CHECK_EQ(
+        exp(x).item<double>(), doctest::Approx(std::exp(1.2345678901234567)));
+  }
+
   // Test expm1
   {
     array x(-1.0f);
@@ -1441,6 +1456,21 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK(allclose(sin(x), expected).item<bool>());
   }
 
+  // float64 sin
+  if (default_device() == Device::cpu) {
+    array x(0.0, float64);
+    auto out = sin(x);
+    CHECK_EQ(out.dtype(), float64);
+    CHECK_EQ(out.item<double>(), 0.0);
+
+    x = array(M_PI_2, float64);
+    CHECK_EQ(sin(x).item<double>(), doctest::Approx(std::sin(M_PI_2)));
+
+    x = array(0.123456789012345, float64);
+    CHECK_EQ(
+        sin(x).item<double>(), doctest::Approx(std::sin(0.123456789012345)));
+  }
+
   // Test cos
   {
     array x(0.0);
@@ -1463,6 +1493,21 @@ TEST_CASE("test arithmetic unary ops") {
     x = split(array({0.0f, 1.0f, 2.0f, 3.0f}, {2, 2}), 2, 1)[0];
     auto expected = array({std::cos(0.0f), std::cos(2.0f)}, {2, 1});
     CHECK(allclose(cos(x), expected).item<bool>());
+  }
+
+  // float64 cos
+  if (default_device() == Device::cpu) {
+    array x(0.0, float64);
+    auto out = cos(x);
+    CHECK_EQ(out.dtype(), float64);
+    CHECK_EQ(out.item<double>(), 1.0);
+
+    x = array(M_PI_2, float64);
+    CHECK_EQ(cos(x).item<double>(), doctest::Approx(std::cos(M_PI_2)));
+
+    x = array(0.123456789012345, float64);
+    CHECK_EQ(
+        cos(x).item<double>(), doctest::Approx(std::cos(0.123456789012345)));
   }
 
   // Test degrees
@@ -1704,6 +1749,49 @@ TEST_CASE("test error functions") {
       x = array(vals.begin()[i]);
       CHECK_EQ(erfinv(x).item<float>(), doctest::Approx(expected.begin()[i]));
     }
+  }
+
+  // float64
+  if (default_device() == Device::cpu) {
+    array x(0.0, float64);
+    auto out = erf(x);
+    CHECK_EQ(out.dtype(), float64);
+    CHECK_EQ(out.item<double>(), 0.0);
+
+    constexpr double inf_d = std::numeric_limits<double>::infinity();
+    x = array(inf_d, float64);
+    CHECK_EQ(erf(x).item<double>(), 1.0);
+    x = array(-inf_d, float64);
+    CHECK_EQ(erf(x).item<double>(), -1.0);
+
+    // Test precision with scipy-generated values
+    x = array(0.9, float64);
+    CHECK_EQ(erf(x).item<double>(), doctest::Approx(0.7969082124228322));
+    x = array(0.5, float64);
+    CHECK_EQ(erf(x).item<double>(), doctest::Approx(0.5204998778130465));
+
+    // erfinv float64
+    x = array(0.0, float64);
+    out = erfinv(x);
+    CHECK_EQ(out.dtype(), float64);
+    CHECK_EQ(out.item<double>(), 0.0);
+
+    x = array(1.0, float64);
+    CHECK_EQ(erfinv(x).item<double>(), inf_d);
+    x = array(-1.0, float64);
+    CHECK_EQ(erfinv(x).item<double>(), -inf_d);
+
+    // Test precision with scipy-generated values
+    x = array(0.9, float64);
+    CHECK_EQ(erfinv(x).item<double>(), doctest::Approx(1.1630871536766738));
+    x = array(0.5, float64);
+    CHECK_EQ(erfinv(x).item<double>(), doctest::Approx(0.4769362762044699));
+    x = array(0.1, float64);
+    CHECK_EQ(erfinv(x).item<double>(), doctest::Approx(0.08885599049425778));
+
+    // Test tail values (region3 of erfinv)
+    x = array(0.99, float64);
+    CHECK_EQ(erfinv(x).item<double>(), doctest::Approx(1.8213863677184496));
   }
 
   // float16_t
