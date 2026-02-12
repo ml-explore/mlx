@@ -295,6 +295,73 @@ void qmv(
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
+void qmv_split_k(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string& mode) {
+  int split_k = K > 8192 ? 32 : 8;
+  int groups_per_part = (K / group_size) / split_k;
+  int partition_size = groups_per_part * group_size;
+
+  int bn = 8;
+  int bk = 32;
+  MTL::Size group_dims(bk, 2, 1);
+  MTL::Size grid_dims(M, (N + bn - 1) / bn, split_k);
+
+  array intermediate({split_k, M, N}, float32, nullptr, {});
+  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
+  d.add_temporary(intermediate, s.index);
+
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname;
+  kname.reserve(64);
+  concatenate(
+      kname,
+      mode + "_qmv_split_k_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits);
+  auto kernel = get_quantized_kernel_wrapped(
+      d, kname, "qmv_split_k", mode, type_string, group_size, bits);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
+  }
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_output_array(intermediate, c++);
+  int split_k_partition_stride = M * N;
+  compute_encoder.set_bytes(partition_size, c++); // in_vec_size (partition)
+  compute_encoder.set_bytes(N, c++); // out_vec_size
+  compute_encoder.set_bytes(K, c++); // in_vec_size_full
+  compute_encoder.set_bytes(
+      split_k_partition_stride, c++); // split_k_partition_stride
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+  int axis = 0;
+  ReductionPlan plan(
+      ReductionOpType::ContiguousStridedReduce,
+      {intermediate.shape(axis)},
+      {intermediate.strides(axis)});
+  strided_reduce_general_dispatch(
+      intermediate, out, "sum", plan, {axis}, compute_encoder, d, s);
+}
 
 void qvm_split_k(
     const array& x,
@@ -769,6 +836,98 @@ void qmm(
   add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, c);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void qmm_splitk(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string& mode) {
+  // Choose split_k to target ~512 threadgroups
+  int bm = 32, bn = 32;
+  int n_tiles = (N + bn - 1) / bn;
+  int m_tiles = (M + bm - 1) / bm;
+  int current_tgs = n_tiles * m_tiles;
+  int split_k = std::max(1, 512 / current_tgs);
+
+  // Ensure K divides evenly by split_k * group_size
+  while (split_k > 1 && (K % (split_k * group_size) != 0)) {
+    split_k--;
+  }
+  if (split_k <= 1) {
+    return qmm(
+        x, w, scales, biases, out, true, group_size, bits, M, N, K, d, s, mode);
+  }
+
+  int k_partition_size = K / split_k;
+  int split_k_partition_stride = M * N;
+
+  // Allocate intermediate buffer: insert split_k at the front so that
+  // partition_stride = M * N matches the leading stride of the buffer.
+  auto temp_shape = out.shape();
+  if (temp_shape.size() == 1) {
+    temp_shape.insert(temp_shape.begin(), 1);
+  }
+  temp_shape.insert(temp_shape.begin(), split_k);
+  array intermediate(temp_shape, x.dtype(), nullptr, {});
+  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
+  d.add_temporary(intermediate, s.index);
+
+  // Grid: (N_tiles, M_tiles, split_k)
+  MTL::Size group_dims(32, 2, 2);
+  MTL::Size grid_dims(n_tiles, m_tiles, split_k);
+
+  bool aligned = N % 32 == 0;
+  std::string type_string = get_type_string(x.dtype());
+  std::string kname;
+  kname.reserve(64);
+  concatenate(
+      kname,
+      mode + "_qmm_t_splitk_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      aligned ? "_alN_true" : "_alN_false");
+  auto kernel = get_quantized_kernel_wrapped(
+      d, kname, "qmm_t_splitk", mode, type_string, group_size, bits, aligned);
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
+  }
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_output_array(intermediate, c++);
+  compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(M, c++);
+  compute_encoder.set_bytes(k_partition_size, c++);
+  compute_encoder.set_bytes(split_k_partition_stride, c++);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+  // Sum across split_k dimension (axis 0)
+  ReductionPlan plan(
+      ReductionOpType::ContiguousStridedReduce,
+      {intermediate.shape(0)},
+      {intermediate.strides(0)});
+  strided_reduce_general_dispatch(
+      intermediate, out, "sum", plan, {0}, compute_encoder, d, s);
 }
 
 void gather_qmm(
@@ -1286,8 +1445,6 @@ void dispatch_qmv(
     qmv_quad(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
     return;
   }
-
-  // Run of the mill qmv
   qmv(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
 }
 
@@ -1317,6 +1474,13 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto mode = quantization_mode_to_string(mode_);
   // It is a matrix matrix product.
   if (M >= vector_limit) {
+    // Use split-K qmm for small M with transposed weights (non-batched only)
+    int B = out.size() / M / N;
+    if (transpose_ && B == 1) {
+      qmm_splitk(
+          x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+      return;
+    }
     qmm(x,
         w,
         scales,
