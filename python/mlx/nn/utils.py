@@ -208,7 +208,7 @@ def average_gradients(
         communication_type (Optional[mlx.core.Dtype]): If provided cast to this
             type before performing the communication. Typically cast to a
             smaller float to reduce the communication size. Default: ``None``.
-        communication_stream (Optional[mlx.core.Stream]): The stream to usse
+        communication_stream (Optional[mlx.core.Stream]): The stream to use
             for the communication. If unspecified the default communication
             stream is used which can vary by back-end. Default: ``None``.
     """
@@ -240,16 +240,21 @@ def reduce_scatter_gradients(
     communication_type: Optional[mx.Dtype] = None,
     communication_stream: Optional[mx.Stream] = None,
 ):
-    """Reduce-scatter gradients across distributed processes.
+    """Average and scatter the gradients across the distributed processes in the passed group
 
-    Similar to average_gradients but uses reduce_scatter instead of all_reduce,
-    so each rank ends up with 1/N of the averaged gradients.
+    Similar to :func:`average_gradients`, but uses ``sum_scatter`` instead of
+    ``all_sum`` so each rank receives a shard of the averaged gradients.
+
+    Each gradient array is sharded along axis 0, so that dimension
+    must be divisible by the world size of the group.
+
+    Notes: Currently supported only on CUDA backend.
 
     Args:
         gradients (Any): The Python tree containing the gradients (it should
             have the same structure across processes)
         group (Optional[mlx.core.distributed.Group]): The group of processes to
-            reduce-scatter the gradients. If set to ``None`` the global group is used.
+            average and scatter the gradients. If ``None``, the global group is used.
             Default: ``None``.
         reduce_scatter_size (int): Group arrays until their size in bytes exceeds
             this number. Perform one communication step per group of arrays. If
@@ -260,7 +265,14 @@ def reduce_scatter_gradients(
         communication_stream (Optional[mlx.core.Stream]): The stream to use
             for the communication. If unspecified the default communication
             stream is used which can vary by back-end. Default: ``None``.
+
+    Returns:
+        A slice of a tree with the same structure as ``gradients``, where each tensor is
+        replaced by its shard containing the averaged values for that rank.
     """
+    if not mx.cuda.is_available():
+        raise NotImplementedError("Currently only supported on CUDA backend.")
+
     group = group or mx.distributed.init()
     N = group.size()
 
@@ -298,14 +310,13 @@ def all_gather_parameters(
 ):
     """All-gather parameters across distributed processes.
 
-    Each rank has 1/N of the parameters, this gathers them to reconstruct
-    the full parameters on each rank.
+    Gathers parameter slices from each rank and reconstructs the full Python tree.
 
     Args:
         parameters_slice (Any): The Python tree containing the parameter slices
             (it should have the same structure across processes)
         group (Optional[mlx.core.distributed.Group]): The group of processes to
-            all-gather the parameters. If set to ``None`` the global group is used.
+            all-gather the parameters. If ``None``, the global group is used.
             Default: ``None``.
         all_gather_size (int): Group arrays until their size in bytes exceeds
             this number. Perform one communication step per group of arrays. If
@@ -316,9 +327,16 @@ def all_gather_parameters(
         communication_stream (Optional[mlx.core.Stream]): The stream to use
             for the communication. If unspecified the default communication
             stream is used which can vary by back-end. Default: ``None``.
+
+    Returns:
+        A tree with the same structure as ``parameters_slice``, where each
+        tensor is reconstructed to the full (unsharded) value.
     """
     group = group or mx.distributed.init()
     N = group.size()
+
+    if not mx.cuda.is_available():
+        raise NotImplementedError("Currently only supported on CUDA backend.")
 
     _all_gather = _make_comm_fn(
         communication_type,
@@ -344,15 +362,11 @@ def all_gather_parameters(
 
 
 def _clip_grad_norm_fsdp(grads_slice, max_norm):
-    """Compute global gradient norm and clip gradients.
-
-    Args:
-        grads_slice: Gradient slices (each rank has 1/N of full gradients)
-        max_norm: Maximum gradient norm
-
-    Returns:
-        Tuple of (clipped_grads_slice, grad_norm)
-    """
+    """Clip sharded gradients by global norm and return the unclipped norm."""
+    # For fsdp each rank hold a slice of the gradients,
+    # so we need to compute the local norm, then do an all-reduce
+    # to get the global norm, and then compute the clipping factor
+    # and apply it to the local slice.
     local_norm_sq = tree_reduce(lambda acc, g: acc + g.square().sum(), grads_slice, 0.0)
     global_norm_sq = mx.distributed.all_sum(local_norm_sq)
     grad_norm = mx.sqrt(global_norm_sq)
@@ -362,39 +376,42 @@ def _clip_grad_norm_fsdp(grads_slice, max_norm):
 
 
 def fsdp_update_params(
-    parameters,
-    gradients,
-    optimizer,
+    parameters: Any,
+    gradients: Any,
+    optimizer: Any,
     group: Optional[mx.distributed.Group] = None,
     communication_size: int = 32 * 1024**2,
     communication_type: Optional[mx.Dtype] = None,
     communication_stream: Optional[mx.Stream] = None,
     max_norm: Optional[float] = None,
 ):
-    """Update parameters using FSDP (Fully Sharded Data Parallel) strategy.
+    """Update parameters with an FSDP-style communication pattern.
 
-    This function performs the following steps:
+    Communication flow:
+    1. Reduce-scatter and average gradients across ranks.
+    2. Optionally clip gradients by global norm.
+    3. Update local parameter shards with the optimizer.
+    4. All-gather updated shards to reconstruct full parameters.
 
-    1. Sum-scatter gradients across ranks (each rank gets 1/N of averaged gradients)
-    2. Optionally clip gradients by global norm
-    3. Apply optimizer update on local parameter slice
-    4. All-gather updated parameters to reconstruct full parameters on each rank
+    This utility assumes full parameters are materialized outside this update
+    step (no parameter reshard after forward/backward). Conceptually this is
+    similar to the no-reshard variant of FSDP.
 
-    Note: There is currently no option to shard model parameters during the
-    forward/backward passes. Each rank holds a full parameter copy. This is equivalent
-    to PyTorch's ``torch.distributed.fsdp.fully_shard(model, reshard_after_forward=False)``.
-
-    All parameters must have their first dimension divisible by the world size.
+    Requirements:
+    - CUDA backend (depends on reduce-scatter / all-gather helpers).
+    - Every parameter and gradient tensor is sharded on axis 0, and that
+      dimension must be divisible by world size.
 
     Args:
-        parameters (Any): The Python tree containing the full parameters (same
-            structure across processes). Each parameter's first dimension must
+        parameters (Any): Tree of full parameters (same structure across
+            processes). Each parameter's first dimension must
             be divisible by the world size.
-        gradients (Any): The Python tree containing the full gradients (same
-            structure as parameters)
-        optimizer: Optimizer with an apply_gradients method
+        gradients (Any): Tree of full gradients (same structure as
+            ``parameters``). Each gradient's first dimension must be
+            divisible by the world size.
+        optimizer: Optimizer with an ``apply_gradients`` method.
         group (Optional[mlx.core.distributed.Group]): The group of processes for
-            communication. If set to ``None`` the global group is used.
+            communication. If ``None``, the global group is used.
             Default: ``None``.
         communication_size (int): Group arrays until their size in bytes exceeds
             this number. Perform one communication step per group of arrays. If
@@ -409,9 +426,9 @@ def fsdp_update_params(
             maximum global norm before applying optimizer update. Default: ``None``.
 
     Returns:
-        The updated parameters tree. If ``max_norm`` is provided, returns
-        a tuple ``(parameters, grad_norm)`` where ``grad_norm`` is the global
-        gradient norm before clipping.
+        If ``max_norm`` is ``None``, returns the updated full-parameter tree.
+        Otherwise returns ``(parameters, grad_norm)``, where ``grad_norm`` is
+        the global gradient norm before clipping.
 
     Example:
 
@@ -428,7 +445,7 @@ def fsdp_update_params(
     rank = group.rank()
     world_size = group.size()
 
-    # Sum-scatter gradients so each rank gets 1/N of the averaged gradients
+    # Reduce-scatter gradients so each rank gets 1/N of the averaged gradients
     grads_slice = reduce_scatter_gradients(
         gradients,
         group=group,
