@@ -1,11 +1,11 @@
 # Copyright © 2023-2024 Apple Inc.
 
-from functools import reduce, wraps
-from typing import Any, Callable, Optional
+from functools import wraps
+from typing import Any, Callable, List, Optional
 
 import mlx.core as mx
 
-from ..utils import tree_flatten, tree_map, tree_unflatten
+from ..utils import tree_flatten, tree_map, tree_reduce, tree_unflatten
 from .layers.base import Module
 
 
@@ -71,6 +71,138 @@ def checkpoint(module: Module, fn: Optional[Callable] = None):
     return wrapped_checkpointed_fn
 
 
+def _group_arrays_by_size(
+    sizes: List[int],
+    itemsize: int,
+    threshold: int,
+) -> List[List[int]]:
+    groups = []
+    current_group = []
+    current_size = 0
+    for i in range(len(sizes)):
+        current_group.append(i)
+        current_size += sizes[i] * itemsize
+        if current_size >= threshold:
+            groups.append(current_group)
+            current_group = []
+            current_size = 0
+    if current_group:
+        groups.append(current_group)
+    return groups
+
+
+def _get_itemsize(
+    communication_type: Optional[mx.Dtype],
+    default_dtype: mx.Dtype,
+) -> int:
+    return (
+        communication_type.size
+        if communication_type is not None
+        else default_dtype.size
+    )
+
+
+def _compute_split_indices(group: List[int], elem_sizes: List[int]) -> List[int]:
+    indices = [0]
+    for i in group:
+        indices.append(indices[-1] + elem_sizes[i])
+    return indices[1:-1]
+
+
+def _make_comm_fn(
+    communication_type: Optional[mx.Dtype],
+    op_fn: Callable,
+) -> Callable:
+    def comm_fn(x):
+        dt = x.dtype
+        x = x.astype(communication_type) if communication_type is not None else x
+        return op_fn(x).astype(dt)
+
+    return comm_fn
+
+
+def _extract_info(flat: List) -> tuple:
+    keys = [k for k, _ in flat]
+    shapes = [v.shape for _, v in flat]
+    sizes = [v.size for _, v in flat]
+    dtypes = [v.dtype for _, v in flat]
+    return keys, shapes, sizes, dtypes
+
+
+def _grouped_comm_op(
+    arrays: Any,
+    group: mx.distributed.Group,
+    size_threshold: int,
+    communication_type: Optional[mx.Dtype],
+    comm_fn: Callable,
+    tree_map_fn: Callable,
+    reshape_for_concat: Callable,
+    get_split_sizes: Callable,
+    get_target_shapes: Callable,
+    concat_axis: int = 0,
+    split_axis: int = 0,
+    flatten_before_split: bool = False,
+) -> Any:
+    N = group.size()
+
+    if N == 1:
+        return arrays
+
+    if size_threshold <= 0:
+        return tree_map(tree_map_fn, arrays)
+
+    flat = tree_flatten(arrays)
+
+    if not flat:
+        return arrays
+
+    keys, shapes, sizes, dtypes = _extract_info(flat)
+
+    if not all(dt == dtypes[0] for dt in dtypes):
+        return _grouped_comm_op(
+            arrays,
+            group,
+            0,
+            communication_type,
+            comm_fn,
+            tree_map_fn,
+            reshape_for_concat,
+            get_split_sizes,
+            get_target_shapes,
+            concat_axis,
+            split_axis,
+            flatten_before_split,
+        )
+
+    split_sizes = get_split_sizes(sizes, N)
+    target_shapes = get_target_shapes(shapes, N)
+
+    itemsize = _get_itemsize(communication_type, dtypes[0])
+    groups = _group_arrays_by_size(sizes, itemsize, size_threshold)
+
+    new_flat = []
+    for grp in groups:
+        split_indices = _compute_split_indices(grp, split_sizes)
+
+        big = mx.concatenate(
+            [reshape_for_concat(flat[i][1], N) for i in grp],
+            axis=concat_axis,
+        )
+
+        result = comm_fn(big)
+
+        if flatten_before_split:
+            result = result.reshape(-1)
+            parts = mx.split(result, split_indices)
+        else:
+            parts = mx.split(result, split_indices, axis=split_axis)
+
+        for idx_in_grp, i in enumerate(grp):
+            new_flat.append((keys[i], parts[idx_in_grp].reshape(target_shapes[i])))
+
+    return tree_unflatten(new_flat)
+
+
 def average_gradients(
     gradients: Any,
     group: Optional[mx.distributed.Group] = None,
@@ -102,64 +234,139 @@ def average_gradients(
     group = group or mx.distributed.init()
     N = group.size()
 
-    if N == 1:
-        return gradients
+    _average = _make_comm_fn(
+        communication_type,
+        lambda x: mx.distributed.all_sum(x, stream=communication_stream) / N,
+    )
 
-    def _average(x):
-        dt = x.dtype
-        x = x.astype(communication_type) if communication_type is not None else x
-        return mx.distributed.all_sum(x, stream=communication_stream).astype(dt) / N
+    return _grouped_comm_op(
+        arrays=gradients,
+        group=group,
+        size_threshold=all_reduce_size,
+        communication_type=communication_type,
+        comm_fn=_average,
+        tree_map_fn=_average,
+        reshape_for_concat=lambda v, N: v.reshape(-1),
+        get_split_sizes=lambda sizes, N: sizes,
+        get_target_shapes=lambda shapes, N: shapes,
+    )
 
-    if all_reduce_size <= 0:
-        return tree_map(_average, gradients)
 
-    else:
-        flat_grads = tree_flatten(gradients)
-        if len(flat_grads) == 0:
-            return gradients
+def reduce_scatter_gradients(
+    gradients: Any,
+    group: Optional[mx.distributed.Group] = None,
+    reduce_scatter_size: int = 32 * 1024**2,
+    communication_type: Optional[mx.Dtype] = None,
+    communication_stream: Optional[mx.Stream] = None,
+):
+    """Reduce-scatter gradients across distributed processes.
 
-        # Extract some info for the gradient
-        keys = [k for k, _ in flat_grads]
-        shapes = [v.shape for _, v in flat_grads]
-        sizes = [v.size for _, v in flat_grads]
-        dtypes = [v.dtype for _, v in flat_grads]
+    Similar to average_gradients but uses reduce_scatter instead of all_reduce,
+    so each rank ends up with 1/N of the averaged gradients.
 
-        # We can't group them if they have mixed types
-        if not all(dt == dtypes[0] for dt in dtypes):
-            return average_gradients(gradients, group, 0, communication_type)
-        itemsize = (
-            communication_type.size
-            if communication_type is not None
-            else dtypes[0].size
+    Args:
+        gradients (Any): The Python tree containing the gradients (it should
+            have the same structure across processes)
+        group (Optional[mlx.core.distributed.Group]): The group of processes to
+            reduce-scatter the gradients. If set to ``None`` the global group is used.
+            Default: ``None``.
+        reduce_scatter_size (int): Group arrays until their size in bytes exceeds
+            this number. Perform one communication step per group of arrays. If
+            less or equal to 0 array grouping is disabled. Default: ``32MiB``.
+        communication_type (Optional[mlx.core.Dtype]): If provided cast to this
+            type before performing the communication. Typically cast to a
+            smaller float to reduce the communication size. Default: ``None``.
+        communication_stream (Optional[mlx.core.Stream]): The stream to use
+            for the communication. If unspecified the default communication
+            stream is used which can vary by back-end. Default: ``None``.
+    """
+    group = group or mx.distributed.init()
+    N = group.size()
+
+    _reduce_scatter = _make_comm_fn(
+        communication_type,
+        lambda x: mx.distributed.sum_scatter(
+            x, group=group, stream=communication_stream
         )
+        / N,
+    )
 
-        # Gather the gradients in groups that are just above or equal to all_reduce_size
-        grad_groups = []
-        grad_group = []
-        grad_group_size = 0
-        for i in range(len(keys)):
-            grad_group.append(i)
-            grad_group_size += sizes[i] * itemsize
-            if grad_group_size >= all_reduce_size:
-                grad_groups.append(grad_group)
-                grad_group = []
-                grad_group_size = 0
-        if grad_group:
-            grad_groups.append(grad_group)
-            grad_group = []
+    return _grouped_comm_op(
+        arrays=gradients,
+        group=group,
+        size_threshold=reduce_scatter_size,
+        communication_type=communication_type,
+        comm_fn=_reduce_scatter,
+        tree_map_fn=lambda g: _reduce_scatter(g.reshape(N, -1)).reshape(
+            g.shape[0] // N, *g.shape[1:]
+        ),
+        reshape_for_concat=lambda v, N: v.reshape(N, -1),
+        get_split_sizes=lambda sizes, N: [s // N for s in sizes],
+        get_target_shapes=lambda shapes, N: [(s[0] // N, *s[1:]) for s in shapes],
+        concat_axis=1,
+        flatten_before_split=True,
+    )
 
-        # Concatenate-reduce-split
-        new_flat_grads = []
-        for grad_group in grad_groups:
-            indices = reduce(lambda x, y: x + [x[-1] + sizes[y]], grad_group, [0])
-            big_grad = mx.concatenate(
-                [flat_grads[i][1].reshape(-1) for i in grad_group]
-            )
-            big_grad = _average(big_grad)
-            big_grad = mx.split(big_grad, indices[1:-1])
-            new_flat_grads.extend(
-                (keys[j], big_grad[i].reshape(shapes[j]))
-                for i, j in enumerate(grad_group)
-            )
 
-        return tree_unflatten(new_flat_grads)
+def all_gather_parameters(
+    parameters_slice: Any,
+    group: Optional[mx.distributed.Group] = None,
+    all_gather_size: int = 32 * 1024**2,
+    communication_type: Optional[mx.Dtype] = None,
+    communication_stream: Optional[mx.Stream] = None,
+):
+    """All-gather parameters across distributed processes.
+
+    Each rank has 1/N of the parameters, this gathers them to reconstruct
+    the full parameters on each rank.
+
+    Args:
+        parameters_slice (Any): The Python tree containing the parameter slices
+            (it should have the same structure across processes)
+        group (Optional[mlx.core.distributed.Group]): The group of processes to
+            all-gather the parameters. If set to ``None`` the global group is used.
+            Default: ``None``.
+        all_gather_size (int): Group arrays until their size in bytes exceeds
+            this number. Perform one communication step per group of arrays. If
+            less or equal to 0 array grouping is disabled. Default: ``32MiB``.
+        communication_type (Optional[mlx.core.Dtype]): If provided cast to this
+            type before performing the communication. Typically cast to a
+            smaller float to reduce the communication size. Default: ``None``.
+        communication_stream (Optional[mlx.core.Stream]): The stream to use
+            for the communication. If unspecified the default communication
+            stream is used which can vary by back-end. Default: ``None``.
+    """
+    group = group or mx.distributed.init()
+    N = group.size()
+
+    _all_gather = _make_comm_fn(
+        communication_type,
+        lambda x: mx.distributed.all_gather(
+            x, group=group, stream=communication_stream
+        ),
+    )
+
+    return _grouped_comm_op(
+        arrays=parameters_slice,
+        group=group,
+        size_threshold=all_gather_size,
+        communication_type=communication_type,
+        comm_fn=lambda x: _all_gather(x.reshape(1, -1)),
+        tree_map_fn=lambda p: _all_gather(p.reshape(1, -1)).reshape(
+            p.shape[0] * N, *p.shape[1:]
+        ),
+        reshape_for_concat=lambda v, N: v.reshape(-1),
+        get_split_sizes=lambda sizes, N: sizes,
+        get_target_shapes=lambda shapes, N: [(s[0] * N, *s[1:]) for s in shapes],
+        split_axis=1,
+    )
+
+
+def clip_grads_fsdp(grads_slice, max_norm):
+    local_norm_sq = tree_reduce(lambda acc, g: acc + g.square().sum(), grads_slice, 0.0)
+    global_norm_sq = mx.distributed.all_sum(local_norm_sq)
+    grad_norm = mx.sqrt(global_norm_sq)
+    normalizer = mx.minimum(max_norm / (grad_norm + 1e-6), 1.0)
+    grads_slice = tree_map(lambda g: g * normalizer, grads_slice)
+
+    return grads_slice, grad_norm
