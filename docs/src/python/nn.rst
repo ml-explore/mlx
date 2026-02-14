@@ -175,7 +175,7 @@ In detail:
    value_and_grad
    quantize
    average_gradients
-   fsdp_update_params
+   fsdp_update_parameters
 
 .. toctree::
 

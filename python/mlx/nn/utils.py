@@ -441,6 +441,9 @@ def fsdp_update_parameters(
     rank = group.rank()
     world_size = group.size()
 
+    if not mx.cuda.is_available():
+        raise NotImplementedError("Currently only supported on CUDA backend.")
+
     grads_slice = reduce_scatter_gradients(
         gradients,
         group=group,
