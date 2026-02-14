@@ -8,7 +8,7 @@ import mlx_tests
 from mlx.nn.utils import (
     all_gather_parameters,
     average_gradients,
-    fsdp_update_params,
+    fsdp_update_parameters,
     reduce_scatter_gradients,
 )
 
@@ -199,7 +199,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
                         mx.allclose(averaged[key], gathered[key], atol=1e-6, rtol=1e-4)
                     )
 
-    def test_fsdp_update_params(self):
+    def test_fsdp_update_parameters(self):
         world = mx.distributed.init()
         N = world.size()
 
@@ -213,7 +213,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         }
 
         optimizer = optim.SGD(learning_rate=0.1)
-        updated_params_fsdp = fsdp_update_params(params, grads, optimizer)
+        updated_params_fsdp = fsdp_update_parameters(params, grads, optimizer)
         mx.eval(updated_params_fsdp)
 
         self.assertEqual(updated_params_fsdp["w1"].shape, (N * 10, 8))
@@ -233,7 +233,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             "w2": mx.ones((N * 20,)) * 10.0,
         }
 
-        new_params_clipped, grad_norm = fsdp_update_params(
+        new_params_clipped, grad_norm = fsdp_update_parameters(
             params, grads, optimizer, max_norm=1.0
         )
         mx.eval(new_params_clipped, grad_norm)
@@ -266,7 +266,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         grads = {"w": mx.ones((N * 4,)) * 0.5}
         optimizer = optim.SGD(learning_rate=0.1)
 
-        updated_params_fsdp = fsdp_update_params(params, grads, optimizer)
+        updated_params_fsdp = fsdp_update_parameters(params, grads, optimizer)
         avg_grads = average_gradients(grads)
         updated_params_ddp = optimizer.apply_gradients(avg_grads, params)
         mx.eval(updated_params_ddp, updated_params_fsdp)
@@ -300,7 +300,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             return grad_norm, params
 
         def pseudo_step_fsdp(grads, params, optimizer):
-            params, grad_norm = fsdp_update_params(
+            params, grad_norm = fsdp_update_parameters(
                 params, grads, optimizer, max_norm=1.0
             )
             return grad_norm, params

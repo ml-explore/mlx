@@ -375,7 +375,7 @@ def _clip_grad_norm_fsdp(grads_slice, max_norm):
     return clipped, grad_norm
 
 
-def fsdp_update_params(
+def fsdp_update_parameters(
     parameters: Any,
     gradients: Any,
     optimizer: Any,
@@ -385,30 +385,25 @@ def fsdp_update_params(
     communication_stream: Optional[mx.Stream] = None,
     max_norm: Optional[float] = None,
 ):
-    """Update parameters with an FSDP-style communication pattern.
+    """Perform a distributed optimizer step by sharding gradients and optimizer states across ranks.
 
-    Communication flow:
-    1. Reduce-scatter and average gradients across ranks.
-    2. Optionally clip gradients by global norm.
-    3. Update local parameter shards with the optimizer.
-    4. All-gather updated shards to reconstruct full parameters.
+    This helper function performs the following steps:
+    1. Reduce-scatter the gradients across ranks so each rank gets a shard of the averaged gradients.
+    2. Optionally clip the sharded gradients by global norm.
+    3. Apply the optimizer update on the local parameter slice using the sharded gradients.
+    4. All-gather the updated parameter slices from all ranks to reconstruct the full parameters tree.
 
-    This utility assumes full parameters are materialized outside this update
-    step (no parameter reshard after forward/backward). Conceptually this is
-    similar to the no-reshard variant of FSDP.
+    This is similar to PyTorch's FSDP with `reshard_after_forward=False`.
 
-    Requirements:
-    - CUDA backend (depends on reduce-scatter / all-gather helpers).
-    - Every parameter and gradient tensor is sharded on axis 0, and that
-      dimension must be divisible by world size.
+    Note: Currently supported only on CUDA backend.
 
     Args:
-        parameters (Any): Tree of full parameters (same structure across
-            processes). Each parameter's first dimension must
-            be divisible by the world size.
-        gradients (Any): Tree of full gradients (same structure as
-            ``parameters``). Each gradient's first dimension must be
-            divisible by the world size.
+        parameters (Any): The Python tree containing the full parameters (it should
+            have the same structure across processes). Each parameter's first
+            dimension must be divisible by the world size.
+        gradients (Any): The Python tree containing the full gradients (it should
+            have the same structure as ``parameters``). Each gradient's first
+            dimension must be divisible by the world size.
         optimizer: Optimizer with an ``apply_gradients`` method.
         group (Optional[mlx.core.distributed.Group]): The group of processes for
             communication. If ``None``, the global group is used.
@@ -423,7 +418,8 @@ def fsdp_update_params(
             for the communication. If unspecified the default communication
             stream is used which can vary by back-end. Default: ``None``.
         max_norm (Optional[float]): If provided, clip gradients to this
-            maximum global norm before applying optimizer update. Default: ``None``.
+            maximum global norm before applying the optimizer update.
+            Default: ``None``.
 
     Returns:
         If ``max_norm`` is ``None``, returns the updated full-parameter tree.
@@ -434,10 +430,10 @@ def fsdp_update_params(
 
         >>> optimizer = optim.SGD(learning_rate=0.01)
         >>> # Without gradient clipping
-        >>> updated_params = fsdp_update_params(params, grads, optimizer)
+        >>> updated_params = fsdp_update_parameters(params, grads, optimizer)
         >>>
         >>> # With gradient clipping
-        >>> updated_params, grad_norm = fsdp_update_params(
+        >>> updated_params, grad_norm = fsdp_update_parameters(
         ...     params, grads, optimizer, max_norm=1.0
         ... )
     """
@@ -445,7 +441,6 @@ def fsdp_update_params(
     rank = group.rank()
     world_size = group.size()
 
-    # Reduce-scatter gradients so each rank gets 1/N of the averaged gradients
     grads_slice = reduce_scatter_gradients(
         gradients,
         group=group,
@@ -454,21 +449,17 @@ def fsdp_update_params(
         communication_stream=communication_stream,
     )
 
-    # Optionally clip gradients
     grad_norm = None
     if max_norm is not None:
         grads_slice, grad_norm = _clip_grad_norm_fsdp(grads_slice, max_norm)
 
-    # Extract local parameter slice (each rank owns 1/N of parameters)
     params_slice = tree_map(
         lambda x: x.reshape(world_size, x.shape[0] // world_size, *x.shape[1:])[rank],
         parameters,
     )
 
-    # Apply optimizer update on local parameter slice
     params_slice = optimizer.apply_gradients(grads_slice, params_slice)
 
-    # All-gather updated parameters from all ranks
     params = all_gather_parameters(
         params_slice,
         group=group,
