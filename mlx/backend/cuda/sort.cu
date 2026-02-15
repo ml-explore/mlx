@@ -1212,7 +1212,6 @@ int64_t segment_stride_for_contiguous(
 
 struct RadixLaunchPlan {
   int blocks_per_row{1};
-  int rows_per_block{1};
 
   bool uses_tiled_launch() const {
     return blocks_per_row > 1;
@@ -1248,7 +1247,6 @@ RadixLaunchPlan make_radix_tiled_launch_plan(
   constexpr int kBlocksPerSmTarget = 4;
   constexpr int kMinElemsPerBlock = 1024;
   constexpr int kMaxBlocksPerRow = 32;
-  constexpr int kMaxRowsPerBlock = 4;
 
   int sm_count = 0;
   CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
@@ -1266,18 +1264,7 @@ RadixLaunchPlan make_radix_tiled_launch_plan(
   if (blocks_per_row <= 1) {
     return {};
   }
-
-  int total_blocks = n_rows * blocks_per_row;
-  int chunk = (size_sorted_axis + blocks_per_row - 1) / blocks_per_row;
-
-  int rows_per_block = 1;
-  if (total_blocks > target_blocks && chunk <= 2 * kMinElemsPerBlock) {
-    rows_per_block = std::min(
-        {kMaxRowsPerBlock,
-         n_rows,
-         std::max(1, (total_blocks + target_blocks - 1) / target_blocks)});
-  }
-  return {blocks_per_row, rows_per_block};
+  return {blocks_per_row};
 }
 
 Dtype unsigned_dtype_for_size(int size) {
@@ -1307,7 +1294,6 @@ void gpu_radix_partition_large_tiled(
     int64_t in_stride_segment_axis,
     int64_t out_stride_segment_axis,
     int blocks_per_row,
-    int rows_per_block,
     bool arg_partition) {
   auto& encoder = cu::get_command_encoder(s);
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
@@ -1333,9 +1319,6 @@ void gpu_radix_partition_large_tiled(
       int total_blocks = n_rows * blocks_per_row;
       array block_less_dev({total_blocks}, int32, nullptr, {});
       array block_equal_dev({total_blocks}, int32, nullptr, {});
-      array less_base_dev({total_blocks}, int32, nullptr, {});
-      array equal_base_dev({total_blocks}, int32, nullptr, {});
-      array greater_base_dev({total_blocks}, int32, nullptr, {});
 
       auto allocate_temporary = [&](array& a) {
         a.set_data(cu::malloc_async(a.nbytes(), encoder));
@@ -1347,13 +1330,9 @@ void gpu_radix_partition_large_tiled(
       allocate_temporary(row_hist_dev);
       allocate_temporary(block_less_dev);
       allocate_temporary(block_equal_dev);
-      allocate_temporary(less_base_dev);
-      allocate_temporary(equal_base_dev);
-      allocate_temporary(greater_base_dev);
 
-      int row_groups = (n_rows + rows_per_block - 1) / rows_per_block;
-      dim3 row_grid(1, row_groups, 1);
-      dim3 grid(blocks_per_row, row_groups, 1);
+      dim3 row_grid(1, n_rows, 1);
+      dim3 grid(blocks_per_row, n_rows, 1);
 
       encoder.set_output_array(target_prefix_dev);
       encoder.set_output_array(prefix_mask_dev);
@@ -1368,9 +1347,7 @@ void gpu_radix_partition_large_tiled(
           gpu_ptr<UnsignedT>(prefix_mask_dev),
           gpu_ptr<int>(k_values_dev),
           gpu_ptr<int>(row_hist_dev),
-          kth,
-          n_rows,
-          rows_per_block);
+          kth);
 
       for (int pass = NUM_PASSES - 1; pass >= 0; --pass) {
         int start_bit = pass * cu::RADIX_BITS;
@@ -1393,8 +1370,6 @@ void gpu_radix_partition_large_tiled(
             gpu_ptr<UnsignedT>(prefix_mask_dev),
             start_bit,
             blocks_per_row,
-            n_rows,
-            rows_per_block,
             gpu_ptr<int>(row_hist_dev));
 
         encoder.set_input_array(row_hist_dev);
@@ -1416,9 +1391,7 @@ void gpu_radix_partition_large_tiled(
             gpu_ptr<UnsignedT>(prefix_mask_dev),
             gpu_ptr<int>(k_values_dev),
             pass > 0 ? 1 : 0,
-            start_bit,
-            n_rows,
-            rows_per_block);
+            start_bit);
       }
 
       encoder.set_input_array(in);
@@ -1436,39 +1409,16 @@ void gpu_radix_partition_large_tiled(
           in_stride_segment_axis,
           gpu_ptr<UnsignedT>(target_prefix_dev),
           blocks_per_row,
-          n_rows,
-          rows_per_block,
           gpu_ptr<int>(block_less_dev),
           gpu_ptr<int>(block_equal_dev));
-
-      encoder.set_input_array(block_less_dev);
-      encoder.set_input_array(block_equal_dev);
-      encoder.set_output_array(less_base_dev);
-      encoder.set_output_array(equal_base_dev);
-      encoder.set_output_array(greater_base_dev);
-      encoder.add_kernel_node(
-          cu::radix_select_tiled_prefix_kernel,
-          row_grid,
-          dim3(1, 1, 1),
-          0,
-          size_sorted_axis,
-          blocks_per_row,
-          n_rows,
-          rows_per_block,
-          gpu_ptr<int>(block_less_dev),
-          gpu_ptr<int>(block_equal_dev),
-          gpu_ptr<int>(less_base_dev),
-          gpu_ptr<int>(equal_base_dev),
-          gpu_ptr<int>(greater_base_dev));
 
       dispatch_bool(arg_partition, [&](auto arg_tag) {
         constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
         using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
         encoder.set_input_array(in);
         encoder.set_input_array(target_prefix_dev);
-        encoder.set_input_array(less_base_dev);
-        encoder.set_input_array(equal_base_dev);
-        encoder.set_input_array(greater_base_dev);
+        encoder.set_input_array(block_less_dev);
+        encoder.set_input_array(block_equal_dev);
         encoder.set_output_array(out);
         encoder.add_kernel_node(
             cu::radix_select_tiled_scatter_kernel<
@@ -1488,11 +1438,8 @@ void gpu_radix_partition_large_tiled(
             out_stride_segment_axis,
             gpu_ptr<UnsignedT>(target_prefix_dev),
             blocks_per_row,
-            n_rows,
-            rows_per_block,
-            gpu_ptr<int>(less_base_dev),
-            gpu_ptr<int>(equal_base_dev),
-            gpu_ptr<int>(greater_base_dev));
+            gpu_ptr<int>(block_less_dev),
+            gpu_ptr<int>(block_equal_dev));
       });
     } else {
       throw std::runtime_error(
@@ -1555,7 +1502,6 @@ void gpu_radix_partition_large(
           in_stride_segment_axis,
           out_stride_segment_axis,
           plan.blocks_per_row,
-          plan.rows_per_block,
           arg_partition);
     }
   }
