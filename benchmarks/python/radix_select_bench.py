@@ -170,14 +170,27 @@ def verify_tie_determinism(b=64, v=1024, k=None, dtype=mx.float32, axis=-1):
 
 
 def sweep_boundary(
-    dtype=mx.bfloat16, k_ratio=0.004, warmup=10, iterations=50, verify=False
+    dtype=mx.bfloat16,
+    k_ratio=0.004,
+    warmup=10,
+    iterations=50,
+    verify=False,
+    small_kernel=False,
 ):
     dtype_name = str(dtype).split(".")[-1]
     print(f"\nDtype={dtype_name}  k=vocab*{k_ratio:.3f}")
     print()
 
-    batch_sizes = [1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 256, 512, 1024, 2048]
-    vocab_sizes = [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072]
+    batch_sizes = (
+        [1, 4, 8, 16, 32, 48, 64, 128, 256, 512, 1024, 2048, 4096, 8192]
+        if small_kernel
+        else [1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 256, 512, 1024, 2048]
+    )
+    vocab_sizes = (
+        [32, 64, 96, 128, 160, 192, 256, 384, 512, 1024, 2048]
+        if small_kernel
+        else [3072, 4096, 8192, 16384, 32768, 65536, 131072]
+    )
 
     col_w = 10
     print(f"{'':>8}", end="")
@@ -228,6 +241,11 @@ def main():
         help="Enable boundary sweep test (default: disabled)",
     )
     parser.add_argument(
+        "--small-kernel-sweep",
+        action="store_true",
+        help="Enable small-kernel-only sweep (axis <= 2048 by default)",
+    )
+    parser.add_argument(
         "--verify",
         action="store_true",
         help="Enable correctness verification (default: disabled). "
@@ -267,7 +285,11 @@ def main():
         print(f"Error: {e}")
         return
 
-    if not args.boundary_sweep:
+    if args.boundary_sweep and args.small_kernel_sweep:
+        print("Error: choose only one of --boundary-sweep or --small-kernel-sweep")
+        return
+
+    if not args.boundary_sweep and not args.small_kernel_sweep:
         if args.verify:
             print("\n1. Correctness Verification")
             print("-" * 40)
@@ -322,11 +344,13 @@ def main():
                 except Exception as e:
                     print(f"b={b}, v={v}, k={k}: Error - {e}")
 
-    if args.boundary_sweep:
+    if args.boundary_sweep or args.small_kernel_sweep:
         print("\nBoundary Sweep" + (" (with verification)" if args.verify else ""))
         print("-" * 70)
         for dtype, dtype_name in dtypes:
-            sweep_boundary(dtype, verify=args.verify)
+            sweep_boundary(
+                dtype, verify=args.verify, small_kernel=args.small_kernel_sweep
+            )
 
     print("\n" + "=" * 70)
     print("Benchmark Complete")
