@@ -1094,11 +1094,28 @@ void gpu_radix_partition_small(
     if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
       using ValT = cuda_type_t<CTYPE>;
 
-      constexpr int BLOCK_THREADS = 256;
-      constexpr int ITEMS_PER_THREAD = 8;
+      int block_threads = 256;
+      if (size_sorted_axis <= 128) {
+        block_threads = 16;
+      } else if (size_sorted_axis <= 256) {
+        block_threads = 32;
+      } else if (size_sorted_axis <= 512) {
+        block_threads = 64;
+      } else if (size_sorted_axis <= 1024) {
+        block_threads = 128;
+      }
 
-      dim3 grid(1, n_rows, 1);
-      dim3 block(BLOCK_THREADS, 1, 1);
+      int items_per_thread =
+          (size_sorted_axis + block_threads - 1) / block_threads;
+      if (items_per_thread <= 1) {
+        items_per_thread = 1;
+      } else if (items_per_thread <= 2) {
+        items_per_thread = 2;
+      } else if (items_per_thread <= 4) {
+        items_per_thread = 4;
+      } else {
+        items_per_thread = 8;
+      }
 
       dispatch_bool(arg_partition, [&](auto arg_tag) {
         constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
@@ -1118,43 +1135,59 @@ void gpu_radix_partition_small(
           }
         }
 
-        dispatch_bool(contiguous, [&](auto contiguous_tag) {
-          constexpr bool USE_SIMPLE_STRIDE = decltype(contiguous_tag)::value;
+        dispatch_block_dim(block_threads, [&](auto block_dim) {
+          constexpr int BLOCK_THREADS = block_dim();
+          dim3 grid(1, n_rows, 1);
+          dim3 block(BLOCK_THREADS, 1, 1);
 
-          auto kernel = cu::radix_select_small_kernel<
-              ValT,
-              OutT,
-              ARG_PARTITION,
-              USE_SIMPLE_STRIDE,
-              BLOCK_THREADS,
-              ITEMS_PER_THREAD>;
+          dispatch_radix_items_per_thread(
+              items_per_thread, [&](auto items_per_thread_tag) {
+                constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
 
-          // Calculate dynamic shared memory size
-          using UnsignedT = typename cu::RadixTraits<ValT>::UnsignedT;
-          constexpr int TILE_SIZE_VAL = BLOCK_THREADS * ITEMS_PER_THREAD;
-          constexpr size_t shared_mem_bytes =
-              TILE_SIZE_VAL * sizeof(UnsignedT) + // shared_keys
-              TILE_SIZE_VAL * sizeof(uint32_t) + // shared_idxs
-              256 * sizeof(int) + // shared_hist (RADIX_SIZE=256)
-              2 * sizeof(int); // shared_count
+                dispatch_bool(contiguous, [&](auto contiguous_tag) {
+                  constexpr bool USE_SIMPLE_STRIDE =
+                      decltype(contiguous_tag)::value;
 
-          encoder.add_kernel_node(
-              kernel,
-              grid,
-              block,
-              shared_mem_bytes,
-              gpu_ptr<ValT>(in),
-              gpu_ptr<OutT>(out),
-              kth,
-              size_sorted_axis,
-              in_stride_sorted_axis,
-              out_stride_sorted_axis,
-              in_stride_segment_axis,
-              out_stride_segment_axis,
-              nc_shape_param,
-              in_nc_strides_param,
-              out_nc_strides_param,
-              nc_dim);
+                  auto kernel = cu::radix_select_small_kernel<
+                      ValT,
+                      OutT,
+                      ARG_PARTITION,
+                      USE_SIMPLE_STRIDE,
+                      BLOCK_THREADS,
+                      ITEMS_PER_THREAD>;
+
+                  // Calculate dynamic shared memory size
+                  using UnsignedT = typename cu::RadixTraits<ValT>::UnsignedT;
+                  constexpr int TILE_SIZE_VAL =
+                      BLOCK_THREADS * ITEMS_PER_THREAD;
+                  constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
+                  constexpr size_t shared_mem_bytes =
+                      TILE_SIZE_VAL * sizeof(UnsignedT) + // shared_keys
+                      TILE_SIZE_VAL * sizeof(uint32_t) + // shared_idxs
+                      cu::SMALL_RADIX_SIZE *
+                          sizeof(int) + // shared_hist for small kernel
+                      (2 + 3 * NUM_WARPS + 6) *
+                          sizeof(int); // shared_count + scatter scratch
+
+                  encoder.add_kernel_node(
+                      kernel,
+                      grid,
+                      block,
+                      shared_mem_bytes,
+                      gpu_ptr<ValT>(in),
+                      gpu_ptr<OutT>(out),
+                      kth,
+                      size_sorted_axis,
+                      in_stride_sorted_axis,
+                      out_stride_sorted_axis,
+                      in_stride_segment_axis,
+                      out_stride_segment_axis,
+                      nc_shape_param,
+                      in_nc_strides_param,
+                      out_nc_strides_param,
+                      nc_dim);
+                });
+              });
         });
       });
     } else {
@@ -1185,6 +1218,24 @@ struct RadixLaunchPlan {
     return blocks_per_row > 1;
   }
 };
+
+template <typename F>
+void dispatch_radix_items_per_thread(int items_per_thread, F&& f) {
+  switch (items_per_thread) {
+    case 1:
+      f(std::integral_constant<int, 1>{});
+      break;
+    case 2:
+      f(std::integral_constant<int, 2>{});
+      break;
+    case 4:
+      f(std::integral_constant<int, 4>{});
+      break;
+    default:
+      f(std::integral_constant<int, 8>{});
+      break;
+  }
+}
 
 RadixLaunchPlan make_radix_tiled_launch_plan(
     const Stream& s,

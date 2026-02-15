@@ -20,6 +20,8 @@ namespace mlx::core::cu {
 // Radix configuration
 constexpr int RADIX_BITS = 8;
 constexpr int RADIX_SIZE = 1 << RADIX_BITS; // 256 bins
+constexpr int SMALL_RADIX_BITS = 5;
+constexpr int SMALL_RADIX_SIZE = 1 << SMALL_RADIX_BITS; // 32 bins
 
 ///////////////////////////////////////////////////////////////////////////////
 // Bit manipulation for radix sorting
@@ -328,12 +330,13 @@ __device__ __forceinline__ int block_exclusive_scan(
 ///////////////////////////////////////////////////////////////////////////////
 
 // Helper to calculate required shared memory size for small kernel
-template <typename UnsignedT, int TILE_SIZE>
+template <typename UnsignedT, int TILE_SIZE, int BLOCK_THREADS>
 constexpr size_t radix_select_small_shared_mem_size() {
+  constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
   return TILE_SIZE * sizeof(UnsignedT) + // shared_keys
       TILE_SIZE * sizeof(uint32_t) + // shared_idxs
-      RADIX_SIZE * sizeof(int) + // shared_hist
-      2 * sizeof(int); // shared_count
+      SMALL_RADIX_SIZE * sizeof(int) + // shared_hist
+      (2 + 3 * NUM_WARPS + 6) * sizeof(int); // shared_count + scatter scratch
 }
 
 template <
@@ -360,7 +363,8 @@ __global__ void radix_select_small_kernel(
   using UnsignedT = typename Traits::UnsignedT;
 
   constexpr int TILE_SIZE = BLOCK_THREADS * ITEMS_PER_THREAD;
-  constexpr int NUM_PASSES = (Traits::BITS + RADIX_BITS - 1) / RADIX_BITS;
+  constexpr int NUM_PASSES =
+      (Traits::BITS + SMALL_RADIX_BITS - 1) / SMALL_RADIX_BITS;
 
   // Dynamic shared memory layout
   extern __shared__ char shared_mem[];
@@ -369,7 +373,14 @@ __global__ void radix_select_small_kernel(
   UnsignedT* shared_keys = reinterpret_cast<UnsignedT*>(shared_mem);
   uint32_t* shared_idxs = reinterpret_cast<uint32_t*>(shared_keys + TILE_SIZE);
   int* shared_hist = reinterpret_cast<int*>(shared_idxs + TILE_SIZE);
-  int* shared_count = shared_hist + RADIX_SIZE;
+  int* shared_count = shared_hist + SMALL_RADIX_SIZE;
+  constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
+  int* scatter_scratch = shared_count + 2;
+  int* warp_less = scatter_scratch;
+  int* warp_equal = warp_less + NUM_WARPS;
+  int* warp_greater = warp_equal + NUM_WARPS;
+  int* iter_counts = warp_greater + NUM_WARPS;
+  int* running_bases = iter_counts + 3;
 
   int row = blockIdx.y;
 
@@ -413,10 +424,10 @@ __global__ void radix_select_small_kernel(
   UnsignedT prefix_mask = 0;
 
   for (int pass = NUM_PASSES - 1; pass >= 0; pass--) {
-    int start_bit = pass * RADIX_BITS;
+    int start_bit = pass * SMALL_RADIX_BITS;
 
     // Clear histogram
-    for (int i = threadIdx.x; i < RADIX_SIZE; i += BLOCK_THREADS) {
+    for (int i = threadIdx.x; i < SMALL_RADIX_SIZE; i += BLOCK_THREADS) {
       shared_hist[i] = 0;
     }
     __syncthreads();
@@ -425,7 +436,7 @@ __global__ void radix_select_small_kernel(
     for (int i = threadIdx.x; i < tile_n; i += BLOCK_THREADS) {
       UnsignedT key = shared_keys[i];
       if ((key & prefix_mask) == target_prefix) {
-        int digit = extract_digit(key, start_bit, RADIX_BITS);
+        int digit = extract_digit(key, start_bit, SMALL_RADIX_BITS);
         atomicAdd(&shared_hist[digit], 1);
       }
     }
@@ -435,7 +446,7 @@ __global__ void radix_select_small_kernel(
     if (threadIdx.x == 0) {
       int cumsum = 0;
       int target_bin = 0;
-      for (int bin = 0; bin < RADIX_SIZE; bin++) {
+      for (int bin = 0; bin < SMALL_RADIX_SIZE; bin++) {
         int count = shared_hist[bin];
         if (cumsum + count >= k) {
           target_bin = bin;
@@ -452,7 +463,7 @@ __global__ void radix_select_small_kernel(
     int target_bin = shared_count[0];
     k = shared_count[1];
 
-    UnsignedT digit_mask = UnsignedT((1 << RADIX_BITS) - 1) << start_bit;
+    UnsignedT digit_mask = UnsignedT((1 << SMALL_RADIX_BITS) - 1) << start_bit;
     target_prefix |= UnsignedT(target_bin) << start_bit;
     prefix_mask |= digit_mask;
 
@@ -481,17 +492,8 @@ __global__ void radix_select_small_kernel(
   int equal_count = shared_count[1];
 
   // Scatter in increasing i order to keep tie behavior aligned with merge sort.
-  constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
-  static_assert(3 * NUM_WARPS + 6 <= RADIX_SIZE);
-
   int lane = threadIdx.x & (WARP_SIZE - 1);
   int warp = threadIdx.x / WARP_SIZE;
-
-  int* warp_less = shared_hist;
-  int* warp_equal = shared_hist + NUM_WARPS;
-  int* warp_greater = shared_hist + 2 * NUM_WARPS;
-  int* iter_counts = shared_hist + 3 * NUM_WARPS;
-  int* running_bases = iter_counts + 3;
 
   if (threadIdx.x == 0) {
     running_bases[0] = 0;
