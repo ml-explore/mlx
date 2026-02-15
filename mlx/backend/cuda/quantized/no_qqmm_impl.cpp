@@ -17,9 +17,8 @@ void qqmm_impl(
     const array&,
     const array&,
     const array&,
-    Dtype,
     QuantizationMode,
-    float) {
+    const GemmScalars&) {
   throw std::runtime_error(
       "[QQMatmul::eval_gpu] QQMM is only supported with CUDA 12.8 or higher.");
 }
