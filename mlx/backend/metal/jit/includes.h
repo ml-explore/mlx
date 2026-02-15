@@ -31,6 +31,7 @@ const char* scan();
 const char* scatter_axis();
 const char* softmax();
 const char* sort();
+const char* radix_select();
 const char* reduce();
 
 const char* gemm();
