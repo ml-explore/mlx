@@ -2311,6 +2311,19 @@ array argmax(
   return out;
 }
 
+array hanning(int M, StreamOrDevice s /* = {} */) {
+  if (M < 1) {
+    return array({});
+  }
+  if (M == 1) {
+    return ones({1}, float32, s);
+  }
+
+  auto n = arange(0, M, float32, s);
+  array factor(M_PI / (M - 1), float32);
+  return square(sin(multiply(factor, n, s), s), s);
+}
+
 /** Returns a sorted copy of the flattened array. */
 array sort(const array& a, StreamOrDevice s /* = {} */) {
   int size = a.size();
