@@ -419,8 +419,8 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     return decltype(v){v.begin(), v.end() - 2};
   };
 
-  auto& lhs_indices = inputs[2];
-  auto& rhs_indices = inputs[3];
+  auto lhs_indices = inputs[2];
+  auto rhs_indices = inputs[3];
 
   auto batch_shape = get_batch_dims(out.shape());
 
@@ -429,8 +429,8 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto batch_shape_B = get_batch_dims(b.shape());
   auto batch_strides_B = get_batch_dims(b.strides());
 
-  const uint32_t* lhs_indices_ptr = lhs_indices.data<uint32_t>();
-  const uint32_t* rhs_indices_ptr = rhs_indices.data<uint32_t>();
+  encoder.add_temporary(lhs_indices);
+  encoder.add_temporary(rhs_indices);
   encoder.set_input_array(a);
   encoder.set_input_array(b);
   encoder.set_input_array(lhs_indices);
@@ -449,8 +449,8 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
                     a_transposed = a_transposed,
                     b_transposed = b_transposed,
                     ldc,
-                    lhs_indices_ptr,
-                    rhs_indices_ptr,
+                    lhs_indices,
+                    rhs_indices,
                     lhs_indices_shape = lhs_indices.shape(),
                     lhs_indices_strides = lhs_indices.strides(),
                     rhs_indices_shape = rhs_indices.shape(),
@@ -461,6 +461,8 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
                     batch_shape_B = std::move(batch_shape_B),
                     batch_strides_A = std::move(batch_strides_A),
                     batch_strides_B = std::move(batch_strides_B)]() {
+    const uint32_t* lhs_indices_ptr = lhs_indices.data<uint32_t>();
+    const uint32_t* rhs_indices_ptr = rhs_indices.data<uint32_t>();
     for (int i = 0; i < batch_size_out; i++) {
       // Get index
       uint32_t indx_A = lhs_indices_ptr[elem_to_loc(
