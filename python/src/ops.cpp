@@ -1451,6 +1451,30 @@ void init_ops(nb::module_& m) {
                    appears only if the number of samples is odd).
     )pbdoc");
   m.def(
+      "hamming",
+      &mlx::core::hamming,
+      "M"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def hamming(M: int, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Return the Hamming window.
+
+        The Hamming window is a taper formed by using a weighted cosine.
+
+        .. math::
+           w(n) = 0.54 - 0.46 \cos\left(\frac{2\pi n}{M-1}\right)
+           \qquad 0 \le n \le M-1
+
+        Args:
+            M (int): Number of points in the output window.
+
+        Returns:
+            array: The window, with the maximum value normalized to one (the value one
+                   appears only if the number of samples is odd).
+    )pbdoc");
+  m.def(
       "linspace",
       [](Scalar start,
          Scalar stop,
