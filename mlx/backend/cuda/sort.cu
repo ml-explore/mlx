@@ -1045,6 +1045,113 @@ void gpu_merge_sort(
 // Radix partition functions
 ///////////////////////////////////////////////////////////////////////////////
 
+// Upper bound for small-kernel tiling. Keep this aligned with the
+// items-per-thread dispatch set and per-block shared-memory budget.
+constexpr int MAX_RADIX_ITEMS_PER_THREAD = 64;
+
+int radix_small_block_threads(int size_sorted_axis) {
+  int block_threads = 256;
+  if (size_sorted_axis <= 128) {
+    block_threads = 16;
+  } else if (size_sorted_axis <= 256) {
+    block_threads = 32;
+  } else if (size_sorted_axis <= 512) {
+    block_threads = 64;
+  } else if (size_sorted_axis <= 1024) {
+    block_threads = 128;
+  }
+  return block_threads;
+}
+
+template <typename F>
+void dispatch_radix_items_per_thread(
+    int size_sorted_axis,
+    int block_threads,
+    F&& f) {
+  int items_per_thread = (size_sorted_axis + block_threads - 1) / block_threads;
+  if (items_per_thread <= 1) {
+    f(std::integral_constant<int, 1>{});
+  } else if (items_per_thread <= 2) {
+    f(std::integral_constant<int, 2>{});
+  } else if (items_per_thread <= 4) {
+    f(std::integral_constant<int, 4>{});
+  } else if (items_per_thread <= 8) {
+    f(std::integral_constant<int, 8>{});
+  } else if (items_per_thread <= 12) {
+    f(std::integral_constant<int, 12>{});
+  } else if (items_per_thread <= 16) {
+    f(std::integral_constant<int, 16>{});
+  } else if (items_per_thread <= 24) {
+    f(std::integral_constant<int, 24>{});
+  } else if (items_per_thread <= 32) {
+    f(std::integral_constant<int, 32>{});
+  } else if (items_per_thread <= 48) {
+    f(std::integral_constant<int, 48>{});
+  } else {
+    f(std::integral_constant<int, MAX_RADIX_ITEMS_PER_THREAD>{});
+  }
+}
+
+size_t radix_small_shared_mem_bytes(
+    size_t key_size,
+    int block_threads,
+    int items_per_thread) {
+  size_t tile_size = static_cast<size_t>(block_threads) *
+      static_cast<size_t>(items_per_thread);
+  size_t num_warps = static_cast<size_t>(block_threads / WARP_SIZE);
+  return tile_size * key_size + // shared_keys
+      tile_size * sizeof(uint32_t) + // shared_idxs
+      cu::SMALL_RADIX_SIZE * sizeof(int) + // shared_hist for small kernel
+      (2 + 3 * num_warps + 6) * sizeof(int); // shared_count + scatter scratch
+}
+
+int radix_max_shared_mem_per_block(const Stream& s) {
+  int max_shared_mem_per_block = 0;
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &max_shared_mem_per_block,
+      cudaDevAttrMaxSharedMemoryPerBlock,
+      s.device.index));
+
+  int max_shared_mem_per_block_optin = 0;
+  cudaError_t optin_err = cudaDeviceGetAttribute(
+      &max_shared_mem_per_block_optin,
+      cudaDevAttrMaxSharedMemoryPerBlockOptin,
+      s.device.index);
+  if (optin_err == cudaSuccess) {
+    max_shared_mem_per_block =
+        std::max(max_shared_mem_per_block, max_shared_mem_per_block_optin);
+  } else {
+    cudaGetLastError();
+  }
+  return max_shared_mem_per_block;
+}
+
+bool radix_small_fits_shared_memory(
+    const Stream& s,
+    Dtype dtype,
+    int size_sorted_axis) {
+  if (size_sorted_axis <= 0) {
+    return false;
+  }
+
+  int block_threads = radix_small_block_threads(size_sorted_axis);
+  int required_items = (size_sorted_axis + block_threads - 1) / block_threads;
+  if (required_items > MAX_RADIX_ITEMS_PER_THREAD) {
+    return false;
+  }
+
+  size_t required_shared_mem = 0;
+  dispatch_radix_items_per_thread(
+      size_sorted_axis, block_threads, [&](auto items_per_thread_tag) {
+        constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
+        required_shared_mem = radix_small_shared_mem_bytes(
+            size_of(dtype), block_threads, ITEMS_PER_THREAD);
+      });
+
+  int max_shared_mem_per_block = radix_max_shared_mem_per_block(s);
+  return required_shared_mem <= static_cast<size_t>(max_shared_mem_per_block);
+}
+
 void gpu_radix_partition_small(
     const Stream& s,
     const array& in,
@@ -1094,28 +1201,7 @@ void gpu_radix_partition_small(
     if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
       using ValT = cuda_type_t<CTYPE>;
 
-      int block_threads = 256;
-      if (size_sorted_axis <= 128) {
-        block_threads = 16;
-      } else if (size_sorted_axis <= 256) {
-        block_threads = 32;
-      } else if (size_sorted_axis <= 512) {
-        block_threads = 64;
-      } else if (size_sorted_axis <= 1024) {
-        block_threads = 128;
-      }
-
-      int items_per_thread =
-          (size_sorted_axis + block_threads - 1) / block_threads;
-      if (items_per_thread <= 1) {
-        items_per_thread = 1;
-      } else if (items_per_thread <= 2) {
-        items_per_thread = 2;
-      } else if (items_per_thread <= 4) {
-        items_per_thread = 4;
-      } else {
-        items_per_thread = 8;
-      }
+      int block_threads = radix_small_block_threads(size_sorted_axis);
 
       dispatch_bool(arg_partition, [&](auto arg_tag) {
         constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
@@ -1141,7 +1227,7 @@ void gpu_radix_partition_small(
           dim3 block(BLOCK_THREADS, 1, 1);
 
           dispatch_radix_items_per_thread(
-              items_per_thread, [&](auto items_per_thread_tag) {
+              size_sorted_axis, block_threads, [&](auto items_per_thread_tag) {
                 constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
 
                 dispatch_bool(contiguous, [&](auto contiguous_tag) {
@@ -1168,6 +1254,11 @@ void gpu_radix_partition_small(
                           sizeof(int) + // shared_hist for small kernel
                       (2 + 3 * NUM_WARPS + 6) *
                           sizeof(int); // shared_count + scatter scratch
+
+                  CHECK_CUDA_ERROR(cudaFuncSetAttribute(
+                      kernel,
+                      cudaFuncAttributeMaxDynamicSharedMemorySize,
+                      static_cast<int>(shared_mem_bytes)));
 
                   encoder.add_kernel_node(
                       kernel,
@@ -1217,24 +1308,6 @@ struct RadixLaunchPlan {
     return blocks_per_row > 1;
   }
 };
-
-template <typename F>
-void dispatch_radix_items_per_thread(int items_per_thread, F&& f) {
-  switch (items_per_thread) {
-    case 1:
-      f(std::integral_constant<int, 1>{});
-      break;
-    case 2:
-      f(std::integral_constant<int, 2>{});
-      break;
-    case 4:
-      f(std::integral_constant<int, 4>{});
-      break;
-    default:
-      f(std::integral_constant<int, 8>{});
-      break;
-  }
-}
 
 RadixLaunchPlan make_radix_tiled_launch_plan(
     const Stream& s,
@@ -1576,8 +1649,8 @@ void gpu_radix_partition(
     return gpu_merge_sort(s, in, out, axis, arg_partition);
   }
 
-  // Dispatch based on size
-  if (size_sorted_axis <= 2048) {
+  // Dispatch based on whether the small kernel tile fits in shared memory.
+  if (radix_small_fits_shared_memory(s, in.dtype(), size_sorted_axis)) {
     return gpu_radix_partition_small(s, in, out, axis, kth, arg_partition);
   } else {
     return gpu_radix_partition_large(s, in, out, axis, kth, arg_partition);

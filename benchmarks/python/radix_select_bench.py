@@ -5,6 +5,7 @@ Compares radix select implementation against full argsort.
 """
 
 import argparse
+import ctypes
 import time
 
 import mlx.core as mx
@@ -26,6 +27,135 @@ DTYPE_MAP = {
     "uint32": mx.uint32,
     "uint64": mx.uint64,
 }
+
+# Benchmark-side model for cross-GPU small-kernel dispatch policy.
+RADIX_ITEMS_BUCKETS = (1, 2, 4, 8, 12, 16, 24, 32, 48, 64)
+MAX_RADIX_ITEMS_PER_THREAD = 64
+SMALL_RADIX_SIZE = 32
+WARP_SIZE = 32
+CUDA_DEV_ATTR_MAX_SHARED_MEMORY_PER_BLOCK = 8
+CUDA_DEV_ATTR_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN = 97
+
+DTYPE_SIZE_BYTES = {
+    "bool_": 1,
+    "bfloat16": 2,
+    "float16": 2,
+    "float32": 4,
+    "float64": 8,
+    "int8": 1,
+    "int16": 2,
+    "int32": 4,
+    "int64": 8,
+    "uint8": 1,
+    "uint16": 2,
+    "uint32": 4,
+    "uint64": 8,
+}
+
+
+def _dtype_size_bytes(dtype):
+    dtype_name = str(dtype).split(".")[-1]
+    return DTYPE_SIZE_BYTES[dtype_name]
+
+
+def _cuda_max_shared_mem_per_block(default=48 * 1024):
+    """Query max(base, optin) shared memory per block; fallback to 48KB."""
+    try:
+        cudart = ctypes.CDLL("libcudart.so")
+
+        cuda_get_device = cudart.cudaGetDevice
+        cuda_get_device.argtypes = [ctypes.POINTER(ctypes.c_int)]
+        cuda_get_device.restype = ctypes.c_int
+
+        cuda_device_get_attribute = cudart.cudaDeviceGetAttribute
+        cuda_device_get_attribute.argtypes = [
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
+        cuda_device_get_attribute.restype = ctypes.c_int
+
+        dev = ctypes.c_int()
+        if cuda_get_device(ctypes.byref(dev)) != 0:
+            return default
+
+        smem_base = ctypes.c_int()
+        if (
+            cuda_device_get_attribute(
+                ctypes.byref(smem_base),
+                CUDA_DEV_ATTR_MAX_SHARED_MEMORY_PER_BLOCK,
+                dev.value,
+            )
+            != 0
+        ):
+            return default
+
+        smem_optin = ctypes.c_int()
+        optin_rc = cuda_device_get_attribute(
+            ctypes.byref(smem_optin),
+            CUDA_DEV_ATTR_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN,
+            dev.value,
+        )
+        if optin_rc == 0:
+            return max(int(smem_base.value), int(smem_optin.value))
+        return int(smem_base.value)
+    except Exception:
+        return default
+
+
+def _radix_small_block_threads(vocab_size):
+    if vocab_size <= 128:
+        return 16
+    if vocab_size <= 256:
+        return 32
+    if vocab_size <= 512:
+        return 64
+    if vocab_size <= 1024:
+        return 128
+    return 256
+
+
+def _radix_small_dispatch_items(required_items):
+    for bucket in RADIX_ITEMS_BUCKETS:
+        if required_items <= bucket:
+            return bucket
+    return None
+
+
+def _radix_small_shared_mem_bytes(dtype_size, block_threads, items_per_thread):
+    tile_size = block_threads * items_per_thread
+    num_warps = block_threads // WARP_SIZE
+    return (
+        tile_size * dtype_size
+        + tile_size * 4
+        + SMALL_RADIX_SIZE * 4
+        + (2 + 3 * num_warps + 6) * 4
+    )
+
+
+def estimate_small_kernel_limit(dtype):
+    """Estimate max small-kernel axis for dtype under current CUDA radix policy."""
+    dtype_size = _dtype_size_bytes(dtype)
+    smem_limit = _cuda_max_shared_mem_per_block()
+    max_axis = 0
+    # 256 is the largest block_threads in sort.cu launch selection.
+    for v in range(1, 256 * MAX_RADIX_ITEMS_PER_THREAD + 1):
+        block_threads = _radix_small_block_threads(v)
+        required_items = (v + block_threads - 1) // block_threads
+        if required_items > MAX_RADIX_ITEMS_PER_THREAD:
+            continue
+        items_per_thread = _radix_small_dispatch_items(required_items)
+        if items_per_thread is None:
+            continue
+        if (
+            _radix_small_shared_mem_bytes(dtype_size, block_threads, items_per_thread)
+            <= smem_limit
+        ):
+            max_axis = v
+    return {
+        "max_axis": max_axis,
+        "smem_limit": smem_limit,
+    }
 
 
 def parse_dtypes(dtype_str):
@@ -169,7 +299,7 @@ def verify_tie_determinism(b=64, v=1024, k=None, dtype=mx.float32, axis=-1):
     return True
 
 
-def sweep_boundary(
+def sweep_kernel(
     dtype=mx.bfloat16,
     k_ratio=0.004,
     warmup=10,
@@ -178,19 +308,40 @@ def sweep_boundary(
     small_kernel=False,
 ):
     dtype_name = str(dtype).split(".")[-1]
-    print(f"\nDtype={dtype_name}  k=vocab*{k_ratio:.3f}")
+    limit = estimate_small_kernel_limit(dtype)
+    max_small_axis = limit["max_axis"]
+    smem_kb = limit["smem_limit"] / 1024.0
+    print(
+        f"\nDtype={dtype_name}  k=vocab*{k_ratio:.3f}  "
+        f"small-kernel-limit≈{max_small_axis}  "
+        f"smem={smem_kb:.1f}KB"
+    )
     print()
 
-    batch_sizes = (
-        [1, 4, 8, 16, 32, 48, 64, 128, 256, 512, 1024, 2048, 4096, 8192]
-        if small_kernel
-        else [1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 256, 512, 1024, 2048]
-    )
-    vocab_sizes = (
-        [32, 64, 96, 128, 160, 192, 256, 384, 512, 1024, 2048]
-        if small_kernel
-        else [3072, 4096, 8192, 16384, 32768, 65536, 131072]
-    )
+    candidate_vocab = {
+        32,
+        64,
+        96,
+        160,
+        256,
+        384,
+        512,
+        1024,
+        2048,
+        4096,
+        8192,
+        16384,
+        32768,
+        65536,
+        131072,
+    }
+
+    if small_kernel:
+        batch_sizes = [1, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192]
+        vocab_sizes = sorted({int(v) for v in candidate_vocab if v <= max_small_axis})
+    else:
+        batch_sizes = [1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 256, 512, 1024, 2048]
+        vocab_sizes = sorted({int(v) for v in candidate_vocab if v > small_kernel})
 
     col_w = 10
     print(f"{'':>8}", end="")
@@ -236,20 +387,20 @@ def main():
         description="Benchmark MLX radix select implementation"
     )
     parser.add_argument(
-        "--boundary-sweep",
+        "--large-kernel-sweep",
         action="store_true",
-        help="Enable boundary sweep test (default: disabled)",
+        help="Enable large-kernel-focused sweep (default: disabled)",
     )
     parser.add_argument(
         "--small-kernel-sweep",
         action="store_true",
-        help="Enable small-kernel-only sweep (axis <= 2048 by default)",
+        help="Enable small-kernel-focused sweep around the estimated boundary",
     )
     parser.add_argument(
         "--verify",
         action="store_true",
         help="Enable correctness verification (default: disabled). "
-        "Disabled when --boundary-sweep is enabled.",
+        "Disabled when --large-kernel-sweep is enabled.",
     )
     parser.add_argument(
         "--dtypes",
@@ -285,11 +436,11 @@ def main():
         print(f"Error: {e}")
         return
 
-    if args.boundary_sweep and args.small_kernel_sweep:
-        print("Error: choose only one of --boundary-sweep or --small-kernel-sweep")
+    if args.large_kernel_sweep and args.small_kernel_sweep:
+        print("Error: choose only one of --large-kernel-sweep or --small-kernel-sweep")
         return
 
-    if not args.boundary_sweep and not args.small_kernel_sweep:
+    if not args.large_kernel_sweep and not args.small_kernel_sweep:
         if args.verify:
             print("\n1. Correctness Verification")
             print("-" * 40)
@@ -344,11 +495,11 @@ def main():
                 except Exception as e:
                     print(f"b={b}, v={v}, k={k}: Error - {e}")
 
-    if args.boundary_sweep or args.small_kernel_sweep:
-        print("\nBoundary Sweep" + (" (with verification)" if args.verify else ""))
+    if args.large_kernel_sweep or args.small_kernel_sweep:
+        print("\nKernel Sweep" + (" (with verification)" if args.verify else ""))
         print("-" * 70)
         for dtype, dtype_name in dtypes:
-            sweep_boundary(
+            sweep_kernel(
                 dtype, verify=args.verify, small_kernel=args.small_kernel_sweep
             )
 
