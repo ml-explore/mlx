@@ -1474,6 +1474,18 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(a.size, 0)
         self.assertEqual(a.dtype, mx.float32)
 
+    def test_blackman_general(self):
+        a = mx.blackman(10)
+        expected = np.blackman(10)
+        self.assertTrue(np.allclose(a, expected, atol=1e-5))
+
+        a = mx.blackman(1)
+        self.assertEqual(a.item(), 1.0)
+
+        a = mx.blackman(0)
+        self.assertEqual(a.size, 0)
+        self.assertEqual(a.dtype, mx.float32)
+
     def test_unary_ops(self):
         def test_ops(npop, mlxop, x, y, atol, rtol):
             r_np = npop(x)

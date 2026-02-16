@@ -672,6 +672,9 @@ MLX_API array hanning(int M, StreamOrDevice s = {});
 /** Returns the Hamming window of size M. */
 MLX_API array hamming(int M, StreamOrDevice s = {});
 
+/** Returns the Blackmann window of size M. */
+MLX_API array blackman(int M, StreamOrDevice s = {});
+
 /** Returns the index of the minimum value in the array. */
 MLX_API array argmin(const array& a, bool keepdims, StreamOrDevice s = {});
 inline array argmin(const array& a, StreamOrDevice s = {}) {
