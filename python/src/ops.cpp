@@ -1429,6 +1429,28 @@ void init_ops(nb::module_& m) {
       nb::sig(
           "def arange(stop : Union[int, float], step : Union[None, int, float] = None, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"));
   m.def(
+      "hanning",
+      &mlx::core::hanning,
+      "M"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Return the Hanning window.
+        
+        The Hanning window is a taper formed by using a weighted cosine.
+
+        .. math::
+          w(n) = 0.5 - 0.5 \cos\left(\frac{2\pi n}{M-1}\right)
+           \qquad 0 \le n \le M-1
+        
+        Args:
+            M (int): Number of points in the output window.
+            
+        Returns:
+            array: The window, with the maximum value normalized to one (the value one
+                   appears only if the number of samples is odd).
+    )pbdoc");
+  m.def(
       "linspace",
       [](Scalar start,
          Scalar stop,
