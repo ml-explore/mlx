@@ -2,6 +2,7 @@
 
 #include "mlx/backend/cuda/quantized/quantized.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/quantized/qmm.h"
 #include "mlx/backend/cuda/quantized/qmv.h"
 #include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/fast_primitives.h"
@@ -34,14 +35,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
 
-  if (M > 8 || !transpose_ || mode_ == QuantizationMode::Affine) {
-    throw std::runtime_error("QMM NYI");
-  }
-
-  if (transpose_) {
+  if (transpose_ && M <= 8 && mode_ != QuantizationMode::Affine) {
     fp_qmv(w, scales, x, out, bits_, group_size_, M, N, K, enc);
     return;
   }
+
+  if (transpose_ && biases && mode_ == QuantizationMode::Affine) {
+    cute_qmm(x, w, scales, *biases, out, bits_, group_size_, enc);
+    return;
+  }
+
+  throw std::runtime_error("QMM NYI");
 }
 
 void fast::Quantize::eval_gpu(
