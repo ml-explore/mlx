@@ -1,11 +1,26 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-from functools import partial
+import threading
+from functools import wraps
 from typing import Any
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
+
+
+def _lazy_compile(fn):
+    """Lazily apply mx.compile(shapeless=True) on first call."""
+    _compiled_fn = None
+
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        nonlocal _compiled_fn
+        if _compiled_fn is None:
+            _compiled_fn = mx.compile(fn, shapeless=True)
+        return _compiled_fn(*args, **kwargs)
+
+    return wrapper
 
 
 def _make_activation_module(f):
@@ -16,7 +31,7 @@ def _make_activation_module(f):
     return decorator
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def sigmoid(x):
     r"""Applies the sigmoid function.
 
@@ -26,7 +41,7 @@ def sigmoid(x):
     return mx.sigmoid(x)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def relu(x):
     r"""Applies the Rectified Linear Unit.
 
@@ -35,7 +50,7 @@ def relu(x):
     return mx.maximum(x, 0)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def relu2(x):
     r"""Applies the ReLU² activation function.
 
@@ -44,7 +59,7 @@ def relu2(x):
     return mx.square(mx.maximum(x, 0))
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def relu6(x):
     r"""Applies the Rectified Linear Unit 6.
 
@@ -53,7 +68,7 @@ def relu6(x):
     return mx.minimum(mx.maximum(x, 0), 6.0)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def leaky_relu(x, negative_slope=0.01):
     r"""Applies the Leaky Rectified Linear Unit.
 
@@ -62,7 +77,7 @@ def leaky_relu(x, negative_slope=0.01):
     return mx.maximum(negative_slope * x, x)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def log_softmax(x, axis=-1):
     r"""Applies the Log Softmax function.
 
@@ -71,7 +86,7 @@ def log_softmax(x, axis=-1):
     return x - mx.logsumexp(x, axis=axis, keepdims=True)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def elu(x, alpha=1.0):
     r"""Applies the Exponential Linear Unit.
 
@@ -80,7 +95,7 @@ def elu(x, alpha=1.0):
     return mx.where(x > 0, x, alpha * (mx.exp(x) - 1))
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def softmax(x, axis=-1):
     r"""Applies the Softmax function.
 
@@ -89,7 +104,7 @@ def softmax(x, axis=-1):
     return mx.softmax(x, axis=axis)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def softplus(x):
     r"""Applies the Softplus function.
 
@@ -98,7 +113,7 @@ def softplus(x):
     return mx.logaddexp(x, 0)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def softsign(x):
     r"""Applies the Softsign function.
 
@@ -107,7 +122,7 @@ def softsign(x):
     return mx.divide(x, 1 + mx.abs(x))
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def softshrink(x, lambd: float = 0.5):
     r"""Applies the Softshrink activation function.
 
@@ -121,7 +136,7 @@ def softshrink(x, lambd: float = 0.5):
     return mx.where(mx.abs(x) > lambd, x - mx.sign(x) * lambd, 0)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def celu(x, alpha=1.0):
     r"""Applies the Continuously Differentiable Exponential Linear Unit.
 
@@ -131,7 +146,7 @@ def celu(x, alpha=1.0):
     return mx.maximum(x, 0.0) + alpha * (mx.exp(mx.minimum(x, 0.0) / alpha) - 1)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def silu(x):
     r"""Applies the Sigmoid Linear Unit. Also known as Swish.
 
@@ -141,7 +156,7 @@ def silu(x):
     return x * mx.sigmoid(x)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def log_sigmoid(x):
     r"""Applies the Log Sigmoid function.
 
@@ -150,7 +165,7 @@ def log_sigmoid(x):
     return -softplus(-x)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def gelu(x) -> mx.array:
     r"""Applies the Gaussian Error Linear Units function.
 
@@ -165,7 +180,7 @@ def gelu(x) -> mx.array:
     return x * (1 + mx.erf(x / math.sqrt(2))) / 2
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def gelu_approx(x):
     r"""An approximation to Gaussian Error Linear Unit.
 
@@ -182,7 +197,7 @@ def gelu_approx(x):
     return 0.5 * x * (1 + mx.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * x**3)))
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def gelu_fast_approx(x):
     r"""A fast approximation to Gaussian Error Linear Unit.
 
@@ -220,7 +235,7 @@ def glu(x: mx.array, axis: int = -1) -> mx.array:
     return a * mx.sigmoid(b)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def step(x: mx.array, threshold: float = 0.0):
     r"""Applies the Step Activation Function.
 
@@ -240,7 +255,7 @@ def step(x: mx.array, threshold: float = 0.0):
     return mx.where(x > threshold, 1, 0)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def selu(x):
     r"""Applies the Scaled Exponential Linear Unit.
 
@@ -257,7 +272,7 @@ def selu(x):
     return elu(x, 1.67326) * 1.0507
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def prelu(x: mx.array, alpha: mx.array) -> mx.array:
     r"""Applies the element-wise parametric ReLU.
 
@@ -269,7 +284,7 @@ def prelu(x: mx.array, alpha: mx.array) -> mx.array:
     return mx.maximum(0, x) + alpha * mx.minimum(0, x)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def mish(x: mx.array) -> mx.array:
     r"""Applies the Mish function, element-wise.
 
@@ -284,7 +299,7 @@ def mish(x: mx.array) -> mx.array:
     return x * mx.tanh(softplus(x))
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def hardswish(x):
     r"""Applies the hardswish function, element-wise.
 
@@ -295,7 +310,7 @@ def hardswish(x):
     return x * mx.minimum(max_x_3, 6) / 6
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def hard_tanh(x, min_val=-1.0, max_val=1.0):
     r"""Applies the HardTanh function.
 
@@ -304,7 +319,7 @@ def hard_tanh(x, min_val=-1.0, max_val=1.0):
     return mx.minimum(mx.maximum(x, min_val), max_val)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def hard_shrink(x, lambd=0.5):
     r"""Applies the HardShrink activation function.
 
@@ -318,7 +333,7 @@ def hard_shrink(x, lambd=0.5):
     return mx.where(mx.abs(x) > lambd, x, 0)
 
 
-@partial(mx.compile, shapeless=True)
+@_lazy_compile
 def softmin(x, axis=-1):
     r"""Applies the Softmin function.
 
