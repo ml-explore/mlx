@@ -39,7 +39,7 @@ void qqmm_impl(
       out.dtype(),
       qmode);
 
-  if (scalars.uses_device_pointers()) {
+  if (scalars.has_values()) {
     qqmm.run(
         encoder,
         out,

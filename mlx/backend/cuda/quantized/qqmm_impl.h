@@ -12,7 +12,7 @@ struct GemmScalars {
   std::optional<array> alpha_device;
   std::optional<array> beta_device;
 
-  bool uses_device_pointers() const {
+  bool has_values() const {
     return alpha_device.has_value();
   }
 };
