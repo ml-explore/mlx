@@ -1,4 +1,5 @@
 // Copyright © 2025 Apple Inc.
+#pragma once
 
 #include <cuda_fp4.h>
 #include <cuda_fp8.h>
