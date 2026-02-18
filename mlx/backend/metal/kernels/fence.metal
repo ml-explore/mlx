@@ -41,12 +41,23 @@ constexpr constant metal::thread_scope thread_scope_system =
     volatile coherent(system) device uint* timestamp [[buffer(0)]],
     constant uint& value [[buffer(1)]]) {
   while (1) {
-    metal::atomic_thread_fence(
-        metal::mem_flags::mem_device,
-        metal::memory_order_seq_cst,
-        metal::thread_scope_system);
-    if (timestamp[0] >= value) {
-      break;
+    // Fast path: volatile reads through GPU cache + system-scope fence
+    for (uint i = 0; i < 1000000; i++) {
+      metal::atomic_thread_fence(
+          metal::mem_flags::mem_device,
+          metal::memory_order_seq_cst,
+          metal::thread_scope_system);
+      if (timestamp[0] >= value) {
+        return;
+      }
+    }
+    // System-scope atomic load to force GPU cache refresh from SLC
+    uint cur = __metal_atomic_load_explicit(
+        timestamp,
+        int(metal::memory_order_relaxed),
+        __METAL_MEMORY_SCOPE_SYSTEM__);
+    if (cur >= value) {
+      return;
     }
   }
 }
