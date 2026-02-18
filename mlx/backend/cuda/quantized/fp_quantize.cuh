@@ -361,9 +361,6 @@ __global__ void __launch_bounds__(128) fp_quantize_columnwise_tma_mxfp8(
        TMA_SHMEM_ALIGNMENT) *
       TMA_SHMEM_ALIGNMENT;
 
-  constexpr size_t scales_per_tile = TILE_K; // One scale per column
-  constexpr size_t scales_tile_size = scales_per_tile * sizeof(uint8_t);
-
   extern __shared__ char shared_mem[];
   uintptr_t aligned_shared =
       (reinterpret_cast<uintptr_t>(shared_mem) + TMA_SHMEM_ALIGNMENT - 1) &

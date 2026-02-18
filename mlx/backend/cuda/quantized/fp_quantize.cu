@@ -249,38 +249,38 @@ void fp_quantize_columnwise_tma(
   auto [grid, block, smem_size] = cu::get_columnwise_tma_launch_args(
       rows, cols, group_size, bits, w.itemsize());
 
-  CUtensorMap tensor_map_input;
-  CUtensorMap tensor_map_output;
-
-  create_2D_tensor_map(
-      &tensor_map_input,
-      const_cast<void*>(static_cast<const void*>(w.data<void>())),
-      cu::get_tma_dtype(w.dtype()),
-      rows,
-      cols,
-      static_cast<uint32_t>(cu::TILE_M),
-      static_cast<uint32_t>(cu::TILE_K),
-      stride_bytes);
-
   const size_t output_rows = cols;
   const size_t output_cols = (bits == 8) ? rows : rows / 2;
   const uint32_t out_tile_x = (bits == 8) ? cu::TILE_M : cu::TILE_M / 2;
   const uint32_t out_tile_y = cu::TILE_K;
 
-  create_2D_tensor_map(
-      &tensor_map_output,
-      static_cast<void*>(wq.data<void>()),
-      CU_TENSOR_MAP_DATA_TYPE_UINT8,
-      output_rows,
-      output_cols,
-      out_tile_y,
-      out_tile_x,
-      output_cols);
-
   dispatch_float_types(
       w.dtype(), "fp_quantize_columnwise_mxfp8", [&](auto type_tag) {
         using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         if constexpr (!std::is_same_v<T, double>) {
+          CUtensorMap tensor_map_input;
+          CUtensorMap tensor_map_output;
+
+          create_2D_tensor_map(
+              &tensor_map_input,
+              const_cast<void*>(static_cast<const void*>(gpu_ptr<T>(w))),
+              cu::get_tma_dtype(w.dtype()),
+              rows,
+              cols,
+              static_cast<uint32_t>(cu::TILE_M),
+              static_cast<uint32_t>(cu::TILE_K),
+              stride_bytes);
+
+          create_2D_tensor_map(
+              &tensor_map_output,
+              gpu_ptr<uint8_t>(wq),
+              CU_TENSOR_MAP_DATA_TYPE_UINT8,
+              output_rows,
+              output_cols,
+              out_tile_y,
+              out_tile_x,
+              output_cols);
+
           // Currently only MXFP8 (bits=8, group_size=32) is implemented
           // TODO: Add NVFP4 support
           auto kernel = cu::fp_quantize_columnwise_tma_mxfp8<T, false>;
