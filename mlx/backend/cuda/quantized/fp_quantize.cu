@@ -1,7 +1,9 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/cuda/common.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
+#include "mlx/backend/cuda/ptx.cuh"
 #include "mlx/backend/cuda/quantized/mxfp8_quantize.cuh"
 #include "mlx/backend/cuda/quantized/nvfp4_quantize.cuh"
 #include "mlx/backend/cuda/quantized/quantized.h"
@@ -13,6 +15,7 @@
 #include <cooperative_groups/reduce.h>
 #include <cuda_fp4.h>
 #include <cuda_fp8.h>
+#include <iostream>
 
 constexpr float F8E4M3_MAX = 448.0f;
 constexpr float F4E2M1_MAX = 6.0f;
@@ -184,7 +187,7 @@ __global__ void fp_quantize_rowwise(
 }
 
 template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
-__global__ void fp_quantize_columnwise(
+__global__ void fp_quantize_columnwise_fallback(
     T* w,
     uint8_t* out,
     uint8_t* scales,
@@ -316,6 +319,216 @@ __global__ void fp_quantize_columnwise(
   }
 }
 
+constexpr size_t TMA_SHMEM_ALIGNMENT = 128;
+constexpr size_t ROWS_PER_BLOCK = 128;
+constexpr size_t COLS_PER_BLOCK = 128;
+constexpr size_t THREADS_PER_BLOCK = 128;
+constexpr size_t TILE_M = 32;
+constexpr size_t TILE_K = 128;
+constexpr size_t BUFFS_NUM = 2;
+
+template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
+__global__ void __launch_bounds__(128) fp_quantize_columnwise_tma(
+    const __grid_constant__ CUtensorMap tensor_map_input,
+    const __grid_constant__ CUtensorMap tensor_map_output,
+    uint8_t* __restrict__ scales,
+    const size_t rows,
+    const size_t cols) {
+#if (defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 1000)
+  using Tx2 = cu::Vector2_t<T>;
+  using Tx4 = cu::Vector4_t<T>;
+
+  constexpr size_t TILE_M = group_size;
+  constexpr size_t TILE_K = COLS_PER_BLOCK;
+  constexpr size_t STAGES = ROWS_PER_BLOCK / TILE_M; // 4 for gs=32, 8 for gs=16
+
+  constexpr int elem_per_byte = (bits == 8) ? 1 : 2;
+
+  const auto block_idx = cg::this_thread_block().group_index();
+  const auto idx_in_block = cg::this_thread_block().thread_index();
+  const int tidx = idx_in_block.x; // Thread handles column tidx
+  const bool is_master = (tidx == 0);
+
+  const size_t block_offset_col = block_idx.x * COLS_PER_BLOCK;
+  const size_t block_offset_row = block_idx.y * ROWS_PER_BLOCK;
+
+  constexpr size_t BUFF_ELEMS = TILE_M * TILE_K;
+  constexpr size_t in_tile_size = BUFF_ELEMS * sizeof(T);
+  constexpr size_t in_buff_size_aligned =
+      ((in_tile_size * BUFFS_NUM + TMA_SHMEM_ALIGNMENT - 1) /
+       TMA_SHMEM_ALIGNMENT) *
+      TMA_SHMEM_ALIGNMENT;
+
+  // Transposed output tile: TILE_K rows x TILE_M cols (128 x group_size)
+  // For FP8: 128 * group_size bytes, for FP4: 128 * (group_size/2) bytes
+  constexpr size_t out_tile_elems = BUFF_ELEMS / elem_per_byte;
+  constexpr size_t out_tile_size = out_tile_elems;
+  constexpr size_t out_buff_size_aligned =
+      ((out_tile_size * BUFFS_NUM + TMA_SHMEM_ALIGNMENT - 1) /
+       TMA_SHMEM_ALIGNMENT) *
+      TMA_SHMEM_ALIGNMENT;
+
+  constexpr size_t scales_per_tile = TILE_K; // One scale per column
+  constexpr size_t scales_tile_size = scales_per_tile * sizeof(uint8_t);
+
+  extern __shared__ char shared_mem[];
+  uintptr_t aligned_shared =
+      (reinterpret_cast<uintptr_t>(shared_mem) + TMA_SHMEM_ALIGNMENT - 1) &
+      ~(static_cast<uintptr_t>(TMA_SHMEM_ALIGNMENT - 1));
+
+  T* in_sh = reinterpret_cast<T*>(aligned_shared);
+  uint8_t* out_sh =
+      reinterpret_cast<uint8_t*>(aligned_shared + in_buff_size_aligned);
+  uint8_t* scales_sh = reinterpret_cast<uint8_t*>(
+      aligned_shared + in_buff_size_aligned + out_buff_size_aligned);
+
+  constexpr uint32_t tile_bytes = static_cast<uint32_t>(in_tile_size);
+
+  __shared__ alignas(8) uint64_t mbar[STAGES];
+
+  T thread_data[group_size];
+  uint32_t rbits = 0; // Reserved for stochastic rounding
+  const size_t scale_stride = rows / group_size;
+
+  // Master thread init memory barriers for all stages
+  // fence for tma, synchronize threads so all see mbarrier
+  if (is_master) {
+#pragma unroll
+    for (int iter = 0; iter < STAGES; ++iter) {
+      ptx::mbarrier_init(&mbar[iter], THREADS_PER_BLOCK);
+    }
+    ptx::fence_proxy_async_shared_cta();
+  }
+  __syncthreads();
+  // Launch first async copy before entering the loop
+  copy_2d_to_shared(
+      &in_sh[0],
+      &tensor_map_input,
+      static_cast<uint32_t>(block_offset_col),
+      static_cast<uint32_t>(block_offset_row),
+      tile_bytes,
+      &mbar[0],
+      is_master);
+
+#pragma unroll
+  for (size_t stage = 0; stage < STAGES; ++stage) {
+    // buffer memory offset in shared memory (we use double buffering for
+    // pipelining)
+    const size_t buff = stage % BUFFS_NUM;
+    const size_t next_stage = stage + 1;
+    const size_t stage_row_offset = stage * TILE_M;
+
+    if (next_stage < STAGES) {
+      // before launching another async copy, check that there is less than 2
+      // (to ensure that shared -> global synch is finished and buffer can be
+      // reused)
+      ptx::cp_async_bulk_wait_group_read<1>();
+      const size_t next_buff = next_stage % BUFFS_NUM;
+      const size_t next_row_offset = block_offset_row + next_stage * TILE_M;
+      const size_t next_buff_elem_offset = next_buff * BUFF_ELEMS;
+
+      copy_2d_to_shared(
+          &in_sh[next_buff_elem_offset],
+          &tensor_map_input,
+          static_cast<uint32_t>(block_offset_col),
+          static_cast<uint32_t>(next_row_offset),
+          tile_bytes,
+          &mbar[next_stage],
+          is_master);
+    }
+
+    ptx::fence_proxy_async_shared_cta();
+    // Wait until the data is ready, parity is always 0 because for simplicity
+    // we dont reuse barriers between stages
+    ptx::mbarrier_wait_parity(&mbar[stage], 0);
+    const size_t buff_offset = buff * BUFF_ELEMS;
+    // Read the data from shared to registers
+#pragma unroll
+    for (int row = 0; row < group_size; ++row) {
+      thread_data[row] = in_sh[buff_offset + row * TILE_K + tidx];
+    }
+    // Compute scale: find max absolute value in the column group
+    Tx2 amax_2x = Tx2{T(0.0f), T(0.0f)};
+#pragma unroll
+    for (int row = 0; row < group_size; row += 2) {
+      auto pair = Tx2{thread_data[row], thread_data[row + 1]};
+      cu::absmax_x2<Tx2>(amax_2x, amax_2x, pair);
+    }
+
+    float scale =
+        max(fabsf(static_cast<float>(amax_2x.x)),
+            fabsf(static_cast<float>(amax_2x.y)));
+
+    scale /= (bits == 4) ? 6.0f : 448.0f;
+
+    using ScaleType =
+        std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
+    auto s = ScaleType(scale);
+    scale = float(s);
+    // Store scale to shared memory buffer
+    // TODO: currently it results in 4-way bank conflict
+    scales_sh[buff * TILE_K + tidx] = s.__x;
+    const size_t out_buff_offset = buff * out_tile_elems;
+    // Quantize and write output to shared memory
+#pragma unroll
+    for (int j = 0; j < group_size / 4; ++j) {
+      Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&thread_data[j * 4]);
+      if constexpr (bits == 8) {
+        uint32_t quantized_val =
+            cu::scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+        *reinterpret_cast<uint32_t*>(
+            &out_sh[out_buff_offset + tidx * TILE_M + j * 4]) = quantized_val;
+      } else {
+        uint16_t quantized_val =
+            cu::scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+        *reinterpret_cast<uint16_t*>(
+            &out_sh[out_buff_offset + tidx * (TILE_M / 2) + j * 2]) =
+            quantized_val;
+      }
+    }
+    __syncthreads();
+    // Thread tidx computes scale for input column (block_offset_col + tidx)
+    // This scale goes to output row (block_offset_col + tidx), column
+    // (global_row_group)
+    const size_t global_row_group =
+        (block_offset_row + stage_row_offset) / group_size;
+    const size_t global_col = block_offset_col + tidx;
+    // TODO: scale writing is not good
+    if (global_col < cols && (block_offset_row + stage_row_offset) < rows) {
+      scales[global_col * scale_stride + global_row_group] =
+          scales_sh[buff * TILE_K + tidx];
+    }
+    ptx::fence_proxy_async_shared_cta();
+    __syncthreads();
+
+    if (is_master) {
+      const size_t global_row = block_offset_row + stage_row_offset;
+      const uint32_t out_x = (bits == 8)
+          ? static_cast<uint32_t>(global_row)
+          : static_cast<uint32_t>(global_row / 2);
+      const uint32_t out_y = static_cast<uint32_t>(block_offset_col);
+
+      ptx::cp_async_bulk_tensor_2d_shared_to_global(
+          reinterpret_cast<const uint64_t*>(&tensor_map_output),
+          out_x,
+          out_y,
+          reinterpret_cast<uint64_t*>(&out_sh[out_buff_offset]));
+      ptx::cp_async_bulk_commit_group();
+    }
+  }
+  // Wait for all TMA stores to complete
+  ptx::cp_async_bulk_wait_group_read<0>();
+
+  __syncthreads();
+  if (is_master) {
+#pragma unroll
+    for (int iter = 0; iter < STAGES; ++iter) {
+      ptx::mbarrier_invalidate(&mbar[iter]);
+    }
+  }
+#endif // __CUDA_ARCH__ >= 1000
+}
+
 template <typename T, int group_size, int bits, bool use_mx_scale>
 __global__ void fp_dequantize(
     const uint8_t* w,
@@ -361,6 +574,60 @@ __global__ void fp_dequantize(
       d = val;
     }
     out[i] = static_cast<T>(scale * Dequantize<bits>{}(d));
+  }
+}
+
+inline std::tuple<dim3, dim3, size_t> get_tma_columnwise_launch_args(
+    size_t rows,
+    size_t cols,
+    int group_size,
+    int bits,
+    int bytes_per_element) {
+  dim3 grid;
+  grid.x = (cols + COLS_PER_BLOCK - 1) / COLS_PER_BLOCK;
+  grid.y = (rows + ROWS_PER_BLOCK - 1) / ROWS_PER_BLOCK;
+  grid.z = 1;
+
+  dim3 block(THREADS_PER_BLOCK, 1, 1);
+
+  const int elem_per_byte = (bits == 8) ? 1 : 2;
+
+  const size_t BUFF_ELEMS = TILE_M * TILE_K;
+  const size_t in_tile_size = BUFF_ELEMS * bytes_per_element;
+  const size_t in_buff_size_aligned =
+      ((in_tile_size * BUFFS_NUM + TMA_SHMEM_ALIGNMENT - 1) /
+       TMA_SHMEM_ALIGNMENT) *
+      TMA_SHMEM_ALIGNMENT;
+
+  const size_t out_tile_elems = BUFF_ELEMS / elem_per_byte;
+  const size_t out_buff_size_aligned =
+      ((out_tile_elems * BUFFS_NUM + TMA_SHMEM_ALIGNMENT - 1) /
+       TMA_SHMEM_ALIGNMENT) *
+      TMA_SHMEM_ALIGNMENT;
+
+  const size_t scales_tile_size = TILE_K * sizeof(uint8_t);
+  const size_t scales_buff_size_aligned =
+      ((scales_tile_size * BUFFS_NUM + TMA_SHMEM_ALIGNMENT - 1) /
+       TMA_SHMEM_ALIGNMENT) *
+      TMA_SHMEM_ALIGNMENT;
+
+  const size_t smem_size = in_buff_size_aligned + out_buff_size_aligned +
+      scales_buff_size_aligned + TMA_SHMEM_ALIGNMENT;
+
+  return std::make_tuple(grid, block, smem_size);
+}
+
+inline CUtensorMapDataType get_tma_dtype(Dtype dtype) {
+  switch (dtype) {
+    case float16:
+      return CU_TENSOR_MAP_DATA_TYPE_FLOAT16;
+    case bfloat16:
+      return CU_TENSOR_MAP_DATA_TYPE_BFLOAT16;
+    case float32:
+      return CU_TENSOR_MAP_DATA_TYPE_FLOAT32;
+    default:
+      throw std::runtime_error(
+          "[fp_quantize_columnwise_tma] Unsupported dtype for TMA");
   }
 }
 
@@ -424,7 +691,7 @@ void fp_quantize_dequantize(
   });
 }
 
-void fp_quantize(
+void fp_quantize_rowwise(
     const array& w,
     array& wq,
     array& scales,
@@ -439,68 +706,196 @@ void fp_quantize(
   }
   enc.set_output_array(wq);
   enc.set_output_array(scales);
-  if (w.strides().back() != 1) {
-    dispatch_float_types(w.dtype(), "fp_quantize_columnwise", [&](auto type_tag) {
-      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-      if constexpr (!std::is_same_v<T, double>) {
-        auto M = w.shape(-2);
-        auto K = w.shape(-1);
-        auto kernel = cu::fp_quantize_columnwise<T, 32, 4, true, false>;
-        if (bits == 8) {
-          kernel = cu::fp_quantize_columnwise<T, 32, 8, true, false>;
-        } else if (group_size == 16) {
-          kernel = cu::fp_quantize_columnwise<T, 16, 4, false, false>;
-        }
-        auto [num_blocks, block_dims] =
-            cu::get_columnwise_quantize_launch_args(w.size(), group_size, M, K);
-        enc.add_kernel_node(
-            kernel,
-            num_blocks,
-            block_dims,
-            0,
-            gpu_ptr<T>(w),
-            gpu_ptr<uint8_t>(wq),
-            gpu_ptr<uint8_t>(scales),
-            w.size(),
-            M,
-            K,
-            global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
-                                     : nullptr);
-      } else {
-        throw std::runtime_error(
-            "[Quantize::eval_gpu] Can not quantize input with type float64.");
+  dispatch_float_types(w.dtype(), "fp_quantize_rowwise", [&](auto type_tag) {
+    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    if constexpr (!std::is_same_v<T, double>) {
+      auto kernel = cu::fp_quantize_rowwise<T, 32, 4, true, false>;
+      if (bits == 8) {
+        kernel = cu::fp_quantize_rowwise<T, 32, 8, true, false>;
+      } else if (group_size == 16) {
+        kernel = cu::fp_quantize_rowwise<T, 16, 4, false, false>;
       }
-    });
-  } else {
-    dispatch_float_types(w.dtype(), "fp_quantize_rowwise", [&](auto type_tag) {
-      using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-      if constexpr (!std::is_same_v<T, double>) {
-        auto kernel = cu::fp_quantize_rowwise<T, 32, 4, true, false>;
-        if (bits == 8) {
-          kernel = cu::fp_quantize_rowwise<T, 32, 8, true, false>;
-        } else if (group_size == 16) {
-          kernel = cu::fp_quantize_rowwise<T, 16, 4, false, false>;
-        }
-        bool large = w.size() > UINT_MAX;
-        auto [num_blocks, block_dims] = get_launch_args(
-            w.size(), w.shape(), w.strides(), large, group_size);
+      bool large = w.size() > UINT_MAX;
+      auto [num_blocks, block_dims] =
+          get_launch_args(w.size(), w.shape(), w.strides(), large, group_size);
 
-        enc.add_kernel_node(
-            kernel,
-            num_blocks,
-            block_dims,
-            0,
-            gpu_ptr<T>(w),
-            gpu_ptr<uint8_t>(wq),
-            gpu_ptr<uint8_t>(scales),
-            w.size(),
-            global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
-                                     : nullptr);
-      } else {
-        throw std::runtime_error(
-            "[Quantize::eval_gpu] Can not quantize input with type float64.");
+      enc.add_kernel_node(
+          kernel,
+          num_blocks,
+          block_dims,
+          0,
+          gpu_ptr<T>(w),
+          gpu_ptr<uint8_t>(wq),
+          gpu_ptr<uint8_t>(scales),
+          w.size(),
+          global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
+                                   : nullptr);
+    } else {
+      throw std::runtime_error(
+          "[Quantize::eval_gpu] Can not quantize input with type float64.");
+    }
+  });
+}
+
+void fp_quantize_columnwise_fallback(
+    const array& w,
+    array& wq,
+    array& scales,
+    int group_size,
+    int bits,
+    const std::optional<array>& global_scale /* = std::nullopt */,
+    cu::CommandEncoder& enc,
+    const Stream& s) {
+  enc.set_input_array(w);
+  if (global_scale.has_value()) {
+    enc.set_input_array(global_scale.value());
+  }
+  enc.set_output_array(wq);
+  enc.set_output_array(scales);
+  dispatch_float_types(
+      w.dtype(), "fp_quantize_columnwise_fallback", [&](auto type_tag) {
+        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+        if constexpr (!std::is_same_v<T, double>) {
+          auto M = w.shape(-2);
+          auto K = w.shape(-1);
+          auto kernel =
+              cu::fp_quantize_columnwise_fallback<T, 32, 4, true, false>;
+          if (bits == 8) {
+            kernel = cu::fp_quantize_columnwise_fallback<T, 32, 8, true, false>;
+          } else if (group_size == 16) {
+            kernel =
+                cu::fp_quantize_columnwise_fallback<T, 16, 4, false, false>;
+          }
+          auto [num_blocks, block_dims] =
+              cu::get_columnwise_quantize_launch_args(
+                  w.size(), group_size, M, K);
+          enc.add_kernel_node(
+              kernel,
+              num_blocks,
+              block_dims,
+              0,
+              gpu_ptr<T>(w),
+              gpu_ptr<uint8_t>(wq),
+              gpu_ptr<uint8_t>(scales),
+              w.size(),
+              M,
+              K,
+              global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
+                                       : nullptr);
+        } else {
+          throw std::runtime_error(
+              "[Quantize::eval_gpu] Can not quantize input with type float64.");
+        }
+      });
+}
+
+void fp_quantize_columnwise_tma(
+    const array& w,
+    array& wq,
+    array& scales,
+    int group_size,
+    int bits,
+    const std::optional<array>& global_scale /* = std::nullopt */,
+    cu::CommandEncoder& enc,
+    const Stream& s) {
+  enc.set_input_array(w);
+  enc.set_output_array(wq);
+  enc.set_output_array(scales);
+
+  size_t rows = w.shape(-1);
+  size_t cols = w.shape(-2);
+  size_t stride_bytes = w.strides(-1) * w.itemsize();
+
+  auto [grid, block, smem_size] = cu::get_tma_columnwise_launch_args(
+      rows, cols, group_size, bits, w.itemsize());
+
+  CUtensorMap tensor_map_input;
+  CUtensorMap tensor_map_output;
+
+  create_2D_tensor_map(
+      &tensor_map_input,
+      const_cast<void*>(static_cast<const void*>(w.data<void>())),
+      cu::get_tma_dtype(w.dtype()),
+      rows,
+      cols,
+      static_cast<uint32_t>(cu::TILE_M),
+      static_cast<uint32_t>(cu::TILE_K),
+      stride_bytes);
+
+  const size_t output_rows = cols;
+  const size_t output_cols = (bits == 8) ? rows : rows / 2;
+  const uint32_t out_tile_x = (bits == 8) ? cu::TILE_M : cu::TILE_M / 2;
+  const uint32_t out_tile_y = cu::TILE_K;
+
+  create_2D_tensor_map(
+      &tensor_map_output,
+      static_cast<void*>(wq.data<void>()),
+      CU_TENSOR_MAP_DATA_TYPE_UINT8,
+      output_rows,
+      output_cols,
+      out_tile_y,
+      out_tile_x,
+      output_cols);
+
+  dispatch_float_types(w.dtype(), "fp_quantize_columnwise_tma", [&](auto type_tag) {
+    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    if constexpr (!std::is_same_v<T, double>) {
+      auto kernel = cu::fp_quantize_columnwise_tma<T, 32, 4, true, false>;
+      if (bits == 8) {
+        kernel = cu::fp_quantize_columnwise_tma<T, 32, 8, true, false>;
+      } else if (group_size == 16) {
+        kernel = cu::fp_quantize_columnwise_tma<T, 16, 4, false, false>;
       }
-    });
+      enc.add_kernel_node(
+          kernel,
+          grid,
+          block,
+          static_cast<uint32_t>(smem_size),
+          tensor_map_input,
+          tensor_map_output,
+          gpu_ptr<uint8_t>(scales),
+          rows,
+          cols);
+    } else {
+      throw std::runtime_error(
+          "[fp_quantize_columnwise_tma] Cannot quantize input with type float64.");
+    }
+  });
+}
+
+void fp_quantize_columnwise(
+    const array& w,
+    array& wq,
+    array& scales,
+    int group_size,
+    int bits,
+    const std::optional<array>& global_scale /* = std::nullopt */,
+    cu::CommandEncoder& enc,
+    const Stream& s) {
+  if (enc.device().compute_capability_major() >= 10) {
+    std::cout << "Using TMA kernel for column-wise quantization" << std::endl;
+    fp_quantize_columnwise_tma(
+        w, wq, scales, group_size, bits, global_scale, enc, s);
+  } else {
+    fp_quantize_columnwise_fallback(
+        w, wq, scales, group_size, bits, global_scale, enc, s);
+  }
+}
+
+void fp_quantize(
+    const array& w,
+    array& wq,
+    array& scales,
+    int group_size,
+    int bits,
+    const std::optional<array>& global_scale /* = std::nullopt */,
+    cu::CommandEncoder& enc,
+    const Stream& s) {
+  if (w.strides(-1) == 1) {
+    fp_quantize_rowwise(w, wq, scales, group_size, bits, global_scale, enc, s);
+  } else {
+    fp_quantize_columnwise(
+        w, wq, scales, group_size, bits, global_scale, enc, s);
   }
 }
 
