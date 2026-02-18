@@ -95,6 +95,16 @@ struct DeviceFile {
       }
     }
 
+    // For 2-node rings, the cable count must be even (so the midpoint
+    // split yields equal halves) and >= 2 (a single cable cannot form
+    // a ring — bidirectional data flow requires at least one cable per
+    // direction).
+    if (size() == 2) {
+      if (num_connections < 2 || num_connections % 2 != 0) {
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -112,6 +122,17 @@ struct DeviceFile {
   extract_ring_connectivity(int rank) {
     int left = (rank + size() - 1) % size();
     int right = (rank + 1) % size();
+
+    // For 2-node rings, left == right so both directions reference the
+    // same device vector. Split at the midpoint: first half -> left,
+    // second half -> right, giving each direction dedicated cables.
+    if (left == right) {
+      auto& devs = devices_[rank][left];
+      auto mid = devs.size() / 2;
+      std::vector<std::string> left_devices(devs.begin(), devs.begin() + mid);
+      std::vector<std::string> right_devices(devs.begin() + mid, devs.end());
+      return std::make_pair(left_devices, right_devices);
+    }
 
     return std::make_pair(devices_[rank][left], devices_[rank][right]);
   }

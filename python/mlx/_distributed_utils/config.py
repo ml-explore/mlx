@@ -492,13 +492,22 @@ def configure_jaccl_ring(args, hosts, ips, ring, sshinfo):
         h = hosts[node]
         peer_left = ring[i - 1]
         peer_right = ring[(i + 1) % num_nodes]
+
+        # For 2-node rings, swap cable halves for rank 1 so that the
+        # midpoint split in extract_ring_connectivity() yields correct
+        # QP pairings: rank 0 left_[k] <-> rank 1 right_[k] land on
+        # the same physical wire.
+        cable_order = list(range(count))
+        if num_nodes == 2 and i == 1:
+            cable_order = list(range(count // 2, count)) + list(range(0, count // 2))
+
         rdmas = []
         for j in range(len(hosts)):
             if j not in (peer_left, peer_right):
                 rdmas.append(None)
             else:
                 rdma = []
-                for c in range(count):
+                for c in cable_order:
                     rdma.append(f"rdma_{ips.ips[i, j][c][0]}")
                 rdmas.append(rdma[0] if count == 1 else rdma)
         jaccl_hosts.append(Host(i, h.ssh_hostname, h.ips, rdmas))
