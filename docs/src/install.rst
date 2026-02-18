@@ -80,16 +80,31 @@ way to do this is with `Conda <https://stackoverflow.com/q/65415996>`_.
 Build from source
 -----------------
 
-Build Requirements
+Build Requirements MacOS
 ^^^^^^^^^^^^^^^^^^
 
 - A C++ compiler with C++20 support (e.g. Clang >= 15.0)
 - `cmake <https://cmake.org/>`_ -- version 3.25 or later, and ``make``
 - Xcode >= 15.0 and macOS SDK >= 14.0
+- The following libraries through brew, or by using the Accelerate framework
+  - libblas-dev
+  - liblapack-dev
+  - liblapacke-dev
 
 .. note::
    Ensure your shell environment is native ``arm``, not ``x86`` via Rosetta. If
    the output of ``uname -p`` is ``x86``, see the :ref:`troubleshooting section <build shell>` below.
+
+Build Requirements Linux
+^^^^^^^^^^^^^^^^^^
+
+- A C++ compiler with C++20 support (e.g. Clang >= 15.0)
+- `cmake <https://cmake.org/>`_ -- version 3.25 or later, and ``make``
+- The following libraries through brew, or by using the Accelerate framework
+  - build-essential
+  - libblas-dev
+  - liblapack-dev
+  - liblapacke-dev
 
 Python API
 ^^^^^^^^^^
