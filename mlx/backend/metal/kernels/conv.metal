@@ -30,7 +30,7 @@ template <typename T, int N>
     out_pixels *= params->oS[i];
 
   // Set out
-  out += gid.z * filter_size + gid.y * (params->C);
+  out += (size_t)gid.z * filter_size + (size_t)gid.y * (params->C);
 
   // Coordinates in input
   int is[N] = {0};
@@ -93,7 +93,7 @@ template <typename T, int N>
     out_pixels *= params->oS[i];
 
   // Set out
-  out += gid.z * filter_size + gid.x * (filter_size / params->C);
+  out += (size_t)gid.z * filter_size + (size_t)gid.x * (filter_size / params->C);
 
   // Coordinates in input
   int is[N] = {0};
