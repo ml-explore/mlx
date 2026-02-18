@@ -122,7 +122,9 @@ __global__ void qmm_impl(
   Tensor tApA = make_tensor<bool>(make_shape(size<1>(tAsA), size<2>(tAsA)),
                                   Stride<_1,_0>{});                       // (ACPY_M,ACPY_K)
   Tensor cA = make_identity_tensor(make_shape(size<0>(sA), size<1>(sA))); // (BLK_M,BLK_K)
+  Tensor cC = make_identity_tensor(make_shape(size<0>(gC), size<1>(gC))); // (BLK_M,BLK_N)
   Tensor tAcA = thr_copy_a.partition_S(cA);                               // (ACPY,ACPY_M,ACPY_K)
+  Tensor tCcC = thr_mma.partition_C(cC);                                  // (MMA,MMA_M,MMA_N)
   CUTE_UNROLL
   for (int m = 0; m < size<0>(tApA); ++m) {
     tApA(m,0) = get<0>(tAcA(0,m,0)) < m_max_coord;
@@ -157,7 +159,12 @@ __global__ void qmm_impl(
     gemm(mma, tCsA, tCsB, tCrC);
   }
 
-  copy(tCrC, tCgC);
+  CUTE_UNROLL
+  for (int i = 0; i < size(tCrC); ++i) {
+    if (get<0>(tCcC(i)) < m_max_coord) {
+      tCgC(i) = tCrC(i);
+    }
+  }
 }
 
 template <typename Element, typename GroupSize, typename F>
@@ -327,10 +334,6 @@ void cute_qmm(
   if (k % 64 != 0) {
     throw std::runtime_error(
         fmt::format("[{0}] K must be multiples of 64.", tag));
-  }
-  if (l != 1 && m % 16 != 0) {
-    throw std::runtime_error(
-        fmt::format("[{0}] M must be multiples of 16 for batched GEMM.", tag));
   }
   dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
     dispatch_quant_types(bits, tag, [&]<typename Quant>() {
