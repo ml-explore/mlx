@@ -160,6 +160,19 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, mode="nvfp4")
         self.assertTrue(mx.all(w_hat == 0))
 
+        # Test nvfp4 quantize/dequantize with tensor-scale global_scale
+        # currently supported only on cpu and cuda
+        if not mx.metal.is_available():
+            global_scale = w.abs().max().astype(mx.float32)
+        else:
+            global_scale = None
+
+        w_q, scales = mx.quantize(w, mode="nvfp4", global_scale=global_scale)
+        w_hat = mx.dequantize(
+            w_q, scales, group_size=16, bits=4, mode="nvfp4", global_scale=global_scale
+        )
+        self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
+
     def test_qqmv(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

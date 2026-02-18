@@ -99,6 +99,9 @@ class Scheduler {
   Stream get_stream(int index) const {
     return streams_.at(index);
   }
+  std::vector<Stream> get_streams() const {
+    return streams_;
+  }
 
   void set_default_stream(const Stream& s) {
     default_streams_.at(s.device.type) = s;

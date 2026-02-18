@@ -146,7 +146,7 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(y, y2, atol=self.atol, rtol=self.rtol))
         self.assertTrue(mx.allclose(y[part], y1, atol=self.atol, rtol=self.rtol))
 
-        # And their quant versions (QuintizedMatmul is not supported on CUDA)
+        # And their quant versions (QuantizedMatmul is not supported on CUDA)
         if not mx.cuda.is_available():
             qlin = lin.to_quantized()
             slin1 = shard_linear(qlin, "all-to-sharded")
@@ -154,6 +154,27 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
             y = qlin(x)
             y1 = slin1(x)
             y2 = slin2(x[part])
+            self.assertTrue(mx.allclose(y, y2, atol=self.atol, rtol=self.rtol))
+            self.assertTrue(mx.allclose(y[part], y1))
+
+            # Test non-affine quantization modes (mxfp8)
+            qlin_mxfp8 = lin.to_quantized(group_size=32, bits=8, mode="mxfp8")
+            self.assertEqual(qlin_mxfp8.mode, "mxfp8")
+
+            slin1_mxfp8 = shard_linear(qlin_mxfp8, "all-to-sharded")
+            slin2_mxfp8 = shard_linear(qlin_mxfp8, "sharded-to-all")
+
+            # Verify mode is propagated
+            self.assertEqual(slin1_mxfp8.mode, "mxfp8")
+            self.assertEqual(slin2_mxfp8.mode, "mxfp8")
+
+            # Verify biases parameter is not set for mxfp8
+            self.assertIsNone(slin1_mxfp8.get("biases"))
+            self.assertIsNone(slin2_mxfp8.get("biases"))
+
+            y = qlin_mxfp8(x)
+            y1 = slin1_mxfp8(x)
+            y2 = slin2_mxfp8(x[part])
             self.assertTrue(mx.allclose(y, y2, atol=self.atol, rtol=self.rtol))
             self.assertTrue(mx.allclose(y[part], y1))
 
