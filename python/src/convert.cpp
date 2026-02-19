@@ -528,6 +528,8 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
       auto arr = to_array_with_accessor(std::get<ArrayLike>(v_cast).obj);
       return mx::astype(arr, t.value_or(arr.dtype()));
     }
+  } catch (const std::bad_cast& e) {
+    throw std::invalid_argument("Cannot convert to mlx array.");
   } catch (const nb::cast_error& e) {
     throw std::invalid_argument("Cannot convert to mlx array.");
   }
