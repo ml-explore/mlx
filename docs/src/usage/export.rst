@@ -109,29 +109,6 @@ keyword arguments when calling the imported function.
   out, = imported_fun(x, z=y)
 
 
-Inspecting Exports with a Callback
-----------------------------------
-
-You can pass a callback instead of a file path to :func:`export_function` to
-inspect the exported graph records.
-
-.. code-block:: python
-
-  def fun(x):
-    return x.astype(mx.int32)
-
-  def callback(record):
-    if record["type"] == "primitive":
-      print(record["name"], record["arguments"])
-
-  mx.export_function(callback, fun, mx.array([1.0, 2.0], dtype=mx.float32))
-
-Each callback ``record`` includes a ``type`` field. Primitive records also
-include ``name``, ``inputs``, ``outputs``, and ``arguments``. Primitive
-arguments preserve the original MLX state values, including dtype arguments for
-dtype-dependent primitives like ``AsType``.
-
-
 Exporting Modules
 -----------------
 
@@ -176,6 +153,34 @@ parameters, pass them as inputs to the ``call`` wrapper:
 
    params = tree_flatten(model.parameters(), destination={})
    mx.export_function("model.mlxfn", call, (mx.zeros(4),), params)
+
+
+Exporting with a Callback
+-------------------------
+
+To inspect the exported graph, you can pass a callback instead of a file path
+to :func:`export_function`.
+
+.. code-block:: python
+
+  def fun(x):
+    return x.astype(mx.int32)
+
+  def callback(args):
+    print(args)
+
+  mx.export_function(callback, fun, mx.array([1.0, 2.0]))
+
+The argument to the callback (``args``) is a dictionary which includes a
+``type`` field. The possible types are:
+
+* ``"inputs"``: The ordered positional inputs to the exported function
+* ``"keyword_inputs"``: The keyword specified inputs to the exported function
+* ``"outputs"``: The ordered outputs of the exported function
+* ``"constants"``: Any graph constants
+* ``"primitives"``: Inner graph nodes representating the operations
+
+Each type has additional fields in the ``args`` dictionary.
 
 
 Shapeless Exports
