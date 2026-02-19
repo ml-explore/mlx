@@ -40,6 +40,23 @@ struct ImplicitGemmConv2DParams {
   const int swizzle_log;
 };
 
+struct ImplicitGemmConv3DParams {
+  const int M;
+  const int N;
+  const int K;
+
+  const int gemm_k_iterations;
+
+  const int inp_jump_w;
+  const int inp_jump_h;
+  const int inp_jump_d;
+  const int inp_jump_c;
+
+  const int tiles_n;
+  const int tiles_m;
+  const int swizzle_log;
+};
+
 struct Conv2DGeneralJumpParams {
   const int f_wgt_jump_h;
   const int f_wgt_jump_w;

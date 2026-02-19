@@ -41,6 +41,7 @@ const char* steel_gemm_gather();
 const char* steel_gemm_segmented();
 const char* conv();
 const char* steel_conv();
+const char* steel_conv_3d();
 const char* steel_conv_general();
 const char* gemv_masked();
 const char* steel_attention();

@@ -71,6 +71,7 @@ if(MLX_METAL_JIT)
     kernels/steel/conv/loaders/loader_channel_l.h
     kernels/steel/conv/loaders/loader_channel_n.h)
   make_jit_source(steel/conv/kernels/steel_conv)
+  make_jit_source(steel/conv/kernels/steel_conv_3d)
   make_jit_source(steel/conv/kernels/steel_conv_general kernels/steel/defines.h
                   kernels/steel/conv/loaders/loader_general.h)
 

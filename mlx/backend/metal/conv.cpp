@@ -489,6 +489,148 @@ void implicit_gemm_conv_2D_general_gpu(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void implicit_gemm_conv_3D_gpu(
+    const Stream& s,
+    metal::Device& d,
+    const array& in,
+    const array& wt,
+    array out,
+    const MLXConvParams<3>& conv_params) {
+  const int groups = conv_params.groups;
+  const int C_per_group = conv_params.C / conv_params.groups;
+  const int O_per_group = conv_params.O / conv_params.groups;
+
+  // Deduce implicit gemm size
+  const int implicit_M =
+      conv_params.N * conv_params.oS[0] * conv_params.oS[1] * conv_params.oS[2];
+  const int implicit_N = O_per_group;
+  const int implicit_K =
+      conv_params.wS[0] * conv_params.wS[1] * conv_params.wS[2] * C_per_group;
+
+  // Determine block and warp tiles
+  int wm = 2, wn = 2;
+
+  int bm = implicit_M >= 8192 && C_per_group >= 64 ? 64 : 32;
+  int bn = (bm == 64 || implicit_N >= 64) ? 64 : 32;
+  int bk = 16;
+
+  if (implicit_N <= 16) {
+    bn = 8;
+    wm = 4;
+    wn = 1;
+  }
+
+  int tn = (implicit_N + bn - 1) / bn;
+  int tm = (implicit_M + bm - 1) / bm;
+  int swizzle_log = 0;
+
+  int channel_k_iters = ((C_per_group + bk - 1) / bk);
+  int gemm_k_iters = conv_params.wS[0] * conv_params.wS[1] * conv_params.wS[2] *
+      channel_k_iters;
+
+  // Fix host side helper params
+  int sign = (conv_params.flip ? -1 : 1);
+  int ijw = conv_params.in_strides[3] * conv_params.kdil[2];
+  int ijh = conv_params.in_strides[2] * conv_params.kdil[1];
+  int ijd = conv_params.in_strides[1] * conv_params.kdil[0];
+
+  int inp_jump_w = sign * ijw;
+  int inp_jump_h = sign * (ijh - (conv_params.wS[2] - 1) * ijw);
+  int inp_jump_d = sign *
+      (ijd - (conv_params.wS[1] - 1) * ijh - (conv_params.wS[2] - 1) * ijw);
+  int inp_jump_c = bk - sign * (conv_params.wS[0] - 1) * ijd -
+      sign * (conv_params.wS[1] - 1) * ijh -
+      sign * (conv_params.wS[2] - 1) * ijw;
+
+  // Build implicit gemm params
+  ImplicitGemmConv3DParams gemm_params{
+      /* const int M = */ implicit_M,
+      /* const int N = */ implicit_N,
+      /* const int K = */ implicit_K,
+
+      /* const int gemm_k_iterations = */ gemm_k_iters,
+
+      /* const int inp_jump_w = */ inp_jump_w,
+      /* const int inp_jump_h = */ inp_jump_h,
+      /* const int inp_jump_d = */ inp_jump_d,
+      /* const int inp_jump_c = */ inp_jump_c,
+
+      /* const int tiles_n = */ tn,
+      /* const int tiles_m = */ tm,
+      /* const int swizzle_log = */ swizzle_log};
+
+  // Determine kernel
+  std::string kname;
+  kname.reserve(64);
+  concatenate(
+      kname,
+      "implicit_gemm_conv_3d_",
+      type_to_name(out),
+      "_bm",
+      bm,
+      "_bn",
+      bn,
+      "_bk",
+      bk,
+      "_wm",
+      wm,
+      "_wn",
+      wn);
+
+  // Encode and dispatch kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_steel_conv_3d_kernel(d, kname, out, bm, bn, bk, wm, wn);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Deduce grid launch dimensions
+  int tile = 1 << swizzle_log;
+  size_t grid_dim_y = (tm + tile - 1) / tile;
+  size_t grid_dim_x = tn * tile;
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(grid_dim_x, grid_dim_y, groups);
+
+  // Encode arrays
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_input_array(wt, 1);
+  compute_encoder.set_output_array(out, 2);
+
+  // Encode params
+  compute_encoder.set_bytes(conv_params, 3);
+  compute_encoder.set_bytes(gemm_params, 4);
+
+  // Launch kernel
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+void dispatch_conv_3D_gpu(
+    const Stream& s,
+    metal::Device& d,
+    const array& in,
+    const array& wt,
+    array out,
+    const MLXConvParams<3>& conv_params,
+    std::vector<array>& copies) {
+  bool is_idil_one = conv_params.idil[0] == 1 && conv_params.idil[1] == 1 &&
+      conv_params.idil[2] == 1;
+  const int C_per_group = conv_params.C / conv_params.groups;
+  const int O_per_group = conv_params.O / conv_params.groups;
+
+  // Implicit GEMM: no input dilation, 16-aligned channels only
+  // (C_per_group <= 4 excluded - no small-channel loader for 3D yet)
+  if (is_idil_one && C_per_group % 16 == 0 &&
+      (O_per_group <= 16 || O_per_group % 16 == 0)) {
+    return implicit_gemm_conv_3D_gpu(s, d, in, wt, out, conv_params);
+  }
+
+  // Grouped fallback: must use the group-aware explicit GEMM
+  if (conv_params.groups > 1) {
+    return explicit_gemm_conv_group_ND_gpu(s, d, in, wt, out, conv_params);
+  }
+
+  return explicit_gemm_conv_ND_gpu(s, d, in, wt, out, conv_params);
+}
+
 void winograd_conv_2D_gpu(
     const Stream& s,
     metal::Device& d,
@@ -989,6 +1131,7 @@ void conv_3D_gpu(
     const std::vector<int>& wt_strides,
     const std::vector<int>& wt_dilation,
     const std::vector<int>& in_dilation,
+    int groups,
     bool flip,
     std::vector<array>& copies) {
   // Make conv params
@@ -1032,10 +1175,10 @@ void conv_3D_gpu(
        out.strides()[2],
        out.strides()[3],
        out.strides()[4]},
-      /* const int groups = */ 1,
+      /* const int groups = */ groups,
       /* const bool flip = */ flip,
   };
-  return explicit_gemm_conv_ND_gpu(s, d, in, wt, out, conv_params);
+  return dispatch_conv_3D_gpu(s, d, in, wt, out, conv_params, copies);
 }
 
 } // namespace
@@ -1070,6 +1213,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
         kernel_strides_,
         kernel_dilation_,
         input_dilation_,
+        groups_,
         flip_,
         copies);
   }
