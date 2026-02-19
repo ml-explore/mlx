@@ -201,6 +201,16 @@ MTL::ComputePipelineState* get_steel_conv_kernel(
     int n_channel_specialization,
     bool small_filter);
 
+MTL::ComputePipelineState* get_steel_conv_3d_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn);
+
 MTL::ComputePipelineState* get_gemv_masked_kernel(
     metal::Device& d,
     const std::string& kernel_name,

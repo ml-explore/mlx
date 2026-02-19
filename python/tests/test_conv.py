@@ -550,7 +550,6 @@ class TestConv(mlx_tests.MLXTestCase):
                 (1, 1, 6),
                 (4, 16, 32),
             ):
-                continue
                 for idim, kdim, stride, padding in (
                     ((1, 1, 1), (1, 1, 1), (1, 1, 1), (0, 0, 0)),
                     ((3, 3, 3), (3, 1, 1), (1, 1, 1), (0, 0, 0)),
