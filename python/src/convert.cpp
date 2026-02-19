@@ -530,7 +530,5 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
     }
   } catch (const std::bad_cast& e) {
     throw std::invalid_argument("Cannot convert to mlx array.");
-  } catch (const nb::cast_error& e) {
-    throw std::invalid_argument("Cannot convert to mlx array.");
   }
 }
