@@ -469,8 +469,10 @@ mx::array array_from_list(nb::tuple pl, std::optional<mx::Dtype> dtype) {
 
 mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
   if (nb::hasattr(v, "dtype")) {
-    if (nb::cast<nb::str>(v.attr("dtype")).equal(nb::str("bfloat16"))) {
-      auto type_mod = nb::cast<nb::str>(v.attr("__class__").attr("__module__"));
+    nb::object dtype_obj = v.attr("dtype");
+    if (nb::str(dtype_obj).equal(nb::str("bfloat16"))) {
+      nb::object module_obj = v.attr("__class__").attr("__module__");
+      auto type_mod = nb::str(module_obj);
       if (type_mod.equal(nb::str("numpy")) ||
           type_mod.equal(nb::str("ml_dtypes"))) {
         auto np = nb::module_::import_("numpy");
