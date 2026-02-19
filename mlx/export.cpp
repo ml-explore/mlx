@@ -279,6 +279,8 @@ void extract_state(const T state, std::vector<StateT>& unpacked_state) {
     unpacked_state.push_back(state);
   } else if constexpr (std::is_enum_v<T>) {
     unpacked_state.push_back(static_cast<int>(state));
+  } else if constexpr (std::is_same_v<T, Dtype>) {
+    unpacked_state.push_back(state);
   } else if constexpr (is_iterable<T>) {
     unpacked_state.push_back(state);
   } else if constexpr (is_pair<T> || is_tuple<T>) {
