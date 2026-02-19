@@ -22,6 +22,7 @@ try:
 except ImportError:
     has_ml_dtypes = False
 
+
 class TestBF16(mlx_tests.MLXTestCase):
     def __test_ops(
         self,
@@ -196,7 +197,7 @@ class TestBF16(mlx_tests.MLXTestCase):
         expected = mx.array([1.0, 2.0, 3.0], mx.bfloat16)
         self.assertEqual(a_mx.dtype, mx.bfloat16)
         self.assertTrue(mx.array_equal(a_mx, expected))
-    
+
     @unittest.skipIf(not has_ml_dtypes, "requires ml_dtypes")
     def test_conversion_ml_dtypes(self):
         x_scalar = np.array(1.5, dtype=ml_dtypes.bfloat16)
@@ -215,7 +216,7 @@ class TestBF16(mlx_tests.MLXTestCase):
 
         a_cast = mx.array(x_scalar, dtype=mx.float32)
         self.assertEqual(a_cast.dtype, mx.float32)
-        self.assertEqual(a_cast.item(), 1.5)  
+        self.assertEqual(a_cast.item(), 1.5)
 
 
 if __name__ == "__main__":
