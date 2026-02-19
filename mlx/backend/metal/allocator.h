@@ -41,6 +41,7 @@ class MetalAllocator : public allocator::Allocator {
   size_t set_memory_limit(size_t limit);
   size_t get_memory_limit();
   size_t set_wired_limit(size_t limit);
+  void on_capture_stop();
   void clear_cache();
 
  private:
@@ -68,6 +69,8 @@ class MetalAllocator : public allocator::Allocator {
   size_t peak_memory_{0};
   size_t max_pool_size_;
   size_t wired_limit_{0};
+  bool wired_limit_pending_apply_{false};
+  bool residency_set_attached_{false};
   size_t num_resources_{0};
   size_t resource_limit_{0};
 

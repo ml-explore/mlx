@@ -144,6 +144,7 @@ struct DeviceStream {
   std::unique_ptr<CommandEncoder> encoder{nullptr};
   std::shared_ptr<Fence> fence;
   std::vector<array> temporaries;
+  bool residency_set_attached{false};
 };
 
 class MLX_API Device {
@@ -206,8 +207,13 @@ class MLX_API Device {
   void add_temporaries(std::vector<array> arrays, int index);
 
   void set_residency_set(const MTL::ResidencySet* residency_set);
+  void on_capture_start();
+  void on_capture_stop();
 
  private:
+  void attach_residency_set_to_stream_(DeviceStream& stream);
+  void attach_residency_set_to_existing_queues_if_needed_();
+
   DeviceStream& get_stream_(int index) {
     return stream_map_.find(index)->second;
   }
@@ -255,6 +261,7 @@ class MLX_API Device {
       std::unordered_map<std::string, MTL::ComputePipelineState*>>
       library_kernels_;
   const MTL::ResidencySet* residency_set_{nullptr};
+  bool residency_set_pending_attach_{false};
   std::string arch_;
   int arch_gen_;
   int max_ops_per_buffer_;

@@ -15,6 +15,13 @@ bool is_available() {
 
 void start_capture(std::string) {}
 void stop_capture() {}
+bool is_capture_active() {
+  return false;
+}
+bool residency_sets_enabled() {
+  return false;
+}
+void set_residency_sets_enabled(bool) {}
 
 const std::unordered_map<std::string, std::variant<std::string, size_t>>&
 device_info() {

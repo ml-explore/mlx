@@ -52,8 +52,6 @@ MetalAllocator::MetalAllocator()
   block_limit_ = std::min(1.5 * max_rec_size, 0.95 * memsize);
   gc_limit_ = std::min(static_cast<size_t>(0.95 * max_rec_size), block_limit_);
   max_pool_size_ = block_limit_;
-  device(mlx::core::Device::gpu)
-      .set_residency_set(residency_set_.mtl_residency_set());
   bool is_vm = std::get<std::string>(info.at("device_name")) ==
       "Apple Paravirtual device";
   if (is_vm) {
@@ -96,10 +94,41 @@ size_t MetalAllocator::get_memory_limit() {
 
 size_t MetalAllocator::set_wired_limit(size_t limit) {
   std::unique_lock lk(mutex_);
-  std::swap(limit, wired_limit_);
+  size_t previous = wired_limit_;
+  wired_limit_ = limit;
+  // During active Metal capture, avoid issuing residency-set mutations so the
+  // capture remains replayable for derived counters.
+  if (!metal::residency_sets_enabled() || metal::is_capture_active()) {
+    wired_limit_pending_apply_ = true;
+    return previous;
+  }
+  // Attach the residency set lazily so normal execution (wired limit == 0)
+  // does not add queue residency-set state that is never used.
+  if (wired_limit_ > 0 && !residency_set_attached_ &&
+      residency_set_.mtl_residency_set() != nullptr) {
+    device(mlx::core::Device::gpu)
+        .set_residency_set(residency_set_.mtl_residency_set());
+    residency_set_attached_ = true;
+  }
   residency_set_.resize(wired_limit_);
-  return limit;
+  wired_limit_pending_apply_ = false;
+  return previous;
 };
+
+void MetalAllocator::on_capture_stop() {
+  std::unique_lock lk(mutex_);
+  if (!wired_limit_pending_apply_ || !metal::residency_sets_enabled()) {
+    return;
+  }
+  if (wired_limit_ > 0 && !residency_set_attached_ &&
+      residency_set_.mtl_residency_set() != nullptr) {
+    device(mlx::core::Device::gpu)
+        .set_residency_set(residency_set_.mtl_residency_set());
+    residency_set_attached_ = true;
+  }
+  residency_set_.resize(wired_limit_);
+  wired_limit_pending_apply_ = false;
+}
 
 Buffer MetalAllocator::malloc(size_t size) {
   // Metal doesn't like empty buffers
