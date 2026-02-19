@@ -218,6 +218,11 @@ class TestBF16(mlx_tests.MLXTestCase):
         self.assertEqual(a_cast.dtype, mx.float32)
         self.assertEqual(a_cast.item(), 1.5)
 
+        a_asarray = mx.asarray(x_vector)
+        self.assertEqual(a_asarray.dtype, mx.bfloat16)
+        self.assertEqual(a_asarray.shape, (3,))
+        self.assertTrue(mx.array_equal(a_asarray, expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

@@ -297,39 +297,7 @@ void init_array(nb::module_& m) {
       .def(
           "__init__",
           [](mx::array* aptr, nb::object v, std::optional<mx::Dtype> t) {
-            if (nb::hasattr(v, "dtype")) {
-              if (nb::str(v.attr("dtype")).equal(nb::str("bfloat16"))) {
-                auto type_mod = nb::str(v.attr("__class__").attr("__module__"));
-                if (type_mod.equal(nb::str("numpy")) ||
-                    type_mod.equal(nb::str("ml_dtypes"))) {
-                  auto np = nb::module_::import_("numpy");
-                  auto contig_obj = np.attr("ascontiguousarray")(v);
-                  mx::Shape shape;
-                  nb::tuple shape_tuple = nb::cast<nb::tuple>(v.attr("shape"));
-                  size_t ndim = shape_tuple.size();
-                  for (size_t i = 0; i < ndim; ++i) {
-                    shape.push_back(nb::cast<int>(shape_tuple[i]));
-                  }
-                  uint64_t ptr_int = nb::cast<uint64_t>(
-                      contig_obj.attr("ctypes").attr("data"));
-                  const mx::bfloat16_t* typed_ptr =
-                      reinterpret_cast<const mx::bfloat16_t*>(ptr_int);
-                  auto res = (ndim == 0)
-                      ? mx::array(*typed_ptr, mx::bfloat16)
-                      : mx::array(typed_ptr, shape, mx::bfloat16);
-                  if (t.has_value())
-                    res = mx::astype(res, *t);
-                  new (aptr) mx::array(res);
-                  return;
-                }
-              }
-            }
-            try {
-              auto v_cast = nb::cast<ArrayInitType>(v);
-              new (aptr) mx::array(create_array(v_cast, t));
-            } catch (const nb::cast_error& e) {
-              throw std::invalid_argument("Cannot convert to mlx array.");
-            }
+            new (aptr) mx::array(create_array(v, t));
           },
           "val"_a,
           "dtype"_a = nb::none(),
