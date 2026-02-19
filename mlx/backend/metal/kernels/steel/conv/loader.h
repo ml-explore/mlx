@@ -4,3 +4,4 @@
 
 #include "mlx/backend/metal/kernels/steel/conv/loaders/loader_channel_l.h"
 #include "mlx/backend/metal/kernels/steel/conv/loaders/loader_channel_n.h"
+#include "mlx/backend/metal/kernels/steel/conv/loaders/loader_conv3d.h"

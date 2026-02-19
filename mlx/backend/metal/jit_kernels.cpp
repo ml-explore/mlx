@@ -770,6 +770,35 @@ MTL::ComputePipelineState* get_steel_conv_kernel(
   return d.get_kernel(kernel_name, lib);
 }
 
+MTL::ComputePipelineState* get_steel_conv_3d_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn,
+    bool small_filter) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::utils() << metal::conv() << metal::steel_conv_3d()
+                  << get_template_definition(
+                         lib_name,
+                         "implicit_gemm_conv_3d",
+                         get_type_string(out.dtype()),
+                         bm,
+                         bn,
+                         bk,
+                         wm,
+                         wn,
+                         small_filter);
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
 MTL::ComputePipelineState* get_steel_conv_general_kernel(
     metal::Device& d,
     const std::string& kernel_name,

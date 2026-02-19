@@ -65,8 +65,10 @@ set(STEEL_HEADERS
     steel/conv/loader.h
     steel/conv/loaders/loader_channel_l.h
     steel/conv/loaders/loader_channel_n.h
+    steel/conv/loaders/loader_conv3d.h
     steel/conv/loaders/loader_general.h
     steel/conv/kernels/steel_conv.h
+    steel/conv/kernels/steel_conv_3d.h
     steel/conv/kernels/steel_conv_general.h
     steel/gemm/gemm.h
     steel/gemm/mma.h
@@ -143,6 +145,7 @@ if(NOT MLX_METAL_JIT)
   build_kernel(ternary ternary.h ternary_ops.h)
   build_kernel(unary unary.h unary_ops.h)
   build_kernel(steel/conv/kernels/steel_conv ${STEEL_HEADERS})
+  build_kernel(steel/conv/kernels/steel_conv_3d ${STEEL_HEADERS})
   build_kernel(steel/conv/kernels/steel_conv_general ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_fused ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_gather ${STEEL_HEADERS})
