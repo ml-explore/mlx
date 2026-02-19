@@ -109,6 +109,29 @@ keyword arguments when calling the imported function.
   out, = imported_fun(x, z=y)
 
 
+Inspecting Exports with a Callback
+----------------------------------
+
+You can pass a callback instead of a file path to :func:`export_function` to
+inspect the exported graph records.
+
+.. code-block:: python
+
+  def fun(x):
+    return x.astype(mx.int32)
+
+  def callback(record):
+    if record["type"] == "primitive":
+      print(record["name"], record["arguments"])
+
+  mx.export_function(callback, fun, mx.array([1.0, 2.0], dtype=mx.float32))
+
+Each callback ``record`` includes a ``type`` field. Primitive records also
+include ``name``, ``inputs``, ``outputs``, and ``arguments``. Primitive
+arguments preserve the original MLX state values, including dtype arguments for
+dtype-dependent primitives like ``AsType``.
+
+
 Exporting Modules
 -----------------
 
