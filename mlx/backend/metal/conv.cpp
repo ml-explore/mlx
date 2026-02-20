@@ -524,6 +524,10 @@ void implicit_gemm_conv_3D_gpu(
   int tm = (implicit_M + bm - 1) / bm;
   int swizzle_log = 0;
 
+  bool small_filter =
+      (conv_params.wS[0] <= 16 && conv_params.wS[1] <= 16 &&
+       conv_params.wS[2] <= 16);
+
   int channel_k_iters = ((C_per_group + bk - 1) / bk);
   int gemm_k_iters = conv_params.wS[0] * conv_params.wS[1] * conv_params.wS[2] *
       channel_k_iters;
@@ -575,11 +579,14 @@ void implicit_gemm_conv_3D_gpu(
       "_wm",
       wm,
       "_wn",
-      wn);
+      wn,
+      "_filter_",
+      small_filter ? 's' : 'l');
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = get_steel_conv_3d_kernel(d, kname, out, bm, bn, bk, wm, wn);
+  auto kernel =
+      get_steel_conv_3d_kernel(d, kname, out, bm, bn, bk, wm, wn, small_filter);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Deduce grid launch dimensions

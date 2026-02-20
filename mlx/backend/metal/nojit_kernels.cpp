@@ -265,7 +265,8 @@ MTL::ComputePipelineState* get_steel_conv_3d_kernel(
     int,
     int,
     int,
-    int) {
+    int,
+    bool) {
   return d.get_kernel(kernel_name);
 }
 

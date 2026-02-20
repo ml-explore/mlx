@@ -4,7 +4,14 @@
 
 using namespace metal;
 
-template <typename T, int BM, int BN, int BK, int WM, int WN>
+template <
+    typename T,
+    int BM,
+    int BN,
+    int BK,
+    int WM,
+    int WN,
+    bool SMALL_FILTER = false>
 [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void
 implicit_gemm_conv_3d(
     const device T* A [[buffer(0)]],
@@ -35,8 +42,17 @@ implicit_gemm_conv_3d(
   constexpr short tgp_size = WM * WN * 32;
 
   // Input loader
-  using loader_a_t =
-      Conv3DInputBlockLoaderLargeFilter<T, BM, BN, BK, tgp_size, tgp_padding_a>;
+  using loader_a_t = typename metal::conditional_t<
+      // If the filter is small we can precompute masks for bounds checking
+      SMALL_FILTER,
+      Conv3DInputBlockLoaderSmallFilter<T, BM, BN, BK, tgp_size, tgp_padding_a>,
+      Conv3DInputBlockLoaderLargeFilter<
+          T,
+          BM,
+          BN,
+          BK,
+          tgp_size,
+          tgp_padding_a>>;
 
   // Weight loader
   using loader_b_t =

@@ -778,7 +778,8 @@ MTL::ComputePipelineState* get_steel_conv_3d_kernel(
     int bn,
     int bk,
     int wm,
-    int wn) {
+    int wn,
+    bool small_filter) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
@@ -791,7 +792,8 @@ MTL::ComputePipelineState* get_steel_conv_3d_kernel(
                          bn,
                          bk,
                          wm,
-                         wn);
+                         wn,
+                         small_filter);
     return kernel_source.str();
   });
   return d.get_kernel(kernel_name, lib);
