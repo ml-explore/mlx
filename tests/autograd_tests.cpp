@@ -1357,11 +1357,6 @@ TEST_CASE("test grad dynamic slices") {
 }
 
 TEST_CASE("test masked_scatter autograd") {
-  if (cu::is_available()) {
-    INFO("Skipping masked_scatter cuda autograd tests");
-    return;
-  }
-
   // Test jvp
   {
     auto self = array({10.f, 20.f, 30.f, 40.f}, {4});
