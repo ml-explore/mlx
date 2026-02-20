@@ -523,6 +523,7 @@ void sdpa_vector_2pass(
   // Get the kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
+  check_kernel_threadgroup_size(kernel, group_dims, hash_name);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -564,13 +565,8 @@ void sdpa_vector_2pass(
   kname += "_";
   kname += std::to_string(v.shape(-1));
 
-  func_consts = {
-      {&blocks, MTL::DataType::DataTypeInt, 26},
-  };
-  hash_name = kname + "_" + std::to_string(blocks);
-
   // Get the kernel
-  kernel = d.get_kernel(kname, hash_name, func_consts);
+  kernel = d.get_kernel(kname);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Set its arguments
@@ -578,10 +574,12 @@ void sdpa_vector_2pass(
   compute_encoder.set_input_array(sums, 1);
   compute_encoder.set_input_array(maxs, 2);
   compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(blocks, 4);
 
   // Launch
   group_dims = MTL::Size(1024, 1, 1);
   grid_dims = MTL::Size(q.shape(0) * q.shape(1), q.shape(2), 1);
+  check_kernel_threadgroup_size(kernel, group_dims, kname);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
@@ -713,7 +711,8 @@ void ScaledDotProductAttention::eval_gpu(
       return (strides[0] == strides[1] * shape[1]);
     };
 
-    const auto& q = copy_unless(q_copy_unless, q_pre);
+    bool q_copied = !q_copy_unless(q_pre);
+    array q = (q_copied) ? contiguous_copy_gpu(q_pre, s) : q_pre;
     const auto& k = copy_unless(kv_copy_unless, k_pre);
     const auto& v = copy_unless(kv_copy_unless, v_pre);
 
@@ -721,6 +720,9 @@ void ScaledDotProductAttention::eval_gpu(
     if (q.is_donatable() && q.flags().row_contiguous && q.size() == o.size()) {
       o.copy_shared_buffer(q);
     } else {
+      if (q_copied) {
+        copies.push_back(q);
+      }
       o.set_data(allocator::malloc(o.nbytes()));
     }
 

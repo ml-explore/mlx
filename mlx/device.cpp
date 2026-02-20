@@ -36,9 +36,9 @@ bool operator!=(const Device& lhs, const Device& rhs) {
 bool is_available(const Device& d) {
   switch (d.type) {
     case Device::cpu:
-      return cpu::is_available();
+      return cpu::is_available() && (d.index < cpu::device_count());
     case Device::gpu:
-      return gpu::is_available();
+      return gpu::is_available() && (d.index < gpu::device_count());
   }
   // appease compiler
   return false;

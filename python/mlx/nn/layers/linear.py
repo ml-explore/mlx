@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
-from mlx.nn.layers.quantized import QuantizedLinear
+from mlx.nn.layers.quantized import QQLinear, QuantizedLinear
 
 
 class Identity(Module):
@@ -75,8 +75,36 @@ class Linear(Module):
         group_size: Optional[int] = None,
         bits: Optional[int] = None,
         mode: str = "affine",
+        quantize_input: bool = False,
     ):
-        """Return a :obj:`QuantizedLinear` layer that approximates this layer."""
+        """Return a quantized approximation of this layer.
+
+        If ``quantize_input`` is ``False``, returns a :obj:`QuantizedLinear`
+        (weights are quantized). If ``quantize_input`` is ``True``, returns
+        a :obj:`QQLinear` (weights and activations are quantized).
+
+        Args:
+            group_size (Optional[int]): The quantization group size (see
+                :func:`mlx.core.quantize`). Default: ``None``.
+            bits (Optional[int]): The number of bits per parameter (see
+                :func:`mlx.core.quantize`). Default: ``None``.
+            mode (str): The quantization method to use (see
+                :func:`mlx.core.quantize`). Default: ``"affine"``.
+            quantize_input (bool): Whether to quantize input. Default: ``False``.
+
+        Returns:
+            QuantizedLinear or QQLinear: A quantized version of this layer.
+
+        Notes:
+            Quantized input is only supported for ``"nvfp4"`` and ``"mxfp8"``
+            modes.
+        """
+        if quantize_input:
+            if mode not in ["nvfp4", "mxfp8"]:
+                raise ValueError(
+                    f"Quantized activations are only supported for 'nvfp4' and 'mxfp8' modes, got {mode}."
+                )
+            return QQLinear.from_linear(self, group_size, bits, mode)
         return QuantizedLinear.from_linear(self, group_size, bits, mode)
 
 

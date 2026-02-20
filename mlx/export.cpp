@@ -279,6 +279,8 @@ void extract_state(const T state, std::vector<StateT>& unpacked_state) {
     unpacked_state.push_back(state);
   } else if constexpr (std::is_enum_v<T>) {
     unpacked_state.push_back(static_cast<int>(state));
+  } else if constexpr (std::is_same_v<T, Dtype>) {
+    unpacked_state.push_back(state);
   } else if constexpr (is_iterable<T>) {
     unpacked_state.push_back(state);
   } else if constexpr (is_pair<T> || is_tuple<T>) {
@@ -448,6 +450,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(FastLSTMCell),
       SERIALIZE_PRIMITIVE(CustomKernel)};
   std::unordered_map<std::string, std::string> name_remap;
+  std::unordered_map<int, Stream> stream_map;
 
   PrimitiveFactory() {
     for (auto& [n, f] : factory) {
@@ -473,13 +476,25 @@ struct PrimitiveFactory {
     }
   };
 
-  std::shared_ptr<Primitive> load(Reader& is) {
-    auto stream = deserialize<Stream>(is);
-    if (get_stream(stream.index) != stream) {
-      std::ostringstream msg;
-      msg << "[import_function] Invalid stream encountered " << stream << ".";
-      throw std::invalid_argument(msg.str());
+  Stream resolve_stream(const Stream& stream) {
+    if (auto it = stream_map.find(stream.index); it != stream_map.end()) {
+      return it->second;
     }
+    // Try to find an existing stream on the same device
+    for (auto& s : get_streams()) {
+      if (s.device == stream.device) {
+        stream_map.emplace(stream.index, s);
+        return s;
+      }
+    }
+    // No stream on that device, make a new one
+    Stream s = new_stream(stream.device);
+    stream_map.emplace(stream.index, s);
+    return s;
+  }
+
+  std::shared_ptr<Primitive> load(Reader& is) {
+    auto stream = resolve_stream(deserialize<Stream>(is));
     auto name = deserialize<std::string>(is);
     if (auto it = factory.find(name); it != factory.end()) {
       return it->second.deserialize(is, stream);

@@ -70,6 +70,21 @@ inline std::tuple<dim3, dim3> get_swizzle_launch_args(
 
 namespace cu {
 
+constexpr float F8E4M3_MAX = 448.0f;
+constexpr float F4E2M1_MAX = 6.0f;
+
+__global__ void compute_qqmm_pointers(
+    float* alpha_out,
+    float* beta_out,
+    const float* tensor_amax_x,
+    const float* tensor_amax_w) {
+  // Compute alpha = tensor_amax_x * tensor_amax_w / (448 * 6)^2
+  constexpr float inv_scale_sq =
+      1.0f / (F8E4M3_MAX * F4E2M1_MAX * F8E4M3_MAX * F4E2M1_MAX);
+  *alpha_out = (*tensor_amax_x) * (*tensor_amax_w) * inv_scale_sq;
+  *beta_out = 0.0f;
+}
+
 __global__ void swizzle_scales(
     const uint8_t* scales_linear,
     uint8_t* scales_swizzled,
@@ -222,6 +237,27 @@ void swizzle_scales(
       input_cols,
       output_rows,
       output_cols);
+}
+
+void compute_qqmm_pointers(
+    array& alpha_out,
+    array& beta_out,
+    const array& tensor_amax_x,
+    const array& tensor_amax_w,
+    cu::CommandEncoder& enc) {
+  enc.set_input_array(tensor_amax_x);
+  enc.set_input_array(tensor_amax_w);
+  enc.set_output_array(alpha_out);
+  enc.set_output_array(beta_out);
+  enc.add_kernel_node(
+      cu::compute_qqmm_pointers,
+      dim3(1),
+      dim3(1),
+      0,
+      gpu_ptr<void>(alpha_out),
+      gpu_ptr<void>(beta_out),
+      gpu_ptr<void>(tensor_amax_x),
+      gpu_ptr<void>(tensor_amax_w));
 }
 
 } // namespace mlx::core

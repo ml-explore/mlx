@@ -19,7 +19,7 @@ from subprocess import PIPE, Popen, run
 
 import mlx.core as mx
 
-from .common import log, log_warning, parse_hostfile, parse_hostlist, positive_number
+from .common import Hostfile, log, log_warning, positive_number
 
 
 class CommandProcess:
@@ -367,6 +367,7 @@ def launch_jaccl(parser, hosts, args, command):
     if not hosts[0].ips:
         raise ValueError("Rank 0 should have an IP reachable from all other ranks")
 
+    jaccl_ring = args.backend == "jaccl-ring"
     have_rdmas = all(len(h.rdma) == len(hosts) for h in hosts)
     have_nulls = all(h.rdma[i] is None for i, h in enumerate(hosts))
     if not have_rdmas or not have_nulls:
@@ -376,6 +377,8 @@ def launch_jaccl(parser, hosts, args, command):
     env = args.env
     cwd = args.cwd
     env.append(f"MLX_JACCL_COORDINATOR={coordinator}:{args.starting_port}")
+    if jaccl_ring:
+        env.append("MLX_JACCL_RING=1")
     files = {"MLX_IBV_DEVICES": json.dumps([h.rdma for h in hosts])}
 
     log(args.verbose, "Running", shlex.join(command))
@@ -474,8 +477,6 @@ def main():
     parser.add_argument("--hostfile", help="The file containing the hosts")
     parser.add_argument(
         "--backend",
-        choices=["ring", "mpi", "nccl", "jaccl"],
-        default="nccl" if mx.cuda.is_available() else "ring",
         help="Which distributed backend to launch",
     )
     parser.add_argument(
@@ -535,9 +536,16 @@ def main():
 
     # Try to extract a list of hosts and corresponding ips
     if args.hostfile is not None:
-        hosts = parse_hostfile(parser, args.hostfile)
+        hostfile = Hostfile.from_file(args.hostfile)
     else:
-        hosts = parse_hostlist(parser, args.hosts, args.repeat_hosts)
+        hostfile = Hostfile.from_list(args.hosts, args.repeat_hosts)
+
+    # Extract extra arguments from the hostfile
+    if hostfile.backend != "" and args.backend is None:
+        args.backend = hostfile.backend
+    if args.backend is None:
+        args.backend = "nccl" if mx.cuda.is_available() else "ring"
+    args.env = hostfile.envs + args.env
 
     # Check if the script is a file and convert it to a full path
     if (script := Path(rest[0])).exists() and script.is_file():
@@ -549,10 +557,14 @@ def main():
 
     # Launch
     if args.backend == "ring":
-        launch_ring(parser, hosts, args, rest)
-    if args.backend == "mpi":
-        launch_mpi(parser, hosts, args, rest)
-    if args.backend == "nccl":
-        launch_nccl(parser, hosts, args, rest)
-    if args.backend == "jaccl":
-        launch_jaccl(parser, hosts, args, rest)
+        launch_ring(parser, hostfile.hosts, args, rest)
+    elif args.backend == "mpi":
+        launch_mpi(parser, hostfile.hosts, args, rest)
+    elif args.backend == "nccl":
+        launch_nccl(parser, hostfile.hosts, args, rest)
+    elif args.backend == "jaccl" or args.backend == "jaccl-ring":
+        launch_jaccl(parser, hostfile.hosts, args, rest)
+    else:
+        parser.error(
+            "The backend should be one of {'ring', 'mpi', 'nccl', 'jaccl', 'jaccl-ring'}"
+        )

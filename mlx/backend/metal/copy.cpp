@@ -109,12 +109,11 @@ void copy_gpu_inplace(
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
-  bool donate_in = in.data_shared_ptr() == nullptr;
 
   inp_offset *= size_of(in.dtype());
   out_offset *= size_of(out.dtype());
 
-  compute_encoder.set_input_array(donate_in ? out : in, 0, inp_offset);
+  compute_encoder.set_input_array(in, 0, inp_offset);
   compute_encoder.set_output_array(out, 1, out_offset);
 
   auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();

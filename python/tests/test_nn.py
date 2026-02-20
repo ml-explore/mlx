@@ -204,6 +204,27 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
         self.assertTrue(isinstance(m.layers[2].scales, mx.array))
 
+        m = nn.Sequential(
+            nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256, bias=False)
+        )
+        nn.quantize(
+            m,
+            group_size=32,
+            mode="mxfp8",
+            quantize_input=True,
+            class_predicate=lambda path, module: isinstance(module, nn.Linear),
+        )
+        self.assertTrue(isinstance(m.layers[0], nn.Embedding))
+        self.assertTrue(isinstance(m.layers[1], nn.ReLU))
+        self.assertTrue(isinstance(m.layers[2], nn.QQLinear))
+
+        # Check that Embedding does not support quantize_input
+        m = nn.Sequential(
+            nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256, bias=False)
+        )
+        with self.assertRaises(ValueError) as context:
+            nn.quantize(m, group_size=32, mode="mxfp8", quantize_input=True)
+
     def test_quantize_freeze(self):
         lin = nn.Linear(512, 512)
         qlin = lin.to_quantized()

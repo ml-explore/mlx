@@ -665,9 +665,7 @@ bool supports_sdpa_vector(
     const array& q,
     const array& k,
     const array& v,
-    bool has_mask,
     bool has_arr_mask,
-    bool do_causal,
     bool output_logsumexp) {
   if (output_logsumexp) {
     return false;
