@@ -197,8 +197,8 @@ void fp_quantize_rowwise_tma(
   enc.set_output_array(wq);
   enc.set_output_array(scales);
 
-  size_t rows = w.shape(-2);
   size_t cols = w.shape(-1);
+  size_t rows = w.size() / cols;
   size_t stride_bytes = cols * w.itemsize();
 
   if (bits == 8 && group_size == 32) {
@@ -356,7 +356,7 @@ void fp_quantize_columnwise_tma(
   enc.set_output_array(scales);
 
   size_t rows = w.shape(-1);
-  size_t cols = w.shape(-2);
+  size_t cols = w.size() / rows;
   size_t stride_bytes = w.strides(-1) * w.itemsize();
 
   // 16 bytes is minimum for TMA tile size along contigious dimension
