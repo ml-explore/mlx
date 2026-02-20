@@ -8,6 +8,9 @@ namespace mlx::core {
 
 namespace cu {
 
+constexpr float F8E4M3_MAX = 448.0f;
+constexpr float F4E2M1_MAX = 6.0f;
+
 inline __device__ float4 dequant_fp8(uint32_t bits) {
   auto out = *(__nv_fp8x4_e4m3*)(&bits);
   return out.operator float4();
