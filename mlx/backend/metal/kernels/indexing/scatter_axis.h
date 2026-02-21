@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "mlx/backend/metal/kernels/indexing/indexing.h"
+
 template <
     typename T,
     typename IdxT,
@@ -21,6 +23,7 @@ template <
     const constant int& out_axis_size [[buffer(8)]],
     const constant size_t& upd_ax_stride [[buffer(9)]],
     const constant size_t& idx_ax_stride [[buffer(10)]],
+    device atomic<int32_t>* global_failure [[buffer(11)]],
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
   Op op;
@@ -37,6 +40,10 @@ template <
   auto idx_val = indices[idx_loc];
   if (is_signed_v<IdxT>) {
     idx_val = (idx_val < 0) ? idx_val + out_axis_size : idx_val;
+  }
+
+  if (!check_bounds(idx_val, out_axis_size, global_failure)) {
+    return;
   }
 
   LocT upd_idx = index.y * static_cast<LocT>(upd_ax_stride);

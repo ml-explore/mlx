@@ -6,12 +6,14 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/failure.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/jit/indexing.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/scan.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/dtype.h"
+#include "mlx/failure.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -67,6 +69,8 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   std::string idx_type_name = nidx ? type_to_name(inputs[1]) : "";
 
+  auto* global_failure = metal::get_failure_buffer();
+
   if (src.flags().row_contiguous && nidx == 1 && axes_[0] == 0 &&
       inputs[1].flags().row_contiguous && slice_size == src.strides()[0]) {
     int work_per_thread = (slice_size > 8 && src.dtype().size() < 4) ? 2 : 1;
@@ -80,7 +84,10 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     std::string lib_name = kernel_name;
 
     auto lib = d.get_library(lib_name, [&]() {
-      std::string kernel_source = metal::utils();
+      std::string kernel_source = fmt::format(
+          "#define BOUNDS_FAILURE {}\n",
+          static_cast<int>(FailureCode::BoundsFailure));
+      kernel_source += metal::utils();
       kernel_source += metal::gather_front();
       kernel_source += get_template_definition(
           kernel_name,
@@ -107,6 +114,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.set_output_array(out, 2);
     compute_encoder.set_bytes(slice_size, 3);
     compute_encoder.set_bytes(src.shape(0), 4);
+    compute_encoder.set_buffer(global_failure, 5, 0);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
 
     return;
@@ -125,7 +133,10 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::string lib_name = kernel_name;
 
   auto lib = d.get_library(lib_name, [&]() {
-    std::string kernel_source = metal::utils();
+    std::string kernel_source = fmt::format(
+        "#define BOUNDS_FAILURE {}\n",
+        static_cast<int>(FailureCode::BoundsFailure));
+    kernel_source += metal::utils();
     kernel_source += metal::gather();
     std::string out_type_str = get_type_string(out.dtype());
     std::string idx_type_str =
@@ -193,14 +204,17 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_vector_bytes(slice_sizes_, 5);
   compute_encoder.set_vector_bytes(axes_, 6);
 
+  // Set failure buffer
+  compute_encoder.set_buffer(global_failure, 7, 0);
+
   // Set index info
   //
   // We don't need to check for empty idx_shapes because gather has a
   // idx_ndim == 0 specialization
-  compute_encoder.set_vector_bytes(idx_shapes, 7);
-  compute_encoder.set_vector_bytes(idx_strides, 8);
-  compute_encoder.set_vector_bytes(idx_contigs, 9);
-  compute_encoder.set_bytes(idx_ndim, 10);
+  compute_encoder.set_vector_bytes(idx_shapes, 8);
+  compute_encoder.set_vector_bytes(idx_strides, 9);
+  compute_encoder.set_vector_bytes(idx_contigs, 10);
+  compute_encoder.set_bytes(idx_ndim, 11);
 
   // Set index buffers
   for (int i = 0; i < nidx; ++i) {
@@ -301,7 +315,10 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::string lib_name = kernel_name;
 
   auto lib = d.get_library(lib_name, [&]() {
-    std::string kernel_source = metal::utils();
+    std::string kernel_source = fmt::format(
+        "#define BOUNDS_FAILURE {}\n",
+        static_cast<int>(FailureCode::BoundsFailure));
+    kernel_source += metal::utils();
     concatenate(kernel_source, metal::reduce_utils(), metal::scatter());
 
     std::string out_type_str = get_type_string(out.dtype());
@@ -351,6 +368,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   size_t nthreads = upd.size();
 
   compute_encoder.set_compute_pipeline_state(kernel);
+
+  auto* global_failure = metal::get_failure_buffer();
 
   // Set all the buffers
   compute_encoder.set_input_array(upd, 1);
@@ -421,6 +440,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_vector_bytes(idx_contigs, 13);
   compute_encoder.set_bytes(idx_ndim, 14);
   compute_encoder.set_bytes(idx_size, 15);
+  compute_encoder.set_buffer(global_failure, 16, 0);
 
   // Set index buffers
   for (int i = 0; i < nidx; ++i) {
@@ -465,7 +485,10 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   kernel_name += idx.flags().row_contiguous ? "c" : "nc";
 
   auto lib = d.get_library(lib_name, [&]() {
-    std::string kernel_source = metal::utils();
+    std::string kernel_source = fmt::format(
+        "#define BOUNDS_FAILURE {}\n",
+        static_cast<int>(FailureCode::BoundsFailure));
+    kernel_source += metal::utils();
     kernel_source += metal::gather_axis();
     std::string out_type_str = get_type_string(out.dtype());
     std::string idx_type_str = get_type_string(idx.dtype());
@@ -516,6 +539,9 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_bytes(src.shape(axis_), 8);
   compute_encoder.set_bytes(src.strides(axis_), 9);
   compute_encoder.set_bytes(idx.strides(axis_), 10);
+
+  auto* global_failure = metal::get_failure_buffer();
+  compute_encoder.set_buffer(global_failure, 11, 0);
 
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
@@ -569,7 +595,10 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   kernel_name += idx.flags().row_contiguous ? "c" : "nc";
 
   auto lib = d.get_library(lib_name, [&]() {
-    std::string kernel_source = metal::utils();
+    std::string kernel_source = fmt::format(
+        "#define BOUNDS_FAILURE {}\n",
+        static_cast<int>(FailureCode::BoundsFailure));
+    kernel_source += metal::utils();
     kernel_source += metal::reduce_utils();
     kernel_source += metal::scatter_axis();
     std::string out_type_str = get_type_string(out.dtype());
@@ -641,6 +670,9 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_bytes(upd.strides(axis_), 9);
   compute_encoder.set_bytes(idx.strides(axis_), 10);
 
+  auto* global_failure = metal::get_failure_buffer();
+  compute_encoder.set_buffer(global_failure, 11, 0);
+
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
@@ -695,7 +727,10 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       fmt::format("{}_{}_{}", kBaseName, dtype_tag, contiguous);
 
   auto lib = d.get_library(kernel_name, [&]() {
-    std::string source = metal::utils();
+    std::string source = fmt::format(
+        "#define BOUNDS_FAILURE {}\n",
+        static_cast<int>(FailureCode::BoundsFailure));
+    source += metal::utils();
     source += metal::masked_scatter();
     source +=
         fmt::format(masked_assign_kernel, kernel_name, value_type, contiguous);
