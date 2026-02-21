@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <sstream>
 #include "mlx/distributed/utils.h"
 
 constexpr const char* IBV_TAG = "[jaccl]";
@@ -213,7 +214,12 @@ struct Connection {
   }
 
   int poll(int num_completions, ibv_wc* work_completions) {
-    return ibv_poll_cq(completion_queue, num_completions, work_completions);
+    int n = ibv_poll_cq(completion_queue, num_completions, work_completions);
+    if (n < 0) {
+      throw std::runtime_error(
+          "[jaccl] ibv_poll_cq failed with error " + std::to_string(n));
+    }
+    return n;
   }
 };
 
@@ -237,6 +243,10 @@ inline int poll(
         c.completion_queue,
         num_completions - completions,
         work_completions + completions);
+    if (n < 0) {
+      throw std::runtime_error(
+          "[jaccl] ibv_poll_cq failed with error " + std::to_string(n));
+    }
 
     completions += n;
   }
@@ -255,6 +265,41 @@ inline int poll(
       num_completions - completions,
       work_completions + completions);
   return completions;
+}
+
+
+inline const char* wc_status_name(int status) {
+  switch (status) {
+    case IBV_WC_SUCCESS: return "SUCCESS";
+    case IBV_WC_LOC_LEN_ERR: return "LOC_LEN_ERR";
+    case IBV_WC_LOC_QP_OP_ERR: return "LOC_QP_OP_ERR";
+    case IBV_WC_LOC_EEC_OP_ERR: return "LOC_EEC_OP_ERR";
+    case IBV_WC_LOC_PROT_ERR: return "LOC_PROT_ERR";
+    case IBV_WC_WR_FLUSH_ERR: return "WR_FLUSH_ERR";
+    case IBV_WC_MW_BIND_ERR: return "MW_BIND_ERR";
+    case IBV_WC_BAD_RESP_ERR: return "BAD_RESP_ERR";
+    case IBV_WC_LOC_ACCESS_ERR: return "LOC_ACCESS_ERR";
+    case IBV_WC_REM_INV_REQ_ERR: return "REM_INV_REQ_ERR";
+    case IBV_WC_REM_ACCESS_ERR: return "REM_ACCESS_ERR";
+    case IBV_WC_REM_OP_ERR: return "REM_OP_ERR";
+    case IBV_WC_RETRY_EXC_ERR: return "RETRY_EXC_ERR";
+    case IBV_WC_RNR_RETRY_EXC_ERR: return "RNR_RETRY_EXC_ERR";
+    case IBV_WC_REM_ABORT_ERR: return "REM_ABORT_ERR";
+    case IBV_WC_GENERAL_ERR: return "GENERAL_ERR";
+    default: return "UNKNOWN";
+  }
+}
+
+inline void check_wc_status(const ibv_wc& wc) {
+  if (wc.status != IBV_WC_SUCCESS) {
+    std::ostringstream msg;
+    msg << "[jaccl] RDMA work completion error: status=" << wc.status
+        << " (" << wc_status_name(wc.status) << ")"
+        << " qp_num=" << std::dec << wc.qp_num
+        << " vendor_err=" << wc.vendor_err
+        << " wr_id=0x" << std::hex << wc.wr_id;
+    throw std::runtime_error(msg.str());
+  }
 }
 
 /**
