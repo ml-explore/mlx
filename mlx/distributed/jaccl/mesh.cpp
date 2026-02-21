@@ -5,6 +5,7 @@
 #include "mlx/distributed/reduction_ops.h"
 #include "mlx/dtype_utils.h"
 
+
 constexpr int MAX_PEERS = 8;
 
 namespace mlx::core::distributed::jaccl {
@@ -183,6 +184,7 @@ void MeshGroup::all_gather(const array& input, array& output, Stream stream) {
         int buff = (wc[i].wr_id >> 8) & 0xff;
         int rank = wc[i].wr_id & 0xff;
 
+        check_wc_status(wc[i]);
         in_flight--;
 
         // Send completed. If all sends completed then send the next chunk.
@@ -258,6 +260,7 @@ void MeshGroup::send(const array& input, int dst, Stream stream) {
         int buff = (wc[i].wr_id >> 8) & 0xff;
         int rank = wc[i].wr_id & 0xff;
 
+        check_wc_status(wc[i]);
         in_flight--;
 
         if (read_offset < n_bytes) {
@@ -309,6 +312,7 @@ void MeshGroup::recv(array& out, int src, Stream stream) {
         int buff = (wc[i].wr_id >> 8) & 0xff;
         int rank = wc[i].wr_id & 0xff;
 
+        check_wc_status(wc[i]);
         in_flight--;
 
         std::copy(
@@ -395,6 +399,7 @@ void MeshGroup::all_reduce(
         int buff = (wc[i].wr_id >> 8) & 0xff;
         int rank = wc[i].wr_id & 0xff;
 
+        check_wc_status(wc[i]);
         in_flight--;
 
         if (work_type == SEND_WR && read_offset < total) {

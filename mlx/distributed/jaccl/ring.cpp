@@ -5,6 +5,7 @@
 #include "mlx/distributed/reduction_ops.h"
 #include "mlx/dtype_utils.h"
 
+
 namespace mlx::core::distributed::jaccl {
 
 RingGroup::RingGroup(
@@ -217,6 +218,7 @@ void RingGroup::all_gather(const array& input, array& output, Stream stream) {
           int lr = wire / MAX_CONNS;
           int lw = wire % MAX_CONNS;
 
+          check_wc_status(wc[i]);
           in_flight--;
 
           if (work_type == SEND_WR && send_count[wire] < n_steps) {
@@ -324,6 +326,7 @@ void RingGroup::send(const array& input, int dst, Stream stream) {
         int wire = wc[i].wr_id & 0xff;
         int lw = wire % MAX_CONNS;
 
+        check_wc_status(wc[i]);
         in_flight--;
 
         if (read_offset[lw] < limits[lw]) {
@@ -400,6 +403,7 @@ void RingGroup::recv(array& out, int src, Stream stream) {
         int wire = wc[i].wr_id & 0xff;
         int lw = wire % MAX_CONNS;
 
+        check_wc_status(wc[i]);
         in_flight--;
 
         std::copy(
@@ -533,6 +537,7 @@ void RingGroup::all_reduce_impl(
         int lr = wire / MAX_CONNS;
         int lw = wire % MAX_CONNS;
 
+        check_wc_status(wc[i]);
         in_flight--;
 
         if (work_type == SEND_WR && send_count[wire] < n_steps) {
@@ -630,6 +635,7 @@ void RingGroup::all_reduce_impl(
         int lr = wire / MAX_CONNS;
         int lw = wire % MAX_CONNS;
 
+        check_wc_status(wc[i]);
         in_flight--;
 
         if (work_type == SEND_WR && send_count[wire] < n_steps) {
