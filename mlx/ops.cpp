@@ -2346,6 +2346,33 @@ array hamming(int M, StreamOrDevice s /* = {} */) {
   return subtract(left_coef, multiply(right_coef, cos_vals, s), s);
 }
 
+array blackman(int M, StreamOrDevice s /* = {} */) {
+  if (M < 1) {
+    return array({});
+  }
+  if (M == 1) {
+    return ones({1}, float32, s);
+  }
+
+  auto n = arange(0, M, float32, s);
+
+  float arg_val = (2.0 * M_PI) / (M - 1);
+  auto x = multiply(array(arg_val, float32), n, s);
+
+  auto cos_x = cos(x, s);
+
+  auto alpha = array(0.34f, float32);
+  auto beta = array(0.5f, float32);
+  auto gamma = array(0.16f, float32);
+
+  auto term1 = multiply(beta, cos_x, s);
+
+  auto cos_sq = square(cos_x, s);
+  auto term2 = multiply(gamma, cos_sq, s);
+
+  return add(subtract(alpha, term1, s), term2, s);
+}
+
 /** Returns a sorted copy of the flattened array. */
 array sort(const array& a, StreamOrDevice s /* = {} */) {
   int size = a.size();

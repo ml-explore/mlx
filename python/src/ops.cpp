@@ -1475,6 +1475,30 @@ void init_ops(nb::module_& m) {
                    appears only if the number of samples is odd).
     )pbdoc");
   m.def(
+      "blackman",
+      &mlx::core::blackman,
+      "M"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def blackman(M: int, *, stream: Union[None, Stream, Device] = None) -> array"), // <--- J'ai rajouté ça
+      R"pbdoc(
+        Return the Blackman window.
+        
+        The Blackman window is a taper formed by using the first three terms of a summation of cosines.
+
+        .. math::
+          w(n) = 0.42 - 0.5 \cos\left(\frac{2\pi n}{M-1}\right) + 0.08 \cos\left(\frac{4\pi n}{M-1}\right)
+           \qquad 0 \le n \le M-1
+        
+        Args:
+            M (int): Number of points in the output window.
+            
+        Returns:
+            array: The window, with the maximum value normalized to one (the value one
+                   appears only if the number of samples is odd).
+    )pbdoc");
+  m.def(
       "linspace",
       [](Scalar start,
          Scalar stop,
