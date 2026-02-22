@@ -19,7 +19,6 @@ namespace cu {
 
 constexpr size_t TMA_SHMEM_ALIGNMENT = 128;
 constexpr size_t BUFFS_NUM = 2;
-constexpr size_t TOTAL_BANKS_WIDTH = (32 * 4); // 32 banks, 4 bytes
 
 namespace cg = cooperative_groups;
 
@@ -55,7 +54,6 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
   const auto idx_in_block = cg::this_thread_block().thread_index();
   const int tidx = idx_in_block.x; // Thread handles row tidx
   const bool is_master = (tidx == 0);
-  const bool is_active = (tidx < ROWS_PER_BLOCK);
 
   const size_t block_offset_row = block_idx.x * ROWS_PER_BLOCK;
   const size_t block_offset_col = block_idx.y * COLS_PER_BLOCK;
@@ -137,52 +135,63 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
     ptx::mbarrier_wait_parity(&mbar[stage], 0);
 
     const size_t buff_offset = buff * BUFF_ELEMS;
-    const size_t out_buff_offset = buff * out_tile_elems;
     const int lane = tidx % 32;
     constexpr int GROUPS = TILE_K / 4;
-    if (is_active) {
-      // First made 2 naive mistakes were made:
-      // 1. Stored without swizzling that results in 32 / 16 bank conflicts
-      // (depending of the input type)
-      // 2. More naive mistake was indexing registes with swizzling index that
-      // is known only at compile time this results in massive slow down of
-      // course
+    // First made 2 naive mistakes were made:
+    // 1. Stored without swizzling that results in 32 / 16 bank conflicts
+    // (depending of the input type)
+    // 2. More naive mistake was indexing registes with swizzling index that
+    // is known only at compile time this results in massive slow down of
+    // course
 #pragma unroll
-      for (int j = 0; j < GROUPS; ++j) {
-        int swizzled_j = (j + lane) % GROUPS;
-        *reinterpret_cast<Tx4*>(&thread_data[j * 4]) = *reinterpret_cast<Tx4*>(
-            &in_sh[buff_offset + tidx * TILE_K + swizzled_j * 4]);
-      }
-      // Compute scale: find max absolute value in the row (order-independent)
-      Tx2 amax_2x = Tx2{T(0.0f), T(0.0f)};
-#pragma unroll
-      for (int col = 0; col < TILE_K; col += 2) {
-        auto pair = Tx2{thread_data[col], thread_data[col + 1]};
-        absmax_x2<Tx2>(amax_2x, amax_2x, pair);
-      }
-
-      float scale =
-          max(fabsf(static_cast<float>(amax_2x.x)),
-              fabsf(static_cast<float>(amax_2x.y)));
-
-      scale /= F8E4M3_MAX;
-
-      using ScaleType = __nv_fp8_e8m0;
-      auto s = ScaleType(scale);
-      scale = float(s);
-      scales_sh[stage * TILE_M + tidx] = s.__x;
-
-#pragma unroll
-      for (int j = 0; j < GROUPS; ++j) {
-        int swizzled_j = (j + lane) % GROUPS;
-        Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&thread_data[j * 4]);
-        uint32_t quantized_val =
-            cu::scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
-        *reinterpret_cast<uint32_t*>(
-            &out_sh[out_buff_offset + tidx * TILE_K + swizzled_j * 4]) =
-            quantized_val;
-      }
+    for (int j = 0; j < GROUPS; ++j) {
+      int swizzled_j = (j + lane) % GROUPS;
+      *reinterpret_cast<Tx4*>(&thread_data[j * 4]) = *reinterpret_cast<Tx4*>(
+          &in_sh[buff_offset + tidx * TILE_K + swizzled_j * 4]);
     }
+    // Compute scale: find max absolute value in the row (order-independent)
+    Tx2 amax_2x = Tx2{T(0.0f), T(0.0f)};
+#pragma unroll
+    for (int col = 0; col < TILE_K; col += 2) {
+      auto pair = Tx2{thread_data[col], thread_data[col + 1]};
+      absmax_x2<Tx2>(amax_2x, amax_2x, pair);
+    }
+
+    float scale =
+        max(fabsf(static_cast<float>(amax_2x.x)),
+            fabsf(static_cast<float>(amax_2x.y)));
+
+    scale /= F8E4M3_MAX;
+
+    using ScaleType = __nv_fp8_e8m0;
+    auto s = ScaleType(scale);
+    scale = float(s);
+    scales_sh[buff * TILE_K + tidx] = s.__x;
+    const size_t out_buff_offset = buff * out_tile_elems;
+    // Quantize to registers first
+    uint32_t quantized_regs[GROUPS];
+#pragma unroll
+    for (int j = 0; j < GROUPS; ++j) {
+      Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&thread_data[j * 4]);
+      quantized_regs[j] =
+          cu::scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+    }
+    const int group = lane / 4; // 8 groups of 4 threads
+#pragma unroll
+    for (int j = 0; j < GROUPS; ++j) {
+      int rotated_j = (j + group) % GROUPS;
+      *reinterpret_cast<uint32_t*>(
+          &out_sh[out_buff_offset + tidx * TILE_K + rotated_j * 4]) =
+          quantized_regs[rotated_j];
+    }
+    __syncthreads();
+    const size_t global_row = block_offset_row + tidx;
+    const size_t global_group = (block_offset_col + stage_col_offset) / TILE_K;
+    if (global_row < rows) {
+      scales[global_row * groups_per_row + global_group] =
+          scales_sh[buff * TILE_K + tidx];
+    }
+    ptx::fence_proxy_async_shared_cta();
     __syncthreads();
 
     if (is_master) {
@@ -201,20 +210,6 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
 
   ptx::cp_async_bulk_wait_group_read<0>();
   __syncthreads();
-
-  const size_t global_row = block_offset_row + tidx;
-  const size_t base_group = block_offset_col / TILE_K;
-
-  if (is_active && global_row < rows) {
-#pragma unroll
-    for (size_t s = 0; s < STAGES; ++s) {
-      const size_t group_idx = base_group + s;
-      if ((block_offset_col + s * TILE_K) < cols) {
-        scales[global_row * groups_per_row + group_idx] =
-            scales_sh[s * TILE_M + tidx];
-      }
-    }
-  }
 
   if (is_master) {
 #pragma unroll
@@ -251,7 +246,6 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
   const auto idx_in_block = cg::this_thread_block().thread_index();
   const int tidx = idx_in_block.x; // Thread handles column tidx
   const bool is_master = (tidx == 0);
-  const bool is_active = (tidx < COLS_PER_BLOCK);
 
   const size_t block_offset_col = block_idx.x * COLS_PER_BLOCK;
   const size_t block_offset_row = block_idx.y * ROWS_PER_BLOCK;
@@ -341,43 +335,83 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
     // we dont reuse barriers between stages
     ptx::mbarrier_wait_parity(&mbar[stage], 0);
     const size_t buff_offset = buff * BUFF_ELEMS;
-    const size_t out_buff_offset = buff * out_tile_elems;
-    if (is_active) {
-      // Read the data from shared to registers
+    // Read the data from shared to registers
 #pragma unroll
-      for (int row = 0; row < TILE_M; ++row) {
-        thread_data[row] = in_sh[buff_offset + row * TILE_K + tidx];
-      }
-      Tx2 amax_2x = Tx2{T(0.0f), T(0.0f)};
-#pragma unroll
-      for (int row = 0; row < TILE_M; row += 2) {
-        auto pair = Tx2{thread_data[row], thread_data[row + 1]};
-        absmax_x2<Tx2>(amax_2x, amax_2x, pair);
-      }
-
-      float scale =
-          max(fabsf(static_cast<float>(amax_2x.x)),
-              fabsf(static_cast<float>(amax_2x.y)));
-
-      scale /= F8E4M3_MAX;
-
-      using ScaleType = __nv_fp8_e8m0;
-      auto s = ScaleType(scale);
-      scale = float(s);
-      // Store scale to shared memory buffer
-      // TODO: this results in 4 way bank conflicts
-      // (tidx+0,tidx+1,tidx+2,tidx+3 writes to the same bank)
-      scales_sh[stage * TILE_K + tidx] = s.__x;
-      // Quantize and write output to shared memory
-#pragma unroll
-      for (int j = 0; j < TILE_M / 4; ++j) {
-        Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&thread_data[j * 4]);
-        uint32_t quantized_val =
-            cu::scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
-        *reinterpret_cast<uint32_t*>(
-            &out_sh[out_buff_offset + tidx * TILE_M + j * 4]) = quantized_val;
-      }
+    for (int row = 0; row < TILE_M; ++row) {
+      thread_data[row] = in_sh[buff_offset + row * TILE_K + tidx];
     }
+    Tx2 amax_2x = Tx2{T(0.0f), T(0.0f)};
+#pragma unroll
+    for (int row = 0; row < TILE_M; row += 2) {
+      auto pair = Tx2{thread_data[row], thread_data[row + 1]};
+      absmax_x2<Tx2>(amax_2x, amax_2x, pair);
+    }
+
+    float scale =
+        max(fabsf(static_cast<float>(amax_2x.x)),
+            fabsf(static_cast<float>(amax_2x.y)));
+
+    scale /= F8E4M3_MAX;
+
+    using ScaleType = __nv_fp8_e8m0;
+    auto s = ScaleType(scale);
+    scale = float(s);
+    scales_sh[buff * TILE_K + tidx] = s.__x;
+    const size_t out_buff_offset = buff * out_tile_elems;
+    // Quantize to registers first
+    constexpr int GROUPS = TILE_M / 4;
+    uint32_t quantized_regs[GROUPS];
+#pragma unroll
+    for (int j = 0; j < GROUPS; ++j) {
+      Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&thread_data[j * 4]);
+      quantized_regs[j] =
+          cu::scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, 1.0f / scale, rbits);
+    }
+    // Write output to shared memory with swapped store order to reduce bank
+    // conflicts. Without swap: stride between threads is TILE_M=32 bytes
+    // = 8 banks, every 4th thread hits the same bank -> 8-way conflict.
+    const int lane = tidx % 32;
+    const int group = (lane / 4) % 2;
+    const size_t base = out_buff_offset + tidx * TILE_M;
+    switch (group) {
+      case 0:
+        *reinterpret_cast<uint4*>(&out_sh[base + 0]) = {
+            quantized_regs[0],
+            quantized_regs[1],
+            quantized_regs[2],
+            quantized_regs[3]};
+        *reinterpret_cast<uint4*>(&out_sh[base + 16]) = {
+            quantized_regs[4],
+            quantized_regs[5],
+            quantized_regs[6],
+            quantized_regs[7]};
+        break;
+      case 1:
+        *reinterpret_cast<uint4*>(&out_sh[base + 16]) = {
+            quantized_regs[4],
+            quantized_regs[5],
+            quantized_regs[6],
+            quantized_regs[7]};
+        *reinterpret_cast<uint4*>(&out_sh[base + 0]) = {
+            quantized_regs[0],
+            quantized_regs[1],
+            quantized_regs[2],
+            quantized_regs[3]};
+        break;
+    }
+    __syncthreads();
+    // Thread tidx computes scale for input column (block_offset_col + tidx)
+    // This scale goes to output row (block_offset_col + tidx), column
+    // (global_row_group)
+    const size_t global_row_group =
+        (block_offset_row + stage_row_offset) / TILE_M;
+    const size_t global_col = block_offset_col + tidx;
+    // TODO: scale writing is not good
+    if (global_col < cols && (block_offset_row + stage_row_offset) < rows) {
+      scales[global_col * scale_stride + global_row_group] =
+          scales_sh[buff * TILE_K + tidx];
+    }
+    ptx::fence_proxy_async_shared_cta();
     __syncthreads();
 
     if (is_master) {
@@ -397,22 +431,6 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
   ptx::cp_async_bulk_wait_group_read<0>();
 
   __syncthreads();
-
-  const size_t base_row_group = block_offset_row / TILE_M;
-  const size_t global_col = block_offset_col + tidx;
-
-  // This also results in 4way bank conflicts
-  // This can be done better
-  if (is_active && global_col < cols) {
-#pragma unroll
-    for (size_t s = 0; s < STAGES; ++s) {
-      if ((block_offset_row + s * TILE_M) < rows) {
-        scales[global_col * scale_stride + base_row_group + s] =
-            scales_sh[s * TILE_K + tidx];
-      }
-    }
-  }
-
   if (is_master) {
 #pragma unroll
     for (int iter = 0; iter < STAGES; ++iter) {

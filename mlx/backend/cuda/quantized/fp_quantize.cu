@@ -25,11 +25,11 @@ template <
     int STAGES,
     int SCALES_PER_STAGE>
 inline std::tuple<dim3, dim3, size_t> get_tma_launch_args(
-    size_t grid_dim_x_size,
-    size_t grid_dim_y_size,
-    size_t block_size_x,
-    size_t block_size_y,
-    int in_size_bytes,
+    size_t grid_dim_x_size, // rows
+    size_t grid_dim_y_size, // cols
+    size_t block_size_x, // ROWS_PER_BLOCK
+    size_t block_size_y, // COL_PER_BLOCK
+    int in_size_bytes, // itemsize
     int bits) {
   dim3 grid;
   grid.x = (grid_dim_x_size + block_size_x - 1) / block_size_x;
@@ -54,7 +54,8 @@ inline std::tuple<dim3, dim3, size_t> get_tma_launch_args(
 
   const size_t scales_tile_size = STAGES * SCALES_PER_STAGE * sizeof(uint8_t);
   const size_t scales_buff_size_aligned =
-      ((scales_tile_size + TMA_SHMEM_ALIGNMENT - 1) / TMA_SHMEM_ALIGNMENT) *
+      ((scales_tile_size * BUFFS_NUM + TMA_SHMEM_ALIGNMENT - 1) /
+       TMA_SHMEM_ALIGNMENT) *
       TMA_SHMEM_ALIGNMENT;
 
   const size_t smem_size = in_buff_size_aligned + out_buff_size_aligned +
@@ -280,8 +281,11 @@ void fp_quantize_rowwise(
     const std::optional<array>& global_scale /* = std::nullopt */,
     cu::CommandEncoder& enc,
     const Stream& s) {
+  size_t cols = w.shape(-1);
+  size_t rows = w.size() / cols;
+  const bool has_full_tma_tiles = ((rows % 128) == 0) && ((cols % 128) == 0);
   if (enc.device().compute_capability_major() >= 10 && bits == 8 &&
-      group_size == 32) {
+      group_size == 32 && !global_scale.has_value() && has_full_tma_tiles) {
     fp_quantize_rowwise_tma(
         w, wq, scales, group_size, bits, global_scale, enc, s);
   } else {
@@ -446,9 +450,12 @@ void fp_quantize_columnwise(
     const Stream& s) {
   // Use TMA version for SM100+ with MXFP8 (bits=8, group_size=32)
   // NVFP4 todo
+  const size_t rows = w.shape(-1);
+  const size_t cols = w.size() / rows;
+  const bool has_full_tma_tiles = ((rows % 128) == 0) && ((cols % 128) == 0);
   bool use_tma =
       (enc.device().compute_capability_major() >= 10 && bits == 8 &&
-       group_size == 32 && !global_scale.has_value());
+       group_size == 32 && !global_scale.has_value() && has_full_tma_tiles);
   if (use_tma) {
     fp_quantize_columnwise_tma(
         w, wq, scales, group_size, bits, global_scale, enc, s);
