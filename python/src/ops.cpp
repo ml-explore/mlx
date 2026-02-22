@@ -920,6 +920,28 @@ void init_ops(nb::module_& m) {
             array: The inverse error function of ``a``.
       )pbdoc");
   m.def(
+      "i0",
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::i0(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def i0(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise modified Bessel function of the first kind, order zero.
+
+        .. math::
+          I_0(x) = \sum_{k=0}^{\infty} \frac{(x/2)^{2k}}{(k!)^2}
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The modified Bessel function :math:`I_0` evaluated element-wise on ``a``.
+      )pbdoc");
+  m.def(
       "sin",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
         return mx::sin(to_array(a), s);
@@ -1473,6 +1495,31 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The window, with the maximum value normalized to one (the value one
                    appears only if the number of samples is odd).
+    )pbdoc");
+  m.def(
+      "kaiser",
+      &mlx::core::kaiser,
+      "M"_a,
+      "beta"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def kaiser(M: int, beta: float, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Return the Kaiser window.
+
+        The Kaiser window is a taper formed by using a Bessel function.
+
+        .. math::
+           w(n) = \frac{I_0\!\left(\beta\,\sqrt{1 - \!\left(\frac{2n}{M-1} - 1\right)^{\!2}}\right)}{I_0(\beta)}
+           \qquad 0 \le n \le M-1
+
+        Args:
+            M (int): Number of points in the output window.
+            beta (float): Shape parameter for the window.
+
+        Returns:
+            array: The Kaiser window of length ``M`` with shape parameter ``beta``.
     )pbdoc");
   m.def(
       "linspace",

@@ -9,6 +9,7 @@
 #include "mlx/backend/metal/kernels/erf.h"
 #include "mlx/backend/metal/kernels/expm1f.h"
 #include "mlx/backend/metal/kernels/fp8.h"
+#include "mlx/backend/metal/kernels/i0.h"
 
 namespace {
 constant float inf = metal::numeric_limits<float>::infinity();
@@ -171,6 +172,13 @@ struct ErfInv {
   template <typename T>
   T operator()(T x) {
     return static_cast<T>(erfinv(static_cast<float>(x)));
+  };
+};
+
+struct I0 {
+  template <typename T>
+  T operator()(T x) {
+    return static_cast<T>(i0_impl(static_cast<float>(x)));
   };
 };
 

@@ -1474,6 +1474,106 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(a.size, 0)
         self.assertEqual(a.dtype, mx.float32)
 
+    def test_i0(self):
+        try:
+            from scipy.special import i0 as ref_i0
+        except ImportError:
+            # numpy.i0 uses the same Cephes approximation
+            ref_i0 = np.i0
+
+        # Test both polynomial branches: |x| <= 3.75 and |x| > 3.75
+        inputs = np.array([-10.0, -5.0, -3.75, -1.0, 0.0, 1.0, 3.75, 5.0, 10.0])
+        x_mx = mx.array(inputs, dtype=mx.float32)
+        x_np = inputs.astype(np.float32)
+
+        result = np.array(mx.i0(x_mx).tolist())
+        expected = ref_i0(x_np).astype(np.float32)
+
+        self.assertTrue(
+            np.allclose(result, expected, rtol=1e-4, atol=1e-4),
+            f"i0 mismatch:\n  got:      {result}\n  expected: {expected}",
+        )
+
+        # Scalar input: I0(0) == 1
+        self.assertAlmostEqual(float(mx.i0(mx.array(0.0))), 1.0, places=5)
+
+        # Symmetry: I0 is even
+        self.assertTrue(
+            np.allclose(
+                np.array(mx.i0(x_mx).tolist()),
+                np.array(mx.i0(-x_mx).tolist()),
+                atol=1e-5,
+            )
+        )
+
+    def test_i0_cpu_gpu_parity(self):
+        """CPU and GPU evaluations of i0 must agree."""
+        inputs = np.linspace(-10, 10, 41, dtype=np.float32)
+
+        # Force CPU execution
+        with mx.stream(mx.cpu):
+            x_cpu = mx.array(inputs)
+            cpu_result = np.array(mx.i0(x_cpu).tolist())
+
+        # Force GPU execution (default behavior on Apple Silicon, but good to be explicit)
+        with mx.stream(mx.gpu):
+            x_gpu = mx.array(inputs)
+            gpu_result = np.array(mx.i0(x_gpu).tolist())
+
+        self.assertTrue(
+            np.allclose(cpu_result, gpu_result, atol=1e-5),
+            "i0 CPU/GPU parity failed",
+        )
+
+    def test_i0_grad(self):
+        try:
+            from scipy.special import i1 as ref_i1
+        except ImportError:
+            # SciPy is required to get the ground truth for I1
+            self.skipTest("SciPy is required for i0 gradient tests")
+
+        # Test values covering both small (<=3.75) and large (>3.75) domains, plus negative
+        inputs = np.array([-5.0, -1.0, 0.0, 1.0, 3.75, 5.0])
+        x_mx = mx.array(inputs, dtype=mx.float32)
+        
+        # The derivative of sum(i0(x)) with respect to x is exactly i1(x)
+        def f(x):
+            return mx.sum(mx.i0(x))
+            
+        grad_fn = mx.grad(f)
+        mlx_grad = np.array(grad_fn(x_mx).tolist())
+        
+        expected_grad = ref_i1(inputs).astype(np.float32)
+
+        self.assertTrue(
+            np.allclose(mlx_grad, expected_grad, rtol=1e-4, atol=1e-4),
+            f"i0 gradient mismatch:\n  got:      {mlx_grad}\n  expected: {expected_grad}",
+        )
+
+    def test_kaiser_general(self):
+        # Basic comparison with numpy
+        for M, beta in [(10, 5.0), (20, 8.6), (5, 0.0), (11, 14.0)]:
+            a = mx.kaiser(M, beta)
+            expected = np.kaiser(M, beta)
+            self.assertTrue(
+                np.allclose(np.array(a.tolist()), expected, atol=1e-4, rtol=1e-4),
+                f"kaiser(M={M}, beta={beta}) mismatch:\n  got      {np.array(a.tolist())}\n  expected {expected}",
+            )
+
+        # Edge cases
+        a = mx.kaiser(1, 5.0)
+        self.assertEqual(a.item(), 1.0)
+
+        a = mx.kaiser(0, 5.0)
+        self.assertEqual(a.size, 0)
+        self.assertEqual(a.dtype, mx.float32)
+
+        # Symmetry: Kaiser window is symmetric
+        a = np.array(mx.kaiser(21, 8.6).tolist())
+        self.assertTrue(
+            np.allclose(a, a[::-1], atol=1e-5), "Kaiser window should be symmetric"
+        )
+
     def test_unary_ops(self):
         def test_ops(npop, mlxop, x, y, atol, rtol):
             r_np = npop(x)

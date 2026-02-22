@@ -945,6 +945,12 @@ MLX_API array erf(const array& a, StreamOrDevice s = {});
 /** Computes the inverse error function of the elements of an array. */
 MLX_API array erfinv(const array& a, StreamOrDevice s = {});
 
+/** Computes the modified Bessel function of the first kind, order zero. */
+MLX_API array i0(const array& a, StreamOrDevice s = {});
+
+/** Returns the Kaiser window of size M with shape parameter beta. */
+MLX_API array kaiser(int M, float beta, StreamOrDevice s = {});
+
 /** Computes the expm1 function of the elements of an array. */
 MLX_API array expm1(const array& a, StreamOrDevice s = {});
 
