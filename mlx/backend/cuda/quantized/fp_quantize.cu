@@ -70,7 +70,7 @@ inline CUtensorMapDataType get_tma_dtype(Dtype dtype) {
 }
 
 inline std::tuple<dim3, dim3>
-get_columnwise_launch_args(size_t size, int group_size, int M, int K) {
+get_columnwise_quantize_launch_args(size_t size, int group_size, int M, int K) {
   constexpr int BLOCK_X = 16;
   constexpr int BLOCK_Y = 32;
   int rows_per_block = BLOCK_X;
@@ -205,7 +205,8 @@ void fp_quantize_columnwise_fallback(
                 cu::fp_quantize_columnwise_fallback<T, 16, 4, false, false>;
           }
           auto [num_blocks, block_dims] =
-              cu::get_columnwise_launch_args(w.size(), group_size, M, K);
+              cu::get_columnwise_quantize_launch_args(
+                  w.size(), group_size, M, K);
           enc.add_kernel_node(
               kernel,
               num_blocks,

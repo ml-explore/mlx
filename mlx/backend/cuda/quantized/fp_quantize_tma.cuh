@@ -1,7 +1,6 @@
 // Copyright © 2026 Apple Inc.
 #pragma once
 
-#include "mlx/backend/cuda/common.h"
 #include "mlx/backend/cuda/ptx.cuh"
 #include "mlx/backend/cuda/quantized/mxfp8_quantize.cuh"
 #include "mlx/backend/cuda/quantized/nvfp4_quantize.cuh"
@@ -235,14 +234,20 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
 #endif // __CUDA_ARCH__ >= 1000
 }
 
-template <typename T, bool USE_SR>
-__global__ void __launch_bounds__(128) fp_quantize_columnwise_tma_nvfp4(
-    const __grid_constant__ CUtensorMap tensor_map_input,
-    const __grid_constant__ CUtensorMap tensor_map_output,
-    uint8_t* __restrict__ scales,
-    const size_t rows,
-    const size_t cols,
-    float* global_scale) {
+template <
+    typename T,
+    bool USE_SR,
+    int THREADS_PER_BLOCK,
+    int COLS_PER_BLOCK,
+    int ROWS_PER_BLOCK>
+__global__ void __launch_bounds__(THREADS_PER_BLOCK)
+    fp_quantize_columnwise_tma_nvfp4(
+        const __grid_constant__ CUtensorMap tensor_map_input,
+        const __grid_constant__ CUtensorMap tensor_map_output,
+        uint8_t* __restrict__ scales,
+        const size_t rows,
+        const size_t cols,
+        float* global_scale) {
 #if (defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 1000)
   // placeholder TODO - NVFP4 TMA kernel not yet implemented
 #endif // __CUDA_ARCH__ >= 1000
