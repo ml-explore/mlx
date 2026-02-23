@@ -2,6 +2,7 @@
 
 #include "mlx/backend/cuda/quantized/quantized.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/quantized/qmm.h"
 #include "mlx/backend/cuda/quantized/qmv.h"
 #include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/fast_primitives.h"
@@ -14,34 +15,35 @@ namespace mlx::core {
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("QuantizedMatmul::eval_gpu");
   auto& s = stream();
-  auto& d = cu::device(s.device);
-  auto& enc = d.get_command_encoder(s);
+  auto& encoder = cu::get_command_encoder(s);
 
-  out.set_data(cu::malloc_async(out.nbytes(), enc));
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
-  // Make sure the last two dims of x and w, s, b are contiguous. This should
-  // be relaxed for x.
-  array x = ensure_row_contiguous_matrix(inputs[0], enc, s);
-  array w = ensure_row_contiguous_matrix(inputs[1], enc, s);
-  array scales = ensure_row_contiguous_matrix(inputs[2], enc, s);
-  std::optional<array> biases = std::nullopt;
-  if (inputs.size() == 4) {
-    biases = ensure_row_contiguous_matrix(inputs[3], enc, s);
+  const array& x = inputs[0];
+  const array& w = inputs[1];
+  const array& scales = inputs[2];
+  std::optional<array> biases;
+  if (inputs.size() > 3) {
+    biases = inputs[3];
   }
 
-  bool non_batched = w.ndim() == 2 && x.flags().row_contiguous;
+  bool non_batched = w.ndim() == 2;
   int K = x.shape(-1);
-  int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
+  int vec_batch = non_batched ? x.size() / K : x.shape(-2);
 
-  if (M > 8 || !transpose_ || mode_ == QuantizationMode::Affine) {
-    throw std::runtime_error("QMM NYI");
-  }
-
-  if (transpose_) {
-    fp_qmv(w, scales, x, out, bits_, group_size_, M, N, K, enc);
+  if (transpose_ && vec_batch <= 8 && mode_ != QuantizationMode::Affine) {
+    assert(!biases);
+    fp_qmv(x, w, scales, out, bits_, group_size_, vec_batch, N, K, encoder, s);
     return;
   }
+
+  if (transpose_ && encoder.device().compute_capability_major() == 9) {
+    qmm_sm90(x, w, scales, biases, out, bits_, group_size_, mode_, encoder, s);
+    return;
+  }
+
+  throw std::runtime_error("QMM NYI");
 }
 
 void fast::Quantize::eval_gpu(

@@ -106,16 +106,15 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     fp_quantize_dequantize(
         x, xhat, group_size_, bits_, global_scale, encoder, s);
 
-    // Make sure the last two dims of w and s are contiguous
-    array w = ensure_row_contiguous_matrix(inputs[1], encoder, s);
-    array scales = ensure_row_contiguous_matrix(inputs[2], encoder, s);
+    const array& w = inputs[1];
+    const array& scales = inputs[2];
 
     bool non_batched = w.ndim() == 2;
     int K = x.shape(-1);
     int M = non_batched ? x.size() / K : x.shape(-2);
     int N = out.shape(-1);
 
-    fp_qmv(w, scales, xhat, out, bits_, group_size_, M, N, K, encoder);
+    fp_qmv(xhat, w, scales, out, bits_, group_size_, M, N, K, encoder, s);
     return;
   }
 
