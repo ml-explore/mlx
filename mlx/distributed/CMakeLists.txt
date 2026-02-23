@@ -2,7 +2,8 @@ target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp)
+          ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/distributed_impl.cpp)
 
 if(MLX_BUILD_CPU AND NOT WIN32)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp)
