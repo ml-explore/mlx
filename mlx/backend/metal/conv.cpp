@@ -4,6 +4,7 @@
 #include <numeric>
 
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/slicing.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
@@ -19,13 +20,23 @@ namespace mlx::core {
 
 namespace {
 
+inline array
+ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
+  if (x.flags().row_contiguous) {
+    return x;
+  }
+  auto result = contiguous_copy_gpu(x, s);
+  d.add_temporary(result, s.index);
+  return result;
+}
+
 template <int N>
 void explicit_gemm_conv_ND_gpu(
     const Stream& s,
     metal::Device& d,
     const array& in,
     const array& wt,
-    array out,
+    array& out,
     const MLXConvParams<N>& conv_params) {
   // Get gemm shapes
   int implicit_M = out.size() / conv_params.O;
@@ -96,7 +107,7 @@ void explicit_gemm_conv_group_ND_gpu(
     metal::Device& d,
     const array& in,
     const array& wt,
-    array out,
+    array& out,
     const MLXConvParams<N>& conv_params) {
   const int groups = conv_params.groups;
   const int C_per_group = conv_params.C / conv_params.groups;
@@ -182,7 +193,7 @@ void implicit_gemm_conv_2D_gpu(
     metal::Device& d,
     const array& in,
     const array& wt,
-    array out,
+    array& out,
     const MLXConvParams<2>& conv_params) {
   const int groups = conv_params.groups;
   const int C_per_group = conv_params.C / conv_params.groups;
@@ -315,7 +326,7 @@ void implicit_gemm_conv_2D_general_gpu(
     metal::Device& d,
     const array& in,
     const array& wt,
-    array out,
+    array& out,
     const MLXConvParams<2>& conv_params) {
   // Deduce implicit gemm size
   int implicit_M = conv_params.N * conv_params.oS[0] * conv_params.oS[1];
@@ -494,7 +505,7 @@ void implicit_gemm_conv_3D_gpu(
     metal::Device& d,
     const array& in,
     const array& wt,
-    array out,
+    array& out,
     const MLXConvParams<3>& conv_params) {
   const int groups = conv_params.groups;
   const int C_per_group = conv_params.C / conv_params.groups;
@@ -610,12 +621,59 @@ void implicit_gemm_conv_3D_gpu(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void pad_and_slice_conv_3D_gpu(
+    const Stream& s,
+    metal::Device& d,
+    const array& in_pre,
+    const array& wt_pre,
+    array& out,
+    const MLXConvParams<3>& conv_params) {
+  // For now assume conv_params.groups == 1
+  int extra_c = ((conv_params.C + 15) / 16) * 16 - conv_params.C;
+  int extra_o = ((conv_params.O + 15) / 16) * 16 - conv_params.O;
+
+  // Pad function
+  auto pad_array = [&](const array& x, int pad_ax_first, int pad_ax_last) {
+    if (pad_ax_first == 0 && pad_ax_last == 0) {
+      return ensure_row_contiguous(x, d, s);
+    }
+
+    auto xshape = x.shape();
+    xshape.front() += pad_ax_first;
+    xshape.back() += pad_ax_last;
+    array x_copy(xshape, x.dtype(), nullptr, {});
+    array zero(0, x.dtype());
+    pad_gpu(x, zero, x_copy, {0, -1}, {0, 0}, s);
+    d.add_temporary(x_copy, s.index);
+
+    return x_copy;
+  };
+
+  // Allocate space for the intermediate output. Don't save it as a temporary
+  // since it will be sliced to the output so they share the buffer.
+  auto oshape = out.shape();
+  oshape.back() += extra_o;
+  array intermediate(oshape, out.dtype(), nullptr, {});
+  intermediate.set_data(allocator::malloc(intermediate.nbytes()));
+
+  // Actually pad and conv
+  array in = pad_array(in_pre, 0, extra_c);
+  array wt = pad_array(wt_pre, extra_o, extra_c);
+  auto new_params =
+      MLXConvParams<3>::with_padded_channels(conv_params, extra_o, extra_c);
+  implicit_gemm_conv_3D_gpu(s, d, in, wt, intermediate, new_params);
+
+  // Slice out
+  out.copy_shared_buffer(
+      intermediate, intermediate.strides(), {0}, intermediate.data_size());
+}
+
 void dispatch_conv_3D_gpu(
     const Stream& s,
     metal::Device& d,
-    const array& in,
-    const array& wt,
-    array out,
+    const array& in_pre,
+    const array& wt_pre,
+    array& out,
     const MLXConvParams<3>& conv_params,
     std::vector<array>& copies) {
   bool is_idil_one = conv_params.idil[0] == 1 && conv_params.idil[1] == 1 &&
@@ -623,18 +681,33 @@ void dispatch_conv_3D_gpu(
   const int C_per_group = conv_params.C / conv_params.groups;
   const int O_per_group = conv_params.O / conv_params.groups;
 
-  // Implicit GEMM: no input dilation, 16-aligned channels only
-  // (C_per_group <= 4 excluded - no small-channel loader for 3D yet)
-  if (is_idil_one && C_per_group % 16 == 0 &&
-      (O_per_group <= 16 || O_per_group % 16 == 0)) {
+  bool mod16_channels =
+      C_per_group % 16 == 0 && (O_per_group <= 16 || O_per_group % 16 == 0);
+
+  // Check if we can do implicit gemm but the channels are not divisible by 16
+  // so we can pad and slice.
+  //
+  // We check it first because it doesn't need contiguous inputs and it needs
+  // different output allocation.
+  if (is_idil_one && !mod16_channels && conv_params.groups == 1) {
+    return pad_and_slice_conv_3D_gpu(s, d, in_pre, wt_pre, out, conv_params);
+  }
+
+  // Allocate the output and ensure contiguous inputs
+  out.set_data(allocator::malloc(out.nbytes()));
+  auto in = ensure_row_contiguous(in_pre, d, s);
+  auto wt = ensure_row_contiguous(wt_pre, d, s);
+
+  // Perform the implicit gemm
+  if (is_idil_one && mod16_channels) {
     return implicit_gemm_conv_3D_gpu(s, d, in, wt, out, conv_params);
   }
 
-  // Grouped fallback: must use the group-aware explicit GEMM
+  // Explicit gemms where we unfold and do a matmul
+  // (separate one for groups > 1)
   if (conv_params.groups > 1) {
     return explicit_gemm_conv_group_ND_gpu(s, d, in, wt, out, conv_params);
   }
-
   return explicit_gemm_conv_ND_gpu(s, d, in, wt, out, conv_params);
 }
 
@@ -643,7 +716,7 @@ void winograd_conv_2D_gpu(
     metal::Device& d,
     const array& in,
     const array& wt,
-    array out,
+    array& out,
     const MLXConvParams<2>& conv_params,
     std::vector<array>& copies_w) {
   Shape padded_shape = {
@@ -837,7 +910,7 @@ void depthwise_conv_2D_gpu(
     metal::Device& d,
     const array& in,
     const array& wt,
-    array out,
+    array& out,
     const MLXConvParams<2>& conv_params) {
   std::string base_name;
   base_name.reserve(32);
@@ -899,7 +972,7 @@ void dispatch_conv_2D_gpu(
     metal::Device& d,
     const array& in,
     const array& wt,
-    array out,
+    array& out,
     const MLXConvParams<2>& conv_params,
     std::vector<array>& copies) {
   bool is_stride_one = conv_params.str[0] == 1 && conv_params.str[1] == 1;
@@ -960,8 +1033,8 @@ void depthwise_conv_1D_gpu(
     const Stream& s,
     metal::Device& d,
     const array& in,
-    array wt,
-    array out) {
+    const array& wt,
+    array& out) {
   bool large = in.size() > INT32_MAX || in.data_size() > INT32_MAX;
   std::string base_name;
   base_name.reserve(32);
@@ -971,10 +1044,6 @@ void depthwise_conv_1D_gpu(
       large ? "_large" : "",
       type_to_name(out));
 
-  if (!wt.flags().row_contiguous) {
-    wt = contiguous_copy_gpu(wt, s);
-    d.add_temporary(wt, s.index);
-  }
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(base_name);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -1009,9 +1078,9 @@ void depthwise_conv_1D_gpu(
 void conv_1D_gpu(
     const Stream& s,
     metal::Device& d,
-    const array& in,
-    const array& wt,
-    array out,
+    const array& in_pre,
+    const array& wt_pre,
+    array& out,
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
     const std::vector<int>& wt_dilation,
@@ -1019,6 +1088,11 @@ void conv_1D_gpu(
     int groups,
     bool flip,
     std::vector<array>& copies) {
+  // Allocate space and ensure weights are contiguous
+  out.set_data(allocator::malloc(out.nbytes()));
+  auto in = ensure_row_contiguous(in_pre, d, s);
+  auto wt = ensure_row_contiguous(wt_pre, d, s);
+
   bool is_idil_one = in_dilation[0] == 1;
   int C = in.shape(2);
   int O = wt.shape(0);
@@ -1091,9 +1165,9 @@ void conv_1D_gpu(
 void conv_2D_gpu(
     const Stream& s,
     metal::Device& d,
-    const array& in,
-    const array& wt,
-    array out,
+    const array& in_pre,
+    const array& wt_pre,
+    array& out,
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
     const std::vector<int>& wt_dilation,
@@ -1101,6 +1175,11 @@ void conv_2D_gpu(
     const int groups,
     bool flip,
     std::vector<array>& copies) {
+  // Allocate space and ensure weights are contiguous
+  out.set_data(allocator::malloc(out.nbytes()));
+  auto in = ensure_row_contiguous(in_pre, d, s);
+  auto wt = ensure_row_contiguous(wt_pre, d, s);
+
   // Make conv params
   MLXConvParams<2> conv_params{
       /* const int  N = */ static_cast<int>(in.shape(0)),
@@ -1141,6 +1220,8 @@ void conv_3D_gpu(
     int groups,
     bool flip,
     std::vector<array>& copies) {
+  // TODO: Fix the strides below because in, wt may not be contiguous
+
   // Make conv params
   MLXConvParams<3> conv_params{
       /* const int  N = */ static_cast<int>(in.shape(0)),
@@ -1191,22 +1272,16 @@ void conv_3D_gpu(
 } // namespace
 
 void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
-  out.set_data(allocator::malloc(out.nbytes()));
   auto& s = stream();
   auto& d = metal::device(s.device);
 
-  // Ensure contiguity
+  // Intermediates that are put here will be added to the command encoder as
+  // temporaries.
   std::vector<array> copies;
-  auto in = inputs[0];
-  auto wt = inputs[1];
-  if (!in.flags().row_contiguous) {
-    in = contiguous_copy_gpu(in, s);
-    copies.push_back(in);
-  }
-  if (!wt.flags().row_contiguous) {
-    wt = contiguous_copy_gpu(wt, s);
-    copies.push_back(wt);
-  }
+
+  // Some shortcuts for brevity
+  const array& in = inputs[0];
+  const array& wt = inputs[1];
 
   // 3D conv
   if (out.ndim() == 5) {
@@ -1263,7 +1338,9 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Record copies
-  d.add_temporaries(std::move(copies), s.index);
+  if (!copies.empty()) {
+    d.add_temporaries(std::move(copies), s.index);
+  }
 }
 
 } // namespace mlx::core
