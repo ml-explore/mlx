@@ -41,6 +41,11 @@ void eval(array& arr) {
 
     debug_set_primitive_buffer_label(command_buffer, arr.primitive());
     arr.primitive().eval_gpu(arr.inputs(), outputs);
+
+    // Re-capture command buffer in case eval_gpu performed a mid-sync
+    // (e.g., distributed primitives that call gpu::synchronize internally).
+    // If no mid-sync occurred, this returns the same buffer.
+    command_buffer = d.get_command_buffer(s.index);
   }
   std::unordered_set<std::shared_ptr<array::Data>> buffers;
   for (auto& in : arr.inputs()) {
