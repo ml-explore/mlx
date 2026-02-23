@@ -247,6 +247,10 @@ void CommandEncoder::set_buffer(
     const MTL::Buffer* buf,
     int idx,
     int64_t offset /* = 0 */) {
+  // Record as both input and output to ensure synchronization between command
+  // buffers
+  all_inputs_.insert((void*)buf);
+  all_outputs_.insert((void*)buf);
   enc_->setBuffer(buf, offset, idx);
 }
 
