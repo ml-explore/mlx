@@ -41,7 +41,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
 
   constexpr size_t TILE_M = 32;
   constexpr size_t TILE_K = COLS_PER_BLOCK;
-  constexpr size_t STAGES = ROWS_PER_BLOCK / TILE_M;
+  constexpr size_t STEPS = ROWS_PER_BLOCK / TILE_M;
   constexpr int elem_per_byte = 1;
 
   const auto block_idx = cg::this_thread_block().group_index();
@@ -77,17 +77,17 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
 
   constexpr uint32_t tile_bytes = static_cast<uint32_t>(in_tile_size);
 
-  __shared__ alignas(8) uint64_t mbar[STAGES];
+  __shared__ alignas(8) uint64_t mbar[STEPS];
 
   T thread_data[TILE_M];
   uint32_t rbits = 0; // Reserved for stochastic rounding
   const size_t scale_stride = rows / TILE_M;
 
-  // Master thread init memory barriers for all stages
+  // Master thread init memory barriers for all steps
   // fence for tma, synchronize threads so all see mbarrier
   if (is_master) {
 #pragma unroll
-    for (int iter = 0; iter < STAGES; ++iter) {
+    for (int iter = 0; iter < STEPS; ++iter) {
       ptx::mbarrier_init(&mbar[iter], THREADS_PER_BLOCK);
     }
     ptx::fence_proxy_async_shared_cta();
@@ -104,20 +104,20 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
       is_master);
 
 #pragma unroll
-  for (size_t stage = 0; stage < STAGES; ++stage) {
+  for (size_t step = 0; step < STEPS; ++step) {
     // buffer memory offset in shared memory (we use double buffering for
     // pipelining)
-    const size_t buff = stage % BUFFS_NUM;
-    const size_t next_stage = stage + 1;
-    const size_t stage_row_offset = stage * TILE_M;
+    const size_t buff = step % BUFFS_NUM;
+    const size_t next_step = step + 1;
+    const size_t step_row_offset = step * TILE_M;
 
-    if (next_stage < STAGES) {
+    if (next_step < STEPS) {
       // before launching another async copy, check that there is less than 2
       // (to ensure that shared -> global synch is finished and buffer can be
       // reused)
       ptx::cp_async_bulk_wait_group_read<1>();
-      const size_t next_buff = next_stage % BUFFS_NUM;
-      const size_t next_row_offset = block_offset_row + next_stage * TILE_M;
+      const size_t next_buff = next_step % BUFFS_NUM;
+      const size_t next_row_offset = block_offset_row + next_step * TILE_M;
       const size_t next_buff_elem_offset = next_buff * BUFF_ELEMS;
 
       copy_2d_to_shared(
@@ -126,14 +126,14 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
           static_cast<uint32_t>(block_offset_col),
           static_cast<uint32_t>(next_row_offset),
           tile_bytes,
-          &mbar[next_stage],
+          &mbar[next_step],
           is_master);
     }
 
     ptx::fence_proxy_async_shared_cta();
     // Wait until the data is ready, parity is always 0 because for simplicity
-    // we dont reuse barriers between stages
-    ptx::mbarrier_wait_parity(&mbar[stage], 0);
+    // we dont reuse barriers between steps
+    ptx::mbarrier_wait_parity(&mbar[step], 0);
     const size_t buff_offset = buff * BUFF_ELEMS;
     // Read the data from shared to registers
 #pragma unroll
@@ -159,8 +159,8 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
     // Write scale directly to global memory
     const size_t global_col = block_offset_col + tidx;
     const size_t global_row_group =
-        (block_offset_row + stage_row_offset) / TILE_M;
-    if (global_col < cols && (block_offset_row + stage_row_offset) < rows) {
+        (block_offset_row + step_row_offset) / TILE_M;
+    if (global_col < cols && (block_offset_row + step_row_offset) < rows) {
       scales[global_col * scale_stride + global_row_group] = s.__x;
     }
     const size_t out_buff_offset = buff * out_tile_elems;
@@ -210,7 +210,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
     __syncthreads();
 
     if (is_master) {
-      const size_t global_row = block_offset_row + stage_row_offset;
+      const size_t global_row = block_offset_row + step_row_offset;
       const uint32_t out_x = static_cast<uint32_t>(global_row);
       const uint32_t out_y = static_cast<uint32_t>(block_offset_col);
 
@@ -228,7 +228,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
   __syncthreads();
   if (is_master) {
 #pragma unroll
-    for (int iter = 0; iter < STAGES; ++iter) {
+    for (int iter = 0; iter < STEPS; ++iter) {
       ptx::mbarrier_invalidate(&mbar[iter]);
     }
   }

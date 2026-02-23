@@ -33,48 +33,74 @@ def test_qqmm():
         [64, 128, 256, 1024, 1024 * 8],  # N
         [64, 128, 256, 1024, 1024 * 8],  # K
     )
+    layouts = ["TN", "NT", "TT", "NN"]
     for group_size, mode, bits in tests:
         for M, N, K in product(*shapes):
             for dtype in dtypes:
-                x = mx.random.normal(shape=(M, K), key=k1, dtype=dtype)
-                w = mx.random.normal(shape=(N, K), key=k2, dtype=dtype)
-                w_q, scales_w = mx.quantize(w, group_size, bits, mode=mode)
-                w_dq = mx.dequantize(
-                    w_q,
-                    scales_w,
-                    group_size=group_size,
-                    bits=bits,
-                    mode=mode,
-                    dtype=dtype,
-                )
-                y_q = mx.qqmm(
-                    x,
-                    w_q,
-                    scales_w,
-                    group_size=group_size,
-                    bits=bits,
-                    mode=mode,
-                )
-                x_q, scales_x = mx.quantize(
-                    x, group_size=group_size, bits=bits, mode=mode
-                )
-                x_dq = mx.dequantize(
-                    x_q,
-                    scales_x,
-                    group_size=group_size,
-                    bits=bits,
-                    mode=mode,
-                    dtype=dtype,
-                )
-                y_hat = mx.matmul(x_dq, mx.transpose(w_dq))
-                ulp = ulp_bf16_at(y_hat)
-                error = (y_q - y_hat).abs()
-                if not (mx.logical_or(error < 1e-3, error <= ulp).all()):
-                    raise AssertionError(
-                        f"qqmm test failed for shape {(M, N, K)}, "
-                        f"group_size={group_size}, bits={bits}, "
-                        f"mode={mode}, dtype={dtype}"
+                for layout in layouts:
+                    if layout == "NT":
+                        x_shape = (M, K)
+                        w_shape = (N, K)
+                    elif layout == "TN":
+                        x_shape = (K, M)
+                        w_shape = (K, N)
+                    elif layout == "TT":
+                        x_shape = (K, M)
+                        w_shape = (N, K)
+                    else:  # "NN"
+                        x_shape = (M, K)
+                        w_shape = (K, N)
+                    x = mx.random.normal(shape=x_shape, key=k1, dtype=dtype)
+                    w = mx.random.normal(shape=w_shape, key=k2, dtype=dtype)
+
+                    if layout == "TT":
+                        x = mx.transpose(x)
+                    elif layout == "TN":
+                        w = mx.transpose(w)
+                        x = mx.transpose(x)
+                    else:  # "NN"
+                        w = mx.transpose(w)
+
+                    w_q, scales_w = mx.quantize(w, group_size, bits, mode=mode)
+                    w_dq = mx.dequantize(
+                        w_q,
+                        scales_w,
+                        group_size=group_size,
+                        bits=bits,
+                        mode=mode,
+                        dtype=dtype,
                     )
+                    y_q = mx.qqmm(
+                        x,
+                        w_q,
+                        scales_w,
+                        group_size=group_size,
+                        bits=bits,
+                        mode=mode,
+                    )
+                    x_q, scales_x = mx.quantize(
+                        x, group_size=group_size, bits=bits, mode=mode
+                    )
+                    x_dq = mx.dequantize(
+                        x_q,
+                        scales_x,
+                        group_size=group_size,
+                        bits=bits,
+                        mode=mode,
+                        dtype=dtype,
+                    )
+                    y_hat = mx.matmul(x_dq, mx.transpose(w_dq))
+                    ulp = ulp_bf16_at(y_hat)
+                    error = (y_q - y_hat).abs()
+                    if not (mx.logical_or(error < 1e-3, error <= ulp).all()):
+                        import pdb
+
+                        pdb.set_trace()
+                        raise AssertionError(
+                            f"qqmm test failed for shape {(M, N, K)}, "
+                            f"group_size={group_size}, bits={bits}, "
+                            f"mode={mode}, dtype={dtype}, layout={layout}"
+                        )
 
 
 def test_qqmm_vjp():

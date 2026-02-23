@@ -6,23 +6,6 @@
 namespace mlx::core {
 
 namespace ptx {
-// For pipelining with TMA, we use memory barries, the mental model is the
-// folowing:
-//  1. master thread inits a barrier with expected number of threads to arrive,
-//  while the rest skip and __synchthreads() to wait for the barrier to be
-//  ready.
-//  2. pipelining: before the loop, master thread launch an asynch copy and
-//  signals the barrier with the expected number of bytes to arrive,
-//  while the rest just signal arrival (first buffer).
-//  3.  So we have 2 buffers, and n pipeline stages. We launch the fist asynch
-//  copy before the begining of the loop. Then iterate over pipeline stages and
-//  copy to freed up buffer (buff = stage % BUFFS_NUM), but before the copy we
-//  want to check that the result was copied to global memory. at the firt loop
-//  nothing was commited so the check is succeseful so we launch a seconf asynch
-//  copy. Then we wait for the first one, do operations then lauch an asynch
-//  copy from shared -> global and return to the begining of the loop, now we
-//  check if the previous read from shared to global is done so we can reuse the
-//  buffer and launch async copy to fill buffer 0
 
 #if (CUDART_VERSION >= 12080) && (__CUDA_ARCH__ >= 1000) && \
     defined(__CUDA_ARCH_SPECIFIC__)

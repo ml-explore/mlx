@@ -13,7 +13,6 @@
 #include <cooperative_groups/reduce.h>
 #include <cuda_fp4.h>
 #include <cuda_fp8.h>
-#include <iostream>
 
 namespace mlx::core {
 namespace cu {
@@ -244,9 +243,6 @@ void fp_quantize_columnwise_tma(
   size_t cols = w.size() / rows;
   size_t stride_bytes = w.strides(-1) * w.itemsize();
 
-  // 16 bytes is minimum for TMA tile size along contigious dimension
-  // For nvfp4 (group_size = 16), we can't have a tile = group_size because we
-  // write transposed output so we will do 2 passes on the input tile
   if (bits == 8 && group_size == 32) {
     dispatch_float_types(
         w.dtype(), "fp_quantize_columnwise_mxfp8", [&](auto type_tag) {
@@ -274,7 +270,7 @@ void fp_quantize_columnwise_tma(
 
             create_2D_tensor_map(
                 &tensor_map_input,
-                const_cast<void*>(static_cast<const void*>(gpu_ptr<T>(w))),
+                gpu_ptr<void>(w),
                 cu::get_tma_dtype(w.dtype()),
                 rows,
                 cols,
@@ -302,7 +298,7 @@ void fp_quantize_columnwise_tma(
                 kernel,
                 grid,
                 block,
-                static_cast<uint32_t>(smem_size),
+                smem_size,
                 tensor_map_input,
                 tensor_map_output,
                 gpu_ptr<uint8_t>(scales),
@@ -314,7 +310,6 @@ void fp_quantize_columnwise_tma(
           }
         });
   } else {
-    // NVFP4 or other configurations - TMA kernel not implemented yet
     throw std::runtime_error(
         "[fp_quantize_columnwise_tma] TMA quantization only implemented for bits=8 and group_size=32.");
   }
