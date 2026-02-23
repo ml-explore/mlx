@@ -134,6 +134,7 @@ bool array::is_available() const {
   } else if (
       status() == Status::evaluated &&
       (!event().valid() || event().is_signaled())) {
+    detach_event();
     set_status(Status::available);
     return true;
   }
