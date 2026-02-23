@@ -176,7 +176,7 @@ void fp_quantize_rowwise(
   });
 }
 
-void fp_quantize_columnwise(
+void fp_quantize_columnwise_fallback(
     const array& w,
     array& wq,
     array& scales,
@@ -191,37 +191,40 @@ void fp_quantize_columnwise(
   }
   enc.set_output_array(wq);
   enc.set_output_array(scales);
-  dispatch_float_types(w.dtype(), "fp_quantize_columnwise", [&](auto type_tag) {
-    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    if constexpr (!std::is_same_v<T, double>) {
-      auto M = w.shape(-2);
-      auto K = w.shape(-1);
-      auto kernel = cu::fp_quantize_columnwise<T, 32, 4, true, false>;
-      if (bits == 8) {
-        kernel = cu::fp_quantize_columnwise<T, 32, 8, true, false>;
-      } else if (group_size == 16) {
-        kernel = cu::fp_quantize_columnwise<T, 16, 4, false, false>;
-      }
-      auto [num_blocks, block_dims] =
-          cu::get_columnwise_launch_args(w.size(), group_size, M, K);
-      enc.add_kernel_node(
-          kernel,
-          num_blocks,
-          block_dims,
-          0,
-          gpu_ptr<T>(w),
-          gpu_ptr<uint8_t>(wq),
-          gpu_ptr<uint8_t>(scales),
-          w.size(),
-          M,
-          K,
-          global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
-                                   : nullptr);
-    } else {
-      throw std::runtime_error(
-          "[Quantize::eval_gpu] Can not quantize input with type float64.");
-    }
-  });
+  dispatch_float_types(
+      w.dtype(), "fp_quantize_columnwise_fallback", [&](auto type_tag) {
+        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+        if constexpr (!std::is_same_v<T, double>) {
+          auto M = w.shape(-2);
+          auto K = w.shape(-1);
+          auto kernel =
+              cu::fp_quantize_columnwise_fallback<T, 32, 4, true, false>;
+          if (bits == 8) {
+            kernel = cu::fp_quantize_columnwise_fallback<T, 32, 8, true, false>;
+          } else if (group_size == 16) {
+            kernel =
+                cu::fp_quantize_columnwise_fallback<T, 16, 4, false, false>;
+          }
+          auto [num_blocks, block_dims] =
+              cu::get_columnwise_launch_args(w.size(), group_size, M, K);
+          enc.add_kernel_node(
+              kernel,
+              num_blocks,
+              block_dims,
+              0,
+              gpu_ptr<T>(w),
+              gpu_ptr<uint8_t>(wq),
+              gpu_ptr<uint8_t>(scales),
+              w.size(),
+              M,
+              K,
+              global_scale.has_value() ? gpu_ptr<float>(global_scale.value())
+                                       : nullptr);
+        } else {
+          throw std::runtime_error(
+              "[Quantize::eval_gpu] Can not quantize input with type float64.");
+        }
+      });
 }
 
 void fp_quantize_columnwise_tma(
@@ -338,7 +341,7 @@ void fp_quantize_columnwise(
     fp_quantize_columnwise_tma(
         w, wq, scales, group_size, bits, global_scale, enc, s);
   } else {
-    fp_quantize_columnwise(
+    fp_quantize_columnwise_fallback(
         w, wq, scales, group_size, bits, global_scale, enc, s);
   }
 }

@@ -179,7 +179,7 @@ __global__ void fp_quantize_rowwise(
 }
 
 template <typename T, int group_size, int bits, bool use_mx_scale, bool USE_SR>
-__global__ void fp_quantize_columnwise(
+__global__ void fp_quantize_columnwise_fallback(
     T* w,
     uint8_t* out,
     uint8_t* scales,
