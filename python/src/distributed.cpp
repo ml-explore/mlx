@@ -4,6 +4,7 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
@@ -349,4 +350,170 @@ void init_distributed(nb::module_& parent_module) {
       Returns:
         array: The output array with shape ``[x.shape[0] // group.size(), *x.shape[1:]]``.
     )pbdoc");
+
+  m.def(
+      "all_to_all",
+      [](const ScalarOrArray& x,
+         std::optional<mx::distributed::Group> group,
+         mx::StreamOrDevice s) {
+        return mx::distributed::all_to_all(to_array(x), group, s);
+      },
+      "x"_a,
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def all_to_all(x: array, *, group: Optional[Group] = None, "
+          "stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      All-to-all exchange of data between processes.
+
+      Each process splits its input along the first axis into ``group.size()``
+      chunks and sends chunk *i* to process *i*. All processes receive one chunk
+      from every other process and concatenate them in rank order. The output
+      has the same shape as the input.
+
+      ``x.shape[0]`` must be divisible by the group size.
+
+      Args:
+        x (array): Input array.
+        group (Group): The group of processes that will participate in the
+          exchange. If set to ``None`` the global group is used. Default:
+          ``None``.
+        stream (Stream, optional): Stream or device. Defaults to ``None``
+          in which case the default stream of the default device is used.
+
+      Returns:
+        array: The result of the all-to-all exchange.
+    )pbdoc");
+
+  m.def(
+      "moe_dispatch_exchange",
+      [](const ScalarOrArray& tokens,
+         const ScalarOrArray& expert_indices,
+         int num_experts,
+         int capacity,
+         std::optional<mx::distributed::Group> group,
+         bool deterministic,
+         const std::string& backend,
+         mx::StreamOrDevice s) {
+        auto [dispatched, route_idx] = mx::distributed::moe_dispatch_exchange(
+            to_array(tokens),
+            to_array(expert_indices),
+            num_experts,
+            capacity,
+            group,
+            deterministic,
+            backend,
+            s);
+        return nb::make_tuple(dispatched, route_idx);
+      },
+      "tokens"_a,
+      "expert_indices"_a,
+      nb::kw_only(),
+      "num_experts"_a,
+      "capacity"_a,
+      "group"_a = nb::none(),
+      "deterministic"_a = true,
+      "backend"_a = "cpu",
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def moe_dispatch_exchange(tokens: array, expert_indices: array, "
+          "*, num_experts: int, capacity: int, group: Optional[Group] = None, "
+          "deterministic: bool = True, backend: str = \"cpu\", "
+          "stream: Union[None, Stream, Device] = None) -> tuple[array, array]"),
+      R"pbdoc(
+        Fused MoE dispatch and all-to-all exchange.
+
+        Scatters tokens into the dispatch buffer and performs all-to-all
+        exchange in a single fused primitive.
+
+        Args:
+          tokens (array): Input tokens of shape ``[N, D]``.
+          expert_indices (array): Expert assignments of shape ``[N, top_k]`` (int32).
+          num_experts (int): Total number of experts across all devices.
+          capacity (int): Per-expert capacity (max tokens per expert).
+          group (Group, optional): Distributed group. Default: global group.
+          deterministic (bool, optional): Use token-order based slot assignment.
+            Default: ``True``.
+          backend (str, optional): Compute backend for the fused primitive.
+            ``"auto"`` selects CPU for small workloads (N <= 64) and Metal
+            for large workloads (N >= 320). ``"cpu"`` forces the CPU path.
+            ``"metal"`` forces the Metal GPU path. Default: ``"cpu"``.
+          stream (Stream, optional): Stream or device. Default: ``None``.
+
+        Returns:
+          tuple[array, array]: ``(dispatched, route_indices)`` where
+            - ``dispatched``: ``[experts_per_device, world_size * capacity, D]``
+            - ``route_indices``: ``[N, top_k]`` int32, -1 means overflow
+      )pbdoc");
+
+  m.def(
+      "moe_combine_exchange",
+      [](const ScalarOrArray& expert_outputs,
+         const ScalarOrArray& route_indices,
+         const ScalarOrArray& weights,
+         const ScalarOrArray& original_tokens,
+         int num_experts,
+         int capacity,
+         std::optional<mx::distributed::Group> group,
+         bool deterministic,
+         const std::string& backend,
+         mx::StreamOrDevice s) {
+        return mx::distributed::moe_combine_exchange(
+            to_array(expert_outputs),
+            to_array(route_indices),
+            to_array(weights),
+            to_array(original_tokens),
+            num_experts,
+            capacity,
+            group,
+            deterministic,
+            backend,
+            s);
+      },
+      "expert_outputs"_a,
+      "route_indices"_a,
+      "weights"_a,
+      "original_tokens"_a,
+      nb::kw_only(),
+      "num_experts"_a,
+      "capacity"_a,
+      "group"_a = nb::none(),
+      "deterministic"_a = true,
+      "backend"_a = "cpu",
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def moe_combine_exchange(expert_outputs: array, route_indices: array, "
+          "weights: array, original_tokens: array, "
+          "*, num_experts: int, capacity: int, group: Optional[Group] = None, "
+          "deterministic: bool = True, backend: str = \"cpu\", "
+          "stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Fused MoE all-to-all exchange and combine.
+
+        Performs all-to-all exchange and gathers expert outputs back to token
+        order with weighted summation in a single fused primitive.
+
+        Args:
+          expert_outputs (array): Expert outputs of shape
+            ``[experts_per_device, world_size * capacity, D]``.
+          route_indices (array): Route indices from ``moe_dispatch_exchange``,
+            shape ``[N, top_k]`` int32.
+          weights (array): Routing weights, shape ``[N, top_k]``.
+          original_tokens (array): Original input tokens ``[N, D]`` used as
+            residual fallback for fully-overflowed tokens.
+          num_experts (int): Total number of experts across all devices.
+          capacity (int): Per-expert capacity.
+          group (Group, optional): Distributed group. Default: global group.
+          deterministic (bool, optional): Default: ``True``.
+          backend (str, optional): Compute backend for the fused primitive.
+            ``"auto"`` selects CPU for small workloads (N <= 64) and Metal
+            for large workloads (N >= 320). ``"cpu"`` forces the CPU path.
+            ``"metal"`` forces the Metal GPU path. Default: ``"cpu"``.
+          stream (Stream, optional): Stream or device. Default: ``None``.
+
+        Returns:
+          array: Combined tokens of shape ``[N, D]``.
+      )pbdoc");
 }

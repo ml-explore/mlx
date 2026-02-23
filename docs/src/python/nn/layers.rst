@@ -45,6 +45,7 @@ Layers
    MaxPool2d
    MaxPool3d
    Mish
+   MixtureOfExperts
    MultiHeadAttention
    PReLU
    QuantizedAllToShardedLinear
