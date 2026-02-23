@@ -1220,7 +1220,16 @@ void conv_3D_gpu(
     int groups,
     bool flip,
     std::vector<array>& copies) {
-  // TODO: Fix the strides below because in, wt may not be contiguous
+  // We will use the contiguous strides for the conv params because that is
+  // what the rest of the code expects.
+  constexpr int NDIM = 3;
+  int64_t in_arr_strides[NDIM + 2];
+  int64_t wt_arr_strides[NDIM + 2];
+  in_arr_strides[NDIM + 1] = wt_arr_strides[NDIM + 1] = 1;
+  for (int i = NDIM; i >= 0; i--) {
+    in_arr_strides[i] = in_arr_strides[i + 1] * in.shape(i + 1);
+    wt_arr_strides[i] = wt_arr_strides[i + 1] * wt.shape(i + 1);
+  }
 
   // Make conv params
   MLXConvParams<3> conv_params{
@@ -1246,23 +1255,23 @@ void conv_3D_gpu(
       /* const int idil[NDIM] = */
       {in_dilation[0], in_dilation[1], in_dilation[2]},
       /* const size_t in_strides[NDIM + 2] = */
-      {in.strides()[0],
-       in.strides()[1],
-       in.strides()[2],
-       in.strides()[3],
-       in.strides()[4]},
+      {in_arr_strides[0],
+       in_arr_strides[1],
+       in_arr_strides[2],
+       in_arr_strides[3],
+       in_arr_strides[4]},
       /* const size_t wt_strides[NDIM + 2] = */
-      {wt.strides()[0],
-       wt.strides()[1],
-       wt.strides()[2],
-       wt.strides()[3],
-       wt.strides()[4]},
+      {wt_arr_strides[0],
+       wt_arr_strides[1],
+       wt_arr_strides[2],
+       wt_arr_strides[3],
+       wt_arr_strides[4]},
       /* const size_t out_strides[NDIM + 2] = */
-      {out.strides()[0],
-       out.strides()[1],
-       out.strides()[2],
-       out.strides()[3],
-       out.strides()[4]},
+      {out.strides(0),
+       out.strides(1),
+       out.strides(2),
+       out.strides(3),
+       out.strides(4)},
       /* const int groups = */ groups,
       /* const bool flip = */ flip,
   };
