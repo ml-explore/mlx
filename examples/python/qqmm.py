@@ -50,6 +50,7 @@ def test_qqmm():
                     else:  # "NN"
                         x_shape = (M, K)
                         w_shape = (K, N)
+
                     x = mx.random.normal(shape=x_shape, key=k1, dtype=dtype)
                     w = mx.random.normal(shape=w_shape, key=k2, dtype=dtype)
 
@@ -58,9 +59,16 @@ def test_qqmm():
                     elif layout == "TN":
                         w = mx.transpose(w)
                         x = mx.transpose(x)
-                    else:  # "NN"
+                    elif layout == "NN":
                         w = mx.transpose(w)
 
+                    y_q = mx.qqmm(
+                        x,
+                        w,
+                        group_size=group_size,
+                        bits=bits,
+                        mode=mode,
+                    )
                     w_q, scales_w = mx.quantize(w, group_size, bits, mode=mode)
                     w_dq = mx.dequantize(
                         w_q,
@@ -69,14 +77,6 @@ def test_qqmm():
                         bits=bits,
                         mode=mode,
                         dtype=dtype,
-                    )
-                    y_q = mx.qqmm(
-                        x,
-                        w_q,
-                        scales_w,
-                        group_size=group_size,
-                        bits=bits,
-                        mode=mode,
                     )
                     x_q, scales_x = mx.quantize(
                         x, group_size=group_size, bits=bits, mode=mode
@@ -94,6 +94,8 @@ def test_qqmm():
                     error = (y_q - y_hat).abs()
                     if not (mx.logical_or(error < 1e-3, error <= ulp).all()):
                         import pdb
+
+                        pdb.set_trace()
 
                         pdb.set_trace()
                         raise AssertionError(
