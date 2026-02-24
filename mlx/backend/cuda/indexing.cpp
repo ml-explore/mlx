@@ -55,53 +55,6 @@ void append_indices_arg(
 
 } // namespace
 
-namespace cu {
-
-template <typename T, bool src_contiguous, typename IdxT>
-__global__ void masked_assign(
-    const bool* mask,
-    const int32_t* scatter_offsets,
-    const T* src,
-    T* out,
-    IdxT total,
-    const __grid_constant__ Shape src_shape,
-    const __grid_constant__ Strides src_strides,
-    int32_t src_ndim,
-    IdxT src_batch_size,
-    IdxT mask_batch_size) {
-  IdxT block_id = static_cast<IdxT>(blockIdx.x) +
-      static_cast<IdxT>(gridDim.x) *
-          (static_cast<IdxT>(blockIdx.y) +
-           static_cast<IdxT>(gridDim.y) * static_cast<IdxT>(blockIdx.z));
-  IdxT thread_id = block_id * blockDim.x + threadIdx.x;
-  IdxT stride =
-      static_cast<IdxT>(blockDim.x) * gridDim.x * gridDim.y * gridDim.z;
-
-  for (IdxT idx = thread_id; idx < total; idx += stride) {
-    if (!mask[idx]) {
-      continue;
-    }
-
-    IdxT src_index = static_cast<IdxT>(scatter_offsets[idx]);
-    if (src_index >= src_batch_size) {
-      // Match Metal backend behavior by skipping out-of-range source reads.
-      continue;
-    }
-
-    IdxT batch_idx = idx / mask_batch_size;
-    if constexpr (src_contiguous) {
-      out[idx] = src[batch_idx * src_batch_size + src_index];
-    } else {
-      IdxT src_elem = batch_idx * src_batch_size + src_index;
-      IdxT src_loc =
-          elem_to_loc(src_elem, src_shape.data(), src_strides.data(), src_ndim);
-      out[idx] = src[src_loc];
-    }
-  }
-}
-
-} // namespace cu
-
 void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Gather::eval_gpu");
   assert(inputs.size() > 0);
@@ -528,42 +481,56 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   const size_t batch_count = mask.shape(0);
   const size_t mask_batch_size = mask_flat.size() / batch_count;
   const size_t src_batch_size = src.size() / src.shape(0);
+  bool large = total > INT32_MAX || src.size() > INT32_MAX;
+
+  std::string module_name =
+      fmt::format("masked_scatter_assign_{}", dtype_to_string(out.dtype()));
+  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+    std::vector<std::string> kernel_names;
+    for (int src_contiguous = 0; src_contiguous <= 1; ++src_contiguous) {
+      for (int use_large = 0; use_large <= 1; ++use_large) {
+        kernel_names.push_back(
+            fmt::format(
+                "mlx::core::cu::masked_scatter_assign<{}, {}, {}>",
+                dtype_to_cuda_type(out.dtype()),
+                src_contiguous ? "true" : "false",
+                use_large ? "int64_t" : "int32_t"));
+      }
+    }
+    return std::make_tuple(false, jit_source_scatter, std::move(kernel_names));
+  });
+
+  cu::KernelArgs args;
+  args.append(mask_flat);
+  args.append(scatter_offsets);
+  args.append(src);
+  args.append(out);
+  if (large) {
+    args.append<int64_t>(mask_flat.size());
+    args.append<int64_t>(src_batch_size);
+    args.append<int64_t>(mask_batch_size);
+  } else {
+    args.append<int32_t>(mask_flat.size());
+    args.append<int32_t>(src_batch_size);
+    args.append<int32_t>(mask_batch_size);
+  }
+  args.append_ndim(src.shape());
+  args.append_ndim(src.strides());
+  args.append<int32_t>(src.ndim());
 
   encoder.set_input_array(mask_flat);
   encoder.set_input_array(scatter_offsets);
   encoder.set_input_array(src);
   encoder.set_output_array(out);
 
-  dispatch_all_types(out.dtype(), [&](auto type_tag) {
-    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    dispatch_bool(src.flags().row_contiguous, [&](auto src_contiguous) {
-      dispatch_bool(
-          total > INT32_MAX || src.size() > INT32_MAX, [&](auto large) {
-            using IdxT = std::conditional_t<large(), int64_t, int32_t>;
-            auto [num_blocks, block_dims] = get_launch_args(
-                mask_flat.size(),
-                mask_flat.shape(),
-                mask_flat.strides(),
-                large());
-            auto kernel = cu::masked_assign<T, src_contiguous.value, IdxT>;
-            encoder.add_kernel_node(
-                kernel,
-                num_blocks,
-                block_dims,
-                0,
-                gpu_ptr<bool>(mask_flat),
-                gpu_ptr<int32_t>(scatter_offsets),
-                gpu_ptr<T>(src),
-                gpu_ptr<T>(out),
-                static_cast<IdxT>(mask_flat.size()),
-                const_param(src.shape()),
-                const_param(src.strides()),
-                static_cast<int32_t>(src.ndim()),
-                static_cast<IdxT>(src_batch_size),
-                static_cast<IdxT>(mask_batch_size));
-          });
-    });
-  });
+  std::string kernel_name = fmt::format(
+      "mlx::core::cu::masked_scatter_assign<{}, {}, {}>",
+      dtype_to_cuda_type(out.dtype()),
+      src.flags().row_contiguous ? "true" : "false",
+      large ? "int64_t" : "int32_t");
+  auto kernel = mod.get_kernel(kernel_name);
+  auto [num_blocks, block_dims] = get_launch_args(mask_flat, large);
+  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
 }
 
 } // namespace mlx::core

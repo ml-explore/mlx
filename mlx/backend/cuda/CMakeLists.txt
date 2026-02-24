@@ -31,7 +31,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/grouped_gemm_unaligned.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/kernel_utils.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp

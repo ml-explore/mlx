@@ -65,4 +65,42 @@ __global__ void scatter(
   Op{}(out + out_idx, upd[upd_loc]);
 }
 
+template <typename T, bool SrcContiguous, typename IdxT>
+__global__ void masked_scatter_assign(
+    const bool* mask,
+    const int32_t* scatter_offsets,
+    const T* src,
+    T* out,
+    IdxT size,
+    IdxT src_batch_size,
+    IdxT mask_batch_size,
+    const __grid_constant__ Shape src_shape,
+    const __grid_constant__ Strides src_strides,
+    int32_t src_ndim) {
+  IdxT index = cg::this_grid().thread_rank();
+  if (index >= size) {
+    return;
+  }
+
+  if (!mask[index]) {
+    return;
+  }
+
+  IdxT src_index = static_cast<IdxT>(scatter_offsets[index]);
+  if (src_index >= src_batch_size) {
+    // Match Metal backend behavior by skipping out-of-range source reads.
+    return;
+  }
+
+  IdxT batch_idx = index / mask_batch_size;
+  if constexpr (SrcContiguous) {
+    out[index] = src[batch_idx * src_batch_size + src_index];
+  } else {
+    IdxT src_elem = batch_idx * src_batch_size + src_index;
+    IdxT src_loc =
+        elem_to_loc(src_elem, src_shape.data(), src_strides.data(), src_ndim);
+    out[index] = src[src_loc];
+  }
+}
+
 } // namespace mlx::core::cu
