@@ -1049,6 +1049,83 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(d[0], d_hat[0]))
         self.assertTrue(mx.allclose(d[1], d_hat[1]))
 
+    def test_compile_large_graph_with_broadcasts(self):
+        """Regression test for compile_fuse broadcast split aliasing bug.
+
+        When a broadcast has mixed parents (some in the fused group, some
+        outside), split_one creates a copy. The array reference `a` in the
+        recurse lambda is aliased through a parent's input vector, so
+        split_one silently replaces it with the copy. If the copy then fails
+        to be fused (e.g. hitting depth/array limits), the original broadcast
+        is orphaned and compile_replace crashes with unordered_map::at.
+
+        This test builds a graph large enough (~100+ ops) to trigger the bug.
+        """
+        import math
+
+        n = 15
+        obs = [mx.array(i * 2.0) for i in range(n)]
+        xs = [mx.array(i * 1.0) for i in range(n)]
+        mu0 = mx.array(0.0)
+        sig_prior = mx.array(10.0)
+        sig_obs = mx.array(1.0)
+        half = mx.array(0.5)
+        log2pi_half = mx.array(0.5 * math.log(2 * math.pi))
+        idx0 = mx.array(0, mx.int32)
+        idx1 = mx.array(1, mx.int32)
+
+        def gaussian_log_prob(v, mu, sigma):
+            z = mx.divide(mx.subtract(v, mu), sigma)
+            return mx.negative(
+                mx.add(
+                    log2pi_half,
+                    mx.add(mx.log(sigma), mx.multiply(half, mx.square(z))),
+                )
+            )
+
+        @mx.compile
+        def score_fn(params):
+            t = mx.transpose(params)
+            slope = mx.take(t, idx0, axis=0)
+            intercept = mx.take(t, idx1, axis=0)
+            score = mx.add(
+                gaussian_log_prob(slope, mu0, sig_prior),
+                gaussian_log_prob(intercept, mu0, sig_prior),
+            )
+            for i in range(n):
+                mean = mx.add(mx.multiply(slope, xs[i]), intercept)
+                score = mx.add(score, gaussian_log_prob(obs[i], mean, sig_obs))
+            return score
+
+        params = mx.random.normal((4, 2))
+        r = score_fn(params)
+        mx.eval(r)
+
+        # Second call exercises the cached path (where the crash occurred)
+        r2 = score_fn(mx.random.normal((4, 2)))
+        mx.eval(r2)
+
+        # Verify correctness: uncompiled should match
+        def score_fn_ref(params):
+            t = mx.transpose(params)
+            slope = mx.take(t, idx0, axis=0)
+            intercept = mx.take(t, idx1, axis=0)
+            score = mx.add(
+                gaussian_log_prob(slope, mu0, sig_prior),
+                gaussian_log_prob(intercept, mu0, sig_prior),
+            )
+            for i in range(n):
+                mean = mx.add(mx.multiply(slope, xs[i]), intercept)
+                score = mx.add(score, gaussian_log_prob(obs[i], mean, sig_obs))
+            return score
+
+        test_params = mx.random.normal((4, 2))
+        mx.eval(test_params)
+        compiled_result = score_fn(test_params)
+        ref_result = score_fn_ref(test_params)
+        mx.eval(compiled_result, ref_result)
+        self.assertTrue(mx.allclose(compiled_result, ref_result))
+
     def test_wrap_compiled(self):
         @mx.compile
         def inner():
