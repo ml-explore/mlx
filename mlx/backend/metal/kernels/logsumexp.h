@@ -5,28 +5,33 @@ template <typename T, typename AccT = float, int N_READS = 4>
     const device T* in,
     device T* out,
     constant int& axis_size,
-    uint gid [[threadgroup_position_in_grid]],
-    uint _lid [[thread_position_in_threadgroup]],
+    uint2 gid [[threadgroup_position_in_grid]],
+    uint2 tid [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]],
+    uint2 _lid [[thread_position_in_threadgroup]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
-  int lid = _lid;
+  int lid = _lid.x;
 
   constexpr int SIMD_SIZE = 32;
+  constexpr int elem_per_group = SIMD_SIZE * 32 * N_READS;
 
   threadgroup AccT local_max[SIMD_SIZE];
   threadgroup AccT local_normalizer[SIMD_SIZE];
 
   AccT ld[N_READS];
 
-  in += gid * size_t(axis_size) + lid * N_READS;
-  if (lid * N_READS + N_READS <= axis_size) {
+  const int axis_offset = tid.y * elem_per_group;
+  in += gid.x * size_t(axis_size) + lid * N_READS + axis_offset;
+  if (axis_offset + lid * N_READS + N_READS <= axis_size) {
     for (int i = 0; i < N_READS; i++) {
       ld[i] = AccT(in[i]);
     }
   } else {
     for (int i = 0; i < N_READS; i++) {
-      ld[i] =
-          ((lid * N_READS + i) < axis_size) ? AccT(in[i]) : Limits<AccT>::min;
+      ld[i] = ((axis_offset + lid * N_READS + i) < axis_size)
+          ? AccT(in[i])
+          : Limits<AccT>::min;
     }
   }
   if (simd_group_id == 0) {
@@ -55,6 +60,7 @@ template <typename T, typename AccT = float, int N_READS = 4>
   maxval = local_max[0];
 
   // Compute exp(x_i - maxval) and store the partial sums in local_normalizer
+  out += gid.x * grid_dim.y + tid.y;
   AccT normalizer = 0;
   for (int i = 0; i < N_READS; i++) {
     normalizer += fast::exp(ld[i] - maxval);
@@ -67,7 +73,7 @@ template <typename T, typename AccT = float, int N_READS = 4>
   if (simd_group_id == 0) {
     normalizer = simd_sum(local_normalizer[simd_lane_id]);
     if (simd_lane_id == 0) {
-      out[gid] = isinf(maxval) ? T(maxval) : T(log(normalizer) + maxval);
+      out[0] = isinf(maxval) ? T(maxval) : T(log(normalizer) + maxval);
     }
   }
 }
