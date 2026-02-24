@@ -16,7 +16,7 @@ bool is_available() {
 }
 
 void set_enabled(bool enabled) {
-  shutting_down.store(enabled, std::memory_order_release);
+  metal::enabled.store(enabled, std::memory_order_release);
 }
 
 void start_capture(std::string path, NS::Object* object) {
