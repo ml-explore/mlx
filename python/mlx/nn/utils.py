@@ -196,21 +196,28 @@ def fsdp_update_parameters(
     communication_stream=None,
     max_norm=None,
 ):
-    """Perform a full FSDP parameter update: reduce-scatter gradients, run
-    the optimizer on sharded blobs, then all-gather the updated parameters.
+    """Perform a distributed optimizer step by sharding gradients and optimizer states across ranks.
 
-    This keeps gradients and parameters as concatenated blobs between
-    reduce-scatter and all-gather, avoiding tree reconstruction. The blobs
-    are passed to ``optimizer.apply_gradients`` as a dict keyed by group index.
+    This helper function performs the following steps:
+    1. Reduce-scatter the gradients across ranks so each rank gets a shard of the averaged gradients.
+    2. Optionally clip the sharded gradients by global norm.
+    3. Apply the optimizer update on the local parameter slice using the sharded gradients.
+    4. All-gather the updated parameter slices from all ranks to reconstruct the full parameters tree.
+
+    This is similar to PyTorch's FSDP with `reshard_after_forward=False`.
+
+    Note: Currently supported only on CUDA backend.
 
     Args:
-        gradients (dict): A Python tree of gradients, most likely computed
-                            via :func:`mlx.nn.value_and_grad`.
-        parameters (dict): A Python tree of parameters, with the same structure
-                            as the gradients tree.
-        optimizer: :obj:`mlx.optimizers.Optimizer` optimizer to use for the update.
-        group (Optional[mlx.core.distributed.Group]): The group of processes to
-            average the gradients. If set to ``None`` the global group is used.
+        parameters (Any): The Python tree containing the full parameters (it should
+            have the same structure across processes). Each parameter's first
+            dimension must be divisible by the world size.
+        gradients (Any): The Python tree containing the full gradients (it should
+            have the same structure as ``parameters``). Each gradient's first
+            dimension must be divisible by the world size.
+        optimizer: Optimizer with an ``apply_gradients`` method.
+        group (Optional[mlx.core.distributed.Group]): The group of processes for
+            communication. If ``None``, the global group is used.
             Default: ``None``.
         communication_size (int): Group arrays until their size in bytes exceeds
             this number. Perform one communication step per group of arrays. If
@@ -221,12 +228,25 @@ def fsdp_update_parameters(
         communication_stream (Optional[mlx.core.Stream]): The stream to use
             for the communication. If unspecified the default communication
             stream is used which can vary by back-end. Default: ``None``.
-        max_norm (float, optional): If provided, clip gradients so their global
-            norm does not exceed this value. Default: ``None``.
+        max_norm (Optional[float]): If provided, clip gradients to this
+            maximum global norm before applying the optimizer update.
+            Default: ``None``.
 
     Returns:
-        Updated parameters tree (same structure as input). If ``max_norm`` is
-        provided, returns ``(updated_parameters, grad_norm)`` instead.
+        If ``max_norm`` is ``None``, returns the updated full-parameter tree.
+        Otherwise returns ``(parameters, grad_norm)``, where ``grad_norm`` is
+        the global gradient norm before clipping.
+
+    Example:
+
+        >>> optimizer = optim.SGD(learning_rate=0.01)
+        >>> # Without gradient clipping
+        >>> updated_params = fsdp_update_parameters(params, grads, optimizer)
+        >>>
+        >>> # With gradient clipping
+        >>> updated_params, grad_norm = fsdp_update_parameters(
+        ...     params, grads, optimizer, max_norm=1.0
+        ... )
     """
     group = group or mx.distributed.init()
     N = group.size()
