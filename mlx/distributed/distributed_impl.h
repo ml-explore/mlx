@@ -30,6 +30,7 @@ class GroupImpl {
   virtual void all_min(const array& input, array& output, Stream stream) = 0;
   virtual void
   sum_scatter(const array& input, array& output, Stream stream) = 0;
+  virtual void all_to_all(const array& input, array& output, Stream stream) = 0;
 };
 
 /* Define the MLX stream that the communication should happen in. */
@@ -55,5 +56,8 @@ void all_min(Group group, const array& input, array& output, Stream stream);
 
 /** Reduce scatter with average operation */
 void sum_scatter(Group group, const array& input, array& output, Stream stream);
+
+/** All-to-all exchange */
+void all_to_all(Group group, const array& input, array& output, Stream stream);
 
 } // namespace mlx::core::distributed::detail

@@ -54,4 +54,9 @@ MLX_API array sum_scatter(
     std::optional<Group> group = std::nullopt,
     StreamOrDevice s = {});
 
+MLX_API array all_to_all(
+    const array& x,
+    std::optional<Group> group = std::nullopt,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::distributed

@@ -41,6 +41,7 @@ class MeshGroup : public GroupImpl {
   void all_max(const array& input, array& output, Stream stream) override;
   void all_min(const array& input, array& output, Stream stream) override;
   void all_gather(const array& input, array& output, Stream stream) override;
+  void all_to_all(const array& input, array& output, Stream stream) override;
   void send(const array& input, int dst, Stream stream) override;
   void recv(array& out, int src, Stream stream) override;
 

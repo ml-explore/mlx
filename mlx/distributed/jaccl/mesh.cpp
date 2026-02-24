@@ -448,4 +448,106 @@ void MeshGroup::all_reduce(
   });
 }
 
+void MeshGroup::all_to_all(const array& input, array& output, Stream stream) {
+  if (size_ != 2) {
+    throw std::runtime_error(
+        "[jaccl] all_to_all currently supports size == 2, got " +
+        std::to_string(size_) + ".");
+  }
+  auto in_ptr = input.data<char>();
+  auto out_ptr = output.data<char>();
+  if (in_ptr == out_ptr) {
+    throw std::runtime_error(
+        "[jaccl] in-place all_to_all is not supported (input/output alias).");
+  }
+  int64_t n_bytes = static_cast<int64_t>(input.nbytes());
+
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(input);
+  encoder.set_output_array(output);
+  encoder.dispatch([in_ptr, out_ptr, n_bytes, this]() {
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE * 2;
+
+    int peer = 1 - rank_;
+    int64_t per_peer_bytes = n_bytes / size_;
+
+    // Local chunk: input[rank] -> output[rank]
+    std::memcpy(
+        out_ptr + rank_ * per_peer_bytes,
+        in_ptr + rank_ * per_peer_bytes,
+        per_peer_bytes);
+
+    if (per_peer_bytes == 0)
+      return;
+
+    char* send_src = const_cast<char*>(in_ptr) + peer * per_peer_bytes;
+    char* recv_dst = out_ptr + peer * per_peer_bytes;
+
+    auto [sz, N] = buffer_size_from_message(per_peer_bytes);
+
+    int in_flight = 0;
+    int64_t read_offset = 0;
+    int64_t write_offset = 0;
+
+    // Prefill: recv-first (deadlock prevention)
+    int buff = 0;
+    while (read_offset < per_peer_bytes && buff < PIPELINE) {
+      recv_from(sz, peer, buff);
+      in_flight++;
+
+      std::copy(
+          send_src + read_offset,
+          send_src +
+              std::min(read_offset + static_cast<int64_t>(N), per_peer_bytes),
+          send_buffer(sz, buff).begin<char>());
+      send_to(sz, peer, buff);
+      in_flight++;
+
+      read_offset += N;
+      buff++;
+    }
+
+    // Single poll loop
+    while (in_flight > 0) {
+      ibv_wc wc[WC_NUM];
+      int n = connections_[peer].poll(WC_NUM, wc);
+
+      for (int i = 0; i < n; i++) {
+        int work_type = wc[i].wr_id >> 16;
+        int b = (wc[i].wr_id >> 8) & 0xff;
+
+        in_flight--;
+
+        if (work_type == SEND_WR) {
+          if (read_offset < per_peer_bytes) {
+            std::copy(
+                send_src + read_offset,
+                send_src +
+                    std::min(
+                        read_offset + static_cast<int64_t>(N), per_peer_bytes),
+                send_buffer(sz, b).begin<char>());
+            send_to(sz, peer, b);
+            in_flight++;
+            read_offset += N;
+          }
+        } else if (work_type == RECV_WR) {
+          std::copy(
+              recv_buffer(sz, b, peer).begin<char>(),
+              recv_buffer(sz, b, peer).begin<char>() +
+                  std::min(
+                      static_cast<int64_t>(N), per_peer_bytes - write_offset),
+              recv_dst + write_offset);
+          write_offset += N;
+
+          if (write_offset + (PIPELINE - 1) * N < per_peer_bytes) {
+            recv_from(sz, peer, b);
+            in_flight++;
+          }
+        }
+      }
+    }
+  });
+}
+
 } // namespace mlx::core::distributed::jaccl

@@ -317,6 +317,144 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
         y2 = smod(x)
         self.assertTrue(mx.allclose(y1, y2, atol=1e-6, rtol=1e-4))
 
+    def _skip_if_all_to_all_unsupported(self, group):
+        try:
+            test = mx.distributed.all_to_all(mx.zeros((group.size(),)), group=group)
+            mx.eval(test)
+        except RuntimeError as e:
+            msg = str(e)
+            if "not supported" in msg or "not yet implemented" in msg or "currently supports size" in msg:
+                self.skipTest(f"all_to_all not supported: {msg}")
+            raise
+
+    def test_all_to_all(self):
+        group = mx.distributed.init()
+        self._skip_if_all_to_all_unsupported(group)
+        world_size = group.size()
+        rank = group.rank()
+
+        # Test multiple dtypes
+        dtypes = [mx.float32, mx.float16, mx.bfloat16, mx.int32]
+
+        for dt in dtypes:
+            # Create a [world_size * 4, 8] tensor with rank-specific values
+            rows = world_size * 4
+            cols = 8
+            x = (mx.ones((rows, cols), dtype=dt) * (rank * 100)) + mx.broadcast_to(
+                mx.arange(rows).reshape(-1, 1), (rows, cols)
+            ).astype(dt)
+
+            y = mx.distributed.all_to_all(x, group=group)
+            mx.eval(y)
+
+            # Output shape should equal input shape
+            self.assertEqual(y.shape, x.shape)
+
+            if world_size == 1:
+                # For single process: all_to_all is identity
+                self.assertTrue(mx.array_equal(y, x).item())
+            else:
+                # For multi-process: verify the all-to-all permutation
+                # Each rank's output chunk i should come from rank i's input chunk rank
+                chunk_size = rows // world_size
+                for src_rank in range(world_size):
+                    out_chunk = y[src_rank * chunk_size : (src_rank + 1) * chunk_size]
+                    # This chunk should be what src_rank sent to us (our rank-th chunk of src_rank's input)
+                    expected_vals = (
+                        mx.ones((chunk_size, cols), dtype=dt) * (src_rank * 100)
+                    ) + mx.broadcast_to(
+                        mx.arange(rank * chunk_size, (rank + 1) * chunk_size).reshape(
+                            -1, 1
+                        ),
+                        (chunk_size, cols),
+                    ).astype(
+                        dt
+                    )
+                    self.assertTrue(mx.array_equal(out_chunk, expected_vals).item())
+
+    def test_all_to_all_sizes(self):
+        group = mx.distributed.init()
+        self._skip_if_all_to_all_unsupported(group)
+        world_size = group.size()
+
+        # Test various input sizes
+        sizes = [
+            (world_size,),  # minimal 1D
+            (world_size * 256, 64),  # medium 2D
+            (world_size * 2, 3, 4, 5),  # multi-dimensional
+        ]
+
+        for sh in sizes:
+            x = mx.ones(sh, dtype=mx.float32)
+            y = mx.distributed.all_to_all(x, group=group)
+            mx.eval(y)
+
+            self.assertEqual(y.shape, x.shape)
+            if world_size == 1:
+                self.assertTrue(mx.array_equal(y, x).item())
+
+    def test_all_to_all_non_contiguous(self):
+        group = mx.distributed.init()
+        self._skip_if_all_to_all_unsupported(group)
+        world_size = group.size()
+
+        # Create a non-contiguous input via transpose then slice
+        base = mx.random.normal((8, world_size * 4))
+        x_non_contig = base.T  # shape (world_size * 4, 8), non-contiguous
+
+        # Create contiguous copy
+        x_contig = mx.array(x_non_contig)
+
+        y1 = mx.distributed.all_to_all(x_non_contig, group=group)
+        y2 = mx.distributed.all_to_all(x_contig, group=group)
+        mx.eval(y1, y2)
+
+        self.assertTrue(mx.allclose(y1, y2).item())
+
+    def test_all_to_all_vjp(self):
+        group = mx.distributed.init()
+        self._skip_if_all_to_all_unsupported(group)
+        world_size = group.size()
+
+        x = mx.random.normal((world_size * 4, 8))
+        mx.eval(x)
+
+        # Test mx.grad
+        grad_fn = mx.grad(lambda x: mx.distributed.all_to_all(x, group=group).sum())
+        g = grad_fn(x)
+        mx.eval(g)
+
+        if world_size == 1:
+            # For single process: gradient of identity + sum is all ones
+            self.assertTrue(mx.allclose(g, mx.ones_like(g)).item())
+
+        # Test mx.value_and_grad
+        val_grad_fn = mx.value_and_grad(
+            lambda x: mx.distributed.all_to_all(x, group=group).sum()
+        )
+        val, g2 = val_grad_fn(x)
+        mx.eval(val, g2)
+
+        self.assertEqual(g2.shape, x.shape)
+
+    def test_all_to_all_shape_validation(self):
+        group = mx.distributed.init()
+        if group.size() == 1:
+            self.skipTest("requires world_size > 1")
+        self._skip_if_all_to_all_unsupported(group)
+        world_size = group.size()
+
+        # Test that scalar input raises an exception
+        scalar = mx.array(1.0)
+        with self.assertRaises(Exception):
+            mx.eval(mx.distributed.all_to_all(scalar, group=group))
+
+        # Test that x.shape[0] % world_size != 0 raises (only meaningful for world_size > 1)
+        if world_size > 1:
+            bad = mx.ones((world_size * 4 + 1, 8))
+            with self.assertRaises(Exception):
+                mx.eval(mx.distributed.all_to_all(bad, group=group))
+
     def test_all_gather(self):
         world = mx.distributed.init()
         dtypes = [

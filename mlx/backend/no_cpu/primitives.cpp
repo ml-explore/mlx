@@ -141,6 +141,7 @@ NO_CPU_MULTI(AllGather)
 NO_CPU_MULTI(Send)
 NO_CPU_MULTI(Recv)
 NO_CPU_MULTI(ReduceScatter)
+NO_CPU_MULTI(AllToAll)
 } // namespace distributed
 
 } // namespace mlx::core
