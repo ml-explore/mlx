@@ -1,7 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
-from functools import wraps
-from typing import Any, Callable, List, Optional
+from functools import reduce, wraps
+from typing import Any, Callable, Optional
 
 import mlx.core as mx
 
@@ -71,117 +71,30 @@ def checkpoint(module: Module, fn: Optional[Callable] = None):
     return wrapped_checkpointed_fn
 
 
-def _group_arrays_by_size(
-    sizes: List[int],
-    itemsize: int,
-    threshold: int,
-) -> List[List[int]]:
-    groups = []
-    current_group = []
-    current_size = 0
-    for i in range(len(sizes)):
-        current_group.append(i)
-        current_size += sizes[i] * itemsize
-        if current_size >= threshold:
-            groups.append(current_group)
-            current_group = []
-            current_size = 0
-    if current_group:
-        groups.append(current_group)
-    return groups
-
-
-def _make_comm_fn(
-    communication_type: Optional[mx.Dtype],
-    op_fn: Callable,
-) -> Callable:
-
-    def comm_fn(x):
-        dt = x.dtype
-        x = x.astype(communication_type) if communication_type is not None else x
-        return op_fn(x).astype(dt)
-
-    return comm_fn
-
-
-def _comm_op(
-    arrays: Any,
-    group: mx.distributed.Group,
-    size_threshold: int,
-    communication_type: Optional[mx.Dtype],
-    comm_fn: Callable,
-    tree_map_fn: Callable,
-    reshape_for_concat: Callable,
-    get_split_sizes: Callable,
-    get_target_shapes: Callable,
-    concat_axis: int = 0,
-    split_axis: Optional[int] = 0,
-) -> Any:
-    N = group.size()
-
-    if N == 1:
-        return arrays
-
-    if size_threshold <= 0:
-        return tree_map(tree_map_fn, arrays)
-
-    flat = tree_flatten(arrays)
-
-    if not flat:
-        return arrays
-
+def _extract_info(flat):
     keys = [k for k, _ in flat]
-    shapes = [v.shape for _, v in flat]
-    sizes = [v.size for _, v in flat]
-    dtypes = [v.dtype for _, v in flat]
+    shapes = [g.shape for _, g in flat]
+    sizes = [g.size for _, g in flat]
+    dtypes = [g.dtype for _, g in flat]
+    return keys, shapes, sizes, dtypes
 
-    if not all(dt == dtypes[0] for dt in dtypes):
-        return _comm_op(
-            arrays,
-            group,
-            0,
-            communication_type,
-            comm_fn,
-            tree_map_fn,
-            reshape_for_concat,
-            get_split_sizes,
-            get_target_shapes,
-            concat_axis,
-            split_axis,
-        )
 
-    split_sizes = get_split_sizes(sizes, N)
-    target_shapes = get_target_shapes(shapes, N)
+def _group_by_size(keys, sizes, itemsize, communication_size):
 
-    itemsize = (
-        communication_type.size if communication_type is not None else dtypes[0].size
-    )
-    groups = _group_arrays_by_size(sizes, itemsize, size_threshold)
-
-    new_flat = []
-    for group in groups:
-        split_indices = [0]
-        for i in group:
-            split_indices.append(split_indices[-1] + split_sizes[i])
-        split_indices = split_indices[1:-1]
-
-        big = mx.concatenate(
-            [reshape_for_concat(flat[i][1], N) for i in group],
-            axis=concat_axis,
-        )
-
-        result = comm_fn(big)
-
-        if split_axis is None:
-            result = result.reshape(-1)
-            parts = mx.split(result, split_indices)
-        else:
-            parts = mx.split(result, split_indices, axis=split_axis)
-
-        for idx_in_group, i in enumerate(group):
-            new_flat.append((keys[i], parts[idx_in_group].reshape(target_shapes[i])))
-
-    return tree_unflatten(new_flat)
+    grad_groups = []
+    grad_group = []
+    grad_group_size = 0
+    for i in range(len(keys)):
+        grad_group.append(i)
+        grad_group_size += sizes[i] * itemsize
+        if grad_group_size >= communication_size:
+            grad_groups.append(grad_group)
+            grad_group = []
+            grad_group_size = 0
+    if grad_group:
+        grad_groups.append(grad_group)
+        grad_group = []
+    return grad_groups
 
 
 def average_gradients(
@@ -215,198 +128,89 @@ def average_gradients(
     group = group or mx.distributed.init()
     N = group.size()
 
-    _average = _make_comm_fn(
-        communication_type,
-        lambda x: mx.distributed.all_sum(x, stream=communication_stream) / N,
-    )
+    if N == 1:
+        return gradients
 
-    return _comm_op(
-        arrays=gradients,
-        group=group,
-        size_threshold=all_reduce_size,
-        communication_type=communication_type,
-        comm_fn=_average,
-        tree_map_fn=_average,
-        reshape_for_concat=lambda v, N: v.reshape(-1),
-        get_split_sizes=lambda sizes, N: sizes,
-        get_target_shapes=lambda shapes, N: shapes,
-    )
+    def _average(x):
+        dt = x.dtype
+        x = x.astype(communication_type) if communication_type is not None else x
+        return mx.distributed.all_sum(x, stream=communication_stream).astype(dt) / N
 
+    if all_reduce_size <= 0:
+        return tree_map(_average, gradients)
 
-def reduce_scatter_gradients(
-    gradients: Any,
-    group: Optional[mx.distributed.Group] = None,
-    reduce_scatter_size: int = 32 * 1024**2,
-    communication_type: Optional[mx.Dtype] = None,
-    communication_stream: Optional[mx.Stream] = None,
-):
-    """Average and scatter the gradients across the distributed processes in the passed group
+    else:
+        flat_grads = tree_flatten(gradients)
+        if len(flat_grads) == 0:
+            return gradients
 
-    Similar to :func:`average_gradients`, but uses ``sum_scatter`` instead of
-    ``all_sum`` so each rank receives a shard of the averaged gradients.
+        # Extract some info for the gradient
+        keys, shapes, sizes, dtypes = _extract_info(flat_grads)
 
-    Each gradient array is sharded along axis 0, so that dimension
-    must be divisible by the world size of the group.
-
-    Notes: Currently supported only on CUDA backend.
-
-    Args:
-        gradients (Any): The Python tree containing the gradients (it should
-            have the same structure across processes)
-        group (Optional[mlx.core.distributed.Group]): The group of processes to
-            average and scatter the gradients. If ``None``, the global group is used.
-            Default: ``None``.
-        reduce_scatter_size (int): Group arrays until their size in bytes exceeds
-            this number. Perform one communication step per group of arrays. If
-            less or equal to 0 array grouping is disabled. Default: ``32MiB``.
-        communication_type (Optional[mlx.core.Dtype]): If provided cast to this
-            type before performing the communication. Typically cast to a
-            smaller float to reduce the communication size. Default: ``None``.
-        communication_stream (Optional[mlx.core.Stream]): The stream to use
-            for the communication. If unspecified the default communication
-            stream is used which can vary by back-end. Default: ``None``.
-
-    Returns:
-        A slice of a tree with the same structure as ``gradients``, where each tensor is
-        replaced by its shard containing the averaged values for that rank.
-    """
-    if not mx.cuda.is_available():
-        raise NotImplementedError("Currently only supported on CUDA backend.")
-
-    group = group or mx.distributed.init()
-    N = group.size()
-
-    _reduce_scatter = _make_comm_fn(
-        communication_type,
-        lambda x: mx.distributed.sum_scatter(
-            x, group=group, stream=communication_stream
+        # We can't group them if they have mixed types
+        if not all(dt == dtypes[0] for dt in dtypes):
+            return average_gradients(gradients, group, 0, communication_type)
+        itemsize = (
+            communication_type.size
+            if communication_type is not None
+            else dtypes[0].size
         )
-        / N,
-    )
 
-    return _comm_op(
-        arrays=gradients,
-        group=group,
-        size_threshold=reduce_scatter_size,
-        communication_type=communication_type,
-        comm_fn=_reduce_scatter,
-        tree_map_fn=lambda g: _reduce_scatter(g.reshape(N, -1)).reshape(
-            g.shape[0] // N, *g.shape[1:]
-        ),
-        reshape_for_concat=lambda v, N: v.reshape(N, -1),
-        get_split_sizes=lambda sizes, N: [s // N for s in sizes],
-        get_target_shapes=lambda shapes, N: [(s[0] // N, *s[1:]) for s in shapes],
-        concat_axis=1,
-        split_axis=None,
-    )
+        # Gather the gradients in groups that are just above or equal to all_reduce_size
+        grad_groups = _group_by_size(keys, sizes, itemsize, all_reduce_size)
 
+        # Concatenate-reduce-split
+        new_flat_grads = []
+        for grad_group in grad_groups:
+            indices = reduce(lambda x, y: x + [x[-1] + sizes[y]], grad_group, [0])
+            big_grad = mx.concatenate(
+                [flat_grads[i][1].reshape(-1) for i in grad_group]
+            )
+            big_grad = _average(big_grad)
+            big_grad = mx.split(big_grad, indices[1:-1])
+            new_flat_grads.extend(
+                (keys[j], big_grad[i].reshape(shapes[j]))
+                for i, j in enumerate(grad_group)
+            )
 
-def all_gather_parameters(
-    parameters_slice: Any,
-    group: Optional[mx.distributed.Group] = None,
-    all_gather_size: int = 32 * 1024**2,
-    communication_type: Optional[mx.Dtype] = None,
-    communication_stream: Optional[mx.Stream] = None,
-):
-    """All-gather parameters across distributed processes.
-
-    Gathers parameter slices from each rank and reconstructs the full Python tree.
-
-    Args:
-        parameters_slice (Any): The Python tree containing the parameter slices
-            (it should have the same structure across processes)
-        group (Optional[mlx.core.distributed.Group]): The group of processes to
-            all-gather the parameters. If ``None``, the global group is used.
-            Default: ``None``.
-        all_gather_size (int): Group arrays until their size in bytes exceeds
-            this number. Perform one communication step per group of arrays. If
-            less or equal to 0 array grouping is disabled. Default: ``32MiB``.
-        communication_type (Optional[mlx.core.Dtype]): If provided cast to this
-            type before performing the communication. Typically cast to a
-            smaller float to reduce the communication size. Default: ``None``.
-        communication_stream (Optional[mlx.core.Stream]): The stream to use
-            for the communication. If unspecified the default communication
-            stream is used which can vary by back-end. Default: ``None``.
-
-    Returns:
-        A tree with the same structure as ``parameters_slice``, where each
-        tensor is reconstructed to the full (unsharded) value.
-    """
-    group = group or mx.distributed.init()
-    N = group.size()
-
-    if not mx.cuda.is_available():
-        raise NotImplementedError("Currently only supported on CUDA backend.")
-
-    _all_gather = _make_comm_fn(
-        communication_type,
-        lambda x: mx.distributed.all_gather(
-            x, group=group, stream=communication_stream
-        ),
-    )
-
-    return _comm_op(
-        arrays=parameters_slice,
-        group=group,
-        size_threshold=all_gather_size,
-        communication_type=communication_type,
-        comm_fn=lambda x: _all_gather(x.reshape(1, -1)),
-        tree_map_fn=lambda p: _all_gather(p.reshape(1, -1)).reshape(
-            p.shape[0] * N, *p.shape[1:]
-        ),
-        reshape_for_concat=lambda v, N: v.reshape(-1),
-        get_split_sizes=lambda sizes, N: sizes,
-        get_target_shapes=lambda shapes, N: [(s[0] * N, *s[1:]) for s in shapes],
-        split_axis=1,
-    )
+        return tree_unflatten(new_flat_grads)
 
 
-def _clip_grad_norm_fsdp(grads_slice, max_norm):
-    """Clip sharded gradients by global norm and return the unclipped norm."""
-    # For fsdp each rank hold a slice of the gradients,
-    # so we need to compute the local norm, then do an all-reduce
-    # to get the global norm, and then compute the clipping factor
-    # and apply it to the local slice.
+def _clip_grads_fsdp(grads_slice, max_norm):
     local_norm_sq = tree_reduce(lambda acc, g: acc + g.square().sum(), grads_slice, 0.0)
     global_norm_sq = mx.distributed.all_sum(local_norm_sq)
     grad_norm = mx.sqrt(global_norm_sq)
     normalizer = mx.minimum(max_norm / (grad_norm + 1e-6), 1.0)
-    clipped = tree_map(lambda g: g * normalizer, grads_slice)
-    return clipped, grad_norm
+    grads_slice = tree_map(lambda g: g * normalizer, grads_slice)
+
+    return grads_slice, grad_norm
 
 
 def fsdp_update_parameters(
-    parameters: Any,
-    gradients: Any,
-    optimizer: Any,
-    group: Optional[mx.distributed.Group] = None,
-    communication_size: int = 32 * 1024**2,
-    communication_type: Optional[mx.Dtype] = None,
-    communication_stream: Optional[mx.Stream] = None,
-    max_norm: Optional[float] = None,
+    parameters,
+    gradients,
+    optimizer,
+    group=None,
+    communication_size=32 * 1024**2,
+    communication_type=None,
+    communication_stream=None,
+    max_norm=None,
 ):
-    """Perform a distributed optimizer step by sharding gradients and optimizer states across ranks.
+    """Perform a full FSDP parameter update: reduce-scatter gradients, run
+    the optimizer on sharded blobs, then all-gather the updated parameters.
 
-    This helper function performs the following steps:
-    1. Reduce-scatter the gradients across ranks so each rank gets a shard of the averaged gradients.
-    2. Optionally clip the sharded gradients by global norm.
-    3. Apply the optimizer update on the local parameter slice using the sharded gradients.
-    4. All-gather the updated parameter slices from all ranks to reconstruct the full parameters tree.
-
-    This is similar to PyTorch's FSDP with `reshard_after_forward=False`.
-
-    Note: Currently supported only on CUDA backend.
+    This keeps gradients and parameters as concatenated blobs between
+    reduce-scatter and all-gather, avoiding tree reconstruction. The blobs
+    are passed to ``optimizer.apply_gradients`` as a dict keyed by group index.
 
     Args:
-        parameters (Any): The Python tree containing the full parameters (it should
-            have the same structure across processes). Each parameter's first
-            dimension must be divisible by the world size.
-        gradients (Any): The Python tree containing the full gradients (it should
-            have the same structure as ``parameters``). Each gradient's first
-            dimension must be divisible by the world size.
-        optimizer: Optimizer with an ``apply_gradients`` method.
-        group (Optional[mlx.core.distributed.Group]): The group of processes for
-            communication. If ``None``, the global group is used.
+        gradients (dict): A Python tree of gradients, most likely computed
+                            via :func:`mlx.nn.value_and_grad`.
+        parameters (dict): A Python tree of parameters, with the same structure
+                            as the gradients tree.
+        optimizer: :obj:`mlx.optimizers.Optimizer` optimizer to use for the update.
+        group (Optional[mlx.core.distributed.Group]): The group of processes to
+            average the gradients. If set to ``None`` the global group is used.
             Default: ``None``.
         communication_size (int): Group arrays until their size in bytes exceeds
             this number. Perform one communication step per group of arrays. If
@@ -417,58 +221,86 @@ def fsdp_update_parameters(
         communication_stream (Optional[mlx.core.Stream]): The stream to use
             for the communication. If unspecified the default communication
             stream is used which can vary by back-end. Default: ``None``.
-        max_norm (Optional[float]): If provided, clip gradients to this
-            maximum global norm before applying the optimizer update.
-            Default: ``None``.
+        max_norm (float, optional): If provided, clip gradients so their global
+            norm does not exceed this value. Default: ``None``.
 
     Returns:
-        If ``max_norm`` is ``None``, returns the updated full-parameter tree.
-        Otherwise returns ``(parameters, grad_norm)``, where ``grad_norm`` is
-        the global gradient norm before clipping.
-
-    Example:
-
-        >>> optimizer = optim.SGD(learning_rate=0.01)
-        >>> # Without gradient clipping
-        >>> updated_params = fsdp_update_parameters(params, grads, optimizer)
-        >>>
-        >>> # With gradient clipping
-        >>> updated_params, grad_norm = fsdp_update_parameters(
-        ...     params, grads, optimizer, max_norm=1.0
-        ... )
+        Updated parameters tree (same structure as input). If ``max_norm`` is
+        provided, returns ``(updated_parameters, grad_norm)`` instead.
     """
     group = group or mx.distributed.init()
+    N = group.size()
     rank = group.rank()
-    world_size = group.size()
 
-    if not mx.cuda.is_available():
-        raise NotImplementedError("Currently only supported on CUDA backend.")
+    if N == 1:
+        if max_norm is not None:
+            gradients, grad_norm = _clip_grads_fsdp(gradients, max_norm)
+            return optimizer.apply_gradients(gradients, parameters), grad_norm
+        return optimizer.apply_gradients(gradients, parameters)
 
-    grads_slice = reduce_scatter_gradients(
-        gradients,
-        group=group,
-        reduce_scatter_size=communication_size,
-        communication_type=communication_type,
-        communication_stream=communication_stream,
-    )
+    flat_grads = tree_flatten(gradients)
+    flat_params = tree_flatten(parameters)
 
+    def _sum_scatter(x):
+        dt = x.dtype
+        x = x.astype(communication_type) if communication_type is not None else x
+        return (
+            mx.distributed.sum_scatter(
+                x, group=group, stream=communication_stream
+            ).astype(dt)
+            / N
+        )
+
+    def _all_gather(x):
+        dt = x.dtype
+        x = x.astype(communication_type) if communication_type is not None else x
+        return mx.distributed.all_gather(
+            x, group=group, stream=communication_stream
+        ).astype(dt)
+
+    keys, shapes, sizes, dtypes = _extract_info(flat_grads)
+    itemsize = dtypes[0].size
+
+    groups = _group_by_size(keys, sizes, itemsize, communication_size)
+
+    # reduce-scatter gradients, shard parameters
+    grad_slices = {}
+    param_slices = {}
+    for group_idx, arr_group in enumerate(groups):
+        big_grad = mx.concatenate(
+            [flat_grads[i][1].reshape(N, -1) for i in arr_group], axis=1
+        )
+        grad_slices[group_idx] = _sum_scatter(big_grad)
+        big_param = mx.concatenate(
+            [flat_params[i][1].reshape(N, -1) for i in arr_group], axis=1
+        )
+        param_slices[group_idx] = big_param[rank]
+
+    # clip gradients if needed
     grad_norm = None
     if max_norm is not None:
-        grads_slice, grad_norm = _clip_grad_norm_fsdp(grads_slice, max_norm)
+        grad_slices, grad_norm = _clip_grads_fsdp(grad_slices, max_norm)
 
-    params_slice = tree_map(
-        lambda x: x.reshape(world_size, x.shape[0] // world_size, *x.shape[1:])[rank],
-        parameters,
-    )
+    # optimizer step
+    updated_blobs = optimizer.apply_gradients(grad_slices, param_slices)
 
-    params_slice = optimizer.apply_gradients(grads_slice, params_slice)
+    # all-gather and reconstruct
+    new_flat = []
+    for group_idx, arr_group in enumerate(groups):
+        big_gathered = _all_gather(updated_blobs[group_idx].reshape(1, -1))
 
-    params = all_gather_parameters(
-        params_slice,
-        group=group,
-        all_gather_size=communication_size,
-        communication_type=communication_type,
-        communication_stream=communication_stream,
-    )
+        split_sizes = [sizes[i] // N for i in arr_group]
+        split_indices = []
+        acc = 0
+        for s in split_sizes:
+            acc += s
+            split_indices.append(acc)
 
-    return (params, grad_norm) if max_norm is not None else params
+        parts = mx.split(big_gathered, split_indices[:-1], axis=1)
+        for idx_in_group, i in enumerate(arr_group):
+            new_flat.append((keys[i], parts[idx_in_group].reshape(shapes[i])))
+
+    result = tree_unflatten(new_flat)
+    if max_norm is not None:
+        return result, grad_norm
+    return result

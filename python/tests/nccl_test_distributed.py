@@ -264,11 +264,13 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         )
         params = {"w": mx.ones((N * 4,))}
         grads = {"w": mx.ones((N * 4,)) * 0.5}
-        optimizer = optim.SGD(learning_rate=0.1)
 
-        updated_params_fsdp = fsdp_update_parameters(params, grads, optimizer)
+        optimizer_fsdp = optim.SGD(learning_rate=0.1)
+        updated_params_fsdp = fsdp_update_parameters(params, grads, optimizer_fsdp)
+
+        optimizer_ddp = optim.SGD(learning_rate=0.1)
         avg_grads = average_gradients(grads)
-        updated_params_ddp = optimizer.apply_gradients(avg_grads, params)
+        updated_params_ddp = optimizer_ddp.apply_gradients(avg_grads, params)
         mx.eval(updated_params_ddp, updated_params_fsdp)
 
         self.assertTrue(
