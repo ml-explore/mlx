@@ -79,4 +79,3 @@ uv.lock
 .cache/
 # vim
 *.swp
-tmp
