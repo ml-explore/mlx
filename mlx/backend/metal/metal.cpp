@@ -8,15 +8,15 @@
 
 namespace mlx::core::metal {
 
-// Global shutdown flag to prevent new GPU operations during app termination
-static std::atomic<bool> shutting_down{false};
+// Global flag to prevent new GPU operations, for example at app termination.
+static std::atomic<bool> enabled{true};
 
 bool is_available() {
-  return !shutting_down.load(std::memory_order_acquire);
+  return enabled.load(std::memory_order_acquire);
 }
 
-void begin_shutdown() {
-  shutting_down.store(true, std::memory_order_release);
+void set_enabled(bool enabled) {
+  shutting_down.store(enabled, std::memory_order_release);
 }
 
 void start_capture(std::string path, NS::Object* object) {
