@@ -805,8 +805,9 @@ void Device::set_residency_set(const MTL::ResidencySet* residency_set) {
 }
 
 Device& device(mlx::core::Device) {
-  static Device metal_device;
-  return metal_device;
+  // leak device
+  static Device* metal_device = new Device();
+  return *metal_device;
 }
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {

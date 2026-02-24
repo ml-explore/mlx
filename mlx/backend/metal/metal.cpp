@@ -1,4 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <atomic>
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
@@ -7,8 +8,15 @@
 
 namespace mlx::core::metal {
 
+// Global shutdown flag to prevent new GPU operations during app termination
+static std::atomic<bool> shutting_down{false};
+
 bool is_available() {
-  return true;
+  return !shutting_down.load(std::memory_order_acquire);
+}
+
+void begin_shutdown() {
+  shutting_down.store(true, std::memory_order_release);
 }
 
 void start_capture(std::string path, NS::Object* object) {
