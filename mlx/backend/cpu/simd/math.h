@@ -190,4 +190,58 @@ Simd<T, N> erfinv(Simd<T, N> a_) {
   }
 }
 
+/**
+ * Modified Bessel function of the first kind, order zero: I0(x).
+ * Cephes polynomial approximation in two domains:
+ *   |x| <= 3.75  →  polynomial in (x/3.75)^2
+ *   |x|  > 3.75  →  exp(|x|) / sqrt(|x|) * polynomial in (3.75/|x|)
+ */
+template <typename T, int N>
+Simd<T, N> i0(Simd<T, N> x_) {
+  Simd<float, N> x = x_;
+  Simd<float, N> y = abs(x);
+
+  // Branch 1: y <= 3.75
+  auto small = [](Simd<float, N> y) {
+    Simd<float, N> t = y / 3.75f;
+    t = t * t;
+    Simd<float, N> p(1.0f);
+    p = fma(t, Simd<float, N>(3.5156229f), p);
+    // Horner evaluation of the inner polynomial
+    Simd<float, N> r(0.0045813f);
+    r = fma(r, t, Simd<float, N>(0.0360768f));
+    r = fma(r, t, Simd<float, N>(0.2659732f));
+    r = fma(r, t, Simd<float, N>(1.2067492f));
+    r = fma(r, t, Simd<float, N>(3.0899424f));
+    r = fma(r, t, Simd<float, N>(3.5156229f));
+    r = fma(r, t, Simd<float, N>(1.0f));
+    return r;
+  };
+
+  // Branch 2: y > 3.75
+  auto large = [](Simd<float, N> y) {
+    Simd<float, N> t = Simd<float, N>(3.75f) / y;
+    Simd<float, N> p(0.00392377f);
+    p = fma(p, t, Simd<float, N>(-0.01647633f));
+    p = fma(p, t, Simd<float, N>(0.02635537f));
+    p = fma(p, t, Simd<float, N>(-0.02057706f));
+    p = fma(p, t, Simd<float, N>(0.00916281f));
+    p = fma(p, t, Simd<float, N>(-0.00157565f));
+    p = fma(p, t, Simd<float, N>(0.00225319f));
+    p = fma(p, t, Simd<float, N>(0.01328592f));
+    p = fma(p, t, Simd<float, N>(0.39894228f));
+    return (exp(y) / sqrt(y)) * p;
+  };
+
+  if constexpr (N == 1) {
+    if ((y <= 3.75f).value) {
+      return Simd<T, N>(small(y));
+    } else {
+      return Simd<T, N>(large(y));
+    }
+  } else {
+    return Simd<T, N>(select(y <= 3.75f, small(y), large(y)));
+  }
+}
+
 } // namespace mlx::core::simd

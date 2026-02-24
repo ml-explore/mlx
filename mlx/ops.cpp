@@ -2969,6 +2969,35 @@ array erfinv(const array& a, StreamOrDevice s /* = {} */) {
       {astype(a, dtype, s)});
 }
 
+array i0(const array& a, StreamOrDevice s /* = {} */) {
+  auto dtype = at_least_float(a.dtype());
+  return array(
+      a.shape(),
+      dtype,
+      std::make_shared<I0>(to_stream(s)),
+      {astype(a, dtype, s)});
+}
+
+array kaiser(int M, float beta, StreamOrDevice s /* = {} */) {
+  if (M < 1) {
+    return array({});
+  }
+  if (M == 1) {
+    return ones({1}, float32, s);
+  }
+
+  // w(n) = I0(beta * sqrt(1 - ((2n/(M-1)) - 1)^2)) / I0(beta)
+  auto n = arange(0, M, float32, s);
+  auto alpha = array((M - 1) / 2.0f, float32);
+  auto x = divide(subtract(n, alpha, s), alpha, s); // (2n/(M-1)) - 1
+  auto arg = multiply(                              // beta * sqrt(1 - x^2)
+      array(beta, float32),
+      sqrt(subtract(array(1.0f, float32), square(x, s), s), s),
+      s);
+  auto denom = i0(array(beta, float32), s);
+  return divide(i0(arg, s), denom, s);
+}
+
 array stop_gradient(const array& a, StreamOrDevice s /* = {} */) {
   return array(
       a.shape(), a.dtype(), std::make_shared<StopGradient>(to_stream(s)), {a});
