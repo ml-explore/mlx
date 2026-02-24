@@ -53,6 +53,7 @@ cuda_skip = {
     "TestQuantized.test_qmv_small_non_multiples",
     "TestQuantized.test_small_matrix",
     "TestQuantized.test_throw",
+    "TestQuantized.test_1bit_quantize_dequantize",
     "TestQuantized.test_vjp_scales_biases",
     "TestExportImport.test_export_quantized_model",
     # Masked scatter

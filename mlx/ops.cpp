@@ -4540,10 +4540,10 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
     throw std::invalid_argument(msg.str());
   }
 
-  if (bits < 2 || bits > 8 || bits == 7) {
+  if (bits < 1 || bits > 8 || bits == 7) {
     std::ostringstream msg;
     msg << "[quantize] The requested number of bits " << bits
-        << " is not supported. The supported bits are 2, 3, 4, 5, 6 and 8.";
+        << " is not supported. The supported bits are 1, 2, 3, 4, 5, 6 and 8.";
     throw std::invalid_argument(msg.str());
   }
 
@@ -4564,14 +4564,22 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
     w_max = astype(w_max, float32, s);
     w_min = astype(w_min, float32, s);
 
-    array mask = greater(abs(w_min, s), abs(w_max, s), s);
-    array scales =
-        maximum(divide(subtract(w_max, w_min, s), n_bins, s), eps, s);
-    scales = where(mask, scales, negative(scales, s), s);
-    array edge = where(mask, w_min, w_max, s);
-    array q0 = round(divide(edge, scales, s), s);
-    scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales);
-    array biases = where(equal(q0, zero, s), zero, edge, s);
+    array scales(0, float32);
+    array biases(0, float32);
+
+    if (bits == 1) {
+      // Affine 1-bit: bit 0 -> w_min, bit 1 -> w_max
+      scales = maximum(subtract(w_max, w_min, s), eps, s);
+      biases = w_min;
+    } else {
+      array mask = greater(abs(w_min, s), abs(w_max, s), s);
+      scales = maximum(divide(subtract(w_max, w_min, s), n_bins, s), eps, s);
+      scales = where(mask, scales, negative(scales, s), s);
+      array edge = where(mask, w_min, w_max, s);
+      array q0 = round(divide(edge, scales, s), s);
+      scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales);
+      biases = where(equal(q0, zero, s), zero, edge, s);
+    }
 
     packed_w = pack_and_quantize(packed_w, scales, biases, bits, s);
 
