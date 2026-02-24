@@ -257,6 +257,19 @@ MTL::ComputePipelineState* get_steel_conv_kernel(
   return d.get_kernel(kernel_name);
 }
 
+MTL::ComputePipelineState* get_steel_conv_3d_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    int,
+    int,
+    int,
+    int,
+    int,
+    bool) {
+  return d.get_kernel(kernel_name);
+}
+
 MTL::ComputePipelineState* get_steel_conv_general_kernel(
     metal::Device& d,
     const std::string& kernel_name,
