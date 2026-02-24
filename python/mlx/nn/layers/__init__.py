@@ -26,6 +26,7 @@ from mlx.nn.layers.activations import (
     Softsign,
     Step,
     Tanh,
+    XieLU,
     celu,
     elu,
     gelu,

@@ -62,6 +62,7 @@ Layers
    ShardedToAllLinear
    Sigmoid
    SiLU
+   XieLU
    SinusoidalPositionalEncoding
    Softmin
    Softshrink
