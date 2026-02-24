@@ -2743,6 +2743,85 @@ TEST_CASE("test pad") {
   CHECK(array_equal(padded_x, expected).item<bool>());
 }
 
+TEST_CASE("test pad reflect") {
+  auto x1d = array({1.0f, 2.0f, 3.0f});
+  auto padded_1d = pad(x1d, {{2, 2}}, array(0), "reflect");
+  auto expected_1d = array({3.0f, 2.0f, 1.0f, 2.0f, 3.0f, 2.0f, 1.0f});
+  CHECK(array_equal(padded_1d, expected_1d).item<bool>());
+
+  auto x2d =
+      array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f}, {3, 3});
+  auto padded_2d = pad(x2d, {{1, 1}, {2, 2}}, array(0), "reflect");
+  auto expected_2d = array(
+      {6.0f, 5.0f, 4.0f, 5.0f, 6.0f, 5.0f, 4.0f, 3.0f, 2.0f, 1.0f, 2.0f, 3.0f,
+       2.0f, 1.0f, 6.0f, 5.0f, 4.0f, 5.0f, 6.0f, 5.0f, 4.0f, 9.0f, 8.0f, 7.0f,
+       8.0f, 9.0f, 8.0f, 7.0f, 6.0f, 5.0f, 4.0f, 5.0f, 6.0f, 5.0f, 4.0f},
+      {5, 7});
+  CHECK(array_equal(padded_2d, expected_2d).item<bool>());
+
+  auto x_small = array({1.0f, 2.0f, 3.0f});
+  auto padded_large = pad(x_small, {{5, 5}}, array(0), "reflect");
+  auto expected_large = array(
+      {2.0f,
+       1.0f,
+       2.0f,
+       3.0f,
+       2.0f,
+       1.0f,
+       2.0f,
+       3.0f,
+       2.0f,
+       1.0f,
+       2.0f,
+       3.0f,
+       2.0f});
+  CHECK(array_equal(padded_large, expected_large).item<bool>());
+
+  auto x_min = array({1.0f, 2.0f});
+  auto padded_min = pad(x_min, {{1, 1}}, array(0), "reflect");
+  auto expected_min = array({2.0f, 1.0f, 2.0f, 1.0f});
+  CHECK(array_equal(padded_min, expected_min).item<bool>());
+
+  auto x_asym = array({1.0f, 2.0f, 3.0f, 4.0f}, {2, 2});
+  auto padded_asym = pad(x_asym, {{0, 2}, {1, 0}}, array(0), "reflect");
+  CHECK_EQ(padded_asym.shape(), Shape{4, 3});
+}
+
+TEST_CASE("test pad symmetric") {
+  auto x1d = array({1.0f, 2.0f, 3.0f});
+  auto padded_1d = pad(x1d, {{2, 2}}, array(0), "symmetric");
+  auto expected_1d = array({2.0f, 1.0f, 1.0f, 2.0f, 3.0f, 3.0f, 2.0f});
+  CHECK(array_equal(padded_1d, expected_1d).item<bool>());
+
+  auto x2d =
+      array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f}, {3, 3});
+  auto padded_2d = pad(x2d, {{1, 1}, {2, 2}}, array(0), "symmetric");
+  auto expected_2d = array(
+      {5.0f, 4.0f, 4.0f, 5.0f, 6.0f, 6.0f, 5.0f, 2.0f, 1.0f, 1.0f, 2.0f, 3.0f,
+       3.0f, 2.0f, 2.0f, 1.0f, 1.0f, 2.0f, 3.0f, 3.0f, 2.0f, 5.0f, 4.0f, 4.0f,
+       5.0f, 6.0f, 6.0f, 5.0f, 8.0f, 7.0f, 7.0f, 8.0f, 9.0f, 9.0f, 8.0f},
+      {5, 7});
+  CHECK(array_equal(padded_2d, expected_2d).item<bool>());
+
+  auto x_small = array({1.0f, 2.0f, 3.0f});
+  auto padded_large = pad(x_small, {{5, 5}}, array(0), "symmetric");
+  auto expected_large = array(
+      {3.0f,
+       2.0f,
+       1.0f,
+       1.0f,
+       2.0f,
+       3.0f,
+       3.0f,
+       2.0f,
+       1.0f,
+       1.0f,
+       2.0f,
+       3.0f,
+       3.0f});
+  CHECK(array_equal(padded_large, expected_large).item<bool>());
+}
+
 TEST_CASE("test power") {
   CHECK_EQ(power(array(1), array(2)).item<int>(), 1);
   CHECK_EQ((power(array(-1), array(2))).item<int>(), 1);

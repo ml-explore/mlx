@@ -1234,6 +1234,194 @@ array edge_pad(
   return padded;
 }
 
+array reflect_pad(
+    const array& a,
+    const std::vector<int>& axes,
+    const Shape& low_pad_size,
+    const Shape& high_pad_size,
+    const Shape& out_shape,
+    StreamOrDevice s /* = {}*/) {
+  array out = zeros(out_shape, a.dtype(), s);
+  auto stops = a.shape();
+  for (int i = 0; i < stops.size(); i++) {
+    stops[i] += low_pad_size[i];
+  }
+  array padded = slice_update(out, a, low_pad_size, stops, s);
+
+  for (int axis = 0; axis < a.ndim(); axis++) {
+    if (low_pad_size[axis] > 0) {
+      int n = a.shape(axis);
+      Shape starts(a.ndim(), 0);
+      Shape stops = padded.shape();
+      Shape strides(a.ndim(), 1);
+      strides[axis] = -1;
+
+      starts[axis] = low_pad_size[axis] + 1;
+      stops[axis] = low_pad_size[axis] + n;
+      array forward = slice(padded, starts, stops, s);
+
+      starts[axis] = low_pad_size[axis] + n - 2;
+      stops[axis] = low_pad_size[axis] - 1;
+      array backward = slice(padded, starts, stops, strides, s);
+
+      // build bounce pattern cycle
+      array cycle = concatenate({forward, backward}, axis, s);
+      int cycle_len = cycle.shape(axis);
+      int reps_needed = (low_pad_size[axis] + cycle_len - 1) / cycle_len + 1;
+      std::vector<int> reps(a.ndim(), 1);
+      reps[axis] = reps_needed;
+      array tiled = tile(cycle, reps, s);
+
+      Shape slice_starts(a.ndim(), 0);
+      Shape slice_stops = tiled.shape();
+      slice_stops[axis] = low_pad_size[axis];
+      array padding = slice(tiled, slice_starts, slice_stops, s);
+
+      // reverse padding for left side placement
+      Shape rev_strides(a.ndim(), 1);
+      rev_strides[axis] = -1;
+      Shape rev_starts(a.ndim(), 0);
+      Shape rev_stops = padding.shape();
+      rev_starts[axis] = padding.shape(axis) - 1;
+      rev_stops[axis] = -padding.shape(axis) - 1;
+      padding = slice(padding, rev_starts, rev_stops, rev_strides, s);
+
+      starts[axis] = 0;
+      stops[axis] = low_pad_size[axis];
+      padded = slice_update(padded, padding, starts, stops, s);
+    }
+
+    if (high_pad_size[axis] > 0) {
+      int n = a.shape(axis);
+      Shape starts(a.ndim(), 0);
+      Shape stops = padded.shape();
+      Shape strides(a.ndim(), 1);
+      strides[axis] = -1;
+      int orig_end = low_pad_size[axis] + n;
+
+      starts[axis] = orig_end - n + 1;
+      stops[axis] = orig_end;
+      array forward = slice(padded, starts, stops, s);
+
+      starts[axis] = orig_end - 2;
+      stops[axis] = -(padded.shape(axis) + 1);
+      array backward = slice(padded, starts, stops, strides, s);
+
+      // build bounce pattern cycle
+      array cycle = concatenate({backward, forward}, axis, s);
+      int cycle_len = cycle.shape(axis);
+      int reps_needed = (high_pad_size[axis] + cycle_len - 1) / cycle_len + 1;
+      std::vector<int> reps(a.ndim(), 1);
+      reps[axis] = reps_needed;
+      array tiled = tile(cycle, reps, s);
+
+      Shape slice_starts(a.ndim(), 0);
+      Shape slice_stops = tiled.shape();
+      slice_stops[axis] = high_pad_size[axis];
+      array padding = slice(tiled, slice_starts, slice_stops, s);
+
+      starts[axis] = low_pad_size[axis] + n;
+      stops[axis] = padded.shape(axis);
+      padded = slice_update(padded, padding, starts, stops, s);
+    }
+  }
+  return padded;
+}
+
+array symmetric_pad(
+    const array& a,
+    const std::vector<int>& axes,
+    const Shape& low_pad_size,
+    const Shape& high_pad_size,
+    const Shape& out_shape,
+    StreamOrDevice s /* = {}*/) {
+  array out = zeros(out_shape, a.dtype(), s);
+  auto stops = a.shape();
+  for (int i = 0; i < stops.size(); i++) {
+    stops[i] += low_pad_size[i];
+  }
+  array padded = slice_update(out, a, low_pad_size, stops, s);
+
+  for (int axis = 0; axis < a.ndim(); axis++) {
+    if (low_pad_size[axis] > 0) {
+      int n = a.shape(axis);
+      Shape starts(a.ndim(), 0);
+      Shape stops = padded.shape();
+      Shape strides(a.ndim(), 1);
+      strides[axis] = -1;
+
+      starts[axis] = low_pad_size[axis];
+      stops[axis] = low_pad_size[axis] + n;
+      array forward = slice(padded, starts, stops, s);
+
+      starts[axis] = low_pad_size[axis] + n - 1;
+      stops[axis] = (padded.shape(axis) + 1);
+      array backward = slice(padded, starts, stops, strides, s);
+
+      // build bounce pattern cycle
+      array cycle = concatenate({forward, backward}, axis, s);
+      int cycle_len = cycle.shape(axis);
+      int reps_needed = (low_pad_size[axis] + cycle_len - 1) / cycle_len + 1;
+      std::vector<int> reps(a.ndim(), 1);
+      reps[axis] = reps_needed;
+      array tiled = tile(cycle, reps, s);
+
+      Shape slice_starts(a.ndim(), 0);
+      Shape slice_stops = tiled.shape();
+      slice_stops[axis] = low_pad_size[axis];
+      array padding = slice(tiled, slice_starts, slice_stops, s);
+
+      // reverse padding for left side placement
+      Shape rev_strides(a.ndim(), 1);
+      rev_strides[axis] = -1;
+      Shape rev_starts(a.ndim(), 0);
+      Shape rev_stops = padding.shape();
+      rev_starts[axis] = padding.shape(axis) - 1;
+      rev_stops[axis] = -padding.shape(axis) - 1;
+      padding = slice(padding, rev_starts, rev_stops, rev_strides, s);
+
+      starts[axis] = 0;
+      stops[axis] = low_pad_size[axis];
+      padded = slice_update(padded, padding, starts, stops, s);
+    }
+
+    if (high_pad_size[axis] > 0) {
+      int n = a.shape(axis);
+      Shape starts(a.ndim(), 0);
+      Shape stops = padded.shape();
+      Shape strides(a.ndim(), 1);
+      strides[axis] = -1;
+      int orig_end = low_pad_size[axis] + n;
+
+      starts[axis] = orig_end - n;
+      stops[axis] = orig_end;
+      array forward = slice(padded, starts, stops, s);
+
+      starts[axis] = orig_end - 1;
+      stops[axis] = -(padded.shape(axis) + 1);
+      array backward = slice(padded, starts, stops, strides, s);
+
+      // build bounce pattern cycle
+      array cycle = concatenate({backward, forward}, axis, s);
+      int cycle_len = cycle.shape(axis);
+      int reps_needed = (high_pad_size[axis] + cycle_len - 1) / cycle_len + 1;
+      std::vector<int> reps(a.ndim(), 1);
+      reps[axis] = reps_needed;
+      array tiled = tile(cycle, reps, s);
+
+      Shape slice_starts(a.ndim(), 0);
+      Shape slice_stops = tiled.shape();
+      slice_stops[axis] = high_pad_size[axis];
+      array padding = slice(tiled, slice_starts, slice_stops, s);
+
+      starts[axis] = low_pad_size[axis] + n;
+      stops[axis] = padded.shape(axis);
+      padded = slice_update(padded, padding, starts, stops, s);
+    }
+  }
+  return padded;
+}
+
 /** Pad an array with a constant value */
 array pad(
     const array& a,
@@ -1281,6 +1469,10 @@ array pad(
         {a, astype(pad_value, a.dtype(), s)});
   } else if (mode == "edge") {
     return edge_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
+  } else if (mode == "reflect") {
+    return reflect_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
+  } else if (mode == "symmetric") {
+    return symmetric_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
   } else {
     std::ostringstream msg;
     msg << "Invalid padding mode (" << mode << ") passed to pad";
