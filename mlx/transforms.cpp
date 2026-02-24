@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <deque>
 #include <future>
+#include <mutex>
 #include <numeric>
 #include <set>
 #include <sstream>
@@ -36,6 +37,42 @@ class Synchronizer : public Primitive {
   DEFINE_NAME(Synchronize);
 };
 
+class Interrupt {
+ private:
+  static std::mutex mutex_;
+  static bool eval_running_;
+  static bool interrupt_;
+
+ public:
+  Interrupt() {
+    std::unique_lock lk(mutex_);
+    eval_running_ = true;
+  }
+
+  static bool interrupt() {
+    std::unique_lock lk(mutex_);
+    if (eval_running_) {
+      interrupt_ = true;
+      return true;
+    }
+    return false;
+  }
+
+  static bool interrupted() {
+    std::unique_lock lk(mutex_);
+    return interrupt_;
+  }
+
+  ~Interrupt() {
+    std::unique_lock lk(mutex_);
+    eval_running_ = false;
+    interrupt_ = false;
+  }
+};
+std::mutex Interrupt::mutex_{};
+bool Interrupt::eval_running_ = false;
+bool Interrupt::interrupt_ = false;
+
 // Initialize the static tracing members from transforms_impl.h
 //
 // These are used to implement the in_tracing() function the returns true if we
@@ -50,6 +87,8 @@ int detail::InTracing::grad_counter{0};
 int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
+  Interrupt interrupt;
+
   std::deque<array> tape;
 
   // Make an effort to choose a good output stream
@@ -277,6 +316,11 @@ array eval_impl(std::vector<array> outputs, bool async) {
     if (!arr.is_tracer()) {
       arr.detach();
     }
+
+    if (Interrupt::interrupted()) {
+      synchronizer.attach_event(Event{stream});
+      break;
+    }
   }
 
   // Signal the event in its stream
@@ -291,6 +335,10 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   return synchronizer;
+}
+
+bool interrupt_eval() {
+  return Interrupt::interrupt();
 }
 
 void async_eval(std::vector<array> outputs) {
