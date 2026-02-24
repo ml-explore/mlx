@@ -1,7 +1,6 @@
 // Copyright © 2026 Apple Inc.
 
 #include "mlx/backend/cuda/cutlass_utils.cuh"
-#include "mlx/backend/cuda/quantized/qmm.h"
 #include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
@@ -13,10 +12,20 @@
 #include <cutlass/gemm/device/gemm_universal_adapter.h>
 #include <cutlass/gemm/kernel/gemm_universal.hpp>
 
+#if defined(MLX_CUDA_SM90A_ENABLED)
+
 // We can't put kernel code in mlx::core due to name conflicts of "Shape".
 namespace cutlass_gemm {
 
-template <typename GroupSize, typename Element, typename Quant, typename F>
+using namespace cute;
+
+template <
+    typename TileShapeMN = Shape<_128, _16>,
+    typename ClusterShape = Shape<_1, _1, _1>,
+    typename Element,
+    typename Quant,
+    typename GroupSize,
+    typename F>
 void qmm_sm90(
     const Element* A,
     const Quant* B,
@@ -29,9 +38,6 @@ void qmm_sm90(
     int64_t l,
     GroupSize group_size,
     F&& launch_kernel) {
-#if defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
-  using namespace cute;
-
   constexpr int kAlignmentA = 128 / sizeof_bits<Element>::value;
   constexpr int kAlignmentB = 128 / sizeof_bits<Quant>::value;
   constexpr int kTileShapeK =
@@ -40,8 +46,7 @@ void qmm_sm90(
 
   using Arch = cutlass::arch::Sm90;
   using Accumulator = float;
-  using TileShape = Shape<_128, _16, Int<kTileShapeK>>;
-  using ClusterShape = Shape<_1, _1, _1>;
+  using TileShape = decltype(append(TileShapeMN{}, Int<kTileShapeK>{}));
 
   using Epilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
       Arch,
@@ -66,7 +71,7 @@ void qmm_sm90(
       Arch,
       cutlass::arch::OpClassTensorOp,
       // ElementA:
-      cute::tuple<Quant, Element, Element>,
+      tuple<Quant, Element, Element>,
       cutlass::layout::RowMajor,
       kAlignmentB,
       // ElementB:
@@ -101,16 +106,14 @@ void qmm_sm90(
 
   auto* kernel = &cutlass::device_kernel<GemmKernel>;
   void* kernel_params[] = {const_cast<Gemm::Params*>(&gemm.params())};
+  auto cluster = ClusterShape{};
   launch_kernel(
       reinterpret_cast<void*>(kernel),
       gemm.get_grid_shape(gemm.params()),
       GemmKernel::get_block_shape(),
+      {get<0>(cluster), get<1>(cluster), get<2>(cluster)},
       GemmKernel::SharedStorageSize,
       kernel_params);
-#else
-  throw std::runtime_error(
-      "[quantized_matmul] Hopper-only kernel is not available.");
-#endif // defined(CUTLASS_ARCH_MMA_SM90_SUPPORTED)
 }
 
 } // namespace cutlass_gemm
@@ -167,28 +170,28 @@ inline void dispatch_groups(int group_size, const char* tag, F&& f) {
   }
 }
 
-void qmm_sm90(
-    const array& x_,
+template <typename TileShapeMN, typename ClusterShape>
+void qmm_impl_sm90(
+    const array& x,
     const array& w,
     const array& scales_,
-    const std::optional<array>& biases_,
+    const array& biases_,
     array& out,
     int bits,
     int group_size,
-    QuantizationMode mode,
     cu::CommandEncoder& encoder,
     Stream s) {
-  if ((mode != QuantizationMode::Affine) || !biases_) {
-    throw std::runtime_error("qmm_sm90 NYI");
-  }
-
   const char* tag = "[quantized_matmul]";
   int m = out.shape(-2);
   int n = out.shape(-1);
-  int k = x_.shape(-1);
+  int k = x.shape(-1);
   int l = out.size() / (m * n);
   if (k % 64 != 0) {
     throw std::runtime_error(fmt::format("{} K must be multiples of 64.", tag));
+  }
+  if (!x.flags().row_contiguous) {
+    throw std::runtime_error(
+        fmt::format("{} Activations must be row contiguous.", tag));
   }
   if (!w.flags().row_contiguous) {
     throw std::runtime_error(
@@ -198,16 +201,14 @@ void qmm_sm90(
     throw std::runtime_error(
         fmt::format("{} Scales must be row contiguous.", tag));
   }
-  if (!biases_->flags().row_contiguous) {
+  if (!biases_.flags().row_contiguous) {
     throw std::runtime_error(
         fmt::format("{} Biases must be row contiguous.", tag));
   }
 
-  // TODO: Support column-major x.
-  array x = ensure_row_contiguous(x_, encoder, s);
   // FIXME: Copy happens for every call.
   array scales = transpose_last_2_dims(scales_, encoder, s);
-  array biases = transpose_last_2_dims(*biases_, encoder, s);
+  array biases = transpose_last_2_dims(biases_, encoder, s);
 
   dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
     dispatch_quant_types(bits, tag, [&]<typename Quant>() {
@@ -231,10 +232,16 @@ void qmm_sm90(
             [&](auto* kernel,
                 dim3 num_blocks,
                 dim3 block_dims,
+                dim3 cluster_shape,
                 uint32_t smem_bytes,
                 void** args) {
-              encoder.add_kernel_node(
-                  kernel, num_blocks, block_dims, smem_bytes, args);
+              encoder.add_kernel_node_raw(
+                  kernel,
+                  num_blocks,
+                  block_dims,
+                  cluster_shape,
+                  smem_bytes,
+                  args);
             });
       });
     });
@@ -242,3 +249,23 @@ void qmm_sm90(
 }
 
 } // namespace mlx::core
+
+#define QMM_SM90_GPU(TileShapeMN, ClusterShape)           \
+  namespace mlx::core {                                   \
+  template void qmm_impl_sm90<TileShapeMN, ClusterShape>( \
+      const array& x,                                     \
+      const array& w,                                     \
+      const array& scales,                                \
+      const array& biases,                                \
+      array& out,                                         \
+      int bits,                                           \
+      int group_size,                                     \
+      cu::CommandEncoder& encoder,                        \
+      Stream s);                                          \
+  }
+
+#else
+
+#define QMM_SM90_GPU(TileShapeMN, ClusterShape)
+
+#endif // defined(MLX_CUDA_SM90A_ENABLED)

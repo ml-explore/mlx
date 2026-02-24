@@ -2,7 +2,7 @@
 
 #include "mlx/backend/cuda/quantized/quantized.h"
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/quantized/qmm.h"
+#include "mlx/backend/cuda/quantized/qmm/qmm.h"
 #include "mlx/backend/cuda/quantized/qmv.h"
 #include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/fast_primitives.h"
@@ -38,8 +38,10 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  if (transpose_ && encoder.device().compute_capability_major() == 9) {
-    qmm_sm90(x, w, scales, biases, out, bits_, group_size_, mode_, encoder, s);
+  if (transpose_ && mode_ == QuantizationMode::Affine &&
+      encoder.device().compute_capability_major() == 9) {
+    assert(biases);
+    qmm_sm90(x, w, scales, *biases, out, bits_, group_size_, encoder, s);
     return;
   }
 
