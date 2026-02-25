@@ -85,6 +85,5 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         self.assertTrue(mx.all(y == expected))
 
 
-
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
