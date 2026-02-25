@@ -278,6 +278,7 @@ struct NCCLComm {
 
   ~NCCLComm() {
     if (comm != nullptr) {
+      ncclCommFinalize(comm);
       ncclCommDestroy(comm);
     }
   }
