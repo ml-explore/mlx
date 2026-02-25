@@ -56,6 +56,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/fp_quantize.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm_sm90.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm.cpp
@@ -115,6 +116,10 @@ target_compile_options(mlx
 # the constexpr version of isnan is host only.
 target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>")
+
+# Required for generating optimized CUTLASS code.
+target_compile_options(
+  mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-strict-aliasing>")
 
 # Suppress nvcc warnings on C++ headers.
 target_compile_options(

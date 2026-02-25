@@ -7,15 +7,16 @@
 namespace mlx::core::cu {
 
 void fp_qmv(
+    const array& x,
     const array& w,
     const array& scales,
-    const array& vec,
     array& out,
     int bits,
     int group_size,
     int M,
     int N,
     int K,
-    CommandEncoder& encoder);
+    CommandEncoder& encoder,
+    Stream s);
 
 } // namespace mlx::core::cu
