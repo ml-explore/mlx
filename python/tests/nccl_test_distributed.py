@@ -47,6 +47,44 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
                 maxrelerror = maxrelerror.max()
                 self.assertLessEqual(maxrelerror, rtol)
 
+    def test_groups(self):
+        world = mx.distributed.init()
+        self.assertEqual(world.size(), 8)
+        self.assertTrue(0 <= world.rank() < 8)
+
+        world2 = mx.distributed.init()
+        self.assertEqual(world.size(), world2.size())
+        self.assertEqual(world.rank(), world2.rank())
+
+        sub = world.split(world.rank() % 2)
+        self.assertEqual(sub.size(), 4)
+        self.assertEqual(sub.rank(), world.rank() // 2)
+
+        sub = world.split(world.rank() // 2)
+        self.assertEqual(sub.size(), 2)
+
+    def test_split(self):
+        world = mx.distributed.init()
+
+        sub = world.split(world.rank() % 2)
+        self.assertEqual(sub.size(), world.size() // 2)
+        self.assertEqual(sub.rank(), world.rank() // 2)
+
+        x = mx.ones((2, 4), dtype=mx.float32)
+        y = mx.distributed.all_gather(x, group=sub)
+        self.assertEqual(y.shape, (sub.size() * 2, 4))
+        self.assertTrue(mx.all(y == 1))
+
+        pairs = world.split(world.rank() // 2)
+        self.assertEqual(pairs.size(), 2)
+
+        x = mx.ones((8,)) * world.rank()
+        y = mx.distributed.all_sum(x, group=pairs)
+        pair_base = (world.rank() // 2) * 2
+        expected = pair_base + (pair_base + 1)
+        self.assertTrue(mx.all(y == expected))
+
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

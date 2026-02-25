@@ -267,28 +267,60 @@ inline void bootstrap_unique_id(
 
 } // namespace detail
 
+// helper struct to manage communicator
+struct NCCLComm {
+  ncclComm_t comm;
+  int rank_;
+  int size_;
+
+  NCCLComm(ncclComm_t c, int rank, int size)
+      : comm(c), rank_(rank), size_(size) {}
+
+  ~NCCLComm() {
+    if (comm != nullptr) {
+      ncclCommDestroy(comm);
+    }
+  }
+
+  static std::shared_ptr<NCCLComm>
+  create(int numRanks, int rank, ncclUniqueId commId) {
+    ncclComm_t raw;
+    CHECK_NCCL(ncclCommInitRank(&raw, numRanks, commId, rank));
+    return std::make_shared<NCCLComm>(raw, rank, numRanks);
+  }
+
+  static std::shared_ptr<NCCLComm> split(NCCLComm* source, int color, int key) {
+    ncclComm_t raw;
+    // default config, blocking comm creation
+    ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
+    CHECK_NCCL(ncclCommSplit(source->comm, color, key, &raw, &config));
+    int new_rank, new_size;
+    CHECK_NCCL(ncclCommUserRank(raw, &new_rank));
+    CHECK_NCCL(ncclCommCount(raw, &new_size));
+    return std::make_shared<NCCLComm>(raw, new_rank, new_size);
+  }
+
+  NCCLComm(const NCCLComm&) = delete;
+  NCCLComm& operator=(const NCCLComm&) = delete;
+};
+
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 class NCCLGroup : public GroupImpl {
  public:
   NCCLGroup(int worldRank, int worldSize, const std::string initMethod)
-      : rank_(worldRank),
-        size_(worldSize),
-        comm_(nullptr),
-        initMethod_(initMethod) {
+      : rank_(worldRank), size_(worldSize), initMethod_(initMethod) {
     if (initialized_)
       return;
     int ndev;
     CHECK_CUDA(cudaGetDeviceCount(&ndev));
     CHECK_CUDA(cudaSetDevice(rank_ % ndev));
     detail::bootstrap_unique_id(uniqueId_, rank_, size_, initMethod_);
-    CHECK_NCCL(ncclCommInitRank(&comm_, size_, uniqueId_, rank_));
+    comm_ = NCCLComm::create(size_, rank_, uniqueId_);
     initialized_ = true;
   }
-
-  ~NCCLGroup() {
-    ncclCommDestroy(comm_);
-    initialized_ = false;
-  }
+  // Used by split() to wrap an already-created communicator
+  NCCLGroup(std::shared_ptr<NCCLComm> comm, int rank, int size)
+      : rank_(rank), size_(size), comm_(std::move(comm)) {}
 
   Stream communication_stream(StreamOrDevice s) override {
     return to_stream(s, Device::gpu);
@@ -309,8 +341,11 @@ class NCCLGroup : public GroupImpl {
     });
   }
 
-  virtual std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
-    throw std::runtime_error("[nccl] Group split not supported.");
+  std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
+    key = (key < 0) ? rank() : key;
+    auto new_comm = NCCLComm::split(comm_.get(), color, key);
+    return std::make_shared<NCCLGroup>(
+        new_comm, new_comm->rank_, new_comm->size_);
   }
 
   void all_gather(const array& input, array& output, Stream stream) override {
@@ -322,7 +357,7 @@ class NCCLGroup : public GroupImpl {
           gpu_ptr<T>(output),
           input.size(),
           dt,
-          comm_,
+          comm_->comm,
           encoder.stream()));
     });
   }
@@ -371,7 +406,7 @@ class NCCLGroup : public GroupImpl {
         input.size(),
         dt,
         op,
-        comm_,
+        comm_->comm,
         encoder.stream()));
   }
 
@@ -390,14 +425,15 @@ class NCCLGroup : public GroupImpl {
         output.size(),
         dt,
         op,
-        comm_,
+        comm_->comm,
         encoder.stream()));
   }
 
-  int rank_, size_;
+  int rank_;
+  int size_;
   std::string initMethod_;
   ncclUniqueId uniqueId_;
-  ncclComm_t comm_;
+  std::shared_ptr<NCCLComm> comm_;
   bool initialized_ = false;
 };
 
