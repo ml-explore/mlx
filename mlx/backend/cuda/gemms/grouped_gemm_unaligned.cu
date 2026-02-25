@@ -158,10 +158,11 @@ class GemmGroupedEncoder
     : public cutlass::gemm::device::GemmGrouped<GemmKernel> {
  public:
   void encode(cu::CommandEncoder& encoder) {
-    encoder.add_kernel_node(
+    encoder.add_kernel_node_ex(
         cutlass::Kernel<GemmKernel>,
         {static_cast<uint32_t>(this->params_.threadblock_count), 1, 1},
         {GemmKernel::kThreadCount, 1, 1},
+        {},
         sizeof(typename GemmKernel::SharedStorage),
         this->params_);
   }
@@ -309,10 +310,11 @@ void cutlass_grouped_gemm_unaligned(
 
   encoder.set_input_array(indices);
   encoder.set_output_array(gemm_args);
-  encoder.add_kernel_node(
+  encoder.add_kernel_node_ex(
       cu::prepare_grouped_mm_data<N_READS>,
       num_blocks,
       block_dims,
+      {},
       group_count * sizeof(uint32_t), // sizeof(cum_histo)
       gpu_ptr<uint32_t>(indices),
       indices.size(),
