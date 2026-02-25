@@ -63,26 +63,56 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         sub = world.split(world.rank() // 2)
         self.assertEqual(sub.size(), 2)
 
-    def test_split(self):
+    def test_all_reduce_split(self):
         world = mx.distributed.init()
+        dtypes = [
+            (mx.float32, 1e-6),
+            (mx.float16, 5e-3),
+            (mx.bfloat16, 1e-1),
+        ]
+        sizes = [
+            (7,),
+            (10,),
+            (1024,),
+            (1024, 1024),
+        ]
+        key = mx.random.key(0)
+        group = world.split(world.rank() % 2)
 
+        for dt, rtol in dtypes:
+            for sh in sizes:
+                x = (
+                    mx.random.uniform(shape=(group.size(),) + sh, key=key) * 10
+                ).astype(dt)
+
+                # All sum
+                y = mx.distributed.all_sum(x[group.rank()], group=group)
+                z = x.sum(0)
+                maxrelerror = (y - z).abs()
+                if rtol > 0:
+                    maxrelerror /= z.abs()
+                maxrelerror = maxrelerror.max()
+                self.assertLessEqual(maxrelerror, rtol)
+
+                # All max
+                y = mx.distributed.all_max(x[group.rank()], group=group)
+                z = x.max(0)
+                self.assertTrue(mx.all(y == z))
+
+                # All min
+                y = mx.distributed.all_min(x[group.rank()], group=group)
+                z = x.min(0)
+                self.assertTrue(mx.all(y == z))
+
+    def test_all_gather_split(self):
+        world = mx.distributed.init()
+        dtypes = [mx.float32, mx.float16, mx.bfloat16]
         sub = world.split(world.rank() % 2)
-        self.assertEqual(sub.size(), world.size() // 2)
-        self.assertEqual(sub.rank(), world.rank() // 2)
-
-        x = mx.ones((2, 4), dtype=mx.float32)
-        y = mx.distributed.all_gather(x, group=sub)
-        self.assertEqual(y.shape, (sub.size() * 2, 4))
-        self.assertTrue(mx.all(y == 1))
-
-        pairs = world.split(world.rank() // 2)
-        self.assertEqual(pairs.size(), 2)
-
-        x = mx.ones((8,)) * world.rank()
-        y = mx.distributed.all_sum(x, group=pairs)
-        pair_base = (world.rank() // 2) * 2
-        expected = pair_base + (pair_base + 1)
-        self.assertTrue(mx.all(y == expected))
+        for dt in dtypes:
+            x = mx.ones((2, 2, 4), dtype=dt)
+            y = mx.distributed.all_gather(x, group=sub)
+            self.assertEqual(y.shape, (sub.size() * 2, 2, 4))
+            self.assertTrue(mx.all(y == 1))
 
 
 if __name__ == "__main__":

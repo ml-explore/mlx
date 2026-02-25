@@ -276,13 +276,6 @@ struct NCCLComm {
   NCCLComm(ncclComm_t c, int rank, int size)
       : comm(c), rank_(rank), size_(size) {}
 
-  ~NCCLComm() {
-    if (comm != nullptr) {
-      ncclCommFinalize(comm);
-      ncclCommDestroy(comm);
-    }
-  }
-
   static std::shared_ptr<NCCLComm>
   create(int numRanks, int rank, ncclUniqueId commId) {
     ncclComm_t raw;
