@@ -120,7 +120,6 @@ array grouped_unfold_transpose_inputs_nd(
         cu::naive_grouped_unfold_transpose_nd<DataType, NDIM>,
         num_blocks,
         block_dims,
-        0,
         gpu_ptr<DataType>(in),
         gpu_ptr<DataType>(unfolded),
         filter_size,

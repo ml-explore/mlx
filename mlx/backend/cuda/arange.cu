@@ -56,7 +56,6 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
           cu::arange<OutType, IdxT, N_WRITES>,
           num_blocks,
           block_dims,
-          0,
           gpu_ptr<OutType>(out),
           out.data_size(),
           static_cast<CTYPE>(start_),
