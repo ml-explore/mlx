@@ -26,8 +26,16 @@ constexpr float inf = std::numeric_limits<float>::infinity();
  */
 template <typename T, int N>
 Simd<T, N> exp(Simd<T, N> in) {
-  if constexpr (is_complex<T>) {
-    return Simd<T, 1>{std::exp(in.value)};
+  if constexpr (is_complex<T> || std::is_same_v<T, double>) {
+    if constexpr (N == 1) {
+      return Simd<T, 1>{std::exp(in.value)};
+    } else {
+      Simd<T, N> result;
+      for (int i = 0; i < N; ++i) {
+        result[i] = std::exp(in[i]);
+      }
+      return result;
+    }
   } else {
     Simd<float, N> x_init = in;
     auto x = x_init * 1.442695f; // multiply with log_2(e)
@@ -117,8 +125,16 @@ Simd<T, N> sincos(Simd<T, N> in) {
 
 template <typename T, int N>
 Simd<T, N> sin(Simd<T, N> x) {
-  if constexpr (is_complex<T>) {
-    return std::sin(x.value);
+  if constexpr (is_complex<T> || std::is_same_v<T, double>) {
+    if constexpr (N == 1) {
+      return Simd<T, 1>{std::sin(x.value)};
+    } else {
+      Simd<T, N> result;
+      for (int i = 0; i < N; ++i) {
+        result[i] = std::sin(x[i]);
+      }
+      return result;
+    }
   } else {
     return sincos<true>(x);
   }
@@ -126,8 +142,16 @@ Simd<T, N> sin(Simd<T, N> x) {
 
 template <typename T, int N>
 Simd<T, N> cos(Simd<T, N> x) {
-  if constexpr (is_complex<T>) {
-    return std::cos(x.value);
+  if constexpr (is_complex<T> || std::is_same_v<T, double>) {
+    if constexpr (N == 1) {
+      return Simd<T, 1>{std::cos(x.value)};
+    } else {
+      Simd<T, N> result;
+      for (int i = 0; i < N; ++i) {
+        result[i] = std::cos(x[i]);
+      }
+      return result;
+    }
   } else {
     return sincos<false>(x);
   }
@@ -135,58 +159,166 @@ Simd<T, N> cos(Simd<T, N> x) {
 
 template <typename T, int N>
 Simd<T, N> erf(Simd<T, N> x) {
-  // https://github.com/pytorch/pytorch/blob/abf28982a8cb43342e7669d859de9543fd804cc9/aten/src/ATen/cpu/vec/vec256/vec256_float.h#L175
-  Simd<float, N> v = x;
-  auto t = recip(fma(Simd<float, N>(0.3275911f), abs(v), 1.0f));
-  auto r = fma(Simd<float, N>(1.061405429f), t, -1.453152027f);
-  r = fma(r, t, 1.421413741f);
-  r = fma(r, t, -0.284496736f);
-  r = fma(r, t, 0.254829592f);
-  auto e = -exp(-v * v);
-  auto result = Simd<T, N>(fma(e * t, r, 1.0f));
-  return select(x > 0, result, -result);
+  if constexpr (std::is_same_v<T, double>) {
+    if constexpr (N == 1) {
+      return Simd<T, 1>{std::erf(x.value)};
+    } else {
+      Simd<T, N> result;
+      for (int i = 0; i < N; ++i) {
+        result[i] = std::erf(x[i]);
+      }
+      return result;
+    }
+  } else {
+    // https://github.com/pytorch/pytorch/blob/abf28982a8cb43342e7669d859de9543fd804cc9/aten/src/ATen/cpu/vec/vec256/vec256_float.h#L175
+    Simd<float, N> v = x;
+    auto t = recip(fma(Simd<float, N>(0.3275911f), abs(v), 1.0f));
+    auto r = fma(Simd<float, N>(1.061405429f), t, -1.453152027f);
+    r = fma(r, t, 1.421413741f);
+    r = fma(r, t, -0.284496736f);
+    r = fma(r, t, 0.254829592f);
+    auto e = -exp(-v * v);
+    auto result = Simd<T, N>(fma(e * t, r, 1.0f));
+    return select(x > 0, result, -result);
+  }
 }
 
 template <typename T, int N>
 Simd<T, N> erfinv(Simd<T, N> a_) {
-  Simd<float, N> a = a_;
-  auto t = fma(a, 0.0f - a, 1.0f);
-  t = log(t);
-  auto lhs = [](auto t) {
-    Simd<float, N> p;
-    p = 3.03697567e-10f; //  0x1.4deb44p-32
-    p = fma(p, t, 2.93243101e-8f); //  0x1.f7c9aep-26
-    p = fma(p, t, 1.22150334e-6f); //  0x1.47e512p-20
-    p = fma(p, t, 2.84108955e-5f); //  0x1.dca7dep-16
-    p = fma(p, t, 3.93552968e-4f); //  0x1.9cab92p-12
-    p = fma(p, t, 3.02698812e-3f); //  0x1.8cc0dep-9
-    p = fma(p, t, 4.83185798e-3f); //  0x1.3ca920p-8
-    p = fma(p, t, -2.64646143e-1f); // -0x1.0eff66p-2
-    return fma(p, t, 8.40016484e-1f); //  0x1.ae16a4p-1
-  };
-  auto rhs = [](auto t) {
-    Simd<float, N> p;
-    p = 5.43877832e-9f; //  0x1.75c000p-28
-    p = fma(p, t, 1.43285448e-7f); //  0x1.33b402p-23
-    p = fma(p, t, 1.22774793e-6f); //  0x1.499232p-20
-    p = fma(p, t, 1.12963626e-7f); //  0x1.e52cd2p-24
-    p = fma(p, t, -5.61530760e-5f); // -0x1.d70bd0p-15
-    p = fma(p, t, -1.47697632e-4f); // -0x1.35be90p-13
-    p = fma(p, t, 2.31468678e-3f); //  0x1.2f6400p-9
-    p = fma(p, t, 1.15392581e-2f); //  0x1.7a1e50p-7
-    p = fma(p, t, -2.32015476e-1f); // -0x1.db2aeep-3
-    return fma(p, t, 8.86226892e-1f); //  0x1.c5bf88p-1
-  };
-  auto thresh = 6.125f;
-  // Compute both branches and select if N > 1
-  if constexpr (N == 1) {
-    if ((abs(t) > thresh).value) { // maximum ulp error = 2.35793
-      return a * lhs(t);
-    } else { // maximum ulp error = 2.35002
-      return a * rhs(t);
+  if constexpr (std::is_same_v<T, double>) {
+    // Double precision rational approximation from Blair et al. (1976)
+    // Coefficients from Julia's SpecialFunctions.jl
+    auto region1 = [](Simd<double, 1> t) {
+      // |a| <= 0.75, t = a*a - 0.5625
+      Simd<double, 1> p = 0.17605872171059059;
+      p = fma(p, t, -0.86421301587247794e1);
+      p = fma(p, t, 0.65454662847944870487e2);
+      p = fma(p, t, -0.16900142734642382420e3);
+      p = fma(p, t, 0.18644914861620987391e3);
+      p = fma(p, t, -0.90784959262960326650e2);
+      p = fma(p, t, 0.16030495584406622931e2);
+
+      Simd<double, 1> q = 1.0;
+      q = fma(q, t, -0.20601073032865144300e2);
+      q = fma(q, t, 0.10760453916055123830e3);
+      q = fma(q, t, -0.22210254121855132366e3);
+      q = fma(q, t, 0.21015790486205317714e3);
+      q = fma(q, t, -0.91374167024260313936e2);
+      q = fma(q, t, 0.14780647071538316111e2);
+      return p / q;
+    };
+
+    auto region2 = [](Simd<double, 1> t) {
+      // 0.75 < |a| <= 0.9375, t = a*a - 0.87890625
+      Simd<double, 1> p = 0.23751664902444448;
+      p = fma(p, t, -0.54789276199831318769e1);
+      p = fma(p, t, 0.19121334396580330163e2);
+      p = fma(p, t, -0.22655292831011104193e2);
+      p = fma(p, t, 0.11763505701781827302e2);
+      p = fma(p, t, -0.29344398672542478687e1);
+      p = fma(p, t, 0.34445569241361125216);
+      p = fma(p, t, -0.15238926344072612800e-1);
+
+      Simd<double, 1> q = 1.0;
+      q = fma(q, t, -0.10014376349783070835e2);
+      q = fma(q, t, 0.24640158943917284883e2);
+      q = fma(q, t, -0.23716715521596581025e2);
+      q = fma(q, t, 0.10695129973387014469e2);
+      q = fma(q, t, -0.24068318104393757995e1);
+      q = fma(q, t, 0.26106288854430078511);
+      q = fma(q, t, -0.10846516960205954100e-1);
+      return p / q;
+    };
+
+    auto region3 = [](Simd<double, 1> t) {
+      // |a| > 0.9375, t = 1/sqrt(-log1p(-|a|))
+      Simd<double, 1> p = 0.88606273496594145149;
+      p = fma(p, t, 0.36270024830957089309e1);
+      p = fma(p, t, 0.68738088073543839802e1);
+      p = fma(p, t, 0.85475611822167827825e1);
+      p = fma(p, t, 0.71678547949107996810e1);
+      p = fma(p, t, 0.23268695788919690806e1);
+      p = fma(p, t, 0.26987802736243283545);
+      p = fma(p, t, 0.10532611324233381642e-1);
+      p = fma(p, t, 0.10501311523733438116e-3);
+
+      Simd<double, 1> q = 1.0;
+      q = fma(q, t, 0.40993879076368015361e1);
+      q = fma(q, t, 0.81922409747269907893e1);
+      q = fma(q, t, 0.11948787918435396667e2);
+      q = fma(q, t, 0.11181586104056990827e2);
+      q = fma(q, t, 0.76078028785801277064e1);
+      q = fma(q, t, 0.23501436397970253259e1);
+      q = fma(q, t, 0.27019862373751554845);
+      q = fma(q, t, 0.10532860903153275311e-1);
+      q = fma(q, t, 0.10501266687030337690e-3);
+      return p / q;
+    };
+
+    auto compute_erfinv = [&](double ai) {
+      double abs_a = std::abs(ai);
+      if (abs_a <= 0.75) {
+        Simd<double, 1> t{ai * ai - 0.5625};
+        return ai * region1(t).value;
+      } else if (abs_a <= 0.9375) {
+        Simd<double, 1> t{ai * ai - 0.87890625};
+        return ai * region2(t).value;
+      } else {
+        double tv = 1.0 / std::sqrt(-std::log1p(-abs_a));
+        Simd<double, 1> t{tv};
+        return std::copysign(region3(t).value / tv, ai);
+      }
+    };
+
+    if constexpr (N == 1) {
+      return Simd<T, 1>{compute_erfinv(a_.value)};
+    } else {
+      Simd<T, N> result;
+      for (int i = 0; i < N; ++i) {
+        result[i] = compute_erfinv(a_[i]);
+      }
+      return result;
     }
   } else {
-    return a * select(abs(t) > thresh, lhs(t), rhs(t));
+    Simd<float, N> a = a_;
+    auto t = fma(a, 0.0f - a, 1.0f);
+    t = log(t);
+    auto lhs = [](auto t) {
+      Simd<float, N> p;
+      p = 3.03697567e-10f; //  0x1.4deb44p-32
+      p = fma(p, t, 2.93243101e-8f); //  0x1.f7c9aep-26
+      p = fma(p, t, 1.22150334e-6f); //  0x1.47e512p-20
+      p = fma(p, t, 2.84108955e-5f); //  0x1.dca7dep-16
+      p = fma(p, t, 3.93552968e-4f); //  0x1.9cab92p-12
+      p = fma(p, t, 3.02698812e-3f); //  0x1.8cc0dep-9
+      p = fma(p, t, 4.83185798e-3f); //  0x1.3ca920p-8
+      p = fma(p, t, -2.64646143e-1f); // -0x1.0eff66p-2
+      return fma(p, t, 8.40016484e-1f); //  0x1.ae16a4p-1
+    };
+    auto rhs = [](auto t) {
+      Simd<float, N> p;
+      p = 5.43877832e-9f; //  0x1.75c000p-28
+      p = fma(p, t, 1.43285448e-7f); //  0x1.33b402p-23
+      p = fma(p, t, 1.22774793e-6f); //  0x1.499232p-20
+      p = fma(p, t, 1.12963626e-7f); //  0x1.e52cd2p-24
+      p = fma(p, t, -5.61530760e-5f); // -0x1.d70bd0p-15
+      p = fma(p, t, -1.47697632e-4f); // -0x1.35be90p-13
+      p = fma(p, t, 2.31468678e-3f); //  0x1.2f6400p-9
+      p = fma(p, t, 1.15392581e-2f); //  0x1.7a1e50p-7
+      p = fma(p, t, -2.32015476e-1f); // -0x1.db2aeep-3
+      return fma(p, t, 8.86226892e-1f); //  0x1.c5bf88p-1
+    };
+    auto thresh = 6.125f;
+    // Compute both branches and select if N > 1
+    if constexpr (N == 1) {
+      if ((abs(t) > thresh).value) { // maximum ulp error = 2.35793
+        return a * lhs(t);
+      } else { // maximum ulp error = 2.35002
+        return a * rhs(t);
+      }
+    } else {
+      return a * select(abs(t) > thresh, lhs(t), rhs(t));
+    }
   }
 }
 

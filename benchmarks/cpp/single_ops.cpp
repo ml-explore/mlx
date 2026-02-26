@@ -57,6 +57,8 @@ void time_unary_ops() {
   int N = 500;
   auto device = mx::default_device();
 
+  // float32
+  std::cout << "  float32:" << std::endl;
   auto a = mx::random::normal({M, N});
   mx::eval(a);
   TIME(mlx::core::abs, a, device);
@@ -66,9 +68,30 @@ void time_unary_ops() {
   TIME(mlx::core::sqrt, a, device);
   TIME(mx::rsqrt, a, device);
   TIME(mlx::core::exp, a, device);
+  TIME(mlx::core::sin, a, device);
+  TIME(mlx::core::cos, a, device);
+  TIME(mx::erf, a, device);
+  TIME(mx::erfinv, a, device);
 
   a = mx::random::uniform({M, N});
+  mx::eval(a);
   TIME(mlx::core::log, a, device);
+
+  // float64 (CPU only)
+  if (device == mx::Device::cpu) {
+    std::cout << "  float64:" << std::endl;
+    auto a64 = mx::astype(mx::random::normal({M, N}), mx::float64);
+    mx::eval(a64);
+    TIME(mlx::core::exp, a64, device);
+    TIME(mlx::core::sin, a64, device);
+    TIME(mlx::core::cos, a64, device);
+    TIME(mx::erf, a64, device);
+    TIME(mx::erfinv, a64, device);
+
+    a64 = mx::astype(mx::random::uniform({M, N}), mx::float64);
+    mx::eval(a64);
+    TIME(mlx::core::log, a64, device);
+  }
 }
 
 void time_binary_ops() {
@@ -271,7 +294,16 @@ void time_divmod() {
   TIME(divmod_separate);
 }
 
-int main() {
+int main(int argc, char** argv) {
+  bool use_cpu = false;
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "--cpu") {
+      use_cpu = true;
+    }
+  }
+  if (use_cpu) {
+    mx::set_default_device(mx::Device::cpu);
+  }
   std::cout << "Benchmarks for " << mx::default_device() << std::endl;
   time_creation_ops();
   time_type_conversions();
