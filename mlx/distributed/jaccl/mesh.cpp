@@ -30,6 +30,14 @@ MeshGroup::MeshGroup(
 
   // Create the mesh implementation object
   mesh_ = MeshImpl(rank_, size_, connections_, buffers_);
+  ring_ = RingImpl(
+      rank_,
+      size_,
+      &connections_[(rank_ + size_ - 1) % size_],
+      &connections_[(rank_ + 1) % size_],
+      1,
+      ring_send_buffers_,
+      ring_recv_buffers_);
 }
 
 void MeshGroup::initialize() {
@@ -76,18 +84,27 @@ void MeshGroup::initialize() {
 void MeshGroup::allocate_buffers() {
   // Deregister any buffers and free the memory
   buffers_.clear();
+  ring_send_buffers_.clear();
+  ring_recv_buffers_.clear();
 
   // Allocate the memory
   for (int k = 0; k < BUFFER_SIZES; k++) {
     for (int i = 0; i < NUM_BUFFERS; i++) {
+      // Mesh buffers
       for (int j = 0; j < size_; j++) {
         buffers_.emplace_back(FRAME_SIZE * (1 << k));
+      }
+      // Ring buffers (1 for each direction)
+      for (int j = 0; j < 2; j++) {
+        ring_send_buffers_.emplace_back(FRAME_SIZE * (1 << k));
+        ring_recv_buffers_.emplace_back(FRAME_SIZE * (1 << k));
       }
     }
   }
 
   for (int k = 0; k < BUFFER_SIZES; k++) {
     for (int i = 0; i < NUM_BUFFERS; i++) {
+      // Mesh buffers
       for (int j = 0; j < size_; j++) {
         // This is our send buffer so register it with all pds so we can send
         // it to all connected devices.
@@ -107,6 +124,19 @@ void MeshGroup::allocate_buffers() {
               .register_to_protection_domain(connections_[j].protection_domain);
         }
       }
+
+      // Ring buffers (see ring group for the logic below)
+      // We register send buffers to both the right and the left.
+      int left = (rank_ + size_ - 1) % size_;
+      int right = (rank_ + 1) % size_;
+      ring_send_buffers_[k * NUM_BUFFERS * 2 + i * 2 + 0]
+          .register_to_protection_domain(connections_[right].protection_domain);
+      ring_recv_buffers_[k * NUM_BUFFERS * 2 + i * 2 + 0]
+          .register_to_protection_domain(connections_[left].protection_domain);
+      ring_send_buffers_[k * NUM_BUFFERS * 2 + i * 2 + 1]
+          .register_to_protection_domain(connections_[left].protection_domain);
+      ring_recv_buffers_[k * NUM_BUFFERS * 2 + i * 2 + 1]
+          .register_to_protection_domain(connections_[right].protection_domain);
     }
   }
 }
@@ -175,7 +205,12 @@ void MeshGroup::all_reduce(
   encoder.set_input_array(input);
   encoder.set_output_array(output);
   encoder.dispatch([in_ptr, out_ptr, size, this, reduce_op]() {
-    mesh_.all_reduce(in_ptr, out_ptr, size, reduce_op);
+    if ((std::is_same_v<T, bfloat16_t> && size > 65536) ||
+        size >= 8 * 1024 * 1024) {
+      ring_.all_reduce<2>(in_ptr, out_ptr, size, 1, reduce_op);
+    } else {
+      mesh_.all_reduce(in_ptr, out_ptr, size, reduce_op);
+    }
   });
 }
 

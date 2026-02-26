@@ -4,6 +4,7 @@
 
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/jaccl/mesh_impl.h"
+#include "mlx/distributed/jaccl/ring_impl.h"
 #include "mlx/distributed/jaccl/utils.h"
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
@@ -78,8 +79,11 @@ class MeshGroup : public GroupImpl {
   SideChannel side_channel_;
   std::vector<Connection> connections_;
   std::vector<SharedBuffer> buffers_;
+  std::vector<SharedBuffer> ring_send_buffers_;
+  std::vector<SharedBuffer> ring_recv_buffers_;
 
   MeshImpl mesh_;
+  RingImpl ring_;
 };
 
 } // namespace mlx::core::distributed::jaccl

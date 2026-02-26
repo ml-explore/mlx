@@ -27,6 +27,22 @@ class RingImpl {
         send_buffers_(send_buffers),
         recv_buffers_(recv_buffers) {}
 
+  RingImpl(
+      int rank,
+      int size,
+      Connection* left_begin,
+      Connection* right_begin,
+      size_t n_conns,
+      std::vector<SharedBuffer>& send_buffers,
+      std::vector<SharedBuffer>& recv_buffers)
+      : rank_(rank),
+        size_(size),
+        n_conns_(n_conns),
+        left_(left_begin, n_conns),
+        right_(right_begin, n_conns),
+        send_buffers_(send_buffers),
+        recv_buffers_(recv_buffers) {}
+
   RingImpl() : rank_(0), size_(1), n_conns_(0) {}
 
   template <int MAX_DIR, typename T, typename ReduceOp>
