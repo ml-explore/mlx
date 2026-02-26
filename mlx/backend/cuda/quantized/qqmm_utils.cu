@@ -10,11 +10,6 @@ namespace mlx::core {
 
 namespace cg = cooperative_groups;
 
-constexpr int TILE_ROWS = 128;
-constexpr int TILE_COLS = 4;
-constexpr int TILES_PER_LANE = 1;
-constexpr int LANES_PER_BLOCK = 32;
-
 // To pass scales to tensor cores, they need to be repacked into a tiled layout
 // https://docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
 // Tiled layout for scale factors is very well described in CUTLASS
@@ -48,6 +43,15 @@ constexpr int LANES_PER_BLOCK = 32;
 //          [252, 253, 254, 255],
 //          [380, 381, 382, 383],
 //          [508, 509, 510, 511]]]]],
+namespace cu {
+
+constexpr float F8E4M3_MAX = 448.0f;
+constexpr float F4E2M1_MAX = 6.0f;
+
+constexpr int TILE_ROWS = 128;
+constexpr int TILE_COLS = 4;
+constexpr int TILES_PER_LANE = 1;
+constexpr int LANES_PER_BLOCK = 32;
 
 inline std::tuple<dim3, dim3> get_swizzle_launch_args(
     size_t M_swizzled,
@@ -67,11 +71,6 @@ inline std::tuple<dim3, dim3> get_swizzle_launch_args(
 
   return std::make_tuple(grid, block);
 }
-
-namespace cu {
-
-constexpr float F8E4M3_MAX = 448.0f;
-constexpr float F4E2M1_MAX = 6.0f;
 
 __global__ void compute_qqmm_pointers(
     float* alpha_out,
@@ -225,7 +224,7 @@ void swizzle_scales(
   size_t output_cols = scales_tiled.shape(-1);
 
   auto [num_blocks, block_dims] =
-      get_swizzle_launch_args(output_rows, output_cols);
+      cu::get_swizzle_launch_args(output_rows, output_cols);
   enc.add_kernel_node(
       cu::swizzle_scales,
       num_blocks,
