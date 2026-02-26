@@ -186,25 +186,6 @@ void qmm_impl_sm90(
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);
-  if (k % 64 != 0) {
-    throw std::runtime_error(fmt::format("{} K must be multiples of 64.", tag));
-  }
-  if (!x.flags().row_contiguous) {
-    throw std::runtime_error(
-        fmt::format("{} Activations must be row contiguous.", tag));
-  }
-  if (!w.flags().row_contiguous) {
-    throw std::runtime_error(
-        fmt::format("{} Weights must be row contiguous.", tag));
-  }
-  if (!scales_.flags().row_contiguous) {
-    throw std::runtime_error(
-        fmt::format("{} Scales must be row contiguous.", tag));
-  }
-  if (!biases_.flags().row_contiguous) {
-    throw std::runtime_error(
-        fmt::format("{} Biases must be row contiguous.", tag));
-  }
 
   // FIXME: Copy happens for every call.
   array scales = transpose_last_2_dims(scales_, encoder, s);

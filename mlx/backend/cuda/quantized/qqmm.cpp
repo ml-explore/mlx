@@ -1,7 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/quantized/qmv.h"
+#include "mlx/backend/cuda/quantized/qmm/qmm.h"
 #include "mlx/backend/cuda/quantized/qqmm_impl.h"
 #include "mlx/backend/cuda/quantized/qqmm_utils.h"
 #include "mlx/backend/cuda/quantized/quantized.h"
@@ -108,13 +108,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     const array& w = inputs[1];
     const array& scales = inputs[2];
-
-    bool non_batched = w.ndim() == 2;
-    int K = x.shape(-1);
-    int M = non_batched ? x.size() / K : x.shape(-2);
-    int N = out.shape(-1);
-
-    fp_qmv(xhat, w, scales, out, bits_, group_size_, M, N, K, encoder, s);
+    fp_qmv(xhat, w, scales, out, bits_, group_size_, encoder, s);
     return;
   }
 
