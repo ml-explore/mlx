@@ -205,8 +205,9 @@ void MeshGroup::all_reduce(
   encoder.set_input_array(input);
   encoder.set_output_array(output);
   encoder.dispatch([in_ptr, out_ptr, size, this, reduce_op]() {
-    if ((std::is_same_v<T, bfloat16_t> && size > 65536) ||
-        size >= 8 * 1024 * 1024 / sizeof(T)) {
+    if (size_ > 2 &&
+        ((std::is_same_v<T, bfloat16_t> && size > 65536) ||
+         size >= 8 * 1024 * 1024 / sizeof(T))) {
       ring_.all_reduce<2>(in_ptr, out_ptr, size, 1, reduce_op);
     } else {
       mesh_.all_reduce(in_ptr, out_ptr, size, reduce_op);
