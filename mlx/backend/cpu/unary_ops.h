@@ -41,6 +41,8 @@ DEFAULT_OP(Cos, cos)
 DEFAULT_OP(Cosh, cosh)
 DEFAULT_OP(Erf, erf)
 DEFAULT_OP(ErfInv, erfinv)
+DEFAULT_OP(LogGamma, lgamma)
+DEFAULT_OP(Digamma, digamma)
 DEFAULT_OP(Exp, exp)
 DEFAULT_OP(Expm1, expm1)
 DEFAULT_OP(Floor, floor);

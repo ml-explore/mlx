@@ -190,4 +190,68 @@ Simd<T, N> erfinv(Simd<T, N> a_) {
   }
 }
 
+template <typename T, int N>
+Simd<T, N> lgamma(Simd<T, N> x) {
+  // Delegate to std::lgamma element-wise
+  Simd<T, N> result;
+  for (int i = 0; i < N; i++) {
+    result[i] = static_cast<T>(std::lgamma(static_cast<float>(x[i])));
+  }
+  return result;
+}
+
+template <typename T>
+Simd<T, 1> lgamma(Simd<T, 1> x) {
+  return Simd<T, 1>(static_cast<T>(std::lgamma(static_cast<float>(x.value))));
+}
+
+template <typename T, int N>
+Simd<T, N> digamma(Simd<T, N> x_) {
+  // Asymptotic expansion + recurrence, matching the Metal kernel
+  Simd<T, N> result;
+  for (int i = 0; i < N; i++) {
+    float v = static_cast<float>(x_[i]);
+    float r = 0.0f;
+    if (v < 0.0f) {
+      r = -M_PI / std::tan(M_PI * v);
+      v = 1.0f - v;
+    }
+    while (v < 10.0f) {
+      r -= 1.0f / v;
+      v += 1.0f;
+    }
+    float z = 1.0f / (v * v);
+    float y = 3.96825396825e-3f;
+    y = y * z + (-4.16666666667e-3f);
+    y = y * z + 7.57575757576e-3f;
+    y = y * z + (-2.10927960928e-2f);
+    y = y * z + 8.33333333333e-2f;
+    r += std::log(v) - 0.5f / v - y * z;
+    result[i] = static_cast<T>(r);
+  }
+  return result;
+}
+
+template <typename T>
+Simd<T, 1> digamma(Simd<T, 1> x_) {
+  float v = static_cast<float>(x_.value);
+  float r = 0.0f;
+  if (v < 0.0f) {
+    r = -M_PI / std::tan(M_PI * v);
+    v = 1.0f - v;
+  }
+  while (v < 10.0f) {
+    r -= 1.0f / v;
+    v += 1.0f;
+  }
+  float z = 1.0f / (v * v);
+  float y = 3.96825396825e-3f;
+  y = y * z + (-4.16666666667e-3f);
+  y = y * z + 7.57575757576e-3f;
+  y = y * z + (-2.10927960928e-2f);
+  y = y * z + 8.33333333333e-2f;
+  r += std::log(v) - 0.5f / v - y * z;
+  return Simd<T, 1>(static_cast<T>(r));
+}
+
 } // namespace mlx::core::simd

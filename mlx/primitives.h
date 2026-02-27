@@ -1018,6 +1018,34 @@ class ErfInv : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
+class LogGamma : public UnaryPrimitive {
+ public:
+  explicit LogGamma(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(LogGamma)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
+class Digamma : public UnaryPrimitive {
+ public:
+  explicit Digamma(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(Digamma)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
 class MLX_API Exp : public UnaryPrimitive {
  public:
   explicit Exp(Stream stream) : UnaryPrimitive(stream) {}

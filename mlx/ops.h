@@ -948,6 +948,12 @@ MLX_API array erf(const array& a, StreamOrDevice s = {});
 /** Computes the inverse error function of the elements of an array. */
 MLX_API array erfinv(const array& a, StreamOrDevice s = {});
 
+/** Element-wise log-gamma (log of the absolute value of the gamma function). */
+MLX_API array lgamma(const array& a, StreamOrDevice s = {});
+
+/** Element-wise digamma (psi) function, the derivative of lgamma. */
+MLX_API array digamma(const array& a, StreamOrDevice s = {});
+
 /** Computes the expm1 function of the elements of an array. */
 MLX_API array expm1(const array& a, StreamOrDevice s = {});
 
