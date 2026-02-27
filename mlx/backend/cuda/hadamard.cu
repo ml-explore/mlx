@@ -159,8 +159,8 @@ void hadamard_mn_contiguous(
     args.append(num_transforms);
 
     auto kernel = mod.get_kernel(n1_kernel_name);
-    encoder.add_kernel_node(
-        kernel, num_blocks, n1 / max_radix_1, 0, args.args());
+    encoder.add_kernel_node_raw(
+        kernel, num_blocks, n1 / max_radix_1, {}, 0, args.args());
   }
 
   {
@@ -179,8 +179,8 @@ void hadamard_mn_contiguous(
     args.append(num_transforms);
 
     auto kernel = mod.get_kernel(n2_kernel_name);
-    encoder.add_kernel_node(
-        kernel, num_blocks, n2 / max_radix_2, 0, args.args());
+    encoder.add_kernel_node_raw(
+        kernel, num_blocks, n2 / max_radix_2, {}, 0, args.args());
   }
 
   if (m > 1) {
@@ -200,7 +200,8 @@ void hadamard_mn_contiguous(
     args.append(num_tasks);
 
     auto kernel = mod.get_kernel(m_kernel_name);
-    encoder.add_kernel_node(kernel, num_blocks, block_dim, 0, args.args());
+    encoder.add_kernel_node_raw(
+        kernel, num_blocks, block_dim, {}, 0, args.args());
   }
 }
 

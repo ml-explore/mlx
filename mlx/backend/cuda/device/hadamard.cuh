@@ -10,7 +10,9 @@ __device__ __forceinline__ void hadamard_radix_m(float* x);
 
 template <int N>
 struct Pow2Log2 {
-  static_assert(N > 0 && (N % 2 == 0), "N must be a power-of-two > 1.");
+  static_assert(
+      (N > 0) && ((N & (N - 1)) == 0),
+      "N must be a positive power of two.");
   static constexpr int value = 1 + Pow2Log2<N / 2>::value;
 };
 
