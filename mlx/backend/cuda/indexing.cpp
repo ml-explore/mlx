@@ -530,7 +530,8 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       large ? "int64_t" : "int32_t");
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = get_launch_args(mask_flat, large);
-  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
+  encoder.add_kernel_node_raw(
+      kernel, num_blocks, block_dims, {}, 0, args.args());
 }
 
 } // namespace mlx::core
