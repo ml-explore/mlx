@@ -281,8 +281,8 @@ void CommandEncoder::add_kernel_node_raw(
     config.blockDim = block_dim;
     config.dynamicSmemBytes = smem_bytes;
     config.stream = stream();
+    cudaLaunchAttribute attr = {};
     if (use_cluster) {
-      cudaLaunchAttribute attr;
       attr.id = cudaLaunchAttributeClusterDimension;
       attr.val.clusterDim.x = cluster_dim.x;
       attr.val.clusterDim.y = cluster_dim.y;
@@ -332,16 +332,16 @@ void CommandEncoder::add_kernel_node_raw(
     config.blockDimZ = block_dim.z;
     config.sharedMemBytes = smem_bytes;
     config.hStream = stream();
+    CUlaunchAttribute attr = {};
     if (use_cluster) {
-      CUlaunchAttribute attr = {};
       attr.id = CU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION;
       attr.value.clusterDim.x = cluster_dim.x;
       attr.value.clusterDim.y = cluster_dim.y;
       attr.value.clusterDim.z = cluster_dim.z;
       config.attrs = &attr;
       config.numAttrs = 1;
-      CHECK_CUDA_ERROR(cuLaunchKernelEx(&config, func, params, nullptr));
     }
+    CHECK_CUDA_ERROR(cuLaunchKernelEx(&config, func, params, nullptr));
     return;
   }
 
