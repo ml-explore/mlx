@@ -856,18 +856,10 @@ void compile_fuse(
       // are not fusable except for broadcast which we can split to avoid
       // stopping fusion
       if (!all_parents_in) {
-        if (a.has_primitive() && is_broadcast(a.primitive())) {
-          // Save the original before split_one, because `a` is a reference
-          // into a parent's input vector and split_one will replace it
-          array orig(a);
-          array b = split_one(orig, parents_map, cache);
+        if (a.has_primitive() && is_broadcast(a.primitive()) &&
+            input_set.size() < max_compile_arrays) {
+          array b = split_one(a, parents_map, cache);
           recurse(b, depth, s, shape);
-          if (cache.find(b.id()) == cache.end()) {
-            // Split copy wasn't fused, undo and treat original as input
-            merge_one(orig, b, parents_map);
-            input_set.erase(b.id());
-            input_set.insert(orig.id());
-          }
         } else {
           // Possible input
           input_set.insert(a.id());
