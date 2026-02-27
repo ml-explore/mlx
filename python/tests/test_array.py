@@ -1100,6 +1100,46 @@ class TestArray(mlx_tests.MLXTestCase):
         a_mlx = mx.array(a_np)
         self.assertTrue(np.array_equal(a_np[2:-1, 0], np.array(a_mlx[2:-1, 0])))
 
+        # Out of bounds indexing
+        a = mx.arange(10)
+        with self.assertRaises(IndexError):
+            a[10].item()
+        with self.assertRaises(IndexError):
+            a[-11].item()
+        with self.assertRaises(IndexError):
+            mx.eval(a[1 << 30])
+
+        a = mx.zeros((5, 5))
+        idx = mx.array([5])
+        with self.assertRaises(IndexError):
+            mx.eval(a[idx, 0])
+        with self.assertRaises(IndexError):
+            mx.eval(a[0, idx])
+        with self.assertRaises(IndexError):
+            mx.eval(a[1 << 30])
+
+    def test_scatter(self):
+        a = mx.array([1, 2, 3])
+        with self.assertRaises(IndexError):
+            mx.eval(a.at[mx.array([100])].add(mx.array([10])))
+        with self.assertRaises(IndexError):
+            mx.eval(a.at[mx.array([-6])].add(mx.array([10])))
+
+        a = mx.array([[1, 2, 3], [4, 5, 6]])
+        indices = mx.array([0, 10])
+        updates = mx.array([[0, 0, 0], [0, 0, 0]])
+        with self.assertRaises(IndexError):
+            mx.eval(a.at[indices].add(updates))
+        with self.assertRaises(IndexError):
+            a[indices] = updates
+            mx.eval(a)
+
+    def test_take_along_axis_bounds(self):
+        a = mx.array([[1, 2, 3], [4, 5, 6]])
+        indices = mx.array([[0, 10], [0, 0]])
+        with self.assertRaises(IndexError):
+            mx.eval(mx.take_along_axis(a, indices, axis=1))
+
     def test_indexing_grad(self):
         x = mx.array([[1, 2], [3, 4]]).astype(mx.float32)
         ind = mx.array([0, 1, 0]).astype(mx.float32)
@@ -1125,6 +1165,14 @@ class TestArray(mlx_tests.MLXTestCase):
         a[-1] = 2
         self.assertEqual(a.tolist(), [2, 2, 2])
 
+        with self.assertRaises(IndexError):
+            a[4] = 1
+            mx.eval(a)
+
+        with self.assertRaises(IndexError):
+            a[-4] = 1
+            mx.eval(a)
+
         a[0] = mx.array([[[1]]])
         self.assertEqual(a.tolist(), [1, 2, 2])
 
@@ -1140,7 +1188,11 @@ class TestArray(mlx_tests.MLXTestCase):
         a[0:2] = 3
         self.assertEqual(a.tolist(), [3, 3, 1])
 
-        a[0:3] = 4
+        a[0:3] = 5
+        self.assertEqual(a.tolist(), [5, 5, 5])
+
+        # Slices clip, so this should not raise IndexError
+        a[0:4] = 4
         self.assertEqual(a.tolist(), [4, 4, 4])
 
         a[0:1] = mx.array(0)
@@ -1157,6 +1209,14 @@ class TestArray(mlx_tests.MLXTestCase):
 
         a[:] = mx.array([[[[1, 1, 1]]]])
         self.assertEqual(a.tolist(), [1, 1, 1])
+
+        a = mx.array([[1, 1, 1], [1, 1, 1]])
+        with self.assertRaises(IndexError):
+            a[0, 10] = 0
+            mx.eval(a)
+        with self.assertRaises(IndexError):
+            a[None, 2] = 1
+            mx.eval(a)
 
         # Array slices
         def check_slices(arr_np, update_np, *idx_np):
@@ -1378,6 +1438,10 @@ class TestArray(mlx_tests.MLXTestCase):
         a = mx.array([0, 1, 2])
         a = a.at[1].add(2)
         self.assertEqual(a.tolist(), [0, 3, 2])
+
+        with self.assertRaises(IndexError):
+            a = a.at[4].add(2)
+            mx.eval(a)
 
         a = a.at[mx.array([0, 0, 0, 0])].add(1)
         self.assertEqual(a.tolist(), [4, 3, 2])

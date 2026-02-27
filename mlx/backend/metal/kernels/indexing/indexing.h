@@ -21,3 +21,13 @@ METAL_FUNC size_t offset_neg_idx(IdxT idx, int size) {
     return (idx < 0) ? idx + size : idx;
   }
 }
+
+template <typename IdxT>
+METAL_FUNC bool
+check_bounds(IdxT idx, int size, device atomic<int32_t>* global_failure) {
+  if (idx < 0 || idx >= size) {
+    atomic_store_explicit(global_failure, BOUNDS_FAILURE, memory_order_relaxed);
+    return false;
+  }
+  return true;
+}
