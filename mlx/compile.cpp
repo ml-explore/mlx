@@ -856,7 +856,8 @@ void compile_fuse(
       // are not fusable except for broadcast which we can split to avoid
       // stopping fusion
       if (!all_parents_in) {
-        if (a.has_primitive() && is_broadcast(a.primitive())) {
+        if (a.has_primitive() && is_broadcast(a.primitive()) &&
+            input_set.size() < max_compile_arrays) {
           array b = split_one(a, parents_map, cache);
           recurse(b, depth, s, shape);
         } else {
