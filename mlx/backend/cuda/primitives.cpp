@@ -27,7 +27,6 @@ namespace mlx::core {
 NO_GPU(BlockMaskedMM)
 NO_GPU(FFT)
 NO_GPU(GatherQMM)
-NO_GPU(Hadamard)
 NO_GPU_MULTI(LUF)
 NO_GPU_MULTI(QRF)
 NO_GPU(SegmentedMM)
