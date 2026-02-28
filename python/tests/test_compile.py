@@ -1049,6 +1049,28 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(d[0], d_hat[0]))
         self.assertTrue(mx.allclose(d[1], d_hat[1]))
 
+    def test_compile_large_graph_with_broadcasts(self):
+        N = 20
+        _as = [mx.array(2 * i, dtype=mx.float32) for i in range(N)]
+        _bs = [mx.array(i, dtype=mx.float32) for i in range(N)]
+        _c = mx.array(0.0)
+        x = mx.random.normal((2, 2))
+
+        def f(x):
+            y = 0
+            for i in range(N):
+                y = y + _as[i] * x * _bs[i] * _c
+            return y
+
+        ref = f(x)
+        mx.eval(ref)
+        f = mx.compile(f)
+        for i in range(2):
+            y = f(x)
+            mx.eval(y)
+
+        self.assertTrue(mx.allclose(y, ref))
+
     def test_wrap_compiled(self):
         @mx.compile
         def inner():

@@ -1,5 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
+#include <optional>
 #include "mlx/backend/cuda/device.h"
 
 namespace mlx::core {
@@ -30,6 +31,7 @@ void fp_quantize(
     array& scales,
     int group_size,
     int bits,
+    const std::optional<array>& global_scale,
     cu::CommandEncoder& enc,
     const Stream& s);
 
@@ -39,6 +41,7 @@ void fp_dequantize(
     array& w,
     int group_size,
     int bits,
+    const std::optional<array>& global_scale,
     cu::CommandEncoder& enc,
     const Stream& s);
 
@@ -47,6 +50,7 @@ void fp_quantize_dequantize(
     array& what,
     int group_size,
     int bits,
+    const std::optional<array>& global_scale,
     cu::CommandEncoder& enc,
     const Stream& s);
 

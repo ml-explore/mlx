@@ -26,6 +26,10 @@ Stream get_stream(int index) {
   return scheduler::scheduler().get_stream(index);
 }
 
+std::vector<Stream> get_streams() {
+  return scheduler::scheduler().get_streams();
+}
+
 Stream new_stream(Device d) {
   if (!gpu::is_available() && d == Device::gpu) {
     throw std::invalid_argument(

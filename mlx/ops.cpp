@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/backend/metal/metal.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -2311,6 +2312,67 @@ array argmax(
   return out;
 }
 
+array hanning(int M, StreamOrDevice s /* = {} */) {
+  if (M < 1) {
+    return array({});
+  }
+  if (M == 1) {
+    return ones({1}, float32, s);
+  }
+
+  auto n = arange(0, M, float32, s);
+  array factor(M_PI / (M - 1), float32);
+  return square(sin(multiply(factor, n, s), s), s);
+}
+
+array hamming(int M, StreamOrDevice s /* = {} */) {
+  if (M < 1) {
+    return array({});
+  }
+  if (M == 1) {
+    return ones({1}, float32, s);
+  }
+
+  auto n = arange(0, M, float32, s);
+  float factor_val = (2.0 * M_PI) / (M - 1);
+  auto factor = array(factor_val, float32);
+
+  auto arg = multiply(factor, n, s);
+  auto cos_vals = cos(arg, s);
+
+  auto left_coef = array(0.54f, float32);
+  auto right_coef = array(0.46f, float32);
+
+  return subtract(left_coef, multiply(right_coef, cos_vals, s), s);
+}
+
+array blackman(int M, StreamOrDevice s /* = {} */) {
+  if (M < 1) {
+    return array({});
+  }
+  if (M == 1) {
+    return ones({1}, float32, s);
+  }
+
+  auto n = arange(0, M, float32, s);
+
+  float arg_val = (2.0 * M_PI) / (M - 1);
+  auto x = multiply(array(arg_val, float32), n, s);
+
+  auto cos_x = cos(x, s);
+
+  auto alpha = array(0.34f, float32);
+  auto beta = array(0.5f, float32);
+  auto gamma = array(0.16f, float32);
+
+  auto term1 = multiply(beta, cos_x, s);
+
+  auto cos_sq = square(cos_x, s);
+  auto term2 = multiply(gamma, cos_sq, s);
+
+  return add(subtract(alpha, term1, s), term2, s);
+}
+
 /** Returns a sorted copy of the flattened array. */
 array sort(const array& a, StreamOrDevice s /* = {} */) {
   int size = a.size();
@@ -4209,6 +4271,34 @@ std::pair<Dtype, QuantizationMode> validate_mode_with_type(
   }
 }
 
+void validate_global_scale(
+    std::string_view tag,
+    QuantizationMode qmode,
+    const std::optional<array>& global_scale) {
+  if (global_scale.has_value()) {
+    if (qmode != QuantizationMode::Nvfp4) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Global scale is only supported for 'nvfp4' "
+          << "quantization mode.";
+      throw std::invalid_argument(msg.str());
+    } else {
+      if (global_scale->size() != 1) {
+        std::ostringstream msg;
+        msg << "[" << tag << "] Global scale must be a scalar but got shape "
+            << global_scale->shape() << ".";
+        throw std::invalid_argument(msg.str());
+      }
+      // TODO: not sure if type should be restricted to float32
+      if (global_scale->dtype() != float32) {
+        std::ostringstream msg;
+        msg << "[" << tag << "] Global scale must have dtype float32 but got "
+            << global_scale->dtype() << ".";
+        throw std::invalid_argument(msg.str());
+      }
+    }
+  }
+}
+
 array quantized_matmul(
     array x,
     array w,
@@ -4251,7 +4341,6 @@ array quantized_matmul(
   if (x.ndim() > 2 && w.ndim() > 2) {
     inputs = broadcast_arrays(inputs, {-2, -1}, s);
   }
-
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
   return array(
@@ -4267,7 +4356,10 @@ void validate_qqmm_inputs(
     array w,
     std::optional<array> scales_w,
     int group_size,
-    int bits) {
+    int bits,
+    std::optional<array> global_scale_x,
+    std::optional<array> global_scale_w,
+    QuantizationMode qmode) {
   // check 2D (for now)
   if (x.ndim() > 2 || w.ndim() > 2) {
     std::ostringstream msg;
@@ -4303,6 +4395,19 @@ void validate_qqmm_inputs(
     msg << "[qqmm] Only real floating types except float64 are supported but "
         << "first argument dtype == " << x.dtype() << ".";
     throw std::invalid_argument(msg.str());
+  }
+  // validate global scales
+  validate_global_scale("qqmm", qmode, global_scale_x);
+  validate_global_scale("qqmm", qmode, global_scale_w);
+  // For nvfp4 mode, both global scales must be provided together or neither
+  if (qmode == QuantizationMode::Nvfp4) {
+    bool has_x = global_scale_x.has_value();
+    bool has_w = global_scale_w.has_value();
+    if (has_x != has_w) {
+      throw std::invalid_argument(
+          "[qqmm] For nvfp4 mode, either both global_scale_x and "
+          "global_scale_w must be provided, or neither.");
+    }
   }
 }
 
@@ -4343,6 +4448,8 @@ array qqmm(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
+    const std::optional<array> global_scale_x /* = std::nullopt */,
+    const std::optional<array> global_scale_w /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
   auto qmode = string_to_quantization_mode(mode, "qqmm");
@@ -4369,7 +4476,8 @@ array qqmm(
   }
 
   // validate inputs
-  validate_qqmm_inputs(x, w, scales_w, group_size, bits);
+  validate_qqmm_inputs(
+      x, w, scales_w, group_size, bits, global_scale_x, global_scale_w, qmode);
   // validate and extract shapes
   auto [w_inner_dims, w_outer_dims] =
       extract_qqmm_dims(x, w, scales_w, group_size, bits);
@@ -4380,6 +4488,11 @@ array qqmm(
   if (scales_w.has_value()) {
     inputs.push_back(*scales_w);
   }
+  if (global_scale_x.has_value() && global_scale_w.has_value()) {
+    inputs.push_back(*global_scale_x);
+    inputs.push_back(*global_scale_w);
+  }
+
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
   auto out = array(
@@ -4515,6 +4628,7 @@ std::vector<array> fp_quantize(
     int group_size,
     int bits,
     QuantizationMode mode,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     Stream s) {
   int expected_gs = mode == QuantizationMode::Nvfp4 ? 16 : 32;
   int expected_bits = mode == QuantizationMode::Mxfp8 ? 8 : 4;
@@ -4532,6 +4646,12 @@ std::vector<array> fp_quantize(
         << bits << ".";
     throw std::invalid_argument(msg.str());
   }
+
+  auto inputs = std::vector<array>{w};
+  if (global_scale.has_value()) {
+    inputs.push_back(global_scale.value());
+  }
+
   auto fallback = [bits = bits, group_size = group_size, s](
                       const std::vector<array>& inputs) -> std::vector<array> {
     auto& w = inputs[0];
@@ -4543,8 +4663,13 @@ std::vector<array> fp_quantize(
         divide(max(abs(wq, s), -1, true, s), array(maxval, w.dtype()), s);
     if (group_size == 16) {
       // convert to e4m3
+      auto scale_encode = inputs.size() > 1
+          ? divide(array(448.0f * 6.0f, float32), inputs[1], s)
+          : array(1.0f, float32);
+      scales = multiply(scales, scale_encode, s);
       scales = to_fp8(scales, s);
-      wq = divide(wq, from_fp8(scales, w.dtype(), s), s);
+      wq = multiply(
+          divide(wq, from_fp8(scales, w.dtype(), s), s), scale_encode, s);
     } else {
       // convert to e8m0
       auto z = array(0, scales.dtype());
@@ -4600,9 +4725,9 @@ std::vector<array> fp_quantize(
         {uint32, uint8},
         std::make_shared<fast::Quantize>(
             s, fallback, group_size, bits, mode, false),
-        {w});
+        inputs);
   }
-  return fallback({w});
+  return fallback(inputs);
 }
 
 std::vector<array> quantize(
@@ -4610,6 +4735,7 @@ std::vector<array> quantize(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto qmode = string_to_quantization_mode(mode, "quantize");
   auto [group_size, bits] =
@@ -4636,11 +4762,17 @@ std::vector<array> quantize(
         << " matrix has shape " << w.shape();
     throw std::invalid_argument(msg.str());
   }
-
+  if (to_stream(s).device == Device::gpu && metal::is_available() &&
+      global_scale.has_value()) {
+    std::ostringstream msg;
+    msg << "[quantize] Global scale is not supported on the Metal backend.";
+    throw std::invalid_argument(msg.str());
+  }
+  validate_global_scale("quantize", qmode, global_scale);
   if (qmode == QuantizationMode::Affine) {
     return affine_quantize(w, group_size, bits, s);
   } else {
-    return fp_quantize(w, group_size, bits, qmode, to_stream(s));
+    return fp_quantize(w, group_size, bits, qmode, global_scale, to_stream(s));
   }
 }
 
@@ -4745,6 +4877,7 @@ array fp_dequantize(
     int bits,
     Dtype out_type,
     QuantizationMode mode,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     Stream s) {
   int expected_gs = mode == QuantizationMode::Nvfp4 ? 16 : 32;
   int expected_bits = mode == QuantizationMode::Mxfp8 ? 8 : 4;
@@ -4789,6 +4922,11 @@ array fp_dequantize(
     throw std::invalid_argument(msg.str());
   }
 
+  auto inputs = std::vector<array>{w, scales};
+  if (global_scale.has_value()) {
+    inputs.push_back(global_scale.value());
+  }
+
   auto fallback =
       [wshape = std::move(wshape),
        sshape = std::move(sshape),
@@ -4831,13 +4969,17 @@ array fp_dequantize(
     out = reshape(out, {-1, group_size}, s);
     scales = reshape(scales, {-1, 1}, s);
     if (group_size == 16) {
-      scales = from_fp8(scales, out_type, s);
+      array inv_scale_enc = inputs.size() > 2
+          ? divide(inputs[2], array(448.0f * 6.0f, out_type), s)
+          : array(1.0f, out_type);
+      scales = multiply(from_fp8(scales, out_type, s), inv_scale_enc, s);
     } else {
       scales = subtract(astype(scales, out_type, s), array(127, out_type), s);
       scales = power(array(2.0f, out_type), scales, s);
     }
     return {reshape(multiply(out, scales, s), wshape, s)};
   };
+
   if (s.device == Device::gpu) {
     auto out_shape = w.shape();
     out_shape.back() = out_size;
@@ -4846,9 +4988,9 @@ array fp_dequantize(
         out_type,
         std::make_shared<fast::Quantize>(
             s, fallback, group_size, bits, mode, true),
-        {w, scales});
+        inputs);
   }
-  return fallback({w, scales})[0];
+  return fallback(inputs)[0];
 }
 
 array dequantize(
@@ -4858,6 +5000,7 @@ array dequantize(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     std::optional<Dtype> dtype /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto [out_type, qmode] =
@@ -4884,6 +5027,14 @@ array dequantize(
         << "but it has only " << w.ndim() << ".";
     throw std::invalid_argument(msg.str());
   }
+  if (global_scale.has_value()) {
+    if (to_stream(s).device == Device::gpu && metal::is_available()) {
+      std::ostringstream msg;
+      msg << "[dequantize] Global scale is not supported on the Metal backend.";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+  validate_global_scale("dequantize", qmode, global_scale);
 
   if (qmode == QuantizationMode::Affine) {
     return astype(
@@ -4892,7 +5043,14 @@ array dequantize(
         s);
   } else {
     return fp_dequantize(
-        w, scales, group_size, bits, out_type, qmode, to_stream(s));
+        w,
+        scales,
+        group_size,
+        bits,
+        out_type,
+        qmode,
+        global_scale,
+        to_stream(s));
   }
 }
 

@@ -3424,6 +3424,7 @@ std::vector<array> QuantizedMatmul::vjp(
             group_size_,
             bits_,
             quantization_mode_to_string(mode_),
+            {}, // placeholder for amax
             std::nullopt,
             stream());
         wq = unflatten(wq, -1, {-1, group_size_}, stream());
@@ -3484,14 +3485,14 @@ std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
 }
 
 std::vector<array> QQMatmul::vjp(
-    const std::vector<array>& primals, // non quantized x, non quantized w
+    const std::vector<array>& primals, // non quantized x, non quantized w, if
+                                       // nvfp4 global_scale_x, global_scale_w
     const std::vector<array>& cotangents, // non quantized upstream grads
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  if (primals.size() != 2) {
-    throw std::runtime_error(
-        "[QQMatmul::vjp] Expected exactly 2 non-quantized primal inputs (x, w).");
-  }
+  bool is_nvfp4 = mode_ == QuantizationMode::Nvfp4;
+  assert(primals.size() == 2 || (is_nvfp4 && primals.size() == 4));
+
   std::vector<array> vjps;
   auto& cotan = cotangents[0];
   auto& s = stream();
@@ -3499,6 +3500,15 @@ std::vector<array> QQMatmul::vjp(
   // primal[0] -- non quantized activations (M, K)
   // cotan -- non quantized grads (M, N)
   auto qmode = quantization_mode_to_string(mode_);
+  std::optional<array> cotan_amax = (primals.size() == 4)
+      ? std::make_optional(astype(max(abs(cotan, s), s), float32, s))
+      : std::nullopt;
+
+  auto get_primal_scale = [&](int idx) {
+    return (primals.size() == 4) ? std::make_optional(primals[idx])
+                                 : std::nullopt;
+  };
+
   for (auto arg : argnums) {
     if (arg == 0) { // gradient wrt to x
       // We transpose weights -> quantize along N
@@ -3509,6 +3519,8 @@ std::vector<array> QQMatmul::vjp(
           group_size_,
           bits_,
           qmode,
+          cotan_amax,
+          get_primal_scale(3), // global_scale_w (for w.T)
           s));
     } else if (arg == 1) { // gradient wrt to weights
       vjps.push_back(qqmm(
@@ -3518,7 +3530,11 @@ std::vector<array> QQMatmul::vjp(
           group_size_,
           bits_,
           qmode,
+          cotan_amax,
+          get_primal_scale(2), // global_scale_x (for x.T)
           s));
+    } else {
+      vjps.push_back(zeros_like(primals[arg], s));
     }
   }
   return vjps;
@@ -3643,6 +3659,7 @@ std::vector<array> GatherQMM::vjp(
                             bits_,
                             quantization_mode_to_string(mode_),
                             std::nullopt,
+                            std::nullopt, // amax placeholder
                             stream()),
                         -1,
                         {-1, group_size_},

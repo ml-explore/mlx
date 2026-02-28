@@ -711,7 +711,8 @@ void ScaledDotProductAttention::eval_gpu(
       return (strides[0] == strides[1] * shape[1]);
     };
 
-    const auto& q = copy_unless(q_copy_unless, q_pre);
+    bool q_copied = !q_copy_unless(q_pre);
+    array q = (q_copied) ? contiguous_copy_gpu(q_pre, s) : q_pre;
     const auto& k = copy_unless(kv_copy_unless, k_pre);
     const auto& v = copy_unless(kv_copy_unless, v_pre);
 
@@ -719,6 +720,9 @@ void ScaledDotProductAttention::eval_gpu(
     if (q.is_donatable() && q.flags().row_contiguous && q.size() == o.size()) {
       o.copy_shared_buffer(q);
     } else {
+      if (q_copied) {
+        copies.push_back(q);
+      }
       o.set_data(allocator::malloc(o.nbytes()));
     }
 

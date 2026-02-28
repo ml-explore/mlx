@@ -76,7 +76,6 @@ void copy_contiguous(
             kernel,
             num_blocks,
             block_dims,
-            0,
             gpu_ptr<InType>(in) + in_offset,
             gpu_ptr<OutType>(out) + out_offset,
             out.data_size());

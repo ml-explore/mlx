@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "mlx/api.h"
 #include "mlx/device.h"
 
@@ -24,6 +26,9 @@ MLX_API Stream new_stream(Device d);
 
 /** Get the stream with the given index. */
 MLX_API Stream get_stream(int index);
+
+/** Get all available streams. */
+MLX_API std::vector<Stream> get_streams();
 
 inline bool operator==(const Stream& lhs, const Stream& rhs) {
   return lhs.index == rhs.index;

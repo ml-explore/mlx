@@ -1429,6 +1429,76 @@ void init_ops(nb::module_& m) {
       nb::sig(
           "def arange(stop : Union[int, float], step : Union[None, int, float] = None, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"));
   m.def(
+      "hanning",
+      &mlx::core::hanning,
+      "M"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Return the Hanning window.
+        
+        The Hanning window is a taper formed by using a weighted cosine.
+
+        .. math::
+          w(n) = 0.5 - 0.5 \cos\left(\frac{2\pi n}{M-1}\right)
+           \qquad 0 \le n \le M-1
+        
+        Args:
+            M (int): Number of points in the output window.
+            
+        Returns:
+            array: The window, with the maximum value normalized to one (the value one
+                   appears only if the number of samples is odd).
+    )pbdoc");
+  m.def(
+      "hamming",
+      &mlx::core::hamming,
+      "M"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def hamming(M: int, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Return the Hamming window.
+
+        The Hamming window is a taper formed by using a weighted cosine.
+
+        .. math::
+           w(n) = 0.54 - 0.46 \cos\left(\frac{2\pi n}{M-1}\right)
+           \qquad 0 \le n \le M-1
+
+        Args:
+            M (int): Number of points in the output window.
+
+        Returns:
+            array: The window, with the maximum value normalized to one (the value one
+                   appears only if the number of samples is odd).
+    )pbdoc");
+  m.def(
+      "blackman",
+      &mlx::core::blackman,
+      "M"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def blackman(M: int, *, stream: Union[None, Stream, Device] = None) -> array"), // <--- J'ai rajouté ça
+      R"pbdoc(
+        Return the Blackman window.
+        
+        The Blackman window is a taper formed by using the first three terms of a summation of cosines.
+
+        .. math::
+          w(n) = 0.42 - 0.5 \cos\left(\frac{2\pi n}{M-1}\right) + 0.08 \cos\left(\frac{4\pi n}{M-1}\right)
+           \qquad 0 \le n \le M-1
+        
+        Args:
+            M (int): Number of points in the output window.
+            
+        Returns:
+            array: The window, with the maximum value normalized to one (the value one
+                   appears only if the number of samples is odd).
+    )pbdoc");
+  m.def(
       "linspace",
       [](Scalar start,
          Scalar stop,
@@ -4258,10 +4328,11 @@ void init_ops(nb::module_& m) {
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "affine",
+      "global_scale"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantize(w: array, /, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, stream: Union[None, Stream, Device] = None) -> tuple[array, array, array]"),
+          "def quantize(w: array, /, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, global_scale: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> tuple[array, array, array]"),
       R"pbdoc(
         Quantize the array ``w``.
 
@@ -4286,6 +4357,8 @@ void init_ops(nb::module_& m) {
             ``w`` in the quantized array. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
           mode (str, optional): The quantization mode. Default: ``"affine"``.
+          global_scale (array, optional): The per-input float32 scale used for
+            ``"nvfp4"`` quantization if provided. Default: ``None``.
 
         Returns:
           tuple: A tuple with either two or three elements containing:
@@ -4355,11 +4428,12 @@ void init_ops(nb::module_& m) {
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "affine",
+      "global_scale"_a = nb::none(),
       "dtype"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def dequantize(w: array, /, scales: array, biases: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def dequantize(w: array, /, scales: array, biases: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', global_scale: Optional[array] = None, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Dequantize the matrix ``w`` using quantization parameters.
 
@@ -4374,6 +4448,8 @@ void init_ops(nb::module_& m) {
           bits (int, optional): The number of bits occupied by each element of
             ``w`` in the quantized array. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+          global_scale (array, optional): The per-input float32 scale used for
+            ``"nvfp4"`` quantization if provided. Default: ``None``.
           dtype (Dtype, optional): The data type of the dequantized output. If
             ``None`` the return type is inferred from the scales and biases
             when possible and otherwise defaults to ``bfloat16``.
@@ -5465,10 +5541,12 @@ void init_ops(nb::module_& m) {
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "nvfp4",
+      "global_scale_x"_a = nb::none(),
+      "global_scale_w"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def qqmm(x: array, w: array, scales: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def qqmm(x: array, w: array, scales: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', global_scale_x: Optional[array] = None, global_scale_w: Optional[array] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
       Perform a matrix multiplication using a possibly quantized weight matrix
       ``w`` and a non-quantized input ``x``. The input ``x`` is quantized on the
@@ -5486,6 +5564,7 @@ void init_ops(nb::module_& m) {
         If ``x`` and `w`` are not quantized, their data types must be ``float32``,
         ``float16``, or ``bfloat16``.
         If ``w`` is quantized, it must be packed in unsigned integers.
+        ``global_scale_x`` and ``global_scale_w`` are only used for ``nvfp4`` quantization.
 
       Args:
         x (array): Input array.
@@ -5501,7 +5580,10 @@ void init_ops(nb::module_& m) {
         mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
           Supported modes are ``nvfp4`` and ``mxfp8``. See the
           :ref:`table of quantization modes <quantize-modes>` for details.
-
+        global_scale (array, optional): The per-input float32 scale used for x
+            with ``"nvfp4"`` quantization. Default: ``None``.
+        global_scale_w (array, optional): The per-input float32 scale used for w
+            with ``"nvfp4"`` quantization. Default: ``None``.
       Returns:
         array: The result of the multiplication of quantized ``x`` with quantized ``w``.
         needed).

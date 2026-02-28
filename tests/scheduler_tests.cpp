@@ -36,6 +36,34 @@ TEST_CASE("test stream management") {
   }
 }
 
+TEST_CASE("test get streams") {
+  auto streams = get_streams();
+
+  // At least the default CPU stream exists
+  CHECK(streams.size() >= 1);
+
+  // All default streams should be in the list
+  auto s_cpu = default_stream(Device::cpu);
+  bool found_cpu = false;
+  for (auto& s : streams) {
+    if (s == s_cpu) {
+      found_cpu = true;
+    }
+  }
+  CHECK(found_cpu);
+
+  // New streams show up
+  auto s_new = new_stream(Device::cpu);
+  streams = get_streams();
+  bool found_new = false;
+  for (auto& s : streams) {
+    if (s == s_new) {
+      found_new = true;
+    }
+  }
+  CHECK(found_new);
+}
+
 TEST_CASE("test asynchronous launch") {
   auto s1 = default_stream(Device::cpu);
   auto s2 = new_stream(Device::cpu);

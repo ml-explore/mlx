@@ -19,15 +19,10 @@ void qqmm_impl(
     const array& b,
     const array& a_scale,
     const array& b_scale,
-    Dtype out_dtype,
     QuantizationMode mode,
-    float alpha) {
-  // Invoke CublasQQMM
+    const GemmScalars& scalars) {
   std::string qmode = quantization_mode_to_string(mode);
 
-  // Currently only supports non-batched QQMM operations
-  // that covers all use cases for training, we will just collapse (batch,
-  // seq_len) into (tokens)
   CublasQQMM qqmm(
       encoder.device(),
       a_transposed,
@@ -41,10 +36,22 @@ void qqmm_impl(
       1, // batch_count
       0, // a_batch_stride
       0, // b_batch_stride
-      out_dtype,
+      out.dtype(),
       qmode);
 
-  qqmm.run(encoder, out, a, b, a_scale, b_scale, alpha);
+  if (scalars.has_values()) {
+    qqmm.run(
+        encoder,
+        out,
+        a,
+        b,
+        a_scale,
+        b_scale,
+        *scalars.alpha_device,
+        *scalars.beta_device);
+  } else {
+    qqmm.run(encoder, out, a, b, a_scale, b_scale);
+  }
 }
 
 } // namespace mlx::core

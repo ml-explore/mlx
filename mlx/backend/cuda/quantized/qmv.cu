@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/qmv.h"
 #include "mlx/backend/cuda/quantized/quantized_utils.cuh"
+#include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/dtype_utils.h"
 
 #include <cooperative_groups.h>
@@ -214,16 +215,23 @@ void dispatch_1_2_4(int n, F&& f) {
 }
 
 void fp_qmv(
-    const array& mat,
-    const array& scales,
-    const array& vec,
+    const array& x,
+    const array& w,
+    const array& scales_,
     array& out,
     int bits,
     int group_size,
     int M,
     int N,
     int K,
-    CommandEncoder& encoder) {
+    CommandEncoder& encoder,
+    Stream s) {
+  // Make sure the last two dims of x and w, s, b are contiguous. This should
+  // be relaxed for x.
+  array vec = ensure_row_contiguous_matrix(x, encoder, s);
+  array mat = ensure_row_contiguous_matrix(w, encoder, s);
+  array scales = ensure_row_contiguous_matrix(scales_, encoder, s);
+
   encoder.set_input_array(mat);
   encoder.set_input_array(scales);
   encoder.set_input_array(vec);
@@ -261,7 +269,6 @@ void fp_qmv(
                 kernel,
                 {static_cast<uint32_t>(M), blocks_y},
                 block_dims,
-                0,
                 mat_ptr,
                 gpu_ptr<uint8_t>(scales),
                 vec_ptr,
@@ -280,7 +287,6 @@ void fp_qmv(
                 kernel,
                 {static_cast<uint32_t>(M), blocks_y, B},
                 block_dims,
-                0,
                 mat_ptr,
                 gpu_ptr<uint8_t>(scales),
                 vec_ptr,

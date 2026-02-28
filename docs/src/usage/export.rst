@@ -155,6 +155,34 @@ parameters, pass them as inputs to the ``call`` wrapper:
    mx.export_function("model.mlxfn", call, (mx.zeros(4),), params)
 
 
+Exporting with a Callback
+-------------------------
+
+To inspect the exported graph, you can pass a callback instead of a file path
+to :func:`export_function`.
+
+.. code-block:: python
+
+  def fun(x):
+    return x.astype(mx.int32)
+
+  def callback(args):
+    print(args)
+
+  mx.export_function(callback, fun, mx.array([1.0, 2.0]))
+
+The argument to the callback (``args``) is a dictionary which includes a
+``type`` field. The possible types are:
+
+* ``"inputs"``: The ordered positional inputs to the exported function
+* ``"keyword_inputs"``: The keyword specified inputs to the exported function
+* ``"outputs"``: The ordered outputs of the exported function
+* ``"constants"``: Any graph constants
+* ``"primitives"``: Inner graph nodes representating the operations
+
+Each type has additional fields in the ``args`` dictionary.
+
+
 Shapeless Exports
 -----------------
 

@@ -91,8 +91,7 @@ void scan_gpu_inplace(
   } else {
     auto& compute_encoder = d.get_command_encoder(s.index);
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(
-        in.data_shared_ptr() == nullptr ? out : in, 0);
+    compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
     size_t size = in.shape(axis);
     size_t stride = in.strides()[axis];
