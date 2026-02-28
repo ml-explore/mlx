@@ -20,7 +20,7 @@ runs:
       run: |
         pip install auditwheel build patchelf setuptools
         python setup.py clean --all
-        MLX_BUILD_STAGE=2 python -m build -w
+        CMAKE_BUILD_PARALLEL_LEVEL=1 MLX_BUILD_STAGE=2 python -m build -w
 
         auditwheel repair dist/mlx_cuda*.whl \
           --plat manylinux_2_35_${{ inputs.arch }} \
