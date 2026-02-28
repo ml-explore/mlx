@@ -158,8 +158,10 @@ message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
 
-if(("90a" IN_LIST MLX_CUDA_ARCHITECTURES) OR ("90a-real" IN_LIST
-                                              MLX_CUDA_ARCHITECTURES))
+# Skip Hopper-only kernels when not building for sm90a.
+if(NOT DEFINED ENV{MLX_DISABLE_SM90A_KERNELS}
+   AND (("90a" IN_LIST MLX_CUDA_ARCHITECTURES) OR ("90a-real" IN_LIST
+                                                   MLX_CUDA_ARCHITECTURES)))
   target_compile_definitions(mlx PRIVATE MLX_CUDA_SM90A_ENABLED)
 endif()
 
