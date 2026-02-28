@@ -1,11 +1,8 @@
 # Copyright © 2024 Apple Inc.
 
 import mlx.core as mx
-import mlx.nn as nn
-import mlx.optimizers as optim
 import mlx_distributed_tests
 import mlx_tests
-from mlx.nn.utils import average_gradients, fsdp_update_parameters
 
 
 class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
@@ -50,7 +47,74 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
                 maxrelerror = maxrelerror.max()
                 self.assertLessEqual(maxrelerror, rtol)
 
-    def test_fsdp_update_parameters(self):
+    def test_groups(self):
+        world = mx.distributed.init()
+        self.assertEqual(world.size(), 8)
+        self.assertTrue(0 <= world.rank() < 8)
+
+        world2 = mx.distributed.init()
+        self.assertEqual(world.size(), world2.size())
+        self.assertEqual(world.rank(), world2.rank())
+
+        sub = world.split(world.rank() % 2)
+        self.assertEqual(sub.size(), 4)
+        self.assertEqual(sub.rank(), world.rank() // 2)
+
+        sub = world.split(world.rank() // 2)
+        self.assertEqual(sub.size(), 2)
+
+    def test_all_reduce_split(self):
+        world = mx.distributed.init()
+        dtypes = [
+            (mx.float32, 1e-6),
+            (mx.float16, 5e-3),
+            (mx.bfloat16, 1e-1),
+        ]
+        sizes = [
+            (7,),
+            (10,),
+            (1024,),
+            (1024, 1024),
+        ]
+        key = mx.random.key(0)
+        group = world.split(world.rank() % 2)
+
+        for dt, rtol in dtypes:
+            for sh in sizes:
+                x = (
+                    mx.random.uniform(shape=(group.size(),) + sh, key=key) * 10
+                ).astype(dt)
+
+                # All sum
+                y = mx.distributed.all_sum(x[group.rank()], group=group)
+                z = x.sum(0)
+                maxrelerror = (y - z).abs()
+                if rtol > 0:
+                    maxrelerror /= z.abs()
+                maxrelerror = maxrelerror.max()
+                self.assertLessEqual(maxrelerror, rtol)
+
+                # All max
+                y = mx.distributed.all_max(x[group.rank()], group=group)
+                z = x.max(0)
+                self.assertTrue(mx.all(y == z))
+
+                # All min
+                y = mx.distributed.all_min(x[group.rank()], group=group)
+                z = x.min(0)
+                self.assertTrue(mx.all(y == z))
+
+    def test_all_gather_split(self):
+        world = mx.distributed.init()
+        dtypes = [mx.float32, mx.float16, mx.bfloat16]
+        sub = world.split(world.rank() % 2)
+        for dt in dtypes:
+            x = mx.ones((2, 2, 4), dtype=dt)
+            y = mx.distributed.all_gather(x, group=sub)
+            self.assertEqual(y.shape, (sub.size() * 2, 2, 4))
+            self.assertTrue(mx.all(y == 1))
+
+    def test_fsdp_apply_gradients(self):
         world = mx.distributed.init()
         N = world.size()
 
@@ -64,7 +128,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         }
 
         optimizer = optim.SGD(learning_rate=0.1)
-        updated_params_fsdp = fsdp_update_parameters(params, grads, optimizer)
+        updated_params_fsdp = fsdp_apply_gradients(params, grads, optimizer)
         mx.eval(updated_params_fsdp)
 
         self.assertEqual(updated_params_fsdp["w1"].shape, (N * 10, 8))
@@ -84,7 +148,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             "w2": mx.ones((N * 20,)) * 10.0,
         }
 
-        new_params_clipped, grad_norm = fsdp_update_parameters(
+        new_params_clipped, grad_norm = fsdp_apply_gradients(
             params, grads, optimizer, max_norm=1.0
         )
         mx.eval(new_params_clipped, grad_norm)
@@ -117,7 +181,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         grads = {"w": mx.ones((N * 4,)) * 0.5}
 
         optimizer_fsdp = optim.SGD(learning_rate=0.1)
-        updated_params_fsdp = fsdp_update_parameters(params, grads, optimizer_fsdp)
+        updated_params_fsdp = fsdp_apply_gradients(params, grads, optimizer_fsdp)
 
         optimizer_ddp = optim.SGD(learning_rate=0.1)
         avg_grads = average_gradients(grads)
@@ -153,7 +217,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             return grad_norm, params
 
         def pseudo_step_fsdp(grads, params, optimizer):
-            params, grad_norm = fsdp_update_parameters(
+            params, grad_norm = fsdp_apply_gradients(
                 params, grads, optimizer, max_norm=1.0
             )
             return grad_norm, params

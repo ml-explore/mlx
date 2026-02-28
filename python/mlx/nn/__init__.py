@@ -4,6 +4,6 @@ from mlx.nn import init, losses
 from mlx.nn.layers import *
 from mlx.nn.utils import (
     average_gradients,
-    fsdp_update_parameters,
+    fsdp_apply_gradients,
     value_and_grad,
 )

@@ -238,12 +238,14 @@ def fsdp_apply_gradients(
 
         >>> optimizer = optim.SGD(learning_rate=0.01)
         >>> # Without gradient clipping
-        >>> updated_params = fsdp_update_parameters(params, grads, optimizer)
+        >>> updated_params = fsdp_apply_gradients(params, grads, optimizer)
+        >>> model.update(updated_params)
         >>>
         >>> # With gradient clipping
-        >>> updated_params, grad_norm = fsdp_update_parameters(
+        >>> updated_params, grad_norm = fsdp_apply_gradients(
         ...     params, grads, optimizer, max_norm=1.0
         ... )
+        >>> model.update(updated_params)
     """
     group = group or mx.distributed.init()
     N = group.size()
