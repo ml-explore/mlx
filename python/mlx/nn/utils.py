@@ -80,7 +80,6 @@ def _extract_info(flat):
 
 
 def _group_by_size(keys, sizes, itemsize, communication_size):
-
     grad_groups = []
     grad_group = []
     grad_group_size = 0
@@ -186,9 +185,9 @@ def _clip_grads_fsdp(grads_slice, max_norm):
     return grads_slice, grad_norm
 
 
-def fsdp_update_parameters(
-    parameters,
+def fsdp_apply_gradients(
     gradients,
+    parameters,
     optimizer,
     group=None,
     communication_size=32 * 1024**2,
@@ -206,14 +205,12 @@ def fsdp_update_parameters(
 
     This is similar to PyTorch's FSDP with `reshard_after_forward=False`.
 
-    Note: Currently supported only on CUDA backend.
-
     Args:
-        parameters (Any): The Python tree containing the full parameters (it should
-            have the same structure across processes). Each parameter's first
-            dimension must be divisible by the world size.
         gradients (Any): The Python tree containing the full gradients (it should
             have the same structure as ``parameters``). Each gradient's first
+            dimension must be divisible by the world size.
+        parameters (Any): The Python tree containing the full parameters (it should
+            have the same structure across processes). Each parameter's first
             dimension must be divisible by the world size.
         optimizer: Optimizer with an ``apply_gradients`` method.
         group (Optional[mlx.core.distributed.Group]): The group of processes for
@@ -302,12 +299,12 @@ def fsdp_update_parameters(
         grad_slices, grad_norm = _clip_grads_fsdp(grad_slices, max_norm)
 
     # optimizer step
-    updated_blobs = optimizer.apply_gradients(grad_slices, param_slices)
+    updated_param_slices = optimizer.apply_gradients(grad_slices, param_slices)
 
     # all-gather and reconstruct
     new_flat = []
     for group_idx, arr_group in enumerate(groups):
-        big_gathered = _all_gather(updated_blobs[group_idx].reshape(1, -1))
+        big_gathered = _all_gather(updated_param_slices[group_idx].reshape(1, -1))
 
         split_sizes = [sizes[i] // N for i in arr_group]
         split_indices = []
