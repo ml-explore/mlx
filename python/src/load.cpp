@@ -162,8 +162,12 @@ class PyFileReader : public mx::io::Reader {
 
  private:
   void _read(char* data, size_t n) {
-    auto memview = PyMemoryView_FromMemory(data, n, PyBUF_WRITE);
-    nb::object bytes_read = readinto_func_(nb::handle(memview));
+    nb::object memview =
+        nb::steal<nb::object>(PyMemoryView_FromMemory(data, n, PyBUF_WRITE));
+    if (!memview.is_valid()) {
+      throw std::runtime_error("[load] Failed to create memoryview for read");
+    }
+    nb::object bytes_read = readinto_func_(memview);
 
     if (bytes_read.is_none() || nb::cast<size_t>(bytes_read) < n) {
       throw std::runtime_error("[load] Failed to read from python stream");
@@ -374,9 +378,12 @@ class PyFileWriter : public mx::io::Writer {
   void write(const char* data, size_t n) override {
     nb::gil_scoped_acquire gil;
 
-    auto memview =
-        PyMemoryView_FromMemory(const_cast<char*>(data), n, PyBUF_READ);
-    nb::object bytes_written = write_func_(nb::handle(memview));
+    nb::object memview = nb::steal<nb::object>(
+        PyMemoryView_FromMemory(const_cast<char*>(data), n, PyBUF_READ));
+    if (!memview.is_valid()) {
+      throw std::runtime_error("[load] Failed to create memoryview for write");
+    }
+    nb::object bytes_written = write_func_(memview);
 
     if (bytes_written.is_none() || nb::cast<size_t>(bytes_written) < n) {
       throw std::runtime_error("[load] Failed to write to python stream");
