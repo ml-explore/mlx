@@ -130,6 +130,7 @@ class RingImpl {
         ibv_wc wc[WC_NUM];
         int n = poll(left_, right_, WC_NUM, wc);
         for (int i = 0; i < n; i++) {
+          check_wc_status(wc[i]);
           int work_type = wc[i].wr_id >> 16;
           int buff = (wc[i].wr_id >> 8) & 0xff;
           int wire = wc[i].wr_id & 0xff;
@@ -229,6 +230,7 @@ class RingImpl {
         ibv_wc wc[WC_NUM];
         int n = poll(left_, right_, WC_NUM, wc);
         for (int i = 0; i < n; i++) {
+          check_wc_status(wc[i]);
           int work_type = wc[i].wr_id >> 16;
           int buff = (wc[i].wr_id >> 8) & 0xff;
           int wire = wc[i].wr_id & 0xff;
@@ -354,6 +356,7 @@ class RingImpl {
         ibv_wc wc[WC_NUM];
         int n = poll(left_, right_, WC_NUM, wc);
         for (int i = 0; i < n; i++) {
+          check_wc_status(wc[i]);
           int work_type = wc[i].wr_id >> 16;
           int buff = (wc[i].wr_id >> 8) & 0xff;
           int wire = wc[i].wr_id & 0xff;
@@ -450,6 +453,7 @@ class RingImpl {
       ibv_wc wc[WC_NUM];
       int n = poll(conns, WC_NUM, wc);
       for (int i = 0; i < n; i++) {
+        check_wc_status(wc[i]);
         int buff = (wc[i].wr_id >> 8) & 0xff;
         int wire = wc[i].wr_id & 0xff;
         int lw = wire % RING_MAX_CONNS;
@@ -513,6 +517,7 @@ class RingImpl {
       ibv_wc wc[WC_NUM];
       int n = poll(conns, WC_NUM, wc);
       for (int i = 0; i < n; i++) {
+        check_wc_status(wc[i]);
         int buff = (wc[i].wr_id >> 8) & 0xff;
         int wire = wc[i].wr_id & 0xff;
         int lw = wire % RING_MAX_CONNS;
