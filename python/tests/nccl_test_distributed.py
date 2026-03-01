@@ -1,8 +1,10 @@
 # Copyright © 2024 Apple Inc.
 
 import mlx.core as mx
+import mlx.optimizers as optim
 import mlx_distributed_tests
 import mlx_tests
+from mlx.nn.utils import average_gradients, fsdp_apply_gradients
 
 
 class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
@@ -128,7 +130,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         }
 
         optimizer = optim.SGD(learning_rate=0.1)
-        updated_params_fsdp = fsdp_apply_gradients(params, grads, optimizer)
+        updated_params_fsdp = fsdp_apply_gradients(grads, params, optimizer)
         mx.eval(updated_params_fsdp)
 
         self.assertEqual(updated_params_fsdp["w1"].shape, (N * 10, 8))
@@ -149,7 +151,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         }
 
         new_params_clipped, grad_norm = fsdp_apply_gradients(
-            params, grads, optimizer, max_norm=1.0
+            grads, params, optimizer, max_norm=1.0
         )
         mx.eval(new_params_clipped, grad_norm)
 
@@ -181,7 +183,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         grads = {"w": mx.ones((N * 4,)) * 0.5}
 
         optimizer_fsdp = optim.SGD(learning_rate=0.1)
-        updated_params_fsdp = fsdp_apply_gradients(params, grads, optimizer_fsdp)
+        updated_params_fsdp = fsdp_apply_gradients(grads, params, optimizer_fsdp)
 
         optimizer_ddp = optim.SGD(learning_rate=0.1)
         avg_grads = average_gradients(grads)
@@ -218,7 +220,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
 
         def pseudo_step_fsdp(grads, params, optimizer):
             params, grad_norm = fsdp_apply_gradients(
-                params, grads, optimizer, max_norm=1.0
+                grads, params, optimizer, max_norm=1.0
             )
             return grad_norm, params
 
