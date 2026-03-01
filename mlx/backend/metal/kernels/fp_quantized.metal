@@ -107,7 +107,9 @@
 
 #define instantiate_quantized_all_splitk(type, mode, group_size, bits) \
   instantiate_quantized_split_k(mode, qvm_split_k, type, 8, group_size, bits) \
-  instantiate_quantized_split_k(mode, qvm_split_k, type, 32, group_size, bits)
+  instantiate_quantized_split_k(mode, qvm_split_k, type, 32, group_size, bits) \
+  instantiate_quantized_aligned(mode, qmm_t_splitk, type, true, group_size, bits) \
+  instantiate_quantized_aligned(mode, qmm_t_splitk, type, false, group_size, bits)
 
 #define instantiate_quantized_all_rhs(type, mode, group_size, bits) \
   instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, gather_qmm_rhs_nt, type, 16, 32, 32, 1, 2, true, mode, group_size, bits) \
