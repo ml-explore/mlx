@@ -3,9 +3,9 @@
 #pragma once
 
 #include <optional>
+#include <utility>
 #include <variant>
 
-#include "mlx/api.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {
@@ -52,6 +52,32 @@ MLX_API array scaled_dot_product_attention(
     const std::string& mask_mode = "",
     std::optional<array> mask_arr = {},
     const std::optional<array>& sinks = {},
+    StreamOrDevice s = {});
+
+/** Fused GRU cell (Metal RNN). One step: out = (1-z)*n + z*h_prev with r,z,n
+ * from gates. */
+MLX_API array gru_cell(
+    const array& input_proj,
+    const array& hidden_proj,
+    const array& hidden_prev,
+    StreamOrDevice s = {});
+
+/** Same with optional recurrent bias bhn [H] for n-gate; avoids per-step add in
+ * Python. */
+MLX_API array gru_cell(
+    const array& input_proj,
+    const array& hidden_proj,
+    const array& hidden_prev,
+    const std::optional<array>& bhn,
+    StreamOrDevice s = {});
+
+/** Fused LSTM cell (Metal RNN). One step: cell_new = f*c_prev + i*g, hidden_new
+ * = o*tanh(cell_new). */
+MLX_API std::pair<array, array> lstm_cell(
+    const array& input_proj,
+    const array& hidden_proj,
+    const array& cell_prev,
+    const array& hidden_prev,
     StreamOrDevice s = {});
 
 using TemplateArg = std::variant<int, bool, Dtype>;

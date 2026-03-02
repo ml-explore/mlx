@@ -720,8 +720,8 @@ array scaled_dot_product_attention(
         if (do_causal) {
           int kL = k.shape(-2);
           int qL = q.shape(-2);
-          int offset = kL - qL;
-          auto q_idx = arange(offset, qL + offset, s);
+          int q_off = (kL - qL) < 0 ? 0 : (kL - qL);
+          auto q_idx = arange(q_off, q_off + qL, s);
           auto k_idx = arange(0, kL, s);
           q_idx = expand_dims(q_idx, 1, s);
           k_idx = expand_dims(k_idx, 0, s);
@@ -842,6 +842,149 @@ array scaled_dot_product_attention(
     }
   }
   return fallback(std::move(inputs))[0];
+}
+
+array gru_cell(
+    const array& input_proj,
+    const array& hidden_proj,
+    const array& hidden_prev,
+    StreamOrDevice s_ /* = {} */) {
+  auto s = to_stream(s_);
+  if (input_proj.ndim() != 2 || hidden_proj.ndim() != 2 ||
+      hidden_prev.ndim() != 2) {
+    throw std::invalid_argument(
+        "[gru_cell] input_proj, hidden_proj, hidden_prev must be 2D.");
+  }
+  size_t B = input_proj.shape(0);
+  size_t H3 = input_proj.shape(1);
+  if (H3 % 3 != 0) {
+    throw std::invalid_argument(
+        "[gru_cell] input_proj last dim must be 3 * hidden_size.");
+  }
+  size_t H = H3 / 3;
+  if (hidden_proj.shape(0) != B || hidden_proj.shape(1) != H3 ||
+      hidden_prev.shape(0) != B || hidden_prev.shape(1) != H) {
+    throw std::invalid_argument(
+        "[gru_cell] shapes must match: input_proj [B,3H], hidden_proj [B,3H], hidden_prev [B,H].");
+  }
+  auto fallback = [s](const std::vector<array>& inputs) {
+    using namespace mlx::core;
+    const array& x = inputs[0];
+    const array& h = inputs[1];
+    const array& h_prev = inputs[2];
+    auto px = split(x, 3, -1, s);
+    auto ph = split(h, 3, -1, s);
+    array h_n = ph[2];
+    if (inputs.size() == 4) {
+      h_n = add(h_n, inputs[3], s); // add bhn to n-gate part
+    }
+    array r = sigmoid(add(px[0], ph[0], s), s);
+    array z = sigmoid(add(px[1], ph[1], s), s);
+    array n = tanh(add(px[2], multiply(r, h_n, s), s), s);
+    array one_minus_z = subtract(full_like(z, 1.0f, s), z, s);
+    return std::vector<array>{
+        add(multiply(one_minus_z, n, s), multiply(z, h_prev, s), s)};
+  };
+  Shape out_shape{static_cast<int>(B), static_cast<int>(H)};
+  auto primitive = std::make_shared<FastGruCell>(s, std::move(fallback));
+  std::vector<array> inps = {input_proj, hidden_proj, hidden_prev};
+  return array(
+      std::move(out_shape),
+      result_type(input_proj, hidden_proj, hidden_prev),
+      primitive,
+      std::move(inps));
+}
+
+array gru_cell(
+    const array& input_proj,
+    const array& hidden_proj,
+    const array& hidden_prev,
+    const std::optional<array>& bhn,
+    StreamOrDevice s_) {
+  if (!bhn.has_value()) {
+    return gru_cell(input_proj, hidden_proj, hidden_prev, s_);
+  }
+  const array& b = bhn.value();
+  if (b.ndim() != 1 ||
+      b.shape(0) != static_cast<int>(input_proj.shape(1) / 3)) {
+    throw std::invalid_argument(
+        "[gru_cell] optional bhn must be 1D of length hidden_size.");
+  }
+  auto s = to_stream(s_);
+  size_t B = input_proj.shape(0);
+  size_t H = input_proj.shape(1) / 3;
+  auto fallback = [s](const std::vector<array>& inputs) {
+    using namespace mlx::core;
+    const array& x = inputs[0];
+    const array& h = inputs[1];
+    const array& h_prev = inputs[2];
+    const array& b = inputs[3];
+    auto px = split(x, 3, -1, s);
+    auto ph = split(h, 3, -1, s);
+    array h_n = add(ph[2], b, s);
+    array r = sigmoid(add(px[0], ph[0], s), s);
+    array z = sigmoid(add(px[1], ph[1], s), s);
+    array n = tanh(add(px[2], multiply(r, h_n, s), s), s);
+    array one_minus_z = subtract(full_like(z, 1.0f, s), z, s);
+    return std::vector<array>{
+        add(multiply(one_minus_z, n, s), multiply(z, h_prev, s), s)};
+  };
+  Shape out_shape{static_cast<int>(B), static_cast<int>(H)};
+  auto primitive = std::make_shared<FastGruCell>(s, std::move(fallback));
+  std::vector<array> inps = {input_proj, hidden_proj, hidden_prev, b};
+  return array(
+      std::move(out_shape),
+      result_type(std::vector<array>{input_proj, hidden_proj, hidden_prev, b}),
+      primitive,
+      std::move(inps));
+}
+
+std::pair<array, array> lstm_cell(
+    const array& input_proj,
+    const array& hidden_proj,
+    const array& cell_prev,
+    const array& hidden_prev,
+    StreamOrDevice s_ /* = {} */) {
+  auto s = to_stream(s_);
+  if (input_proj.ndim() != 2 || hidden_proj.ndim() != 2 ||
+      cell_prev.ndim() != 2 || hidden_prev.ndim() != 2) {
+    throw std::invalid_argument("[lstm_cell] all inputs must be 2D.");
+  }
+  size_t B = input_proj.shape(0);
+  size_t H4 = input_proj.shape(1);
+  if (H4 % 4 != 0) {
+    throw std::invalid_argument(
+        "[lstm_cell] input_proj last dim must be 4 * hidden_size.");
+  }
+  size_t H = H4 / 4;
+  if (hidden_proj.shape(0) != B || hidden_proj.shape(1) != H4 ||
+      cell_prev.shape(0) != B || cell_prev.shape(1) != H ||
+      hidden_prev.shape(0) != B || hidden_prev.shape(1) != H) {
+    throw std::invalid_argument(
+        "[lstm_cell] shapes must match: input_proj [B,4H], hidden_proj [B,4H], cell_prev [B,H], hidden_prev [B,H].");
+  }
+  auto fallback = [s](const std::vector<array>& inputs) {
+    using namespace mlx::core;
+    const array& x = inputs[0];
+    const array& h = inputs[1];
+    const array& c_prev = inputs[2];
+    auto gates = split(add(x, h, s), 4, -1, s);
+    array i_g = sigmoid(gates[0], s);
+    array f_g = sigmoid(gates[1], s);
+    array g_g = tanh(gates[2], s);
+    array o_g = sigmoid(gates[3], s);
+    array c_new = add(multiply(f_g, c_prev, s), multiply(i_g, g_g, s), s);
+    array h_new = multiply(o_g, tanh(c_new, s), s);
+    return std::vector<array>{c_new, h_new};
+  };
+  Shape out_shape{static_cast<int>(B), static_cast<int>(H)};
+  auto dtype = promote_types(
+      result_type(input_proj, hidden_proj, cell_prev), hidden_prev.dtype());
+  auto primitive = std::make_shared<FastLSTMCell>(s, std::move(fallback));
+  std::vector<array> inputs = {input_proj, hidden_proj, cell_prev, hidden_prev};
+  auto outputs = array::make_arrays(
+      {out_shape, out_shape}, {dtype, dtype}, primitive, inputs);
+  return std::make_pair(std::move(outputs[0]), std::move(outputs[1]));
 }
 
 std::vector<array> ScaledDotProductAttention::vjp(

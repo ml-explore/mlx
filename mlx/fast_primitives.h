@@ -295,6 +295,56 @@ class ScaledDotProductAttentionVJP : public Custom {
   bool has_sinks_;
 };
 
+// Fused GRU cell (Metal RNN). Single kernel for one step. See Apple Metal docs.
+class FastGruCell : public Custom {
+ public:
+  explicit FastGruCell(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, std::move(fallback)) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(FastGruCell);
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    return {
+        inputs[2].shape()}; // output [B, H] = hidden_prev shape (3 or 4 inputs)
+  }
+  auto state() const {
+    return std::make_tuple(nullptr);
+  }
+};
+
+// Fused LSTM cell (Metal RNN). One step: cell_new = f*c_prev + i*g, hidden_new
+// = o*tanh(cell_new).
+class FastLSTMCell : public Custom {
+ public:
+  explicit FastLSTMCell(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, std::move(fallback)) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(FastLSTMCell);
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    return {inputs[2].shape(), inputs[3].shape()}; // cell [B,H], hidden [B,H]
+  }
+  auto state() const {
+    return std::make_tuple(nullptr);
+  }
+};
+
 class ConvertFP8 : public Primitive {
  public:
   explicit ConvertFP8(Stream stream, bool to_fp8)
