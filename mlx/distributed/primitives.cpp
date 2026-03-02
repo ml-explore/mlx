@@ -92,4 +92,45 @@ std::pair<std::vector<array>, std::vector<int>> Send::vmap(
   return {{send(inputs[0], dst_, group(), stream())}, axes};
 }
 
+std::pair<std::vector<array>, std::vector<int>> AllToAll::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  return {{all_to_all(inputs[0], group(), stream())}, axes};
+}
+
+std::vector<array> AllToAll::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>&) {
+  return {all_to_all(tangents[0], group(), stream())};
+}
+
+std::vector<array> AllToAll::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  return {all_to_all(cotangents[0], group(), stream())};
+}
+
+std::vector<array> MoeDispatchExchange::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  throw std::runtime_error(
+      "[MoeDispatchExchange] VJP not implemented yet. "
+      "Use ep_impl='python' for training.");
+}
+
+std::vector<array> MoeCombineExchange::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  throw std::runtime_error(
+      "[MoeCombineExchange] VJP not implemented yet. "
+      "Use ep_impl='python' for training.");
+}
+
 } // namespace mlx::core::distributed
