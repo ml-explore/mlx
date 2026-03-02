@@ -3093,6 +3093,38 @@ array matmul(
   return axes.empty() ? out : squeeze(out, axes, s);
 }
 
+array sparse_matmul_csr(
+    const array& row_ptr,
+    const array& col_indices,
+    const array& values,
+    const array& dense_b,
+    StreamOrDevice s /* = {} */) {
+  if (row_ptr.dtype() != int32) {
+    throw std::invalid_argument("[sparse_matmul_csr] row_ptr must be int32");
+  }
+  if (col_indices.dtype() != int32) {
+    throw std::invalid_argument(
+        "[sparse_matmul_csr] col_indices must be int32");
+  }
+  if (!issubdtype(values.dtype(), floating)) {
+    throw std::invalid_argument(
+        "[sparse_matmul_csr] values must be floating point");
+  }
+  if (values.dtype() != dense_b.dtype()) {
+    throw std::invalid_argument(
+        "[sparse_matmul_csr] values and dense_b must have the same dtype");
+  }
+
+  int n_rows = row_ptr.shape(0) - 1;
+  int n_cols = dense_b.shape(1);
+
+  return array(
+      {n_rows, n_cols},
+      values.dtype(),
+      std::make_shared<SparseMatmulCSR>(to_stream(s), n_rows, n_cols),
+      {row_ptr, col_indices, values, dense_b});
+}
+
 array gather(
     const array& a,
     const std::vector<array>& indices,

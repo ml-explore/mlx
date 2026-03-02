@@ -963,6 +963,14 @@ inline array round(const array& a, StreamOrDevice s = {}) {
 /** Matrix-matrix multiplication. */
 MLX_API array matmul(const array& a, const array& b, StreamOrDevice s = {});
 
+/** Sparse matrix-dense matrix multiplication using CSR format. */
+MLX_API array sparse_matmul_csr(
+    const array& row_ptr,
+    const array& col_indices,
+    const array& values,
+    const array& dense_b,
+    StreamOrDevice s = {});
+
 /** Gather array entries given indices and slices */
 MLX_API array gather(
     const array& a,

@@ -672,6 +672,32 @@ void init_ops(nb::module_& m) {
             array: The matrix product of ``a`` and ``b``.
       )pbdoc");
   m.def(
+      "sparse_matmul_csr",
+      &mx::sparse_matmul_csr,
+      nb::arg(),
+      nb::arg(),
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def sparse_matmul_csr(row_ptr: array, col_indices: array, values: array, dense_b: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Sparse matrix-dense matrix multiplication using CSR format.
+
+        Performs the matrix multiplication of a sparse matrix in CSR (Compressed
+        Sparse Row) format with a dense matrix.
+
+        Args:
+            row_ptr (array): Row pointers array of shape ``(n_rows + 1,)``.
+            col_indices (array): Column indices array.
+            values (array): Non-zero values array.
+            dense_b (array): Dense matrix to multiply with.
+
+        Returns:
+            array: The result of the sparse-dense matrix multiplication.
+      )pbdoc");
+  m.def(
       "square",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
         return mx::square(to_array(a), s);
