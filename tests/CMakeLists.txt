@@ -42,3 +42,11 @@ target_link_options(tests PRIVATE ${SANITIZER_LINK_FLAGS})
 
 doctest_discover_tests(tests)
 add_test(NAME tests COMMAND tests)
+
+# Standalone test: verify clean exit when GPU work is in-flight during teardown.
+# (Cannot be a doctest case because the crash occurs during static destruction.)
+add_executable(test_teardown test_teardown.cpp)
+target_link_libraries(test_teardown PRIVATE mlx)
+target_compile_options(test_teardown PRIVATE ${SANITIZER_COMPILE_FLAGS})
+target_link_options(test_teardown PRIVATE ${SANITIZER_LINK_FLAGS})
+add_test(NAME teardown COMMAND test_teardown)

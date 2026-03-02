@@ -1,4 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <atomic>
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
@@ -7,8 +8,15 @@
 
 namespace mlx::core::metal {
 
+// Global flag to prevent new GPU operations, for example at app termination.
+static std::atomic<bool> enabled{true};
+
 bool is_available() {
-  return true;
+  return enabled.load(std::memory_order_acquire);
+}
+
+void set_enabled(bool enabled) {
+  metal::enabled.store(enabled, std::memory_order_release);
 }
 
 void start_capture(std::string path, NS::Object* object) {

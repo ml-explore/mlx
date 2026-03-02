@@ -13,6 +13,9 @@ namespace mlx::core::metal {
 /* Check if the Metal backend is available. */
 MLX_API bool is_available();
 
+/* Enable or disable Metal operations globally. */
+void set_enabled(bool enabled);
+
 /** Capture a GPU trace, saving it to an absolute file `path` */
 MLX_API void start_capture(std::string path = "");
 MLX_API void stop_capture();
