@@ -1946,6 +1946,94 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(h_out.shape, (44, 12))
         self.assertEqual(c_out.shape, (44, 12))
 
+    def test_recurrent_dtype_propagation(self):
+        for dtype in (mx.float16, mx.bfloat16):
+            inp_batched = mx.random.normal((2, 32, 5)).astype(dtype)
+            inp_unbatched = mx.random.normal((32, 5)).astype(dtype)
+
+            rnn = nn.RNN(5, 12)
+            gru = nn.GRU(5, 12)
+            lstm = nn.LSTM(5, 12)
+            rnn.set_dtype(dtype)
+            gru.set_dtype(dtype)
+            lstm.set_dtype(dtype)
+
+            rnn_out = rnn(inp_batched)
+            self.assertEqual(rnn_out.dtype, dtype)
+            self.assertEqual(rnn(inp_unbatched).dtype, dtype)
+
+            gru_out = gru(inp_batched)
+            self.assertEqual(gru_out.dtype, dtype)
+            self.assertEqual(gru(inp_unbatched).dtype, dtype)
+
+            lstm_hidden, lstm_cell = lstm(inp_batched)
+            self.assertEqual(lstm_hidden.dtype, dtype)
+            self.assertEqual(lstm_cell.dtype, dtype)
+
+            lstm_hidden, lstm_cell = lstm(inp_unbatched)
+            self.assertEqual(lstm_hidden.dtype, dtype)
+            self.assertEqual(lstm_cell.dtype, dtype)
+
+    def test_recurrent_gradient_parity(self):
+        def assert_grads_close(layer, loss_fn, *loss_args):
+            _, module_grads = nn.value_and_grad(layer, loss_fn)(layer, *loss_args)
+
+            def pure_loss(params, *args):
+                layer.update(params)
+                return loss_fn(layer, *args)
+
+            pure_grads = mx.grad(pure_loss)(layer.trainable_parameters(), *loss_args)
+
+            module_flat = tree_flatten(module_grads, destination={})
+            pure_flat = tree_flatten(pure_grads, destination={})
+            self.assertEqual(module_flat.keys(), pure_flat.keys())
+            for key in module_flat:
+                self.assertTrue(
+                    mx.allclose(module_flat[key], pure_flat[key], atol=1e-5, rtol=1e-5),
+                    f"Gradient mismatch for {key}",
+                )
+
+        x = mx.random.normal((2, 24, 5))
+        h0 = mx.random.normal((2, 12))
+        c0 = mx.random.normal((2, 12))
+
+        def rnn_loss(model, x, hidden):
+            return model(x, hidden=hidden).sum()
+
+        def gru_loss(model, x, hidden):
+            return model(x, hidden=hidden).sum()
+
+        def lstm_loss(model, x, hidden, cell):
+            h_out, c_out = model(x, hidden=hidden, cell=cell)
+            return h_out.sum() + c_out.sum()
+
+        assert_grads_close(nn.RNN(5, 12), rnn_loss, x, h0)
+        assert_grads_close(nn.GRU(5, 12), gru_loss, x, h0)
+        assert_grads_close(nn.LSTM(5, 12), lstm_loss, x, h0, c0)
+
+    def test_recurrent_long_sequence_stability(self):
+        seq_len = 256
+        inp = mx.random.normal((2, seq_len, 5)).astype(mx.float32)
+        h0 = mx.random.normal((2, 12))
+        c0 = mx.random.normal((2, 12))
+
+        def assert_finite(name, arr):
+            arr_np = np.array(arr)
+            self.assertTrue(np.isfinite(arr_np).all(), f"{name} has non-finite values")
+
+        rnn = nn.RNN(5, 12)
+        gru = nn.GRU(5, 12)
+        lstm = nn.LSTM(5, 12)
+
+        rnn_out = rnn(inp, hidden=h0)
+        gru_out = gru(inp, hidden=h0)
+        lstm_hidden, lstm_cell = lstm(inp, hidden=h0, cell=c0)
+
+        assert_finite("rnn_out", rnn_out)
+        assert_finite("gru_out", gru_out)
+        assert_finite("lstm_hidden", lstm_hidden)
+        assert_finite("lstm_cell", lstm_cell)
+
     def test_quantized_embedding(self):
         emb = nn.Embedding(32, 256)
         qemb = nn.QuantizedEmbedding.from_embedding(emb, bits=8)
