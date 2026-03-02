@@ -920,6 +920,56 @@ void init_ops(nb::module_& m) {
             array: The inverse error function of ``a``.
       )pbdoc");
   m.def(
+      "lgamma",
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::lgamma(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def lgamma(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise log-gamma function.
+
+        Computes the natural logarithm of the absolute value of the
+        gamma function.
+
+        .. math::
+          \mathrm{lgamma}(x) = \log |\Gamma(x)|
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The log-gamma of ``a``.
+      )pbdoc");
+  m.def(
+      "digamma",
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::digamma(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def digamma(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise digamma function.
+
+        Computes the logarithmic derivative of the gamma function
+        (the derivative of :func:`lgamma`).
+
+        .. math::
+          \psi(x) = \frac{d}{dx} \log \Gamma(x)
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The digamma of ``a``.
+      )pbdoc");
+  m.def(
       "sin",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
         return mx::sin(to_array(a), s);

@@ -1731,6 +1731,84 @@ TEST_CASE("test error functions") {
   }
 }
 
+TEST_CASE("test lgamma and digamma") {
+  constexpr float inf = std::numeric_limits<float>::infinity();
+
+  // lgamma known values
+  CHECK_EQ(lgamma(array(1.0f)).item<float>(), doctest::Approx(0.0f).epsilon(1e-5));
+  CHECK_EQ(lgamma(array(2.0f)).item<float>(), doctest::Approx(0.0f).epsilon(1e-5));
+  CHECK_EQ(
+      lgamma(array(0.5f)).item<float>(),
+      doctest::Approx(0.5723649f).epsilon(1e-5));
+  CHECK_EQ(
+      lgamma(array(5.0f)).item<float>(),
+      doctest::Approx(3.1780538f).epsilon(1e-4));
+  CHECK_EQ(
+      lgamma(array(10.0f)).item<float>(),
+      doctest::Approx(12.801827f).epsilon(1e-3));
+
+  // lgamma at poles
+  CHECK(std::isinf(lgamma(array(0.0f)).item<float>()));
+  CHECK(std::isinf(lgamma(array(-1.0f)).item<float>()));
+
+  // lgamma negative non-integer (reflection)
+  CHECK_EQ(
+      lgamma(array(-0.5f)).item<float>(),
+      doctest::Approx(1.2655121f).epsilon(1e-4));
+
+  // lgamma integer promotion
+  CHECK_EQ(lgamma(array(2, int32)).dtype(), float32);
+
+  // lgamma vectorized
+  {
+    auto x = array({1.0f, 2.0f, 5.0f, 10.0f});
+    auto result = lgamma(x);
+    CHECK_EQ(result.shape(), Shape{4});
+    CHECK_EQ(result.dtype(), float32);
+  }
+
+  // lgamma float16
+  {
+    array x(2.0f, float16);
+    auto out = lgamma(x);
+    CHECK_EQ(out.dtype(), float16);
+    CHECK_EQ(out.item<float16_t>(), doctest::Approx(0.0f).epsilon(1e-2));
+  }
+
+  // digamma known values
+  // digamma(1) = -euler_gamma
+  CHECK_EQ(
+      digamma(array(1.0f)).item<float>(),
+      doctest::Approx(-0.5772157f).epsilon(1e-5));
+  // digamma(2) = 1 - euler_gamma
+  CHECK_EQ(
+      digamma(array(2.0f)).item<float>(),
+      doctest::Approx(0.4227843f).epsilon(1e-5));
+  // digamma(0.5) = -euler_gamma - 2*ln(2)
+  CHECK_EQ(
+      digamma(array(0.5f)).item<float>(),
+      doctest::Approx(-1.9635100f).epsilon(1e-4));
+
+  // digamma integer promotion
+  CHECK_EQ(digamma(array(2, int32)).dtype(), float32);
+
+  // digamma vectorized
+  {
+    auto x = array({1.0f, 2.0f, 5.0f, 10.0f});
+    auto result = digamma(x);
+    CHECK_EQ(result.shape(), Shape{4});
+    CHECK_EQ(result.dtype(), float32);
+  }
+
+  // gradient: d/dx lgamma(x) = digamma(x)
+  {
+    auto f = [](array x) { return lgamma(x); };
+    auto dfdx = grad(f)(array(3.0f));
+    auto expected = digamma(array(3.0f));
+    CHECK_EQ(dfdx.item<float>(), doctest::Approx(expected.item<float>()).epsilon(1e-5));
+  }
+}
+
 TEST_CASE("test arithmetic binary ops") {
   array x(1.0);
   array y(1.0);

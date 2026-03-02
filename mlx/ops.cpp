@@ -2996,6 +2996,24 @@ array erfinv(const array& a, StreamOrDevice s /* = {} */) {
       {astype(a, dtype, s)});
 }
 
+array lgamma(const array& a, StreamOrDevice s /* = {} */) {
+  auto dtype = at_least_float(a.dtype());
+  return array(
+      a.shape(),
+      dtype,
+      std::make_shared<LogGamma>(to_stream(s)),
+      {astype(a, dtype, s)});
+}
+
+array digamma(const array& a, StreamOrDevice s /* = {} */) {
+  auto dtype = at_least_float(a.dtype());
+  return array(
+      a.shape(),
+      dtype,
+      std::make_shared<Digamma>(to_stream(s)),
+      {astype(a, dtype, s)});
+}
+
 array stop_gradient(const array& a, StreamOrDevice s /* = {} */) {
   return array(
       a.shape(), a.dtype(), std::make_shared<StopGradient>(to_stream(s)), {a});

@@ -1020,6 +1020,54 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array([3.8325066566467285] * 8)
         self.assertTrue(mx.allclose(result, expected))
 
+    def test_lgamma(self):
+        # Known values: lgamma(1) = 0, lgamma(2) = 0
+        x = mx.array([0.5, 1.0, 2.0, 5.0, 10.0])
+        expected = np.array(
+            [
+                math.lgamma(0.5),
+                math.lgamma(1.0),
+                math.lgamma(2.0),
+                math.lgamma(5.0),
+                math.lgamma(10.0),
+            ]
+        ).astype(np.float32)
+        self.assertTrue(np.allclose(mx.lgamma(x), expected, atol=1e-5))
+
+        # Integer input promotion
+        self.assertEqual(mx.lgamma(mx.array(2)).dtype, mx.float32)
+
+        # Negative non-integer (reflection formula)
+        result = mx.lgamma(mx.array([-0.5]))
+        expected_val = np.array([math.lgamma(0.5) + math.log(math.pi) - math.log(math.sin(math.pi * 0.5))]).astype(np.float32)
+        # lgamma(-0.5) = log(pi / sin(pi*0.5)) + lgamma(1.5) ... use math.lgamma directly
+        expected_val = np.array([math.lgamma(-0.5 + 1e-15)]).astype(np.float32)
+        # Actually just use Python's math.lgamma for the reference
+        self.assertTrue(
+            np.allclose(
+                mx.lgamma(mx.array(-0.5)),
+                math.lgamma(-0.5 + 1e-15),
+                atol=1e-3,
+            )
+        )
+
+    def test_digamma(self):
+        # digamma(1) = -euler_gamma ≈ -0.5772156649
+        result = mx.digamma(mx.array([1.0]))
+        self.assertTrue(np.allclose(result, [-0.5772157], atol=1e-5))
+
+        # digamma(2) = 1 - euler_gamma ≈ 0.4227843351
+        result = mx.digamma(mx.array([2.0]))
+        self.assertTrue(np.allclose(result, [0.4227843], atol=1e-5))
+
+        # Vectorized
+        x = mx.array([1.0, 2.0, 5.0, 10.0])
+        result = mx.digamma(x)
+        self.assertEqual(list(result.shape), [4])
+
+        # Integer input promotion
+        self.assertEqual(mx.digamma(mx.array(2)).dtype, mx.float32)
+
     def test_sin(self):
         a = mx.array(
             [0, math.pi / 4, math.pi / 2, math.pi, 3 * math.pi / 4, 2 * math.pi]
