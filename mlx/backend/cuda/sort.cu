@@ -1096,7 +1096,7 @@ size_t radix_small_shared_mem_bytes(
   size_t num_warps = static_cast<size_t>(block_threads / WARP_SIZE);
   return tile_size * key_size + // shared_keys
       tile_size * sizeof(uint32_t) + // shared_idxs
-      cu::SMALL_RADIX_SIZE * sizeof(int) + // shared_hist for small kernel
+      cu::RADIX_SIZE * sizeof(int) + // shared_hist for small kernel
       (2 + 3 * num_warps + 6) * sizeof(int); // shared_count + scatter scratch
 }
 
@@ -1245,7 +1245,7 @@ void gpu_radix_partition_small(
                   constexpr size_t shared_mem_bytes =
                       TILE_SIZE_VAL * sizeof(UnsignedT) + // shared_keys
                       TILE_SIZE_VAL * sizeof(uint32_t) + // shared_idxs
-                      cu::SMALL_RADIX_SIZE *
+                      cu::RADIX_SIZE *
                           sizeof(int) + // shared_hist for small kernel
                       (2 + 3 * NUM_WARPS + 6) *
                           sizeof(int); // shared_count + scatter scratch
@@ -1255,10 +1255,11 @@ void gpu_radix_partition_small(
                       cudaFuncAttributeMaxDynamicSharedMemorySize,
                       static_cast<int>(shared_mem_bytes)));
 
-                  encoder.add_kernel_node(
+                  encoder.add_kernel_node_ex(
                       kernel,
                       grid,
                       block,
+                      {},
                       shared_mem_bytes,
                       gpu_ptr<ValT>(in),
                       gpu_ptr<OutT>(out),
@@ -1275,350 +1276,6 @@ void gpu_radix_partition_small(
                 });
               });
         });
-      });
-    } else {
-      throw std::runtime_error(
-          "CUDA backend does not support sorting complex numbers");
-    }
-  });
-}
-
-int64_t segment_stride_for_contiguous(
-    const Shape& shape_no_axis,
-    const Strides& strides_no_axis) {
-  int64_t stride = INT64_MAX;
-  for (size_t i = 0; i < shape_no_axis.size(); ++i) {
-    if (shape_no_axis[i] == 1) {
-      continue;
-    }
-    stride = std::min(stride, strides_no_axis[i]);
-  }
-  return (stride == INT64_MAX) ? int64_t(0) : stride;
-}
-
-struct RadixLaunchPlan {
-  int blocks_per_row{1};
-
-  bool uses_tiled_launch() const {
-    return blocks_per_row > 1;
-  }
-};
-
-RadixLaunchPlan make_radix_tiled_launch_plan(
-    const Stream& s,
-    int n_rows,
-    int size_sorted_axis) {
-  if (n_rows <= 0 || size_sorted_axis <= 0 || size_sorted_axis < 8192) {
-    return {};
-  }
-
-  constexpr int kBlocksPerSmTarget = 4;
-  constexpr int kMinElemsPerBlock = 1024;
-  constexpr int kMaxBlocksPerRow = 32;
-
-  int sm_count = 0;
-  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
-      &sm_count, cudaDevAttrMultiProcessorCount, s.device.index));
-  sm_count = std::max(sm_count, 1);
-
-  int target_blocks = std::max(1, sm_count * kBlocksPerSmTarget);
-  int needed_blocks_per_row =
-      std::max(1, (target_blocks + n_rows - 1) / n_rows);
-
-  int max_blocks_by_work = std::max(
-      1, std::min(kMaxBlocksPerRow, size_sorted_axis / kMinElemsPerBlock));
-  int blocks_per_row = std::min(needed_blocks_per_row, max_blocks_by_work);
-
-  if (blocks_per_row <= 1) {
-    return {};
-  }
-  return {blocks_per_row};
-}
-
-Dtype unsigned_dtype_for_size(int size) {
-  switch (size) {
-    case 1:
-      return uint8;
-    case 2:
-      return uint16;
-    case 4:
-      return uint32;
-    case 8:
-      return uint64;
-    default:
-      throw std::runtime_error("Unsupported radix key size");
-  }
-}
-
-void gpu_radix_partition_large_tiled(
-    const Stream& s,
-    const array& in,
-    array& out,
-    int kth,
-    int n_rows,
-    int size_sorted_axis,
-    int64_t in_stride_sorted_axis,
-    int64_t out_stride_sorted_axis,
-    int64_t in_stride_segment_axis,
-    int64_t out_stride_segment_axis,
-    int blocks_per_row,
-    bool arg_partition) {
-  auto& encoder = cu::get_command_encoder(s);
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
-  encoder.set_input_array(in);
-  encoder.set_output_array(out);
-
-  dispatch_all_types(in.dtype(), [&](auto type_tag) {
-    using CTYPE = MLX_GET_TYPE(type_tag);
-    if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
-      using ValT = cuda_type_t<CTYPE>;
-      constexpr int BLOCK_THREADS = 256;
-      constexpr int NUM_PASSES =
-          (cu::RadixTraits<ValT>::BITS + cu::RADIX_BITS - 1) / cu::RADIX_BITS;
-      using UnsignedT = typename cu::RadixTraits<ValT>::UnsignedT;
-
-      Dtype unsigned_dtype = unsigned_dtype_for_size(sizeof(UnsignedT));
-
-      array target_prefix_dev({n_rows}, unsigned_dtype, nullptr, {});
-      array prefix_mask_dev({n_rows}, unsigned_dtype, nullptr, {});
-      array k_values_dev({n_rows}, int32, nullptr, {});
-      array row_hist_dev({n_rows, cu::RADIX_SIZE}, int32, nullptr, {});
-
-      int total_blocks = n_rows * blocks_per_row;
-      array block_less_dev({total_blocks}, int32, nullptr, {});
-      array block_equal_dev({total_blocks}, int32, nullptr, {});
-
-      auto allocate_temporary = [&](array& a) {
-        a.set_data(cu::malloc_async(a.nbytes(), encoder));
-        encoder.add_temporary(a);
-      };
-      allocate_temporary(target_prefix_dev);
-      allocate_temporary(prefix_mask_dev);
-      allocate_temporary(k_values_dev);
-      allocate_temporary(row_hist_dev);
-      allocate_temporary(block_less_dev);
-      allocate_temporary(block_equal_dev);
-
-      dim3 row_grid(1, n_rows, 1);
-      dim3 grid(blocks_per_row, n_rows, 1);
-
-      encoder.set_output_array(target_prefix_dev);
-      encoder.set_output_array(prefix_mask_dev);
-      encoder.set_output_array(k_values_dev);
-      encoder.set_output_array(row_hist_dev);
-      encoder.add_kernel_node(
-          cu::radix_select_tiled_init_state_kernel<UnsignedT>,
-          row_grid,
-          dim3(32, 1, 1),
-          0,
-          gpu_ptr<UnsignedT>(target_prefix_dev),
-          gpu_ptr<UnsignedT>(prefix_mask_dev),
-          gpu_ptr<int>(k_values_dev),
-          gpu_ptr<int>(row_hist_dev),
-          kth);
-
-      for (int pass = NUM_PASSES - 1; pass >= 0; --pass) {
-        int start_bit = pass * cu::RADIX_BITS;
-
-        encoder.set_input_array(in);
-        encoder.set_input_array(row_hist_dev);
-        encoder.set_input_array(target_prefix_dev);
-        encoder.set_input_array(prefix_mask_dev);
-        encoder.set_output_array(row_hist_dev);
-        encoder.add_kernel_node(
-            cu::radix_select_tiled_histogram_kernel<ValT, BLOCK_THREADS>,
-            grid,
-            dim3(BLOCK_THREADS, 1, 1),
-            0,
-            gpu_ptr<ValT>(in),
-            size_sorted_axis,
-            in_stride_sorted_axis,
-            in_stride_segment_axis,
-            gpu_ptr<UnsignedT>(target_prefix_dev),
-            gpu_ptr<UnsignedT>(prefix_mask_dev),
-            start_bit,
-            blocks_per_row,
-            gpu_ptr<int>(row_hist_dev));
-
-        encoder.set_input_array(row_hist_dev);
-        encoder.set_input_array(target_prefix_dev);
-        encoder.set_input_array(prefix_mask_dev);
-        encoder.set_input_array(k_values_dev);
-        encoder.set_input_array(row_hist_dev);
-        encoder.set_output_array(target_prefix_dev);
-        encoder.set_output_array(prefix_mask_dev);
-        encoder.set_output_array(k_values_dev);
-        encoder.set_output_array(row_hist_dev);
-        encoder.add_kernel_node(
-            cu::radix_select_tiled_select_bin_kernel<UnsignedT>,
-            row_grid,
-            dim3(32, 1, 1),
-            0,
-            gpu_ptr<int>(row_hist_dev),
-            gpu_ptr<UnsignedT>(target_prefix_dev),
-            gpu_ptr<UnsignedT>(prefix_mask_dev),
-            gpu_ptr<int>(k_values_dev),
-            pass > 0 ? 1 : 0,
-            start_bit);
-      }
-
-      encoder.set_input_array(in);
-      encoder.set_input_array(target_prefix_dev);
-      encoder.set_output_array(block_less_dev);
-      encoder.set_output_array(block_equal_dev);
-      encoder.add_kernel_node(
-          cu::radix_select_tiled_count_kernel<ValT, BLOCK_THREADS>,
-          grid,
-          dim3(BLOCK_THREADS, 1, 1),
-          0,
-          gpu_ptr<ValT>(in),
-          size_sorted_axis,
-          in_stride_sorted_axis,
-          in_stride_segment_axis,
-          gpu_ptr<UnsignedT>(target_prefix_dev),
-          blocks_per_row,
-          gpu_ptr<int>(block_less_dev),
-          gpu_ptr<int>(block_equal_dev));
-
-      dispatch_bool(arg_partition, [&](auto arg_tag) {
-        constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
-        using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
-        encoder.set_input_array(in);
-        encoder.set_input_array(target_prefix_dev);
-        encoder.set_input_array(block_less_dev);
-        encoder.set_input_array(block_equal_dev);
-        encoder.set_output_array(out);
-        encoder.add_kernel_node(
-            cu::radix_select_tiled_scatter_kernel<
-                ValT,
-                OutT,
-                ARG_PARTITION,
-                BLOCK_THREADS>,
-            grid,
-            dim3(BLOCK_THREADS, 1, 1),
-            0,
-            gpu_ptr<ValT>(in),
-            gpu_ptr<OutT>(out),
-            size_sorted_axis,
-            in_stride_sorted_axis,
-            out_stride_sorted_axis,
-            in_stride_segment_axis,
-            out_stride_segment_axis,
-            gpu_ptr<UnsignedT>(target_prefix_dev),
-            blocks_per_row,
-            gpu_ptr<int>(block_less_dev),
-            gpu_ptr<int>(block_equal_dev));
-      });
-    } else {
-      throw std::runtime_error(
-          "CUDA backend does not support sorting complex numbers");
-    }
-  });
-}
-
-void gpu_radix_partition_large(
-    const Stream& s,
-    const array& in,
-    array& out,
-    int axis,
-    int kth,
-    bool arg_partition) {
-  int n_rows = in.size() / in.shape(axis);
-
-  int size_sorted_axis = in.shape(axis);
-  int64_t in_stride_sorted_axis = in.strides()[axis];
-  int64_t out_stride_sorted_axis = out.strides()[axis];
-
-  auto in_nc_str = in.strides();
-  in_nc_str.erase(in_nc_str.begin() + axis);
-
-  auto out_nc_str = out.strides();
-  out_nc_str.erase(out_nc_str.begin() + axis);
-
-  auto nc_shape = in.shape();
-  nc_shape.erase(nc_shape.begin() + axis);
-
-  int nc_dim = nc_shape.size();
-
-  bool contiguous = in.flags().contiguous;
-  auto check_strides = [](const array& x, int64_t sort_stride) {
-    int64_t min_stride =
-        *std::min_element(x.strides().begin(), x.strides().end());
-    int64_t max_stride =
-        *std::max_element(x.strides().begin(), x.strides().end());
-    return sort_stride == min_stride || sort_stride == max_stride;
-  };
-  contiguous &= check_strides(in, in_stride_sorted_axis);
-  contiguous &= check_strides(out, out_stride_sorted_axis);
-
-  if (contiguous) {
-    const auto plan = make_radix_tiled_launch_plan(s, n_rows, size_sorted_axis);
-    if (plan.uses_tiled_launch()) {
-      const int64_t in_stride_segment_axis =
-          segment_stride_for_contiguous(nc_shape, in_nc_str);
-      const int64_t out_stride_segment_axis =
-          segment_stride_for_contiguous(nc_shape, out_nc_str);
-      return gpu_radix_partition_large_tiled(
-          s,
-          in,
-          out,
-          kth,
-          n_rows,
-          size_sorted_axis,
-          in_stride_sorted_axis,
-          out_stride_sorted_axis,
-          in_stride_segment_axis,
-          out_stride_segment_axis,
-          plan.blocks_per_row,
-          arg_partition);
-    }
-  }
-
-  auto& encoder = cu::get_command_encoder(s);
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
-  encoder.set_input_array(in);
-  encoder.set_output_array(out);
-
-  auto nc_shape_param = const_param(nc_shape);
-  auto in_nc_strides_param = const_param(in_nc_str);
-  auto out_nc_strides_param = const_param(out_nc_str);
-
-  dispatch_all_types(in.dtype(), [&](auto type_tag) {
-    using CTYPE = MLX_GET_TYPE(type_tag);
-    if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
-      using ValT = cuda_type_t<CTYPE>;
-
-      constexpr int BLOCK_THREADS = 256;
-
-      dim3 grid(1, n_rows, 1);
-      dim3 block(BLOCK_THREADS, 1, 1);
-
-      dispatch_bool(arg_partition, [&](auto arg_tag) {
-        constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
-        using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
-
-        // Large kernel always uses elem_to_loc addressing
-        auto kernel = cu::radix_select_large_streaming_kernel<
-            ValT,
-            OutT,
-            ARG_PARTITION,
-            BLOCK_THREADS>;
-
-        encoder.add_kernel_node(
-            kernel,
-            grid,
-            block,
-            0,
-            gpu_ptr<ValT>(in),
-            gpu_ptr<OutT>(out),
-            size_sorted_axis,
-            kth,
-            in_stride_sorted_axis,
-            out_stride_sorted_axis,
-            nc_shape_param,
-            in_nc_strides_param,
-            out_nc_strides_param,
-            nc_dim);
       });
     } else {
       throw std::runtime_error(
@@ -1648,7 +1305,7 @@ void gpu_radix_partition(
   if (radix_small_fits_shared_memory(s, in.dtype(), size_sorted_axis)) {
     return gpu_radix_partition_small(s, in, out, axis, kth, arg_partition);
   } else {
-    return gpu_radix_partition_large(s, in, out, axis, kth, arg_partition);
+    return gpu_merge_sort(s, in, out, axis, arg_partition);
   }
 }
 

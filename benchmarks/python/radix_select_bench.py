@@ -31,7 +31,7 @@ DTYPE_MAP = {
 # Benchmark-side model for cross-GPU small-kernel dispatch policy.
 RADIX_ITEMS_BUCKETS = (1, 2, 4, 8, 12, 16, 24, 32, 48, 64)
 MAX_RADIX_ITEMS_PER_THREAD = 64
-SMALL_RADIX_SIZE = 32
+RADIX_SIZE = 32
 WARP_SIZE = 32
 CUDA_DEV_ATTR_MAX_SHARED_MEMORY_PER_BLOCK = 8
 CUDA_DEV_ATTR_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN = 97
@@ -128,7 +128,7 @@ def _radix_small_shared_mem_bytes(dtype_size, block_threads, items_per_thread):
     return (
         tile_size * dtype_size
         + tile_size * 4
-        + SMALL_RADIX_SIZE * 4
+        + RADIX_SIZE * 4
         + (2 + 3 * num_warps + 6) * 4
     )
 
