@@ -3361,6 +3361,34 @@ QuantizationMode string_to_quantization_mode(
   throw std::invalid_argument(msg);
 }
 
+std::pair<int, int> quantization_params_from_mode(
+    QuantizationMode mode,
+    std::optional<int> group_size_,
+    std::optional<int> bits_) {
+  int default_group_size;
+  int default_bits;
+  switch (mode) {
+    case QuantizationMode::Affine:
+      default_group_size = 64;
+      default_bits = 4;
+      break;
+    case QuantizationMode::Nvfp4:
+      default_group_size = 16;
+      default_bits = 4;
+      break;
+    case QuantizationMode::Mxfp4:
+      default_group_size = 32;
+      default_bits = 4;
+      break;
+    case QuantizationMode::Mxfp8:
+      default_group_size = 32;
+      default_bits = 8;
+      break;
+  }
+  return {
+      group_size_.value_or(default_group_size), bits_.value_or(default_bits)};
+}
+
 std::pair<std::vector<array>, std::vector<int>> QuantizedMatmul::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

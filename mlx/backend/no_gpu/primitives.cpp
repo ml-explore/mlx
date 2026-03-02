@@ -40,6 +40,14 @@ bool fast::ScaledDotProductAttention::supports_bool_mask() {
   return false;
 }
 
+bool fast::QuantizedScaledDotProductAttention::use_fallback(
+    const array&,
+    const array&,
+    bool,
+    Stream) {
+  return true;
+}
+
 bool fast::ScaledDotProductAttentionVJP::use_fallback(
     const array& q,
     Stream s) {
@@ -168,6 +176,7 @@ NO_GPU_USE_FALLBACK(RMSNorm)
 NO_GPU_MULTI(RMSNormVJP)
 NO_GPU_USE_FALLBACK(RoPE)
 NO_GPU_MULTI(ScaledDotProductAttention)
+NO_GPU_MULTI(QuantizedScaledDotProductAttention)
 NO_GPU_MULTI(ScaledDotProductAttentionVJP)
 NO_GPU_MULTI(ConvertFP8)
 NO_GPU_MULTI(Quantize)
