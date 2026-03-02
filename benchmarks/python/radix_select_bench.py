@@ -5,7 +5,6 @@ Compares radix select implementation against full argsort.
 """
 
 import argparse
-import ctypes
 import time
 
 import mlx.core as mx
@@ -33,8 +32,7 @@ RADIX_ITEMS_BUCKETS = (1, 2, 4, 8, 12, 16, 24, 32, 48, 64)
 MAX_RADIX_ITEMS_PER_THREAD = 64
 RADIX_SIZE = 32
 WARP_SIZE = 32
-CUDA_DEV_ATTR_MAX_SHARED_MEMORY_PER_BLOCK = 8
-CUDA_DEV_ATTR_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN = 97
+RADIX_SMALL_SHARED_MEM_BUDGET_BYTES = 48 * 1024
 
 DTYPE_SIZE_BYTES = {
     "bool_": 1,
@@ -56,51 +54,6 @@ DTYPE_SIZE_BYTES = {
 def _dtype_size_bytes(dtype):
     dtype_name = str(dtype).split(".")[-1]
     return DTYPE_SIZE_BYTES[dtype_name]
-
-
-def _cuda_max_shared_mem_per_block(default=48 * 1024):
-    """Query max(base, optin) shared memory per block; fallback to 48KB."""
-    try:
-        cudart = ctypes.CDLL("libcudart.so")
-
-        cuda_get_device = cudart.cudaGetDevice
-        cuda_get_device.argtypes = [ctypes.POINTER(ctypes.c_int)]
-        cuda_get_device.restype = ctypes.c_int
-
-        cuda_device_get_attribute = cudart.cudaDeviceGetAttribute
-        cuda_device_get_attribute.argtypes = [
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.c_int,
-            ctypes.c_int,
-        ]
-        cuda_device_get_attribute.restype = ctypes.c_int
-
-        dev = ctypes.c_int()
-        if cuda_get_device(ctypes.byref(dev)) != 0:
-            return default
-
-        smem_base = ctypes.c_int()
-        if (
-            cuda_device_get_attribute(
-                ctypes.byref(smem_base),
-                CUDA_DEV_ATTR_MAX_SHARED_MEMORY_PER_BLOCK,
-                dev.value,
-            )
-            != 0
-        ):
-            return default
-
-        smem_optin = ctypes.c_int()
-        optin_rc = cuda_device_get_attribute(
-            ctypes.byref(smem_optin),
-            CUDA_DEV_ATTR_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN,
-            dev.value,
-        )
-        if optin_rc == 0:
-            return max(int(smem_base.value), int(smem_optin.value))
-        return int(smem_base.value)
-    except Exception:
-        return default
 
 
 def _radix_small_block_threads(vocab_size):
@@ -134,9 +87,9 @@ def _radix_small_shared_mem_bytes(dtype_size, block_threads, items_per_thread):
 
 
 def estimate_small_kernel_limit(dtype):
-    """Estimate max small-kernel axis for dtype under current CUDA radix policy."""
+    """Estimate max small-kernel axis for dtype under the fixed 48KB budget."""
     dtype_size = _dtype_size_bytes(dtype)
-    smem_limit = _cuda_max_shared_mem_per_block()
+    smem_limit = RADIX_SMALL_SHARED_MEM_BUDGET_BYTES
     max_axis = 0
     # 256 is the largest block_threads in sort.cu launch selection.
     for v in range(1, 256 * MAX_RADIX_ITEMS_PER_THREAD + 1):
@@ -341,7 +294,13 @@ def sweep_kernel(
         vocab_sizes = sorted({int(v) for v in candidate_vocab if v <= max_small_axis})
     else:
         batch_sizes = [1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 256, 512, 1024, 2048]
-        vocab_sizes = sorted({int(v) for v in candidate_vocab if v > small_kernel})
+        vocab_sizes = sorted({int(v) for v in candidate_vocab if v > max_small_axis})
+
+    if not vocab_sizes:
+        print(
+            "No vocabulary sizes in sweep range for this dtype and shared-memory budget."
+        )
+        return
 
     col_w = 10
     print(f"{'':>8}", end="")
