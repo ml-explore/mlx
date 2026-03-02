@@ -1043,19 +1043,19 @@ void gpu_merge_sort(
 // Upper bound for small-kernel tiling. Keep this aligned with the
 // items-per-thread dispatch set and per-block shared-memory budget.
 constexpr int MAX_RADIX_ITEMS_PER_THREAD = 64;
+constexpr size_t RADIX_SMALL_SHARED_MEM_BUDGET_BYTES = 48 * 1024;
 
-int radix_small_block_threads(int size_sorted_axis) {
-  int block_threads = 256;
-  if (size_sorted_axis <= 128) {
-    block_threads = 16;
-  } else if (size_sorted_axis <= 256) {
-    block_threads = 32;
+template <typename F>
+void dispatch_radix_small_block_threads(int size_sorted_axis, F&& f) {
+  if (size_sorted_axis <= 256) {
+    f(std::integral_constant<int, 32>{});
   } else if (size_sorted_axis <= 512) {
-    block_threads = 64;
+    f(std::integral_constant<int, 64>{});
   } else if (size_sorted_axis <= 1024) {
-    block_threads = 128;
+    f(std::integral_constant<int, 128>{});
+  } else {
+    f(std::integral_constant<int, 256>{});
   }
-  return block_threads;
 }
 
 template <typename F>
@@ -1078,10 +1078,6 @@ void dispatch_radix_items_per_thread(
     f(std::integral_constant<int, 16>{});
   } else if (items_per_thread <= 24) {
     f(std::integral_constant<int, 24>{});
-  } else if (items_per_thread <= 32) {
-    f(std::integral_constant<int, 32>{});
-  } else if (items_per_thread <= 48) {
-    f(std::integral_constant<int, 48>{});
   } else {
     f(std::integral_constant<int, MAX_RADIX_ITEMS_PER_THREAD>{});
   }
@@ -1100,51 +1096,30 @@ size_t radix_small_shared_mem_bytes(
       (2 + 3 * num_warps + 6) * sizeof(int); // shared_count + scatter scratch
 }
 
-int radix_max_shared_mem_per_block(const Stream& s) {
-  int max_shared_mem_per_block = 0;
-  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
-      &max_shared_mem_per_block,
-      cudaDevAttrMaxSharedMemoryPerBlock,
-      s.device.index));
-
-  int max_shared_mem_per_block_optin = 0;
-  cudaError_t optin_err = cudaDeviceGetAttribute(
-      &max_shared_mem_per_block_optin,
-      cudaDevAttrMaxSharedMemoryPerBlockOptin,
-      s.device.index);
-  if (optin_err == cudaSuccess) {
-    max_shared_mem_per_block =
-        std::max(max_shared_mem_per_block, max_shared_mem_per_block_optin);
-  } else {
-    cudaGetLastError();
-  }
-  return max_shared_mem_per_block;
-}
-
-bool radix_small_fits_shared_memory(
-    const Stream& s,
-    Dtype dtype,
-    int size_sorted_axis) {
+bool radix_small_fits_shared_memory(Dtype dtype, int size_sorted_axis) {
   if (size_sorted_axis <= 0) {
     return false;
   }
 
-  int block_threads = radix_small_block_threads(size_sorted_axis);
-  int required_items = (size_sorted_axis + block_threads - 1) / block_threads;
-  if (required_items > MAX_RADIX_ITEMS_PER_THREAD) {
-    return false;
-  }
-
   size_t required_shared_mem = 0;
-  dispatch_radix_items_per_thread(
-      size_sorted_axis, block_threads, [&](auto items_per_thread_tag) {
-        constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
-        required_shared_mem = radix_small_shared_mem_bytes(
-            size_of(dtype), block_threads, ITEMS_PER_THREAD);
-      });
+  bool fits = false;
+  dispatch_radix_small_block_threads(size_sorted_axis, [&](auto block_dim_tag) {
+    constexpr int BLOCK_THREADS = block_dim_tag();
+    int required_items = (size_sorted_axis + BLOCK_THREADS - 1) / BLOCK_THREADS;
+    if (required_items > MAX_RADIX_ITEMS_PER_THREAD) {
+      fits = false;
+      return;
+    }
 
-  int max_shared_mem_per_block = radix_max_shared_mem_per_block(s);
-  return required_shared_mem <= static_cast<size_t>(max_shared_mem_per_block);
+    dispatch_radix_items_per_thread(
+        size_sorted_axis, BLOCK_THREADS, [&](auto items_per_thread_tag) {
+          constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
+          required_shared_mem = radix_small_shared_mem_bytes(
+              size_of(dtype), BLOCK_THREADS, ITEMS_PER_THREAD);
+          fits = required_shared_mem <= RADIX_SMALL_SHARED_MEM_BUDGET_BYTES;
+        });
+  });
+  return fits;
 }
 
 void gpu_radix_partition_small(
@@ -1196,8 +1171,6 @@ void gpu_radix_partition_small(
     if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
       using ValT = cuda_type_t<CTYPE>;
 
-      int block_threads = radix_small_block_threads(size_sorted_axis);
-
       dispatch_bool(arg_partition, [&](auto arg_tag) {
         constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
         using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
@@ -1216,66 +1189,65 @@ void gpu_radix_partition_small(
           }
         }
 
-        dispatch_block_dim(block_threads, [&](auto block_dim) {
-          constexpr int BLOCK_THREADS = block_dim();
-          dim3 grid(1, n_rows, 1);
-          dim3 block(BLOCK_THREADS, 1, 1);
+        dispatch_radix_small_block_threads(
+            size_sorted_axis, [&](auto block_dim_tag) {
+              constexpr int BLOCK_THREADS = block_dim_tag();
+              dim3 grid(1, n_rows, 1);
+              dim3 block(BLOCK_THREADS, 1, 1);
 
-          dispatch_radix_items_per_thread(
-              size_sorted_axis, block_threads, [&](auto items_per_thread_tag) {
-                constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
+              dispatch_radix_items_per_thread(
+                  size_sorted_axis,
+                  BLOCK_THREADS,
+                  [&](auto items_per_thread_tag) {
+                    constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
 
-                dispatch_bool(contiguous, [&](auto contiguous_tag) {
-                  constexpr bool USE_SIMPLE_STRIDE =
-                      decltype(contiguous_tag)::value;
+                    dispatch_bool(contiguous, [&](auto contiguous_tag) {
+                      constexpr bool USE_SIMPLE_STRIDE =
+                          decltype(contiguous_tag)::value;
 
-                  auto kernel = cu::radix_select_small_kernel<
-                      ValT,
-                      OutT,
-                      ARG_PARTITION,
-                      USE_SIMPLE_STRIDE,
-                      BLOCK_THREADS,
-                      ITEMS_PER_THREAD>;
+                      auto kernel = cu::radix_select_small_kernel<
+                          ValT,
+                          OutT,
+                          ARG_PARTITION,
+                          USE_SIMPLE_STRIDE,
+                          BLOCK_THREADS,
+                          ITEMS_PER_THREAD>;
 
-                  // Calculate dynamic shared memory size
-                  using UnsignedT = typename cu::RadixTraits<ValT>::UnsignedT;
-                  constexpr int TILE_SIZE_VAL =
-                      BLOCK_THREADS * ITEMS_PER_THREAD;
-                  constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
-                  constexpr size_t shared_mem_bytes =
-                      TILE_SIZE_VAL * sizeof(UnsignedT) + // shared_keys
-                      TILE_SIZE_VAL * sizeof(uint32_t) + // shared_idxs
-                      cu::RADIX_SIZE *
-                          sizeof(int) + // shared_hist for small kernel
-                      (2 + 3 * NUM_WARPS + 6) *
-                          sizeof(int); // shared_count + scatter scratch
+                      // Calculate dynamic shared memory size
+                      using UnsignedT =
+                          typename cu::RadixTraits<ValT>::UnsignedT;
+                      constexpr int TILE_SIZE_VAL =
+                          BLOCK_THREADS * ITEMS_PER_THREAD;
+                      constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
+                      constexpr size_t shared_mem_bytes =
+                          TILE_SIZE_VAL * sizeof(UnsignedT) + // shared_keys
+                          TILE_SIZE_VAL * sizeof(uint32_t) + // shared_idxs
+                          cu::RADIX_SIZE *
+                              sizeof(int) + // shared_hist for small kernel
+                          (2 + 3 * NUM_WARPS + 6) *
+                              sizeof(int); // shared_count + scatter scratch
 
-                  CHECK_CUDA_ERROR(cudaFuncSetAttribute(
-                      kernel,
-                      cudaFuncAttributeMaxDynamicSharedMemorySize,
-                      static_cast<int>(shared_mem_bytes)));
-
-                  encoder.add_kernel_node_ex(
-                      kernel,
-                      grid,
-                      block,
-                      {},
-                      shared_mem_bytes,
-                      gpu_ptr<ValT>(in),
-                      gpu_ptr<OutT>(out),
-                      kth,
-                      size_sorted_axis,
-                      in_stride_sorted_axis,
-                      out_stride_sorted_axis,
-                      in_stride_segment_axis,
-                      out_stride_segment_axis,
-                      nc_shape_param,
-                      in_nc_strides_param,
-                      out_nc_strides_param,
-                      nc_dim);
-                });
-              });
-        });
+                      encoder.add_kernel_node_ex(
+                          kernel,
+                          grid,
+                          block,
+                          {},
+                          shared_mem_bytes,
+                          gpu_ptr<ValT>(in),
+                          gpu_ptr<OutT>(out),
+                          kth,
+                          size_sorted_axis,
+                          in_stride_sorted_axis,
+                          out_stride_sorted_axis,
+                          in_stride_segment_axis,
+                          out_stride_segment_axis,
+                          nc_shape_param,
+                          in_nc_strides_param,
+                          out_nc_strides_param,
+                          nc_dim);
+                    });
+                  });
+            });
       });
     } else {
       throw std::runtime_error(
@@ -1302,7 +1274,7 @@ void gpu_radix_partition(
   }
 
   // Dispatch based on whether the small kernel tile fits in shared memory.
-  if (radix_small_fits_shared_memory(s, in.dtype(), size_sorted_axis)) {
+  if (radix_small_fits_shared_memory(in.dtype(), size_sorted_axis)) {
     return gpu_radix_partition_small(s, in, out, axis, kth, arg_partition);
   } else {
     return gpu_merge_sort(s, in, out, axis, arg_partition);
