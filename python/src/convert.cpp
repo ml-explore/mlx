@@ -454,7 +454,7 @@ mx::array array_from_list_impl(T pl, std::optional<mx::Dtype> dtype) {
   // `pl` contains mlx arrays
   std::vector<mx::array> arrays;
   for (auto l : pl) {
-    arrays.push_back(create_array(nb::cast<ArrayInitType>(l), dtype));
+    arrays.push_back(create_array(nb::cast<nb::object>(l), dtype));
   }
   return mx::stack(arrays);
 }
@@ -467,38 +467,70 @@ mx::array array_from_list(nb::tuple pl, std::optional<mx::Dtype> dtype) {
   return array_from_list_impl(pl, dtype);
 }
 
-mx::array create_array(ArrayInitType v, std::optional<mx::Dtype> t) {
-  if (auto pv = std::get_if<nb::bool_>(&v); pv) {
-    return mx::array(nb::cast<bool>(*pv), t.value_or(mx::bool_));
-  } else if (auto pv = std::get_if<nb::int_>(&v); pv) {
-    auto val = nb::cast<int64_t>(*pv);
-    auto default_type = (val > std::numeric_limits<int>::max() ||
-                         val < std::numeric_limits<int>::min())
-        ? mx::int64
-        : mx::int32;
-    return mx::array(val, t.value_or(default_type));
-  } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
-    auto out_type = t.value_or(mx::float32);
-    if (out_type == mx::float64) {
-      return mx::array(nb::cast<double>(*pv), out_type);
-    } else {
-      return mx::array(nb::cast<float>(*pv), out_type);
+mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
+  if (nb::hasattr(v, "dtype")) {
+    nb::object dtype_obj = v.attr("dtype");
+    if (nb::str(dtype_obj).equal(nb::str("bfloat16"))) {
+      nb::object module_obj = v.attr("__class__").attr("__module__");
+      auto type_mod = nb::str(module_obj);
+      if (type_mod.equal(nb::str("numpy")) ||
+          type_mod.equal(nb::str("ml_dtypes"))) {
+        auto np = nb::module_::import_("numpy");
+        auto contig_obj = np.attr("ascontiguousarray")(v);
+        mx::Shape shape;
+        nb::tuple shape_tuple = nb::cast<nb::tuple>(v.attr("shape"));
+        size_t ndim = shape_tuple.size();
+        for (size_t i = 0; i < ndim; ++i) {
+          shape.push_back(nb::cast<int>(shape_tuple[i]));
+        }
+        uint64_t ptr_int =
+            nb::cast<uint64_t>(contig_obj.attr("ctypes").attr("data"));
+        const mx::bfloat16_t* typed_ptr =
+            reinterpret_cast<const mx::bfloat16_t*>(ptr_int);
+        auto res = (ndim == 0) ? mx::array(*typed_ptr, mx::bfloat16)
+                               : mx::array(typed_ptr, shape, mx::bfloat16);
+        if (t.has_value())
+          res = mx::astype(res, *t);
+        return res;
+      }
     }
-  } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
-    return mx::array(
-        static_cast<mx::complex64_t>(*pv), t.value_or(mx::complex64));
-  } else if (auto pv = std::get_if<nb::list>(&v); pv) {
-    return array_from_list(*pv, t);
-  } else if (auto pv = std::get_if<nb::tuple>(&v); pv) {
-    return array_from_list(*pv, t);
-  } else if (auto pv = std::get_if<
-                 nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>>(&v);
-             pv) {
-    return nd_array_to_mlx(*pv, t);
-  } else if (auto pv = std::get_if<mx::array>(&v); pv) {
-    return mx::astype(*pv, t.value_or((*pv).dtype()));
-  } else {
-    auto arr = to_array_with_accessor(std::get<ArrayLike>(v).obj);
-    return mx::astype(arr, t.value_or(arr.dtype()));
+  }
+  try {
+    auto v_cast = nb::cast<ArrayInitType>(v);
+    if (auto pv = std::get_if<nb::bool_>(&v_cast); pv) {
+      return mx::array(nb::cast<bool>(*pv), t.value_or(mx::bool_));
+    } else if (auto pv = std::get_if<nb::int_>(&v_cast); pv) {
+      auto val = nb::cast<int64_t>(*pv);
+      auto default_type = (val > std::numeric_limits<int>::max() ||
+                           val < std::numeric_limits<int>::min())
+          ? mx::int64
+          : mx::int32;
+      return mx::array(val, t.value_or(default_type));
+    } else if (auto pv = std::get_if<nb::float_>(&v_cast); pv) {
+      auto out_type = t.value_or(mx::float32);
+      if (out_type == mx::float64) {
+        return mx::array(nb::cast<double>(*pv), out_type);
+      } else {
+        return mx::array(nb::cast<float>(*pv), out_type);
+      }
+    } else if (auto pv = std::get_if<std::complex<float>>(&v_cast); pv) {
+      return mx::array(
+          static_cast<mx::complex64_t>(*pv), t.value_or(mx::complex64));
+    } else if (auto pv = std::get_if<nb::list>(&v_cast); pv) {
+      return array_from_list(*pv, t);
+    } else if (auto pv = std::get_if<nb::tuple>(&v_cast); pv) {
+      return array_from_list(*pv, t);
+    } else if (auto pv = std::get_if<
+                   nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>>(&v_cast);
+               pv) {
+      return nd_array_to_mlx(*pv, t);
+    } else if (auto pv = std::get_if<mx::array>(&v_cast); pv) {
+      return mx::astype(*pv, t.value_or((*pv).dtype()));
+    } else {
+      auto arr = to_array_with_accessor(std::get<ArrayLike>(v_cast).obj);
+      return mx::astype(arr, t.value_or(arr.dtype()));
+    }
+  } catch (const std::bad_cast& e) {
+    throw std::invalid_argument("Cannot convert to mlx array.");
   }
 }

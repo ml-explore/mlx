@@ -45,6 +45,6 @@ nb::object to_scalar(mx::array& a);
 
 nb::object tolist(mx::array& a);
 
-mx::array create_array(ArrayInitType v, std::optional<mx::Dtype> t);
+mx::array create_array(nb::object v, std::optional<mx::Dtype> t);
 mx::array array_from_list(nb::list pl, std::optional<mx::Dtype> dtype);
 mx::array array_from_list(nb::tuple pl, std::optional<mx::Dtype> dtype);

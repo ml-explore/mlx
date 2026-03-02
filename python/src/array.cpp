@@ -296,7 +296,7 @@ void init_array(nb::module_& m) {
       nb::is_weak_referenceable())
       .def(
           "__init__",
-          [](mx::array* aptr, ArrayInitType v, std::optional<mx::Dtype> t) {
+          [](mx::array* aptr, nb::object v, std::optional<mx::Dtype> t) {
             new (aptr) mx::array(create_array(v, t));
           },
           "val"_a,

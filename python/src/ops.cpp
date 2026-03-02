@@ -1743,7 +1743,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "asarray",
-      [](const ArrayInitType& a, std::optional<mx::Dtype> dtype) {
+      [](const nb::object& a, std::optional<mx::Dtype> dtype) {
         return create_array(a, dtype);
       },
       nb::arg(),
