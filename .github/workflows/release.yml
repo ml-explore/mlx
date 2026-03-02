@@ -169,12 +169,12 @@ jobs:
       name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: linux-wheels-*
           merge-multiple: true
           path: dist
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: mac-wheels-*
           merge-multiple: true
@@ -197,7 +197,7 @@ jobs:
       name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx-cuda
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: mlx-cuda-*
           merge-multiple: true
@@ -220,7 +220,7 @@ jobs:
       name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx-cpu
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: mlx-cpu-*
           merge-multiple: true
@@ -243,7 +243,7 @@ jobs:
       name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx-metal
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: mlx-metal
           path: dist
