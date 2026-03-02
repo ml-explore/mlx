@@ -9,8 +9,11 @@ struct gc_func {
   PyObject_HEAD
       // Vector call implementation that forwards calls to nanobind
       PyObject* (*vectorcall)(PyObject*, PyObject* const*, size_t, PyObject*);
-  // The function itself
+  // The nanobind wrapper func
   PyObject* func;
+
+  // The original wrapped func
+  PyObject* orig_func;
   // A non-owning reference to dependencies owned by 'func'
   std::vector<PyObject*> deps;
 };
@@ -68,8 +71,7 @@ static PyGetSetDef gc_func_getset[] = {
 
 static PyObject* gc_func_getattro(PyObject* self, PyObject* name_) {
   gc_func* w = (gc_func*)self;
-  auto f = PyCFunction(PyType_GetSlot(Py_TYPE(w->func), Py_tp_getattro));
-  return f(w->func, name_);
+  return PyObject_GenericGetAttr(w->orig_func, name_);
 }
 
 // Table of custom type slots we want to install
@@ -87,14 +89,20 @@ static PyType_Spec gc_func_spec = {
     /* .name = */ "mlx.gc_func",
     /* .basicsize = */ (int)sizeof(gc_func),
     /* .itemsize = */ 0,
-    /* .flags = */ Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | NB_HAVE_VECTORCALL,
+    /* .flags = */ Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+        Py_TPFLAGS_HAVE_VECTORCALL,
     /* .slots = */ gc_func_slots};
 
 static PyTypeObject* gc_func_tp = nullptr;
 
-nb::callable mlx_func(nb::object func, std::vector<PyObject*> deps) {
+nb::callable mlx_func(
+    nb::object func,
+    const nb::callable& orig_func,
+    std::vector<PyObject*> deps) {
   gc_func* r = (gc_func*)PyType_GenericAlloc(gc_func_tp, 0);
   r->func = func.inc_ref().ptr();
+  r->orig_func = orig_func.ptr();
+  deps.push_back(r->orig_func);
   r->deps = std::move(deps);
   r->vectorcall = gc_func_vectorcall;
   return nb::steal<nb::callable>((PyObject*)r);

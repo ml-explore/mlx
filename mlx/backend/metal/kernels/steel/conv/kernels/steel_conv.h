@@ -13,7 +13,7 @@ template <
     int WN,
     int N_CHANNELS = 0,
     bool SMALL_FILTER = false>
-[[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void
+[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void
 implicit_gemm_conv_2d(
     const device T* A [[buffer(0)]],
     const device T* B [[buffer(1)]],

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <arm_neon.h>
 #include <simd/math.h>
 #include <simd/vector.h>
 
@@ -9,7 +10,7 @@
 
 #include "mlx/backend/cpu/simd/base_simd.h"
 
-// There seems to be a bug in sims/base.h
+// There seems to be a bug in simd/base_simd.h
 // __XROS_2_0 is not defined, the expression evaluates
 // to true instead of false setting the SIMD library
 // higher than it should be even on macOS < 15
@@ -201,20 +202,35 @@ SIMD_DEFAULT_COMPARISONS(==)
 SIMD_DEFAULT_COMPARISONS(!=)
 
 template <typename T, int N>
+Simd<T, N> clz(Simd<T, N> x) {
+  auto a = *(uint32x4_t*)(&x);
+  auto b = *((uint32x4_t*)(&x) + 1);
+  a = vclzq_u32(a);
+  b = vclzq_u32(b);
+  return asd::make_uint8(a, b);
+}
+
+template <typename T, int N>
 Simd<T, N> atan2(Simd<T, N> a, Simd<T, N> b) {
   return asd::atan2(a.value, b.value);
 }
 
 template <typename T, int N>
 Simd<T, N> maximum(Simd<T, N> a, Simd<T, N> b) {
-  // TODO add isnan
-  return asd::max(a.value, b.value);
+  auto out = Simd<T, N>(asd::max(a.value, b.value));
+  if constexpr (!std::is_integral_v<T>) {
+    out = select(isnan(b), b, select(isnan(a), a, out));
+  }
+  return out;
 }
 
 template <typename T, int N>
 Simd<T, N> minimum(Simd<T, N> a, Simd<T, N> b) {
-  // TODO add isnan
-  return asd::min(a.value, b.value);
+  auto out = Simd<T, N>(asd::min(a.value, b.value));
+  if constexpr (!std::is_integral_v<T>) {
+    out = select(isnan(b), b, select(isnan(a), a, out));
+  }
+  return out;
 }
 
 template <typename T, int N>
@@ -234,6 +250,7 @@ Simd<T, N> remainder(Simd<T, N> a, Simd<T, N> b) {
 
 template <typename MaskT, typename T1, typename T2, int N>
 Simd<T1, N> select(Simd<MaskT, N> mask, Simd<T1, N> x, Simd<T2, N> y) {
+  static_assert(std::is_same_v<MaskT, bool>);
   if constexpr (sizeof(T1) == 1) {
     return asd::bitselect(y.value, x.value, asd::convert<char>(mask.value));
   } else if constexpr (sizeof(T1) == 2) {
@@ -251,9 +268,13 @@ Simd<T, N> pow(Simd<T, N> base, Simd<T, N> exp) {
     return asd::pow(base.value, exp.value);
   } else {
     Simd<T, N> res = 1;
-    while (any(exp)) {
-      res = select(exp & 1, res * base, res);
-      base = select(exp, base * base, base);
+    // Raising an integer to a negative power is undefined
+    if (any(exp < 0)) {
+      return 0;
+    }
+    while (any(exp > 0)) {
+      res = select((exp & 1) != 0, res * base, res);
+      base = select(exp > 0, base * base, base);
       exp = exp >> 1;
     }
     return res;

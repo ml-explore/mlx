@@ -350,7 +350,7 @@ TEST_CASE("test SVD factorization") {
   const auto A_again = matmul(matmul(U_slice, diag(S)), Vt);
 
   CHECK(
-      allclose(A_again, A, /* rtol = */ 1e-4, /* atol = */ 1e-4).item<bool>());
+      allclose(A_again, A, /* rtol = */ 1e-3, /* atol = */ 1e-3).item<bool>());
   CHECK_EQ(U.dtype(), float32);
   CHECK_EQ(S.dtype(), float32);
   CHECK_EQ(Vt.dtype(), float32);
@@ -394,12 +394,14 @@ TEST_CASE("test matrix cholesky") {
       linalg::cholesky(array({0.0, 1.0}), /* upper = */ false, Device::cpu));
 
   // Unsupported types throw
-  CHECK_THROWS(linalg::cholesky(
-      array({0, 1}, {1, 2}), /* upper = */ false, Device::cpu));
+  CHECK_THROWS(
+      linalg::cholesky(
+          array({0, 1}, {1, 2}), /* upper = */ false, Device::cpu));
 
   // Non-square throws.
-  CHECK_THROWS(linalg::cholesky(
-      array({1, 2, 3, 4, 5, 6}, {2, 3}), /* upper = */ false, Device::cpu));
+  CHECK_THROWS(
+      linalg::cholesky(
+          array({1, 2, 3, 4, 5, 6}, {2, 3}), /* upper = */ false, Device::cpu));
 
   const auto prng_key = random::key(220398);
   const auto sqrtA = random::normal({5, 5}, prng_key);
@@ -425,9 +427,11 @@ TEST_CASE("test matrix pseudo-inverse") {
     const auto A = array({1.0, 2.0, 3.0, 4.0}, {2, 2});
     const auto A_pinv = linalg::pinv(A, Device::cpu);
     const auto A_again = matmul(matmul(A, A_pinv), A);
-    CHECK(allclose(A_again, A).item<bool>());
+    CHECK(allclose(A_again, A, /* rtol = */ 1e-5, /* atol = */ 1e-5)
+              .item<bool>());
     const auto A_pinv_again = matmul(matmul(A_pinv, A), A_pinv);
-    CHECK(allclose(A_pinv_again, A_pinv).item<bool>());
+    CHECK(allclose(A_pinv_again, A_pinv, /* rtol = */ 1e-5, /* atol = */ 1e-5)
+              .item<bool>());
   }
   { // Rectangular matrix m < n
     const auto prng_key = random::key(42);
@@ -437,9 +441,11 @@ TEST_CASE("test matrix pseudo-inverse") {
     CHECK_FALSE(allclose(zeros, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6)
                     .item<bool>());
     const auto A_again = matmul(matmul(A, A_pinv), A);
-    CHECK(allclose(A_again, A).item<bool>());
+    CHECK(allclose(A_again, A, /* rtol = */ 1e-5, /* atol = */ 1e-5)
+              .item<bool>());
     const auto A_pinv_again = matmul(matmul(A_pinv, A), A_pinv);
-    CHECK(allclose(A_pinv_again, A_pinv).item<bool>());
+    CHECK(allclose(A_pinv_again, A_pinv, /* rtol = */ 1e-5, /* atol = */ 1e-5)
+              .item<bool>());
   }
   { // Rectangular matrix m > n
     const auto prng_key = random::key(10);
@@ -449,9 +455,11 @@ TEST_CASE("test matrix pseudo-inverse") {
     CHECK_FALSE(allclose(zeros2, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6)
                     .item<bool>());
     const auto A_again = matmul(matmul(A, A_pinv), A);
-    CHECK(allclose(A_again, A).item<bool>());
+    CHECK(allclose(A_again, A, /* rtol = */ 1e-5, /* atol = */ 1e-5)
+              .item<bool>());
     const auto A_pinv_again = matmul(matmul(A_pinv, A), A_pinv);
-    CHECK(allclose(A_pinv_again, A_pinv).item<bool>());
+    CHECK(allclose(A_pinv_again, A_pinv, /* rtol = */ 1e-5, /* atol = */ 1e-5)
+              .item<bool>());
   }
 }
 

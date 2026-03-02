@@ -13,6 +13,8 @@
 #include "mlx/graph_utils.h"
 #include "mlx/mlx.h"
 
+#include "mlx/backend/cuda/cuda.h"
+
 using namespace mlx::core;
 
 TEST_CASE("test stop gradient") {
@@ -411,6 +413,25 @@ TEST_CASE("test op vjps") {
     auto out =
         vjp([](array input) { return cos(input); }, array(1.0f), array(1.0f));
     CHECK(out.second.item<float>() == doctest::Approx(-std::sin(1.0f)));
+  }
+
+  // Test arctan
+  {
+    auto out = vjp(
+        [](array input) { return arctan(input); }, array(2.0f), array(1.0f));
+    CHECK(out.second.item<float>() == doctest::Approx(0.2f));
+  }
+
+  // Test arctan2
+  {
+    auto out = vjp(
+        [](const std::vector<array>& xs) {
+          return std::vector<array>{arctan2(xs[0], xs[1])};
+        },
+        {array(2.0f), array(3.0f)},
+        {array(1.0f)});
+    CHECK(out.second[0].item<float>() == doctest::Approx(3.0f / 13.0f));
+    CHECK(out.second[1].item<float>() == doctest::Approx(-2.0f / 13.0f));
   }
 
   // Test log
@@ -1133,26 +1154,48 @@ TEST_CASE("test complex gradients") {
   }
 
   {
+    auto multiply_fn =
+        [](const std::vector<array>& inputs) -> std::vector<array> {
+      return {multiply(inputs[0], inputs[1])};
+    };
+
     // Compute jvp
     auto x = array(complex64_t{2.0, 4.0});
     auto y = array(3.0f);
-
     auto x_tan = array(complex64_t{1.0, 2.0});
     auto y_tan = array(2.0f);
+    auto jvp_out = jvp(multiply_fn, {x, y}, {x_tan, y_tan}).second;
+    CHECK_EQ(jvp_out[0].item<complex64_t>(), complex64_t{7.0, 14.0});
 
-    auto out = jvp([x](array a) { return multiply(a, x); }, y, y_tan).second;
-    CHECK_EQ(out.item<complex64_t>(), complex64_t{4.0, 8.0});
-
-    out = jvp([y](array a) { return multiply(a, y); }, x, x_tan).second;
-    CHECK_EQ(out.item<complex64_t>(), complex64_t{3.0, 6.0});
-
+    // Compute vjp
     auto cotan = array(complex64_t{2.0, 3.0});
-    out = vjp([x](array a) { return multiply(a, x); }, y, cotan).second;
-    CHECK_EQ(out.dtype(), float32);
-    CHECK_EQ(out.item<float>(), -8.0);
+    auto vjp_out = vjp(multiply_fn, {x, y}, {cotan}).second;
+    CHECK_EQ(vjp_out[0].dtype(), complex64);
+    CHECK_EQ(vjp_out[0].item<complex64_t>(), complex64_t{6.0, 9.0});
+    CHECK_EQ(vjp_out[1].dtype(), float32);
+    CHECK_EQ(vjp_out[1].item<float>(), 16);
+  }
 
-    out = vjp([y](array a) { return multiply(a, y); }, x, cotan).second;
-    CHECK_EQ(out.item<complex64_t>(), complex64_t{6.0, 9.0});
+  {
+    auto divide_fn =
+        [](const std::vector<array>& inputs) -> std::vector<array> {
+      return {divide(inputs[0], inputs[1])};
+    };
+
+    // Compute jvp
+    auto x = array(complex64_t{2.0, 3.0});
+    auto y = array(complex64_t{1.0, 2.0});
+    auto x_tan = array(complex64_t{3.0, 4.0});
+    auto y_tan = array(complex64_t{4.0, -2.0});
+    auto jvp_out = jvp(divide_fn, {x, y}, {x_tan, y_tan}).second;
+    CHECK_EQ(
+        jvp_out[0].item<complex64_t>(), doctest::Approx(complex64_t{2.6, 2.8}));
+
+    // Compute vjp
+    auto cotan = array(complex64_t{2.0, -4.0});
+    auto vjp_out = vjp(divide_fn, {x, y}, {cotan}).second;
+    CHECK_EQ(vjp_out[0].item<complex64_t>(), complex64_t{2.0, 0.0});
+    CHECK_EQ(vjp_out[1].item<complex64_t>(), complex64_t{-3.2, -0.4});
   }
 }
 
@@ -1310,5 +1353,47 @@ TEST_CASE("test grad dynamic slices") {
     auto outs = vjp(fn, {x, update}, {ones({2, 2})}).second;
     CHECK(allclose(outs[0], array({0.f, 0.f, 1.f, 1.f}, {2, 2})).item<bool>());
     CHECK(allclose(outs[1], ones({1, 2})).item<bool>());
+  }
+}
+
+TEST_CASE("test masked_scatter autograd") {
+  if (cu::is_available()) {
+    INFO("Skipping masked_scatter cuda autograd tests");
+    return;
+  }
+
+  // Test jvp
+  {
+    auto self = array({10.f, 20.f, 30.f, 40.f}, {4});
+    auto mask = array({false, true, false, true}, bool_);
+    auto src = array({7.f, 8.f}, {2});
+
+    auto self_tan = array({1.f, 2.f, 3.f, 4.f}, {4});
+    auto src_tan = array({9.f, 11.f}, {2});
+
+    auto fun = [&mask](const std::vector<array>& in) {
+      return std::vector<array>{masked_scatter(in[0], mask, in[1])};
+    };
+
+    auto outs = jvp(fun, {self, src}, {self_tan, src_tan}).second;
+    CHECK_EQ(outs.size(), 1);
+    CHECK(array_equal(outs[0], array({1.f, 9.f, 3.f, 11.f}, {4})).item<bool>());
+  }
+
+  // Test vjp
+  {
+    auto self = array({10.f, 20.f, 30.f, 40.f}, {4});
+    auto mask = array({true, false, false, true}, bool_);
+    auto src = array({7.f, 8.f}, {2});
+
+    auto f_sum = [&mask](const std::vector<array>& xs) {
+      return std::vector<array>{sum(masked_scatter(xs[0], mask, xs[1]))};
+    };
+
+    auto v = vjp(f_sum, {self, src}, {array(1.f)});
+    const auto& grads = v.second;
+
+    CHECK(array_equal(grads[0], array({0.f, 1.f, 1.f, 0.f}, {4})).item<bool>());
+    CHECK(array_equal(grads[1], array({1.f, 1.f}, {2})).item<bool>());
   }
 }

@@ -80,7 +80,7 @@ class TestBase(mlx_tests.MLXTestCase):
                 self.weights = {"w1": mx.zeros((2, 2)), "w2": mx.ones((2, 2))}
 
         model = DictModule()
-        params = dict(tree_flatten(model.parameters()))
+        params = tree_flatten(model.parameters(), destination={})
         self.assertEqual(len(params), 2)
         self.assertTrue(mx.array_equal(params["weights.w1"], mx.zeros((2, 2))))
         self.assertTrue(mx.array_equal(params["weights.w2"], mx.ones((2, 2))))
@@ -198,12 +198,51 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(m.layers[1], nn.ReLU))
         self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
 
+        nn.quantize(m, group_size=32, mode="mxfp4")
+        self.assertTrue(isinstance(m.layers[0], nn.QuantizedEmbedding))
+        self.assertTrue(isinstance(m.layers[1], nn.ReLU))
+        self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
+        self.assertTrue(isinstance(m.layers[2].scales, mx.array))
+
+        m = nn.Sequential(
+            nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256, bias=False)
+        )
+        nn.quantize(
+            m,
+            group_size=32,
+            mode="mxfp8",
+            quantize_input=True,
+            class_predicate=lambda path, module: isinstance(module, nn.Linear),
+        )
+        self.assertTrue(isinstance(m.layers[0], nn.Embedding))
+        self.assertTrue(isinstance(m.layers[1], nn.ReLU))
+        self.assertTrue(isinstance(m.layers[2], nn.QQLinear))
+
+        # Check that Embedding does not support quantize_input
+        m = nn.Sequential(
+            nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256, bias=False)
+        )
+        with self.assertRaises(ValueError) as context:
+            nn.quantize(m, group_size=32, mode="mxfp8", quantize_input=True)
+
     def test_quantize_freeze(self):
         lin = nn.Linear(512, 512)
         qlin = lin.to_quantized()
         qlin.unfreeze(keys=["scales"])
         size = tree_reduce(lambda acc, p: acc + p.size, qlin.trainable_parameters(), 0)
         self.assertTrue(size > 0)
+
+    def test_quantized_sharded_linear_construction(self):
+        input_dims, output_dims = 1536, 1024
+        for bits in [2, 3, 4, 5, 6, 8]:
+            lin = nn.Linear(input_dims, output_dims)
+            qlin = lin.to_quantized(bits=bits)
+
+            slin1 = nn.QuantizedAllToShardedLinear.from_quantized_linear(qlin)
+            self.assertEqual(slin1.weight.shape, qlin.weight.shape)
+
+            slin2 = nn.QuantizedShardedToAllLinear.from_quantized_linear(qlin)
+            self.assertEqual(slin2.weight.shape, qlin.weight.shape)
 
     def test_grad_of_module(self):
         class Model(nn.Module):
@@ -218,6 +257,83 @@ class TestBase(mlx_tests.MLXTestCase):
 
         x = mx.zeros((3,))
         mx.grad(loss_fn)(model)
+
+    def test_update(self):
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+
+        # Updating non-existent parameters
+        with self.assertRaises(ValueError):
+            updates = {"layers": [{"value": 0}]}
+            m.update(updates)
+
+        with self.assertRaises(ValueError):
+            updates = {"layers": ["hello"]}
+            m.update(updates)
+
+        # Wronge type
+        with self.assertRaises(ValueError):
+            updates = {"layers": [{"weight": "hi"}]}
+            m.update(updates)
+
+    def test_update_modules(self):
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+
+        # Updating non-existent modules should not be allowed by default
+        with self.assertRaises(ValueError):
+            m = m.update_modules({"values": [0, 1]})
+
+        # Update wrong types
+        with self.assertRaises(ValueError):
+            m = m.update_modules({"layers": [0, 1]})
+
+        class MyModule(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.test = mx.array(1.0)
+                self.list = [mx.array(1.0), mx.array(2.0)]
+
+        m = MyModule()
+        with self.assertRaises(ValueError):
+            m = m.update_modules({"test": "hi"})
+        with self.assertRaises(ValueError):
+            m = m.update_modules({"list": ["hi"]})
+
+        # Allow updating a strict subset
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        m.update_modules({"layers": [{}, nn.Linear(3, 4)]})
+        self.assertEqual(m.layers[1].weight.shape, (4, 3))
+
+        # Using leaf_modules in the update should always work
+        class MyModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.stuff = [nn.Linear(2, 2), 0, nn.Linear(2, 2)]
+                self.more_stuff = {"hi": nn.Linear(2, 2), "bye": 0}
+
+        m = MyModel()
+        m.update_modules(m.leaf_modules())
+
+    def test_parameter_deletion(self):
+        m = nn.Linear(32, 32)
+        del m.weight
+        self.assertFalse(hasattr(m, "weight"))
+
+    def test_circular_leaks(self):
+        y = mx.random.uniform(1)
+        mx.eval(y)
+
+        def make_and_update():
+            model = nn.Linear(1024, 512)
+            mx.eval(model.parameters())
+            leaves = {}
+            model.update_modules(leaves)
+
+        mx.synchronize()
+        pre = mx.get_active_memory()
+        make_and_update()
+        mx.synchronize()
+        post = mx.get_active_memory()
+        self.assertEqual(pre, post)
 
 
 class TestLayers(mlx_tests.MLXTestCase):
@@ -1867,4 +1983,4 @@ class TestLayers(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

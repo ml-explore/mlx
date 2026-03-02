@@ -16,7 +16,7 @@ TEST_CASE("test stream management") {
   CHECK_NE(s1, s2);
 
   // Check that default streams have the correct devices
-  if (metal::is_available()) {
+  if (gpu::is_available()) {
     auto s_gpu = default_stream(Device::gpu);
     CHECK_EQ(s_gpu.device, Device::gpu);
   } else {
@@ -28,12 +28,40 @@ TEST_CASE("test stream management") {
   s_cpu = new_stream(Device::cpu);
   CHECK_EQ(s_cpu.device, Device::cpu);
 
-  if (metal::is_available()) {
+  if (gpu::is_available()) {
     auto s_gpu = new_stream(Device::gpu);
     CHECK_EQ(s_gpu.device, Device::gpu);
   } else {
     CHECK_THROWS_AS(new_stream(Device::gpu), std::invalid_argument);
   }
+}
+
+TEST_CASE("test get streams") {
+  auto streams = get_streams();
+
+  // At least the default CPU stream exists
+  CHECK(streams.size() >= 1);
+
+  // All default streams should be in the list
+  auto s_cpu = default_stream(Device::cpu);
+  bool found_cpu = false;
+  for (auto& s : streams) {
+    if (s == s_cpu) {
+      found_cpu = true;
+    }
+  }
+  CHECK(found_cpu);
+
+  // New streams show up
+  auto s_new = new_stream(Device::cpu);
+  streams = get_streams();
+  bool found_new = false;
+  for (auto& s : streams) {
+    if (s == s_new) {
+      found_new = true;
+    }
+  }
+  CHECK(found_new);
 }
 
 TEST_CASE("test asynchronous launch") {

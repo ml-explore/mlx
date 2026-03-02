@@ -5,6 +5,15 @@
 
 using namespace mlx::core;
 
+namespace std {
+
+// Required to make doctest compile.
+ostream& operator<<(ostream& os, const vector<vector<int>>&) {
+  return os;
+}
+
+} // namespace std
+
 TEST_CASE("test einsum path") {
   std::vector<std::vector<int>> expected = {{1, 2}, {0, 1}};
   auto path =

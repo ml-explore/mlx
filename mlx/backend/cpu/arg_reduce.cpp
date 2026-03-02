@@ -14,10 +14,8 @@ template <typename InT, typename OpT>
 void arg_reduce(const array& in, array& out, const OpT& op, int axis) {
   auto axis_size = in.shape()[axis];
   auto axis_stride = in.strides()[axis];
-  Strides strides = in.strides();
-  Shape shape = in.shape();
-  strides.erase(strides.begin() + axis);
-  shape.erase(shape.begin() + axis);
+  Strides strides = remove_index(in.strides(), axis);
+  Shape shape = remove_index(in.shape(), axis);
   auto in_ptr = in.data<InT>();
   auto out_ptr = out.data<uint32_t>();
 

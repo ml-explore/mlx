@@ -38,3 +38,17 @@ the docs. Then force add the `build/html` directory:
 `git add -f build/html`
 
 Commit and push the changes to the `gh-pages` branch.
+
+## Doc Development Setup
+
+To enable live refresh of docs while writing:
+
+Install sphinx autobuild
+```
+pip install sphinx-autobuild
+```
+
+Run auto build on docs/src folder
+```
+sphinx-autobuild ./src ./build/html
+```

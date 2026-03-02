@@ -1,13 +1,17 @@
 // Copyright © 2023-2024 Apple Inc.
+
 #include <fmt/format.h>
 
 #include "mlx/backend/common/compiled.h"
-#include "mlx/backend/metal/copy.h"
+#include "mlx/backend/common/utils.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/jit/indexing.h"
 #include "mlx/backend/metal/kernels.h"
+#include "mlx/backend/metal/scan.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/dtype.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -51,8 +55,10 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
-  int idx_ndim = nidx ? inputs[1].ndim() : 0;
-  size_t ndim = src.ndim();
+  size_t slice_size = 1;
+  for (auto s : slice_sizes_) {
+    slice_size *= s;
+  }
 
   bool large_index = nidx && inputs[1].size() > INT32_MAX;
   bool large_src = src.size() > INT32_MAX;
@@ -60,6 +66,55 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool large = large_index || large_src || large_out;
 
   std::string idx_type_name = nidx ? type_to_name(inputs[1]) : "";
+
+  if (src.flags().row_contiguous && nidx == 1 && axes_[0] == 0 &&
+      inputs[1].flags().row_contiguous && slice_size == src.strides()[0]) {
+    int work_per_thread = (slice_size > 8 && src.dtype().size() < 4) ? 2 : 1;
+    auto& indices = inputs[1];
+    std::string kernel_name = fmt::format(
+        "gather_front{0}_{1}_{2}_{3}",
+        type_to_name(out),
+        idx_type_name,
+        large ? "int64_t" : "int",
+        work_per_thread);
+    std::string lib_name = kernel_name;
+
+    auto lib = d.get_library(lib_name, [&]() {
+      std::string kernel_source = metal::utils();
+      kernel_source += metal::gather_front();
+      kernel_source += get_template_definition(
+          kernel_name,
+          "gather_front",
+          get_type_string(out.dtype()),
+          get_type_string(indices.dtype()),
+          large ? "int64_t" : "int",
+          work_per_thread);
+
+      return kernel_source;
+    });
+
+    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto kernel = d.get_kernel(kernel_name, lib);
+    compute_encoder.set_compute_pipeline_state(kernel);
+
+    size_t dim_x = (slice_size + work_per_thread - 1) / work_per_thread;
+    size_t dim_y = indices.size();
+    auto group_dims = get_block_dims(dim_x, dim_y, 1);
+    MTL::Size grid_dims = MTL::Size(dim_x, dim_y, 1);
+
+    compute_encoder.set_input_array(src, 0);
+    compute_encoder.set_input_array(indices, 1);
+    compute_encoder.set_output_array(out, 2);
+    compute_encoder.set_bytes(slice_size, 3);
+    compute_encoder.set_bytes(src.shape(0), 4);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+
+    return;
+  }
+
+  int idx_ndim = nidx ? inputs[1].ndim() : 0;
+  size_t ndim = src.ndim();
+
   std::string kernel_name = fmt::format(
       "gather{0}{1}_{2}_{3}_{4}",
       type_to_name(out),
@@ -94,11 +149,6 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kernel_name, lib);
   compute_encoder.set_compute_pipeline_state(kernel);
-
-  size_t slice_size = 1;
-  for (auto s : slice_sizes_) {
-    slice_size *= s;
-  }
 
   // Launch 3D grid of threads
   // First two dimensions for the indices, the last one for the slice
@@ -331,7 +381,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   if (upd_ndim == 0) {
-    // Need placeholders so Metal doesn't compalain
+    // Need placeholders so Metal doesn't complain
     int shape_ = 0;
     int64_t stride_ = 0;
     compute_encoder.set_bytes(shape_, 3);
@@ -346,7 +396,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Set output info
   size_t out_ndim = out.ndim();
   if (out_ndim == 0) {
-    // Need placeholders so Metal doesn't compalain
+    // Need placeholders so Metal doesn't complain
     int shape_ = 0;
     int64_t stride_ = 0;
     compute_encoder.set_bytes(shape_, 7);
@@ -458,17 +508,9 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_output_array(out, 2);
 
   // Set source info
-  auto shape = idx.shape();
-  shape.erase(shape.begin() + axis_);
-  compute_encoder.set_vector_bytes(shape, 3);
-
-  auto strides = src.strides();
-  strides.erase(strides.begin() + axis_);
-  compute_encoder.set_vector_bytes(strides, 4);
-
-  strides = idx.strides();
-  strides.erase(strides.begin() + axis_);
-  compute_encoder.set_vector_bytes(strides, 5);
+  compute_encoder.set_vector_bytes(remove_index(idx.shape(), axis_), 3);
+  compute_encoder.set_vector_bytes(remove_index(src.strides(), axis_), 4);
+  compute_encoder.set_vector_bytes(remove_index(idx.strides(), axis_), 5);
   compute_encoder.set_bytes(ndim - 1, 6);
   compute_encoder.set_bytes(axis_, 7);
   compute_encoder.set_bytes(src.shape(axis_), 8);
@@ -582,23 +624,103 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_output_array(out, 2);
 
   // Set source info
-  auto shape = idx.shape();
-  shape.erase(shape.begin() + axis_);
-  compute_encoder.set_vector_bytes(shape, 3);
-
-  auto strides = upd.strides();
-  strides.erase(strides.begin() + axis_);
-  compute_encoder.set_vector_bytes(strides, 4);
-
-  strides = idx.strides();
-  strides.erase(strides.begin() + axis_);
-  compute_encoder.set_vector_bytes(strides, 5);
+  if (ndim > 1) {
+    compute_encoder.set_vector_bytes(remove_index(idx.shape(), axis_), 3);
+    compute_encoder.set_vector_bytes(remove_index(upd.strides(), axis_), 4);
+    compute_encoder.set_vector_bytes(remove_index(idx.strides(), axis_), 5);
+  } else {
+    // The following will be ignored in the kernel but we still have to set
+    // some value so that metal validation passes.
+    compute_encoder.set_vector_bytes(idx.shape(), 3);
+    compute_encoder.set_vector_bytes(upd.strides(), 4);
+    compute_encoder.set_vector_bytes(idx.strides(), 5);
+  }
   compute_encoder.set_bytes(ndim - 1, 6);
   compute_encoder.set_bytes(axis_, 7);
   compute_encoder.set_bytes(out.shape(axis_), 8);
   compute_encoder.set_bytes(upd.strides(axis_), 9);
   compute_encoder.set_bytes(idx.strides(axis_), 10);
 
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
+  const array& dst = inputs[0];
+  const array& mask = inputs[1];
+  const array& src = inputs[2];
+
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  const size_t total = mask.size();
+  const CopyType ct = (total == 1)
+      ? CopyType::Scalar
+      : (dst.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  copy_gpu(dst, out, ct, s);
+  if (total == 0) {
+    return;
+  }
+
+  array mask_flat = flatten_in_eval(mask, 1, -1, s);
+  if (mask_flat.data<void>() != mask.data<void>()) {
+    d.add_temporary(mask_flat, s.index);
+  }
+
+  if (!mask_flat.flags().row_contiguous) {
+    mask_flat = contiguous_copy_gpu(mask_flat, s);
+    d.add_temporary(mask_flat, s.index);
+  }
+
+  // Prefix (exclusive) of mask → scatter_offsets
+  array scatter_offsets(mask_flat.shape(), uint32, nullptr, {});
+  scatter_offsets.set_data(allocator::malloc(scatter_offsets.nbytes()));
+  d.add_temporary(scatter_offsets, s.index);
+
+  scan_gpu_inplace(
+      mask_flat,
+      scatter_offsets,
+      Scan::Sum,
+      /*axis=*/1,
+      /*reverse=*/false,
+      /*inclusive=*/false,
+      s);
+
+  // Kernel selection/build
+  static constexpr std::string_view kBaseName = "masked_assign";
+  const std::string dtype_tag = type_to_name(out.dtype());
+  const std::string value_type = get_type_string(out.dtype());
+  const std::string contiguous =
+      (src.flags().row_contiguous) ? "true" : "false";
+  const std::string kernel_name =
+      fmt::format("{}_{}_{}", kBaseName, dtype_tag, contiguous);
+
+  auto lib = d.get_library(kernel_name, [&]() {
+    std::string source = metal::utils();
+    source += metal::masked_scatter();
+    source +=
+        fmt::format(masked_assign_kernel, kernel_name, value_type, contiguous);
+    return source;
+  });
+  auto kernel = d.get_kernel(kernel_name, lib);
+
+  // Binding
+  int bind_idx = 0;
+  const int ndim = static_cast<int>(src.ndim());
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(mask_flat, bind_idx++);
+  compute_encoder.set_input_array(scatter_offsets, bind_idx++);
+  compute_encoder.set_input_array(src, bind_idx++);
+  compute_encoder.set_output_array(out, bind_idx++);
+  compute_encoder.set_vector_bytes(src.shape(), bind_idx++);
+  compute_encoder.set_vector_bytes(src.strides(), bind_idx++);
+  compute_encoder.set_bytes(ndim, bind_idx++);
+  compute_encoder.set_bytes(src.size() / src.shape(0), bind_idx++);
+  compute_encoder.set_bytes(mask_flat.size() / mask.shape(0), bind_idx++);
+
+  // Dispatch
+  auto group_dims = get_block_dims(total, 1, 1);
+  MTL::Size grid_dims(total, 1, 1);
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 

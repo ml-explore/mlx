@@ -51,5 +51,9 @@ ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes);
 std::pair<Shape, Strides> shapes_without_reduction_axes(
     const array& x,
     const std::vector<int>& axes);
+std::pair<Shape, Strides> shapes_without_reduction_axes(
+    Shape shape,
+    Strides strides,
+    const std::vector<int>& axes);
 
 } // namespace mlx::core

@@ -11,6 +11,7 @@ Transforms
    eval
    async_eval
    compile
+   checkpoint
    custom_function
    disable_compile
    enable_compile

@@ -1,0 +1,576 @@
+// Copyright © 2025 Apple Inc.
+
+#include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/jit_module.h"
+#include "mlx/backend/cuda/worker.h"
+#include "mlx/backend/gpu/device_info.h"
+#include "mlx/utils.h"
+
+#include <fmt/format.h>
+#include <nvtx3/nvtx3.hpp>
+#include <future>
+#include <unordered_set>
+
+namespace mlx::core::cu {
+
+namespace {
+
+bool use_cuda_graphs() {
+  static bool use_graphs = env::get_var("MLX_USE_CUDA_GRAPHS", true);
+  return use_graphs;
+}
+
+const char* save_cuda_graphs_dot_file() {
+  static const char* filename = []() -> const char* {
+    const char* env = std::getenv("MLX_SAVE_CUDA_GRAPHS_DOT_FILE");
+    if (env && std::strlen(env) == 0) {
+      return nullptr;
+    }
+    return env;
+  }();
+  return filename;
+}
+
+inline bool is_empty_dim(dim3 dim) {
+  return (dim.x == 0 && dim.y == 0 && dim.z == 0) ||
+      (dim.x == 1 && dim.y == 1 && dim.z == 1);
+}
+
+} // namespace
+
+Device::Device(int device) : device_(device) {
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &compute_capability_major_, cudaDevAttrComputeCapabilityMajor, device_));
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &compute_capability_minor_, cudaDevAttrComputeCapabilityMinor, device_));
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &concurrent_managed_access_,
+      cudaDevAttrConcurrentManagedAccess,
+      device_));
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &host_native_atomic_, cudaDevAttrHostNativeAtomicSupported, device_));
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &managed_memory_, cudaDevAttrManagedMemory, device_));
+  CHECK_CUDA_ERROR(cudaDeviceGetAttribute(
+      &memory_pools_, cudaDevAttrMemoryPoolsSupported, device_));
+}
+
+Device::~Device() {
+  if (cudnn_handle_) {
+    CHECK_CUDNN_ERROR(cudnnDestroy(cudnn_handle_));
+  }
+  if (cublaslt_handle_) {
+    CHECK_CUBLAS_ERROR(cublasLtDestroy(cublaslt_handle_));
+  }
+}
+
+void Device::make_current() {
+  // We need to set/get current CUDA device very frequently, cache it to reduce
+  // actual calls of CUDA APIs.
+  static thread_local int current = 0;
+  if (current != device_) {
+    CHECK_CUDA_ERROR(cudaSetDevice(device_));
+    current = device_;
+  }
+}
+
+CommandEncoder& Device::get_command_encoder(Stream s) {
+  auto it = encoders_.find(s.index);
+  if (it == encoders_.end()) {
+    it = encoders_.try_emplace(s.index, *this).first;
+  }
+  return it->second;
+}
+
+cublasLtHandle_t Device::get_cublaslt_handle() {
+  if (!cublaslt_handle_) {
+    make_current();
+    CHECK_CUBLAS_ERROR(cublasLtCreate(&cublaslt_handle_));
+  }
+  return cublaslt_handle_;
+}
+
+cudnnHandle_t Device::get_cudnn_handle() {
+  if (!cudnn_handle_) {
+    make_current();
+    CHECK_CUDNN_ERROR(cudnnCreate(&cudnn_handle_));
+  }
+  return cudnn_handle_;
+}
+
+CommandEncoder::CaptureContext::CaptureContext(CommandEncoder& enc) : enc(enc) {
+  enc.device().make_current();
+  if (!use_cuda_graphs()) {
+    return;
+  }
+  CHECK_CUDA_ERROR(
+      cudaStreamBeginCapture(enc.stream(), cudaStreamCaptureModeThreadLocal));
+}
+
+CommandEncoder::CaptureContext::~CaptureContext() {
+  if (!use_cuda_graphs()) {
+    enc.node_count_++;
+    return;
+  }
+
+  graph.end_capture(enc.stream());
+  if (discard) {
+    return;
+  }
+  enc.add_graph_node(graph);
+}
+
+CommandEncoder::ConcurrentContext::ConcurrentContext(CommandEncoder& enc)
+    : enc(enc) {
+  enc.in_concurrent_ = true;
+}
+
+CommandEncoder::ConcurrentContext::~ConcurrentContext() {
+  enc.in_concurrent_ = false;
+  if (!use_cuda_graphs()) {
+    return;
+  }
+
+  // Use an empty graph node for synchronization
+  CommandEncoder::GraphNode empty{NULL, "E", std::to_string(enc.node_count_++)};
+  CHECK_CUDA_ERROR(cudaGraphAddEmptyNode(&empty.node, enc.graph_, NULL, 0));
+
+  // Insert the concurrent -> empty node dependencies
+  for (auto& from : enc.concurrent_nodes_) {
+    enc.from_nodes_.push_back(from.node);
+    enc.to_nodes_.push_back(empty.node);
+    enc.graph_deps_key_ += from.id;
+    enc.graph_deps_key_ += "-";
+    enc.graph_deps_key_ += empty.id;
+    enc.graph_deps_key_ += "-";
+  }
+
+  // Insert the input -> concurrent node dependencies without updating output
+  // nodes
+  auto outputs = std::move(enc.active_outputs_);
+  enc.insert_graph_dependencies(std::move(enc.concurrent_nodes_));
+
+  // Update output node to be the empty node
+  for (auto o : outputs) {
+    enc.node_map_.emplace(o, empty).first->second = empty;
+  }
+}
+
+void CommandEncoder::insert_graph_dependencies(GraphNode node) {
+  node.id = std::to_string(node_count_++);
+  if (in_concurrent_) {
+    concurrent_nodes_.push_back(std::move(node));
+  } else {
+    std::vector<GraphNode> nodes;
+    nodes.push_back(std::move(node));
+    insert_graph_dependencies(std::move(nodes));
+  }
+}
+
+void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
+  for (auto& node : nodes) {
+    graph_nodes_key_ += node.node_type;
+    graph_nodes_key_ += "-";
+  }
+  std::vector<GraphNode> deps;
+  {
+    // Dependencies must be added in the same order to produce a consistent
+    // topology
+    std::unordered_set<cudaGraphNode_t> set_deps;
+    for (auto d : active_deps_) {
+      if (auto it = node_map_.find(d); it != node_map_.end()) {
+        auto [_, inserted] = set_deps.insert(it->second.node);
+        if (inserted) {
+          deps.push_back(it->second);
+        }
+      }
+    }
+  }
+  active_deps_.clear();
+
+  for (auto o : active_outputs_) {
+    for (auto& node : nodes) {
+      node_map_.emplace(o, node).first->second = node;
+    }
+  }
+  active_outputs_.clear();
+
+  for (auto& from : deps) {
+    for (auto& to : nodes) {
+      from_nodes_.push_back(from.node);
+      to_nodes_.push_back(to.node);
+      graph_deps_key_ += from.id;
+      graph_deps_key_ += "-";
+      graph_deps_key_ += to.id;
+      graph_deps_key_ += "-";
+    }
+  }
+}
+
+// Can be tuned with MLX_MAX_OPS_PER_BUFFER, MLX_MAX_MB_PER_BUFFER
+std::pair<int, int> get_graph_limits(Device& d) {
+  auto cc =
+      d.compute_capability_major() * 100 + d.compute_capability_minor() * 10;
+  int ops = 20;
+  int mb = 100;
+  switch (cc) {
+    case 800: // A100
+      ops = 20;
+      mb = 400;
+      break;
+    case 900: // H100
+    case 1000: // B200
+    case 1200: // Consumer Blackwell
+      ops = 100;
+      mb = 1000;
+      break;
+    case 1210: // DGX Spark
+      ops = 20;
+      mb = 25;
+      break;
+  }
+  return {env::max_ops_per_buffer(ops), env::max_mb_per_buffer(mb)};
+}
+
+CommandEncoder::CommandEncoder(Device& d)
+    : device_(d),
+      stream_(d),
+      graph_(d),
+      worker_(d),
+      graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
+  std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
+}
+
+void CommandEncoder::add_completed_handler(std::function<void()> task) {
+  worker_.add_task(std::move(task));
+}
+
+void CommandEncoder::set_input_array(const array& arr) {
+  if (!use_cuda_graphs()) {
+    return;
+  }
+  bytes_in_graph_ += arr.data_size();
+  auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
+  active_deps_.push_back(id);
+}
+
+void CommandEncoder::set_output_array(const array& arr) {
+  if (!use_cuda_graphs()) {
+    return;
+  }
+
+  auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
+  active_deps_.push_back(id);
+  active_outputs_.push_back(id);
+}
+
+void CommandEncoder::add_kernel_node_raw(
+    void* func,
+    dim3 grid_dim,
+    dim3 block_dim,
+    dim3 cluster_dim,
+    uint32_t smem_bytes,
+    void** params) {
+  bool use_cluster = !is_empty_dim(cluster_dim);
+  assert(!use_cluster || device_.compute_capability_major() >= 9);
+
+  if (!use_cuda_graphs()) {
+    node_count_++;
+    cudaLaunchConfig_t config = {};
+    config.gridDim = grid_dim;
+    config.blockDim = block_dim;
+    config.dynamicSmemBytes = smem_bytes;
+    config.stream = stream();
+    cudaLaunchAttribute attr = {};
+    if (use_cluster) {
+      attr.id = cudaLaunchAttributeClusterDimension;
+      attr.val.clusterDim.x = cluster_dim.x;
+      attr.val.clusterDim.y = cluster_dim.y;
+      attr.val.clusterDim.z = cluster_dim.z;
+      config.attrs = &attr;
+      config.numAttrs = 1;
+    }
+    CHECK_CUDA_ERROR(cudaLaunchKernelExC(&config, func, params));
+    return;
+  }
+
+  cudaKernelNodeParams kernel_params = {0};
+  kernel_params.func = func;
+  kernel_params.gridDim = grid_dim;
+  kernel_params.blockDim = block_dim;
+  kernel_params.kernelParams = params;
+  kernel_params.sharedMemBytes = smem_bytes;
+  cudaGraphNode_t node = add_kernel_node_raw(kernel_params);
+  if (use_cluster) {
+    cudaKernelNodeAttrValue attr = {};
+    attr.clusterDim.x = cluster_dim.x;
+    attr.clusterDim.y = cluster_dim.y;
+    attr.clusterDim.z = cluster_dim.z;
+    CHECK_CUDA_ERROR(cudaGraphKernelNodeSetAttribute(
+        node, cudaLaunchAttributeClusterDimension, &attr));
+  }
+}
+
+void CommandEncoder::add_kernel_node_raw(
+    CUfunction func,
+    dim3 grid_dim,
+    dim3 block_dim,
+    dim3 cluster_dim,
+    uint32_t smem_bytes,
+    void** params) {
+  bool use_cluster = !is_empty_dim(cluster_dim);
+  assert(!use_cluster || device_.compute_capability_major() >= 9);
+
+  if (!use_cuda_graphs()) {
+    node_count_++;
+    CUlaunchConfig config = {};
+    config.gridDimX = grid_dim.x;
+    config.gridDimY = grid_dim.y;
+    config.gridDimZ = grid_dim.z;
+    config.blockDimX = block_dim.x;
+    config.blockDimY = block_dim.y;
+    config.blockDimZ = block_dim.z;
+    config.sharedMemBytes = smem_bytes;
+    config.hStream = stream();
+    CUlaunchAttribute attr = {};
+    if (use_cluster) {
+      attr.id = CU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION;
+      attr.value.clusterDim.x = cluster_dim.x;
+      attr.value.clusterDim.y = cluster_dim.y;
+      attr.value.clusterDim.z = cluster_dim.z;
+      config.attrs = &attr;
+      config.numAttrs = 1;
+    }
+    CHECK_CUDA_ERROR(cuLaunchKernelEx(&config, func, params, nullptr));
+    return;
+  }
+
+  CUDA_KERNEL_NODE_PARAMS kernel_params = {};
+  kernel_params.func = func;
+  kernel_params.gridDimX = grid_dim.x;
+  kernel_params.gridDimY = grid_dim.y;
+  kernel_params.gridDimZ = grid_dim.z;
+  kernel_params.blockDimX = block_dim.x;
+  kernel_params.blockDimY = block_dim.y;
+  kernel_params.blockDimZ = block_dim.z;
+  kernel_params.kernelParams = params;
+  kernel_params.sharedMemBytes = smem_bytes;
+  CUgraphNode node = add_kernel_node_raw(kernel_params);
+  if (use_cluster) {
+    CUlaunchAttributeValue attr = {};
+    attr.clusterDim.x = cluster_dim.x;
+    attr.clusterDim.y = cluster_dim.y;
+    attr.clusterDim.z = cluster_dim.z;
+    CHECK_CUDA_ERROR(cuGraphKernelNodeSetAttribute(
+        node, CU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION, &attr));
+  }
+}
+
+cudaGraphNode_t CommandEncoder::add_kernel_node_raw(
+    const cudaKernelNodeParams& params) {
+  cudaGraphNode_t node;
+  CHECK_CUDA_ERROR(cudaGraphAddKernelNode(&node, graph_, NULL, 0, &params));
+  insert_graph_dependencies(GraphNode{node, "K"});
+  return node;
+}
+
+CUgraphNode CommandEncoder::add_kernel_node_raw(
+    const CUDA_KERNEL_NODE_PARAMS& params) {
+  CUgraphNode node;
+  CHECK_CUDA_ERROR(cuGraphAddKernelNode(&node, graph_, NULL, 0, &params));
+  insert_graph_dependencies(GraphNode{node, "K"});
+  return node;
+}
+
+std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph) {
+  // Constructs a key representing the nodes of a sub-graph.
+  // Also checks if the sub-graph is updatable as CUDA graphs do not get
+  // updated correctly if a kernel node getting updated has a different cluster
+  // shape than the node it's being updated with.
+  std::string key = "(";
+  size_t num_nodes = 0;
+  CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, nullptr, &num_nodes));
+  if (num_nodes == 0) {
+    return {key + ")", true};
+  }
+  bool is_updatable = true;
+  std::vector<cudaGraphNode_t> nodes(num_nodes);
+  CHECK_CUDA_ERROR(cudaGraphGetNodes(graph, nodes.data(), &num_nodes));
+  for (const auto& node : nodes) {
+    if (!is_updatable) {
+      break;
+    }
+    cudaGraphNodeType type;
+    CHECK_CUDA_ERROR(cudaGraphNodeGetType(node, &type));
+    switch (type) {
+      case cudaGraphNodeTypeGraph: {
+        // Try to be updatable for a structure like graph -> graph -> kernel
+        cudaGraph_t child;
+        CHECK_CUDA_ERROR(cudaGraphChildGraphNodeGetGraph(node, &child));
+        auto [subkey, sub_is_updatable] = subgraph_to_key(child);
+        is_updatable &= sub_is_updatable;
+        key += subkey;
+        break;
+      }
+      case cudaGraphNodeTypeHost:
+        key += "H";
+        break;
+      case cudaGraphNodeTypeMemset:
+        key += "M";
+        break;
+      case cudaGraphNodeTypeKernel: {
+        cudaLaunchAttributeValue cluster_dim;
+        CHECK_CUDA_ERROR(cudaGraphKernelNodeGetAttribute(
+            node, cudaLaunchAttributeClusterDimension, &cluster_dim));
+        // Only allow dim.x to be greater than 1
+        if (cluster_dim.clusterDim.y > 1 || cluster_dim.clusterDim.z > 1) {
+          is_updatable = false;
+        } else {
+          key += "K";
+          key += std::to_string(cluster_dim.clusterDim.x);
+        }
+        break;
+      }
+      case cudaGraphNodeTypeWaitEvent:
+        key += "W";
+        break;
+      case cudaGraphNodeTypeEventRecord:
+        key += "R";
+        break;
+      default:
+        is_updatable = false;
+    }
+  }
+  key += ")";
+  return {key, is_updatable};
+}
+
+void CommandEncoder::add_graph_node(cudaGraph_t child) {
+  if (!use_cuda_graphs()) {
+    node_count_++;
+    CudaGraphExec graph_exec;
+    graph_exec.instantiate(child);
+    device_.make_current();
+    CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream()));
+    return;
+  }
+  cudaGraphNode_t node;
+  auto [sub_graph_key, is_updatable] = subgraph_to_key(child);
+  is_graph_updatable_ &= is_updatable;
+  CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&node, graph_, NULL, 0, child));
+  insert_graph_dependencies(GraphNode{node, sub_graph_key});
+}
+
+bool CommandEncoder::needs_commit() {
+  return (node_count_ > max_ops_per_graph_) ||
+      ((bytes_in_graph_ >> 20) > max_mb_per_graph_);
+}
+
+void CommandEncoder::commit() {
+  nvtx3::scoped_range r("CommandEncoder::commit");
+  if (!temporaries_.empty()) {
+    add_completed_handler([temporaries = std::move(temporaries_)]() {});
+  }
+  if (use_cuda_graphs() && node_count_ > 0) {
+    if (!from_nodes_.empty()) {
+#if CUDART_VERSION >= 13000
+      CHECK_CUDA_ERROR(cudaGraphAddDependencies(
+          graph_,
+          from_nodes_.data(),
+          to_nodes_.data(),
+          nullptr, // edgeData
+          from_nodes_.size()));
+#else
+      CHECK_CUDA_ERROR(cudaGraphAddDependencies(
+          graph_, from_nodes_.data(), to_nodes_.data(), from_nodes_.size()));
+#endif
+    }
+
+    device_.make_current();
+
+    if (!is_graph_updatable_) {
+      CudaGraphExec graph_exec;
+      graph_exec.instantiate(graph_);
+      CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
+    } else {
+      auto graph_key = graph_nodes_key_ + ":" + graph_deps_key_;
+      auto& graph_exec = graph_cache_[graph_key];
+
+      if (graph_exec != nullptr) {
+        cudaGraphExecUpdateResult update_result;
+#if CUDART_VERSION >= 12000
+        cudaGraphExecUpdateResultInfo info;
+        cudaGraphExecUpdate(graph_exec, graph_, &info);
+        update_result = info.result;
+#else
+        cudaGraphNode_t error_node;
+        cudaGraphExecUpdate(graph_exec, graph_, &error_node, &update_result);
+#endif // CUDART_VERSION >= 12000
+        if (update_result != cudaGraphExecUpdateSuccess) {
+          cudaGetLastError(); // reset error
+          graph_exec.reset();
+        }
+      }
+      if (graph_exec == nullptr) {
+        graph_exec.instantiate(graph_);
+      }
+
+      CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream_));
+    }
+
+    // Save cuda graph to dot file
+    if (const char* filename = save_cuda_graphs_dot_file(); filename) {
+      static int count = 0;
+      auto path = fmt::format("{}_{}.dot", filename, ++count);
+      CHECK_CUDA_ERROR(cudaGraphDebugDotPrint(graph_, path.c_str(), 0));
+    }
+
+    // Reset state
+    from_nodes_.clear();
+    to_nodes_.clear();
+    graph_deps_key_.clear();
+    graph_nodes_key_.clear();
+    node_map_.clear();
+    graph_ = CudaGraph(device_);
+    is_graph_updatable_ = true;
+  }
+
+  // Put completion handlers in a batch.
+  worker_.commit(stream_);
+  node_count_ = 0;
+  bytes_in_graph_ = 0;
+}
+
+void CommandEncoder::synchronize() {
+  CHECK_CUDA_ERROR(cudaStreamSynchronize(stream_));
+  auto p = std::make_shared<std::promise<void>>();
+  std::future<void> f = p->get_future();
+  add_completed_handler([p = std::move(p)]() { p->set_value(); });
+  commit();
+  f.wait();
+}
+
+Device& device(int cuda_device) {
+  static auto devices = []() {
+    std::vector<Device> devices;
+    int device_count = gpu::device_count();
+    for (int i = 0; i < device_count; ++i) {
+      devices.emplace_back(i);
+    }
+    // Initialize the jit module cache here ensures it is not unloaded before
+    // any evaluation is done.
+    get_jit_module_cache();
+    return devices;
+  }();
+  return devices.at(cuda_device);
+}
+
+Device& device(mlx::core::Device d) {
+  return device(d.index);
+}
+
+CommandEncoder& get_command_encoder(Stream s) {
+  return device(s.device).get_command_encoder(s);
+}
+
+} // namespace mlx::core::cu

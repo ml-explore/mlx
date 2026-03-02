@@ -325,7 +325,15 @@ struct MaxReduce {
   };
 
   template <int N, typename T>
-  T operator()(simd::Simd<T, N> x) {
+  std::enable_if_t<std::is_integral_v<T>, T> operator()(simd::Simd<T, N> x) {
+    return simd::max(x);
+  };
+
+  template <int N, typename T>
+  std::enable_if_t<!std::is_integral_v<T>, T> operator()(simd::Simd<T, N> x) {
+    if (simd::any(x != x)) {
+      return static_cast<T>(NAN);
+    }
     return simd::max(x);
   };
 };
@@ -342,7 +350,15 @@ struct MinReduce {
   };
 
   template <int N, typename T>
-  T operator()(simd::Simd<T, N> x) {
+  std::enable_if_t<std::is_integral_v<T>, T> operator()(simd::Simd<T, N> x) {
+    return simd::min(x);
+  };
+
+  template <int N, typename T>
+  std::enable_if_t<!std::is_integral_v<T>, T> operator()(simd::Simd<T, N> x) {
+    if (simd::any(x != x)) {
+      return static_cast<T>(NAN);
+    }
     return simd::min(x);
   };
 };
@@ -475,19 +491,27 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
         switch (in.dtype()) {
           case bool_:
           case uint8:
+            reduce_dispatch_sum_prod<uint8_t>(in, out, reduce_type_, axes_);
+            break;
+          case uint16:
+            reduce_dispatch_sum_prod<uint16_t>(in, out, reduce_type_, axes_);
+            break;
+          case uint32:
+            reduce_dispatch_sum_prod<uint32_t>(in, out, reduce_type_, axes_);
+            break;
+          case uint64:
+            reduce_dispatch_sum_prod<uint64_t>(in, out, reduce_type_, axes_);
+            break;
           case int8:
             reduce_dispatch_sum_prod<int8_t>(in, out, reduce_type_, axes_);
             break;
           case int16:
-          case uint16:
             reduce_dispatch_sum_prod<int16_t>(in, out, reduce_type_, axes_);
             break;
           case int32:
-          case uint32:
             reduce_dispatch_sum_prod<int32_t>(in, out, reduce_type_, axes_);
             break;
           case int64:
-          case uint64:
             reduce_dispatch_sum_prod<int64_t>(in, out, reduce_type_, axes_);
             break;
           case float16:
@@ -527,10 +551,10 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
             reduce_dispatch_min_max<uint64_t>(in, out, reduce_type_, axes_);
             break;
           case int8:
-            reduce_dispatch_min_max<uint8_t>(in, out, reduce_type_, axes_);
+            reduce_dispatch_min_max<int8_t>(in, out, reduce_type_, axes_);
             break;
           case int16:
-            reduce_dispatch_min_max<uint16_t>(in, out, reduce_type_, axes_);
+            reduce_dispatch_min_max<int16_t>(in, out, reduce_type_, axes_);
             break;
           case int32:
             reduce_dispatch_min_max<int32_t>(in, out, reduce_type_, axes_);

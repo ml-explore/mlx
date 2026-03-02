@@ -10,10 +10,14 @@
 
 namespace mlx::core {
 
-void copy(const array& src, array& dst, CopyType ctype, Stream stream);
-void copy_inplace(const array& src, array& dst, CopyType ctype, Stream stream);
+void copy_cpu(const array& src, array& dst, CopyType ctype, Stream stream);
+void copy_cpu_inplace(
+    const array& src,
+    array& dst,
+    CopyType ctype,
+    Stream stream);
 
-void copy_inplace(
+void copy_cpu_inplace(
     const array& src,
     array& dst,
     const Shape& data_shape,
@@ -25,5 +29,8 @@ void copy_inplace(
     Stream stream,
     const std::optional<array>& dynamic_i_offset = std::nullopt,
     const std::optional<array>& dynamic_o_offset = std::nullopt);
+
+// Return a contiguous array with same shape that copies the data of |arr|.
+array contiguous_copy_cpu(const array& arr, Stream stream);
 
 } // namespace mlx::core

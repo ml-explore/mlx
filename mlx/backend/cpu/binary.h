@@ -7,6 +7,7 @@
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/utils.h"
 
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
 
 namespace mlx::core {
@@ -288,6 +289,229 @@ void binary_op(const array& a, const array& b, array& out, BinaryOpType bopt) {
 template <typename T, typename Op>
 void binary_op(const array& a, const array& b, array& out, BinaryOpType bopt) {
   binary_op<T, T, Op>(a, b, out, bopt);
+}
+
+template <typename Op>
+void binary_op_cpu(
+    const array& a,
+    const array& b,
+    array& out,
+    Op op,
+    Stream stream) {
+  auto bopt = get_binary_op_type(a, b);
+  set_binary_op_output_data(a, b, out, bopt);
+
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_output_array(out);
+  encoder.dispatch([a = array::unsafe_weak_copy(a),
+                    b = array::unsafe_weak_copy(b),
+                    out = array::unsafe_weak_copy(out),
+                    bopt]() mutable {
+    switch (out.dtype()) {
+      case bool_:
+        binary_op<bool, Op>(a, b, out, bopt);
+        break;
+      case uint8:
+        binary_op<uint8_t, Op>(a, b, out, bopt);
+        break;
+      case uint16:
+        binary_op<uint16_t, Op>(a, b, out, bopt);
+        break;
+      case uint32:
+        binary_op<uint32_t, Op>(a, b, out, bopt);
+        break;
+      case uint64:
+        binary_op<uint64_t, Op>(a, b, out, bopt);
+        break;
+      case int8:
+        binary_op<int8_t, Op>(a, b, out, bopt);
+        break;
+      case int16:
+        binary_op<int16_t, Op>(a, b, out, bopt);
+        break;
+      case int32:
+        binary_op<int32_t, Op>(a, b, out, bopt);
+        break;
+      case int64:
+        binary_op<int64_t, Op>(a, b, out, bopt);
+        break;
+      case float16:
+        binary_op<float16_t, Op>(a, b, out, bopt);
+        break;
+      case float32:
+        binary_op<float, Op>(a, b, out, bopt);
+        break;
+      case float64:
+        binary_op<double, Op>(a, b, out, bopt);
+        break;
+      case bfloat16:
+        binary_op<bfloat16_t, Op>(a, b, out, bopt);
+        break;
+      case complex64:
+        binary_op<complex64_t, Op>(a, b, out, bopt);
+        break;
+    }
+  });
+}
+
+template <typename Op>
+void comparison_op_cpu(
+    const array& a,
+    const array& b,
+    array& out,
+    Op op,
+    Stream stream) {
+  auto bopt = get_binary_op_type(a, b);
+  set_binary_op_output_data(a, b, out, bopt);
+
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_output_array(out);
+  encoder.dispatch([a = array::unsafe_weak_copy(a),
+                    b = array::unsafe_weak_copy(b),
+                    out = array::unsafe_weak_copy(out),
+                    bopt]() mutable {
+    switch (a.dtype()) {
+      case bool_:
+        binary_op<bool, bool, Op>(a, b, out, bopt);
+        break;
+      case uint8:
+        binary_op<uint8_t, bool, Op>(a, b, out, bopt);
+        break;
+      case uint16:
+        binary_op<uint16_t, bool, Op>(a, b, out, bopt);
+        break;
+      case uint32:
+        binary_op<uint32_t, bool, Op>(a, b, out, bopt);
+        break;
+      case uint64:
+        binary_op<uint64_t, bool, Op>(a, b, out, bopt);
+        break;
+      case int8:
+        binary_op<int8_t, bool, Op>(a, b, out, bopt);
+        break;
+      case int16:
+        binary_op<int16_t, bool, Op>(a, b, out, bopt);
+        break;
+      case int32:
+        binary_op<int32_t, bool, Op>(a, b, out, bopt);
+        break;
+      case int64:
+        binary_op<int64_t, bool, Op>(a, b, out, bopt);
+        break;
+      case float16:
+        binary_op<float16_t, bool, Op>(a, b, out, bopt);
+        break;
+      case float32:
+        binary_op<float, bool, Op>(a, b, out, bopt);
+        break;
+      case float64:
+        binary_op<double, bool, Op>(a, b, out, bopt);
+        break;
+      case bfloat16:
+        binary_op<bfloat16_t, bool, Op>(a, b, out, bopt);
+        break;
+      case complex64:
+        binary_op<complex64_t, bool, Op>(a, b, out, bopt);
+        break;
+    }
+  });
+}
+
+template <typename Op>
+void binary_float_op_cpu(
+    const array& a,
+    const array& b,
+    array& out,
+    Op op,
+    Stream stream) {
+  auto bopt = get_binary_op_type(a, b);
+  set_binary_op_output_data(a, b, out, bopt);
+
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_output_array(out);
+  encoder.dispatch([a = array::unsafe_weak_copy(a),
+                    b = array::unsafe_weak_copy(b),
+                    out = array::unsafe_weak_copy(out),
+                    bopt]() mutable {
+    switch (out.dtype()) {
+      case float16:
+        binary_op<float16_t, Op>(a, b, out, bopt);
+        break;
+      case float32:
+        binary_op<float, Op>(a, b, out, bopt);
+        break;
+      case float64:
+        binary_op<double, Op>(a, b, out, bopt);
+        break;
+      case bfloat16:
+        binary_op<bfloat16_t, Op>(a, b, out, bopt);
+        break;
+      case complex64:
+        binary_op<complex64_t, Op>(a, b, out, bopt);
+        break;
+      default:
+        throw std::runtime_error(
+            "[binary_float] Only supports floating point types.");
+    }
+  });
+}
+
+template <typename Op>
+void binary_int_op_cpu(
+    const array& a,
+    const array& b,
+    array& out,
+    Op op,
+    Stream stream) {
+  auto bopt = get_binary_op_type(a, b);
+  set_binary_op_output_data(a, b, out, bopt);
+
+  auto& encoder = cpu::get_command_encoder(stream);
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_output_array(out);
+  encoder.dispatch([a = array::unsafe_weak_copy(a),
+                    b = array::unsafe_weak_copy(b),
+                    out = array::unsafe_weak_copy(out),
+                    bopt]() mutable {
+    switch (out.dtype()) {
+      case bool_:
+        binary_op<bool, Op>(a, b, out, bopt);
+      case uint8:
+        binary_op<uint8_t, Op>(a, b, out, bopt);
+        break;
+      case uint16:
+        binary_op<uint16_t, Op>(a, b, out, bopt);
+        break;
+      case uint32:
+        binary_op<uint32_t, Op>(a, b, out, bopt);
+        break;
+      case uint64:
+        binary_op<uint64_t, Op>(a, b, out, bopt);
+        break;
+      case int8:
+        binary_op<int8_t, Op>(a, b, out, bopt);
+        break;
+      case int16:
+        binary_op<int16_t, Op>(a, b, out, bopt);
+        break;
+      case int32:
+        binary_op<int32_t, Op>(a, b, out, bopt);
+        break;
+      case int64:
+        binary_op<int64_t, Op>(a, b, out, bopt);
+        break;
+      default:
+        throw std::runtime_error("[binary_int] Type not supported");
+        break;
+    }
+  });
 }
 
 } // namespace mlx::core

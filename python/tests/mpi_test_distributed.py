@@ -1,15 +1,16 @@
 # Copyright © 2024 Apple Inc.
 
-import unittest
-
 import mlx.core as mx
 import mlx_distributed_tests
+import mlx_tests
 
 
 class TestMPIDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
     @classmethod
     def setUpClass(cls):
-        world = mx.distributed.init(strict=True, backend="mpi")
+        _ = mx.distributed.init(strict=True, backend="mpi")
+        cls.atol = 1e-6
+        cls.rtol = 1e-4
 
     def test_groups(self):
         world = mx.distributed.init()
@@ -27,18 +28,11 @@ class TestMPIDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         sub = world.split(world.rank() // 2)
         self.assertEqual(sub.size(), 2)
 
-    def test_all_reduce(self):
+    def test_all_reduce_extra(self):
         world = mx.distributed.init()
         dtypes = [
-            (mx.int8, 0),
-            (mx.uint8, 0),
             (mx.int16, 0),
             (mx.uint16, 0),
-            (mx.int32, 0),
-            (mx.uint32, 0),
-            (mx.float32, 1e-6),
-            (mx.float16, 5e-3),
-            (mx.bfloat16, 1e-1),
             (mx.complex64, 1e-6),
         ]
         sizes = [
@@ -76,16 +70,11 @@ class TestMPIDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
                     z = x.min(0)
                     self.assertTrue(mx.all(y == z))
 
-    def test_all_gather(self):
+    def test_all_gather_extra(self):
         world = mx.distributed.init()
         dtypes = [
-            mx.int8,
-            mx.uint8,
             mx.int16,
             mx.uint16,
-            mx.int32,
-            mx.uint32,
-            mx.float32,
             mx.complex64,
         ]
         for dt in dtypes:
@@ -150,4 +139,4 @@ class TestMPIDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

@@ -1,15 +1,12 @@
-# Doctest works fine with cmake 3.5
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-
 FetchContent_Declare(
   doctest
-  GIT_REPOSITORY "https://github.com/onqtam/doctest"
-  GIT_TAG "ae7a13539fb71f270b87eb2e874fbac80bc8dda2")
+  GIT_REPOSITORY https://github.com/onqtam/doctest.git
+  GIT_TAG v2.4.12)
 FetchContent_MakeAvailable(doctest)
 
 add_executable(tests ${PROJECT_SOURCE_DIR}/tests/tests.cpp)
 
-if(MLX_BUILD_METAL)
+if(MLX_BUILD_METAL OR MLX_BUILD_CUDA)
   set(METAL_TEST_SOURCES gpu_tests.cpp)
 endif()
 
@@ -40,5 +37,8 @@ target_sources(
           ${METAL_TEST_SOURCES})
 
 target_link_libraries(tests PRIVATE mlx doctest)
+target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})
+target_link_options(tests PRIVATE ${SANITIZER_LINK_FLAGS})
+
 doctest_discover_tests(tests)
 add_test(NAME tests COMMAND tests)

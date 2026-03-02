@@ -5,24 +5,25 @@
 #include <optional>
 #include <variant>
 
+#include "mlx/api.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {
 
-array rms_norm(
+MLX_API array rms_norm(
     const array& x,
     const std::optional<array>& weight,
     float eps,
     StreamOrDevice s = {});
 
-array layer_norm(
+MLX_API array layer_norm(
     const array& x,
     const std::optional<array>& weight,
     const std::optional<array>& bias,
     float eps,
     StreamOrDevice s = {});
 
-array rope(
+MLX_API array rope(
     const array& x,
     int dims,
     bool traditional,
@@ -32,7 +33,7 @@ array rope(
     const std::optional<array>& freqs = std::nullopt,
     StreamOrDevice s = {});
 
-array rope(
+MLX_API array rope(
     const array& x,
     int dims,
     bool traditional,
@@ -43,32 +44,20 @@ array rope(
     StreamOrDevice s = {});
 
 /** Computes: O = softmax(Q @ K.T) @ V **/
-array scaled_dot_product_attention(
+MLX_API array scaled_dot_product_attention(
     const array& queries,
     const array& keys,
     const array& values,
     const float scale,
     const std::string& mask_mode = "",
-    const std::vector<array>& mask_arrs = {},
+    std::optional<array> mask_arr = {},
+    const std::optional<array>& sinks = {},
     StreamOrDevice s = {});
 
-std::tuple<array, array, array> affine_quantize(
-    const array& w,
-    int group_size = 64,
-    int bits = 4,
-    StreamOrDevice s = {});
+using TemplateArg = std::variant<int, bool, Dtype>;
+using ScalarArg = std::variant<bool, int, float>;
 
-array affine_dequantize(
-    const array& w,
-    const array& scales,
-    const array& biases,
-    int group_size = 64,
-    int bits = 4,
-    StreamOrDevice s = {});
-
-typedef std::variant<int, bool, Dtype> TemplateArg;
-
-typedef std::function<std::vector<array>(
+using CustomKernelFunction = std::function<std::vector<array>(
     const std::vector<array>&,
     const std::vector<Shape>&,
     const std::vector<Dtype>&,
@@ -77,10 +66,9 @@ typedef std::function<std::vector<array>(
     std::vector<std::pair<std::string, TemplateArg>>,
     std::optional<float>,
     bool,
-    StreamOrDevice)>
-    MetalKernelFunction;
+    StreamOrDevice)>;
 
-MetalKernelFunction metal_kernel(
+MLX_API CustomKernelFunction metal_kernel(
     const std::string& name,
     const std::vector<std::string>& input_names,
     const std::vector<std::string>& output_names,
@@ -88,5 +76,28 @@ MetalKernelFunction metal_kernel(
     const std::string& header = "",
     bool ensure_row_contiguous = true,
     bool atomic_outputs = false);
+
+MLX_API CustomKernelFunction cuda_kernel(
+    const std::string& name,
+    const std::vector<std::string>& input_names,
+    const std::vector<std::string>& output_names,
+    const std::string& source,
+    const std::string& header = "",
+    bool ensure_row_contiguous = true,
+    int shared_memory = 0);
+
+MLX_API std::vector<array> precompiled_cuda_kernel(
+    const std::string& name,
+    const std::string& compiled_source,
+    const std::vector<array>& inputs,
+    const std::vector<Shape>& output_shapes,
+    const std::vector<Dtype>& output_dtypes,
+    const std::vector<ScalarArg>& scalars,
+    std::tuple<int, int, int> grid,
+    std::tuple<int, int, int> threadgroup,
+    int shared_memory = 0,
+    std::optional<float> init_value = std::nullopt,
+    bool ensure_row_contiguous = false,
+    StreamOrDevice s = {});
 
 } // namespace mlx::core::fast

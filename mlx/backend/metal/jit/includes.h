@@ -11,6 +11,7 @@ const char* ternary_ops();
 const char* reduce_utils();
 const char* gather();
 const char* scatter();
+const char* masked_scatter();
 
 const char* arange();
 const char* unary();
@@ -19,9 +20,12 @@ const char* binary_two();
 const char* copy();
 const char* fft();
 const char* gather_axis();
+const char* gather_front();
 const char* hadamard();
 const char* logsumexp();
+const char* quantized_utils();
 const char* quantized();
+const char* fp_quantized();
 const char* ternary();
 const char* scan();
 const char* scatter_axis();
@@ -34,9 +38,22 @@ const char* steel_gemm_fused();
 const char* steel_gemm_masked();
 const char* steel_gemm_splitk();
 const char* steel_gemm_gather();
+const char* steel_gemm_segmented();
 const char* conv();
 const char* steel_conv();
+const char* steel_conv_3d();
 const char* steel_conv_general();
 const char* gemv_masked();
+const char* steel_attention();
+
+const char* gemm_nax();
+const char* steel_gemm_fused_nax();
+const char* steel_gemm_gather_nax();
+const char* steel_gemm_splitk_nax();
+
+const char* quantized_nax();
+const char* fp_quantized_nax();
+
+const char* steel_attention_nax();
 
 } // namespace mlx::core::metal

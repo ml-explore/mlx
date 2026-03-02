@@ -86,7 +86,9 @@ def cross_entropy(
     if targets_as_probs:
         score = mx.sum(logits * targets, axis=axis)
     else:
-        score = mx.take_along_axis(logits, targets[..., None], axis).squeeze(-1)
+        score = mx.take_along_axis(logits, mx.expand_dims(targets, axis), axis).squeeze(
+            axis
+        )
 
     logsumexp_logits = mx.logsumexp(logits, axis=axis)
     if label_smoothing > 0:

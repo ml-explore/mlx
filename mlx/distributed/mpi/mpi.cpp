@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <cstdlib>
 #include <iostream>
 
 #include "mlx/backend/cpu/encoder.h"
@@ -19,11 +20,17 @@
     }                                                              \
   }
 
+static const char* get_libmpi_name() {
+  const char* libname = std::getenv("MLX_MPI_LIBNAME");
+  if (libname != nullptr) {
+    return libname;
+  }
 #ifdef __APPLE__
-static constexpr const char* libmpi_name = "libmpi.dylib";
+  return "libmpi.dylib";
 #else
-static constexpr const char* libmpi_name = "libmpi.so";
+  return "libmpi.so";
 #endif
+}
 
 namespace mlx::core::distributed::mpi {
 
@@ -94,7 +101,7 @@ struct MPIWrapper {
   MPIWrapper() {
     initialized_ = false;
 
-    libmpi_handle_ = dlopen(libmpi_name, RTLD_NOW | RTLD_GLOBAL);
+    libmpi_handle_ = dlopen(get_libmpi_name(), RTLD_NOW | RTLD_GLOBAL);
     if (libmpi_handle_ == nullptr) {
       return;
     }
@@ -225,6 +232,8 @@ struct MPIWrapper {
         return mpi_bfloat16_;
       case float64:
         return mpi_double_;
+      default:
+        throw std::runtime_error("Invalid type");
     }
   }
 
@@ -347,6 +356,10 @@ class MPIGroup : public GroupImpl {
     }
   }
 
+  Stream communication_stream(StreamOrDevice s) override {
+    return to_stream(s, Device::cpu);
+  }
+
   int rank() override {
     if (rank_ < 0) {
       mpi().rank(comm_, &rank_);
@@ -457,6 +470,10 @@ class MPIGroup : public GroupImpl {
       MPI_Status status;
       mpi().recv(out_ptr, out_size, out_type, src, MPI_ANY_TAG, comm, &status);
     });
+  }
+
+  void sum_scatter(const array& input, array& output, Stream stream) override {
+    throw std::runtime_error("[mpi] sum_scatter not yet implemented.");
   }
 
  private:

@@ -22,7 +22,7 @@ void reshape(const array& in, array& out) {
   auto [copy_necessary, out_strides] = prepare_reshape(in, out);
   if (copy_necessary) {
     out.set_data(allocator::malloc(out.nbytes()));
-    copy_inplace(in, out, CopyType::General, out.primitive().stream());
+    copy_cpu_inplace(in, out, CopyType::General, out.primitive().stream());
   } else {
     shared_buffer_reshape(in, out_strides, out);
   }
@@ -175,7 +175,7 @@ void AsType::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   CopyType ctype = in.flags().contiguous ? CopyType::Vector : CopyType::General;
-  copy(in, out, ctype, stream());
+  copy_cpu(in, out, ctype, stream());
 }
 
 void Concatenate::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -198,7 +198,7 @@ void Concatenate::eval_cpu(const std::vector<array>& inputs, array& out) {
     size_t data_offset = strides[axis_] * sizes[i];
     out_slice.copy_shared_buffer(
         out, strides, flags, out_slice.size(), data_offset);
-    copy_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, stream());
+    copy_cpu_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, stream());
   }
 }
 
@@ -211,7 +211,7 @@ void Contiguous::eval_cpu(const std::vector<array>& inputs, array& out) {
        (allow_col_major_ && in.flags().col_contiguous))) {
     out.copy_shared_buffer(in);
   } else {
-    copy(in, out, CopyType::General, stream());
+    copy_cpu(in, out, CopyType::General, stream());
   }
 }
 
@@ -235,7 +235,7 @@ void Full::eval_cpu(const std::vector<array>& inputs, array& out) {
   } else {
     ctype = CopyType::General;
   }
-  copy(in, out, ctype, stream());
+  copy_cpu(in, out, ctype, stream());
 }
 
 void Pad::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -251,7 +251,7 @@ void Pad::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(val.dtype() == in.dtype() && in.dtype() == out.dtype());
 
   // Fill output with val
-  copy(val, out, CopyType::Scalar, stream());
+  copy_cpu(val, out, CopyType::Scalar, stream());
 
   // Find offset for start of input values
   size_t data_offset = 0;
@@ -266,7 +266,7 @@ void Pad::eval_cpu(const std::vector<array>& inputs, array& out) {
       out, out.strides(), out.flags(), out_slice.size(), data_offset);
 
   // Copy input values into the slice
-  copy_inplace(in, out_slice, CopyType::GeneralGeneral, stream());
+  copy_cpu_inplace(in, out_slice, CopyType::GeneralGeneral, stream());
 }
 
 void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -291,6 +291,17 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
                     num_keys,
                     kshape = keys.shape(),
                     kstrides = keys.strides()]() mutable {
+    auto copy_remaining = [&](char* cptr, size_t loc, uint32_t v) {
+      if (4 * loc + 4 <= bytes_per_key) {
+        reinterpret_cast<uint32_t*>(cptr)[loc] = v;
+      } else {
+        std::copy(
+            reinterpret_cast<char*>(&v),
+            reinterpret_cast<char*>(&v) + bytes_per_key - 4 * loc,
+            cptr + 4 * loc);
+      }
+    };
+
     size_t out_skip = (bytes_per_key + 4 - 1) / 4;
     auto half_size = out_skip / 2;
     bool even = out_skip % 2 == 0;
@@ -310,18 +321,12 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
       if (count.first < half_size) {
         auto rb = random::threefry2x32_hash(key, count);
         ptr[count.first++] = rb.first;
-        if (bytes_per_key % 4 > 0) {
-          std::copy(
-              reinterpret_cast<char*>(&rb.second),
-              reinterpret_cast<char*>(&rb.second) + bytes_per_key % 4,
-              cptr + 4 * count.second);
-        } else {
-          ptr[count.second] = rb.second;
-        }
+        copy_remaining(cptr, count.second, rb.second);
       }
       if (!even) {
         count.second = 0;
-        ptr[half_size] = random::threefry2x32_hash(key, count).first;
+        copy_remaining(
+            cptr, half_size, random::threefry2x32_hash(key, count).first);
       }
     }
   });
@@ -333,14 +338,14 @@ void Reshape::eval_cpu(const std::vector<array>& inputs, array& out) {
 
 void DynamicSlice::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
   auto& in = inputs[0];
   out.set_data(allocator::malloc(out.nbytes()));
   auto [in_offset, donated] =
       compute_dynamic_offset(inputs[1], in.strides(), axes_, stream());
-  copy_inplace(
+  copy_cpu_inplace(
       /* const array& src = */ in,
       /* array& dst = */ out,
       /* const Shape& data_shape = */ out.shape(),
@@ -361,7 +366,7 @@ void DynamicSliceUpdate::eval_cpu(
     const std::vector<array>& inputs,
     array& out) {
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 
@@ -372,11 +377,11 @@ void DynamicSliceUpdate::eval_cpu(
   auto ctype = in.flags().contiguous && in.size() == in.data_size()
       ? CopyType::Vector
       : CopyType::General;
-  copy(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
+  copy_cpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
 
   auto [out_offset, donated] =
       compute_dynamic_offset(inputs[2], out.strides(), axes_, stream());
-  copy_inplace(
+  copy_cpu_inplace(
       /* const array& src = */ upd,
       /* array& dst = */ out,
       /* const std::vector<int>& data_shape = */ upd.shape(),
@@ -396,7 +401,7 @@ void DynamicSliceUpdate::eval_cpu(
 void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (out.size() == 0) {
-    out.set_data(nullptr);
+    out.set_data(allocator::malloc(0));
     return;
   }
 
@@ -412,14 +417,14 @@ void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto ctype = in.flags().contiguous && in.size() == in.data_size()
       ? CopyType::Vector
       : CopyType::General;
-  copy(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
+  copy_cpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
 
   // Calculate out strides, initial offset and if copy needs to be made
   auto [data_offset, out_strides] =
       prepare_slice(out, start_indices_, strides_);
 
   // Do copy
-  copy_inplace(
+  copy_cpu_inplace(
       /* const array& src = */ upd,
       /* array& dst = */ out,
       /* const std::vector<int>& data_shape = */ upd.shape(),
@@ -456,9 +461,9 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
     if (in.dtype() == bool_) {
       auto in_tmp = array(in.shape(), uint8, nullptr, {});
       in_tmp.copy_shared_buffer(in);
-      copy_inplace(in_tmp, tmp, CopyType::General, stream());
+      copy_cpu_inplace(in_tmp, tmp, CopyType::General, stream());
     } else {
-      copy_inplace(in, tmp, CopyType::General, stream());
+      copy_cpu_inplace(in, tmp, CopyType::General, stream());
     }
 
     auto flags = out.flags();

@@ -1,13 +1,10 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <sstream>
-
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
-#include "mlx/primitives.h"
 
 namespace mlx::core {
 
@@ -26,10 +23,6 @@ void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   copy_gpu_inplace(in, out, ctype, s);
 }
 
-void copy_gpu(const array& in, array& out, CopyType ctype) {
-  copy_gpu(in, out, ctype, out.primitive().stream());
-}
-
 void copy_gpu_inplace(
     const array& in,
     array& out,
@@ -40,8 +33,8 @@ void copy_gpu_inplace(
     int64_t out_offset,
     CopyType ctype,
     const Stream& s,
-    const std::optional<array>& dynamic_i_offset /* = std::nullopt */,
-    const std::optional<array>& dynamic_o_offset /* = std::nullopt */) {
+    std::optional<array> dynamic_i_offset /* = std::nullopt */,
+    std::optional<array> dynamic_o_offset /* = std::nullopt */) {
   if (out.size() == 0) {
     return;
   }
@@ -75,10 +68,10 @@ void copy_gpu_inplace(
   std::string kernel_name;
   switch (ctype) {
     case CopyType::Scalar:
-      kernel_name = (large ? "s2" : "s");
+      kernel_name = large ? "s2" : "s";
       break;
     case CopyType::Vector:
-      kernel_name = (large ? "v2" : "v");
+      kernel_name = large ? "v2" : "v";
       break;
     case CopyType::General:
       kernel_name = "g";
@@ -104,6 +97,11 @@ void copy_gpu_inplace(
             "[Copy::eval_gpu] Dynamic output offset requires GeneralGeneral copy");
       }
     }
+  } else {
+    work_per_thread = get_work_per_thread(out.dtype(), out.data_size());
+    if (!large && work_per_thread > 1) {
+      kernel_name += "n";
+    }
   }
   concatenate(kernel_name, "_copy", type_to_name(in), type_to_name(out));
   auto kernel = dynamic ? get_dynamic_copy_kernel(d, kernel_name, in, out)
@@ -111,12 +109,11 @@ void copy_gpu_inplace(
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
-  bool donate_in = in.data_shared_ptr() == nullptr;
 
   inp_offset *= size_of(in.dtype());
   out_offset *= size_of(out.dtype());
 
-  compute_encoder.set_input_array(donate_in ? out : in, 0, inp_offset);
+  compute_encoder.set_input_array(in, 0, inp_offset);
   compute_encoder.set_output_array(out, 1, out_offset);
 
   auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
@@ -165,37 +162,21 @@ void copy_gpu_inplace(
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
-    size_t nthreads = out.data_size();
+    size_t nthreads = ceildiv(out.data_size(), work_per_thread);
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
-                                : MTL::Size(nthreads, 1, 1);
+    MTL::Size grid_dims;
+    if (large) {
+      compute_encoder.set_bytes<int64_t>(out.data_size(), 2);
+      grid_dims = get_2d_grid_dims(out.shape(), out.strides(), work_per_thread);
+    } else {
+      compute_encoder.set_bytes<int>(out.data_size(), 2);
+      grid_dims = MTL::Size(nthreads, 1, 1);
+    }
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
-}
-
-void copy_gpu_inplace(
-    const array& in,
-    array& out,
-    CopyType ctype,
-    const Stream& s) {
-  assert(in.shape() == out.shape());
-  return copy_gpu_inplace(
-      in, out, in.shape(), in.strides(), out.strides(), 0, 0, ctype, s);
-}
-
-void copy_gpu_inplace(
-    const array& in,
-    array& out,
-    const Strides& i_strides,
-    int64_t i_offset,
-    CopyType ctype,
-    const Stream& s) {
-  assert(in.shape() == out.shape());
-  return copy_gpu_inplace(
-      in, out, in.shape(), i_strides, out.strides(), i_offset, 0, ctype, s);
 }
 
 void fill_gpu(const array& val, array& out, const Stream& s) {
@@ -204,9 +185,10 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
   }
   out.set_data(allocator::malloc(out.nbytes()));
   bool large = out.data_size() > UINT32_MAX;
+  int work_per_thread = get_work_per_thread(out.dtype(), out.data_size());
   auto& d = metal::device(s.device);
-  std::string kernel_name = std::string(large ? "s2" : "s") + "_copy" +
-      type_to_name(val) + type_to_name(out);
+  std::string kernel_name = large ? "s2" : (work_per_thread > 1 ? "sn" : "s");
+  concatenate(kernel_name, "_copy", type_to_name(val), type_to_name(out));
   auto kernel = get_copy_kernel(d, kernel_name, val, out);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -215,14 +197,39 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
   compute_encoder.set_output_array(out, 1);
 
   auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  size_t nthreads = out.data_size();
+  size_t nthreads = ceildiv(out.data_size(), work_per_thread);
   if (thread_group_size > nthreads) {
     thread_group_size = nthreads;
   }
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-  MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
-                              : MTL::Size(nthreads, 1, 1);
+  MTL::Size grid_dims;
+  if (large) {
+    compute_encoder.set_bytes<int64_t>(out.data_size(), 2);
+    grid_dims = get_2d_grid_dims(out.shape(), out.strides(), work_per_thread);
+  } else {
+    compute_encoder.set_bytes<int>(out.data_size(), 2);
+    grid_dims = MTL::Size(nthreads, 1, 1);
+  }
   compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+void reshape_gpu(const array& in, array& out, Stream s) {
+  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
+  if (copy_necessary) {
+    out.set_data(allocator::malloc(out.nbytes()));
+    copy_gpu_inplace(
+        in,
+        out,
+        in.shape(),
+        in.strides(),
+        make_contiguous_strides(in.shape()),
+        0,
+        0,
+        CopyType::General,
+        s);
+  } else {
+    shared_buffer_reshape(in, out_strides, out);
+  }
 }
 
 } // namespace mlx::core

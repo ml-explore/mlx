@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <Accelerate/Accelerate.h>
 
 #include "mlx/array.h"
@@ -49,9 +48,15 @@ void matmul_bnns(
   size_t K = a_shape[ndim - 1];
 
   BNNSDataType bnns_dtype = to_bnns_dtype<T>();
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+  if (beta != 1.0 && beta != 0.0) {
+    // scale the output
+    for (auto i = 0; i < batch_size * M * N; ++i) {
+      out[i] *= beta;
+    }
+    beta = 1.0;
+  }
   const BNNSLayerParametersBroadcastMatMul gemm_params{
       /* float alpha = */ alpha,
       /* float beta = */ beta,

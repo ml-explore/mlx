@@ -2,20 +2,14 @@
 
 #include <numeric>
 
-#include "mlx/backend/common/slicing.h"
-#include "mlx/backend/metal/copy.h"
+#include "mlx/backend/common/compiled.h"
+#include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/slicing.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/kernels.h"
+#include "mlx/backend/metal/utils.h"
 
 namespace mlx::core {
-
-void slice_gpu(
-    const array& in,
-    array& out,
-    const Shape& start_indices,
-    const Shape& strides,
-    const Stream& s) {
-  slice(in, out, start_indices, strides);
-}
 
 void concatenate_gpu(
     const std::vector<array>& inputs,
@@ -48,30 +42,58 @@ void concatenate_gpu(
   }
 }
 
-void pad_gpu(
-    const array& in,
-    const array& val,
-    array& out,
+array compute_dynamic_offset(
+    const array& indices,
+    const Strides& strides,
     const std::vector<int>& axes,
-    const Shape& low_pad_size,
     const Stream& s) {
-  // Fill output with val
-  fill_gpu(val, out, s);
+  auto& d = metal::device(s.device);
 
-  // Find offset for start of input values
-  size_t data_offset = 0;
-  for (int i = 0; i < axes.size(); i++) {
-    auto ax = axes[i] < 0 ? out.ndim() + axes[i] : axes[i];
-    data_offset += out.strides()[ax] * low_pad_size[i];
+  // Kernel to compute offset here.
+  array offset({1}, int64, nullptr, {});
+  bool donate = indices.is_donatable() &&
+      (indices.data_size() * indices.itemsize()) >= offset.itemsize();
+  if (donate) {
+    offset.copy_shared_buffer(indices);
+  } else {
+    offset.set_data(allocator::malloc(offset.itemsize()));
   }
+  d.add_temporary(offset, s.index);
 
-  // Extract slice from output where input will be pasted
-  array out_slice(in.shape(), out.dtype(), nullptr, {});
-  out_slice.copy_shared_buffer(
-      out, out.strides(), out.flags(), out_slice.size(), data_offset);
+  auto dtype = indices.dtype();
+  std::string lib_name = "compute_dynamic_offset_" + type_to_name(dtype);
+  auto lib = d.get_library(lib_name, [dtype]() {
+    return fmt::format(
+        R"(
+        [[kernel]] void compute_dynamic_offset_{0}(
+            constant const {1}* indices [[buffer(0)]],
+            device int64_t& offset [[buffer(1)]],
+            constant const int64_t* strides [[buffer(2)]],
+            constant const int* axes [[buffer(3)]],
+            constant const int& n_axes [[buffer(4)]],
+            uint index [[thread_position_in_grid]]) {{
+          int64_t acc = 0;
+          for (int i = 0; i < n_axes; ++i) {{
+            acc += indices[i] * strides[axes[i]];
+          }}
+          offset = acc;
+        }})",
+        type_to_name(dtype),
+        get_type_string(dtype));
+  });
+  auto kernel = d.get_kernel(lib_name, lib);
 
-  // Copy input values into the slice
-  copy_gpu_inplace(in, out_slice, CopyType::GeneralGeneral, s);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(indices, 0);
+  compute_encoder.set_output_array(offset, 1);
+  compute_encoder.set_vector_bytes(strides, 2);
+  compute_encoder.set_vector_bytes(axes, 3);
+  int n_axes = axes.size();
+  compute_encoder.set_bytes(n_axes, 4);
+  MTL::Size dims = MTL::Size(1, 1, 1);
+  compute_encoder.dispatch_threads(dims, dims);
+  return offset;
 }
 
 } // namespace mlx::core

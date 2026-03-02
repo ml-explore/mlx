@@ -115,7 +115,7 @@ void inverse_impl(
   //   (A⁻¹)ᵀ = (Aᵀ)⁻¹
 
   // The inverse is computed in place, so just copy the input to the output.
-  copy(
+  copy_cpu(
       a,
       inv,
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,

@@ -86,6 +86,8 @@ def _all_to_sharded(segments):
     representation becomes a sharded representation."""
 
     def _shard_fn(path, weight):
+        if path.endswith("bias"):
+            return -1, segments
         return max(weight.ndim - 2, 0), segments
 
     return _shard_fn
@@ -369,6 +371,8 @@ class QuantizedAllToShardedLinear(Module):
             weight. See :func:`~mlx.core.quantize`. Default: ``64``.
         bits (int, optional): The bit width to use for the quantized weight.
             See :func:`~mlx.core.quantize`. Default: ``4``.
+        mode (str, optional): The quantization method to use (see
+            :func:`~mlx.core.quantize`). Default: ``"affine"``.
         group (mx.distributed.Group, optional): The sharding will happen across
             this group. If not set then the global group is used. Default is
             ``None``.
@@ -381,6 +385,7 @@ class QuantizedAllToShardedLinear(Module):
         bias: bool = True,
         group_size: int = 64,
         bits: int = 4,
+        mode: str = "affine",
         group: Optional[mx.distributed.Group] = None,
     ):
         super().__init__()
@@ -388,6 +393,7 @@ class QuantizedAllToShardedLinear(Module):
         # Quantization config
         self.group_size = group_size
         self.bits = bits
+        self.mode = mode
 
         # Initialize the quantized weight
         scale = math.sqrt(1.0 / input_dims)
@@ -404,7 +410,10 @@ class QuantizedAllToShardedLinear(Module):
             high=scale,
             shape=(output_dims // N, input_dims),
         )
-        self.weight, self.scales, self.biases = mx.quantize(weight, group_size, bits)
+        self.weight, self.scales, *biases = mx.quantize(
+            weight, group_size, bits, mode=mode
+        )
+        self.biases = biases[0] if biases else None
 
         # And bias if needed
         if bias:
@@ -421,11 +430,11 @@ class QuantizedAllToShardedLinear(Module):
 
     def _extra_repr(self) -> str:
         out_dims, in_dims = self.weight.shape
-        in_dims *= 32 // self.bits
+        in_dims = (in_dims * 32) // self.bits
         out_dims *= self.group.size()
         return (
             f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}, "
-            f"group_size={self.group_size}, bits={self.bits}"
+            f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
         )
 
     def __call__(self, x: mx.array) -> mx.array:
@@ -436,10 +445,11 @@ class QuantizedAllToShardedLinear(Module):
             x,
             self["weight"],
             scales=self["scales"],
-            biases=self["biases"],
+            biases=self.get("biases"),
             transpose=True,
             group_size=self.group_size,
             bits=self.bits,
+            mode=self.mode,
         )
         if "bias" in self:
             x = x + self["bias"]
@@ -455,7 +465,7 @@ class QuantizedAllToShardedLinear(Module):
     ):
         group = group or mx.distributed.init()
         output_dims, input_dims = quantized_linear_layer.weight.shape
-        input_dims *= 32 // quantized_linear_layer.bits
+        input_dims = (input_dims * 32) // quantized_linear_layer.bits
 
         sl = cls(
             input_dims,
@@ -463,6 +473,7 @@ class QuantizedAllToShardedLinear(Module):
             hasattr(quantized_linear_layer, "bias"),
             group_size=quantized_linear_layer.group_size,
             bits=quantized_linear_layer.bits,
+            mode=getattr(quantized_linear_layer, "mode", "affine"),
             group=group,
         )
         sl.update(
@@ -495,6 +506,8 @@ class QuantizedShardedToAllLinear(Module):
             weight. See :func:`~mlx.core.quantize`. Default: ``64``.
         bits (int, optional): The bit width to use for the quantized weight.
             See :func:`~mlx.core.quantize`. Default: ``4``.
+        mode (str, optional): The quantization method to use (see
+            :func:`~mlx.core.quantize`). Default: ``"affine"``.
         group (mx.distributed.Group, optional): The sharding will happen across
             this group. If not set then the global group is used. Default is
             ``None``.
@@ -507,6 +520,7 @@ class QuantizedShardedToAllLinear(Module):
         bias: bool = True,
         group_size: int = 64,
         bits: int = 4,
+        mode: str = "affine",
         group: Optional[mx.distributed.Group] = None,
     ):
         super().__init__()
@@ -514,6 +528,7 @@ class QuantizedShardedToAllLinear(Module):
         # Quantization config
         self.group_size = group_size
         self.bits = bits
+        self.mode = mode
 
         # Initialize the quantized weight
         scale = math.sqrt(1.0 / input_dims)
@@ -530,7 +545,10 @@ class QuantizedShardedToAllLinear(Module):
             high=scale,
             shape=(output_dims, input_dims // N),
         )
-        self.weight, self.scales, self.biases = mx.quantize(weight, group_size, bits)
+        self.weight, self.scales, *biases = mx.quantize(
+            weight, group_size, bits, mode=mode
+        )
+        self.biases = biases[0] if biases else None
 
         # And bias if needed
         if bias:
@@ -547,10 +565,10 @@ class QuantizedShardedToAllLinear(Module):
 
     def _extra_repr(self) -> str:
         out_dims, in_dims = self.weight.shape
-        in_dims *= (32 // self.bits) * self.group.size()
+        in_dims = (in_dims * 32) // self.bits * self.group.size()
         return (
             f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}, "
-            f"group_size={self.group_size}, bits={self.bits}"
+            f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
         )
 
     def __call__(self, x: mx.array) -> mx.array:
@@ -558,10 +576,11 @@ class QuantizedShardedToAllLinear(Module):
             x,
             self["weight"],
             scales=self["scales"],
-            biases=self["biases"],
+            biases=self.get("biases"),
             transpose=True,
             group_size=self.group_size,
             bits=self.bits,
+            mode=self.mode,
         )
         x = mx.distributed.all_sum(x, group=self.group)
         if "bias" in self:
@@ -578,7 +597,7 @@ class QuantizedShardedToAllLinear(Module):
     ):
         group = group or mx.distributed.init()
         output_dims, input_dims = quantized_linear_layer.weight.shape
-        input_dims *= 32 // quantized_linear_layer.bits
+        input_dims = (input_dims * 32) // quantized_linear_layer.bits
 
         sl = cls(
             input_dims,
@@ -586,6 +605,7 @@ class QuantizedShardedToAllLinear(Module):
             hasattr(quantized_linear_layer, "bias"),
             group_size=quantized_linear_layer.group_size,
             bits=quantized_linear_layer.bits,
+            mode=getattr(quantized_linear_layer, "mode", "affine"),
             group=group,
         )
         sl.update(

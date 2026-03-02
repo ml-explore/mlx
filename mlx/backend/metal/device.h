@@ -3,8 +3,6 @@
 #pragma once
 
 #include <Metal/Metal.hpp>
-#include <dlfcn.h>
-#include <filesystem>
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
@@ -15,28 +13,14 @@
 #include "mlx/array.h"
 #include "mlx/device.h"
 
-namespace fs = std::filesystem;
-
 namespace mlx::core::metal {
-
-// Note, this function must be left inline in a header so that it is not
-// dynamically linked.
-inline std::string get_binary_directory() {
-  Dl_info info;
-  std::string directory;
-  int success = dladdr((void*)get_binary_directory, &info);
-  if (success) {
-    directory = fs::path(info.dli_fname).remove_filename().c_str();
-  }
-  return directory;
-}
 
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
 struct DeviceStream;
 
-struct CommandEncoder {
+struct MLX_API CommandEncoder {
   explicit CommandEncoder(DeviceStream& stream);
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
@@ -76,12 +60,12 @@ struct CommandEncoder {
     enc_->updateFence(fence);
   }
 
-  template <typename T>
-  void set_vector_bytes(const std::vector<T>& vec, size_t nelems, int idx) {
-    enc_->setBytes(vec.data(), nelems * sizeof(T), idx);
+  template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
+  void set_vector_bytes(const Vec& vec, size_t nelems, int idx) {
+    enc_->setBytes(vec.data(), nelems * sizeof(typename Vec::value_type), idx);
   }
-  template <typename T>
-  void set_vector_bytes(const std::vector<T>& vec, int idx) {
+  template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
+  void set_vector_bytes(const Vec& vec, int idx) {
     return set_vector_bytes(vec, vec.size(), idx);
   }
 
@@ -95,6 +79,10 @@ struct CommandEncoder {
     return enc_->setBytes(&v, sizeof(T), idx);
   }
 
+  void set_threadgroup_memory_length(size_t length, int idx) {
+    enc_->setThreadgroupMemoryLength(length, idx);
+  }
+
   ConcurrentContext start_concurrent() {
     return ConcurrentContext(*this);
   }
@@ -106,7 +94,7 @@ struct CommandEncoder {
   };
 
   // Outputs of all kernels in the encoder including temporaries
-  std::unordered_set<const void*> outputs() {
+  std::unordered_set<const void*>& outputs() {
     return all_outputs_;
   };
 
@@ -158,7 +146,7 @@ struct DeviceStream {
   std::vector<array> temporaries;
 };
 
-class Device {
+class MLX_API Device {
  public:
   Device();
   Device(const Device&) = delete;
@@ -173,6 +161,10 @@ class Device {
     return arch_;
   }
 
+  int get_architecture_gen() const {
+    return arch_gen_;
+  }
+
   void new_queue(int index);
 
   MTL::CommandQueue* get_queue(Stream stream);
@@ -183,13 +175,15 @@ class Device {
   CommandEncoder& get_command_encoder(int index);
   void end_encoding(int index);
 
-  void register_library(
-      const std::string& lib_name,
-      const std::string& lib_path = "");
+  MTL::Library* get_library(
+      const std::string& name,
+      const std::string& path = "");
 
   MTL::Library* get_library(
       const std::string& name,
       const std::function<std::string(void)>& builder);
+
+  void clear_library(const std::string& name);
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& base_name,
@@ -200,7 +194,6 @@ class Device {
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& base_name,
-      const std::string& lib_name = "mlx",
       const std::string& hash_name = "",
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
@@ -254,18 +247,43 @@ class Device {
   std::unordered_map<int32_t, DeviceStream> stream_map_;
 
   std::shared_mutex kernel_mtx_;
-  std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
-
   std::shared_mutex library_mtx_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
+  MTL::Library* default_library_;
+  std::unordered_map<
+      MTL::Library*,
+      std::unordered_map<std::string, MTL::ComputePipelineState*>>
+      library_kernels_;
   const MTL::ResidencySet* residency_set_{nullptr};
   std::string arch_;
+  int arch_gen_;
   int max_ops_per_buffer_;
   int max_mb_per_buffer_;
 };
 
-Device& device(mlx::core::Device);
+MLX_API Device& device(mlx::core::Device);
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
+
+inline bool is_nax_available() {
+#ifdef MLX_METAL_NO_NAX
+  return false;
+#else
+  auto _check_nax = []() {
+    bool can_use_nax = false;
+    if (__builtin_available(
+            macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
+      can_use_nax = true;
+    }
+    auto& d = metal::device(mlx::core::Device::gpu);
+    auto arch = d.get_architecture().back();
+    auto gen = d.get_architecture_gen();
+    can_use_nax &= gen >= (arch == 'p' ? 18 : 17);
+    return can_use_nax;
+  };
+  static bool is_nax_available_ = _check_nax();
+  return is_nax_available_;
+#endif
+}
 
 } // namespace mlx::core::metal

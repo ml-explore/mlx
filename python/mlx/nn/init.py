@@ -100,7 +100,7 @@ def identity(dtype: mx.Dtype = mx.float32) -> Callable[[mx.array], mx.array]:
     r"""An initializer that returns an identity matrix.
 
     Args:
-        dtype (Dtype, optional): The data type of the array. Defaults:
+        dtype (Dtype, optional): The data type of the array. Default:
           ``float32``.
 
     Returns:
@@ -253,7 +253,7 @@ def he_normal(
     <https://arxiv.org/abs/1502.01852>`_
 
     Args:
-        dtype (Dtype, optional): The data type of the array. Defaults to mx.float32.
+        dtype (Dtype, optional): The data type of the array. Default: ``float32``.
 
     Returns:
         Callable[[array, str, float], array]: An initializer that returns an

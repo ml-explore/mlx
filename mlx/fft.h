@@ -6,30 +6,30 @@
 
 #include "array.h"
 #include "device.h"
+#include "mlx/api.h"
 #include "utils.h"
 
 namespace mlx::core::fft {
 
 /** Compute the n-dimensional Fourier Transform. */
-array fftn(
+MLX_API array fftn(
     const array& a,
     const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {});
-array fftn(const array& a, const std::vector<int>& axes, StreamOrDevice s = {});
-array fftn(const array& a, StreamOrDevice s = {});
+MLX_API array
+fftn(const array& a, const std::vector<int>& axes, StreamOrDevice s = {});
+MLX_API array fftn(const array& a, StreamOrDevice s = {});
 
 /** Compute the n-dimensional inverse Fourier Transform. */
-array ifftn(
+MLX_API array ifftn(
     const array& a,
     const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {});
-array ifftn(
-    const array& a,
-    const std::vector<int>& axes,
-    StreamOrDevice s = {});
-array ifftn(const array& a, StreamOrDevice s = {});
+MLX_API array
+ifftn(const array& a, const std::vector<int>& axes, StreamOrDevice s = {});
+MLX_API array ifftn(const array& a, StreamOrDevice s = {});
 
 /** Compute the one-dimensional Fourier Transform. */
 inline array fft(const array& a, int n, int axis, StreamOrDevice s = {}) {
@@ -78,28 +78,24 @@ inline array ifft2(
 }
 
 /** Compute the n-dimensional Fourier Transform on a real input. */
-array rfftn(
+MLX_API array rfftn(
     const array& a,
     const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {});
-array rfftn(
-    const array& a,
-    const std::vector<int>& axes,
-    StreamOrDevice s = {});
-array rfftn(const array& a, StreamOrDevice s = {});
+MLX_API array
+rfftn(const array& a, const std::vector<int>& axes, StreamOrDevice s = {});
+MLX_API array rfftn(const array& a, StreamOrDevice s = {});
 
 /** Compute the n-dimensional inverse of `rfftn`. */
-array irfftn(
+MLX_API array irfftn(
     const array& a,
     const Shape& n,
     const std::vector<int>& axes,
     StreamOrDevice s = {});
-array irfftn(
-    const array& a,
-    const std::vector<int>& axes,
-    StreamOrDevice s = {});
-array irfftn(const array& a, StreamOrDevice s = {});
+MLX_API array
+irfftn(const array& a, const std::vector<int>& axes, StreamOrDevice s = {});
+MLX_API array irfftn(const array& a, StreamOrDevice s = {});
 
 /** Compute the one-dimensional Fourier Transform on a real input. */
 inline array rfft(const array& a, int n, int axis, StreamOrDevice s = {}) {
@@ -146,22 +142,18 @@ inline array irfft2(
   return irfftn(a, axes, s);
 }
 /** Shift the zero-frequency component to the center of the spectrum. */
-array fftshift(const array& a, StreamOrDevice s = {});
+MLX_API array fftshift(const array& a, StreamOrDevice s = {});
 
 /** Shift the zero-frequency component to the center of the spectrum along
  * specified axes. */
-array fftshift(
-    const array& a,
-    const std::vector<int>& axes,
-    StreamOrDevice s = {});
+MLX_API array
+fftshift(const array& a, const std::vector<int>& axes, StreamOrDevice s = {});
 
 /** The inverse of fftshift. */
-array ifftshift(const array& a, StreamOrDevice s = {});
+MLX_API array ifftshift(const array& a, StreamOrDevice s = {});
 
 /** The inverse of fftshift along specified axes. */
-array ifftshift(
-    const array& a,
-    const std::vector<int>& axes,
-    StreamOrDevice s = {});
+MLX_API array
+ifftshift(const array& a, const std::vector<int>& axes, StreamOrDevice s = {});
 
 } // namespace mlx::core::fft

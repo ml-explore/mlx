@@ -60,9 +60,19 @@ class TestLosses(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(loss, expected))
 
-        probs = mx.array([[1.0, 0.0], [0.0, 1.0]])
+        # Test a different axis
+        logits = mx.random.normal((4, 8))
+        targets = mx.array([1, 2, 3, 0])
         loss = nn.losses.cross_entropy(
-            logits, probs, weights=weights, label_smoothing=0.3, reduction="none"
+            logits.T,
+            targets,
+            axis=0,
+        )
+        targets = mx.array([1, 2, 3, 0])
+        expected = nn.losses.cross_entropy(
+            logits,
+            targets,
+            axis=-1,
         )
         self.assertTrue(mx.allclose(loss, expected))
 
@@ -83,14 +93,14 @@ class TestLosses(mlx_tests.MLXTestCase):
                 logits, targets, reduction="mean"
             )
             expected_mean = mx.mean(expected_none)
-            self.assertEqual(losses_mean, expected_mean)
+            self.assertTrue(mx.allclose(losses_mean, expected_mean))
 
             # Test with reduction 'sum'
             losses_sum = nn.losses.binary_cross_entropy(
                 logits, targets, reduction="sum"
             )
             expected_sum = mx.sum(expected_none)
-            self.assertEqual(losses_sum, expected_sum)
+            self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
             # With weights, no label smoothing
             weights = mx.array([1.0, 2.0, 1.0, 2.0])
@@ -414,4 +424,4 @@ class TestLosses(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

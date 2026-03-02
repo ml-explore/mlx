@@ -7,14 +7,17 @@
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
+
 #include "mlx/backend/metal/metal.h"
+#include "mlx/device.h"
 #include "mlx/memory.h"
+#include "python/src/small_vector.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
-bool DEPRECATE(const std::string& old_fn, const std::string new_fn) {
+bool DEPRECATE(const char* old_fn, const char* new_fn) {
   std::cerr << old_fn << " is deprecated and will be removed in a future "
             << "version. Use " << new_fn << " instead." << std::endl;
   return true;
@@ -49,21 +52,21 @@ void init_metal(nb::module_& m) {
   metal.def(
       "set_memory_limit",
       [](size_t limit) {
-        DEPRECATE("mx.metal.set_memory_limt", "mx.set_memory_limit");
+        DEPRECATE("mx.metal.set_memory_limit", "mx.set_memory_limit");
         return mx::set_memory_limit(limit);
       },
       "limit"_a);
   metal.def(
       "set_cache_limit",
       [](size_t limit) {
-        DEPRECATE("mx.metal.set_cache_limt", "mx.set_cache_limit");
+        DEPRECATE("mx.metal.set_cache_limit", "mx.set_cache_limit");
         return mx::set_cache_limit(limit);
       },
       "limit"_a);
   metal.def(
       "set_wired_limit",
       [](size_t limit) {
-        DEPRECATE("mx.metal.set_wired_limt", "mx.set_wired_limit");
+        DEPRECATE("mx.metal.set_wired_limit", "mx.set_wired_limit");
         return mx::set_wired_limit(limit);
       },
       "limit"_a);
@@ -88,21 +91,8 @@ void init_metal(nb::module_& m) {
       R"pbdoc(
       Stop a Metal capture.
       )pbdoc");
-  metal.def(
-      "device_info",
-      &mx::metal::device_info,
-      R"pbdoc(
-      Get information about the GPU device and system settings.
-
-      Currently returns:
-
-      * ``architecture``
-      * ``max_buffer_size``
-      * ``max_recommended_working_set_size``
-      * ``memory_size``
-      * ``resource_limit``
-
-      Returns:
-          dict: A dictionary with string keys and string or integer values.
-      )pbdoc");
+  metal.def("device_info", []() {
+    DEPRECATE("mx.metal.device_info", "mx.device_info");
+    return mx::device_info(mx::Device(mx::Device::gpu, 0));
+  });
 }

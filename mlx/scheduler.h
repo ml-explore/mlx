@@ -8,6 +8,7 @@
 #include <thread>
 #include <unordered_map>
 
+#include "mlx/api.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/device.h"
 #include "mlx/stream.h"
@@ -98,6 +99,9 @@ class Scheduler {
   Stream get_stream(int index) const {
     return streams_.at(index);
   }
+  std::vector<Stream> get_streams() const {
+    return streams_;
+  }
 
   void set_default_stream(const Stream& s) {
     default_streams_.at(s.device.type) = s;
@@ -135,7 +139,11 @@ class Scheduler {
 
   ~Scheduler() {
     for (auto s : streams_) {
-      synchronize(s);
+      try {
+        synchronize(s);
+      } catch (const std::runtime_error&) {
+        // ignore errors if synch fails
+      }
     }
     for (auto t : threads_) {
       if (t != nullptr) {
@@ -158,7 +166,7 @@ void Scheduler::enqueue(const Stream& stream, F&& f) {
   threads_[stream.index]->enqueue(std::forward<F>(f));
 }
 
-Scheduler& scheduler();
+MLX_API Scheduler& scheduler();
 
 template <typename F>
 void enqueue(const Stream& stream, F&& f) {

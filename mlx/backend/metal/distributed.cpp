@@ -4,7 +4,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/metal/copy.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/distributed/ops.h"
@@ -28,6 +28,11 @@ void Send::eval_gpu(const std::vector<array>&, std::vector<array>&) {
 
 void Recv::eval_gpu(const std::vector<array>&, std::vector<array>&) {
   throw std::runtime_error("[Recv::eval_gpu] has no GPU implementation.");
+}
+
+void ReduceScatter::eval_gpu(const std::vector<array>&, std::vector<array>&) {
+  throw std::runtime_error(
+      "[ReduceScatter::eval_gpu] has no GPU implementation.");
 }
 
 } // namespace mlx::core::distributed

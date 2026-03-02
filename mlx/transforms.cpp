@@ -33,7 +33,7 @@ class Synchronizer : public Primitive {
   void eval_cpu(const std::vector<array>&, std::vector<array>&) override {}
   void eval_gpu(const std::vector<array>&, std::vector<array>&) override {}
 
-  DEFINE_PRINT(Synchronize);
+  DEFINE_NAME(Synchronize);
 };
 
 // Initialize the static tracing members from transforms_impl.h
@@ -62,7 +62,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   // Map of array id that needs fence and stream it's computed on
-  std::unordered_map<uintptr_t, uint32_t> needs_fence;
+  std::unordered_map<uintptr_t, std::pair<uint32_t, bool>> needs_fence;
 
   auto synchronizer = array(
       {}, bool_, std::make_shared<Synchronizer>(stream), std::move(outputs));
@@ -72,7 +72,12 @@ array eval_impl(std::vector<array> outputs, bool async) {
 
   // Stream events for synchronization after eval
   std::unordered_map<uint32_t, Event> events;
-  events.emplace(stream.index, Event{stream});
+  {
+    auto e = Event{stream};
+    e.set_value(1);
+    synchronizer.attach_event(e);
+    events.emplace(stream.index, std::move(e));
+  }
 
   {
     // Record the degree of each input
@@ -109,7 +114,14 @@ array eval_impl(std::vector<array> outputs, bool async) {
                 "https://github.com/ml-explore/mlx/issues.");
           }
           if (a.primitive().stream() != in.primitive().stream()) {
-            needs_fence.emplace(in.id(), in.primitive().stream().index);
+            bool device_switch =
+                a.primitive().stream().device != in.primitive().stream().device;
+            auto [it, inserted] = needs_fence.emplace(
+                in.id(),
+                std::make_pair(in.primitive().stream().index, device_switch));
+            if (!inserted) {
+              it->second.second |= device_switch;
+            }
           }
         }
 
@@ -184,21 +196,25 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
   }
 
+  std::unordered_set<int> open_streams;
   while (!tape.empty()) {
     auto arr = std::move(tape.back());
     tape.pop_back();
 
     auto stream = arr.primitive().stream();
+    open_streams.insert(stream.index);
 
-    // Lookup corresponding event
-    auto e = events.find(stream.index);
-    if (e == events.end()) {
-      e = events.emplace(stream.index, Event{stream}).first;
-    }
-    e->second.set_value(1);
-    arr.attach_event(e->second);
-    for (auto& s : arr.siblings()) {
-      s.attach_event(e->second);
+    if (async) {
+      // Lookup corresponding event
+      auto e = events.find(stream.index);
+      if (e == events.end()) {
+        e = events.emplace(stream.index, Event{stream}).first;
+      }
+      e->second.set_value(1);
+      arr.attach_event(e->second);
+      for (auto& s : arr.siblings()) {
+        s.attach_event(e->second);
+      }
     }
 
     for (auto& in : arr.inputs()) {
@@ -206,7 +222,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
         // Use fence to wait within a single eval
         // Get the input array's stream fence and wait on the
         // output arrays stream
-        fences[it->second].wait(stream, in);
+        fences[it->second.first].wait(stream, in);
       } else if (in.event().valid()) {
         if (in.event().is_signaled()) {
           in.detach_event();
@@ -227,9 +243,10 @@ array eval_impl(std::vector<array> outputs, bool async) {
         (get_active_memory() > get_memory_limit() &&
          scheduler::n_active_tasks() > 0)) {
       // Commit any open streams
-      for (auto& [_, e] : events) {
-        if (e.stream().device == Device::gpu) {
-          gpu::finalize(e.stream());
+      for (auto i : open_streams) {
+        auto s = get_stream(i);
+        if (s.device == Device::gpu) {
+          gpu::finalize(s);
         }
       }
       scheduler::wait_for_one();
@@ -240,12 +257,12 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
 
     auto maybe_update_fence = [&fences, &needs_fence, stream](const array& a) {
-      if (needs_fence.find(a.id()) != needs_fence.end()) {
+      if (auto nf = needs_fence.find(a.id()); nf != needs_fence.end()) {
         auto it = fences.find(stream.index);
         if (it == fences.end()) {
           it = fences.emplace(stream.index, Fence{stream}).first;
         }
-        it->second.update(stream, a);
+        it->second.update(stream, a, nf->second.second);
       }
     };
 
@@ -263,9 +280,11 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   // Signal the event in its stream
-  for (auto& [_, e] : events) {
-    auto s = e.stream();
-    e.signal(s);
+  for (auto i : open_streams) {
+    auto s = get_stream(i);
+    if (auto e = events.find(i); e != events.end()) {
+      e->second.signal(s);
+    }
     if (s.device == Device::gpu) {
       gpu::finalize(s);
     }
@@ -302,7 +321,7 @@ void eval(std::vector<array> outputs) {
     return;
   }
 
-  eval_impl(std::move(outputs), false).event().wait();
+  eval_impl(std::move(outputs), false).wait();
 }
 
 std::pair<std::vector<array>, std::vector<array>> vjp(
@@ -903,7 +922,7 @@ std::function<array(const array&, const array&)> vmap(
     int in_axis_b /* = 0 */,
     int out_axis /* = 0 */) {
   auto vfun = vmap(
-      [in_axis_a, in_axis_b, out_axis, fun](const std::vector<array>& inputs) {
+      [fun](const std::vector<array>& inputs) {
         return std::vector<array>{fun(inputs[0], inputs[1])};
       },
       {in_axis_a, in_axis_b},
@@ -916,7 +935,7 @@ std::function<array(const array&)> vmap(
     int in_axis /* = 0 */,
     int out_axis /* = 0 */) {
   auto vfun = vmap(
-      [in_axis, out_axis, fun](const std::vector<array>& inputs) {
+      [fun](const std::vector<array>& inputs) {
         return std::vector<array>{fun(inputs[0])};
       },
       {in_axis},

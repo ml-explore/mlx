@@ -1,7 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <memory>
 
-#include "mlx/backend/gpu/available.h"
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
@@ -9,10 +8,6 @@
 #include "mlx/scheduler.h"
 
 namespace mlx::core::gpu {
-
-bool is_available() {
-  return true;
-}
 
 void new_stream(Stream stream) {
   if (stream.device == mlx::core::Device::gpu) {
@@ -71,7 +66,7 @@ void eval(array& arr) {
     d.get_command_buffer(s.index);
   } else {
     command_buffer->addCompletedHandler(
-        [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
+        [buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
           check_error(cbuf);
         });
   }
@@ -82,7 +77,7 @@ void finalize(Stream s) {
   auto& d = metal::device(s.device);
   auto cb = d.get_command_buffer(s.index);
   d.end_encoding(s.index);
-  cb->addCompletedHandler([s](MTL::CommandBuffer* cbuf) { check_error(cbuf); });
+  cb->addCompletedHandler([](MTL::CommandBuffer* cbuf) { check_error(cbuf); });
   d.commit_command_buffer(s.index);
   d.get_command_buffer(s.index);
 }

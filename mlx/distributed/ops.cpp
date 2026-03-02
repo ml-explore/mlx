@@ -2,6 +2,9 @@
 
 #include <sstream>
 
+#include "mlx/backend/cuda/cuda.h"
+#include "mlx/backend/metal/metal.h"
+#include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/ops.h"
 #include "mlx/distributed/primitives.h"
 
@@ -28,11 +31,12 @@ array all_sum(
   if (group.size() == 1) {
     return x;
   }
+  auto stream = detail::communication_stream(group, s);
+
   return array(
       x.shape(),
       x.dtype(),
-      std::make_shared<AllReduce>(
-          to_stream(s, Device::cpu), group, AllReduce::Sum),
+      std::make_shared<AllReduce>(stream, group, AllReduce::Sum),
       {x});
 }
 
@@ -45,11 +49,12 @@ array all_max(
   if (group.size() == 1) {
     return x;
   }
+  auto stream = detail::communication_stream(group, s);
+
   return array(
       x.shape(),
       x.dtype(),
-      std::make_shared<AllReduce>(
-          to_stream(s, Device::cpu), group, AllReduce::Max),
+      std::make_shared<AllReduce>(stream, group, AllReduce::Max),
       {x});
 }
 
@@ -62,11 +67,12 @@ array all_min(
   if (group.size() == 1) {
     return x;
   }
+  auto stream = detail::communication_stream(group, s);
+
   return array(
       x.shape(),
       x.dtype(),
-      std::make_shared<AllReduce>(
-          to_stream(s, Device::cpu), group, AllReduce::Min),
+      std::make_shared<AllReduce>(stream, group, AllReduce::Min),
       {x});
 }
 
@@ -79,6 +85,7 @@ array all_gather(
   if (group.size() == 1) {
     return x;
   }
+  auto stream = detail::communication_stream(group, s);
 
   auto result_shape = x.shape();
   if (result_shape.size() == 0) {
@@ -89,7 +96,7 @@ array all_gather(
   return array(
       std::move(result_shape),
       x.dtype(),
-      std::make_shared<AllGather>(to_stream(s, Device::cpu), group),
+      std::make_shared<AllGather>(stream, group),
       {x});
 }
 
@@ -103,6 +110,7 @@ array send(
   if (group.size() == 1) {
     throw std::invalid_argument("Cannot send to a singleton group");
   }
+  auto stream = detail::communication_stream(group, s);
 
   if (dst < 0 || dst >= group.size()) {
     std::ostringstream msg;
@@ -112,10 +120,7 @@ array send(
   }
 
   return array(
-      x.shape(),
-      x.dtype(),
-      std::make_shared<Send>(to_stream(s, Device::cpu), group, dst),
-      {x});
+      x.shape(), x.dtype(), std::make_shared<Send>(stream, group, dst), {x});
 }
 
 array recv(
@@ -129,6 +134,7 @@ array recv(
   if (group.size() == 1) {
     throw std::invalid_argument("Cannot recv from a singleton group");
   }
+  auto stream = detail::communication_stream(group, s);
 
   if (src < 0 || src >= group.size()) {
     std::ostringstream msg;
@@ -139,7 +145,7 @@ array recv(
   return array(
       std::move(shape),
       std::move(dtype),
-      std::make_shared<Recv>(to_stream(s, Device::cpu), group, src),
+      std::make_shared<Recv>(stream, group, src),
       std::vector<array>{});
 }
 
@@ -151,4 +157,30 @@ array recv_like(
   return recv(x.shape(), x.dtype(), src, group_, s);
 }
 
+array sum_scatter(
+    const array& x,
+    std::optional<Group> group_ /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  auto group = to_group(group_);
+  if (group.size() == 1) {
+    return x;
+  }
+  if (x.shape()[0] % group.size() != 0) {
+    std::ostringstream msg;
+    msg << "[sum_scatter] Invalid shape=" << x.shape()
+        << " for a group of size " << group.size()
+        << ". The first dimension (axis 0) must be divisible by the group size.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto result_shape = x.shape();
+  result_shape[0] /= group.size();
+  auto stream = detail::communication_stream(group, s);
+
+  return array(
+      std::move(result_shape),
+      x.dtype(),
+      std::make_shared<ReduceScatter>(stream, group, ReduceScatter::Sum),
+      {x});
+}
 } // namespace mlx::core::distributed

@@ -8,6 +8,7 @@
 
 #include "mlx/fft.h"
 #include "mlx/ops.h"
+#include "python/src/small_vector.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;

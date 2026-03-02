@@ -49,7 +49,7 @@ template <
     bool transpose_b,
     bool MN_aligned,
     bool K_aligned>
-[[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void
+[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void
 block_masked_gemm(
     const device T* A [[buffer(0)]],
     const device T* B [[buffer(1)]],
@@ -435,7 +435,7 @@ template <
     bool MN_aligned,
     bool K_aligned,
     bool has_operand_mask = false>
-[[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void
+[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void
 block_masked_gemm(
     const device T* A [[buffer(0)]],
     const device T* B [[buffer(1)]],

@@ -1,0 +1,473 @@
+// NCCL distributed support currently requires Unix socket APIs
+// TODO: Add Windows Winsock2 support for Windows builds
+#ifndef _WIN32
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
+
+#include <cuda_runtime.h>
+#include <nccl.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <mutex>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+
+#include "mlx/backend/cuda/device.h"
+#include "mlx/distributed/distributed.h"
+#include "mlx/distributed/distributed_impl.h"
+#include "mlx/dtype_utils.h"
+#include "mlx/utils.h"
+
+namespace mlx::core::distributed::nccl {
+
+// Can be tuned with MLX_NCCL_TIMEOUT
+constexpr int nccl_timeout = 300000; // miliseconds
+
+#define CHECK_CUDA(cmd)              \
+  do {                               \
+    cudaError_t e = cmd;             \
+    if (e != cudaSuccess) {          \
+      fprintf(                       \
+          stderr,                    \
+          "CUDA error %s:%d '%s'\n", \
+          __FILE__,                  \
+          __LINE__,                  \
+          cudaGetErrorString(e));    \
+      exit(1);                       \
+    }                                \
+  } while (0)
+
+#define CHECK_NCCL(cmd)              \
+  do {                               \
+    ncclResult_t r = cmd;            \
+    if (r != ncclSuccess) {          \
+      fprintf(                       \
+          stderr,                    \
+          "NCCL error %s:%d '%s'\n", \
+          __FILE__,                  \
+          __LINE__,                  \
+          ncclGetErrorString(r));    \
+      exit(1);                       \
+    }                                \
+  } while (0)
+
+#define MLX_NCCL_TYPE_LIST(X) \
+  X(int8_t, ncclChar)         \
+  X(uint8_t, ncclUint8)       \
+  X(int32_t, ncclInt)         \
+  X(uint32_t, ncclUint32)     \
+  X(int64_t, ncclInt64)       \
+  X(uint64_t, ncclUint64)     \
+  X(float16_t, ncclHalf)      \
+  X(bfloat16_t, ncclBfloat16) \
+  X(float, ncclFloat)         \
+  X(double, ncclDouble)
+
+template <class>
+struct nccl_map {
+  static constexpr bool ok = false; // default: unsupported
+};
+
+#define MLX_DEF_NCCL_MAP(T, E)                 \
+  template <>                                  \
+  struct nccl_map<T> {                         \
+    static constexpr bool ok = true;           \
+    static constexpr ncclDataType_t value = E; \
+  };
+
+MLX_NCCL_TYPE_LIST(MLX_DEF_NCCL_MAP)
+#undef MLX_DEF_NCCL_MAP
+
+namespace detail {
+
+template <typename F>
+void dispatch_dtype(const array& arr, F&& f) {
+  dispatch_all_types(arr.dtype(), [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    if constexpr (nccl_map<T>::ok) {
+      f(type_tag, nccl_map<T>::value);
+    } else {
+      throw std::invalid_argument("[nccl] Unknown or unsupported dtype");
+    }
+  });
+}
+
+#ifndef _WIN32
+inline void sendAll(int sock, const void* buf, size_t len) {
+  const char* ptr = reinterpret_cast<const char*>(buf);
+  while (len > 0) {
+    ssize_t sent = send(sock, ptr, len, 0);
+    if (sent <= 0) {
+      perror("send");
+      exit(1);
+    }
+    ptr += sent;
+    len -= sent;
+  }
+}
+
+inline void recvAll(int sock, void* buf, size_t len) {
+  char* ptr = reinterpret_cast<char*>(buf);
+  while (len > 0) {
+    ssize_t rec = recv(sock, ptr, len, 0);
+    if (rec <= 0) {
+      perror("recv");
+      exit(1);
+    }
+    ptr += rec;
+    len -= rec;
+  }
+}
+#endif // _WIN32
+
+#ifndef _WIN32
+inline void bootstrap_unique_id(
+    ncclUniqueId& id,
+    int rank,
+    int size,
+    const std::string& initMethod) {
+  // Parse the init method to extract the host and port
+  if (initMethod.rfind("tcp://", 0) != 0)
+    throw;
+  auto hostport = initMethod.substr(6);
+  auto colon = hostport.find(':');
+  std::string host = hostport.substr(0, colon);
+  int port = std::stoi(hostport.substr(colon + 1));
+
+  if (rank == 0) {
+    // create a unique id on the rank 0
+    CHECK_NCCL(ncclGetUniqueId(&id));
+
+    // create a socket to send the unique id to all other ranks
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (sock < 0) {
+      std::ostringstream msg;
+      msg << "[nccl] Couldn't create socket (error: " << errno << ")";
+      throw std::runtime_error(msg.str());
+    }
+
+    sockaddr_in serv = {};
+    serv.sin_family = AF_INET;
+    serv.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv.sin_port = htons(port);
+
+    int reuse = 1;
+    // Without this, if rank-0 crashes or restarts process quickly,
+    // the OS might refuse to let binding to the same port, so reuse
+
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+      std::ostringstream msg;
+      msg << "[nccl] setsockopt() failed: " << strerror(errno);
+      throw std::runtime_error(msg.str());
+    }
+
+    if (bind(sock, reinterpret_cast<sockaddr*>(&serv), sizeof(serv)) < 0) {
+      std::ostringstream msg;
+      msg << "[nccl] bind() failed: " << strerror(errno);
+      throw std::runtime_error(msg.str());
+    }
+    if (listen(sock, size - 1) < 0) {
+      std::ostringstream msg;
+      msg << "[nccl] listen() failed: " << strerror(errno);
+      throw std::runtime_error(msg.str());
+    }
+
+    for (int peer = 1; peer < size; ++peer) {
+      int conn = accept(sock, nullptr, nullptr);
+      if (conn < 0) {
+        std::ostringstream msg;
+        msg << "[nccl] accept() failed: " << strerror(errno);
+        throw std::runtime_error(msg.str());
+      }
+      sendAll(conn, &id, sizeof(id));
+      close(conn);
+    }
+    close(sock);
+
+  } else {
+    // Here we want to make sure that rank 0 has enough time to bind
+    // so we will retry to connect until elapsed time exceeds nccl_timeout
+    // this is particularity important for multinode setup
+
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+      std::ostringstream msg;
+      msg << "[nccl] socket() failed: " << strerror(errno);
+      throw std::runtime_error(msg.str());
+    }
+
+    hostent* he = gethostbyname(host.c_str());
+    if (!he) {
+      throw std::runtime_error("[nccl] lookup failed for host: " + host);
+    }
+    sockaddr_in serv = {};
+    serv.sin_family = AF_INET;
+    memcpy(&serv.sin_addr, he->h_addr_list[0], he->h_length);
+    serv.sin_port = htons(port);
+
+    const int timeout_ms = env::nccl_timeout(nccl_timeout);
+    bool connected = false;
+
+    const char* dbg = std::getenv("NCCL_DEBUG");
+    bool do_log = (dbg && std::string(dbg) == "INFO");
+
+    auto start = std::chrono::steady_clock::now();
+    int attempt = 0;
+
+    while (true) {
+      auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - start)
+                            .count();
+      if (elapsed_ms > timeout_ms)
+        break;
+      if (connect(sock, reinterpret_cast<sockaddr*>(&serv), sizeof(serv)) ==
+          0) {
+        connected = true;
+        if (do_log) {
+          std::cout << "[Rank " << rank << "] Connected successfully after "
+                    << elapsed_ms << " miliseconds" << std::endl;
+          break;
+        }
+      }
+      if (errno != ECONNREFUSED) {
+        break;
+      }
+      ++attempt;
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    if (!connected) {
+      std::ostringstream msg;
+      msg << "[Rank " << rank << "] connect() failed after " << timeout_ms
+          << " milliseconds and " << attempt << " retries: " << strerror(errno);
+      close(sock);
+      throw std::runtime_error(msg.str());
+    }
+    recvAll(sock, &id, sizeof(id));
+    close(sock);
+  }
+}
+#else // _WIN32
+inline void bootstrap_unique_id(
+    ncclUniqueId& id,
+    int rank,
+    int size,
+    const std::string& initMethod) {
+  throw std::runtime_error(
+      "[nccl] Distributed NCCL is not yet supported on Windows");
+}
+#endif // _WIN32
+
+} // namespace detail
+
+// helper struct to manage communicator
+struct NCCLComm {
+  ncclComm_t comm;
+  int rank_;
+  int size_;
+
+  NCCLComm(ncclComm_t c, int rank, int size)
+      : comm(c), rank_(rank), size_(size) {}
+
+  static std::shared_ptr<NCCLComm>
+  create(int numRanks, int rank, ncclUniqueId commId) {
+    ncclComm_t raw;
+    CHECK_NCCL(ncclCommInitRank(&raw, numRanks, commId, rank));
+    return std::make_shared<NCCLComm>(raw, rank, numRanks);
+  }
+
+  static std::shared_ptr<NCCLComm> split(NCCLComm* source, int color, int key) {
+    ncclComm_t raw;
+    // default config, blocking comm creation
+    ncclConfig_t config = NCCL_CONFIG_INITIALIZER;
+    CHECK_NCCL(ncclCommSplit(source->comm, color, key, &raw, &config));
+    int new_rank, new_size;
+    CHECK_NCCL(ncclCommUserRank(raw, &new_rank));
+    CHECK_NCCL(ncclCommCount(raw, &new_size));
+    return std::make_shared<NCCLComm>(raw, new_rank, new_size);
+  }
+
+  NCCLComm(const NCCLComm&) = delete;
+  NCCLComm& operator=(const NCCLComm&) = delete;
+};
+
+using GroupImpl = mlx::core::distributed::detail::GroupImpl;
+class NCCLGroup : public GroupImpl {
+ public:
+  NCCLGroup(int worldRank, int worldSize, const std::string initMethod)
+      : rank_(worldRank), size_(worldSize), initMethod_(initMethod) {
+    if (initialized_)
+      return;
+    int ndev;
+    CHECK_CUDA(cudaGetDeviceCount(&ndev));
+    CHECK_CUDA(cudaSetDevice(rank_ % ndev));
+    detail::bootstrap_unique_id(uniqueId_, rank_, size_, initMethod_);
+    comm_ = NCCLComm::create(size_, rank_, uniqueId_);
+    initialized_ = true;
+  }
+  // Used by split() to wrap an already-created communicator
+  NCCLGroup(std::shared_ptr<NCCLComm> comm, int rank, int size)
+      : rank_(rank), size_(size), comm_(std::move(comm)) {}
+
+  Stream communication_stream(StreamOrDevice s) override {
+    return to_stream(s, Device::gpu);
+  }
+
+  int rank() override {
+    return rank_;
+  }
+
+  int size() override {
+    return size_;
+  }
+
+  void all_sum(const array& input, array& output, Stream stream) override {
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclSum);
+    });
+  }
+
+  std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
+    key = (key < 0) ? rank() : key;
+    auto new_comm = NCCLComm::split(comm_.get(), color, key);
+    return std::make_shared<NCCLGroup>(
+        new_comm, new_comm->rank_, new_comm->size_);
+  }
+
+  void all_gather(const array& input, array& output, Stream stream) override {
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      auto& encoder = cu::get_command_encoder(stream);
+      CHECK_NCCL(ncclAllGather(
+          gpu_ptr<T>(input),
+          gpu_ptr<T>(output),
+          input.size(),
+          dt,
+          comm_->comm,
+          encoder.stream()));
+    });
+  }
+
+  void send(const array& input, int dst, Stream stream) override {
+    throw std::runtime_error("[nccl] Send not supported in NCCL backend.");
+  }
+
+  void recv(array& output, int src, Stream stream) override {
+    throw std::runtime_error("[nccl] Recv not supported in NCCL backend.");
+  }
+
+  void all_max(const array& input, array& output, Stream stream) override {
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclMax);
+    });
+  }
+
+  void all_min(const array& input, array& output, Stream stream) override {
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_reduce_impl<T>(input, output, stream, dt, ncclMin);
+    });
+  }
+
+  void sum_scatter(const array& input, array& output, Stream stream) override {
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      reduce_scatter_impl<T>(input, output, stream, dt, ncclSum);
+    });
+  }
+
+  template <typename T>
+  void all_reduce_impl(
+      const array& input,
+      array& output,
+      Stream stream,
+      ncclDataType_t dt,
+      ncclRedOp_t op) {
+    auto& encoder = cu::get_command_encoder(stream);
+
+    CHECK_NCCL(ncclAllReduce(
+        gpu_ptr<T>(input),
+        gpu_ptr<T>(output),
+        input.size(),
+        dt,
+        op,
+        comm_->comm,
+        encoder.stream()));
+  }
+
+  template <typename T>
+  void reduce_scatter_impl(
+      const array& input,
+      array& output,
+      Stream stream,
+      ncclDataType_t dt,
+      ncclRedOp_t op) {
+    auto& encoder = cu::get_command_encoder(stream);
+
+    CHECK_NCCL(ncclReduceScatter(
+        gpu_ptr<T>(input),
+        gpu_ptr<T>(output),
+        output.size(),
+        dt,
+        op,
+        comm_->comm,
+        encoder.stream()));
+  }
+
+  int rank_;
+  int size_;
+  std::string initMethod_;
+  ncclUniqueId uniqueId_;
+  std::shared_ptr<NCCLComm> comm_;
+  bool initialized_ = false;
+};
+
+bool is_available() {
+  return true;
+}
+
+namespace detail {
+std::string get_env_var_or_throw(const char* env_var_name, bool strict) {
+  const char* value = std::getenv(env_var_name);
+  if (value == nullptr && strict) {
+    std::ostringstream msg;
+    msg << "[nccl] Required environment variable '" << env_var_name
+        << "' is not set. "
+        << "Please set it before initializing the distributed backend.";
+    throw std::runtime_error(msg.str());
+  }
+  if (value == nullptr) {
+    return "";
+  }
+  return std::string(value);
+}
+} // namespace detail
+
+std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
+  std::string host = detail::get_env_var_or_throw("NCCL_HOST_IP", strict);
+  std::string port = detail::get_env_var_or_throw("NCCL_PORT", strict);
+  std::string rank_str = detail::get_env_var_or_throw("MLX_RANK", strict);
+  std::string n_nodes_str =
+      detail::get_env_var_or_throw("MLX_WORLD_SIZE", strict);
+  if (!strict &&
+      (host.empty() || port.empty() || rank_str.empty() ||
+       n_nodes_str.empty())) {
+    return nullptr;
+  }
+
+  int rank = std::stoi(rank_str);
+  int n_nodes = std::stoi(n_nodes_str);
+  std::string init_method = "tcp://" + host + ":" + port;
+
+  return std::make_shared<NCCLGroup>(rank, n_nodes, init_method);
+}
+} // namespace mlx::core::distributed::nccl

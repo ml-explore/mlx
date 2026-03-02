@@ -1,0 +1,80 @@
+name: 'Build and Test on macOS'
+description: 'Build and test MLX on macOS'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install dependencies
+      env:
+        DEBUG: 1
+        CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
+      shell: bash -l {0}
+      run: |
+        pip install --upgrade pip
+        pip install cmake setuptools typing_extensions
+        pip install -e . -v
+
+    - name: Install tests dependencies
+      shell: bash -l {0}
+      run: |
+        pip install numpy torch tensorflow
+
+    - name: Run Python tests
+      shell: bash -l {0}
+      env:
+        LOW_MEMORY: 1
+      run: |
+        DEVICE=cpu python -m unittest discover -v python/tests
+        DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m unittest discover -v python/tests
+        mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
+        mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+        if $(grep "\[WARN\]" stderr.log); then echo "Distributed ring test failed"; exit 1; fi
+    
+    - name: Build example extension
+      shell: bash -l {0}
+      run: |
+        cd examples/extensions
+        pip install -r requirements.txt
+        python setup.py build_ext --inplace
+        python test.py
+    
+    - name: Build CPP only
+      shell: bash -l {0}
+      run: |
+        mkdir -p build
+        cd build
+        cmake ..
+        make -j $(sysctl -n hw.ncpu)
+    
+    - name: Run CPP tests
+      shell: bash -l {0}
+      env:
+        DEVICE: gpu
+        METAL_DEVICE_WRAPPER_TYPE: 1
+        METAL_DEBUG_ERROR_MODE: 0
+      run: ./build/tests/tests
+    
+    - name: Build small binary with JIT
+      shell: bash -l {0}
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel \
+          -DBUILD_SHARED_LIBS=ON \
+          -DMLX_BUILD_CPU=OFF \
+          -DMLX_BUILD_SAFETENSORS=OFF \
+          -DMLX_BUILD_GGUF=OFF \
+          -DMLX_METAL_JIT=ON
+        make -j $(sysctl -n hw.ncpu)
+    
+    - name: Run Python tests with JIT
+      shell: bash -l {0}
+      env:
+        LOW_MEMORY: 1
+        DEVICE: gpu
+        METAL_DEVICE_WRAPPER_TYPE: 1
+        METAL_DEBUG_ERROR_MODE: 0
+      run: |
+        CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
+          pip install -e . -v
+        python -m unittest discover -v python/tests

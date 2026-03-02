@@ -27,6 +27,7 @@ simple functions.
    mish
    prelu
    relu
+   relu2
    relu6
    selu
    sigmoid

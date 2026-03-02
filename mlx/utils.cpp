@@ -69,7 +69,12 @@ inline void PrintFormatter::print(std::ostream& os, double val) {
   os << val;
 }
 inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
-  os << val;
+  os << val.real();
+  if (val.imag() >= 0 || std::isnan(val.imag())) {
+    os << "+" << val.imag() << "j";
+  } else {
+    os << "-" << -val.imag() << "j";
+  }
 }
 
 PrintFormatter& get_global_formatter() {
@@ -171,17 +176,6 @@ std::ostream& operator<<(std::ostream& os, uint8_t x) {
 
 namespace {
 
-inline size_t
-elem_to_loc(int elem, const Shape& shape, const Strides& strides) {
-  size_t loc = 0;
-  for (int i = shape.size() - 1; i >= 0; --i) {
-    auto q_and_r = ldiv(elem, shape[i]);
-    loc += q_and_r.rem * strides[i];
-    elem = q_and_r.quot;
-  }
-  return loc;
-}
-
 template <typename T>
 void print_subarray(std::ostream& os, const array& a, size_t index, int dim) {
   int num_print = 3;
@@ -248,25 +242,9 @@ std::ostream& operator<<(std::ostream& os, const Dtype::Kind& k) {
 
 std::ostream& operator<<(std::ostream& os, array a) {
   a.eval();
-  MLX_SWITCH_ALL_TYPES(a.dtype(), CTYPE, print_array<CTYPE>(os, a));
-  return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const std::vector<int>& v) {
-  os << "(";
-  for (int i = 0; i < v.size(); ++i) {
-    os << v[i] << ((i == v.size() - 1) ? "" : ",");
-  }
-  os << ")";
-  return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const std::vector<int64_t>& v) {
-  os << "(";
-  for (int i = 0; i < v.size(); ++i) {
-    os << v[i] << ((i == v.size() - 1) ? "" : ",");
-  }
-  os << ")";
+  dispatch_all_types(a.dtype(), [&](auto type_tag) {
+    print_array<MLX_GET_TYPE(type_tag)>(os, a);
+  });
   return os;
 }
 
@@ -275,6 +253,14 @@ namespace env {
 int get_var(const char* name, int default_value) {
   if (const char* buff_str = std::getenv(name)) {
     return atoi(buff_str);
+  } else {
+    return default_value;
+  }
+}
+
+std::string get_var(const char* name, const char* default_value) {
+  if (const char* buff_str = std::getenv(name)) {
+    return buff_str;
   } else {
     return default_value;
   }
@@ -316,8 +302,9 @@ void set_iinfo_limits(int64_t& min, uint64_t& max) {
 }
 
 iinfo::iinfo(Dtype dtype) : dtype(dtype) {
-  MLX_SWITCH_INT_TYPES_CHECKED(
-      dtype, "[iinfo]", CTYPE, set_iinfo_limits<CTYPE>(min, max));
+  dispatch_int_types(dtype, "[iinfo]", [&](auto type_tag) {
+    set_iinfo_limits<MLX_GET_TYPE(type_tag)>(min, max);
+  });
 }
 
 } // namespace mlx::core

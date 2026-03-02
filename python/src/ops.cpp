@@ -16,6 +16,7 @@
 #include "mlx/ops.h"
 #include "mlx/utils.h"
 #include "python/src/load.h"
+#include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
 namespace mx = mlx::core;
@@ -52,8 +53,9 @@ void init_ops(nb::module_& m) {
       "shape"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def reshape(a: array, /, shape: Sequence[int], *, stream: "
-              "Union[None, Stream, Device] = None) -> array"),
+      nb::sig(
+          "def reshape(a: array, /, shape: Sequence[int], *, stream: "
+          "Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Reshape an array while preserving the size.
 
@@ -79,8 +81,9 @@ void init_ops(nb::module_& m) {
       "end_axis"_a = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def flatten(a: array, /, start_axis: int = 0, end_axis: int = "
-              "-1, *, stream: Union[None, Stream, Device] = None) -> array"),
+      nb::sig(
+          "def flatten(a: array, /, start_axis: int = 0, end_axis: int = "
+          "-1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
       Flatten an array.
 
@@ -181,8 +184,9 @@ void init_ops(nb::module_& m) {
       "axis"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def expand_dims(a: array, /, axis: Union[int, Sequence[int]], "
-              "*, stream: Union[None, Stream, Device] = None) -> array"),
+      nb::sig(
+          "def expand_dims(a: array, /, axis: Union[int, Sequence[int]], "
+          "*, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Add a size one dimension at the given axis.
 
@@ -1425,6 +1429,76 @@ void init_ops(nb::module_& m) {
       nb::sig(
           "def arange(stop : Union[int, float], step : Union[None, int, float] = None, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"));
   m.def(
+      "hanning",
+      &mlx::core::hanning,
+      "M"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Return the Hanning window.
+        
+        The Hanning window is a taper formed by using a weighted cosine.
+
+        .. math::
+          w(n) = 0.5 - 0.5 \cos\left(\frac{2\pi n}{M-1}\right)
+           \qquad 0 \le n \le M-1
+        
+        Args:
+            M (int): Number of points in the output window.
+            
+        Returns:
+            array: The window, with the maximum value normalized to one (the value one
+                   appears only if the number of samples is odd).
+    )pbdoc");
+  m.def(
+      "hamming",
+      &mlx::core::hamming,
+      "M"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def hamming(M: int, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Return the Hamming window.
+
+        The Hamming window is a taper formed by using a weighted cosine.
+
+        .. math::
+           w(n) = 0.54 - 0.46 \cos\left(\frac{2\pi n}{M-1}\right)
+           \qquad 0 \le n \le M-1
+
+        Args:
+            M (int): Number of points in the output window.
+
+        Returns:
+            array: The window, with the maximum value normalized to one (the value one
+                   appears only if the number of samples is odd).
+    )pbdoc");
+  m.def(
+      "blackman",
+      &mlx::core::blackman,
+      "M"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def blackman(M: int, *, stream: Union[None, Stream, Device] = None) -> array"), // <--- J'ai rajouté ça
+      R"pbdoc(
+        Return the Blackman window.
+        
+        The Blackman window is a taper formed by using the first three terms of a summation of cosines.
+
+        .. math::
+          w(n) = 0.42 - 0.5 \cos\left(\frac{2\pi n}{M-1}\right) + 0.08 \cos\left(\frac{4\pi n}{M-1}\right)
+           \qquad 0 \le n \le M-1
+        
+        Args:
+            M (int): Number of points in the output window.
+            
+        Returns:
+            array: The window, with the maximum value normalized to one (the value one
+                   appears only if the number of samples is odd).
+    )pbdoc");
+  m.def(
       "linspace",
       [](Scalar start,
          Scalar stop,
@@ -1444,7 +1518,7 @@ void init_ops(nb::module_& m) {
       "dtype"_a.none() = mx::float32,
       "stream"_a = nb::none(),
       nb::sig(
-          "def linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array"),
+          "def linspace(start: scalar, stop: scalar, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Generate ``num`` evenly spaced numbers over interval ``[start, stop]``.
 
@@ -1666,6 +1740,26 @@ void init_ops(nb::module_& m) {
 
         Returns:
             array: The array of zeros with the specified shape.
+      )pbdoc");
+  m.def(
+      "asarray",
+      [](const ArrayInitType& a, std::optional<mx::Dtype> dtype) {
+        return create_array(a, dtype);
+      },
+      nb::arg(),
+      "dtype"_a = nb::none(),
+      nb::sig(
+          "def asarray(a: Union[scalar, array, Sequence], dtype: "
+          "Optional[Dtype] = None) -> array"),
+      R"pbdoc(
+        Convert the input to an array.
+
+        Args:
+            a: Input data.
+            dtype (Dtype, optional): The desired data-type for the array.
+
+        Returns:
+            array: An array interpretation of the input.
       )pbdoc");
   m.def(
       "zeros_like",
@@ -2484,6 +2578,35 @@ void init_ops(nb::module_& m) {
             array: The output array of means.
       )pbdoc");
   m.def(
+      "median",
+      [](const mx::array& a,
+         const IntOrVec& axis,
+         bool keepdims,
+         mx::StreamOrDevice s) {
+        return mx::median(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      "keepdims"_a = false,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def median(a: array, /, axis: Union[None, int, Sequence[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the median(s) over the given axes.
+
+        Args:
+            a (array): Input array.
+            axis (int or list(int), optional): Optional axis or
+              axes to reduce over. If unspecified this defaults
+              to reducing over the entire array.
+            keepdims (bool, optional): Keep reduced axes as
+              singleton dimensions, defaults to `False`.
+
+        Returns:
+            array: The output array of medians.
+      )pbdoc");
+  m.def(
       "var",
       [](const mx::array& a,
          const IntOrVec& axis,
@@ -2576,13 +2699,23 @@ void init_ops(nb::module_& m) {
             a (array): Input array.
             indices_or_sections (int or list(int)): If ``indices_or_sections``
               is an integer the array is split into that many sections of equal
-              size. An error is raised if this is not possible. If ``indices_or_sections``
-              is a list, the list contains the indices of the start of each subarray
-              along the given axis.
+              size. An error is raised if this is not possible. If
+              ``indices_or_sections`` is a list, then the indices are the split
+              points, and the array is divided into
+              ``len(indices_or_sections) + 1`` sub-arrays.
             axis (int, optional): Axis to split along, defaults to `0`.
 
         Returns:
             list(array): A list of split arrays.
+
+        Example:
+
+          >>> a = mx.array([1, 2, 3, 4], dtype=mx.int32)
+          >>> mx.split(a, 2)
+          [array([1, 2], dtype=int32), array([3, 4], dtype=int32)]
+          >>> mx.split(a, [1, 3])
+          [array([1], dtype=int32), array([2, 3], dtype=int32), array([4], dtype=int32)]
+
       )pbdoc");
   m.def(
       "argmin",
@@ -3076,7 +3209,7 @@ void init_ops(nb::module_& m) {
              std::tuple<int>,
              std::pair<int, int>,
              std::vector<std::pair<int, int>>>& pad_width,
-         const std::string mode,
+         const std::string& mode,
          const ScalarOrArray& constant_value,
          mx::StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&pad_width); pv) {
@@ -3910,12 +4043,13 @@ void init_ops(nb::module_& m) {
       &mlx_save_helper,
       "file"_a,
       "arr"_a,
-      nb::sig("def save(file: str, arr: array) -> None"),
+      nb::sig(
+          "def save(file: Union[file, str, pathlib.Path], arr: array) -> None"),
       R"pbdoc(
         Save the array to a binary file in ``.npy`` format.
 
         Args:
-            file (str): File to which the array is saved
+            file (str, pathlib.Path, file): File to which the array is saved
             arr (array): Array to be saved.
       )pbdoc");
   m.def(
@@ -3926,6 +4060,8 @@ void init_ops(nb::module_& m) {
       "file"_a,
       "args"_a,
       "kwargs"_a,
+      nb::sig(
+          "def savez(file: Union[file, str, pathlib.Path], *args, **kwargs)"),
       R"pbdoc(
         Save several arrays to a binary file in uncompressed ``.npz``
         format.
@@ -3945,7 +4081,7 @@ void init_ops(nb::module_& m) {
             mx.savez("model.npz", **dict(flat_params))
 
         Args:
-            file (file, str): Path to file to which the arrays are saved.
+            file (file, str, pathlib.Path): Path to file to which the arrays are saved.
             *args (arrays): Arrays to be saved.
             **kwargs (arrays): Arrays to be saved. Each array will be saved
               with the associated keyword as the output file name.
@@ -3958,12 +4094,13 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       "args"_a,
       "kwargs"_a,
-      nb::sig("def savez_compressed(file: str, *args, **kwargs)"),
+      nb::sig(
+          "def savez_compressed(file: Union[file, str, pathlib.Path], *args, **kwargs)"),
       R"pbdoc(
         Save several arrays to a binary file in compressed ``.npz`` format.
 
         Args:
-            file (file, str): Path to file to which the arrays are saved.
+            file (file, str, pathlib.Path): Path to file to which the arrays are saved.
             *args (arrays): Arrays to be saved.
             **kwargs (arrays): Arrays to be saved. Each array will be saved
               with the associated keyword as the output file name.
@@ -3977,7 +4114,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def load(file: str, /, format: Optional[str] = None, return_metadata: bool = False, *, stream: Union[None, Stream, Device] = None) -> Union[array, dict[str, array]]"),
+          "def load(file: Union[file, str, pathlib.Path], /, format: Optional[str] = None, return_metadata: bool = False, *, stream: Union[None, Stream, Device] = None) -> Union[array, dict[str, array], Tuple[dict[str, array], dict[str, Any]]]"),
       R"pbdoc(
         Load array(s) from a binary file.
 
@@ -3985,7 +4122,7 @@ void init_ops(nb::module_& m) {
         ``.gguf``.
 
         Args:
-            file (file, str): File in which the array is saved.
+            file (file, str, pathlib.Path): File in which the array is saved.
             format (str, optional): Format of the file. If ``None``, the
               format is inferred from the file extension. Supported formats:
               ``npy``, ``npz``, and ``safetensors``. Default: ``None``.
@@ -3993,11 +4130,12 @@ void init_ops(nb::module_& m) {
               which support matadata. The metadata will be returned as an
               additional dictionary. Default: ``False``.
         Returns:
-            array or dict:
+            array, dict, or tuple:
                 A single array if loading from a ``.npy`` file or a dict
                 mapping names to arrays if loading from a ``.npz`` or
-                ``.safetensors`` file. If ``return_metadata`` is ``True`` an
-                additional dictionary of metadata will be returned.
+                ``.safetensors`` file. If ``return_metadata`` is ``True`` a
+                tuple ``(arrays, metadata)`` will be returned where the second
+                element is a dictionary containing the metadata.
 
         Warning:
 
@@ -4011,7 +4149,7 @@ void init_ops(nb::module_& m) {
       "arrays"_a,
       "metadata"_a = nb::none(),
       nb::sig(
-          "def save_safetensors(file: str, arrays: dict[str, array], metadata: Optional[dict[str, str]] = None)"),
+          "def save_safetensors(file: Union[file, str, pathlib.Path], arrays: dict[str, array], metadata: Optional[dict[str, str]] = None)"),
       R"pbdoc(
         Save array(s) to a binary file in ``.safetensors`` format.
 
@@ -4020,10 +4158,11 @@ void init_ops(nb::module_& m) {
         information on the format.
 
         Args:
-            file (file, str): File in which the array is saved.
+            file (file, str, pathlib.Path): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to
-            be saved. metadata (dict(str, str), optional): The dictionary of
-            metadata to be saved.
+              be saved.
+            metadata (dict(str, str), optional): The dictionary of
+              metadata to be saved.
       )pbdoc");
   m.def(
       "save_gguf",
@@ -4032,7 +4171,7 @@ void init_ops(nb::module_& m) {
       "arrays"_a,
       "metadata"_a = nb::none(),
       nb::sig(
-          "def save_gguf(file: str, arrays: dict[str, array], metadata: dict[str, Union[array, str, list[str]]])"),
+          "def save_gguf(file: Union[file, str, pathlib.Path], arrays: dict[str, array], metadata: dict[str, Union[array, str, list[str]]])"),
       R"pbdoc(
         Save array(s) to a binary file in ``.gguf`` format.
 
@@ -4041,7 +4180,7 @@ void init_ops(nb::module_& m) {
         more information on the format.
 
         Args:
-            file (file, str): File in which the array is saved.
+            file (file, str, pathlib.Path): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to
               be saved.
             metadata (dict(str, Union[array, str, list(str)])): The dictionary
@@ -4147,14 +4286,15 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::arg(),
       "scales"_a,
-      "biases"_a,
+      "biases"_a = nb::none(),
       "transpose"_a = true,
-      "group_size"_a = 64,
-      "bits"_a = 4,
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "affine",
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantized_matmul(x: array, w: array, /, scales: array, biases: array, transpose: bool = True, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def quantized_matmul(x: array, w: array, /, scales: array, biases: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform the matrix multiplication with the quantized matrix ``w``. The
         quantization uses one floating point scale and bias per ``group_size`` of
@@ -4165,14 +4305,18 @@ void init_ops(nb::module_& m) {
           x (array): Input array
           w (array): Quantized matrix packed in unsigned integers
           scales (array): The scales to use per ``group_size`` elements of ``w``
-          biases (array): The biases to use per ``group_size`` elements of ``w``
+          biases (array, optional): The biases to use per ``group_size``
+            elements of ``w``. Default: ``None``.
           transpose (bool, optional): Defines whether to multiply with the
             transposed ``w`` or not, namely whether we are performing
             ``x @ w.T`` or ``x @ w``. Default: ``True``.
-          group_size (int, optional): The size of the group in ``w`` that
-            shares a scale and bias. Default: ``64``.
-          bits (int, optional): The number of bits occupied by each element in
-            ``w``. Default: ``4``.
+          group_size (int, optional): The size of the group in ``w`` that shares a
+            scale and bias. See supported values and defaults in the
+            :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+          bits (int, optional): The number of bits occupied by each element of
+            ``w`` in the quantized array. See supported values and defaults in the
+            :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+          mode (str, optional): The quantization mode. Default: ``"affine"``.
 
         Returns:
           array: The result of the multiplication of ``x`` with ``w``.
@@ -4181,96 +4325,151 @@ void init_ops(nb::module_& m) {
       "quantize",
       &mx::quantize,
       nb::arg(),
-      "group_size"_a = 64,
-      "bits"_a = 4,
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "affine",
+      "global_scale"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantize(w: array, /, group_size: int = 64, bits : int = 4, *, stream: Union[None, Stream, Device] = None) -> tuple[array, array, array]"),
+          "def quantize(w: array, /, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, global_scale: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> tuple[array, array, array]"),
       R"pbdoc(
-        Quantize the matrix ``w`` using ``bits`` bits per element.
+        Quantize the array ``w``.
 
         Note, every ``group_size`` elements in a row of ``w`` are quantized
-        together. Hence, number of columns of ``w`` should be divisible by
-        ``group_size``. In particular, the rows of ``w`` are divided into groups of
-        size ``group_size`` which are quantized together.
+        together. Hence, the last dimension of ``w`` should be divisible by
+        ``group_size``.
 
         .. warning::
 
-          ``quantize`` currently only supports 2D inputs with dimensions which are multiples of 32
+          ``quantize`` only supports inputs with two or more dimensions with
+          the last dimension divisible by ``group_size``
 
-        Formally, for a group of :math:`g` consecutive elements :math:`w_1` to
-        :math:`w_g` in a row of ``w`` we compute the quantized representation
-        of each element :math:`\hat{w_i}` as follows
-
-        .. math::
-
-          \begin{aligned}
-            \alpha &= \max_i w_i \\
-            \beta &= \min_i w_i \\
-            s &= \frac{\alpha - \beta}{2^b - 1} \\
-            \hat{w_i} &= \textrm{round}\left( \frac{w_i - \beta}{s}\right).
-          \end{aligned}
-
-        After the above computation, :math:`\hat{w_i}` fits in :math:`b` bits
-        and is packed in an unsigned 32-bit integer from the lower to upper
-        bits. For instance, for 4-bit quantization we fit 8 elements in an
-        unsigned 32 bit integer where the 1st element occupies the 4 least
-        significant bits, the 2nd bits 4-7 etc.
-
-        In order to be able to dequantize the elements of ``w`` we also need to
-        save :math:`s` and :math:`\beta` which are the returned ``scales`` and
-        ``biases`` respectively.
+        The supported quantization modes are ``"affine"``, ``"mxfp4"``,
+        ``"mxfp8"``, and ``"nvfp4"``. They are described in more detail below.
 
         Args:
-          w (array): Matrix to be quantized
+          w (array): Array to be quantized
           group_size (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. Default: ``64``.
+            scale and bias. See supported values and defaults in the
+            :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
           bits (int, optional): The number of bits occupied by each element of
-            ``w`` in the returned quantized matrix. Default: ``4``.
+            ``w`` in the quantized array. See supported values and defaults in the
+            :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+          mode (str, optional): The quantization mode. Default: ``"affine"``.
+          global_scale (array, optional): The per-input float32 scale used for
+            ``"nvfp4"`` quantization if provided. Default: ``None``.
 
         Returns:
-          tuple: A tuple containing
+          tuple: A tuple with either two or three elements containing:
 
           * w_q (array): The quantized version of ``w``
-          * scales (array): The scale to multiply each element with, namely :math:`s`
-          * biases (array): The biases to add to each element, namely :math:`\beta`
+          * scales (array): The quantization scales
+          * biases (array): The quantization biases (returned for ``mode=="affine"``).
+
+        Notes:
+          .. _quantize-modes:
+
+          .. table:: Quantization modes
+
+            ======  ======================   ==========================  =============  =====
+            mode    group size               bits                        scale type     bias
+            ======  ======================   ==========================  =============  =====
+            affine  32, 64\ :sup:`*`, 128    2, 3, 4\ :sup:`*`, 5, 6, 8  same as input  yes
+            mxfp4   32\ :sup:`*`             4\ :sup:`*`                 e8m0           no
+            mxfp8   32\ :sup:`*`             8\ :sup:`*`                 e8m0           no
+            nvfp4   16\ :sup:`*`             4\ :sup:`*`                 e4m3           no
+            ======  ======================   ==========================  =============  =====
+
+          :sup:`*` indicates the default value when unspecified.
+
+          The ``"affine"`` mode quantizes groups of :math:`g` consecutive
+          elements in a row of ``w``. For each group the quantized
+          representation of each element :math:`\hat{w_i}` is computed as follows:
+
+          .. math::
+
+            \begin{aligned}
+              \alpha &= \max_i w_i \\
+              \beta &= \min_i w_i \\
+              s &= \frac{\alpha - \beta}{2^b - 1} \\
+              \hat{w_i} &= \textrm{round}\left( \frac{w_i - \beta}{s}\right).
+            \end{aligned}
+
+          After the above computation, :math:`\hat{w_i}` fits in :math:`b` bits
+          and is packed in an unsigned 32-bit integer from the lower to upper
+          bits. For instance, for 4-bit quantization we fit 8 elements in an
+          unsigned 32 bit integer where the 1st element occupies the 4 least
+          significant bits, the 2nd bits 4-7 etc.
+
+          To dequantize the elements of ``w``, we also save :math:`s` and
+          :math:`\beta` which are the returned ``scales`` and
+          ``biases`` respectively.
+
+          The ``"mxfp4"``, ``"mxfp8"``, and ``"nvfp4"`` modes similarly
+          quantize groups of :math:`g` elements of ``w``. For the ``"mx"``
+          modes, the group size must be ``32``.  For ``"nvfp4"`` the group
+          size must be 16. The elements are quantized to 4-bit or 8-bit
+          precision floating-point values: E2M1 for ``"fp4"`` and E4M3 for
+          ``"fp8"``. There is a shared 8-bit scale per group. The ``"mx"``
+          modes use an E8M0 scale and the ``"nv"`` mode uses an E4M3 scale.
+          Unlike ``affine`` quantization, these modes does not have a bias
+          value.
+
+          More details on the ``"mx"`` formats can
+          be found in the `specification <https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf>`_.
       )pbdoc");
   m.def(
       "dequantize",
       &mx::dequantize,
       nb::arg(),
       "scales"_a,
-      "biases"_a,
-      "group_size"_a = 64,
-      "bits"_a = 4,
+      "biases"_a = nb::none(),
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "affine",
+      "global_scale"_a = nb::none(),
+      "dtype"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def dequantize(w: array, /, scales: array, biases: array, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def dequantize(w: array, /, scales: array, biases: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', global_scale: Optional[array] = None, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Dequantize the matrix ``w`` using the provided ``scales`` and
-        ``biases`` and the ``group_size`` and ``bits`` configuration.
-
-        Formally, given the notation in :func:`quantize`, we compute
-        :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s` and
-        :math:`\beta` as follows
-
-        .. math::
-
-          w_i = s \hat{w_i} - \beta
+        Dequantize the matrix ``w`` using quantization parameters.
 
         Args:
-          w (array): Matrix to be quantized
-          scales (array): The scales to use per ``group_size`` elements of ``w``
-          biases (array): The biases to use per ``group_size`` elements of ``w``
+          w (array): Matrix to be dequantized
+          scales (array): The scales to use per ``group_size`` elements of ``w``.
+          biases (array, optional): The biases to use per ``group_size``
+             elements of ``w``. Default: ``None``.
           group_size (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. Default: ``64``.
-          bits (int, optional): The number of bits occupied by each element in
-            ``w``. Default: ``4``.
+            scale and bias. See supported values and defaults in the
+            :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+          bits (int, optional): The number of bits occupied by each element of
+            ``w`` in the quantized array. See supported values and defaults in the
+            :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+          global_scale (array, optional): The per-input float32 scale used for
+            ``"nvfp4"`` quantization if provided. Default: ``None``.
+          dtype (Dtype, optional): The data type of the dequantized output. If
+            ``None`` the return type is inferred from the scales and biases
+            when possible and otherwise defaults to ``bfloat16``.
+            Default: ``None``.
+          mode (str, optional): The quantization mode. Default: ``"affine"``.
 
         Returns:
           array: The dequantized version of ``w``
+
+        Notes:
+          The currently supported quantization modes are ``"affine"``,
+          ``"mxfp4``, ``"mxfp8"``, and ``"nvfp4"``.
+
+          For ``affine`` quantization, given the notation in :func:`quantize`,
+          we compute :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s`
+          and :math:`\beta` as follows
+
+          .. math::
+
+            w_i = s \hat{w_i} + \beta
       )pbdoc");
   m.def(
       "gather_qmm",
@@ -4278,17 +4477,18 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::arg(),
       "scales"_a,
-      "biases"_a,
+      "biases"_a = nb::none(),
       "lhs_indices"_a = nb::none(),
       "rhs_indices"_a = nb::none(),
       "transpose"_a = true,
-      "group_size"_a = 64,
-      "bits"_a = 4,
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "affine",
       nb::kw_only(),
       "sorted_indices"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def gather_qmm(x: array, w: array, /, scales: array, biases: array, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: int = 64, bits: int = 4, *, sorted_indices: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+          "def gather_qmm(x: array, w: array, /, scales: array, biases: Optional[array] = None, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, sorted_indices: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform quantized matrix multiplication with matrix-level gather.
 
@@ -4304,22 +4504,48 @@ void init_ops(nb::module_& m) {
             x (array): Input array
             w (array): Quantized matrix packed in unsigned integers
             scales (array): The scales to use per ``group_size`` elements of ``w``
-            biases (array): The biases to use per ``group_size`` elements of ``w``
+            biases (array, optional): The biases to use per ``group_size``
+              elements of ``w``. Default: ``None``.
             lhs_indices (array, optional): Integer indices for ``x``. Default: ``None``.
             rhs_indices (array, optional): Integer indices for ``w``. Default: ``None``.
             transpose (bool, optional): Defines whether to multiply with the
               transposed ``w`` or not, namely whether we are performing
               ``x @ w.T`` or ``x @ w``. Default: ``True``.
-            group_size (int, optional): The size of the group in ``w`` that
-              shares a scale and bias. Default: ``64``.
-            bits (int, optional): The number of bits occupied by each element in
-              ``w``. Default: ``4``.
+            group_size (int, optional): The size of the group in ``w`` that shares a
+              scale and bias. See supported values and defaults in the
+              :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+            bits (int, optional): The number of bits occupied by each element of
+              ``w`` in the quantized array. See supported values and defaults in the
+              :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+            mode (str, optional): The quantization mode. Default: ``"affine"``.
             sorted_indices (bool, optional): May allow a faster implementation
               if the passed indices are sorted. Default: ``False``.
 
         Returns:
             array: The result of the multiplication of ``x`` with ``w``
               after gathering using ``lhs_indices`` and ``rhs_indices``.
+      )pbdoc");
+  m.def(
+      "segmented_mm",
+      &mx::segmented_mm,
+      nb::arg(),
+      nb::arg(),
+      "segments"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def segmented_mm(a: array, b: array, /, segments: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Perform a matrix multiplication but segment the inner dimension and
+        save the result for each segment separately.
+
+        Args:
+          a (array): Input array of shape ``MxK``.
+          b (array): Input array of shape ``KxN``.
+          segments (array): The offsets into the inner dimension for each segment.
+
+        Returns:
+          array: The result per segment of shape ``MxN``.
       )pbdoc");
   m.def(
       "tensordot",
@@ -5266,4 +5492,136 @@ void init_ops(nb::module_& m) {
             >>> mx.broadcast_shapes((5, 1, 4), (1, 3, 1))
             (5, 3, 4)
       )pbdoc");
+  m.def(
+      "depends",
+      [](const nb::object& inputs_, const nb::object& deps_) {
+        bool return_vec = false;
+        std::vector<mx::array> inputs;
+        std::vector<mx::array> deps;
+        if (nb::isinstance<mx::array>(inputs_)) {
+          inputs = {nb::cast<mx::array>(inputs_)};
+        } else {
+          return_vec = true;
+          inputs = {nb::cast<std::vector<mx::array>>(inputs_)};
+        }
+        if (nb::isinstance<mx::array>(deps_)) {
+          deps = {nb::cast<mx::array>(deps_)};
+        } else {
+          deps = {nb::cast<std::vector<mx::array>>(deps_)};
+        }
+        auto out = depends(inputs, deps);
+        if (return_vec) {
+          return nb::cast(out);
+        } else {
+          return nb::cast(out[0]);
+        }
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::sig(
+          "def depends(inputs: Union[array, Sequence[array]], dependencies: Union[array, Sequence[array]])"),
+      R"pbdoc(
+        Insert dependencies between arrays in the graph. The outputs are
+        identical to ``inputs`` but with dependencies on ``dependencies``.
+
+        Args:
+            inputs (array or Sequence[array]): The input array or arrays.
+            dependencies (array or Sequence[array]): The array or arrays
+              to insert dependencies on.
+
+        Returns:
+            array or Sequence[array]: The outputs which depend on dependencies.
+      )pbdoc");
+  m.def(
+      "qqmm",
+      &mx::qqmm,
+      nb::arg(), // x
+      nb::arg(), // w_q
+      "scales"_a = nb::none(), // scales w
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "nvfp4",
+      "global_scale_x"_a = nb::none(),
+      "global_scale_w"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def qqmm(x: array, w: array, scales: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', global_scale_x: Optional[array] = None, global_scale_w: Optional[array] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Perform a matrix multiplication using a possibly quantized weight matrix
+      ``w`` and a non-quantized input ``x``. The input ``x`` is quantized on the
+      fly. The weight matrix ``w`` is used as-is if it is already quantized;
+      otherwise, it is quantized on the fly.
+
+      If ``w`` is quantized, ``scales`` must be provided, and ``group_size``,
+      ``bits``, and ``mode`` must match the parameters that were used to quantize
+      ``w``.
+
+      Notes:
+        If ``w`` is expected to receive gradients, it must be provided in
+        non-quantized form.
+
+        If ``x`` and `w`` are not quantized, their data types must be ``float32``,
+        ``float16``, or ``bfloat16``.
+        If ``w`` is quantized, it must be packed in unsigned integers.
+        ``global_scale_x`` and ``global_scale_w`` are only used for ``nvfp4`` quantization.
+
+      Args:
+        x (array): Input array.
+        w (array): Weight matrix. If quantized, it is packed in unsigned integers.
+        scales (array, optional): The scales to use per ``group_size`` elements of
+          ``w`` if ``w`` is quantized. Default: ``None``.
+        group_size (int, optional): Number of elements in ``x`` and ``w`` that
+          share a scale. See supported values and defaults in the
+          :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+        bits (int, optional): Number of bits used to represent each element of
+          ``x`` and ``w``. See supported values and defaults in the
+          :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+        mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
+          Supported modes are ``nvfp4`` and ``mxfp8``. See the
+          :ref:`table of quantization modes <quantize-modes>` for details.
+        global_scale (array, optional): The per-input float32 scale used for x
+            with ``"nvfp4"`` quantization. Default: ``None``.
+        global_scale_w (array, optional): The per-input float32 scale used for w
+            with ``"nvfp4"`` quantization. Default: ``None``.
+      Returns:
+        array: The result of the multiplication of quantized ``x`` with quantized ``w``.
+        needed).
+  )pbdoc");
+  m.def(
+      "from_fp8",
+      &mx::from_fp8,
+      nb::arg(),
+      "dtype"_a = mx::bfloat16,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def from_fp8(x: array, dtype: Dtype = bfloat16, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert the array from fp8 (e4m3) to another floating-point type.
+
+      Args:
+        x (array): The input fp8 array with type ``uint8``.
+        dtype (Dtype): The data type to convert to. Default: ``bfloat16``.
+
+      Returns:
+        array: The array converted from fp8.
+  )pbdoc");
+  m.def(
+      "to_fp8",
+      &mx::to_fp8,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def to_fp8(x: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert the array to fp8 (e4m3) from another floating-point type.
+
+      Args:
+        x (array): The input array.
+
+      Returns:
+        array: The array converted to fp8 with type ``uint8``.
+  )pbdoc");
 }

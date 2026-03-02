@@ -54,6 +54,8 @@ are the CPU and GPU.
    examples/linear_regression
    examples/mlp
    examples/llama-inference
+   examples/data_parallelism
+   examples/tensor_parallelism
 
 .. toctree::
    :caption: Python API Reference
@@ -70,6 +72,7 @@ are the CPU and GPU.
    python/fft
    python/linalg
    python/metal
+   python/cuda
    python/memory_management
    python/nn
    python/optimizers
@@ -88,5 +91,6 @@ are the CPU and GPU.
 
    dev/extensions
    dev/metal_debugger
+   dev/metal_logging
    dev/custom_metal_kernels
    dev/mlx_in_cpp

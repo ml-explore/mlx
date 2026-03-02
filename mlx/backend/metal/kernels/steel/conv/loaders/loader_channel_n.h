@@ -83,7 +83,7 @@ struct Conv2DInputBlockLoaderSmallChannels {
   const constant MLXConvParams<2>* params;
   const constant ImplicitGemmConv2DParams* gemm_params;
 
-  short weight_hw;
+  int weight_hw;
 
   const device T* src[n_rows];
 
@@ -272,7 +272,7 @@ struct Conv2DWeightBlockLoaderSmallChannels {
       return;
     }
 
-    const device T* curr_src = src + weight_hw * params->wt_strides[2];
+    const device T* curr_src = src + weight_hw * (params->C / params->groups);
 
     if (BN != 8 || do_read) {
       STEEL_PRAGMA_UNROLL

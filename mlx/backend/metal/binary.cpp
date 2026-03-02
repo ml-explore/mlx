@@ -7,20 +7,20 @@
 
 #define BINARY_GPU(func)                                              \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
-    binary_op_gpu(inputs, out, get_primitive_string(this));           \
+    binary_op_gpu(inputs, out, name());                               \
   }
 
 #define BINARY_GPU_MULTI(func)                                         \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
-    binary_op_gpu(inputs, outputs, get_primitive_string(this));        \
+    binary_op_gpu(inputs, outputs, name());                            \
   }
 
 namespace mlx::core {
 
 std::string get_kernel_name(
     BinaryOpType bopt,
-    const std::string& op,
+    const char* op,
     const array& a,
     bool large,
     int ndim,
@@ -31,13 +31,13 @@ std::string get_kernel_name(
       kname = "ss";
       break;
     case BinaryOpType::ScalarVector:
-      kname = (large ? "sv2" : "sv");
+      kname = "sv";
       break;
     case BinaryOpType::VectorScalar:
-      kname = (large ? "vs2" : "vs");
+      kname = "vs";
       break;
     case BinaryOpType::VectorVector:
-      kname = (large ? "vv2" : "vv");
+      kname = "vv";
       break;
     case BinaryOpType::General:
       kname = "g";
@@ -51,6 +51,13 @@ std::string get_kernel_name(
       }
       break;
   }
+  if (bopt != BinaryOpType::General && bopt != BinaryOpType::ScalarScalar) {
+    if (large) {
+      kname += "2";
+    } else if (work_per_thread > 1) {
+      kname += "n";
+    }
+  }
   concatenate(kname, "_", op, type_to_name(a));
   return kname;
 }
@@ -58,7 +65,7 @@ std::string get_kernel_name(
 void binary_op_gpu_inplace(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    const std::string& op,
+    const char* op,
     const Stream& s) {
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -90,7 +97,7 @@ void binary_op_gpu_inplace(
     work_per_thread = large ? 4 : 2;
   } else {
     large = out.data_size() > UINT32_MAX;
-    work_per_thread = 1;
+    work_per_thread = get_work_per_thread(a.dtype(), out.data_size());
   }
   std::string kernel_name =
       get_kernel_name(bopt, op, a, large, shape.size(), work_per_thread);
@@ -137,13 +144,20 @@ void binary_op_gpu_inplace(
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
     // Launch a 1D or 2D grid of threads
-    size_t nthreads = out.data_size();
+    size_t nthreads = ceildiv(out.data_size(), work_per_thread);
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
     }
+
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    MTL::Size grid_dims = large ? get_2d_grid_dims(out.shape(), out.strides())
-                                : MTL::Size(nthreads, 1, 1);
+    MTL::Size grid_dims;
+    if (large) {
+      compute_encoder.set_bytes<int64_t>(out.data_size(), arg_idx++);
+      grid_dims = get_2d_grid_dims(out.shape(), out.strides(), work_per_thread);
+    } else {
+      compute_encoder.set_bytes<int>(out.data_size(), arg_idx++);
+      grid_dims = MTL::Size(nthreads, 1, 1);
+    }
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }
@@ -151,7 +165,7 @@ void binary_op_gpu_inplace(
 void binary_op_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    const std::string& op,
+    const char* op,
     const Stream& s) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
@@ -165,7 +179,7 @@ void binary_op_gpu(
 void binary_op_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    const std::string& op) {
+    const char* op) {
   auto& s = outputs[0].primitive().stream();
   binary_op_gpu(inputs, outputs, op, s);
 }
@@ -173,7 +187,7 @@ void binary_op_gpu(
 void binary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    const std::string& op,
+    const char* op,
     const Stream& s) {
   std::vector<array> outputs = {out};
   binary_op_gpu_inplace(inputs, outputs, op, s);
@@ -182,7 +196,7 @@ void binary_op_gpu_inplace(
 void binary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string& op,
+    const char* op,
     const Stream& s) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
@@ -195,7 +209,7 @@ void binary_op_gpu(
 void binary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string& op) {
+    const char* op) {
   auto& s = out.primitive().stream();
   binary_op_gpu(inputs, out, op, s);
 }
@@ -223,19 +237,19 @@ BINARY_GPU(Subtract)
 void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
   switch (op_) {
     case BitwiseBinary::And:
-      binary_op_gpu(inputs, out, get_primitive_string(this));
+      binary_op_gpu(inputs, out, name());
       break;
     case BitwiseBinary::Or:
-      binary_op_gpu(inputs, out, get_primitive_string(this));
+      binary_op_gpu(inputs, out, name());
       break;
     case BitwiseBinary::Xor:
-      binary_op_gpu(inputs, out, get_primitive_string(this));
+      binary_op_gpu(inputs, out, name());
       break;
     case BitwiseBinary::LeftShift:
-      binary_op_gpu(inputs, out, get_primitive_string(this));
+      binary_op_gpu(inputs, out, name());
       break;
     case BitwiseBinary::RightShift:
-      binary_op_gpu(inputs, out, get_primitive_string(this));
+      binary_op_gpu(inputs, out, name());
       break;
   }
 }

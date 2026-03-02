@@ -1,7 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include "mlx/scheduler.h"
-#include "mlx/backend/gpu/available.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/backend/gpu/eval.h"
 
 namespace mlx::core {
@@ -24,6 +24,10 @@ void set_default_stream(Stream s) {
 
 Stream get_stream(int index) {
   return scheduler::scheduler().get_stream(index);
+}
+
+std::vector<Stream> get_streams() {
+  return scheduler::scheduler().get_streams();
 }
 
 Stream new_stream(Device d) {

@@ -12,7 +12,7 @@ namespace mlx::core::cpu {
 // Number of dispatches per scheduler task
 constexpr int DISPATCHES_PER_TASK = 10;
 
-struct CommandEncoder {
+struct MLX_API CommandEncoder {
   CommandEncoder(Stream stream) : stream_(stream) {}
 
   CommandEncoder(const CommandEncoder&) = delete;
@@ -62,6 +62,6 @@ struct CommandEncoder {
   int num_ops_{0};
 };
 
-CommandEncoder& get_command_encoder(Stream stream);
+MLX_API CommandEncoder& get_command_encoder(Stream stream);
 
 } // namespace mlx::core::cpu

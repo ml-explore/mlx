@@ -1,5 +1,7 @@
 // Copyright © 2024-25 Apple Inc.
 
+#include "mlx/backend/metal/kernels/steel/attn/attn.h"
+
 using namespace mlx::steel;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -11,16 +13,7 @@ constant bool align_K [[function_constant(201)]];
 
 constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
-
-template <typename T>
-struct TransformScale {
-  T scale;
-  METAL_FUNC TransformScale(T scale_) : scale(scale_) {}
-
-  METAL_FUNC T apply(T x) const {
-    return scale * x;
-  }
-};
+constant bool has_sinks [[function_constant(302)]];
 
 struct MaxOp {
   template <typename T>
@@ -82,6 +75,7 @@ template <
     const constant AttnParams* params [[buffer(4)]],
     const constant AttnMaskParams* mask_params [[buffer(5), function_constant(has_mask)]],
     const device MaskType* mask [[buffer(6), function_constant(has_mask)]],
+    const device T* sinks [[buffer(7), function_constant(has_sinks)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -169,7 +163,7 @@ template <
   VBlockLoader loader_v(
       V, params->V_strides[2], Vs, simd_group_id, simd_lane_id);
 
-  TransformScale<T> ts(static_cast<T>(params->scale * 1.44269504089));
+  const AccumType scale = params->scale * M_LOG2E_F;
 
   // Prepare MMA tiles
   constexpr short kFragSize = 8; // MMAFrag size
@@ -212,13 +206,12 @@ template <
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  // Load Q blocks apply scale
+  // Load Q blocks
   if (!align_Q && int(tid.x) == (params->NQ_aligned)) {
     loader_q.load_safe(short2(BD, params->qL_rem));
   } else {
     loader_q.load_unsafe();
   }
-  loader_q.apply_inplace_op(ts);
 
   // Init row reduction variables
   constexpr short kRowsPT = decltype(Stile)::kRowsPerThread;
@@ -230,6 +223,14 @@ template <
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < kRowsPT; ++i) {
     max_score[i] = Limits<AccumType>::finite_min;
+  }
+
+  if (has_sinks) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      max_score[i] = M_LOG2E_F * static_cast<AccumType>(sinks[tidl.y]);
+      sum_score[i] = 1;
+    }
   }
 
   int kb_lim = params->NK;
@@ -267,6 +268,12 @@ template <
       simdgroup_barrier(mem_flags::mem_none);
 
       tile_matmad(Stile, Qtile, Ktile, Stile);
+    }
+
+    // Apply scale in float32
+    STEEL_PRAGMA_UNROLL
+    for (short ii = 0; ii < decltype(Stile)::kElemsPerTile; ii++) {
+      Stile.elems()[ii] *= scale;
     }
 
     // Mask out length sequence
@@ -337,7 +344,7 @@ template <
           MMAFrag_mask_t::load_safe(
               mfrag,
               mask,
-              int(mask_params->M_strides[2]),
+              int64_t(mask_params->M_strides[2]),
               Int<1>{},
               params->qL,
               params->kL,
@@ -350,7 +357,7 @@ template <
               Stile.frag_at(i, j)[jj] =
                   mfrag[jj] ? Stile.frag_at(i, j)[jj] : neg_inf;
             } else {
-              Stile.frag_at(i, j)[jj] += 1.44269504089 * selem_t(mfrag[jj]);
+              Stile.frag_at(i, j)[jj] += M_LOG2E_F * selem_t(mfrag[jj]);
             }
           }
         }

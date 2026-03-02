@@ -257,15 +257,11 @@ void gather_axis(
     const array& ind,
     array& out,
     const int axis) {
-  auto strides = ind.strides();
-  strides.erase(strides.begin() + axis);
-  auto shape = ind.shape();
-  shape.erase(shape.begin() + axis);
-  ContiguousIterator ind_it(shape, strides, src.ndim() - 1);
-
-  strides = src.strides();
-  strides.erase(strides.begin() + axis);
-  ContiguousIterator src_it(shape, strides, src.ndim() - 1);
+  auto shape = remove_index(ind.shape(), axis);
+  ContiguousIterator ind_it(
+      shape, remove_index(ind.strides(), axis), src.ndim() - 1);
+  ContiguousIterator src_it(
+      shape, remove_index(src.strides(), axis), src.ndim() - 1);
 
   auto ind_ptr = ind.data<IdxT>();
   auto src_ptr = src.data<T>();
@@ -521,7 +517,7 @@ void Scatter::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Copy src into out (copy allocates memory for out)
   auto ctype =
       src.flags().row_contiguous ? CopyType::Vector : CopyType::General;
-  copy(src, out, ctype, stream());
+  copy_cpu(src, out, ctype, stream());
 
   auto& encoder = cpu::get_command_encoder(stream());
   std::vector<array> inds;
@@ -585,15 +581,11 @@ void Scatter::eval_cpu(const std::vector<array>& inputs, array& out) {
 
 template <typename T, typename IdxT, typename OpT>
 void scatter_axis(array& out, const array idx, const array& upd, int axis) {
-  auto strides = idx.strides();
-  strides.erase(strides.begin() + axis);
-  auto shape = idx.shape();
-  shape.erase(shape.begin() + axis);
-  ContiguousIterator idx_it(shape, strides, upd.ndim() - 1);
-
-  strides = upd.strides();
-  strides.erase(strides.begin() + axis);
-  ContiguousIterator upd_it(shape, strides, upd.ndim() - 1);
+  auto shape = remove_index(idx.shape(), axis);
+  ContiguousIterator idx_it(
+      shape, remove_index(idx.strides(), axis), upd.ndim() - 1);
+  ContiguousIterator upd_it(
+      shape, remove_index(upd.strides(), axis), upd.ndim() - 1);
 
   auto idx_ptr = idx.data<IdxT>();
   auto upd_ptr = upd.data<T>();
@@ -694,7 +686,7 @@ void ScatterAxis::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Copy src into out (copy allocates memory for out)
   auto ctype =
       src.flags().row_contiguous ? CopyType::Vector : CopyType::General;
-  copy(src, out, ctype, stream());
+  copy_cpu(src, out, ctype, stream());
 
   auto& encoder = cpu::get_command_encoder(stream());
   encoder.set_input_array(idx);
@@ -750,6 +742,110 @@ void ScatterAxis::eval_cpu(const std::vector<array>& inputs, array& out) {
       case complex64:
         dispatch_scatter_axis<complex64_t>(
             out, idx, updates, axis_, reduce_type_);
+        break;
+    }
+  });
+}
+
+template <typename T>
+void masked_scatter_impl(const array& mask, const array& src, array& out) {
+  ContiguousIterator mask_it(mask);
+  ContiguousIterator src_it(src);
+  ContiguousIterator out_it(out);
+
+  const bool* mask_ptr = mask.data<bool>();
+  const T* src_ptr = src.data<T>();
+  T* dst_ptr = out.data<T>();
+
+  const size_t batch_count = mask.shape(0);
+  const size_t mask_batch_size = mask.size() / batch_count;
+  const size_t src_batch_size = src.size() / batch_count;
+
+  for (size_t b = 0; b < batch_count; ++b) {
+    size_t src_consumed = 0;
+    src_it.seek(b * src_batch_size);
+
+    for (size_t i = 0; i < mask_batch_size; ++i) {
+      if (mask_ptr[mask_it.loc]) {
+        if (src_consumed >= src_batch_size) {
+          throw std::runtime_error(
+              "[MaskedScatter::eval_cpu] Source does not have enough elements for mask.");
+        }
+        dst_ptr[out_it.loc] = src_ptr[src_it.loc];
+        src_it.step();
+        ++src_consumed;
+      }
+      mask_it.step();
+      out_it.step();
+    }
+  }
+}
+
+void MaskedScatter::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 3);
+
+  auto& dst = inputs[0];
+  auto& mask = inputs[1];
+  auto& src = inputs[2];
+
+  // Copy src into out (copy allocates memory for out)
+  auto ctype =
+      dst.flags().row_contiguous ? CopyType::Vector : CopyType::General;
+  copy_cpu(dst, out, ctype, stream());
+
+  if (mask.size() == 0) {
+    return;
+  }
+
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_input_array(mask);
+  encoder.set_input_array(src);
+  encoder.set_output_array(out);
+  encoder.dispatch([mask = array::unsafe_weak_copy(mask),
+                    src = array::unsafe_weak_copy(src),
+                    out = array::unsafe_weak_copy(out)]() mutable {
+    switch (out.dtype()) {
+      case bool_:
+        masked_scatter_impl<bool>(mask, src, out);
+        break;
+      case uint8:
+        masked_scatter_impl<uint8_t>(mask, src, out);
+        break;
+      case uint16:
+        masked_scatter_impl<uint16_t>(mask, src, out);
+        break;
+      case uint32:
+        masked_scatter_impl<uint32_t>(mask, src, out);
+        break;
+      case uint64:
+        masked_scatter_impl<uint64_t>(mask, src, out);
+        break;
+      case int8:
+        masked_scatter_impl<int8_t>(mask, src, out);
+        break;
+      case int16:
+        masked_scatter_impl<int16_t>(mask, src, out);
+        break;
+      case int32:
+        masked_scatter_impl<int32_t>(mask, src, out);
+        break;
+      case int64:
+        masked_scatter_impl<int64_t>(mask, src, out);
+        break;
+      case float16:
+        masked_scatter_impl<float16_t>(mask, src, out);
+        break;
+      case float32:
+        masked_scatter_impl<float>(mask, src, out);
+        break;
+      case float64:
+        masked_scatter_impl<double>(mask, src, out);
+        break;
+      case bfloat16:
+        masked_scatter_impl<bfloat16_t>(mask, src, out);
+        break;
+      case complex64:
+        masked_scatter_impl<complex64_t>(mask, src, out);
         break;
     }
   });

@@ -10,15 +10,22 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-nb::callable mlx_func(nb::object func, std::vector<PyObject*> deps);
+nb::callable mlx_func(
+    nb::object func,
+    const nb::callable& orig_func,
+    std::vector<PyObject*> deps);
 
 template <typename F, typename... Deps>
-nb::callable mlx_func(F func, Deps&&... deps) {
+nb::callable mlx_func(F func, const nb::callable& orig_func, Deps&&... deps) {
   return mlx_func(
-      nb::cpp_function(std::move(func)), std::vector<PyObject*>{deps.ptr()...});
+      nb::cpp_function(std::move(func)),
+      orig_func,
+      std::vector<PyObject*>{deps.ptr()...});
 }
 
 template <typename... Deps>
-nb::callable mlx_func(nb::object func, Deps&&... deps) {
-  return mlx_func(std::move(func), std::vector<PyObject*>{deps.ptr()...});
+nb::callable
+mlx_func(nb::object func, const nb::callable& orig_func, Deps&&... deps) {
+  return mlx_func(
+      std::move(func), orig_func, std::vector<PyObject*>{deps.ptr()...});
 }

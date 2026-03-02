@@ -130,8 +130,8 @@ Now make an array, and benchmark both functions:
 .. code-block:: python
 
   x = mx.random.uniform(shape=(32, 1000, 4096))
-  timeit(nn.gelu, x)
-  timeit(mx.compile(nn.gelu), x)
+  timeit(gelu, x)
+  timeit(mx.compile(gelu), x)
 
 On an M1 Max the times are 15.5 and 3.1 milliseconds. The compiled ``gelu`` is
 five times faster.
@@ -225,7 +225,7 @@ In some cases returning updated state can be pretty inconvenient. Hence,
   def fun(x, y):
       z = x + y
       state.append(z)
-      return mx.exp(z), state
+      return mx.exp(z)
 
   fun(mx.array(1.0), mx.array(2.0))
   # Prints [array(3, dtype=float32)]
@@ -257,7 +257,26 @@ constants. For example:
 
 In order to have the change of state reflected in the outputs of ``fun`` you
 again have two options. The first option is to simply pass ``state`` as input
-to the function. In some cases this can be pretty inconvenient. Hence,
+to the function.
+
+.. code-block:: python
+
+  state = [mx.array(1.0)]
+
+  @mx.compile
+  def fun(x, state):
+      return x + state[0]
+
+  # Prints array(2, dtype=float32)
+  print(fun(mx.array(1.0), state))
+
+  # Update state
+  state[0] = mx.array(5.0)
+
+  # Prints array(6, dtype=float32)
+  print(fun(mx.array(1.0), state))
+
+In some cases this can be pretty inconvenient. Hence,
 :func:`compile` also has a parameter to capture implicit inputs:
 
 .. code-block:: python

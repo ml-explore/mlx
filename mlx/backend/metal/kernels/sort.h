@@ -19,11 +19,28 @@ METAL_FUNC void thread_swap(thread T& a, thread T& b) {
   b = w;
 }
 
+template <typename T, typename = void>
+struct Init {
+  static constexpr constant T v = Limits<T>::max;
+};
+
+template <typename T>
+struct Init<T, metal::enable_if_t<metal::is_floating_point_v<T>>> {
+  static constexpr constant T v = metal::numeric_limits<T>::quiet_NaN();
+};
+
 template <typename T>
 struct LessThan {
-  static constexpr constant T init = Limits<T>::max;
-
-  METAL_FUNC bool operator()(T a, T b) {
+  static constexpr constant T init = Init<T>::v;
+  METAL_FUNC bool operator()(T a, T b) const {
+    if constexpr (
+        metal::is_floating_point_v<T> || metal::is_same_v<T, complex64_t>) {
+      bool an = isnan(a);
+      bool bn = isnan(b);
+      if (an | bn) {
+        return (!an) & bn;
+      }
+    }
     return a < b;
   }
 };
@@ -45,7 +62,9 @@ struct ThreadSort {
       for (short j = i & 1; j < N_PER_THREAD - 1; j += 2) {
         if (op(vals[j + 1], vals[j])) {
           thread_swap(vals[j + 1], vals[j]);
-          thread_swap(idxs[j + 1], idxs[j]);
+          if (ARG_SORT) {
+            thread_swap(idxs[j + 1], idxs[j]);
+          }
         }
       }
     }
@@ -106,12 +125,18 @@ struct BlockMergeSort {
     short b_idx = 0;
 
     for (int i = 0; i < N_PER_THREAD; ++i) {
-      auto a = As[a_idx];
-      auto b = Bs[b_idx];
+      auto a = (a_idx < A_sz) ? As[a_idx] : ValT(CompareOp::init);
+      auto b = (b_idx < B_sz) ? Bs[b_idx] : ValT(CompareOp::init);
       bool pred = (b_idx < B_sz) && (a_idx >= A_sz || op(b, a));
 
       vals[i] = pred ? b : a;
-      idxs[i] = pred ? Bs_idx[b_idx] : As_idx[a_idx];
+      if (ARG_SORT) {
+        if (pred) {
+          idxs[i] = Bs_idx[b_idx];
+        } else {
+          idxs[i] = (a_idx < A_sz) ? As_idx[a_idx] : IdxT(0);
+        }
+      }
 
       b_idx += short(pred);
       a_idx += short(!pred);

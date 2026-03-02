@@ -1,6 +1,8 @@
 // Copyright © 2023 Apple Inc.
-
+#include <cassert>
 #include <climits>
+#include <stdexcept>
+#include <vector>
 
 #include "doctest/doctest.h"
 
@@ -607,4 +609,55 @@ TEST_CASE("test make empty array") {
   a = array({}, bool_);
   CHECK_EQ(a.size(), 0);
   CHECK_EQ(a.dtype(), bool_);
+}
+
+TEST_CASE("test make array from user buffer") {
+  int size = 4096;
+  std::vector<int> buffer(size, 0);
+
+  int count = 0;
+  auto deleter = [&count, data = buffer.data()](void* ptr) {
+    // make sure pointer is correct
+    if (ptr == data) {
+      count++;
+    }
+  };
+
+  {
+    auto a = array(buffer.data(), Shape{size}, int32, deleter);
+    if (metal::is_available()) {
+      CHECK_EQ(buffer.data(), a.data<int>());
+    }
+    auto b = a + array(1);
+    eval(b);
+    auto expected = ones({4096});
+    CHECK(array_equal(b, expected).item<bool>());
+  }
+  // deleter should always get called
+  CHECK_EQ(count, 1);
+}
+
+TEST_CASE("test negative indexing for shape/strides") {
+  // 2D array: shape = {2, 3}
+  std::vector<float> data(6, 1.0f);
+  array a(data.begin(), Shape{2, 3});
+
+  // Valid negative indexing
+  CHECK_EQ(a.shape(-1), a.shape(1));
+  CHECK_EQ(a.shape(-2), a.shape(0));
+  CHECK_EQ(a.shape(-1), 3);
+  CHECK_EQ(a.shape(-2), 2);
+
+  CHECK_EQ(a.strides(-1), a.strides(1));
+  CHECK_EQ(a.strides(-2), a.strides(0));
+  CHECK_EQ(a.strides(-1), 1);
+  CHECK_EQ(a.strides(-2), 3);
+
+  // Invalid: too negative
+  CHECK_THROWS_AS(a.shape(-3), std::out_of_range);
+  CHECK_THROWS_AS(a.strides(-3), std::out_of_range);
+
+  // Invalid: too positive
+  CHECK_THROWS_AS(a.shape(2), std::out_of_range);
+  CHECK_THROWS_AS(a.strides(2), std::out_of_range);
 }

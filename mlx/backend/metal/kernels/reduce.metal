@@ -134,6 +134,10 @@ instantiate_and_or(and, And)
 instantiate_and_or(or, Or)
 
 #define instantiate_sum_prod(name, op)                                       \
+  instantiate_reduce_functions(name, uint8, uint8_t, int32_t, op)            \
+  instantiate_reduce_functions(name, uint16, uint16_t, uint32_t, op)         \
+  instantiate_reduce_functions(name, uint32, uint32_t, uint32_t, op)         \
+  instantiate_reduce_functions(name, uint64, uint64_t, uint64_t, op)         \
   instantiate_reduce_functions(name, int8, int8_t, int32_t, op)              \
   instantiate_reduce_functions(name, int16, int16_t, int32_t, op)            \
   instantiate_reduce_functions(name, int32, int32_t, int32_t, op)            \

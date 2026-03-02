@@ -15,6 +15,15 @@ using namespace metal;
 
 #define MLX_MTL_CONST static constant constexpr const
 
+template <typename U>
+struct DefaultAccT {
+  using type = float;
+};
+template <>
+struct DefaultAccT<complex64_t> {
+  using type = complex64_t;
+};
+
 template <
     typename T,
     const int BM, /* Threadgroup rows (in simdgroups) */
@@ -24,8 +33,10 @@ template <
     const int TM, /* Thread rows (in elements) */
     const int TN, /* Thread cols (in elements) */
     const bool kDoAxpby, /* Do out = alpha * out + beta * bias */
-    typename AccT = float>
+    typename AccT = typename DefaultAccT<T>::type>
 struct GEMVKernel {
+  using acc_type = AccT;
+
   MLX_MTL_CONST int threadsM = BM * SM;
   MLX_MTL_CONST int threadsN = BN * SN;
 
@@ -35,8 +46,8 @@ struct GEMVKernel {
   static_assert(SM * SN == 32, "simdgroup can only have 32 threads");
 
   static_assert(
-      SN == 8 || SN == 16 || SN == 32,
-      "gemv block must have a width of 8, 16, or 32");
+      SN == 4 || SN == 8 || SN == 16 || SN == 32,
+      "gemv block must have a width of 4, 8, 16, or 32");
 
   // - The matrix of size (M = out_vec_size, K = in_vec_size) is divided up
   //   into blocks of (blockM, blockN) divided among threadgroups
@@ -246,8 +257,10 @@ template <
     const int TM, /* Thread rows (in elements) */
     const int TN, /* Thread cols (in elements) */
     const bool kDoAxpby, /* Do out = alpha * out + beta * bias */
-    typename AccT = float>
+    typename AccT = typename DefaultAccT<T>::type>
 struct GEMVTKernel {
+  using acc_type = AccT;
+
   MLX_MTL_CONST int threadsM = BM * SM;
   MLX_MTL_CONST int threadsN = BN * SN;
 
@@ -432,7 +445,7 @@ template <
     const int TN, /* Thread cols (in elements) */
     const bool kDoNCBatch, /* Batch ndim > 1 */
     const bool kDoAxpby> /* Do out = alpha * out + beta * bias */
-[[kernel, max_total_threads_per_threadgroup(BM* BN * 32)]] void gemv(
+[[kernel, max_total_threads_per_threadgroup(BM * BN * 32)]] void gemv(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
     const device T* bias [[buffer(2)]],
@@ -453,7 +466,7 @@ template <
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   using gemv_kernel = GEMVKernel<T, BM, BN, SM, SN, TM, TN, kDoAxpby>;
-  threadgroup float tgp_memory
+  threadgroup typename gemv_kernel::acc_type tgp_memory
       [gemv_kernel::tgp_mem_size == 0 ? 1 : gemv_kernel::tgp_mem_size];
 
   // Update batch offsets
@@ -511,21 +524,26 @@ template <
       axpby)
 
 // clang-format off
-#define instantiate_gemv(name, itype, bm, bn, tm, tn)              \
-  instantiate_gemv_helper(name, itype, bm, 1, 1, bn, tm, tn, 0, 0) \
-  instantiate_gemv_helper(name, itype, bm, 1, 1, bn, tm, tn, 0, 1) \
-  instantiate_gemv_helper(name, itype, bm, 1, 1, bn, tm, tn, 1, 0) \
-  instantiate_gemv_helper(name, itype, bm, 1, 1, bn, tm, tn, 1, 1) // clang-format on
+#define instantiate_gemv(name, itype, bm, bn, sm, sn, tm, tn)        \
+  instantiate_gemv_helper(name, itype, bm, bn, sm, sn, tm, tn, 0, 0) \
+  instantiate_gemv_helper(name, itype, bm, bn, sm, sn, tm, tn, 0, 1) \
+  instantiate_gemv_helper(name, itype, bm, bn, sm, sn, tm, tn, 1, 0) \
+  instantiate_gemv_helper(name, itype, bm, bn, sm, sn, tm, tn, 1, 1) // clang-format on
 
 // clang-format off
 #define instantiate_gemv_blocks(name, itype) \
-  instantiate_gemv(name, itype, 4, 32, 1, 4) \
-  instantiate_gemv(name, itype, 4, 32, 4, 4) \
-  instantiate_gemv(name, itype, 8, 32, 4, 4) // clang-format on
+  instantiate_gemv(name, itype, 1,  8, 1, 32, 4, 4) \
+  instantiate_gemv(name, itype, 1,  8, 1, 32, 1, 4) \
+  instantiate_gemv(name, itype, 1,  1, 8,  4, 4, 4) \
+  instantiate_gemv(name, itype, 1,  1, 8,  4, 1, 4) \
+  instantiate_gemv(name, itype, 4,  1, 1, 32, 1, 4) \
+  instantiate_gemv(name, itype, 4,  1, 1, 32, 4, 4) \
+  instantiate_gemv(name, itype, 8,  1, 1, 32, 4, 4) // clang-format on
 
 instantiate_gemv_blocks(float32, float);
 instantiate_gemv_blocks(float16, half);
 instantiate_gemv_blocks(bfloat16, bfloat16_t);
+instantiate_gemv_blocks(complex64, complex64_t);
 
 template <
     typename T,
@@ -535,7 +553,7 @@ template <
     const int SN, /* Simdgroup cols (in threads) */
     const int TM, /* Thread rows (in elements) */
     const int TN> /* Thread cols (in elements) */
-[[kernel, max_total_threads_per_threadgroup(BM* BN * 32)]] void gemv_gather(
+[[kernel, max_total_threads_per_threadgroup(BM * BN * 32)]] void gemv_gather(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
     const device T* bias [[buffer(2)]],
@@ -561,7 +579,7 @@ template <
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   using gemv_kernel = GEMVKernel<T, BM, BN, SM, SN, TM, TN, false>;
-  threadgroup float tgp_memory
+  threadgroup typename gemv_kernel::acc_type tgp_memory
       [gemv_kernel::tgp_mem_size == 0 ? 1 : gemv_kernel::tgp_mem_size];
 
   uint32_t indx_vec;
@@ -632,6 +650,7 @@ template <
 instantiate_gemv_bs_blocks(float32, float);
 instantiate_gemv_bs_blocks(float16, half);
 instantiate_gemv_bs_blocks(bfloat16, bfloat16_t);
+instantiate_gemv_bs_blocks(complex64, complex64_t);
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Vector matrix multiplication
@@ -647,7 +666,7 @@ template <
     const int TN, /* Thread cols (in elements) */
     const bool kDoNCBatch, /* Batch ndim > 1 */
     const bool kDoAxpby> /* Do out = alpha * out + beta * bias */
-[[kernel, max_total_threads_per_threadgroup(BM* BN * 32)]] void gemv_t(
+[[kernel, max_total_threads_per_threadgroup(BM * BN * 32)]] void gemv_t(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
     const device T* bias [[buffer(2)]],
@@ -668,7 +687,7 @@ template <
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   using gemv_kernel = GEMVTKernel<T, BM, BN, SM, SN, TM, TN, kDoAxpby>;
-  threadgroup float tgp_memory
+  threadgroup typename gemv_kernel::acc_type tgp_memory
       [gemv_kernel::tgp_mem_size == 0 ? 1 : gemv_kernel::tgp_mem_size];
 
   // Update batch offsets
@@ -734,7 +753,8 @@ template <
 // clang-format off
 instantiate_gemv_t_blocks(float32, float);
 instantiate_gemv_t_blocks(float16, half);
-instantiate_gemv_t_blocks(bfloat16, bfloat16_t); // clang-format on
+instantiate_gemv_t_blocks(bfloat16, bfloat16_t);
+instantiate_gemv_t_blocks(complex64, complex64_t); // clang-format on
 
 template <
     typename T,
@@ -744,7 +764,7 @@ template <
     const int SN, /* Simdgroup cols (in threads) */
     const int TM, /* Thread rows (in elements) */
     const int TN> /* Thread cols (in elements) */
-[[kernel, max_total_threads_per_threadgroup(BM* BN * 32)]] void gemv_t_gather(
+[[kernel, max_total_threads_per_threadgroup(BM * BN * 32)]] void gemv_t_gather(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
     const device T* bias [[buffer(2)]],
@@ -769,8 +789,8 @@ template <
     uint3 lid [[thread_position_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
-  using gemv_kernel = GEMVTKernel<T, BM, BN, SM, SN, TM, TN, false, float>;
-  threadgroup float tgp_memory
+  using gemv_kernel = GEMVTKernel<T, BM, BN, SM, SN, TM, TN, false>;
+  threadgroup typename gemv_kernel::acc_type tgp_memory
       [gemv_kernel::tgp_mem_size == 0 ? 1 : gemv_kernel::tgp_mem_size];
 
   uint32_t indx_vec;
@@ -844,4 +864,5 @@ template <
 // clang-format off
 instantiate_gemv_t_bs_blocks(float32, float);
 instantiate_gemv_t_bs_blocks(float16, half);
-instantiate_gemv_t_bs_blocks(bfloat16, bfloat16_t); // clang-format on
+instantiate_gemv_t_bs_blocks(bfloat16, bfloat16_t);
+instantiate_gemv_t_bs_blocks(complex64, complex64_t); // clang-format on

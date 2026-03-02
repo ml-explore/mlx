@@ -1,0 +1,20 @@
+name: 'Run tests on Windows'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Python tests - CPU
+      shell: bash
+      run: |
+        echo "::group::Python tests - CPU"
+        python -m unittest discover python/tests -v
+        echo "::endgroup::"
+
+    - name: Run CPP tests - CPU
+      shell: bash
+      env:
+        DEVICE: cpu
+      run: |
+        echo "::group::CPP tests - CPU"
+        ./build/tests.exe -tce="*gguf*,test random uniform"
+        echo "::endgroup::"

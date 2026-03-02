@@ -10,7 +10,7 @@ import mlx_tests
 class TestDefaultDevice(unittest.TestCase):
     def test_mlx_default_device(self):
         device = mx.default_device()
-        if mx.metal.is_available():
+        if mx.is_available(mx.gpu):
             self.assertEqual(device, mx.Device(mx.gpu))
             self.assertEqual(str(device), "Device(gpu, 0)")
             self.assertEqual(device, mx.gpu)
@@ -38,7 +38,7 @@ class TestDevice(mlx_tests.MLXTestCase):
         # Restore device
         mx.set_default_device(device)
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
     def test_device_context(self):
         default = mx.default_device()
         diff = mx.cpu if default == mx.gpu else mx.gpu
@@ -73,7 +73,7 @@ class TestStream(mlx_tests.MLXTestCase):
         self.assertEqual(s2.device, mx.default_device())
         self.assertNotEqual(s1, s2)
 
-        if mx.metal.is_available():
+        if mx.is_available(mx.gpu):
             s_gpu = mx.default_stream(mx.gpu)
             self.assertEqual(s_gpu.device, mx.gpu)
         else:
@@ -86,7 +86,7 @@ class TestStream(mlx_tests.MLXTestCase):
         s_cpu = mx.new_stream(mx.cpu)
         self.assertEqual(s_cpu.device, mx.cpu)
 
-        if mx.metal.is_available():
+        if mx.is_available(mx.gpu):
             s_gpu = mx.new_stream(mx.gpu)
             self.assertEqual(s_gpu.device, mx.gpu)
         else:
@@ -99,7 +99,7 @@ class TestStream(mlx_tests.MLXTestCase):
 
         a = mx.add(x, y, stream=mx.default_stream(mx.default_device()))
 
-        if mx.metal.is_available():
+        if mx.is_available(mx.gpu):
             b = mx.add(x, y, stream=mx.default_stream(mx.gpu))
             self.assertEqual(a.item(), b.item())
             s_gpu = mx.new_stream(mx.gpu)
@@ -113,5 +113,38 @@ class TestStream(mlx_tests.MLXTestCase):
         self.assertEqual(a.item(), b.item())
 
 
+class TestDeviceInfo(mlx_tests.MLXTestCase):
+    def test_device_count(self):
+        cpu_count = mx.device_count(mx.cpu)
+        self.assertIsInstance(cpu_count, int)
+        self.assertEqual(cpu_count, 1)
+
+        gpu_count = mx.device_count(mx.gpu)
+        self.assertIsInstance(gpu_count, int)
+        self.assertGreaterEqual(gpu_count, 0)
+
+    def test_device_info_cpu(self):
+        info = mx.device_info(mx.cpu)
+        self.assertIsInstance(info, dict)
+        self.assertIn("device_name", info)
+        self.assertTrue(len(info["device_name"]) > 0)
+        self.assertIn("architecture", info)
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    def test_device_info_gpu(self):
+        gpu_count = mx.device_count(mx.gpu)
+        for i in range(gpu_count):
+            info = mx.device_info(mx.Device(mx.gpu, i))
+            self.assertIsInstance(info, dict)
+            self.assertIn("device_name", info)
+            self.assertTrue(len(info["device_name"]) > 0)
+            self.assertIn("architecture", info)
+
+    def test_device_info_default(self):
+        info = mx.device_info()
+        self.assertIsInstance(info, dict)
+        self.assertIn("device_name", info)
+
+
 if __name__ == "__main__":
-    unittest.main()
+    mlx_tests.MLXTestRunner()

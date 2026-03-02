@@ -2,31 +2,12 @@
 
 #pragma once
 
-#include "mlx/allocator.h"
-#include "mlx/array.h"
-#include "mlx/backend/common/utils.h"
+#include "mlx/backend/common/unary.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
-
-void set_unary_output_data(const array& in, array& out) {
-  if (in.flags().contiguous) {
-    if (is_donatable(in, out)) {
-      out.copy_shared_buffer(in);
-    } else {
-      auto size = in.data_size();
-      out.set_data(
-          allocator::malloc(size * out.itemsize()),
-          size,
-          in.strides(),
-          in.flags());
-    }
-  } else {
-    out.set_data(allocator::malloc(out.nbytes()));
-  }
-}
 
 template <typename T, typename U = T, typename Op>
 void unary_op(const T* a, U* out, size_t shape, size_t stride) {
@@ -43,9 +24,9 @@ void unary_op(const array& a, array& out, Op) {
   auto ndim = a.ndim();
   if (a.flags().contiguous) {
     auto size = a.data_size();
-    constexpr int N = simd::max_size<T>;
+    constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
     while (size >= N) {
-      simd::store(dst, Op{}(simd::load<T, N>(src)));
+      simd::store(dst, simd::Simd<U, N>(Op{}(simd::load<T, N>(src))));
       size -= N;
       src += N;
       dst += N;

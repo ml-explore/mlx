@@ -23,8 +23,6 @@ struct ndarray_traits<mx::float16_t> {
   static constexpr bool is_int = false;
   static constexpr bool is_signed = true;
 };
-
-static constexpr dlpack::dtype bfloat16{4, 16, 1};
 }; // namespace nanobind
 
 int check_shape_dim(int64_t dim) {
@@ -51,6 +49,7 @@ mx::array nd_array_to_mlx(
     std::optional<mx::Dtype> dtype) {
   // Compute the shape and size
   mx::Shape shape;
+  shape.reserve(nd_array.ndim());
   for (int i = 0; i < nd_array.ndim(); i++) {
     shape.push_back(check_shape_dim(nd_array.shape(i)));
   }
@@ -205,6 +204,8 @@ nb::object to_scalar(mx::array& a) {
       return nb::cast(static_cast<float>(a.item<mx::bfloat16_t>()));
     case mx::complex64:
       return nb::cast(a.item<std::complex<float>>());
+    case mx::float64:
+      return nb::cast(a.item<double>());
     default:
       throw nb::type_error("type cannot be converted to Python scalar.");
   }
@@ -258,6 +259,8 @@ nb::object tolist(mx::array& a) {
       return to_list<float>(a, 0, 0);
     case mx::bfloat16:
       return to_list<mx::bfloat16_t, float>(a, 0, 0);
+    case mx::float64:
+      return to_list<double>(a, 0, 0);
     case mx::complex64:
       return to_list<std::complex<float>>(a, 0, 0);
     default:
@@ -405,10 +408,16 @@ mx::array array_from_list_impl(
       }
     }
     case pyfloat: {
-      std::vector<float> vals;
-      fill_vector(pl, vals);
-      return mx::array(
-          vals.begin(), shape, specified_type.value_or(mx::float32));
+      auto out_type = specified_type.value_or(mx::float32);
+      if (out_type == mx::float64) {
+        std::vector<double> vals;
+        fill_vector(pl, vals);
+        return mx::array(vals.begin(), shape, out_type);
+      } else {
+        std::vector<float> vals;
+        fill_vector(pl, vals);
+        return mx::array(vals.begin(), shape, out_type);
+      }
     }
     case pycomplex: {
       std::vector<std::complex<float>> vals;
@@ -462,14 +471,19 @@ mx::array create_array(ArrayInitType v, std::optional<mx::Dtype> t) {
   if (auto pv = std::get_if<nb::bool_>(&v); pv) {
     return mx::array(nb::cast<bool>(*pv), t.value_or(mx::bool_));
   } else if (auto pv = std::get_if<nb::int_>(&v); pv) {
-    auto val = nb::cast<long>(*pv);
+    auto val = nb::cast<int64_t>(*pv);
     auto default_type = (val > std::numeric_limits<int>::max() ||
                          val < std::numeric_limits<int>::min())
         ? mx::int64
         : mx::int32;
     return mx::array(val, t.value_or(default_type));
   } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
-    return mx::array(nb::cast<float>(*pv), t.value_or(mx::float32));
+    auto out_type = t.value_or(mx::float32);
+    if (out_type == mx::float64) {
+      return mx::array(nb::cast<double>(*pv), out_type);
+    } else {
+      return mx::array(nb::cast<float>(*pv), out_type);
+    }
   } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
     return mx::array(
         static_cast<mx::complex64_t>(*pv), t.value_or(mx::complex64));

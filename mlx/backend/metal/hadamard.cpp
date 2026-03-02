@@ -3,7 +3,7 @@
 #include "mlx/backend/common/hadamard.h"
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/metal/copy.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/kernels.h"

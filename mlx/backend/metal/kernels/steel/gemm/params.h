@@ -47,6 +47,7 @@ struct GEMMSpiltKParams {
   const int split_k_partition_stride;
   const int split_k_partition_size;
 
+  const int swizzle_log;
   const int gemm_k_iterations_aligned;
 };
 

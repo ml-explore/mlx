@@ -15,6 +15,7 @@ from mlx.nn.layers.activations import (
     Mish,
     PReLU,
     ReLU,
+    ReLU2,
     ReLU6,
     Sigmoid,
     SiLU,
@@ -40,6 +41,7 @@ from mlx.nn.layers.activations import (
     mish,
     prelu,
     relu,
+    relu2,
     relu6,
     selu,
     sigmoid,
@@ -85,7 +87,12 @@ from mlx.nn.layers.pooling import (
     MaxPool3d,
 )
 from mlx.nn.layers.positional_encoding import ALiBi, RoPE, SinusoidalPositionalEncoding
-from mlx.nn.layers.quantized import QuantizedEmbedding, QuantizedLinear, quantize
+from mlx.nn.layers.quantized import (
+    QQLinear,
+    QuantizedEmbedding,
+    QuantizedLinear,
+    quantize,
+)
 from mlx.nn.layers.recurrent import GRU, LSTM, RNN
 from mlx.nn.layers.transformer import (
     MultiHeadAttention,

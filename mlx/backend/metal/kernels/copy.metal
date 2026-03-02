@@ -4,9 +4,13 @@
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/copy.h"
 
-#define instantiate_copy_all(tname, itype, otype)                     \
-  instantiate_kernel("s_copy" #tname, copy_s, itype, otype)           \
-  instantiate_kernel("v_copy" #tname, copy_v, itype, otype)           \
+#define instantiate_copy_work_per_thread(tname, itype, otype)         \
+  instantiate_kernel("sn_copy" #tname, copy_s, itype, otype)          \
+  instantiate_kernel("vn_copy" #tname, copy_v, itype, otype)
+
+#define instantiate_copy_base(tname, itype, otype)                    \
+  instantiate_kernel("s_copy" #tname, copy_s, itype, otype, 1)        \
+  instantiate_kernel("v_copy" #tname, copy_v, itype, otype, 1)        \
   instantiate_kernel("s2_copy" #tname, copy_s2, itype, otype)         \
   instantiate_kernel("v2_copy" #tname, copy_v2, itype, otype)         \
   instantiate_kernel("g1_copy" #tname, copy_g_nd1, itype, otype, int) \
@@ -17,6 +21,10 @@
   instantiate_kernel("g2large_copy" #tname, copy_g_nd2, itype, otype) \
   instantiate_kernel("g3large_copy" #tname, copy_g_nd3, itype, otype) \
   instantiate_kernel("gn4large_copy" #tname, copy_g, itype, otype, 4)
+
+#define instantiate_copy_all(tname, itype, otype) \
+  instantiate_copy_base(tname, itype, otype)      \
+  instantiate_copy_work_per_thread(tname, itype, otype)
 
 #define instantiate_copy_same(tname, type)                                            \
   instantiate_kernel("gg1_copy" #tname, copy_gg_nd1, type, type, int)                 \
@@ -42,15 +50,15 @@
   instantiate_copy_all(itname ##uint8, itype, uint8_t)       \
   instantiate_copy_all(itname ##uint16, itype, uint16_t)     \
   instantiate_copy_all(itname ##uint32, itype, uint32_t)     \
-  instantiate_copy_all(itname ##uint64, itype, uint64_t)     \
+  instantiate_copy_base(itname ##uint64, itype, uint64_t)    \
   instantiate_copy_all(itname ##int8, itype, int8_t)         \
   instantiate_copy_all(itname ##int16, itype, int16_t)       \
   instantiate_copy_all(itname ##int32, itype, int32_t)       \
-  instantiate_copy_all(itname ##int64, itype, int64_t)       \
+  instantiate_copy_base(itname ##int64, itype, int64_t)      \
   instantiate_copy_all(itname ##float16, itype, half)        \
   instantiate_copy_all(itname ##float32, itype, float)       \
   instantiate_copy_all(itname ##bfloat16, itype, bfloat16_t) \
-  instantiate_copy_all(itname ##complex64, itype, complex64_t)
+  instantiate_copy_base(itname ##complex64, itype, complex64_t)
 
 instantiate_copy_itype(bool_, bool)
 instantiate_copy_itype(uint8, uint8_t)
