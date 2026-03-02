@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/device/binary_ops.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/reduce/reduce_ops.cuh"
+#include "mlx/backend/cuda/scan.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
@@ -362,51 +363,38 @@ constexpr bool supports_scan_op() {
   }
 }
 
-void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
-  nvtx3::scoped_range r("Scan::eval_gpu");
-  assert(inputs.size() == 1);
-  auto in = inputs[0];
-  auto& s = stream();
+void scan_gpu_inplace(
+    array in,
+    array& out,
+    Scan::ReduceType reduce_type,
+    int axis,
+    bool reverse,
+    bool inclusive,
+    const Stream& s) {
   auto& encoder = cu::get_command_encoder(s);
-
-  if (in.flags().contiguous && in.strides()[axis_] != 0) {
-    if (in.is_donatable() && in.itemsize() == out.itemsize()) {
-      out.copy_shared_buffer(in);
-    } else {
-      out.set_data(
-          cu::malloc_async(in.data_size() * out.itemsize(), encoder),
-          in.data_size(),
-          in.strides(),
-          in.flags());
-    }
-  } else {
-    in = contiguous_copy_gpu(in, s);
-    out.copy_shared_buffer(in);
-  }
-
   constexpr int N_READS = 4;
-  int32_t axis_size = in.shape(axis_);
-  bool contiguous = in.strides()[axis_] == 1;
+  int32_t axis_size = in.shape(axis);
+  bool contiguous = in.strides()[axis] == 1;
 
   encoder.set_input_array(in);
   encoder.set_output_array(out);
 
   dispatch_all_types(in.dtype(), [&](auto type_tag) {
     using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    dispatch_scan_ops(reduce_type_, [&](auto scan_op_tag) {
+    dispatch_scan_ops(reduce_type, [&](auto scan_op_tag) {
       using Op = MLX_GET_TYPE(scan_op_tag);
       if constexpr (supports_scan_op<Op, T>()) {
         using U = typename cu::ScanResult<Op, T>::type;
-        dispatch_bool(inclusive_, [&](auto inclusive) {
-          dispatch_bool(reverse_, [&](auto reverse) {
+        dispatch_bool(inclusive, [&](auto inclusive_tag) {
+          dispatch_bool(reverse, [&](auto reverse_tag) {
             if (contiguous) {
               auto kernel = cu::contiguous_scan<
                   T,
                   U,
                   Op,
                   N_READS,
-                  inclusive.value,
-                  reverse.value>;
+                  inclusive_tag.value,
+                  reverse_tag.value>;
               int block_dim = cuda::ceil_div(axis_size, N_READS);
               block_dim = cuda::ceil_div(block_dim, WARP_SIZE) * WARP_SIZE;
               block_dim = std::min(block_dim, WARP_SIZE * WARP_SIZE);
@@ -427,9 +415,9 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
                   N_READS,
                   BM,
                   BN,
-                  inclusive.value,
-                  reverse.value>;
-              int64_t stride = in.strides()[axis_];
+                  inclusive_tag.value,
+                  reverse_tag.value>;
+              int64_t stride = in.strides()[axis];
               int64_t stride_blocks = cuda::ceil_div(stride, BN);
               dim3 num_blocks = get_2d_grid_dims(
                   in.shape(), in.strides(), axis_size * stride);
@@ -461,6 +449,31 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
       }
     });
   });
+}
+
+void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Scan::eval_gpu");
+  assert(inputs.size() == 1);
+  auto in = inputs[0];
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  if (in.flags().contiguous && in.strides()[axis_] != 0) {
+    if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+      out.copy_shared_buffer(in);
+    } else {
+      out.set_data(
+          cu::malloc_async(in.data_size() * out.itemsize(), encoder),
+          in.data_size(),
+          in.strides(),
+          in.flags());
+    }
+  } else {
+    in = contiguous_copy_gpu(in, s);
+    out.copy_shared_buffer(in);
+  }
+
+  scan_gpu_inplace(in, out, reduce_type_, axis_, reverse_, inclusive_, s);
 }
 
 } // namespace mlx::core

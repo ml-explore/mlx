@@ -1,5 +1,6 @@
 import math
 import os
+import platform
 import subprocess
 import time
 from copy import copy
@@ -17,14 +18,36 @@ RESULTS_DIR = "./results"
 if not os.path.isdir(RESULTS_DIR):
     os.mkdir(RESULTS_DIR)
 
-DEVICE_NAME = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])
-DEVICE_NAME = DEVICE_NAME.decode("utf-8").strip("\n")
-
 TORCH_DEVICE = torch.device(
     "mps"
     if torch.backends.mps.is_available()
     else ("cuda" if torch.cuda.is_available() else "cpu")
 )
+
+
+def get_device_name():
+    if TORCH_DEVICE.type == "cuda":
+        try:
+            out = subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                stderr=subprocess.DEVNULL,
+            )
+            return out.decode("utf-8").splitlines()[0].strip()
+        except Exception:
+            return "CUDA_GPU"
+    if TORCH_DEVICE.type == "mps":
+        try:
+            out = subprocess.check_output(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                stderr=subprocess.DEVNULL,
+            )
+            return out.decode("utf-8").strip()
+        except Exception:
+            return "Apple_Silicon"
+    return platform.processor() or platform.machine() or "CPU"
+
+
+DEVICE_NAME = get_device_name()
 
 
 N_WARMUP = 5
