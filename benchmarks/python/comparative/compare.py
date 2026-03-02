@@ -28,6 +28,18 @@ def compare(args):
     print((t_torch - t_mlx) / t_torch, " ".join(args), sep="\t")
 
 
+def compare_mlx_quant(args_base, bits_list):
+    """Compare quantized matmul across bit widths (MLX only, no PyTorch)."""
+    results = {}
+    for bits in bits_list:
+        bench_args = args_base.replace("{bits}", str(bits)).split()
+        results[bits] = run_or_raise(["python", BENCH_MLX] + bench_args)
+    baseline = max(results.values())
+    for bits in bits_list:
+        speedup = (baseline - results[bits]) / baseline if baseline > 0 else 0
+        print(f"{speedup:.4f}\t{args_base.replace('{bits}', str(bits))}")
+
+
 def compare_mlx_dtypes(args, dt1, dt2):
     t_mlx_dt1 = run_or_raise(["python", BENCH_MLX] + args + ["--dtype", dt1])
     t_mlx_dt2 = run_or_raise(["python", BENCH_MLX] + args + ["--dtype", dt2])
@@ -282,3 +294,26 @@ if __name__ == "__main__":
     compare_filtered("topk --size 32768x128 --axis 1")
     compare_filtered("topk --size 128x128 --axis 0 --cpu")
     compare_filtered("topk --size 128x128 --axis 1 --cpu")
+
+    # Quantized matmul ops (MLX only — compare across bit widths)
+    # qmv path (M=1, token generation, memory-bandwidth bound)
+    for gs in [64, 128]:
+        compare_mlx_quant(
+            f"quant_matmul_t_{gs}_{{bits}} --size 1x4096 --size 4096x4096",
+            [1, 2, 4, 8],
+        )
+        compare_mlx_quant(
+            f"quant_matmul_t_{gs}_{{bits}} --size 1x4096 --size 11008x4096",
+            [1, 2, 4, 8],
+        )
+    # qmm path (prompt processing, more compute bound)
+    for gs in [64, 128]:
+        for M in [32, 512]:
+            compare_mlx_quant(
+                f"quant_matmul_t_{gs}_{{bits}} --size {M}x4096 --size 4096x4096",
+                [1, 2, 4, 8],
+            )
+            compare_mlx_quant(
+                f"quant_matmul_t_{gs}_{{bits}} --size {M}x4096 --size 11008x4096",
+                [1, 2, 4, 8],
+            )
