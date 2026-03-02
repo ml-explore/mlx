@@ -96,6 +96,21 @@ def _group_by_size(keys, sizes, itemsize, communication_size):
     return grad_groups
 
 
+def _comm_fn(x, comm_op, group, type, stream, average=False):
+    N = group.size() if average else 1
+    dt = x.dtype
+    x = x.astype(type) if type is not None else x
+    if comm_op == "all_sum":
+        return mx.distributed.all_sum(x, stream=stream, group=group).astype(dt) / N
+    elif comm_op == "sum_scatter":
+        return mx.distributed.sum_scatter(x, stream=stream, group=group).astype(dt) / N
+    # in all_gather we never want to average the result
+    elif comm_op == "all_gather":
+        if average:
+            raise ValueError("Averaging is not supported for all_gather operation")
+        return mx.distributed.all_gather(x, stream=stream, group=group).astype(dt)
+
+
 def average_gradients(
     gradients: Any,
     group: Optional[mx.distributed.Group] = None,
@@ -130,13 +145,18 @@ def average_gradients(
     if N == 1:
         return gradients
 
-    def _average(x):
-        dt = x.dtype
-        x = x.astype(communication_type) if communication_type is not None else x
-        return mx.distributed.all_sum(x, stream=communication_stream).astype(dt) / N
-
     if all_reduce_size <= 0:
-        return tree_map(_average, gradients)
+        return tree_map(
+            lambda x: _comm_fn(
+                x,
+                "all_sum",
+                group,
+                communication_type,
+                communication_stream,
+                average=True,
+            ),
+            gradients,
+        )
 
     else:
         flat_grads = tree_flatten(gradients)
@@ -165,7 +185,14 @@ def average_gradients(
             big_grad = mx.concatenate(
                 [flat_grads[i][1].reshape(-1) for i in grad_group]
             )
-            big_grad = _average(big_grad)
+            big_grad = _comm_fn(
+                big_grad,
+                "all_sum",
+                group,
+                communication_type,
+                communication_stream,
+                average=True,
+            )
             big_grad = mx.split(big_grad, indices[1:-1])
             new_flat_grads.extend(
                 (keys[j], big_grad[i].reshape(shapes[j]))
@@ -189,7 +216,8 @@ def fsdp_apply_gradients(
     gradients,
     parameters,
     optimizer,
-    group=None,
+    fsdp_group=None,
+    dp_group=None,
     communication_size=32 * 1024**2,
     communication_type=None,
     communication_stream=None,
@@ -208,13 +236,18 @@ def fsdp_apply_gradients(
     Args:
         gradients (Any): The Python tree containing the full gradients (it should
             have the same structure as ``parameters``). Each gradient's first
-            dimension must be divisible by the world size.
+            dimension must be divisible by ``fsdp_group.size()``.
         parameters (Any): The Python tree containing the full parameters (it should
             have the same structure across processes). Each parameter's first
-            dimension must be divisible by the world size.
+            dimension must be divisible by ``fsdp_group.size()``.
         optimizer: Optimizer with an ``apply_gradients`` method.
-        group (Optional[mlx.core.distributed.Group]): The group of processes for
-            communication. If ``None``, the global group is used.
+        fsdp_group (Optional[mlx.core.distributed.Group]): The group of processes
+            for FSDP sharding (reduce-scatter / all-gather). If ``None``, the
+            global group is used. When set to an intra-node group, pair it with
+            ``dp_group`` for hybrid FSDP+DDP. Default: ``None``.
+        dp_group (Optional[mlx.core.distributed.Group]): The group of processes
+            for data-parallel gradient averaging. Required when ``fsdp_group`` is
+            smaller than the world (e.g. FSDP intra-node, DDP inter-node).
             Default: ``None``.
         communication_size (int): Group arrays until their size in bytes exceeds
             this number. Perform one communication step per group of arrays. If
@@ -247,9 +280,14 @@ def fsdp_apply_gradients(
         ... )
         >>> model.update(updated_params)
     """
-    group = group or mx.distributed.init()
-    N = group.size()
-    rank = group.rank()
+    world = mx.distributed.init()
+    N = world.size()
+    fsdp_group = fsdp_group or world
+
+    if dp_group is None and fsdp_group.size() != N:
+        raise ValueError(
+            "dp_group must be provided when fsdp_group is smaller than the world"
+        )
 
     if N == 1:
         if max_norm is not None:
@@ -260,40 +298,43 @@ def fsdp_apply_gradients(
     flat_grads = tree_flatten(gradients)
     flat_params = tree_flatten(parameters)
 
-    def _sum_scatter(x):
-        dt = x.dtype
-        x = x.astype(communication_type) if communication_type is not None else x
-        return (
-            mx.distributed.sum_scatter(
-                x, group=group, stream=communication_stream
-            ).astype(dt)
-            / N
-        )
-
-    def _all_gather(x):
-        dt = x.dtype
-        x = x.astype(communication_type) if communication_type is not None else x
-        return mx.distributed.all_gather(
-            x, group=group, stream=communication_stream
-        ).astype(dt)
-
     keys, shapes, sizes, dtypes = _extract_info(flat_grads)
     itemsize = dtypes[0].size
 
     groups = _group_by_size(keys, sizes, itemsize, communication_size)
+
+    S = fsdp_group.size()
+    fsdp_rank = fsdp_group.rank()
+    fsdp_is_full_world = fsdp_group.size() == N
 
     # reduce-scatter gradients, shard parameters
     grad_slices = {}
     param_slices = {}
     for group_idx, arr_group in enumerate(groups):
         big_grad = mx.concatenate(
-            [flat_grads[i][1].reshape(N, -1) for i in arr_group], axis=1
+            [flat_grads[i][1].reshape(S, -1) for i in arr_group], axis=1
         )
-        grad_slices[group_idx] = _sum_scatter(big_grad)
+        grad_slices[group_idx] = _comm_fn(
+            big_grad,
+            "sum_scatter",
+            fsdp_group,
+            communication_type,
+            communication_stream,
+            average=not fsdp_is_full_world,
+        )
+        if not fsdp_is_full_world:
+            grad_slices[group_idx] = _comm_fn(
+                grad_slices[group_idx],
+                "all_sum",
+                dp_group,
+                communication_type,
+                communication_stream,
+                average=True,
+            )
         big_param = mx.concatenate(
-            [flat_params[i][1].reshape(N, -1) for i in arr_group], axis=1
+            [flat_params[i][1].reshape(S, -1) for i in arr_group], axis=1
         )
-        param_slices[group_idx] = big_param[rank]
+        param_slices[group_idx] = big_param[fsdp_rank]
 
     # clip gradients if needed
     grad_norm = None
@@ -306,9 +347,15 @@ def fsdp_apply_gradients(
     # all-gather and reconstruct
     new_flat = []
     for group_idx, arr_group in enumerate(groups):
-        big_gathered = _all_gather(updated_param_slices[group_idx].reshape(1, -1))
+        big_gathered = _comm_fn(
+            updated_param_slices[group_idx].reshape(1, -1),
+            "all_gather",
+            fsdp_group,
+            communication_type,
+            communication_stream,
+        )
 
-        split_sizes = [sizes[i] // N for i in arr_group]
+        split_sizes = [sizes[i] // S for i in arr_group]
         split_indices = []
         acc = 0
         for s in split_sizes:
