@@ -2312,6 +2312,21 @@ array argmax(
   return out;
 }
 
+array bartlett(int M, StreamOrDevice s /* = {} */) {
+  if (M < 1) {
+    return array({});
+  }
+  if (M == 1) {
+    return ones({1}, float32, s);
+  }
+
+  auto n = arange(0, M, float32, s);
+  float factor_val = 2.0f / (M - 1);
+  auto factor = array(factor_val, float32);
+  auto term = subtract(multiply(factor, n, s), array(1.0f, float32), s);
+  return subtract(array(1.0f, float32), abs(term, s), s);
+}
+
 array hanning(int M, StreamOrDevice s /* = {} */) {
   if (M < 1) {
     return array({});
