@@ -21,6 +21,46 @@ void qmm_impl_sm90(
     Stream s);
 #endif // defined(MLX_CUDA_SM90A_ENABLED)
 
+bool supports_qmm_sm90(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device) {
+  if (device.compute_capability_major() != 9) {
+    return false;
+  }
+  int k = x.shape(-1);
+  if (k % 64 != 0) {
+    return false;
+  }
+  if (!biases) {
+    return false;
+  }
+  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
+      !scales.flags().row_contiguous || !biases->flags().row_contiguous) {
+    return false;
+  }
+  if (!transpose) {
+    return false;
+  }
+  if (bits % 2 != 0) {
+    return false;
+  }
+  if (group_size < k) {
+    return false;
+  }
+  if (mode != QuantizationMode::Affine) {
+    return false;
+  }
+  return true;
+}
+
 void qmm_sm90(
     const array& x,
     const array& w,
@@ -55,6 +95,73 @@ void qmm_sm90(
   throw std::runtime_error(
       "[quantized_matmul] Hopper-only kernel is not available.");
 #endif // defined(MLX_CUDA_SM90A_ENABLED)
+}
+
+bool supports_fp_qmv(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device) {
+  bool non_batched = w.ndim() == 2;
+  int k = x.shape(-1);
+  int n = out.shape(-1);
+  int vec_batch = non_batched ? x.size() / k : x.shape(-2);
+  if (vec_batch > 8) {
+    return false;
+  }
+  if (!transpose) {
+    return false;
+  }
+  if (mode == QuantizationMode::Affine) {
+    return false;
+  }
+  return true;
+}
+
+bool supports_qmv(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device) {
+  int m = out.shape(-2);
+  int n = out.shape(-1);
+  int k = x.shape(-1);
+  int l = out.size() / (m * n);
+  if (l > 1) {
+    return false;
+  }
+  if (n % 8 != 0 || k % 8 != 0) {
+    return false;
+  }
+  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
+      !scales.flags().row_contiguous) {
+    return false;
+  }
+  if (biases && !biases->flags().row_contiguous) {
+    return false;
+  }
+  if (!transpose) {
+    return false;
+  }
+  if (bits % 2 != 0) {
+    return false;
+  }
+  if (mode != QuantizationMode::Affine) {
+    return false;
+  }
+  return true;
 }
 
 } // namespace mlx::core
