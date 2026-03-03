@@ -30,6 +30,5 @@ int main() {
   sleep(1);
   t.detach();
   std::cout << "Main thread exiting." << std::endl;
-  mx::metal::set_enabled(false);
   return 0;
 }
