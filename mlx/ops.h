@@ -672,6 +672,9 @@ MLX_API array hanning(int M, StreamOrDevice s = {});
 /** Returns the Hamming window of size M. */
 MLX_API array hamming(int M, StreamOrDevice s = {});
 
+/** Returns the bartlett window of size M. */
+MLX_API array bartlett(int M, StreamOrDevice s = {});
+
 /** Returns the Blackmann window of size M. */
 MLX_API array blackman(int M, StreamOrDevice s = {});
 
