@@ -198,7 +198,7 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
 
     def test_fsdp_ddp_apply_gradients(self):
         world = mx.distributed.init()
-        N = world.size()  # 8
+        N = world.size()
         S = 4
         fsdp_group = world.split(world.rank() // S)
         dp_group = world.split(world.rank() % S)
@@ -276,8 +276,6 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             )
         )
 
-        # Both approaches should produce the same result when all ranks
-        # have identical gradients
         params_eq = {"w": mx.ones((S * 4,))}
         grads_eq = {"w": mx.ones((S * 4,)) * 0.5}
 

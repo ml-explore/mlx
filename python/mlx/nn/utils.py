@@ -104,11 +104,8 @@ def _comm_fn(x, comm_op, group, type, stream, average=False):
         return mx.distributed.all_sum(x, stream=stream, group=group).astype(dt) / N
     elif comm_op == "sum_scatter":
         return mx.distributed.sum_scatter(x, stream=stream, group=group).astype(dt) / N
-    # in all_gather we never want to average the result
     elif comm_op == "all_gather":
-        if average:
-            raise ValueError("Averaging is not supported for all_gather operation")
-        return mx.distributed.all_gather(x, stream=stream, group=group).astype(dt)
+        return mx.distributed.all_gather(x, stream=stream, group=group).astype(dt) / N
 
 
 def average_gradients(
@@ -242,9 +239,7 @@ def fsdp_apply_gradients(
             dimension must be divisible by ``fsdp_group.size()``.
         optimizer: Optimizer with an ``apply_gradients`` method.
         fsdp_group (Optional[mlx.core.distributed.Group]): The group of processes
-            for FSDP sharding (reduce-scatter / all-gather). If ``None``, the
-            global group is used. When set to an intra-node group, pair it with
-            ``dp_group`` for hybrid FSDP+DDP. Default: ``None``.
+            for FSDP sharding. If ``None``, the global group is used.
         dp_group (Optional[mlx.core.distributed.Group]): The group of processes
             for data-parallel gradient averaging. Required when ``fsdp_group`` is
             smaller than the world (e.g. FSDP intra-node, DDP inter-node).
