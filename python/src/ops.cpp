@@ -920,6 +920,50 @@ void init_ops(nb::module_& m) {
             array: The inverse error function of ``a``.
       )pbdoc");
   m.def(
+      "bessel_i0e",
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::bessel_i0e(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def bessel_i0e(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise exponentially scaled modified Bessel function of order 0.
+
+        Computes :math:`e^{-|x|} I_0(x)` where :math:`I_0` is the modified
+        Bessel function of the first kind of order 0.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The exponentially scaled Bessel I0 of ``a``.
+      )pbdoc");
+  m.def(
+      "bessel_i1e",
+      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
+        return mx::bessel_i1e(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def bessel_i1e(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise exponentially scaled modified Bessel function of order 1.
+
+        Computes :math:`e^{-|x|} I_1(x)` where :math:`I_1` is the modified
+        Bessel function of the first kind of order 1.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The exponentially scaled Bessel I1 of ``a``.
+      )pbdoc");
+  m.def(
       "sin",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
         return mx::sin(to_array(a), s);

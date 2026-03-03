@@ -31,6 +31,8 @@ Operations
    atleast_1d
    atleast_2d
    atleast_3d
+   bessel_i0e
+   bessel_i1e
    bitwise_and
    bitwise_invert
    bitwise_or
