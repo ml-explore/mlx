@@ -989,6 +989,55 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].shape, (3, 1, 4, 2))
         self.assertEqual(out[1].shape, (2, 2, 5))
 
+    def test_shapeless_compile_reduce_after_gather(self):
+        # Regression test: when the first call to a shapeless-compiled function
+        # has a size-1 reduced dimension, the reduction was elided as a no-op
+        # during tracing. On replay with larger sizes, the missing reduction
+        # caused stale (first-call) values to be returned.
+        buf = mx.array([10.0, 20.0, 30.0, 40.0, 50.0])
+
+        # take + sum
+        def fn_sum(buf, idx):
+            return mx.take(buf, idx, axis=0).sum()
+
+        cfn = mx.compile(fn_sum, shapeless=True)
+        for n in [1, 2, 3, 4]:
+            idx = mx.arange(n)
+            expected = fn_sum(buf, idx)
+            result = cfn(buf, idx)
+            self.assertTrue(
+                mx.allclose(result, expected),
+                f"sum failed for n={n}: got {result.item()}, expected {expected.item()}",
+            )
+
+        # take + mean
+        def fn_mean(buf, idx):
+            return mx.take(buf, idx, axis=0).mean()
+
+        cfn = mx.compile(fn_mean, shapeless=True)
+        for n in [1, 2, 3, 4]:
+            idx = mx.arange(n)
+            expected = fn_mean(buf, idx)
+            result = cfn(buf, idx)
+            self.assertTrue(
+                mx.allclose(result, expected),
+                f"mean failed for n={n}: got {result.item()}, expected {expected.item()}",
+            )
+
+        # take + max
+        def fn_max(buf, idx):
+            return mx.take(buf, idx, axis=0).max()
+
+        cfn = mx.compile(fn_max, shapeless=True)
+        for n in [1, 2, 3, 4]:
+            idx = mx.arange(n)
+            expected = fn_max(buf, idx)
+            result = cfn(buf, idx)
+            self.assertTrue(
+                mx.allclose(result, expected),
+                f"max failed for n={n}: got {result.item()}, expected {expected.item()}",
+            )
+
     def test_leaks(self):
         gc.collect()
         if mx.metal.is_available():
