@@ -448,10 +448,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
 
   const size_t total = mask.size();
-  const CopyType copy_type = (total == 1)
-      ? CopyType::Scalar
-      : (dst.flags().row_contiguous ? CopyType::Vector : CopyType::General);
-  copy_gpu(dst, out, copy_type, s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
   if (total == 0) {
     return;
   }
@@ -478,23 +475,27 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       mask_flat, scatter_offsets, static_cast<int64_t>(mask_batch_size), s);
 
   std::string module_name =
-      fmt::format("masked_scatter_assign_{}", dtype_to_string(out.dtype()));
+      fmt::format("masked_scatter_fused_{}", dtype_to_string(out.dtype()));
   cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
     std::vector<std::string> kernel_names;
     for (int src_contiguous = 0; src_contiguous <= 1; ++src_contiguous) {
-      for (int use_large = 0; use_large <= 1; ++use_large) {
-        kernel_names.push_back(
-            fmt::format(
-                "mlx::core::cu::masked_scatter_assign<{}, {}, {}>",
-                dtype_to_cuda_type(out.dtype()),
-                src_contiguous ? "true" : "false",
-                use_large ? "int64_t" : "int32_t"));
+      for (int dst_contiguous = 0; dst_contiguous <= 1; ++dst_contiguous) {
+        for (int use_large = 0; use_large <= 1; ++use_large) {
+          kernel_names.push_back(
+              fmt::format(
+                  "mlx::core::cu::masked_scatter_fused<{}, {}, {}, {}>",
+                  dtype_to_cuda_type(out.dtype()),
+                  src_contiguous ? "true" : "false",
+                  dst_contiguous ? "true" : "false",
+                  use_large ? "int64_t" : "int32_t"));
+        }
       }
     }
     return std::make_tuple(false, jit_source_scatter, std::move(kernel_names));
   });
 
   cu::KernelArgs args;
+  args.append(dst);
   args.append(mask_flat);
   args.append(scatter_offsets);
   args.append(src);
@@ -508,19 +509,24 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     args.append<int32_t>(src_batch_size);
     args.append<int32_t>(mask_batch_size);
   }
+  args.append_ndim(dst.shape());
+  args.append_ndim(dst.strides());
+  args.append<int32_t>(dst.ndim());
   args.append_ndim(src.shape());
   args.append_ndim(src.strides());
   args.append<int32_t>(src.ndim());
 
+  encoder.set_input_array(dst);
   encoder.set_input_array(mask_flat);
   encoder.set_input_array(scatter_offsets);
   encoder.set_input_array(src);
   encoder.set_output_array(out);
 
   std::string kernel_name = fmt::format(
-      "mlx::core::cu::masked_scatter_assign<{}, {}, {}>",
+      "mlx::core::cu::masked_scatter_fused<{}, {}, {}, {}>",
       dtype_to_cuda_type(out.dtype()),
       src.flags().row_contiguous ? "true" : "false",
+      dst.flags().row_contiguous ? "true" : "false",
       large ? "int64_t" : "int32_t");
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = get_launch_args(mask_flat, large);
