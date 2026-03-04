@@ -318,6 +318,14 @@ class TestFFT(mlx_tests.MLXTestCase):
             dgdx = torch.func.grad(g)(torch.tensor(x))
             self.assertLess((dfdx - dgdx).abs().max() / dgdx.abs().mean(), 1e-4)
 
+    def test_fft_large_powers_of_two(self):
+        for power in [21, 22, 23]:
+            size = 2**power
+            x = mx.ones(size, dtype=mx.complex64)
+            result = mx.fft.fft(x, stream=mx.gpu)
+            mx.eval(result)
+            self.assertEqual(result.shape[0], size)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
