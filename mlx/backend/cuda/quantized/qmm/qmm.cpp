@@ -2,10 +2,13 @@
 
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
 
+#if defined(MLX_CUDA_SM90A_ENABLED)
+#include <cute/tensor.hpp>
+#endif
+
 namespace mlx::core {
 
 #if defined(MLX_CUDA_SM90A_ENABLED)
-#include <cute/tensor.hpp>
 // Defined in qmm_impl_sm90_xxx.cu files.
 template <typename TileShape, typename ClusterShape>
 void qmm_impl_sm90(
