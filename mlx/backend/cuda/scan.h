@@ -8,13 +8,10 @@
 
 namespace mlx::core {
 
-void scan_gpu_inplace(
-    array in,
+void segmented_exclusive_mask_scan_gpu(
+    const array& in,
     array& out,
-    Scan::ReduceType reduce_type,
-    int axis,
-    bool reverse,
-    bool inclusive,
+    int64_t segment_size,
     const Stream& s);
 
 } // namespace mlx::core

@@ -469,19 +469,13 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   scatter_offsets.set_data(cu::malloc_async(scatter_offsets.nbytes(), encoder));
   encoder.add_temporary(scatter_offsets);
 
-  scan_gpu_inplace(
-      mask_flat,
-      scatter_offsets,
-      Scan::Sum,
-      /* axis= */ 1,
-      /* reverse= */ false,
-      /* inclusive= */ false,
-      s);
-
   const size_t batch_count = mask.shape(0);
   const size_t mask_batch_size = mask_flat.size() / batch_count;
   const size_t src_batch_size = src.size() / src.shape(0);
   bool large = total > INT32_MAX || src.size() > INT32_MAX;
+
+  segmented_exclusive_mask_scan_gpu(
+      mask_flat, scatter_offsets, static_cast<int64_t>(mask_batch_size), s);
 
   std::string module_name =
       fmt::format("masked_scatter_assign_{}", dtype_to_string(out.dtype()));
