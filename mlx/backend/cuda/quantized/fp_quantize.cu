@@ -13,6 +13,7 @@
 #include <cooperative_groups/reduce.h>
 #include <cuda_fp4.h>
 #include <cuda_fp8.h>
+#include <cutlass/numeric_conversion.h>
 
 constexpr float F8E4M3_MAX = 448.0f;
 constexpr float F4E2M1_MAX = 6.0f;
@@ -45,7 +46,6 @@ __global__ void fp_quantize_dequantize(
   const float inv_scale_enc = use_global_scale ? 1.0f / scale_enc : 1.0f;
 
   using Tx2 = Vector2_t<T>;
-  using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
@@ -87,22 +87,25 @@ __global__ void fp_quantize_dequantize(
   AlignedVector<T, group_size> w_hat;
 
 #pragma unroll
-  for (int i = 0; i < group_size / 4; i++) {
-    Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&w_tile[i * 4]);
-    float4 dq;
+  for (int i = 0; i < group_size / 8; i++) {
+    auto& w = *reinterpret_cast<cutlass::Array<T, 8>*>(&w_tile[i * 8]);
+    cutlass::NumericArrayConverter<float, T, 8> fp32_t;
+    auto scaled = fp32_t(w) * scale_enc_b;
+    cutlass::Array<float, 8> dq;
     if constexpr (bits == 8) {
-      uint32_t quantized_val =
-          scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, scale_enc_b, rbits);
-      dq = dequant_fp8(quantized_val);
+      cutlass::NumericArrayConverter<cutlass::float_e4m3_t, float, 8> fp8_fp32;
+      auto quant = fp8_fp32(scaled);
+      cutlass::NumericArrayConverter<float, cutlass::float_e4m3_t, 8> fp32_fp8;
+      dq = fp32_fp8(quant);
     } else {
-      uint16_t quantized_val =
-          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, scale_enc_b, rbits);
-      dq = dequant_fp4(quantized_val);
+      cutlass::NumericArrayConverter<cutlass::float_e2m1_t, float, 8> fp4_fp32;
+      auto quant = fp4_fp32(scaled);
+      cutlass::NumericArrayConverter<float, cutlass::float_e2m1_t, 8> fp32_fp4;
+      dq = fp32_fp4(quant);
     }
-    w_hat[i * 4] = static_cast<T>(dq.x * scale_dec);
-    w_hat[i * 4 + 1] = static_cast<T>(dq.y * scale_dec);
-    w_hat[i * 4 + 2] = static_cast<T>(dq.z * scale_dec);
-    w_hat[i * 4 + 3] = static_cast<T>(dq.w * scale_dec);
+    cutlass::NumericArrayConverter<T, float, 8> t_fp32;
+    *reinterpret_cast<cutlass::Array<T, 8>*>(&w_hat[i * 8]) =
+        t_fp32(dq * scale_dec);
   }
   store_vector<group_size>(out, thread_idx, w_hat);
 }
