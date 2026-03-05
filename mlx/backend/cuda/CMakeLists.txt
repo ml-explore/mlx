@@ -30,6 +30,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/gemv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/grouped_gemm_unaligned.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/kernel_utils.cu
