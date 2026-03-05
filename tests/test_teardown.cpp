@@ -14,7 +14,7 @@ namespace mx = mlx::core;
 
 int main() {
   using namespace std::chrono_literals;
-  
+
   std::thread t([] {
     auto a = mx::random::normal({2048, 2048});
     std::cout << "START" << std::endl;
