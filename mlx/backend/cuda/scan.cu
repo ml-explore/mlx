@@ -387,7 +387,7 @@ struct MaskSegmentKey {
 
 } // namespace
 
-void segmented_exclusive_mask_scan_gpu(
+void segmented_exclusive_mask_prefix_sum_gpu(
     const array& in,
     array& out,
     int64_t segment_size,
@@ -453,7 +453,76 @@ void segmented_exclusive_mask_scan_gpu(
             cuda::std::equal_to<>{},
             encoder.stream()));
   }
-  return;
+}
+
+void segmented_exclusive_int32_prefix_sum_gpu(
+    const array& in,
+    array& out,
+    int64_t segment_size,
+    const Stream& s) {
+  if (segment_size <= 0) {
+    throw std::runtime_error("segment_size must be positive.");
+  }
+  if (in.dtype() != int32 || out.dtype() != int32) {
+    throw std::runtime_error(
+        "segmented_exclusive_int32_prefix_sum_gpu expects int32.");
+  }
+
+  auto& encoder = cu::get_command_encoder(s);
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+
+  using CubIdx = int64_t;
+  auto count_iter = thrust::counting_iterator<CubIdx>(0);
+  auto key_iter = thrust::make_transform_iterator(
+      count_iter, MaskSegmentKey<CubIdx>{static_cast<CubIdx>(segment_size)});
+
+  size_t workspace_size = 0;
+  if (segment_size == static_cast<int64_t>(in.size())) {
+    CHECK_CUDA_ERROR(
+        cub::DeviceScan::ExclusiveSum(
+            nullptr,
+            workspace_size,
+            gpu_ptr<int32_t>(in),
+            gpu_ptr<int32_t>(out),
+            static_cast<CubIdx>(in.size()),
+            encoder.stream()));
+
+    void* workspace = allocate_workspace(encoder, workspace_size);
+    auto capture = encoder.capture_context();
+    CHECK_CUDA_ERROR(
+        cub::DeviceScan::ExclusiveSum(
+            workspace,
+            workspace_size,
+            gpu_ptr<int32_t>(in),
+            gpu_ptr<int32_t>(out),
+            static_cast<CubIdx>(in.size()),
+            encoder.stream()));
+  } else {
+    CHECK_CUDA_ERROR(
+        cub::DeviceScan::ExclusiveSumByKey(
+            nullptr,
+            workspace_size,
+            key_iter,
+            gpu_ptr<int32_t>(in),
+            gpu_ptr<int32_t>(out),
+            static_cast<CubIdx>(in.size()),
+            cuda::std::equal_to<>{},
+            encoder.stream()));
+
+    void* workspace = allocate_workspace(encoder, workspace_size);
+    auto capture = encoder.capture_context();
+    CHECK_CUDA_ERROR(
+        cub::DeviceScan::ExclusiveSumByKey(
+            workspace,
+            workspace_size,
+            key_iter,
+            gpu_ptr<int32_t>(in),
+            gpu_ptr<int32_t>(out),
+            static_cast<CubIdx>(in.size()),
+            cuda::std::equal_to<>{},
+            encoder.stream()));
+  }
 }
 
 void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
