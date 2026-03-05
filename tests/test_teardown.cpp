@@ -4,6 +4,7 @@
 // Verifies that the process exits cleanly when a background thread is
 // performing GPU work and the main thread exits.
 
+#include <chrono>
 #include <iostream>
 #include <thread>
 
@@ -12,6 +13,8 @@
 namespace mx = mlx::core;
 
 int main() {
+  using namespace std::chrono_literals;
+  
   std::thread t([] {
     auto a = mx::random::normal({2048, 2048});
     std::cout << "START" << std::endl;
@@ -27,7 +30,7 @@ int main() {
     std::cout << "Done: " << a.shape(0) << "x" << a.shape(1) << std::endl;
   });
 
-  sleep(1);
+  std::this_thread::sleep_for(1s);
   t.detach();
   std::cout << "Main thread exiting." << std::endl;
   return 0;
