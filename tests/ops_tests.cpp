@@ -2437,11 +2437,6 @@ TEST_CASE("test scatter") {
 }
 
 TEST_CASE("test masked_scatter") {
-  if (cu::is_available()) {
-    INFO("Skipping masked_scatter cuda ops tests");
-    return;
-  }
-
   // Wrong mask dtype
   CHECK_THROWS(masked_scatter(array({1, 2}), array({1, 2}), array({1, 2})));
 
