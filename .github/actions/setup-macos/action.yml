@@ -13,10 +13,10 @@ runs:
     - name: Install Homebrew packages
       shell: sh
       run: /opt/homebrew/bin/brew install openmpi
-    
-    - name: Verify MetalToolchain installed
+
+    - name: Install MetalToolchain
       shell: bash
-      run: xcodebuild -showComponent MetalToolchain
+      run: xcodebuild -downloadComponent MetalToolchain
 
     - uses: conda-incubator/setup-miniconda@v3
       with:
