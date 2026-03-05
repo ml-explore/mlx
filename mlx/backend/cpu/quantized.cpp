@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
+#include "mlx/backend/common/quantized.h"
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
@@ -58,15 +59,6 @@ static inline T dequantize_scale(uint8_t s) {
     out.i = (s == 0 ? 0x40 : (static_cast<uint16_t>(s) << 7));
     return static_cast<T>(out.f);
   }
-}
-
-inline constexpr short get_pack_factor(int bits, int wsize = 8) {
-  return (bits == 3 || bits == 5) ? 8 : (bits == 6 ? 4 : wsize / bits);
-}
-
-inline constexpr short get_bytes_per_pack(int bits, int wsize = 8) {
-  auto power_of_2_bits = (bits & (bits - 1)) == 0;
-  return power_of_2_bits ? (wsize / 8) : (bits == 5 ? 5 : 3);
 }
 
 template <typename T, int bits>

@@ -1,11 +1,11 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/common/quantized.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/mxfp8_quantize.cuh"
 #include "mlx/backend/cuda/quantized/nvfp4_quantize.cuh"
 #include "mlx/backend/cuda/quantized/quantized.h"
-#include "mlx/backend/cuda/quantized/quantized_utils.cuh"
 #include "mlx/backend/cuda/vector_types.cuh"
 #include "mlx/dtype_utils.h"
 
@@ -30,6 +30,22 @@ struct Dequantize {
     }
   }
 };
+
+template <typename T>
+__device__ __forceinline__ void absmax_x2(T& out, const T& x1, const T& x2) {
+  if constexpr (
+      (std::is_same<T, __nv_bfloat162>::value) ||
+      (std::is_same<T, __half2>::value)) {
+    T a = x1;
+    T b = x2;
+    out = __hmax2(__habs2(a), __habs2(b));
+  } else if constexpr (std::is_same<T, float2>::value) {
+    float2 a = x1;
+    float2 b = x2;
+    out.x = fmaxf(fabsf(a.x), fabsf(b.x));
+    out.y = fmaxf(fabsf(a.y), fabsf(b.y));
+  }
+}
 
 namespace cg = cooperative_groups;
 
