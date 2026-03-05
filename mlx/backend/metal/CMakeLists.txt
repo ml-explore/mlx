@@ -82,6 +82,8 @@ if(MLX_METAL_JIT)
   make_jit_source(gemv_masked)
 
   make_jit_source(steel/attn/kernels/steel_attention)
+  make_jit_source(steel/attn/kernels/steel_attention_vjp_dq)
+  make_jit_source(steel/attn/kernels/steel_attention_vjp_dkv)
 
   make_jit_source(
     steel/gemm/gemm_nax kernels/steel/utils.h kernels/steel/gemm/nax.h
