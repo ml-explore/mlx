@@ -51,6 +51,13 @@ std::tuple<Shape, std::vector<int>, bool> compute_reduce_shape(
     is_noop &= (out_shape.back() == shape[i]);
   }
   std::vector<int> sorted_axes(axes_set.begin(), axes_set.end());
+  // During dynamic (shapeless) tracing, dimensions that happen to be size 1
+  // at trace time may have different sizes on replay.  Never elide the
+  // reduction in that case, otherwise the Reduce primitive is missing from
+  // the traced graph and replays produce wrong results.
+  if (detail::in_dynamic_tracing()) {
+    is_noop = false;
+  }
   return {out_shape, sorted_axes, is_noop};
 }
 
