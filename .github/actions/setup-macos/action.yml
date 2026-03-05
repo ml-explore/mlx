@@ -16,7 +16,7 @@ runs:
     
     - name: Verify MetalToolchain installed
       shell: bash
-      run: xcodebuild -showComponent MetalToolchain
+      run: xcodebuild -downloadComponent MetalToolchain
 
     - uses: conda-incubator/setup-miniconda@v3
       with:
