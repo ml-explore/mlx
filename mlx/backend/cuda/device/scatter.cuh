@@ -114,4 +114,48 @@ __global__ void masked_scatter_fused(
   out[index] = dst_val;
 }
 
+template <typename T, typename IdxT, int N_READS>
+__global__ void masked_scatter_fused_vec_contiguous(
+    const T* dst,
+    const bool* mask,
+    const int32_t* scatter_offsets,
+    const T* src,
+    T* out,
+    IdxT size,
+    IdxT src_batch_size,
+    IdxT mask_batch_size,
+    const __grid_constant__ Shape,
+    const __grid_constant__ Strides,
+    int32_t,
+    const __grid_constant__ Shape,
+    const __grid_constant__ Strides,
+    int32_t) {
+  IdxT vec_index = cg::this_grid().thread_rank();
+  IdxT base = vec_index * N_READS;
+  if (base >= size) {
+    return;
+  }
+
+  auto out_vec = load_vector<N_READS>(dst, vec_index, size, static_cast<T>(0));
+  auto mask_vec = load_vector<N_READS>(mask, vec_index, size, false);
+  auto offset_vec = load_vector<N_READS>(scatter_offsets, vec_index, size, 0);
+
+#pragma unroll
+  for (int i = 0; i < N_READS; ++i) {
+    IdxT index = base + i;
+    if (index >= size) {
+      break;
+    }
+    if (mask_vec[i]) {
+      IdxT src_index = static_cast<IdxT>(offset_vec[i]);
+      if (src_index < src_batch_size) {
+        IdxT batch_idx = index / mask_batch_size;
+        out_vec[i] = src[batch_idx * src_batch_size + src_index];
+      }
+    }
+  }
+
+  store_vector<N_READS>(out, vec_index, out_vec, size);
+}
+
 } // namespace mlx::core::cu

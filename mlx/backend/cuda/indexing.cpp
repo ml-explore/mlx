@@ -491,6 +491,14 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         }
       }
     }
+    for (int use_large = 0; use_large <= 1; ++use_large) {
+      kernel_names.push_back(
+          fmt::format(
+              "mlx::core::cu::masked_scatter_fused_vec_contiguous<{}, {}, {}>",
+              dtype_to_cuda_type(out.dtype()),
+              use_large ? "int64_t" : "int32_t",
+              16));
+    }
     return std::make_tuple(false, jit_source_scatter, std::move(kernel_names));
   });
 
@@ -522,14 +530,23 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(src);
   encoder.set_output_array(out);
 
-  std::string kernel_name = fmt::format(
-      "mlx::core::cu::masked_scatter_fused<{}, {}, {}, {}>",
-      dtype_to_cuda_type(out.dtype()),
-      src.flags().row_contiguous ? "true" : "false",
-      dst.flags().row_contiguous ? "true" : "false",
-      large ? "int64_t" : "int32_t");
+  bool vectorized = src.flags().row_contiguous && dst.flags().row_contiguous;
+  std::string kernel_name = vectorized
+      ? fmt::format(
+            "mlx::core::cu::masked_scatter_fused_vec_contiguous<{}, {}, {}>",
+            dtype_to_cuda_type(out.dtype()),
+            large ? "int64_t" : "int32_t",
+            16)
+      : fmt::format(
+            "mlx::core::cu::masked_scatter_fused<{}, {}, {}, {}>",
+            dtype_to_cuda_type(out.dtype()),
+            src.flags().row_contiguous ? "true" : "false",
+            dst.flags().row_contiguous ? "true" : "false",
+            large ? "int64_t" : "int32_t");
   auto kernel = mod.get_kernel(kernel_name);
-  auto [num_blocks, block_dims] = get_launch_args(mask_flat, large);
+  auto [num_blocks, block_dims] = vectorized
+      ? get_launch_args(mask_flat, large, 16, 256)
+      : get_launch_args(mask_flat, large);
   encoder.add_kernel_node_raw(
       kernel, num_blocks, block_dims, {}, 0, args.args());
 }
