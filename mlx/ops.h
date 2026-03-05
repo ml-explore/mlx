@@ -951,6 +951,12 @@ MLX_API array erf(const array& a, StreamOrDevice s = {});
 /** Computes the inverse error function of the elements of an array. */
 MLX_API array erfinv(const array& a, StreamOrDevice s = {});
 
+/** Element-wise exponentially scaled modified Bessel function of order 0. */
+MLX_API array bessel_i0e(const array& a, StreamOrDevice s = {});
+
+/** Element-wise exponentially scaled modified Bessel function of order 1. */
+MLX_API array bessel_i1e(const array& a, StreamOrDevice s = {});
+
 /** Computes the expm1 function of the elements of an array. */
 MLX_API array expm1(const array& a, StreamOrDevice s = {});
 

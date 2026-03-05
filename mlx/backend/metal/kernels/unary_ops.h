@@ -5,6 +5,7 @@
 #include <metal_integer>
 #include <metal_math>
 
+#include "mlx/backend/metal/kernels/bessel.h"
 #include "mlx/backend/metal/kernels/cexpf.h"
 #include "mlx/backend/metal/kernels/erf.h"
 #include "mlx/backend/metal/kernels/expm1f.h"
@@ -171,6 +172,20 @@ struct ErfInv {
   template <typename T>
   T operator()(T x) {
     return static_cast<T>(erfinv(static_cast<float>(x)));
+  };
+};
+
+struct BesselI0e {
+  template <typename T>
+  T operator()(T x) {
+    return static_cast<T>(i0e_impl(static_cast<float>(x)));
+  };
+};
+
+struct BesselI1e {
+  template <typename T>
+  T operator()(T x) {
+    return static_cast<T>(i1e_impl(static_cast<float>(x)));
   };
 };
 
