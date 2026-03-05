@@ -555,7 +555,6 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
-    bool is_training,
     bool output_logsumexp,
     Stream s) {
   if (s.device == Device::cpu) {
@@ -618,7 +617,12 @@ void ScaledDotProductAttention::eval_gpu(
   }
 }
 
-bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
+bool ScaledDotProductAttentionVJP::use_fallback(
+    const array& q,
+    Stream s,
+    bool has_mask,
+    bool has_sinks,
+    int /* n_kv_heads */) {
   // The frontend adds a padding mask when sequence length is not a multiple of
   // tile size.
   if (q.shape(2) % 128 != 0) {

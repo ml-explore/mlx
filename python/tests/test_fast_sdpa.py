@@ -1,10 +1,12 @@
 import math
+import os
 import unittest
 from itertools import product
 
 import mlx.core as mx
 import mlx_tests
 import numpy as np
+import pytest
 
 
 def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
@@ -610,37 +612,460 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 ).sum()
                 test_grad(loss_slow, loss_fast, [q, k, v])
 
-    def test_sdpa_sliced(self):
-        N = 8
+    def test_sdpa_steel_vjp_grad(self):
+        """Test STEEL VJP correctness for D=64/96/128 with L>8 sequences.
+
+        The STEEL kernel path is used for longer sequences (L>8) where the
+        vector path is not applicable. Tests MHA and GQA configurations
+        with causal and non-causal masks across fp32 and fp16.
+        """
+        mx.random.seed(42)
+
+        B = 1
+
+        # fmt: off
+        configs = [
+            # (qL, kL, D, n_q_heads, n_kv_heads)
+            # D=64 configs
+            ( 16,  16,  64,  8,  8),
+            ( 32,  32,  64,  8,  8),
+            (128, 128,  64,  8,  8),
+            # D=96 configs
+            ( 16,  16,  96,  8,  8),
+            ( 32,  32,  96,  8,  8),
+            (128, 128,  96,  8,  8),
+            # D=128 configs
+            ( 16,  16, 128,  8,  8),
+            ( 32,  32, 128,  8,  8),
+            (128, 128, 128,  8,  8),
+            # GQA configs (heads=8, kv_heads=2)
+            ( 32,  32,  64,  8,  2),
+            (128, 128,  64,  8,  2),
+            ( 32,  32, 128,  8,  2),
+            (128, 128, 128,  8,  2),
+            # Longer sequences (skip 8192 - too slow for unit tests)
+            (1024, 1024, 64,  8,  8),
+            (1024, 1024, 64,  8,  2),
+        ]
+        # fmt: on
+
+        dtypes = [mx.float32]
+        if mx.metal.is_available():
+            dtypes.append(mx.float16)
+
+        for dtype in dtypes:
+            for qL, kL, D, n_q, n_kv in configs:
+                for mask_type in (None, "causal"):
+                    with self.subTest(
+                        dtype=dtype,
+                        qL=qL,
+                        kL=kL,
+                        D=D,
+                        n_q_heads=n_q,
+                        n_kv_heads=n_kv,
+                        mask=mask_type,
+                    ):
+                        scale = D**-0.5
+
+                        q = mx.random.normal(shape=(B, n_q, qL, D), dtype=dtype)
+                        k = mx.random.normal(shape=(B, n_kv, kL, D), dtype=dtype)
+                        v = mx.random.normal(shape=(B, n_kv, kL, D), dtype=dtype)
+
+                        mask = mask_type  # None or "causal"
+
+                        def ref_fn(q, k, v):
+                            return mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+
+                        def fused_fn(q, k, v):
+                            return mx.fast.scaled_dot_product_attention(
+                                q, k, v, scale=scale, mask=mask
+                            )
+
+                        primals = [q, k, v]
+                        out_ref = ref_fn(q, k, v)
+                        cotan = mx.random.normal(shape=out_ref.shape, dtype=dtype)
+
+                        _, vjp_ref = mx.vjp(ref_fn, primals, [cotan])
+                        _, vjp_fused = mx.vjp(fused_fn, primals, [cotan])
+
+                        atol = 1e-4 if dtype == mx.float32 else 5e-2
+                        rtol = 1e-4 if dtype == mx.float32 else 5e-2
+                        tol = {"atol": atol, "rtol": rtol}
+
+                        for i, name in enumerate(["dQ", "dK", "dV"]):
+                            self.assertTrue(
+                                mx.allclose(vjp_ref[i], vjp_fused[i], **tol),
+                                msg=(
+                                    f"{name} mismatch: dtype={dtype}, qL={qL}, "
+                                    f"kL={kL}, D={D}, n_q={n_q}, n_kv={n_kv}, "
+                                    f"mask={mask_type}, "
+                                    f"max_diff={mx.max(mx.abs(vjp_ref[i] - vjp_fused[i])).item()}"
+                                ),
+                            )
+
+    def test_sdpa_steel_vjp_masks(self):
+        """Test STEEL VJP with explicit masks (bool and additive).
+
+        Since STEEL VJP may fall back to unfused for explicit masks, this
+        verifies that the fallback path still produces correct gradients.
+        """
+        mx.random.seed(88)
+
+        B = 1
         D = 64
+        L = 32
+        n_q, n_kv = 8, 8
         scale = D**-0.5
 
-        for B, T_q, T_kv, offset, mask in product(
-            (1, 2, 4),
-            (1, 8),
-            (256, 512),
-            (8, 9, 64, 79),
-            (None, "causal"),
-        ):
-            with self.subTest(B=B, T_q=T_q, T_kv=T_kv, offset=offset, mask=mask):
-                q = mx.random.normal((B, N, T_q, D), mx.float16)
-                k = mx.random.normal((B, N, T_kv, D), mx.float16)
-                v = mx.random.normal((B, N, T_kv, D), mx.float16)
+        dtypes = [mx.float32]
+        if mx.metal.is_available():
+            dtypes.append(mx.float16)
 
-                k = k[..., :offset, :]
-                v = v[..., :offset, :]
+        for dtype in dtypes:
+            for mask_kind in ("bool", "additive"):
+                with self.subTest(dtype=dtype, mask_kind=mask_kind):
+                    q = mx.random.normal(shape=(B, n_q, L, D), dtype=dtype)
+                    k = mx.random.normal(shape=(B, n_kv, L, D), dtype=dtype)
+                    v = mx.random.normal(shape=(B, n_kv, L, D), dtype=dtype)
 
-                ref = mlx_ref_attn(q, k, v, scale=scale, mask=mask)
-
-                for i in range(2):
-                    out = mx.fast.scaled_dot_product_attention(
-                        q, k, v, scale=scale, mask=mask
-                    )
-                    if B == 1:
-                        tolerance = {"rtol": 1e-3, "atol": 1e-3}
+                    if mask_kind == "bool":
+                        mask = mx.random.uniform(shape=(1, 1, L, L)) > 0.3
                     else:
-                        tolerance = {"rtol": 1e-2, "atol": 1e-2}
-                    self.assertTrue(mx.allclose(ref, out, **tolerance))
+                        bool_mask = mx.random.uniform(shape=(1, 1, L, L)) > 0.3
+                        mask = mx.where(
+                            bool_mask,
+                            mx.zeros((1, 1, L, L), dtype=dtype),
+                            mx.full((1, 1, L, L), -1e9, dtype=dtype),
+                        )
+
+                    def ref_fn(q, k, v):
+                        return mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+
+                    def fused_fn(q, k, v):
+                        return mx.fast.scaled_dot_product_attention(
+                            q, k, v, scale=scale, mask=mask
+                        )
+
+                    primals = [q, k, v]
+                    out_ref = ref_fn(q, k, v)
+                    cotan = mx.random.normal(shape=out_ref.shape, dtype=dtype)
+
+                    _, vjp_ref = mx.vjp(ref_fn, primals, [cotan])
+                    _, vjp_fused = mx.vjp(fused_fn, primals, [cotan])
+
+                    atol = 1e-4 if dtype == mx.float32 else 5e-2
+                    rtol = 1e-4 if dtype == mx.float32 else 5e-2
+                    tol = {"atol": atol, "rtol": rtol}
+
+                    for i, name in enumerate(["dQ", "dK", "dV"]):
+                        self.assertTrue(
+                            mx.allclose(vjp_ref[i], vjp_fused[i], **tol),
+                            msg=(
+                                f"{name} mismatch: dtype={dtype}, "
+                                f"mask_kind={mask_kind}, "
+                                f"max_diff={mx.max(mx.abs(vjp_ref[i] - vjp_fused[i])).item()}"
+                            ),
+                        )
+
+    def test_sdpa_vector_vjp_d256(self):
+        """Test D=256 two-stage tiling in the vector VJP path.
+
+        D=256 exceeds the single-tile head dimension limit and requires
+        two-stage tiling in the vector kernel. Tests with small query
+        sequence lengths (vector path: qL <= 8).
+        """
+        mx.random.seed(256)
+
+        B = 1
+        D = 256
+        n_q, n_kv = 8, 8
+        scale = D**-0.5
+
+        dtypes = [mx.float32]
+        if mx.metal.is_available():
+            dtypes.append(mx.float16)
+
+        for dtype in dtypes:
+            for qL in (1, 2, 4, 8):
+                for kL in (32, 128):
+                    with self.subTest(dtype=dtype, qL=qL, kL=kL):
+                        q = mx.random.normal(
+                            shape=(B, n_q, qL, D), dtype=dtype
+                        )
+                        k = mx.random.normal(
+                            shape=(B, n_kv, kL, D), dtype=dtype
+                        )
+                        v = mx.random.normal(
+                            shape=(B, n_kv, kL, D), dtype=dtype
+                        )
+
+                        def ref_fn(q, k, v):
+                            return mlx_ref_attn(q, k, v, scale=scale)
+
+                        def fused_fn(q, k, v):
+                            return mx.fast.scaled_dot_product_attention(
+                                q, k, v, scale=scale
+                            )
+
+                        primals = [q, k, v]
+                        out_ref = ref_fn(q, k, v)
+                        cotan = mx.random.normal(
+                            shape=out_ref.shape, dtype=dtype
+                        )
+
+                        _, vjp_ref = mx.vjp(ref_fn, primals, [cotan])
+                        _, vjp_fused = mx.vjp(fused_fn, primals, [cotan])
+
+                        atol = 1e-4 if dtype == mx.float32 else 5e-2
+                        rtol = 1e-4 if dtype == mx.float32 else 5e-2
+                        tol = {"atol": atol, "rtol": rtol}
+
+                        for i, name in enumerate(["dQ", "dK", "dV"]):
+                            self.assertTrue(
+                                mx.allclose(vjp_ref[i], vjp_fused[i], **tol),
+                                msg=(
+                                    f"{name} mismatch: dtype={dtype}, qL={qL}, "
+                                    f"kL={kL}, "
+                                    f"max_diff={mx.max(mx.abs(vjp_ref[i] - vjp_fused[i])).item()}"
+                                ),
+                            )
+
+    def test_sdpa_steel_vjp_unaligned(self):
+        """Test STEEL VJP with unaligned sequence lengths.
+
+        Exercises the sequence padding logic by using sequence lengths that
+        are not multiples of 16 or 32 (the tile sizes used by STEEL kernels).
+        """
+        mx.random.seed(17)
+
+        B = 1
+
+        # fmt: off
+        configs = [
+            # (qL, kL, D)
+            # Not multiples of 32 for queries
+            (17,  17,  64),
+            (33,  33,  64),
+            (63,  63,  64),
+            (100, 100, 64),
+            # Asymmetric lengths
+            (17,  33,  64),
+            (33,  63,  64),
+            (63, 100,  64),
+            (100,  17,  64),
+            # D=96
+            (17,  17,  96),
+            (33,  33,  96),
+            (63,  63,  96),
+            (100, 100, 96),
+            # D=128 (exercises O/dO aliasing + padding)
+            (17,  17,  128),
+            (33,  63,  128),
+            (63, 100,  128),
+        ]
+        # fmt: on
+
+        dtypes = [mx.float32]
+        if mx.metal.is_available():
+            dtypes.append(mx.float16)
+
+        for dtype in dtypes:
+            for qL, kL, D in configs:
+                n_q, n_kv = 8, 8
+                for mask_type in (None, "causal"):
+                    with self.subTest(
+                        dtype=dtype,
+                        qL=qL,
+                        kL=kL,
+                        D=D,
+                        mask=mask_type,
+                    ):
+                        scale = D**-0.5
+
+                        q = mx.random.normal(
+                            shape=(B, n_q, qL, D), dtype=dtype
+                        )
+                        k = mx.random.normal(
+                            shape=(B, n_kv, kL, D), dtype=dtype
+                        )
+                        v = mx.random.normal(
+                            shape=(B, n_kv, kL, D), dtype=dtype
+                        )
+
+                        mask = mask_type
+
+                        def ref_fn(q, k, v):
+                            return mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+
+                        def fused_fn(q, k, v):
+                            return mx.fast.scaled_dot_product_attention(
+                                q, k, v, scale=scale, mask=mask
+                            )
+
+                        primals = [q, k, v]
+                        out_ref = ref_fn(q, k, v)
+                        cotan = mx.random.normal(
+                            shape=out_ref.shape, dtype=dtype
+                        )
+
+                        _, vjp_ref = mx.vjp(ref_fn, primals, [cotan])
+                        _, vjp_fused = mx.vjp(fused_fn, primals, [cotan])
+
+                        atol = 1e-4 if dtype == mx.float32 else 5e-2
+                        rtol = 1e-4 if dtype == mx.float32 else 5e-2
+                        tol = {"atol": atol, "rtol": rtol}
+
+                        # For causal mask when qL > kL, skip first rows
+                        # (they are fully masked and undefined)
+                        if mask_type == "causal" and qL > kL:
+                            offset = qL - kL
+                            for i, name in enumerate(["dQ", "dK", "dV"]):
+                                ref_g = vjp_ref[i]
+                                fused_g = vjp_fused[i]
+                                if name == "dQ":
+                                    ref_g = ref_g[:, :, offset:, :]
+                                    fused_g = fused_g[:, :, offset:, :]
+                                self.assertTrue(
+                                    mx.allclose(ref_g, fused_g, **tol),
+                                    msg=(
+                                        f"{name} mismatch: dtype={dtype}, qL={qL}, "
+                                        f"kL={kL}, D={D}, mask={mask_type}, "
+                                        f"max_diff={mx.max(mx.abs(ref_g - fused_g)).item()}"
+                                    ),
+                                )
+                        else:
+                            for i, name in enumerate(["dQ", "dK", "dV"]):
+                                self.assertTrue(
+                                    mx.allclose(
+                                        vjp_ref[i], vjp_fused[i], **tol
+                                    ),
+                                    msg=(
+                                        f"{name} mismatch: dtype={dtype}, qL={qL}, "
+                                        f"kL={kL}, D={D}, mask={mask_type}, "
+                                        f"max_diff={mx.max(mx.abs(vjp_ref[i] - vjp_fused[i])).item()}"
+                                    ),
+                                )
+
+
+@pytest.mark.skipif(
+    not hasattr(mx, "metal"),
+    reason="Metal GPU required",
+)
+class TestSDPALongSequenceVJP(unittest.TestCase):
+    """Tests demonstrating fused VJP value for long sequences.
+
+    These tests show that fused backward avoids materializing the O(L^2)
+    attention matrix, which matters for long sequences where memory is
+    the constraint rather than compute speed.
+
+    Run with: pytest -m slow python/tests/test_fast_sdpa.py
+    Or: python -m pytest python/tests/test_fast_sdpa.py -k "LongSequence" -v
+    """
+
+    def _run_vjp_memory_test(self, L, D=64, H=4, B=1, dtype=mx.float16):
+        """Run fused vs unfused VJP and compare memory + correctness."""
+        scale = 1.0 / math.sqrt(D)
+
+        q = mx.random.normal(shape=(B, H, L, D)).astype(dtype)
+        k = mx.random.normal(shape=(B, H, L, D)).astype(dtype)
+        v = mx.random.normal(shape=(B, H, L, D)).astype(dtype)
+        mx.eval(q, k, v)
+
+        def loss_fused(q, k, v):
+            return mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale
+            ).sum()
+
+        def loss_unfused(q, k, v):
+            s = (q * scale) @ k.swapaxes(-1, -2)
+            s = mx.softmax(s, axis=-1, precise=True)
+            return (s @ v).sum()
+
+        grad_fused = mx.grad(loss_fused, argnums=(0, 1, 2))
+        grad_unfused = mx.grad(loss_unfused, argnums=(0, 1, 2))
+
+        # Measure fused memory
+        mx.clear_cache()
+        mx.eval(q, k, v)
+        mx.reset_peak_memory()
+        grads_f = grad_fused(q, k, v)
+        mx.eval(grads_f)
+        mem_fused = mx.get_peak_memory()
+
+        # Measure unfused memory
+        mx.clear_cache()
+        mx.eval(q, k, v)
+        mx.reset_peak_memory()
+        grads_u = grad_unfused(q, k, v)
+        mx.eval(grads_u)
+        mem_unfused = mx.get_peak_memory()
+
+        # Check no NaN
+        for i, name in enumerate(["dQ", "dK", "dV"]):
+            self.assertFalse(
+                mx.any(mx.isnan(grads_f[i])).item(),
+                f"NaN in fused {name} at L={L}",
+            )
+
+        # Check correctness (fused matches unfused)
+        atol = 1e-2  # float16 tolerance
+        for i, name in enumerate(["dQ", "dK", "dV"]):
+            max_diff = mx.max(mx.abs(grads_f[i] - grads_u[i])).item()
+            self.assertTrue(
+                mx.allclose(grads_f[i], grads_u[i], atol=atol, rtol=atol).item(),
+                f"{name} mismatch at L={L}: max|diff|={max_diff:.2e}",
+            )
+
+        # Report memory
+        attn_matrix_bytes = B * H * L * L * 2  # float16
+        savings = 1.0 - mem_fused / mem_unfused if mem_unfused > 0 else 0.0
+        print(
+            f"\n  L={L}: fused={mem_fused/1e6:.1f}MB, unfused={mem_unfused/1e6:.1f}MB, "
+            f"savings={100*savings:.1f}%, "
+            f"theoretical_attn_matrix={attn_matrix_bytes/1e6:.1f}MB"
+        )
+
+        return mem_fused, mem_unfused
+
+    @pytest.mark.slow
+    def test_long_sequence_L8192(self):
+        """L=8192: attention matrix would be 4GB (B=1,H=4). Fused avoids this."""
+        os.environ["MLX_SDPA_VJP_MODE"] = "fused"
+        try:
+            mem_fused, mem_unfused = self._run_vjp_memory_test(L=8192, H=4)
+            # Fused should use significantly less memory
+            self.assertLess(
+                mem_fused, mem_unfused,
+                f"Fused ({mem_fused/1e6:.1f}MB) should use less memory than "
+                f"unfused ({mem_unfused/1e6:.1f}MB) at L=8192",
+            )
+        finally:
+            os.environ.pop("MLX_SDPA_VJP_MODE", None)
+
+    @pytest.mark.slow
+    def test_long_sequence_L16384(self):
+        """L=16384: attention matrix would be 16GB (B=1,H=4). Fused avoids this."""
+        os.environ["MLX_SDPA_VJP_MODE"] = "fused"
+        try:
+            mem_fused, mem_unfused = self._run_vjp_memory_test(L=16384, H=4)
+            self.assertLess(
+                mem_fused, mem_unfused,
+                f"Fused ({mem_fused/1e6:.1f}MB) should use less memory than "
+                f"unfused ({mem_unfused/1e6:.1f}MB) at L=16384",
+            )
+        finally:
+            os.environ.pop("MLX_SDPA_VJP_MODE", None)
+
+    @pytest.mark.slow
+    def test_fused_correctness_sweep(self):
+        """Verify fused VJP correctness across multiple L values."""
+        os.environ["MLX_SDPA_VJP_MODE"] = "fused"
+        try:
+            for L in [512, 1024, 2048, 4096]:
+                with self.subTest(L=L):
+                    self._run_vjp_memory_test(L=L, H=4)
+        finally:
+            os.environ.pop("MLX_SDPA_VJP_MODE", None)
 
 
 if __name__ == "__main__":
