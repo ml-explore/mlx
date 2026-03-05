@@ -129,6 +129,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/sparse.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
