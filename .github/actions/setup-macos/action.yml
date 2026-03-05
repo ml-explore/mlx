@@ -6,6 +6,10 @@ inputs:
     description: 'Python version to use'
     required: false
     default: '3.10'
+  use-ccache:
+    description: 'Whether to enable ccache'
+    required: false
+    default: 'true'
 
 runs:
   using: "composite"
@@ -17,6 +21,13 @@ runs:
     - name: Install MetalToolchain
       shell: bash
       run: xcodebuild -downloadComponent MetalToolchain
+
+    - name: Use ccache
+      if: ${{ inputs.use-ccache == 'true' }}
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ccache-${{ runner.os }}-${{ runner.arch }}
+        max-size: 1GB
 
     - uses: conda-incubator/setup-miniconda@v3
       with:

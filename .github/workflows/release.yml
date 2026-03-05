@@ -93,6 +93,7 @@ jobs:
       - uses: ./.github/actions/setup-macos
         with:
           python-version: ${{ matrix.python-version }}
+          use-ccache: false
 
       - name: Install dependencies
         shell: bash -l {0}
