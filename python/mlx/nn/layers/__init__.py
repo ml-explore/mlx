@@ -71,6 +71,13 @@ from mlx.nn.layers.distributed import (
 from mlx.nn.layers.dropout import Dropout, Dropout2d, Dropout3d
 from mlx.nn.layers.embedding import Embedding
 from mlx.nn.layers.linear import Bilinear, Identity, Linear
+from mlx.nn.layers.moe import (
+    Expert,
+    MixtureOfExperts,
+    TopKRouter,
+    expert_combine,
+    expert_dispatch,
+)
 from mlx.nn.layers.normalization import (
     BatchNorm,
     GroupNorm,
