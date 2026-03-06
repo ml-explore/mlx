@@ -149,9 +149,6 @@ bool supports_qmv(
   if (!transpose) {
     return false;
   }
-  if (bits % 2 != 0) {
-    return false;
-  }
   if (mode != QuantizationMode::Affine) {
     return false;
   }
