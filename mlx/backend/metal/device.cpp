@@ -259,7 +259,7 @@ void CommandEncoder::set_input_array(
     int idx,
     int64_t offset /* = 0 */) {
   if (all_inputs_.insert(a.buffer().ptr()).second) {
-    stream_.buffer_sizes += a.data_size();
+    stream_.buffer_sizes += a.data_size() * a.itemsize();
   }
   auto r_buf = static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
   needs_barrier_ =
