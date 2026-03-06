@@ -201,6 +201,9 @@ class Module(dict):
                         f"Expected shape {v.shape} but received "
                         f"shape {v_new.shape} for parameter {k}"
                     )
+        else:
+            curr_weights = dict(tree_flatten(self.parameters()))
+            weights = [(k, v) for k, v in weights if k in curr_weights]
 
         if len(weights) != 0:
             self.update(tree_unflatten(weights), strict=False)
