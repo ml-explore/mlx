@@ -88,7 +88,12 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   throw std::runtime_error(
       fmt::format(
           "[quantized_matmul] No implementation for "
+          "problem shape: {}x{}x{}x{} "
           "activation: {}, bits: {}, group size: {}, mode: \"{}\".",
+          M,
+          N,
+          K,
+          B,
           dtype_to_string(x.dtype()),
           bits_,
           group_size_,

@@ -135,14 +135,8 @@ bool supports_qmv(
     int group_size,
     QuantizationMode mode,
     cu::Device& device) {
-  int m = out.shape(-2);
-  int n = out.shape(-1);
   int k = x.shape(-1);
-  int l = out.size() / (m * n);
-  if (l > 1) {
-    return false;
-  }
-  if (n % 8 != 0 || k % 8 != 0) {
+  if (k % 8 != 0) {
     return false;
   }
   if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
