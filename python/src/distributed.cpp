@@ -349,4 +349,40 @@ void init_distributed(nb::module_& parent_module) {
       Returns:
         array: The output array with shape ``[x.shape[0] // group.size(), *x.shape[1:]]``.
     )pbdoc");
+
+  m.def(
+      "all_to_all",
+      [](const ScalarOrArray& x,
+         std::optional<mx::distributed::Group> group,
+         mx::StreamOrDevice s) {
+        return mx::distributed::all_to_all(to_array(x), group, s);
+      },
+      "x"_a,
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def all_to_all(x: array, *, group: Optional[Group] = None, "
+          "stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      All-to-all exchange of data between processes.
+
+      Each process splits its input along the first axis into ``group.size()``
+      chunks and sends chunk *i* to process *i*. All processes receive one chunk
+      from every other process and concatenate them in rank order. The output
+      has the same shape as the input.
+
+      ``x.shape[0]`` must be divisible by the group size.
+
+      Args:
+        x (array): Input array.
+        group (Group): The group of processes that will participate in the
+          exchange. If set to ``None`` the global group is used. Default:
+          ``None``.
+        stream (Stream, optional): Stream or device. Defaults to ``None``
+          in which case the default stream of the default device is used.
+
+      Returns:
+        array: The result of the all-to-all exchange.
+    )pbdoc");
 }
