@@ -201,9 +201,6 @@ class Module(dict):
                         f"Expected shape {v.shape} but received "
                         f"shape {v_new.shape} for parameter {k}"
                     )
-        else:
-            curr_weights = dict(tree_flatten(self.parameters()))
-            weights = [(k, v) for k, v in weights if k in curr_weights]
 
         if len(weights) != 0:
             self.update(tree_unflatten(weights), strict=False)
@@ -343,6 +340,13 @@ class Module(dict):
                         raise ValueError(f'Module does not have parameter named "{k}".')
             elif isinstance(parameters, list):
                 for i in range(len(parameters)):
+                    if i >= len(dst):
+                        if strict:
+                            raise ValueError(
+                                f"List index {i} is out of bounds for "
+                                f"destination of length {len(dst)}."
+                            )
+                        continue
                     current_value = dst[i]
                     new_value = parameters[i]
                     if isinstance(current_value, mx.array):
