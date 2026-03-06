@@ -1,9 +1,8 @@
 #pragma once
 
-#include <cuda.h>
-#include <cuda_fp4.h>
-#include <cuda_runtime.h>
 #include "mlx/backend/cuda/vector_types.cuh"
+
+#include <cutlass/numeric_conversion.h>
 
 namespace mlx::core::cu {
 
@@ -13,23 +12,15 @@ using f32x4 = Vector4_t<float>;
 
 template <typename T>
 __device__ __forceinline__ uint16_t
-scale_cvt_Tx4_to_fp4x4_fallback(const Vector4_t<T> input, const float scale) {
+scale_cvt_Tx4_to_fp4x4_fallback(const Vector4_t<T>& input, const float scale) {
   // Fallback implementation for architectures that do not support cvt
   // instructions or for cuda versions with no fp4 support (< 12.8) -> scalar
-  uint16_t out_fp4x4 = 0;
-  fp32x4 scaled;
-  scaled.x = static_cast<float>(input.x) * scale;
-  scaled.y = static_cast<float>(input.y) * scale;
-  scaled.z = static_cast<float>(input.z) * scale;
-  scaled.w = static_cast<float>(input.w) * scale;
-  uint8_t q0 = __nv_fp4_e2m1(scaled.x).__x;
-  uint8_t q1 = __nv_fp4_e2m1(scaled.y).__x;
-  uint8_t q2 = __nv_fp4_e2m1(scaled.z).__x;
-  uint8_t q3 = __nv_fp4_e2m1(scaled.w).__x;
-  out_fp4x4 = (static_cast<uint16_t>(q3) << 12) |
-      (static_cast<uint16_t>(q2) << 8) | (static_cast<uint16_t>(q1) << 4) |
-      static_cast<uint16_t>(q0);
-  return out_fp4x4;
+  cutlass::NumericArrayConverter<float, T, 4> fp32_t;
+  auto scaled =
+      fp32_t(*reinterpret_cast<const cutlass::Array<T, 4>*>(&input)) * scale;
+  cutlass::NumericArrayConverter<cutlass::float_e2m1_t, float, 4> fp4_fp32;
+  auto quant = fp4_fp32(scaled);
+  return *reinterpret_cast<uint16_t*>(&quant);
 }
 
 #if (CUDART_VERSION >= 12080) && (__CUDA_ARCH__ >= 1000) && \
@@ -318,7 +309,7 @@ __device__ __forceinline__ uint16_t scale_cvt_Tx4_to_fp4x4_fast(
 
 template <typename T, bool USE_SR>
 __device__ __forceinline__ uint16_t scale_cvt_Tx4_to_fp4x4(
-    const Vector4_t<T> input,
+    const Vector4_t<T>& input,
     const float scale,
     uint32_t rbits) {
 #if (CUDART_VERSION >= 12080) && (__CUDA_ARCH__ >= 1000) && \
@@ -331,4 +322,5 @@ __device__ __forceinline__ uint16_t scale_cvt_Tx4_to_fp4x4(
   return scale_cvt_Tx4_to_fp4x4_fallback(input, scale);
 #endif
 }
+
 } // namespace mlx::core::cu
