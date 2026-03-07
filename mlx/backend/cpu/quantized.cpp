@@ -359,6 +359,10 @@ void _qmm_dispatch_typed(
     int bits,
     bool transposed_w) {
   switch (bits) {
+    case 1:
+      _qmm_dispatch_group<T, 1>(
+          result, x, w, scales, biases, M, N, K, group_size, transposed_w);
+      break;
     case 2:
       _qmm_dispatch_group<T, 2>(
           result, x, w, scales, biases, M, N, K, group_size, transposed_w);
@@ -384,7 +388,8 @@ void _qmm_dispatch_typed(
           result, x, w, scales, biases, M, N, K, group_size, transposed_w);
       break;
     default:
-      throw std::invalid_argument("Quantization bits must be 2, 3, 4, 6 or 8.");
+      throw std::invalid_argument(
+          "Quantization bits must be 1, 2, 3, 4, 5, 6 or 8.");
   }
 }
 
@@ -1180,15 +1185,24 @@ void quantize(
       w_min = std::min(w_min, (float)w[w_idx + j]);
     }
     bool mask = std::abs(w_min) > std::abs(w_max);
-    float scale = std::max((w_max - w_min) / n_bins, eps);
-    scale = mask ? scale : -scale;
+    float scale;
+    float bias;
 
-    float edge = mask ? w_min : w_max;
-    float q0 = std::rint(edge / scale);
-    float bias = 0;
-    if (q0 != 0) {
-      scale = edge / q0;
-      bias = edge;
+    if (bits == 1) {
+      // Affine 1-bit: bit 0 -> w_min, bit 1 -> w_max
+      scale = std::max(w_max - w_min, eps);
+      bias = w_min;
+    } else {
+      scale = std::max((w_max - w_min) / n_bins, eps);
+      scale = mask ? scale : -scale;
+
+      float edge = mask ? w_min : w_max;
+      float q0 = std::rint(edge / scale);
+      bias = 0;
+      if (q0 != 0) {
+        scale = edge / q0;
+        bias = edge;
+      }
     }
     size_t out_idx = i * int_per_group;
     for (int j = 0; j < int_per_group / bytes_per_pack; ++j) {

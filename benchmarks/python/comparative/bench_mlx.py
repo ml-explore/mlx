@@ -72,12 +72,17 @@ def _quant_matmul(x, w, s, b, transpose, group_size, bits):
 
 
 quant_matmul = {
+    "quant_matmul_32_1": partial(_quant_matmul, transpose=False, group_size=32, bits=1),
     "quant_matmul_32_2": partial(_quant_matmul, transpose=False, group_size=32, bits=2),
     "quant_matmul_32_4": partial(_quant_matmul, transpose=False, group_size=32, bits=4),
     "quant_matmul_32_8": partial(_quant_matmul, transpose=False, group_size=32, bits=8),
+    "quant_matmul_64_1": partial(_quant_matmul, transpose=False, group_size=64, bits=1),
     "quant_matmul_64_2": partial(_quant_matmul, transpose=False, group_size=64, bits=2),
     "quant_matmul_64_4": partial(_quant_matmul, transpose=False, group_size=64, bits=4),
     "quant_matmul_64_8": partial(_quant_matmul, transpose=False, group_size=64, bits=8),
+    "quant_matmul_128_1": partial(
+        _quant_matmul, transpose=False, group_size=128, bits=1
+    ),
     "quant_matmul_128_2": partial(
         _quant_matmul, transpose=False, group_size=128, bits=2
     ),
@@ -86,6 +91,9 @@ quant_matmul = {
     ),
     "quant_matmul_128_8": partial(
         _quant_matmul, transpose=False, group_size=128, bits=8
+    ),
+    "quant_matmul_t_32_1": partial(
+        _quant_matmul, transpose=True, group_size=32, bits=1
     ),
     "quant_matmul_t_32_2": partial(
         _quant_matmul, transpose=True, group_size=32, bits=2
@@ -96,6 +104,9 @@ quant_matmul = {
     "quant_matmul_t_32_8": partial(
         _quant_matmul, transpose=True, group_size=32, bits=8
     ),
+    "quant_matmul_t_64_1": partial(
+        _quant_matmul, transpose=True, group_size=64, bits=1
+    ),
     "quant_matmul_t_64_2": partial(
         _quant_matmul, transpose=True, group_size=64, bits=2
     ),
@@ -104,6 +115,9 @@ quant_matmul = {
     ),
     "quant_matmul_t_64_8": partial(
         _quant_matmul, transpose=True, group_size=64, bits=8
+    ),
+    "quant_matmul_t_128_1": partial(
+        _quant_matmul, transpose=True, group_size=128, bits=1
     ),
     "quant_matmul_t_128_2": partial(
         _quant_matmul, transpose=True, group_size=128, bits=2
@@ -420,7 +434,22 @@ if __name__ == "__main__":
         print(bench(matmul, *xs))
 
     elif args.benchmark.startswith("quant_matmul"):
-        print(bench(quant_matmul[args.benchmark], *xs))
+        # Parse group_size and bits from the benchmark name, e.g.
+        # "quant_matmul_128_4" or "quant_matmul_t_128_4"
+        fn = quant_matmul[args.benchmark]
+        gs = fn.keywords["group_size"]
+        bits = fn.keywords["bits"]
+        transpose = fn.keywords["transpose"]
+
+        # xs[0] = activation x, xs[1] = original (float) weight matrix
+        # Quantize the weight internally so the caller only needs:
+        #   --size MxK --size NxK  (transpose=True)  or  --size MxK --size KxN
+        w_float = xs[1].astype(mx.float16)
+        w_q, scales, biases = mx.quantize(w_float, group_size=gs, bits=bits)
+        mx.eval(w_q, scales, biases)
+        x_input = xs[0].astype(mx.float16)
+        mx.eval(x_input)
+        print(bench(_quant_matmul, x_input, w_q, scales, biases, transpose, gs, bits))
 
     elif args.benchmark == "linear":
         if args.fused:
