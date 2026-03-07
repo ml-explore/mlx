@@ -232,6 +232,37 @@ class TestBase(mlx_tests.MLXTestCase):
         size = tree_reduce(lambda acc, p: acc + p.size, qlin.trainable_parameters(), 0)
         self.assertTrue(size > 0)
 
+    def test_qqlinear_bias(self):
+        # Test QQLinear with bias=True
+        layer = nn.QQLinear(32, 64, bias=True, mode="nvfp4")
+        self.assertIn("bias", layer)
+        self.assertEqual(layer.bias.shape, (64,))
+
+        # Test QQLinear with bias=False (default)
+        layer_no_bias = nn.QQLinear(32, 64, bias=False, mode="nvfp4")
+        self.assertNotIn("bias", layer_no_bias)
+
+        # Test _extra_repr shows bias info
+        self.assertIn("bias=True", layer._extra_repr())
+        self.assertIn("bias=False", layer_no_bias._extra_repr())
+
+    def test_qqlinear_from_linear_with_bias(self):
+        # Test converting Linear with bias to QQLinear
+        linear = nn.Linear(32, 64, bias=True)
+        mx.eval(linear.parameters())
+
+        qqlinear = nn.QQLinear.from_linear(linear, mode="nvfp4")
+        self.assertIn("bias", qqlinear)
+        self.assertEqual(qqlinear.bias.shape, (64,))
+
+        # Test that bias values are copied
+        self.assertTrue(mx.array_equal(qqlinear.bias, linear.bias))
+
+        # Test converting Linear without bias
+        linear_no_bias = nn.Linear(32, 64, bias=False)
+        qqlinear_no_bias = nn.QQLinear.from_linear(linear_no_bias, mode="nvfp4")
+        self.assertNotIn("bias", qqlinear_no_bias)
+
     def test_quantized_sharded_linear_construction(self):
         input_dims, output_dims = 1536, 1024
         for bits in [2, 3, 4, 5, 6, 8]:
