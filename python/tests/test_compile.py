@@ -1294,6 +1294,18 @@ class TestCompile(mlx_tests.MLXTestCase):
             np.asarray(out, copy=False).__array_interface__["data"][0], in_ptr
         )
 
+    def test_compile_unary_reduction(self):
+
+        x = mx.ones(shape=(4096, 4096))
+        y = mx.ones(shape=(4096, 4096))
+
+        @mx.compile
+        def abs_max(x):
+            return mx.max(mx.abs(x))
+
+        out = abs_max(x)
+        expected = y.abs().max() 
+        self.assertTrue(mx.allclose(out, expected))
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
