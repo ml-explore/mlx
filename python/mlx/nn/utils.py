@@ -128,14 +128,12 @@ def average_gradients(
 
     if all_reduce_size <= 0:
         return tree_map(
-            lambda x: _comm_fn(
+            lambda x: mx.distributed.all_sum(
                 x,
-                "all_sum",
-                group,
-                communication_type,
-                communication_stream,
-                average=True,
-            ),
+                group=group,
+                stream=communication_stream,
+            )
+            / N,
             gradients,
         )
 
@@ -149,15 +147,9 @@ def average_gradients(
 
         # We can't group them if they have mixed types
         if not all(dt == dtypes[0] for dt in dtypes):
-            return average_gradients(gradients, group, 0, communication_type)
-        itemsize = (
-            communication_type.size
-            if communication_type is not None
-            else dtypes[0].size
-        )
-
+            return average_gradients(gradients, group, 0)
         # Gather the gradients in groups that are just above or equal to all_reduce_size
-        grad_groups = _group_by_size(keys, sizes, itemsize, all_reduce_size)
+        grad_groups = _group_by_size(keys, sizes, dtypes[0].size, all_reduce_size)
 
         # Concatenate-reduce-split
         new_flat_grads = []
@@ -181,9 +173,9 @@ def average_gradients(
         return tree_unflatten(new_flat_grads)
 
 
-def _clip_grads_fsdp(grads_slice, max_norm):
+def _clip_grads_fsdp(grads_slice, max_norm, group=None):
     local_norm_sq = tree_reduce(lambda acc, g: acc + g.square().sum(), grads_slice, 0.0)
-    global_norm_sq = mx.distributed.all_sum(local_norm_sq)
+    global_norm_sq = mx.distributed.all_sum(local_norm_sq, group=group)
     grad_norm = mx.sqrt(global_norm_sq)
     normalizer = mx.minimum(max_norm / (grad_norm + 1e-6), 1.0)
     grads_slice = tree_map(lambda g: g * normalizer, grads_slice)
@@ -253,14 +245,8 @@ def fsdp_apply_gradients(
         ... )
         >>> model.update(updated_params)
     """
-    world = mx.distributed.init()
-    N = world.size()
-    fsdp_group = fsdp_group or world
-
-    if dp_group is None and fsdp_group.size() != N:
-        raise ValueError(
-            "dp_group must be provided when fsdp_group is smaller than the world"
-        )
+    fsdp_group = fsdp_group or mx.distributed.init()
+    N = fsdp_group.size() * (dp_group.size() if dp_group is not None else 1)
 
     if N == 1:
         if max_norm is not None:
@@ -278,8 +264,6 @@ def fsdp_apply_gradients(
 
     S = fsdp_group.size()
     fsdp_rank = fsdp_group.rank()
-    fsdp_is_full_world = fsdp_group.size() == N
-
     # reduce-scatter gradients, shard parameters
     grad_slices = {}
     param_slices = {}
@@ -293,7 +277,7 @@ def fsdp_apply_gradients(
             )
             / N
         )
-        if not fsdp_is_full_world:
+        if dp_group is not None:
             grad_slices[group_idx] = mx.distributed.all_sum(
                 grad_slices[group_idx], group=dp_group, stream=communication_stream
             )
@@ -305,7 +289,9 @@ def fsdp_apply_gradients(
     # clip gradients if needed
     grad_norm = None
     if max_norm is not None:
-        grad_slices, grad_norm = _clip_grads_fsdp(grad_slices, max_norm)
+        grad_slices, grad_norm = _clip_grads_fsdp(
+            grad_slices, max_norm, group=fsdp_group
+        )
 
     # optimizer step
     updated_param_slices = optimizer.apply_gradients(grad_slices, param_slices)
