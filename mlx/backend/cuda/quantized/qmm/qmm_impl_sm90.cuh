@@ -111,7 +111,9 @@ void qmm_sm90(
       reinterpret_cast<void*>(kernel),
       gemm.get_grid_shape(gemm.params()),
       GemmKernel::get_block_shape(),
-      {get<0>(cluster), get<1>(cluster), get<2>(cluster)},
+      {static_cast<unsigned>(get<0>(cluster)),
+       static_cast<unsigned>(get<1>(cluster)),
+       static_cast<unsigned>(get<2>(cluster))},
       GemmKernel::SharedStorageSize,
       kernel_params);
 }
