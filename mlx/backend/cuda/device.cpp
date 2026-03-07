@@ -66,8 +66,10 @@ Device::~Device() {
 
 void Device::make_current() {
   // We need to set/get current CUDA device very frequently, cache it to reduce
-  // actual calls of CUDA APIs.
-  static thread_local int current = 0;
+  // actual calls of CUDA APIs. Use -1 as sentinel so the first call on each
+  // new thread always calls cudaSetDevice (which establishes the CUDA primary
+  // context). Without this, device 0 would never get set on a new thread.
+  static thread_local int current = -1;
   if (current != device_) {
     CHECK_CUDA_ERROR(cudaSetDevice(device_));
     current = device_;
