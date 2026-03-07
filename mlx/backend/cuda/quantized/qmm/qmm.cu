@@ -2,9 +2,7 @@
 
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
 
-#if defined(MLX_CUDA_SM90A_ENABLED)
 #include <cute/tensor.hpp>
-#endif
 
 namespace mlx::core {
 

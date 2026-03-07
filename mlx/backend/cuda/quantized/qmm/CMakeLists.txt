@@ -1,6 +1,6 @@
 target_sources(
   mlx
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/qmm.cpp
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/qmm.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/qmv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fp_qmv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/qmm_impl_sm90_m128_n16_m1.cu
