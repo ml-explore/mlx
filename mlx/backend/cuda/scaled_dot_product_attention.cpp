@@ -318,7 +318,15 @@ bool supports_sdpa_cudnn(
     bool has_arr_mask,
     bool do_causal,
     Stream s) {
+#ifdef _WIN32
+  // On Windows (WDDM), cuDNN SDPA has severe performance issues due to
+  // high per-kernel-launch overhead in the WDDM driver model. cuDNN's
+  // multi-kernel SDPA amplifies this, making it much slower than the
+  // single-kernel sdpa_vector path for both prefill and generation.
+  static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SDPA", 0);
+#else
   static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SDPA", 1);
+#endif
   if (!enabled) {
     return false;
   }

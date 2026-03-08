@@ -118,8 +118,10 @@ target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>")
 
 # Required for generating optimized CUTLASS code.
-target_compile_options(
-  mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-strict-aliasing>")
+if(NOT MSVC)
+  target_compile_options(
+    mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-strict-aliasing>")
+endif()
 
 # Suppress nvcc warnings on C++ headers.
 target_compile_options(
