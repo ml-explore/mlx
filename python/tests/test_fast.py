@@ -169,6 +169,35 @@ class TestFast(mlx_tests.MLXTestCase):
                 x, dims, traditional=traditional, base=base, scale=scale, offset=offset
             )
 
+    def test_rope_dims_validation(self):
+        T = 4
+        feature_dim = 64
+        x = mx.random.uniform(shape=(1, T, feature_dim))
+
+        # dims = 0 should raise
+        with self.assertRaises(ValueError):
+            mx.fast.rope(x, dims=0, traditional=False, base=10000.0, scale=1.0, offset=0)
+
+        # negative dims should raise
+        with self.assertRaises(ValueError):
+            mx.fast.rope(x, dims=-2, traditional=False, base=10000.0, scale=1.0, offset=0)
+
+        # odd dims should raise
+        with self.assertRaises(ValueError):
+            mx.fast.rope(x, dims=7, traditional=False, base=10000.0, scale=1.0, offset=0)
+
+        # dims > feature_dim should raise
+        with self.assertRaises(ValueError):
+            mx.fast.rope(
+                x, dims=128, traditional=False, base=10000.0, scale=1.0, offset=0
+            )
+
+        # valid dims should not raise
+        mx.fast.rope(x, dims=32, traditional=False, base=10000.0, scale=1.0, offset=0)
+        mx.fast.rope(
+            x, dims=feature_dim, traditional=False, base=10000.0, scale=1.0, offset=0
+        )
+
     def test_rope_with_freqs(self):
         mx.random.seed(0)
 

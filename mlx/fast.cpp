@@ -406,6 +406,23 @@ array rope(
   if (offset.dtype().size() != 4) {
     inputs[1] = astype(offset, int32, s);
   }
+  if (dims <= 0) {
+    std::ostringstream msg;
+    msg << "[rope] dims must be positive but got " << dims << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (dims % 2 != 0) {
+    std::ostringstream msg;
+    msg << "[rope] dims must be even but got " << dims << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (dims > x.shape(-1)) {
+    std::ostringstream msg;
+    msg << "[rope] dims must not exceed the input's last dimension ("
+        << x.shape(-1) << ") but got " << dims << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
   if (inputs.size() == 3 &&
       (inputs[2].ndim() != 1 || inputs[2].shape(0) != dims / 2)) {
     std::ostringstream msg;
