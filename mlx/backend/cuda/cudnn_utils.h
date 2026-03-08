@@ -2,6 +2,10 @@
 
 #pragma once
 
+#include <cassert>
+#include <optional>
+
+#include "mlx/backend/cuda/cuda_utils.h"
 #include "mlx/backend/cuda/device/config.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/dtype_utils.h"
@@ -182,6 +186,9 @@ class DnnGraph : public fe::graph::Graph {
       const array& x);
 
   cudnnHandle_t handle_;
+  std::optional<CudaGraph> cached_cuda_graph_;
+  std::string cached_subgraph_key_;
+  bool cached_is_updatable_{true};
 };
 
 } // namespace mlx::core
