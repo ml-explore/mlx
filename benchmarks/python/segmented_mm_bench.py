@@ -3,9 +3,16 @@
 import argparse
 import time
 
-import mlx.core as mx
 import numpy as np
+
+# Keep torch imported before mlx in this benchmark process.
+# If mlx imports first, mixed CUDA runtime loading can trigger Torch fp16/bf16
+# GEMM failures (CUBLAS_STATUS_INVALID_VALUE) on some setups.
+# isort: off
 import torch
+import mlx.core as mx
+
+# isort: on
 
 MLX_DTYPES = {
     "float16": mx.float16,
