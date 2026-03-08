@@ -170,6 +170,77 @@ void gather_mm_rhs(
       encoder);
 }
 
+void segmented_mm(
+    const array& a_,
+    const array& b_,
+    const array& segments_,
+    array& out,
+    int M,
+    int N,
+    cu::CommandEncoder& encoder,
+    Stream s) {
+  auto a = a_;
+  auto b = b_;
+  auto segments = segments_;
+
+  // Initialize output to zeros for empty segments where end <= start.
+  array zero(0, out.dtype());
+  encoder.add_temporary(zero);
+  fill_gpu(zero, out, s);
+
+  segments.eval();
+  const uint32_t* segments_ptr = segments.data<uint32_t>();
+  size_t num_segments = segments.size() / 2;
+
+  auto a_strides = Strides{a.strides(-2), a.strides(-1)};
+  auto b_strides = Strides{b.strides(-2), b.strides(-1)};
+  auto out_strides = Strides{out.strides(-2), out.strides(-1)};
+
+  for (size_t i = 0; i < num_segments; ++i) {
+    uint32_t start =
+        segments_ptr[elem_to_loc(2 * i, segments.shape(), segments.strides())];
+    uint32_t end = segments_ptr[elem_to_loc(
+        2 * i + 1, segments.shape(), segments.strides())];
+    if (end <= start) {
+      continue;
+    }
+
+    int K = static_cast<int>(end - start);
+
+    array a_view({M, K}, a.dtype(), nullptr, {});
+    a_view.copy_shared_buffer(
+        a,
+        a_strides,
+        {},
+        a.data_size(),
+        static_cast<int64_t>(start) * a.strides(-1));
+
+    array b_view({K, N}, b.dtype(), nullptr, {});
+    b_view.copy_shared_buffer(
+        b,
+        b_strides,
+        {},
+        b.data_size(),
+        static_cast<int64_t>(start) * b.strides(-2));
+
+    // CuBLASLt is more reliable with packed slices than arbitrary strided
+    // submatrix pointers.
+    array a_slice = contiguous_copy_gpu(a_view, s);
+    array b_slice = contiguous_copy_gpu(b_view, s);
+    encoder.add_temporary(a_slice);
+    encoder.add_temporary(b_slice);
+
+    array out_view({M, N}, out.dtype(), nullptr, {});
+    out_view.copy_shared_buffer(
+        out, out_strides, {}, out.data_size(), static_cast<int64_t>(i) * M * N);
+
+    CublasGemm gemm(
+        encoder.device(), a.dtype(), false, M, K, K, false, K, N, N, 1, 0, 0);
+    gemm.run(
+        encoder, out_view, a_slice, b_slice, Shape{1}, Strides{0}, Strides{0});
+  }
+}
+
 } // namespace
 
 void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -368,6 +439,36 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   throw std::runtime_error("NYI");
+}
+
+void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("SegmentedMM::eval_gpu");
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  assert(inputs.size() == 3);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto& segments = inputs[2];
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  if (out.size() == 0) {
+    return;
+  }
+
+  // Return zeros if either input matrix is empty.
+  if (a.size() == 0 || b.size() == 0) {
+    array zero(0, a.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
+
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+
+  segmented_mm(a, b, segments, out, M, N, encoder, s);
 }
 
 } // namespace mlx::core
