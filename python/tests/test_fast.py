@@ -630,6 +630,42 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gb1).max(), 1e-9)
         self.assertLess(mx.abs(gb2).max(), 1e-9)
 
+    def test_layer_norm_grad_no_bias(self):
+        # Second-order gradient through layer_norm with weight but no bias.
+        # Regression test: the VJP fallback had zeros_like(w) instead of
+        # zeros_like(b) for the bias placeholder gradient, causing a shape
+        # mismatch that crashes on higher-order differentiation.
+        D = 8
+        eps = 1e-5
+        x = mx.random.uniform(shape=(2, 4, D))
+        w = mx.random.uniform(shape=(D,))
+        y = mx.random.uniform(shape=(2, 4, D))
+        mx.eval(x, w, y)
+
+        f_ref = lambda x, w, y: (layer_norm(x, w, None, eps) * y).sum()
+        f_fast = lambda x, w, y: (mx.fast.layer_norm(x, w, None, eps) * y).sum()
+
+        # First order should match reference
+        gx1, gw1 = mx.grad(f_ref, argnums=(0, 1))(x, w, y)
+        gx2, gw2 = mx.grad(f_fast, argnums=(0, 1))(x, w, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+
+        # Second order — this crashes without the fix due to shape mismatch
+        # in the bias placeholder gradient: zeros_like(w) shape (D,) vs
+        # expected zeros_like(b) shape ()
+        def gf(f):
+            def inner(x, w, y):
+                gx, gw = mx.grad(f, argnums=(0, 1))(x, w, y)
+                return ((gx + gw) * y).sum()
+
+            return inner
+
+        gx1, gw1 = mx.grad(gf(f_ref), argnums=(0, 1))(x, w, y)
+        gx2, gw2 = mx.grad(gf(f_fast), argnums=(0, 1))(x, w, y)
+        self.assertLess(mx.abs(gx1 - gx2).max() / mx.abs(gx1).mean(), 5e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 5e-5)
+
     def test_layer_norm_grad_no_params(self):
         eps = 1e-5
         f1 = lambda x: layer_norm(x, None, None, eps).sum()
