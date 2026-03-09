@@ -169,7 +169,7 @@ T deserialize(Reader& is) {
   } else if constexpr (is_optional<T>) {
     auto has_value = deserialize<bool>(is);
     if (has_value) {
-      return deserialize<T>(is);
+      return T{deserialize<typename T::value_type>(is)};
     } else {
       return std::nullopt;
     }
