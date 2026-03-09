@@ -29,7 +29,9 @@ struct _MLX_Float16 {
 
   // Appease std::vector<bool> for being special
   _MLX_Float16& operator=(std::vector<bool>::reference x) {
-      return (*this = _MLX_Float16(static_cast<float>(static_cast<bool>(x))));
+    // 0x3c00 == TRUE == 1.0
+    bits_ = (x) ? 0x3c00 : 0;
+    return (*this);
   }
 
   _MLX_Float16& operator=(const float& x) {
