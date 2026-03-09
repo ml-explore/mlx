@@ -105,6 +105,16 @@ TEST_CASE("test array basics") {
     CHECK_EQ(x.dtype(), bool_);
     CHECK(array_equal(x, array({false, true, false, true})).item<bool>());
   }
+
+  // Regression: vector<bool>::reference to fp16/bf16 stored raw bits
+  {
+    std::vector<bool> data = {true, false, true};
+    auto bf = array(data.begin(), {3}, bfloat16);
+    CHECK(array_equal(bf, array({1.0f, 0.0f, 1.0f}, bfloat16)).item<bool>());
+
+    auto fp = array(data.begin(), {3}, float16);
+    CHECK(array_equal(fp, array({1.0f, 0.0f, 1.0f}, float16)).item<bool>());
+  }
 }
 
 TEST_CASE("test array types") {
