@@ -64,7 +64,7 @@ jobs:
           build-backend: ${{ matrix.python_version == '3.10' }}
           arch: ${{ matrix.arch }}
       - name: Upload MLX artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           overwrite: true
           name: linux-wheels-${{ matrix.python_version }}-${{ matrix.arch }}
@@ -72,7 +72,7 @@ jobs:
           if-no-files-found: error
       - name: Upload CPU artifacts
         if: matrix.python_version == '3.10'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           overwrite: true
           name: mlx-cpu-${{ matrix.arch }}
@@ -116,7 +116,7 @@ jobs:
           macos-target: 26.0
           build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Upload MLX artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           overwrite: true
           name: mac-wheels-${{ matrix.python-version }}
@@ -124,7 +124,7 @@ jobs:
           if-no-files-found: error
       - name: Upload Metal artifacts
         if: matrix.python-version == '3.10'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           overwrite: true
           name: mlx-metal
@@ -152,7 +152,7 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           overwrite: true
           name: mlx-${{ matrix.toolkit }}-${{ matrix.arch }}
@@ -169,12 +169,12 @@ jobs:
       name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: linux-wheels-*
           merge-multiple: true
           path: dist
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: mac-wheels-*
           merge-multiple: true
@@ -197,7 +197,7 @@ jobs:
       name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx-cuda
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: mlx-cuda-*
           merge-multiple: true
@@ -220,7 +220,7 @@ jobs:
       name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx-cpu
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: mlx-cpu-*
           merge-multiple: true
@@ -243,7 +243,7 @@ jobs:
       name: ${{ inputs.dry_run && 'dry-run' || 'pypi' }}
       url: https://pypi.org/p/mlx-metal
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: mlx-metal
           path: dist

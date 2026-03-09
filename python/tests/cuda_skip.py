@@ -8,9 +8,6 @@ cuda_skip = {
     "TestBlas.test_gather_mm_sorted_vjp",
     # Segmented matmul NYI
     "TestBlas.test_segmented_mm",
-    # Hadamard NYI
-    "TestOps.test_hadamard",
-    "TestOps.test_hadamard_grad_vmap",
     # FFTs NYI
     "TestFFT.test_fft",
     "TestFFT.test_fft_big_powers_of_two",

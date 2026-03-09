@@ -117,7 +117,6 @@ array unfold_inputs_nd(
         cu::naive_unfold_nd<DataType, NDIM>,
         num_blocks,
         block_dims,
-        0,
         gpu_ptr<DataType>(in),
         gpu_ptr<DataType>(unfolded),
         filter_size,

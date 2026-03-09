@@ -47,10 +47,17 @@ class CommandEncoder {
   void set_output_array(const array& arr);
 
   template <typename F, typename... Params>
-  void add_kernel_node(
+  void
+  add_kernel_node(F* func, dim3 grid_dim, dim3 block_dim, Params&&... params) {
+    add_kernel_node_ex(func, grid_dim, block_dim, {}, 0, params...);
+  }
+
+  template <typename F, typename... Params>
+  void add_kernel_node_ex(
       F* func,
       dim3 grid_dim,
       dim3 block_dim,
+      dim3 cluster_dim,
       uint32_t smem_bytes,
       Params&&... params) {
     constexpr size_t num = sizeof...(Params);
@@ -59,20 +66,28 @@ class CommandEncoder {
     ([&](auto&& p) { ptrs[i++] = static_cast<void*>(&p); }(
          std::forward<Params>(params)),
      ...);
-    add_kernel_node((void*)func, grid_dim, block_dim, smem_bytes, ptrs);
+    add_kernel_node_raw(
+        reinterpret_cast<void*>(func),
+        grid_dim,
+        block_dim,
+        cluster_dim,
+        smem_bytes,
+        ptrs);
   }
 
-  void add_kernel_node(
-      CUfunction func,
-      dim3 grid_dim,
-      dim3 block_dim,
-      uint32_t smem_bytes,
-      void** params);
-
-  void add_kernel_node(
+  void add_kernel_node_raw(
       void* func,
       dim3 grid_dim,
       dim3 block_dim,
+      dim3 cluster_dim,
+      uint32_t smem_bytes,
+      void** params);
+
+  void add_kernel_node_raw(
+      CUfunction func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      dim3 cluster_dim,
       uint32_t smem_bytes,
       void** params);
 
@@ -98,8 +113,8 @@ class CommandEncoder {
   void synchronize();
 
  private:
-  void add_kernel_node(const cudaKernelNodeParams& params);
-  void add_kernel_node(const CUDA_KERNEL_NODE_PARAMS& params);
+  cudaGraphNode_t add_kernel_node_raw(const cudaKernelNodeParams& params);
+  CUgraphNode add_kernel_node_raw(const CUDA_KERNEL_NODE_PARAMS& params);
 
   struct GraphNode {
     cudaGraphNode_t node;

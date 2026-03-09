@@ -4,6 +4,7 @@
 
 #include <infiniband/verbs.h>
 
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -221,7 +222,7 @@ std::vector<Connection> create_connections(
     const std::vector<std::string>& device_names);
 
 inline int poll(
-    const std::vector<Connection>& connections,
+    std::span<const Connection> connections,
     int num_completions,
     ibv_wc* work_completions) {
   int completions = 0;
@@ -244,8 +245,8 @@ inline int poll(
 }
 
 inline int poll(
-    const std::vector<Connection>& connections_1,
-    const std::vector<Connection>& connections_2,
+    std::span<const Connection> connections_1,
+    std::span<const Connection> connections_2,
     int num_completions,
     ibv_wc* work_completions) {
   int completions = 0;

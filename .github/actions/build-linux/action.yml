@@ -21,7 +21,7 @@ runs:
       run: |
         if ${{ startsWith(inputs.toolkit, 'cuda') && runner.arch == 'arm64' }} ; then
           # There is no GPU in arm64 runner, use a common arch.
-          CMAKE_ARGS="$CMAKE_ARGS -DMLX_CUDA_ARCHITECTURES=90a"
+          CMAKE_ARGS="$CMAKE_ARGS -DMLX_CUDA_ARCHITECTURES=80"
           # Can not build tests and stubs when the built executables can not run.
           CMAKE_ARGS="$CMAKE_ARGS -DMLX_BUILD_TESTS=OFF -DMLX_BUILD_PYTHON_STUBS=OFF"
         fi

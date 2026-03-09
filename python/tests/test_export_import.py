@@ -501,13 +501,14 @@ class TestExportImport(mlx_tests.MLXTestCase):
     def test_export_with_callback(self):
 
         def fn(x, y):
-            return mx.log(mx.abs(x - y))
+            return mx.log(mx.abs(x - y)).astype(mx.int32)
 
         n_in = None
         n_out = None
         n_const = None
         keywords = None
         primitives = []
+        primitive_args = []
 
         def callback(args):
             nonlocal n_in, n_out, n_const, keywords, primitives
@@ -522,6 +523,7 @@ class TestExportImport(mlx_tests.MLXTestCase):
                 n_const = len(args["constants"])
             elif t == "primitive":
                 primitives.append(args["name"])
+                primitive_args.append(args["arguments"])
 
         mx.export_function(callback, fn, mx.array(1.0), y=mx.array(1.0))
         self.assertEqual(n_in, 2)
@@ -529,7 +531,11 @@ class TestExportImport(mlx_tests.MLXTestCase):
         self.assertEqual(n_const, 0)
         self.assertEqual(len(keywords), 1)
         self.assertEqual(keywords[0][0], "y")
-        self.assertEqual(primitives, ["Subtract", "Abs", "Log"])
+        self.assertEqual(primitives, ["Subtract", "Abs", "Log", "AsType"])
+        self.assertEqual(primitive_args[0], [])
+        self.assertEqual(primitive_args[1], [])
+        self.assertEqual(primitive_args[2], [2])
+        self.assertEqual(primitive_args[3], [mx.int32])
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_export_import_custom_kernel(self):

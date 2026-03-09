@@ -103,7 +103,7 @@ array compute_dynamic_offset(
   args.append(axes);
 
   auto kernel = mod.get_kernel(kernel_name);
-  encoder.add_kernel_node(kernel, 1, 1, 0, args.args());
+  encoder.add_kernel_node_raw(kernel, 1, 1, {}, 0, args.args());
 
   return offset;
 }

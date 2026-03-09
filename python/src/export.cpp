@@ -164,6 +164,8 @@ void init_export(nb::module_& m) {
       nb::kw_only(),
       "shapeless"_a = false,
       "kwargs"_a,
+      nb::sig(
+          "def export_function(file_or_callback: Union[str, Callable], fun: Callable, *args, shapeless: bool = False, **kwargs) -> None"),
       R"pbdoc(
         Export an MLX function.
 
@@ -178,8 +180,8 @@ void init_export(nb::module_& m) {
           versions of MLX may not be compatible with future versions.
 
         Args:
-            file (str or Callable): Either a file path to export the function
-              to or a callback.
+            file_or_callback (str or Callable): Either a file path to export
+              the function to or a callback.
             fun (Callable): A function which takes as input zero or more
               :class:`array` and returns one or more :class:`array`.
             *args (array): Example array inputs to the function.

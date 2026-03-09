@@ -247,6 +247,10 @@ void CommandEncoder::set_buffer(
     const MTL::Buffer* buf,
     int idx,
     int64_t offset /* = 0 */) {
+  // Record as both input and output to ensure synchronization between command
+  // buffers
+  all_inputs_.insert((void*)buf);
+  all_outputs_.insert((void*)buf);
   enc_->setBuffer(buf, offset, idx);
 }
 
@@ -319,9 +323,18 @@ Device::Device() {
   auto pool = new_scoped_memory_pool();
   device_ = load_device();
   default_library_ = load_default_library(device_);
-  arch_ = std::string(device_->architecture()->name()->utf8String());
-  int ag_tens = arch_[arch_.size() - 3] - '0';
-  int ag_ones = arch_[arch_.size() - 2] - '0';
+  arch_ = env::metal_gpu_arch();
+  if (arch_.empty()) {
+    arch_ = std::string(device_->architecture()->name()->utf8String());
+  }
+  int ag_tens = 0;
+  int ag_ones = 0;
+  if (arch_.size() >= 3) {
+    ag_tens = arch_[arch_.size() - 3] - '0';
+    ag_ones = arch_[arch_.size() - 2] - '0';
+    ag_tens = (ag_tens < 10 && ag_tens >= 0) ? ag_tens : 0;
+    ag_ones = (ag_ones < 10 && ag_ones >= 0) ? ag_ones : 0;
+  }
   arch_gen_ = ag_tens * 10 + ag_ones;
   auto arch = arch_.back();
   switch (arch) {

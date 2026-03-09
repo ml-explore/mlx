@@ -3,6 +3,8 @@
 #pragma once
 
 #include "mlx/distributed/distributed_impl.h"
+#include "mlx/distributed/jaccl/mesh_impl.h"
+#include "mlx/distributed/jaccl/ring_impl.h"
 #include "mlx/distributed/jaccl/utils.h"
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
@@ -72,51 +74,16 @@ class MeshGroup : public GroupImpl {
    */
   void allocate_buffers();
 
-  void send_to(int sz, int rank, int buff) {
-    connections_[rank].post_send(
-        send_buffer(sz, buff), SEND_WR << 16 | buff << 8 | rank);
-  }
-
-  void recv_from(int sz, int rank, int buff) {
-    connections_[rank].post_recv(
-        recv_buffer(sz, buff, rank), RECV_WR << 16 | buff << 8 | rank);
-  }
-
-  SharedBuffer& send_buffer(int sz, int buff) {
-    return buffers_[sz * NUM_BUFFERS * size_ + buff * size_ + rank_];
-  }
-
-  SharedBuffer& recv_buffer(int sz, int buff, int rank) {
-    return buffers_[sz * NUM_BUFFERS * size_ + buff * size_ + rank];
-  }
-
-  void post_send_all(int sz, int buff) {
-    auto& b = send_buffer(sz, buff);
-    int wr_id = SEND_WR << 16 | buff << 8;
-    for (int i = 0; i < size_; i++) {
-      if (i == rank_) {
-        continue;
-      }
-      connections_[i].post_send(b, wr_id | i);
-    }
-  }
-
-  void post_recv_all(int sz, int buff) {
-    int b = sz * NUM_BUFFERS * size_ + buff * size_;
-    int wr_id = RECV_WR << 16 | buff << 8;
-    for (int i = 0; i < size_; i++) {
-      if (i == rank_) {
-        continue;
-      }
-      connections_[i].post_recv(buffers_[b + i], wr_id | i);
-    }
-  }
-
   int rank_;
   int size_;
   SideChannel side_channel_;
   std::vector<Connection> connections_;
   std::vector<SharedBuffer> buffers_;
+  std::vector<SharedBuffer> ring_send_buffers_;
+  std::vector<SharedBuffer> ring_recv_buffers_;
+
+  MeshImpl mesh_;
+  RingImpl ring_;
 };
 
 } // namespace mlx::core::distributed::jaccl

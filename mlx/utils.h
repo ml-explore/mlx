@@ -136,6 +136,7 @@ inline int next_power_of_2(int n) {
 namespace env {
 
 int get_var(const char* name, int default_value);
+std::string get_var(const char* name, const char* default_value);
 
 inline int bfs_max_width() {
   static int bfs_max_width_ = get_var("MLX_BFS_MAX_WIDTH", 20);
@@ -167,6 +168,11 @@ inline bool enable_tf32() {
 inline int nccl_timeout(int default_value) {
   static int nccl_timeout = get_var("MLX_NCCL_TIMEOUT", default_value);
   return nccl_timeout;
+}
+
+inline const std::string& metal_gpu_arch() {
+  static std::string gpu_arch_ = get_var("MLX_METAL_GPU_ARCH", "");
+  return gpu_arch_;
 }
 
 } // namespace env
