@@ -31,6 +31,7 @@ struct _MLX_BFloat16 {
   _MLX_BFloat16& operator=(std::vector<bool>::reference x) {
     // 0x3f80 == TRUE == 1.0
     bits_ = (x) ? 0x3f80 : 0;
+    return (*this);
   }
 
   _MLX_BFloat16& operator=(const float& x) {
