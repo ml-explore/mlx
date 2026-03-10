@@ -955,6 +955,12 @@ split(const array& a, int num_splits, int axis, StreamOrDevice s /* = {} */) {
         << " for array with shape " << a.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
+  if (num_splits <= 0) {
+    std::ostringstream msg;
+    msg << "[split] num_splits must be positive and non-zero but got "
+        << num_splits << ".";
+    throw std::invalid_argument(msg.str());
+  }
   auto q_and_r = std::ldiv(a.shape(axis), num_splits);
   if (q_and_r.rem) {
     std::ostringstream msg;
