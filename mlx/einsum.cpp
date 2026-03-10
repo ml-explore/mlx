@@ -811,7 +811,8 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
   if (inputs.size() <= 2) {
     std::vector<int> positions(in_subscripts.size());
     std::iota(positions.begin(), positions.end(), 0);
-    path.emplace_back(std::move(inputs), std::move(output), std::move(positions));
+    path.emplace_back(
+        std::move(inputs), std::move(output), std::move(positions));
     path_info.optimized_cost = path_info.naive_cost;     
     path_info.optimized_scaling = path_info.naive_scaling;
 
