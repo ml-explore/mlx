@@ -9,6 +9,105 @@
 #include <cute/numeric/numeric_types.hpp>
 #include <cutlass/numeric_conversion.h>
 
+namespace cutlass {
+
+using uint3b_t = integer_subbyte<3, false>;
+using uint5b_t = integer_subbyte<5, false>;
+
+template <typename T, int N, FloatRoundStyle Round>
+struct NumericArrayConverter<T, uint3b_t, N, Round> {
+  static_assert(N % 8 == 0);
+
+  using result_type = Array<T, N>;
+  using source_type = Array<uint3b_t, N>;
+
+  CUTLASS_HOST_DEVICE
+  static result_type convert(const source_type& source) {
+    result_type result;
+    auto* s_base = reinterpret_cast<const uint8_t*>(&source);
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < N / 8; ++i) {
+      auto* s = s_base + i * 3;
+      result[i * 8] = T(s[0] & 0x07);
+      result[i * 8 + 1] = T((s[0] & 0x38) >> 3);
+      result[i * 8 + 2] = T((s[0] & 0xc0) >> 6) + T((s[1] & 0x01) << 2);
+      result[i * 8 + 3] = T((s[1] & 0x0e) >> 1);
+      result[i * 8 + 4] = T((s[1] & 0x70) >> 4);
+      result[i * 8 + 5] = T((s[1] & 0x80) >> 7) + T((s[2] & 0x03) << 1);
+      result[i * 8 + 6] = T((s[2] & 0x1c) >> 2);
+      result[i * 8 + 7] = T((s[2] & 0xe0) >> 5);
+    }
+    return result;
+  }
+
+  CUTLASS_HOST_DEVICE
+  result_type operator()(const source_type& s) const {
+    return convert(s);
+  }
+};
+
+template <typename T, int N, FloatRoundStyle Round>
+struct NumericArrayConverter<T, uint5b_t, N, Round> {
+  static_assert(N % 8 == 0);
+
+  using result_type = Array<T, N>;
+  using source_type = Array<uint5b_t, N>;
+
+  CUTLASS_HOST_DEVICE
+  static result_type convert(const source_type& source) {
+    result_type result;
+    auto* s_base = reinterpret_cast<const uint8_t*>(&source);
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < N / 8; ++i) {
+      auto* s = s_base + i * 5;
+      result[i * 8] = T(s[0] & 0x1f);
+      result[i * 8 + 1] = T((s[0] & 0xe0) >> 5) + T((s[1] & 0x03) << 3);
+      result[i * 8 + 2] = T((s[1] & 0x7c) >> 2);
+      result[i * 8 + 3] = T((s[1] & 0x80) >> 7) + T((s[2] & 0x0f) << 1);
+      result[i * 8 + 4] = T((s[2] & 0xf0) >> 4) + T((s[3] & 0x01) << 4);
+      result[i * 8 + 5] = T((s[3] & 0x3e) >> 1);
+      result[i * 8 + 6] = T((s[3] & 0xc0) >> 6) + T((s[4] & 0x07) << 2);
+      result[i * 8 + 7] = T((s[4] & 0xf8) >> 3);
+    }
+    return result;
+  }
+
+  CUTLASS_HOST_DEVICE
+  result_type operator()(const source_type& s) const {
+    return convert(s);
+  }
+};
+
+template <typename T, int N, FloatRoundStyle Round>
+struct NumericArrayConverter<T, uint6b_t, N, Round> {
+  static_assert(N % 4 == 0);
+
+  using result_type = Array<T, N>;
+  using source_type = Array<uint6b_t, N>;
+
+  CUTLASS_HOST_DEVICE
+  static result_type convert(const source_type& source) {
+    result_type result;
+    auto* s_base = reinterpret_cast<const uint8_t*>(&source);
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < N / 4; ++i) {
+      auto* s = s_base + i * 3;
+      result[i * 4] = T(s[0] & 0x3f);
+      result[i * 4 + 1] = T((s[0] >> 6) & 0x03) + T((s[1] & 0x0f) << 2);
+      result[i * 4 + 2] = T((s[1] >> 4) & 0x0f) + T((s[2] & 0x03) << 4);
+      result[i * 4 + 3] = T((s[2] >> 2) & 0x3f);
+    }
+    return result;
+  }
+
+  CUTLASS_HOST_DEVICE
+  result_type operator()(const source_type& s) const {
+    return convert(s);
+  }
+};
+
+} // namespace cutlass
+
 namespace mlx::core {
 
 namespace cu {
@@ -108,14 +207,14 @@ __global__ void qmv_kernel(
   // For sub-byte Q, pointer moves by 8bits for each advance, e.g. w += 1 would
   // move past 2 elements for 4-bit Q.
   constexpr int bits = cute::sizeof_bits_v<Q>;
-  constexpr int w_step = 8 / cuda::std::min(8, bits);
+  auto w_step = [&](int idx) { return idx * cuda::std::min(8, bits) / 8; };
 
   // How many groups (and scales/biases) in a row.
   int groups_per_row = k / group_size;
 
   // Advance w/scales/biases to current row.
   int w_batch = broadcast_w ? 0 : l;
-  w += (static_cast<int64_t>(row) + n * w_batch) * k / w_step;
+  w += (static_cast<int64_t>(row) + n * w_batch) * w_step(k);
   scales += (static_cast<int64_t>(row) + n * w_batch) * groups_per_row;
   if constexpr (has_bias) {
     biases += (static_cast<int64_t>(row) + n * w_batch) * groups_per_row;
@@ -130,7 +229,7 @@ __global__ void qmv_kernel(
     if constexpr (has_bias) {
       bias = biases[idx / group_size];
     }
-    dequant_fma<elems_per_thread>(x + idx, w + idx / w_step, scale, bias, sums);
+    dequant_fma<elems_per_thread>(x + idx, w + w_step(idx), scale, bias, sums);
   };
 
   // Loop over k dimension.
@@ -246,8 +345,14 @@ inline void dispatch_quant_types(
     dispatch_groups(group_size, tag, [&]<int group_size>() {
       if (bits == 2) {
         f.template operator()<cutlass::uint2b_t, group_size>();
+      } else if (bits == 3) {
+        f.template operator()<cutlass::uint3b_t, group_size>();
       } else if (bits == 4) {
         f.template operator()<cutlass::uint4b_t, group_size>();
+      } else if (bits == 5) {
+        f.template operator()<cutlass::uint5b_t, group_size>();
+      } else if (bits == 6) {
+        f.template operator()<cutlass::uint6b_t, group_size>();
       } else if (bits == 8) {
         f.template operator()<uint8_t, group_size>();
       } else {
