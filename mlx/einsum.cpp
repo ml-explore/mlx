@@ -813,9 +813,8 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
     std::iota(positions.begin(), positions.end(), 0);
     path.emplace_back(
         std::move(inputs), std::move(output), std::move(positions));
-    path_info.optimized_cost = path_info.naive_cost;     
+    path_info.optimized_cost = path_info.naive_cost;
     path_info.optimized_scaling = path_info.naive_scaling;
-
   } else {
     std::tie(path, path_info.optimized_cost, path_info.optimized_scaling) =
         greedy_path(inputs, output, dim_map, path_info.naive_cost, max_size);
