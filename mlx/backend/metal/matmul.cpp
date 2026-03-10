@@ -207,7 +207,10 @@ void steel_matmul_regular_axpby_nax(
   // Temp routing for larger devices
   char devc = d.get_architecture().back();
   if (devc == 's' || devc == 'c' || devc == 'd') {
-    bk = (K > 8192 && K > (M + N)) ? 64 : 256;
+    bk = (K >= 8192 && K > (M + N)) ? 64 : 256;
+
+    bm = 64;
+    wm = 2;
   }
 
   // Prepare kernel name
@@ -274,6 +277,9 @@ void steel_matmul_regular_axpby_nax(
 
   // TODO: Explore device-based tuning for swizzle
   int swizzle_log = tm <= 3 ? 0 : 1;
+  if (devc == 's' || devc == 'c' || devc == 'd') {
+    swizzle_log = 2;
+  }
 
   // Prepare steel matmul params
   GEMMParams params{/* const int M = */ M,
