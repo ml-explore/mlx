@@ -332,7 +332,7 @@ std::vector<array> LayerNorm::vjp(
 
     // df/db
     if (b.ndim() == 0) {
-      vjps.push_back(zeros_like(w, s));
+      vjps.push_back(zeros_like(b, s));
     } else {
       vjps.push_back(sum(g, axes, /* keepdims= */ false, s));
     }
