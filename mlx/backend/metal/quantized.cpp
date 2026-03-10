@@ -792,6 +792,9 @@ void qmm_splitk(
   int current_tgs = n_tiles * m_tiles;
   int split_k = std::max(1, 512 / current_tgs);
 
+  // Cap split_k by the number of quantization groups
+  split_k = std::min(split_k, K / group_size);
+
   // Ensure K divides evenly by split_k * group_size
   while (split_k > 1 && (K % (split_k * group_size) != 0)) {
     split_k--;
