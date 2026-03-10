@@ -120,9 +120,8 @@ __global__ void prepare_segmented_mm_data(
   uint32_t start = segments[2 * idx];
   uint32_t end = segments[2 * idx + 1];
   int K_i = (end > start) ? static_cast<int>(end - start) : 0;
-  int M_i = (K_i > 0) ? M : 0;
 
-  problem_sizes[idx] = {M_i, N, K_i};
+  problem_sizes[idx] = {M, N, K_i};
   a_lds[idx] = lda;
   b_lds[idx] = ldb;
   out_lds[idx] = N;

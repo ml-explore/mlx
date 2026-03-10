@@ -394,13 +394,6 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  // Zero-fill output for segments where end <= start.
-  {
-    array zero(0, out.dtype());
-    encoder.add_temporary(zero);
-    fill_gpu(zero, out, s);
-  }
-
   int M = a_pre.shape(-2);
   int N = b_pre.shape(-1);
   int num_segments = segments_pre.size() / 2;
