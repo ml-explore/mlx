@@ -8,6 +8,7 @@
 #include <vector>
 
 #define __MLX_BFLOAT_NAN__ 0x7FC0
+#define __MLX_BFLOAT_ONE__ 0x3F80
 
 namespace mlx::core {
 
@@ -29,8 +30,7 @@ struct _MLX_BFloat16 {
 
   // Appease std::vector<bool> for being special
   _MLX_BFloat16& operator=(std::vector<bool>::reference x) {
-    // 0x3f80 == TRUE == 1.0
-    bits_ = (x) ? 0x3f80 : 0;
+    bits_ = (x) ? __MLX_BFLOAT_ONE__ : 0;
     return (*this);
   }
 
