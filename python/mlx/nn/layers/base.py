@@ -340,6 +340,13 @@ class Module(dict):
                         raise ValueError(f'Module does not have parameter named "{k}".')
             elif isinstance(parameters, list):
                 for i in range(len(parameters)):
+                    if i >= len(dst):
+                        if strict:
+                            raise ValueError(
+                                f"List index {i} is out of bounds for "
+                                f"destination of length {len(dst)}."
+                            )
+                        continue
                     current_value = dst[i]
                     new_value = parameters[i]
                     if isinstance(current_value, mx.array):
