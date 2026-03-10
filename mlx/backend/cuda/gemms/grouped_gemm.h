@@ -22,4 +22,18 @@ void cutlass_grouped_gemm_unaligned(
     array& out,
     cu::CommandEncoder& encoder);
 
+void cutlass_segmented_mm(
+    bool a_transposed,
+    int lda,
+    bool b_transposed,
+    int ldb,
+    int num_segments,
+    int M,
+    int N,
+    const array& a,
+    const array& b,
+    const array& segments,
+    array& out,
+    cu::CommandEncoder& encoder);
+
 } // namespace mlx::core
