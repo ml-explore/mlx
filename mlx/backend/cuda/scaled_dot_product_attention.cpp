@@ -563,7 +563,6 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
-    bool is_training,
     bool output_logsumexp,
     Stream s) {
   if (s.device == Device::cpu) {
@@ -626,7 +625,14 @@ void ScaledDotProductAttention::eval_gpu(
   }
 }
 
-bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
+bool ScaledDotProductAttentionVJP::use_fallback(
+    const array& q,
+    const array& /* k */,
+    Stream s,
+    bool,
+    bool,
+    bool,
+    int) {
   // The frontend adds a padding mask when sequence length is not a multiple of
   // tile size.
   if (q.shape(2) % 128 != 0) {
@@ -642,8 +648,8 @@ void ScaledDotProductAttentionVJP::eval_gpu(
 
   auto& s = stream();
 
-  assert(inputs.size() >= 6);
-  int primals_size = inputs.size() - 3;
+  assert(inputs.size() >= 7); // primals(>=3) + O + LSE + dO + delta
+  int primals_size = inputs.size() - 4;
   bool has_arr_mask = primals_size > 3 + has_sinks_;
 
   array q = prepare_sdpa_input(inputs[0], s);
@@ -659,7 +665,7 @@ void ScaledDotProductAttentionVJP::eval_gpu(
   }
   std::optional<array> sinks;
   if (has_sinks_) {
-    sinks = prepare_sdpa_sinks(inputs.back(), s);
+    sinks = prepare_sdpa_sinks(inputs[primals_size - 1], s);
   }
 
   assert(outputs.size() == 3);
