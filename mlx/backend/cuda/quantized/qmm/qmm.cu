@@ -108,6 +108,11 @@ bool supports_fp_qmv(
     int group_size,
     QuantizationMode mode,
     cu::Device& device) {
+  // The fp_qmv kernel uses less registers and is faster for sm120. For sm80/90
+  // the qmv kernel is faster. We didn't test sm89/100.
+  if (device.compute_capability_major() <= 9) {
+    return false;
+  }
   bool non_batched = w.ndim() == 2;
   int k = x.shape(-1);
   int n = out.shape(-1);
@@ -147,9 +152,6 @@ bool supports_qmv(
     return false;
   }
   if (!transpose) {
-    return false;
-  }
-  if (mode != QuantizationMode::Affine) {
     return false;
   }
   return true;
