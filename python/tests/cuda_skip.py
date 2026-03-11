@@ -8,16 +8,6 @@ cuda_skip = {
     "TestBlas.test_gather_mm_sorted_vjp",
     # Segmented matmul NYI
     "TestBlas.test_segmented_mm",
-    # FFTs NYI
-    "TestFFT.test_fft",
-    "TestFFT.test_fft_big_powers_of_two",
-    "TestFFT.test_fft_contiguity",
-    "TestFFT.test_fft_exhaustive",
-    "TestFFT.test_fft_grads",
-    "TestFFT.test_fft_into_ifft",
-    "TestFFT.test_fft_large_numbers",
-    "TestFFT.test_fft_shared_mem",
-    "TestFFT.test_fftn",
     # Lapack ops NYI
     "TestLinalg.test_cholesky",
     "TestLinalg.test_cholesky_inv",
