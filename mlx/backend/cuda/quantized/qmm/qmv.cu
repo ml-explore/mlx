@@ -117,9 +117,9 @@ namespace cg = cooperative_groups;
 // Fused vectorized dequantize and multiply-add:
 // w_dq = w * scale + bias
 // out = fma(x, w_dq, out)
-template <int N, typename T, typename Q>
+template <int N, bool has_bias, typename T, typename Q, typename S>
 __device__ __forceinline__ void
-dequant_fma(const T* x, const Q* w, T scale, T bias, T* out) {
+dequant_fma(const T* x, const Q* w, S scale, T bias, T* out) {
   // Read x/w into registers.
   auto x_vec = *(reinterpret_cast<const cutlass::Array<T, N>*>(x));
   auto w_vec = *(reinterpret_cast<const cutlass::Array<Q, N>*>(w));
@@ -129,13 +129,17 @@ dequant_fma(const T* x, const Q* w, T scale, T bias, T* out) {
   // Dequantize w.
   cutlass::NumericArrayConverter<T, Q, N> converter_tq;
   cutlass::Array<T, N> w_dq = converter_tq(w_vec);
-  if constexpr (cuda::std::is_same_v<T, float>) {
+  if constexpr (has_bias) {
+    if constexpr (cuda::std::is_same_v<T, float>) {
 #pragma unroll
-    for (int i = 0; i < N; ++i) {
-      w_dq[i] = w_dq[i] * scale + bias;
+      for (int i = 0; i < N; ++i) {
+        w_dq[i] = w_dq[i] * T(scale) + bias;
+      }
+    } else {
+      w_dq = w_dq * T(scale) + bias;
     }
   } else {
-    w_dq = w_dq * scale + bias;
+    w_dq = w_dq * T(scale);
   }
 
   // Multiply and add.
@@ -145,11 +149,13 @@ dequant_fma(const T* x, const Q* w, T scale, T bias, T* out) {
 // Specialization for doing float32 accumulations on narrow types.
 template <
     int N,
+    bool has_bias,
     typename T,
     typename Q,
+    typename S,
     typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, float>>>
 __device__ __forceinline__ void
-dequant_fma(const T* x, const Q* w, T scale, T bias, float* out) {
+dequant_fma(const T* x, const Q* w, S scale, T bias, float* out) {
   // Read x/w into registers.
   auto x_vec = *(reinterpret_cast<const cutlass::Array<T, N>*>(x));
   auto w_vec = *(reinterpret_cast<const cutlass::Array<Q, N>*>(w));
@@ -159,7 +165,11 @@ dequant_fma(const T* x, const Q* w, T scale, T bias, float* out) {
   // Dequantize w.
   cutlass::NumericArrayConverter<T, Q, N> converter_tq;
   cutlass::Array<T, N> w_dq = converter_tq(w_vec);
-  w_dq = w_dq * scale + bias;
+  if constexpr (has_bias) {
+    w_dq = w_dq * T(scale) + bias;
+  } else {
+    w_dq = w_dq * T(scale);
+  }
 
   // Promote x/w to float.
   static_assert(!cuda::std::is_same_v<T, float>);
@@ -178,11 +188,12 @@ template <
     bool has_bias,
     bool has_residue_k,
     typename T,
-    typename Q>
+    typename Q,
+    typename S>
 __global__ void qmv_kernel(
     const T* x,
     const Q* w,
-    const T* scales,
+    const S* scales,
     const T* biases,
     T* out,
     int n,
@@ -224,12 +235,13 @@ __global__ void qmv_kernel(
   cuda::std::conditional_t<(bits >= 8), float, T> sums[elems_per_thread] = {};
 
   auto dequant_fma_tile = [&](int idx) {
-    T scale = scales[idx / group_size];
+    S scale = scales[idx / group_size];
     T bias{0};
     if constexpr (has_bias) {
       bias = biases[idx / group_size];
     }
-    dequant_fma<elems_per_thread>(x + idx, w + w_step(idx), scale, bias, sums);
+    dequant_fma<elems_per_thread, has_bias>(
+        x + idx, w + w_step(idx), scale, bias, sums);
   };
 
   // Loop over k dimension.
@@ -262,11 +274,17 @@ __global__ void qmv_kernel(
   }
 }
 
-template <int group_size, bool has_bias, typename T, typename Q, typename F>
+template <
+    int group_size,
+    bool has_bias,
+    typename T,
+    typename Q,
+    typename S,
+    typename F>
 void qmv(
     const T* x,
     const Q* w,
-    const T* scales,
+    const S* scales,
     const T* biases,
     T* out,
     int m,
@@ -292,7 +310,8 @@ void qmv(
         has_bias,
         has_residue_k.value,
         T,
-        Q>;
+        Q,
+        S>;
     launch_kernel(
         reinterpret_cast<void*>(kernel), num_blocks, block_dims, args);
   });
@@ -328,7 +347,7 @@ inline void dispatch_groups(int group_size, const char* tag, F&& f) {
   }
 }
 
-template <typename F>
+template <typename T, typename F>
 inline void dispatch_quant_types(
     int bits,
     int group_size,
@@ -336,25 +355,25 @@ inline void dispatch_quant_types(
     const char* tag,
     F&& f) {
   if (mode == QuantizationMode::Mxfp4) {
-    f.template operator()<cutlass::float_e2m1_t, 16>();
+    f.template operator()<cutlass::float_e2m1_t, cutlass::float_ue8m0_t, 32>();
   } else if (mode == QuantizationMode::Mxfp8) {
-    f.template operator()<cutlass::float_e4m3_t, 32>();
+    f.template operator()<cutlass::float_e4m3_t, cutlass::float_ue8m0_t, 32>();
   } else if (mode == QuantizationMode::Nvfp4) {
-    f.template operator()<cutlass::float_e2m1_t, 32>();
+    f.template operator()<cutlass::float_e2m1_t, cutlass::float_e4m3_t, 16>();
   } else {
     dispatch_groups(group_size, tag, [&]<int group_size>() {
       if (bits == 2) {
-        f.template operator()<cutlass::uint2b_t, group_size>();
+        f.template operator()<cutlass::uint2b_t, T, group_size>();
       } else if (bits == 3) {
-        f.template operator()<cutlass::uint3b_t, group_size>();
+        f.template operator()<cutlass::uint3b_t, T, group_size>();
       } else if (bits == 4) {
-        f.template operator()<cutlass::uint4b_t, group_size>();
+        f.template operator()<cutlass::uint4b_t, T, group_size>();
       } else if (bits == 5) {
-        f.template operator()<cutlass::uint5b_t, group_size>();
+        f.template operator()<cutlass::uint5b_t, T, group_size>();
       } else if (bits == 6) {
-        f.template operator()<cutlass::uint6b_t, group_size>();
+        f.template operator()<cutlass::uint6b_t, T, group_size>();
       } else if (bits == 8) {
-        f.template operator()<uint8_t, group_size>();
+        f.template operator()<uint8_t, T, group_size>();
       } else {
         throw std::invalid_argument(
             fmt::format("{} {}-bit quantization is not supported.", tag, bits));
@@ -381,8 +400,12 @@ void qmv(
   bool broadcast_w = w.ndim() == 2;
 
   dispatch_element_types(out.dtype(), tag, [&]<typename T>() {
-    dispatch_quant_types(
-        bits, group_size, mode, tag, [&]<typename Q, int group_size>() {
+    dispatch_quant_types<T>(
+        bits,
+        group_size,
+        mode,
+        tag,
+        [&]<typename Q, typename S, int group_size>() {
           encoder.set_input_array(x);
           encoder.set_input_array(w);
           encoder.set_input_array(scales);
@@ -394,7 +417,7 @@ void qmv(
           cu::qmv<group_size, has_bias>(
               gpu_ptr<T>(x),
               gpu_ptr<Q>(w),
-              gpu_ptr<T>(scales),
+              gpu_ptr<S>(scales),
               biases ? gpu_ptr<T>(*biases) : nullptr,
               gpu_ptr<T>(out),
               m,
