@@ -3,10 +3,10 @@
 #pragma once
 
 #include <cublasLt.h>
-#include <cufftXt.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cudnn.h>
+#include <cufftXt.h>
 
 namespace mlx::core {
 

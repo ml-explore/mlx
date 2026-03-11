@@ -196,7 +196,9 @@ TEST_CASE("test fftn") {
 
   // Test non-contiguous layouts and axes that are not physically last.
   {
-    x = astype(transpose(reshape(arange(24, float32), {2, 3, 4}), {1, 2, 0}), complex64);
+    x = astype(
+        transpose(reshape(arange(24, float32), {2, 3, 4}), {1, 2, 0}),
+        complex64);
     auto y = fft::fftn(x, {2, 0});
     CHECK_EQ(y.shape(), x.shape());
     CHECK(allclose(fft::ifftn(y, {2, 0}), x, 1e-5, 1e-5).item<bool>());

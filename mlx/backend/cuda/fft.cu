@@ -147,8 +147,8 @@ std::shared_ptr<CuFFTPlan> get_fft_plan(
     int64_t n,
     int64_t batch) {
   auto key = BytesKey<FFTPlanKey>{};
-  key.pod = make_plan_key(
-      encoder.device().cuda_device(), transform_type, n, batch);
+  key.pod =
+      make_plan_key(encoder.device().cuda_device(), transform_type, n, batch);
 
   auto& cache = fft_plan_cache();
   if (auto entry = cache.find(key); entry != cache.end()) {
@@ -316,9 +316,7 @@ void execute_fft(
       exec_direction(transform_type, inverse)));
 }
 
-void restore_output_layout(
-    const OrderedArray& current,
-    array& out) {
+void restore_output_layout(const OrderedArray& current, array& out) {
   Strides out_strides(out.ndim());
   for (int i = 0; i < current.order.size(); ++i) {
     out_strides[current.order[i]] = current.arr.strides(i);
@@ -326,8 +324,8 @@ void restore_output_layout(
 
   auto [data_size, row_contiguous, col_contiguous] =
       check_contiguity(out.shape(), out_strides);
-  bool contiguous = current.arr.flags().contiguous &&
-      data_size == current.arr.data_size();
+  bool contiguous =
+      current.arr.flags().contiguous && data_size == current.arr.data_size();
   if (!contiguous) {
     row_contiguous = false;
     col_contiguous = false;
