@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/common/quantized.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
-#include "mlx/backend/cuda/quantized/quantized_utils.cuh"
 #include "mlx/dtype_utils.h"
 
 #include <cooperative_groups.h>
@@ -27,8 +27,8 @@ affine_quantize(const T* w, uint8_t* out, T* scales, T* biases, size_t size) {
   constexpr float eps = 1e-7;
   constexpr int simd_size = WARP_SIZE;
   constexpr float n_bins = (1 << bits) - 1;
-  constexpr int pack_factor = get_pack_factor<bits, 8>();
-  constexpr int bytes_per_pack = get_bytes_per_pack<bits>();
+  constexpr int pack_factor = get_pack_factor(bits, 8);
+  constexpr int bytes_per_pack = get_bytes_per_pack(bits);
   constexpr int values_per_reduce = group_size / simd_size;
   constexpr int writes_per_reduce = pack_factor / values_per_reduce;
   constexpr int writes_per_pack =
@@ -142,8 +142,8 @@ __global__ void affine_dequantize(
 
   auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
-  constexpr int pack_factor = get_pack_factor<bits, 8>();
-  constexpr int bytes_per_pack = get_bytes_per_pack<bits>();
+  constexpr int pack_factor = get_pack_factor(bits, 8);
+  constexpr int bytes_per_pack = get_bytes_per_pack(bits);
 
   size_t offset = tidx + grid_dim_x * size_t(tidy);
   size_t oindex = offset * pack_factor;
@@ -225,6 +225,45 @@ __global__ void affine_dequantize(
 }
 
 } // namespace cu
+
+template <typename F>
+void dispatch_groups(int group_size, F&& f) {
+  switch (group_size) {
+    case 32:
+      f(std::integral_constant<int, 32>{});
+      break;
+    case 64:
+      f(std::integral_constant<int, 64>{});
+      break;
+    case 128:
+      f(std::integral_constant<int, 128>{});
+      break;
+  }
+}
+
+template <typename F>
+void dispatch_bits(int bits, F&& f) {
+  switch (bits) {
+    case 2:
+      f(std::integral_constant<int, 2>{});
+      break;
+    case 3:
+      f(std::integral_constant<int, 3>{});
+      break;
+    case 4:
+      f(std::integral_constant<int, 4>{});
+      break;
+    case 5:
+      f(std::integral_constant<int, 5>{});
+      break;
+    case 6:
+      f(std::integral_constant<int, 6>{});
+      break;
+    case 8:
+      f(std::integral_constant<int, 8>{});
+      break;
+  }
+}
 
 void affine_quantize(
     const array& w,
