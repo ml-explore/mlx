@@ -34,10 +34,49 @@ struct AttnParams {
   int64_t K_strides[3]; ///< Key    strides (B, H, L, D = 1)
   int64_t V_strides[3]; ///< Value  strides (B, H, L, D = 1)
   int64_t O_strides[3]; ///< Output strides (B, H, L, D = 1)
+  int64_t LSE_strides[2]; ///< LSE strides (B*H, L) - logsumexp output for VJP
 };
 
 struct AttnMaskParams {
   int64_t M_strides[3]; ///< Mask  strides (B, H, qL, kL = 1)
+};
+
+struct AttnVJPParams {
+  int B; ///< Batch Size
+  int H; ///< Heads (query heads)
+  int D; ///< Head Dim
+
+  int qL; ///< Query Sequence Length
+  int kL; ///< Key Sequence Length
+
+  int gqa_factor; ///< Group Query factor
+  float scale; ///< Attention scale
+  float scale_log2; ///< scale * log2(e) for log2-domain scoring
+
+  int NQ; ///< Number of query blocks
+  int NK; ///< Number of key/value blocks
+
+  int NQ_aligned; ///< Number of full query blocks
+  int NK_aligned; ///< Number of full key/value blocks
+
+  int qL_rem; ///< Remainder in last query block
+  int kL_rem; ///< Remainder in last key/value block
+  int qL_off; ///< Offset in query sequence start
+
+  int64_t Q_strides[3]; ///< Query  strides (B, H, L, D = 1)
+  int64_t K_strides[3]; ///< Key    strides (B, H, L, D = 1)
+  int64_t V_strides[3]; ///< Value  strides (B, H, L, D = 1)
+  int64_t dO_strides[3]; ///< dO strides (B, H, L, D = 1)
+  int64_t LSE_strides[2]; ///< LSE strides (B*H, L) - logsumexp
+  int64_t delta_strides[2]; ///< delta strides (B*H, L) - rowsum(dO*O)
+
+  // VJP-specific output strides
+  int64_t dQ_strides[3]; ///< dQ strides (B, H, L, D = 1)
+  int64_t dK_strides[3]; ///< dK strides (B, H, L, D = 1)
+  int64_t dV_strides[3]; ///< dV strides (B, H, L, D = 1)
+
+  // Sparse block mask support
+  int NK_tiles; ///< Number of K-tile columns (for block_mask indexing)
 };
 
 } // namespace steel
