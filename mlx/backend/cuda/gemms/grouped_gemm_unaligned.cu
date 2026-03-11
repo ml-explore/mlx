@@ -113,12 +113,12 @@ __global__ void prepare_segmented_mm_data(
     void** a_ptrs,
     void** b_ptrs,
     void** out_ptrs) {
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int idx = cg::this_grid().thread_rank();
   if (idx >= num_segments)
     return;
 
-  uint32_t start = segments[2 * idx];
-  uint32_t end = segments[2 * idx + 1];
+  int64_t start = segments[2 * idx];
+  int64_t end = segments[2 * idx + 1];
   int K_i = (end > start) ? static_cast<int>(end - start) : 0;
 
   problem_sizes[idx] = {M, N, K_i};
@@ -129,10 +129,8 @@ __global__ void prepare_segmented_mm_data(
   // Offset into K dimension depends on layout:
   // A [M,K]: row-major offset = start, col-major offset = start * lda
   // B [K,N]: row-major offset = start * ldb, col-major offset = start
-  int64_t a_offset = a_transposed ? static_cast<int64_t>(start) * lda
-                                  : static_cast<int64_t>(start);
-  int64_t b_offset = b_transposed ? static_cast<int64_t>(start)
-                                  : static_cast<int64_t>(start) * ldb;
+  int64_t a_offset = a_transposed ? start * lda : start;
+  int64_t b_offset = b_transposed ? start : start * ldb;
 
   a_ptrs[idx] = a_start + a_offset * item_size;
   b_ptrs[idx] = b_start + b_offset * item_size;

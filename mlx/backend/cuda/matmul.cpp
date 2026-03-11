@@ -380,19 +380,15 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& b_pre = inputs[1];
   auto& segments_pre = inputs[2];
 
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
-
-  if (out.size() == 0) {
-    return;
-  }
-
-  // Return zeros if either input matrix is empty.
-  if (a_pre.size() == 0 || b_pre.size() == 0) {
+  // Return zeros if output is empty or either input is empty.
+  if (out.size() == 0 || a_pre.size() == 0 || b_pre.size() == 0) {
     array zero(0, a_pre.dtype());
     encoder.add_temporary(zero);
     fill_gpu(zero, out, s);
     return;
   }
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   int M = a_pre.shape(-2);
   int N = b_pre.shape(-1);
