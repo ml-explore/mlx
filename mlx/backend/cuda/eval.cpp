@@ -21,6 +21,10 @@ void new_stream(Stream s) {
 
 void eval(array& arr) {
   nvtx3::scoped_range r("gpu::eval");
+  // Ensure CUDA context is active on this thread. Required when MLX is called
+  // from threads that have not yet established a CUDA context (e.g. thread
+  // pools, language runtimes that migrate work across OS threads).
+  cu::device(arr.primitive().stream().device).make_current();
   auto outputs = arr.outputs();
   {
     // If the array is a tracer hold a reference
