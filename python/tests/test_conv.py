@@ -1151,7 +1151,7 @@ class TestConv(mlx_tests.MLXTestCase):
             )
             self.assertEqual(grads.shape, k_shape)
 
-    def test_1d_conv_with_2d(self):
+    def test_conv_1d_with_2d(self):
         x = mx.random.uniform(shape=(2, 10, 16))
         y = mx.random.normal(shape=(16, 3, 16))
 
