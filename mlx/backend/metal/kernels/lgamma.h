@@ -19,10 +19,13 @@ float lgamma_impl(float x) {
 
   // Reflection formula for x < 0.5:
   //   lgamma(x) = log(pi) - log(|sin(pi*x)|) - lgamma(1-x)
+  // Lanczos for 1-x is inlined (no function calls — Metal has no call stack).
+  float reflection = 0.0f;
   if (x < 0.5f) {
     float sin_pi_x = metal::precise::sin(M_PI_F * x);
-    return 1.1447298858494002f // log(pi)
-        - metal::precise::log(metal::abs(sin_pi_x)) - lgamma_impl(1.0f - x);
+    reflection = 1.1447298858494002f // log(pi)
+        - metal::precise::log(metal::abs(sin_pi_x));
+    x = 1.0f - x;
   }
 
   // Lanczos g=5, 7-term (Numerical Recipes)
@@ -36,9 +39,12 @@ float lgamma_impl(float x) {
   s = metal::fma(1.208650973866179e-3f, 1.0f / (z + 5.0f), s);
   s = metal::fma(-5.395239384953e-6f, 1.0f / (z + 6.0f), s);
 
-  return 0.9189385332046727f // 0.5 * log(2*pi)
+  float lanczos = 0.9189385332046727f // 0.5 * log(2*pi)
       + (z + 0.5f) * metal::precise::log(t) - t +
       metal::precise::log(s);
+
+  // For x < 0.5: reflection - lanczos(1-x). For x >= 0.5: just lanczos(x).
+  return (reflection != 0.0f) ? (reflection - lanczos) : lanczos;
 }
 
 /*
