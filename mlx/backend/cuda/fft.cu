@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cufftXt.h>
 #include <memory>
 #include <numeric>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <nvtx3/nvtx3.hpp>
@@ -21,6 +23,16 @@
 namespace mlx::core {
 
 namespace {
+
+void check_cufft_error(const char* name, cufftResult err) {
+  if (err != CUFFT_SUCCESS) {
+    throw std::runtime_error(
+        std::string(name) + " failed with code: " +
+        std::to_string(static_cast<int>(err)) + ".");
+  }
+}
+
+#define CHECK_CUFFT_ERROR(cmd) check_cufft_error(#cmd, (cmd))
 
 enum class FFTTransformType : uint8_t {
   C2C = 0,
@@ -448,5 +460,7 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   restore_output_layout(current, out);
 }
+
+#undef CHECK_CUFFT_ERROR
 
 } // namespace mlx::core
