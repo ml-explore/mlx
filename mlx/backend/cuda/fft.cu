@@ -214,27 +214,6 @@ std::shared_ptr<CuFFTPlan> get_fft_plan(
   return cache.emplace(key, plan).first->second;
 }
 
-array transpose_view(const array& in, const std::vector<int>& axes) {
-  Shape out_shape(axes.size());
-  Strides out_strides(axes.size());
-  for (int i = 0; i < axes.size(); ++i) {
-    out_shape[i] = in.shape(axes[i]);
-    out_strides[i] = in.strides(axes[i]);
-  }
-
-  auto [data_size, row_contiguous, col_contiguous] =
-      check_contiguity(out_shape, out_strides);
-  bool contiguous = in.flags().contiguous && data_size == in.data_size();
-
-  array out(std::move(out_shape), in.dtype(), nullptr, {});
-  out.copy_shared_buffer(
-      in,
-      out_strides,
-      {contiguous, row_contiguous, col_contiguous},
-      in.data_size());
-  return out;
-}
-
 std::vector<int> make_identity_order(int ndim) {
   std::vector<int> order(ndim);
   std::iota(order.begin(), order.end(), 0);
@@ -289,7 +268,7 @@ OrderedArray prepare_input(
   std::vector<int> order = current.order;
   if (!axis_last) {
     auto perm = move_axis_to_back_permutation(current.arr.ndim(), axis_pos);
-    view = transpose_view(current.arr, perm);
+    view = transpose_view_in_eval(current.arr, perm);
     order = apply_permutation(current.order, perm);
   }
 

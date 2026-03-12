@@ -6,6 +6,7 @@
 #include "mlx/stream.h"
 
 #include <optional>
+#include <vector>
 
 namespace mlx::core {
 
@@ -53,5 +54,6 @@ void reshape_gpu(const array& in, array& out, Stream s);
 array flatten_in_eval(const array& x, int start_axis, int end_axis, Stream s);
 array reshape_in_eval(const array& x, Shape shape, Stream s);
 array swapaxes_in_eval(const array& x, int axis1, int axis2);
+array transpose_view_in_eval(const array& x, const std::vector<int>& axes);
 
 } // namespace mlx::core

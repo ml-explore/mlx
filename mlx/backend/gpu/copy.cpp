@@ -39,6 +39,27 @@ array contiguous_copy_gpu(const array& arr, const Stream& s) {
   return arr_copy;
 }
 
+array transpose_view_in_eval(const array& x, const std::vector<int>& axes) {
+  Shape shape(axes.size());
+  Strides strides(axes.size());
+  for (int i = 0; i < axes.size(); ++i) {
+    shape[i] = x.shape(axes[i]);
+    strides[i] = x.strides(axes[i]);
+  }
+
+  auto [data_size, row_contiguous, col_contiguous] =
+      check_contiguity(shape, strides);
+  bool contiguous = x.flags().contiguous && data_size == x.data_size();
+
+  array out(std::move(shape), x.dtype(), nullptr, {});
+  out.copy_shared_buffer(
+      x,
+      std::move(strides),
+      {contiguous, row_contiguous, col_contiguous},
+      x.data_size());
+  return out;
+}
+
 array flatten_in_eval(const array& x, int start_axis, int end_axis, Stream s) {
   int ndim = x.ndim();
   if (start_axis < 0) {
@@ -68,22 +89,12 @@ array swapaxes_in_eval(const array& x, int axis1, int axis2) {
     axis2 += ndim;
   }
 
-  auto shape = x.shape();
-  std::swap(shape[axis1], shape[axis2]);
-  auto strides = x.strides();
-  std::swap(strides[axis1], strides[axis2]);
-
-  auto [data_size, row_contiguous, col_contiguous] =
-      check_contiguity(shape, strides);
-  bool contiguous = data_size == x.data_size();
-
-  array out(std::move(shape), x.dtype(), nullptr, {});
-  out.copy_shared_buffer(
-      x,
-      std::move(strides),
-      {contiguous, row_contiguous, col_contiguous},
-      x.data_size());
-  return out;
+  std::vector<int> axes(ndim);
+  for (int i = 0; i < ndim; ++i) {
+    axes[i] = i;
+  }
+  std::swap(axes[axis1], axes[axis2]);
+  return transpose_view_in_eval(x, axes);
 }
 
 } // namespace mlx::core
