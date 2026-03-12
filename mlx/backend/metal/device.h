@@ -3,12 +3,16 @@
 #pragma once
 
 #include <Metal/Metal.hpp>
+#include <atomic>
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
+#include <stdexcept>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include "mlx/array.h"
 #include "mlx/device.h"
@@ -120,31 +124,103 @@ struct Fence {
   MTL::Fence* fence;
 };
 
+struct SubmissionEpoch {
+  MTL::CommandBuffer* buffer{nullptr};
+  std::unique_ptr<CommandEncoder> encoder{nullptr};
+  std::shared_ptr<Fence> fence;
+  std::vector<array> temporaries;
+  int buffer_ops{0};
+  size_t buffer_sizes{0};
+  uint64_t sequence{0};
+  enum class State : uint8_t { IDLE, OPEN, ENCODING, ENDED, COMMITTED };
+  State state{State::IDLE};
+};
+
+struct DebugOwner {
+#ifndef NDEBUG
+  std::atomic<std::thread::id> owner{};
+  void set() {
+    owner.store(std::this_thread::get_id(), std::memory_order_release);
+  }
+  void clear() {
+    owner.store(std::thread::id{}, std::memory_order_release);
+  }
+  void assert_held(const char* where) const {
+    if (owner.load(std::memory_order_acquire) != std::this_thread::get_id()) {
+      throw std::runtime_error(
+          std::string("[metal::Device] Missing stream op lock in ") + where);
+    }
+  }
+#else
+  void set() {}
+  void clear() {}
+  void assert_held(const char*) const {}
+#endif
+};
+
+class Device;
+
+class [[nodiscard]] StreamOpLock {
+ public:
+  StreamOpLock(Device& device, DeviceStream& stream, std::mutex& mtx);
+  ~StreamOpLock();
+  StreamOpLock(const StreamOpLock&) = delete;
+  StreamOpLock& operator=(const StreamOpLock&) = delete;
+  StreamOpLock(StreamOpLock&&) = default;
+  StreamOpLock& operator=(StreamOpLock&&) = delete;
+
+  template <typename Fn>
+  auto with_fence_state(Fn&& fn) -> decltype(fn(
+      std::declval<
+          std::unordered_map<const void*, std::shared_ptr<Fence>>&>()));
+
+  uint64_t sequence() const {
+    return sequence_;
+  }
+
+ private:
+  Device& device_;
+  DeviceStream& stream_;
+  std::unique_lock<std::mutex> lock_;
+  uint64_t sequence_;
+};
+
 struct DeviceStream {
   DeviceStream(MTL::CommandQueue* queue) : queue(queue) {};
   ~DeviceStream() {
     queue->release();
-    if (buffer != nullptr) {
-      buffer->release();
+    if (submission.buffer != nullptr) {
+      submission.buffer->release();
     }
   };
+
   MTL::CommandQueue* queue;
-  // A map of prior command encoder outputs to their corresponding fence
+  // A map of prior command encoder outputs to their corresponding fence.
   std::unordered_map<const void*, std::shared_ptr<Fence>> outputs;
-  // Used to allow thread-safe access to the outputs map
+  SubmissionEpoch submission;
+  std::mutex op_mtx;
+  DebugOwner debug_owner;
+
+ private:
   std::mutex fence_mtx;
 
-  // Data updated between command buffers
-  MTL::CommandBuffer* buffer{nullptr};
-  int buffer_ops{0};
-  size_t buffer_sizes{0};
-
-  // The command encoder, fence, and temporaries are updated between command
-  // encoders
-  std::unique_ptr<CommandEncoder> encoder{nullptr};
-  std::shared_ptr<Fence> fence;
-  std::vector<array> temporaries;
+  friend class Device;
+  friend class StreamOpLock;
 };
+
+// Deferred implementation — requires complete DeviceStream definition.
+template <typename Fn>
+auto StreamOpLock::with_fence_state(Fn&& fn) -> decltype(fn(
+    std::declval<std::unordered_map<const void*, std::shared_ptr<Fence>>&>())) {
+#ifndef NDEBUG
+  if (stream_.submission.sequence != sequence_) {
+    throw std::runtime_error(
+        "[metal::Device] Stale StreamOpLock epoch in with_fence_state");
+  }
+#endif
+  std::lock_guard<std::mutex> lk(stream_.fence_mtx);
+  return fn(stream_.outputs);
+}
 
 class MLX_API Device {
  public:
@@ -168,12 +244,13 @@ class MLX_API Device {
   void new_queue(int index);
 
   MTL::CommandQueue* get_queue(Stream stream);
+  StreamOpLock lock_stream_ops(int index);
 
   MTL::CommandBuffer* get_command_buffer(int index);
   bool command_buffer_needs_commit(int index);
   void commit_command_buffer(int index);
   CommandEncoder& get_command_encoder(int index);
-  void end_encoding(int index);
+  void end_encoding(int index, StreamOpLock& lk);
 
   MTL::Library* get_library(
       const std::string& name,
@@ -208,9 +285,9 @@ class MLX_API Device {
   void set_residency_set(const MTL::ResidencySet* residency_set);
 
  private:
-  DeviceStream& get_stream_(int index) {
-    return stream_map_.find(index)->second;
-  }
+  friend class StreamOpLock;
+  DeviceStream& get_stream_(int index);
+  void assert_stream_lock_held_(DeviceStream& stream, const char* where) const;
   MTL::Library* get_library_cache_(const std::string& name);
 
   MTL::Library* get_library_(const std::string& name);
@@ -245,6 +322,11 @@ class MLX_API Device {
 
   MTL::Device* device_;
   std::unordered_map<int32_t, DeviceStream> stream_map_;
+  mutable std::shared_mutex stream_map_mtx_;
+#ifdef MLX_METAL_GLOBAL_OP_LOCK
+  std::mutex global_op_mtx_;
+  DebugOwner global_debug_owner_;
+#endif
 
   std::shared_mutex kernel_mtx_;
   std::shared_mutex library_mtx_;

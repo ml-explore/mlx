@@ -1,6 +1,8 @@
 // Copyright © 2024 Apple Inc.
-#include "mlx/fence.h"
+#include <atomic>
+
 #include "mlx/backend/metal/device.h"
+#include "mlx/fence.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
@@ -35,7 +37,8 @@ struct FenceImpl {
     }
   }
   bool use_fast{false};
-  uint32_t count{0};
+  // Submission sequence counter. acq_rel on increments, acquire on reads.
+  std::atomic<uint64_t> count{0};
   void* fence;
 
   std::atomic_uint* cpu_value() {
@@ -51,9 +54,11 @@ Fence::Fence(Stream) {
 
 void Fence::wait(Stream stream, const array& x) {
   auto& f = *static_cast<FenceImpl*>(fence_.get());
+  // Acquire pairs with update() fetch_add(acq_rel) to observe latest ticket.
+  auto count = f.count.load(std::memory_order_acquire);
 
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [fence_ = fence_, count = f.count]() mutable {
+    scheduler::enqueue(stream, [fence_ = fence_, count]() mutable {
       auto& f = *static_cast<FenceImpl*>(fence_.get());
       if (!f.use_fast) {
         if (!static_cast<MTL::SharedEvent*>(f.fence)->waitUntilSignaledValue(
@@ -70,11 +75,12 @@ void Fence::wait(Stream stream, const array& x) {
 
   auto& d = metal::device(stream.device);
   auto idx = stream.index;
+  auto lk = d.lock_stream_ops(idx);
 
   if (!f.use_fast) {
-    d.end_encoding(idx);
+    d.end_encoding(idx, lk);
     auto command_buffer = d.get_command_buffer(idx);
-    command_buffer->encodeWait(static_cast<MTL::Event*>(f.fence), f.count);
+    command_buffer->encodeWait(static_cast<MTL::Event*>(f.fence), count);
     command_buffer->addCompletedHandler(
         [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
     return;
@@ -92,19 +98,25 @@ void Fence::wait(Stream stream, const array& x) {
 
   auto buf = static_cast<MTL::Buffer*>(f.fence);
   compute_encoder.set_buffer(buf, 0);
-  compute_encoder.set_bytes(f.count, 1);
+  compute_encoder.set_bytes(count, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
   d.get_command_buffer(idx)->addCompletedHandler(
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
+
+  lk.with_fence_state([&](auto& /*outputs*/) {
+    // Fence dependency state access is structurally routed through
+    // with_fence_state() to preserve lock ordering: op_mtx -> fence_mtx.
+  });
 }
 
 void Fence::update(Stream stream, const array& x, bool cross_device) {
   auto& f = *static_cast<FenceImpl*>(fence_.get());
-  f.count++;
+  // acq_rel: publish prep before ticket becomes visible; also observe prior.
+  auto count = f.count.fetch_add(1, std::memory_order_acq_rel) + 1;
 
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [fence_ = fence_, count = f.count]() mutable {
+    scheduler::enqueue(stream, [fence_ = fence_, count]() mutable {
       auto& f = *static_cast<FenceImpl*>(fence_.get());
       if (!f.use_fast) {
         static_cast<MTL::SharedEvent*>(f.fence)->setSignaledValue(count);
@@ -118,11 +130,11 @@ void Fence::update(Stream stream, const array& x, bool cross_device) {
 
   auto& d = metal::device(stream.device);
   auto idx = stream.index;
+  auto lk = d.lock_stream_ops(idx);
   if (!f.use_fast) {
-    d.end_encoding(idx);
+    d.end_encoding(idx, lk);
     auto command_buffer = d.get_command_buffer(idx);
-    command_buffer->encodeSignalEvent(
-        static_cast<MTL::Event*>(f.fence), f.count);
+    command_buffer->encodeSignalEvent(static_cast<MTL::Event*>(f.fence), count);
     command_buffer->addCompletedHandler(
         [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
     return;
@@ -152,11 +164,16 @@ void Fence::update(Stream stream, const array& x, bool cross_device) {
 
   auto buf = static_cast<MTL::Buffer*>(f.fence);
   compute_encoder.set_buffer(buf, 0);
-  compute_encoder.set_bytes(f.count, 1);
+  compute_encoder.set_bytes(count, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
   d.get_command_buffer(idx)->addCompletedHandler(
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
+
+  lk.with_fence_state([&](auto& /*outputs*/) {
+    // Fence dependency state access is structurally routed through
+    // with_fence_state() to preserve lock ordering: op_mtx -> fence_mtx.
+  });
 }
 
 } // namespace mlx::core

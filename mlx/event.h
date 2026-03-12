@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -13,6 +14,22 @@ class Event {
  public:
   Event() {};
   explicit Event(Stream stream);
+
+  Event(const Event& other)
+      : stream_(other.stream_),
+        event_(other.event_),
+        value_(other.value_.load(std::memory_order_acquire)) {}
+
+  Event& operator=(const Event& other) {
+    if (this != &other) {
+      stream_ = other.stream_;
+      event_ = other.event_;
+      value_.store(
+          other.value_.load(std::memory_order_acquire),
+          std::memory_order_release);
+    }
+    return *this;
+  }
 
   // Wait for the event to be signaled at its current value
   void wait();
@@ -32,11 +49,13 @@ class Event {
   }
 
   uint64_t value() const {
-    return value_;
+    // Acquire: readers observe state published before set_value(release).
+    return value_.load(std::memory_order_acquire);
   }
 
   void set_value(uint64_t v) {
-    value_ = v;
+    // Release: publish host-side event counter updates.
+    value_.store(v, std::memory_order_release);
   }
 
   const Stream& stream() const {
@@ -52,7 +71,7 @@ class Event {
   // since the event is not yet valid
   Stream stream_{0, Device::cpu};
   std::shared_ptr<void> event_{nullptr};
-  uint64_t value_{0};
+  std::atomic<uint64_t> value_{0};
 };
 
 } // namespace mlx::core
