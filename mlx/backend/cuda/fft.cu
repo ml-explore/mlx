@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include <cooperative_groups.h>
 #include <nvtx3/nvtx3.hpp>
 
 #include "mlx/backend/common/utils.h"
@@ -24,9 +25,11 @@ namespace mlx::core {
 
 namespace cu {
 
+namespace cg = cooperative_groups;
+
 template <typename T>
 __global__ void scale_fft_output(T* out, T scale, size_t size) {
-  auto index = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  auto index = cg::this_grid().thread_rank();
   if (index < size) {
     out[index] *= scale;
   }
