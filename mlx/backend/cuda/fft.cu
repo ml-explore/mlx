@@ -225,10 +225,6 @@ array transpose_view(const array& in, const std::vector<int>& axes) {
   auto [data_size, row_contiguous, col_contiguous] =
       check_contiguity(out_shape, out_strides);
   bool contiguous = in.flags().contiguous && data_size == in.data_size();
-  if (!contiguous) {
-    row_contiguous = false;
-    col_contiguous = false;
-  }
 
   array out(std::move(out_shape), in.dtype(), nullptr, {});
   out.copy_shared_buffer(
@@ -345,10 +341,6 @@ void restore_output_layout(const OrderedArray& current, array& out) {
       check_contiguity(out.shape(), out_strides);
   bool contiguous =
       current.arr.flags().contiguous && data_size == current.arr.data_size();
-  if (!contiguous) {
-    row_contiguous = false;
-    col_contiguous = false;
-  }
 
   out.copy_shared_buffer(
       current.arr,
