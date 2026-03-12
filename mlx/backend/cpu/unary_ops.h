@@ -41,6 +41,8 @@ DEFAULT_OP(Cos, cos)
 DEFAULT_OP(Cosh, cosh)
 DEFAULT_OP(Erf, erf)
 DEFAULT_OP(ErfInv, erfinv)
+DEFAULT_OP(BesselI0e, i0e)
+DEFAULT_OP(BesselI1e, i1e)
 DEFAULT_OP(Exp, exp)
 DEFAULT_OP(Expm1, expm1)
 DEFAULT_OP(Floor, floor);

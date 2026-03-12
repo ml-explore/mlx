@@ -103,6 +103,18 @@ void ErfInv::eval_cpu(const std::vector<array>& inputs, array& out) {
   unary_real_fp(in, out, detail::ErfInv(), stream());
 }
 
+void BesselI0e::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  unary_real_fp(in, out, detail::BesselI0e(), stream());
+}
+
+void BesselI1e::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  unary_real_fp(in, out, detail::BesselI1e(), stream());
+}
+
 void Exp::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
