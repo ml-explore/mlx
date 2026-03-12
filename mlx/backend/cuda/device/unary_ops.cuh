@@ -131,6 +131,43 @@ struct ErfInv {
   }
 };
 
+struct LogGamma {
+  template <typename T>
+  __device__ T operator()(T x) {
+    if constexpr (cuda::std::is_same_v<T, __half>) {
+      return ::lgamma(__half2float(x));
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+      return ::lgamma(__bfloat162float(x));
+    } else {
+      return ::lgamma(x);
+    }
+  }
+};
+
+struct Digamma {
+  template <typename T>
+  __device__ T operator()(T x) {
+    float v = static_cast<float>(x);
+    float r = 0.0f;
+    if (v < 0.0f) {
+      r = -M_PI / ::tan(M_PI * v);
+      v = 1.0f - v;
+    }
+    while (v < 10.0f) {
+      r -= 1.0f / v;
+      v += 1.0f;
+    }
+    float z = 1.0f / (v * v);
+    float y = 3.96825396825e-3f;
+    y = y * z + (-4.16666666667e-3f);
+    y = y * z + 7.57575757576e-3f;
+    y = y * z + (-2.10927960928e-2f);
+    y = y * z + 8.33333333333e-2f;
+    r += ::logf(v) - 0.5f / v - y * z;
+    return static_cast<T>(r);
+  }
+};
+
 struct Exp {
   template <typename T>
   __device__ T operator()(T x) {

@@ -7,6 +7,7 @@
 
 #include "mlx/backend/metal/kernels/cexpf.h"
 #include "mlx/backend/metal/kernels/erf.h"
+#include "mlx/backend/metal/kernels/lgamma.h"
 #include "mlx/backend/metal/kernels/expm1f.h"
 #include "mlx/backend/metal/kernels/fp8.h"
 
@@ -171,6 +172,20 @@ struct ErfInv {
   template <typename T>
   T operator()(T x) {
     return static_cast<T>(erfinv(static_cast<float>(x)));
+  };
+};
+
+struct LogGamma {
+  template <typename T>
+  T operator()(T x) {
+    return static_cast<T>(lgamma_impl(static_cast<float>(x)));
+  };
+};
+
+struct Digamma {
+  template <typename T>
+  T operator()(T x) {
+    return static_cast<T>(digamma_impl(static_cast<float>(x)));
   };
 };
 

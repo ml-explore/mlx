@@ -1930,6 +1930,59 @@ std::pair<std::vector<array>, std::vector<int>> ErfInv::vmap(
   return {{erfinv(inputs[0], stream())}, axes};
 }
 
+std::vector<array> LogGamma::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  // d/dx lgamma(x) = digamma(x)
+  return {multiply(cotangents[0], digamma(primals[0], stream()), stream())};
+}
+
+std::vector<array> LogGamma::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {multiply(tangents[0], digamma(primals[0], stream()), stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> LogGamma::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{lgamma(inputs[0], stream())}, axes};
+}
+
+std::vector<array> Digamma::vjp(
+    const std::vector<array>&,
+    const std::vector<array>&,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  throw std::runtime_error(
+      "[Digamma] Digamma is not twice differentiable. "
+      "Second-order gradients of lgamma are not supported.");
+}
+
+std::vector<array> Digamma::jvp(
+    const std::vector<array>&,
+    const std::vector<array>&,
+    const std::vector<int>&) {
+  throw std::runtime_error(
+      "[Digamma] Digamma is not twice differentiable. "
+      "Second-order gradients of lgamma are not supported.");
+}
+
+std::pair<std::vector<array>, std::vector<int>> Digamma::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{digamma(inputs[0], stream())}, axes};
+}
+
 std::vector<array> Exp::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
