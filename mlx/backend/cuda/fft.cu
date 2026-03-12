@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
+#include <cufftXt.h>
 #include <algorithm>
 #include <cstdint>
-#include <cufftXt.h>
 #include <memory>
 #include <numeric>
 #include <stdexcept>
@@ -42,8 +42,8 @@ namespace {
 void check_cufft_error(const char* name, cufftResult err) {
   if (err != CUFFT_SUCCESS) {
     throw std::runtime_error(
-        std::string(name) + " failed with code: " +
-        std::to_string(static_cast<int>(err)) + ".");
+        std::string(name) +
+        " failed with code: " + std::to_string(static_cast<int>(err)) + ".");
   }
 }
 
@@ -438,11 +438,13 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
         : FFTTransformType::C2C;
 
     // cuFFT may overwrite the input buffer for C2R, so only use the direct
-    // input when the transform is out-of-place from the library's perspective.
+    // input when the transform is out-of-place from the library's perspective
+    // or when the original input may be donated to the output.
     auto prepared = prepare_input(
         current,
         axis,
-        /* allow_direct= */ transform_type != FFTTransformType::C2R,
+        /* allow_direct= */ transform_type != FFTTransformType::C2R ||
+            is_donatable(in, out),
         encoder,
         s);
 
