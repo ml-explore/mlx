@@ -66,15 +66,15 @@ template <
     bool UPD_ROW_CONTIG,
     bool UPD_SCALAR,
     int NWORK>
-METAL_FUNC void slice_update_op_impl(
-    const device T* updates,
-    device T* out,
-    const constant int* update_shape,
-    const constant int64_t* update_strides,
-    const constant int& update_ndim,
-    const constant int64_t& update_size,
-    const constant int64_t* output_strides,
-    const constant int64_t& output_offset,
+[[kernel]] void slice_update_op_impl(
+    const device T* updates [[buffer(0)]],
+    device T* out [[buffer(1)]],
+    const constant int* update_shape [[buffer(2)]],
+    const constant int64_t* update_strides [[buffer(3)]],
+    const constant int& update_ndim [[buffer(4)]],
+    const constant int64_t& update_size [[buffer(5)]],
+    const constant int64_t* output_strides [[buffer(6)]],
+    const constant int64_t& output_offset [[buffer(7)]],
     uint2 gid [[thread_position_in_grid]],
     uint2 gsize [[threads_per_grid]]) {
   Op op;

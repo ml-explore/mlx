@@ -831,14 +831,14 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Set all the buffers
   int ndim = shape.size();
   int64_t size = upd.size();
-  compute_encoder.set_input_array(upd, 1);
-  compute_encoder.set_output_array(out, 2);
-  compute_encoder.set_vector_bytes(shape, 3);
-  compute_encoder.set_vector_bytes(strides[0], 4);
-  compute_encoder.set_bytes(ndim, 5);
-  compute_encoder.set_bytes(size, 6);
-  compute_encoder.set_vector_bytes(strides[1], 7);
-  compute_encoder.set_bytes(data_offset, 8);
+  compute_encoder.set_input_array(upd, 0);
+  compute_encoder.set_output_array(out, 1);
+  compute_encoder.set_vector_bytes(shape, 2);
+  compute_encoder.set_vector_bytes(strides[0], 3);
+  compute_encoder.set_bytes(ndim, 4);
+  compute_encoder.set_bytes(size, 5);
+  compute_encoder.set_vector_bytes(strides[1], 6);
+  compute_encoder.set_bytes(data_offset, 7);
 
   // Launch grid
   int threads_x, threads_y = 1;
