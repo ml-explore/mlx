@@ -22,6 +22,18 @@
 
 namespace mlx::core {
 
+namespace cu {
+
+template <typename T>
+__global__ void scale_fft_output(T* out, T scale, size_t size) {
+  auto index = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (index < size) {
+    out[index] *= scale;
+  }
+}
+
+} // namespace cu
+
 namespace {
 
 void check_cufft_error(const char* name, cufftResult err) {
@@ -70,14 +82,6 @@ struct OrderedArray {
   array arr;
   std::vector<int> order;
 };
-
-template <typename T>
-__global__ void scale_fft_output(T* out, T scale, size_t size) {
-  auto index = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-  if (index < size) {
-    out[index] *= scale;
-  }
-}
 
 auto& fft_plan_cache() {
   static LRUBytesKeyCache<FFTPlanKey, std::shared_ptr<CuFFTPlan>> cache(
@@ -374,7 +378,7 @@ void apply_inverse_scale(
   if (arr.dtype() == float32) {
     float scale_f = static_cast<float>(scale);
     encoder.add_kernel_node(
-        scale_fft_output<float>,
+        cu::scale_fft_output<float>,
         grid_dims,
         block_dims,
         gpu_ptr<float>(arr),
@@ -383,7 +387,7 @@ void apply_inverse_scale(
   } else if (arr.dtype() == complex64) {
     cu::complex64_t scale_f(static_cast<float>(scale), 0.0f);
     encoder.add_kernel_node(
-        scale_fft_output<cu::complex64_t>,
+        cu::scale_fft_output<cu::complex64_t>,
         grid_dims,
         block_dims,
         gpu_ptr<cu::complex64_t>(arr),
