@@ -53,7 +53,7 @@ void reshape_gpu(const array& in, array& out, Stream s);
 // Like the normal ops but safe to call in eval_gpu.
 array flatten_in_eval(const array& x, int start_axis, int end_axis, Stream s);
 array reshape_in_eval(const array& x, Shape shape, Stream s);
+array transpose_in_eval(const array& x, const std::vector<int>& axes);
 array swapaxes_in_eval(const array& x, int axis1, int axis2);
-array transpose_view_in_eval(const array& x, const std::vector<int>& axes);
 
 } // namespace mlx::core

@@ -57,9 +57,9 @@ enum class FFTTransformType : uint8_t {
 
 struct FFTPlanKey {
   int device_id;
-  uint8_t transform_type;
-  uint64_t n;
-  uint64_t batch;
+  FFTTransformType transform_type;
+  int64_t n;
+  int64_t batch;
 };
 
 struct CuFFTPlan {
@@ -100,9 +100,9 @@ FFTPlanKey make_plan_key(
     int64_t batch) {
   FFTPlanKey key{};
   key.device_id = device_id;
-  key.transform_type = static_cast<uint8_t>(transform_type);
-  key.n = static_cast<uint64_t>(n);
-  key.batch = static_cast<uint64_t>(batch);
+  key.transform_type = transform_type;
+  key.n = n;
+  key.batch = batch;
   return key;
 }
 
@@ -268,7 +268,7 @@ OrderedArray prepare_input(
   std::vector<int> order = current.order;
   if (!axis_last) {
     auto perm = move_axis_to_back_permutation(current.arr.ndim(), axis_pos);
-    view = transpose_view_in_eval(current.arr, perm);
+    view = transpose_in_eval(current.arr, perm);
     order = apply_permutation(current.order, perm);
   }
 
@@ -439,7 +439,5 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   restore_output_layout(current, out);
 }
-
-#undef CHECK_CUFFT_ERROR
 
 } // namespace mlx::core
