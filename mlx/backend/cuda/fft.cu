@@ -407,7 +407,6 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
 
   if (out.size() == 0) {
-    out.set_data(cu::malloc_async(0, encoder));
     return;
   }
 
