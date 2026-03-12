@@ -850,7 +850,11 @@ array slice_update(
       src.shape(),
       src.dtype(),
       std::make_shared<SliceUpdate>(
-          to_stream(s), std::move(start), std::move(stop), std::move(strides)),
+          to_stream(s),
+          SliceUpdate::None,
+          std::move(start),
+          std::move(stop),
+          std::move(strides)),
       {src, upd});
 }
 
@@ -893,6 +897,162 @@ array slice_update(
       src.dtype(),
       std::make_shared<DynamicSliceUpdate>(to_stream(s), std::move(axes)),
       {src, upd, start});
+}
+
+array slice_update(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    Shape strides,
+    SliceUpdate::ReduceType mode,
+    StreamOrDevice s) {
+  if (start.size() != src.ndim() || stop.size() != src.ndim() ||
+      strides.size() != src.ndim()) {
+    std::ostringstream msg;
+    msg << "[slice_update] Invalid number of indices or strides for "
+        << "array with dimension " << src.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto [has_neg_strides, upd_shape] =
+      normalize_slice(src.shape(), start, stop, strides);
+
+  auto upd = broadcast_to(astype(update, src.dtype(), s), upd_shape, s);
+
+  if (!has_neg_strides && upd_shape == src.shape()) {
+    switch (mode) {
+      case SliceUpdate::None:
+        return upd;
+      case SliceUpdate::Sum:
+        return add(src, upd, s);
+      case SliceUpdate::Prod:
+        return multiply(src, upd, s);
+      case SliceUpdate::Max:
+        return maximum(src, upd, s);
+      case SliceUpdate::Min:
+        return minimum(src, upd, s);
+    }
+  }
+
+  return array(
+      src.shape(),
+      src.dtype(),
+      std::make_shared<SliceUpdate>(
+          to_stream(s),
+          mode,
+          std::move(start),
+          std::move(stop),
+          std::move(strides)),
+      {src, upd});
+}
+
+array slice_update_add(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    Shape strides,
+    StreamOrDevice s /*= {}*/) {
+  return slice_update(
+      src,
+      update,
+      std::move(start),
+      std::move(stop),
+      std::move(strides),
+      SliceUpdate::Sum,
+      s);
+}
+
+array slice_update_add(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    StreamOrDevice s /*= {}*/) {
+  return slice_update_add(
+      src, update, std::move(start), std::move(stop), Shape(src.ndim(), 1), s);
+}
+
+array slice_update_prod(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    Shape strides,
+    StreamOrDevice s /*= {}*/) {
+  return slice_update(
+      src,
+      update,
+      std::move(start),
+      std::move(stop),
+      std::move(strides),
+      SliceUpdate::Prod,
+      s);
+}
+
+array slice_update_prod(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    StreamOrDevice s /*= {}*/) {
+  return slice_update_prod(
+      src, update, std::move(start), std::move(stop), Shape(src.ndim(), 1), s);
+}
+
+array slice_update_max(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    Shape strides,
+    StreamOrDevice s /*= {}*/) {
+  return slice_update(
+      src,
+      update,
+      std::move(start),
+      std::move(stop),
+      std::move(strides),
+      SliceUpdate::Max,
+      s);
+}
+
+array slice_update_max(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    StreamOrDevice s /*= {}*/) {
+  return slice_update_max(
+      src, update, std::move(start), std::move(stop), Shape(src.ndim(), 1), s);
+}
+
+array slice_update_min(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    Shape strides,
+    StreamOrDevice s /*= {}*/) {
+  return slice_update(
+      src,
+      update,
+      std::move(start),
+      std::move(stop),
+      std::move(strides),
+      SliceUpdate::Min,
+      s);
+}
+
+array slice_update_min(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    StreamOrDevice s /*= {}*/) {
+  return slice_update_min(
+      src, update, std::move(start), std::move(stop), Shape(src.ndim(), 1), s);
 }
 
 std::vector<array> split(

@@ -57,3 +57,65 @@ METAL_FUNC void scatter_impl(
     op.atomic_update(out, updates[upd_idx], out_idx);
   }
 }
+
+template <
+    typename T,
+    typename IdxT,
+    typename Op,
+    bool OUT_ROW_CONTIG,
+    bool UPD_ROW_CONTIG,
+    bool UPD_SCALAR,
+    int NWORK>
+METAL_FUNC void slice_update_op_impl(
+    const device T* updates,
+    device T* out,
+    const constant int* update_shape,
+    const constant int64_t* update_strides,
+    const constant int& update_ndim,
+    const constant int64_t& update_size,
+    const constant int64_t* output_strides,
+    const constant int64_t& output_offset,
+    uint2 gid [[thread_position_in_grid]],
+    uint2 gsize [[threads_per_grid]]) {
+  Op op;
+
+  IdxT idx = (IdxT(gid.y) * gsize.x + gid.x) * NWORK;
+  IdxT out_idx;
+  IdxT update_idx;
+
+  if constexpr (OUT_ROW_CONTIG) {
+    out_idx = idx;
+  } else {
+    out_idx = elem_to_loc<IdxT>(idx, update_shape, output_strides, update_ndim);
+  }
+
+  if constexpr (!UPD_SCALAR) {
+    if constexpr (UPD_ROW_CONTIG) {
+      update_idx = idx;
+    } else {
+      update_idx =
+          elem_to_loc<IdxT>(idx, update_shape, update_strides, update_ndim);
+    }
+  } else {
+    update_idx = 0;
+  }
+
+  out += output_offset;
+
+  for (int j = 0; j < NWORK && idx < update_size; j++) {
+    out[out_idx] = op(out[out_idx], updates[update_idx]);
+    idx++;
+
+    if constexpr (OUT_ROW_CONTIG) {
+      out_idx = idx;
+    } else {
+      out_idx += output_strides[update_ndim - 1];
+    }
+
+    if constexpr (UPD_ROW_CONTIG) {
+      update_idx = idx;
+    } else {
+      update_idx += update_strides[update_ndim - 1];
+    }
+  }
+}

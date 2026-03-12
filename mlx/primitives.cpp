@@ -4793,10 +4793,17 @@ std::pair<std::vector<array>, std::vector<int>> SliceUpdate::vmap(
 
   // No vmapping needed
   if (src_ax == -1 && upd_ax == -1) {
-    return {{slice_update(src, upd, start, stop, strides, stream())}, {-1}};
+    return {
+        {array(
+            src.shape(),
+            src.dtype(),
+            std::make_shared<SliceUpdate>(
+                stream(), reduce_type_, start, stop, strides),
+            {src, upd})},
+        {-1}};
   }
 
-  // Broadcast src
+  // Broadcast Src
   if (src_ax == -1) {
     src = expand_dims(src, upd_ax, stream());
     auto shape = src.shape();
@@ -4819,7 +4826,14 @@ std::pair<std::vector<array>, std::vector<int>> SliceUpdate::vmap(
   stop.insert(stop.begin() + src_ax, src.shape(src_ax));
   strides.insert(strides.begin() + src_ax, 1);
 
-  return {{slice_update(src, upd, start, stop, strides, stream())}, {src_ax}};
+  return {
+      {array(
+          src.shape(),
+          src.dtype(),
+          std::make_shared<SliceUpdate>(
+              stream(), reduce_type_, start, stop, strides),
+          {src, upd})},
+      {src_ax}};
 }
 
 std::vector<array> SliceUpdate::vjp(
@@ -4838,13 +4852,12 @@ std::vector<array> SliceUpdate::vjp(
   for (int num : argnums) {
     // Vjp for source
     if (num == 0) {
-      vjps.push_back(slice_update(
-          cotan,
-          zeros_like(upd, stream()),
-          start_indices_,
-          end_indices_,
-          strides_,
-          stream()));
+      vjps.push_back(array(
+          cotan.shape(),
+          cotan.dtype(),
+          std::make_shared<SliceUpdate>(
+              stream(), reduce_type_, start_indices_, end_indices_, strides_),
+          {cotan, zeros_like(upd, stream())}));
     }
     // Vjp fpr updates
     else {
@@ -4862,18 +4875,18 @@ std::vector<array> SliceUpdate::jvp(
     const std::vector<int>& argnums) {
   // Check inputs
   assert(primals.size() == 2);
-  return {slice_update(
-      tangents[0],
-      tangents[1],
-      start_indices_,
-      end_indices_,
-      strides_,
-      stream())};
+  return {array(
+      tangents[0].shape(),
+      tangents[0].dtype(),
+      std::make_shared<SliceUpdate>(
+          stream(), reduce_type_, start_indices_, end_indices_, strides_),
+      {tangents[0], tangents[1]})};
 }
 
 bool SliceUpdate::is_equivalent(const Primitive& other) const {
   const auto& s_other = static_cast<const SliceUpdate&>(other);
   return (
+      reduce_type_ == s_other.reduce_type_ &&
       start_indices_ == s_other.start_indices_ &&
       end_indices_ == s_other.end_indices_ && strides_ == s_other.strides_);
 }
