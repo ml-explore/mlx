@@ -150,10 +150,6 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
     bool decoding = false,
     bool output_logsumexp = false) {
   BytesKey<SDPACacheKey> cache_key;
-  // Set fields individually to preserve zero-initialized padding bytes.
-  // Aggregate init (cache_key.pod = {...}) creates a stack temporary whose
-  // padding is uninitialized, and trivial copy-assignment copies the entire
-  // struct including padding — breaking BytesKey's memcmp-based comparison.
   cache_key.pod.device_id = encoder.device().cuda_device();
   cache_key.pod.cudnn_dtype = dtype_to_cudnn_type(q.dtype());
   cache_key.pod.q_shape = vector_key<QKV_NDIM>(q.shape());
