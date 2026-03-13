@@ -23,6 +23,7 @@ const char* gather_axis();
 const char* gather_front();
 const char* hadamard();
 const char* logsumexp();
+const char* moe();
 const char* quantized_utils();
 const char* quantized();
 const char* fp_quantized();
