@@ -11,11 +11,16 @@ template <typename T, typename IdxT, typename LocT, int N>
     device T* out,
     const constant int64_t& stride,
     const constant int& size,
+    device atomic<int32_t>* global_failure,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
   auto idx = offset_neg_idx(indices[index.y], size);
   LocT src_idx = static_cast<LocT>(stride) * idx;
   LocT out_idx = static_cast<LocT>(stride) * index.y;
+
+  if (!check_bounds(idx, size, global_failure)) {
+    return;
+  }
 
   int s_idx = N * index.x;
   for (int i = 0; i < N && s_idx < stride; ++i, ++s_idx) {

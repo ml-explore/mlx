@@ -9,10 +9,11 @@ constexpr std::string_view gather_kernels = R"(
     const constant size_t& src_ndim [[buffer(4)]],
     const constant int* slice_sizes [[buffer(5)]],
     const constant int* axes [[buffer(6)]],
-    const constant int* idx_shapes [[buffer(7)]],
-    const constant int64_t* idx_strides [[buffer(8)]],
-    const constant bool* idx_contigs [[buffer(9)]],
-    const constant int& idx_ndim [[buffer(10)]],
+    device atomic<int32_t>* global_failure [[buffer(7)]],
+    const constant int* idx_shapes [[buffer(8)]],
+    const constant int64_t* idx_strides [[buffer(9)]],
+    const constant bool* idx_contigs [[buffer(10)]],
+    const constant int& idx_ndim [[buffer(11)]],
     {4}
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {{
@@ -27,6 +28,7 @@ constexpr std::string_view gather_kernels = R"(
       src_ndim,
       slice_sizes,
       axes,
+      global_failure,
       idxs,
       index,
       grid_dim);
@@ -50,6 +52,7 @@ constexpr std::string_view scatter_kernels = R"(
     const constant bool* idx_contigs [[buffer(13)]],
     const constant int& idx_ndim [[buffer(14)]],
     const constant size_t& idx_size [[buffer(15)]],
+    device atomic<int32_t>* global_failure [[buffer(16)]],
     {5}
     uint2 gid [[thread_position_in_grid]]) {{
   Indices<{2}, {4}> idxs{{ {{ {6} }}, idx_shapes, idx_strides, idx_contigs, idx_ndim}};
@@ -66,6 +69,7 @@ constexpr std::string_view scatter_kernels = R"(
       out_ndim,
       axes,
       idx_size,
+      global_failure,
       idxs,
       gid);
 }}
