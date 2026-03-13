@@ -1,5 +1,4 @@
 // Copyright © 2023 Apple Inc.
-
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
@@ -90,4 +89,18 @@ TEST_CASE("test eval graph retention when not tracing") {
   CHECK(z.is_available());
   CHECK(!a.has_primitive());
   CHECK(a.is_available());
+}
+
+TEST_CASE("test interrupt eval") {
+  auto x = zeros({1024}, int32);
+  for (int i = 0; i < 1000; ++i) {
+    x = x + 1;
+  }
+  std::thread t([x]() { eval(x); });
+  while (!interrupt_eval()) {
+  }
+  t.join();
+  // Check that x is not evaluated
+  CHECK(!x.is_available());
+  CHECK(array_equal(x, full({1024}, 1000, int32)).item<bool>());
 }
