@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <unistd.h>
+
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/jaccl/mesh_impl.h"
 #include "mlx/distributed/jaccl/ring_impl.h"
@@ -50,9 +52,7 @@ class MeshGroup : public GroupImpl {
     throw std::runtime_error("[jaccl] sum_scatter not supported.");
   }
 
-  std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
-    throw std::runtime_error("[jaccl] Group split not supported.");
-  }
+  std::shared_ptr<GroupImpl> split(int color, int key = -1) override;
 
  private:
   template <typename T, typename ReduceOp>
@@ -84,6 +84,12 @@ class MeshGroup : public GroupImpl {
 
   MeshImpl mesh_;
   RingImpl ring_;
+
+  // Stored for split() — device names indexed by rank (empty string for self)
+  std::vector<std::string> device_names_;
+  // Original coordinator host and port for deriving sub-group coordinators
+  std::string coordinator_host_;
+  int coordinator_port_;
 };
 
 } // namespace mlx::core::distributed::jaccl

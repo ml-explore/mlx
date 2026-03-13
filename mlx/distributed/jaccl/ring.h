@@ -51,9 +51,7 @@ class RingGroup : public GroupImpl {
     throw std::runtime_error("[jaccl] sum_scatter not supported.");
   }
 
-  std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
-    throw std::runtime_error("[jaccl] Group split not supported.");
-  }
+  std::shared_ptr<GroupImpl> split(int color, int key = -1) override;
 
  private:
   template <typename T, typename ReduceOp>
@@ -84,6 +82,11 @@ class RingGroup : public GroupImpl {
   std::vector<SharedBuffer> send_buffers_;
   std::vector<SharedBuffer> recv_buffers_;
   RingImpl ring_;
+
+  // Stored for split() — full NxN device matrix and coordinator info
+  std::vector<std::vector<std::vector<std::string>>> all_devices_;
+  std::string coordinator_host_;
+  int coordinator_port_;
 };
 
 } // namespace mlx::core::distributed::jaccl
