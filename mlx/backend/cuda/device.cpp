@@ -463,6 +463,24 @@ void CommandEncoder::add_graph_node(cudaGraph_t child) {
   insert_graph_dependencies(GraphNode{node, sub_graph_key});
 }
 
+void CommandEncoder::add_graph_node(
+    cudaGraph_t child,
+    const std::string& subgraph_key,
+    bool is_updatable) {
+  if (!use_cuda_graphs()) {
+    node_count_++;
+    CudaGraphExec graph_exec;
+    graph_exec.instantiate(child);
+    device_.make_current();
+    CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream()));
+    return;
+  }
+  is_graph_updatable_ &= is_updatable;
+  cudaGraphNode_t node;
+  CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&node, graph_, NULL, 0, child));
+  insert_graph_dependencies(GraphNode{node, subgraph_key});
+}
+
 bool CommandEncoder::needs_commit() {
   return (node_count_ > max_ops_per_graph_) ||
       ((bytes_in_graph_ >> 20) > max_mb_per_graph_);

@@ -16,6 +16,9 @@
 
 namespace mlx::core::cu {
 
+// Compute a key and updatability flag for a CUDA graph by walking its nodes.
+std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph);
+
 class CommandEncoder {
  public:
   struct CaptureContext {
@@ -92,6 +95,10 @@ class CommandEncoder {
       void** params);
 
   void add_graph_node(cudaGraph_t child);
+  void add_graph_node(
+      cudaGraph_t child,
+      const std::string& subgraph_key,
+      bool is_updatable);
 
   void add_temporary(const array& arr) {
     temporaries_.push_back(arr.data_shared_ptr());

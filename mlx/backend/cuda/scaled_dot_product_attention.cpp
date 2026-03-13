@@ -150,21 +150,17 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
     bool decoding = false,
     bool output_logsumexp = false) {
   BytesKey<SDPACacheKey> cache_key;
-  cache_key.pod = {
-      encoder.device().cuda_device(),
-      dtype_to_cudnn_type(q.dtype()),
-      vector_key<QKV_NDIM>(q.shape()),
-      vector_key<QKV_NDIM>(k.shape()),
-      vector_key<QKV_NDIM>(v.shape()),
-      vector_key<QKV_NDIM>(q.strides()),
-      vector_key<QKV_NDIM>(k.strides()),
-      vector_key<QKV_NDIM>(v.strides()),
-      do_causal,
-      {},
-      {},
-      sinks.has_value(),
-      output_logsumexp,
-  };
+  cache_key.pod.device_id = encoder.device().cuda_device();
+  cache_key.pod.cudnn_dtype = dtype_to_cudnn_type(q.dtype());
+  cache_key.pod.q_shape = vector_key<QKV_NDIM>(q.shape());
+  cache_key.pod.k_shape = vector_key<QKV_NDIM>(k.shape());
+  cache_key.pod.v_shape = vector_key<QKV_NDIM>(v.shape());
+  cache_key.pod.q_strides = vector_key<QKV_NDIM>(q.strides());
+  cache_key.pod.k_strides = vector_key<QKV_NDIM>(k.strides());
+  cache_key.pod.v_strides = vector_key<QKV_NDIM>(v.strides());
+  cache_key.pod.do_causal = do_causal;
+  cache_key.pod.has_sinks = sinks.has_value();
+  cache_key.pod.output_logsumexp = output_logsumexp;
   if (mask_arr) {
     cache_key.pod.mask_shape = vector_key<QKV_NDIM>(mask_arr->shape());
     cache_key.pod.mask_strides = vector_key<QKV_NDIM>(mask_arr->strides());
@@ -318,15 +314,7 @@ bool supports_sdpa_cudnn(
     bool has_arr_mask,
     bool do_causal,
     Stream s) {
-#ifdef _WIN32
-  // On Windows (WDDM), cuDNN SDPA has severe performance issues due to
-  // high per-kernel-launch overhead in the WDDM driver model. cuDNN's
-  // multi-kernel SDPA amplifies this, making it much slower than the
-  // single-kernel sdpa_vector path for both prefill and generation.
-  static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SDPA", 0);
-#else
   static bool enabled = env::get_var("MLX_CUDA_USE_CUDNN_SDPA", 1);
-#endif
   if (!enabled) {
     return false;
   }
