@@ -801,6 +801,81 @@ void compile_fuse(
     if (global_cache.find(arr.id()) != global_cache.end()) {
       continue;
     }
+    // If current op is a reduction, we may want to fuse prefix ops
+    // Only fuse for all_reduce
+    if (arr.has_primitive() && is_reduction(arr.primitive()) &&
+        arr.size() == 1) {
+      auto& reduction_input = arr.inputs()[0];
+      Stream reduction_stream = arr.primitive().stream();
+      const int max_prefix_depth = max_compile_depth - 1; // 1 for reduction
+
+      std::vector<array> prefix_tape; //
+      std::vector<array> prefix_inputs; //
+      std::unordered_set<uintptr_t> visited;
+
+      std::function<void(const array&, int)> collect_prefix;
+      collect_prefix = [&](const array& a, int depth) {
+        // Skip if already processed
+        if (visited.count(a.id())) {
+          return;
+        }
+        // Stop fusing if:
+        // depth limit exceeded
+        // non unary primitive
+        // does not have primitive
+        // stream mismatch
+        // is a constant input
+        if (depth >= max_prefix_depth || !a.has_primitive() ||
+            !is_unary(a.primitive()) ||
+            a.primitive().stream() != reduction_stream ||
+            input_ids.count(a.id())) {
+          prefix_inputs.push_back(a);
+          visited.insert(a.id());
+          return;
+        }
+        // Check if the input is used multiple times
+        auto pit = parents_map.find(a.id());
+        if (pit != parents_map.end() && pit->second.size() > 1) {
+          prefix_inputs.push_back(a);
+          visited.insert(a.id());
+          return;
+        }
+        visited.insert(a.id());
+        for (auto& in : a.inputs()) {
+          collect_prefix(in, depth + 1);
+        }
+        prefix_tape.push_back(a);
+      };
+
+      collect_prefix(reduction_input, 0);
+
+      // If there are operations that we can fuse
+      if (!prefix_tape.empty()) {
+        std::unordered_set<uintptr_t> constant_ids;
+        for (auto& in : prefix_inputs) {
+          if (in.size() == 1 && !in.has_primitive() &&
+              input_ids.find(in.id()) == input_ids.end()) {
+            constant_ids.insert(in.id());
+          }
+        }
+
+        // Attach prefix to the Reduce primitive
+        auto& reduce = static_cast<Reduce&>(arr.primitive());
+        reduce.set_fused_prefix(
+            prefix_tape, prefix_inputs, std::move(constant_ids));
+
+        for (auto& p : prefix_tape) {
+          global_cache.insert(p.id());
+          parents_map.erase(p.id());
+        }
+        arr.inputs() = std::move(prefix_inputs);
+      }
+
+      // Add the reduction to the new tape (with or without fused prefix)
+      new_tape.push_back(arr);
+      global_cache.insert(arr.id());
+      continue;
+    }
 
     // Two pass recursion:
     // First pass:
