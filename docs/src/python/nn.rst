@@ -64,6 +64,30 @@ Quick Start with Neural Networks
     # gradient with respect to `mlp.trainable_parameters()`
     loss_and_grad = nn.value_and_grad(mlp, l2_loss)
 
+Recurrent Patterns for Temporal Inputs
+--------------------------------------
+
+For temporal and event-like inputs, recurrent layers can be run in fixed
+windows while carrying hidden state between windows. This pattern is useful for
+streaming and SNN-style unrolled training loops where each chunk should keep
+context from the previous chunk.
+
+.. code-block:: python
+
+    import mlx.core as mx
+    import mlx.nn as nn
+
+    rnn = nn.RNN(input_size=40, hidden_size=128)
+    hidden = None
+
+    # stream_chunks yields arrays with shape [batch, time, features]
+    for chunk in stream_chunks:
+        y = rnn(chunk, hidden=hidden)
+        hidden = y[:, -1, :]
+
+When using :class:`GRU` or :class:`LSTM`, the same chunked approach applies.
+For :class:`LSTM`, carry both hidden and cell states between windows.
+
 .. _module_class:
 
 The Module Class
