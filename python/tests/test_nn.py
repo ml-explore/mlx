@@ -1941,6 +1941,24 @@ class TestLayers(mlx_tests.MLXTestCase):
         h_out = layer(inp, h_out[-1, :])
         self.assertEqual(h_out.shape, (44, 12))
 
+    def test_gru_none_hidden_matches_zeros(self):
+        mx.random.seed(42)
+
+        for bias in (False, True):
+            layer = nn.GRU(5, 12, bias=bias)
+
+            batched = mx.random.normal((2, 25, 5))
+            h_none = layer(batched)
+            h_zeros = layer(batched, hidden=mx.zeros((2, 12), dtype=batched.dtype))
+            mx.eval(h_none, h_zeros)
+            self.assertTrue(mx.allclose(h_none, h_zeros, atol=1e-6).item())
+
+            unbatched = mx.random.normal((25, 5))
+            h_none = layer(unbatched)
+            h_zeros = layer(unbatched, hidden=mx.zeros((12,), dtype=unbatched.dtype))
+            mx.eval(h_none, h_zeros)
+            self.assertTrue(mx.allclose(h_none, h_zeros, atol=1e-6).item())
+
     def test_lstm(self):
         layer = nn.LSTM(5, 12)
         inp = mx.random.normal((2, 25, 5))
