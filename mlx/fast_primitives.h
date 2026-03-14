@@ -210,11 +210,13 @@ class ScaledDotProductAttention : public Custom {
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float scale,
       bool do_causal,
+      bool causal_upper_left,
       bool has_sinks,
       bool output_logsumexp)
       : Custom(stream, std::move(fallback)),
         scale_(scale),
         do_causal_(do_causal),
+        causal_upper_left_(causal_upper_left),
         has_sinks_(has_sinks),
         output_logsumexp_(output_logsumexp) {}
 
@@ -250,12 +252,18 @@ class ScaledDotProductAttention : public Custom {
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
     return std::make_tuple(
-        nullptr, scale_, do_causal_, has_sinks_, output_logsumexp_);
+        nullptr,
+        scale_,
+        do_causal_,
+        causal_upper_left_,
+        has_sinks_,
+        output_logsumexp_);
   }
 
  private:
   float scale_;
   bool do_causal_;
+  bool causal_upper_left_;
   bool has_sinks_;
   bool output_logsumexp_;
 };

@@ -24,6 +24,7 @@ void sdpa_full_self_attention_nax(
     const float scale,
     array& o,
     bool do_causal_,
+    bool causal_upper_left,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
   using namespace mlx::steel;
@@ -131,7 +132,7 @@ void sdpa_full_self_attention_nax(
 
       /* int qL_rem = */ (qL - NQ_aligned * bq),
       /* int kL_rem = */ (kL - NK_aligned * bk),
-      /* int qL_off = */ (kL - qL),
+      /* int qL_off = */ (causal_upper_left ? 0 : kL - qL),
 
       /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
@@ -172,6 +173,7 @@ void sdpa_full_self_attention_metal(
     const float scale,
     array& o,
     bool do_causal_,
+    bool causal_upper_left,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
   if (metal::is_nax_available() && q.shape(3) != 80 &&
@@ -185,6 +187,7 @@ void sdpa_full_self_attention_metal(
         /* const float scale = */ scale,
         /* array& o = */ o,
         /* bool do_causal_ = */ do_causal_,
+        /* bool causal_upper_left = */ causal_upper_left,
         /* const std::optional<array>& mask = */ mask,
         /* const std::optional<array>& sinks = */ sinks);
   }
@@ -294,7 +297,7 @@ void sdpa_full_self_attention_metal(
 
       /* int qL_rem = */ (qL - NQ_aligned * bq),
       /* int kL_rem = */ (kL - NK_aligned * bk),
-      /* int qL_off = */ (kL - qL),
+      /* int qL_off = */ (causal_upper_left ? 0 : kL - qL),
 
       /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
@@ -335,6 +338,7 @@ void sdpa_vector(
     array& out,
     float scale,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
   // Set the kernel name
@@ -410,6 +414,8 @@ void sdpa_vector(
     compute_encoder.set_input_array(*sinks, 16);
     compute_encoder.set_bytes(q.shape(1), 17);
   }
+  int32_t causal_offset = causal_upper_left ? 0 : N - q.shape(2);
+  compute_encoder.set_bytes(causal_offset, 18);
 
   // Launch
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
@@ -424,6 +430,7 @@ void sdpa_vector_2pass(
     array& out,
     float scale,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
   // Set the kernel name
@@ -554,6 +561,8 @@ void sdpa_vector_2pass(
   if (has_sinks) {
     compute_encoder.set_input_array(*sinks, 18);
   }
+  int32_t causal_offset = causal_upper_left ? 0 : N - q.shape(2);
+  compute_encoder.set_bytes(causal_offset, 19);
 
   // Launch
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
@@ -744,9 +753,11 @@ void ScaledDotProductAttention::eval_gpu(
     char devc = d.get_architecture().back();
     if (((devc == 'd' || devc == 's') && k.shape(2) >= 1024) ||
         (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
-      sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
+      sdpa_vector_2pass(
+          s, d, q, k, v, o, scale_, do_causal, causal_upper_left_, mask, sinks);
     } else {
-      sdpa_vector(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
+      sdpa_vector(
+          s, d, q, k, v, o, scale_, do_causal, causal_upper_left_, mask, sinks);
     }
   }
 
@@ -779,7 +790,7 @@ void ScaledDotProductAttention::eval_gpu(
         : std::nullopt;
 
     sdpa_full_self_attention_metal(
-        s, d, q, k, v, scale_, o, do_causal_, mask, sinks);
+        s, d, q, k, v, scale_, o, do_causal_, causal_upper_left_, mask, sinks);
   }
 
   d.add_temporaries(std::move(copies), s.index);
