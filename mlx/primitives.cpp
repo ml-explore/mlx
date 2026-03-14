@@ -1863,7 +1863,7 @@ std::vector<array> Equal::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> Erf::vjp(
@@ -2530,7 +2530,7 @@ std::vector<array> Greater::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> GreaterEqual::vmap(
@@ -2557,7 +2557,7 @@ std::vector<array> GreaterEqual::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> Imag::vjp(
@@ -2614,7 +2614,7 @@ std::vector<array> Less::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> LessEqual::vmap(
@@ -2641,7 +2641,7 @@ std::vector<array> LessEqual::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> Log::vjp(
@@ -3188,7 +3188,7 @@ std::vector<array> NotEqual::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> Pad::vjp(
