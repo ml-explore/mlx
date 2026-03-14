@@ -1941,6 +1941,14 @@ class TestLayers(mlx_tests.MLXTestCase):
         h_out = layer(inp, h_out[-1, :])
         self.assertEqual(h_out.shape, (44, 12))
 
+        # hidden=None should be equivalent to hidden=zeros (issue #3249)
+        for bias in [True, False]:
+            layer = nn.GRU(5, 12, bias=bias)
+            inp = mx.random.normal((2, 25, 5))
+            h_none = layer(inp)
+            h_zeros = layer(inp, hidden=mx.zeros((2, 12)))
+            self.assertTrue(mx.allclose(h_none, h_zeros).item())
+
     def test_lstm(self):
         layer = nn.LSTM(5, 12)
         inp = mx.random.normal((2, 25, 5))
