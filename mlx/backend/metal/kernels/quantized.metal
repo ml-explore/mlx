@@ -109,7 +109,20 @@
 
 #define instantiate_quantized_all_splitk(type, group_size, bits)   \
   instantiate_quantized_split_k(affine_qvm_split_k, type, group_size, bits, 8)   \
-  instantiate_quantized_split_k(affine_qvm_split_k, type, group_size, bits, 32)
+  instantiate_quantized_split_k(affine_qvm_split_k, type, group_size, bits, 32)  \
+
+#define instantiate_quantized_splitk_qmm(name, type, group_size, bits, aligned) \
+  instantiate_kernel(                                                           \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned,         \
+      name,                                                                     \
+      type,                                                                     \
+      group_size,                                                               \
+      bits,                                                                     \
+      aligned)
+
+#define instantiate_quantized_all_splitk_qmm(type, group_size, bits)                    \
+  instantiate_quantized_splitk_qmm(affine_qmm_t_splitk, type, group_size, bits, true)  \
+  instantiate_quantized_splitk_qmm(affine_qmm_t_splitk, type, group_size, bits, false)
 
 #define instantiate_quantized_all_rhs(type, group_size, bits) \
   instantiate_gather_qmm_rhs(affine_gather_qmm_rhs, affine_gather_qmm_rhs_nt, type, group_size, bits, 16, 32, 32, 1, 2, true) \
@@ -121,6 +134,7 @@
   instantiate_quantized_all_aligned(type, group_size, bits) \
   instantiate_quantized_all_quad(type, group_size, bits)    \
   instantiate_quantized_all_splitk(type, group_size, bits)  \
+  instantiate_quantized_all_splitk_qmm(type, group_size, bits) \
   instantiate_quantized_all_rhs(type, group_size, bits)
 
 #define instantiate_quantized_types(group_size, bits)       \
