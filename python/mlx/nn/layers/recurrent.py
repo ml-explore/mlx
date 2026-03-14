@@ -184,6 +184,8 @@ class GRU(Module):
 
             if hidden is not None:
                 n = n + r * h_proj_n
+            elif self.bhn is not None:
+                n = n + r * self.bhn
             n = mx.tanh(n)
 
             if hidden is not None:
