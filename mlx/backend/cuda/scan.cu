@@ -4,8 +4,8 @@
 #include "mlx/backend/cuda/device/binary_ops.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/reduce/reduce_ops.cuh"
-#include "mlx/backend/cuda/scan.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/scan.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 

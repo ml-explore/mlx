@@ -4,8 +4,8 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/jit_module.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
-#include "mlx/backend/cuda/scan.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/scan.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
@@ -479,9 +479,12 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   const size_t mask_batch_size = mask_flat.size() / batch_count;
   const size_t src_batch_size = src.size() / src.shape(0);
   bool large = total > INT32_MAX || src.size() > INT32_MAX;
+  bool vectorized = src.flags().row_contiguous && dst.flags().row_contiguous;
+  constexpr int kMaskedScatterVecSize = 16;
+  constexpr int kMaskedScatterVecBlockDim = 256;
 
   std::string module_name =
-      fmt::format("masked_scatter_fused_{}", dtype_to_string(out.dtype()));
+      fmt::format("masked_scatter_{}", dtype_to_string(out.dtype()));
   cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
     std::vector<std::string> kernel_names;
     for (int src_contiguous = 0; src_contiguous <= 1; ++src_contiguous) {
@@ -489,7 +492,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         for (int use_large = 0; use_large <= 1; ++use_large) {
           kernel_names.push_back(
               fmt::format(
-                  "mlx::core::cu::masked_scatter_fused<{}, {}, {}, {}>",
+                  "mlx::core::cu::masked_scatter<{}, {}, {}, {}>",
                   dtype_to_cuda_type(out.dtype()),
                   src_contiguous ? "true" : "false",
                   dst_contiguous ? "true" : "false",
@@ -500,10 +503,10 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     for (int use_large = 0; use_large <= 1; ++use_large) {
       kernel_names.push_back(
           fmt::format(
-              "mlx::core::cu::masked_scatter_fused_vec_contiguous<{}, {}, {}>",
+              "mlx::core::cu::masked_scatter_vec_contiguous<{}, {}, {}>",
               dtype_to_cuda_type(out.dtype()),
               use_large ? "int64_t" : "int32_t",
-              16));
+              kMaskedScatterVecSize));
     }
     return std::make_tuple(false, jit_source_scatter, std::move(kernel_names));
   });
@@ -523,12 +526,14 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     args.append<int32_t>(src_batch_size);
     args.append<int32_t>(mask_batch_size);
   }
-  args.append_ndim(dst.shape());
-  args.append_ndim(dst.strides());
-  args.append<int32_t>(dst.ndim());
-  args.append_ndim(src.shape());
-  args.append_ndim(src.strides());
-  args.append<int32_t>(src.ndim());
+  if (!vectorized) {
+    args.append_ndim(dst.shape());
+    args.append_ndim(dst.strides());
+    args.append<int32_t>(dst.ndim());
+    args.append_ndim(src.shape());
+    args.append_ndim(src.strides());
+    args.append<int32_t>(src.ndim());
+  }
 
   encoder.set_input_array(dst);
   encoder.set_input_array(mask_flat);
@@ -536,22 +541,22 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(src);
   encoder.set_output_array(out);
 
-  bool vectorized = src.flags().row_contiguous && dst.flags().row_contiguous;
   std::string kernel_name = vectorized
       ? fmt::format(
-            "mlx::core::cu::masked_scatter_fused_vec_contiguous<{}, {}, {}>",
+            "mlx::core::cu::masked_scatter_vec_contiguous<{}, {}, {}>",
             dtype_to_cuda_type(out.dtype()),
             large ? "int64_t" : "int32_t",
-            16)
+            kMaskedScatterVecSize)
       : fmt::format(
-            "mlx::core::cu::masked_scatter_fused<{}, {}, {}, {}>",
+            "mlx::core::cu::masked_scatter<{}, {}, {}, {}>",
             dtype_to_cuda_type(out.dtype()),
             src.flags().row_contiguous ? "true" : "false",
             dst.flags().row_contiguous ? "true" : "false",
             large ? "int64_t" : "int32_t");
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = vectorized
-      ? get_launch_args(mask_flat, large, 16, 256)
+      ? get_launch_args(
+            mask_flat, large, kMaskedScatterVecSize, kMaskedScatterVecBlockDim)
       : get_launch_args(mask_flat, large);
   encoder.add_kernel_node_raw(
       kernel, num_blocks, block_dims, {}, 0, args.args());

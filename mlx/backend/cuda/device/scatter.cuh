@@ -66,7 +66,7 @@ __global__ void scatter(
 }
 
 template <typename T, bool SrcContiguous, bool DstContiguous, typename IdxT>
-__global__ void masked_scatter_fused(
+__global__ void masked_scatter(
     const T* dst,
     const bool* mask,
     const int32_t* scatter_offsets,
@@ -115,7 +115,7 @@ __global__ void masked_scatter_fused(
 }
 
 template <typename T, typename IdxT, int N_READS>
-__global__ void masked_scatter_fused_vec_contiguous(
+__global__ void masked_scatter_vec_contiguous(
     const T* dst,
     const bool* mask,
     const int32_t* scatter_offsets,
@@ -123,13 +123,7 @@ __global__ void masked_scatter_fused_vec_contiguous(
     T* out,
     IdxT size,
     IdxT src_batch_size,
-    IdxT mask_batch_size,
-    const __grid_constant__ Shape,
-    const __grid_constant__ Strides,
-    int32_t,
-    const __grid_constant__ Shape,
-    const __grid_constant__ Strides,
-    int32_t) {
+    IdxT mask_batch_size) {
   IdxT vec_index = cg::this_grid().thread_rank();
   IdxT base = vec_index * N_READS;
   if (base >= size) {
