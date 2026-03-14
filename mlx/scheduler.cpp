@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include "mlx/scheduler.h"
 #include "mlx/backend/gpu/device_info.h"
@@ -59,7 +59,10 @@ void synchronize() {
 
 namespace scheduler {
 
-/** A singleton scheduler to manage devices, streams, and task execution. */
+// Leak both singletons on all platforms. During static destruction, worker
+// threads may still be executing JIT-compiled code that has been unmapped,
+// causing SIGSEGV (macOS/Linux) or join() deadlocks (Windows/MSVC CRT).
+// The OS reclaims all resources at process exit anyway.
 Scheduler& scheduler() {
   // Intentionally leaked to avoid the "static destruction order fiasco":
   // background threads (e.g. command buffer completion handlers) may

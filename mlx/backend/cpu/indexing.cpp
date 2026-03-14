@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -9,6 +9,7 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
+#include "mlx/backend/cpu/threading/common.h"
 
 namespace mlx::core {
 
@@ -109,36 +110,92 @@ void gather(
   const T* src_ptr = src.data<T>();
   T* dst_ptr = out.data<T>();
 
-  std::vector<ContiguousIterator> its(inds.begin(), inds.end());
-  ContiguousIterator src_it;
-  if (!can_copy && src.ndim() > 0) {
-    src_it = ContiguousIterator(slice_sizes, src.strides(), src.ndim());
-  }
+  auto& pool = cpu::ThreadPool::instance();
+  int n_threads = cpu::effective_threads(out.size(), pool.max_threads());
 
-  size_t out_idx = 0;
-  for (int idx = 0; idx < ind_size; idx++) {
-    size_t src_idx = 0;
-    for (int ii = 0; ii < inds.size(); ++ii) {
-      auto ax = axes[ii];
-      auto idx_loc = its[ii].loc;
-      its[ii].step();
-      auto idx_val =
-          offset_neg_idx(inds[ii].data<IdxT>()[idx_loc], src.shape(ax));
-      src_idx += (idx_val * src.strides()[ax]);
+  if (n_threads > 1 && ind_size >= static_cast<size_t>(n_threads)) {
+    pool.parallel_for(n_threads, [&](int tid, int nth) {
+      size_t chunk = (ind_size + nth - 1) / nth;
+      size_t start = chunk * tid;
+      size_t end = std::min(start + chunk, ind_size);
+      if (start >= end)
+        return;
+
+      // Each thread creates its own iterators and advances to start position
+      std::vector<ContiguousIterator> my_its(inds.begin(), inds.end());
+      for (size_t s = 0; s < start; s++) {
+        for (auto& it : my_its)
+          it.step();
+      }
+      ContiguousIterator my_src_it;
+      if (!can_copy && src.ndim() > 0) {
+        my_src_it = ContiguousIterator(slice_sizes, src.strides(), src.ndim());
+      }
+
+      size_t out_idx = start * slice_size;
+      for (size_t idx = start; idx < end; idx++) {
+        size_t src_idx = 0;
+        for (int ii = 0; ii < inds.size(); ++ii) {
+          auto ax = axes[ii];
+          auto idx_loc = my_its[ii].loc;
+          my_its[ii].step();
+          auto idx_val =
+              offset_neg_idx(inds[ii].data<IdxT>()[idx_loc], src.shape(ax));
+          src_idx += (idx_val * src.strides()[ax]);
+        }
+
+        if (slice_size == 1) {
+          dst_ptr[out_idx++] = src_ptr[src_idx];
+        } else if (can_copy) {
+          std::copy(
+              src_ptr + src_idx,
+              src_ptr + src_idx + slice_size,
+              dst_ptr + out_idx);
+          out_idx += slice_size;
+        } else {
+          for (int jj = 0; jj < slice_size; jj++) {
+            dst_ptr[out_idx++] = src_ptr[src_idx + my_src_it.loc];
+            my_src_it.step();
+          }
+          my_src_it.reset();
+        }
+      }
+    });
+  } else {
+    // Sequential path
+    std::vector<ContiguousIterator> its(inds.begin(), inds.end());
+    ContiguousIterator src_it;
+    if (!can_copy && src.ndim() > 0) {
+      src_it = ContiguousIterator(slice_sizes, src.strides(), src.ndim());
     }
 
-    if (slice_size == 1) {
-      dst_ptr[out_idx++] = src_ptr[src_idx];
-    } else if (can_copy) {
-      std::copy(
-          src_ptr + src_idx, src_ptr + src_idx + slice_size, dst_ptr + out_idx);
-      out_idx += slice_size;
-    } else {
-      for (int jj = 0; jj < slice_size; jj++) {
-        dst_ptr[out_idx++] = src_ptr[src_idx + src_it.loc];
-        src_it.step();
+    size_t out_idx = 0;
+    for (size_t idx = 0; idx < ind_size; idx++) {
+      size_t src_idx = 0;
+      for (int ii = 0; ii < inds.size(); ++ii) {
+        auto ax = axes[ii];
+        auto idx_loc = its[ii].loc;
+        its[ii].step();
+        auto idx_val =
+            offset_neg_idx(inds[ii].data<IdxT>()[idx_loc], src.shape(ax));
+        src_idx += (idx_val * src.strides()[ax]);
       }
-      src_it.reset();
+
+      if (slice_size == 1) {
+        dst_ptr[out_idx++] = src_ptr[src_idx];
+      } else if (can_copy) {
+        std::copy(
+            src_ptr + src_idx,
+            src_ptr + src_idx + slice_size,
+            dst_ptr + out_idx);
+        out_idx += slice_size;
+      } else {
+        for (int jj = 0; jj < slice_size; jj++) {
+          dst_ptr[out_idx++] = src_ptr[src_idx + src_it.loc];
+          src_it.step();
+        }
+        src_it.reset();
+      }
     }
   }
 }
@@ -258,10 +315,8 @@ void gather_axis(
     array& out,
     const int axis) {
   auto shape = remove_index(ind.shape(), axis);
-  ContiguousIterator ind_it(
-      shape, remove_index(ind.strides(), axis), src.ndim() - 1);
-  ContiguousIterator src_it(
-      shape, remove_index(src.strides(), axis), src.ndim() - 1);
+  auto ind_strides_no_ax = remove_index(ind.strides(), axis);
+  auto src_strides_no_ax = remove_index(src.strides(), axis);
 
   auto ind_ptr = ind.data<IdxT>();
   auto src_ptr = src.data<T>();
@@ -282,18 +337,63 @@ void gather_axis(
   }
 
   size_t stride_pre = size_post * ind_ax_size;
-  for (size_t i = 0; i < size_pre; i++) {
-    for (size_t k = 0; k < size_post; k++) {
-      for (int j = 0; j < ind_ax_size; ++j) {
-        auto ind_val = offset_neg_idx(
-            ind_ptr[ind_it.loc + j * ind_ax_stride], src_ax_size);
-        dst_ptr[k + j * dst_ax_stride] =
-            src_ptr[src_it.loc + ind_val * src_ax_stride];
+  int ndim_minus_1 = src.ndim() - 1;
+
+  auto& pool = cpu::ThreadPool::instance();
+  int n_threads = cpu::effective_threads(out.size(), pool.max_threads());
+
+  if (n_threads > 1 && size_pre >= static_cast<size_t>(n_threads)) {
+    pool.parallel_for(n_threads, [&](int tid, int nth) {
+      size_t chunk = (size_pre + nth - 1) / nth;
+      size_t start = chunk * tid;
+      size_t end = std::min(start + chunk, size_pre);
+      if (start >= end)
+        return;
+
+      // Each thread creates its own iterators and advances to start position
+      ContiguousIterator my_ind_it(shape, ind_strides_no_ax, ndim_minus_1);
+      ContiguousIterator my_src_it(shape, src_strides_no_ax, ndim_minus_1);
+      // Advance iterators to start position
+      size_t advance = start * size_post;
+      for (size_t s = 0; s < advance; s++) {
+        my_ind_it.step();
+        my_src_it.step();
       }
-      ind_it.step();
-      src_it.step();
+
+      T* my_dst = dst_ptr + start * stride_pre;
+      for (size_t i = start; i < end; i++) {
+        for (size_t k = 0; k < size_post; k++) {
+          for (int j = 0; j < ind_ax_size; ++j) {
+            auto ind_val = offset_neg_idx(
+                ind_ptr[my_ind_it.loc + j * ind_ax_stride], src_ax_size);
+            my_dst[k + j * dst_ax_stride] =
+                src_ptr[my_src_it.loc + ind_val * src_ax_stride];
+          }
+          my_ind_it.step();
+          my_src_it.step();
+        }
+        my_dst += stride_pre;
+      }
+    });
+  } else {
+    // Sequential path
+    ContiguousIterator ind_it(shape, ind_strides_no_ax, ndim_minus_1);
+    ContiguousIterator src_it(shape, src_strides_no_ax, ndim_minus_1);
+
+    T* dst = dst_ptr;
+    for (size_t i = 0; i < size_pre; i++) {
+      for (size_t k = 0; k < size_post; k++) {
+        for (int j = 0; j < ind_ax_size; ++j) {
+          auto ind_val = offset_neg_idx(
+              ind_ptr[ind_it.loc + j * ind_ax_stride], src_ax_size);
+          dst[k + j * dst_ax_stride] =
+              src_ptr[src_it.loc + ind_val * src_ax_stride];
+        }
+        ind_it.step();
+        src_it.step();
+      }
+      dst += stride_pre;
     }
-    dst_ptr += stride_pre;
   }
 }
 
