@@ -4,6 +4,7 @@
 #include "mlx/primitives.h"
 
 #include <cassert>
+#include <numeric>
 
 namespace mlx::core {
 
@@ -59,19 +60,13 @@ array reshape_in_eval(const array& x, Shape shape, Stream s) {
   return out;
 }
 
-array swapaxes_in_eval(const array& x, int axis1, int axis2) {
-  int ndim = x.ndim();
-  if (axis1 < 0) {
-    axis1 += ndim;
+array transpose_in_eval(const array& x, const std::vector<int>& axes) {
+  Shape shape(axes.size());
+  Strides strides(axes.size());
+  for (int i = 0; i < axes.size(); ++i) {
+    shape[i] = x.shape(axes[i]);
+    strides[i] = x.strides(axes[i]);
   }
-  if (axis2 < 0) {
-    axis2 += ndim;
-  }
-
-  auto shape = x.shape();
-  std::swap(shape[axis1], shape[axis2]);
-  auto strides = x.strides();
-  std::swap(strides[axis1], strides[axis2]);
 
   auto [data_size, row_contiguous, col_contiguous] =
       check_contiguity(shape, strides);
@@ -84,6 +79,21 @@ array swapaxes_in_eval(const array& x, int axis1, int axis2) {
       {contiguous, row_contiguous, col_contiguous},
       x.data_size());
   return out;
+}
+
+array swapaxes_in_eval(const array& x, int axis1, int axis2) {
+  int ndim = x.ndim();
+  if (axis1 < 0) {
+    axis1 += ndim;
+  }
+  if (axis2 < 0) {
+    axis2 += ndim;
+  }
+
+  std::vector<int> axes(ndim);
+  std::iota(axes.begin(), axes.end(), 0);
+  std::swap(axes[axis1], axes[axis2]);
+  return transpose_in_eval(x, axes);
 }
 
 } // namespace mlx::core
