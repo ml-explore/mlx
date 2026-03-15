@@ -344,7 +344,53 @@ MTL::ComputePipelineState* get_steel_attention_kernel(
     int bd,
     int wm,
     int wn,
-    const array& m);
+    const array& m,
+    int gqa_factor,
+    float scale,
+    bool align_Q,
+    bool align_K,
+    bool has_mask,
+    bool do_causal,
+    bool has_sinks,
+    bool output_logsumexp);
+
+MTL::ComputePipelineState* get_steel_attention_vjp_dq_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& q,
+    int bq,
+    int bk,
+    int bd,
+    int wm,
+    int wn,
+    int gqa_factor,
+    float scale,
+    float scale_log2,
+    bool align_Q,
+    bool align_K,
+    bool do_causal,
+    bool has_block_mask = false);
+
+MTL::ComputePipelineState* get_steel_attention_vjp_dkv_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& q,
+    int bq,
+    int bk,
+    int bd,
+    int wm,
+    int wn,
+    int gqa_factor,
+    float scale,
+    float scale_log2,
+    bool align_Q,
+    bool align_K,
+    bool do_causal,
+    bool has_block_mask = false);
 
 MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     metal::Device& d,

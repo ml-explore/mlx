@@ -1,5 +1,9 @@
 // Copyright © 2024 Apple Inc.
+#include <cassert>
+#include <cstdlib>
 #include <sstream>
+#include <stdexcept>
+#include <string_view>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/gpu/copy.h"
@@ -9,11 +13,66 @@
 #include "mlx/backend/metal/kernels/steel/attn/params.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
+#include "mlx/ops.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {
 
 namespace {
+
+// Shared eligibility check for STEEL fused VJP kernels.
+// Must be consistent between use_fallback() and eval_gpu() to avoid UB.
+inline bool steel_vjp_eligible(int head_dim, Dtype dtype) {
+  return (head_dim == 64 || head_dim == 96 || head_dim == 128) &&
+      (dtype == float16 || dtype == bfloat16);
+}
+
+// Copy predicates shared between forward and VJP eval_gpu methods.
+
+// Returns true if the array's last dimension has stride 1.
+bool is_matrix_contiguous(const array& arr) {
+  return arr.strides(-1) == 1;
+}
+
+// Returns true if Q doesn't need a contiguous copy for the vector path.
+// Allows row-contiguous or transposed layouts where batch/head dims are
+// interchangeable with sequence when one is a singleton.
+bool q_is_vector_compatible(const array& arr) {
+  if (arr.flags().row_contiguous) {
+    return true;
+  }
+  auto& strides = arr.strides();
+  auto& shape = arr.shape();
+  if (shape[0] == 1 || shape[1] == 1) {
+    auto bidx = shape[0] == 1 ? 1 : 0;
+    return (strides[3] == 1) && (strides[2] == shape[3] * shape[bidx]) &&
+        (strides[bidx] == shape[3]);
+  }
+  return false;
+}
+
+// Returns true if K/V doesn't need a contiguous copy for the vector path.
+// Requires last dim stride=1 and contiguous batch/head dimensions.
+bool kv_is_vector_compatible(const array& arr) {
+  auto& strides = arr.strides();
+  auto& shape = arr.shape();
+  if (strides.back() != 1) {
+    return false;
+  }
+  if (shape[0] == 1 || shape[1] == 1) {
+    return true;
+  }
+  return (strides[0] == strides[1] * shape[1]);
+}
+
+// Returns true if mask doesn't need a contiguous copy.
+// Checks row-contiguity or batch/head dimension compatibility.
+bool mask_is_compatible(const array& q, const array& arr) {
+  auto& strides = arr.strides();
+  auto& shape = arr.shape();
+  return arr.flags().row_contiguous || q.shape(0) == 1 || q.shape(1) == 1 ||
+      (strides[0] == strides[1] * shape[1]);
+}
 
 void sdpa_full_self_attention_nax(
     const Stream& s,
@@ -112,6 +171,7 @@ void sdpa_full_self_attention_nax(
   const int NQ_aligned = qL / bq;
   const int NK_aligned = kL / bk;
 
+  // NAX doesn't support logsumexp output - provide dummy strides
   AttnParams params{
       /* int B = */ B,
       /* int H = */ H,
@@ -136,7 +196,8 @@ void sdpa_full_self_attention_nax(
       /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
       /* int64_t V_strides[3] = */ {v.strides(0), v.strides(1), v.strides(2)},
-      /* int64_t O_strides[3] = */ {o.strides(0), o.strides(1), o.strides(2)}};
+      /* int64_t O_strides[3] = */ {o.strides(0), o.strides(1), o.strides(2)},
+      /* int64_t LSE_strides[2] = */ {0, 0}};
 
   compute_encoder.set_input_array(q, 0);
   compute_encoder.set_input_array(k, 1);
@@ -173,9 +234,12 @@ void sdpa_full_self_attention_metal(
     array& o,
     bool do_causal_,
     const std::optional<array>& mask,
-    const std::optional<array>& sinks) {
+    const std::optional<array>& sinks,
+    bool output_logsumexp_ = false,
+    array* lse_out = nullptr) {
+  // NAX path does not support logsumexp output - skip when VJP needs it
   if (metal::is_nax_available() && q.shape(3) != 80 &&
-      (env::enable_tf32() || q.dtype() != float32)) {
+      (env::enable_tf32() || q.dtype() != float32) && !output_logsumexp_) {
     return sdpa_full_self_attention_nax(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,
@@ -211,13 +275,15 @@ void sdpa_full_self_attention_metal(
   const bool has_mask = mask.has_value();
   const bool do_causal = do_causal_;
   const bool has_sinks = sinks.has_value();
+  const bool output_logsumexp = output_logsumexp_;
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
       {&align_K, MTL::DataType::DataTypeBool, 201},
       {&has_mask, MTL::DataType::DataTypeBool, 300},
       {&do_causal, MTL::DataType::DataTypeBool, 301},
-      {&has_sinks, MTL::DataType::DataTypeBool, 302}};
+      {&has_sinks, MTL::DataType::DataTypeBool, 302},
+      {&output_logsumexp, MTL::DataType::DataTypeBool, 303}};
 
   std::string base_name;
   concatenate(
@@ -250,7 +316,9 @@ void sdpa_full_self_attention_metal(
       "_do_causal_",
       (do_causal ? 't' : 'n'),
       "_has_sinks_",
-      (has_sinks ? 't' : 'n'));
+      (has_sinks ? 't' : 'n'),
+      "_lse_",
+      (output_logsumexp ? 't' : 'n'));
 
   auto& compute_encoder = d.get_command_encoder(s.index);
 
@@ -265,7 +333,15 @@ void sdpa_full_self_attention_metal(
       bd,
       wm,
       wn,
-      (has_mask ? *mask : q));
+      (has_mask ? *mask : q),
+      gqa_factor,
+      scale,
+      align_Q,
+      align_K,
+      has_mask,
+      do_causal,
+      has_sinks,
+      output_logsumexp);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -274,6 +350,14 @@ void sdpa_full_self_attention_metal(
 
   const int NQ_aligned = qL / bq;
   const int NK_aligned = kL / bk;
+
+  // Compute LSE strides if outputting logsumexp: shape [B, H, qL, 1]
+  // The VJP kernel expects strides as:
+  //   LSE_strides[0] = qL (stride between heads within same batch)
+  //   LSE_strides[1] = 1 (stride between query positions)
+  // Linear index = (batch * H + head) * qL + query_pos
+  int64_t lse_str_head = qL; // Stride between heads
+  int64_t lse_str_qpos = 1; // Stride between query positions
 
   AttnParams params{
       /* int B = */ B,
@@ -299,7 +383,8 @@ void sdpa_full_self_attention_metal(
       /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
       /* int64_t V_strides[3] = */ {v.strides(0), v.strides(1), v.strides(2)},
-      /* int64_t O_strides[3] = */ {o.strides(0), o.strides(1), o.strides(2)}};
+      /* int64_t O_strides[3] = */ {o.strides(0), o.strides(1), o.strides(2)},
+      /* int64_t LSE_strides[2] = */ {lse_str_head, lse_str_qpos}};
 
   compute_encoder.set_input_array(q, 0);
   compute_encoder.set_input_array(k, 1);
@@ -318,6 +403,9 @@ void sdpa_full_self_attention_metal(
   }
   if (has_sinks) {
     compute_encoder.set_input_array(*sinks, 7);
+  }
+  if (output_logsumexp && lse_out != nullptr) {
+    compute_encoder.set_output_array(*lse_out, 8);
   }
 
   MTL::Size grid_dims = MTL::Size(NQ, H, B);
@@ -410,7 +498,6 @@ void sdpa_vector(
     compute_encoder.set_input_array(*sinks, 16);
     compute_encoder.set_bytes(q.shape(1), 17);
   }
-
   // Launch
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
@@ -425,7 +512,8 @@ void sdpa_vector_2pass(
     float scale,
     bool do_causal,
     const std::optional<array>& mask,
-    const std::optional<array>& sinks) {
+    const std::optional<array>& sinks,
+    array* lse_out = nullptr) {
   // Set the kernel name
   std::string kname;
   kname.reserve(64);
@@ -565,8 +653,15 @@ void sdpa_vector_2pass(
   kname += "_";
   kname += std::to_string(v.shape(-1));
 
+  bool do_output_lse = (lse_out != nullptr);
+  metal::MTLFCList pass2_func_consts = {
+      {&do_output_lse, MTL::DataType::DataTypeBool, 28},
+  };
+  std::string pass2_hash_name = kname;
+  pass2_hash_name += do_output_lse ? "_lse" : "_nolse";
+
   // Get the kernel
-  kernel = d.get_kernel(kname);
+  kernel = d.get_kernel(kname, pass2_hash_name, pass2_func_consts);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Set its arguments
@@ -575,6 +670,9 @@ void sdpa_vector_2pass(
   compute_encoder.set_input_array(maxs, 2);
   compute_encoder.set_output_array(out, 3);
   compute_encoder.set_bytes(blocks, 4);
+  if (do_output_lse) {
+    compute_encoder.set_output_array(*lse_out, 5);
+  }
 
   // Launch
   group_dims = MTL::Size(1024, 1, 1);
@@ -592,17 +690,11 @@ bool ScaledDotProductAttention::use_fallback(
     bool has_mask,
     bool has_arr_mask,
     bool do_causal,
-    bool is_training,
     bool output_logsumexp,
     Stream s) {
-  if (is_training) {
-    // It's faster for training on Metal to use the unfused SDPA for both
-    // forward and backward.
-    return true;
-  }
-  if (output_logsumexp) {
-    return true;
-  }
+  // Note: When output_logsumexp is true, the caller (fast.cpp) has already
+  // verified VJP availability with proper has_mask/has_sinks parameters.
+  // No redundant check needed here.
   if (s.device == Device::cpu) {
     return true;
   }
@@ -620,7 +712,8 @@ bool ScaledDotProductAttention::use_fallback(
       (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
        query_head_dim == 256);
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
+      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 96 ||
+       query_head_dim == 128);
 
   const bool sdpa_full_supported_mask = !has_mask || has_arr_mask ||
       (query_sequence_length <= key_sequence_length && do_causal);
@@ -653,8 +746,6 @@ void ScaledDotProductAttention::eval_gpu(
 
   std::vector<array> copies;
 
-  // Define some copy functions to ensure the layout of the inputs is as
-  // expected.
   copies.reserve(inputs.size());
   auto copy_unless = [&copies, &s](
                          auto predicate, const array& arr) -> const array& {
@@ -667,11 +758,6 @@ void ScaledDotProductAttention::eval_gpu(
     }
   };
 
-  // Checks that the headdim dimension has stride 1.
-  auto is_matrix_contiguous = [](const array& arr) {
-    return arr.strides(-1) == 1;
-  };
-
   std::optional<array> sinks = std::nullopt;
   if (has_sinks_) {
     sinks = copy_unless(is_matrix_contiguous, inputs.back());
@@ -680,41 +766,10 @@ void ScaledDotProductAttention::eval_gpu(
 
   // We are in vector mode ie single query
   if (q_pre.shape(2) <= 8) {
-    auto q_copy_unless = [](const array& arr) {
-      if (arr.flags().row_contiguous) {
-        return true;
-      }
-      auto& strides = arr.strides();
-      auto& shape = arr.shape();
-      if (shape[0] == 1 || shape[1] == 1) {
-        // If either the batch or head dimension is a singleton, the other can
-        // be transposed with the sequence dimension
-        auto bidx = shape[0] == 1 ? 1 : 0;
-        return (strides[3] == 1) && (strides[2] == shape[3] * shape[bidx]) &&
-            (strides[bidx] == shape[3]);
-      }
-      return false;
-    };
-
-    auto kv_copy_unless = [](const array& arr) {
-      // keys and values should be copied if:
-      // - the last dimension is not contiguous
-      // - the batch and head dim are not contiguous
-      auto& strides = arr.strides();
-      auto& shape = arr.shape();
-      if (strides.back() != 1) {
-        return false;
-      }
-      if (shape[0] == 1 || shape[1] == 1) {
-        return true;
-      }
-      return (strides[0] == strides[1] * shape[1]);
-    };
-
-    bool q_copied = !q_copy_unless(q_pre);
+    bool q_copied = !q_is_vector_compatible(q_pre);
     array q = (q_copied) ? contiguous_copy_gpu(q_pre, s) : q_pre;
-    const auto& k = copy_unless(kv_copy_unless, k_pre);
-    const auto& v = copy_unless(kv_copy_unless, v_pre);
+    const auto& k = copy_unless(kv_is_vector_compatible, k_pre);
+    const auto& v = copy_unless(kv_is_vector_compatible, v_pre);
 
     // Donate the query if possible
     if (q.is_donatable() && q.flags().row_contiguous && q.size() == o.size()) {
@@ -726,15 +781,19 @@ void ScaledDotProductAttention::eval_gpu(
       o.set_data(allocator::malloc(o.nbytes()));
     }
 
-    auto mask_copy_unless = [&q](const array& arr) {
-      auto& strides = arr.strides();
-      auto& shape = arr.shape();
-      return arr.flags().row_contiguous || q.shape(0) == 1 || q.shape(1) == 1 ||
-          (strides[0] == strides[1] * shape[1]);
-    };
+    // Handle logsumexp output for VJP backward pass
+    array* lse_out = nullptr;
+    if (output_logsumexp_ && outputs.size() > 1) {
+      auto& lse = outputs[1];
+      lse.set_data(allocator::malloc(lse.nbytes()));
+      lse_out = &outputs[1];
+    }
 
+    auto mask_pred = [&q](const array& arr) {
+      return mask_is_compatible(q, arr);
+    };
     auto mask = has_arr_mask
-        ? std::optional<array>{copy_unless(mask_copy_unless, inputs[3])}
+        ? std::optional<array>{copy_unless(mask_pred, inputs[3])}
         : std::nullopt;
 
     // We route to the 2 pass fused attention if
@@ -744,7 +803,8 @@ void ScaledDotProductAttention::eval_gpu(
     char devc = d.get_architecture().back();
     if (((devc == 'd' || devc == 's') && k.shape(2) >= 1024) ||
         (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
-      sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
+      sdpa_vector_2pass(
+          s, d, q, k, v, o, scale_, do_causal, mask, sinks, lse_out);
     } else {
       sdpa_vector(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
     }
@@ -774,25 +834,612 @@ void ScaledDotProductAttention::eval_gpu(
         {str_oB, str_oH, str_oL, str_oD},
         flags);
 
+    // Handle logsumexp output for VJP backward pass
+    array* lse_out = nullptr;
+    if (output_logsumexp_ && outputs.size() > 1) {
+      auto& lse = outputs[1];
+      lse.set_data(allocator::malloc(lse.nbytes()));
+      lse_out = &outputs[1];
+    }
+
     auto mask = has_arr_mask
         ? std::optional<array>{copy_unless(is_matrix_contiguous, inputs[3])}
         : std::nullopt;
 
     sdpa_full_self_attention_metal(
-        s, d, q, k, v, scale_, o, do_causal_, mask, sinks);
+        s,
+        d,
+        q,
+        k,
+        v,
+        scale_,
+        o,
+        do_causal_,
+        mask,
+        sinks,
+        output_logsumexp_,
+        lse_out);
   }
 
   d.add_temporaries(std::move(copies), s.index);
 }
 
-bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
-  return true;
+bool ScaledDotProductAttentionVJP::use_fallback(
+    const array& q,
+    const array& k,
+    Stream s,
+    bool do_causal,
+    bool has_mask,
+    bool has_sinks,
+    int n_kv_heads) {
+  // Use fallback on CPU
+  if (s.device == Device::cpu) {
+    return true;
+  }
+
+  const int query_head_dim = q.shape(-1);
+  const int query_seq_len = q.shape(2);
+
+  // Vector path (qL <= 8): the 1-pass sdpa_vector kernel does not write LSE,
+  // which is required by the VJP. Fall back to unfused backward for short
+  // sequences until the vector kernel is extended to support LSE output.
+  if (query_seq_len <= 8) {
+    return true;
+  }
+
+  // STEEL VJP dispatch policy.
+  //
+  // Fused VJP avoids materializing the O(L^2) attention matrix, providing
+  // 70-95% memory savings. However, fused uses BQ=32 STEEL tiles (~1.9
+  // TFLOPS) while unfused uses NAX-optimized large-tile matmul (~10.7
+  // TFLOPS), so performance varies by head dim, causal mode, and GQA.
+  //
+  // Policy:
+  //   Causal:  fused by default (tile skipping gives speed advantage)
+  //   Dense:   unfused by default (fused always slower), memory ceiling for OOM
+  //   Memory:  1 GB ceiling forces fused to prevent OOM on large dense attention
+  //
+  // Environment overrides:
+  //   MLX_SDPA_VJP_MODE={auto|unfused|fused}
+  //   MLX_SDPA_VJP_LONG_L_THRESHOLD=N  (overrides auto L thresholds)
+  //   MLX_SDPA_VJP_ATTENTION_BYTES_THRESHOLD=N  (memory ceiling, default 1GB)
+
+  const bool steel_eligible =
+      steel_vjp_eligible(query_head_dim, q.dtype()) && !has_mask && !has_sinks;
+
+  if (!steel_eligible) {
+    return true; // Not eligible for fused VJP, use unfused
+  }
+
+  // Read dispatch policy from environment (cached — read once per process)
+  static const char* mode_env = std::getenv("MLX_SDPA_VJP_MODE");
+  std::string_view mode = mode_env ? mode_env : "auto";
+
+  if (mode == "unfused") {
+    return true;
+  }
+  if (mode == "fused") {
+    return false; // Force fused VJP
+  }
+
+  // --- Auto mode: causal thresholds (speed) + memory ceiling (OOM) ---
+
+  const int B = q.shape(0);
+  const int n_q_heads = q.shape(1);
+  const int gqa_factor = (n_kv_heads > 0) ? (n_q_heads / n_kv_heads) : 1;
+  const bool is_gqa = gqa_factor > 1;
+
+  // Causal attention: fused is competitive or faster due to ~50% tile skipping.
+  // Use L thresholds to decide (speed-driven, not memory-driven).
+  if (do_causal) {
+    int l_threshold;
+    if (query_head_dim <= 96) {
+      // D=64/96: fused is faster at all L (non-GQA).
+      // GQA erodes advantage; fused at L>=1024.
+      l_threshold = is_gqa ? 1024 : 0;
+    } else {
+      // D=128: fused is slower but saves a lot of memory at L>=1024.
+      // Acceptable trade-off for training. GQA needs higher L.
+      l_threshold = is_gqa ? 2048 : 1024;
+    }
+
+    static const char* thresh_env =
+        std::getenv("MLX_SDPA_VJP_LONG_L_THRESHOLD");
+    if (thresh_env) {
+      l_threshold = std::atoi(thresh_env);
+    }
+
+    if (query_seq_len >= l_threshold) {
+      return false; // Use fused VJP
+    }
+  }
+
+  // Memory ceiling: OOM protection for dense attention (and short causal).
+  // Dense fused is always slower — only forced to prevent OOM.
+  // Default 1 GB: covers L>=4096 at H=32 (attn matrix = 1+ GB).
+  const int key_seq_len = k.shape(2);
+  const size_t attn_bytes =
+      static_cast<size_t>(B) * n_q_heads * query_seq_len * key_seq_len * 2;
+
+  static const char* bytes_env =
+      std::getenv("MLX_SDPA_VJP_ATTENTION_BYTES_THRESHOLD");
+  const size_t bytes_threshold = bytes_env
+      ? static_cast<size_t>(std::atoll(bytes_env))
+      : static_cast<size_t>(1) << 30; // 1 GB
+
+  if (attn_bytes >= bytes_threshold) {
+    return false; // Use fused to avoid OOM
+  }
+
+  return true; // Default: unfused (dense is never speed-competitive)
 }
+
+namespace {
+
+// Dispatch the STEEL VJP dQ kernel.
+// Computes dQ gradients using tiled matrix multiply on the GPU.
+// Grid: [NQ, H, B] - one threadgroup per (query_block, head, batch)
+void sdpa_steel_vjp_dq_dispatch(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& v,
+    const array& delta,
+    const array& d_out,
+    const array& logsumexp,
+    array& d_q,
+    float scale,
+    bool do_causal,
+    const std::optional<array>& block_mask = std::nullopt,
+    int qL_off_override = -1) {
+  using namespace mlx::steel;
+
+  constexpr int bq = 32;
+  constexpr int wm = 4;
+  constexpr int wn = 1;
+
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int D = q.shape(3);
+  int gqa_factor = q.shape(1) / k.shape(1);
+
+  // Select BK based on head dimension and architecture (matches MFA):
+  // D=64: BK=32 (all architectures)
+  // D=96/128: BK=32 on M3+ (halves KV iterations), BK=16 on M1/M2
+  int bk;
+  if (D <= 64) {
+    bk = 32;
+  } else if (D <= 128 && d.get_architecture_gen() >= 15) {
+    bk = 32; // M3+ has dynamic register allocation
+  } else {
+    bk = 16;
+  }
+
+  int qL = q.shape(2);
+  int kL = k.shape(2);
+
+  const int NQ = (qL + bq - 1) / bq;
+  const int NK = (kL + bk - 1) / bk;
+
+  const int NQ_aligned = qL / bq;
+  const int NK_aligned = kL / bk;
+
+  const bool align_Q = (qL % bq) == 0;
+  const bool align_K = (kL % bk) == 0;
+
+  bool has_block_mask_flag = block_mask.has_value();
+
+  // Function constants (same indices as forward kernel)
+  metal::MTLFCList func_consts = {
+      {&align_Q, MTL::DataType::DataTypeBool, 200},
+      {&align_K, MTL::DataType::DataTypeBool, 201},
+      {&do_causal, MTL::DataType::DataTypeBool, 301},
+      {&has_block_mask_flag, MTL::DataType::DataTypeBool, 302},
+  };
+
+  // Kernel name: matches host_name from instantiation macro
+  // Format: attention_vjp_dq_{type}_{bq}_{bk}_{bd}
+  std::string kname = "attention_vjp_dq_";
+  kname += type_to_name(q);
+  kname += "_";
+  kname += std::to_string(bq);
+  kname += "_";
+  kname += std::to_string(bk);
+  kname += "_";
+  kname += std::to_string(D);
+
+  std::string hash_name = kname;
+  hash_name += "_align_Q_";
+  hash_name += (align_Q ? 't' : 'n');
+  hash_name += "_align_K_";
+  hash_name += (align_K ? 't' : 'n');
+  hash_name += "_causal_";
+  hash_name += (do_causal ? 't' : 'n');
+  hash_name += "_bmask_";
+  hash_name += (has_block_mask_flag ? 't' : 'n');
+
+  float scale_log2 = static_cast<float>(scale * M_LOG2E);
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_steel_attention_vjp_dq_kernel(
+      d,
+      kname,
+      hash_name,
+      func_consts,
+      q,
+      bq,
+      bk,
+      D,
+      wm,
+      wn,
+      gqa_factor,
+      scale,
+      scale_log2,
+      align_Q,
+      align_K,
+      do_causal,
+      has_block_mask_flag);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // LSE strides: shape [B, H, qL] stored linearly as (batch * H + head) * qL +
+  // pos
+  int64_t lse_str_head = qL;
+  int64_t lse_str_qpos = 1;
+
+  // qL_off: causal mask offset. When caller pads Q/K to different block sizes,
+  // the padded kL - qL may differ from the original. Use override if provided.
+  int qL_off = (qL_off_override >= 0) ? qL_off_override : (kL - qL);
+
+  AttnVJPParams params{
+      /* int B = */ B,
+      /* int H = */ H,
+      /* int D = */ D,
+
+      /* int qL = */ qL,
+      /* int kL = */ kL,
+
+      /* int gqa_factor = */ gqa_factor,
+      /* float scale = */ scale,
+      /* float scale_log2 = */ scale_log2,
+
+      /* int NQ = */ NQ,
+      /* int NK = */ NK,
+
+      /* int NQ_aligned = */ NQ_aligned,
+      /* int NK_aligned = */ NK_aligned,
+
+      /* int qL_rem = */ (qL - NQ_aligned * bq),
+      /* int kL_rem = */ (kL - NK_aligned * bk),
+      /* int qL_off = */ qL_off,
+
+      /* int64_t Q_strides[3] = */
+      {q.strides(0), q.strides(1), q.strides(2)},
+      /* int64_t K_strides[3] = */
+      {k.strides(0), k.strides(1), k.strides(2)},
+      /* int64_t V_strides[3] = */
+      {v.strides(0), v.strides(1), v.strides(2)},
+      /* int64_t dO_strides[3] = */
+      {d_out.strides(0), d_out.strides(1), d_out.strides(2)},
+      /* int64_t LSE_strides[2] = */ {lse_str_head, lse_str_qpos},
+      /* int64_t delta_strides[2] = */ {qL, 1},
+
+      /* int64_t dQ_strides[3] = */
+      {d_q.strides(0), d_q.strides(1), d_q.strides(2)},
+      /* int64_t dK_strides[3] = */ {0, 0, 0},
+      /* int64_t dV_strides[3] = */ {0, 0, 0},
+
+      /* int NK_tiles = */ NK,
+  };
+
+  // Set buffers (must match kernel signature in steel_attention_vjp_dq.h)
+  compute_encoder.set_input_array(q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(v, 2);
+  compute_encoder.set_input_array(delta, 3);
+  compute_encoder.set_input_array(d_out, 4);
+  compute_encoder.set_input_array(logsumexp, 5);
+  compute_encoder.set_output_array(d_q, 6);
+  compute_encoder.set_bytes(params, 7);
+  if (has_block_mask_flag) {
+    compute_encoder.set_input_array(*block_mask, 8);
+  }
+
+  // Grid: [NQ, H, B] - one threadgroup per (query_block, head, batch)
+  MTL::Size grid_dims = MTL::Size(NQ, H, B);
+  // Group: WM * WN * 32 threads = 4 * 1 * 32 = 128
+  MTL::Size group_dims = MTL::Size(wm * wn * 32, 1, 1);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+// Dispatch the STEEL VJP dKV kernel.
+// Computes dK and dV gradients using tiled matrix multiply on the GPU.
+// Grid: [NK, n_kv_heads, B] - one threadgroup per (kv_block, kv_head, batch)
+void sdpa_steel_vjp_dkv_dispatch(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& v,
+    const array& delta,
+    const array& d_out,
+    const array& logsumexp,
+    array& d_k,
+    array& d_v,
+    float scale,
+    bool do_causal,
+    const std::optional<array>& block_mask = std::nullopt,
+    int qL_off_override = -1) {
+  using namespace mlx::steel;
+
+  constexpr int wn = 1;
+
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int D = q.shape(3);
+  int gqa_factor = q.shape(1) / k.shape(1);
+  int n_kv_heads = k.shape(1);
+
+  // Select BQ, WM, BK based on head dimension:
+  // D=64: BQ=32, WM=1, BK=32 (32 threads, register pressure OK)
+  // D=96: BQ=32, WM=2, BK=16 (64 threads, ~280 regs/thread)
+  // D=128: BQ=16, WM=2, BK=16 (64 threads, ~202 regs/thread, no spilling!)
+  //   BQ=16 halves Q-tile register tiles (TQ=1 vs TQ=2) at cost of 2x Q
+  //   iterations.
+  int bq = (D >= 128) ? 16 : 32;
+  int wm = (D >= 96) ? 2 : 1;
+  int bk = (D <= 64) ? 32 : 16;
+
+  int qL = q.shape(2);
+  int kL = k.shape(2);
+
+  const int NQ = (qL + bq - 1) / bq;
+  const int NK = (kL + bk - 1) / bk;
+
+  const int NQ_aligned = qL / bq;
+  const int NK_aligned = kL / bk;
+
+  const bool align_Q = (qL % bq) == 0;
+  const bool align_K = (kL % bk) == 0;
+
+  bool has_block_mask_flag = block_mask.has_value();
+
+  // Function constants
+  metal::MTLFCList func_consts = {
+      {&align_Q, MTL::DataType::DataTypeBool, 200},
+      {&align_K, MTL::DataType::DataTypeBool, 201},
+      {&do_causal, MTL::DataType::DataTypeBool, 301},
+      {&has_block_mask_flag, MTL::DataType::DataTypeBool, 302},
+  };
+
+  // Kernel name: matches host_name from instantiation macro
+  // Format: attention_vjp_dkv_{type}_{bq}_{bk}_{bd}[_wmN]
+  std::string kname = "attention_vjp_dkv_";
+  kname += type_to_name(q);
+  kname += "_";
+  kname += std::to_string(bq);
+  kname += "_";
+  kname += std::to_string(bk);
+  kname += "_";
+  kname += std::to_string(D);
+  if (wm > 1) {
+    kname += "_wm";
+    kname += std::to_string(wm);
+  }
+
+  std::string hash_name = kname;
+  hash_name += "_align_Q_";
+  hash_name += (align_Q ? 't' : 'n');
+  hash_name += "_align_K_";
+  hash_name += (align_K ? 't' : 'n');
+  hash_name += "_causal_";
+  hash_name += (do_causal ? 't' : 'n');
+  hash_name += "_bmask_";
+  hash_name += (has_block_mask_flag ? 't' : 'n');
+
+  float scale_log2 = static_cast<float>(scale * M_LOG2E);
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = get_steel_attention_vjp_dkv_kernel(
+      d,
+      kname,
+      hash_name,
+      func_consts,
+      q,
+      bq,
+      bk,
+      D,
+      wm,
+      wn,
+      gqa_factor,
+      scale,
+      scale_log2,
+      align_Q,
+      align_K,
+      do_causal,
+      has_block_mask_flag);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int64_t lse_str_head = qL;
+  int64_t lse_str_qpos = 1;
+
+  // qL_off: causal mask offset. When caller pads Q/K to different block sizes,
+  // the padded kL - qL may differ from the original. Use override if provided.
+  int qL_off = (qL_off_override >= 0) ? qL_off_override : (kL - qL);
+
+  AttnVJPParams params{
+      /* int B = */ B,
+      /* int H = */ H,
+      /* int D = */ D,
+
+      /* int qL = */ qL,
+      /* int kL = */ kL,
+
+      /* int gqa_factor = */ gqa_factor,
+      /* float scale = */ scale,
+      /* float scale_log2 = */ scale_log2,
+
+      /* int NQ = */ NQ,
+      /* int NK = */ NK,
+
+      /* int NQ_aligned = */ NQ_aligned,
+      /* int NK_aligned = */ NK_aligned,
+
+      /* int qL_rem = */ (qL - NQ_aligned * bq),
+      /* int kL_rem = */ (kL - NK_aligned * bk),
+      /* int qL_off = */ qL_off,
+
+      /* int64_t Q_strides[3] = */
+      {q.strides(0), q.strides(1), q.strides(2)},
+      /* int64_t K_strides[3] = */
+      {k.strides(0), k.strides(1), k.strides(2)},
+      /* int64_t V_strides[3] = */
+      {v.strides(0), v.strides(1), v.strides(2)},
+      /* int64_t dO_strides[3] = */
+      {d_out.strides(0), d_out.strides(1), d_out.strides(2)},
+      /* int64_t LSE_strides[2] = */ {lse_str_head, lse_str_qpos},
+      /* int64_t delta_strides[2] = */ {qL, 1},
+
+      /* int64_t dQ_strides[3] = */ {0, 0, 0},
+      /* int64_t dK_strides[3] = */
+      {d_k.strides(0), d_k.strides(1), d_k.strides(2)},
+      /* int64_t dV_strides[3] = */
+      {d_v.strides(0), d_v.strides(1), d_v.strides(2)},
+
+      /* int NK_tiles = */ NK,
+  };
+
+  // Set buffers (must match kernel signature in steel_attention_vjp_dkv.h)
+  compute_encoder.set_input_array(q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(v, 2);
+  compute_encoder.set_input_array(delta, 3);
+  compute_encoder.set_input_array(d_out, 4);
+  compute_encoder.set_input_array(logsumexp, 5);
+  compute_encoder.set_output_array(d_k, 6);
+  compute_encoder.set_output_array(d_v, 7);
+  compute_encoder.set_bytes(params, 8);
+  if (has_block_mask_flag) {
+    compute_encoder.set_input_array(*block_mask, 9);
+  }
+
+  // Grid: [NK, n_kv_heads, B] - one threadgroup per (kv_block, kv_head, batch)
+  MTL::Size grid_dims = MTL::Size(NK, n_kv_heads, B);
+  // Group: WM * WN * 32 threads (D=64: 32, D>=96: 64)
+  MTL::Size group_dims = MTL::Size(wm * wn * 32, 1, 1);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
+} // namespace
 
 void ScaledDotProductAttentionVJP::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  throw std::runtime_error("NYI");
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  // Parse inputs:
+  // inputs = [Q, K, V, (optional mask), (optional sinks), O, logsumexp, dO,
+  // delta] The last 4 are always O, logsumexp, dO, delta
+  const auto& q_pre = inputs[0];
+  const auto& k_pre = inputs[1];
+  const auto& v_pre = inputs[2];
+
+  // Determine indices based on optional inputs
+  // primals can have mask and/or sinks appended
+  size_t num_primals = inputs.size() - 4; // Subtract O, logsumexp, dO, delta
+  const auto& out = inputs[num_primals];
+  const auto& logsumexp = inputs[num_primals + 1];
+  const auto& d_out = inputs[num_primals + 2];
+  const auto& delta_pre = inputs[num_primals + 3];
+
+  auto& d_q = outputs[0];
+  auto& d_k = outputs[1];
+  auto& d_v = outputs[2];
+
+  std::vector<array> copies;
+  copies.reserve(inputs.size());
+
+  auto copy_unless = [&copies, &s](
+                         auto predicate, const array& arr) -> const array& {
+    if (!predicate(arr)) {
+      array arr_copy = contiguous_copy_gpu(arr, s);
+      copies.push_back(std::move(arr_copy));
+      return copies.back();
+    } else {
+      return arr;
+    }
+  };
+
+  // Handle optional sinks
+  std::optional<array> sinks = std::nullopt;
+  if (has_sinks_) {
+    sinks = copy_unless(is_matrix_contiguous, inputs[num_primals - 1]);
+  }
+
+  // Determine if we have a mask
+  bool has_arr_mask = num_primals > (3 + has_sinks_);
+
+  // STEEL VJP: re-enabled behind policy control. On Apple Silicon with
+  // NAX-optimized matmuls, unfused is faster for typical L. Fused VJP
+  // avoids materializing O(L^2) attention matrix (84-96% memory savings
+  // at L>=1024). Dispatch controlled by MLX_SDPA_VJP_MODE env var.
+  // See use_fallback() for policy details.
+  const int query_head_dim_pre = q_pre.shape(-1);
+  bool use_steel_vjp = steel_vjp_eligible(query_head_dim_pre, q_pre.dtype()) &&
+      (q_pre.shape(2) > 8) && !has_arr_mask && !has_sinks_;
+
+  auto is_row_contiguous = [](const array& arr) {
+    return arr.flags().row_contiguous;
+  };
+
+  // STEEL VJP requires row-contiguous Q and dO for kernel pointer arithmetic.
+  const auto& q = use_steel_vjp ? copy_unless(is_row_contiguous, q_pre)
+                                : copy_unless(q_is_vector_compatible, q_pre);
+  const auto& k = copy_unless(is_matrix_contiguous, k_pre);
+  const auto& v = copy_unless(is_matrix_contiguous, v_pre);
+  const auto& dO = copy_unless(is_row_contiguous, d_out);
+  const auto& lse = copy_unless(is_matrix_contiguous, logsumexp);
+
+  // Handle mask
+  auto mask_pred = [&q](const array& arr) {
+    return mask_is_compatible(q, arr);
+  };
+  std::optional<array> mask = std::nullopt;
+  if (has_arr_mask) {
+    mask = copy_unless(mask_pred, inputs[3]);
+  }
+
+  bool do_causal = do_causal_ && q.shape(2) > 1;
+
+  // Dispatch to appropriate kernel
+  if (use_steel_vjp) {
+    // delta = sum(dO * O, axis=-1) was precomputed in fast.cpp's VJP function
+    // as a lazy graph op. By the time eval_gpu runs, it's already evaluated.
+    const auto& delta_arr = copy_unless(is_row_contiguous, delta_pre);
+    d_q.set_data(allocator::malloc(d_q.nbytes()));
+    d_k.set_data(allocator::malloc(d_k.nbytes()));
+    d_v.set_data(allocator::malloc(d_v.nbytes()));
+
+    {
+      auto& enc = d.get_command_encoder(s.index);
+      auto concurrent = enc.start_concurrent();
+      sdpa_steel_vjp_dq_dispatch(
+          s, d, q, k, v, delta_arr, dO, lse, d_q, scale_, do_causal);
+      sdpa_steel_vjp_dkv_dispatch(
+          s, d, q, k, v, delta_arr, dO, lse, d_k, d_v, scale_, do_causal);
+    }
+  } else {
+    throw std::runtime_error(
+        "[ScaledDotProductAttentionVJP::eval_gpu] "
+        "use_steel_vjp is false but eval_gpu was called. "
+        "This indicates a mismatch between use_fallback() and eval_gpu() "
+        "eligibility checks.");
+  }
+
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core::fast
