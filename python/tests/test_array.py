@@ -1100,6 +1100,19 @@ class TestArray(mlx_tests.MLXTestCase):
         a_mlx = mx.array(a_np)
         self.assertTrue(np.array_equal(a_np[2:-1, 0], np.array(a_mlx[2:-1, 0])))
 
+        # Numpy scalar indexing (issue #2710)
+        a = mx.array([10, 20, 30, 40, 50])
+        for np_int in [np.int8, np.int16, np.int32, np.int64, np.intp]:
+            self.assertEqual(a[np_int(1)].item(), 20)
+            self.assertEqual(a[np_int(-1)].item(), 50)
+        # Numpy scalar slicing
+        self.assertTrue(
+            np.array_equal(np.array(a[np.int64(1) : np.int64(4)]), [20, 30, 40])
+        )
+        # Numpy scalar in tuple index
+        b = mx.array(np.arange(12).reshape(3, 4))
+        self.assertEqual(b[np.int64(1), np.int64(2)].item(), 6)
+
     def test_indexing_grad(self):
         x = mx.array([[1, 2], [3, 4]]).astype(mx.float32)
         ind = mx.array([0, 1, 0]).astype(mx.float32)
