@@ -20,6 +20,7 @@ namespace mlx::core {
 using MTLFC = std::tuple<const void*, MTL::DataType, NS::UInteger>;
 
 #define MAX_STOCKHAM_FFT_SIZE 4096
+#define MAX_SAFE_FFT_SIZE 1024
 #define MAX_RADER_FFT_SIZE 2048
 #define MAX_BLUESTEIN_FFT_SIZE 2048
 // Threadgroup memory batching improves throughput for small n
@@ -121,7 +122,7 @@ FFTPlan plan_fft(int n) {
   int remaining_n = n;
 
   // Four Step FFT when N is too large for shared mem.
-  if (n > MAX_STOCKHAM_FFT_SIZE && is_power_of_2(n)) {
+  if (n > MAX_SAFE_FFT_SIZE && is_power_of_2(n)) {
     // For power's of two we have a fast, no transpose four step implementation.
     plan.four_step = true;
     // Rough heuristic for choosing faster powers of two when we can
