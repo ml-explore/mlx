@@ -159,6 +159,9 @@ class GRU(Module):
         else:
             x = x @ self.Wx.T
 
+        if hidden is None:
+            hidden = mx.zeros(x.shape[:-2] + (self.hidden_size,), dtype=x.dtype)
+
         x_rz = x[..., : -self.hidden_size]
         x_n = x[..., -self.hidden_size :]
 
@@ -166,30 +169,24 @@ class GRU(Module):
 
         for idx in range(x.shape[-2]):
             rz = x_rz[..., idx, :]
-            if hidden is not None:
-                h_proj = hidden @ self.Wh.T
-                h_proj_rz = h_proj[..., : -self.hidden_size]
-                h_proj_n = h_proj[..., -self.hidden_size :]
+            h_proj = hidden @ self.Wh.T
+            h_proj_rz = h_proj[..., : -self.hidden_size]
+            h_proj_n = h_proj[..., -self.hidden_size :]
 
-                if self.bhn is not None:
-                    h_proj_n += self.bhn
+            if self.bhn is not None:
+                h_proj_n += self.bhn
 
-                rz = rz + h_proj_rz
+            rz = rz + h_proj_rz
 
             rz = mx.sigmoid(rz)
 
             r, z = mx.split(rz, 2, axis=-1)
 
             n = x_n[..., idx, :]
-
-            if hidden is not None:
-                n = n + r * h_proj_n
+            n = n + r * h_proj_n
             n = mx.tanh(n)
 
-            if hidden is not None:
-                hidden = (1 - z) * n + z * hidden
-            else:
-                hidden = (1 - z) * n
+            hidden = (1 - z) * n + z * hidden
 
             all_hidden.append(hidden)
 
