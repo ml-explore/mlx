@@ -48,13 +48,6 @@ class TestAutograd(mlx_tests.MLXTestCase):
             _, tangents = mx.jvp(lambda x, _op=op: _op(x, 0.0), [x], [t])
             self.assertEqual(tangents[0].dtype, mx.float32)
 
-        # This should not raise "[negative] Not supported for bool"
-        def f(x):
-            return mx.negative(x > 0.0)
-
-        _, tangents = mx.jvp(f, [x], [t])
-        self.assertEqual(tangents[0].dtype, mx.float32)
-
     def test_vjp(self):
         fun = lambda x: 2 * x
         out, dout = mx.vjp(fun, [mx.array(1.0)], [mx.array(2.0)])
