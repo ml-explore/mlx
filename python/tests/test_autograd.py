@@ -296,6 +296,19 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(dfdx, mx.array([1.0, 1.0])))
         self.assertEqual(dfdx.dtype, mx.float32)
 
+    def test_scatter_add_vjp(self):
+        def fun(src, updates):
+            x = src.at[mx.array([1, 3])].add(updates)
+            return x
+
+        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
+        updates = mx.array([1.0, 2.0])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        mx.eval(vjps)
+
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([5.0, 7.0])))
+
     def test_scatter_max_vjp(self):
         def fun(src, updates):
             x = src.at[mx.array([1, 3])].maximum(updates)
