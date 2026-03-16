@@ -11,7 +11,7 @@ namespace mlx::core::gpu {
 
 void new_stream(Stream stream) {
   if (stream.device == mlx::core::Device::gpu) {
-    metal::device(stream.device).new_queue(stream.index);
+    metal::device(stream.device).get_command_encoder(stream.index);
   }
 }
 
@@ -63,7 +63,6 @@ void eval(array& arr) {
           check_error(cbuf);
         });
     d.commit_command_buffer(s.index);
-    d.get_command_buffer(s.index);
   } else {
     command_buffer->addCompletedHandler(
         [buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
@@ -79,7 +78,6 @@ void finalize(Stream s) {
   d.end_encoding(s.index);
   cb->addCompletedHandler([](MTL::CommandBuffer* cbuf) { check_error(cbuf); });
   d.commit_command_buffer(s.index);
-  d.get_command_buffer(s.index);
 }
 
 void synchronize(Stream s) {
