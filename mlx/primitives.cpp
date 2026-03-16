@@ -4840,29 +4840,85 @@ std::vector<array> SliceUpdate::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>&) {
+    const std::vector<array>& outputs) {
   // Check inputs
   assert(primals.size() == 2);
 
-  auto& cotan = cotangents[0];
-  auto& upd = primals[1];
+  const array& result = outputs[0];
+  const array& values = primals[0];
+  const array& updates = primals.back();
+  const array& cotan = cotangents[0];
 
   std::vector<array> vjps;
 
   for (int num : argnums) {
     // Vjp for source
     if (num == 0) {
-      vjps.push_back(array(
-          cotan.shape(),
-          cotan.dtype(),
-          std::make_shared<SliceUpdate>(
-              stream(), reduce_type_, start_indices_, end_indices_, strides_),
-          {cotan, zeros_like(upd, stream())}));
+      switch (reduce_type_) {
+        case SliceUpdate::None:
+          vjps.push_back(array(
+              cotan.shape(),
+              cotan.dtype(),
+              std::make_shared<SliceUpdate>(
+                  stream(),
+                  reduce_type_,
+                  start_indices_,
+                  end_indices_,
+                  strides_),
+              {cotan, zeros_like(updates, stream())}));
+          break;
+        case SliceUpdate::Sum:
+          vjps.push_back(cotan);
+          break;
+        case SliceUpdate::Max:
+        case SliceUpdate::Min:
+          vjps.push_back(where(
+              equal(result, values, stream()),
+              cotan,
+              array(0, cotan.dtype()),
+              stream()));
+          break;
+        case SliceUpdate::Prod:
+          vjps.push_back(array(
+              cotan.shape(),
+              cotan.dtype(),
+              std::make_shared<SliceUpdate>(
+                  stream(),
+                  reduce_type_,
+                  start_indices_,
+                  end_indices_,
+                  strides_),
+              {cotan, updates}));
+          break;
+      }
     }
     // Vjp fpr updates
     else {
-      vjps.push_back(
-          slice(cotan, start_indices_, end_indices_, strides_, stream()));
+      auto sliced_cotan =
+          slice(cotan, start_indices_, end_indices_, strides_, stream());
+      switch (reduce_type_) {
+        case SliceUpdate::None:
+        case SliceUpdate::Sum:
+          vjps.emplace_back(std::move(sliced_cotan));
+          break;
+        case SliceUpdate::Max:
+        case SliceUpdate::Min: {
+          auto sliced_result =
+              slice(result, start_indices_, end_indices_, strides_, stream());
+          vjps.push_back(where(
+              equal(sliced_result, sliced_cotan, stream()),
+              sliced_cotan,
+              array(0, cotan.dtype()),
+              stream()));
+          break;
+        }
+        case SliceUpdate::Prod: {
+          auto sliced_values =
+              slice(values, start_indices_, end_indices_, strides_, stream());
+          vjps.push_back(multiply(sliced_cotan, sliced_values, stream()));
+          break;
+        }
+      }
     }
   }
 
@@ -4875,12 +4931,36 @@ std::vector<array> SliceUpdate::jvp(
     const std::vector<int>& argnums) {
   // Check inputs
   assert(primals.size() == 2);
-  return {array(
-      tangents[0].shape(),
-      tangents[0].dtype(),
-      std::make_shared<SliceUpdate>(
-          stream(), reduce_type_, start_indices_, end_indices_, strides_),
-      {tangents[0], tangents[1]})};
+
+  if (argnums.size() != 2) {
+    throw std::runtime_error(
+        "[SliceUpdate] JVP for one argument not implemented yet.");
+  }
+
+  auto result_tan = tangents[0];
+
+  switch (reduce_type_) {
+    case SliceUpdate::None:
+      return {array(
+          result_tan.shape(),
+          result_tan.dtype(),
+          std::make_shared<SliceUpdate>(
+              stream(), reduce_type_, start_indices_, end_indices_, strides_),
+          {result_tan, tangents[1]})};
+    case SliceUpdate::Sum:
+      return {array(
+          result_tan.shape(),
+          result_tan.dtype(),
+          std::make_shared<SliceUpdate>(
+              stream(), reduce_type_, start_indices_, end_indices_, strides_),
+          {result_tan, tangents[1]})};
+    case SliceUpdate::Prod:
+    case SliceUpdate::Max:
+    case SliceUpdate::Min: {
+      throw std::runtime_error(
+          "[SliceUpdate] JVP for product, minimum and maximum not implemented.");
+    }
+  }
 }
 
 bool SliceUpdate::is_equivalent(const Primitive& other) const {
