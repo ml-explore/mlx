@@ -22,9 +22,6 @@ template <
     bool kAlignedM,
     bool kAlignedN,
     bool kAlignedK,
-    short UM,
-    short UN,
-    short UK,
     typename AccumType = float>
 auto gemm_loop(
     const device T* A,
@@ -35,9 +32,9 @@ auto gemm_loop(
     int gemm_k_iterations_aligned,
     const short sgp_sm,
     const short sgp_sn) {
-  constexpr short TM = SM / UM;
-  constexpr short TN = SN / UN;
-  constexpr short TK = SK / UK;
+  constexpr short TM = SM / 16;
+  constexpr short TN = SN / 16;
+  constexpr short TK = SK / 16;
 
   constexpr int RA = transpose_a ? TK : TM;
   constexpr int CA = transpose_a ? TM : TK;
@@ -45,13 +42,7 @@ auto gemm_loop(
   constexpr int RB = transpose_b ? TN : TK;
   constexpr int CB = transpose_b ? TK : TN;
 
-  using DSubTile = NAXSubTile<AccumType, UM, UN>;
-  using ASubTile =
-      NAXSubTile<T, (transpose_a ? UK : UM), (transpose_a ? UM : UK)>;
-  using BSubTile =
-      NAXSubTile<T, (transpose_b ? UN : UK), (transpose_b ? UK : UN)>;
-
-  NAXTile<AccumType, TM, TN, DSubTile> Dtile;
+  NAXTile<AccumType, TM, TN> Dtile;
   Dtile.clear();
 
   int gemm_k_iterations_ = gemm_k_iterations_aligned;
@@ -62,8 +53,8 @@ auto gemm_loop(
 
     STEEL_PRAGMA_NO_UNROLL
     for (int kk1 = 0; kk1 < BK; kk1 += SK) {
-      NAXTile<T, RA, CA, ASubTile> Atile;
-      NAXTile<T, RB, CB, BSubTile> Btile;
+      NAXTile<T, RA, CA> Atile;
+      NAXTile<T, RB, CB> Btile;
       const int k = kk1;
 
       volatile int compiler_barrier;
@@ -108,46 +99,29 @@ auto gemm_loop(
 
     STEEL_PRAGMA_NO_UNROLL
     for (int kk1 = 0; kk1 < rem_bk; kk1 += SK) {
-      NAXTile<T, 1, 1, ASubTile> Atile;
-      NAXTile<T, 1, 1, BSubTile> Btile;
+      NAXTile<T, RA, CA> Atile;
+      NAXTile<T, RB, CB> Btile;
 
-      STEEL_PRAGMA_UNROLL
-      for (int mm = 0; mm < TM; mm++) {
-        STEEL_PRAGMA_UNROLL
-        for (int nn = 0; nn < TN; nn++) {
-          STEEL_PRAGMA_UNROLL
-          for (int kk = 0; kk < TK; kk++) {
-            const int m = mm * UM;
-            const int n = nn * UN;
-            const int k = kk1 + kk * UK;
-            const short psk = max(0, rem_bk - k);
+      const int k = kk1;
+      const short psk = max(0, rem_bk - k);
 
-            const int A_offset = transpose_a ? (m + k * lda) : (m * lda + k);
-            const int B_offset = transpose_b ? (k + n * ldb) : (k * ldb + n);
+      const short2 Aklims =
+          transpose_a ? short2(sgp_sm, psk) : short2(psk, sgp_sm);
+      const short2 Bklims =
+          transpose_b ? short2(psk, sgp_sn) : short2(sgp_sn, psk);
 
-            {
-              const short psm = kAlignedM ? SM : max(0, sgp_sm - m);
-              const short rmax = transpose_a ? psk : psm;
-              const short cmax = transpose_a ? psm : psk;
-              Atile.load_safe(A + A_offset, lda, short2(cmax, rmax));
-            }
+      const int A_offset = transpose_a ? k * lda : k;
+      const int B_offset = transpose_b ? k : k * ldb;
 
-            {
-              const short psn = kAlignedN ? SN : max(0, sgp_sn - n);
-              const short rmax = transpose_b ? psn : psk;
-              const short cmax = transpose_b ? psk : psn;
-              Btile.load_safe(B + B_offset, ldb, short2(cmax, rmax));
-            }
+      Atile.load_safe(A + A_offset, lda, Aklims);
+      Btile.load_safe(B + B_offset, ldb, Bklims);
 
-            subtile_matmad_nax(
-                Dtile.subtile_at(mm, nn),
-                Atile.subtile_at(0, 0),
-                metal::bool_constant<transpose_a>{},
-                Btile.subtile_at(0, 0),
-                metal::bool_constant<transpose_b>{});
-          }
-        }
-      }
+      tile_matmad_nax(
+          Dtile,
+          Atile,
+          metal::bool_constant<transpose_a>{},
+          Btile,
+          metal::bool_constant<transpose_b>{});
     }
   }
 

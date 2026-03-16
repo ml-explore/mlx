@@ -125,38 +125,36 @@ template <
       make_uniform(params->scale) * make_uniform(1.44269504089f);
 
   // Prepare MMA tiles
-  constexpr short UQ = 16;
-  constexpr short UD = 32;
+  constexpr short kU = 16;
 
   constexpr int kNWarps = WM * WN;
   static_assert(
-      BQ >= (kNWarps * UQ) && BQ % (kNWarps * UQ) == 0,
+      BQ >= (kNWarps * kU) && BQ % (kNWarps * kU) == 0,
       "Each simdgroup must host atleast 1 simdgroup matrix along Q sequence.");
 
   // Q seq frags per warp
-  constexpr int TQ = BQ / (kNWarps * UQ);
+  constexpr int TQ = BQ / (kNWarps * kU);
   // HeadDim frags (all warps load the same frags)
-  constexpr int TD = BD / UD;
+  constexpr int TD = BD / kU;
+  // KV seq frags per warp
+  constexpr short TK = BK / kU;
 
   static_assert(TQ == 1, "Check TQ");
-
-  using OSubTile = NAXSubTile<AccumType, UQ, UD>;
-  NAXTile<AccumType, TQ, TD, OSubTile> Otile;
+  using otile_t = NAXTile<AccumType, TQ, TD>;
+  otile_t Otile;
 
   Otile.clear();
 
   // Prepare mma tile offsets
-  const short2 simd_coord = OSubTile::NAXFrag_t::get_coord();
+  const short tm = kU * TQ * simd_group_id;
+  Q += tm * int(params->Q_strides[2]);
+
+  const short2 simd_coord = otile_t::NAXFrag_t::get_coord();
   const short sm = simd_coord.y;
   const short sn = simd_coord.x;
-  const short tm = UQ * TQ * simd_group_id;
-
-  Q += (tm + sm) * int(params->Q_strides[2]) + sn;
-  K += sm * int(params->K_strides[2]) + sn;
-  V += sm * int(params->V_strides[2]) + sn;
 
   // Init row reduction variables
-  constexpr short kRowsPT = decltype(Otile)::kRowsPerThread;
+  constexpr short kRowsPT = otile_t::kRowsPerThread;
 
   metal::vec<AccumType, kRowsPT> max_score;
   metal::vec<AccumType, kRowsPT> sum_score{0};
@@ -187,40 +185,30 @@ template <
   // const bool is_last_tq = int(simd_group_id) >= (params->qL_rem / UQ);
   const bool is_last_q = is_last_bq;
 
-  const short lim_rows_q = params->qL_rem - (tm + sm);
-  const short lim_rows_k = params->kL_rem - sm;
+  const short lim_rows_q = params->qL_rem - tm;
+  const short lim_rows_k = params->kL_rem;
 
   // Loop over KV seq length
   for (int kb = 0; kb < kb_lim; kb++) {
     const int is_last_k = (kb == (params->NK_aligned));
 
     // Do S = Q @ K.T
-    constexpr short UDs = 16;
-    constexpr short UKs = 32;
-
-    constexpr short TDs = BD / UDs;
-    constexpr short TKs = BK / UKs;
-
-    using SSubTile = NAXSubTile<AccumType, UQ, UKs>;
-    using QSubTile = NAXSubTile<T, UQ, UDs>;
-    using KSubTile = NAXSubTile<T, UKs, UDs>;
-
-    NAXTile<AccumType, TQ, TKs, SSubTile> Stile;
+    using stile_t = NAXTile<AccumType, TQ, TK>;
+    stile_t Stile;
 
     Stile.clear();
 
     STEEL_PRAGMA_UNROLL
     for (short iq = 0; iq < TQ; iq++) {
       STEEL_PRAGMA_UNROLL
-      for (short ik = 0; ik < TKs; ik++) {
+      for (short ik = 0; ik < TK; ik += 2) {
         STEEL_PRAGMA_UNROLL
-        for (short id = 0; id < TDs; id++) {
-          NAXTile<T, 1, 1, QSubTile> Qtile;
-          NAXTile<T, 1, 1, KSubTile> Ktile;
+        for (short id = 0; id < TD; id++) {
+          NAXTile<T, 1, 1> Qtile;
+          NAXTile<T, 2, 1> Ktile;
 
-          const int Q_load_off = iq * UQ * int(params->Q_strides[2]) + id * UDs;
-          const int K_load_off =
-              ik * UKs * int(params->K_strides[2]) + id * UDs;
+          const int Q_load_off = iq * kU * int(params->Q_strides[2]) + id * kU;
+          const int K_load_off = ik * kU * int(params->K_strides[2]) + id * kU;
 
           if (!align_Q && is_last_q) {
             // Qtile.load_rows(
@@ -230,7 +218,7 @@ template <
             Qtile.load_safe(
                 Q + Q_load_off,
                 int(params->Q_strides[2]),
-                short2(BD, lim_rows_q - iq * UQ));
+                short2(BD, lim_rows_q - iq * kU));
           } else {
             Qtile.load(Q + Q_load_off, int(params->Q_strides[2]));
           }
@@ -243,16 +231,18 @@ template <
             Ktile.load_safe(
                 K + K_load_off,
                 int(params->K_strides[2]),
-                short2(BD, lim_rows_k - ik * UKs));
+                short2(BD, lim_rows_k - ik * kU));
           } else {
             Ktile.load(K + K_load_off, int(params->K_strides[2]));
           }
 
-          subtile_matmad_nax(
-              Stile.subtile_at(iq, ik),
-              Qtile.subtile_at(0, 0),
+          stile_t::NAXFrag_t::mma(
+              Stile.frag_at(iq, ik),
+              Stile.frag_at(iq, ik + 1),
+              Qtile.frag_at(0, 0),
               metal::false_type{},
-              Ktile.subtile_at(0, 0),
+              Ktile.frag_at(0, 0),
+              Ktile.frag_at(1, 0),
               metal::true_type{});
         }
       }
@@ -260,20 +250,8 @@ template <
 
     // Scale S
     STEEL_PRAGMA_UNROLL
-    for (short ii = 0; ii < decltype(Stile)::kElemsPerTile; ii++) {
+    for (short ii = 0; ii < stile_t::kElemsPerTile; ii++) {
       Stile.elems()[ii] *= float(scale2);
-    }
-
-    // Scale and Retile S
-    constexpr short UK = 16;
-    constexpr short TK = BK / UK;
-    using PSubTile = NAXSubTile<AccumType, UQ, UK>;
-
-    NAXTile<AccumType, TQ, TK, PSubTile> Ptile;
-
-    STEEL_PRAGMA_UNROLL
-    for (short ii = 0; ii < decltype(Stile)::kElemsPerTile; ii++) {
-      Ptile.elems()[ii] = Stile.elems()[ii];
     }
 
     // Mask out length sequence
@@ -284,15 +262,15 @@ template <
       for (short iq = 0; iq < TQ; iq++) {
         STEEL_PRAGMA_UNROLL
         for (short ik = 0; ik < TK; ik++) {
-          const short col_pos = sn + ik * UK;
+          const short col_pos = ik * kU + sn;
 
-          thread auto& fg = Ptile.subtile_at(iq, ik).frag_at(0, 0);
+          thread auto& fg = Stile.frag_at(iq, ik);
 
           STEEL_PRAGMA_UNROLL
-          for (short ii = 0; ii < PSubTile::kFragThrRows; ii++) {
+          for (short ii = 0; ii < stile_t::kFragThrRows; ii++) {
             STEEL_PRAGMA_UNROLL
-            for (short jj = 0; jj < PSubTile::kFragThrCols; jj++) {
-              const auto loc = ii * PSubTile::kFragThrCols + jj;
+            for (short jj = 0; jj < stile_t::kFragThrCols; jj++) {
+              const auto loc = ii * stile_t::kFragThrCols + jj;
               fg[loc] = ((col_pos + jj) >= params->kL_rem) ? neg_inf : fg[loc];
             }
           }
@@ -311,18 +289,18 @@ template <
       for (short iq = 0; iq < TQ; iq++) {
         STEEL_PRAGMA_UNROLL
         for (short ik = 0; ik < TK; ik++) {
-          const short row_pos = base_row + iq * UQ;
-          const short col_pos = base_col + ik * UK;
+          const short row_pos = base_row + iq * kU;
+          const short col_pos = base_col + ik * kU;
 
-          thread auto& fg = Ptile.subtile_at(iq, ik).frag_at(0, 0);
+          thread auto& fg = Stile.frag_at(iq, ik);
 
           STEEL_PRAGMA_UNROLL
-          for (short ii = 0; ii < PSubTile::kFragThrRows; ii++) {
+          for (short ii = 0; ii < stile_t::kFragThrRows; ii++) {
             STEEL_PRAGMA_UNROLL
-            for (short jj = 0; jj < PSubTile::kFragThrCols; jj++) {
-              const auto r = row_pos + ii * PSubTile::kFragRowsJump + sm;
+            for (short jj = 0; jj < stile_t::kFragThrCols; jj++) {
+              const auto r = row_pos + ii * stile_t::kFragRowsJump + sm;
               const auto c = col_pos + jj + sn;
-              const auto loc = ii * PSubTile::kFragThrCols + jj;
+              const auto loc = ii * stile_t::kFragThrCols + jj;
               fg[loc] = (r < c) ? neg_inf : fg[loc];
             }
           }
@@ -339,17 +317,19 @@ template <
 
       constexpr bool is_bool = is_same_v<MaskType, bool>;
       using melem_t = typename metal::conditional_t<is_bool, bool, AccumType>;
-      using MSubTile = NAXSubTile<melem_t, UQ, UK>;
+      using mtile_t = NAXTile<melem_t, TQ, TK>;
+      using mfrag_t = typename mtile_t::frag_type;
 
       STEEL_PRAGMA_UNROLL
       for (short iq = 0; iq < TQ; iq++) {
         STEEL_PRAGMA_UNROLL
         for (short ik = 0; ik < TK; ik++) {
-          const short row_pos = base_row + iq * UQ + sm;
-          const short col_pos = base_col + ik * UK + sn;
+          const short row_pos = base_row + iq * kU;
+          const short col_pos = base_col + ik * kU;
 
-          MSubTile mfrag;
-          mfrag.load_safe(
+          mfrag_t mfrag;
+          mtile_t::NAXFrag_t::load_safe(
+              mfrag,
               mask,
               int64_t(mask_params->M_strides[2]),
               Int<1>{},
@@ -358,14 +338,14 @@ template <
               row_pos,
               col_pos);
 
-          thread auto& fg = Ptile.subtile_at(iq, ik).frag_at(0, 0);
+          thread auto& fg = Stile.frag_at(iq, ik);
 
           STEEL_PRAGMA_UNROLL
-          for (short jj = 0; jj < MSubTile::kElemsPerFrag; jj++) {
+          for (short jj = 0; jj < mtile_t::kElemsPerFrag; jj++) {
             if constexpr (is_bool) {
-              fg[jj] = mfrag.elems()[jj] ? fg[jj] : neg_inf;
+              fg[jj] = mfrag[jj] ? fg[jj] : neg_inf;
             } else {
-              fg[jj] += M_LOG2E_F * AccumType(mfrag.elems()[jj]);
+              fg[jj] += M_LOG2E_F * AccumType(mfrag[jj]);
             }
           }
         }
@@ -383,10 +363,10 @@ template <
     }
 
     // Row max
-    Ptile.template row_reduce<MaxOp>(new_max);
+    Stile.template row_reduce<MaxOp>(new_max);
 
     // exp(Si - rowmax(Si))
-    Ptile.template row_bin_op<ExpSubOp>(new_max);
+    Stile.template row_bin_op<ExpSubOp>(new_max);
 
     // Factor exp(rowmax(Si) - rowmax(Si-1))
     STEEL_PRAGMA_UNROLL
@@ -401,7 +381,7 @@ template <
       sum_score[i] = sum_score[i] * factor[i];
     }
 
-    Ptile.template row_reduce<SumOp>(sum_score);
+    Stile.template row_reduce<SumOp>(sum_score);
 
     // Update O
     Otile.template row_bin_op<MulOp>(factor);
@@ -412,19 +392,18 @@ template <
     STEEL_PRAGMA_UNROLL
     for (short iq = 0; iq < TQ; iq++) {
       STEEL_PRAGMA_UNROLL
-      for (short id = 0; id < TD; id++) {
+      for (short id = 0; id < TD; id += 2) {
         if constexpr (BD == 128) {
-          if (id == 2) {
+          if (id == 4) {
             threadgroup_barrier(mem_flags::mem_none);
           }
         }
 
         STEEL_PRAGMA_UNROLL
         for (short ik = 0; ik < TK; ik++) {
-          using VSubTile = NAXSubTile<T, UK, UD>;
-          NAXTile<T, 1, 1, VSubTile> Vtile;
+          NAXTile<T, 1, 2> Vtile;
 
-          const int V_load_off = ik * UK * int(params->V_strides[2]) + id * UD;
+          const int V_load_off = ik * kU * int(params->V_strides[2]) + id * kU;
 
           if (!align_K && is_last_k) {
             // Vtile.load_rows(
@@ -434,17 +413,19 @@ template <
             Vtile.load_safe(
                 V + V_load_off,
                 int(params->V_strides[2]),
-                short2(BD, lim_rows_k - ik * UK));
+                short2(BD, lim_rows_k - ik * kU));
           } else {
             Vtile.load(V + V_load_off, int(params->V_strides[2]));
           }
 
-          subtile_matmad_nax(
-              Otile.subtile_at(iq, id),
-              Ptile.subtile_at(iq, ik),
-              metal::bool_constant<false>{},
-              Vtile.subtile_at(0, 0),
-              metal::bool_constant<false>{});
+          otile_t::NAXFrag_t::mma(
+              Otile.frag_at(iq, id),
+              Otile.frag_at(iq, id + 1),
+              Stile.frag_at(iq, ik),
+              metal::false_type{},
+              Vtile.frag_at(0, 0),
+              Vtile.frag_at(0, 1),
+              metal::false_type{});
         }
       }
     }
@@ -467,7 +448,7 @@ template <
   Otile.template row_bin_op<MulOp>(rcp);
 
   // Store results
-  O += (tm + sm) * int(params->O_strides[2]) + sn;
+  O += tm * int(params->O_strides[2]);
 
   if (!align_Q && is_last_q) {
     if (lim_rows_q <= 0)
