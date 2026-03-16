@@ -373,7 +373,8 @@ void CustomKernel::eval_gpu(
               kernel, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, smem);
         }
       });
-  encoder.add_kernel_node(kernel, grid, block, shared_memory_, args.args());
+  encoder.add_kernel_node_raw(
+      kernel, grid, block, {}, shared_memory_, args.args());
 }
 
 } // namespace mlx::core::fast

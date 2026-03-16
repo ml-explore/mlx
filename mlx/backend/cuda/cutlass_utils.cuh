@@ -22,7 +22,7 @@ inline void check_cutlass_error(const char* name, cutlass::Status status) {
 }
 
 // The macro version that prints the command that failed.
-#define CHECK_CUTLASS_ERROR(cmd) check_cutlass_error(#cmd, (cmd))
+#define CHECK_CUTLASS_ERROR(cmd) ::mlx::core::check_cutlass_error(#cmd, (cmd))
 
 // Maps CPU types to CUTLASS types.
 template <typename T>

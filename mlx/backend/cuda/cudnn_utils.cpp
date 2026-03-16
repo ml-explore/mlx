@@ -71,10 +71,26 @@ fe::error_t DnnGraph::encode_graph(
     cu::CommandEncoder& encoder,
     std::unordered_map<int64_t, void*> variant_pack) {
   cudnnSetStream(handle_, encoder.stream());
-  CudaGraph cuda_graph(encoder.device());
-  RETURN_IF_ERROR(populate_cuda_graph(
-      handle_, variant_pack, prepare_workspace(encoder), cuda_graph));
-  encoder.add_graph_node(cuda_graph);
+  auto* workspace_ptr = prepare_workspace(encoder);
+  if (!cached_cuda_graph_) {
+    // First call: populate the CUDA graph from the cuDNN execution plan.
+    // Also compute and cache the subgraph key to avoid calling
+    // cudaGraphKernelNodeGetAttribute on every subsequent call (expensive
+    // on WDDM where each driver API call has ~40-400us overhead).
+    cached_cuda_graph_.emplace(encoder.device());
+    RETURN_IF_ERROR(populate_cuda_graph(
+        handle_, variant_pack, workspace_ptr, *cached_cuda_graph_));
+    std::tie(cached_subgraph_key_, cached_is_updatable_) =
+        cu::subgraph_to_key(*cached_cuda_graph_);
+  } else {
+    // Subsequent calls: patch data pointers without re-running kernel setup.
+    RETURN_IF_ERROR(update_cuda_graph(
+        handle_, variant_pack, workspace_ptr, *cached_cuda_graph_));
+  }
+  // Add the cuDNN child graph to the parent CUDA graph for batched launch.
+  // The pre-computed subgraph key avoids expensive per-node attribute queries.
+  encoder.add_graph_node(
+      *cached_cuda_graph_, cached_subgraph_key_, cached_is_updatable_);
   return {};
 }
 

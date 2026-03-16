@@ -1328,6 +1328,25 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [1, 2, 3, 4])
         self.assertEqual(z.tolist(), [5, 6, 7])
 
+    def test_split_invalid_num_splits(self):
+        """Regression: split with num_splits <= 0 should raise, not crash."""
+        a = mx.arange(6)
+
+        # num_splits = 0: should raise cleanly (was UB via divide-by-zero)
+        with self.assertRaises(ValueError):
+            mx.split(a, 0)
+
+        # num_splits = -1: should raise cleanly (was SIGBUS via huge allocation)
+        with self.assertRaises(ValueError):
+            mx.split(a, -1)
+
+        # Also check with explicit axis
+        b = mx.zeros((4, 6))
+        with self.assertRaises(ValueError):
+            mx.split(b, 0, axis=1)
+        with self.assertRaises(ValueError):
+            mx.split(b, -2, axis=0)
+
     def test_arange_overload_dispatch(self):
         with self.assertRaises(ValueError):
             a = mx.arange(float("nan"), 1, 5)
@@ -1471,6 +1490,30 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(a.item(), 1.0)
 
         a = mx.hamming(0)
+        self.assertEqual(a.size, 0)
+        self.assertEqual(a.dtype, mx.float32)
+
+    def test_bartlett_general(self):
+        a = mx.bartlett(10)
+        expected = np.bartlett(10)
+        self.assertTrue(np.allclose(a, expected, atol=1e-5))
+
+        a = mx.bartlett(1)
+        self.assertEqual(a.item(), 1.0)
+
+        a = mx.bartlett(0)
+        self.assertEqual(a.size, 0)
+        self.assertEqual(a.dtype, mx.float32)
+
+    def test_blackman_general(self):
+        a = mx.blackman(10)
+        expected = np.blackman(10)
+        self.assertTrue(np.allclose(a, expected, atol=1e-5))
+
+        a = mx.blackman(1)
+        self.assertEqual(a.item(), 1.0)
+
+        a = mx.blackman(0)
         self.assertEqual(a.size, 0)
         self.assertEqual(a.dtype, mx.float32)
 

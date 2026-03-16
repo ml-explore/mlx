@@ -82,10 +82,9 @@ inline array ensure_row_contiguous_matrix(
 }
 
 inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
-  auto arch = d.get_architecture();
-  auto arch_size = arch.back();
-  auto arch_gen = arch.substr(arch.size() - 3, 2);
-  if (arch_gen == "13" || arch_gen == "14") {
+  auto arch_size = d.get_architecture().back();
+  auto arch_gen = d.get_architecture_gen();
+  if (arch_gen == 13 || arch_gen == 14) {
     switch (arch_size) {
       case 'd':
         if (D <= 2048 && O <= 2048) {

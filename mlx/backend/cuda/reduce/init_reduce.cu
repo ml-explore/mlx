@@ -41,8 +41,7 @@ void init_reduce(
       dim3 grid = get_2d_grid_dims(out.shape(), out.strides());
       dim3 block(grid.x < 1024 ? grid.x : 1024, 1, 1);
       grid.x = (grid.x + 1023) / 1024;
-      encoder.add_kernel_node(
-          kernel, grid, block, 0, gpu_ptr<U>(out), out.size());
+      encoder.add_kernel_node(kernel, grid, block, gpu_ptr<U>(out), out.size());
     });
   });
 }

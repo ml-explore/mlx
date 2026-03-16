@@ -1,18 +1,21 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/common/quantized.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/fp_quantize.cuh"
 #include "mlx/backend/cuda/quantized/fp_quantize_tma.cuh"
 #include "mlx/backend/cuda/quantized/quantized.h"
-#include "mlx/backend/cuda/quantized/quantized_utils.cuh"
 #include "mlx/backend/cuda/vector_types.cuh"
 #include "mlx/dtype_utils.h"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
-#include <cuda_fp4.h>
-#include <cuda_fp8.h>
+#include <cutlass/float8.h>
+#include <cutlass/numeric_conversion.h>
+
+constexpr float F8E4M3_MAX = 448.0f;
+constexpr float F4E2M1_MAX = 6.0f;
 
 namespace mlx::core {
 namespace cu {
@@ -119,7 +122,6 @@ void fp_quantize_dequantize(
           kernel,
           num_blocks,
           block_dims,
-          0,
           gpu_ptr<T>(w),
           gpu_ptr<T>(what),
           w.size(),
@@ -397,7 +399,6 @@ void fp_dequantize(
           kernel,
           num_blocks,
           block_dims,
-          0,
           gpu_ptr<uint8_t>(wq),
           gpu_ptr<uint8_t>(scales),
           gpu_ptr<T>(w),

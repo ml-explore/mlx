@@ -170,6 +170,23 @@ class TestBase(mlx_tests.MLXTestCase):
         # Empty weights is ok if strict is false
         m.load_weights([], strict=False)
 
+        # Extra weights for non-existent layers are filtered when strict
+        # is false. Flat keys like "extra.weight" are silently dropped by
+        # Module.update, but nested indexed keys like "layers.1.weight"
+        # cause an IndexError in tree_unflatten/update without filtering.
+        m = nn.Sequential(nn.Linear(2, 2))
+        m.load_weights(
+            [
+                ("layers.0.weight", mx.ones((2, 2))),
+                ("layers.0.bias", mx.ones((2,))),
+                ("layers.1.weight", mx.ones((2, 2))),
+                ("layers.1.bias", mx.ones((2,))),
+            ],
+            strict=False,
+        )
+        self.assertTrue(mx.array_equal(m.layers[0].weight, mx.ones((2, 2))))
+        self.assertEqual(len(m.layers), 1)
+
     def test_module_state(self):
         m = nn.Linear(10, 1)
         m.state["hello"] = "world"

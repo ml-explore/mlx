@@ -271,7 +271,7 @@ void row_reduce_simple(
       T* indata = const_cast<T*>(gpu_ptr<T>(in));
       int size = plan.shape.back();
       encoder.add_kernel_node(
-          kernel, grid, block, 0, indata, gpu_ptr<U>(out), out.size(), size);
+          kernel, grid, block, indata, gpu_ptr<U>(out), out.size(), size);
     });
   });
 }
@@ -315,7 +315,7 @@ void row_reduce_looped(
       });
 
       encoder.add_kernel_node(
-          kernel, grid, block, 0, gpu_ptr<T>(in), gpu_ptr<U>(out), args);
+          kernel, grid, block, gpu_ptr<T>(in), gpu_ptr<U>(out), args);
     });
   });
 }

@@ -955,6 +955,12 @@ split(const array& a, int num_splits, int axis, StreamOrDevice s /* = {} */) {
         << " for array with shape " << a.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
+  if (num_splits <= 0) {
+    std::ostringstream msg;
+    msg << "[split] num_splits must be positive and non-zero but got "
+        << num_splits << ".";
+    throw std::invalid_argument(msg.str());
+  }
   auto q_and_r = std::ldiv(a.shape(axis), num_splits);
   if (q_and_r.rem) {
     std::ostringstream msg;
@@ -2312,6 +2318,21 @@ array argmax(
   return out;
 }
 
+array bartlett(int M, StreamOrDevice s /* = {} */) {
+  if (M < 1) {
+    return array({});
+  }
+  if (M == 1) {
+    return ones({1}, float32, s);
+  }
+
+  auto n = arange(0, M, float32, s);
+  float factor_val = 2.0f / (M - 1);
+  auto factor = array(factor_val, float32);
+  auto term = subtract(multiply(factor, n, s), array(1.0f, float32), s);
+  return subtract(array(1.0f, float32), abs(term, s), s);
+}
+
 array hanning(int M, StreamOrDevice s /* = {} */) {
   if (M < 1) {
     return array({});
@@ -2344,6 +2365,33 @@ array hamming(int M, StreamOrDevice s /* = {} */) {
   auto right_coef = array(0.46f, float32);
 
   return subtract(left_coef, multiply(right_coef, cos_vals, s), s);
+}
+
+array blackman(int M, StreamOrDevice s /* = {} */) {
+  if (M < 1) {
+    return array({});
+  }
+  if (M == 1) {
+    return ones({1}, float32, s);
+  }
+
+  auto n = arange(0, M, float32, s);
+
+  float arg_val = (2.0 * M_PI) / (M - 1);
+  auto x = multiply(array(arg_val, float32), n, s);
+
+  auto cos_x = cos(x, s);
+
+  auto alpha = array(0.34f, float32);
+  auto beta = array(0.5f, float32);
+  auto gamma = array(0.16f, float32);
+
+  auto term1 = multiply(beta, cos_x, s);
+
+  auto cos_sq = square(cos_x, s);
+  auto term2 = multiply(gamma, cos_sq, s);
+
+  return add(subtract(alpha, term1, s), term2, s);
 }
 
 /** Returns a sorted copy of the flattened array. */

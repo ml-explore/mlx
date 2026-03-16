@@ -1,4 +1,4 @@
-if(MLX_BUILD_CUDA)
+if(MLX_BUILD_CUDA AND NOT WIN32)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nccl.cpp)
   find_package(NCCL)
   if(NCCL_FOUND)

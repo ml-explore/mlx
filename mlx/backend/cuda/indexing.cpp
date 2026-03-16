@@ -5,6 +5,7 @@
 #include "mlx/backend/cuda/jit_module.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/scan.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
@@ -130,7 +131,8 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = get_launch_args(out, large);
-  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
+  encoder.add_kernel_node_raw(
+      kernel, num_blocks, block_dims, {}, 0, args.args());
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -232,7 +234,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_output_array(out);
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = get_launch_args(upd, large);
-  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
+  encoder.add_kernel_node_raw(
+      kernel, num_blocks, block_dims, {}, 0, args.args());
 }
 
 void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -322,7 +325,8 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_output_array(out);
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = get_launch_args(idx, large);
-  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
+  encoder.add_kernel_node_raw(
+      kernel, num_blocks, block_dims, {}, 0, args.args());
 }
 
 void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -428,7 +432,134 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_output_array(out);
   auto kernel = mod.get_kernel(kernel_name);
   auto [num_blocks, block_dims] = get_launch_args(idx, large);
-  encoder.add_kernel_node(kernel, num_blocks, block_dims, 0, args.args());
+  encoder.add_kernel_node_raw(
+      kernel, num_blocks, block_dims, {}, 0, args.args());
+}
+
+void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("MaskedScatter::eval_gpu");
+  assert(inputs.size() == 3);
+
+  const array& dst = inputs[0];
+  const array& mask = inputs[1];
+  const array& src = inputs[2];
+
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  const size_t total = mask.size();
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  if (total == 0) {
+    return;
+  }
+
+  array mask_flat = flatten_in_eval(mask, 1, -1, s);
+  if (mask_flat.data<void>() != mask.data<void>()) {
+    encoder.add_temporary(mask_flat);
+  }
+  if (!mask_flat.flags().row_contiguous) {
+    mask_flat = contiguous_copy_gpu(mask_flat, s);
+    encoder.add_temporary(mask_flat);
+  }
+
+  array scatter_offsets(mask_flat.shape(), int32, nullptr, {});
+  scatter_offsets.set_data(cu::malloc_async(scatter_offsets.nbytes(), encoder));
+  encoder.add_temporary(scatter_offsets);
+
+  scan_gpu_inplace(
+      mask_flat,
+      scatter_offsets,
+      Scan::Sum,
+      /* axis= */ 1,
+      /* reverse= */ false,
+      /* inclusive= */ false,
+      s);
+
+  const size_t batch_count = mask.shape(0);
+  const size_t mask_batch_size = mask_flat.size() / batch_count;
+  const size_t src_batch_size = src.size() / src.shape(0);
+  bool large = total > INT32_MAX || src.size() > INT32_MAX;
+  bool vectorized = src.flags().row_contiguous && dst.flags().row_contiguous;
+  constexpr int kMaskedScatterVecSize = 16;
+  constexpr int kMaskedScatterVecBlockDim = 256;
+
+  std::string module_name =
+      fmt::format("masked_scatter_{}", dtype_to_string(out.dtype()));
+  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+    std::vector<std::string> kernel_names;
+    for (int src_contiguous = 0; src_contiguous <= 1; ++src_contiguous) {
+      for (int dst_contiguous = 0; dst_contiguous <= 1; ++dst_contiguous) {
+        for (int use_large = 0; use_large <= 1; ++use_large) {
+          kernel_names.push_back(
+              fmt::format(
+                  "mlx::core::cu::masked_scatter<{}, {}, {}, {}>",
+                  dtype_to_cuda_type(out.dtype()),
+                  src_contiguous ? "true" : "false",
+                  dst_contiguous ? "true" : "false",
+                  use_large ? "int64_t" : "int32_t"));
+        }
+      }
+    }
+    for (int use_large = 0; use_large <= 1; ++use_large) {
+      kernel_names.push_back(
+          fmt::format(
+              "mlx::core::cu::masked_scatter_vec_contiguous<{}, {}, {}>",
+              dtype_to_cuda_type(out.dtype()),
+              use_large ? "int64_t" : "int32_t",
+              kMaskedScatterVecSize));
+    }
+    return std::make_tuple(false, jit_source_scatter, std::move(kernel_names));
+  });
+
+  cu::KernelArgs args;
+  args.append(dst);
+  args.append(mask_flat);
+  args.append(scatter_offsets);
+  args.append(src);
+  args.append(out);
+  if (large) {
+    args.append<int64_t>(mask_flat.size());
+    args.append<int64_t>(src_batch_size);
+    args.append<int64_t>(mask_batch_size);
+  } else {
+    args.append<int32_t>(mask_flat.size());
+    args.append<int32_t>(src_batch_size);
+    args.append<int32_t>(mask_batch_size);
+  }
+  if (!vectorized) {
+    args.append_ndim(dst.shape());
+    args.append_ndim(dst.strides());
+    args.append<int32_t>(dst.ndim());
+    args.append_ndim(src.shape());
+    args.append_ndim(src.strides());
+    args.append<int32_t>(src.ndim());
+  }
+
+  encoder.set_input_array(dst);
+  encoder.set_input_array(mask_flat);
+  encoder.set_input_array(scatter_offsets);
+  encoder.set_input_array(src);
+  encoder.set_output_array(out);
+
+  std::string kernel_name = vectorized
+      ? fmt::format(
+            "mlx::core::cu::masked_scatter_vec_contiguous<{}, {}, {}>",
+            dtype_to_cuda_type(out.dtype()),
+            large ? "int64_t" : "int32_t",
+            kMaskedScatterVecSize)
+      : fmt::format(
+            "mlx::core::cu::masked_scatter<{}, {}, {}, {}>",
+            dtype_to_cuda_type(out.dtype()),
+            src.flags().row_contiguous ? "true" : "false",
+            dst.flags().row_contiguous ? "true" : "false",
+            large ? "int64_t" : "int32_t");
+  auto kernel = mod.get_kernel(kernel_name);
+  auto [num_blocks, block_dims] = vectorized
+      ? get_launch_args(
+            mask_flat, large, kMaskedScatterVecSize, kMaskedScatterVecBlockDim)
+      : get_launch_args(mask_flat, large);
+  encoder.add_kernel_node_raw(
+      kernel, num_blocks, block_dims, {}, 0, args.args());
 }
 
 } // namespace mlx::core

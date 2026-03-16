@@ -15,7 +15,7 @@ silicon computer is
 
 To install from PyPI your system must meet the following requirements:
 
-- Using an M series chip (Apple silicon)
+- Using `Apple silicon <https://support.apple.com/en-us/116943>`_
 - Using a native Python >= 3.10
 - macOS >= 14.0
 
@@ -83,6 +83,7 @@ Build from source
 Build Requirements
 ^^^^^^^^^^^^^^^^^^
 
+- ``libblas-dev``, ``liblapack-dev``, and ``liblapacke-dev`` (Linux)
 - A C++ compiler with C++20 support (e.g. Clang >= 15.0)
 - `cmake <https://cmake.org/>`_ -- version 3.25 or later, and ``make``
 - Xcode >= 15.0 and macOS SDK >= 14.0

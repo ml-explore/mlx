@@ -550,7 +550,6 @@ class TestConv(mlx_tests.MLXTestCase):
                 (1, 1, 6),
                 (4, 16, 32),
             ):
-                continue
                 for idim, kdim, stride, padding in (
                     ((1, 1, 1), (1, 1, 1), (1, 1, 1), (0, 0, 0)),
                     ((3, 3, 3), (3, 1, 1), (1, 1, 1), (0, 0, 0)),
@@ -1152,7 +1151,7 @@ class TestConv(mlx_tests.MLXTestCase):
             )
             self.assertEqual(grads.shape, k_shape)
 
-    def test_1d_conv_with_2d(self):
+    def test_conv_1d_with_2d(self):
         x = mx.random.uniform(shape=(2, 10, 16))
         y = mx.random.normal(shape=(16, 3, 16))
 

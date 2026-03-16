@@ -415,6 +415,10 @@ TEST_CASE("test split") {
   array x = array(1);
   CHECK_THROWS(split(x, 0));
 
+  // Regression: non-scalar split with num_splits <= 0
+  CHECK_THROWS(split(array({0, 1, 2, 3, 4, 5}), 0));
+  CHECK_THROWS(split(array({0, 1, 2, 3, 4, 5}), -1));
+
   x = array({3});
   CHECK_EQ(split(x, 1)[0].item<int>(), 3);
 
@@ -2437,11 +2441,6 @@ TEST_CASE("test scatter") {
 }
 
 TEST_CASE("test masked_scatter") {
-  if (cu::is_available()) {
-    INFO("Skipping masked_scatter cuda ops tests");
-    return;
-  }
-
   // Wrong mask dtype
   CHECK_THROWS(masked_scatter(array({1, 2}), array({1, 2}), array({1, 2})));
 

@@ -21,9 +21,10 @@ device_info(int device_index) {
   auto init_device_info = []()
       -> std::unordered_map<std::string, std::variant<std::string, size_t>> {
     auto pool = metal::new_scoped_memory_pool();
-    auto raw_device = metal::device(mlx::core::Device::gpu).mtl_device();
+    auto& device = metal::device(mlx::core::Device::gpu);
+    auto raw_device = device.mtl_device();
     auto name = std::string(raw_device->name()->utf8String());
-    auto arch = std::string(raw_device->architecture()->name()->utf8String());
+    auto arch = device.get_architecture();
 
     size_t memsize = 0;
     size_t length = sizeof(memsize);

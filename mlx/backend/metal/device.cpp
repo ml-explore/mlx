@@ -323,9 +323,18 @@ Device::Device() {
   auto pool = new_scoped_memory_pool();
   device_ = load_device();
   default_library_ = load_default_library(device_);
-  arch_ = std::string(device_->architecture()->name()->utf8String());
-  int ag_tens = arch_[arch_.size() - 3] - '0';
-  int ag_ones = arch_[arch_.size() - 2] - '0';
+  arch_ = env::metal_gpu_arch();
+  if (arch_.empty()) {
+    arch_ = std::string(device_->architecture()->name()->utf8String());
+  }
+  int ag_tens = 0;
+  int ag_ones = 0;
+  if (arch_.size() >= 3) {
+    ag_tens = arch_[arch_.size() - 3] - '0';
+    ag_ones = arch_[arch_.size() - 2] - '0';
+    ag_tens = (ag_tens < 10 && ag_tens >= 0) ? ag_tens : 0;
+    ag_ones = (ag_ones < 10 && ag_ones >= 0) ? ag_ones : 0;
+  }
   arch_gen_ = ag_tens * 10 + ag_ones;
   auto arch = arch_.back();
   switch (arch) {
@@ -805,8 +814,11 @@ void Device::set_residency_set(const MTL::ResidencySet* residency_set) {
 }
 
 Device& device(mlx::core::Device) {
-  static Device metal_device;
-  return metal_device;
+  // Leak singleton device intentionally, to avoid cases where a compute kernel
+  // returns and tries to access the object after it has been freed by the main
+  // thread teardown.
+  static Device* metal_device = new Device;
+  return *metal_device;
 }
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {

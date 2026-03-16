@@ -4,9 +4,9 @@
 #include <sstream>
 
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/scan.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
-#include "mlx/backend/metal/scan.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
