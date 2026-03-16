@@ -114,7 +114,7 @@ template <
 
     if constexpr (UPD_ROW_CONTIG) {
       update_idx = idx;
-    } else {
+    } else if constexpr (!UPD_SCALAR) {
       update_idx += update_strides[update_ndim - 1];
     }
   }

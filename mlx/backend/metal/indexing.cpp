@@ -781,8 +781,11 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [shape, strides] =
       collapse_contiguous_dims(upd.shape(), {upd.strides(), out_strides});
   int nwork = 1;
-  if (strides[0].back() == 1 && strides[1].back() == 1 && shape.back() > 4) {
-    nwork = 4;
+  if (strides[0].back() == 1 && strides[1].back() <= 1) {
+    int b = 16 / out.itemsize();
+    if (shape.back() >= b) {
+      nwork = b;
+    }
   }
 
   bool upd_contiguous = upd.flags().row_contiguous;
