@@ -4961,6 +4961,9 @@ std::vector<array> SliceUpdate::jvp(
           "[SliceUpdate] JVP for product, minimum and maximum not implemented.");
     }
   }
+
+  // Appease gcc (although no path reaches here).
+  return {};
 }
 
 bool SliceUpdate::is_equivalent(const Primitive& other) const {
