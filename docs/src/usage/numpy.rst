@@ -90,7 +90,7 @@ PyTorch supports the buffer protocol, but it requires an explicit
 
   a = mx.arange(3)
   b = torch.tensor(memoryview(a))
-  c = mx.array(b)  # works directly, including for bfloat16
+  c = mx.array(b)
 
 JAX
 ---
