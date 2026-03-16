@@ -7,37 +7,47 @@ import torch
 from time_utils import measure_runtime
 
 
-def benchmark_slice_update_mlx(dst_shape, slice_shape, slice_range):
-    def slice_update(dst, updates):
-        for i in range(10):
-            dst = dst.at[slice_range].add(updates)
-        mx.eval(dst)
+def benchmark_slice_update_mlx(dst_shape, slice_shape, slice_range, dtype, iters=10):
+    def slice_update(arguments):
+        for i in range(iters):
+            arguments["dst"] = (
+                arguments["dst"].at[slice_range].add(arguments["updates"])
+            )
+        mx.eval(arguments)
 
-    updates = mx.random.normal(slice_shape).astype(mx.float32)
-    dst = mx.random.normal(dst_shape).astype(mx.float32)
+    dtype = getattr(mx, dtype)
+    arguments = {
+        "dst": mx.random.normal(dst_shape).astype(dtype),
+        "updates": mx.random.normal(slice_shape).astype(dtype),
+    }
 
-    runtime = measure_runtime(slice_update, dst=dst, updates=updates)
-    bytes_processed = (dst[slice_range].nbytes * 2 + updates.nbytes) * 10
+    runtime = measure_runtime(slice_update, arguments=arguments)
+    bytes_processed = (
+        arguments["dst"][slice_range].nbytes * 2 + arguments["updates"].nbytes
+    ) * iters
     bandwidth_gb_s = bytes_processed / runtime / 1e6
-    print(f"MLX: {runtime:.3f}ms, {bandwidth_gb_s:.2f} GB/s")
+    return runtime, bandwidth_gb_s
 
 
-def benchmark_slice_update_torch(dst_shape, slice_shape, slice_range, device):
+def benchmark_slice_update_torch(
+    dst_shape, slice_shape, slice_range, device, dtype, iters=10
+):
     def slice_update(dst, updates, slice_range):
-        for i in range(10):
+        for i in range(iters):
             dst[slice_range] = dst[slice_range] + updates
         if device == torch.device("mps"):
             torch.mps.synchronize()
 
-    updates = torch.randn(slice_shape, dtype=torch.float32).to(device)
-    dst = torch.randn(dst_shape, dtype=torch.float32).to(device)
+    dtype = getattr(torch, dtype)
+    updates = torch.randn(slice_shape, dtype=dtype).to(device)
+    dst = torch.randn(dst_shape, dtype=dtype).to(device)
 
     runtime = measure_runtime(
         slice_update, dst=dst, updates=updates, slice_range=slice_range
     )
-    bytes_processed = (dst[slice_range].nbytes * 2 + updates.nbytes) * 10
+    bytes_processed = (dst[slice_range].nbytes * 2 + updates.nbytes) * iters
     bandwidth_gb_s = bytes_processed / runtime / 1e6
-    print(f"PyTorch: {runtime:.3f}ms, {bandwidth_gb_s:.2f} GB/s")
+    return runtime, bandwidth_gb_s
 
 
 if __name__ == "__main__":
@@ -51,43 +61,45 @@ if __name__ == "__main__":
     else:
         device = torch.device("mps")
 
-    dst_shapes = [
-        (10_000_000,),
-        (1_000_000,),
-        (100_000,),
-        (10_000,),
-        (1_000,),
-        (1000, 64),
-        (100, 100, 64),
-        (10, 100, 100, 64),
-    ]
-    slice_ranges = [
-        slice(0, 1_000_000),
-        slice(0, 100_000),
-        slice(0, 10_000),
-        slice(0, 1_000),
-        slice(0, 100),
-        slice(0, 100),
-        slice(0, 100),
-        slice(0, 10),
-    ]
-    update_shapes = [
-        (1_000_000,),
-        (100_000,),
-        (10_000,),
-        (1_000,),
-        (100,),
-        (100, 64),
-        (100, 100, 64),
-        (10, 100, 100, 64),
+    dtypes = ["float32", "bfloat16"]
+
+    test_cases = [
+        ((10_000_000,), slice(0, 1_000_000), (1_000_000,)),
+        ((100_000,), slice(10_000, 20_000), (10_000,)),
+        ((1000, 64), slice(100, 200), (100, 64)),
+        ((100, 100, 64), slice(20, 40), (20, 100, 64)),
+        (
+            (2048, 2048, 128),
+            (slice(500, 1500), slice(200, 1200), slice(32, 96)),
+            (1000, 1000, 64),
+        ),
+        (
+            (2048, 2048, 128),
+            (slice(1800, 1850), slice(100, 200), slice(64, 128)),
+            (50, 100, 64),
+        ),
+        (
+            (2048, 2048, 128),
+            (slice(1000, 1010), slice(1000, 1010), slice(64, 128)),
+            (10, 10, 64),
+        ),
     ]
 
-    for dst_shape, slice_range, update_shape in zip(
-        dst_shapes, slice_ranges, update_shapes
-    ):
-        print("=" * 40)
-        print(f"Dst: {dst_shape}, Slice: {slice_range}, Updates: {update_shape}")
-        benchmark_slice_update_mlx(dst_shape, update_shape, slice_range)
-        benchmark_slice_update_torch(
-            dst_shape, update_shape, slice_range, device=device
-        )
+    print(
+        f"{'Dtype':<12} {'Dst Shape':<25} {'Update Shape':<20} "
+        f"{'MLX (ms)':<12} {'MLX GB/s':<12} {'Torch (ms)':<12} {'Torch GB/s':<12}"
+    )
+    print("-" * 110)
+
+    for dtype in dtypes:
+        for dst_shape, slice_range, update_shape in test_cases:
+            mlx_time, mlx_bw = benchmark_slice_update_mlx(
+                dst_shape, update_shape, slice_range, dtype
+            )
+            torch_time, torch_bw = benchmark_slice_update_torch(
+                dst_shape, update_shape, slice_range, device, dtype
+            )
+            print(
+                f"{dtype:<12} {str(dst_shape):<25} {str(update_shape):<20} "
+                f"{mlx_time:<12.3f} {mlx_bw:<12.2f} {torch_time:<12.3f} {torch_bw:<12.2f}"
+            )
