@@ -305,8 +305,30 @@ CustomKernelFunction metal_kernel(
                 << "```" << std::endl;
     }
 
+    // Store original shapes (may contain -1 for dynamic dimensions)
+    auto saved_shapes = output_shapes;
+
+    // Resolve -1 sentinel values for array creation (make_arrays needs real sizes).
+    // Convention: -1 → total_input_elements / num_outputs.
+    auto resolved_shapes = output_shapes;
+    bool has_dynamic = false;
+    for (const auto& s : resolved_shapes) {
+      for (auto d : s) { if (d == -1) { has_dynamic = true; break; } }
+      if (has_dynamic) break;
+    }
+    if (has_dynamic) {
+      size_t total = 0;
+      for (const auto& in : inputs) total += in.size();
+      auto per_out = static_cast<ShapeElem>(total / resolved_shapes.size());
+      for (size_t i = 0; i < resolved_shapes.size(); i++) {
+        for (size_t j = 0; j < resolved_shapes[i].size(); j++) {
+          if (resolved_shapes[i][j] == -1) resolved_shapes[i][j] = per_out;
+        }
+      }
+    }
+
     return array::make_arrays(
-        std::move(output_shapes),
+        std::move(resolved_shapes),
         std::move(output_dtypes),
         std::make_shared<CustomKernel>(
             s,
@@ -319,7 +341,8 @@ CustomKernelFunction metal_kernel(
             init_value,
             std::vector<ScalarArg>{},
             false,
-            0),
+            0,
+            std::move(saved_shapes)),
         std::move(inputs));
   };
 }

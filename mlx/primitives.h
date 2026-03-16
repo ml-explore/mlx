@@ -200,6 +200,7 @@ class AddMM : public UnaryPrimitive {
   DEFINE_NAME(AddMM)
 
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   std::pair<float, float> state() const {
     return {alpha_, beta_};
   };
@@ -2043,6 +2044,7 @@ class Slice : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_NAME(Slice)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
     return std::make_tuple(start_indices_, end_indices_, strides_);
   }
