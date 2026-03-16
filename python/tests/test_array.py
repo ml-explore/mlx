@@ -1423,6 +1423,28 @@ class TestArray(mlx_tests.MLXTestCase):
         src = src.at[0:1].add(update)
         self.assertTrue(mx.array_equal(src, mx.array([[2.0, 4.0]])))
 
+        # Test all array.at ops with slice-only indices
+        a = mx.random.uniform(shape=(10, 5, 2))
+        update = mx.ones((2, 5))
+        a[1:3, :, 0] = 0
+        a = a.at[1:3, :, 0].add(update)
+        self.assertEqualArray(a[1:3, :, 0], update)
+        a = a.at[1:3, :, 0].subtract(update)
+        self.assertEqualArray(a[1:3, :, 0], mx.zeros_like(update))
+        a = a.at[1:3, :, 0].add(2 * update)
+        self.assertEqualArray(a[1:3, :, 0], 2 * update)
+        a = a.at[1:3, :, 0].multiply(2 * update)
+        self.assertEqualArray(a[1:3, :, 0], 4 * update)
+        a = a.at[1:3, :, 0].divide(3 * update)
+        self.assertEqualArray(a[1:3, :, 0], (4 / 3) * update)
+        a[1:3, :, 0] = 5
+        update = mx.arange(10).reshape(2, 5)
+        a = a.at[1:3, :, 0].maximum(update)
+        self.assertEqualArray(a[1:3, :, 0], mx.maximum(a[1:3, :, 0], update))
+        a[1:3, :, 0] = 5
+        a = a.at[1:3, :, 0].minimum(update)
+        self.assertEqualArray(a[1:3, :, 0], mx.minimum(a[1:3, :, 0], update))
+
     def test_slice_negative_step(self):
         a_np = np.arange(20)
         a_mx = mx.array(a_np)
