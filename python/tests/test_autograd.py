@@ -30,6 +30,24 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].item(), 4.0 * 1.0 + 2.0 * 3.0)
         self.assertEqual(out[1].item(), 4.0 * 1.0 + 6.0 * 3.0)
 
+    def test_jvp_comparison_tangent_dtype(self):
+        # Comparison op JVP tangents should preserve the input tangent's
+        # dtype (e.g. float32), not return bool. Using bool tangents causes
+        # downstream ops like negative to crash. (issue #3081)
+        x = mx.array([1.0, -2.0, 3.0])
+        t = mx.ones_like(x)
+
+        for op in [
+            mx.greater,
+            mx.less,
+            mx.equal,
+            mx.greater_equal,
+            mx.less_equal,
+            mx.not_equal,
+        ]:
+            _, tangents = mx.jvp(lambda x, _op=op: _op(x, 0.0), [x], [t])
+            self.assertEqual(tangents[0].dtype, mx.float32)
+
     def test_vjp(self):
         fun = lambda x: 2 * x
         out, dout = mx.vjp(fun, [mx.array(1.0)], [mx.array(2.0)])
