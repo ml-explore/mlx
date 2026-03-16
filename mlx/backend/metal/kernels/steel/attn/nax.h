@@ -112,7 +112,7 @@ struct BaseNAXFrag {
       OffX off_x = {},
       OffY off_y = {}) {
     const short2 sc = get_coord();
-    dst += sc.y * str_x + sc.x * str_y;
+    src += sc.y * str_x + sc.x * str_y;
     auto lx = lim_x - sc.y;
 
     STEEL_PRAGMA_UNROLL
@@ -135,7 +135,10 @@ struct BaseNAXFrag {
         }
 
       } else {
-        dst = dtype_frag_t<T>(0);
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < kElemCols; j++) {
+          dst[i * kElemCols + j] = T(0);
+        }
       }
     }
   }
@@ -169,7 +172,7 @@ struct BaseNAXFrag {
       const auto c = off_y;
       STEEL_PRAGMA_UNROLL
       for (short j = 0; j < kElemCols; j++) {
-        if (r < lx && (c + j) < ly) {
+        if ((r < lx) && ((c + j) < ly)) {
           dst[i * kElemCols + j] =
               static_cast<T>(src[r * str_x + (c + j) * str_y]);
         } else {

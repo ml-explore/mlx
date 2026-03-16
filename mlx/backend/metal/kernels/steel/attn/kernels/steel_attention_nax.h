@@ -174,11 +174,16 @@ template <
   }
 
   int kb_lim = params->NK;
+  int kb_min_causal = params->NK;
 
   if (do_causal) {
     int q_max = (tid.x + 1) * BQ + params->qL_off;
     kb_lim = (q_max + BK - 1) / BK;
     kb_lim = min(params->NK, kb_lim);
+
+    int q_min = tid.x * BQ + params->qL_off;
+    kb_min_causal = (q_min / BK) - int(!align_K);
+    kb_min_causal = max(0, kb_min_causal);
   }
 
   const bool is_last_bq = int(tid.x) == (params->NQ_aligned);
@@ -211,27 +216,19 @@ template <
           const int K_load_off = ik * kU * int(params->K_strides[2]) + id * kU;
 
           if (!align_Q && is_last_q) {
-            // Qtile.load_rows(
-            //     Q + Q_load_off,
-            //     int(params->Q_strides[2]),
-            //     lim_rows_q - iq * UQ);
-            Qtile.load_safe(
+            Qtile.load_rows(
                 Q + Q_load_off,
                 int(params->Q_strides[2]),
-                short2(BD, lim_rows_q - iq * kU));
+                lim_rows_q - iq * kU);
           } else {
             Qtile.load(Q + Q_load_off, int(params->Q_strides[2]));
           }
 
           if (!align_K && is_last_k) {
-            // Ktile.load_rows(
-            //     K + K_load_off,
-            //     int(params->K_strides[2]),
-            //     lim_rows_k - ik * UKs);
-            Ktile.load_safe(
+            Ktile.load_rows(
                 K + K_load_off,
                 int(params->K_strides[2]),
-                short2(BD, lim_rows_k - ik * kU));
+                lim_rows_k - ik * kU);
           } else {
             Ktile.load(K + K_load_off, int(params->K_strides[2]));
           }
@@ -271,7 +268,7 @@ template <
             STEEL_PRAGMA_UNROLL
             for (short jj = 0; jj < stile_t::kFragThrCols; jj++) {
               const auto loc = ii * stile_t::kFragThrCols + jj;
-              fg[loc] = ((col_pos + jj) >= params->kL_rem) ? neg_inf : fg[loc];
+              fg[loc] = ((col_pos + jj) < params->kL_rem) ? fg[loc] : neg_inf;
             }
           }
         }
@@ -279,7 +276,7 @@ template <
     }
 
     // Mask out if causal
-    if (do_causal && kb >= (kb_lim - ((BQ + BK - 1) / BK) - int(!align_K))) {
+    if (do_causal && kb >= kb_min_causal) {
       constexpr auto neg_inf = Limits<AccumType>::finite_min;
 
       const int base_row = tid.x * BQ + params->qL_off + tm;
@@ -406,14 +403,10 @@ template <
           const int V_load_off = ik * kU * int(params->V_strides[2]) + id * kU;
 
           if (!align_K && is_last_k) {
-            // Vtile.load_rows(
-            //     V + V_load_off,
-            //     int(params->V_strides[2]),
-            //     lim_rows_k - ik * UK);
-            Vtile.load_safe(
+            Vtile.load_rows(
                 V + V_load_off,
                 int(params->V_strides[2]),
-                short2(BD, lim_rows_k - ik * kU));
+                lim_rows_k - ik * kU);
           } else {
             Vtile.load(V + V_load_off, int(params->V_strides[2]));
           }
@@ -454,8 +447,7 @@ template <
     if (lim_rows_q <= 0)
       return;
 
-    // Otile.store_rows(O, params->O_strides[2], lim_rows_q);
-    Otile.store_safe(O, params->O_strides[2], short2(BD, lim_rows_q));
+    Otile.store_rows(O, int(params->O_strides[2]), lim_rows_q);
   } else {
     Otile.store(O, int(params->O_strides[2]));
   }
