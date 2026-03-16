@@ -4906,7 +4906,7 @@ std::vector<array> SliceUpdate::vjp(
           auto sliced_result =
               slice(result, start_indices_, end_indices_, strides_, stream());
           vjps.push_back(where(
-              equal(sliced_result, sliced_cotan, stream()),
+              equal(sliced_result, updates, stream()),
               sliced_cotan,
               array(0, cotan.dtype()),
               stream()));
