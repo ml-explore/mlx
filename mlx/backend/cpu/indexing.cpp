@@ -4,12 +4,14 @@
 #include <cmath>
 
 #include "mlx/allocator.h"
-#include "mlx/primitives.h"
-
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/cpu/binary.h"
+#include "mlx/backend/cpu/binary_ops.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/slicing.h"
+#include "mlx/dtype_utils.h"
+#include "mlx/primitives.h"
 
 namespace mlx::core {
 
@@ -789,7 +791,7 @@ void MaskedScatter::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& mask = inputs[1];
   auto& src = inputs[2];
 
-  // Copy src into out (copy allocates memory for out)
+  // Copy dst into out (copy allocates memory for out)
   auto ctype =
       dst.flags().row_contiguous ? CopyType::Vector : CopyType::General;
   copy_cpu(dst, out, ctype, stream());
@@ -852,6 +854,52 @@ void MaskedScatter::eval_cpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
+template <typename T, typename Op>
+void slice_update_impl(array& out, const array& upd, int64_t data_offset) {
+  ContiguousIterator out_it(upd.shape(), out.strides(), upd.ndim());
+  ContiguousIterator upd_it(upd);
+  Op op;
+
+  constexpr int SIMD_START = 32;
+
+  T* out_ptr = out.data<T>() + data_offset;
+  const T* upd_ptr = upd.data<T>();
+  int64_t size = upd.size();
+  int64_t suffix = out_it.contiguous_suffix();
+
+  if (upd.data_size() == 1) {
+    if (suffix >= SIMD_START) {
+      for (int64_t i = 0; i < size; i += suffix) {
+        VectorScalar<Op>{}(
+            out_ptr + out_it.loc, upd_ptr, out_ptr + out_it.loc, suffix);
+        out_it.step(suffix);
+      }
+    } else {
+      T update = upd_ptr[0];
+      for (int64_t i = 0; i < size; i++) {
+        out_ptr[out_it.loc] = op(out_ptr[out_it.loc], update);
+        out_it.step();
+      }
+    }
+  } else if (suffix == upd_it.contiguous_suffix() && suffix >= SIMD_START) {
+    for (int64_t i = 0; i < size; i += suffix) {
+      VectorVector<Op>{}(
+          out_ptr + out_it.loc,
+          upd_ptr + upd_it.loc,
+          out_ptr + out_it.loc,
+          suffix);
+      out_it.step(suffix);
+      upd_it.step(suffix);
+    }
+  } else {
+    for (int64_t i = 0; i < size; i++) {
+      out_ptr[out_it.loc] = op(out_ptr[out_it.loc], upd_ptr[upd_it.loc]);
+      out_it.step();
+      upd_it.step();
+    }
+  }
+}
+
 void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (out.size() == 0) {
@@ -878,16 +926,48 @@ void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
       prepare_slice(out, start_indices_, strides_);
 
   // Do copy
-  copy_cpu_inplace(
-      /* const array& src = */ upd,
-      /* array& dst = */ out,
-      /* const std::vector<int>& data_shape = */ upd.shape(),
-      /* const std::vector<stride_t>& i_strides = */ upd.strides(),
-      /* const std::vector<stride_t>& o_strides = */ out_strides,
-      /* int64_t i_offset = */ 0,
-      /* int64_t o_offset = */ data_offset,
-      /* CopyType ctype = */ CopyType::GeneralGeneral,
-      stream());
+  if (reduce_type_ == SliceUpdate::None) {
+    copy_cpu_inplace(
+        /* const array& src = */ upd,
+        /* array& dst = */ out,
+        /* const std::vector<int>& data_shape = */ upd.shape(),
+        /* const std::vector<stride_t>& i_strides = */ upd.strides(),
+        /* const std::vector<stride_t>& o_strides = */ out_strides,
+        /* int64_t i_offset = */ 0,
+        /* int64_t o_offset = */ data_offset,
+        /* CopyType ctype = */ CopyType::GeneralGeneral,
+        stream());
+    return;
+  }
+
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_input_array(upd);
+  encoder.set_output_array(out);
+  encoder.dispatch([upd = array::unsafe_weak_copy(upd),
+                    out = array::unsafe_weak_copy(out),
+                    data_offset = data_offset,
+                    reduce_type = reduce_type_]() mutable {
+    dispatch_all_types(out.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      switch (reduce_type) {
+        case SliceUpdate::Sum:
+          slice_update_impl<T, detail::Add>(out, upd, data_offset);
+          break;
+        case SliceUpdate::Prod:
+          slice_update_impl<T, detail::Multiply>(out, upd, data_offset);
+          break;
+        case SliceUpdate::Max:
+          slice_update_impl<T, detail::Maximum>(out, upd, data_offset);
+          break;
+        case SliceUpdate::Min:
+          slice_update_impl<T, detail::Minimum>(out, upd, data_offset);
+          break;
+        case SliceUpdate::None:
+          // Should never be here
+          break;
+      }
+    });
+  });
 }
 
 } // namespace mlx::core
