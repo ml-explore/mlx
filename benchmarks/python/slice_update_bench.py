@@ -58,8 +58,12 @@ if __name__ == "__main__":
     if args.cpu:
         mx.set_default_device(mx.cpu)
         device = torch.device("cpu")
-    else:
+    elif torch.mps.is_available():
         device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        raise ValueError()
 
     dtypes = ["float32", "bfloat16"]
 
