@@ -9,10 +9,9 @@ ResidencySet::ResidencySet(MTL::Device* d) {
     return;
   } else if (__builtin_available(macOS 15, iOS 18, *)) {
     auto pool = new_scoped_memory_pool();
-    auto desc = MTL::ResidencySetDescriptor::alloc()->init();
+    auto desc = MTL::ResidencySetDescriptor::alloc()->init()->autorelease();
     NS::Error* error;
-    wired_set_ = d->newResidencySet(desc, &error);
-    desc->release();
+    wired_set_ = NS::TransferPtr(d->newResidencySet(desc, &error));
     if (!wired_set_) {
       std::ostringstream msg;
       msg << "[metal::Device] Unable to construct residency set.\n";
@@ -90,11 +89,6 @@ void ResidencySet::resize(size_t size) {
   }
 }
 
-ResidencySet::~ResidencySet() {
-  if (wired_set_) {
-    auto pool = new_scoped_memory_pool();
-    wired_set_->release();
-  }
-}
+ResidencySet::~ResidencySet() = default;
 
 } // namespace mlx::core::metal
