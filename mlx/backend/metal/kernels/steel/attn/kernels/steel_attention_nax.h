@@ -182,8 +182,8 @@ template <
     kb_lim = min(params->NK, kb_lim);
 
     int q_min = tid.x * BQ + params->qL_off;
-    kb_min_causal = (q_min / BK) - int(!align_K);
-    kb_min_causal = max(0, kb_min_causal);
+    q_min = max(0, q_min);
+    kb_min_causal = (q_min / BK);
   }
 
   const bool is_last_bq = int(tid.x) == (params->NQ_aligned);
