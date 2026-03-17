@@ -608,17 +608,17 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [shape, strides] =
       collapse_contiguous_dims(upd.shape(), {upd.strides(), out_strides});
   int nwork = 1;
-  if (strides[0].back() == 1 && strides[1].back() <= 1) {
-    int b = 16 / out.itemsize();
-    if (shape.back() >= b) {
-      nwork = b;
-    }
+  if (shape.back() % 4 == 0) {
+    nwork = 4;
+  } else if (shape.back() % 2 == 0) {
+    nwork = 2;
   }
 
   const char* op_name = g_slice_ops[reduce_type_];
+  auto [ds, rc, cc] = check_contiguity(shape, strides[1]);
   bool upd_contiguous = upd.flags().row_contiguous;
   bool upd_scalar = upd.data_size() == 1;
-  bool out_contiguous = strides[1].back() == 1;
+  bool out_contiguous = rc;
   bool large = upd.size() > INT32_MAX;
   std::string module_name =
       fmt::format("slice_update_{}_{}", op_name, dtype_to_string(out.dtype()));
