@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 #include <algorithm>
 #include <cstring>
 #include <fstream>
@@ -335,13 +335,15 @@ array load(std::string file, StreamOrDevice s) {
 namespace io {
 
 ThreadPool& thread_pool() {
-  static ThreadPool pool_{4};
-  return pool_;
+  // Leak - see Scheduler singleton comment in scheduler.cpp.
+  static ThreadPool* pool_ = new ThreadPool{4};
+  return *pool_;
 }
 
 ThreadPool& ParallelFileReader::thread_pool() {
-  static ThreadPool thread_pool{4};
-  return thread_pool;
+  // Leak - see Scheduler singleton comment in scheduler.cpp.
+  static ThreadPool* thread_pool = new ThreadPool{4};
+  return *thread_pool;
 }
 
 void ParallelFileReader::read(char* data, size_t n) {

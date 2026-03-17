@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include <cassert>
 #include <cmath>
@@ -6,6 +6,7 @@
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
+#include "mlx/backend/cpu/threading/common.h"
 #include "mlx/primitives.h"
 #include "mlx/types/limits.h"
 
@@ -14,6 +15,90 @@ namespace mlx::core {
 namespace {
 
 using namespace mlx::core::simd;
+
+// Process a single row of softmax
+template <typename T, typename AccT>
+void softmax_row(const T* in_ptr, T* out_ptr, int M) {
+  constexpr bool same_t = std::is_same_v<T, AccT>;
+  constexpr int N = std::min(max_size<AccT>, max_size<T>);
+
+  const T* current_in_ptr;
+  T* current_out_ptr;
+
+  // Find the maximum
+  current_in_ptr = in_ptr;
+  Simd<AccT, N> vmaximum(-numeric_limits<AccT>::infinity());
+  size_t s = M;
+  while (s >= N) {
+    Simd<AccT, N> vals = load<T, N>(current_in_ptr);
+    vmaximum = maximum(vals, vmaximum);
+    current_in_ptr += N;
+    s -= N;
+  }
+
+  AccT maximum = max(vmaximum);
+  while (s-- > 0) {
+    maximum = std::max(maximum, static_cast<AccT>(*current_in_ptr));
+    current_in_ptr++;
+  }
+
+  // Compute the normalizer and the exponentials
+  Simd<AccT, N> vnormalizer(0.0);
+  current_out_ptr = out_ptr;
+  current_in_ptr = in_ptr;
+  s = M;
+  while (s >= N) {
+    Simd<AccT, N> vexp = load<T, N>(current_in_ptr);
+    vexp = exp(vexp - maximum);
+    if constexpr (same_t) {
+      store(current_out_ptr, vexp);
+    }
+    vnormalizer = vnormalizer + vexp;
+    current_in_ptr += N;
+    current_out_ptr += N;
+    s -= N;
+  }
+  AccT normalizer = sum(vnormalizer);
+  while (s-- > 0) {
+    AccT _exp = std::exp(*current_in_ptr - maximum);
+    if constexpr (same_t) {
+      *current_out_ptr = _exp;
+    }
+    normalizer += _exp;
+    current_in_ptr++;
+    current_out_ptr++;
+  }
+  normalizer = 1 / normalizer;
+
+  // Normalize
+  current_out_ptr = out_ptr;
+  current_in_ptr = in_ptr;
+  s = M;
+  while (s >= N) {
+    if constexpr (same_t) {
+      store(
+          current_out_ptr,
+          Simd<T, N>(load<T, N>(current_out_ptr) * normalizer));
+    } else {
+      Simd<AccT, N> vexp = load<T, N>(current_in_ptr);
+      vexp = exp(vexp - maximum) * normalizer;
+      store(current_out_ptr, Simd<T, N>(vexp));
+      current_in_ptr += N;
+    }
+    current_out_ptr += N;
+    s -= N;
+  }
+  while (s-- > 0) {
+    if constexpr (same_t) {
+      *current_out_ptr *= normalizer;
+    } else {
+      AccT _exp = std::exp(*current_in_ptr - maximum);
+      *current_out_ptr = static_cast<T>(_exp * normalizer);
+      current_in_ptr++;
+    }
+    current_out_ptr++;
+  }
+}
 
 template <typename T, typename AccT>
 void softmax(const array& in, array& out, Stream stream) {
@@ -27,89 +112,41 @@ void softmax(const array& in, array& out, Stream stream) {
   int M = in.shape().back();
   int L = in.data_size() / M;
 
-  encoder.dispatch([in_ptr, out_ptr, M, L]() mutable {
-    constexpr bool same_t = std::is_same_v<T, AccT>;
-    constexpr int N = std::min(max_size<AccT>, max_size<T>);
+  // Parallelize over rows, limited by number of rows
+  auto& pool = cpu::ThreadPool::instance();
+  // Only parallelize if we have enough rows and elements
+  // Each row needs enough work (M elements) to justify threading overhead
+  int nth = std::min(pool.max_threads(), L);
+  size_t total_elements = static_cast<size_t>(L) * M;
+  if (total_elements < cpu::MIN_TOTAL_ELEMENTS) {
+    nth = 1;
+  }
 
-    const T* current_in_ptr;
-    T* current_out_ptr;
+  if (nth > 1) {
+    encoder.dispatch([in_ptr, out_ptr, M, L, nth, &pool]() {
+      pool.parallel_for(nth, [=](int tid, int num_threads) {
+        // Divide rows among threads
+        int rows_per_thread = (L + num_threads - 1) / num_threads;
+        int row_start = rows_per_thread * tid;
+        int row_end = std::min(row_start + rows_per_thread, L);
 
-    for (int i = 0; i < L; i++, in_ptr += M, out_ptr += M) {
-      // Find the maximum
-      current_in_ptr = in_ptr;
-      Simd<AccT, N> vmaximum(-numeric_limits<AccT>::infinity());
-      size_t s = M;
-      while (s >= N) {
-        Simd<AccT, N> vals = load<T, N>(current_in_ptr);
-        vmaximum = maximum(vals, vmaximum);
-        current_in_ptr += N;
-        s -= N;
-      }
+        const T* row_in = in_ptr + row_start * M;
+        T* row_out = out_ptr + row_start * M;
 
-      AccT maximum = max(vmaximum);
-      while (s-- > 0) {
-        maximum = std::max(maximum, static_cast<AccT>(*current_in_ptr));
-        current_in_ptr++;
-      }
-
-      // Compute the normalizer and the exponentials
-      Simd<AccT, N> vnormalizer(0.0);
-      current_out_ptr = out_ptr;
-      current_in_ptr = in_ptr;
-      s = M;
-      while (s >= N) {
-        Simd<AccT, N> vexp = load<T, N>(current_in_ptr);
-        vexp = exp(vexp - maximum);
-        if constexpr (same_t) {
-          store(current_out_ptr, vexp);
+        for (int i = row_start; i < row_end; i++) {
+          softmax_row<T, AccT>(row_in, row_out, M);
+          row_in += M;
+          row_out += M;
         }
-        vnormalizer = vnormalizer + vexp;
-        current_in_ptr += N;
-        current_out_ptr += N;
-        s -= N;
+      });
+    });
+  } else {
+    encoder.dispatch([in_ptr, out_ptr, M, L]() mutable {
+      for (int i = 0; i < L; i++, in_ptr += M, out_ptr += M) {
+        softmax_row<T, AccT>(in_ptr, out_ptr, M);
       }
-      AccT normalizer = sum(vnormalizer);
-      while (s-- > 0) {
-        AccT _exp = std::exp(*current_in_ptr - maximum);
-        if constexpr (same_t) {
-          *current_out_ptr = _exp;
-        }
-        normalizer += _exp;
-        current_in_ptr++;
-        current_out_ptr++;
-      }
-      normalizer = 1 / normalizer;
-
-      // Normalize
-      current_out_ptr = out_ptr;
-      current_in_ptr = in_ptr;
-      s = M;
-      while (s >= N) {
-        if constexpr (same_t) {
-          store(
-              current_out_ptr,
-              Simd<T, N>(load<T, N>(current_out_ptr) * normalizer));
-        } else {
-          Simd<AccT, N> vexp = load<T, N>(current_in_ptr);
-          vexp = exp(vexp - maximum) * normalizer;
-          store(current_out_ptr, Simd<T, N>(vexp));
-          current_in_ptr += N;
-        }
-        current_out_ptr += N;
-        s -= N;
-      }
-      while (s-- > 0) {
-        if constexpr (same_t) {
-          *current_out_ptr *= normalizer;
-        } else {
-          AccT _exp = std::exp(*current_in_ptr - maximum);
-          *current_out_ptr = static_cast<T>(_exp * normalizer);
-          current_in_ptr++;
-        }
-        current_out_ptr++;
-      }
-    }
-  });
+    });
+  }
 }
 
 } // namespace

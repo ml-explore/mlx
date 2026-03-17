@@ -1,4 +1,4 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-2026 Apple Inc.
 
 #pragma once
 
@@ -77,8 +77,7 @@ struct Real {
 struct Sigmoid {
   template <int N, typename T>
   Simd<T, N> operator()(Simd<T, N> x) {
-    auto y = 1.0f / (1.0f + simd::exp(simd::abs(x)));
-    return simd::select(x < Simd<T, N>{0}, y, Simd<T, N>{1} - y);
+    return simd::sigmoid(x);
   }
   SINGLE()
 };
@@ -88,12 +87,12 @@ struct Sign {
   Simd<T, N> operator()(Simd<T, N> x) {
     auto z = Simd<T, N>{0};
     auto o = Simd<T, N>{1};
-    auto m = Simd<T, N>{-1};
     if constexpr (std::is_unsigned_v<T>) {
       return simd::select(x == z, z, o);
     } else if constexpr (std::is_same_v<T, complex64_t>) {
       return simd::select(x == z, x, Simd<T, N>(x / simd::abs(x)));
     } else {
+      auto m = Simd<T, N>{-1};
       return simd::select(x < z, m, simd::select(x > z, o, z));
     }
   }
@@ -155,18 +154,11 @@ struct FromFP8 {
   template <int N>
   Simd<float, N> operator()(Simd<uint8_t, N> x) {
     auto v = Simd<uint16_t, N>(x & 127) << 7;
-    Simd<float, N> out;
-    if constexpr (simd::max_size<float16_t> >= N) {
-      auto converted = *(Simd<float16_t, N>*)(&v);
-      out = converted * 256.0;
-    } else {
-      for (int i = 0; i < N; ++i) {
-        auto converted = *(float16_t*)(&v[i]);
-        out[i] = converted * 256.0;
-      }
-    }
+    auto converted = *(Simd<float16_t, N>*)(&v);
+    converted = converted * 256.0;
     auto sign = Simd<bool, N>(x & 128);
-    return select(sign, -out, out);
+    Simd<float, N> out = select(sign, -converted, converted);
+    return out;
   }
   float operator()(uint8_t x) {
     return (*this)(Simd<uint8_t, 1>(x)).value;

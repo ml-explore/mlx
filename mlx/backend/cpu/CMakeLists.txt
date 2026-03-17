@@ -3,6 +3,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CLANG TRUE)
 else()
   set(COMPILER ${CMAKE_CXX_COMPILER})
+  set(CLANG FALSE)
 endif()
 
 set(COMPILE_DEPS
@@ -17,7 +18,35 @@ set(COMPILE_DEPS
     unary_ops.h
     binary_ops.h)
 
-if(MSVC)
+# x86 SIMD: enable AVX2 when requested and supported (must come before preamble
+# generation so PREAMBLE_SIMD_FLAGS is set)
+if(MLX_ENABLE_AVX2 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|x86")
+  include(CheckCXXCompilerFlag)
+  if(MSVC)
+    check_cxx_compiler_flag("/arch:AVX2" COMPILER_SUPPORTS_AVX2)
+    if(COMPILER_SUPPORTS_AVX2)
+      target_compile_options(mlx PRIVATE /arch:AVX2)
+      set(PREAMBLE_SIMD_FLAGS "/arch:AVX2")
+      message(STATUS "x86 SIMD: AVX2 enabled (/arch:AVX2)")
+    else()
+      message(
+        WARNING "MLX_ENABLE_AVX2 is ON but compiler does not support /arch:AVX2"
+      )
+    endif()
+  else()
+    check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
+    if(COMPILER_SUPPORTS_AVX2)
+      target_compile_options(mlx PRIVATE -mavx2 -mfma -mf16c)
+      set(PREAMBLE_SIMD_FLAGS "-mavx2 -mfma -mf16c")
+      message(STATUS "x86 SIMD: AVX2 enabled (-mavx2 -mfma -mf16c)")
+    else()
+      message(
+        WARNING "MLX_ENABLE_AVX2 is ON but compiler does not support -mavx2")
+    endif()
+  endif()
+endif()
+
+if(WIN32)
   set(SHELL_EXT ps1)
   set(SHELL_CMD powershell -ExecutionPolicy Bypass -File)
 else()
@@ -31,6 +60,7 @@ add_custom_command(
     ${SHELL_CMD} ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.${SHELL_EXT}
     ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp ${COMPILER}
     ${PROJECT_SOURCE_DIR} ${CLANG} ${CMAKE_SYSTEM_PROCESSOR}
+    "${PREAMBLE_SIMD_FLAGS}"
   DEPENDS make_compiled_preamble.${SHELL_EXT} compiled_preamble.h
           ${COMPILE_DEPS})
 
@@ -70,6 +100,9 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/inverse.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/cholesky.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/norms.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/rope.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/sdpa.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
           ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp)
 
@@ -86,3 +119,6 @@ else()
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
                              ${CMAKE_CURRENT_SOURCE_DIR}/jit_compiler.cpp)
 endif()
+
+# Include threading backend (platform-specific implementation)
+add_subdirectory(threading)
