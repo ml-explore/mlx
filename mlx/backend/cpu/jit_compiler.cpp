@@ -1,10 +1,12 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2024-2026 Apple Inc.
 
 #include "mlx/backend/cpu/jit_compiler.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/compiled_preamble.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <fstream>
 #include <sstream>
 #include <vector>
 
@@ -38,11 +40,16 @@ struct VisualStudioInfo {
     // Get path of Visual Studio.
     // Use -latest to get only the most recent installation when multiple
     // versions are installed, avoiding path concatenation issues.
+    auto pf86 = std::getenv("ProgramFiles(x86)");
+    if (!pf86) {
+      throw std::runtime_error(
+          "ProgramFiles(x86) environment variable not set.");
+    }
     std::string vs_path = JitCompiler::exec(
         fmt::format(
             "\"{0}\\Microsoft Visual Studio\\Installer\\vswhere.exe\""
-            " -latest -property installationPath",
-            std::getenv("ProgramFiles(x86)")));
+            " -latest -property installationPath 2>&1",
+            pf86));
     if (vs_path.empty()) {
       throw std::runtime_error("Can not find Visual Studio.");
     }
@@ -57,7 +64,7 @@ struct VisualStudioInfo {
     // Read the envs from vcvarsall.
     std::string envs = JitCompiler::exec(
         fmt::format(
-            "\"{0}\\VC\\Auxiliary\\Build\\vcvarsall.bat\" {1} >NUL && set",
+            "\"{0}\\VC\\Auxiliary\\Build\\vcvarsall.bat\" {1} >NUL 2>&1 && set",
             vs_path,
             arch));
     for (const std::string& line : str_split(envs, '\n')) {
@@ -70,12 +77,34 @@ struct VisualStudioInfo {
       if (name == "LIB") {
         libpaths = str_split(value, ';');
       } else if (name == "VCToolsInstallDir" || name == "VCTOOLSINSTALLDIR") {
-        cl_exe = fmt::format("{0}\\bin\\Host{1}\\{1}\\cl.exe", value, arch);
+        msvc_cl = fmt::format("{0}\\bin\\Host{1}\\{1}\\cl.exe", value, arch);
       }
     }
+
+    // Check for clang-cl bundled with Visual Studio.
+    std::string clang_cl_path = fmt::format(
+        "{0}\\VC\\Tools\\Llvm\\{1}\\bin\\clang-cl.exe", vs_path, arch);
+    {
+      std::ifstream f(clang_cl_path);
+      if (f.good()) {
+        clang_cl = clang_cl_path;
+      }
+    }
+
+    // Select the JIT compiler. The preamble was preprocessed at build time
+    // by whichever compiler built the library -- it contains compiler-specific
+    // builtins (e.g. __builtin_fpclassify for Clang, __is_same for MSVC) that
+    // are only valid for the same compiler family. Prefer the matching one.
+#ifdef __clang__
+    cl_exe = !clang_cl.empty() ? clang_cl : msvc_cl;
+#else
+    cl_exe = !msvc_cl.empty() ? msvc_cl : clang_cl;
+#endif
   }
   std::string arch;
   std::string cl_exe;
+  std::string msvc_cl;
+  std::string clang_cl;
   std::vector<std::string> libpaths;
 };
 
@@ -110,36 +139,92 @@ const std::tuple<bool, std::string, std::string>& JitCompiler::get_preamble() {
   return preamble;
 }
 
+bool JitCompiler::available() {
+#ifdef _MSC_VER
+  static int result = -1; // -1 = not probed yet
+  if (result == -1) {
+    try {
+      const auto& info = GetVisualStudioInfo();
+      // The preamble is preprocessed at build time by the build compiler.
+      // It contains compiler-specific intrinsics that only the same compiler
+      // family can parse, so we must have the matching compiler at runtime.
+#ifdef __clang__
+      result = !info.clang_cl.empty() ? 1 : 0;
+#else
+      result = !info.msvc_cl.empty() ? 1 : 0;
+#endif
+    } catch (...) {
+      result = 0;
+    }
+  }
+  return result == 1;
+#else
+  static int result = -1;
+  if (result == -1) {
+    // The build command uses g++, and the preamble was preprocessed by the
+    // build compiler (GCC or Clang). The preprocessed output contains
+    // compiler-specific intrinsics (e.g. __remove_reference for GCC,
+    // __builtin_* for Clang) that only the same compiler family can parse.
+    // Note: on some distros (e.g. macOS), g++ may be a symlink to Clang.
+    // Check that g++ is available in PATH.
+#ifdef _WIN32
+    result = (std::system("g++ --version > NUL 2>&1") == 0) ? 1 : 0;
+#else
+    result = (std::system("g++ --version > /dev/null 2>&1") == 0) ? 1 : 0;
+#endif
+  }
+  return result == 1;
+#endif
+}
+
 std::string JitCompiler::build_command(
     const std::filesystem::path& dir,
     const std::string& source_file_name,
     const std::string& shared_lib_name) {
   auto& [use_include, include_dir, preamble] = get_preamble();
 #ifdef _MSC_VER
-  std::string extra_flags;
+  std::string compiler_flags;
   if (use_include) {
-    extra_flags += fmt::format("/I \"{}\"", include_dir);
+    compiler_flags += fmt::format(" /I \"{}\"", include_dir);
   }
   const VisualStudioInfo& info = GetVisualStudioInfo();
+  std::string libpaths;
   for (const std::string& lib : info.libpaths) {
-    extra_flags += fmt::format(" /libpath:\"{}\"", lib);
+    libpaths += fmt::format(" /libpath:\"{}\"", lib);
   }
+  // clang-cl accepts the same flags as cl.exe (/LD, /EHsc, etc.)
+  // but we add -Wno-everything to suppress warnings from the preprocessed
+  // preamble, which may contain pragmas or builtins from a different compiler
+  // (e.g. MSVC pragmas when compiling with clang-cl, or vice versa).
+  if (!info.clang_cl.empty() && info.cl_exe == info.clang_cl) {
+    compiler_flags += " -Wno-everything";
+  }
+#ifdef __AVX2__
+  compiler_flags += " /arch:AVX2";
+#endif
   return fmt::format(
       "\""
-      "cd /D \"{}\" && "
-      "\"{}\" /LD /EHsc /MD /Ox /nologo /std:c++17 {} \"{}\" "
-      "/link /out:\"{}\" 2>&1"
+      "cd /D \"{0}\" && "
+      "\"{1}\" /LD /EHsc /MD /Ox /nologo /std:c++17{5} \"{2}\" "
+      "/link /out:\"{3}\" {4} 2>&1"
       "\"",
       dir.string(),
       info.cl_exe,
-      extra_flags,
       source_file_name,
-      shared_lib_name);
+      shared_lib_name,
+      libpaths,
+      compiler_flags);
 #else
   std::string extra_flags;
   if (use_include) {
     extra_flags = fmt::format("-I \"{}\"", include_dir);
   }
+#ifdef __AVX2__
+  if (!extra_flags.empty()) {
+    extra_flags += " ";
+  }
+  extra_flags += "-mavx2 -mfma -mf16c";
+#endif
   return fmt::format(
       "g++ -std=c++17 -O3 -Wall -fPIC -shared {} \"{}\" -o \"{}\" 2>&1",
       extra_flags,
@@ -162,7 +247,7 @@ std::string JitCompiler::exec(const std::string& cmd) {
   while (fgets(buffer, sizeof(buffer), pipe)) {
     ret += buffer;
   }
-  // Trim trailing spaces.
+  // Trim trailing whitespace.
   ret.erase(
       std::find_if(
           ret.rbegin(),
