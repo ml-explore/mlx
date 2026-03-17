@@ -4,7 +4,6 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/fp_quantize.cuh"
-#include "mlx/backend/cuda/quantized/fp_quantize_tma.cuh"
 #include "mlx/backend/cuda/quantized/quantized.h"
 #include "mlx/backend/cuda/vector_types.cuh"
 #include "mlx/dtype_utils.h"
@@ -14,11 +13,40 @@
 #include <cutlass/float8.h>
 #include <cutlass/numeric_conversion.h>
 
-constexpr float F8E4M3_MAX = 448.0f;
-constexpr float F4E2M1_MAX = 6.0f;
-
 namespace mlx::core {
 namespace cu {
+
+inline void create_2D_tensor_map(
+    CUtensorMap* tensorMap,
+    void* input_ptr,
+    CUtensorMapDataType dtype,
+    uint64_t rows,
+    uint64_t cols,
+    uint32_t tile_y,
+    uint32_t tile_x,
+    uint64_t stride_bytes,
+    CUtensorMapSwizzle swizzle = CU_TENSOR_MAP_SWIZZLE_NONE) {
+  constexpr uint32_t rank = 2; // 2D
+  uint64_t global_dim[rank] = {cols, rows};
+  // For row-major layout
+  uint64_t strides[rank - 1] = {stride_bytes};
+  uint32_t tile_dim[rank] = {tile_x, tile_y};
+  uint32_t elem_stride[rank] = {1, 1};
+
+  CHECK_CUDA_ERROR(cuTensorMapEncodeTiled(
+      tensorMap,
+      dtype,
+      rank,
+      input_ptr,
+      global_dim,
+      strides,
+      tile_dim,
+      elem_stride,
+      CU_TENSOR_MAP_INTERLEAVE_NONE,
+      swizzle,
+      CU_TENSOR_MAP_L2_PROMOTION_NONE,
+      CU_TENSOR_MAP_FLOAT_OOB_FILL_NONE));
+}
 
 template <
     int TILE_M,
@@ -26,7 +54,7 @@ template <
     int THREADS_PER_BLOCK,
     int STAGES,
     int SCALES_PER_STAGE>
-inline std::tuple<dim3, dim3, size_t> get_tma_launch_args(
+inline std::tuple<dim3, dim3, size_t> get_columnwise_quantize_mxfp8_launch_args(
     size_t grid_dim_x_size, // rows
     size_t grid_dim_y_size, // cols
     size_t block_size_x, // ROWS_PER_BLOCK
@@ -72,8 +100,11 @@ inline CUtensorMapDataType get_tma_dtype(Dtype dtype) {
   }
 }
 
-inline std::tuple<dim3, dim3>
-get_columnwise_quantize_launch_args(size_t size, int group_size, int M, int K) {
+inline std::tuple<dim3, dim3> get_columnwise_quantize_fallback_launch_args(
+    size_t size,
+    int group_size,
+    int M,
+    int K) {
   constexpr int BLOCK_X = 16;
   constexpr int BLOCK_Y = 32;
   int rows_per_block = BLOCK_X;
@@ -163,7 +194,6 @@ void fp_quantize_rowwise(
           kernel,
           num_blocks,
           block_dims,
-          0,
           gpu_ptr<T>(w),
           gpu_ptr<uint8_t>(wq),
           gpu_ptr<uint8_t>(scales),
@@ -207,13 +237,12 @@ void fp_quantize_columnwise_fallback(
                 cu::fp_quantize_columnwise_fallback<T, 16, 4, false, false>;
           }
           auto [num_blocks, block_dims] =
-              cu::get_columnwise_quantize_launch_args(
+              cu::get_columnwise_quantize_fallback_launch_args(
                   w.size(), group_size, M, K);
           enc.add_kernel_node(
               kernel,
               num_blocks,
               block_dims,
-              0,
               gpu_ptr<T>(w),
               gpu_ptr<uint8_t>(wq),
               gpu_ptr<uint8_t>(scales),
@@ -229,7 +258,7 @@ void fp_quantize_columnwise_fallback(
       });
 }
 
-void fp_quantize_columnwise_tma(
+void fp_quantize_columnwise_mxfp8(
     const array& w,
     array& wq,
     array& scales,
@@ -246,76 +275,78 @@ void fp_quantize_columnwise_tma(
   size_t cols = w.size() / rows;
   size_t stride_bytes = w.strides(-1) * w.itemsize();
 
-  if (bits == 8 && group_size == 32) {
-    dispatch_float_types(
-        w.dtype(), "fp_quantize_columnwise_mxfp8", [&](auto type_tag) {
-          using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-          if constexpr (!std::is_same_v<T, double>) {
-            constexpr int THREADS_PER_BLOCK = 64;
-            constexpr int ROWS_PER_BLOCK = 64;
-            constexpr int COLS_PER_BLOCK = 64;
-            constexpr size_t TILE_M = 32;
-            constexpr size_t TILE_K = COLS_PER_BLOCK;
-            constexpr size_t STAGES = ROWS_PER_BLOCK / TILE_M;
+  dispatch_float_types(
+      w.dtype(), "fp_quantize_columnwise_mxfp8", [&](auto type_tag) {
+        using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+        if constexpr (!std::is_same_v<T, double>) {
+          constexpr int THREADS_PER_BLOCK = 64;
+          constexpr int ROWS_PER_BLOCK = 64;
+          constexpr int COLS_PER_BLOCK = 64;
+          constexpr size_t TILE_M = 32;
+          constexpr size_t TILE_K = COLS_PER_BLOCK;
+          constexpr size_t STAGES = ROWS_PER_BLOCK / TILE_M;
 
-            // For columnwise: grid.x = cols, grid.y = rows
-            // scales_per_stage = TILE_K (one scale per column per stage)
-            auto [grid, block, smem_size] = cu::get_tma_launch_args<
-                TILE_M,
-                TILE_K,
-                THREADS_PER_BLOCK,
-                STAGES,
-                TILE_K>(
-                cols, rows, COLS_PER_BLOCK, ROWS_PER_BLOCK, w.itemsize(), bits);
+          // For columnwise: grid.x = cols, grid.y = rows
+          // scales_per_stage = TILE_K (one scale per column per stage)
+          auto [grid, block, smem_size] =
+              cu::get_columnwise_quantize_mxfp8_launch_args<
+                  TILE_M,
+                  TILE_K,
+                  THREADS_PER_BLOCK,
+                  STAGES,
+                  TILE_K>(
+                  cols,
+                  rows,
+                  COLS_PER_BLOCK,
+                  ROWS_PER_BLOCK,
+                  w.itemsize(),
+                  bits);
 
-            CUtensorMap tensor_map_input;
-            CUtensorMap tensor_map_output;
+          CUtensorMap tensor_map_input;
+          CUtensorMap tensor_map_output;
 
-            create_2D_tensor_map(
-                &tensor_map_input,
-                gpu_ptr<void>(w),
-                cu::get_tma_dtype(w.dtype()),
-                rows,
-                cols,
-                TILE_M,
-                TILE_K,
-                stride_bytes);
+          cu::create_2D_tensor_map(
+              &tensor_map_input,
+              gpu_ptr<void>(w),
+              cu::get_tma_dtype(w.dtype()),
+              rows,
+              cols,
+              TILE_M,
+              TILE_K,
+              stride_bytes);
 
-            create_2D_tensor_map(
-                &tensor_map_output,
-                gpu_ptr<uint8_t>(wq),
-                CU_TENSOR_MAP_DATA_TYPE_UINT8,
-                cols,
-                rows,
-                TILE_K,
-                TILE_M,
-                rows);
+          cu::create_2D_tensor_map(
+              &tensor_map_output,
+              gpu_ptr<uint8_t>(wq),
+              CU_TENSOR_MAP_DATA_TYPE_UINT8,
+              cols,
+              rows,
+              TILE_K,
+              TILE_M,
+              rows);
 
-            auto kernel = cu::fp_quantize_columnwise_tma_mxfp8<
-                T,
-                false,
-                THREADS_PER_BLOCK,
-                COLS_PER_BLOCK,
-                ROWS_PER_BLOCK>;
-            enc.add_kernel_node(
-                kernel,
-                grid,
-                block,
-                smem_size,
-                tensor_map_input,
-                tensor_map_output,
-                gpu_ptr<uint8_t>(scales),
-                rows,
-                cols);
-          } else {
-            throw std::runtime_error(
-                "[fp_quantize_columnwise_tma] Cannot quantize input with type float64.");
-          }
-        });
-  } else {
-    throw std::runtime_error(
-        "[fp_quantize_columnwise_tma] TMA quantization only implemented for bits=8 and group_size=32.");
-  }
+          auto kernel = cu::fp_quantize_columnwise_mxfp8<
+              T,
+              false,
+              THREADS_PER_BLOCK,
+              COLS_PER_BLOCK,
+              ROWS_PER_BLOCK>;
+          enc.add_kernel_node_ex(
+              kernel,
+              grid,
+              block,
+              {},
+              smem_size,
+              tensor_map_input,
+              tensor_map_output,
+              gpu_ptr<uint8_t>(scales),
+              rows,
+              cols);
+        } else {
+          throw std::runtime_error(
+              "[fp_quantize_columnwise_tma] Cannot quantize input with type float64.");
+        }
+      });
 }
 
 void fp_quantize_columnwise(
@@ -336,7 +367,7 @@ void fp_quantize_columnwise(
       (enc.device().compute_capability_major() >= 10 && bits == 8 &&
        group_size == 32 && has_full_tma_tiles);
   if (use_tma) {
-    fp_quantize_columnwise_tma(
+    fp_quantize_columnwise_mxfp8(
         w, wq, scales, group_size, bits, global_scale, enc, s);
   } else {
     fp_quantize_columnwise_fallback(
