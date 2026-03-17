@@ -57,6 +57,16 @@ MTL::Library* try_load_bundle(
     MTL::Device* device,
     NS::URL* url,
     const std::string& lib_name) {
+  std::string path =
+    std::string(url->fileSystemRepresentation()) +
+    "/" + lib_name + ".metallib";
+
+  auto [lib, error] = load_library_from_path(device, path.c_str());
+  if (lib) {
+    return lib;
+  }
+
+  // url contains already the resource path. Why to rebuild it here again ?
   std::string bundle_path = std::string(url->fileSystemRepresentation()) + "/" +
       SWIFTPM_BUNDLE + ".bundle";
   auto bundle = NS::Bundle::alloc()->init(
@@ -112,6 +122,11 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
   for (int i = 0, c = (int)bundles->count(); i < c; i++) {
     auto bundle = reinterpret_cast<NS::Bundle*>(bundles->object(i));
     library = try_load_bundle(device, bundle->resourceURL(), lib_name);
+    if (library != nullptr) {
+      return {library, nullptr};
+    }
+    // MetalCompilerPlugin does not generate a resource, but puts it into the bundle
+    library = try_load_bundle(device, bundle->bundleURL(), lib_name);
     if (library != nullptr) {
       return {library, nullptr};
     }
