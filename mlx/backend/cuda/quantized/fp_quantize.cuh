@@ -358,15 +358,14 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
 
     scale /= F8E4M3_MAX;
 
-    using ScaleType = __nv_fp8_e8m0;
-    auto s = ScaleType(scale);
+    auto s = cutlass::float_ue8m0_t(scale);
     scale = float(s);
     // Write scale directly to global memory
     const size_t global_col = block_offset_col + tidx;
     const size_t global_row_group =
         (block_offset_row + step_row_offset) / TILE_M;
     if (global_col < cols && (block_offset_row + step_row_offset) < rows) {
-      scales[global_col * scale_stride + global_row_group] = s.__x;
+      scales[global_col * scale_stride + global_row_group] = s.storage;
     }
     const size_t out_buff_offset = buff * out_tile_elems;
     // Quantize to registers first
@@ -605,8 +604,10 @@ __global__ void fp_dequantize(
   }
 
   size_t gindex = oindex / group_size;
-  using ScaleType =
-      std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
+  using ScaleType = std::conditional_t<
+      use_mx_scale,
+      cutlass::float_ue8m0_t,
+      cutlass::float_e4m3_t>;
   auto scale = float(((ScaleType*)(scales))[gindex]) * inv_scale_enc;
 
   out += oindex;
