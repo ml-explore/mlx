@@ -346,11 +346,9 @@ bool AddMM::is_equivalent(const Primitive& other) const {
 }
 
 std::vector<Shape> AddMM::output_shapes(const std::vector<array>& inputs) {
-  // out = alpha * (A @ B) + beta * C
-  // Output shape matches C (inputs[0]), with last dim from B (inputs[2])
-  auto out_shape = inputs[0].shape();
-  out_shape.back() = inputs[2].shape(-1);
-  return {std::move(out_shape)};
+  // C (inputs[0]) is validated to match the output shape at construction
+  // in ops.cpp, so its shape is the output shape directly.
+  return {inputs[0].shape()};
 }
 
 std::pair<std::vector<array>, std::vector<int>> AddMM::vmap(
