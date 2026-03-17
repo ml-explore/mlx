@@ -855,8 +855,12 @@ void MaskedScatter::eval_cpu(const std::vector<array>& inputs, array& out) {
 }
 
 template <typename T, typename Op>
-void slice_update_impl(array& out, const array& upd, int64_t data_offset) {
-  ContiguousIterator out_it(upd.shape(), out.strides(), upd.ndim());
+void slice_update_impl(
+    array& out,
+    const array& upd,
+    int64_t data_offset,
+    const Strides& out_strides) {
+  ContiguousIterator out_it(upd.shape(), out_strides, upd.ndim());
   ContiguousIterator upd_it(upd);
   Op op;
 
@@ -946,21 +950,25 @@ void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.dispatch([upd = array::unsafe_weak_copy(upd),
                     out = array::unsafe_weak_copy(out),
                     data_offset = data_offset,
+                    out_strides = std::move(out_strides),
                     reduce_type = reduce_type_]() mutable {
     dispatch_all_types(out.dtype(), [&](auto type_tag) {
       using T = MLX_GET_TYPE(type_tag);
       switch (reduce_type) {
         case SliceUpdate::Sum:
-          slice_update_impl<T, detail::Add>(out, upd, data_offset);
+          slice_update_impl<T, detail::Add>(out, upd, data_offset, out_strides);
           break;
         case SliceUpdate::Prod:
-          slice_update_impl<T, detail::Multiply>(out, upd, data_offset);
+          slice_update_impl<T, detail::Multiply>(
+              out, upd, data_offset, out_strides);
           break;
         case SliceUpdate::Max:
-          slice_update_impl<T, detail::Maximum>(out, upd, data_offset);
+          slice_update_impl<T, detail::Maximum>(
+              out, upd, data_offset, out_strides);
           break;
         case SliceUpdate::Min:
-          slice_update_impl<T, detail::Minimum>(out, upd, data_offset);
+          slice_update_impl<T, detail::Minimum>(
+              out, upd, data_offset, out_strides);
           break;
         case SliceUpdate::None:
           // Should never be here
