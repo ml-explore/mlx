@@ -3311,10 +3311,22 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.broadcast_shapes()
 
     def test_sort_nan(self):
-        x = mx.array([3.0, mx.nan, 2.0, 0.0])
-        expected = mx.array([0.0, 2.0, 3.0, mx.nan])
-        self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
+        for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+            with self.subTest(dtype=dtype):
+                x = mx.array([3.0, mx.nan, 2.0, 0.0], dtype=dtype)
+                expected = mx.array([0.0, 2.0, 3.0, mx.nan], dtype=dtype)
+                self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
+
         x = mx.array([3.0, mx.nan, 2.0, 0.0]) + 1j * mx.array([1.0] * 4)
+
+    def test_argsort_nan(self):
+        for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+            with self.subTest(dtype=dtype):
+                x = mx.array([3.0, mx.nan, 2.0, 0.0], dtype=dtype)
+                expected = mx.array([0.0, 2.0, 3.0, mx.nan], dtype=dtype)
+                indices = mx.argsort(x)
+                sorted_x = mx.take(x, indices)
+                self.assertTrue(mx.array_equal(sorted_x, expected, equal_nan=True))
 
     def test_to_from_fp8(self):
         vals = mx.array(
