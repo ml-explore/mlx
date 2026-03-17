@@ -103,10 +103,11 @@ void qmm_impl_sm80(
     const array& x,
     const array& w,
     const array& scales,
-    const array& biases,
+    const std::optional<array>& biases,
     array& out,
     int bits,
     int group_size,
+    QuantizationMode mode,
     cu::CommandEncoder& encoder);
 
 bool supports_qmm_sm80(
@@ -128,11 +129,11 @@ bool supports_qmm_sm80(
   if ((n % 128 != 0) || (k % std::max(64, group_size) != 0)) {
     return false;
   }
-  if (!biases) {
+  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
+      !scales.flags().row_contiguous) {
     return false;
   }
-  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
-      !scales.flags().row_contiguous || !biases->flags().row_contiguous) {
+  if (biases && !biases->flags().row_contiguous) {
     return false;
   }
   if (x.dtype() != float16 && x.dtype() != bfloat16) {
@@ -141,10 +142,7 @@ bool supports_qmm_sm80(
   if (!transpose) {
     return false;
   }
-  if (bits != 8) {
-    return false;
-  }
-  if (mode != QuantizationMode::Affine) {
+  if (bits != 4 && bits != 8) {
     return false;
   }
   return true;
@@ -154,13 +152,15 @@ void qmm_sm80(
     const array& x,
     const array& w,
     const array& scales,
-    const array& biases,
+    const std::optional<array>& biases,
     array& out,
     int bits,
     int group_size,
+    QuantizationMode mode,
     cu::CommandEncoder& encoder) {
   auto dispatch = [&]<int TileM>() {
-    qmm_impl_sm80<TileM>(x, w, scales, biases, out, bits, group_size, encoder);
+    qmm_impl_sm80<TileM>(
+        x, w, scales, biases, out, bits, group_size, mode, encoder);
   };
   int m = out.shape(-2);
   if (m <= 16) {

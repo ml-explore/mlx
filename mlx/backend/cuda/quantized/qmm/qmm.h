@@ -48,10 +48,11 @@ void qmm_sm80(
     const array& x,
     const array& w,
     const array& scales,
-    const array& biases,
+    const std::optional<array>& biases,
     array& out,
     int bits,
     int group_size,
+    QuantizationMode mode,
     cu::CommandEncoder& encoder);
 
 bool supports_fp_qmv(
