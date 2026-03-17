@@ -5,6 +5,7 @@
 #include "doctest/doctest.h"
 
 #include "mlx/allocator.h"
+#include "mlx/memory.h"
 
 using namespace mlx::core;
 
@@ -38,4 +39,22 @@ TEST_CASE("test large allocations") {
     auto buffer = allocator::malloc(size);
     allocator::free(buffer);
   }
+}
+
+TEST_CASE("test cached allocation keeps capacity") {
+  auto old_limit = set_cache_limit(1 << 20);
+  clear_cache();
+
+  auto large = allocator::malloc(8192);
+  allocator::free(large);
+  auto cached = get_cache_memory();
+  CHECK_GE(cached, 8192);
+
+  auto small = allocator::malloc(6000);
+  CHECK_GE(allocator::allocator().size(small), cached);
+  allocator::free(small);
+  CHECK_GE(get_cache_memory(), cached);
+
+  clear_cache();
+  set_cache_limit(old_limit);
 }
