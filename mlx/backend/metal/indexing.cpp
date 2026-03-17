@@ -778,30 +778,44 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
       break;
   }
 
-  auto [shape, strides] =
-      collapse_contiguous_dims(upd.shape(), {upd.strides(), out_strides});
-  int nwork = 1;
-  if (strides[0].back() == 1 && strides[1].back() <= 1) {
-    int b = 16 / out.itemsize();
-    if (shape.back() >= b) {
-      nwork = b;
-    }
-  }
-
   bool upd_contiguous = upd.flags().row_contiguous;
   bool upd_scalar = upd.data_size() == 1;
+
+  Shape shape;
+  std::vector<Strides> strides;
+  if (upd_scalar) {
+    std::tie(shape, strides) =
+        collapse_contiguous_dims(upd.shape(), {out_strides, out_strides});
+  } else {
+    std::tie(shape, strides) =
+        collapse_contiguous_dims(upd.shape(), {upd.strides(), out_strides});
+  }
+
+  int ndim_constant = shape.size();
+  if (ndim_constant > 3) {
+    ndim_constant = 0;
+  }
+
+  int nwork = 1;
+  if (shape.back() % 4 == 0) {
+    nwork = 4;
+  } else if (shape.back() % 2 == 0) {
+    nwork = 2;
+  }
+
   auto [ds, rc, cc] = check_contiguity(shape, strides[1]);
   bool out_contiguous = rc;
   bool large = upd.size() > INT32_MAX;
   std::string kernel_name = fmt::format(
-      "slice_update_{0}_{1}{2}_{3}_{4}_{5}_nw{6}",
+      "slice_update_{0}_{1}{2}_{3}_{4}_{5}_nw{6}_nd{7}",
       op_name,
       type_to_name(out),
       large ? "int64_t" : "int",
       out_contiguous ? "oc_true" : "oc_false",
       upd_contiguous ? "updc_true" : "updc_false",
       upd_scalar ? "upds_true" : "upds_false",
-      nwork);
+      nwork,
+      ndim_constant);
 
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -822,7 +836,8 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
         out_contiguous,
         upd_contiguous,
         upd_scalar,
-        nwork);
+        nwork,
+        ndim_constant);
 
     return kernel_source;
   });
@@ -844,18 +859,13 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_bytes(data_offset, 7);
 
   // Launch grid
-  int threads_x, threads_y = 1;
-  for (int i = 0; i < ndim; i++) {
-    if (size / threads_y <= INT32_MAX) {
-      threads_x = size / threads_y;
-      break;
-    }
-    threads_y *= shape[i];
-  }
-  threads_x = (threads_x + nwork - 1) / nwork;
+  int64_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
+  int64_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
+  int64_t rest = size / (dim0 * dim1);
+  dim0 /= nwork;
 
-  MTL::Size grid_dims(threads_x, threads_y, 1);
-  MTL::Size group_dims = get_block_dims(threads_x, threads_y, 1);
+  auto group_dims = get_block_dims(dim0, dim1, rest);
+  MTL::Size grid_dims(dim0, dim1, rest);
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 

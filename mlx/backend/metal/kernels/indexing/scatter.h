@@ -65,7 +65,8 @@ template <
     bool OUT_ROW_CONTIG,
     bool UPD_ROW_CONTIG,
     bool UPD_SCALAR,
-    int NWORK>
+    int NWORK,
+    int NDIM>
 [[kernel]] void slice_update_op_impl(
     const device T* updates [[buffer(0)]],
     device T* out [[buffer(1)]],
@@ -75,47 +76,62 @@ template <
     const constant int64_t& update_size [[buffer(5)]],
     const constant int64_t* output_strides [[buffer(6)]],
     const constant int64_t& output_offset [[buffer(7)]],
-    uint2 gid [[thread_position_in_grid]],
-    uint2 gsize [[threads_per_grid]]) {
+    uint3 gid [[thread_position_in_grid]],
+    uint3 gsize [[threads_per_grid]]) {
   Op op;
 
-  IdxT idx = (IdxT(gid.y) * gsize.x + gid.x) * NWORK;
+  IdxT idx = IdxT(gid.z) * gsize.y + gid.y * gsize.x + gid.x * NWORK;
   IdxT out_idx;
   IdxT update_idx;
 
   if constexpr (OUT_ROW_CONTIG) {
     out_idx = idx;
+  } else if constexpr (NDIM == 1) {
+    out_idx = NWORK * gid.x * output_strides[0];
+  } else if constexpr (NDIM == 2) {
+    out_idx = gid.y * output_strides[0] + NWORK * gid.x * output_strides[1];
+  } else if constexpr (NDIM == 3) {
+    out_idx = gid.z * output_strides[0] + gid.y * output_strides[1] +
+        NWORK * gid.x * output_strides[2];
   } else {
     out_idx = elem_to_loc<IdxT>(idx, update_shape, output_strides, update_ndim);
   }
 
-  if constexpr (!UPD_SCALAR) {
-    if constexpr (UPD_ROW_CONTIG) {
-      update_idx = idx;
-    } else {
-      update_idx =
-          elem_to_loc<IdxT>(idx, update_shape, update_strides, update_ndim);
-    }
-  } else {
+  if constexpr (UPD_SCALAR) {
     update_idx = 0;
+  } else if constexpr (UPD_ROW_CONTIG) {
+    update_idx = idx;
+  } else if constexpr (NDIM == 1) {
+    update_idx = NWORK * gid.x * update_strides[0];
+  } else if constexpr (NDIM == 2) {
+    update_idx = gid.y * update_strides[0] + NWORK * gid.x * update_strides[1];
+  } else if constexpr (NDIM == 3) {
+    update_idx = gid.z * update_strides[0] + gid.y * update_strides[1] +
+        NWORK * gid.x * update_strides[2];
+  } else {
+    update_idx =
+        elem_to_loc<IdxT>(idx, update_shape, update_strides, update_ndim);
   }
 
   out += output_offset;
 
-  for (int j = 0; j < NWORK && idx < update_size; j++) {
-    out[out_idx] = op(out[out_idx], updates[update_idx]);
-    idx++;
-
-    if constexpr (OUT_ROW_CONTIG) {
-      out_idx = idx;
-    } else {
-      out_idx += output_strides[update_ndim - 1];
+  if constexpr (OUT_ROW_CONTIG && (UPD_ROW_CONTIG || UPD_SCALAR)) {
+    for (int j = 0; j < NWORK; j++) {
+      out[out_idx] = op(out[out_idx], updates[update_idx]);
+      out_idx++;
+      if constexpr (!UPD_SCALAR) {
+        update_idx++;
+      }
     }
-
-    if constexpr (UPD_ROW_CONTIG) {
-      update_idx = idx;
-    } else if constexpr (!UPD_SCALAR) {
-      update_idx += update_strides[update_ndim - 1];
+  } else {
+    auto out_stride = output_strides[update_ndim - 1];
+    auto update_stride = update_strides[update_ndim - 1];
+    for (int j = 0; j < NWORK; j++) {
+      out[out_idx] = op(out[out_idx], updates[update_idx]);
+      out_idx += out_stride;
+      if constexpr (!UPD_SCALAR) {
+        update_idx += update_stride;
+      }
     }
   }
 }
