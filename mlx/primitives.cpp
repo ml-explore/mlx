@@ -3566,9 +3566,70 @@ std::vector<array> QQAddMM::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  // For now, throw an error - gradient computation for QQAddMM needs
-  // careful handling
-  throw std::runtime_error("QQAddMM::vjp NYI");
+  // primals: [c, x, w, (global_scale_x, global_scale_w if nvfp4)]
+  // For qqaddmm(c, x, w) = c + x @ w.T:
+  //   grad_c = cotan (summed to match c's shape)
+  //   grad_x = cotan @ w (same as qqmm)
+  //   grad_w = cotan.T @ x (same as qqmm)
+  bool is_nvfp4 = mode_ == QuantizationMode::Nvfp4;
+  assert(primals.size() == 3 || (is_nvfp4 && primals.size() == 5));
+
+  std::vector<array> vjps;
+  auto& cotan = cotangents[0];
+  auto& s = stream();
+  auto qmode = quantization_mode_to_string(mode_);
+
+  std::optional<array> cotan_amax = (primals.size() == 5)
+      ? std::make_optional(astype(max(abs(cotan, s), s), float32, s))
+      : std::nullopt;
+
+  auto get_primal_scale = [&](int idx) {
+    return (primals.size() == 5) ? std::make_optional(primals[idx])
+                                 : std::nullopt;
+  };
+
+  for (auto arg : argnums) {
+    if (arg == 0) { // gradient wrt c (bias)
+      // grad_c = sum(cotan) along batch dimensions to match c's shape
+      auto grad_c = cotan;
+      // Sum along all but the last dimension to match bias shape
+      if (cotan.ndim() > 1) {
+        std::vector<int> axes;
+        for (int i = 0; i < cotan.ndim() - 1; i++) {
+          axes.push_back(i);
+        }
+        grad_c = sum(cotan, axes, false, s);
+      }
+      vjps.push_back(grad_c);
+    } else if (arg == 1) { // gradient wrt x
+      // Same as QQMatmul: grad_x = cotan @ w
+      vjps.push_back(qqmm(
+          cotan,
+          swapaxes(primals[2], -1, -2, s),
+          {},
+          group_size_,
+          bits_,
+          qmode,
+          cotan_amax,
+          get_primal_scale(4), // global_scale_w
+          s));
+    } else if (arg == 2) { // gradient wrt w
+      // Same as QQMatmul: grad_w = cotan.T @ x
+      vjps.push_back(qqmm(
+          swapaxes(cotan, -1, -2, s),
+          swapaxes(primals[1], -1, -2, s),
+          {},
+          group_size_,
+          bits_,
+          qmode,
+          cotan_amax,
+          get_primal_scale(3), // global_scale_x
+          s));
+    } else {
+      vjps.push_back(zeros_like(primals[arg], s));
+    }
+  }
+  return vjps;
 }
 
 std::vector<array> QQAddMM::jvp(
