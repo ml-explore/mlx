@@ -1430,6 +1430,20 @@ MLX_API array qqmm(
     const std::optional<array> global_scale_w = std::nullopt,
     StreamOrDevice s = {});
 
+/** Compute D = C + (x @ w.T) with quantized x and w */
+MLX_API array qqaddmm(
+    array c, // bias to add
+    array x, // input activations
+    array w, // maybe quantized weights
+    const std::optional<array> w_scales = std::nullopt, // optional scales if w
+                                                        // is quantized
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
+    const std::string& mode = "nvfp4",
+    const std::optional<array> global_scale_x = std::nullopt,
+    const std::optional<array> global_scale_w = std::nullopt,
+    StreamOrDevice s = {});
+
 /** Convert an E4M3 float8 to the given floating point dtype. */
 MLX_API array from_fp8(array x, Dtype dtype, StreamOrDevice s = {});
 

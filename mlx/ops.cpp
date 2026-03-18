@@ -4525,6 +4525,82 @@ array qqmm(
   return out;
 }
 
+array qqaddmm(
+    array c,
+    array in_x,
+    array w,
+    std::optional<array> scales_w /* = std::nullopt */,
+    std::optional<int> group_size_ /* = std::nullopt */,
+    std::optional<int> bits_ /* = std::nullopt */,
+    const std::string& mode /* = "nvfp4" */,
+    const std::optional<array> global_scale_x /* = std::nullopt */,
+    const std::optional<array> global_scale_w /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  auto stream = to_stream(s);
+  auto qmode = string_to_quantization_mode(mode, "qqaddmm");
+
+  // cuBLAS block scaled matmul only supports nvfp4 and mxfp8
+  if (qmode != QuantizationMode::Nvfp4 && qmode != QuantizationMode::Mxfp8) {
+    std::ostringstream msg;
+    msg << "[qqaddmm] Only 'nvfp4' and 'mxfp8' quantization modes are supported but '"
+        << mode << "' was provided.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto [group_size, bits] =
+      quantization_params_from_mode(qmode, group_size_, bits_);
+
+  // Allow gemv
+  auto x = in_x;
+  if (x.ndim() == 1) {
+    x = expand_dims(x, 0, s);
+  } else if (w.ndim() == 2 && x.ndim() > 2) {
+    x = flatten(x, 0, -2, s);
+  }
+
+  // Validate inputs (reuse qqmm validation)
+  validate_qqmm_inputs(
+      x, w, scales_w, group_size, bits, global_scale_x, global_scale_w, qmode);
+
+  // Validate and extract shapes
+  auto [w_inner_dims, w_outer_dims] =
+      extract_qqmm_dims(x, w, scales_w, group_size, bits);
+
+  // Validate bias shape
+  auto out_shape = x.shape();
+  out_shape.back() = w_outer_dims;
+
+  // Broadcast c to output shape (similar to addmm)
+  auto c_broadcast_shape = broadcast_shapes(c.shape(), {out_shape.back()});
+  c = broadcast_to(c, c_broadcast_shape, s);
+  c = astype(c, x.dtype(), s);
+
+  // Build inputs: [c, x, w, (scales_w), (global_scale_x, global_scale_w)]
+  std::vector<array> inputs = {c, x, w};
+  if (scales_w.has_value()) {
+    inputs.push_back(*scales_w);
+  }
+  if (global_scale_x.has_value() && global_scale_w.has_value()) {
+    inputs.push_back(*global_scale_x);
+    inputs.push_back(*global_scale_w);
+  }
+
+  auto out = array(
+      std::move(out_shape),
+      x.dtype(),
+      std::make_shared<QQAddMM>(stream, group_size, bits, qmode),
+      std::move(inputs));
+
+  if (in_x.ndim() > 2) {
+    auto orig_shape = in_x.shape();
+    orig_shape.pop_back();
+    out = unflatten(out, 0, std::move(orig_shape), s);
+  } else if (in_x.ndim() == 1) {
+    out = squeeze(out, 0, s);
+  }
+  return out;
+}
+
 array pack_and_quantize(
     array& packed_w,
     const array& scales,

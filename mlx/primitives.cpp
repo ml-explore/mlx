@@ -3547,6 +3547,37 @@ std::vector<array> QQMatmul::jvp(
   throw std::runtime_error("QQMM::jvp NYI");
 }
 
+bool QQAddMM::is_equivalent(const Primitive& other) const {
+  const QQAddMM& qm_other = static_cast<const QQAddMM&>(other);
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
+      mode_ == qm_other.mode_;
+}
+
+std::vector<Shape> QQAddMM::output_shapes(const std::vector<array>& inputs) {
+  // inputs: [c, x, w, ...]
+  auto out_shape = inputs[1].shape();
+  int w_outer_dims = inputs[2].shape(-2);
+  out_shape.back() = w_outer_dims;
+  return {std::move(out_shape)};
+}
+
+std::vector<array> QQAddMM::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  // For now, throw an error - gradient computation for QQAddMM needs
+  // careful handling
+  throw std::runtime_error("QQAddMM::vjp NYI");
+}
+
+std::vector<array> QQAddMM::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("QQAddMM::jvp NYI");
+}
+
 std::pair<std::vector<array>, std::vector<int>> GatherQMM::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
