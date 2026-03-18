@@ -65,4 +65,91 @@ __global__ void scatter(
   Op{}(out + out_idx, upd[upd_loc]);
 }
 
+template <typename T, bool SrcContiguous, bool DstContiguous, typename IdxT>
+__global__ void masked_scatter(
+    const T* dst,
+    const bool* mask,
+    const int32_t* scatter_offsets,
+    const T* src,
+    T* out,
+    IdxT size,
+    IdxT src_batch_size,
+    IdxT mask_batch_size,
+    const __grid_constant__ Shape dst_shape,
+    const __grid_constant__ Strides dst_strides,
+    int32_t dst_ndim,
+    const __grid_constant__ Shape src_shape,
+    const __grid_constant__ Strides src_strides,
+    int32_t src_ndim) {
+  IdxT index = cg::this_grid().thread_rank();
+  if (index >= size) {
+    return;
+  }
+
+  T dst_val;
+  if constexpr (DstContiguous) {
+    dst_val = dst[index];
+  } else {
+    IdxT dst_loc =
+        elem_to_loc(index, dst_shape.data(), dst_strides.data(), dst_ndim);
+    dst_val = dst[dst_loc];
+  }
+
+  if (mask[index]) {
+    IdxT src_index = static_cast<IdxT>(scatter_offsets[index]);
+    if (src_index < src_batch_size) {
+      IdxT batch_idx = index / mask_batch_size;
+      if constexpr (SrcContiguous) {
+        out[index] = src[batch_idx * src_batch_size + src_index];
+      } else {
+        IdxT src_elem = batch_idx * src_batch_size + src_index;
+        IdxT src_loc = elem_to_loc(
+            src_elem, src_shape.data(), src_strides.data(), src_ndim);
+        out[index] = src[src_loc];
+      }
+      return;
+    }
+  }
+
+  out[index] = dst_val;
+}
+
+template <typename T, typename IdxT, int N_READS>
+__global__ void masked_scatter_vec_contiguous(
+    const T* dst,
+    const bool* mask,
+    const int32_t* scatter_offsets,
+    const T* src,
+    T* out,
+    IdxT size,
+    IdxT src_batch_size,
+    IdxT mask_batch_size) {
+  IdxT vec_index = cg::this_grid().thread_rank();
+  IdxT base = vec_index * N_READS;
+  if (base >= size) {
+    return;
+  }
+
+  auto out_vec = load_vector<N_READS>(dst, vec_index, size, static_cast<T>(0));
+  auto mask_vec = load_vector<N_READS>(mask, vec_index, size, false);
+  auto offset_vec = load_vector<N_READS>(scatter_offsets, vec_index, size, 0);
+
+#pragma unroll
+  for (int i = 0; i < N_READS; ++i) {
+    IdxT index = base + i;
+    if (index >= size) {
+      break;
+    }
+    if (mask_vec[i]) {
+      IdxT src_index = static_cast<IdxT>(offset_vec[i]);
+      if (src_index < src_batch_size) {
+        IdxT batch_idx = index / mask_batch_size;
+        out_vec[i] = src[batch_idx * src_batch_size + src_index];
+      }
+    }
+  }
+
+  store_vector<N_READS>(out, vec_index, out_vec, size);
+}
+
 } // namespace mlx::core::cu

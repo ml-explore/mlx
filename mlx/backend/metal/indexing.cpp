@@ -3,13 +3,15 @@
 #include <fmt/format.h>
 
 #include "mlx/backend/common/compiled.h"
+#include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/scan.h"
+#include "mlx/backend/gpu/slicing.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/jit/indexing.h"
 #include "mlx/backend/metal/kernels.h"
-#include "mlx/backend/metal/scan.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/dtype.h"
 #include "mlx/primitives.h"
@@ -34,6 +36,22 @@ std::pair<std::string, std::string> make_index_args(
     }
   }
   return {idx_args.str(), idx_arr.str()};
+}
+
+template <typename T>
+inline std::string make_op(typename T::ReduceType r, const std::string& dt) {
+  switch (r) {
+    case T::None:
+      return "None";
+    case T::Sum:
+      return fmt::format("Sum<{0}>", dt);
+    case T::Prod:
+      return fmt::format("Prod<{0}>", dt);
+    case T::Max:
+      return fmt::format("Max<{0}>", dt);
+    case T::Min:
+      return fmt::format("Min<{0}>", dt);
+  }
 }
 
 void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -307,27 +325,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     std::string out_type_str = get_type_string(out.dtype());
     std::string idx_type_str =
         nidx ? get_type_string(inputs[1].dtype()) : "bool";
-    std::string op_type;
-    switch (reduce_type_) {
-      case Scatter::None:
-        op_type = "None";
-        break;
-      case Scatter::Sum:
-        op_type = "Sum<{0}>";
-        break;
-      case Scatter::Prod:
-        op_type = "Prod<{0}>";
-        break;
-      case Scatter::Max:
-        op_type = "Max<{0}>";
-        break;
-      case Scatter::Min:
-        op_type = "Min<{0}>";
-        break;
-    }
-    if (reduce_type_ != Scatter::None) {
-      op_type = fmt::format(fmt::runtime(op_type), out_type_str);
-    }
+    std::string op_type = make_op<Scatter>(reduce_type_, out_type_str);
     auto [idx_args, idx_arr] = make_index_args(idx_type_str, nidx);
 
     kernel_source += fmt::format(
@@ -721,6 +719,153 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Dispatch
   auto group_dims = get_block_dims(total, 1, 1);
   MTL::Size grid_dims(total, 1, 1);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& upd = inputs[1];
+
+  if (upd.size() == 0) {
+    out.copy_shared_buffer(in);
+    return;
+  }
+
+  auto ctype = in.flags().contiguous && in.size() == in.data_size()
+      ? CopyType::Vector
+      : CopyType::General;
+  copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
+  auto [data_offset, out_strides] =
+      prepare_slice(out, start_indices_, strides_);
+
+  // Do copy
+  if (reduce_type_ == SliceUpdate::None) {
+    copy_gpu_inplace(
+        /* const array& src = */ upd,
+        /* array& dst = */ out,
+        /* const Shape& data_shape = */ upd.shape(),
+        /* const Strides& i_strides = */ upd.strides(),
+        /* const Strides& o_strides = */ out_strides,
+        /* int64_t i_offset = */ 0,
+        /* int64_t o_offset = */ data_offset,
+        /* CopyType ctype = */ CopyType::GeneralGeneral,
+        /* const Stream& s = */ stream());
+    return;
+  }
+
+  std::string op_name;
+  switch (reduce_type_) {
+    case SliceUpdate::None:
+      op_name = "none";
+      break;
+    case SliceUpdate::Sum:
+      op_name = "sum";
+      break;
+    case SliceUpdate::Prod:
+      op_name = "prod";
+      break;
+    case SliceUpdate::Max:
+      op_name = "max";
+      break;
+    case SliceUpdate::Min:
+      op_name = "min";
+      break;
+  }
+
+  bool upd_contiguous = upd.flags().row_contiguous;
+  bool upd_scalar = upd.data_size() == 1;
+
+  Shape shape;
+  std::vector<Strides> strides;
+  if (upd_scalar) {
+    std::tie(shape, strides) =
+        collapse_contiguous_dims(upd.shape(), {out_strides, out_strides});
+  } else {
+    std::tie(shape, strides) =
+        collapse_contiguous_dims(upd.shape(), {upd.strides(), out_strides});
+  }
+
+  int ndim_constant = shape.size();
+  if (ndim_constant > 3) {
+    ndim_constant = 0;
+  }
+
+  int nwork = 1;
+  if (shape.back() % 4 == 0) {
+    nwork = 4;
+  } else if (shape.back() % 2 == 0) {
+    nwork = 2;
+  }
+
+  auto [ds, rc, cc] = check_contiguity(shape, strides[1]);
+  bool out_contiguous = rc;
+  bool large = upd.size() > INT32_MAX;
+  std::string kernel_name = fmt::format(
+      "slice_update_{0}_{1}{2}_{3}_{4}_{5}_nw{6}_nd{7}",
+      op_name,
+      type_to_name(out),
+      large ? "int64_t" : "int",
+      out_contiguous ? "oc_true" : "oc_false",
+      upd_contiguous ? "updc_true" : "updc_false",
+      upd_scalar ? "upds_true" : "upds_false",
+      nwork,
+      ndim_constant);
+
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  auto lib = d.get_library(kernel_name, [&]() {
+    std::string kernel_source = metal::utils();
+    concatenate(kernel_source, metal::reduce_utils(), metal::scatter());
+
+    std::string out_type = get_type_string(out.dtype());
+    std::string op_type = make_op<SliceUpdate>(reduce_type_, out_type);
+
+    kernel_source += fmt::format(
+        slice_update_op_kernel,
+        kernel_name,
+        out_type,
+        large ? "int64_t" : "int",
+        op_type,
+        out_contiguous,
+        upd_contiguous,
+        upd_scalar,
+        nwork,
+        ndim_constant);
+
+    return kernel_source;
+  });
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kernel_name, lib);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Set all the buffers
+  int ndim = shape.size();
+  int64_t size = upd.size();
+  compute_encoder.set_input_array(upd, 0);
+  compute_encoder.set_output_array(out, 1);
+  compute_encoder.set_vector_bytes(shape, 2);
+  compute_encoder.set_vector_bytes(strides[0], 3);
+  compute_encoder.set_bytes(ndim, 4);
+  compute_encoder.set_bytes(size, 5);
+  compute_encoder.set_vector_bytes(strides[1], 6);
+  compute_encoder.set_bytes(data_offset, 7);
+
+  // Launch grid
+  int64_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
+  int64_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
+  int64_t rest = size / (dim0 * dim1);
+  dim0 /= nwork;
+
+  auto group_dims = get_block_dims(dim0, dim1, rest);
+  MTL::Size grid_dims(dim0, dim1, rest);
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 

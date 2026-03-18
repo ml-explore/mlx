@@ -1,18 +1,18 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/common/quantized.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/mxfp8_quantize.cuh"
 #include "mlx/backend/cuda/quantized/nvfp4_quantize.cuh"
 #include "mlx/backend/cuda/quantized/quantized.h"
-#include "mlx/backend/cuda/quantized/quantized_utils.cuh"
 #include "mlx/backend/cuda/vector_types.cuh"
 #include "mlx/dtype_utils.h"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
-#include <cuda_fp4.h>
-#include <cuda_fp8.h>
+#include <cutlass/float8.h>
+#include <cutlass/numeric_conversion.h>
 
 constexpr float F8E4M3_MAX = 448.0f;
 constexpr float F4E2M1_MAX = 6.0f;
@@ -24,12 +24,28 @@ template <int bits>
 struct Dequantize {
   __device__ float operator()(uint8_t x) {
     if constexpr (bits == 8) {
-      return float(*(__nv_fp8_e4m3*)(&x));
+      return float(*(cutlass::float_e4m3_t*)(&x));
     } else {
-      return float(*(__nv_fp4_e2m1*)(&x));
+      return float(*(cutlass::float_e2m1_t*)(&x));
     }
   }
 };
+
+template <typename T>
+__device__ __forceinline__ void absmax_x2(T& out, const T& x1, const T& x2) {
+  if constexpr (
+      (std::is_same<T, __nv_bfloat162>::value) ||
+      (std::is_same<T, __half2>::value)) {
+    T a = x1;
+    T b = x2;
+    out = __hmax2(__habs2(a), __habs2(b));
+  } else if constexpr (std::is_same<T, float2>::value) {
+    float2 a = x1;
+    float2 b = x2;
+    out.x = fmaxf(fabsf(a.x), fabsf(b.x));
+    out.y = fmaxf(fabsf(a.y), fabsf(b.y));
+  }
+}
 
 namespace cg = cooperative_groups;
 
@@ -45,7 +61,6 @@ __global__ void fp_quantize_dequantize(
   const float inv_scale_enc = use_global_scale ? 1.0f / scale_enc : 1.0f;
 
   using Tx2 = Vector2_t<T>;
-  using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
   auto block_size = cg::this_thread_block().dim_threads();
   auto block_idx = cg::this_thread_block().group_index();
@@ -79,30 +94,35 @@ __global__ void fp_quantize_dequantize(
   scale_dec_b /= bits == 4 ? F4E2M1_MAX : F8E4M3_MAX;
   scale_dec_b *= scale_enc;
   // Convert to mx scale or nv scale
-  using ScaleType =
-      std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
+  using ScaleType = std::conditional_t<
+      use_mx_scale,
+      cutlass::float_ue8m0_t,
+      cutlass::float_e4m3_t>;
   auto s = ScaleType(scale_dec_b);
   float scale_enc_b = scale_enc / float(s);
   float scale_dec = float(s) * inv_scale_enc;
   AlignedVector<T, group_size> w_hat;
 
 #pragma unroll
-  for (int i = 0; i < group_size / 4; i++) {
-    Tx4 w_Tx4 = *reinterpret_cast<Tx4*>(&w_tile[i * 4]);
-    float4 dq;
+  for (int i = 0; i < group_size / 8; i++) {
+    auto& w = *reinterpret_cast<cutlass::Array<T, 8>*>(&w_tile[i * 8]);
+    cutlass::NumericArrayConverter<float, T, 8> fp32_t;
+    auto scaled = fp32_t(w) * scale_enc_b;
+    cutlass::Array<float, 8> dq;
     if constexpr (bits == 8) {
-      uint32_t quantized_val =
-          scale_cvt_Tx4_to_fp8x4<T, USE_SR>(w_Tx4, scale_enc_b, rbits);
-      dq = dequant_fp8(quantized_val);
+      cutlass::NumericArrayConverter<cutlass::float_e4m3_t, float, 8> fp8_fp32;
+      auto quant = fp8_fp32(scaled);
+      cutlass::NumericArrayConverter<float, cutlass::float_e4m3_t, 8> fp32_fp8;
+      dq = fp32_fp8(quant);
     } else {
-      uint16_t quantized_val =
-          scale_cvt_Tx4_to_fp4x4<T, USE_SR>(w_Tx4, scale_enc_b, rbits);
-      dq = dequant_fp4(quantized_val);
+      cutlass::NumericArrayConverter<cutlass::float_e2m1_t, float, 8> fp4_fp32;
+      auto quant = fp4_fp32(scaled);
+      cutlass::NumericArrayConverter<float, cutlass::float_e2m1_t, 8> fp32_fp4;
+      dq = fp32_fp4(quant);
     }
-    w_hat[i * 4] = static_cast<T>(dq.x * scale_dec);
-    w_hat[i * 4 + 1] = static_cast<T>(dq.y * scale_dec);
-    w_hat[i * 4 + 2] = static_cast<T>(dq.z * scale_dec);
-    w_hat[i * 4 + 3] = static_cast<T>(dq.w * scale_dec);
+    cutlass::NumericArrayConverter<T, float, 8> t_fp32;
+    *reinterpret_cast<cutlass::Array<T, 8>*>(&w_hat[i * 8]) =
+        t_fp32(dq * scale_dec);
   }
   store_vector<group_size>(out, thread_idx, w_hat);
 }
@@ -157,10 +177,12 @@ __global__ void fp_quantize_rowwise(
   scale_dec_b /= bits == 4 ? F4E2M1_MAX : F8E4M3_MAX;
   scale_dec_b *= scale_enc;
   // Convert to mx scale or nv scale
-  using ScaleType =
-      std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
+  using ScaleType = std::conditional_t<
+      use_mx_scale,
+      cutlass::float_ue8m0_t,
+      cutlass::float_e4m3_t>;
   auto s = ScaleType(scale_dec_b);
-  uint8_t q_scale = s.__x;
+  uint8_t q_scale = s.storage;
   float scale_enc_b = scale_enc / float(s);
 
   scales[thread_idx] = q_scale;
@@ -256,11 +278,13 @@ __global__ void fp_quantize_columnwise(
     scale_dec_b /= bits == 4 ? F4E2M1_MAX : F8E4M3_MAX;
     scale_dec_b *= scale_enc;
     // Convert to mx scale or nv scale
-    using ScaleType =
-        std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
+    using ScaleType = std::conditional_t<
+        use_mx_scale,
+        cutlass::float_ue8m0_t,
+        cutlass::float_e4m3_t>;
     auto s = ScaleType(scale_dec_b);
     float scale_enc_b = scale_enc / float(s);
-    scales_smem[tidx][tidy] = s.__x;
+    scales_smem[tidx][tidy] = s.storage;
 
     int shared_idx = tidx * padded_local_cols + tidy * bytes_per_group;
 
@@ -345,8 +369,10 @@ __global__ void fp_dequantize(
   }
 
   size_t gindex = oindex / group_size;
-  using ScaleType =
-      std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
+  using ScaleType = std::conditional_t<
+      use_mx_scale,
+      cutlass::float_ue8m0_t,
+      cutlass::float_e4m3_t>;
   auto scale = float(((ScaleType*)(scales))[gindex]) * inv_scale_enc;
 
   out += oindex;

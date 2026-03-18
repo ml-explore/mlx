@@ -66,8 +66,10 @@ Device::~Device() {
 
 void Device::make_current() {
   // We need to set/get current CUDA device very frequently, cache it to reduce
-  // actual calls of CUDA APIs.
-  static thread_local int current = 0;
+  // actual calls of CUDA APIs. Use -1 as sentinel so the first call on each
+  // new thread always calls cudaSetDevice (which establishes the CUDA primary
+  // context). Without this, device 0 would never get set on a new thread.
+  static thread_local int current = -1;
   if (current != device_) {
     CHECK_CUDA_ERROR(cudaSetDevice(device_));
     current = device_;
@@ -459,6 +461,24 @@ void CommandEncoder::add_graph_node(cudaGraph_t child) {
   is_graph_updatable_ &= is_updatable;
   CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&node, graph_, NULL, 0, child));
   insert_graph_dependencies(GraphNode{node, sub_graph_key});
+}
+
+void CommandEncoder::add_graph_node(
+    cudaGraph_t child,
+    const std::string& subgraph_key,
+    bool is_updatable) {
+  if (!use_cuda_graphs()) {
+    node_count_++;
+    CudaGraphExec graph_exec;
+    graph_exec.instantiate(child);
+    device_.make_current();
+    CHECK_CUDA_ERROR(cudaGraphLaunch(graph_exec, stream()));
+    return;
+  }
+  is_graph_updatable_ &= is_updatable;
+  cudaGraphNode_t node;
+  CHECK_CUDA_ERROR(cudaGraphAddChildGraphNode(&node, graph_, NULL, 0, child));
+  insert_graph_dependencies(GraphNode{node, subgraph_key});
 }
 
 bool CommandEncoder::needs_commit() {

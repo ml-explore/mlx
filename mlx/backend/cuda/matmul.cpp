@@ -370,4 +370,54 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   throw std::runtime_error("NYI");
 }
 
+void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("SegmentedMM::eval_gpu");
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  assert(inputs.size() == 3);
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
+  auto& segments_pre = inputs[2];
+
+  // Return zeros if output is empty or either input is empty.
+  if (out.size() == 0 || a_pre.size() == 0 || b_pre.size() == 0) {
+    array zero(0, a_pre.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  int M = a_pre.shape(-2);
+  int N = b_pre.shape(-1);
+  int num_segments = segments_pre.size() / 2;
+
+  auto [a_transposed, lda, a] = check_transpose(encoder, s, a_pre);
+  auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
+  auto segments = [&] {
+    if (segments_pre.flags().row_contiguous) {
+      return segments_pre;
+    }
+    array copy = contiguous_copy_gpu(segments_pre, s);
+    encoder.add_temporary(copy);
+    return copy;
+  }();
+
+  cutlass_segmented_mm(
+      a_transposed,
+      lda,
+      b_transposed,
+      ldb,
+      num_segments,
+      M,
+      N,
+      a,
+      b,
+      segments,
+      out,
+      encoder);
+}
+
 } // namespace mlx::core

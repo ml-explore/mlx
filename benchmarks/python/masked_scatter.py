@@ -1,5 +1,6 @@
 import math
 import os
+import platform
 import subprocess
 import time
 from copy import copy
@@ -17,9 +18,6 @@ RESULTS_DIR = "./results"
 if not os.path.isdir(RESULTS_DIR):
     os.mkdir(RESULTS_DIR)
 
-DEVICE_NAME = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])
-DEVICE_NAME = DEVICE_NAME.decode("utf-8").strip("\n")
-
 TORCH_DEVICE = torch.device(
     "mps"
     if torch.backends.mps.is_available()
@@ -27,11 +25,36 @@ TORCH_DEVICE = torch.device(
 )
 
 
+def get_device_name():
+    if TORCH_DEVICE.type == "cuda":
+        try:
+            out = subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                stderr=subprocess.DEVNULL,
+            )
+            return out.decode("utf-8").splitlines()[0].strip()
+        except Exception:
+            return "CUDA_GPU"
+    if TORCH_DEVICE.type == "mps":
+        try:
+            out = subprocess.check_output(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                stderr=subprocess.DEVNULL,
+            )
+            return out.decode("utf-8").strip()
+        except Exception:
+            return "Apple_Silicon"
+    return platform.processor() or platform.machine() or "CPU"
+
+
+DEVICE_NAME = get_device_name()
+
+
 N_WARMUP = 5
 N_ITER_BENCH = 50
 N_ITER_FUNC = 20
 
-VECTOR_LENGTHS = [4096 * (2**i) for i in range(10)]
+VECTOR_LENGTHS = [4096 * (2**i) for i in range(12)]
 MASK_DENSITIES = [0.01, 0.1, 0.25, 0.5]
 D_TYPES = ("float32", "float16")
 
@@ -202,9 +225,10 @@ def main():
         )
         output_path = os.path.join(
             RESULTS_DIR,
-            f"{DEVICE_NAME.replace(' ', '_')}_masked_scatter_{dtype}.pdf",
+            f"{DEVICE_NAME.replace(' ', '_')}_masked_scatter_{dtype}.png",
         )
         fig.savefig(output_path)
+        print(f"Saved benchmark image: {output_path}")
         plt.close(fig)
 
 

@@ -25,19 +25,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     biases = inputs[3];
   }
 
-  auto call_qmm_sm90 = [&]() {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    qmm_sm90(x, w, scales, *biases, out, bits_, group_size_, encoder, s);
-  };
-  auto call_fp_qmv = [&]() {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    fp_qmv(x, w, scales, out, bits_, group_size_, encoder, s);
-  };
-  auto call_qmv = [&]() {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    qmv(x, w, scales, biases, out, bits_, group_size_, mode_, encoder);
-  };
-
   auto supports = [&](auto&& f) {
     return f(
         x,
@@ -52,34 +39,50 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         encoder.device());
   };
   bool can_use_qmm_sm90 = supports(supports_qmm_sm90);
+  bool can_use_qmm_sm80 = supports(supports_qmm_sm80);
   bool can_use_fp_qmv = supports(supports_fp_qmv);
-  bool can_use_qmv = supports(supports_qmv);
+  bool can_use_qmv = supports(supports_qmv) || can_use_fp_qmv;
+
+  auto call_qmm_sm90 = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    qmm_sm90(x, w, scales, *biases, out, bits_, group_size_, encoder, s);
+  };
+  auto call_qmm_sm80 = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    qmm_sm80(x, w, scales, *biases, out, bits_, group_size_, encoder);
+  };
+  auto call_qmv = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    if (can_use_fp_qmv) {
+      fp_qmv(x, w, scales, out, bits_, group_size_, encoder, s);
+    } else {
+      qmv(x, w, scales, biases, out, bits_, group_size_, mode_, encoder);
+    }
+  };
 
   int M = out.shape(-2);
   int N = out.shape(-1);
   int K = x.shape(-1);
   int B = out.size() / (M * N);
-  bool prefer_qmv = M == 1 && B == 1 && N <= 16384 && K <= 16384;
 
   if (can_use_qmm_sm90) {
-    if (prefer_qmv) {
-      if (can_use_fp_qmv) {
-        call_fp_qmv();
-        return;
-      }
-      if (can_use_qmv) {
-        call_qmv();
-        return;
-      }
+    if (can_use_qmv && (M == 1 && B == 1 && N <= 16384 && K <= 16384)) {
+      call_qmv();
+    } else {
+      call_qmm_sm90();
     }
-    call_qmm_sm90();
     return;
   }
 
-  if (can_use_fp_qmv) {
-    call_fp_qmv();
+  if (can_use_qmm_sm80) {
+    if (can_use_qmv && (M * B < 8)) {
+      call_qmv();
+    } else {
+      call_qmm_sm80();
+    }
     return;
   }
+
   if (can_use_qmv) {
     call_qmv();
     return;
@@ -88,7 +91,13 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   throw std::runtime_error(
       fmt::format(
           "[quantized_matmul] No implementation for "
+          "problem shape: {}x{}x{}x{}, transpose: {}, "
           "activation: {}, bits: {}, group size: {}, mode: \"{}\".",
+          M,
+          N,
+          K,
+          B,
+          transpose_,
           dtype_to_string(x.dtype()),
           bits_,
           group_size_,

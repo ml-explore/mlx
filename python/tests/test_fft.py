@@ -91,6 +91,17 @@ class TestFFT(mlx_tests.MLXTestCase):
             np_op = getattr(np.fft, op)
             self.check_mx_np(mx_op, np_op, x, axes=ax, s=s)
 
+        # Explicitly exercise transposed layouts and axes that are not
+        # physically last in memory order.
+        xt = np.transpose(a, (1, 2, 0))
+        self.check_mx_np(mx.fft.fftn, np.fft.fftn, xt, axes=(2, 0))
+        self.check_mx_np(mx.fft.ifftn, np.fft.ifftn, xt, axes=(2, 0))
+
+        rt = np.transpose(r, (1, 2, 0))
+        self.check_mx_np(mx.fft.rfftn, np.fft.rfftn, rt, axes=(2, 0))
+        irfft_in = np.ascontiguousarray(np.fft.rfftn(rt, axes=(2, 0)))
+        self.check_mx_np(mx.fft.irfftn, np.fft.irfftn, irfft_in, axes=(2, 0))
+
     def _run_ffts(self, shape, atol=1e-4, rtol=1e-4):
         np.random.seed(9)
 

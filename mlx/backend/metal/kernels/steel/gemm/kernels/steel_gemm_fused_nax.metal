@@ -22,6 +22,10 @@
 
 #define instantiate_gemm_shapes_helper(iname, itype, oname, otype) \
     instantiate_gemm_transpose_helper(iname, itype, oname, otype,  64,  64, 256, 2, 2) \
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype,  64, 128,  64, 2, 4) \
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype,  64, 128, 256, 2, 4) \
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 128, 128,  64, 4, 4) \
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 128, 128, 256, 4, 4) \
     instantiate_gemm_transpose_helper(iname, itype, oname, otype, 128, 128, 512, 4, 4)
 
 instantiate_gemm_shapes_helper(float16, half, float16, half);

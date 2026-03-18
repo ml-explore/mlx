@@ -8,6 +8,7 @@
 #include <vector>
 
 #define __MLX_HALF_NAN__ 0x7D00
+#define __MLX_HALF_ONE__ 0x3C00
 
 namespace mlx::core {
 
@@ -29,8 +30,8 @@ struct _MLX_Float16 {
 
   // Appease std::vector<bool> for being special
   _MLX_Float16& operator=(std::vector<bool>::reference x) {
-    bits_ = x;
-    return *this;
+    bits_ = (x) ? __MLX_HALF_ONE__ : 0;
+    return (*this);
   }
 
   _MLX_Float16& operator=(const float& x) {

@@ -367,6 +367,104 @@ TEST_CASE("test slice update") {
   CHECK(array_equal(slice(out, {4}, {8}, {1}), y).item<bool>());
 }
 
+TEST_CASE("test slice update add") {
+  // Basic slice update add
+  auto x = zeros({8}, float32);
+  auto y = ones({4}, float32);
+  auto out = slice_update_add(x, y, {2}, {6}, {1});
+  auto expected = array({0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Overlapping slice update add
+  x = zeros({8}, float32);
+  y = ones({4}, float32);
+  out = slice_update_add(x, y, {2}, {6}, {1});
+  out = slice_update_add(out, y, {4}, {8}, {1});
+  expected = array({0.0f, 0.0f, 1.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Slice update add with stride
+  x = zeros({10}, float32);
+  y = ones({3}, float32);
+  out = slice_update_add(x, y, {1}, {7}, {2});
+  expected =
+      array({0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // 2D slice update add
+  x = zeros({4, 4}, float32);
+  y = ones({2, 2}, float32);
+  out = slice_update_add(x, y, {1, 1}, {3, 3}, {1, 1});
+  expected = reshape(
+      array(
+          {0.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           1.0f,
+           1.0f,
+           0.0f,
+           0.0f,
+           1.0f,
+           1.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           0.0f},
+          {4, 4}),
+      {4, 4});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Overlapping 2D slice update add
+  x = zeros({4, 4}, float32);
+  y = ones({2, 2}, float32);
+  out = slice_update_add(x, y, {0, 0}, {2, 2}, {1, 1});
+  out = slice_update_add(out, y, {1, 1}, {3, 3}, {1, 1});
+  expected = reshape(
+      array(
+          {1.0f,
+           1.0f,
+           0.0f,
+           0.0f,
+           1.0f,
+           2.0f,
+           1.0f,
+           0.0f,
+           0.0f,
+           1.0f,
+           1.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           0.0f},
+          {4, 4}),
+      {4, 4});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Slice update add with different dtypes
+  x = zeros({4}, int32);
+  y = ones({2}, int32);
+  out = slice_update_add(x, y, {1}, {3}, {1});
+  expected = array({0, 1, 1, 0});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Empty slice update add
+  x = arange(4, float32);
+  y = array({});
+  out = slice_update_add(x, y, {0}, {0}, {1});
+  CHECK(array_equal(out, x).item<bool>());
+
+  // Full array slice update add
+  x = ones({4}, float32);
+  y = full({4}, 2.0f, float32);
+  out = slice_update_add(x, y, {0}, {4}, {1});
+  expected = array({3.0f, 3.0f, 3.0f, 3.0f});
+  CHECK(array_equal(out, expected).item<bool>());
+}
+
 TEST_CASE("test dynamic slice") {
   auto src = reshape(arange(6), {2, 3});
   CHECK_THROWS(slice(src, array({1, 0, 0}), {0, 0, 0}, {1, 1}));
@@ -414,6 +512,10 @@ TEST_CASE("test dynamic slice update") {
 TEST_CASE("test split") {
   array x = array(1);
   CHECK_THROWS(split(x, 0));
+
+  // Regression: non-scalar split with num_splits <= 0
+  CHECK_THROWS(split(array({0, 1, 2, 3, 4, 5}), 0));
+  CHECK_THROWS(split(array({0, 1, 2, 3, 4, 5}), -1));
 
   x = array({3});
   CHECK_EQ(split(x, 1)[0].item<int>(), 3);
@@ -2437,11 +2539,6 @@ TEST_CASE("test scatter") {
 }
 
 TEST_CASE("test masked_scatter") {
-  if (cu::is_available()) {
-    INFO("Skipping masked_scatter cuda ops tests");
-    return;
-  }
-
   // Wrong mask dtype
   CHECK_THROWS(masked_scatter(array({1, 2}), array({1, 2}), array({1, 2})));
 

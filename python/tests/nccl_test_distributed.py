@@ -196,6 +196,107 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             ),
         )
 
+    def test_fsdp_ddp_apply_gradients(self):
+        world = mx.distributed.init()
+        N = world.size()
+        S = 4
+        fsdp_group = world.split(world.rank() // S)
+        dp_group = world.split(world.rank() % S)
+
+        self.assertEqual(fsdp_group.size(), S)
+        self.assertEqual(dp_group.size(), N // S)
+
+        params = {
+            "w1": mx.ones((S * 10, 8)),
+            "w2": mx.ones((S * 20,)),
+        }
+        grads = {
+            "w1": mx.ones((S * 10, 8)) * 0.1,
+            "w2": mx.ones((S * 20,)) * 0.1,
+        }
+
+        optimizer = optim.SGD(learning_rate=0.1)
+        updated = fsdp_apply_gradients(
+            grads,
+            params,
+            optimizer,
+            fsdp_group=fsdp_group,
+            dp_group=dp_group,
+        )
+        mx.eval(updated)
+
+        self.assertEqual(updated["w1"].shape, (S * 10, 8))
+        self.assertEqual(updated["w2"].shape, (S * 20,))
+
+        self.assertTrue(
+            mx.allclose(updated["w1"], mx.ones((S * 10, 8)) * 0.99, atol=1e-6)
+        )
+        self.assertTrue(
+            mx.allclose(updated["w2"], mx.ones((S * 20,)) * 0.99, atol=1e-6)
+        )
+
+        grads_big = {
+            "w1": mx.ones((S * 10, 8)) * 10.0,
+            "w2": mx.ones((S * 20,)) * 10.0,
+        }
+
+        optimizer2 = optim.SGD(learning_rate=0.1)
+        clipped, grad_norm = fsdp_apply_gradients(
+            grads_big,
+            params,
+            optimizer2,
+            fsdp_group=fsdp_group,
+            dp_group=dp_group,
+            max_norm=1.0,
+        )
+        mx.eval(clipped, grad_norm)
+
+        self.assertIsNotNone(grad_norm)
+        expected_norm = mx.sqrt((S * 10 * 8 + S * 20) * 100.0)
+        self.assertTrue(mx.allclose(grad_norm, expected_norm, atol=1e-4, rtol=1e-4))
+        self.assertEqual(clipped["w1"].shape, (S * 10, 8))
+        self.assertEqual(clipped["w2"].shape, (S * 20,))
+
+        scale = 1.0 / expected_norm
+        expected_update = 1.0 - 0.1 * 10.0 * scale
+        self.assertTrue(
+            mx.allclose(
+                clipped["w1"],
+                mx.ones((S * 10, 8)) * expected_update,
+                atol=1e-4,
+                rtol=1e-4,
+            )
+        )
+        self.assertTrue(
+            mx.allclose(
+                clipped["w2"],
+                mx.ones((S * 20,)) * expected_update,
+                atol=1e-4,
+                rtol=1e-4,
+            )
+        )
+
+        params_eq = {"w": mx.ones((S * 4,))}
+        grads_eq = {"w": mx.ones((S * 4,)) * 0.5}
+
+        optimizer_hybrid = optim.SGD(learning_rate=0.1)
+        updated_hybrid = fsdp_apply_gradients(
+            grads_eq,
+            params_eq,
+            optimizer_hybrid,
+            fsdp_group=fsdp_group,
+            dp_group=dp_group,
+        )
+
+        optimizer_ddp = optim.SGD(learning_rate=0.1)
+        avg_grads = average_gradients(grads_eq)
+        updated_ddp = optimizer_ddp.apply_gradients(avg_grads, params_eq)
+        mx.eval(updated_hybrid, updated_ddp)
+
+        self.assertTrue(
+            mx.allclose(updated_hybrid["w"], updated_ddp["w"], atol=1e-6, rtol=1e-4),
+        )
+
     def test_fsdp_peak_memory(self):
         world = mx.distributed.init()
         N = world.size()

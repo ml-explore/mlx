@@ -1,14 +1,16 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/common/quantized.h"
 #include "mlx/backend/cuda/device/utils.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
-#include "mlx/backend/cuda/quantized/quantized_utils.cuh"
 #include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/dtype_utils.h"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#include <cutlass/float8.h>
+#include <cutlass/numeric_conversion.h>
 
 namespace mlx::core {
 
@@ -76,8 +78,10 @@ __device__ void fp_qmv_impl(
   vec += g_idx.x * cols;
   out += g_idx.x * rows;
 
-  using ScaleType =
-      std::conditional_t<use_mx_scale, __nv_fp8_e8m0, __nv_fp8_e4m3>;
+  using ScaleType = std::conditional_t<
+      use_mx_scale,
+      cutlass::float_ue8m0_t,
+      cutlass::float_e4m3_t>;
   auto scales = (ScaleType*)(scales_);
   auto packed_cols = cols / vals_per_item;
 
@@ -102,35 +106,41 @@ __device__ void fp_qmv_impl(
         for (int j = 0; j < n_per_step; ++j) {
           int k = n_per_step * i + j;
           if constexpr (bits == 8) {
-            auto v = dequant_fp8(local_mat[k]);
+            cutlass::NumericArrayConverter<float, cutlass::float_e4m3_t, 4>
+                converter;
+            auto v = converter(
+                *reinterpret_cast<cutlass::Array<cutlass::float_e4m3_t, 4>*>(
+                    &local_mat[k]));
             local_sum.x +=
-                v.x * static_cast<float>(local_vec[vals_per_item * k]);
+                v[0] * static_cast<float>(local_vec[vals_per_item * k]);
             local_sum.x +=
-                v.y * static_cast<float>(local_vec[vals_per_item * k + 1]);
+                v[1] * static_cast<float>(local_vec[vals_per_item * k + 1]);
             local_sum.y +=
-                v.z * static_cast<float>(local_vec[vals_per_item * k + 2]);
+                v[2] * static_cast<float>(local_vec[vals_per_item * k + 2]);
             local_sum.y +=
-                v.w * static_cast<float>(local_vec[vals_per_item * k + 3]);
+                v[3] * static_cast<float>(local_vec[vals_per_item * k + 3]);
           } else {
-            auto v = dequant_fp4(local_mat[k]);
+            cutlass::NumericArrayConverter<float, cutlass::float_e2m1_t, 8>
+                converter;
+            auto v = converter(
+                *reinterpret_cast<cutlass::Array<cutlass::float_e2m1_t, 8>*>(
+                    &local_mat[k]));
             local_sum.x +=
-                v.x * static_cast<float>(local_vec[vals_per_item * k]);
+                v[0] * static_cast<float>(local_vec[vals_per_item * k]);
             local_sum.y +=
-                v.y * static_cast<float>(local_vec[vals_per_item * k + 1]);
+                v[1] * static_cast<float>(local_vec[vals_per_item * k + 1]);
             local_sum.x +=
-                v.z * static_cast<float>(local_vec[vals_per_item * k + 2]);
+                v[2] * static_cast<float>(local_vec[vals_per_item * k + 2]);
             local_sum.y +=
-                v.w * static_cast<float>(local_vec[vals_per_item * k + 3]);
-
-            v = dequant_fp4(local_mat[k] >> 16);
+                v[3] * static_cast<float>(local_vec[vals_per_item * k + 3]);
             local_sum.x +=
-                v.x * static_cast<float>(local_vec[vals_per_item * k + 4]);
+                v[4] * static_cast<float>(local_vec[vals_per_item * k + 4]);
             local_sum.y +=
-                v.y * static_cast<float>(local_vec[vals_per_item * k + 5]);
+                v[5] * static_cast<float>(local_vec[vals_per_item * k + 5]);
             local_sum.x +=
-                v.z * static_cast<float>(local_vec[vals_per_item * k + 6]);
+                v[6] * static_cast<float>(local_vec[vals_per_item * k + 6]);
             local_sum.y +=
-                v.w * static_cast<float>(local_vec[vals_per_item * k + 7]);
+                v[7] * static_cast<float>(local_vec[vals_per_item * k + 7]);
           }
         }
         sum += (local_sum.x + local_sum.y) * float(scales[i]);

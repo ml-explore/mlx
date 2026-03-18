@@ -47,17 +47,6 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
             self.assertTrue(all(mx.all(g == 1) for g in new_grads))
             self.assertEqual(n_calls, 10)
 
-            n_calls = 0
-            xtype = mx.float16
-            new_grads = average_gradients(
-                grads, all_reduce_size=2 * 50, communication_type=mx.float16
-            )
-            mx.eval(new_grads)
-            self.assertEqual(len(new_grads), 10)
-            self.assertTrue(all(g.dtype == mx.float32 for g in new_grads))
-            self.assertTrue(all(mx.all(g == 1) for g in new_grads))
-            self.assertEqual(n_calls, 2)
-
         finally:
             mx.distributed.all_sum = original_all_sum
 

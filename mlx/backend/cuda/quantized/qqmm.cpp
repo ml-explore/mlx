@@ -108,7 +108,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     const array& w = inputs[1];
     const array& scales = inputs[2];
-    fp_qmv(xhat, w, scales, out, bits_, group_size_, encoder, s);
+    qmv(xhat, w, scales, std::nullopt, out, bits_, group_size_, mode_, encoder);
     return;
   }
 

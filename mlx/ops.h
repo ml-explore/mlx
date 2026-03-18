@@ -224,6 +224,78 @@ MLX_API array slice_update(
     std::vector<int> axes,
     StreamOrDevice s = {});
 
+/** Slice update and add updates to given slice. */
+MLX_API array slice_update_add(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    Shape strides,
+    StreamOrDevice s = {});
+
+/** Slice update and add updates to given slice with stride 1 in each dimension.
+ */
+MLX_API array slice_update_add(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    StreamOrDevice s = {});
+
+/** Slice update and prod updates to given slice. */
+MLX_API array slice_update_prod(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    Shape strides,
+    StreamOrDevice s = {});
+
+/** Slice update and prod updates to given slice with stride 1 in each
+ * dimension. */
+MLX_API array slice_update_prod(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    StreamOrDevice s = {});
+
+/** Slice update and max updates to given slice. */
+MLX_API array slice_update_max(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    Shape strides,
+    StreamOrDevice s = {});
+
+/** Slice update and max updates to given slice with stride 1 in each dimension.
+ */
+MLX_API array slice_update_max(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    StreamOrDevice s = {});
+
+/** Slice update and min updates to given slice. */
+MLX_API array slice_update_min(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    Shape strides,
+    StreamOrDevice s = {});
+
+/** Slice update and min updates to given slice with stride 1 in each dimension.
+ */
+MLX_API array slice_update_min(
+    const array& src,
+    const array& update,
+    Shape start,
+    Shape stop,
+    StreamOrDevice s = {});
+
 /** Split an array into sub-arrays along a given axis. */
 MLX_API std::vector<array>
 split(const array& a, int num_splits, int axis, StreamOrDevice s = {});

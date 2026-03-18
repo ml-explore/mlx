@@ -193,6 +193,21 @@ TEST_CASE("test fftn") {
     CHECK_EQ(y.shape(), Shape{5, 8});
     CHECK_EQ(y.dtype(), float32);
   }
+
+  // Test non-contiguous layouts and axes that are not physically last.
+  {
+    x = astype(
+        transpose(reshape(arange(24, float32), {2, 3, 4}), {1, 2, 0}),
+        complex64);
+    auto y = fft::fftn(x, {2, 0});
+    CHECK_EQ(y.shape(), x.shape());
+    CHECK(allclose(fft::ifftn(y, {2, 0}), x, 1e-5, 1e-5).item<bool>());
+
+    auto r = transpose(reshape(arange(60, float32), {3, 4, 5}), {1, 2, 0});
+    auto yr = fft::rfftn(r, {2, 0});
+    CHECK_EQ(yr.shape(), Shape{3, 5, 3});
+    CHECK(allclose(fft::irfftn(yr, {2, 0}), r, 1e-5, 1e-5).item<bool>());
+  }
 }
 
 TEST_CASE("test fft with provided shape") {

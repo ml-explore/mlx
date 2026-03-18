@@ -1863,7 +1863,7 @@ std::vector<array> Equal::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> Erf::vjp(
@@ -2530,7 +2530,7 @@ std::vector<array> Greater::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> GreaterEqual::vmap(
@@ -2557,7 +2557,7 @@ std::vector<array> GreaterEqual::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> Imag::vjp(
@@ -2614,7 +2614,7 @@ std::vector<array> Less::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> LessEqual::vmap(
@@ -2641,7 +2641,7 @@ std::vector<array> LessEqual::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> Log::vjp(
@@ -3188,7 +3188,7 @@ std::vector<array> NotEqual::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
-  return {zeros(shape, bool_, stream())};
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> Pad::vjp(
@@ -4793,10 +4793,17 @@ std::pair<std::vector<array>, std::vector<int>> SliceUpdate::vmap(
 
   // No vmapping needed
   if (src_ax == -1 && upd_ax == -1) {
-    return {{slice_update(src, upd, start, stop, strides, stream())}, {-1}};
+    return {
+        {array(
+            src.shape(),
+            src.dtype(),
+            std::make_shared<SliceUpdate>(
+                stream(), reduce_type_, start, stop, strides),
+            {src, upd})},
+        {-1}};
   }
 
-  // Broadcast src
+  // Broadcast Src
   if (src_ax == -1) {
     src = expand_dims(src, upd_ax, stream());
     auto shape = src.shape();
@@ -4819,37 +4826,99 @@ std::pair<std::vector<array>, std::vector<int>> SliceUpdate::vmap(
   stop.insert(stop.begin() + src_ax, src.shape(src_ax));
   strides.insert(strides.begin() + src_ax, 1);
 
-  return {{slice_update(src, upd, start, stop, strides, stream())}, {src_ax}};
+  return {
+      {array(
+          src.shape(),
+          src.dtype(),
+          std::make_shared<SliceUpdate>(
+              stream(), reduce_type_, start, stop, strides),
+          {src, upd})},
+      {src_ax}};
 }
 
 std::vector<array> SliceUpdate::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>&) {
+    const std::vector<array>& outputs) {
   // Check inputs
   assert(primals.size() == 2);
 
-  auto& cotan = cotangents[0];
-  auto& upd = primals[1];
+  const array& result = outputs[0];
+  const array& values = primals[0];
+  const array& updates = primals.back();
+  const array& cotan = cotangents[0];
 
   std::vector<array> vjps;
 
   for (int num : argnums) {
     // Vjp for source
     if (num == 0) {
-      vjps.push_back(slice_update(
-          cotan,
-          zeros_like(upd, stream()),
-          start_indices_,
-          end_indices_,
-          strides_,
-          stream()));
+      switch (reduce_type_) {
+        case SliceUpdate::None:
+          vjps.push_back(array(
+              cotan.shape(),
+              cotan.dtype(),
+              std::make_shared<SliceUpdate>(
+                  stream(),
+                  reduce_type_,
+                  start_indices_,
+                  end_indices_,
+                  strides_),
+              {cotan, zeros_like(updates, stream())}));
+          break;
+        case SliceUpdate::Sum:
+          vjps.push_back(cotan);
+          break;
+        case SliceUpdate::Max:
+        case SliceUpdate::Min:
+          vjps.push_back(where(
+              equal(result, values, stream()),
+              cotan,
+              array(0, cotan.dtype()),
+              stream()));
+          break;
+        case SliceUpdate::Prod:
+          vjps.push_back(array(
+              cotan.shape(),
+              cotan.dtype(),
+              std::make_shared<SliceUpdate>(
+                  stream(),
+                  reduce_type_,
+                  start_indices_,
+                  end_indices_,
+                  strides_),
+              {cotan, updates}));
+          break;
+      }
     }
     // Vjp fpr updates
     else {
-      vjps.push_back(
-          slice(cotan, start_indices_, end_indices_, strides_, stream()));
+      auto sliced_cotan =
+          slice(cotan, start_indices_, end_indices_, strides_, stream());
+      switch (reduce_type_) {
+        case SliceUpdate::None:
+        case SliceUpdate::Sum:
+          vjps.emplace_back(std::move(sliced_cotan));
+          break;
+        case SliceUpdate::Max:
+        case SliceUpdate::Min: {
+          auto sliced_result =
+              slice(result, start_indices_, end_indices_, strides_, stream());
+          vjps.push_back(where(
+              equal(sliced_result, updates, stream()),
+              sliced_cotan,
+              array(0, cotan.dtype()),
+              stream()));
+          break;
+        }
+        case SliceUpdate::Prod: {
+          auto sliced_values =
+              slice(values, start_indices_, end_indices_, strides_, stream());
+          vjps.push_back(multiply(sliced_cotan, sliced_values, stream()));
+          break;
+        }
+      }
     }
   }
 
@@ -4862,18 +4931,45 @@ std::vector<array> SliceUpdate::jvp(
     const std::vector<int>& argnums) {
   // Check inputs
   assert(primals.size() == 2);
-  return {slice_update(
-      tangents[0],
-      tangents[1],
-      start_indices_,
-      end_indices_,
-      strides_,
-      stream())};
+
+  if (argnums.size() != 2) {
+    throw std::runtime_error(
+        "[SliceUpdate] JVP for one argument not implemented yet.");
+  }
+
+  auto result_tan = tangents[0];
+
+  switch (reduce_type_) {
+    case SliceUpdate::None:
+      return {array(
+          result_tan.shape(),
+          result_tan.dtype(),
+          std::make_shared<SliceUpdate>(
+              stream(), reduce_type_, start_indices_, end_indices_, strides_),
+          {result_tan, tangents[1]})};
+    case SliceUpdate::Sum:
+      return {array(
+          result_tan.shape(),
+          result_tan.dtype(),
+          std::make_shared<SliceUpdate>(
+              stream(), reduce_type_, start_indices_, end_indices_, strides_),
+          {result_tan, tangents[1]})};
+    case SliceUpdate::Prod:
+    case SliceUpdate::Max:
+    case SliceUpdate::Min: {
+      throw std::runtime_error(
+          "[SliceUpdate] JVP for product, minimum and maximum not implemented.");
+    }
+  }
+
+  // Appease gcc (although no path reaches here).
+  return {};
 }
 
 bool SliceUpdate::is_equivalent(const Primitive& other) const {
   const auto& s_other = static_cast<const SliceUpdate&>(other);
   return (
+      reduce_type_ == s_other.reduce_type_ &&
       start_indices_ == s_other.start_indices_ &&
       end_indices_ == s_other.end_indices_ && strides_ == s_other.strides_);
 }

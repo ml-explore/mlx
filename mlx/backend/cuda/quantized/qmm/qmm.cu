@@ -97,6 +97,81 @@ void qmm_sm90(
 #endif // defined(MLX_CUDA_SM90A_ENABLED)
 }
 
+// Defined in qmm_impl_sm80_xxx.cu files.
+template <int TileM>
+void qmm_impl_sm80(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int bits,
+    int group_size,
+    cu::CommandEncoder& encoder);
+
+bool supports_qmm_sm80(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device) {
+  if (device.compute_capability_major() < 8) {
+    return false;
+  }
+  int n = out.shape(-1);
+  int k = x.shape(-1);
+  if ((n % 128 != 0) || (k % std::max(64, group_size) != 0)) {
+    return false;
+  }
+  if (!biases) {
+    return false;
+  }
+  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
+      !scales.flags().row_contiguous || !biases->flags().row_contiguous) {
+    return false;
+  }
+  if (x.dtype() != float16 && x.dtype() != bfloat16) {
+    return false;
+  }
+  if (!transpose) {
+    return false;
+  }
+  if (bits != 8) {
+    return false;
+  }
+  if (mode != QuantizationMode::Affine) {
+    return false;
+  }
+  return true;
+}
+
+void qmm_sm80(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int bits,
+    int group_size,
+    cu::CommandEncoder& encoder) {
+  auto dispatch = [&]<int TileM>() {
+    qmm_impl_sm80<TileM>(x, w, scales, biases, out, bits, group_size, encoder);
+  };
+  int m = out.shape(-2);
+  if (m <= 16) {
+    dispatch.template operator()<16>();
+  } else if (m <= 32) {
+    dispatch.template operator()<32>();
+  } else {
+    dispatch.template operator()<64>();
+  }
+}
+
 bool supports_fp_qmv(
     const array& x,
     const array& w,
@@ -108,6 +183,11 @@ bool supports_fp_qmv(
     int group_size,
     QuantizationMode mode,
     cu::Device& device) {
+  // The fp_qmv kernel uses less registers and is faster for sm120. For sm80/90
+  // the qmv kernel is faster. We didn't test sm89/100.
+  if (device.compute_capability_major() <= 9) {
+    return false;
+  }
   bool non_batched = w.ndim() == 2;
   int k = x.shape(-1);
   int n = out.shape(-1);
@@ -135,14 +215,8 @@ bool supports_qmv(
     int group_size,
     QuantizationMode mode,
     cu::Device& device) {
-  int m = out.shape(-2);
-  int n = out.shape(-1);
   int k = x.shape(-1);
-  int l = out.size() / (m * n);
-  if (l > 1) {
-    return false;
-  }
-  if (n % 8 != 0 || k % 8 != 0) {
+  if (k % 8 != 0) {
     return false;
   }
   if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
@@ -153,12 +227,6 @@ bool supports_qmv(
     return false;
   }
   if (!transpose) {
-    return false;
-  }
-  if (bits % 2 != 0) {
-    return false;
-  }
-  if (mode != QuantizationMode::Affine) {
     return false;
   }
   return true;
