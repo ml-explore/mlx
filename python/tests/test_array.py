@@ -1130,7 +1130,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(a.tolist(), [2, 9, 2])
 
         a[0] = mx.array([[[1]]])
-        self.assertEqual(a.tolist(), [1, 2, 2])
+        self.assertEqual(a.tolist(), [1, 9, 2])
 
         a[:] = 0
         self.assertEqual(a.tolist(), [0, 0, 0])

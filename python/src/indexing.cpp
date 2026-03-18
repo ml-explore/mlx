@@ -16,7 +16,20 @@ bool is_none_slice(const nb::slice& in_slice) {
 }
 
 bool is_index_scalar(const nb::object& obj) {
-  return !nb::isinstance<nb::bool_>(obj) && PyIndex_Check(obj.ptr());
+  if (nb::isinstance<nb::bool_>(obj)) {
+    return false;
+  }
+  if (!PyIndex_Check(obj.ptr())) {
+    return false;
+  }
+  // Exclude multi-dimensional arrays (mx.array, np.ndarray) by checking ndim
+  if (nb::hasattr(obj, "ndim")) {
+    auto ndim = nb::getattr(obj, "ndim");
+    if (nb::isinstance<nb::int_>(ndim) && nb::cast<int>(ndim) > 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 int safe_to_int32(nb::object obj) {
