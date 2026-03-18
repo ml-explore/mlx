@@ -5611,6 +5611,64 @@ void init_ops(nb::module_& m) {
         needed).
   )pbdoc");
   m.def(
+      "qqaddmm",
+      &mx::qqaddmm,
+      nb::arg(), // c (bias)
+      nb::arg(), // x
+      nb::arg(), // w_q
+      "scales"_a = nb::none(), // scales w
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "nvfp4",
+      "global_scale_x"_a = nb::none(),
+      "global_scale_w"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def qqaddmm(c: array, x: array, w: array, scales: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', global_scale_x: Optional[array] = None, global_scale_w: Optional[array] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Compute ``c + x @ w.T`` where ``x`` and ``w`` are quantized on the fly.
+
+      This operation fuses bias addition with quantized matrix multiplication,
+      using the hardware bias epilogue when available (CUDA compute capability
+      10.0+) for better performance than separate ``qqmm`` followed by ``add``.
+
+      If ``w`` is quantized, ``scales`` must be provided, and ``group_size``,
+      ``bits``, and ``mode`` must match the parameters that were used to quantize
+      ``w``.
+
+      Notes:
+        Currently only supported on CUDA with compute capability 10.0 or higher.
+        On other devices, an error will be raised.
+
+        If ``w`` is expected to receive gradients, it must be provided in
+        non-quantized form.
+
+        ``global_scale_x`` and ``global_scale_w`` are only used for ``nvfp4`` quantization.
+
+      Args:
+        c (array): The bias array to add to the result.
+        x (array): Input array.
+        w (array): Weight matrix. If quantized, it is packed in unsigned integers.
+        scales (array, optional): The scales to use per ``group_size`` elements of
+          ``w`` if ``w`` is quantized. Default: ``None``.
+        group_size (int, optional): Number of elements in ``x`` and ``w`` that
+          share a scale. See supported values and defaults in the
+          :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+        bits (int, optional): Number of bits used to represent each element of
+          ``x`` and ``w``. See supported values and defaults in the
+          :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+        mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
+          Supported modes are ``nvfp4`` and ``mxfp8``. See the
+          :ref:`table of quantization modes <quantize-modes>` for details.
+        global_scale_x (array, optional): The per-input float32 scale used for x
+            with ``"nvfp4"`` quantization. Default: ``None``.
+        global_scale_w (array, optional): The per-input float32 scale used for w
+            with ``"nvfp4"`` quantization. Default: ``None``.
+      Returns:
+        array: The result of ``c + x @ w.T`` with quantized ``x`` and ``w``.
+  )pbdoc");
+  m.def(
       "from_fp8",
       &mx::from_fp8,
       nb::arg(),

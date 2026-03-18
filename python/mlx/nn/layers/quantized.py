@@ -401,7 +401,19 @@ class QQLinear(Module):
             self.quantize()
 
     def __call__(self, x):
-        x = mx.qqmm(
+        if "bias" in self:
+            # Use qqaddmm to fuse bias addition into the matmul epilogue
+            return mx.qqaddmm(
+                self["bias"],
+                x,
+                self["weight"],
+                scales=self.get("scales"),
+                group_size=self.group_size,
+                bits=self.bits,
+                mode=self.mode,
+            )
+
+        return mx.qqmm(
             x,
             self["weight"],
             scales=self.get("scales"),
@@ -409,11 +421,6 @@ class QQLinear(Module):
             bits=self.bits,
             mode=self.mode,
         )
-
-        if "bias" in self:
-            x = x + self["bias"]
-
-        return x
 
     @classmethod
     def from_linear(
