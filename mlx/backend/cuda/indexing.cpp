@@ -1,11 +1,13 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/compiled.h"
+#include "mlx/backend/common/slicing.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/jit_module.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/gpu/scan.h"
+#include "mlx/backend/gpu/slicing.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
@@ -24,6 +26,8 @@ namespace mlx::core {
 namespace {
 
 constexpr const char* g_scatter_ops[] = {"Max", "Min", "Sum", "Prod", "Assign"};
+constexpr const char* g_slice_ops[] =
+    {"Maximum", "Minimum", "Add", "Multiply", ""};
 
 void append_indices_arg(
     cu::KernelArgs& args,
@@ -558,6 +562,122 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       ? get_launch_args(
             mask_flat, large, kMaskedScatterVecSize, kMaskedScatterVecBlockDim)
       : get_launch_args(mask_flat, large);
+  encoder.add_kernel_node_raw(
+      kernel, num_blocks, block_dims, {}, 0, args.args());
+}
+
+void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("SliceUpdate::eval_gpu");
+  assert(inputs.size() == 2);
+  if (out.size() == 0) {
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& upd = inputs[1];
+
+  if (upd.size() == 0) {
+    out.copy_shared_buffer(in);
+    return;
+  }
+
+  auto ctype = in.flags().contiguous && in.size() == in.data_size()
+      ? CopyType::Vector
+      : CopyType::General;
+  copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
+
+  // Calculate out strides, initial offset and if copy needs to be made
+  auto [data_offset, out_strides] =
+      prepare_slice(out, start_indices_, strides_);
+
+  // Do copy for None reduce type
+  if (reduce_type_ == SliceUpdate::None) {
+    copy_gpu_inplace(
+        /* const array& src = */ upd,
+        /* array& dst = */ out,
+        /* const Shape& data_shape = */ upd.shape(),
+        /* const Strides& i_strides = */ upd.strides(),
+        /* const Strides& o_strides = */ out_strides,
+        /* int64_t i_offset = */ 0,
+        /* int64_t o_offset = */ data_offset,
+        /* CopyType ctype = */ CopyType::GeneralGeneral,
+        /* const Stream& s = */ stream());
+    return;
+  }
+
+  auto [shape, strides] =
+      collapse_contiguous_dims(upd.shape(), {upd.strides(), out_strides});
+  int nwork = 1;
+  if (shape.back() % 4 == 0) {
+    nwork = 4;
+  } else if (shape.back() % 2 == 0) {
+    nwork = 2;
+  }
+
+  const char* op_name = g_slice_ops[reduce_type_];
+  auto [ds, rc, cc] = check_contiguity(shape, strides[1]);
+  bool upd_contiguous = upd.flags().row_contiguous;
+  bool upd_scalar = upd.data_size() == 1;
+  bool out_contiguous = rc;
+  bool large = upd.size() > INT32_MAX;
+  std::string module_name =
+      fmt::format("slice_update_{}_{}", op_name, dtype_to_string(out.dtype()));
+
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+    std::vector<std::string> kernel_names;
+    for (int out_c = 0; out_c <= 1; ++out_c) {
+      for (int upd_c = 0; upd_c <= 1; ++upd_c) {
+        for (int upd_s = 0; upd_s <= 1; ++upd_s) {
+          for (int large = 0; large <= 1; ++large) {
+            for (int nwork = 1; nwork <= 16; nwork *= 2) {
+              kernel_names.push_back(
+                  fmt::format(
+                      "mlx::core::cu::slice_update_op<{}, {}, mlx::core::cu::{}, {}, {}, {}, {}>",
+                      dtype_to_cuda_type(out.dtype()),
+                      large ? "int64_t" : "int32_t",
+                      op_name,
+                      out_c ? "true" : "false",
+                      upd_c ? "true" : "false",
+                      upd_s ? "true" : "false",
+                      nwork));
+            }
+          }
+        }
+      }
+    }
+    return std::make_tuple(
+        false, jit_source_slice_update, std::move(kernel_names));
+  });
+
+  cu::KernelArgs args;
+  args.append(upd);
+  args.append(out);
+  args.append<int64_t>(upd.size());
+  args.append_ndim(shape);
+  args.append_ndim(strides[0]);
+  args.append<int32_t>(shape.size());
+  args.append_ndim(strides[1]);
+  args.append<int64_t>(data_offset);
+
+  encoder.set_input_array(upd);
+  encoder.set_output_array(out);
+
+  std::string kernel_name;
+  kernel_name = fmt::format(
+      "mlx::core::cu::slice_update_op<{}, {}, mlx::core::cu::{}, {}, {}, {}, {}>",
+      dtype_to_cuda_type(out.dtype()),
+      large ? "int64_t" : "int32_t",
+      op_name,
+      out_contiguous,
+      upd_contiguous,
+      upd_scalar,
+      nwork);
+
+  auto kernel = mod.get_kernel(kernel_name);
+  auto [num_blocks, block_dims] = get_launch_args(upd, large, nwork);
   encoder.add_kernel_node_raw(
       kernel, num_blocks, block_dims, {}, 0, args.args());
 }

@@ -74,3 +74,9 @@ constexpr std::string_view scatter_kernels = R"(
 constexpr std::string_view masked_assign_kernel = R"(
 template [[host_name("{0}")]] [[kernel]] decltype(masked_assign_impl<{1}, {2}>) masked_assign_impl<{1}, {2}>;
 )";
+
+constexpr std::string_view slice_update_op_kernel = R"(
+template [[host_name("{0}")]]
+[[kernel]] decltype(slice_update_op_impl<{1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}>)
+slice_update_op_impl<{1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}>;
+)";
