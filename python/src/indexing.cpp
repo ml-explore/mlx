@@ -978,7 +978,7 @@ mx::array mlx_add_item(
 
   auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
-    return scatterAdd(src, indices, updates, axes);
+    return scatter_add(src, indices, updates, axes);
   } else {
     return src + updates;
   }
@@ -996,7 +996,7 @@ mx::array mlx_subtract_item(
 
   auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
-    return scatterAdd(src, indices, -updates, axes);
+    return scatter_add(src, indices, -updates, axes);
   } else {
     return src - updates;
   }
@@ -1014,7 +1014,7 @@ mx::array mlx_multiply_item(
 
   auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
-    return scatterProd(src, indices, updates, axes);
+    return scatter_prod(src, indices, updates, axes);
   } else {
     return src * updates;
   }
@@ -1032,7 +1032,7 @@ mx::array mlx_divide_item(
 
   auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
-    return scatterProd(src, indices, reciprocal(updates), axes);
+    return scatter_prod(src, indices, reciprocal(updates), axes);
   } else {
     return src / updates;
   }
@@ -1050,7 +1050,7 @@ mx::array mlx_maximum_item(
 
   auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
-    return scatterMax(src, indices, updates, axes);
+    return scatter_max(src, indices, updates, axes);
   } else {
     return maximum(src, updates);
   }
@@ -1068,7 +1068,7 @@ mx::array mlx_minimum_item(
 
   auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
-    return scatterMin(src, indices, updates, axes);
+    return scatter_min(src, indices, updates, axes);
   } else {
     return minimum(src, updates);
   }
