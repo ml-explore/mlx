@@ -205,8 +205,8 @@ __global__ void qmm_sm80_kernel(
   auto K_BLOCK_MAX = size<2>(tCrA);
 
   // Prefetch beginning tiles.
-  CUTE_UNROLL
   int tile_pipe = 0;
+  CUTE_UNROLL
   for (; tile_pipe < K_PIPE_MAX - 1; ++tile_pipe) {
     fetch_gmem(tile_pipe);
   }

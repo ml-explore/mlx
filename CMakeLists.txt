@@ -156,6 +156,10 @@ if(MLX_BUILD_CUDA)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   find_package(CUDNN REQUIRED)
+  if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "13.1" AND CUDAToolkit_VERSION
+                                                          VERSION_LESS "13.2")
+    message(FATAL_ERROR "CUDA Toolkit 13.1 is not supported.")
+  endif()
 endif()
 
 if(MLX_BUILD_METAL)
