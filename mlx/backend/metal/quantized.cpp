@@ -1553,6 +1553,61 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void QQAddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  auto mode = quantization_mode_to_string(mode_);
+
+  // inputs: [c, x, w, (scales_w)]
+  const array& c = inputs[0];
+  bool w_quantized = (inputs[2].dtype() == uint32);
+
+  // QMV case (M=1): supported with bias via dispatch_qmv
+  if (w_quantized && inputs[1].shape(-2) == 1) {
+    out.set_data(allocator::malloc(out.nbytes()));
+
+    bool donate_x = inputs[1].is_donatable();
+    array x = ensure_row_contiguous(inputs[1], d, s);
+    // If x is a copy it should be donatable
+    donate_x |= x.is_donatable();
+    auto xhat = donate_x
+        ? x
+        : array(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
+    quantize_dequantize(x, xhat, mode, group_size_, bits_, d, s);
+
+    // Make sure the last two dims of w and scales are contiguous
+    array w = ensure_row_contiguous_matrix(inputs[2], d, s);
+    array scales = ensure_row_contiguous_matrix(inputs[3], d, s);
+
+    // Ensure bias is contiguous
+    array bias = ensure_row_contiguous(c, d, s);
+
+    bool non_batched = w.ndim() == 2;
+    int K = x.shape(-1);
+    int M = non_batched ? x.size() / K : x.shape(-2);
+    int N = out.shape(-1);
+
+    dispatch_qmv(
+        xhat,
+        w,
+        scales,
+        bias, // Pass bias to use the epilogue
+        out,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+    return;
+  } else {
+    throw std::runtime_error("[QQAddMM] NYI for the general case");
+  }
+}
+
 void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {

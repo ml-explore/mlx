@@ -183,4 +183,92 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       scalars);
 }
 
+void QQAddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("QQAddMM::eval_gpu");
+
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+  auto& device = encoder.device();
+
+  // inputs: [c, x, w, (scales_w), (global_scale_x, global_scale_w)]
+  const array& c = inputs[0];
+  bool w_quantized = (inputs[2].dtype() == uint32);
+  int base_size = w_quantized ? 4 : 3; // c + x + w + (scales_w if quantized)
+
+  assert(
+      inputs.size() == base_size ||
+      (mode_ == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2));
+
+  auto cc = device.compute_capability_major() * 100 +
+      device.compute_capability_minor() * 10;
+  if (cc < 1000) {
+    throw std::runtime_error(
+        "[QQAddMM::eval_gpu] QQAddMM is only supported on GPUs with compute capability 10.0 or higher.");
+  }
+
+  // For nvfp4, global scales are optional but must be both present or both
+  // absent. If present, they add 2 more inputs (global_scale_x, global_scale_w)
+  bool has_global_scales =
+      mode_ == QuantizationMode::Nvfp4 && inputs.size() > base_size;
+
+  // For nvfp4, get global scales from inputs if present
+  std::optional<array> global_scale_x = std::nullopt;
+  std::optional<array> global_scale_w = std::nullopt;
+  if (has_global_scales) {
+    global_scale_x = inputs[inputs.size() - 2];
+    global_scale_w = inputs[inputs.size() - 1];
+  }
+
+  // Quantize inputs (or use pre-quantized)
+  auto [x_q, scale_x_pre] = quantize_input(
+      inputs[1], encoder, s, mode_, bits_, group_size_, global_scale_x);
+  auto [w_q, scale_w_pre] = !w_quantized
+      ? quantize_input(
+            inputs[2], encoder, s, mode_, bits_, group_size_, global_scale_w)
+      : std::make_tuple(
+            ensure_contiguous(inputs[2], encoder, s),
+            ensure_contiguous(inputs[3], encoder, s));
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  int M = x_q.shape(-2);
+  int N = w_q.shape(-2); // transposed
+  int K = x_q.shape(-1) * (32 / bits_);
+
+  bool x_transposed = false;
+  bool w_transposed = true; // always transposed
+  int64_t lda = K;
+  int64_t ldb = K;
+
+  // Repack scales to tiled layout for tensor cores
+  array scale_x = pad_and_swizzle_scales(scale_x_pre, encoder, s);
+  array scale_w = pad_and_swizzle_scales(scale_w_pre, encoder, s);
+
+  GemmScalars scalars;
+  if (has_global_scales) {
+    scalars = create_nvfp4_scalars(*global_scale_x, *global_scale_w, encoder);
+  }
+
+  // Ensure bias is row contiguous and pass it to qqmm_impl
+  array bias = ensure_row_contiguous(c, encoder, s);
+
+  qqmm_impl(
+      encoder,
+      M,
+      N,
+      K,
+      x_transposed,
+      lda,
+      w_transposed,
+      ldb,
+      out,
+      x_q,
+      w_q,
+      scale_x,
+      scale_w,
+      mode_,
+      scalars,
+      bias);
+}
+
 } // namespace mlx::core
