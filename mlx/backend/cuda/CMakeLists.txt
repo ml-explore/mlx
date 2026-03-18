@@ -118,8 +118,12 @@ target_compile_options(mlx
 target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>")
 
-# Required for generating optimized CUTLASS code.
-if(NOT MSVC)
+if(MSVC)
+  # Ignore warnings from CUTLASS.
+  target_compile_options(
+    mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=2908">)
+else()
+  # Required for generating optimized CUTLASS code.
   target_compile_options(
     mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-strict-aliasing>")
 endif()

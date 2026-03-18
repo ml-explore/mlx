@@ -2181,6 +2181,7 @@ class TestArray(mlx_tests.MLXTestCase):
             x = mx.sin(x)
         mx.eval(x)
 
+    @unittest.skipIf(platform.system() == "Windows", "Memory info not accurate")
     def test_siblings_without_eval(self):
         def get_mem():
             process = psutil.Process(os.getpid())

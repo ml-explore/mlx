@@ -16,8 +16,14 @@ namespace cu {
 
 namespace cg = cooperative_groups;
 
+constexpr int BINARY_MAX_BLOCK_DIM = 1024;
+
 template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
-__global__ void binary_ss(const In* a, const In* b, Out* out, IdxT size) {
+__global__ __launch_bounds__(BINARY_MAX_BLOCK_DIM) void binary_ss(
+    const In* a,
+    const In* b,
+    Out* out,
+    IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
 
   if ((index + 1) * N_READS > size) {
@@ -36,7 +42,11 @@ __global__ void binary_ss(const In* a, const In* b, Out* out, IdxT size) {
 }
 
 template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
-__global__ void binary_sv(const In* a, const In* b, Out* out, IdxT size) {
+__global__ __launch_bounds__(BINARY_MAX_BLOCK_DIM) void binary_sv(
+    const In* a,
+    const In* b,
+    Out* out,
+    IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
 
   if ((index + 1) * N_READS > size) {
@@ -57,7 +67,11 @@ __global__ void binary_sv(const In* a, const In* b, Out* out, IdxT size) {
 }
 
 template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
-__global__ void binary_vs(const In* a, const In* b, Out* out, IdxT size) {
+__global__ __launch_bounds__(BINARY_MAX_BLOCK_DIM) void binary_vs(
+    const In* a,
+    const In* b,
+    Out* out,
+    IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
 
   if ((index + 1) * N_READS > size) {
@@ -78,7 +92,11 @@ __global__ void binary_vs(const In* a, const In* b, Out* out, IdxT size) {
 }
 
 template <typename Op, typename In, typename Out, typename IdxT, int N_READS>
-__global__ void binary_vv(const In* a, const In* b, Out* out, IdxT size) {
+__global__ __launch_bounds__(BINARY_MAX_BLOCK_DIM) void binary_vv(
+    const In* a,
+    const In* b,
+    Out* out,
+    IdxT size) {
   IdxT index = cg::this_grid().thread_rank();
 
   if ((index + 1) * N_READS > size) {
@@ -331,7 +349,12 @@ void binary_op_gpu_inplace(
               kernel = cu::binary_vv<Op, InType, OutType, IdxT, N_READS>;
             }
             auto [num_blocks, block_dims] = get_launch_args(
-                out.data_size(), out.shape(), out.strides(), large(), N_READS);
+                out.data_size(),
+                out.shape(),
+                out.strides(),
+                large(),
+                N_READS,
+                cu::BINARY_MAX_BLOCK_DIM);
             encoder.add_kernel_node(
                 kernel,
                 num_blocks,
