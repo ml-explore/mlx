@@ -2004,7 +2004,7 @@ class TestOps(mlx_tests.MLXTestCase):
         out_np = np.nan_to_num(a)
         self.assertTrue(np.allclose(out_mx, out_np))
 
-        for t in [mx.float32, mx.float16]:
+        for t in [mx.float32, mx.float16, mx.bfloat16]:
             a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")])
             out_mx = mx.nan_to_num(a)
             out_np = np.nan_to_num(a)
