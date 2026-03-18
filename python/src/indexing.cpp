@@ -70,8 +70,8 @@ mx::array get_int_index(nb::object idx, int axis_size) {
 
 bool is_valid_index_type(const nb::object& obj) {
   return nb::isinstance<nb::slice>(obj) || is_index_scalar(obj) ||
-      nb::isinstance<mx::array>(obj) || obj.is_none() || nb::ellipsis().is(obj) ||
-      nb::isinstance<nb::list>(obj);
+      nb::isinstance<mx::array>(obj) || obj.is_none() ||
+      nb::ellipsis().is(obj) || nb::isinstance<nb::list>(obj);
 }
 
 mx::array mlx_get_item_slice(const mx::array& src, const nb::slice& in_slice) {
@@ -783,9 +783,9 @@ auto mlx_slice_update(
     const nb::object& obj,
     const ScalarOrArray& v) {
   // Can't route to slice update if not slice, tuple, or int
-  if (src.ndim() == 0 || (!nb::isinstance<nb::slice>(obj) &&
-                          !nb::isinstance<nb::tuple>(obj) &&
-                          !is_index_scalar(obj))) {
+  if (src.ndim() == 0 ||
+      (!nb::isinstance<nb::slice>(obj) && !nb::isinstance<nb::tuple>(obj) &&
+       !is_index_scalar(obj))) {
     return std::make_pair(false, src);
   }
   if (nb::isinstance<nb::tuple>(obj)) {
