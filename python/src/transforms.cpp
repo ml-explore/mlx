@@ -1534,9 +1534,4 @@ void init_transforms(nb::module_& m) {
           A callable that recomputes intermediate states during gradient
           computation.
       )pbdoc");
-
-  // Register static Python object cleanup before the interpreter exits
-  auto atexit = nb::module_::import_("atexit");
-  atexit.attr("register")(
-      nb::cpp_function([]() { mx::detail::compile_clear_cache(); }));
 }
