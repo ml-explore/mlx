@@ -4781,31 +4781,6 @@ bool Slice::is_equivalent(const Primitive& other) const {
       end_indices_ == s_other.end_indices_ && strides_ == s_other.strides_);
 }
 
-std::vector<Shape> Slice::output_shapes(const std::vector<array>& inputs) {
-  // Re-normalize slice bounds against the runtime input shape.
-  // Works for constant-dimension slices; variable-dimension slices
-  // should use take()/DynamicSlice instead.
-  auto& in_shape = inputs[0].shape();
-  Shape out_shape(in_shape.size());
-  for (int i = 0; i < in_shape.size(); ++i) {
-    auto n = in_shape[i];
-    auto s = start_indices_[i] < 0 ? start_indices_[i] + n : start_indices_[i];
-    auto e = end_indices_[i] < 0 ? end_indices_[i] + n : end_indices_[i];
-    s = std::max(static_cast<ShapeElem>(0), std::min(s, n));
-    e = std::max(static_cast<ShapeElem>(0), std::min(e, n));
-    if (strides_[i] > 0) {
-      e = e < s ? s : e;
-      out_shape[i] = (e - s + strides_[i] - 1) / strides_[i];
-    } else {
-      auto st = std::min(s, n - 1);
-      auto ed = e > -1 ? e : -1;
-      ed = ed > st ? st : ed;
-      out_shape[i] = (st - ed + (-strides_[i]) - 1) / (-strides_[i]);
-    }
-  }
-  return {std::move(out_shape)};
-}
-
 std::pair<std::vector<array>, std::vector<int>> SliceUpdate::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
