@@ -1461,6 +1461,14 @@ void init_transforms(nb::module_& m) {
          const nb::object& inputs,
          const nb::object& outputs,
          bool shapeless) {
+        // Make sure each thread using mx.compile would clear its compile cache
+        // before python interpreter exits.
+        static thread_local auto clear_cache = []() {
+          auto atexit = nb::module_::import_("atexit");
+          atexit.attr("register")(
+              nb::cpp_function(&mx::detail::compile_clear_cache));
+          return true;
+        };
         return mlx_func(
             nb::cpp_function(PyCompiledFun{fun, inputs, outputs, shapeless}),
             fun,
@@ -1534,9 +1542,4 @@ void init_transforms(nb::module_& m) {
           A callable that recomputes intermediate states during gradient
           computation.
       )pbdoc");
-
-  // Register static Python object cleanup before the interpreter exits
-  auto atexit = nb::module_::import_("atexit");
-  atexit.attr("register")(
-      nb::cpp_function([]() { mx::detail::compile_clear_cache(); }));
 }

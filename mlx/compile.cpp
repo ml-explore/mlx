@@ -1,4 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
+
+#include <atomic>
 #include <cstdlib>
 #include <map>
 #include <sstream>
@@ -211,7 +213,7 @@ std::vector<Shape> Compiled::output_shapes(const std::vector<array>& inputs) {
 
 namespace detail {
 
-CompileMode& compile_mode() {
+std::atomic<CompileMode>& compile_mode() {
   auto get_val = []() {
     if (std::getenv("MLX_DISABLE_COMPILE")) {
       return CompileMode::disabled;
@@ -219,7 +221,7 @@ CompileMode& compile_mode() {
       return CompileMode::enabled;
     }
   };
-  static CompileMode compile_mode_ = get_val();
+  static std::atomic<CompileMode> compile_mode_ = get_val();
   return compile_mode_;
 }
 
@@ -384,7 +386,7 @@ class CompilerCache {
 };
 
 CompilerCache& compiler_cache() {
-  static CompilerCache compiler_cache_;
+  static thread_local CompilerCache compiler_cache_;
   return compiler_cache_;
 }
 
@@ -1133,14 +1135,15 @@ ArrayFnWithExtra compile(
           compile_dfs(entry.inputs, entry.outputs, inputs);
 
       // Simplify the tape
-      if (compile_mode() != CompileMode::no_simplify) {
+      auto mode = compile_mode().load();
+      if (mode != CompileMode::no_simplify) {
         compile_simplify(
             entry.tape, parents_map, entry.outputs, /* passes */ 3);
       }
 
       // Kernel fusion to generate Compiled primitives. The tape and
       // new outputs must be updated accordingly
-      if (compile_mode() != CompileMode::no_fuse) {
+      if (mode != CompileMode::no_fuse) {
         compile_fuse(entry.tape, parents_map, entry.inputs, entry.outputs);
       }
     }
