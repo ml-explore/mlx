@@ -49,7 +49,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   };
   auto call_qmm_sm80 = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    qmm_sm80(x, w, scales, *biases, out, bits_, group_size_, encoder);
+    qmm_sm80(x, w, scales, biases, out, bits_, group_size_, mode_, encoder);
   };
   auto call_qmv = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
