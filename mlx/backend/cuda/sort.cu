@@ -52,7 +52,7 @@ struct InitValue {
 };
 
 template <typename T>
-struct InitValue<T, cuda::std::enable_if_t<std::is_floating_point_v<T>>> {
+struct InitValue<T, cuda::std::enable_if_t<is_floating_v<T>>> {
   __device__ __forceinline__ static T value() {
     return nan_value<T>();
   }
@@ -72,7 +72,7 @@ struct LessThan {
   }
 
   __device__ __forceinline__ bool operator()(T a, T b) const {
-    if constexpr (std::is_floating_point_v<T>) {
+    if constexpr (is_floating_v<T>) {
       bool an = cuda::std::isnan(a);
       bool bn = cuda::std::isnan(b);
       if (an | bn) {

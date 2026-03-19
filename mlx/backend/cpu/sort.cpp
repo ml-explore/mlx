@@ -15,10 +15,14 @@ namespace mlx::core {
 
 namespace {
 
+template <typename T>
+inline constexpr bool is_floating_v = std::is_floating_point_v<T> ||
+    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
+
 // NaN-aware comparator that places NaNs at the end
 template <typename T>
 bool nan_aware_less(T a, T b) {
-  if constexpr (std::is_floating_point_v<T> || std::is_same_v<T, complex64_t>) {
+  if constexpr (is_floating_v<T> || std::is_same_v<T, complex64_t>) {
     if (std::isnan(a))
       return false;
     if (std::isnan(b))
@@ -198,7 +202,7 @@ void argsort(const array& in, array& out, int axis) {
       auto v2 = data_ptr[b * in_stride];
 
       // Handle NaNs (place them at the end)
-      if (std::is_floating_point<T>::value) {
+      if constexpr (is_floating_v<T>) {
         if (std::isnan(v1))
           return false;
         if (std::isnan(v2))
@@ -299,7 +303,7 @@ void argpartition(const array& in, array& out, int axis, int kth) {
       auto v2 = data_ptr[b * in_stride];
 
       // Handle NaNs (place them at the end)
-      if (std::is_floating_point<T>::value) {
+      if constexpr (is_floating_v<T>) {
         if (std::isnan(v1))
           return false;
         if (std::isnan(v2))
