@@ -24,6 +24,9 @@ class ResidencySet {
   void resize(size_t size);
 
  private:
+  void ensure_wired_set_();
+
+  MTL::Device* device_{nullptr};
   MTL::ResidencySet* wired_set_{nullptr};
   std::unordered_set<const MTL::Allocation*> unwired_set_;
   size_t capacity_{0};
