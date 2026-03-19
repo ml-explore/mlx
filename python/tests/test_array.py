@@ -960,6 +960,11 @@ class TestArray(mlx_tests.MLXTestCase):
         a_sliced_mlx = a_mlx[-1]
         self.assertTrue(np.array_equal(a_sliced_mlx, a_npy[-1]))
 
+        # NumPy integer scalar indexing
+        a_sliced_mlx = a_mlx[np.int64(5)]
+        a_sliced_npy = np.asarray(a_sliced_mlx)
+        self.assertTrue(np.array_equal(a_sliced_npy, a_npy[np.int64(5)]))
+
         # Basic content check, empty index
         a_sliced_mlx = a_mlx[()]
         a_sliced_npy = np.asarray(a_sliced_mlx)
@@ -1121,8 +1126,11 @@ class TestArray(mlx_tests.MLXTestCase):
         a[-1] = 2
         self.assertEqual(a.tolist(), [2, 2, 2])
 
+        a[np.int64(1)] = 9
+        self.assertEqual(a.tolist(), [2, 9, 2])
+
         a[0] = mx.array([[[1]]])
-        self.assertEqual(a.tolist(), [1, 2, 2])
+        self.assertEqual(a.tolist(), [1, 9, 2])
 
         a[:] = 0
         self.assertEqual(a.tolist(), [0, 0, 0])
