@@ -18,10 +18,11 @@ namespace mlx::core::metal {
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
-struct DeviceStream;
+class Device;
 
-struct MLX_API CommandEncoder {
-  explicit CommandEncoder(DeviceStream& stream);
+class MLX_API CommandEncoder {
+ public:
+  CommandEncoder(Device& d, int index, const MTL::ResidencySet* residency_set);
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
@@ -40,29 +41,26 @@ struct MLX_API CommandEncoder {
     CommandEncoder& enc;
   };
 
+  void set_buffer(const MTL::Buffer* buf, int idx, int64_t offset = 0);
   void set_input_array(const array& a, int idx, int64_t offset = 0);
   void set_output_array(array& a, int idx, int64_t offset = 0);
   void register_output_array(const array& a);
+
+  void add_temporary(array arr);
+  void add_temporaries(std::vector<array> arrays);
+
   void dispatch_threadgroups(MTL::Size grid_dims, MTL::Size group_dims);
   void dispatch_threads(MTL::Size grid_dims, MTL::Size group_dims);
   void maybeInsertBarrier();
-  void set_buffer(const MTL::Buffer* buf, int idx, int64_t offset = 0);
 
   void set_compute_pipeline_state(MTL::ComputePipelineState* kernel) {
-    enc_->setComputePipelineState(kernel);
-  }
-
-  void wait_for_fence(MTL::Fence* fence) {
-    enc_->waitForFence(fence);
-  }
-
-  void update_fence(MTL::Fence* fence) {
-    enc_->updateFence(fence);
+    get_command_encoder()->setComputePipelineState(kernel);
   }
 
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
   void set_vector_bytes(const Vec& vec, size_t nelems, int idx) {
-    enc_->setBytes(vec.data(), nelems * sizeof(typename Vec::value_type), idx);
+    get_command_encoder()->setBytes(
+        vec.data(), nelems * sizeof(typename Vec::value_type), idx);
   }
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
   void set_vector_bytes(const Vec& vec, int idx) {
@@ -71,79 +69,62 @@ struct MLX_API CommandEncoder {
 
   template <typename T>
   void set_bytes(const T* v, int n, int idx) {
-    return enc_->setBytes(v, n * sizeof(T), idx);
+    return get_command_encoder()->setBytes(v, n * sizeof(T), idx);
   }
 
   template <typename T>
   void set_bytes(const T& v, int idx) {
-    return enc_->setBytes(&v, sizeof(T), idx);
+    return get_command_encoder()->setBytes(&v, sizeof(T), idx);
   }
 
   void set_threadgroup_memory_length(size_t length, int idx) {
-    enc_->setThreadgroupMemoryLength(length, idx);
+    get_command_encoder()->setThreadgroupMemoryLength(length, idx);
   }
 
   ConcurrentContext start_concurrent() {
     return ConcurrentContext(*this);
   }
-  ~CommandEncoder();
-
-  // Inputs to all kernels in the encoder including temporaries
-  std::unordered_set<const void*>& inputs() {
-    return all_inputs_;
-  };
-
-  // Outputs of all kernels in the encoder including temporaries
-  std::unordered_set<const void*>& outputs() {
-    return all_outputs_;
-  };
 
   void barrier();
+  void end_encoding();
+  bool needs_commit() const;
+  void commit();
+
+  MTL::CommandQueue* get_command_queue() const {
+    return queue_.get();
+  }
+  MTL::CommandBuffer* get_command_buffer() const {
+    return buffer_.get();
+  }
 
  private:
-  DeviceStream& stream_;
-  MTL::ComputeCommandEncoder* enc_;
+  MTL::ComputeCommandEncoder* get_command_encoder();
+
+  Device& device_;
+
+  // Buffer that stores encoded commands.
+  NS::SharedPtr<MTL::CommandQueue> queue_;
+  NS::SharedPtr<MTL::CommandBuffer> buffer_;
+  int buffer_ops_{0};
+  size_t buffer_sizes_{0};
+
+  // Encoder for issuing GPU commands.
+  // The members are used within a single ComputeCommandEncoder and will be
+  // reset after calling end_encoding().
+  NS::SharedPtr<MTL::ComputeCommandEncoder> encoder_;
+  NS::SharedPtr<MTL::Fence> fence_;
   bool needs_barrier_{false};
   bool concurrent_{false};
+  std::vector<array> temporaries_;
   std::unordered_set<MTL::Resource*> prev_outputs_;
   std::unordered_set<MTL::Resource*> next_outputs_;
   std::unordered_set<MTL::Resource*> concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
   std::unordered_set<const void*> all_outputs_;
-};
 
-struct Fence {
-  Fence(MTL::Fence* fence) : fence(fence) {}
-  ~Fence() {
-    fence->release();
-  }
-  MTL::Fence* fence;
-};
-
-struct DeviceStream {
-  DeviceStream(MTL::CommandQueue* queue) : queue(queue) {};
-  ~DeviceStream() {
-    queue->release();
-    if (buffer != nullptr) {
-      buffer->release();
-    }
-  };
-  MTL::CommandQueue* queue;
-  // A map of prior command encoder outputs to their corresponding fence
-  std::unordered_map<const void*, std::shared_ptr<Fence>> outputs;
-  // Used to allow thread-safe access to the outputs map
-  std::mutex fence_mtx;
-
-  // Data updated between command buffers
-  MTL::CommandBuffer* buffer{nullptr};
-  int buffer_ops{0};
-  size_t buffer_sizes{0};
-
-  // The command encoder, fence, and temporaries are updated between command
-  // encoders
-  std::unique_ptr<CommandEncoder> encoder{nullptr};
-  std::shared_ptr<Fence> fence;
-  std::vector<array> temporaries;
+  // A map of prior command encoder outputs to their corresponding fence.
+  std::unordered_map<const void*, NS::SharedPtr<MTL::Fence>> prev_ce_outputs_;
+  std::mutex outputs_mtx_;
 };
 
 class MLX_API Device {
@@ -157,17 +138,15 @@ class MLX_API Device {
     return device_;
   };
 
-  const std::string& get_architecture() {
+  const std::string& get_architecture() const {
     return arch_;
   }
-
   int get_architecture_gen() const {
     return arch_gen_;
   }
-
-  void new_queue(int index);
-
-  MTL::CommandQueue* get_queue(Stream stream);
+  std::tuple<int, int> get_max_ops_mb_per_buffer() const {
+    return std::make_tuple(max_ops_per_buffer_, max_mb_per_buffer_);
+  }
 
   MTL::CommandBuffer* get_command_buffer(int index);
   bool command_buffer_needs_commit(int index);
@@ -198,9 +177,6 @@ class MLX_API Device {
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
 
-  MTL::ArgumentEncoder* argument_encoder(
-      const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
-
   // Record temporary arrays for the given stream index
   void add_temporary(array arr, int index);
   void add_temporaries(std::vector<array> arrays, int index);
@@ -208,9 +184,6 @@ class MLX_API Device {
   void set_residency_set(const MTL::ResidencySet* residency_set);
 
  private:
-  DeviceStream& get_stream_(int index) {
-    return stream_map_.find(index)->second;
-  }
   MTL::Library* get_library_cache_(const std::string& name);
 
   MTL::Library* get_library_(const std::string& name);
@@ -244,7 +217,7 @@ class MLX_API Device {
       const std::vector<MTL::Function*>& linked_functions = {});
 
   MTL::Device* device_;
-  std::unordered_map<int32_t, DeviceStream> stream_map_;
+  std::unordered_map<int32_t, CommandEncoder> encoders_;
 
   std::shared_mutex kernel_mtx_;
   std::shared_mutex library_mtx_;
