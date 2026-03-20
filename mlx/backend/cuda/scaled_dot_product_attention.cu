@@ -32,6 +32,8 @@ struct AttnParams {
   int gqa_factor;
   float scale;
 
+  int causal_offset;
+
   int64_t Q_strides[3];
   int64_t K_strides[3];
   int64_t V_strides[3];
@@ -118,7 +120,7 @@ __global__ void kernel_sdpav_1pass(
   for (int i = kv_seq_idx; i < params.kL; i += BN) {
     bool use_key = true;
     if constexpr (do_causal) {
-      use_key = i <= (params.kL - params.qL + q_seq_idx);
+      use_key = i <= (params.causal_offset + q_seq_idx);
     }
 
     if (use_key) {
@@ -283,7 +285,7 @@ __global__ void kernel_sdpav_2pass_1(
   for (int i = kv_seq_idx; i < params.kL; i += blocks * BN) {
     bool use_key = true;
     if constexpr (do_causal) {
-      use_key = i <= (params.kL - params.qL + q_seq_idx);
+      use_key = i <= (params.causal_offset + q_seq_idx);
     }
 
     if (use_key) {
@@ -472,6 +474,7 @@ void sdpa_vector_1pass_fallback(
     const float scale,
     array& o,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& sinks) {
   encoder.set_input_array(q);
   encoder.set_input_array(k);
@@ -491,6 +494,8 @@ void sdpa_vector_1pass_fallback(
 
       /* int gqa_factor = */ q.shape(1) / k.shape(1),
       /* float scale = */ scale,
+
+      /* int causal_offset = */ (causal_upper_left ? 0 : k.shape(2) - q.shape(2)),
 
       /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
@@ -531,6 +536,7 @@ void sdpa_vector_2pass_fallback(
     const float scale,
     array& o,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& sinks) {
   cu::AttnParams params{
       /* int B = */ q.shape(0),
@@ -542,6 +548,8 @@ void sdpa_vector_2pass_fallback(
 
       /* int gqa_factor = */ q.shape(1) / k.shape(1),
       /* float scale = */ scale,
+
+      /* int causal_offset = */ (causal_upper_left ? 0 : k.shape(2) - q.shape(2)),
 
       /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
@@ -644,15 +652,16 @@ void sdpa_vector_fallback(
     const float scale,
     array& o,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& sinks) {
   int kL = k.shape(2);
 
   if (kL > 1024) {
     return sdpa_vector_2pass_fallback(
-        s, encoder, q, k, v, scale, o, do_causal, sinks);
+        s, encoder, q, k, v, scale, o, do_causal, causal_upper_left, sinks);
   } else {
     return sdpa_vector_1pass_fallback(
-        s, encoder, q, k, v, scale, o, do_causal, sinks);
+        s, encoder, q, k, v, scale, o, do_causal, causal_upper_left, sinks);
   }
 }
 
@@ -689,6 +698,7 @@ void sdpa_vector(
     float scale,
     array& o,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& sinks_pre,
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
@@ -781,7 +791,8 @@ void sdpa_vector(
       encoder.add_temporary(cp);
     }
 
-    sdpa_vector_fallback(s, encoder, q, k, v, scale, o, do_causal, sinks);
+    sdpa_vector_fallback(
+        s, encoder, q, k, v, scale, o, do_causal, causal_upper_left, sinks);
   }
 
   // Full attention mode should never reach here

@@ -206,10 +206,13 @@ void init_fast(nb::module_& parent_module) {
         if (has_mask) {
           if (has_str_mask) {
             auto mask_str = std::get<std::string>(mask);
-            if (mask_str != "causal") {
+            if (mask_str != "causal" && mask_str != "causal_lower_right" &&
+                mask_str != "causal_upper_left") {
               std::ostringstream msg;
               msg << "[scaled_dot_product_attention] invalid mask option '"
-                  << mask_str << "'. Must be 'causal', or an array.";
+                  << mask_str
+                  << "'. Must be 'causal', 'causal_lower_right', "
+                  << "'causal_upper_left', or an array.";
               throw std::invalid_argument(msg.str());
             }
             return mx::fast::scaled_dot_product_attention(
@@ -267,13 +270,20 @@ void init_fast(nb::module_& parent_module) {
             scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``).
             mask (str or array, optional): The mask to apply to the
                query-key scores. The mask can be an array or a string indicating
-               the mask type. The only supported string type is ``"causal"``. If
-               the mask is an array it can be a boolean or additive mask. The mask
-               can have at most 4 dimensions and must be broadcast-compatible with
-               the shape ``[B, N, T_q, T_kv]``. If an additive mask is given its
-               type must promote to the promoted type of ``q``, ``k``, and ``v``.
-               The ``"causal"`` mask uses lower-right alignment where the
-               last query aligns with the last key.
+               the mask type. Supported string types are:
+
+               * ``"causal"`` or ``"causal_lower_right"``: Lower-right
+                 aligned causal mask. The last query attends to the last key.
+                 This is the standard mask for autoregressive decoding.
+               * ``"causal_upper_left"``: Upper-left aligned causal mask.
+                 Query ``i`` attends to keys ``0..i``. This matches PyTorch's
+                 default ``is_causal=True`` behavior.
+
+               If the mask is an array it can be a boolean or additive mask.
+               The mask can have at most 4 dimensions and must be
+               broadcast-compatible with the shape ``[B, N, T_q, T_kv]``. If
+               an additive mask is given its type must promote to the promoted
+               type of ``q``, ``k``, and ``v``.
             sinks (array, optional): An optional array of attention sinks.
                Default: ``None``.
 
