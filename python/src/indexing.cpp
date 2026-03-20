@@ -3,10 +3,11 @@
 #include <optional>
 #include <sstream>
 
-#include "python/src/convert.h"
-#include "python/src/indexing.h"
+#include <nanobind/ndarray.h>
 
 #include "mlx/ops.h"
+#include "python/src/convert.h"
+#include "python/src/indexing.h"
 
 bool is_none_slice(const nb::slice& in_slice) {
   return (
@@ -22,12 +23,8 @@ bool is_index_scalar(const nb::object& obj) {
   if (!PyIndex_Check(obj.ptr())) {
     return false;
   }
-  // Exclude multi-dimensional arrays (mx.array, np.ndarray) by checking ndim
-  if (nb::hasattr(obj, "ndim")) {
-    auto ndim = nb::getattr(obj, "ndim");
-    if (nb::isinstance<nb::int_>(ndim) && nb::cast<int>(ndim) > 0) {
-      return false;
-    }
+  if (nb::ndarray_check(obj) && nb::cast<nb::ndarray<nb::ro>>(obj).ndim() > 0) {
+    return false;
   }
   return true;
 }
