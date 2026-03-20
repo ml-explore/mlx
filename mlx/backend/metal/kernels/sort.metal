@@ -50,6 +50,7 @@ instantiate_block_sort_bn(bfloat16, bfloat16_t)
 
 instantiate_block_sort_long(uint64, uint64_t)
 instantiate_block_sort_long(int64, int64_t)
+instantiate_block_sort_long(complex64, complex64_t)
 
 #define instantiate_multi_block_sort(                                      \
     vtname, vtype, itname, itype, arg_sort, bn, tn)                        \
@@ -77,4 +78,5 @@ instantiate_multi_block_sort_base(bfloat16, bfloat16_t)
   instantiate_multi_block_sort(vtname, vtype, uint32, uint32_t, true, 256, 4)
 
 instantiate_multi_block_sort_long(uint64, uint64_t)
-instantiate_multi_block_sort_long(int64, int64_t) // clang-format on
+instantiate_multi_block_sort_long(int64, int64_t)
+instantiate_multi_block_sort_long(complex64, complex64_t) // clang-format on

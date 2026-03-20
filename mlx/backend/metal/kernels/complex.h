@@ -97,6 +97,10 @@ constexpr bool operator<(complex64_t a, complex64_t b) {
   return operator>(b, a);
 }
 
+constexpr bool isnan(complex64_t x) {
+  return isnan(x.real) || isnan(x.imag);
+}
+
 constexpr bool operator==(complex64_t a, complex64_t b) {
   return a.real == b.real && a.imag == b.imag;
 }

@@ -2192,11 +2192,8 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_sort(self):
         shape = (6, 4, 10)
-        dtypes = ["int32", "float32"]
-        if not mx.metal.is_available():
-            dtypes.append("complex64")
         tests = product(
-            dtypes,  # type
+            ("int32", "float32", "complex64"),  # type
             (None, 0, 1, 2),  # axis
             (True, False),  # strided
         )
@@ -3326,10 +3323,9 @@ class TestOps(mlx_tests.MLXTestCase):
                 expected = mx.array([0.0, 2.0, 3.0, mx.nan], dtype=dtype)
                 self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
 
-        if not mx.metal.is_available():
-            x = mx.array([3.0 + 1j, mx.nan + 2j, 2.0 + 1j, 0.0 + 1j])
-            expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, mx.nan + 2j])
-            self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
+        x = mx.array([3.0 + 1j, mx.nan + 2j, 2.0 + 1j, 0.0 + 1j])
+        expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, mx.nan + 2j])
+        self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
 
     def test_argsort_nan(self):
         for dtype in [mx.float32, mx.float16, mx.bfloat16]:

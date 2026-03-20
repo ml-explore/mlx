@@ -29,6 +29,13 @@ struct Init<T, metal::enable_if_t<metal::is_floating_point_v<T>>> {
   static constexpr constant T v = metal::numeric_limits<T>::quiet_NaN();
 };
 
+template <>
+struct Init<complex64_t> {
+  static constexpr constant complex64_t v = complex64_t(
+      metal::numeric_limits<float>::quiet_NaN(),
+      metal::numeric_limits<float>::quiet_NaN());
+};
+
 template <typename T>
 struct LessThan {
   static constexpr constant T init = Init<T>::v;
