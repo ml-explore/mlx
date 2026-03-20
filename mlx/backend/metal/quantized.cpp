@@ -54,7 +54,7 @@ inline array
 ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   if (!x.flags().row_contiguous) {
     array x_copy = contiguous_copy_gpu(x, s);
-    d.add_temporary(x_copy, s.index);
+    metal::get_command_encoder(s).add_temporary(x_copy);
     return x_copy;
   } else {
     return x;
@@ -77,7 +77,7 @@ inline array ensure_row_contiguous_matrix(
     }
   }
   array x_copy = contiguous_copy_gpu(x, s);
-  d.add_temporary(x_copy, s.index);
+  metal::get_command_encoder(s).add_temporary(x_copy);
   return x_copy;
 }
 
@@ -214,7 +214,7 @@ void qmv_quad(
       B > 1 ? "_batch_1" : "_batch_0");
   auto kernel = get_quantized_kernel_wrapped(
       d, kname, "qmv_quad", mode, type_string, group_size, bits, K, B > 1);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -277,7 +277,7 @@ void qmv(
       bits,
       B > 1);
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -309,6 +309,8 @@ void qvm_split_k(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
+  auto& compute_encoder = metal::get_command_encoder(s);
+
   int split_k = K > 8192 ? 32 : 8;
   int split_D = (K + split_k - 1) / split_k;
   int B = out.size() / M / N;
@@ -356,7 +358,7 @@ void qvm_split_k(
   temp_shape.insert(temp_shape.end() - 2, split_k);
   array intermediate(temp_shape, x.dtype(), nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
-  d.add_temporary(intermediate, s.index);
+  compute_encoder.add_temporary(intermediate);
 
   std::string type_string = get_type_string(x.dtype());
   std::string kname;
@@ -376,7 +378,6 @@ void qvm_split_k(
   auto kernel = get_quantized_kernel_wrapped(
       d, kname, "qvm_split_k", mode, type_string, group_size, bits, split_k);
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -451,7 +452,7 @@ void qvm(
       B > 1 ? "_batch_1" : "_batch_0");
   auto kernel = get_quantized_kernel_wrapped(
       d, kname, "qvm", mode, type_string, group_size, bits, B > 1);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -553,7 +554,7 @@ void qmm_nax(
         wm,
         wn);
   }
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -654,7 +655,7 @@ void gather_qmm_nax(
         wn);
   }
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -751,7 +752,7 @@ void qmm(
     kernel = get_quantized_kernel_wrapped(
         d, kname, "qmm_n", mode, type_string, group_size, bits, batched);
   }
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -808,6 +809,7 @@ void qmm_splitk(
 
   // Allocate intermediate buffer: insert split_k at the front so that
   // partition_stride = M * N matches the leading stride of the buffer.
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto temp_shape = out.shape();
   if (temp_shape.size() == 1) {
     temp_shape.insert(temp_shape.begin(), 1);
@@ -815,7 +817,7 @@ void qmm_splitk(
   temp_shape.insert(temp_shape.begin(), split_k);
   array intermediate(temp_shape, x.dtype(), nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
-  d.add_temporary(intermediate, s.index);
+  compute_encoder.add_temporary(intermediate);
 
   // Grid: (N_tiles, M_tiles, split_k)
   MTL::Size group_dims(32, 2, 2);
@@ -837,7 +839,6 @@ void qmm_splitk(
   auto kernel = get_quantized_kernel_wrapped(
       d, kname, "qmm_t_splitk", mode, type_string, group_size, bits, aligned);
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -934,7 +935,7 @@ void gather_qmm(
         d, kname, "gather_qmm_n", mode, type_string, group_size, bits);
   }
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -1001,7 +1002,7 @@ void gather_qmv(
       group_size,
       bits);
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -1059,7 +1060,7 @@ void gather_qvm(
       bits);
   auto kernel = get_quantized_kernel_wrapped(
       d, kname, "gather_qvm", mode, type_string, group_size, bits);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int c = 0;
@@ -1173,7 +1174,7 @@ void gather_qmm_rhs_nax(
       align_K ? 't' : 'n');
 
   // Get and set the kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = get_gather_qmm_nax_kernel(
       d,
       kname,
@@ -1323,7 +1324,7 @@ void gather_qmm_rhs(
       align_K ? 't' : 'n');
 
   // Get and set the kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = get_gather_qmm_kernel(
       d,
       kname,
@@ -1568,7 +1569,7 @@ void quantize_dequantize(
     int bits,
     metal::Device& d,
     const Stream& s) {
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   auto w = ensure_row_contiguous(in, d, s);
   compute_encoder.set_input_array(w, 0);
@@ -1662,7 +1663,7 @@ void fast::Quantize::eval_gpu(
 
   auto& s = stream();
   auto& d = metal::device(s.device);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   auto w = ensure_row_contiguous(w_pre, d, s);
   if (dequantize_) {

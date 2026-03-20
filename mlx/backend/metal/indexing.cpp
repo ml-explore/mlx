@@ -111,7 +111,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
       return kernel_source;
     });
 
-    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = metal::get_command_encoder(s);
     auto kernel = d.get_kernel(kernel_name, lib);
     compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -164,7 +164,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     return kernel_source;
   });
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kernel_name, lib);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -343,7 +343,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     return kernel_source;
   });
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kernel_name, lib);
 
   size_t nthreads = upd.size();
@@ -482,7 +482,7 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     return kernel_source;
   });
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kernel_name, lib);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -598,7 +598,7 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     return kernel_source;
   });
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kernel_name, lib);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -649,6 +649,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto& s = stream();
   auto& d = metal::device(s.device);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   const size_t total = mask.size();
   const CopyType ct = (total == 1)
@@ -661,18 +662,18 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   array mask_flat = flatten_in_eval(mask, 1, -1, s);
   if (mask_flat.data<void>() != mask.data<void>()) {
-    d.add_temporary(mask_flat, s.index);
+    compute_encoder.add_temporary(mask_flat);
   }
 
   if (!mask_flat.flags().row_contiguous) {
     mask_flat = contiguous_copy_gpu(mask_flat, s);
-    d.add_temporary(mask_flat, s.index);
+    compute_encoder.add_temporary(mask_flat);
   }
 
   // Prefix (exclusive) of mask → scatter_offsets
   array scatter_offsets(mask_flat.shape(), uint32, nullptr, {});
   scatter_offsets.set_data(allocator::malloc(scatter_offsets.nbytes()));
-  d.add_temporary(scatter_offsets, s.index);
+  compute_encoder.add_temporary(scatter_offsets);
 
   scan_gpu_inplace(
       mask_flat,
@@ -704,7 +705,6 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Binding
   int bind_idx = 0;
   const int ndim = static_cast<int>(src.ndim());
-  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(mask_flat, bind_idx++);
   compute_encoder.set_input_array(scatter_offsets, bind_idx++);
@@ -842,7 +842,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
     return kernel_source;
   });
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kernel_name, lib);
   compute_encoder.set_compute_pipeline_state(kernel);
 

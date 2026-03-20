@@ -109,8 +109,7 @@ void fast::Quantize::eval_gpu(
     std::vector<array>& outputs) {
   nvtx3::scoped_range r("Quantize::eval_gpu");
   auto& s = stream();
-  auto& d = cu::device(s.device);
-  auto& enc = d.get_command_encoder(s);
+  auto& enc = cu::get_command_encoder(s);
   if (dequantize_) {
     auto wq = ensure_row_contiguous(inputs[0], enc, s);
     auto scales = ensure_row_contiguous(inputs[1], enc, s);

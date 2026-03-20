@@ -118,7 +118,7 @@ void RoPE::eval_gpu(
       {&head_seq_transpose, MTL::DataType::DataTypeBool, 3}};
 
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   float base = std::log2(base_);
   compute_encoder.set_compute_pipeline_state(kernel);

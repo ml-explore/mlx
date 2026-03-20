@@ -378,7 +378,7 @@ void CustomKernel::eval_gpu(
 
   auto lib = d.get_library(name_, [this] { return metal::utils() + source_; });
   auto kernel = d.get_kernel(name_, lib);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
   int index = 0;
   for (int i = 0; i < checked_inputs.size(); i++) {
@@ -424,7 +424,7 @@ void CustomKernel::eval_gpu(
   MTL::Size grid_dims = MTL::Size(gx, gy, gz);
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 }
 
 } // namespace mlx::core::fast

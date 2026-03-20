@@ -46,6 +46,7 @@ auto get_metal_version() {
 }
 
 NS::SharedPtr<MTL::Device> load_device() {
+  auto pool = new_scoped_memory_pool();
   auto devices = NS::TransferPtr(MTL::CopyAllDevices());
   auto device = NS::RetainPtr(static_cast<MTL::Device*>(devices->object(0)))
       ?: NS::TransferPtr(MTL::CreateSystemDefaultDevice());
@@ -249,7 +250,7 @@ MTL::Library* load_library(
 CommandEncoder::CommandEncoder(
     Device& d,
     int index,
-    const MTL::ResidencySet* residency_set)
+    ResidencySet& residency_set)
     : device_(d) {
   auto pool = new_scoped_memory_pool();
   queue_ = NS::TransferPtr(device_.mtl_device()->newCommandQueue());
@@ -257,8 +258,8 @@ CommandEncoder::CommandEncoder(
     throw std::runtime_error(
         "[metal::CommandEncoder] Failed to make new command queue.");
   }
-  if (residency_set) {
-    queue_->addResidencySet(residency_set);
+  if (residency_set.mtl_residency_set()) {
+    queue_->addResidencySet(residency_set.mtl_residency_set());
   }
   debug_set_stream_queue_label(queue_.get(), index);
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
@@ -441,9 +442,8 @@ MTL::ComputeCommandEncoder* CommandEncoder::get_command_encoder() {
   return encoder_.get();
 }
 
-Device::Device() {
+Device::Device() : device_(load_device()), residency_set_(device_.get()) {
   auto pool = new_scoped_memory_pool();
-  device_ = load_device();
   default_library_ = NS::TransferPtr(load_default_library(device_.get()));
   arch_ = env::metal_gpu_arch();
   if (arch_.empty()) {
@@ -486,38 +486,6 @@ Device::Device() {
 }
 
 Device::~Device() = default;
-
-bool Device::command_buffer_needs_commit(int index) {
-  return get_command_encoder(index).needs_commit();
-}
-
-MTL::CommandBuffer* Device::get_command_buffer(int index) {
-  return get_command_encoder(index).get_command_buffer();
-}
-
-void Device::commit_command_buffer(int index) {
-  get_command_encoder(index).commit();
-}
-
-void Device::add_temporary(array arr, int index) {
-  get_command_encoder(index).add_temporary(std::move(arr));
-}
-
-void Device::add_temporaries(std::vector<array> arrays, int index) {
-  get_command_encoder(index).add_temporaries(std::move(arrays));
-}
-
-void Device::end_encoding(int index) {
-  get_command_encoder(index).end_encoding();
-}
-
-CommandEncoder& Device::get_command_encoder(int index) {
-  auto it = encoders_.find(index);
-  if (it == encoders_.end()) {
-    it = encoders_.try_emplace(index, *this, index, residency_set_).first;
-  }
-  return it->second;
-}
 
 MTL::Library* Device::get_library(
     const std::string& name,
@@ -793,27 +761,23 @@ MTL::ComputePipelineState* Device::get_kernel(
       linked_functions);
 }
 
-void Device::set_residency_set(const MTL::ResidencySet* residency_set) {
-  if (residency_set_ != nullptr) {
-    throw std::runtime_error(
-        "[Device::set_residency_set] Can only be set once.");
-  }
-  if (residency_set == nullptr) {
-    return;
-  }
-  residency_set_ = residency_set;
-  // Attach residency set to existing command queues
-  for (auto& [_, encoder] : encoders_) {
-    encoder.get_command_queue()->addResidencySet(residency_set_);
-  }
-}
-
 Device& device(mlx::core::Device) {
   // Leak singleton device intentionally, to avoid cases where a compute kernel
   // returns and tries to access the object after it has been freed by the main
   // thread teardown.
   static Device* metal_device = new Device;
   return *metal_device;
+}
+
+CommandEncoder& get_command_encoder(Stream s) {
+  // Leak the command encoders for the same reason with device.
+  static auto* encoders = new std::unordered_map<int, CommandEncoder>;
+  auto it = encoders->find(s.index);
+  if (it == encoders->end()) {
+    auto& d = device(s.device);
+    it = encoders->try_emplace(s.index, d, s.index, d.residency_set()).first;
+  }
+  return it->second;
 }
 
 NS::SharedPtr<NS::AutoreleasePool> new_scoped_memory_pool() {

@@ -37,7 +37,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
   MTL::Size group_dims = MTL::Size(
       std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   switch (out.dtype()) {
@@ -116,7 +116,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // ArgReduce
   int simd_size = 32;
   int n_reads = 4;
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   {
     auto kernel = d.get_kernel(op_name + type_to_name(in));
     NS::UInteger thread_group_size = std::min(
@@ -183,7 +183,7 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   // organize into grid nkeys x elem_per_key
   MTL::Size grid_dims = MTL::Size(num_keys, half_size + odd, 1);
   auto group_dims = get_block_dims(num_keys, half_size + odd, 1);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(keys, 0);
   compute_encoder.set_output_array(out, 1);

@@ -2,7 +2,9 @@
 
 #pragma once
 
-#include "mlx/backend/metal/device.h"
+#include <unordered_set>
+
+#include <Metal/Metal.hpp>
 
 namespace mlx::core::metal {
 

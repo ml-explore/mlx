@@ -31,8 +31,9 @@ void* Buffer::raw_ptr() {
 
 namespace metal {
 
-MetalAllocator::MetalAllocator()
-    : device_(device(mlx::core::Device::gpu).mtl_device()),
+MetalAllocator::MetalAllocator(Device& d)
+    : device_(d.mtl_device()),
+      residency_set_(d.residency_set()),
       buffer_cache_(
           vm_page_size,
           [](MTL::Buffer* buf) { return buf->length(); },
@@ -42,8 +43,7 @@ MetalAllocator::MetalAllocator()
             }
             auto pool = metal::new_scoped_memory_pool();
             buf->release();
-          }),
-      residency_set_(device_) {
+          }) {
   const auto& info = gpu::device_info(0);
   auto memsize = std::get<size_t>(info.at("memory_size"));
   auto max_rec_size =
@@ -52,8 +52,6 @@ MetalAllocator::MetalAllocator()
   block_limit_ = std::min(1.5 * max_rec_size, 0.95 * memsize);
   gc_limit_ = std::min(static_cast<size_t>(0.95 * max_rec_size), block_limit_);
   max_pool_size_ = block_limit_;
-  device(mlx::core::Device::gpu)
-      .set_residency_set(residency_set_.mtl_residency_set());
   bool is_vm = std::get<std::string>(info.at("device_name")) ==
       "Apple Paravirtual device";
   if (is_vm) {
@@ -226,7 +224,8 @@ MetalAllocator& allocator() {
   // By creating the |allocator_| on heap, the destructor of MetalAllocator
   // will not be called on exit and buffers in the cache will be leaked. This
   // can save some time at program exit.
-  static MetalAllocator* allocator_ = new MetalAllocator;
+  static MetalAllocator* allocator_ =
+      new MetalAllocator(device(mlx::core::Device::gpu));
   return *allocator_;
 }
 

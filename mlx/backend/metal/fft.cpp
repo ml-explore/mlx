@@ -515,6 +515,7 @@ void fft_op(
     bool inplace,
     const Stream& s) {
   auto& d = metal::device(s.device);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   size_t n = out.dtype() == float32 ? out.shape(axis) : in.shape(axis);
   if (n == 1) {
@@ -581,7 +582,7 @@ void fft_op(
   auto plan = plan_fft(n);
   if (plan.four_step) {
     four_step_fft(in, out, axis, inverse, real, plan, copies, s, inplace);
-    d.add_temporaries(std::move(copies), s.index);
+    compute_encoder.add_temporaries(std::move(copies));
     return;
   }
 
@@ -654,7 +655,6 @@ void fft_op(
     // We can perform 2 RFFTs at once so the batch size is halved.
     batch_size = (batch_size + 2 - 1) / 2;
   }
-  auto& compute_encoder = d.get_command_encoder(s.index);
   auto in_type_str = in.dtype() == float32 ? "float" : "float2";
   auto out_type_str = out.dtype() == float32 ? "float" : "float2";
   // Only required by four step
@@ -745,7 +745,7 @@ void fft_op(
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 }
 
 void fft_op(
@@ -789,8 +789,7 @@ void nd_fft_op(
     fft_op(in_arr, out_arr, axis, inverse, step_real, inplace, s);
   }
 
-  auto& d = metal::device(s.device);
-  d.add_temporaries(std::move(temp_arrs), s.index);
+  metal::get_command_encoder(s).add_temporaries(std::move(temp_arrs));
 }
 
 void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {

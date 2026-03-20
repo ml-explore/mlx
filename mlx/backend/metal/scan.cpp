@@ -60,7 +60,7 @@ void scan_gpu_inplace(
       get_scan_kernel(d, kname, reverse, inclusive, reduce_type_str, in, out);
 
   if (contiguous) {
-    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = metal::get_command_encoder(s);
     compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
@@ -89,7 +89,7 @@ void scan_gpu_inplace(
     MTL::Size group_dims(thread_group_size, 1, 1);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   } else {
-    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = metal::get_command_encoder(s);
     compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);

@@ -9,7 +9,6 @@
 #include "mlx/allocator.h"
 #include "mlx/backend/common/buffer_cache.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/resident.h"
 
 namespace mlx::core::metal {
 
@@ -52,13 +51,13 @@ class MetalAllocator : public allocator::Allocator {
   static constexpr int small_size_ = 256;
   static constexpr int heap_size_ = 1 << 20;
 
-  MetalAllocator();
+  MetalAllocator(Device& d);
   ~MetalAllocator();
 
   friend MetalAllocator& allocator();
 
   NS::SharedPtr<MTL::Heap> heap_;
-  ResidencySet residency_set_;
+  ResidencySet& residency_set_;
 
   // Caching allocator
   BufferCache<MTL::Buffer> buffer_cache_;
