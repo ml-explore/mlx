@@ -7,6 +7,8 @@
 
 namespace mlx::core::gpu {
 
+void init() {}
+
 void new_stream(Stream) {}
 
 void eval(array&) {

@@ -218,13 +218,13 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
   }
 
-  std::unordered_set<int> open_streams;
+  std::set<Stream> open_streams;
   while (!tape.empty()) {
     auto arr = std::move(tape.back());
     tape.pop_back();
 
     auto stream = arr.primitive().stream();
-    open_streams.insert(stream.index);
+    open_streams.insert(stream);
 
     if (async) {
       // Lookup corresponding event
@@ -265,8 +265,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
         (get_active_memory() > get_memory_limit() &&
          scheduler::n_active_tasks() > 0)) {
       // Commit any open streams
-      for (auto i : open_streams) {
-        auto s = get_stream(i);
+      for (auto& s : open_streams) {
         if (s.device == Device::gpu) {
           gpu::finalize(s);
         }
@@ -302,9 +301,8 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   // Signal the event in its stream
-  for (auto i : open_streams) {
-    auto s = get_stream(i);
-    if (auto e = events.find(i); e != events.end()) {
+  for (auto& s : open_streams) {
+    if (auto e = events.find(s.index); e != events.end()) {
       e->second.signal(s);
     }
     if (s.device == Device::gpu) {

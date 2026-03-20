@@ -9,6 +9,8 @@
 
 namespace mlx::core::gpu {
 
+void init() {}
+
 void new_stream(Stream stream) {
   if (stream.device == mlx::core::Device::gpu) {
     metal::device(stream.device).get_command_encoder(stream.index);
