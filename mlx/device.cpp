@@ -25,14 +25,6 @@ void set_default_device(const Device& d) {
   mutable_default_device() = d;
 }
 
-bool operator==(const Device& lhs, const Device& rhs) {
-  return lhs.type == rhs.type && lhs.index == rhs.index;
-}
-
-bool operator!=(const Device& lhs, const Device& rhs) {
-  return !(lhs == rhs);
-}
-
 bool is_available(const Device& d) {
   switch (d.type) {
     case Device::cpu:
