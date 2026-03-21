@@ -168,6 +168,55 @@ TEST_CASE("test simplify noops") {
   set_compile_mode(CompileMode::enabled);
 }
 
+TEST_CASE("test layout mover pushes views across multiple elementwise ops") {
+  set_compile_mode(CompileMode::no_fuse);
+  auto fun = [](const std::vector<array>& inputs) -> std::vector<array> {
+    auto added = inputs[0] + inputs[1];
+    auto absed = abs(added);
+    auto expanded = expand_dims(absed, 0);
+    return {sin(expanded)};
+  };
+  auto x = array({1.0f, 2.0f});
+  auto y = array({3.0f, 4.0f});
+  auto out = compile(fun)({x, y})[0];
+  auto abs_node = out.inputs()[0];
+  auto& abs_prim = abs_node.primitive();
+  CHECK(typeid(abs_prim) == typeid(Abs));
+  CHECK_EQ(abs_node.inputs().size(), 1);
+  CHECK(abs_node.inputs()[0].has_primitive());
+
+  auto add_node = abs_node.inputs()[0];
+  auto& add_prim = add_node.primitive();
+  CHECK(typeid(add_prim) == typeid(Add));
+  CHECK_EQ(add_node.inputs().size(), 2);
+  CHECK(add_node.inputs()[0].has_primitive());
+  auto& in0_prim = add_node.inputs()[0].primitive();
+  CHECK(typeid(in0_prim) == typeid(ExpandDims));
+  CHECK(add_node.inputs()[1].has_primitive());
+  auto& in1_prim = add_node.inputs()[1].primitive();
+  CHECK(typeid(in1_prim) == typeid(ExpandDims));
+  set_compile_mode(CompileMode::enabled);
+}
+
+TEST_CASE("test layout mover skips graph outputs") {
+  set_compile_mode(CompileMode::no_fuse);
+  auto fun = [](const std::vector<array>& inputs) -> std::vector<array> {
+    auto added = inputs[0] + inputs[1];
+    return {expand_dims(added, 0)};
+  };
+  auto x = array({1.0f, 2.0f});
+  auto y = array({3.0f, 4.0f});
+  auto out = compile(fun)({x, y})[0];
+  auto& out_prim = out.primitive();
+  CHECK(typeid(out_prim) == typeid(ExpandDims));
+  auto parent = out.inputs()[0];
+  auto& parent_prim = parent.primitive();
+  CHECK(typeid(parent_prim) == typeid(Add));
+  CHECK_FALSE(parent.inputs()[0].has_primitive());
+  CHECK_FALSE(parent.inputs()[1].has_primitive());
+  set_compile_mode(CompileMode::enabled);
+}
+
 auto add_diff(const std::vector<array>& inputs) {
   auto a = inputs[0];
   return std::vector<array>{cos(a) + sin(a)};
@@ -263,6 +312,12 @@ auto unary_fused_3(const std::vector<array>& inputs) {
   return std::vector<array>{exp(abs(negative(sum(inputs[0], true))))};
 }
 
+auto unary_fused_layout(const std::vector<array>& inputs) {
+  auto added = inputs[0] + inputs[1];
+  auto expanded = expand_dims(added, 0);
+  return std::vector<array>{sin(expanded)};
+}
+
 TEST_CASE("test compile unary fused") {
   // NB: some of these tests are brittle and may need to be
   // updated if we change compile conditions
@@ -326,6 +381,18 @@ TEST_CASE("test compile unary fused") {
     CHECK(out1[0].primitive().is_equivalent(out2[0].primitive()));
     auto out3 = compile(unary_fused_1_diff)({array(1.0)});
     CHECK(!out1[0].primitive().is_equivalent(out3[0].primitive()));
+  }
+
+  // Layout ops should not block fusion
+  {
+    auto cfun = compile(unary_fused_layout);
+    auto x = array({1.0f, 2.0f});
+    auto y = array({3.0f, 4.0f});
+    auto out = cfun({x, y})[0];
+    auto& prim = out.primitive();
+    CHECK_EQ(typeid(prim), typeid(Compiled));
+    auto expected = unary_fused_layout({x, y})[0];
+    CHECK(allclose(out, expected).item<bool>());
   }
 }
 
