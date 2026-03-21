@@ -55,6 +55,30 @@ void qmm_sm80(
     QuantizationMode mode,
     cu::CommandEncoder& encoder);
 
+bool supports_qmm_naive(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device);
+
+void qmm_naive(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder);
+
 bool supports_fp_qmv(
     const array& x,
     const array& w,

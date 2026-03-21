@@ -1,10 +1,8 @@
 // Copyright © 2026 Apple Inc.
 
+#include "mlx/backend/cuda/quantized/qmm/cute_dequant.cuh"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
 #include "mlx/dtype_utils.h"
-
-#include <cute/tensor.hpp>
-#include <cutlass/numeric_conversion.h>
 
 // clang-format off
 
@@ -12,9 +10,6 @@
 namespace cutlass_gemm {
 
 using namespace cute;
-
-template <typename Quant>
-constexpr bool has_zero_point_v = !cutlass::has_negative_zero_v<Quant>;
 
 template <typename Element,
           typename Quant,
@@ -30,30 +25,6 @@ union SharedStorage {
     ArrayEngine<Element, cosize_v<SmemLayoutC>> C;
   } epilogue;
 };
-
-template <typename Q, typename S, typename Z, typename T>
-__device__ __forceinline__ void
-dequant(const Q& w, const S& s, const Z& z, T out) {
-  // Scale must be one element.
-  CUTE_STATIC_ASSERT_V(cosize(s.layout()) == Int<1>{});
-  CUTE_STATIC_ASSERT_V(cosize(z.layout()) == Int<1>{});
-  // Quant must be contiguous.
-  auto layout = coalesce(w.layout());
-  CUTE_STATIC_ASSERT_V(stride(layout) == Int<1>{});
-  // Use cutlass for conversions.
-  constexpr int N = size(layout);
-  using Element = typename T::value_type;
-  using Quant = typename Q::value_type;
-  auto& w_vec = *(reinterpret_cast<const cutlass::Array<Quant, N>*>(raw_pointer_cast(w.data())));
-  Element scale{s[0]};
-  cutlass::NumericArrayConverter<Element, Quant, N> converter;
-  auto w_dq = converter(w_vec) * scale;
-  if constexpr (has_zero_point_v<Quant>) {
-    Element zero_point{z[0]};
-    w_dq = w_dq + zero_point;
-  }
-  copy(make_tensor(make_rmem_ptr<Element>(&w_dq), out.layout()), out);
-}
 
 template <typename ProblemShape, typename CtaTiler,
           typename Element, typename Quant, typename Scale,
@@ -195,7 +166,7 @@ __global__ void qmm_sm80_kernel(
   // Copy S/Z: GMEM => RMEM.
   auto fetch_scales = [&](int tile) {
     copy(g2r_copy_s, g2r_tCgS(_,_,_,tile), g2r_tCrS);
-    if constexpr (has_zero_point_v<Quant>) {
+    if constexpr (quant_has_bias_v<Quant>) {
       copy(g2r_copy_s, g2r_tCgZ(_,_,_,tile), g2r_tCrZ);
     }
   };
@@ -205,7 +176,11 @@ __global__ void qmm_sm80_kernel(
     copy(s2r_atom_b, s2r_tCsB(_,_,block,smem_pipe_read), s2r_tCrB(_,_,block));
     CUTE_UNROLL
     for (int n = 0; n < size<1>(tCrB); ++n) {
-      dequant(tCrB(_,n,block), tCrS(_,n,block), tCrZ(_,n,block), tCrB_dq(_,n,block));
+      cute_vectorized_dequant(
+          tCrB(_,n,block),
+          tCrS(_,n,block),
+          tCrZ(_,n,block),
+          tCrB_dq(_,n,block));
     }
   };
 
@@ -300,6 +275,7 @@ void qmm_sm80(
     const Element* Z,
     Element* C,
     int m, int n, int k, int l,
+    bool broadcast_b,
     GroupSize group_size,
     F&& launch_kernel) {
   // Define shapes (dynamic).
@@ -309,6 +285,17 @@ void qmm_sm80(
   auto dA = make_stride(k, Int<1>{}, m * k); // (dM,dK,dL)
   auto dB = make_stride(k, Int<1>{}, n * k); // (dN,dK,dL)
   auto dC = make_stride(n, Int<1>{}, m * n); // (dM,dN,dL)
+
+  // Define layout of scales/biases (mixed).
+  auto S_layout = make_layout(
+      make_shape(n, make_shape(group_size, k / group_size), l),
+      make_stride(k / group_size, Stride<_0, _1>{}, n * k / group_size));
+
+  // Handle broadcasting.
+  if (broadcast_b) {
+    get<2>(dB) = 0;
+    get<2>(stride(S_layout)) = 0;
+  }
 
   // Define CTA tile sizes (static).
   auto bM = Int<TileM>{};
@@ -336,11 +323,6 @@ void qmm_sm80(
   auto bS = ceil_div(bK, group_size);
   auto sS_layout = make_layout(make_shape(bN, make_shape(group_size, bS)),
                                make_stride(bS, Stride<_0, _1>{}));
-
-  // Define layout of scales/biases (mixed).
-  auto S_layout = make_layout(
-      make_shape(n, make_shape(group_size, k / group_size), l),
-      make_stride(k / group_size, Stride<_0, _1>{}, n * k / group_size));
 
   // Atoms.
   constexpr int element_bits = sizeof_bits_v<Element>;
@@ -457,6 +439,7 @@ void qmm_impl_sm80(
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);
+  bool broadcast_b = w.ndim() == 2;
 
   dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
     dispatch_quant_types<Element>(
@@ -482,6 +465,7 @@ void qmm_impl_sm80(
               n,
               k,
               l,
+              broadcast_b,
               cute::Int<group_size>{},
               [&](auto* kernel,
                   dim3 num_blocks,

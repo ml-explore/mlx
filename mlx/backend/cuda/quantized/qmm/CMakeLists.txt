@@ -3,6 +3,12 @@ target_sources(
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/qmm.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/qmv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fp_qmv.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/qmm_impl_naive_m16_k.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/qmm_impl_naive_m16_n.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/qmm_impl_naive_m32_k.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/qmm_impl_naive_m32_n.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/qmm_impl_naive_m64_k.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/qmm_impl_naive_m64_n.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/qmm_impl_sm80_m16.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/qmm_impl_sm80_m32.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/qmm_impl_sm80_m64.cu
