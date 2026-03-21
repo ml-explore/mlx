@@ -66,12 +66,8 @@ struct StreamThread {
 
 class Scheduler {
  public:
-  Scheduler() : n_active_tasks_(0) {
-    if (is_available(Device::gpu)) {
-      default_streams_.insert({Device::gpu, new_stream(Device::gpu)});
-    }
-    default_streams_.insert({Device::cpu, new_stream(Device::cpu)});
-  }
+  Scheduler();
+  ~Scheduler();
 
   // Not copyable or moveable
   Scheduler(const Scheduler&) = delete;
@@ -79,33 +75,8 @@ class Scheduler {
   Scheduler& operator=(const Scheduler&) = delete;
   Scheduler& operator=(Scheduler&&) = delete;
 
-  Stream new_stream(const Device& d) {
-    streams_.emplace_back(streams_.size(), d);
-    if (d == Device::gpu) {
-      threads_.push_back(nullptr);
-      gpu::new_stream(streams_.back());
-    } else {
-      threads_.push_back(new StreamThread{});
-    }
-    return streams_.back();
-  }
-
   template <typename F>
   void enqueue(const Stream& stream, F&& f);
-
-  Stream get_default_stream(const Device& d) const {
-    return default_streams_.at(d.type);
-  }
-  Stream get_stream(int index) const {
-    return streams_.at(index);
-  }
-  std::vector<Stream> get_streams() const {
-    return streams_;
-  }
-
-  void set_default_stream(const Stream& s) {
-    default_streams_.at(s.device.type) = s;
-  }
 
   void notify_new_task(const Stream& stream) {
     {
@@ -137,26 +108,13 @@ class Scheduler {
     }
   }
 
-  ~Scheduler() {
-    for (auto s : streams_) {
-      try {
-        synchronize(s);
-      } catch (const std::runtime_error&) {
-        // ignore errors if synch fails
-      }
-    }
-    for (auto t : threads_) {
-      if (t != nullptr) {
-        delete t;
-      }
-    }
-  }
-
  private:
-  int n_active_tasks_;
-  std::vector<StreamThread*> threads_;
-  std::vector<Stream> streams_;
-  std::unordered_map<Device::DeviceType, Stream> default_streams_;
+  friend Stream mlx::core::new_stream(Device d);
+
+  void new_thread(Device::DeviceType type);
+
+  int n_active_tasks_{0};
+  std::vector<std::unique_ptr<StreamThread>> threads_;
   std::condition_variable completion_cv;
   std::mutex mtx;
 };
