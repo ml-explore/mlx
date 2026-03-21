@@ -321,11 +321,11 @@ class QQLinear(Module):
     :obj:`QQLinear` also provides the class method :meth:`from_linear` to
     convert :class:`mlx.nn.Linear` layers to :obj:`QQLinear` layers.
 
-    Note: This layer does not support a bias term yet.
-
     Args:
         input_dims (int): The dimensionality of the input features.
         output_dims (int): The dimensionality of the output features.
+        bias (bool, optional): If set to ``False`` then the layer will not use
+            a bias. Default: ``False``.
         group_size (Optional[int]): The group size to use for the quantized weight.
             See :func:`~mlx.core.quantize`. Default: ``None``.
         bits (Optional[int]): The bit width to use for the quantized weight.
@@ -339,6 +339,7 @@ class QQLinear(Module):
         self,
         input_dims: int,
         output_dims: int,
+        bias: bool = False,
         group_size: int = None,
         bits: int = None,
         mode: str = "nvfp4",
@@ -357,12 +358,15 @@ class QQLinear(Module):
         )
         self._quantized = False
 
+        if bias:
+            self.bias = mx.zeros((output_dims,))
+
     def _extra_repr(self):
         out_dims, in_dims = self.weight.shape
         if self.weight.dtype == mx.uint32:
             in_dims = (in_dims * 32) // self.bits
         return (
-            f"input_dims={in_dims}, output_dims={out_dims}, "
+            f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}, "
             f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
         )
 
@@ -397,7 +401,19 @@ class QQLinear(Module):
             self.quantize()
 
     def __call__(self, x):
-        x = mx.qqmm(
+        if "bias" in self:
+            # Use qqaddmm to fuse bias addition into the matmul epilogue
+            return mx.qqaddmm(
+                self["bias"],
+                x,
+                self["weight"],
+                scales=self.get("scales"),
+                group_size=self.group_size,
+                bits=self.bits,
+                mode=self.mode,
+            )
+
+        return mx.qqmm(
             x,
             self["weight"],
             scales=self.get("scales"),
@@ -405,7 +421,6 @@ class QQLinear(Module):
             bits=self.bits,
             mode=self.mode,
         )
-        return x
 
     @classmethod
     def from_linear(
@@ -417,10 +432,19 @@ class QQLinear(Module):
     ):
         """Create a :obj:`QQLinear` layer from a :obj:`Linear` layer."""
         output_dims, input_dims = linear_layer.weight.shape  # (N,K)
-        if linear_layer.get("bias") is not None:
-            raise NotImplementedError("QQLinear does not support bias yet.")
-        ql = cls(input_dims, output_dims, group_size, bits, mode=mode)
+        has_bias = linear_layer.get("bias") is not None
+        ql = cls(
+            input_dims,
+            output_dims,
+            bias=False,
+            group_size=group_size,
+            bits=bits,
+            mode=mode,
+        )
         ql.weight = linear_layer.weight
-        ql.train(linear_layer.training)
 
+        if has_bias:
+            ql.bias = linear_layer.bias
+
+        ql.train(linear_layer.training)
         return ql
