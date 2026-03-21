@@ -1930,6 +1930,88 @@ std::pair<std::vector<array>, std::vector<int>> ErfInv::vmap(
   return {{erfinv(inputs[0], stream())}, axes};
 }
 
+// ---------------------------------------------------------------------------
+// Helper: compute I1(x) – modified Bessel function of the first kind, order 1
+// This is the derivative of I0 and is needed for I0 gradients.
+// Cephes polynomial approximation (same two-domain split as I0).
+// ---------------------------------------------------------------------------
+static array i1_impl(const array& x, Stream s) {
+  auto dtype = x.dtype();
+  auto y = abs(x, s);
+  auto t_small = square(divide(y, array(3.75f, dtype), s), s); // (y/3.75)^2
+  // Horner evaluation for |x| <= 3.75: result = x * poly(t)
+  auto poly_small = [&](const array& t) -> array {
+    // coefficients [inner … outer]
+    static const float cs[] = {
+        0.00032411f,
+        0.00301532f,
+        0.02658733f,
+        0.15084934f,
+        0.51498869f,
+        0.87890594f,
+        0.5f,
+    };
+    array r(cs[0], dtype);
+    for (int i = 1; i < 7; ++i) {
+      r = add(multiply(r, t, s), array(cs[i], dtype), s);
+    }
+    return multiply(x, r, s); // I1 is odd: multiply by x (preserves sign)
+  };
+
+  auto t_large = divide(array(3.75f, dtype), y, s); // 3.75/|x|
+  // Horner evaluation for |x| > 3.75: result =
+  // sign(x)*exp(|x|)/sqrt(|x|)*poly(t)
+  auto poly_large = [&](const array& t) -> array {
+    static const float cl[] = {
+        -0.00420059f,
+        0.01787654f,
+        -0.02895312f,
+        0.02282967f,
+        -0.01031555f,
+        0.00163801f,
+        -0.00362018f,
+        -0.03988024f,
+        0.39894228f,
+    };
+    array r(cl[0], dtype);
+    for (int i = 1; i < 9; ++i) {
+      r = add(multiply(r, t, s), array(cl[i], dtype), s);
+    }
+    auto env = divide(exp(y, s), sqrt(y, s), s);
+    auto mag = multiply(env, r, s);
+    // Restore sign: I1 is odd
+    return multiply(sign(x, s), mag, s);
+  };
+
+  auto mask = less_equal(y, array(3.75f, dtype), s);
+  return where(mask, poly_small(t_small), poly_large(t_large), s);
+}
+
+std::vector<array> I0::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  return jvp(primals, cotangents, argnums);
+}
+
+std::vector<array> I0::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {multiply(tangents[0], i1_impl(primals[0], stream()), stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> I0::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{i0(inputs[0], stream())}, axes};
+}
+
 std::vector<array> Exp::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
