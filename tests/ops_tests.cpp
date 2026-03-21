@@ -4254,3 +4254,77 @@ TEST_CASE("test max min with nan") {
   CHECK(array_equal(max_result, expected, true).item<bool>());
   CHECK(array_equal(min_result, expected, true).item<bool>());
 }
+
+TEST_CASE("test bessel_i0e and bessel_i1e") {
+  // i0e(0) = 1
+  CHECK_EQ(
+      bessel_i0e(array(0.0f)).item<float>(),
+      doctest::Approx(1.0f).epsilon(1e-5));
+
+  // i1e(0) = 0
+  CHECK_EQ(
+      bessel_i1e(array(0.0f)).item<float>(),
+      doctest::Approx(0.0f).epsilon(1e-5));
+
+  // Known value: i0e(1) = exp(-1) * I0(1) ≈ 0.4657596
+  CHECK_EQ(
+      bessel_i0e(array(1.0f)).item<float>(),
+      doctest::Approx(0.4657596f).epsilon(1e-5));
+
+  // Known value: i1e(1) = exp(-1) * I1(1) ≈ 0.2079104
+  CHECK_EQ(
+      bessel_i1e(array(1.0f)).item<float>(),
+      doctest::Approx(0.2079104f).epsilon(1e-5));
+
+  // Even symmetry: i0e(-x) = i0e(x)
+  CHECK_EQ(
+      bessel_i0e(array(-5.0f)).item<float>(),
+      doctest::Approx(bessel_i0e(array(5.0f)).item<float>()).epsilon(1e-6));
+
+  // Odd symmetry: i1e(-x) = -i1e(x)
+  CHECK_EQ(
+      bessel_i1e(array(-5.0f)).item<float>(),
+      doctest::Approx(-bessel_i1e(array(5.0f)).item<float>()).epsilon(1e-6));
+
+  // Large x (asymptotic regime): i0e(100) ≈ 1/sqrt(2*pi*100) ≈ 0.03989
+  CHECK_EQ(
+      bessel_i0e(array(100.0f)).item<float>(),
+      doctest::Approx(0.0398942f).epsilon(1e-4));
+
+  // Type promotion: int -> float
+  CHECK_EQ(bessel_i0e(array(2, int32)).dtype(), float32);
+  CHECK_EQ(bessel_i1e(array(2, int32)).dtype(), float32);
+
+  // Vectorized
+  {
+    auto x = array({0.0f, 1.0f, 5.0f, 10.0f});
+    CHECK_EQ(bessel_i0e(x).shape(), Shape{4});
+    CHECK_EQ(bessel_i1e(x).shape(), Shape{4});
+  }
+
+  // float16
+  {
+    array x(1.0f, float16);
+    CHECK_EQ(bessel_i0e(x).dtype(), float16);
+    CHECK_EQ(bessel_i1e(x).dtype(), float16);
+  }
+
+  // Gradient of i0e: d/dx i0e(x) = i1e(x) - sign(x) * i0e(x)
+  {
+    auto f = [](array x) { return bessel_i0e(x); };
+    auto dfdx = grad(f)(array(3.0f));
+    auto expected = bessel_i1e(array(3.0f)).item<float>() -
+        bessel_i0e(array(3.0f)).item<float>();
+    CHECK_EQ(dfdx.item<float>(), doctest::Approx(expected).epsilon(1e-5));
+  }
+
+  // Gradient of i1e: d/dx i1e(x) = i0e(x) - (sign(x) + 1/x) * i1e(x)
+  {
+    auto f = [](array x) { return bessel_i1e(x); };
+    auto dfdx = grad(f)(array(3.0f));
+    float x_val = 3.0f;
+    float expected = bessel_i0e(array(x_val)).item<float>() -
+        (1.0f + 1.0f / x_val) * bessel_i1e(array(x_val)).item<float>();
+    CHECK_EQ(dfdx.item<float>(), doctest::Approx(expected).epsilon(1e-5));
+  }
+}

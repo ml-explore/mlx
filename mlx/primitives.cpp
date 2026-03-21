@@ -1930,6 +1930,101 @@ std::pair<std::vector<array>, std::vector<int>> ErfInv::vmap(
   return {{erfinv(inputs[0], stream())}, axes};
 }
 
+// d/dx i0e(x) = i1e(x) - sign(x) * i0e(x)
+std::vector<array> BesselI0e::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  auto x = primals[0];
+  auto grad = subtract(
+      bessel_i1e(x, stream()),
+      multiply(sign(x, stream()), bessel_i0e(x, stream()), stream()),
+      stream());
+  return {multiply(cotangents[0], grad, stream())};
+}
+
+std::vector<array> BesselI0e::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  auto x = primals[0];
+  auto grad = subtract(
+      bessel_i1e(x, stream()),
+      multiply(sign(x, stream()), bessel_i0e(x, stream()), stream()),
+      stream());
+  return {multiply(tangents[0], grad, stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> BesselI0e::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{bessel_i0e(inputs[0], stream())}, axes};
+}
+
+// d/dx i1e(x) = i0e(x) - (sign(x) + 1/x) * i1e(x)
+// At x=0: i1e(0)=0 and 1/x*i1e(x) -> 0 via L'Hopital, so gradient = i0e(0) = 1
+std::vector<array> BesselI1e::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  auto x = primals[0];
+  auto i0e_val = bessel_i0e(x, stream());
+  auto i1e_val = bessel_i1e(x, stream());
+  auto s = sign(x, stream());
+  auto ax = abs(x, stream());
+  auto eps = array(1e-10f, x.dtype());
+  auto safe = greater(ax, eps, stream());
+  auto inv_x = where(
+      safe,
+      divide(array(1.0f, x.dtype()), x, stream()),
+      array(0.0f, x.dtype()),
+      stream());
+  auto grad = subtract(
+      i0e_val,
+      multiply(add(s, inv_x, stream()), i1e_val, stream()),
+      stream());
+  return {multiply(cotangents[0], grad, stream())};
+}
+
+std::vector<array> BesselI1e::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  auto x = primals[0];
+  auto i0e_val = bessel_i0e(x, stream());
+  auto i1e_val = bessel_i1e(x, stream());
+  auto s = sign(x, stream());
+  auto ax = abs(x, stream());
+  auto eps = array(1e-10f, x.dtype());
+  auto safe = greater(ax, eps, stream());
+  auto inv_x = where(
+      safe,
+      divide(array(1.0f, x.dtype()), x, stream()),
+      array(0.0f, x.dtype()),
+      stream());
+  auto grad = subtract(
+      i0e_val,
+      multiply(add(s, inv_x, stream()), i1e_val, stream()),
+      stream());
+  return {multiply(tangents[0], grad, stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> BesselI1e::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{bessel_i1e(inputs[0], stream())}, axes};
+}
+
 std::vector<array> Exp::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

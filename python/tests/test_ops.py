@@ -1020,6 +1020,50 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array([3.8325066566467285] * 8)
         self.assertTrue(mx.allclose(result, expected))
 
+    def test_bessel_i0e(self):
+        # i0e(0) = 1
+        self.assertTrue(
+            np.allclose(mx.bessel_i0e(mx.array([0.0])), [1.0], atol=1e-6)
+        )
+        # Known values: i0e(1) ≈ 0.4657596, i0e(5) ≈ 0.1835408
+        x = mx.array([0.0, 1.0, 5.0, 10.0])
+        expected = np.array([1.0, 0.4657596, 0.1835408, 0.1278333]).astype(
+            np.float32
+        )
+        self.assertTrue(np.allclose(mx.bessel_i0e(x), expected, atol=1e-5))
+        # Type promotion
+        self.assertEqual(mx.bessel_i0e(mx.array(2)).dtype, mx.float32)
+        # Even symmetry
+        self.assertTrue(
+            np.allclose(
+                mx.bessel_i0e(mx.array([-3.0])),
+                mx.bessel_i0e(mx.array([3.0])),
+                atol=1e-6,
+            )
+        )
+
+    def test_bessel_i1e(self):
+        # i1e(0) = 0
+        self.assertTrue(
+            np.allclose(mx.bessel_i1e(mx.array([0.0])), [0.0], atol=1e-6)
+        )
+        # Known values: i1e(1) ≈ 0.2079104
+        x = mx.array([0.0, 1.0, 5.0, 10.0])
+        expected = np.array([0.0, 0.2079104, 0.1639723, 0.1212627]).astype(
+            np.float32
+        )
+        self.assertTrue(np.allclose(mx.bessel_i1e(x), expected, atol=1e-5))
+        # Type promotion
+        self.assertEqual(mx.bessel_i1e(mx.array(2)).dtype, mx.float32)
+        # Odd symmetry
+        self.assertTrue(
+            np.allclose(
+                mx.bessel_i1e(mx.array([-3.0])),
+                -mx.bessel_i1e(mx.array([3.0])),
+                atol=1e-6,
+            )
+        )
+
     def test_sin(self):
         a = mx.array(
             [0, math.pi / 4, math.pi / 2, math.pi, 3 * math.pi / 4, 2 * math.pi]

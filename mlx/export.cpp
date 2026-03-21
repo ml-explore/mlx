@@ -361,6 +361,8 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(Equal, "NaNEqual"),
       SERIALIZE_PRIMITIVE(Erf),
       SERIALIZE_PRIMITIVE(ErfInv),
+      SERIALIZE_PRIMITIVE(BesselI0e),
+      SERIALIZE_PRIMITIVE(BesselI1e),
       SERIALIZE_PRIMITIVE(Exp),
       SERIALIZE_PRIMITIVE(Expm1),
       SERIALIZE_PRIMITIVE(ExpandDims),
