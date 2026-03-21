@@ -24,6 +24,26 @@ namespace mlx::core {
 
 static constexpr int MAX_ACTIVE_TASKS = 10;
 
+namespace {
+
+bool is_stale_copy_wrapper(const array& x) {
+  if (!x.has_primitive() || x.inputs().empty() || x.is_tracer()) {
+    return false;
+  }
+
+  auto& p = x.primitive();
+  return typeid(p) == typeid(Copy);
+}
+
+array unwrap_stale_copy_wrappers(array x) {
+  while (is_stale_copy_wrapper(x)) {
+    x = x.inputs()[0];
+  }
+  return x;
+}
+
+} // namespace
+
 /* This class is only meant to be used in eval
  * for synchronizing with the main thread. */
 class Synchronizer : public Primitive {
@@ -337,7 +357,8 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
   for (auto& p : primals) {
     auto s = p.has_primitive() ? p.primitive().stream()
                                : default_stream(default_device());
-    primals_.push_back(copy(p, s)); // Does not do a deep copy
+    primals_.push_back(
+        copy(unwrap_stale_copy_wrappers(p), s)); // Does not do a deep copy
     primals_.back().set_tracer(true);
   }
 
@@ -545,7 +566,8 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
   for (auto& p : primals) {
     auto s = p.has_primitive() ? p.primitive().stream()
                                : default_stream(default_device());
-    primals_.push_back(copy(p, s)); // Does not do a deep copy
+    primals_.push_back(
+        copy(unwrap_stale_copy_wrappers(p), s)); // Does not do a deep copy
     primals_.back().set_tracer(true);
   }
   auto outputs = fun(primals_);
