@@ -36,6 +36,7 @@ template <typename T, int D, int V = D>
     const device T* sinks [[buffer(16), function_constant(has_sinks)]],
     const constant int& num_q_heads
     [[buffer(17), function_constant(has_sinks)]],
+    const constant int& causal_offset [[buffer(18)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -99,7 +100,7 @@ template <typename T, int D, int V = D>
   for (int i = simd_gid; i < N; i += BN) {
     bool use_key = true;
     if (do_causal) {
-      use_key = i <= (N - int(tpg.y) + int(q_seq_idx));
+      use_key = i <= (causal_offset + int(q_seq_idx));
     } else if (bool_mask) {
       use_key = bmask[0];
     } else if (float_mask) {
@@ -199,6 +200,7 @@ template <typename T, int D, int V = D>
     const constant int& mask_head_stride
     [[buffer(17), function_constant(has_mask)]],
     const device T* sinks [[buffer(18), function_constant(has_sinks)]],
+    const constant int& causal_offset [[buffer(19)]],
     uint3 tptg [[threads_per_threadgroup]],
     uint3 tidtg [[thread_position_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -263,7 +265,7 @@ template <typename T, int D, int V = D>
   for (int i = block_idx; i < N; i += blocks) {
     bool use_key = true;
     if (do_causal) {
-      use_key = i <= (N - q_seq_len + int(q_seq_idx));
+      use_key = i <= (causal_offset + int(q_seq_idx));
     } else if (bool_mask) {
       use_key = bmask[0];
     } else if (float_mask) {

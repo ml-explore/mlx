@@ -133,6 +133,7 @@ struct SDPACacheKey {
   std::array<int64_t, QKV_NDIM> k_strides;
   std::array<int64_t, QKV_NDIM> v_strides;
   bool do_causal;
+  bool causal_upper_left;
   std::array<int, QKV_NDIM> mask_shape;
   std::array<int64_t, QKV_NDIM> mask_strides;
   bool has_sinks;
@@ -145,6 +146,7 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
     const array& k,
     const array& v,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& mask_arr,
     const std::optional<array>& sinks,
     bool decoding = false,
@@ -159,6 +161,7 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
   cache_key.pod.k_strides = vector_key<QKV_NDIM>(k.strides());
   cache_key.pod.v_strides = vector_key<QKV_NDIM>(v.strides());
   cache_key.pod.do_causal = do_causal;
+  cache_key.pod.causal_upper_left = causal_upper_left;
   cache_key.pod.has_sinks = sinks.has_value();
   cache_key.pod.output_logsumexp = output_logsumexp;
   if (mask_arr) {
@@ -211,6 +214,7 @@ DnnGraph build_sdpa_graph(
     const array& k,
     const array& v,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& mask_arr,
     const std::optional<array>& sinks,
     const std::optional<array>& seq_len_q,
@@ -229,7 +233,11 @@ DnnGraph build_sdpa_graph(
                      .set_attn_scale(graph.scalar("Scale", SCALE, float32))
                      .set_generate_stats(output_logsumexp);
   if (do_causal) {
-    options.set_causal_mask_bottom_right(do_causal);
+    if (causal_upper_left) {
+      options.set_causal_mask(do_causal);
+    } else {
+      options.set_causal_mask_bottom_right(do_causal);
+    }
   }
   if (mask_arr) {
     options.set_bias(graph.tensor("BIAS", BIAS, *mask_arr));
@@ -262,6 +270,7 @@ DnnGraph build_sdpa_backward_graph(
     const array& k,
     const array& v,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& mask_arr,
     const std::optional<array>& sinks,
     const array& o,
@@ -283,7 +292,11 @@ DnnGraph build_sdpa_backward_graph(
                      .set_name("sdpa_backward_cudnn")
                      .set_attn_scale(graph.scalar("Scale", SCALE, float32));
   if (do_causal) {
-    options.set_causal_mask_bottom_right(do_causal);
+    if (causal_upper_left) {
+      options.set_causal_mask(do_causal);
+    } else {
+      options.set_causal_mask_bottom_right(do_causal);
+    }
   }
   if (mask_arr) {
     options.set_bias(graph.tensor("BIAS", BIAS, *mask_arr));
@@ -352,6 +365,7 @@ void sdpa_cudnn(
     array& o,
     std::optional<array>& stats,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& mask_arr,
     const std::optional<array>& sinks,
     bool output_logsumexp,
@@ -400,7 +414,16 @@ void sdpa_cudnn(
 
   // Search cache.
   auto cache_key = build_sdpa_cache_key(
-      encoder, q, k, v, do_causal, mask_arr, sinks, decoding, output_logsumexp);
+      encoder,
+      q,
+      k,
+      v,
+      do_causal,
+      causal_upper_left,
+      mask_arr,
+      sinks,
+      decoding,
+      output_logsumexp);
   auto it = sdpa_cache().find(cache_key);
   if (it == sdpa_cache().end()) {
     auto graph = build_sdpa_graph(
@@ -409,6 +432,7 @@ void sdpa_cudnn(
         k,
         v,
         do_causal,
+        causal_upper_left,
         mask_arr,
         sinks,
         seq_len_q,
@@ -451,6 +475,7 @@ void sdpa_backward_cudnn(
     const array& o,
     const array& stats,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& mask_arr,
     const std::optional<array>& sinks,
     const array& d_o,
@@ -482,8 +507,8 @@ void sdpa_backward_cudnn(
   }
 
   // Search cache.
-  auto cache_key =
-      build_sdpa_cache_key(encoder, q, k, v, do_causal, mask_arr, sinks);
+  auto cache_key = build_sdpa_cache_key(
+      encoder, q, k, v, do_causal, causal_upper_left, mask_arr, sinks);
   auto it = sdpa_backward_cache().find(cache_key);
   if (it == sdpa_backward_cache().end()) {
     auto graph = build_sdpa_backward_graph(
@@ -492,6 +517,7 @@ void sdpa_backward_cudnn(
         k,
         v,
         do_causal,
+        causal_upper_left,
         mask_arr,
         sinks,
         o,
@@ -539,6 +565,7 @@ void sdpa_vector(
     float scale,
     array& o,
     bool do_causal,
+    bool causal_upper_left,
     const std::optional<array>& sinks,
     Stream s);
 
@@ -605,12 +632,14 @@ void ScaledDotProductAttention::eval_gpu(
         out,
         stats,
         do_causal_,
+        causal_upper_left_,
         mask_arr,
         sinks,
         output_logsumexp_,
         s);
   } else {
-    sdpa_vector(q, k, v, scale_, out, do_causal_, sinks, s);
+    sdpa_vector(
+        q, k, v, scale_, out, do_causal_, causal_upper_left_, sinks, s);
   }
 }
 

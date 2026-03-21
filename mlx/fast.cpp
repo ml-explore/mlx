@@ -628,26 +628,31 @@ array scaled_dot_product_attention(
     }
   }
   // Check valid mask
-  if (mask_mode != "" && mask_mode != "causal" && mask_mode != "array") {
+  bool is_causal_mode = mask_mode == "causal" ||
+      mask_mode == "causal_lower_right" || mask_mode == "causal_upper_left";
+  if (mask_mode != "" && !is_causal_mode && mask_mode != "array") {
     std::ostringstream msg;
-    msg << "[scaled_dot_product_attention] Invalid mask_mode " << mask_mode
-        << ". mask_mode must be 'causal', 'array' or ''.";
+    msg << "[scaled_dot_product_attention] Invalid mask_mode '" << mask_mode
+        << "'. Must be 'causal', 'causal_lower_right', "
+        << "'causal_upper_left', 'array' or ''.";
     throw std::invalid_argument(msg.str());
   }
 
   bool do_causal = false;
+  bool causal_upper_left = false;
   bool has_mask = false;
   bool has_arr_mask = false;
   bool has_bool_mask = false;
 
-  if (mask_mode == "causal") {
+  if (is_causal_mode) {
     has_mask = true;
     do_causal = true;
+    causal_upper_left = (mask_mode == "causal_upper_left");
 
     if (mask_arr) {
       std::ostringstream msg;
       msg << "[scaled_dot_product_attention] Invalid mask_arr for mask_mode "
-          << "'casusal'. No array mask should be passed.";
+          << "'" << mask_mode << "'. No array mask should be passed.";
       throw std::invalid_argument(msg.str());
     }
   } else if (mask_arr) {
@@ -718,6 +723,7 @@ array scaled_dot_product_attention(
                    n_q_heads,
                    n_kv_heads,
                    do_causal,
+                   causal_upper_left,
                    has_sinks,
                    has_arr_mask,
                    s](const std::vector<array>& inputs) {
@@ -737,7 +743,7 @@ array scaled_dot_product_attention(
         if (do_causal) {
           int kL = k.shape(-2);
           int qL = q.shape(-2);
-          int offset = kL - qL;
+          int offset = causal_upper_left ? 0 : kL - qL;
           auto q_idx = arange(offset, qL + offset, s);
           auto k_idx = arange(0, kL, s);
           q_idx = expand_dims(q_idx, 1, s);
@@ -846,7 +852,13 @@ array scaled_dot_product_attention(
     }
     Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
     auto primitive = std::make_shared<ScaledDotProductAttention>(
-        stream, fallback, scale, do_causal, has_sinks, output_logsumexp);
+        stream,
+        fallback,
+        scale,
+        do_causal,
+        causal_upper_left,
+        has_sinks,
+        output_logsumexp);
     if (output_logsumexp) {
       return array::make_arrays(
           {std::move(out_shape), Shape{q.shape(0), q.shape(1), q.shape(2), 1}},
@@ -888,7 +900,7 @@ std::vector<array> ScaledDotProductAttention::vjp(
     dtypes.push_back(primals[i].dtype());
   }
   auto primitive = std::make_shared<ScaledDotProductAttentionVJP>(
-      s, fallback, scale_, do_causal_, has_sinks_);
+      s, fallback, scale_, do_causal_, causal_upper_left_, has_sinks_);
   std::vector<array> inputs = primals;
   inputs.push_back(outputs[0]);
   inputs.push_back(outputs[1]);
@@ -911,6 +923,7 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttention& a_other =
       static_cast<const ScaledDotProductAttention&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
+      causal_upper_left_ == a_other.causal_upper_left_ &&
       has_sinks_ == a_other.has_sinks_ &&
       output_logsumexp_ == a_other.output_logsumexp_;
 }
@@ -919,6 +932,7 @@ bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttentionVJP& a_other =
       static_cast<const ScaledDotProductAttentionVJP&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
+      causal_upper_left_ == a_other.causal_upper_left_ &&
       has_sinks_ == a_other.has_sinks_;
 }
 

@@ -26,7 +26,6 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     scores = q @ mx.swapaxes(k, -1, -2)
     is_causal = mask == "causal"
     if mask is not None:
-
         if is_causal:
             offset = kL - L
             q_indices = mx.arange(L) + offset
@@ -641,6 +640,50 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     else:
                         tolerance = {"rtol": 1e-2, "atol": 1e-2}
                     self.assertTrue(mx.allclose(ref, out, **tolerance))
+
+    def test_causal_mask_alignment(self):
+        B, H, D = 1, 2, 64
+        qL, kL = 4, 8
+        scale = 1.0 / math.sqrt(D)
+
+        mx.random.seed(0)
+        q = mx.random.normal((B, H, qL, D))
+        k = mx.random.normal((B, H, kL, D))
+        v = mx.random.normal((B, H, kL, D))
+
+        # "causal" and "causal_lower_right" should be identical
+        out_causal = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, mask="causal"
+        )
+        out_lr = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, mask="causal_lower_right"
+        )
+        self.assertTrue(mx.allclose(out_causal, out_lr, atol=1e-6, rtol=1e-5))
+
+        # "causal_upper_left" should match a manual upper-left mask
+        q_idx = mx.arange(qL)
+        k_idx = mx.arange(kL)
+        ul_mask = q_idx[:, None] >= k_idx[None]
+        out_ul = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, mask="causal_upper_left"
+        )
+        out_manual = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, mask=ul_mask
+        )
+        self.assertTrue(mx.allclose(out_ul, out_manual, atol=1e-5, rtol=1e-4))
+
+        # upper-left != lower-right when qL != kL
+        self.assertFalse(mx.allclose(out_ul, out_lr, atol=1e-2, rtol=1e-2))
+
+        # when qL == kL, both should be identical
+        q_eq = mx.random.normal((B, H, kL, D))
+        out_lr_eq = mx.fast.scaled_dot_product_attention(
+            q_eq, k, v, scale=scale, mask="causal_lower_right"
+        )
+        out_ul_eq = mx.fast.scaled_dot_product_attention(
+            q_eq, k, v, scale=scale, mask="causal_upper_left"
+        )
+        self.assertTrue(mx.allclose(out_lr_eq, out_ul_eq, atol=1e-6, rtol=1e-5))
 
 
 if __name__ == "__main__":
