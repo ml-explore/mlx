@@ -92,4 +92,25 @@ std::pair<std::vector<array>, std::vector<int>> Send::vmap(
   return {{send(inputs[0], dst_, group(), stream())}, axes};
 }
 
+std::pair<std::vector<array>, std::vector<int>> AllToAll::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  return {{all_to_all(inputs[0], group(), stream())}, axes};
+}
+
+std::vector<array> AllToAll::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>&) {
+  return {all_to_all(tangents[0], group(), stream())};
+}
+
+std::vector<array> AllToAll::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  return {all_to_all(cotangents[0], group(), stream())};
+}
+
 } // namespace mlx::core::distributed
