@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include <dlfcn.h>
+#include <climits>
 #include <cstdlib>
 #include <iostream>
 
@@ -131,6 +132,8 @@ struct MPIWrapper {
     LOAD_SYMBOL(MPI_Allgather, all_gather);
     LOAD_SYMBOL(MPI_Send, send);
     LOAD_SYMBOL(MPI_Recv, recv);
+    LOAD_SYMBOL(MPI_Alltoall, all_to_all);
+    LOAD_SYMBOL(MPI_Sendrecv, sendrecv);
     LOAD_SYMBOL(MPI_Type_contiguous, mpi_type_contiguous);
     LOAD_SYMBOL(MPI_Type_commit, mpi_type_commit);
     LOAD_SYMBOL(MPI_Op_create, mpi_op_create);
@@ -156,6 +159,7 @@ struct MPIWrapper {
     LOAD_SYMBOL(ompi_mpi_float, mpi_float_);
     LOAD_SYMBOL(ompi_mpi_double, mpi_double_);
     LOAD_SYMBOL(ompi_mpi_c_complex, mpi_complex_);
+    LOAD_SYMBOL(ompi_mpi_byte, mpi_byte_);
   }
 
   bool is_available() {
@@ -237,6 +241,10 @@ struct MPIWrapper {
     }
   }
 
+  MPI_Datatype mpi_byte() {
+    return mpi_byte_;
+  }
+
   MPI_Op op_sum(const array& arr) {
     switch (arr.dtype()) {
       case float16:
@@ -294,6 +302,27 @@ struct MPIWrapper {
   int (*comm_free)(MPI_Comm*);
   int (*send)(const void*, int, MPI_Datatype, int, int, MPI_Comm);
   int (*recv)(void*, int, MPI_Datatype, int, int, MPI_Comm, MPI_Status*);
+  int (*all_to_all)(
+      const void*,
+      int,
+      MPI_Datatype,
+      void*,
+      int,
+      MPI_Datatype,
+      MPI_Comm);
+  int (*sendrecv)(
+      const void*,
+      int,
+      MPI_Datatype,
+      int,
+      int,
+      void*,
+      int,
+      MPI_Datatype,
+      int,
+      int,
+      MPI_Comm,
+      MPI_Status*);
 
   // Objects
   MPI_Comm comm_world_;
@@ -326,6 +355,7 @@ struct MPIWrapper {
   MPI_Datatype mpi_complex_;
   MPI_Datatype mpi_float16_;
   MPI_Datatype mpi_bfloat16_;
+  MPI_Datatype mpi_byte_;
 
  private:
   bool initialized_;
@@ -474,6 +504,97 @@ class MPIGroup : public GroupImpl {
 
   void sum_scatter(const array& input, array& output, Stream stream) override {
     throw std::runtime_error("[mpi] sum_scatter not yet implemented.");
+  }
+
+  void all_to_all(const array& input, array& output, Stream stream) override {
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    int count = input.size() / size();
+    encoder.dispatch(
+        mpi().all_to_all,
+        input.data<void>(),
+        count,
+        mpi().datatype(input),
+        output.data<void>(),
+        count,
+        mpi().datatype(output),
+        comm_);
+  }
+
+  void blocking_send(const array& input, int dst) override {
+    mpi().send(
+        input.data<void>(), input.size(), mpi().datatype(input), dst, 0, comm_);
+  }
+
+  void blocking_recv(array& out, int src) override {
+    MPI_Status status;
+    mpi().recv(
+        out.data<void>(),
+        out.size(),
+        mpi().datatype(out),
+        src,
+        MPI_ANY_TAG,
+        comm_,
+        &status);
+  }
+
+  void blocking_all_to_all(const array& input, array& output) override {
+    int count = input.size() / size();
+    mpi().all_to_all(
+        input.data<void>(),
+        count,
+        mpi().datatype(input),
+        output.data<void>(),
+        count,
+        mpi().datatype(output),
+        comm_);
+  }
+
+  void blocking_sendrecv(
+      const array& send_buf,
+      size_t send_nbytes,
+      array& recv_buf,
+      size_t recv_nbytes,
+      int peer,
+      detail::ExchangeTag tag) override {
+    if (send_nbytes == 0 && recv_nbytes == 0)
+      return;
+
+    int mpi_tag = static_cast<int>(tag);
+    auto* sptr = static_cast<const char*>(send_buf.data<void>());
+    auto* rptr = static_cast<char*>(recv_buf.data<void>());
+
+    // INT_MAX asymmetric chunk loop for large messages
+    size_t so = 0, ro = 0;
+    while (so < send_nbytes || ro < recv_nbytes) {
+      int sc = (so < send_nbytes)
+          ? static_cast<int>(
+                std::min(static_cast<size_t>(INT_MAX), send_nbytes - so))
+          : 0;
+      int rc = (ro < recv_nbytes)
+          ? static_cast<int>(
+                std::min(static_cast<size_t>(INT_MAX), recv_nbytes - ro))
+          : 0;
+
+      MPI_Status st;
+      mpi().sendrecv(
+          sc > 0 ? sptr + so : sptr,
+          sc,
+          mpi().mpi_byte(),
+          peer,
+          mpi_tag,
+          rc > 0 ? rptr + ro : rptr,
+          rc,
+          mpi().mpi_byte(),
+          peer,
+          mpi_tag,
+          comm_,
+          &st);
+
+      so += sc;
+      ro += rc;
+    }
   }
 
  private:
