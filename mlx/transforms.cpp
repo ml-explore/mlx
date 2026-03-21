@@ -24,6 +24,28 @@ namespace mlx::core {
 
 static constexpr int MAX_ACTIVE_TASKS = 10;
 
+namespace {
+
+// Create a tracer copy of a primal for use in vjp/jvp. If the primal is a
+// stale Copy from a previous transform call (not an active tracer), peel it
+// off to prevent copy-chain accumulation when containers feed tracers back.
+array make_tracer(const array& p) {
+  auto s = p.has_primitive() ? p.primitive().stream()
+                             : default_stream(default_device());
+  auto source = p;
+  if (!p.is_tracer() && p.has_primitive() && !p.inputs().empty()) {
+    auto& prim = p.primitive();
+    if (typeid(prim) == typeid(Copy)) {
+      source = p.inputs()[0];
+    }
+  }
+  auto out = copy(source, s);
+  out.set_tracer(true);
+  return out;
+}
+
+} // namespace
+
 /* This class is only meant to be used in eval
  * for synchronizing with the main thread. */
 class Synchronizer : public Primitive {
@@ -335,10 +357,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
   // Make tracers from given primals
   std::vector<array> primals_;
   for (auto& p : primals) {
-    auto s = p.has_primitive() ? p.primitive().stream()
-                               : default_stream(default_device());
-    primals_.push_back(copy(p, s)); // Does not do a deep copy
-    primals_.back().set_tracer(true);
+    primals_.push_back(make_tracer(p));
   }
 
   // Pass tracer primals through the function
@@ -543,10 +562,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
 
   std::vector<array> primals_;
   for (auto& p : primals) {
-    auto s = p.has_primitive() ? p.primitive().stream()
-                               : default_stream(default_device());
-    primals_.push_back(copy(p, s)); // Does not do a deep copy
-    primals_.back().set_tracer(true);
+    primals_.push_back(make_tracer(p));
   }
   auto outputs = fun(primals_);
 
