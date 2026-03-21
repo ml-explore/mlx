@@ -1789,6 +1789,22 @@ std::pair<std::vector<array>, std::vector<int>> Divide::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
+  // The high-level divide() promotes integers to float via at_least_float.
+  // But floor_divide() creates a Divide primitive with integer dtype
+  // for integer division. Preserve that: if inputs are integer, keep
+  // integer semantics by constructing the primitive directly.
+  auto dtype = promote_types(a.dtype(), b.dtype());
+  if (issubdtype(dtype, integer)) {
+    auto bcast = broadcast_arrays(
+        {astype(a, dtype, stream()), astype(b, dtype, stream())}, stream());
+    return {
+        {array(
+            bcast[0].shape(),
+            dtype,
+            std::make_shared<Divide>(stream()),
+            std::move(bcast))},
+        {to_ax}};
+  }
   return {{divide(a, b, stream())}, {to_ax}};
 }
 
