@@ -72,3 +72,4 @@ Layers
    Tanh
    Transformer
    Upsample
+   WeightNorm
