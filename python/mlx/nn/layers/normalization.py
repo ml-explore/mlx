@@ -361,3 +361,70 @@ class BatchNorm(Module):
 
         x = (x - mean) * mx.rsqrt(var + self.eps)
         return (self.weight * x + self.bias) if "weight" in self else x
+
+
+class WeightNorm(Module):
+    r"""Applies weight normalization [1] to a parameter of a given module.
+
+    Weight normalization reparameterizes a weight tensor :math:`\mathbf{w}` as
+
+    .. math::
+
+        \mathbf{w} = g \frac{\mathbf{v}}{\|\mathbf{v}\|}
+
+    where :math:`g` is a scalar magnitude and :math:`\mathbf{v}` is the
+    direction vector. The norm is computed over all dimensions except ``dim``.
+
+    On each call, the normalized weight is recomputed from the current
+    ``weight_g`` and ``weight_v`` and injected into the wrapped module
+    before its forward pass.
+
+    [1]: https://arxiv.org/abs/1602.07868
+
+    Args:
+        module (mlx.nn.Module): The module containing the weight to normalize.
+        name (str): The name of the weight parameter to normalize.
+            Default: ``"weight"``.
+        dim (int): The dimension over which to keep independent magnitudes.
+            Default: ``0``.
+
+    Examples:
+        >>> import mlx.core as mx
+        >>> import mlx.nn as nn
+        >>> linear = nn.Linear(8, 16)
+        >>> wn = nn.WeightNorm(linear)
+        >>> x = mx.random.normal((2, 8))
+        >>> wn(x).shape
+        [2, 16]
+    """
+
+    def __init__(self, module: Module, name: str = "weight", dim: int = 0):
+        super().__init__()
+        self.module = module
+        self.name = name
+
+        w = getattr(module, name)
+        self.dim = dim % w.ndim
+        norm_axes = [i for i in range(w.ndim) if i != self.dim]
+        g = mx.sqrt(mx.sum(mx.square(w), axis=norm_axes, keepdims=True))
+
+        self.weight_g = g
+        self.weight_v = w
+        module.freeze(keys=[name], recurse=False)
+
+    def unfreeze(self, *args, **kwargs):
+        super().unfreeze(*args, **kwargs)
+        self.module.freeze(keys=[self.name], recurse=False)
+
+    def _compute_weight(self):
+        v = self.weight_v
+        norm_axes = [i for i in range(v.ndim) if i != self.dim]
+        norm = mx.sqrt(mx.sum(mx.square(v), axis=norm_axes, keepdims=True))
+        return self.weight_g * (v / norm)
+
+    def __call__(self, *args, **kwargs):
+        setattr(self.module, self.name, self._compute_weight())
+        return self.module(*args, **kwargs)
+
+    def _extra_repr(self):
+        return f"name={self.name!r}, dim={self.dim}"
