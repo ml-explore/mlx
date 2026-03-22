@@ -345,6 +345,12 @@ bool AddMM::is_equivalent(const Primitive& other) const {
   return (alpha_ == a_other.alpha_ && beta_ == a_other.beta_);
 }
 
+std::vector<Shape> AddMM::output_shapes(const std::vector<array>& inputs) {
+  // C (inputs[0]) is validated to match the output shape at construction
+  // in ops.cpp, so its shape is the output shape directly.
+  return {inputs[0].shape()};
+}
+
 std::pair<std::vector<array>, std::vector<int>> AddMM::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
