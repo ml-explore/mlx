@@ -1,6 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
 import unittest
 from itertools import permutations
 
@@ -1191,6 +1192,43 @@ class TestConv(mlx_tests.MLXTestCase):
         y = mx.conv2d(x, w, (1, 1), (1, 1), stream=mx.cpu)
         y_hat = mx.conv2d(x, w, (1, 1), (1, 1))
         self.assertTrue(mx.allclose(y, y_hat, rtol=1e-3, atol=1e-3))
+
+    @unittest.skipIf(
+        os.getenv("LOW_MEMORY", None) is not None,
+        "This test requires a lot of memory",
+    )
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_conv_general_large_output_offset(self):
+        H = W = 64
+        O = 17
+
+        per_batch_output = H * W * O
+        # +2 makes the last batch start beyond the signed 32-bit offset limit.
+        batch_size = (2**31) // per_batch_output + 2
+
+        # Vary the per-batch input so mis-addressed writes cannot still pass by
+        # aliasing another batch with identical values.
+        batch_values = (mx.arange(batch_size, dtype=mx.int32) % 251).astype(mx.float16)
+        batch_values = batch_values.reshape((batch_size, 1, 1, 1))
+        x = mx.ones((batch_size, H, W, 1), dtype=mx.float16) * batch_values
+
+        channel_values = mx.arange(1, O + 1, dtype=mx.float16) / 8
+        w = channel_values.reshape((O, 1, 1, 1))
+        channel_values = channel_values.reshape((1, 1, O))
+
+        try:
+            y = mx.conv_general(x, w, stream=mx.gpu)
+            self.assertTrue(
+                mx.allclose(y[0], x[0] * channel_values, atol=1e-3, rtol=1e-3)
+            )
+            self.assertTrue(
+                mx.allclose(y[-1], x[-1] * channel_values, atol=1e-3, rtol=1e-3)
+            )
+        finally:
+            del batch_values, x, w, channel_values
+            if "y" in locals():
+                del y
+            mx.clear_cache()
 
 
 if __name__ == "__main__":
