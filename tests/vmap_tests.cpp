@@ -558,9 +558,7 @@ TEST_CASE("test vmap floor_divide integer") {
     CHECK_EQ(expected.dtype(), int32);
 
     // With vmap: should also return int32
-    auto vfun = vmap([&divisor](array s) {
-      return floor_divide(s, divisor);
-    });
+    auto vfun = vmap([&divisor](array s) { return floor_divide(s, divisor); });
     auto result = vfun(x);
     CHECK_EQ(result.dtype(), int32);
     CHECK(array_equal(result, expected).item<bool>());
@@ -572,9 +570,7 @@ TEST_CASE("test vmap floor_divide integer") {
     auto divisor = array(3, int32);
 
     auto expected = remainder(x, divisor);
-    auto vfun = vmap([&divisor](array s) {
-      return remainder(s, divisor);
-    });
+    auto vfun = vmap([&divisor](array s) { return remainder(s, divisor); });
     auto result = vfun(x);
     CHECK_EQ(result.dtype(), int32);
     CHECK(array_equal(result, expected).item<bool>());
