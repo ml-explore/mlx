@@ -35,6 +35,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/kernel_utils.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/gemms/block_mask.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/layer_norm.cu
