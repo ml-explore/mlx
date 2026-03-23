@@ -243,7 +243,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool has_op_mask = inputs.size() > 3;
   bool has_out_mask = inputs.size() == 3 || inputs.size() == 5;
 
-  int batch_count = out.size() / (M * N);
+  int64_t batch_count = out.size() / (int64_t(M) * N);
 
   bool a_transposed;
   int64_t lda;

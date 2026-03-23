@@ -15,41 +15,35 @@ __global__ void block_mask_inplace(
     T* data,
     const MaskT* mask,
     int block_size,
-    int rows,
-    int cols,
+    int64_t rows,
+    int64_t cols,
     int64_t data_batch_stride,
     const __grid_constant__ Shape mask_shape,
     const __grid_constant__ Strides mask_strides,
     int mask_ndim,
     int64_t mask_row_stride,
     int64_t mask_col_stride,
-    int mask_mat_size,
-    int batch_count) {
+    int64_t mask_mat_size,
+    int64_t batch_count) {
+  int64_t mat_size = rows * cols;
   int64_t idx = int64_t(blockIdx.x) * blockDim.x + threadIdx.x;
-  int64_t total = int64_t(batch_count) * rows * cols;
-  if (idx >= total)
+  if (idx >= batch_count * mat_size)
     return;
 
-  int mat_size = rows * cols;
-  int batch = idx / mat_size;
-  int within = idx % mat_size;
-
+  int64_t batch = idx / mat_size;
+  int64_t within = idx % mat_size;
   int64_t mask_batch_offset = elem_to_loc(
-      int64_t(batch) * mask_mat_size,
-      mask_shape.data(),
-      mask_strides.data(),
-      mask_ndim);
+      batch * mask_mat_size, mask_shape.data(), mask_strides.data(), mask_ndim);
   MaskT mask_val = mask
       [mask_batch_offset + (within / cols) / block_size * mask_row_stride +
        (within % cols) / block_size * mask_col_stride];
 
-  int64_t data_offset = int64_t(batch) * data_batch_stride + within;
   if constexpr (std::is_same_v<MaskT, bool>) {
     if (!mask_val) {
-      data[data_offset] = T(0);
+      data[batch * data_batch_stride + within] = T(0);
     }
   } else {
-    data[data_offset] *= T(mask_val);
+    data[batch * data_batch_stride + within] *= T(mask_val);
   }
 }
 
@@ -58,8 +52,8 @@ __global__ void block_mask_copy(
     const T* src,
     T* dst,
     int block_size,
-    int rows,
-    int cols,
+    int64_t rows,
+    int64_t cols,
     const __grid_constant__ Shape src_shape,
     const __grid_constant__ Strides src_strides,
     int src_ndim,
@@ -69,22 +63,17 @@ __global__ void block_mask_copy(
     int mask_ndim,
     int64_t mask_row_stride,
     int64_t mask_col_stride,
-    int mask_mat_size,
-    int batch_count) {
+    int64_t mask_mat_size,
+    int64_t batch_count) {
+  int64_t mat_size = rows * cols;
   int64_t idx = int64_t(blockIdx.x) * blockDim.x + threadIdx.x;
-  int mat_size = rows * cols;
-  int64_t total = int64_t(batch_count) * mat_size;
-  if (idx >= total)
+  if (idx >= batch_count * mat_size)
     return;
 
-  int batch = idx / mat_size;
-  int within = idx % mat_size;
-
+  int64_t batch = idx / mat_size;
+  int64_t within = idx % mat_size;
   int64_t mask_batch_offset = elem_to_loc(
-      int64_t(batch) * mask_mat_size,
-      mask_shape.data(),
-      mask_strides.data(),
-      mask_ndim);
+      batch * mask_mat_size, mask_shape.data(), mask_strides.data(), mask_ndim);
   MaskT mask_val = mask
       [mask_batch_offset + (within / cols) / block_size * mask_row_stride +
        (within % cols) / block_size * mask_col_stride];
@@ -94,7 +83,7 @@ __global__ void block_mask_copy(
     src_offset = idx;
   } else {
     src_offset = elem_to_loc(
-        int64_t(batch) * mat_size + within,
+        batch * mat_size + within,
         src_shape.data(),
         src_strides.data(),
         src_ndim);
@@ -120,19 +109,20 @@ void apply_block_mask(
     array& data,
     const array& mask,
     int block_size,
-    int rows,
-    int cols,
+    int64_t rows,
+    int64_t cols,
     int64_t data_batch_stride,
-    int batch_count) {
+    int64_t batch_count) {
   encoder.set_input_array(mask);
   encoder.set_output_array(data);
 
-  int64_t total = int64_t(batch_count) * rows * cols;
+  int64_t total = batch_count * rows * cols;
   int grid = (total + BLOCK_DIM - 1) / BLOCK_DIM;
   int mask_ndim = mask.ndim();
   int64_t mask_row_str = mask.strides()[mask_ndim - 2];
   int64_t mask_col_str = mask.strides()[mask_ndim - 1];
-  int mask_mat_size = mask.shape()[mask_ndim - 2] * mask.shape()[mask_ndim - 1];
+  int64_t mask_mat_size =
+      int64_t(mask.shape()[mask_ndim - 2]) * mask.shape()[mask_ndim - 1];
   auto mask_shape = const_param(mask.shape());
   auto mask_strides = const_param(mask.strides());
   auto& mask_nc = const_cast<array&>(mask);
@@ -180,9 +170,9 @@ array copy_with_block_mask(
     const array& src,
     const array& mask,
     int block_size,
-    int rows,
-    int cols,
-    int batch_count) {
+    int64_t rows,
+    int64_t cols,
+    int64_t batch_count) {
   array dst(src.shape(), src.dtype(), nullptr, {});
   dst.set_data(cu::malloc_async(dst.nbytes(), encoder));
   encoder.add_temporary(dst);
@@ -191,12 +181,13 @@ array copy_with_block_mask(
   encoder.set_input_array(mask);
   encoder.set_output_array(dst);
 
-  int64_t total = int64_t(batch_count) * rows * cols;
+  int64_t total = batch_count * rows * cols;
   int grid = (total + BLOCK_DIM - 1) / BLOCK_DIM;
   int mask_ndim = mask.ndim();
   int64_t mask_row_str = mask.strides()[mask_ndim - 2];
   int64_t mask_col_str = mask.strides()[mask_ndim - 1];
-  int mask_mat_size = mask.shape()[mask_ndim - 2] * mask.shape()[mask_ndim - 1];
+  int64_t mask_mat_size =
+      int64_t(mask.shape()[mask_ndim - 2]) * mask.shape()[mask_ndim - 1];
   auto src_shape = const_param(src.shape());
   auto src_strides = const_param(src.strides());
   int src_ndim = src.ndim();
