@@ -253,23 +253,17 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   array b = b_pre;
 
   if (has_op_mask) {
-    // Make contiguous copies of A and B so we can mask them in-place.
-    a = contiguous_copy_gpu(a_pre, s);
-    encoder.add_temporary(a);
-    b = contiguous_copy_gpu(b_pre, s);
-    encoder.add_temporary(b);
+    // Fused copy + mask in a single pass per matrix.
+    auto& lhs_mask = inputs[inputs.size() - 2];
+    auto& rhs_mask = inputs[inputs.size() - 1];
+    a = copy_with_block_mask(
+        encoder, a_pre, lhs_mask, block_size_, M, K, batch_count);
+    b = copy_with_block_mask(
+        encoder, b_pre, rhs_mask, block_size_, K, N, batch_count);
     a_transposed = false;
     lda = K;
     b_transposed = false;
     ldb = N;
-
-    // Apply operand masks.
-    auto& lhs_mask = inputs[inputs.size() - 2];
-    auto& rhs_mask = inputs[inputs.size() - 1];
-    apply_block_mask(
-        encoder, a, lhs_mask, block_size_, M, K, int64_t(M) * K, batch_count);
-    apply_block_mask(
-        encoder, b, rhs_mask, block_size_, K, N, int64_t(K) * N, batch_count);
   } else {
     std::tie(a_transposed, lda, a) = check_transpose(encoder, s, a_pre);
     std::tie(b_transposed, ldb, b) = check_transpose(encoder, s, b_pre);
