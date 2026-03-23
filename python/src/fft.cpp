@@ -14,6 +14,23 @@ namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
+namespace {
+
+using IntOrVec = std::variant<int, std::vector<int>>;
+using AxesArg = std::optional<IntOrVec>;
+
+std::optional<std::vector<int>> normalize_axes(const AxesArg& axes) {
+  if (!axes.has_value()) {
+    return std::nullopt;
+  }
+  if (auto axis = std::get_if<int>(&axes.value())) {
+    return std::vector<int>{*axis};
+  }
+  return std::get<std::vector<int>>(axes.value());
+}
+
+} // namespace
+
 void init_fft(nb::module_& parent_module) {
   auto m = parent_module.def_submodule(
       "fft", "mlx.core.fft: Fast Fourier Transforms.");
@@ -461,12 +478,75 @@ void init_fft(nb::module_& parent_module) {
             array: The real array containing the inverse of :func:`rfftn`.
       )pbdoc");
   m.def(
+      "fftfreq",
+      [](int n, double d, mx::StreamOrDevice s) {
+        if (n <= 0) {
+          throw std::invalid_argument("[fftfreq] `n` must be greater than 0.");
+        }
+        if (d == 0.0) {
+          throw std::invalid_argument("[fftfreq] `d` must be non-zero.");
+        }
+
+        auto pos = mx::arange(0, (n + 1) / 2, mx::float32, s);
+        auto neg = mx::arange(-(n / 2), 0, mx::float32, s);
+        auto freqs = mx::concatenate({pos, neg}, s);
+        auto scale = mx::array(
+            static_cast<float>(1.0 / (static_cast<double>(n) * d)),
+            mx::float32);
+        return mx::multiply(freqs, scale, s);
+      },
+      "n"_a,
+      "d"_a = 1.0,
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Return the discrete Fourier Transform sample frequencies.
+
+        Args:
+            n (int): Window length.
+            d (float, optional): Sample spacing. The default is ``1.0``.
+
+        Returns:
+            array: The sample frequencies as a one-dimensional array of type ``float32``.
+      )pbdoc");
+  m.def(
+      "rfftfreq",
+      [](int n, double d, mx::StreamOrDevice s) {
+        if (n <= 0) {
+          throw std::invalid_argument("[rfftfreq] `n` must be greater than 0.");
+        }
+        if (d == 0.0) {
+          throw std::invalid_argument("[rfftfreq] `d` must be non-zero.");
+        }
+
+        auto freqs = mx::arange(0, n / 2 + 1, mx::float32, s);
+        auto scale = mx::array(
+            static_cast<float>(1.0 / (static_cast<double>(n) * d)),
+            mx::float32);
+        return mx::multiply(freqs, scale, s);
+      },
+      "n"_a,
+      "d"_a = 1.0,
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Return the discrete Fourier Transform sample frequencies
+        for use with :func:`rfft` and :func:`irfft`.
+
+        The returned array contains the non-negative frequency terms
+        in the range ``[0, floor(n/2)]``.
+
+        Args:
+            n (int): Window length.
+            d (float, optional): Sample spacing. The default is ``1.0``.
+
+        Returns:
+            array: The sample frequencies as a one-dimensional array of type ``float32``.
+      )pbdoc");
+  m.def(
       "fftshift",
-      [](const mx::array& a,
-         const std::optional<std::vector<int>>& axes,
-         mx::StreamOrDevice s) {
-        if (axes.has_value()) {
-          return mx::fft::fftshift(a, axes.value(), s);
+      [](const mx::array& a, const AxesArg& axes, mx::StreamOrDevice s) {
+        auto normalized_axes = normalize_axes(axes);
+        if (normalized_axes.has_value()) {
+          return mx::fft::fftshift(a, normalized_axes.value(), s);
         } else {
           return mx::fft::fftshift(a, s);
         }
@@ -479,7 +559,7 @@ void init_fft(nb::module_& parent_module) {
 
         Args:
             a (array): The input array.
-            axes (list(int), optional): Axes over which to perform the shift.
+            axes (int or list(int), optional): Axis or axes over which to perform the shift.
                If ``None``, shift all axes. 
 
         Returns:
@@ -487,11 +567,10 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "ifftshift",
-      [](const mx::array& a,
-         const std::optional<std::vector<int>>& axes,
-         mx::StreamOrDevice s) {
-        if (axes.has_value()) {
-          return mx::fft::ifftshift(a, axes.value(), s);
+      [](const mx::array& a, const AxesArg& axes, mx::StreamOrDevice s) {
+        auto normalized_axes = normalize_axes(axes);
+        if (normalized_axes.has_value()) {
+          return mx::fft::ifftshift(a, normalized_axes.value(), s);
         } else {
           return mx::fft::ifftshift(a, s);
         }
@@ -505,7 +584,7 @@ void init_fft(nb::module_& parent_module) {
 
         Args:
             a (array): The input array.
-            axes (list(int), optional): Axes over which to perform the inverse shift.
+            axes (int or list(int), optional): Axis or axes over which to perform the inverse shift.
                If ``None``, shift all axes. 
 
         Returns:

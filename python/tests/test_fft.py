@@ -217,6 +217,48 @@ class TestFFT(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.fft.irfftn(x)
 
+    def test_fftfreq(self):
+        for n, d in [(1, 1.0), (4, 0.5), (5, 0.25), (8, -0.5), (6, 1.0)]:
+            out = mx.fft.fftfreq(n, d=d)
+            expected = np.fft.fftfreq(n, d=d).astype(np.float32)
+            self.assertEqual(out.dtype, mx.float32)
+            np.testing.assert_allclose(out, expected, atol=0.0, rtol=0.0)
+
+        with self.assertRaises(ValueError):
+            mx.fft.fftfreq(0)
+
+        with self.assertRaises(ValueError):
+            mx.fft.fftfreq(-1)
+
+        # Test default d=1.0
+        out = mx.fft.fftfreq(8)
+        expected = np.fft.fftfreq(8).astype(np.float32)
+        np.testing.assert_allclose(out, expected, atol=0.0, rtol=0.0)
+
+        with self.assertRaises(ValueError):
+            mx.fft.fftfreq(4, d=0.0)
+
+    def test_rfftfreq(self):
+        for n, d in [(1, 1.0), (4, 0.5), (5, 0.25), (8, -0.5), (6, 1.0)]:
+            out = mx.fft.rfftfreq(n, d=d)
+            expected = np.fft.rfftfreq(n, d=d).astype(np.float32)
+            self.assertEqual(out.dtype, mx.float32)
+            np.testing.assert_allclose(out, expected, atol=0.0, rtol=0.0)
+
+        # Test default d=1.0
+        out = mx.fft.rfftfreq(8)
+        expected = np.fft.rfftfreq(8).astype(np.float32)
+        np.testing.assert_allclose(out, expected, atol=0.0, rtol=0.0)
+
+        with self.assertRaises(ValueError):
+            mx.fft.rfftfreq(0)
+
+        with self.assertRaises(ValueError):
+            mx.fft.rfftfreq(-1)
+
+        with self.assertRaises(ValueError):
+            mx.fft.rfftfreq(4, d=0.0)
+
     def test_fftshift(self):
         # Test 1D arrays
         r = np.random.rand(100).astype(np.float32)
@@ -224,11 +266,14 @@ class TestFFT(mlx_tests.MLXTestCase):
 
         # Test with specific axis
         r = np.random.rand(4, 6).astype(np.float32)
+        self.check_mx_np(mx.fft.fftshift, np.fft.fftshift, r, axes=0)
+        self.check_mx_np(mx.fft.fftshift, np.fft.fftshift, r, axes=1)
         self.check_mx_np(mx.fft.fftshift, np.fft.fftshift, r, axes=[0])
         self.check_mx_np(mx.fft.fftshift, np.fft.fftshift, r, axes=[1])
         self.check_mx_np(mx.fft.fftshift, np.fft.fftshift, r, axes=[0, 1])
 
         # Test with negative axes
+        self.check_mx_np(mx.fft.fftshift, np.fft.fftshift, r, axes=-1)
         self.check_mx_np(mx.fft.fftshift, np.fft.fftshift, r, axes=[-1])
 
         # Test with odd lengths
@@ -249,11 +294,14 @@ class TestFFT(mlx_tests.MLXTestCase):
 
         # Test with specific axis
         r = np.random.rand(4, 6).astype(np.float32)
+        self.check_mx_np(mx.fft.ifftshift, np.fft.ifftshift, r, axes=0)
+        self.check_mx_np(mx.fft.ifftshift, np.fft.ifftshift, r, axes=1)
         self.check_mx_np(mx.fft.ifftshift, np.fft.ifftshift, r, axes=[0])
         self.check_mx_np(mx.fft.ifftshift, np.fft.ifftshift, r, axes=[1])
         self.check_mx_np(mx.fft.ifftshift, np.fft.ifftshift, r, axes=[0, 1])
 
         # Test with negative axes
+        self.check_mx_np(mx.fft.ifftshift, np.fft.ifftshift, r, axes=-1)
         self.check_mx_np(mx.fft.ifftshift, np.fft.ifftshift, r, axes=[-1])
 
         # Test with odd lengths
