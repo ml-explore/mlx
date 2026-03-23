@@ -128,8 +128,8 @@ array fft_impl(
     const std::vector<int>& axes,
     bool real,
     bool inverse,
-    StreamOrDevice s,
-    FFTNorm norm) {
+    FFTNorm norm,
+    StreamOrDevice s) {
   Shape n;
   for (auto ax : axes) {
     n.push_back(a.shape(ax));
@@ -137,7 +137,7 @@ array fft_impl(
   if (real && inverse && a.ndim() > 0) {
     n.back() = (n.back() - 1) * 2;
   }
-  return fft_impl(a, n, axes, real, inverse, s, norm);
+  return fft_impl(a, n, axes, real, inverse, norm, s);
 }
 
 array fft_impl(
@@ -148,7 +148,7 @@ array fft_impl(
     StreamOrDevice s) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);
-  return fft_impl(a, axes, real, inverse, s, norm);
+  return fft_impl(a, axes, real, inverse, norm, s);
 }
 
 array fftn(
@@ -157,20 +157,20 @@ array fftn(
     const std::vector<int>& axes,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, n, axes, false, false, s, norm);
+  return fft_impl(a, n, axes, false, false, norm, s);
 }
 array fftn(
     const array& a,
     const std::vector<int>& axes,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, axes, false, false, s, norm);
+  return fft_impl(a, axes, false, false, norm, s);
 }
 array fftn(
     const array& a,
-    StreamOrDevice s /* = {} */,
-    FFTNorm norm /* = FFTNorm::Backward */) {
-  return fft_impl(a, false, false, s, norm);
+    FFTNorm norm /* = FFTNorm::Backward */,
+    StreamOrDevice s /* = {} */) {
+  return fft_impl(a, false, false, norm, s);
 }
 
 array ifftn(
@@ -179,20 +179,20 @@ array ifftn(
     const std::vector<int>& axes,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, n, axes, false, true, s, norm);
+  return fft_impl(a, n, axes, false, true, norm, s);
 }
 array ifftn(
     const array& a,
     const std::vector<int>& axes,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, axes, false, true, s, norm);
+  return fft_impl(a, axes, false, true, norm, s);
 }
 array ifftn(
     const array& a,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, false, true, s, norm);
+  return fft_impl(a, false, true, norm, s);
 }
 
 array rfftn(
@@ -201,20 +201,20 @@ array rfftn(
     const std::vector<int>& axes,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, n, axes, true, false, s, norm);
+  return fft_impl(a, n, axes, true, false, norm, s);
 }
 array rfftn(
     const array& a,
     const std::vector<int>& axes,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, axes, true, false, s, norm);
+  return fft_impl(a, axes, true, false, norm, s);
 }
 array rfftn(
     const array& a,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, true, false, s, norm);
+  return fft_impl(a, true, false, norm, s);
 }
 
 array irfftn(
@@ -223,21 +223,21 @@ array irfftn(
     const std::vector<int>& axes,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, n, axes, true, true, s, norm);
+  return fft_impl(a, n, axes, true, true, norm, s);
 }
 array irfftn(
     const array& a,
     const std::vector<int>& axes,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, axes, true, true, s, norm);
+  return fft_impl(a, axes, true, true, norm, s);
 }
 
 array irfftn(
     const array& a,
     FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, true, true, s, norm);
+  return fft_impl(a, true, true, norm, s);
 }
 
 array fftshift(
