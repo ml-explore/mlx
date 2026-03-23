@@ -12,10 +12,10 @@
 
 namespace mlx::core::fft {
 
-enum class FFTNorm : uint8_t {
-  Backward = 0,
-  Ortho = 1,
-  Forward = 2,
+enum class FFTNorm {
+  Backward,
+  Ortho,
+  Forward,
 };
 
 /** Compute the n-dimensional Fourier Transform. */

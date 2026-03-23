@@ -34,8 +34,8 @@ array fft_impl(
     const std::vector<int>& axes,
     bool real,
     bool inverse,
-    StreamOrDevice s,
-    FFTNorm norm) {
+    FFTNorm norm,
+    StreamOrDevice s) {
   if (a.ndim() < 1) {
     throw std::invalid_argument(
         "[fftn] Requires array with at least one dimension.");
@@ -144,8 +144,8 @@ array fft_impl(
     const array& a,
     bool real,
     bool inverse,
-    StreamOrDevice s,
-    FFTNorm norm) {
+    FFTNorm norm,
+    StreamOrDevice s) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);
   return fft_impl(a, axes, real, inverse, s, norm);
@@ -168,8 +168,8 @@ array fftn(
 }
 array fftn(
     const array& a,
-    FFTNorm norm /* = FFTNorm::Backward */,
-    StreamOrDevice s /* = {} */) {
+    StreamOrDevice s /* = {} */,
+    FFTNorm norm /* = FFTNorm::Backward */) {
   return fft_impl(a, false, false, s, norm);
 }
 
