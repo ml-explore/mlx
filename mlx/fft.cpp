@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 #include <cmath>
+#include <functional>
 #include <numeric>
 #include <set>
 
@@ -14,10 +15,8 @@ double fft_scale_factor(const Shape& n, FFTNorm norm, bool inverse) {
   if (n.empty()) {
     return 1.0;
   }
-  double n_elements = 1.0;
-  for (auto dim : n) {
-    n_elements *= static_cast<double>(dim);
-  }
+  double n_elements =
+      std::accumulate(n.begin(), n.end(), 1.0, std::multiplies<double>());
   switch (norm) {
     case FFTNorm::Backward:
       return 1.0;

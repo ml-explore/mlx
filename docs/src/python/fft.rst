@@ -5,9 +5,6 @@ FFT
 
 .. currentmodule:: mlx.core.fft
 
-All FFT transform functions support ``norm`` with values ``"backward"``,
-``"ortho"``, and ``"forward"``.
-
 .. autosummary:: 
   :toctree: _autosummary
 
