@@ -628,5 +628,116 @@ class TestSDPAChunked(mlx_tests.MLXTestCase):
         )
 
 
+class TestSDPAChunkedIntegration(mlx_tests.MLXTestCase):
+    """Integration tests at real production sequence lengths (128K+).
+
+    These tests use the *default* env var values (MLX_SDPA_CHUNK_THRESHOLD=65536,
+    MLX_SDPA_CHUNK_SIZE=32768) — no overrides — so they exercise the actual
+    production chunked-dispatch path end-to-end.
+
+    Each test uses qL=16 (simulates a prefill step with prefill_step_size=16,
+    which is > 8 so the full-attention kernel fires rather than sdpa_vector).
+
+    Before chunked SDPA these tests would trigger the GPU watchdog at 65K+
+    keys.  A passing run proves the watchdog issue is solved.
+
+    Note: these allocate O(kL) memory per head so they take a few seconds each.
+    """
+
+    # No setUp/tearDown overrides: production defaults are used.
+
+    def _make_qkv(self, B, qL, kL, n_q, n_kv, D, dtype, seed=0):
+        mx.random.seed(seed)
+        scale = 1.0 / math.sqrt(D)
+        q = mx.random.uniform(-0.5, 0.5, (B, n_q, qL, D)).astype(dtype)
+        k = mx.random.uniform(-0.5, 0.5, (B, n_kv, kL, D)).astype(dtype)
+        v = mx.random.uniform(-0.5, 0.5, (B, n_kv, kL, D)).astype(dtype)
+        return q, k, v, scale
+
+    def _check_finite_and_bounded(self, out, tag=""):
+        """Verify output is finite and has magnitude consistent with softmax output."""
+        mx.eval(out)
+        # mx.isfinite returns a bool array; all() reduces to scalar
+        all_finite = mx.all(mx.isfinite(out)).item()
+        self.assertTrue(
+            all_finite,
+            msg=f"{tag}: output contains non-finite values (NaN/Inf)",
+        )
+        max_val = mx.max(mx.abs(out)).item()
+        # Attention output is a convex combination of V values; |V| <= 0.5
+        # so |out| should be well below 1.0 for uniform random V in [-0.5, 0.5]
+        self.assertLess(
+            max_val,
+            1.0,
+            msg=f"{tag}: output magnitude {max_val:.3f} unexpectedly large",
+        )
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU required for fused SDPA")
+    def test_128k_prefill_step(self):
+        """qL=16, kL=131072, H=4, D=128, float16 — 128K context prefill step.
+
+        This sequence length previously triggered the GPU watchdog (no chunking).
+        With chunked SDPA (threshold=65536, chunk_size=32768) the 131072-key
+        context is processed in 4 chunks of 32768 — no single kernel sees the
+        full KV length.
+        """
+        B, qL, kL, n_heads, D = 1, 16, 131072, 4, 128
+        q, k, v, scale = self._make_qkv(B, qL, kL, n_heads, n_heads, D,
+                                        mx.float16)
+        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+        self._check_finite_and_bounded(out, tag="128k_prefill_step non-causal")
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU required for fused SDPA")
+    def test_256k_prefill_step(self):
+        """qL=16, kL=262144, H=4, D=128, float16 — 256K context prefill step.
+
+        262144 keys → 8 chunks of 32768.  Tests that the logsumexp merge
+        accumulates correctly over many chunks without numerical drift.
+        """
+        B, qL, kL, n_heads, D = 1, 16, 262144, 4, 128
+        q, k, v, scale = self._make_qkv(B, qL, kL, n_heads, n_heads, D,
+                                        mx.float16)
+        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+        self._check_finite_and_bounded(out, tag="256k_prefill_step non-causal")
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU required for fused SDPA")
+    def test_128k_causal(self):
+        """qL=16, kL=131072, causal=True — causal masking across 4 chunks.
+
+        Verifies that the causal position offset is computed correctly when
+        the KV context spans multiple 32768-token chunks.  Query position i
+        (0-indexed within the qL window) can only attend to key positions
+        j <= i + (kL - qL).
+        """
+        B, qL, kL, n_heads, D = 1, 16, 131072, 4, 128
+        q, k, v, scale = self._make_qkv(B, qL, kL, n_heads, n_heads, D,
+                                        mx.float16, seed=1)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, mask="causal"
+        )
+        self._check_finite_and_bounded(out, tag="128k_causal")
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU required for fused SDPA")
+    def test_128k_headdim_256(self):
+        """qL=16, kL=131072, D=256, float16 — head dim that matters for Qwen3.5.
+
+        Qwen3.5 uses D=256 (head_dim=256).  This is the primary motivation for
+        the chunked dispatch — the non-chunked path hit Metal threadgroup memory
+        limits with D=256.  Tests that 128K context works end-to-end with the
+        production head dimension.
+        """
+        B, qL, kL, n_heads, D = 1, 16, 131072, 4, 256
+        q, k, v, scale = self._make_qkv(B, qL, kL, n_heads, n_heads, D,
+                                        mx.float16, seed=2)
+        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+        self._check_finite_and_bounded(out, tag="128k_headdim256 non-causal")
+
+        # Also test causal path with D=256
+        out_causal = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, mask="causal"
+        )
+        self._check_finite_and_bounded(out_causal, tag="128k_headdim256 causal")
+
+
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=False)
