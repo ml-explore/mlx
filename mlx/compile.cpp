@@ -18,6 +18,10 @@
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 
+#ifdef METAL_AVAILABLE
+#include "mlx/backend/metal/device.h"
+#endif
+
 namespace mlx::core {
 
 constexpr int max_compile_depth = 11;
@@ -367,14 +371,54 @@ class CompilerCache {
   }
 
   void erase(std::uintptr_t fun_id) {
+    // Clean up Metal shader libraries before erasing
+    auto it = cache_.find(fun_id);
+    if (it != cache_.end()) {
+      cleanup_metal_libraries(it->second);
+    }
     cache_.erase(fun_id);
   }
 
   void clear() {
+    // Clean up all Metal shader libraries before clearing
+    for (auto& [_, entries] : cache_) {
+      cleanup_metal_libraries(entries);
+    }
     cache_.clear();
   }
 
  private:
+  // Clean up Metal shader libraries from compiled functions
+  void cleanup_metal_libraries(std::vector<CacheEntry>& entries) {
+#ifdef METAL_AVAILABLE
+    for (auto& entry : entries) {
+      // Skip empty entries
+      if (entry.tape.empty()) {
+        continue;
+      }
+      
+      // Collect unique library names from Compiled primitives
+      std::unordered_set<std::string> lib_names;
+      for (const auto& arr : entry.tape) {
+        // Check if this array's primitive is a Compiled primitive
+        auto& prim = arr.primitive();
+        if (auto* compiled = dynamic_cast<const Compiled*>(&prim)) {
+          std::string lib = compiled->lib_name();
+          if (!lib.empty()) {
+            lib_names.insert(lib);
+          }
+        }
+      }
+      
+      // Release Metal resources for each library
+      auto& d = metal::device(entry.stream.device);
+      for (const auto& lib_name : lib_names) {
+        d.clear_library(lib_name);
+      }
+    }
+#endif
+  }
+
   CompilerCache() {
     // Make sure the allocator is fully
     // initialized before the compiler cache
