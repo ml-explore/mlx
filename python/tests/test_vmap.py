@@ -242,6 +242,30 @@ class TestVmap(mlx_tests.MLXTestCase):
         out = mx.vmap(lambda x: x.sum(axis=(0, 1)), in_axes=(2,))(a)
         self.assertTrue(mx.array_equal(out, mx.full((2,), 15)))
 
+    def test_vmap_broadcast_to(self):
+        x = mx.arange(2 * 3 * 1 * 5).reshape(2, 3, 1, 5)
+
+        out = mx.vmap(lambda a: mx.broadcast_to(a, (3, 4, 5)), in_axes=0)(x)
+        expected = mx.stack(
+            [mx.broadcast_to(x[i], (3, 4, 5)) for i in range(x.shape[0])]
+        )
+        self.assertTrue(mx.array_equal(out, expected))
+
+        out = mx.vmap(lambda a: mx.broadcast_to(a, (2, 4, 5)), in_axes=1)(x)
+        expected = mx.stack(
+            [mx.broadcast_to(x[:, i, :, :], (2, 4, 5)) for i in range(x.shape[1])]
+        )
+        self.assertTrue(mx.array_equal(out, expected))
+
+        out = mx.vmap(lambda a: mx.broadcast_to(a, (2, 3, 4)), in_axes=-1, out_axes=-1)(
+            x
+        )
+        expected = mx.stack(
+            [mx.broadcast_to(x[:, :, :, i], (2, 3, 4)) for i in range(x.shape[-1])],
+            axis=-1,
+        )
+        self.assertTrue(mx.array_equal(out, expected))
+
     def test_vmap_argreduce(self):
         a = mx.array([[1, 2, 3], [2, 3, 1]])
         out = mx.vmap(lambda x: mx.argmin(x))(a)
@@ -595,6 +619,25 @@ class TestVmap(mlx_tests.MLXTestCase):
         out = mx.vmap(fun, in_axes=(None, 0))(a, idx)
         self.assertEqual(out.shape, (4, 2, 1))
 
+        a = mx.arange(3 * 2 * 5 * 4).reshape(3, 2, 5, 4)
+        idx = mx.zeros((3, 2, 1, 4), mx.int32)
+        out = mx.vmap(lambda x, y: mx.take_along_axis(x, y, axis=1), in_axes=(0, 0))(
+            a, idx
+        )
+        expected = mx.stack(
+            [mx.take_along_axis(a[i], idx[i], axis=1) for i in range(a.shape[0])]
+        )
+        self.assertTrue(mx.array_equal(out, expected))
+
+        idx = mx.zeros((3, 2, 5, 1), mx.int32)
+        out = mx.vmap(lambda x, y: mx.take_along_axis(x, y, axis=-1), in_axes=(0, 0))(
+            a, idx
+        )
+        expected = mx.stack(
+            [mx.take_along_axis(a[i], idx[i], axis=-1) for i in range(a.shape[0])]
+        )
+        self.assertTrue(mx.array_equal(out, expected))
+
     def test_vmap_put_along_axis(self):
         a = mx.zeros((4, 5, 1))
         idx = mx.ones((2, 4, 1), mx.int32)
@@ -620,6 +663,30 @@ class TestVmap(mlx_tests.MLXTestCase):
         upd = mx.ones((2, 4, 1))
         out = mx.vmap(fun, in_axes=(None, 1, 1))(a, idx, upd)
         self.assertEqual(out.shape, (4, 5, 1))
+
+        a = mx.zeros((3, 2, 5, 4))
+        idx = mx.zeros((3, 2, 1, 4), mx.int32)
+        upd = mx.ones((3, 2, 1, 4))
+        out = mx.vmap(
+            lambda x, y, z: mx.put_along_axis(x, y, z, axis=1), in_axes=(0, 0, 0)
+        )(a, idx, upd)
+        expected = mx.stack(
+            [mx.put_along_axis(a[i], idx[i], upd[i], axis=1) for i in range(a.shape[0])]
+        )
+        self.assertTrue(mx.array_equal(out, expected))
+
+        idx = mx.zeros((3, 2, 5, 1), mx.int32)
+        upd = mx.ones((3, 2, 5, 1))
+        out = mx.vmap(
+            lambda x, y, z: mx.put_along_axis(x, y, z, axis=-1), in_axes=(0, 0, 0)
+        )(a, idx, upd)
+        expected = mx.stack(
+            [
+                mx.put_along_axis(a[i], idx[i], upd[i], axis=-1)
+                for i in range(a.shape[0])
+            ]
+        )
+        self.assertTrue(mx.array_equal(out, expected))
 
     def test_vmap_split_vmap(self):
         def fun(x):

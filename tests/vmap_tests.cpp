@@ -3,6 +3,7 @@
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
+#include "mlx/primitives.h"
 
 using namespace mlx::core;
 
@@ -235,6 +236,33 @@ TEST_CASE("test vmap with eval") {
   };
   x = array({1.0, 2.0}, {2, 1});
   CHECK_THROWS(vmap(fun2)({x, y}));
+}
+
+TEST_CASE("test vmap broadcast axes primitive") {
+  auto s = default_stream(default_device());
+  {
+    auto p = BroadcastAxes(s, {-1});
+    auto x = reshape(arange(2 * 3 * 1 * 5, float32, s), {2, 3, 1, 5}, s);
+    auto y = zeros({1, 2, 4, 5}, float32, s);
+
+    auto [out, out_axes] = p.vmap({x, y}, {0, 1});
+    auto expected = broadcast_to(x, {2, 3, 4, 5}, s);
+    CHECK_EQ(out_axes.size(), 1);
+    CHECK_EQ(out_axes[0], 0);
+    CHECK(array_equal(out[0], expected).item<bool>());
+  }
+
+  {
+    auto p = BroadcastAxes(s, {-1});
+    auto x = reshape(arange(3 * 1 * 5, float32, s), {3, 1, 5}, s);
+    auto y = zeros({2, 1, 4, 5}, float32, s);
+
+    auto [out, out_axes] = p.vmap({x, y}, {-1, 0});
+    auto expected = broadcast_to(x, {2, 3, 4, 5}, s);
+    CHECK_EQ(out_axes.size(), 1);
+    CHECK_EQ(out_axes[0], 0);
+    CHECK(array_equal(out[0], expected).item<bool>());
+  }
 }
 
 TEST_CASE("test vmap comparison ops") {

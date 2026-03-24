@@ -897,7 +897,81 @@ std::vector<array> BroadcastAxes::jvp(
 std::pair<std::vector<array>, std::vector<int>> BroadcastAxes::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::invalid_argument("[BroadcastAxes] VMAP NYI");
+  assert(inputs.size() == axes.size());
+  assert(!inputs.empty());
+
+  if (std::all_of(axes.begin(), axes.end(), [](int ax) { return ax == -1; })) {
+    return {
+        {array(
+            output_shape(inputs, ignore_axes_),
+            inputs[0].dtype(),
+            std::make_shared<BroadcastAxes>(stream(), ignore_axes_),
+            inputs)},
+        {-1}};
+  }
+
+  int ndim = 0;
+  for (int i = 0; i < inputs.size(); ++i) {
+    ndim = std::max(ndim, static_cast<int>(inputs[i].ndim()) + (axes[i] == -1));
+  }
+
+  auto expand_dims = [this, ndim](const array& in) {
+    auto shape = in.shape();
+    shape.insert(shape.begin(), ndim - shape.size(), 1);
+    return reshape(in, std::move(shape), stream());
+  };
+
+  auto aligned_inputs = inputs;
+  int to_ax = (ndim - static_cast<int>(inputs[0].ndim())) + axes[0];
+  if (to_ax < 0 || to_ax >= ndim) {
+    throw std::invalid_argument(
+        "[BroadcastAxes::vmap] Received invalid vmapped axis.");
+  }
+  for (int i = 0; i < aligned_inputs.size(); ++i) {
+    int from_ax = (ndim - static_cast<int>(inputs[i].ndim())) + axes[i];
+    if (from_ax < 0 || from_ax >= ndim) {
+      throw std::invalid_argument(
+          "[BroadcastAxes::vmap] Received invalid vmapped axis.");
+    }
+    aligned_inputs[i] = expand_dims(inputs[i]);
+
+    if (from_ax != to_ax) {
+      std::vector<int> tdims(aligned_inputs[i].ndim());
+      std::iota(tdims.begin(), tdims.end(), 0);
+      tdims.erase(tdims.begin() + from_ax);
+      tdims.insert(tdims.begin() + to_ax, from_ax);
+      aligned_inputs[i] = transpose(aligned_inputs[i], tdims, stream());
+    }
+  }
+
+  int prefix = ndim - static_cast<int>(inputs[0].ndim());
+  int unbatched_ndim = static_cast<int>(inputs[0].ndim()) - (axes[0] >= 0);
+  std::vector<int> ignore_axes;
+  ignore_axes.reserve(ignore_axes_.size());
+  for (auto ax : ignore_axes_) {
+    auto pos_ax = unbatched_ndim + ax;
+    if (pos_ax < 0 || pos_ax >= unbatched_ndim) {
+      throw std::invalid_argument(
+          "[BroadcastAxes::vmap] Invalid axis in ignore_axes.");
+    }
+    if (axes[0] >= 0 && pos_ax >= axes[0]) {
+      pos_ax++;
+    }
+    pos_ax += prefix;
+    if (pos_ax < 0 || pos_ax >= ndim) {
+      throw std::invalid_argument(
+          "[BroadcastAxes::vmap] Invalid axis in ignore_axes.");
+    }
+    ignore_axes.push_back(pos_ax - ndim);
+  }
+
+  return {
+      {array(
+          output_shape(aligned_inputs, ignore_axes),
+          aligned_inputs[0].dtype(),
+          std::make_shared<BroadcastAxes>(stream(), ignore_axes),
+          std::move(aligned_inputs))},
+      {to_ax}};
 }
 
 bool BroadcastAxes::is_equivalent(const Primitive& other) const {
