@@ -3231,7 +3231,43 @@ std::vector<array> Pad::jvp(
 std::pair<std::vector<array>, std::vector<int>> Pad::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("Pad vmap is NYI.");
+  assert(inputs.size() == 2);
+  assert(axes.size() == 2);
+
+  if (axes[1] >= 0) {
+    throw std::invalid_argument(
+        "[Pad::vmap] Vmap over padding value is not supported.");
+  }
+
+  auto ax = axes[0];
+  auto& in = inputs[0];
+  auto pad_axes = axes_;
+  if (ax >= 0) {
+    auto unbatched_ndim = static_cast<int>(in.ndim()) - 1;
+    pad_axes.clear();
+    pad_axes.reserve(axes_.size());
+    for (auto pad_ax : axes_) {
+      auto normalized_pad_ax = pad_ax < 0 ? pad_ax + unbatched_ndim : pad_ax;
+      if (normalized_pad_ax < 0 || normalized_pad_ax >= unbatched_ndim) {
+        throw std::invalid_argument("[Pad::vmap] Invalid padding axis.");
+      }
+      pad_axes.push_back(
+          normalized_pad_ax >= ax ? normalized_pad_ax + 1 : normalized_pad_ax);
+    }
+  }
+
+  auto pad_val = inputs[1];
+  return {
+      {
+          pad(in,
+              pad_axes,
+              low_pad_size_,
+              high_pad_size_,
+              pad_val,
+              "constant",
+              stream()),
+      },
+      {ax}};
 }
 
 bool Pad::is_equivalent(const Primitive& other) const {
