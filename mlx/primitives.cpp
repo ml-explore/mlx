@@ -3240,33 +3240,22 @@ std::pair<std::vector<array>, std::vector<int>> Pad::vmap(
   }
 
   auto ax = axes[0];
-  auto& in = inputs[0];
   auto pad_axes = axes_;
   if (ax >= 0) {
-    auto unbatched_ndim = static_cast<int>(in.ndim()) - 1;
-    pad_axes.clear();
-    pad_axes.reserve(axes_.size());
-    for (auto pad_ax : axes_) {
-      auto normalized_pad_ax = pad_ax < 0 ? pad_ax + unbatched_ndim : pad_ax;
-      if (normalized_pad_ax < 0 || normalized_pad_ax >= unbatched_ndim) {
-        throw std::invalid_argument("[Pad::vmap] Invalid padding axis.");
-      }
-      pad_axes.push_back(
-          normalized_pad_ax >= ax ? normalized_pad_ax + 1 : normalized_pad_ax);
+    for (auto& pad_ax : pad_axes) {
+      pad_ax = (pad_ax >= ax) ? pad_ax + 1 : pad_ax;
     }
   }
 
-  auto pad_val = inputs[1];
   return {
-      {
-          pad(in,
-              pad_axes,
-              low_pad_size_,
-              high_pad_size_,
-              pad_val,
-              "constant",
-              stream()),
-      },
+      {pad(
+          inputs[0],
+          pad_axes,
+          low_pad_size_,
+          high_pad_size_,
+          inputs[1],
+          "constant",
+          stream())},
       {ax}};
 }
 
