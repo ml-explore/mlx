@@ -903,7 +903,10 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(cfun(c, a, b), fun(c, a, b)))
 
         # With alpha and beta
-        fun2 = mx.compile(lambda c, a, b: mx.addmm(c, a, b, alpha=2.0, beta=3.0), shapeless=True)
+        fun2 = mx.compile(
+            lambda c, a, b: mx.addmm(c, a, b, alpha=2.0, beta=3.0),
+            shapeless=True
+        )
         c = mx.ones((2, 4))
         a = mx.ones((2, 3))
         b = mx.ones((3, 4))
