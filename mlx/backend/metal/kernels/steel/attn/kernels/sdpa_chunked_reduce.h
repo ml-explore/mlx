@@ -57,16 +57,21 @@ template <typename T>
   }
 
   // --- Pass 2: accumulate weighted sum and total weight ---
+  // Guard: when all keys in a chunk are causally masked, the kernel output
+  // is NaN (0/0 in softmax) and lse is -inf.  exp(-inf - max_lse) = 0,
+  // but 0 * NaN = NaN in IEEE 754.  Skip zero-weight chunks to avoid this.
   float acc = 0.0f;
   float sum_w = 0.0f;
   for (int c = 0; c < n_chunks; c++) {
     int64_t lse_idx = int64_t(c) * int64_t(BHqL) + bhq;
     float w = metal::exp(chunk_lses[lse_idx] - max_lse);
-    sum_w += w;
+    if (w > 0.0f) {
+      sum_w += w;
 
-    int64_t out_idx = int64_t(c) * int64_t(BHqL) * int64_t(D) +
-                      bhq * int64_t(D) + int64_t(d);
-    acc += w * float(chunk_outs[out_idx]);
+      int64_t out_idx = int64_t(c) * int64_t(BHqL) * int64_t(D) +
+                        bhq * int64_t(D) + int64_t(d);
+      acc += w * float(chunk_outs[out_idx]);
+    }
   }
 
   // Normalize
