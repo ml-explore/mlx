@@ -173,8 +173,11 @@ void sdpa_full_self_attention_metal(
     array& o,
     bool do_causal_,
     const std::optional<array>& mask,
-    const std::optional<array>& sinks) {
-  if (metal::is_nax_available() && q.shape(3) != 80 &&
+    const std::optional<array>& sinks,
+    bool output_logsumexp_flag,
+    array* lse) {
+  // NAX path does not support logsumexp output
+  if (!output_logsumexp_flag && metal::is_nax_available() && q.shape(3) != 80 &&
       (env::enable_tf32() || q.dtype() != float32)) {
     return sdpa_full_self_attention_nax(
         /* const Stream& s = */ s,
@@ -217,7 +220,8 @@ void sdpa_full_self_attention_metal(
       {&align_K, MTL::DataType::DataTypeBool, 201},
       {&has_mask, MTL::DataType::DataTypeBool, 300},
       {&do_causal, MTL::DataType::DataTypeBool, 301},
-      {&has_sinks, MTL::DataType::DataTypeBool, 302}};
+      {&has_sinks, MTL::DataType::DataTypeBool, 302},
+      {&output_logsumexp_flag, MTL::DataType::DataTypeBool, 304}};
 
   std::string base_name;
   concatenate(
@@ -250,7 +254,9 @@ void sdpa_full_self_attention_metal(
       "_do_causal_",
       (do_causal ? 't' : 'n'),
       "_has_sinks_",
-      (has_sinks ? 't' : 'n'));
+      (has_sinks ? 't' : 'n'),
+      "_lse_",
+      (output_logsumexp_flag ? 't' : 'n'));
 
   auto& compute_encoder = d.get_command_encoder(s.index);
 
@@ -318,6 +324,9 @@ void sdpa_full_self_attention_metal(
   }
   if (has_sinks) {
     compute_encoder.set_input_array(*sinks, 7);
+  }
+  if (output_logsumexp_flag && lse != nullptr) {
+    compute_encoder.set_output_array(*lse, 8);
   }
 
   MTL::Size grid_dims = MTL::Size(NQ, H, B);
@@ -600,9 +609,6 @@ bool ScaledDotProductAttention::use_fallback(
     // forward and backward.
     return true;
   }
-  if (output_logsumexp) {
-    return true;
-  }
   if (s.device == Device::cpu) {
     return true;
   }
@@ -628,7 +634,9 @@ bool ScaledDotProductAttention::use_fallback(
   const bool supports_sdpa_full = query_sequence_length > 8 &&
       sdpa_full_supported_mask && sdpa_full_supported_head_dim;
 
-  const bool supports_sdpa_vector = (query_sequence_length <= 8) &&
+  // Vector kernels do not support logsumexp output
+  const bool supports_sdpa_vector = !output_logsumexp &&
+      (query_sequence_length <= 8) &&
       (query_sequence_length <= key_sequence_length) &&
       sdpa_vector_supported_head_dim &&
       (query_sequence_length * gqa_factor) <= 32;
@@ -778,8 +786,17 @@ void ScaledDotProductAttention::eval_gpu(
         ? std::optional<array>{copy_unless(is_matrix_contiguous, inputs[3])}
         : std::nullopt;
 
+    // Set up logsumexp output if requested
+    bool lse_flag = output_logsumexp_ && outputs.size() > 1;
+    array* lse_ptr = nullptr;
+    if (lse_flag) {
+      auto& lse = outputs[1];
+      lse.set_data(allocator::malloc(lse.nbytes()));
+      lse_ptr = &lse;
+    }
+
     sdpa_full_self_attention_metal(
-        s, d, q, k, v, scale_, o, do_causal_, mask, sinks);
+        s, d, q, k, v, scale_, o, do_causal_, mask, sinks, lse_flag, lse_ptr);
   }
 
   d.add_temporaries(std::move(copies), s.index);
