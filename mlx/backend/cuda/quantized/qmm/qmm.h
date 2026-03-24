@@ -100,4 +100,17 @@ void qmv(
     QuantizationMode mode,
     cu::CommandEncoder& encoder);
 
+void gather_qmv(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    array& out,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder);
+
 } // namespace mlx::core

@@ -104,6 +104,95 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
           quantization_mode_to_string(mode_)));
 }
 
+void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("GatherQMM::eval_gpu");
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  const array& x = inputs[0];
+  const array& w = inputs[1];
+  const array& scales = inputs[2];
+  std::optional<array> biases;
+  if (inputs.size() == 6) {
+    biases = inputs[3];
+  }
+  const array& lhs_indices = inputs[inputs.size() - 2];
+  const array& rhs_indices = inputs[inputs.size() - 1];
+
+  int M = out.shape(-2);
+  int N = out.shape(-1);
+  int K = x.shape(-1);
+  int B = out.size() / (M * N);
+
+  auto supports = [&](auto&& f) {
+    return f(
+        x,
+        w,
+        scales,
+        biases,
+        out,
+        transpose_,
+        bits_,
+        group_size_,
+        mode_,
+        encoder.device());
+  };
+  bool can_use_fp_qmv = supports(supports_fp_qmv);
+  bool can_use_qmv = supports(supports_qmv) || can_use_fp_qmv;
+
+  auto call_qmv = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    if (can_use_fp_qmv) {
+      // TODO: Add gather_fp_qmv for FP-mode-specific optimizations.
+      gather_qmv(
+          x,
+          w,
+          scales,
+          biases,
+          lhs_indices,
+          rhs_indices,
+          out,
+          bits_,
+          group_size_,
+          mode_,
+          encoder);
+    } else {
+      gather_qmv(
+          x,
+          w,
+          scales,
+          biases,
+          lhs_indices,
+          rhs_indices,
+          out,
+          bits_,
+          group_size_,
+          mode_,
+          encoder);
+    }
+  };
+
+  if (can_use_qmv) {
+    call_qmv();
+    return;
+  }
+
+  throw std::runtime_error(
+      fmt::format(
+          "[gather_qmm] No implementation for "
+          "problem shape: {}x{}x{}x{}, transpose: {}, "
+          "activation: {}, bits: {}, group size: {}, mode: \"{}\".",
+          M,
+          N,
+          K,
+          B,
+          transpose_,
+          dtype_to_string(x.dtype()),
+          bits_,
+          group_size_,
+          quantization_mode_to_string(mode_)));
+}
+
 void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
