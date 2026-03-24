@@ -14,6 +14,7 @@ constant bool align_K [[function_constant(201)]];
 constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
 constant bool has_sinks [[function_constant(302)]];
+constant bool output_logsumexp [[function_constant(304)]];
 
 struct MaxOp {
   template <typename T>
@@ -76,6 +77,7 @@ template <
     const constant AttnMaskParams* mask_params [[buffer(5), function_constant(has_mask)]],
     const device MaskType* mask [[buffer(6), function_constant(has_mask)]],
     const device T* sinks [[buffer(7), function_constant(has_sinks)]],
+    device float* lse_out [[buffer(8), function_constant(output_logsumexp)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -472,5 +474,19 @@ template <
     Otile.template store_safe<T, 1, 1>(O, params->O_strides[2], dst_tile_dims);
   } else {
     Otile.template store<T, 1, 1>(O, params->O_strides[2]);
+  }
+
+  // Write per-row logsumexp if requested
+  if (output_logsumexp) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      int row = int(tid.x) * BQ + tm + sm + (i * kFragSize);
+      if (row < params->qL) {
+        int64_t idx = int64_t(tid.z) * params->H * params->qL
+                    + int64_t(tid.y) * params->qL + row;
+        lse_out[idx] = float(max_score[i]) * M_LN2_F
+                     + metal::precise::log(float(sum_score[i]));
+      }
+    }
   }
 }
