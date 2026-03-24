@@ -595,6 +595,12 @@ class TestVmap(mlx_tests.MLXTestCase):
         out = mx.vmap(fun, in_axes=(None, 0))(a, idx)
         self.assertEqual(out.shape, (4, 2, 1))
 
+        a = mx.zeros((4, 5, 3))
+        idx = mx.zeros((2, 2, 1, 3), mx.int32)
+
+        out = mx.vmap(fun, in_axes=(None, 0))(a, idx)
+        self.assertEqual(out.shape, (2, 2, 5, 3))
+
     def test_vmap_put_along_axis(self):
         a = mx.zeros((4, 5, 1))
         idx = mx.ones((2, 4, 1), mx.int32)

@@ -1659,7 +1659,7 @@ std::vector<array> broadcast_arrays(
         outputs.push_back(in);
       } else {
         outputs.push_back(array(
-            std::move(out_shape),
+            out_shape,
             in.dtype(),
             std::make_shared<Broadcast>(to_stream(s), out_shape),
             {in}));

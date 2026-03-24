@@ -392,6 +392,18 @@ TEST_CASE("test vmap gather") {
   }
 }
 
+TEST_CASE("test vmap take_along_axis with unmapped input and mapped index") {
+  auto fun = [](std::vector<array> inputs) {
+    return std::vector<array>{take_along_axis(inputs[0], inputs[1], 0)};
+  };
+
+  auto a = reshape(arange(60), {4, 5, 3});
+  auto idx = zeros({2, 2, 1, 3}, int32);
+
+  auto out = vmap(fun, {-1, 0})({a, idx})[0];
+  CHECK_EQ(out.shape(), Shape{2, 2, 5, 3});
+}
+
 TEST_CASE("test vmap scatter") {
   auto make_scatter_fn = [](const std::vector<array>& indices,
                             const array& updates,
