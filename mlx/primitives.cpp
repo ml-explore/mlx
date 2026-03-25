@@ -923,16 +923,8 @@ std::pair<std::vector<array>, std::vector<int>> BroadcastAxes::vmap(
 
   auto aligned_inputs = inputs;
   int to_ax = (ndim - static_cast<int>(inputs[0].ndim())) + axes[0];
-  if (to_ax < 0 || to_ax >= ndim) {
-    throw std::invalid_argument(
-        "[BroadcastAxes::vmap] Received invalid vmapped axis.");
-  }
   for (int i = 0; i < aligned_inputs.size(); ++i) {
     int from_ax = (ndim - static_cast<int>(inputs[i].ndim())) + axes[i];
-    if (from_ax < 0 || from_ax >= ndim) {
-      throw std::invalid_argument(
-          "[BroadcastAxes::vmap] Received invalid vmapped axis.");
-    }
     aligned_inputs[i] = expand_dims(inputs[i]);
 
     if (from_ax != to_ax) {
@@ -950,18 +942,10 @@ std::pair<std::vector<array>, std::vector<int>> BroadcastAxes::vmap(
   ignore_axes.reserve(ignore_axes_.size());
   for (auto ax : ignore_axes_) {
     auto pos_ax = unbatched_ndim + ax;
-    if (pos_ax < 0 || pos_ax >= unbatched_ndim) {
-      throw std::invalid_argument(
-          "[BroadcastAxes::vmap] Invalid axis in ignore_axes.");
-    }
     if (axes[0] >= 0 && pos_ax >= axes[0]) {
       pos_ax++;
     }
     pos_ax += prefix;
-    if (pos_ax < 0 || pos_ax >= ndim) {
-      throw std::invalid_argument(
-          "[BroadcastAxes::vmap] Invalid axis in ignore_axes.");
-    }
     ignore_axes.push_back(pos_ax - ndim);
   }
 
