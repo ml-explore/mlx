@@ -40,10 +40,15 @@ template <typename T>
 struct LessThan {
   static constexpr constant T init = Init<T>::v;
   METAL_FUNC bool operator()(T a, T b) const {
-    if constexpr (
-        metal::is_floating_point_v<T> || metal::is_same_v<T, complex64_t>) {
-      bool an = isnan(a);
-      bool bn = isnan(b);
+    if constexpr (metal::is_floating_point_v<T>) {
+      bool an = metal::isnan(a);
+      bool bn = metal::isnan(b);
+      if (an | bn) {
+        return (!an) & bn;
+      }
+    } else if constexpr (metal::is_same_v<T, complex64_t>) {
+      bool an = metal::isnan(a.real) || metal::isnan(a.imag);
+      bool bn = metal::isnan(b.real) || metal::isnan(b.imag);
       if (an | bn) {
         return (!an) & bn;
       }
