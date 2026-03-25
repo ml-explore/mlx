@@ -621,15 +621,17 @@ bool ScaledDotProductAttention::use_fallback(
   const bool sdpa_vector_supported_head_dim =
       query_head_dim == value_head_dim &&
       (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
-       query_head_dim == 256);
-  // For head_dim=256, the fused full-attention kernel is ~30% slower than
-  // unfused. Only route to fused when kL is large enough that unfused would
-  // exceed Metal buffer limits (the fused kernel tiles K/V so it scales).
-  const bool sdpa_full_256_ok =
-      query_head_dim == 256 && key_sequence_length > 16384;
+       query_head_dim == 192 || query_head_dim == 256);
+  // For head_dim >= 192, the fused full-attention kernel is slower than
+  // unfused for short sequences. Only route to fused when kL is large enough
+  // that the unfused path would exceed Metal buffer limits (the fused kernel
+  // tiles K/V so it scales to arbitrary sequence lengths).
+  const bool sdpa_full_large_hd_ok =
+      (query_head_dim == 192 || query_head_dim == 256) &&
+      key_sequence_length > 16384;
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
       (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128 ||
-       sdpa_full_256_ok);
+       sdpa_full_large_hd_ok);
 
   const bool sdpa_full_supported_mask = !has_mask || has_arr_mask ||
       (query_sequence_length <= key_sequence_length && do_causal);
