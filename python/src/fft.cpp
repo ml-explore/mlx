@@ -557,20 +557,7 @@ void init_fft(nb::module_& parent_module) {
   m.def(
       "fftfreq",
       [](int n, double d, mx::StreamOrDevice s) {
-        if (n <= 0) {
-          throw std::invalid_argument("[fftfreq] `n` must be greater than 0.");
-        }
-        if (d == 0.0) {
-          throw std::invalid_argument("[fftfreq] `d` must be non-zero.");
-        }
-
-        auto pos = mx::arange(0, (n + 1) / 2, mx::float32, s);
-        auto neg = mx::arange(-(n / 2), 0, mx::float32, s);
-        auto freqs = mx::concatenate({pos, neg}, s);
-        auto scale = mx::array(
-            static_cast<float>(1.0 / (static_cast<double>(n) * d)),
-            mx::float32);
-        return mx::multiply(freqs, scale, s);
+        return mx::fft::fftfreq(n, d, s);
       },
       "n"_a,
       "d"_a = 1.0,
@@ -588,18 +575,7 @@ void init_fft(nb::module_& parent_module) {
   m.def(
       "rfftfreq",
       [](int n, double d, mx::StreamOrDevice s) {
-        if (n <= 0) {
-          throw std::invalid_argument("[rfftfreq] `n` must be greater than 0.");
-        }
-        if (d == 0.0) {
-          throw std::invalid_argument("[rfftfreq] `d` must be non-zero.");
-        }
-
-        auto freqs = mx::arange(0, n / 2 + 1, mx::float32, s);
-        auto scale = mx::array(
-            static_cast<float>(1.0 / (static_cast<double>(n) * d)),
-            mx::float32);
-        return mx::multiply(freqs, scale, s);
+        return mx::fft::rfftfreq(n, d, s);
       },
       "n"_a,
       "d"_a = 1.0,

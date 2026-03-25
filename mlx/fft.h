@@ -212,6 +212,13 @@ inline array irfft2(
     StreamOrDevice s = {}) {
   return irfftn(a, axes, norm, s);
 }
+/** Compute the discrete Fourier Transform sample frequencies. */
+MLX_API array fftfreq(int n, double d = 1.0, StreamOrDevice s = {});
+
+/** Compute the discrete Fourier Transform sample frequencies for
+ * `rfft`/`irfft`. */
+MLX_API array rfftfreq(int n, double d = 1.0, StreamOrDevice s = {});
+
 /** Shift the zero-frequency component to the center of the spectrum. */
 MLX_API array fftshift(const array& a, StreamOrDevice s = {});
 

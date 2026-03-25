@@ -310,4 +310,32 @@ array ifftshift(const array& a, StreamOrDevice s /* = {} */) {
   return ifftshift(a, axes, s);
 }
 
+array fftfreq(int n, double d /* = 1.0 */, StreamOrDevice s /* = {} */) {
+  if (n <= 0) {
+    throw std::invalid_argument("[fftfreq] `n` must be greater than 0.");
+  }
+  if (d == 0.0) {
+    throw std::invalid_argument("[fftfreq] `d` must be non-zero.");
+  }
+  auto pos = arange(0, (n + 1) / 2, float32, s);
+  auto neg = arange(-(n / 2), 0, float32, s);
+  auto freqs = concatenate({pos, neg}, s);
+  auto scale =
+      array(static_cast<float>(1.0 / (static_cast<double>(n) * d)), float32);
+  return multiply(freqs, scale, s);
+}
+
+array rfftfreq(int n, double d /* = 1.0 */, StreamOrDevice s /* = {} */) {
+  if (n <= 0) {
+    throw std::invalid_argument("[rfftfreq] `n` must be greater than 0.");
+  }
+  if (d == 0.0) {
+    throw std::invalid_argument("[rfftfreq] `d` must be non-zero.");
+  }
+  auto freqs = arange(0, n / 2 + 1, float32, s);
+  auto scale =
+      array(static_cast<float>(1.0 / (static_cast<double>(n) * d)), float32);
+  return multiply(freqs, scale, s);
+}
+
 } // namespace mlx::core::fft
