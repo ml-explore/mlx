@@ -6,14 +6,18 @@
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/dtype_utils.h"
 
+#include <cooperative_groups.h>
+
 namespace mlx::core {
+
+namespace cg = cooperative_groups;
 
 namespace cu {
 
 template <typename T, typename MaskT>
 __global__ void block_mask_inplace(
     T* data,
-    const MaskT* mask,
+    MaskT* mask,
     int block_size,
     int64_t rows,
     int64_t cols,
@@ -26,7 +30,7 @@ __global__ void block_mask_inplace(
     int64_t mask_mat_size,
     int64_t batch_count) {
   int64_t mat_size = rows * cols;
-  int64_t idx = int64_t(blockIdx.x) * blockDim.x + threadIdx.x;
+  int64_t idx = cg::this_grid().thread_rank();
   if (idx >= batch_count * mat_size)
     return;
 
@@ -49,7 +53,7 @@ __global__ void block_mask_inplace(
 
 template <typename T, typename MaskT, bool SrcContiguous>
 __global__ void block_mask_copy(
-    const T* src,
+    T* src,
     T* dst,
     int block_size,
     int64_t rows,
@@ -57,7 +61,7 @@ __global__ void block_mask_copy(
     const __grid_constant__ Shape src_shape,
     const __grid_constant__ Strides src_strides,
     int src_ndim,
-    const MaskT* mask,
+    MaskT* mask,
     const __grid_constant__ Shape mask_shape,
     const __grid_constant__ Strides mask_strides,
     int mask_ndim,
@@ -66,7 +70,7 @@ __global__ void block_mask_copy(
     int64_t mask_mat_size,
     int64_t batch_count) {
   int64_t mat_size = rows * cols;
-  int64_t idx = int64_t(blockIdx.x) * blockDim.x + threadIdx.x;
+  int64_t idx = cg::this_grid().thread_rank();
   if (idx >= batch_count * mat_size)
     return;
 
@@ -102,6 +106,15 @@ namespace {
 
 constexpr int BLOCK_DIM = 256;
 
+template <typename T, typename F>
+void dispatch_mask_type(Dtype mask_dtype, F&& f) {
+  if (mask_dtype == bool_) {
+    f.template operator()<bool>();
+  } else {
+    f.template operator()<T>();
+  }
+}
+
 } // namespace
 
 void apply_block_mask(
@@ -116,8 +129,8 @@ void apply_block_mask(
   encoder.set_input_array(mask);
   encoder.set_output_array(data);
 
-  int64_t total = batch_count * rows * cols;
-  int grid = (total + BLOCK_DIM - 1) / BLOCK_DIM;
+  auto [num_blocks, block_dims] = get_launch_args(
+      data, data.size() > INT32_MAX, /*work_per_thread=*/1, BLOCK_DIM);
   int mask_ndim = mask.ndim();
   int64_t mask_row_str = mask.strides()[mask_ndim - 2];
   int64_t mask_col_str = mask.strides()[mask_ndim - 1];
@@ -130,20 +143,13 @@ void apply_block_mask(
   dispatch_float_types(data.dtype(), "apply_block_mask", [&](auto type_tag) {
     using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
 
-    auto launch = [&](auto mask_tag) {
-      using MaskT = decltype(mask_tag);
-      MaskT* mask_ptr;
-      if constexpr (std::is_same_v<MaskT, bool>) {
-        mask_ptr = gpu_ptr<bool>(mask_nc);
-      } else {
-        mask_ptr = gpu_ptr<T>(mask_nc);
-      }
+    dispatch_mask_type<T>(mask.dtype(), [&]<typename MaskT>() {
       encoder.add_kernel_node(
           cu::block_mask_inplace<T, MaskT>,
-          grid,
-          BLOCK_DIM,
+          num_blocks,
+          block_dims,
           gpu_ptr<T>(data),
-          mask_ptr,
+          gpu_ptr<MaskT>(mask_nc),
           block_size,
           rows,
           cols,
@@ -155,13 +161,7 @@ void apply_block_mask(
           mask_col_str,
           mask_mat_size,
           batch_count);
-    };
-
-    if (mask.dtype() == bool_) {
-      launch(bool{});
-    } else {
-      launch(T{});
-    }
+    });
   });
 }
 
@@ -181,8 +181,8 @@ array copy_with_block_mask(
   encoder.set_input_array(mask);
   encoder.set_output_array(dst);
 
-  int64_t total = batch_count * rows * cols;
-  int grid = (total + BLOCK_DIM - 1) / BLOCK_DIM;
+  auto [num_blocks, block_dims] =
+      get_launch_args(dst, dst.size() > INT32_MAX, /*work_per_thread=*/1, 256);
   int mask_ndim = mask.ndim();
   int64_t mask_row_str = mask.strides()[mask_ndim - 2];
   int64_t mask_col_str = mask.strides()[mask_ndim - 1];
@@ -203,50 +203,33 @@ array copy_with_block_mask(
     auto src_ptr = gpu_ptr<T>(src_nc);
     auto dst_ptr = gpu_ptr<T>(dst);
 
-    auto launch = [&](auto mask_tag, auto contiguous_tag) {
-      using MaskT = decltype(mask_tag);
-      constexpr bool Contiguous = decltype(contiguous_tag)::value;
-      MaskT* mask_ptr;
-      if constexpr (std::is_same_v<MaskT, bool>) {
-        mask_ptr = gpu_ptr<bool>(mask_nc);
-      } else {
-        mask_ptr = gpu_ptr<T>(mask_nc);
-      }
-      encoder.add_kernel_node(
-          cu::block_mask_copy<T, MaskT, Contiguous>,
-          grid,
-          BLOCK_DIM,
-          src_ptr,
-          dst_ptr,
-          block_size,
-          rows,
-          cols,
-          src_shape,
-          src_strides,
-          src_ndim,
-          mask_ptr,
-          mask_shape,
-          mask_strides_p,
-          mask_ndim,
-          mask_row_str,
-          mask_col_str,
-          mask_mat_size,
-          batch_count);
-    };
+    dispatch_mask_type<T>(mask.dtype(), [&]<typename MaskT>() {
+      auto mask_ptr = gpu_ptr<MaskT>(mask_nc);
 
-    auto dispatch_contiguous = [&](auto mask_tag) {
-      if (src_contiguous) {
-        launch(mask_tag, std::true_type{});
-      } else {
-        launch(mask_tag, std::false_type{});
-      }
-    };
-
-    if (mask.dtype() == bool_) {
-      dispatch_contiguous(bool{});
-    } else {
-      dispatch_contiguous(T{});
-    }
+      dispatch_bool(src_contiguous, [&](auto contiguous_tag) {
+        constexpr bool Contiguous = decltype(contiguous_tag)::value;
+        encoder.add_kernel_node(
+            cu::block_mask_copy<T, MaskT, Contiguous>,
+            num_blocks,
+            block_dims,
+            src_ptr,
+            dst_ptr,
+            block_size,
+            rows,
+            cols,
+            src_shape,
+            src_strides,
+            src_ndim,
+            mask_ptr,
+            mask_shape,
+            mask_strides_p,
+            mask_ndim,
+            mask_row_str,
+            mask_col_str,
+            mask_mat_size,
+            batch_count);
+      });
+    });
   });
 
   return dst;

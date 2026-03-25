@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/matmul.h"
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/gemms/block_mask.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
@@ -253,13 +254,27 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   array b = b_pre;
 
   if (has_op_mask) {
-    // Fused copy + mask in a single pass per matrix.
     auto& lhs_mask = inputs[inputs.size() - 2];
     auto& rhs_mask = inputs[inputs.size() - 1];
-    a = copy_with_block_mask(
-        encoder, a_pre, lhs_mask, block_size_, M, K, batch_count);
-    b = copy_with_block_mask(
-        encoder, b_pre, rhs_mask, block_size_, K, N, batch_count);
+
+    // When the input is donatable and row-contiguous, mask in-place to avoid
+    // a copy. Otherwise, fuse the copy and mask into a single pass.
+    auto mask_input = [&](const array& src,
+                          const array& mask,
+                          int64_t r,
+                          int64_t c) -> array {
+      if (is_donatable(src, out) && src.flags().row_contiguous) {
+        array donated = src;
+        apply_block_mask(
+            encoder, donated, mask, block_size_, r, c, r * c, batch_count);
+        return donated;
+      }
+      return copy_with_block_mask(
+          encoder, src, mask, block_size_, r, c, batch_count);
+    };
+
+    a = mask_input(a_pre, lhs_mask, M, K);
+    b = mask_input(b_pre, rhs_mask, K, N);
     a_transposed = false;
     lda = K;
     b_transposed = false;
