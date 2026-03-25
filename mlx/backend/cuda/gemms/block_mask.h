@@ -14,7 +14,6 @@ void apply_block_mask(
     int block_size,
     int64_t rows,
     int64_t cols,
-    int64_t data_batch_stride,
     int64_t batch_count);
 
 array copy_with_block_mask(
