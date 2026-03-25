@@ -44,6 +44,11 @@ TEST_CASE("test fft basics") {
     CHECK_EQ(y.size(), x.size());
     CHECK(array_equal(y, array(expected)).item<bool>());
 
+    auto y_ortho = fft::fft(x, -1, fft::FFTNorm::Ortho);
+    auto y_forward = fft::fft(x, -1, fft::FFTNorm::Forward);
+    CHECK(allclose(y_ortho, y * array(0.5f), 1e-6, 1e-6).item<bool>());
+    CHECK(allclose(y_forward, y * array(0.25f), 1e-6, 1e-6).item<bool>());
+
     y = fft::ifft(x);
     std::initializer_list<complex64_t> expected_inv = {
         {1.5, 0.0},
@@ -52,6 +57,12 @@ TEST_CASE("test fft basics") {
         {-0.5, 0.5},
     };
     CHECK(array_equal(y, array(expected_inv)).item<bool>());
+
+    auto yi = fft::ifft(x);
+    auto yi_ortho = fft::ifft(x, -1, fft::FFTNorm::Ortho);
+    auto yi_forward = fft::ifft(x, -1, fft::FFTNorm::Forward);
+    CHECK(allclose(yi_ortho, yi * array(2.0f), 1e-6, 1e-6).item<bool>());
+    CHECK(allclose(yi_forward, yi * array(4.0f), 1e-6, 1e-6).item<bool>());
   }
 
   {
@@ -126,8 +137,11 @@ TEST_CASE("test fftn") {
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, -4}), std::invalid_argument);
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, 0}), std::invalid_argument);
   CHECK_THROWS_AS(fft::fftn(x, {5, 5, 5}, {0}), std::invalid_argument);
-  CHECK_THROWS_AS(fft::fftn(x, {0}, {}, {}), std::invalid_argument);
-  CHECK_THROWS_AS(fft::fftn(x, {1, -1}, {}, {}), std::invalid_argument);
+  CHECK_THROWS_AS(
+      fft::fftn(x, {0}, {}, fft::FFTNorm::Backward, {}), std::invalid_argument);
+  CHECK_THROWS_AS(
+      fft::fftn(x, {1, -1}, {}, fft::FFTNorm::Backward, {}),
+      std::invalid_argument);
 
   // Test 2D FFT
   {

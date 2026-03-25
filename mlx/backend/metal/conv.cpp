@@ -1041,8 +1041,8 @@ void depthwise_conv_1D_gpu(
   concatenate(
       base_name,
       "depthwise_conv_1d_",
-      large ? "_large" : "",
-      type_to_name(out));
+      type_to_name(out),
+      large ? "_large" : "");
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(base_name);

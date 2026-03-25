@@ -200,6 +200,7 @@ class AddMM : public UnaryPrimitive {
   DEFINE_NAME(AddMM)
 
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   std::pair<float, float> state() const {
     return {alpha_, beta_};
   };
