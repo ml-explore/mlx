@@ -497,4 +497,67 @@ void gather_qmv(
   });
 }
 
+namespace cu {
+
+__global__ void gather_copy_kernel(
+    const char* src,
+    char* dst,
+    const uint32_t* indices,
+    int64_t slice_bytes,
+    int64_t src_batch_stride_bytes,
+    int num_slices) {
+  int64_t idx = cg::this_grid().thread_rank();
+  int slice_idx = idx / slice_bytes;
+  int64_t byte_idx = idx % slice_bytes;
+  if (slice_idx < num_slices) {
+    uint32_t src_slice = indices[slice_idx];
+    dst[int64_t(slice_idx) * slice_bytes + byte_idx] =
+        src[int64_t(src_slice) * src_batch_stride_bytes + byte_idx];
+  }
+}
+
+} // namespace cu
+
+array gather_slices(
+    const array& src,
+    const array& indices,
+    int batch_size,
+    cu::CommandEncoder& encoder,
+    const Stream& s) {
+  // Compute the slice size.
+  int64_t slice_elems = 1;
+  for (int i = 1; i < src.ndim(); i++) {
+    slice_elems *= src.shape(i);
+  }
+  int64_t slice_bytes = slice_elems * src.itemsize();
+  int64_t src_batch_stride_bytes = src.strides()[0] * src.itemsize();
+
+  // Allocate contiguous output: (batch_size, ...inner_dims).
+  auto out_shape = src.shape();
+  out_shape[0] = batch_size;
+  array gathered(std::move(out_shape), src.dtype(), nullptr, {});
+  gathered.set_data(cu::malloc_async(gathered.nbytes(), encoder));
+  encoder.add_temporary(gathered);
+
+  // Launch copy kernel.
+  auto [num_blocks, block_dims] = get_launch_args(
+      gathered.nbytes(), gathered.shape(), gathered.strides(), false);
+
+  encoder.set_input_array(src);
+  encoder.set_input_array(indices);
+  encoder.set_output_array(gathered);
+  encoder.add_kernel_node(
+      cu::gather_copy_kernel,
+      num_blocks,
+      dim3(block_dims),
+      gpu_ptr<char>(src),
+      gpu_ptr<char>(gathered),
+      gpu_ptr<uint32_t>(indices),
+      slice_bytes,
+      src_batch_stride_bytes,
+      batch_size);
+
+  return gathered;
+}
+
 } // namespace mlx::core

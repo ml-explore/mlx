@@ -161,7 +161,22 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         mode_,
         encoder.device());
   };
+  bool can_use_qmm_sm90 = supports(supports_qmm_sm90);
+  bool can_use_qmm_sm80 = supports(supports_qmm_sm80);
   bool can_use_qmv = supports(supports_qmv);
+
+  // Pre-gather inputs into contiguous batched arrays, then call existing qmm.
+  auto call_qmm = [&](auto&& qmm_fn) {
+    array gx = gather_slices(x, lhs_indices, B, encoder, s);
+    array gw = gather_slices(w, rhs_indices, B, encoder, s);
+    array gs = gather_slices(scales, rhs_indices, B, encoder, s);
+    std::optional<array> gb = std::nullopt;
+    if (biases) {
+      gb = gather_slices(*biases, rhs_indices, B, encoder, s);
+    }
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    qmm_fn(gx, gw, gs, gb);
+  };
 
   auto call_qmv = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
@@ -178,6 +193,30 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         mode_,
         encoder);
   };
+
+  constexpr int kGemvMLimit = 8;
+
+  if (can_use_qmm_sm90) {
+    if (can_use_qmv && M < kGemvMLimit) {
+      call_qmv();
+    } else {
+      call_qmm([&](auto& gx, auto& gw, auto& gs, auto& gb) {
+        qmm_sm90(gx, gw, gs, *gb, out, bits_, group_size_, encoder, s);
+      });
+    }
+    return;
+  }
+
+  if (can_use_qmm_sm80) {
+    if (can_use_qmv && M < kGemvMLimit) {
+      call_qmv();
+    } else {
+      call_qmm([&](auto& gx, auto& gw, auto& gs, auto& gb) {
+        qmm_sm80(gx, gw, gs, gb, out, bits_, group_size_, mode_, encoder);
+      });
+    }
+    return;
+  }
 
   if (can_use_qmv) {
     call_qmv();

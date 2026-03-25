@@ -137,4 +137,11 @@ void gather_qmv(
     QuantizationMode mode,
     cu::CommandEncoder& encoder);
 
+array gather_slices(
+    const array& src,
+    const array& indices,
+    int batch_size,
+    cu::CommandEncoder& encoder,
+    const Stream& s);
+
 } // namespace mlx::core
