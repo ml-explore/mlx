@@ -880,7 +880,9 @@ METAL_FUNC void qmv_fast_impl(
   x += tid.x * in_vec_size + simd_lid * values_per_thread;
   y += tid.x * out_vec_size + out_row;
 
-  for (int k = 0; k < in_vec_size; k += block_size) {
+  const int aligned_end = (in_vec_size / block_size) * block_size;
+
+  for (int k = 0; k < aligned_end; k += block_size) {
     U sum = load_vector<T, U, values_per_thread, bits>(x, x_thread);
 
     for (int row = 0; row < results_per_simdgroup; row++) {
@@ -897,6 +899,28 @@ METAL_FUNC void qmv_fast_impl(
     scales += block_size / group_size;
     biases += block_size / group_size;
     x += block_size;
+  }
+
+  if (aligned_end < in_vec_size) {
+    bool in_bounds =
+        (aligned_end + simd_lid * values_per_thread) < in_vec_size;
+    U sum = 0;
+    if (in_bounds) {
+      sum = load_vector<T, U, values_per_thread, bits>(x, x_thread);
+    } else {
+      for (int i = 0; i < values_per_thread; i++)
+        x_thread[i] = 0;
+    }
+
+    for (int row = 0; row < results_per_simdgroup; row++) {
+      auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
+      const device T* sl = scales + row * in_vec_size_g;
+      const device T* bl = biases + row * in_vec_size_g;
+
+      U s = in_bounds ? (U)sl[0] : (U)0;
+      U b = in_bounds ? (U)bl[0] : (U)0;
+      result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s, b, sum);
+    }
   }
 
   for (int row = 0; row < results_per_simdgroup; row++) {
