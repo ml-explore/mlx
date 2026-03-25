@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -22,6 +23,84 @@ namespace mlx::core {
 
 constexpr int max_compile_depth = 11;
 constexpr int max_compile_arrays = 24;
+
+namespace {
+
+#ifdef METAL_AVAILABLE
+class MetalLibraryOwnership {
+ public:
+  static MetalLibraryOwnership& instance() {
+    static MetalLibraryOwnership ownership;
+    return ownership;
+  }
+
+  void retain(const std::unordered_set<std::string>& lib_names) {
+    if (lib_names.empty()) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(mtx_);
+    for (const auto& lib_name : lib_names) {
+      refcounts_[lib_name]++;
+    }
+  }
+
+  void release(
+      const Device& device,
+      const std::unordered_set<std::string>& lib_names) {
+    if (device.type != Device::gpu || lib_names.empty()) {
+      return;
+    }
+
+    std::vector<std::string> libraries_to_clear;
+    {
+      std::lock_guard<std::mutex> lock(mtx_);
+      for (const auto& lib_name : lib_names) {
+        auto it = refcounts_.find(lib_name);
+        if (it == refcounts_.end()) {
+          continue;
+        }
+        if (--it->second == 0) {
+          libraries_to_clear.push_back(lib_name);
+          refcounts_.erase(it);
+        }
+      }
+    }
+
+    if (!libraries_to_clear.empty()) {
+      auto& d = metal::device(device);
+      for (const auto& lib_name : libraries_to_clear) {
+        d.clear_library(lib_name);
+      }
+    }
+  }
+
+ private:
+  std::mutex mtx_;
+  std::unordered_map<std::string, size_t> refcounts_;
+};
+#endif
+
+void retain_metal_libraries(
+    const Device& device,
+    const std::unordered_set<std::string>& lib_names) {
+#ifdef METAL_AVAILABLE
+  if (device.type == Device::gpu && !lib_names.empty()) {
+    MetalLibraryOwnership::instance().retain(lib_names);
+  }
+#endif
+}
+
+void release_metal_libraries(
+    const Device& device,
+    const std::unordered_set<std::string>& lib_names) {
+#ifdef METAL_AVAILABLE
+  if (device.type == Device::gpu && !lib_names.empty()) {
+    MetalLibraryOwnership::instance().release(device, lib_names);
+  }
+#endif
+}
+
+} // namespace
 
 bool is_unary(const Primitive& p) {
   return (
@@ -310,6 +389,7 @@ class CompilerCache {
     bool empty{true};
     std::vector<uint64_t> constants;
     std::shared_ptr<void> extra;
+    std::unordered_set<std::string> metal_libs;
   };
 
   // Returns a reference to a CacheEntry which can be updated
@@ -367,11 +447,26 @@ class CompilerCache {
   }
 
   void erase(std::uintptr_t fun_id) {
-    cache_.erase(fun_id);
+    auto it = cache_.find(fun_id);
+    if (it == cache_.end()) {
+      return;
+    }
+    cleanup_cache_entries(it->second);
+    cache_.erase(it);
   }
 
   void clear() {
+    for (auto& [_, entries] : cache_) {
+      cleanup_cache_entries(entries);
+    }
     cache_.clear();
+  }
+
+  void cleanup_cache_entries(std::vector<CacheEntry>& entries) {
+    for (auto& entry : entries) {
+      release_metal_libraries(entry.stream.device, entry.metal_libs);
+      entry.metal_libs.clear();
+    }
   }
 
  private:
@@ -780,7 +875,8 @@ void compile_fuse(
     std::vector<array>& tape,
     ParentsMap& parents_map,
     const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+    std::vector<array>& outputs,
+    std::unordered_set<std::string>& metal_libs) {
   // Track outputs to replace with new compiled outputs
   std::unordered_map<uintptr_t, array> output_map;
   for (auto& o : outputs) {
@@ -970,16 +1066,17 @@ void compile_fuse(
         constant_ids.insert(in.id());
       }
     }
+    auto compiled_primitive = std::make_shared<Compiled>(
+        old_outputs.back().primitive().stream(),
+        inputs,
+        old_outputs,
+        std::move(fused_tape),
+        std::move(constant_ids));
+    if (compiled_primitive->stream().device.type == Device::gpu) {
+      metal_libs.insert(compiled_primitive->lib_name());
+    }
     auto compiled_outputs = array::make_arrays(
-        std::move(shapes),
-        types,
-        std::make_shared<Compiled>(
-            old_outputs.back().primitive().stream(),
-            inputs,
-            old_outputs,
-            std::move(fused_tape),
-            std::move(constant_ids)),
-        inputs);
+        std::move(shapes), types, compiled_primitive, inputs);
 
     // One output per primitive
     new_tape.push_back(compiled_outputs.back());
@@ -1144,8 +1241,15 @@ ArrayFnWithExtra compile(
       // Kernel fusion to generate Compiled primitives. The tape and
       // new outputs must be updated accordingly
       if (mode != CompileMode::no_fuse) {
-        compile_fuse(entry.tape, parents_map, entry.inputs, entry.outputs);
+        compile_fuse(
+            entry.tape,
+            parents_map,
+            entry.inputs,
+            entry.outputs,
+            entry.metal_libs);
       }
+
+      retain_metal_libraries(entry.stream.device, entry.metal_libs);
     }
 
     // At this point we must have a tape, now replace the placeholders

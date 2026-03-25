@@ -5,6 +5,7 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/compile_impl.h"
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
 
@@ -35,6 +36,28 @@ TEST_CASE("test simple compile") {
 
   out = compfn({array(2.0f), array({1, 2}, int32)})[0];
   CHECK(array_equal(out, array({3.0f, 4.0f})).item<bool>());
+}
+
+TEST_CASE("test compile erase rebuilds cache entry") {
+  auto compfn = compile(simple_fun);
+  auto out = compfn({array(1.0f), array(2.0f)})[0];
+  CHECK_EQ(out.item<float>(), 3.0f);
+
+  detail::compile_erase(reinterpret_cast<std::uintptr_t>(simple_fun));
+
+  out = compfn({array(3.0f), array(4.0f)})[0];
+  CHECK_EQ(out.item<float>(), 7.0f);
+}
+
+TEST_CASE("test compile clear cache rebuilds entries") {
+  auto compfn = compile(simple_fun);
+  auto out = compfn({array(1.0f), array(2.0f)})[0];
+  CHECK_EQ(out.item<float>(), 3.0f);
+
+  detail::compile_clear_cache();
+
+  out = compfn({array(5.0f), array(6.0f)})[0];
+  CHECK_EQ(out.item<float>(), 11.0f);
 }
 
 std::vector<array> grad_fun(const std::vector<array>& inputs) {
@@ -657,6 +680,37 @@ TEST_CASE("test fusion kernel reuse") {
   CHECK(!lib_name_z.empty());
 
   CHECK_EQ(lib_name, lib_name_z);
+}
+
+TEST_CASE("test fusion library ownership") {
+#ifdef METAL_AVAILABLE
+  if (!metal::is_available()) {
+    return;
+  }
+
+  auto cfun1 = compile(unary_fused_1);
+  auto cfun2 = compile(unary_fused_1_copy);
+  auto x = array(1.0f, float32);
+
+  auto y1 = cfun1({x})[0];
+  auto y2 = cfun2({x})[0];
+  eval(y1);
+  eval(y2);
+
+  auto p1 = std::dynamic_pointer_cast<Compiled>(y1.primitive_ptr());
+  auto p2 = std::dynamic_pointer_cast<Compiled>(y2.primitive_ptr());
+  REQUIRE(p1);
+  REQUIRE(p2);
+  CHECK_EQ(p1->lib_name(), p2->lib_name());
+
+  detail::compile_erase(reinterpret_cast<std::uintptr_t>(unary_fused_1));
+  auto y2_after = cfun2({x})[0];
+  CHECK(array_equal(y2_after, y2).item<bool>());
+
+  detail::compile_erase(reinterpret_cast<std::uintptr_t>(unary_fused_1_copy));
+  auto y1_recompiled = cfun1({x})[0];
+  CHECK(array_equal(y1_recompiled, y1).item<bool>());
+#endif
 }
 
 auto add3(const std::vector<array>& xs) {
