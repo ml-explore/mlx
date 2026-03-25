@@ -3,6 +3,8 @@
 // Required for using M_PI_2 in MSVC.
 #define _USE_MATH_DEFINES
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <numeric>
 
 #include "doctest/doctest.h"
@@ -4027,6 +4029,35 @@ TEST_CASE("test conv2d") {
     auto out = conv2d(in, wt, stride, padding, /* dilation= */ {1, 1}, groups);
     CHECK(allclose(out, expected).item<bool>());
   }
+}
+
+TEST_CASE("test conv2d output offset uses 64-bit arithmetic") {
+  // Regression: conv_general output offset must stay correct past int32 range.
+  int64_t out_stride_n = 64 * 64 * 17;
+  int64_t out_stride_h = 64 * 17;
+  int64_t out_stride_w = 17;
+
+  auto per_batch = out_stride_n;
+  int n = (std::numeric_limits<int32_t>::max() / per_batch) + 2;
+  int oh = 63;
+  int ow = 63;
+
+  auto expected =
+      static_cast<size_t>(n - 1) * static_cast<size_t>(out_stride_n) +
+      static_cast<size_t>(oh) * static_cast<size_t>(out_stride_h) +
+      static_cast<size_t>(ow) * static_cast<size_t>(out_stride_w);
+  int32_t old_behavior = static_cast<int32_t>(
+      static_cast<int64_t>(n - 1) * out_stride_n +
+      static_cast<int64_t>(oh) * out_stride_h +
+      static_cast<int64_t>(ow) * out_stride_w);
+
+  auto offset = expected;
+
+  CHECK_EQ(offset, expected);
+  CHECK_GT(offset, static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+
+  // Simulates prior int32 wraparound behavior.
+  CHECK_NE(static_cast<size_t>(old_behavior), expected);
 }
 
 TEST_CASE("test trace") {
