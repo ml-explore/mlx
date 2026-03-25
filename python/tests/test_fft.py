@@ -102,6 +102,33 @@ class TestFFT(mlx_tests.MLXTestCase):
         irfft_in = np.ascontiguousarray(np.fft.rfftn(rt, axes=(2, 0)))
         self.check_mx_np(mx.fft.irfftn, np.fft.irfftn, irfft_in, axes=(2, 0))
 
+    def test_fft_norm(self):
+        norms = ["backward", "ortho", "forward"]
+
+        r = np.random.randn(8, 6).astype(np.float32)
+        i = np.random.randn(8, 6).astype(np.float32)
+        c = r + 1j * i
+
+        for norm in norms:
+            self.check_mx_np(mx.fft.fft, np.fft.fft, c, axis=1, norm=norm)
+            self.check_mx_np(mx.fft.ifft, np.fft.ifft, c, axis=1, norm=norm)
+            self.check_mx_np(mx.fft.rfft, np.fft.rfft, r, axis=1, norm=norm)
+
+            cr = np.fft.rfft(r, axis=1)
+            self.check_mx_np(mx.fft.irfft, np.fft.irfft, cr, axis=1, norm=norm)
+
+            self.check_mx_np(mx.fft.fft2, np.fft.fft2, c, axes=(0, 1), norm=norm)
+            self.check_mx_np(mx.fft.ifft2, np.fft.ifft2, c, axes=(0, 1), norm=norm)
+            self.check_mx_np(mx.fft.fftn, np.fft.fftn, c, axes=(0, 1), norm=norm)
+            self.check_mx_np(mx.fft.ifftn, np.fft.ifftn, c, axes=(0, 1), norm=norm)
+
+            self.check_mx_np(mx.fft.rfft2, np.fft.rfft2, r, axes=(0, 1), norm=norm)
+            self.check_mx_np(mx.fft.rfftn, np.fft.rfftn, r, axes=(0, 1), norm=norm)
+
+            cr2 = np.fft.rfft2(r, axes=(0, 1))
+            self.check_mx_np(mx.fft.irfft2, np.fft.irfft2, cr2, axes=(0, 1), norm=norm)
+            self.check_mx_np(mx.fft.irfftn, np.fft.irfftn, cr2, axes=(0, 1), norm=norm)
+
     def _run_ffts(self, shape, atol=1e-4, rtol=1e-4):
         np.random.seed(9)
 
@@ -216,6 +243,8 @@ class TestFFT(mlx_tests.MLXTestCase):
         x = mx.array(3.0)
         with self.assertRaises(ValueError):
             mx.fft.irfftn(x)
+        with self.assertRaises(ValueError):
+            mx.fft.fft(mx.array([1.0]), norm="invalid")
 
     def test_fftshift(self):
         # Test 1D arrays

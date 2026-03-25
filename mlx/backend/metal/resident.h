@@ -15,7 +15,7 @@ class ResidencySet {
   ResidencySet& operator=(const ResidencySet&) = delete;
 
   const MTL::ResidencySet* mtl_residency_set() {
-    return wired_set_;
+    return wired_set_.get();
   }
 
   void insert(MTL::Allocation* buf);
@@ -24,7 +24,7 @@ class ResidencySet {
   void resize(size_t size);
 
  private:
-  MTL::ResidencySet* wired_set_{nullptr};
+  NS::SharedPtr<MTL::ResidencySet> wired_set_;
   std::unordered_set<const MTL::Allocation*> unwired_set_;
   size_t capacity_{0};
 };

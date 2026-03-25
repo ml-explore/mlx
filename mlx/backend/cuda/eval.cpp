@@ -10,12 +10,14 @@
 
 namespace mlx::core::gpu {
 
-void new_stream(Stream s) {
-  // Force initalization of CUDA, so CUDA runtime get destroyed at last.
+void init() {
+  // Force initalization of CUDA, so CUDA runtime get destroyed last.
   cudaFree(nullptr);
   // Make sure CUDA event pool get destroyed after device and stream.
   cu::CudaEvent::init_pool();
-  // Ensure the static stream objects get created.
+}
+
+void new_stream(Stream s) {
   cu::get_command_encoder(s);
 }
 
