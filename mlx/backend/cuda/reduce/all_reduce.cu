@@ -98,9 +98,7 @@ void all_reduce(
   size_t block_step;
   size_t insize = in.size();
   Dtype dt = in.dtype();
-
-  // Cub doesn't like const pointers for load (sigh).
-  void* indata = const_cast<void*>(gpu_ptr<void>(in));
+  void* indata = gpu_ptr<void>(in);
 
   // Large array so allocate an intermediate and accumulate there
   std::tie(blocks, threads, block_step) = get_args(insize, N_READS);
@@ -120,7 +118,7 @@ void all_reduce(
             kernel,
             blocks,
             threads,
-            static_cast<T*>(indata),
+            indata,
             gpu_ptr<U>(intermediate),
             block_step,
             insize);
@@ -143,13 +141,7 @@ void all_reduce(
       using U = typename cu::ReduceResult<OP, T>::type;
       auto kernel = cu::all_reduce<T, U, OP, N_READS>;
       encoder.add_kernel_node(
-          kernel,
-          blocks,
-          threads,
-          static_cast<T*>(indata),
-          gpu_ptr<U>(out),
-          block_step,
-          insize);
+          kernel, blocks, threads, indata, gpu_ptr<U>(out), block_step, insize);
     });
   });
 }
