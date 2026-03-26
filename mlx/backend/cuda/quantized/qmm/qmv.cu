@@ -1,10 +1,7 @@
 // Copyright © 2026 Apple Inc.
 
-#include "mlx/backend/common/utils.h"
-#include "mlx/backend/cuda/device/utils.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
-#include "mlx/backend/cuda/quantized/quantized_utils.h"
 #include "mlx/dtype_utils.h"
 
 #include <cooperative_groups.h>
@@ -330,18 +327,10 @@ __global__ void gather_qmv_kernel(
     const uint32_t* rhs_indices,
     int n,
     int k,
-    int x_batch_ndims,
-    const __grid_constant__ Shape x_batch_shape,
-    const __grid_constant__ Strides x_batch_strides,
-    int w_batch_ndims,
-    const __grid_constant__ Shape w_batch_shape,
-    const __grid_constant__ Strides w_batch_strides,
-    const __grid_constant__ Strides s_batch_strides,
-    const __grid_constant__ Strides b_batch_strides,
-    int index_ndims,
-    const __grid_constant__ Shape index_shape,
-    const __grid_constant__ Strides lhs_index_strides,
-    const __grid_constant__ Strides rhs_index_strides,
+    int64_t x_batch_stride,
+    int64_t w_batch_stride,
+    int64_t s_batch_stride,
+    int64_t b_batch_stride,
     int output_stride) {
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
@@ -354,58 +343,15 @@ __global__ void gather_qmv_kernel(
 
   // Gather: look up batch indices.
   uint32_t batch_idx = block.group_index().z;
-  uint32_t x_idx, w_idx;
-  if (index_ndims == 1) {
-    x_idx = lhs_indices[batch_idx * lhs_index_strides[0]];
-    w_idx = rhs_indices[batch_idx * rhs_index_strides[0]];
-  } else {
-    auto [lhs_off, rhs_off] = elem_to_loc(
-        batch_idx,
-        index_shape.data(),
-        lhs_index_strides.data(),
-        rhs_index_strides.data(),
-        index_ndims);
-    x_idx = lhs_indices[lhs_off];
-    w_idx = rhs_indices[rhs_off];
-  }
+  uint32_t x_idx = lhs_indices[batch_idx];
+  uint32_t w_idx = rhs_indices[batch_idx];
 
-  // Offset x using gathered index.
-  if (x_batch_ndims == 1) {
-    x += x_idx * x_batch_strides[0];
-  } else {
-    x += elem_to_loc(
-        x_idx, x_batch_shape.data(), x_batch_strides.data(), x_batch_ndims);
-  }
-
-  // Offset w/scales/biases using gathered index.
-  if (w_batch_ndims == 1) {
-    w += w_idx * w_batch_strides[0];
-    scales += w_idx * s_batch_strides[0];
-    if constexpr (has_bias) {
-      biases += w_idx * b_batch_strides[0];
-    }
-  } else {
-    if constexpr (has_bias) {
-      auto [w_off, s_off, b_off] = elem_to_loc(
-          w_idx,
-          w_batch_shape.data(),
-          w_batch_strides.data(),
-          s_batch_strides.data(),
-          b_batch_strides.data(),
-          w_batch_ndims);
-      w += w_off;
-      scales += s_off;
-      biases += b_off;
-    } else {
-      auto [w_off, s_off] = elem_to_loc(
-          w_idx,
-          w_batch_shape.data(),
-          w_batch_strides.data(),
-          s_batch_strides.data(),
-          w_batch_ndims);
-      w += w_off;
-      scales += s_off;
-    }
+  // Offset pointers using gathered indices.
+  x += x_idx * x_batch_stride;
+  w += w_idx * w_batch_stride;
+  scales += w_idx * s_batch_stride;
+  if constexpr (has_bias) {
+    biases += w_idx * b_batch_stride;
   }
 
   // Offset output for this batch element.
@@ -597,9 +543,12 @@ void gather_qmv(
   int k = x.shape(-1);
   int B = out.size() / (m * n);
 
-  // Collapse contiguous dims for index arrays.
-  auto [idx_shape, idx_strides] = collapse_contiguous_dims(
-      lhs_indices.shape(), {lhs_indices.strides(), rhs_indices.strides()});
+  // Batch strides for contiguous inputs.
+  int64_t x_batch_stride = x.strides()[0];
+  int64_t w_batch_stride = w.strides()[0];
+  int64_t s_batch_stride = scales.strides()[0];
+  int64_t b_batch_stride =
+      biases ? biases->strides()[0] : static_cast<int64_t>(0);
 
   dispatch_element_types(out.dtype(), tag, [&]<typename T>() {
     dispatch_quant_types<T>(
@@ -639,23 +588,6 @@ void gather_qmv(
           auto li_ptr = gpu_ptr<uint32_t>(lhs_indices);
           auto ri_ptr = gpu_ptr<uint32_t>(rhs_indices);
 
-          int x_batch_ndims = x.ndim() - 2;
-          auto x_shape_p = const_param(x.shape());
-          auto x_strides_p = const_param<MAX_NDIM, int64_t>(x.strides());
-          int w_batch_ndims = w.ndim() - 2;
-          auto w_shape_p = const_param(w.shape());
-          auto w_strides_p = const_param<MAX_NDIM, int64_t>(w.strides());
-          auto s_strides_p = const_param<MAX_NDIM, int64_t>(scales.strides());
-          auto b_strides_p = biases
-              ? const_param<MAX_NDIM, int64_t>(biases->strides())
-              : decltype(s_strides_p){};
-          int index_ndims = idx_shape.size();
-          auto idx_shape_p = const_param(idx_shape);
-          auto lhs_idx_strides_p =
-              const_param<MAX_NDIM, int64_t>(idx_strides[0]);
-          auto rhs_idx_strides_p =
-              const_param<MAX_NDIM, int64_t>(idx_strides[1]);
-
           void* args[] = {
               &x_ptr,
               &w_ptr,
@@ -666,18 +598,10 @@ void gather_qmv(
               &ri_ptr,
               &n,
               &k,
-              &x_batch_ndims,
-              &x_shape_p,
-              &x_strides_p,
-              &w_batch_ndims,
-              &w_shape_p,
-              &w_strides_p,
-              &s_strides_p,
-              &b_strides_p,
-              &index_ndims,
-              &idx_shape_p,
-              &lhs_idx_strides_p,
-              &rhs_idx_strides_p,
+              &x_batch_stride,
+              &w_batch_stride,
+              &s_batch_stride,
+              &b_batch_stride,
               &output_stride};
 
           dispatch_bool(

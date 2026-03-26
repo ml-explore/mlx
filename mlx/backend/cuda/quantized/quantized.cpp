@@ -137,39 +137,22 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         mode_,
         encoder.device());
   };
-  bool can_use_fp_qmv = supports(supports_fp_qmv);
-  bool can_use_qmv = supports(supports_qmv) || can_use_fp_qmv;
+  bool can_use_qmv = supports(supports_qmv) || supports(supports_fp_qmv);
 
   auto call_qmv = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    if (can_use_fp_qmv) {
-      // TODO: Add gather_fp_qmv for FP-mode-specific optimizations.
-      gather_qmv(
-          x,
-          w,
-          scales,
-          biases,
-          lhs_indices,
-          rhs_indices,
-          out,
-          bits_,
-          group_size_,
-          mode_,
-          encoder);
-    } else {
-      gather_qmv(
-          x,
-          w,
-          scales,
-          biases,
-          lhs_indices,
-          rhs_indices,
-          out,
-          bits_,
-          group_size_,
-          mode_,
-          encoder);
-    }
+    gather_qmv(
+        x,
+        w,
+        scales,
+        biases,
+        lhs_indices,
+        rhs_indices,
+        out,
+        bits_,
+        group_size_,
+        mode_,
+        encoder);
   };
 
   if (can_use_qmv) {
