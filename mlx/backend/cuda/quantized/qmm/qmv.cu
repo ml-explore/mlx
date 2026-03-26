@@ -189,13 +189,14 @@ template <
     typename T,
     typename Q,
     typename S>
-__device__ __forceinline__ void qmv_impl(
+__device__ __forceinline__ void qmv_kernel_impl(
     const T* x,
     const Q* w,
     const S* scales,
     const T* biases,
     T* out,
     int row,
+    int w_batch,
     int n,
     int k) {
   auto warp = cg::tiled_partition<WARP_SIZE>(cg::this_thread_block());
@@ -209,10 +210,10 @@ __device__ __forceinline__ void qmv_impl(
   int groups_per_row = k / group_size;
 
   // Advance w/scales/biases to current row.
-  w += static_cast<int64_t>(row) * w_step(k);
-  scales += static_cast<int64_t>(row) * groups_per_row;
+  w += (static_cast<int64_t>(row) + n * w_batch) * w_step(k);
+  scales += (static_cast<int64_t>(row) + n * w_batch) * groups_per_row;
   if constexpr (has_bias) {
-    biases += static_cast<int64_t>(row) * groups_per_row;
+    biases += (static_cast<int64_t>(row) + n * w_batch) * groups_per_row;
   }
 
   // Accumulations of current row.
@@ -291,21 +292,10 @@ __global__ void qmv_kernel(
   int l = block.group_index().z;
   x += block.group_index().y * k + m * k * l;
   out += block.group_index().y * n + m * n * l;
-
-  // Advance w/scales/biases for batch dimension.
-  constexpr int bits = cute::sizeof_bits_v<Q>;
-  auto w_step = [&](int idx) { return idx * cuda::std::min(8, bits) / 8; };
-  int groups_per_row = k / group_size;
   int w_batch = broadcast_w ? 0 : l;
-  w += static_cast<int64_t>(n) * w_batch * w_step(k);
-  scales += static_cast<int64_t>(n) * w_batch * groups_per_row;
-  if constexpr (has_bias) {
-    biases += static_cast<int64_t>(n) * w_batch * groups_per_row;
-  }
 
-  // Row-level compute: dequantize, FMA, reduce, write.
-  qmv_impl<elems_per_thread, group_size, has_bias, has_residue_k>(
-      x, w, scales, biases, out, row, n, k);
+  qmv_kernel_impl<elems_per_thread, group_size, has_bias, has_residue_k>(
+      x, w, scales, biases, out, row, w_batch, n, k);
 }
 
 template <
@@ -319,51 +309,33 @@ template <
     typename S>
 __global__ void gather_qmv_kernel(
     const T* x,
-    const uint32_t* w,
+    const Q* w,
     const S* scales,
     const T* biases,
     T* out,
     const uint32_t* lhs_indices,
     const uint32_t* rhs_indices,
     int n,
-    int k,
-    int64_t x_batch_stride,
-    int64_t w_batch_stride,
-    int64_t s_batch_stride,
-    int64_t b_batch_stride,
-    int output_stride) {
+    int k) {
+  auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
 
-  // The row that this warp handles.
   int row = block.group_index().x * rows_per_block + warp.meta_group_rank();
   if (row >= n) {
     return;
   }
 
-  // Gather: look up batch indices.
-  uint32_t batch_idx = block.group_index().z;
-  uint32_t x_idx = lhs_indices[batch_idx];
-  uint32_t w_idx = rhs_indices[batch_idx];
+  int m = grid.dim_blocks().y;
+  int l = block.group_index().z;
+  uint32_t x_idx = lhs_indices[l];
+  uint32_t w_idx = rhs_indices[l];
 
-  // Offset pointers using gathered indices.
-  x += x_idx * x_batch_stride;
-  w += w_idx * w_batch_stride;
-  scales += w_idx * s_batch_stride;
-  if constexpr (has_bias) {
-    biases += w_idx * b_batch_stride;
-  }
+  x += block.group_index().y * k + m * k * x_idx;
+  out += block.group_index().y * n + m * n * l;
 
-  // Offset output for this batch element.
-  out += batch_idx * output_stride;
-
-  // Advance pointers for M dimension (block.group_index().y).
-  x += block.group_index().y * k;
-  out += block.group_index().y * n;
-
-  // Reinterpret w as Q* for sub-byte access, then run shared compute.
-  qmv_impl<elems_per_thread, group_size, has_bias, has_residue_k>(
-      x, reinterpret_cast<const Q*>(w), scales, biases, out, row, n, k);
+  qmv_kernel_impl<elems_per_thread, group_size, has_bias, has_residue_k>(
+      x, w, scales, biases, out, row, w_idx, n, k);
 }
 
 template <
@@ -396,6 +368,51 @@ void qmv(
 
   dispatch_bool(k % (WARP_SIZE * elems_per_thread), [&](auto has_residue_k) {
     auto* kernel = &qmv_kernel<
+        rows_per_block,
+        elems_per_thread,
+        group_size,
+        has_bias,
+        has_residue_k.value,
+        T,
+        Q,
+        S>;
+    launch_kernel(
+        reinterpret_cast<void*>(kernel), num_blocks, block_dims, args);
+  });
+}
+
+template <
+    int group_size,
+    bool has_bias,
+    typename T,
+    typename Q,
+    typename S,
+    typename F>
+void gather_qmv(
+    const T* x,
+    const Q* w,
+    const S* scales,
+    const T* biases,
+    T* out,
+    const uint32_t* lhs_indices,
+    const uint32_t* rhs_indices,
+    int m,
+    int n,
+    int k,
+    int l,
+    F&& launch_kernel) {
+  constexpr int rows_per_block = 8;
+  constexpr int elems_per_thread =
+      (cute::sizeof_bits_v<T> <= 16 && cute::sizeof_bits_v<Q> <= 4) ? 16 : 8;
+
+  dim3 num_blocks{
+      uint32_t(cuda::ceil_div(n, rows_per_block)), uint32_t(m), uint32_t(l)};
+  dim3 block_dims{WARP_SIZE, rows_per_block};
+  void* args[] = {
+      &x, &w, &scales, &biases, &out, &lhs_indices, &rhs_indices, &n, &k};
+
+  dispatch_bool(k % (WARP_SIZE * elems_per_thread), [&](auto has_residue_k) {
+    auto* kernel = &gather_qmv_kernel<
         rows_per_block,
         elems_per_thread,
         group_size,
@@ -541,14 +558,7 @@ void gather_qmv(
   int m = out.shape(-2);
   int n = out.shape(-1);
   int k = x.shape(-1);
-  int B = out.size() / (m * n);
-
-  // Batch strides for contiguous inputs.
-  int64_t x_batch_stride = x.strides()[0];
-  int64_t w_batch_stride = w.strides()[0];
-  int64_t s_batch_stride = scales.strides()[0];
-  int64_t b_batch_stride =
-      biases ? biases->strides()[0] : static_cast<int64_t>(0);
+  int l = out.size() / (m * n);
 
   dispatch_element_types(out.dtype(), tag, [&]<typename T>() {
     dispatch_quant_types<T>(
@@ -566,62 +576,22 @@ void gather_qmv(
           encoder.set_input_array(lhs_indices);
           encoder.set_input_array(rhs_indices);
           encoder.set_output_array(out);
-
           constexpr bool has_bias = !cutlass::has_negative_zero_v<Q>;
-          constexpr int rows_per_block = 8;
-          constexpr int elems_per_thread =
-              (cute::sizeof_bits_v<T> <= 16 && cute::sizeof_bits_v<Q> <= 4) ? 16
-                                                                            : 8;
-
-          dim3 num_blocks{
-              uint32_t(cuda::ceil_div(n, rows_per_block)),
-              uint32_t(m),
-              uint32_t(B)};
-          dim3 block_dims{WARP_SIZE, rows_per_block};
-          int output_stride = m * n;
-
-          auto x_ptr = gpu_ptr<T>(x);
-          auto w_ptr = gpu_ptr<uint32_t>(w);
-          auto s_ptr = gpu_ptr<S>(scales);
-          auto b_ptr = biases ? gpu_ptr<T>(*biases) : (const T*)nullptr;
-          auto o_ptr = gpu_ptr<T>(out);
-          auto li_ptr = gpu_ptr<uint32_t>(lhs_indices);
-          auto ri_ptr = gpu_ptr<uint32_t>(rhs_indices);
-
-          void* args[] = {
-              &x_ptr,
-              &w_ptr,
-              &s_ptr,
-              &b_ptr,
-              &o_ptr,
-              &li_ptr,
-              &ri_ptr,
-              &n,
-              &k,
-              &x_batch_stride,
-              &w_batch_stride,
-              &s_batch_stride,
-              &b_batch_stride,
-              &output_stride};
-
-          dispatch_bool(
-              k % (WARP_SIZE * elems_per_thread), [&](auto has_residue_k) {
-                auto* kernel = &cu::gather_qmv_kernel<
-                    rows_per_block,
-                    elems_per_thread,
-                    group_size,
-                    has_bias,
-                    has_residue_k.value,
-                    T,
-                    Q,
-                    S>;
+          cu::gather_qmv<group_size, has_bias>(
+              gpu_ptr<T>(x),
+              gpu_ptr<Q>(w),
+              gpu_ptr<S>(scales),
+              biases ? gpu_ptr<T>(*biases) : nullptr,
+              gpu_ptr<T>(out),
+              gpu_ptr<uint32_t>(lhs_indices),
+              gpu_ptr<uint32_t>(rhs_indices),
+              m,
+              n,
+              k,
+              l,
+              [&](auto* kernel, dim3 num_blocks, dim3 block_dims, void** args) {
                 encoder.add_kernel_node_raw(
-                    reinterpret_cast<void*>(kernel),
-                    num_blocks,
-                    block_dims,
-                    {},
-                    0,
-                    args);
+                    kernel, num_blocks, block_dims, {}, 0, args);
               });
         });
   });

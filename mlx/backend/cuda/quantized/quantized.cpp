@@ -137,7 +137,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         mode_,
         encoder.device());
   };
-  bool can_use_qmv = supports(supports_qmv) || supports(supports_fp_qmv);
+  bool can_use_qmv = supports(supports_qmv);
 
   auto call_qmv = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
