@@ -149,91 +149,85 @@ void gpu_radix_partition_small(
 
   dispatch_all_types(in.dtype(), [&](auto type_tag) {
     using CTYPE = MLX_GET_TYPE(type_tag);
-    if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
-      using ValT = cuda_type_t<CTYPE>;
+    using ValT = cuda_type_t<CTYPE>;
 
-      dispatch_bool(arg_partition, [&](auto arg_tag) {
-        constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
-        using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
+    dispatch_bool(arg_partition, [&](auto arg_tag) {
+      constexpr bool ARG_PARTITION = decltype(arg_tag)::value;
+      using OutT = std::conditional_t<ARG_PARTITION, uint32_t, ValT>;
 
-        int64_t in_stride_segment_axis = INT64_MAX;
-        int64_t out_stride_segment_axis = INT64_MAX;
-        if (contiguous) {
-          for (size_t i = 0; i < nc_shape.size(); i++) {
-            if (nc_shape[i] == 1) {
-              continue;
-            }
-            in_stride_segment_axis =
-                std::min(in_stride_segment_axis, in_nc_str[i]);
-            out_stride_segment_axis =
-                std::min(out_stride_segment_axis, out_nc_str[i]);
+      int64_t in_stride_segment_axis = INT64_MAX;
+      int64_t out_stride_segment_axis = INT64_MAX;
+      if (contiguous) {
+        for (size_t i = 0; i < nc_shape.size(); i++) {
+          if (nc_shape[i] == 1) {
+            continue;
           }
+          in_stride_segment_axis =
+              std::min(in_stride_segment_axis, in_nc_str[i]);
+          out_stride_segment_axis =
+              std::min(out_stride_segment_axis, out_nc_str[i]);
         }
+      }
 
-        dispatch_radix_small_block_threads(
-            size_sorted_axis, [&](auto block_dim_tag) {
-              constexpr int BLOCK_THREADS = block_dim_tag();
-              dim3 grid(1, n_rows, 1);
-              dim3 block(BLOCK_THREADS, 1, 1);
+      dispatch_radix_small_block_threads(
+          size_sorted_axis, [&](auto block_dim_tag) {
+            constexpr int BLOCK_THREADS = block_dim_tag();
+            dim3 grid(1, n_rows, 1);
+            dim3 block(BLOCK_THREADS, 1, 1);
 
-              dispatch_radix_items_per_thread(
-                  size_sorted_axis,
-                  BLOCK_THREADS,
-                  [&](auto items_per_thread_tag) {
-                    constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
+            dispatch_radix_items_per_thread(
+                size_sorted_axis,
+                BLOCK_THREADS,
+                [&](auto items_per_thread_tag) {
+                  constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
 
-                    dispatch_bool(contiguous, [&](auto contiguous_tag) {
-                      constexpr bool USE_SIMPLE_STRIDE =
-                          decltype(contiguous_tag)::value;
+                  dispatch_bool(contiguous, [&](auto contiguous_tag) {
+                    constexpr bool USE_SIMPLE_STRIDE =
+                        decltype(contiguous_tag)::value;
 
-                      auto kernel = cu::radix_select_small_kernel<
-                          ValT,
-                          OutT,
-                          ARG_PARTITION,
-                          USE_SIMPLE_STRIDE,
-                          BLOCK_THREADS,
-                          ITEMS_PER_THREAD>;
+                    auto kernel = cu::radix_select_small_kernel<
+                        ValT,
+                        OutT,
+                        ARG_PARTITION,
+                        USE_SIMPLE_STRIDE,
+                        BLOCK_THREADS,
+                        ITEMS_PER_THREAD>;
 
-                      // Calculate dynamic shared memory size
-                      using UnsignedT =
-                          typename cu::RadixTraits<ValT>::UnsignedT;
-                      constexpr int TILE_SIZE_VAL =
-                          BLOCK_THREADS * ITEMS_PER_THREAD;
-                      constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
-                      constexpr size_t shared_mem_bytes =
-                          TILE_SIZE_VAL * sizeof(UnsignedT) + // shared_keys
-                          TILE_SIZE_VAL * sizeof(uint32_t) + // shared_idxs
-                          cu::RADIX_SIZE *
-                              sizeof(int) + // shared_hist for small kernel
-                          (2 + 3 * NUM_WARPS + 6) *
-                              sizeof(int); // shared_count + scatter scratch
+                    // Calculate dynamic shared memory size
+                    using UnsignedT = typename cu::RadixTraits<ValT>::UnsignedT;
+                    constexpr int TILE_SIZE_VAL =
+                        BLOCK_THREADS * ITEMS_PER_THREAD;
+                    constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
+                    constexpr size_t shared_mem_bytes =
+                        TILE_SIZE_VAL * sizeof(UnsignedT) + // shared_keys
+                        TILE_SIZE_VAL * sizeof(uint32_t) + // shared_idxs
+                        cu::RADIX_SIZE *
+                            sizeof(int) + // shared_hist for small kernel
+                        (2 + 3 * NUM_WARPS + 6) *
+                            sizeof(int); // shared_count + scatter scratch
 
-                      encoder.add_kernel_node_ex(
-                          kernel,
-                          grid,
-                          block,
-                          {},
-                          static_cast<uint32_t>(shared_mem_bytes),
-                          gpu_ptr<ValT>(in),
-                          gpu_ptr<OutT>(out),
-                          kth,
-                          size_sorted_axis,
-                          in_stride_sorted_axis,
-                          out_stride_sorted_axis,
-                          in_stride_segment_axis,
-                          out_stride_segment_axis,
-                          nc_shape_param,
-                          in_nc_strides_param,
-                          out_nc_strides_param,
-                          nc_dim);
-                    });
+                    encoder.add_kernel_node_ex(
+                        kernel,
+                        grid,
+                        block,
+                        {},
+                        static_cast<uint32_t>(shared_mem_bytes),
+                        gpu_ptr<ValT>(in),
+                        gpu_ptr<OutT>(out),
+                        kth,
+                        size_sorted_axis,
+                        in_stride_sorted_axis,
+                        out_stride_sorted_axis,
+                        in_stride_segment_axis,
+                        out_stride_segment_axis,
+                        nc_shape_param,
+                        in_nc_strides_param,
+                        out_nc_strides_param,
+                        nc_dim);
                   });
-            });
-      });
-    } else {
-      throw std::runtime_error(
-          "CUDA backend does not support sorting complex numbers");
-    }
+                });
+          });
+    });
   });
 }
 

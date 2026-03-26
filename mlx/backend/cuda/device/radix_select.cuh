@@ -58,6 +58,25 @@ struct RadixTraits<double> {
 };
 
 template <>
+struct RadixTraits<complex64_t> {
+  using UnsignedT = uint64_t;
+  static constexpr int BITS = 64;
+
+  __device__ __forceinline__ static UnsignedT to_radix(complex64_t val) {
+    float real = val.real();
+    float imag = val.imag();
+    if (cuda::std::isnan(real) || cuda::std::isnan(imag)) {
+      return ~UnsignedT(0);
+    }
+
+    auto real_key = RadixTraits<float>::to_radix(real);
+    auto imag_key = RadixTraits<float>::to_radix(imag);
+    return (static_cast<UnsignedT>(real_key) << 32) |
+        static_cast<UnsignedT>(imag_key);
+  }
+};
+
+template <>
 struct RadixTraits<__half> {
   using UnsignedT = uint16_t;
   static constexpr int BITS = 16;
@@ -472,7 +491,7 @@ __global__ void radix_select_small_kernel(
         pos = running_bases[2] + warp_greater[warp] + greater_rank;
       }
 
-      if (ARG_PARTITION) {
+      if constexpr (ARG_PARTITION) {
         row_output[pos * out_stride] = shared_idxs[i];
       } else {
         row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];

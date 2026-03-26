@@ -25,6 +25,7 @@ DTYPE_MAP = {
     "uint16": mx.uint16,
     "uint32": mx.uint32,
     "uint64": mx.uint64,
+    "complex64": mx.complex64,
 }
 
 # Benchmark-side model for cross-GPU small-kernel dispatch policy.
@@ -48,6 +49,7 @@ DTYPE_SIZE_BYTES = {
     "uint16": 2,
     "uint32": 4,
     "uint64": 8,
+    "complex64": 8,
 }
 
 
