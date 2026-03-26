@@ -638,8 +638,7 @@ void ScaledDotProductAttention::eval_gpu(
         output_logsumexp_,
         s);
   } else {
-    sdpa_vector(
-        q, k, v, scale_, out, do_causal_, causal_upper_left_, sinks, s);
+    sdpa_vector(q, k, v, scale_, out, do_causal_, causal_upper_left_, sinks, s);
   }
 }
 

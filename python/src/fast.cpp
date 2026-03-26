@@ -210,8 +210,7 @@ void init_fast(nb::module_& parent_module) {
                 mask_str != "causal_upper_left") {
               std::ostringstream msg;
               msg << "[scaled_dot_product_attention] invalid mask option '"
-                  << mask_str
-                  << "'. Must be 'causal', 'causal_lower_right', "
+                  << mask_str << "'. Must be 'causal', 'causal_lower_right', "
                   << "'causal_upper_left', or an array.";
               throw std::invalid_argument(msg.str());
             }

@@ -495,7 +495,8 @@ void sdpa_vector_1pass_fallback(
       /* int gqa_factor = */ q.shape(1) / k.shape(1),
       /* float scale = */ scale,
 
-      /* int causal_offset = */ (causal_upper_left ? 0 : k.shape(2) - q.shape(2)),
+      /* int causal_offset = */
+      (causal_upper_left ? 0 : k.shape(2) - q.shape(2)),
 
       /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
@@ -549,7 +550,8 @@ void sdpa_vector_2pass_fallback(
       /* int gqa_factor = */ q.shape(1) / k.shape(1),
       /* float scale = */ scale,
 
-      /* int causal_offset = */ (causal_upper_left ? 0 : k.shape(2) - q.shape(2)),
+      /* int causal_offset = */
+      (causal_upper_left ? 0 : k.shape(2) - q.shape(2)),
 
       /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
