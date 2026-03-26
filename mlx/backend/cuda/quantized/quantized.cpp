@@ -116,8 +116,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (inputs.size() == 6) {
     biases = inputs[3];
   }
-  const array& lhs_indices = inputs[inputs.size() - 2];
-  const array& rhs_indices = inputs[inputs.size() - 1];
+  array lhs_indices = ensure_contiguous(inputs[inputs.size() - 2], encoder, s);
+  array rhs_indices = ensure_contiguous(inputs[inputs.size() - 1], encoder, s);
 
   int M = out.shape(-2);
   int N = out.shape(-1);
