@@ -16,7 +16,7 @@ namespace cu {
 
 template <typename T, typename MaskT, bool SrcContiguous>
 __global__ void block_mask_copy_kernel(
-    T* src,
+    const T* src,
     T* dst,
     int block_size,
     int64_t rows,
@@ -78,7 +78,7 @@ void dispatch_mask_type(Dtype mask_dtype, F&& f) {
 
 void block_mask_copy(
     cu::CommandEncoder& encoder,
-    array& src,
+    const array& src,
     array& dst,
     const array& mask,
     int block_size,
@@ -86,7 +86,6 @@ void block_mask_copy(
     int64_t cols,
     bool src_contiguous,
     int64_t batch_count) {
-  auto& mask_nc = const_cast<array&>(mask);
   int mask_ndim = mask.ndim();
   int64_t mask_row_str = mask.strides()[mask_ndim - 2];
   int64_t mask_col_str = mask.strides()[mask_ndim - 1];
@@ -113,7 +112,7 @@ void block_mask_copy(
             const_param(src.shape()),
             const_param(src.strides()),
             src.ndim(),
-            gpu_ptr<MaskT>(mask_nc),
+            gpu_ptr<MaskT>(mask),
             const_param(mask.shape()),
             const_param(mask.strides()),
             mask_ndim,
@@ -160,10 +159,9 @@ array copy_with_block_mask(
   encoder.set_input_array(mask);
   encoder.set_output_array(dst);
 
-  auto& src_nc = const_cast<array&>(src);
   block_mask_copy(
       encoder,
-      src_nc,
+      src,
       dst,
       mask,
       block_size,
