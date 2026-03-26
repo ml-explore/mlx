@@ -76,12 +76,10 @@ void dispatch_mask_type(Dtype mask_dtype, F&& f) {
   }
 }
 
-template <typename T>
 void block_mask_copy(
     cu::CommandEncoder& encoder,
-    T* src_ptr,
-    T* dst_ptr,
-    const array& src,
+    array& src,
+    array& dst,
     const array& mask,
     int block_size,
     int64_t rows,
@@ -94,38 +92,36 @@ void block_mask_copy(
   int64_t mask_col_str = mask.strides()[mask_ndim - 1];
   int64_t mask_mat_size =
       int64_t(mask.shape()[mask_ndim - 2]) * mask.shape()[mask_ndim - 1];
-  auto src_shape = const_param(src.shape());
-  auto src_strides = const_param(src.strides());
-  auto mask_shape = const_param(mask.shape());
-  auto mask_strides_p = const_param(mask.strides());
 
   auto [num_blocks, block_dims] = get_launch_args(src, src.size() > INT32_MAX);
 
-  dispatch_mask_type<T>(mask.dtype(), [&]<typename MaskT>() {
-    auto mask_ptr = gpu_ptr<MaskT>(mask_nc);
+  dispatch_float_types(src.dtype(), "block_mask_copy", [&](auto type_tag) {
+    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
 
-    dispatch_bool(src_contiguous, [&](auto contiguous_tag) {
-      constexpr bool Contiguous = decltype(contiguous_tag)::value;
-      encoder.add_kernel_node(
-          cu::block_mask_copy_kernel<T, MaskT, Contiguous>,
-          num_blocks,
-          block_dims,
-          src_ptr,
-          dst_ptr,
-          block_size,
-          rows,
-          cols,
-          src_shape,
-          src_strides,
-          src.ndim(),
-          mask_ptr,
-          mask_shape,
-          mask_strides_p,
-          mask_ndim,
-          mask_row_str,
-          mask_col_str,
-          mask_mat_size,
-          batch_count);
+    dispatch_mask_type<T>(mask.dtype(), [&]<typename MaskT>() {
+      dispatch_bool(src_contiguous, [&](auto contiguous_tag) {
+        constexpr bool Contiguous = decltype(contiguous_tag)::value;
+        encoder.add_kernel_node(
+            cu::block_mask_copy_kernel<T, MaskT, Contiguous>,
+            num_blocks,
+            block_dims,
+            gpu_ptr<T>(src),
+            gpu_ptr<T>(dst),
+            block_size,
+            rows,
+            cols,
+            const_param(src.shape()),
+            const_param(src.strides()),
+            src.ndim(),
+            gpu_ptr<MaskT>(mask_nc),
+            const_param(mask.shape()),
+            const_param(mask.strides()),
+            mask_ndim,
+            mask_row_str,
+            mask_col_str,
+            mask_mat_size,
+            batch_count);
+      });
     });
   });
 }
@@ -144,21 +140,8 @@ void apply_block_mask(
   encoder.set_output_array(data);
 
   // Use block_mask_copy in-place (src == dst) with SrcContiguous=true.
-  dispatch_float_types(data.dtype(), "apply_block_mask", [&](auto type_tag) {
-    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    auto data_ptr = gpu_ptr<T>(data);
-    block_mask_copy(
-        encoder,
-        data_ptr,
-        data_ptr,
-        data,
-        mask,
-        block_size,
-        rows,
-        cols,
-        /*src_contiguous=*/true,
-        batch_count);
-  });
+  block_mask_copy(
+      encoder, data, data, mask, block_size, rows, cols, true, batch_count);
 }
 
 array copy_with_block_mask(
@@ -178,21 +161,16 @@ array copy_with_block_mask(
   encoder.set_output_array(dst);
 
   auto& src_nc = const_cast<array&>(src);
-
-  dispatch_float_types(src.dtype(), "copy_with_block_mask", [&](auto type_tag) {
-    using T = cuda_type_t<MLX_GET_TYPE(type_tag)>;
-    block_mask_copy(
-        encoder,
-        gpu_ptr<T>(src_nc),
-        gpu_ptr<T>(dst),
-        src,
-        mask,
-        block_size,
-        rows,
-        cols,
-        src.flags().row_contiguous,
-        batch_count);
-  });
+  block_mask_copy(
+      encoder,
+      src_nc,
+      dst,
+      mask,
+      block_size,
+      rows,
+      cols,
+      src.flags().row_contiguous,
+      batch_count);
 
   return dst;
 }
