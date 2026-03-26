@@ -224,8 +224,6 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
-
   int M = a_pre.shape(-2);
   int N = b_pre.shape(-1);
   int K = a_pre.shape(-1);
@@ -239,6 +237,8 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     fill_gpu(zero, out, s);
     return;
   }
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   bool has_op_mask = inputs.size() > 3;
   bool has_out_mask = inputs.size() == 3 || inputs.size() == 5;
