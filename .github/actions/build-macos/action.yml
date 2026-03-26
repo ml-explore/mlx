@@ -45,15 +45,17 @@ runs:
         cd build
         cmake ..
         make -j $(sysctl -n hw.ncpu)
-    
+
     - name: Run CPP tests
       shell: bash -l {0}
       env:
         DEVICE: gpu
         METAL_DEVICE_WRAPPER_TYPE: 1
         METAL_DEBUG_ERROR_MODE: 0
-      run: ./build/tests/tests
-    
+      run: |
+        ./build/tests/tests
+        ./build/tests/test_teardown
+
     - name: Build small binary with JIT
       shell: bash -l {0}
       run: |

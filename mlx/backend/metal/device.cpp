@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <sstream>
 
+#include <fmt/format.h>
+
 #define NS_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
 #define MTL_PRIVATE_IMPLEMENTATION
@@ -265,6 +267,14 @@ CommandEncoder::CommandEncoder(
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
 }
 
+CommandEncoder::~CommandEncoder() {
+  exiting_ = true;
+  synchronize();
+  auto pool = new_scoped_memory_pool();
+  buffer_.reset();
+  queue_.reset();
+}
+
 void CommandEncoder::set_buffer(
     const MTL::Buffer* buf,
     int idx,
@@ -431,6 +441,22 @@ void CommandEncoder::commit() {
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
   buffer_ops_ = 0;
   buffer_sizes_ = 0;
+}
+
+void CommandEncoder::synchronize() {
+  auto pool = new_scoped_memory_pool();
+  auto cb = NS::RetainPtr(get_command_buffer());
+  end_encoding();
+  commit();
+  cb->waitUntilCompleted();
+  if (!exiting_) {
+    if (cb->status() == MTL::CommandBufferStatusError) {
+      throw std::runtime_error(
+          fmt::format(
+              "[METAL] Command buffer execution failed: {}.",
+              cb->error()->localizedDescription()->utf8String()));
+    }
+  }
 }
 
 MTL::ComputeCommandEncoder* CommandEncoder::get_command_encoder() {
@@ -770,14 +796,18 @@ Device& device(mlx::core::Device) {
 }
 
 CommandEncoder& get_command_encoder(Stream s) {
-  // Leak the command encoders for the same reason with device.
-  static auto* encoders = new std::unordered_map<int, CommandEncoder>;
-  auto it = encoders->find(s.index);
-  if (it == encoders->end()) {
-    auto& d = device(s.device);
-    it = encoders->try_emplace(s.index, d, s.index, d.residency_set()).first;
+  auto& encoders = get_command_encoders();
+  auto it = encoders.find(s.index);
+  if (it == encoders.end()) {
+    throw std::runtime_error(
+        fmt::format("There is no Stream(gpu, {}) in current thread.", s.index));
   }
   return it->second;
+}
+
+std::unordered_map<int, CommandEncoder>& get_command_encoders() {
+  static thread_local std::unordered_map<int, CommandEncoder> encoders;
+  return encoders;
 }
 
 NS::SharedPtr<NS::AutoreleasePool> new_scoped_memory_pool() {

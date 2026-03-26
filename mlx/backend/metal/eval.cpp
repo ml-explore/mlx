@@ -11,10 +11,11 @@ namespace mlx::core::gpu {
 
 void init() {}
 
-void new_stream(Stream stream) {
-  if (stream.device == mlx::core::Device::gpu) {
-    metal::get_command_encoder(stream);
-  }
+void new_stream(Stream s) {
+  assert(s.device == Device::gpu);
+  auto& encoders = metal::get_command_encoders();
+  auto& d = metal::device(s.device);
+  encoders.try_emplace(s.index, d, s.index, d.residency_set());
 }
 
 inline void check_error(MTL::CommandBuffer* cbuf) {
@@ -83,15 +84,7 @@ void finalize(Stream s) {
 }
 
 void synchronize(Stream s) {
-  auto pool = metal::new_scoped_memory_pool();
-  auto& encoder = metal::get_command_encoder(s);
-  auto* cb = encoder.get_command_buffer();
-  cb->retain();
-  encoder.end_encoding();
-  encoder.commit();
-  cb->waitUntilCompleted();
-  check_error(cb);
-  cb->release();
+  metal::get_command_encoder(s).synchronize();
 }
 
 } // namespace mlx::core::gpu

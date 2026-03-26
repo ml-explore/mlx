@@ -24,6 +24,8 @@ class Device;
 class MLX_API CommandEncoder {
  public:
   CommandEncoder(Device& d, int index, ResidencySet& residency_set);
+  ~CommandEncoder();
+
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
@@ -90,6 +92,7 @@ class MLX_API CommandEncoder {
   void end_encoding();
   bool needs_commit() const;
   void commit();
+  void synchronize();
 
   MTL::CommandQueue* get_command_queue() const {
     return queue_.get();
@@ -102,6 +105,7 @@ class MLX_API CommandEncoder {
   MTL::ComputeCommandEncoder* get_command_encoder();
 
   Device& device_;
+  bool exiting_{false};
 
   // Buffer that stores encoded commands.
   NS::SharedPtr<MTL::CommandQueue> queue_;
@@ -226,6 +230,7 @@ class MLX_API Device {
 MLX_API Device& device(mlx::core::Device);
 MLX_API CommandEncoder& get_command_encoder(Stream s);
 
+std::unordered_map<int, CommandEncoder>& get_command_encoders();
 NS::SharedPtr<NS::AutoreleasePool> new_scoped_memory_pool();
 
 bool is_nax_available();

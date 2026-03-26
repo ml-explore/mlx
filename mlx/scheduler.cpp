@@ -26,15 +26,7 @@ Scheduler::Scheduler() {
   gpu::init();
 }
 
-Scheduler::~Scheduler() {
-  for (auto& s : get_streams()) {
-    try {
-      synchronize(s);
-    } catch (const std::runtime_error&) {
-      // ignore errors if synch fails
-    }
-  }
-}
+Scheduler::~Scheduler() = default;
 
 void Scheduler::new_thread(Device::DeviceType type) {
   if (type == Device::gpu) {

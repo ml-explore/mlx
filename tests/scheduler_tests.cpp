@@ -65,6 +65,27 @@ TEST_CASE("test default stream in threads") {
   CHECK_EQ(new_streams, thread_streams);
 }
 
+TEST_CASE("test access stream in other thread") {
+  if (!metal::is_available()) {
+    return;
+  }
+
+  auto main_thread_stream = new_stream(Device::gpu);
+  eval(arange(10, main_thread_stream));
+
+  bool error_caught = false;
+  std::thread t([&] {
+    try {
+      eval(arange(10, main_thread_stream));
+    } catch (const std::runtime_error&) {
+      error_caught = true;
+    }
+  });
+  t.join();
+
+  CHECK(error_caught);
+}
+
 TEST_CASE("test get streams") {
   auto streams = get_streams();
 
