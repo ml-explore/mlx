@@ -33,6 +33,9 @@ struct RadixTraits<float> {
   static constexpr int BITS = 32;
 
   __device__ __forceinline__ static UnsignedT to_radix(float val) {
+    if (cuda::std::isnan(val)) {
+      return ~UnsignedT(0);
+    }
     uint32_t bits = __float_as_uint(val);
     if ((bits << 1) == 0) {
       bits = 0; // Canonicalize +/-0.0 to +0.0 for stable equal-value ties.
@@ -48,6 +51,9 @@ struct RadixTraits<double> {
   static constexpr int BITS = 64;
 
   __device__ __forceinline__ static UnsignedT to_radix(double val) {
+    if (cuda::std::isnan(val)) {
+      return ~UnsignedT(0);
+    }
     uint64_t bits = __double_as_longlong(val);
     if ((bits << 1) == 0) {
       bits = 0; // Canonicalize +/-0.0 to +0.0 for stable equal-value ties.
@@ -82,6 +88,9 @@ struct RadixTraits<__half> {
   static constexpr int BITS = 16;
 
   __device__ __forceinline__ static UnsignedT to_radix(__half val) {
+    if (cuda::std::isnan(val)) {
+      return ~UnsignedT(0);
+    }
     uint16_t bits = __half_as_ushort(val);
     if ((bits & 0x7FFFu) == 0) {
       bits = 0; // Canonicalize +/-0 to +0 for stable equal-value ties.
@@ -97,6 +106,9 @@ struct RadixTraits<__nv_bfloat16> {
   static constexpr int BITS = 16;
 
   __device__ __forceinline__ static UnsignedT to_radix(__nv_bfloat16 val) {
+    if (cuda::std::isnan(val)) {
+      return ~UnsignedT(0);
+    }
     uint16_t bits = __bfloat16_as_ushort(val);
     if ((bits & 0x7FFFu) == 0) {
       bits = 0; // Canonicalize +/-0 to +0 for stable equal-value ties.
@@ -282,8 +294,7 @@ __global__ void radix_select_small_kernel(
 
   // Calculate offsets for different arrays in shared memory
   UnsignedT* shared_keys = reinterpret_cast<UnsignedT*>(shared_mem);
-  uint32_t* shared_idxs = reinterpret_cast<uint32_t*>(shared_keys + TILE_SIZE);
-  int* shared_hist = reinterpret_cast<int*>(shared_idxs + TILE_SIZE);
+  int* shared_hist = reinterpret_cast<int*>(shared_keys + TILE_SIZE);
   int* shared_count = shared_hist + RADIX_SIZE;
   constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
   int* scatter_scratch = shared_count + 2;
@@ -314,30 +325,8 @@ __global__ void radix_select_small_kernel(
 
   // Load data into shared memory
   for (int i = threadIdx.x; i < TILE_SIZE; i += BLOCK_THREADS) {
-    if (i < tile_n) {
-      ValT val = row_input[i * in_stride];
-      UnsignedT key = Traits::to_radix(val);
-      if constexpr (cuda::std::is_floating_point_v<ValT>) {
-        if (cuda::std::isnan(val)) {
-          key = ~UnsignedT(0);
-        }
-      } else if constexpr (cuda::std::is_same_v<ValT, __half>) {
-        if (__hisnan(val)) {
-          key = ~UnsignedT(0);
-        }
-      } else if constexpr (cuda::std::is_same_v<ValT, __nv_bfloat16>) {
-        if (__hisnan(val)) {
-          key = ~UnsignedT(0);
-        }
-      } else {
-        // Non-floating types cannot produce NaN keys.
-      }
-      shared_keys[i] = key;
-      shared_idxs[i] = i;
-    } else {
-      shared_keys[i] = ~UnsignedT(0);
-      shared_idxs[i] = i;
-    }
+    shared_keys[i] = (i < tile_n) ? Traits::to_radix(row_input[i * in_stride])
+                                  : ~UnsignedT(0);
   }
   __syncthreads();
 
@@ -492,9 +481,9 @@ __global__ void radix_select_small_kernel(
       }
 
       if constexpr (ARG_PARTITION) {
-        row_output[pos * out_stride] = shared_idxs[i];
+        row_output[pos * out_stride] = i;
       } else {
-        row_output[pos * out_stride] = row_input[shared_idxs[i] * in_stride];
+        row_output[pos * out_stride] = row_input[i * in_stride];
       }
     }
     __syncthreads();

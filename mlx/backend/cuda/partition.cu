@@ -72,8 +72,7 @@ size_t radix_small_shared_mem_bytes(
       static_cast<size_t>(items_per_thread);
   size_t num_warps = static_cast<size_t>(block_threads / WARP_SIZE);
   return tile_size * key_size + // shared_keys
-      tile_size * sizeof(uint32_t) + // shared_idxs
-      cu::RADIX_SIZE * sizeof(int) + // shared_hist for small kernel
+      cu::RADIX_SIZE * sizeof(int) + // shared_hist
       (2 + 3 * num_warps + 6) * sizeof(int); // shared_count + scatter scratch
 }
 
@@ -82,7 +81,6 @@ bool radix_small_fits_shared_memory(Dtype dtype, int size_sorted_axis) {
     return false;
   }
 
-  size_t required_shared_mem = 0;
   bool fits = false;
   dispatch_radix_small_block_threads(size_sorted_axis, [&](auto block_dim_tag) {
     constexpr int BLOCK_THREADS = block_dim_tag();
@@ -95,15 +93,15 @@ bool radix_small_fits_shared_memory(Dtype dtype, int size_sorted_axis) {
     dispatch_radix_items_per_thread(
         size_sorted_axis, BLOCK_THREADS, [&](auto items_per_thread_tag) {
           constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
-          required_shared_mem = radix_small_shared_mem_bytes(
-              size_of(dtype), BLOCK_THREADS, ITEMS_PER_THREAD);
-          fits = required_shared_mem <= RADIX_SMALL_SHARED_MEM_BUDGET_BYTES;
+          fits = radix_small_shared_mem_bytes(
+                     size_of(dtype), BLOCK_THREADS, ITEMS_PER_THREAD) <=
+              RADIX_SMALL_SHARED_MEM_BUDGET_BYTES;
         });
   });
   return fits;
 }
 
-void gpu_radix_partition_small(
+void gpu_partition_small(
     const Stream& s,
     const array& in,
     array& out,
@@ -193,18 +191,10 @@ void gpu_radix_partition_small(
                         BLOCK_THREADS,
                         ITEMS_PER_THREAD>;
 
-                    // Calculate dynamic shared memory size
-                    using UnsignedT = typename cu::RadixTraits<ValT>::UnsignedT;
-                    constexpr int TILE_SIZE_VAL =
-                        BLOCK_THREADS * ITEMS_PER_THREAD;
-                    constexpr int NUM_WARPS = BLOCK_THREADS / WARP_SIZE;
-                    constexpr size_t shared_mem_bytes =
-                        TILE_SIZE_VAL * sizeof(UnsignedT) + // shared_keys
-                        TILE_SIZE_VAL * sizeof(uint32_t) + // shared_idxs
-                        cu::RADIX_SIZE *
-                            sizeof(int) + // shared_hist for small kernel
-                        (2 + 3 * NUM_WARPS + 6) *
-                            sizeof(int); // shared_count + scatter scratch
+                    size_t shared_mem_bytes = radix_small_shared_mem_bytes(
+                        sizeof(typename cu::RadixTraits<ValT>::UnsignedT),
+                        BLOCK_THREADS,
+                        ITEMS_PER_THREAD);
 
                     encoder.add_kernel_node_ex(
                         kernel,
@@ -252,7 +242,7 @@ void gpu_partition(
 
   // Dispatch based on whether the small kernel tile fits in shared memory.
   if (radix_small_fits_shared_memory(in.dtype(), size_sorted_axis)) {
-    return gpu_radix_partition_small(s, in, out, axis, kth, arg_partition);
+    return gpu_partition_small(s, in, out, axis, kth, arg_partition);
   } else {
     return gpu_partition_fallback(s, in, out, axis, arg_partition);
   }
