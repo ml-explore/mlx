@@ -165,8 +165,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool can_use_qmm_sm80 = supports(supports_qmm_sm80);
   bool can_use_qmv = supports(supports_qmv);
 
-  // Pre-gather inputs into contiguous batched arrays, then call existing qmm.
-  auto call_qmm = [&](auto&& qmm_fn) {
+  auto call_qmm_sm90 = [&]() {
+    // sm90: pre-gather + qmm
     array gx = gather_slices(x, lhs_indices, B, encoder, s);
     array gw = gather_slices(w, rhs_indices, B, encoder, s);
     array gs = gather_slices(scales, rhs_indices, B, encoder, s);
@@ -175,9 +175,26 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       gb = gather_slices(*biases, rhs_indices, B, encoder, s);
     }
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    qmm_fn(gx, gw, gs, gb);
+    qmm_sm90(gx, gw, gs, *gb, out, bits_, group_size_, encoder, s);
   };
-
+  auto call_qmm_sm80 = [&]() {
+    // sm80: fused index lookup in the kernel.
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    encoder.set_input_array(lhs_indices);
+    encoder.set_input_array(rhs_indices);
+    qmm_sm80(
+        x,
+        w,
+        scales,
+        biases,
+        out,
+        bits_,
+        group_size_,
+        mode_,
+        encoder,
+        gpu_ptr<uint32_t>(lhs_indices),
+        gpu_ptr<uint32_t>(rhs_indices));
+  };
   auto call_qmv = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
     gather_qmv(
@@ -194,26 +211,20 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         encoder);
   };
 
-  constexpr int kGemvMLimit = 8;
-
   if (can_use_qmm_sm90) {
-    if (can_use_qmv && M < kGemvMLimit) {
+    if (can_use_qmv && (M == 1 && B == 1 && N <= 16384 && K <= 16384)) {
       call_qmv();
     } else {
-      call_qmm([&](auto& gx, auto& gw, auto& gs, auto& gb) {
-        qmm_sm90(gx, gw, gs, *gb, out, bits_, group_size_, encoder, s);
-      });
+      call_qmm_sm90();
     }
     return;
   }
 
   if (can_use_qmm_sm80) {
-    if (can_use_qmv && M < kGemvMLimit) {
+    if (can_use_qmv && (M * B < 8)) {
       call_qmv();
     } else {
-      call_qmm([&](auto& gx, auto& gw, auto& gs, auto& gb) {
-        qmm_sm80(gx, gw, gs, gb, out, bits_, group_size_, mode_, encoder);
-      });
+      call_qmm_sm80();
     }
     return;
   }

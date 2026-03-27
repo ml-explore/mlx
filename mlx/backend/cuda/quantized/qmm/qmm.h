@@ -53,7 +53,9 @@ void qmm_sm80(
     int bits,
     int group_size,
     QuantizationMode mode,
-    cu::CommandEncoder& encoder);
+    cu::CommandEncoder& encoder,
+    const uint32_t* lhs_indices = nullptr,
+    const uint32_t* rhs_indices = nullptr);
 
 bool supports_qmm_naive(
     const array& x,
