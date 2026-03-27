@@ -947,6 +947,7 @@ std::pair<std::vector<array>, std::vector<int>> BroadcastAxes::vmap(
   int unbatched_ndim = static_cast<int>(inputs[0].ndim()) - (axes[0] >= 0);
   std::vector<int> ignore_axes;
   ignore_axes.reserve(ignore_axes_.size());
+  // Reexpress ignore_axes_ in the normalized batched layout.
   for (auto ax : ignore_axes_) {
     auto pos_ax = unbatched_ndim + ax;
     if (axes[0] >= 0 && pos_ax >= axes[0]) {
