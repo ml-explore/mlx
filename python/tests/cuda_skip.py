@@ -1,7 +1,5 @@
 cuda_skip = {
     "TestLayers.test_quantized_embedding",
-    # Block masked matmul NYI
-    "TestBlas.test_block_masked_matmul",
     # Gather matmul NYI
     "TestBlas.test_gather_matmul",
     "TestBlas.test_gather_matmul_grad",
