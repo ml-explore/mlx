@@ -71,11 +71,17 @@ template <typename T, int D>
       (q_batch_head_idx * int(tpg.y) + q_seq_idx) * D +
       simd_lid * per_thread;
 
-  // Load query coordinates for this thread
+  // Load query coordinates for this thread (pre-scaled by attention scale)
   for (int i = 0; i < per_thread; i++) {
-    q_r[i] = static_cast<U>(q_rot[q_offset + i]);
-    q_s[i] = static_cast<U>(q_sketch[q_offset + i]);
+    q_r[i] = static_cast<U>(params.scale) * static_cast<U>(q_rot[q_offset + i]);
+    q_s[i] = static_cast<U>(params.scale) * static_cast<U>(q_sketch[q_offset + i]);
     o[i] = U(0);
+  }
+
+  // Cache centroids in registers (only 4 values for 2-bit MSE)
+  thread U c[4];
+  for (int i = 0; i < params.n_centroids && i < 4; i++) {
+    c[i] = centroids[i];
   }
 
   // --- KV base offsets (contiguous B*H_kv, N, packed_dim layout) ---
@@ -118,7 +124,7 @@ template <typename T, int D>
                    mse_byte_for_thread];
       for (int sub = 0; sub < per_thread; sub++) {
         const uint idx = (uint(packed) >> (sub * mse_bits)) & mse_mask;
-        mse_partial += q_r[sub] * centroids[idx];
+        mse_partial += q_r[sub] * c[idx];
       }
     }
     U mse_score = simd_sum(mse_partial);
@@ -140,8 +146,8 @@ template <typename T, int D>
     U qjl_score = simd_sum(qjl_partial);
     qjl_score *= k_res_norms[kv_norms_base + n] * params.qjl_scale;
 
-    // Combined score with attention scale
-    const U score = (mse_score + qjl_score) * params.scale;
+    // Combined score (scale already baked into q_r and q_s at load time)
+    const U score = mse_score + qjl_score;
 
     // === ONLINE SOFTMAX UPDATE ===
     const U new_max = max(max_score, score);
@@ -155,13 +161,13 @@ template <typename T, int D>
       const uint8_t packed_v =
           v_packed[kv_v_packed_base + long(n) * long(params.packed_d_v) +
                    v_byte_for_thread];
+      // Hoist scale/zero loads (all per_thread coords share same group)
+      const int group_idx = coord_start / params.group_size;
+      const long sg_offset = kv_v_sg_base + long(n) * long(params.n_groups);
+      const U scale_val = v_scales[sg_offset + group_idx];
+      const U zero_val = v_zeros[sg_offset + group_idx];
       for (int sub = 0; sub < per_thread; sub++) {
         const uint qval = (uint(packed_v) >> (sub * v_bits)) & v_mask;
-        const int coord = coord_start + sub;
-        const int group_idx = coord / params.group_size;
-        const long sg_offset = kv_v_sg_base + long(n) * long(params.n_groups);
-        const U scale_val = v_scales[sg_offset + group_idx];
-        const U zero_val = v_zeros[sg_offset + group_idx];
         const U val = U(qval) * scale_val + zero_val;
         o[sub] = o[sub] * factor + exp_score * val;
       }
