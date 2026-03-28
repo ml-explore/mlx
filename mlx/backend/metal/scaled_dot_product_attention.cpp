@@ -883,6 +883,38 @@ void ScaledDotProductAttention::eval_gpu(
   d.add_temporaries(std::move(copies), s.index);
 }
 
+void TurboQuantSDPA::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  // inputs: [queries, k_packed, values, k_norms, codebook]
+  auto& q_pre = inputs[0];
+  auto& k_packed = inputs[1];
+  auto& v_pre = inputs[2];
+  auto& k_norms = inputs[3];
+  auto& codebook = inputs[4];
+  auto& o = outputs[0];
+
+  o.set_data(allocator::malloc(o.nbytes()));
+
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  // Use inputs directly — they should already be contiguous from fast.cpp
+  const auto& q = q_pre;
+  const auto& v = v_pre;
+
+  sdpa_vector_turbo(
+      s, d, q, k_packed, v, o,
+      scale_, do_causal_, std::nullopt,
+      k_norms, codebook, bits_, inv_sqrt_dim_);
+}
+
+bool TurboQuantSDPA::is_equivalent(const Primitive& other) const {
+  const TurboQuantSDPA& a_other = static_cast<const TurboQuantSDPA&>(other);
+  return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
+      bits_ == a_other.bits_;
+}
+
 bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
   return true;
 }

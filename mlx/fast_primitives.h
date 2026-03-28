@@ -260,6 +260,41 @@ class ScaledDotProductAttention : public Custom {
   bool output_logsumexp_;
 };
 
+class TurboQuantSDPA : public Custom {
+ public:
+  TurboQuantSDPA(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      float scale,
+      bool do_causal,
+      int bits,
+      float inv_sqrt_dim)
+      : Custom(stream, std::move(fallback)),
+        scale_(scale),
+        do_causal_(do_causal),
+        bits_(bits),
+        inv_sqrt_dim_(inv_sqrt_dim) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("[TurboQuantSDPA] CPU not supported");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  bool is_equivalent(const Primitive& other) const override;
+
+  DEFINE_NAME(TurboQuantSDPA);
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
+  float scale_;
+  bool do_causal_;
+  int bits_;
+  float inv_sqrt_dim_;
+};
+
 class ScaledDotProductAttentionVJP : public Custom {
  public:
   ScaledDotProductAttentionVJP(
