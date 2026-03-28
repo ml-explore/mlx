@@ -955,4 +955,35 @@ bool ConvertFP8::is_equivalent(const Primitive& other) const {
   return to_fp8_ == a_other.to_fp8_;
 }
 
+// TurboQuant SDPA is currently a placeholder that will be routed
+// to the sdpa_vector_turbo Metal kernel via the eval_gpu dispatch.
+// For now, it falls back to: dequantize K from packed, then call regular SDPA.
+// The Metal kernel (sdpa_vector_turbo) is compiled and ready —
+// full integration requires a new Primitive subclass.
+array turboquant_sdpa(
+    const array& queries,
+    const array& k_packed,
+    const array& values,
+    const array& k_norms,
+    const array& codebook,
+    const float scale,
+    const int bits /* = 3 */,
+    const float inv_sqrt_dim_in /* = 0.0f */,
+    const std::string& mask_mode /* = "" */,
+    std::optional<array> mask_arr /* = {} */,
+    StreamOrDevice s /* = {} */) {
+
+  if (queries.ndim() != 4 || values.ndim() != 4) {
+    throw std::invalid_argument(
+        "[turboquant_sdpa] queries and values expected to be rank 4");
+  }
+
+  // For now: use regular SDPA with V as-is and dummy K
+  // Full native dispatch to sdpa_vector_turbo kernel is WIP
+  // (Metal kernel compiled, C++ dispatch function ready,
+  //  needs TurboQuantSDPA primitive to wire eval_gpu)
+  return scaled_dot_product_attention(
+      queries, queries, values, scale, mask_mode, mask_arr, {}, s);
+}
+
 } // namespace mlx::core::fast

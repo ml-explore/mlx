@@ -54,6 +54,23 @@ MLX_API array scaled_dot_product_attention(
     const std::optional<array>& sinks = {},
     StreamOrDevice s = {});
 
+/** TurboQuant SDPA: attention with bit-packed KV cache.
+ *  K is stored as packed uint32 indices with per-vector norms.
+ *  Queries must be pre-rotated: Q_rot = WHT(signs * Q).
+ *  V is passed as dequantized fp16 (from decode buffer). **/
+MLX_API array turboquant_sdpa(
+    const array& queries,      // pre-rotated (B, H_q, T_q, D)
+    const array& k_packed,     // packed uint32 (B, H_kv, T_kv, packed_dim)
+    const array& values,       // dequantized V (B, H_kv, T_kv, D)
+    const array& k_norms,      // per-vector norms (B, H_kv, T_kv)
+    const array& codebook,     // centroids (n_levels,)
+    const float scale,
+    const int bits = 3,
+    const float inv_sqrt_dim = 0.0f,
+    const std::string& mask_mode = "",
+    std::optional<array> mask_arr = {},
+    StreamOrDevice s = {});
+
 using TemplateArg = std::variant<int, bool, Dtype>;
 using ScalarArg = std::variant<bool, int, float>;
 

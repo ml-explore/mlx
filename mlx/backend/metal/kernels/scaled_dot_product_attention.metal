@@ -3,6 +3,7 @@
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/sdpa_vector.h"
+#include "mlx/backend/metal/kernels/sdpa_vector_turbo.h"
 
 using namespace metal;
 
@@ -41,4 +42,25 @@ using namespace metal;
 instantiate_sdpa_vector_heads(float)
 instantiate_sdpa_vector_heads(bfloat16_t)
 instantiate_sdpa_vector_heads(float16_t)
+
+// TurboQuant SDPA: 3-bit packed K with codebook dequant
+#define instantiate_sdpa_vector_turbo(type, qk_dim, value_dim, bits, vpw) \
+  instantiate_kernel(                                                      \
+      "sdpa_vector_turbo_" #type "_" #qk_dim "_" #value_dim                \
+      "_b" #bits "_vpw" #vpw,                                             \
+      sdpa_vector_turbo,                                                   \
+      type,                                                                \
+      qk_dim,                                                              \
+      value_dim,                                                           \
+      bits,                                                                \
+      vpw)
+
+#define instantiate_sdpa_vector_turbo_heads(type)             \
+  instantiate_sdpa_vector_turbo(type, 64, 64, 3, 10)          \
+  instantiate_sdpa_vector_turbo(type, 128, 128, 3, 10)        \
+  instantiate_sdpa_vector_turbo(type, 64, 64, 4, 8)           \
+  instantiate_sdpa_vector_turbo(type, 128, 128, 4, 8)
+
+instantiate_sdpa_vector_turbo_heads(float16_t)
+instantiate_sdpa_vector_turbo_heads(bfloat16_t)
     // clang-format on

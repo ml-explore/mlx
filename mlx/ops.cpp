@@ -4394,6 +4394,10 @@ std::pair<int, int> quantization_params_from_mode(
       default_group_size = 32;
       default_bits = 8;
       break;
+    case QuantizationMode::TurboQuant:
+      default_group_size = 128;
+      default_bits = 3;
+      break;
   }
   return {
       group_size_.has_value() ? *group_size_ : default_group_size,

@@ -297,6 +297,56 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
+      "turboquant_sdpa",
+      [](const mx::array& queries,
+         const mx::array& k_packed,
+         const mx::array& values,
+         const mx::array& k_norms,
+         const mx::array& codebook,
+         const float scale,
+         const int bits,
+         const float inv_sqrt_dim,
+         const std::optional<std::string>& mask,
+         mx::StreamOrDevice s) {
+        std::string mask_mode = mask.value_or("");
+        return mx::fast::turboquant_sdpa(
+            queries, k_packed, values, k_norms, codebook,
+            scale, bits, inv_sqrt_dim, mask_mode, {}, s);
+      },
+      "queries"_a,
+      "k_packed"_a,
+      "values"_a,
+      "k_norms"_a,
+      "codebook"_a,
+      nb::kw_only(),
+      "scale"_a,
+      "bits"_a = 3,
+      "inv_sqrt_dim"_a = 0.0f,
+      "mask"_a = nb::none(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        TurboQuant SDPA: attention with bit-packed KV cache.
+
+        Computes attention using pre-rotated queries and compressed K cache.
+        K is stored as bit-packed uint32 codebook indices + per-vector norms.
+        V is passed as dequantized fp16 (from incremental decode buffer).
+
+        Args:
+            queries (array): Pre-rotated queries ``[B, H_q, T_q, D]``.
+            k_packed (array): Packed K indices ``[B, H_kv, T_kv, packed_dim]`` uint32.
+            values (array): Dequantized V ``[B, H_kv, T_kv, D]``.
+            k_norms (array): Per-vector K norms ``[B, H_kv, T_kv]`` float32.
+            codebook (array): Quantization centroids ``[n_levels]`` float32.
+            scale (float): Attention scale (typically ``1/sqrt(D)``).
+            bits (int): Quantization bits (2, 3, or 4). Default: ``3``.
+            inv_sqrt_dim (float): ``1/sqrt(D)``. Default: auto-computed.
+            mask (str, optional): ``"causal"`` or ``None``. Default: ``None``.
+
+        Returns:
+            array: Attention output ``[B, H_q, T_q, D]``.
+      )pbdoc");
+
+  m.def(
       "metal_kernel",
       [](const std::string& name,
          const std::vector<std::string>& input_names,

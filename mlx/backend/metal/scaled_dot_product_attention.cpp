@@ -415,6 +415,104 @@ void sdpa_vector(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void sdpa_vector_turbo(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,          // pre-rotated queries (B*H_q, q_seq, D)
+    const array& k_packed,   // packed uint32 K indices (B*H_kv, kv_seq, packed_dim)
+    const array& v,          // dequantized V from decode buffer
+    array& out,
+    float scale,
+    bool do_causal,
+    const std::optional<array>& mask,
+    const array& k_norms,    // per-vector norms (B*H_kv, kv_seq)
+    const array& codebook,   // (n_centroids,) float32
+    int bits,
+    float inv_sqrt_dim) {
+
+  int vpw = bits == 3 ? 10 : (bits == 4 ? 8 : (bits == 2 ? 16 : 32));
+
+  // Kernel name: sdpa_vector_turbo_<type>_<D>_<V>_b<bits>_vpw<vpw>
+  std::string kname;
+  kname.reserve(64);
+  kname += "sdpa_vector_turbo_";
+  kname += get_type_string(q.dtype());
+  kname += "_";
+  kname += std::to_string(q.shape(-1));
+  kname += "_";
+  kname += std::to_string(v.shape(-1));
+  kname += "_b";
+  kname += std::to_string(bits);
+  kname += "_vpw";
+  kname += std::to_string(vpw);
+
+  int gqa_factor = q.shape(1) / k_packed.shape(1);
+  int N = k_norms.shape(1);  // kv sequence length
+  size_t k_head_stride = k_packed.shape(1) == 1 ? k_packed.strides(0) : k_packed.strides(1);
+  size_t k_seq_stride = k_packed.strides()[2];
+  size_t v_head_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
+  size_t v_seq_stride = v.strides()[2];
+  size_t k_norm_head_stride = k_norms.shape(1) == 1 ? k_norms.strides(0) : k_norms.strides(1);
+
+  MTL::Size group_dims(1024, 1, 1);
+  MTL::Size grid_dims(q.shape(0) * q.shape(1), q.shape(2), 1);
+
+  bool has_mask = mask.has_value();
+  bool bool_mask = has_mask && (*mask).dtype() == bool_;
+  bool float_mask = has_mask && !bool_mask;
+  bool query_transposed = !q.flags().row_contiguous;
+  bool has_sinks = false;
+  metal::MTLFCList func_consts = {
+      {&has_mask, MTL::DataType::DataTypeBool, 20},
+      {&query_transposed, MTL::DataType::DataTypeBool, 21},
+      {&do_causal, MTL::DataType::DataTypeBool, 22},
+      {&bool_mask, MTL::DataType::DataTypeBool, 23},
+      {&float_mask, MTL::DataType::DataTypeBool, 24},
+      {&has_sinks, MTL::DataType::DataTypeBool, 25},
+  };
+  std::string hash_name = kname;
+  hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
+  hash_name += query_transposed ? "_qt" : "_qnt";
+  hash_name += do_causal ? "_c" : "_nc";
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname, hash_name, func_consts);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  // Set arguments matching sdpa_vector_turbo kernel signature
+  compute_encoder.set_input_array(q, 0);           // queries (pre-rotated)
+  compute_encoder.set_input_array(k_packed, 1);     // packed K indices
+  compute_encoder.set_input_array(v, 2);            // dequantized V
+  compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(gqa_factor, 4);
+  compute_encoder.set_bytes(N, 5);
+  compute_encoder.set_bytes(k_head_stride, 6);
+  compute_encoder.set_bytes(k_seq_stride, 7);
+  compute_encoder.set_bytes(v_head_stride, 8);
+  compute_encoder.set_bytes(v_seq_stride, 9);
+  compute_encoder.set_bytes(scale, 10);
+
+  if (has_mask) {
+    auto& m = *mask;
+    compute_encoder.set_input_array(m, 11 + float_mask);
+    int32_t kv_seq_stride = m.shape(3) > 1 ? m.strides(3) : 0;
+    int32_t q_seq_stride = m.shape(2) > 1 ? m.strides(2) : 0;
+    int32_t head_stride =
+        m.shape(1) > 1 ? m.strides(1) : (m.shape(0) > 1 ? m.strides(0) : 0);
+    compute_encoder.set_bytes(kv_seq_stride, 13);
+    compute_encoder.set_bytes(q_seq_stride, 14);
+    compute_encoder.set_bytes(head_stride, 15);
+  }
+
+  // TurboQuant-specific buffers
+  compute_encoder.set_input_array(k_norms, 18);
+  compute_encoder.set_bytes(k_norm_head_stride, 19);
+  compute_encoder.set_input_array(codebook, 20);
+  compute_encoder.set_bytes(inv_sqrt_dim, 21);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void sdpa_vector_2pass(
     const Stream& s,
     metal::Device& d,
