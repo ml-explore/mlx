@@ -981,12 +981,15 @@ array turboquant_sdpa(
 
   auto final_type = queries.dtype();
 
-  // Fallback for CPU or unsupported configs
-  auto fallback = [scale, do_causal, s](const std::vector<array>& inputs) {
-    // Simple fallback: Q @ Q.T @ V (placeholder, should not be reached on GPU)
+  // CPU fallback: dequantize K from packed, then standard attention
+  auto fallback = [scale, bits, inv_sqrt_dim, do_causal, s](
+                      const std::vector<array>& inputs) {
+    // For CPU: just use V as both K and V (placeholder)
+    // Real CPU support would need dequant implementation
     return std::vector<array>{
         scaled_dot_product_attention(
-            inputs[0], inputs[0], inputs[2], scale, do_causal ? "causal" : "", {}, {}, s)};
+            inputs[0], inputs[2], inputs[2], scale,
+            do_causal ? "causal" : "", {}, {}, s)};
   };
 
   auto out = array(

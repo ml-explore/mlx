@@ -894,18 +894,34 @@ void TurboQuantSDPA::eval_gpu(
   auto& codebook = inputs[4];
   auto& o = outputs[0];
 
-  o.set_data(allocator::malloc(o.nbytes()));
-
   auto& s = stream();
   auto& d = metal::device(s.device);
 
-  // Use inputs directly — they should already be contiguous from fast.cpp
-  const auto& q = q_pre;
-  const auto& v = v_pre;
+  std::vector<array> copies;
+  copies.reserve(4);
+  auto ensure_contiguous = [&copies, &s](const array& arr) -> const array& {
+    if (arr.flags().row_contiguous || arr.strides(-1) == 1) {
+      return arr;
+    }
+    copies.push_back(contiguous_copy_gpu(arr, s));
+    return copies.back();
+  };
+
+  const auto& q = ensure_contiguous(q_pre);
+  const auto& v = ensure_contiguous(v_pre);
+
+  // Try to donate query buffer for output
+  if (q.is_donatable() && q.flags().row_contiguous && q.size() == o.size()) {
+    o.copy_shared_buffer(q);
+  } else {
+    o.set_data(allocator::malloc(o.nbytes()));
+  }
+
+  bool do_causal = do_causal_ && q.shape(2) > 1;
 
   sdpa_vector_turbo(
       s, d, q, k_packed, v, o,
-      scale_, do_causal_, std::nullopt,
+      scale_, do_causal, std::nullopt,
       k_norms, codebook, bits_, inv_sqrt_dim_);
 }
 
