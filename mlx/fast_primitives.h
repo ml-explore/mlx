@@ -203,6 +203,55 @@ class RoPE : public Custom {
   bool forward_;
 };
 
+class TurboQuantAttention : public Custom {
+ public:
+  TurboQuantAttention(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      float scale,
+      float qjl_scale,
+      int mse_bits,
+      int v_bits,
+      int group_size)
+      : Custom(stream, std::move(fallback)),
+        scale_(scale),
+        qjl_scale_(qjl_scale),
+        mse_bits_(mse_bits),
+        v_bits_(v_bits),
+        group_size_(group_size) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error(
+        "[turboquant_attention] Not supported on CPU, use GPU.");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  bool is_equivalent(const Primitive& other) const override;
+
+  DEFINE_NAME(TurboQuantAttention);
+  DEFINE_INPUT_OUTPUT_SHAPE()
+  auto state() const {
+    return std::make_tuple(
+        nullptr, scale_, qjl_scale_, mse_bits_, v_bits_, group_size_);
+  }
+
+  float scale() const { return scale_; }
+  float qjl_scale() const { return qjl_scale_; }
+  int mse_bits() const { return mse_bits_; }
+  int v_bits() const { return v_bits_; }
+  int group_size() const { return group_size_; }
+
+ private:
+  float scale_;
+  float qjl_scale_;
+  int mse_bits_;
+  int v_bits_;
+  int group_size_;
+};
+
 class ScaledDotProductAttention : public Custom {
  public:
   ScaledDotProductAttention(

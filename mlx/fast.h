@@ -43,6 +43,28 @@ MLX_API array rope(
     const std::optional<array>& freqs = std::nullopt,
     StreamOrDevice s = {});
 
+/** Computes attention directly from TurboQuant compressed KV cache data.
+ *  Fuses MSE score + QJL correction + value dequantization + online softmax
+ *  in a single Metal kernel with zero intermediate allocations. **/
+MLX_API array turboquant_attention(
+    const array& queries,
+    const array& k_packed,
+    const array& k_signs,
+    const array& k_norms,
+    const array& k_res_norms,
+    const array& centroids,
+    const array& v_packed,
+    const array& v_scales,
+    const array& v_zeros,
+    const array& rotation_matrix,
+    const array& sketch_matrix,
+    const float scale,
+    const float qjl_scale,
+    const int mse_bits = 2,
+    const int v_bits = 2,
+    const int group_size = 32,
+    StreamOrDevice s = {});
+
 /** Computes: O = softmax(Q @ K.T) @ V **/
 MLX_API array scaled_dot_product_attention(
     const array& queries,

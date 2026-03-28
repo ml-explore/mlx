@@ -297,6 +297,64 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
+      "turboquant_attention",
+      &mx::fast::turboquant_attention,
+      "queries"_a,
+      "k_packed"_a,
+      "k_signs"_a,
+      "k_norms"_a,
+      "k_res_norms"_a,
+      "centroids"_a,
+      "v_packed"_a,
+      "v_scales"_a,
+      "v_zeros"_a,
+      "rotation_matrix"_a,
+      "sketch_matrix"_a,
+      nb::kw_only(),
+      "scale"_a,
+      "qjl_scale"_a,
+      "mse_bits"_a = 2,
+      "v_bits"_a = 2,
+      "group_size"_a = 32,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def turboquant_attention(queries: array, k_packed: array, "
+          "k_signs: array, k_norms: array, k_res_norms: array, "
+          "centroids: array, v_packed: array, v_scales: array, "
+          "v_zeros: array, rotation_matrix: array, sketch_matrix: array, "
+          "*, scale: float, qjl_scale: float, mse_bits: int = 2, "
+          "v_bits: int = 2, group_size: int = 32, "
+          "stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Fused attention from TurboQuant compressed KV cache data.
+
+        Computes attention directly from compressed keys (MSE quantized +
+        QJL sign correction) and quantized values, with zero intermediate
+        allocations. Implements online softmax in a single Metal kernel.
+
+        Args:
+            queries (array): Query tensor ``[B, H_q, T_q, D]``.
+            k_packed (array): MSE-quantized key indices ``[B, H_kv, T_kv, packed_d]`` (uint8).
+            k_signs (array): QJL sign bits ``[B, H_kv, T_kv, packed_d_signs]`` (uint8).
+            k_norms (array): Key L2 norms ``[B, H_kv, T_kv]``.
+            k_res_norms (array): Residual L2 norms ``[B, H_kv, T_kv]``.
+            centroids (array): MSE codebook centroids ``[n_centroids]``.
+            v_packed (array): Quantized values ``[B, H_kv, T_kv, packed_d_v]`` (uint8).
+            v_scales (array): Value quantization scales ``[B, H_kv, T_kv, n_groups]``.
+            v_zeros (array): Value quantization zeros ``[B, H_kv, T_kv, n_groups]``.
+            rotation_matrix (array): MSE rotation matrix Pi ``[D, D]``.
+            sketch_matrix (array): QJL sketch matrix S ``[D, D]``.
+            scale (float): Attention scale (typically ``1.0 / sqrt(D)``).
+            qjl_scale (float): QJL correction scale (``sqrt(pi/2) / D``).
+            mse_bits (int): Bits per MSE index (default: 2).
+            v_bits (int): Bits per value element (default: 2).
+            group_size (int): Value quantization group size (default: 32).
+
+        Returns:
+            array: Output tensor ``[B, H_q, T_q, D]``.
+      )pbdoc");
+
+  m.def(
       "metal_kernel",
       [](const std::string& name,
          const std::vector<std::string>& input_names,

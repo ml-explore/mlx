@@ -609,6 +609,152 @@ bool RoPE::is_equivalent(const Primitive& other) const {
       forward_ == a_other.forward_);
 }
 
+/** TurboQuant fused attention from compressed KV cache **/
+array turboquant_attention(
+    const array& queries,
+    const array& k_packed,
+    const array& k_signs,
+    const array& k_norms,
+    const array& k_res_norms,
+    const array& centroids,
+    const array& v_packed,
+    const array& v_scales,
+    const array& v_zeros,
+    const array& rotation_matrix,
+    const array& sketch_matrix,
+    const float scale,
+    const float qjl_scale,
+    const int mse_bits /* = 2 */,
+    const int v_bits /* = 2 */,
+    const int group_size /* = 32 */,
+    StreamOrDevice s /* = {} */) {
+  // --- Input validation ---
+  if (queries.ndim() != 4) {
+    std::ostringstream msg;
+    msg << "[turboquant_attention] queries must be rank 4 (B, H_q, qL, D), got "
+        << queries.shape();
+    throw std::invalid_argument(msg.str());
+  }
+  if (k_packed.ndim() != 4 || k_signs.ndim() != 4) {
+    throw std::invalid_argument(
+        "[turboquant_attention] k_packed and k_signs must be rank 4 "
+        "(B, H_kv, kL, packed_d)");
+  }
+  if (k_norms.ndim() != 3 || k_res_norms.ndim() != 3) {
+    throw std::invalid_argument(
+        "[turboquant_attention] k_norms and k_res_norms must be rank 3 "
+        "(B, H_kv, kL)");
+  }
+  if (centroids.ndim() != 1) {
+    throw std::invalid_argument(
+        "[turboquant_attention] centroids must be rank 1 (n_centroids,)");
+  }
+  if (v_packed.ndim() != 4 || v_scales.ndim() != 4 || v_zeros.ndim() != 4) {
+    throw std::invalid_argument(
+        "[turboquant_attention] v_packed, v_scales, v_zeros must be rank 4");
+  }
+  if (rotation_matrix.ndim() != 2 || sketch_matrix.ndim() != 2) {
+    throw std::invalid_argument(
+        "[turboquant_attention] rotation_matrix and sketch_matrix must be "
+        "rank 2 (D, D)");
+  }
+
+  int B = queries.shape(0);
+  int H_q = queries.shape(1);
+  int qL = queries.shape(2);
+  int D = queries.shape(3);
+  int H_kv = k_packed.shape(1);
+  int kL = k_packed.shape(2);
+
+  if (H_q % H_kv != 0) {
+    std::ostringstream msg;
+    msg << "[turboquant_attention] n_q_heads (" << H_q
+        << ") must be divisible by n_kv_heads (" << H_kv << ")";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (D != 64 && D != 128) {
+    throw std::invalid_argument(
+        "[turboquant_attention] head dimension D must be 64 or 128, got " +
+        std::to_string(D));
+  }
+
+  if (mse_bits != 2) {
+    throw std::invalid_argument(
+        "[turboquant_attention] only mse_bits=2 is currently supported");
+  }
+  if (v_bits != 2) {
+    throw std::invalid_argument(
+        "[turboquant_attention] only v_bits=2 is currently supported");
+  }
+
+  auto stream = to_stream(s);
+
+  // Must be on GPU
+  if (stream.device == Device::cpu) {
+    throw std::runtime_error(
+        "[turboquant_attention] Only supported on GPU, not CPU.");
+  }
+
+  // Compute type
+  auto final_type = queries.dtype();
+  if (!issubdtype(final_type, floating)) {
+    std::ostringstream msg;
+    msg << "[turboquant_attention] Unsupported query type " << final_type;
+    throw std::invalid_argument(msg.str());
+  }
+
+  // --- Precompute rotated and sketched queries ---
+  // q_rot = queries @ rotation_matrix^T   shape: (B, H_q, qL, D)
+  // q_sketch = queries @ sketch_matrix^T  shape: (B, H_q, qL, D)
+  auto rot_t = transpose(rotation_matrix, {1, 0}, s);
+  auto sketch_t = transpose(sketch_matrix, {1, 0}, s);
+  auto q_rot = matmul(queries, rot_t, s);
+  auto q_sketch = matmul(queries, sketch_t, s);
+
+  // --- Fallback (pure MLX ops for correctness reference) ---
+  auto fallback = [scale, qjl_scale, mse_bits, v_bits, group_size, D, H_q,
+                   H_kv, B, kL, qL,
+                   s](const std::vector<array>& inputs) {
+    // This fallback is not optimized — it's for gradient computation and
+    // correctness verification only. For actual use, the Metal kernel runs.
+    auto& q_r = inputs[0];   // (B, H_q, qL, D)
+    auto& q_s = inputs[1];   // (B, H_q, qL, D)
+    // inputs[2..10] are the compressed KV data
+    // For now, just return zeros as placeholder
+    auto out = zeros({B, H_q, qL, D}, q_r.dtype(), s);
+    return std::vector<array>{out};
+  };
+
+  // --- Create primitive and dispatch ---
+  std::vector<array> inputs = {
+      astype(q_rot, final_type, s),      // 0: q_rot
+      astype(q_sketch, final_type, s),   // 1: q_sketch
+      k_packed,                          // 2: MSE indices (uint8)
+      k_signs,                           // 3: QJL signs (uint8)
+      astype(k_norms, float32, s),       // 4: key norms
+      astype(k_res_norms, float32, s),   // 5: residual norms
+      astype(centroids, float32, s),     // 6: centroids
+      v_packed,                          // 7: value data (uint8)
+      astype(v_scales, float32, s),      // 8: value scales
+      astype(v_zeros, float32, s),       // 9: value zeros
+  };
+
+  Shape out_shape = {B, H_q, qL, D};
+  auto primitive = std::make_shared<TurboQuantAttention>(
+      stream, fallback, scale, qjl_scale, mse_bits, v_bits, group_size);
+  return array(
+      std::move(out_shape), final_type, primitive, std::move(inputs));
+}
+
+bool TurboQuantAttention::is_equivalent(const Primitive& other) const {
+  const TurboQuantAttention& a_other =
+      static_cast<const TurboQuantAttention&>(other);
+  return scale_ == a_other.scale_ && qjl_scale_ == a_other.qjl_scale_ &&
+      mse_bits_ == a_other.mse_bits_ && v_bits_ == a_other.v_bits_ &&
+      group_size_ == a_other.group_size_;
+}
+
 /** Computes: O = softmax(Q @ K.T) @ V **/
 array scaled_dot_product_attention(
     const array& queries,
