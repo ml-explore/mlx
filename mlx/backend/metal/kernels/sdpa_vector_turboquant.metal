@@ -18,7 +18,9 @@
       const device float* v_scales [[buffer(8)]], \
       const device float* v_zeros [[buffer(9)]], \
       device type* out [[buffer(10)]], \
-      const constant mlx::steel::TurboQuantAttnParams& params [[buffer(11)]], \
+      device float* out_m [[buffer(11)]], \
+      device float* out_l [[buffer(12)]], \
+      const constant mlx::steel::TurboQuantAttnParams& params [[buffer(13)]], \
       uint3 tid [[threadgroup_position_in_grid]], \
       uint3 tpg [[threadgroups_per_grid]], \
       uint simd_gid [[simdgroup_index_in_threadgroup]], \

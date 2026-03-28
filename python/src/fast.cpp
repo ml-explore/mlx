@@ -298,7 +298,30 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "turboquant_attention",
-      &mx::fast::turboquant_attention,
+      [](const mx::array& queries,
+         const mx::array& k_packed,
+         const mx::array& k_signs,
+         const mx::array& k_norms,
+         const mx::array& k_res_norms,
+         const mx::array& centroids,
+         const mx::array& v_packed,
+         const mx::array& v_scales,
+         const mx::array& v_zeros,
+         const mx::array& rotation_matrix,
+         const mx::array& sketch_matrix,
+         float scale,
+         float qjl_scale,
+         int mse_bits,
+         int v_bits,
+         int group_size,
+         mx::StreamOrDevice s) {
+        auto result = mx::fast::turboquant_attention(
+            queries, k_packed, k_signs, k_norms, k_res_norms,
+            centroids, v_packed, v_scales, v_zeros,
+            rotation_matrix, sketch_matrix,
+            scale, qjl_scale, mse_bits, v_bits, group_size, s);
+        return nb::make_tuple(result[0], result[1], result[2]);
+      },
       "queries"_a,
       "k_packed"_a,
       "k_signs"_a,
@@ -324,7 +347,7 @@ void init_fast(nb::module_& parent_module) {
           "v_zeros: array, rotation_matrix: array, sketch_matrix: array, "
           "*, scale: float, qjl_scale: float, mse_bits: int = 2, "
           "v_bits: int = 2, group_size: int = 32, "
-          "stream: Union[None, Stream, Device] = None) -> array"),
+          "stream: Union[None, Stream, Device] = None) -> tuple[array, array, array]"),
       R"pbdoc(
         Fused attention from TurboQuant compressed KV cache data.
 
@@ -351,7 +374,10 @@ void init_fast(nb::module_& parent_module) {
             group_size (int): Value quantization group size (default: 32).
 
         Returns:
-            array: Output tensor ``[B, H_q, T_q, D]``.
+            tuple: ``(acc, max_score, sum_exp)`` where:
+                - ``acc``: Unnormalized weighted sum ``[B, H_q, T_q, D]``
+                - ``max_score``: Running max ``[B, H_q, T_q]``
+                - ``sum_exp``: Sum of exp(scores - max) ``[B, H_q, T_q]``
       )pbdoc");
 
   m.def(

@@ -45,8 +45,9 @@ MLX_API array rope(
 
 /** Computes attention directly from TurboQuant compressed KV cache data.
  *  Fuses MSE score + QJL correction + value dequantization + online softmax
- *  in a single Metal kernel with zero intermediate allocations. **/
-MLX_API array turboquant_attention(
+ *  in a single Metal kernel with zero intermediate allocations.
+ *  Returns (acc, max_score, sum_exp) for log-sum-exp merge with buffer. **/
+MLX_API std::vector<array> turboquant_attention(
     const array& queries,
     const array& k_packed,
     const array& k_signs,

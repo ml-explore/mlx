@@ -28,7 +28,9 @@ template <typename T, int D>
     const device float* v_scales [[buffer(8)]],
     const device float* v_zeros [[buffer(9)]],
     device T* out [[buffer(10)]],
-    const constant mlx::steel::TurboQuantAttnParams& params [[buffer(11)]],
+    device float* out_m [[buffer(11)]],
+    device float* out_l [[buffer(12)]],
+    const constant mlx::steel::TurboQuantAttnParams& params [[buffer(13)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -205,20 +207,24 @@ template <typename T, int D>
 
     // Read transposed: row=simd_gid, col=simd_lid
     // factor holds rescaling for SIMD group simd_lid
+    // NOTE: do NOT normalize — output is unnormalized (acc, m, l) for merge
     o[i] = simd_sum(tg_outputs[simd_gid * BD + simd_lid] * factor);
-    o[i] = (sum_exp_score > U(0)) ? (o[i] / sum_exp_score) : o[i];
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 
-  // === WRITE OUTPUT ===
+  // === WRITE OUTPUT (unnormalized acc + softmax state) ===
   // After transpose reduction, SIMD group simd_gid owns output coords
   // [simd_gid * per_thread, (simd_gid+1) * per_thread)
+  const int tg_idx = q_batch_head_idx * int(tpg.y) + q_seq_idx;
   if (simd_lid == 0) {
-    const int out_offset =
-        (q_batch_head_idx * int(tpg.y) + q_seq_idx) * D +
-        simd_gid * per_thread;
+    const int out_offset = tg_idx * D + simd_gid * per_thread;
     for (int i = 0; i < per_thread; i++) {
       out[out_offset + i] = static_cast<T>(o[i]);
+    }
+    // Write m and l once per threadgroup (only first SIMD group)
+    if (simd_gid == 0) {
+      out_m[tg_idx] = global_max;
+      out_l[tg_idx] = sum_exp_score;
     }
   }
 }

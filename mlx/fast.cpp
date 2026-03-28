@@ -610,7 +610,7 @@ bool RoPE::is_equivalent(const Primitive& other) const {
 }
 
 /** TurboQuant fused attention from compressed KV cache **/
-array turboquant_attention(
+std::vector<array> turboquant_attention(
     const array& queries,
     const array& k_packed,
     const array& k_signs,
@@ -719,11 +719,11 @@ array turboquant_attention(
     // This fallback is not optimized — it's for gradient computation and
     // correctness verification only. For actual use, the Metal kernel runs.
     auto& q_r = inputs[0];   // (B, H_q, qL, D)
-    auto& q_s = inputs[1];   // (B, H_q, qL, D)
-    // inputs[2..10] are the compressed KV data
-    // For now, just return zeros as placeholder
+    // For now, return zeros as placeholder
     auto out = zeros({B, H_q, qL, D}, q_r.dtype(), s);
-    return std::vector<array>{out};
+    auto m = full({B, H_q, qL}, -std::numeric_limits<float>::infinity(), float32, s);
+    auto l = zeros({B, H_q, qL}, float32, s);
+    return std::vector<array>{out, m, l};
   };
 
   // --- Create primitive and dispatch ---
@@ -741,10 +741,15 @@ array turboquant_attention(
   };
 
   Shape out_shape = {B, H_q, qL, D};
+  Shape m_shape = {B, H_q, qL};
+  Shape l_shape = {B, H_q, qL};
   auto primitive = std::make_shared<TurboQuantAttention>(
       stream, fallback, scale, qjl_scale, mse_bits, v_bits, group_size);
-  return array(
-      std::move(out_shape), final_type, primitive, std::move(inputs));
+  return array::make_arrays(
+      {std::move(out_shape), std::move(m_shape), std::move(l_shape)},
+      {final_type, float32, float32},
+      primitive,
+      std::move(inputs));
 }
 
 bool TurboQuantAttention::is_equivalent(const Primitive& other) const {

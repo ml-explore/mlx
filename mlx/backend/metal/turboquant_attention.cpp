@@ -31,7 +31,9 @@ void TurboQuantAttention::eval_gpu(
   auto& v_scales = inputs[8];  // (B, H_kv, kL, n_groups)
   auto& v_zeros = inputs[9];   // (B, H_kv, kL, n_groups)
 
-  auto& o = outputs[0]; // (B, H_q, qL, D)
+  auto& o = outputs[0];   // (B, H_q, qL, D) — unnormalized acc
+  auto& o_m = outputs[1]; // (B, H_q, qL) — max scores
+  auto& o_l = outputs[2]; // (B, H_q, qL) — sum of exp(scores - max)
 
   // Ensure contiguous layout via copies
   std::vector<array> copies;
@@ -56,8 +58,10 @@ void TurboQuantAttention::eval_gpu(
   const auto& vs = ensure_contiguous(v_scales);
   const auto& vz = ensure_contiguous(v_zeros);
 
-  // Allocate output
+  // Allocate outputs
   o.set_data(allocator::malloc(o.nbytes()));
+  o_m.set_data(allocator::malloc(o_m.nbytes()));
+  o_l.set_data(allocator::malloc(o_l.nbytes()));
 
   // Extract dimensions
   int B = q_r.shape(0);
@@ -102,8 +106,10 @@ void TurboQuantAttention::eval_gpu(
   compute_encoder.set_input_array(vp, 7);      // v_packed
   compute_encoder.set_input_array(vs, 8);      // v_scales
   compute_encoder.set_input_array(vz, 9);      // v_zeros
-  compute_encoder.set_output_array(o, 10);     // output
-  compute_encoder.set_bytes(params, 11);       // params struct
+  compute_encoder.set_output_array(o, 10);     // acc (unnormalized)
+  compute_encoder.set_output_array(o_m, 11);   // max scores
+  compute_encoder.set_output_array(o_l, 12);   // sum of exp
+  compute_encoder.set_bytes(params, 13);       // params struct
 
   // Grid: one threadgroup per (batch×head, query_position)
   // Threadgroup: 1024 = 32 SIMD groups × 32 threads
