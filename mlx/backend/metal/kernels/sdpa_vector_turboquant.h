@@ -228,3 +228,222 @@ template <typename T, int D>
     }
   }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// TurboQuant 2-pass attention (long sequences, N >= 1024)
+///////////////////////////////////////////////////////////////////////////////
+
+// Pass 1: Each threadgroup handles a BLOCK of KV tokens (stride by blocks count).
+// Single SIMD group (32 threads) per threadgroup, same D-splitting as 1-pass.
+// Grid: (H_kv, B, blocks). Threadgroup: (32, gqa_factor, 1).
+template <typename T, int D>
+[[kernel]] void sdpa_vector_turboquant_2pass_1(
+    const device T* q_rot [[buffer(0)]],
+    const device T* q_sketch [[buffer(1)]],
+    const device uint8_t* k_packed [[buffer(2)]],
+    const device uint8_t* k_signs [[buffer(3)]],
+    const device float* k_norms [[buffer(4)]],
+    const device float* k_res_norms [[buffer(5)]],
+    const device float* centroids [[buffer(6)]],
+    const device uint8_t* v_packed [[buffer(7)]],
+    const device float* v_scales [[buffer(8)]],
+    const device float* v_zeros [[buffer(9)]],
+    device T* out [[buffer(10)]],
+    device float* out_sums [[buffer(11)]],
+    device float* out_maxs [[buffer(12)]],
+    const constant mlx::steel::TurboQuantAttnParams& params [[buffer(13)]],
+    uint3 tptg [[threads_per_threadgroup]],
+    uint3 tidtg [[thread_position_in_threadgroup]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 tpg [[threadgroups_per_grid]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+
+  constexpr int BD = 32;
+  constexpr int per_thread = D / BD;
+  constexpr int mse_bits = 2;
+  constexpr int mse_vpb = 4;
+  constexpr uint mse_mask = 3u;
+  constexpr int v_bits = 2;
+  constexpr int v_vpb = 4;
+  constexpr uint v_mask = 3u;
+
+  typedef float U;
+
+  thread U q_r[per_thread];
+  thread U q_s[per_thread];
+  thread U o[per_thread] = {0};
+
+  // Grid positions
+  const int kv_head_idx = tid.x;
+  const int batch_idx = tid.y;
+  const int block_idx = tid.z;
+  const int gqa_factor = tptg.y;
+  const int q_head_idx = gqa_factor * kv_head_idx + tidtg.y;
+  const int num_kv_heads = tpg.x;
+  const int num_q_heads = num_kv_heads * gqa_factor;
+  const int blocks = tpg.z;
+
+  const int q_batch_head_idx = batch_idx * num_q_heads + q_head_idx;
+
+  // Load query (pre-scaled)
+  const int q_offset = q_batch_head_idx * D + simd_lid * per_thread;
+  for (int i = 0; i < per_thread; i++) {
+    q_r[i] = static_cast<U>(params.scale) * static_cast<U>(q_rot[q_offset + i]);
+    q_s[i] = static_cast<U>(params.scale) * static_cast<U>(q_sketch[q_offset + i]);
+  }
+
+  // Cache centroids
+  thread U c[4];
+  for (int i = 0; i < params.n_centroids && i < 4; i++) {
+    c[i] = centroids[i];
+  }
+
+  // KV base offsets
+  const long kv_packed_base = long(kv_head_idx) * long(params.N) * long(params.packed_d_mse);
+  const long kv_signs_base = long(kv_head_idx) * long(params.N) * long(params.packed_d_signs);
+  const long kv_norms_base = long(kv_head_idx) * long(params.N);
+  const long kv_v_packed_base = long(kv_head_idx) * long(params.N) * long(params.packed_d_v);
+  const long kv_v_sg_base = long(kv_head_idx) * long(params.N) * long(params.n_groups);
+
+  const int coord_start = simd_lid * per_thread;
+  const int mse_byte = coord_start / mse_vpb;
+  const int sign_byte = coord_start / 8;
+  const int sign_bit_off = coord_start % 8;
+  const int v_byte = coord_start / v_vpb;
+
+  U max_score = -INFINITY;
+  U sum_exp_score = U(0);
+
+  // Block-strided loop over KV tokens
+  for (int n = block_idx; n < params.N; n += blocks) {
+    // MSE score
+    U mse_partial = U(0);
+    if (mse_byte < params.packed_d_mse) {
+      const uint8_t packed = k_packed[kv_packed_base + long(n) * long(params.packed_d_mse) + mse_byte];
+      for (int sub = 0; sub < per_thread; sub++) {
+        mse_partial += q_r[sub] * c[(uint(packed) >> (sub * mse_bits)) & mse_mask];
+      }
+    }
+    U mse_score = simd_sum(mse_partial) * k_norms[kv_norms_base + n];
+
+    // QJL correction
+    U qjl_partial = U(0);
+    if (sign_byte < params.packed_d_signs) {
+      const uint8_t ps = k_signs[kv_signs_base + long(n) * long(params.packed_d_signs) + sign_byte];
+      for (int sub = 0; sub < per_thread; sub++) {
+        U sv = ((uint(ps) >> (sign_bit_off + sub)) & 1u) ? U(1.0) : U(-1.0);
+        qjl_partial += q_s[sub] * sv;
+      }
+    }
+    U score = mse_score + simd_sum(qjl_partial) * k_res_norms[kv_norms_base + n] * params.qjl_scale;
+
+    // Online softmax
+    U new_max = max(max_score, score);
+    U factor = fast::exp(max_score - new_max);
+    U exp_score = fast::exp(score - new_max);
+    max_score = new_max;
+    sum_exp_score = sum_exp_score * factor + exp_score;
+
+    // Value dequant + accumulate
+    if (v_byte < params.packed_d_v) {
+      const uint8_t pv = v_packed[kv_v_packed_base + long(n) * long(params.packed_d_v) + v_byte];
+      const int gi = coord_start / params.group_size;
+      const long sg_off = kv_v_sg_base + long(n) * long(params.n_groups);
+      const U sv = v_scales[sg_off + gi];
+      const U zv = v_zeros[sg_off + gi];
+      for (int sub = 0; sub < per_thread; sub++) {
+        U val = U((uint(pv) >> (sub * v_bits)) & v_mask) * sv + zv;
+        o[sub] = o[sub] * factor + exp_score * val;
+      }
+    } else {
+      for (int sub = 0; sub < per_thread; sub++) o[sub] *= factor;
+    }
+  }
+
+  // Write partial results for this block
+  const int out_idx = q_batch_head_idx;
+  if (simd_lid == 0) {
+    out_sums[out_idx * blocks + block_idx] = sum_exp_score;
+    out_maxs[out_idx * blocks + block_idx] = max_score;
+  }
+  // Each thread writes its per_thread output coords
+  const int out_base = out_idx * blocks * D + block_idx * D + simd_lid * per_thread;
+  for (int i = 0; i < per_thread; i++) {
+    out[out_base + i] = static_cast<T>(o[i]);
+  }
+}
+
+// Pass 2: Merge partial results across blocks. Outputs UNNORMALIZED (acc, m, l).
+// Grid: (B*H_q, 1, 1). Threadgroup: (1024, 1, 1) = 32 SIMD groups × 32 threads.
+template <typename T, int D>
+[[kernel]] void sdpa_vector_turboquant_2pass_2(
+    const device T* partials [[buffer(0)]],
+    const device float* sums [[buffer(1)]],
+    const device float* maxs [[buffer(2)]],
+    device T* out [[buffer(3)]],
+    device float* out_m [[buffer(4)]],
+    device float* out_l [[buffer(5)]],
+    const constant int& blocks [[buffer(6)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+
+  constexpr int BN = 32;
+  constexpr int BD = 32;
+  constexpr int elem_per_thread = D / BD;
+
+  typedef float U;
+
+  thread U o[elem_per_thread] = {0};
+  threadgroup U tg_outputs[BN * BD];
+
+  const int head_idx = tid.x;
+  const device T* p = partials + head_idx * blocks * D + simd_gid * D + simd_lid * elem_per_thread;
+  const device float* s = sums + head_idx * blocks;
+  const device float* m = maxs + head_idx * blocks;
+
+  // Find global max across all blocks
+  U max_score = -INFINITY;
+  U sum_exp_score = U(0);
+  for (int b = 0; b < blocks / BN; ++b) {
+    max_score = max(max_score, m[simd_lid + BN * b]);
+  }
+  max_score = simd_max(max_score);
+
+  // Compute global sum with rescaling
+  for (int b = 0; b < blocks / BN; ++b) {
+    U factor = fast::exp(m[simd_lid + BN * b] - max_score);
+    sum_exp_score += factor * s[simd_lid + BN * b];
+  }
+  sum_exp_score = simd_sum(sum_exp_score);
+
+  // Accumulate rescaled partials
+  for (int b = 0; b < blocks / BN; ++b) {
+    U factor = fast::exp(m[simd_gid + BN * b] - max_score);
+    for (int i = 0; i < elem_per_thread; i++) {
+      o[i] += factor * static_cast<U>(p[i]);
+    }
+    p += BN * D;
+  }
+
+  // Transpose reduction across SIMD groups (same as 1-pass)
+  for (int i = 0; i < elem_per_thread; i++) {
+    tg_outputs[simd_lid * BD + simd_gid] = o[i];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    o[i] = simd_sum(tg_outputs[simd_gid * BD + simd_lid]);
+    // NOT normalizing — output is unnormalized for log-sum-exp merge
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+
+  // Write unnormalized output + softmax state
+  if (simd_lid == 0) {
+    const int out_base = head_idx * D + simd_gid * elem_per_thread;
+    for (int i = 0; i < elem_per_thread; i++) {
+      out[out_base + i] = static_cast<T>(o[i]);
+    }
+    if (simd_gid == 0) {
+      out_m[head_idx] = max_score;
+      out_l[head_idx] = sum_exp_score;
+    }
+  }
+}
