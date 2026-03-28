@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Test mx.fast.turboquant_sdpa with the native Metal kernel."""
 
-import sys
 import os
+import sys
 
 # Use our built MLX
 build_path = os.path.join(os.path.dirname(__file__), "build", "python")
 sys.path.insert(0, build_path)
 
-import mlx.core as mx
 # mx.fast is accessed via mx.core.fast
 import math
 import time
+
+import mlx.core as mx
 
 
 def test_basic():
@@ -25,13 +26,20 @@ def test_basic():
     k_packed = mx.random.randint(0, 8, shape=(B, H_kv, T, packed_dim)).astype(mx.uint32)
     v = mx.random.normal(shape=(B, H_kv, T, D)).astype(mx.float16)
     k_norms = mx.random.normal(shape=(B, H_kv, T)).astype(mx.float32)
-    codebook = mx.array([-2.15, -1.34, -0.756, -0.245, 0.245, 0.756, 1.34, 2.15], dtype=mx.float32)
+    codebook = mx.array(
+        [-2.15, -1.34, -0.756, -0.245, 0.245, 0.756, 1.34, 2.15], dtype=mx.float32
+    )
     scale = 1.0 / math.sqrt(D)
 
     print("Calling mx.fast.turboquant_sdpa...")
     out = mx.fast.turboquant_sdpa(
-        q, k_packed, v, k_norms, codebook,
-        scale=scale, bits=bits,
+        q,
+        k_packed,
+        v,
+        k_norms,
+        codebook,
+        scale=scale,
+        bits=bits,
     )
     mx.eval(out)
     print(f"  Output shape: {out.shape}")
@@ -57,16 +65,24 @@ def test_speed():
         k_float = mx.random.normal(shape=(B, H_kv, T, D)).astype(mx.float16)
 
         # TurboQuant
-        k_packed = mx.random.randint(0, 8, shape=(B, H_kv, T, packed_dim)).astype(mx.uint32)
+        k_packed = mx.random.randint(0, 8, shape=(B, H_kv, T, packed_dim)).astype(
+            mx.uint32
+        )
         k_norms = mx.abs(mx.random.normal(shape=(B, H_kv, T))).astype(mx.float32)
-        codebook = mx.array([-2.15, -1.34, -0.756, -0.245, 0.245, 0.756, 1.34, 2.15], dtype=mx.float32)
+        codebook = mx.array(
+            [-2.15, -1.34, -0.756, -0.245, 0.245, 0.756, 1.34, 2.15], dtype=mx.float32
+        )
 
         mx.eval(q, k_float, v, k_packed, k_norms)
 
         # Warmup
         for _ in range(5):
             mx.eval(mx.fast.scaled_dot_product_attention(q, k_float, v, scale=scale))
-            mx.eval(mx.fast.turboquant_sdpa(q, k_packed, v, k_norms, codebook, scale=scale, bits=bits))
+            mx.eval(
+                mx.fast.turboquant_sdpa(
+                    q, k_packed, v, k_norms, codebook, scale=scale, bits=bits
+                )
+            )
 
         # Standard SDPA
         t0 = time.perf_counter()
@@ -77,10 +93,16 @@ def test_speed():
         # TurboQuant SDPA
         t0 = time.perf_counter()
         for _ in range(50):
-            mx.eval(mx.fast.turboquant_sdpa(q, k_packed, v, k_norms, codebook, scale=scale, bits=bits))
+            mx.eval(
+                mx.fast.turboquant_sdpa(
+                    q, k_packed, v, k_norms, codebook, scale=scale, bits=bits
+                )
+            )
         tq_ms = (time.perf_counter() - t0) / 50 * 1000
 
-        print(f"  T={T:>5}: std={std_ms:.3f}ms turbo={tq_ms:.3f}ms ratio={tq_ms/std_ms:.2f}x")
+        print(
+            f"  T={T:>5}: std={std_ms:.3f}ms turbo={tq_ms:.3f}ms ratio={tq_ms/std_ms:.2f}x"
+        )
 
 
 if __name__ == "__main__":
@@ -94,6 +116,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"  FAILED: {e}")
         import traceback
+
         traceback.print_exc()
 
     print("\n[Speed benchmark]")
@@ -102,4 +125,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"  FAILED: {e}")
         import traceback
+
         traceback.print_exc()

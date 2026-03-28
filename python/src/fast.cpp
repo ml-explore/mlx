@@ -310,8 +310,17 @@ void init_fast(nb::module_& parent_module) {
          mx::StreamOrDevice s) {
         std::string mask_mode = mask.value_or("");
         return mx::fast::turboquant_sdpa(
-            queries, k_packed, values, k_norms, codebook,
-            scale, bits, inv_sqrt_dim, mask_mode, {}, s);
+            queries,
+            k_packed,
+            values,
+            k_norms,
+            codebook,
+            scale,
+            bits,
+            inv_sqrt_dim,
+            mask_mode,
+            {},
+            s);
       },
       "queries"_a,
       "k_packed"_a,

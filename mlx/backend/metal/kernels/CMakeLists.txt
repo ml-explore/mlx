@@ -29,8 +29,8 @@ function(build_kernel_base TARGET SRCFILE DEPS)
                     "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
   endif()
   add_custom_command(
-    COMMAND xcrun metal ${METAL_FLAGS} -c ${SRCFILE}
-            -I${PROJECT_SOURCE_DIR} -o ${TARGET}.air
+    COMMAND xcrun metal ${METAL_FLAGS} -c ${SRCFILE} -I${PROJECT_SOURCE_DIR} -o
+            ${TARGET}.air
     DEPENDS ${SRCFILE} ${DEPS} ${BASE_HEADERS}
     OUTPUT ${TARGET}.air
     COMMENT "Building ${TARGET}.air"
@@ -176,8 +176,7 @@ endif()
 
 add_custom_command(
   OUTPUT ${MLX_METAL_PATH}/mlx.metallib
-  COMMAND xcrun metallib ${KERNEL_AIR} -o
-          ${MLX_METAL_PATH}/mlx.metallib
+  COMMAND xcrun metallib ${KERNEL_AIR} -o ${MLX_METAL_PATH}/mlx.metallib
   DEPENDS ${KERNEL_AIR}
   COMMENT "Building mlx.metallib"
   VERBATIM)

@@ -21,37 +21,36 @@
 //   VPW: values per uint32 word (16, 10, 8 for 2, 3, 4 bits)
 template <typename T, int D, int V_DIM = D, int BITS = 3, int VPW = 10>
 [[kernel]] void sdpa_vector_turbo(
-    const device T* queries [[buffer(0)]],          // pre-rotated queries
-    const device uint32_t* k_packed [[buffer(1)]],  // packed K indices
-    const device T* values [[buffer(2)]],            // dequantized V (from decode buffer)
+    const device T* queries [[buffer(0)]], // pre-rotated queries
+    const device uint32_t* k_packed [[buffer(1)]], // packed K indices
+    const device T* values [[buffer(2)]], // dequantized V (from decode buffer)
     device T* out [[buffer(3)]],
     const constant int& gqa_factor [[buffer(4)]],
     const constant int& N [[buffer(5)]],
-    const constant size_t& k_head_stride [[buffer(6)]],   // in uint32 words
-    const constant size_t& k_seq_stride [[buffer(7)]],    // in uint32 words
+    const constant size_t& k_head_stride [[buffer(6)]], // in uint32 words
+    const constant size_t& k_seq_stride [[buffer(7)]], // in uint32 words
     const constant size_t& v_head_stride [[buffer(8)]],
     const constant size_t& v_seq_stride [[buffer(9)]],
     const constant float& scale [[buffer(10)]],
     const device bool* bmask [[buffer(11), function_constant(bool_mask)]],
     const device T* fmask [[buffer(12), function_constant(float_mask)]],
     const constant int& mask_kv_seq_stride
-        [[buffer(13), function_constant(has_mask)]],
+    [[buffer(13), function_constant(has_mask)]],
     const constant int& mask_q_seq_stride
-        [[buffer(14), function_constant(has_mask)]],
+    [[buffer(14), function_constant(has_mask)]],
     const constant int& mask_head_stride
-        [[buffer(15), function_constant(has_mask)]],
+    [[buffer(15), function_constant(has_mask)]],
     const device T* sinks [[buffer(16), function_constant(has_sinks)]],
     const constant int& num_q_heads
-        [[buffer(17), function_constant(has_sinks)]],
-    const device float* k_norms [[buffer(18)]],           // per-vector norms
+    [[buffer(17), function_constant(has_sinks)]],
+    const device float* k_norms [[buffer(18)]], // per-vector norms
     const constant size_t& k_norm_head_stride [[buffer(19)]],
-    const device float* codebook [[buffer(20)]],           // 2^BITS centroids
-    const constant float& inv_sqrt_dim [[buffer(21)]],     // 1/sqrt(dim)
+    const device float* codebook [[buffer(20)]], // 2^BITS centroids
+    const constant float& inv_sqrt_dim [[buffer(21)]], // 1/sqrt(dim)
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 tpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
-
   constexpr int BN = 32;
   constexpr int BD = 32;
   constexpr int qk_per_thread = D / BD;
@@ -128,7 +127,8 @@ template <typename T, int D, int V_DIM = D, int BITS = 3, int VPW = 10>
     if (use_key) {
       // --- TurboQuant: read packed K indices, codebook lookup ---
       // Each thread handles qk_per_thread = D/32 elements
-      // Thread simd_lid handles elements [simd_lid*qk_per_thread, (simd_lid+1)*qk_per_thread)
+      // Thread simd_lid handles elements [simd_lid*qk_per_thread,
+      // (simd_lid+1)*qk_per_thread)
       U score = 0;
       int elem_start = simd_lid * qk_per_thread;
       for (int j = 0; j < qk_per_thread; j++) {
@@ -141,7 +141,8 @@ template <typename T, int D, int V_DIM = D, int BITS = 3, int VPW = 10>
         score += q[j] * k_val;
       }
 
-      // Apply norm and scale: score = dot(q_rot, codebook[indices]) * norm * inv_sqrt_dim
+      // Apply norm and scale: score = dot(q_rot, codebook[indices]) * norm *
+      // inv_sqrt_dim
       U norm_val = k_norms[0];
       score = simd_sum(score) * norm_val * inv_sqrt_dim;
 

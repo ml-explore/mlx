@@ -967,7 +967,6 @@ array turboquant_sdpa(
     const std::string& mask_mode /* = "" */,
     std::optional<array> mask_arr /* = {} */,
     StreamOrDevice s /* = {} */) {
-
   if (queries.ndim() != 4 || values.ndim() != 4) {
     throw std::invalid_argument(
         "[turboquant_sdpa] queries and values expected to be rank 4");
@@ -986,22 +985,22 @@ array turboquant_sdpa(
                       const std::vector<array>& inputs) {
     // For CPU: just use V as both K and V (placeholder)
     // Real CPU support would need dequant implementation
-    return std::vector<array>{
-        scaled_dot_product_attention(
-            inputs[0], inputs[2], inputs[2], scale,
-            do_causal ? "causal" : "", {}, {}, s)};
+    return std::vector<array>{scaled_dot_product_attention(
+        inputs[0],
+        inputs[2],
+        inputs[2],
+        scale,
+        do_causal ? "causal" : "",
+        {},
+        {},
+        s)};
   };
 
   auto out = array(
       queries.shape(),
       final_type,
       std::make_shared<TurboQuantSDPA>(
-          to_stream(s),
-          fallback,
-          scale,
-          do_causal,
-          bits,
-          inv_sqrt_dim),
+          to_stream(s), fallback, scale, do_causal, bits, inv_sqrt_dim),
       {astype(queries, final_type, s),
        astype(k_packed, uint32, s),
        astype(values, final_type, s),
