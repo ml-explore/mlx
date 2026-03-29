@@ -40,7 +40,7 @@ void PrintFormatter::print(std::ostream& os, bool val) {
   }
 }
 inline void PrintFormatter::print(std::ostream& os, int16_t val) {
-    os << val;
+  os << val;
 }
 inline void PrintFormatter::print(std::ostream& os, uint16_t val) {
   os << val;
@@ -58,49 +58,51 @@ inline void PrintFormatter::print(std::ostream& os, uint64_t val) {
   os << val;
 }
 inline void PrintFormatter::print(std::ostream& os, float16_t val) {
-    if (precision == -1) {
-        os << val;
-    } else {
-        os << std::fixed << std::setprecision(precision) << val;
-    }
+  if (precision == -1) {
+    os << val;
+  } else {
+    os << std::fixed << std::setprecision(precision) << val;
+  }
 }
 inline void PrintFormatter::print(std::ostream& os, bfloat16_t val) {
-    if (precision == -1) {
-        os << val;
-    } else {
-        os << std::fixed << std::setprecision(precision) << val;
-    }
+  if (precision == -1) {
+    os << val;
+  } else {
+    os << std::fixed << std::setprecision(precision) << val;
+  }
 }
 inline void PrintFormatter::print(std::ostream& os, float val) {
-    if (precision == -1) {
-        os << val;
-    } else {
-        os << std::fixed << std::setprecision(precision) << val;
-    }
+  if (precision == -1) {
+    os << val;
+  } else {
+    os << std::fixed << std::setprecision(precision) << val;
+  }
 }
 inline void PrintFormatter::print(std::ostream& os, double val) {
-    if (precision == -1) {
-        os << val;
-    } else {
-        os << std::fixed << std::setprecision(precision) << val;
-    }
+  if (precision == -1) {
+    os << val;
+  } else {
+    os << std::fixed << std::setprecision(precision) << val;
+  }
 }
 inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
-    if (precision == -1) {
-        os << val.real();
-        if (val.imag() >= 0 || std::isnan(val.imag())) {
-          os << "+" << val.imag() << "j";
-        } else {
-          os << "-" << -val.imag() << "j";
-        }
+  if (precision == -1) {
+    os << val.real();
+    if (val.imag() >= 0 || std::isnan(val.imag())) {
+      os << "+" << val.imag() << "j";
     } else {
-        os << std::fixed << std::setprecision(precision) << val.real();
-        if (val.imag() >= 0 || std::isnan(val.imag())) {
-          os << "+" << std::fixed << std::setprecision(precision) << val.imag() << "j";
-        } else {
-          os << "-" << std::fixed << std::setprecision(precision) << -val.imag() << "j";
-        }
+      os << "-" << -val.imag() << "j";
     }
+  } else {
+    os << std::fixed << std::setprecision(precision) << val.real();
+    if (val.imag() >= 0 || std::isnan(val.imag())) {
+      os << "+" << std::fixed << std::setprecision(precision) << val.imag()
+         << "j";
+    } else {
+      os << "-" << std::fixed << std::setprecision(precision) << -val.imag()
+         << "j";
+    }
+  }
 }
 
 PrintFormatter& get_global_formatter() {
@@ -109,7 +111,7 @@ PrintFormatter& get_global_formatter() {
 }
 
 void set_printoptions(int precision) {
-  auto &formatter = get_global_formatter();
+  auto& formatter = get_global_formatter();
   formatter.precision = precision;
 }
 

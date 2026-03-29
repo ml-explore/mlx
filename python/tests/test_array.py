@@ -618,7 +618,6 @@ class TestArray(mlx_tests.MLXTestCase):
             expected = "array([0.9016], dtype=float32)"
             self.assertEqual(str(x), expected)
 
-
     def test_array_to_list(self):
         types = [mx.bool_, mx.uint32, mx.int32, mx.int64, mx.float32]
         for t in types:
