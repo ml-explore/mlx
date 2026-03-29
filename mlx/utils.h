@@ -53,7 +53,10 @@ struct PrintFormatter {
   inline void print(std::ostream& os, complex64_t val);
 
   bool capitalize_bool{false};
+  int precision{-1};
 };
+
+MLX_API void set_printoptions(int precision);
 
 MLX_API PrintFormatter& get_global_formatter();
 

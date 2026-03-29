@@ -96,9 +96,62 @@ class ArrayPythonIterator {
   std::vector<mx::array> splits_;
 };
 
+struct PrintOptionsContext {
+  int old_precision;
+  int new_precision;
+  PrintOptionsContext(int p) : new_precision(p) {}
+  PrintOptionsContext& __enter__() {
+    old_precision = mx::get_global_formatter().precision;
+    mx::set_printoptions(new_precision);
+    return *this;
+  }
+  void __exit__(nb::args) {
+    mx::set_printoptions(old_precision);
+  }
+};
+
 void init_array(nb::module_& m) {
   // Set Python print formatting options
   mx::get_global_formatter().capitalize_bool = true;
+
+  // Expose printing options to Python: allow setting global precision.
+  m.def(
+      "set_printoptions",
+      &mx::set_printoptions,
+      "precision"_a,
+      R"pbdoc(
+      Set global printing precision for array formatting.
+
+      Args:
+        precision (int): Number of decimal places to use when printing
+          floating point numbers in arrays.
+      )pbdoc");
+  m.def(
+      "get_printoptions",
+      []() { return mx::get_global_formatter().precision; },
+      R"pbdoc(
+      Get global printing precision for array formatting.
+
+      Returns:
+        int: The number of decimal places used when printing floating point
+          numbers in arrays.
+      )pbdoc");
+
+  nb::class_<PrintOptionsContext>(m, "_PrintOptionsContext")
+      .def(nb::init<int>())
+      .def("__enter__", &PrintOptionsContext::__enter__)
+      .def("__exit__", &PrintOptionsContext::__exit__);
+
+  m.def(
+      "printoptions",
+      [](int precision) { return PrintOptionsContext(precision); },
+      "precision"_a,
+      R"pbdoc(
+      Context manager for setting print options temporarily.
+
+      Args:
+        precision (int): Number of decimal places.
+      )pbdoc");
 
   // Types
   nb::class_<mx::Dtype>(
