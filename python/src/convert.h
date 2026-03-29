@@ -21,19 +21,6 @@ struct ArrayLike {
   nb::object obj;
 };
 
-using ArrayInitType = std::variant<
-    nb::bool_,
-    nb::int_,
-    nb::float_,
-    // Must be above ndarray
-    mx::array,
-    // Must be above complex
-    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>,
-    std::complex<float>,
-    nb::list,
-    nb::tuple,
-    ArrayLike>;
-
 mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
     std::optional<mx::Dtype> dtype);

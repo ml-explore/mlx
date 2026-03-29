@@ -234,6 +234,7 @@ if __name__ == "__main__":
             "psutil",
             "torch>=2.9",
             "typing_extensions",
+            "ml_dtypes",
         ],
     }
     entry_points = {
