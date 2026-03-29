@@ -298,12 +298,13 @@ template <typename T, int D>
     c[i] = centroids[i];
   }
 
-  // KV base offsets
-  const long kv_packed_base = long(kv_head_idx) * long(params.N) * long(params.packed_d_mse);
-  const long kv_signs_base = long(kv_head_idx) * long(params.N) * long(params.packed_d_signs);
-  const long kv_norms_base = long(kv_head_idx) * long(params.N);
-  const long kv_v_packed_base = long(kv_head_idx) * long(params.N) * long(params.packed_d_v);
-  const long kv_v_sg_base = long(kv_head_idx) * long(params.N) * long(params.n_groups);
+  // KV base offsets — include batch dimension (data layout: B, H_kv, N, packed_d)
+  const int kv_batch_head = batch_idx * num_kv_heads + kv_head_idx;
+  const long kv_packed_base = long(kv_batch_head) * long(params.N) * long(params.packed_d_mse);
+  const long kv_signs_base = long(kv_batch_head) * long(params.N) * long(params.packed_d_signs);
+  const long kv_norms_base = long(kv_batch_head) * long(params.N);
+  const long kv_v_packed_base = long(kv_batch_head) * long(params.N) * long(params.packed_d_v);
+  const long kv_v_sg_base = long(kv_batch_head) * long(params.N) * long(params.n_groups);
 
   const int coord_start = simd_lid * per_thread;
   const int mse_byte = coord_start / mse_vpb;
