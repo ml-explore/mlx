@@ -111,7 +111,7 @@ MLX useful in your research and wish to cite it, please use the following
 BibTex entry:
 
 ```text
-@software{mlx2023,
+@software{mlx2026,
   author = {Awni Hannun and Jagrit Digani and Angelos Katharopoulos and Ronan Collobert},
   title = {{MLX}: Efficient and flexible machine learning on Apple silicon},
   url = {https://github.com/ml-explore},
