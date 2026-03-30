@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include <metal_stdlib>
 #include <metal_math>
+#include <metal_stdlib>
 
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/bf16_math.h"
