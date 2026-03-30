@@ -286,16 +286,14 @@ __global__ void radix_select_small_kernel(
   auto block = cg::this_thread_block();
   auto warp = cg::tiled_partition<WARP_SIZE>(block);
 
-  extern __shared__ char shared_mem[];
-  UnsignedT* shared_keys = reinterpret_cast<UnsignedT*>(shared_mem);
-  int* shared_hist = reinterpret_cast<int*>(shared_keys + TILE_SIZE);
-  int* shared_count = shared_hist + RADIX_SIZE;
-  int* scatter_scratch = shared_count + 2;
-  int* warp_less = scatter_scratch;
-  int* warp_equal = warp_less + NUM_WARPS;
-  int* warp_greater = warp_equal + NUM_WARPS;
-  int* iter_counts = warp_greater + NUM_WARPS;
-  int* running_bases = iter_counts + 3;
+  __shared__ UnsignedT shared_keys[TILE_SIZE];
+  __shared__ int shared_hist[RADIX_SIZE];
+  __shared__ int shared_count[2];
+  __shared__ int warp_less[NUM_WARPS];
+  __shared__ int warp_equal[NUM_WARPS];
+  __shared__ int warp_greater[NUM_WARPS];
+  __shared__ int iter_counts[3];
+  __shared__ int running_bases[3];
 
   int row = blockIdx.y;
 

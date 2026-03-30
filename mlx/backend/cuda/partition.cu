@@ -57,13 +57,12 @@ void dispatch_radix_items_per_thread(
   }
 }
 
-size_t radix_small_shared_mem_bytes(
+constexpr size_t radix_small_shared_mem_bytes(
     size_t key_size,
-    int block_threads,
-    int items_per_thread) {
-  size_t tile_size = static_cast<size_t>(block_threads) *
-      static_cast<size_t>(items_per_thread);
-  size_t num_warps = static_cast<size_t>(block_threads / WARP_SIZE);
+    size_t block_threads,
+    size_t items_per_thread) {
+  size_t tile_size = block_threads * items_per_thread;
+  size_t num_warps = block_threads / WARP_SIZE;
   return tile_size * key_size + // shared_keys
       cu::RADIX_SIZE * sizeof(int) + // shared_hist
       (2 + 3 * num_warps + 6) * sizeof(int); // shared_count + scatter scratch
@@ -174,42 +173,41 @@ void gpu_partition_small(
                 [&](auto items_per_thread_tag) {
                   constexpr int ITEMS_PER_THREAD = items_per_thread_tag();
 
-                  dispatch_bool(contiguous, [&](auto contiguous_tag) {
-                    constexpr bool USE_SIMPLE_STRIDE =
-                        decltype(contiguous_tag)::value;
+                  constexpr size_t SMEM = radix_small_shared_mem_bytes(
+                      sizeof(typename cu::RadixTraits<ValT>::UnsignedT),
+                      BLOCK_THREADS,
+                      ITEMS_PER_THREAD);
+                  if constexpr (SMEM <= RADIX_SMALL_SHARED_MEM_BUDGET_BYTES) {
+                    dispatch_bool(contiguous, [&](auto contiguous_tag) {
+                      constexpr bool USE_SIMPLE_STRIDE =
+                          decltype(contiguous_tag)::value;
 
-                    auto kernel = cu::radix_select_small_kernel<
-                        ValT,
-                        OutT,
-                        ARG_PARTITION,
-                        USE_SIMPLE_STRIDE,
-                        BLOCK_THREADS,
-                        ITEMS_PER_THREAD>;
+                      auto kernel = cu::radix_select_small_kernel<
+                          ValT,
+                          OutT,
+                          ARG_PARTITION,
+                          USE_SIMPLE_STRIDE,
+                          BLOCK_THREADS,
+                          ITEMS_PER_THREAD>;
 
-                    size_t shared_mem_bytes = radix_small_shared_mem_bytes(
-                        sizeof(typename cu::RadixTraits<ValT>::UnsignedT),
-                        BLOCK_THREADS,
-                        ITEMS_PER_THREAD);
-
-                    encoder.add_kernel_node_ex(
-                        kernel,
-                        grid,
-                        block,
-                        {},
-                        static_cast<uint32_t>(shared_mem_bytes),
-                        gpu_ptr<ValT>(in),
-                        gpu_ptr<OutT>(out),
-                        kth,
-                        size_sorted_axis,
-                        in_stride_sorted_axis,
-                        out_stride_sorted_axis,
-                        in_stride_segment_axis,
-                        out_stride_segment_axis,
-                        nc_shape_param,
-                        in_nc_strides_param,
-                        out_nc_strides_param,
-                        nc_dim);
-                  });
+                      encoder.add_kernel_node(
+                          kernel,
+                          grid,
+                          block,
+                          gpu_ptr<ValT>(in),
+                          gpu_ptr<OutT>(out),
+                          kth,
+                          size_sorted_axis,
+                          in_stride_sorted_axis,
+                          out_stride_sorted_axis,
+                          in_stride_segment_axis,
+                          out_stride_segment_axis,
+                          nc_shape_param,
+                          in_nc_strides_param,
+                          out_nc_strides_param,
+                          nc_dim);
+                    });
+                  }
                 });
           });
     });
