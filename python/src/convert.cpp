@@ -495,24 +495,25 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
   } else if (nb::isinstance<mx::array>(v)) {
     auto arr = nb::cast<mx::array>(v);
     return mx::astype(arr, t.value_or(arr.dtype()));
-  } else if (
-      nb::hasattr(v, "dtype") &&
-      nb::str(v.attr("dtype")).equal(nb::str("bfloat16")) &&
-      nb::hasattr(v, "__class__") &&
-      (nb::str(v.attr("__class__").attr("__module__"))
-           .equal(nb::str("numpy")) ||
-       nb::str(v.attr("__class__").attr("__module__"))
-           .equal(nb::str("ml_dtypes")))) {
-    auto uint16_view = v.attr("view")("uint16");
-    using ContigArray =
-        nb::ndarray<uint16_t, nb::ro, nb::c_contig, nb::device::cpu>;
-    auto nd_arr = nb::cast<ContigArray>(uint16_view);
-    auto shape = nb::cast<mx::Shape>(v.attr("shape"));
-    const mx::bfloat16_t* typed_ptr =
-        reinterpret_cast<const mx::bfloat16_t*>(nd_arr.data());
-    auto res = (shape.empty()) ? mx::array(*typed_ptr, mx::bfloat16)
-                               : mx::array(typed_ptr, shape, mx::bfloat16);
-    return t.has_value() ? mx::astype(res, *t) : res;
+  } else if (nb::hasattr(v, "dtype")) {
+    nb::object dtype_obj = v.attr("dtype");
+    if (nb::str(dtype_obj).equal(nb::str("bfloat16"))) {
+      nb::object module_obj = v.attr("__class__").attr("__module__");
+      auto type_mod = nb::str(module_obj);
+      if (type_mod.equal(nb::str("numpy")) ||
+          type_mod.equal(nb::str("ml_dtypes"))) {
+        auto uint16_view = v.attr("view")("uint16");
+        using ContigArray =
+            nb::ndarray<uint16_t, nb::ro, nb::c_contig, nb::device::cpu>;
+        auto nd_arr = nb::cast<ContigArray>(uint16_view);
+        auto shape = nb::cast<mx::Shape>(v.attr("shape"));
+        const mx::bfloat16_t* typed_ptr =
+            reinterpret_cast<const mx::bfloat16_t*>(nd_arr.data());
+        auto res = (shape.empty()) ? mx::array(*typed_ptr, mx::bfloat16)
+                                   : mx::array(typed_ptr, shape, mx::bfloat16);
+        return t.has_value() ? mx::astype(res, *t) : res;
+      }
+    }
   } else if (nb::ndarray_check(v)) {
     using ContigArray = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
     auto nd = nb::cast<ContigArray>(v);
