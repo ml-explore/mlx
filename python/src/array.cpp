@@ -492,7 +492,7 @@ void init_array(nb::module_& m) {
                      reinterpret_cast<const size_t*>(nd.shape_ptr()),
                      owner,
                      nullptr,
-                     nb::bfloat16),
+                     nb::dtype<mx::bfloat16_t>()),
                   mx::bfloat16));
             } else {
               new (&arr) mx::array(nd_array_to_mlx(nd, std::nullopt));
