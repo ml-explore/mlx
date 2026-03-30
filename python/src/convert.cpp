@@ -514,12 +514,12 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
         return t.has_value() ? mx::astype(res, *t) : res;
       }
     }
-  } else if (nb::ndarray_check(v)) {
+  }
+  if (nb::ndarray_check(v)) {
     using ContigArray = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
     auto nd = nb::cast<ContigArray>(v);
     return nd_array_to_mlx(nd, t);
-  } else {
-    auto arr = to_array_with_accessor(v);
-    return mx::astype(arr, t.value_or(arr.dtype()));
   }
+  auto arr = to_array_with_accessor(v);
+  return mx::astype(arr, t.value_or(arr.dtype()));
 }
