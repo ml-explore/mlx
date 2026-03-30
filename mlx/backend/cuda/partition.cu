@@ -12,13 +12,6 @@
 
 namespace mlx::core {
 
-void gpu_partition_fallback(
-    const Stream& s,
-    const array& in,
-    array& out,
-    int axis,
-    bool arg_partition);
-
 namespace {
 
 // Upper bound for small-kernel tiling. Keep this aligned with the
@@ -76,7 +69,9 @@ size_t radix_small_shared_mem_bytes(
       (2 + 3 * num_warps + 6) * sizeof(int); // shared_count + scatter scratch
 }
 
-bool radix_small_fits_shared_memory(Dtype dtype, int size_sorted_axis) {
+} // namespace
+
+bool gpu_partition_small_fits(Dtype dtype, int size_sorted_axis) {
   if (size_sorted_axis <= 0) {
     return false;
   }
@@ -219,33 +214,6 @@ void gpu_partition_small(
           });
     });
   });
-}
-
-} // namespace
-
-void gpu_partition(
-    const Stream& s,
-    const array& in,
-    array& out,
-    int axis_,
-    int kth_,
-    bool arg_partition) {
-  int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
-  int size_sorted_axis = in.shape(axis);
-  int kth = kth_ < 0 ? kth_ + size_sorted_axis : kth_;
-  int nc_dim = static_cast<int>(in.ndim()) - 1;
-
-  // Fixed-size const_param metadata is capped by MAX_NDIM.
-  if (nc_dim > MAX_NDIM) {
-    return gpu_partition_fallback(s, in, out, axis, arg_partition);
-  }
-
-  // Dispatch based on whether the small kernel tile fits in shared memory.
-  if (radix_small_fits_shared_memory(in.dtype(), size_sorted_axis)) {
-    return gpu_partition_small(s, in, out, axis, kth, arg_partition);
-  } else {
-    return gpu_partition_fallback(s, in, out, axis, arg_partition);
-  }
 }
 
 } // namespace mlx::core

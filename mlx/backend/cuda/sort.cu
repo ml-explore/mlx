@@ -718,19 +718,14 @@ __global__ void mb_block_merge_kernel(
 
 } // namespace cu
 
-void gpu_partition(
-    const Stream& s,
-    const array& in,
-    array& out,
-    int axis_,
-    int kth_,
-    bool arg_partition);
+bool gpu_partition_small_fits(Dtype dtype, int size_sorted_axis);
 
-void gpu_partition_fallback(
+void gpu_partition_small(
     const Stream& s,
     const array& in,
     array& out,
     int axis,
+    int kth,
     bool arg_partition);
 
 namespace {
@@ -1067,15 +1062,6 @@ void gpu_sort(
 
 } // namespace
 
-void gpu_partition_fallback(
-    const Stream& s,
-    const array& in,
-    array& out,
-    int axis,
-    bool arg_partition) {
-  gpu_merge_sort(s, in, out, axis, arg_partition);
-}
-
 void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("ArgSort::eval_gpu");
   assert(inputs.size() == 1);
@@ -1087,6 +1073,34 @@ void Sort::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   gpu_sort(stream(), inputs[0], out, axis_, false);
 }
+
+namespace {
+
+void gpu_partition(
+    const Stream& s,
+    const array& in,
+    array& out,
+    int axis_,
+    int kth_,
+    bool arg_partition) {
+  int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
+  int size_sorted_axis = in.shape(axis);
+  int kth = kth_ < 0 ? kth_ + size_sorted_axis : kth_;
+
+  // Fixed-size const_param metadata is capped by MAX_NDIM.
+  if (in.ndim() > MAX_NDIM) {
+    return gpu_merge_sort(s, in, out, axis, arg_partition);
+  }
+
+  // Dispatch based on whether the small kernel tile fits in shared memory.
+  if (gpu_partition_small_fits(in.dtype(), size_sorted_axis)) {
+    return gpu_partition_small(s, in, out, axis, kth, arg_partition);
+  } else {
+    return gpu_merge_sort(s, in, out, axis, arg_partition);
+  }
+}
+
+} // namespace
 
 void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("ArgPartition::eval_gpu");
