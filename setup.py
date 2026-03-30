@@ -229,12 +229,12 @@ if __name__ == "__main__":
 
     extras = {
         "dev": [
+            "ml_dtypes",
             "numpy>=2",
             "pre-commit",
             "psutil",
             "torch>=2.9",
             "typing_extensions",
-            "ml_dtypes",
         ],
     }
     entry_points = {
