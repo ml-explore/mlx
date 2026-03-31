@@ -11,25 +11,13 @@
 #include "mlx/fft.h"
 #include "mlx/ops.h"
 #include "python/src/small_vector.h"
+#include "python/src/utils.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace {
-
-using IntOrVec = std::variant<int, std::vector<int>>;
-using AxesArg = std::optional<IntOrVec>;
-
-std::optional<std::vector<int>> normalize_axes(const AxesArg& axes) {
-  if (!axes.has_value()) {
-    return std::nullopt;
-  }
-  if (auto axis = std::get_if<int>(&axes.value())) {
-    return std::vector<int>{*axis};
-  }
-  return std::get<std::vector<int>>(axes.value());
-}
 
 mx::fft::FFTNorm parse_norm(std::string_view norm, std::string_view op) {
   if (norm == "backward") {
@@ -596,12 +584,13 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "fftshift",
-      [](const mx::array& a, const AxesArg& axes, mx::StreamOrDevice s) {
-        auto normalized_axes = normalize_axes(axes);
-        if (normalized_axes.has_value()) {
-          return mx::fft::fftshift(a, normalized_axes.value(), s);
-        } else {
+      [](const mx::array& a, const IntOrVec& axes, mx::StreamOrDevice s) {
+        if (std::holds_alternative<std::monostate>(v)) {
           return mx::fft::fftshift(a, s);
+        } else if (auto pv = std::get_if<int>(&v); pv) {
+          return mx::fft::fftshift(a, {*pv}, s);
+        } else {
+          return mx::fft::fftshift(a, std::get<std::vector<int>>(v), s);
         }
       },
       "a"_a,
@@ -620,12 +609,13 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "ifftshift",
-      [](const mx::array& a, const AxesArg& axes, mx::StreamOrDevice s) {
-        auto normalized_axes = normalize_axes(axes);
-        if (normalized_axes.has_value()) {
-          return mx::fft::ifftshift(a, normalized_axes.value(), s);
-        } else {
+      [](const mx::array& a, const IntOrVec& axes, mx::StreamOrDevice s) {
+        if (std::holds_alternative<std::monostate>(v)) {
           return mx::fft::ifftshift(a, s);
+        } else if (auto pv = std::get_if<int>(&v); pv) {
+          return mx::fft::ifftshift(a, {*pv}, s);
+        } else {
+          return mx::fft::ifftshift(a, std::get<std::vector<int>>(v), s);
         }
       },
       "a"_a,
