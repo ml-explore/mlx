@@ -1658,9 +1658,11 @@ std::vector<array> broadcast_arrays(
       if (in.shape() == out_shape) {
         outputs.push_back(in);
       } else {
-        auto prim = std::make_shared<Broadcast>(to_stream(s), out_shape);
-        outputs.push_back(
-            array(std::move(out_shape), in.dtype(), std::move(prim), {in}));
+        outputs.push_back(array(
+            out_shape,
+            in.dtype(),
+            std::make_shared<Broadcast>(to_stream(s), out_shape),
+            {in}));
       }
     }
     return outputs;
@@ -1766,10 +1768,7 @@ array equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
-      bool_,
-      std::make_shared<Equal>(to_stream(s)),
-      std::move(inputs));
+      shape, bool_, std::make_shared<Equal>(to_stream(s)), std::move(inputs));
 }
 
 array not_equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
@@ -1777,7 +1776,7 @@ array not_equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       bool_,
       std::make_shared<NotEqual>(to_stream(s)),
       std::move(inputs));
@@ -1788,10 +1787,7 @@ array greater(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
-      bool_,
-      std::make_shared<Greater>(to_stream(s)),
-      std::move(inputs));
+      shape, bool_, std::make_shared<Greater>(to_stream(s)), std::move(inputs));
 }
 
 array greater_equal(
@@ -1802,7 +1798,7 @@ array greater_equal(
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       bool_,
       std::make_shared<GreaterEqual>(to_stream(s)),
       std::move(inputs));
@@ -1813,10 +1809,7 @@ array less(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
-      bool_,
-      std::make_shared<Less>(to_stream(s)),
-      std::move(inputs));
+      shape, bool_, std::make_shared<Less>(to_stream(s)), std::move(inputs));
 }
 
 array less_equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
@@ -1824,7 +1817,7 @@ array less_equal(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       bool_,
       std::make_shared<LessEqual>(to_stream(s)),
       std::move(inputs));
@@ -2820,7 +2813,7 @@ array logical_and(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       bool_,
       std::make_shared<LogicalAnd>(to_stream(s)),
       std::move(inputs));
@@ -2834,7 +2827,7 @@ array logical_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       bool_,
       std::make_shared<LogicalOr>(to_stream(s)),
       std::move(inputs));
@@ -2854,10 +2847,7 @@ array add(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
-      out_type,
-      std::make_shared<Add>(to_stream(s)),
-      std::move(inputs));
+      shape, out_type, std::make_shared<Add>(to_stream(s)), std::move(inputs));
 }
 
 array operator+(const array& a, const array& b) {
@@ -2870,7 +2860,7 @@ array subtract(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       out_type,
       std::make_shared<Subtract>(to_stream(s)),
       std::move(inputs));
@@ -2886,7 +2876,7 @@ array multiply(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       out_type,
       std::make_shared<Multiply>(to_stream(s)),
       std::move(inputs));
@@ -2902,10 +2892,7 @@ array divide(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
-      dtype,
-      std::make_shared<Divide>(to_stream(s)),
-      std::move(inputs));
+      shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
 }
 array operator/(const array& a, const array& b) {
   return divide(a, b);
@@ -2929,10 +2916,7 @@ array floor_divide(
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
-      dtype,
-      std::make_shared<Divide>(to_stream(s)),
-      std::move(inputs));
+      shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
 }
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
@@ -2941,7 +2925,7 @@ array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       dtype,
       std::make_shared<Remainder>(to_stream(s)),
       std::move(inputs));
@@ -2971,7 +2955,7 @@ array maximum(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       out_type,
       std::make_shared<Maximum>(to_stream(s)),
       std::move(inputs));
@@ -2983,7 +2967,7 @@ array minimum(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       out_type,
       std::make_shared<Minimum>(to_stream(s)),
       std::move(inputs));
@@ -3066,10 +3050,7 @@ array arctan2(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
-      dtype,
-      std::make_shared<ArcTan2>(to_stream(s)),
-      std::move(inputs));
+      shape, dtype, std::make_shared<ArcTan2>(to_stream(s)), std::move(inputs));
 }
 
 array sinh(const array& a, StreamOrDevice s /* = {} */) {
@@ -3165,7 +3146,7 @@ array logaddexp(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       broadcast_arrays({astype(a, out_type, s), astype(b, out_type, s)}, s);
   auto shape = inputs[0].shape();
   return array(
-      std::move(shape),
+      shape,
       out_type,
       std::make_shared<LogAddExp>(to_stream(s)),
       std::move(inputs));
