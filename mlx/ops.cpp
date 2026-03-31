@@ -4206,10 +4206,12 @@ array conv_transpose_general(
         output_padding[i]; // Adjust with output_padding
   }
 
+  auto ndim = stride.size();
+
   return conv_general(
       /* const array& input = */ input,
       /* const array& weight = */ weight,
-      /* std::vector<int> stride = */ std::vector(stride.size(), 1),
+      /* std::vector<int> stride = */ std::vector(ndim, 1),
       /* std::vector<int> padding_lo = */ std::move(padding_lo),
       /* std::vector<int> padding_hi = */ std::move(padding_hi),
       /* std::vector<int> kernel_dilation = */ std::move(dilation),
