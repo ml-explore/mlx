@@ -1676,23 +1676,19 @@ std::vector<array> broadcast_arrays(
   for (int i = 0; i < inputs.size(); ++i) {
     auto& in = inputs[i];
     auto out_shape = check_and_get_shape(in);
-    if (in.shape() == out_shape) {
-      outputs.push_back(in);
-    } else {
-      // broadcasted array goes first followed by other stopgrad inputs
-      std::vector<array> p_inputs = {in};
-      for (int j = 0; j < inputs.size(); ++j) {
-        if (j == i) {
-          continue;
-        }
-        p_inputs.push_back(stop_grad_inputs[j]);
+    // broadcasted array goes first followed by other stopgrad inputs
+    std::vector<array> p_inputs = {in};
+    for (int j = 0; j < inputs.size(); ++j) {
+      if (j == i) {
+        continue;
       }
-      outputs.push_back(array(
-          std::move(out_shape),
-          in.dtype(),
-          std::make_shared<BroadcastAxes>(to_stream(s), ignore_axes),
-          std::move(p_inputs)));
+      p_inputs.push_back(stop_grad_inputs[j]);
     }
+    outputs.push_back(array(
+        out_shape,
+        in.dtype(),
+        std::make_shared<BroadcastAxes>(to_stream(s), ignore_axes),
+        std::move(p_inputs)));
   }
   return outputs;
 }
@@ -1727,23 +1723,19 @@ std::vector<array> broadcast_arrays(
   }
   for (int i = 0; i < inputs.size(); ++i) {
     auto& in = inputs[i];
-    if (in.shape() == shape) {
-      outputs.push_back(in);
-    } else {
-      // broadcasted array goes first followed by other stopgrad inputs
-      std::vector<array> p_inputs = {in};
-      for (int j = 0; j < inputs.size(); ++j) {
-        if (j == i) {
-          continue;
-        }
-        p_inputs.push_back(stop_grad_inputs[j]);
+    // broadcasted array goes first followed by other stopgrad inputs
+    std::vector<array> p_inputs = {in};
+    for (int j = 0; j < inputs.size(); ++j) {
+      if (j == i) {
+        continue;
       }
-      outputs.push_back(array(
-          shape,
-          in.dtype(),
-          std::make_shared<Broadcast>(to_stream(s), shape),
-          std::move(p_inputs)));
+      p_inputs.push_back(stop_grad_inputs[j]);
     }
+    outputs.push_back(array(
+        shape,
+        in.dtype(),
+        std::make_shared<Broadcast>(to_stream(s), shape),
+        std::move(p_inputs)));
   }
   return outputs;
 }

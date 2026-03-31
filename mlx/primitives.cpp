@@ -904,7 +904,40 @@ std::vector<array> BroadcastAxes::jvp(
 std::pair<std::vector<array>, std::vector<int>> BroadcastAxes::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::invalid_argument("[BroadcastAxes] VMAP NYI");
+  std::vector<array> new_inputs = inputs;
+  std::vector<int> new_axes = axes;
+  size_t ndim = 0;
+  bool have_batch = false;
+  for (int i = 0; i < inputs.size(); i++) {
+    have_batch |= axes[i] >= 0;
+    ndim = std::max(inputs[i].ndim(), ndim);
+  }
+
+  std::vector<int> expand;
+  expand.reserve(ndim);
+  for (int i = 0; i < inputs.size(); i++) {
+    int extra = ndim - inputs[i].ndim();
+    if (axes[i] >= 0 && extra > 0) {
+      new_axes[i] += extra;
+      expand.resize(extra);
+      std::iota(expand.begin(), expand.end(), 0);
+      new_inputs[i] = expand_dims(new_inputs[i], expand, stream());
+    }
+
+    if (new_axes[i] > 0) {
+      new_inputs[i] = moveaxis(new_inputs[i], new_axes[i], 0, stream());
+    }
+  }
+
+  auto shape = output_shape(new_inputs, ignore_axes_);
+  auto dtype = new_inputs[0].dtype();
+  return {
+      {array(
+          shape,
+          dtype,
+          std::make_shared<BroadcastAxes>(stream(), ignore_axes_),
+          std::move(new_inputs))},
+      {have_batch ? 0 : -1}};
 }
 
 bool BroadcastAxes::is_equivalent(const Primitive& other) const {

@@ -899,6 +899,51 @@ class TestVmap(mlx_tests.MLXTestCase):
         out = double_scatter(a + 0, mask, src)
         self.assertTrue(mx.array_equal(expected, out))
 
+    def test_broadcast_axes_vmap(self):
+        # Broadcast axes requires shapeless compile to properly test
+
+        counter = [0]
+
+        def fn(x, y):
+            counter[0] += 1
+            return mx.matmul(x, y)
+
+        x = mx.random.normal((2, 3, 1, 4, 5))
+        y = mx.random.normal((1, 2, 5, 6))
+        z = mx.random.normal((3, 2, 1, 4, 5))
+        w = mx.random.normal((2, 3, 5, 6))
+
+        vmap_fn = mx.vmap(fn, in_axes=(0, 1))
+        cvmap_fn = mx.compile(vmap_fn, shapeless=True)
+
+        expected = vmap_fn(x, y)
+        out = cvmap_fn(x, y)
+        self.assertTrue(mx.array_equal(expected, out))
+        self.assertEqual(2, counter[0])
+
+        expected = vmap_fn(z, w)
+        out = cvmap_fn(z, w)
+        self.assertTrue(mx.array_equal(expected, out))
+        self.assertEqual(3, counter[0])
+
+        x = mx.random.normal((2, 3, 1, 4, 5))
+        y = mx.random.normal((1, 2, 5, 6))
+        z = mx.random.normal((2, 3, 1, 7, 2))
+        w = mx.random.normal((1, 2, 2, 3))
+
+        vmap_fn = mx.vmap(fn, in_axes=(0, None))
+        cvmap_fn = mx.compile(vmap_fn, shapeless=True)
+
+        expected = vmap_fn(x, y)
+        out = cvmap_fn(x, y)
+        self.assertTrue(mx.array_equal(expected, out))
+        self.assertEqual(5, counter[0])
+
+        expected = vmap_fn(z, w)
+        out = cvmap_fn(z, w)
+        self.assertTrue(mx.array_equal(expected, out))
+        self.assertEqual(6, counter[0])
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
