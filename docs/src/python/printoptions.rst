@@ -6,6 +6,7 @@ Print Options
 .. autosummary::
   :toctree: _autosummary
 
+  PrintOptions
   set_printoptions
   printoptions
   get_printoptions
