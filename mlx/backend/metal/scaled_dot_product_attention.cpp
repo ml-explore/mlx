@@ -447,7 +447,7 @@ void sdpa_vector_turbo(
   kname += std::to_string(vpw);
 
   int gqa_factor = q.shape(1) / k_packed.shape(1);
-  int N = k_norms.shape(1); // kv sequence length
+  int N = k_norms.shape(2); // kv sequence length
   size_t k_head_stride =
       k_packed.shape(1) == 1 ? k_packed.strides(0) : k_packed.strides(1);
   size_t k_seq_stride = k_packed.strides()[2];
