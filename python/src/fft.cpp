@@ -585,12 +585,12 @@ void init_fft(nb::module_& parent_module) {
   m.def(
       "fftshift",
       [](const mx::array& a, const IntOrVec& axes, mx::StreamOrDevice s) {
-        if (std::holds_alternative<std::monostate>(v)) {
+        if (std::holds_alternative<std::monostate>(axes)) {
           return mx::fft::fftshift(a, s);
-        } else if (auto pv = std::get_if<int>(&v); pv) {
+        } else if (auto pv = std::get_if<int>(&axes); pv) {
           return mx::fft::fftshift(a, {*pv}, s);
         } else {
-          return mx::fft::fftshift(a, std::get<std::vector<int>>(v), s);
+          return mx::fft::fftshift(a, std::get<std::vector<int>>(axes), s);
         }
       },
       "a"_a,
@@ -610,12 +610,12 @@ void init_fft(nb::module_& parent_module) {
   m.def(
       "ifftshift",
       [](const mx::array& a, const IntOrVec& axes, mx::StreamOrDevice s) {
-        if (std::holds_alternative<std::monostate>(v)) {
+        if (std::holds_alternative<std::monostate>(axes)) {
           return mx::fft::ifftshift(a, s);
-        } else if (auto pv = std::get_if<int>(&v); pv) {
+        } else if (auto pv = std::get_if<int>(&axes); pv) {
           return mx::fft::ifftshift(a, {*pv}, s);
         } else {
-          return mx::fft::ifftshift(a, std::get<std::vector<int>>(v), s);
+          return mx::fft::ifftshift(a, std::get<std::vector<int>>(axes), s);
         }
       },
       "a"_a,
