@@ -56,9 +56,7 @@ def _quantize_keys_2bit(keys, rotation_matrix, sketch_matrix):
     # Quantize each coordinate to nearest centroid
     x_rot_flat = mx.reshape(x_rot, (-1, D))  # (B*H*N, D)
     # For each coordinate, find nearest centroid index (0-3)
-    diffs = mx.abs(
-        x_rot_flat[..., None] - centroids[None, None, :]
-    )  # (B*H*N, D, 4)
+    diffs = mx.abs(x_rot_flat[..., None] - centroids[None, None, :])  # (B*H*N, D, 4)
     indices = mx.argmin(diffs, axis=-1).astype(mx.uint8)  # (B*H*N, D)
 
     # Bit-pack indices: 4 values per byte (2 bits each)
@@ -109,15 +107,15 @@ def _quantize_values_2bit(values, group_size=32):
     grouped = mx.reshape(values, (B, H, N, n_groups, group_size))
 
     # Per-group min/max
-    v_min = mx.min(grouped, axis=-1)   # (B, H, N, n_groups)
+    v_min = mx.min(grouped, axis=-1)  # (B, H, N, n_groups)
     v_max = mx.max(grouped, axis=-1)
     v_range = v_max - v_min
     v_range = mx.maximum(v_range, 1e-10)
 
     # Scale and zero point
     n_levels = (1 << 2) - 1  # 3 for 2-bit
-    v_scales = v_range / n_levels   # (B, H, N, n_groups)
-    v_zeros = v_min                  # (B, H, N, n_groups)
+    v_scales = v_range / n_levels  # (B, H, N, n_groups)
+    v_zeros = v_min  # (B, H, N, n_groups)
 
     # Quantize
     normalized = (grouped - v_min[..., None]) / (v_range[..., None] + 1e-10)
@@ -136,7 +134,12 @@ def _quantize_values_2bit(values, group_size=32):
 
 
 def _reference_attention(
-    queries, keys, values, scale, rotation_matrix, sketch_matrix,
+    queries,
+    keys,
+    values,
+    scale,
+    rotation_matrix,
+    sketch_matrix,
 ):
     """Reference full-precision attention for correctness comparison.
 
@@ -175,16 +178,24 @@ class TestTurboQuantAttention(mlx_tests.MLXTestCase):
         rotation_matrix = _make_random_orthogonal(D, seed=42)
         sketch_matrix = _make_random_orthogonal(D, seed=99)
 
-        k_packed, k_signs, k_norms, k_res_norms, centroids = \
-            _quantize_keys_2bit(keys, rotation_matrix, sketch_matrix)
+        k_packed, k_signs, k_norms, k_res_norms, centroids = _quantize_keys_2bit(
+            keys, rotation_matrix, sketch_matrix
+        )
 
-        v_packed, v_scales, v_zeros = \
-            _quantize_values_2bit(values, group_size)
+        v_packed, v_scales, v_zeros = _quantize_values_2bit(values, group_size)
 
         mx.eval(
-            queries, k_packed, k_signs, k_norms, k_res_norms,
-            centroids, v_packed, v_scales, v_zeros,
-            rotation_matrix, sketch_matrix,
+            queries,
+            k_packed,
+            k_signs,
+            k_norms,
+            k_res_norms,
+            centroids,
+            v_packed,
+            v_scales,
+            v_zeros,
+            rotation_matrix,
+            sketch_matrix,
         )
 
         scale = 1.0 / math.sqrt(D)
@@ -331,23 +342,41 @@ class TestTurboQuantAttention(mlx_tests.MLXTestCase):
         qjl_scale = 1.0 / math.sqrt(D)
 
         acc_s, m_s, l_s = mx.fast.turboquant_attention(
-            queries, kp_s, ks_s, kn_s, kr_s, centroids,
-            vp_s, vs_s, vz_s, rotation, sketch,
-            scale=scale, qjl_scale=qjl_scale,
+            queries,
+            kp_s,
+            ks_s,
+            kn_s,
+            kr_s,
+            centroids,
+            vp_s,
+            vs_s,
+            vz_s,
+            rotation,
+            sketch,
+            scale=scale,
+            qjl_scale=qjl_scale,
         )
         out_s = acc_s / l_s[..., None]
 
         # Long (2-pass): first 2048 tokens
-        kp_l, ks_l, kn_l, kr_l, _ = _quantize_keys_2bit(
-            keys_all, rotation, sketch
-        )
+        kp_l, ks_l, kn_l, kr_l, _ = _quantize_keys_2bit(keys_all, rotation, sketch)
         vp_l, vs_l, vz_l = _quantize_values_2bit(values_all)
         mx.eval(kp_l, ks_l, kn_l, kr_l, vp_l, vs_l, vz_l)
 
         acc_l, m_l, l_l = mx.fast.turboquant_attention(
-            queries, kp_l, ks_l, kn_l, kr_l, centroids,
-            vp_l, vs_l, vz_l, rotation, sketch,
-            scale=scale, qjl_scale=qjl_scale,
+            queries,
+            kp_l,
+            ks_l,
+            kn_l,
+            kr_l,
+            centroids,
+            vp_l,
+            vs_l,
+            vz_l,
+            rotation,
+            sketch,
+            scale=scale,
+            qjl_scale=qjl_scale,
         )
         mx.eval(acc_s, out_s, acc_l, m_l, l_l)
 

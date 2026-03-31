@@ -316,10 +316,23 @@ void init_fast(nb::module_& parent_module) {
          int group_size,
          mx::StreamOrDevice s) {
         auto result = mx::fast::turboquant_attention(
-            queries, k_packed, k_signs, k_norms, k_res_norms,
-            centroids, v_packed, v_scales, v_zeros,
-            rotation_matrix, sketch_matrix,
-            scale, qjl_scale, mse_bits, v_bits, group_size, s);
+            queries,
+            k_packed,
+            k_signs,
+            k_norms,
+            k_res_norms,
+            centroids,
+            v_packed,
+            v_scales,
+            v_zeros,
+            rotation_matrix,
+            sketch_matrix,
+            scale,
+            qjl_scale,
+            mse_bits,
+            v_bits,
+            group_size,
+            s);
         return nb::make_tuple(result[0], result[1], result[2]);
       },
       "queries"_a,

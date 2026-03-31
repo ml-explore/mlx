@@ -713,31 +713,41 @@ std::vector<array> turboquant_attention(
   auto q_sketch = matmul(queries, sketch_t, s);
 
   // --- Fallback (pure MLX ops for correctness reference) ---
-  auto fallback = [scale, qjl_scale, mse_bits, v_bits, group_size, D, H_q,
-                   H_kv, B, kL, qL,
+  auto fallback = [scale,
+                   qjl_scale,
+                   mse_bits,
+                   v_bits,
+                   group_size,
+                   D,
+                   H_q,
+                   H_kv,
+                   B,
+                   kL,
+                   qL,
                    s](const std::vector<array>& inputs) {
     // This fallback is not optimized — it's for gradient computation and
     // correctness verification only. For actual use, the Metal kernel runs.
-    auto& q_r = inputs[0];   // (B, H_q, qL, D)
+    auto& q_r = inputs[0]; // (B, H_q, qL, D)
     // For now, return zeros as placeholder
     auto out = zeros({B, H_q, qL, D}, q_r.dtype(), s);
-    auto m = full({B, H_q, qL}, -std::numeric_limits<float>::infinity(), float32, s);
+    auto m =
+        full({B, H_q, qL}, -std::numeric_limits<float>::infinity(), float32, s);
     auto l = zeros({B, H_q, qL}, float32, s);
     return std::vector<array>{out, m, l};
   };
 
   // --- Create primitive and dispatch ---
   std::vector<array> inputs = {
-      astype(q_rot, final_type, s),      // 0: q_rot
-      astype(q_sketch, final_type, s),   // 1: q_sketch
-      k_packed,                          // 2: MSE indices (uint8)
-      k_signs,                           // 3: QJL signs (uint8)
-      astype(k_norms, float32, s),       // 4: key norms
-      astype(k_res_norms, float32, s),   // 5: residual norms
-      astype(centroids, float32, s),     // 6: centroids
-      v_packed,                          // 7: value data (uint8)
-      astype(v_scales, float32, s),      // 8: value scales
-      astype(v_zeros, float32, s),       // 9: value zeros
+      astype(q_rot, final_type, s), // 0: q_rot
+      astype(q_sketch, final_type, s), // 1: q_sketch
+      k_packed, // 2: MSE indices (uint8)
+      k_signs, // 3: QJL signs (uint8)
+      astype(k_norms, float32, s), // 4: key norms
+      astype(k_res_norms, float32, s), // 5: residual norms
+      astype(centroids, float32, s), // 6: centroids
+      v_packed, // 7: value data (uint8)
+      astype(v_scales, float32, s), // 8: value scales
+      astype(v_zeros, float32, s), // 9: value zeros
   };
 
   Shape out_shape = {B, H_q, qL, D};

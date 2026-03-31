@@ -32,7 +32,10 @@ void sdpa_turboquant_1pass(
     array& o_m,
     array& o_l,
     const mlx::steel::TurboQuantAttnParams& params,
-    int B, int H_q, int qL, int D) {
+    int B,
+    int H_q,
+    int qL,
+    int D) {
   std::string kname = "sdpa_vector_turboquant_";
   kname += get_type_string(q_r.dtype());
   kname += "_";
@@ -79,7 +82,12 @@ void sdpa_turboquant_2pass(
     array& o_m,
     array& o_l,
     const mlx::steel::TurboQuantAttnParams& params,
-    int B, int H_q, int H_kv, int qL, int D, int kL) {
+    int B,
+    int H_q,
+    int H_kv,
+    int qL,
+    int D,
+    int kL) {
   // Determine number of blocks based on sequence length
   int blocks = 32;
   if (kL > 4096) {
@@ -228,12 +236,50 @@ void TurboQuantAttention::eval_gpu(
   // 2-pass requires blocks to be a multiple of 32 (for pass 2 reduction)
   if (kL >= 1024 && qL == 1) {
     sdpa_turboquant_2pass(
-        s, d, q_r, q_s, kp, ks, kn, krn, cen, vp, vs, vz,
-        o, o_m, o_l, params, B, H_q, H_kv, qL, D, kL);
+        s,
+        d,
+        q_r,
+        q_s,
+        kp,
+        ks,
+        kn,
+        krn,
+        cen,
+        vp,
+        vs,
+        vz,
+        o,
+        o_m,
+        o_l,
+        params,
+        B,
+        H_q,
+        H_kv,
+        qL,
+        D,
+        kL);
   } else {
     sdpa_turboquant_1pass(
-        s, d, q_r, q_s, kp, ks, kn, krn, cen, vp, vs, vz,
-        o, o_m, o_l, params, B, H_q, qL, D);
+        s,
+        d,
+        q_r,
+        q_s,
+        kp,
+        ks,
+        kn,
+        krn,
+        cen,
+        vp,
+        vs,
+        vz,
+        o,
+        o_m,
+        o_l,
+        params,
+        B,
+        H_q,
+        qL,
+        D);
   }
 
   d.add_temporaries(std::move(copies), s.index);

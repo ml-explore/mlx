@@ -238,11 +238,21 @@ class TurboQuantAttention : public Custom {
         nullptr, scale_, qjl_scale_, mse_bits_, v_bits_, group_size_);
   }
 
-  float scale() const { return scale_; }
-  float qjl_scale() const { return qjl_scale_; }
-  int mse_bits() const { return mse_bits_; }
-  int v_bits() const { return v_bits_; }
-  int group_size() const { return group_size_; }
+  float scale() const {
+    return scale_;
+  }
+  float qjl_scale() const {
+    return qjl_scale_;
+  }
+  int mse_bits() const {
+    return mse_bits_;
+  }
+  int v_bits() const {
+    return v_bits_;
+  }
+  int group_size() const {
+    return group_size_;
+  }
 
  private:
   float scale_;
