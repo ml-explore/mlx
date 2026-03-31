@@ -679,13 +679,15 @@ std::vector<array> turboquant_attention(
         std::to_string(D));
   }
 
-  if (mse_bits != 2) {
+  if (mse_bits != 2 && mse_bits != 4) {
     throw std::invalid_argument(
-        "[turboquant_attention] only mse_bits=2 is currently supported");
+        "[turboquant_attention] mse_bits must be 2 or 4, got " +
+        std::to_string(mse_bits));
   }
-  if (v_bits != 2) {
+  if (v_bits != 2 && v_bits != 4) {
     throw std::invalid_argument(
-        "[turboquant_attention] only v_bits=2 is currently supported");
+        "[turboquant_attention] v_bits must be 2 or 4, got " +
+        std::to_string(v_bits));
   }
 
   auto stream = to_stream(s);

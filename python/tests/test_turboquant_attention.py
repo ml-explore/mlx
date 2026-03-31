@@ -426,6 +426,134 @@ class TestTurboQuantAttention(mlx_tests.MLXTestCase):
         self.assertEqual(acc.dtype, mx.float16)
         self.assertTrue(mx.all(mx.isfinite(acc)).item())
 
+    # --- 4-bit tests ---
+
+    def _make_inputs_4bit(
+        self, B=1, H_q=4, H_kv=4, N=64, D=128, group_size=32, mse_bits=4, v_bits=4
+    ):
+        """Create synthetic 4-bit compressed inputs."""
+        mx.random.seed(42)
+        np.random.seed(42)
+
+        queries = mx.random.normal((B, H_q, 1, D))
+        rotation_matrix = _make_random_orthogonal(D, seed=42)
+        sketch_matrix = _make_random_orthogonal(D, seed=99)
+
+        n_centroids = 1 << mse_bits
+        vpb_mse = 8 // mse_bits  # values per byte
+        vpb_v = 8 // v_bits
+        packed_d_mse = D // vpb_mse
+        packed_d_signs = D // 8
+        n_groups = D // group_size
+        packed_d_v = D // vpb_v
+
+        k_packed = mx.random.randint(0, 256, (B, H_kv, N, packed_d_mse)).astype(
+            mx.uint8
+        )
+        k_signs = mx.random.randint(0, 256, (B, H_kv, N, packed_d_signs)).astype(
+            mx.uint8
+        )
+        k_norms = mx.abs(mx.random.normal((B, H_kv, N))) + 0.1
+        k_res_norms = mx.abs(mx.random.normal((B, H_kv, N))) * 0.1
+        centroids = mx.random.normal((n_centroids,))
+
+        v_packed = mx.random.randint(0, 256, (B, H_kv, N, packed_d_v)).astype(mx.uint8)
+        v_scales = mx.abs(mx.random.normal((B, H_kv, N, n_groups))) + 0.01
+        v_zeros = mx.random.normal((B, H_kv, N, n_groups))
+
+        mx.eval(
+            queries,
+            k_packed,
+            k_signs,
+            k_norms,
+            k_res_norms,
+            centroids,
+            v_packed,
+            v_scales,
+            v_zeros,
+            rotation_matrix,
+            sketch_matrix,
+        )
+
+        scale = 1.0 / math.sqrt(D)
+        qjl_scale = 1.0 / math.sqrt(D)
+
+        return {
+            "queries": queries,
+            "k_packed": k_packed,
+            "k_signs": k_signs,
+            "k_norms": k_norms,
+            "k_res_norms": k_res_norms,
+            "centroids": centroids,
+            "v_packed": v_packed,
+            "v_scales": v_scales,
+            "v_zeros": v_zeros,
+            "rotation_matrix": rotation_matrix,
+            "sketch_matrix": sketch_matrix,
+            "scale": scale,
+            "qjl_scale": qjl_scale,
+            "mse_bits": mse_bits,
+            "v_bits": v_bits,
+            "group_size": group_size,
+        }
+
+    def test_4bit_output_shapes(self):
+        """4-bit keys + 4-bit values: correct output shapes."""
+        inputs = self._make_inputs_4bit(B=1, H_q=4, H_kv=4, N=64, D=128)
+        acc, m, l = mx.fast.turboquant_attention(**inputs)
+        mx.eval(acc, m, l)
+
+        self.assertEqual(acc.shape, (1, 4, 1, 128))
+        self.assertTrue(mx.all(mx.isfinite(acc)).item())
+        self.assertTrue(mx.all(l > 0).item())
+
+    def test_4bit_d64(self):
+        """4-bit with D=64."""
+        inputs = self._make_inputs_4bit(B=1, H_q=2, H_kv=2, N=32, D=64)
+        acc, m, l = mx.fast.turboquant_attention(**inputs)
+        mx.eval(acc, m, l)
+
+        self.assertEqual(acc.shape, (1, 2, 1, 64))
+        self.assertTrue(mx.all(mx.isfinite(acc)).item())
+
+    def test_4bit_gqa(self):
+        """4-bit with GQA (H_q=8, H_kv=2)."""
+        inputs = self._make_inputs_4bit(B=1, H_q=8, H_kv=2, N=64, D=128)
+        acc, m, l = mx.fast.turboquant_attention(**inputs)
+        mx.eval(acc, m, l)
+
+        self.assertEqual(acc.shape, (1, 8, 1, 128))
+        self.assertTrue(mx.all(mx.isfinite(acc)).item())
+
+    def test_4bit_long_sequence_2pass(self):
+        """4-bit with long sequence (2-pass kernel)."""
+        inputs = self._make_inputs_4bit(B=1, H_q=2, H_kv=2, N=2048, D=128)
+        acc, m, l = mx.fast.turboquant_attention(**inputs)
+        mx.eval(acc, m, l)
+
+        self.assertEqual(acc.shape, (1, 2, 1, 128))
+        self.assertTrue(mx.all(mx.isfinite(acc)).item())
+        self.assertTrue(mx.all(l > 0).item())
+
+    def test_mixed_4bit_keys_2bit_values(self):
+        """4-bit keys with 2-bit values."""
+        inputs = self._make_inputs_4bit(
+            B=1, H_q=4, H_kv=4, N=64, D=128, mse_bits=4, v_bits=2
+        )
+        acc, m, l = mx.fast.turboquant_attention(**inputs)
+        mx.eval(acc, m, l)
+
+        self.assertEqual(acc.shape, (1, 4, 1, 128))
+        self.assertTrue(mx.all(mx.isfinite(acc)).item())
+
+    def test_rejects_3bit(self):
+        """3-bit is not supported yet."""
+        inputs = self._make_inputs_4bit(mse_bits=4)
+        inputs["mse_bits"] = 3
+        with self.assertRaises(Exception):
+            acc, m, l = mx.fast.turboquant_attention(**inputs)
+            mx.eval(acc, m, l)
+
 
 if __name__ == "__main__":
     unittest.main()

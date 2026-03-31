@@ -4,9 +4,10 @@
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/sdpa_vector_turboquant.h"
 
-#define instantiate_sdpa_vector_tq(tname, type, head_dim) \
-  template [[host_name("sdpa_vector_turboquant_" #tname "_" #head_dim)]] \
-  [[kernel]] void sdpa_vector_turboquant<type, head_dim>( \
+// 1-pass kernel: instantiate for (type, head_dim, mse_bits, v_bits)
+#define instantiate_sdpa_vector_tq(tname, type, head_dim, mb, vb) \
+  template [[host_name("sdpa_vector_turboquant_" #tname "_" #head_dim "_" #mb "_" #vb)]] \
+  [[kernel]] void sdpa_vector_turboquant<type, head_dim, mb, vb>( \
       const device type* q_rot [[buffer(0)]], \
       const device type* q_sketch [[buffer(1)]], \
       const device uint8_t* k_packed [[buffer(2)]], \
@@ -26,19 +27,34 @@
       uint simd_gid [[simdgroup_index_in_threadgroup]], \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
-// Instantiate for common types and head dimensions
-// tname must match get_type_string() output for kernel dispatch to find them
-instantiate_sdpa_vector_tq(float16_t, half, 64);
-instantiate_sdpa_vector_tq(float16_t, half, 128);
-instantiate_sdpa_vector_tq(bfloat16_t, bfloat16_t, 64);
-instantiate_sdpa_vector_tq(bfloat16_t, bfloat16_t, 128);
-instantiate_sdpa_vector_tq(float, float, 64);
-instantiate_sdpa_vector_tq(float, float, 128);
+// 2-bit instantiations
+instantiate_sdpa_vector_tq(float16_t, half, 64, 2, 2);
+instantiate_sdpa_vector_tq(float16_t, half, 128, 2, 2);
+instantiate_sdpa_vector_tq(bfloat16_t, bfloat16_t, 64, 2, 2);
+instantiate_sdpa_vector_tq(bfloat16_t, bfloat16_t, 128, 2, 2);
+instantiate_sdpa_vector_tq(float, float, 64, 2, 2);
+instantiate_sdpa_vector_tq(float, float, 128, 2, 2);
 
-// 2-pass kernels: pass 1 (partial results per block)
-#define instantiate_sdpa_vector_tq_2pass_1(tname, type, head_dim) \
-  template [[host_name("sdpa_vector_turboquant_2pass_1_" #tname "_" #head_dim)]] \
-  [[kernel]] void sdpa_vector_turboquant_2pass_1<type, head_dim>( \
+// 4-bit instantiations
+instantiate_sdpa_vector_tq(float16_t, half, 64, 4, 4);
+instantiate_sdpa_vector_tq(float16_t, half, 128, 4, 4);
+instantiate_sdpa_vector_tq(bfloat16_t, bfloat16_t, 64, 4, 4);
+instantiate_sdpa_vector_tq(bfloat16_t, bfloat16_t, 128, 4, 4);
+instantiate_sdpa_vector_tq(float, float, 64, 4, 4);
+instantiate_sdpa_vector_tq(float, float, 128, 4, 4);
+
+// Mixed: 4-bit keys, 2-bit values
+instantiate_sdpa_vector_tq(float16_t, half, 64, 4, 2);
+instantiate_sdpa_vector_tq(float16_t, half, 128, 4, 2);
+instantiate_sdpa_vector_tq(bfloat16_t, bfloat16_t, 64, 4, 2);
+instantiate_sdpa_vector_tq(bfloat16_t, bfloat16_t, 128, 4, 2);
+instantiate_sdpa_vector_tq(float, float, 64, 4, 2);
+instantiate_sdpa_vector_tq(float, float, 128, 4, 2);
+
+// 2-pass kernels: pass 1
+#define instantiate_sdpa_vector_tq_2pass_1(tname, type, head_dim, mb, vb) \
+  template [[host_name("sdpa_vector_turboquant_2pass_1_" #tname "_" #head_dim "_" #mb "_" #vb)]] \
+  [[kernel]] void sdpa_vector_turboquant_2pass_1<type, head_dim, mb, vb>( \
       const device type* q_rot [[buffer(0)]], \
       const device type* q_sketch [[buffer(1)]], \
       const device uint8_t* k_packed [[buffer(2)]], \
@@ -59,14 +75,31 @@ instantiate_sdpa_vector_tq(float, float, 128);
       uint3 tpg [[threadgroups_per_grid]], \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
-instantiate_sdpa_vector_tq_2pass_1(float16_t, half, 64);
-instantiate_sdpa_vector_tq_2pass_1(float16_t, half, 128);
-instantiate_sdpa_vector_tq_2pass_1(bfloat16_t, bfloat16_t, 64);
-instantiate_sdpa_vector_tq_2pass_1(bfloat16_t, bfloat16_t, 128);
-instantiate_sdpa_vector_tq_2pass_1(float, float, 64);
-instantiate_sdpa_vector_tq_2pass_1(float, float, 128);
+// 2-bit
+instantiate_sdpa_vector_tq_2pass_1(float16_t, half, 64, 2, 2);
+instantiate_sdpa_vector_tq_2pass_1(float16_t, half, 128, 2, 2);
+instantiate_sdpa_vector_tq_2pass_1(bfloat16_t, bfloat16_t, 64, 2, 2);
+instantiate_sdpa_vector_tq_2pass_1(bfloat16_t, bfloat16_t, 128, 2, 2);
+instantiate_sdpa_vector_tq_2pass_1(float, float, 64, 2, 2);
+instantiate_sdpa_vector_tq_2pass_1(float, float, 128, 2, 2);
 
-// 2-pass kernels: pass 2 (merge blocks, output unnormalized)
+// 4-bit
+instantiate_sdpa_vector_tq_2pass_1(float16_t, half, 64, 4, 4);
+instantiate_sdpa_vector_tq_2pass_1(float16_t, half, 128, 4, 4);
+instantiate_sdpa_vector_tq_2pass_1(bfloat16_t, bfloat16_t, 64, 4, 4);
+instantiate_sdpa_vector_tq_2pass_1(bfloat16_t, bfloat16_t, 128, 4, 4);
+instantiate_sdpa_vector_tq_2pass_1(float, float, 64, 4, 4);
+instantiate_sdpa_vector_tq_2pass_1(float, float, 128, 4, 4);
+
+// Mixed: 4-bit keys, 2-bit values
+instantiate_sdpa_vector_tq_2pass_1(float16_t, half, 64, 4, 2);
+instantiate_sdpa_vector_tq_2pass_1(float16_t, half, 128, 4, 2);
+instantiate_sdpa_vector_tq_2pass_1(bfloat16_t, bfloat16_t, 64, 4, 2);
+instantiate_sdpa_vector_tq_2pass_1(bfloat16_t, bfloat16_t, 128, 4, 2);
+instantiate_sdpa_vector_tq_2pass_1(float, float, 64, 4, 2);
+instantiate_sdpa_vector_tq_2pass_1(float, float, 128, 4, 2);
+
+// 2-pass kernels: pass 2 (merge blocks — no bit-width dependency)
 #define instantiate_sdpa_vector_tq_2pass_2(tname, type, head_dim) \
   template [[host_name("sdpa_vector_turboquant_2pass_2_" #tname "_" #head_dim)]] \
   [[kernel]] void sdpa_vector_turboquant_2pass_2<type, head_dim>( \

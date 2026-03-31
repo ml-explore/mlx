@@ -15,7 +15,7 @@ using namespace metal;
 // TurboQuant vector attention kernel (decode path, qL <= 8)
 ///////////////////////////////////////////////////////////////////////////////
 
-template <typename T, int D>
+template <typename T, int D, int MSE_BITS = 2, int V_BITS = 2>
 [[kernel]] void sdpa_vector_turboquant(
     const device T* q_rot [[buffer(0)]],
     const device T* q_sketch [[buffer(1)]],
@@ -40,13 +40,13 @@ template <typename T, int D>
   constexpr int BD = 32; // Threads per SIMD group (dimension stride)
   constexpr int per_thread = D / BD; // Coordinates per thread
 
-  // MSE unpacking constants (2-bit: 4 values per byte)
-  constexpr int mse_bits = 2;
-  constexpr int mse_vpb = 8 / mse_bits; // values per byte = 4
+  // MSE unpacking constants (derived from template params)
+  constexpr int mse_bits = MSE_BITS;
+  constexpr int mse_vpb = 8 / mse_bits; // values per byte
   constexpr uint mse_mask = (1u << mse_bits) - 1u;
 
-  // Value unpacking constants (2-bit: 4 values per byte)
-  constexpr int v_bits = 2;
+  // Value unpacking constants (derived from template params)
+  constexpr int v_bits = V_BITS;
   constexpr int v_vpb = 8 / v_bits;
   constexpr uint v_mask = (1u << v_bits) - 1u;
 
@@ -79,9 +79,10 @@ template <typename T, int D>
     o[i] = U(0);
   }
 
-  // Cache centroids in registers (only 4 values for 2-bit MSE)
-  thread U c[4];
-  for (int i = 0; i < params.n_centroids && i < 4; i++) {
+  // Cache centroids in registers (2^MSE_BITS values)
+  constexpr int n_cent = 1 << MSE_BITS;
+  thread U c[n_cent];
+  for (int i = 0; i < n_cent; i++) {
     c[i] = centroids[i];
   }
 
@@ -102,28 +103,26 @@ template <typename T, int D>
   // Coordinate range for this thread
   const int coord_start = simd_lid * per_thread;
 
-  // MSE byte index for this thread's coordinates
-  // For 2-bit MSE with per_thread=4: exactly 1 byte per thread
-  const int mse_byte_for_thread = coord_start / mse_vpb;
-
   // QJL sign byte and bit offset for this thread's coordinates
   const int sign_byte_for_thread = coord_start / 8;
   const int sign_bit_offset = coord_start % 8;
-
-  // Value byte index (same as MSE for 2-bit)
-  const int v_byte_for_thread = coord_start / v_vpb;
 
   // --- Main loop: stride over KV tokens ---
   for (int n = simd_gid; n < params.N; n += BN) {
     // === MSE SCORE ===
     U mse_partial = U(0);
-    if (mse_byte_for_thread < params.packed_d_mse) {
-      const uint8_t packed = k_packed
-          [kv_packed_base + long(n) * long(params.packed_d_mse) +
-           mse_byte_for_thread];
+    {
+      const long mse_row_base =
+          kv_packed_base + long(n) * long(params.packed_d_mse);
       for (int sub = 0; sub < per_thread; sub++) {
-        const uint idx = (uint(packed) >> (sub * mse_bits)) & mse_mask;
-        mse_partial += q_r[sub] * c[idx];
+        const int global_coord = coord_start + sub;
+        const int byte_idx = global_coord / mse_vpb;
+        const int sub_idx = global_coord % mse_vpb;
+        if (byte_idx < params.packed_d_mse) {
+          const uint8_t packed = k_packed[mse_row_base + byte_idx];
+          const uint idx = (uint(packed) >> (sub_idx * mse_bits)) & mse_mask;
+          mse_partial += q_r[sub] * c[idx];
+        }
       }
     }
     U mse_score = simd_sum(mse_partial);
@@ -156,24 +155,25 @@ template <typename T, int D>
     sum_exp_score = sum_exp_score * factor + exp_score;
 
     // === VALUE DEQUANT + WEIGHTED ACCUMULATE ===
-    if (v_byte_for_thread < params.packed_d_v) {
-      const uint8_t packed_v = v_packed
-          [kv_v_packed_base + long(n) * long(params.packed_d_v) +
-           v_byte_for_thread];
-      // Hoist scale/zero loads (all per_thread coords share same group)
+    {
+      const long v_row_base =
+          kv_v_packed_base + long(n) * long(params.packed_d_v);
       const int group_idx = coord_start / params.group_size;
       const long sg_offset = kv_v_sg_base + long(n) * long(params.n_groups);
       const U scale_val = v_scales[sg_offset + group_idx];
       const U zero_val = v_zeros[sg_offset + group_idx];
       for (int sub = 0; sub < per_thread; sub++) {
-        const uint qval = (uint(packed_v) >> (sub * v_bits)) & v_mask;
-        const U val = U(qval) * scale_val + zero_val;
-        o[sub] = o[sub] * factor + exp_score * val;
-      }
-    } else {
-      // Thread handles no value coordinates (D not multiple of BD)
-      for (int sub = 0; sub < per_thread; sub++) {
-        o[sub] *= factor;
+        const int global_coord = coord_start + sub;
+        const int byte_idx = global_coord / v_vpb;
+        const int sub_idx = global_coord % v_vpb;
+        if (byte_idx < params.packed_d_v) {
+          const uint8_t packed_v = v_packed[v_row_base + byte_idx];
+          const uint qval = (uint(packed_v) >> (sub_idx * v_bits)) & v_mask;
+          const U val = U(qval) * scale_val + zero_val;
+          o[sub] = o[sub] * factor + exp_score * val;
+        } else {
+          o[sub] *= factor;
+        }
       }
     }
   }
@@ -233,7 +233,7 @@ template <typename T, int D>
 // Pass 1: Each threadgroup handles a BLOCK of KV tokens (stride by blocks
 // count). Single SIMD group (32 threads) per threadgroup, same D-splitting as
 // 1-pass. Grid: (H_kv, B, blocks). Threadgroup: (32, gqa_factor, 1).
-template <typename T, int D>
+template <typename T, int D, int MSE_BITS = 2, int V_BITS = 2>
 [[kernel]] void sdpa_vector_turboquant_2pass_1(
     const device T* q_rot [[buffer(0)]],
     const device T* q_sketch [[buffer(1)]],
@@ -256,12 +256,12 @@ template <typename T, int D>
     uint simd_lid [[thread_index_in_simdgroup]]) {
   constexpr int BD = 32;
   constexpr int per_thread = D / BD;
-  constexpr int mse_bits = 2;
-  constexpr int mse_vpb = 4;
-  constexpr uint mse_mask = 3u;
-  constexpr int v_bits = 2;
-  constexpr int v_vpb = 4;
-  constexpr uint v_mask = 3u;
+  constexpr int mse_bits = MSE_BITS;
+  constexpr int mse_vpb = 8 / mse_bits;
+  constexpr uint mse_mask = (1u << mse_bits) - 1u;
+  constexpr int v_bits = V_BITS;
+  constexpr int v_vpb = 8 / v_bits;
+  constexpr uint v_mask = (1u << v_bits) - 1u;
 
   typedef float U;
 
@@ -290,8 +290,9 @@ template <typename T, int D>
   }
 
   // Cache centroids
-  thread U c[4];
-  for (int i = 0; i < params.n_centroids && i < 4; i++) {
+  constexpr int n_cent = 1 << MSE_BITS;
+  thread U c[n_cent];
+  for (int i = 0; i < n_cent; i++) {
     c[i] = centroids[i];
   }
 
@@ -309,24 +310,28 @@ template <typename T, int D>
       long(kv_batch_head) * long(params.N) * long(params.n_groups);
 
   const int coord_start = simd_lid * per_thread;
-  const int mse_byte = coord_start / mse_vpb;
   const int sign_byte = coord_start / 8;
   const int sign_bit_off = coord_start % 8;
-  const int v_byte = coord_start / v_vpb;
 
   U max_score = -INFINITY;
   U sum_exp_score = U(0);
 
   // Block-strided loop over KV tokens
   for (int n = block_idx; n < params.N; n += blocks) {
-    // MSE score
+    // MSE score (per-coordinate byte indexing for any bit width)
     U mse_partial = U(0);
-    if (mse_byte < params.packed_d_mse) {
-      const uint8_t packed = k_packed
-          [kv_packed_base + long(n) * long(params.packed_d_mse) + mse_byte];
+    {
+      const long mse_row_base =
+          kv_packed_base + long(n) * long(params.packed_d_mse);
       for (int sub = 0; sub < per_thread; sub++) {
-        mse_partial +=
-            q_r[sub] * c[(uint(packed) >> (sub * mse_bits)) & mse_mask];
+        const int global_coord = coord_start + sub;
+        const int byte_idx = global_coord / mse_vpb;
+        const int sub_idx = global_coord % mse_vpb;
+        if (byte_idx < params.packed_d_mse) {
+          const uint8_t packed = k_packed[mse_row_base + byte_idx];
+          mse_partial +=
+              q_r[sub] * c[(uint(packed) >> (sub_idx * mse_bits)) & mse_mask];
+        }
       }
     }
     U mse_score = simd_sum(mse_partial) * k_norms[kv_norms_base + n];
@@ -352,21 +357,26 @@ template <typename T, int D>
     max_score = new_max;
     sum_exp_score = sum_exp_score * factor + exp_score;
 
-    // Value dequant + accumulate
-    if (v_byte < params.packed_d_v) {
-      const uint8_t pv = v_packed
-          [kv_v_packed_base + long(n) * long(params.packed_d_v) + v_byte];
+    // Value dequant + accumulate (per-coordinate byte indexing)
+    {
+      const long v_row_base =
+          kv_v_packed_base + long(n) * long(params.packed_d_v);
       const int gi = coord_start / params.group_size;
       const long sg_off = kv_v_sg_base + long(n) * long(params.n_groups);
       const U sv = v_scales[sg_off + gi];
       const U zv = v_zeros[sg_off + gi];
       for (int sub = 0; sub < per_thread; sub++) {
-        U val = U((uint(pv) >> (sub * v_bits)) & v_mask) * sv + zv;
-        o[sub] = o[sub] * factor + exp_score * val;
+        const int global_coord = coord_start + sub;
+        const int byte_idx = global_coord / v_vpb;
+        const int sub_idx = global_coord % v_vpb;
+        if (byte_idx < params.packed_d_v) {
+          const uint8_t pv = v_packed[v_row_base + byte_idx];
+          U val = U((uint(pv) >> (sub_idx * v_bits)) & v_mask) * sv + zv;
+          o[sub] = o[sub] * factor + exp_score * val;
+        } else {
+          o[sub] *= factor;
+        }
       }
-    } else {
-      for (int sub = 0; sub < per_thread; sub++)
-        o[sub] *= factor;
     }
   }
 

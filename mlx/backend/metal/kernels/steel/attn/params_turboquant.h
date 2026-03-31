@@ -22,6 +22,8 @@ struct TurboQuantAttnParams {
   int n_groups; ///< Number of value quantization groups (D / group_size)
   int group_size; ///< Value quantization group size
   int n_centroids; ///< Number of MSE centroids (2^mse_bits)
+  int mse_bits; ///< Bits per MSE index (2 or 4)
+  int v_bits; ///< Bits per value index (2 or 4)
 };
 
 } // namespace steel

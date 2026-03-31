@@ -38,8 +38,9 @@ void sdpa_turboquant_1pass(
     int D) {
   std::string kname = "sdpa_vector_turboquant_";
   kname += get_type_string(q_r.dtype());
-  kname += "_";
-  kname += std::to_string(D);
+  kname += "_" + std::to_string(D);
+  kname += "_" + std::to_string(params.mse_bits);
+  kname += "_" + std::to_string(params.v_bits);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname);
@@ -102,8 +103,9 @@ void sdpa_turboquant_2pass(
   // Pass 1: partial results per block
   std::string kname1 = "sdpa_vector_turboquant_2pass_1_";
   kname1 += get_type_string(q_r.dtype());
-  kname1 += "_";
-  kname1 += std::to_string(D);
+  kname1 += "_" + std::to_string(D);
+  kname1 += "_" + std::to_string(params.mse_bits);
+  kname1 += "_" + std::to_string(params.v_bits);
 
   // Allocate intermediates
   Shape inter_shape = {B * H_q, blocks, D};
@@ -231,6 +233,8 @@ void TurboQuantAttention::eval_gpu(
   params.n_groups = D / group_size_;
   params.group_size = group_size_;
   params.n_centroids = cen.shape(0);
+  params.mse_bits = mse_bits_;
+  params.v_bits = v_bits_;
 
   // Route: 2-pass for long sequences, 1-pass otherwise
   // 2-pass requires blocks to be a multiple of 32 (for pass 2 reduction)
