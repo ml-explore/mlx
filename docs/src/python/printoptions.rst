@@ -1,5 +1,5 @@
 Print Options
-============
+===============
 
 .. currentmodule:: mlx.core
 
