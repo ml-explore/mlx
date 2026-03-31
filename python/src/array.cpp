@@ -498,6 +498,27 @@ void init_array(nb::module_& m) {
               new (&arr) mx::array(nd_array_to_mlx(nd, std::nullopt));
             }
           })
+      .def(
+          "data_ptr",
+          [](mx::array& a) {
+            {
+              nb::gil_scoped_release nogil;
+              a.eval();
+            }
+            return reinterpret_cast<uintptr_t>(a.data<void>());
+          },
+          nb::sig("def data_ptr(self) -> int"),
+          R"pbdoc(
+            Return the address of the first element as an integer.
+
+            This returns a pointer to the array's underlying storage and is
+            intended for low-level interop.
+
+            .. warning::
+
+               The pointer is only valid while the array's underlying storage
+               remains alive.
+          )pbdoc")
       .def("__dlpack__", [](const mx::array& a) { return mlx_to_dlpack(a); })
       .def(
           "__dlpack_device__",

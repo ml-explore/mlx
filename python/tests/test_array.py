@@ -1,5 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
+import ctypes
 import gc
 import operator
 import os
@@ -1781,6 +1782,42 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertIsNotNone(wr())
         a_np = None
         self.assertIsNone(wr())
+
+    def test_data_ptr(self):
+        base = mx.arange(24, dtype=mx.float32).reshape(4, 6) + 1.5
+
+        base_ptr = base.data_ptr()
+        self.assertIsInstance(base_ptr, int)
+        self.assertGreater(base_ptr, 0)
+        base_np = np.array(base, copy=False)
+        self.assertEqual(base_ptr, base_np.__array_interface__["data"][0])
+        self.assertAlmostEqual(ctypes.c_float.from_address(base_ptr).value, 1.5)
+
+        view = base[:, 2:]
+        view_ptr = view.data_ptr()
+        self.assertGreater(view_ptr, base_ptr)
+        view_np = np.array(view, copy=False)
+        self.assertEqual(view_ptr, view_np.__array_interface__["data"][0])
+        self.assertEqual(view_ptr - base_ptr, 2 * base.itemsize)
+        self.assertAlmostEqual(ctypes.c_float.from_address(view_ptr).value, 3.5)
+
+        transposed = view.T
+        transposed_ptr = transposed.data_ptr()
+        transposed_np = np.array(transposed, copy=False)
+        self.assertEqual(transposed_ptr, transposed_np.__array_interface__["data"][0])
+        self.assertEqual(transposed_ptr, view_ptr)
+        self.assertAlmostEqual(ctypes.c_float.from_address(transposed_ptr).value, 3.5)
+
+        reversed_cols = base[:, ::-1]
+        reversed_cols_ptr = reversed_cols.data_ptr()
+        reversed_cols_np = np.array(reversed_cols, copy=False)
+        self.assertEqual(
+            reversed_cols_ptr, reversed_cols_np.__array_interface__["data"][0]
+        )
+        self.assertEqual(reversed_cols_ptr - base_ptr, 5 * base.itemsize)
+        self.assertAlmostEqual(
+            ctypes.c_float.from_address(reversed_cols_ptr).value, 6.5
+        )
 
     @unittest.skipIf(not has_tf, "requires TensorFlow")
     def test_buffer_protocol_tf(self):
