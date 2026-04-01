@@ -443,7 +443,7 @@ void init_array(nb::module_& m) {
                * - ``x = x.at[idx].minimum(y)``
                  - ``x[idx] = mx.minimum(x[idx], y)``
 
-        Example:
+            Example:
                 >>> a = mx.array([0, 0])
                 >>> idx = mx.array([0, 1, 0, 1])
                 >>> a[idx] += 1
