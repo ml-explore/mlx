@@ -602,7 +602,6 @@ class TestArray(mlx_tests.MLXTestCase):
         expected = "array([1.12346], dtype=float32)"
         self.assertEqual(str(x), expected)
 
-
         with mx.printoptions(precision=4):
             expected = "array([1.1235], dtype=float32)"
             self.assertEqual(str(x), expected)

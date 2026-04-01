@@ -94,13 +94,14 @@ inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
       os << "-" << -val.imag() << "j";
     }
   } else {
-    os << std::fixed << std::setprecision(format_options.precision) << val.real();
+    os << std::fixed << std::setprecision(format_options.precision)
+       << val.real();
     if (val.imag() >= 0 || std::isnan(val.imag())) {
-      os << "+" << std::fixed << std::setprecision(format_options.precision) << val.imag()
-         << "j";
+      os << "+" << std::fixed << std::setprecision(format_options.precision)
+         << val.imag() << "j";
     } else {
-      os << "-" << std::fixed << std::setprecision(format_options.precision) << -val.imag()
-         << "j";
+      os << "-" << std::fixed << std::setprecision(format_options.precision)
+         << -val.imag() << "j";
     }
   }
 }

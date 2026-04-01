@@ -97,7 +97,6 @@ class ArrayPythonIterator {
   std::vector<mx::array> splits_;
 };
 
-
 void init_array(nb::module_& m) {
   // Types
   nb::class_<mx::Dtype>(
