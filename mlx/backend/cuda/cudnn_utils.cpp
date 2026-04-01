@@ -2,6 +2,7 @@
 
 #include "mlx/backend/cuda/cudnn_utils.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/gpu/device_info.h"
 
 namespace mlx::core {
 
@@ -47,7 +48,47 @@ inline auto nhwc_to_nchw(const array& x) {
   return std::make_tuple(std::move(shape), std::move(strides));
 }
 
+auto& cudnn_handles_cache() {
+  struct CudnnHandle {
+    ~CudnnHandle() {
+      if (handle) {
+        CHECK_CUDNN_ERROR(cudnnDestroy(handle));
+      }
+    }
+    cudnnHandle_t handle{nullptr};
+  };
+  static thread_local std::vector<CudnnHandle> cache(gpu::device_count());
+  return cache;
+}
+
 } // namespace
+
+void check_cudnn_error(const char* name, cudnnStatus_t err) {
+  if (err != CUDNN_STATUS_SUCCESS) {
+    throw std::runtime_error(
+        fmt::format("{} failed: {}.", name, cudnnGetErrorString(err)));
+  }
+}
+
+void check_cudnn_error(const char* name, fe::error_t err) {
+  if (!err.is_good()) {
+    throw std::runtime_error(
+        fmt::format("{} failed: {}.", name, err.get_message()));
+  }
+}
+
+cudnnHandle_t get_cudnn_handle(cu::Device& device) {
+  auto& storage = cudnn_handles_cache().at(device.cuda_device());
+  if (!storage.handle) {
+    device.make_current();
+    CHECK_CUDNN_ERROR(cudnnCreate(&storage.handle));
+  }
+  return storage.handle;
+}
+
+void init_cudnn_handles_cache() {
+  cudnn_handles_cache();
+}
 
 fe::error_t DnnGraph::prepare() {
   RETURN_IF_ERROR(validate());
@@ -109,7 +150,7 @@ fe::error_t DnnGraph::encode_capturing(
 
 void* DnnGraph::prepare_workspace(cu::CommandEncoder& encoder) {
   int64_t workspace_size = 0;
-  CHECK_CUDNN_FE_ERROR(get_workspace_size(workspace_size));
+  CHECK_CUDNN_ERROR(get_workspace_size(workspace_size));
   return allocate_workspace(encoder, workspace_size);
 }
 

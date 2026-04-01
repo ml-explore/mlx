@@ -66,7 +66,7 @@ TEST_CASE("test default stream in threads") {
 }
 
 TEST_CASE("test access stream in other thread") {
-  if (!metal::is_available()) {
+  if (!gpu::is_available()) {
     return;
   }
 

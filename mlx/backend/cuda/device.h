@@ -8,10 +8,6 @@
 #include "mlx/backend/cuda/worker.h"
 #include "mlx/stream.h"
 
-#include <cublasLt.h>
-#include <cuda.h>
-#include <cudnn.h>
-
 #include <unordered_map>
 
 namespace mlx::core::cu {
@@ -35,6 +31,7 @@ class CommandEncoder {
   };
 
   explicit CommandEncoder(Device& d);
+  ~CommandEncoder();
 
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
@@ -170,10 +167,6 @@ class Device {
   // Make this device the current cuda device, this method is thread-safe.
   void make_current();
 
-  CommandEncoder& get_command_encoder(Stream s);
-  cublasLtHandle_t get_cublaslt_handle();
-  cudnnHandle_t get_cudnn_handle();
-
   int cuda_device() const {
     return device_;
   }
@@ -205,13 +198,12 @@ class Device {
   int managed_memory_;
   int memory_pools_;
   std::string device_name_;
-  cublasLtHandle_t cublaslt_handle_{nullptr};
-  cudnnHandle_t cudnn_handle_{nullptr};
-  std::unordered_map<int, CommandEncoder> encoders_;
 };
 
-Device& device(int cuda_device);
-Device& device(mlx::core::Device d);
-CommandEncoder& get_command_encoder(Stream s);
+MLX_API Device& device(int cuda_device);
+MLX_API Device& device(mlx::core::Device d);
+MLX_API CommandEncoder& get_command_encoder(Stream s);
+
+std::unordered_map<int, CommandEncoder>& get_command_encoders();
 
 } // namespace mlx::core::cu
