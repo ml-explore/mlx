@@ -435,7 +435,7 @@ void qmm_impl_sm80(
     QuantizationMode mode,
     cu::CommandEncoder& encoder) {
   const char* tag = "[quantized_matmul]";
-  int m = out.shape(-2);
+  int m = out.ndim() > 1 ? out.shape(-2) : 1;
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);

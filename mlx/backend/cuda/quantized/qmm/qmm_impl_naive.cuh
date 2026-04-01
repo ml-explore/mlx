@@ -385,8 +385,14 @@ inline void dispatch_quant_types(
     dispatch_groups(group_size, tag, [&]<int group_size>() {
       if (bits == 2) {
         f.template operator()<cutlass::uint2b_t, T, group_size>();
+      } else if (bits == 3) {
+        f.template operator()<cutlass::uint3b_t, T, group_size>();
       } else if (bits == 4) {
         f.template operator()<cutlass::uint4b_t, T, group_size>();
+      } else if (bits == 5) {
+        f.template operator()<cutlass::uint5b_t, T, group_size>();
+      } else if (bits == 6) {
+        f.template operator()<cutlass::uint6b_t, T, group_size>();
       } else if (bits == 8) {
         f.template operator()<uint8_t, T, group_size>();
       } else {
@@ -409,7 +415,7 @@ void qmm_impl_naive(
     QuantizationMode mode,
     cu::CommandEncoder& encoder) {
   const char* tag = "[quantized_matmul]";
-  int m = out.shape(-2);
+  int m = out.ndim() > 1 ? out.shape(-2) : 1;
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);

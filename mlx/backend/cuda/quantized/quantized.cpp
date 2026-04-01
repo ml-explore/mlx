@@ -75,7 +75,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   };
 
-  int M = out.shape(-2);
+  int M = out.ndim() > 1 ? out.shape(-2) : 1;
   int N = out.shape(-1);
   int K = x.shape(-1);
   int B = out.size() / (M * N);

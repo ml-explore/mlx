@@ -27,7 +27,6 @@ cuda_skip = {
     "TestQuantized.test_qmm_shapes",
     "TestQuantized.test_fp_qvm",
     "TestQuantized.test_qvm",
-    "TestQuantized.test_qvm_splitk",
     "TestQuantized.test_qmv_small_non_multiples",
     "TestQuantized.test_small_matrix",
     "TestExportImport.test_export_quantized_model",

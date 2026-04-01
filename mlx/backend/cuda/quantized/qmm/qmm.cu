@@ -80,7 +80,7 @@ void qmm_sm90(
     qmm_impl_sm90<TileShapeMN, ClusterShape>(
         x, w, scales, biases, out, bits, group_size, encoder, s);
   };
-  int m = out.shape(-2);
+  int m = out.ndim() > 1 ? out.shape(-2) : 1;
   if (m <= 16) {
     dispatch.template operator()<128, 16, 1>();
   } else if (m <= 32) {
@@ -163,7 +163,7 @@ void qmm_sm80(
     qmm_impl_sm80<TileM>(
         x, w, scales, biases, out, bits, group_size, mode, encoder);
   };
-  int m = out.shape(-2);
+  int m = out.ndim() > 1 ? out.shape(-2) : 1;
   if (m <= 16) {
     dispatch.template operator()<16>();
   } else if (m <= 32) {
@@ -208,9 +208,6 @@ bool supports_qmm_naive(
   if (biases && !biases->flags().row_contiguous) {
     return false;
   }
-  if (bits != 2 && bits != 4 && bits != 8) {
-    return false;
-  }
   return true;
 }
 
@@ -230,7 +227,7 @@ void qmm_naive(
         x, w, scales, biases, out, bits, group_size, mode, encoder);
   };
   dispatch_bool(transpose, [&](auto k_major) {
-    int m = out.shape(-2);
+    int m = out.ndim() > 1 ? out.shape(-2) : 1;
     if (m <= 16) {
       dispatch.template operator()<16, k_major.value>();
     } else if (m <= 32) {

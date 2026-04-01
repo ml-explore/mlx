@@ -189,7 +189,7 @@ void qmm_impl_sm90(
     cu::CommandEncoder& encoder,
     Stream s) {
   const char* tag = "[quantized_matmul]";
-  int m = out.shape(-2);
+  int m = out.ndim() > 1 ? out.shape(-2) : 1;
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);
