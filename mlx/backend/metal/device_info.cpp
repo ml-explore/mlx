@@ -36,6 +36,13 @@ device_info(int device_index) {
       rsrc_limit = 499000;
     }
 
+    // Detect if this is a Max chip (M1/M2/M3/M4/M5 Max)
+    bool is_max_chip = name.find("Max") != std::string::npos;
+    
+    // Get additional device capabilities
+    size_t memory_clock = 0;  // Would need IOKit to get exact values
+    size_t compute_units = 0; // Would need IOKit to get exact values
+    
     return {
         {"device_name", name},
         {"architecture", arch},
@@ -43,7 +50,8 @@ device_info(int device_index) {
         {"max_recommended_working_set_size",
          raw_device->recommendedMaxWorkingSetSize()},
         {"memory_size", memsize},
-        {"resource_limit", rsrc_limit}};
+        {"resource_limit", rsrc_limit},
+        {"is_max_chip", is_max_chip}};
   };
   static auto device_info_ = init_device_info();
   static std::unordered_map<std::string, std::variant<std::string, size_t>>

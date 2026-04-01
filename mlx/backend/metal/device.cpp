@@ -485,6 +485,10 @@ Device::Device() : device_(load_device()), residency_set_(device_.get()) {
   }
   arch_gen_ = ag_tens * 10 + ag_ones;
   auto arch = arch_.back();
+  
+  // Check for M5 Max specifically (has 's' suffix and generation 25 or higher)
+  bool is_m5_max = arch_gen_ >= 25 && arch == 's';
+  
   switch (arch) {
     case 'p': // phone
       max_ops_per_buffer_ = 20;
@@ -494,9 +498,15 @@ Device::Device() : device_(load_device()), residency_set_(device_.get()) {
       max_ops_per_buffer_ = 40;
       max_mb_per_buffer_ = 40;
       break;
-    case 's': // max
-      max_ops_per_buffer_ = 50;
-      max_mb_per_buffer_ = 50;
+    case 's': // max (including M5 Max)
+      // M5 Max has improved memory bandwidth, use larger buffers
+      if (is_m5_max) {
+        max_ops_per_buffer_ = 70;
+        max_mb_per_buffer_ = 70;
+      } else {
+        max_ops_per_buffer_ = 60;
+        max_mb_per_buffer_ = 60;
+      }
       break;
     case 'd': // ultra
       max_ops_per_buffer_ = 50;
