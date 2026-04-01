@@ -46,6 +46,8 @@ struct PrintFormatter {
   inline void print(std::ostream& os, uint32_t val);
   inline void print(std::ostream& os, int64_t val);
   inline void print(std::ostream& os, uint64_t val);
+  inline void print(std::ostream& os, float8_t val);
+  inline void print(std::ostream& os, bfloat8_t val);
   inline void print(std::ostream& os, float16_t val);
   inline void print(std::ostream& os, bfloat16_t val);
   inline void print(std::ostream& os, float val);

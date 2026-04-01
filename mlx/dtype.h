@@ -8,6 +8,7 @@
 #include "mlx/api.h"
 #include "mlx/types/complex.h"
 #include "mlx/types/half_types.h"
+#include "mlx/types/quarter_types.h"
 
 namespace mlx::core {
 
@@ -22,9 +23,11 @@ struct Dtype {
     int16,
     int32,
     int64,
+    float8,
     float16,
     float32,
     float64,
+    bfloat8,
     bfloat16,
     complex64,
   };
@@ -78,9 +81,11 @@ inline constexpr Dtype int16{Dtype::Val::int16, sizeof(int16_t)};
 inline constexpr Dtype int32{Dtype::Val::int32, sizeof(int32_t)};
 inline constexpr Dtype int64{Dtype::Val::int64, sizeof(int64_t)};
 
+inline constexpr Dtype float8{Dtype::Val::float8, sizeof(uint8_t)};
 inline constexpr Dtype float16{Dtype::Val::float16, sizeof(uint16_t)};
 inline constexpr Dtype float32{Dtype::Val::float32, sizeof(float)};
 inline constexpr Dtype float64{Dtype::Val::float64, sizeof(double)};
+inline constexpr Dtype bfloat8{Dtype::Val::bfloat8, sizeof(uint8_t)};
 inline constexpr Dtype bfloat16{Dtype::Val::bfloat16, sizeof(uint16_t)};
 inline constexpr Dtype complex64{Dtype::Val::complex64, sizeof(complex64_t)};
 

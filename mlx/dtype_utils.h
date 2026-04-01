@@ -28,6 +28,8 @@ const char* dtype_to_string(Dtype arg);
   MLX_INTERNAL_DTYPE_SWITCH_CASE(uint64, uint64_t)
 
 #define MLX_INTERNAL_DTYPE_SWITCH_FLOATS()              \
+  MLX_INTERNAL_DTYPE_SWITCH_CASE(float8, float8_t);    \
+  MLX_INTERNAL_DTYPE_SWITCH_CASE(bfloat8, bfloat8_t); \
   MLX_INTERNAL_DTYPE_SWITCH_CASE(float16, float16_t);   \
   MLX_INTERNAL_DTYPE_SWITCH_CASE(bfloat16, bfloat16_t); \
   MLX_INTERNAL_DTYPE_SWITCH_CASE(float32, float);       \

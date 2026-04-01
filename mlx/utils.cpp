@@ -56,6 +56,12 @@ inline void PrintFormatter::print(std::ostream& os, int64_t val) {
 inline void PrintFormatter::print(std::ostream& os, uint64_t val) {
   os << val;
 }
+inline void PrintFormatter::print(std::ostream& os, float8_t val) {
+  os << static_cast<float>(val);
+}
+inline void PrintFormatter::print(std::ostream& os, bfloat8_t val) {
+  os << static_cast<float>(val);
+}
 inline void PrintFormatter::print(std::ostream& os, float16_t val) {
   os << val;
 }

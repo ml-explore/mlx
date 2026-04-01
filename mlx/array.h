@@ -615,6 +615,12 @@ void array::init(It src) {
     case int64:
       std::copy(src, src + size(), data<int64_t>());
       break;
+    case float8:
+      std::copy(src, src + size(), data<float8_t>());
+      break;
+    case bfloat8:
+      std::copy(src, src + size(), data<bfloat8_t>());
+      break;
     case float16:
       std::copy(src, src + size(), data<float16_t>());
       break;
