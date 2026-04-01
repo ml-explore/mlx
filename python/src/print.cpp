@@ -43,13 +43,13 @@ void init_print(nb::module_& m) {
         Set global printing precision for array formatting.
 
         Example:
-        >>> print(x)  # Uses default precision
-        >>> mx.set_printoptions(precision=3):
-        >>> print(x)  # Uses precision of 3
-        >>> print(x)  # Uses precision of 3 (again)
+            >>> print(x)  # Uses default precision
+            >>> mx.set_printoptions(precision=3):
+            >>> print(x)  # Uses precision of 3
+            >>> print(x)  # Uses precision of 3 (again)
 
         Args:
-        precision (int): Number of decimal places.
+            precision (int): Number of decimal places.
         )pbdoc");
   m.def(
       "get_printoptions",
@@ -74,13 +74,13 @@ void init_print(nb::module_& m) {
         Context manager for setting print options temporarily.
 
         Example:
-        >>> print(x)  # Uses default precision
-        >>> with mx.printoptions(precision=3):
-        >>>     print(x)  # Uses precision of 3
-        >>> print(x)  # Back to default precision
+            >>> print(x)  # Uses default precision
+            >>> with mx.printoptions(precision=3):
+            >>>     print(x)  # Uses precision of 3
+            >>> print(x)  # Back to default precision
 
 
         Args:
-        precision (int): Number of decimal places. Use -1 for default
+            precision (int): Number of decimal places. Use -1 for default
         )pbdoc");
 }
