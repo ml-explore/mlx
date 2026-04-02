@@ -5,7 +5,6 @@ import unittest
 
 import mlx.core as mx
 import mlx_tests
-from mlx.utils import ThreadLocalStream
 
 
 class TestReduce(mlx_tests.MLXTestCase):
@@ -25,16 +24,16 @@ class TestReduce(mlx_tests.MLXTestCase):
         t1.join()
         t2.join()
 
-        test_stream = ThreadLocalStream()
+        test_stream = mx.ThreadLocalStream(mx.default_device())
 
         def test_success():
-            with mx.stream(test_stream.stream):
+            with mx.stream(test_stream):
                 x = mx.arange(10)
                 mx.eval(2 * x)
                 self.assertEqual(x.tolist(), list(range(10)))
 
-        t1 = threading.Thread(target=test_failure)
-        t2 = threading.Thread(target=test_failure)
+        t1 = threading.Thread(target=test_success)
+        t2 = threading.Thread(target=test_success)
         t1.start()
         t2.start()
         t1.join()
