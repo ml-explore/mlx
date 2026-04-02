@@ -52,6 +52,7 @@ void MLAFusedSDPA::eval_gpu(
   enc.set_bytes(B, 7);
   enc.set_bytes(H, 8);
   enc.set_bytes(S, 9);
+  enc.set_bytes(scale_, 10);
 
   // One threadgroup per (head, batch)
   // BN=32 simdgroups × BD=32 threads = 1024 threads per threadgroup

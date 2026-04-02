@@ -30,8 +30,8 @@ constant uint BD = 32;
 
 template <typename T>
 [[kernel]] void mla_fused_sdpa(
-    const device T*        q_nope      [[buffer(0)]],   // [B, H, 256] pre-scaled, post-embed_q
-    const device T*        q_pe        [[buffer(1)]],   // [B, H, 64] pre-scaled
+    const device T*        q_nope      [[buffer(0)]],   // [B, H, 256] post-embed_q, NOT pre-scaled
+    const device T*        q_pe        [[buffer(1)]],   // [B, H, 64] NOT pre-scaled
     const device uint32_t* lat_packed  [[buffer(2)]],   // [B, S, 32] INT4 packed latent (shared)
     const device T*        lat_scales  [[buffer(3)]],   // [B, S, 4] per-group scales
     const device T*        lat_biases  [[buffer(4)]],   // [B, S, 4] per-group biases
@@ -40,6 +40,7 @@ template <typename T>
     const constant uint&   B           [[buffer(7)]],
     const constant uint&   H           [[buffer(8)]],
     const constant uint&   S           [[buffer(9)]],
+    const constant float&  scale       [[buffer(10)]],  // attention scale, applied at query load
     uint3  tid       [[threadgroup_position_in_grid]],
     uint   simd_gid  [[simdgroup_index_in_threadgroup]],
     uint   simd_lid  [[thread_index_in_simdgroup]]) {
@@ -53,19 +54,20 @@ template <typename T>
 
     typedef float U;
 
-    // --- Load query into registers (once, reused for all KV positions) ---
+    // --- Load query into registers with scale applied (sdpa_vector.h pattern) ---
+    // Scale applied once at load, not per KV position
     // 8 nope dims per thread (256 / 32 = 8)
     thread U q_n[8];
     const device T* q_nope_ptr = q_nope + (batch_idx * H + head_idx) * MLA_D;
     for (uint i = 0; i < 8; i++) {
-        q_n[i] = static_cast<U>(q_nope_ptr[simd_lid * 8 + i]);
+        q_n[i] = static_cast<U>(scale) * static_cast<U>(q_nope_ptr[simd_lid * 8 + i]);
     }
 
     // 2 rope dims per thread (64 / 32 = 2)
     thread U q_r[2];
     const device T* q_pe_ptr = q_pe + (batch_idx * H + head_idx) * MLA_RD;
     for (uint i = 0; i < 2; i++) {
-        q_r[i] = static_cast<U>(q_pe_ptr[simd_lid * 2 + i]);
+        q_r[i] = static_cast<U>(scale) * static_cast<U>(q_pe_ptr[simd_lid * 2 + i]);
     }
 
     // --- Output accumulator (256 latent dims, 8 per thread) ---
@@ -174,6 +176,7 @@ template [[host_name("mla_fused_sdpa_f16")]]
     const device uint32_t*, const device half*, const device half*,
     const device half*, device half*,
     const constant uint&, const constant uint&, const constant uint&,
+    const constant float&,
     uint3, uint, uint);
 
 template [[host_name("mla_fused_sdpa_bf16")]]
@@ -182,4 +185,5 @@ template [[host_name("mla_fused_sdpa_bf16")]]
     const device uint32_t*, const device bfloat*, const device bfloat*,
     const device bfloat*, device bfloat*,
     const constant uint&, const constant uint&, const constant uint&,
+    const constant float&,
     uint3, uint, uint);
