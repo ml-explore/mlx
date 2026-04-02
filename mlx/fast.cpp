@@ -955,4 +955,110 @@ bool ConvertFP8::is_equivalent(const Primitive& other) const {
   return to_fp8_ == a_other.to_fp8_;
 }
 
+array mla_nope_scores(
+    const array& q_nope,
+    const array& k_packed,
+    const array& k_scales,
+    const array& k_biases,
+    float scale,
+    StreamOrDevice s) {
+
+  if (q_nope.ndim() != 3) {
+    throw std::invalid_argument("q_nope must be [B, H, 256]");
+  }
+  if (k_packed.ndim() != 3) {
+    throw std::invalid_argument("k_packed must be [B, S, 32]");
+  }
+  if (q_nope.shape(2) != 256) {
+    throw std::invalid_argument("q_nope last dim must be 256");
+  }
+  if (k_packed.shape(2) != 32) {
+    throw std::invalid_argument("k_packed last dim must be 32 (INT4 packed)");
+  }
+
+  auto B = q_nope.shape(0);
+  auto H = q_nope.shape(1);
+  auto S = k_packed.shape(1);
+
+  auto stream = to_stream(s);
+
+  // Fallback: dequant then matmul (for transforms + CPU)
+  auto fallback = [scale](std::vector<array> inputs) -> std::vector<array> {
+    auto& q = inputs[0];
+    auto& pk = inputs[1];
+    auto& sc = inputs[2];
+    auto& bi = inputs[3];
+    auto latent = dequantize(pk, sc, bi, 64, 4);
+    auto q_f32 = astype(q, float32);
+    auto lat_f32 = astype(latent, float32);
+    auto scores = matmul(q_f32, transpose(lat_f32, {0, 2, 1}));
+    return {multiply(array(scale), scores)};
+  };
+
+  auto out = array(
+      {B, H, S},
+      float32,
+      std::make_shared<MLANopeScores>(stream, fallback, scale),
+      {q_nope, k_packed, k_scales, k_biases});
+
+  return out;
+}
+
+array mla_fused_sdpa(
+    const array& q_nope,
+    const array& q_pe,
+    const array& lat_packed,
+    const array& lat_scales,
+    const array& lat_biases,
+    const array& k_pe,
+    float scale,
+    StreamOrDevice s) {
+
+  auto B = q_nope.shape(0);
+  auto H = q_nope.shape(1);
+  auto S = lat_packed.shape(1);
+
+  auto stream = to_stream(s);
+
+  // Fallback: dequant + standard attention (for transforms + CPU)
+  auto fallback = [scale](std::vector<array> inputs) -> std::vector<array> {
+    auto& qn = inputs[0];  // [B, H, 256]
+    auto& qp = inputs[1];  // [B, H, 64]
+    auto& pk = inputs[2];  // [B, S, 32]
+    auto& sc = inputs[3];  // [B, S, 4]
+    auto& bi = inputs[4];  // [B, S, 4]
+    auto& kp = inputs[5];  // [B, S, 64]
+
+    // Dequant latent
+    auto lat = dequantize(pk, sc, bi, 64, 4);
+    auto lat_f = astype(lat, float32);
+
+    // Nope scores
+    auto qn_f = astype(qn, float32);
+    auto nope = matmul(qn_f, transpose(lat_f, {0, 2, 1}));
+
+    // Rope scores
+    auto qp_f = astype(qp, float32);
+    auto kp_f = astype(kp, float32);
+    // kp is [B, S, 64], need [B, 64, S] for matmul
+    auto rope = matmul(qp_f, transpose(kp_f, {0, 2, 1}));
+
+    // Combined scores + softmax
+    auto scores = add(nope, rope);
+    auto weights = softmax(scores, -1);
+
+    // Value aggregation
+    auto output = matmul(weights, lat_f);
+    return {astype(output, qn.dtype())};
+  };
+
+  auto out = array(
+      {B, H, 256},
+      q_nope.dtype(),
+      std::make_shared<MLAFusedSDPA>(stream, fallback, scale),
+      {q_nope, q_pe, lat_packed, lat_scales, lat_biases, k_pe});
+
+  return out;
+}
+
 } // namespace mlx::core::fast

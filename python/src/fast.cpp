@@ -624,4 +624,82 @@ void init_fast(nb::module_& parent_module) {
            before the kernel runs. Default: ``False``.
         stream (mx.stream, optional): Stream to run the kernel on. Default: ``None``.
       )pbdoc");
+
+  m.def(
+      "mla_nope_scores",
+      [](const mx::array& q_nope,
+         const mx::array& k_packed,
+         const mx::array& k_scales,
+         const mx::array& k_biases,
+         float scale,
+         mx::StreamOrDevice s) {
+        return mx::fast::mla_nope_scores(
+            q_nope, k_packed, k_scales, k_biases, scale, s);
+      },
+      "q_nope"_a,
+      "k_packed"_a,
+      "k_scales"_a,
+      "k_biases"_a,
+      "scale"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+      MLA shared-latent nope scores.
+
+      Computes scores[b,h,s] = scale * dot(q_nope[b,h,:], dequant(latent[b,s,:]))
+      with latent shared across all heads. INT4 affine dequant in-kernel.
+
+      Args:
+        q_nope (array): [B, H, 256] float16/bfloat16 — absorbed query.
+        k_packed (array): [B, S, 32] uint32 — INT4 packed latent.
+        k_scales (array): [B, S, 4] float32 — per-group scales.
+        k_biases (array): [B, S, 4] float32 — per-group biases.
+        scale (float): MLA attention scale.
+        stream (mx.stream, optional): Stream. Default: ``None``.
+
+      Returns:
+        array: [B, H, S] float32 nope scores.
+      )pbdoc");
+
+  m.def(
+      "mla_fused_sdpa",
+      [](const mx::array& q_nope,
+         const mx::array& q_pe,
+         const mx::array& lat_packed,
+         const mx::array& lat_scales,
+         const mx::array& lat_biases,
+         const mx::array& k_pe,
+         float scale,
+         mx::StreamOrDevice s) {
+        return mx::fast::mla_fused_sdpa(
+            q_nope, q_pe, lat_packed, lat_scales, lat_biases, k_pe, scale, s);
+      },
+      "q_nope"_a,
+      "q_pe"_a,
+      "lat_packed"_a,
+      "lat_scales"_a,
+      "lat_biases"_a,
+      "k_pe"_a,
+      "scale"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+      Fused quantized MLA SDPA for decode.
+
+      Single kernel fusing INT4 dequant + split nope/rope scoring +
+      online softmax + value accumulation.
+
+      Args:
+        q_nope (array): [B, H, 256] pre-scaled absorbed query.
+        q_pe (array): [B, H, 64] pre-scaled RoPE query.
+        lat_packed (array): [B, S, 32] uint32 INT4 packed latent.
+        lat_scales (array): [B, S, 4] fp16 scales.
+        lat_biases (array): [B, S, 4] fp16 biases.
+        k_pe (array): [B, S, 64] fp16 RoPE keys.
+        scale (float): attention scale (unused, pre-applied to queries).
+        stream (mx.stream, optional): Stream. Default: None.
+
+      Returns:
+        array: [B, H, 256] latent attention output (pre-unembed).
+      )pbdoc");
 }

@@ -424,4 +424,56 @@ class CustomKernel : public Primitive {
   int shared_memory_;
 };
 
+class MLANopeScores : public Custom {
+ public:
+  MLANopeScores(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      float scale)
+      : Custom(stream, std::move(fallback)), scale_(scale) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(MLANopeScores)
+
+  bool is_equivalent(const Primitive& other) const override {
+    auto& o = static_cast<const MLANopeScores&>(other);
+    return scale_ == o.scale_;
+  }
+
+ private:
+  float scale_;
+};
+
+class MLAFusedSDPA : public Custom {
+ public:
+  MLAFusedSDPA(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      float scale)
+      : Custom(stream, std::move(fallback)), scale_(scale) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(MLAFusedSDPA)
+
+  bool is_equivalent(const Primitive& other) const override {
+    auto& o = static_cast<const MLAFusedSDPA&>(other);
+    return scale_ == o.scale_;
+  }
+
+ private:
+  float scale_;
+};
+
 } // namespace mlx::core::fast

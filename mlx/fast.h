@@ -100,4 +100,34 @@ MLX_API std::vector<array> precompiled_cuda_kernel(
     bool ensure_row_contiguous = false,
     StreamOrDevice s = {});
 
+/** MLA shared-latent nope scoring — first-class MLA primitive.
+ *
+ * Computes: scores[b,h,s] = scale * dot(q_nope[b,h,:], dequant(latent[b,s,:]))
+ * Latent is shared across all heads (no broadcast).
+ * INT4 affine dequant in-kernel.
+ */
+MLX_API array mla_nope_scores(
+    const array& q_nope,    // [B, H, 256] float16/bfloat16
+    const array& k_packed,  // [B, S, 32]  uint32 (INT4 packed)
+    const array& k_scales,  // [B, S, 4]   float32
+    const array& k_biases,  // [B, S, 4]   float32
+    float scale,
+    StreamOrDevice s = {});
+
+/** Fused quantized MLA SDPA for decode (L==1).
+ *
+ * Single kernel fusing: INT4 dequant + split nope/rope scoring +
+ * online softmax + value accumulation. Replaces 5+ separate dispatches.
+ * Output is latent attention result (pre-unembed).
+ */
+MLX_API array mla_fused_sdpa(
+    const array& q_nope,      // [B, H, 256] pre-scaled, post-embed_q
+    const array& q_pe,        // [B, H, 64]  pre-scaled
+    const array& lat_packed,  // [B, S, 32]  uint32 INT4 packed latent
+    const array& lat_scales,  // [B, S, 4]   fp16 scales
+    const array& lat_biases,  // [B, S, 4]   fp16 biases
+    const array& k_pe,        // [B, S, 64]  fp16 RoPE keys
+    float scale,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::fast
