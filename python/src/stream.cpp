@@ -41,6 +41,26 @@ class PyStreamContext {
   mx::StreamContext* _inner;
 };
 
+class PyThreadLocalStream {
+ public:
+  PyThreadLocalStream(mx::Device d) : device(d) {}
+
+  mx::Stream stream() const {
+    thread_local std::unordered_map<const PyThreadLocalStream*, mx::Stream>
+        streams;
+
+    auto it = streams.find(this);
+    if (it == streams.end()) {
+      auto result = streams.emplace(this, mx::new_stream(device));
+      it = result.first;
+    }
+
+    return it->second;
+  }
+
+  mx::Device device;
+};
+
 void init_stream(nb::module_& m) {
   nb::class_<mx::Stream>(
       m,
@@ -49,6 +69,11 @@ void init_stream(nb::module_& m) {
       A stream for running operations on a given device.
       )pbdoc")
       .def_ro("device", &mx::Stream::device)
+      .def(
+          "__init__",
+          [](mx::Stream* s, const PyThreadLocalStream& tls) {
+            return new (s) mx::Stream(tls.stream());
+          })
       .def(
           "__repr__",
           [](const mx::Stream& s) {
@@ -61,7 +86,29 @@ void init_stream(nb::module_& m) {
             s == nb::cast<mx::Stream>(other);
       });
 
+  nb::class_<PyThreadLocalStream>(
+      m,
+      "ThreadLocalStream",
+      R"pbdoc(
+      A stream that will be unique per thread and can be used to run operations on a given device.
+      )pbdoc")
+      .def_ro("device", &PyThreadLocalStream::device)
+      .def(nb::init<mx::Device>())
+      .def(
+          "__repr__",
+          [](const PyThreadLocalStream& s) {
+            std::ostringstream os;
+            os << "ThreadLocalStream(" << s.device << ")";
+            return os.str();
+          })
+      .def("__eq__", [](const PyThreadLocalStream& s, const nb::object& other) {
+        auto s_other = mx::default_stream(mx::default_device());
+        return nb::try_cast<mx::Stream>(other, s_other) &&
+            s_other == s.stream();
+      });
+
   nb::implicitly_convertible<mx::Device::DeviceType, mx::Device>();
+  nb::implicitly_convertible<PyThreadLocalStream, mx::Stream>();
 
   m.def(
       "default_stream",

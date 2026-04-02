@@ -1,11 +1,8 @@
 # Copyright © 2023 Apple Inc.
 
-import threading
 from collections import defaultdict
 from itertools import zip_longest
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
-import mlx.core as mx
 
 
 def tree_map(
@@ -327,18 +324,3 @@ def tree_merge(tree_a, tree_b, merge_fn=None):
                 )
             )
         return merge_fn(tree_a, tree_b)
-
-
-class ThreadLocalStream(threading.local):
-    """A convenient way to create a stream per thread.
-
-    Args:
-        device (Device, optional): The device to associate the stream with
-    """
-
-    def __init__(self, device=None):
-        self._stream = mx.new_stream(device or mx.default_device())
-
-    @property
-    def stream(self):
-        return self._stream
