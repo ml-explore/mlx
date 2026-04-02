@@ -130,4 +130,13 @@ MLX_API array mla_fused_sdpa(
     float scale,
     StreamOrDevice s = {});
 
+/**
+ * Fused INT4 affine quantization for MLA latent cache.
+ * Single kernel replacing mx.quantize multi-dispatch overhead
+ * for MLA dimensions (256 latent, group_size=64, 4-bit).
+ */
+MLX_API std::vector<array> mla_quantize_store(
+    const array& input,  // [..., 256] fp16 latent
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::fast

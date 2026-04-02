@@ -476,4 +476,25 @@ class MLAFusedSDPA : public Custom {
   float scale_;
 };
 
+class MLAQuantizeStore : public Custom {
+ public:
+  MLAQuantizeStore(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, std::move(fallback)) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(MLAQuantizeStore)
+
+  bool is_equivalent(const Primitive& other) const override {
+    return true;
+  }
+};
+
 } // namespace mlx::core::fast

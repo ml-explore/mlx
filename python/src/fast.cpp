@@ -702,4 +702,27 @@ void init_fast(nb::module_& parent_module) {
       Returns:
         array: [B, H, 256] latent attention output (pre-unembed).
       )pbdoc");
+
+  m.def(
+      "mla_quantize_store",
+      [](const mx::array& input,
+         mx::StreamOrDevice s) {
+        return mx::fast::mla_quantize_store(input, s);
+      },
+      "input"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+      Fused INT4 affine quantization for MLA latent cache.
+
+      Single kernel replacing mx.quantize for MLA dimensions
+      (256 latent, group_size=64, 4-bit).
+
+      Args:
+        input (array): [..., 256] fp16 latent vectors.
+        stream (mx.stream, optional): Stream. Default: None.
+
+      Returns:
+        tuple: (packed, scales, biases) matching mx.quantize output format.
+      )pbdoc");
 }

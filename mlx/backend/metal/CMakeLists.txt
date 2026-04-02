@@ -122,6 +122,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/mla_nope_scores.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/mla_fused_sdpa.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/mla_quantize_store.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/metal.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized.cpp

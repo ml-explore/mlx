@@ -1061,4 +1061,32 @@ array mla_fused_sdpa(
   return out;
 }
 
+std::vector<array> mla_quantize_store(
+    const array& input,
+    StreamOrDevice s) {
+
+  auto stream = to_stream(s);
+
+  // Fallback: use standard quantize (for transforms + CPU)
+  auto fallback = [](std::vector<array> inputs) -> std::vector<array> {
+    return quantize(inputs[0], 64, 4);
+  };
+
+  // Output shapes: same leading dims, last dim changes
+  // packed: [..., 32] (256/8), scales: [..., 4] (256/64), biases: [..., 4]
+  auto shape = input.shape();
+  auto packed_shape = shape;
+  packed_shape.back() = 256 / 8;  // 32
+  auto scale_shape = shape;
+  scale_shape.back() = 256 / 64;  // 4
+
+  auto outputs = array::make_arrays(
+      {packed_shape, scale_shape, scale_shape},
+      {uint32, input.dtype(), input.dtype()},
+      std::make_shared<MLAQuantizeStore>(stream, fallback),
+      {input});
+
+  return outputs;
+}
+
 } // namespace mlx::core::fast
