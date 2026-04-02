@@ -18,10 +18,15 @@ using namespace nb::literals;
 
 class PyKeySequence {
  public:
-  PyKeySequence() {
-    // Destroy state before the python interpreter exits.
-    auto atexit = nb::module_::import_("atexit");
-    atexit.attr("register")(nb::cpp_function([this]() { state_.reset(); }));
+  ~PyKeySequence() {
+    if (state_.has_value()) {
+      nb::gil_scoped_acquire gil;
+      state_.reset();
+    }
+  }
+
+  void reset() {
+    state_.reset();
   }
 
   void seed(uint64_t seed) {
@@ -521,4 +526,10 @@ void init_random(nb::module_& parent_module) {
             array:
               The generated random permutation or randomly permuted input array.
       )pbdoc");
+
+  // Ensure the main thread cleanup will happen before the interpreter goes
+  // away. As a result if the other threads join the main thread we should have
+  // a clean tear-down.
+  auto atexit = nb::module_::import_("atexit");
+  atexit.attr("register")(nb::cpp_function([]() { default_key().reset(); }));
 }

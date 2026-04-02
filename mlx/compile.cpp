@@ -374,6 +374,10 @@ class CompilerCache {
     cache_.clear();
   }
 
+  bool empty() {
+    return cache_.empty();
+  }
+
  private:
   CompilerCache() {
     // Make sure the allocator is fully
@@ -1190,6 +1194,10 @@ void compile_erase(std::uintptr_t fun_id) {
 
 void compile_clear_cache() {
   detail::compiler_cache().clear();
+}
+
+bool compile_cache_empty() {
+  return detail::compiler_cache().empty();
 }
 
 } // namespace detail

@@ -1463,12 +1463,22 @@ void init_transforms(nb::module_& m) {
          bool shapeless) {
         // Make sure each thread using mx.compile would clear its compile cache
         // before python interpreter exits.
-        static thread_local auto clear_cache = []() {
-          auto atexit = nb::module_::import_("atexit");
-          atexit.attr("register")(
-              nb::cpp_function(&mx::detail::compile_clear_cache));
-          return true;
+        struct ThreadCleanup {
+          ~ThreadCleanup() {
+            if (!mx::detail::compile_cache_empty()) {
+              nb::gil_scoped_acquire gil;
+              mx::detail::compile_clear_cache();
+            }
+          }
         };
+        static thread_local auto clear_cache = []() {
+          // Ensure it is created
+          mx::detail::compile_clear_cache();
+
+          // Ensure it will be cleaned up
+          return ThreadCleanup{};
+        }();
+
         return mlx_func(
             nb::cpp_function(PyCompiledFun{fun, inputs, outputs, shapeless}),
             fun,
@@ -1542,4 +1552,10 @@ void init_transforms(nb::module_& m) {
           A callable that recomputes intermediate states during gradient
           computation.
       )pbdoc");
+
+  // Ensure the main thread cleanup will happen before the interpreter goes
+  // away. As a result if the other threads join the main thread we should have
+  // a clean tear-down.
+  auto atexit = nb::module_::import_("atexit");
+  atexit.attr("register")(nb::cpp_function(&mx::detail::compile_clear_cache));
 }
