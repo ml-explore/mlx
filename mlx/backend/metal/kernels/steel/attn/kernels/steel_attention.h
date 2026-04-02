@@ -482,10 +482,10 @@ template <
     for (short i = 0; i < kRowsPT; ++i) {
       int row = int(tid.x) * BQ + tm + sm + (i * kFragSize);
       if (row < params->qL) {
-        int64_t idx = int64_t(tid.z) * params->H * params->qL
-                    + int64_t(tid.y) * params->qL + row;
-        lse_out[idx] = float(max_score[i]) * M_LN2_F
-                     + metal::precise::log(float(sum_score[i]));
+        int64_t idx = int64_t(tid.z) * params->H * params->qL +
+            int64_t(tid.y) * params->qL + row;
+        lse_out[idx] = float(max_score[i]) * M_LN2_F +
+            metal::precise::log(float(sum_score[i]));
       }
     }
   }

@@ -22,7 +22,6 @@ from itertools import product
 import mlx.core as mx
 import mlx_tests
 
-
 # ---------------------------------------------------------------------------
 # Reference implementation
 # ---------------------------------------------------------------------------
@@ -70,17 +69,17 @@ def ref_attention(q, k, v, scale, causal=False):
         #   i + (kL - qL) >= j
         offset = kL - qL
         q_idx = mx.arange(qL)[:, None] + offset  # (qL, 1)
-        k_idx = mx.arange(kL)[None, :]            # (1, kL)
-        mask = q_idx >= k_idx                      # (qL, kL) bool
+        k_idx = mx.arange(kL)[None, :]  # (1, kL)
+        mask = q_idx >= k_idx  # (qL, kL) bool
         scores = mx.where(mask, scores, mx.array(-1e9, mx.float32))
 
     # logsumexp for numerical stability
-    scores_max = mx.max(scores, axis=-1, keepdims=True)           # (B, H, qL, 1)
-    exp_scores = mx.exp(scores - scores_max)                       # (B, H, qL, kL)
-    sum_exp = mx.sum(exp_scores, axis=-1, keepdims=True)           # (B, H, qL, 1)
-    attn_weights = exp_scores / sum_exp                            # (B, H, qL, kL)
+    scores_max = mx.max(scores, axis=-1, keepdims=True)  # (B, H, qL, 1)
+    exp_scores = mx.exp(scores - scores_max)  # (B, H, qL, kL)
+    sum_exp = mx.sum(exp_scores, axis=-1, keepdims=True)  # (B, H, qL, 1)
+    attn_weights = exp_scores / sum_exp  # (B, H, qL, kL)
 
-    out = attn_weights @ v                                         # (B, H, qL, D)
+    out = attn_weights @ v  # (B, H, qL, D)
 
     # logsumexp = max + log(sum_exp)  — shape (B, H, qL)
     logsumexp = (scores_max + mx.log(sum_exp))[..., 0]
@@ -156,10 +155,12 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
         B, qL, kL = 1, 64, 64
         n_heads = 8
 
-        configs = list(product(
-            [mx.float16, mx.bfloat16, mx.float32],
-            [64, 80, 128, 256],
-        ))
+        configs = list(
+            product(
+                [mx.float16, mx.bfloat16, mx.float32],
+                [64, 80, 128, 256],
+            )
+        )
 
         for dtype, D in configs:
             # float32 + D=256 exceeds Metal threadgroup memory on current kernel
@@ -168,7 +169,7 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
             with self.subTest(dtype=dtype, D=D):
                 q, k, v, scale = self._make_qkv(B, qL, kL, n_heads, n_heads, D, dtype)
                 self._check(q, k, v, scale, causal=False, atol=self._atol_for(dtype))
-                self._check(q, k, v, scale, causal=True,  atol=self._atol_for(dtype))
+                self._check(q, k, v, scale, causal=True, atol=self._atol_for(dtype))
 
     # ------------------------------------------------------------------
     # Causal attention
@@ -180,8 +181,9 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
         B, n_heads, D = 1, 8, 128
         for qL in [32, 64, 128, 256]:
             with self.subTest(qL=qL):
-                q, k, v, scale = self._make_qkv(B, qL, qL, n_heads, n_heads, D,
-                                                 mx.float16)
+                q, k, v, scale = self._make_qkv(
+                    B, qL, qL, n_heads, n_heads, D, mx.float16
+                )
                 self._check(q, k, v, scale, causal=True)
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU required for fused SDPA")
@@ -190,8 +192,9 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
         B, n_heads, D = 1, 8, 128
         for kL in [64, 128, 256, 512]:
             with self.subTest(kL=kL):
-                q, k, v, scale = self._make_qkv(B, 1, kL, n_heads, n_heads, D,
-                                                 mx.float16)
+                q, k, v, scale = self._make_qkv(
+                    B, 1, kL, n_heads, n_heads, D, mx.float16
+                )
                 self._check(q, k, v, scale, causal=True)
 
     # ------------------------------------------------------------------
@@ -206,13 +209,14 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
             (16, 128),
             (32, 256),
             (64, 512),
-            (128, 64),   # qL > kL
+            (128, 64),  # qL > kL
         ]
         for qL, kL in cross_shapes:
             for causal in (False, True):
                 with self.subTest(qL=qL, kL=kL, causal=causal):
-                    q, k, v, scale = self._make_qkv(B, qL, kL, n_heads, n_heads,
-                                                     D, mx.float16)
+                    q, k, v, scale = self._make_qkv(
+                        B, qL, kL, n_heads, n_heads, D, mx.float16
+                    )
                     self._check(q, k, v, scale, causal=causal)
 
     # ------------------------------------------------------------------
@@ -224,16 +228,15 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
         """Grouped-query attention: multiple Q heads share each KV head."""
         B, qL, kL, D = 1, 64, 64, 128
         gqa_configs = [
-            (32, 8),   # 4:1 ratio  — typical 122B
-            (8,  1),   # 8:1 ratio  — extreme GQA / MQA
-            (16, 4),   # 4:1 ratio
-            (8,  2),   # 4:1 ratio, 2 KV heads
+            (32, 8),  # 4:1 ratio  — typical 122B
+            (8, 1),  # 8:1 ratio  — extreme GQA / MQA
+            (16, 4),  # 4:1 ratio
+            (8, 2),  # 4:1 ratio, 2 KV heads
         ]
         for n_q, n_kv in gqa_configs:
             for causal in (False, True):
                 with self.subTest(n_q=n_q, n_kv=n_kv, causal=causal):
-                    q, k, v, scale = self._make_qkv(B, qL, kL, n_q, n_kv, D,
-                                                     mx.float16)
+                    q, k, v, scale = self._make_qkv(B, qL, kL, n_q, n_kv, D, mx.float16)
                     self._check(q, k, v, scale, causal=causal)
 
     # ------------------------------------------------------------------
@@ -257,8 +260,7 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
                     continue
                 with self.subTest(D=D, dtype=dtype):
                     q, k, v, scale = self._make_qkv(B, qL, kL, n_q, n_kv, D, dtype)
-                    self._check(q, k, v, scale, causal=True,
-                                atol=self._atol_for(dtype))
+                    self._check(q, k, v, scale, causal=True, atol=self._atol_for(dtype))
 
     # ------------------------------------------------------------------
     # Long context (8K)
@@ -296,13 +298,12 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
         """Batch size > 1 with various head configurations."""
         D = 128
         for B, n_q, n_kv, qL, kL in [
-            (2, 8, 8,  64,  64),
-            (4, 8, 2,  32, 128),
-            (2, 16, 4, 64,  64),
+            (2, 8, 8, 64, 64),
+            (4, 8, 2, 32, 128),
+            (2, 16, 4, 64, 64),
         ]:
             with self.subTest(B=B, n_q=n_q, n_kv=n_kv, qL=qL, kL=kL):
-                q, k, v, scale = self._make_qkv(B, qL, kL, n_q, n_kv, D,
-                                                 mx.float16)
+                q, k, v, scale = self._make_qkv(B, qL, kL, n_q, n_kv, D, mx.float16)
                 self._check(q, k, v, scale, causal=False)
                 self._check(q, k, v, scale, causal=True)
 
@@ -333,12 +334,11 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
 
         # Independently compute logsumexp of the raw scaled scores
         raw_scores = (q * scale) @ mx.swapaxes(k, -1, -2)  # (B, H, qL, kL)
-        expected_lse = mx.logsumexp(raw_scores, axis=-1)     # (B, H, qL)
+        expected_lse = mx.logsumexp(raw_scores, axis=-1)  # (B, H, qL)
 
         mx.eval(lse, expected_lse)
         max_diff = mx.max(mx.abs(lse - expected_lse)).item()
-        self.assertLessEqual(max_diff, 1e-5,
-                             msg=f"ref logsumexp drift: {max_diff:.2e}")
+        self.assertLessEqual(max_diff, 1e-5, msg=f"ref logsumexp drift: {max_diff:.2e}")
 
     def test_ref_logsumexp_causal(self):
         """Reference logsumexp must match raw scores with causal masking applied."""
@@ -353,17 +353,18 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
         _, lse = ref_attention(q, k, v, scale, causal=True)
 
         # Build the causal mask manually and compute expected logsumexp
-        raw = (q * scale) @ mx.swapaxes(k, -1, -2)         # (B, H, L, L)
+        raw = (q * scale) @ mx.swapaxes(k, -1, -2)  # (B, H, L, L)
         q_idx = mx.arange(L)[:, None]
         k_idx = mx.arange(L)[None, :]
-        mask = q_idx >= k_idx                               # (L, L) bool
+        mask = q_idx >= k_idx  # (L, L) bool
         masked = mx.where(mask, raw, mx.array(-1e9, mx.float32))
-        expected_lse = mx.logsumexp(masked, axis=-1)        # (B, H, L)
+        expected_lse = mx.logsumexp(masked, axis=-1)  # (B, H, L)
 
         mx.eval(lse, expected_lse)
         max_diff = mx.max(mx.abs(lse - expected_lse)).item()
-        self.assertLessEqual(max_diff, 1e-4,
-                             msg=f"causal ref logsumexp drift: {max_diff:.2e}")
+        self.assertLessEqual(
+            max_diff, 1e-4, msg=f"causal ref logsumexp drift: {max_diff:.2e}"
+        )
 
     def test_ref_logsumexp_gqa(self):
         """Reference logsumexp tiles KV heads correctly for GQA."""
@@ -383,14 +384,15 @@ class TestSDPALogsumexpBaseline(mlx_tests.MLXTestCase):
 
         # Cross-check: tile K manually and verify logsumexp
         n_rep = n_q // n_kv
-        k_tiled = mx.repeat(k, n_rep, axis=1)              # (B, n_q, kL, D)
-        raw = (q * scale) @ mx.swapaxes(k_tiled, -1, -2)   # (B, n_q, qL, kL)
+        k_tiled = mx.repeat(k, n_rep, axis=1)  # (B, n_q, kL, D)
+        raw = (q * scale) @ mx.swapaxes(k_tiled, -1, -2)  # (B, n_q, qL, kL)
         expected_lse = mx.logsumexp(raw, axis=-1)
 
         mx.eval(lse, expected_lse)
         max_diff = mx.max(mx.abs(lse - expected_lse)).item()
-        self.assertLessEqual(max_diff, 1e-5,
-                             msg=f"GQA ref logsumexp drift: {max_diff:.2e}")
+        self.assertLessEqual(
+            max_diff, 1e-5, msg=f"GQA ref logsumexp drift: {max_diff:.2e}"
+        )
 
 
 if __name__ == "__main__":
