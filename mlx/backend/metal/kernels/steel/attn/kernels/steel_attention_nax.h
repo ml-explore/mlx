@@ -286,8 +286,8 @@ template <
       for (short iq = 0; iq < TQ; iq++) {
         STEEL_PRAGMA_UNROLL
         for (short ik = 0; ik < TK; ik++) {
-          const short row_pos = base_row + iq * kU;
-          const short col_pos = base_col + ik * kU;
+          const int row_pos = base_row + iq * kU;
+          const int col_pos = base_col + ik * kU;
 
           thread auto& fg = Stile.frag_at(iq, ik);
 
@@ -321,8 +321,8 @@ template <
       for (short iq = 0; iq < TQ; iq++) {
         STEEL_PRAGMA_UNROLL
         for (short ik = 0; ik < TK; ik++) {
-          const short row_pos = base_row + iq * kU;
-          const short col_pos = base_col + ik * kU;
+          const int row_pos = base_row + iq * kU;
+          const int col_pos = base_col + ik * kU;
 
           mfrag_t mfrag;
           mtile_t::NAXFrag_t::load_safe(
