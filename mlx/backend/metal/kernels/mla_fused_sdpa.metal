@@ -214,9 +214,11 @@ template <typename T>
     threadgroup U        tg_new_kpe[MLA_RD];           // 64 RoPE values (float)
 
     // --- Existing threadgroup memory for cross-simdgroup reduction ---
+    // Padding on tg_out avoids 32-way bank conflicts during transpose
+    // (stride 32 with 32 banks = all threads hit same bank on transposed read)
     threadgroup U tg_max[BN];
     threadgroup U tg_sum[BN];
-    threadgroup U tg_out[BN * BD];
+    threadgroup U tg_out[BN * (BD + 1)];  // stride 33 avoids bank conflicts in transpose
 
     const uint cache_base = batch_idx * S_alloc;
 
@@ -229,12 +231,14 @@ template <typename T>
         // --- Quantize new_latent (same pattern as mla_quantize_store) ---
         const device T* lat_ptr = new_latent + batch_idx * MLA_D;
         float vals[8];
+        #pragma clang loop unroll(full)
         for (uint i = 0; i < 8; i++) {
             vals[i] = static_cast<float>(lat_ptr[simd_lid * 8 + i]);
         }
 
         // Per-group min/max via simd_shuffle_xor (groups of 8 threads)
         float local_min = vals[0], local_max = vals[0];
+        #pragma clang loop unroll(full)
         for (uint i = 1; i < 8; i++) {
             local_min = min(local_min, vals[i]);
             local_max = max(local_max, vals[i]);
@@ -252,6 +256,7 @@ template <typename T>
 
         // Quantize and pack
         uint packed_word = 0;
+        #pragma clang loop unroll(full)
         for (uint i = 0; i < 8; i++) {
             float normalized = (vals[i] - bias_val) * inv_scale;
             uint q = static_cast<uint>(clamp(rint(normalized), 0.0f, 15.0f));
@@ -278,6 +283,7 @@ template <typename T>
 
         // Copy new_kpe to threadgroup memory + cache (2 values per thread)
         const device T* kpe_ptr = new_kpe + batch_idx * MLA_RD;
+        #pragma clang loop unroll(full)
         for (uint i = 0; i < 2; i++) {
             uint elem = simd_lid * 2 + i;
             U val = static_cast<U>(kpe_ptr[elem]);
@@ -296,12 +302,14 @@ template <typename T>
 
     thread U q_n[8];
     const device T* q_nope_ptr = q_nope + (batch_idx * H + head_idx) * MLA_D;
+    #pragma clang loop unroll(full)
     for (uint i = 0; i < 8; i++) {
         q_n[i] = static_cast<U>(attn_scale) * static_cast<U>(q_nope_ptr[simd_lid * 8 + i]);
     }
 
     thread U q_r[2];
     const device T* q_pe_ptr = q_pe + (batch_idx * H + head_idx) * MLA_RD;
+    #pragma clang loop unroll(full)
     for (uint i = 0; i < 2; i++) {
         q_r[i] = static_cast<U>(attn_scale) * static_cast<U>(q_pe_ptr[simd_lid * 2 + i]);
     }
@@ -331,11 +339,13 @@ template <typename T>
             U sc = static_cast<U>(cache_scales[(cache_base + s) * MLA_NGROUPS + group]);
             U bi = static_cast<U>(cache_biases[(cache_base + s) * MLA_NGROUPS + group]);
 
+            #pragma clang loop unroll(full)
             for (uint i = 0; i < 8; i++) {
                 uint raw = (word >> (i * 4)) & 0xFu;
                 lat[i] = static_cast<U>(raw) * sc + bi;
             }
 
+            #pragma clang loop unroll(full)
             for (uint i = 0; i < 2; i++) {
                 uint elem = simd_lid * 2 + i;
                 rope_partial += q_r[i] * static_cast<U>(cache_kpe[(cache_base + s) * MLA_RD + elem]);
@@ -347,11 +357,13 @@ template <typename T>
             U sc = tg_new_scales[group];
             U bi = tg_new_biases[group];
 
+            #pragma clang loop unroll(full)
             for (uint i = 0; i < 8; i++) {
                 uint raw = (word >> (i * 4)) & 0xFu;
                 lat[i] = static_cast<U>(raw) * sc + bi;
             }
 
+            #pragma clang loop unroll(full)
             for (uint i = 0; i < 2; i++) {
                 uint elem = simd_lid * 2 + i;
                 rope_partial += q_r[i] * tg_new_kpe[elem];
@@ -360,6 +372,7 @@ template <typename T>
 
         // Nope score via simd_sum
         U nope_partial = 0;
+        #pragma clang loop unroll(full)
         for (uint i = 0; i < 8; i++) {
             nope_partial += q_n[i] * lat[i];
         }
@@ -376,6 +389,7 @@ template <typename T>
         sum_exp_score = sum_exp_score * factor + exp_score;
 
         // Value accumulation (reuse dequanted latent)
+        #pragma clang loop unroll(full)
         for (uint i = 0; i < 8; i++) {
             o[i] = o[i] * factor + exp_score * lat[i];
         }
@@ -396,10 +410,14 @@ template <typename T>
     U factor = fast::exp(max_score - new_max);
     sum_exp_score = simd_sum(tg_sum[simd_lid] * factor);
 
+    // Padded stride for bank-conflict-free transpose
+    const uint TG_STRIDE = BD + 1;  // 33 instead of 32
+
+    #pragma clang loop unroll(full)
     for (uint i = 0; i < 8; i++) {
-        tg_out[simd_lid * BD + simd_gid] = o[i];
+        tg_out[simd_lid * TG_STRIDE + simd_gid] = o[i];
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        o[i] = simd_sum(tg_out[simd_gid * BD + simd_lid] * factor);
+        o[i] = simd_sum(tg_out[simd_gid * TG_STRIDE + simd_lid] * factor);
         o[i] = sum_exp_score == 0 ? o[i] : (o[i] / sum_exp_score);
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
@@ -407,6 +425,7 @@ template <typename T>
     // Write attention output
     if (simd_lid == 0) {
         device T* out_ptr = out + (batch_idx * H + head_idx) * MLA_D;
+        #pragma clang loop unroll(full)
         for (uint i = 0; i < 8; i++) {
             out_ptr[simd_gid * 8 + i] = static_cast<T>(o[i]);
         }
