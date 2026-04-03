@@ -139,4 +139,25 @@ MLX_API std::vector<array> mla_quantize_store(
     const array& input,  // [..., 256] fp16 latent
     StreamOrDevice s = {});
 
+/**
+ * Fused SDPA + direct cache update for MLA decode.
+ * Combines attention computation with in-place cache append,
+ * eliminating SliceUpdate full-cache copies.
+ *
+ * Returns: (sdpa_output, updated_packed, updated_scales, updated_biases, updated_kpe)
+ * Cache outputs are aliased to input buffers — zero-copy append.
+ */
+MLX_API std::vector<array> mla_fused_sdpa_v2(
+    const array& q_nope,       // [B, H, 256]
+    const array& q_pe,         // [B, H, 64]
+    const array& cache_packed, // [B, S_alloc, 32]
+    const array& cache_scales, // [B, S_alloc, 4]
+    const array& cache_biases, // [B, S_alloc, 4]
+    const array& cache_kpe,    // [B, S_alloc, 64]
+    const array& new_latent,   // [B, 1, 256]
+    const array& new_kpe,      // [B, 1, 64]
+    float scale,
+    uint32_t seq_offset,       // S: current cache occupancy
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::fast

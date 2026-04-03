@@ -497,4 +497,34 @@ class MLAQuantizeStore : public Custom {
   }
 };
 
+class MLAFusedSDPAWithCacheUpdate : public Custom {
+ public:
+  MLAFusedSDPAWithCacheUpdate(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      float scale,
+      uint32_t seq_offset)
+      : Custom(stream, std::move(fallback)),
+        scale_(scale),
+        seq_offset_(seq_offset) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(MLAFusedSDPAWithCacheUpdate)
+
+  bool is_equivalent(const Primitive& other) const override {
+    auto& o = static_cast<const MLAFusedSDPAWithCacheUpdate&>(other);
+    return scale_ == o.scale_ && seq_offset_ == o.seq_offset_;
+  }
+
+ private:
+  float scale_;
+  uint32_t seq_offset_;
+};
+
 } // namespace mlx::core::fast

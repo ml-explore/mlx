@@ -1,0 +1,810 @@
+Using pip 26.0 from /opt/homebrew/lib/python3.12/site-packages/pip (python 3.12)
+Obtaining file:///Users/producerguy/Documents/Projects/forge/mlx-mla
+  Installing build dependencies: started
+  Running command installing build dependencies
+  Using pip 26.0 from /opt/homebrew/Cellar/python@3.12/3.12.13/lib/python3.12/site-packages/pip (python 3.12)
+  Collecting setuptools>=80
+    Obtaining dependency information for setuptools>=80 from https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl.metadata
+    Using cached setuptools-82.0.1-py3-none-any.whl.metadata (6.5 kB)
+  Collecting cmake>=3.25
+    Obtaining dependency information for cmake>=3.25 from https://files.pythonhosted.org/packages/43/07/05be57c389f8f0c3d0d7b878685ec1eed863b77787d65584c9399e294531/cmake-4.3.1-py3-none-macosx_10_10_universal2.whl.metadata
+    Using cached cmake-4.3.1-py3-none-macosx_10_10_universal2.whl.metadata (6.5 kB)
+  Collecting typing_extensions
+    Obtaining dependency information for typing_extensions from https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl.metadata
+    Using cached typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+  Using cached setuptools-82.0.1-py3-none-any.whl (1.0 MB)
+  Using cached cmake-4.3.1-py3-none-macosx_10_10_universal2.whl (52.6 MB)
+  Using cached typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+  Installing collected packages: typing_extensions, setuptools, cmake
+    Creating /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-build-env-51sd32tr/overlay/bin
+    changing mode of /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-build-env-51sd32tr/overlay/bin/ccmake to 755
+    changing mode of /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-build-env-51sd32tr/overlay/bin/cmake to 755
+    changing mode of /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-build-env-51sd32tr/overlay/bin/cpack to 755
+    changing mode of /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-build-env-51sd32tr/overlay/bin/ctest to 755
+
+  Successfully installed cmake-4.3.1 setuptools-82.0.1 typing_extensions-4.15.0
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Running command Checking if build backend supports build_editable
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Running command Getting requirements to build editable
+  running egg_info
+  writing python/mlx.egg-info/PKG-INFO
+  writing dependency_links to python/mlx.egg-info/dependency_links.txt
+  writing entry points to python/mlx.egg-info/entry_points.txt
+  writing requirements to python/mlx.egg-info/requires.txt
+  writing top-level names to python/mlx.egg-info/top_level.txt
+  reading manifest file 'python/mlx.egg-info/SOURCES.txt'
+  reading manifest template 'MANIFEST.in'
+  adding license file 'LICENSE'
+  writing manifest file 'python/mlx.egg-info/SOURCES.txt'
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Running command Preparing editable metadata (pyproject.toml)
+  running dist_info
+  creating /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-modern-metadata-jfg2_nnl/mlx.egg-info
+  writing /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-modern-metadata-jfg2_nnl/mlx.egg-info/PKG-INFO
+  writing dependency_links to /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-modern-metadata-jfg2_nnl/mlx.egg-info/dependency_links.txt
+  writing entry points to /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-modern-metadata-jfg2_nnl/mlx.egg-info/entry_points.txt
+  writing requirements to /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-modern-metadata-jfg2_nnl/mlx.egg-info/requires.txt
+  writing top-level names to /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-modern-metadata-jfg2_nnl/mlx.egg-info/top_level.txt
+  writing manifest file '/private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-modern-metadata-jfg2_nnl/mlx.egg-info/SOURCES.txt'
+  reading manifest file '/private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-modern-metadata-jfg2_nnl/mlx.egg-info/SOURCES.txt'
+  reading manifest template 'MANIFEST.in'
+  adding license file 'LICENSE'
+  writing manifest file '/private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-modern-metadata-jfg2_nnl/mlx.egg-info/SOURCES.txt'
+  creating '/private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-modern-metadata-jfg2_nnl/mlx-0.31.2.dev20260401+2ffafe07.dist-info'
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: mlx
+  Building editable for mlx (pyproject.toml): started
+  Running command Building editable for mlx (pyproject.toml)
+  running editable_wheel
+  creating /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx.egg-info
+  writing /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx.egg-info/PKG-INFO
+  writing dependency_links to /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx.egg-info/dependency_links.txt
+  writing entry points to /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx.egg-info/entry_points.txt
+  writing requirements to /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx.egg-info/requires.txt
+  writing top-level names to /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx.egg-info/top_level.txt
+  writing manifest file '/private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx.egg-info/SOURCES.txt'
+  reading manifest file '/private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx.egg-info/SOURCES.txt'
+  reading manifest template 'MANIFEST.in'
+  adding license file 'LICENSE'
+  writing manifest file '/private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx.egg-info/SOURCES.txt'
+  creating '/private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx-0.31.2.dev20260401+2ffafe07.dist-info'
+  creating /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx-0.31.2.dev20260401+2ffafe07.dist-info/WHEEL
+  running build_py
+  running build_ext
+  -- The C compiler identification is AppleClang 21.0.0.21000099
+  -- The CXX compiler identification is AppleClang 21.0.0.21000099
+  -- Detecting C compiler ABI info
+  -- Detecting C compiler ABI info - done
+  -- Check for working C compiler: /usr/bin/cc - skipped
+  -- Detecting C compile features
+  -- Detecting C compile features - done
+  -- Detecting CXX compiler ABI info
+  -- Detecting CXX compiler ABI info - done
+  -- Check for working CXX compiler: /usr/bin/c++ - skipped
+  -- Detecting CXX compile features
+  -- Detecting CXX compile features - done
+  -- Building MLX for arm64 processor on Darwin
+  -- Metal found /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Metal.framework
+  -- Building with macOS SDK version 26.4
+  -- Accelerate found /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework
+  -- Downloading json
+  -- Using the multi-header code from /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.core/_deps/json-src/include/
+  -- Downloading gguflib
+  -- {fmt} version: 12.1.0
+  -- Build type: Release
+  -- Performing Test HAS_NULLPTR_WARNING
+  -- Performing Test HAS_NULLPTR_WARNING - Success
+  -- Building Python bindings.
+  -- Found Python: /tmp/hf-download/bin/python3.12 (found suitable version "3.12.13", minimum required is "3.10") found components: Interpreter Development.Module
+  -- Configuring done (8.4s)
+  -- Generating done (0.1s)
+  -- Build files have been written to: /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.core
+  [  1%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_internals.cpp.o
+  [  1%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_func.cpp.o
+  [  1%] Generating jit/reduce_utils.cpp
+  [  2%] Generating jit/utils.cpp
+  [  3%] Generating compiled_preamble.cpp
+  [  4%] Generating jit/scatter.cpp
+  [  5%] Generating jit/masked_scatter.cpp
+  [  5%] Generating jit/unary_ops.cpp
+  [  6%] Generating jit/gather.cpp
+  [  7%] Generating jit/ternary_ops.cpp
+  [  7%] Generating jit/binary_ops.cpp
+  [  7%] Generating jit/scatter_axis.cpp
+  [  7%] Generating jit/gather_front.cpp
+  [  7%] Generating jit/hadamard.cpp
+  [  7%] Building CXX object mlx/CMakeFiles/mlx_version.dir/version.cpp.o
+  [  7%] Generating jit/gather_axis.cpp
+  [  8%] Building C object mlx/io/CMakeFiles/gguflib.dir/__/__/_deps/gguflib-src/fp16.c.o
+  [  9%] Building arg_reduce.air
+  [  9%] Built target masked_scatter
+  [  9%] Built target reduce_utils
+  [  9%] Built target cpu_compiled_preamble
+  [  9%] Built target gather
+  [  9%] Built target mlx_version
+  [ 10%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_type.cpp.o
+  [ 10%] Building steel_attention_nax.air
+  [ 10%] Building C object mlx/io/CMakeFiles/gguflib.dir/__/__/_deps/gguflib-src/gguflib.c.o
+  [ 10%] Built target ternary_ops
+  [ 10%] Built target scatter
+  [ 10%] Building fp_quantized_nax.air
+  [ 10%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_enum.cpp.o
+  [ 10%] Built target gather_front
+  [ 11%] Building quantized_nax.air
+  [ 12%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_ndarray.cpp.o
+  [ 12%] Built target hadamard
+  [ 12%] Built target gather_axis
+  [ 12%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_static_property.cpp.o
+  [ 12%] Built target binary_ops
+  [ 12%] Building steel_gemm_splitk_nax.air
+  [ 12%] Built target scatter_axis
+  [ 12%] Building steel_gemm_gather_nax.air
+  [ 13%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_ft.cpp.o
+  [ 13%] Building steel_gemm_fused_nax.air
+  [ 13%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/common.cpp.o
+  [ 13%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/error.cpp.o
+  [ 13%] Built target utils
+  [ 14%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/trampoline.cpp.o
+  [ 15%] Building steel_attention.air
+  [ 16%] Linking C static library libgguflib.a
+  [ 16%] Building gemv_masked.air
+  [ 16%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/implicit.cpp.o
+  [ 16%] Built target unary_ops
+  [ 16%] Building steel_gemm_segmented.air
+  [ 17%] Building steel_gemm_splitk.air
+  [ 18%] Building steel_gemm_masked.air
+  [ 19%] Building steel_gemm_gather.air
+  [ 20%] Building steel_gemm_fused.air
+  [ 20%] Built target gguflib
+  [ 20%] Building steel_conv_general.air
+  [ 20%] Building steel_conv_3d.air
+  [ 21%] Building steel_conv.air
+  [ 22%] Building unary.air
+  [ 22%] Building ternary.air
+  [ 23%] Linking CXX static library libnanobind-static.a
+  [ 23%] Building sort.air
+  ranlib: warning: 'libnanobind-static.a(nb_ft.cpp.o)' has no symbols
+  [ 23%] Building logsumexp.air
+  ranlib: warning: 'libnanobind-static.a(nb_ft.cpp.o)' has no symbols
+  [ 23%] Built target nanobind-static
+  [ 24%] Building softmax.air
+  [ 24%] Building scan.air
+  [ 24%] Building fp_quantized.air
+  [ 24%] Building quantized.air
+  [ 24%] Building reduce.air
+  [ 25%] Building fft.air
+  [ 26%] Building copy.air
+  [ 27%] Building binary_two.air
+  [ 27%] Building binary.air
+  [ 27%] Building arange.air
+  [ 27%] Building fence.air
+  [ 28%] Building scaled_dot_product_attention.air
+  [ 29%] Building mla_nope_scores.air
+  [ 29%] Building rope.air
+  [ 30%] Building rms_norm.air
+  [ 30%] Building random.air
+  [ 31%] Building layer_norm.air
+  [ 32%] Building gemv.air
+  [ 32%] Building conv.air
+  [ 33%] Building mlx.metallib
+  [ 33%] Built target mlx-metallib
+  [ 33%] Building CXX object CMakeFiles/mlx.dir/mlx/array.cpp.o
+  [ 34%] Building CXX object CMakeFiles/mlx.dir/mlx/compile.cpp.o
+  [ 35%] Building CXX object CMakeFiles/mlx.dir/mlx/linalg.cpp.o
+  [ 36%] Building CXX object CMakeFiles/mlx.dir/mlx/transforms.cpp.o
+  [ 37%] Building CXX object CMakeFiles/mlx.dir/mlx/dtype.cpp.o
+  [ 37%] Building CXX object CMakeFiles/mlx.dir/mlx/primitives.cpp.o
+  [ 37%] Building CXX object CMakeFiles/mlx.dir/mlx/fast.cpp.o
+  [ 37%] Building CXX object CMakeFiles/mlx.dir/mlx/utils.cpp.o
+  [ 37%] Building CXX object CMakeFiles/mlx.dir/mlx/stream.cpp.o
+  [ 38%] Building CXX object CMakeFiles/mlx.dir/mlx/fft.cpp.o
+  [ 39%] Building CXX object CMakeFiles/mlx.dir/mlx/random.cpp.o
+  [ 40%] Building CXX object CMakeFiles/mlx.dir/mlx/einsum.cpp.o
+  [ 40%] Building CXX object CMakeFiles/mlx.dir/mlx/device.cpp.o
+  [ 41%] Building CXX object CMakeFiles/mlx.dir/mlx/graph_utils.cpp.o
+  [ 41%] Building CXX object CMakeFiles/mlx.dir/mlx/scheduler.cpp.o
+  [ 41%] Building CXX object CMakeFiles/mlx.dir/mlx/dtype_utils.cpp.o
+  [ 41%] Building CXX object CMakeFiles/mlx.dir/mlx/ops.cpp.o
+  [ 41%] Building CXX object CMakeFiles/mlx.dir/mlx/export.cpp.o
+  [ 41%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/common/broadcasting.cpp.o
+  [ 42%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/common/compiled.cpp.o
+  [ 42%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/common/common.cpp.o
+  [ 43%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/common/load.cpp.o
+  [ 44%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/common/slicing.cpp.o
+  [ 44%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/common/reduce.cpp.o
+  [ 44%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/common/utils.cpp.o
+  [ 44%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/device_info.cpp.o
+  [ 45%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/arg_reduce.cpp.o
+  [ 45%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/binary.cpp.o
+  [ 46%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/conv.cpp.o
+  [ 46%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/copy.cpp.o
+  [ 47%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/distributed.cpp.o
+  [ 47%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/eig.cpp.o
+  [ 48%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/eigh.cpp.o
+  [ 48%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/encoder.cpp.o
+  [ 48%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/fft.cpp.o
+  [ 49%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/hadamard.cpp.o
+  [ 49%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/matmul.cpp.o
+  [ 50%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/gemms/cblas.cpp.o
+  [ 50%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/masked_mm.cpp.o
+  [ 51%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/primitives.cpp.o
+  [ 51%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/quantized.cpp.o
+  [ 52%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/reduce.cpp.o
+  [ 52%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/scan.cpp.o
+  [ 53%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/select.cpp.o
+  [ 53%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/softmax.cpp.o
+  [ 53%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/logsumexp.cpp.o
+  [ 54%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/sort.cpp.o
+  [ 54%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/threefry.cpp.o
+  [ 55%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/indexing.cpp.o
+  [ 55%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/luf.cpp.o
+  [ 56%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/qrf.cpp.o
+  [ 56%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/svd.cpp.o
+  [ 57%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/inverse.cpp.o
+  [ 57%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/cholesky.cpp.o
+  [ 57%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/unary.cpp.o
+  [ 58%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/eval.cpp.o
+  [ 58%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/compiled_preamble.cpp.o
+  [ 59%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/gemms/bnns.cpp.o
+  [ 59%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/compiled.cpp.o
+  [ 60%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cpu/jit_compiler.cpp.o
+  [ 60%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/primitives.cpp.o
+  [ 61%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/ops.cpp.o
+  [ 61%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/distributed.cpp.o
+  [ 62%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/utils.cpp.o
+  [ 62%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/mpi/mpi.cpp.o
+  [ 62%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/ring/ring.cpp.o
+  [ 63%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/nccl/no_nccl.cpp.o
+  [ 63%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/jaccl/jaccl.cpp.o
+  [ 64%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/jaccl/utils.cpp.o
+  [ 65%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/jaccl/ring.cpp.o
+  [ 65%] Building CXX object CMakeFiles/mlx.dir/mlx/distributed/jaccl/mesh.cpp.o
+  [ 65%] Building CXX object CMakeFiles/mlx.dir/mlx/io/load.cpp.o
+  [ 66%] Building CXX object CMakeFiles/mlx.dir/mlx/io/safetensors.cpp.o
+  [ 66%] Building CXX object CMakeFiles/mlx.dir/mlx/io/gguf.cpp.o
+  [ 67%] Building CXX object CMakeFiles/mlx.dir/mlx/io/gguf_quants.cpp.o
+  [ 67%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/utils.cpp.o
+  [ 67%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/unary_ops.cpp.o
+  [ 68%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/binary_ops.cpp.o
+  [ 68%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/ternary_ops.cpp.o
+  [ 69%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/reduce_utils.cpp.o
+  [ 69%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/scatter.cpp.o
+  [ 70%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/masked_scatter.cpp.o
+  [ 70%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/gather.cpp.o
+  [ 71%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/gather_front.cpp.o
+  [ 71%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/gather_axis.cpp.o
+  [ 71%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/scatter_axis.cpp.o
+  [ 72%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/jit/hadamard.cpp.o
+  [ 72%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/nojit_kernels.cpp.o
+  [ 73%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/allocator.cpp.o
+  [ 73%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/binary.cpp.o
+  [ 74%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/device_info.cpp.o
+  [ 74%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/compiled.cpp.o
+  [ 75%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/conv.cpp.o
+  [ 75%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/copy.cpp.o
+  [ 76%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/custom_kernel.cpp.o
+  [ 76%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/distributed.cpp.o
+  [ 76%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/device.cpp.o
+  [ 77%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/event.cpp.o
+  [ 77%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/eval.cpp.o
+  [ 78%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/fence.cpp.o
+  [ 78%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/fft.cpp.o
+  [ 79%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/hadamard.cpp.o
+  [ 79%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/indexing.cpp.o
+  [ 80%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/logsumexp.cpp.o
+  [ 80%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/matmul.cpp.o
+  [ 80%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/scaled_dot_product_attention.cpp.o
+  [ 81%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/mla_nope_scores.cpp.o
+  [ 81%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/metal.cpp.o
+  [ 82%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/primitives.cpp.o
+  [ 82%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/quantized.cpp.o
+  [ 83%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/normalization.cpp.o
+  [ 83%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/rope.cpp.o
+  [ 84%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/scan.cpp.o
+  [ 84%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/slicing.cpp.o
+  [ 85%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/softmax.cpp.o
+  [ 85%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/sort.cpp.o
+  [ 85%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/reduce.cpp.o
+  [ 86%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/ternary.cpp.o
+  [ 86%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/unary.cpp.o
+  [ 87%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/resident.cpp.o
+  [ 87%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/metal/utils.cpp.o
+  [ 88%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/cuda/no_cuda.cpp.o
+  [ 88%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/gpu/copy.cpp.o
+  [ 89%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/gpu/primitives.cpp.o
+  [ 89%] Building CXX object CMakeFiles/mlx.dir/mlx/backend/gpu/slicing.cpp.o
+  [ 89%] Linking CXX shared library libmlx.dylib
+  [ 89%] Built target mlx
+  [ 89%] Building CXX object python/src/CMakeFiles/core.dir/mlx.cpp.o
+  [ 90%] Building CXX object python/src/CMakeFiles/core.dir/array.cpp.o
+  [ 90%] Building CXX object python/src/CMakeFiles/core.dir/random.cpp.o
+  [ 91%] Building CXX object python/src/CMakeFiles/core.dir/device.cpp.o
+  [ 91%] Building CXX object python/src/CMakeFiles/core.dir/stream.cpp.o
+  [ 92%] Building CXX object python/src/CMakeFiles/core.dir/fft.cpp.o
+  [ 92%] Building CXX object python/src/CMakeFiles/core.dir/convert.cpp.o
+  [ 92%] Building CXX object python/src/CMakeFiles/core.dir/cuda.cpp.o
+  [ 92%] Building CXX object python/src/CMakeFiles/core.dir/distributed.cpp.o
+  [ 92%] Building CXX object python/src/CMakeFiles/core.dir/fast.cpp.o
+  [ 92%] Building CXX object python/src/CMakeFiles/core.dir/indexing.cpp.o
+  [ 93%] Building CXX object python/src/CMakeFiles/core.dir/export.cpp.o
+  [ 94%] Building CXX object python/src/CMakeFiles/core.dir/memory.cpp.o
+  [ 95%] Building CXX object python/src/CMakeFiles/core.dir/ops.cpp.o
+  [ 95%] Building CXX object python/src/CMakeFiles/core.dir/load.cpp.o
+  [ 95%] Building CXX object python/src/CMakeFiles/core.dir/mlx_func.cpp.o
+  [ 96%] Building CXX object python/src/CMakeFiles/core.dir/metal.cpp.o
+  [ 97%] Building CXX object python/src/CMakeFiles/core.dir/transforms.cpp.o
+  [ 98%] Building CXX object python/src/CMakeFiles/core.dir/linalg.cpp.o
+  [ 98%] Building CXX object python/src/CMakeFiles/core.dir/constants.cpp.o
+  [100%] Building CXX object python/src/CMakeFiles/core.dir/utils.cpp.o
+  [100%] Building CXX object python/src/CMakeFiles/core.dir/trees.cpp.o
+  [100%] Linking CXX shared module /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/core.cpython-312-darwin.so
+  [100%] Built target core
+  Install the project...
+  -- Install configuration: "Release"
+  copying /var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/core.cpython-312-darwin.so -> python/mlx
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4LibraryDescriptor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4MachineLearningCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4CommandQueue.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4LinkingDescriptor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLTypes.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLResourceStateCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLIndirectCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLGPUAddress.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4Archive.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLComputePipeline.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLFunctionHandle.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4MeshRenderPipeline.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLDrawable.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLDynamicLibrary.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4FunctionDescriptor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLComputePass.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4LibraryFunctionDescriptor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLFunctionConstantValues.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLPipeline.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4StitchedFunctionDescriptor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4CompilerTask.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLRenderCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLTextureViewPool.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLTensor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLResidencySet.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLBlitCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLCaptureManager.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/Metal.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLStageInputOutputDescriptor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4CommandAllocator.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLAccelerationStructureTypes.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLParallelRenderCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4CommitFeedback.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4TileRenderPipeline.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4BinaryFunction.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLRasterizationRate.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4ArgumentTable.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLLinkedFunctions.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLTexture.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLDataType.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4SpecializedFunctionDescriptor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLSampler.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLDepthStencil.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4CommandBuffer.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4Counters.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLArgumentEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLIntersectionFunctionTable.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLVisibleFunctionTable.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4CommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLPrivate.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLVersion.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLResource.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLAccelerationStructure.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLDevice.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLArgument.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLFunctionLog.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4RenderPipeline.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLBuffer.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLRenderPass.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLHeap.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLVertexDescriptor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4BinaryFunctionDescriptor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4ComputeCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLIOCommandBuffer.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLFunctionStitching.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLLogState.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLLibrary.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLPixelFormat.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4ComputePipeline.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLResourceViewPool.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLAllocation.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4RenderPass.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4MachineLearningPipeline.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLFence.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4PipelineDataSetSerializer.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLIndirectCommandBuffer.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLRenderPipeline.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLCommandQueue.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLFunctionDescriptor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLAccelerationStructureCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLBlitPass.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4AccelerationStructure.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLEvent.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4PipelineState.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLBinaryArchive.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4Compiler.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLIOCommandQueue.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLCaptureScope.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLComputeCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLIOCompressor.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLHeaderBridge.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTL4RenderCommandEncoder.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLCounters.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLDefines.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLResourceStatePass.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Metal/MTLCommandBuffer.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Metal
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSString.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSDictionary.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSLock.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSProcessInfo.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSSharedPtr.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSError.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSObjCRuntime.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSObject.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSNotification.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSPrivate.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSURL.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSSet.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSAutoreleasePool.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSRange.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSTypes.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSData.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSNumber.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/Foundation.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSDate.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSDefines.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSBundle.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSEnumerator.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/Foundation/NSArray.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/Foundation
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/README.md -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/QuartzCore
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/QuartzCore/CAMetalLayer.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/QuartzCore
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/QuartzCore/QuartzCore.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/QuartzCore
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/QuartzCore/CAPrivate.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/QuartzCore
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/QuartzCore/CAMetalDrawable.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/QuartzCore
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/QuartzCore/CADefines.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/QuartzCore
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MTL4FXSpatialScaler.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MTL4FXFrameInterpolator.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MTL4FXTemporalScaler.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MTLFXFrameInterpolator.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MTLFXDefines.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MetalFX.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MTLFXTemporalDenoisedScaler.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MTLFXSpatialScaler.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MTLFXTemporalScaler.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MTL4FXTemporalDenoisedScaler.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/MetalFX/MTLFXPrivate.hpp -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/MetalFX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/LICENSE.txt -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/SingleHeader
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/metal_cpp/SingleHeader/MakeSingleHeader.py -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/metal_cpp/SingleHeader
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/fast.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/fft.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/mlx.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/fast_primitives.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/version.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/types
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/types/bf16.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/types
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/types/limits.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/types
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/types/half_types.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/types
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/types/fp16.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/types
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/types/complex.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/types
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/export.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/device.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/fence.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/transforms_impl.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/threadpool.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/small_vector.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/event.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/jaccl
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/jaccl/utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/jaccl
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/jaccl/ring_impl.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/jaccl
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/jaccl/ring.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/jaccl
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/jaccl/mesh.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/jaccl
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/jaccl/mesh_impl.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/jaccl
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/jaccl/jaccl.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/jaccl
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/nccl
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/nccl/nccl.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/nccl
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/mpi
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/mpi/mpi.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/mpi
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/mpi/mpi_declarations.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/mpi
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/distributed.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/reduction_ops.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/ops.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/ring
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/ring/ring.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed/ring
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/primitives.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/distributed/distributed_impl.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/distributed
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/scheduler.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/einsum.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/io
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/io/load.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/io
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/io/gguf.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/io
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/stream.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/gpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/gpu/eval.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/gpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/gpu/device_info.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/gpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/gpu/scan.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/gpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/gpu/slicing.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/gpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/gpu/copy.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/gpu
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/matmul.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/softmax.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/fft.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/bf16.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/fp_quantized_nax.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/unary_ops.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/utils
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/utils/type_traits.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/utils
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/utils/integral_constant.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/utils
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/conv/kernels/steel_conv_general.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/conv/kernels/steel_conv.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/conv/kernels/steel_conv_3d.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/conv/params.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/conv/loader.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv/loaders
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/conv/loaders/loader_general.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv/loaders
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/conv/loaders/loader_channel_n.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv/loaders
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/conv/loaders/loader_channel_l.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv/loaders
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/conv/conv.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/conv
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/defines.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_splitk_nax.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_fused.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_splitk.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_gather_nax.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_segmented.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_gather.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_masked.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels/steel_gemm_fused_nax.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/gemm.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/params.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/gemm_nax.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/loader.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/nax.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/mma.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/gemm/transforms.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/gemm
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/attn
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/attn/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/attn/kernels/steel_attention.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/attn/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/attn/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/attn/attn.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/attn
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/attn/params.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/attn
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/attn/loader.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/attn
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/attn/nax.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/attn
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/attn/mma.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/attn
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/steel/attn/transforms.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/steel/attn
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/binary_two.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/logsumexp.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/fp8.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/quantized_nax.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/bf16_math.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/reduce_utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/logging.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/gemv_masked.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/cexpf.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/binary_ops.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/defines.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/quantized.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/quantized_utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/expm1f.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/reduction
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/reduction/reduce_col.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/reduction
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/reduction/reduce_init.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/reduction
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/reduction/reduce_row.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/reduction
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/reduction/ops.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/reduction
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/reduction/reduce_all.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/reduction
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/hadamard.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/reduce.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/erf.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/fft
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/fft/readwrite.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/fft
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/fft/radix.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/fft
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/fp4.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/indexing
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/indexing/gather.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/indexing
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/indexing/gather_axis.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/indexing
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/indexing/masked_scatter.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/indexing
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/indexing/scatter.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/indexing
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/indexing/indexing.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/indexing
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/indexing/gather_front.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/indexing
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/indexing/scatter_axis.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels/indexing
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/sort.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/arange.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/ternary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/sdpa_vector.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/unary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/fp_quantized.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/complex.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/ternary_ops.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/binary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/scan.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/copy.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/kernels/atomic.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/kernels
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/device.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/allocator.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/jit
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/jit/indexing.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/jit
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/jit/includes.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal/jit
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/reduce.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/metal.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/resident.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/ternary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/unary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/metal/binary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/metal
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu/gemms
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/gemms/simd_gemm.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu/gemms
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/gemm.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/compiled_preamble.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/unary_ops.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/binary_two.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu/simd
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/simd/type.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu/simd
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/simd/base_simd.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu/simd
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/simd/neon_fp16_simd.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu/simd
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/simd/simd.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu/simd
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/simd/math.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu/simd
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/simd/accelerate_simd.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu/simd
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/simd/accelerate_fp16_simd.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu/simd
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/threefry.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/binary_ops.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/eval.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/encoder.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/arange.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/ternary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/jit_compiler.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/unary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/device_info.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/lapack.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/binary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/slicing.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cpu/copy.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cpu
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/unary
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/gemms
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/gemms/grouped_gemm.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/gemms
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/gemms/gemv.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/gemms
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/gemms/cublas_gemm.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/gemms
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/gemms/block_mask.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/gemms
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/device.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/event.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/steel
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/reduce
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/lru_cache.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/quantized
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/quantized/qmm
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/quantized/qmm/qmm.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/quantized/qmm
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/quantized/cublas_qqmm.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/quantized
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/quantized/quantized.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/quantized
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/quantized/quantized_utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/quantized
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/quantized/qqmm_utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/quantized
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/quantized/qqmm_impl.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/quantized
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/cudnn_utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/conv
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/conv/conv.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/conv
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/worker.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/allocator.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/cuda.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/jit_module.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/copy
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/device
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/device/config.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/device
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda/binary
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/cuda_utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/cuda/cublas_utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/cuda
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/no_gpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/no_gpu/apple_memory.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/no_gpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/no_gpu/linux_memory.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/no_gpu
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/matmul.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/compiled.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/broadcasting.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/quantized.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/buffer_cache.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/hadamard.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/reduce.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/ternary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/unary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/binary.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/slicing.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/backend/common/copy.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/common
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/backend/no_cpu
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/api.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/dtype_utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/compile_impl.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/compile.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/allocator.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/io.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/array.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/linalg.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/memory.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/ops.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/3rdparty
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/3rdparty/pocketfft.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx/3rdparty
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/export_impl.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/dtype.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/primitives.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/transforms.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/graph_utils.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/include/mlx/random.h -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/include/mlx
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/core.cpython-312-darwin.so -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/lib
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/lib/libmlx.dylib -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/lib
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/lib/mlx.metallib -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/lib
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share/cmake
+  creating /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share/cmake/MLX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/share/cmake/MLX/MLXTargets.cmake -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share/cmake/MLX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/share/cmake/MLX/extension.cmake -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share/cmake/MLX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/share/cmake/MLX/FindCUDNN.cmake -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share/cmake/MLX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/share/cmake/MLX/Findnvpl.cmake -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share/cmake/MLX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/share/cmake/MLX/MLXTargets-release.cmake -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share/cmake/MLX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/share/cmake/MLX/MLXConfig.cmake -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share/cmake/MLX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/share/cmake/MLX/MLXConfigVersion.cmake -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share/cmake/MLX
+  copying /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpv2sn0pfr.build-lib/mlx/share/cmake/MLX/FindNCCL.cmake -> /Users/producerguy/Documents/Projects/forge/mlx-mla/python/mlx/share/cmake/MLX
+  -- Install configuration: "Release"
+  running egg_info
+  creating /var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.egg-info
+  writing /var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.egg-info/PKG-INFO
+  writing dependency_links to /var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.egg-info/dependency_links.txt
+  writing entry points to /var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.egg-info/entry_points.txt
+  writing requirements to /var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.egg-info/requires.txt
+  writing top-level names to /var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.egg-info/top_level.txt
+  writing manifest file '/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.egg-info/SOURCES.txt'
+  reading manifest file '/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.egg-info/SOURCES.txt'
+  reading manifest template 'MANIFEST.in'
+  adding license file 'LICENSE'
+  writing manifest file '/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpoz7157c4.build-temp/mlx.egg-info/SOURCES.txt'
+
+          Editable install will be performed using .pth file to extend `sys.path` with:
+          ['python']
+
+  Options like `package-data`, `include/exclude-package-data` or
+  `packages.find.exclude/include` may have no effect.
+
+  adding '__editable__.mlx-0.31.2.dev20260401+2ffafe07.pth'
+  creating '/private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4/tmpm32w75sg/.tmp-c8_rtiuz/mlx-0.31.2.dev20260401+2ffafe07-0.editable-cp312-cp312-macosx_26_0_arm64.whl' and adding '/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/tmpdq54mzqbmlx-0.31.2.dev20260401+2ffafe07-0.editable-cp312-cp312-macosx_26_0_arm64.whl' to it
+  adding 'mlx-0.31.2.dev20260401+2ffafe07.dist-info/licenses/LICENSE'
+  adding 'mlx-0.31.2.dev20260401+2ffafe07.dist-info/METADATA'
+  adding 'mlx-0.31.2.dev20260401+2ffafe07.dist-info/WHEEL'
+  adding 'mlx-0.31.2.dev20260401+2ffafe07.dist-info/entry_points.txt'
+  adding 'mlx-0.31.2.dev20260401+2ffafe07.dist-info/top_level.txt'
+  adding 'mlx-0.31.2.dev20260401+2ffafe07.dist-info/RECORD'
+  Building editable for mlx (pyproject.toml): finished with status 'done'
+  Created wheel for mlx: filename=mlx-0.31.2.dev20260401+2ffafe07-0.editable-cp312-cp312-macosx_26_0_arm64.whl size=4762 sha256=5b3e34c55c5548601ac68971bfbb139fd4401022698f493f6873e94eb05f5e73
+  Stored in directory: /private/var/folders/zb/nt1w4wmd52s0wvb2w59c5x3w0000gn/T/pip-ephem-wheel-cache-1fg9lq29/wheels/b5/9b/56/4c5265fb1eb41888f966eb6a619dfcb37ff162c2c577cf37d4
+Successfully built mlx
+Installing collected packages: mlx
+  changing mode of /opt/homebrew/bin/mlx.distributed_config to 755
+  changing mode of /opt/homebrew/bin/mlx.launch to 755
+Successfully installed mlx-0.31.2.dev20260401+2ffafe07

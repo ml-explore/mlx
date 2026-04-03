@@ -725,4 +725,59 @@ void init_fast(nb::module_& parent_module) {
       Returns:
         tuple: (packed, scales, biases) matching mx.quantize output format.
       )pbdoc");
+
+  m.def(
+      "mla_fused_sdpa_v2",
+      [](const mx::array& q_nope,
+         const mx::array& q_pe,
+         const mx::array& cache_packed,
+         const mx::array& cache_scales,
+         const mx::array& cache_biases,
+         const mx::array& cache_kpe,
+         const mx::array& new_latent,
+         const mx::array& new_kpe,
+         float scale,
+         uint32_t seq_offset,
+         mx::StreamOrDevice s) {
+        return mx::fast::mla_fused_sdpa_v2(
+            q_nope, q_pe,
+            cache_packed, cache_scales, cache_biases, cache_kpe,
+            new_latent, new_kpe,
+            scale, seq_offset, s);
+      },
+      "q_nope"_a,
+      "q_pe"_a,
+      "cache_packed"_a,
+      "cache_scales"_a,
+      "cache_biases"_a,
+      "cache_kpe"_a,
+      "new_latent"_a,
+      "new_kpe"_a,
+      "scale"_a,
+      "seq_offset"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+      Fused SDPA + direct cache update for MLA decode.
+
+      Combines attention computation with in-place cache append,
+      eliminating SliceUpdate full-cache copies. New token is quantized
+      in-kernel and written directly to cache buffers.
+
+      Args:
+        q_nope (array): [B, H, 256] absorbed query.
+        q_pe (array): [B, H, 64] RoPE query.
+        cache_packed (array): [B, S_alloc, 32] existing INT4 packed cache.
+        cache_scales (array): [B, S_alloc, 4] existing scales.
+        cache_biases (array): [B, S_alloc, 4] existing biases.
+        cache_kpe (array): [B, S_alloc, 64] existing RoPE keys.
+        new_latent (array): [B, 1, 256] new token's raw latent.
+        new_kpe (array): [B, 1, 64] new token's RoPE key.
+        scale (float): attention scale.
+        seq_offset (int): current cache occupancy (positions 0..S-1 valid).
+        stream (mx.stream, optional): Stream. Default: None.
+
+      Returns:
+        tuple: (sdpa_out, updated_packed, updated_scales, updated_biases, updated_kpe)
+      )pbdoc");
 }
