@@ -8,6 +8,62 @@
 
 namespace mlx::core::distributed {
 
+// Optimized collective communication algorithms
+enum class CollectiveAlgorithm {
+  DEFAULT,   // Let the library choose the best algorithm
+  LINEAR,    // Linear exchange (O(n) communication steps)
+  RING,      // Ring-based all-reduce
+  RECURSIVE_DOUBLING, // Recursive doubling (logarithmic steps)
+  TREE,      // Tree-based reduction
+  BROADCAST, // Broadcast-based gather
+};
+
+// Optimized all-reduce with algorithm selection
+MLX_API array all_reduce_opt(
+    const array& x,
+    const std::string& op,
+    std::optional<Group> group = std::nullopt,
+    CollectiveAlgorithm algo = CollectiveAlgorithm::DEFAULT,
+    StreamOrDevice s = {});
+
+// Optimized all-gather with algorithm selection
+MLX_API array all_gather_opt(
+    const array& x,
+    std::optional<Group> group = std::nullopt,
+    CollectiveAlgorithm algo = CollectiveAlgorithm::DEFAULT,
+    StreamOrDevice s = {});
+
+// Optimized reduce-scatter with algorithm selection
+MLX_API array reduce_scatter_opt(
+    const array& x,
+    const std::string& op,
+    std::optional<Group> group = std::nullopt,
+    CollectiveAlgorithm algo = CollectiveAlgorithm::DEFAULT,
+    StreamOrDevice s = {});
+
+// Pipeline parallelism utilities for overlapping computation and communication
+struct PipelineStage {
+  int stage_id;
+  int num_stages;
+  std::function<array(const array&)> compute_fn;
+  
+  PipelineStage(int id, int num, std::function<array(const array&)>&& compute)
+      : stage_id(id), num_stages(num), compute_fn(std::move(compute)) {}
+};
+
+// Execute pipeline stages with pipelined execution
+MLX_API array execute_pipeline(
+    const std::vector<PipelineStage>& stages,
+    const array& input,
+    std::optional<Group> group = std::nullopt);
+
+// Optimized communication with automatic algorithm selection
+MLX_API array all_reduce(
+    const array& x,
+    const std::string& op = "sum",
+    std::optional<Group> group = std::nullopt,
+    StreamOrDevice s = {});
+
 class DistPrimitive : public Primitive {
  public:
   DistPrimitive(Stream stream, Group group)

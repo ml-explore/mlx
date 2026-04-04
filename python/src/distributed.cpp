@@ -349,4 +349,213 @@ void init_distributed(nb::module_& parent_module) {
       Returns:
         array: The output array with shape ``[x.shape[0] // group.size(), *x.shape[1:]]``.
     )pbdoc");
+  
+  m.def(
+      "all_reduce",
+      [](const ScalarOrArray& x,
+         const std::string& op,
+         std::optional<mx::distributed::Group> group,
+         mx::StreamOrDevice s) {
+        return mx::distributed::all_reduce(to_array(x), op, group, s);
+      },
+      "x"_a,
+      "op"_a = "sum",
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def all_reduce(x: array, op: str = 'sum', *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        All reduce with configurable operation.
+
+        Perform an all-reduce operation with the specified reduction operation.
+        This function automatically selects an appropriate algorithm based on
+        the data size and group characteristics.
+
+        Args:
+          x (array): Input array.
+          op (str): The reduction operation. Supported operations are:
+            ``"sum"``, ``"max"``, and ``"min"``. Default: ``"sum"``.
+          group (Group): The group of processes that will participate in the
+            reduction. If set to ``None`` the global group is used. Default:
+            ``None``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``
+            in which case the default stream of the default device is used.
+
+        Returns:
+          array: The result of the all-reduce operation.
+      )pbdoc");
+  
+  m.def(
+      "all_reduce_opt",
+      [](const ScalarOrArray& x,
+         const std::string& op,
+         const std::string& algo_str,
+         std::optional<mx::distributed::Group> group,
+         mx::StreamOrDevice s) {
+        // Map algorithm string to enum
+        mx::distributed::CollectiveAlgorithm algo;
+        if (algo_str == "default" || algo_str.empty()) {
+          algo = mx::distributed::CollectiveAlgorithm::DEFAULT;
+        } else if (algo_str == "linear") {
+          algo = mx::distributed::CollectiveAlgorithm::LINEAR;
+        } else if (algo_str == "ring") {
+          algo = mx::distributed::CollectiveAlgorithm::RING;
+        } else if (algo_str == "recursive_doubling" || algo_str == "recp_double") {
+          algo = mx::distributed::CollectiveAlgorithm::RECURSIVE_DOUBLING;
+        } else if (algo_str == "tree") {
+          algo = mx::distributed::CollectiveAlgorithm::TREE;
+        } else if (algo_str == "broadcast") {
+          algo = mx::distributed::CollectiveAlgorithm::BROADCAST;
+        } else {
+          throw std::invalid_argument("Unknown algorithm: " + algo_str);
+        }
+        return mx::distributed::all_reduce_opt(to_array(x), op, group, algo, s);
+      },
+      "x"_a,
+      "op"_a = "sum",
+      "algo"_a = "default",
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def all_reduce_opt(x: array, op: str = 'sum', algo: str = 'default', *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        All reduce with configurable operation and algorithm.
+
+        Perform an all-reduce operation with the specified reduction operation
+        and communication algorithm. This allows fine-grained control over
+        the communication strategy.
+
+        Args:
+          x (array): Input array.
+          op (str): The reduction operation. Supported operations are:
+            ``"sum"``, ``"max"``, and ``"min"``. Default: ``"sum"``.
+          algo (str): The communication algorithm to use. Supported algorithms are:
+            ``"default"`` (automatic selection), ``"linear"``, ``"ring"``,
+            ``"recursive_doubling"``, ``"tree"``, ``"broadcast"``.
+            Default: ``"default"``.
+          group (Group): The group of processes that will participate in the
+            reduction. If set to ``None`` the global group is used. Default:
+            ``None``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``
+            in which case the default stream of the default device is used.
+
+        Returns:
+          array: The result of the all-reduce operation.
+      )pbdoc");
+  
+  m.def(
+      "all_gather_opt",
+      [](const ScalarOrArray& x,
+         const std::string& algo_str,
+         std::optional<mx::distributed::Group> group,
+         mx::StreamOrDevice s) {
+        // Map algorithm string to enum
+        mx::distributed::CollectiveAlgorithm algo;
+        if (algo_str == "default" || algo_str.empty()) {
+          algo = mx::distributed::CollectiveAlgorithm::DEFAULT;
+        } else if (algo_str == "linear") {
+          algo = mx::distributed::CollectiveAlgorithm::LINEAR;
+        } else if (algo_str == "ring") {
+          algo = mx::distributed::CollectiveAlgorithm::RING;
+        } else if (algo_str == "recursive_doubling" || algo_str == "recp_double") {
+          algo = mx::distributed::CollectiveAlgorithm::RECURSIVE_DOUBLING;
+        } else if (algo_str == "tree") {
+          algo = mx::distributed::CollectiveAlgorithm::TREE;
+        } else if (algo_str == "broadcast") {
+          algo = mx::distributed::CollectiveAlgorithm::BROADCAST;
+        } else {
+          throw std::invalid_argument("Unknown algorithm: " + algo_str);
+        }
+        return mx::distributed::all_gather_opt(to_array(x), group, algo, s);
+      },
+      "x"_a,
+      "algo"_a = "default",
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def all_gather_opt(x: array, algo: str = 'default', *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        All gather with configurable algorithm.
+
+        Perform an all-gather operation with the specified communication
+        algorithm for optimal data distribution.
+
+        Args:
+          x (array): Input array.
+          algo (str): The communication algorithm to use. Supported algorithms are:
+            ``"default"``, ``"linear"``, ``"ring"``,
+            ``"recursive_doubling"``, ``"tree"``, ``"broadcast"``.
+            Default: ``"default"``.
+          group (Group): The group of processes that will participate in the
+            gather. If set to ``None`` the global group is used. Default:
+            ``None``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``
+            in which case the default stream of the default device is used.
+
+        Returns:
+          array: The concatenation of all ``x`` arrays from all processes.
+      )pbdoc");
+  
+  m.def(
+      "reduce_scatter_opt",
+      [](const ScalarOrArray& x,
+         const std::string& op,
+         const std::string& algo_str,
+         std::optional<mx::distributed::Group> group,
+         mx::StreamOrDevice s) {
+        // Map algorithm string to enum
+        mx::distributed::CollectiveAlgorithm algo;
+        if (algo_str == "default" || algo_str.empty()) {
+          algo = mx::distributed::CollectiveAlgorithm::DEFAULT;
+        } else if (algo_str == "linear") {
+          algo = mx::distributed::CollectiveAlgorithm::LINEAR;
+        } else if (algo_str == "ring") {
+          algo = mx::distributed::CollectiveAlgorithm::RING;
+        } else if (algo_str == "recursive_doubling" || algo_str == "recp_double") {
+          algo = mx::distributed::CollectiveAlgorithm::RECURSIVE_DOUBLING;
+        } else if (algo_str == "tree") {
+          algo = mx::distributed::CollectiveAlgorithm::TREE;
+        } else if (algo_str == "broadcast") {
+          algo = mx::distributed::CollectiveAlgorithm::BROADCAST;
+        } else {
+          throw std::invalid_argument("Unknown algorithm: " + algo_str);
+        }
+        return mx::distributed::reduce_scatter_opt(to_array(x), op, group, algo, s);
+      },
+      "x"_a,
+      "op"_a = "sum",
+      "algo"_a = "default",
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def reduce_scatter_opt(x: array, op: str = 'sum', algo: str = 'default', *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Reduce scatter with configurable operation and algorithm.
+
+        Perform a reduce-scatter operation with the specified reduction
+        operation and communication algorithm. The result is sharded across
+        processes.
+
+        Args:
+          x (array): Input array. The first dimension must be divisible by
+            the group size.
+          op (str): The reduction operation. Supported operations are:
+            ``"sum"``, ``"max"``, and ``"min"``. Default: ``"sum"``.
+          algo (str): The communication algorithm to use. Supported algorithms are:
+            ``"default"``, ``"linear"``, ``"ring"``,
+            ``"recursive_doubling"``, ``"tree"``, ``"broadcast"``.
+            Default: ``"default"``.
+          group (Group): The group of processes that will participate in the
+            scatter. If set to ``None`` the global group is used. Default:
+            ``None``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``
+            in which case the default stream of the default device is used.
+
+        Returns:
+          array: The output array with shape ``[x.shape[0] // group.size(), *x.shape[1:]]``.
+      )pbdoc");
 }
