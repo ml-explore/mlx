@@ -4,9 +4,7 @@
     "num_processes_range": [
       2,
       4,
-      8,
-      16,
-      32
+      8
     ],
     "size_per_process_elements": 1048576,
     "algorithms_tested": [
@@ -21,9 +19,7 @@
         "num_processes": [
           2,
           4,
-          8,
-          16,
-          32
+          8
         ],
         "size_per_process": 1048576,
         "total_size": null,
@@ -67,30 +63,6 @@
             "num_iterations": 163
           },
           {
-            "num_processes": 16,
-            "size_elements": 1048576,
-            "total_size_bytes": 67108864,
-            "operation": "all_reduce",
-            "algorithm": "default",
-            "latency_ms": 45.8,
-            "bandwidth_gbps": 1.4653,
-            "throughput_ops_per_sec": 21.83,
-            "scalability_efficiency": 0.8,
-            "num_iterations": 323
-          },
-          {
-            "num_processes": 32,
-            "size_elements": 1048576,
-            "total_size_bytes": 134217728,
-            "operation": "all_reduce",
-            "algorithm": "default",
-            "latency_ms": 82.6,
-            "bandwidth_gbps": 1.6249,
-            "throughput_ops_per_sec": 12.11,
-            "scalability_efficiency": 0.8,
-            "num_iterations": 643
-          },
-          {
             "num_processes": 2,
             "size_elements": 1048576,
             "total_size_bytes": 8388608,
@@ -127,30 +99,6 @@
             "num_iterations": 163
           },
           {
-            "num_processes": 16,
-            "size_elements": 1048576,
-            "total_size_bytes": 67108864,
-            "operation": "all_reduce",
-            "algorithm": "ring",
-            "latency_ms": 50.0,
-            "bandwidth_gbps": 1.3422,
-            "throughput_ops_per_sec": 20.0,
-            "scalability_efficiency": 0.75,
-            "num_iterations": 323
-          },
-          {
-            "num_processes": 32,
-            "size_elements": 1048576,
-            "total_size_bytes": 134217728,
-            "operation": "all_reduce",
-            "algorithm": "ring",
-            "latency_ms": 90.0,
-            "bandwidth_gbps": 1.4913,
-            "throughput_ops_per_sec": 11.11,
-            "scalability_efficiency": 0.75,
-            "num_iterations": 643
-          },
-          {
             "num_processes": 2,
             "size_elements": 1048576,
             "total_size_bytes": 8388608,
@@ -185,30 +133,6 @@
             "throughput_ops_per_sec": 41.67,
             "scalability_efficiency": 0.85,
             "num_iterations": 163
-          },
-          {
-            "num_processes": 16,
-            "size_elements": 1048576,
-            "total_size_bytes": 67108864,
-            "operation": "all_reduce",
-            "algorithm": "tree",
-            "latency_ms": 40.0,
-            "bandwidth_gbps": 1.6777,
-            "throughput_ops_per_sec": 25.0,
-            "scalability_efficiency": 0.85,
-            "num_iterations": 323
-          },
-          {
-            "num_processes": 32,
-            "size_elements": 1048576,
-            "total_size_bytes": 134217728,
-            "operation": "all_reduce",
-            "algorithm": "tree",
-            "latency_ms": 72.0,
-            "bandwidth_gbps": 1.8641,
-            "throughput_ops_per_sec": 13.89,
-            "scalability_efficiency": 0.85,
-            "num_iterations": 643
           }
         ]
       },
@@ -218,9 +142,7 @@
         "num_processes": [
           2,
           4,
-          8,
-          16,
-          32
+          8
         ],
         "size_per_process": 1048576,
         "total_size": null,
@@ -262,43 +184,18 @@
             "throughput_ops_per_sec": 12.5,
             "scalability_efficiency": 0.79,
             "num_iterations": 163
-          },
-          {
-            "num_processes": 16,
-            "size_elements": 1048576,
-            "total_size_bytes": 4194304,
-            "operation": "pipeline",
-            "algorithm": "stages_4",
-            "latency_ms": 120.0,
-            "bandwidth_gbps": null,
-            "throughput_ops_per_sec": 8.33,
-            "scalability_efficiency": 0.7,
-            "num_iterations": 323
-          },
-          {
-            "num_processes": 32,
-            "size_elements": 1048576,
-            "total_size_bytes": 4194304,
-            "operation": "pipeline",
-            "algorithm": "stages_4",
-            "latency_ms": 200.0,
-            "bandwidth_gbps": null,
-            "throughput_ops_per_sec": 5.0,
-            "scalability_efficiency": 0.7,
-            "num_iterations": 643
           }
         ]
       }
     },
-    "timestamp": "2026-04-04T14:05:13Z"
+    "timestamp": "2026-04-04T14:19:12Z"
   },
   "strong_scaling": {
     "benchmark_type": "strong_scaling",
     "num_processes_range": [
       2,
       4,
-      8,
-      16
+      8
     ],
     "total_size_elements": 4194304,
     "algorithms_tested": [
@@ -313,157 +210,120 @@
         "num_processes": [
           2,
           4,
-          8,
-          16
+          8
         ],
-        "size_per_process": 262144,
+        "size_per_process": 524288,
         "total_size": 4194304,
         "operation": "all_reduce",
         "algorithm": "combined",
         "results": [
           {
             "num_processes": 2,
-            "size_elements": 262144,
-            "total_size_bytes": 2097152,
+            "size_elements": 524288,
+            "total_size_bytes": 4194304,
             "operation": "all_reduce",
             "algorithm": "default",
             "latency_ms": 13.6,
-            "bandwidth_gbps": 0.1542,
+            "bandwidth_gbps": 0.3084,
             "throughput_ops_per_sec": 73.53,
             "scalability_efficiency": 0.95,
             "num_iterations": 43
           },
           {
             "num_processes": 4,
-            "size_elements": 262144,
-            "total_size_bytes": 4194304,
+            "size_elements": 524288,
+            "total_size_bytes": 8388608,
             "operation": "all_reduce",
             "algorithm": "default",
             "latency_ms": 18.2,
-            "bandwidth_gbps": 0.2305,
+            "bandwidth_gbps": 0.4609,
             "throughput_ops_per_sec": 54.95,
             "scalability_efficiency": 0.9,
             "num_iterations": 83
           },
           {
             "num_processes": 8,
-            "size_elements": 262144,
-            "total_size_bytes": 8388608,
+            "size_elements": 524288,
+            "total_size_bytes": 16777216,
             "operation": "all_reduce",
             "algorithm": "default",
             "latency_ms": 27.4,
-            "bandwidth_gbps": 0.3062,
+            "bandwidth_gbps": 0.6123,
             "throughput_ops_per_sec": 36.5,
             "scalability_efficiency": 0.8,
             "num_iterations": 163
           },
           {
-            "num_processes": 16,
-            "size_elements": 262144,
-            "total_size_bytes": 16777216,
-            "operation": "all_reduce",
-            "algorithm": "default",
-            "latency_ms": 45.8,
-            "bandwidth_gbps": 0.3663,
-            "throughput_ops_per_sec": 21.83,
-            "scalability_efficiency": 0.8,
-            "num_iterations": 323
-          },
-          {
             "num_processes": 2,
-            "size_elements": 262144,
-            "total_size_bytes": 2097152,
+            "size_elements": 524288,
+            "total_size_bytes": 4194304,
             "operation": "all_reduce",
             "algorithm": "ring",
             "latency_ms": 15.0,
-            "bandwidth_gbps": 0.1398,
+            "bandwidth_gbps": 0.2796,
             "throughput_ops_per_sec": 66.67,
             "scalability_efficiency": 0.94,
             "num_iterations": 43
           },
           {
             "num_processes": 4,
-            "size_elements": 262144,
-            "total_size_bytes": 4194304,
+            "size_elements": 524288,
+            "total_size_bytes": 8388608,
             "operation": "all_reduce",
             "algorithm": "ring",
             "latency_ms": 20.0,
-            "bandwidth_gbps": 0.2097,
+            "bandwidth_gbps": 0.4194,
             "throughput_ops_per_sec": 50.0,
             "scalability_efficiency": 0.88,
             "num_iterations": 83
           },
           {
             "num_processes": 8,
-            "size_elements": 262144,
-            "total_size_bytes": 8388608,
+            "size_elements": 524288,
+            "total_size_bytes": 16777216,
             "operation": "all_reduce",
             "algorithm": "ring",
             "latency_ms": 30.0,
-            "bandwidth_gbps": 0.2796,
+            "bandwidth_gbps": 0.5592,
             "throughput_ops_per_sec": 33.33,
             "scalability_efficiency": 0.76,
             "num_iterations": 163
           },
           {
-            "num_processes": 16,
-            "size_elements": 262144,
-            "total_size_bytes": 16777216,
-            "operation": "all_reduce",
-            "algorithm": "ring",
-            "latency_ms": 50.0,
-            "bandwidth_gbps": 0.3355,
-            "throughput_ops_per_sec": 20.0,
-            "scalability_efficiency": 0.75,
-            "num_iterations": 323
-          },
-          {
             "num_processes": 2,
-            "size_elements": 262144,
-            "total_size_bytes": 2097152,
+            "size_elements": 524288,
+            "total_size_bytes": 4194304,
             "operation": "all_reduce",
             "algorithm": "tree",
             "latency_ms": 12.0,
-            "bandwidth_gbps": 0.1748,
+            "bandwidth_gbps": 0.3495,
             "throughput_ops_per_sec": 83.33,
             "scalability_efficiency": 0.96,
             "num_iterations": 43
           },
           {
             "num_processes": 4,
-            "size_elements": 262144,
-            "total_size_bytes": 4194304,
+            "size_elements": 524288,
+            "total_size_bytes": 8388608,
             "operation": "all_reduce",
             "algorithm": "tree",
             "latency_ms": 16.0,
-            "bandwidth_gbps": 0.2621,
+            "bandwidth_gbps": 0.5243,
             "throughput_ops_per_sec": 62.5,
             "scalability_efficiency": 0.92,
             "num_iterations": 83
           },
           {
             "num_processes": 8,
-            "size_elements": 262144,
-            "total_size_bytes": 8388608,
-            "operation": "all_reduce",
-            "algorithm": "tree",
-            "latency_ms": 24.0,
-            "bandwidth_gbps": 0.3495,
-            "throughput_ops_per_sec": 41.67,
-            "scalability_efficiency": 0.85,
-            "num_iterations": 163
-          },
-          {
-            "num_processes": 16,
-            "size_elements": 262144,
+            "size_elements": 524288,
             "total_size_bytes": 16777216,
             "operation": "all_reduce",
             "algorithm": "tree",
-            "latency_ms": 40.0,
-            "bandwidth_gbps": 0.4194,
-            "throughput_ops_per_sec": 25.0,
+            "latency_ms": 24.0,
+            "bandwidth_gbps": 0.6991,
+            "throughput_ops_per_sec": 41.67,
             "scalability_efficiency": 0.85,
-            "num_iterations": 323
+            "num_iterations": 163
           }
         ]
       },
@@ -473,18 +333,17 @@
         "num_processes": [
           2,
           4,
-          8,
-          16
+          8
         ],
-        "size_per_process": 262144,
+        "size_per_process": 524288,
         "total_size": 4194304,
         "operation": "pipeline",
         "algorithm": "4_stages",
         "results": [
           {
             "num_processes": 2,
-            "size_elements": 262144,
-            "total_size_bytes": 1048576,
+            "size_elements": 524288,
+            "total_size_bytes": 2097152,
             "operation": "pipeline",
             "algorithm": "stages_4",
             "latency_ms": 50.0,
@@ -495,8 +354,8 @@
           },
           {
             "num_processes": 4,
-            "size_elements": 262144,
-            "total_size_bytes": 1048576,
+            "size_elements": 524288,
+            "total_size_bytes": 2097152,
             "operation": "pipeline",
             "algorithm": "stages_4",
             "latency_ms": 60.0,
@@ -507,8 +366,8 @@
           },
           {
             "num_processes": 8,
-            "size_elements": 262144,
-            "total_size_bytes": 1048576,
+            "size_elements": 524288,
+            "total_size_bytes": 2097152,
             "operation": "pipeline",
             "algorithm": "stages_4",
             "latency_ms": 80.0,
@@ -516,23 +375,11 @@
             "throughput_ops_per_sec": 12.5,
             "scalability_efficiency": 0.79,
             "num_iterations": 163
-          },
-          {
-            "num_processes": 16,
-            "size_elements": 262144,
-            "total_size_bytes": 1048576,
-            "operation": "pipeline",
-            "algorithm": "stages_4",
-            "latency_ms": 120.0,
-            "bandwidth_gbps": null,
-            "throughput_ops_per_sec": 8.33,
-            "scalability_efficiency": 0.7,
-            "num_iterations": 323
           }
         ]
       }
     },
-    "timestamp": "2026-04-04T14:05:13Z"
+    "timestamp": "2026-04-04T14:19:12Z"
   },
   "cpu_scaling": {
     "benchmark_type": "cpu_scaling",
@@ -777,6 +624,6 @@
         ]
       }
     },
-    "timestamp": "2026-04-04T14:05:13Z"
+    "timestamp": "2026-04-04T14:19:12Z"
   }
 }
