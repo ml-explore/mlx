@@ -4,8 +4,19 @@
     "description": "MLX optimized collective communications benchmark results",
     "num_processes": 4,
     "mlx_version": "0.0",
-    "algorithms_tested": ["default", "linear", "ring", "recursive_doubling", "tree"],
-    "operations_tested": ["all_reduce", "all_gather", "reduce_scatter", "pipeline"],
+    "algorithms_tested": [
+      "default",
+      "linear",
+      "ring",
+      "recursive_doubling",
+      "tree"
+    ],
+    "operations_tested": [
+      "all_reduce",
+      "all_gather",
+      "reduce_scatter",
+      "pipeline"
+    ],
     "timestamp": "2026-04-04T10:30:00Z"
   },
   "state_of_the_art_reference": {
@@ -16,19 +27,19 @@
         "recursive_doubling": 1.2
       },
       "1MB": {
-        "ring": 10-12,
-        "tree": 12-18,
-        "recursive_doubling": 10-14
+        "ring": 10 - 12,
+        "tree": 12 - 18,
+        "recursive_doubling": 10 - 14
       },
       "10MB": {
-        "ring": 12-15,
-        "tree": 15-20,
-        "recursive_doubling": 12-16
+        "ring": 12 - 15,
+        "tree": 15 - 20,
+        "recursive_doubling": 12 - 16
       },
       "100MB": {
-        "ring": 14-18,
-        "tree": 16-25,
-        "recursive_doubling": 14-20
+        "ring": 14 - 18,
+        "tree": 16 - 25,
+        "recursive_doubling": 14 - 20
       }
     },
     "expected_speedups": {
@@ -374,19 +385,23 @@
   },
   "analysis": {
     "best_algorithms": {
-      "all_reduce_small_messages": "recursive_doubling (1.5x - 2.0x speedup over ring)",
+      "all_reduce_small_messages":
+          "recursive_doubling (1.5x - 2.0x speedup over ring)",
       "all_reduce_medium_messages": "tree (1.8x - 2.5x speedup over ring)",
       "all_reduce_large_messages": "tree (2.0x - 3.0x speedup over ring)",
       "all_gather": "tree (1.5x - 2.0x speedup over ring)",
       "reduce_scatter": "tree (1.5x - 2.0x speedup over ring)"
     },
     "pipeline_speedups": {
-      "description": "Pipeline parallelism can achieve 1.5x - 3.0x speedup by overlapping computation and communication",
+      "description":
+          "Pipeline parallelism can achieve 1.5x - 3.0x speedup by overlapping computation and communication",
       "optimal_overlap": "When compute time ≈ communication time"
     },
     "scalability": {
-      "weak_scaling": "Maintains consistent performance per process as processes increase",
-      "strong_scaling": "Performance improves with more processes until communication overhead dominates"
+      "weak_scaling":
+          "Maintains consistent performance per process as processes increase",
+      "strong_scaling":
+          "Performance improves with more processes until communication overhead dominates"
     }
   },
   "usage_examples": {

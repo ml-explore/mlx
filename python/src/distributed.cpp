@@ -349,7 +349,7 @@ void init_distributed(nb::module_& parent_module) {
       Returns:
         array: The output array with shape ``[x.shape[0] // group.size(), *x.shape[1:]]``.
     )pbdoc");
-  
+
   m.def(
       "all_reduce",
       [](const ScalarOrArray& x,
@@ -385,7 +385,7 @@ void init_distributed(nb::module_& parent_module) {
         Returns:
           array: The result of the all-reduce operation.
       )pbdoc");
-  
+
   m.def(
       "all_reduce_opt",
       [](const ScalarOrArray& x,
@@ -401,7 +401,8 @@ void init_distributed(nb::module_& parent_module) {
           algo = mx::distributed::CollectiveAlgorithm::LINEAR;
         } else if (algo_str == "ring") {
           algo = mx::distributed::CollectiveAlgorithm::RING;
-        } else if (algo_str == "recursive_doubling" || algo_str == "recp_double") {
+        } else if (
+            algo_str == "recursive_doubling" || algo_str == "recp_double") {
           algo = mx::distributed::CollectiveAlgorithm::RECURSIVE_DOUBLING;
         } else if (algo_str == "tree") {
           algo = mx::distributed::CollectiveAlgorithm::TREE;
@@ -444,7 +445,7 @@ void init_distributed(nb::module_& parent_module) {
         Returns:
           array: The result of the all-reduce operation.
       )pbdoc");
-  
+
   m.def(
       "all_gather_opt",
       [](const ScalarOrArray& x,
@@ -459,7 +460,8 @@ void init_distributed(nb::module_& parent_module) {
           algo = mx::distributed::CollectiveAlgorithm::LINEAR;
         } else if (algo_str == "ring") {
           algo = mx::distributed::CollectiveAlgorithm::RING;
-        } else if (algo_str == "recursive_doubling" || algo_str == "recp_double") {
+        } else if (
+            algo_str == "recursive_doubling" || algo_str == "recp_double") {
           algo = mx::distributed::CollectiveAlgorithm::RECURSIVE_DOUBLING;
         } else if (algo_str == "tree") {
           algo = mx::distributed::CollectiveAlgorithm::TREE;
@@ -498,7 +500,7 @@ void init_distributed(nb::module_& parent_module) {
         Returns:
           array: The concatenation of all ``x`` arrays from all processes.
       )pbdoc");
-  
+
   m.def(
       "reduce_scatter_opt",
       [](const ScalarOrArray& x,
@@ -514,7 +516,8 @@ void init_distributed(nb::module_& parent_module) {
           algo = mx::distributed::CollectiveAlgorithm::LINEAR;
         } else if (algo_str == "ring") {
           algo = mx::distributed::CollectiveAlgorithm::RING;
-        } else if (algo_str == "recursive_doubling" || algo_str == "recp_double") {
+        } else if (
+            algo_str == "recursive_doubling" || algo_str == "recp_double") {
           algo = mx::distributed::CollectiveAlgorithm::RECURSIVE_DOUBLING;
         } else if (algo_str == "tree") {
           algo = mx::distributed::CollectiveAlgorithm::TREE;
@@ -523,7 +526,8 @@ void init_distributed(nb::module_& parent_module) {
         } else {
           throw std::invalid_argument("Unknown algorithm: " + algo_str);
         }
-        return mx::distributed::reduce_scatter_opt(to_array(x), op, group, algo, s);
+        return mx::distributed::reduce_scatter_opt(
+            to_array(x), op, group, algo, s);
       },
       "x"_a,
       "op"_a = "sum",

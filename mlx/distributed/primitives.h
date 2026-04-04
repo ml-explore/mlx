@@ -10,11 +10,11 @@ namespace mlx::core::distributed {
 
 // Optimized collective communication algorithms
 enum class CollectiveAlgorithm {
-  DEFAULT,   // Let the library choose the best algorithm
-  LINEAR,    // Linear exchange (O(n) communication steps)
-  RING,      // Ring-based all-reduce
+  DEFAULT, // Let the library choose the best algorithm
+  LINEAR, // Linear exchange (O(n) communication steps)
+  RING, // Ring-based all-reduce
   RECURSIVE_DOUBLING, // Recursive doubling (logarithmic steps)
-  TREE,      // Tree-based reduction
+  TREE, // Tree-based reduction
   BROADCAST, // Broadcast-based gather
 };
 
@@ -46,7 +46,7 @@ struct PipelineStage {
   int stage_id;
   int num_stages;
   std::function<array(const array&)> compute_fn;
-  
+
   PipelineStage(int id, int num, std::function<array(const array&)>&& compute)
       : stage_id(id), num_stages(num), compute_fn(std::move(compute)) {}
 };
