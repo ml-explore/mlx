@@ -442,6 +442,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 diff = mx.abs(out_fst - out_ref) - atol * mx.abs(out_ref)
                 self.assertLessEqual(mx.max(diff).item(), atol)
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "too slow on CPU")
     def test_sdpa_long_masked_sequence(self):
         # Test for int16 overflow in steel_attention_nax.h mask
         # indexing (col_pos declared as short, overflows when kL > 32767).
