@@ -959,9 +959,13 @@ Examples:
   # Run specific operation with specific algorithms
   mpirun -n 4 python scaling_benchmark.py --op all_reduce --algo tree,ring
   
+  # Run backend comparison (Ring vs JACCL vs MPI)
+  python scaling_benchmark.py --backend-comparison --backends ring,jaccl,mpi
+  
 Note:
   - For GPU benchmarks: mpirun -n <num_gpus>
   - For CPU benchmarks: use single process with multiple threads
+  - For backend comparison: --backend-comparison runs all specified backends sequentially
         """,
     )
 
@@ -987,6 +991,12 @@ Note:
 
     parser.add_argument(
         "--full", action="store_true", help="Run full benchmark suite (GPU + CPU)"
+    )
+
+    parser.add_argument(
+        "--backend-comparison",
+        action="store_true",
+        help="Run comparison across multiple backends (Ring, JACCL, MPI)",
     )
 
     parser.add_argument(
@@ -1035,6 +1045,15 @@ Note:
     )
 
     parser.add_argument(
+        "--backend",
+        "-b",
+        type=str,
+        default="any",
+        choices=["ring", "jaccl", "mpi", "nccl", "any"],
+        help="Communication backend to use (default: auto-select)",
+    )
+
+    parser.add_argument(
         "--output",
         "-O",
         type=str,
@@ -1044,10 +1063,19 @@ Note:
 
     args = parser.parse_args()
 
-    # Initialize distributed
-    world = warmup_group()
+    # Initialize distributed group (use specified backend)
+    world = warmup_group(backend=args.backend)
 
-    if args.full or (
+    # Run backend comparison if requested
+    if args.backend_comparison:
+        backends_to_test = [b.strip() for b in args.backend.split(",")]
+        results = run_backend_comparison(
+            min_gpus=args.min_gpus,
+            max_gpus=args.max_gpus,
+            size_per_process=args.size,
+            backends=backends_to_test,
+        )
+    elif args.full or (
         not args.gpu_scale
         and not args.cpu_scale
         and not args.weak_scaling
@@ -1107,5 +1135,78 @@ Note:
     save_results(results, args.output)
 
 
-if __name__ == "__main__":
-    main()
+def run_backend_comparison(
+    min_gpus: int = 2,
+    max_gpus: int = 40,
+    size_per_process: int = 1048576,
+    backends: List[str] = ["ring", "jaccl", "mpi"],
+) -> Dict:
+    """
+    Run benchmark comparison across multiple backends.
+
+    Args:
+        min_gpus: Minimum number of GPUs
+        max_gpus: Maximum number of GPUs
+        size_per_process: Size per process in elements
+        backends: List of backends to compare
+
+    Returns:
+        Dict with comparison results for all backends
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+
+    results_dict = {}
+    lock = threading.Lock()
+
+    def benchmark_backend(backend: str):
+        """Run benchmarks for a single backend."""
+        print(f"\n{'=' * 80}")
+        print(f"BENCHMARKING BACKEND: {backend.upper()}")
+        print("=" * 80)
+
+        # Set environment for backend
+        old_backend = None
+        try:
+            world = warmup_group(backend)
+            if not world or world.size() < 2:
+                print(f"Warning: Could not initialize {backend} with multiple processes")
+                # Try standalone simulation
+                if world and world.size() == 1:
+                    print("Running in single-process mode")
+            else:
+                # Run benchmarks
+                results = run_weak_scaling_benchmark(
+                    min_gpus=min_gpus,
+                    max_gpus=max_gpus,
+                    size_per_process=size_per_process,
+                    algorithms=["ring", "tree"],
+                    warmup_group_=world,
+                )
+
+                with lock:
+                    results_dict[backend] = results
+
+        except Exception as e:
+            print(f"Error with backend {backend}: {e}")
+            # Add placeholder for missing backend
+            results_dict[backend] = {
+                "benchmark_type": "comparison",
+                "backend": backend,
+                "error": str(e),
+                "results": [],
+            }
+
+    # Run backends sequentially or in parallel
+    for backend in backends:
+        benchmark_backend(backend)
+
+    return {
+        "benchmark_type": "backend_comparison",
+        "backends_tested": backends,
+        "results_by_backend": results_dict,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+
+def main():
