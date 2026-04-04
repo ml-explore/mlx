@@ -24,7 +24,46 @@ import sys
 import time
 from datetime import datetime
 
-import mlx.core as mx
+# Try to import MLX with helpful error messages
+try:
+    import mlx.core as mx
+except ImportError as e:
+    print("=" * 80)
+    print("MLX Import Error")
+    print("=" * 80)
+    print(f"Import failed with error: {e}")
+    print()
+    print("Solutions:")
+    print("-" * 80)
+    print()
+    print("Option 1: Install pre-built MLX (recommended for most users)")
+    print()
+    print("  pip install mlx")
+    print()
+    print("  Verify: python -c 'import mlx.core as mx; print(mx.__version__)'")
+    print()
+    print("-" * 80)
+    print()
+    print("Option 2: Install MLX with CPU backend only (no GPU)")
+    print()
+    print("  pip install mlx[cpu]")
+    print()
+    print("-" * 80)
+    print()
+    print("Option 3: Build MLX from source (requires full Xcode + Metal Toolchain)")
+    print()
+    print("  1. Install full Xcode from App Store")
+    print("  2. Run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer")
+    print("  3. Run: sudo xcodebuild -license accept")
+    print("  4. Run: sudo xcodebuild -downloadComponent MetalToolchain")
+    print("  5. Run: cd /path/to/mlx && pip install -e .")
+    print()
+    print("-" * 80)
+    print()
+    print("For detailed troubleshooting, see: benchmarks/README.md")
+    print("=" * 80)
+    sys.exit(1)
+
 from time_utils import time_fn
 
 
