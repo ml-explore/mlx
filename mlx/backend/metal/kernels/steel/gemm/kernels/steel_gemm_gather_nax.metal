@@ -35,3 +35,4 @@
 
 instantiate_gather_mm_shapes_helper(float16, half, float16, half);
 instantiate_gather_mm_shapes_helper(bfloat16, bfloat, bfloat16, bfloat);
+instantiate_gather_mm_shapes_helper(float32, float, float32, float);
