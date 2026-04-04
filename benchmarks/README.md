@@ -222,6 +222,43 @@ xcrun --find metal
 
 **Important**: On macOS 26+ (Xcode 15.3+), you must explicitly download the Metal Toolchain component even after installing Xcode.
 
+**Note**: After downloading the Metal Toolchain, you may need to restart your terminal or run `xcodebuild -runPathToolchain` to refresh the toolchain paths.
+
+**Verification**: After downloading, verify the toolchain is installed:
+
+```bash
+# Check Metal Toolchain location
+ls -la /System/Library/AssetsV2/com_apple_MobileAsset_MetalToolchain/
+
+# Verify metal compiler can be found
+xcrun --find metal
+xcrun -f metal  # Should show the full path to metal compiler
+
+# Check toolchain version
+xcodebuild -version
+```
+
+**If you still get "cannot execute tool 'metal'" error after downloading the toolchain:**
+
+The Metal Toolchain may not be properly registered. Try:
+
+```bash
+# Option A: Re-download the Metal Toolchain
+sudo xcodebuild -downloadComponent MetalToolchain
+
+# Option B: Install all available components
+sudo xcodebuild -pickXcode /Applications/Xcode.app
+
+# Option C: Reset toolchain paths
+sudo xcodebuild -runPathToolchain
+
+# Option D: Try a clean build
+cd /Users/martinolsson/Documents/GitHub/mlx
+pip uninstall mlx -y  # Remove any partial installations
+rm -rf /Users/martinolsson/Documents/GitHub/mlx/build  # Clean build directory
+pip install -e . --verbose  # Build with verbose output to diagnose
+```
+
 **Option 2: Use Pre-built MLX Wheel**
 
 If installing Xcode isn't feasible, use the pre-built wheel (may not have custom optimizations):
