@@ -2,20 +2,50 @@
 
 This directory contains various benchmark scripts for MLX operations.
 
-## Running Benchmarks
+## Prerequisites for Building MLX from Source
 
-To run benchmarks, you need to have MLX installed. If you're working with this fork, ensure MLX is built and installed:
+Before building MLX, ensure you have the required dependencies:
 
+### macOS (Apple Silicon M5 Max)
+MLX requires Apple's Metal framework for GPU acceleration. To build MLX with Metal support, you need:
+
+1. **Xcode Command Line Tools** (with Metal SDK):
+```bash
+# Install Xcode command line tools
+xcode-select --install
+
+# Or install full Xcode from App Store, then:
+sudo xcodebuild -license accept
+```
+
+2. **Verify Metal is available**:
+```bash
+# Check if metal compiler is available
+xcrun --find metal
+
+# Should return something like:
+# /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/metal
+```
+
+3. **Build MLX**:
 ```bash
 # From the project root directory
 pip install -e .
 ```
 
-Or if you have a built version:
+### Alternative: Install Pre-built MLX
+
+If building from source fails, you can install the official MLX wheel:
 
 ```bash
-python setup.py install
+# Install MLX from PyPI (pre-built for macOS)
+pip install mlx
+
+# Verify installation
+python -c "import mlx.core as mx; print(mx.__version__)"
 ```
+
+Note: The pre-built wheels may not include your custom M5 Max optimizations. For full optimization support, build from source.
 
 ## Available Benchmarks
 
@@ -139,6 +169,48 @@ python -m benchmarks.python.m5_max_bench --output after.json
 - Run multiple times and average the results
 - Check for system load during benchmarking
 - Ensure thermal conditions are consistent
+
+### "Failed to build mlx" - Metal Compiler Not Found
+
+If you encounter this error when building MLX from source:
+
+```
+xcrun: error: unable to find utility "metal", not a developer tool or in PATH
+make[2]: *** [mlx/backend/metal/kernels/arg_reduce.air] Error 72
+```
+
+**Solution**: Install Xcode Command Line Tools with Metal support:
+
+```bash
+# Install command line tools (includes Metal SDK)
+xcode-select --install
+
+# Or install full Xcode from App Store, then:
+sudo xcodebuild -license accept
+
+# Verify Metal is now available
+xcrun --find metal
+```
+
+After installation, retry building MLX:
+
+```bash
+cd /Users/martinolsson/Documents/GitHub/mlx
+pip install -e .
+```
+
+### "Failed building editable for mlx"
+This typically means the build process failed during compilation. Common causes:
+
+1. **Missing Metal compiler** - See previous error
+2. **Insufficient disk space** - Ensure at least 5GB free
+3. **Outdated Xcode** - Update to latest version from App Store
+
+Build with verbose output for debugging:
+
+```bash
+pip install -e . --verbose
+```
 
 ## Contributing Benchmarks
 
