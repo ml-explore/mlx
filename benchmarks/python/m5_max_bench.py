@@ -607,12 +607,12 @@ def run_benchmarks(cpu=False, output_file=None):
     # Print system info
     print(f"\nSystem Info:")
     print(f"  Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  Device: {mx.device()}")
+    print(f"  Device: {mx.default_device()}")
     
     # Get device info if available
     try:
         import mlx.metal as metal
-        device_info = metal.device_info(mx.device())
+        device_info = metal.device_info(mx.default_device())
         print(f"  Device info: {device_info}")
     except:
         pass
@@ -620,7 +620,7 @@ def run_benchmarks(cpu=False, output_file=None):
     # Run all benchmarks
     results = {
         'timestamp': datetime.now().isoformat(),
-        'device': str(mx.device()),
+        'device': str(mx.default_device()),
         'benchmarks': {}
     }
     
