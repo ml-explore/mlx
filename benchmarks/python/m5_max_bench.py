@@ -19,6 +19,7 @@ Run with: python m5_max_bench.py [--cpu] [--gpu]
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
