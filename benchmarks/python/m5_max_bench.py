@@ -513,30 +513,13 @@ class LargeMatrixBenchmark(M5MaxBenchmark):
             **result
         })
         
-    def benchmark_matrix_power(self):
-        """Matrix power (CPU stream - not yet GPU supported)."""
-        a = mx.random.uniform(shape=(128, 128))
-        mx.eval(a)
-        
-        def fn():
-            # matrix_power currently only supported on CPU
-            with mx.stream(mx.cpu):
-                return mx.linalg.matrix_power(a, 10)
-            
-        result = self.measure(fn, num_iters=20)  # Faster operation
-        self.results.append({
-            'test': 'matrix_power',
-            'shape': '(128, 128) ^ 10',
-            **result
-        })
-        
+
     def run(self):
         """Run all large matrix benchmarks."""
         print("Running large matrix benchmarks...")
         self.benchmark_qr()
         self.benchmark_svd()
         self.benchmark_eig()
-        self.benchmark_matrix_power()
         return self.results
 
 
