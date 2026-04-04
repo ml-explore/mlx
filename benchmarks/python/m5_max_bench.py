@@ -595,7 +595,7 @@ class ReduceBenchmark(M5MaxBenchmark):
         self.benchmark_fp16_reduce()      # FP16 performance
         self.benchmark_bf16_reduce()      # BF16 performance
         self.benchmark_parallel_reduce()
-        self.benchmark_softmax_elementwise()
+        self.benchmark_softmax_reduce()
         self.benchmark_rms_norm()
         return self.results
 
@@ -780,21 +780,6 @@ class ElementWiseBenchmark(M5MaxBenchmark):
             **result
         })
         
-    def benchmark_softmax_elementwise(self):
-        """Softmax element-wise (common in transformers)."""
-        a = mx.random.uniform(shape=(16, 32, 10000))
-        mx.eval(a)
-        
-        def fn():
-            return mx.softmax(a, axis=-1)
-            
-        result = self.measure(fn)
-        self.results.append({
-            'test': 'softmax_elementwise',
-            'shape': '(16, 32, 10000) softmax',
-            **result
-        })
-        
     def run(self):
         """Run all element-wise benchmarks."""
         print("Running element-wise benchmarks...")
@@ -809,7 +794,6 @@ class ElementWiseBenchmark(M5MaxBenchmark):
         self.benchmark_bf16_element()    # BF16 performance
         self.benchmark_gelu()
         self.benchmark_gelu_fused()
-        self.benchmark_softmax_elementwise()
         return self.results
 
 
