@@ -554,7 +554,7 @@ class ReduceBenchmark(M5MaxBenchmark):
         mx.eval(a)
         
         def fn():
-            return mx.nn.softmax(a, axis=-1)
+            return mx.softmax(a, axis=-1)
             
         result = self.measure(fn)
         self.results.append({
@@ -563,20 +563,19 @@ class ReduceBenchmark(M5MaxBenchmark):
             **result
         })
         
-    def benchmark_batch_norm(self):
-        """Batch normalization reduce."""
+    def benchmark_rms_norm(self):
+        """RMS normalization (common in transformers)."""
         x = mx.random.uniform(shape=(32, 1024))
-        mean = mx.zeros((1024,))
-        var = mx.ones((1024,))
-        mx.eval(x, mean, var)
+        weight = mx.ones((1024,))
+        mx.eval(x, weight)
         
         def fn():
-            return mx.nn.batch_normalize(x, mean=mean, var=var)
+            return mx.rms_norm(x, weight=weight, eps=1e-5)
             
         result = self.measure(fn)
         self.results.append({
-            'test': 'batch_norm',
-            'shape': '(32, 1024) batch norm',
+            'test': 'rms_norm',
+            'shape': '(32, 1024) RMS norm',
             **result
         })
         
@@ -596,8 +595,8 @@ class ReduceBenchmark(M5MaxBenchmark):
         self.benchmark_fp16_reduce()      # FP16 performance
         self.benchmark_bf16_reduce()      # BF16 performance
         self.benchmark_parallel_reduce()
-        self.benchmark_softmax()
-        self.benchmark_batch_norm()
+        self.benchmark_softmax_elementwise()
+        self.benchmark_rms_norm()
         return self.results
 
 
@@ -781,17 +780,17 @@ class ElementWiseBenchmark(M5MaxBenchmark):
             **result
         })
         
-    def benchmark_softmax(self):
-        """Softmax (common in transformers)."""
+    def benchmark_softmax_elementwise(self):
+        """Softmax element-wise (common in transformers)."""
         a = mx.random.uniform(shape=(16, 32, 10000))
         mx.eval(a)
         
         def fn():
-            return mx.nn.softmax(a, axis=-1)
+            return mx.softmax(a, axis=-1)
             
         result = self.measure(fn)
         self.results.append({
-            'test': 'softmax',
+            'test': 'softmax_elementwise',
             'shape': '(16, 32, 10000) softmax',
             **result
         })
@@ -810,7 +809,7 @@ class ElementWiseBenchmark(M5MaxBenchmark):
         self.benchmark_bf16_element()    # BF16 performance
         self.benchmark_gelu()
         self.benchmark_gelu_fused()
-        self.benchmark_softmax()
+        self.benchmark_softmax_elementwise()
         return self.results
 
 
