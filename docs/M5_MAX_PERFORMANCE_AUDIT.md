@@ -255,5 +255,4 @@ The optimizations are backward compatible with M1/M2/M3/M4 Max chips.
 ---
 
 **Report Date**: 2026-04-01  
-**Auditor**: OpenHands AI Assistant  
 **Target Hardware**: Apple Silicon M5 Max
