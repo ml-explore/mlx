@@ -64,7 +64,7 @@ except ImportError as e:
     print("=" * 80)
     sys.exit(1)
 
-from time_utils import time_fn
+from .time_utils import time_fn
 
 
 class M5MaxBenchmark:
