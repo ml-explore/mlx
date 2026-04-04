@@ -9,21 +9,25 @@ Before building MLX, ensure you have the required dependencies:
 ### macOS (Apple Silicon M5 Max)
 MLX requires Apple's Metal framework for GPU acceleration. To build MLX with Metal support, you need:
 
-1. **Xcode Command Line Tools** (with Metal SDK):
+1. **Full Xcode (not just Command Line Tools)**:
 ```bash
-# Install Xcode command line tools
-xcode-select --install
+# Important: You need the full Xcode IDE (not just command line tools)
+# Download and install from Mac App Store
+# Command Line Tools alone do NOT include the Metal compiler
 
-# Or install full Xcode from App Store, then:
+# After installing Xcode, set it as your developer directory:
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+# Accept the license:
 sudo xcodebuild -license accept
 ```
 
 2. **Verify Metal is available**:
 ```bash
-# Check if metal compiler is available
+# Check if metal compiler is in PATH
 xcrun --find metal
 
-# Should return something like:
+# Should output something like:
 # /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/metal
 ```
 
@@ -32,6 +36,10 @@ xcrun --find metal
 # From the project root directory
 pip install -e .
 ```
+
+⚠️ **Common Error**: If you get `xcrun: error: unable to find utility "metal"`, this means:
+- You only have Command Line Tools installed (not full Xcode)
+- Solution: Install full Xcode from App Store
 
 ### Alternative: Install Pre-built MLX
 
@@ -179,20 +187,47 @@ xcrun: error: unable to find utility "metal", not a developer tool or in PATH
 make[2]: *** [mlx/backend/metal/kernels/arg_reduce.air] Error 72
 ```
 
-**Solution**: Install Xcode Command Line Tools with Metal support:
+**Cause**: Command Line Tools alone don't include the Metal compiler. You need full **Xcode** (the IDE).
+
+#### Solution Options:
+
+**Option 1: Install Full Xcode (Recommended)**
+
+The command line tools you have installed don't include the Metal compiler. Install Xcode from the App Store:
 
 ```bash
-# Install command line tools (includes Metal SDK)
-xcode-select --install
+# 1. Download and install Xcode from Mac App Store
+#    (Search for "Xcode" in App Store and install)
 
-# Or install full Xcode from App Store, then:
+# 2. Switch to Xcode's developer directory
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+# 3. Accept the license
 sudo xcodebuild -license accept
 
-# Verify Metal is now available
+# 4. Verify Metal compiler is available
 xcrun --find metal
+# Should output: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/metal
 ```
 
-After installation, retry building MLX:
+**Option 2: Use Pre-built MLX Wheel**
+
+If installing Xcode isn't feasible, use the pre-built wheel (may not have custom optimizations):
+
+```bash
+pip install mlx
+```
+
+**Option 3: Build without Metal (CPU-only)**
+
+If you only need CPU support:
+
+```bash
+# Install MLX with CPU backend only (no Metal)
+pip install mlx[cpu]
+```
+
+After installing Xcode, retry building MLX:
 
 ```bash
 cd /Users/martinolsson/Documents/GitHub/mlx
