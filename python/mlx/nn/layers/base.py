@@ -206,6 +206,85 @@ class Module(dict):
             self.update(tree_unflatten(weights), strict=False)
         return self
 
+    def load_weights_streaming(
+        self,
+        files: List[str],
+        strict: bool = True,
+    ) -> Module:
+        """
+        Load model weights from multiple files one at a time, freeing
+        each file's data before loading the next.
+
+        This reduces peak memory during loading by avoiding the need to
+        hold all weight shards in memory simultaneously. For a model split
+        across N safetensors files, peak memory drops from N*shard_size
+        to approximately 1*shard_size + model_size.
+
+        Useful on memory-constrained devices (e.g. 8-16GB Macs) where
+        loading all shards at once would exceed available memory.
+
+        Args:
+            files (list[str]): Paths to weight files (``.safetensors``
+                or ``.npz``), e.g. the sharded model weight files.
+            strict (bool, optional): If ``True``, verifies that the
+                union of all weights across files exactly matches the
+                model parameters. Default: ``True``.
+
+        Returns:
+            The module instance after updating the weights.
+
+        Example:
+
+            .. code-block:: python
+
+                import glob
+                import mlx.nn as nn
+
+                model = MyModel(args)
+
+                # Load shards one at a time instead of all at once
+                shard_files = sorted(glob.glob("model-*.safetensors"))
+                model.load_weights_streaming(shard_files)
+        """
+        if strict:
+            expected_keys = set(
+                tree_flatten(self.parameters(), destination={}).keys()
+            )
+            loaded_keys = set()
+
+        for file_path in files:
+            shard = mx.load(file_path)
+            shard_items = list(shard.items())
+
+            if strict:
+                loaded_keys.update(k for k, _ in shard_items)
+
+            # Apply this shard's weights to the model
+            self.update(tree_unflatten(shard_items), strict=False)
+
+            # Evaluate to materialize weights in the model, then the
+            # raw shard dict can be freed by the garbage collector
+            mx.eval(self.parameters())
+            del shard, shard_items
+
+        if strict:
+            if missing := (expected_keys - loaded_keys):
+                num_missing = len(missing)
+                missing_str = ",\n".join(sorted(missing))
+                raise ValueError(
+                    f"Missing {num_missing} parameters after loading "
+                    f"all shards: \n{missing_str}."
+                )
+            if extras := (loaded_keys - expected_keys):
+                num_extras = len(extras)
+                extras_str = ",\n".join(sorted(extras))
+                raise ValueError(
+                    f"Received {num_extras} parameters not in "
+                    f"model: \n{extras_str}."
+                )
+
+        return self
+
     def save_weights(self, file: str):
         """
         Save the model's weights to a file. The saving method is determined by the file extension:

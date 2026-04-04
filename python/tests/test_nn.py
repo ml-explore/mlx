@@ -187,6 +187,67 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(m.layers[0].weight, mx.ones((2, 2))))
         self.assertEqual(len(m.layers), 1)
 
+    def test_load_weights_streaming(self):
+        def make_model():
+            return nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
+
+        m = make_model()
+        tdir = tempfile.TemporaryDirectory()
+
+        # Save weights across two shard files
+        params = tree_flatten(m.parameters(), destination={})
+        keys = list(params.keys())
+        mid = len(keys) // 2
+
+        shard1 = {k: params[k] for k in keys[:mid]}
+        shard2 = {k: params[k] for k in keys[mid:]}
+
+        shard1_path = os.path.join(tdir.name, "shard-001.safetensors")
+        shard2_path = os.path.join(tdir.name, "shard-002.safetensors")
+        mx.save_safetensors(shard1_path, shard1)
+        mx.save_safetensors(shard2_path, shard2)
+
+        # Load via streaming
+        m_load = make_model()
+        m_load.load_weights_streaming(
+            [shard1_path, shard2_path], strict=True
+        )
+
+        mx.eval(m_load.state)
+        tdir.cleanup()
+
+        eq_tree = tree_map(mx.array_equal, m.parameters(), m_load.parameters())
+        self.assertTrue(all(tree_flatten(eq_tree)))
+
+    def test_load_weights_streaming_strict_missing(self):
+        m = nn.Linear(4, 4)
+        tdir = tempfile.TemporaryDirectory()
+
+        # Save only the weight, not bias
+        shard_path = os.path.join(tdir.name, "shard.safetensors")
+        mx.save_safetensors(shard_path, {"weight": m.weight})
+
+        m_load = nn.Linear(4, 4)
+        with self.assertRaises(ValueError):
+            m_load.load_weights_streaming([shard_path], strict=True)
+
+        tdir.cleanup()
+
+    def test_load_weights_streaming_non_strict(self):
+        m = nn.Linear(4, 4)
+        tdir = tempfile.TemporaryDirectory()
+
+        shard_path = os.path.join(tdir.name, "shard.safetensors")
+        mx.save_safetensors(shard_path, {"weight": m.weight})
+
+        m_load = nn.Linear(4, 4)
+        m_load.load_weights_streaming([shard_path], strict=False)
+
+        mx.eval(m_load.state)
+        tdir.cleanup()
+
+        self.assertTrue(mx.array_equal(m.weight, m_load.weight))
+
     def test_module_state(self):
         m = nn.Linear(10, 1)
         m.state["hello"] = "world"
