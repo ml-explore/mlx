@@ -128,11 +128,14 @@ Large matrices (M, N > 1024): 128 threads
 
 ## Implementation Checklist
 
-### High Priority (Implemented)
-- [x] Add 's' case to GEMM_TPARAM_MACRO
+### High Priority (Implemented) ✓
+- [x] Add 's' case to GEMM_TPARAM_MACRO (matmul.cpp)
 - [x] Increase buffer capacity for Max chips
+  - M5 Max: 70 ops, 70 MB buffer
+  - Other Max chips: 60 ops, 60 MB buffer
 - [x] Add M5 Max detection (arch_gen >= 25)
 - [x] Document optimizations in header file
+- [x] Update device_info.cpp with M5 Max metrics
 
 ### Medium Priority (Recommended for Future)
 - [ ] Increase thread group sizes for large matrices
@@ -153,27 +156,63 @@ Large matrices (M, N > 1024): 128 threads
 
 ## Benchmarking Recommendations
 
-To validate these optimizations, run:
+To validate these optimizations, run the comprehensive M5 Max benchmark:
 
 ```bash
-# Matmul performance
-python -m benchmarks.python.matmul_benchmark
+# Run with GPU (default)
+python -m benchmarks.python.m5_max_bench
 
-# Reduction operations  
-python -m benchmarks.python.reduce_benchmark
+# Run with CPU
+python -m benchmarks.python.m5_max_bench --cpu
 
-# Large matrix operations
-python -m benchmarks.python.large_ops_benchmark
+# Save results to file
+python -m benchmarks.python.m5_max_bench --output m5_max_results.json
+
+# View all options
+python -m benchmarks.python.m5_max_bench --help
+```
+
+The benchmark suite includes:
+- **Matmul benchmarks**: Small, medium, large, and batched matmuls
+- **Reduce benchmarks**: Row, column, and large reductions
+- **Element-wise operations**: Add, multiply, exp, log, sigmoid, relu
+- **Large matrix operations**: QR, SVD, eigenvalue decomposition
+- **CPU backend benchmarks**: For comparison with GPU
+
+Example output format:
+```json
+{
+  "timestamp": "2026-04-04T...",
+  "device": "Apple M5 Max",
+  "benchmarks": {
+    "matmul": [
+      {"test": "large_nn", "mean": 1.23, "min": 1.20, "max": 1.30, ...}
+    ],
+    ...
+  }
+}
 ```
 
 ## Conclusion
 
-The primary optimization (matmul GEMM parameters) has been successfully implemented. Additional opportunities were identified for:
-- Kernel fusion
-- Better SIMD utilization
-- Improved memory access patterns
+The primary optimization (matmul GEMM parameters) has been successfully implemented along with:
+- Improved M5 Max device detection via architecture generation (arch_gen >= 25)
+- Optimized buffer parameters (70 ops/70 MB for M5 Max)
+- Enhanced device info with is_m5_max flag and buffer metrics
+- Comprehensive benchmark suite for performance validation
 
 The current changes provide ~15-20% improvement for large matrix operations on M5 Max compared to previous general Max chip parameters.
+
+### Implementation Summary
+
+**Files Modified:**
+- `mlx/backend/metal/device_info.cpp` - Added M5 Max detection and metrics
+- `docs/M5_MAX_PERFORMANCE_AUDIT.md` - Updated audit documentation
+
+**New Files:**
+- `benchmarks/python/m5_max_bench.py` - Comprehensive M5 Max benchmark suite
+
+The optimizations are backward compatible with M1/M2/M3/M4 Max chips.
 
 ---
 
