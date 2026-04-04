@@ -461,12 +461,14 @@ class LargeMatrixBenchmark(M5MaxBenchmark):
         super().__init__("large_matrices")
         
     def benchmark_qr(self):
-        """QR decomposition."""
+        """QR decomposition (CPU stream - not yet GPU supported)."""
         a = mx.random.uniform(shape=(512, 512))
         mx.eval(a)
         
         def fn():
-            return mx.linalg.qr(a)
+            # QR decomposition currently only supported on CPU
+            with mx.stream(mx.cpu):
+                return mx.linalg.qr(a)
             
         result = self.measure(fn, num_iters=10)  # Slower operation
         self.results.append({
@@ -476,12 +478,14 @@ class LargeMatrixBenchmark(M5MaxBenchmark):
         })
         
     def benchmark_svd(self):
-        """SVD."""
+        """SVD (CPU stream - not yet GPU supported)."""
         a = mx.random.uniform(shape=(256, 256))
         mx.eval(a)
         
         def fn():
-            return mx.linalg.svd(a)
+            # SVD currently only supported on CPU
+            with mx.stream(mx.cpu):
+                return mx.linalg.svd(a)
             
         result = self.measure(fn, num_iters=10)  # Slower operation
         self.results.append({
@@ -491,14 +495,16 @@ class LargeMatrixBenchmark(M5MaxBenchmark):
         })
         
     def benchmark_eig(self):
-        """Eigenvalue decomposition."""
+        """Eigenvalue decomposition (CPU stream - not yet GPU supported)."""
         # Make symmetric for stability
         a = mx.random.uniform(shape=(256, 256))
         a = (a + mx.transpose(a)) / 2
         mx.eval(a)
         
         def fn():
-            return mx.linalg.eigvalsh(a)
+            # eigvalsh currently only supported on CPU
+            with mx.stream(mx.cpu):
+                return mx.linalg.eigvalsh(a)
             
         result = self.measure(fn, num_iters=10)  # Slower operation
         self.results.append({
@@ -508,12 +514,14 @@ class LargeMatrixBenchmark(M5MaxBenchmark):
         })
         
     def benchmark_matrix_power(self):
-        """Matrix power."""
+        """Matrix power (CPU stream - not yet GPU supported)."""
         a = mx.random.uniform(shape=(128, 128))
         mx.eval(a)
         
         def fn():
-            return mx.linalg.matrix_power(a, 10)
+            # matrix_power currently only supported on CPU
+            with mx.stream(mx.cpu):
+                return mx.linalg.matrix_power(a, 10)
             
         result = self.measure(fn, num_iters=20)  # Faster operation
         self.results.append({
