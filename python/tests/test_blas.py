@@ -1191,39 +1191,44 @@ class TestBlas(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 
     def test_gather_matmul_float32_nax(self):
-        """Test float32 gather_mm with NAX path (M5 Max + TF32).
+        """Test float32 gather_mm RHS NAX path (M5 Max + TF32).
 
         Validates fix for https://github.com/ml-explore/mlx/issues/3362
         - MoE LoRA training crashed on M5 Max with TF32 enabled
         - Root cause: Missing float32 NAX gather_mm kernel
         - Fix: Added float32 instantiation in steel_gemm_gather_nax.metal
 
-        This test explicitly uses float32 (the default for gather_mm) to ensure
-        the NAX kernel path works on devices with TF32 enabled.
+        The NAX path is triggered when:
+        1. M == 1 (matvec, not matmul)
+        2. right_sorted == True (sorted_indices=True)
+        3. is_nax_available() (M5 Max)
+        4. enable_tf32() OR dtype != float32
+
+        This test uses M=1 (matvec) + sorted_indices=True to hit the NAX path.
+        Without the float32 kernel instantiation, this crashes on M5 Max.
         """
         if not mx.is_available(mx.gpu):
             return
 
-        # Test with float32 (triggers NAX path on M5 Max with TF32)
-        a = mx.random.normal(shape=(8, 256, 128), dtype=mx.float32)
+        # Matvec case (M=1) triggers NAX path
+        a = mx.random.normal(shape=(8, 1, 128), dtype=mx.float32)  # M=1 is critical
         b = mx.random.normal(shape=(4, 128, 256), dtype=mx.float32)
 
-        # MoE-style indices (experts selection)
-        lhs_indices = mx.array([0, 2, 5, 7], dtype=mx.uint32)
-        rhs_indices = mx.array([1, 0, 3, 2], dtype=mx.uint32)
+        # MoE-style sorted indices (sorted_indices=True activates NAX path)
+        rhs_indices = mx.array([0, 1, 2, 3], dtype=mx.uint32)  # Sorted
 
-        # This should not crash with: "Unable to load function steel_gather_mm_rhs_nax_nt_float32_float32..."
-        out = mx.gather_mm(a, b, lhs_indices, rhs_indices)
+        # This would crash with "Unable to load function steel_gather_mm_rhs_nax_nt_float32_float32..."
+        # before the fix on M5 Max with TF32 enabled
+        out = mx.gather_mm(a, b, rhs_indices=rhs_indices, sorted_indices=True)
         mx.eval(out)
 
-        # Verify output shape
-        self.assertEqual(out.shape, (4, 256, 256))
+        # Verify output shape: (4, 1, 256)
+        self.assertEqual(out.shape, (4, 1, 256))
         self.assertEqual(out.dtype, mx.float32)
 
         # Verify correctness against reference implementation
-        a_selected = a[lhs_indices.tolist()]
         b_selected = b[rhs_indices.tolist()]
-        expected = a_selected @ b_selected
+        expected = a @ b_selected
 
         self.assertTrue(mx.allclose(out, expected, atol=1e-5))
 
