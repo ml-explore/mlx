@@ -1068,7 +1068,7 @@ Note:
 
     # Run backend comparison if requested
     if args.backend_comparison:
-        backends_to_test = [b.strip() for b in args.backend.split(",")]
+        backends_to_test = [b.strip() for b in getattr(args, 'backends', 'ring,jaccl,mpi').split(",")]
         results = run_backend_comparison(
             min_gpus=args.min_gpus,
             max_gpus=args.max_gpus,
