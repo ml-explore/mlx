@@ -691,13 +691,15 @@ def run_cpu_scaling_benchmark(
                 efficiency = 1.0
             else:
                 # For CPU, use single process time as baseline
-                x_single = mx.random.normal(shape=(size_per_core,), dtype=mx.float32)
+                x_single_cpu = mx.random.normal(
+                    shape=(size_per_core,), dtype=mx.float32
+                )
 
                 def run_single_cpu():
                     for _ in range(5):
-                        x_single = mx.sin(x_single)
-                        x_single = mx.exp(x_single)
-                    return x_single
+                        x_single_cpu = mx.sin(x_single_cpu)
+                        x_single_cpu = mx.exp(x_single_cpu)
+                    return x_single_cpu
 
                 try:
                     time_single, _ = time_function(
@@ -756,12 +758,20 @@ def run_cpu_scaling_benchmark(
                     "best_algorithm_by_size": {},
                     "scalability_profile": {
                         "num_test_points": len(results),
-                        "efficiency_range": {
-                            "min": min(r.scalability_efficiency for r in results),
-                            "max": max(r.scalability_efficiency for r in results),
-                            "mean": sum(r.scalability_efficiency for r in results)
-                            / len(results),
-                        },
+                        "efficiency_range": (
+                            {
+                                "min": min(r.scalability_efficiency for r in results),
+                                "max": max(r.scalability_efficiency for r in results),
+                                "mean": sum(r.scalability_efficiency for r in results)
+                                / len(results),
+                            }
+                            if results
+                            else {
+                                "min": 1.0,
+                                "max": 1.0,
+                                "mean": 1.0,
+                            }
+                        ),
                     },
                 },
             )
