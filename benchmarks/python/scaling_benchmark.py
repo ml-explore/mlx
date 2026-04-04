@@ -79,13 +79,13 @@ class ScalingExperiment:
     metrics: Dict
 
 
-def warmup_group():
-    """Initialize distributed group."""
+def warmup_group(backend: str = "any"):
+    """Initialize distributed group with specified backend."""
     try:
-        world = mx.distributed.init()
+        world = mx.distributed.init(backend=backend)
         return world
     except Exception as e:
-        print(f"Warning: Distributed initialization failed: {e}")
+        print(f"Warning: Distributed initialization with '{backend}' backend failed: {e}")
         return None
 
 
