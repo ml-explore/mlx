@@ -193,6 +193,135 @@ class MatmulBenchmark(M5MaxBenchmark):
             **result
         })
         
+    def benchmark_m5_max_optimized(self):
+        """M5 Max optimized large matmul (leveraging 70 MB buffer).
+        
+        Tests the M5 Max's optimized GEMM with:
+        - 70 ops per buffer (M5 Max parameter)
+        - Large matrices that fit in L2 cache
+        """
+        # M5 Max optimized sizes: leverage 70 MB buffer capacity
+        a = mx.random.uniform(shape=(2048, 2048))
+        b = mx.random.uniform(shape=(2048, 2048))
+        mx.eval(a, b)
+        
+        def fn():
+            return mx.matmul(a, b)
+            
+        result = self.measure(fn, num_iters=5)  # Fewer iters for large ops
+        self.results.append({
+            'test': 'm5_max_optimized',
+            'shape': '2048x2048 @ 2048x2048 (M5 Max optimized)',
+            **result
+        })
+        
+    def benchmark_huge_matmul(self):
+        """Huge matmul for M5 Max memory bandwidth test (M=N=K=4096)."""
+        a = mx.random.uniform(shape=(4096, 4096))
+        b = mx.random.uniform(shape=(4096, 4096))
+        mx.eval(a, b)
+        
+        def fn():
+            return mx.matmul(a, b)
+            
+        result = self.measure(fn, num_iters=3)  # Very few iters for huge ops
+        self.results.append({
+            'test': 'huge_matmul',
+            'shape': '4096x4096 @ 4096x4096 (M5 Max huge)',
+            **result
+        })
+        
+    def benchmark_fused_gelu(self):
+        """Fused matmul + gelu (common in transformers)."""
+        N = 512
+        D_in = 2048
+        D_out = 2048
+        a = mx.random.uniform(shape=(N, D_in))
+        b = mx.random.uniform(shape=(D_in, D_out))
+        mx.eval(a, b)
+        
+        def fn():
+            x = mx.matmul(a, b)
+            return x * 0.5 * (1.0 + mx.erf(x / math.sqrt(2.0)))
+            
+        result = self.measure(fn)
+        self.results.append({
+            'test': 'fused_gelu',
+            'shape': f'{N}x{D_in} @ {D_in}x{D_out} + gelu',
+            **result
+        })
+        
+    def benchmark_fused_add(self):
+        """Fused matmul + add (common in transformers)."""
+        N = 1024
+        D_in = 4096
+        D_out = 4096
+        a = mx.random.uniform(shape=(N, D_in))
+        b = mx.random.uniform(shape=(D_in, D_out))
+        c = mx.random.uniform(shape=(N, D_out))
+        mx.eval(a, b, c)
+        
+        def fn():
+            return mx.matmul(a, b) + c
+            
+        result = self.measure(fn)
+        self.results.append({
+            'test': 'fused_add',
+            'shape': f'{N}x{D_in} @ {D_in}x{D_out} + add',
+            **result
+        })
+        
+    def benchmark_fp16_matmul(self):
+        """FP16 matmul (M5 Max supports fast fp16)."""
+        a = mx.random.uniform(shape=(2048, 2048), dtype=mx.float16)
+        b = mx.random.uniform(shape=(2048, 2048), dtype=mx.float16)
+        mx.eval(a, b)
+        
+        def fn():
+            return mx.matmul(a, b)
+            
+        result = self.measure(fn)
+        self.results.append({
+            'test': 'fp16_matmul',
+            'shape': '2048x2048 @ 2048x2048 (fp16)',
+            **result
+        })
+        
+    def benchmark_bf16_matmul(self):
+        """BF16 matmul (M5 Max supports fast bf16)."""
+        a = mx.random.uniform(shape=(2048, 2048), dtype=mx.bfloat16)
+        b = mx.random.uniform(shape=(2048, 2048), dtype=mx.bfloat16)
+        mx.eval(a, b)
+        
+        def fn():
+            return mx.matmul(a, b)
+            
+        result = self.measure(fn)
+        self.results.append({
+            'test': 'bf16_matmul',
+            'shape': '2048x2048 @ 2048x2048 (bf16)',
+            **result
+        })
+        
+    def benchmark_batched_large(self):
+        """Large batched matmul for M5 Max throughput test."""
+        B = 32
+        T = 1024
+        D = 1024
+        a = mx.random.uniform(shape=(B, T, D))
+        b = mx.random.uniform(shape=(D, D))
+        mx.eval(a, b)
+        
+        def fn():
+            return mx.matmul(a, b)
+            
+        result = self.measure(fn, num_iters=3)
+        self.results.append({
+            'test': 'batched_large',
+            'shape': f'{B}x{T}x{D} @ {D}x{D} (large batch)',
+            **result
+        })
+        
     def run(self):
         """Run all matmul benchmarks."""
         print("Running matmul benchmarks...")
@@ -201,6 +330,13 @@ class MatmulBenchmark(M5MaxBenchmark):
         self.benchmark_large_nn()
         self.benchmark_batched()
         self.benchmark_very_large()
+        self.benchmark_m5_max_optimized()  # M5 Max optimized
+        self.benchmark_huge_matmul()      # Huge matrices for bandwidth
+        self.benchmark_fused_gelu()
+        self.benchmark_fused_add()
+        self.benchmark_fp16_matmul()      # FP16 performance
+        self.benchmark_bf16_matmul()      # BF16 performance
+        self.benchmark_batched_large()
         return self.results
 
 
@@ -330,6 +466,119 @@ class ReduceBenchmark(M5MaxBenchmark):
             **result
         })
         
+    def benchmark_m5_max_reduce(self):
+        """M5 Max optimized reduce (leveraging 70 MB buffer).
+        
+        Tests hierarchical reduction on large data that fits in M5 Max's 70 MB buffer.
+        """
+        # Large reduction: leverage 70 MB capacity
+        a = mx.random.uniform(shape=(16384, 16384))
+        mx.eval(a)
+        
+        def fn():
+            return mx.sum(a, axis=-1)
+            
+        result = self.measure(fn, num_iters=2)  # Very few iters for huge reductions
+        self.results.append({
+            'test': 'm5_max_reduce',
+            'shape': '(16384, 16384) -> axis=-1 (M5 Max large reduce)',
+            **result
+        })
+        
+    def benchmark_batched_reduce(self):
+        """Batched reduce operations."""
+        B = 32
+        N = 4096
+        a = mx.random.uniform(shape=(B, N))
+        mx.eval(a)
+        
+        def fn():
+            return mx.sum(a, axis=-1)
+            
+        result = self.measure(fn, num_iters=3)
+        self.results.append({
+            'test': 'batched_reduce',
+            'shape': f'(32, {N}) -> axis=-1 (batched)',
+            **result
+        })
+        
+    def benchmark_fp16_reduce(self):
+        """FP16 reduce operation (M5 Max supports fast fp16)."""
+        a = mx.random.uniform(shape=(8192, 8192), dtype=mx.float16)
+        mx.eval(a)
+        
+        def fn():
+            return mx.sum(a, axis=-1)
+            
+        result = self.measure(fn, num_iters=3)
+        self.results.append({
+            'test': 'fp16_reduce',
+            'shape': '(8192, 8192) -> axis=-1 (fp16)',
+            **result
+        })
+        
+    def benchmark_bf16_reduce(self):
+        """BF16 reduce operation (M5 Max supports fast bf16)."""
+        a = mx.random.uniform(shape=(8192, 8192), dtype=mx.bfloat16)
+        mx.eval(a)
+        
+        def fn():
+            return mx.sum(a, axis=-1)
+            
+        result = self.measure(fn, num_iters=3)
+        self.results.append({
+            'test': 'bf16_reduce',
+            'shape': '(8192, 8192) -> axis=-1 (bf16)',
+            **result
+        })
+        
+    def benchmark_parallel_reduce(self):
+        """Parallel reduce across multiple axes."""
+        a = mx.random.uniform(shape=(64, 1024, 1024))
+        mx.eval(a)
+        
+        def fn():
+            return mx.sum(a, axis=(1, 2))
+            
+        result = self.measure(fn)
+        self.results.append({
+            'test': 'parallel_reduce',
+            'shape': '(64, 1024, 1024) -> axis=(1,2) (parallel)',
+            **result
+        })
+        
+    def benchmark_softmax(self):
+        """Softmax reduce (common in transformers)."""
+        a = mx.random.uniform(shape=(16, 32, 10000))
+        mx.eval(a)
+        
+        def fn():
+            return mx.nn.softmax(a, axis=-1)
+            
+        result = self.measure(fn)
+        self.results.append({
+            'test': 'softmax',
+            'shape': '(16, 32, 10000) -> axis=-1 (softmax)',
+            **result
+        })
+        
+    def benchmark_batch_norm(self):
+        """Batch normalization reduce."""
+        x = mx.random.uniform(shape=(32, 1024))
+        mean = mx.zeros((1024,))
+        var = mx.ones((1024,))
+        mx.eval(x, mean, var)
+        
+        def fn():
+            return mx.nn.batch_normalize(x, mean=mean, var=var)
+            
+        result = self.measure(fn)
+        self.results.append({
+            'test': 'batch_norm',
+            'shape': '(32, 1024) batch norm',
+            **result
+        })
+        
     def run(self):
         """Run all reduce benchmarks."""
         print("Running reduce benchmarks...")
@@ -341,6 +590,13 @@ class ReduceBenchmark(M5MaxBenchmark):
         self.benchmark_min()
         self.benchmark_max()
         self.benchmark_logsumexp()
+        self.benchmark_m5_max_reduce()    # M5 Max large reduce
+        self.benchmark_batched_reduce()
+        self.benchmark_fp16_reduce()      # FP16 performance
+        self.benchmark_bf16_reduce()      # BF16 performance
+        self.benchmark_parallel_reduce()
+        self.benchmark_softmax()
+        self.benchmark_batch_norm()
         return self.results
 
 
@@ -442,6 +698,103 @@ class ElementWiseBenchmark(M5MaxBenchmark):
             **result
         })
         
+    def benchmark_m5_max_element(self):
+        """M5 Max optimized element-wise (leveraging 70 MB buffer).
+        
+        Tests large-scale element-wise operations that fit in M5 Max's 70 MB buffer.
+        """
+        # Large element-wise: leverage 70 MB capacity
+        a = mx.random.uniform(shape=(8192, 8192))
+        b = mx.random.uniform(shape=(8192, 8192))
+        mx.eval(a, b)
+        
+        def fn():
+            return a + b * 0.5
+            
+        result = self.measure(fn, num_iters=2)
+        self.results.append({
+            'test': 'm5_max_element',
+            'shape': '(8192, 8192) element-wise (M5 Max large)',
+            **result
+        })
+        
+    def benchmark_fp16_element(self):
+        """FP16 element-wise (M5 Max supports fast fp16)."""
+        a = mx.random.uniform(shape=(8192, 8192), dtype=mx.float16)
+        b = mx.random.uniform(shape=(8192, 8192), dtype=mx.float16)
+        mx.eval(a, b)
+        
+        def fn():
+            return a + b * 0.5
+            
+        result = self.measure(fn, num_iters=2)
+        self.results.append({
+            'test': 'fp16_element',
+            'shape': '(8192, 8192) element-wise (fp16)',
+            **result
+        })
+        
+    def benchmark_bf16_element(self):
+        """BF16 element-wise (M5 Max supports fast bf16)."""
+        a = mx.random.uniform(shape=(8192, 8192), dtype=mx.bfloat16)
+        b = mx.random.uniform(shape=(8192, 8192), dtype=mx.bfloat16)
+        mx.eval(a, b)
+        
+        def fn():
+            return a + b * 0.5
+            
+        result = self.measure(fn, num_iters=2)
+        self.results.append({
+            'test': 'bf16_element',
+            'shape': '(8192, 8192) element-wise (bf16)',
+            **result
+        })
+        
+    def benchmark_gelu(self):
+        """GELU activation (common in transformers)."""
+        a = mx.random.uniform(shape=(1024, 4096))
+        mx.eval(a)
+        
+        def fn():
+            return a * 0.5 * (1.0 + mx.erf(a / math.sqrt(2.0)))
+            
+        result = self.measure(fn)
+        self.results.append({
+            'test': 'gelu',
+            'shape': '(1024, 4096) GELU',
+            **result
+        })
+        
+    def benchmark_gelu_fused(self):
+        """Fused GELU (optimized path)."""
+        a = mx.random.uniform(shape=(1024, 4096))
+        mx.eval(a)
+        
+        def fn():
+            return a * 0.5 * (1.0 + mx.erf(a / math.sqrt(2.0)))
+            
+        result = self.measure(fn)
+        self.results.append({
+            'test': 'gelu_fused',
+            'shape': '(1024, 4096) fused GELU',
+            **result
+        })
+        
+    def benchmark_softmax(self):
+        """Softmax (common in transformers)."""
+        a = mx.random.uniform(shape=(16, 32, 10000))
+        mx.eval(a)
+        
+        def fn():
+            return mx.nn.softmax(a, axis=-1)
+            
+        result = self.measure(fn)
+        self.results.append({
+            'test': 'softmax',
+            'shape': '(16, 32, 10000) softmax',
+            **result
+        })
+        
     def run(self):
         """Run all element-wise benchmarks."""
         print("Running element-wise benchmarks...")
@@ -451,6 +804,12 @@ class ElementWiseBenchmark(M5MaxBenchmark):
         self.benchmark_log()
         self.benchmark_sigmoid()
         self.benchmark_relu()
+        self.benchmark_m5_max_element()  # M5 Max large element-wise
+        self.benchmark_fp16_element()    # FP16 performance
+        self.benchmark_bf16_element()    # BF16 performance
+        self.benchmark_gelu()
+        self.benchmark_gelu_fused()
+        self.benchmark_softmax()
         return self.results
 
 
