@@ -595,7 +595,7 @@ class ReduceBenchmark(M5MaxBenchmark):
         self.benchmark_fp16_reduce()      # FP16 performance
         self.benchmark_bf16_reduce()      # BF16 performance
         self.benchmark_parallel_reduce()
-        self.benchmark_softmax_reduce()
+        self.benchmark_softmax()
         self.benchmark_rms_norm()
         return self.results
 
