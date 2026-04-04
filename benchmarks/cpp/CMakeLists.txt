@@ -9,3 +9,8 @@ build_benchmark(single_ops.cpp)
 build_benchmark(irregular_strides.cpp)
 build_benchmark(compare_devices.cpp)
 build_benchmark(autograd.cpp)
+
+# Collectives benchmark (requires distributed backend)
+if(MLX_ENABLE_DISTRIBUTED)
+  build_benchmark(collectives_bench.cpp)
+endif()
