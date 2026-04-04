@@ -570,7 +570,7 @@ class ReduceBenchmark(M5MaxBenchmark):
         mx.eval(x, weight)
         
         def fn():
-            return mx.rms_norm(x, weight=weight, eps=1e-5)
+            return mx.fast.rms_norm(x, weight=weight, eps=1e-5)
             
         result = self.measure(fn)
         self.results.append({
