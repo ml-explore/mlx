@@ -290,7 +290,7 @@
         ]
       }
     },
-    "timestamp": "2026-04-04T14:36:49Z"
+    "timestamp": "2026-04-04T14:56:14Z"
   },
   "strong_scaling": {
     "benchmark_type": "strong_scaling",
@@ -532,7 +532,7 @@
         ]
       }
     },
-    "timestamp": "2026-04-04T14:36:49Z"
+    "timestamp": "2026-04-04T14:56:14Z"
   },
   "cpu_scaling": {
     "benchmark_type": "cpu_scaling",
@@ -777,6 +777,6 @@
         ]
       }
     },
-    "timestamp": "2026-04-04T14:36:49Z"
+    "timestamp": "2026-04-04T14:56:14Z"
   }
 }
