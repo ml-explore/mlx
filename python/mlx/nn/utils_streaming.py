@@ -5,12 +5,12 @@
 Enables running models that exceed available physical memory by
 evaluating each transformer layer individually, allowing the OS
 to page out idle layer weights between forward passes. Weights
-remain mmap-backed in safetensors — only the active layer's
-pages need to be resident in physical RAM.
+remain mmap-backed from safetensors — only the active layer's
+pages need to be resident.
 
-For a 70B 4-bit model (35GB) on a 16GB Mac:
-  Standard load: all 35GB paged in → system thrashes and freezes
-  Streaming:     ~1-2GB active at a time → runs slowly but doesn't crash
+For a 27B 4-bit model (15GB) on a 16GB Mac:
+  Standard: 15GB active -> system thrashes or crashes
+  Streaming: ~1GB active at a time -> runs slowly but works
 """
 
 from __future__ import annotations
@@ -28,12 +28,11 @@ def stream_generate(
     max_tokens: int = 100,
     temperature: float = 0.0,
 ):
-    """Generate tokens with layer-streaming to minimize memory.
+    """Generate tokens with per-layer evaluation for low memory usage.
 
-    Each forward pass evaluates one layer at a time, allowing the
-    OS to reclaim idle layer weights between evaluations. This is
-    slower than standard generation but uses far less physical
-    memory.
+    Monkey-patches the model's inner transformer to insert mx.eval()
+    after each layer, then restores the original. This is model-agnostic
+    — it works with any mlx_lm model architecture.
 
     Args:
         model: An mlx_lm model.
@@ -43,97 +42,92 @@ def stream_generate(
         temperature: Sampling temperature (0 = greedy).
 
     Yields:
-        Generated token strings, one at a time.
+        Generated token strings.
     """
-    tokens = mx.array([tokenizer.encode(prompt)])
-    cache = model.make_cache()
+    # Find the inner transformer that has .layers
+    inner = _find_inner_model(model)
+    if inner is None:
+        raise AttributeError("Cannot find transformer layers in model")
 
-    for _ in range(max_tokens):
-        logits = _stream_forward(model, tokens, cache)
-        mx.eval(logits)
+    # Collect stop token ids
+    hf_tok = getattr(tokenizer, '_tokenizer', tokenizer)
+    stop_ids = set()
+    eos = getattr(hf_tok, 'eos_token_id', None)
+    if eos is not None:
+        stop_ids.add(eos)
+    # Add <end_of_turn> for Gemma models
+    if hasattr(hf_tok, 'added_tokens_encoder'):
+        for name, tid in hf_tok.added_tokens_encoder.items():
+            if name in ('<end_of_turn>', '<|im_end|>', '<|eot_id|>'):
+                stop_ids.add(tid)
+    if not stop_ids:
+        stop_ids.add(2)
 
-        if temperature <= 0:
-            token = mx.argmax(logits[:, -1, :], axis=-1)
-        else:
-            logits = logits[:, -1, :] / temperature
-            token = mx.random.categorical(logits)
+    # Patch each layer to eval eagerly after its forward pass.
+    # We wrap each layer's __call__ rather than replacing the layers list,
+    # because MLX Module.layers is a read-only property.
+    original_calls = {}
+    for i, layer in enumerate(inner.layers):
+        layer_type = type(layer)
+        if layer_type not in original_calls:
+            original_calls[layer_type] = layer_type.__call__
 
-        mx.eval(token)
-        token_id = token.item()
+            def make_streaming_call(orig):
+                def streaming_call(self, *args, **kwargs):
+                    out = orig(self, *args, **kwargs)
+                    mx.eval(out)
+                    return out
+                return streaming_call
 
-        if token_id == tokenizer.eos_token_id:
-            break
+            layer_type.__call__ = make_streaming_call(original_calls[layer_type])
 
-        tokens = token.reshape(1, 1)
-        yield tokenizer.decode([token_id])
+    try:
+        tokens = mx.array([tokenizer.encode(prompt)])
+        cache = model.make_cache()
 
+        for _ in range(max_tokens):
+            logits = model(tokens, cache=cache)
+            mx.eval(logits)
 
-def _stream_forward(model, inputs, cache=None):
-    """Forward pass with per-layer evaluation for memory efficiency.
-
-    Instead of building the full computation graph across all layers
-    (which forces all layer weights into memory when evaluated), this
-    evaluates after each layer, allowing the OS memory manager to
-    page out weights that are no longer needed.
-    """
-    # Navigate to the inner transformer model
-    # mlx_lm models: model -> model.language_model -> language_model.model
-    lm = getattr(model, 'language_model', model)
-    inner = getattr(lm, 'model', lm)
-
-    # Embedding
-    h = inner.embed_tokens(inputs)
-    mx.eval(h)
-
-    # Build masks (model-specific)
-    if cache is None:
-        cache_list = [None] * len(inner.layers)
-    else:
-        cache_list = cache
-
-    mask = None
-    if hasattr(inner, 'fa_idx'):
-        # Qwen3.5-style: different masks for attention vs SSM layers
-        from mlx_lm.models.qwen3_5 import create_attention_mask, create_ssm_mask
-        fa_mask = create_attention_mask(h, cache_list[inner.fa_idx])
-        ssm_mask = create_ssm_mask(h, cache_list[inner.ssm_idx])
-        mx.eval(fa_mask, ssm_mask)
-
-        for layer, c in zip(inner.layers, cache_list):
-            layer_mask = ssm_mask if getattr(layer, 'is_linear', False) else fa_mask
-            h = layer(h, mask=layer_mask, cache=c)
-            mx.eval(h)
-    else:
-        # Standard transformer: single attention mask
-        try:
-            from mlx_lm.models.base import create_attention_mask
-            mask = create_attention_mask(h, cache_list[0] if cache_list else None)
-        except ImportError:
-            mask = None
-
-        if mask is not None:
-            mx.eval(mask)
-
-        for layer, c in zip(inner.layers, cache_list):
-            if mask is not None:
-                h = layer(h, mask=mask, cache=c)
+            if temperature <= 0:
+                token = mx.argmax(logits[:, -1, :], axis=-1)
             else:
-                h = layer(h, cache=c)
-            mx.eval(h)
+                scaled = logits[:, -1, :] / temperature
+                token = mx.random.categorical(scaled)
 
-    # Final norm
-    h = inner.norm(h)
-    mx.eval(h)
+            mx.eval(token)
+            token_id = token.item()
 
-    # Output projection
-    if hasattr(lm, 'lm_head'):
-        logits = lm.lm_head(h)
-    elif hasattr(inner, 'embed_tokens') and hasattr(inner.embed_tokens, 'as_linear'):
-        logits = inner.embed_tokens.as_linear(h)
-    else:
-        logits = h
+            if token_id in stop_ids:
+                break
 
-    return logits
+            tokens = token.reshape(1, 1)
+            yield hf_tok.decode([token_id])
+    finally:
+        # Restore original layer __call__ methods
+        for layer_type, orig in original_calls.items():
+            layer_type.__call__ = orig
+
+
+def _find_inner_model(model):
+    """Walk the model tree to find the inner transformer with .layers."""
+    candidates = [model]
+    for attr in ('language_model', 'model', 'transformer', 'gpt_neox'):
+        obj = getattr(model, attr, None)
+        if obj is not None:
+            candidates.append(obj)
+            # One more level deep
+            for attr2 in ('model', 'transformer'):
+                obj2 = getattr(obj, attr2, None)
+                if obj2 is not None:
+                    candidates.append(obj2)
+
+    for c in candidates:
+        if hasattr(c, 'layers') and hasattr(c.layers, '__len__'):
+            return c
+    return None
+
+
 
 
 def estimate_streaming_memory(
@@ -147,23 +141,20 @@ def estimate_streaming_memory(
     Args:
         model_size_gb: Total model size in GB.
         num_layers: Number of transformer layers.
-        kv_cache_per_layer_mb: KV cache size per layer in MB.
-        num_kv_layers: Number of layers with KV cache (0 = num_layers).
+        kv_cache_per_layer_mb: KV cache per layer in MB.
+        num_kv_layers: Layers with KV cache (0 = all).
 
     Returns:
-        Dict with standard_gb, streaming_gb, and savings_pct.
+        Dict with standard_gb, streaming_gb, savings_pct.
     """
     if num_kv_layers == 0:
         num_kv_layers = num_layers
 
     layer_size_gb = model_size_gb / num_layers
     kv_total_gb = (kv_cache_per_layer_mb * num_kv_layers) / 1024
-
-    # Standard: all weights + KV cache in memory simultaneously
-    standard = model_size_gb + kv_total_gb
-
-    # Streaming: one layer active + embeddings/head (~10%) + full KV cache
     embedding_overhead = model_size_gb * 0.10
+
+    standard = model_size_gb + kv_total_gb
     streaming = layer_size_gb + embedding_overhead + kv_total_gb
 
     return {
