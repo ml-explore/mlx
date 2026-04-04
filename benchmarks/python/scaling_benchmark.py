@@ -1141,18 +1141,7 @@ def run_backend_comparison(
     size_per_process: int = 1048576,
     backends: List[str] = ["ring", "jaccl", "mpi"],
 ) -> Dict:
-    """
-    Run benchmark comparison across multiple backends.
-
-    Args:
-        min_gpus: Minimum number of GPUs
-        max_gpus: Maximum number of GPUs
-        size_per_process: Size per process in elements
-        backends: List of backends to compare
-
-    Returns:
-        Dict with comparison results for all backends
-    """
+    """Run benchmark comparison across multiple backends."""
     from concurrent.futures import ThreadPoolExecutor
     import threading
 
@@ -1209,4 +1198,3 @@ def run_backend_comparison(
     }
 
 
-def main():
