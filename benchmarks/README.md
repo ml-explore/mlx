@@ -20,6 +20,9 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 # Accept the license:
 sudo xcodebuild -license accept
+
+# ⚠️ CRITICAL: Download Metal Toolchain for macOS 26+ (M5 Max)
+sudo xcodebuild -downloadComponent MetalToolchain
 ```
 
 2. **Verify Metal is available**:
@@ -37,9 +40,13 @@ xcrun --find metal
 pip install -e .
 ```
 
-⚠️ **Common Error**: If you get `xcrun: error: unable to find utility "metal"`, this means:
+⚠️ **Common Error 1**: If you get `xcrun: error: unable to find utility "metal"`, this means:
 - You only have Command Line Tools installed (not full Xcode)
 - Solution: Install full Xcode from App Store
+
+⚠️ **Common Error 2**: If you get `error: cannot execute tool 'metal' due to missing Metal Toolchain`, this means:
+- You have Xcode but haven't downloaded the Metal Toolchain component
+- Solution: Run `sudo xcodebuild -downloadComponent MetalToolchain`
 
 ### Alternative: Install Pre-built MLX
 
@@ -191,7 +198,7 @@ make[2]: *** [mlx/backend/metal/kernels/arg_reduce.air] Error 72
 
 #### Solution Options:
 
-**Option 1: Install Full Xcode (Recommended)**
+**Option 1: Install Full Xcode and Metal Toolchain (Recommended)**
 
 The command line tools you have installed don't include the Metal compiler. Install Xcode from the App Store:
 
@@ -205,10 +212,15 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 # 3. Accept the license
 sudo xcodebuild -license accept
 
-# 4. Verify Metal compiler is available
+# 4. Download the Metal Toolchain (CRITICAL for macOS 26+)
+sudo xcodebuild -downloadComponent MetalToolchain
+
+# 5. Verify Metal compiler is available
 xcrun --find metal
 # Should output: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/metal
 ```
+
+**Important**: On macOS 26+ (Xcode 15.3+), you must explicitly download the Metal Toolchain component even after installing Xcode.
 
 **Option 2: Use Pre-built MLX Wheel**
 
