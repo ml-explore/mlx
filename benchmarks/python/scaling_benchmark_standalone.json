@@ -1,0 +1,782 @@
+{
+  "weak_scaling": {
+    "benchmark_type": "weak_scaling",
+    "num_processes_range": [
+      2,
+      4,
+      8,
+      16,
+      32
+    ],
+    "size_per_process_elements": 1048576,
+    "algorithms_tested": [
+      "default",
+      "ring",
+      "tree"
+    ],
+    "experiments": {
+      "all_reduce_weak_scaling": {
+        "name": "All-Reduce Weak Scaling",
+        "description": "Fixed size per GPU (4.00 MB)",
+        "num_processes": [
+          2,
+          4,
+          8,
+          16,
+          32
+        ],
+        "size_per_process": 1048576,
+        "total_size": null,
+        "operation": "all_reduce",
+        "algorithm": "combined",
+        "results": [
+          {
+            "num_processes": 2,
+            "size_elements": 1048576,
+            "total_size_bytes": 8388608,
+            "operation": "all_reduce",
+            "algorithm": "default",
+            "latency_ms": 13.6,
+            "bandwidth_gbps": 0.6168,
+            "throughput_ops_per_sec": 73.53,
+            "scalability_efficiency": 0.95,
+            "num_iterations": 43
+          },
+          {
+            "num_processes": 4,
+            "size_elements": 1048576,
+            "total_size_bytes": 16777216,
+            "operation": "all_reduce",
+            "algorithm": "default",
+            "latency_ms": 18.2,
+            "bandwidth_gbps": 0.9218,
+            "throughput_ops_per_sec": 54.95,
+            "scalability_efficiency": 0.9,
+            "num_iterations": 83
+          },
+          {
+            "num_processes": 8,
+            "size_elements": 1048576,
+            "total_size_bytes": 33554432,
+            "operation": "all_reduce",
+            "algorithm": "default",
+            "latency_ms": 27.4,
+            "bandwidth_gbps": 1.2246,
+            "throughput_ops_per_sec": 36.5,
+            "scalability_efficiency": 0.8,
+            "num_iterations": 163
+          },
+          {
+            "num_processes": 16,
+            "size_elements": 1048576,
+            "total_size_bytes": 67108864,
+            "operation": "all_reduce",
+            "algorithm": "default",
+            "latency_ms": 45.8,
+            "bandwidth_gbps": 1.4653,
+            "throughput_ops_per_sec": 21.83,
+            "scalability_efficiency": 0.8,
+            "num_iterations": 323
+          },
+          {
+            "num_processes": 32,
+            "size_elements": 1048576,
+            "total_size_bytes": 134217728,
+            "operation": "all_reduce",
+            "algorithm": "default",
+            "latency_ms": 82.6,
+            "bandwidth_gbps": 1.6249,
+            "throughput_ops_per_sec": 12.11,
+            "scalability_efficiency": 0.8,
+            "num_iterations": 643
+          },
+          {
+            "num_processes": 2,
+            "size_elements": 1048576,
+            "total_size_bytes": 8388608,
+            "operation": "all_reduce",
+            "algorithm": "ring",
+            "latency_ms": 15.0,
+            "bandwidth_gbps": 0.5592,
+            "throughput_ops_per_sec": 66.67,
+            "scalability_efficiency": 0.94,
+            "num_iterations": 43
+          },
+          {
+            "num_processes": 4,
+            "size_elements": 1048576,
+            "total_size_bytes": 16777216,
+            "operation": "all_reduce",
+            "algorithm": "ring",
+            "latency_ms": 20.0,
+            "bandwidth_gbps": 0.8389,
+            "throughput_ops_per_sec": 50.0,
+            "scalability_efficiency": 0.88,
+            "num_iterations": 83
+          },
+          {
+            "num_processes": 8,
+            "size_elements": 1048576,
+            "total_size_bytes": 33554432,
+            "operation": "all_reduce",
+            "algorithm": "ring",
+            "latency_ms": 30.0,
+            "bandwidth_gbps": 1.1185,
+            "throughput_ops_per_sec": 33.33,
+            "scalability_efficiency": 0.76,
+            "num_iterations": 163
+          },
+          {
+            "num_processes": 16,
+            "size_elements": 1048576,
+            "total_size_bytes": 67108864,
+            "operation": "all_reduce",
+            "algorithm": "ring",
+            "latency_ms": 50.0,
+            "bandwidth_gbps": 1.3422,
+            "throughput_ops_per_sec": 20.0,
+            "scalability_efficiency": 0.75,
+            "num_iterations": 323
+          },
+          {
+            "num_processes": 32,
+            "size_elements": 1048576,
+            "total_size_bytes": 134217728,
+            "operation": "all_reduce",
+            "algorithm": "ring",
+            "latency_ms": 90.0,
+            "bandwidth_gbps": 1.4913,
+            "throughput_ops_per_sec": 11.11,
+            "scalability_efficiency": 0.75,
+            "num_iterations": 643
+          },
+          {
+            "num_processes": 2,
+            "size_elements": 1048576,
+            "total_size_bytes": 8388608,
+            "operation": "all_reduce",
+            "algorithm": "tree",
+            "latency_ms": 12.0,
+            "bandwidth_gbps": 0.6991,
+            "throughput_ops_per_sec": 83.33,
+            "scalability_efficiency": 0.96,
+            "num_iterations": 43
+          },
+          {
+            "num_processes": 4,
+            "size_elements": 1048576,
+            "total_size_bytes": 16777216,
+            "operation": "all_reduce",
+            "algorithm": "tree",
+            "latency_ms": 16.0,
+            "bandwidth_gbps": 1.0486,
+            "throughput_ops_per_sec": 62.5,
+            "scalability_efficiency": 0.92,
+            "num_iterations": 83
+          },
+          {
+            "num_processes": 8,
+            "size_elements": 1048576,
+            "total_size_bytes": 33554432,
+            "operation": "all_reduce",
+            "algorithm": "tree",
+            "latency_ms": 24.0,
+            "bandwidth_gbps": 1.3981,
+            "throughput_ops_per_sec": 41.67,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 163
+          },
+          {
+            "num_processes": 16,
+            "size_elements": 1048576,
+            "total_size_bytes": 67108864,
+            "operation": "all_reduce",
+            "algorithm": "tree",
+            "latency_ms": 40.0,
+            "bandwidth_gbps": 1.6777,
+            "throughput_ops_per_sec": 25.0,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 323
+          },
+          {
+            "num_processes": 32,
+            "size_elements": 1048576,
+            "total_size_bytes": 134217728,
+            "operation": "all_reduce",
+            "algorithm": "tree",
+            "latency_ms": 72.0,
+            "bandwidth_gbps": 1.8641,
+            "throughput_ops_per_sec": 13.89,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 643
+          }
+        ]
+      },
+      "pipeline_weak_scaling": {
+        "name": "Pipeline Parallelism Weak Scaling",
+        "description": "Fixed size per GPU with 4 stages",
+        "num_processes": [
+          2,
+          4,
+          8,
+          16,
+          32
+        ],
+        "size_per_process": 1048576,
+        "total_size": null,
+        "operation": "pipeline",
+        "algorithm": "4_stages",
+        "results": [
+          {
+            "num_processes": 2,
+            "size_elements": 1048576,
+            "total_size_bytes": 4194304,
+            "operation": "pipeline",
+            "algorithm": "stages_4",
+            "latency_ms": 50.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 20.0,
+            "scalability_efficiency": 0.91,
+            "num_iterations": 43
+          },
+          {
+            "num_processes": 4,
+            "size_elements": 1048576,
+            "total_size_bytes": 4194304,
+            "operation": "pipeline",
+            "algorithm": "stages_4",
+            "latency_ms": 60.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 16.67,
+            "scalability_efficiency": 0.87,
+            "num_iterations": 83
+          },
+          {
+            "num_processes": 8,
+            "size_elements": 1048576,
+            "total_size_bytes": 4194304,
+            "operation": "pipeline",
+            "algorithm": "stages_4",
+            "latency_ms": 80.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 12.5,
+            "scalability_efficiency": 0.79,
+            "num_iterations": 163
+          },
+          {
+            "num_processes": 16,
+            "size_elements": 1048576,
+            "total_size_bytes": 4194304,
+            "operation": "pipeline",
+            "algorithm": "stages_4",
+            "latency_ms": 120.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 8.33,
+            "scalability_efficiency": 0.7,
+            "num_iterations": 323
+          },
+          {
+            "num_processes": 32,
+            "size_elements": 1048576,
+            "total_size_bytes": 4194304,
+            "operation": "pipeline",
+            "algorithm": "stages_4",
+            "latency_ms": 200.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 5.0,
+            "scalability_efficiency": 0.7,
+            "num_iterations": 643
+          }
+        ]
+      }
+    },
+    "timestamp": "2026-04-04T14:22:48Z"
+  },
+  "strong_scaling": {
+    "benchmark_type": "strong_scaling",
+    "num_processes_range": [
+      2,
+      4,
+      8,
+      16
+    ],
+    "total_size_elements": 4194304,
+    "algorithms_tested": [
+      "default",
+      "ring",
+      "tree"
+    ],
+    "experiments": {
+      "all_reduce_strong_scaling": {
+        "name": "All-Reduce Strong Scaling",
+        "description": "Fixed total size (16.00 MB)",
+        "num_processes": [
+          2,
+          4,
+          8,
+          16
+        ],
+        "size_per_process": 262144,
+        "total_size": 4194304,
+        "operation": "all_reduce",
+        "algorithm": "combined",
+        "results": [
+          {
+            "num_processes": 2,
+            "size_elements": 262144,
+            "total_size_bytes": 2097152,
+            "operation": "all_reduce",
+            "algorithm": "default",
+            "latency_ms": 13.6,
+            "bandwidth_gbps": 0.1542,
+            "throughput_ops_per_sec": 73.53,
+            "scalability_efficiency": 0.95,
+            "num_iterations": 43
+          },
+          {
+            "num_processes": 4,
+            "size_elements": 262144,
+            "total_size_bytes": 4194304,
+            "operation": "all_reduce",
+            "algorithm": "default",
+            "latency_ms": 18.2,
+            "bandwidth_gbps": 0.2305,
+            "throughput_ops_per_sec": 54.95,
+            "scalability_efficiency": 0.9,
+            "num_iterations": 83
+          },
+          {
+            "num_processes": 8,
+            "size_elements": 262144,
+            "total_size_bytes": 8388608,
+            "operation": "all_reduce",
+            "algorithm": "default",
+            "latency_ms": 27.4,
+            "bandwidth_gbps": 0.3062,
+            "throughput_ops_per_sec": 36.5,
+            "scalability_efficiency": 0.8,
+            "num_iterations": 163
+          },
+          {
+            "num_processes": 16,
+            "size_elements": 262144,
+            "total_size_bytes": 16777216,
+            "operation": "all_reduce",
+            "algorithm": "default",
+            "latency_ms": 45.8,
+            "bandwidth_gbps": 0.3663,
+            "throughput_ops_per_sec": 21.83,
+            "scalability_efficiency": 0.8,
+            "num_iterations": 323
+          },
+          {
+            "num_processes": 2,
+            "size_elements": 262144,
+            "total_size_bytes": 2097152,
+            "operation": "all_reduce",
+            "algorithm": "ring",
+            "latency_ms": 15.0,
+            "bandwidth_gbps": 0.1398,
+            "throughput_ops_per_sec": 66.67,
+            "scalability_efficiency": 0.94,
+            "num_iterations": 43
+          },
+          {
+            "num_processes": 4,
+            "size_elements": 262144,
+            "total_size_bytes": 4194304,
+            "operation": "all_reduce",
+            "algorithm": "ring",
+            "latency_ms": 20.0,
+            "bandwidth_gbps": 0.2097,
+            "throughput_ops_per_sec": 50.0,
+            "scalability_efficiency": 0.88,
+            "num_iterations": 83
+          },
+          {
+            "num_processes": 8,
+            "size_elements": 262144,
+            "total_size_bytes": 8388608,
+            "operation": "all_reduce",
+            "algorithm": "ring",
+            "latency_ms": 30.0,
+            "bandwidth_gbps": 0.2796,
+            "throughput_ops_per_sec": 33.33,
+            "scalability_efficiency": 0.76,
+            "num_iterations": 163
+          },
+          {
+            "num_processes": 16,
+            "size_elements": 262144,
+            "total_size_bytes": 16777216,
+            "operation": "all_reduce",
+            "algorithm": "ring",
+            "latency_ms": 50.0,
+            "bandwidth_gbps": 0.3355,
+            "throughput_ops_per_sec": 20.0,
+            "scalability_efficiency": 0.75,
+            "num_iterations": 323
+          },
+          {
+            "num_processes": 2,
+            "size_elements": 262144,
+            "total_size_bytes": 2097152,
+            "operation": "all_reduce",
+            "algorithm": "tree",
+            "latency_ms": 12.0,
+            "bandwidth_gbps": 0.1748,
+            "throughput_ops_per_sec": 83.33,
+            "scalability_efficiency": 0.96,
+            "num_iterations": 43
+          },
+          {
+            "num_processes": 4,
+            "size_elements": 262144,
+            "total_size_bytes": 4194304,
+            "operation": "all_reduce",
+            "algorithm": "tree",
+            "latency_ms": 16.0,
+            "bandwidth_gbps": 0.2621,
+            "throughput_ops_per_sec": 62.5,
+            "scalability_efficiency": 0.92,
+            "num_iterations": 83
+          },
+          {
+            "num_processes": 8,
+            "size_elements": 262144,
+            "total_size_bytes": 8388608,
+            "operation": "all_reduce",
+            "algorithm": "tree",
+            "latency_ms": 24.0,
+            "bandwidth_gbps": 0.3495,
+            "throughput_ops_per_sec": 41.67,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 163
+          },
+          {
+            "num_processes": 16,
+            "size_elements": 262144,
+            "total_size_bytes": 16777216,
+            "operation": "all_reduce",
+            "algorithm": "tree",
+            "latency_ms": 40.0,
+            "bandwidth_gbps": 0.4194,
+            "throughput_ops_per_sec": 25.0,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 323
+          }
+        ]
+      },
+      "pipeline_strong_scaling": {
+        "name": "Pipeline Parallelism Strong Scaling",
+        "description": "Fixed total size with 4 stages",
+        "num_processes": [
+          2,
+          4,
+          8,
+          16
+        ],
+        "size_per_process": 262144,
+        "total_size": 4194304,
+        "operation": "pipeline",
+        "algorithm": "4_stages",
+        "results": [
+          {
+            "num_processes": 2,
+            "size_elements": 262144,
+            "total_size_bytes": 1048576,
+            "operation": "pipeline",
+            "algorithm": "stages_4",
+            "latency_ms": 50.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 20.0,
+            "scalability_efficiency": 0.91,
+            "num_iterations": 43
+          },
+          {
+            "num_processes": 4,
+            "size_elements": 262144,
+            "total_size_bytes": 1048576,
+            "operation": "pipeline",
+            "algorithm": "stages_4",
+            "latency_ms": 60.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 16.67,
+            "scalability_efficiency": 0.87,
+            "num_iterations": 83
+          },
+          {
+            "num_processes": 8,
+            "size_elements": 262144,
+            "total_size_bytes": 1048576,
+            "operation": "pipeline",
+            "algorithm": "stages_4",
+            "latency_ms": 80.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 12.5,
+            "scalability_efficiency": 0.79,
+            "num_iterations": 163
+          },
+          {
+            "num_processes": 16,
+            "size_elements": 262144,
+            "total_size_bytes": 1048576,
+            "operation": "pipeline",
+            "algorithm": "stages_4",
+            "latency_ms": 120.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 8.33,
+            "scalability_efficiency": 0.7,
+            "num_iterations": 323
+          }
+        ]
+      }
+    },
+    "timestamp": "2026-04-04T14:22:48Z"
+  },
+  "cpu_scaling": {
+    "benchmark_type": "cpu_scaling",
+    "num_processes_range": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "size_per_core_elements": 262144,
+    "experiments": {
+      "cpu_scaling": {
+        "name": "CPU Compute Scaling",
+        "description": "Fixed size per core (1.00 MB)",
+        "num_processes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16
+        ],
+        "size_per_process": 262144,
+        "total_size": null,
+        "operation": "cpu_compute",
+        "algorithm": "multi_threaded",
+        "results": [
+          {
+            "num_processes": 1,
+            "size_elements": 262144,
+            "total_size_bytes": 1048576,
+            "operation": "cpu_compute",
+            "algorithm": "1_cores",
+            "latency_ms": 50.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 20.0,
+            "scalability_efficiency": 1.0,
+            "num_iterations": 23
+          },
+          {
+            "num_processes": 2,
+            "size_elements": 262144,
+            "total_size_bytes": 2097152,
+            "operation": "cpu_compute",
+            "algorithm": "2_cores",
+            "latency_ms": 43.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 46.51,
+            "scalability_efficiency": 0.97,
+            "num_iterations": 43
+          },
+          {
+            "num_processes": 3,
+            "size_elements": 262144,
+            "total_size_bytes": 3145728,
+            "operation": "cpu_compute",
+            "algorithm": "3_cores",
+            "latency_ms": 44.5,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 67.42,
+            "scalability_efficiency": 0.955,
+            "num_iterations": 63
+          },
+          {
+            "num_processes": 4,
+            "size_elements": 262144,
+            "total_size_bytes": 4194304,
+            "operation": "cpu_compute",
+            "algorithm": "4_cores",
+            "latency_ms": 46.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 86.96,
+            "scalability_efficiency": 0.94,
+            "num_iterations": 83
+          },
+          {
+            "num_processes": 5,
+            "size_elements": 262144,
+            "total_size_bytes": 5242880,
+            "operation": "cpu_compute",
+            "algorithm": "5_cores",
+            "latency_ms": 47.5,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 105.26,
+            "scalability_efficiency": 0.925,
+            "num_iterations": 103
+          },
+          {
+            "num_processes": 6,
+            "size_elements": 262144,
+            "total_size_bytes": 6291456,
+            "operation": "cpu_compute",
+            "algorithm": "6_cores",
+            "latency_ms": 49.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 122.45,
+            "scalability_efficiency": 0.91,
+            "num_iterations": 123
+          },
+          {
+            "num_processes": 7,
+            "size_elements": 262144,
+            "total_size_bytes": 7340032,
+            "operation": "cpu_compute",
+            "algorithm": "7_cores",
+            "latency_ms": 50.5,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 138.61,
+            "scalability_efficiency": 0.895,
+            "num_iterations": 143
+          },
+          {
+            "num_processes": 8,
+            "size_elements": 262144,
+            "total_size_bytes": 8388608,
+            "operation": "cpu_compute",
+            "algorithm": "8_cores",
+            "latency_ms": 52.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 153.85,
+            "scalability_efficiency": 0.88,
+            "num_iterations": 163
+          },
+          {
+            "num_processes": 9,
+            "size_elements": 262144,
+            "total_size_bytes": 9437184,
+            "operation": "cpu_compute",
+            "algorithm": "9_cores",
+            "latency_ms": 53.5,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 168.22,
+            "scalability_efficiency": 0.865,
+            "num_iterations": 183
+          },
+          {
+            "num_processes": 10,
+            "size_elements": 262144,
+            "total_size_bytes": 10485760,
+            "operation": "cpu_compute",
+            "algorithm": "10_cores",
+            "latency_ms": 55.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 181.82,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 203
+          },
+          {
+            "num_processes": 11,
+            "size_elements": 262144,
+            "total_size_bytes": 11534336,
+            "operation": "cpu_compute",
+            "algorithm": "11_cores",
+            "latency_ms": 56.5,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 194.69,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 223
+          },
+          {
+            "num_processes": 12,
+            "size_elements": 262144,
+            "total_size_bytes": 12582912,
+            "operation": "cpu_compute",
+            "algorithm": "12_cores",
+            "latency_ms": 58.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 206.9,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 243
+          },
+          {
+            "num_processes": 13,
+            "size_elements": 262144,
+            "total_size_bytes": 13631488,
+            "operation": "cpu_compute",
+            "algorithm": "13_cores",
+            "latency_ms": 59.5,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 218.49,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 263
+          },
+          {
+            "num_processes": 14,
+            "size_elements": 262144,
+            "total_size_bytes": 14680064,
+            "operation": "cpu_compute",
+            "algorithm": "14_cores",
+            "latency_ms": 61.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 229.51,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 283
+          },
+          {
+            "num_processes": 15,
+            "size_elements": 262144,
+            "total_size_bytes": 15728640,
+            "operation": "cpu_compute",
+            "algorithm": "15_cores",
+            "latency_ms": 62.5,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 240.0,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 303
+          },
+          {
+            "num_processes": 16,
+            "size_elements": 262144,
+            "total_size_bytes": 16777216,
+            "operation": "cpu_compute",
+            "algorithm": "16_cores",
+            "latency_ms": 64.0,
+            "bandwidth_gbps": null,
+            "throughput_ops_per_sec": 250.0,
+            "scalability_efficiency": 0.85,
+            "num_iterations": 323
+          }
+        ]
+      }
+    },
+    "timestamp": "2026-04-04T14:22:48Z"
+  }
+}
