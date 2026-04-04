@@ -1,0 +1,52 @@
+{
+  "benchmark_type": "jaccl_standalone",
+  "world_size": 1,
+  "backend": "jaccl_standalone",
+  "results": [
+    {
+      "operation": "all_reduce_sum",
+      "size_elements": 1024,
+      "total_size_bytes": 4096,
+      "num_processes": 1,
+      "latency_ms": 0.01625,
+      "bandwidth_gbps": 1.5157,
+      "throughput_ops_per_sec": 61538.46,
+      "num_iterations": 23,
+      "backend": "jaccl_standalone"
+    },
+    {
+      "operation": "all_reduce_sum",
+      "size_elements": 8192,
+      "total_size_bytes": 32768,
+      "num_processes": 1,
+      "latency_ms": 0.027678,
+      "bandwidth_gbps": 2.8284,
+      "throughput_ops_per_sec": 36130.21,
+      "num_iterations": 23,
+      "backend": "jaccl_standalone"
+    },
+    {
+      "operation": "all_reduce_sum",
+      "size_elements": 65536,
+      "total_size_bytes": 262144,
+      "num_processes": 1,
+      "latency_ms": 0.06,
+      "bandwidth_gbps": 5.278,
+      "throughput_ops_per_sec": 16666.67,
+      "num_iterations": 23,
+      "backend": "jaccl_standalone"
+    },
+    {
+      "operation": "all_reduce_sum",
+      "size_elements": 524288,
+      "total_size_bytes": 2097152,
+      "num_processes": 1,
+      "latency_ms": 0.151421,
+      "bandwidth_gbps": 9.8492,
+      "throughput_ops_per_sec": 6604.09,
+      "num_iterations": 23,
+      "backend": "jaccl_standalone"
+    }
+  ],
+  "timestamp": "2026-04-04T15:05:15Z"
+}
