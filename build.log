@@ -1,0 +1,356 @@
+Using pip 26.0.1 from /Users/martinolsson/miniconda3/lib/python3.13/site-packages/pip (python 3.13)
+Obtaining file:///Users/martinolsson/Documents/GitHub/mlx
+  Installing build dependencies: started
+  Running command installing build dependencies
+  Using pip 26.0.1 from /Users/martinolsson/miniconda3/lib/python3.13/site-packages/pip (python 3.13)
+  Collecting setuptools>=80
+    Obtaining dependency information for setuptools>=80 from https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl.metadata
+    Using cached setuptools-82.0.1-py3-none-any.whl.metadata (6.5 kB)
+  Collecting cmake>=3.25
+    Obtaining dependency information for cmake>=3.25 from https://files.pythonhosted.org/packages/43/07/05be57c389f8f0c3d0d7b878685ec1eed863b77787d65584c9399e294531/cmake-4.3.1-py3-none-macosx_10_10_universal2.whl.metadata
+    Using cached cmake-4.3.1-py3-none-macosx_10_10_universal2.whl.metadata (6.5 kB)
+  Collecting typing_extensions
+    Obtaining dependency information for typing_extensions from https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl.metadata
+    Using cached typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+  Using cached setuptools-82.0.1-py3-none-any.whl (1.0 MB)
+  Using cached cmake-4.3.1-py3-none-macosx_10_10_universal2.whl (52.6 MB)
+  Using cached typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+  Installing collected packages: typing_extensions, setuptools, cmake
+    Creating /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/bin
+    changing mode of /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/bin/ccmake to 755
+    changing mode of /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/bin/cmake to 755
+    changing mode of /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/bin/cpack to 755
+    changing mode of /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/bin/ctest to 755
+
+  Successfully installed cmake-4.3.1 setuptools-82.0.1 typing_extensions-4.15.0
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Running command Checking if build backend supports build_editable
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Running command Getting requirements to build editable
+  running egg_info
+  writing python/mlx.egg-info/PKG-INFO
+  writing dependency_links to python/mlx.egg-info/dependency_links.txt
+  writing entry points to python/mlx.egg-info/entry_points.txt
+  writing requirements to python/mlx.egg-info/requires.txt
+  writing top-level names to python/mlx.egg-info/top_level.txt
+  reading manifest file 'python/mlx.egg-info/SOURCES.txt'
+  reading manifest template 'MANIFEST.in'
+  adding license file 'LICENSE'
+  writing manifest file 'python/mlx.egg-info/SOURCES.txt'
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Running command Preparing editable metadata (pyproject.toml)
+  running dist_info
+  creating /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-modern-metadata-_ahgdzcj/mlx.egg-info
+  writing /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-modern-metadata-_ahgdzcj/mlx.egg-info/PKG-INFO
+  writing dependency_links to /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-modern-metadata-_ahgdzcj/mlx.egg-info/dependency_links.txt
+  writing entry points to /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-modern-metadata-_ahgdzcj/mlx.egg-info/entry_points.txt
+  writing requirements to /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-modern-metadata-_ahgdzcj/mlx.egg-info/requires.txt
+  writing top-level names to /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-modern-metadata-_ahgdzcj/mlx.egg-info/top_level.txt
+  writing manifest file '/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-modern-metadata-_ahgdzcj/mlx.egg-info/SOURCES.txt'
+  reading manifest file '/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-modern-metadata-_ahgdzcj/mlx.egg-info/SOURCES.txt'
+  reading manifest template 'MANIFEST.in'
+  adding license file 'LICENSE'
+  writing manifest file '/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-modern-metadata-_ahgdzcj/mlx.egg-info/SOURCES.txt'
+  creating '/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-modern-metadata-_ahgdzcj/mlx-0.31.2.dev20260404+dad6e208.dist-info'
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: mlx
+  Building editable for mlx (pyproject.toml): started
+  Running command Building editable for mlx (pyproject.toml)
+  running editable_wheel
+  creating /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx.egg-info
+  writing /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx.egg-info/PKG-INFO
+  writing dependency_links to /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx.egg-info/dependency_links.txt
+  writing entry points to /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx.egg-info/entry_points.txt
+  writing requirements to /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx.egg-info/requires.txt
+  writing top-level names to /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx.egg-info/top_level.txt
+  writing manifest file '/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx.egg-info/SOURCES.txt'
+  reading manifest file '/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx.egg-info/SOURCES.txt'
+  reading manifest template 'MANIFEST.in'
+  adding license file 'LICENSE'
+  writing manifest file '/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx.egg-info/SOURCES.txt'
+  creating '/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx-0.31.2.dev20260404+dad6e208.dist-info'
+  creating /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-ephem-wheel-cache-mt_wy72g/wheels/a2/06/3e/6bddcba028ee85074440a9aa5cde3476a0ea6e0b2c9290975c/tmpd_obriy9/.tmp-mavd05yr/mlx-0.31.2.dev20260404+dad6e208.dist-info/WHEEL
+  running build_py
+  running build_ext
+  -- The C compiler identification is AppleClang 21.0.0.21000099
+  -- The CXX compiler identification is AppleClang 21.0.0.21000099
+  -- Detecting C compiler ABI info
+  -- Detecting C compiler ABI info - done
+  -- Check for working C compiler: /usr/bin/cc - skipped
+  -- Detecting C compile features
+  -- Detecting C compile features - done
+  -- Detecting CXX compiler ABI info
+  -- Detecting CXX compiler ABI info - done
+  -- Check for working CXX compiler: /usr/bin/c++ - skipped
+  -- Detecting CXX compile features
+  -- Detecting CXX compile features - done
+  -- Building MLX for arm64 processor on Darwin
+  -- Metal found /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Metal.framework
+  -- Building with macOS SDK version 26.4
+  error: error: cannot execute tool 'metal' due to missing Metal Toolchain; use: xcodebuild -downloadComponent MetalToolchain
+  -- Accelerate found /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework
+  -- Downloading json
+  -- Using the multi-header code from /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/tmpr5ck5ege.build-temp/mlx.core/_deps/json-src/include/
+  -- Downloading gguflib
+  -- {fmt} version: 12.1.0
+  -- Build type: Release
+  -- Performing Test HAS_NULLPTR_WARNING
+  -- Performing Test HAS_NULLPTR_WARNING - Success
+  -- Building Python bindings.
+  -- Found Python: /Users/martinolsson/miniconda3/bin/python3.13 (found suitable version "3.13.12", minimum required is "3.10") found components: Interpreter Development.Module
+  -- Configuring done (7.9s)
+  -- Generating done (0.1s)
+  -- Build files have been written to: /private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/tmpr5ck5ege.build-temp/mlx.core
+  [  0%] Generating compiled_preamble.cpp
+  [  0%] Building arg_reduce.air
+  [  1%] Generating jit/scatter.cpp
+  [  1%] Building CXX object mlx/CMakeFiles/mlx_version.dir/version.cpp.o
+  [  1%] Generating jit/unary_ops.cpp
+  [  1%] Generating jit/binary_ops.cpp
+  [  1%] Generating jit/reduce_utils.cpp
+  [  1%] Generating jit/masked_scatter.cpp
+  [  2%] Generating jit/utils.cpp
+  [  3%] Building C object mlx/io/CMakeFiles/gguflib.dir/__/__/_deps/gguflib-src/fp16.c.o
+  [  4%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_internals.cpp.o
+  [  4%] Generating jit/gather_front.cpp
+  [  5%] Building steel_attention.air
+  error: error: cannot execute tool 'metal' due to missing Metal Toolchain; use: xcodebuild -downloadComponent MetalToolchain
+  make[2]: *** [mlx/backend/metal/kernels/arg_reduce.air] Error 1
+  make[2]: *** Waiting for unfinished jobs....
+  [  5%] Generating jit/gather.cpp
+  [  6%] Generating jit/ternary_ops.cpp
+  [  7%] Generating jit/hadamard.cpp
+  [  7%] Generating jit/scatter_axis.cpp
+  error: error: cannot execute tool 'metal' due to missing Metal Toolchain; use: xcodebuild -downloadComponent MetalToolchain
+  make[2]: *** [mlx/backend/metal/kernels/steel_attention.air] Error 1
+  make[1]: *** [mlx/backend/metal/kernels/CMakeFiles/mlx-metallib.dir/all] Error 2
+  make[1]: *** Waiting for unfinished jobs....
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  [  8%] Generating jit/gather_axis.cpp
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  [  8%] Building C object mlx/io/CMakeFiles/gguflib.dir/__/__/_deps/gguflib-src/gguflib.c.o
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  [  8%] Built target cpu_compiled_preamble
+  [  8%] Built target mlx_version
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  [  8%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_func.cpp.o
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  [  8%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_type.cpp.o
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  [  9%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_enum.cpp.o
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  [  9%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_ndarray.cpp.o
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  [  9%] Built target unary_ops
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/error:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/execute: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/'metal': No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/use:: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  [ 10%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_static_property.cpp.o
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/.: Is a directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/-downloadComponent: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  grep: /Users/martinolsson/Documents/GitHub/mlx/Metal: No such file or directory
+  [ 10%] Built target binary_ops
+  [ 10%] Built target reduce_utils
+  [ 10%] Built target scatter
+  grep: /Users/martinolsson/Documents/GitHub/mlx/to: No such file or directory
+  [ 10%] Built target utils
+  [ 10%] Built target masked_scatter
+  [ 10%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/nb_ft.cpp.o
+  [ 10%] Built target gather
+  [ 11%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/common.cpp.o
+  [ 11%] Built target gather_front
+  [ 11%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/error.cpp.o
+  [ 11%] Built target gather_axis
+  [ 11%] Built target hadamard
+  [ 11%] Built target ternary_ops
+  [ 12%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/trampoline.cpp.o
+  [ 12%] Building CXX object python/src/CMakeFiles/nanobind-static.dir/__/__/_deps/nanobind-src/src/implicit.cpp.o
+  [ 12%] Built target scatter_axis
+  [ 12%] Linking C static library libgguflib.a
+  [ 12%] Built target gguflib
+  [ 13%] Linking CXX static library libnanobind-static.a
+  ranlib: warning: 'libnanobind-static.a(nb_ft.cpp.o)' has no symbols
+  ranlib: warning: 'libnanobind-static.a(nb_ft.cpp.o)' has no symbols
+  [ 13%] Built target nanobind-static
+  make: *** [all] Error 2
+  Traceback (most recent call last):
+    File "/Users/martinolsson/miniconda3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 389, in <module>
+      main()
+      ~~~~^^
+    File "/Users/martinolsson/miniconda3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 373, in main
+      json_out["return_val"] = hook(**hook_input["kwargs"])
+                               ~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/Users/martinolsson/miniconda3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 303, in build_editable
+      return hook(wheel_directory, config_settings, metadata_directory)
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 474, in build_editable
+      return self._build_with_temp_dir(
+             ~~~~~~~~~~~~~~~~~~~~~~~~~^
+          cmd, ".whl", wheel_directory, config_settings
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      )
+      ^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 410, in _build_with_temp_dir
+      self.run_setup()
+      ~~~~~~~~~~~~~~^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/build_meta.py", line 317, in run_setup
+      exec(code, locals())
+      ~~~~^^^^^^^^^^^^^^^^
+    File "<string>", line 276, in <module>
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/__init__.py", line 117, in setup
+      return distutils.core.setup(**attrs)  # type: ignore[return-value]
+             ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/_distutils/core.py", line 186, in setup
+      return run_commands(dist)
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/_distutils/core.py", line 202, in run_commands
+      dist.run_commands()
+      ~~~~~~~~~~~~~~~~~^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1000, in run_commands
+      self.run_command(cmd)
+      ~~~~~~~~~~~~~~~~^^^^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/dist.py", line 1107, in run_command
+      super().run_command(command)
+      ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1019, in run_command
+      cmd_obj.run()
+      ~~~~~~~~~~~^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 140, in run
+      self._create_wheel_file(bdist_wheel)
+      ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 350, in _create_wheel_file
+      files, mapping = self._run_build_commands(dist_name, unpacked, lib, tmp)
+                       ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 273, in _run_build_commands
+      self._run_build_subcommands()
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/command/editable_wheel.py", line 300, in _run_build_subcommands
+      self.run_command(name)
+      ~~~~~~~~~~~~~~~~^^^^^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/_distutils/cmd.py", line 341, in run_command
+      self.distribution.run_command(command)
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/dist.py", line 1107, in run_command
+      super().run_command(command)
+      ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/_distutils/dist.py", line 1019, in run_command
+      cmd_obj.run()
+      ~~~~~~~~~~~^^
+    File "<string>", line 152, in run
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/command/build_ext.py", line 97, in run
+      _build_ext.run(self)
+      ~~~~~~~~~~~~~~^^^^^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/_distutils/command/build_ext.py", line 367, in run
+      self.build_extensions()
+      ~~~~~~~~~~~~~~~~~~~~~^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/_distutils/command/build_ext.py", line 483, in build_extensions
+      self._build_extensions_serial()
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+    File "/private/var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/pip-build-env-6ruddgt2/overlay/lib/python3.13/site-packages/setuptools/_distutils/command/build_ext.py", line 509, in _build_extensions_serial
+      self.build_extension(ext)
+      ~~~~~~~~~~~~~~~~~~~~^^^^^
+    File "<string>", line 144, in build_extension
+    File "/Users/martinolsson/miniconda3/lib/python3.13/subprocess.py", line 577, in run
+      raise CalledProcessError(retcode, process.args,
+                               output=stdout, stderr=stderr)
+  subprocess.CalledProcessError: Command '['cmake', '--build', '.', '--target', 'install', '--config', 'Release', '-j18']' returned non-zero exit status 2.
+  An error occurred when building editable wheel for mlx.
+  See debugging tips in: https://setuptools.pypa.io/en/latest/userguide/development_mode.html#debugging-tips
+  error: subprocess-exited-with-error
+  
+  × Building editable for mlx (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> No available output.
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  full command: /Users/martinolsson/miniconda3/bin/python3.13 /Users/martinolsson/miniconda3/lib/python3.13/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py build_editable /var/folders/kj/039d64cj77z56d6hy1kx_t_h0000gn/T/tmp4eff7ofu
+  cwd: /Users/martinolsson/Documents/GitHub/mlx
+  Building editable for mlx (pyproject.toml): finished with status 'error'
+  ERROR: Failed building editable for mlx
+Failed to build mlx
+error: failed-wheel-build-for-install
+
+× Failed to build installable wheels for some pyproject.toml based projects
+╰─> mlx
