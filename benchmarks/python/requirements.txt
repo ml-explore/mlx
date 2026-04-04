@@ -1,0 +1,17 @@
+# MLX Distributed Scaling Benchmarks - Requirements
+
+# Core dependencies for benchmarking
+matplotlib>=3.7.0
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Optional: Additional plotting features
+scipy>=1.11.0
+seaborn>=0.12.0
+
+# Test dependencies (for benchmarking infrastructure)
+pytest>=7.4.0
+pytest-benchmark>=4.0.0
+
+# Development tools
+pre-commit>=3.5.0
