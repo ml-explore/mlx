@@ -159,27 +159,41 @@ Large matrices (M, N > 1024): 128 threads
 To validate these optimizations, run the comprehensive M5 Max benchmark:
 
 ```bash
-# Run with GPU (default)
+# From the project root directory
+
+# Quick start with the helper script:
+./run_benchmarks.sh
+
+# Run with GPU (default):
 python -m benchmarks.python.m5_max_bench
 
-# Run with CPU
+# Run with CPU:
 python -m benchmarks.python.m5_max_bench --cpu
 
-# Save results to file
+# Save results to file:
 python -m benchmarks.python.m5_max_bench --output m5_max_results.json
 
-# View all options
+# View all options:
 python -m benchmarks.python.m5_max_bench --help
 ```
 
-The benchmark suite includes:
-- **Matmul benchmarks**: Small, medium, large, and batched matmuls
-- **Reduce benchmarks**: Row, column, and large reductions
-- **Element-wise operations**: Add, multiply, exp, log, sigmoid, relu
-- **Large matrix operations**: QR, SVD, eigenvalue decomposition
-- **CPU backend benchmarks**: For comparison with GPU
+### Prerequisites
 
-Example output format:
+Before running benchmarks, ensure MLX is installed:
+
+```bash
+# Install from PyPI
+pip install mlx
+
+# Or build and install from source
+cd /path/to/mlx
+pip install -e .
+```
+
+### Expected Output
+
+The benchmark will display results in the terminal and optionally save to JSON:
+
 ```json
 {
   "timestamp": "2026-04-04T...",
@@ -192,6 +206,30 @@ Example output format:
   }
 }
 ```
+
+### Interpreting Results
+
+- **mean**: Average execution time in milliseconds
+- **min/max**: Best and worst case execution times
+- **std**: Standard deviation (lower = more consistent)
+
+Lower values indicate better performance.
+
+### Common Issues
+
+**Error: "No module named mlx.core"**
+- MLX is not installed. Run `pip install mlx` or build from source.
+
+**Error: "No module named benchmarks.python.m5_max_bench"**
+- Ensure you're running from the project root directory
+- Check that `benchmarks/python` is in your Python path
+
+**Inconsistent results**
+- Run multiple times and average results
+- Ensure Mac is plugged in (not throttling)
+- Close other applications during benchmarking
+
+See `benchmarks/README.md` for more detailed documentation.
 
 ## Conclusion
 
