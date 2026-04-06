@@ -7,6 +7,15 @@
 
 namespace mlx::core {
 
+namespace {
+
+inline bool is_last_2_dims_row_contiguous(const array& x) {
+  return x.flags().contiguous && (x.ndim() >= 2) && (x.strides(-1) == 1) &&
+      (x.strides(-2) == x.shape(-1));
+}
+
+} // namespace
+
 #if defined(MLX_CUDA_SM90A_ENABLED)
 // Defined in qmm_impl_sm90_xxx.cu files.
 template <typename TileShape, typename ClusterShape>
@@ -43,8 +52,9 @@ bool supports_qmm_sm90(
   if (!biases) {
     return false;
   }
-  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
-      !scales.flags().row_contiguous || !biases->flags().row_contiguous) {
+  if (!x.flags().row_contiguous || !is_last_2_dims_row_contiguous(w) ||
+      !is_last_2_dims_row_contiguous(scales) ||
+      !is_last_2_dims_row_contiguous(*biases)) {
     return false;
   }
   if (!transpose) {
@@ -132,11 +142,11 @@ bool supports_qmm_sm80(
   if ((n % 128 != 0) || (k % std::max(64, group_size) != 0)) {
     return false;
   }
-  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
-      !scales.flags().row_contiguous) {
+  if (!x.flags().row_contiguous || !is_last_2_dims_row_contiguous(w) ||
+      !is_last_2_dims_row_contiguous(scales)) {
     return false;
   }
-  if (biases && !biases->flags().row_contiguous) {
+  if (biases && !is_last_2_dims_row_contiguous(*biases)) {
     return false;
   }
   if (x.dtype() != float16 && x.dtype() != bfloat16) {
@@ -214,14 +224,14 @@ bool supports_qmm_naive(
     QuantizationMode mode,
     cu::Device& device) {
   int k = x.shape(-1);
-  if (k % std::max(64, group_size) != 0) {
+  if (transpose && (k % std::max(64, group_size) != 0)) {
     return false;
   }
-  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
-      !scales.flags().row_contiguous) {
+  if (!x.flags().row_contiguous || !is_last_2_dims_row_contiguous(w) ||
+      !is_last_2_dims_row_contiguous(scales)) {
     return false;
   }
-  if (biases && !biases->flags().row_contiguous) {
+  if (biases && !is_last_2_dims_row_contiguous(*biases)) {
     return false;
   }
   return true;
@@ -313,11 +323,11 @@ bool supports_qmv(
   if (k % 8 != 0) {
     return false;
   }
-  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
-      !scales.flags().row_contiguous) {
+  if (!x.flags().row_contiguous || !is_last_2_dims_row_contiguous(w) ||
+      !is_last_2_dims_row_contiguous(scales)) {
     return false;
   }
-  if (biases && !biases->flags().row_contiguous) {
+  if (biases && !is_last_2_dims_row_contiguous(*biases)) {
     return false;
   }
   if (!transpose) {

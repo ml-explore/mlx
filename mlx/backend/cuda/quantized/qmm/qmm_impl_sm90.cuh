@@ -193,7 +193,7 @@ void qmm_impl_sm90(
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);
-  bool broadcast_b = w.ndim() == 2;
+  bool broadcast_b = (w.ndim() <= 2) || (w.size() != w.data_size());
 
   // FIXME: Copy happens for every call.
   array scales = transpose_last_2_dims(scales_, encoder, s);

@@ -451,7 +451,7 @@ void qmm_impl_sm80(
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);
-  bool broadcast_b = w.ndim() == 2;
+  bool broadcast_b = (w.ndim() <= 2) || (w.size() != w.data_size());
 
   dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
     dispatch_quant_types<Element>(
