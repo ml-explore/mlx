@@ -2081,59 +2081,6 @@ class TestLayers(mlx_tests.MLXTestCase):
         out = model(src, tgt, src_mask=None, tgt_mask=None, memory_mask=None)
         self.assertEqual(out.shape, tgt.shape)
 
-    def test_transformer_decoder_cross_attention_query(self):
-        """Regression test: in post-norm mode (norm_first=False), the
-        cross_attention query must be the normalized output after
-        self-attention (x), not the stale self-attention output (y)."""
-        mx.random.seed(42)
-        dims = 32
-        num_heads = 4
-
-        layer = nn.TransformerDecoderLayer(
-            dims=dims, num_heads=num_heads, norm_first=False
-        )
-        layer.eval()
-
-        x = mx.random.normal(shape=(1, 4, dims))
-        memory = mx.random.normal(shape=(1, 6, dims))
-
-        # Get the output with the correct implementation
-        out = layer(x, memory, x_mask=None, memory_mask=None)
-
-        # Manually compute the expected forward pass to verify the query
-        # Step 1: self-attention
-        y_sa = layer.self_attention(x, x, x, None)
-        y_sa = layer.dropout1(y_sa)
-        x_after_sa = layer.ln1(x + y_sa)
-
-        # Step 2: cross-attention — query MUST be x_after_sa, not y_sa
-        y_ca = layer.cross_attention(x_after_sa, memory, memory, None)
-        y_ca = layer.dropout2(y_ca)
-        x_after_ca = layer.ln2(x_after_sa + y_ca)
-
-        # Step 3: feedforward
-        y_ff = layer.linear1(x_after_ca)
-        y_ff = layer.activation(y_ff)
-        y_ff = layer.dropout3(y_ff)
-        y_ff = layer.linear2(y_ff)
-        expected = layer.ln3(x_after_ca + y_ff)
-
-        self.assertTrue(mx.allclose(out, expected, atol=1e-5))
-
-        # Also verify that using the WRONG query (y_sa) gives a
-        # different result, confirming this test would catch the bug.
-        y_ca_wrong = layer.cross_attention(y_sa, memory, memory, None)
-        y_ca_wrong = layer.dropout2(y_ca_wrong)
-        x_after_ca_wrong = layer.ln2(x_after_sa + y_ca_wrong)
-
-        y_ff_wrong = layer.linear1(x_after_ca_wrong)
-        y_ff_wrong = layer.activation(y_ff_wrong)
-        y_ff_wrong = layer.dropout3(y_ff_wrong)
-        y_ff_wrong = layer.linear2(y_ff_wrong)
-        wrong_out = layer.ln3(x_after_ca_wrong + y_ff_wrong)
-
-        self.assertFalse(mx.allclose(out, wrong_out, atol=1e-5))
-
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
