@@ -264,7 +264,7 @@ CommandEncoder::CommandEncoder(
     queue_->addResidencySet(residency_set.mtl_residency_set());
   }
   debug_set_stream_queue_label(queue_.get(), index);
-  buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
+  buffer_ = NS::RetainPtr(queue_->commandBuffer());
 }
 
 CommandEncoder::~CommandEncoder() {
@@ -438,7 +438,7 @@ bool CommandEncoder::needs_commit() const {
 
 void CommandEncoder::commit() {
   buffer_->commit();
-  buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
+  buffer_ = NS::RetainPtr(queue_->commandBuffer());
   buffer_ops_ = 0;
   buffer_sizes_ = 0;
 }
