@@ -244,6 +244,10 @@ class ScaledDotProductAttention : public Custom {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
+  std::pair<std::vector<array>, std::vector<int>> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
   bool is_equivalent(const Primitive& other) const override;
 
   DEFINE_NAME(ScaledDotProductAttention);
