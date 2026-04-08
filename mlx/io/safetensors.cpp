@@ -147,6 +147,30 @@ SafetensorsLoad load_safetensors(
     const Shape& shape = item.value().at("shape");
     const std::vector<size_t>& data_offsets = item.value().at("data_offsets");
     Dtype type = dtype_from_safetensor_str(dtype);
+    if (data_offsets.size() != 2) {
+      throw std::runtime_error(
+          "[load_safetensors] Tensor \"" + item.key() +
+          "\" data_offsets must have exactly 2 entries");
+    }
+    if (data_offsets[0] > data_offsets[1]) {
+      throw std::runtime_error(
+          "[load_safetensors] Tensor \"" + item.key() +
+          "\" data_offsets[0] > data_offsets[1]");
+    }
+    {
+      size_t expected_nbytes = type.size();
+      for (auto dim : shape) {
+        expected_nbytes *= static_cast<size_t>(dim);
+      }
+      if ((data_offsets[1] - data_offsets[0]) != expected_nbytes) {
+        throw std::runtime_error(
+            "[load_safetensors] Tensor \"" + item.key() +
+            "\" data_offsets range " +
+            std::to_string(data_offsets[1] - data_offsets[0]) +
+            " does not match expected byte size " +
+            std::to_string(expected_nbytes));
+      }
+    }
     res.insert(
         {item.key(),
          array(
