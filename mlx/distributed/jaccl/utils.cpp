@@ -181,8 +181,20 @@ const Destination& Connection::info() {
 
   ibv_port_attr port_attr;
   ibv().query_port(ctx, 1, &port_attr);
-  ibv_gid gid;
-  ibv().query_gid(ctx, 1, 1, &gid);
+  // Scan GID table for a valid entry. On some Thunderbolt interfaces the
+  // IPv4-mapped GID is not at index 1 (e.g. index 2 on certain TB5 configs).
+  ibv_gid gid = {};
+  for (int idx = 1; idx <= 3; idx++) {
+    ibv_gid tmp;
+    if (ibv().query_gid(ctx, 1, idx, &tmp) == 0 &&
+        tmp.global.interface_id != 0) {
+      gid = tmp;
+      break;
+    }
+  }
+  if (gid.global.interface_id == 0) {
+    ibv().query_gid(ctx, 1, 0, &gid);
+  }
 
   src.local_id = port_attr.lid;
   src.queue_pair_number = queue_pair->qp_num;
@@ -227,7 +239,16 @@ void Connection::queue_pair_rtr(const Destination& dst) {
     attr.ah_attr.is_global = 1;
     attr.ah_attr.grh.hop_limit = 1;
     attr.ah_attr.grh.dgid = dst.global_identifier;
-    attr.ah_attr.grh.sgid_index = 1;
+    // Find valid local sgid_index dynamically (matches info() scan)
+    attr.ah_attr.grh.sgid_index = 0;
+    for (int idx = 1; idx <= 3; idx++) {
+      ibv_gid tmp;
+      if (ibv().query_gid(ctx, 1, idx, &tmp) == 0 &&
+          tmp.global.interface_id != 0) {
+        attr.ah_attr.grh.sgid_index = idx;
+        break;
+      }
+    }
   }
 
   int mask = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN |
