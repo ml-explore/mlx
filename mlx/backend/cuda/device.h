@@ -5,15 +5,18 @@
 #include "mlx/array.h"
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/lru_cache.h"
-#include "mlx/backend/cuda/worker.h"
+#include "mlx/backend/cuda/utils.h"
 #include "mlx/stream.h"
 
+#include <memory>
 #include <unordered_map>
 
 namespace mlx::core::cu {
 
 // Compute a key and updatability flag for a CUDA graph by walking its nodes.
 std::pair<std::string, bool> subgraph_to_key(cudaGraph_t graph);
+
+class Worker;
 
 class CommandEncoder {
  public:
@@ -136,7 +139,7 @@ class CommandEncoder {
   Device& device_;
   CudaStream stream_;
   CudaGraph graph_;
-  Worker worker_;
+  std::shared_ptr<Worker> worker_;
   int node_count_{0};
   bool in_concurrent_{false};
   std::vector<cudaGraphNode_t> from_nodes_;

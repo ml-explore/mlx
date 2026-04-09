@@ -4,7 +4,7 @@
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/cublas_utils.h"
 #include "mlx/backend/cuda/cudnn_utils.h"
-#include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/event.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 
@@ -16,7 +16,7 @@ void init() {
   // Force initalization of CUDA, so CUDA runtime get destroyed last.
   cudaFree(nullptr);
   // Make sure CUDA event pool get destroyed after device and stream.
-  cu::CudaEvent::init_pool();
+  mlx::core::cu::CudaEvent::init_pool();
 }
 
 void new_stream(Stream s) {

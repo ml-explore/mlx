@@ -7,16 +7,25 @@ namespace mlx::core::cu {
 
 Worker::Worker(Device& d)
     : signal_stream_(d),
-      signal_event_(d, cudaEventDisableTiming | cudaEventBlockingSync),
-      worker_(&Worker::thread_fn, this) {}
+      signal_event_(d, cudaEventDisableTiming | cudaEventBlockingSync) {}
 
-Worker::~Worker() {
+Worker::~Worker() = default;
+
+void Worker::start() {
+  // Note that |shared_from_this| can not be called in constructor.
+  worker_ = std::thread(&Worker::thread_fn, shared_from_this());
+  // Detach the thread and let it free itself after finishing tasks.
+  // This is to avoid deadlock when joining threads on exit on Windows:
+  // https://developercommunity.visualstudio.com/t/1654756
+  worker_.detach();
+}
+
+void Worker::stop() {
   {
     std::lock_guard lock(mtx_);
     stop_ = true;
   }
   cond_.notify_one();
-  worker_.join();
 }
 
 void Worker::add_task(std::function<void()> task) {

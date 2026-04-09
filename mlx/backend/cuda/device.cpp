@@ -206,17 +206,19 @@ CommandEncoder::CommandEncoder(Device& d)
     : device_(d),
       stream_(d),
       graph_(d),
-      worker_(d),
+      worker_(std::make_shared<Worker>(d)),
       graph_cache_("MLX_CUDA_GRAPH_CACHE_SIZE", /* default_capacity */ 400) {
   std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits(d);
+  worker_->start();
 }
 
 CommandEncoder::~CommandEncoder() {
   synchronize();
+  worker_->stop();
 }
 
 void CommandEncoder::add_completed_handler(std::function<void()> task) {
-  worker_.add_task(std::move(task));
+  worker_->add_task(std::move(task));
 }
 
 void CommandEncoder::set_input_array(const array& arr) {
@@ -528,7 +530,7 @@ void CommandEncoder::commit() {
   }
 
   // Put completion handlers in a batch.
-  worker_.commit(stream_);
+  worker_->commit(stream_);
   node_count_ = 0;
   bytes_in_graph_ = 0;
 }
