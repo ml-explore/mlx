@@ -15,5 +15,6 @@ void new_stream(Stream stream);
 void eval(array& arr);
 void finalize(Stream s);
 void synchronize(Stream s);
+void clear_streams();
 
 } // namespace mlx::core::gpu

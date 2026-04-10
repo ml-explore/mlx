@@ -9,6 +9,7 @@ os.environ["MLX_ENABLE_TF32"] = "0"
 os.environ["MLX_ENABLE_CACHE_THRASHING_CHECK"] = "0"
 
 import platform
+import sys
 import unittest
 from typing import Any, Callable, List, Tuple, Union
 
@@ -18,6 +19,8 @@ import numpy as np
 
 class MLXTestRunner(unittest.TestProgram):
     def __init__(self, *args, **kwargs):
+        # Do not exit in runTests
+        kwargs["exit"] = False
         super().__init__(*args, **kwargs)
 
     def createTests(self, *args, **kwargs):
@@ -50,6 +53,11 @@ class MLXTestRunner(unittest.TestProgram):
 
         filter_and_add(self.test)
         self.test = filtered_suite
+
+    def runTests(self):
+        super().runTests()
+        mx.clear_streams()
+        sys.exit(0 if self.result.wasSuccessful() else 1)
 
 
 class MLXTestCase(unittest.TestCase):
