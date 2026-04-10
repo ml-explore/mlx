@@ -799,8 +799,13 @@ CommandEncoder& get_command_encoder(Stream s) {
   auto& encoders = get_command_encoders();
   auto it = encoders.find(s.index);
   if (it == encoders.end()) {
-    throw std::runtime_error(
-        fmt::format("There is no Stream(gpu, {}) in current thread.", s.index));
+    // Auto-register the stream on this thread.  MLX streams are thread-local,
+    // but arrays may carry references to streams created on other threads
+    // (e.g. module-level streams created at import time).  Rather than
+    // throwing, lazily create a CommandEncoder so the current thread can
+    // dispatch work for that stream.
+    auto& d = device(s.device);
+    it = encoders.try_emplace(s.index, d, s.index, d.residency_set()).first;
   }
   return it->second;
 }
