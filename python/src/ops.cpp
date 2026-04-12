@@ -2821,6 +2821,9 @@ void init_ops(nb::module_& m) {
       R"pbdoc(
         Returns a sorted copy of the array.
 
+        The sort is stable, meaning equal elements preserve their relative
+        order. ``NaN`` values are placed at the end.
+
         Args:
             a (array): Input array.
             axis (int or None, optional): Optional axis to sort over.
@@ -2847,6 +2850,9 @@ void init_ops(nb::module_& m) {
           "def argsort(a: array, /, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Returns the indices that sort the array.
+
+        The sort is stable, meaning equal elements preserve their relative
+        order. ``NaN`` values are placed at the end.
 
         Args:
             a (array): Input array.
