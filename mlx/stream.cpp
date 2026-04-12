@@ -3,6 +3,7 @@
 #include "mlx/stream.h"
 #include "mlx/backend/cpu/device_info.h"
 #include "mlx/backend/gpu/device_info.h"
+#include "mlx/backend/gpu/eval.h"
 #include "mlx/scheduler.h"
 
 #include <array>
@@ -55,6 +56,16 @@ std::vector<Stream> get_streams() {
   auto& [streams, mtx] = all_streams();
   std::shared_lock lock(mtx);
   return streams;
+}
+
+void register_stream(Stream s) {
+  if (s.device == Device::gpu) {
+    if (!gpu::is_available()) {
+      throw std::invalid_argument(
+          "[register_stream] Cannot register gpu stream without gpu backend.");
+    }
+    gpu::new_stream(s);
+  }
 }
 
 Stream new_stream(Device d) {

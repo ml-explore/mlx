@@ -30,6 +30,22 @@ MLX_API void set_default_stream(Stream s);
 /** Make a new stream on the given device. */
 MLX_API Stream new_stream(Device d);
 
+/**
+ * Register an existing stream on the calling thread.
+ *
+ * GPU streams use thread-local command encoders. When a stream is created,
+ * its encoder is registered only on the creating thread. If a different
+ * thread later calls eval() on arrays from that stream, it will fail
+ * because the encoder does not exist on the new thread.
+ *
+ * Call this function on any thread that needs to eval() arrays from a
+ * stream that was created on a different thread.
+ *
+ * Safe to call multiple times or on the creating thread (no-op if already
+ * registered).
+ */
+MLX_API void register_stream(Stream s);
+
 /** Get all available streams. */
 MLX_API std::vector<Stream> get_streams();
 

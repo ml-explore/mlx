@@ -133,6 +133,23 @@ void init_stream(nb::module_& m) {
       &mx::new_stream,
       "device"_a,
       R"pbdoc(Make a new stream on the given device.)pbdoc");
+  m.def(
+      "register_stream",
+      &mx::register_stream,
+      "stream"_a,
+      R"pbdoc(
+        Register a stream on the calling thread.
+
+        GPU streams use thread-local command encoders. When a stream is
+        created, its encoder is only registered on the creating thread.
+        Call this on any new thread that needs to evaluate arrays from
+        that stream.
+
+        Safe to call multiple times (no-op if already registered).
+
+        Args:
+          stream (Stream): The stream to register.
+      )pbdoc");
 
   nb::class_<PyStreamContext>(m, "StreamContext", R"pbdoc(
         A context manager for setting the current device and stream.
