@@ -770,16 +770,28 @@ inline array argmax(const array& a, StreamOrDevice s = {}) {
 MLX_API array
 argmax(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {});
 
-/** Returns a sorted copy of the flattened array. */
+/**
+ * Returns a sorted copy of the flattened array.
+ * The sort is stable and NaN values are placed at the end.
+ */
 MLX_API array sort(const array& a, StreamOrDevice s = {});
 
-/** Returns a sorted copy of the array along a given axis. */
+/**
+ * Returns a sorted copy of the array along a given axis.
+ * The sort is stable and NaN values are placed at the end.
+ */
 MLX_API array sort(const array& a, int axis, StreamOrDevice s = {});
 
-/** Returns indices that sort the flattened array. */
+/**
+ * Returns indices that sort the flattened array.
+ * The sort is stable and NaN values are placed at the end.
+ */
 MLX_API array argsort(const array& a, StreamOrDevice s = {});
 
-/** Returns indices that sort the array along a given axis. */
+/**
+ * Returns indices that sort the array along a given axis.
+ * The sort is stable and NaN values are placed at the end.
+ */
 MLX_API array argsort(const array& a, int axis, StreamOrDevice s = {});
 
 /**
