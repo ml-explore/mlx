@@ -6,6 +6,7 @@
 #include "mlx/scheduler.h"
 
 #include <array>
+#include <map>
 #include <optional>
 #include <shared_mutex>
 
@@ -26,6 +27,11 @@ auto& default_stream_storage(Device d) {
 
 auto& all_streams() {
   static std::tuple<std::vector<Stream>, std::shared_mutex> streams_and_mtx;
+  return streams_and_mtx;
+}
+
+auto& thread_local_streams() {
+  static std::tuple<std::vector<ThreadLocalStream>, std::mutex> streams_and_mtx;
   return streams_and_mtx;
 }
 
@@ -58,10 +64,6 @@ std::vector<Stream> get_streams() {
 }
 
 Stream new_stream(Device d) {
-  if (!gpu::is_available() && d == Device::gpu) {
-    throw std::invalid_argument(
-        "[new_stream] Cannot make gpu stream without gpu backend.");
-  }
   auto& [streams, mtx] = all_streams();
   std::unique_lock lock(mtx);
   int index = streams.size();
@@ -71,6 +73,22 @@ Stream new_stream(Device d) {
     gpu::new_stream(s);
   }
   return s;
+}
+
+ThreadLocalStream new_thread_local_stream(Device d) {
+  auto& [streams, mtx] = thread_local_streams();
+  std::lock_guard lock(mtx);
+  int index = streams.size();
+  return streams.emplace_back(index, d);
+}
+
+Stream stream_from_thread_local_stream(ThreadLocalStream tls) {
+  static thread_local std::map<ThreadLocalStream, Stream> streams;
+  auto it = streams.find(tls);
+  if (it == streams.end()) {
+    it = streams.emplace(tls, new_stream(tls.device)).first;
+  }
+  return it->second;
 }
 
 } // namespace mlx::core

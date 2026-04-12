@@ -25,7 +25,7 @@ class TestThreads(mlx_tests.MLXTestCase):
         t1.join()
         t2.join()
 
-        test_stream = mx.ThreadLocalStream(mx.default_device())
+        test_stream = mx.new_thread_local_stream(mx.default_device())
 
         def test_success():
             with mx.stream(test_stream):

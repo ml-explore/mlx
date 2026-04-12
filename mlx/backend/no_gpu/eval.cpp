@@ -9,7 +9,10 @@ namespace mlx::core::gpu {
 
 void init() {}
 
-void new_stream(Stream) {}
+void new_stream(Stream) {
+  throw std::invalid_argument(
+      "[new_stream] Cannot make gpu stream without gpu backend.");
+}
 
 void eval(array&) {
   throw std::runtime_error("[gpu::eval] GPU backend is not available");
