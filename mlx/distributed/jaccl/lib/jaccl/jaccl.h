@@ -37,13 +37,15 @@ class Config {
     return prefer_ring_;
   }
 
+  static std::optional<Config> from_env();
+
+  friend std::shared_ptr<Group> init(const Config& cfg, bool strict);
+
+ private:
   std::vector<std::string> get_mesh_connectivity() const;
   std::pair<std::vector<std::string>, std::vector<std::string>>
   get_ring_connectivity() const;
 
-  static std::optional<Config> from_env();
-
- private:
   int rank_;
   int size_;
   std::string coordinator_;
