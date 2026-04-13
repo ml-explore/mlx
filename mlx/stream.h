@@ -30,6 +30,14 @@ MLX_API void set_default_stream(Stream s);
 /** Make a new stream on the given device. */
 MLX_API Stream new_stream(Device d);
 
+/**
+ * Make a stream thread local so it is treated as an unique stream in each
+ * thread. */
+MLX_API void make_stream_thread_local(Stream s);
+
+/** Return whether a stream is thread local. */
+MLX_API bool is_stream_thread_local(Stream s);
+
 /** Get all available streams. */
 MLX_API std::vector<Stream> get_streams();
 

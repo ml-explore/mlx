@@ -66,6 +66,7 @@ TEST_CASE("test default stream in threads") {
 }
 
 TEST_CASE("test access stream in other thread") {
+  // Safe in CPU backend.
   if (!gpu::is_available()) {
     return;
   }
@@ -84,6 +85,65 @@ TEST_CASE("test access stream in other thread") {
   t.join();
 
   CHECK(error_caught);
+}
+
+TEST_CASE("test eval array created in other thread") {
+  // Safe in CPU backend.
+  if (!gpu::is_available()) {
+    return;
+  }
+
+  auto s = new_stream(Device::gpu);
+  auto x = arange(10, s);
+
+  bool error_caught = false;
+  std::thread t([&] {
+    try {
+      eval(x);
+    } catch (const std::runtime_error&) {
+      error_caught = true;
+    }
+  });
+
+  t.join();
+  CHECK(error_caught);
+}
+
+TEST_CASE("test thread local stream") {
+  auto s = new_stream(default_device());
+  make_stream_thread_local(s);
+  int result = sum(arange(10, s)).item<int>();
+
+  std::atomic<int> finished = 0;
+  std::vector<std::thread> threads;
+  int num_threads = 4;
+  for (int i = 0; i < 4; ++i) {
+    threads.emplace_back([&]() {
+      int r = sum(arange(10, s)).item<int>();
+      CHECK_EQ(result, r);
+      finished += 1;
+    });
+  }
+
+  for (auto& t : threads) {
+    t.join();
+  }
+  CHECK_EQ(finished, num_threads);
+}
+
+TEST_CASE("test eval array created with thread local stream") {
+  auto s = new_stream(default_device());
+  make_stream_thread_local(s);
+  auto x = arange(10, s);
+
+  bool success = false;
+  std::thread t([&] {
+    eval(x);
+    success = true;
+  });
+
+  t.join();
+  CHECK(success);
 }
 
 TEST_CASE("test get streams") {

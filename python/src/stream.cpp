@@ -41,26 +41,6 @@ class PyStreamContext {
   mx::StreamContext* _inner;
 };
 
-class PyThreadLocalStream {
- public:
-  PyThreadLocalStream(mx::Device d) : device(d) {}
-
-  mx::Stream stream() const {
-    thread_local std::unordered_map<const PyThreadLocalStream*, mx::Stream>
-        streams;
-
-    auto it = streams.find(this);
-    if (it == streams.end()) {
-      auto result = streams.emplace(this, mx::new_stream(device));
-      it = result.first;
-    }
-
-    return it->second;
-  }
-
-  mx::Device device;
-};
-
 void init_stream(nb::module_& m) {
   nb::class_<mx::Stream>(
       m,
@@ -69,11 +49,6 @@ void init_stream(nb::module_& m) {
       A stream for running operations on a given device.
       )pbdoc")
       .def_ro("device", &mx::Stream::device)
-      .def(
-          "__init__",
-          [](mx::Stream* s, const PyThreadLocalStream& tls) {
-            return new (s) mx::Stream(tls.stream());
-          })
       .def(
           "__repr__",
           [](const mx::Stream& s) {
@@ -86,29 +61,7 @@ void init_stream(nb::module_& m) {
             s == nb::cast<mx::Stream>(other);
       });
 
-  nb::class_<PyThreadLocalStream>(
-      m,
-      "ThreadLocalStream",
-      R"pbdoc(
-      A stream that will be unique per thread and can be used to run operations on a given device.
-      )pbdoc")
-      .def_ro("device", &PyThreadLocalStream::device)
-      .def(nb::init<mx::Device>())
-      .def(
-          "__repr__",
-          [](const PyThreadLocalStream& s) {
-            std::ostringstream os;
-            os << "ThreadLocalStream(" << s.device << ")";
-            return os.str();
-          })
-      .def("__eq__", [](const PyThreadLocalStream& s, const nb::object& other) {
-        auto s_other = mx::default_stream(mx::default_device());
-        return nb::try_cast<mx::Stream>(other, s_other) &&
-            s_other == s.stream();
-      });
-
   nb::implicitly_convertible<mx::Device::DeviceType, mx::Device>();
-  nb::implicitly_convertible<PyThreadLocalStream, mx::Stream>();
 
   m.def(
       "default_stream",
@@ -133,6 +86,15 @@ void init_stream(nb::module_& m) {
       &mx::new_stream,
       "device"_a,
       R"pbdoc(Make a new stream on the given device.)pbdoc");
+  m.def(
+      "make_stream_thread_local",
+      &mx::make_stream_thread_local,
+      "stream"_a,
+      R"pbdoc(Make a stream thread local so it is treated as an unique stream in each thread.)pbdoc");
+  m.def(
+      "is_stream_thread_local",
+      &mx::is_stream_thread_local,
+      R"pbdoc(Return whether a stream is thread local.)pbdoc");
 
   nb::class_<PyStreamContext>(m, "StreamContext", R"pbdoc(
         A context manager for setting the current device and stream.

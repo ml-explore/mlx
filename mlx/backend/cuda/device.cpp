@@ -3,6 +3,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/worker.h"
 #include "mlx/backend/gpu/device_info.h"
+#include "mlx/backend/gpu/eval.h"
 #include "mlx/utils.h"
 
 #include <fmt/format.h>
@@ -566,8 +567,14 @@ CommandEncoder& get_command_encoder(Stream s) {
   auto& encoders = get_command_encoders();
   auto it = encoders.find(s.index);
   if (it == encoders.end()) {
-    throw std::runtime_error(
-        fmt::format("There is no Stream(gpu, {}) in current thread.", s.index));
+    if (!is_stream_thread_local(s)) {
+      throw std::runtime_error(
+          fmt::format(
+              "There is no Stream(gpu, {}) in current thread.", s.index));
+    }
+    gpu::new_stream(s);
+    it = encoders.find(s.index);
+    assert(it != encoders.end());
   }
   return it->second;
 }

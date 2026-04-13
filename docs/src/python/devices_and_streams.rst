@@ -16,6 +16,8 @@ Devices and Streams
    new_stream
    set_default_stream
    stream
+   make_stream_thread_local
+   is_stream_thread_local
    synchronize
    device_count
    device_info

@@ -7,6 +7,7 @@
 
 #include <array>
 #include <optional>
+#include <set>
 #include <shared_mutex>
 
 namespace mlx::core {
@@ -26,6 +27,11 @@ auto& default_stream_storage(Device d) {
 
 auto& all_streams() {
   static std::tuple<std::vector<Stream>, std::shared_mutex> streams_and_mtx;
+  return streams_and_mtx;
+}
+
+auto& thread_local_streams() {
+  static std::tuple<std::set<Stream>, std::shared_mutex> streams_and_mtx;
   return streams_and_mtx;
 }
 
@@ -58,10 +64,6 @@ std::vector<Stream> get_streams() {
 }
 
 Stream new_stream(Device d) {
-  if (!gpu::is_available() && d == Device::gpu) {
-    throw std::invalid_argument(
-        "[new_stream] Cannot make gpu stream without gpu backend.");
-  }
   auto& [streams, mtx] = all_streams();
   std::unique_lock lock(mtx);
   int index = streams.size();
@@ -71,6 +73,18 @@ Stream new_stream(Device d) {
     gpu::new_stream(s);
   }
   return s;
+}
+
+void make_stream_thread_local(Stream s) {
+  auto& [streams, mtx] = thread_local_streams();
+  std::unique_lock lock(mtx);
+  streams.insert(s);
+}
+
+bool is_stream_thread_local(Stream s) {
+  auto& [streams, mtx] = thread_local_streams();
+  std::shared_lock lock(mtx);
+  return streams.contains(s);
 }
 
 } // namespace mlx::core
