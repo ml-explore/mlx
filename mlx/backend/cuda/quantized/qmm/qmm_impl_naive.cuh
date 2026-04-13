@@ -51,7 +51,9 @@ __global__ void qmm_naive_kernel(
     const Quant*   B, StrideB dB, SmemLayoutB sB_layout, TiledCopyB copy_b,
           Element* C, StrideC dC,
     const Scale* S, const Element* Z, LayoutS S_layout,
-    TiledMma mma) {
+    TiledMma mma,
+    const uint32_t* lhs_indices = nullptr,
+    const uint32_t* rhs_indices = nullptr) {
   CUTE_STATIC_ASSERT_V(size(copy_a) == size(mma));
   CUTE_STATIC_ASSERT_V(size(copy_b) == size(mma));
   CUTE_STATIC_ASSERT_V(congruent(select<0,2,3>(shape_MNKL), dA));
@@ -69,13 +71,17 @@ __global__ void qmm_naive_kernel(
   Tensor mS_nkl = make_tensor(make_gmem_ptr(S), S_layout); // (N,(group_size,K/group_size),L)
   Tensor mZ_nkl = make_tensor(make_gmem_ptr(Z), S_layout); // (N,(group_size,K/group_size),L)
 
+  // For gather, use index lookup for input batch slicing.
+  uint32_t a_batch = lhs_indices ? lhs_indices[l_coord] : l_coord;
+  uint32_t b_batch = rhs_indices ? rhs_indices[l_coord] : l_coord;
+
   // Get batch slice.
-  Tensor mA = mA_mkl(_,_,l_coord); // (M,K)
-  Tensor mB = mB_nkl(_,_,l_coord); // (N,K)
+  Tensor mA = mA_mkl(_,_,a_batch); // (M,K)
+  Tensor mB = mB_nkl(_,_,b_batch); // (N,K)
   Tensor mC = mC_mnl(_,_,l_coord); // (M,N)
 
-  Tensor mS = mS_nkl(_,_,l_coord); // (N,(group_size,K/group_size))
-  Tensor mZ = mZ_nkl(_,_,l_coord); // (N,(group_size,K/group_size))
+  Tensor mS = mS_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
+  Tensor mZ = mZ_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
 
   // Get the appropriate blocks for this thread block.
   auto cta_coord = make_coord(m_coord, n_coord, _); // (m,n,k)
@@ -274,7 +280,9 @@ void qmm_naive(
     int m, int n, int k, int l,
     bool broadcast_b,
     auto group_size,
-    auto&& launch_kernel) {
+    auto&& launch_kernel,
+    const uint32_t* lhs_indices = nullptr,
+    const uint32_t* rhs_indices = nullptr) {
   // Define shapes (dynamic).
   auto prob_shape = make_shape(m, n, k, l); // (M,N,K,L)
 
@@ -330,7 +338,8 @@ void qmm_naive(
       &B, &dB, &sB_layout, &copy_b,
       &C, &dC,
       &S, &Z, &S_layout,
-      &mma};
+      &mma,
+      &lhs_indices, &rhs_indices};
   launch_kernel(reinterpret_cast<void*>(kernel), num_blocks, block_dims, smem_bytes, args);
 }
 
@@ -413,7 +422,9 @@ void qmm_impl_naive(
     int bits,
     int group_size,
     QuantizationMode mode,
-    cu::CommandEncoder& encoder) {
+    cu::CommandEncoder& encoder,
+    const uint32_t* lhs_indices = nullptr,
+    const uint32_t* rhs_indices = nullptr) {
   const char* tag = "[quantized_matmul]";
   int m = out.ndim() > 1 ? out.shape(-2) : 1;
   int n = out.shape(-1);
@@ -456,7 +467,9 @@ void qmm_impl_naive(
                     void** args) {
                   encoder.add_kernel_node_raw(
                       kernel, num_blocks, block_dims, {}, smem_bytes, args);
-                });
+                },
+                lhs_indices,
+                rhs_indices);
           });
     });
   });
@@ -475,5 +488,7 @@ void qmm_impl_naive(
       int bits,                                \
       int group_size,                          \
       QuantizationMode mode,                   \
-      cu::CommandEncoder& encoder);            \
+      cu::CommandEncoder& encoder,             \
+      const uint32_t* lhs_indices,             \
+      const uint32_t* rhs_indices);            \
   }

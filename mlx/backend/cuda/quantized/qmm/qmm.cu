@@ -198,7 +198,9 @@ void qmm_impl_naive(
     int bits,
     int group_size,
     QuantizationMode mode,
-    cu::CommandEncoder& encoder);
+    cu::CommandEncoder& encoder,
+    const uint32_t* lhs_indices,
+    const uint32_t* rhs_indices);
 
 bool supports_qmm_naive(
     const array& x,
@@ -235,10 +237,22 @@ void qmm_naive(
     int bits,
     int group_size,
     QuantizationMode mode,
-    cu::CommandEncoder& encoder) {
+    cu::CommandEncoder& encoder,
+    const uint32_t* lhs_indices,
+    const uint32_t* rhs_indices) {
   auto dispatch = [&]<int TileM, bool KMajor>() {
     qmm_impl_naive<TileM, KMajor>(
-        x, w, scales, biases, out, bits, group_size, mode, encoder);
+        x,
+        w,
+        scales,
+        biases,
+        out,
+        bits,
+        group_size,
+        mode,
+        encoder,
+        lhs_indices,
+        rhs_indices);
   };
   dispatch_bool(transpose, [&](auto k_major) {
     int m = out.ndim() > 1 ? out.shape(-2) : 1;

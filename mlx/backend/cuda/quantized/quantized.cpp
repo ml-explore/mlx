@@ -143,7 +143,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   array lhs_indices = ensure_contiguous(inputs[inputs.size() - 2], encoder, s);
   array rhs_indices = ensure_contiguous(inputs[inputs.size() - 1], encoder, s);
 
-  int M = out.shape(-2);
+  int M = out.ndim() > 1 ? out.shape(-2) : 1;
   int N = out.shape(-1);
   int K = x.shape(-1);
   int B = out.size() / (M * N);
@@ -163,10 +163,10 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   };
   bool can_use_qmm_sm90 = supports(supports_qmm_sm90);
   bool can_use_qmm_sm80 = supports(supports_qmm_sm80);
+  bool can_use_qmm_naive = supports(supports_qmm_naive);
   bool can_use_qmv = supports(supports_qmv);
 
   auto call_qmm_sm90 = [&]() {
-    // sm90: pre-gather + qmm
     array gx = gather_slices(x, lhs_indices, B, encoder, s);
     array gw = gather_slices(w, rhs_indices, B, encoder, s);
     array gs = gather_slices(scales, rhs_indices, B, encoder, s);
@@ -178,7 +178,6 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     qmm_sm90(gx, gw, gs, *gb, out, bits_, group_size_, encoder, s);
   };
   auto call_qmm_sm80 = [&]() {
-    // sm80: fused index lookup in the kernel.
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
     encoder.set_input_array(lhs_indices);
     encoder.set_input_array(rhs_indices);
@@ -188,6 +187,24 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         scales,
         biases,
         out,
+        bits_,
+        group_size_,
+        mode_,
+        encoder,
+        gpu_ptr<uint32_t>(lhs_indices),
+        gpu_ptr<uint32_t>(rhs_indices));
+  };
+  auto call_qmm_naive = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    encoder.set_input_array(lhs_indices);
+    encoder.set_input_array(rhs_indices);
+    qmm_naive(
+        x,
+        w,
+        scales,
+        biases,
+        out,
+        transpose_,
         bits_,
         group_size_,
         mode_,
@@ -225,6 +242,15 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       call_qmv();
     } else {
       call_qmm_sm80();
+    }
+    return;
+  }
+
+  if (can_use_qmm_naive) {
+    if (can_use_qmv && (M * B < 8)) {
+      call_qmv();
+    } else {
+      call_qmm_naive();
     }
     return;
   }

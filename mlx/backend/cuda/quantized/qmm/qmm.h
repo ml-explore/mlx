@@ -79,7 +79,9 @@ void qmm_naive(
     int bits,
     int group_size,
     QuantizationMode mode,
-    cu::CommandEncoder& encoder);
+    cu::CommandEncoder& encoder,
+    const uint32_t* lhs_indices = nullptr,
+    const uint32_t* rhs_indices = nullptr);
 
 bool supports_fp_qmv(
     const array& x,
