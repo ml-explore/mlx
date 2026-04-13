@@ -1,7 +1,4 @@
 cuda_skip = {
-    "TestLayers.test_quantized_embedding",
-    # Block masked matmul NYI
-    "TestBlas.test_block_masked_matmul",
     # Gather matmul NYI
     "TestBlas.test_gather_matmul",
     "TestBlas.test_gather_matmul_grad",
@@ -27,16 +24,10 @@ cuda_skip = {
     "TestQuantized.test_gather_qmm_sorted",
     "TestQuantized.test_gather_qmm_grad",
     "TestQuantized.test_non_multiples",
-    "TestQuantized.test_qmm",
-    "TestQuantized.test_qmm_jvp",
     "TestQuantized.test_qmm_shapes",
-    "TestQuantized.test_qmm_vjp",
     "TestQuantized.test_fp_qvm",
     "TestQuantized.test_qvm",
-    "TestQuantized.test_qvm_splitk",
     "TestQuantized.test_qmv_small_non_multiples",
     "TestQuantized.test_small_matrix",
-    "TestQuantized.test_throw",
-    "TestQuantized.test_vjp_scales_biases",
     "TestExportImport.test_export_quantized_model",
 }

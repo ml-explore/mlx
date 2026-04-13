@@ -595,6 +595,12 @@ class TestVmap(mlx_tests.MLXTestCase):
         out = mx.vmap(fun, in_axes=(None, 0))(a, idx)
         self.assertEqual(out.shape, (4, 2, 1))
 
+        a = mx.zeros((4, 5, 3))
+        idx = mx.zeros((2, 2, 1, 3), mx.int32)
+
+        out = mx.vmap(fun, in_axes=(None, 0))(a, idx)
+        self.assertEqual(out.shape, (2, 2, 5, 3))
+
     def test_vmap_put_along_axis(self):
         a = mx.zeros((4, 5, 1))
         idx = mx.ones((2, 4, 1), mx.int32)
@@ -722,6 +728,44 @@ class TestVmap(mlx_tests.MLXTestCase):
         expected = mx.stack([gconv(xi, wi) for xi, wi in zip(x, w)])
         out = mx.vmap(gconv, in_axes=(0, 0))(x, w)
         self.assertTrue(mx.allclose(expected, out))
+
+    def test_vmap_pad(self):
+        def pad2d(x, value=0.0):
+            return mx.pad(x, ((1, 2), (0, 1)), constant_values=value)
+
+        x = mx.arange(24, dtype=mx.float32).reshape(2, 3, 4)
+
+        expected = mx.stack([pad2d(xi) for xi in x])
+        out = mx.vmap(pad2d, in_axes=0)(x)
+        self.assertTrue(mx.array_equal(out, expected))
+
+        expected = mx.stack([pad2d(x[:, i, :]) for i in range(x.shape[1])])
+        out = mx.vmap(pad2d, in_axes=1)(x)
+        self.assertTrue(mx.array_equal(out, expected))
+
+        expected = mx.stack([pad2d(x[:, :, i]) for i in range(x.shape[2])], axis=2)
+        out = mx.vmap(pad2d, in_axes=-1, out_axes=-1)(x)
+        self.assertTrue(mx.array_equal(out, expected))
+
+        nested = mx.vmap(mx.vmap(lambda y: mx.pad(y, (1, 1))))
+        out = nested(x)
+        expected = mx.pad(x, ((0, 0), (0, 0), (1, 1)))
+        self.assertTrue(mx.array_equal(out, expected))
+
+        out = mx.vmap(
+            lambda a, v: mx.pad(a, ((1, 1), (1, 1)), constant_values=v),
+            in_axes=(0, None),
+        )(x, mx.array(5.0))
+        expected = mx.stack(
+            [mx.pad(xi, ((1, 1), (1, 1)), constant_values=mx.array(5.0)) for xi in x]
+        )
+        self.assertTrue(mx.array_equal(out, expected))
+
+        pad_values = mx.array([3.0, 4.0])
+        with self.assertRaises(ValueError):
+            mx.vmap(lambda a, v: mx.pad(a, ((1, 1), (1, 1)), constant_values=v))(
+                x, pad_values
+            )
 
     def test_vmap_types(self):
 
@@ -854,6 +898,51 @@ class TestVmap(mlx_tests.MLXTestCase):
         )
         out = double_scatter(a + 0, mask, src)
         self.assertTrue(mx.array_equal(expected, out))
+
+    def test_broadcast_axes_vmap(self):
+        # Broadcast axes requires shapeless compile to properly test
+
+        counter = [0]
+
+        def fn(x, y):
+            counter[0] += 1
+            return mx.matmul(x, y)
+
+        x = mx.random.normal((2, 3, 1, 4, 5))
+        y = mx.random.normal((1, 2, 5, 6))
+        z = mx.random.normal((3, 2, 1, 4, 5))
+        w = mx.random.normal((2, 3, 5, 6))
+
+        vmap_fn = mx.vmap(fn, in_axes=(0, 1))
+        cvmap_fn = mx.compile(vmap_fn, shapeless=True)
+
+        expected = vmap_fn(x, y)
+        out = cvmap_fn(x, y)
+        self.assertTrue(mx.array_equal(expected, out))
+        self.assertEqual(2, counter[0])
+
+        expected = vmap_fn(z, w)
+        out = cvmap_fn(z, w)
+        self.assertTrue(mx.array_equal(expected, out))
+        self.assertEqual(3, counter[0])
+
+        x = mx.random.normal((2, 3, 1, 4, 5))
+        y = mx.random.normal((1, 2, 5, 6))
+        z = mx.random.normal((2, 3, 1, 7, 2))
+        w = mx.random.normal((1, 2, 2, 3))
+
+        vmap_fn = mx.vmap(fn, in_axes=(0, None))
+        cvmap_fn = mx.compile(vmap_fn, shapeless=True)
+
+        expected = vmap_fn(x, y)
+        out = cvmap_fn(x, y)
+        self.assertTrue(mx.array_equal(expected, out))
+        self.assertEqual(5, counter[0])
+
+        expected = vmap_fn(z, w)
+        out = cvmap_fn(z, w)
+        self.assertTrue(mx.array_equal(expected, out))
+        self.assertEqual(6, counter[0])
 
 
 if __name__ == "__main__":

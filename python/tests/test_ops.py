@@ -2193,7 +2193,7 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_sort(self):
         shape = (6, 4, 10)
         tests = product(
-            ("int32", "float32"),  # type
+            ("int32", "float32", "complex64"),  # type
             (None, 0, 1, 2),  # axis
             (True, False),  # strided
         )
@@ -2201,7 +2201,13 @@ class TestOps(mlx_tests.MLXTestCase):
             with self.subTest(dtype=dtype, axis=axis, strided=strided):
                 np.random.seed(0)
                 np_dtype = getattr(np, dtype)
-                a_np = np.random.uniform(0, 100, size=shape).astype(np_dtype)
+                if np.issubdtype(np_dtype, np.complexfloating):
+                    a_np = (
+                        np.random.uniform(0, 100, size=shape)
+                        + 1j * np.random.uniform(0, 100, size=shape)
+                    ).astype(np_dtype)
+                else:
+                    a_np = np.random.uniform(0, 100, size=shape).astype(np_dtype)
                 a_mx = mx.array(a_np)
                 if strided:
                     a_mx = a_mx[::2, :, ::2]
@@ -2882,6 +2888,16 @@ class TestOps(mlx_tests.MLXTestCase):
         out_np = a.conj()
         self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
+        b = np.random.normal(size=shape) + 1j * np.random.normal(size=shape)
+        b = b.astype(np.complex64)
+
+        _, vjps = mx.vjp(mx.conj, [mx.array(a)], [mx.array(b)])
+        self.assertTrue(np.array_equal(np.array(vjps[0]), b.conj()))
+
+        out_mlx, jvps = mx.jvp(mx.conj, [mx.array(a)], [mx.array(b)])
+        self.assertTrue(np.array_equal(np.array(out_mlx[0]), a.conj()))
+        self.assertTrue(np.array_equal(np.array(jvps[0]), b.conj()))
+
     def test_view(self):
         # Check scalar
         out = mx.array(1, mx.int8).view(mx.uint8).item()
@@ -3311,10 +3327,24 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.broadcast_shapes()
 
     def test_sort_nan(self):
-        x = mx.array([3.0, mx.nan, 2.0, 0.0])
-        expected = mx.array([0.0, 2.0, 3.0, mx.nan])
+        for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+            with self.subTest(dtype=dtype):
+                x = mx.array([3.0, mx.nan, 2.0, 0.0], dtype=dtype)
+                expected = mx.array([0.0, 2.0, 3.0, mx.nan], dtype=dtype)
+                self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
+
+        x = mx.array([3.0 + 1j, mx.nan + 2j, 2.0 + 1j, 0.0 + 1j])
+        expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, mx.nan + 2j])
         self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
-        x = mx.array([3.0, mx.nan, 2.0, 0.0]) + 1j * mx.array([1.0] * 4)
+
+    def test_argsort_nan(self):
+        for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+            with self.subTest(dtype=dtype):
+                x = mx.array([3.0, mx.nan, 2.0, 0.0], dtype=dtype)
+                expected = mx.array([0.0, 2.0, 3.0, mx.nan], dtype=dtype)
+                indices = mx.argsort(x)
+                sorted_x = mx.take(x, indices)
+                self.assertTrue(mx.array_equal(sorted_x, expected, equal_nan=True))
 
     def test_to_from_fp8(self):
         vals = mx.array(

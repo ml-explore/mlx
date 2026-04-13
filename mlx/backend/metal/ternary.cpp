@@ -78,7 +78,7 @@ void ternary_op_gpu_inplace(
 
   auto kernel = get_ternary_kernel(d, kernel_name, out.dtype(), op);
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(a, 0);
   compute_encoder.set_input_array(b, 1);

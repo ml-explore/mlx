@@ -12,6 +12,7 @@
 #include <nanobind/typing.h>
 
 #include "mlx/backend/metal/metal.h"
+#include "mlx/utils.h"
 #include "python/src/buffer.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
@@ -97,9 +98,6 @@ class ArrayPythonIterator {
 };
 
 void init_array(nb::module_& m) {
-  // Set Python print formatting options
-  mx::get_global_formatter().capitalize_bool = true;
-
   // Types
   nb::class_<mx::Dtype>(
       m,
@@ -296,7 +294,7 @@ void init_array(nb::module_& m) {
       nb::is_weak_referenceable())
       .def(
           "__init__",
-          [](mx::array* aptr, ArrayInitType v, std::optional<mx::Dtype> t) {
+          [](mx::array* aptr, nb::object v, std::optional<mx::Dtype> t) {
             new (aptr) mx::array(create_array(v, t));
           },
           "val"_a,
@@ -492,7 +490,7 @@ void init_array(nb::module_& m) {
                      reinterpret_cast<const size_t*>(nd.shape_ptr()),
                      owner,
                      nullptr,
-                     nb::bfloat16),
+                     nb::dtype<mx::bfloat16_t>()),
                   mx::bfloat16));
             } else {
               new (&arr) mx::array(nd_array_to_mlx(nd, std::nullopt));

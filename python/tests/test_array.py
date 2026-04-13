@@ -11,14 +11,10 @@ import weakref
 from copy import copy, deepcopy
 from itertools import permutations
 
-if platform.system() == "Windows":
-    import psutil
-else:
-    import resource
-
 import mlx.core as mx
 import mlx_tests
 import numpy as np
+import psutil
 
 try:
     import tensorflow as tf
@@ -601,6 +597,26 @@ class TestArray(mlx_tests.MLXTestCase):
         x = mx.array([1 - 1j], dtype=mx.complex64)
         expected = "array([1-1j], dtype=complex64)"
 
+    def test_array_repr_precision(self):
+        x = mx.array([1.123456789], dtype=mx.float32)
+        expected = "array([1.12346], dtype=float32)"
+        self.assertEqual(str(x), expected)
+
+        with mx.printoptions(precision=4):
+            expected = "array([1.1235], dtype=float32)"
+            self.assertEqual(str(x), expected)
+        mx.set_printoptions(precision=2)
+        expected = "array([1.12], dtype=float32)"
+        self.assertEqual(str(x), expected)
+
+        x = mx.sin(x)
+        expected = "array([0.90], dtype=float32)"
+        self.assertEqual(str(x), expected)
+
+        with mx.printoptions(precision=4):
+            expected = "array([0.9016], dtype=float32)"
+            self.assertEqual(str(x), expected)
+
     def test_array_to_list(self):
         types = [mx.bool_, mx.uint32, mx.int32, mx.int64, mx.float32]
         for t in types:
@@ -964,6 +980,11 @@ class TestArray(mlx_tests.MLXTestCase):
         a_sliced_mlx = a_mlx[-1]
         self.assertTrue(np.array_equal(a_sliced_mlx, a_npy[-1]))
 
+        # NumPy integer scalar indexing
+        a_sliced_mlx = a_mlx[np.int64(5)]
+        a_sliced_npy = np.asarray(a_sliced_mlx)
+        self.assertTrue(np.array_equal(a_sliced_npy, a_npy[np.int64(5)]))
+
         # Basic content check, empty index
         a_sliced_mlx = a_mlx[()]
         a_sliced_npy = np.asarray(a_sliced_mlx)
@@ -1125,8 +1146,11 @@ class TestArray(mlx_tests.MLXTestCase):
         a[-1] = 2
         self.assertEqual(a.tolist(), [2, 2, 2])
 
+        a[np.int64(1)] = 9
+        self.assertEqual(a.tolist(), [2, 9, 2])
+
         a[0] = mx.array([[[1]]])
-        self.assertEqual(a.tolist(), [1, 2, 2])
+        self.assertEqual(a.tolist(), [1, 9, 2])
 
         a[:] = 0
         self.assertEqual(a.tolist(), [0, 0, 0])
@@ -1423,6 +1447,106 @@ class TestArray(mlx_tests.MLXTestCase):
         src = src.at[0:1].add(update)
         self.assertTrue(mx.array_equal(src, mx.array([[2.0, 4.0]])))
 
+        # Test all array.at ops with slice-only indices
+        a = mx.random.uniform(shape=(10, 5, 2))
+        update = mx.ones((2, 5))
+        a[1:3, :, 0] = 0
+        a = a.at[1:3, :, 0].add(update)
+        self.assertEqualArray(a[1:3, :, 0], update)
+        a = a.at[1:3, :, 0].subtract(update)
+        self.assertEqualArray(a[1:3, :, 0], mx.zeros_like(update))
+        a = a.at[1:3, :, 0].add(2 * update)
+        self.assertEqualArray(a[1:3, :, 0], 2 * update)
+        a = a.at[1:3, :, 0].multiply(2 * update)
+        self.assertEqualArray(a[1:3, :, 0], 4 * update)
+        a = a.at[1:3, :, 0].divide(3 * update)
+        self.assertEqualArray(a[1:3, :, 0], (4 / 3) * update)
+        a[1:3, :, 0] = 5
+        update = mx.arange(10).reshape(2, 5)
+        a = a.at[1:3, :, 0].maximum(update)
+        self.assertEqualArray(a[1:3, :, 0], mx.maximum(a[1:3, :, 0], update))
+        a[1:3, :, 0] = 5
+        a = a.at[1:3, :, 0].minimum(update)
+        self.assertEqualArray(a[1:3, :, 0], mx.minimum(a[1:3, :, 0], update))
+
+    def test_array_at_slice_update_extensive(self):
+        # Test with transposed inputs
+        a = mx.zeros((4, 5))
+        update = mx.ones((5, 2)).T  # Shape (2, 5)
+        a = a.at[1:3, :].add(update)
+        self.assertEqualArray(a[1:3, :], update)
+
+        # Test with transposed updates on transposed slice
+        a = mx.zeros((5, 4))
+        update = mx.ones((2, 5))
+        a = a.at[:, 1:3].add(update.T)
+        self.assertEqualArray(a[:, 1:3], update.T)
+
+        # Test with slice of another array as update
+        source = mx.arange(20, dtype=mx.float32).reshape(4, 5)
+        a = mx.zeros((4, 5))
+        update = source[1:3, :]  # Shape (2, 5)
+        a = a.at[0:2, :].add(update)
+        self.assertEqualArray(a[0:2, :], source[1:3, :])
+
+        # Test with both input and update being slices
+        source = mx.arange(30, dtype=mx.float32).reshape(5, 6)
+        a = mx.zeros((5, 6))
+        a = a.at[1:4, 1:5].add(source[0:3, 0:4])
+        self.assertEqualArray(a[1:4, 1:5], source[0:3, 0:4])
+
+        # Test with transposed slice of another array
+        source = mx.arange(20, dtype=mx.float32).reshape(4, 5)
+        a = mx.zeros((5, 4))
+        update = source[1:3, :].T  # Shape (5, 2)
+        a = a.at[:, 1:3].add(update)
+        self.assertEqualArray(a[:, 1:3], update)
+
+        # Test with negative indexing in slices
+        a = mx.zeros((5, 5))
+        update = mx.ones((2, 5))
+        a = a.at[-3:-1, :].add(update)
+        self.assertEqualArray(a[-3:-1, :], update)
+
+        # Test with strided slices
+        a = mx.zeros((6, 6))
+        update = mx.ones((2, 3))
+        a = a.at[1:5:2, 0:6:2].add(update)
+        self.assertEqualArray(a[1:5:2, 0:6:2], update)
+
+        # Test with slice of transposed array
+        source = mx.arange(20, dtype=mx.float32).reshape(4, 5)
+        a = mx.zeros((5, 4))
+        update = source.T[:, 1:3]  # Shape (5, 2)
+        a = a.at[:, 1:3].add(update)
+        self.assertEqualArray(a[:, 1:3], update)
+
+        # Test with 3D arrays and transposed updates
+        a = mx.zeros((3, 4, 5))
+        update = mx.ones((4, 3, 5)).transpose(1, 0, 2)  # Shape (3, 4, 5)
+        a = a.at[:, :, :].add(update)
+        self.assertEqualArray(a, update)
+
+        # Test with slice of 3D array
+        source = mx.arange(60, dtype=mx.float32).reshape(3, 4, 5)
+        a = mx.zeros((3, 4, 5))
+        update = source[0:2, :, :]
+        a = a.at[1:3, :, :].add(update)
+        self.assertEqualArray(a[1:3, :, :], source[0:2, :, :])
+
+        # Test with mixed slice and index
+        a = mx.zeros((4, 5, 6))
+        update = mx.ones((2, 6))
+        a = a.at[1:3, 2, :].add(update)
+        self.assertEqualArray(a[1:3, 2, :], update)
+
+        # Test with update from strided slice
+        source = mx.arange(60, dtype=mx.float32).reshape(3, 4, 5)
+        a = mx.zeros((3, 2, 5))
+        update = source[:, ::2, :]  # Shape (3, 2, 5)
+        a = a.at[:, :, :].add(update)
+        self.assertEqualArray(a, update)
+
     def test_slice_negative_step(self):
         a_np = np.arange(20)
         a_mx = mx.array(a_np)
@@ -1677,6 +1801,15 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertIsNotNone(wr())
         a_np = None
         self.assertIsNone(wr())
+
+    def test_create_from_buffer(self):
+        x = mx.array(b"Hello")
+        self.assertEqual(x.dtype, mx.uint8)
+        self.assertEqual(x.tolist(), [72, 101, 108, 108, 111])
+
+        x = mx.array(bytearray([1, 2, 3]))
+        self.assertEqual(x.dtype, mx.uint8)
+        self.assertEqual(x.tolist(), [1, 2, 3])
 
     @unittest.skipIf(not has_tf, "requires TensorFlow")
     def test_buffer_protocol_tf(self):
@@ -2085,13 +2218,11 @@ class TestArray(mlx_tests.MLXTestCase):
             x = mx.sin(x)
         mx.eval(x)
 
+    @unittest.skipIf(platform.system() == "Windows", "Memory info not accurate")
     def test_siblings_without_eval(self):
         def get_mem():
-            if platform.system() == "Windows":
-                process = psutil.Process(os.getpid())
-                return process.memory_info().peak_wset
-            else:
-                return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            process = psutil.Process(os.getpid())
+            return process.memory_info().rss
 
         key = mx.array([1, 2])
 

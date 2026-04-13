@@ -192,7 +192,7 @@ void Axpby::eval_gpu(
   auto kernel = d.get_kernel(kname, lib);
 
   // Prepare to encode kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = mx::metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Kernel parameters are registered with buffer indices corresponding to

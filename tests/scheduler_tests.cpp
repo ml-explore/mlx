@@ -36,7 +36,59 @@ TEST_CASE("test stream management") {
   }
 }
 
+TEST_CASE("test default stream in threads") {
+  std::set<Stream> thread_streams;
+  std::mutex mtx;
+  std::vector<std::thread> threads;
+
+  auto all_streams = get_streams();
+  size_t num_streams = all_streams.size();
+
+  size_t num_threads = 4;
+  for (size_t i = 0; i < num_threads; ++i) {
+    threads.emplace_back([&thread_streams, &mtx]() {
+      auto s = default_stream(gpu::is_available() ? Device::gpu : Device::cpu);
+      std::lock_guard lock(mtx);
+      thread_streams.insert(s);
+    });
+  }
+
+  for (auto& t : threads) {
+    t.join();
+  }
+  CHECK_EQ(thread_streams.size(), num_threads);
+
+  all_streams = get_streams();
+  CHECK_EQ(all_streams.size() - num_streams, num_threads);
+
+  std::set new_streams(all_streams.begin() + num_streams, all_streams.end());
+  CHECK_EQ(new_streams, thread_streams);
+}
+
+TEST_CASE("test access stream in other thread") {
+  if (!gpu::is_available()) {
+    return;
+  }
+
+  auto main_thread_stream = new_stream(Device::gpu);
+  eval(arange(10, main_thread_stream));
+
+  bool error_caught = false;
+  std::thread t([&] {
+    try {
+      eval(arange(10, main_thread_stream));
+    } catch (const std::runtime_error&) {
+      error_caught = true;
+    }
+  });
+  t.join();
+
+  CHECK(error_caught);
+}
+
 TEST_CASE("test get streams") {
+  // Initialize default CPU stream before querying
+  default_stream(Device::cpu);
   auto streams = get_streams();
 
   // At least the default CPU stream exists

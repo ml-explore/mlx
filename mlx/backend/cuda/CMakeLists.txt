@@ -28,6 +28,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fft.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/gemms/block_mask.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/gemv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/grouped_gemm_unaligned.cu
@@ -118,8 +119,12 @@ target_compile_options(mlx
 target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>")
 
-# Required for generating optimized CUTLASS code.
-if(NOT MSVC)
+if(MSVC)
+  # Ignore warnings from CUTLASS.
+  target_compile_options(
+    mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=2908">)
+else()
+  # Required for generating optimized CUTLASS code.
   target_compile_options(
     mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-strict-aliasing>")
 endif()

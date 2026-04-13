@@ -58,7 +58,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   kernel_name += type_to_name(out);
 
   auto kernel = get_softmax_kernel(d, kernel_name, precise_, out);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   {
     MTL::Size grid_dims, group_dims;
     if (axis_size <= looped_limit) {

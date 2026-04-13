@@ -44,7 +44,7 @@ inline array
 ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   if (!x.flags().row_contiguous) {
     array x_copy = contiguous_copy_gpu(x, s);
-    d.add_temporary(x_copy, s.index);
+    metal::get_command_encoder(s).add_temporary(x_copy);
     return x_copy;
   } else {
     return x;
@@ -75,7 +75,7 @@ ensure_batch_contiguous(const array& x, metal::Device& d, const Stream& s) {
   }
 
   array x_copy = contiguous_copy_gpu(x, s);
-  d.add_temporary(x_copy, s.index);
+  metal::get_command_encoder(s).add_temporary(x_copy);
   return std::make_tuple(false, x_copy.strides()[x_copy.ndim() - 2], x_copy);
 }
 
@@ -254,7 +254,7 @@ void steel_matmul_regular_axpby_nax(
   std::string hash_name = kname.str();
 
   // Encode and dispatch kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = get_steel_gemm_fused_nax_kernel(
       /* metal::Device& d = */ d,
       /* const std::string& kernel_name = */ base_name,
@@ -334,7 +334,7 @@ void steel_matmul_regular_axpby_nax(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
   // Record copies
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 }
 
 template <bool CHECK_AB>
@@ -442,7 +442,7 @@ void steel_matmul_regular_axpby(
   std::string hash_name = kname.str();
 
   // Encode and dispatch kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = get_steel_gemm_fused_kernel(
       /* metal::Device& d = */ d,
       /* const std::string& kernel_name = */ base_name,
@@ -519,7 +519,7 @@ void steel_matmul_regular_axpby(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
   // Record copies
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -587,7 +587,7 @@ void steel_gemm_splitk_axpby(
         << "_K_" << (k_aligned ? "t" : "n") << "aligned"; // clang-format on
 
   // Encode and dispatch gemm kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = get_steel_gemm_splitk_kernel(
       /* metal::Device& d = */ d,
       /* const std::string& kernel_name = */ kname.str(),
@@ -676,7 +676,7 @@ void steel_gemm_splitk_axpby(
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -748,7 +748,7 @@ void steel_gemm_splitk_axpby_nax(
 
   std::string hash_name = kname.str();
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = get_steel_gemm_splitk_nax_kernel(
       /* metal::Device& d = */ d,
       /* const std::string& kernel_name = */ base_name,
@@ -848,7 +848,7 @@ void steel_gemm_splitk_axpby_nax(
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1131,7 +1131,7 @@ void gemv_axbpy(
         << "_axpby" << do_axpby; // clang-format on
 
   // Encode and dispatch kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -1166,7 +1166,7 @@ void gemv_axbpy(
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 }
 
 inline void gemv(
@@ -1219,6 +1219,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   auto& s = stream();
   auto& d = metal::device(s.device);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
@@ -1226,7 +1227,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (a_pre.size() == 0 || b_pre.size() == 0) {
     array zero = array(0, a_pre.dtype());
     fill_gpu(zero, out, s);
-    d.add_temporary(std::move(zero), s.index);
+    compute_encoder.add_temporary(std::move(zero));
     return;
   }
 
@@ -1331,6 +1332,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto& s = stream();
   auto& d = metal::device(s.device);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   // Handle empty matrix case (K=0)
   if (inputs[0].shape(-1) == 0) {
@@ -1344,7 +1346,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     } else {
       array beta_scalar = array(beta_, c.dtype());
       binary_op_gpu({c, beta_scalar}, out, "Multiply", s);
-      d.add_temporary(std::move(beta_scalar), s.index);
+      compute_encoder.add_temporary(std::move(beta_scalar));
     }
     return;
   }
@@ -1464,6 +1466,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   auto& s = stream();
   auto& d = metal::device(s.device);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
@@ -1471,7 +1474,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (a_pre.size() == 0 || b_pre.size() == 0) {
     array zero = array(0, a_pre.dtype());
     fill_gpu(zero, out, s);
-    d.add_temporary(std::move(zero), s.index);
+    compute_encoder.add_temporary(std::move(zero));
     return;
   }
 
@@ -1642,7 +1645,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         tn,
         contiguous_kernel);
 
-    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = metal::get_command_encoder(s);
     compute_encoder.set_compute_pipeline_state(kernel);
 
     int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
@@ -1724,7 +1727,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
-    d.add_temporaries(std::move(copies), s.index);
+    compute_encoder.add_temporaries(std::move(copies));
     return;
   }
 
@@ -1747,7 +1750,6 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         << "_K_" << (k_aligned ? "t" : "n") << "aligned";
 
   // Encode and dispatch kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = get_steel_gemm_masked_kernel(
       d,
       kname.str(),
@@ -1834,7 +1836,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1925,7 +1927,7 @@ void gather_mm_rhs(
       align_K ? 't' : 'n');
 
   // Get and set the kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = get_steel_gemm_gather_kernel(
       d,
       base_name,
@@ -2068,7 +2070,7 @@ void gather_mm_rhs_nax(
       align_K ? 't' : 'n');
 
   // Get and set the kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = get_steel_gemm_gather_nax_kernel(
       d,
       base_name,
@@ -2128,12 +2130,14 @@ void gather_mv(
     bool is_mv,
     metal::Device& d,
     const Stream& s) {
+  auto& compute_encoder = metal::get_command_encoder(s);
+
   // Copy if needed
   std::vector<array> copies;
   auto [transpose_mat, mat_cols, mat] =
       check_transpose(copies, s, mat_, N == 1);
   auto [transpose_vec, vec_cols, vec] = check_transpose(copies, s, vec_, true);
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 
   // If we are doing vector matrix instead of matrix vector we need to flip the
   // matrix transposition. Basically m @ v = v @ m.T assuming that v is treated
@@ -2200,7 +2204,6 @@ void gather_mv(
         << tm << "_tn" << tn;
 
   // Encode and dispatch kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -2245,11 +2248,13 @@ void gather_mm(
     int K,
     metal::Device& d,
     const Stream& s) {
+  auto& compute_encoder = metal::get_command_encoder(s);
+
   // Copy if needed
   std::vector<array> copies;
   auto [transpose_a, lda, a] = check_transpose(copies, s, a_, false);
   auto [transpose_b, ldb, b] = check_transpose(copies, s, b_, false);
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 
   // Determine dispatch kernel
   int bm = 64, bn = 64, bk = 16;
@@ -2313,7 +2318,6 @@ void gather_mm(
       align_K ? 't' : 'n');
 
   // Get and set the kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = get_steel_gemm_gather_kernel(
       d,
       base_name,
@@ -2375,6 +2379,7 @@ void gather_mm(
 void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -2385,7 +2390,7 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (a.size() == 0 || b.size() == 0) {
     array zero = array(0, a.dtype());
     fill_gpu(zero, out, s);
-    d.add_temporary(std::move(zero), s.index);
+    compute_encoder.add_temporary(std::move(zero));
     return;
   }
 
@@ -2431,7 +2436,9 @@ void segmented_mm(
     int K,
     metal::Device& d,
     const Stream& s) {
-  auto check_segments_layout = [&d, &s](const array& x) {
+  auto& compute_encoder = metal::get_command_encoder(s);
+
+  auto check_segments_layout = [&](const array& x) {
     // Contiguous so return early
     if (x.flags().row_contiguous) {
       return std::make_tuple(true, x);
@@ -2452,7 +2459,7 @@ void segmented_mm(
     }
 
     array x_copy = contiguous_copy_gpu(x, s);
-    d.add_temporary(x_copy, s.index);
+    compute_encoder.add_temporary(x_copy);
     return std::make_tuple(true, x_copy);
   };
 
@@ -2461,7 +2468,7 @@ void segmented_mm(
   auto [transpose_a, lda, a] = check_transpose(copies, s, a_, false);
   auto [transpose_b, ldb, b] = check_transpose(copies, s, b_, false);
   auto [segments_contiguous, segments] = check_segments_layout(segments_);
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 
   // Determine dispatch kernel
   int bm = 64, bn = 64, bk = 16;
@@ -2517,7 +2524,6 @@ void segmented_mm(
       align_N ? 't' : 'n');
 
   // Get and set the kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = get_steel_gemm_segmented_kernel(
       d,
       base_name,

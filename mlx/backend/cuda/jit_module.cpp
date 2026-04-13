@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <shared_mutex>
 
 #include <fmt/format.h>
 #include <nvrtc.h>
@@ -24,6 +25,25 @@ void check_nvrtc_error(const char* name, nvrtcResult err) {
     throw std::runtime_error(
         fmt::format("{} failed: {}", name, nvrtcGetErrorString(err)));
   }
+}
+
+// Return the default path to CUDA toolkit.
+const std::filesystem::path& default_cuda_toolkit_path() {
+#if defined(_WIN32)
+  static auto cached_path = []() -> std::filesystem::path {
+    std::filesystem::path root(
+        LR"(C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA)");
+    for (auto& file : std::filesystem::directory_iterator(root)) {
+      if (std::filesystem::exists(file.path() / "include" / "cuda.h")) {
+        return file.path();
+      }
+    }
+    return {};
+  }();
+#else
+  static std::filesystem::path cached_path = "/usr/local/cuda";
+#endif
+  return cached_path;
 }
 
 // Return the --include-path args used for invoking NVRTC.
@@ -47,26 +67,22 @@ const std::vector<std::string>& include_path_args() {
     // Add path to CUDA runtime headers, try local-installed python package
     // first and then system-installed headers.
     path = root_dir.parent_path() / "nvidia" / "cuda_runtime" / "include";
-    if (std::filesystem::exists(path)) {
-      args.push_back(fmt::format("--include-path={}", path.string()));
-    } else {
+    if (!std::filesystem::exists(path)) {
       const char* home = std::getenv("CUDA_HOME");
       if (!home) {
         home = std::getenv("CUDA_PATH");
       }
-#if defined(__linux__)
-      if (!home) {
-        home = "/usr/local/cuda";
+      path = home ? std::filesystem::path(home) : default_cuda_toolkit_path();
+      if (!path.empty()) {
+        path = path / "include";
       }
-#endif
-      if (home && std::filesystem::exists(home)) {
-        args.push_back(fmt::format("--include-path={}/include", home));
-      } else {
+      if (path.empty() || !std::filesystem::exists(path)) {
         throw std::runtime_error(
             "Can not find locations of CUDA headers, please set environment "
             "variable CUDA_HOME or CUDA_PATH.");
       }
     }
+    args.push_back(fmt::format("--include-path={}", path.string()));
     return args;
   }();
   return cached_args;
@@ -424,20 +440,28 @@ CUfunction JitModule::get_kernel(
   return get_kernel_and_dims(kernel_name, std::move(configure_kernel)).first;
 }
 
-std::unordered_map<std::string, JitModule>& get_jit_module_cache() {
-  static std::unordered_map<std::string, JitModule> map;
-  return map;
-}
-
 JitModule& get_jit_module(
     const mlx::core::Device& device,
     const std::string& name,
     const KernelBuilder& builder,
-    bool cache) {
-  auto& map = get_jit_module_cache();
-  auto it = map.find(name);
-  if (it == map.end()) {
-    it = map.try_emplace(name, cu::device(device), name, builder, cache).first;
+    bool use_disk_cache) {
+  // The cache are leak intentionally as user code may still be running JIT
+  // compiled code after main thread teardown.
+  static auto* cache = new std::unordered_map<std::string, JitModule>;
+  static auto* mtx = new std::shared_mutex;
+
+  {
+    std::shared_lock rlock(*mtx);
+    if (auto it = cache->find(name); it != cache->end()) {
+      return it->second;
+    }
+  }
+
+  std::unique_lock wlock(*mtx);
+  auto it = cache->find(name);
+  if (it == cache->end()) {
+    auto& d = cu::device(device);
+    it = cache->try_emplace(name, d, name, builder, use_disk_cache).first;
   }
   return it->second;
 }

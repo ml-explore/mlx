@@ -31,9 +31,9 @@ void Event::wait(Stream stream) {
   if (stream.device == Device::cpu) {
     scheduler::enqueue(stream, [*this]() mutable { wait(); });
   } else {
-    auto& d = metal::device(stream.device);
-    d.end_encoding(stream.index);
-    auto command_buffer = d.get_command_buffer(stream.index);
+    auto& encoder = metal::get_command_encoder(stream);
+    encoder.end_encoding();
+    auto* command_buffer = encoder.get_command_buffer();
     command_buffer->encodeWait(static_cast<MTL::Event*>(event_.get()), value());
     command_buffer->addCompletedHandler([*this](MTL::CommandBuffer*) {});
   }
@@ -45,9 +45,9 @@ void Event::signal(Stream stream) {
       static_cast<MTL::SharedEvent*>(event_.get())->setSignaledValue(value());
     });
   } else {
-    auto& d = metal::device(stream.device);
-    d.end_encoding(stream.index);
-    auto command_buffer = d.get_command_buffer(stream.index);
+    auto& encoder = metal::get_command_encoder(stream);
+    encoder.end_encoding();
+    auto* command_buffer = encoder.get_command_buffer();
     command_buffer->encodeSignalEvent(
         static_cast<MTL::Event*>(event_.get()), value());
     command_buffer->addCompletedHandler([*this](MTL::CommandBuffer*) {});

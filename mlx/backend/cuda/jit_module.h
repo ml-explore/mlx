@@ -91,11 +91,12 @@ class JitModule {
       Device& device,
       const std::string& module_name,
       const KernelBuilder& builder,
-      bool cache);
+      bool use_disk_cache);
   ~JitModule();
 
   JitModule(const JitModule&) = delete;
   JitModule& operator=(const JitModule&) = delete;
+
   CUfunction get_kernel(
       const std::string& kernel_name,
       std::function<void(CUfunction)> configure_kernel = nullptr);
@@ -108,8 +109,6 @@ class JitModule {
   std::unordered_map<std::string, std::tuple<CUfunction, bool, uint32_t>>
       kernels_;
 };
-
-std::unordered_map<std::string, JitModule>& get_jit_module_cache();
 
 JitModule& get_jit_module(
     const mlx::core::Device& device,

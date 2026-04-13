@@ -176,7 +176,7 @@ endif()
 
 add_custom_command(
   OUTPUT ${MLX_METAL_PATH}/mlx.metallib
-  COMMAND xcrun -sdk macosx metallib ${KERNEL_AIR} -o
+  COMMAND xcrun -sdk macosx metal ${KERNEL_AIR} -o
           ${MLX_METAL_PATH}/mlx.metallib
   DEPENDS ${KERNEL_AIR}
   COMMENT "Building mlx.metallib"

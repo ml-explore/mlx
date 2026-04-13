@@ -36,6 +36,7 @@ void qmm_sm90(
     int64_t n,
     int64_t k,
     int64_t l,
+    bool broadcast_b,
     GroupSize group_size,
     F&& launch_kernel) {
   constexpr int kAlignmentA = 128 / sizeof_bits<Element>::value;
@@ -93,6 +94,10 @@ void qmm_sm90(
   auto dB = make_stride(k, Int<1>{}, n * k);
   auto dS = make_stride(Int<1>{}, n, n * k / group_size);
   auto dD = make_stride(Int<1>{}, n, m * n);
+  if (broadcast_b) {
+    get<2>(dB) = 0;
+    get<2>(dS) = 0;
+  }
 
   Gemm gemm;
   typename Gemm::Arguments args{
@@ -184,10 +189,11 @@ void qmm_impl_sm90(
     cu::CommandEncoder& encoder,
     Stream s) {
   const char* tag = "[quantized_matmul]";
-  int m = out.shape(-2);
+  int m = out.ndim() > 1 ? out.shape(-2) : 1;
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);
+  bool broadcast_b = w.ndim() == 2;
 
   // FIXME: Copy happens for every call.
   array scales = transpose_last_2_dims(scales_, encoder, s);
@@ -211,6 +217,7 @@ void qmm_impl_sm90(
             n,
             k,
             l,
+            broadcast_b,
             group_size,
             [&](auto* kernel,
                 dim3 num_blocks,

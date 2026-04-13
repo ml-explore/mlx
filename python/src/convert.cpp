@@ -14,17 +14,6 @@ enum PyScalarT {
   pycomplex = 3,
 };
 
-namespace nanobind {
-template <>
-struct ndarray_traits<mx::float16_t> {
-  static constexpr bool is_complex = false;
-  static constexpr bool is_float = true;
-  static constexpr bool is_bool = false;
-  static constexpr bool is_int = false;
-  static constexpr bool is_signed = true;
-};
-}; // namespace nanobind
-
 int check_shape_dim(int64_t dim) {
   if (dim > std::numeric_limits<int>::max()) {
     throw std::invalid_argument(
@@ -46,14 +35,15 @@ mx::array nd_array_to_mlx_contiguous(
 
 mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
-    std::optional<mx::Dtype> dtype) {
+    std::optional<mx::Dtype> dtype,
+    std::optional<nb::dlpack::dtype> nb_dtype) {
   // Compute the shape and size
   mx::Shape shape;
   shape.reserve(nd_array.ndim());
   for (int i = 0; i < nd_array.ndim(); i++) {
     shape.push_back(check_shape_dim(nd_array.shape(i)));
   }
-  auto type = nd_array.dtype();
+  auto type = nb_dtype.value_or(nd_array.dtype());
 
   // Copy data and make array
   if (type == nb::dtype<bool>()) {
@@ -86,7 +76,7 @@ mx::array nd_array_to_mlx(
   } else if (type == nb::dtype<mx::float16_t>()) {
     return nd_array_to_mlx_contiguous<mx::float16_t>(
         nd_array, shape, dtype.value_or(mx::float16));
-  } else if (type == nb::bfloat16) {
+  } else if (type == nb::dtype<mx::bfloat16_t>()) {
     return nd_array_to_mlx_contiguous<mx::bfloat16_t>(
         nd_array, shape, dtype.value_or(mx::bfloat16));
   } else if (type == nb::dtype<float>()) {
@@ -454,7 +444,7 @@ mx::array array_from_list_impl(T pl, std::optional<mx::Dtype> dtype) {
   // `pl` contains mlx arrays
   std::vector<mx::array> arrays;
   for (auto l : pl) {
-    arrays.push_back(create_array(nb::cast<ArrayInitType>(l), dtype));
+    arrays.push_back(create_array(nb::cast<nb::object>(l), dtype));
   }
   return mx::stack(arrays);
 }
@@ -467,38 +457,49 @@ mx::array array_from_list(nb::tuple pl, std::optional<mx::Dtype> dtype) {
   return array_from_list_impl(pl, dtype);
 }
 
-mx::array create_array(ArrayInitType v, std::optional<mx::Dtype> t) {
-  if (auto pv = std::get_if<nb::bool_>(&v); pv) {
-    return mx::array(nb::cast<bool>(*pv), t.value_or(mx::bool_));
-  } else if (auto pv = std::get_if<nb::int_>(&v); pv) {
-    auto val = nb::cast<int64_t>(*pv);
+mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
+  if (nb::isinstance<nb::bool_>(v)) {
+    return mx::array(nb::cast<bool>(v), t.value_or(mx::bool_));
+  } else if (nb::isinstance<nb::int_>(v)) {
+    auto val = nb::cast<int64_t>(v);
     auto default_type = (val > std::numeric_limits<int>::max() ||
                          val < std::numeric_limits<int>::min())
         ? mx::int64
         : mx::int32;
     return mx::array(val, t.value_or(default_type));
-  } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
+  } else if (nb::isinstance<nb::float_>(v)) {
     auto out_type = t.value_or(mx::float32);
     if (out_type == mx::float64) {
-      return mx::array(nb::cast<double>(*pv), out_type);
+      return mx::array(nb::cast<double>(v), out_type);
     } else {
-      return mx::array(nb::cast<float>(*pv), out_type);
+      return mx::array(nb::cast<float>(v), out_type);
     }
-  } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
+  } else if (PyComplex_Check(v.ptr())) {
     return mx::array(
-        static_cast<mx::complex64_t>(*pv), t.value_or(mx::complex64));
-  } else if (auto pv = std::get_if<nb::list>(&v); pv) {
-    return array_from_list(*pv, t);
-  } else if (auto pv = std::get_if<nb::tuple>(&v); pv) {
-    return array_from_list(*pv, t);
-  } else if (auto pv = std::get_if<
-                 nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>>(&v);
-             pv) {
-    return nd_array_to_mlx(*pv, t);
-  } else if (auto pv = std::get_if<mx::array>(&v); pv) {
-    return mx::astype(*pv, t.value_or((*pv).dtype()));
+        static_cast<mx::complex64_t>(nb::cast<std::complex<float>>(v)),
+        t.value_or(mx::complex64));
+  } else if (nb::isinstance<nb::list>(v)) {
+    return array_from_list(nb::cast<nb::list>(v), t);
+  } else if (nb::isinstance<nb::tuple>(v)) {
+    return array_from_list(nb::cast<nb::tuple>(v), t);
+  } else if (nb::isinstance<mx::array>(v)) {
+    auto arr = nb::cast<mx::array>(v);
+    return mx::astype(arr, t.value_or(arr.dtype()));
+  } else if (nb::ndarray_check(v)) {
+    using ContigArray = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
+    ContigArray nd;
+    std::optional<nb::dlpack::dtype> nb_dtype;
+    // Nanobind does not recognize bfloat16 numpy array:
+    // https://github.com/wjakob/nanobind/discussions/560
+    if (nb::hasattr(v, "dtype") && v.attr("dtype").equal(nb::str("bfloat16"))) {
+      nd = nb::cast<ContigArray>(v.attr("view")("uint16"));
+      nb_dtype = nb::dtype<mx::bfloat16_t>();
+    } else {
+      nd = nb::cast<ContigArray>(v);
+    }
+    return nd_array_to_mlx(nd, t, nb_dtype);
   } else {
-    auto arr = to_array_with_accessor(std::get<ArrayLike>(v).obj);
+    auto arr = to_array_with_accessor(v);
     return mx::astype(arr, t.value_or(arr.dtype()));
   }
 }

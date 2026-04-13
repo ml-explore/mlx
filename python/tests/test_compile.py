@@ -884,6 +884,34 @@ class TestCompile(mlx_tests.MLXTestCase):
         fun = mx.compile(lambda a, b: a @ b, shapeless=True)
         self.assertTrue(mx.allclose(fun(a, b), a @ b))
 
+    def test_shapeless_compile_addmm(self):
+        def fun(c, a, b):
+            return mx.addmm(c, a, b)
+
+        cfun = mx.compile(fun, shapeless=True)
+
+        # First shape
+        c = mx.ones((2, 4))
+        a = mx.ones((2, 3))
+        b = mx.ones((3, 4))
+        self.assertTrue(mx.allclose(cfun(c, a, b), fun(c, a, b)))
+
+        # Different shape, same ranks — should not recompile
+        c = mx.ones((3, 5))
+        a = mx.ones((3, 6))
+        b = mx.ones((6, 5))
+        self.assertTrue(mx.allclose(cfun(c, a, b), fun(c, a, b)))
+
+        # With alpha and beta
+        fun2 = mx.compile(
+            lambda c, a, b: mx.addmm(c, a, b, alpha=2.0, beta=3.0), shapeless=True
+        )
+        c = mx.ones((2, 4))
+        a = mx.ones((2, 3))
+        b = mx.ones((3, 4))
+        expected = 3.0 * c + 2.0 * (a @ b)
+        self.assertTrue(mx.allclose(fun2(c, a, b), expected))
+
     def test_shapeless_compile_slice_update(self):
         def fun(x):
             x[2] = mx.array([3.0])

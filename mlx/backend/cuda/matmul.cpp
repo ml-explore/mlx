@@ -2,6 +2,7 @@
 
 #include "mlx/backend/common/matmul.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/gemms/block_mask.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
 #include "mlx/backend/cuda/gemms/gemv.h"
 #include "mlx/backend/cuda/gemms/grouped_gemm.h"
@@ -201,6 +202,82 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   gemm_and_bias(
       encoder, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b);
+}
+
+void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("BlockMaskedMM::eval_gpu");
+  if (!issubdtype(out.dtype(), floating)) {
+    throw std::runtime_error(
+        "[BlockMaskedMM] Does not yet support non-floating point types.");
+  }
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
+
+  // Return 0s if either input is empty.
+  if (a_pre.size() == 0 || b_pre.size() == 0) {
+    array zero(0, a_pre.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
+
+  int M = a_pre.shape(-2);
+  int N = b_pre.shape(-1);
+  int K = a_pre.shape(-1);
+
+  if (M == 0 || N == 0) {
+    return;
+  }
+  if (K == 0) {
+    array zero(0, a_pre.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  bool has_op_mask = inputs.size() > 3;
+  bool has_out_mask = inputs.size() == 3 || inputs.size() == 5;
+
+  int64_t batch_count = out.size() / (int64_t(M) * N);
+
+  bool a_transposed;
+  int64_t lda;
+  array a = a_pre;
+  bool b_transposed;
+  int64_t ldb;
+  array b = b_pre;
+
+  if (has_op_mask) {
+    // Fused copy + mask in a single pass per matrix.
+    auto& lhs_mask = inputs[inputs.size() - 2];
+    auto& rhs_mask = inputs[inputs.size() - 1];
+    a = copy_with_block_mask(
+        encoder, a_pre, lhs_mask, block_size_, M, K, batch_count);
+    b = copy_with_block_mask(
+        encoder, b_pre, rhs_mask, block_size_, K, N, batch_count);
+    a_transposed = false;
+    lda = K;
+    b_transposed = false;
+    ldb = N;
+  } else {
+    std::tie(a_transposed, lda, a) = check_transpose(encoder, s, a_pre);
+    std::tie(b_transposed, ldb, b) = check_transpose(encoder, s, b_pre);
+  }
+
+  // Run GEMM.
+  gemm_and_bias(
+      encoder, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b);
+
+  // Apply output mask.
+  if (has_out_mask) {
+    auto& out_mask = inputs[2];
+    apply_block_mask(encoder, out, out_mask, block_size_, M, N, batch_count);
+  }
 }
 
 void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {

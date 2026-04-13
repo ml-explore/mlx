@@ -69,18 +69,16 @@ void Fence::wait(Stream stream, const array& x) {
   }
 
   auto& d = metal::device(stream.device);
-  auto idx = stream.index;
+  auto& compute_encoder = metal::get_command_encoder(stream);
 
   if (!f.use_fast) {
-    d.end_encoding(idx);
-    auto command_buffer = d.get_command_buffer(idx);
+    compute_encoder.end_encoding();
+    auto* command_buffer = compute_encoder.get_command_buffer();
     command_buffer->encodeWait(static_cast<MTL::Event*>(f.fence), f.count);
     command_buffer->addCompletedHandler(
         [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
     return;
   }
-
-  auto& compute_encoder = d.get_command_encoder(idx);
 
   // Register outputs to ensure that no kernels which depends on the
   // output starts before this one is done
@@ -95,7 +93,7 @@ void Fence::wait(Stream stream, const array& x) {
   compute_encoder.set_bytes(f.count, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
-  d.get_command_buffer(idx)->addCompletedHandler(
+  compute_encoder.get_command_buffer()->addCompletedHandler(
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
 }
 
@@ -117,10 +115,11 @@ void Fence::update(Stream stream, const array& x, bool cross_device) {
   }
 
   auto& d = metal::device(stream.device);
-  auto idx = stream.index;
+  auto& compute_encoder = metal::get_command_encoder(stream);
+
   if (!f.use_fast) {
-    d.end_encoding(idx);
-    auto command_buffer = d.get_command_buffer(idx);
+    compute_encoder.end_encoding();
+    auto* command_buffer = compute_encoder.get_command_buffer();
     command_buffer->encodeSignalEvent(
         static_cast<MTL::Event*>(f.fence), f.count);
     command_buffer->addCompletedHandler(
@@ -129,7 +128,6 @@ void Fence::update(Stream stream, const array& x, bool cross_device) {
   }
 
   // Launch input visibility kernels
-  auto& compute_encoder = d.get_command_encoder(idx);
   if (cross_device) {
     auto kernel = d.get_kernel("input_coherent");
     uint32_t nthreads = (x.data_size() * x.itemsize() + sizeof(uint32_t) - 1) /
@@ -155,7 +153,7 @@ void Fence::update(Stream stream, const array& x, bool cross_device) {
   compute_encoder.set_bytes(f.count, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
-  d.get_command_buffer(idx)->addCompletedHandler(
+  compute_encoder.get_command_buffer()->addCompletedHandler(
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
 }
 

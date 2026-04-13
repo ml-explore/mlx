@@ -57,7 +57,7 @@ void unary_op_gpu_inplace(
   auto kernel = get_unary_kernel(d, kernel_name, in.dtype(), out.dtype(), op);
 
   auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);

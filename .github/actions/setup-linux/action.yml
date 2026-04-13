@@ -54,6 +54,12 @@ runs:
         echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
         echo "::endgroup::"
 
+    - name: Set swap space
+      if: ${{ startsWith(inputs.toolkit, 'cuda') && runner.arch == 'arm64' }}
+      uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
+      with:
+        swap-size-gb: 16
+
     - name: Install CUDA toolkit
       if: ${{ startsWith(inputs.toolkit, 'cuda') }}
       shell: bash

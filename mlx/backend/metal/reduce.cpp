@@ -358,7 +358,7 @@ void all_reduce_dispatch(
     // Allocate an intermediate tensor to hold results if needed
     array intermediate({n_rows}, out_type, nullptr, {});
     intermediate.set_data(allocator::malloc(intermediate.nbytes()));
-    d.add_temporary(intermediate, s.index);
+    compute_encoder.add_temporary(intermediate);
 
     // 1st pass
     size_t row_size = (in_size + n_rows - 1) / n_rows;
@@ -652,7 +652,7 @@ void strided_reduce_longcolumn(
       intermediate_shape.end(), out.shape().begin(), out.shape().end());
   array intermediate(std::move(intermediate_shape), out_type, nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
-  d.add_temporary(intermediate, s.index);
+  compute_encoder.add_temporary(intermediate);
 
   // Prepare the arguments for the kernel
   args.reduce_shape.push_back(args.reduction_size);
@@ -823,7 +823,7 @@ void strided_reduce_2pass(
       intermediate_shape.end(), out.shape().begin(), out.shape().end());
   array intermediate(std::move(intermediate_shape), out_type, nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
-  d.add_temporary(intermediate, s.index);
+  compute_encoder.add_temporary(intermediate);
 
   // Prepare the arguments for the kernel
   args.reduce_shape.push_back(args.reduction_size);
@@ -986,7 +986,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Initialize output
   auto& s = stream();
   auto& d = metal::device(s.device);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   // Reduce
   if (in.size() > 0) {
@@ -1000,7 +1000,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     //       stride.
     if (plan.type == GeneralReduce) {
       array in_copy = contiguous_copy_gpu(in, s);
-      d.add_temporary(in_copy, s.index);
+      compute_encoder.add_temporary(in_copy);
       in = in_copy;
       plan = get_reduction_plan(in, axes_);
     }

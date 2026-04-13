@@ -116,6 +116,39 @@ struct ContiguousIterator {
     loc += strides_[i];
   }
 
+  void step(int64_t s) {
+    int dims = shape_.size();
+    if (dims == 0) {
+      return;
+    }
+    int i = dims - 1;
+    while (s > 0) {
+      if (shape_[i] - pos_[i] > 1) {
+        int steps = static_cast<int>(
+            std::min(static_cast<int64_t>(shape_[i] - pos_[i] - 1), s));
+        pos_[i] += steps;
+        loc += strides_[i] * steps;
+        s -= steps;
+      } else {
+        while (pos_[i] == (shape_[i] - 1) && i > 0) {
+          pos_[i] = 0;
+          loc -= (shape_[i] - 1) * strides_[i];
+          i--;
+        }
+        pos_[i]++;
+        loc += strides_[i];
+        s--;
+      }
+    }
+  }
+
+  int64_t contiguous_suffix() {
+    if (shape_.size() == 0) {
+      return 0;
+    }
+    return (strides_.back() == 1) ? shape_.back() : 0;
+  }
+
   void seek(int64_t n) {
     loc = 0;
     for (int i = shape_.size() - 1; i >= 0; --i) {

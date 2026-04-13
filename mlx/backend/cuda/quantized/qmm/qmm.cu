@@ -1,5 +1,6 @@
 // Copyright © 2026 Apple Inc.
 
+#include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
 
 #include <cute/tensor.hpp>
@@ -79,7 +80,7 @@ void qmm_sm90(
     qmm_impl_sm90<TileShapeMN, ClusterShape>(
         x, w, scales, biases, out, bits, group_size, encoder, s);
   };
-  int m = out.shape(-2);
+  int m = out.ndim() > 1 ? out.shape(-2) : 1;
   if (m <= 16) {
     dispatch.template operator()<128, 16, 1>();
   } else if (m <= 32) {
@@ -95,6 +96,146 @@ void qmm_sm90(
   throw std::runtime_error(
       "[quantized_matmul] Hopper-only kernel is not available.");
 #endif // defined(MLX_CUDA_SM90A_ENABLED)
+}
+
+// Defined in qmm_impl_sm80_xxx.cu files.
+template <int TileM>
+void qmm_impl_sm80(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder);
+
+bool supports_qmm_sm80(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device) {
+  if (device.compute_capability_major() < 8) {
+    return false;
+  }
+  int n = out.shape(-1);
+  int k = x.shape(-1);
+  if ((n % 128 != 0) || (k % std::max(64, group_size) != 0)) {
+    return false;
+  }
+  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
+      !scales.flags().row_contiguous) {
+    return false;
+  }
+  if (biases && !biases->flags().row_contiguous) {
+    return false;
+  }
+  if (x.dtype() != float16 && x.dtype() != bfloat16) {
+    return false;
+  }
+  if (!transpose) {
+    return false;
+  }
+  if (bits != 4 && bits != 8) {
+    return false;
+  }
+  return true;
+}
+
+void qmm_sm80(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder) {
+  auto dispatch = [&]<int TileM>() {
+    qmm_impl_sm80<TileM>(
+        x, w, scales, biases, out, bits, group_size, mode, encoder);
+  };
+  int m = out.ndim() > 1 ? out.shape(-2) : 1;
+  if (m <= 16) {
+    dispatch.template operator()<16>();
+  } else if (m <= 32) {
+    dispatch.template operator()<32>();
+  } else {
+    dispatch.template operator()<64>();
+  }
+}
+
+// Defined in qmm_impl_naive_xxx.cu files.
+template <int TileM, bool KMajor>
+void qmm_impl_naive(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder);
+
+bool supports_qmm_naive(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device) {
+  int k = x.shape(-1);
+  if (k % std::max(64, group_size) != 0) {
+    return false;
+  }
+  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
+      !scales.flags().row_contiguous) {
+    return false;
+  }
+  if (biases && !biases->flags().row_contiguous) {
+    return false;
+  }
+  return true;
+}
+
+void qmm_naive(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder) {
+  auto dispatch = [&]<int TileM, bool KMajor>() {
+    qmm_impl_naive<TileM, KMajor>(
+        x, w, scales, biases, out, bits, group_size, mode, encoder);
+  };
+  dispatch_bool(transpose, [&](auto k_major) {
+    int m = out.ndim() > 1 ? out.shape(-2) : 1;
+    if (m <= 16) {
+      dispatch.template operator()<16, k_major.value>();
+    } else if (m <= 32) {
+      dispatch.template operator()<32, k_major.value>();
+    } else {
+      dispatch.template operator()<64, k_major.value>();
+    }
+  });
 }
 
 bool supports_fp_qmv(

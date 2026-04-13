@@ -18,41 +18,48 @@ using namespace nb::literals;
 
 class PyKeySequence {
  public:
-  explicit PyKeySequence(uint64_t seed) {
-    state_.append(mx::random::key(seed));
+  ~PyKeySequence() {
+    if (state_.has_value()) {
+      nb::gil_scoped_acquire gil;
+      state_.reset();
+    }
+  }
+
+  void reset() {
+    state_.reset();
   }
 
   void seed(uint64_t seed) {
-    state_[0] = mx::random::key(seed);
+    state()[0] = mx::random::key(seed);
   }
 
   mx::array next() {
-    auto out = mx::random::split(nb::cast<mx::array>(state_[0]));
-    state_[0] = out.first;
+    auto out = mx::random::split(nb::cast<mx::array>(state()[0]));
+    state()[0] = out.first;
     return out.second;
   }
 
-  nb::list state() {
-    return state_;
-  }
-
-  void release() {
-    nb::gil_scoped_acquire gil;
-    state_.release().dec_ref();
+  nb::list& state() {
+    if (!state_) {
+      static auto time_seed = []() {
+        auto now = std::chrono::system_clock::now();
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+                   now.time_since_epoch())
+            .count();
+      }();
+      state_ = nb::list();
+      state_->append(mx::random::key(time_seed));
+    }
+    return *state_;
   }
 
  private:
-  nb::list state_;
+  std::optional<nb::list> state_;
 };
 
 PyKeySequence& default_key() {
-  auto get_current_time_seed = []() {
-    auto now = std::chrono::system_clock::now();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-               now.time_since_epoch())
-        .count();
-  };
-  static PyKeySequence ks(get_current_time_seed());
+  // Each thread has its own random key to avoid race condition.
+  static thread_local PyKeySequence ks;
   return ks;
 }
 
@@ -61,7 +68,16 @@ void init_random(nb::module_& parent_module) {
       "random",
       "mlx.core.random: functionality related to random number generation");
 
-  m.attr("state") = default_key().state();
+  m.def("__getattr__", [&](nb::handle key) -> nb::object {
+    // Create random.state lazily to avoid initializing device during import.
+    if (nb::isinstance<nb::str>(key) && nb::cast<std::string>(key) == "state") {
+      return default_key().state();
+    }
+    return nb::steal(PyErr_Format(
+        PyExc_AttributeError,
+        "Module 'random' has no attribute %R",
+        key.ptr()));
+  });
   m.def(
       "seed",
       [](uint64_t seed) { default_key().seed(seed); },
@@ -510,7 +526,10 @@ void init_random(nb::module_& parent_module) {
             array:
               The generated random permutation or randomly permuted input array.
       )pbdoc");
-  // Register static Python object cleanup before the interpreter exits
+
+  // Ensure the main thread cleanup will happen before the interpreter goes
+  // away. As a result if the other threads join the main thread we should have
+  // a clean tear-down.
   auto atexit = nb::module_::import_("atexit");
-  atexit.attr("register")(nb::cpp_function([]() { default_key().release(); }));
+  atexit.attr("register")(nb::cpp_function([]() { default_key().reset(); }));
 }

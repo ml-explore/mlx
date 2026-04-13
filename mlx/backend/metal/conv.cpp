@@ -26,7 +26,7 @@ ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
     return x;
   }
   auto result = contiguous_copy_gpu(x, s);
-  d.add_temporary(result, s.index);
+  metal::get_command_encoder(s).add_temporary(result);
   return result;
 }
 
@@ -52,7 +52,7 @@ void explicit_gemm_conv_ND_gpu(
   std::string kname;
   kname.reserve(32);
   concatenate(kname, "naive_unfold_nd_", type_to_name(in_unfolded), "_", N);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kname);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -132,7 +132,7 @@ void explicit_gemm_conv_group_ND_gpu(
   kname.reserve(32);
   concatenate(
       kname, "naive_unfold_transpose_nd_", type_to_name(in_unfolded), "_", N);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kname);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -286,7 +286,7 @@ void implicit_gemm_conv_2D_gpu(
       small_filter ? 's' : 'l');
 
   // Encode and dispatch kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = get_steel_conv_kernel(
       d,
       kname,
@@ -469,7 +469,7 @@ void implicit_gemm_conv_2D_general_gpu(
   };
 
   // Encode and dispatch kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = get_steel_conv_general_kernel(
       d, kname, hash_name, func_consts, out, bm, bn, bk, wm, wn);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -595,7 +595,7 @@ void implicit_gemm_conv_3D_gpu(
       small_filter ? 's' : 'l');
 
   // Encode and dispatch kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel =
       get_steel_conv_3d_kernel(d, kname, out, bm, bn, bk, wm, wn, small_filter);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -644,7 +644,7 @@ void pad_and_slice_conv_3D_gpu(
     array x_copy(xshape, x.dtype(), nullptr, {});
     array zero(0, x.dtype());
     pad_gpu(x, zero, x_copy, {0, -1}, {0, 0}, s);
-    d.add_temporary(x_copy, s.index);
+    metal::get_command_encoder(s).add_temporary(x_copy);
 
     return x_copy;
   };
@@ -804,7 +804,7 @@ void winograd_conv_2D_gpu(
         type_to_name(out),
         "_bc",
         bc);
-    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = metal::get_command_encoder(s);
     auto kernel = d.get_kernel(kname);
     compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -837,7 +837,7 @@ void winograd_conv_2D_gpu(
         type_to_name(out),
         "_bc",
         bc);
-    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = metal::get_command_encoder(s);
     auto kernel = d.get_kernel(kname);
     compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -889,7 +889,7 @@ void winograd_conv_2D_gpu(
         type_to_name(out),
         "_bo",
         bc);
-    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = metal::get_command_encoder(s);
     auto kernel = d.get_kernel(kname);
     compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -950,7 +950,7 @@ void depthwise_conv_2D_gpu(
   "_tgp_w_", tw,
   "_do_flip_", do_flip ? 't' : 'n'); // clang-format on
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(base_name, hash_name, func_consts);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -1041,10 +1041,10 @@ void depthwise_conv_1D_gpu(
   concatenate(
       base_name,
       "depthwise_conv_1d_",
-      large ? "_large" : "",
-      type_to_name(out));
+      type_to_name(out),
+      large ? "_large" : "");
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(base_name);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -1348,7 +1348,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Record copies
   if (!copies.empty()) {
-    d.add_temporaries(std::move(copies), s.index);
+    metal::get_command_encoder(s).add_temporaries(std::move(copies));
   }
 }
 

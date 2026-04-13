@@ -9,10 +9,13 @@
 
 namespace mlx::core::gpu {
 
-void new_stream(Stream stream) {
-  if (stream.device == mlx::core::Device::gpu) {
-    metal::device(stream.device).new_queue(stream.index);
-  }
+void init() {}
+
+void new_stream(Stream s) {
+  assert(s.device == Device::gpu);
+  auto& encoders = metal::get_command_encoders();
+  auto& d = metal::device(s.device);
+  encoders.try_emplace(s.index, d, s.index, d.residency_set());
 }
 
 inline void check_error(MTL::CommandBuffer* cbuf) {
@@ -27,8 +30,8 @@ inline void check_error(MTL::CommandBuffer* cbuf) {
 void eval(array& arr) {
   auto pool = metal::new_scoped_memory_pool();
   auto s = arr.primitive().stream();
-  auto& d = metal::device(s.device);
-  auto command_buffer = d.get_command_buffer(s.index);
+  auto& encoder = metal::get_command_encoder(s);
+  auto* command_buffer = encoder.get_command_buffer();
 
   auto outputs = arr.outputs();
   {
@@ -54,16 +57,15 @@ void eval(array& arr) {
     buffers.erase(it);
   }
 
-  if (d.command_buffer_needs_commit(s.index)) {
-    d.end_encoding(s.index);
+  if (encoder.needs_commit()) {
+    encoder.end_encoding();
     scheduler::notify_new_task(s);
     command_buffer->addCompletedHandler(
         [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
           scheduler::notify_task_completion(s);
           check_error(cbuf);
         });
-    d.commit_command_buffer(s.index);
-    d.get_command_buffer(s.index);
+    encoder.commit();
   } else {
     command_buffer->addCompletedHandler(
         [buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
@@ -74,24 +76,15 @@ void eval(array& arr) {
 
 void finalize(Stream s) {
   auto pool = metal::new_scoped_memory_pool();
-  auto& d = metal::device(s.device);
-  auto cb = d.get_command_buffer(s.index);
-  d.end_encoding(s.index);
+  auto& encoder = metal::get_command_encoder(s);
+  auto* cb = encoder.get_command_buffer();
+  encoder.end_encoding();
   cb->addCompletedHandler([](MTL::CommandBuffer* cbuf) { check_error(cbuf); });
-  d.commit_command_buffer(s.index);
-  d.get_command_buffer(s.index);
+  encoder.commit();
 }
 
 void synchronize(Stream s) {
-  auto pool = metal::new_scoped_memory_pool();
-  auto& d = metal::device(s.device);
-  auto cb = d.get_command_buffer(s.index);
-  cb->retain();
-  d.end_encoding(s.index);
-  d.commit_command_buffer(s.index);
-  cb->waitUntilCompleted();
-  check_error(cb);
-  cb->release();
+  metal::get_command_encoder(s).synchronize();
 }
 
 } // namespace mlx::core::gpu

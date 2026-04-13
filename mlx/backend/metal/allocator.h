@@ -9,7 +9,6 @@
 #include "mlx/allocator.h"
 #include "mlx/backend/common/buffer_cache.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/resident.h"
 
 namespace mlx::core::metal {
 
@@ -51,15 +50,17 @@ class MetalAllocator : public allocator::Allocator {
   // the heap, a heap can have at most heap.size() / 256 buffers.
   static constexpr int small_size_ = 256;
   static constexpr int heap_size_ = 1 << 20;
-  MTL::Heap* heap_;
-  MetalAllocator();
+
+  MetalAllocator(Device& d);
   ~MetalAllocator();
+
   friend MetalAllocator& allocator();
+
+  NS::SharedPtr<MTL::Heap> heap_;
+  ResidencySet& residency_set_;
 
   // Caching allocator
   BufferCache<MTL::Buffer> buffer_cache_;
-
-  ResidencySet residency_set_;
 
   // Allocation stats
   size_t block_limit_;
