@@ -48,42 +48,19 @@ inline void create_2D_tensor_map(
       CU_TENSOR_MAP_FLOAT_OOB_FILL_NONE));
 }
 
-template <
-    int TILE_M,
-    int TILE_K,
-    int THREADS_PER_BLOCK,
-    int STAGES,
-    int SCALES_PER_STAGE>
-inline std::tuple<dim3, dim3, size_t> get_columnwise_quantize_mxfp8_launch_args(
+inline std::tuple<dim3, dim3> get_columnwise_quantize_mxfp8_launch_args(
     size_t grid_dim_x_size, // rows
     size_t grid_dim_y_size, // cols
     size_t block_size_x, // ROWS_PER_BLOCK
     size_t block_size_y, // COL_PER_BLOCK
-    int in_size_bytes, // itemsize
-    int bits) {
+    int threads_per_block) {
   dim3 grid;
-  grid.x = (grid_dim_x_size + block_size_x - 1) / block_size_x;
-  grid.y = (grid_dim_y_size + block_size_y - 1) / block_size_y;
+  grid.x = cuda::ceil_div(grid_dim_x_size, block_size_x);
+  grid.y = cuda::ceil_div(grid_dim_y_size, block_size_y);
   grid.z = 1;
 
-  dim3 block(THREADS_PER_BLOCK, 1, 1);
-
-  const int elem_per_byte = bits == 8 ? 1 : 2;
-  constexpr size_t BUFF_ELEMS = TILE_M * TILE_K;
-  const size_t in_tile_size = BUFF_ELEMS * in_size_bytes;
-  const size_t in_buff_size_aligned =
-      ((in_tile_size * BUFFS_NUM + TMA_SHMEM_ALIGNMENT - 1) /
-       TMA_SHMEM_ALIGNMENT) *
-      TMA_SHMEM_ALIGNMENT;
-
-  const size_t out_tile_elems = BUFF_ELEMS / elem_per_byte;
-  const size_t out_buff_size_aligned =
-      ((out_tile_elems * BUFFS_NUM + TMA_SHMEM_ALIGNMENT - 1) /
-       TMA_SHMEM_ALIGNMENT) *
-      TMA_SHMEM_ALIGNMENT;
-  const size_t smem_size =
-      in_buff_size_aligned + out_buff_size_aligned + TMA_SHMEM_ALIGNMENT;
-  return std::make_tuple(grid, block, smem_size);
+  dim3 block(threads_per_block, 1, 1);
+  return std::make_tuple(grid, block);
 }
 
 inline CUtensorMapDataType get_tma_dtype(Dtype dtype) {
@@ -288,19 +265,8 @@ void fp_quantize_columnwise_mxfp8(
 
           // For columnwise: grid.x = cols, grid.y = rows
           // scales_per_stage = TILE_K (one scale per column per stage)
-          auto [grid, block, smem_size] =
-              cu::get_columnwise_quantize_mxfp8_launch_args<
-                  TILE_M,
-                  TILE_K,
-                  THREADS_PER_BLOCK,
-                  STAGES,
-                  TILE_K>(
-                  cols,
-                  rows,
-                  COLS_PER_BLOCK,
-                  ROWS_PER_BLOCK,
-                  w.itemsize(),
-                  bits);
+          auto [grid, block] = cu::get_columnwise_quantize_mxfp8_launch_args(
+              cols, rows, COLS_PER_BLOCK, ROWS_PER_BLOCK, THREADS_PER_BLOCK);
 
           CUtensorMap tensor_map_input;
           CUtensorMap tensor_map_output;
@@ -331,12 +297,10 @@ void fp_quantize_columnwise_mxfp8(
               THREADS_PER_BLOCK,
               COLS_PER_BLOCK,
               ROWS_PER_BLOCK>;
-          enc.add_kernel_node_ex(
+          enc.add_kernel_node(
               kernel,
               grid,
               block,
-              {},
-              smem_size,
               tensor_map_input,
               tensor_map_output,
               gpu_ptr<uint8_t>(scales),

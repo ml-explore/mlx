@@ -8,8 +8,6 @@
 
 namespace mlx::core {
 
-namespace cg = cooperative_groups;
-
 // To pass scales to tensor cores, they need to be repacked into a tiled layout
 // https://docs.nvidia.com/cuda/cublas/index.html#d-block-scaling-factors-layout
 // Tiled layout for scale factors is very well described in CUTLASS
@@ -52,6 +50,8 @@ constexpr int TILE_ROWS = 128;
 constexpr int TILE_COLS = 4;
 constexpr int TILES_PER_LANE = 1;
 constexpr int LANES_PER_BLOCK = 32;
+
+namespace cg = cooperative_groups;
 
 inline std::tuple<dim3, dim3> get_swizzle_launch_args(
     size_t M_swizzled,

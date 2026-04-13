@@ -84,14 +84,8 @@ __global__ void fp_quantize_dequantize(
 
   using Tx2 = Vector2_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
-  auto block_size = cg::this_thread_block().dim_threads();
-  auto block_idx = cg::this_thread_block().group_index();
-  auto idx_in_block = cg::this_thread_block().thread_index();
-  auto tidx = block_idx.x * block_size.x + idx_in_block.x;
-  auto tidy = block_idx.y * block_size.y + idx_in_block.y;
-  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
-  size_t thread_idx = tidx + grid_dim_x * size_t(tidy);
+  size_t thread_idx = cg::this_grid().thread_rank();
   size_t base_idx = thread_idx * group_size;
 
   if (base_idx >= size) {
@@ -167,14 +161,8 @@ __global__ void fp_quantize_rowwise(
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
   uint32_t rbits = 0; // reserved bits for future use
-  auto block_size = cg::this_thread_block().dim_threads();
-  auto block_idx = cg::this_thread_block().group_index();
-  auto idx_in_block = cg::this_thread_block().thread_index();
-  auto tidx = block_idx.x * block_size.x + idx_in_block.x;
-  auto tidy = block_idx.y * block_size.y + idx_in_block.y;
-  auto grid_dim_x = cg::this_grid().dim_blocks().x * block_size.x;
 
-  size_t thread_idx = tidx + grid_dim_x * size_t(tidy);
+  size_t thread_idx = cg::this_grid().thread_rank();
   size_t base_idx = thread_idx * group_size;
 
   if (base_idx >= size) {
@@ -258,29 +246,13 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
   const size_t block_offset_row = block_idx.y * ROWS_PER_BLOCK;
 
   constexpr size_t BUFF_ELEMS = TILE_M * TILE_K;
-  constexpr size_t in_tile_size = BUFF_ELEMS * sizeof(T);
-  constexpr size_t in_buff_size_aligned =
-      ((in_tile_size * BUFFS_NUM + TMA_SHMEM_ALIGNMENT - 1) /
-       TMA_SHMEM_ALIGNMENT) *
-      TMA_SHMEM_ALIGNMENT;
+  constexpr uint32_t tile_bytes = static_cast<uint32_t>(BUFF_ELEMS * sizeof(T));
 
-  constexpr size_t out_tile_elems = BUFF_ELEMS / elem_per_byte;
-  constexpr size_t out_tile_size = out_tile_elems;
-  constexpr size_t out_buff_size_aligned =
-      ((out_tile_size * BUFFS_NUM + TMA_SHMEM_ALIGNMENT - 1) /
-       TMA_SHMEM_ALIGNMENT) *
-      TMA_SHMEM_ALIGNMENT;
-
-  extern __shared__ char shared_mem[];
-  uintptr_t aligned_shared =
-      (reinterpret_cast<uintptr_t>(shared_mem) + TMA_SHMEM_ALIGNMENT - 1) &
-      ~(static_cast<uintptr_t>(TMA_SHMEM_ALIGNMENT - 1));
-
-  T* in_sh = reinterpret_cast<T*>(aligned_shared);
-  uint8_t* out_sh =
-      reinterpret_cast<uint8_t*>(aligned_shared + in_buff_size_aligned);
-
-  constexpr uint32_t tile_bytes = static_cast<uint32_t>(in_tile_size);
+  // Note: 128 byte alignment is a requirement for shared memory buffers
+  // if only we use swizzling while tma copy
+  // if swizzling is not used, pointers must be 16 byte aligned
+  __shared__ alignas(16) T in_smem[BUFF_ELEMS * BUFFS_NUM];
+  __shared__ alignas(16) uint8_t out_smem[BUFF_ELEMS * BUFFS_NUM];
 
   __shared__ alignas(8) uint64_t mbar[STEPS];
 
@@ -300,7 +272,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
   __syncthreads();
   // Launch first async copy before entering the loop
   copy_2d_to_shared(
-      &in_sh[0],
+      &in_smem[0],
       &tensor_map_input,
       static_cast<uint32_t>(block_offset_col),
       static_cast<uint32_t>(block_offset_row),
@@ -326,7 +298,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
       const size_t next_buff_elem_offset = next_buff * BUFF_ELEMS;
 
       copy_2d_to_shared(
-          &in_sh[next_buff_elem_offset],
+          &in_smem[next_buff_elem_offset],
           &tensor_map_input,
           static_cast<uint32_t>(block_offset_col),
           static_cast<uint32_t>(next_row_offset),
@@ -343,7 +315,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
     // Read the data from shared to registers
 #pragma unroll
     for (int row = 0; row < TILE_M; ++row) {
-      thread_data[row] = in_sh[buff_offset + row * TILE_K + tidx];
+      thread_data[row] = in_smem[buff_offset + row * TILE_K + tidx];
     }
     Tx2 amax_2x = Tx2{T(0.0f), T(0.0f)};
 #pragma unroll
@@ -367,7 +339,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
     if (global_col < cols && (block_offset_row + step_row_offset) < rows) {
       scales[global_col * scale_stride + global_row_group] = s.storage;
     }
-    const size_t out_buff_offset = buff * out_tile_elems;
+    const size_t out_buff_offset = buff * BUFF_ELEMS / elem_per_byte;
     // Quantize to registers first
     constexpr int GROUPS = TILE_M / 4;
     uint32_t quantized_regs[GROUPS];
@@ -385,24 +357,24 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
     const size_t base = out_buff_offset + tidx * TILE_M;
     switch (group) {
       case 0:
-        *reinterpret_cast<uint4*>(&out_sh[base + 0]) = {
+        *reinterpret_cast<uint4*>(&out_smem[base + 0]) = {
             quantized_regs[0],
             quantized_regs[1],
             quantized_regs[2],
             quantized_regs[3]};
-        *reinterpret_cast<uint4*>(&out_sh[base + 16]) = {
+        *reinterpret_cast<uint4*>(&out_smem[base + 16]) = {
             quantized_regs[4],
             quantized_regs[5],
             quantized_regs[6],
             quantized_regs[7]};
         break;
       case 1:
-        *reinterpret_cast<uint4*>(&out_sh[base + 16]) = {
+        *reinterpret_cast<uint4*>(&out_smem[base + 16]) = {
             quantized_regs[4],
             quantized_regs[5],
             quantized_regs[6],
             quantized_regs[7]};
-        *reinterpret_cast<uint4*>(&out_sh[base + 0]) = {
+        *reinterpret_cast<uint4*>(&out_smem[base + 0]) = {
             quantized_regs[0],
             quantized_regs[1],
             quantized_regs[2],
@@ -422,7 +394,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
           reinterpret_cast<const uint64_t*>(&tensor_map_output),
           out_x,
           out_y,
-          reinterpret_cast<uint64_t*>(&out_sh[out_buff_offset]));
+          reinterpret_cast<uint64_t*>(&out_smem[out_buff_offset]));
       ptx::cp_async_bulk_commit_group();
     }
   }
