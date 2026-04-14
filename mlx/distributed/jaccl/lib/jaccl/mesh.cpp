@@ -25,7 +25,7 @@ MeshGroup::MeshGroup(
   initialize();
 
   // Make sure every node has reached here before continuing
-  side_channel_.all_gather<int>(0);
+  side_channel_.barrier();
 
   // Create the mesh implementation object
   mesh_ = MeshImpl(rank_, size_, connections_, buffers_);

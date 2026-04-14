@@ -28,8 +28,8 @@ RingGroup::RingGroup(
   // Initialize all the connections and allocate buffers
   initialize();
 
-  // Make sure every node has reached here before continuing
-  side_channel_.all_gather<int>(0);
+  // Make sure every node has reached here before continuing.
+  side_channel_.barrier();
 
   // Create the ring implementation object
   ring_ = RingImpl(rank_, size_, left_, right_, send_buffers_, recv_buffers_);

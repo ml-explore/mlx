@@ -333,6 +333,12 @@ class SideChannel {
     return result;
   }
 
+  void barrier() {
+    // Twice has proven to be more robust to initialization issues.
+    all_gather<int>(0);
+    all_gather<int>(0);
+  }
+
  private:
   int rank_;
   int size_;
