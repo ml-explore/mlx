@@ -194,7 +194,7 @@ void MeshGroup::all_reduce(
   auto out_ptr = static_cast<T*>(output);
   int64_t count = n_bytes / sizeof(T);
   if (size_ > 2 &&
-      ((std::is_same_v<T, bfloat16_t> && count > 65536) ||
+      ((std::is_same_v<T, bfloat16_t> && count > 256 * 1024) ||
        count >= 8 * 1024 * 1024 / static_cast<int64_t>(sizeof(T)))) {
     ring_.all_reduce<2>(in_ptr, out_ptr, count, 1, reduce_op);
   } else {
