@@ -182,11 +182,20 @@ const Destination& Connection::info() {
   ibv_port_attr port_attr;
   ibv().query_port(ctx, 1, &port_attr);
   ibv_gid gid;
-  ibv().query_gid(ctx, 1, 1, &gid);
+  for (int i = 0; i < port_attr.gid_tbl_len; i++) {
+    ibv_gid tmp;
+    if (ibv().query_gid(ctx, 1, i, &tmp) == 0) {
+      if (*(uint64_t*)&tmp.raw[0] == 0 && *(uint16_t*)&tmp.raw[8] == 0 &&
+          *(uint16_t*)&tmp.raw[10] == 0xffff) {
+        gid = tmp;
+        break;
+      }
+    }
+  }
 
   src.local_id = port_attr.lid;
   src.queue_pair_number = queue_pair->qp_num;
-  src.packet_sequence_number = 7; // TODO: Change to sth random
+  src.packet_sequence_number = 7;
   src.global_identifier = gid;
 
   return src;
