@@ -111,13 +111,10 @@ bool Config::is_valid_mesh() const {
     return false;
   }
 
-  for (auto& d : devices_) {
-    if (d.size() != size_) {
-      return false;
-    }
-    for (int i = 0; i < size_; i++) {
-      if ((i == rank_ && d[i].size() != 0) ||
-          (i != rank_ && d[i].size() == 0)) {
+  for (int src = 0; src < size_; src++) {
+    for (int dst = 0; dst < size_; dst++) {
+      if ((src == dst && devices_[src][dst].size() != 0) ||
+          (src != dst && devices_[src][dst].size() == 0)) {
         return false;
       }
     }
@@ -135,11 +132,7 @@ bool Config::is_valid_ring() const {
     int left = (src + size_ - 1) % size_;
     int right = (src + 1) % size_;
     for (int dst = 0; dst < size_; dst++) {
-      if (dst != left && dst != right) {
-        if (devices_[src][dst].size() != 0) {
-          return false;
-        }
-      } else {
+      if (dst == left || dst == right) {
         if (devices_[src][dst].size() != num_connections) {
           return false;
         }
