@@ -83,7 +83,9 @@ class ParallelFileReader : public Reader {
   void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
       override {
     if (way == std::ios_base::beg) {
-      lseek(fd_, off, 0);
+      lseek(fd_, off, SEEK_SET);
+    } else if (way == std::ios_base::end) {
+      lseek(fd_, off, SEEK_END);
     } else {
       lseek(fd_, off, SEEK_CUR);
     }
@@ -143,7 +145,9 @@ class FileWriter : public Writer {
   void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
       override {
     if (way == std::ios_base::beg) {
-      lseek(fd_, off, 0);
+      lseek(fd_, off, SEEK_SET);
+    } else if (way == std::ios_base::end) {
+      lseek(fd_, off, SEEK_END);
     } else {
       lseek(fd_, off, SEEK_CUR);
     }

@@ -133,6 +133,20 @@ SafetensorsLoad load_safetensors(
         "[load_safetensors] Invalid json metadata " + in_stream->label());
   }
   size_t offset = jsonHeaderLength + 8;
+
+  // Determine file size to validate tensor data boundaries
+  auto saved_pos = in_stream->tell();
+  in_stream->seek(0, std::ios_base::end);
+  size_t file_size = in_stream->tell();
+  in_stream->seek(saved_pos, std::ios_base::beg);
+
+  if (file_size < offset) {
+    throw std::runtime_error(
+        "[load_safetensors] File is smaller than header indicates in " +
+        in_stream->label());
+  }
+  size_t data_size = file_size - offset;
+
   // Load the arrays using metadata
   std::unordered_map<std::string, array> res;
   std::unordered_map<std::string, std::string> metadata_map;
@@ -147,6 +161,23 @@ SafetensorsLoad load_safetensors(
     const Shape& shape = item.value().at("shape");
     const std::vector<size_t>& data_offsets = item.value().at("data_offsets");
     Dtype type = dtype_from_safetensor_str(dtype);
+
+    if (data_offsets.size() < 2) {
+      throw std::runtime_error(
+          "[load_safetensors] Invalid data_offsets for tensor '" + item.key() +
+          "' in " + in_stream->label());
+    }
+    if (data_offsets.at(0) > data_offsets.at(1)) {
+      throw std::runtime_error(
+          "[load_safetensors] data_offsets begin > end for tensor '" +
+          item.key() + "' in " + in_stream->label());
+    }
+    if (data_offsets.at(1) > data_size) {
+      throw std::runtime_error(
+          "[load_safetensors] Tensor '" + item.key() +
+          "' data extends beyond file boundary in " + in_stream->label());
+    }
+
     res.insert(
         {item.key(),
          array(
