@@ -23,14 +23,14 @@ std::vector<std::vector<std::vector<std::string>>> parse_devices_json(
         "[jaccl] The device file should start with an array");
   }
 
-  std::vector<std::vector<std::vector<std::string>>> result;
+  std::vector<std::vector<std::vector<std::string>>> result(devices.size());
   for (int rank = 0; rank < devices.size(); rank++) {
     auto conn = devices[rank];
     if (!conn.is_array()) {
       throw std::runtime_error(
           "[jaccl] The device file should have an array of arrays");
     }
-    if (conn.size() != result.size()) {
+    if (conn.size() != devices.size()) {
       std::ostringstream msg;
       msg << "[jaccl] The device file should contain the connectivity of each rank to "
           << "all other ranks but rank " << rank << " contains only "
