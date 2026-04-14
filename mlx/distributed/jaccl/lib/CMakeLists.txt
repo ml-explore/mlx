@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.24)
 project(jaccl LANGUAGES CXX)
 
+# Default to Release when built standalone. Without this CMake uses an empty
+# build type (-O0) which severely impacts the reduction / memcpy hot paths.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE
+      Release
+      CACHE STRING "Build type" FORCE)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

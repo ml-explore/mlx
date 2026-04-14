@@ -35,3 +35,6 @@ endfunction()
 # Examples
 build_example(minimal_env.cpp)
 build_example(minimal_cfg.cpp)
+
+# Benchmarks
+build_example(allreduce_bench.cpp)
