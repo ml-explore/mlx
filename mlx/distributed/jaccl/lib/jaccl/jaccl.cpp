@@ -88,12 +88,15 @@ Config& Config::set_coordinator(std::string coordinator) {
 Config& Config::set_devices(
     std::vector<std::vector<std::vector<std::string>>> devices) {
   devices_ = std::move(devices);
-  size_ = devices.size();
-  if (size_ > 0 && size_ != devices[0].size()) {
-    std::ostringstream msg;
-    msg << "[jaccl] The full connectivity matrix should be provided but we have "
-        << size_ << " rows and " << devices[0].size() << " columns.";
-    throw std::invalid_argument(msg.str());
+  size_ = devices_.size();
+  for (int r = 0; r < size_; r++) {
+    if (size_ != devices_[r].size()) {
+      std::ostringstream msg;
+      msg << "[jaccl] The full connectivity matrix should be provided but we have "
+          << size_ << " rows and row " << r << " has " << devices_[r].size()
+          << " columns.";
+      throw std::invalid_argument(msg.str());
+    }
   }
   return *this;
 }
