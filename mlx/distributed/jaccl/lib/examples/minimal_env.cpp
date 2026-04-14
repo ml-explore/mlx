@@ -18,7 +18,11 @@ int main() {
 
   group->all_sum(input, output, sizeof(input), jaccl::Float32);
 
-  std::cout << "Result: " << output[0] << std::endl;
+  std::cout << "Result: ";
+  for (auto o : output) {
+    std::cout << o << " ";
+  }
+  std::cout << std::endl;
 
   return 0;
 }

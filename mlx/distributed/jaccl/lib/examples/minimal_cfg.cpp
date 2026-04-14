@@ -2,14 +2,15 @@
 #include <iostream>
 
 int main() {
-  auto cfg = jaccl::Config()
-                 .set_rank(0)
-                 .set_coordinator("192.168.1.1:32132")
-                 .set_devices(
-                     {{{}, {"rdma_en5"}, {"rdma_en4"}, {"rdma_en3"}},
-                      {{"rdma_en5"}, {}, {"rdma_en3"}, {"rdma_en4"}},
-                      {{"rdma_en4"}, {"rdma_en3"}, {}, {"rdma_en5"}},
-                      {{"rdma_en3"}, {"rdma_en4"}, {"rdma_en5"}, {}}});
+  auto cfg =
+      jaccl::Config()
+          .set_rank(0) // should be different per node
+          .set_coordinator("192.168.1.1:32132") // rank 0 will listen here
+          .set_devices(
+              {{{}, {"rdma_en5"}, {"rdma_en4"}, {"rdma_en3"}},
+               {{"rdma_en5"}, {}, {"rdma_en3"}, {"rdma_en4"}},
+               {{"rdma_en4"}, {"rdma_en3"}, {}, {"rdma_en5"}},
+               {{"rdma_en3"}, {"rdma_en4"}, {"rdma_en5"}, {}}});
   auto group = jaccl::init(cfg);
   if (!group) {
     std::cerr << "Failed to initialize JACCL" << std::endl;
@@ -25,7 +26,11 @@ int main() {
 
   group->all_sum(input, output, sizeof(input), jaccl::Float32);
 
-  std::cout << "Result: " << output[0] << std::endl;
+  std::cout << "Result: ";
+  for (auto o : output) {
+    std::cout << o << " ";
+  }
+  std::cout << std::endl;
 
   return 0;
 }
