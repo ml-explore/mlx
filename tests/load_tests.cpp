@@ -102,7 +102,7 @@ TEST_CASE("test safetensors file boundary validation") {
     write_raw_safetensors(file_path, json_header, data);
     CHECK_THROWS_AS(load_safetensors(file_path), std::runtime_error);
   }
-  
+
   SUBCASE("bad data_offsets count") {
     std::string json_header =
         R"({"t":{"dtype":"F32","shape":[1],"data_offsets":[0,4,8]}})";
