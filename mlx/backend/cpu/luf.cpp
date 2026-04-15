@@ -67,11 +67,10 @@ void luf_impl(
               /* ipiv */ reinterpret_cast<int*>(pivots_ptr),
               /* info */ &info);
 
-          if (info != 0) {
+          if (info < 0) {
             std::stringstream ss;
             ss << "[LUF::eval_cpu] sgetrf_ failed with code " << info
-               << ((info > 0) ? " because matrix is singular"
-                              : " because argument had an illegal value");
+               << " because argument had an illegal value";
             throw std::runtime_error(ss.str());
           }
 
