@@ -134,7 +134,7 @@ SafetensorsLoad load_safetensors(
   in_stream->seek(0, std::ios_base::end);
   size_t file_size = in_stream->tell();
   in_stream->seek(8, std::ios_base::beg);
-  
+
   // Load the json metadata
   if (file_size < jsonHeaderLength + 8) {
     std::ostringstream msg;
