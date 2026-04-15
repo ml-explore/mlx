@@ -51,6 +51,10 @@ class RingGroup : public GroupImpl {
     throw std::runtime_error("[jaccl] sum_scatter not supported.");
   }
 
+  void all_to_all(const array& input, array& output, Stream stream) override {
+    throw std::runtime_error("[jaccl] all_to_all not supported.");
+  }
+
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
     throw std::runtime_error("[jaccl] Group split not supported.");
   }

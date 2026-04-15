@@ -34,6 +34,7 @@ make_jit_source(indexing/gather_front kernels/indexing/indexing.h)
 make_jit_source(indexing/gather_axis)
 make_jit_source(indexing/scatter_axis)
 make_jit_source(hadamard)
+make_jit_source(moe)
 
 if(MLX_METAL_JIT)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/jit_kernels.cpp)
@@ -110,6 +111,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/moe.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
