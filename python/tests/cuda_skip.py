@@ -1,8 +1,4 @@
 cuda_skip = {
-    # Gather matmul NYI
-    "TestBlas.test_gather_matmul",
-    "TestBlas.test_gather_matmul_grad",
-    "TestBlas.test_gather_mm_sorted_vjp",
     # Lapack ops NYI
     "TestLinalg.test_cholesky",
     "TestLinalg.test_cholesky_inv",

@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/gemms/block_mask.h"
 #include "mlx/backend/cuda/gemms/cublas_gemm.h"
+#include "mlx/backend/cuda/gemms/gather_gemm.h"
 #include "mlx/backend/cuda/gemms/gemv.h"
 #include "mlx/backend/cuda/gemms/grouped_gemm.h"
 #include "mlx/backend/gpu/copy.h"
@@ -135,40 +136,6 @@ void gemm_and_bias(
   }
   gemm.run(
       encoder, out, a, b, batch_shape, a_batch_strides, b_batch_strides, alpha);
-}
-
-void gather_mm_rhs(
-    const array& a_,
-    const array& b_,
-    const array& indices_,
-    array& out,
-    cu::CommandEncoder& encoder,
-    Stream s) {
-  if (a_.size() / a_.shape(-2) / a_.shape(-1) != indices_.size()) {
-    throw std::runtime_error("[gather_mm] Broadcasting lhs is not supported.");
-  }
-
-  int group_count = b_.size() / b_.shape(-1) / b_.shape(-2);
-  if (group_count > 1024) {
-    throw std::runtime_error(
-        "[gather_mm] Group count can not be larger than 1024.");
-  }
-
-  auto [a_transposed, lda, a] = ensure_batch_contiguous(a_, encoder, s);
-  auto [b_transposed, ldb, b] = ensure_batch_contiguous(b_, encoder, s);
-  auto indices = ensure_row_contiguous(indices_, encoder, s);
-
-  cutlass_grouped_gemm_unaligned(
-      a_transposed,
-      lda,
-      b_transposed,
-      ldb,
-      group_count,
-      a,
-      b,
-      indices,
-      out,
-      encoder);
 }
 
 } // namespace
@@ -404,14 +371,12 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
 
   assert(inputs.size() == 4);
-  auto& a = inputs[0];
-  auto& b = inputs[1];
-  auto& lhs_indices = inputs[2];
-  auto& rhs_indices = inputs[3];
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
 
   // Return 0s if either input is empty.
-  if (a.size() == 0 || b.size() == 0) {
-    array zero(0, a.dtype());
+  if (a_pre.size() == 0 || b_pre.size() == 0) {
+    array zero(0, a_pre.dtype());
     encoder.add_temporary(zero);
     fill_gpu(zero, out, s);
     return;
@@ -420,31 +385,44 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   // Extract shapes from inputs.
-  int M = a.shape(-2);
-  int N = b.shape(-1);
-  int K = a.shape(-1);
+  int M = a_pre.shape(-2);
+  int N = b_pre.shape(-1);
+  int K = a_pre.shape(-1);
+
+  auto [a_transposed, lda, a] = ensure_batch_contiguous(a_pre, encoder, s);
+  auto [b_transposed, ldb, b] = ensure_batch_contiguous(b_pre, encoder, s);
+  auto lhs_indices = ensure_row_contiguous(inputs[2], encoder, s);
+  auto rhs_indices = ensure_row_contiguous(inputs[3], encoder, s);
 
   // We are walking a in order and b is also in order so we can batch up the
   // matmuls and reuse reading a and b.
   if (M == 1 && right_sorted_ == true) {
-    gather_mm_rhs(a, b, rhs_indices, out, encoder, s);
+    cutlass_grouped_gemm_unaligned(
+        a_transposed,
+        lda,
+        b_transposed,
+        ldb,
+        b.size() / b.shape(-1) / b.shape(-2), // group_count
+        a,
+        b,
+        rhs_indices,
+        out,
+        encoder);
     return;
   }
 
-  auto [transposed_a, lda, a_] = check_transpose(encoder, s, a);
-  auto [transposed_b, ldb, b_] = check_transpose(encoder, s, b);
-  auto use_gemv = cu::can_use_gemv(M, N, K, transposed_a, transposed_b);
+  auto use_gemv = cu::can_use_gemv(M, N, K, a_transposed, b_transposed);
   if (M == 1 && use_gemv) {
-    gather_mv(b_, a_, rhs_indices, lhs_indices, out, N, K, encoder);
+    gather_mv(b, a, rhs_indices, lhs_indices, out, N, K, encoder);
     return;
   }
-
   if (N == 1 && use_gemv) {
-    gather_mv(a_, b_, lhs_indices, rhs_indices, out, M, K, encoder);
+    gather_mv(a, b, lhs_indices, rhs_indices, out, M, K, encoder);
     return;
   }
 
-  throw std::runtime_error("NYI");
+  cutlass_gather_mm(
+      a_transposed, b_transposed, a, b, lhs_indices, rhs_indices, out, encoder);
 }
 
 void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -473,14 +451,7 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto [a_transposed, lda, a] = check_transpose(encoder, s, a_pre);
   auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
-  auto segments = [&] {
-    if (segments_pre.flags().row_contiguous) {
-      return segments_pre;
-    }
-    array copy = contiguous_copy_gpu(segments_pre, s);
-    encoder.add_temporary(copy);
-    return copy;
-  }();
+  auto segments = ensure_row_contiguous(segments_pre, encoder, s);
 
   cutlass_segmented_mm(
       a_transposed,
