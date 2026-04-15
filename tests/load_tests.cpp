@@ -104,6 +104,7 @@ TEST_CASE("test safetensors file boundary validation") {
   }
 
   SUBCASE("bad data_offsets count") {
+    std::string file_path = get_temp_file("test_bad_offsets_count.safetensors");
     std::string json_header =
         R"({"t":{"dtype":"F32","shape":[1],"data_offsets":[0,4,8]}})";
     std::vector<char> data(4, 0);
