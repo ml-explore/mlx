@@ -2546,15 +2546,13 @@ array blackman(int M, StreamOrDevice s /* = {} */) {
   return add(subtract(alpha, term1, s), term2, s);
 }
 
-/** Returns a sorted copy of the flattened array.
- * The sort is stable and NaN values are placed at the end. */
+/** Returns a sorted copy of the flattened array. */
 array sort(const array& a, StreamOrDevice s /* = {} */) {
   int size = a.size();
   return sort(reshape(a, {size}, s), 0, s);
 }
 
-/** Returns a sorted copy of the array along a given axis.
- * The sort is stable and NaN values are placed at the end. */
+/** Returns a sorted copy of the array along a given axis. */
 array sort(const array& a, int axis, StreamOrDevice s /* = {} */) {
   // Check for valid axis
   if (axis + static_cast<int>(a.ndim()) < 0 ||
@@ -2569,15 +2567,13 @@ array sort(const array& a, int axis, StreamOrDevice s /* = {} */) {
       a.shape(), a.dtype(), std::make_shared<Sort>(to_stream(s), axis), {a});
 }
 
-/** Returns indices that sort the flattened array.
- * The sort is stable and NaN values are placed at the end. */
+/** Returns indices that sort the flattened array. */
 array argsort(const array& a, StreamOrDevice s /* = {} */) {
   int size = a.size();
   return argsort(reshape(a, {size}, s), 0, s);
 }
 
-/** Returns indices that sort the array along a given axis.
- * The sort is stable and NaN values are placed at the end. */
+/** Returns indices that sort the array along a given axis. */
 array argsort(const array& a, int axis, StreamOrDevice s /* = {} */) {
   // Check for valid axis
   if (axis + static_cast<int>(a.ndim()) < 0 ||
