@@ -92,11 +92,11 @@ TEST_CASE("test safetensors file boundary validation") {
     array test = dict.at("test");
     CHECK(array_equal(test, array({1.0, 2.0, 3.0, 4.0})).item<bool>());
   }
-  
+
   SUBCASE("mismatched data_offsets") {
     std::string file_path = get_temp_file("test_bad_offsets.safetensors");
     std::string json_header =
-      R"({"t":{"dtype":"F32","shape":[10,10],"data_offsets":[0,4]}})";
+        R"({"t":{"dtype":"F32","shape":[10,10],"data_offsets":[0,4]}})";
     std::vector<char> data(400, 0);
 
     write_raw_safetensors(file_path, json_header, data);
@@ -105,7 +105,7 @@ TEST_CASE("test safetensors file boundary validation") {
   
   SUBCASE("bad data_offsets count") {
     std::string json_header =
-      R"({"t":{"dtype":"F32","shape":[1],"data_offsets":[0,4,8]}})";
+        R"({"t":{"dtype":"F32","shape":[1],"data_offsets":[0,4,8]}})";
     std::vector<char> data(4, 0);
 
     write_raw_safetensors(file_path, json_header, data);
