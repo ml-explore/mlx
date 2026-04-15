@@ -17,6 +17,7 @@ made available.
     init
     all_sum
     all_gather
+    all_to_all
     send
     recv
     recv_like

@@ -50,6 +50,10 @@ void sum_scatter(
   group.raw_group()->sum_scatter(input, output, stream);
 }
 
+void all_to_all(Group group, const array& input, array& output, Stream stream) {
+  group.raw_group()->all_to_all(input, output, stream);
+}
+
 class EmptyGroup : public GroupImpl {
  public:
   Stream communication_stream(StreamOrDevice s) override {
@@ -95,6 +99,10 @@ class EmptyGroup : public GroupImpl {
         "Communication not implemented in an empty distributed group.");
   }
   void sum_scatter(const array&, array&, Stream) override {
+    throw std::runtime_error(
+        "Communication not implemented in an empty distributed group.");
+  }
+  void all_to_all(const array&, array&, Stream) override {
     throw std::runtime_error(
         "Communication not implemented in an empty distributed group.");
   }

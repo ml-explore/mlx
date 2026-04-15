@@ -131,6 +131,7 @@ struct MPIWrapper {
     LOAD_SYMBOL(MPI_Allgather, all_gather);
     LOAD_SYMBOL(MPI_Send, send);
     LOAD_SYMBOL(MPI_Recv, recv);
+    LOAD_SYMBOL(MPI_Alltoall, all_to_all);
     LOAD_SYMBOL(MPI_Type_contiguous, mpi_type_contiguous);
     LOAD_SYMBOL(MPI_Type_commit, mpi_type_commit);
     LOAD_SYMBOL(MPI_Op_create, mpi_op_create);
@@ -294,6 +295,14 @@ struct MPIWrapper {
   int (*comm_free)(MPI_Comm*);
   int (*send)(const void*, int, MPI_Datatype, int, int, MPI_Comm);
   int (*recv)(void*, int, MPI_Datatype, int, int, MPI_Comm, MPI_Status*);
+  int (*all_to_all)(
+      const void*,
+      int,
+      MPI_Datatype,
+      void*,
+      int,
+      MPI_Datatype,
+      MPI_Comm);
 
   // Objects
   MPI_Comm comm_world_;
@@ -474,6 +483,22 @@ class MPIGroup : public GroupImpl {
 
   void sum_scatter(const array& input, array& output, Stream stream) override {
     throw std::runtime_error("[mpi] sum_scatter not yet implemented.");
+  }
+
+  void all_to_all(const array& input, array& output, Stream stream) override {
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    int count = input.size() / size();
+    encoder.dispatch(
+        mpi().all_to_all,
+        input.data<void>(),
+        count,
+        mpi().datatype(input),
+        output.data<void>(),
+        count,
+        mpi().datatype(output),
+        comm_);
   }
 
  private:

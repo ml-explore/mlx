@@ -35,4 +35,8 @@ void ReduceScatter::eval_gpu(const std::vector<array>&, std::vector<array>&) {
       "[ReduceScatter::eval_gpu] has no GPU implementation.");
 }
 
+void AllToAll::eval_gpu(const std::vector<array>&, std::vector<array>&) {
+  throw std::runtime_error("[AllToAll::eval_gpu] has no GPU implementation.");
+}
+
 } // namespace mlx::core::distributed
