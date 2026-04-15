@@ -87,4 +87,8 @@ void synchronize(Stream s) {
   metal::get_command_encoder(s).synchronize();
 }
 
+void clear_streams() {
+  metal::get_command_encoders().clear();
+}
+
 } // namespace mlx::core::gpu

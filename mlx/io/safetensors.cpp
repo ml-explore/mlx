@@ -1,7 +1,8 @@
 // Copyright © 2023 Apple Inc.
-//
+
 #include <json.hpp>
 #include <memory>
+#include <sstream>
 #include <stack>
 
 #include "mlx/backend/cuda/cuda.h"
@@ -97,8 +98,9 @@ Dtype dtype_from_safetensor_str(std::string_view str) {
   } else if (str == ST_F8_E4M3) {
     return uint8;
   } else {
-    throw std::runtime_error(
-        "[safetensor] unsupported dtype " + std::string(str));
+    std::ostringstream msg;
+    msg << "[safetensor] unsupported dtype" << str;
+    throw std::runtime_error(msg.str());
   }
 }
 
@@ -109,8 +111,9 @@ SafetensorsLoad load_safetensors(
   ////////////////////////////////////////////////////////
   // Open and check file
   if (!in_stream->good() || !in_stream->is_open()) {
-    throw std::runtime_error(
-        "[load_safetensors] Failed to open " + in_stream->label());
+    std::ostringstream msg;
+    msg << "[load_safetensors] Failed to open " << in_stream->label();
+    throw std::runtime_error(msg.str());
   }
 
   auto stream = cu::is_available() ? to_stream(s) : to_stream(s, Device::cpu);
@@ -120,8 +123,10 @@ SafetensorsLoad load_safetensors(
   constexpr uint64_t kMaxJsonHeaderLength = 100000000;
   in_stream->read(reinterpret_cast<char*>(&jsonHeaderLength), 8);
   if (jsonHeaderLength <= 0 || jsonHeaderLength >= kMaxJsonHeaderLength) {
-    throw std::runtime_error(
-        "[load_safetensors] Invalid json header length " + in_stream->label());
+    std::ostringstream msg;
+    msg << "[load_safetensors] Invalid json header length "
+        << in_stream->label();
+    throw std::runtime_error(msg.str());
   }
   // Load the json metadata
   auto rawJson = std::make_unique<char[]>(jsonHeaderLength);
@@ -129,8 +134,9 @@ SafetensorsLoad load_safetensors(
   auto metadata = json::parse(rawJson.get(), rawJson.get() + jsonHeaderLength);
   // Should always be an object on the top-level
   if (!metadata.is_object()) {
-    throw std::runtime_error(
-        "[load_safetensors] Invalid json metadata " + in_stream->label());
+    std::ostringstream msg;
+    msg << "[load_safetensors] Invalid json metadata " << in_stream->label();
+    throw std::runtime_error(msg.str());
   }
   size_t offset = jsonHeaderLength + 8;
 
@@ -161,23 +167,28 @@ SafetensorsLoad load_safetensors(
     const Shape& shape = item.value().at("shape");
     const std::vector<size_t>& data_offsets = item.value().at("data_offsets");
     Dtype type = dtype_from_safetensor_str(dtype);
-
-    if (data_offsets.size() < 2) {
-      throw std::runtime_error(
-          "[load_safetensors] Invalid data_offsets for tensor '" + item.key() +
-          "' in " + in_stream->label());
+    if (data_offsets.size() != 2) {
+      std::ostringstream msg;
+      msg << "[load_safetensors] Tensor '" << item.key()
+          << "' data_offsets must have exactly 2 entries but has "
+          << data_offsets.size();
+      throw std::runtime_error(msg.str());
     }
-    if (data_offsets.at(0) > data_offsets.at(1)) {
-      throw std::runtime_error(
-          "[load_safetensors] data_offsets begin > end for tensor '" +
-          item.key() + "' in " + in_stream->label());
+    {
+      size_t expected_nbytes = type.size();
+      for (auto dim : shape) {
+        expected_nbytes *= static_cast<size_t>(dim);
+      }
+      if (data_offsets[1] < data_offsets[0] ||
+          data_offsets[1] - data_offsets[0] != expected_nbytes) {
+        std::ostringstream msg;
+        msg << "[load_safetensors] Tensor '" << item.key()
+            << "' invalid data offsets (" << data_offsets[0] << ", "
+            << data_offsets[1] << "). Expecting " << expected_nbytes
+            << " bytes.";
+        throw std::runtime_error(msg.str());
+      }
     }
-    if (data_offsets.at(1) > data_size) {
-      throw std::runtime_error(
-          "[load_safetensors] Tensor '" + item.key() +
-          "' data extends beyond file boundary in " + in_stream->label());
-    }
-
     res.insert(
         {item.key(),
          array(
@@ -201,8 +212,9 @@ void save_safetensors(
   ////////////////////////////////////////////////////////
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
-    throw std::runtime_error(
-        "[save_safetensors] Failed to open " + out_stream->label());
+    std::ostringstream msg;
+    msg << "[save_safetensors] Failed to open " << out_stream->label();
+    throw std::runtime_error(msg.str());
   }
 
   ////////////////////////////////////////////////////////
@@ -227,8 +239,10 @@ void save_safetensors(
   size_t offset = 0;
   for (auto& [key, arr] : a) {
     if (arr.nbytes() == 0) {
-      throw std::invalid_argument(
-          "[save_safetensors] cannot serialize an empty array key: " + key);
+      std::ostringstream msg;
+      msg << "[save_safetensors] Cannot serialize an empty array ('" << key
+          << "')";
+      throw std::invalid_argument(msg.str());
     }
 
     json child;

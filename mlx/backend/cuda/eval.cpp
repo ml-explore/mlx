@@ -80,4 +80,8 @@ void synchronize(Stream s) {
   cu::get_command_encoder(s).synchronize();
 }
 
+void clear_streams() {
+  cu::get_command_encoders().clear();
+}
+
 } // namespace mlx::core::gpu

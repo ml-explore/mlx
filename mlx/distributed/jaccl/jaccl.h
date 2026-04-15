@@ -1,5 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
+#pragma once
+
 #include "mlx/distributed/distributed.h"
 
 namespace mlx::core::distributed::jaccl {

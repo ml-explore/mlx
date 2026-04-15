@@ -39,4 +39,7 @@ MLX_API void synchronize();
 /* Synchronize with the provided stream. */
 MLX_API void synchronize(Stream);
 
+/* Destroy all streams created in current thread. */
+MLX_API void clear_streams();
+
 } // namespace mlx::core

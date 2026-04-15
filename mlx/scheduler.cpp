@@ -20,6 +20,10 @@ void synchronize() {
   synchronize(default_stream(default_device()));
 }
 
+void clear_streams() {
+  gpu::clear_streams();
+}
+
 namespace scheduler {
 
 Scheduler::Scheduler() {

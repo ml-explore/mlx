@@ -23,4 +23,6 @@ void synchronize(Stream) {
   throw std::runtime_error("[gpu::synchronize]  GPU backend is not available");
 }
 
+void clear_streams() {}
+
 } // namespace mlx::core::gpu

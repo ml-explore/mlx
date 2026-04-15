@@ -1,178 +1,173 @@
 // Copyright © 2025 Apple Inc.
 
-#include <fstream>
-#include <sstream>
-
-#include <json.hpp>
-
+#include "mlx/distributed/jaccl/jaccl.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/distributed/distributed_impl.h"
-#include "mlx/distributed/jaccl/mesh.h"
-#include "mlx/distributed/jaccl/ring.h"
-#include "mlx/distributed/jaccl/utils.h"
+#include "mlx/dtype_utils.h"
+
+#include <jaccl/group.h>
+#include <jaccl/jaccl.h>
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
-using json = nlohmann::json;
+
+namespace mlx::core::distributed::jaccl {
 
 namespace {
 
-struct DeviceFile {
-  DeviceFile(const char* dev_file) {
-    std::ifstream f(dev_file);
-    json devices = json::parse(f);
-    if (!devices.is_array()) {
-      throw std::runtime_error(
-          "[jaccl] The device file should start with an array");
-    }
+/**
+ * Map MLX Dtype to JACCL Dtype for dispatch.
+ */
+int dtype_to_jaccl_dtype(Dtype dt) {
+  switch (dt) {
+    case bool_:
+      return ::jaccl::Dtype::Bool;
+    case int8:
+      return ::jaccl::Dtype::Int8;
+    case int16:
+      return ::jaccl::Dtype::Int16;
+    case int32:
+      return ::jaccl::Dtype::Int32;
+    case int64:
+      return ::jaccl::Dtype::Int64;
+    case uint8:
+      return ::jaccl::Dtype::UInt8;
+    case uint16:
+      return ::jaccl::Dtype::UInt16;
+    case uint32:
+      return ::jaccl::Dtype::UInt32;
+    case uint64:
+      return ::jaccl::Dtype::UInt64;
+    case float16:
+      return ::jaccl::Dtype::Float16;
+    case bfloat16:
+      return ::jaccl::Dtype::BFloat16;
+    case float32:
+      return ::jaccl::Dtype::Float32;
+    case float64:
+      return ::jaccl::Dtype::Float64;
+    case complex64:
+      return ::jaccl::Dtype::Complex64;
+    default:
+      throw std::runtime_error("[jaccl] Unsupported dtype for JACCL operation");
+  }
+}
 
-    devices_.resize(devices.size());
-    for (int rank = 0; rank < devices.size(); rank++) {
-      auto conn = devices[rank];
-      if (!conn.is_array()) {
-        throw std::runtime_error(
-            "[jaccl] The device file should have an array of arrays");
-      }
-      if (conn.size() != devices_.size()) {
-        std::ostringstream msg;
-        msg << "[jaccl] The device file should contain the connectivity of each rank to "
-            << "all other ranks but rank " << rank << " contains only "
-            << conn.size() << " entries.";
-        throw std::runtime_error(msg.str());
-      }
+/**
+ * Adapter that wraps a standalone jaccl::Group to implement
+ * MLX's distributed::detail::GroupImpl interface.
+ *
+ * This bridges mlx::core::array to raw pointers for JACCL operations.
+ */
+class JACCLGroup : public GroupImpl {
+ public:
+  JACCLGroup(std::shared_ptr<::jaccl::Group> group)
+      : group_(std::move(group)) {}
 
-      devices_[rank].resize(conn.size());
-      for (int dst = 0; dst < conn.size(); dst++) {
-        auto names = conn[dst];
-        if (names.is_string()) {
-          devices_[rank][dst].push_back(names);
-        } else if (names.is_array()) {
-          for (auto name_it = names.begin(); name_it != names.end();
-               name_it++) {
-            devices_[rank][dst].push_back(*name_it);
-          }
-        } else if (!names.is_null()) {
-          throw std::runtime_error(
-              "[jaccl] Device names should be null, a string or array of strings.");
-        }
-      }
-    }
+  Stream communication_stream(StreamOrDevice s) override {
+    return to_stream(s, Device::cpu);
   }
 
-  int size() {
-    return devices_.size();
+  int rank() override {
+    return group_->rank();
   }
 
-  bool is_valid_mesh() {
-    for (int src = 0; src < size(); src++) {
-      for (int dst = 0; dst < size(); dst++) {
-        if (devices_[src][dst].size() != static_cast<size_t>(src != dst)) {
-          return false;
-        }
-      }
-    }
-
-    return true;
+  int size() override {
+    return group_->size();
   }
 
-  bool is_valid_ring() {
-    int num_connections = devices_[0][1].size();
-    if (num_connections == 0) {
-      return false;
-    }
-
-    for (int src = 0; src < size(); src++) {
-      int left = (src + size() - 1) % size();
-      int right = (src + 1) % size();
-      for (int dst = 0; dst < size(); dst++) {
-        if (dst != left && dst != right) {
-          if (devices_[src][dst].size() != 0) {
-            return false;
-          }
-        } else {
-          if (devices_[src][dst].size() != num_connections) {
-            return false;
-          }
-        }
-      }
-    }
-
-    return true;
+  void all_sum(const array& input, array& output, Stream stream) override {
+    auto in_ptr = input.data<char>();
+    auto out_ptr = output.data<char>();
+    size_t n_bytes = input.nbytes();
+    int dtype = dtype_to_jaccl_dtype(output.dtype());
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch([in_ptr, out_ptr, n_bytes, dtype, this]() {
+      group_->all_sum(in_ptr, out_ptr, n_bytes, dtype);
+    });
   }
 
-  std::vector<std::string> extract_mesh_connectivity(int rank) {
-    std::vector<std::string> devices(size());
-    for (int dst = 0; dst < size(); dst++) {
-      if (dst != rank) {
-        devices[dst] = devices_[rank][dst][0];
-      }
-    }
-    return devices;
+  void all_max(const array& input, array& output, Stream stream) override {
+    auto in_ptr = input.data<char>();
+    auto out_ptr = output.data<char>();
+    size_t n_bytes = input.nbytes();
+    int dtype = dtype_to_jaccl_dtype(output.dtype());
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch([in_ptr, out_ptr, n_bytes, dtype, this]() {
+      group_->all_max(in_ptr, out_ptr, n_bytes, dtype);
+    });
   }
 
-  std::pair<std::vector<std::string>, std::vector<std::string>>
-  extract_ring_connectivity(int rank) {
-    int left = (rank + size() - 1) % size();
-    int right = (rank + 1) % size();
-
-    return std::make_pair(devices_[rank][left], devices_[rank][right]);
+  void all_min(const array& input, array& output, Stream stream) override {
+    auto in_ptr = input.data<char>();
+    auto out_ptr = output.data<char>();
+    size_t n_bytes = input.nbytes();
+    int dtype = dtype_to_jaccl_dtype(output.dtype());
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch([in_ptr, out_ptr, n_bytes, dtype, this]() {
+      group_->all_min(in_ptr, out_ptr, n_bytes, dtype);
+    });
   }
 
-  std::vector<std::vector<std::vector<std::string>>> devices_;
+  void all_gather(const array& input, array& output, Stream stream) override {
+    auto in_ptr = input.data<char>();
+    auto out_ptr = output.data<char>();
+    size_t n_bytes = input.nbytes();
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch([in_ptr, out_ptr, n_bytes, this]() {
+      group_->all_gather(in_ptr, out_ptr, n_bytes);
+    });
+  }
+
+  void send(const array& input, int dst, Stream stream) override {
+    auto data = input.data<char>();
+    size_t n_bytes = input.nbytes();
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.dispatch(
+        [data, n_bytes, dst, this]() { group_->send(data, n_bytes, dst); });
+  }
+
+  void recv(array& out, int src, Stream stream) override {
+    auto data = out.data<char>();
+    size_t n_bytes = out.nbytes();
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_output_array(out);
+    encoder.dispatch(
+        [data, n_bytes, src, this]() { group_->recv(data, n_bytes, src); });
+  }
+
+  void sum_scatter(const array& input, array& output, Stream stream) override {
+    throw std::runtime_error("[jaccl] sum_scatter not supported.");
+  }
+
+  std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
+    throw std::runtime_error("[jaccl] Group split not supported.");
+  }
+
+ private:
+  std::shared_ptr<::jaccl::Group> group_;
 };
 
 } // namespace
 
-namespace mlx::core::distributed::jaccl {
-
 bool is_available() {
-  return ibv().is_available();
+  return ::jaccl::is_available();
 }
 
 std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
-  const char* dev_file = std::getenv("MLX_IBV_DEVICES");
-  const char* coordinator = std::getenv("MLX_JACCL_COORDINATOR");
-  const char* rank_str = std::getenv("MLX_RANK");
-  const char* ring = std::getenv("MLX_JACCL_RING");
-
-  if (!is_available() || !dev_file || !coordinator || !rank_str) {
-    if (strict) {
-      std::ostringstream msg;
-      msg << "[jaccl] You need to provide via environment variables a rank (MLX_RANK), "
-          << "a device file (MLX_IBV_DEVICES) and a coordinator ip/port (MLX_JACCL_COORDINATOR) "
-          << "but provided MLX_RANK=\"" << ((rank_str) ? rank_str : "")
-          << "\", MLX_IBV_DEVICES=\"" << ((dev_file) ? dev_file : "")
-          << "\" and MLX_JACCL_COORDINATOR=\""
-          << ((coordinator) ? coordinator : "");
-      throw std::runtime_error(msg.str());
-    }
+  auto group = ::jaccl::init(strict);
+  if (group == nullptr) {
     return nullptr;
   }
-
-  auto rank = std::atoi(rank_str);
-  bool prefer_ring = ring != nullptr;
-  DeviceFile devices(dev_file);
-
-  if (rank >= devices.size() || rank < 0) {
-    std::ostringstream msg;
-    msg << "[jaccl] Invalid rank " << rank << ". It should be between 0 and "
-        << devices.size();
-    throw std::runtime_error(msg.str());
-  }
-
-  if (prefer_ring && devices.is_valid_ring()) {
-    auto [left, right] = devices.extract_ring_connectivity(rank);
-    return std::make_shared<RingGroup>(
-        rank, devices.size(), left, right, coordinator);
-  } else if (devices.is_valid_mesh()) {
-    auto device_names = devices.extract_mesh_connectivity(rank);
-    return std::make_shared<MeshGroup>(rank, device_names, coordinator);
-  } else if (devices.is_valid_ring()) {
-    auto [left, right] = devices.extract_ring_connectivity(rank);
-    return std::make_shared<RingGroup>(
-        rank, devices.size(), left, right, coordinator);
-  } else {
-    throw std::runtime_error(
-        "[jaccl] The device file should define a valid mesh or a valid ring.");
-  }
+  return std::make_shared<JACCLGroup>(std::move(group));
 }
 
 } // namespace mlx::core::distributed::jaccl
