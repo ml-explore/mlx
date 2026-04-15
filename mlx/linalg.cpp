@@ -721,8 +721,7 @@ void validate_det(
   }
 
   if (a.shape(-1) != a.shape(-2)) {
-    throw std::invalid_argument(
-        fname + " Only defined for square matrices.");
+    throw std::invalid_argument(fname + " Only defined for square matrices.");
   }
 }
 
@@ -748,16 +747,24 @@ array det_raw_small(const array& a, StreamOrDevice s) {
         multiply(elem(0, 1), elem(1, 0), s),
         s);
   } else {
-    // 3x3: a00*(a11*a22 - a12*a21) - a01*(a10*a22 - a12*a20) + a02*(a10*a21 - a11*a20)
+    // 3x3: a00*(a11*a22 - a12*a21) - a01*(a10*a22 - a12*a20) + a02*(a10*a21 -
+    // a11*a20)
     auto a00 = elem(0, 0), a01 = elem(0, 1), a02 = elem(0, 2);
     auto a10 = elem(1, 0), a11 = elem(1, 1), a12 = elem(1, 2);
     auto a20 = elem(2, 0), a21 = elem(2, 1), a22 = elem(2, 2);
     return add(
         subtract(
-            multiply(a00, subtract(multiply(a11, a22, s), multiply(a12, a21, s), s), s),
-            multiply(a01, subtract(multiply(a10, a22, s), multiply(a12, a20, s), s), s),
+            multiply(
+                a00,
+                subtract(multiply(a11, a22, s), multiply(a12, a21, s), s),
+                s),
+            multiply(
+                a01,
+                subtract(multiply(a10, a22, s), multiply(a12, a20, s), s),
+                s),
             s),
-        multiply(a02, subtract(multiply(a10, a21, s), multiply(a11, a20, s), s), s),
+        multiply(
+            a02, subtract(multiply(a10, a21, s), multiply(a11, a20, s), s), s),
         s);
   }
 }
@@ -785,13 +792,19 @@ std::pair<array, array> slogdet_impl(const array& input, StreamOrDevice s) {
   int k = std::min(input.shape(-2), input.shape(-1));
   auto iota = arange(0, k, uint32, s);
   auto parity = astype(
-      sum(not_equal(pivots, iota, s), /* axis = */ -1, /* keepdims = */ false, s),
+      sum(not_equal(pivots, iota, s),
+          /* axis = */ -1,
+          /* keepdims = */ false,
+          s),
       int32,
       s);
 
   // Count negative diagonal elements
   auto num_neg = astype(
-      sum(less(diag, array(0.0f, dtype), s), /* axis = */ -1, /* keepdims = */ false, s),
+      sum(less(diag, array(0.0f, dtype), s),
+          /* axis = */ -1,
+          /* keepdims = */ false,
+          s),
       int32,
       s);
 
@@ -806,11 +819,15 @@ std::pair<array, array> slogdet_impl(const array& input, StreamOrDevice s) {
       s);
 
   // logabsdet = sum(log(abs(diag)))
-  auto logabsdet = sum(log(abs(diag, s), s), /* axis = */ -1, /* keepdims = */ false, s);
+  auto logabsdet =
+      sum(log(abs(diag, s), s), /* axis = */ -1, /* keepdims = */ false, s);
 
   // Handle singular matrices: any zero on diagonal
-  auto is_zero = any(
-      equal(diag, array(0.0f, dtype), s), /* axis = */ -1, /* keepdims = */ false, s);
+  auto is_zero =
+      any(equal(diag, array(0.0f, dtype), s),
+          /* axis = */ -1,
+          /* keepdims = */ false,
+          s);
   sign_val = where(is_zero, array(0.0f, dtype), sign_val, s);
   logabsdet = where(
       is_zero,

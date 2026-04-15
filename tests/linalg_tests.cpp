@@ -655,8 +655,8 @@ TEST_CASE("test det") {
 
   // 3x3 fast path: det([[1,2,3],[0,1,4],[5,6,0]]) = 1
   {
-    array a = array(
-        {1.0f, 2.0f, 3.0f, 0.0f, 1.0f, 4.0f, 5.0f, 6.0f, 0.0f}, {3, 3});
+    array a =
+        array({1.0f, 2.0f, 3.0f, 0.0f, 1.0f, 4.0f, 5.0f, 6.0f, 0.0f}, {3, 3});
     auto d = det(a, Device::cpu);
     CHECK_EQ(d.item<float>(), doctest::Approx(1.0f));
   }
@@ -669,7 +669,8 @@ TEST_CASE("test det") {
   }
 
   // Non-square should throw
-  CHECK_THROWS(det(array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {2, 3}), Device::cpu));
+  CHECK_THROWS(
+      det(array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {2, 3}), Device::cpu));
 
   // 1D should throw
   CHECK_THROWS(det(array({1.0f, 2.0f}), Device::cpu));

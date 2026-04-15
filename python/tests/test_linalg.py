@@ -758,7 +758,9 @@ class TestLinalg(mlx_tests.MLXTestCase):
 
         # Error: non-square
         with self.assertRaises(ValueError):
-            mx.linalg.slogdet(mx.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), stream=mx.cpu)
+            mx.linalg.slogdet(
+                mx.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), stream=mx.cpu
+            )
 
         # Error: 1D
         with self.assertRaises(ValueError):
