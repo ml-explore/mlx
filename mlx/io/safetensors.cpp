@@ -128,7 +128,21 @@ SafetensorsLoad load_safetensors(
         << in_stream->label();
     throw std::runtime_error(msg.str());
   }
+
+  // Determine file size to be able to validate that reads are within the
+  // bounds of the file (at least at creation time)
+  in_stream->seek(0, std::ios_base::end);
+  size_t file_size = in_stream->tell();
+  in_stream->seek(8, std::ios_base::beg);
+  
   // Load the json metadata
+  if (file_size < jsonHeaderLength + 8) {
+    std::ostringstream msg;
+    msg << "[load_safetensors] The JSON header is " << jsonHeaderLength
+        << " bytes long but the file is only " << file_size << " bytes. "
+        << "Perhaps an incomplete download or corrupt file?";
+    throw std::runtime_error(msg.str());
+  }
   auto rawJson = std::make_unique<char[]>(jsonHeaderLength);
   in_stream->read(rawJson.get(), jsonHeaderLength);
   auto metadata = json::parse(rawJson.get(), rawJson.get() + jsonHeaderLength);
@@ -139,19 +153,6 @@ SafetensorsLoad load_safetensors(
     throw std::runtime_error(msg.str());
   }
   size_t offset = jsonHeaderLength + 8;
-
-  // Determine file size to validate tensor data boundaries
-  auto saved_pos = in_stream->tell();
-  in_stream->seek(0, std::ios_base::end);
-  size_t file_size = in_stream->tell();
-  in_stream->seek(saved_pos, std::ios_base::beg);
-
-  if (file_size < offset) {
-    throw std::runtime_error(
-        "[load_safetensors] File is smaller than header indicates in " +
-        in_stream->label());
-  }
-  size_t data_size = file_size - offset;
 
   // Load the arrays using metadata
   std::unordered_map<std::string, array> res;
@@ -188,6 +189,14 @@ SafetensorsLoad load_safetensors(
             << " bytes.";
         throw std::runtime_error(msg.str());
       }
+    }
+    if (offset + data_offsets[1] > file_size) {
+      std::ostringstream msg;
+      msg << "[load_safetensors] Tensor '" << item.key()
+          << "' invalid data offsets (" << data_offsets[0] << ", "
+          << data_offsets[1] << ") exceeding the size of the file. "
+          << "Perhaps an incomplete download or corrupt file?";
+      throw std::runtime_error(msg.str());
     }
     res.insert(
         {item.key(),
