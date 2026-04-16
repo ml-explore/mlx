@@ -2478,6 +2478,9 @@ void segmented_mm(
   char devc = d.get_architecture().back();
   GEMM_TPARAM_MACRO(devc)
 
+  bool use_nax = metal::is_nax_available() &&
+      (env::enable_tf32() || out.dtype() != float32);
+
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
 
@@ -2492,7 +2495,7 @@ void segmented_mm(
   base_name += "steel_segmented_mm_";
 
   // Use NAX kernel if available
-  if (metal::is_nax_available()) {
+  if (use_nax) {
     int average_k = K / batch_size_out;
     bm = 64;
     bn = 64;
@@ -2535,33 +2538,32 @@ void segmented_mm(
       align_N ? 't' : 'n');
 
   // Get and set the kernel
-  auto kernel = (metal::is_nax_available())
-      ? get_steel_gemm_segmented_nax_kernel(
-            d,
-            base_name,
-            hash_name,
-            func_consts,
-            out,
-            transpose_a,
-            transpose_b,
-            bm,
-            bn,
-            bk,
-            wm,
-            wn)
-      : get_steel_gemm_segmented_kernel(
-            d,
-            base_name,
-            hash_name,
-            func_consts,
-            out,
-            transpose_a,
-            transpose_b,
-            bm,
-            bn,
-            bk,
-            wm,
-            wn);
+  auto kernel = (use_nax) ? get_steel_gemm_segmented_nax_kernel(
+                                d,
+                                base_name,
+                                hash_name,
+                                func_consts,
+                                out,
+                                transpose_a,
+                                transpose_b,
+                                bm,
+                                bn,
+                                bk,
+                                wm,
+                                wn)
+                          : get_steel_gemm_segmented_kernel(
+                                d,
+                                base_name,
+                                hash_name,
+                                func_consts,
+                                out,
+                                transpose_a,
+                                transpose_b,
+                                bm,
+                                bn,
+                                bk,
+                                wm,
+                                wn);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Prepare the matmul params
@@ -2582,7 +2584,7 @@ void segmented_mm(
 
   // Prepare the grid
   MTL::Size group_dims = MTL::Size(32, wn, wm);
-  MTL::Size grid_dims = (metal::is_nax_available() && bk == 64)
+  MTL::Size grid_dims = (use_nax && bk == 64)
       ? MTL::Size(batch_size_out, params.tiles_n, params.tiles_m)
       : MTL::Size(params.tiles_n, params.tiles_m, batch_size_out);
 
