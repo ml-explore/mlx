@@ -657,7 +657,7 @@ void quant_sdpa_vector_2pass(
   kname += "_";
   kname += std::to_string(q.shape(-1));
   kname += "_";
-  kname += std::to_string(v.shape(-1));
+  kname += std::to_string(q.shape(-1));
 
   int N = k.shape(2);
   int gqa_factor = q.shape(1) / k.shape(1);
@@ -691,9 +691,6 @@ void quant_sdpa_vector_2pass(
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   sums.set_data(allocator::malloc(sums.nbytes()));
   maxs.set_data(allocator::malloc(maxs.nbytes()));
-  d.add_temporary(intermediate, s.index);
-  d.add_temporary(sums, s.index);
-  d.add_temporary(maxs, s.index);
 
   bool has_mask = mask.has_value();
   bool bool_mask = has_mask && (*mask).dtype() == bool_;
@@ -726,7 +723,10 @@ void quant_sdpa_vector_2pass(
   hash_name += std::to_string(group_size) + "_";
   hash_name += std::to_string(blocks);
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
+  compute_encoder.add_temporary(intermediate);
+  compute_encoder.add_temporary(sums);
+  compute_encoder.add_temporary(maxs);
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
   check_kernel_threadgroup_size(kernel, group_dims, hash_name);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -874,7 +874,7 @@ bool QuantizedScaledDotProductAttention::use_fallback(
   return query_sequence_length > 8 ||
       query_sequence_length > key_sequence_length ||
       !(query_head_dim == 64 || query_head_dim == 128 ||
-        query_head_dim == 256) ||
+        query_head_dim == 256 || query_head_dim == 512) ||
       (query_sequence_length * gqa_factor > 32);
 }
 
@@ -1150,7 +1150,7 @@ void QuantizedScaledDotProductAttention::eval_gpu(
       sinks,
       mode_);
 
-  d.add_temporaries(std::move(copies), s.index);
+  metal::get_command_encoder(s).add_temporaries(std::move(copies));
 }
 
 bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
