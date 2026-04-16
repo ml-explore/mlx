@@ -507,7 +507,7 @@ __global__ void gather_copy_kernel(
     int64_t src_batch_stride_bytes,
     int num_slices) {
   int64_t idx = cg::this_grid().thread_rank();
-  int slice_idx = idx / slice_bytes;
+  int64_t slice_idx = idx / slice_bytes;
   int64_t byte_idx = idx % slice_bytes;
   if (slice_idx < num_slices) {
     uint32_t src_slice = indices[slice_idx];
