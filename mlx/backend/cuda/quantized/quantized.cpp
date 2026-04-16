@@ -161,22 +161,10 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         mode_,
         encoder.device());
   };
-  bool can_use_qmm_sm90 = supports(supports_qmm_sm90);
   bool can_use_qmm_sm80 = supports(supports_qmm_sm80);
   bool can_use_qmm_naive = supports(supports_qmm_naive);
   bool can_use_qmv = supports(supports_qmv);
 
-  auto call_qmm_sm90 = [&]() {
-    array gx = gather_slices(x, lhs_indices, B, encoder, s);
-    array gw = gather_slices(w, rhs_indices, B, encoder, s);
-    array gs = gather_slices(scales, rhs_indices, B, encoder, s);
-    std::optional<array> gb = std::nullopt;
-    if (biases) {
-      gb = gather_slices(*biases, rhs_indices, B, encoder, s);
-    }
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    qmm_sm90(gx, gw, gs, *gb, out, bits_, group_size_, encoder, s);
-  };
   auto call_qmm_sm80 = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
     encoder.set_input_array(lhs_indices);
@@ -227,15 +215,6 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         mode_,
         encoder);
   };
-
-  if (can_use_qmm_sm90) {
-    if (can_use_qmv && (M == 1 && B == 1 && N <= 16384 && K <= 16384)) {
-      call_qmv();
-    } else {
-      call_qmm_sm90();
-    }
-    return;
-  }
 
   if (can_use_qmm_sm80) {
     if (can_use_qmv && (M * B < 8)) {
