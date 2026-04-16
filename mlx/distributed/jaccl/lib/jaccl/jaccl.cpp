@@ -190,13 +190,16 @@ bool is_available() {
 
 std::shared_ptr<Group> init(bool strict /* = false */) {
   auto cfg = Config::from_env();
-  if (!cfg.has_value() && strict) {
-    std::ostringstream msg;
-    msg << "[jaccl] You need to provide via environment variables a rank "
-        << "(JACCL_RANK/MLX_RANK), a device file (JACCL_IBV_DEVICES/"
-        << "MLX_IBV_DEVICES) and a coordinator ip/port (JACCL_COORDINATOR/"
-        << "MLX_JACCL_COORDINATOR).";
-    throw std::runtime_error(msg.str());
+  if (!cfg.has_value()) {
+    if (strict) {
+      std::ostringstream msg;
+      msg << "[jaccl] You need to provide via environment variables a rank "
+          << "(JACCL_RANK/MLX_RANK), a device file (JACCL_IBV_DEVICES/"
+          << "MLX_IBV_DEVICES) and a coordinator ip/port (JACCL_COORDINATOR/"
+          << "MLX_JACCL_COORDINATOR).";
+      throw std::runtime_error(msg.str());
+    }
+    return nullptr;
   }
 
   return init(*cfg, strict);
