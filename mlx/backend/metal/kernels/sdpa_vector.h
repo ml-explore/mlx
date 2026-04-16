@@ -408,13 +408,12 @@ METAL_FUNC void quant_sdpa_vector_2pass_1_impl(
 
   static_assert(
       (D % group_size) == 0, "group_size must divide the head dimension");
-  constexpr int BN = 8;
-  constexpr int BD = 4;
+  constexpr int BD = (D > 256) ? 8 : 4;
+  constexpr int BN = 32 / BD;
   constexpr int elem_per_thread = D / BD;
 
-  // Derive quad indices from simd_lid (replaces quad_gid/quad_lid attributes)
-  const int local_quad_gid = simd_lid / 4; // 0-7
-  const int local_quad_lid = simd_lid % 4; // 0-3
+  const int local_quad_gid = simd_lid / BD;
+  const int local_quad_lid = simd_lid % BD;
 
   typedef float U;
 
@@ -515,6 +514,9 @@ METAL_FUNC void quant_sdpa_vector_2pass_1_impl(
           template dot<U, ScaleT, elem_per_thread>(
               q, key_ptr.ptr(), key_scales, key_bias_ptr);
       score = quad_sum(score);
+      for (int s = 4; s < BD; s <<= 1) {
+        score += simd_shuffle_xor(score, s);
+      }
 
       if (float_mask) {
         score += static_cast<U>(fmask[0]);
@@ -568,14 +570,13 @@ METAL_FUNC void quant_sdpa_vector_2pass_1_impl(
     maxs[0] = global_max;
   }
 
-  // Output reduction: sum across quads (same local_quad_lid only)
+  // Output reduction: sum across groups (same local_quad_lid only)
   U rescale = fast::exp(max_score - global_max);
   for (int i = 0; i < elem_per_thread; i++) {
     U val = o[i] * rescale;
-    val += simd_shuffle_xor(val, 4); // sum quads 0+1, 2+3, 4+5, 6+7
-    val += simd_shuffle_xor(val, 8); // sum quads 0-3, 4-7
-    val += simd_shuffle_xor(val, 16); // sum quads 0-7
-    // All lanes with same local_quad_lid now have the full sum;
+    for (int s = BD; s < 32; s <<= 1) {
+      val += simd_shuffle_xor(val, s);
+    }
     if (local_quad_gid == 0) {
       out[i] = static_cast<T>(val);
     }
