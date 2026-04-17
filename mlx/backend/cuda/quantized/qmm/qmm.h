@@ -49,13 +49,13 @@ void qmm_sm80(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& lhs_indices,
+    const std::optional<array>& rhs_indices,
     array& out,
     int bits,
     int group_size,
     QuantizationMode mode,
-    cu::CommandEncoder& encoder,
-    const uint32_t* lhs_indices = nullptr,
-    const uint32_t* rhs_indices = nullptr);
+    cu::CommandEncoder& encoder);
 
 bool supports_qmm_naive(
     const array& x,
@@ -74,14 +74,14 @@ void qmm_naive(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& lhs_indices,
+    const std::optional<array>& rhs_indices,
     array& out,
     bool transpose,
     int bits,
     int group_size,
     QuantizationMode mode,
-    cu::CommandEncoder& encoder,
-    const uint32_t* lhs_indices = nullptr,
-    const uint32_t* rhs_indices = nullptr);
+    cu::CommandEncoder& encoder);
 
 bool supports_fp_qmv(
     const array& x,

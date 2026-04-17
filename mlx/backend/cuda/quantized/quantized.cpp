@@ -50,7 +50,18 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   };
   auto call_qmm_sm80 = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    qmm_sm80(x, w, scales, biases, out, bits_, group_size_, mode_, encoder);
+    qmm_sm80(
+        x,
+        w,
+        scales,
+        biases,
+        std::nullopt,
+        std::nullopt,
+        out,
+        bits_,
+        group_size_,
+        mode_,
+        encoder);
   };
   auto call_qmm_naive = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
@@ -59,6 +70,8 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         w,
         scales,
         biases,
+        std::nullopt,
+        std::nullopt,
         out,
         transpose_,
         bits_,
@@ -167,38 +180,34 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto call_qmm_sm80 = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    encoder.set_input_array(lhs_indices);
-    encoder.set_input_array(rhs_indices);
     qmm_sm80(
         x,
         w,
         scales,
         biases,
+        lhs_indices,
+        rhs_indices,
         out,
         bits_,
         group_size_,
         mode_,
-        encoder,
-        gpu_ptr<uint32_t>(lhs_indices),
-        gpu_ptr<uint32_t>(rhs_indices));
+        encoder);
   };
   auto call_qmm_naive = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    encoder.set_input_array(lhs_indices);
-    encoder.set_input_array(rhs_indices);
     qmm_naive(
         x,
         w,
         scales,
         biases,
+        lhs_indices,
+        rhs_indices,
         out,
         transpose_,
         bits_,
         group_size_,
         mode_,
-        encoder,
-        gpu_ptr<uint32_t>(lhs_indices),
-        gpu_ptr<uint32_t>(rhs_indices));
+        encoder);
   };
   auto call_qmv = [&]() {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));

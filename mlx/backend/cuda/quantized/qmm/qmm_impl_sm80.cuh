@@ -438,13 +438,13 @@ void qmm_impl_sm80(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& lhs_indices,
+    const std::optional<array>& rhs_indices,
     array& out,
     int bits,
     int group_size,
     QuantizationMode mode,
-    cu::CommandEncoder& encoder,
-    const uint32_t* lhs_indices = nullptr,
-    const uint32_t* rhs_indices = nullptr) {
+    cu::CommandEncoder& encoder) {
   const char* tag = "[quantized_matmul]";
   int m = out.ndim() > 1 ? out.shape(-2) : 1;
   int n = out.shape(-1);
@@ -464,6 +464,12 @@ void qmm_impl_sm80(
           encoder.set_input_array(scales);
           if (biases) {
             encoder.set_input_array(*biases);
+          }
+          if (lhs_indices) {
+            encoder.set_input_array(*lhs_indices);
+          }
+          if (rhs_indices) {
+            encoder.set_input_array(*rhs_indices);
           }
           encoder.set_output_array(out);
           cutlass_gemm::qmm_sm80<TileM>(
@@ -486,26 +492,26 @@ void qmm_impl_sm80(
                 encoder.add_kernel_node_raw(
                     kernel, num_blocks, block_dims, {}, smem_bytes, args);
               },
-              lhs_indices,
-              rhs_indices);
+              lhs_indices ? gpu_ptr<uint32_t>(*lhs_indices) : nullptr,
+              rhs_indices ? gpu_ptr<uint32_t>(*rhs_indices) : nullptr);
         });
   });
 }
 
 } // namespace mlx::core
 
-#define QMM_SM80_GPU(TileM)               \
-  namespace mlx::core {                   \
-  template void qmm_impl_sm80<TileM>(     \
-      const array& x,                     \
-      const array& w,                     \
-      const array& scales,                \
-      const std::optional<array>& biases, \
-      array& out,                         \
-      int bits,                           \
-      int group_size,                     \
-      QuantizationMode mode,              \
-      cu::CommandEncoder& encoder,        \
-      const uint32_t* lhs_indices,        \
-      const uint32_t* rhs_indices);       \
+#define QMM_SM80_GPU(TileM)                    \
+  namespace mlx::core {                        \
+  template void qmm_impl_sm80<TileM>(          \
+      const array& x,                          \
+      const array& w,                          \
+      const array& scales,                     \
+      const std::optional<array>& biases,      \
+      const std::optional<array>& lhs_indices, \
+      const std::optional<array>& rhs_indices, \
+      array& out,                              \
+      int bits,                                \
+      int group_size,                          \
+      QuantizationMode mode,                   \
+      cu::CommandEncoder& encoder);            \
   }
