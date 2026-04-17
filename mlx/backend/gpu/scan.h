@@ -6,7 +6,7 @@
 namespace mlx::core {
 
 void scan_gpu_inplace(
-    array in,
+    const array& in,
     array& out,
     Scan::ReduceType reduce_type,
     int axis,
