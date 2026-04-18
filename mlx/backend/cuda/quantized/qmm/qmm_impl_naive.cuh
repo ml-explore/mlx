@@ -51,9 +51,8 @@ __global__ void qmm_naive_kernel(
     const Quant*   B, StrideB dB, SmemLayoutB sB_layout, TiledCopyB copy_b,
           Element* C, StrideC dC,
     const Scale* S, const Element* Z, LayoutS S_layout,
-    TiledMma mma,
-    const uint32_t* lhs_indices = nullptr,
-    const uint32_t* rhs_indices = nullptr) {
+    const uint32_t* lhs_indices, const uint32_t* rhs_indices,
+    TiledMma mma) {
   CUTE_STATIC_ASSERT_V(size(copy_a) == size(mma));
   CUTE_STATIC_ASSERT_V(size(copy_b) == size(mma));
   CUTE_STATIC_ASSERT_V(congruent(select<0,2,3>(shape_MNKL), dA));
@@ -276,13 +275,13 @@ void qmm_naive(
     const Quant*   B,
     const Scale*   S,
     const Element* Z,
+    const uint32_t* lhs_indices,
+    const uint32_t* rhs_indices,
     Element* C,
     int m, int n, int k, int l,
     bool broadcast_b,
     auto group_size,
-    auto&& launch_kernel,
-    const uint32_t* lhs_indices = nullptr,
-    const uint32_t* rhs_indices = nullptr) {
+    auto&& launch_kernel) {
   // Define shapes (dynamic).
   auto prob_shape = make_shape(m, n, k, l); // (M,N,K,L)
 
@@ -338,8 +337,8 @@ void qmm_naive(
       &B, &dB, &sB_layout, &copy_b,
       &C, &dC,
       &S, &Z, &S_layout,
-      &mma,
-      &lhs_indices, &rhs_indices};
+      &lhs_indices, &rhs_indices,
+      &mma};
   launch_kernel(reinterpret_cast<void*>(kernel), num_blocks, block_dims, smem_bytes, args);
 }
 
@@ -459,6 +458,8 @@ void qmm_impl_naive(
                 gpu_ptr<Quant>(w),
                 gpu_ptr<Scale>(scales),
                 biases ? gpu_ptr<Element>(*biases) : nullptr,
+                lhs_indices ? gpu_ptr<uint32_t>(*lhs_indices) : nullptr,
+                rhs_indices ? gpu_ptr<uint32_t>(*rhs_indices) : nullptr,
                 gpu_ptr<Element>(out),
                 m,
                 n,
@@ -473,9 +474,7 @@ void qmm_impl_naive(
                     void** args) {
                   encoder.add_kernel_node_raw(
                       kernel, num_blocks, block_dims, {}, smem_bytes, args);
-                },
-                lhs_indices ? gpu_ptr<uint32_t>(*lhs_indices) : nullptr,
-                rhs_indices ? gpu_ptr<uint32_t>(*rhs_indices) : nullptr);
+                });
           });
     });
   });

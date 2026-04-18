@@ -37,9 +37,9 @@ __global__ void qmm_sm80_kernel(
     const Element* A, StrideA dA, SmemLayoutA sA_layout, TiledCopyA g2s_copy_a, S2RAtomA s2r_atom_a,
     const Quant*   B, StrideB dB, SmemLayoutB sB_layout, TiledCopyB g2s_copy_b, S2RAtomB s2r_atom_b,
           Element* C, StrideC dC, SmemLayoutC sC_layout, TiledCopyC s2g_copy_c, R2SAtomC r2s_atom_c,
-    const Scale* S, const Element* Z, LayoutS S_layout, G2RAtomS g2r_atom_s, TiledMma mma,
-    const uint32_t* lhs_indices = nullptr,
-    const uint32_t* rhs_indices = nullptr) {
+    const Scale* S, const Element* Z, LayoutS S_layout, G2RAtomS g2r_atom_s,
+    const uint32_t* lhs_indices, const uint32_t* rhs_indices,
+    TiledMma mma) {
   CUTE_STATIC_ASSERT_V(size(g2s_copy_a) == size(mma));
   CUTE_STATIC_ASSERT_V(size(g2s_copy_b) == size(mma));
   CUTE_STATIC_ASSERT_V(size(s2g_copy_c) == size(mma));
@@ -273,19 +273,19 @@ inline auto make_tiled_copy(NumThreads num_threads) {
       make_layout(make_shape(Int<1>{}, Int<bits / sizeof_bits_v<T>>{})));
 }
 
-template <int TileM = 16, typename Element, typename Quant, typename Scale, typename GroupSize, typename F>
+template <int TileM = 16, typename Element, typename Quant, typename Scale, typename GroupSize>
 void qmm_sm80(
     const Element* A,
     const Quant*   B,
     const Scale* S,
     const Element* Z,
+    const uint32_t* lhs_indices,
+    const uint32_t* rhs_indices,
     Element* C,
     int m, int n, int k, int l,
     bool broadcast_b,
     GroupSize group_size,
-    F&& launch_kernel,
-    const uint32_t* lhs_indices = nullptr,
-    const uint32_t* rhs_indices = nullptr) {
+    auto&& launch_kernel) {
   // Define shapes (dynamic).
   auto prob_shape = make_shape(m, n, k, l); // (M,N,K,L)
 
@@ -368,8 +368,9 @@ void qmm_sm80(
       &A, &dA, &sA_layout, &g2s_copy_a, &s2r_atom_a,
       &B, &dB, &sB_layout, &g2s_copy_b, &s2r_atom_b,
       &C, &dC, &sC_layout, &s2g_copy_c, &r2s_atom_c,
-      &S, &Z, &S_layout, &g2r_atom_s, &mma,
-      &lhs_indices, &rhs_indices};
+      &S, &Z, &S_layout, &g2r_atom_s,
+      &lhs_indices, &rhs_indices,
+      &mma};
   launch_kernel(reinterpret_cast<void*>(kernel), num_blocks, block_dims, smem_bytes, args);
 }
 
@@ -477,6 +478,8 @@ void qmm_impl_sm80(
               gpu_ptr<Quant>(w),
               gpu_ptr<Scale>(scales),
               biases ? gpu_ptr<Element>(*biases) : nullptr,
+              lhs_indices ? gpu_ptr<uint32_t>(*lhs_indices) : nullptr,
+              rhs_indices ? gpu_ptr<uint32_t>(*rhs_indices) : nullptr,
               gpu_ptr<Element>(out),
               m,
               n,
@@ -491,9 +494,7 @@ void qmm_impl_sm80(
                   void** args) {
                 encoder.add_kernel_node_raw(
                     kernel, num_blocks, block_dims, {}, smem_bytes, args);
-              },
-              lhs_indices ? gpu_ptr<uint32_t>(*lhs_indices) : nullptr,
-              rhs_indices ? gpu_ptr<uint32_t>(*rhs_indices) : nullptr);
+              });
         });
   });
 }
