@@ -5,6 +5,7 @@
 #include <atomic>
 #include <future>
 #include <queue>
+#include <shared_mutex>
 #include <thread>
 #include <unordered_map>
 
@@ -50,21 +51,20 @@ struct StreamThread {
     }
   }
 
-  template <typename F>
-  void enqueue(F&& f) {
+  void enqueue(std::function<void()> f) {
     {
       std::lock_guard<std::mutex> lk(mtx);
       if (stop) {
         throw std::runtime_error(
             "Cannot enqueue work after stream is stopped.");
       }
-      q.emplace(std::forward<F>(f));
+      q.emplace(std::move(f));
     }
     cond.notify_one();
   }
 };
 
-class Scheduler {
+class MLX_API Scheduler {
  public:
   Scheduler();
   ~Scheduler();
@@ -75,8 +75,7 @@ class Scheduler {
   Scheduler& operator=(const Scheduler&) = delete;
   Scheduler& operator=(Scheduler&&) = delete;
 
-  template <typename F>
-  void enqueue(const Stream& stream, F&& f);
+  void enqueue(Stream s, std::function<void()> task);
 
   void notify_new_task(const Stream& stream) {
     {
@@ -111,18 +110,12 @@ class Scheduler {
  private:
   friend Stream mlx::core::new_stream(Device d);
 
-  void new_thread(Device::DeviceType type);
-
   int n_active_tasks_{0};
-  std::vector<std::unique_ptr<StreamThread>> threads_;
+  std::unordered_map<int, std::unique_ptr<StreamThread>> threads_;
+  std::shared_mutex threads_mtx_;
   std::condition_variable completion_cv;
   std::mutex mtx;
 };
-
-template <typename F>
-void Scheduler::enqueue(const Stream& stream, F&& f) {
-  threads_[stream.index]->enqueue(std::forward<F>(f));
-}
 
 MLX_API Scheduler& scheduler();
 
