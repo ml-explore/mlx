@@ -901,9 +901,9 @@ array quantized_scaled_dot_product_attention(
 
   // Validate mode-specific group_size and bits
   if (is_affine) {
-    if (group_size != 32) {
+    if (group_size != 32 && group_size != 64) {
       std::ostringstream msg;
-      msg << "[" << tag << "] Affine mode supports group_size 32 "
+      msg << "[" << tag << "] Affine mode supports group_size 32 or 64 "
           << "but received " << group_size << ".";
       throw std::invalid_argument(msg.str());
     }
