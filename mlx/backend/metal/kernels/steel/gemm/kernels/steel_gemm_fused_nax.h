@@ -59,7 +59,7 @@ void gemm_epilogue(
             n);
       }
 
-      auto delems = Dtile.frag_at(mm, nn);
+      thread auto& delems = Dtile.frag_at(mm, nn);
 
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < kElemsPerFrag; i++) {

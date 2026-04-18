@@ -677,21 +677,24 @@ void steel_gemm_splitk_axpby_nax(
 
   int bm = 128, bn = 128, bk = 512;
   int wm = 4, wn = 4;
-  int split_k_partition_size = 3072;
+  int split_k_partition_size = 4096;
 
-  if ((M + N) / 2 < 512) {
+  if ((M + N) / 2 < 512 || K <= 4096) {
     bm = bn = 64;
     bk = 256;
     wm = wn = 2;
   }
-  if (K < 10240) {
-    split_k_partition_size = std::min(2048, K / 2);
+  if (K <= 1024) {
+    split_k_partition_size = K / 2;
+  } else if (K <= 2048) {
+    split_k_partition_size = 1024;
+  } else if (K <= 4096) {
+    split_k_partition_size = 2048;
   }
 
   // Determine how many partitions to split K into
   int split_k_partitions =
       (K + split_k_partition_size - 1) / split_k_partition_size;
-
   const int bk_iters_per_partition = split_k_partition_size / bk;
   const int split_k_partition_stride = M * N;
 
@@ -940,7 +943,6 @@ void steel_matmul_axpby(
   }
 
   // Case 2: Large K with sufficient M, N, and NAX is available, use NAX split-K
-  // TODO: Add device-specific tuning for more NAX GPUs in the future
   if (use_nax && batch_size_out == 1 &&
       (K >= 3 * std::max(M, N) ||
        (std::max(M, N) <= 1024 && K > 2 * std::max(M, N)))) {
