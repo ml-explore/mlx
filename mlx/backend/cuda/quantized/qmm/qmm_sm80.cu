@@ -434,7 +434,7 @@ inline void dispatch_quant_types(
 }
 
 template <int TileM>
-void qmm_impl_sm80(
+void qmm_sm80_impl(
     const array& x,
     const array& w,
     const array& scales,
@@ -499,20 +499,19 @@ void qmm_impl_sm80(
   });
 }
 
-} // namespace mlx::core
+// clang-format off
+template void qmm_sm80_impl<@TileM@>(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const std::optional<array>& lhs_indices,
+    const std::optional<array>& rhs_indices,
+    array& out,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder);
+// clang-format on
 
-#define QMM_SM80_GPU(TileM)                    \
-  namespace mlx::core {                        \
-  template void qmm_impl_sm80<TileM>(          \
-      const array& x,                          \
-      const array& w,                          \
-      const array& scales,                     \
-      const std::optional<array>& biases,      \
-      const std::optional<array>& lhs_indices, \
-      const std::optional<array>& rhs_indices, \
-      array& out,                              \
-      int bits,                                \
-      int group_size,                          \
-      QuantizationMode mode,                   \
-      cu::CommandEncoder& encoder);            \
-  }
+} // namespace mlx::core

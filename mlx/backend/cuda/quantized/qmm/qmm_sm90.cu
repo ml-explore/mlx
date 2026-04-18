@@ -20,8 +20,7 @@ namespace cutlass_gemm {
 using namespace cute;
 
 template <
-    typename TileShapeMN = Shape<_128, _16>,
-    typename ClusterShape = Shape<_1, _1, _1>,
+    int TileN = 16,
     typename Element,
     typename Quant,
     typename GroupSize,
@@ -47,7 +46,8 @@ void qmm_sm90(
 
   using Arch = cutlass::arch::Sm90;
   using Accumulator = float;
-  using TileShape = decltype(append(TileShapeMN{}, Int<kTileShapeK>{}));
+  using TileShape = Shape<_128, Int<TileN>, Int<kTileShapeK>>;
+  using ClusterShape = Shape<Int<(TileN <= 32) ? 1 : 2>, _1, _1>;
 
   using Epilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
       Arch,
@@ -177,8 +177,8 @@ inline void dispatch_groups(int group_size, const char* tag, F&& f) {
   }
 }
 
-template <typename TileShapeMN, typename ClusterShape>
-void qmm_impl_sm90(
+template <int TileN>
+void qmm_sm90_impl(
     const array& x,
     const array& w,
     const array& scales_,
@@ -207,7 +207,7 @@ void qmm_impl_sm90(
         encoder.set_input_array(scales);
         encoder.set_input_array(biases);
         encoder.set_output_array(out);
-        cutlass_gemm::qmm_sm90(
+        cutlass_gemm::qmm_sm90<TileN>(
             gpu_ptr<Element>(x),
             gpu_ptr<Quant>(w),
             gpu_ptr<Element>(scales),
@@ -238,24 +238,19 @@ void qmm_impl_sm90(
   });
 }
 
+// clang-format off
+template void qmm_sm90_impl<@TileN@>(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    array& out,
+    int bits,
+    int group_size,
+    cu::CommandEncoder& encoder,
+    Stream s);
+// clang-format on
+
 } // namespace mlx::core
-
-#define QMM_SM90_GPU(TileShapeMN, ClusterShape)           \
-  namespace mlx::core {                                   \
-  template void qmm_impl_sm90<TileShapeMN, ClusterShape>( \
-      const array& x,                                     \
-      const array& w,                                     \
-      const array& scales,                                \
-      const array& biases,                                \
-      array& out,                                         \
-      int bits,                                           \
-      int group_size,                                     \
-      cu::CommandEncoder& encoder,                        \
-      Stream s);                                          \
-  }
-
-#else
-
-#define QMM_SM90_GPU(TileShapeMN, ClusterShape)
 
 #endif // defined(MLX_CUDA_SM90A_ENABLED)

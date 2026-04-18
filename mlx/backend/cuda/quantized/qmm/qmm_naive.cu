@@ -316,7 +316,7 @@ inline constexpr auto make_scales_layout(auto n, auto k, auto l, auto group_size
   }
 }
 
-template <int TileM = 16, bool KMajor = true, bool SM80 = true, bool HasKResidue = false,
+template <int TileM = 16, bool KMajor = true, bool HasKResidue = false, bool SM80 = true,
           typename Element, typename Quant, typename Scale>
 void qmm_naive(
     const Element* A,
@@ -396,21 +396,6 @@ void qmm_naive(
 
 namespace mlx::core {
 
-template <bool KMajor, typename F>
-inline void dispatch_k(bool has_k_residue, const char* tag, F&& f) {
-  if constexpr (KMajor) {
-    if (has_k_residue) {
-      throw std::invalid_argument(
-          fmt::format("{} K must be multiples of group_size.", tag));
-    }
-    f.template operator()<false>();
-  } else {
-    dispatch_bool(has_k_residue, [&](auto has_k_residue) {
-      f.template operator()<has_k_residue.value>();
-    });
-  }
-}
-
 template <typename F>
 inline void dispatch_element_types(Dtype dtype, const char* tag, F&& f) {
   if (dtype == float32) {
@@ -474,8 +459,8 @@ inline void dispatch_quant_types(
   }
 }
 
-template <int TileM, bool KMajor>
-void qmm_impl_naive(
+template <int TileM, bool KMajor, bool HasKResidue, bool SM80>
+void qmm_naive_impl(
     const array& x,
     const array& w,
     const array& scales,
@@ -494,71 +479,65 @@ void qmm_impl_naive(
   int l = out.size() / (m * n);
   bool broadcast_b = (w.ndim() <= 2) || (w.size() != w.data_size());
 
-  bool is_sm80 = encoder.device().compute_capability_major() >= 8;
-  dispatch_bool(is_sm80, [&](auto sm80) {
-    dispatch_k<KMajor>(k % group_size != 0, tag, [&]<bool has_k_residue>() {
-      dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
-        dispatch_quant_types<Element>(
-            bits,
-            group_size,
-            mode,
-            tag,
-            [&]<typename Quant, typename Scale, int group_size>() {
-              encoder.set_input_array(x);
-              encoder.set_input_array(w);
-              encoder.set_input_array(scales);
-              if (biases) {
-                encoder.set_input_array(*biases);
-              }
-              if (lhs_indices) {
-                encoder.set_input_array(*lhs_indices);
-              }
-              if (rhs_indices) {
-                encoder.set_input_array(*rhs_indices);
-              }
-              encoder.set_output_array(out);
-              cutlass_gemm::qmm_naive<TileM, KMajor, sm80.value, has_k_residue>(
-                  gpu_ptr<Element>(x),
-                  gpu_ptr<Quant>(w),
-                  gpu_ptr<Scale>(scales),
-                  biases ? gpu_ptr<Element>(*biases) : nullptr,
-                  lhs_indices ? gpu_ptr<uint32_t>(*lhs_indices) : nullptr,
-                  rhs_indices ? gpu_ptr<uint32_t>(*rhs_indices) : nullptr,
-                  gpu_ptr<Element>(out),
-                  m,
-                  n,
-                  k,
-                  l,
-                  broadcast_b,
-                  cute::Int<group_size>{},
-                  [&](auto* kernel,
-                      dim3 num_blocks,
-                      dim3 block_dims,
-                      uint32_t smem_bytes,
-                      void** args) {
-                    encoder.add_kernel_node_raw(
-                        kernel, num_blocks, block_dims, {}, smem_bytes, args);
-                  });
-            });
-      });
-    });
+  dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
+    dispatch_quant_types<Element>(
+        bits,
+        group_size,
+        mode,
+        tag,
+        [&]<typename Quant, typename Scale, int group_size>() {
+          encoder.set_input_array(x);
+          encoder.set_input_array(w);
+          encoder.set_input_array(scales);
+          if (biases) {
+            encoder.set_input_array(*biases);
+          }
+          if (lhs_indices) {
+            encoder.set_input_array(*lhs_indices);
+          }
+          if (rhs_indices) {
+            encoder.set_input_array(*rhs_indices);
+          }
+          encoder.set_output_array(out);
+          cutlass_gemm::qmm_naive<TileM, KMajor, HasKResidue, SM80>(
+              gpu_ptr<Element>(x),
+              gpu_ptr<Quant>(w),
+              gpu_ptr<Scale>(scales),
+              biases ? gpu_ptr<Element>(*biases) : nullptr,
+              lhs_indices ? gpu_ptr<uint32_t>(*lhs_indices) : nullptr,
+              rhs_indices ? gpu_ptr<uint32_t>(*rhs_indices) : nullptr,
+              gpu_ptr<Element>(out),
+              m,
+              n,
+              k,
+              l,
+              broadcast_b,
+              cute::Int<group_size>{},
+              [&](auto* kernel,
+                  dim3 num_blocks,
+                  dim3 block_dims,
+                  uint32_t smem_bytes,
+                  void** args) {
+                encoder.add_kernel_node_raw(
+                    kernel, num_blocks, block_dims, {}, smem_bytes, args);
+              });
+        });
   });
 }
 
-} // namespace mlx::core
+// clang-format off
+template void qmm_naive_impl<@TileM@, @KMajor@, @HasKResidue@, @SM80@>(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const std::optional<array>& lhs_indices,
+    const std::optional<array>& rhs_indices,
+    array& out,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder);
+// clang-format on
 
-#define QMM_NAIVE_GPU(TileM, KMajor)           \
-  namespace mlx::core {                        \
-  template void qmm_impl_naive<TileM, KMajor>( \
-      const array& x,                          \
-      const array& w,                          \
-      const array& scales,                     \
-      const std::optional<array>& biases,      \
-      const std::optional<array>& lhs_indices, \
-      const std::optional<array>& rhs_indices, \
-      array& out,                              \
-      int bits,                                \
-      int group_size,                          \
-      QuantizationMode mode,                   \
-      cu::CommandEncoder& encoder);            \
-  }
+} // namespace mlx::core

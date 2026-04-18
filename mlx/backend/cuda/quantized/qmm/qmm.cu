@@ -17,9 +17,9 @@ inline bool is_last_2_dims_row_contiguous(const array& x) {
 } // namespace
 
 #if defined(MLX_CUDA_SM90A_ENABLED)
-// Defined in qmm_impl_sm90_xxx.cu files.
-template <typename TileShape, typename ClusterShape>
-void qmm_impl_sm90(
+// Defined in qmm_sm90.cu.
+template <int TileN>
+void qmm_sm90_impl(
     const array& x,
     const array& w,
     const array& scales,
@@ -83,24 +83,21 @@ void qmm_sm90(
     cu::CommandEncoder& encoder,
     Stream s) {
 #if defined(MLX_CUDA_SM90A_ENABLED)
-  auto dispatch = [&]<int tile_m, int tile_n, int cluster_m>() {
-    using cute::Int;
-    using TileShapeMN = cute::Shape<Int<tile_m>, Int<tile_n>>;
-    using ClusterShape = cute::Shape<Int<cluster_m>, Int<1>, Int<1>>;
-    qmm_impl_sm90<TileShapeMN, ClusterShape>(
+  auto dispatch = [&]<int TileN>() {
+    qmm_sm90_impl<TileN>(
         x, w, scales, biases, out, bits, group_size, encoder, s);
   };
   int m = out.ndim() > 1 ? out.shape(-2) : 1;
   if (m <= 16) {
-    dispatch.template operator()<128, 16, 1>();
+    dispatch.template operator()<16>();
   } else if (m <= 32) {
-    dispatch.template operator()<128, 32, 1>();
+    dispatch.template operator()<32>();
   } else if (m <= 64) {
-    dispatch.template operator()<128, 64, 2>();
+    dispatch.template operator()<64>();
   } else if (m <= 128) {
-    dispatch.template operator()<128, 128, 2>();
+    dispatch.template operator()<128>();
   } else {
-    dispatch.template operator()<128, 256, 2>();
+    dispatch.template operator()<256>();
   }
 #else
   throw std::runtime_error(
@@ -108,9 +105,9 @@ void qmm_sm90(
 #endif // defined(MLX_CUDA_SM90A_ENABLED)
 }
 
-// Defined in qmm_impl_sm80_xxx.cu files.
+// Defined in qmm_sm80.cu.
 template <int TileM>
-void qmm_impl_sm80(
+void qmm_sm80_impl(
     const array& x,
     const array& w,
     const array& scales,
@@ -174,7 +171,7 @@ void qmm_sm80(
     QuantizationMode mode,
     cu::CommandEncoder& encoder) {
   auto dispatch = [&]<int TileM>() {
-    qmm_impl_sm80<TileM>(
+    qmm_sm80_impl<TileM>(
         x,
         w,
         scales,
@@ -197,9 +194,9 @@ void qmm_sm80(
   }
 }
 
-// Defined in qmm_impl_naive_xxx.cu files.
-template <int TileM, bool KMajor>
-void qmm_impl_naive(
+// Defined in qmm_naive.cu.
+template <int TileM, bool KMajor, bool HasKResidue, bool SM80>
+void qmm_naive_impl(
     const array& x,
     const array& w,
     const array& scales,
@@ -250,8 +247,8 @@ void qmm_naive(
     int group_size,
     QuantizationMode mode,
     cu::CommandEncoder& encoder) {
-  auto dispatch = [&]<int TileM, bool KMajor>() {
-    qmm_impl_naive<TileM, KMajor>(
+  auto dispatch = [&]<int TileM, bool KMajor, bool HasKResidue, bool SM80>() {
+    qmm_naive_impl<TileM, KMajor, HasKResidue, SM80>(
         x,
         w,
         scales,
@@ -264,15 +261,37 @@ void qmm_naive(
         mode,
         encoder);
   };
-  dispatch_bool(transpose, [&](auto k_major) {
-    int m = out.ndim() > 1 ? out.shape(-2) : 1;
-    if (m <= 16) {
-      dispatch.template operator()<16, k_major.value>();
-    } else if (m <= 32) {
-      dispatch.template operator()<32, k_major.value>();
+  auto dispatch_k = [&](auto k_major, bool has_k_residue, auto&& f) {
+    if constexpr (k_major.value) {
+      if (has_k_residue) {
+        throw std::invalid_argument(
+            "[quantized_matmul] K must be multiples of group_size.");
+      }
+      f.template operator()<false>();
     } else {
-      dispatch.template operator()<64, k_major.value>();
+      dispatch_bool(has_k_residue, [&](auto has_k_residue) {
+        f.template operator()<has_k_residue.value>();
+      });
     }
+  };
+  int m = out.ndim() > 1 ? out.shape(-2) : 1;
+  int k = x.shape(-1);
+  bool has_k_residue = k % group_size != 0;
+  bool sm80 = encoder.device().compute_capability_major() >= 8;
+  dispatch_bool(transpose, [&](auto k_major) {
+    dispatch_k(k_major, has_k_residue, [&]<bool HasKResidue>() {
+      dispatch_bool(sm80, [&](auto sm80) {
+        constexpr bool KMajor = k_major.value;
+        constexpr bool SM80 = sm80.value;
+        if (m <= 16) {
+          dispatch.template operator()<16, KMajor, HasKResidue, SM80>();
+        } else if (m <= 32) {
+          dispatch.template operator()<32, KMajor, HasKResidue, SM80>();
+        } else {
+          dispatch.template operator()<64, KMajor, HasKResidue, SM80>();
+        }
+      });
+    });
   });
 }
 
