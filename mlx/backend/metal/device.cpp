@@ -50,10 +50,21 @@ auto get_metal_version() {
 NS::SharedPtr<MTL::Device> load_device() {
   auto pool = new_scoped_memory_pool();
   auto devices = NS::TransferPtr(MTL::CopyAllDevices());
-  auto device = NS::RetainPtr(static_cast<MTL::Device*>(devices->object(0)))
-      ?: NS::TransferPtr(MTL::CreateSystemDefaultDevice());
+  // In headless, sandboxed, or virtualized macOS sessions CopyAllDevices()
+  // returns an empty NSArray. Indexing object(0) on an empty array raises
+  // an unrecoverable NSRangeException, so guard the access and fall back to
+  // CreateSystemDefaultDevice (which can also return null).
+  MTL::Device* first = nullptr;
+  if (devices && devices->count() > 0) {
+    first = static_cast<MTL::Device*>(devices->object(0));
+  }
+  auto device = first ? NS::RetainPtr(first)
+                      : NS::TransferPtr(MTL::CreateSystemDefaultDevice());
   if (!device) {
-    throw std::runtime_error("Failed to load device");
+    throw std::runtime_error(
+        "[metal::load_device] No Metal device available. This typically "
+        "occurs in headless, sandboxed, or virtualized macOS sessions "
+        "where the GPU is not accessible.");
   }
   return device;
 }
