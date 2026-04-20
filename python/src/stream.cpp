@@ -162,8 +162,12 @@ void init_stream(nb::module_& m) {
       )pbdoc");
   m.def(
       "synchronize",
-      [](const std::optional<mx::Stream>& s) {
-        s ? mx::synchronize(s.value()) : mx::synchronize();
+      [](mx::StreamOrDevice s) {
+        if (std::holds_alternative<std::monostate>(s)) {
+          mx::synchronize();
+        } else {
+          mx::synchronize(mx::to_stream(s));
+        }
       },
       "stream"_a = nb::none(),
       R"pbdoc(

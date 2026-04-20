@@ -16,6 +16,10 @@ void synchronize(Stream s) {
   }
 }
 
+void synchronize(ThreadLocalStream s) {
+  synchronize(stream_from_thread_local_stream(s));
+}
+
 void synchronize() {
   synchronize(default_stream(default_device()));
 }
