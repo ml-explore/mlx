@@ -1734,6 +1734,37 @@ class RandomBits : public UnaryPrimitive {
   int width_;
 };
 
+// Fused uniform-in-target-dtype primitive for half-precision outputs.
+// Avoids the 3x peak memory overhead of bits()->divide()->astype()
+// pipelines by computing the entire transform per-thread in registers.
+class RandomUniform : public UnaryPrimitive {
+ public:
+  explicit RandomUniform(
+      Stream stream,
+      const Shape& shape,
+      Dtype dtype,
+      float low,
+      float high)
+      : UnaryPrimitive(stream),
+        shape_(shape),
+        dtype_(dtype),
+        low_(low),
+        high_(high) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_NAME(RandomUniform)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  Shape shape_;
+  Dtype dtype_;
+  float low_;
+  float high_;
+};
+
 class Real : public UnaryPrimitive {
  public:
   explicit Real(Stream stream) : UnaryPrimitive(stream) {}

@@ -3822,6 +3822,23 @@ bool RandomBits::is_equivalent(const Primitive& other) const {
   return shape_ == r_other.shape_ && width_ == r_other.width_;
 }
 
+std::pair<std::vector<array>, std::vector<int>> RandomUniform::vmap(
+    const std::vector<array>&, const std::vector<int>&) {
+  // The fused primitive does not support vmap. Callers (random.cpp) avoid
+  // dispatching here when a vmap is in flight by detecting non-scalar
+  // shapes; if we are reached anyway, throw a clear error.
+  throw std::runtime_error(
+      "[RandomUniform::vmap] Fused half-precision uniform does not "
+      "support vmap. Please use mx.random.uniform with float32 dtype "
+      "and astype to half precision.");
+}
+
+bool RandomUniform::is_equivalent(const Primitive& other) const {
+  const RandomUniform& r_other = static_cast<const RandomUniform&>(other);
+  return shape_ == r_other.shape_ && dtype_ == r_other.dtype_ &&
+      low_ == r_other.low_ && high_ == r_other.high_;
+}
+
 std::vector<array> Real::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
