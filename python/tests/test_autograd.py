@@ -966,6 +966,27 @@ class TestAutograd(mlx_tests.MLXTestCase):
         out, jout = mx.jvp(mx.max, primals=(a,), tangents=(b,))
         self.assertEqual(jout[0].item(), 0)
 
+    def test_complex_prod_vjp(self):
+        def prod(x):
+            return x.prod(axis=0)
+
+        primal = mx.random.normal((2, 20), dtype=mx.complex64)
+        cotangent = mx.random.normal((20,), dtype=mx.complex64)
+
+        _, vjps = mx.vjp(prod, [primal], [cotangent])
+
+        expected = mx.stack(
+            [mx.conj(primal[1]) * cotangent, mx.conj(primal[0]) * cotangent]
+        )
+
+        # Check against hand-computed vjps
+        self.assertTrue(mx.array_equal(vjps[0], expected))
+
+        # Ensure that prod agrees with multiply for complex values
+        _, vjps_multiply = mx.vjp(mx.multiply, [primal[0], primal[1]], [cotangent])
+
+        self.assertTrue(mx.array_equal(mx.stack(vjps_multiply), vjps[0]))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
