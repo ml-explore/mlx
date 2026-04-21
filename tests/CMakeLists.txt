@@ -40,6 +40,12 @@ target_link_libraries(tests PRIVATE mlx doctest)
 target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})
 target_link_options(tests PRIVATE ${SANITIZER_LINK_FLAGS})
 
+if(MLX_BUILD_GGUF)
+  FetchContent_GetProperties(gguflib SOURCE_DIR gguflib_SOURCE_DIR)
+  target_include_directories(tests PRIVATE ${gguflib_SOURCE_DIR})
+  target_compile_definitions(tests PRIVATE MLX_BUILD_GGUF)
+endif()
+
 doctest_discover_tests(tests)
 add_test(NAME tests COMMAND tests)
 

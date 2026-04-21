@@ -9,6 +9,10 @@
 
 #include "mlx/mlx.h"
 
+#ifdef MLX_BUILD_GGUF
+#include "mlx/io/gguf.h"
+#endif
+
 using namespace mlx::core;
 
 std::string get_temp_file(const std::string& name) {
@@ -274,6 +278,17 @@ TEST_CASE("test gguf metadata") {
     CHECK_EQ(str, "last");
   }
 }
+
+#ifdef MLX_BUILD_GGUF
+TEST_CASE("test gguf get_shape rejects oversized ndim") {
+  // Malformed GGUF files can declare more dimensions than gguflib's fixed
+  // tensor.dim[] array can hold. get_shape() must reject these rather than
+  // read past the buffer.
+  gguf_tensor tensor{};
+  tensor.ndim = GGUF_TENSOR_MAX_DIM + 1;
+  CHECK_THROWS_AS(get_shape(tensor), std::runtime_error);
+}
+#endif
 
 TEST_CASE("test single array serialization") {
   // Basic test

@@ -48,6 +48,13 @@ std::optional<Dtype> gguf_type_to_dtype(const uint32_t& gguf_type) {
 }
 
 Shape get_shape(const gguf_tensor& tensor) {
+  if (tensor.ndim > GGUF_TENSOR_MAX_DIM) {
+    std::ostringstream msg;
+    msg << "[load_gguf] Tensor has " << tensor.ndim
+        << " dimensions, but the maximum supported is " << GGUF_TENSOR_MAX_DIM
+        << ".";
+    throw std::runtime_error(msg.str());
+  }
   Shape shape;
   // The dimension order in GGML is the reverse of the order used in MLX.
   for (int i = tensor.ndim - 1; i >= 0; i--) {
