@@ -79,3 +79,7 @@ uv.lock
 .cache/
 # vim
 *.swp
+
+# path-c local additions
+.venv/
+python/mlx/lib/
