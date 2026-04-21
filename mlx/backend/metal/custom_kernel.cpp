@@ -361,22 +361,16 @@ void CustomKernel::eval_gpu(
 
   auto& d = metal::device(s.device);
 
-  {
-    // Clear kernels from the device library cache if needed
-    auto& kernel_cache = cache();
-    if (auto it = kernel_cache.libraries.find(name_);
-        it != kernel_cache.libraries.end()) {
-      if (it->second != source_) {
-        auto& d = metal::device(s.device);
-        d.clear_library(name_);
-        it->second = source_;
-      }
-    } else {
-      kernel_cache.libraries.emplace(name_, source_);
-    }
-  }
+  // Use a source-dependent library key so different source variants
+  // (e.g. from write_signature picking different dtype qualifiers across
+  // calls) coexist without evicting each other. Clearing a library while
+  // its pipeline states are still referenced by an in-flight command
+  // buffer causes use-after-free.
+  auto source_hash = std::hash<std::string>{}(source_);
+  auto lib_key = name_ + "_" + std::to_string(source_hash);
 
-  auto lib = d.get_library(name_, [this] { return metal::utils() + source_; });
+  auto lib =
+      d.get_library(lib_key, [this] { return metal::utils() + source_; });
   auto kernel = d.get_kernel(name_, lib);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
