@@ -388,5 +388,112 @@ class TestRandom(mlx_tests.MLXTestCase):
         self.assertEqual(sample.dtype, mx.float16)
 
 
+class TestRandomChunked(mlx_tests.MLXTestCase):
+    """Tests specifically exercising the chunked random path added in
+    path-c. The path activates when the fp32-equivalent output size is
+    >= ~512 MB (2 * 256 MB chunk threshold). Shapes below that stay on
+    the vanilla path and are covered by TestRandom already.
+    """
+
+    # 16384 * 16384 = 268M elements; fp32-equiv = 1.07 GB -> triggers
+    # chunking for any dtype. Big enough to hit the chunked path,
+    # small enough to fit in M4 CI memory.
+    CHUNK_SHAPE = (16384, 16384)
+
+    def test_uniform_bf16_chunked_no_inf(self):
+        mx.random.seed(42)
+        a = mx.random.uniform(shape=self.CHUNK_SHAPE, dtype=mx.bfloat16)
+        mx.eval(a)
+        self.assertFalse(bool(mx.any(mx.isinf(a)).item()))
+        self.assertFalse(bool(mx.any(mx.isnan(a)).item()))
+
+    def test_normal_bf16_chunked_no_inf(self):
+        mx.random.seed(42)
+        a = mx.random.normal(shape=self.CHUNK_SHAPE, dtype=mx.bfloat16)
+        mx.eval(a)
+        self.assertFalse(bool(mx.any(mx.isinf(a)).item()))
+        self.assertFalse(bool(mx.any(mx.isnan(a)).item()))
+
+    def test_uniform_bf16_chunked_reproducibility(self):
+        # Same seed -> same output even in chunked path
+        mx.random.seed(7)
+        a = mx.random.uniform(shape=self.CHUNK_SHAPE, dtype=mx.bfloat16)
+        mx.random.seed(7)
+        b = mx.random.uniform(shape=self.CHUNK_SHAPE, dtype=mx.bfloat16)
+        mx.eval(a, b)
+        self.assertTrue(bool(mx.array_equal(a, b).item()))
+
+    def test_normal_bf16_chunked_reproducibility(self):
+        mx.random.seed(7)
+        a = mx.random.normal(shape=self.CHUNK_SHAPE, dtype=mx.bfloat16)
+        mx.random.seed(7)
+        b = mx.random.normal(shape=self.CHUNK_SHAPE, dtype=mx.bfloat16)
+        mx.eval(a, b)
+        self.assertTrue(bool(mx.array_equal(a, b).item()))
+
+    def test_uniform_bf16_chunked_distribution(self):
+        mx.random.seed(0)
+        a = mx.random.uniform(shape=self.CHUNK_SHAPE, dtype=mx.bfloat16)
+        mx.eval(a)
+        # Uniform [0, 1): population std = 1/sqrt(12) ≈ 0.2887.
+        # Sample mean SE = std/sqrt(N). 5σ tolerance ≈ 1 in 1.7M
+        # false-fail rate. bf16 quantization spacing near 0.5 is
+        # 2^-8 ≈ 0.004; use max(5σ, 0.003) as the bound.
+        mean = float(a.astype(mx.float32).mean())
+        std = float(a.astype(mx.float32).std())
+        n = float(self.CHUNK_SHAPE[0] * self.CHUNK_SHAPE[1])
+        sigma_mean = (1.0 / math.sqrt(12.0)) / math.sqrt(n)
+        bound_mean = max(5 * sigma_mean, 0.003)
+        self.assertLess(abs(mean - 0.5), bound_mean)
+        self.assertLess(abs(std - 0.2887), 0.005)
+        self.assertGreaterEqual(float(a.min()), 0.0)
+        self.assertLess(float(a.max()), 1.0)
+
+    def test_normal_bf16_chunked_distribution(self):
+        mx.random.seed(0)
+        a = mx.random.normal(shape=self.CHUNK_SHAPE, dtype=mx.bfloat16)
+        mx.eval(a)
+        mean = float(a.astype(mx.float32).mean())
+        std = float(a.astype(mx.float32).std())
+        # Normal(0, 1): mean SE = 1/sqrt(N). 5σ + bf16 quantization floor.
+        n = float(self.CHUNK_SHAPE[0] * self.CHUNK_SHAPE[1])
+        sigma_mean = 1.0 / math.sqrt(n)
+        bound_mean = max(5 * sigma_mean, 0.003)
+        self.assertLess(abs(mean), bound_mean)
+        self.assertLess(abs(std - 1.0), 0.005)
+        # Quality bar: chunked path must produce a healthy variety of
+        # bit-patterns (PR #2361 baseline ~2254 for vanilla bf16
+        # normal at 100K samples; chunked at 268M should easily
+        # exceed 2000).
+        bits = a.view(mx.uint16).flatten()[:1_000_000]
+        host = set(bits.tolist())
+        self.assertGreaterEqual(
+            len(host), 2000,
+            f"chunked bf16 normal unique-value count {len(host)} below quality floor",
+        )
+
+    def test_uniform_chunked_odd_first_dim(self):
+        # First-axis odd to verify chunk-remainder handling
+        shape = (16385, 16384)  # first dim odd
+        mx.random.seed(3)
+        a = mx.random.uniform(shape=shape, dtype=mx.bfloat16)
+        mx.eval(a)
+        self.assertEqual(a.shape, shape)
+        self.assertFalse(bool(mx.any(mx.isinf(a)).item()))
+        self.assertFalse(bool(mx.any(mx.isnan(a)).item()))
+
+    def test_normal_fp32_chunked(self):
+        # fp32 normal also chunked (Phase 5)
+        shape = (16384, 16384)  # 1 GB fp32 -> triggers
+        mx.random.seed(5)
+        a = mx.random.normal(shape=shape, dtype=mx.float32)
+        mx.eval(a)
+        self.assertEqual(a.shape, shape)
+        mean = float(a.mean())
+        std = float(a.std())
+        self.assertLess(abs(mean), 0.001)
+        self.assertLess(abs(std - 1.0), 0.005)
+
+
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

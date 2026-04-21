@@ -130,7 +130,105 @@ __global__ void rbits(
   }
 }
 
+// Fused per-thread uniform RNG for half-precision targets. Mirrors the
+// Metal kernel in mlx/backend/metal/kernels/random.metal: each thread
+// emits TWO output elements at positions y and y + half_size from a
+// single threefry call, matching the rbitsc bit-layout exactly so that
+// seed -> output mapping is bit-identical to the vanilla
+// bits()/divide()/astype()/affine() pipeline (no fp32 intermediate
+// buffer in global memory).
+//
+// NOTE: This CUDA path is untested on this branch (no NVIDIA hardware
+// available during development). Algorithmically it is the direct CUDA
+// transcription of the validated Metal kernel; the C++ dispatch logic
+// in the host-side primitives.cpp is shared. CI / maintainer review
+// required to confirm correctness on a CUDA-capable device.
+template <typename T>
+__global__ void runiformc_fused(
+    const uint32_t* keys,
+    T* out,
+    uint32_t half_size,
+    float lo,
+    float range,
+    float upper_clip) {
+  uint32_t y = blockIdx.x * blockDim.x + threadIdx.x;
+  if (y >= half_size) {
+    return;
+  }
+  uint2 key2 = uint2{keys[0], keys[1]};
+  rbits hash = threefry2x32_hash(key2, uint2{y, y + half_size});
+
+  float f0 = float(hash.val.x) / 4294967295.0f;
+  if (f0 > upper_clip) f0 = upper_clip;
+  T t0 = T(f0);
+  T r_dt = T(range);
+  T lo_dt = T(lo);
+  T tr0 = r_dt * t0;
+  out[y] = tr0 + lo_dt;
+
+  float f1 = float(hash.val.y) / 4294967295.0f;
+  if (f1 > upper_clip) f1 = upper_clip;
+  T t1 = T(f1);
+  T tr1 = r_dt * t1;
+  out[y + half_size] = tr1 + lo_dt;
+}
+
 } // namespace cu
+
+void RandomUniform::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("RandomUniform::eval_gpu");
+  assert(inputs.size() == 1);
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  if (out.size() == 0) {
+    return;
+  }
+  size_t N = out.size();
+  if (N % 2 != 0) {
+    throw std::runtime_error(
+        "[RandomUniform::eval_gpu] CUDA fast path requires even N; "
+        "fall back to vanilla pipeline at the random.cpp level.");
+  }
+  auto& keys = inputs[0];
+  encoder.set_input_array(keys);
+  encoder.set_output_array(out);
+  size_t half = N / 2;
+  if (half >= UINT32_MAX) {
+    throw std::runtime_error(
+        "[RandomUniform::eval_gpu] half output size exceeds UINT32_MAX");
+  }
+  float lo = low_;
+  float range = high_ - low_;
+  float upper_clip =
+      (dtype_ == bfloat16) ? 0.99609375f : 0.99951171875f;
+  uint32_t threads = 256;
+  uint32_t blocks =
+      static_cast<uint32_t>((half + threads - 1) / threads);
+  if (dtype_ == bfloat16) {
+    encoder.add_kernel_node(
+        cu::runiformc_fused<__nv_bfloat16>,
+        dim3{blocks},
+        dim3{threads},
+        gpu_ptr<uint32_t>(keys),
+        gpu_ptr<__nv_bfloat16>(out),
+        static_cast<uint32_t>(half),
+        lo,
+        range,
+        upper_clip);
+  } else {
+    encoder.add_kernel_node(
+        cu::runiformc_fused<__half>,
+        dim3{blocks},
+        dim3{threads},
+        gpu_ptr<uint32_t>(keys),
+        gpu_ptr<__half>(out),
+        static_cast<uint32_t>(half),
+        lo,
+        range,
+        upper_clip);
+  }
+}
 
 void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("RandomBits::eval_gpu");
