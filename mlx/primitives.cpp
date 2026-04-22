@@ -3824,13 +3824,10 @@ bool RandomBits::is_equivalent(const Primitive& other) const {
 
 std::pair<std::vector<array>, std::vector<int>> RandomUniform::vmap(
     const std::vector<array>&, const std::vector<int>&) {
-  // The fused primitive does not support vmap. Callers (random.cpp) avoid
-  // dispatching here when a vmap is in flight by detecting non-scalar
-  // shapes; if we are reached anyway, throw a clear error.
+  // Defense-in-depth: random::uniform already skips this primitive when
+  // detail::in_tracing() is true, so vmap should never reach here.
   throw std::runtime_error(
-      "[RandomUniform::vmap] Fused half-precision uniform does not "
-      "support vmap. Please use mx.random.uniform with float32 dtype "
-      "and astype to half precision.");
+      "[RandomUniform::vmap] not supported; use float32 uniform and astype.");
 }
 
 bool RandomUniform::is_equivalent(const Primitive& other) const {

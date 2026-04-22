@@ -206,13 +206,11 @@ void RandomUniform::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (out.size() == 0) {
     return;
   }
-  // Fused kernel requires even output size to use the rbitsc-style two-
-  // outputs-per-thread layout (for bit-exact match with vanilla).
+  // Two outputs per thread (rbitsc layout) requires an even N for
+  // bit-exact match with vanilla.
   size_t N = out.size();
   if (N % 2 != 0) {
-    throw std::runtime_error(
-        "[RandomUniform::eval_gpu] N must be even; this dispatch path is "
-        "only used by random.cpp::uniform when N is even.");
+    throw std::runtime_error("[RandomUniform::eval_gpu] N must be even.");
   }
   auto& keys = inputs[0];
   auto& s = stream();
@@ -221,13 +219,6 @@ void RandomUniform::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::string tname = (dtype_ == bfloat16) ? "bfloat16" : "float16";
   auto kernel = d.get_kernel("runiformc_" + tname);
 
-  // Affine + clip constants packed into a struct so Metal binds them
-  // as a single constant buffer. Setting individual `set_bytes` floats
-  // on consecutive slots was being miscompiled in this version of the
-  // Metal toolchain (constants arrived as zero in the kernel).
-  // Pass each constant individually at slots 1..3, output at slot 4
-  // (matching the original kernel signature; struct/float4 packing was
-  // failing in this Metal toolchain when range/lo were read).
   float lo = low_;
   float range = high_ - low_;
   float upper_clip = (dtype_ == bfloat16) ? 0.99609375f : 0.99951171875f;

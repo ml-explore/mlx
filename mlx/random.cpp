@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 
@@ -94,21 +95,12 @@ T below_one() {
   return f;
 }
 
-// Shared helper for the chunked fp32-then-cast random path. Splits the
-// output along axis 0 into K independent sub-keys, generates each
-// chunk via `process_chunk`, and writes into a pre-allocated output
-// with `slice_update + eval` so per-chunk transient fp32 buffers are
-// freed between chunks. Peak memory ~1+2/K * output (measured 1.15x
-// for K=8 on bf16 normal). Caller provides the per-chunk pipeline via
-// `process_chunk(chunk_shape, subkey) -> array` returning a chunk
-// already in the target dtype.
-//
-// Activation rule: caller should only invoke this when `bits_bytes`
-// (fp32-equivalent of the total output) is large enough that the
-// memory savings outweigh K kernel-launch sync points. Small shapes
-// should stay on the vanilla path.
+// Chunks the output along axis 0 across K sub-keys, writing each
+// via slice_update + eval to free the fp32 transients between chunks.
+// Peak memory ~ (1 + 2/K) * output. Caller must guard with
+// !detail::in_tracing(); the per-chunk eval is illegal under tracing.
 template <typename ProcessChunk>
-array chunked_fp32_then_cast(
+static array chunked_fp32_then_cast(
     const Shape& shape,
     Dtype dtype,
     const array& key,
@@ -146,26 +138,15 @@ array chunked_fp32_then_cast(
   return out;
 }
 
-// Heuristic K selection. Target fp32 transient ≤ 256 MB per chunk so
-// peak stays well inside a typical 16 GB Apple Silicon working set.
-// Clamps K to [4, 256] and never exceeds shape[0]. A device-aware
-// version was prototyped (Phase 4) but metal::device_info() is not
-// linked into libmlx core; leaving as a fixed heuristic since the
-// measured 1.15x peak for K=8 at canary shapes is well under the
-// working-set ceiling (profiled in 11-concat-eval-profile.md).
-inline size_t pick_chunk_count(size_t bits_bytes_fp32, int first_dim) {
-  const size_t kChunkBytes = 256ULL * 1024 * 1024;
+// Target ~256 MB fp32 transient per chunk. Clamped to [4, 256] and
+// never larger than shape[0].
+static inline size_t pick_chunk_count(
+    size_t bits_bytes_fp32,
+    int first_dim) {
+  constexpr size_t kChunkBytes = 256ULL * 1024 * 1024;
   size_t K = (bits_bytes_fp32 + kChunkBytes - 1) / kChunkBytes;
-  if (K < 4) {
-    K = 4;
-  }
-  if (K > 256) {
-    K = 256;
-  }
-  if (static_cast<int>(K) > first_dim) {
-    K = static_cast<size_t>(first_dim);
-  }
-  return K;
+  K = std::clamp(K, size_t{4}, size_t{256});
+  return std::min(K, static_cast<size_t>(first_dim));
 }
 
 array uniform(
@@ -210,75 +191,51 @@ array uniform(
 
   auto upper = get_upper();
 
-  // Fused per-thread uniform path for half-precision GPU outputs.
-  // Avoids the 3x peak-memory amplification of the bits()->divide()->
-  // astype() chain by computing the entire transform in registers.
-  // Conditions: GPU stream, bf16 or fp16 dtype, scalar low/high, even
-  // total output size, single-key (shape == {2}). Quality and seed
-  // mapping are bit-identical to the existing pipeline.
+  // Fused per-thread uniform for half-precision GPU outputs.
+  // Bit-identical to vanilla; cuts peak from 3x to 1x output.
+  // Skipped under transforms (no vmap rule); falls through to vanilla.
   bool half = (dtype == bfloat16 || dtype == float16);
   size_t total = 1;
   for (auto d : shape) {
     total *= static_cast<size_t>(d);
   }
-  bool even = (total % 2) == 0;
   bool scalar_lohi = (lo.size() == 1) && (hi.size() == 1);
   bool single_key = !key || (key->shape() == Shape{2});
   bool gpu_stream = (stream.device.type == Device::gpu);
-  // Skip the fused primitive under any function transform (vmap, compile,
-  // vjp, jvp). RandomUniform::vmap intentionally throws (the fused
-  // per-thread kernel has no batched semantics), and the chunked path
-  // below also internally evals which is illegal under tracing. Falling
-  // through to the vanilla bits()->divide()->cast() pipeline keeps user
-  // code that wraps random.uniform in a transform working.
-  if (half && even && scalar_lohi && single_key && gpu_stream &&
+  if (half && (total % 2 == 0) && scalar_lohi && single_key && gpu_stream &&
       !detail::in_tracing()) {
     auto eff_key = key ? *key : KeySequence::default_().next();
-    if (eff_key.shape() == Shape{2}) {
-      // .item<float>() requires the array to be float32; cast first.
-      // .item() forces evaluation, so no explicit eval needed here.
-      float lo_f = astype(low, float32, stream).item<float>();
-      float hi_f = astype(high, float32, stream).item<float>();
-      return array(
-          shape,
-          dtype,
-          std::make_shared<RandomUniform>(
-              stream, shape, dtype, lo_f, hi_f),
-          {eff_key});
-    }
+    // .item() forces evaluation, so no explicit eval needed here.
+    float lo_f = astype(low, float32, stream).item<float>();
+    float hi_f = astype(high, float32, stream).item<float>();
+    return array(
+        shape,
+        dtype,
+        std::make_shared<RandomUniform>(stream, shape, dtype, lo_f, hi_f),
+        {eff_key});
   }
 
   auto maxval = array(std::numeric_limits<uint32_t>::max(), float32);
 
-  // Chunked path (Variant D1) for large GPU random.uniform calls. Splits
-  // the output along axis 0 into K independent sub-keys + chunks; each
-  // chunk runs the standard fp32-then-cast pipeline and the results are
-  // concatenated. Reduces peak memory from 3x to ~1+2/K with quality
-  // preserved (still fp32 inside). Bit pattern is not vanilla-equivalent
-  // because sub-keys differ; same precedent as PR #904.
+  // Chunked fp32-then-cast for large half-precision uniform. Sub-key
+  // derivation differs from vanilla so output bytes change (precedent:
+  // #904); per-element distribution preserved. fp32 excluded (vanilla
+  // already at 1x peak); transforms skipped (per-chunk eval illegal).
   size_t bits_bytes = total * size_of(float32);
-  const size_t kChunkBytes = 256ULL * 1024 * 1024;  // 256 MB trigger
-  // Restrict to half-precision: vanilla fp32 uniform already operates at
-  // ~1x output peak (the bits buffer IS the target dtype size), so chunking
-  // only adds K-fold sub-key + slice_update overhead with no memory benefit
-  // (drawback Phase 1 measured ~25% latency regression and ~25% higher peak).
-  // Skip under any transform: per-chunk eval is illegal inside compile/vmap.
+  constexpr size_t kChunkBytes = 256ULL * 1024 * 1024;
   if (half && gpu_stream && scalar_lohi && single_key &&
       bits_bytes >= 2 * kChunkBytes && !shape.empty() && shape[0] >= 4 &&
       !detail::in_tracing()) {
     auto eff_key = key ? *key : KeySequence::default_().next();
-    if (eff_key.shape() == Shape{2}) {
-      size_t K = pick_chunk_count(bits_bytes, shape[0]);
-      return chunked_fp32_then_cast(
-          shape, dtype, eff_key, K, stream,
-          [&](const Shape& chunk_shape, const array& subkey_i) {
-            auto bits_i = bits(chunk_shape, size_of(float32), subkey_i, stream);
-            auto fp_i = divide(bits_i, maxval, stream);
-            auto clipped =
-                astype(minimum(fp_i, upper, stream), dtype, stream);
-            return add(multiply(range, clipped, stream), lo, stream);
-          });
-    }
+    size_t K = pick_chunk_count(bits_bytes, shape[0]);
+    return chunked_fp32_then_cast(
+        shape, dtype, eff_key, K, stream,
+        [&](const Shape& chunk_shape, const array& subkey_i) {
+          auto bits_i = bits(chunk_shape, size_of(float32), subkey_i, stream);
+          auto fp_i = divide(bits_i, maxval, stream);
+          auto clipped = astype(minimum(fp_i, upper, stream), dtype, stream);
+          return add(multiply(range, clipped, stream), lo, stream);
+        });
   }
 
   auto out = bits(shape, size_of(float32), key, stream);
@@ -334,29 +291,14 @@ array normal(
   }
 
   auto stream = to_stream(s);
-  // Keep normal() on the fp32 sampling path: sampling in target dtype
-  // would erode randomness quality (per PR #2361 discussion: bf16 native
-  // gives only ~382 unique values per 100K samples, below the
-  // fp32-then-cast baseline of ~2254). The uniform() fast path still
-  // shrinks half-precision uniform peak memory to 1x.
+  // Keep normal() on the fp32 sampling path: native bf16 sampling produces
+  // only ~382 unique values per 100K samples vs ~2254 for fp32-then-cast
+  // (PR #2361).
   auto low = array(std::nextafter(-1.0f, 0.0f), float32);
   auto high = array(1.0f, float32);
 
-  // Variant D4: chunked normal pipeline for large GPU half-precision
-  // outputs. Splits the normal pipeline (uniform fp32 -> erfinv ->
-  // cast -> affine) along axis 0 into K independent sub-keys/chunks
-  // and concatenates. Reduces peak memory ~3x to ~2x, enough to make
-  // (46341, 46341) bf16 normal succeed on 16 GB devices. Sub-key
-  // derivation differs from vanilla so bf16/fp16 normal bytes change
-  // (precedent: PR #904); statistical quality is preserved (each chunk
-  // is fp32-then-cast).
-  // Restrict to half-precision: fp32 normal does not have the 3x peak
-  // amplification (vanilla fp32 normal already operates at ~1x output
-  // peak because the intermediate IS the target), so chunking only adds
-  // K-fold sub-key + slice_update overhead with no memory benefit
-  // (drawback Phase 1 measured ~20% slower + 25% higher peak for fp32).
-  // Skip under any transform (compile/vmap/vjp/jvp): per-chunk eval is
-  // illegal inside the tracer.
+  // Chunked normal pipeline; same dispatch rationale as the uniform
+  // chunked path above. Lets (46341, 46341) bf16 normal fit on 16 GB.
   bool chunkable_dtype = (dtype == bfloat16 || dtype == float16);
   bool gpu_stream = (stream.device.type == Device::gpu);
   bool single_key = !key || (key->shape() == Shape{2});
@@ -365,35 +307,31 @@ array normal(
     total *= static_cast<size_t>(d);
   }
   size_t bits_bytes = total * size_of(float32);
-  const size_t kChunkBytes = 256ULL * 1024 * 1024;
+  constexpr size_t kChunkBytes = 256ULL * 1024 * 1024;
   if (chunkable_dtype && gpu_stream && single_key &&
       bits_bytes >= 2 * kChunkBytes && !shape.empty() && shape[0] >= 4 &&
       !detail::in_tracing()) {
     auto eff_key = key ? *key : KeySequence::default_().next();
-    if (eff_key.shape() == Shape{2}) {
-      size_t K = pick_chunk_count(bits_bytes, shape[0]);
-      auto applied_scale = array(std::sqrt(2.0), dtype);
-      if (scale.has_value()) {
-        applied_scale = multiply(
-            applied_scale, astype(*scale, dtype, stream), stream);
-      }
-      array loc_dt = loc.has_value()
-          ? astype(*loc, dtype, stream)
-          : array(0.0, dtype);
-      bool has_loc = loc.has_value();
-      return chunked_fp32_then_cast(
-          shape, dtype, eff_key, K, stream,
-          [&](const Shape& chunk_shape, const array& subkey_i) {
-            auto u =
-                uniform(low, high, chunk_shape, float32, subkey_i, stream);
-            auto chunk_dt = astype(erfinv(u, stream), dtype, stream);
-            chunk_dt = multiply(applied_scale, chunk_dt, stream);
-            if (has_loc) {
-              chunk_dt = add(loc_dt, chunk_dt, stream);
-            }
-            return chunk_dt;
-          });
+    size_t K = pick_chunk_count(bits_bytes, shape[0]);
+    auto applied_scale = array(std::sqrt(2.0), dtype);
+    if (scale.has_value()) {
+      applied_scale =
+          multiply(applied_scale, astype(*scale, dtype, stream), stream);
     }
+    array loc_dt = loc.has_value() ? astype(*loc, dtype, stream)
+                                   : array(0.0, dtype);
+    bool has_loc = loc.has_value();
+    return chunked_fp32_then_cast(
+        shape, dtype, eff_key, K, stream,
+        [&](const Shape& chunk_shape, const array& subkey_i) {
+          auto u = uniform(low, high, chunk_shape, float32, subkey_i, stream);
+          auto chunk_dt = astype(erfinv(u, stream), dtype, stream);
+          chunk_dt = multiply(applied_scale, chunk_dt, stream);
+          if (has_loc) {
+            chunk_dt = add(loc_dt, chunk_dt, stream);
+          }
+          return chunk_dt;
+        });
   }
 
   auto samples = uniform(low, high, shape, float32, key, stream);

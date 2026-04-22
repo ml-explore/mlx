@@ -333,13 +333,10 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
 }
 
 void RandomUniform::eval_cpu(const std::vector<array>&, array&) {
-  // The fused half-precision uniform is GPU-only (the memory
-  // amplification it solves is a GPU peak-buffer problem). On CPU
-  // streams, mlx::core::random::uniform should keep dispatching the
-  // existing fp32 pipeline instead of constructing this primitive.
-  throw std::runtime_error(
-      "[RandomUniform::eval_cpu] Not implemented; use float32 uniform "
-      "and astype on CPU.");
+  // GPU-only primitive (the peak-memory amplification it solves is a
+  // GPU buffer problem). The dispatch in random::uniform skips this
+  // primitive on CPU streams, so reaching here indicates a misuse.
+  throw std::runtime_error("[RandomUniform::eval_cpu] GPU-only primitive.");
 }
 
 void Reshape::eval_cpu(const std::vector<array>& inputs, array& out) {

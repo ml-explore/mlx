@@ -103,8 +103,8 @@ rbits threefry2x32_hash(const thread uint2& key, uint2 count) {
 }
 
 // Fused per-thread uniform RNG for half-precision targets. Each thread
-// emits TWO output elements at positions y and y + grid_dim.y from a
-// single threefry call, matching the rbitsc bit-layout exactly so that
+// emits two outputs at positions y and y + grid_dim.y from a single
+// threefry call, matching the rbitsc bit-layout exactly so the
 // seed -> output mapping is bit-identical to the vanilla
 // bits()/divide()/astype()/affine() pipeline (no fp32 intermediate
 // buffer in global memory).
@@ -122,20 +122,14 @@ template <typename T>
   uint half_size = grid_dim.y;
   union rbits hash = threefry2x32_hash(key2, uint2(y, y + half_size));
 
-  // Same exact pattern as Step4 (which worked for the upper_clip read).
-  float f0 = float(hash.val.x) / 4294967295.0f;
-  f0 = min(f0, upper_clip);
-  T t0 = T(f0);
   T r_dt = T(range);
   T lo_dt = T(lo);
-  T tr0 = r_dt * t0;
-  out[y] = tr0 + lo_dt;
 
-  float f1 = float(hash.val.y) / 4294967295.0f;
-  f1 = min(f1, upper_clip);
-  T t1 = T(f1);
-  T tr1 = r_dt * t1;
-  out[y + half_size] = tr1 + lo_dt;
+  float f0 = min(float(hash.val.x) / 4294967295.0f, upper_clip);
+  out[y] = r_dt * T(f0) + lo_dt;
+
+  float f1 = min(float(hash.val.y) / 4294967295.0f, upper_clip);
+  out[y + half_size] = r_dt * T(f1) + lo_dt;
 }
 
 #define instantiate_runiformc(tname, type) \
