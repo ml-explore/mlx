@@ -159,6 +159,14 @@ Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
   } else if (bk == "jaccl") {
     group = jaccl::init(strict);
   } else if (bk == "any") {
+    // Check if the launcher specified a preferred backend via env var.
+    // This prevents the wrong backend from being selected when
+    // mlx.launch --backend jaccl sets JACCL env vars but ring::init()
+    // succeeds first as a singleton (MLX_RANK is set, MLX_HOSTFILE is not).
+    auto env_bk = std::getenv("MLX_DISTRIBUTED_BACKEND");
+    if (env_bk && *env_bk) {
+      return init(strict, std::string(env_bk));
+    }
     if (mlx::core::cu::is_available()) {
       group = nccl::init(false);
       bk_ = "nccl";

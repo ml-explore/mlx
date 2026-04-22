@@ -377,6 +377,7 @@ def launch_jaccl(parser, hosts, args, command):
     env = args.env
     cwd = args.cwd
     env.append(f"MLX_JACCL_COORDINATOR={coordinator}:{args.starting_port}")
+    env.append(f"MLX_DISTRIBUTED_BACKEND={'jaccl-ring' if jaccl_ring else 'jaccl'}")
     if jaccl_ring:
         env.append("MLX_JACCL_RING=1")
     files = {"MLX_IBV_DEVICES": json.dumps([h.rdma for h in hosts])}
