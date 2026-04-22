@@ -145,7 +145,16 @@ class JACCLGroup : public GroupImpl {
   }
 
   void sum_scatter(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[jaccl] sum_scatter not supported.");
+    auto in_ptr = input.data<char>();
+    auto out_ptr = output.data<char>();
+    size_t n_bytes = input.nbytes();
+    int dtype = dtype_to_jaccl_dtype(output.dtype());
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch([in_ptr, out_ptr, n_bytes, dtype, this]() {
+      group_->sum_scatter(in_ptr, out_ptr, n_bytes, dtype);
+    });
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {

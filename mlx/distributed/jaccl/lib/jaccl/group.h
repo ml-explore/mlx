@@ -28,6 +28,9 @@ class Group {
 
   virtual void all_gather(const void* input, void* output, size_t n_bytes) = 0;
 
+  virtual void
+  sum_scatter(const void* input, void* output, size_t n_bytes, int dtype) = 0;
+
   virtual void send(const void* input, size_t n_bytes, int dst) = 0;
   virtual void recv(void* output, size_t n_bytes, int src) = 0;
 };

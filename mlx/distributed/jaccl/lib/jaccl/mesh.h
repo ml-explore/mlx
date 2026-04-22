@@ -44,10 +44,20 @@ class MeshGroup : public Group {
 
   void all_gather(const void* input, void* output, size_t n_bytes) override;
 
+  void sum_scatter(const void* input, void* output, size_t n_bytes, int dtype)
+      override;
+
   void send(const void* input, size_t n_bytes, int dst) override;
   void recv(void* output, size_t n_bytes, int src) override;
 
  private:
+  template <typename T, typename ReduceOp>
+  void reduce_scatter(
+      const void* input,
+      void* output,
+      size_t n_bytes,
+      ReduceOp reduce_op);
+
   template <typename T, typename ReduceOp>
   void all_reduce(
       const void* input,

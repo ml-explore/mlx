@@ -166,6 +166,17 @@ void RingGroup::all_gather(const void* input, void* output, size_t n_bytes) {
       n_conns_);
 }
 
+void RingGroup::sum_scatter(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    reduce_scatter<T>(input, output, n_bytes, SumOp<T>{});
+  });
+}
+
 void RingGroup::send(const void* input, size_t n_bytes, int dst) {
   int right = (rank_ + 1) % size_;
   int left = (rank_ + size_ - 1) % size_;
@@ -188,6 +199,29 @@ void RingGroup::recv(void* output, size_t n_bytes, int src) {
     throw std::runtime_error(msg.str());
   }
   ring_.recv(static_cast<char*>(output), n_bytes, src, n_conns_);
+}
+
+template <typename T, typename ReduceOp>
+void RingGroup::reduce_scatter(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    ReduceOp reduce_op) {
+  auto in_ptr = static_cast<const T*>(input);
+  auto out_ptr = static_cast<T*>(output);
+  int64_t count = n_bytes / sizeof(T);
+  if (count < size_ * 2 * n_conns_) {
+    ring_.reduce_scatter<1, T, ReduceOp>(in_ptr, out_ptr, count, 1, reduce_op);
+    return;
+  }
+
+  if (n_bytes <= 65536) {
+    ring_.reduce_scatter<2, T, ReduceOp>(in_ptr, out_ptr, count, 1, reduce_op);
+    return;
+  }
+
+  ring_.reduce_scatter<2, T, ReduceOp>(
+      in_ptr, out_ptr, count, n_conns_, reduce_op);
 }
 
 template <typename T, typename ReduceOp>

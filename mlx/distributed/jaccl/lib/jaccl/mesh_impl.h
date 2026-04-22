@@ -30,6 +30,165 @@ class MeshImpl {
   MeshImpl() : rank_(0), size_(1) {}
 
   template <typename T, typename ReduceOp>
+  void reduce_scatter(const T* in, T* out, int64_t size, ReduceOp reduce_op) {
+    // Reduce-scatter for mesh topology.
+    //
+    // Each rank sends its entire input to all other ranks.
+    // Each rank reduces only its assigned chunk from all received inputs.
+
+    auto [sz, buffer_size] = buffer_size_from_message(size * sizeof(T));
+    int64_t N = buffer_size / sizeof(T);
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE * MESH_MAX_PEERS * 2;
+    int64_t total = static_cast<int64_t>(size);
+    int num_peers = size_ - 1;
+
+    // Calculate chunk for this rank
+    int64_t chunk_size = (total + size_ - 1) / size_;
+    int64_t my_chunk_start = rank_ * chunk_size;
+    int64_t my_chunk_size = std::min(chunk_size, total - my_chunk_start);
+
+    // Initialize output with our own chunk
+    if (my_chunk_size > 0) {
+      std::copy_n(in + my_chunk_start, my_chunk_size, out);
+    }
+
+    // A helper for convenient access to the staging buffer.
+    auto local_staging = [&](int buff) -> T* {
+      return reinterpret_cast<T*>(staging_mem_.get() + buff * MAX_BUFFER_SIZE);
+    };
+
+    // Counters to maintain the state of transfers
+    int in_flight = 0;
+    int64_t read_offset = 0;
+    int completed_send_count[PIPELINE] = {0};
+    int recv_end[MESH_MAX_PEERS] = {0};
+    int reduce_chunk = 0;
+    int reduce_rank = 0;
+
+    // Total number of chunks
+    int64_t total_chunks = (total + N - 1) / N;
+
+    // Prefill the pipeline
+    int buff = 0;
+    while (read_offset < total && buff < PIPELINE) {
+      post_recv_all(sz, buff);
+
+      // Copy the local data to send buffer and staging buffer
+      int64_t elems = std::min(N, total - read_offset);
+      std::copy(
+          in + read_offset, in + read_offset + elems, local_staging(buff));
+      std::copy(
+          in + read_offset,
+          in + read_offset + elems,
+          send_buffer(sz, buff).begin<T>());
+      recv_end[rank_]++;
+      post_send_all(sz, buff);
+
+      buff++;
+      in_flight += 2 * num_peers;
+      read_offset += N;
+    }
+
+    // Main loop
+    while (reduce_chunk < total_chunks) {
+      // Poll the hardware for completions.
+      ibv_wc wc[WC_NUM];
+      int n = poll(connections_, WC_NUM, wc);
+      for (int i = 0; i < n; i++) {
+        int work_type = wc[i].wr_id >> 16;
+        int buff = (wc[i].wr_id >> 8) & 0xff;
+        int rank = wc[i].wr_id & 0xff;
+
+        in_flight--;
+
+        if (work_type == SEND_WR && read_offset < total) {
+          completed_send_count[buff]++;
+          if (completed_send_count[buff] == num_peers) {
+            int64_t elems = std::min(N, total - read_offset);
+            std::copy(
+                in + read_offset,
+                in + read_offset + elems,
+                local_staging(buff));
+            std::copy(
+                in + read_offset,
+                in + read_offset + elems,
+                send_buffer(sz, buff).begin<T>());
+            recv_end[rank_]++;
+            post_send_all(sz, buff);
+
+            completed_send_count[buff] = 0;
+            in_flight += num_peers;
+            read_offset += N;
+          }
+        }
+
+        else if (work_type == RECV_WR) {
+          recv_end[rank]++;
+        }
+      }
+
+      // Process the received chunks in order, reducing only our chunk
+      while (reduce_chunk < total_chunks) {
+        int64_t w = static_cast<int64_t>(reduce_chunk) * N;
+        if (w >= read_offset) {
+          break;
+        }
+        if (recv_end[reduce_rank] <= reduce_chunk) {
+          break;
+        }
+        int b = reduce_chunk % PIPELINE;
+        int64_t elems = std::min(N, total - w);
+
+        // Check if this chunk overlaps with our output chunk
+        int64_t overlap_start = std::max(w, my_chunk_start);
+        int64_t overlap_end =
+            std::min(w + elems, my_chunk_start + my_chunk_size);
+
+        if (overlap_start < overlap_end) {
+          int64_t out_offset = overlap_start - my_chunk_start;
+          int64_t in_offset = overlap_start - w;
+          int64_t overlap_size = overlap_end - overlap_start;
+
+          // Data is read from the staging area for our own rank
+          if (reduce_rank == rank_) {
+            reduce_op(
+                local_staging(b) + in_offset, out + out_offset, overlap_size);
+          }
+          // Data is read from the recv buffers for other ranks
+          else {
+            reduce_op(
+                recv_buffer(sz, b, reduce_rank).begin<T>() + in_offset,
+                out + out_offset,
+                overlap_size);
+          }
+        }
+
+        // Check if we need to post another receive
+        int64_t next_chunk = static_cast<int64_t>(reduce_chunk) + PIPELINE;
+        if (next_chunk < total_chunks) {
+          recv_from(sz, reduce_rank, b);
+          in_flight++;
+        }
+
+        // Move to next rank's data for this chunk
+        reduce_rank++;
+        if (reduce_rank >= size_) {
+          reduce_rank = 0;
+          reduce_chunk++;
+        }
+      }
+    }
+
+    // Drain remaining in-flight completions
+    while (in_flight > 0) {
+      ibv_wc wc[WC_NUM];
+      int n = poll(connections_, WC_NUM, wc);
+      in_flight -= n;
+    }
+  }
+
+  template <typename T, typename ReduceOp>
   void all_reduce(const T* in, T* out, int64_t size, ReduceOp reduce_op) {
     // Fully connected all reduce with deterministic reduction order.
     //

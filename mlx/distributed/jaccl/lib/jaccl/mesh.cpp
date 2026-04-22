@@ -176,12 +176,35 @@ void MeshGroup::all_gather(const void* input, void* output, size_t n_bytes) {
       static_cast<const char*>(input), static_cast<char*>(output), n_bytes);
 }
 
+void MeshGroup::sum_scatter(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    reduce_scatter<T>(input, output, n_bytes, SumOp<T>{});
+  });
+}
+
 void MeshGroup::send(const void* input, size_t n_bytes, int dst) {
   mesh_.send(static_cast<const char*>(input), n_bytes, dst);
 }
 
 void MeshGroup::recv(void* output, size_t n_bytes, int src) {
   mesh_.recv(static_cast<char*>(output), n_bytes, src);
+}
+
+template <typename T, typename ReduceOp>
+void MeshGroup::reduce_scatter(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    ReduceOp reduce_op) {
+  auto in_ptr = static_cast<const T*>(input);
+  auto out_ptr = static_cast<T*>(output);
+  int64_t count = n_bytes / sizeof(T);
+  mesh_.reduce_scatter(in_ptr, out_ptr, count, reduce_op);
 }
 
 template <typename T, typename ReduceOp>
