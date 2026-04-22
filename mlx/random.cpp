@@ -8,6 +8,7 @@
 #include "mlx/primitives.h"
 #include "mlx/random.h"
 #include "mlx/transforms.h"
+#include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::random {
@@ -224,7 +225,14 @@ array uniform(
   bool scalar_lohi = (lo.size() == 1) && (hi.size() == 1);
   bool single_key = !key || (key->shape() == Shape{2});
   bool gpu_stream = (stream.device.type == Device::gpu);
-  if (half && even && scalar_lohi && single_key && gpu_stream) {
+  // Skip the fused primitive under any function transform (vmap, compile,
+  // vjp, jvp). RandomUniform::vmap intentionally throws (the fused
+  // per-thread kernel has no batched semantics), and the chunked path
+  // below also internally evals which is illegal under tracing. Falling
+  // through to the vanilla bits()->divide()->cast() pipeline keeps user
+  // code that wraps random.uniform in a transform working.
+  if (half && even && scalar_lohi && single_key && gpu_stream &&
+      !detail::in_tracing()) {
     auto eff_key = key ? *key : KeySequence::default_().next();
     if (eff_key.shape() == Shape{2}) {
       // .item<float>() requires the array to be float32; cast first.
@@ -250,8 +258,14 @@ array uniform(
   // because sub-keys differ; same precedent as PR #904.
   size_t bits_bytes = total * size_of(float32);
   const size_t kChunkBytes = 256ULL * 1024 * 1024;  // 256 MB trigger
-  if (gpu_stream && scalar_lohi && single_key &&
-      bits_bytes >= 2 * kChunkBytes && !shape.empty() && shape[0] >= 4) {
+  // Restrict to half-precision: vanilla fp32 uniform already operates at
+  // ~1x output peak (the bits buffer IS the target dtype size), so chunking
+  // only adds K-fold sub-key + slice_update overhead with no memory benefit
+  // (drawback Phase 1 measured ~25% latency regression and ~25% higher peak).
+  // Skip under any transform: per-chunk eval is illegal inside compile/vmap.
+  if (half && gpu_stream && scalar_lohi && single_key &&
+      bits_bytes >= 2 * kChunkBytes && !shape.empty() && shape[0] >= 4 &&
+      !detail::in_tracing()) {
     auto eff_key = key ? *key : KeySequence::default_().next();
     if (eff_key.shape() == Shape{2}) {
       size_t K = pick_chunk_count(bits_bytes, shape[0]);
@@ -336,12 +350,14 @@ array normal(
   // derivation differs from vanilla so bf16/fp16 normal bytes change
   // (precedent: PR #904); statistical quality is preserved (each chunk
   // is fp32-then-cast).
-  // Route fp32 normal through chunking too (consistency; fp32 target
-  // has the same 3x peak problem under the standard uniform+erfinv+cast
-  // chain). Each chunk stays fp32-then-cast; for fp32 target, the cast
-  // is a no-op.
-  bool chunkable_dtype =
-      (dtype == bfloat16 || dtype == float16 || dtype == float32);
+  // Restrict to half-precision: fp32 normal does not have the 3x peak
+  // amplification (vanilla fp32 normal already operates at ~1x output
+  // peak because the intermediate IS the target), so chunking only adds
+  // K-fold sub-key + slice_update overhead with no memory benefit
+  // (drawback Phase 1 measured ~20% slower + 25% higher peak for fp32).
+  // Skip under any transform (compile/vmap/vjp/jvp): per-chunk eval is
+  // illegal inside the tracer.
+  bool chunkable_dtype = (dtype == bfloat16 || dtype == float16);
   bool gpu_stream = (stream.device.type == Device::gpu);
   bool single_key = !key || (key->shape() == Shape{2});
   size_t total = 1;
@@ -351,7 +367,8 @@ array normal(
   size_t bits_bytes = total * size_of(float32);
   const size_t kChunkBytes = 256ULL * 1024 * 1024;
   if (chunkable_dtype && gpu_stream && single_key &&
-      bits_bytes >= 2 * kChunkBytes && !shape.empty() && shape[0] >= 4) {
+      bits_bytes >= 2 * kChunkBytes && !shape.empty() && shape[0] >= 4 &&
+      !detail::in_tracing()) {
     auto eff_key = key ? *key : KeySequence::default_().next();
     if (eff_key.shape() == Shape{2}) {
       size_t K = pick_chunk_count(bits_bytes, shape[0]);
