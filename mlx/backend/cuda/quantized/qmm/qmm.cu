@@ -276,7 +276,8 @@ void qmm_naive(
   };
   int m = out.ndim() > 1 ? out.shape(-2) : 1;
   int k = x.shape(-1);
-  bool has_k_residue = k % group_size != 0;
+  int tile_k = std::max(64, group_size);
+  bool has_k_residue = k % tile_k != 0;
   bool sm80 = encoder.device().compute_capability_major() >= 8;
   dispatch_bool(transpose, [&](auto k_major) {
     dispatch_k(k_major, has_k_residue, [&]<bool HasKResidue>() {
