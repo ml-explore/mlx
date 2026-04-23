@@ -1608,6 +1608,173 @@ class TestQuantized(mlx_tests.MLXTestCase):
         expected = mx.dequantize(w_q, mx.contiguous(scales), mode=mode)
         self.assertTrue(mx.allclose(w_hat, expected))
 
+    def test_quantized_sdpa_turbo(self):
+        """TurboQuant 3-bit and 4-bit SDPA: pack indices, run kernel, compare
+        against standard SDPA using the dequantized K and V."""
+        if mx.default_device() == mx.cpu:
+            self.skipTest("TurboQuant SDPA requires a Metal GPU.")
+
+        import numpy as np
+
+        # Codebooks must match the constants in quantized_utils.h
+        CB3 = np.array(
+            [-1.7481, -1.0498, -0.5012, -0.1624, 0.1624, 0.5012, 1.0498, 1.7481],
+            dtype=np.float32,
+        )
+        CB4 = np.array(
+            [
+                -1.9672,
+                -1.3305,
+                -1.0130,
+                -0.7811,
+                -0.5714,
+                -0.4053,
+                -0.2382,
+                -0.0784,
+                0.0784,
+                0.2382,
+                0.4053,
+                0.5714,
+                0.7811,
+                1.0130,
+                1.3305,
+                1.9672,
+            ],
+            dtype=np.float32,
+        )
+
+        def pack_3bit(indices_np):
+            """Pack 3-bit indices to uint32 using PackReader<3> byte layout.
+
+            8 indices → 3 bytes (24 bits), little-endian, stored as uint32 words.
+            """
+            *batch, D = indices_np.shape
+            assert D % 8 == 0
+            n_packs = D // 8
+            flat = indices_np.reshape(-1, D).astype(np.int64)
+            n_tok = flat.shape[0]
+            buf = np.zeros((n_tok, n_packs * 3), dtype=np.uint8)
+            for t in range(n_tok):
+                for p in range(n_packs):
+                    ix = flat[t, p * 8 : p * 8 + 8]
+                    v = (
+                        int(ix[0])
+                        | (int(ix[1]) << 3)
+                        | (int(ix[2]) << 6)
+                        | (int(ix[3]) << 9)
+                        | (int(ix[4]) << 12)
+                        | (int(ix[5]) << 15)
+                        | (int(ix[6]) << 18)
+                        | (int(ix[7]) << 21)
+                    )
+                    buf[t, p * 3] = v & 0xFF
+                    buf[t, p * 3 + 1] = (v >> 8) & 0xFF
+                    buf[t, p * 3 + 2] = (v >> 16) & 0xFF
+            n_u32 = D * 3 // 32
+            u32 = np.frombuffer(buf.tobytes(), dtype="<u4").reshape(n_tok, n_u32)
+            return u32.reshape(*batch, n_u32)
+
+        def pack_4bit(indices_np):
+            """Pack 4-bit indices: 8 indices per uint32, lower nibble first."""
+            *batch, D = indices_np.shape
+            flat = indices_np.reshape(-1, D).astype(np.uint32)
+            n_tok, n_u32 = flat.shape[0], D // 8
+            u32 = np.zeros((n_tok, n_u32), dtype=np.uint32)
+            for i in range(8):
+                u32 |= (flat[:, i::8] & 0xF) << (4 * i)
+            return u32.reshape(*batch, n_u32)
+
+        def turbo_encode(x_np, bits, codebook):
+            """Quantize to nearest codebook entry; scale = norm / sqrt(D)."""
+            *batch, D = x_np.shape
+            flat = x_np.reshape(-1, D).astype(np.float32)
+            norm = np.linalg.norm(flat, axis=-1, keepdims=True)
+            x_scaled = flat / (norm + 1e-8) * np.sqrt(D)
+            diff = x_scaled[:, :, None] - codebook[None, None, :]
+            indices = np.argmin(diff**2, axis=-1)  # [-1, D]
+            scales = (norm / np.sqrt(D)).astype(np.float16)
+            return indices.reshape(*batch, D), scales.reshape(*batch, 1)
+
+        def turbo_decode(indices_np, scales_np, codebook):
+            return codebook[indices_np].astype(np.float32) * scales_np.astype(
+                np.float32
+            )
+
+        mx.random.seed(0)
+        B, Hq, Hkv = 1, 4, 1  # gqa_factor=4, within use_fallback limit
+        Lq, Lk, D = 1, 128, 64
+
+        cases = [
+            (3, CB3, pack_3bit, "turbo3"),
+            (4, CB4, pack_4bit, "turbo4"),
+        ]
+        for bits, cb, pack_fn, mode in cases:
+            with self.subTest(bits=bits):
+                q = mx.random.normal(shape=(B, Hq, Lq, D))
+                k = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
+                v = 0.1 * mx.random.normal(shape=(B, Hkv, Lk, D))
+
+                k_np = np.array(k.astype(mx.float32))
+                v_np = np.array(v.astype(mx.float32))
+
+                k_idx, k_sc = turbo_encode(k_np, bits, cb)
+                v_idx, v_sc = turbo_encode(v_np, bits, cb)
+
+                # Reference: standard SDPA with dequantized K/V
+                k_dq = mx.array(turbo_decode(k_idx, k_sc, cb).astype(np.float16))
+                v_dq = mx.array(turbo_decode(v_idx, v_sc, cb).astype(np.float16))
+                ref = mx.fast.scaled_dot_product_attention(q, k_dq, v_dq, scale=1.0)
+                mx.eval(ref)
+
+                # TurboQuant SDPA kernel
+                k_q = mx.array(pack_fn(k_idx))
+                v_q = mx.array(pack_fn(v_idx))
+                k_scales = mx.array(k_sc)
+                v_scales = mx.array(v_sc)
+
+                out = mx.fast.quantized_scaled_dot_product_attention(
+                    q,
+                    k_q,
+                    k_scales,
+                    v_q,
+                    v_scales,
+                    scale=1.0,
+                    mode=mode,
+                    group_size=D,
+                )
+                mx.eval(out)
+
+                self.assertEqual(out.shape, ref.shape)
+                # Kernel should produce exactly the same result as the Python
+                # dequantization reference (same codebook, same scale).
+                self.assertLess(float((out - ref).abs().max()), 1e-2)
+
+    def test_quantized_sdpa_turbo_errors(self):
+        """Error handling for TurboQuant SDPA mode."""
+        B, Hq, Hkv = 1, 2, 1
+        Lq, Lk, D = 1, 64, 64
+
+        q = mx.random.normal(shape=(B, Hq, Lq, D))
+        k = mx.random.normal(shape=(B, Hkv, Lk, D))
+        v = mx.random.normal(shape=(B, Hkv, Lk, D))
+        k_q, k_scales, k_biases = mx.quantize(k, group_size=32, bits=4, mode="affine")
+        v_q, v_scales, v_biases = mx.quantize(v, group_size=32, bits=4, mode="affine")
+
+        # biases not allowed for TurboQuant
+        with self.assertRaises(ValueError):
+            mx.fast.quantized_scaled_dot_product_attention(
+                q,
+                k_q,
+                k_scales,
+                k_biases,
+                v_q,
+                v_scales,
+                v_biases,
+                scale=1.0,
+                mode="turbo4",
+                group_size=D,
+            )
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

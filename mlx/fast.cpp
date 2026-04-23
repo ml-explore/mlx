@@ -896,6 +896,8 @@ array quantized_scaled_dot_product_attention(
   // Parse mode and get parameters
   auto qmode = string_to_quantization_mode(mode, tag);
   bool is_affine = qmode == QuantizationMode::Affine;
+  bool is_turbo = qmode == QuantizationMode::TurboQuant3 ||
+      qmode == QuantizationMode::TurboQuant4;
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
 
@@ -918,6 +920,19 @@ array quantized_scaled_dot_product_attention(
       throw std::invalid_argument(
           "[quantized_scaled_dot_product_attention] Affine mode requires "
           "key_biases and value_biases.");
+    }
+  } else if (is_turbo) {
+    int expected_bits = (qmode == QuantizationMode::TurboQuant3) ? 3 : 4;
+    if (bits != expected_bits) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Mode '" << mode << "' requires bits "
+          << expected_bits << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (key_biases.has_value() || value_biases.has_value()) {
+      throw std::invalid_argument(
+          "[quantized_scaled_dot_product_attention] Biases are not supported "
+          "for TurboQuant modes.");
     }
   } else {
     // FP modes have fixed params - verify if user overrode them incorrectly
@@ -972,11 +987,24 @@ array quantized_scaled_dot_product_attention(
         "[quantized_scaled_dot_product_attention] Keys and values must be "
         "uint32.");
   }
-  if (!is_affine &&
+  if (!is_affine && !is_turbo &&
       (key_scales.dtype() != uint8 || value_scales.dtype() != uint8)) {
     throw std::invalid_argument(
         "[quantized_scaled_dot_product_attention] Scales must be uint8 for fp "
         "quantization.");
+  }
+  if (is_turbo) {
+    auto check_turbo_scale_dtype = [&](const array& s, const char* name) {
+      if (s.dtype() != float16 && s.dtype() != bfloat16 &&
+          s.dtype() != float32) {
+        std::ostringstream msg;
+        msg << "[" << tag << "] TurboQuant " << name
+            << " scales must be float16, bfloat16, or float32.";
+        throw std::invalid_argument(msg.str());
+      }
+    };
+    check_turbo_scale_dtype(key_scales, "key");
+    check_turbo_scale_dtype(value_scales, "value");
   }
 
   // Compute and validate dimensions
@@ -1014,6 +1042,22 @@ array quantized_scaled_dot_product_attention(
     msg << "[" << tag << "] Head dim " << queries.shape(-1)
         << " must be divisible by group_size " << group_size << ".";
     throw std::invalid_argument(msg.str());
+  }
+  if (is_turbo) {
+    if (group_size != queries.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] TurboQuant requires group_size == head_dim,"
+          << " got group_size=" << group_size
+          << " head_dim=" << queries.shape(-1) << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    auto head_dim = queries.shape(-1);
+    if (head_dim != 64 && head_dim != 128 && head_dim != 256) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] TurboQuant only supports head_dim in {64, 128, 256},"
+          << " got " << head_dim << ".";
+      throw std::invalid_argument(msg.str());
+    }
   }
 
   // Validate scale/bias shapes
@@ -1063,10 +1107,16 @@ array quantized_scaled_dot_product_attention(
                    has_arr_mask,
                    has_sinks,
                    is_affine,
+                   is_turbo,
                    group_size,
                    bits,
                    mode,
                    s](const std::vector<array>& inputs) {
+    if (is_turbo) {
+      throw std::runtime_error(
+          "[quantized_scaled_dot_product_attention] TurboQuant mode requires "
+          "a Metal GPU device.");
+    }
     auto q = multiply(array(scale, inputs[0].dtype()), inputs[0], s);
     int n_repeats = n_q_heads / n_kv_heads;
 
@@ -1181,12 +1231,17 @@ array quantized_scaled_dot_product_attention(
   Shape full_mask_shape{
       queries.shape(0), queries.shape(1), queries.shape(2), keys.shape(-2)};
 
-  std::vector<array> inputs = {q, keys, key_scales};
+  // For TurboQuant, scales are per-vector norms stored as floats (not uint8).
+  // Cast them to final_type so the Metal kernel sees the expected dtype.
+  auto ks = is_turbo ? astype(key_scales, final_type, stream) : key_scales;
+  auto vs = is_turbo ? astype(value_scales, final_type, stream) : value_scales;
+
+  std::vector<array> inputs = {q, keys, ks};
   if (is_affine) {
     inputs.push_back(*key_biases);
   }
   inputs.push_back(values);
-  inputs.push_back(value_scales);
+  inputs.push_back(vs);
   if (is_affine) {
     inputs.push_back(*value_biases);
   }

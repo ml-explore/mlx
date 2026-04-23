@@ -8,7 +8,7 @@
 #include "mlx/backend/metal/kernels/fp4.h"
 #include "mlx/backend/metal/kernels/fp8.h"
 
-enum class QuantMode { Affine, Mxfp4, Mxfp8, Nvfp4 };
+enum class QuantMode { Affine, Mxfp4, Mxfp8, Nvfp4, TurboQuant3, TurboQuant4 };
 
 template <typename OutT, typename EncodedT>
 struct DecodeValue {
@@ -72,6 +72,64 @@ struct QuantConfig<QuantMode::Mxfp8> {
   using scale_storage_t = uint8_t;
 };
 
+// TurboQuant: codebook-based quantization with per-vector float scales.
+// Keys/values are packed bit indices; scales are per-vector L2 norms / sqrt(D).
+// Codebooks are Lloyd-Max optimal for N(0,1) (distribution of rotated,
+// norm-normalized key coordinates scaled by sqrt(D)).
+template <>
+struct QuantConfig<QuantMode::TurboQuant3> {
+  static constant constexpr bool has_bias = false;
+
+  using value_type = void;
+  using scale_type = void;
+
+  template <typename T>
+  using scale_storage_t = T;
+};
+
+template <>
+struct QuantConfig<QuantMode::TurboQuant4> {
+  static constant constexpr bool has_bias = false;
+
+  using value_type = void;
+  using scale_type = void;
+
+  template <typename T>
+  using scale_storage_t = T;
+};
+
+// N(0,1) Lloyd-Max 3-bit codebook (8 reconstruction levels).
+// Boundaries: 0, ±0.332, ±0.776, ±1.399 (midpoints of adjacent centroids).
+constant float turbo3_codebook[8] = {
+    -1.7481f,
+    -1.0498f,
+    -0.5012f,
+    -0.1624f,
+    0.1624f,
+    0.5012f,
+    1.0498f,
+    1.7481f};
+
+// N(0,1) equal-probability 4-bit codebook (16 reconstruction levels).
+// Computed as E[X | X in (b_i, b_{i+1})] for N(0,1) with equiprobable bins.
+constant float turbo4_codebook[16] = {
+    -1.9672f,
+    -1.3305f,
+    -1.0130f,
+    -0.7811f,
+    -0.5714f,
+    -0.4053f,
+    -0.2382f,
+    -0.0784f,
+    0.0784f,
+    0.2382f,
+    0.4053f,
+    0.5714f,
+    0.7811f,
+    1.0130f,
+    1.3305f,
+    1.9672f};
+
 template <QuantMode mode, typename T>
 struct Dequant {
   using Cfg = QuantConfig<mode>;
@@ -95,6 +153,32 @@ struct Dequant {
     } else {
       return s * raw(v);
     }
+  }
+};
+
+template <typename T>
+struct Dequant<QuantMode::TurboQuant3, T> {
+  [[clang::always_inline]] T raw(uint8_t v) const {
+    return T(turbo3_codebook[v & 7u]);
+  }
+  [[clang::always_inline]] T scale(T s) const {
+    return s;
+  }
+  [[clang::always_inline]] T operator()(uint8_t v, T s, T) const {
+    return s * raw(v);
+  }
+};
+
+template <typename T>
+struct Dequant<QuantMode::TurboQuant4, T> {
+  [[clang::always_inline]] T raw(uint8_t v) const {
+    return T(turbo4_codebook[v & 15u]);
+  }
+  [[clang::always_inline]] T scale(T s) const {
+    return s;
+  }
+  [[clang::always_inline]] T operator()(uint8_t v, T s, T) const {
+    return s * raw(v);
   }
 };
 

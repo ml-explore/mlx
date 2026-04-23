@@ -3425,9 +3425,13 @@ std::string quantization_mode_to_string(QuantizationMode mode) {
     case QuantizationMode::Mxfp8:
       return "mxfp8";
     case QuantizationMode::Nvfp4:
-    default:
       return "nvfp4";
+    case QuantizationMode::TurboQuant3:
+      return "turbo3";
+    case QuantizationMode::TurboQuant4:
+      return "turbo4";
   }
+  throw std::runtime_error("Unknown quantization mode");
 }
 
 QuantizationMode string_to_quantization_mode(
@@ -3441,6 +3445,10 @@ QuantizationMode string_to_quantization_mode(
     return QuantizationMode::Mxfp8;
   } else if (mode == "nvfp4") {
     return QuantizationMode::Nvfp4;
+  } else if (mode == "turbo3") {
+    return QuantizationMode::TurboQuant3;
+  } else if (mode == "turbo4") {
+    return QuantizationMode::TurboQuant4;
   }
   std::string msg;
   if (!tag.empty()) {
@@ -3472,6 +3480,14 @@ std::pair<int, int> quantization_params_from_mode(
     case QuantizationMode::Mxfp8:
       default_group_size = 32;
       default_bits = 8;
+      break;
+    case QuantizationMode::TurboQuant3:
+      default_group_size = 64;
+      default_bits = 3;
+      break;
+    case QuantizationMode::TurboQuant4:
+      default_group_size = 64;
+      default_bits = 4;
       break;
   }
   return {

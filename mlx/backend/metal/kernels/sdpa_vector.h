@@ -208,7 +208,9 @@ struct QuantOps {
   static constant constexpr int granularity = is_fast_path ? 4 : pack_factor;
   using fast_load_t = metal::conditional_t<bits == 4, uint16_t, uint32_t>;
   static constant constexpr uint32_t fast_mask = (1u << bits) - 1;
-  static_assert(bits == 4 || bits == 6 || bits == 8, "unsupported quant bits");
+  static_assert(
+      bits == 3 || bits == 4 || bits == 6 || bits == 8,
+      "unsupported quant bits");
   static_assert(
       !is_fast_path || (group_size % 4) == 0,
       "group_size must be divisible by 4 for 4/8-bit fast path");
@@ -659,6 +661,20 @@ template <typename T, int D>
   QUANT_SDPA_DISPATCH(Mxfp4, 32, 4)
   QUANT_SDPA_DISPATCH(Nvfp4, 16, 4)
   QUANT_SDPA_DISPATCH(Mxfp8, 32, 8)
+  // TurboQuant requires group_size == head_dim (one norm per vector).
+  // Gate on D to avoid the (D % group_size) == 0 static_assert failing.
+  if constexpr (D >= 64) {
+    QUANT_SDPA_DISPATCH(TurboQuant3, 64, 3)
+    QUANT_SDPA_DISPATCH(TurboQuant4, 64, 4)
+  }
+  if constexpr (D >= 128) {
+    QUANT_SDPA_DISPATCH(TurboQuant3, 128, 3)
+    QUANT_SDPA_DISPATCH(TurboQuant4, 128, 4)
+  }
+  if constexpr (D >= 256) {
+    QUANT_SDPA_DISPATCH(TurboQuant3, 256, 3)
+    QUANT_SDPA_DISPATCH(TurboQuant4, 256, 4)
+  }
 #undef QUANT_SDPA_DISPATCH
 }
 

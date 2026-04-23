@@ -626,6 +626,10 @@ int quant_mode_to_int(QuantizationMode mode) {
       return 2;
     case QuantizationMode::Nvfp4:
       return 3;
+    case QuantizationMode::TurboQuant3:
+      return 4;
+    case QuantizationMode::TurboQuant4:
+      return 5;
     default:
       throw std::invalid_argument(
           "[quant_sdpa_vector_2pass] Unsupported quantization mode.");

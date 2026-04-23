@@ -388,7 +388,7 @@ void init_fast(nb::module_& parent_module) {
             sinks (array, optional): An optional array of attention sinks with shape ``[N_q]``.
             group_size (int, optional): The group size used in the KV quantization. Defaults follow the quantization ``mode``.
             bits (int, optional): The bits used in the KV quantization. Defaults follow the quantization ``mode``.
-            mode (str, optional): The quantization mode: ``"mxfp4"``, ``"mxfp8"``, ``"nvfp4"``, or ``"affine"``.
+            mode (str, optional): The quantization mode: ``"mxfp4"``, ``"mxfp8"``, ``"nvfp4"``, ``"affine"``, ``"turbo3"``, or ``"turbo4"``. TurboQuant modes use a WHT rotation + Lloyd-Max codebook and require ``group_size == head_dim``; ``k_biases`` and ``v_biases`` must be ``None``.
             causal (bool, optional): Whether to apply lower-right aligned causal masking.
               Cannot be used together with ``mask``.
         Returns:
