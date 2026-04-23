@@ -265,7 +265,7 @@ void qmm_naive(
     if constexpr (k_major.value) {
       if (has_k_residue) {
         throw std::invalid_argument(
-            "[quantized_matmul] K must be multiples of group_size.");
+            "[quantized_matmul] K must be multiples of max(64, group_size).");
       }
       f.template operator()<false>();
     } else {
