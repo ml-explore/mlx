@@ -2888,6 +2888,16 @@ class TestOps(mlx_tests.MLXTestCase):
         out_np = a.conj()
         self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
+        b = np.random.normal(size=shape) + 1j * np.random.normal(size=shape)
+        b = b.astype(np.complex64)
+
+        _, vjps = mx.vjp(mx.conj, [mx.array(a)], [mx.array(b)])
+        self.assertTrue(np.array_equal(np.array(vjps[0]), b.conj()))
+
+        out_mlx, jvps = mx.jvp(mx.conj, [mx.array(a)], [mx.array(b)])
+        self.assertTrue(np.array_equal(np.array(out_mlx[0]), a.conj()))
+        self.assertTrue(np.array_equal(np.array(jvps[0]), b.conj()))
+
     def test_view(self):
         # Check scalar
         out = mx.array(1, mx.int8).view(mx.uint8).item()

@@ -458,7 +458,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   array mask_flat = flatten_in_eval(mask, 1, -1, s);
-  if (mask_flat.data<void>() != mask.data<void>()) {
+  if (gpu_ptr<void>(mask_flat) != gpu_ptr<void>(mask)) {
     encoder.add_temporary(mask_flat);
   }
   if (!mask_flat.flags().row_contiguous) {

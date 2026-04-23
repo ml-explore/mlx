@@ -36,12 +36,10 @@ void gemm_epilogue(
   using CFrag = typename NAXTile_t::NAXFrag_t;
   using cfrag_t = typename CFrag::template dtype_frag_t<T>;
 
-  STEEL_PRAGMA_UNROLL
-  for (short mm = 0; mm < TM; mm++) {
-    STEEL_PRAGMA_UNROLL
-    for (short nn = 0; nn < TN; nn++) {
-      const short m = mm * CFrag::kFragRows;
-      const short n = nn * CFrag::kFragCols;
+  const_for_loop<0, TM, 1>([&](auto mm) {
+    const_for_loop<0, TN, 1>([&](auto nn) {
+      auto m = mm * Int<CFrag::kFragRows>{};
+      auto n = nn * Int<CFrag::kFragCols>{};
 
       cfrag_t celems;
 
@@ -59,7 +57,7 @@ void gemm_epilogue(
             n);
       }
 
-      auto delems = Dtile.frag_at(mm, nn);
+      thread auto& delems = Dtile.template frag_at<mm, nn>();
 
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < kElemsPerFrag; i++) {
@@ -70,8 +68,8 @@ void gemm_epilogue(
           delems[i] += static_cast<V>(celems[i]);
         }
       }
-    }
-  }
+    });
+  });
 }
 
 // clang-format off

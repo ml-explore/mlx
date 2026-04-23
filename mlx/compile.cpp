@@ -137,8 +137,9 @@ Compiled::Compiled(
     }
   }
   os << "_";
-  for (const auto& x : inputs) {
-    if (constant_ids.find(x.id()) != constant_ids.end()) {
+  // Iterate the moved-into members; the parameters are moved-from above.
+  for (const auto& x : inputs_) {
+    if (constant_ids_.find(x.id()) != constant_ids_.end()) {
       continue;
     }
     os << kindof(x.dtype()) << x.itemsize();

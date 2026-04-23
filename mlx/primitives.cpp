@@ -1178,6 +1178,21 @@ std::vector<Shape> Concatenate::output_shapes(
   return {std::move(shape)};
 }
 
+std::vector<array> Conjugate::vjp(
+    const std::vector<array>&,
+    const std::vector<array>& cotangents,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  return {conjugate(cotangents[0], stream())};
+}
+
+std::vector<array> Conjugate::jvp(
+    const std::vector<array>&,
+    const std::vector<array>& tangents,
+    const std::vector<int>&) {
+  return {conjugate(tangents[0], stream())};
+}
+
 std::pair<std::vector<array>, std::vector<int>> Conjugate::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -3936,7 +3951,7 @@ std::vector<array> Reduce::vjp(
           auto p1 = cumprod(x, axis, /*reverse=*/false, /*inclusive=*/false, s);
           auto p2 = cumprod(x, axis, /*reverse=*/true, /*inclusive=*/false, s);
           auto exclusive_prod = multiply(p1, p2, s);
-          return multiply(exclusive_prod, cotan, s);
+          return multiply(conjugate(exclusive_prod, s), cotan, s);
         };
 
     // To compute a numerically stable gradient for prod we need an exclusive

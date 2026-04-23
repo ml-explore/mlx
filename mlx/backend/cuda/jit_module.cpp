@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <shared_mutex>
 
 #include <fmt/format.h>
 #include <nvrtc.h>
@@ -439,20 +440,28 @@ CUfunction JitModule::get_kernel(
   return get_kernel_and_dims(kernel_name, std::move(configure_kernel)).first;
 }
 
-std::unordered_map<std::string, JitModule>& get_jit_module_cache() {
-  static std::unordered_map<std::string, JitModule> map;
-  return map;
-}
-
 JitModule& get_jit_module(
     const mlx::core::Device& device,
     const std::string& name,
     const KernelBuilder& builder,
-    bool cache) {
-  auto& map = get_jit_module_cache();
-  auto it = map.find(name);
-  if (it == map.end()) {
-    it = map.try_emplace(name, cu::device(device), name, builder, cache).first;
+    bool use_disk_cache) {
+  // The cache are leak intentionally as user code may still be running JIT
+  // compiled code after main thread teardown.
+  static auto* cache = new std::unordered_map<std::string, JitModule>;
+  static auto* mtx = new std::shared_mutex;
+
+  {
+    std::shared_lock rlock(*mtx);
+    if (auto it = cache->find(name); it != cache->end()) {
+      return it->second;
+    }
+  }
+
+  std::unique_lock wlock(*mtx);
+  auto it = cache->find(name);
+  if (it == cache->end()) {
+    auto& d = cu::device(device);
+    it = cache->try_emplace(name, d, name, builder, use_disk_cache).first;
   }
   return it->second;
 }

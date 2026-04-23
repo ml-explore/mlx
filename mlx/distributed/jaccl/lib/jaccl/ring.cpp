@@ -1,22 +1,21 @@
 // Copyright © 2026 Apple Inc.
 
-#include "mlx/distributed/jaccl/ring.h"
-#include "mlx/backend/cpu/encoder.h"
-#include "mlx/distributed/reduction_ops.h"
-#include "mlx/dtype_utils.h"
+#include "jaccl/ring.h"
+#include "jaccl/reduction_ops.h"
+#include "jaccl/types.h"
 
-namespace mlx::core::distributed::jaccl {
+namespace jaccl {
 
 RingGroup::RingGroup(
     int rank,
     int size,
     const std::vector<std::string>& left_devices,
     const std::vector<std::string>& right_devices,
-    const char* coordinator_addr)
+    const std::string& coordinator_addr)
     : rank_(rank),
       size_(size),
       n_conns_(left_devices.size()),
-      side_channel_(rank_, size_, coordinator_addr),
+      side_channel_(rank_, size_, coordinator_addr.c_str()),
       left_(create_connections(left_devices)),
       right_(create_connections(right_devices)) {
   if (left_.size() > RING_MAX_CONNS || right_.size() > RING_MAX_CONNS) {
@@ -29,8 +28,8 @@ RingGroup::RingGroup(
   // Initialize all the connections and allocate buffers
   initialize();
 
-  // Make sure every node has reached here before continuing
-  side_channel_.all_gather<int>(0);
+  // Make sure every node has reached here before continuing.
+  side_channel_.barrier();
 
   // Create the ring implementation object
   ring_ = RingImpl(rank_, size_, left_, right_, send_buffers_, recv_buffers_);
@@ -60,9 +59,9 @@ void RingGroup::initialize() {
     conn.queue_pair_init();
   }
 
-  // Gather the information to be exchanged, this also serves as a barrier so
-  // that all peers have initialized their connections before attempting to
-  // transition to RTS.
+  // Gather the information to be exchanged, this also serves as a barrier
+  // so that all peers have initialized their connections before attempting
+  // to transition to RTS.
   std::vector<Destination> left_info;
   for (auto& conn : left_) {
     left_info.emplace_back(conn.info());
@@ -126,40 +125,48 @@ void RingGroup::allocate_buffers() {
   }
 }
 
-void RingGroup::all_sum(const array& input, array& output, Stream stream) {
-  dispatch_all_types(output.dtype(), [&](auto type_tag) {
-    using T = MLX_GET_TYPE(type_tag);
-    all_reduce<T>(input, output, stream, detail::SumOp<T>{});
+void RingGroup::all_sum(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    all_reduce<T>(input, output, n_bytes, SumOp<T>{});
   });
 }
 
-void RingGroup::all_max(const array& input, array& output, Stream stream) {
-  dispatch_all_types(output.dtype(), [&](auto type_tag) {
-    using T = MLX_GET_TYPE(type_tag);
-    all_reduce<T>(input, output, stream, detail::MaxOp<T>{});
+void RingGroup::all_max(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    all_reduce<T>(input, output, n_bytes, MaxOp<T>{});
   });
 }
 
-void RingGroup::all_min(const array& input, array& output, Stream stream) {
-  dispatch_all_types(output.dtype(), [&](auto type_tag) {
-    using T = MLX_GET_TYPE(type_tag);
-    all_reduce<T>(input, output, stream, detail::MinOp<T>{});
+void RingGroup::all_min(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    all_reduce<T>(input, output, n_bytes, MinOp<T>{});
   });
 }
 
-void RingGroup::all_gather(const array& input, array& output, Stream stream) {
-  auto in_ptr = input.data<char>();
-  auto out_ptr = output.data<char>();
-  int64_t n_bytes = input.nbytes();
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(input);
-  encoder.set_output_array(output);
-  encoder.dispatch([in_ptr, out_ptr, n_bytes, this]() {
-    ring_.all_gather(in_ptr, out_ptr, n_bytes, n_conns_);
-  });
+void RingGroup::all_gather(const void* input, void* output, size_t n_bytes) {
+  ring_.all_gather(
+      static_cast<const char*>(input),
+      static_cast<char*>(output),
+      n_bytes,
+      n_conns_);
 }
 
-void RingGroup::send(const array& input, int dst, Stream stream) {
+void RingGroup::send(const void* input, size_t n_bytes, int dst) {
   int right = (rank_ + 1) % size_;
   int left = (rank_ + size_ - 1) % size_;
   if (dst != right && dst != left) {
@@ -168,16 +175,10 @@ void RingGroup::send(const array& input, int dst, Stream stream) {
         << "but tried to send to " << dst << " from " << rank_ << std::endl;
     throw std::runtime_error(msg.str());
   }
-  auto data = input.data<char>();
-  int64_t n_bytes = input.nbytes();
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(input);
-  encoder.dispatch([data, n_bytes, dst, this]() {
-    ring_.send(data, n_bytes, dst, n_conns_);
-  });
+  ring_.send(static_cast<const char*>(input), n_bytes, dst, n_conns_);
 }
 
-void RingGroup::recv(array& out, int src, Stream stream) {
+void RingGroup::recv(void* output, size_t n_bytes, int src) {
   int right = (rank_ + 1) % size_;
   int left = (rank_ + size_ - 1) % size_;
   if (src != right && src != left) {
@@ -186,42 +187,29 @@ void RingGroup::recv(array& out, int src, Stream stream) {
         << "but tried to recv from " << src << " to " << rank_ << std::endl;
     throw std::runtime_error(msg.str());
   }
-  auto data = out.data<char>();
-  int64_t n_bytes = out.nbytes();
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_output_array(out);
-  encoder.dispatch([data, n_bytes, src, this]() {
-    ring_.recv(data, n_bytes, src, n_conns_);
-  });
+  ring_.recv(static_cast<char*>(output), n_bytes, src, n_conns_);
 }
 
 template <typename T, typename ReduceOp>
 void RingGroup::all_reduce(
-    const array& input,
-    array& output,
-    Stream stream,
+    const void* input,
+    void* output,
+    size_t n_bytes,
     ReduceOp reduce_op) {
-  auto in_ptr = input.data<T>();
-  auto out_ptr = output.data<T>();
-  int64_t size = input.size();
-  int64_t n_bytes = input.nbytes();
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(input);
-  encoder.set_output_array(output);
-  encoder.dispatch([in_ptr, out_ptr, size, n_bytes, this, reduce_op]() {
-    if (size < size_ * 2 * n_conns_) {
-      ring_.all_reduce<1, T, ReduceOp>(in_ptr, out_ptr, size, 1, reduce_op);
-      return;
-    }
+  auto in_ptr = static_cast<const T*>(input);
+  auto out_ptr = static_cast<T*>(output);
+  int64_t count = n_bytes / sizeof(T);
+  if (count < size_ * 2 * n_conns_) {
+    ring_.all_reduce<1, T, ReduceOp>(in_ptr, out_ptr, count, 1, reduce_op);
+    return;
+  }
 
-    if (n_bytes <= 65536) {
-      ring_.all_reduce<2, T, ReduceOp>(in_ptr, out_ptr, size, 1, reduce_op);
-      return;
-    }
+  if (n_bytes <= 65536) {
+    ring_.all_reduce<2, T, ReduceOp>(in_ptr, out_ptr, count, 1, reduce_op);
+    return;
+  }
 
-    ring_.all_reduce<2, T, ReduceOp>(
-        in_ptr, out_ptr, size, n_conns_, reduce_op);
-  });
+  ring_.all_reduce<2, T, ReduceOp>(in_ptr, out_ptr, count, n_conns_, reduce_op);
 }
 
-} // namespace mlx::core::distributed::jaccl
+} // namespace jaccl

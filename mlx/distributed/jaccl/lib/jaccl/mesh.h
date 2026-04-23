@@ -2,14 +2,12 @@
 
 #pragma once
 
-#include "mlx/distributed/distributed_impl.h"
-#include "mlx/distributed/jaccl/mesh_impl.h"
-#include "mlx/distributed/jaccl/ring_impl.h"
-#include "mlx/distributed/jaccl/utils.h"
+#include "jaccl/group.h"
+#include "jaccl/mesh_impl.h"
+#include "jaccl/rdma.h"
+#include "jaccl/ring_impl.h"
 
-using GroupImpl = mlx::core::distributed::detail::GroupImpl;
-
-namespace mlx::core::distributed::jaccl {
+namespace jaccl {
 
 /**
  * The JACCL communication group for a fully connected mesh. We expect one
@@ -20,16 +18,12 @@ namespace mlx::core::distributed::jaccl {
  * information and then configure the connections to be ready for RDMA
  * operations.
  */
-class MeshGroup : public GroupImpl {
+class MeshGroup : public Group {
  public:
   MeshGroup(
       int rank,
       const std::vector<std::string>& device_names,
-      const char* coordinator_addr);
-
-  Stream communication_stream(StreamOrDevice s) override {
-    return to_stream(s, Device::cpu);
-  }
+      const std::string& coordinator_addr);
 
   int rank() override {
     return rank_;
@@ -39,27 +33,26 @@ class MeshGroup : public GroupImpl {
     return size_;
   }
 
-  void all_sum(const array& input, array& output, Stream stream) override;
-  void all_max(const array& input, array& output, Stream stream) override;
-  void all_min(const array& input, array& output, Stream stream) override;
-  void all_gather(const array& input, array& output, Stream stream) override;
-  void send(const array& input, int dst, Stream stream) override;
-  void recv(array& out, int src, Stream stream) override;
+  void all_sum(const void* input, void* output, size_t n_bytes, int dtype)
+      override;
 
-  void sum_scatter(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[jaccl] sum_scatter not supported.");
-  }
+  void all_max(const void* input, void* output, size_t n_bytes, int dtype)
+      override;
 
-  std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
-    throw std::runtime_error("[jaccl] Group split not supported.");
-  }
+  void all_min(const void* input, void* output, size_t n_bytes, int dtype)
+      override;
+
+  void all_gather(const void* input, void* output, size_t n_bytes) override;
+
+  void send(const void* input, size_t n_bytes, int dst) override;
+  void recv(void* output, size_t n_bytes, int src) override;
 
  private:
   template <typename T, typename ReduceOp>
   void all_reduce(
-      const array& input,
-      array& output,
-      Stream stream,
+      const void* input,
+      void* output,
+      size_t n_bytes,
       ReduceOp reduce_op);
 
   /**
@@ -86,4 +79,4 @@ class MeshGroup : public GroupImpl {
   RingImpl ring_;
 };
 
-} // namespace mlx::core::distributed::jaccl
+} // namespace jaccl

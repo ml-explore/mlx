@@ -18,7 +18,7 @@ runs:
       env:
         CMAKE_ARGS: -DMLX_BUILD_CUDA=ON
       run: |
-        pip install auditwheel build patchelf setuptools
+        pip install auditwheel "build<=1.4.2" patchelf setuptools
         python setup.py clean --all
         MLX_DISABLE_SM90A_KERNELS=1 MLX_BUILD_STAGE=2 python -m build -w
 

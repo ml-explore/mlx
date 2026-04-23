@@ -7,19 +7,23 @@
 #include <condition_variable>
 #include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <thread>
 
 namespace mlx::core::cu {
 
 // Run tasks in worker thread, synchronized with cuda stream.
-class Worker {
+class Worker : public std::enable_shared_from_this<Worker> {
  public:
   explicit Worker(Device& d);
   ~Worker();
 
   Worker(const Worker&) = delete;
   Worker& operator=(const Worker&) = delete;
+
+  void start();
+  void stop();
 
   // Add a pending |task| that will run when consumed or commited.
   void add_task(std::function<void()> task);

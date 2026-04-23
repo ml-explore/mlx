@@ -5,6 +5,7 @@
 #include <cute/numeric/numeric_types.hpp>
 #include <cute/tensor.hpp>
 #include <cutlass/numeric_conversion.h>
+#include <cuda/std/array>
 
 namespace cutlass {
 
@@ -109,13 +110,13 @@ namespace cute {
 
 // Required by tiled copy for 3/5/6-bit weights.
 struct uint24_t {
-  std::array<std::uint8_t, 3> bytes;
+  cuda::std::array<std::uint8_t, 3> bytes;
 };
 struct uint40_t {
-  std::array<std::uint8_t, 5> bytes;
+  cuda::std::array<std::uint8_t, 5> bytes;
 };
 struct uint48_t {
-  std::array<std::uint8_t, 6> bytes;
+  cuda::std::array<std::uint8_t, 6> bytes;
 };
 
 template <>

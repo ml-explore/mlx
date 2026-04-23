@@ -5,6 +5,7 @@ import os
 import platform
 import re
 import subprocess
+import sys
 from functools import partial
 from pathlib import Path
 
@@ -91,6 +92,7 @@ class CMakeBuild(build_ext):
             f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
             f"-DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY={pybind_out_dir}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
+            f"-DPython_EXECUTABLE={sys.executable}",
             "-DMLX_BUILD_PYTHON_BINDINGS=ON",
             "-DMLX_BUILD_TESTS=OFF",
             "-DMLX_BUILD_BENCHMARKS=OFF",

@@ -48,8 +48,11 @@ TEST_CASE("test default stream in threads") {
   for (size_t i = 0; i < num_threads; ++i) {
     threads.emplace_back([&thread_streams, &mtx]() {
       auto s = default_stream(gpu::is_available() ? Device::gpu : Device::cpu);
-      std::lock_guard lock(mtx);
-      thread_streams.insert(s);
+      {
+        std::lock_guard lock(mtx);
+        thread_streams.insert(s);
+      }
+      clear_streams();
     });
   }
 
@@ -66,7 +69,7 @@ TEST_CASE("test default stream in threads") {
 }
 
 TEST_CASE("test access stream in other thread") {
-  if (!metal::is_available()) {
+  if (!gpu::is_available()) {
     return;
   }
 
@@ -80,13 +83,52 @@ TEST_CASE("test access stream in other thread") {
     } catch (const std::runtime_error&) {
       error_caught = true;
     }
+    clear_streams();
   });
   t.join();
 
   CHECK(error_caught);
 }
 
+TEST_CASE("test new stream in threads") {
+  std::vector<std::thread> threads;
+  for (int i = 0; i < 1; ++i) {
+    threads.emplace_back([]() {
+      auto s = new_stream(default_device());
+      eval(arange(10, s));
+      clear_streams();
+    });
+  }
+  for (auto& t : threads) {
+    t.join();
+  }
+}
+
+TEST_CASE("test thread local stream") {
+  auto s = new_thread_local_stream(default_device());
+  int result = sum(arange(10, s)).item<int>();
+
+  std::atomic<int> finished = 0;
+  std::vector<std::thread> threads;
+  int num_threads = 4;
+  for (int i = 0; i < 4; ++i) {
+    threads.emplace_back([&]() {
+      int r = sum(arange(10, s)).item<int>();
+      CHECK_EQ(result, r);
+      finished += 1;
+      clear_streams();
+    });
+  }
+
+  for (auto& t : threads) {
+    t.join();
+  }
+  CHECK_EQ(finished, num_threads);
+}
+
 TEST_CASE("test get streams") {
+  // Initialize default CPU stream before querying
+  default_stream(Device::cpu);
   auto streams = get_streams();
 
   // At least the default CPU stream exists

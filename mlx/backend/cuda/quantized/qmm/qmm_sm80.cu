@@ -37,7 +37,9 @@ __global__ void qmm_sm80_kernel(
     const Element* A, StrideA dA, SmemLayoutA sA_layout, TiledCopyA g2s_copy_a, S2RAtomA s2r_atom_a,
     const Quant*   B, StrideB dB, SmemLayoutB sB_layout, TiledCopyB g2s_copy_b, S2RAtomB s2r_atom_b,
           Element* C, StrideC dC, SmemLayoutC sC_layout, TiledCopyC s2g_copy_c, R2SAtomC r2s_atom_c,
-    const Scale* S, const Element* Z, LayoutS S_layout, G2RAtomS g2r_atom_s, TiledMma mma) {
+    const Scale* S, const Element* Z, LayoutS S_layout, G2RAtomS g2r_atom_s,
+    const uint32_t* lhs_indices, const uint32_t* rhs_indices,
+    TiledMma mma) {
   CUTE_STATIC_ASSERT_V(size(g2s_copy_a) == size(mma));
   CUTE_STATIC_ASSERT_V(size(g2s_copy_b) == size(mma));
   CUTE_STATIC_ASSERT_V(size(s2g_copy_c) == size(mma));
@@ -48,6 +50,10 @@ __global__ void qmm_sm80_kernel(
   int thread_idx = int(threadIdx.x);
   auto [m_coord, n_coord, l_coord] = static_cast<uint3>(blockIdx);
 
+  // For gather, use index lookup for input batch slicing.
+  uint32_t a_batch = lhs_indices ? lhs_indices[l_coord] : l_coord;
+  uint32_t b_batch = rhs_indices ? rhs_indices[l_coord] : l_coord;
+
   // Represent the full tensors.
   Tensor mA_mkl = make_tensor(make_gmem_ptr(A),        select<0,2,3>(shape_MNKL), dA); // (M,K,L)
   Tensor mB_nkl = make_tensor(make_gmem_ptr<Quant>(B), select<1,2,3>(shape_MNKL), dB); // (N,K,L)
@@ -57,12 +63,12 @@ __global__ void qmm_sm80_kernel(
   Tensor mZ_nkl = make_tensor(make_gmem_ptr(Z), S_layout); // (N,(group_size,K/group_size),L)
 
   // Get batch slice.
-  Tensor mA = mA_mkl(_,_,l_coord); // (M,K)
-  Tensor mB = mB_nkl(_,_,l_coord); // (N,K)
+  Tensor mA = mA_mkl(_,_,a_batch); // (M,K)
+  Tensor mB = mB_nkl(_,_,b_batch); // (N,K)
   Tensor mC = mC_mnl(_,_,l_coord); // (M,N)
 
-  Tensor mS = mS_nkl(_,_,l_coord); // (N,(group_size,K/group_size))
-  Tensor mZ = mZ_nkl(_,_,l_coord); // (N,(group_size,K/group_size))
+  Tensor mS = mS_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
+  Tensor mZ = mZ_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
 
   // Get the appropriate blocks for this thread block.
   auto cta_coord = make_coord(m_coord, n_coord, _); // (m,n,k)
@@ -267,17 +273,19 @@ inline auto make_tiled_copy(NumThreads num_threads) {
       make_layout(make_shape(Int<1>{}, Int<bits / sizeof_bits_v<T>>{})));
 }
 
-template <int TileM = 16, typename Element, typename Quant, typename Scale, typename GroupSize, typename F>
+template <int TileM = 16, typename Element, typename Quant, typename Scale, typename GroupSize>
 void qmm_sm80(
     const Element* A,
     const Quant*   B,
     const Scale* S,
     const Element* Z,
+    const uint32_t* lhs_indices,
+    const uint32_t* rhs_indices,
     Element* C,
     int m, int n, int k, int l,
     bool broadcast_b,
     GroupSize group_size,
-    F&& launch_kernel) {
+    auto&& launch_kernel) {
   // Define shapes (dynamic).
   auto prob_shape = make_shape(m, n, k, l); // (M,N,K,L)
 
@@ -360,7 +368,9 @@ void qmm_sm80(
       &A, &dA, &sA_layout, &g2s_copy_a, &s2r_atom_a,
       &B, &dB, &sB_layout, &g2s_copy_b, &s2r_atom_b,
       &C, &dC, &sC_layout, &s2g_copy_c, &r2s_atom_c,
-      &S, &Z, &S_layout, &g2r_atom_s, &mma};
+      &S, &Z, &S_layout, &g2r_atom_s,
+      &lhs_indices, &rhs_indices,
+      &mma};
   launch_kernel(reinterpret_cast<void*>(kernel), num_blocks, block_dims, smem_bytes, args);
 }
 
@@ -424,11 +434,13 @@ inline void dispatch_quant_types(
 }
 
 template <int TileM>
-void qmm_impl_sm80(
+void qmm_sm80_impl(
     const array& x,
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& lhs_indices,
+    const std::optional<array>& rhs_indices,
     array& out,
     int bits,
     int group_size,
@@ -439,7 +451,7 @@ void qmm_impl_sm80(
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);
-  bool broadcast_b = w.ndim() == 2;
+  bool broadcast_b = (w.ndim() <= 2) || (w.size() != w.data_size());
 
   dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
     dispatch_quant_types<Element>(
@@ -454,12 +466,20 @@ void qmm_impl_sm80(
           if (biases) {
             encoder.set_input_array(*biases);
           }
+          if (lhs_indices) {
+            encoder.set_input_array(*lhs_indices);
+          }
+          if (rhs_indices) {
+            encoder.set_input_array(*rhs_indices);
+          }
           encoder.set_output_array(out);
           cutlass_gemm::qmm_sm80<TileM>(
               gpu_ptr<Element>(x),
               gpu_ptr<Quant>(w),
               gpu_ptr<Scale>(scales),
               biases ? gpu_ptr<Element>(*biases) : nullptr,
+              lhs_indices ? gpu_ptr<uint32_t>(*lhs_indices) : nullptr,
+              rhs_indices ? gpu_ptr<uint32_t>(*rhs_indices) : nullptr,
               gpu_ptr<Element>(out),
               m,
               n,
@@ -479,18 +499,19 @@ void qmm_impl_sm80(
   });
 }
 
-} // namespace mlx::core
+// clang-format off
+template void qmm_sm80_impl<@TileM@>(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const std::optional<array>& lhs_indices,
+    const std::optional<array>& rhs_indices,
+    array& out,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder);
+// clang-format on
 
-#define QMM_SM80_GPU(TileM)               \
-  namespace mlx::core {                   \
-  template void qmm_impl_sm80<TileM>(     \
-      const array& x,                     \
-      const array& w,                     \
-      const array& scales,                \
-      const std::optional<array>& biases, \
-      array& out,                         \
-      int bits,                           \
-      int group_size,                     \
-      QuantizationMode mode,              \
-      cu::CommandEncoder& encoder);       \
-  }
+} // namespace mlx::core

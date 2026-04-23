@@ -40,7 +40,7 @@ cute_dequant(auto w, auto s, auto z, auto out) {
   }
 }
 
-template <typename ProblemShape, typename CtaTiler,
+template <bool HasKResidue, typename ProblemShape, typename CtaTiler,
           typename Element, typename Quant, typename Scale,
           typename StrideA, typename SmemLayoutA, typename TiledCopyA,
           typename StrideB, typename SmemLayoutB, typename TiledCopyB,
@@ -51,6 +51,7 @@ __global__ void qmm_naive_kernel(
     const Quant*   B, StrideB dB, SmemLayoutB sB_layout, TiledCopyB copy_b,
           Element* C, StrideC dC,
     const Scale* S, const Element* Z, LayoutS S_layout,
+    const uint32_t* lhs_indices, const uint32_t* rhs_indices,
     TiledMma mma) {
   CUTE_STATIC_ASSERT_V(size(copy_a) == size(mma));
   CUTE_STATIC_ASSERT_V(size(copy_b) == size(mma));
@@ -61,6 +62,20 @@ __global__ void qmm_naive_kernel(
   int thread_idx = int(threadIdx.x);
   auto [m_coord, n_coord, l_coord] = static_cast<uint3>(blockIdx);
 
+  auto m_max_coord = size<0>(shape_MNKL) - size<0>(cta_tiler) * m_coord; // M - BLK_M * m_coord
+  auto n_max_coord = size<1>(shape_MNKL) - size<1>(cta_tiler) * n_coord; // N - BLK_N * n_coord
+
+  // Shift tensor so we handle residue of K in the 0th tile.
+  auto shape_K = size<2>(shape_MNKL);
+  auto bK = size<2>(cta_tiler);
+  auto k_residue = shape_K - bK * ceil_div(shape_K, bK);
+  if constexpr (HasKResidue) {
+    A += k_residue * get<1>(dA);
+    B += k_residue * get<1>(dB) * cuda::std::min(8, sizeof_bits_v<Quant>) / 8;
+    S += k_residue * stride<1>(S_layout);
+    Z += k_residue * stride<1>(S_layout);
+  }
+
   // Represent the full tensors.
   Tensor mA_mkl = make_tensor(make_gmem_ptr(A),        select<0,2,3>(shape_MNKL), dA); // (M,K,L)
   Tensor mB_nkl = make_tensor(make_gmem_ptr<Quant>(B), select<1,2,3>(shape_MNKL), dB); // (N,K,L)
@@ -69,13 +84,17 @@ __global__ void qmm_naive_kernel(
   Tensor mS_nkl = make_tensor(make_gmem_ptr(S), S_layout); // (N,(group_size,K/group_size),L)
   Tensor mZ_nkl = make_tensor(make_gmem_ptr(Z), S_layout); // (N,(group_size,K/group_size),L)
 
+  // For gather, use index lookup for input batch slicing.
+  uint32_t a_batch = lhs_indices ? lhs_indices[l_coord] : l_coord;
+  uint32_t b_batch = rhs_indices ? rhs_indices[l_coord] : l_coord;
+
   // Get batch slice.
-  Tensor mA = mA_mkl(_,_,l_coord); // (M,K)
-  Tensor mB = mB_nkl(_,_,l_coord); // (N,K)
+  Tensor mA = mA_mkl(_,_,a_batch); // (M,K)
+  Tensor mB = mB_nkl(_,_,b_batch); // (N,K)
   Tensor mC = mC_mnl(_,_,l_coord); // (M,N)
 
-  Tensor mS = mS_nkl(_,_,l_coord); // (N,(group_size,K/group_size))
-  Tensor mZ = mZ_nkl(_,_,l_coord); // (N,(group_size,K/group_size))
+  Tensor mS = mS_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
+  Tensor mZ = mZ_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
 
   // Get the appropriate blocks for this thread block.
   auto cta_coord = make_coord(m_coord, n_coord, _); // (m,n,k)
@@ -85,9 +104,6 @@ __global__ void qmm_naive_kernel(
 
   Tensor gS = local_tile(mS, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
   Tensor gZ = local_tile(mZ, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
-
-  auto m_max_coord = size<0>(shape_MNKL) - size<0>(gA) * m_coord; // M - BLK_M * m_coord
-  auto n_max_coord = size<1>(shape_MNKL) - size<0>(gB) * n_coord; // N - BLK_N * n_coord
 
   // Shared memory buffers.
   extern __shared__ char shared_memory[];
@@ -159,17 +175,53 @@ __global__ void qmm_naive_kernel(
     __syncthreads();
   };
 
+  // Clear the rmem tiles to account for predicated off loads.
+  if constexpr (HasKResidue) {
+    clear(tArA);
+    clear(tBrB);
+    clear(tBrS);
+    clear(tBrZ);
+  }
+
   // Prefetch first tile.
-  fetch_gmem(0);
+  if constexpr (HasKResidue) {
+    Tensor tAgA_k = tAgA(_,_,_,0);
+    CUTE_UNROLL
+    for (int k = 0; k < size<2>(tArA); ++k) {
+      if (get<1>(tAcA(0,0,k)) >= -k_residue) {
+        copy_if(copy_a, tApA(_,k), tAgA_k(_,_,k), tArA(_,_,k));
+      }
+    }
+    Tensor tBgB_k = tBgB(_,_,_,0);
+    Tensor tBgS_k = tBgS(_,_,_,0);
+    Tensor tBgZ_k = tBgZ(_,_,_,0);
+    CUTE_UNROLL
+    for (int k = 0; k < size<2>(tBrB); ++k) {
+      if (get<1>(tBcB(0,0,k)) >= -k_residue) {
+        copy_if(copy_b, tBpB(_,k), tBgB_k(_,_,k), tBrB(_,_,k));
+        copy(tBgS_k(_,_,k), tBrS(_,_,k));
+        copy(tBgZ_k(_,_,k), tBrZ(_,_,k));
+      }
+    }
+  } else {
+    fetch_gmem(0);
+  }
 
   // Clear accumulators.
   clear(tCrC);
 
   // Loop over CTA tiles.
-  auto K_TILE_MAX  = size<3>(tAgA);
+  auto K_TILE_MAX = size<3>(tAgA);
   for (int tile = 0; tile < K_TILE_MAX; ++tile) {
     store_smem();
-    fetch_gmem((tile + 1 < K_TILE_MAX) ? tile + 1 : tile);
+    if constexpr (HasKResidue) {
+      // Avoid fetching full 0th-tile when there is residue.
+      if (K_TILE_MAX > 1) {
+        fetch_gmem((tile + 1 < K_TILE_MAX) ? tile + 1 : tile);
+      }
+    } else {
+      fetch_gmem((tile + 1 < K_TILE_MAX) ? tile + 1 : tile);
+    }
     gemm(mma, tCsA, tCsB, tCrC);
   }
 
@@ -231,9 +283,10 @@ inline constexpr auto make_tiled_mma() {
   }
 }
 
-template <typename T, bool KMajor = true>
+template <typename T, bool KMajor = true, bool HasKResidue = false>
 inline auto make_tiled_copy(auto num_threads, auto bM, auto bK) {
-  auto n_read = Int<8>{};
+  // TODO: Only do 1-element read for the tile of residue.
+  auto n_read = Int<HasKResidue ? 1 : 8>{};
   auto atom = Copy_Atom<UniversalCopy<uint_bit_t<n_read * sizeof_bits_v<T>>>, T>{};
   if constexpr (KMajor) {
     auto k_threads = bK / n_read;
@@ -263,13 +316,15 @@ inline constexpr auto make_scales_layout(auto n, auto k, auto l, auto group_size
   }
 }
 
-template <int TileM = 16, bool KMajor = true, bool SM80 = true,
+template <int TileM = 16, bool KMajor = true, bool HasKResidue = false, bool SM80 = true,
           typename Element, typename Quant, typename Scale>
 void qmm_naive(
     const Element* A,
     const Quant*   B,
     const Scale*   S,
     const Element* Z,
+    const uint32_t* lhs_indices,
+    const uint32_t* rhs_indices,
     Element* C,
     int m, int n, int k, int l,
     bool broadcast_b,
@@ -307,11 +362,11 @@ void qmm_naive(
   auto sB_layout = make_smem_layout<KMajor>(bN, bK);
 
   // Atoms.
-  TiledCopy copy_a = make_tiled_copy<Element>(num_threads, bM, bK);
+  TiledCopy copy_a = make_tiled_copy<Element, true, HasKResidue>(num_threads, bM, bK);
   TiledCopy copy_b = make_tiled_copy<Quant, KMajor>(num_threads, bN, bK);
 
   auto* kernel = &qmm_naive_kernel<
-      decltype(prob_shape), decltype(cta_tiler),
+      HasKResidue, decltype(prob_shape), decltype(cta_tiler),
       Element, Quant, Scale,
       decltype(dA), decltype(sA_layout), decltype(copy_a),
       decltype(dB), decltype(sB_layout), decltype(copy_b),
@@ -330,6 +385,7 @@ void qmm_naive(
       &B, &dB, &sB_layout, &copy_b,
       &C, &dC,
       &S, &Z, &S_layout,
+      &lhs_indices, &rhs_indices,
       &mma};
   launch_kernel(reinterpret_cast<void*>(kernel), num_blocks, block_dims, smem_bytes, args);
 }
@@ -403,12 +459,14 @@ inline void dispatch_quant_types(
   }
 }
 
-template <int TileM, bool KMajor>
-void qmm_impl_naive(
+template <int TileM, bool KMajor, bool HasKResidue, bool SM80>
+void qmm_naive_impl(
     const array& x,
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& lhs_indices,
+    const std::optional<array>& rhs_indices,
     array& out,
     int bits,
     int group_size,
@@ -419,61 +477,67 @@ void qmm_impl_naive(
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);
-  bool broadcast_b = w.ndim() == 2;
+  bool broadcast_b = (w.ndim() <= 2) || (w.size() != w.data_size());
 
-  bool is_sm80 = encoder.device().compute_capability_major() >= 8;
-  dispatch_bool(is_sm80, [&](auto sm80) {
-    dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
-      dispatch_quant_types<Element>(
-          bits,
-          group_size,
-          mode,
-          tag,
-          [&]<typename Quant, typename Scale, int group_size>() {
-            encoder.set_input_array(x);
-            encoder.set_input_array(w);
-            encoder.set_input_array(scales);
-            if (biases) {
-              encoder.set_input_array(*biases);
-            }
-            encoder.set_output_array(out);
-            cutlass_gemm::qmm_naive<TileM, KMajor, sm80.value>(
-                gpu_ptr<Element>(x),
-                gpu_ptr<Quant>(w),
-                gpu_ptr<Scale>(scales),
-                biases ? gpu_ptr<Element>(*biases) : nullptr,
-                gpu_ptr<Element>(out),
-                m,
-                n,
-                k,
-                l,
-                broadcast_b,
-                cute::Int<group_size>{},
-                [&](auto* kernel,
-                    dim3 num_blocks,
-                    dim3 block_dims,
-                    uint32_t smem_bytes,
-                    void** args) {
-                  encoder.add_kernel_node_raw(
-                      kernel, num_blocks, block_dims, {}, smem_bytes, args);
-                });
-          });
-    });
+  dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
+    dispatch_quant_types<Element>(
+        bits,
+        group_size,
+        mode,
+        tag,
+        [&]<typename Quant, typename Scale, int group_size>() {
+          encoder.set_input_array(x);
+          encoder.set_input_array(w);
+          encoder.set_input_array(scales);
+          if (biases) {
+            encoder.set_input_array(*biases);
+          }
+          if (lhs_indices) {
+            encoder.set_input_array(*lhs_indices);
+          }
+          if (rhs_indices) {
+            encoder.set_input_array(*rhs_indices);
+          }
+          encoder.set_output_array(out);
+          cutlass_gemm::qmm_naive<TileM, KMajor, HasKResidue, SM80>(
+              gpu_ptr<Element>(x),
+              gpu_ptr<Quant>(w),
+              gpu_ptr<Scale>(scales),
+              biases ? gpu_ptr<Element>(*biases) : nullptr,
+              lhs_indices ? gpu_ptr<uint32_t>(*lhs_indices) : nullptr,
+              rhs_indices ? gpu_ptr<uint32_t>(*rhs_indices) : nullptr,
+              gpu_ptr<Element>(out),
+              m,
+              n,
+              k,
+              l,
+              broadcast_b,
+              cute::Int<group_size>{},
+              [&](auto* kernel,
+                  dim3 num_blocks,
+                  dim3 block_dims,
+                  uint32_t smem_bytes,
+                  void** args) {
+                encoder.add_kernel_node_raw(
+                    kernel, num_blocks, block_dims, {}, smem_bytes, args);
+              });
+        });
   });
 }
 
-} // namespace mlx::core
+// clang-format off
+template void qmm_naive_impl<@TileM@, @KMajor@, @HasKResidue@, @SM80@>(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const std::optional<array>& lhs_indices,
+    const std::optional<array>& rhs_indices,
+    array& out,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::CommandEncoder& encoder);
+// clang-format on
 
-#define QMM_NAIVE_GPU(TileM, KMajor)           \
-  namespace mlx::core {                        \
-  template void qmm_impl_naive<TileM, KMajor>( \
-      const array& x,                          \
-      const array& w,                          \
-      const array& scales,                     \
-      const std::optional<array>& biases,      \
-      array& out,                              \
-      int bits,                                \
-      int group_size,                          \
-      QuantizationMode mode,                   \
-      cu::CommandEncoder& encoder);            \
-  }
+} // namespace mlx::core

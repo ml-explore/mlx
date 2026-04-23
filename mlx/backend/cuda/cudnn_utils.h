@@ -21,14 +21,16 @@ class CommandEncoder;
 
 namespace fe = cudnn_frontend;
 
-#define CHECK_CUDNN_FE_ERROR(cmd)                                    \
-  do {                                                               \
-    auto error = cmd;                                                \
-    if (!error.is_good()) {                                          \
-      throw std::runtime_error(                                      \
-          fmt::format("{} failed: {}.", #cmd, error.get_message())); \
-    }                                                                \
-  } while (0)
+void check_cudnn_error(const char* name, cudnnStatus_t err);
+void check_cudnn_error(const char* name, fe::error_t err);
+
+#define CHECK_CUDNN_ERROR(cmd) check_cudnn_error(#cmd, (cmd))
+
+cudnnHandle_t get_cudnn_handle(cu::Device& device);
+
+void init_cudnn_handles_cache();
+void init_cudnn_conv_cache();
+void init_cudnn_sdpa_cache();
 
 // Return pointer alignment of |x|'s data.
 inline uint8_t get_alignment(const array& x) {

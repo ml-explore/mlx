@@ -1,19 +1,18 @@
 // Copyright © 2026 Apple Inc.
 
-#include "mlx/distributed/jaccl/mesh.h"
-#include "mlx/backend/cpu/encoder.h"
-#include "mlx/distributed/reduction_ops.h"
-#include "mlx/dtype_utils.h"
+#include "jaccl/mesh.h"
+#include "jaccl/reduction_ops.h"
+#include "jaccl/types.h"
 
-namespace mlx::core::distributed::jaccl {
+namespace jaccl {
 
 MeshGroup::MeshGroup(
     int rank,
     const std::vector<std::string>& device_names,
-    const char* coordinator_addr)
+    const std::string& coordinator_addr)
     : rank_(rank),
       size_(device_names.size()),
-      side_channel_(rank_, size_, coordinator_addr),
+      side_channel_(rank_, size_, coordinator_addr.c_str()),
       connections_(create_connections(device_names)) {
   if (size_ > MESH_MAX_PEERS) {
     std::ostringstream msg;
@@ -26,7 +25,7 @@ MeshGroup::MeshGroup(
   initialize();
 
   // Make sure every node has reached here before continuing
-  side_channel_.all_gather<int>(0);
+  side_channel_.barrier();
 
   // Create the mesh implementation object
   mesh_ = MeshImpl(rank_, size_, connections_, buffers_);
@@ -61,9 +60,9 @@ void MeshGroup::initialize() {
     connections_[peer].queue_pair_init();
   }
 
-  // Gather the information to be exchanged, this also serves as a barrier so
-  // that all peers have initialized their connections before attempting to
-  // transition to RTS.
+  // Gather the information to be exchanged, this also serves as a barrier
+  // so that all peers have initialized their connections before attempting
+  // to transition to RTS.
   std::vector<Destination> info;
   for (auto& conn : connections_) {
     info.emplace_back(conn.info());
@@ -106,29 +105,27 @@ void MeshGroup::allocate_buffers() {
     for (int i = 0; i < NUM_BUFFERS; i++) {
       // Mesh buffers
       for (int j = 0; j < size_; j++) {
-        // This is our send buffer so register it with all pds so we can send
-        // it to all connected devices.
         if (j == rank_) {
+          // This is our send buffer so register it with all pds so we can
+          // send it to all connected devices.
           for (auto& conn : connections_) {
             if (conn.ctx != nullptr) {
               buffers_[k * NUM_BUFFERS * size_ + i * size_ + j]
                   .register_to_protection_domain(conn.protection_domain);
             }
           }
-        }
-
-        // This is the recv buffer from rank j so register it to rank j's
-        // protection domain.
-        else {
+        } else {
+          // This is the recv buffer from rank j so register it to rank j's
+          // protection domain.
           buffers_[k * NUM_BUFFERS * size_ + i * size_ + j]
               .register_to_protection_domain(connections_[j].protection_domain);
         }
       }
 
       // Ring buffers (see ring group for the logic below)
-      // We register send buffers to both the right and the left.
       int left = (rank_ + size_ - 1) % size_;
       int right = (rank_ + 1) % size_;
+      // We register send buffers to both the right and the left.
       ring_send_buffers_[k * NUM_BUFFERS * 2 + i * 2 + 0]
           .register_to_protection_domain(connections_[right].protection_domain);
       ring_recv_buffers_[k * NUM_BUFFERS * 2 + i * 2 + 0]
@@ -141,78 +138,68 @@ void MeshGroup::allocate_buffers() {
   }
 }
 
-void MeshGroup::all_sum(const array& input, array& output, Stream stream) {
-  dispatch_all_types(output.dtype(), [&](auto type_tag) {
-    using T = MLX_GET_TYPE(type_tag);
-    all_reduce<T>(input, output, stream, detail::SumOp<T>{});
+void MeshGroup::all_sum(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    all_reduce<T>(input, output, n_bytes, SumOp<T>{});
   });
 }
 
-void MeshGroup::all_max(const array& input, array& output, Stream stream) {
-  dispatch_all_types(output.dtype(), [&](auto type_tag) {
-    using T = MLX_GET_TYPE(type_tag);
-    all_reduce<T>(input, output, stream, detail::MaxOp<T>{});
+void MeshGroup::all_max(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    all_reduce<T>(input, output, n_bytes, MaxOp<T>{});
   });
 }
 
-void MeshGroup::all_min(const array& input, array& output, Stream stream) {
-  dispatch_all_types(output.dtype(), [&](auto type_tag) {
-    using T = MLX_GET_TYPE(type_tag);
-    all_reduce<T>(input, output, stream, detail::MinOp<T>{});
+void MeshGroup::all_min(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    all_reduce<T>(input, output, n_bytes, MinOp<T>{});
   });
 }
 
-void MeshGroup::all_gather(const array& input, array& output, Stream stream) {
-  auto in_ptr = input.data<char>();
-  auto out_ptr = output.data<char>();
-  size_t n_bytes = input.nbytes();
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(input);
-  encoder.set_output_array(output);
-  encoder.dispatch([in_ptr, out_ptr, n_bytes, this]() {
-    mesh_.all_gather(in_ptr, out_ptr, n_bytes);
-  });
+void MeshGroup::all_gather(const void* input, void* output, size_t n_bytes) {
+  mesh_.all_gather(
+      static_cast<const char*>(input), static_cast<char*>(output), n_bytes);
 }
 
-void MeshGroup::send(const array& input, int dst, Stream stream) {
-  auto data = input.data<char>();
-  int64_t n_bytes = input.nbytes();
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(input);
-  encoder.dispatch(
-      [data, n_bytes, dst, this]() { mesh_.send(data, n_bytes, dst); });
+void MeshGroup::send(const void* input, size_t n_bytes, int dst) {
+  mesh_.send(static_cast<const char*>(input), n_bytes, dst);
 }
 
-void MeshGroup::recv(array& out, int src, Stream stream) {
-  auto data = out.data<char>();
-  int64_t n_bytes = out.nbytes();
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_output_array(out);
-  encoder.dispatch(
-      [data, n_bytes, src, this]() { mesh_.recv(data, n_bytes, src); });
+void MeshGroup::recv(void* output, size_t n_bytes, int src) {
+  mesh_.recv(static_cast<char*>(output), n_bytes, src);
 }
 
 template <typename T, typename ReduceOp>
 void MeshGroup::all_reduce(
-    const array& input,
-    array& output,
-    Stream stream,
+    const void* input,
+    void* output,
+    size_t n_bytes,
     ReduceOp reduce_op) {
-  auto in_ptr = input.data<T>();
-  auto out_ptr = output.data<T>();
-  int64_t size = input.size();
-  auto& encoder = cpu::get_command_encoder(stream);
-  encoder.set_input_array(input);
-  encoder.set_output_array(output);
-  encoder.dispatch([in_ptr, out_ptr, size, this, reduce_op]() {
-    if (size_ > 2 &&
-        ((std::is_same_v<T, bfloat16_t> && size > 65536) ||
-         size >= 8 * 1024 * 1024 / sizeof(T))) {
-      ring_.all_reduce<2>(in_ptr, out_ptr, size, 1, reduce_op);
-    } else {
-      mesh_.all_reduce(in_ptr, out_ptr, size, reduce_op);
-    }
-  });
+  auto in_ptr = static_cast<const T*>(input);
+  auto out_ptr = static_cast<T*>(output);
+  int64_t count = n_bytes / sizeof(T);
+  if (size_ > 2 &&
+      ((std::is_same_v<T, bfloat16_t> && count > 256 * 1024) ||
+       count >= 8 * 1024 * 1024 / static_cast<int64_t>(sizeof(T)))) {
+    ring_.all_reduce<2>(in_ptr, out_ptr, count, 1, reduce_op);
+  } else {
+    mesh_.all_reduce(in_ptr, out_ptr, count, reduce_op);
+  }
 }
 
-} // namespace mlx::core::distributed::jaccl
+} // namespace jaccl

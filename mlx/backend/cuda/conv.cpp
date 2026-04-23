@@ -39,7 +39,7 @@ struct ConvCacheKey {
 };
 
 auto& conv_cache() {
-  static LRUBytesKeyCache<
+  static thread_local LRUBytesKeyCache<
       ConvCacheKey,
       std::pair<ConvBackendType, std::optional<DnnGraph>>>
       cache("MLX_CUDA_CONV_CACHE_SIZE", /* default_capacity */ 128);
@@ -103,7 +103,7 @@ std::optional<DnnGraph> build_conv_graph(
     const std::vector<int64_t>& dilation) {
   auto compute_dtype =
       (dtype == float16 || dtype == bfloat16) ? float32 : dtype;
-  DnnGraph graph(encoder.device().get_cudnn_handle(), dtype, compute_dtype);
+  DnnGraph graph(get_cudnn_handle(encoder.device()), dtype, compute_dtype);
   auto x_ = graph.tensor_nchw("X", 'x', x);
   auto w_ = graph.tensor_nchw("W", 'w', w);
 
@@ -139,7 +139,7 @@ std::optional<DnnGraph> build_conv_graph(
   if (dtype == float32 && !env::enable_tf32()) {
     graph.deselect_numeric_notes({fe::NumericalNote_t::TENSOR_CORE});
   }
-  CHECK_CUDNN_FE_ERROR(graph.build());
+  CHECK_CUDNN_ERROR(graph.build());
   return graph;
 }
 
@@ -252,6 +252,10 @@ void register_args(
 
 } // namespace
 
+void init_cudnn_conv_cache() {
+  conv_cache();
+}
+
 void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
   nvtx3::scoped_range r("Convolution::eval_gpu");
   if (out_.size() == 0) {
@@ -289,7 +293,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
       std::tie(in, wt, out) =
           prepare_args(encoder, backend_type, in, wt, out, groups_, s);
       register_args(encoder, backend_type, in, wt, out, out_);
-      CHECK_CUDNN_FE_ERROR(graph->encode_capturing(
+      CHECK_CUDNN_ERROR(graph->encode_capturing(
           encoder,
           {
               {'x', gpu_ptr<void>(in)},
@@ -371,7 +375,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
 
   if (graph) {
     register_args(encoder, backend_type, in, wt, out, out_);
-    CHECK_CUDNN_FE_ERROR(graph->encode_capturing(
+    CHECK_CUDNN_ERROR(graph->encode_capturing(
         encoder,
         {
             {'x', gpu_ptr<void>(in)},

@@ -363,35 +363,6 @@ void steel_matmul_regular_axpby(
     int64_t C_batch_stride /* = 0*/,
     float alpha /* = 1.0f */,
     float beta /* = 0.0f */) {
-  if (metal::is_nax_available() && !issubdtype(a.dtype(), complexfloating) &&
-      (env::enable_tf32() || a.dtype() != float32)) {
-    return steel_matmul_regular_axpby_nax<CHECK_AB>(
-        /* const Stream& s = */ s,
-        /* metal::Device& d = */ d,
-        /* const array& a = */ a,
-        /* const array& b = */ b,
-        /* const array& c = */ c,
-        /* array& out = */ out,
-        /* int M = */ M,
-        /* int N = */ N,
-        /* int K = */ K,
-        /* int batch_size_out = */ batch_size_out,
-        /* int lda = */ lda,
-        /* int ldb = */ ldb,
-        /* int ldd = */ ldd,
-        /* bool transpose_a = */ transpose_a,
-        /* bool transpose_b = */ transpose_b,
-        /* std::vector<array>& copies = */ copies,
-        /* Shape batch_shape = */ batch_shape,
-        /* Strides batch_strides = */ batch_strides,
-        /* int64_t A_batch_stride = */ A_batch_stride,
-        /* int64_t B_batch_stride = */ B_batch_stride,
-        /* int64_t matrix_stride_out = */ matrix_stride_out,
-        /* int64_t C_batch_stride = */ C_batch_stride,
-        /* float alpha = */ alpha,
-        /* float beta = */ beta);
-  }
-
   using namespace mlx::steel;
 
   // Determine dispatch kernel
@@ -704,14 +675,26 @@ void steel_gemm_splitk_axpby_nax(
     float beta = 0.0f) {
   using namespace mlx::steel;
 
-  constexpr int bm = 128, bn = 128, bk = 512;
-  constexpr int wm = 4, wn = 4;
+  int bm = 128, bn = 128, bk = 512;
+  int wm = 4, wn = 4;
+  int split_k_partition_size = 4096;
+
+  if ((M + N) / 2 < 512 || K <= 4096) {
+    bm = bn = 64;
+    bk = 256;
+    wm = wn = 2;
+  }
+  if (K <= 1024) {
+    split_k_partition_size = K / 2;
+  } else if (K <= 2048) {
+    split_k_partition_size = 1024;
+  } else if (K <= 4096) {
+    split_k_partition_size = 2048;
+  }
 
   // Determine how many partitions to split K into
-  constexpr int split_k_partition_size = 3072;
   int split_k_partitions =
       (K + split_k_partition_size - 1) / split_k_partition_size;
-
   const int bk_iters_per_partition = split_k_partition_size / bk;
   const int split_k_partition_stride = M * N;
 
@@ -928,13 +911,17 @@ void steel_matmul_axpby(
   int _tm = (M + 16 - 1) / 16;
   int _tn = (N + 16 - 1) / 16;
   int _tk = K / 16;
+  int64_t matrix_size = static_cast<int64_t>(M) * N;
+  bool use_nax = metal::is_nax_available() &&
+      !issubdtype(a.dtype(), complexfloating) &&
+      (env::enable_tf32() || a.dtype() != float32);
+  char devc = d.get_architecture().back();
+  int min_tmn_threshold = (devc == 's' || devc == 'd') ? 2048 : 1024;
 
   // Case 1: Small M×N with large K, use SIMD split-K
-  char devc = d.get_architecture().back();
   // Max and Ultra dispatch larger sizes to splitk
-  int min_tmn_threshold = (devc == 's' || devc == 'd') ? 2048 : 1024;
-  if (batch_size_out == 1 && (_tm * _tn) <= min_tmn_threshold && _tk >= 8 &&
-      K >= std::max(M, N)) {
+  if (!use_nax && batch_size_out == 1 && (_tm * _tn) <= min_tmn_threshold &&
+      _tk >= 8 && K >= std::max(M, N)) {
     return steel_gemm_splitk_axpby<CHECK_AB>(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,
@@ -956,14 +943,9 @@ void steel_matmul_axpby(
   }
 
   // Case 2: Large K with sufficient M, N, and NAX is available, use NAX split-K
-  // TODO: Add device-specific tuning for more NAX GPUs in the future
-  constexpr int min_mn_threshold = 2048 * 2048;
-  constexpr int min_k_threshold = 10240;
-  if (batch_size_out == 1 && metal::is_nax_available() &&
-      !issubdtype(a.dtype(), complexfloating) &&
-      (env::enable_tf32() || a.dtype() != float32) &&
-      int64_t(M) * N >= min_mn_threshold && K >= min_k_threshold &&
-      K >= (3 * std::max(M, N))) {
+  if (use_nax && batch_size_out == 1 &&
+      (K >= 3 * std::max(M, N) ||
+       (std::max(M, N) <= 1024 && K > 2 * std::max(M, N)))) {
     return steel_gemm_splitk_axpby_nax<CHECK_AB>(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,
@@ -997,6 +979,34 @@ void steel_matmul_axpby(
   int64_t A_batch_stride_ = A_batch_stride.empty() ? 0 : A_batch_stride.back();
   int64_t B_batch_stride_ = B_batch_stride.empty() ? 0 : B_batch_stride.back();
   int64_t C_batch_stride_ = C_batch_stride.empty() ? 0 : C_batch_stride.back();
+
+  if (use_nax) {
+    return steel_matmul_regular_axpby_nax<CHECK_AB>(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ a,
+        /* const array& b = */ b,
+        /* const array& c = */ c,
+        /* array& out = */ out,
+        /* int M = */ M,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* int batch_size_out = */ batch_size_out,
+        /* int lda = */ lda,
+        /* int ldb = */ ldb,
+        /* int ldd = */ N,
+        /* bool transpose_a = */ transpose_a,
+        /* bool transpose_b = */ transpose_b,
+        /* std::vector<array>& copies = */ copies,
+        /* Shape batch_shape = */ std::move(batch_shape),
+        /* Strides batch_strides = */ std::move(batch_strides),
+        /* int64_t A_batch_stride = */ A_batch_stride_,
+        /* int64_t B_batch_stride = */ B_batch_stride_,
+        /* int64_t matrix_stride_out = */ int64_t(M) * N,
+        /* int64_t C_batch_stride = */ C_batch_stride_,
+        /* float alpha = */ alpha,
+        /* float beta = */ beta);
+  }
 
   return steel_matmul_regular_axpby<CHECK_AB>(
       /* const Stream& s = */ s,
@@ -2478,15 +2488,36 @@ void segmented_mm(
   char devc = d.get_architecture().back();
   GEMM_TPARAM_MACRO(devc)
 
+  bool use_nax = metal::is_nax_available() &&
+      (env::enable_tf32() || out.dtype() != float32);
+
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
 
-  // Define the kernel name
+  metal::MTLFCList func_consts = {
+      {&segments_contiguous, MTL::DataType::DataTypeBool, 199},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+  };
+
   std::string base_name;
   base_name.reserve(128);
+  base_name += "steel_segmented_mm_";
+
+  // Use NAX kernel if available
+  if (use_nax) {
+    int average_k = K / batch_size_out;
+    bm = 64;
+    bn = 64;
+    bk = (average_k >= 256) ? 256 : (average_k >= 128) ? 128 : 64;
+    wm = 2;
+    wn = 2;
+
+    base_name += "nax_";
+  }
+
   concatenate(
       base_name,
-      "steel_segmented_mm_",
       transpose_a ? 't' : 'n',
       transpose_b ? 't' : 'n',
       "_",
@@ -2504,13 +2535,6 @@ void segmented_mm(
       "_wn",
       wn);
 
-  metal::MTLFCList func_consts = {
-      {&segments_contiguous, MTL::DataType::DataTypeBool, 199},
-      {&align_M, MTL::DataType::DataTypeBool, 200},
-      {&align_N, MTL::DataType::DataTypeBool, 201},
-  };
-
-  // And the kernel hash that includes the function constants
   std::string hash_name;
   hash_name.reserve(128);
   concatenate(
@@ -2524,19 +2548,32 @@ void segmented_mm(
       align_N ? 't' : 'n');
 
   // Get and set the kernel
-  auto kernel = get_steel_gemm_segmented_kernel(
-      d,
-      base_name,
-      hash_name,
-      func_consts,
-      out,
-      transpose_a,
-      transpose_b,
-      bm,
-      bn,
-      bk,
-      wm,
-      wn);
+  auto kernel = (use_nax) ? get_steel_gemm_segmented_nax_kernel(
+                                d,
+                                base_name,
+                                hash_name,
+                                func_consts,
+                                out,
+                                transpose_a,
+                                transpose_b,
+                                bm,
+                                bn,
+                                bk,
+                                wm,
+                                wn)
+                          : get_steel_gemm_segmented_kernel(
+                                d,
+                                base_name,
+                                hash_name,
+                                func_consts,
+                                out,
+                                transpose_a,
+                                transpose_b,
+                                bm,
+                                bn,
+                                bk,
+                                wm,
+                                wn);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Prepare the matmul params
@@ -2557,8 +2594,9 @@ void segmented_mm(
 
   // Prepare the grid
   MTL::Size group_dims = MTL::Size(32, wn, wm);
-  MTL::Size grid_dims =
-      MTL::Size(params.tiles_n, params.tiles_m, batch_size_out);
+  MTL::Size grid_dims = (use_nax && bk == 64)
+      ? MTL::Size(batch_size_out, params.tiles_n, params.tiles_m)
+      : MTL::Size(params.tiles_n, params.tiles_m, batch_size_out);
 
   // Launch kernel
   compute_encoder.set_input_array(a, 0);

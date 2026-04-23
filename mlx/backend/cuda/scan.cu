@@ -364,7 +364,7 @@ constexpr bool supports_scan_op() {
 }
 
 void scan_gpu_inplace(
-    array in,
+    const array& in,
     array& out,
     Scan::ReduceType reduce_type,
     int axis,

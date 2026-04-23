@@ -176,13 +176,13 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
 }
 
 auto& sdpa_cache() {
-  static LRUBytesKeyCache<SDPACacheKey, DnnGraph> cache(
+  static thread_local LRUBytesKeyCache<SDPACacheKey, DnnGraph> cache(
       "MLX_CUDA_SDPA_CACHE_SIZE", /* default_capacity */ 256);
   return cache;
 }
 
 auto& sdpa_backward_cache() {
-  static LRUBytesKeyCache<SDPACacheKey, DnnGraph> cache(
+  static thread_local LRUBytesKeyCache<SDPACacheKey, DnnGraph> cache(
       "MLX_CUDA_SDPA_BACKWARD_CACHE_SIZE", /* default_capacity */ 64);
   return cache;
 }
@@ -249,10 +249,10 @@ DnnGraph build_sdpa_graph(
     graph.tensor(stats_, STATS, *stats)->set_output(true);
   }
 
-  CHECK_CUDNN_FE_ERROR(graph.prepare());
+  CHECK_CUDNN_ERROR(graph.prepare());
   graph.select_behavior_notes(
       {fe::BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API});
-  CHECK_CUDNN_FE_ERROR(graph.build());
+  CHECK_CUDNN_ERROR(graph.build());
   return graph;
 }
 
@@ -298,14 +298,19 @@ DnnGraph build_sdpa_backward_graph(
   graph.tensor(d_k_, D_K, d_k)->set_output(true);
   graph.tensor(d_v_, D_V, d_v)->set_output(true);
 
-  CHECK_CUDNN_FE_ERROR(graph.prepare());
+  CHECK_CUDNN_ERROR(graph.prepare());
   graph.select_behavior_notes(
       {fe::BehaviorNote_t::SUPPORTS_CUDA_GRAPH_NATIVE_API});
-  CHECK_CUDNN_FE_ERROR(graph.build());
+  CHECK_CUDNN_ERROR(graph.build());
   return graph;
 }
 
 } // namespace
+
+void init_cudnn_sdpa_cache() {
+  sdpa_cache();
+  sdpa_backward_cache();
+}
 
 bool supports_sdpa_cudnn(
     const array& q,
@@ -357,7 +362,7 @@ void sdpa_cudnn(
     bool output_logsumexp,
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
-  auto handle = encoder.device().get_cudnn_handle();
+  auto handle = get_cudnn_handle(encoder.device());
 
   malloc_with_same_layout(encoder, o, q);
 
@@ -440,7 +445,7 @@ void sdpa_cudnn(
     variant_pack[STATS] = gpu_ptr<void>(*stats);
   }
 
-  CHECK_CUDNN_FE_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
+  CHECK_CUDNN_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
 }
 
 void sdpa_backward_cudnn(
@@ -459,7 +464,7 @@ void sdpa_backward_cudnn(
     array& d_v,
     Stream s) {
   auto& encoder = cu::get_command_encoder(s);
-  auto handle = encoder.device().get_cudnn_handle();
+  auto handle = get_cudnn_handle(encoder.device());
 
   malloc_with_same_layout(encoder, d_q, q);
   malloc_with_same_layout(encoder, d_k, k);
@@ -522,7 +527,7 @@ void sdpa_backward_cudnn(
     variant_pack[SINKS] = gpu_ptr<void>(*sinks);
   }
 
-  CHECK_CUDNN_FE_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
+  CHECK_CUDNN_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
 }
 
 // Defined in scaled_dot_product_attention.cu file.

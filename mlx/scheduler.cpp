@@ -16,8 +16,16 @@ void synchronize(Stream s) {
   }
 }
 
+void synchronize(ThreadLocalStream s) {
+  synchronize(stream_from_thread_local_stream(s));
+}
+
 void synchronize() {
   synchronize(default_stream(default_device()));
+}
+
+void clear_streams() {
+  gpu::clear_streams();
 }
 
 namespace scheduler {
@@ -28,12 +36,24 @@ Scheduler::Scheduler() {
 
 Scheduler::~Scheduler() = default;
 
-void Scheduler::new_thread(Device::DeviceType type) {
-  if (type == Device::gpu) {
-    threads_.push_back(nullptr);
-  } else {
-    threads_.push_back(std::make_unique<StreamThread>());
+void Scheduler::enqueue(Stream s, std::function<void()> task) {
+  StreamThread* st = nullptr;
+  {
+    std::shared_lock lock(threads_mtx_);
+    auto it = threads_.find(s.index);
+    if (it != threads_.end()) {
+      st = it->second.get();
+    }
   }
+  if (!st) {
+    std::unique_lock lock(threads_mtx_);
+    auto it = threads_.find(s.index);
+    if (it == threads_.end()) {
+      it = threads_.emplace(s.index, std::make_unique<StreamThread>()).first;
+    }
+    st = it->second.get();
+  }
+  st->enqueue(std::move(task));
 }
 
 /** A singleton scheduler to manage devices, streams, and task execution. */

@@ -5,10 +5,11 @@
 #include <infiniband/verbs.h>
 
 #include <span>
+#include <sstream>
 #include <unordered_map>
 #include <vector>
 
-#include "mlx/distributed/utils.h"
+#include "jaccl/tcp.h"
 
 constexpr const char* IBV_TAG = "[jaccl]";
 constexpr int SEND_WR = 1;
@@ -18,8 +19,6 @@ constexpr int MAX_RECV_WR = 32;
 constexpr int BUFFER_SIZES = 8;
 constexpr int NUM_BUFFERS = 2;
 constexpr int FRAME_SIZE = 4096;
-
-namespace detail = mlx::core::distributed::detail;
 
 namespace {
 
@@ -45,7 +44,7 @@ inline std::pair<int, int64_t> buffer_size_from_message(int64_t msg) {
 
 } // namespace
 
-namespace mlx::core::distributed::jaccl {
+namespace jaccl {
 
 /**
  * Wrapper for the ibverbs API.
@@ -334,10 +333,16 @@ class SideChannel {
     return result;
   }
 
+  void barrier() {
+    // Twice has proven to be more robust to initialization issues.
+    all_gather<int>(0);
+    all_gather<int>(0);
+  }
+
  private:
   int rank_;
   int size_;
-  std::vector<detail::TCPSocket> sockets_;
+  std::vector<TCPSocket> sockets_;
 };
 
-} // namespace mlx::core::distributed::jaccl
+} // namespace jaccl

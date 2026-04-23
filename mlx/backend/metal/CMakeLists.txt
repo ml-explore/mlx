@@ -89,6 +89,7 @@ if(MLX_METAL_JIT)
   make_jit_source(steel/gemm/kernels/steel_gemm_fused_nax)
   make_jit_source(steel/gemm/kernels/steel_gemm_gather_nax)
   make_jit_source(steel/gemm/kernels/steel_gemm_splitk_nax)
+  make_jit_source(steel/gemm/kernels/steel_gemm_segmented_nax)
 
   make_jit_source(quantized_nax kernels/quantized_utils.h)
   make_jit_source(fp_quantized_nax kernels/quantized_utils.h kernels/fp8.h

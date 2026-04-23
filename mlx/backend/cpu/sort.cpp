@@ -107,11 +107,11 @@ struct StridedIterator {
     return *this;
   }
 
-  StridedIterator operator+(difference_type diff) {
+  StridedIterator operator+(difference_type diff) const {
     return StridedIterator(ptr_, stride_, diff);
   }
 
-  StridedIterator operator-(difference_type diff) {
+  StridedIterator operator-(difference_type diff) const {
     return StridedIterator(ptr_, stride_, -diff);
   }
 
