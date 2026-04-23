@@ -2959,12 +2959,20 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
           if (group_size_ == 32)  { LAUNCH_TILED(hip_bfloat16, hip_bfloat16, 4, 32); }
           else if (group_size_ == 64)  { LAUNCH_TILED(hip_bfloat16, hip_bfloat16, 4, 64); }
           else if (group_size_ == 128) { LAUNCH_TILED(hip_bfloat16, hip_bfloat16, 4, 128); }
+        } else if (bits_ == 8) {
+          if (group_size_ == 32)  { LAUNCH_TILED(hip_bfloat16, hip_bfloat16, 8, 32); }
+          else if (group_size_ == 64)  { LAUNCH_TILED(hip_bfloat16, hip_bfloat16, 8, 64); }
+          else if (group_size_ == 128) { LAUNCH_TILED(hip_bfloat16, hip_bfloat16, 8, 128); }
         }
       } else if (x.dtype() == float16) {
         if (bits_ == 4) {
           if (group_size_ == 32)  { LAUNCH_TILED(__half, __half, 4, 32); }
           else if (group_size_ == 64)  { LAUNCH_TILED(__half, __half, 4, 64); }
           else if (group_size_ == 128) { LAUNCH_TILED(__half, __half, 4, 128); }
+        } else if (bits_ == 8) {
+          if (group_size_ == 32)  { LAUNCH_TILED(__half, __half, 8, 32); }
+          else if (group_size_ == 64)  { LAUNCH_TILED(__half, __half, 8, 64); }
+          else if (group_size_ == 128) { LAUNCH_TILED(__half, __half, 8, 128); }
         }
       }
       #undef LAUNCH_TILED
