@@ -37,6 +37,12 @@ target_sources(
           ${METAL_TEST_SOURCES})
 
 target_link_libraries(tests PRIVATE mlx doctest)
+target_compile_definitions(
+  tests PRIVATE MLX_TEST_BUILD_GGUF=$<BOOL:${MLX_BUILD_GGUF}>)
+if(MLX_BUILD_GGUF)
+  target_include_directories(
+    tests PRIVATE $<TARGET_PROPERTY:gguflib,INTERFACE_INCLUDE_DIRECTORIES>)
+endif()
 target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})
 target_link_options(tests PRIVATE ${SANITIZER_LINK_FLAGS})
 

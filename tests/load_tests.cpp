@@ -7,6 +7,13 @@
 
 #include "doctest/doctest.h"
 
+#ifndef MLX_TEST_BUILD_GGUF
+#define MLX_TEST_BUILD_GGUF 0
+#endif
+
+#if MLX_TEST_BUILD_GGUF
+#include "mlx/io/gguf.h"
+#endif
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -167,6 +174,14 @@ TEST_CASE("test gguf") {
     CHECK(array_equal(loaded_weights.at("test"), arr).item<bool>());
   }
 }
+
+#if MLX_TEST_BUILD_GGUF
+TEST_CASE("test gguf tensor ndim validation") {
+  gguf_tensor tensor{};
+  tensor.ndim = GGUF_TENSOR_MAX_DIM + 1;
+  CHECK_THROWS_AS(get_shape(tensor), std::runtime_error);
+}
+#endif
 
 TEST_CASE("test gguf metadata") {
   std::string file_path = get_temp_file("test_arr.gguf");
