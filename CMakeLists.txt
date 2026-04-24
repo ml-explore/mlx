@@ -20,6 +20,10 @@ project(
   LANGUAGES C CXX
   VERSION ${MLX_PROJECT_VERSION})
 
+# Define a job pool for heavy template metaprogramming tasks (e.g., quantized matmul)
+# Limit to 2 concurrent jobs to prevent OOM on standard GitHub Actions runners (16GB RAM)
+set_property(GLOBAL PROPERTY JOB_POOLS heavy_compilation_pool=2)
+
 # ----------------------------- Setup -----------------------------
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 set(CMAKE_CXX_STANDARD 20)

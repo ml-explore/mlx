@@ -8,6 +8,7 @@ foreach(TileN 16 32 64 128 256)
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/qmm_sm90.cu"
                  "${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_FILE}" @ONLY)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_FILE})
+  set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_FILE} PROPERTIES JOB_POOL_COMPILE heavy_compilation_pool)
 endforeach()
 
 foreach(TileM 16 32 64)
@@ -15,6 +16,7 @@ foreach(TileM 16 32 64)
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/qmm_sm80.cu"
                  "${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_FILE}" @ONLY)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_FILE})
+  set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_FILE} PROPERTIES JOB_POOL_COMPILE heavy_compilation_pool)
 endforeach()
 
 foreach(TileM 16 32 64)
@@ -29,6 +31,7 @@ foreach(TileM 16 32 64)
         configure_file("${CMAKE_CURRENT_SOURCE_DIR}/qmm_naive.cu"
                        "${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_FILE}" @ONLY)
         target_sources(mlx PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_FILE})
+  set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/${OUTPUT_FILE} PROPERTIES JOB_POOL_COMPILE heavy_compilation_pool)
       endforeach()
     endforeach()
   endforeach()
