@@ -962,7 +962,9 @@ void depthwise_conv_2D_gpu(
 
   MTL::Size group_dims = MTL::Size(tc, tw, th);
   MTL::Size grid_dims = MTL::Size(
-      conv_params.C / tc, conv_params.oS[1] / tw, (conv_params.oS[0] / th) * N);
+      conv_params.C / tc,
+      (conv_params.oS[1] + tw - 1) / tw,
+      ((conv_params.oS[0] + th - 1) / th) * N);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
@@ -986,7 +988,6 @@ void dispatch_conv_2D_gpu(
     if (C_per_group == 1 && O_per_group == 1 && is_kdil_one &&
         conv_params.wS[0] <= 7 && conv_params.wS[1] <= 7 &&
         conv_params.str[0] <= 2 && conv_params.str[1] <= 2 &&
-        conv_params.oS[0] % 8 == 0 && conv_params.oS[1] % 8 == 0 &&
         conv_params.wt_strides[1] == conv_params.wS[1] &&
         conv_params.C % 16 == 0 && conv_params.C == conv_params.O) {
       return depthwise_conv_2D_gpu(s, d, in, wt, out, conv_params);
