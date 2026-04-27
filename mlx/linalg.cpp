@@ -705,12 +705,7 @@ array solve_triangular(
   return matmul(a_inv, b, s);
 }
 
-void validate_det(
-    const array& a,
-    const StreamOrDevice& stream,
-    const std::string& fname) {
-  check_cpu_stream(stream, fname);
-
+void validate_det(const array& a, const std::string& fname) {
   if (a.ndim() < 2) {
     std::ostringstream msg;
     msg << fname
@@ -839,7 +834,7 @@ std::pair<array, array> slogdet_impl(const array& input, StreamOrDevice s) {
 }
 
 std::pair<array, array> slogdet(const array& a, StreamOrDevice s /* = {} */) {
-  validate_det(a, s, "[linalg::slogdet]");
+  validate_det(a, "[linalg::slogdet]");
 
   auto dtype = at_least_float(a.dtype());
   auto input = astype(a, dtype, s);
@@ -847,7 +842,7 @@ std::pair<array, array> slogdet(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array det(const array& a, StreamOrDevice s /* = {} */) {
-  validate_det(a, s, "[linalg::det]");
+  validate_det(a, "[linalg::det]");
 
   auto dtype = at_least_float(a.dtype());
   auto input = astype(a, dtype, s);
