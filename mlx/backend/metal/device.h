@@ -101,6 +101,13 @@ class MLX_API CommandEncoder {
     return buffer_.get();
   }
 
+  // Transfer ownership of MTL::Buffer pointers retained at bind for the
+  // current command buffer. Called from eval()'s completion-handler
+  // closure setup; the closure is responsible for releasing each pointer
+  // when the command buffer completes. See set_buffer / set_input_array
+  // for the matching retain.
+  std::vector<MTL::Buffer*> take_retained_buffers();
+
  private:
   MTL::ComputeCommandEncoder* get_command_encoder();
 
@@ -126,6 +133,13 @@ class MLX_API CommandEncoder {
   std::unordered_set<MTL::Resource*> concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
   std::unordered_set<const void*> all_outputs_;
+  // MTL::Buffer* pointers retained at bind for the current command buffer.
+  // Allocator buffers use MTLResourceHazardTrackingModeUntracked and command
+  // buffers use commandBufferWithUnretainedReferences(); both APIs require
+  // the application to keep bound buffers alive until CB completion. We
+  // accumulate retains here per-CB and transfer them to the eval-side
+  // completion handler via take_retained_buffers().
+  std::vector<MTL::Buffer*> retained_buffers_;
 
   // A map of prior command encoder outputs to their corresponding fence.
   std::unordered_map<const void*, NS::SharedPtr<MTL::Fence>> prev_ce_outputs_;

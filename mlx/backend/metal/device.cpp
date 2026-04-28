@@ -291,9 +291,17 @@ void CommandEncoder::set_buffer(
     int idx,
     int64_t offset /* = 0 */) {
   // Record as both input and output to ensure synchronization between command
-  // buffers
-  all_inputs_.insert((void*)buf);
+  // buffers. First sighting in this CB triggers an explicit retain; the
+  // all_inputs_ set already dedupes so we won't double-retain. Required by
+  // Apple's MTLResourceHazardTrackingModeUntracked +
+  // commandBufferWithUnretainedReferences contract.
+  bool first = all_inputs_.insert((void*)buf).second;
   all_outputs_.insert((void*)buf);
+  if (first && env::metal_retain_bound_buffers() && buf) {
+    auto* mut_buf = const_cast<MTL::Buffer*>(buf);
+    mut_buf->retain();
+    retained_buffers_.push_back(mut_buf);
+  }
   get_command_encoder()->setBuffer(buf, offset, idx);
 }
 
@@ -301,14 +309,29 @@ void CommandEncoder::set_input_array(
     const array& a,
     int idx,
     int64_t offset /* = 0 */) {
-  if (all_inputs_.insert(a.buffer().ptr()).second) {
+  bool first = all_inputs_.insert(a.buffer().ptr()).second;
+  if (first) {
     buffer_sizes_ += a.data_size();
+    // See note in set_buffer above re: untracked-hazard / unretained-CB
+    // contract. Retain on first sighting only.
+    if (env::metal_retain_bound_buffers() && a.buffer().ptr()) {
+      auto* mut_buf =
+          static_cast<MTL::Buffer*>(const_cast<void*>(a.buffer().ptr()));
+      mut_buf->retain();
+      retained_buffers_.push_back(mut_buf);
+    }
   }
   auto r_buf = static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
   needs_barrier_ =
       needs_barrier_ | (prev_outputs_.find(r_buf) != prev_outputs_.end());
   auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
   get_command_encoder()->setBuffer(a_buf, a.offset() + offset, idx);
+}
+
+std::vector<MTL::Buffer*> CommandEncoder::take_retained_buffers() {
+  std::vector<MTL::Buffer*> out;
+  out.swap(retained_buffers_);
+  return out;
 }
 
 void CommandEncoder::set_output_array(

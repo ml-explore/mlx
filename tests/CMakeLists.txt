@@ -28,6 +28,7 @@ target_sources(
           eval_tests.cpp
           fft_tests.cpp
           load_tests.cpp
+          metal_buffer_lifetime_tests.cpp
           ops_tests.cpp
           random_tests.cpp
           scheduler_tests.cpp

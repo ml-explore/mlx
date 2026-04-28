@@ -168,6 +168,12 @@ inline bool metal_fast_synch() {
   return metal_fast_synch;
 }
 
+inline bool metal_retain_bound_buffers() {
+  static bool metal_retain_bound_buffers_ =
+      get_var("MLX_METAL_RETAIN_BOUND_BUFFERS", 1);
+  return metal_retain_bound_buffers_;
+}
+
 inline bool enable_tf32() {
   static bool enable_tf32_ = get_var("MLX_ENABLE_TF32", 1);
   return enable_tf32_;

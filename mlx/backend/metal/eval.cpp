@@ -52,23 +52,40 @@ void eval(array& arr) {
   for (auto& s : arr.siblings()) {
     buffers.insert(s.data_shared_ptr());
   }
-  // Remove the output if it was donated to by an input
-  if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
-    buffers.erase(it);
-  }
+  // Capture the output's data_shared_ptr so the output buffer's lifetime is
+  // tied to CB completion. The unordered_set already dedupes the
+  // input-donated-as-output case (same data_shared_ptr), so this is safe.
+  buffers.insert(arr.data_shared_ptr());
+
+  // Transfer encoder-side MTL::Buffer retains into the completion handler so
+  // the Metal-level refcount survives until the GPU is done with the CB,
+  // independent of any caller-side shared_ptr<array::Data> lifetime. Required
+  // because allocator buffers use MTLResourceHazardTrackingModeUntracked and
+  // the command buffer uses commandBufferWithUnretainedReferences().
+  auto retained = encoder.take_retained_buffers();
 
   if (encoder.needs_commit()) {
     encoder.end_encoding();
     scheduler::notify_new_task(s);
     command_buffer->addCompletedHandler(
-        [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
+        [s, buffers = std::move(buffers), retained = std::move(retained)](
+            MTL::CommandBuffer* cbuf) {
           scheduler::notify_task_completion(s);
+          for (auto* b : retained) {
+            if (b)
+              b->release();
+          }
           check_error(cbuf);
         });
     encoder.commit();
   } else {
     command_buffer->addCompletedHandler(
-        [buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
+        [buffers = std::move(buffers),
+         retained = std::move(retained)](MTL::CommandBuffer* cbuf) {
+          for (auto* b : retained) {
+            if (b)
+              b->release();
+          }
           check_error(cbuf);
         });
   }
