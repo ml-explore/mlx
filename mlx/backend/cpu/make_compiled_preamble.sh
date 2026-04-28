@@ -30,12 +30,10 @@ fi
 CONTENT=$($GCC $CC_FLAGS -I "$SRCDIR" -E -P "$SRCDIR/mlx/backend/cpu/compiled_preamble.h" 2>/dev/null)
 
 cat << EOF > "$OUTPUT_FILE"
-const char* get_kernel_preamble() {
+const char* get_prebuilt_preamble() {
 return R"preamble(
 $INCLUDES
 $CONTENT
-using namespace mlx::core;
-using namespace mlx::core::detail;
 )preamble";
 }
 EOF

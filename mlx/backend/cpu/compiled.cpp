@@ -10,7 +10,6 @@
 #include <fmt/format.h>
 
 #include "mlx/backend/common/compiled.h"
-#include "mlx/backend/cpu/compiled_preamble.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/jit_compiler.h"
 #include "mlx/device.h"
@@ -316,7 +315,9 @@ void Compiled::eval_cpu(
   // Get the function
   auto fn_ptr = compile(kernel_name, [&, contiguous = contiguous]() {
     std::ostringstream kernel;
-    kernel << get_kernel_preamble() << std::endl;
+    kernel << std::get<2>(JitCompiler::get_preamble()) << std::endl;
+    kernel << "using namespace mlx::core;" << std::endl;
+    kernel << "using namespace mlx::core::detail;" << std::endl;
     kernel << "extern \"C\"  {" << std::endl;
     build_kernel(
         kernel,

@@ -7,6 +7,9 @@ namespace mlx::core {
 
 class JitCompiler {
  public:
+  // Return the includes that should be prepended to the source code.
+  static const std::tuple<bool, std::string, std::string>& get_preamble();
+
   // Build a shell command that compiles a source code file to a shared library.
   static std::string build_command(
       const std::filesystem::path& dir,
