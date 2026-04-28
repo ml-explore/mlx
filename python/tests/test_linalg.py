@@ -734,9 +734,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
 
         # Error: complex unsupported (small-matrix path)
         with self.assertRaises(ValueError):
-            mx.linalg.det(
-                mx.array([[1.0 + 1j, 2.0], [3.0, 4.0]]), stream=mx.cpu
-            )
+            mx.linalg.det(mx.array([[1.0 + 1j, 2.0], [3.0, 4.0]]), stream=mx.cpu)
 
         # Error: complex unsupported (LU path)
         with self.assertRaises(ValueError):
@@ -867,9 +865,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
 
         # Error: complex unsupported (small-matrix path)
         with self.assertRaises(ValueError):
-            mx.linalg.slogdet(
-                mx.array([[1.0 + 1j, 2.0], [3.0, 4.0]]), stream=mx.cpu
-            )
+            mx.linalg.slogdet(mx.array([[1.0 + 1j, 2.0], [3.0, 4.0]]), stream=mx.cpu)
 
         # Error: complex unsupported (LU path)
         with self.assertRaises(ValueError):
