@@ -715,6 +715,15 @@ class TestLinalg(mlx_tests.MLXTestCase):
         d_np = np.linalg.det(A_np)
         self.assertTrue(np.allclose(d_mx, d_np, atol=1e-5))
 
+        # Empty 0x0 matrix: det is the empty product = 1
+        d = mx.linalg.det(mx.zeros((0, 0)), stream=mx.cpu)
+        self.assertEqual(d.shape, ())
+        self.assertEqual(float(d), 1.0)
+
+        # Batched empty matrices: shape preserves batch dims
+        d = mx.linalg.det(mx.zeros((3, 0, 0)), stream=mx.cpu)
+        self.assertTrue(np.allclose(d, np.linalg.det(np.zeros((3, 0, 0)))))
+
         # Error: non-square
         with self.assertRaises(ValueError):
             mx.linalg.det(mx.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), stream=mx.cpu)
@@ -722,6 +731,16 @@ class TestLinalg(mlx_tests.MLXTestCase):
         # Error: 1D
         with self.assertRaises(ValueError):
             mx.linalg.det(mx.array([1.0, 2.0]), stream=mx.cpu)
+
+        # Error: complex unsupported (small-matrix path)
+        with self.assertRaises(ValueError):
+            mx.linalg.det(
+                mx.array([[1.0 + 1j, 2.0], [3.0, 4.0]]), stream=mx.cpu
+            )
+
+        # Error: complex unsupported (LU path)
+        with self.assertRaises(ValueError):
+            mx.linalg.det(mx.eye(4).astype(mx.complex64), stream=mx.cpu)
 
     def test_slogdet(self):
         # 2x2: det = -2 => sign = -1, logabsdet = log(2)
@@ -823,6 +842,19 @@ class TestLinalg(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(sign_mx, sign_np))
         self.assertTrue(np.allclose(logabs_mx, logabs_np, atol=1e-10))
 
+        # Empty 0x0 matrix: sign = 1, logabsdet = 0 (empty product)
+        sign, logabsdet = mx.linalg.slogdet(mx.zeros((0, 0)), stream=mx.cpu)
+        self.assertEqual(sign.shape, ())
+        self.assertEqual(logabsdet.shape, ())
+        self.assertEqual(float(sign), 1.0)
+        self.assertEqual(float(logabsdet), 0.0)
+
+        # Batched empty matrices
+        sign, logabsdet = mx.linalg.slogdet(mx.zeros((3, 0, 0)), stream=mx.cpu)
+        sign_np, logabs_np = np.linalg.slogdet(np.zeros((3, 0, 0)))
+        self.assertTrue(np.allclose(sign, sign_np))
+        self.assertTrue(np.allclose(logabsdet, logabs_np))
+
         # Error: non-square
         with self.assertRaises(ValueError):
             mx.linalg.slogdet(
@@ -832,6 +864,16 @@ class TestLinalg(mlx_tests.MLXTestCase):
         # Error: 1D
         with self.assertRaises(ValueError):
             mx.linalg.slogdet(mx.array([1.0, 2.0]), stream=mx.cpu)
+
+        # Error: complex unsupported (small-matrix path)
+        with self.assertRaises(ValueError):
+            mx.linalg.slogdet(
+                mx.array([[1.0 + 1j, 2.0], [3.0, 4.0]]), stream=mx.cpu
+            )
+
+        # Error: complex unsupported (LU path)
+        with self.assertRaises(ValueError):
+            mx.linalg.slogdet(mx.eye(4).astype(mx.complex64), stream=mx.cpu)
 
 
 if __name__ == "__main__":

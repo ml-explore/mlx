@@ -705,7 +705,14 @@ array solve_triangular(
   return matmul(a_inv, b, s);
 }
 
-void validate_det(const array& a, const std::string& fname) {
+void validate_det(
+    const array& a,
+    const StreamOrDevice& stream,
+    const std::string& fname) {
+  check_cpu_stream(stream, fname);
+  if (issubdtype(a.dtype(), complexfloating)) {
+    throw std::invalid_argument(fname + " Complex inputs are not supported.");
+  }
   if (a.ndim() < 2) {
     std::ostringstream msg;
     msg << fname
@@ -722,6 +729,12 @@ void validate_det(const array& a, const std::string& fname) {
 
 array det_raw_small(const array& a, StreamOrDevice s) {
   int n = a.shape(-1);
+
+  // Empty 0x0 matrix: determinant is the empty product = 1
+  if (n == 0) {
+    Shape out_shape(a.shape().begin(), a.shape().end() - 2);
+    return broadcast_to(array(1.0f, a.dtype()), std::move(out_shape), s);
+  }
 
   // Helper to extract a[..., i, j] from the last two dims
   auto elem = [&](int i, int j) {
@@ -834,7 +847,7 @@ std::pair<array, array> slogdet_impl(const array& input, StreamOrDevice s) {
 }
 
 std::pair<array, array> slogdet(const array& a, StreamOrDevice s /* = {} */) {
-  validate_det(a, "[linalg::slogdet]");
+  validate_det(a, s, "[linalg::slogdet]");
 
   auto dtype = at_least_float(a.dtype());
   auto input = astype(a, dtype, s);
@@ -842,7 +855,7 @@ std::pair<array, array> slogdet(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array det(const array& a, StreamOrDevice s /* = {} */) {
-  validate_det(a, "[linalg::det]");
+  validate_det(a, s, "[linalg::det]");
 
   auto dtype = at_least_float(a.dtype());
   auto input = astype(a, dtype, s);
