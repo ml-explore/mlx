@@ -122,4 +122,24 @@ void init_memory(nb::module_& m) {
 
       After calling this, :func:`get_cache_memory` should return ``0``.
       )pbdoc");
+  m.def(
+      "get_active_resource_count",
+      &mx::get_active_resource_count,
+      R"pbdoc(
+      Get the total number of GPU buffers (active + cached) currently
+      allocated by mlx.
+
+      On Metal this is the count of MTLBuffer objects, useful for diagnosing
+      descriptor-pressure bugs such as ml-explore/mlx-lm#1185. CUDA returns
+      ``0`` (the resource limit on CUDA is bytes, not handles).
+      )pbdoc");
+  m.def(
+      "get_cache_count",
+      &mx::get_cache_count,
+      R"pbdoc(
+      Get the number of GPU buffers currently sitting in the buffer cache.
+
+      Useful in conjunction with :func:`get_active_resource_count` for
+      debugging descriptor-pressure issues. Returns ``0`` on CUDA.
+      )pbdoc");
 }

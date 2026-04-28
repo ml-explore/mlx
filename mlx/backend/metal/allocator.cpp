@@ -261,6 +261,12 @@ void reset_peak_memory() {
 size_t get_cache_memory() {
   return metal::allocator().get_cache_memory();
 }
+size_t get_active_resource_count() {
+  return metal::allocator().get_active_resource_count();
+}
+size_t get_cache_count() {
+  return metal::allocator().get_cache_count();
+}
 void clear_cache() {
   return metal::allocator().clear_cache();
 }

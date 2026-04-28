@@ -443,6 +443,16 @@ void clear_cache() {
   cu::allocator().clear_cache();
 }
 
+// Resource-count introspection is Metal-specific (descriptor pressure on
+// M-series GPUs, see ml-explore/mlx-lm#1185). CUDA does not expose an
+// equivalent buffer-count limit, so these stubs return 0.
+size_t get_active_resource_count() {
+  return 0;
+}
+size_t get_cache_count() {
+  return 0;
+}
+
 // Not supported in CUDA.
 size_t set_wired_limit(size_t) {
   return 0;

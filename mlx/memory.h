@@ -33,6 +33,18 @@ MLX_API void reset_peak_memory();
  * */
 MLX_API size_t get_cache_memory();
 
+/* Get the total number of GPU buffers (active + cached) currently allocated
+ * by mlx.
+ *
+ * On Metal this is the count of MTLBuffer objects, useful for diagnosing
+ * descriptor-pressure bugs (see ml-explore/mlx-lm#1185). CUDA returns 0
+ * (the resource limit on CUDA is bytes, not handles).
+ * */
+MLX_API size_t get_active_resource_count();
+
+/* Get the number of GPU buffers currently sitting in the buffer cache. */
+MLX_API size_t get_cache_count();
+
 /* Set the memory limit.
  * The memory limit is a guideline for the maximum amount of memory to use
  * during graph evaluation. If the memory limit is exceeded and there is no

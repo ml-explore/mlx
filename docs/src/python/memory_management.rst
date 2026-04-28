@@ -10,6 +10,8 @@ Memory Management
   get_peak_memory
   reset_peak_memory
   get_cache_memory
+  get_active_resource_count
+  get_cache_count
   set_memory_limit
   set_cache_limit
   set_wired_limit

@@ -102,6 +102,10 @@ class BufferCache {
     return pool_size_;
   }
 
+  size_t cache_count() const {
+    return buffer_pool_.size();
+  }
+
   size_t page_size() const {
     return page_size_;
   }
