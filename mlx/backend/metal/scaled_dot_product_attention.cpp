@@ -1,4 +1,6 @@
 // Copyright © 2024 Apple Inc.
+#include <algorithm>
+#include <cstdlib>
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -14,6 +16,22 @@
 namespace mlx::core::fast {
 
 namespace {
+
+int sdpa_full_chunk_threshold() {
+  if (auto* env = std::getenv("MLX_SDPA_CHUNK_THRESHOLD")) {
+    int value = std::atoi(env);
+    return value > 0 ? value : 65536;
+  }
+  return 65536;
+}
+
+int sdpa_full_chunk_size() {
+  if (auto* env = std::getenv("MLX_SDPA_CHUNK_SIZE")) {
+    int value = std::atoi(env);
+    return value > 0 ? value : 32768;
+  }
+  return 32768;
+}
 
 void sdpa_full_self_attention_nax(
     const Stream& s,
@@ -163,6 +181,184 @@ void sdpa_full_self_attention_nax(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void sdpa_full_self_attention_chunked(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& v,
+    const float scale,
+    array& o,
+    bool do_causal_,
+    const std::optional<array>& sinks) {
+  using namespace mlx::steel;
+
+  const int chunk_size = sdpa_full_chunk_size();
+  const int full_kL = k.shape(2);
+  const int n_chunks = (full_kL + chunk_size - 1) / chunk_size;
+
+  int wm = 4;
+  int wn = 1;
+  int bd = q.shape(-1);
+  int bq = 32;
+  int bk = bd < 128 ? 32 : 16;
+
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int D = q.shape(3);
+  int gqa_factor = q.shape(1) / k.shape(1);
+  int qL = q.shape(2);
+
+  int64_t BHqL = int64_t(B) * int64_t(H) * int64_t(qL);
+  int64_t BHqLD = BHqL * int64_t(D);
+
+  array chunk_outs({n_chunks, B * H, qL, D}, q.dtype(), nullptr, {});
+  chunk_outs.set_data(
+      allocator::malloc(int64_t(n_chunks) * BHqLD * q.itemsize()));
+
+  array chunk_lses({n_chunks, B * H, qL}, float32, nullptr, {});
+  chunk_lses.set_data(
+      allocator::malloc(int64_t(n_chunks) * BHqL * size_of(float32)));
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  compute_encoder.add_temporary(chunk_outs);
+  compute_encoder.add_temporary(chunk_lses);
+
+  for (int c = 0; c < n_chunks; c++) {
+    int k_start = c * chunk_size;
+    int chunk_kL = std::min(chunk_size, full_kL - k_start);
+    int chunk_qL_off = (full_kL - qL) - k_start;
+
+    const bool align_Q = (qL % bq) == 0;
+    const bool align_K = (chunk_kL % bk) == 0;
+    const bool has_mask = false;
+    const bool do_causal = do_causal_;
+    const bool has_sinks_chunk = c == 0 && sinks.has_value();
+    const bool output_lse = true;
+
+    const int NQ = (qL + bq - 1) / bq;
+    const int NK = (chunk_kL + bk - 1) / bk;
+    const int NQ_aligned = qL / bq;
+    const int NK_aligned = chunk_kL / bk;
+
+    AttnParams params{
+        /* int B = */ B,
+        /* int H = */ H,
+        /* int D = */ D,
+
+        /* int qL = */ qL,
+        /* int kL = */ chunk_kL,
+
+        /* int gqa_factor = */ gqa_factor,
+        /* float scale = */ scale,
+
+        /* int NQ = */ NQ,
+        /* int NK = */ NK,
+
+        /* int NQ_aligned = */ NQ_aligned,
+        /* int NK_aligned = */ NK_aligned,
+
+        /* int qL_rem = */ (qL - NQ_aligned * bq),
+        /* int kL_rem = */ (chunk_kL - NK_aligned * bk),
+        /* int qL_off = */ chunk_qL_off,
+
+        /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
+        /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
+        /* int64_t V_strides[3] = */ {v.strides(0), v.strides(1), v.strides(2)},
+        /* int64_t O_strides[3] = */
+        {int64_t(H) * qL * D, int64_t(qL) * D, D}};
+
+    metal::MTLFCList func_consts = {
+        {&align_Q, MTL::DataType::DataTypeBool, 200},
+        {&align_K, MTL::DataType::DataTypeBool, 201},
+        {&has_mask, MTL::DataType::DataTypeBool, 300},
+        {&do_causal, MTL::DataType::DataTypeBool, 301},
+        {&has_sinks_chunk, MTL::DataType::DataTypeBool, 302},
+        {&output_lse, MTL::DataType::DataTypeBool, 304}};
+
+    std::string base_name;
+    concatenate(
+        base_name,
+        "steel_attention_",
+        type_to_name(q),
+        "_bq",
+        bq,
+        "_bk",
+        bk,
+        "_bd",
+        bd,
+        "_wm",
+        wm,
+        "_wn",
+        wn,
+        "_mask",
+        type_to_name(q));
+
+    std::string hash_name;
+    concatenate(
+        hash_name,
+        base_name,
+        "_align_Q_",
+        (align_Q ? 't' : 'n'),
+        "_align_K_",
+        (align_K ? 't' : 'n'),
+        "_has_mask_n_do_causal_",
+        (do_causal ? 't' : 'n'),
+        "_has_sinks_",
+        (has_sinks_chunk ? 't' : 'n'),
+        "_lse_t");
+
+    auto kernel = get_steel_attention_kernel(
+        d, base_name, hash_name, func_consts, q, bq, bk, bd, wm, wn, q);
+
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(q, 0);
+    compute_encoder.set_input_array(
+        k, 1, int64_t(k_start) * k.strides(2) * k.itemsize());
+    compute_encoder.set_input_array(
+        v, 2, int64_t(k_start) * v.strides(2) * v.itemsize());
+    compute_encoder.set_output_array(
+        chunk_outs, 3, int64_t(c) * BHqLD * q.itemsize());
+    compute_encoder.set_bytes(params, 4);
+    if (has_sinks_chunk) {
+      compute_encoder.set_input_array(*sinks, 7);
+    }
+    compute_encoder.set_output_array(
+        chunk_lses, 8, int64_t(c) * BHqL * size_of(float32));
+
+    MTL::Size grid_dims = MTL::Size(NQ, H, B);
+    MTL::Size group_dims = MTL::Size(32, wm, wn);
+
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+  }
+
+  std::string reduce_kname = "sdpa_chunked_reduce_" + type_to_name(q);
+  auto reduce_kernel = d.get_kernel(reduce_kname);
+  compute_encoder.set_compute_pipeline_state(reduce_kernel);
+
+  compute_encoder.set_input_array(chunk_outs, 0);
+  compute_encoder.set_input_array(chunk_lses, 1);
+  compute_encoder.set_output_array(o, 2);
+  compute_encoder.set_bytes(n_chunks, 3);
+  compute_encoder.set_bytes(D, 4);
+  compute_encoder.set_bytes(qL, 5);
+  compute_encoder.set_bytes(H, 6);
+
+  int64_t o_strides[3] = {o.strides(0), o.strides(1), o.strides(2)};
+  compute_encoder.set_bytes(o_strides, 7);
+
+  int BHqL_int = static_cast<int>(BHqL);
+  compute_encoder.set_bytes(BHqL_int, 8);
+
+  MTL::Size grid = MTL::Size(D, qL, B * H);
+  MTL::Size group = MTL::Size(std::min(D, 32), std::min(qL, 32), 1);
+  int total = group.width * group.height;
+  if (total > 1024) {
+    group = MTL::Size(std::min(D, 32), 1024 / std::min(D, 32), 1);
+  }
+  compute_encoder.dispatch_threads(grid, group);
+}
+
 void sdpa_full_self_attention_metal(
     const Stream& s,
     metal::Device& d,
@@ -174,7 +370,12 @@ void sdpa_full_self_attention_metal(
     bool do_causal_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
-  if (metal::is_nax_available() && q.shape(3) != 80 &&
+  if (k.shape(2) >= sdpa_full_chunk_threshold() && !mask.has_value()) {
+    return sdpa_full_self_attention_chunked(
+        s, d, q, k, v, scale, o, do_causal_, sinks);
+  }
+
+  if (metal::is_nax_available() && q.shape(3) != 80 && q.shape(3) != 256 &&
       (env::enable_tf32() || q.dtype() != float32)) {
     return sdpa_full_self_attention_nax(
         /* const Stream& s = */ s,
@@ -211,13 +412,15 @@ void sdpa_full_self_attention_metal(
   const bool has_mask = mask.has_value();
   const bool do_causal = do_causal_;
   const bool has_sinks = sinks.has_value();
+  const bool output_logsumexp = false;
 
   metal::MTLFCList func_consts = {
       {&align_Q, MTL::DataType::DataTypeBool, 200},
       {&align_K, MTL::DataType::DataTypeBool, 201},
       {&has_mask, MTL::DataType::DataTypeBool, 300},
       {&do_causal, MTL::DataType::DataTypeBool, 301},
-      {&has_sinks, MTL::DataType::DataTypeBool, 302}};
+      {&has_sinks, MTL::DataType::DataTypeBool, 302},
+      {&output_logsumexp, MTL::DataType::DataTypeBool, 304}};
 
   std::string base_name;
   concatenate(
@@ -250,7 +453,8 @@ void sdpa_full_self_attention_metal(
       "_do_causal_",
       (do_causal ? 't' : 'n'),
       "_has_sinks_",
-      (has_sinks ? 't' : 'n'));
+      (has_sinks ? 't' : 'n'),
+      "_lse_n");
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -618,9 +822,12 @@ bool ScaledDotProductAttention::use_fallback(
   const bool sdpa_vector_supported_head_dim =
       query_head_dim == value_head_dim &&
       (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
-       query_head_dim == 256);
+       query_head_dim == 192 || query_head_dim == 256);
+  const bool sdpa_full_256_ok =
+      query_head_dim == 256 && key_sequence_length > 16384;
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
+      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128 ||
+       sdpa_full_256_ok);
 
   const bool sdpa_full_supported_mask = !has_mask || has_arr_mask ||
       (query_sequence_length <= key_sequence_length && do_causal);

@@ -116,6 +116,24 @@ def mlx_primitives_sdpa(q, k, v, scale, mask=None):
     return scores @ v
 
 
+class temporary_env:
+    def __init__(self, **values):
+        self.values = values
+        self.previous = {}
+
+    def __enter__(self):
+        for key, value in self.values.items():
+            self.previous[key] = os.environ.get(key)
+            os.environ[key] = str(value)
+
+    def __exit__(self, exc_type, exc, tb):
+        for key, value in self.previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_sdpa_vector_kv_transposed_head_seq(self):
         D = 64
@@ -442,6 +460,77 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
 
                 diff = mx.abs(out_fst - out_ref) - atol * mx.abs(out_ref)
                 self.assertLessEqual(mx.max(diff).item(), atol)
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal-only SDPA dispatch")
+    def test_sdpa_full_head_dim_256_inference(self):
+        D = 256
+        qL = 16
+        kL = 16385
+        scale = D**-0.5
+        mx.random.seed(0)
+
+        q = mx.random.normal(shape=(1, 1, qL, D), dtype=mx.float16)
+        k = mx.random.normal(shape=(1, 1, kL, D), dtype=mx.float16)
+        v = mx.random.normal(shape=(1, 1, kL, D), dtype=mx.float16)
+
+        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+        ref = mlx_ref_attn(q, k, v, scale=scale)
+
+        self.assertFalse(mx.isnan(out).any().item())
+        self.assertTrue(mx.allclose(out, ref, atol=5e-3, rtol=5e-3))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal-only SDPA dispatch")
+    def test_sdpa_chunked_threshold_inference(self):
+        D = 64
+        qL = 16
+        kL = 48
+        scale = D**-0.5
+        mx.random.seed(0)
+
+        q = mx.random.normal(shape=(1, 2, qL, D), dtype=mx.float16)
+        k = mx.random.normal(shape=(1, 1, kL, D), dtype=mx.float16)
+        v = mx.random.normal(shape=(1, 1, kL, D), dtype=mx.float16)
+
+        with temporary_env(MLX_SDPA_CHUNK_THRESHOLD=32, MLX_SDPA_CHUNK_SIZE=16):
+            out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+            out_causal = mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, mask="causal"
+            )
+
+        ref = mlx_ref_attn(q, k, v, scale=scale)
+        ref_causal = mlx_ref_attn(q, k, v, scale=scale, mask="causal")
+
+        self.assertTrue(mx.allclose(out, ref, atol=1e-3, rtol=1e-3))
+        self.assertTrue(mx.allclose(out_causal, ref_causal, atol=1e-3, rtol=1e-3))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal-only SDPA dispatch")
+    def test_sdpa_chunked_matches_normal_small_tensors(self):
+        D = 64
+        qL = 9
+        kL = 24
+        scale = D**-0.5
+        mx.random.seed(1)
+
+        q = mx.random.normal(shape=(1, 4, qL, D), dtype=mx.float16)
+        k = mx.random.normal(shape=(1, 2, kL, D), dtype=mx.float16)
+        v = mx.random.normal(shape=(1, 2, kL, D), dtype=mx.float16)
+
+        with temporary_env(MLX_SDPA_CHUNK_THRESHOLD=1024, MLX_SDPA_CHUNK_SIZE=16):
+            normal = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+            normal_causal = mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, mask="causal"
+            )
+
+        with temporary_env(MLX_SDPA_CHUNK_THRESHOLD=1, MLX_SDPA_CHUNK_SIZE=8):
+            chunked = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+            chunked_causal = mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, mask="causal"
+            )
+
+        self.assertTrue(mx.allclose(chunked, normal, atol=1e-3, rtol=1e-3))
+        self.assertTrue(
+            mx.allclose(chunked_causal, normal_causal, atol=1e-3, rtol=1e-3)
+        )
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "too slow on CPU")
     @unittest.skipIf(mx.cuda.is_available() and "CI" in os.environ, "not enough memory")
