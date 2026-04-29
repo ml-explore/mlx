@@ -52,7 +52,7 @@ bool supports_qmm_sm90(
   if (!biases) {
     return false;
   }
-  if (!x.flags().row_contiguous || !is_last_2_dims_row_contiguous(w) ||
+  if (!is_last_2_dims_row_contiguous(w) ||
       !is_last_2_dims_row_contiguous(scales) ||
       !is_last_2_dims_row_contiguous(*biases)) {
     return false;
@@ -139,7 +139,7 @@ bool supports_qmm_sm80(
   if ((n % 128 != 0) || (k % std::max(64, group_size) != 0)) {
     return false;
   }
-  if (!x.flags().row_contiguous || !is_last_2_dims_row_contiguous(w) ||
+  if (!is_last_2_dims_row_contiguous(w) ||
       !is_last_2_dims_row_contiguous(scales)) {
     return false;
   }
@@ -224,7 +224,7 @@ bool supports_qmm_naive(
   if (transpose && (k % std::max(64, group_size) != 0)) {
     return false;
   }
-  if (!x.flags().row_contiguous || !is_last_2_dims_row_contiguous(w) ||
+  if (!is_last_2_dims_row_contiguous(w) ||
       !is_last_2_dims_row_contiguous(scales)) {
     return false;
   }
@@ -343,7 +343,7 @@ bool supports_qmv(
   if (k % 8 != 0) {
     return false;
   }
-  if (!x.flags().row_contiguous || !is_last_2_dims_row_contiguous(w) ||
+  if (!is_last_2_dims_row_contiguous(w) ||
       !is_last_2_dims_row_contiguous(scales)) {
     return false;
   }

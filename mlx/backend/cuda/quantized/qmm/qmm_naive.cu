@@ -60,7 +60,9 @@ __global__ void qmm_naive_kernel(
   CUTE_STATIC_ASSERT_V(congruent(select<0,1,3>(shape_MNKL), dC));
 
   int thread_idx = int(threadIdx.x);
-  auto [m_coord, n_coord, l_coord] = static_cast<uint3>(blockIdx);
+  int m_coord = int(blockIdx.x);
+  int n_coord = int(blockIdx.y);
+  int l_coord = int(blockIdx.z);
 
   auto m_max_coord = size<0>(shape_MNKL) - size<0>(cta_tiler) * m_coord; // M - BLK_M * m_coord
   auto n_max_coord = size<1>(shape_MNKL) - size<1>(cta_tiler) * n_coord; // N - BLK_N * n_coord

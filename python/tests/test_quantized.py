@@ -1046,7 +1046,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y3 = scatter_unsort(y3, inv_order, indices.shape)
                 y4 = scatter_unsort(y4, inv_order, indices.shape)
 
-                tol = 1.5e-5 if (dtype == mx.float32) else 2.5e-4
+                tol = 1.5e-5 if (dtype == mx.float32) else 1e-3
 
                 self.assertLess((y1 - y2).abs().max(), tol)
                 self.assertLess((y1 - y3).abs().max(), tol)

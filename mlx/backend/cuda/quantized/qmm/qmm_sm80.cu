@@ -48,7 +48,9 @@ __global__ void qmm_sm80_kernel(
   CUTE_STATIC_ASSERT_V(congruent(select<0,1,3>(shape_MNKL), dC));
 
   int thread_idx = int(threadIdx.x);
-  auto [m_coord, n_coord, l_coord] = static_cast<uint3>(blockIdx);
+  int m_coord = int(blockIdx.x);
+  int n_coord = int(blockIdx.y);
+  int l_coord = int(blockIdx.z);
 
   // For gather, use index lookup for input batch slicing.
   uint32_t a_batch = lhs_indices ? lhs_indices[l_coord] : l_coord;
