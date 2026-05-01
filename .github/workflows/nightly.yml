@@ -85,20 +85,24 @@ jobs:
 
   build_cuda_release:
     if: github.repository == 'ml-explore/mlx'
-    runs-on: ubuntu-22-large
+    strategy:
+      matrix:
+        arch: ['x86_64', 'aarch64']
+        toolkit: ['cuda-12.9', 'cuda-13.0']
+    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-22-large' || 'ubuntu-22-large-arm' }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-linux
         with:
-          toolkit: 'cuda-12.9'
+          toolkit: ${{ matrix.toolkit }}
+          ccache-key: 'ccache-release'
       - name: Build Python package
         uses: ./.github/actions/build-cuda-release
         with:
-          toolkit: 'cuda-12.9'
-          arch: 'x86_64'
+          arch: ${{ matrix.arch }}
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: mlx-cuda
+          name: mlx-${{ matrix.toolkit }}-${{ matrix.arch }}
           path: wheelhouse/mlx_cuda_*.whl
           retention-days: 7

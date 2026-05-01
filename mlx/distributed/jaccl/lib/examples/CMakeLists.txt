@@ -35,6 +35,7 @@ endfunction()
 # Examples
 build_example(minimal_env.cpp)
 build_example(minimal_cfg.cpp)
+build_example(minimal_barrier.cpp)
 
 # Benchmarks
 build_example(allreduce_bench.cpp)

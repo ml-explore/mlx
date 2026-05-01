@@ -29,6 +29,8 @@ in macOS 26.2.
 - **Point-to-Point Operations**:
   - `send`: Send data to a specific node
   - `recv`: Receive data from a specific node
+- **Synchronization**:
+  - `barrier`: Block until all nodes in the group reach this point
 - **Type Support**: Bool, Int8-64, UInt8-64, Float16, BFloat16, Float32,
   Float64, Complex64
 
@@ -286,6 +288,9 @@ class Group {
   // Simple send/recv primitives.
   virtual void send(const void* input, size_t n_bytes, int dst) = 0;
   virtual void recv(void* output, size_t n_bytes, int src) = 0;
+
+  // Block until every rank reaches this point.
+  virtual void barrier() = 0;
 };
 ```
 

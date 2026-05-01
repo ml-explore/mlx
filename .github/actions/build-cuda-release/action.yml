@@ -20,7 +20,7 @@ runs:
       run: |
         pip install auditwheel "build<=1.4.2" patchelf setuptools
         python setup.py clean --all
-        MLX_DISABLE_SM90A_KERNELS=1 MLX_BUILD_STAGE=2 python -m build -w
+        MLX_BUILD_STAGE=2 python -m build -w
 
         auditwheel repair dist/mlx_cuda*.whl \
           --plat manylinux_2_35_${{ inputs.arch }} \

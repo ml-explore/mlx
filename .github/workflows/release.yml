@@ -146,7 +146,7 @@ jobs:
       - uses: ./.github/actions/setup-linux
         with:
           toolkit: ${{ matrix.toolkit }}
-          use-ccache: false
+          ccache-key: 'ccache-release'
       - name: Build Python package
         uses: ./.github/actions/build-cuda-release
         with:

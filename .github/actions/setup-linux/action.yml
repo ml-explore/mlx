@@ -14,6 +14,9 @@ inputs:
     description: 'Whether to enable ccache'
     required: false
     default: 'true'
+  ccache-key:
+    required: false
+    default: 'ccache'
 
 runs:
   using: "composite"
@@ -33,7 +36,7 @@ runs:
       if: ${{ inputs.use-ccache == 'true' }}
       uses: hendrikmuhs/ccache-action@v1.2
       with:
-        key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolkit }}
+        key: ${{ inputs.ccache-key }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolkit }}
         max-size: 1GB
         # ccache-action bug: running "apt-get update" fails on large arm runner.
         update-package-index: false

@@ -190,6 +190,11 @@ void RingGroup::recv(void* output, size_t n_bytes, int src) {
   ring_.recv(static_cast<char*>(output), n_bytes, src, n_conns_);
 }
 
+void RingGroup::barrier() {
+  uint8_t b = 0;
+  all_sum(&b, &b, sizeof(b), Dtype::UInt8);
+}
+
 template <typename T, typename ReduceOp>
 void RingGroup::all_reduce(
     const void* input,

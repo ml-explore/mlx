@@ -184,6 +184,11 @@ void MeshGroup::recv(void* output, size_t n_bytes, int src) {
   mesh_.recv(static_cast<char*>(output), n_bytes, src);
 }
 
+void MeshGroup::barrier() {
+  uint8_t b = 0;
+  all_sum(&b, &b, sizeof(b), Dtype::UInt8);
+}
+
 template <typename T, typename ReduceOp>
 void MeshGroup::all_reduce(
     const void* input,

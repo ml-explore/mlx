@@ -47,6 +47,8 @@ class MeshGroup : public Group {
   void send(const void* input, size_t n_bytes, int dst) override;
   void recv(void* output, size_t n_bytes, int src) override;
 
+  void barrier() override;
+
  private:
   template <typename T, typename ReduceOp>
   void all_reduce(
