@@ -112,6 +112,18 @@ Buffer MetalAllocator::malloc(size_t size) {
   // Align up memory
   if (size > vm_page_size) {
     size = vm_page_size * ((size + vm_page_size - 1) / vm_page_size);
+  } else if (size < small_size_) {
+    // Coalesce sub-`small_size_` requests to `small_size_` so they share a
+    // single cache bucket. Without this, each distinct small size (4, 8,
+    // 16, ...) gets its own bucket and async-eval pipelining keeps the
+    // cache cold for the most-frequent sizes (size-4 scalars in DSv4
+    // decode). With coalescing, every small request can reuse any prior
+    // small allocation → ~100% cache hit rate after warmup → no heap
+    // pressure and no fall-through to device_->newBuffer (which would
+    // each consume a fresh vm_page_size VM region per scalar — the
+    // long-decode RSS leak we previously fixed by bumping heap_size_).
+    // Wastes <small_size_> bytes per scalar (negligible).
+    size = small_size_;
   }
 
   // Try the cache
