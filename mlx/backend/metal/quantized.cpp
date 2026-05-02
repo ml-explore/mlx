@@ -1408,6 +1408,32 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
   auto mode = quantization_mode_to_string(mode_);
+
+  // Numerical strict mode (MLX_NUMERICAL_STRICT_MODE=1): bypass the
+  // shape-dependent fast paths (qmv, qmm_splitk, qvm_split_k) so output is
+  // bit-identical regardless of M. Costs ~1.5-2.3x slower decode at M=1
+  // (qmv is heavily optimized for the M=1 case) but gives path-independence
+  // required for prefix-cache reuse, batched-vs-streaming eval comparison,
+  // and distillation/RLHF teacher-student equality. See
+  // env::numerical_strict_mode() in mlx/utils.h.
+  if (env::numerical_strict_mode()) {
+    qmm(x,
+        w,
+        scales,
+        biases,
+        out,
+        transpose_,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+    return;
+  }
+
   // It is a matrix matrix product.
   if (M >= vector_limit) {
     // Use split-K qmm for small M with transposed weights (non-batched only)
@@ -1476,6 +1502,33 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   int E = w.size() / w.shape(-1) / w.shape(-2);
   int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
   auto mode = quantization_mode_to_string(mode_);
+
+  // Numerical strict mode (MLX_NUMERICAL_STRICT_MODE=1): bypass the
+  // shape-dependent fast paths (gather_qmv, gather_qvm, gather_qmm_rhs) so
+  // GatherQMM output is bit-identical regardless of M. Same justification as
+  // QuantizedMatmul::eval_gpu — gather_qmm is the reference path that uses
+  // sequential register-fma accumulation matching qmm. Necessary for
+  // bit-equivalence in MoE models (Mixtral-MoE, DeepSeek-MoE, etc.).
+  if (env::numerical_strict_mode()) {
+    gather_qmm(
+        x,
+        w,
+        scales,
+        biases,
+        lhs_indices,
+        rhs_indices,
+        out,
+        transpose_,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
+    return;
+  }
 
   // We are walking x in order and w is also in order so we can batch up the
   // matmuls and reuse reading x and w.

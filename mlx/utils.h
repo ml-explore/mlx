@@ -173,6 +173,25 @@ inline bool enable_tf32() {
   return enable_tf32_;
 }
 
+// When set, QuantizedMatmul forces the no-split qmm path for all 2D shapes,
+// bypassing the qmv (M < vector_limit) and qmm_splitk fast paths. This
+// guarantees that quantized_matmul output is independent of input shape:
+// q_proj(x[:, -L:]) is bit-identical to q_proj(x)[:, -L:] for any L.
+//
+// The fast paths use parallel reductions across K (simd-butterfly in qmv,
+// partition-then-sum in splitk) which produce different fp32 sums than qmm's
+// sequential register-level accumulation. Even when both paths use fp32
+// throughout, fp32 is non-associative so the bit patterns differ by ~ULP.
+//
+// This bites workloads that compare two equivalent paths — prefix-cache reuse,
+// batched-vs-streaming eval, distillation/RLHF teacher-student equality. For
+// straight inference / training the diff is invisible. Off by default.
+inline bool numerical_strict_mode() {
+  static bool numerical_strict_mode_ =
+      get_var("MLX_NUMERICAL_STRICT_MODE", 0);
+  return numerical_strict_mode_;
+}
+
 inline int nccl_timeout(int default_value) {
   static int nccl_timeout = get_var("MLX_NCCL_TIMEOUT", default_value);
   return nccl_timeout;
