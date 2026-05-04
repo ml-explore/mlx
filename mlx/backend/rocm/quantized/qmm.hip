@@ -585,25 +585,36 @@ inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
           std::strstr(arch_name, "gfx1201") != nullptr) {
         hw.tier = RocmQmvArchTier::Rdna4;
         hw.simds_per_cu = 2;
-        hw.has_wmma = true;
       } else if (std::strstr(arch_name, "gfx1150") != nullptr ||
                  std::strstr(arch_name, "gfx1151") != nullptr ||
                  std::strstr(arch_name, "gfx1152") != nullptr) {
         hw.tier = RocmQmvArchTier::Rdna35;
         hw.simds_per_cu = 2;
-        hw.has_wmma = true;
       } else if (std::strstr(arch_name, "gfx11") != nullptr) {
         hw.tier = RocmQmvArchTier::Rdna3;
         hw.simds_per_cu = 2;
-        hw.has_wmma = true;
       } else if (std::strstr(arch_name, "gfx10") != nullptr) {
         hw.tier = RocmQmvArchTier::Rdna2;
         hw.simds_per_cu = 2;
-        hw.has_wmma = false;
       } else if (std::strstr(arch_name, "gfx9") != nullptr) {
         hw.tier = RocmQmvArchTier::Cdna;
         hw.simds_per_cu = 4;
-        hw.has_wmma = (std::strstr(arch_name, "gfx942") != nullptr);
+      }
+
+      // rocWMMA library arch allowlist (AMD's official support matrix).
+      // CDNA1/2/3 use MFMA under rocwmma; RDNA3 dGPU + gfx1151 + RDNA4 use
+      // hardware WMMA. Excludes gfx1103/1150/1152 and all gfx10xx (RDNA1/2).
+      static const char* const kRocwmmaArches[] = {
+          "gfx908",  "gfx90a",  "gfx942",
+          "gfx1100", "gfx1101", "gfx1102",
+          "gfx1151",
+          "gfx1200", "gfx1201",
+      };
+      for (const char* a : kRocwmmaArches) {
+        if (std::strstr(arch_name, a) != nullptr) {
+          hw.has_native_wmma = true;
+          break;
+        }
       }
     }
   }
@@ -4766,7 +4777,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     // ---- WMMA path: use 16x16x16 wave matrix multiply when tiles align ----
     // WMMA tiles are 16x16; kernel handles non-aligned M with bounds masking.
     // N must be 16-aligned (typical for transformer hidden dimensions).
-    bool use_wmma = (M >= 2) && (N % 16 == 0) && (bits_ == 4);
+    // Gate on the device arch: a multi-arch build can compile this kernel
+    // for a target whose gcnArchName isn't on the rocWMMA allowlist
+    // (e.g. gfx1030/1103) — dispatching there would crash.
+    bool use_wmma = d.has_native_wmma() && (M >= 2) && (N % 16 == 0) &&
+        (bits_ == 4);
     use_wmma = parse_warp_kernel_env("MLX_ROCM_GATHER_QMV_USE_WMMA", use_wmma);
 
     if (use_wmma) {

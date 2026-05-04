@@ -115,6 +115,10 @@ class Device {
   // Check if rocBLAS bf16 GEMM works on this device (probed at init)
   bool is_rocblas_bf16_available();
 
+  // True iff this device's gcnArchName is on the rocWMMA arch allowlist
+  // (CDNA1/2/3 + RDNA3 dGPU + gfx1151 + RDNA4). Lazy-cached on first call.
+  bool has_native_wmma();
+
  private:
   int device_;
   rocblas_handle rocblas_{nullptr};
@@ -123,6 +127,8 @@ class Device {
   bool rocblas_available_{true};
   bool rocblas_bf16_probed_{false};
   bool rocblas_bf16_available_{false};
+  bool wmma_probed_{false};
+  bool has_native_wmma_{false};
   std::unordered_map<int, std::unique_ptr<CommandEncoder>> encoders_;
 };
 

@@ -141,10 +141,13 @@ void ScaledDotProductAttention::eval_gpu(
     mask_arr = prepare_sdpa_input(inputs[3], s);
   }
 
-  // Prefer WMMA flash attention when available (bf16/fp16, standard dims)
+  // Prefer WMMA flash attention when available (bf16/fp16, standard dims).
+  // Gate on the device's runtime arch — a multi-arch wheel can include the
+  // WMMA kernel even when running on a non-WMMA chip (e.g. gfx1030/1103).
 #ifdef MLX_HAS_ROCM_WMMA
   bool wmma_supported = supports_sdpa_flash_wmma(
-      q, k, v, has_arr_mask, output_logsumexp_) && !has_sinks_;
+                            q, k, v, has_arr_mask, output_logsumexp_) &&
+      !has_sinks_ && rocm::device(s.device).has_native_wmma();
 #else
   bool wmma_supported = false;
 #endif

@@ -189,6 +189,41 @@ bool Device::is_rocblas_bf16_available() {
   return rocblas_bf16_available_;
 }
 
+bool Device::has_native_wmma() {
+  if (!wmma_probed_) {
+    wmma_probed_ = true;
+
+    hipDeviceProp_t props;
+    if (hipGetDeviceProperties(&props, device_) != hipSuccess) {
+      has_native_wmma_ = false;
+      return has_native_wmma_;
+    }
+
+    // Strip any ":sramecc+:xnack-" style suffix from gcnArchName.
+    std::string base_arch = props.gcnArchName;
+    size_t colon_pos = base_arch.find(':');
+    if (colon_pos != std::string::npos) {
+      base_arch = base_arch.substr(0, colon_pos);
+    }
+
+    // rocWMMA arch allowlist (AMD's official support matrix). Keep in sync
+    // with detect_rocm_hw_info() in mlx/backend/rocm/quantized/qmm.hip.
+    static const std::vector<std::string> rocwmma_archs = {
+        "gfx908",  "gfx90a",  "gfx942",
+        "gfx1100", "gfx1101", "gfx1102",
+        "gfx1151",
+        "gfx1200", "gfx1201",
+    };
+    for (const auto& a : rocwmma_archs) {
+      if (base_arch == a) {
+        has_native_wmma_ = true;
+        break;
+      }
+    }
+  }
+  return has_native_wmma_;
+}
+
 void Device::make_current() {
   // We need to set/get current HIP device very frequently, cache it to reduce
   // actual calls of HIP APIs. This function assumes single-thread in host.

@@ -103,7 +103,8 @@ struct HWInfo {
   int max_threads_per_cu;   // Max resident threads per CU
   int shared_mem_per_cu;    // Shared/LDS memory per CU in bytes
   int l2_cache_bytes;       // L2/Infinity Cache size
-  bool has_wmma;            // WMMA/tensor core support
+  bool has_native_wmma;     // True if arch is on rocWMMA allowlist
+                            // (CDNA1/2/3 + RDNA3 dGPU + gfx1151 + RDNA4)
 };
 
 // Per-architecture tuning parameters for quantized matvec and attention kernels.
