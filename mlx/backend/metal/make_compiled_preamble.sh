@@ -34,6 +34,22 @@ mkdir -p "$OUTPUT_DIR"
 CCC="xcrun -sdk macosx metal -x metal"
 HDRS=$( $CCC -I"$SRC_DIR" -I"$JIT_INCLUDES" -DMLX_METAL_JIT -E -P -CC -C -H "$INPUT_FILE" $CFLAGS -w 2>&1 1>/dev/null )
 
+# Fail early if the Metal compiler returned errors instead of header paths.
+# Valid lines start with '.' chars (depth indicators); anything else means
+# xcrun/metal failed (e.g. missing SDK, misconfigured toolchain).
+if [ -n "$HDRS" ]; then
+  invalid_lines=$(echo "$HDRS" | grep -v '^\.*\.' || true)
+  if [ -n "$invalid_lines" ]; then
+    echo "Error: Metal compiler header resolution failed for ${INPUT_FILE}" >&2
+    echo "Expected lines starting with '.' but got:" >&2
+    echo "$invalid_lines" >&2
+    echo "" >&2
+    echo "This usually means xcrun or the Metal toolchain is not configured correctly." >&2
+    echo "Try running: xcrun -sdk macosx metal --version" >&2
+    exit 1
+  fi
+fi
+
 # Remove any included system frameworks (for MetalPerformancePrimitive headers)
 HDRS=$(echo "$HDRS" | grep -v "Xcode")
 

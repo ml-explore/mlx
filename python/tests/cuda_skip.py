@@ -1,21 +1,4 @@
 cuda_skip = {
-    "TestLayers.test_quantized_embedding",
-    # Block masked matmul NYI
-    "TestBlas.test_block_masked_matmul",
-    # Gather matmul NYI
-    "TestBlas.test_gather_matmul",
-    "TestBlas.test_gather_matmul_grad",
-    "TestBlas.test_gather_mm_sorted_vjp",
-    # FFTs NYI
-    "TestFFT.test_fft",
-    "TestFFT.test_fft_big_powers_of_two",
-    "TestFFT.test_fft_contiguity",
-    "TestFFT.test_fft_exhaustive",
-    "TestFFT.test_fft_grads",
-    "TestFFT.test_fft_into_ifft",
-    "TestFFT.test_fft_large_numbers",
-    "TestFFT.test_fft_shared_mem",
-    "TestFFT.test_fftn",
     # Lapack ops NYI
     "TestLinalg.test_cholesky",
     "TestLinalg.test_cholesky_inv",
@@ -54,4 +37,5 @@ cuda_skip = {
     "TestOps.test_masked_scatter",
     "TestVmap.test_vmap_masked_scatter",
     "TestArray.test_setitem_with_boolean_mask",
+
 }

@@ -2,13 +2,16 @@
 
 #pragma once
 
+#include <memory>
 #include <span>
 
-#include "mlx/distributed/jaccl/utils.h"
+#include "jaccl/rdma.h"
 
 constexpr int MESH_MAX_PEERS = 8;
+constexpr int MESH_PIPELINE = 2;
+constexpr int64_t MAX_BUFFER_SIZE = FRAME_SIZE * (1 << (BUFFER_SIZES - 1));
 
-namespace mlx::core::distributed::jaccl {
+namespace jaccl {
 
 class MeshImpl {
  public:
@@ -17,20 +20,25 @@ class MeshImpl {
       int size,
       std::vector<Connection>& conns,
       std::vector<SharedBuffer>& buffers)
-      : rank_(rank), size_(size), connections_(conns), buffers_(buffers) {}
+      : rank_(rank),
+        size_(size),
+        connections_(conns),
+        buffers_(buffers),
+        staging_mem_(
+            std::make_unique<char[]>(MESH_PIPELINE * MAX_BUFFER_SIZE)) {}
 
   MeshImpl() : rank_(0), size_(1) {}
 
   template <typename T, typename ReduceOp>
-  void
-  all_reduce(const T* in_ptr, T* out_ptr, int64_t size, ReduceOp reduce_op) {
-    // If not inplace all reduce then copy the input to the output first
-    if (in_ptr != out_ptr) {
-      std::memcpy(out_ptr, in_ptr, size * sizeof(T));
-    }
+  void all_reduce(const T* in, T* out, int64_t size, ReduceOp reduce_op) {
+    // Fully connected all reduce with deterministic reduction order.
+    //
+    // We copy rank 0's data to the output buffer and then we reduce every
+    // subsequent rank in-place in the output.
+    //
+    // Our own data is copied to a staging buffer to ensure we can reduce it in
+    // the output when needed.
 
-    // Fully connected all reduce
-    T* data = out_ptr;
     auto [sz, buffer_size] = buffer_size_from_message(size * sizeof(T));
     int64_t N = buffer_size / sizeof(T);
     constexpr int PIPELINE = 2;
@@ -38,21 +46,36 @@ class MeshImpl {
     int64_t total = static_cast<int64_t>(size);
     int num_peers = size_ - 1;
 
+    // A helper for convenient access to the staging buffer.
+    auto local_staging = [&](int buff) -> T* {
+      return reinterpret_cast<T*>(staging_mem_.get() + buff * MAX_BUFFER_SIZE);
+    };
+
     // Counters to maintain the state of transfers
     int in_flight = 0;
     int64_t read_offset = 0;
     int completed_send_count[PIPELINE] = {0};
-    int completed_recv_begin[MESH_MAX_PEERS] = {0};
-    int completed_recv_end[MESH_MAX_PEERS] = {0};
+    int recv_end[MESH_MAX_PEERS] = {0};
+    int reduce_chunk = 0;
+    int reduce_rank = 0;
+
+    // Total number of chunks
+    int64_t total_chunks = (total + N - 1) / N;
 
     // Prefill the pipeline
     int buff = 0;
     while (read_offset < total && buff < PIPELINE) {
       post_recv_all(sz, buff);
+
+      // Copy the local data to send buffer and staging buffer
+      int64_t elems = std::min(N, total - read_offset);
       std::copy(
-          data + read_offset,
-          data + std::min(read_offset + N, total),
+          in + read_offset, in + read_offset + elems, local_staging(buff));
+      std::copy(
+          in + read_offset,
+          in + read_offset + elems,
           send_buffer(sz, buff).begin<T>());
+      recv_end[rank_]++;
       post_send_all(sz, buff);
 
       buff++;
@@ -61,14 +84,14 @@ class MeshImpl {
     }
 
     // Main loop
-    //
-    // Keep going until we have no longer data in flight.
-    while (in_flight > 0) {
+    while (reduce_chunk < total_chunks) {
       // Poll the hardware for completions.
       //
       // If a send was completed mark how many completions we have received
       // for that buffer. If we have sent the buffer to all peers we can
       // reuse the buffer so copy the next chunk of data and send it to all.
+      // Also copy the next chunk into the staging area and advance our
+      // completed "receives".
       //
       // If a receive is completed then advance the pointer of completed
       // receives.
@@ -84,10 +107,16 @@ class MeshImpl {
         if (work_type == SEND_WR && read_offset < total) {
           completed_send_count[buff]++;
           if (completed_send_count[buff] == num_peers) {
+            int64_t elems = std::min(N, total - read_offset);
             std::copy(
-                data + read_offset,
-                data + std::min(read_offset + N, total),
+                in + read_offset,
+                in + read_offset + elems,
+                local_staging(buff));
+            std::copy(
+                in + read_offset,
+                in + read_offset + elems,
                 send_buffer(sz, buff).begin<T>());
+            recv_end[rank_]++;
             post_send_all(sz, buff);
 
             completed_send_count[buff] = 0;
@@ -97,37 +126,69 @@ class MeshImpl {
         }
 
         else if (work_type == RECV_WR) {
-          completed_recv_end[rank]++;
+          recv_end[rank]++;
         }
       }
 
-      // Process the completed recv
+      // Process the received chunks in order.
       //
-      // For each rank we have a range of completed recv defined by a begin
-      // and end inclusive and exlusive in standard C++ fashion.
-      //
-      // When there is an unprocessed receive we first check if we have
-      // finished sending the write location. If so then we reduce in-place
-      // and then check if there is more to be received and post a recv.
-      for (int r = 0; r < size_; r++) {
-        int s = completed_recv_begin[r];
-        int e = completed_recv_end[r];
-        int w = s * N;
-        while (w < read_offset && e - s > 0) {
-          int buff = s % PIPELINE;
-          reduce_op(
-              recv_buffer(sz, buff, r).begin<T>(),
-              data + w,
-              std::min(N, total - w));
-          w += N;
-          s++;
-          if (w + (PIPELINE - 1) * N < total) {
-            recv_from(sz, r, buff);
+      // Rank 0 is always copied as is. Our rank is always read from the
+      // staging area.
+      while (reduce_chunk < total_chunks) {
+        // w is our write location so break if it is ahead of the read location.
+        int64_t w = static_cast<int64_t>(reduce_chunk) * N;
+        if (w >= read_offset) {
+          break;
+        }
+        // We want to reduce the 'reduce_chunk' chunk but it hasn't arrived
+        // yet.
+        if (recv_end[reduce_rank] <= reduce_chunk) {
+          break;
+        }
+        int b = reduce_chunk % PIPELINE;
+        int64_t elems = std::min(N, total - w);
+
+        // Data is read from the staging area
+        if (reduce_rank == rank_) {
+          if (reduce_rank == 0) {
+            std::copy_n(local_staging(b), elems, out + w);
+          } else {
+            reduce_op(local_staging(b), out + w, elems);
+          }
+        }
+
+        // Data is read from the recv buffers
+        else {
+          if (reduce_rank == 0) {
+            std::copy_n(
+                recv_buffer(sz, b, reduce_rank).begin<T>(), elems, out + w);
+          } else {
+            reduce_op(
+                recv_buffer(sz, b, reduce_rank).begin<T>(), out + w, elems);
+          }
+
+          // Check if we need to post another receive
+          int64_t next_chunk = static_cast<int64_t>(reduce_chunk) + PIPELINE;
+          if (next_chunk < total_chunks) {
+            recv_from(sz, reduce_rank, b);
             in_flight++;
           }
         }
-        completed_recv_begin[r] = s;
+
+        // Means we processed that chunk so move to the next one
+        reduce_rank++;
+        if (reduce_rank >= size_) {
+          reduce_rank = 0;
+          reduce_chunk++;
+        }
       }
+    }
+
+    // Drain remaining in-flight completions (outstanding sends).
+    while (in_flight > 0) {
+      ibv_wc wc[WC_NUM];
+      int n = poll(connections_, WC_NUM, wc);
+      in_flight -= n;
     }
   }
 
@@ -353,6 +414,7 @@ class MeshImpl {
   int size_;
   std::span<Connection> connections_;
   std::span<SharedBuffer> buffers_;
+  std::unique_ptr<char[]> staging_mem_;
 };
 
-} // namespace mlx::core::distributed::jaccl
+} // namespace jaccl

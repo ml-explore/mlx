@@ -34,6 +34,9 @@ MLX_API void compile_erase(std::uintptr_t fun_id);
 // when called again.
 MLX_API void compile_clear_cache();
 
+// Return true if the cache is empty.
+MLX_API bool compile_cache_empty();
+
 bool compile_available_for_device(const Device& device);
 
 std::tuple<std::vector<array>, std::vector<array>, std::shared_ptr<void>>

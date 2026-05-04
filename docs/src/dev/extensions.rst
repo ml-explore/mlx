@@ -404,7 +404,7 @@ below.
         auto kernel = d.get_kernel(kname, lib);
 
         // Prepare to encode kernel
-        auto& compute_encoder = d.get_command_encoder(s.index);
+        auto& compute_encoder = mx::metal::get_command_encoder(s);
         compute_encoder.set_compute_pipeline_state(kernel);
 
         // Kernel parameters are registered with buffer indices corresponding to
@@ -448,7 +448,7 @@ We can now call the :meth:`axpby` operation on both the CPU and the GPU!
 
 A few things to note about MLX and Metal before moving on. MLX keeps track of
 the active ``command_buffer`` and the ``MTLCommandBuffer`` to which it is
-associated. We rely on :meth:`d.get_command_encoder` to give us the active
+associated. We rely on :meth:`metal::get_command_encoder` to give us the active
 metal compute command encoder instead of building a new one and calling
 :meth:`compute_encoder->end_encoding` at the end. MLX adds kernels (compute
 pipelines) to the active command buffer until some specified limit is hit or

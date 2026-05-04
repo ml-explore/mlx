@@ -109,7 +109,8 @@ set(STEEL_NAX_HEADERS
     steel/utils/integral_constant.h
     steel/gemm/kernels/steel_gemm_fused_nax.h
     steel/gemm/kernels/steel_gemm_gather_nax.h
-    steel/gemm/kernels/steel_gemm_splitk_nax.h)
+    steel/gemm/kernels/steel_gemm_splitk_nax.h
+    steel/gemm/kernels/steel_gemm_segmented_nax.h)
 
 set(STEEL_NAX_ATTN_HEADERS
     steel/defines.h
@@ -160,6 +161,8 @@ if(NOT MLX_METAL_JIT)
     build_kernel(steel/gemm/kernels/steel_gemm_fused_nax ${STEEL_NAX_HEADERS})
     build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
     build_kernel(steel/gemm/kernels/steel_gemm_splitk_nax ${STEEL_NAX_HEADERS})
+    build_kernel(steel/gemm/kernels/steel_gemm_segmented_nax
+                 ${STEEL_NAX_HEADERS})
 
     build_kernel(quantized_nax quantized_nax.h ${STEEL_NAX_HEADERS})
     build_kernel(fp_quantized_nax fp4.h fp8.h fp_quantized_nax.h
@@ -176,7 +179,7 @@ endif()
 
 add_custom_command(
   OUTPUT ${MLX_METAL_PATH}/mlx.metallib
-  COMMAND xcrun -sdk macosx metallib ${KERNEL_AIR} -o
+  COMMAND xcrun -sdk macosx metal ${KERNEL_AIR} -o
           ${MLX_METAL_PATH}/mlx.metallib
   DEPENDS ${KERNEL_AIR}
   COMMENT "Building mlx.metallib"

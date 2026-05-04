@@ -24,6 +24,28 @@ namespace mlx::core {
 
 static constexpr int MAX_ACTIVE_TASKS = 10;
 
+namespace {
+
+// Create a tracer copy of a primal for use in vjp/jvp. If the primal is a
+// stale Copy from a previous transform call (not an active tracer), peel it
+// off to prevent copy-chain accumulation when containers feed tracers back.
+array make_tracer(const array& p) {
+  auto s = p.has_primitive() ? p.primitive().stream()
+                             : default_stream(default_device());
+  auto source = p;
+  if (!p.is_tracer() && p.has_primitive() && !p.inputs().empty()) {
+    auto& prim = p.primitive();
+    if (typeid(prim) == typeid(Copy)) {
+      source = p.inputs()[0];
+    }
+  }
+  auto out = copy(source, s);
+  out.set_tracer(true);
+  return out;
+}
+
+} // namespace
+
 /* This class is only meant to be used in eval
  * for synchronizing with the main thread. */
 class Synchronizer : public Primitive {
@@ -196,13 +218,13 @@ array eval_impl(std::vector<array> outputs, bool async) {
     }
   }
 
-  std::unordered_set<int> open_streams;
+  std::set<Stream> open_streams;
   while (!tape.empty()) {
     auto arr = std::move(tape.back());
     tape.pop_back();
 
     auto stream = arr.primitive().stream();
-    open_streams.insert(stream.index);
+    open_streams.insert(stream);
 
     if (async) {
       // Lookup corresponding event
@@ -243,8 +265,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
         (get_active_memory() > get_memory_limit() &&
          scheduler::n_active_tasks() > 0)) {
       // Commit any open streams
-      for (auto i : open_streams) {
-        auto s = get_stream(i);
+      for (auto& s : open_streams) {
         if (s.device == Device::gpu) {
           gpu::finalize(s);
         }
@@ -280,9 +301,8 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   // Signal the event in its stream
-  for (auto i : open_streams) {
-    auto s = get_stream(i);
-    if (auto e = events.find(i); e != events.end()) {
+  for (auto& s : open_streams) {
+    if (auto e = events.find(s.index); e != events.end()) {
       e->second.signal(s);
     }
     if (s.device == Device::gpu) {
@@ -335,10 +355,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
   // Make tracers from given primals
   std::vector<array> primals_;
   for (auto& p : primals) {
-    auto s = p.has_primitive() ? p.primitive().stream()
-                               : default_stream(default_device());
-    primals_.push_back(copy(p, s)); // Does not do a deep copy
-    primals_.back().set_tracer(true);
+    primals_.push_back(make_tracer(p));
   }
 
   // Pass tracer primals through the function
@@ -543,10 +560,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
 
   std::vector<array> primals_;
   for (auto& p : primals) {
-    auto s = p.has_primitive() ? p.primitive().stream()
-                               : default_stream(default_device());
-    primals_.push_back(copy(p, s)); // Does not do a deep copy
-    primals_.back().set_tracer(true);
+    primals_.push_back(make_tracer(p));
   }
   auto outputs = fun(primals_);
 

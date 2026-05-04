@@ -14,8 +14,10 @@ Devices and Streams
    set_default_device
    default_stream
    new_stream
+   new_thread_local_stream
    set_default_stream
    stream
    synchronize
+   clear_streams
    device_count
    device_info

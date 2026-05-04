@@ -325,6 +325,11 @@ void cutlass_grouped_gemm_unaligned(
     const array& indices,
     array& out,
     cu::CommandEncoder& encoder) {
+  if (group_count > 1024) {
+    throw std::runtime_error(
+        "[gather_mm] Group count can not be larger than 1024.");
+  }
+
   int K = a.shape(-1);
   int N = b.shape(-1);
 

@@ -31,7 +31,7 @@ void concatenate_gpu(
   flags.col_contiguous = false;
   flags.contiguous = false;
   auto& d = metal::device(s.device);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto concurrent_ctx = compute_encoder.start_concurrent();
   for (int i = 0; i < inputs.size(); i++) {
     array out_slice(inputs[i].shape(), out.dtype(), nullptr, {});
@@ -48,6 +48,7 @@ array compute_dynamic_offset(
     const std::vector<int>& axes,
     const Stream& s) {
   auto& d = metal::device(s.device);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   // Kernel to compute offset here.
   array offset({1}, int64, nullptr, {});
@@ -58,7 +59,7 @@ array compute_dynamic_offset(
   } else {
     offset.set_data(allocator::malloc(offset.itemsize()));
   }
-  d.add_temporary(offset, s.index);
+  compute_encoder.add_temporary(offset);
 
   auto dtype = indices.dtype();
   std::string lib_name = "compute_dynamic_offset_" + type_to_name(dtype);
@@ -83,7 +84,6 @@ array compute_dynamic_offset(
   });
   auto kernel = d.get_kernel(lib_name, lib);
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(indices, 0);
   compute_encoder.set_output_array(offset, 1);

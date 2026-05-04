@@ -24,9 +24,6 @@ namespace mlx::core {
     throw std::runtime_error(#func " has no CUDA implementation.");   \
   }
 
-NO_GPU(BlockMaskedMM)
-NO_GPU(FFT)
-NO_GPU(GatherQMM)
 NO_GPU_MULTI(LUF)
 NO_GPU_MULTI(QRF)
 NO_GPU_MULTI(SVD)
@@ -34,7 +31,6 @@ NO_GPU(Inverse)
 NO_GPU(Cholesky)
 NO_GPU_MULTI(Eig)
 NO_GPU_MULTI(Eigh)
-NO_GPU(MaskedScatter)
 
 namespace distributed {
 NO_GPU_MULTI(Send)

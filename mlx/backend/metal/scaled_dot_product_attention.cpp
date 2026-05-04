@@ -89,7 +89,7 @@ void sdpa_full_self_attention_nax(
       "_has_sinks_",
       (has_sinks ? 't' : 'n'));
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   auto kernel = get_steel_attention_nax_kernel(
       d,
@@ -252,7 +252,7 @@ void sdpa_full_self_attention_metal(
       "_has_sinks_",
       (has_sinks ? 't' : 'n'));
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   auto kernel = get_steel_attention_kernel(
       d,
@@ -378,7 +378,7 @@ void sdpa_vector(
   hash_name += has_sinks ? "_sinks" : "_nosinks";
 
   // Get the kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -495,9 +495,10 @@ void sdpa_vector_2pass(
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   sums.set_data(allocator::malloc(sums.nbytes()));
   maxs.set_data(allocator::malloc(maxs.nbytes()));
-  d.add_temporary(intermediate, s.index);
-  d.add_temporary(sums, s.index);
-  d.add_temporary(maxs, s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
+  compute_encoder.add_temporary(intermediate);
+  compute_encoder.add_temporary(sums);
+  compute_encoder.add_temporary(maxs);
 
   bool has_mask = mask.has_value();
   bool bool_mask = has_mask && (*mask).dtype() == bool_;
@@ -521,7 +522,6 @@ void sdpa_vector_2pass(
   hash_name += std::to_string(blocks);
 
   // Get the kernel
-  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
   check_kernel_threadgroup_size(kernel, group_dims, hash_name);
 
@@ -782,7 +782,7 @@ void ScaledDotProductAttention::eval_gpu(
         s, d, q, k, v, scale_, o, do_causal_, mask, sinks);
   }
 
-  d.add_temporaries(std::move(copies), s.index);
+  metal::get_command_encoder(s).add_temporaries(std::move(copies));
 }
 
 bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {

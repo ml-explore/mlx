@@ -389,7 +389,7 @@ void Compiled::eval_gpu(
     kernel_name += "_large";
   }
   auto kernel = d.get_kernel(kernel_name, lib);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Put the inputs in

@@ -2,6 +2,10 @@
 
 #pragma once
 
+#include <cassert>
+#include <optional>
+
+#include "mlx/backend/cuda/cuda_utils.h"
 #include "mlx/backend/cuda/device/config.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/dtype_utils.h"
@@ -17,14 +21,16 @@ class CommandEncoder;
 
 namespace fe = cudnn_frontend;
 
-#define CHECK_CUDNN_FE_ERROR(cmd)                                    \
-  do {                                                               \
-    auto error = cmd;                                                \
-    if (!error.is_good()) {                                          \
-      throw std::runtime_error(                                      \
-          fmt::format("{} failed: {}.", #cmd, error.get_message())); \
-    }                                                                \
-  } while (0)
+void check_cudnn_error(const char* name, cudnnStatus_t err);
+void check_cudnn_error(const char* name, fe::error_t err);
+
+#define CHECK_CUDNN_ERROR(cmd) check_cudnn_error(#cmd, (cmd))
+
+cudnnHandle_t get_cudnn_handle(cu::Device& device);
+
+void init_cudnn_handles_cache();
+void init_cudnn_conv_cache();
+void init_cudnn_sdpa_cache();
 
 // Return pointer alignment of |x|'s data.
 inline uint8_t get_alignment(const array& x) {
@@ -182,6 +188,9 @@ class DnnGraph : public fe::graph::Graph {
       const array& x);
 
   cudnnHandle_t handle_;
+  std::optional<CudaGraph> cached_cuda_graph_;
+  std::string cached_subgraph_key_;
+  bool cached_is_updatable_{true};
 };
 
 } // namespace mlx::core

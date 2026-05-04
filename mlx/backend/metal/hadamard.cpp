@@ -132,7 +132,7 @@ void hadamard_mn_contiguous(
 
   // Launch the strided transform for n1
   if (n1 > 1) {
-    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = metal::get_command_encoder(s);
     auto kernel = d.get_kernel("n1" + kname, lib);
     compute_encoder.set_compute_pipeline_state(kernel);
     compute_encoder.set_input_array(x, 0);
@@ -142,7 +142,7 @@ void hadamard_mn_contiguous(
   }
 
   // Launch the transform for n2
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel("n2" + kname, lib);
   compute_encoder.set_compute_pipeline_state(kernel);
   compute_encoder.set_input_array(n1 > 1 ? y : x, 0);

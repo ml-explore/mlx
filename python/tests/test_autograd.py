@@ -30,6 +30,24 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].item(), 4.0 * 1.0 + 2.0 * 3.0)
         self.assertEqual(out[1].item(), 4.0 * 1.0 + 6.0 * 3.0)
 
+    def test_jvp_comparison_tangent_dtype(self):
+        # Comparison op JVP tangents should preserve the input tangent's
+        # dtype (e.g. float32), not return bool. Using bool tangents causes
+        # downstream ops like negative to crash. (issue #3081)
+        x = mx.array([1.0, -2.0, 3.0])
+        t = mx.ones_like(x)
+
+        for op in [
+            mx.greater,
+            mx.less,
+            mx.equal,
+            mx.greater_equal,
+            mx.less_equal,
+            mx.not_equal,
+        ]:
+            _, tangents = mx.jvp(lambda x, _op=op: _op(x, 0.0), [x], [t])
+            self.assertEqual(tangents[0].dtype, mx.float32)
+
     def test_vjp(self):
         fun = lambda x: 2 * x
         out, dout = mx.vjp(fun, [mx.array(1.0)], [mx.array(2.0)])
@@ -282,65 +300,138 @@ class TestAutograd(mlx_tests.MLXTestCase):
             x[idx] = 2.0
             return x.sum()
 
-        dfdx = mx.grad(fun)(mx.array([1.0, 2.0, 3.0]), mx.array([1]))
-        self.assertTrue(mx.array_equal(dfdx, mx.array([1.0, 0.0, 1.0])))
+        dfdx = mx.grad(fun)(mx.array([1.0, 2.0, 3.0, 4.0]), mx.array([1, 3]))
+        self.assertTrue(mx.array_equal(dfdx, mx.array([1.0, 0.0, 1.0, 0.0])))
         self.assertEqual(dfdx.dtype, mx.float32)
 
-        y = mx.array([0.0, 1.0, 2.0])
+        y = mx.array([0.0, 1.0, 2.0, 3.0])
 
         def fun(x, idx):
             y[idx] = x
             return y.sum()
 
-        dfdx = mx.grad(fun)(mx.array([2.0]), mx.array([1]))
-        self.assertTrue(mx.array_equal(dfdx, mx.array([1.0])))
+        dfdx = mx.grad(fun)(mx.array([2.0, 3.0]), mx.array([1, 3]))
+        self.assertTrue(mx.array_equal(dfdx, mx.array([1.0, 1.0])))
         self.assertEqual(dfdx.dtype, mx.float32)
+
+    def test_scatter_add_vjp(self):
+        def fun(src, updates):
+            x = src.at[mx.array([1, 3])].add(updates)
+            return x
+
+        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
+        updates = mx.array([1.0, 2.0])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        mx.eval(vjps)
+
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([5.0, 7.0])))
 
     def test_scatter_max_vjp(self):
         def fun(src, updates):
-            x = src.at[1].maximum(updates)
+            x = src.at[mx.array([1, 3])].maximum(updates)
             return x
 
-        cotan = mx.array([4.0, 5.0, 6.0])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0]), mx.array([[3.0]])], [cotan])
+        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
+        updates = mx.array([1.0, 2.0])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
         mx.eval(vjps)
 
-        # Update larger than value
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 0.0, 6.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([5.0])))
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([0.0, 0.0])))
 
-        cotan = mx.array([[4.0], [5.0], [6.0]])
-        _, vjps = mx.vjp(
-            fun, [mx.array([[1.0], [2.0], [3.0]]), mx.array([[[2.0]]])], [cotan]
-        )
+        updates = mx.array([5.0, 6.0])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
         mx.eval(vjps)
 
-        # Update and value are equal
-        self.assertTrue(mx.allclose(vjps[0], mx.array([[4.0], [5.0], [6.0]])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([[[5.0]]])))
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 0.0, 6.0, 0.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([5.0, 7.0])))
 
     def test_scatter_min_vjp(self):
         def fun(src, updates):
-            x = src.at[1].minimum(updates)
+            x = src.at[mx.array([1, 3])].minimum(updates)
             return x
 
-        cotan = mx.array([4.0, 5.0, 6.0])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0]), mx.array([[3.0]])], [cotan])
+        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
+        updates = mx.array([5.0, 6.0])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
         mx.eval(vjps)
 
-        # Update larger than value
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([0.0])))
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([0.0, 0.0])))
 
-        cotan = mx.array([[4.0], [5.0], [6.0]])
-        _, vjps = mx.vjp(
-            fun, [mx.array([[1.0], [2.0], [3.0]]), mx.array([[[2.0]]])], [cotan]
-        )
+        updates = mx.array([1.0, 1.0])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
         mx.eval(vjps)
 
-        # Update and value are equal
-        self.assertTrue(mx.allclose(vjps[0], mx.array([[4.0], [5.0], [6.0]])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([[[5.0]]])))
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 0.0, 6.0, 0.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([5.0, 7.0])))
+
+    def test_slice_update_max_vjp(self):
+        def fun(src, updates):
+            x = src.at[1:3].maximum(updates)
+            return x
+
+        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
+        updates = mx.array([[1.0, 2.0]])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        mx.eval(vjps)
+
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([[0.0, 0.0]])))
+
+        updates = mx.array([[5.0, 6.0]])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        mx.eval(vjps)
+
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 0.0, 0.0, 7.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([[5.0, 6.0]])))
+
+    def test_slice_update_min_vjp(self):
+        def fun(src, updates):
+            x = src.at[1:3].minimum(updates)
+            return x
+
+        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
+        updates = mx.array([[5.0, 6.0]])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        mx.eval(vjps)
+
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([[0.0, 0.0]])))
+
+        updates = mx.array([[1.0, 1.0]])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        mx.eval(vjps)
+
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 0.0, 0.0, 7.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([[5.0, 6.0]])))
+
+    def test_slice_update_add_vjp(self):
+        def fun(src, updates):
+            x = src.at[1:3].add(updates)
+            return x
+
+        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
+        updates = mx.array([[1.0, 2.0]])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        mx.eval(vjps)
+
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([[5.0, 6.0]])))
+
+    def test_slice_update_multiply_vjp(self):
+        def fun(src, updates):
+            x = src.at[1:3].multiply(updates)
+            return x
+
+        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
+        updates = mx.array([[2.0, 3.0]])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        mx.eval(vjps)
+
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 10.0, 18.0, 7.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([[10.0, 18.0]])))
 
     def test_split_against_slice(self):
         def f_split(x):
@@ -874,6 +965,27 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
         out, jout = mx.jvp(mx.max, primals=(a,), tangents=(b,))
         self.assertEqual(jout[0].item(), 0)
+
+    def test_complex_prod_vjp(self):
+        def prod(x):
+            return x.prod(axis=0)
+
+        primal = mx.random.normal((2, 20), dtype=mx.complex64)
+        cotangent = mx.random.normal((20,), dtype=mx.complex64)
+
+        _, vjps = mx.vjp(prod, [primal], [cotangent])
+
+        expected = mx.stack(
+            [mx.conj(primal[1]) * cotangent, mx.conj(primal[0]) * cotangent]
+        )
+
+        # Check against hand-computed vjps
+        self.assertTrue(mx.array_equal(vjps[0], expected))
+
+        # Ensure that prod agrees with multiply for complex values
+        _, vjps_multiply = mx.vjp(mx.multiply, [primal[0], primal[1]], [cotangent])
+
+        self.assertTrue(mx.array_equal(mx.stack(vjps_multiply), vjps[0]))
 
 
 if __name__ == "__main__":

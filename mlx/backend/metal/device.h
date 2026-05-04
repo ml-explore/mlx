@@ -11,6 +11,7 @@
 #include <unordered_set>
 
 #include "mlx/array.h"
+#include "mlx/backend/metal/resident.h"
 #include "mlx/device.h"
 
 namespace mlx::core::metal {
@@ -18,10 +19,13 @@ namespace mlx::core::metal {
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
-struct DeviceStream;
+class Device;
 
-struct MLX_API CommandEncoder {
-  explicit CommandEncoder(DeviceStream& stream);
+class MLX_API CommandEncoder {
+ public:
+  CommandEncoder(Device& d, int index, ResidencySet& residency_set);
+  ~CommandEncoder();
+
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
@@ -40,29 +44,26 @@ struct MLX_API CommandEncoder {
     CommandEncoder& enc;
   };
 
+  void set_buffer(const MTL::Buffer* buf, int idx, int64_t offset = 0);
   void set_input_array(const array& a, int idx, int64_t offset = 0);
   void set_output_array(array& a, int idx, int64_t offset = 0);
   void register_output_array(const array& a);
+
+  void add_temporary(array arr);
+  void add_temporaries(std::vector<array> arrays);
+
   void dispatch_threadgroups(MTL::Size grid_dims, MTL::Size group_dims);
   void dispatch_threads(MTL::Size grid_dims, MTL::Size group_dims);
   void maybeInsertBarrier();
-  void set_buffer(const MTL::Buffer* buf, int idx, int64_t offset = 0);
 
   void set_compute_pipeline_state(MTL::ComputePipelineState* kernel) {
-    enc_->setComputePipelineState(kernel);
-  }
-
-  void wait_for_fence(MTL::Fence* fence) {
-    enc_->waitForFence(fence);
-  }
-
-  void update_fence(MTL::Fence* fence) {
-    enc_->updateFence(fence);
+    get_command_encoder()->setComputePipelineState(kernel);
   }
 
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
   void set_vector_bytes(const Vec& vec, size_t nelems, int idx) {
-    enc_->setBytes(vec.data(), nelems * sizeof(typename Vec::value_type), idx);
+    get_command_encoder()->setBytes(
+        vec.data(), nelems * sizeof(typename Vec::value_type), idx);
   }
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
   void set_vector_bytes(const Vec& vec, int idx) {
@@ -71,79 +72,64 @@ struct MLX_API CommandEncoder {
 
   template <typename T>
   void set_bytes(const T* v, int n, int idx) {
-    return enc_->setBytes(v, n * sizeof(T), idx);
+    return get_command_encoder()->setBytes(v, n * sizeof(T), idx);
   }
 
   template <typename T>
   void set_bytes(const T& v, int idx) {
-    return enc_->setBytes(&v, sizeof(T), idx);
+    return get_command_encoder()->setBytes(&v, sizeof(T), idx);
   }
 
   void set_threadgroup_memory_length(size_t length, int idx) {
-    enc_->setThreadgroupMemoryLength(length, idx);
+    get_command_encoder()->setThreadgroupMemoryLength(length, idx);
   }
 
   ConcurrentContext start_concurrent() {
     return ConcurrentContext(*this);
   }
-  ~CommandEncoder();
-
-  // Inputs to all kernels in the encoder including temporaries
-  std::unordered_set<const void*>& inputs() {
-    return all_inputs_;
-  };
-
-  // Outputs of all kernels in the encoder including temporaries
-  std::unordered_set<const void*>& outputs() {
-    return all_outputs_;
-  };
 
   void barrier();
+  void end_encoding();
+  bool needs_commit() const;
+  void commit();
+  void synchronize();
+
+  MTL::CommandQueue* get_command_queue() const {
+    return queue_.get();
+  }
+  MTL::CommandBuffer* get_command_buffer() const {
+    return buffer_.get();
+  }
 
  private:
-  DeviceStream& stream_;
-  MTL::ComputeCommandEncoder* enc_;
+  MTL::ComputeCommandEncoder* get_command_encoder();
+
+  Device& device_;
+  bool exiting_{false};
+
+  // Buffer that stores encoded commands.
+  NS::SharedPtr<MTL::CommandQueue> queue_;
+  NS::SharedPtr<MTL::CommandBuffer> buffer_;
+  int buffer_ops_{0};
+  size_t buffer_sizes_{0};
+
+  // Encoder for issuing GPU commands.
+  // The members are used within a single ComputeCommandEncoder and will be
+  // reset after calling end_encoding().
+  NS::SharedPtr<MTL::ComputeCommandEncoder> encoder_;
+  NS::SharedPtr<MTL::Fence> fence_;
   bool needs_barrier_{false};
   bool concurrent_{false};
+  std::vector<array> temporaries_;
   std::unordered_set<MTL::Resource*> prev_outputs_;
   std::unordered_set<MTL::Resource*> next_outputs_;
   std::unordered_set<MTL::Resource*> concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
   std::unordered_set<const void*> all_outputs_;
-};
 
-struct Fence {
-  Fence(MTL::Fence* fence) : fence(fence) {}
-  ~Fence() {
-    fence->release();
-  }
-  MTL::Fence* fence;
-};
-
-struct DeviceStream {
-  DeviceStream(MTL::CommandQueue* queue) : queue(queue) {};
-  ~DeviceStream() {
-    queue->release();
-    if (buffer != nullptr) {
-      buffer->release();
-    }
-  };
-  MTL::CommandQueue* queue;
-  // A map of prior command encoder outputs to their corresponding fence
-  std::unordered_map<const void*, std::shared_ptr<Fence>> outputs;
-  // Used to allow thread-safe access to the outputs map
-  std::mutex fence_mtx;
-
-  // Data updated between command buffers
-  MTL::CommandBuffer* buffer{nullptr};
-  int buffer_ops{0};
-  size_t buffer_sizes{0};
-
-  // The command encoder, fence, and temporaries are updated between command
-  // encoders
-  std::unique_ptr<CommandEncoder> encoder{nullptr};
-  std::shared_ptr<Fence> fence;
-  std::vector<array> temporaries;
+  // A map of prior command encoder outputs to their corresponding fence.
+  std::unordered_map<const void*, NS::SharedPtr<MTL::Fence>> prev_ce_outputs_;
+  std::mutex outputs_mtx_;
 };
 
 class MLX_API Device {
@@ -154,26 +140,18 @@ class MLX_API Device {
   ~Device();
 
   MTL::Device* mtl_device() {
-    return device_;
+    return device_.get();
   };
 
-  const std::string& get_architecture() {
+  const std::string& get_architecture() const {
     return arch_;
   }
-
   int get_architecture_gen() const {
     return arch_gen_;
   }
-
-  void new_queue(int index);
-
-  MTL::CommandQueue* get_queue(Stream stream);
-
-  MTL::CommandBuffer* get_command_buffer(int index);
-  bool command_buffer_needs_commit(int index);
-  void commit_command_buffer(int index);
-  CommandEncoder& get_command_encoder(int index);
-  void end_encoding(int index);
+  std::tuple<int, int> get_max_ops_mb_per_buffer() const {
+    return std::make_tuple(max_ops_per_buffer_, max_mb_per_buffer_);
+  }
 
   MTL::Library* get_library(
       const std::string& name,
@@ -198,40 +176,29 @@ class MLX_API Device {
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
 
-  MTL::ArgumentEncoder* argument_encoder(
-      const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
-
-  // Record temporary arrays for the given stream index
-  void add_temporary(array arr, int index);
-  void add_temporaries(std::vector<array> arrays, int index);
-
-  void set_residency_set(const MTL::ResidencySet* residency_set);
+  ResidencySet& residency_set() {
+    return residency_set_;
+  }
 
  private:
-  DeviceStream& get_stream_(int index) {
-    return stream_map_.find(index)->second;
-  }
-  MTL::Library* get_library_cache_(const std::string& name);
+  NS::SharedPtr<MTL::Library> build_library_(const std::string& source_string);
 
-  MTL::Library* get_library_(const std::string& name);
-  MTL::Library* build_library_(const std::string& source_string);
-
-  MTL::Function* get_function_(const std::string& name, MTL::Library* mtl_lib);
-
-  MTL::Function* get_function_(
+  NS::SharedPtr<MTL::Function> get_function_(
+      const std::string& name,
+      MTL::Library* mtl_lib);
+  NS::SharedPtr<MTL::Function> get_function_(
       const std::string& name,
       const std::string& specialized_name,
       const MTLFCList& func_consts,
       MTL::Library* mtl_lib);
 
-  MTL::LinkedFunctions* get_linked_functions_(
+  NS::SharedPtr<MTL::LinkedFunctions> get_linked_functions_(
       const std::vector<MTL::Function*>& funcs);
 
-  MTL::ComputePipelineState* get_kernel_(
+  NS::SharedPtr<MTL::ComputePipelineState> get_kernel_(
       const std::string& name,
       const MTL::Function* mtl_function);
-
-  MTL::ComputePipelineState* get_kernel_(
+  NS::SharedPtr<MTL::ComputePipelineState> get_kernel_(
       const std::string& name,
       const MTL::Function* mtl_function,
       const MTL::LinkedFunctions* linked_functions);
@@ -243,18 +210,17 @@ class MLX_API Device {
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
 
-  MTL::Device* device_;
-  std::unordered_map<int32_t, DeviceStream> stream_map_;
+  NS::SharedPtr<MTL::Device> device_;
+  ResidencySet residency_set_;
 
   std::shared_mutex kernel_mtx_;
   std::shared_mutex library_mtx_;
-  std::unordered_map<std::string, MTL::Library*> library_map_;
-  MTL::Library* default_library_;
+  std::unordered_map<std::string, NS::SharedPtr<MTL::Library>> library_map_;
+  NS::SharedPtr<MTL::Library> default_library_;
   std::unordered_map<
       MTL::Library*,
-      std::unordered_map<std::string, MTL::ComputePipelineState*>>
+      std::unordered_map<std::string, NS::SharedPtr<MTL::ComputePipelineState>>>
       library_kernels_;
-  const MTL::ResidencySet* residency_set_{nullptr};
   std::string arch_;
   int arch_gen_;
   int max_ops_per_buffer_;
@@ -262,28 +228,11 @@ class MLX_API Device {
 };
 
 MLX_API Device& device(mlx::core::Device);
+MLX_API CommandEncoder& get_command_encoder(Stream s);
 
-std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
+std::unordered_map<int, CommandEncoder>& get_command_encoders();
+NS::SharedPtr<NS::AutoreleasePool> new_scoped_memory_pool();
 
-inline bool is_nax_available() {
-#ifdef MLX_METAL_NO_NAX
-  return false;
-#else
-  auto _check_nax = []() {
-    bool can_use_nax = false;
-    if (__builtin_available(
-            macOS 26.2, iOS 26.2, tvOS 26.2, visionOS 26.2, *)) {
-      can_use_nax = true;
-    }
-    auto& d = metal::device(mlx::core::Device::gpu);
-    auto arch = d.get_architecture().back();
-    auto gen = d.get_architecture_gen();
-    can_use_nax &= gen >= (arch == 'p' ? 18 : 17);
-    return can_use_nax;
-  };
-  static bool is_nax_available_ = _check_nax();
-  return is_nax_available_;
-#endif
-}
+bool is_nax_available();
 
 } // namespace mlx::core::metal

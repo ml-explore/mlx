@@ -5,7 +5,7 @@
 #include <iostream>
 #include <sstream>
 
-#include "mlx/distributed/jaccl/utils.h"
+#include "jaccl/rdma.h"
 
 #define LOAD_SYMBOL(symbol, variable)                               \
   {                                                                 \
@@ -31,7 +31,7 @@ void* page_aligned_alloc(size_t num_bytes) {
 
 } // namespace
 
-namespace mlx::core::distributed::jaccl {
+namespace jaccl {
 
 IBVWrapper::IBVWrapper() {
   librdma_handle_ = dlopen("librdma.dylib", RTLD_NOW | RTLD_GLOBAL);
@@ -182,11 +182,20 @@ const Destination& Connection::info() {
   ibv_port_attr port_attr;
   ibv().query_port(ctx, 1, &port_attr);
   ibv_gid gid;
-  ibv().query_gid(ctx, 1, 1, &gid);
+  for (int i = 0; i < port_attr.gid_tbl_len; i++) {
+    ibv_gid tmp;
+    if (ibv().query_gid(ctx, 1, i, &tmp) == 0) {
+      if (*(uint64_t*)&tmp.raw[0] == 0 && *(uint16_t*)&tmp.raw[8] == 0 &&
+          *(uint16_t*)&tmp.raw[10] == 0xffff) {
+        gid = tmp;
+        break;
+      }
+    }
+  }
 
   src.local_id = port_attr.lid;
   src.queue_pair_number = queue_pair->qp_num;
-  src.packet_sequence_number = 7; // TODO: Change to sth random
+  src.packet_sequence_number = 7;
   src.global_identifier = gid;
 
   return src;
@@ -287,10 +296,10 @@ std::vector<Connection> create_connections(
 
 SideChannel::SideChannel(int rank, int size, const char* addr)
     : rank_(rank), size_(size) {
-  auto address = detail::parse_address(addr);
+  auto address = parse_address(addr);
 
   if (rank_ == 0) {
-    detail::TCPSocket server(IBV_TAG);
+    TCPSocket server(IBV_TAG);
     server.listen(IBV_TAG, address);
 
     for (int i = 0; i < size - 1; i++) {
@@ -311,7 +320,7 @@ SideChannel::SideChannel(int rank, int size, const char* addr)
     }
   } else {
     sockets_.push_back(
-        detail::TCPSocket::connect(
+        TCPSocket::connect(
             IBV_TAG, address, 4, 1000, [](int attempt, int wait) {
               std::cerr << IBV_TAG << " Connection attempt " << attempt
                         << " waiting " << wait << " ms" << std::endl;
@@ -326,4 +335,4 @@ SideChannel::SideChannel(SideChannel&& sc)
   sc.size_ = -1;
 }
 
-} // namespace mlx::core::distributed::jaccl
+} // namespace jaccl

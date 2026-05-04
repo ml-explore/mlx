@@ -65,5 +65,5 @@ runs:
         DEVICE: gpu
       run: |
         echo "::group::CPP tests - GPU"
-        ./build/tests/tests -sfe="*fft_tests.cpp,*linalg_tests.cpp"
+        ./build/tests/tests -sfe="*linalg_tests.cpp"
         echo "::endgroup::"

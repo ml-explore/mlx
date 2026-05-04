@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <cstdlib>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -16,6 +17,8 @@ Stream to_stream(StreamOrDevice s) {
     return default_stream(default_device());
   } else if (std::holds_alternative<Device>(s)) {
     return default_stream(std::get<Device>(s));
+  } else if (std::holds_alternative<ThreadLocalStream>(s)) {
+    return stream_from_thread_local_stream(std::get<ThreadLocalStream>(s));
   } else {
     return std::get<Stream>(s);
   }
@@ -57,29 +60,62 @@ inline void PrintFormatter::print(std::ostream& os, uint64_t val) {
   os << val;
 }
 inline void PrintFormatter::print(std::ostream& os, float16_t val) {
-  os << val;
+  if (format_options.precision == -1) {
+    os << val;
+  } else {
+    os << std::fixed << std::setprecision(format_options.precision) << val;
+  }
 }
 inline void PrintFormatter::print(std::ostream& os, bfloat16_t val) {
-  os << val;
+  if (format_options.precision == -1) {
+    os << val;
+  } else {
+    os << std::fixed << std::setprecision(format_options.precision) << val;
+  }
 }
 inline void PrintFormatter::print(std::ostream& os, float val) {
-  os << val;
+  if (format_options.precision == -1) {
+    os << val;
+  } else {
+    os << std::fixed << std::setprecision(format_options.precision) << val;
+  }
 }
 inline void PrintFormatter::print(std::ostream& os, double val) {
-  os << val;
+  if (format_options.precision == -1) {
+    os << val;
+  } else {
+    os << std::fixed << std::setprecision(format_options.precision) << val;
+  }
 }
 inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
-  os << val.real();
-  if (val.imag() >= 0 || std::isnan(val.imag())) {
-    os << "+" << val.imag() << "j";
+  if (format_options.precision == -1) {
+    os << val.real();
+    if (val.imag() >= 0 || std::isnan(val.imag())) {
+      os << "+" << val.imag() << "j";
+    } else {
+      os << "-" << -val.imag() << "j";
+    }
   } else {
-    os << "-" << -val.imag() << "j";
+    os << std::fixed << std::setprecision(format_options.precision)
+       << val.real();
+    if (val.imag() >= 0 || std::isnan(val.imag())) {
+      os << "+" << std::fixed << std::setprecision(format_options.precision)
+         << val.imag() << "j";
+    } else {
+      os << "-" << std::fixed << std::setprecision(format_options.precision)
+         << -val.imag() << "j";
+    }
   }
 }
 
 PrintFormatter& get_global_formatter() {
   static PrintFormatter formatter;
   return formatter;
+}
+
+void set_printoptions(PrintOptions options) {
+  auto& formatter = get_global_formatter();
+  formatter.format_options = options;
 }
 
 void abort_with_exception(const std::exception& error) {

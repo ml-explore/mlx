@@ -25,7 +25,7 @@ runs:
     - name: Build Python package
       shell: bash
       run: |
-        pip install auditwheel patchelf build
+        pip install auditwheel patchelf "build<=1.4.2"
         python setup.py clean --all
         MLX_BUILD_STAGE=1 python -m build -w
         auditwheel repair dist/mlx-*.whl \

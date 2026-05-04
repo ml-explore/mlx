@@ -1941,6 +1941,14 @@ class TestLayers(mlx_tests.MLXTestCase):
         h_out = layer(inp, h_out[-1, :])
         self.assertEqual(h_out.shape, (44, 12))
 
+        # hidden=None should be equivalent to hidden=zeros (issue #3249)
+        for bias in [True, False]:
+            layer = nn.GRU(5, 12, bias=bias)
+            inp = mx.random.normal((2, 25, 5))
+            h_none = layer(inp)
+            h_zeros = layer(inp, hidden=mx.zeros((2, 12)))
+            self.assertTrue(mx.allclose(h_none, h_zeros).item())
+
     def test_lstm(self):
         layer = nn.LSTM(5, 12)
         inp = mx.random.normal((2, 25, 5))
@@ -1997,6 +2005,81 @@ class TestLayers(mlx_tests.MLXTestCase):
         x = mx.random.normal(shape=(2, 5, 32))
         out = attn(x, x, x)
         self.assertEqual(out.shape, x.shape)
+
+    def test_transformer_encoder_layer(self):
+        # Test norm_first=True (default)
+        layer = nn.TransformerEncoderLayer(dims=32, num_heads=4)
+        x = mx.random.normal(shape=(2, 5, 32))
+        out = layer(x, mask=None)
+        self.assertEqual(out.shape, x.shape)
+
+        # Test norm_first=False
+        layer = nn.TransformerEncoderLayer(dims=32, num_heads=4, norm_first=False)
+        out = layer(x, mask=None)
+        self.assertEqual(out.shape, x.shape)
+
+        # Test with causal mask
+        mask = nn.MultiHeadAttention.create_additive_causal_mask(5)
+        out = layer(x, mask=mask)
+        self.assertEqual(out.shape, x.shape)
+
+        # Test with custom mlp_dims
+        layer = nn.TransformerEncoderLayer(dims=32, num_heads=4, mlp_dims=64)
+        out = layer(x, mask=None)
+        self.assertEqual(out.shape, x.shape)
+
+    def test_transformer_decoder_layer(self):
+        dims = 32
+        num_heads = 4
+        x = mx.random.normal(shape=(2, 5, dims))
+        memory = mx.random.normal(shape=(2, 8, dims))
+
+        # Test norm_first=True (default)
+        layer = nn.TransformerDecoderLayer(dims=dims, num_heads=num_heads)
+        out = layer(x, memory, x_mask=None, memory_mask=None)
+        self.assertEqual(out.shape, x.shape)
+
+        # Test norm_first=False
+        layer = nn.TransformerDecoderLayer(
+            dims=dims, num_heads=num_heads, norm_first=False
+        )
+        out = layer(x, memory, x_mask=None, memory_mask=None)
+        self.assertEqual(out.shape, x.shape)
+
+        # Test with masks
+        x_mask = nn.MultiHeadAttention.create_additive_causal_mask(5)
+        out = layer(x, memory, x_mask=x_mask, memory_mask=None)
+        self.assertEqual(out.shape, x.shape)
+
+        # Test with custom mlp_dims
+        layer = nn.TransformerDecoderLayer(dims=dims, num_heads=num_heads, mlp_dims=64)
+        out = layer(x, memory, x_mask=None, memory_mask=None)
+        self.assertEqual(out.shape, x.shape)
+
+    def test_transformer_encoder(self):
+        encoder = nn.TransformerEncoder(num_layers=2, dims=32, num_heads=4)
+        x = mx.random.normal(shape=(2, 5, 32))
+        out = encoder(x, mask=None)
+        self.assertEqual(out.shape, x.shape)
+
+    def test_transformer_decoder(self):
+        decoder = nn.TransformerDecoder(num_layers=2, dims=32, num_heads=4)
+        x = mx.random.normal(shape=(2, 5, 32))
+        memory = mx.random.normal(shape=(2, 8, 32))
+        out = decoder(x, memory, x_mask=None, memory_mask=None)
+        self.assertEqual(out.shape, x.shape)
+
+    def test_transformer(self):
+        model = nn.Transformer(
+            dims=32,
+            num_heads=4,
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+        )
+        src = mx.random.normal(shape=(2, 8, 32))
+        tgt = mx.random.normal(shape=(2, 5, 32))
+        out = model(src, tgt, src_mask=None, tgt_mask=None, memory_mask=None)
+        self.assertEqual(out.shape, tgt.shape)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,6 @@
 // Copyright © 2023 Apple Inc.
+#include <cmath>
+#include <functional>
 #include <numeric>
 #include <set>
 
@@ -9,12 +11,30 @@
 
 namespace mlx::core::fft {
 
+double fft_scale_factor(const Shape& n, FFTNorm norm, bool inverse) {
+  if (n.empty()) {
+    return 1.0;
+  }
+  double n_elements =
+      std::accumulate(n.begin(), n.end(), 1.0, std::multiplies<double>());
+  switch (norm) {
+    case FFTNorm::Backward:
+      return 1.0;
+    case FFTNorm::Ortho:
+      return inverse ? std::sqrt(n_elements) : 1.0 / std::sqrt(n_elements);
+    case FFTNorm::Forward:
+      return inverse ? n_elements : 1.0 / n_elements;
+  }
+  throw std::invalid_argument("[fftn] Invalid FFT normalization mode.");
+}
+
 array fft_impl(
     const array& a,
     Shape n,
     const std::vector<int>& axes,
     bool real,
     bool inverse,
+    FFTNorm norm,
     StreamOrDevice s) {
   if (a.ndim() < 1) {
     throw std::invalid_argument(
@@ -91,11 +111,16 @@ array fft_impl(
 
   auto in_type = real && !inverse ? float32 : complex64;
   auto out_type = real && inverse ? float32 : complex64;
-  return array(
+  auto out = array(
       out_shape,
       out_type,
       std::make_shared<FFT>(to_stream(s), valid_axes, inverse, real),
       {astype(in, in_type, s)});
+  auto scale = fft_scale_factor(n, norm, inverse);
+  if (scale != 1.0) {
+    return multiply(out, array(scale, out.dtype()), s);
+  }
+  return out;
 }
 
 array fft_impl(
@@ -103,6 +128,7 @@ array fft_impl(
     const std::vector<int>& axes,
     bool real,
     bool inverse,
+    FFTNorm norm,
     StreamOrDevice s) {
   Shape n;
   for (auto ax : axes) {
@@ -111,82 +137,107 @@ array fft_impl(
   if (real && inverse && a.ndim() > 0) {
     n.back() = (n.back() - 1) * 2;
   }
-  return fft_impl(a, n, axes, real, inverse, s);
+  return fft_impl(a, n, axes, real, inverse, norm, s);
 }
 
-array fft_impl(const array& a, bool real, bool inverse, StreamOrDevice s) {
+array fft_impl(
+    const array& a,
+    bool real,
+    bool inverse,
+    FFTNorm norm,
+    StreamOrDevice s) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);
-  return fft_impl(a, axes, real, inverse, s);
+  return fft_impl(a, axes, real, inverse, norm, s);
 }
 
 array fftn(
     const array& a,
     const Shape& n,
     const std::vector<int>& axes,
+    FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, n, axes, false, false, s);
+  return fft_impl(a, n, axes, false, false, norm, s);
 }
 array fftn(
     const array& a,
     const std::vector<int>& axes,
+    FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, axes, false, false, s);
+  return fft_impl(a, axes, false, false, norm, s);
 }
-array fftn(const array& a, StreamOrDevice s /* = {} */) {
-  return fft_impl(a, false, false, s);
+array fftn(
+    const array& a,
+    FFTNorm norm /* = FFTNorm::Backward */,
+    StreamOrDevice s /* = {} */) {
+  return fft_impl(a, false, false, norm, s);
 }
 
 array ifftn(
     const array& a,
     const Shape& n,
     const std::vector<int>& axes,
+    FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, n, axes, false, true, s);
+  return fft_impl(a, n, axes, false, true, norm, s);
 }
 array ifftn(
     const array& a,
     const std::vector<int>& axes,
+    FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, axes, false, true, s);
+  return fft_impl(a, axes, false, true, norm, s);
 }
-array ifftn(const array& a, StreamOrDevice s /* = {} */) {
-  return fft_impl(a, false, true, s);
+array ifftn(
+    const array& a,
+    FFTNorm norm /* = FFTNorm::Backward */,
+    StreamOrDevice s /* = {} */) {
+  return fft_impl(a, false, true, norm, s);
 }
 
 array rfftn(
     const array& a,
     const Shape& n,
     const std::vector<int>& axes,
+    FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, n, axes, true, false, s);
+  return fft_impl(a, n, axes, true, false, norm, s);
 }
 array rfftn(
     const array& a,
     const std::vector<int>& axes,
+    FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, axes, true, false, s);
+  return fft_impl(a, axes, true, false, norm, s);
 }
-array rfftn(const array& a, StreamOrDevice s /* = {} */) {
-  return fft_impl(a, true, false, s);
+array rfftn(
+    const array& a,
+    FFTNorm norm /* = FFTNorm::Backward */,
+    StreamOrDevice s /* = {} */) {
+  return fft_impl(a, true, false, norm, s);
 }
 
 array irfftn(
     const array& a,
     const Shape& n,
     const std::vector<int>& axes,
+    FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, n, axes, true, true, s);
+  return fft_impl(a, n, axes, true, true, norm, s);
 }
 array irfftn(
     const array& a,
     const std::vector<int>& axes,
+    FFTNorm norm /* = FFTNorm::Backward */,
     StreamOrDevice s /* = {} */) {
-  return fft_impl(a, axes, true, true, s);
+  return fft_impl(a, axes, true, true, norm, s);
 }
 
-array irfftn(const array& a, StreamOrDevice s /* = {} */) {
-  return fft_impl(a, true, true, s);
+array irfftn(
+    const array& a,
+    FFTNorm norm /* = FFTNorm::Backward */,
+    StreamOrDevice s /* = {} */) {
+  return fft_impl(a, true, true, norm, s);
 }
 
 array fftshift(
@@ -257,6 +308,34 @@ array ifftshift(const array& a, StreamOrDevice s /* = {} */) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);
   return ifftshift(a, axes, s);
+}
+
+array fftfreq(int n, double d /* = 1.0 */, StreamOrDevice s /* = {} */) {
+  if (n <= 0) {
+    throw std::invalid_argument("[fftfreq] `n` must be greater than 0.");
+  }
+  if (d == 0.0) {
+    throw std::invalid_argument("[fftfreq] `d` must be non-zero.");
+  }
+  auto pos = arange(0, (n + 1) / 2, float32, s);
+  auto neg = arange(-(n / 2), 0, float32, s);
+  auto freqs = concatenate({pos, neg}, s);
+  auto scale =
+      array(static_cast<float>(1.0 / (static_cast<double>(n) * d)), float32);
+  return multiply(freqs, scale, s);
+}
+
+array rfftfreq(int n, double d /* = 1.0 */, StreamOrDevice s /* = {} */) {
+  if (n <= 0) {
+    throw std::invalid_argument("[rfftfreq] `n` must be greater than 0.");
+  }
+  if (d == 0.0) {
+    throw std::invalid_argument("[rfftfreq] `d` must be non-zero.");
+  }
+  auto freqs = arange(0, n / 2 + 1, float32, s);
+  auto scale =
+      array(static_cast<float>(1.0 / (static_cast<double>(n) * d)), float32);
+  return multiply(freqs, scale, s);
 }
 
 } // namespace mlx::core::fft

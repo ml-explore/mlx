@@ -44,6 +44,11 @@ TEST_CASE("test fft basics") {
     CHECK_EQ(y.size(), x.size());
     CHECK(array_equal(y, array(expected)).item<bool>());
 
+    auto y_ortho = fft::fft(x, -1, fft::FFTNorm::Ortho);
+    auto y_forward = fft::fft(x, -1, fft::FFTNorm::Forward);
+    CHECK(allclose(y_ortho, y * array(0.5f), 1e-6, 1e-6).item<bool>());
+    CHECK(allclose(y_forward, y * array(0.25f), 1e-6, 1e-6).item<bool>());
+
     y = fft::ifft(x);
     std::initializer_list<complex64_t> expected_inv = {
         {1.5, 0.0},
@@ -52,6 +57,12 @@ TEST_CASE("test fft basics") {
         {-0.5, 0.5},
     };
     CHECK(array_equal(y, array(expected_inv)).item<bool>());
+
+    auto yi = fft::ifft(x);
+    auto yi_ortho = fft::ifft(x, -1, fft::FFTNorm::Ortho);
+    auto yi_forward = fft::ifft(x, -1, fft::FFTNorm::Forward);
+    CHECK(allclose(yi_ortho, yi * array(2.0f), 1e-6, 1e-6).item<bool>());
+    CHECK(allclose(yi_forward, yi * array(4.0f), 1e-6, 1e-6).item<bool>());
   }
 
   {
@@ -126,8 +137,11 @@ TEST_CASE("test fftn") {
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, -4}), std::invalid_argument);
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, 0}), std::invalid_argument);
   CHECK_THROWS_AS(fft::fftn(x, {5, 5, 5}, {0}), std::invalid_argument);
-  CHECK_THROWS_AS(fft::fftn(x, {0}, {}, {}), std::invalid_argument);
-  CHECK_THROWS_AS(fft::fftn(x, {1, -1}, {}, {}), std::invalid_argument);
+  CHECK_THROWS_AS(
+      fft::fftn(x, {0}, {}, fft::FFTNorm::Backward, {}), std::invalid_argument);
+  CHECK_THROWS_AS(
+      fft::fftn(x, {1, -1}, {}, fft::FFTNorm::Backward, {}),
+      std::invalid_argument);
 
   // Test 2D FFT
   {
@@ -192,6 +206,21 @@ TEST_CASE("test fftn") {
     y = fft::irfftn(x);
     CHECK_EQ(y.shape(), Shape{5, 8});
     CHECK_EQ(y.dtype(), float32);
+  }
+
+  // Test non-contiguous layouts and axes that are not physically last.
+  {
+    x = astype(
+        transpose(reshape(arange(24, float32), {2, 3, 4}), {1, 2, 0}),
+        complex64);
+    auto y = fft::fftn(x, {2, 0});
+    CHECK_EQ(y.shape(), x.shape());
+    CHECK(allclose(fft::ifftn(y, {2, 0}), x, 1e-5, 1e-5).item<bool>());
+
+    auto r = transpose(reshape(arange(60, float32), {3, 4, 5}), {1, 2, 0});
+    auto yr = fft::rfftn(r, {2, 0});
+    CHECK_EQ(yr.shape(), Shape{3, 5, 3});
+    CHECK(allclose(fft::irfftn(yr, {2, 0}), r, 1e-5, 1e-5).item<bool>());
   }
 }
 

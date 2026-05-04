@@ -25,19 +25,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     biases = inputs[3];
   }
 
-  auto call_qmm_sm90 = [&]() {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    qmm_sm90(x, w, scales, *biases, out, bits_, group_size_, encoder, s);
-  };
-  auto call_fp_qmv = [&]() {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    fp_qmv(x, w, scales, out, bits_, group_size_, encoder, s);
-  };
-  auto call_qmv = [&]() {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    qmv(x, w, scales, biases, out, bits_, group_size_, mode_, encoder);
-  };
-
   auto supports = [&](auto&& f) {
     return f(
         x,
@@ -52,34 +39,87 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         encoder.device());
   };
   bool can_use_qmm_sm90 = supports(supports_qmm_sm90);
+  bool can_use_qmm_sm80 = supports(supports_qmm_sm80);
+  bool can_use_qmm_naive = supports(supports_qmm_naive);
   bool can_use_fp_qmv = supports(supports_fp_qmv);
-  bool can_use_qmv = supports(supports_qmv);
+  bool can_use_qmv = supports(supports_qmv) || can_use_fp_qmv;
 
-  int M = out.shape(-2);
+  auto call_qmm_sm90 = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    qmm_sm90(x, w, scales, *biases, out, bits_, group_size_, encoder, s);
+  };
+  auto call_qmm_sm80 = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    qmm_sm80(
+        x,
+        w,
+        scales,
+        biases,
+        std::nullopt,
+        std::nullopt,
+        out,
+        bits_,
+        group_size_,
+        mode_,
+        encoder);
+  };
+  auto call_qmm_naive = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    qmm_naive(
+        x,
+        w,
+        scales,
+        biases,
+        std::nullopt,
+        std::nullopt,
+        out,
+        transpose_,
+        bits_,
+        group_size_,
+        mode_,
+        encoder);
+  };
+  auto call_qmv = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    if (can_use_fp_qmv) {
+      fp_qmv(x, w, scales, out, bits_, group_size_, encoder, s);
+    } else {
+      qmv(x, w, scales, biases, out, bits_, group_size_, mode_, encoder);
+    }
+  };
+
+  int M = out.ndim() > 1 ? out.shape(-2) : 1;
   int N = out.shape(-1);
   int K = x.shape(-1);
   int B = out.size() / (M * N);
-  bool prefer_qmv = M == 1 && B == 1 && N <= 16384 && K <= 16384;
 
   if (can_use_qmm_sm90) {
-    if (prefer_qmv) {
-      if (can_use_fp_qmv) {
-        call_fp_qmv();
-        return;
-      }
-      if (can_use_qmv) {
-        call_qmv();
-        return;
-      }
+    if (can_use_qmv && (M == 1 && B == 1 && N <= 16384 && K <= 16384)) {
+      call_qmv();
+    } else {
+      call_qmm_sm90();
     }
-    call_qmm_sm90();
     return;
   }
 
-  if (can_use_fp_qmv) {
-    call_fp_qmv();
+  if (can_use_qmm_sm80) {
+    if (can_use_qmv && (M * B < 8)) {
+      call_qmv();
+    } else {
+      call_qmm_sm80();
+    }
     return;
   }
+
+  if (can_use_qmm_naive) {
+    if (can_use_qmv && (M * B < 8)) {
+      call_qmv();
+    } else {
+      call_qmm_naive();
+    }
+    return;
+  }
+
   if (can_use_qmv) {
     call_qmv();
     return;
@@ -88,12 +128,136 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   throw std::runtime_error(
       fmt::format(
           "[quantized_matmul] No implementation for "
-          "problem shape: {}x{}x{}x{} "
+          "problem shape: {}x{}x{}x{}, transpose: {}, "
           "activation: {}, bits: {}, group size: {}, mode: \"{}\".",
           M,
           N,
           K,
           B,
+          transpose_,
+          dtype_to_string(x.dtype()),
+          bits_,
+          group_size_,
+          quantization_mode_to_string(mode_)));
+}
+
+void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("GatherQMM::eval_gpu");
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  const array& x = inputs[0];
+  const array& w = inputs[1];
+  const array& scales = inputs[2];
+  std::optional<array> biases;
+  if (inputs.size() == 6) {
+    biases = inputs[3];
+  }
+  array lhs_indices = ensure_contiguous(inputs[inputs.size() - 2], encoder, s);
+  array rhs_indices = ensure_contiguous(inputs[inputs.size() - 1], encoder, s);
+
+  int M = out.ndim() > 1 ? out.shape(-2) : 1;
+  int N = out.shape(-1);
+  int K = x.shape(-1);
+  int B = out.size() / (M * N);
+
+  auto supports = [&](auto&& f) {
+    return f(
+        x,
+        w,
+        scales,
+        biases,
+        out,
+        transpose_,
+        bits_,
+        group_size_,
+        mode_,
+        encoder.device());
+  };
+  bool can_use_qmm_sm80 = supports(supports_qmm_sm80);
+  bool can_use_qmm_naive = supports(supports_qmm_naive);
+  bool can_use_qmv = supports(supports_qmv);
+
+  auto call_qmm_sm80 = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    qmm_sm80(
+        x,
+        w,
+        scales,
+        biases,
+        lhs_indices,
+        rhs_indices,
+        out,
+        bits_,
+        group_size_,
+        mode_,
+        encoder);
+  };
+  auto call_qmm_naive = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    qmm_naive(
+        x,
+        w,
+        scales,
+        biases,
+        lhs_indices,
+        rhs_indices,
+        out,
+        transpose_,
+        bits_,
+        group_size_,
+        mode_,
+        encoder);
+  };
+  auto call_qmv = [&]() {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    gather_qmv(
+        x,
+        w,
+        scales,
+        biases,
+        lhs_indices,
+        rhs_indices,
+        out,
+        bits_,
+        group_size_,
+        mode_,
+        encoder);
+  };
+
+  if (can_use_qmm_sm80) {
+    if (can_use_qmv && (M * B < 8)) {
+      call_qmv();
+    } else {
+      call_qmm_sm80();
+    }
+    return;
+  }
+
+  if (can_use_qmm_naive) {
+    if (can_use_qmv && (M * B < 8)) {
+      call_qmv();
+    } else {
+      call_qmm_naive();
+    }
+    return;
+  }
+
+  if (can_use_qmv) {
+    call_qmv();
+    return;
+  }
+
+  throw std::runtime_error(
+      fmt::format(
+          "[gather_qmm] No implementation for "
+          "problem shape: {}x{}x{}x{}, transpose: {}, "
+          "activation: {}, bits: {}, group size: {}, mode: \"{}\".",
+          M,
+          N,
+          K,
+          B,
+          transpose_,
           dtype_to_string(x.dtype()),
           bits_,
           group_size_,
@@ -105,8 +269,7 @@ void fast::Quantize::eval_gpu(
     std::vector<array>& outputs) {
   nvtx3::scoped_range r("Quantize::eval_gpu");
   auto& s = stream();
-  auto& d = cu::device(s.device);
-  auto& enc = d.get_command_encoder(s);
+  auto& enc = cu::get_command_encoder(s);
   if (dequantize_) {
     auto wq = ensure_row_contiguous(inputs[0], enc, s);
     auto scales = ensure_row_contiguous(inputs[1], enc, s);

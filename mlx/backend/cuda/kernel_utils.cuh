@@ -89,7 +89,8 @@ using cuda_type_t = typename CTypeToCudaType<T>::type;
 template <typename T>
 inline constexpr bool is_floating_v =
     cuda::std::is_same_v<T, float> || cuda::std::is_same_v<T, double> ||
-    cuda::std::is_same_v<T, float16_t> || cuda::std::is_same_v<T, bfloat16_t>;
+    cuda::std::is_same_v<T, float16_t> || cuda::std::is_same_v<T, bfloat16_t> ||
+    cuda::std::is_same_v<T, __half> || cuda::std::is_same_v<T, __nv_bfloat16>;
 
 // Type traits for detecting complex numbers.
 template <typename T>

@@ -17,6 +17,24 @@
 
 using namespace mlx::core;
 
+namespace {
+
+int count_graph_nodes(const array& x, const std::string& node_name) {
+  std::ostringstream oss;
+  print_graph(oss, x);
+  auto graph = oss.str();
+
+  int count = 0;
+  size_t pos = 0;
+  while ((pos = graph.find(node_name, pos)) != std::string::npos) {
+    count++;
+    pos += node_name.size();
+  }
+  return count;
+}
+
+} // namespace
+
 TEST_CASE("test stop gradient") {
   auto x = zeros({5, 5});
   auto y = stop_gradient(x);
@@ -325,6 +343,42 @@ TEST_CASE("test grad") {
     CHECK_THROWS_AS(grad(fn, {0, 1, 2})({x, y}), std::invalid_argument);
     CHECK_THROWS_AS(grad(fn, {0, 0})({x, y}), std::invalid_argument);
     CHECK_THROWS_AS(grad(fn, -3)({x, y}), std::invalid_argument);
+  }
+}
+
+TEST_CASE("test transform container reuse does not accumulate stale wrappers") {
+  auto x = ones({128});
+
+  SUBCASE("grad reuses a single copy wrapper") {
+    std::vector<array> container = {array(1.0f)};
+    auto grad_fn = grad([&container](const std::vector<array>& inputs) {
+      container[0] = inputs[0];
+      return sum(inputs[1]);
+    });
+
+    for (int i = 0; i < 5; ++i) {
+      auto grads = grad_fn({container[0], x});
+      eval(grads);
+    }
+
+    CHECK_EQ(count_graph_nodes(container[0], "Copy "), 1);
+  }
+
+  SUBCASE("jvp reuses a single copy wrapper") {
+    std::vector<array> container = {array(1.0f)};
+    auto fun = [&container](const std::vector<array>& inputs) {
+      container[0] = inputs[0];
+      return std::vector<array>{sum(inputs[1])};
+    };
+
+    for (int i = 0; i < 5; ++i) {
+      auto [outputs, tangents] =
+          jvp(fun, {container[0], x}, {array(1.0f), ones({128})});
+      eval(outputs);
+      eval(tangents);
+    }
+
+    CHECK_EQ(count_graph_nodes(container[0], "Copy "), 1);
   }
 }
 
@@ -1357,11 +1411,6 @@ TEST_CASE("test grad dynamic slices") {
 }
 
 TEST_CASE("test masked_scatter autograd") {
-  if (cu::is_available()) {
-    INFO("Skipping masked_scatter cuda autograd tests");
-    return;
-  }
-
   // Test jvp
   {
     auto self = array({10.f, 20.f, 30.f, 40.f}, {4});

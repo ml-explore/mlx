@@ -398,44 +398,6 @@ void DynamicSliceUpdate::eval_cpu(
   }
 }
 
-void SliceUpdate::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  if (out.size() == 0) {
-    out.set_data(allocator::malloc(0));
-    return;
-  }
-
-  auto& in = inputs[0];
-  auto& upd = inputs[1];
-
-  if (upd.size() == 0) {
-    out.copy_shared_buffer(in);
-    return;
-  }
-
-  // Check if materialization is needed
-  auto ctype = in.flags().contiguous && in.size() == in.data_size()
-      ? CopyType::Vector
-      : CopyType::General;
-  copy_cpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
-
-  // Calculate out strides, initial offset and if copy needs to be made
-  auto [data_offset, out_strides] =
-      prepare_slice(out, start_indices_, strides_);
-
-  // Do copy
-  copy_cpu_inplace(
-      /* const array& src = */ upd,
-      /* array& dst = */ out,
-      /* const std::vector<int>& data_shape = */ upd.shape(),
-      /* const std::vector<stride_t>& i_strides = */ upd.strides(),
-      /* const std::vector<stride_t>& o_strides = */ out_strides,
-      /* int64_t i_offset = */ 0,
-      /* int64_t o_offset = */ data_offset,
-      /* CopyType ctype = */ CopyType::GeneralGeneral,
-      stream());
-}
-
 void View::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];

@@ -1,4 +1,5 @@
 import math
+import os
 import unittest
 from itertools import product
 
@@ -440,6 +441,45 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 self.assertListEqual(list(out_ref.shape), list(out_fst.shape))
 
                 diff = mx.abs(out_fst - out_ref) - atol * mx.abs(out_ref)
+                self.assertLessEqual(mx.max(diff).item(), atol)
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "too slow on CPU")
+    @unittest.skipIf(mx.cuda.is_available() and "CI" in os.environ, "not enough memory")
+    def test_sdpa_long_masked_sequence(self):
+        # Test for int16 overflow in steel_attention_nax.h mask
+        # indexing (col_pos declared as short, overflows when kL > 32767).
+        D = 64
+        dtype = mx.float16
+        atol = 1e-3  # Slightly looser than test_sdpa due to long masked sequences
+
+        for kL, active in [
+            (8192, 1024),
+            (36864, 1024),
+            (49152, 1024),
+            (66048, 1024),
+        ]:
+            with self.subTest(kL=kL, active=active):
+                mx.random.seed(0)
+                qH, kH, qL = 32, 16, 512
+                scale = 1.0 / math.sqrt(D)
+
+                q = mx.random.normal(shape=(1, qH, qL, D)).astype(dtype)
+                k = mx.random.normal(shape=(1, kH, kL, D)).astype(dtype)
+                v = mx.random.normal(shape=(1, kH, kL, D)).astype(dtype)
+
+                # Additive mask: -1e4 for inactive, 0 for last `active` positions
+                mask = mx.full((1, 1, 1, kL), -1e4, dtype=dtype)
+                mask[..., kL - active :] = 0.0
+
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask
+                )
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+
+                self.assertFalse(mx.isnan(out).any().item())
+                self.assertListEqual(list(out.shape), list(ref.shape))
+
+                diff = mx.abs(out - ref) - atol * mx.abs(ref)
                 self.assertLessEqual(mx.max(diff).item(), atol)
 
     def test_sdpa_broadcast_mask(self):

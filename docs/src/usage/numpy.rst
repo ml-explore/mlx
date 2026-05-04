@@ -90,10 +90,7 @@ PyTorch supports the buffer protocol, but it requires an explicit
 
   a = mx.arange(3)
   b = torch.tensor(memoryview(a))
-  c = mx.array(b.numpy())
-
-Conversion from PyTorch tensors back to arrays must be done via intermediate
-NumPy arrays with ``numpy()``.
+  c = mx.array(b)
 
 JAX
 ---
