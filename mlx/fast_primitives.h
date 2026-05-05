@@ -375,7 +375,8 @@ class CustomKernel : public Primitive {
       std::optional<float> init_value,
       std::vector<ScalarArg> scalar_arguments,
       bool is_precompiled,
-      int shared_memory)
+      int shared_memory,
+      std::vector<Shape> output_shapes = {})
       : Primitive(stream),
         name_(std::move(name)),
         source_(std::move(source)),
@@ -386,7 +387,8 @@ class CustomKernel : public Primitive {
         init_value_(init_value),
         scalar_arguments_(std::move(scalar_arguments)),
         is_precompiled_(is_precompiled),
-        shared_memory_(shared_memory) {}
+        shared_memory_(shared_memory),
+        output_shapes_(std::move(output_shapes)) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -397,6 +399,13 @@ class CustomKernel : public Primitive {
       override;
 
   DEFINE_NAME(CustomKernel);
+
+  std::vector<Shape> output_shapes(const std::vector<array>&) override {
+    if (output_shapes_.empty())
+      return Primitive::output_shapes({});
+    return output_shapes_;
+  }
+
   auto state() const {
     return std::make_tuple(
         name_,
@@ -422,6 +431,7 @@ class CustomKernel : public Primitive {
   std::vector<ScalarArg> scalar_arguments_;
   bool is_precompiled_;
   int shared_memory_;
+  std::vector<Shape> output_shapes_;
 };
 
 } // namespace mlx::core::fast
