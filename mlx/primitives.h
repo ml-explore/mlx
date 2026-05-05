@@ -1700,6 +1700,21 @@ class GatherQMM : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_NAME(GatherQMM)
   bool is_equivalent(const Primitive& other) const override;
+
+  // inputs layout: Affine → {x, w, scales, biases, lhs_idx, rhs_idx}
+  //                other  → {x, w, scales,          lhs_idx, rhs_idx}
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    const auto& x = inputs[0];
+    const auto& w = inputs[1];
+    const auto& lhs_idx =
+        (mode_ == QuantizationMode::Affine) ? inputs[4] : inputs[3];
+    int w_outer = transpose_ ? w.shape(-2) : w.shape(-1) * 32 / bits_;
+    auto out_shape = lhs_idx.shape();
+    out_shape.push_back(x.shape(-2));
+    out_shape.push_back(w_outer);
+    return {out_shape};
+  }
+
   auto state() const {
     return std::make_tuple(
         group_size_, bits_, mode_, transpose_, left_sorted_, right_sorted_);
