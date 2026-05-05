@@ -6,6 +6,7 @@
 #include <nanobind/stl/complex.h>
 
 #include "python/src/convert.h"
+#include "python/src/dlpack_consumer.h"
 #include "python/src/utils.h"
 
 #include "mlx/utils.h"
@@ -494,7 +495,13 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
   } else if (nb::isinstance<mx::array>(v)) {
     auto arr = nb::cast<mx::array>(v);
     return mx::astype(arr, t.value_or(arr.dtype()));
-  } else if (nb::ndarray_check(v)) {
+  }
+
+  const bool has_mlx_array = nb::hasattr(v, "__mlx_array__");
+  const bool is_dlpack =
+      PyCapsule_CheckExact(v.ptr()) || nb::hasattr(v, "__dlpack__");
+
+  if (!has_mlx_array && nb::ndarray_check(v)) {
     using ContigArray = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
     ContigArray nd;
     std::optional<nb::dlpack::dtype> nb_dtype;
@@ -507,6 +514,12 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
       nd = nb::cast<ContigArray>(v);
     }
     return nd_array_to_mlx(nd, t, nb_dtype);
+  } else if (has_mlx_array) {
+    auto arr = nb::cast<mx::array>(v.attr("__mlx_array__")());
+    return mx::astype(arr, t.value_or(arr.dtype()));
+  } else if (is_dlpack) {
+    auto arr = dlpack_to_mlx(v);
+    return mx::astype(arr, t.value_or(arr.dtype()));
   } else {
     auto arr = to_array_with_accessor(v);
     return mx::astype(arr, t.value_or(arr.dtype()));

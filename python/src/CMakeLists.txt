@@ -10,6 +10,8 @@ nanobind_add_module(
   ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/convert.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dlpack_consumer.cpp
+  $<IF:$<BOOL:${MLX_BUILD_METAL}>,${CMAKE_CURRENT_SOURCE_DIR}/dlpack_consumer_metal.cpp,${CMAKE_CURRENT_SOURCE_DIR}/dlpack_consumer_no_metal.cpp>
   ${CMAKE_CURRENT_SOURCE_DIR}/distributed.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/export.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fast.cpp
