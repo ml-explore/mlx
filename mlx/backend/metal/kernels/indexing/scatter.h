@@ -80,7 +80,9 @@ template <
     uint3 gsize [[threads_per_grid]]) {
   Op op;
 
-  IdxT idx = IdxT(gid.z) * gsize.y + gid.y * gsize.x + gid.x * NWORK;
+  IdxT idx =
+      (IdxT(gid.z) * IdxT(gsize.y) + IdxT(gid.y)) * IdxT(gsize.x) * NWORK +
+      IdxT(gid.x) * NWORK;
   IdxT out_idx;
   IdxT update_idx;
 

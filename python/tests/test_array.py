@@ -1547,6 +1547,30 @@ class TestArray(mlx_tests.MLXTestCase):
         a = a.at[:, :, :].add(update)
         self.assertEqualArray(a, update)
 
+    def test_slice_update_contiguous_2d(self):
+        for shape in [(32, 32), (64, 64), (17, 33), (128, 128)]:
+            for upd_shape in [(16, 16), (8, 8), (4, 4)]:
+                if upd_shape[0] > shape[0] or upd_shape[1] > shape[1]:
+                    continue
+                y = mx.zeros(shape)
+                x = mx.random.normal(upd_shape)
+                z = y.at[: upd_shape[0], : upd_shape[1]].add(x)
+                diff = z[: upd_shape[0], : upd_shape[1]] - x
+                self.assertTrue(mx.allclose(diff, mx.zeros_like(diff)))
+
+        # Test non-zero offset slice update
+        y = mx.zeros((32, 32))
+        x = mx.random.normal((16, 16))
+        z = y.at[16:, 16:].add(x)
+        self.assertTrue(mx.allclose(z[16:, 16:] - x, mx.zeros_like(x)))
+
+        # Test with size divisible by 4, 2, and odd
+        for cols in [32, 18, 15]:
+            y = mx.zeros((32, cols))
+            x = mx.random.normal((16, cols))
+            z = y.at[:16, :].add(x)
+            self.assertTrue(mx.allclose(z[:16, :] - x, mx.zeros_like(x)))
+
     def test_slice_negative_step(self):
         a_np = np.arange(20)
         a_mx = mx.array(a_np)
