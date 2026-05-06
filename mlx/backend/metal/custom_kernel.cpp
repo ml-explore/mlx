@@ -307,7 +307,7 @@ CustomKernelFunction metal_kernel(
 
     auto output_shapes_copy = output_shapes;
     return array::make_arrays(
-        std::move(output_shapes),
+        output_shapes,
         std::move(output_dtypes),
         std::make_shared<CustomKernel>(
             s,

@@ -1702,7 +1702,7 @@ class GatherQMM : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
 
   // inputs layout: Affine → {x, w, scales, biases, lhs_idx, rhs_idx}
-  //                other  → {x, w, scales,          lhs_idx, rhs_idx}
+  //                other  → {x, w, scales,         lhs_idx, rhs_idx}
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
     const auto& x = inputs[0];
     const auto& w = inputs[1];
