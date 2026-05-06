@@ -753,6 +753,28 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     self.assertEqual(y_q.shape, y_hat.shape)
                     self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    def test_qmm_non_multiple_n_regression(self):
+        # Force the qmm path with an N dimension that leaves an edge tile.
+        # On CUDA this should hit the naive kernel rather than the qmv fallback.
+        M, K, N = 8, 128, 129
+        group_size = 64
+        bits = 4
+        dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
+
+        x = (mx.random.normal(shape=(M, K)) / K**0.5).astype(dtype)
+        w = (mx.random.normal(shape=(N, K)) / K**0.5).astype(dtype)
+
+        w_q, scales, biases = mx.quantize(w, group_size, bits)
+        w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
+        y_q = mx.quantized_matmul(
+            x, w_q, scales, biases, True, group_size, bits
+        )
+        y_hat = x @ w_hat.T
+
+        self.assertEqual(y_q.shape, y_hat.shape)
+        tol = 1e-3 if dtype == mx.float32 else 1.5e-3
+        self.assertLess((y_q - y_hat).abs().max(), tol)
+
     def test_gather_qmm(self):
         def quantize(w, transpose=True, group_size=None, bits=None, mode="affine"):
             if mode == "affine":

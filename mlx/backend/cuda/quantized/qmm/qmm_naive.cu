@@ -159,8 +159,8 @@ __global__ void qmm_naive_kernel(
   auto fetch_gmem = [&](int tile) {
     copy_if(copy_a, tApA, tAgA(_,_,_,tile), tArA);
     copy_if(copy_b, tBpB, tBgB(_,_,_,tile), tBrB);
-    copy(tBgS(_,_,_,tile), tBrS);
-    copy(tBgZ(_,_,_,tile), tBrZ);
+    copy_if(copy_b, tBpB, tBgS(_,_,_,tile), tBrS);
+    copy_if(copy_b, tBpB, tBgZ(_,_,_,tile), tBrZ);
   };
   // RMEM => SMEM.
   auto store_smem = [&]() {
@@ -201,8 +201,8 @@ __global__ void qmm_naive_kernel(
     for (int k = 0; k < size<2>(tBrB); ++k) {
       if (get<1>(tBcB(0,0,k)) >= -k_residue) {
         copy_if(copy_b, tBpB(_,k), tBgB_k(_,_,k), tBrB(_,_,k));
-        copy(tBgS_k(_,_,k), tBrS(_,_,k));
-        copy(tBgZ_k(_,_,k), tBrZ(_,_,k));
+        copy_if(copy_b, tBpB(_,k), tBgS_k(_,_,k), tBrS(_,_,k));
+        copy_if(copy_b, tBpB(_,k), tBgZ_k(_,_,k), tBrZ(_,_,k));
       }
     }
   } else {
