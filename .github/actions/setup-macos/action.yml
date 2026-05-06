@@ -13,12 +13,20 @@ runs:
     - name: Install Homebrew packages
       shell: sh
       run: /opt/homebrew/bin/brew install openmpi
-    
+
     - name: Verify MetalToolchain installed
       shell: bash
       run: xcodebuild -showComponent MetalToolchain
 
-    - uses: conda-incubator/setup-miniconda@v3
-      with:
-        miniconda-version: "latest"
-        python-version: ${{ inputs.python-version }}
+    - uses: astral-sh/setup-uv@v7
+
+    - name: Setup Python venv
+      shell: bash
+      run: |
+        echo "::group::Setup Python venv"
+        uv venv --python ${{ inputs.python-version }} --managed-python
+        source .venv/bin/activate
+        echo PATH=$PATH >> $GITHUB_ENV
+        # Search python packages in .venv
+        echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
+        echo "::endgroup::"
