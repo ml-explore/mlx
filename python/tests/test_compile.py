@@ -504,6 +504,63 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(compiled_zero_like(y).shape, y_shape)
         self.assertEqual(compiled_ones_like(y).shape, y_shape)
 
+    def test_shapeless_compile_custom_kernel(self):
+        # CustomKernel must implement output_shapes() so shapeless compile can
+        # re-trace without throwing "CustomKernel cannot infer output shapes".
+        if not mx.metal.is_available():
+            return
+
+        kernel = mx.fast.metal_kernel(
+            name="copy_kernel",
+            input_names=["inp"],
+            output_names=["out"],
+            source="out[thread_position_in_grid.x] = inp[thread_position_in_grid.x];",
+        )
+
+        def fn(x):
+            return kernel(
+                inputs=[x],
+                grid=(x.size, 1, 1),
+                threadgroup=(min(x.size, 256), 1, 1),
+                output_shapes=[x.shape],
+                output_dtypes=[x.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        cfn = mx.compile(fn, shapeless=True)
+
+        x = mx.ones((4,), dtype=mx.float32)
+        self.assertTrue(mx.array_equal(cfn(x), x))
+
+        # Different shape — must reuse compiled graph without throwing.
+        x = mx.ones((8,), dtype=mx.float32)
+        self.assertTrue(mx.array_equal(cfn(x), x))
+
+    def test_shapeless_compile_gather_qmm(self):
+        # GatherQMM must implement output_shapes() so shapeless compile can
+        # re-trace without throwing "GatherQMM cannot infer output shapes".
+        K, N, num_experts = 64, 32, 4
+
+        w = mx.random.normal((num_experts, N, K))
+        qw, s, b = mx.quantize(w)
+        mx.eval(qw, s, b)
+
+        # Keep inputs outside fn so RandomBits doesn't enter the compiled graph.
+        x4 = mx.ones((4, K))
+        x8 = mx.ones((8, K))
+        idx4 = mx.array([0, 1, 2, 3])
+        idx8 = mx.array([0, 0, 1, 1, 2, 2, 3, 3])
+
+        def fn(x, lhs_indices):
+            return mx.gather_qmm(x, qw, s, b, lhs_indices=lhs_indices, transpose=True)
+
+        cfn = mx.compile(fn, shapeless=True)
+
+        self.assertEqual(cfn(x4, idx4).shape, fn(x4, idx4).shape)
+
+        # Different M — must reuse compiled graph without throwing.
+        self.assertEqual(cfn(x8, idx8).shape, fn(x8, idx8).shape)
+
     def test_compile_with_constant(self):
         # Test float
         @partial(mx.compile)
