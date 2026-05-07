@@ -545,21 +545,24 @@ class TestCompile(mlx_tests.MLXTestCase):
         qw, s, b = mx.quantize(w)
         mx.eval(qw, s, b)
 
-        # Keep inputs outside fn so RandomBits doesn't enter the compiled graph.
-        x4 = mx.ones((4, K))
-        x8 = mx.ones((8, K))
-        idx4 = mx.array([0, 1, 2, 3])
-        idx8 = mx.array([0, 0, 1, 1, 2, 2, 3, 3])
+        # x has shape (num_experts, M, K): the batch dim is indexed by idx,
+        # which stays fixed so that lhs_indices and rhs_indices (auto-generated
+        # from w's batch shape) always broadcast.  Only M changes between calls.
+        idx = mx.array([0, 1, 2, 3])
+        x4 = mx.ones((num_experts, 4, K))
+        x8 = mx.ones((num_experts, 8, K))
 
-        def fn(x, lhs_indices):
-            return mx.gather_qmm(x, qw, s, b, lhs_indices=lhs_indices, transpose=True)
+        def fn(x):
+            return mx.gather_qmm(
+                x, qw, s, b, lhs_indices=idx, rhs_indices=idx, transpose=True
+            )
 
         cfn = mx.compile(fn, shapeless=True)
 
-        self.assertEqual(cfn(x4, idx4).shape, fn(x4, idx4).shape)
+        self.assertEqual(cfn(x4).shape, fn(x4).shape)
 
         # Different M — must reuse compiled graph without throwing.
-        self.assertEqual(cfn(x8, idx8).shape, fn(x8, idx8).shape)
+        self.assertEqual(cfn(x8).shape, fn(x8).shape)
 
     def test_compile_with_constant(self):
         # Test float
