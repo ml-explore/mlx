@@ -245,7 +245,7 @@ void grouped_gemm_v2(
           LayoutB,
           cutlass::ComplexTransform::kNone,
           GemmConfiguration::kAlignmentAB,
-          typename GemmConfiguration::Element,
+          typename GemmConfiguration::Accumulator,
           cutlass::layout::RowMajor,
           typename GemmConfiguration::Accumulator,
           typename GemmConfiguration::OpClass,

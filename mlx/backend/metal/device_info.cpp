@@ -13,7 +13,12 @@ bool is_available() {
 }
 
 int device_count() {
-  return 1;
+  try {
+    metal::device(Device::gpu);
+    return 1;
+  } catch (...) {
+    return 0;
+  }
 }
 
 const std::unordered_map<std::string, std::variant<std::string, size_t>>&

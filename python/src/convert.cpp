@@ -1,5 +1,8 @@
 // Copyright © 2024 Apple Inc.
 
+#include <limits>
+#include <sstream>
+
 #include <nanobind/stl/complex.h>
 
 #include "python/src/convert.h"
@@ -15,9 +18,15 @@ enum PyScalarT {
 };
 
 int check_shape_dim(int64_t dim) {
-  if (dim > std::numeric_limits<int>::max()) {
-    throw std::invalid_argument(
-        "Shape dimension falls outside supported `int` range.");
+  if (dim > std::numeric_limits<int>::max() ||
+      dim < std::numeric_limits<int>::min()) {
+    std::ostringstream msg;
+    msg << "Shape dimension " << dim << " is outside the supported range ["
+        << std::numeric_limits<int>::min() << ", "
+        << std::numeric_limits<int>::max()
+        << "]. MLX currently uses 32-bit integers for shape dimensions.";
+    PyErr_SetString(PyExc_OverflowError, msg.str().c_str());
+    nb::detail::raise_python_error();
   }
   return static_cast<int>(dim);
 }

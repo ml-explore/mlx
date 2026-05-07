@@ -28,6 +28,7 @@ using json = nlohmann::json;
 #define ST_U32 "U32"
 #define ST_U64 "U64"
 #define ST_F8_E4M3 "F8_E4M3"
+#define ST_F8_E8M0 "F8_E8M0"
 
 // Note: Complex numbers aren't in the spec yet so this could change -
 // https://github.com/huggingface/safetensors/issues/389
@@ -96,6 +97,8 @@ Dtype dtype_from_safetensor_str(std::string_view str) {
   } else if (str == ST_C64) {
     return complex64;
   } else if (str == ST_F8_E4M3) {
+    return uint8;
+  } else if (str == ST_F8_E8M0) {
     return uint8;
   } else {
     std::ostringstream msg;

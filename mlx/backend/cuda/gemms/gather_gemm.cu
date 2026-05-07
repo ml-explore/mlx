@@ -43,6 +43,12 @@ class GatherGemm {
   using ElementD = typename CollectiveEpilogue::ElementD;
   using StrideD = typename CollectiveEpilogue::StrideD;
 
+  static_assert(
+      cute::is_same_v<
+          ElementAccumulator,
+          typename CollectiveEpilogue::ElementAccumulator>,
+      "Mainloop and epilogue do not agree on accumulator value type.");
+
   static constexpr int SharedStorageSize = static_cast<int>(cute::max(
       sizeof(typename CollectiveMainloop::SharedStorage),
       sizeof(typename CollectiveEpilogue::SharedStorage)));
@@ -98,7 +104,9 @@ class GatherGemm {
 
   CUTLASS_DEVICE void operator()(const Params& params, char* smem_buf) {
     int thread_idx = int(threadIdx.x);
-    auto [m_coord, n_coord, l_coord] = uint3(blockIdx);
+    int m_coord = int(blockIdx.x);
+    int n_coord = int(blockIdx.y);
+    int l_coord = int(blockIdx.z);
 
     auto shape_MNKL = append<4>(params.problem_shape, Int<1>{});
     auto cta_tile = TileShape{};
@@ -220,7 +228,7 @@ void gather_mm(
       using TileShape = Shape<_128, _128, _8>;
       using DispatchPolicy = cutlass::gemm::MainloopSm70TwoStage;
       using TiledMma = TiledMMA<
-          MMA_Atom<UniversalFMA<Accumulator, Element, Element, Element>>,
+          MMA_Atom<UniversalFMA<Accumulator, Element, Element, Accumulator>>,
           Layout<Shape<_16, _16, _1>>>;
 
       using CopyTraitsA = SimtCopyTraits<Element, k_major_a.value>;
@@ -296,9 +304,6 @@ void cutlass_gather_mm(
   int n = out.shape(-1);
   int k = a.shape(-1);
   int l = out.size() / (m * n);
-  if (m < 16 || n < 16) {
-    throw std::invalid_argument("[gather_mm] M/N is too small.");
-  }
 
   encoder.set_input_array(a);
   encoder.set_input_array(b);

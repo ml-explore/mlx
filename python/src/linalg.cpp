@@ -660,4 +660,77 @@ void init_linalg(nb::module_& parent_module) {
         Returns:
             array: The unique solution to the system ``AX = B``.
       )pbdoc");
+
+  m.def(
+      "det",
+      &mx::linalg::det,
+      "a"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def det(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the determinant of a square matrix.
+
+        This function supports arrays with at least 2 dimensions. When the
+        input has more than two dimensions, the determinant is computed for
+        each matrix in the last two dimensions.
+
+        Args:
+            a (array): Input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: The determinant(s) of the input matrix (matrices).
+
+        Example:
+            >>> A = mx.array([[1., 2.], [3., 4.]])
+            >>> mx.linalg.det(A, stream=mx.cpu)
+            array(-2, dtype=float32)
+      )pbdoc");
+
+  m.def(
+      "slogdet",
+      [](const mx::array& a, mx::StreamOrDevice s) {
+        auto result = mx::linalg::slogdet(a, s);
+        return nb::make_tuple(result.first, result.second);
+      },
+      "a"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def slogdet(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
+      R"pbdoc(
+        Compute the sign and natural log of the absolute value of the
+        determinant of a square matrix.
+
+        This function supports arrays with at least 2 dimensions. When the
+        input has more than two dimensions, the sign and log-absolute-determinant
+        are computed for each matrix in the last two dimensions.
+
+        For a singular matrix, ``sign`` is 0 and ``logabsdet`` is ``-inf``.
+
+        The determinant can be reconstructed as ``det = sign * exp(logabsdet)``.
+        This is more numerically stable than computing the determinant directly
+        for matrices with large or small determinants.
+
+        Args:
+            a (array): Input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            tuple(array, array): The ``sign`` and ``logabsdet`` of the
+              determinant. ``sign`` is -1, 0, or +1. ``logabsdet`` is the
+              natural log of the absolute value of the determinant.
+
+        Example:
+            >>> A = mx.array([[1., 2.], [3., 4.]])
+            >>> sign, logabsdet = mx.linalg.slogdet(A, stream=mx.cpu)
+            >>> sign
+            array(-1, dtype=float32)
+            >>> logabsdet
+            array(0.693147, dtype=float32)
+      )pbdoc");
 }
