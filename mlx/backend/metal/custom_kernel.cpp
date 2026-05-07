@@ -305,7 +305,6 @@ CustomKernelFunction metal_kernel(
                 << "```" << std::endl;
     }
 
-    auto output_shapes_copy = output_shapes;
     return array::make_arrays(
         output_shapes,
         std::move(output_dtypes),
@@ -321,7 +320,7 @@ CustomKernelFunction metal_kernel(
             std::vector<ScalarArg>{},
             false,
             0,
-            std::move(output_shapes_copy)),
+            output_shapes),
         std::move(inputs));
   };
 }

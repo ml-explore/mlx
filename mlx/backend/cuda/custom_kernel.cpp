@@ -222,7 +222,6 @@ CustomKernelFunction cuda_kernel(
                 << "```" << std::endl;
     }
 
-    auto output_shapes_copy = output_shapes;
     return array::make_arrays(
         output_shapes,
         std::move(output_dtypes),
@@ -238,7 +237,7 @@ CustomKernelFunction cuda_kernel(
             std::vector<ScalarArg>{},
             false,
             shared_memory,
-            std::move(output_shapes_copy)),
+            output_shapes),
         std::move(inputs));
   };
 }
