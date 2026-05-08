@@ -92,27 +92,17 @@ METAL_FUNC void mlx_atomic_fetch_mul_explicit(
     device mlx_atomic<T>* object,
     T val,
     size_t offset) {
-  // Floating-point NaN handling: `nan * anything = nan` mathematically, but
-  // Metal's atomic_compare_exchange_weak does *bitwise* comparison. When NaN
-  // is involved, `val * expected` can produce a NaN bit pattern that differs
-  // from `expected`, so the CAS keeps failing and the loop spins forever.
-  // Short-circuit when NaN is in play — the result is well-defined (NaN), so
-  // we just store a NaN. Storing `val` / `expected` directly (rather than
-  // `val * expected`) avoids depending on Metal's NaN-payload behavior,
-  // which is exactly the mechanism the CAS spin depends on.
-  if constexpr (metal::is_floating_point_v<T>) {
-    if (isnan(val)) {
-      mlx_atomic_store_explicit(object, val, offset);
-      return;
-    }
-  }
   T expected = mlx_atomic_load_explicit(object, offset);
   while (!mlx_atomic_compare_exchange_weak_explicit(
       object, &expected, val * expected, offset)) {
+    // Under contention, a concurrent NaN-producing update can leave `expected`
+    // as NaN after a failed CAS. Multiplying by it produces another NaN whose
+    // payload may not bit-match the one in memory, so the loop never makes
+    // progress. Bail out — memory is already NaN and that is the correct
+    // reduction result regardless of this thread's update.
     if constexpr (metal::is_floating_point_v<T>) {
       if (isnan(expected)) {
-        mlx_atomic_store_explicit(object, expected, offset);
-        return;
+        break;
       }
     }
   }
