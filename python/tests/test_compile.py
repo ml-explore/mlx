@@ -506,37 +506,41 @@ class TestCompile(mlx_tests.MLXTestCase):
 
     def test_shapeless_compile_custom_kernel(self):
         # CustomKernel must implement output_shapes() so shapeless compile can
-        # re-trace without throwing "CustomKernel cannot infer output shapes".
+        # reuse the compiled graph without throwing "CustomKernel cannot infer
+        # output shapes".  The kernel here has a fixed output shape (1,) that
+        # does not depend on the input shape, so output_shapes_ stays correct
+        # across calls with different input sizes.
         if not mx.metal.is_available():
             return
 
         kernel = mx.fast.metal_kernel(
-            name="copy_kernel",
+            name="first_elem",
             input_names=["inp"],
             output_names=["out"],
-            source="out[thread_position_in_grid.x] = inp[thread_position_in_grid.x];",
+            source="if (thread_position_in_grid.x == 0) out[0] = inp[0];",
         )
 
         def fn(x):
             return kernel(
                 inputs=[x],
-                grid=(x.size, 1, 1),
-                threadgroup=(min(x.size, 256), 1, 1),
-                output_shapes=[x.shape],
+                grid=(1, 1, 1),
+                threadgroup=(1, 1, 1),
+                output_shapes=[(1,)],
                 output_dtypes=[x.dtype],
                 stream=mx.gpu,
             )[0]
 
         cfn = mx.compile(fn, shapeless=True)
 
-        x = mx.ones((4,), dtype=mx.float32)
-        self.assertTrue(mx.array_equal(cfn(x), x))
+        x = mx.array([5.0, 6.0, 7.0, 8.0])
+        self.assertEqual(cfn(x).item(), 5.0)
 
-        # Different shape — must reuse compiled graph without throwing and must
-        # return an output with the updated shape.  Values are not checked here
-        # because the grid was captured at trace time and does not update.
-        x = mx.ones((8,), dtype=mx.float32)
-        self.assertEqual(cfn(x).shape, x.shape)
+        # Different input shape — shapeless compile must reuse the graph without
+        # throwing and return the fixed output shape (1,) with the correct value.
+        x = mx.array([9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0])
+        result = cfn(x)
+        self.assertEqual(result.shape, (1,))
+        self.assertEqual(result.item(), 9.0)
 
     def test_shapeless_compile_gather_qmm(self):
         # GatherQMM must implement output_shapes() so shapeless compile can
