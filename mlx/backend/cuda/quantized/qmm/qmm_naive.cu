@@ -46,7 +46,6 @@ void qmm_naive_kernel(
   Tensor mC_mnl = make_tensor(make_gmem_ptr(C),        select<0,1,3>(shape_MNKL), dC); // (M,N,L)
 
   Tensor mS_nkl = make_tensor(make_gmem_ptr(S), S_layout); // (N,(group_size,K/group_size),L)
-  Tensor mZ_nkl = make_tensor(make_gmem_ptr(Z), S_layout); // (N,(group_size,K/group_size),L)
 
   // For gather, use index lookup for input batch slicing.
   uint32_t a_batch = lhs_indices ? lhs_indices[l_coord] : l_coord;
@@ -58,7 +57,6 @@ void qmm_naive_kernel(
   Tensor mC = mC_mnl(_,_,l_coord); // (M,N)
 
   Tensor mS = mS_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
-  Tensor mZ = mZ_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
 
   // Get the appropriate blocks for this thread block.
   auto cta_coord = make_coord(m_coord, n_coord, _); // (m,n,k)
@@ -67,7 +65,16 @@ void qmm_naive_kernel(
   Tensor gC = local_tile(mC, cta_tiler, cta_coord, Step<_1,_1, X>{}); // (BLK_M,BLK_N)
 
   Tensor gS = local_tile(mS, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
-  Tensor gZ = local_tile(mZ, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
+  auto gZ = [&]() {
+    if constexpr (quant_has_bias_v<Quant>) {
+      Tensor mZ_nkl = make_tensor(make_gmem_ptr(Z), S_layout); // (N,(group_size,K/group_size),L)
+      Tensor mZ = mZ_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
+      return local_tile(mZ, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
+    } else {
+      // Dummy tensor; no-bias paths never offset or load gZ.
+      return gS;
+    }
+  }();
 
   // Compute tile residues for predication.
   int m_max_coord = size<0>(shape_MNKL) - size<0>(cta_tiler) * m_coord; // M - BLK_M * m_coord

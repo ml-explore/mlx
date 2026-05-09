@@ -114,7 +114,9 @@ CUTE_DEVICE void qmm_naive_mainloop(
     gB.data() = recast_ptr<Quant>(raw_pointer_cast(gB.data()) + gB.layout()(0, k_residue, 0) * cuda::std::min(8, sizeof_bits_v<Quant>) / 8);
   }
   gS = domain_offset(make_coord(0, k_residue, 0), gS);
-  gZ = domain_offset(make_coord(0, k_residue, 0), gZ);
+  if constexpr (quant_has_bias_v<Quant>) {
+    gZ = domain_offset(make_coord(0, k_residue, 0), gZ);
+  }
 
   // Define smem layouts.
   auto [sA_layout, sB_layout] = make_smem_layouts(cta_tiler);
@@ -177,8 +179,15 @@ CUTE_DEVICE void qmm_naive_mainloop(
   auto fetch_gmem = [&](int tile) {
     copy_if(copy_a, tApA, tAgA(_,_,_,tile), tArA);
     copy_if(copy_b, tBpB, tBgB(_,_,_,tile), tBrB);
-    copy(tBgS(_,_,_,tile), tBrS);
-    copy(tBgZ(_,_,_,tile), tBrZ);
+    CUTE_UNROLL
+    for (int n = 0; n < size<1>(tBrS); ++n) {
+      if (tBpB(n,0)) {
+        copy(tBgS(_,n,_,tile), tBrS(_,n,_));
+        if constexpr (quant_has_bias_v<Quant>) {
+          copy(tBgZ(_,n,_,tile), tBrZ(_,n,_));
+        }
+      }
+    }
   };
   // RMEM => SMEM.
   auto store_smem = [&]() {
@@ -219,8 +228,15 @@ CUTE_DEVICE void qmm_naive_mainloop(
     for (int k = 0; k < size<2>(tBrB); ++k) {
       if (get<1>(tBcB(0,0,k)) >= -k_residue) {
         copy_if(copy_b, tBpB(_,k), tBgB_k(_,_,k), tBrB(_,_,k));
-        copy(tBgS_k(_,_,k), tBrS(_,_,k));
-        copy(tBgZ_k(_,_,k), tBrZ(_,_,k));
+        CUTE_UNROLL
+        for (int n = 0; n < size<1>(tBrS); ++n) {
+          if (tBpB(n,k)) {
+            copy(tBgS_k(_,n,k), tBrS(_,n,k));
+            if constexpr (quant_has_bias_v<Quant>) {
+              copy(tBgZ_k(_,n,k), tBrZ(_,n,k));
+            }
+          }
+        }
       }
     }
   } else {
