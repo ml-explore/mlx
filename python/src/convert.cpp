@@ -135,6 +135,35 @@ mx::array nd_array_to_mlx(
   }
 }
 
+mx::array from_dlpack(nb::object v, std::optional<bool> copy) {
+  using ContigArray = nb::ndarray<nb::ro, nb::c_contig>;
+  auto nd = nb::cast<ContigArray>(v);
+
+  switch (nd.device_type()) {
+    case nb::device::cpu::value:
+      if (copy == false) {
+        throw std::invalid_argument(
+            "Cannot import a CPU DLPack array without a copy.");
+      }
+      return nd_array_to_mlx(std::move(nd), std::nullopt);
+    case nb::device::metal::value: {
+      std::optional<mx::Dtype> dtype;
+      if (copy == true) {
+        dtype = dispatch_dlpack_dtype(
+            nd.dtype(),
+            []<typename T>(mx::Dtype dtype) { return dtype; },
+            "Cannot convert Metal DLPack array to mlx array.");
+      }
+      return nd_array_to_mlx(std::move(nd), dtype);
+    }
+    case nb::device::cuda::value:
+    case nb::device::cuda_managed::value:
+      throw std::invalid_argument("CUDA DLPack import is not supported.");
+    default:
+      throw std::invalid_argument("Unsupported DLPack device.");
+  }
+}
+
 template <typename T>
 mx::array metal_dlpack_to_mlx_contiguous(
     std::shared_ptr<nb::ndarray<nb::ro, nb::c_contig>> owner,

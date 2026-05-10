@@ -76,7 +76,8 @@ PyTorch
 -------
 
 PyTorch supports DLPack inputs and can import MLX arrays directly.
-MLX can also import PyTorch tensors through DLPack with ``mx.array``.
+MLX can also import PyTorch tensors through DLPack with ``mx.array`` or
+``mx.from_dlpack``.
 
 .. code-block:: python
 
@@ -99,8 +100,9 @@ The arrays do not share memory:
   print(c.tolist()) # [0, 1, 2]
 
 Metal DLPack inputs are different. If a PyTorch MPS tensor is passed to
-``mx.array``, MLX imports the underlying Metal buffer without copying it. The
-PyTorch tensor and the MLX array then share the same storage.
+``mx.array`` or to ``mx.from_dlpack`` with ``copy=None`` or ``copy=False``, MLX
+imports the underlying Metal buffer without copying it. The PyTorch tensor and
+the MLX array then share the same storage.
 
 Since the buffer is shared across frameworks, synchronization has to be managed
 explicitly. After PyTorch writes to an MPS tensor, call
@@ -132,6 +134,20 @@ has been evaluated:
   c += 10
   mx.eval(c)
   print(b.cpu()) # tensor([10., 11., 12.])
+
+Use ``mx.from_dlpack`` when you need to control the copy behavior. Specifying
+``copy=True`` asks MLX to create a new array instead of sharing the Metal
+buffer:
+
+.. code-block:: python
+
+  b = torch.arange(3, device="mps", dtype=torch.float32)
+  torch.mps.synchronize()
+  c = mx.from_dlpack(b, copy=True)
+
+  b.add_(10)
+  torch.mps.synchronize()
+  print(c.tolist()) # [0.0, 1.0, 2.0]
 
 JAX
 ---
