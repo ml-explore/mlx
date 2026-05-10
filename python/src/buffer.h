@@ -91,6 +91,14 @@ extern "C" inline int getbuffer(PyObject* obj, Py_buffer* view, int flags) {
   {
     nb::gil_scoped_release nogil;
     a.eval();
+    a.wait();
+  }
+  if (!a.buffer().is_host_accessible()) {
+    PyErr_SetString(
+        PyExc_BufferError,
+        "Cannot provide a buffer for an array whose storage is not "
+        "CPU-addressable.");
+    return -1;
   }
 
   std::vector<Py_ssize_t> shape(a.shape().begin(), a.shape().end());

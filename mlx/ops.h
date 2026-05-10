@@ -60,6 +60,9 @@ MLX_API array as_strided(
 /** Copy another array. */
 MLX_API array copy(array a, StreamOrDevice s = {});
 
+/** Copy another array into newly allocated storage. */
+MLX_API array copy_to_new_buffer(array a, StreamOrDevice s = {});
+
 /** Fill an array of the given shape with the given value(s). */
 MLX_API array full(Shape shape, array vals, Dtype dtype, StreamOrDevice s = {});
 MLX_API array full(Shape shape, array vals, StreamOrDevice s = {});

@@ -178,6 +178,9 @@ void* Buffer::raw_ptr() {
   return static_cast<size_t*>(ptr_) + 1;
 }
 
+bool Buffer::is_host_accessible() const {
+  return true;
+}
 } // namespace allocator
 
 size_t get_active_memory() {

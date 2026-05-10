@@ -76,6 +76,7 @@ PyTorch
 -------
 
 PyTorch supports DLPack inputs and can import MLX arrays directly.
+MLX can also import PyTorch tensors through DLPack with ``mx.array``.
 
 .. code-block:: python
 
@@ -84,7 +85,53 @@ PyTorch supports DLPack inputs and can import MLX arrays directly.
 
   a = mx.arange(3)
   b = torch.tensor(a)
-  c = mx.array(b.cpu())
+  c = mx.array(b)
+
+Creating an MLX array from a CPU tensor copies the data into MLX-owned storage.
+The arrays do not share memory:
+
+.. code-block:: python
+
+  b = torch.arange(3)
+  c = mx.array(b)
+
+  b += 10
+  print(c.tolist()) # [0, 1, 2]
+
+Metal DLPack inputs are different. If a PyTorch MPS tensor is passed to
+``mx.array``, MLX imports the underlying Metal buffer without copying it. The
+PyTorch tensor and the MLX array then share the same storage.
+
+Since the buffer is shared across frameworks, synchronization has to be managed
+explicitly. After PyTorch writes to an MPS tensor, call
+``torch.mps.synchronize()`` before reading the shared data from MLX. After MLX
+writes to the shared array, call ``mx.eval`` on the MLX result before reading
+the shared data from PyTorch. Without these synchronization points, the other
+framework may read the shared buffer before the producer has finished writing,
+so it can observe stale data.
+
+.. code-block:: python
+
+  b = torch.arange(3, device="mps", dtype=torch.float32)
+  torch.mps.synchronize()
+  c = mx.array(b) # zero-copy Metal DLPack import
+
+  b.add_(10)
+  torch.mps.synchronize()
+  print(c.tolist()) # [10.0, 11.0, 12.0]
+
+Updates made by MLX can also be observed from PyTorch after the MLX computation
+has been evaluated:
+
+.. code-block:: python
+
+  b = torch.arange(3, device="mps", dtype=torch.float32)
+  torch.mps.synchronize()
+  c = mx.array(b)
+
+  c += 10
+  mx.eval(c)
+  print(b.cpu()) # tensor([10., 11., 12.])
 
 JAX
 ---

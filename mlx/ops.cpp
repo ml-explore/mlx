@@ -300,6 +300,16 @@ array copy(array a, StreamOrDevice s /* = {} */) {
       {std::move(a)});
 }
 
+array copy_to_new_buffer(array a, StreamOrDevice s /* = {} */) {
+  auto copied_shape = a.shape(); // |a| will be moved
+  auto dtype = a.dtype();
+  return array(
+      std::move(copied_shape),
+      dtype,
+      std::make_shared<AsType>(to_stream(s), dtype),
+      {std::move(a)});
+}
+
 array full_impl(array vals, Dtype dtype, StreamOrDevice s /* = {} */) {
   return array(
       vals.shape(),
