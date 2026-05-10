@@ -2048,6 +2048,20 @@ class TestArray(mlx_tests.MLXTestCase):
         y = np.from_dlpack(x)
         self.assertTrue(mx.array_equal(y, x))
 
+    def test_from_dlpack_cpu(self):
+        x = np.arange(3, dtype=np.float32)
+
+        y = mx.from_dlpack(x)
+        x += 10
+        self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
+
+        y = mx.from_dlpack(x, copy=True)
+        x += 10
+        self.assertEqual(y.tolist(), [10.0, 11.0, 12.0])
+
+        with self.assertRaises(ValueError):
+            mx.from_dlpack(x, copy=False)
+
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_import(self):
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
@@ -2136,6 +2150,36 @@ class TestArray(mlx_tests.MLXTestCase):
         y += 3
         mx.eval(y)
         self.assertEqual(x.cpu().numpy().tolist(), [3, 4, 5])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_from_dlpack_torch_mps_copy_none_shares(self):
+        x = torch.arange(3, device="mps", dtype=torch.float32)
+        torch.mps.synchronize()
+        y = mx.from_dlpack(x)
+
+        x.add_(10)
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [10.0, 11.0, 12.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_from_dlpack_torch_mps_copy_false_shares(self):
+        x = torch.arange(3, device="mps", dtype=torch.float32)
+        torch.mps.synchronize()
+        y = mx.from_dlpack(x, copy=False)
+
+        y += 10
+        mx.eval(y)
+        self.assertEqual(x.cpu().numpy().tolist(), [10.0, 11.0, 12.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_from_dlpack_torch_mps_copy_true_copies(self):
+        x = torch.arange(3, device="mps", dtype=torch.float32)
+        torch.mps.synchronize()
+        y = mx.from_dlpack(x, copy=True)
+
+        x.add_(10)
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
 
     def test_getitem_with_list(self):
         a = mx.array([1, 2, 3, 4, 5])

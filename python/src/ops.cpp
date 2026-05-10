@@ -1796,6 +1796,29 @@ void init_ops(nb::module_& m) {
             ValueError: If ``copy`` is ``False``.
       )pbdoc");
   m.def(
+      "from_dlpack",
+      [](const nb::object& x, std::optional<bool> copy) {
+        return from_dlpack(x, copy);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "copy"_a = nb::none(),
+      nb::sig(
+          "def from_dlpack(x: DLPackCompatible, /, *, copy: Optional[bool] = None) -> array"),
+      R"pbdoc(
+        Create an array from an object that supports DLPack.
+
+        Args:
+            x: Input object implementing ``__dlpack__`` and
+              ``__dlpack_device__``.
+            copy (bool, optional): Whether to copy the input. If ``True``,
+              always copy. If ``False``, never copy. If ``None``, share memory
+              when possible and copy otherwise.
+
+        Returns:
+            array: An array containing the input data.
+      )pbdoc");
+  m.def(
       "zeros_like",
       &mx::zeros_like,
       nb::arg(),
