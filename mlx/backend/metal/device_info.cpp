@@ -38,7 +38,20 @@ device_info(int device_index) {
     size_t rsrc_limit = 0;
     sysctlbyname("iogpu.rsrc_limit", &rsrc_limit, &length, NULL, 0);
     if (rsrc_limit == 0) {
-      rsrc_limit = 499000;
+      // Default macOS rsrc_limit (499K) is too tight for large unified
+      // memory training. Scale with hw.memsize so small machines stay
+      // on stock and only large-RAM devices get the uplift.
+      constexpr size_t kBaseRsrcLimit = 499000;
+      constexpr size_t kGB = 1024ULL * 1024ULL * 1024ULL;
+      if (memsize >= 384 * kGB) {
+        rsrc_limit = kBaseRsrcLimit * 3;       // M3 Ultra 512 GB
+      } else if (memsize >= 64 * kGB) {
+        rsrc_limit = kBaseRsrcLimit * 2;       // 64-128 GB Max/Studio
+      } else if (memsize >= 24 * kGB) {
+        rsrc_limit = (kBaseRsrcLimit * 3) / 2; // 24-36 GB Pro (1.5x)
+      } else {
+        rsrc_limit = kBaseRsrcLimit;           // < 24 GB: stock
+      }
     }
 
     return {
