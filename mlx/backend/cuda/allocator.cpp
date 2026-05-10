@@ -416,6 +416,10 @@ void* Buffer::raw_ptr() {
   return cbuf.data;
 }
 
+bool Buffer::is_host_accessible() const {
+  return true;
+}
+
 } // namespace allocator
 
 size_t get_active_memory() {

@@ -735,7 +735,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.tolist(), cvals)
 
     def test_array_np_dtype_conversion(self):
-        dtypes_list = [
+        to_mlx_dtypes_list = [
             (mx.bool_, np.bool_),
             (mx.uint8, np.uint8),
             (mx.uint16, np.uint16),
@@ -750,13 +750,14 @@ class TestArray(mlx_tests.MLXTestCase):
             (mx.complex64, np.complex64),
         ]
 
-        for mlx_dtype, np_dtype in dtypes_list:
+        for mlx_dtype, np_dtype in to_mlx_dtypes_list:
             a_npy = np.random.uniform(low=0, high=100, size=(32,)).astype(np_dtype)
             a_mlx = mx.array(a_npy)
 
             self.assertEqual(a_mlx.dtype, mlx_dtype)
             self.assertTrue(np.allclose(a_mlx, a_npy))
 
+        for mlx_dtype, np_dtype in to_mlx_dtypes_list:
             b_mlx = mx.random.uniform(
                 low=0,
                 high=10,
@@ -2048,19 +2049,93 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(y, x))
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_torch_mps_dlpack_non_cpu_error(self):
+    def test_torch_mps_dlpack_import(self):
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         self.assertEqual(x.__dlpack_device__()[0], 8)
 
-        with self.assertRaisesRegex(ValueError, "non-CPU DLPack"):
-            mx.array(x)
+        y = mx.array(x)
+        self.assertEqual(y.dtype, mx.float32)
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), x.cpu().numpy().tolist())
 
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_host_access(self):
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        y = mx.array(x)
+
+        torch.mps.synchronize()
+        self.assertIn("array(", repr(y))
+        self.assertEqual(y.tolist(), x.cpu().numpy().tolist())
+        try:
+            mv = memoryview(y)
+        except BufferError:
+            pass
+        else:
+            self.assertEqual(mv.tolist(), x.cpu().numpy().tolist())
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_zero_copy_reads_torch_updates(self):
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        y = mx.array(x)
+
+        x.add_(100)
+        torch.mps.synchronize()
+        self.assertEqual((y + 1).tolist(), (x + 1).cpu().numpy().tolist())
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_dtype_argument_copies(self):
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        torch.mps.synchronize()
+        y_copy = mx.array(x, dtype=mx.float32)
+        expected = x.cpu().numpy().tolist()
+
+        x.add_(100)
+        torch.mps.synchronize()
+        self.assertEqual(y_copy.tolist(), expected)
+
+        z = mx.array(x, dtype=mx.float16)
+        self.assertEqual(z.dtype, mx.float16)
+        self.assertEqual(z.tolist(), x.to(torch.float16).cpu().numpy().tolist())
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_data_offset(self):
+        view = torch.arange(12, device="mps", dtype=torch.float32)[3:9]
+        view_mx = mx.array(view)
+        torch.mps.synchronize()
+        self.assertEqual((view_mx + 1).tolist(), (view + 1).cpu().numpy().tolist())
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_bfloat16(self):
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        bf = x.to(torch.bfloat16)
+        bf_mx = mx.array(bf)
+
+        self.assertEqual(bf_mx.dtype, mx.bfloat16)
+        torch.mps.synchronize()
+        self.assertEqual(
+            bf_mx.astype(mx.float32).tolist(),
+            bf.to(torch.float32).cpu().numpy().tolist(),
+        )
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_array_operand(self):
         a = mx.array([1])
         b = torch.tensor([2])
         self.assertTrue(mx.array_equal(a + b, mx.array([3])))
 
-        with self.assertRaisesRegex(ValueError, "non-CPU DLPack"):
-            a + b.to("mps")
+        b_mps = b.to("mps")
+        torch.mps.synchronize()
+        self.assertTrue(mx.array_equal(a + b_mps, mx.array([3])))
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_mlx_update_writes_torch_buffer(self):
+        x = torch.arange(3, device="mps", dtype=torch.float32)
+        torch.mps.synchronize()
+        y = mx.array(x)
+
+        y += 3
+        mx.eval(y)
+        self.assertEqual(x.cpu().numpy().tolist(), [3, 4, 5])
 
     def test_getitem_with_list(self):
         a = mx.array([1, 2, 3, 4, 5])

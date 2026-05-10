@@ -21,6 +21,10 @@ class MLX_API Buffer {
   // Get the raw data pointer from the buffer
   void* raw_ptr();
 
+  // Whether raw_ptr() can return a host-accessible pointer without moving or
+  // copying the buffer.
+  bool is_host_accessible() const;
+
   // Get the buffer pointer from the buffer
   const void* ptr() const {
     return ptr_;

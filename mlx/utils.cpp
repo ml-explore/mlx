@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "mlx/dtype_utils.h"
+#include "mlx/ops.h"
 #include "mlx/types/limits.h"
 #include "mlx/utils.h"
 
@@ -212,6 +213,19 @@ std::ostream& operator<<(std::ostream& os, uint8_t x) {
 
 namespace {
 
+array host_accessible_array(array a) {
+  a.eval();
+  a.wait();
+  if (a.buffer().is_host_accessible()) {
+    return a;
+  }
+  auto out = copy_to_new_buffer(std::move(a), Device::gpu);
+  out.eval();
+  out.wait();
+  out.detach();
+  return out;
+}
+
 template <typename T>
 void print_subarray(std::ostream& os, const array& a, size_t index, int dim) {
   int num_print = 3;
@@ -277,7 +291,7 @@ std::ostream& operator<<(std::ostream& os, const Dtype::Kind& k) {
 }
 
 std::ostream& operator<<(std::ostream& os, array a) {
-  a.eval();
+  a = host_accessible_array(std::move(a));
   dispatch_all_types(a.dtype(), [&](auto type_tag) {
     print_array<MLX_GET_TYPE(type_tag)>(os, a);
   });

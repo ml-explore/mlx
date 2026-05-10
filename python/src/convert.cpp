@@ -1,13 +1,16 @@
 // Copyright © 2024 Apple Inc.
 
 #include <limits>
+#include <memory>
 #include <sstream>
 
 #include <nanobind/stl/complex.h>
+#include <nanobind/stl/string.h>
 
 #include "python/src/convert.h"
 #include "python/src/utils.h"
 
+#include "mlx/ops.h"
 #include "mlx/utils.h"
 
 enum PyScalarT {
@@ -31,6 +34,16 @@ int check_shape_dim(int64_t dim) {
   return static_cast<int>(dim);
 }
 
+template <typename... NDParams>
+mx::Shape get_shape(const nb::ndarray<NDParams...>& nd_array) {
+  mx::Shape shape;
+  shape.reserve(nd_array.ndim());
+  for (int i = 0; i < nd_array.ndim(); i++) {
+    shape.push_back(check_shape_dim(nd_array.shape(i)));
+  }
+  return shape;
+}
+
 template <typename T>
 mx::array nd_array_to_mlx_contiguous(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
@@ -42,72 +55,132 @@ mx::array nd_array_to_mlx_contiguous(
   return mx::array(static_cast<const T*>(data_ptr), shape, dtype);
 }
 
+template <typename F>
+auto dispatch_dlpack_dtype(
+    nb::dlpack::dtype type,
+    F&& f,
+    const char* error_message) {
+  if (type == nb::dtype<bool>()) {
+    return f.template operator()<bool>(mx::bool_);
+  } else if (type == nb::dtype<uint8_t>()) {
+    return f.template operator()<uint8_t>(mx::uint8);
+  } else if (type == nb::dtype<uint16_t>()) {
+    return f.template operator()<uint16_t>(mx::uint16);
+  } else if (type == nb::dtype<uint32_t>()) {
+    return f.template operator()<uint32_t>(mx::uint32);
+  } else if (type == nb::dtype<uint64_t>()) {
+    return f.template operator()<uint64_t>(mx::uint64);
+  } else if (type == nb::dtype<int8_t>()) {
+    return f.template operator()<int8_t>(mx::int8);
+  } else if (type == nb::dtype<int16_t>()) {
+    return f.template operator()<int16_t>(mx::int16);
+  } else if (type == nb::dtype<int32_t>()) {
+    return f.template operator()<int32_t>(mx::int32);
+  } else if (type == nb::dtype<int64_t>()) {
+    return f.template operator()<int64_t>(mx::int64);
+  } else if (type == nb::dtype<mx::float16_t>()) {
+    return f.template operator()<mx::float16_t>(mx::float16);
+  } else if (type == nb::dtype<mx::bfloat16_t>()) {
+    return f.template operator()<mx::bfloat16_t>(mx::bfloat16);
+  } else if (type == nb::dtype<float>()) {
+    return f.template operator()<float>(mx::float32);
+  } else if (type == nb::dtype<double>()) {
+    return f.template operator()<double>(mx::float32);
+  } else if (type == nb::dtype<std::complex<float>>()) {
+    return f.template operator()<mx::complex64_t>(mx::complex64);
+  } else if (type == nb::dtype<std::complex<double>>()) {
+    return f.template operator()<mx::complex128_t>(mx::complex64);
+  } else {
+    throw std::invalid_argument(error_message);
+  }
+}
+
+mx::array metal_dlpack_to_mlx(
+    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+    std::optional<mx::Dtype> dtype);
+
+mx::array host_accessible_array(mx::array a) {
+  a.eval();
+  a.wait();
+  if (a.buffer().is_host_accessible()) {
+    return a;
+  }
+  auto out = mx::copy_to_new_buffer(std::move(a), mx::Device::gpu);
+  out.eval();
+  out.wait();
+  out.detach();
+  return out;
+}
+
 mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
     std::optional<mx::Dtype> dtype,
     std::optional<nb::dlpack::dtype> nb_dtype) {
-  if (nd_array.device_type() != nb::device::cpu::value) {
+  switch (nd_array.device_type()) {
+    case nb::device::cpu::value: {
+      auto shape = get_shape(nd_array);
+      auto type = nb_dtype.value_or(nd_array.dtype());
+      return dispatch_dlpack_dtype(
+          type,
+          [&]<typename T>(mx::Dtype default_dtype) {
+            return nd_array_to_mlx_contiguous<T>(
+                nd_array, shape, dtype.value_or(default_dtype));
+          },
+          "Cannot convert numpy array to mlx array.");
+    }
+    case nb::device::metal::value:
+      return metal_dlpack_to_mlx(std::move(nd_array), dtype);
+    default:
+      throw std::invalid_argument("Unsupported DLPack device.");
+  }
+}
+
+template <typename T>
+mx::array metal_dlpack_to_mlx_contiguous(
+    std::shared_ptr<nb::ndarray<nb::ro, nb::c_contig>> owner,
+    const mx::Shape& shape,
+    mx::Dtype type,
+    std::optional<mx::Dtype> dtype) {
+  auto itemsize = mx::size_of(type);
+  if (owner->itemsize() != itemsize) {
     throw std::invalid_argument(
-        "Cannot convert non-CPU DLPack array to mlx array.");
+        "Cannot convert Metal DLPack dtype to mlx dtype.");
   }
 
-  // Compute the shape and size
-  mx::Shape shape;
-  shape.reserve(nd_array.ndim());
-  for (int i = 0; i < nd_array.ndim(); i++) {
-    shape.push_back(check_shape_dim(nd_array.shape(i)));
+  auto byte_offset = owner->data_offset();
+  if (byte_offset % itemsize != 0) {
+    throw std::invalid_argument(
+        "Metal DLPack byte offset is not aligned to dtype size.");
   }
-  auto type = nb_dtype.value_or(nd_array.dtype());
 
-  // Copy data and make array
-  if (type == nb::dtype<bool>()) {
-    return nd_array_to_mlx_contiguous<bool>(
-        nd_array, shape, dtype.value_or(mx::bool_));
-  } else if (type == nb::dtype<uint8_t>()) {
-    return nd_array_to_mlx_contiguous<uint8_t>(
-        nd_array, shape, dtype.value_or(mx::uint8));
-  } else if (type == nb::dtype<uint16_t>()) {
-    return nd_array_to_mlx_contiguous<uint16_t>(
-        nd_array, shape, dtype.value_or(mx::uint16));
-  } else if (type == nb::dtype<uint32_t>()) {
-    return nd_array_to_mlx_contiguous<uint32_t>(
-        nd_array, shape, dtype.value_or(mx::uint32));
-  } else if (type == nb::dtype<uint64_t>()) {
-    return nd_array_to_mlx_contiguous<uint64_t>(
-        nd_array, shape, dtype.value_or(mx::uint64));
-  } else if (type == nb::dtype<int8_t>()) {
-    return nd_array_to_mlx_contiguous<int8_t>(
-        nd_array, shape, dtype.value_or(mx::int8));
-  } else if (type == nb::dtype<int16_t>()) {
-    return nd_array_to_mlx_contiguous<int16_t>(
-        nd_array, shape, dtype.value_or(mx::int16));
-  } else if (type == nb::dtype<int32_t>()) {
-    return nd_array_to_mlx_contiguous<int32_t>(
-        nd_array, shape, dtype.value_or(mx::int32));
-  } else if (type == nb::dtype<int64_t>()) {
-    return nd_array_to_mlx_contiguous<int64_t>(
-        nd_array, shape, dtype.value_or(mx::int64));
-  } else if (type == nb::dtype<mx::float16_t>()) {
-    return nd_array_to_mlx_contiguous<mx::float16_t>(
-        nd_array, shape, dtype.value_or(mx::float16));
-  } else if (type == nb::dtype<mx::bfloat16_t>()) {
-    return nd_array_to_mlx_contiguous<mx::bfloat16_t>(
-        nd_array, shape, dtype.value_or(mx::bfloat16));
-  } else if (type == nb::dtype<float>()) {
-    return nd_array_to_mlx_contiguous<float>(
-        nd_array, shape, dtype.value_or(mx::float32));
-  } else if (type == nb::dtype<double>()) {
-    return nd_array_to_mlx_contiguous<double>(
-        nd_array, shape, dtype.value_or(mx::float32));
-  } else if (type == nb::dtype<std::complex<float>>()) {
-    return nd_array_to_mlx_contiguous<mx::complex64_t>(
-        nd_array, shape, dtype.value_or(mx::complex64));
-  } else if (type == nb::dtype<std::complex<double>>()) {
-    return nd_array_to_mlx_contiguous<mx::complex128_t>(
-        nd_array, shape, dtype.value_or(mx::complex64));
-  } else {
-    throw std::invalid_argument("Cannot convert numpy array to mlx array.");
+  auto out = mx::array(
+      mx::allocator::Buffer(owner->data_handle()),
+      shape,
+      type,
+      [](mx::allocator::Buffer) {});
+  auto flags = out.flags();
+  out.set_data(
+      out.buffer(),
+      out.data_size(),
+      out.strides(),
+      flags,
+      [owner = std::move(owner)](mx::allocator::Buffer) {});
+
+  auto offset = static_cast<int64_t>(byte_offset / itemsize);
+  if (offset != 0) {
+    out.copy_shared_buffer(out, out.strides(), flags, out.data_size(), offset);
   }
+
+  if (dtype) {
+    auto result = (*dtype == out.dtype())
+        ? mx::copy_to_new_buffer(out, mx::Device::gpu)
+        : mx::astype(out, *dtype, mx::Device::gpu);
+    result.eval();
+    result.wait();
+    result.detach();
+    return result;
+  }
+  return out;
 }
 
 template <typename T, typename... NDParams>
@@ -116,14 +189,15 @@ nb::ndarray<NDParams...> mlx_to_nd_array_impl(
     std::optional<nb::dlpack::dtype> t = {}) {
   {
     nb::gil_scoped_release nogil;
-    a.eval();
+    a = host_accessible_array(std::move(a));
   }
   std::vector<size_t> shape(a.shape().begin(), a.shape().end());
+  auto owner = nb::cast(a);
   return nb::ndarray<NDParams...>(
       a.data<T>(),
       a.ndim(),
       shape.data(),
-      /* owner= */ nb::none(),
+      /* owner= */ owner,
       a.strides().data(),
       t.value_or(nb::dtype<T>()));
 }
@@ -177,42 +251,58 @@ nb::object to_scalar(mx::array& a) {
     throw std::invalid_argument(
         "[convert] Only length-1 arrays can be converted to Python scalars.");
   }
+  auto host = mx::array(a);
   {
     nb::gil_scoped_release nogil;
-    a.eval();
+    host = host_accessible_array(std::move(host));
   }
-  switch (a.dtype()) {
+  switch (host.dtype()) {
     case mx::bool_:
-      return nb::cast(a.item<bool>());
+      return nb::cast(host.item<bool>());
     case mx::uint8:
-      return nb::cast(a.item<uint8_t>());
+      return nb::cast(host.item<uint8_t>());
     case mx::uint16:
-      return nb::cast(a.item<uint16_t>());
+      return nb::cast(host.item<uint16_t>());
     case mx::uint32:
-      return nb::cast(a.item<uint32_t>());
+      return nb::cast(host.item<uint32_t>());
     case mx::uint64:
-      return nb::cast(a.item<uint64_t>());
+      return nb::cast(host.item<uint64_t>());
     case mx::int8:
-      return nb::cast(a.item<int8_t>());
+      return nb::cast(host.item<int8_t>());
     case mx::int16:
-      return nb::cast(a.item<int16_t>());
+      return nb::cast(host.item<int16_t>());
     case mx::int32:
-      return nb::cast(a.item<int32_t>());
+      return nb::cast(host.item<int32_t>());
     case mx::int64:
-      return nb::cast(a.item<int64_t>());
+      return nb::cast(host.item<int64_t>());
     case mx::float16:
-      return nb::cast(static_cast<float>(a.item<mx::float16_t>()));
+      return nb::cast(static_cast<float>(host.item<mx::float16_t>()));
     case mx::float32:
-      return nb::cast(a.item<float>());
+      return nb::cast(host.item<float>());
     case mx::bfloat16:
-      return nb::cast(static_cast<float>(a.item<mx::bfloat16_t>()));
+      return nb::cast(static_cast<float>(host.item<mx::bfloat16_t>()));
     case mx::complex64:
-      return nb::cast(a.item<std::complex<float>>());
+      return nb::cast(host.item<std::complex<float>>());
     case mx::float64:
-      return nb::cast(a.item<double>());
+      return nb::cast(host.item<double>());
     default:
       throw nb::type_error("type cannot be converted to Python scalar.");
   }
+}
+
+mx::array metal_dlpack_to_mlx(
+    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+    std::optional<mx::Dtype> dtype) {
+  auto owner =
+      std::make_shared<nb::ndarray<nb::ro, nb::c_contig>>(std::move(nd_array));
+  auto shape = get_shape(*owner);
+
+  return dispatch_dlpack_dtype(
+      owner->dtype(),
+      [&]<typename T>(mx::Dtype type) {
+        return metal_dlpack_to_mlx_contiguous<T>(owner, shape, type, dtype);
+      },
+      "Cannot convert Metal DLPack array to mlx array.");
 }
 
 template <typename T, typename U = T>
@@ -234,39 +324,40 @@ nb::object tolist(mx::array& a) {
   if (a.ndim() == 0) {
     return to_scalar(a);
   }
+  auto host = mx::array(a);
   {
     nb::gil_scoped_release nogil;
-    a.eval();
+    host = host_accessible_array(std::move(host));
   }
-  switch (a.dtype()) {
+  switch (host.dtype()) {
     case mx::bool_:
-      return to_list<bool>(a, 0, 0);
+      return to_list<bool>(host, 0, 0);
     case mx::uint8:
-      return to_list<uint8_t>(a, 0, 0);
+      return to_list<uint8_t>(host, 0, 0);
     case mx::uint16:
-      return to_list<uint16_t>(a, 0, 0);
+      return to_list<uint16_t>(host, 0, 0);
     case mx::uint32:
-      return to_list<uint32_t>(a, 0, 0);
+      return to_list<uint32_t>(host, 0, 0);
     case mx::uint64:
-      return to_list<uint64_t>(a, 0, 0);
+      return to_list<uint64_t>(host, 0, 0);
     case mx::int8:
-      return to_list<int8_t>(a, 0, 0);
+      return to_list<int8_t>(host, 0, 0);
     case mx::int16:
-      return to_list<int16_t>(a, 0, 0);
+      return to_list<int16_t>(host, 0, 0);
     case mx::int32:
-      return to_list<int32_t>(a, 0, 0);
+      return to_list<int32_t>(host, 0, 0);
     case mx::int64:
-      return to_list<int64_t>(a, 0, 0);
+      return to_list<int64_t>(host, 0, 0);
     case mx::float16:
-      return to_list<mx::float16_t, float>(a, 0, 0);
+      return to_list<mx::float16_t, float>(host, 0, 0);
     case mx::float32:
-      return to_list<float>(a, 0, 0);
+      return to_list<float>(host, 0, 0);
     case mx::bfloat16:
-      return to_list<mx::bfloat16_t, float>(a, 0, 0);
+      return to_list<mx::bfloat16_t, float>(host, 0, 0);
     case mx::float64:
-      return to_list<double>(a, 0, 0);
+      return to_list<double>(host, 0, 0);
     case mx::complex64:
-      return to_list<std::complex<float>>(a, 0, 0);
+      return to_list<std::complex<float>>(host, 0, 0);
     default:
       throw nb::type_error("data type cannot be converted to Python list.");
   }
