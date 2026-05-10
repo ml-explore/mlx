@@ -5,7 +5,6 @@ import base64
 import json
 import os
 import shlex
-import shutil
 import sys
 import tempfile
 import threading
@@ -514,12 +513,6 @@ def main():
         help="The port to use for the NCCL communication (only for nccl backend)",
     )
     parser.add_argument(
-        "--no-verify-script",
-        action="store_false",
-        dest="verify_script",
-        help="Do not verify that the script exists",
-    )
-    parser.add_argument(
         "--python", default=sys.executable, help="Use this python on the remote hosts"
     )
 
@@ -546,14 +539,6 @@ def main():
     if args.backend is None:
         args.backend = "nccl" if mx.cuda.is_available() else "ring"
     args.env = hostfile.envs + args.env
-
-    # Check if the script is a file and convert it to a full path
-    if (script := Path(rest[0])).exists() and script.is_file():
-        rest[0:1] = [args.python, str(script.resolve())]
-    elif (command := shutil.which(rest[0])) is not None:
-        rest[0] = command
-    elif args.verify_script:
-        raise ValueError(f"Invalid script or command {rest[0]}")
 
     # Launch
     if args.backend == "ring":
