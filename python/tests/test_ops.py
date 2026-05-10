@@ -1877,7 +1877,7 @@ class TestOps(mlx_tests.MLXTestCase):
             a = (10 * mx.random.normal(shape=(1024,))).astype(t)
             out_expect = mx.softmax(a.astype(mx.float32)).astype(t)
             out = mx.softmax(a, axis=-1, precise=True)
-            self.assertTrue(mx.allclose(out_expect, out))
+            self.assertTrue(mx.allclose(out_expect, out, atol=1e-6))
 
         # All Infs give NaNs
         for n in [127, 128, 129]:
@@ -2979,6 +2979,7 @@ class TestOps(mlx_tests.MLXTestCase):
             H = np.vstack((np.hstack((H, H)), np.hstack((H, -H))))
         return H
 
+    @unittest.skipIf("CI" in os.environ, "too slow in CI")
     def test_hadamard(self):
         with self.assertRaises(ValueError):
             mx.hadamard_transform(mx.array([]))

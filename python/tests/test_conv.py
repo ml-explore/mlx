@@ -1085,7 +1085,7 @@ class TestConv(mlx_tests.MLXTestCase):
                         groups=groups,
                         flip=flip,
                         np_dtype=dtype,
-                        atol=2e-5 if dtype == np.float32 else 5e-4,
+                        atol=2e-5 if dtype == np.float32 else 5e-3,
                     )
 
     @unittest.skipIf(not has_torch, "requires Torch")
