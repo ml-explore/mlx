@@ -102,7 +102,8 @@ The arrays do not share memory:
 Metal DLPack inputs are different. If a PyTorch MPS tensor is passed to
 ``mx.array`` or to ``mx.from_dlpack`` with ``copy=None`` or ``copy=False``, MLX
 imports the underlying Metal buffer without copying it. The PyTorch tensor and
-the MLX array then share the same storage.
+the MLX array then share the same storage. MLX arrays exported to PyTorch with
+DLPack are also shared without a copy.
 
 Since the buffer is shared across frameworks, synchronization has to be managed
 explicitly. After PyTorch writes to an MPS tensor, call
@@ -134,6 +135,10 @@ has been evaluated:
   c += 10
   mx.eval(c)
   print(b.cpu()) # tensor([10., 11., 12.])
+
+For MLX arrays exported to PyTorch, the share is tied to the exported buffer.
+MLX updates after export may rebind the MLX array to a new buffer, while the
+PyTorch tensor continues to reference the exported buffer.
 
 Use ``mx.from_dlpack`` when you need to control the copy behavior. Specifying
 ``copy=True`` asks MLX to create a new array instead of sharing the Metal

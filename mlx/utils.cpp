@@ -211,8 +211,6 @@ std::ostream& operator<<(std::ostream& os, uint8_t x) {
   return os;
 }
 
-namespace {
-
 array host_accessible_array(array a) {
   a.eval();
   a.wait();
@@ -225,6 +223,8 @@ array host_accessible_array(array a) {
   out.detach();
   return out;
 }
+
+namespace {
 
 template <typename T>
 void print_subarray(std::ostream& os, const array& a, size_t index, int dim) {

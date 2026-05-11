@@ -496,7 +496,29 @@ void init_array(nb::module_& m) {
               new (&arr) mx::array(nd_array_to_mlx(nd, std::nullopt));
             }
           })
-      .def("__dlpack__", [](const mx::array& a) { return mlx_to_dlpack(a); })
+      .def(
+          "__dlpack__",
+          [](const mx::array& a,
+             nb::object,
+             nb::object,
+             nb::object dl_device,
+             nb::object) {
+            std::optional<int> dl_device_type;
+            if (!dl_device.is_none()) {
+              auto device = nb::cast<nb::tuple>(dl_device);
+              if (nb::len(device) != 2) {
+                throw nb::type_error(
+                    "dl_device must be None or a tuple[int, int]");
+              }
+              dl_device_type = nb::cast<int>(device[0]);
+            }
+            return mlx_to_dlpack(a, dl_device_type);
+          },
+          nb::kw_only(),
+          "stream"_a = nb::none(),
+          "max_version"_a = nb::none(),
+          "dl_device"_a = nb::none(),
+          "copy"_a = nb::none())
       .def(
           "__dlpack_device__",
           [](const mx::array& a) {
