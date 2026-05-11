@@ -526,11 +526,8 @@ TEST_CASE("test memory info") {
 }
 
 TEST_CASE("test scatter_prod with NaN does not hang") {
-  // Regression test: Metal's CAS-based scatter_prod used to spin forever when
-  // a NaN was involved in two-or-more updates colliding on the same output
-  // slot. Each case below was empirically confirmed to hang on the unfixed
-  // kernel; the std::async timeout converts a regression into a test failure
-  // instead of a wedged GPU. See mlx/backend/metal/kernels/atomic.h.
+  // Regression test for the NaN CAS workaround in atomic.h. The std::async
+  // timeout converts a wedged GPU into a test failure.
   auto run_with_timeout = [](auto fn) {
     auto fut = std::async(std::launch::async, std::move(fn));
     REQUIRE(
@@ -540,8 +537,7 @@ TEST_CASE("test scatter_prod with NaN does not hang") {
 
   float nan = std::nanf("");
 
-  // NaN as the *first* update colliding with a normal update — the case in
-  // the original bug report. Exercises the outer `isnan(val)` short-circuit.
+  // NaN-valued update colliding with a normal update on the same slot.
   {
     auto out = run_with_timeout([&] {
       auto x = array({1.0f, 1.0f, 1.0f, 1.0f});
@@ -554,9 +550,7 @@ TEST_CASE("test scatter_prod with NaN does not hang") {
     CHECK(std::isnan(out.data<float>()[0]));
   }
 
-  // NaN already in memory + two non-NaN updates colliding on it. Distinct
-  // hang case — exercises the inner-loop `isnan(expected)` guard, which the
-  // outer short-circuit does not cover.
+  // NaN already in memory before any update lands.
   {
     auto out = run_with_timeout([&] {
       auto x = array({nan, 1.0f, 1.0f, 1.0f});
