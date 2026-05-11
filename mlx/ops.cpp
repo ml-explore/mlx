@@ -67,8 +67,10 @@ array indices_or_default(
   }
 
   Shape shape(x.shape().begin(), x.shape().end() - 2);
-  int total =
-      std::reduce(shape.begin(), shape.end(), 1, std::multiplies<int>());
+  int total = check_shape_dim(
+      std::reduce(
+          shape.begin(), shape.end(), int64_t{1}, std::multiplies<int64_t>{}),
+      "gather");
   return reshape(arange(total, uint32, s), std::move(shape), s);
 }
 
@@ -433,7 +435,8 @@ array unflatten(
     }
   }
   if (infer_idx >= 0) {
-    shape[infer_idx] = a.shape(ax) / size;
+    shape[infer_idx] =
+        check_shape_dim(static_cast<int64_t>(a.shape(ax) / size), "unflatten");
     size *= shape[infer_idx];
   }
   if (size != a.shape(ax)) {

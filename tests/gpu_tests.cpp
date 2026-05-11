@@ -3,6 +3,7 @@
 #include <array>
 
 #include "doctest/doctest.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -475,6 +476,101 @@ TEST_CASE("test gpu validation") {
   eval(argmax(x));
 
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
+}
+
+TEST_CASE("test gpu int32 shape overflow errors") {
+  // (2^30, 2).flatten() — product 2^31 doesn't fit in ShapeElem.
+  // Issue #2681 reported wrapped shape (-2147483648,) and a
+  // 2^64 - X reported size. The lazy graph is never evaluated.
+  auto a = zeros({1 << 30, 2});
+  CHECK_THROWS_AS(flatten(a), std::overflow_error);
+
+  // conv_general output > 2^31 elements with each per-dim < 2^31.
+  // Total elements 524290 * 64 * 64 = 2,147,491,840.
+  int n = static_cast<int>((int64_t{1} << 31) / (64 * 64) + 2);
+  auto x = ones({n, 8, 8, 1}, float16);
+  auto w = ones({1, 1, 1, 1}, float16);
+  auto y = conv_general(
+      /* input = */ x,
+      /* weight = */ w,
+      /* stride = */ {1, 1},
+      /* padding_lo = */ {0, 0},
+      /* padding_hi = */ {0, 0},
+      /* kernel_dilation = */ {1, 1},
+      /* input_dilation = */ {9, 9},
+      /* groups = */ 1,
+      /* flip = */ false);
+  CHECK_EQ(y.shape(), Shape{n, 64, 64, 1});
+
+  // reshape with inferred dim that won't fit in ShapeElem — issue #3327.
+  CHECK_THROWS_AS(reshape(y, {-1}), std::overflow_error);
+
+  // take(a, idx) routes through an internal flatten — overflows on flatten.
+  auto idx = array({0u}, uint32);
+  CHECK_THROWS_AS(take(y, idx), std::overflow_error);
+
+  // The conv dispatcher refuses to compute a >2^31-element output. eval
+  // allocates the ~4 GB float16 output before the dispatcher check fires,
+  // so skip on small-GPU devices.
+  size_t needed = size_t(n) * 64 * 64 * sizeof(float16_t);
+  auto max_buf = std::get<size_t>(gpu::device_info().at("max_buffer_length"));
+  if (max_buf >= needed) {
+    CHECK_THROWS_AS(eval(y), std::overflow_error);
+  }
+}
+
+TEST_CASE("test gpu conv2d large output offset") {
+  // Regression for the kernel-offset half of #3327 (originally PR #3294).
+  // Output shape (batch, 64, 64, O) with batch * 64 * 64 * O > 2^31 but
+  // each per-dim and `batch * 64 * 64` fit in int32 — so the dispatcher
+  // accepts the work but each thread's output offset `c_row * O + c_col`
+  // exceeds int32 max. Before the size_t promotion in
+  // steel_conv_general.h, threads wrote to wrapped offsets and the last
+  // batches read back zeros.
+  constexpr int H = 64;
+  constexpr int W = 64;
+  constexpr int O = 17;
+  const int per_batch_output = H * W * O;
+  const int batch_size =
+      static_cast<int>((int64_t{1} << 31) / per_batch_output + 2);
+
+  // Skip if the output array (~4.3 GB fp16) won't fit on this device.
+  size_t needed = size_t(batch_size) * H * W * O * sizeof(float16_t);
+  auto max_buf = std::get<size_t>(gpu::device_info().at("max_buffer_length"));
+  if (max_buf < needed) {
+    return;
+  }
+
+  auto batch_values =
+      astype(remainder(arange(batch_size, int32), array(251)), float16);
+  batch_values = reshape(batch_values, {batch_size, 1, 1, 1});
+  auto x = multiply(ones({batch_size, H, W, 1}, float16), batch_values);
+  auto channel_values =
+      divide(arange(1.0, double(O + 1), float16), array(8.0f, float16));
+  auto w = reshape(channel_values, {O, 1, 1, 1});
+
+  auto y = conv2d(x, w);
+
+  // Expected y[i, h, w, j] = (i % 251) * ((j+1)/8). Spot check first and
+  // last batches; the last batch covers offsets past int32 max.
+  auto expected_first = multiply(
+      slice(x, {0, 0, 0, 0}, {1, H, W, 1}),
+      reshape(channel_values, {1, 1, 1, O}));
+  auto expected_last = multiply(
+      slice(x, {batch_size - 1, 0, 0, 0}, {batch_size, H, W, 1}),
+      reshape(channel_values, {1, 1, 1, O}));
+  CHECK(allclose(
+            slice(y, {0, 0, 0, 0}, {1, H, W, O}),
+            expected_first,
+            /* rtol = */ 1e-3,
+            /* atol = */ 1e-3)
+            .item<bool>());
+  CHECK(allclose(
+            slice(y, {batch_size - 1, 0, 0, 0}, {batch_size, H, W, O}),
+            expected_last,
+            /* rtol = */ 1e-3,
+            /* atol = */ 1e-3)
+            .item<bool>());
 }
 
 TEST_CASE("test memory info") {

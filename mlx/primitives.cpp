@@ -2136,12 +2136,12 @@ bool Flatten::is_equivalent(const Primitive& other) const {
 
 Shape Flatten::output_shape(const array& input, int start_axis, int end_axis) {
   Shape shape = input.shape();
-  auto flat_size = input.shape(start_axis);
+  int64_t flat_size = input.shape(start_axis);
   for (int ax = start_axis + 1; ax <= end_axis; ++ax) {
     flat_size *= input.shape(ax);
   }
   shape.erase(shape.begin() + start_axis + 1, shape.begin() + end_axis + 1);
-  shape[start_axis] = flat_size;
+  shape[start_axis] = check_shape_dim(flat_size, "flatten");
   return shape;
 }
 
@@ -3913,7 +3913,8 @@ Shape Reshape::output_shape(const array& input, Shape shape) {
 
   // Infer the shape
   if (size > 0 && infer_idx >= 0) {
-    shape[infer_idx] = input.size() / size;
+    shape[infer_idx] =
+        check_shape_dim(static_cast<int64_t>(input.size() / size), "reshape");
     size *= shape[infer_idx];
   } else if (infer_idx >= 0) {
     throw std::invalid_argument(
