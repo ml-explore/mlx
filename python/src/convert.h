@@ -7,7 +7,6 @@
 #include <nanobind/ndarray.h>
 
 #include "mlx/array.h"
-#include "mlx/ops.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
@@ -67,9 +66,9 @@ mx::array nd_array_to_mlx(
     std::optional<nb::dlpack::dtype> nb_dtype = std::nullopt);
 
 nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a);
-nb::ndarray<> mlx_to_dlpack(const mx::array& a);
-
-mx::array host_accessible_array(mx::array a);
+nb::ndarray<> mlx_to_dlpack(
+    const mx::array& a,
+    std::optional<int> dl_device_type = std::nullopt);
 
 nb::object to_scalar(mx::array& a);
 

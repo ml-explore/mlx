@@ -10,6 +10,8 @@
 #include "python/src/convert.h"
 #include "python/src/utils.h"
 
+#include "mlx/backend/cuda/cuda.h"
+#include "mlx/backend/metal/metal.h"
 #include "mlx/ops.h"
 #include "mlx/utils.h"
 
@@ -99,19 +101,6 @@ mx::array metal_dlpack_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
     std::optional<mx::Dtype> dtype);
 
-mx::array host_accessible_array(mx::array a) {
-  a.eval();
-  a.wait();
-  if (a.buffer().is_host_accessible()) {
-    return a;
-  }
-  auto out = mx::copy_to_new_buffer(std::move(a), mx::Device::gpu);
-  out.eval();
-  out.wait();
-  out.detach();
-  return out;
-}
-
 mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
     std::optional<mx::Dtype> dtype,
@@ -176,7 +165,7 @@ mx::array metal_dlpack_to_mlx_contiguous(
         "Cannot convert Metal DLPack dtype to mlx dtype.");
   }
 
-  auto byte_offset = owner->data_offset();
+  auto byte_offset = owner->byte_offset();
   if (byte_offset % itemsize != 0) {
     throw std::invalid_argument(
         "Metal DLPack byte offset is not aligned to dtype size.");
@@ -271,8 +260,92 @@ nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a) {
   return mlx_to_nd_array<nb::numpy>(a);
 }
 
-nb::ndarray<> mlx_to_dlpack(const mx::array& a) {
-  return mlx_to_nd_array<>(a);
+template <typename T>
+nb::ndarray<> mlx_to_dlpack_impl(mx::array a, int dl_device_type) {
+  void* data = nullptr;
+  uint64_t byte_offset = 0;
+  {
+    nb::gil_scoped_release nogil;
+    a.eval();
+    a.wait();
+    if (dl_device_type == nb::device::cpu::value) {
+      a = host_accessible_array(std::move(a));
+      data = a.data<T>();
+    } else {
+      data = a.buffer().ptr();
+      byte_offset = a.offset();
+    }
+  }
+
+  std::vector<size_t> shape(a.shape().begin(), a.shape().end());
+  auto owner = nb::cast(a);
+  return nb::ndarray<>(
+      data,
+      a.ndim(),
+      shape.data(),
+      /* owner= */ owner,
+      a.strides().data(),
+      nb::dtype<T>(),
+      dl_device_type,
+      0,
+      '\0',
+      byte_offset);
+}
+
+nb::ndarray<> mlx_to_dlpack(
+    const mx::array& a,
+    std::optional<int> dl_device_type) {
+  int device_type = dl_device_type.value_or(
+      mx::metal::is_available()
+          ? nb::device::metal::value
+          : (mx::cu::is_available() ? nb::device::cuda_managed::value
+                                    : nb::device::cpu::value));
+
+  if (device_type == nb::device::cuda::value ||
+      device_type == nb::device::cuda_managed::value) {
+    throw nb::buffer_error("CUDA DLPack export is not supported.");
+  }
+  if (device_type != nb::device::cpu::value &&
+      device_type != nb::device::metal::value) {
+    throw nb::buffer_error(
+        "Cannot export mlx array to requested DLPack device.");
+  }
+  if (device_type == nb::device::metal::value && !mx::metal::is_available()) {
+    throw nb::buffer_error("Metal DLPack export is not available.");
+  }
+
+  switch (a.dtype()) {
+    case mx::bool_:
+      return mlx_to_dlpack_impl<bool>(a, device_type);
+    case mx::uint8:
+      return mlx_to_dlpack_impl<uint8_t>(a, device_type);
+    case mx::uint16:
+      return mlx_to_dlpack_impl<uint16_t>(a, device_type);
+    case mx::uint32:
+      return mlx_to_dlpack_impl<uint32_t>(a, device_type);
+    case mx::uint64:
+      return mlx_to_dlpack_impl<uint64_t>(a, device_type);
+    case mx::int8:
+      return mlx_to_dlpack_impl<int8_t>(a, device_type);
+    case mx::int16:
+      return mlx_to_dlpack_impl<int16_t>(a, device_type);
+    case mx::int32:
+      return mlx_to_dlpack_impl<int32_t>(a, device_type);
+    case mx::int64:
+      return mlx_to_dlpack_impl<int64_t>(a, device_type);
+    case mx::float16:
+      return mlx_to_dlpack_impl<mx::float16_t>(a, device_type);
+    case mx::bfloat16:
+      return mlx_to_dlpack_impl<mx::bfloat16_t>(a, device_type);
+    case mx::float32:
+      return mlx_to_dlpack_impl<float>(a, device_type);
+    case mx::float64:
+      return mlx_to_dlpack_impl<double>(a, device_type);
+    case mx::complex64:
+      return mlx_to_dlpack_impl<std::complex<float>>(a, device_type);
+    default:
+      throw nb::buffer_error("Cannot export mlx array with unsupported dtype.");
+  }
 }
 
 nb::object to_scalar(mx::array& a) {

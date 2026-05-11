@@ -2102,17 +2102,28 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(z.item(), 3)
 
     def test_dlpack(self):
+        class CpuDLPack:
+            def __init__(self, array):
+                self.array = array
+
+            def __dlpack_device__(self):
+                return (1, 0)
+
+            def __dlpack__(self, *args, **kwargs):
+                kwargs["dl_device"] = (1, 0)
+                return self.array.__dlpack__(*args, **kwargs)
+
         x = mx.array(1, dtype=mx.int32)
-        y = np.from_dlpack(x)
+        y = np.from_dlpack(CpuDLPack(x))
         self.assertTrue(mx.array_equal(y, x))
 
         x = mx.array([[1.0, 2.0], [3.0, 4.0]])
-        y = np.from_dlpack(x)
+        y = np.from_dlpack(CpuDLPack(x))
         self.assertTrue(mx.array_equal(y, x))
 
         x = mx.arange(16).reshape(4, 4)
         x = x[::2, ::2]
-        y = np.from_dlpack(x)
+        y = np.from_dlpack(CpuDLPack(x))
         self.assertTrue(mx.array_equal(y, x))
 
     def test_from_dlpack_cpu(self):
@@ -2155,13 +2166,18 @@ class TestArray(mlx_tests.MLXTestCase):
             self.assertEqual(mv.tolist(), x.cpu().numpy().tolist())
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_torch_mps_dlpack_zero_copy_reads_torch_updates(self):
+    def test_torch_mps_dlpack_zero_copy_shares_updates(self):
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        torch.mps.synchronize()
         y = mx.array(x)
 
         x.add_(100)
         torch.mps.synchronize()
         self.assertEqual((y + 1).tolist(), (x + 1).cpu().numpy().tolist())
+
+        y += 10
+        mx.eval(y)
+        self.assertEqual(x.cpu().numpy().tolist(), y.tolist())
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_dtype_argument_copies(self):
@@ -2219,7 +2235,44 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.cpu().numpy().tolist(), [3, 4, 5])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_from_dlpack_torch_mps_copy_none_shares(self):
+    def test_mlx_dlpack_exports_mps_tensor_to_torch(self):
+        x = mx.array([1]).astype(mx.float16)
+        mx.eval(x)
+        y = torch.utils.dlpack.from_dlpack(x)
+        torch.mps.synchronize()
+
+        self.assertEqual(y.device.type, "mps")
+        self.assertEqual(y.dtype, torch.float16)
+        self.assertEqual(y.cpu().numpy().tolist(), [1.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_mlx_dlpack_exports_mps_tensor_to_torch_tensor(self):
+        x = mx.array([1]).astype(mx.float16)
+        mx.eval(x)
+        y = torch.tensor(x)
+        torch.mps.synchronize()
+
+        self.assertEqual(y.device.type, "mps")
+        self.assertEqual(y.dtype, torch.float16)
+        self.assertEqual(y.cpu().numpy().tolist(), [1.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_mlx_dlpack_export_torch_update_writes_mlx_buffer(self):
+        x = mx.arange(8, dtype=mx.float32)
+        y = x[2:6]
+        mx.eval(y)
+        t = torch.utils.dlpack.from_dlpack(y)
+
+        self.assertEqual(t.device.type, "mps")
+        self.assertEqual(t.cpu().numpy().tolist(), [2.0, 3.0, 4.0, 5.0])
+
+        t.add_(10)
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [12.0, 13.0, 14.0, 15.0])
+        self.assertEqual(x.tolist(), [0.0, 1.0, 12.0, 13.0, 14.0, 15.0, 6.0, 7.0])
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_from_dlpack_torch_mps_copy_none_shares_updates(self):
         x = torch.arange(3, device="mps", dtype=torch.float32)
         torch.mps.synchronize()
         y = mx.from_dlpack(x)
@@ -2228,8 +2281,12 @@ class TestArray(mlx_tests.MLXTestCase):
         torch.mps.synchronize()
         self.assertEqual(y.tolist(), [10.0, 11.0, 12.0])
 
+        y += 10
+        mx.eval(y)
+        self.assertEqual(x.cpu().numpy().tolist(), [20.0, 21.0, 22.0])
+
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_from_dlpack_torch_mps_copy_false_shares(self):
+    def test_from_dlpack_torch_mps_copy_false_shares_updates(self):
         x = torch.arange(3, device="mps", dtype=torch.float32)
         torch.mps.synchronize()
         y = mx.from_dlpack(x, copy=False)
@@ -2237,6 +2294,10 @@ class TestArray(mlx_tests.MLXTestCase):
         y += 10
         mx.eval(y)
         self.assertEqual(x.cpu().numpy().tolist(), [10.0, 11.0, 12.0])
+
+        x.add_(10)
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [20.0, 21.0, 22.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_from_dlpack_torch_mps_copy_true_copies(self):
