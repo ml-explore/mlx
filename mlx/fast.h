@@ -100,4 +100,13 @@ MLX_API std::vector<array> precompiled_cuda_kernel(
     bool ensure_row_contiguous = false,
     StreamOrDevice s = {});
 
+MLX_API array mamba3_ssd(
+      const array& q,
+      const array& k,
+      const array& v,
+      const array& dt,
+      const array& trap,
+      const array& angles,
+      StreamOrDevice s = {});
+      
 } // namespace mlx::core::fast

@@ -82,6 +82,19 @@ void init_fast(nb::module_& parent_module) {
       parent_module.def_submodule("fast", "mlx.core.fast: fast operations");
 
   m.def(
+      "mamba3_ssd",
+      &mlx::core::fast::mamba3_ssd, // <-- RCA FIXED: Fully qualified namespace
+      "q"_a,
+      "k"_a,
+      "v"_a,
+      "dt"_a,
+      "trap"_a,
+      "angles"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      "Fused Mamba-3 SSD kernel");
+
+  m.def(
       "rms_norm",
       &mx::fast::rms_norm,
       "x"_a,
@@ -528,6 +541,8 @@ void init_fast(nb::module_& parent_module) {
           b = exp_elementwise(a)
           assert mx.allclose(b, mx.exp(a))
      )pbdoc");
+
+  m.def("mamba3_ssd", &mlx::core::fast::mamba3_ssd, "Fused Mamba-3 SSD kernel");
 
   m.def(
       "precompiled_cuda_kernel",

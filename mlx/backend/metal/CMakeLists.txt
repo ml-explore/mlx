@@ -96,6 +96,9 @@ if(MLX_METAL_JIT)
                   kernels/fp4.h)
 
   make_jit_source(steel/attn/kernels/steel_attention_nax)
+  
+  # === MAMBA 3 JIT REGISTRATION ===
+  make_jit_source(mamba3_ssd)
 
 else()
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nojit_kernels.cpp)
@@ -134,12 +137,14 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/resident.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp)
+          ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/mamba3.cpp) # <--- MAMBA 3 DISPATCHER ADDED HERE
 
 if(NOT MLX_METAL_PATH)
   set(MLX_METAL_PATH ${CMAKE_CURRENT_BINARY_DIR}/kernels/)
 endif()
 
+# This is where the .metal files are compiled!
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/kernels)
 
 target_compile_definitions(mlx

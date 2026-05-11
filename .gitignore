@@ -1,81 +1,37 @@
-# Byte-compiled / optimized / DLL files
+# --- Python & Environment ---
 __pycache__/
 *.py[cod]
-*$py.class
-
-# tensor files
-*.safe
-*.safetensors
-
-# Metal libraries
-*.metallib
-
-# Distribution / packaging
-python/mlx/core
-python/mlx/share
-python/mlx/include
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
+*.class
+.venv/
 venv/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-uv.lock
-.DS_Store
+.python-version
+.ruff_cache/
+.mypy_cache/
 
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
+# --- C++ & Metal (Apple Silicon) ---
+build/
+bin/
+*.air
+*.metallib
 *.o
 *.obj
-*.ilk
+.DS_Store
+.AppleDouble
+.LSOverride
+**/__MACOSX/
 
-# Precompiled Headers
-*.gch
-*.pch
+# --- Project Specific (The Brain & Data) ---
+.env
+.env.local
+data/
+!data/.gitkeep
+src/storage/graph_db/neo4j-operations.log
+*.pb
+*.pb.bin
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# Debug symbols
-*.pdb
-
-# VSCode
+# --- IDEs ---
 .vscode/
-# Jetbrains
-.cache/
-# vim
+!.vscode/settings.json
+!.vscode/launch.json
+.idea/
 *.swp

@@ -175,6 +175,11 @@ if(NOT MLX_METAL_JIT)
     target_compile_definitions(mlx PRIVATE MLX_METAL_NO_NAX)
   endif()
 
+  # =========================================================================
+  # MAMBA-3: Build the custom SSD kernel and track its headers
+  # =========================================================================
+  build_kernel(mamba3_ssd scan.h ${STEEL_HEADERS})
+
 endif()
 
 add_custom_command(
