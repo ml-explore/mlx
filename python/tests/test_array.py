@@ -2113,19 +2113,32 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.cpu().numpy().tolist(), y.tolist())
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_torch_mps_dlpack_dtype_argument_copies(self):
+    def test_torch_mps_dlpack_matching_dtype_argument_shares_updates(self):
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         torch.mps.synchronize()
-        y_copy = mx.array(x, dtype=mx.float32)
-        expected = x.cpu().numpy().tolist()
+        y = mx.array(x, dtype=mx.float32)
 
         x.add_(100)
         torch.mps.synchronize()
-        self.assertEqual(y_copy.tolist(), expected)
+        self.assertEqual(y.tolist(), x.cpu().numpy().tolist())
 
+        y += 10
+        mx.eval(y)
+        self.assertEqual(x.cpu().numpy().tolist(), y.tolist())
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_different_dtype_argument_copies(self):
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        torch.mps.synchronize()
         z = mx.array(x, dtype=mx.float16)
+        expected = x.to(torch.float16).cpu().numpy().tolist()
+
         self.assertEqual(z.dtype, mx.float16)
-        self.assertEqual(z.tolist(), x.to(torch.float16).cpu().numpy().tolist())
+        self.assertEqual(z.tolist(), expected)
+
+        x.add_(100)
+        torch.mps.synchronize()
+        self.assertEqual(z.tolist(), expected)
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_data_offset(self):
