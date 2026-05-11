@@ -97,6 +97,13 @@ auto dispatch_dlpack_dtype(
   }
 }
 
+mx::Dtype mlx_dtype_from_dlpack(
+    nb::dlpack::dtype type,
+    const char* error_message) {
+  return dispatch_dlpack_dtype(
+      type, []<typename T>(mx::Dtype dtype) { return dtype; }, error_message);
+}
+
 mx::array metal_dlpack_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
     std::optional<mx::Dtype> dtype);
@@ -138,10 +145,8 @@ mx::array from_dlpack(nb::object v, std::optional<bool> copy) {
     case nb::device::metal::value: {
       std::optional<mx::Dtype> dtype;
       if (copy == true) {
-        dtype = dispatch_dlpack_dtype(
-            nd.dtype(),
-            []<typename T>(mx::Dtype dtype) { return dtype; },
-            "Cannot convert Metal DLPack array to mlx array.");
+        dtype = mlx_dtype_from_dlpack(
+            nd.dtype(), "Cannot convert Metal DLPack array to mlx array.");
       }
       return nd_array_to_mlx(std::move(nd), dtype);
     }
@@ -704,7 +709,13 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
     } else {
       nd = nb::cast<ContigArray>(v);
     }
-    return nd_array_to_mlx(nd, t, nb_dtype);
+    auto type = nb_dtype.value_or(nd.dtype());
+    std::optional<mx::Dtype> copy_dtype;
+    if (t &&
+        *t != mlx_dtype_from_dlpack(type, "Cannot convert array to mlx.")) {
+      copy_dtype = t;
+    }
+    return nd_array_to_mlx(nd, copy_dtype, nb_dtype);
   } else {
     auto arr = to_array_with_accessor(v);
     return mx::astype(arr, t.value_or(arr.dtype()));
