@@ -4,6 +4,8 @@ from collections import defaultdict
 from itertools import zip_longest
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from mlx.core import register_pytree_node  # noqa: F401 (public re-export)
+
 
 def tree_map(
     fn: Callable, tree: Any, *rest: Any, is_leaf: Optional[Callable] = None

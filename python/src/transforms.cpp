@@ -461,6 +461,7 @@ struct PyCompiledFun {
     constexpr uint64_t list_identifier = 18446744073709551533UL;
     constexpr uint64_t dict_identifier = 18446744073709551521UL;
     constexpr uint64_t none_identifier = 10239356951478402889UL;
+    constexpr uint64_t pytree_identifier = 14695981039346656037UL;
 
     // Flatten the tree with hashed constants and structure
     std::function<void(nb::handle)> recurse;
@@ -488,6 +489,17 @@ struct PyCompiledFun {
       } else if (nb::isinstance<mx::array>(obj)) {
         inputs.push_back(nb::cast<mx::array>(obj));
         constants.push_back(array_identifier);
+      } else if (is_registered_pytree(obj)) {
+        // Custom registered pytree node — treat as an internal node.  The
+        // type identity + aux fingerprint participate in the compile cache
+        // key so two structurally-different instances retrace.
+        constants.push_back(pytree_identifier);
+        constants.push_back(registered_pytree_fingerprint(obj));
+        auto [children, _aux] = flatten_registered(obj);
+        constants.push_back(static_cast<uint64_t>(children.size()));
+        for (const auto& child : children) {
+          recurse(child);
+        }
       } else if (nb::isinstance<nb::str>(obj)) {
         auto r = obj.attr("__hash__")();
         constants.push_back(nb::cast<int64_t>(r));
@@ -502,7 +514,8 @@ struct PyCompiledFun {
         std::ostringstream msg;
         msg << "[compile] Function arguments must be trees of arrays "
             << "or constants (floats, ints, strings, or None), but received "
-            << "type " << type_name_str(obj) << ".";
+            << "type " << type_name_str(obj) << ". To pass a custom type, "
+            << "register it with mx.register_pytree_node().";
         throw std::invalid_argument(msg.str());
       }
     };

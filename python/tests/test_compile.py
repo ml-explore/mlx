@@ -1322,6 +1322,69 @@ class TestCompile(mlx_tests.MLXTestCase):
             np.asarray(out, copy=False).__array_interface__["data"][0], in_ptr
         )
 
+    def test_compile_registered_pytree_node(self):
+        # Custom container class that holds two arrays.
+        class Pair:
+            def __init__(self, a, b):
+                self.a = a
+                self.b = b
+
+        # Before registration, compile must reject Pair instances.
+        before = mx.compile(lambda p: p.a + p.b)
+        with self.assertRaises(ValueError):
+            before(Pair(mx.array(1), mx.array(2)))
+
+        # Register Pair and verify the compiled function works end-to-end.
+        mx.register_pytree_node(
+            Pair,
+            lambda p: ([p.a, p.b], None),
+            lambda _aux, children: Pair(*children),
+        )
+
+        @mx.compile
+        def add_pair(p):
+            return p.a + p.b
+
+        out = add_pair(Pair(mx.array(3), mx.array(4)))
+        self.assertEqual(out.item(), 7)
+
+        # Aux-data participates in the cache key: a subclass with different
+        # aux-tag is treated as a distinct shape.
+        class TaggedPair(Pair):
+            pass
+
+        mx.register_pytree_node(
+            TaggedPair,
+            lambda p: ([p.a, p.b], "tag-v1"),
+            lambda _aux, children: TaggedPair(*children),
+        )
+
+        @mx.compile
+        def doubled(p):
+            return (p.a + p.b) * 2
+
+        self.assertEqual(doubled(Pair(mx.array(5), mx.array(6))).item(), 22)
+        self.assertEqual(
+            doubled(TaggedPair(mx.array(5), mx.array(6))).item(), 22
+        )
+
+        # Bad flatten_fn return value surfaces a clean error.
+        class BadFlatten:
+            pass
+
+        mx.register_pytree_node(
+            BadFlatten,
+            lambda _: "not a pair",
+            lambda _aux, children: BadFlatten(),
+        )
+
+        @mx.compile
+        def use_bad(_p):
+            return mx.array(0)
+
+        with self.assertRaises(ValueError):
+            use_bad(BadFlatten())
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

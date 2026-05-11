@@ -15,6 +15,7 @@ void init_metal(nb::module_&);
 void init_cuda(nb::module_&);
 void init_memory(nb::module_&);
 void init_ops(nb::module_&);
+void init_trees(nb::module_&);
 void init_transforms(nb::module_&);
 void init_random(nb::module_&);
 void init_fft(nb::module_&);
@@ -39,6 +40,7 @@ NB_MODULE(core, m) {
   init_cuda(m);
   init_memory(m);
   init_ops(m);
+  init_trees(m);
   init_transforms(m);
   init_random(m);
   init_fft(m);

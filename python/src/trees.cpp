@@ -1,6 +1,194 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <unordered_map>
+
+#include <nanobind/stl/pair.h>
+#include <nanobind/stl/vector.h>
+
 #include "python/src/trees.h"
+
+namespace {
+
+struct PytreeNodeDef {
+  nb::callable flatten_fn;
+  nb::callable unflatten_fn;
+};
+
+// Keyed by raw PyTypeObject pointer; the type is held via the registered
+// callables so it cannot be collected while the def is live.
+//
+// The map is intentionally heap-allocated and never freed.  Holding nb::callable
+// references in a function-local static triggers a use-after-finalize when the
+// C++ runtime tears down the static during interpreter shutdown — the Python
+// state is already gone, so decrefing the stored callables segfaults.  This is
+// the same lifetime trick used by structure_sentinel() below.
+std::unordered_map<PyTypeObject*, PytreeNodeDef>& registry() {
+  static auto* r = new std::unordered_map<PyTypeObject*, PytreeNodeDef>();
+  return *r;
+}
+
+}  // namespace
+
+void register_pytree_node(
+    nb::object cls,
+    nb::callable flatten_fn,
+    nb::callable unflatten_fn) {
+  if (!PyType_Check(cls.ptr())) {
+    throw std::invalid_argument(
+        "[register_pytree_node] cls must be a Python class object.");
+  }
+  PyTypeObject* type = reinterpret_cast<PyTypeObject*>(cls.ptr());
+  registry()[type] = PytreeNodeDef{flatten_fn, unflatten_fn};
+}
+
+bool is_registered_pytree(nb::handle obj) {
+  if (!obj.ptr()) {
+    return false;
+  }
+  return registry().find(Py_TYPE(obj.ptr())) != registry().end();
+}
+
+std::pair<std::vector<nb::object>, nb::object> flatten_registered(
+    nb::handle obj) {
+  PyTypeObject* type = Py_TYPE(obj.ptr());
+  auto it = registry().find(type);
+  if (it == registry().end()) {
+    throw std::runtime_error(
+        "[flatten_registered] type is not registered as a pytree node");
+  }
+  nb::object result = it->second.flatten_fn(obj);
+  if (!nb::isinstance<nb::tuple>(result) && !nb::isinstance<nb::list>(result)) {
+    throw std::invalid_argument(
+        "[register_pytree_node] flatten_fn must return a (children, aux_data) "
+        "pair.");
+  }
+  auto seq = nb::cast<nb::sequence>(result);
+  if (nb::len(seq) != 2) {
+    throw std::invalid_argument(
+        "[register_pytree_node] flatten_fn must return a (children, aux_data) "
+        "pair.");
+  }
+  nb::object children_obj = seq[0];
+  nb::object aux = seq[1];
+
+  std::vector<nb::object> children;
+  if (nb::isinstance<nb::list>(children_obj) ||
+      nb::isinstance<nb::tuple>(children_obj)) {
+    auto iter = nb::iter(children_obj);
+    for (auto h : iter) {
+      children.push_back(nb::cast<nb::object>(h));
+    }
+  } else {
+    throw std::invalid_argument(
+        "[register_pytree_node] flatten_fn must return children as a list or "
+        "tuple.");
+  }
+  return {children, aux};
+}
+
+nb::object unflatten_registered(
+    nb::handle type,
+    nb::object aux_data,
+    const std::vector<nb::object>& children) {
+  PyTypeObject* t = reinterpret_cast<PyTypeObject*>(type.ptr());
+  auto it = registry().find(t);
+  if (it == registry().end()) {
+    throw std::runtime_error(
+        "[unflatten_registered] type is not registered as a pytree node");
+  }
+  nb::list children_list;
+  for (const auto& c : children) {
+    children_list.append(c);
+  }
+  return it->second.unflatten_fn(aux_data, children_list);
+}
+
+uint64_t registered_pytree_fingerprint(nb::handle obj) {
+  PyTypeObject* type = Py_TYPE(obj.ptr());
+  uint64_t fp = reinterpret_cast<uintptr_t>(type);
+
+  // Mix in hash(aux_data) so structurally distinct registered nodes don't
+  // collide.  We re-call flatten_fn purely to retrieve aux; this is the same
+  // cost as the structural recurse below and keeps the fingerprint in sync
+  // with how the node will be expanded.
+  auto it = registry().find(type);
+  if (it != registry().end()) {
+    try {
+      nb::object result = it->second.flatten_fn(obj);
+      if (nb::isinstance<nb::tuple>(result) ||
+          nb::isinstance<nb::list>(result)) {
+        auto seq = nb::cast<nb::sequence>(result);
+        if (nb::len(seq) == 2) {
+          nb::object aux = seq[1];
+          if (!aux.is_none()) {
+            try {
+              auto h = aux.attr("__hash__")();
+              uint64_t aux_hash =
+                  static_cast<uint64_t>(nb::cast<int64_t>(h));
+              fp ^= aux_hash + 0x9e3779b97f4a7c15ULL + (fp << 6) + (fp >> 2);
+            } catch (...) {
+              // Unhashable aux — fall back to type-only fingerprint.
+            }
+          }
+        }
+      }
+    } catch (...) {
+      // flatten_fn failed — fall back to type-only fingerprint.
+    }
+  }
+  return fp;
+}
+
+void init_trees(nb::module_& m) {
+  m.def(
+      "register_pytree_node",
+      &register_pytree_node,
+      nb::arg("cls"),
+      nb::arg("flatten_fn"),
+      nb::arg("unflatten_fn"),
+      R"pbdoc(
+        Register a custom class as a pytree node.
+
+        Once registered, instances of ``cls`` are treated as interior nodes
+        (not leaves) by :func:`mlx.core.compile`, :func:`mlx.utils.tree_map`,
+        :func:`mlx.utils.tree_flatten`, and friends.
+
+        Args:
+            cls (type): The class to register.
+            flatten_fn (callable): ``flatten_fn(obj) -> (children, aux_data)``
+                where *children* is a list or tuple of sub-trees (may contain
+                :class:`array` or further nested structures) and *aux_data* is
+                any hashable metadata needed to reconstruct the object.  When
+                a registered object appears as a :func:`compile` argument the
+                hash of *aux_data* participates in the compile cache key, so
+                two instances with different aux trigger a retrace.
+            unflatten_fn (callable): ``unflatten_fn(aux_data, children) -> obj``
+                that recreates the original object from *aux_data* and the
+                (possibly updated) *children* list.
+
+        Example:
+
+            >>> import mlx.core as mx
+            >>>
+            >>> class Pair:
+            ...     def __init__(self, a, b):
+            ...         self.a = a
+            ...         self.b = b
+            ...
+            >>> mx.register_pytree_node(
+            ...     Pair,
+            ...     lambda p: ([p.a, p.b], None),
+            ...     lambda _, children: Pair(*children),
+            ... )
+            >>>
+            >>> @mx.compile
+            ... def add_pair(p):
+            ...     return p.a + p.b
+            ...
+            >>> add_pair(Pair(mx.array(1), mx.array(2)))
+            array(3, dtype=int32)
+      )pbdoc");
+}
 
 template <typename T, typename U, typename V>
 void validate_subtrees(const std::vector<nb::object>& subtrees) {
@@ -76,6 +264,40 @@ nb::object tree_map(
         d[item.first] = recurse(items);
       }
       return nb::cast<nb::object>(d);
+    } else if (is_registered_pytree(subtrees[0])) {
+      auto [children, aux] = flatten_registered(subtrees[0]);
+      PyTypeObject* type = Py_TYPE(subtrees[0].ptr());
+      nb::handle type_handle(reinterpret_cast<PyObject*>(type));
+
+      // Pre-flatten every other subtree so we can index parallel children.
+      std::vector<std::vector<nb::object>> other_children(subtrees.size());
+      other_children[0] = std::move(children);
+      for (size_t j = 1; j < subtrees.size(); ++j) {
+        if (is_registered_pytree(subtrees[j]) &&
+            Py_TYPE(subtrees[j].ptr()) == type) {
+          other_children[j] = flatten_registered(subtrees[j]).first;
+          if (other_children[j].size() != other_children[0].size()) {
+            throw std::invalid_argument(
+                "[tree_map] Additional input tree is not a valid prefix of "
+                "the first tree.");
+          }
+        }
+      }
+
+      std::vector<nb::object> new_children;
+      new_children.reserve(other_children[0].size());
+      for (size_t i = 0; i < other_children[0].size(); ++i) {
+        std::vector<nb::object> items(subtrees.size());
+        for (size_t j = 0; j < subtrees.size(); ++j) {
+          if (!other_children[j].empty()) {
+            items[j] = other_children[j][i];
+          } else {
+            items[j] = subtrees[j];
+          }
+        }
+        new_children.push_back(recurse(items));
+      }
+      return unflatten_registered(type_handle, aux, new_children);
     } else {
       return transform(subtrees);
     }
@@ -143,6 +365,32 @@ void tree_visit(
         }
         recurse(items);
       }
+    } else if (is_registered_pytree(subtrees[0])) {
+      PyTypeObject* type = Py_TYPE(subtrees[0].ptr());
+      std::vector<std::vector<nb::object>> other_children(subtrees.size());
+      other_children[0] = flatten_registered(subtrees[0]).first;
+      for (size_t j = 1; j < subtrees.size(); ++j) {
+        if (is_registered_pytree(subtrees[j]) &&
+            Py_TYPE(subtrees[j].ptr()) == type) {
+          other_children[j] = flatten_registered(subtrees[j]).first;
+          if (other_children[j].size() != other_children[0].size()) {
+            throw std::invalid_argument(
+                "[tree_visit] Additional input tree is not a valid prefix of "
+                "the first tree.");
+          }
+        }
+      }
+      for (size_t i = 0; i < other_children[0].size(); ++i) {
+        std::vector<nb::object> items(subtrees.size());
+        for (size_t j = 0; j < subtrees.size(); ++j) {
+          if (!other_children[j].empty()) {
+            items[j] = other_children[j][i];
+          } else {
+            items[j] = subtrees[j];
+          }
+        }
+        recurse(items);
+      }
     } else {
       visitor(subtrees);
     }
@@ -161,6 +409,11 @@ void tree_visit(nb::handle tree, std::function<void(nb::handle)> visitor) {
     } else if (nb::isinstance<nb::dict>(subtree)) {
       for (auto item : nb::cast<nb::dict>(subtree)) {
         recurse(item.second);
+      }
+    } else if (is_registered_pytree(subtree)) {
+      auto [children, _] = flatten_registered(subtree);
+      for (const auto& child : children) {
+        recurse(child);
       }
     } else {
       visitor(subtree);
@@ -197,6 +450,16 @@ void tree_visit_update(
         d[item.first] = recurse(item.second);
       }
       return nb::cast<nb::object>(d);
+    } else if (is_registered_pytree(subtree)) {
+      auto [children, aux] = flatten_registered(subtree);
+      PyTypeObject* type = Py_TYPE(subtree.ptr());
+      nb::handle type_handle(reinterpret_cast<PyObject*>(type));
+      std::vector<nb::object> new_children;
+      new_children.reserve(children.size());
+      for (auto& c : children) {
+        new_children.push_back(recurse(c));
+      }
+      return unflatten_registered(type_handle, aux, new_children);
     } else if (nb::isinstance<mx::array>(subtree)) {
       return visitor(subtree);
     } else {
