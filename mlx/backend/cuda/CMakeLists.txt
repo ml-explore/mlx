@@ -122,7 +122,8 @@ target_compile_options(
 
 # Ignore warnings from CUTLASS.
 target_compile_options(
-  mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=2908,2361">)
+  mlx
+  PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=186,2908,2361">)
 
 if(NOT MSVC)
   # Required for generating optimized CUTLASS code.
