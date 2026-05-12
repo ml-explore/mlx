@@ -142,11 +142,9 @@ void gemm_grouped_conv_nd(
   // Get gemm shapes.
   int C_per_group = params.C / params.groups;
   int O_per_group = params.O / params.groups;
-  int mat_M = check_shape_dim(
-      static_cast<int64_t>(out.size() / params.O), "conv"); // N * H_out * W_out
-  int mat_K = check_shape_dim(
-      static_cast<int64_t>(wt.size() / params.O),
-      "conv"); // C_per_group * H_wt * W_wt
+  int mat_M = safe_cast(out.size() / params.O, "conv"); // N * H_out * W_out
+  int mat_K =
+      safe_cast(wt.size() / params.O, "conv"); // C_per_group * H_wt * W_wt
   int mat_N = O_per_group; // O_per_group
 
   // Unfold input to (N * H_out * W_out, C * H_wt * W_wt) for gemm.

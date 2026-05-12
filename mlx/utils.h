@@ -100,20 +100,22 @@ MLX_API Dtype result_type(const std::vector<array>& arrays);
 
 MLX_API Shape broadcast_shapes(const Shape& s1, const Shape& s2);
 
-inline ShapeElem check_shape_dim(int64_t dim, std::string_view op = "") {
+template <typename T>
+inline ShapeElem safe_cast(T dim, std::string_view op = "") {
   constexpr int64_t lo = std::numeric_limits<ShapeElem>::min();
   constexpr int64_t hi = std::numeric_limits<ShapeElem>::max();
-  if (dim < lo || dim > hi) {
+  auto v = static_cast<int64_t>(dim);
+  if (v < lo || v > hi) {
     std::ostringstream msg;
     if (!op.empty()) {
       msg << "[" << op << "] ";
     }
-    msg << "Shape dimension " << dim << " is outside the supported range ["
-        << lo << ", " << hi
+    msg << "Shape dimension " << v << " is outside the supported range [" << lo
+        << ", " << hi
         << "]. MLX currently uses 32-bit integers for shape dimensions.";
     throw std::overflow_error(msg.str());
   }
-  return static_cast<ShapeElem>(dim);
+  return static_cast<ShapeElem>(v);
 }
 
 /**

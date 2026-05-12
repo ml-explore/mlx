@@ -39,10 +39,8 @@ void explicit_gemm_conv_ND_gpu(
     array& out,
     const MLXConvParams<N>& conv_params) {
   // Get gemm shapes
-  int implicit_M =
-      check_shape_dim(static_cast<int64_t>(out.size() / conv_params.O), "conv");
-  int implicit_K =
-      check_shape_dim(static_cast<int64_t>(wt.size() / conv_params.O), "conv");
+  int implicit_M = safe_cast(out.size() / conv_params.O, "conv");
+  int implicit_K = safe_cast(wt.size() / conv_params.O, "conv");
   int implicit_N = conv_params.O;
   // Prepare unfolding array
   Shape unfolded_shape{implicit_M, implicit_K};
@@ -115,10 +113,8 @@ void explicit_gemm_conv_group_ND_gpu(
   const int C_per_group = conv_params.C / conv_params.groups;
   const int O_per_group = conv_params.O / conv_params.groups;
   // Get gemm shapes
-  const int implicit_M =
-      check_shape_dim(static_cast<int64_t>(out.size() / conv_params.O), "conv");
-  const int implicit_K =
-      check_shape_dim(static_cast<int64_t>(wt.size() / conv_params.O), "conv");
+  const int implicit_M = safe_cast(out.size() / conv_params.O, "conv");
+  const int implicit_K = safe_cast(wt.size() / conv_params.O, "conv");
   const int implicit_N = O_per_group;
 
   int kernel_size = 1;
@@ -204,7 +200,7 @@ void implicit_gemm_conv_2D_gpu(
   const int O_per_group = conv_params.O / conv_params.groups;
 
   // Deduce implicit gemm size
-  const int implicit_M = check_shape_dim(
+  const int implicit_M = safe_cast(
       static_cast<int64_t>(conv_params.N) * conv_params.oS[0] *
           conv_params.oS[1],
       "conv");
@@ -336,7 +332,7 @@ void implicit_gemm_conv_2D_general_gpu(
     array& out,
     const MLXConvParams<2>& conv_params) {
   // Deduce implicit gemm size
-  int implicit_M = check_shape_dim(
+  int implicit_M = safe_cast(
       static_cast<int64_t>(conv_params.N) * conv_params.oS[0] *
           conv_params.oS[1],
       "conv");
@@ -522,7 +518,7 @@ void implicit_gemm_conv_3D_gpu(
   const int O_per_group = conv_params.O / conv_params.groups;
 
   // Deduce implicit gemm size
-  const int implicit_M = check_shape_dim(
+  const int implicit_M = safe_cast(
       static_cast<int64_t>(conv_params.N) * conv_params.oS[0] *
           conv_params.oS[1] * conv_params.oS[2],
       "conv");

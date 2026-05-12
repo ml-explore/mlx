@@ -137,10 +137,8 @@ void gemm_conv_nd(
     ConvParams<NDIM>& params,
     Stream s) {
   // Get gemm shapes.
-  int mat_M = check_shape_dim(
-      static_cast<int64_t>(out.size() / params.O), "conv"); // N * H_out * W_out
-  int mat_K = check_shape_dim(
-      static_cast<int64_t>(wt.size() / params.O), "conv"); // C * H_wt * W_wt
+  int mat_M = safe_cast(out.size() / params.O, "conv"); // N * H_out * W_out
+  int mat_K = safe_cast(wt.size() / params.O, "conv"); // C * H_wt * W_wt
   int mat_N = params.O; // O
 
   // Unfold input to (N * H_out * W_out, C * H_wt * W_wt) for gemm.

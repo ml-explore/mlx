@@ -200,12 +200,8 @@ implicit_gemm_conv_2d_general(
           (hw % jump_params->adj_out_w) * jump_params->f_out_jump_w + base_ow;
 
       if (n < params->N && oh < params->oS[0] && ow < params->oS[1]) {
-        size_t offset_cm = static_cast<size_t>(n) *
-                static_cast<size_t>(params->out_strides[0]) +
-            static_cast<size_t>(oh) *
-                static_cast<size_t>(params->out_strides[1]) +
-            static_cast<size_t>(ow) *
-                static_cast<size_t>(params->out_strides[2]);
+        size_t offset_cm = static_cast<size_t>(n) * params->out_strides[0] +
+            oh * params->out_strides[1] + ow * params->out_strides[2];
 
         STEEL_PRAGMA_UNROLL
         for (int j = 0; j < mma_t::TN; j++) {
