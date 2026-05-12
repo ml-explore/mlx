@@ -17,17 +17,18 @@ struct PytreeNodeDef {
 // Keyed by raw PyTypeObject pointer; the type is held via the registered
 // callables so it cannot be collected while the def is live.
 //
-// The map is intentionally heap-allocated and never freed.  Holding nb::callable
-// references in a function-local static triggers a use-after-finalize when the
-// C++ runtime tears down the static during interpreter shutdown — the Python
-// state is already gone, so decrefing the stored callables segfaults.  This is
-// the same lifetime trick used by structure_sentinel() below.
+// The map is intentionally heap-allocated and never freed.  Holding
+// nb::callable references in a function-local static triggers a
+// use-after-finalize when the C++ runtime tears down the static during
+// interpreter shutdown — the Python state is already gone, so decrefing the
+// stored callables segfaults.  This is the same lifetime trick used by
+// structure_sentinel() below.
 std::unordered_map<PyTypeObject*, PytreeNodeDef>& registry() {
   static auto* r = new std::unordered_map<PyTypeObject*, PytreeNodeDef>();
   return *r;
 }
 
-}  // namespace
+} // namespace
 
 void register_pytree_node(
     nb::object cls,
@@ -123,8 +124,7 @@ uint64_t registered_pytree_fingerprint(nb::handle obj) {
           if (!aux.is_none()) {
             try {
               auto h = aux.attr("__hash__")();
-              uint64_t aux_hash =
-                  static_cast<uint64_t>(nb::cast<int64_t>(h));
+              uint64_t aux_hash = static_cast<uint64_t>(nb::cast<int64_t>(h));
               fp ^= aux_hash + 0x9e3779b97f4a7c15ULL + (fp << 6) + (fp >> 2);
             } catch (...) {
               // Unhashable aux — fall back to type-only fingerprint.

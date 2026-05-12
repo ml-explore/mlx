@@ -1364,9 +1364,7 @@ class TestCompile(mlx_tests.MLXTestCase):
             return (p.a + p.b) * 2
 
         self.assertEqual(doubled(Pair(mx.array(5), mx.array(6))).item(), 22)
-        self.assertEqual(
-            doubled(TaggedPair(mx.array(5), mx.array(6))).item(), 22
-        )
+        self.assertEqual(doubled(TaggedPair(mx.array(5), mx.array(6))).item(), 22)
 
         # Bad flatten_fn return value surfaces a clean error.
         class BadFlatten:
