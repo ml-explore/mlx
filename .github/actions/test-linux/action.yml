@@ -21,7 +21,7 @@ runs:
       shell: bash
       run: |
         echo "::group::Distributed tests"
-        mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+        mlx.launch --verbose -n 8 python python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
         if grep -Fq '[WARN]' stderr.log ; then
           grep -F '[WARN]' stderr.log
           echo "Distributed ring test failed";

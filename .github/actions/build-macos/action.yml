@@ -27,7 +27,7 @@ runs:
         DEVICE=cpu python -m unittest discover -v python/tests
         DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m unittest discover -v python/tests
         mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
-        mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+        mlx.launch --verbose -n 8 python python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
         if $(grep "\[WARN\]" stderr.log); then echo "Distributed ring test failed"; exit 1; fi
     
     - name: Build example extension
