@@ -495,7 +495,7 @@ struct PyCompiledFun {
         // key so two structurally-different instances retrace.
         constants.push_back(pytree_identifier);
         constants.push_back(registered_pytree_fingerprint(obj));
-        auto [children, _aux] = flatten_registered(obj);
+        auto children = pytree_children(obj);
         constants.push_back(static_cast<uint64_t>(children.size()));
         for (const auto& child : children) {
           recurse(child);

@@ -1,7 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #pragma once
 #include <nanobind/nanobind.h>
-#include <utility>
 #include <vector>
 
 #include "mlx/array.h"
@@ -21,29 +20,20 @@ namespace nb = nanobind;
 // --------------------------------------------------------------------------
 
 void register_pytree_node(
-    nb::object cls,
+    nb::type_object cls,
     nb::callable flatten_fn,
     nb::callable unflatten_fn);
 
-// True if Py_TYPE(obj) has been registered as a pytree node.
+// True if type(obj) has been registered as a pytree node.
 bool is_registered_pytree(nb::handle obj);
 
-// Calls the registered flatten_fn for the type of obj. Caller must ensure
+// Returns the children list for a registered pytree node.  Caller must ensure
 // is_registered_pytree(obj) is true.
-std::pair<std::vector<nb::object>, nb::object> flatten_registered(
-    nb::handle obj);
-
-// Calls the registered unflatten_fn for the given type object.
-nb::object unflatten_registered(
-    nb::handle type,
-    nb::object aux_data,
-    const std::vector<nb::object>& children);
+std::vector<nb::object> pytree_children(nb::handle obj);
 
 // Compile cache fingerprint for a registered pytree's type+aux pair.
 // Combines id(type) and hash(aux) so that compile retraces if either changes.
 uint64_t registered_pytree_fingerprint(nb::handle obj);
-
-void init_trees(nb::module_& m);
 
 void tree_visit(
     const std::vector<nb::object>& trees,
