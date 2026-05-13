@@ -67,3 +67,15 @@ runs:
         echo "::group::CPP tests - GPU"
         ./build/tests/tests -sfe="*linalg_tests.cpp"
         echo "::endgroup::"
+
+    - name: Show stack trace on crash
+      if: failure()
+      shell: bash
+      run: |
+        echo "::group::Show stack trace on crash"
+        set +e
+        sleep 10
+        if coredumpctl list; then
+          coredumpctl debug --debugger-arguments="-batch -ex 'thread apply all bt'"
+        fi
+        echo "::endgroup::"

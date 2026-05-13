@@ -27,7 +27,7 @@ runs:
         echo "::group::Install common dependencies"
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
-            zip \
+            gdb zip \
             libblas-dev liblapack-dev liblapacke-dev \
             openmpi-bin openmpi-common libopenmpi-dev
         echo "::endgroup::"
