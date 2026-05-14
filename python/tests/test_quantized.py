@@ -205,6 +205,32 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     self.assertEqual(y_q.shape, y_hat.shape)
                     self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    def test_qqmm_metal_global_scale_rejected(self):
+        # Tensor-scale nvfp4 (global_scale_x / global_scale_w) is not
+        # implemented in the Metal qqmm kernels. mx.qqmm must reject the
+        # request on Metal rather than silently dropping the global scales
+        # in the gemv path and producing incorrect results.
+        if not mx.metal.is_available():
+            return
+
+        w = mx.random.normal(shape=(64, 64))
+        w_q, scales = mx.quantize(w, mode="nvfp4")
+        x = mx.random.normal(shape=(1, 64))
+        gx = mx.array(1.0, dtype=mx.float32)
+        gw = mx.array(1.0, dtype=mx.float32)
+
+        with self.assertRaises(RuntimeError):
+            y = mx.qqmm(
+                x,
+                w_q,
+                scales,
+                mode="nvfp4",
+                global_scale_x=gx,
+                global_scale_w=gw,
+                stream=mx.gpu,
+            )
+            mx.eval(y)
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
