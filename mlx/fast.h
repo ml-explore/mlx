@@ -43,7 +43,12 @@ MLX_API array rope(
     const std::optional<array>& freqs = std::nullopt,
     StreamOrDevice s = {});
 
-/** Computes: O = softmax(Q @ K.T) @ V **/
+/** Computes: O = softmax(Q @ K.T) @ V
+ *
+ * `window_size` (>0) enables a sliding-window attention pattern: query at
+ * absolute position q only attends to keys in [max(0, q - window_size + 1), q].
+ * When 0 (default), the standard full-attention behavior is used.
+ **/
 MLX_API array scaled_dot_product_attention(
     const array& queries,
     const array& keys,
@@ -52,6 +57,7 @@ MLX_API array scaled_dot_product_attention(
     const std::string& mask_mode = "",
     std::optional<array> mask_arr = {},
     const std::optional<array>& sinks = {},
+    int window_size = 0,
     StreamOrDevice s = {});
 
 using TemplateArg = std::variant<int, bool, Dtype>;

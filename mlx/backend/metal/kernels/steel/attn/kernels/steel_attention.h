@@ -14,6 +14,7 @@ constant bool align_K [[function_constant(201)]];
 constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
 constant bool has_sinks [[function_constant(302)]];
+constant bool has_window [[function_constant(303)]];
 
 struct MaxOp {
   template <typename T>
@@ -234,6 +235,7 @@ template <
   }
 
   int kb_lim = params->NK;
+  int kb_start = 0;
   int kb_min_causal = params->NK;
 
   if (do_causal) {
@@ -246,8 +248,19 @@ template <
     kb_min_causal = (q_min / BK);
   }
 
+  if (has_window) {
+    int q_min = tid.x * BQ + params->qL_off;
+    int k_min = q_min - params->window_size + 1;
+    if (k_min > 0) {
+      kb_start = k_min / BK;
+      if (kb_start > kb_lim) {
+        kb_start = kb_lim;
+      }
+    }
+  }
+
   // Loop over KV seq length
-  for (int kb = 0; kb < kb_lim; kb++) {
+  for (int kb = kb_start; kb < kb_lim; kb++) {
     // Load K block and apply scale
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (!align_K && kb == (params->NK_aligned)) {
@@ -318,6 +331,28 @@ template <
           STEEL_PRAGMA_UNROLL
           for (short jj = 0; jj < stile_t::MMAFrag_t::kElemCols; jj++) {
             if (row_pos < (col_pos + jj)) {
+              Stile.frag_at(i, j)[jj] = neg_inf;
+            }
+          }
+        }
+      }
+    }
+
+    if (has_window && kb < (kb_start + ((BQ + BK - 1) / BK))) {
+      using stile_t = decltype(Stile);
+      using selem_t = typename stile_t::elem_type;
+      constexpr auto neg_inf = Limits<selem_t>::finite_min;
+
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < stile_t::kTileRows; i++) {
+        const int row_pos =
+            tid.x * BQ + params->qL_off + tm + sm + (i * stile_t::kFragRows);
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < stile_t::kTileCols; j++) {
+          const int col_pos = kb * BK + sn + (j * stile_t::kFragCols);
+          STEEL_PRAGMA_UNROLL
+          for (short jj = 0; jj < stile_t::MMAFrag_t::kElemCols; jj++) {
+            if (row_pos - (col_pos + jj) >= params->window_size) {
               Stile.frag_at(i, j)[jj] = neg_inf;
             }
           }

@@ -197,6 +197,7 @@ void init_fast(nb::module_& parent_module) {
          const float scale,
          const std::variant<std::monostate, std::string, mx::array>& mask,
          const std::optional<mx::array>& sinks,
+         int window_size,
          mx::StreamOrDevice s) {
         bool has_mask = !std::holds_alternative<std::monostate>(mask);
         bool has_str_mask =
@@ -213,16 +214,32 @@ void init_fast(nb::module_& parent_module) {
               throw std::invalid_argument(msg.str());
             }
             return mx::fast::scaled_dot_product_attention(
-                queries, keys, values, scale, mask_str, std::nullopt, sinks, s);
+                queries,
+                keys,
+                values,
+                scale,
+                mask_str,
+                std::nullopt,
+                sinks,
+                window_size,
+                s);
           } else {
             auto mask_arr = std::get<mx::array>(mask);
             return mx::fast::scaled_dot_product_attention(
-                queries, keys, values, scale, "", mask_arr, sinks, s);
+                queries,
+                keys,
+                values,
+                scale,
+                "",
+                mask_arr,
+                sinks,
+                window_size,
+                s);
           }
 
         } else {
           return mx::fast::scaled_dot_product_attention(
-              queries, keys, values, scale, "", {}, sinks, s);
+              queries, keys, values, scale, "", {}, sinks, window_size, s);
         }
       },
       "q"_a,
@@ -232,9 +249,10 @@ void init_fast(nb::module_& parent_module) {
       "scale"_a,
       "mask"_a = nb::none(),
       "sinks"_a = nb::none(),
+      "window_size"_a = 0,
       "stream"_a = nb::none(),
       nb::sig(
-          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, str, array] = None, sinks: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, str, array] = None, sinks: Optional[array] = None, window_size: int = 0, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         A fast implementation of multi-head attention: ``O = softmax(Q @ K.T, dim=-1) @ V``.
 
@@ -276,6 +294,9 @@ void init_fast(nb::module_& parent_module) {
                last query aligns with the last key.
             sinks (array, optional): An optional array of attention sinks.
                Default: ``None``.
+            window_size (int, optional): A sliding-window size. When greater
+               than zero, each query attends only to keys in the last
+               ``window_size`` positions. Default: ``0``.
 
         Returns:
             array: The output array.

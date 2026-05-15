@@ -618,6 +618,7 @@ array scaled_dot_product_attention(
     const std::string& mask_mode /* = "" */,
     std::optional<array> mask_arr /* = {} */,
     const std::optional<array>& sinks /* = {} */,
+    int window_size /* = 0 */,
     StreamOrDevice s /* = {}*/) {
   for (const auto& tensor : {queries, keys, values}) {
     if (tensor.ndim() != 4) {
@@ -660,6 +661,12 @@ array scaled_dot_product_attention(
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] the mask with shape "
         << mask_arr->shape() << " expected to have at most rank 4.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (window_size < 0) {
+    std::ostringstream msg;
+    msg << "[scaled_dot_product_attention] window_size must be non-negative; "
+        << "received " << window_size << ".";
     throw std::invalid_argument(msg.str());
   }
 
@@ -718,6 +725,7 @@ array scaled_dot_product_attention(
                    n_q_heads,
                    n_kv_heads,
                    do_causal,
+                   window_size,
                    has_sinks,
                    has_arr_mask,
                    s](const std::vector<array>& inputs) {
@@ -731,19 +739,45 @@ array scaled_dot_product_attention(
       v = expand_dims(v, 2, s);
     }
     auto scores = matmul(q, swapaxes(k, -1, -2, s), s);
-    if (has_arr_mask || do_causal) {
+    if (has_arr_mask || do_causal || window_size > 0) {
       // Mask must be broadcast-compatible with [B, n_q_heads, L_q, L_kv]
       auto make_or_fetch_mask = [&]() {
+        int kL = k.shape(-2);
+        int qL = q.shape(-2);
+        int offset = kL - qL;
+        auto q_idx = arange(offset, qL + offset, s);
+        auto k_idx = arange(0, kL, s);
+        q_idx = expand_dims(q_idx, 1, s);
+        k_idx = expand_dims(k_idx, 0, s);
+
         if (do_causal) {
-          int kL = k.shape(-2);
-          int qL = q.shape(-2);
-          int offset = kL - qL;
-          auto q_idx = arange(offset, qL + offset, s);
-          auto k_idx = arange(0, kL, s);
-          q_idx = expand_dims(q_idx, 1, s);
-          k_idx = expand_dims(k_idx, 0, s);
-          return greater_equal(q_idx, k_idx, s);
+          auto causal_mask = greater_equal(q_idx, k_idx, s);
+          if (window_size > 0) {
+            auto window_mask =
+                less(q_idx, add(k_idx, array(window_size, k_idx.dtype()), s), s);
+            return logical_and(causal_mask, window_mask, s);
+          }
+          return causal_mask;
         }
+
+        if (window_size > 0) {
+          auto window_mask =
+              less(q_idx, add(k_idx, array(window_size, k_idx.dtype()), s), s);
+          if (!has_arr_mask) {
+            return window_mask;
+          }
+          auto mask = inputs[3];
+          if (mask.dtype() == bool_) {
+            return logical_and(mask, window_mask, s);
+          }
+          auto additive_window_mask = where(
+              window_mask,
+              full_like(mask, 0, mask.dtype(), s),
+              full_like(mask, finfo(mask.dtype()).min, mask.dtype(), s),
+              s);
+          return add(mask, additive_window_mask, s);
+        }
+
         return inputs[3];
       };
       auto mask = make_or_fetch_mask();
@@ -834,6 +868,7 @@ array scaled_dot_product_attention(
           do_causal,
           is_training,
           output_logsumexp,
+          window_size,
           stream)) {
     if (has_bool_mask && !ScaledDotProductAttention::supports_bool_mask()) {
       // Convert bool mask to additive mask.
@@ -846,7 +881,13 @@ array scaled_dot_product_attention(
     }
     Shape out_shape{q.shape(0), q.shape(1), q.shape(2), v.shape(-1)};
     auto primitive = std::make_shared<ScaledDotProductAttention>(
-        stream, fallback, scale, do_causal, has_sinks, output_logsumexp);
+        stream,
+        fallback,
+        scale,
+        do_causal,
+        has_sinks,
+        output_logsumexp,
+        window_size);
     if (output_logsumexp) {
       return array::make_arrays(
           {std::move(out_shape), Shape{q.shape(0), q.shape(1), q.shape(2), 1}},
@@ -912,7 +953,8 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
       static_cast<const ScaledDotProductAttention&>(other);
   return scale_ == a_other.scale_ && do_causal_ == a_other.do_causal_ &&
       has_sinks_ == a_other.has_sinks_ &&
-      output_logsumexp_ == a_other.output_logsumexp_;
+      output_logsumexp_ == a_other.output_logsumexp_ &&
+      window_size_ == a_other.window_size_;
 }
 
 bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {

@@ -30,6 +30,8 @@ struct AttnParams {
   int kL_rem; ///< Remainder in last key/value block
   int qL_off; ///< Offset in query sequence start
 
+  int window_size; ///< Sliding window size (0 = no window)
+
   int64_t Q_strides[3]; ///< Query  strides (B, H, L, D = 1)
   int64_t K_strides[3]; ///< Key    strides (B, H, L, D = 1)
   int64_t V_strides[3]; ///< Value  strides (B, H, L, D = 1)
