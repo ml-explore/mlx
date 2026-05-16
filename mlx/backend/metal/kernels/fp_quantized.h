@@ -1839,7 +1839,8 @@ inline void fp_quantize_impl(
     device uint8_t* scales,
     float global_scale,
     uint2 tidx,
-    uint2 grid_dim) {
+    uint2 grid_dim,
+    uint simd_lane_id) {
   constexpr bool use_mx_scale = group_size == 32;
   size_t index = tidx.x + grid_dim.x * size_t(tidx.y);
 
@@ -1848,9 +1849,14 @@ inline void fp_quantize_impl(
   if (use_mx_scale) {
     scale = simd_max(abs(w_thread));
   } else {
-    float w_max_l = simd_max(tidx.x < 16 ? abs(w_thread) : 0.0);
-    float w_max_r = simd_max(tidx.x >= 16 ? abs(w_thread) : 0.0);
-    scale = tidx.x < 16 ? w_max_l : w_max_r;
+    // Use simd_lane_id (0..31 within each simdgroup) to bisect into
+    // two 16-element blocks. Using tidx.x (global grid index) makes
+    // the comparison non-uniform across simdgroups beyond the first,
+    // causing block scales to be computed over 32 elements instead
+    // of 16. See: <fix for upstream nvfp4 2-tier block-scale bug>.
+    float w_max_l = simd_max(simd_lane_id < 16 ? abs(w_thread) : 0.0);
+    float w_max_r = simd_max(simd_lane_id >= 16 ? abs(w_thread) : 0.0);
+    scale = simd_lane_id < 16 ? w_max_l : w_max_r;
   }
   scale /= bits == 4 ? 6.0f : 448.0f;
 
@@ -1881,8 +1887,9 @@ template <typename T, const int group_size, const int bits>
     device uint8_t* out [[buffer(1)]],
     device uint8_t* scales [[buffer(2)]],
     uint2 tidx [[thread_position_in_grid]],
-    uint2 grid_dim [[threads_per_grid]]) {
-  fp_quantize_impl<T, group_size, bits>(w, out, scales, 1.0f, tidx, grid_dim);
+    uint2 grid_dim [[threads_per_grid]],
+    uint simd_lane_id [[thread_index_in_simdgroup]]) {
+  fp_quantize_impl<T, group_size, bits>(w, out, scales, 1.0f, tidx, grid_dim, simd_lane_id);
 }
 
 template <typename T, const int group_size, const int bits>
@@ -1892,8 +1899,9 @@ template <typename T, const int group_size, const int bits>
     device uint8_t* scales [[buffer(2)]],
     const device float* global_scale [[buffer(4)]],
     uint2 tidx [[thread_position_in_grid]],
-    uint2 grid_dim [[threads_per_grid]]) {
-  fp_quantize_impl<T, group_size, bits>(w, out, scales, *global_scale, tidx, grid_dim);
+    uint2 grid_dim [[threads_per_grid]],
+    uint simd_lane_id [[thread_index_in_simdgroup]]) {
+  fp_quantize_impl<T, group_size, bits>(w, out, scales, *global_scale, tidx, grid_dim, simd_lane_id);
 }
 
 template <typename T, const int group_size, const int bits>
