@@ -160,18 +160,33 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, mode="nvfp4")
         self.assertTrue(mx.all(w_hat == 0))
 
-        # Test nvfp4 quantize/dequantize with tensor-scale global_scale
-        # currently supported only on cpu and cuda
-        if not mx.metal.is_available():
-            global_scale = w.abs().max().astype(mx.float32)
-        else:
-            global_scale = None
+        # Test nvfp4 quantize/dequantize with tensor-scale global_scale (3-tier).
+        # Spec NVFP4: global_scale = max|W| / (E2M1_MAX * E4M3_MAX) so per-block
+        # scales land in the representable E4M3 range. Using max|W| directly
+        # forces per-block scales into a low-precision region of E4M3.
+        global_scale = (w.abs().max().astype(mx.float32) / (6.0 * 448.0))
 
         w_q, scales = mx.quantize(w, mode="nvfp4", global_scale=global_scale)
         w_hat = mx.dequantize(
             w_q, scales, group_size=16, bits=4, mode="nvfp4", global_scale=global_scale
         )
         self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
+
+    def test_nvfp4_block_scales_spec_compliant(self):
+        # Regression test for simdgroup-lane indexing bug.
+        # Per-block scales used to be computed over 32 elements instead of 16
+        # for every simdgroup past the first, because the block-half bisection
+        # used global tidx.x instead of simd_lane_id.
+        #
+        # Pin a 4-block reference output so any regression of simdgroup-local
+        # block bisection is caught.
+        import numpy as np
+
+        np.random.seed(0)
+        w = mx.array((np.random.standard_normal((1, 64)) * 0.1).astype(np.float16))
+        _, sc = mx.quantize(w, group_size=16, bits=4, mode="nvfp4")
+        expected = mx.array([[18, 19, 16, 15]], dtype=sc.dtype)
+        self.assertTrue(mx.array_equal(sc, expected))
 
     def test_qqmv(self):
         key = mx.random.key(0)
