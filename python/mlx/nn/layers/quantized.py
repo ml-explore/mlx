@@ -416,12 +416,24 @@ class QQLinear(Module):
 
     def quantize(self):
         if not self._quantized:
-            self.weight, self.scales = mx.quantize(
-                self.weight,
-                self.group_size,
-                self.bits,
-                mode=self.mode,
-            )
+            if self.mode == "nvfp4":
+                amax = mx.abs(self.weight).max().astype(mx.float32)
+                self.global_scale_w = mx.maximum(
+                    amax / (448.0 * 6.0), mx.array(1e-30, dtype=mx.float32))
+                self.weight, self.scales = mx.quantize(
+                    self.weight,
+                    self.group_size,
+                    self.bits,
+                    mode=self.mode,
+                    global_scale=self.global_scale_w,
+                )
+            else:
+                self.weight, self.scales = mx.quantize(
+                    self.weight,
+                    self.group_size,
+                    self.bits,
+                    mode=self.mode,
+                )
             self._quantized = True
 
     def dequantize(self):
@@ -432,8 +444,11 @@ class QQLinear(Module):
                 group_size=self.group_size,
                 bits=self.bits,
                 mode=self.mode,
+                global_scale=self.get("global_scale_w"),
             )
             self.__delattr__("scales")
+            if "global_scale_w" in self:
+                self.__delattr__("global_scale_w")
             self._quantized = False
 
     def _set_training_mode(self, mode: bool):
@@ -445,6 +460,15 @@ class QQLinear(Module):
             self.quantize()
 
     def __call__(self, x):
+        # For nvfp4, compute the per-tensor activation scale on the fly
+        # and pass both global scales to qqmm. This matches the spec-compliant
+        # 3-tier NVFP4 W4A4 inference path used by Blackwell tensor cores.
+        global_scale_x = None
+        global_scale_w = self.get("global_scale_w") if self.mode == "nvfp4" else None
+        if global_scale_w is not None:
+            amax_x = mx.abs(x).max().astype(mx.float32)
+            global_scale_x = mx.maximum(
+                amax_x / (448.0 * 6.0), mx.array(1e-30, dtype=mx.float32))
         x = mx.qqmm(
             x,
             self["weight"],
@@ -452,6 +476,8 @@ class QQLinear(Module):
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
+            global_scale_x=global_scale_x,
+            global_scale_w=global_scale_w,
         )
         return x
 
