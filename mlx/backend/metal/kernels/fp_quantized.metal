@@ -183,3 +183,12 @@ instantiate_quantized_types(float16_t)
 instantiate_mul_inplace_scalar(float)
 instantiate_mul_inplace_scalar(float16_t)
 instantiate_mul_inplace_scalar(bfloat16_t)
+// mul_scalar_copy — used by QuantizedMatmul NVFP4 3-tier pre-scaling
+#define instantiate_mul_scalar_copy(type) \
+  template [[host_name("mul_scalar_copy_" #type)]] [[kernel]] \
+  decltype(mul_scalar_copy<type>) mul_scalar_copy<type>;
+
+instantiate_mul_scalar_copy(float)
+instantiate_mul_scalar_copy(float16_t)
+instantiate_mul_scalar_copy(bfloat16_t)
+

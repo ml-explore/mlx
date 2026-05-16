@@ -1412,27 +1412,35 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     biases = ensure_row_contiguous_matrix(inputs[3], d, s);
   }
 
-  // Helper to apply global_scale_w to the output after the matmul kernel.
-  // Implements the 3-tier NVFP4 weight reconstruction: weights stored as
-  // W/gs_w, matmul produces output/gs_w, we multiply by gs_w to recover.
-  auto apply_global_scale_w = [&]() {
-    if (!has_global_scale_w) {
-      return;
-    }
+  // For 3-tier NVFP4: weights are packed as W/gs_w. Rather than running the
+  // matmul to produce (x @ W.T)/gs_w and post-multiplying by gs_w (which
+  // overflows fp16 on the intermediate, since 1/gs_w can be ~1e5), we
+  // PRE-multiply x to get xhat = x * gs_w. The matmul then computes
+  // xhat @ (W/gs_w).T = x @ W.T directly. gs_w is small (~1e-5 typically)
+  // so x * gs_w stays well within fp16 range.
+  if (has_global_scale_w) {
     auto gs_w = ensure_row_contiguous(*global_scale_w, d, s);
+    auto x_scaled = array(
+        allocator::malloc(x.nbytes()), x.shape(), x.dtype());
     auto& compute_encoder = metal::get_command_encoder(s);
-    std::string kname = "mul_inplace_scalar_" + get_type_string(out.dtype());
+    std::string kname = "mul_scalar_copy_" + get_type_string(x.dtype());
     auto kernel = d.get_kernel(kname);
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_output_array(out, 0);
-    compute_encoder.set_input_array(gs_w, 1);
-    size_t n = out.size();
+    compute_encoder.set_input_array(x, 0);
+    compute_encoder.set_output_array(x_scaled, 1);
+    compute_encoder.set_input_array(gs_w, 2);
+    size_t n = x_scaled.size();
     NS::UInteger tg = kernel->maxTotalThreadsPerThreadgroup();
     if (tg > n) tg = n;
-    auto group_dims = MTL::Size(tg, 1, 1);
-    auto grid_dims = MTL::Size(n, 1, 1);
-    compute_encoder.dispatch_threads(grid_dims, group_dims);
-  };
+    compute_encoder.dispatch_threads(
+        MTL::Size(n, 1, 1), MTL::Size(tg, 1, 1));
+    x = x_scaled;
+  }
+
+  // No-op lambda: post-multiply was the original strategy but causes fp16
+  // overflow. The pre-multiply above achieves the same math safely.
+  // Kept as a named no-op so the kernel-dispatch return sites read clearly.
+  auto apply_global_scale_w = [&]() {};
 
   // Extract the matmul shapes
   bool non_batched = w.ndim() == 2 && x.flags().row_contiguous;
@@ -1522,24 +1530,30 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   const array& lhs_indices = inputs[inputs.size() - 2];
   const array& rhs_indices = inputs[inputs.size() - 1];
 
-  // Helper to apply global_scale_w to the output after the matmul kernel.
-  auto apply_global_scale_w = [&]() {
-    if (!has_global_scale_w) {
-      return;
-    }
+  // For 3-tier NVFP4: weights packed as W/gs_w. PRE-multiply x by gs_w
+  // (instead of post-multiplying output by gs_w) to avoid fp16 overflow
+  // on the intermediate. See QuantizedMatmul::eval_gpu for full rationale.
+  if (has_global_scale_w) {
     auto gs_w = ensure_row_contiguous(*global_scale_w, d, s);
+    auto x_scaled = array(
+        allocator::malloc(x.nbytes()), x.shape(), x.dtype());
     auto& compute_encoder = metal::get_command_encoder(s);
-    std::string kname = "mul_inplace_scalar_" + get_type_string(out.dtype());
+    std::string kname = "mul_scalar_copy_" + get_type_string(x.dtype());
     auto kernel = d.get_kernel(kname);
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_output_array(out, 0);
-    compute_encoder.set_input_array(gs_w, 1);
-    size_t n = out.size();
+    compute_encoder.set_input_array(x, 0);
+    compute_encoder.set_output_array(x_scaled, 1);
+    compute_encoder.set_input_array(gs_w, 2);
+    size_t n = x_scaled.size();
     NS::UInteger tg = kernel->maxTotalThreadsPerThreadgroup();
     if (tg > n) tg = n;
     compute_encoder.dispatch_threads(
         MTL::Size(n, 1, 1), MTL::Size(tg, 1, 1));
-  };
+    x = x_scaled;
+  }
+
+  // No-op: pre-multiply above achieves the same math without fp16 overflow.
+  auto apply_global_scale_w = [&]() {};
 
   int K = x.shape(-1);
   int M = x.shape(-2);

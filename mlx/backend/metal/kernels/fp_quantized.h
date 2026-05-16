@@ -2035,3 +2035,17 @@ template <typename T>
     uint idx [[thread_position_in_grid]]) {
   arr[idx] = static_cast<T>(static_cast<float>(arr[idx]) * (*scalar));
 }
+
+// Multiply input array by a scalar, write to output array (different buffer).
+// Used by QuantizedMatmul (NVFP4 3-tier W4xfp16): pre-scales the fp16
+// activation by global_scale_w before the matmul, so the matmul's fp16
+// output stays in range (post-multiplication would overflow fp16 since
+// (x@W.T)/gs_w can exceed 65504).
+template <typename T>
+[[kernel]] void mul_scalar_copy(
+    const device T* in [[buffer(0)]],
+    device T* out [[buffer(1)]],
+    const device float* scalar [[buffer(2)]],
+    uint idx [[thread_position_in_grid]]) {
+  out[idx] = static_cast<T>(static_cast<float>(in[idx]) * (*scalar));
+}
