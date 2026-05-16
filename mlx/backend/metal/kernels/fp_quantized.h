@@ -1997,17 +1997,18 @@ template <
 }
 
 template <typename T, const int group_size, const int bits>
-[[kernel]] void fp_quantize(
-    const device T* w [[buffer(0)]],
-    device uint8_t* out [[buffer(1)]],
-    device uint8_t* scales [[buffer(2)]],
-    uint2 tidx [[thread_position_in_grid]],
-    uint2 grid_dim [[threads_per_grid]]) {
+inline void fp_quantize_impl(
+    const device T* w,
+    device uint8_t* out,
+    device uint8_t* scales,
+    float global_scale,
+    uint2 tidx,
+    uint2 grid_dim) {
   constexpr bool use_mx_scale = group_size == 32;
   size_t index = tidx.x + grid_dim.x * size_t(tidx.y);
 
   float scale;
-  float w_thread = w[index];
+  float w_thread = float(w[index]) / global_scale;
   if (use_mx_scale) {
     scale = simd_max(abs(w_thread));
   } else {
@@ -2039,12 +2040,34 @@ template <typename T, const int group_size, const int bits>
 }
 
 template <typename T, const int group_size, const int bits>
-[[kernel]] void fp_dequantize(
-    const device uint8_t* w [[buffer(0)]],
-    const device uint8_t* scales [[buffer(1)]],
-    device T* out [[buffer(3)]],
-    uint2 index [[thread_position_in_grid]],
+[[kernel]] void fp_quantize(
+    const device T* w [[buffer(0)]],
+    device uint8_t* out [[buffer(1)]],
+    device uint8_t* scales [[buffer(2)]],
+    uint2 tidx [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
+  fp_quantize_impl<T, group_size, bits>(w, out, scales, 1.0f, tidx, grid_dim);
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void fp_quantize_3tier(
+    const device T* w [[buffer(0)]],
+    device uint8_t* out [[buffer(1)]],
+    device uint8_t* scales [[buffer(2)]],
+    const device float* global_scale [[buffer(4)]],
+    uint2 tidx [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  fp_quantize_impl<T, group_size, bits>(w, out, scales, *global_scale, tidx, grid_dim);
+}
+
+template <typename T, const int group_size, const int bits>
+inline void fp_dequantize_impl(
+    const device uint8_t* w,
+    const device uint8_t* scales,
+    device T* out,
+    float global_scale,
+    uint2 index,
+    uint2 grid_dim) {
   constexpr bool use_mx_scale = group_size == 32;
   constexpr int pack_factor = bits == 8 ? 1 : 2;
   size_t offset = index.x + grid_dim.x * size_t(index.y);
@@ -2055,7 +2078,7 @@ template <typename T, const int group_size, const int bits>
 
   using ScaleType = metal::conditional_t<use_mx_scale, fp8_e8m0, fp8_e4m3>;
   auto q_scale = ((device ScaleType*)(scales))[gindex];
-  auto scale = float(q_scale);
+  auto scale = float(q_scale) * global_scale;
 
   uint val = w[offset];
 #pragma clang loop unroll(full)
@@ -2068,6 +2091,27 @@ template <typename T, const int group_size, const int bits>
     }
     out[i] = static_cast<T>(scale * Dequantize<bits>{}(d));
   }
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void fp_dequantize(
+    const device uint8_t* w [[buffer(0)]],
+    const device uint8_t* scales [[buffer(1)]],
+    device T* out [[buffer(3)]],
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  fp_dequantize_impl<T, group_size, bits>(w, scales, out, 1.0f, index, grid_dim);
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void fp_dequantize_3tier(
+    const device uint8_t* w [[buffer(0)]],
+    const device uint8_t* scales [[buffer(1)]],
+    device T* out [[buffer(3)]],
+    const device float* global_scale [[buffer(4)]],
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  fp_dequantize_impl<T, group_size, bits>(w, scales, out, *global_scale, index, grid_dim);
 }
 
 template <typename T, const int group_size, const int bits>

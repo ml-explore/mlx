@@ -167,8 +167,23 @@
   instantiate_quantized_all_rhs(type, mode, group_size, bits)     \
   instantiate_quantize_dequantize(type, mode, group_size, bits)
 
+#define instantiate_quantize_dequantize_3tier(type, mode, group_size, bits) \
+  instantiate_kernel( \
+    #mode "_quantize_" #type "_gs_" #group_size "_b_" #bits "_g1", \
+    fp_quantize_3tier, \
+    type, \
+    group_size,  \
+    bits) \
+  instantiate_kernel( \
+    #mode "_dequantize_" #type "_gs_" #group_size "_b_" #bits "_g1", \
+    fp_dequantize_3tier, \
+    type, \
+    group_size,  \
+    bits)
+
 #define instantiate_quantized_types(type) \
   instantiate_quantized_modes(type, nvfp4, 16, 4) \
+  instantiate_quantize_dequantize_3tier(type, nvfp4, 16, 4) \
   instantiate_quantized_modes(type, mxfp8, 32, 8) \
   instantiate_quantized_modes(type, mxfp4, 32, 4)
 
