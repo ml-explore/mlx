@@ -131,9 +131,18 @@ class QuantizedEmbedding(Module):
         # Initialize the quantized weight
         scale = math.sqrt(1 / dims)
         weight = mx.random.normal(shape=(num_embeddings, dims), scale=scale)
-        self.weight, self.scales, *biases = mx.quantize(
-            weight, group_size, bits, mode=mode
-        )
+        # For NVFP4: compute the per-tensor FP32 global_scale (3-tier).
+        if mode == "nvfp4":
+            amax = mx.abs(weight).max().astype(mx.float32)
+            self.global_scale = mx.maximum(
+                amax / (448.0 * 6.0), mx.array(1e-30, dtype=mx.float32))
+            self.weight, self.scales, *biases = mx.quantize(
+                weight, group_size, bits, mode=mode, global_scale=self.global_scale
+            )
+        else:
+            self.weight, self.scales, *biases = mx.quantize(
+                weight, group_size, bits, mode=mode
+            )
         self.biases = biases[0] if biases else None
         self.num_embeddings = num_embeddings
         self.dims = dims
@@ -150,6 +159,7 @@ class QuantizedEmbedding(Module):
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
+            global_scale=self.get("global_scale"),
         )
 
     def as_linear(self, x):
@@ -168,6 +178,7 @@ class QuantizedEmbedding(Module):
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
+            global_scale_w=self.get("global_scale"),
         )
 
     def _extra_repr(self):
@@ -187,12 +198,24 @@ class QuantizedEmbedding(Module):
         """Create a :obj:`QuantizedEmbedding` layer from an :obj:`Embedding` layer."""
         embedding_dims, dims = embedding_layer.weight.shape
         ql = cls(embedding_dims, dims, group_size, bits, mode=mode)
-        ql.weight, ql.scales, *biases = mx.quantize(
-            embedding_layer.weight,
-            group_size,
-            bits,
-            mode=mode,
-        )
+        if mode == "nvfp4":
+            amax = mx.abs(embedding_layer.weight).max().astype(mx.float32)
+            ql.global_scale = mx.maximum(
+                amax / (448.0 * 6.0), mx.array(1e-30, dtype=mx.float32))
+            ql.weight, ql.scales, *biases = mx.quantize(
+                embedding_layer.weight,
+                group_size,
+                bits,
+                mode=mode,
+                global_scale=ql.global_scale,
+            )
+        else:
+            ql.weight, ql.scales, *biases = mx.quantize(
+                embedding_layer.weight,
+                group_size,
+                bits,
+                mode=mode,
+            )
         ql.biases = biases[0] if biases else None
         return ql
 
