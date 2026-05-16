@@ -3515,6 +3515,7 @@ std::vector<array> QuantizedMatmul::vjp(
           group_size_,
           bits_,
           quantization_mode_to_string(mode_),
+          std::nullopt,  // global_scale_w
           stream()));
     }
 
@@ -3579,6 +3580,7 @@ std::vector<array> QuantizedMatmul::jvp(
       group_size_,
       bits_,
       quantization_mode_to_string(mode_),
+      std::nullopt,  // global_scale_w
       stream())};
 }
 
