@@ -1469,7 +1469,11 @@ MLX_API array conv_transpose3d(
     int groups = 1,
     StreamOrDevice s = {});
 
-/** Quantized matmul multiplies x with a quantized matrix w*/
+/** Quantized matmul multiplies x with a quantized matrix w.
+ * For mode="nvfp4", an optional global_scale_w (per-tensor FP32 scale)
+ * applies the 3-tier NVFP4 reconstruction. Required iff the weights were
+ * packed with global_scale (3-tier NVFP4). Currently honored by the Metal
+ * backend; CPU and CUDA error out if provided. */
 MLX_API array quantized_matmul(
     array x,
     array w,
@@ -1479,6 +1483,7 @@ MLX_API array quantized_matmul(
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
+    std::optional<array> global_scale_w = std::nullopt,
     StreamOrDevice s = {});
 
 /** Quantize a matrix along its last axis */

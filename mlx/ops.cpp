@@ -4483,6 +4483,7 @@ array quantized_matmul(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
+    std::optional<array> global_scale_w /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto [dtype, qmode] = validate_mode_with_type(
       "quantized_matmul", scales, biases, std::nullopt, mode);
@@ -4505,12 +4506,28 @@ array quantized_matmul(
         << "x.dtype() == " << x.dtype() << ".";
     throw std::invalid_argument(msg.str());
   }
+
+  // global_scale_w is only valid for NVFP4 (per-tensor FP32 scale)
+  if (global_scale_w.has_value() && qmode != QuantizationMode::Nvfp4) {
+    throw std::invalid_argument(
+        "[quantized_matmul] global_scale_w is only supported for mode='nvfp4'");
+  }
+  if (global_scale_w.has_value() && global_scale_w->dtype() != float32) {
+    throw std::invalid_argument(
+        "[quantized_matmul] global_scale_w must be float32");
+  }
+
   std::vector<array> inputs;
   if (qmode == QuantizationMode::Affine) {
     inputs = {
         astype(x, dtype), w, astype(scales, dtype), astype(*biases, dtype)};
   } else {
     inputs = {x, w, scales};
+  }
+  // For NVFP4 3-tier, append global_scale_w as the trailing input.
+  // The Metal backend detects this and applies it after the matmul.
+  if (global_scale_w.has_value()) {
+    inputs.push_back(*global_scale_w);
   }
 
   if (x.ndim() > 2 && w.ndim() > 2) {
@@ -5282,7 +5299,8 @@ array gather_qmm(
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
     return quantized_matmul(
-        x, w, scales, biases, transpose, group_size_, bits_, mode, s);
+        x, w, scales, biases, transpose, group_size_, bits_, mode,
+        std::nullopt, s);
   }
 
   auto [out_type, qmode] =

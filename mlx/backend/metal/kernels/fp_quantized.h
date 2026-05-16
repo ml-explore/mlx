@@ -2024,3 +2024,14 @@ template <typename T, const int group_size, const int bits>
     uint simd_lane_id [[thread_index_in_simdgroup]]) {
   fp_quantize_dequantize_impl<T, group_size, bits>(w, out, *gs_x, *gs_w, tidx, grid_dim, simd_lane_id);
 }
+
+// Multiply an array in-place by a scalar stored in a 1-element buffer.
+// Used by QuantizedMatmul (NVFP4 3-tier) to apply global_scale_w to the
+// output after the qmv kernel runs.
+template <typename T>
+[[kernel]] void mul_inplace_scalar(
+    device T* arr [[buffer(0)]],
+    const device float* scalar [[buffer(1)]],
+    uint idx [[thread_position_in_grid]]) {
+  arr[idx] = static_cast<T>(static_cast<float>(arr[idx]) * (*scalar));
+}

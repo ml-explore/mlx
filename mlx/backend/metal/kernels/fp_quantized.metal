@@ -174,3 +174,12 @@ instantiate_quantized_types(float)
 instantiate_quantized_types(bfloat16_t)
 instantiate_quantized_types(float16_t)
     // clang-format on
+
+// mul_inplace_scalar — used by QuantizedMatmul NVFP4 3-tier path
+#define instantiate_mul_inplace_scalar(type) \
+  template [[host_name("mul_inplace_scalar_" #type)]] [[kernel]] \
+  decltype(mul_inplace_scalar<type>) mul_inplace_scalar<type>;
+
+instantiate_mul_inplace_scalar(float)
+instantiate_mul_inplace_scalar(float16_t)
+instantiate_mul_inplace_scalar(bfloat16_t)

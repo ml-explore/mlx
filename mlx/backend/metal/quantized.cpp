@@ -1390,15 +1390,49 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   out.set_data(allocator::malloc(out.nbytes()));
 
+  // Detect NVFP4 3-tier (global_scale_w). For Affine mode inputs is
+  // [x, w, scales, biases] (size 4); for non-Affine modes inputs is
+  // [x, w, scales] (size 3) and an optional trailing array is global_scale_w.
+  const bool has_global_scale_w =
+      (mode_ == QuantizationMode::Nvfp4) && (inputs.size() == 4);
+  std::optional<array> global_scale_w = std::nullopt;
+  if (has_global_scale_w) {
+    global_scale_w = inputs.back();
+  }
+
   // Make sure the last two dims of x and w, s, b are contiguous. This should
   // be relaxed for x.
   array x = ensure_row_contiguous_matrix(inputs[0], d, s);
   array w = ensure_row_contiguous_matrix(inputs[1], d, s);
   array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
   std::optional<array> biases = std::nullopt;
-  if (inputs.size() == 4) {
+  // biases only present for Affine mode (with size==4). NVFP4 with size==4
+  // means global_scale_w is at index 3, not biases.
+  if (inputs.size() == 4 && !has_global_scale_w) {
     biases = ensure_row_contiguous_matrix(inputs[3], d, s);
   }
+
+  // Helper to apply global_scale_w to the output after the matmul kernel.
+  // Implements the 3-tier NVFP4 weight reconstruction: weights stored as
+  // W/gs_w, matmul produces output/gs_w, we multiply by gs_w to recover.
+  auto apply_global_scale_w = [&]() {
+    if (!has_global_scale_w) {
+      return;
+    }
+    auto gs_w = ensure_row_contiguous(*global_scale_w, d, s);
+    auto& compute_encoder = metal::get_command_encoder(s);
+    std::string kname = "mul_inplace_scalar_" + get_type_string(out.dtype());
+    auto kernel = d.get_kernel(kname);
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_output_array(out, 0);
+    compute_encoder.set_input_array(gs_w, 1);
+    size_t n = out.size();
+    NS::UInteger tg = kernel->maxTotalThreadsPerThreadgroup();
+    if (tg > n) tg = n;
+    auto group_dims = MTL::Size(tg, 1, 1);
+    auto grid_dims = MTL::Size(n, 1, 1);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+  };
 
   // Extract the matmul shapes
   bool non_batched = w.ndim() == 2 && x.flags().row_contiguous;
@@ -1415,6 +1449,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (transpose_ && B == 1) {
       qmm_splitk(
           x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+      apply_global_scale_w();
       return;
     }
     qmm(x,
@@ -1431,6 +1466,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         d,
         s,
         mode);
+    apply_global_scale_w();
     return;
   }
 
@@ -1438,18 +1474,21 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (transpose_) {
     dispatch_qmv(
         x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+    apply_global_scale_w();
     return;
   }
 
   // Run of the mill qvm
   if (K < 1024) {
     qvm(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+    apply_global_scale_w();
     return;
   }
 
   // Qvm with large dimension so route to a split K kernel for more parallelism
   qvm_split_k(
       x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+  apply_global_scale_w();
   return;
 }
 

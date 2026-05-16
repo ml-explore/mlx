@@ -4315,10 +4315,11 @@ void init_ops(nb::module_& m) {
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "affine",
+      "global_scale_w"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantized_matmul(x: array, w: array, /, scales: array, biases: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def quantized_matmul(x: array, w: array, /, scales: array, biases: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', global_scale_w: Optional[array] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform the matrix multiplication with the quantized matrix ``w``. The
         quantization uses one floating point scale and bias per ``group_size`` of
@@ -4341,6 +4342,10 @@ void init_ops(nb::module_& m) {
             ``w`` in the quantized array. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
           mode (str, optional): The quantization mode. Default: ``"affine"``.
+          global_scale_w (array, optional): For mode='nvfp4', the per-tensor
+            FP32 scale that was used to pack ``w`` (3-tier NVFP4). Required iff
+            ``w`` was packed with ``mx.quantize(..., global_scale=...)``.
+            Currently honored only by the Metal backend. Default: ``None``.
 
         Returns:
           array: The result of the multiplication of ``x`` with ``w``.
