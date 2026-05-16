@@ -39,6 +39,10 @@ option(MLX_BUILD_CUDA "Build cuda backend" OFF)
 option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
+option(
+  MLX_METAL_NVFP4_3TIER
+  "Enable NVFP4 3-tier scaling (global_scale) on Metal backend"
+  OFF)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_PYTHON_STUBS "Build stub files for python bindings" ON)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)

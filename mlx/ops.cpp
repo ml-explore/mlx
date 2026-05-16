@@ -5088,12 +5088,14 @@ std::vector<array> quantize(
         << " matrix has shape " << w.shape();
     throw std::invalid_argument(msg.str());
   }
+#ifndef MLX_METAL_NVFP4_3TIER
   if (to_stream(s).device == Device::gpu && metal::is_available() &&
       global_scale.has_value()) {
     std::ostringstream msg;
     msg << "[quantize] Global scale is not supported on the Metal backend.";
     throw std::invalid_argument(msg.str());
   }
+#endif
   validate_global_scale("quantize", qmode, global_scale);
   if (qmode == QuantizationMode::Affine) {
     return affine_quantize(w, group_size, bits, s);
@@ -5354,11 +5356,13 @@ array dequantize(
     throw std::invalid_argument(msg.str());
   }
   if (global_scale.has_value()) {
+#ifndef MLX_METAL_NVFP4_3TIER
     if (to_stream(s).device == Device::gpu && metal::is_available()) {
       std::ostringstream msg;
       msg << "[dequantize] Global scale is not supported on the Metal backend.";
       throw std::invalid_argument(msg.str());
     }
+#endif
   }
   validate_global_scale("dequantize", qmode, global_scale);
 
