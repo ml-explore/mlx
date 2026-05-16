@@ -106,3 +106,8 @@ if(MLX_BUILD_METAL OR MLX_BUILD_CUDA)
 else()
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/no_gpu)
 endif()
+
+if(MLX_METAL_NVFP4_3TIER)
+  target_compile_definitions(mlx PUBLIC MLX_METAL_NVFP4_3TIER=1)
+  message(STATUS "MLX: NVFP4 3-tier scaling enabled on Metal backend (experimental)")
+endif()
