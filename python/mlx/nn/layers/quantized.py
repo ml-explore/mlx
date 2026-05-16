@@ -242,9 +242,19 @@ class QuantizedLinear(Module):
             high=scale,
             shape=(output_dims, input_dims),
         )
-        self.weight, self.scales, *biases = mx.quantize(
-            weight, group_size, bits, mode=mode
-        )
+        # For NVFP4: compute the per-tensor FP32 global_scale (3-tier).
+        # global_scale = amax(|W|) / (E4M3_MAX * E2M1_MAX) = amax(|W|) / (448 * 6)
+        if mode == "nvfp4":
+            amax = mx.abs(weight).max().astype(mx.float32)
+            self.global_scale = mx.maximum(
+                amax / (448.0 * 6.0), mx.array(1e-30, dtype=mx.float32))
+            self.weight, self.scales, *biases = mx.quantize(
+                weight, group_size, bits, mode=mode, global_scale=self.global_scale
+            )
+        else:
+            self.weight, self.scales, *biases = mx.quantize(
+                weight, group_size, bits, mode=mode
+            )
         self.biases = biases[0] if biases else None
 
         # And bias if needed
@@ -272,6 +282,7 @@ class QuantizedLinear(Module):
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
+            global_scale_w=self.get("global_scale"),
         )
         if "bias" in self:
             x = x + self["bias"]
@@ -288,12 +299,26 @@ class QuantizedLinear(Module):
         """Create a :obj:`QuantizedLinear` layer from a :obj:`Linear` layer."""
         output_dims, input_dims = linear_layer.weight.shape
         ql = cls(input_dims, output_dims, False, group_size, bits, mode=mode)
-        ql.weight, ql.scales, *biases = mx.quantize(
-            linear_layer.weight,
-            group_size,
-            bits,
-            mode=mode,
-        )
+        # For NVFP4: derive the per-tensor global_scale from the source weight
+        # so 3-tier packing is used at quantize time.
+        if mode == "nvfp4":
+            amax = mx.abs(linear_layer.weight).max().astype(mx.float32)
+            ql.global_scale = mx.maximum(
+                amax / (448.0 * 6.0), mx.array(1e-30, dtype=mx.float32))
+            ql.weight, ql.scales, *biases = mx.quantize(
+                linear_layer.weight,
+                group_size,
+                bits,
+                mode=mode,
+                global_scale=ql.global_scale,
+            )
+        else:
+            ql.weight, ql.scales, *biases = mx.quantize(
+                linear_layer.weight,
+                group_size,
+                bits,
+                mode=mode,
+            )
         ql.biases = biases[0] if biases else None
 
         if "bias" in linear_layer:
