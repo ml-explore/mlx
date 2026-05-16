@@ -1568,12 +1568,22 @@ void quantize_dequantize(
     int group_size,
     int bits,
     metal::Device& d,
-    const Stream& s) {
+    const Stream& s,
+    const std::optional<array>& global_scale_x = std::nullopt,
+    const std::optional<array>& global_scale_w = std::nullopt) {
   auto& compute_encoder = metal::get_command_encoder(s);
 
   auto w = ensure_row_contiguous(in, d, s);
   compute_encoder.set_input_array(w, 0);
   compute_encoder.set_output_array(out, 1);
+  const bool use_3tier =
+      global_scale_x.has_value() && global_scale_w.has_value();
+  if (use_3tier) {
+    auto gs_x = ensure_row_contiguous(*global_scale_x, d, s);
+    auto gs_w = ensure_row_contiguous(*global_scale_w, d, s);
+    compute_encoder.set_input_array(gs_x, 4);
+    compute_encoder.set_input_array(gs_w, 5);
+  }
   auto type_string = get_type_string(in.dtype());
   std::string kname;
   concatenate(
@@ -1584,8 +1594,13 @@ void quantize_dequantize(
       group_size,
       "_b_",
       bits);
+  if (use_3tier) {
+    kname += "_g1";
+  }
+  const std::string func_name =
+      use_3tier ? "quantize_dequantize_3tier" : "quantize_dequantize";
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "quantize_dequantize", mode, type_string, group_size, bits);
+      d, kname, func_name, mode, type_string, group_size, bits);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -1614,6 +1629,20 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto mode = quantization_mode_to_string(mode_);
   bool w_quantized = (inputs[1].dtype() == uint32);
+
+  // NVFP4 3-tier: extra trailing inputs are [global_scale_x, global_scale_w].
+  // The base inputs are [x, w, scales]; if NVFP4 mode and inputs.size() > 3,
+  // the extras are the global scales. Both are required if either is present
+  // (validated upstream in qqmm()).
+  const bool has_global_scales =
+      (mode_ == QuantizationMode::Nvfp4) && (inputs.size() > 3);
+  std::optional<array> global_scale_x = std::nullopt;
+  std::optional<array> global_scale_w = std::nullopt;
+  if (has_global_scales) {
+    global_scale_x = inputs[inputs.size() - 2];
+    global_scale_w = inputs[inputs.size() - 1];
+  }
+
   if (w_quantized && inputs[0].shape(-2) == 1) {
     out.set_data(allocator::malloc(out.nbytes()));
 
@@ -1624,7 +1653,20 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     auto xhat = donate_x
         ? x
         : array(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
-    quantize_dequantize(x, xhat, mode, group_size_, bits_, d, s);
+    // For 3-tier NVFP4, quantize_dequantize_3tier applies gs_x to the
+    // activation quantization AND multiplies the reconstructed value
+    // by gs_w. The downstream matmul then computes
+    // (x * gs_w) @ (W / gs_w).T = x @ W.T (correct, no extra ops needed).
+    quantize_dequantize(
+        x,
+        xhat,
+        mode,
+        group_size_,
+        bits_,
+        d,
+        s,
+        global_scale_x,
+        global_scale_w);
 
     // Make sure the last two dims of w and s are contiguous
     array w = ensure_row_contiguous_matrix(inputs[1], d, s);

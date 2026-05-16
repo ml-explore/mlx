@@ -1959,22 +1959,36 @@ template <typename T, const int group_size, const int bits>
 }
 
 template <typename T, const int group_size, const int bits>
-[[kernel]] void fp_quantize_dequantize(
-    const device T* w [[buffer(0)]],
-    device T* out [[buffer(1)]],
-    uint2 tidx [[thread_position_in_grid]],
-    uint2 grid_dim [[threads_per_grid]]) {
+inline void fp_quantize_dequantize_impl(
+    const device T* w,
+    device T* out,
+    float gs_x,
+    float gs_w,
+    uint2 tidx,
+    uint2 grid_dim,
+    uint simd_lane_id) {
+  // 3-tier matmul absorption trick:
+  //   true output = x @ W.T
+  //                = (x * gs_w) @ (W / gs_w).T
+  //   So if we set xhat = quantize_dequantize(x, gs_x) * gs_w,
+  //   then xhat @ Wq_dequant.T (which produces (x * gs_w) @ (W / gs_w).T
+  //   because Wq stores W/gs_w) recovers the true output directly,
+  //   without any matmul kernel modification.
+  // For 2-tier callers, both gs_x and gs_w are 1.0, so this reduces to
+  // the original behavior (bit-identical).
   constexpr bool use_mx_scale = group_size == 32;
   size_t index = tidx.x + grid_dim.x * size_t(tidx.y);
 
   float scale;
-  float w_thread = w[index];
+  float w_thread = float(w[index]) / gs_x;
   if (use_mx_scale) {
     scale = simd_max(abs(w_thread));
   } else {
-    float w_max_l = simd_max(tidx.x < 16 ? abs(w_thread) : 0.0);
-    float w_max_r = simd_max(tidx.x >= 16 ? abs(w_thread) : 0.0);
-    scale = tidx.x < 16 ? w_max_l : w_max_r;
+    // Use simd_lane_id for simdgroup-local bisection — see commit 4
+    // (same bug as fp_quantize had before the simdgroup-lane fix).
+    float w_max_l = simd_max(simd_lane_id < 16 ? abs(w_thread) : 0.0);
+    float w_max_r = simd_max(simd_lane_id >= 16 ? abs(w_thread) : 0.0);
+    scale = simd_lane_id < 16 ? w_max_l : w_max_r;
   }
   scale /= bits == 4 ? 6.0f : 448.0f;
 
@@ -1984,5 +1998,29 @@ template <typename T, const int group_size, const int bits>
 
   uint8_t output = Quantize<bits>{}(scale == 0 ? 0.0f : w_thread / scale);
 
-  out[index] = static_cast<T>(scale * Dequantize<bits>{}(output));
+  // Reconstruct: undo the divide-by-gs_x, and apply gs_w so the
+  // downstream matmul produces the correct output magnitude.
+  out[index] = static_cast<T>(scale * Dequantize<bits>{}(output) * gs_x * gs_w);
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void fp_quantize_dequantize(
+    const device T* w [[buffer(0)]],
+    device T* out [[buffer(1)]],
+    uint2 tidx [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]],
+    uint simd_lane_id [[thread_index_in_simdgroup]]) {
+  fp_quantize_dequantize_impl<T, group_size, bits>(w, out, 1.0f, 1.0f, tidx, grid_dim, simd_lane_id);
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void fp_quantize_dequantize_3tier(
+    const device T* w [[buffer(0)]],
+    device T* out [[buffer(1)]],
+    const device float* gs_x [[buffer(4)]],
+    const device float* gs_w [[buffer(5)]],
+    uint2 tidx [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]],
+    uint simd_lane_id [[thread_index_in_simdgroup]]) {
+  fp_quantize_dequantize_impl<T, group_size, bits>(w, out, *gs_x, *gs_w, tidx, grid_dim, simd_lane_id);
 }

@@ -156,6 +156,12 @@
     fp_dequantize_3tier, \
     type, \
     group_size,  \
+    bits) \
+  instantiate_kernel( \
+    #mode "_quantize_dequantize_" #type "_gs_" #group_size "_b_" #bits "_g1", \
+    fp_quantize_dequantize_3tier, \
+    type, \
+    group_size,  \
     bits)
 
 #define instantiate_quantized_types(type) \
