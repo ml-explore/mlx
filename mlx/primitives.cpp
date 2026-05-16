@@ -3721,6 +3721,7 @@ std::vector<array> GatherQMM::vjp(
           bits_,
           quantization_mode_to_string(mode_),
           sorted,
+          std::nullopt,  // global_scale_w
           stream());
       if (sorted && no_broadcast) {
         vjps.push_back(g);
