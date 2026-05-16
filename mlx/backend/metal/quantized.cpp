@@ -1665,6 +1665,15 @@ void fast::Quantize::eval_gpu(
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);
 
+  // Detect 3-tier NVFP4: extra input is the per-tensor float32 global_scale.
+  // For quantize:    inputs = [w, global_scale]    (size 2)
+  // For dequantize:  inputs = [w_q, scales, global_scale]    (size 3)
+  // Affine mode has biases in inputs[2] but never has global_scale, so the
+  // two are mutually exclusive.
+  const bool has_global_scale =
+      (mode_ == QuantizationMode::Nvfp4) &&
+      (inputs.size() > (dequantize_ ? 2u : 1u));
+
   auto w = ensure_row_contiguous(w_pre, d, s);
   if (dequantize_) {
     auto scales = ensure_row_contiguous(inputs[1], d, s);
@@ -1675,6 +1684,10 @@ void fast::Quantize::eval_gpu(
     compute_encoder.set_input_array(w, 0);
     compute_encoder.set_input_array(scales, 1);
     compute_encoder.set_output_array(out, 3);
+    if (has_global_scale) {
+      auto global_scale = ensure_row_contiguous(inputs[2], d, s);
+      compute_encoder.set_input_array(global_scale, 4);
+    }
   } else {
     auto& scales = outputs[1];
     scales.set_data(allocator::malloc(scales.nbytes()));
@@ -1686,6 +1699,10 @@ void fast::Quantize::eval_gpu(
     compute_encoder.set_input_array(w, 0);
     compute_encoder.set_output_array(out, 1);
     compute_encoder.set_output_array(scales, 2);
+    if (has_global_scale) {
+      auto global_scale = ensure_row_contiguous(inputs[1], d, s);
+      compute_encoder.set_input_array(global_scale, 4);
+    }
   }
 
   auto type_string = dequantize_ ? get_type_string(out.dtype())
@@ -1701,10 +1718,16 @@ void fast::Quantize::eval_gpu(
       group_size_,
       "_b_",
       bits_);
+  if (has_global_scale) {
+    kname += "_g1";
+  }
+  const std::string func_name = dequantize_
+      ? (has_global_scale ? "dequantize_3tier" : "dequantize")
+      : (has_global_scale ? "quantize_3tier" : "quantize");
   auto kernel = get_quantized_kernel_wrapped(
       d,
       kname,
-      dequantize_ ? "dequantize" : "quantize",
+      func_name,
       mode,
       type_string,
       group_size_,
