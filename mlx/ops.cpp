@@ -5296,11 +5296,12 @@ array gather_qmm(
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
     bool sorted_indices /* = false */,
+    std::optional<array> global_scale_w /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
     return quantized_matmul(
         x, w, scales, biases, transpose, group_size_, bits_, mode,
-        std::nullopt, s);
+        global_scale_w, s);
   }
 
   auto [out_type, qmode] =
@@ -5320,6 +5321,16 @@ array gather_qmm(
     msg << "[gather_qmm] Only real floating types are supported but "
         << "x.dtype() == " << x.dtype() << ".";
     throw std::invalid_argument(msg.str());
+  }
+
+  // global_scale_w is only valid for NVFP4
+  if (global_scale_w.has_value() && qmode != QuantizationMode::Nvfp4) {
+    throw std::invalid_argument(
+        "[gather_qmm] global_scale_w is only supported for mode='nvfp4'");
+  }
+  if (global_scale_w.has_value() && global_scale_w->dtype() != float32) {
+    throw std::invalid_argument(
+        "[gather_qmm] global_scale_w must be float32");
   }
 
   // Extract indices and broadcast them
@@ -5364,9 +5375,12 @@ array gather_qmm(
     inputs = {
         astype(x, out_type, s),
         std::move(w),
-        std::move(scales),
-        std::move(lhs_indices),
-        std::move(rhs_indices)};
+        std::move(scales)};
+    if (global_scale_w.has_value()) {
+      inputs.push_back(*global_scale_w);
+    }
+    inputs.push_back(std::move(lhs_indices));
+    inputs.push_back(std::move(rhs_indices));
   }
   return array(
       std::move(out_shape),

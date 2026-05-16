@@ -1525,7 +1525,9 @@ MLX_API array from_fp8(array x, Dtype dtype, StreamOrDevice s = {});
 /** Convert a floating point matrix to E4M3 float8. */
 MLX_API array to_fp8(array x, StreamOrDevice s = {});
 
-/** Compute matrix products with matrix-level gather. */
+/** Compute matrix products with matrix-level gather.
+ * For mode="nvfp4", an optional global_scale_w applies the 3-tier
+ * reconstruction. Required iff weights were packed 3-tier. Metal only. */
 MLX_API array gather_qmm(
     const array& x,
     const array& w,
@@ -1538,6 +1540,7 @@ MLX_API array gather_qmm(
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
     bool sorted_indices = false,
+    std::optional<array> global_scale_w = std::nullopt,
     StreamOrDevice s = {});
 
 /** Returns a contraction of a and b over multiple dimensions. */

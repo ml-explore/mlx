@@ -4513,11 +4513,12 @@ void init_ops(nb::module_& m) {
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "affine",
-      nb::kw_only(),
       "sorted_indices"_a = false,
+      "global_scale_w"_a = nb::none(),
+      nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def gather_qmm(x: array, w: array, /, scales: array, biases: Optional[array] = None, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, sorted_indices: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+          "def gather_qmm(x: array, w: array, /, scales: array, biases: Optional[array] = None, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', sorted_indices: bool = False, global_scale_w: Optional[array] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform quantized matrix multiplication with matrix-level gather.
 

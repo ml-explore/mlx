@@ -1498,15 +1498,48 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   out.set_data(allocator::malloc(out.nbytes()));
 
+  // NVFP4 3-tier: an optional global_scale_w sits between scales and the
+  // two trailing indices arrays.
+  //   Affine + 6 inputs:    [x, w, scales, biases, lhs_idx, rhs_idx]
+  //   Non-affine + 5:       [x, w, scales,         lhs_idx, rhs_idx]
+  //   NVFP4 3-tier + 6:     [x, w, scales, gs_w,   lhs_idx, rhs_idx]
+  const bool has_global_scale_w =
+      (mode_ == QuantizationMode::Nvfp4) && (inputs.size() == 6);
+  std::optional<array> global_scale_w = std::nullopt;
+  if (has_global_scale_w) {
+    global_scale_w = inputs[3];
+  }
+
   array x = ensure_row_contiguous_matrix(inputs[0], d, s);
   array w = ensure_row_contiguous_matrix(inputs[1], d, s);
   array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
   std::optional<array> biases = std::nullopt;
-  if (inputs.size() == 6) {
+  // Biases only present for Affine mode. NVFP4 with size==6 means
+  // inputs[3] is global_scale_w, not biases.
+  if (inputs.size() == 6 && !has_global_scale_w) {
     biases = ensure_row_contiguous_matrix(inputs[3], d, s);
   }
   const array& lhs_indices = inputs[inputs.size() - 2];
   const array& rhs_indices = inputs[inputs.size() - 1];
+
+  // Helper to apply global_scale_w to the output after the matmul kernel.
+  auto apply_global_scale_w = [&]() {
+    if (!has_global_scale_w) {
+      return;
+    }
+    auto gs_w = ensure_row_contiguous(*global_scale_w, d, s);
+    auto& compute_encoder = metal::get_command_encoder(s);
+    std::string kname = "mul_inplace_scalar_" + get_type_string(out.dtype());
+    auto kernel = d.get_kernel(kname);
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_output_array(out, 0);
+    compute_encoder.set_input_array(gs_w, 1);
+    size_t n = out.size();
+    NS::UInteger tg = kernel->maxTotalThreadsPerThreadgroup();
+    if (tg > n) tg = n;
+    compute_encoder.dispatch_threads(
+        MTL::Size(n, 1, 1), MTL::Size(tg, 1, 1));
+  };
 
   int K = x.shape(-1);
   int M = x.shape(-2);
@@ -1537,6 +1570,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         d,
         s,
         mode);
+    apply_global_scale_w();
     return;
   }
 
@@ -1559,6 +1593,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         d,
         s,
         mode);
+    apply_global_scale_w();
     return;
   }
 
@@ -1579,6 +1614,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         d,
         s,
         mode);
+    apply_global_scale_w();
     return;
   }
 
@@ -1598,6 +1634,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       d,
       s,
       mode);
+  apply_global_scale_w();
 }
 
 void quantize_dequantize(
