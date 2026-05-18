@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include "mlx/scheduler.h"
+#include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/gpu/eval.h"
 
 namespace mlx::core {
@@ -16,11 +17,16 @@ void synchronize(Stream s) {
   }
 }
 
+void synchronize(ThreadLocalStream s) {
+  synchronize(stream_from_thread_local_stream(s));
+}
+
 void synchronize() {
   synchronize(default_stream(default_device()));
 }
 
 void clear_streams() {
+  cpu::clear_streams();
   gpu::clear_streams();
 }
 

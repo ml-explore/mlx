@@ -705,4 +705,170 @@ array solve_triangular(
   return matmul(a_inv, b, s);
 }
 
+void validate_det(
+    const array& a,
+    const StreamOrDevice& stream,
+    const std::string& fname) {
+  check_cpu_stream(stream, fname);
+  if (issubdtype(a.dtype(), complexfloating)) {
+    throw std::invalid_argument(fname + " Complex inputs are not supported.");
+  }
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << fname
+        << " Arrays must have >= 2 dimensions. Received array "
+           "with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.shape(-1) != a.shape(-2)) {
+    throw std::invalid_argument(fname + " Only defined for square matrices.");
+  }
+}
+
+array det_raw_small(const array& a, StreamOrDevice s) {
+  int n = a.shape(-1);
+
+  // Empty 0x0 matrix: determinant is the empty product = 1
+  if (n == 0) {
+    Shape out_shape(a.shape().begin(), a.shape().end() - 2);
+    return broadcast_to(array(1.0f, a.dtype()), std::move(out_shape), s);
+  }
+
+  // Helper to extract a[..., i, j] from the last two dims
+  auto elem = [&](int i, int j) {
+    auto starts = Shape(a.ndim(), 0);
+    auto stops = a.shape();
+    starts[a.ndim() - 2] = i;
+    stops[a.ndim() - 2] = i + 1;
+    starts[a.ndim() - 1] = j;
+    stops[a.ndim() - 1] = j + 1;
+    return squeeze(squeeze(slice(a, starts, stops, s), -1, s), -1, s);
+  };
+
+  if (n == 1) {
+    return elem(0, 0);
+  } else if (n == 2) {
+    return subtract(
+        multiply(elem(0, 0), elem(1, 1), s),
+        multiply(elem(0, 1), elem(1, 0), s),
+        s);
+  } else {
+    // 3x3: a00*(a11*a22 - a12*a21) - a01*(a10*a22 - a12*a20) + a02*(a10*a21 -
+    // a11*a20)
+    auto a00 = elem(0, 0), a01 = elem(0, 1), a02 = elem(0, 2);
+    auto a10 = elem(1, 0), a11 = elem(1, 1), a12 = elem(1, 2);
+    auto a20 = elem(2, 0), a21 = elem(2, 1), a22 = elem(2, 2);
+    return add(
+        subtract(
+            multiply(
+                a00,
+                subtract(multiply(a11, a22, s), multiply(a12, a21, s), s),
+                s),
+            multiply(
+                a01,
+                subtract(multiply(a10, a22, s), multiply(a12, a20, s), s),
+                s),
+            s),
+        multiply(
+            a02, subtract(multiply(a10, a21, s), multiply(a11, a20, s), s), s),
+        s);
+  }
+}
+
+std::pair<array, array> slogdet_impl(const array& input, StreamOrDevice s) {
+  int n = input.shape(-1);
+  auto dtype = input.dtype();
+
+  // Small-matrix fast path
+  if (n <= 3) {
+    auto raw = det_raw_small(input, s);
+    auto abs_raw = abs(raw, s);
+    auto sgn = sign(raw, s);
+    auto logabs = log(abs_raw, s);
+    return std::make_pair(sgn, logabs);
+  }
+
+  // General LU-based path
+  auto [LU, pivots] = lu_factor(input, s);
+
+  // Extract diagonal of U
+  auto diag = diagonal(LU, 0, -2, -1, s);
+
+  // Permutation parity: count positions where pivot[i] != i
+  int k = std::min(input.shape(-2), input.shape(-1));
+  auto iota = arange(0, k, uint32, s);
+  auto parity = astype(
+      sum(not_equal(pivots, iota, s),
+          /* axis = */ -1,
+          /* keepdims = */ false,
+          s),
+      int32,
+      s);
+
+  // Count negative diagonal elements
+  auto num_neg = astype(
+      sum(less(diag, array(0.0f, dtype), s),
+          /* axis = */ -1,
+          /* keepdims = */ false,
+          s),
+      int32,
+      s);
+
+  // sign = (-1)^(parity + num_neg)
+  auto total = add(parity, num_neg, s);
+  auto sign_val = astype(
+      subtract(
+          array(1, int32),
+          multiply(array(2, int32), remainder(total, array(2, int32), s), s),
+          s),
+      dtype,
+      s);
+
+  // logabsdet = sum(log(abs(diag)))
+  auto logabsdet =
+      sum(log(abs(diag, s), s), /* axis = */ -1, /* keepdims = */ false, s);
+
+  // Handle singular matrices: any zero on diagonal
+  auto is_zero =
+      any(equal(diag, array(0.0f, dtype), s),
+          /* axis = */ -1,
+          /* keepdims = */ false,
+          s);
+  sign_val = where(is_zero, array(0.0f, dtype), sign_val, s);
+  logabsdet = where(
+      is_zero,
+      array(-std::numeric_limits<float>::infinity(), dtype),
+      logabsdet,
+      s);
+
+  return std::make_pair(sign_val, logabsdet);
+}
+
+std::pair<array, array> slogdet(const array& a, StreamOrDevice s /* = {} */) {
+  validate_det(a, s, "[linalg::slogdet]");
+
+  auto dtype = at_least_float(a.dtype());
+  auto input = astype(a, dtype, s);
+  return slogdet_impl(input, s);
+}
+
+array det(const array& a, StreamOrDevice s /* = {} */) {
+  validate_det(a, s, "[linalg::det]");
+
+  auto dtype = at_least_float(a.dtype());
+  auto input = astype(a, dtype, s);
+  int n = input.shape(-1);
+
+  // Small-matrix fast path: compute directly, skip log/exp round-trip
+  if (n <= 3) {
+    return det_raw_small(input, s);
+  }
+
+  // General case: det = sign * exp(logabsdet)
+  auto [sign_val, logabsdet] = slogdet_impl(input, s);
+  return multiply(sign_val, exp(logabsdet, s), s);
+}
+
 } // namespace mlx::core::linalg

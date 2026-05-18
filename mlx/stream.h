@@ -49,6 +49,9 @@ MLX_API void synchronize();
 /* Synchronize with the provided stream. */
 MLX_API void synchronize(Stream);
 
+/* Synchronize with the stream corresponding to the current thread. */
+MLX_API void synchronize(ThreadLocalStream);
+
 /* Destroy all streams created in current thread. */
 MLX_API void clear_streams();
 

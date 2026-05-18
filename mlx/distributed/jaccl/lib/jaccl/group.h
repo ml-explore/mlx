@@ -30,6 +30,7 @@ class Group {
 
   virtual void send(const void* input, size_t n_bytes, int dst) = 0;
   virtual void recv(void* output, size_t n_bytes, int src) = 0;
+  virtual void barrier() = 0;
 };
 
 /**

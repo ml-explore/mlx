@@ -38,9 +38,7 @@ mx::array to_array(
     return mx::array(static_cast<mx::complex64_t>(*pv), mx::complex64);
   } else if (auto pv = std::get_if<mx::array>(&v); pv) {
     return *pv;
-  } else if (auto pv = std::get_if<
-                 nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>>(&v);
-             pv) {
+  } else if (auto pv = std::get_if<nb::ndarray<nb::ro, nb::c_contig>>(&v); pv) {
     return nd_array_to_mlx(*pv, dtype);
   } else {
     return to_array_with_accessor(std::get<ArrayLike>(v).obj);

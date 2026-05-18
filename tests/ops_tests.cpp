@@ -2737,11 +2737,41 @@ TEST_CASE("test as_strided op") {
   auto x = arange(10);
   auto y = as_strided(x, {3, 3}, {1, 1}, 0);
   auto expected = array({0, 1, 2, 1, 2, 3, 2, 3, 4}, {3, 3});
+  eval(y);
   CHECK(array_equal(y, expected).item<bool>());
+  CHECK_EQ(y.data_size(), 5);
+  CHECK_FALSE(y.flags().contiguous);
 
   y = as_strided(x, {3, 3}, {0, 3}, 0);
   expected = array({0, 3, 6, 0, 3, 6, 0, 3, 6}, {3, 3});
+  eval(y);
   CHECK(array_equal(y, expected).item<bool>());
+  CHECK_EQ(y.data_size(), 7);
+  CHECK_FALSE(y.flags().contiguous);
+
+  x = arange(24);
+  y = as_strided(x, {2, 3, 4}, {3, 1, 6}, 0);
+  expected = array(
+      {0, 6, 12, 18, 1, 7,  13, 19, 2, 8,  14, 20,
+       3, 9, 15, 21, 4, 10, 16, 22, 5, 11, 17, 23},
+      {2, 3, 4});
+  eval(y);
+  CHECK(array_equal(y, expected).item<bool>());
+  CHECK_EQ(y.data_size(), 24);
+  CHECK(y.flags().contiguous);
+  CHECK_FALSE(y.flags().row_contiguous);
+  CHECK_FALSE(y.flags().col_contiguous);
+
+  auto z = astype(y, float32);
+  CHECK(array_equal(z, astype(expected, float32)).item<bool>());
+
+  x = arange(10);
+  y = as_strided(x, {10}, {-1}, 9);
+  expected = array({9, 8, 7, 6, 5, 4, 3, 2, 1, 0}, {10});
+  eval(y);
+  CHECK(array_equal(y, expected).item<bool>());
+  CHECK_EQ(y.data_size(), 10);
+  CHECK_FALSE(y.flags().contiguous);
 
   x = reshape(x, {2, 5}); // 0 1 2 3 ...
   x = transpose(x, {1, 0}); // 0 5 1 6 2 7 ...

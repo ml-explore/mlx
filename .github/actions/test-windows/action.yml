@@ -16,6 +16,6 @@ runs:
         DEVICE: cpu
       run: |
         echo "::group::CPP tests - CPU"
-        ./build/tests.exe -tce="*gguf*,test random uniform"
+        ./build/tests.exe -tce="*gguf*"
         ./build/test_teardown.exe
         echo "::endgroup::"

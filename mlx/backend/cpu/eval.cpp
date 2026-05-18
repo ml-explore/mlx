@@ -7,6 +7,15 @@
 
 namespace mlx::core::cpu {
 
+void new_stream(Stream s) {
+  auto& encoders = get_command_encoders();
+  encoders.try_emplace(s.index, s);
+}
+
+void clear_streams() {
+  get_command_encoders().clear();
+}
+
 void eval(array& arr) {
   auto s = arr.primitive().stream();
 

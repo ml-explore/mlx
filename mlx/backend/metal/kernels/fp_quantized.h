@@ -533,6 +533,7 @@ METAL_FUNC void fp_qvm_impl(
     device T* y,
     const int in_vec_size,
     const int out_vec_size,
+    const int in_vec_stride,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
@@ -563,7 +564,7 @@ METAL_FUNC void fp_qvm_impl(
   int out_col = pack_factor * tn * (tid.y * num_simdgroups + simd_gid);
   ws += out_col * bytes_per_pack / pack_factor + simd_lid * out_vec_size_w;
   scales += out_col / group_size + simd_lid * out_vec_size_g;
-  x += tid.x * in_vec_size + simd_lid;
+  x += tid.x * in_vec_stride + simd_lid;
   y += tid.x * out_vec_size + out_col;
 
   if (out_col >= out_vec_size) {
@@ -1122,7 +1123,16 @@ template <typename T, const int group_size, int bits, bool batched>
         tid);
   }
   fp_qvm_impl<T, group_size, bits>(
-      w, scales, x, y, in_vec_size, out_vec_size, tid, simd_gid, simd_lid);
+      w,
+      scales,
+      x,
+      y,
+      in_vec_size,
+      out_vec_size,
+      in_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
 }
 
 template <typename T, const int group_size, int bits, int split_k = 32>
@@ -1164,8 +1174,20 @@ template <typename T, const int group_size, int bits, int split_k = 32>
   int in_vec_size_adj =
       tid.z % split_k == split_k - 1 ? final_block_size : in_vec_size;
 
+  // The in_vec_stride is the full K dimension, not the partition size
+  int in_vec_stride = (split_k - 1) * in_vec_size + final_block_size;
+
   fp_qvm_impl<T, group_size, bits>(
-      w, scales, x, y, in_vec_size_adj, out_vec_size, tid, simd_gid, simd_lid);
+      w,
+      scales,
+      x,
+      y,
+      in_vec_size_adj,
+      out_vec_size,
+      in_vec_stride,
+      tid,
+      simd_gid,
+      simd_lid);
 }
 
 template <
@@ -1423,7 +1445,16 @@ template <typename T, int group_size, int bits>
       s_strides,
       tid);
   fp_qvm_impl<T, group_size, bits>(
-      w, scales, x, y, in_vec_size, out_vec_size, tid, simd_gid, simd_lid);
+      w,
+      scales,
+      x,
+      y,
+      in_vec_size,
+      out_vec_size,
+      in_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
 }
 
 template <

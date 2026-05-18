@@ -20,8 +20,16 @@ try:
     import tensorflow as tf
 
     has_tf = True
-except ImportError as e:
+except ImportError:
     has_tf = False
+
+try:
+    import torch
+
+    has_torch_mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+except ImportError:
+    torch = None
+    has_torch_mps = False
 
 
 class TestVersion(mlx_tests.MLXTestCase):
@@ -767,10 +775,13 @@ class TestArray(mlx_tests.MLXTestCase):
 
     def test_array_np_shape_dim_check(self):
         a_npy = np.empty(2**31, dtype=np.bool_)
-        with self.assertRaises(ValueError) as e:
+        with self.assertRaises(OverflowError) as e:
             mx.array(a_npy)
         self.assertEqual(
-            str(e.exception), "Shape dimension falls outside supported `int` range."
+            str(e.exception),
+            "Shape dimension 2147483648 is outside the supported range "
+            "[-2147483648, 2147483647]. MLX currently uses 32-bit integers "
+            "for shape dimensions.",
         )
 
     def test_dtype_promotion(self):
@@ -1547,6 +1558,30 @@ class TestArray(mlx_tests.MLXTestCase):
         a = a.at[:, :, :].add(update)
         self.assertEqualArray(a, update)
 
+    def test_slice_update_contiguous_2d(self):
+        for shape in [(32, 32), (64, 64), (17, 33), (128, 128)]:
+            for upd_shape in [(16, 16), (8, 8), (4, 4)]:
+                if upd_shape[0] > shape[0] or upd_shape[1] > shape[1]:
+                    continue
+                y = mx.zeros(shape)
+                x = mx.random.normal(upd_shape)
+                z = y.at[: upd_shape[0], : upd_shape[1]].add(x)
+                diff = z[: upd_shape[0], : upd_shape[1]] - x
+                self.assertTrue(mx.allclose(diff, mx.zeros_like(diff)))
+
+        # Test non-zero offset slice update
+        y = mx.zeros((32, 32))
+        x = mx.random.normal((16, 16))
+        z = y.at[16:, 16:].add(x)
+        self.assertTrue(mx.allclose(z[16:, 16:] - x, mx.zeros_like(x)))
+
+        # Test with size divisible by 4, 2, and odd
+        for cols in [32, 18, 15]:
+            y = mx.zeros((32, cols))
+            x = mx.random.normal((16, cols))
+            z = y.at[:16, :].add(x)
+            self.assertTrue(mx.allclose(z[:16, :] - x, mx.zeros_like(x)))
+
     def test_slice_negative_step(self):
         a_np = np.arange(20)
         a_mx = mx.array(a_np)
@@ -2011,6 +2046,21 @@ class TestArray(mlx_tests.MLXTestCase):
         x = x[::2, ::2]
         y = np.from_dlpack(x)
         self.assertTrue(mx.array_equal(y, x))
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_non_cpu_error(self):
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        self.assertEqual(x.__dlpack_device__()[0], 8)
+
+        with self.assertRaisesRegex(ValueError, "non-CPU DLPack"):
+            mx.array(x)
+
+        a = mx.array([1])
+        b = torch.tensor([2])
+        self.assertTrue(mx.array_equal(a + b, mx.array([3])))
+
+        with self.assertRaisesRegex(ValueError, "non-CPU DLPack"):
+            a + b.to("mps")
 
     def test_getitem_with_list(self):
         a = mx.array([1, 2, 3, 4, 5])

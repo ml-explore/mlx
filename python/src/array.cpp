@@ -300,7 +300,7 @@ void init_array(nb::module_& m) {
           "val"_a,
           "dtype"_a = nb::none(),
           nb::sig(
-              "def __init__(self: array, val: Union[scalar, list, tuple, numpy.ndarray, array], dtype: Optional[Dtype] = None)"))
+              "def __init__(self: array, val: Union[scalar, list, tuple, DLPackCompatible, array], dtype: Optional[Dtype] = None)"))
       .def_prop_ro(
           "size",
           &mx::array::size,
@@ -479,7 +479,7 @@ void init_array(nb::module_& m) {
               throw std::invalid_argument(
                   "Invalid pickle state: expected (ndarray, Dtype::Val)");
             }
-            using ND = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
+            using ND = nb::ndarray<nb::ro, nb::c_contig>;
             ND nd = nb::cast<ND>(state[0]);
             auto val = static_cast<mx::Dtype::Val>(nb::cast<uint8_t>(state[1]));
             if (val == mx::Dtype::Val::bfloat16) {

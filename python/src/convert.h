@@ -62,7 +62,7 @@ struct ArrayLike {
 };
 
 mx::array nd_array_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
+    nb::ndarray<nb::ro, nb::c_contig> nd_array,
     std::optional<mx::Dtype> mx_dtype,
     std::optional<nb::dlpack::dtype> nb_dtype = std::nullopt);
 
@@ -76,3 +76,7 @@ nb::object tolist(mx::array& a);
 mx::array create_array(nb::object v, std::optional<mx::Dtype> t);
 mx::array array_from_list(nb::list pl, std::optional<mx::Dtype> dtype);
 mx::array array_from_list(nb::tuple pl, std::optional<mx::Dtype> dtype);
+
+// Narrow a Python-side shape dimension (int64) to a C++ mx::ShapeElem (int32),
+// raising a clear error if the value would overflow.
+int check_shape_dim(int64_t dim);

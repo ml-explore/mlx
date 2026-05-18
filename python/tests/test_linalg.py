@@ -520,6 +520,19 @@ class TestLinalg(mlx_tests.MLXTestCase):
         P, L, U = mx.linalg.lu(a, stream=mx.cpu)
         self.assertTrue(mx.allclose(L[P, :] @ U, a))
 
+        # Test singular matrix (should not throw)
+        a = mx.array(
+            [
+                [1.0, 2.0, 3.0, 4.0],
+                [2.0, 4.0, 6.0, 8.0],
+                [0.0, 1.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        P, L, U = mx.linalg.lu(a, stream=mx.cpu)
+        L_permuted = mx.take_along_axis(L, P[..., None], axis=-2)
+        self.assertTrue(mx.allclose(L_permuted @ U, a))
+
     def test_lu_factor(self):
         mx.random.seed(7)
 
@@ -615,6 +628,248 @@ class TestLinalg(mlx_tests.MLXTestCase):
         result = mx.linalg.solve_triangular(a, b, upper=True, stream=mx.cpu)
         expected = np.linalg.solve(a, b)
         self.assertTrue(np.allclose(result, expected))
+
+    def test_det(self):
+        # 1x1 fast path
+        A = mx.array([[5.0]])
+        self.assertTrue(np.allclose(mx.linalg.det(A, stream=mx.cpu), 5.0))
+
+        # 2x2 fast path
+        A = mx.array([[1.0, 2.0], [3.0, 4.0]])
+        d = mx.linalg.det(A, stream=mx.cpu)
+        self.assertTrue(np.allclose(d, -2.0))
+
+        # 3x3 fast path
+        A = mx.array([[1.0, 2.0, 3.0], [0.0, 1.0, 4.0], [5.0, 6.0, 0.0]])
+        d = mx.linalg.det(A, stream=mx.cpu)
+        expected = np.linalg.det(np.array(A))
+        self.assertTrue(np.allclose(d, expected, atol=1e-5))
+
+        # 4x4 LU path: compare with numpy
+        np.random.seed(42)
+        A_np = np.random.randn(4, 4).astype(np.float32)
+        A_mx = mx.array(A_np)
+        d_mx = mx.linalg.det(A_mx, stream=mx.cpu)
+        d_np = np.linalg.det(A_np)
+        self.assertTrue(np.allclose(d_mx, d_np, atol=1e-4))
+
+        # 5x5 LU path
+        A_np = np.random.randn(5, 5).astype(np.float32)
+        A_mx = mx.array(A_np)
+        d_mx = mx.linalg.det(A_mx, stream=mx.cpu)
+        d_np = np.linalg.det(A_np)
+        self.assertTrue(np.allclose(d_mx, d_np, atol=1e-4))
+
+        # Identity matrix
+        A = mx.eye(5)
+        self.assertTrue(np.allclose(mx.linalg.det(A, stream=mx.cpu), 1.0))
+
+        # Batched: (3, 4, 4)
+        A_np = np.random.randn(3, 4, 4).astype(np.float32)
+        A_mx = mx.array(A_np)
+        d_mx = mx.linalg.det(A_mx, stream=mx.cpu)
+        d_np = np.linalg.det(A_np)
+        self.assertTrue(np.allclose(d_mx, d_np, atol=1e-4))
+
+        # Multi-batch: (2, 3, 3, 3)
+        A_np = np.random.randn(2, 3, 3, 3).astype(np.float32)
+        A_mx = mx.array(A_np)
+        d_mx = mx.linalg.det(A_mx, stream=mx.cpu)
+        d_np = np.linalg.det(A_np)
+        self.assertTrue(np.allclose(d_mx, d_np, atol=1e-4))
+
+        # Integer input auto-promotes to float
+        A = mx.array([[1, 2], [3, 4]])
+        d = mx.linalg.det(A, stream=mx.cpu)
+        self.assertTrue(np.allclose(d, -2.0))
+
+        # float64
+        A_np = np.random.randn(4, 4).astype(np.float64)
+        A_mx = mx.array(A_np)
+        d_mx = mx.linalg.det(A_mx, stream=mx.cpu)
+        d_np = np.linalg.det(A_np)
+        self.assertTrue(np.allclose(d_mx, d_np, atol=1e-10))
+
+        # Singular 4x4 matrix (LU path): det should be 0
+        A = mx.array(
+            [
+                [1.0, 2.0, 3.0, 4.0],
+                [2.0, 4.0, 6.0, 8.0],
+                [0.0, 1.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        d = mx.linalg.det(A, stream=mx.cpu)
+        self.assertTrue(np.allclose(d, 0.0, atol=1e-5))
+
+        # Singular 5x5 matrix (LU path)
+        A_np = np.ones((5, 5), dtype=np.float32)
+        A_mx = mx.array(A_np)
+        d = mx.linalg.det(A_mx, stream=mx.cpu)
+        self.assertTrue(np.allclose(d, 0.0, atol=1e-5))
+
+        # Batched singular matrices (LU path)
+        A_np = np.array([np.diag([1.0, 2.0, 0.0, 3.0]), np.eye(4, dtype=np.float32)])
+        A_mx = mx.array(A_np)
+        d_mx = mx.linalg.det(A_mx, stream=mx.cpu)
+        d_np = np.linalg.det(A_np)
+        self.assertTrue(np.allclose(d_mx, d_np, atol=1e-5))
+
+        # Empty 0x0 matrix: det is the empty product = 1
+        d = mx.linalg.det(mx.zeros((0, 0)), stream=mx.cpu)
+        self.assertEqual(d.shape, ())
+        self.assertEqual(float(d), 1.0)
+
+        # Batched empty matrices: shape preserves batch dims
+        d = mx.linalg.det(mx.zeros((3, 0, 0)), stream=mx.cpu)
+        self.assertTrue(np.allclose(d, np.linalg.det(np.zeros((3, 0, 0)))))
+
+        # Error: non-square
+        with self.assertRaises(ValueError):
+            mx.linalg.det(mx.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), stream=mx.cpu)
+
+        # Error: 1D
+        with self.assertRaises(ValueError):
+            mx.linalg.det(mx.array([1.0, 2.0]), stream=mx.cpu)
+
+        # Error: complex unsupported (small-matrix path)
+        with self.assertRaises(ValueError):
+            mx.linalg.det(mx.array([[1.0 + 1j, 2.0], [3.0, 4.0]]), stream=mx.cpu)
+
+        # Error: complex unsupported (LU path)
+        with self.assertRaises(ValueError):
+            mx.linalg.det(mx.eye(4).astype(mx.complex64), stream=mx.cpu)
+
+    def test_slogdet(self):
+        # 2x2: det = -2 => sign = -1, logabsdet = log(2)
+        A = mx.array([[1.0, 2.0], [3.0, 4.0]])
+        sign, logabsdet = mx.linalg.slogdet(A, stream=mx.cpu)
+        self.assertTrue(np.allclose(sign, -1.0))
+        self.assertTrue(np.allclose(logabsdet, np.log(2.0), atol=1e-5))
+
+        # Identity: sign = 1, logabsdet = 0
+        A = mx.eye(4)
+        sign, logabsdet = mx.linalg.slogdet(A, stream=mx.cpu)
+        self.assertTrue(np.allclose(sign, 1.0))
+        self.assertTrue(np.allclose(logabsdet, 0.0, atol=1e-6))
+
+        # Compare with numpy for random matrices
+        np.random.seed(42)
+        for n in [1, 2, 3, 4, 5]:
+            A_np = np.random.randn(n, n).astype(np.float32)
+            A_mx = mx.array(A_np)
+            sign_mx, logabs_mx = mx.linalg.slogdet(A_mx, stream=mx.cpu)
+            sign_np, logabs_np = np.linalg.slogdet(A_np)
+            with self.subTest(n=n):
+                self.assertTrue(np.allclose(sign_mx, sign_np, atol=1e-5))
+                self.assertTrue(np.allclose(logabs_mx, logabs_np, atol=1e-4))
+
+        # Singular matrix 2x2 (fast path): sign = 0, logabsdet = -inf
+        A = mx.array([[1.0, 2.0], [2.0, 4.0]])
+        sign, logabsdet = mx.linalg.slogdet(A, stream=mx.cpu)
+        self.assertEqual(float(sign), 0.0)
+        self.assertEqual(float(logabsdet), float("-inf"))
+
+        # Singular 4x4 matrix (LU path): sign = 0, logabsdet = -inf
+        A = mx.array(
+            [
+                [1.0, 2.0, 3.0, 4.0],
+                [2.0, 4.0, 6.0, 8.0],
+                [0.0, 1.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        sign, logabsdet = mx.linalg.slogdet(A, stream=mx.cpu)
+        self.assertEqual(float(sign), 0.0)
+        self.assertEqual(float(logabsdet), float("-inf"))
+
+        # Singular 5x5 matrix (LU path): all-ones matrix
+        A = mx.array(np.ones((5, 5), dtype=np.float32))
+        sign, logabsdet = mx.linalg.slogdet(A, stream=mx.cpu)
+        self.assertEqual(float(sign), 0.0)
+        self.assertEqual(float(logabsdet), float("-inf"))
+
+        # Batched with mix of singular and non-singular (LU path)
+        A_np = np.array([np.diag([1.0, 2.0, 0.0, 3.0]), np.eye(4, dtype=np.float32)])
+        A_mx = mx.array(A_np)
+        sign_mx, logabs_mx = mx.linalg.slogdet(A_mx, stream=mx.cpu)
+        sign_np, logabs_np = np.linalg.slogdet(A_np)
+        self.assertTrue(np.allclose(sign_mx, sign_np, atol=1e-5))
+        # Check -inf for singular, 0.0 for identity
+        self.assertEqual(float(logabs_mx[0]), float("-inf"))
+        self.assertTrue(np.allclose(logabs_mx[1], 0.0, atol=1e-6))
+
+        # Batched
+        A_np = np.random.randn(3, 4, 4).astype(np.float32)
+        A_mx = mx.array(A_np)
+        sign_mx, logabs_mx = mx.linalg.slogdet(A_mx, stream=mx.cpu)
+        sign_np, logabs_np = np.linalg.slogdet(A_np)
+        self.assertTrue(np.allclose(sign_mx, sign_np, atol=1e-5))
+        self.assertTrue(np.allclose(logabs_mx, logabs_np, atol=1e-4))
+
+        # Multi-batch
+        A_np = np.random.randn(2, 3, 3, 3).astype(np.float32)
+        A_mx = mx.array(A_np)
+        sign_mx, logabs_mx = mx.linalg.slogdet(A_mx, stream=mx.cpu)
+        sign_np, logabs_np = np.linalg.slogdet(A_np)
+        self.assertTrue(np.allclose(sign_mx, sign_np, atol=1e-5))
+        self.assertTrue(np.allclose(logabs_mx, logabs_np, atol=1e-4))
+
+        # Numerical stability: large matrix where det overflows
+        # 0.1 * I_100 has det = 0.1^100 which underflows in float32
+        # but slogdet should give sign=1, logabsdet = 100*log(0.1)
+        n = 100
+        A = mx.array(0.1) * mx.eye(n)
+        sign, logabsdet = mx.linalg.slogdet(A, stream=mx.cpu)
+        self.assertTrue(np.allclose(sign, 1.0))
+        self.assertTrue(np.allclose(logabsdet, n * np.log(0.1), atol=1e-3))
+
+        # Verify det = sign * exp(logabsdet) for non-singular cases
+        A_np = np.random.randn(5, 5).astype(np.float32)
+        A_mx = mx.array(A_np)
+        sign_mx, logabs_mx = mx.linalg.slogdet(A_mx, stream=mx.cpu)
+        det_mx = mx.linalg.det(A_mx, stream=mx.cpu)
+        reconstructed = float(sign_mx) * np.exp(float(logabs_mx))
+        self.assertTrue(np.allclose(float(det_mx), reconstructed, rtol=1e-4))
+
+        # float64
+        A_np = np.random.randn(4, 4).astype(np.float64)
+        A_mx = mx.array(A_np)
+        sign_mx, logabs_mx = mx.linalg.slogdet(A_mx, stream=mx.cpu)
+        sign_np, logabs_np = np.linalg.slogdet(A_np)
+        self.assertTrue(np.allclose(sign_mx, sign_np))
+        self.assertTrue(np.allclose(logabs_mx, logabs_np, atol=1e-10))
+
+        # Empty 0x0 matrix: sign = 1, logabsdet = 0 (empty product)
+        sign, logabsdet = mx.linalg.slogdet(mx.zeros((0, 0)), stream=mx.cpu)
+        self.assertEqual(sign.shape, ())
+        self.assertEqual(logabsdet.shape, ())
+        self.assertEqual(float(sign), 1.0)
+        self.assertEqual(float(logabsdet), 0.0)
+
+        # Batched empty matrices
+        sign, logabsdet = mx.linalg.slogdet(mx.zeros((3, 0, 0)), stream=mx.cpu)
+        sign_np, logabs_np = np.linalg.slogdet(np.zeros((3, 0, 0)))
+        self.assertTrue(np.allclose(sign, sign_np))
+        self.assertTrue(np.allclose(logabsdet, logabs_np))
+
+        # Error: non-square
+        with self.assertRaises(ValueError):
+            mx.linalg.slogdet(
+                mx.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), stream=mx.cpu
+            )
+
+        # Error: 1D
+        with self.assertRaises(ValueError):
+            mx.linalg.slogdet(mx.array([1.0, 2.0]), stream=mx.cpu)
+
+        # Error: complex unsupported (small-matrix path)
+        with self.assertRaises(ValueError):
+            mx.linalg.slogdet(mx.array([[1.0 + 1j, 2.0], [3.0, 4.0]]), stream=mx.cpu)
+
+        # Error: complex unsupported (LU path)
+        with self.assertRaises(ValueError):
+            mx.linalg.slogdet(mx.eye(4).astype(mx.complex64), stream=mx.cpu)
 
 
 if __name__ == "__main__":

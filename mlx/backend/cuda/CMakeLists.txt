@@ -122,7 +122,8 @@ target_compile_options(
 
 # Ignore warnings from CUTLASS.
 target_compile_options(
-  mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=2908,2361">)
+  mlx
+  PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=186,2908,2361">)
 
 if(NOT MSVC)
   # Required for generating optimized CUTLASS code.
@@ -168,9 +169,8 @@ set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
 
 # Skip Hopper-only kernels when not building for sm90a.
-if(NOT DEFINED ENV{MLX_DISABLE_SM90A_KERNELS}
-   AND (("90a" IN_LIST MLX_CUDA_ARCHITECTURES) OR ("90a-real" IN_LIST
-                                                   MLX_CUDA_ARCHITECTURES)))
+if(("90a" IN_LIST MLX_CUDA_ARCHITECTURES) OR ("90a-real" IN_LIST
+                                              MLX_CUDA_ARCHITECTURES))
   target_compile_definitions(mlx PRIVATE MLX_CUDA_SM90A_ENABLED)
 endif()
 

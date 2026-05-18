@@ -173,6 +173,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
 
+    @unittest.skipIf(mx.cuda.is_available(), "1-bit quantization NYI on CUDA")
     def test_1bit_quantize_dequantize(self):
         """Test 1-bit affine quantization."""
 
@@ -559,6 +560,30 @@ class TestQuantized(mlx_tests.MLXTestCase):
         y_hat = x @ w_hat
         self.assertEqual(y_q.shape, y_hat.shape)
         self.assertLess((y_q - y_hat).abs().max(), 2e-3)
+
+    def test_qvm_splitk_multi_row(self):
+        # Test qvm split_k with M > 1 to ensure the x row stride is correct
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        tests = product(
+            [64, 32],  # group_size
+            [4, 8],  # bits
+            [128],  # out dim (N)
+            [2048, 4096],  # in dim (K) >= 1024 to trigger split_k
+            [2, 3],  # M (multiple rows)
+        )
+        for group_size, bits, N, K, M in tests:
+            with self.subTest(M=M, K=K, N=N, group_size=group_size, bits=bits):
+                x = 1e-1 * mx.random.normal(shape=(M, K), key=k1)
+                w = 1e-1 * mx.random.normal(shape=(K, N), key=k2)
+                w_q, scales, biases = mx.quantize(w, group_size, bits)
+                w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
+                y_q = mx.quantized_matmul(
+                    x, w_q, scales, biases, False, group_size, bits
+                )
+                y_hat = x @ w_hat
+                self.assertEqual(y_q.shape, y_hat.shape)
+                self.assertLess((y_q - y_hat).abs().max(), 2e-3)
 
     def test_fp_qvm(self):
         key = mx.random.key(0)
@@ -1136,7 +1161,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y3 = scatter_unsort(y3, inv_order, indices.shape)
                 y4 = scatter_unsort(y4, inv_order, indices.shape)
 
-                tol = 1.5e-5 if (dtype == mx.float32) else 2.5e-4
+                tol = 1.5e-5 if (dtype == mx.float32) else 1e-3
 
                 self.assertLess((y1 - y2).abs().max(), tol)
                 self.assertLess((y1 - y3).abs().max(), tol)

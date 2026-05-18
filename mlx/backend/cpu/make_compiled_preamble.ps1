@@ -15,13 +15,6 @@ $CONTENT = $CONTENT | Where-Object { $_.Trim() -ne '' }
 # Concatenate to string.
 $CONTENT = $CONTENT -join "`n"
 
-# Append extra content.
-$CONTENT = @"
-$($CONTENT)
-using namespace mlx::core;
-using namespace mlx::core::detail;
-"@
-
 # Convert each char to ASCII code.
 # Unlike the unix script that outputs string literal directly, the output from
 # MSVC is way too large to be embedded as string and compilation will fail, so
@@ -29,7 +22,7 @@ using namespace mlx::core::detail;
 $CHARCODES = ([System.Text.Encoding]::ASCII.GetBytes($CONTENT) -join ', ') + ', 0'
 
 $OUTPUT = @"
-const char* get_kernel_preamble() {
+const char* get_prebuilt_preamble() {
   static char preamble[] = { $CHARCODES };
   return preamble;
 }

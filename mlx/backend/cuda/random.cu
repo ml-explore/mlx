@@ -49,7 +49,7 @@ __global__ void rbitsc(
     uint8_t* out,
     dim3 grid_dims,
     bool odd,
-    uint32_t bytes_per_key) {
+    uint64_t bytes_per_key) {
   auto grid = cg::this_grid();
   uint32_t thread_index = grid.thread_rank();
   uint32_t index_x = thread_index % grid_dims.x;
@@ -89,7 +89,7 @@ __global__ void rbits(
     uint8_t* out,
     dim3 grid_dims,
     bool odd,
-    uint32_t bytes_per_key,
+    uint64_t bytes_per_key,
     int32_t ndim,
     const __grid_constant__ Shape key_shape,
     const __grid_constant__ Strides key_strides) {

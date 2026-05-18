@@ -1,6 +1,8 @@
 // Copyright © 2024 Apple Inc.
 
 #include "mlx/backend/cpu/jit_compiler.h"
+#include "mlx/backend/common/utils.h"
+#include "mlx/backend/cpu/compiled_preamble.h"
 
 #include <algorithm>
 #include <sstream>
@@ -86,30 +88,61 @@ const VisualStudioInfo& GetVisualStudioInfo() {
 
 #endif // _MSC_VER
 
+const std::tuple<bool, std::string, std::string>& JitCompiler::get_preamble() {
+  static auto preamble = []() -> std::tuple<bool, std::string, std::string> {
+    // Check whether the headers are shipped with the binary, if so use the
+    // preamble from the headers, otherwise use the prebuilt one embeded in
+    // binary, which may not work with all compilers.
+    auto root_dir = current_binary_dir();
+#if !defined(_WIN32)
+    root_dir = root_dir.parent_path();
+#endif
+    auto include_dir = root_dir / "include";
+    if (std::filesystem::exists(include_dir / "mlx")) {
+      return std::make_tuple(
+          true,
+          include_dir.string(),
+          "#include \"mlx/backend/cpu/compiled_preamble.h\"\n");
+    } else {
+      return std::make_tuple(false, "", get_prebuilt_preamble());
+    }
+  }();
+  return preamble;
+}
+
 std::string JitCompiler::build_command(
     const std::filesystem::path& dir,
     const std::string& source_file_name,
     const std::string& shared_lib_name) {
+  auto& [use_include, include_dir, preamble] = get_preamble();
 #ifdef _MSC_VER
+  std::string extra_flags;
+  if (use_include) {
+    extra_flags += fmt::format("/I \"{}\"", include_dir);
+  }
   const VisualStudioInfo& info = GetVisualStudioInfo();
-  std::string libpaths;
   for (const std::string& lib : info.libpaths) {
-    libpaths += fmt::format(" /libpath:\"{0}\"", lib);
+    extra_flags += fmt::format(" /libpath:\"{}\"", lib);
   }
   return fmt::format(
       "\""
-      "cd /D \"{0}\" && "
-      "\"{1}\" /LD /EHsc /MD /Ox /nologo /std:c++17 \"{2}\" "
-      "/link /out:\"{3}\" {4} 2>&1"
+      "cd /D \"{}\" && "
+      "\"{}\" /LD /EHsc /MD /Ox /nologo /std:c++17 {} \"{}\" "
+      "/link /out:\"{}\" 2>&1"
       "\"",
       dir.string(),
       info.cl_exe,
+      extra_flags,
       source_file_name,
-      shared_lib_name,
-      libpaths);
+      shared_lib_name);
 #else
+  std::string extra_flags;
+  if (use_include) {
+    extra_flags = fmt::format("-I \"{}\"", include_dir);
+  }
   return fmt::format(
-      "g++ -std=c++17 -O3 -Wall -fPIC -shared \"{0}\" -o \"{1}\" 2>&1",
+      "g++ -std=c++17 -O3 -Wall -fPIC -shared {} \"{}\" -o \"{}\" 2>&1",
+      extra_flags,
       (dir / source_file_name).string(),
       (dir / shared_lib_name).string());
 #endif

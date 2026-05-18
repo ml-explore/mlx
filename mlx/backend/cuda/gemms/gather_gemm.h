@@ -10,7 +10,7 @@ class CommandEncoder;
 
 class array;
 
-void cutlass_gather_mm(
+void gather_mm(
     bool a_transposed,
     bool b_transposed,
     const array& a,

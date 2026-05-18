@@ -586,7 +586,6 @@ def main():
         choices=["thunderbolt", "ethernet"],
         default="thunderbolt",
         help="What type of connectivity to configure",
-        required=True,
     )
     parser.add_argument(
         "--output-hostfile", help="If provided, save the hostfile to this path"

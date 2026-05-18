@@ -1,6 +1,9 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <array>
+#include <chrono>
+#include <cmath>
+#include <future>
 
 #include "doctest/doctest.h"
 #include "mlx/mlx.h"
@@ -520,4 +523,83 @@ TEST_CASE("test memory info") {
 
   clear_cache();
   CHECK_EQ(get_cache_memory(), 0);
+}
+
+TEST_CASE("test scatter_prod with NaN does not hang") {
+  // Regression test for the NaN CAS workaround in atomic.h. The std::async
+  // timeout converts a wedged GPU into a test failure.
+  auto run_with_timeout = [](auto fn) {
+    auto fut = std::async(std::launch::async, std::move(fn));
+    REQUIRE(
+        fut.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+    return fut.get();
+  };
+
+  float nan = std::nanf("");
+
+  // NaN-valued update colliding with a normal update on the same slot.
+  {
+    auto out = run_with_timeout([&] {
+      auto x = array({1.0f, 1.0f, 1.0f, 1.0f});
+      auto idx = array({0, 0});
+      auto upd = array({nan, 2.0f}, {2, 1});
+      auto y = scatter_prod(x, idx, upd, 0, Device::gpu);
+      eval(y);
+      return y;
+    });
+    CHECK(std::isnan(out.data<float>()[0]));
+  }
+
+  // NaN already in memory before any update lands.
+  {
+    auto out = run_with_timeout([&] {
+      auto x = array({nan, 1.0f, 1.0f, 1.0f});
+      auto idx = array({0, 0});
+      auto upd = array({2.0f, 3.0f}, {2, 1});
+      auto y = scatter_prod(x, idx, upd, 0, Device::gpu);
+      eval(y);
+      return y;
+    });
+    CHECK(std::isnan(out.data<float>()[0]));
+  }
+}
+
+TEST_CASE("test gpu depthwise conv2d non-mod-8 spatial") {
+  // Depthwise Metal kernel is gated on C_per_group == 1, C == O, C % 16 == 0,
+  // kernel <= 7, stride <= 2. Previously the dispatch also required the
+  // output spatial dims to be multiples of 8; non-multiples fell back to the
+  // gemm path. These cases exercise the tail-tile dispatch now handled by
+  // the depthwise kernel itself and verify GPU ≈ CPU.
+  struct Case {
+    int N, H, W, C, kH, kW;
+    std::pair<int, int> stride;
+    std::pair<int, int> padding;
+  };
+  std::vector<Case> cases = {
+      // Matches the issue reproducer resolutions, reduced batch.
+      {1, 15, 15, 16, 3, 3, {1, 1}, {1, 1}},
+      {1, 30, 30, 32, 3, 3, {1, 1}, {1, 1}},
+      {1, 60, 60, 16, 3, 3, {1, 1}, {1, 1}},
+      // Non-square and non-matching alignment on the two spatial axes.
+      {1, 17, 30, 16, 5, 5, {1, 1}, {2, 2}},
+      {1, 8, 13, 16, 3, 3, {1, 1}, {1, 1}},
+      // Stride 2 with non-mod-8 output.
+      {1, 19, 19, 32, 3, 3, {2, 2}, {1, 1}},
+  };
+
+  auto key = random::key(42);
+  for (const auto& c : cases) {
+    auto in = random::normal(
+        {c.N, c.H, c.W, c.C}, float32, 0.0f, 1.0f, key, Device::cpu);
+    auto wt = random::normal(
+        {c.C, c.kH, c.kW, 1}, float32, 0.0f, 1.0f, key, Device::cpu);
+    eval(in);
+    eval(wt);
+
+    auto out_cpu =
+        conv2d(in, wt, c.stride, c.padding, {1, 1}, c.C, Device::cpu);
+    auto out_gpu =
+        conv2d(in, wt, c.stride, c.padding, {1, 1}, c.C, Device::gpu);
+    CHECK(allclose(out_cpu, out_gpu, 1e-4, 1e-4).item<bool>());
+  }
 }
