@@ -1517,7 +1517,7 @@ void init_transforms(nb::module_& m) {
 
         Returns:
             Callable: A compiled function which has the same input arguments
-            as ``fun`` and returns the the same output(s).
+            as ``fun`` and returns the same output(s).
       )pbdoc");
   m.def(
       "disable_compile",

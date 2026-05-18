@@ -272,7 +272,7 @@ def gaussian_nll_loss(
         \ \epsilon\right)\right) + \frac{\left(\text{inputs} - \text{targets} \right)^2}
         {\max\left(\text{vars}, \ \epsilon \right)}\right) + \text{const.}
 
-    where ``inputs`` are the predicted means and ``vars`` are the the
+    where ``inputs`` are the predicted means and ``vars`` are the
     predicted variances.
 
     Args:
