@@ -64,10 +64,6 @@ void Scheduler::enqueue(Stream s, std::function<void()> task) {
 // CRT).
 // The OS reclaims all resources at process exit anyway.
 Scheduler& scheduler() {
-  // Intentionally leaked to avoid the "static destruction order fiasco":
-  // background threads (e.g. command buffer completion handlers) may
-  // reference this singleton after other static objects are destroyed
-  // during process teardown.
   static Scheduler* scheduler = new Scheduler;
   return *scheduler;
 }
