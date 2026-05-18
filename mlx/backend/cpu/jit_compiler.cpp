@@ -18,9 +18,9 @@
 
 namespace mlx::core {
 
-#ifdef _MSC_VER
-
 namespace {
+
+#if defined(_MSC_VER)
 
 // Split string into array.
 std::vector<std::string> str_split(const std::string& str, char delimiter) {
@@ -31,34 +31,6 @@ std::vector<std::string> str_split(const std::string& str, char delimiter) {
     tokens.push_back(token);
   }
   return tokens;
-}
-
-bool supports_avx2_target() {
-#if defined(_M_X64) || defined(_M_IX86) || defined(_M_AMD64)
-  int info[4];
-  __cpuid(info, 0);
-  if (info[0] < 7) {
-    return false;
-  }
-
-  __cpuid(info, 1);
-  bool os_avx = (info[2] & (1 << 27)) && (info[2] & (1 << 28));
-  bool fma = info[2] & (1 << 12);
-  bool f16c = info[2] & (1 << 29);
-  if (!os_avx || !fma || !f16c) {
-    return false;
-  }
-
-  unsigned long long xcr0 = _xgetbv(0);
-  if ((xcr0 & 0x6) != 0x6) {
-    return false;
-  }
-
-  __cpuidex(info, 7, 0);
-  return info[1] & (1 << 5);
-#else
-  return false;
-#endif
 }
 
 // Get path information about MSVC.
@@ -153,26 +125,50 @@ const VisualStudioInfo& GetVisualStudioInfo() {
   return info;
 }
 
-} // namespace
-
-#endif // _MSC_VER
-
-#if !defined(_MSC_VER) && \
-    (defined(__x86_64__) || defined(__i386__) || defined(__amd64__))
-namespace {
+#endif // defined(_MSC_VER)
 
 bool supports_avx2_target() {
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(_MSC_VER)
+
+#if defined(_M_X64) || defined(_M_IX86) || defined(_M_AMD64)
+  int info[4];
+  __cpuid(info, 0);
+  if (info[0] < 7) {
+    return false;
+  }
+  __cpuid(info, 1);
+  bool os_avx = (info[2] & (1 << 27)) && (info[2] & (1 << 28));
+  bool fma = info[2] & (1 << 12);
+  bool f16c = info[2] & (1 << 29);
+  if (!os_avx || !fma || !f16c) {
+    return false;
+  }
+  unsigned long long xcr0 = _xgetbv(0);
+  if ((xcr0 & 0x6) != 0x6) {
+    return false;
+  }
+  __cpuidex(info, 7, 0);
+  return info[1] & (1 << 5);
+#else
+  return false;
+#endif // defined(_M_X64) || defined(_M_IX86) || defined(_M_AMD64)
+
+#elif defined(__GNUC__) || defined(__clang__)
+
+#if defined(__x86_64__) || defined(__i386__) || defined(__amd64__)
   __builtin_cpu_init();
   return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma") &&
       __builtin_cpu_supports("f16c");
 #else
   return false;
 #endif
+
+#else
+  return false;
+#endif // defined(_MSC_VER)
 }
 
 } // namespace
-#endif
 
 const std::tuple<bool, std::string, std::string>& JitCompiler::get_preamble() {
   static auto preamble = []() -> std::tuple<bool, std::string, std::string> {
