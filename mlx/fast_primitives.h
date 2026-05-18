@@ -212,7 +212,7 @@ class ScaledDotProductAttention : public Custom {
       bool do_causal,
       bool has_sinks,
       bool output_logsumexp,
-      int window_size = 0)
+      int window_size = -1)
       : Custom(stream, std::move(fallback)),
         scale_(scale),
         do_causal_(do_causal),

@@ -249,10 +249,10 @@ void init_fast(nb::module_& parent_module) {
       "scale"_a,
       "mask"_a = nb::none(),
       "sinks"_a = nb::none(),
-      "window_size"_a = 0,
+      "window_size"_a = -1,
       "stream"_a = nb::none(),
       nb::sig(
-          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, str, array] = None, sinks: Optional[array] = None, window_size: int = 0, stream: Union[None, Stream, Device] = None) -> array"),
+          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, str, array] = None, sinks: Optional[array] = None, window_size: int = -1, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         A fast implementation of multi-head attention: ``O = softmax(Q @ K.T, dim=-1) @ V``.
 
@@ -296,7 +296,8 @@ void init_fast(nb::module_& parent_module) {
                Default: ``None``.
             window_size (int, optional): A sliding-window size. When greater
                than zero, each query attends only to keys in the last
-               ``window_size`` positions. Default: ``0``.
+               ``window_size`` positions. ``-1`` means no window. Default:
+               ``-1``.
 
         Returns:
             array: The output array.

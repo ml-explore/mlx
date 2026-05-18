@@ -618,7 +618,7 @@ array scaled_dot_product_attention(
     const std::string& mask_mode /* = "" */,
     std::optional<array> mask_arr /* = {} */,
     const std::optional<array>& sinks /* = {} */,
-    int window_size /* = 0 */,
+    int window_size /* = -1 */,
     StreamOrDevice s /* = {}*/) {
   for (const auto& tensor : {queries, keys, values}) {
     if (tensor.ndim() != 4) {
@@ -663,9 +663,9 @@ array scaled_dot_product_attention(
         << mask_arr->shape() << " expected to have at most rank 4.";
     throw std::invalid_argument(msg.str());
   }
-  if (window_size < 0) {
+  if (window_size < -1) {
     std::ostringstream msg;
-    msg << "[scaled_dot_product_attention] window_size must be non-negative; "
+    msg << "[scaled_dot_product_attention] window_size must be -1 or non-negative; "
         << "received " << window_size << ".";
     throw std::invalid_argument(msg.str());
   }
@@ -761,8 +761,10 @@ array scaled_dot_product_attention(
         }
 
         if (window_size > 0) {
-          auto window_mask =
+          auto left_bound =
               less(q_idx, add(k_idx, array(window_size, k_idx.dtype()), s), s);
+          auto right_bound = greater_equal(q_idx, k_idx, s);
+          auto window_mask = logical_and(left_bound, right_bound, s);
           if (!has_arr_mask) {
             return window_mask;
           }

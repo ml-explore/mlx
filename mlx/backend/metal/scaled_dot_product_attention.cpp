@@ -650,7 +650,7 @@ bool ScaledDotProductAttention::use_fallback(
 
   const bool supports_sdpa_vector = (query_sequence_length <= 8) &&
       (query_sequence_length <= key_sequence_length) &&
-      sdpa_vector_supported_head_dim &&
+      sdpa_vector_supported_head_dim && window_size <= 0 &&
       (query_sequence_length * gqa_factor) <= 32;
 
   return !(supports_sdpa_full || supports_sdpa_vector);
