@@ -1264,6 +1264,77 @@ class TestBlas(mlx_tests.MLXTestCase):
                     c2 = gather_mm_test(a, b, rhs)
                     self.assertTrue(mx.allclose(c1, c2, rtol=tol, atol=tol))
 
+    def test_gather_mm_cpu_m1_quantized_warmup(self):
+        if mx.default_device() != mx.cpu:
+            self.skipTest("CPU only")
+
+        def make_case(L, K, D, E, I, transpose, mode):
+            group_size = None if mode != "affine" else 64
+            K, D = (K, D) if transpose else (D, K)
+            key = mx.random.key(0)
+            k1, k2, k3 = mx.random.split(key, 3)
+            indices = (mx.random.uniform(shape=(L, I), key=k1) * E).astype(
+                mx.uint32
+            )
+            x = (mx.random.normal((L, 1, 1, K), key=k2) / K**0.5).astype(
+                mx.float32
+            )
+            w = (
+                mx.random.normal(
+                    (E, D, K) if transpose else (E, K, D), key=k3
+                )
+                / K**0.5
+            ).astype(mx.float32)
+            if mode == "affine":
+                qw, s, b = mx.quantize(w, group_size=group_size, mode=mode)
+            else:
+                qw, s = mx.quantize(w, mode=mode)
+                b = None
+            w = mx.dequantize(qw, s, b, group_size=group_size, mode=mode)
+            if transpose:
+                w = w.swapaxes(-1, -2)
+            return x, w, indices, qw, s, b, group_size
+
+        def warmup_gather_qmm(L, K, D, E, I, transpose, mode):
+            x, w, indices, qw, s, b, group_size = make_case(
+                L, K, D, E, I, transpose, mode
+            )
+            mx.eval(
+                mx.gather_mm(x, w, rhs_indices=indices),
+                mx.gather_qmm(
+                    x,
+                    qw,
+                    s,
+                    b,
+                    group_size=group_size,
+                    mode=mode,
+                    transpose=transpose,
+                    rhs_indices=indices,
+                ),
+            )
+
+        # Keep the quantized warmup sequence: the CPU NaN repro is stateful.
+        warmups = [
+            (32, 512, 512, 4, 2, True, "affine"),
+            (32, 512, 544, 4, 2, True, "mxfp4"),
+            (32, 512, 544, 4, 2, True, "nvfp4"),
+            (32, 512, 544, 4, 2, True, "mxfp8"),
+            (133, 512, 512, 4, 2, True, "affine"),
+            (133, 512, 555, 4, 2, True, "affine"),
+            (133, 512, 512, 4, 2, True, "affine"),
+            (64, 512, 512, 4, 2, False, "affine"),
+            (64, 512, 544, 4, 2, False, "mxfp4"),
+            (64, 512, 544, 4, 2, False, "nvfp4"),
+        ]
+        for params in warmups:
+            warmup_gather_qmm(*params)
+
+        x, w, indices, *_ = make_case(64, 512, 544, 4, 2, False, "mxfp8")
+        expected = x @ w[indices]
+        actual = mx.gather_mm(x, w, rhs_indices=indices)
+        self.assertTrue(mx.isfinite(actual).all().item())
+        self.assertTrue(mx.allclose(expected, actual, rtol=1e-5, atol=1e-5).item())
+
     def test_gather_mm_sorted_vjp(self):
         def gather_mm_ref(a, b, rhs):
             b = b[rhs]

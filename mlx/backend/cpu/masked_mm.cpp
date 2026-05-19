@@ -105,6 +105,27 @@ inline void segmented_mm(
   }
 }
 
+inline void gather_mm_one_row(
+    const float* a,
+    const float* b,
+    float* out,
+    size_t N,
+    size_t K,
+    size_t lda,
+    size_t ldb,
+    bool a_transposed,
+    bool b_transposed) {
+  for (size_t n = 0; n < N; n++) {
+    float sum = 0.0f;
+    for (size_t k = 0; k < K; k++) {
+      auto a_val = a_transposed ? a[k * lda] : a[k];
+      auto b_val = b_transposed ? b[n * ldb + k] : b[k * ldb + n];
+      sum += a_val * b_val;
+    }
+    out[n] = sum;
+  }
+}
+
 } // namespace
 
 void BlockMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -468,21 +489,31 @@ void GatherMM::eval_cpu(const std::vector<array>& inputs, array& out) {
       uint32_t indx_B = rhs_indices_ptr[elem_to_loc(
           i, rhs_indices_shape, rhs_indices_strides)];
 
-      cblas_sgemm(
-          CblasRowMajor,
-          a_transposed ? CblasTrans : CblasNoTrans, // transA
-          b_transposed ? CblasTrans : CblasNoTrans, // transB
-          M,
-          N,
-          K,
-          1.0f, // alpha
-          a_ptr + elem_to_loc(indx_A, batch_shape_A, batch_strides_A),
-          lda,
-          b_ptr + elem_to_loc(indx_B, batch_shape_B, batch_strides_B),
-          ldb,
-          0.0f, // beta
-          out_ptr + matrix_stride_out * i,
-          ldc);
+      auto ai = a_ptr + elem_to_loc(indx_A, batch_shape_A, batch_strides_A);
+      auto bi = b_ptr + elem_to_loc(indx_B, batch_shape_B, batch_strides_B);
+      auto ci = out_ptr + matrix_stride_out * i;
+
+      if (M == 1) {
+        // Avoid intermittent BLAS NaNs for one-row gathered CPU matmuls.
+        gather_mm_one_row(
+            ai, bi, ci, N, K, lda, ldb, a_transposed, b_transposed);
+      } else {
+        cblas_sgemm(
+            CblasRowMajor,
+            a_transposed ? CblasTrans : CblasNoTrans, // transA
+            b_transposed ? CblasTrans : CblasNoTrans, // transB
+            M,
+            N,
+            K,
+            1.0f, // alpha
+            ai,
+            lda,
+            bi,
+            ldb,
+            0.0f, // beta
+            ci,
+            ldc);
+      }
     }
   });
   encoder.add_temporaries(std::move(temps));
