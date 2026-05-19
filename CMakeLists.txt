@@ -357,8 +357,7 @@ if(MLX_BUILD_PYTHON_BINDINGS)
   FetchContent_Declare(
     nanobind
     GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-    GIT_TAG v2.12.0
-    GIT_SHALLOW TRUE
+    GIT_TAG 117ba9ee0253e1bbada678bb4b5d6c6e4ed441eb
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(nanobind)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/python/src)
