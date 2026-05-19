@@ -41,8 +41,11 @@ struct CompilerCache {
 };
 
 static CompilerCache& cache() {
-  static CompilerCache cache_;
-  return cache_;
+  // Leak - see Scheduler singleton comment in scheduler.cpp.
+  // DLib destructors call dlclose() which unmaps JIT .so files;
+  // StreamThreads may still be executing that code at exit.
+  static CompilerCache* cache_ = new CompilerCache;
+  return *cache_;
 };
 
 // GPU compile is always available if the GPU is available and since we are in
