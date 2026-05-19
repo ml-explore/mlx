@@ -30,7 +30,7 @@ static void gemv_outer_product(
 
     for (int k = 0; k < K; k++) {
       float v = static_cast<float>(vec[k]);
-      detail::float8 v_bcast(v);
+      detail::Simd<float, 8> v_bcast(v);
       const T* mat_row = mat + k * mat_stride + jc;
 
       // Prefetch start of next row for this block
@@ -42,8 +42,8 @@ static void gemv_outer_product(
 
       int j = 0;
       for (; j + sw <= nc; j += sw) {
-        detail::float8 m = detail::load_convert_to_float<T>(mat_row + j);
-        detail::float8 c = detail::load<float, sw>(acc_block + j);
+        detail::Simd<float, 8> m = detail::load_convert_to_float<T>(mat_row + j);
+        detail::Simd<float, 8> c = detail::load<float, sw>(acc_block + j);
         detail::store<float, sw>(
             acc_block + j, detail::fma<float, sw>(v_bcast, m, c));
       }
@@ -69,7 +69,7 @@ static void gemv_dot_product(
 
   int i = 0;
   for (; i + UNROLL <= n_outputs; i += UNROLL) {
-    detail::float8 s0, s1, s2, s3;
+    detail::Simd<float, 8> s0, s1, s2, s3;
 
     const T* r0 = mat + (i + 0) * mat_stride;
     const T* r1 = mat + (i + 1) * mat_stride;
@@ -78,7 +78,7 @@ static void gemv_dot_product(
 
     int k = 0;
     for (; k + sw <= K; k += sw) {
-      detail::float8 v = detail::load_convert_to_float<T>(vec + k);
+      detail::Simd<float, 8> v = detail::load_convert_to_float<T>(vec + k);
       s0 = detail::fma<float, sw>(detail::load_convert_to_float<T>(r0 + k), v, s0);
       s1 = detail::fma<float, sw>(detail::load_convert_to_float<T>(r1 + k), v, s1);
       s2 = detail::fma<float, sw>(detail::load_convert_to_float<T>(r2 + k), v, s2);
@@ -105,12 +105,12 @@ static void gemv_dot_product(
   }
 
   for (; i < n_outputs; i++) {
-    detail::float8 s;
+    detail::Simd<float, 8> s;
     const T* row = mat + i * mat_stride;
 
     int k = 0;
     for (; k + sw <= K; k += sw) {
-      detail::float8 v = detail::load_convert_to_float<T>(vec + k);
+      detail::Simd<float, 8> v = detail::load_convert_to_float<T>(vec + k);
       s = detail::fma<float, sw>(detail::load_convert_to_float<T>(row + k), v, s);
     }
 
@@ -167,15 +167,15 @@ void simd_gemv(
   // Writeback: C = alpha * acc + beta * C (convert fp32 → T)
   bool apply_alpha = (alpha != 1.0f);
   bool apply_beta = (beta != 0.0f);
-  detail::float8 alpha_vec(alpha);
-  detail::float8 beta_vec(beta);
+  detail::Simd<float, 8> alpha_vec(alpha);
+  detail::Simd<float, 8> beta_vec(beta);
   int j = 0;
   for (; j + sw <= out_len; j += sw) {
-    detail::float8 val = detail::load<float, sw>(acc + j);
+    detail::Simd<float, 8> val = detail::load<float, sw>(acc + j);
     if (apply_alpha)
       val = alpha_vec * val;
     if (apply_beta) {
-      detail::float8 cv = detail::load_convert_to_float<T>(c + j);
+      detail::Simd<float, 8> cv = detail::load_convert_to_float<T>(c + j);
       val = val + beta_vec * cv;
     }
     detail::store_convert_from_float<T>(c + j, val);

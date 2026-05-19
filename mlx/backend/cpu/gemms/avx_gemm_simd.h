@@ -23,9 +23,6 @@ inline Simd<T, N> broadcast(const T* ptr);
 template <typename T, int N>
 inline Simd<T, N> fma(Simd<T, N> a, Simd<T, N> b, Simd<T, N> c);
 
-// Simd<float, 8> — wraps __m256 for AVX operations.
-using float8 = Simd<float, 8>;
-
 template <>
 struct Simd<float, 8> {
   static constexpr int size = 8;
@@ -43,44 +40,44 @@ struct Simd<float, 8> {
 
 // --- Load/Store (float) ---
 template <>
-inline float8 load<float, 8>(const float* x) {
-  return float8(_mm256_loadu_ps(x));
+inline Simd<float, 8> load<float, 8>(const float* x) {
+  return Simd<float, 8>(_mm256_loadu_ps(x));
 }
 template <>
-inline void store<float, 8>(float* dst, float8 x) {
+inline void store<float, 8>(float* dst, Simd<float, 8> x) {
   _mm256_storeu_ps(dst, x.value);
 }
 template <>
-inline float8 broadcast<float, 8>(const float* x) {
-  return float8(_mm256_broadcast_ss(x));
+inline Simd<float, 8> broadcast<float, 8>(const float* x) {
+  return Simd<float, 8>(_mm256_broadcast_ss(x));
 }
 
 // --- Arithmetic ---
-inline float8 operator+(float8 a, float8 b) {
-  return float8(_mm256_add_ps(a, b));
+inline Simd<float, 8> operator+(Simd<float, 8> a, Simd<float, 8> b) {
+  return Simd<float, 8>(_mm256_add_ps(a, b));
 }
-inline float8 operator-(float8 a, float8 b) {
-  return float8(_mm256_sub_ps(a, b));
+inline Simd<float, 8> operator-(Simd<float, 8> a, Simd<float, 8> b) {
+  return Simd<float, 8>(_mm256_sub_ps(a, b));
 }
-inline float8 operator*(float8 a, float8 b) {
-  return float8(_mm256_mul_ps(a, b));
+inline Simd<float, 8> operator*(Simd<float, 8> a, Simd<float, 8> b) {
+  return Simd<float, 8>(_mm256_mul_ps(a, b));
 }
-inline float8 operator/(float8 a, float8 b) {
-  return float8(_mm256_div_ps(a, b));
+inline Simd<float, 8> operator/(Simd<float, 8> a, Simd<float, 8> b) {
+  return Simd<float, 8>(_mm256_div_ps(a, b));
 }
 
 // --- FMA ---
 template <>
-inline float8 fma<float, 8>(float8 a, float8 b, float8 c) {
+inline Simd<float, 8> fma<float, 8>(Simd<float, 8> a, Simd<float, 8> b, Simd<float, 8> c) {
 #ifdef __AVX2__
-  return float8(_mm256_fmadd_ps(a, b, c));
+  return Simd<float, 8>(_mm256_fmadd_ps(a, b, c));
 #else
-  return float8(_mm256_add_ps(_mm256_mul_ps(a, b), c));
+  return Simd<float, 8>(_mm256_add_ps(_mm256_mul_ps(a, b), c));
 #endif
 }
 
 // --- Horizontal Sum ---
-inline float sum(float8 x) {
+inline float sum(Simd<float, 8> x) {
   __m256 val = x.value;
   __m128 vlow = _mm256_castps256_ps128(val);
   __m128 vhigh = _mm256_extractf128_ps(val, 1); // high 128
@@ -240,7 +237,7 @@ transpose_8x8_block(const T* src, float* dst, int src_stride, int dst_stride) {
 
 // Load 8 half-precision values, convert to float8.
 template <typename T>
-inline float8 load_convert_to_float(const T* src) {
+inline Simd<float, 8> load_convert_to_float(const T* src) {
   static_assert(
       std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>,
       "load_convert_to_float requires float16_t or bfloat16_t input for this specialization.");
@@ -249,7 +246,7 @@ inline float8 load_convert_to_float(const T* src) {
   if constexpr (std::is_same_v<T, float16_t>) {
 #ifdef __F16C__
     __m128i f16_vals = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src));
-    return float8(_mm256_cvtph_ps(f16_vals));
+    return Simd<float, 8>(_mm256_cvtph_ps(f16_vals));
 #else
     float buffer[8];
     for (int i = 0; i < 8; ++i)
@@ -263,7 +260,7 @@ inline float8 load_convert_to_float(const T* src) {
         _mm_loadu_si128(reinterpret_cast<const __m128i*>(src));
     __m256i bf16_vals_u32 = _mm256_cvtepu16_epi32(bf16_vals_u16);
     __m256i fp32_bits = _mm256_slli_epi32(bf16_vals_u32, 16);
-    return float8(_mm256_castsi256_ps(fp32_bits));
+    return Simd<float, 8>(_mm256_castsi256_ps(fp32_bits));
 #else
     // Scalar fallback
     float buffer[8];
@@ -294,7 +291,7 @@ inline __m128i convert_float_to_bfloat16_rne_avx2(__m256 src) {
 
 // Store float8, converting back to 8 half-precision values.
 template <typename T>
-inline void store_convert_from_float(T* dst, float8 src) {
+inline void store_convert_from_float(T* dst, Simd<float, 8> src) {
   static_assert(
       std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>,
       "store_convert_from_float requires float16_t or bfloat16_t output for this specialization.");

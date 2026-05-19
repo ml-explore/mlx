@@ -85,7 +85,7 @@ static void pack_A_block(
       float* a_dst_col_ptr = A_packed + k * MC;
       int i = 0;
       for (; i + simd_width <= m_block; i += simd_width) {
-        detail::float8 a_vec = detail::load_convert_to_float<T>(a_src_row_ptr + i);
+        detail::Simd<float, 8> a_vec = detail::load_convert_to_float<T>(a_src_row_ptr + i);
         detail::store<float, simd_width>(a_dst_col_ptr + i, a_vec);
       }
       for (; i < m_block; ++i) {
@@ -126,7 +126,7 @@ static void pack_B_block(
       float* b_dst_row_ptr = B_packed + k * NC;
       int j = 0;
       for (; j + simd_width <= n_block; j += simd_width) {
-        detail::float8 b_vec = detail::load_convert_to_float<T>(b_src_row_ptr + j);
+        detail::Simd<float, 8> b_vec = detail::load_convert_to_float<T>(b_src_row_ptr + j);
         detail::store<float, simd_width>(b_dst_row_ptr + j, b_vec);
       }
       for (; j < n_block; ++j) {
@@ -318,19 +318,19 @@ void simd_gemm_optimized_higher_precision(
         if (last_k) {
           bool apply_alpha = (alpha != 1.0f);
           bool apply_beta = (beta != 0.0f);
-          detail::float8 alpha_vec(alpha);
-          detail::float8 beta_vec(beta);
+          detail::Simd<float, 8> alpha_vec(alpha);
+          detail::Simd<float, 8> beta_vec(beta);
 
           for (int i = 0; i < mc; ++i) {
             T* c_row = c + (ic + i) * ldC + jc;
             float* acc_row = C_acc + (ic + i) * NC_BLOCK;
             int j = 0;
             for (; j + sw <= nc; j += sw) {
-              detail::float8 acc = detail::load<float, 8>(acc_row + j);
+              detail::Simd<float, 8> acc = detail::load<float, 8>(acc_row + j);
               if (apply_alpha)
                 acc = alpha_vec * acc;
               if (apply_beta) {
-                detail::float8 cv = detail::load_convert_to_float<T>(c_row + j);
+                detail::Simd<float, 8> cv = detail::load_convert_to_float<T>(c_row + j);
                 acc = acc + beta_vec * cv;
               }
               detail::store_convert_from_float<T>(c_row + j, acc);
