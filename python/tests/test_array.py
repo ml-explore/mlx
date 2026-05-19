@@ -802,7 +802,7 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.tolist(), cvals)
 
     def test_array_np_dtype_conversion(self):
-        to_mlx_dtypes_list = [
+        dtypes_list = [
             (mx.bool_, np.bool_),
             (mx.uint8, np.uint8),
             (mx.uint16, np.uint16),
@@ -817,14 +817,13 @@ class TestArray(mlx_tests.MLXTestCase):
             (mx.complex64, np.complex64),
         ]
 
-        for mlx_dtype, np_dtype in to_mlx_dtypes_list:
+        for mlx_dtype, np_dtype in dtypes_list:
             a_npy = np.random.uniform(low=0, high=100, size=(32,)).astype(np_dtype)
             a_mlx = mx.array(a_npy)
 
             self.assertEqual(a_mlx.dtype, mlx_dtype)
             self.assertTrue(np.allclose(a_mlx, a_npy))
 
-        for mlx_dtype, np_dtype in to_mlx_dtypes_list:
             b_mlx = mx.random.uniform(
                 low=0,
                 high=10,
@@ -2158,6 +2157,9 @@ class TestArray(mlx_tests.MLXTestCase):
         torch.mps.synchronize()
         self.assertIn("array(", repr(y))
         self.assertEqual(y.tolist(), x.cpu().numpy().tolist())
+        # PyTorch 2.12 allocates ordinary MPS tensors in shared/unified
+        # MTLBuffers on Apple silicon, while private Metal DLPack producers are
+        # not host-accessible.
         try:
             mv = memoryview(y)
         except BufferError:
