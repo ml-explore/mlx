@@ -9,6 +9,7 @@
 #include "mlx/backend/cpu/simd/base_simd.h"
 
 // GEMM-private AVX2 SIMD helpers for fp16/bf16 matmul
+// Note: This header is only compiled when MLX_USE_AVX2 is defined with -mavx2 -mfma -mf16c
 namespace mlx::core::detail {
 
 // Forward declarations
@@ -69,11 +70,7 @@ inline Simd<float, 8> operator/(Simd<float, 8> a, Simd<float, 8> b) {
 // --- FMA ---
 template <>
 inline Simd<float, 8> fma<float, 8>(Simd<float, 8> a, Simd<float, 8> b, Simd<float, 8> c) {
-#ifdef __AVX2__
   return Simd<float, 8>(_mm256_fmadd_ps(a, b, c));
-#else
-  return Simd<float, 8>(_mm256_add_ps(_mm256_mul_ps(a, b), c));
-#endif
 }
 
 // --- Horizontal Sum ---
@@ -99,8 +96,7 @@ transpose_8x8_block(const T* src, float* dst, int src_stride, int dst_stride) {
       "transpose_8x8_block requires float16_t or bfloat16_t input");
 
   if constexpr (std::is_same_v<T, float16_t>) {
-#ifdef __F16C__
-    // Load 8 rows of 8 float16 values, convert to fp32
+    // Load 8 rows of 8 float16 values, convert to fp32 via F16C
     __m128i row0 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src));
     __m128i row1 =
         _mm_loadu_si128(reinterpret_cast<const __m128i*>(src + src_stride));
@@ -163,16 +159,7 @@ transpose_8x8_block(const T* src, float* dst, int src_stride, int dst_stride) {
     _mm256_storeu_ps(dst + 5 * dst_stride, r5);
     _mm256_storeu_ps(dst + 6 * dst_stride, r6);
     _mm256_storeu_ps(dst + 7 * dst_stride, r7);
-#else
-    // Fallback without F16C
-    for (int i = 0; i < 8; i++) {
-      for (int j = 0; j < 8; j++) {
-        dst[j * dst_stride + i] = static_cast<float>(src[i * src_stride + j]);
-      }
-    }
-#endif
   } else { // bfloat16_t
-#ifdef __AVX2__
     // bf16 → fp32: zero-extend to 32-bit, shift left 16
     __m256 rows[8];
     for (int i = 0; i < 8; i++) {
@@ -219,14 +206,7 @@ transpose_8x8_block(const T* src, float* dst, int src_stride, int dst_stride) {
     _mm256_storeu_ps(dst + 5 * dst_stride, r5);
     _mm256_storeu_ps(dst + 6 * dst_stride, r6);
     _mm256_storeu_ps(dst + 7 * dst_stride, r7);
-#else
-    // Scalar fallback
-    for (int i = 0; i < 8; i++) {
-      for (int j = 0; j < 8; j++) {
-        dst[j * dst_stride + i] = static_cast<float>(src[i * src_stride + j]);
-      }
-    }
-#endif
+
   }
 }
 
@@ -244,39 +224,19 @@ inline Simd<float, 8> load_convert_to_float(const T* src) {
   static_assert(sizeof(T) == 2, "Input type T must be 2 bytes.");
 
   if constexpr (std::is_same_v<T, float16_t>) {
-#ifdef __F16C__
     __m128i f16_vals = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src));
     return Simd<float, 8>(_mm256_cvtph_ps(f16_vals));
-#else
-    float buffer[8];
-    for (int i = 0; i < 8; ++i)
-      buffer[i] = static_cast<float>(src[i]);
-    return load<float, 8>(buffer);
-#endif
   } else { // bfloat16_t
-#ifdef __AVX2__
     // bf16 → fp32: zero-extend to 32-bit then shift left 16
     __m128i bf16_vals_u16 =
         _mm_loadu_si128(reinterpret_cast<const __m128i*>(src));
     __m256i bf16_vals_u32 = _mm256_cvtepu16_epi32(bf16_vals_u16);
     __m256i fp32_bits = _mm256_slli_epi32(bf16_vals_u32, 16);
     return Simd<float, 8>(_mm256_castsi256_ps(fp32_bits));
-#else
-    // Scalar fallback
-    float buffer[8];
-    for (int i = 0; i < 8; ++i) {
-      uint32_t val_int =
-          static_cast<uint32_t>(reinterpret_cast<const uint16_t*>(src)[i])
-          << 16;
-      std::memcpy(&buffer[i], &val_int, sizeof(float));
-    }
-    return load<float, 8>(buffer);
-#endif
   }
 }
 
-// fp32 → bf16 with round-to-nearest-even.
-#ifdef __AVX2__
+// fp32 → bf16 with round-to-nearest-even (AVX2).
 inline __m128i convert_float_to_bfloat16_rne_avx2(__m256 src) {
   __m256i val_int = _mm256_castps_si256(src);
   __m256i bias = _mm256_set1_epi32(0x7FFF);
@@ -287,7 +247,6 @@ inline __m128i convert_float_to_bfloat16_rne_avx2(__m256 src) {
   // Use signed pack to preserve negative values
   return _mm_packs_epi32(bf16_bits_low, bf16_bits_high);
 }
-#endif
 
 // Store float8, converting back to 8 half-precision values.
 template <typename T>
@@ -298,41 +257,12 @@ inline void store_convert_from_float(T* dst, Simd<float, 8> src) {
   static_assert(sizeof(T) == 2, "Output type T must be 2 bytes.");
 
   if constexpr (std::is_same_v<T, float16_t>) {
-#ifdef __F16C__
     __m128i f16_result = _mm256_cvtps_ph(
         src.value, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
     _mm_storeu_si128(reinterpret_cast<__m128i*>(dst), f16_result);
-#else
-    float buffer[8];
-    store<float, 8>(buffer, src);
-    for (int i = 0; i < 8; ++i)
-      dst[i] = static_cast<T>(buffer[i]);
-#endif
   } else { // bfloat16_t
-#ifdef __AVX2__
     __m128i bf16_result = convert_float_to_bfloat16_rne_avx2(src.value);
     _mm_storeu_si128(reinterpret_cast<__m128i*>(dst), bf16_result);
-#else
-    // Scalar fallback with RNE
-    float buffer[8];
-    store<float, 8>(buffer, src);
-    alignas(16) uint16_t bf16_bits_arr[8];
-    for (int i = 0; i < 8; ++i) {
-      uint32_t val_int;
-      std::memcpy(&val_int, &buffer[i], sizeof(float));
-
-      // Handle NaN
-      if ((val_int & 0x7F800000) == 0x7F800000 && (val_int & 0x007FFFFF) != 0) {
-        bf16_bits_arr[i] =
-            0x7FC0 | static_cast<uint16_t>((val_int >> 16) & 0x003F);
-      } else {
-        uint32_t rounding_bias = ((val_int >> 16) & 1) + 0x7FFF;
-        val_int += rounding_bias;
-        bf16_bits_arr[i] = static_cast<uint16_t>(val_int >> 16);
-      }
-    }
-    std::memcpy(dst, bf16_bits_arr, 8 * sizeof(uint16_t));
-#endif
   }
 }
 
