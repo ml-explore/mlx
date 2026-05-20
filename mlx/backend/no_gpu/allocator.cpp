@@ -6,6 +6,7 @@
 #include "mlx/allocator.h"
 #include "mlx/backend/common/buffer_cache.h"
 #include "mlx/memory.h"
+#include "mlx/stream.h"
 
 #ifdef __APPLE__
 #include "mlx/backend/no_gpu/apple_memory.h"
@@ -18,6 +19,18 @@ size_t get_memory_size() {
 #endif
 
 namespace mlx::core {
+
+namespace {
+
+void synchronize_cpu_streams() {
+  for (const auto& s : get_streams()) {
+    if (s.device == Device::cpu) {
+      synchronize(s);
+    }
+  }
+}
+
+} // namespace
 
 namespace allocator {
 
@@ -114,10 +127,12 @@ size_t CommonAllocator::size(Buffer buffer) const {
 }
 
 size_t CommonAllocator::get_cache_memory() const {
+  std::unique_lock lk(mutex_);
   return buffer_cache_.cache_size();
 }
 
 size_t CommonAllocator::set_cache_limit(size_t limit) {
+  synchronize_cpu_streams();
   std::unique_lock lk(mutex_);
   std::swap(cache_limit_, limit);
   if (buffer_cache_.cache_size() > cache_limit_) {
@@ -128,6 +143,13 @@ size_t CommonAllocator::set_cache_limit(size_t limit) {
 }
 
 void CommonAllocator::clear_cache() {
+  {
+    std::unique_lock lk(mutex_);
+    if (buffer_cache_.cache_size() == 0) {
+      return;
+    }
+  }
+  synchronize_cpu_streams();
   std::unique_lock lk(mutex_);
   buffer_cache_.clear();
 }
