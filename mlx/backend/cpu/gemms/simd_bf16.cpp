@@ -3,6 +3,10 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/gemm.h"
 
+#if defined(__AVX2__) && defined(__F16C__)
+#define MLX_USE_AVX2
+#endif
+
 #ifdef MLX_USE_AVX2
 #include "mlx/backend/cpu/gemms/avx_simd_gemm.h"
 #else

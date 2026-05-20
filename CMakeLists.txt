@@ -257,7 +257,6 @@ if(MLX_BUILD_CPU)
       message(
         STATUS "Compiler supports AVX2/FMA/F16C - enabling AVX2 SIMD backend")
       target_compile_options(mlx PRIVATE -mavx2 -mfma -mf16c)
-      target_compile_definitions(mlx PRIVATE MLX_USE_AVX2)
     else()
       message(
         STATUS "Missing required x86 SIMD support - using base SIMD backend")

@@ -9,7 +9,7 @@
 #include "mlx/backend/cpu/simd/base_simd.h"
 
 // GEMM-private AVX2 SIMD helpers for fp16/bf16 matmul
-// Note: This header is only compiled when MLX_USE_AVX2 is defined with -mavx2 -mfma -mf16c
+// Note: This header requires -mavx2 -mfma -mf16c
 namespace mlx::core::detail {
 
 // Forward declarations
