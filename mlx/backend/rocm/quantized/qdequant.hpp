@@ -94,11 +94,17 @@ __device__ __forceinline__ void load_weight_vec(
     out[0] = v.x;
     out[1] = v.y;
   } else if constexpr (PPT == 4) {
-    uint4 v = *reinterpret_cast<const uint4*>(ptr);
-    out[0] = v.x;
-    out[1] = v.y;
-    out[2] = v.z;
-    out[3] = v.w;
+    // Two uint2 loads instead of one uint4. The single-uint4 load
+    // (global_load_b128) miscomputes in the 8-bit affine QMV/gather paths
+    // (root cause: HIP_vector_type<unsigned int,4> codegen on RDNA 3.5 with
+    // hipcc 7.13 / LLVM 23). Two paired global_load_b64 ops yield the same
+    // throughput on RDNA 3.5 without the miscompile.
+    uint2 v0 = *reinterpret_cast<const uint2*>(ptr);
+    uint2 v1 = *reinterpret_cast<const uint2*>(ptr + 2);
+    out[0] = v0.x;
+    out[1] = v0.y;
+    out[2] = v1.x;
+    out[3] = v1.y;
   } else {
     #pragma unroll
     for (int p = 0; p < PPT; p++) {
