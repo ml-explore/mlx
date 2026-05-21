@@ -1342,6 +1342,12 @@ class TestBlas(mlx_tests.MLXTestCase):
             s = mx.array([[0, 5], [5, 10]]).astype(mx.uint32)
             mx.segmented_mm(a, a, s)
 
+        with self.assertRaises(ValueError):
+            a = mx.ones((2, 3))
+            b = mx.ones((4, 5))
+            s = mx.array([[0, 3]]).astype(mx.uint32)
+            mx.segmented_mm(a, b, s)
+
         a = mx.ones((10, 1000))
         s = mx.random.randint(0, 16, shape=(1000,))
         s = mx.zeros(16, dtype=s.dtype).at[s].add(1)

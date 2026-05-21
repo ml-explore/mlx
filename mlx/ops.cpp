@@ -5895,6 +5895,14 @@ array segmented_mm(
     throw std::invalid_argument("[segmented_mm] Batched matmul not supported");
   }
 
+  if (a.shape(-1) != b.shape(-2)) {
+    std::ostringstream msg;
+    msg << "[segmented_mm] Last dimension of first input with shape "
+        << a.shape() << " must match first dimension of second input with "
+        << "shape " << b.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
   if (segments.ndim() < 1 || segments.shape().back() != 2) {
     std::ostringstream msg;
     msg << "[segmented_mm] The segments should have shape (..., 2) but "
