@@ -60,8 +60,8 @@ mx::array nd_array_to_mlx_contiguous(
 template <typename F>
 auto dispatch_dlpack_dtype(
     nb::dlpack::dtype type,
-    F&& f,
-    const char* error_message) {
+    const char* error_message,
+    F&& f) {
   if (type == nb::dtype<bool>()) {
     return f.template operator()<bool>(mx::bool_);
   } else if (type == nb::dtype<uint8_t>()) {
@@ -101,7 +101,7 @@ mx::Dtype mlx_dtype_from_dlpack(
     nb::dlpack::dtype type,
     const char* error_message) {
   return dispatch_dlpack_dtype(
-      type, []<typename T>(mx::Dtype dtype) { return dtype; }, error_message);
+      type, error_message, []<typename T>(mx::Dtype dtype) { return dtype; });
 }
 
 mx::array metal_dlpack_to_mlx(
@@ -118,11 +118,11 @@ mx::array nd_array_to_mlx(
       auto type = nb_dtype.value_or(nd_array.dtype());
       return dispatch_dlpack_dtype(
           type,
+          "Cannot convert numpy array to mlx array.",
           [&]<typename T>(mx::Dtype default_dtype) {
             return nd_array_to_mlx_contiguous<T>(
                 nd_array, shape, dtype.value_or(default_dtype));
-          },
-          "Cannot convert numpy array to mlx array.");
+          });
     }
     case nb::device::metal::value:
       return metal_dlpack_to_mlx(std::move(nd_array), dtype);
@@ -406,10 +406,10 @@ mx::array metal_dlpack_to_mlx(
 
   return dispatch_dlpack_dtype(
       owner->dtype(),
+      "Cannot convert Metal DLPack array to mlx array.",
       [&]<typename T>(mx::Dtype type) {
         return metal_dlpack_to_mlx_contiguous<T>(owner, shape, type, dtype);
-      },
-      "Cannot convert Metal DLPack array to mlx array.");
+      });
 }
 
 template <typename T, typename U = T>

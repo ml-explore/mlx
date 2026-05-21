@@ -804,6 +804,17 @@ class Copy : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class CopyInto : public UnaryPrimitive {
+ public:
+  explicit CopyInto(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_NAME(CopyInto)
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
 class Cos : public UnaryPrimitive {
  public:
   explicit Cos(Stream stream) : UnaryPrimitive(stream) {}

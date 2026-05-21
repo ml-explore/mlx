@@ -399,7 +399,11 @@ void* Buffer::raw_ptr() {
 }
 
 bool Buffer::is_host_accessible() const {
-  return true;
+  if (!ptr_) {
+    return true;
+  }
+  auto& cbuf = *static_cast<cu::CudaBuffer*>(ptr_);
+  return cbuf.device == -1;
 }
 
 } // namespace allocator

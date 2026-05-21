@@ -11,6 +11,7 @@ Array
     array
     array.astype
     array.at
+    array.copy
     array.item
     array.tolist
     array.dtype
