@@ -46,7 +46,7 @@ runs:
         DEVICE: gpu
       run: |
         echo "::group::Python tests - GPU"
-        python -m tests discover python/tests -v
+        python -m unittest discover python/tests -v
         echo "::endgroup::"
 
     - name: Run CPP tests - CPU
