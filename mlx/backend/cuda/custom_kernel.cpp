@@ -223,7 +223,7 @@ CustomKernelFunction cuda_kernel(
     }
 
     return array::make_arrays(
-        output_shapes,
+        std::move(output_shapes),
         std::move(output_dtypes),
         std::make_shared<CustomKernel>(
             s,
@@ -236,8 +236,7 @@ CustomKernelFunction cuda_kernel(
             init_value,
             std::vector<ScalarArg>{},
             false,
-            shared_memory,
-            output_shapes),
+            shared_memory),
         std::move(inputs));
   };
 }
@@ -271,8 +270,7 @@ std::vector<array> precompiled_cuda_kernel(
           init_value,
           scalars,
           true,
-          shared_memory,
-          output_shapes),
+          shared_memory),
       inputs);
 }
 
