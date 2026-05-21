@@ -397,7 +397,6 @@ class CustomKernel : public Primitive {
       override;
 
   DEFINE_NAME(CustomKernel);
-
   auto state() const {
     return std::make_tuple(
         name_,
