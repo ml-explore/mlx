@@ -79,21 +79,15 @@ PyTorch supports DLPack inputs and can import MLX arrays directly.
 MLX can also import PyTorch tensors through DLPack with ``mx.array`` or
 ``mx.from_dlpack``.
 
-.. code-block:: python
-
-  import mlx.core as mx
-  import torch
-
-  a = mx.arange(3)
-  b = torch.tensor(a)
-  c = mx.array(b)
-
 Creating an MLX array from a CPU tensor copies the data into MLX-owned storage.
 The arrays do not share memory:
 
 .. code-block:: python
 
-  b = torch.arange(3)
+  import mlx.core as mx
+  import torch
+
+  b = torch.arange(3).cpu()
   c = mx.array(b)
 
   b += 10
@@ -113,6 +107,12 @@ the shared data from PyTorch. Without these synchronization points, the other
 framework may read the shared buffer before the producer has finished writing,
 so it can observe stale data.
 
+Do not rely on regular MLX update expressions to preserve sharing. MLX may
+rebind an array to a new buffer when evaluating an expression, while PyTorch
+continues to reference the original shared buffer. Use
+:meth:`mlx.core.array.copy` to write into an array's existing storage when you
+need the update to be visible to another framework sharing the same buffer:
+
 .. code-block:: python
 
   b = torch.arange(3, device="mps", dtype=torch.float32)
@@ -123,22 +123,27 @@ so it can observe stale data.
   torch.mps.synchronize()
   print(c.tolist()) # [10.0, 11.0, 12.0]
 
-Updates made by MLX can also be observed from PyTorch after the MLX computation
-has been evaluated:
+  c.copy(mx.array([4, 5, 6], dtype=mx.float32))
+  mx.eval(c)
+  print(b.cpu()) # tensor([4., 5., 6.])
+
+The same synchronization rules apply when PyTorch imports an MLX array through
+DLPack. Use ``torch.as_tensor`` to share the buffer with PyTorch; ``torch.tensor``
+copies the data instead:
 
 .. code-block:: python
 
-  b = torch.arange(3, device="mps", dtype=torch.float32)
+  a = mx.arange(3, dtype=mx.float32)
+  mx.eval(a)
+  b = torch.as_tensor(a)
+
+  b.add_(10)
   torch.mps.synchronize()
-  c = mx.array(b)
+  print(a.tolist()) # [10.0, 11.0, 12.0]
 
-  c += 10
-  mx.eval(c)
-  print(b.cpu()) # tensor([10., 11., 12.])
-
-For MLX arrays exported to PyTorch, the share is tied to the exported buffer.
-MLX updates after export may rebind the MLX array to a new buffer, while the
-PyTorch tensor continues to reference the exported buffer.
+  a.copy(mx.array([4, 5, 6], dtype=mx.float32))
+  mx.eval(a)
+  print(b.cpu()) # tensor([4., 5., 6.])
 
 Use ``mx.from_dlpack`` when you need to control the copy behavior. Specifying
 ``copy=True`` asks MLX to create a new array instead of sharing the Metal
