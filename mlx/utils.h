@@ -69,8 +69,6 @@ MLX_API void set_printoptions(PrintOptions options);
 
 MLX_API PrintFormatter& get_global_formatter();
 
-MLX_API array host_accessible_array(array a);
-
 /** Print the exception and then abort. */
 MLX_API void abort_with_exception(const std::exception& error);
 
