@@ -1,12 +1,12 @@
 // Copyright © 2026 Apple Inc.
 
-#include "mlx/backend/cuda/quantized/qmm/cute_dequant.cuh"
-#include "mlx/dtype_utils.h"
+#include "mlx/backend/cuda/device/cute_dequant.cuh"
+
+#include <cuda/cmath>
 
 // clang-format off
 
-// We can't put kernel code in mlx::core due to name conflicts of "Shape".
-namespace cutlass_gemm {
+namespace mlx::core::cu {
 
 using namespace cute;
 
@@ -16,8 +16,8 @@ struct SharedStorage {
   ArrayEngine<Element, cosize_v<SmemLayoutB>> B;
 };
 
-template <bool KMajor = true>
-inline constexpr auto make_smem_layout(auto bM, auto bK) {
+template <bool KMajor = true, typename TileM, typename TileN>
+inline constexpr auto make_smem_layout(TileM bM, TileN bK) {
   // TODO: Calculate swizzle based on tile shape.
   if constexpr (KMajor) {
     auto swizzle = composition(Swizzle<3,3,3>{},
@@ -31,16 +31,44 @@ inline constexpr auto make_smem_layout(auto bM, auto bK) {
   }
 }
 
-template <bool KMajor = true>
-inline constexpr auto make_smem_layouts(auto cta_tiler) {
+template <bool KMajor = true, typename CtaTiler>
+inline constexpr auto make_smem_layouts(CtaTiler cta_tiler) {
+  // Note: Kernel launcher assumes cosize being same for all KMajor.
   auto [bM, bN, bK] = cta_tiler;
   auto sA_layout = make_smem_layout(bM, bK);
   auto sB_layout = make_smem_layout<KMajor>(bN, bK);
-  return std::make_tuple(sA_layout, sB_layout);
+  return cute::make_tuple(sA_layout, sB_layout);
 }
 
-template <typename T, bool KMajor = true, bool HasKResidue = false>
-inline constexpr auto make_tiled_copy(auto num_threads, auto bM, auto bK) {
+template <bool SM80 = false, typename Element = float, typename CtaTiler>
+inline constexpr auto make_tiled_mma(CtaTiler cta_tiler) {
+  // Note: Kernel launcher assumes num_threads being same for all parameters.
+  using Atom = cuda::std::conditional_t<
+      SM80,
+      cuda::std::conditional_t<
+          cuda::std::is_same_v<Element, half_t>,
+          SM80_16x8x16_F32F16F16F32_TN,
+          cuda::std::conditional_t<
+              cuda::std::is_same_v<Element, bfloat16_t>,
+              SM80_16x8x16_F32BF16BF16F32_TN,
+              UniversalFMA<float>
+          >
+      >,
+      UniversalFMA<float, Element, Element>>;
+  if constexpr (!SM80 || cuda::std::is_same_v<Element, float>) {
+    return make_tiled_mma(Atom{}, Layout<Shape<_16,_8,_1>>{});
+  } else {
+    if constexpr (size<0>(cta_tiler) >= 32) {
+      return make_tiled_mma(Atom{}, Layout<Shape<_2,_2,_1>>{}, Tile<_32,_32,_16>{});
+    } else {
+      return make_tiled_mma(Atom{}, Layout<Shape<_1,_4,_1>>{}, Tile<_16,_32,_16>{});
+    }
+  }
+}
+
+template <typename T, bool KMajor = true, bool HasKResidue = false,
+          typename NumThreads, typename TileM, typename TileN>
+inline constexpr auto make_tiled_copy(NumThreads num_threads, TileM bM, TileN bK) {
   // TODO: Only do 1-element read for the tile of residue.
   auto n_read = Int<HasKResidue ? 1 : 8>{};
   auto atom = Copy_Atom<UniversalCopy<uint_bit_t<n_read * sizeof_bits_v<T>>>, T>{};
@@ -59,37 +87,13 @@ inline constexpr auto make_tiled_copy(auto num_threads, auto bM, auto bK) {
   }
 }
 
-
-__device__ __forceinline__ void
-cute_naive_dequant(auto w, auto s, auto z, auto out) {
-  using Element = typename decltype(out)::value_type;
-  using Quant = typename decltype(w)::value_type;
-  using Scale = typename decltype(s)::value_type;
-  transform(w, out, [](Quant q) { return Element(q); } );
-  transform(out, s, out, [](Element e, Scale s) { return e * Element(s); });
-  if constexpr (quant_has_bias_v<Quant>) {
-    transform(out, z, out, plus{});
-  }
-}
-
-__device__ __forceinline__ void
-cute_dequant(auto w, auto s, auto z, auto out) {
-  if constexpr (stride(coalesce(w.layout())) == Int<1>{} &&
-                is_static_v<decltype(s.layout())>) {
-    cute_vectorized_dequant(w, s, z, out);
-  } else {
-    cute_naive_dequant(w, s, z, out);
-  }
-}
-
 template <bool KMajor, bool HasKResidue, bool SM80,
           typename CtaTiler,
           typename TensorA,
           typename TensorB,
           typename TensorS,
           typename TensorZ,
-          typename TensorC,
-          typename TiledMma>
+          typename TensorC>
 CUTE_DEVICE void qmm_naive_mainloop(
     CtaTiler cta_tiler,
     TensorA gA,
@@ -97,20 +101,20 @@ CUTE_DEVICE void qmm_naive_mainloop(
     TensorS gS,
     TensorZ gZ,
     TensorC gC,
-    TiledMma mma,
     int m_max_coord,
     int n_max_coord,
     int k_residue,
     int thread_idx) {
   // Get the types of operands.
-  using Element = decltype(gA)::value_type;
-  using Quant = decltype(gB)::value_type;
+  using Element = typename decltype(gA)::value_type;
+  using Quant = typename decltype(gB)::value_type;
 
   // Shift tensor so we handle residue of K in the 0th tile.
   gA = domain_offset(make_coord(0, k_residue, 0), gA);
   if constexpr (sizeof_bits_v<Quant> % 8 == 0) {
     gB = domain_offset(make_coord(0, k_residue, 0), gB);
   } else {
+    // TODO: Figure out why domain_offset is not returning wrong offset.
     gB.data() = recast_ptr<Quant>(raw_pointer_cast(gB.data()) + gB.layout()(0, k_residue, 0) * cuda::std::min(8, sizeof_bits_v<Quant>) / 8);
   }
   gS = domain_offset(make_coord(0, k_residue, 0), gS);
@@ -119,7 +123,7 @@ CUTE_DEVICE void qmm_naive_mainloop(
   }
 
   // Define smem layouts.
-  auto [sA_layout, sB_layout] = make_smem_layouts(cta_tiler);
+  auto [sA_layout, sB_layout] = make_smem_layouts<KMajor>(cta_tiler);
 
   // Shared memory buffer.
   extern __shared__ char smem_buf[];
@@ -128,8 +132,11 @@ CUTE_DEVICE void qmm_naive_mainloop(
   Tensor sA = make_tensor(make_smem_ptr(smem.A.begin()), sA_layout); // (BLK_M,BLK_K)
   Tensor sB = make_tensor(make_smem_ptr(smem.B.begin()), sB_layout); // (BLK_N,BLK_K)
 
-  // Define copy atoms.
+  // Define MMA.
+  auto mma = make_tiled_mma<SM80, Element>(CtaTiler{});
   auto num_threads = size(mma);
+
+  // Define copy atoms.
   auto [bM, bN, bK] = cta_tiler;
   TiledCopy copy_a = make_tiled_copy<Element, true, HasKResidue>(num_threads, bM, bK);
   TiledCopy copy_b = make_tiled_copy<Quant, KMajor>(num_threads, bN, bK);
@@ -271,16 +278,17 @@ CUTE_DEVICE void qmm_naive_mainloop(
 }
 
 template <bool KMajor>
-inline constexpr auto make_matrix_stride(auto m, auto k) {
+inline constexpr auto make_matrix_stride(int m, int k) {
   if constexpr (KMajor) {
-    return cute::make_stride(k, cute::Int<1>{}, m * k);
+    return make_stride(k, Int<1>{}, m * k);
   } else {
-    return cute::make_stride(cute::Int<1>{}, m, m * k);
+    return make_stride(Int<1>{}, m, m * k);
   }
 }
 
-template <bool KMajor>
-inline constexpr auto make_scales_layout(auto n, auto k, auto l, auto group_size) {
+template <int GroupSize, bool KMajor>
+inline constexpr auto make_scales_layout(int n, int k, int l) {
+  auto group_size = Int<GroupSize>{};
   if constexpr (KMajor) {
     return make_layout(
         make_shape(n, make_shape(group_size, k / group_size), l),
@@ -292,106 +300,88 @@ inline constexpr auto make_scales_layout(auto n, auto k, auto l, auto group_size
   }
 }
 
-template <int TileM, bool SM80>
-inline constexpr auto make_cta_tiler(auto group_size) {
-  auto bM = Int<TileM>{};
-  auto bN = Int<(!SM80 && group_size > 64) ? 64 : 128>{};
-  auto bK = Int<max(64, group_size)>{};
-  return make_shape(bM, bN, bK);
-}
+template <int GroupSize, bool KMajor, bool HasKResidue, bool SM80,
+          typename Element, typename Quant, typename Scale, typename CtaTiler>
+__global__
+__launch_bounds__(decltype(size(make_tiled_mma<SM80, Element>(CtaTiler{})))::value)
+void qmm_naive_kernel(
+    const Element* A,
+    const Quant* B,
+    const Scale* S,
+    const Element* Z,
+    const uint32_t* lhs_indices,
+    const uint32_t* rhs_indices,
+    Element* C,
+    int m, int n, int k, int l,
+    bool broadcast_b) {
+  int thread_idx = int(threadIdx.x);
+  int m_coord = int(blockIdx.x);
+  int n_coord = int(blockIdx.y);
+  int l_coord = int(blockIdx.z);
 
-template <bool SM80, typename Element>
-inline constexpr auto make_tiled_mma(auto cta_tiler) {
-  using Atom = std::conditional_t<
-      SM80,
-      std::conditional_t<
-          std::is_same_v<Element, half_t>,
-          SM80_16x8x16_F32F16F16F32_TN,
-          std::conditional_t<
-              std::is_same_v<Element, bfloat16_t>,
-              SM80_16x8x16_F32BF16BF16F32_TN,
-              UniversalFMA<float>
-          >
-      >,
-      UniversalFMA<float, Element, Element>>;
-  if constexpr (!SM80 || std::is_same_v<Element, float>) {
-    return make_tiled_mma(Atom{}, Layout<Shape<_16,_8,_1>>{});
-  } else {
-    if constexpr (size<0>(cta_tiler) >= 32) {
-      return make_tiled_mma(Atom{}, Layout<Shape<_2,_2,_1>>{}, Tile<_32,_32,_16>{});
+  // Define layouts (mixed).
+  auto dA = make_stride(k, Int<1>{}, m * k);  // (dM,dK,dL)
+  auto dB = make_matrix_stride<KMajor>(n, k); // (dN,dK,dL)
+  auto dC = make_stride(n, Int<1>{}, m * n);  // (dM,dN,dL)
+  auto S_layout = make_scales_layout<GroupSize, KMajor>(n, k, l);
+
+  // Handle broadcasting.
+  if (broadcast_b) {
+    get<2>(dB) = 0;
+    get<2>(stride(S_layout)) = 0;
+  }
+
+  // Represent the full tensors.
+  Tensor mA_mkl = make_tensor(make_gmem_ptr(A),        make_shape(m, k, l), dA); // (M,K,L)
+  Tensor mB_nkl = make_tensor(make_gmem_ptr<Quant>(B), make_shape(n, k, l), dB); // (N,K,L)
+  Tensor mC_mnl = make_tensor(make_gmem_ptr(C),        make_shape(m, n, l), dC); // (M,N,L)
+
+  Tensor mS_nkl = make_tensor(make_gmem_ptr(S), S_layout); // (N,(group_size,K/group_size),L)
+
+  // For gather, use index lookup for input batch slicing.
+  uint32_t a_batch = lhs_indices ? lhs_indices[l_coord] : l_coord;
+  uint32_t b_batch = rhs_indices ? rhs_indices[l_coord] : l_coord;
+
+  // Get batch slice.
+  Tensor mA = mA_mkl(_,_,a_batch); // (M,K)
+  Tensor mB = mB_nkl(_,_,b_batch); // (N,K)
+  Tensor mC = mC_mnl(_,_,l_coord); // (M,N)
+
+  Tensor mS = mS_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
+
+  // Get the appropriate blocks for this thread block.
+  auto cta_tiler = CtaTiler{};
+  auto cta_coord = make_coord(m_coord, n_coord, _); // (m,n,k)
+  Tensor gA = local_tile(mA, cta_tiler, cta_coord, Step<_1, X,_1>{}); // (BLK_M,BLK_K,k)
+  Tensor gB = local_tile(mB, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
+  Tensor gC = local_tile(mC, cta_tiler, cta_coord, Step<_1,_1, X>{}); // (BLK_M,BLK_N)
+
+  Tensor gS = local_tile(mS, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
+  auto gZ = [&]() {
+    if constexpr (quant_has_bias_v<Quant>) {
+      Tensor mZ_nkl = make_tensor(make_gmem_ptr(Z), S_layout); // (N,(group_size,K/group_size),L)
+      Tensor mZ = mZ_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
+      return local_tile(mZ, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
     } else {
-      return make_tiled_mma(Atom{}, Layout<Shape<_1,_4,_1>>{}, Tile<_16,_32,_16>{});
+      // Dummy tensor; no-bias paths never offset or load gZ.
+      return gS;
     }
-  }
+  }();
+
+  // Compute tile residues for predication.
+  int m_max_coord = m - size<0>(cta_tiler) * m_coord; // M - BLK_M * m_coord
+  int n_max_coord = n - size<1>(cta_tiler) * n_coord; // N - BLK_N * n_coord
+  int k_residue = k - size<1>(gA) * size<2>(gA);
+
+  qmm_naive_mainloop<KMajor, HasKResidue, SM80>(
+      cta_tiler,
+      gA,
+      gB,
+      gS,
+      gZ,
+      gC,
+      m_max_coord, n_max_coord, k_residue,
+      thread_idx);
 }
 
-} // namespace cutlass_gemm
-
-// clang-format on
-
-namespace mlx::core {
-
-template <typename F>
-inline void dispatch_element_types(Dtype dtype, const char* tag, F&& f) {
-  if (dtype == float32) {
-    f.template operator()<float>();
-  } else if (dtype == float16) {
-    f.template operator()<cutlass::half_t>();
-  } else if (dtype == bfloat16) {
-    f.template operator()<cutlass::bfloat16_t>();
-  } else {
-    throw std::invalid_argument(
-        fmt::format("{} Unsupported dtype: {}.", tag, dtype_to_string(dtype)));
-  }
-}
-
-template <typename F>
-inline void dispatch_groups(int group_size, const char* tag, F&& f) {
-  if (group_size == 32) {
-    f.template operator()<32>();
-  } else if (group_size == 64) {
-    f.template operator()<64>();
-  } else if (group_size == 128) {
-    f.template operator()<128>();
-  } else {
-    throw std::invalid_argument(
-        fmt::format("{} Group size {} is not supported.", tag, group_size));
-  }
-}
-
-template <typename T, typename F>
-inline void dispatch_quant_types(
-    int bits,
-    int group_size,
-    QuantizationMode mode,
-    const char* tag,
-    F&& f) {
-  if (mode == QuantizationMode::Mxfp4) {
-    f.template operator()<cutlass::float_e2m1_t, cutlass::float_ue8m0_t, 32>();
-  } else if (mode == QuantizationMode::Mxfp8) {
-    f.template operator()<cutlass::float_e4m3_t, cutlass::float_ue8m0_t, 32>();
-  } else if (mode == QuantizationMode::Nvfp4) {
-    f.template operator()<cutlass::float_e2m1_t, cutlass::float_e4m3_t, 16>();
-  } else {
-    dispatch_groups(group_size, tag, [&]<int group_size>() {
-      if (bits == 2) {
-        f.template operator()<cutlass::uint2b_t, T, group_size>();
-      } else if (bits == 3) {
-        f.template operator()<cutlass::uint3b_t, T, group_size>();
-      } else if (bits == 4) {
-        f.template operator()<cutlass::uint4b_t, T, group_size>();
-      } else if (bits == 5) {
-        f.template operator()<cutlass::uint5b_t, T, group_size>();
-      } else if (bits == 6) {
-        f.template operator()<cutlass::uint6b_t, T, group_size>();
-      } else if (bits == 8) {
-        f.template operator()<uint8_t, T, group_size>();
-      } else {
-        throw std::invalid_argument(
-            fmt::format("{} {}-bit quantization is not supported.", tag, bits));
-      }
-    });
-  }
-}
-
-} // namespace mlx::core
+} // namespace mlx::core::cu

@@ -1,174 +1,82 @@
 // Copyright © 2026 Apple Inc.
 
+#include "mlx/backend/cuda/device/qmm_naive.cuh"
+#include "mlx/backend/cuda/jit_module.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
-#include "mlx/backend/cuda/quantized/qmm/qmm_naive.cuh"
+#include "mlx/dtype_utils.h"
 
-// clang-format off
-
-// We can't put kernel code in mlx::core due to name conflicts of "Shape".
-namespace cutlass_gemm {
-
-using namespace cute;
-
-template <bool KMajor, bool HasKResidue, bool SM80,
-          typename Element, typename Quant, typename Scale,
-          typename ProblemShape,
-          typename CtaTiler,
-          typename StrideA,
-          typename StrideB,
-          typename LayoutS,
-          typename StrideC,
-          typename TiledMma>
-__global__
-__launch_bounds__(decltype(size(TiledMma{}))::value)
-void qmm_naive_kernel(
-    ProblemShape shape_MNKL,
-    CtaTiler cta_tiler,
-    const Element* A, StrideA dA,
-    const Quant* B, StrideB dB,
-    const Scale* S, const Element* Z, LayoutS S_layout,
-    const uint32_t* lhs_indices, const uint32_t* rhs_indices,
-    Element* C, StrideC dC,
-    TiledMma mma) {
-  CUTE_STATIC_ASSERT_V(congruent(select<0,2,3>(shape_MNKL), dA));
-  CUTE_STATIC_ASSERT_V(congruent(select<1,2,3>(shape_MNKL), dB));
-  CUTE_STATIC_ASSERT_V(congruent(select<0,1,3>(shape_MNKL), dC));
-
-  int thread_idx = int(threadIdx.x);
-  int m_coord = int(blockIdx.x);
-  int n_coord = int(blockIdx.y);
-  int l_coord = int(blockIdx.z);
-
-  // Represent the full tensors.
-  Tensor mA_mkl = make_tensor(make_gmem_ptr(A),        select<0,2,3>(shape_MNKL), dA); // (M,K,L)
-  Tensor mB_nkl = make_tensor(make_gmem_ptr<Quant>(B), select<1,2,3>(shape_MNKL), dB); // (N,K,L)
-  Tensor mC_mnl = make_tensor(make_gmem_ptr(C),        select<0,1,3>(shape_MNKL), dC); // (M,N,L)
-
-  Tensor mS_nkl = make_tensor(make_gmem_ptr(S), S_layout); // (N,(group_size,K/group_size),L)
-
-  // For gather, use index lookup for input batch slicing.
-  uint32_t a_batch = lhs_indices ? lhs_indices[l_coord] : l_coord;
-  uint32_t b_batch = rhs_indices ? rhs_indices[l_coord] : l_coord;
-
-  // Get batch slice.
-  Tensor mA = mA_mkl(_,_,a_batch); // (M,K)
-  Tensor mB = mB_nkl(_,_,b_batch); // (N,K)
-  Tensor mC = mC_mnl(_,_,l_coord); // (M,N)
-
-  Tensor mS = mS_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
-
-  // Get the appropriate blocks for this thread block.
-  auto cta_coord = make_coord(m_coord, n_coord, _); // (m,n,k)
-  Tensor gA = local_tile(mA, cta_tiler, cta_coord, Step<_1, X,_1>{}); // (BLK_M,BLK_K,k)
-  Tensor gB = local_tile(mB, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
-  Tensor gC = local_tile(mC, cta_tiler, cta_coord, Step<_1,_1, X>{}); // (BLK_M,BLK_N)
-
-  Tensor gS = local_tile(mS, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
-  auto gZ = [&]() {
-    if constexpr (quant_has_bias_v<Quant>) {
-      Tensor mZ_nkl = make_tensor(make_gmem_ptr(Z), S_layout); // (N,(group_size,K/group_size),L)
-      Tensor mZ = mZ_nkl(_,_,b_batch); // (N,(group_size,K/group_size))
-      return local_tile(mZ, cta_tiler, cta_coord, Step< X,_1,_1>{}); // (BLK_N,BLK_K,k)
-    } else {
-      // Dummy tensor; no-bias paths never offset or load gZ.
-      return gS;
-    }
-  }();
-
-  // Compute tile residues for predication.
-  int m_max_coord = size<0>(shape_MNKL) - size<0>(cta_tiler) * m_coord; // M - BLK_M * m_coord
-  int n_max_coord = size<1>(shape_MNKL) - size<1>(cta_tiler) * n_coord; // N - BLK_N * n_coord
-  int k_residue = size<2>(shape_MNKL) - size<1>(gA) * size<2>(gA);
-
-  qmm_naive_mainloop<KMajor, HasKResidue, SM80>(
-      cta_tiler,
-      gA,
-      gB,
-      gS,
-      gZ,
-      gC,
-      mma,
-      m_max_coord, n_max_coord, k_residue,
-      thread_idx);
-}
-
-template <int TileM, bool KMajor, bool HasKResidue, bool SM80,
-          typename Element, typename Quant, typename Scale>
-void qmm_naive(
-    const Element* A,
-    const Quant*   B,
-    const Scale*   S,
-    const Element* Z,
-    const uint32_t* lhs_indices,
-    const uint32_t* rhs_indices,
-    Element* C,
-    int m, int n, int k, int l,
-    bool broadcast_b,
-    auto group_size,
-    auto&& launch_kernel) {
-  // Define shapes (dynamic).
-  auto shape_MNKL = make_shape(m, n, k, l); // (M,N,K,L)
-
-  // Define layouts (mixed).
-  auto dA = make_stride(k, Int<1>{}, m * k);  // (dM,dK,dL)
-  auto dB = make_matrix_stride<KMajor>(n, k); // (dN,dK,dL)
-  auto dC = make_stride(n, Int<1>{}, m * n);  // (dM,dN,dL)
-  auto S_layout = make_scales_layout<KMajor>(n, k, l, group_size);
-
-  // Handle broadcasting.
-  if (broadcast_b) {
-    get<2>(dB) = 0;
-    get<2>(stride(S_layout)) = 0;
-  }
-
-  // Define CTA tile size (static).
-  auto cta_tiler = make_cta_tiler<TileM, SM80>(group_size);
-
-  // Define MMA.
-  auto mma = make_tiled_mma<SM80, Element>(cta_tiler);
-  auto num_threads = size(mma);
-
-  // Shared memory size.
-  auto [sA_layout, sB_layout] = make_smem_layouts<KMajor>(cta_tiler);
-  size_t smem_bytes = sizeof(SharedStorage<Element, decltype(sA_layout), decltype(sB_layout)>);
-
-  auto* kernel = &qmm_naive_kernel<
-      KMajor, HasKResidue, SM80,
-      Element, Quant, Scale,
-      decltype(shape_MNKL),
-      decltype(cta_tiler),
-      decltype(dA),
-      decltype(dB),
-      decltype(S_layout),
-      decltype(dC),
-      decltype(mma)>;
-  cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_bytes);
-
-  dim3 num_blocks{uint32_t(ceil_div(m, size<0>(cta_tiler))),
-                  uint32_t(ceil_div(n, size<1>(cta_tiler))),
-                  uint32_t(l)};
-  dim3 block_dims{uint32_t(num_threads)};
-  void* args[] = {
-      &shape_MNKL,
-      &cta_tiler,
-      &A, &dA,
-      &B, &dB,
-      &S, &Z, &S_layout,
-      &lhs_indices, &rhs_indices,
-      &C, &dC,
-      &mma};
-  launch_kernel(reinterpret_cast<void*>(kernel), num_blocks, block_dims, smem_bytes, args);
-}
-
-} // namespace cutlass_gemm
-
-// clang-format on
+#include "cuda_jit_sources.h"
 
 namespace mlx::core {
 
-template <int TileM, bool KMajor, bool HasKResidue, bool SM80>
-void qmm_naive_impl(
+namespace {
+
+inline auto make_cta_tiler(int itemsize, int m, int group_size, bool sm80) {
+  bool enough_smem = sm80 && itemsize <= 2 && group_size <= 64;
+  int tile_m = std::max(16, std::min(64, next_power_of_2(m)));
+  int tile_n = enough_smem ? 128 : 64;
+  int tile_k = std::max(64, group_size);
+  return cute::make_shape(tile_m, tile_n, tile_k);
+}
+
+inline auto cta_tiler_to_string(auto cta_tiler) {
+  return fmt::format(
+      "cute::Shape<cute::Int<{}>, cute::Int<{}>, cute::Int<{}>>",
+      cute::size<0>(cta_tiler),
+      cute::size<1>(cta_tiler),
+      cute::size<2>(cta_tiler));
+}
+
+const char* get_weight_cutlass_type(const Dtype& dtype) {
+  switch (dtype) {
+    case float16:
+      return "cutlass::half_t";
+    case bfloat16:
+      return "cutlass::bfloat16_t";
+    case float32:
+      return "float";
+    default:
+      throw std::invalid_argument(
+          fmt::format(
+              "[quantized_matmul] Unsupported dtype: {}.",
+              dtype_to_string(dtype)));
+  }
+}
+
+inline std::tuple<const char*, const char*>
+get_quant_cutlass_types(const char* ctype_x, int bits, QuantizationMode mode) {
+  if (mode == QuantizationMode::Mxfp4) {
+    return {"cutlass::float_e2m1_t", "cutlass::float_ue8m0_t"};
+  } else if (mode == QuantizationMode::Mxfp8) {
+    return {"cutlass::float_e4m3_t", "cutlass::float_ue8m0_t"};
+  } else if (mode == QuantizationMode::Nvfp4) {
+    return {"cutlass::float_e2m1_t", "cutlass::float_e4m3_t"};
+  } else {
+    if (bits == 2) {
+      return {"cutlass::uint2b_t", ctype_x};
+    } else if (bits == 3) {
+      return {"cutlass::uint3b_t", ctype_x};
+    } else if (bits == 4) {
+      return {"cutlass::uint4b_t", ctype_x};
+    } else if (bits == 5) {
+      return {"cutlass::uint5b_t", ctype_x};
+    } else if (bits == 6) {
+      return {"cutlass::uint6b_t", ctype_x};
+    } else if (bits == 8) {
+      return {"uint8_t", ctype_x};
+    } else {
+      throw std::invalid_argument(
+          fmt::format(
+              "[quantized_matmul] {}-bit quantization is not supported.",
+              bits));
+    }
+  }
+}
+
+} // namespace
+
+void qmm_naive(
     const array& x,
     const array& w,
     const array& scales,
@@ -176,76 +84,92 @@ void qmm_naive_impl(
     const std::optional<array>& lhs_indices,
     const std::optional<array>& rhs_indices,
     array& out,
+    bool transpose,
     int bits,
     int group_size,
     QuantizationMode mode,
     cu::CommandEncoder& encoder) {
-  const char* tag = "[quantized_matmul]";
   int m = out.ndim() > 1 ? out.shape(-2) : 1;
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);
   bool broadcast_b = (w.ndim() <= 2) || (w.size() != w.data_size());
 
-  dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
-    dispatch_quant_types<Element>(
-        bits,
-        group_size,
-        mode,
-        tag,
-        [&]<typename Quant, typename Scale, int group_size>() {
-          encoder.set_input_array(x);
-          encoder.set_input_array(w);
-          encoder.set_input_array(scales);
-          if (biases) {
-            encoder.set_input_array(*biases);
-          }
-          if (lhs_indices) {
-            encoder.set_input_array(*lhs_indices);
-          }
-          if (rhs_indices) {
-            encoder.set_input_array(*rhs_indices);
-          }
-          encoder.set_output_array(out);
-          cutlass_gemm::qmm_naive<TileM, KMajor, HasKResidue, SM80>(
-              gpu_ptr<Element>(x),
-              gpu_ptr<Quant>(w),
-              gpu_ptr<Scale>(scales),
-              biases ? gpu_ptr<Element>(*biases) : nullptr,
-              lhs_indices ? gpu_ptr<uint32_t>(*lhs_indices) : nullptr,
-              rhs_indices ? gpu_ptr<uint32_t>(*rhs_indices) : nullptr,
-              gpu_ptr<Element>(out),
-              m,
-              n,
-              k,
-              l,
-              broadcast_b,
-              cute::Int<group_size>{},
-              [&](auto* kernel,
-                  dim3 num_blocks,
-                  dim3 block_dims,
-                  size_t smem_bytes,
-                  void** args) {
-                encoder.add_kernel_node_raw(
-                    kernel, num_blocks, block_dims, {}, smem_bytes, args);
-              });
-        });
-  });
-}
+  bool sm80 = encoder.device().compute_capability_major() >= 8;
+  auto cta_tiler = make_cta_tiler(x.itemsize(), m, group_size, sm80);
+  bool has_k_residue = (k % cute::size<2>(cta_tiler)) != 0;
 
-// clang-format off
-template void qmm_naive_impl<@TileM@, @KMajor@, @HasKResidue@, @SM80@>(
-    const array& x,
-    const array& w,
-    const array& scales,
-    const std::optional<array>& biases,
-    const std::optional<array>& lhs_indices,
-    const std::optional<array>& rhs_indices,
-    array& out,
-    int bits,
-    int group_size,
-    QuantizationMode mode,
-    cu::CommandEncoder& encoder);
-// clang-format on
+  std::string module_name = fmt::format(
+      "qmm_naive_{}_{}_{}_m{}_b{}_g{}_{}",
+      dtype_to_string(x.dtype()),
+      transpose ? "k" : "n",
+      has_k_residue ? "residue" : "aligned",
+      cute::size<0>(cta_tiler),
+      bits,
+      group_size,
+      quantization_mode_to_string(mode));
+
+  auto ctype_x = get_weight_cutlass_type(x.dtype());
+  auto [ctype_q, ctype_s] = get_quant_cutlass_types(ctype_x, bits, mode);
+
+  std::string kernel_name = fmt::format(
+      "mlx::core::cu::qmm_naive_kernel<{}, {}, {}, {}, {}, {}, {}, {}>",
+      group_size,
+      transpose,
+      has_k_residue,
+      sm80,
+      ctype_x,
+      ctype_q,
+      ctype_s,
+      cta_tiler_to_string(cta_tiler));
+
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
+    return std::make_tuple(
+        false, jit_source_qmm_naive, std::vector{kernel_name});
+  });
+
+  encoder.set_input_array(x);
+  encoder.set_input_array(w);
+  encoder.set_input_array(scales);
+  if (biases) {
+    encoder.set_input_array(*biases);
+  }
+  if (lhs_indices) {
+    encoder.set_input_array(*lhs_indices);
+  }
+  if (rhs_indices) {
+    encoder.set_input_array(*rhs_indices);
+  }
+  encoder.set_output_array(out);
+
+  dim3 num_blocks{
+      uint32_t(cute::ceil_div(m, cute::size<0>(cta_tiler))),
+      uint32_t(cute::ceil_div(n, cute::size<1>(cta_tiler))),
+      uint32_t(l)};
+  dim3 block_dims{uint32_t(cute::size(cu::make_tiled_mma(cta_tiler)))};
+
+  auto [sA_layout, sB_layout] = cu::make_smem_layouts(cta_tiler);
+  size_t smem_bytes =
+      x.itemsize() * (cute::cosize(sA_layout) + cute::cosize(sB_layout));
+
+  encoder.add_kernel_node_ex(
+      mod.get_kernel(kernel_name),
+      num_blocks,
+      block_dims,
+      {},
+      smem_bytes,
+      gpu_ptr<void>(x),
+      gpu_ptr<void>(w),
+      gpu_ptr<void>(scales),
+      biases ? gpu_ptr<void>(*biases) : nullptr,
+      lhs_indices ? gpu_ptr<void>(*lhs_indices) : nullptr,
+      rhs_indices ? gpu_ptr<void>(*rhs_indices) : nullptr,
+      gpu_ptr<void>(out),
+      m,
+      n,
+      k,
+      l,
+      broadcast_b);
+}
 
 } // namespace mlx::core

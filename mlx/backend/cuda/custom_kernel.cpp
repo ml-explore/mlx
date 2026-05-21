@@ -313,7 +313,7 @@ void CustomKernel::eval_gpu(
   std::string kernel_name =
       (is_precompiled_) ? name_ : "mlx::core::cu::" + name_;
   cu::JitModule& mod = cu::get_jit_module(
-      s.device,
+      encoder.device(),
       name_,
       [&]() {
         return std::make_tuple(
