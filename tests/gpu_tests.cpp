@@ -480,6 +480,38 @@ TEST_CASE("test gpu validation") {
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
 }
 
+TEST_CASE("test gpu int32 shape overflow errors") {
+  // (2^30, 2).flatten() — product 2^31 doesn't fit in ShapeElem.
+  // Issue #2681 reported wrapped shape (-2147483648,) and a
+  // 2^64 - X reported size. The lazy graph is never evaluated.
+  auto a = zeros({1 << 30, 2});
+  CHECK_THROWS_AS(flatten(a), std::overflow_error);
+
+  // conv_general output > 2^31 elements with each per-dim < 2^31.
+  // Total elements 524290 * 64 * 64 = 2,147,491,840.
+  int n = static_cast<int>((int64_t{1} << 31) / (64 * 64) + 2);
+  auto x = ones({n, 8, 8, 1}, float16);
+  auto w = ones({1, 1, 1, 1}, float16);
+  auto y = conv_general(
+      /* input = */ x,
+      /* weight = */ w,
+      /* stride = */ {1, 1},
+      /* padding_lo = */ {0, 0},
+      /* padding_hi = */ {0, 0},
+      /* kernel_dilation = */ {1, 1},
+      /* input_dilation = */ {9, 9},
+      /* groups = */ 1,
+      /* flip = */ false);
+  CHECK_EQ(y.shape(), Shape{n, 64, 64, 1});
+
+  // reshape with inferred dim that won't fit in ShapeElem — issue #3327.
+  CHECK_THROWS_AS(reshape(y, {-1}), std::overflow_error);
+
+  // take(a, idx) routes through an internal flatten — overflows on flatten.
+  auto idx = array({0u}, uint32);
+  CHECK_THROWS_AS(take(y, idx), std::overflow_error);
+}
+
 TEST_CASE("test memory info") {
   // Test cache limits
   {
