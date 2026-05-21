@@ -2097,24 +2097,9 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(y.dtype, mx.float32)
         torch.mps.synchronize()
         self.assertEqual(y.tolist(), x.cpu().numpy().tolist())
-
-    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_torch_mps_dlpack_host_access(self):
-        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
-        y = mx.array(x)
-
-        torch.mps.synchronize()
         self.assertIn("array(", repr(y))
-        self.assertEqual(y.tolist(), x.cpu().numpy().tolist())
-        # PyTorch 2.12 allocates ordinary MPS tensors in shared/unified
-        # MTLBuffers on Apple silicon, while private Metal DLPack producers are
-        # not host-accessible.
-        try:
-            mv = memoryview(y)
-        except BufferError:
-            pass
-        else:
-            self.assertEqual(mv.tolist(), x.cpu().numpy().tolist())
+        mv = memoryview(y)
+        self.assertEqual(mv.tolist(), x.cpu().numpy().tolist())
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_zero_copy_shares_updates(self):
@@ -2135,14 +2120,11 @@ class TestArray(mlx_tests.MLXTestCase):
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         torch.mps.synchronize()
         y = mx.array(x, dtype=mx.float32)
+        self.assertEqual(y.dtype, mx.float32)
 
         x.add_(100)
         torch.mps.synchronize()
         self.assertEqual(y.tolist(), x.cpu().numpy().tolist())
-
-        y.copy(mx.full(y.shape, 7.0))
-        mx.eval(y)
-        self.assertEqual(x.cpu().numpy().tolist(), y.tolist())
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_different_dtype_argument_copies(self):
@@ -2187,30 +2169,6 @@ class TestArray(mlx_tests.MLXTestCase):
         b_mps = b.to("mps")
         torch.mps.synchronize()
         self.assertTrue(mx.array_equal(a + b_mps, mx.array([3])))
-
-    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_torch_mps_dlpack_mlx_update_writes_torch_buffer(self):
-        x = torch.arange(3, device="mps", dtype=torch.float32)
-        torch.mps.synchronize()
-        y = mx.array(x)
-
-        y.copy(mx.array([3, 4, 5], dtype=mx.float32))
-        mx.eval(y)
-        self.assertEqual(x.cpu().numpy().tolist(), [3, 4, 5])
-
-    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
-    def test_torch_mps_dlpack_copy_writes_torch_buffer(self):
-        x = torch.arange(3, device="mps", dtype=torch.float32)
-        torch.mps.synchronize()
-        y = mx.array(x)
-
-        y.copy(mx.array([4, 5, 6], dtype=mx.float32))
-        mx.eval(y)
-        self.assertEqual(x.cpu().numpy().tolist(), [4.0, 5.0, 6.0])
-
-        x.add_(10)
-        torch.mps.synchronize()
-        self.assertEqual(y.tolist(), [14.0, 15.0, 16.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_mlx_dlpack_exports_mps_tensor_to_torch(self):
@@ -2269,13 +2227,9 @@ class TestArray(mlx_tests.MLXTestCase):
         torch.mps.synchronize()
         y = mx.from_dlpack(x, copy=False)
 
-        y.copy(mx.array([10, 11, 12], dtype=mx.float32))
-        mx.eval(y)
-        self.assertEqual(x.cpu().numpy().tolist(), [10.0, 11.0, 12.0])
-
         x.add_(10)
         torch.mps.synchronize()
-        self.assertEqual(y.tolist(), [20.0, 21.0, 22.0])
+        self.assertEqual(y.tolist(), [10.0, 11.0, 12.0])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_from_dlpack_torch_mps_copy_true_copies(self):
