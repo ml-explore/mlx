@@ -512,7 +512,7 @@ void init_array(nb::module_& m) {
              nb::object,
              nb::object,
              nb::object dl_device,
-             nb::object) {
+             nb::object copy) {
             std::optional<int> dl_device_type;
             if (!dl_device.is_none()) {
               auto device = nb::cast<nb::tuple>(dl_device);
@@ -521,6 +521,9 @@ void init_array(nb::module_& m) {
                     "dl_device must be None or a tuple[int, int]");
               }
               dl_device_type = nb::cast<int>(device[0]);
+            }
+            if (!copy.is_none() && nb::cast<bool>(copy)) {
+              return mlx_to_dlpack(mx::copy_to_new_buffer(a), dl_device_type);
             }
             return mlx_to_dlpack(a, dl_device_type);
           },
