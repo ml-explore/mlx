@@ -106,7 +106,8 @@ mx::Dtype mlx_dtype_from_dlpack(
 
 mx::array metal_dlpack_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
-    std::optional<mx::Dtype> dtype);
+    std::optional<mx::Dtype> dtype,
+    std::optional<bool> copy);
 
 mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
@@ -125,7 +126,7 @@ mx::array nd_array_to_mlx(
           });
     }
     case nb::device::metal::value:
-      return metal_dlpack_to_mlx(std::move(nd_array), dtype);
+      return metal_dlpack_to_mlx(std::move(nd_array), dtype, std::nullopt);
     default:
       throw std::invalid_argument("Unsupported DLPack device.");
   }
@@ -148,7 +149,7 @@ mx::array from_dlpack(nb::object v, std::optional<bool> copy) {
         dtype = mlx_dtype_from_dlpack(
             nd.dtype(), "Cannot convert Metal DLPack array to mlx array.");
       }
-      return nd_array_to_mlx(std::move(nd), dtype);
+      return metal_dlpack_to_mlx(std::move(nd), dtype, copy);
     }
     case nb::device::cuda::value:
     case nb::device::cuda_managed::value:
@@ -163,7 +164,8 @@ mx::array metal_dlpack_to_mlx_contiguous(
     std::shared_ptr<nb::ndarray<nb::ro, nb::c_contig>> owner,
     const mx::Shape& shape,
     mx::Dtype type,
-    std::optional<mx::Dtype> dtype) {
+    std::optional<mx::Dtype> dtype,
+    std::optional<bool> copy) {
   auto itemsize = mx::size_of(type);
   if (owner->itemsize() != itemsize) {
     throw std::invalid_argument(
@@ -194,10 +196,18 @@ mx::array metal_dlpack_to_mlx_contiguous(
     out.copy_shared_buffer(out, out.strides(), flags, out.data_size(), offset);
   }
 
-  if (dtype) {
-    auto result = (*dtype == out.dtype())
+  auto is_host_accessible = out.buffer().is_host_accessible();
+  if (copy == false && !is_host_accessible) {
+    throw std::invalid_argument(
+        "Cannot import a non-host-accessible Metal DLPack buffer without a "
+        "copy.");
+  }
+
+  if (dtype || !is_host_accessible) {
+    auto result_dtype = dtype.value_or(out.dtype());
+    auto result = (result_dtype == out.dtype())
         ? mx::copy_to_new_buffer(out, mx::Device::gpu)
-        : mx::astype(out, *dtype, mx::Device::gpu);
+        : mx::astype(out, result_dtype, mx::Device::gpu);
     result.eval();
     result.wait();
     result.detach();
@@ -212,7 +222,7 @@ nb::ndarray<NDParams...> mlx_to_nd_array_impl(
     std::optional<nb::dlpack::dtype> t = {}) {
   {
     nb::gil_scoped_release nogil;
-    a = host_accessible_array(std::move(a));
+    a.eval();
   }
   std::vector<size_t> shape(a.shape().begin(), a.shape().end());
   auto owner = nb::cast(a);
@@ -274,7 +284,6 @@ nb::ndarray<> mlx_to_dlpack_impl(mx::array a, int dl_device_type) {
     a.eval();
     a.wait();
     if (dl_device_type == nb::device::cpu::value) {
-      a = host_accessible_array(std::move(a));
       data = a.data<T>();
     } else {
       data = a.buffer().ptr();
@@ -358,40 +367,39 @@ nb::object to_scalar(mx::array& a) {
     throw std::invalid_argument(
         "[convert] Only length-1 arrays can be converted to Python scalars.");
   }
-  auto host = mx::array(a);
   {
     nb::gil_scoped_release nogil;
-    host = host_accessible_array(std::move(host));
+    a.eval();
   }
-  switch (host.dtype()) {
+  switch (a.dtype()) {
     case mx::bool_:
-      return nb::cast(host.item<bool>());
+      return nb::cast(a.item<bool>());
     case mx::uint8:
-      return nb::cast(host.item<uint8_t>());
+      return nb::cast(a.item<uint8_t>());
     case mx::uint16:
-      return nb::cast(host.item<uint16_t>());
+      return nb::cast(a.item<uint16_t>());
     case mx::uint32:
-      return nb::cast(host.item<uint32_t>());
+      return nb::cast(a.item<uint32_t>());
     case mx::uint64:
-      return nb::cast(host.item<uint64_t>());
+      return nb::cast(a.item<uint64_t>());
     case mx::int8:
-      return nb::cast(host.item<int8_t>());
+      return nb::cast(a.item<int8_t>());
     case mx::int16:
-      return nb::cast(host.item<int16_t>());
+      return nb::cast(a.item<int16_t>());
     case mx::int32:
-      return nb::cast(host.item<int32_t>());
+      return nb::cast(a.item<int32_t>());
     case mx::int64:
-      return nb::cast(host.item<int64_t>());
+      return nb::cast(a.item<int64_t>());
     case mx::float16:
-      return nb::cast(static_cast<float>(host.item<mx::float16_t>()));
+      return nb::cast(static_cast<float>(a.item<mx::float16_t>()));
     case mx::float32:
-      return nb::cast(host.item<float>());
+      return nb::cast(a.item<float>());
     case mx::bfloat16:
-      return nb::cast(static_cast<float>(host.item<mx::bfloat16_t>()));
+      return nb::cast(static_cast<float>(a.item<mx::bfloat16_t>()));
     case mx::complex64:
-      return nb::cast(host.item<std::complex<float>>());
+      return nb::cast(a.item<std::complex<float>>());
     case mx::float64:
-      return nb::cast(host.item<double>());
+      return nb::cast(a.item<double>());
     default:
       throw nb::type_error("type cannot be converted to Python scalar.");
   }
@@ -399,7 +407,8 @@ nb::object to_scalar(mx::array& a) {
 
 mx::array metal_dlpack_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
-    std::optional<mx::Dtype> dtype) {
+    std::optional<mx::Dtype> dtype,
+    std::optional<bool> copy) {
   auto owner =
       std::make_shared<nb::ndarray<nb::ro, nb::c_contig>>(std::move(nd_array));
   auto shape = get_shape(*owner);
@@ -408,7 +417,8 @@ mx::array metal_dlpack_to_mlx(
       owner->dtype(),
       "Cannot convert Metal DLPack array to mlx array.",
       [&]<typename T>(mx::Dtype type) {
-        return metal_dlpack_to_mlx_contiguous<T>(owner, shape, type, dtype);
+        return metal_dlpack_to_mlx_contiguous<T>(
+            owner, shape, type, dtype, copy);
       });
 }
 
@@ -431,40 +441,39 @@ nb::object tolist(mx::array& a) {
   if (a.ndim() == 0) {
     return to_scalar(a);
   }
-  auto host = mx::array(a);
   {
     nb::gil_scoped_release nogil;
-    host = host_accessible_array(std::move(host));
+    a.eval();
   }
-  switch (host.dtype()) {
+  switch (a.dtype()) {
     case mx::bool_:
-      return to_list<bool>(host, 0, 0);
+      return to_list<bool>(a, 0, 0);
     case mx::uint8:
-      return to_list<uint8_t>(host, 0, 0);
+      return to_list<uint8_t>(a, 0, 0);
     case mx::uint16:
-      return to_list<uint16_t>(host, 0, 0);
+      return to_list<uint16_t>(a, 0, 0);
     case mx::uint32:
-      return to_list<uint32_t>(host, 0, 0);
+      return to_list<uint32_t>(a, 0, 0);
     case mx::uint64:
-      return to_list<uint64_t>(host, 0, 0);
+      return to_list<uint64_t>(a, 0, 0);
     case mx::int8:
-      return to_list<int8_t>(host, 0, 0);
+      return to_list<int8_t>(a, 0, 0);
     case mx::int16:
-      return to_list<int16_t>(host, 0, 0);
+      return to_list<int16_t>(a, 0, 0);
     case mx::int32:
-      return to_list<int32_t>(host, 0, 0);
+      return to_list<int32_t>(a, 0, 0);
     case mx::int64:
-      return to_list<int64_t>(host, 0, 0);
+      return to_list<int64_t>(a, 0, 0);
     case mx::float16:
-      return to_list<mx::float16_t, float>(host, 0, 0);
+      return to_list<mx::float16_t, float>(a, 0, 0);
     case mx::float32:
-      return to_list<float>(host, 0, 0);
+      return to_list<float>(a, 0, 0);
     case mx::bfloat16:
-      return to_list<mx::bfloat16_t, float>(host, 0, 0);
+      return to_list<mx::bfloat16_t, float>(a, 0, 0);
     case mx::float64:
-      return to_list<double>(host, 0, 0);
+      return to_list<double>(a, 0, 0);
     case mx::complex64:
-      return to_list<std::complex<float>>(host, 0, 0);
+      return to_list<std::complex<float>>(a, 0, 0);
     default:
       throw nb::type_error("data type cannot be converted to Python list.");
   }
