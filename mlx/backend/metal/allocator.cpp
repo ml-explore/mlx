@@ -144,12 +144,10 @@ Buffer MetalAllocator::malloc(size_t size) {
       throw std::runtime_error(msg.str());
     }
     lk.unlock();
-    if (size < small_size_ && heap_) {
-      buf = heap_->newBuffer(size, resource_options);
-    }
-    if (!buf) {
-      buf = device_->newBuffer(size, resource_options);
-    }
+    // [PATCH elejometa] Heap allocation disabled — Metal heaps reuse memory
+    // immediately while GPU commands still reference it, causing crashes
+    // with ResourceHazardTrackingModeUntracked.
+    buf = device_->newBuffer(size, resource_options);
     if (!buf) {
       std::ostringstream msg;
       msg << "[malloc] Unable to allocate " << size << " bytes.";
