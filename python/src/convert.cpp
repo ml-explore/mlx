@@ -129,22 +129,22 @@ mx::array metal_dlpack_to_mlx(
 
 mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
-    std::optional<mx::Dtype> dtype,
-    std::optional<nb::dlpack::dtype> nb_dtype) {
+    std::optional<mx::Dtype> dst_dtype,
+    std::optional<nb::dlpack::dtype> src_dtype) {
   switch (nd_array.device_type()) {
     case nb::device::cpu::value: {
       auto shape = get_shape(nd_array);
-      auto type = nb_dtype.value_or(nd_array.dtype());
+      auto type = src_dtype.value_or(nd_array.dtype());
       return dispatch_dlpack_dtype(
           type,
           "Cannot convert numpy array to mlx array.",
           [&]<typename T>(mx::Dtype default_dtype) {
             return nd_array_to_mlx_contiguous<T>(
-                nd_array, shape, dtype.value_or(default_dtype));
+                nd_array, shape, dst_dtype.value_or(default_dtype));
           });
     }
     case nb::device::metal::value:
-      return metal_dlpack_to_mlx(std::move(nd_array), dtype, std::nullopt);
+      return metal_dlpack_to_mlx(std::move(nd_array), dst_dtype, std::nullopt);
     default:
       throw std::invalid_argument("Unsupported DLPack device.");
   }
@@ -156,14 +156,14 @@ mx::array from_dlpack(nb::object v, std::optional<bool> copy) {
 
   switch (nd.device_type()) {
     case nb::device::cpu::value:
-      if (copy == false) {
+      if (copy.has_value() && copy.value() == false) {
         throw std::invalid_argument(
             "Cannot import a CPU DLPack array without a copy.");
       }
       return nd_array_to_mlx(std::move(nd), std::nullopt);
     case nb::device::metal::value: {
       std::optional<mx::Dtype> dtype;
-      if (copy == true) {
+      if (copy.has_value() && copy.value() == true) {
         dtype = mlx_dtype_from_dlpack(
             nd.dtype(), "Cannot convert Metal DLPack array to mlx array.");
       }
@@ -216,7 +216,7 @@ mx::array metal_dlpack_to_mlx_contiguous(
     out.copy_shared_buffer(out, out.strides(), flags, out.data_size(), offset);
   }
 
-  if (copy == false && is_private_buffer) {
+  if (copy.has_value() && copy.value() == false && is_private_buffer) {
     throw std::invalid_argument(
         "Cannot import a private Metal DLPack buffer without a copy.");
   }
