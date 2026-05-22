@@ -1,7 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
 #include <limits>
-#include <memory>
 #include <sstream>
 
 #include <nanobind/stl/complex.h>
@@ -180,27 +179,27 @@ mx::array from_dlpack(nb::object v, std::optional<bool> copy) {
 
 template <typename T>
 mx::array metal_dlpack_to_mlx_contiguous(
-    std::shared_ptr<nb::ndarray<nb::ro, nb::c_contig>> owner,
+    nb::ndarray<nb::ro, nb::c_contig> owner,
     const mx::Shape& shape,
     mx::Dtype type,
     std::optional<mx::Dtype> dtype,
     std::optional<bool> copy) {
   auto itemsize = mx::size_of(type);
-  if (owner->itemsize() != itemsize) {
+  if (owner.itemsize() != itemsize) {
     throw std::invalid_argument(
         "Cannot convert Metal DLPack dtype to mlx dtype.");
   }
 
-  auto byte_offset = owner->byte_offset();
+  auto byte_offset = owner.byte_offset();
   if (byte_offset % itemsize != 0) {
     throw std::invalid_argument(
         "Metal DLPack byte offset is not aligned to dtype size.");
   }
 
-  auto is_private_buffer = metal_buffer_is_private(owner->data_handle());
+  auto is_private_buffer = metal_buffer_is_private(owner.data_handle());
 
   auto out = mx::array(
-      mx::allocator::Buffer(owner->data_handle()),
+      mx::allocator::Buffer(owner.data_handle()),
       shape,
       type,
       [](mx::allocator::Buffer) {});
@@ -228,7 +227,6 @@ mx::array metal_dlpack_to_mlx_contiguous(
         ? mx::copy_to_new_buffer(out, mx::Device::gpu)
         : mx::astype(out, result_dtype, mx::Device::gpu);
     result.eval();
-    result.wait();
     result.detach();
     return result;
   }
@@ -301,7 +299,6 @@ nb::ndarray<> mlx_to_dlpack_impl(mx::array a, int dl_device_type) {
   {
     nb::gil_scoped_release nogil;
     a.eval();
-    a.wait();
     if (dl_device_type == nb::device::cpu::value) {
       data = a.data<T>();
     } else {
@@ -431,12 +428,11 @@ mx::array metal_dlpack_to_mlx(
   if (!mx::metal::is_available()) {
     throw std::invalid_argument("Metal DLPack import is not available.");
   }
-  auto owner =
-      std::make_shared<nb::ndarray<nb::ro, nb::c_contig>>(std::move(nd_array));
-  auto shape = get_shape(*owner);
+  auto owner = std::move(nd_array);
+  auto shape = get_shape(owner);
 
   return dispatch_dlpack_dtype(
-      owner->dtype(),
+      owner.dtype(),
       "Cannot convert Metal DLPack array to mlx array.",
       [&]<typename T>(mx::Dtype type) {
         return metal_dlpack_to_mlx_contiguous<T>(
