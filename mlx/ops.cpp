@@ -59,7 +59,7 @@ Dtype at_least_float(const Dtype& d) {
 }
 
 array inner_1d_gpu_chunked(const array& a, const array& b, Stream s) {
-  constexpr int kChunkSize = 16384;
+  constexpr int kChunkSize = 4096;
 
   int main_size = (a.size() / kChunkSize) * kChunkSize;
   int batches = main_size / kChunkSize;
@@ -5496,7 +5496,7 @@ array tensordot(
     device = b.primitive().stream().device;
   }
   if (a.ndim() == 1 && b.ndim() == 1 && axes_a.size() == 1 &&
-      axes_b.size() == 1 && device == Device::gpu && csize >= 32 * 16384) {
+      axes_b.size() == 1 && device == Device::gpu && csize >= 32 * 4096) {
     return inner_1d_gpu_chunked(a, b, stream);
   }
 
