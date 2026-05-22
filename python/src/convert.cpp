@@ -7,6 +7,10 @@
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/string.h>
 
+#if __has_include(<Metal/Metal.hpp>)
+#include <Metal/Metal.hpp>
+#endif
+
 #include "python/src/convert.h"
 #include "python/src/utils.h"
 
@@ -21,6 +25,21 @@ enum PyScalarT {
   pyfloat = 2,
   pycomplex = 3,
 };
+
+namespace {
+
+bool metal_buffer_is_private(void* ptr) {
+#if __has_include(<Metal/Metal.hpp>)
+  if (!ptr) {
+    return false;
+  }
+  auto* buf = static_cast<MTL::Buffer*>(ptr);
+  return buf->storageMode() == MTL::StorageModePrivate;
+#endif
+  return false;
+}
+
+} // namespace
 
 int check_shape_dim(int64_t dim) {
   if (dim > std::numeric_limits<int>::max() ||
@@ -178,6 +197,8 @@ mx::array metal_dlpack_to_mlx_contiguous(
         "Metal DLPack byte offset is not aligned to dtype size.");
   }
 
+  auto is_private_buffer = metal_buffer_is_private(owner->data_handle());
+
   auto out = mx::array(
       mx::allocator::Buffer(owner->data_handle()),
       shape,
@@ -196,14 +217,12 @@ mx::array metal_dlpack_to_mlx_contiguous(
     out.copy_shared_buffer(out, out.strides(), flags, out.data_size(), offset);
   }
 
-  auto is_host_accessible = out.buffer().is_host_accessible();
-  if (copy == false && !is_host_accessible) {
+  if (copy == false && is_private_buffer) {
     throw std::invalid_argument(
-        "Cannot import a non-host-accessible Metal DLPack buffer without a "
-        "copy.");
+        "Cannot import a private Metal DLPack buffer without a copy.");
   }
 
-  if (dtype || !is_host_accessible) {
+  if (dtype || is_private_buffer) {
     auto result_dtype = dtype.value_or(out.dtype());
     auto result = (result_dtype == out.dtype())
         ? mx::copy_to_new_buffer(out, mx::Device::gpu)
@@ -409,6 +428,9 @@ mx::array metal_dlpack_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
     std::optional<mx::Dtype> dtype,
     std::optional<bool> copy) {
+  if (!mx::metal::is_available()) {
+    throw std::invalid_argument("Metal DLPack import is not available.");
+  }
   auto owner =
       std::make_shared<nb::ndarray<nb::ro, nb::c_contig>>(std::move(nd_array));
   auto shape = get_shape(*owner);
