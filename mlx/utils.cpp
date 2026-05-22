@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 #include "mlx/dtype_utils.h"
@@ -118,11 +119,9 @@ void set_printoptions(PrintOptions options) {
   formatter.format_options = options;
 }
 
-void abort_with_exception(const std::exception& error) {
-  std::ostringstream msg;
-  msg << "Terminating due to uncaught exception: " << error.what();
-  std::cerr << msg.str() << std::endl;
-  std::abort();
+bool is_main_thread() {
+  static auto main_thread_id = std::this_thread::get_id();
+  return main_thread_id == std::this_thread::get_id();
 }
 
 Dtype result_type(const std::vector<array>& arrays) {
