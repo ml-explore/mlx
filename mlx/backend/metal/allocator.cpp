@@ -24,21 +24,14 @@ void* Buffer::raw_ptr() {
   if (!ptr_) {
     return nullptr;
   }
-  if (!is_host_accessible()) {
+  auto* buf = static_cast<MTL::Buffer*>(ptr_);
+  if (buf->storageMode() == MTL::StorageModePrivate) {
     throw std::runtime_error(
         "[metal::Buffer::raw_ptr] Cannot access Metal buffer contents on the "
         "host. The buffer is not CPU-addressable, for example because it uses "
         "private storage.");
   }
-  return static_cast<MTL::Buffer*>(ptr_)->contents();
-}
-
-bool Buffer::is_host_accessible() const {
-  if (!ptr_) {
-    return true;
-  }
-  auto* buf = static_cast<MTL::Buffer*>(ptr_);
-  return buf->storageMode() != MTL::StorageModePrivate;
+  return buf->contents();
 }
 
 } // namespace allocator

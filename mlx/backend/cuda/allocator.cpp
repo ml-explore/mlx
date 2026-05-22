@@ -398,14 +398,6 @@ void* Buffer::raw_ptr() {
   return cbuf.data;
 }
 
-bool Buffer::is_host_accessible() const {
-  if (!ptr_) {
-    return true;
-  }
-  auto& cbuf = *static_cast<cu::CudaBuffer*>(ptr_);
-  return cbuf.device == -1;
-}
-
 } // namespace allocator
 
 size_t get_active_memory() {

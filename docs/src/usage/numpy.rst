@@ -95,12 +95,12 @@ The arrays do not share memory:
 
 Metal DLPack inputs are different. If a PyTorch MPS tensor is passed to
 ``mx.array`` or to ``mx.from_dlpack`` with ``copy=None``, MLX shares the
-underlying Metal buffer when it is host-accessible. Private Metal buffers are
-copied into MLX-managed storage instead. Passing ``copy=False`` requires
-sharing and raises an error if a copy would be needed. MLX arrays exported to
-PyTorch with DLPack are also shared without a copy. In particular, PyTorch 2.12
-and later use shared storage for ordinary MPS tensors on Apple silicon, while
-older PyTorch versions may use private storage and require a copy on import.
+underlying Metal buffer when it is not private. Private Metal buffers are copied
+into MLX-managed storage instead. Passing ``copy=False`` requires sharing and
+raises an error if a copy would be needed. MLX arrays exported to PyTorch with
+DLPack are also shared without a copy. In particular, PyTorch 2.12 and later use
+shared storage for ordinary MPS tensors on Apple silicon, while older PyTorch
+versions may use private storage and require a copy on import.
 
 Since the buffer is shared across frameworks, synchronization has to be managed
 explicitly. After PyTorch writes to an MPS tensor, call
@@ -120,7 +120,7 @@ need the update to be visible to another framework sharing the same buffer:
 
   b = torch.arange(3, device="mps", dtype=torch.float32)
   torch.mps.synchronize()
-  c = mx.array(b) # zero-copy if the Metal buffer is host-accessible
+  c = mx.array(b) # zero-copy if the Metal buffer is not private
 
   b.add_(10)
   torch.mps.synchronize()
