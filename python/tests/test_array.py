@@ -2175,6 +2175,17 @@ class TestArray(mlx_tests.MLXTestCase):
         arr_pass = xp.asarray(existing)
         self.assertEqual(arr_pass.tolist(), [4, 5, 6])
 
+    def test_asarray_copy(self):
+        existing = mx.array([1, 2, 3])
+
+        self.assertEqual(mx.asarray(existing, copy=True).tolist(), [1, 2, 3])
+        self.assertEqual(
+            mx.asarray(existing, dtype=mx.float32, copy=True).dtype, mx.float32
+        )
+
+        with self.assertRaises(ValueError):
+            mx.asarray(existing, copy=False)
+
     def test_asarray(self):
         # List inputs
         self.assertEqual(mx.asarray([1, 2, 3]).tolist(), [1, 2, 3])

@@ -1765,23 +1765,35 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "asarray",
-      [](const nb::object& a, std::optional<mx::Dtype> dtype) {
+      [](const nb::object& a,
+         std::optional<mx::Dtype> dtype,
+         std::optional<bool> copy) {
+        if (copy.has_value() && !*copy) {
+          throw std::invalid_argument("[asarray] copy=False is not supported.");
+        }
         return create_array(a, dtype);
       },
       nb::arg(),
       "dtype"_a = nb::none(),
+      nb::kw_only(),
+      "copy"_a = nb::none(),
       nb::sig(
-          "def asarray(a: Union[scalar, array, Sequence], dtype: "
-          "Optional[Dtype] = None) -> array"),
+          "def asarray(a: Union[scalar, array, Sequence], dtype: Optional[Dtype] = None, *, copy: Optional[bool] = None) -> array"),
       R"pbdoc(
         Convert the input to an array.
 
         Args:
             a: Input data.
             dtype (Dtype, optional): The desired data-type for the array.
+            copy (bool, optional): Must be ``True`` or unspecified. ``False``
+              is not supported, since MLX has no in-place operations and
+              cannot return a non-copying view.
 
         Returns:
             array: An array interpretation of the input.
+
+        Raises:
+            ValueError: If ``copy`` is ``False``.
       )pbdoc");
   m.def(
       "zeros_like",
