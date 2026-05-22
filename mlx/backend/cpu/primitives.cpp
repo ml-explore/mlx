@@ -88,11 +88,6 @@ void BroadcastAxes::eval_cpu(const std::vector<array>& inputs, array& out) {
 void Copy::eval_cpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
-void CopyInto::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  out.copy_shared_buffer(inputs[0]);
-  copy_cpu_inplace(inputs[1], out, CopyType::GeneralGeneral, stream());
-}
 void CustomTransforms::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {

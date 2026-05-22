@@ -77,90 +77,58 @@ PyTorch
 
 PyTorch supports DLPack inputs and can import MLX arrays directly.
 MLX can also import PyTorch tensors through DLPack with ``mx.array`` or
-``mx.from_dlpack``.
-
-Creating an MLX array from a CPU tensor copies the data into MLX-owned storage.
-The arrays do not share memory:
+``mx.from_dlpack``. Use ``torch.as_tensor`` to import an MLX array with
+DLPack; ``torch.tensor`` copies the data instead:
 
 .. code-block:: python
 
   import mlx.core as mx
   import torch
 
-  b = torch.arange(3).cpu()
+  a = mx.arange(3, dtype=mx.float32)
+  mx.eval(a)
+
+  shared = torch.as_tensor(a)
+  copied = torch.tensor(a)
+
+Creating an MLX array from a CPU tensor copies the data into MLX-owned storage.
+The arrays do not share memory:
+
+.. code-block:: python
+
+  b = torch.arange(3)
   c = mx.array(b)
 
   b += 10
   print(c.tolist()) # [0, 1, 2]
 
 Metal DLPack inputs are different. If a PyTorch MPS tensor is passed to
-``mx.array`` or to ``mx.from_dlpack`` with ``copy=None``, MLX shares the
-underlying Metal buffer when it is not private. Private Metal buffers are copied
-into MLX-managed storage instead. Passing ``copy=False`` requires sharing and
-raises an error if a copy would be needed. MLX arrays exported to PyTorch with
-DLPack are also shared without a copy. In particular, PyTorch 2.12 and later use
-shared storage for ordinary MPS tensors on Apple silicon, while older PyTorch
-versions may use private storage and require a copy on import.
+``mx.array`` or to ``mx.from_dlpack`` with ``copy=None``, MLX imports it
+without a copy when the underlying Metal buffer is not private. Private Metal
+buffers are copied into MLX-managed storage instead. Passing ``copy=False``
+requires zero-copy import and raises an error if a copy would be needed.
+Passing ``copy=True`` asks MLX to create a new array instead of reusing the
+Metal buffer. MLX arrays exported to PyTorch with DLPack are also exported
+without a copy on Metal.
 
-Since the buffer is shared across frameworks, synchronization has to be managed
-explicitly. After PyTorch writes to an MPS tensor, call
-``torch.mps.synchronize()`` before reading the shared data from MLX. After MLX
-writes to the shared array, call ``mx.eval`` on the MLX result before reading
-the shared data from PyTorch. Without these synchronization points, the other
-framework may read the shared buffer before the producer has finished writing,
-so it can observe stale data.
-
-Do not rely on regular MLX update expressions to preserve sharing. MLX may
-rebind an array to a new buffer when evaluating an expression, while PyTorch
-continues to reference the original shared buffer. Use
-:meth:`mlx.core.array.copy` to write into an array's existing storage when you
-need the update to be visible to another framework sharing the same buffer:
+In particular, PyTorch 2.12 and later use shared storage for ordinary MPS
+tensors on Apple silicon, while older PyTorch versions may use private storage
+and require a copy on import. DLPack conversion does not synchronize pending
+Metal work; synchronize or evaluate the producing framework before reading the
+converted array.
 
 .. code-block:: python
 
   b = torch.arange(3, device="mps", dtype=torch.float32)
   torch.mps.synchronize()
   c = mx.array(b) # zero-copy if the Metal buffer is not private
-
-  b.add_(10)
-  torch.mps.synchronize()
-  print(c.tolist()) # [10.0, 11.0, 12.0]
-
-  c.copy(mx.array([4, 5, 6], dtype=mx.float32))
-  mx.eval(c)
-  print(b.cpu()) # tensor([4., 5., 6.])
-
-The same synchronization rules apply when PyTorch imports an MLX array through
-DLPack. Use ``torch.as_tensor`` to share the buffer with PyTorch; ``torch.tensor``
-copies the data instead:
+  d = mx.from_dlpack(b, copy=True) # explicit copy
 
 .. code-block:: python
 
   a = mx.arange(3, dtype=mx.float32)
   mx.eval(a)
-  b = torch.as_tensor(a)
-
-  b.add_(10)
-  torch.mps.synchronize()
-  print(a.tolist()) # [10.0, 11.0, 12.0]
-
-  a.copy(mx.array([4, 5, 6], dtype=mx.float32))
-  mx.eval(a)
-  print(b.cpu()) # tensor([4., 5., 6.])
-
-Use ``mx.from_dlpack`` when you need to control the copy behavior. Specifying
-``copy=True`` asks MLX to create a new array instead of sharing the Metal
-buffer:
-
-.. code-block:: python
-
-  b = torch.arange(3, device="mps", dtype=torch.float32)
-  torch.mps.synchronize()
-  c = mx.from_dlpack(b, copy=True)
-
-  b.add_(10)
-  torch.mps.synchronize()
-  print(c.tolist()) # [0.0, 1.0, 2.0]
+  b = torch.as_tensor(a) # zero-copy DLPack import on Metal
 
 JAX
 ---

@@ -956,22 +956,6 @@ class TestArray(mlx_tests.MLXTestCase):
                 y -= 1
                 self.assertEqualArray(y, x - 1)
 
-    def test_array_copy_method(self):
-        x = mx.array([1, 2, 3])
-        y = x.copy(mx.array([4, 5, 6]))
-        self.assertIs(y, x)
-        mx.eval(x)
-        self.assertEqualArray(x, mx.array([4, 5, 6]))
-
-        x.copy(9)
-        mx.eval(x)
-        self.assertEqualArray(x, mx.array([9, 9, 9]))
-
-        x.copy(np.array([1.5, 2.5, 3.5]))
-        mx.eval(x)
-        self.assertEqual(x.dtype, mx.int32)
-        self.assertEqualArray(x, mx.array([1, 2, 3]))
-
     def test_indexing(self):
         # Only ellipsis is a no-op
         a_mlx = mx.array([1])[...]
@@ -2111,7 +2095,7 @@ class TestArray(mlx_tests.MLXTestCase):
         torch.mps.synchronize()
         self.assertEqual((y + 1).tolist(), (x + 1).cpu().numpy().tolist())
 
-        y.copy(mx.full(y.shape, 7.0))
+        y += 10
         mx.eval(y)
         self.assertEqual(x.cpu().numpy().tolist(), y.tolist())
 
@@ -2217,7 +2201,7 @@ class TestArray(mlx_tests.MLXTestCase):
         torch.mps.synchronize()
         self.assertEqual(y.tolist(), [10.0, 11.0, 12.0])
 
-        y.copy(mx.array([20, 21, 22], dtype=mx.float32))
+        y += 10
         mx.eval(y)
         self.assertEqual(x.cpu().numpy().tolist(), [20.0, 21.0, 22.0])
 

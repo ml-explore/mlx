@@ -296,20 +296,6 @@ array copy(array a, StreamOrDevice s /* = {} */) {
       {std::move(a)});
 }
 
-array copy_into(
-    const array& dst,
-    const array& src,
-    StreamOrDevice s /* = {} */) {
-  auto stream = to_stream(s);
-  auto update =
-      broadcast_to(astype(src, dst.dtype(), stream), dst.shape(), stream);
-  return array(
-      dst.shape(),
-      dst.dtype(),
-      std::make_shared<CopyInto>(stream),
-      {dst, std::move(update)});
-}
-
 array copy_to_new_buffer(array a, StreamOrDevice s /* = {} */) {
   auto copied_shape = a.shape(); // |a| will be moved
   auto dtype = a.dtype();

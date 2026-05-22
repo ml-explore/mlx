@@ -542,29 +542,6 @@ void init_array(nb::module_& m) {
           [](const mx::array& self, nb::dict) { return mx::array(self); },
           "memo"_a)
       .def(
-          "copy",
-          [](mx::array& a,
-             const ScalarOrArray& v,
-             mx::StreamOrDevice s) -> mx::array& {
-            a.eval();
-            auto out = mx::copy_into(a, to_array(v, a.dtype()), s);
-            a.overwrite_descriptor(out);
-            return a;
-          },
-          "src"_a,
-          "stream"_a = nb::none(),
-          nb::rv_policy::none,
-          nb::sig(
-              "def copy(self, src: Union[scalar, array, DLPackCompatible], /, *, stream: Union[None, Stream, Device] = None) -> array"),
-          R"pbdoc(
-            Copy ``src`` into the array's existing storage.
-
-            ``src`` can be a scalar, an MLX array, or a DLPack-compatible
-            array. The destination array keeps its shape, dtype, and storage.
-            ``src`` is cast to the destination dtype and broadcast to the
-            destination shape before being written.
-          )pbdoc")
-      .def(
           "__add__",
           [](const mx::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
