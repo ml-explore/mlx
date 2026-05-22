@@ -2175,6 +2175,22 @@ class TestArray(mlx_tests.MLXTestCase):
         arr_pass = xp.asarray(existing)
         self.assertEqual(arr_pass.tolist(), [4, 5, 6])
 
+    def test_array_namespace_from_dlpack(self):
+        xp = mx.array(1.0).__array_namespace__()
+        self.assertTrue(hasattr(xp, "from_dlpack"))
+
+        existing = mx.array([1, 2, 3])
+        arr = xp.from_dlpack(existing)
+        self.assertIsInstance(arr, mx.array)
+        self.assertEqual(arr.tolist(), [1, 2, 3])
+
+        # device and copy=False are not supported
+        with self.assertRaises(ValueError):
+            xp.from_dlpack(existing, copy=False)
+
+        with self.assertRaises(ValueError):
+            xp.from_dlpack(existing, device="cpu")
+
     def test_asarray_copy(self):
         existing = mx.array([1, 2, 3])
 

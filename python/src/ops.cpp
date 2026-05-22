@@ -1796,6 +1796,48 @@ void init_ops(nb::module_& m) {
             ValueError: If ``copy`` is ``False``.
       )pbdoc");
   m.def(
+      "from_dlpack",
+      [](const nb::object& x,
+         const nb::object& device,
+         std::optional<bool> copy) {
+        if (!device.is_none()) {
+          throw std::invalid_argument(
+              "[from_dlpack] device keyword is not supported.");
+        }
+        if (copy.has_value() && !*copy) {
+          throw std::invalid_argument(
+              "[from_dlpack] copy=False is not supported.");
+        }
+        return create_array(x, std::nullopt);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "device"_a = nb::none(),
+      "copy"_a = nb::none(),
+      nb::sig(
+          "def from_dlpack(x: DLPackCompatible, /, *, device: Optional[Any] = None, copy: Optional[bool] = None) -> array"),
+      R"pbdoc(
+        Construct an mlx array from a DLPack-compatible object.
+
+        The input must implement the ``__dlpack__`` and ``__dlpack_device__``
+        methods as described in the
+        `Python array API <https://data-apis.org/array-api/latest/API_specification/generated/array_api.from_dlpack.html>`_.
+
+        Args:
+            x: Input DLPack-compatible object.
+            device: Must be ``None``. Specifying a target device is not
+              supported.
+            copy (bool, optional): Must be ``True`` or unspecified. ``False``
+              is not supported, since MLX has no in-place operations and
+              cannot return a non-copying view.
+
+        Returns:
+            array: An mlx array constructed from the input.
+
+        Raises:
+            ValueError: If ``device`` is not ``None`` or ``copy`` is ``False``.
+      )pbdoc");
+  m.def(
       "zeros_like",
       &mx::zeros_like,
       nb::arg(),
