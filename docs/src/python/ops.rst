@@ -77,6 +77,7 @@ Operations
    floor
    floor_divide
    full
+   from_dlpack
    gather_mm
    gather_qmm
    greater
