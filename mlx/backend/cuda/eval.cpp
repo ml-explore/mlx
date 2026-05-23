@@ -13,7 +13,7 @@
 namespace mlx::core::gpu {
 
 void init() {
-  // Force initalization of CUDA, so CUDA runtime get destroyed last.
+  // Force initialization of CUDA, so CUDA runtime get destroyed last.
   cudaFree(nullptr);
   // Make sure CUDA event pool get destroyed after device and stream.
   mlx::core::cu::CudaEvent::init_pool();
