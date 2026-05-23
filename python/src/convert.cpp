@@ -215,6 +215,10 @@ mx::array nd_array_to_mlx(
     std::optional<mx::Dtype> dst_dtype,
     std::optional<nb::dlpack::dtype> src_dtype,
     std::optional<bool> copy) {
+  if (copy.has_value() && copy.value() == false && dst_dtype) {
+    throw std::invalid_argument(
+        "Cannot convert DLPack array to requested dtype without a copy.");
+  }
   switch (nd_array.device_type()) {
     case nb::device::cpu::value: {
       if (copy.has_value() && copy.value() == false) {
@@ -655,10 +659,22 @@ mx::array array_from_list(nb::tuple pl, std::optional<mx::Dtype> dtype) {
   return array_from_list_impl(pl, dtype);
 }
 
-mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
+void check_copy_false(std::optional<bool> copy) {
+  if (copy.has_value() && copy.value() == false) {
+    throw std::invalid_argument(
+        "Unable to avoid copy while creating an array as requested.");
+  }
+}
+
+mx::array create_array(
+    nb::object v,
+    std::optional<mx::Dtype> t,
+    std::optional<bool> copy) {
   if (nb::isinstance<nb::bool_>(v)) {
+    check_copy_false(copy);
     return mx::array(nb::cast<bool>(v), t.value_or(mx::bool_));
   } else if (nb::isinstance<nb::int_>(v)) {
+    check_copy_false(copy);
     auto val = nb::cast<int64_t>(v);
     auto default_type = (val > std::numeric_limits<int>::max() ||
                          val < std::numeric_limits<int>::min())
@@ -666,6 +682,7 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
         : mx::int32;
     return mx::array(val, t.value_or(default_type));
   } else if (nb::isinstance<nb::float_>(v)) {
+    check_copy_false(copy);
     auto out_type = t.value_or(mx::float32);
     if (out_type == mx::float64) {
       return mx::array(nb::cast<double>(v), out_type);
@@ -673,16 +690,24 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
       return mx::array(nb::cast<float>(v), out_type);
     }
   } else if (PyComplex_Check(v.ptr())) {
+    check_copy_false(copy);
     return mx::array(
         static_cast<mx::complex64_t>(nb::cast<std::complex<float>>(v)),
         t.value_or(mx::complex64));
   } else if (nb::isinstance<nb::list>(v)) {
+    check_copy_false(copy);
     return array_from_list(nb::cast<nb::list>(v), t);
   } else if (nb::isinstance<nb::tuple>(v)) {
+    check_copy_false(copy);
     return array_from_list(nb::cast<nb::tuple>(v), t);
   } else if (nb::isinstance<mx::array>(v)) {
     auto arr = nb::cast<mx::array>(v);
-    return mx::astype(arr, t.value_or(arr.dtype()));
+    auto dtype = t.value_or(arr.dtype());
+    if (copy.has_value() && copy.value() == false && dtype != arr.dtype()) {
+      throw std::invalid_argument(
+          "Unable to avoid copy while creating an array as requested.");
+    }
+    return mx::astype(arr, dtype, copy);
   } else if (nb::ndarray_check(v)) {
     using ContigArray = nb::ndarray<nb::ro, nb::c_contig>;
     ContigArray nd;
@@ -701,9 +726,10 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
         *t != mlx_dtype_from_dlpack(type, "Cannot convert array to mlx.")) {
       dst_dtype = t;
     }
-    return nd_array_to_mlx(nd, dst_dtype, nb_dtype);
+    return nd_array_to_mlx(nd, dst_dtype, nb_dtype, copy);
   } else {
+    check_copy_false(copy);
     auto arr = to_array_with_accessor(v);
-    return mx::astype(arr, t.value_or(arr.dtype()));
+    return mx::astype(arr, t.value_or(arr.dtype()), copy);
   }
 }

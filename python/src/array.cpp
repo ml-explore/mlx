@@ -297,7 +297,7 @@ void init_array(nb::module_& m) {
       .def(
           "__init__",
           [](mx::array* aptr, nb::object v, std::optional<mx::Dtype> t) {
-            new (aptr) mx::array(create_array(v, t));
+            new (aptr) mx::array(create_array(v, t, true));
           },
           "val"_a,
           "dtype"_a = nb::none(),
