@@ -443,6 +443,7 @@ class MLX_API array {
       size_t data_size,
       Strides strides,
       Flags flags,
+      int64_t offset = 0,
       Deleter d = allocator::free);
 
   void copy_shared_buffer(

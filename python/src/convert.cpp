@@ -7,13 +7,10 @@
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/string.h>
 
-#if __has_include(<Metal/Metal.hpp>)
-#include <Metal/Metal.hpp>
-#endif
-
 #include "python/src/convert.h"
 #include "python/src/utils.h"
 
+#include "mlx/allocator.h"
 #include "mlx/backend/cuda/cuda.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/ops.h"
@@ -25,21 +22,6 @@ enum PyScalarT {
   pyfloat = 2,
   pycomplex = 3,
 };
-
-namespace {
-
-bool metal_buffer_is_private(void* ptr) {
-#if __has_include(<Metal/Metal.hpp>)
-  if (!ptr) {
-    return false;
-  }
-  auto* buf = static_cast<MTL::Buffer*>(ptr);
-  return buf->storageMode() == MTL::StorageModePrivate;
-#endif
-  return false;
-}
-
-} // namespace
 
 int check_shape_dim(int64_t dim) {
   if (dim > std::numeric_limits<int>::max() ||
@@ -177,7 +159,8 @@ mx::array metal_dlpack_to_mlx_contiguous(
         "Metal DLPack byte offset is not aligned to dtype size.");
   }
 
-  auto is_private_buffer = metal_buffer_is_private(owner.data_handle());
+  auto can_reuse_buffer =
+      mx::allocator::can_reuse_alien_buffer(owner.data_handle());
 
   auto out = mx::array(
       mx::allocator::Buffer(owner.data_handle()),
@@ -185,28 +168,23 @@ mx::array metal_dlpack_to_mlx_contiguous(
       type,
       [](mx::allocator::Buffer) {});
   auto flags = out.flags();
+  auto offset = static_cast<int64_t>(byte_offset / itemsize);
   out.set_data(
       out.buffer(),
       out.data_size(),
       out.strides(),
       flags,
+      offset,
       [owner = std::move(owner)](mx::allocator::Buffer) {});
 
-  auto offset = static_cast<int64_t>(byte_offset / itemsize);
-  if (offset != 0) {
-    out.copy_shared_buffer(out, out.strides(), flags, out.data_size(), offset);
-  }
-
-  if (copy.has_value() && copy.value() == false && is_private_buffer) {
+  if (copy.has_value() && copy.value() == false && !can_reuse_buffer) {
     throw std::invalid_argument(
         "Cannot import a private Metal DLPack buffer without a copy.");
   }
 
-  if (dtype || is_private_buffer) {
+  if (dtype || !can_reuse_buffer) {
     auto result_dtype = dtype.value_or(out.dtype());
-    auto result = (result_dtype == out.dtype())
-        ? mx::copy_to_new_buffer(out, mx::Device::gpu)
-        : mx::astype(out, result_dtype, mx::Device::gpu);
+    auto result = mx::astype(out, result_dtype, true, mx::Device::gpu);
     result.eval();
     result.detach();
     return result;
@@ -718,12 +696,12 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
       nd = nb::cast<ContigArray>(v);
     }
     auto type = nb_dtype.value_or(nd.dtype());
-    std::optional<mx::Dtype> copy_dtype;
+    std::optional<mx::Dtype> dst_dtype;
     if (t &&
         *t != mlx_dtype_from_dlpack(type, "Cannot convert array to mlx.")) {
-      copy_dtype = t;
+      dst_dtype = t;
     }
-    return nd_array_to_mlx(nd, copy_dtype, nb_dtype);
+    return nd_array_to_mlx(nd, dst_dtype, nb_dtype);
   } else {
     auto arr = to_array_with_accessor(v);
     return mx::astype(arr, t.value_or(arr.dtype()));

@@ -385,7 +385,9 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def(
           "astype",
-          &mx::astype,
+          [](const mx::array& a, mx::Dtype dtype, mx::StreamOrDevice s) {
+            return mx::astype(a, dtype, s);
+          },
           "dtype"_a,
           "stream"_a = nb::none(),
           R"pbdoc(
@@ -516,7 +518,7 @@ void init_array(nb::module_& m) {
              std::optional<std::tuple<int, int>> dl_device,
              std::optional<bool> copy) {
             if (copy.value_or(false)) {
-              return mlx_to_dlpack(mx::copy_to_new_buffer(a), dl_device);
+              return mlx_to_dlpack(mx::astype(a, a.dtype(), true), dl_device);
             }
             return mlx_to_dlpack(a, dl_device);
           },

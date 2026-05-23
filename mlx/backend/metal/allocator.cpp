@@ -34,6 +34,14 @@ void* Buffer::raw_ptr() {
   return buf->contents();
 }
 
+bool can_reuse_alien_buffer(void* ptr) {
+  if (!ptr) {
+    return true;
+  }
+  auto* buf = static_cast<MTL::Buffer*>(ptr);
+  return buf->storageMode() != MTL::StorageModePrivate;
+}
+
 } // namespace allocator
 
 namespace metal {

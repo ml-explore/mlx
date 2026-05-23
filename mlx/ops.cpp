@@ -261,13 +261,16 @@ array linspace(
       s);
 }
 
-array astype(array a, Dtype dtype, StreamOrDevice s /* = {} */) {
-  if (dtype == a.dtype()) {
+array astype(
+    array a,
+    Dtype dtype,
+    std::optional<bool> copy,
+    StreamOrDevice s /* = {} */) {
+  if (dtype == a.dtype() && !copy.value_or(false)) {
     return a;
   }
-  auto copied_shape = a.shape(); // |a| will be moved
   return array(
-      std::move(copied_shape),
+      a.shape(),
       dtype,
       std::make_shared<AsType>(to_stream(s), dtype),
       {std::move(a)});
@@ -297,16 +300,6 @@ array copy(array a, StreamOrDevice s /* = {} */) {
       std::move(copied_shape),
       dtype,
       std::make_shared<Copy>(to_stream(s)),
-      {std::move(a)});
-}
-
-array copy_to_new_buffer(array a, StreamOrDevice s /* = {} */) {
-  auto copied_shape = a.shape(); // |a| will be moved
-  auto dtype = a.dtype();
-  return array(
-      std::move(copied_shape),
-      dtype,
-      std::make_shared<AsType>(to_stream(s), dtype),
       {std::move(a)});
 }
 
