@@ -76,9 +76,10 @@ PyTorch
 -------
 
 PyTorch supports DLPack inputs and can import MLX arrays directly.
-MLX can also import PyTorch tensors through DLPack with ``mx.array`` or
+MLX can also import PyTorch tensors through DLPack with ``mx.asarray`` or
 ``mx.from_dlpack``. Use ``torch.as_tensor`` to import an MLX array with
-DLPack; ``torch.tensor`` copies the data instead:
+DLPack; ``torch.tensor`` copies the data instead. Similarly, ``mx.asarray``
+can share DLPack inputs when possible, while ``mx.array`` copies:
 
 .. code-block:: python
 
@@ -103,13 +104,14 @@ The arrays do not share memory:
   print(c.tolist()) # [0, 1, 2]
 
 Metal DLPack inputs are different. If a PyTorch MPS tensor is passed to
-``mx.array`` or to ``mx.from_dlpack`` with ``copy=None``, MLX imports it
+``mx.asarray`` or to ``mx.from_dlpack`` with ``copy=None``, MLX imports it
 without a copy when the underlying Metal buffer is not private. Private Metal
 buffers are copied into MLX-managed storage instead. Passing ``copy=False``
 requires zero-copy import and raises an error if a copy would be needed.
 Passing ``copy=True`` asks MLX to create a new array instead of reusing the
-Metal buffer. MLX arrays exported to PyTorch with DLPack are also exported
-without a copy on Metal.
+Metal buffer. ``mx.array`` also creates a new array instead of reusing the
+Metal buffer. MLX arrays exported to PyTorch with DLPack are exported without a
+copy on Metal.
 
 In particular, PyTorch 2.12 and later use shared storage for ordinary MPS
 tensors on Apple silicon, while older PyTorch versions may use private storage
@@ -121,7 +123,7 @@ converted array.
 
   b = torch.arange(3, device="mps", dtype=torch.float32)
   torch.mps.synchronize()
-  c = mx.array(b) # zero-copy if the Metal buffer is not private
+  c = mx.asarray(b) # zero-copy if the Metal buffer can be reused
   d = mx.from_dlpack(b, copy=True) # explicit copy
 
 .. code-block:: python
