@@ -2,6 +2,7 @@
 #pragma once
 
 #include <optional>
+#include <tuple>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
@@ -69,14 +70,13 @@ mx::array nd_array_to_mlx(
 nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a);
 nb::ndarray<> mlx_to_dlpack(
     const mx::array& a,
-    std::optional<int> dl_device_type = std::nullopt);
+    std::optional<std::tuple<int, int>> dl_device = std::nullopt);
 
 nb::object to_scalar(mx::array& a);
 
 nb::object tolist(mx::array& a);
 
 mx::array create_array(nb::object v, std::optional<mx::Dtype> t);
-mx::array from_dlpack(nb::object v, std::optional<bool> copy);
 mx::array array_from_list(nb::list pl, std::optional<mx::Dtype> dtype);
 mx::array array_from_list(nb::tuple pl, std::optional<mx::Dtype> dtype);
 

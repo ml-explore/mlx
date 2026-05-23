@@ -1851,8 +1851,8 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "from_dlpack",
-      [](const nb::object& x, std::optional<bool> copy) {
-        return from_dlpack(x, copy);
+      [](nb::ndarray<nb::ro, nb::c_contig> x, std::optional<bool> copy) {
+        return nd_array_to_mlx(x, std::nullopt, std::nullopt, copy);
       },
       nb::arg(),
       nb::kw_only(),
