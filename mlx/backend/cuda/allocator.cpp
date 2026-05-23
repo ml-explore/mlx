@@ -416,6 +416,14 @@ void* Buffer::raw_ptr() {
   return cbuf.data;
 }
 
+bool can_reuse_alien_buffer(void* ptr) {
+  if (!ptr) {
+    return true;
+  }
+  auto& cbuf = *static_cast<cu::CudaBuffer*>(ptr);
+  return cbuf.device == -1;
+}
+
 } // namespace allocator
 
 size_t get_active_memory() {

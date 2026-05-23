@@ -64,6 +64,7 @@ array array::unsafe_weak_copy(const array& other) {
       other.data_size(),
       other.strides(),
       other.flags(),
+      0,
       [](auto) {});
   cpy.array_desc_->offset = other.array_desc_->offset;
   return cpy;
@@ -180,9 +181,10 @@ void array::set_data(
     size_t data_size,
     Strides strides,
     Flags flags,
+    int64_t offset,
     Deleter d) {
   array_desc_->data = std::make_shared<Data>(buffer, d);
-  array_desc_->offset = 0;
+  array_desc_->offset = itemsize() * offset;
   array_desc_->data_size = data_size;
   array_desc_->strides = std::move(strides);
   array_desc_->flags = flags;
