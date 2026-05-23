@@ -2,11 +2,13 @@
 #include <cstdint>
 #include <cstring>
 #include <sstream>
+#include <tuple>
 
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/typing.h>
@@ -501,21 +503,12 @@ void init_array(nb::module_& m) {
           [](const mx::array& a,
              nb::object,
              nb::object,
-             nb::object dl_device,
-             nb::object copy) {
-            std::optional<int> dl_device_type;
-            if (!dl_device.is_none()) {
-              auto device = nb::cast<nb::tuple>(dl_device);
-              if (nb::len(device) != 2) {
-                throw nb::type_error(
-                    "dl_device must be None or a tuple[int, int]");
-              }
-              dl_device_type = nb::cast<int>(device[0]);
+             std::optional<std::tuple<int, int>> dl_device,
+             std::optional<bool> copy) {
+            if (copy.value_or(false)) {
+              return mlx_to_dlpack(mx::copy_to_new_buffer(a), dl_device);
             }
-            if (!copy.is_none() && nb::cast<bool>(copy)) {
-              return mlx_to_dlpack(mx::copy_to_new_buffer(a), dl_device_type);
-            }
-            return mlx_to_dlpack(a, dl_device_type);
+            return mlx_to_dlpack(a, dl_device);
           },
           nb::kw_only(),
           "stream"_a = nb::none(),

@@ -2,6 +2,7 @@
 
 #include <limits>
 #include <sstream>
+#include <tuple>
 
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/string.h>
@@ -157,54 +158,6 @@ nb::dlpack::dtype mlx_dtype_to_dl_dtype(mx::Dtype dtype) {
   }
 }
 
-mx::array metal_dlpack_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig> nd_array,
-    std::optional<mx::Dtype> dtype,
-    std::optional<bool> copy);
-
-mx::array nd_array_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig> nd_array,
-    std::optional<mx::Dtype> dst_dtype,
-    std::optional<nb::dlpack::dtype> src_dtype,
-    std::optional<bool> copy) {
-  switch (nd_array.device_type()) {
-    case nb::device::cpu::value: {
-      if (copy.has_value() && copy.value() == false) {
-        throw std::invalid_argument(
-            "Cannot import a CPU DLPack array without a copy.");
-      }
-      auto shape = get_shape(nd_array);
-      auto type = src_dtype.value_or(nd_array.dtype());
-      return dispatch_dlpack_dtype(
-          type,
-          [&]<typename T>(mx::Dtype default_dtype) {
-            return nd_array_to_mlx_contiguous<T>(
-                nd_array, shape, dst_dtype.value_or(default_dtype));
-          },
-          "Cannot convert numpy array to mlx array.");
-    }
-    case nb::device::metal::value:
-      if (copy.has_value() && copy.value() == true && !dst_dtype) {
-        dst_dtype = mlx_dtype_from_dlpack(
-            nd_array.dtype(),
-            "Cannot convert Metal DLPack array to mlx array.");
-      }
-      return metal_dlpack_to_mlx(std::move(nd_array), dst_dtype, copy);
-    case nb::device::cuda::value:
-    case nb::device::cuda_managed::value:
-      throw std::invalid_argument("CUDA DLPack import is not supported.");
-    default:
-      throw std::invalid_argument("Unsupported DLPack device.");
-  }
-}
-
-mx::array from_dlpack(nb::object v, std::optional<bool> copy) {
-  using ContigArray = nb::ndarray<nb::ro, nb::c_contig>;
-  auto nd = nb::cast<ContigArray>(v);
-  return nd_array_to_mlx(
-      std::move(nd), std::nullopt, std::nullopt, std::move(copy));
-}
-
 template <typename T>
 mx::array metal_dlpack_to_mlx_contiguous(
     nb::ndarray<nb::ro, nb::c_contig> owner,
@@ -259,6 +212,60 @@ mx::array metal_dlpack_to_mlx_contiguous(
     return result;
   }
   return out;
+}
+
+mx::array metal_dlpack_to_mlx(
+    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+    std::optional<mx::Dtype> dtype,
+    std::optional<bool> copy) {
+  if (!mx::metal::is_available()) {
+    throw std::invalid_argument("Metal DLPack import is not available.");
+  }
+  auto shape = get_shape(nd_array);
+
+  return dispatch_dlpack_dtype(
+      nd_array.dtype(),
+      [&]<typename T>(mx::Dtype type) {
+        return metal_dlpack_to_mlx_contiguous<T>(
+            nd_array, shape, type, dtype, copy);
+      },
+      "Cannot convert Metal DLPack array to mlx array.");
+}
+
+mx::array nd_array_to_mlx(
+    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+    std::optional<mx::Dtype> dst_dtype,
+    std::optional<nb::dlpack::dtype> src_dtype,
+    std::optional<bool> copy) {
+  switch (nd_array.device_type()) {
+    case nb::device::cpu::value: {
+      if (copy.has_value() && copy.value() == false) {
+        throw std::invalid_argument(
+            "Cannot import a CPU DLPack array without a copy.");
+      }
+      auto shape = get_shape(nd_array);
+      auto type = src_dtype.value_or(nd_array.dtype());
+      return dispatch_dlpack_dtype(
+          type,
+          [&]<typename T>(mx::Dtype default_dtype) {
+            return nd_array_to_mlx_contiguous<T>(
+                nd_array, shape, dst_dtype.value_or(default_dtype));
+          },
+          "Cannot convert numpy array to mlx array.");
+    }
+    case nb::device::metal::value:
+      if (copy.has_value() && copy.value() == true && !dst_dtype) {
+        dst_dtype = mlx_dtype_from_dlpack(
+            nd_array.dtype(),
+            "Cannot convert Metal DLPack array to mlx array.");
+      }
+      return metal_dlpack_to_mlx(nd_array, dst_dtype, copy);
+    case nb::device::cuda::value:
+    case nb::device::cuda_managed::value:
+      throw std::invalid_argument("CUDA DLPack import is not supported.");
+    default:
+      throw std::invalid_argument("Unsupported DLPack device.");
+  }
 }
 
 template <typename T, typename... NDParams>
@@ -320,44 +327,14 @@ nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a) {
   return mlx_to_nd_array<nb::numpy>(a);
 }
 
-nb::ndarray<>
-mlx_to_dlpack_impl(mx::array a, int dl_device_type, nb::dlpack::dtype dtype) {
-  void* data = nullptr;
-  uint64_t byte_offset = 0;
-  {
-    nb::gil_scoped_release nogil;
-    a.eval();
-    if (dl_device_type == nb::device::cpu::value) {
-      data = static_cast<char*>(a.buffer().raw_ptr()) + a.offset();
-    } else {
-      data = a.buffer().ptr();
-      byte_offset = a.offset();
-    }
-  }
-
-  std::vector<size_t> shape(a.shape().begin(), a.shape().end());
-  auto owner = nb::cast(a);
-  return nb::ndarray<>(
-      data,
-      a.ndim(),
-      shape.data(),
-      /* owner= */ owner,
-      a.strides().data(),
-      dtype,
-      dl_device_type,
-      0,
-      '\0',
-      byte_offset);
-}
-
 nb::ndarray<> mlx_to_dlpack(
     const mx::array& a,
-    std::optional<int> dl_device_type) {
-  int device_type = dl_device_type.value_or(
-      mx::metal::is_available()
-          ? nb::device::metal::value
-          : (mx::cu::is_available() ? nb::device::cuda_managed::value
-                                    : nb::device::cpu::value));
+    std::optional<std::tuple<int, int>> dl_device) {
+  auto default_device = mx::metal::is_available()
+      ? std::tuple{nb::device::metal::value, 0}
+      : (mx::cu::is_available() ? std::tuple{nb::device::cuda_managed::value, 0}
+                                : std::tuple{nb::device::cpu::value, 0});
+  auto [device_type, device_id] = dl_device.value_or(default_device);
 
   if (device_type == nb::device::cuda::value ||
       device_type == nb::device::cuda_managed::value) {
@@ -372,7 +349,33 @@ nb::ndarray<> mlx_to_dlpack(
     throw nb::buffer_error("Metal DLPack export is not available.");
   }
 
-  return mlx_to_dlpack_impl(a, device_type, mlx_dtype_to_dl_dtype(a.dtype()));
+  auto arr = a;
+  void* data = nullptr;
+  uint64_t byte_offset = 0;
+  {
+    nb::gil_scoped_release nogil;
+    arr.eval();
+    if (device_type == nb::device::cpu::value) {
+      data = static_cast<char*>(arr.buffer().raw_ptr()) + arr.offset();
+    } else {
+      data = arr.buffer().ptr();
+      byte_offset = arr.offset();
+    }
+  }
+
+  std::vector<size_t> shape(arr.shape().begin(), arr.shape().end());
+  auto owner = nb::cast(arr);
+  return nb::ndarray<>(
+      data,
+      arr.ndim(),
+      shape.data(),
+      /* owner= */ owner,
+      arr.strides().data(),
+      mlx_dtype_to_dl_dtype(arr.dtype()),
+      device_type,
+      device_id,
+      '\0',
+      byte_offset);
 }
 
 nb::object to_scalar(mx::array& a) {
@@ -416,25 +419,6 @@ nb::object to_scalar(mx::array& a) {
     default:
       throw nb::type_error("type cannot be converted to Python scalar.");
   }
-}
-
-mx::array metal_dlpack_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig> nd_array,
-    std::optional<mx::Dtype> dtype,
-    std::optional<bool> copy) {
-  if (!mx::metal::is_available()) {
-    throw std::invalid_argument("Metal DLPack import is not available.");
-  }
-  auto owner = std::move(nd_array);
-  auto shape = get_shape(owner);
-
-  return dispatch_dlpack_dtype(
-      owner.dtype(),
-      [&]<typename T>(mx::Dtype type) {
-        return metal_dlpack_to_mlx_contiguous<T>(
-            owner, shape, type, dtype, copy);
-      },
-      "Cannot convert Metal DLPack array to mlx array.");
 }
 
 template <typename T, typename U = T>
