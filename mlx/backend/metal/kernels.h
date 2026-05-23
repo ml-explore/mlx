@@ -250,7 +250,8 @@ MTL::ComputePipelineState* get_quantized_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const std::string& template_def,
-    const std::string& mode);
+    const std::string& mode,
+    bool is_encode = false);
 
 MTL::ComputePipelineState* get_gather_qmm_kernel(
     metal::Device& d,
@@ -340,6 +341,7 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
     int group_size,
     int bits,
     const std::string& mode,
+    const std::string& func_name,
     int bm,
     int bn,
     int bk,

@@ -59,24 +59,8 @@ struct Dequantize {
   }
 };
 
-template <typename T, typename U, int values_per_thread>
-inline void load_vector(const device T* x, thread U* x_thread) {
-#pragma unroll
-  for (int i = 0; i < values_per_thread; i++) {
-    x_thread[i] = x[i];
-  }
-}
-
-template <typename T, typename U, int values_per_thread>
-inline void load_vector_safe(const device T* x, thread U* x_thread, int N) {
-  for (int i = 0; i < N; i++) {
-    x_thread[i] = x[i];
-  }
-
-  for (int i = N; i < values_per_thread; i++) {
-    x_thread[i] = 0;
-  }
-}
+// load_vector / load_vector_safe live in quantized_utils.h (shared with
+// kq_quantized.h).
 
 template <typename U, int values_per_thread, int bits>
 inline U qdot(const device uint8_t* w, const thread U* x_thread, U scale) {

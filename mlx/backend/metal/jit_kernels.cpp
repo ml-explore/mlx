@@ -849,16 +849,26 @@ MTL::ComputePipelineState* get_quantized_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const std::string& template_def,
-    const std::string& mode) {
+    const std::string& mode,
+    bool is_encode) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
+    const char* family_source;
+    if (mode == "affine") {
+      family_source = metal::quantized();
+    } else if (mode == "kquant") {
+      family_source =
+          is_encode ? metal::kq_quantized_encode() : metal::kq_quantized();
+    } else {
+      family_source = metal::fp_quantized();
+    }
     concatenate(
         kernel_source,
         metal::utils(),
         metal::gemm(),
         metal::quantized_utils(),
-        (mode == "affine") ? metal::quantized() : metal::fp_quantized(),
+        family_source,
         template_def);
     return kernel_source;
   });
@@ -885,6 +895,11 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     std::string kernel_source;
     concatenate(
         kernel_source, metal::utils(), metal::quantized_utils(), metal::gemm());
+    if (mode == "kquant") {
+      throw std::runtime_error(
+          "[GatherQMM] KQuant gather uses the NAX path; "
+          "non-NAX JIT should be unreachable.");
+    }
     bool is_affine = mode == "affine";
     concatenate(
         kernel_source,
@@ -1059,7 +1074,9 @@ MTL::ComputePipelineState* get_qmm_nax_kernel(
         metal::utils(),
         metal::gemm_nax(),
         metal::quantized_utils(),
-        (mode == "affine") ? metal::quantized_nax() : metal::fp_quantized_nax(),
+        (mode == "affine")       ? metal::quantized_nax()
+            : (mode == "kquant") ? metal::kq_quantized_nax()
+                                 : metal::fp_quantized_nax(),
         template_def);
     return kernel_source;
   });
@@ -1075,6 +1092,7 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
     int group_size,
     int bits,
     const std::string& mode,
+    const std::string& func_name,
     int bm,
     int bn,
     int bk,
@@ -1089,13 +1107,14 @@ MTL::ComputePipelineState* get_gather_qmm_nax_kernel(
         metal::utils(),
         metal::gemm_nax(),
         metal::quantized_utils());
-    bool is_affine = mode == "affine";
     concatenate(
         kernel_source,
-        is_affine ? metal::quantized_nax() : metal::fp_quantized_nax(),
+        (mode == "affine")       ? metal::quantized_nax()
+            : (mode == "kquant") ? metal::kq_quantized_nax()
+                                 : metal::fp_quantized_nax(),
         get_template_definition(
             lib_name,
-            (is_affine ? "affine" : "fp") + std::string("_gather_qmm_rhs_nax"),
+            func_name,
             get_type_string(x.dtype()),
             group_size,
             bits,

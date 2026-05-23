@@ -16,21 +16,70 @@ namespace mlx::core {
 
 namespace {
 
+inline std::string quantized_kname_prefix(
+    const std::string& mode,
+    const std::string& kquant_type) {
+  if (mode == "kquant") {
+    if (kquant_type.empty()) {
+      throw std::runtime_error(
+          "[QuantizedMatmul] kquant mode requires kquant_type "
+          "(e.g. \"q4_k\"); (group_size, bits) does not uniquely "
+          "identify a codec.");
+    }
+    if (kquant_codec_by_name(kquant_type) == nullptr) {
+      throw std::runtime_error(
+          "[QuantizedMatmul] Unknown kquant_type \"" + kquant_type + "\".");
+    }
+    return "kquant_" + kquant_type + "_";
+  }
+  return mode + "_";
+}
+
+inline std::string quantized_source_prefix(
+    const std::string& mode,
+    const std::string& kquant_type) {
+  if (mode == "kquant") {
+    return "kq_" + kquant_type + "_";
+  }
+  return mode + "_";
+}
+
+inline bool kquant_codec_has_matmul(const std::string& kquant_type) {
+  const auto* codec = kquant_codec_by_name(kquant_type);
+  return codec != nullptr && codec->has_matmul_kernel;
+}
+
+inline int kquant_qmv_bn(const std::string& kquant_type) {
+  if (kquant_type == "q2_k" || kquant_type == "q3_k" || kquant_type == "q4_k" ||
+      kquant_type == "q5_k") {
+    return 4;
+  }
+  return 8;
+}
+
+// Minimum K alignment for the qmv_fast kernel path.
+// KQuant block sizes are 32 or 256 -- 256 covers both.
+// Affine/FP families require 512 (16 groups of 32).
+inline int qmv_fast_k_align(const std::string& mode) {
+  return (mode == "kquant") ? 256 : 512;
+}
+
 template <typename... Args>
 auto get_quantized_kernel_wrapped(
     metal::Device& d,
     const std::string& name,
     const std::string& func,
     const std::string& mode,
+    const std::string& kquant_type,
     const std::string& type,
     int group_size,
     int bits,
     Args... args) {
-  std::string template_def;
-  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
-  template_def = get_template_definition(
+  std::string fname = quantized_source_prefix(mode, kquant_type) + func;
+  std::string template_def = get_template_definition(
       name, fname, type, group_size, bits, std::forward<Args>(args)...);
-  return get_quantized_kernel(d, name, template_def, mode);
+  bool is_encode = (func == "quantize");
+  return get_quantized_kernel(d, name, template_def, mode, is_encode);
 }
 
 template <typename... Args>
@@ -39,13 +88,13 @@ auto get_qmm_nax_kernel_wrapped(
     const std::string& name,
     const std::string& func,
     const std::string& mode,
+    const std::string& kquant_type,
     const std::string& type,
     int group_size,
     int bits,
     Args... args) {
-  std::string template_def;
-  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
-  template_def = get_template_definition(
+  std::string fname = quantized_source_prefix(mode, kquant_type) + func;
+  std::string template_def = get_template_definition(
       name, fname, type, group_size, bits, std::forward<Args>(args)...);
   return get_qmm_nax_kernel(d, name, template_def, mode);
 }
@@ -187,7 +236,8 @@ void qmv_quad(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   int B = out.size() / M / N;
 
   constexpr int quads_per_simd = 8;
@@ -203,7 +253,7 @@ void qmv_quad(
 
   concatenate(
       kname,
-      mode + "_qmv_quad_",
+      quantized_kname_prefix(mode, kquant_type) + "qmv_quad_",
       type_string,
       "_gs_",
       group_size,
@@ -213,7 +263,16 @@ void qmv_quad(
       K,
       B > 1 ? "_batch_1" : "_batch_0");
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "qmv_quad", mode, type_string, group_size, bits, K, B > 1);
+      d,
+      kname,
+      "qmv_quad",
+      mode,
+      kquant_type,
+      type_string,
+      group_size,
+      bits,
+      K,
+      B > 1);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -245,10 +304,11 @@ void qmv(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   int B = out.size() / M / N;
 
-  int bn = 8;
+  int bn = (mode == "kquant") ? kquant_qmv_bn(kquant_type) : 8;
   int bk = 32;
   MTL::Size group_dims(bk, 2, 1);
   MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
@@ -256,11 +316,12 @@ void qmv(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
-  bool fast = N % bn == 0 && K % 512 == 0;
+  int k_align = qmv_fast_k_align(mode);
+  bool fast = N % bn == 0 && K % k_align == 0;
 
   concatenate(
       kname,
-      mode + (fast ? "_qmv_fast_" : "_qmv_"),
+      quantized_kname_prefix(mode, kquant_type) + (fast ? "qmv_fast_" : "qmv_"),
       type_string,
       "_gs_",
       group_size,
@@ -272,6 +333,7 @@ void qmv(
       kname,
       (fast ? "qmv_fast" : "qmv"),
       mode,
+      kquant_type,
       type_string,
       group_size,
       bits,
@@ -308,7 +370,8 @@ void qvm_split_k(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   auto& compute_encoder = metal::get_command_encoder(s);
 
   int split_k = K > 8192 ? 32 : 8;
@@ -356,7 +419,7 @@ void qvm_split_k(
     temp_shape.insert(temp_shape.begin(), 1);
   }
   temp_shape.insert(temp_shape.end() - 2, split_k);
-  array intermediate(temp_shape, x.dtype(), nullptr, {});
+  array intermediate(temp_shape, out.dtype(), nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   compute_encoder.add_temporary(intermediate);
 
@@ -365,7 +428,7 @@ void qvm_split_k(
   kname.reserve(64);
   concatenate(
       kname,
-      mode + "_qvm_split_k_",
+      quantized_kname_prefix(mode, kquant_type) + "qvm_split_k_",
       type_string,
       "_gs_",
       group_size,
@@ -376,7 +439,15 @@ void qvm_split_k(
 
   // Encode and dispatch kernel
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "qvm_split_k", mode, type_string, group_size, bits, split_k);
+      d,
+      kname,
+      "qvm_split_k",
+      mode,
+      kquant_type,
+      type_string,
+      group_size,
+      bits,
+      split_k);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -429,7 +500,8 @@ void qvm(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   int B = out.size() / M / N;
 
   constexpr int num_simdgroups = 2;
@@ -443,7 +515,7 @@ void qvm(
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      mode + "_qvm_",
+      quantized_kname_prefix(mode, kquant_type) + "qvm_",
       type_string,
       "_gs_",
       group_size,
@@ -451,7 +523,7 @@ void qvm(
       bits,
       B > 1 ? "_batch_1" : "_batch_0");
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "qvm", mode, type_string, group_size, bits, B > 1);
+      d, kname, "qvm", mode, kquant_type, type_string, group_size, bits, B > 1);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -484,7 +556,8 @@ void qmm_nax(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   int B = out.size() / M / N;
 
   int wm = 2;
@@ -497,12 +570,13 @@ void qmm_nax(
 
   std::string kname;
   kname.reserve(64);
-  bool aligned = N % 64 == 0;
+  bool aligned = N % bn == 0;
   bool batched = B > 1;
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      mode + (transpose ? "_qmm_t_nax_" : "_qmm_n_nax_"),
+      quantized_kname_prefix(mode, kquant_type) +
+          (transpose ? "qmm_t_nax_" : "qmm_n_nax_"),
       type_string,
       "_gs_",
       group_size,
@@ -528,6 +602,7 @@ void qmm_nax(
         kname,
         "qmm_t_nax",
         mode,
+        kquant_type,
         type_string,
         group_size,
         bits,
@@ -544,6 +619,7 @@ void qmm_nax(
         kname,
         "qmm_n_nax",
         mode,
+        kquant_type,
         type_string,
         group_size,
         bits,
@@ -589,24 +665,26 @@ void gather_qmm_nax(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   int B = out.size() / M / N;
 
   int wm = 2;
   int wn = 2;
   int bm = 64;
   int bn = 64;
-  int bk = 32;
+  int bk = 64;
   MTL::Size group_dims(32, wn, wm);
   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
 
   std::string kname;
   kname.reserve(64);
-  bool aligned = N % 64 == 0;
+  bool aligned = N % bn == 0;
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      mode + (transpose ? "_gather_qmm_t_nax_" : "_gather_qmm_n_nax_"),
+      quantized_kname_prefix(mode, kquant_type) +
+          (transpose ? "gather_qmm_t_nax_" : "gather_qmm_n_nax_"),
       type_string,
       "_gs_",
       group_size,
@@ -628,8 +706,9 @@ void gather_qmm_nax(
     kernel = get_qmm_nax_kernel_wrapped(
         d,
         kname,
-        "gather_qmm_t_nax_",
+        "gather_qmm_t_nax",
         mode,
+        kquant_type,
         type_string,
         group_size,
         bits,
@@ -643,8 +722,9 @@ void gather_qmm_nax(
     kernel = get_qmm_nax_kernel_wrapped(
         d,
         kname,
-        "gather_qmm_n_nax_",
+        "gather_qmm_n_nax",
         mode,
+        kquant_type,
         type_string,
         group_size,
         bits,
@@ -691,9 +771,11 @@ void qmm(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
-      (env::enable_tf32() || x.dtype() != float32)) {
+      (env::enable_tf32() || x.dtype() != float32) &&
+      (mode != "kquant" || kquant_codec_has_matmul(kquant_type))) {
     return qmm_nax(
         /* const array& x = */ x,
         /* const array& w = */ w,
@@ -708,26 +790,29 @@ void qmm(
         /* int K = */ K,
         /* metal::Device& d = */ d,
         /* const Stream& s = */ s,
-        /* const std::string& mode = */ mode);
+        /* const std::string& mode = */ mode,
+        /* const std::string& kquant_type = */ kquant_type);
   }
 
   int B = out.size() / M / N;
 
+  bool kquant = mode == "kquant";
   int wm = 2;
   int wn = 2;
-  int bm = 32;
-  int bn = 32;
+  int bm = kquant ? 64 : 32;
+  int bn = (kquant && transpose) ? 64 : 32;
   MTL::Size group_dims(32, wn, wm);
   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
 
   std::string kname;
   kname.reserve(64);
-  bool aligned = N % 32 == 0;
+  bool aligned = N % bn == 0;
   bool batched = B > 1;
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      mode + (transpose ? "_qmm_t_" : "_qmm_n_"),
+      quantized_kname_prefix(mode, kquant_type) +
+          (transpose ? "qmm_t_" : "qmm_n_"),
       type_string,
       "_gs_",
       group_size,
@@ -743,6 +828,7 @@ void qmm(
         kname,
         "qmm_t",
         mode,
+        kquant_type,
         type_string,
         group_size,
         bits,
@@ -750,7 +836,15 @@ void qmm(
         batched);
   } else {
     kernel = get_quantized_kernel_wrapped(
-        d, kname, "qmm_n", mode, type_string, group_size, bits, batched);
+        d,
+        kname,
+        "qmm_n",
+        mode,
+        kquant_type,
+        type_string,
+        group_size,
+        bits,
+        batched);
   }
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -784,7 +878,8 @@ void qmm_splitk(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   // Choose split_k to target ~512 threadgroups
   int bm = 32, bn = 32;
   int n_tiles = (N + bn - 1) / bn;
@@ -801,7 +896,21 @@ void qmm_splitk(
   }
   if (split_k <= 1) {
     return qmm(
-        x, w, scales, biases, out, true, group_size, bits, M, N, K, d, s, mode);
+        x,
+        w,
+        scales,
+        biases,
+        out,
+        true,
+        group_size,
+        bits,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode,
+        kquant_type);
   }
 
   int k_partition_size = K / split_k;
@@ -815,7 +924,7 @@ void qmm_splitk(
     temp_shape.insert(temp_shape.begin(), 1);
   }
   temp_shape.insert(temp_shape.begin(), split_k);
-  array intermediate(temp_shape, x.dtype(), nullptr, {});
+  array intermediate(temp_shape, out.dtype(), nullptr, {});
   intermediate.set_data(allocator::malloc(intermediate.nbytes()));
   compute_encoder.add_temporary(intermediate);
 
@@ -829,7 +938,7 @@ void qmm_splitk(
   kname.reserve(64);
   concatenate(
       kname,
-      mode + "_qmm_t_splitk_",
+      quantized_kname_prefix(mode, kquant_type) + "qmm_t_splitk_",
       type_string,
       "_gs_",
       group_size,
@@ -837,7 +946,15 @@ void qmm_splitk(
       bits,
       aligned ? "_alN_true" : "_alN_false");
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "qmm_t_splitk", mode, type_string, group_size, bits, aligned);
+      d,
+      kname,
+      "qmm_t_splitk",
+      mode,
+      kquant_type,
+      type_string,
+      group_size,
+      bits,
+      aligned);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -882,9 +999,11 @@ void gather_qmm(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
-      (env::enable_tf32() || x.dtype() != float32)) {
+      (env::enable_tf32() || x.dtype() != float32) &&
+      (mode != "kquant" || kquant_codec_has_matmul(kquant_type))) {
     return gather_qmm_nax(
         /* const array& x = */ x,
         /* const array& w = */ w,
@@ -901,7 +1020,8 @@ void gather_qmm(
         /* int K = */ K,
         /* metal::Device& d = */ d,
         /* const Stream& s = */ s,
-        /* const std::string& mode = */ mode);
+        /* const std::string& mode = */ mode,
+        /* const std::string& kquant_type = */ kquant_type);
   }
 
   int B = out.size() / M / N;
@@ -919,7 +1039,8 @@ void gather_qmm(
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      mode + (transpose ? "_gather_qmm_t_" : "_gather_qmm_n_"),
+      quantized_kname_prefix(mode, kquant_type) +
+          (transpose ? "gather_qmm_t_" : "gather_qmm_n_"),
       type_string,
       "_gs_",
       group_size,
@@ -929,10 +1050,25 @@ void gather_qmm(
   MTL::ComputePipelineState* kernel;
   if (transpose) {
     kernel = get_quantized_kernel_wrapped(
-        d, kname, "gather_qmm_t", mode, type_string, group_size, bits, aligned);
+        d,
+        kname,
+        "gather_qmm_t",
+        mode,
+        kquant_type,
+        type_string,
+        group_size,
+        bits,
+        aligned);
   } else {
     kernel = get_quantized_kernel_wrapped(
-        d, kname, "gather_qmm_n", mode, type_string, group_size, bits);
+        d,
+        kname,
+        "gather_qmm_n",
+        mode,
+        kquant_type,
+        type_string,
+        group_size,
+        bits);
   }
 
   auto& compute_encoder = metal::get_command_encoder(s);
@@ -972,10 +1108,11 @@ void gather_qmv(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   int B = out.size() / M / N;
 
-  int bn = 8;
+  int bn = (mode == "kquant") ? kquant_qmv_bn(kquant_type) : 8;
   int bk = 32;
   MTL::Size group_dims(bk, 2, 1);
   MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
@@ -983,10 +1120,12 @@ void gather_qmv(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
-  bool fast = N % bn == 0 && K % 512 == 0;
+  int k_align = qmv_fast_k_align(mode);
+  bool fast = N % bn == 0 && K % k_align == 0;
   concatenate(
       kname,
-      mode + (fast ? "_gather_qmv_fast_" : "_gather_qmv_"),
+      quantized_kname_prefix(mode, kquant_type) +
+          (fast ? "gather_qmv_fast_" : "gather_qmv_"),
       type_string,
       "_gs_",
       group_size,
@@ -998,6 +1137,7 @@ void gather_qmv(
       kname,
       (fast ? "gather_qmv_fast" : "gather_qmv"),
       mode,
+      kquant_type,
       type_string,
       group_size,
       bits);
@@ -1038,7 +1178,8 @@ void gather_qvm(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   int B = out.size() / M / N;
 
   constexpr int num_simdgroups = 2;
@@ -1052,14 +1193,14 @@ void gather_qvm(
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      mode + "_gather_qvm_",
+      quantized_kname_prefix(mode, kquant_type) + "gather_qvm_",
       type_string,
       "_gs_",
       group_size,
       "_b_",
       bits);
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "gather_qvm", mode, type_string, group_size, bits);
+      d, kname, "gather_qvm", mode, kquant_type, type_string, group_size, bits);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -1096,7 +1237,8 @@ void gather_qmm_rhs_nax(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   // Start by normalizing the indices
   array indices = ensure_row_contiguous(indices_, d, s);
 
@@ -1122,9 +1264,11 @@ void gather_qmm_rhs_nax(
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
 
-  // TODO: Tune the block sizes
-  int bm = 64, bn = 64, bk = 64;
-  int wm = 2, wn = 2;
+  int bm = 64;
+  int bn = 64;
+  int bk = 64;
+  int wm = 2;
+  int wn = 2;
 
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
@@ -1136,8 +1280,8 @@ void gather_qmm_rhs_nax(
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      mode +
-          (transpose ? "_gather_qmm_rhs_nax_nt_" : "_gather_qmm_rhs_nax_nn_"),
+      quantized_kname_prefix(mode, kquant_type) +
+          (transpose ? "gather_qmm_rhs_nax_nt_" : "gather_qmm_rhs_nax_nn_"),
       type_string,
       "_gs_",
       group_size,
@@ -1175,6 +1319,8 @@ void gather_qmm_rhs_nax(
 
   // Get and set the kernel
   auto& compute_encoder = metal::get_command_encoder(s);
+  std::string func_name =
+      quantized_source_prefix(mode, kquant_type) + "gather_qmm_rhs_nax";
   auto kernel = get_gather_qmm_nax_kernel(
       d,
       kname,
@@ -1184,6 +1330,7 @@ void gather_qmm_rhs_nax(
       group_size,
       bits,
       mode,
+      func_name,
       bm,
       bn,
       bk,
@@ -1227,9 +1374,11 @@ void gather_qmm_rhs(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   if (metal::is_nax_available() && transpose &&
-      (env::enable_tf32() || x_.dtype() != float32)) {
+      (env::enable_tf32() || x_.dtype() != float32) &&
+      (mode != "kquant" || kquant_codec_has_matmul(kquant_type))) {
     return gather_qmm_rhs_nax(
         /* const array& x_ = */ x_,
         /* const array& w_ = */ w_,
@@ -1245,7 +1394,8 @@ void gather_qmm_rhs(
         /* int K = */ K,
         /* metal::Device& d = */ d,
         /* const Stream& s = */ s,
-        /* const std::string mode = */ mode);
+        /* const std::string mode = */ mode,
+        /* const std::string& kquant_type = */ kquant_type);
   }
 
   // Start by normalizing the indices
@@ -1287,7 +1437,8 @@ void gather_qmm_rhs(
   std::string type_string = get_type_string(x.dtype());
   concatenate(
       kname,
-      mode + (transpose ? "_gather_qmm_rhs_nt_" : "_gather_qmm_rhs_nn_"),
+      quantized_kname_prefix(mode, kquant_type) +
+          (transpose ? "gather_qmm_rhs_nt_" : "gather_qmm_rhs_nn_"),
       type_string,
       "_gs_",
       group_size,
@@ -1375,13 +1526,41 @@ void dispatch_qmv(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    const std::string& kquant_type) {
   // It is a qmv with a small inner dimension so route to qmv_quad kernel
   if ((K == 128 || K == 64) && is_power_of_2(bits)) {
-    qmv_quad(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+    qmv_quad(
+        x,
+        w,
+        scales,
+        biases,
+        out,
+        group_size,
+        bits,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode,
+        kquant_type);
     return;
   }
-  qmv(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+  qmv(x,
+      w,
+      scales,
+      biases,
+      out,
+      group_size,
+      bits,
+      M,
+      N,
+      K,
+      d,
+      s,
+      mode,
+      kquant_type);
 }
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -1408,13 +1587,53 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
   auto mode = quantization_mode_to_string(mode_);
+
+  if (mode_ == QuantizationMode::KQuant) {
+    if (!transpose_ && M < vector_limit) {
+      qmm(x,
+          w,
+          scales,
+          biases,
+          out,
+          transpose_,
+          group_size_,
+          bits_,
+          M,
+          N,
+          K,
+          d,
+          s,
+          mode,
+          kquant_type_);
+      return;
+    }
+    if ((K == 64 || K == 128) && M < vector_limit && transpose_) {
+      throw std::runtime_error(
+          "[QuantizedMatmul::eval_gpu] KQuant qmv_quad is not implemented "
+          "for K=64 or K=128.");
+    }
+  }
+
   // It is a matrix matrix product.
   if (M >= vector_limit) {
     // Use split-K qmm for small M with transposed weights (non-batched only)
     int B = out.size() / M / N;
     if (transpose_ && B == 1) {
       qmm_splitk(
-          x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+          x,
+          w,
+          scales,
+          biases,
+          out,
+          group_size_,
+          bits_,
+          M,
+          N,
+          K,
+          d,
+          s,
+          mode,
+          kquant_type_);
       return;
     }
     qmm(x,
@@ -1430,26 +1649,66 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         K,
         d,
         s,
-        mode);
+        mode,
+        kquant_type_);
     return;
   }
 
   // Run of the mill qmv
   if (transpose_) {
     dispatch_qmv(
-        x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+        x,
+        w,
+        scales,
+        biases,
+        out,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode,
+        kquant_type_);
     return;
   }
 
   // Run of the mill qvm
   if (K < 1024) {
-    qvm(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+    qvm(x,
+        w,
+        scales,
+        biases,
+        out,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode,
+        kquant_type_);
     return;
   }
 
   // Qvm with large dimension so route to a split K kernel for more parallelism
   qvm_split_k(
-      x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+      x,
+      w,
+      scales,
+      biases,
+      out,
+      group_size_,
+      bits_,
+      M,
+      N,
+      K,
+      d,
+      s,
+      mode,
+      kquant_type_);
   return;
 }
 
@@ -1481,7 +1740,13 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // matmuls and reuse reading x and w.
   //
   // TODO: Tune 16 and 4 here a bit better.
-  if (M == 1 && B >= 16 && right_sorted_ == true && B / E >= 4) {
+  // KQuant rhs-only path requires NAX; mirrors the gate in gather_qmm_rhs().
+  bool kquant_rhs_ok = mode_ != QuantizationMode::KQuant ||
+      (metal::is_nax_available() && transpose_ && (K % 64 == 0) &&
+       (env::enable_tf32() || x.dtype() != float32) &&
+       kquant_codec_has_matmul(kquant_type_));
+  if (M == 1 && B >= 16 && right_sorted_ == true && B / E >= 4 &&
+      kquant_rhs_ok) {
     gather_qmm_rhs(
         x,
         w,
@@ -1497,7 +1762,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         K,
         d,
         s,
-        mode);
+        mode,
+        kquant_type_);
     return;
   }
 
@@ -1519,7 +1785,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         K,
         d,
         s,
-        mode);
+        mode,
+        kquant_type_);
     return;
   }
 
@@ -1539,7 +1806,31 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         K,
         d,
         s,
-        mode);
+        mode,
+        kquant_type_);
+    return;
+  }
+
+  // KQuant has no dedicated gather_qvm kernel; route through gather_qmm_n.
+  if (mode_ == QuantizationMode::KQuant) {
+    gather_qmm(
+        x,
+        w,
+        scales,
+        biases,
+        lhs_indices,
+        rhs_indices,
+        out,
+        transpose_,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode,
+        kquant_type_);
     return;
   }
 
@@ -1558,7 +1849,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       K,
       d,
       s,
-      mode);
+      mode,
+      kquant_type_);
 }
 
 void quantize_dequantize(
@@ -1568,7 +1860,8 @@ void quantize_dequantize(
     int group_size,
     int bits,
     metal::Device& d,
-    const Stream& s) {
+    const Stream& s,
+    const std::string& kquant_type) {
   auto& compute_encoder = metal::get_command_encoder(s);
 
   auto w = ensure_row_contiguous(in, d, s);
@@ -1578,14 +1871,21 @@ void quantize_dequantize(
   std::string kname;
   concatenate(
       kname,
-      mode + "_quantize_dequantize_",
+      quantized_kname_prefix(mode, kquant_type) + "quantize_dequantize_",
       type_string,
       "_gs_",
       group_size,
       "_b_",
       bits);
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "quantize_dequantize", mode, type_string, group_size, bits);
+      d,
+      kname,
+      "quantize_dequantize",
+      mode,
+      kquant_type,
+      type_string,
+      group_size,
+      bits);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 
@@ -1609,6 +1909,9 @@ void quantize_dequantize(
 }
 
 void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
+  if (mode_ == QuantizationMode::KQuant) {
+    throw std::runtime_error("[QQMatmul::eval_gpu] KQuant not implemented.");
+  }
   auto& s = stream();
   auto& d = metal::device(s.device);
 
@@ -1624,7 +1927,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     auto xhat = donate_x
         ? x
         : array(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
-    quantize_dequantize(x, xhat, mode, group_size_, bits_, d, s);
+    quantize_dequantize(x, xhat, mode, group_size_, bits_, d, s, kquant_type_);
 
     // Make sure the last two dims of w and s are contiguous
     array w = ensure_row_contiguous_matrix(inputs[1], d, s);
@@ -1647,9 +1950,12 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         K,
         d,
         s,
-        mode);
+        mode,
+        kquant_type_);
     return;
   } else {
+    // General QQMatmul (both operands quantized, arbitrary layout) would
+    // require a dual-dequant kernel. No known inference workload needs this.
     throw std::runtime_error("[QQMatmul] NYI for the general case");
   }
 }
@@ -1664,6 +1970,118 @@ void fast::Quantize::eval_gpu(
   auto& s = stream();
   auto& d = metal::device(s.device);
   auto& compute_encoder = metal::get_command_encoder(s);
+
+  if (dequantize_ && mode_ == QuantizationMode::KQuant) {
+    auto w = ensure_row_contiguous(w_pre, d, s);
+    auto scales = ensure_row_contiguous(inputs[1], d, s);
+    compute_encoder.set_input_array(w, 0);
+    compute_encoder.set_input_array(scales, 1);
+    compute_encoder.set_output_array(out, 2);
+    uint32_t num_weights = static_cast<uint32_t>(out.size());
+    compute_encoder.set_bytes(num_weights, 3);
+
+    auto type_string = get_type_string(out.dtype());
+    auto mode = quantization_mode_to_string(mode_);
+    std::string kname;
+    concatenate(
+        kname,
+        quantized_kname_prefix(mode, kquant_type_),
+        "dequantize_",
+        type_string,
+        "_gs_",
+        group_size_,
+        "_b_",
+        bits_);
+    auto kernel = get_quantized_kernel_wrapped(
+        d,
+        kname,
+        "dequantize",
+        mode,
+        kquant_type_,
+        type_string,
+        group_size_,
+        bits_);
+    compute_encoder.set_compute_pipeline_state(kernel);
+
+    NS::UInteger tg = kernel->maxTotalThreadsPerThreadgroup();
+    if (tg > static_cast<NS::UInteger>(num_weights)) {
+      tg = num_weights;
+    }
+    auto group_dims = MTL::Size(tg, 1, 1);
+    auto grid_dims = MTL::Size(num_weights, 1, 1);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+    return;
+  }
+
+  if (!dequantize_ && mode_ == QuantizationMode::KQuant) {
+    auto w_contig = ensure_row_contiguous(w_pre, d, s);
+    auto& scales_placeholder = outputs[1];
+    scales_placeholder.set_data(allocator::malloc(scales_placeholder.nbytes()));
+
+    const KQuantCodec* codec = kquant_codec_by_name(kquant_type_);
+    if (codec == nullptr) {
+      throw std::runtime_error(
+          "[fast::Quantize::eval_gpu] Unknown kquant_type: '" + kquant_type_ +
+          "'.");
+    }
+    uint32_t num_blocks =
+        static_cast<uint32_t>(out.size() / codec->bytes_per_block);
+
+    compute_encoder.set_input_array(w_contig, 0);
+    compute_encoder.set_output_array(out, 1);
+    compute_encoder.set_bytes(num_blocks, 2);
+
+    uint32_t has_imatrix = 0;
+    uint32_t K = static_cast<uint32_t>(w_pre.shape(-1));
+    if (inputs.size() >= 2) {
+      auto imatrix_contig = ensure_row_contiguous(inputs[1], d, s);
+      compute_encoder.set_input_array(imatrix_contig, 3);
+      has_imatrix = 1;
+    } else {
+      compute_encoder.set_input_array(w_contig, 3);
+    }
+    compute_encoder.set_bytes(has_imatrix, 4);
+    compute_encoder.set_bytes(K, 5);
+
+    auto type_string = get_type_string(w_pre.dtype());
+    auto mode = quantization_mode_to_string(mode_);
+    std::string kname;
+    concatenate(
+        kname,
+        quantized_kname_prefix(mode, kquant_type_),
+        "quantize_",
+        type_string,
+        "_gs_",
+        group_size_,
+        "_b_",
+        bits_);
+    auto kernel = get_quantized_kernel_wrapped(
+        d,
+        kname,
+        "quantize",
+        mode,
+        kquant_type_,
+        type_string,
+        group_size_,
+        bits_);
+    compute_encoder.set_compute_pipeline_state(kernel);
+
+    // K-codecs: 256 threads per super-block; flat codecs: 1 thread per block.
+    if (group_size_ >= 256) {
+      auto group_dims = MTL::Size(256, 1, 1);
+      auto grid_dims = MTL::Size(num_blocks, 1, 1);
+      compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+    } else {
+      NS::UInteger tg = kernel->maxTotalThreadsPerThreadgroup();
+      if (tg > static_cast<NS::UInteger>(num_blocks)) {
+        tg = num_blocks;
+      }
+      auto group_dims = MTL::Size(tg, 1, 1);
+      auto grid_dims = MTL::Size(num_blocks, 1, 1);
+      compute_encoder.dispatch_threads(grid_dims, group_dims);
+    }
+    return;
+  }
 
   auto w = ensure_row_contiguous(w_pre, d, s);
   if (dequantize_) {
@@ -1691,10 +2109,12 @@ void fast::Quantize::eval_gpu(
   auto type_string = dequantize_ ? get_type_string(out.dtype())
                                  : get_type_string(w_pre.dtype());
   auto mode = quantization_mode_to_string(mode_);
+  const std::string kquant_type;
   std::string kname;
   concatenate(
       kname,
-      mode + (dequantize_ ? "_dequantize" : "_quantize"),
+      quantized_kname_prefix(mode, kquant_type) +
+          (dequantize_ ? "dequantize" : "quantize"),
       "_",
       type_string,
       "_gs_",
@@ -1706,6 +2126,7 @@ void fast::Quantize::eval_gpu(
       kname,
       dequantize_ ? "dequantize" : "quantize",
       mode,
+      kquant_type,
       type_string,
       group_size_,
       bits_);

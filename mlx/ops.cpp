@@ -122,7 +122,65 @@ std::pair<int, int> extract_quantized_matmul_dims(
     const std::optional<array>& biases,
     bool transpose,
     int group_size,
-    int bits) {
+    int bits,
+    QuantizationMode mode = QuantizationMode::Affine,
+    const std::string& kquant_type = "") {
+  if (mode == QuantizationMode::KQuant) {
+    if (w.dtype() != uint8) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] KQuant weight tensor must be uint8 "
+          << "but received " << w.dtype() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (biases) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Biases must be null for kquant mode.";
+      throw std::invalid_argument(msg.str());
+    }
+    if (kquant_type.empty()) {
+      std::ostringstream msg;
+      msg << "[" << tag
+          << "] kquant mode requires kquant_type (e.g. \"q4_k\").";
+      throw std::invalid_argument(msg.str());
+    }
+    const KQuantCodec* codec = kquant_codec_by_name(kquant_type);
+    if (codec == nullptr) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Unknown kquant_type \"" << kquant_type << "\".";
+      throw std::invalid_argument(msg.str());
+    }
+    int w_bytes_per_row = w.shape(-1);
+    // Each row of `w` must be a whole number of wire-format blocks. A
+    // weaker check like `(bytes * wpb) % bpb == 0` is wrong: e.g. for
+    // Q8_0 (wpb=32, bpb=34), 17 bytes pass it but represent half a block.
+    if (w_bytes_per_row % codec->bytes_per_block != 0) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] KQuant weight last dim " << w_bytes_per_row
+          << " bytes is not a whole number of " << codec->bytes_per_block
+          << "-byte " << codec->name << " blocks "
+          << "(group_size=" << group_size << ", bits=" << bits << ").";
+      throw std::invalid_argument(msg.str());
+    }
+    int n_blocks_per_row = w_bytes_per_row / codec->bytes_per_block;
+    int weights_per_row = n_blocks_per_row * codec->weights_per_block;
+    int w_inner_dims = transpose ? weights_per_row : w.shape(-2);
+    int w_outer_dims = transpose ? w.shape(-2) : weights_per_row;
+    int x_inner_dims = x.shape(-1);
+    if (w_inner_dims != x_inner_dims) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Last dimension of first input with "
+          << "shape (..., " << x_inner_dims << ") does not match "
+          << "the expanded quantized matrix (" << w_inner_dims << ", "
+          << w_outer_dims << ") computed from shape " << w.shape()
+          << " with kquant codec " << codec->name << " (gs=" << group_size
+          << ", bits=" << bits << ", " << codec->bytes_per_block << " bytes/"
+          << codec->weights_per_block
+          << " weights) and transpose=" << std::boolalpha << transpose;
+      throw std::invalid_argument(msg.str());
+    }
+    return {w_inner_dims, w_outer_dims};
+  }
+
   validate_quantized_input(tag, w, scales, group_size, bits, biases);
 
   int x_inner_dims = x.shape(-1);
@@ -4368,26 +4426,42 @@ array conv_general(
 std::pair<int, int> quantization_params_from_mode(
     QuantizationMode mode,
     std::optional<int> group_size_,
-    std::optional<int> bits_) {
+    std::optional<int> bits_,
+    const std::string& kquant_type = "") {
   int default_group_size;
   int default_bits;
-  switch (mode) {
-    case QuantizationMode::Affine:
-      default_group_size = 64;
-      default_bits = 4;
-      break;
-    case QuantizationMode::Nvfp4:
-      default_group_size = 16;
-      default_bits = 4;
-      break;
-    case QuantizationMode::Mxfp4:
-      default_group_size = 32;
-      default_bits = 4;
-      break;
-    case QuantizationMode::Mxfp8:
+  if (mode == QuantizationMode::KQuant && !kquant_type.empty()) {
+    const auto* codec = kquant_codec_by_name(kquant_type);
+    if (codec) {
+      default_group_size = codec->weights_per_block;
+      default_bits = codec->bits;
+    } else {
       default_group_size = 32;
       default_bits = 8;
-      break;
+    }
+  } else {
+    switch (mode) {
+      case QuantizationMode::Affine:
+        default_group_size = 64;
+        default_bits = 4;
+        break;
+      case QuantizationMode::Nvfp4:
+        default_group_size = 16;
+        default_bits = 4;
+        break;
+      case QuantizationMode::Mxfp4:
+        default_group_size = 32;
+        default_bits = 4;
+        break;
+      case QuantizationMode::Mxfp8:
+        default_group_size = 32;
+        default_bits = 8;
+        break;
+      case QuantizationMode::KQuant:
+        default_group_size = 32;
+        default_bits = 8;
+        break;
+    }
   }
   return {
       group_size_.has_value() ? *group_size_ : default_group_size,
@@ -4426,6 +4500,18 @@ std::pair<Dtype, QuantizationMode> validate_mode_with_type(
       return {*out_type, qmode};
     } else {
       return {dtype, qmode};
+    }
+  } else if (qmode == QuantizationMode::KQuant) {
+    if (biases) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Biases must be null for quantization mode '"
+          << mode << "'.";
+      throw std::invalid_argument(msg.str());
+    }
+    if (out_type.has_value()) {
+      return {*out_type, qmode};
+    } else {
+      return {float16, qmode};
     }
   } else if (scales.dtype() != uint8) {
     std::ostringstream msg;
@@ -4483,18 +4569,30 @@ array quantized_matmul(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
+    const std::string& kquant_type /* = "" */,
     StreamOrDevice s /* = {} */) {
   auto [dtype, qmode] = validate_mode_with_type(
       "quantized_matmul", scales, biases, std::nullopt, mode);
 
   auto [group_size, bits] =
-      quantization_params_from_mode(qmode, group_size_, bits_);
+      quantization_params_from_mode(qmode, group_size_, bits_, kquant_type);
   // Check and extract the quantized matrix shape against x
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
-      "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
+      "quantized_matmul",
+      x,
+      w,
+      scales,
+      biases,
+      transpose,
+      group_size,
+      bits,
+      qmode,
+      kquant_type);
 
   if (qmode == QuantizationMode::Affine) {
     dtype = promote_types(x.dtype(), dtype);
+  } else if (qmode == QuantizationMode::KQuant) {
+    dtype = x.dtype() == float32 ? bfloat16 : x.dtype();
   } else {
     dtype = x.dtype();
   }
@@ -4510,7 +4608,7 @@ array quantized_matmul(
     inputs = {
         astype(x, dtype), w, astype(scales, dtype), astype(*biases, dtype)};
   } else {
-    inputs = {x, w, scales};
+    inputs = {astype(x, dtype, s), w, scales};
   }
 
   if (x.ndim() > 2 && w.ndim() > 2) {
@@ -4522,7 +4620,7 @@ array quantized_matmul(
       std::move(out_shape),
       dtype,
       std::make_shared<QuantizedMatmul>(
-          to_stream(s), group_size, bits, qmode, transpose),
+          to_stream(s), group_size, bits, qmode, transpose, kquant_type),
       std::move(inputs));
 }
 
@@ -4905,16 +5003,87 @@ std::vector<array> fp_quantize(
   return fallback(inputs);
 }
 
+std::vector<array> kquant_quantize(
+    const array& w,
+    int group_size,
+    int bits,
+    const std::string& kquant_type,
+    const std::optional<array>& imatrix,
+    Stream s) {
+  if (kquant_type.empty()) {
+    throw std::invalid_argument(
+        "[kquant_quantize] kquant_type is required for mode='kquant'.");
+  }
+  const auto* codec = kquant_codec_by_name(kquant_type);
+  if (codec == nullptr) {
+    throw std::invalid_argument(
+        "[kquant_quantize] Unknown kquant_type: '" + kquant_type + "'.");
+  }
+  if (!codec->has_encode) {
+    throw std::invalid_argument(
+        "[kquant_quantize] Quantize (encode) is not supported for codec '" +
+        kquant_type + "'.");
+  }
+  if (w.shape(-1) % codec->weights_per_block != 0) {
+    std::ostringstream msg;
+    msg << "[kquant_quantize] Last dim (" << w.shape(-1)
+        << ") must be a multiple of weights_per_block ("
+        << codec->weights_per_block << ") for codec '" << kquant_type << "'.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (imatrix.has_value()) {
+    const auto& im = *imatrix;
+    if (im.dtype() != float32) {
+      throw std::invalid_argument("[kquant_quantize] imatrix must be float32.");
+    }
+    if (im.ndim() != 1 || im.shape(-1) != w.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[kquant_quantize] imatrix shape must be [K]=(" << w.shape(-1)
+          << ",) but got " << im.shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+
+  auto wq_shape = w.shape();
+  wq_shape.back() =
+      (w.shape(-1) / codec->weights_per_block) * codec->bytes_per_block;
+  Shape s_shape = {1};
+
+  auto fallback = [](const std::vector<array>&) -> std::vector<array> {
+    throw std::runtime_error("[kquant_quantize] Gradients are not supported.");
+  };
+
+  std::vector<array> inputs = {w};
+  if (imatrix.has_value()) {
+    inputs.push_back(*imatrix);
+  }
+
+  return array::make_arrays(
+      {std::move(wq_shape), std::move(s_shape)},
+      {uint8, uint8},
+      std::make_shared<fast::Quantize>(
+          s,
+          fallback,
+          group_size,
+          bits,
+          QuantizationMode::KQuant,
+          /* dequantize= */ false,
+          kquant_type),
+      inputs);
+}
+
 std::vector<array> quantize(
     const array& w,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
     const std::optional<array>& global_scale /* = std::nullopt */,
+    const std::string& kquant_type /* = "" */,
+    const std::optional<array>& imatrix /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto qmode = string_to_quantization_mode(mode, "quantize");
   auto [group_size, bits] =
-      quantization_params_from_mode(qmode, group_size_, bits_);
+      quantization_params_from_mode(qmode, group_size_, bits_, kquant_type);
   if (!issubdtype(w.dtype(), floating)) {
     std::ostringstream msg;
     msg << "[quantize] Only real floating types can be quantized "
@@ -4946,6 +5115,9 @@ std::vector<array> quantize(
   validate_global_scale("quantize", qmode, global_scale);
   if (qmode == QuantizationMode::Affine) {
     return affine_quantize(w, group_size, bits, s);
+  } else if (qmode == QuantizationMode::KQuant) {
+    return kquant_quantize(
+        w, group_size, bits, kquant_type, imatrix, to_stream(s));
   } else {
     return fp_quantize(w, group_size, bits, qmode, global_scale, to_stream(s));
   }
@@ -5168,6 +5340,58 @@ array fp_dequantize(
   return fallback(inputs)[0];
 }
 
+array kquant_dequantize(
+    const array& w,
+    const array& scales,
+    int group_size,
+    int bits,
+    Dtype out_type,
+    const std::string& kquant_type,
+    Stream s) {
+  if (w.dtype() != uint8) {
+    throw std::invalid_argument(
+        "[kquant_dequantize] KQuant weights must be uint8.");
+  }
+  if (w.ndim() < 1) {
+    throw std::invalid_argument(
+        "[kquant_dequantize] w must have at least 1 dimension.");
+  }
+  const auto* codec = kquant_codec_by_name(kquant_type);
+  if (codec == nullptr) {
+    throw std::invalid_argument(
+        "[kquant_dequantize] Unknown kquant_type: '" + kquant_type + "'.");
+  }
+  if (w.shape(-1) % codec->bytes_per_block != 0) {
+    std::ostringstream msg;
+    msg << "[kquant_dequantize] Last dim (" << w.shape(-1)
+        << ") must be a multiple of bytes_per_block (" << codec->bytes_per_block
+        << ") for codec '" << kquant_type << "'.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out_shape = w.shape();
+  out_shape.back() =
+      (w.shape(-1) / codec->bytes_per_block) * codec->weights_per_block;
+
+  auto fallback = [](const std::vector<array>&) -> std::vector<array> {
+    throw std::runtime_error(
+        "[kquant_dequantize] Gradients are not supported.");
+  };
+
+  return array(
+      std::move(out_shape),
+      out_type,
+      std::make_shared<fast::Quantize>(
+          s,
+          fallback,
+          group_size,
+          bits,
+          QuantizationMode::KQuant,
+          /* dequantize= */ true,
+          kquant_type),
+      {w, scales});
+}
+
 array dequantize(
     const array& w,
     const array& scales,
@@ -5177,11 +5401,16 @@ array dequantize(
     const std::string& mode /* = "affine" */,
     const std::optional<array>& global_scale /* = std::nullopt */,
     std::optional<Dtype> dtype /* = std::nullopt */,
+    const std::string& kquant_type /* = "" */,
     StreamOrDevice s /* = {} */) {
   auto [out_type, qmode] =
       validate_mode_with_type("dequantize", scales, biases, dtype, mode);
   auto [group_size, bits] =
-      quantization_params_from_mode(qmode, group_size_, bits_);
+      quantization_params_from_mode(qmode, group_size_, bits_, kquant_type);
+  if (qmode == QuantizationMode::KQuant) {
+    return kquant_dequantize(
+        w, scales, group_size, bits, out_type, kquant_type, to_stream(s));
+  }
   if (bits <= 0) {
     std::ostringstream msg;
     msg << "[dequantize] Invalid value for bits: " << bits;
@@ -5275,20 +5504,41 @@ array gather_qmm(
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
     bool sorted_indices /* = false */,
+    const std::string& kquant_type /* = "" */,
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
     return quantized_matmul(
-        x, w, scales, biases, transpose, group_size_, bits_, mode, s);
+        x,
+        w,
+        scales,
+        biases,
+        transpose,
+        group_size_,
+        bits_,
+        mode,
+        kquant_type,
+        s);
   }
 
   auto [out_type, qmode] =
       validate_mode_with_type("gather_qmm", scales, biases, std::nullopt, mode);
   auto [group_size, bits] =
-      quantization_params_from_mode(qmode, group_size_, bits_);
+      quantization_params_from_mode(qmode, group_size_, bits_, kquant_type);
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
-      "gather_qmm", x, w, scales, biases, transpose, group_size, bits);
+      "gather_qmm",
+      x,
+      w,
+      scales,
+      biases,
+      transpose,
+      group_size,
+      bits,
+      qmode,
+      kquant_type);
   if (qmode == QuantizationMode::Affine) {
     out_type = promote_types(x.dtype(), out_type);
+  } else if (qmode == QuantizationMode::KQuant) {
+    out_type = x.dtype() == float32 ? bfloat16 : x.dtype();
   } else {
     out_type = x.dtype();
   }
@@ -5338,6 +5588,13 @@ array gather_qmm(
         astype(*biases, out_type, s),
         std::move(lhs_indices),
         std::move(rhs_indices)};
+  } else if (qmode == QuantizationMode::KQuant) {
+    inputs = {
+        astype(x, out_type, s),
+        std::move(w),
+        std::move(scales),
+        std::move(lhs_indices),
+        std::move(rhs_indices)};
   } else {
     inputs = {
         astype(x, out_type, s),
@@ -5356,7 +5613,8 @@ array gather_qmm(
           qmode,
           transpose,
           sorted_indices && !rhs_indices_,
-          sorted_indices && !lhs_indices_),
+          sorted_indices && !lhs_indices_,
+          kquant_type),
       std::move(inputs));
 }
 

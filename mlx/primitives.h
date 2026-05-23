@@ -152,12 +152,23 @@ class MLX_API UnaryPrimitive : public Primitive {
   UnaryPrimitive& operator=(UnaryPrimitive&& other) = delete;
 };
 
-enum class QuantizationMode { Affine, Mxfp4, Mxfp8, Nvfp4 };
+enum class QuantizationMode { Affine, Mxfp4, Mxfp8, Nvfp4, KQuant };
 
 std::string quantization_mode_to_string(QuantizationMode mode);
 QuantizationMode string_to_quantization_mode(
     const std::string& mode,
     std::string_view error_tag = "");
+
+struct KQuantCodec {
+  std::string_view name;
+  int weights_per_block;
+  int bytes_per_block;
+  int bits;
+  bool has_matmul_kernel;
+  bool has_encode;
+};
+
+const KQuantCodec* kquant_codec_by_name(const std::string& name);
 
 class Abs : public UnaryPrimitive {
  public:
@@ -1619,12 +1630,14 @@ class QuantizedMatmul : public UnaryPrimitive {
       int group_size,
       int bits,
       QuantizationMode mode,
-      bool transpose)
+      bool transpose,
+      const std::string& kquant_type = "")
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
         mode_(mode),
-        transpose_(transpose) {}
+        transpose_(transpose),
+        kquant_type_(kquant_type) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1635,7 +1648,7 @@ class QuantizedMatmul : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
-    return std::make_tuple(group_size_, bits_, mode_, transpose_);
+    return std::make_tuple(group_size_, bits_, mode_, transpose_, kquant_type_);
   }
 
  private:
@@ -1643,6 +1656,7 @@ class QuantizedMatmul : public UnaryPrimitive {
   int bits_;
   QuantizationMode mode_;
   bool transpose_;
+  std::string kquant_type_;
 };
 
 class QQMatmul : public UnaryPrimitive {
@@ -1651,11 +1665,13 @@ class QQMatmul : public UnaryPrimitive {
       Stream stream,
       int group_size,
       int bits,
-      QuantizationMode mode)
+      QuantizationMode mode,
+      const std::string& kquant_type = "")
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
-        mode_(mode) {}
+        mode_(mode),
+        kquant_type_(kquant_type) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1666,13 +1682,14 @@ class QQMatmul : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
-    return std::make_tuple(group_size_, bits_, mode_);
+    return std::make_tuple(group_size_, bits_, mode_, kquant_type_);
   }
 
  private:
   int group_size_;
   int bits_;
   QuantizationMode mode_;
+  std::string kquant_type_;
 };
 
 class GatherQMM : public UnaryPrimitive {
@@ -1684,14 +1701,16 @@ class GatherQMM : public UnaryPrimitive {
       QuantizationMode mode,
       bool transpose,
       bool left_sorted = false,
-      bool right_sorted = false)
+      bool right_sorted = false,
+      const std::string& kquant_type = "")
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
         mode_(mode),
         transpose_(transpose),
         left_sorted_(left_sorted),
-        right_sorted_(right_sorted) {}
+        right_sorted_(right_sorted),
+        kquant_type_(kquant_type) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1702,7 +1721,13 @@ class GatherQMM : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   auto state() const {
     return std::make_tuple(
-        group_size_, bits_, mode_, transpose_, left_sorted_, right_sorted_);
+        group_size_,
+        bits_,
+        mode_,
+        transpose_,
+        left_sorted_,
+        right_sorted_,
+        kquant_type_);
   }
 
  private:
@@ -1712,6 +1737,7 @@ class GatherQMM : public UnaryPrimitive {
   bool transpose_;
   bool left_sorted_;
   bool right_sorted_;
+  std::string kquant_type_;
 };
 
 class RandomBits : public UnaryPrimitive {

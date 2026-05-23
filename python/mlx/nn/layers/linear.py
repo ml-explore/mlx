@@ -76,6 +76,7 @@ class Linear(Module):
         bits: Optional[int] = None,
         mode: str = "affine",
         quantize_input: bool = False,
+        kquant_type: str = "",
     ):
         """Return a quantized approximation of this layer.
 
@@ -91,6 +92,8 @@ class Linear(Module):
             mode (str): The quantization method to use (see
                 :func:`mlx.core.quantize`). Default: ``"affine"``.
             quantize_input (bool): Whether to quantize input. Default: ``False``.
+            kquant_type (str): For ``mode="kquant"``, selects the codec
+                (e.g. ``"q4_k"``). Default: ``""``.
 
         Returns:
             QuantizedLinear or QQLinear: A quantized version of this layer.
@@ -105,7 +108,9 @@ class Linear(Module):
                     f"Quantized activations are only supported for 'nvfp4' and 'mxfp8' modes, got {mode}."
                 )
             return QQLinear.from_linear(self, group_size, bits, mode)
-        return QuantizedLinear.from_linear(self, group_size, bits, mode)
+        return QuantizedLinear.from_linear(
+            self, group_size, bits, mode, kquant_type=kquant_type
+        )
 
 
 class Bilinear(Module):

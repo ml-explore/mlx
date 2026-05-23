@@ -4316,9 +4316,10 @@ void init_ops(nb::module_& m) {
       "bits"_a = nb::none(),
       "mode"_a = "affine",
       nb::kw_only(),
+      "kquant_type"_a = "",
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantized_matmul(x: array, w: array, /, scales: array, biases: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def quantized_matmul(x: array, w: array, /, scales: array, biases: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, kquant_type: str = '', stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform the matrix multiplication with the quantized matrix ``w``. The
         quantization uses one floating point scale and bias per ``group_size`` of
@@ -4341,9 +4342,14 @@ void init_ops(nb::module_& m) {
             ``w`` in the quantized array. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
           mode (str, optional): The quantization mode. Default: ``"affine"``.
+          kquant_type (str, optional): For ``mode="kquant"``, selects the codec
+            (e.g. ``"q4_0"``, ``"q4_k"``). Required for kquant mode; ignored for
+            other modes. Default: ``""``.
 
         Returns:
           array: The result of the multiplication of ``x`` with ``w``.
+            For ``mode="kquant"``, the output dtype is ``bfloat16`` when the
+            input is ``float32``; otherwise the output matches the input dtype.
       )pbdoc");
   m.def(
       "quantize",
@@ -4354,9 +4360,11 @@ void init_ops(nb::module_& m) {
       "mode"_a = "affine",
       "global_scale"_a = nb::none(),
       nb::kw_only(),
+      "kquant_type"_a = "",
+      "imatrix"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def quantize(w: array, /, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, global_scale: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> tuple[array, array, array]"),
+          "def quantize(w: array, /, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', global_scale: Optional[array] = None, *, kquant_type: str = '', imatrix: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> tuple[array, ...]"),
       R"pbdoc(
         Quantize the array ``w``.
 
@@ -4370,7 +4378,8 @@ void init_ops(nb::module_& m) {
           the last dimension divisible by ``group_size``
 
         The supported quantization modes are ``"affine"``, ``"mxfp4"``,
-        ``"mxfp8"``, and ``"nvfp4"``. They are described in more detail below.
+        ``"mxfp8"``, ``"nvfp4"``, and ``"kquant"``. They are described in
+        more detail below.
 
         Args:
           w (array): Array to be quantized
@@ -4383,6 +4392,12 @@ void init_ops(nb::module_& m) {
           mode (str, optional): The quantization mode. Default: ``"affine"``.
           global_scale (array, optional): The per-input float32 scale used for
             ``"nvfp4"`` quantization if provided. Default: ``None``.
+          kquant_type (str, optional): For ``mode="kquant"``, selects the codec
+            (e.g. ``"q4_k"``, ``"q8_0"``). Required when mode is ``"kquant"``.
+            Default: ``""``.
+          imatrix (array, optional): For ``mode="kquant"``, a float32 importance
+            matrix of shape ``[K]`` for importance-weighted quantization.
+            Default: ``None``.
 
         Returns:
           tuple: A tuple with either two or three elements containing:
@@ -4403,6 +4418,7 @@ void init_ops(nb::module_& m) {
             mxfp4   32\ :sup:`*`             4\ :sup:`*`                 e8m0           no
             mxfp8   32\ :sup:`*`             8\ :sup:`*`                 e8m0           no
             nvfp4   16\ :sup:`*`             4\ :sup:`*`                 e4m3           no
+            kquant  32\ :sup:`*`             8\ :sup:`*`                 per-codec      no
             ======  ======================   ==========================  =============  =====
 
           :sup:`*` indicates the default value when unspecified.
@@ -4442,6 +4458,16 @@ void init_ops(nb::module_& m) {
 
           More details on the ``"mx"`` formats can
           be found in the `specification <https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf>`_.
+
+          The ``"kquant"`` mode uses per-codec block quantization formats
+          with hierarchical scales. Each codec has a fixed block geometry
+          (e.g. 256 weights per super-block for ``"q4_k"``). The ``kquant_type``
+          argument selects the codec. Available codecs: ``"q2_k"``,
+          ``"q3_k"``, ``"q4_k"``, ``"q5_k"``, ``"q6_k"``, ``"q4_0"``,
+          ``"q4_1"``, ``"q5_0"``, ``"q5_1"``, ``"q8_0"``. Weights are
+          stored as packed ``uint8`` bytes in the codec's wire format.
+          Unlike ``affine`` quantization, ``kquant`` does not return a
+          separate bias array.
       )pbdoc");
   m.def(
       "dequantize",
@@ -4455,9 +4481,10 @@ void init_ops(nb::module_& m) {
       "global_scale"_a = nb::none(),
       "dtype"_a = nb::none(),
       nb::kw_only(),
+      "kquant_type"_a = "",
       "stream"_a = nb::none(),
       nb::sig(
-          "def dequantize(w: array, /, scales: array, biases: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', global_scale: Optional[array] = None, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def dequantize(w: array, /, scales: array, biases: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', global_scale: Optional[array] = None, dtype: Optional[Dtype] = None, *, kquant_type: str = '', stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Dequantize the matrix ``w`` using quantization parameters.
 
@@ -4472,20 +4499,22 @@ void init_ops(nb::module_& m) {
           bits (int, optional): The number of bits occupied by each element of
             ``w`` in the quantized array. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+          mode (str, optional): The quantization mode. Default: ``"affine"``.
           global_scale (array, optional): The per-input float32 scale used for
             ``"nvfp4"`` quantization if provided. Default: ``None``.
           dtype (Dtype, optional): The data type of the dequantized output. If
             ``None`` the return type is inferred from the scales and biases
             when possible and otherwise defaults to ``bfloat16``.
             Default: ``None``.
-          mode (str, optional): The quantization mode. Default: ``"affine"``.
+          kquant_type (str, optional): For ``mode="kquant"``, selects the codec
+            (e.g. ``"q4_k"``, ``"q8_0"``). Default: ``""``.
 
         Returns:
           array: The dequantized version of ``w``
 
         Notes:
           The currently supported quantization modes are ``"affine"``,
-          ``"mxfp4``, ``"mxfp8"``, and ``"nvfp4"``.
+          ``"mxfp4"``, ``"mxfp8"``, ``"nvfp4"``, and ``"kquant"``.
 
           For ``affine`` quantization, given the notation in :func:`quantize`,
           we compute :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s`
@@ -4510,9 +4539,10 @@ void init_ops(nb::module_& m) {
       "mode"_a = "affine",
       nb::kw_only(),
       "sorted_indices"_a = false,
+      "kquant_type"_a = "",
       "stream"_a = nb::none(),
       nb::sig(
-          "def gather_qmm(x: array, w: array, /, scales: array, biases: Optional[array] = None, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, sorted_indices: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+          "def gather_qmm(x: array, w: array, /, scales: array, biases: Optional[array] = None, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'affine', *, sorted_indices: bool = False, kquant_type: str = '', stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Perform quantized matrix multiplication with matrix-level gather.
 
@@ -4544,6 +4574,8 @@ void init_ops(nb::module_& m) {
             mode (str, optional): The quantization mode. Default: ``"affine"``.
             sorted_indices (bool, optional): May allow a faster implementation
               if the passed indices are sorted. Default: ``False``.
+            kquant_type (str, optional): For ``mode="kquant"``, selects the codec
+              (e.g. ``"q4_k"``). Default: ``""``.
 
         Returns:
             array: The result of the multiplication of ``x`` with ``w``

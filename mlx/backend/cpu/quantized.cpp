@@ -921,6 +921,28 @@ void fp_bs_qmm_dispatch(
 
 } // namespace
 
+namespace {
+
+template <typename T>
+void kquant_dequantize_dispatch(
+    const uint8_t* w,
+    T* out,
+    size_t num_weights,
+    const std::string& kquant_type);
+
+template <typename T>
+void kquant_qmm_cpu(
+    T* result,
+    const T* x,
+    const uint8_t* w,
+    int M,
+    int N,
+    int K,
+    bool transpose_w,
+    const std::string& kquant_type);
+
+} // namespace
+
 void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& x_pre = inputs[0];
   auto& w_pre = inputs[1];
@@ -950,6 +972,68 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
                       transpose_ = transpose_]() mutable {
       _qmm_dispatch(out, x, w, scales, biases, group_size_, bits_, transpose_);
     });
+  } else if (mode_ == QuantizationMode::KQuant) {
+    encoder.dispatch([out = array::unsafe_weak_copy(out),
+                      x = array::unsafe_weak_copy(x),
+                      w = array::unsafe_weak_copy(w),
+                      transpose_ = transpose_,
+                      kquant_type = kquant_type_]() mutable {
+      int K = x.shape(-1);
+      int M = x.ndim() > 1 ? x.shape(-2) : 1;
+      int N = out.shape(-1);
+      int batch_size = x.size() / (K * M);
+      size_t w_batch_els = w.ndim() > 2 ? w.shape(-1) * w.shape(-2) : 0;
+      switch (x.dtype()) {
+        case float32:
+          for (int i = 0; i < batch_size; i++) {
+            kquant_qmm_cpu<float>(
+                out.data<float>() + i * M * N,
+                x.data<float>() +
+                    elem_to_loc(i * M * K, x.shape(), x.strides()),
+                w.data<uint8_t>() +
+                    elem_to_loc(i * w_batch_els, w.shape(), w.strides()),
+                M,
+                N,
+                K,
+                transpose_,
+                kquant_type);
+          }
+          break;
+        case float16:
+          for (int i = 0; i < batch_size; i++) {
+            kquant_qmm_cpu<float16_t>(
+                out.data<float16_t>() + i * M * N,
+                x.data<float16_t>() +
+                    elem_to_loc(i * M * K, x.shape(), x.strides()),
+                w.data<uint8_t>() +
+                    elem_to_loc(i * w_batch_els, w.shape(), w.strides()),
+                M,
+                N,
+                K,
+                transpose_,
+                kquant_type);
+          }
+          break;
+        case bfloat16:
+          for (int i = 0; i < batch_size; i++) {
+            kquant_qmm_cpu<bfloat16_t>(
+                out.data<bfloat16_t>() + i * M * N,
+                x.data<bfloat16_t>() +
+                    elem_to_loc(i * M * K, x.shape(), x.strides()),
+                w.data<uint8_t>() +
+                    elem_to_loc(i * w_batch_els, w.shape(), w.strides()),
+                M,
+                N,
+                K,
+                transpose_,
+                kquant_type);
+          }
+          break;
+        default:
+          throw std::invalid_argument(
+              "[quantized_matmul] only floating types are supported");
+      }
+    });
   } else {
     encoder.dispatch([out = array::unsafe_weak_copy(out),
                       x = array::unsafe_weak_copy(x),
@@ -964,6 +1048,69 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
 }
 
 void GatherQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
+  if (mode_ == QuantizationMode::KQuant) {
+    auto& encoder = cpu::get_command_encoder(stream());
+    auto x = ensure_row_contiguous(inputs[0], encoder, stream());
+    auto w = ensure_row_contiguous(inputs[1], encoder, stream());
+    auto& lhs_indices = inputs[inputs.size() - 2];
+    auto& rhs_indices = inputs[inputs.size() - 1];
+
+    out.set_data(allocator::malloc(out.nbytes()));
+    encoder.set_input_array(x);
+    encoder.set_input_array(w);
+    encoder.set_input_array(lhs_indices);
+    encoder.set_input_array(rhs_indices);
+    encoder.set_output_array(out);
+    encoder.dispatch([out = array::unsafe_weak_copy(out),
+                      x = array::unsafe_weak_copy(x),
+                      w = array::unsafe_weak_copy(w),
+                      lhs_indices = array::unsafe_weak_copy(lhs_indices),
+                      rhs_indices = array::unsafe_weak_copy(rhs_indices),
+                      transpose_ = transpose_,
+                      kquant_type = kquant_type_]() mutable {
+      int K = x.shape(-1);
+      int M = x.shape(-2);
+      int N = out.shape(-1);
+      int w_els = w.shape(-1) * w.shape(-2);
+      auto lhs_ptr = lhs_indices.data<uint32_t>();
+      auto rhs_ptr = rhs_indices.data<uint32_t>();
+
+      auto gather_loop = [&](auto* tag) {
+        using T = std::remove_pointer_t<decltype(tag)>;
+        for (int i = 0; i < lhs_indices.size(); i++) {
+          int x_idx = lhs_ptr[elem_to_loc(
+              i, lhs_indices.shape(), lhs_indices.strides())];
+          int w_idx = rhs_ptr[elem_to_loc(
+              i, rhs_indices.shape(), rhs_indices.strides())];
+          kquant_qmm_cpu<T>(
+              out.data<T>() + i * M * N,
+              x.data<T>() + elem_to_loc(x_idx * M * K, x.shape(), x.strides()),
+              w.data<uint8_t>() +
+                  elem_to_loc(w_idx * w_els, w.shape(), w.strides()),
+              M,
+              N,
+              K,
+              transpose_,
+              kquant_type);
+        }
+      };
+      switch (x.dtype()) {
+        case float32:
+          gather_loop(static_cast<float*>(nullptr));
+          break;
+        case float16:
+          gather_loop(static_cast<float16_t*>(nullptr));
+          break;
+        case bfloat16:
+          gather_loop(static_cast<bfloat16_t*>(nullptr));
+          break;
+        default:
+          throw std::invalid_argument(
+              "[quantized_matmul] only floating types are supported");
+      }
+    });
+    return;
+  }
   auto& x_pre = inputs[0];
   auto& w_pre = inputs[1];
   auto& scales_pre = inputs[2];
@@ -1226,9 +1373,458 @@ void dispatch_quantize(
       w_ptr, out_ptr, scales_ptr, biases_ptr, bits, group_size, w.size());
 }
 
+namespace {
+
+inline float read_f16(const uint8_t* ptr) {
+  _Float16 tmp;
+  std::memcpy(&tmp, ptr, sizeof(_Float16));
+  return static_cast<float>(tmp);
+}
+
+template <typename T>
+void kquant_dequantize_q8_0(const uint8_t* w, T* out, size_t num_weights) {
+  constexpr int block_weights = 32;
+  constexpr int block_bytes = 34;
+  size_t num_blocks = num_weights / block_weights;
+  for (size_t b = 0; b < num_blocks; b++) {
+    const uint8_t* block = w + b * block_bytes;
+    float d = read_f16(block);
+    const int8_t* qs = reinterpret_cast<const int8_t*>(block + 2);
+    T* dst = out + b * block_weights;
+    for (int i = 0; i < block_weights; i++) {
+      dst[i] = static_cast<T>(d * static_cast<float>(qs[i]));
+    }
+  }
+}
+
+template <typename T>
+void kquant_dequantize_q4_0(const uint8_t* w, T* out, size_t num_weights) {
+  constexpr int block_weights = 32;
+  constexpr int block_bytes = 18;
+  size_t num_blocks = num_weights / block_weights;
+  for (size_t b = 0; b < num_blocks; b++) {
+    const uint8_t* block = w + b * block_bytes;
+    float d = read_f16(block);
+    const uint8_t* qs = block + 2;
+    T* dst = out + b * block_weights;
+    for (int j = 0; j < 16; j++) {
+      int x0 = (qs[j] & 0x0F) - 8;
+      int x1 = (qs[j] >> 4) - 8;
+      dst[j] = static_cast<T>(d * static_cast<float>(x0));
+      dst[j + 16] = static_cast<T>(d * static_cast<float>(x1));
+    }
+  }
+}
+
+template <typename T>
+void kquant_dequantize_q4_1(const uint8_t* w, T* out, size_t num_weights) {
+  constexpr int block_weights = 32;
+  constexpr int block_bytes = 20;
+  size_t num_blocks = num_weights / block_weights;
+  for (size_t b = 0; b < num_blocks; b++) {
+    const uint8_t* block = w + b * block_bytes;
+    float d = read_f16(block);
+    float m = read_f16(block + 2);
+    const uint8_t* qs = block + 4;
+    T* dst = out + b * block_weights;
+    for (int j = 0; j < 16; j++) {
+      int x0 = qs[j] & 0x0F;
+      int x1 = qs[j] >> 4;
+      dst[j] = static_cast<T>(d * static_cast<float>(x0) + m);
+      dst[j + 16] = static_cast<T>(d * static_cast<float>(x1) + m);
+    }
+  }
+}
+
+template <typename T>
+void kquant_dequantize_q5_0(const uint8_t* w, T* out, size_t num_weights) {
+  constexpr int block_weights = 32;
+  constexpr int block_bytes = 22;
+  size_t num_blocks = num_weights / block_weights;
+  for (size_t b = 0; b < num_blocks; b++) {
+    const uint8_t* block = w + b * block_bytes;
+    float d = read_f16(block);
+    const uint8_t* qh_bytes = block + 2;
+    uint32_t qh = static_cast<uint32_t>(qh_bytes[0]) |
+        (static_cast<uint32_t>(qh_bytes[1]) << 8) |
+        (static_cast<uint32_t>(qh_bytes[2]) << 16) |
+        (static_cast<uint32_t>(qh_bytes[3]) << 24);
+    const uint8_t* qs = block + 6;
+    T* dst = out + b * block_weights;
+    for (int j = 0; j < 16; j++) {
+      int xh_0 = ((qh >> j) << 4) & 0x10;
+      int xh_1 = (qh >> (j + 12)) & 0x10;
+      int x0 = (qs[j] & 0x0F) | xh_0;
+      int x1 = (qs[j] >> 4) | xh_1;
+      dst[j] = static_cast<T>(d * static_cast<float>(x0 - 16));
+      dst[j + 16] = static_cast<T>(d * static_cast<float>(x1 - 16));
+    }
+  }
+}
+
+template <typename T>
+void kquant_dequantize_q5_1(const uint8_t* w, T* out, size_t num_weights) {
+  constexpr int block_weights = 32;
+  constexpr int block_bytes = 24;
+  size_t num_blocks = num_weights / block_weights;
+  for (size_t b = 0; b < num_blocks; b++) {
+    const uint8_t* block = w + b * block_bytes;
+    float d = read_f16(block);
+    float m = read_f16(block + 2);
+    const uint8_t* qh_bytes = block + 4;
+    const uint8_t* qs = block + 8;
+    uint32_t qh;
+    std::memcpy(&qh, qh_bytes, 4);
+    T* dst = out + b * block_weights;
+    for (int j = 0; j < 16; j++) {
+      uint8_t xh_0 = ((qh >> j) << 4) & 0x10;
+      uint8_t xh_1 = ((qh >> (j + 12))) & 0x10;
+      uint8_t x0 = (qs[j] & 0x0F) | xh_0;
+      uint8_t x1 = (qs[j] >> 4) | xh_1;
+      dst[j] = static_cast<T>(d * static_cast<float>(x0) + m);
+      dst[j + 16] = static_cast<T>(d * static_cast<float>(x1) + m);
+    }
+  }
+}
+
+inline void kquant_unpack_q4k_scales(
+    const uint8_t* scales_packed,
+    float* sc,
+    float* mn,
+    float d,
+    float dmin) {
+  for (int i = 0; i < 8; i++) {
+    uint8_t raw_sc, raw_m;
+    if (i < 4) {
+      raw_sc = scales_packed[i] & 0x3F;
+      raw_m = scales_packed[i + 4] & 0x3F;
+    } else {
+      raw_sc =
+          (scales_packed[i + 4] & 0x0F) | ((scales_packed[i - 4] >> 6) << 4);
+      raw_m = (scales_packed[i + 4] >> 4) | ((scales_packed[i] >> 6) << 4);
+    }
+    sc[i] = d * static_cast<float>(raw_sc);
+    mn[i] = dmin * static_cast<float>(raw_m);
+  }
+}
+
+template <typename T>
+void kquant_dequantize_q4_k(const uint8_t* w, T* out, size_t num_weights) {
+  constexpr int block_weights = 256;
+  constexpr int block_bytes = 144;
+  size_t num_blocks = num_weights / block_weights;
+  for (size_t b = 0; b < num_blocks; b++) {
+    const uint8_t* block = w + b * block_bytes;
+    float d = read_f16(block);
+    float dmin = read_f16(block + 2);
+    const uint8_t* scales_packed = block + 4;
+    const uint8_t* qs = block + 16;
+
+    float sc[8], mn[8];
+    kquant_unpack_q4k_scales(scales_packed, sc, mn, d, dmin);
+
+    T* dst = out + b * block_weights;
+    for (int g = 0; g < 4; g++) {
+      for (int i = 0; i < 32; i++) {
+        dst[(2 * g) * 32 + i] = static_cast<T>(
+            sc[2 * g] * static_cast<float>(qs[g * 32 + i] & 0x0F) - mn[2 * g]);
+        dst[(2 * g + 1) * 32 + i] = static_cast<T>(
+            sc[2 * g + 1] * static_cast<float>(qs[g * 32 + i] >> 4) -
+            mn[2 * g + 1]);
+      }
+    }
+  }
+}
+
+template <typename T>
+void kquant_dequantize_q5_k(const uint8_t* w, T* out, size_t num_weights) {
+  constexpr int block_weights = 256;
+  constexpr int block_bytes = 176;
+  size_t num_blocks = num_weights / block_weights;
+  for (size_t b = 0; b < num_blocks; b++) {
+    const uint8_t* block = w + b * block_bytes;
+    float d = read_f16(block);
+    float dmin = read_f16(block + 2);
+    const uint8_t* scales_packed = block + 4;
+    const uint8_t* qh = block + 16;
+    const uint8_t* qs = block + 48;
+
+    float sc[8], mn[8];
+    kquant_unpack_q4k_scales(scales_packed, sc, mn, d, dmin);
+
+    T* dst = out + b * block_weights;
+    for (int g = 0; g < 4; g++) {
+      for (int i = 0; i < 32; i++) {
+        uint8_t lo0 = qs[g * 32 + i] & 0x0F;
+        uint8_t lo1 = qs[g * 32 + i] >> 4;
+        uint8_t hi0 = (qh[i] >> (2 * g)) & 1;
+        uint8_t hi1 = (qh[i] >> (2 * g + 1)) & 1;
+        dst[(2 * g) * 32 + i] = static_cast<T>(
+            sc[2 * g] * static_cast<float>(lo0 | (hi0 << 4)) - mn[2 * g]);
+        dst[(2 * g + 1) * 32 + i] = static_cast<T>(
+            sc[2 * g + 1] * static_cast<float>(lo1 | (hi1 << 4)) -
+            mn[2 * g + 1]);
+      }
+    }
+  }
+}
+
+template <typename T>
+void kquant_dequantize_q6_k(const uint8_t* w, T* out, size_t num_weights) {
+  constexpr int block_weights = 256;
+  constexpr int block_bytes = 210;
+  size_t num_blocks = num_weights / block_weights;
+  for (size_t b = 0; b < num_blocks; b++) {
+    const uint8_t* block = w + b * block_bytes;
+    const uint8_t* ql_base = block;
+    const uint8_t* qh_base = block + 128;
+    const int8_t* scales = reinterpret_cast<const int8_t*>(block + 192);
+    float d = read_f16(block + 208);
+
+    T* dst = out + b * block_weights;
+    for (int half = 0; half < 2; half++) {
+      const uint8_t* ql = ql_base + half * 64;
+      const uint8_t* qh = qh_base + half * 32;
+      const int8_t* sc = scales + half * 8;
+      T* out_half = dst + half * 128;
+
+      for (int l = 0; l < 32; l++) {
+        int is0 = l / 16;
+        int8_t q1 =
+            static_cast<int8_t>((ql[l] & 0x0F) | (((qh[l] >> 0) & 3) << 4)) -
+            32;
+        int8_t q2 = static_cast<int8_t>(
+                        (ql[l + 32] & 0x0F) | (((qh[l] >> 2) & 3) << 4)) -
+            32;
+        int8_t q3 =
+            static_cast<int8_t>((ql[l] >> 4) | (((qh[l] >> 4) & 3) << 4)) - 32;
+        int8_t q4 =
+            static_cast<int8_t>((ql[l + 32] >> 4) | (((qh[l] >> 6) & 3) << 4)) -
+            32;
+        out_half[l] = static_cast<T>(
+            d * static_cast<float>(sc[is0]) * static_cast<float>(q1));
+        out_half[l + 32] = static_cast<T>(
+            d * static_cast<float>(sc[is0 + 2]) * static_cast<float>(q2));
+        out_half[l + 64] = static_cast<T>(
+            d * static_cast<float>(sc[is0 + 4]) * static_cast<float>(q3));
+        out_half[l + 96] = static_cast<T>(
+            d * static_cast<float>(sc[is0 + 6]) * static_cast<float>(q4));
+      }
+    }
+  }
+}
+
+inline void kquant_unpack_q3k_scales(const uint8_t* s, int32_t* sc) {
+  for (int k = 0; k < 4; k++) {
+    sc[k] = static_cast<int32_t>(s[k] & 0x0F) |
+        (static_cast<int32_t>((s[8 + k]) & 0x03) << 4);
+    sc[k + 4] = static_cast<int32_t>(s[k + 4] & 0x0F) |
+        (static_cast<int32_t>((s[8 + k] >> 2) & 0x03) << 4);
+    sc[k + 8] = static_cast<int32_t>((s[k] >> 4) & 0x0F) |
+        (static_cast<int32_t>((s[8 + k] >> 4) & 0x03) << 4);
+    sc[k + 12] = static_cast<int32_t>((s[k + 4] >> 4) & 0x0F) |
+        (static_cast<int32_t>((s[8 + k] >> 6) & 0x03) << 4);
+  }
+  for (int i = 0; i < 16; i++) {
+    sc[i] -= 32;
+  }
+}
+
+template <typename T>
+void kquant_dequantize_q3_k(const uint8_t* w, T* out, size_t num_weights) {
+  constexpr int block_weights = 256;
+  constexpr int block_bytes = 110;
+  size_t num_blocks = num_weights / block_weights;
+  for (size_t b = 0; b < num_blocks; b++) {
+    const uint8_t* block = w + b * block_bytes;
+    const uint8_t* hmask = block;
+    const uint8_t* qs_full = block + 32;
+    const uint8_t* scales_packed = block + 96;
+    float d = read_f16(block + 108);
+
+    int32_t sc[16];
+    kquant_unpack_q3k_scales(scales_packed, sc);
+
+    T* dst = out + b * block_weights;
+    int out_idx = 0;
+    for (int outer_half = 0; outer_half < 2; outer_half++) {
+      const uint8_t* qs_chunk = qs_full + outer_half * 32;
+      for (int shift_idx = 0; shift_idx < 4; shift_idx++) {
+        int shift = shift_idx * 2;
+        uint8_t m = 1 << (outer_half * 4 + shift_idx);
+        int is_left = outer_half * 8 + shift_idx * 2;
+        float dl_left = d * static_cast<float>(sc[is_left]);
+        for (int l = 0; l < 16; l++) {
+          int q2 = (qs_chunk[l] >> shift) & 3;
+          int h = (hmask[l] & m) ? 0 : 4;
+          dst[out_idx++] = static_cast<T>(dl_left * static_cast<float>(q2 - h));
+        }
+        float dl_right = d * static_cast<float>(sc[is_left + 1]);
+        for (int l = 0; l < 16; l++) {
+          int q2 = (qs_chunk[l + 16] >> shift) & 3;
+          int h = (hmask[l + 16] & m) ? 0 : 4;
+          dst[out_idx++] =
+              static_cast<T>(dl_right * static_cast<float>(q2 - h));
+        }
+      }
+    }
+  }
+}
+
+template <typename T>
+void kquant_dequantize_q2_k(const uint8_t* w, T* out, size_t num_weights) {
+  constexpr int block_weights = 256;
+  constexpr int block_bytes = 84;
+  size_t num_blocks = num_weights / block_weights;
+  for (size_t b = 0; b < num_blocks; b++) {
+    const uint8_t* block = w + b * block_bytes;
+    const uint8_t* scales_raw = block;
+    const uint8_t* qs_full = block + 16;
+    float d = read_f16(block + 80);
+    float dmin = read_f16(block + 82);
+
+    T* dst = out + b * block_weights;
+    int out_idx = 0;
+    int is_idx = 0;
+    for (int outer_half = 0; outer_half < 2; outer_half++) {
+      const uint8_t* qs_chunk = qs_full + outer_half * 32;
+      for (int shift_idx = 0; shift_idx < 4; shift_idx++) {
+        int shift = shift_idx * 2;
+        uint8_t sc_byte_left = scales_raw[is_idx++];
+        float dl_left = d * static_cast<float>(sc_byte_left & 0x0F);
+        float ml_left = dmin * static_cast<float>(sc_byte_left >> 4);
+        for (int l = 0; l < 16; l++) {
+          int q2 = (qs_chunk[l] >> shift) & 3;
+          dst[out_idx++] =
+              static_cast<T>(dl_left * static_cast<float>(q2) - ml_left);
+        }
+        uint8_t sc_byte_right = scales_raw[is_idx++];
+        float dl_right = d * static_cast<float>(sc_byte_right & 0x0F);
+        float ml_right = dmin * static_cast<float>(sc_byte_right >> 4);
+        for (int l = 0; l < 16; l++) {
+          int q2 = (qs_chunk[l + 16] >> shift) & 3;
+          dst[out_idx++] =
+              static_cast<T>(dl_right * static_cast<float>(q2) - ml_right);
+        }
+      }
+    }
+  }
+}
+
+template <typename T>
+void kquant_dequantize_dispatch(
+    const uint8_t* w,
+    T* out,
+    size_t num_weights,
+    const std::string& kquant_type) {
+  if (kquant_type == "q8_0") {
+    kquant_dequantize_q8_0(w, out, num_weights);
+  } else if (kquant_type == "q4_0") {
+    kquant_dequantize_q4_0(w, out, num_weights);
+  } else if (kquant_type == "q4_1") {
+    kquant_dequantize_q4_1(w, out, num_weights);
+  } else if (kquant_type == "q5_0") {
+    kquant_dequantize_q5_0(w, out, num_weights);
+  } else if (kquant_type == "q5_1") {
+    kquant_dequantize_q5_1(w, out, num_weights);
+  } else if (kquant_type == "q4_k") {
+    kquant_dequantize_q4_k(w, out, num_weights);
+  } else if (kquant_type == "q5_k") {
+    kquant_dequantize_q5_k(w, out, num_weights);
+  } else if (kquant_type == "q6_k") {
+    kquant_dequantize_q6_k(w, out, num_weights);
+  } else if (kquant_type == "q3_k") {
+    kquant_dequantize_q3_k(w, out, num_weights);
+  } else if (kquant_type == "q2_k") {
+    kquant_dequantize_q2_k(w, out, num_weights);
+  } else {
+    throw std::runtime_error(
+        "[kquant_dequantize] Unsupported codec: " + kquant_type);
+  }
+}
+
+template <typename T>
+void kquant_qmm_cpu(
+    T* result,
+    const T* x,
+    const uint8_t* w,
+    int M,
+    int N,
+    int K,
+    bool transpose_w,
+    const std::string& kquant_type) {
+  const auto* codec = kquant_codec_by_name(kquant_type);
+  int w_rows = transpose_w ? N : K;
+  int w_cols = transpose_w ? K : N;
+  size_t weights_per_row = static_cast<size_t>(w_cols);
+  size_t row_bytes =
+      (weights_per_row / codec->weights_per_block) * codec->bytes_per_block;
+
+  std::vector<float> w_dec(static_cast<size_t>(w_rows) * w_cols);
+  for (int r = 0; r < w_rows; r++) {
+    kquant_dequantize_dispatch(
+        w + r * row_bytes, w_dec.data() + r * w_cols, w_cols, kquant_type);
+  }
+
+  for (int m = 0; m < M; m++) {
+    for (int n = 0; n < N; n++) {
+      float acc = 0.0f;
+      if (transpose_w) {
+        for (int k = 0; k < K; k++) {
+          acc += static_cast<float>(x[m * K + k]) * w_dec[n * K + k];
+        }
+      } else {
+        for (int k = 0; k < K; k++) {
+          acc += static_cast<float>(x[m * K + k]) * w_dec[k * N + n];
+        }
+      }
+      result[m * N + n] = static_cast<T>(acc);
+    }
+  }
+}
+
+} // namespace
+
 void fast::Quantize::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
+  if (mode_ == QuantizationMode::KQuant) {
+    if (!dequantize_) {
+      throw std::runtime_error(
+          "[fast::Quantize::eval_cpu] KQuant encode is GPU-only.");
+    }
+    auto& encoder = cpu::get_command_encoder(stream());
+    auto w = ensure_row_contiguous(inputs[0], encoder, stream());
+    auto& out = outputs[0];
+    out.set_data(allocator::malloc(out.nbytes()));
+    encoder.set_input_array(w);
+    encoder.set_output_array(out);
+    size_t num_weights = out.size();
+    encoder.dispatch([w = array::unsafe_weak_copy(w),
+                      out = array::unsafe_weak_copy(out),
+                      num_weights,
+                      kquant_type = kquant_type_]() mutable {
+      auto w_ptr = w.data<uint8_t>();
+      switch (out.dtype()) {
+        case float32:
+          kquant_dequantize_dispatch(
+              w_ptr, out.data<float>(), num_weights, kquant_type);
+          break;
+        case float16:
+          kquant_dequantize_dispatch(
+              w_ptr, out.data<float16_t>(), num_weights, kquant_type);
+          break;
+        case bfloat16:
+          kquant_dequantize_dispatch(
+              w_ptr, out.data<bfloat16_t>(), num_weights, kquant_type);
+          break;
+        default:
+          throw std::runtime_error(
+              "[fast::Quantize::eval_cpu] KQuant dequantize only supports float types.");
+      }
+    });
+    return;
+  }
   auto& encoder = cpu::get_command_encoder(stream());
   auto w = ensure_row_contiguous(inputs[0], encoder, stream());
   auto& out = outputs[0];

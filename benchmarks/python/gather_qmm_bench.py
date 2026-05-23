@@ -40,12 +40,21 @@ def gather_mm_simulate(x, w, indices):
     return x
 
 
-def time_gather_qmm():
+def time_gather_qmm(mode="affine", kquant_type=""):
+    label = kquant_type if mode == "kquant" else mode
+    print(f"\n--- gather_qmm ({label}) ---")
+
+    quantize_kwargs = {"mode": mode}
+    qmm_kwargs = {"mode": mode}
+    if mode == "kquant":
+        quantize_kwargs["kquant_type"] = kquant_type
+        qmm_kwargs["kquant_type"] = kquant_type
+
     x = mx.random.normal((N, 1, 1, D)) / 1024**0.5
     w1 = mx.random.normal((E, M, D)) / 1024**0.5
     w2 = mx.random.normal((E, D, M)) / 1024**0.5
-    w1 = mx.quantize(w1)
-    w2 = mx.quantize(w2)
+    w1 = mx.quantize(w1, **quantize_kwargs)
+    w2 = mx.quantize(w2, **quantize_kwargs)
     indices = (mx.random.uniform(shape=(N, I)) * E).astype(mx.uint32)
     sorted_indices = mx.sort(indices.flatten()).reshape(N, I)
     mx.eval(x, w1, w2, indices, sorted_indices)
@@ -55,8 +64,12 @@ def time_gather_qmm():
         inv_order = None
         if sort:
             x, idx, inv_order = gather_sort(x, indices)
-        x = mx.gather_qmm(x, *w1, transpose=True, rhs_indices=idx, sorted_indices=sort)
-        x = mx.gather_qmm(x, *w2, transpose=True, rhs_indices=idx, sorted_indices=sort)
+        x = mx.gather_qmm(
+            x, *w1, transpose=True, rhs_indices=idx, sorted_indices=sort, **qmm_kwargs
+        )
+        x = mx.gather_qmm(
+            x, *w2, transpose=True, rhs_indices=idx, sorted_indices=sort, **qmm_kwargs
+        )
         if sort:
             x = scatter_unsort(x, inv_order, indices.shape)
         return x
@@ -68,13 +81,13 @@ def time_gather_qmm():
     x = mx.random.normal((N * I, D)) / 1024**0.5
     w1 = mx.random.normal((M, D)) / 1024**0.5
     w2 = mx.random.normal((D, M)) / 1024**0.5
-    w1 = mx.quantize(w1)
-    w2 = mx.quantize(w2)
+    w1 = mx.quantize(w1, **quantize_kwargs)
+    w2 = mx.quantize(w2, **quantize_kwargs)
     mx.eval(x, w1, w2)
 
     def equivalent_matmul(x, w1, w2):
-        x = mx.quantized_matmul(x, *w1, transpose=True)
-        x = mx.quantized_matmul(x, *w2, transpose=True)
+        x = mx.quantized_matmul(x, *w1, transpose=True, **qmm_kwargs)
+        x = mx.quantized_matmul(x, *w2, transpose=True, **qmm_kwargs)
         return x
 
     time_fn(equivalent_matmul, x, w1, w2)
@@ -82,3 +95,5 @@ def time_gather_qmm():
 
 if __name__ == "__main__":
     time_gather_qmm()
+    for codec in ("q8_0", "q4_k", "q6_k"):
+        time_gather_qmm(mode="kquant", kquant_type=codec)

@@ -1479,6 +1479,7 @@ MLX_API array quantized_matmul(
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
+    const std::string& kquant_type = "",
     StreamOrDevice s = {});
 
 /** Quantize a matrix along its last axis */
@@ -1488,6 +1489,8 @@ MLX_API std::vector<array> quantize(
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
     const std::optional<array>& global_scale = std::nullopt,
+    const std::string& kquant_type = "",
+    const std::optional<array>& imatrix = std::nullopt,
     StreamOrDevice s = {});
 
 /** Dequantize a matrix produced by quantize() */
@@ -1500,6 +1503,7 @@ MLX_API array dequantize(
     const std::string& mode = "affine",
     const std::optional<array>& global_scale = std::nullopt,
     std::optional<Dtype> dtype = std::nullopt,
+    const std::string& kquant_type = "",
     StreamOrDevice s = {});
 
 MLX_API array qqmm(
@@ -1533,6 +1537,7 @@ MLX_API array gather_qmm(
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
     bool sorted_indices = false,
+    const std::string& kquant_type = "",
     StreamOrDevice s = {});
 
 /** Returns a contraction of a and b over multiple dimensions. */

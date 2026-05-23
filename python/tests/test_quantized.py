@@ -918,6 +918,43 @@ class TestQuantized(mlx_tests.MLXTestCase):
             test_shape(32, 512, 32, transpose=False, **kwargs)
             test_shape(1, 512, 32, transpose=False, **kwargs)
 
+    def test_gather_qmm_nax(self):
+        # Exercises the gather_qmm_nax dispatch path. Prior to the BK=64 /
+        # function-name fixes, this path was dead: affine tests defaulted to
+        # float32 (which satisfies the NAX gate when TF32 is enabled, but
+        # could fall back), and any caller that did hit NAX would fail at
+        # AOT lookup (bk=32 mismatch) or JIT compile (trailing underscore).
+        # Use fp16/bf16 with K%64==0, transpose=True, batched gather to land
+        # squarely in gather_qmm_nax.
+        indices = mx.array([[2], [0], [1]], dtype=mx.uint32)
+        for dtype in (mx.float16, mx.bfloat16):
+            for group_size, bits in ((64, 4), (32, 4), (128, 4)):
+                with self.subTest(dtype=dtype, group_size=group_size, bits=bits):
+                    M, N, K = 32, 128, 256
+                    x = mx.random.normal((3, M, K)).astype(dtype)
+                    w = mx.random.normal((4, N, K)).astype(dtype)
+                    qw, s, b = mx.quantize(w, group_size=group_size, bits=bits)
+                    w_hat = mx.dequantize(qw, s, b, group_size=group_size, bits=bits)
+                    w_hat_t = w_hat.swapaxes(-1, -2)
+
+                    ref = mx.gather_mm(x, w_hat_t, rhs_indices=indices)
+                    out = mx.gather_qmm(
+                        x,
+                        qw,
+                        s,
+                        b,
+                        rhs_indices=indices,
+                        transpose=True,
+                        group_size=group_size,
+                        bits=bits,
+                    )
+                    self.assertEqual(out.dtype, dtype)
+                    # NAX MMA accumulates at lower precision than the
+                    # ALU/dequant reference, so the gap is non-trivial in
+                    # absolute terms but small relative to ||ref||.
+                    rtol = 5e-3 if dtype == mx.float16 else 5e-2
+                    self.assertTrue(mx.allclose(ref, out, atol=1e-2, rtol=rtol))
+
     def test_qmm_fp_type(self):
         indices = mx.array([[2], [0], [1]], dtype=mx.uint32)
 

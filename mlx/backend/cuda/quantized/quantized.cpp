@@ -14,6 +14,10 @@ namespace mlx::core {
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("QuantizedMatmul::eval_gpu");
+  if (mode_ == QuantizationMode::KQuant) {
+    throw std::runtime_error(
+        "[QuantizedMatmul::eval_gpu] KQuant CUDA not implemented.");
+  }
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
@@ -143,6 +147,10 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("GatherQMM::eval_gpu");
+  if (mode_ == QuantizationMode::KQuant) {
+    throw std::runtime_error(
+        "[GatherQMM::eval_gpu] KQuant CUDA not implemented.");
+  }
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
@@ -270,6 +278,10 @@ void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   nvtx3::scoped_range r("Quantize::eval_gpu");
+  if (mode_ == QuantizationMode::KQuant) {
+    throw std::runtime_error(
+        "[fast::Quantize::eval_gpu] KQuant encode/decode CUDA is NYI.");
+  }
   auto& s = stream();
   auto& enc = cu::get_command_encoder(s);
   if (dequantize_) {

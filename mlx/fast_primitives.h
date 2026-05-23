@@ -332,12 +332,14 @@ class Quantize : public Custom {
       int group_size,
       int bits,
       QuantizationMode mode,
-      bool dequantize)
+      bool dequantize,
+      std::string kquant_type = "")
       : Custom(stream, std::move(fallback)),
         group_size_(group_size),
         bits_(bits),
         mode_(mode),
-        dequantize_(dequantize) {}
+        dequantize_(dequantize),
+        kquant_type_(std::move(kquant_type)) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
@@ -350,7 +352,8 @@ class Quantize : public Custom {
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
-    return std::make_tuple(nullptr, group_size_, bits_, mode_, dequantize_);
+    return std::make_tuple(
+        nullptr, group_size_, bits_, mode_, dequantize_, kquant_type_);
   }
 
  private:
@@ -358,6 +361,7 @@ class Quantize : public Custom {
   int bits_;
   QuantizationMode mode_;
   bool dequantize_;
+  std::string kquant_type_;
 };
 
 using ScalarArg = std::variant<bool, int, float>;

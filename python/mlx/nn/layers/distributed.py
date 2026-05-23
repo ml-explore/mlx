@@ -463,6 +463,11 @@ class QuantizedAllToShardedLinear(Module):
         segments: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
     ):
+        mode = getattr(quantized_linear_layer, "mode", "affine")
+        if mode == "kquant":
+            raise NotImplementedError(
+                "Distributed quantized layers do not support mode='kquant'."
+            )
         group = group or mx.distributed.init()
         output_dims, input_dims = quantized_linear_layer.weight.shape
         input_dims = (input_dims * 32) // quantized_linear_layer.bits
@@ -473,7 +478,7 @@ class QuantizedAllToShardedLinear(Module):
             hasattr(quantized_linear_layer, "bias"),
             group_size=quantized_linear_layer.group_size,
             bits=quantized_linear_layer.bits,
-            mode=getattr(quantized_linear_layer, "mode", "affine"),
+            mode=mode,
             group=group,
         )
         sl.update(
@@ -595,6 +600,11 @@ class QuantizedShardedToAllLinear(Module):
         segments: Union[int, list] = 1,
         group: Optional[mx.distributed.Group] = None,
     ):
+        mode = getattr(quantized_linear_layer, "mode", "affine")
+        if mode == "kquant":
+            raise NotImplementedError(
+                "Distributed quantized layers do not support mode='kquant'."
+            )
         group = group or mx.distributed.init()
         output_dims, input_dims = quantized_linear_layer.weight.shape
         input_dims = (input_dims * 32) // quantized_linear_layer.bits
@@ -605,7 +615,7 @@ class QuantizedShardedToAllLinear(Module):
             hasattr(quantized_linear_layer, "bias"),
             group_size=quantized_linear_layer.group_size,
             bits=quantized_linear_layer.bits,
-            mode=getattr(quantized_linear_layer, "mode", "affine"),
+            mode=mode,
             group=group,
         )
         sl.update(

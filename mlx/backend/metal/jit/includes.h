@@ -26,6 +26,8 @@ const char* logsumexp();
 const char* quantized_utils();
 const char* quantized();
 const char* fp_quantized();
+const char* kq_quantized();
+const char* kq_quantized_encode();
 const char* ternary();
 const char* scan();
 const char* scatter_axis();
@@ -54,6 +56,7 @@ const char* steel_gemm_segmented_nax();
 
 const char* quantized_nax();
 const char* fp_quantized_nax();
+const char* kq_quantized_nax();
 
 const char* steel_attention_nax();
 

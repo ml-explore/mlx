@@ -101,6 +101,7 @@ set(STEEL_ATTN_HEADERS
 set(STEEL_NAX_HEADERS
     steel/defines.h
     steel/utils.h
+    steel/gemm/loader.h
     steel/gemm/params.h
     steel/gemm/transforms.h
     steel/gemm/nax.h
@@ -138,6 +139,10 @@ if(NOT MLX_METAL_JIT)
   build_kernel(quantized quantized.h quantized_utils.h ${STEEL_HEADERS})
   build_kernel(fp_quantized fp4.h fp8.h fp_quantized.h quantized_utils.h
                ${STEEL_HEADERS})
+  build_kernel(kq_quantized kq_quantized.h kq_quantized_legacy.h
+               quantized_utils.h ${STEEL_HEADERS})
+  build_kernel(kq_quantized_encode kq_quantized.h kq_quantized_legacy.h
+               kq_quantized_encode.h quantized_utils.h ${STEEL_HEADERS})
   build_kernel(scan scan.h)
   build_kernel(softmax softmax.h)
   build_kernel(logsumexp logsumexp.h)
@@ -167,6 +172,8 @@ if(NOT MLX_METAL_JIT)
     build_kernel(quantized_nax quantized_nax.h ${STEEL_NAX_HEADERS})
     build_kernel(fp_quantized_nax fp4.h fp8.h fp_quantized_nax.h
                  ${STEEL_NAX_HEADERS})
+    build_kernel(kq_quantized_nax kq_quantized.h kq_quantized_legacy.h
+                 kq_quantized_nax.h quantized_utils.h ${STEEL_NAX_HEADERS})
 
     build_kernel(steel/attn/kernels/steel_attention_nax
                  ${STEEL_NAX_ATTN_HEADERS})

@@ -3,6 +3,29 @@
 #include <metal_simdgroup>
 #include <metal_stdlib>
 
+// Load `values_per_thread` consecutive T-values from device memory into a
+// thread-local U-buffer (e.g., T=half, U=float for fp16 input + fp32
+// accumulation). Hot path -- caller guarantees in-bounds.
+template <typename T, typename U, int values_per_thread>
+inline void load_vector(const device T* x, thread U* x_thread) {
+#pragma unroll
+  for (int i = 0; i < values_per_thread; i++) {
+    x_thread[i] = x[i];
+  }
+}
+
+// Boundary-aware variant: load N values then zero-fill the remaining
+// values_per_thread - N slots.
+template <typename T, typename U, int values_per_thread>
+inline void load_vector_safe(const device T* x, thread U* x_thread, int N) {
+  for (int i = 0; i < N; i++) {
+    x_thread[i] = x[i];
+  }
+  for (int i = N; i < values_per_thread; i++) {
+    x_thread[i] = 0;
+  }
+}
+
 template <typename T, typename mma_t, typename loader_a_t, typename loader_b_t>
 METAL_FUNC void gemm_loop_aligned(
     threadgroup T* As,

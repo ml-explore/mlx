@@ -1056,7 +1056,6 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
         loader_w.next();
       }
 
-      // Store results to device memory
       threadgroup_barrier(mem_flags::mem_threadgroup);
 
       if constexpr (kAlignedM.value && kAlignedN.value) {

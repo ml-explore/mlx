@@ -9,6 +9,7 @@
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/fft.h"
@@ -3424,6 +3425,8 @@ std::string quantization_mode_to_string(QuantizationMode mode) {
       return "mxfp4";
     case QuantizationMode::Mxfp8:
       return "mxfp8";
+    case QuantizationMode::KQuant:
+      return "kquant";
     case QuantizationMode::Nvfp4:
     default:
       return "nvfp4";
@@ -3441,6 +3444,8 @@ QuantizationMode string_to_quantization_mode(
     return QuantizationMode::Mxfp8;
   } else if (mode == "nvfp4") {
     return QuantizationMode::Nvfp4;
+  } else if (mode == "kquant") {
+    return QuantizationMode::KQuant;
   }
   std::string msg;
   if (!tag.empty()) {
@@ -3448,6 +3453,23 @@ QuantizationMode string_to_quantization_mode(
   }
   msg += " Invalid quantization mode '" + mode + "'.";
   throw std::invalid_argument(msg);
+}
+
+const KQuantCodec* kquant_codec_by_name(const std::string& name) {
+  static const std::unordered_map<std::string, KQuantCodec> codecs = {
+      {"q4_0", {"q4_0", 32, 18, 4, true, true}},
+      {"q4_1", {"q4_1", 32, 20, 4, true, true}},
+      {"q5_0", {"q5_0", 32, 22, 5, true, true}},
+      {"q5_1", {"q5_1", 32, 24, 5, true, true}},
+      {"q8_0", {"q8_0", 32, 34, 8, true, true}},
+      {"q2_k", {"q2_k", 256, 84, 2, true, true}},
+      {"q3_k", {"q3_k", 256, 110, 3, true, true}},
+      {"q4_k", {"q4_k", 256, 144, 4, true, true}},
+      {"q5_k", {"q5_k", 256, 176, 5, true, true}},
+      {"q6_k", {"q6_k", 256, 210, 6, true, true}},
+  };
+  auto it = codecs.find(name);
+  return it != codecs.end() ? &it->second : nullptr;
 }
 
 std::pair<std::vector<array>, std::vector<int>> QuantizedMatmul::vmap(
@@ -3478,6 +3500,7 @@ std::vector<array> QuantizedMatmul::vjp(
           group_size_,
           bits_,
           quantization_mode_to_string(mode_),
+          kquant_type_,
           stream()));
     }
 
@@ -3513,8 +3536,9 @@ std::vector<array> QuantizedMatmul::vjp(
             group_size_,
             bits_,
             quantization_mode_to_string(mode_),
-            {}, // placeholder for amax
             std::nullopt,
+            std::nullopt,
+            kquant_type_,
             stream());
         wq = unflatten(wq, -1, {-1, group_size_}, stream());
         vjps.push_back(sum(multiply(*dsb, wq, stream()), -1, false, stream()));
@@ -3542,19 +3566,37 @@ std::vector<array> QuantizedMatmul::jvp(
       group_size_,
       bits_,
       quantization_mode_to_string(mode_),
+      kquant_type_,
       stream())};
 }
 
 bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
   const QuantizedMatmul& qm_other = static_cast<const QuantizedMatmul&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
-      mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_;
+      mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_ &&
+      kquant_type_ == qm_other.kquant_type_;
 }
 
 std::vector<Shape> QuantizedMatmul::output_shapes(
     const std::vector<array>& inputs) {
   auto& w = inputs[1];
-  int w_outer_dims = (transpose_) ? w.shape(-2) : w.shape(-1) * 32 / bits_;
+  int w_outer_dims;
+  if (mode_ == QuantizationMode::KQuant) {
+    // For kquant the weight tensor is uint8 packed wire-format bytes; the
+    // expansion factor is weights_per_block / bytes_per_block, not the
+    // bits-per-uint32 formula used by affine/fp.
+    const KQuantCodec* codec = kquant_codec_by_name(kquant_type_);
+    if (codec == nullptr) {
+      throw std::invalid_argument(
+          "[QuantizedMatmul::output_shapes] Unknown kquant_type \"" +
+          kquant_type_ + "\".");
+    }
+    int weights_per_row =
+        w.shape(-1) / codec->bytes_per_block * codec->weights_per_block;
+    w_outer_dims = transpose_ ? w.shape(-2) : weights_per_row;
+  } else {
+    w_outer_dims = transpose_ ? w.shape(-2) : w.shape(-1) * 32 / bits_;
+  }
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
   return {std::move(out_shape)};
@@ -3563,7 +3605,7 @@ std::vector<Shape> QuantizedMatmul::output_shapes(
 bool QQMatmul::is_equivalent(const Primitive& other) const {
   const QQMatmul& qm_other = static_cast<const QQMatmul&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
-      mode_ == qm_other.mode_;
+      mode_ == qm_other.mode_ && kquant_type_ == qm_other.kquant_type_;
 }
 
 std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
@@ -3682,6 +3724,7 @@ std::vector<array> GatherQMM::vjp(
           bits_,
           quantization_mode_to_string(mode_),
           sorted,
+          kquant_type_,
           stream());
       if (sorted && no_broadcast) {
         vjps.push_back(g);
@@ -3699,7 +3742,9 @@ std::vector<array> GatherQMM::vjp(
     }
 
     // gradient wrt to the indices is undefined
-    else if (arg > 3) {
+    // Affine inputs: [x, w, scales, biases, lhs_idx, rhs_idx]
+    // KQuant/FP inputs: [x, w, scales, lhs_idx, rhs_idx]
+    else if (arg >= (mode_ == QuantizationMode::Affine ? 4 : 3)) {
       throw std::runtime_error(
           "[GatherQMM::vjp] cannot compute the gradient wrt the indices.");
     }
@@ -3748,7 +3793,8 @@ std::vector<array> GatherQMM::vjp(
                             bits_,
                             quantization_mode_to_string(mode_),
                             std::nullopt,
-                            std::nullopt, // amax placeholder
+                            std::nullopt,
+                            kquant_type_,
                             stream()),
                         -1,
                         {-1, group_size_},
@@ -3773,7 +3819,10 @@ std::vector<array> GatherQMM::jvp(
 bool GatherQMM::is_equivalent(const Primitive& other) const {
   const GatherQMM& qm_other = static_cast<const GatherQMM&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
-      mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_;
+      mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_ &&
+      left_sorted_ == qm_other.left_sorted_ &&
+      right_sorted_ == qm_other.right_sorted_ &&
+      kquant_type_ == qm_other.kquant_type_;
 }
 
 std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(

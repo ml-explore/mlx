@@ -12,9 +12,16 @@ extern "C" {
 
 namespace mlx::core {
 
+constexpr const char* kKQuantTypesKey = "__kquant_types__";
+
 Shape get_shape(const gguf_tensor& tensor);
-void gguf_load_quantized(
+
+const KQuantCodec* gguf_type_to_kquant_codec(uint32_t gguf_type);
+
+void gguf_load_kquant(
     std::unordered_map<std::string, array>& a,
-    const gguf_tensor& tensor);
+    const gguf_tensor& tensor,
+    const KQuantCodec& codec,
+    std::vector<std::string>& kquant_entries);
 
 } // namespace mlx::core

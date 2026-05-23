@@ -926,17 +926,43 @@ bool Quantize::is_equivalent(const Primitive& other) const {
   const Quantize& p_other = static_cast<const Quantize&>(other);
   return (
       p_other.group_size_ == group_size_ && p_other.bits_ == bits_ &&
-      p_other.mode_ == mode_ && p_other.dequantize_ == dequantize_);
+      p_other.mode_ == mode_ && p_other.dequantize_ == dequantize_ &&
+      p_other.kquant_type_ == kquant_type_);
 }
 
 std::vector<Shape> Quantize::output_shapes(const std::vector<array>& inputs) {
   auto& w = inputs[0];
   if (dequantize_) {
-    auto out_size = w.shape(-1) * 32 / bits_;
+    size_t out_size = 0;
+    if (mode_ == QuantizationMode::KQuant) {
+      const auto* codec = kquant_codec_by_name(kquant_type_);
+      if (codec == nullptr) {
+        throw std::invalid_argument(
+            "[Quantize::output_shapes] Unknown kquant_type: '" + kquant_type_ +
+            "'.");
+      }
+      out_size =
+          (w.shape(-1) / codec->bytes_per_block) * codec->weights_per_block;
+    } else {
+      out_size = w.shape(-1) * 32 / bits_;
+    }
     auto out_shape = w.shape();
     out_shape.back() = out_size;
     return {std::move(out_shape)};
   } else {
+    if (mode_ == QuantizationMode::KQuant) {
+      const auto* codec = kquant_codec_by_name(kquant_type_);
+      if (codec == nullptr) {
+        throw std::invalid_argument(
+            "[Quantize::output_shapes] Unknown kquant_type: '" + kquant_type_ +
+            "'.");
+      }
+      auto wq_shape = w.shape();
+      wq_shape.back() =
+          (w.shape(-1) / codec->weights_per_block) * codec->bytes_per_block;
+      Shape s_shape = {1};
+      return {std::move(wq_shape), std::move(s_shape)};
+    }
     auto wq_shape = w.shape();
     wq_shape.back() = w.shape(-1) * bits_ / 32;
     auto sshape = w.shape();

@@ -7,16 +7,50 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 from mlx.utils import tree_map_with_path
 
+_KQUANT_CODEC_PARAMS = {
+    "q4_0": (32, 4),
+    "q4_1": (32, 4),
+    "q5_0": (32, 5),
+    "q5_1": (32, 5),
+    "q8_0": (32, 8),
+    "q2_k": (256, 2),
+    "q3_k": (256, 3),
+    "q4_k": (256, 4),
+    "q5_k": (256, 5),
+    "q6_k": (256, 6),
+}
 
-def _defaults_for_mode(mode, group_size, bits):
-    mode_defaults = {
-        "affine": (64, 4),
-        "mxfp4": (32, 4),
-        "nvfp4": (16, 4),
-        "mxfp8": (32, 8),
-    }
-    default_group_size, default_bits = mode_defaults[mode]
+
+def _defaults_for_mode(mode, group_size, bits, kquant_type=""):
+    if mode == "kquant" and kquant_type in _KQUANT_CODEC_PARAMS:
+        default_group_size, default_bits = _KQUANT_CODEC_PARAMS[kquant_type]
+    else:
+        mode_defaults = {
+            "affine": (64, 4),
+            "mxfp4": (32, 4),
+            "nvfp4": (16, 4),
+            "mxfp8": (32, 8),
+            "kquant": (32, 8),
+        }
+        default_group_size, default_bits = mode_defaults[mode]
     return group_size or default_group_size, bits or default_bits
+
+
+# (weights_per_block, bytes_per_block) per codec.
+# Must match the C++ kquant_codec_by_name registry in primitives.cpp.
+# Verified by test_kquant.py::TestKQuantRegistryConsistency.
+_KQUANT_CODEC_GEOMETRY = {
+    "q4_0": (32, 18),
+    "q4_1": (32, 20),
+    "q5_0": (32, 22),
+    "q5_1": (32, 24),
+    "q8_0": (32, 34),
+    "q2_k": (256, 84),
+    "q3_k": (256, 110),
+    "q4_k": (256, 144),
+    "q5_k": (256, 176),
+    "q6_k": (256, 210),
+}
 
 
 def quantize(
@@ -25,6 +59,7 @@ def quantize(
     bits: int = None,
     *,
     mode: str = "affine",
+    kquant_type: str = "",
     quantize_input: bool = False,
     class_predicate: Optional[Callable[[str, Module], Union[bool, dict]]] = None,
 ):
@@ -46,6 +81,8 @@ def quantize(
            :func:`mlx.core.quantize`). Default: ``None``.
         mode (str): The quantization method to use (see
            :func:`mlx.core.quantize`). Default: ``"affine"``.
+        kquant_type (str): For ``mode="kquant"``, selects the codec
+           (e.g. ``"q4_k"``, ``"q8_0"``). Default: ``""``.
         quantize_input (bool): Whether to quantize activations. Default: ``False``.
         class_predicate (Optional[Callable]): A callable which receives the
            :obj:`Module` path and :obj:`Module` itself and returns ``True`` or a
@@ -70,7 +107,12 @@ def quantize(
         if bool_or_params := class_predicate(path, m):
             if hasattr(m, "to_quantized"):
                 if isinstance(bool_or_params, bool):
-                    kwargs = {"group_size": group_size, "bits": bits, "mode": mode}
+                    kwargs = {
+                        "group_size": group_size,
+                        "bits": bits,
+                        "mode": mode,
+                        "kquant_type": kquant_type,
+                    }
                     if quantize_input:
                         kwargs["quantize_input"] = quantize_input
                     return m.to_quantized(**kwargs)
@@ -112,6 +154,8 @@ class QuantizedEmbedding(Module):
             See :func:`~mlx.core.quantize`. Default: ``None``.
         mode (str): The quantization method to use (see
            :func:`mlx.core.quantize`). Default: ``"affine"``.
+        kquant_type (str): For ``mode="kquant"``, selects the codec
+           (e.g. ``"q4_k"``, ``"q8_0"``). Default: ``""``.
     """
 
     def __init__(
@@ -121,18 +165,27 @@ class QuantizedEmbedding(Module):
         group_size: int = None,
         bits: int = None,
         mode: str = "affine",
+        kquant_type: str = "",
     ):
         super().__init__()
 
         # Quantization config
-        self.group_size, self.bits = _defaults_for_mode(mode, group_size, bits)
+        if mode == "kquant" and not kquant_type:
+            raise ValueError(
+                "kquant_type is required when mode='kquant'. "
+                "Valid codecs: " + ", ".join(sorted(_KQUANT_CODEC_GEOMETRY))
+            )
+        self.group_size, self.bits = _defaults_for_mode(
+            mode, group_size, bits, kquant_type
+        )
         self.mode = mode
+        self.kquant_type = kquant_type
 
         # Initialize the quantized weight
         scale = math.sqrt(1 / dims)
         weight = mx.random.normal(shape=(num_embeddings, dims), scale=scale)
         self.weight, self.scales, *biases = mx.quantize(
-            weight, group_size, bits, mode=mode
+            weight, group_size, bits, mode=mode, kquant_type=kquant_type
         )
         self.biases = biases[0] if biases else None
         self.num_embeddings = num_embeddings
@@ -150,6 +203,7 @@ class QuantizedEmbedding(Module):
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
+            kquant_type=self.kquant_type,
         )
 
     def as_linear(self, x):
@@ -168,12 +222,14 @@ class QuantizedEmbedding(Module):
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
+            kquant_type=self.kquant_type,
         )
 
     def _extra_repr(self):
+        kq = f", kquant_type={self.kquant_type}" if self.kquant_type else ""
         return (
             f"{self.num_embeddings}, {self.dims}, "
-            f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
+            f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}{kq}"
         )
 
     @classmethod
@@ -183,15 +239,19 @@ class QuantizedEmbedding(Module):
         group_size: int = None,
         bits: int = None,
         mode: str = "affine",
+        kquant_type: str = "",
     ):
         """Create a :obj:`QuantizedEmbedding` layer from an :obj:`Embedding` layer."""
         embedding_dims, dims = embedding_layer.weight.shape
-        ql = cls(embedding_dims, dims, group_size, bits, mode=mode)
+        ql = cls(
+            embedding_dims, dims, group_size, bits, mode=mode, kquant_type=kquant_type
+        )
         ql.weight, ql.scales, *biases = mx.quantize(
             embedding_layer.weight,
             group_size,
             bits,
             mode=mode,
+            kquant_type=kquant_type,
         )
         ql.biases = biases[0] if biases else None
         return ql
@@ -218,6 +278,8 @@ class QuantizedLinear(Module):
             See :func:`~mlx.core.quantize`. Default: ``None``.
         mode (str): The quantization method to use (see
            :func:`mlx.core.quantize`). Default: ``"affine"``.
+        kquant_type (str): For ``mode="kquant"``, selects the codec
+           (e.g. ``"q4_k"``, ``"q8_0"``). Default: ``""``.
     """
 
     def __init__(
@@ -228,12 +290,21 @@ class QuantizedLinear(Module):
         group_size: int = None,
         bits: int = None,
         mode: str = "affine",
+        kquant_type: str = "",
     ):
         super().__init__()
 
         # Quantization config
-        self.group_size, self.bits = _defaults_for_mode(mode, group_size, bits)
+        if mode == "kquant" and not kquant_type:
+            raise ValueError(
+                "kquant_type is required when mode='kquant'. "
+                "Valid codecs: " + ", ".join(sorted(_KQUANT_CODEC_GEOMETRY))
+            )
+        self.group_size, self.bits = _defaults_for_mode(
+            mode, group_size, bits, kquant_type
+        )
         self.mode = mode
+        self.kquant_type = kquant_type
 
         # Initialize the quantized weight
         scale = math.sqrt(1 / input_dims)
@@ -243,7 +314,7 @@ class QuantizedLinear(Module):
             shape=(output_dims, input_dims),
         )
         self.weight, self.scales, *biases = mx.quantize(
-            weight, group_size, bits, mode=mode
+            weight, group_size, bits, mode=mode, kquant_type=kquant_type
         )
         self.biases = biases[0] if biases else None
 
@@ -256,10 +327,16 @@ class QuantizedLinear(Module):
 
     def _extra_repr(self):
         out_dims, in_dims = self.weight.shape
-        in_dims = (in_dims * 32) // self.bits
+        if self.mode == "kquant" and self.kquant_type in _KQUANT_CODEC_GEOMETRY:
+            # uint8 packing: in_dims is bytes-per-row, expand by codec ratio.
+            wpb, bpb = _KQUANT_CODEC_GEOMETRY[self.kquant_type]
+            in_dims = (in_dims // bpb) * wpb
+        else:
+            in_dims = (in_dims * 32) // self.bits
+        kq = f", kquant_type={self.kquant_type}" if self.kquant_type else ""
         return (
             f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}, "
-            f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}"
+            f"group_size={self.group_size}, bits={self.bits}, mode={self.mode}{kq}"
         )
 
     def __call__(self, x):
@@ -272,6 +349,7 @@ class QuantizedLinear(Module):
             group_size=self.group_size,
             bits=self.bits,
             mode=self.mode,
+            kquant_type=self.kquant_type,
         )
         if "bias" in self:
             x = x + self["bias"]
@@ -284,15 +362,25 @@ class QuantizedLinear(Module):
         group_size: int = None,
         bits: int = None,
         mode: str = "affine",
+        kquant_type: str = "",
     ):
         """Create a :obj:`QuantizedLinear` layer from a :obj:`Linear` layer."""
         output_dims, input_dims = linear_layer.weight.shape
-        ql = cls(input_dims, output_dims, False, group_size, bits, mode=mode)
+        ql = cls(
+            input_dims,
+            output_dims,
+            False,
+            group_size,
+            bits,
+            mode=mode,
+            kquant_type=kquant_type,
+        )
         ql.weight, ql.scales, *biases = mx.quantize(
             linear_layer.weight,
             group_size,
             bits,
             mode=mode,
+            kquant_type=kquant_type,
         )
         ql.biases = biases[0] if biases else None
 

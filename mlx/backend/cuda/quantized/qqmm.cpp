@@ -71,6 +71,10 @@ GemmScalars create_nvfp4_scalars(
 
 void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("QQMatmul::eval_gpu");
+  if (mode_ == QuantizationMode::KQuant) {
+    throw std::runtime_error(
+        "[QQMatmul::eval_gpu] KQuant CUDA not implemented.");
+  }
 
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);

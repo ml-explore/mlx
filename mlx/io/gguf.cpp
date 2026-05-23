@@ -211,7 +211,10 @@ std::unordered_map<std::string, GGUFMetaData> load_metadata(gguf_ctx* ctx) {
   return metadata;
 }
 
-std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
+// May insert kKQuantTypesKey into metadata for kquant tensors.
+std::unordered_map<std::string, array> load_arrays(
+    gguf_ctx* ctx,
+    std::unordered_map<std::string, GGUFMetaData>& metadata) {
   std::unordered_map<std::string, array> array_map;
   gguf_tensor tensor;
 
@@ -219,21 +222,26 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
     if (!inserted.second) {
       std::ostringstream msg;
       msg << "[load_gguf] Duplicate parameter name " << inserted.first->second
-          << " this can happend when loading quantized tensors.";
+          << " this can happen when loading quantized tensors.";
       throw std::runtime_error(msg.str());
     }
   };
 
+  std::vector<std::string> kquant_entries;
+
   while (gguf_get_tensor(ctx, &tensor)) {
-    if (tensor.type == GGUF_TYPE_Q4_0 || tensor.type == GGUF_TYPE_Q4_1 ||
-        tensor.type == GGUF_TYPE_Q8_0) {
-      gguf_load_quantized(array_map, tensor);
+    if (const auto* kqc = gguf_type_to_kquant_codec(tensor.type)) {
+      gguf_load_kquant(array_map, tensor, *kqc, kquant_entries);
     } else {
       std::string name(tensor.name, tensor.namelen);
       const auto& [data, dtype] = extract_tensor_data(&tensor);
       array loaded_array = array(data, get_shape(tensor), dtype);
       check_insert(array_map.insert({name, loaded_array}));
     }
+  }
+
+  if (!kquant_entries.empty()) {
+    metadata[kKQuantTypesKey] = std::move(kquant_entries);
   }
   return array_map;
 }
@@ -254,7 +262,7 @@ GGUFLoad load_gguf(const std::string& file, StreamOrDevice s) {
     throw std::runtime_error("[load_gguf] gguf_init failed");
   }
   auto metadata = load_metadata(ctx.get());
-  auto arrays = load_arrays(ctx.get());
+  auto arrays = load_arrays(ctx.get(), metadata);
   return {arrays, metadata};
 }
 
@@ -312,8 +320,11 @@ void save_gguf(
     memcpy(val->string, src.c_str(), src.length());
   };
 
-  // Save any meta data
+  // Save any meta data (skip synthetic keys injected by the loader)
   for (auto& [key, value] : metadata) {
+    if (key == kKQuantTypesKey) {
+      continue;
+    }
     if (auto pv = std::get_if<std::string>(&value); pv) {
       const std::string& str = *pv;
       size_t size = sizeof(gguf_string) + str.length();
