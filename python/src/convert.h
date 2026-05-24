@@ -64,7 +64,7 @@ struct ArrayLike {
 mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
     std::optional<mx::Dtype> mx_dtype,
-    std::optional<nb::dlpack::dtype> nb_dtype = std::nullopt,
+    std::optional<nb::dlpack::dtype> src_dlpack_dtype_override = std::nullopt,
     std::optional<bool> copy = std::nullopt);
 
 nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a);

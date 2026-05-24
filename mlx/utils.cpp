@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "mlx/dtype_utils.h"
-#include "mlx/ops.h"
 #include "mlx/types/limits.h"
 #include "mlx/utils.h"
 

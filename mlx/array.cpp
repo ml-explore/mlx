@@ -184,7 +184,7 @@ void array::set_data(
     int64_t offset,
     Deleter d) {
   array_desc_->data = std::make_shared<Data>(buffer, d);
-  array_desc_->offset = itemsize() * offset;
+  array_desc_->offset = offset;
   array_desc_->data_size = data_size;
   array_desc_->strides = std::move(strides);
   array_desc_->flags = flags;

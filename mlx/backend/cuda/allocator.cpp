@@ -399,11 +399,7 @@ void* Buffer::raw_ptr() {
 }
 
 bool can_reuse_alien_buffer(void* ptr) {
-  if (!ptr) {
-    return true;
-  }
-  auto& cbuf = *static_cast<cu::CudaBuffer*>(ptr);
-  return cbuf.device == -1;
+  return true;
 }
 
 } // namespace allocator
