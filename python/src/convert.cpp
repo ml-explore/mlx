@@ -140,82 +140,55 @@ nb::dlpack::dtype mlx_dtype_to_dl_dtype(mx::Dtype dtype) {
   }
 }
 
-template <typename T>
-mx::array metal_dlpack_to_mlx_contiguous(
-    nb::ndarray<nb::ro, nb::c_contig> owner,
-    const mx::Shape& shape,
-    mx::Dtype type,
-    std::optional<mx::Dtype> dtype,
-    std::optional<bool> copy) {
-  auto itemsize = mx::size_of(type);
-  if (owner.itemsize() != itemsize) {
+mx::array metal_dlpack_to_mlx(
+    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+    mx::Dtype src_dtype,
+    mx::Dtype dst_dtype,
+    bool copy) {
+  if (!mx::metal::is_available()) {
+    throw std::invalid_argument("Metal DLPack import is not available.");
+  }
+  auto shape = get_shape(nd_array);
+  if (nd_array.itemsize() != mx::size_of(src_dtype)) {
     throw std::invalid_argument(
         "Cannot convert Metal DLPack dtype to mlx dtype.");
   }
-
-  auto byte_offset = owner.byte_offset();
-  if (byte_offset % itemsize != 0) {
-    throw std::invalid_argument(
-        "Metal DLPack byte offset is not aligned to dtype size.");
-  }
-
-  auto can_reuse_buffer =
-      mx::allocator::can_reuse_alien_buffer(owner.data_handle());
-
+  auto data_handle = nd_array.data_handle();
   auto out = mx::array(
-      mx::allocator::Buffer(owner.data_handle()),
+      mx::allocator::Buffer(data_handle),
       shape,
-      type,
+      src_dtype,
       [](mx::allocator::Buffer) {});
-  auto flags = out.flags();
-  auto offset = static_cast<int64_t>(byte_offset / itemsize);
   out.set_data(
       out.buffer(),
       out.data_size(),
       out.strides(),
-      flags,
-      offset,
-      [owner = std::move(owner)](mx::allocator::Buffer) {});
+      out.flags(),
+      nd_array.byte_offset(),
+      [owner = std::move(nd_array)](mx::allocator::Buffer) {});
 
-  if (copy.has_value() && copy.value() == false && !can_reuse_buffer) {
-    throw std::invalid_argument(
-        "Cannot import a private Metal DLPack buffer without a copy.");
-  }
-
-  if (dtype || !can_reuse_buffer) {
-    auto result_dtype = dtype.value_or(out.dtype());
-    auto result = mx::astype(out, result_dtype, true, mx::Device::gpu);
+  if (copy) {
+    auto result = mx::astype(out, dst_dtype, true, mx::Device::gpu);
     result.eval();
-    result.detach();
     return result;
   }
   return out;
 }
 
-mx::array metal_dlpack_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig> nd_array,
-    std::optional<mx::Dtype> dtype,
-    std::optional<bool> copy) {
-  if (!mx::metal::is_available()) {
-    throw std::invalid_argument("Metal DLPack import is not available.");
-  }
-  auto shape = get_shape(nd_array);
-
-  return dispatch_dlpack_dtype(
-      nd_array.dtype(),
-      [&]<typename T>(mx::Dtype type) {
-        return metal_dlpack_to_mlx_contiguous<T>(
-            nd_array, shape, type, dtype, copy);
-      },
-      "Cannot convert Metal DLPack array to mlx array.");
-}
-
 mx::array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig> nd_array,
-    std::optional<mx::Dtype> dst_dtype,
-    std::optional<nb::dlpack::dtype> src_dtype,
+    std::optional<mx::Dtype> requested_dtype,
+    std::optional<nb::dlpack::dtype> src_dlpack_dtype_override,
     std::optional<bool> copy) {
-  if (copy.has_value() && copy.value() == false && dst_dtype) {
+  auto src_dlpack_dtype = src_dlpack_dtype_override.value_or(nd_array.dtype());
+  auto src_mlx_dtype =
+      mlx_dtype_from_dlpack(src_dlpack_dtype, "Cannot convert array to mlx.");
+  auto dst_dtype = requested_dtype.value_or(src_mlx_dtype);
+  bool can_reuse_buffer =
+      mx::allocator::can_reuse_alien_buffer(nd_array.data_handle());
+  bool should_copy =
+      copy.value_or(false) || dst_dtype != src_mlx_dtype || !can_reuse_buffer;
+  if (copy.has_value() && copy.value() == false && dst_dtype != src_mlx_dtype) {
     throw std::invalid_argument(
         "Cannot convert DLPack array to requested dtype without a copy.");
   }
@@ -226,22 +199,21 @@ mx::array nd_array_to_mlx(
             "Cannot import a CPU DLPack array without a copy.");
       }
       auto shape = get_shape(nd_array);
-      auto type = src_dtype.value_or(nd_array.dtype());
       return dispatch_dlpack_dtype(
-          type,
-          [&]<typename T>(mx::Dtype default_dtype) {
-            return nd_array_to_mlx_contiguous<T>(
-                nd_array, shape, dst_dtype.value_or(default_dtype));
+          src_dlpack_dtype,
+          [&]<typename T>(mx::Dtype) {
+            return nd_array_to_mlx_contiguous<T>(nd_array, shape, dst_dtype);
           },
           "Cannot convert numpy array to mlx array.");
     }
-    case nb::device::metal::value:
-      if (copy.has_value() && copy.value() == true && !dst_dtype) {
-        dst_dtype = mlx_dtype_from_dlpack(
-            nd_array.dtype(),
-            "Cannot convert Metal DLPack array to mlx array.");
+    case nb::device::metal::value: {
+      if (copy.has_value() && copy.value() == false && !can_reuse_buffer) {
+        throw std::invalid_argument(
+            "Cannot import a private Metal DLPack buffer without a copy.");
       }
-      return metal_dlpack_to_mlx(nd_array, dst_dtype, copy);
+      return metal_dlpack_to_mlx(
+          nd_array, src_mlx_dtype, dst_dtype, should_copy);
+    }
     case nb::device::cuda::value:
     case nb::device::cuda_managed::value:
       throw std::invalid_argument("CUDA DLPack import is not supported.");
@@ -338,7 +310,8 @@ nb::ndarray<> mlx_to_dlpack(
     nb::gil_scoped_release nogil;
     arr.eval();
     if (device_type == nb::device::cpu::value) {
-      data = static_cast<char*>(arr.buffer().raw_ptr()) + arr.offset();
+      data = arr.buffer().raw_ptr();
+      byte_offset = arr.offset();
     } else {
       data = arr.buffer().ptr();
       byte_offset = arr.offset();
@@ -703,10 +676,7 @@ mx::array create_array(
   } else if (nb::isinstance<mx::array>(v)) {
     auto arr = nb::cast<mx::array>(v);
     auto dtype = t.value_or(arr.dtype());
-    if (copy.has_value() && copy.value() == false && dtype != arr.dtype()) {
-      throw std::invalid_argument(
-          "Unable to avoid copy while creating an array as requested.");
-    }
+    check_copy_false(copy);
     return mx::astype(arr, dtype, copy);
   } else if (nb::ndarray_check(v)) {
     using ContigArray = nb::ndarray<nb::ro, nb::c_contig>;
@@ -720,13 +690,7 @@ mx::array create_array(
     } else {
       nd = nb::cast<ContigArray>(v);
     }
-    auto type = nb_dtype.value_or(nd.dtype());
-    std::optional<mx::Dtype> dst_dtype;
-    if (t &&
-        *t != mlx_dtype_from_dlpack(type, "Cannot convert array to mlx.")) {
-      dst_dtype = t;
-    }
-    return nd_array_to_mlx(nd, dst_dtype, nb_dtype, copy);
+    return nd_array_to_mlx(nd, t, nb_dtype, copy);
   } else {
     check_copy_false(copy);
     auto arr = to_array_with_accessor(v);

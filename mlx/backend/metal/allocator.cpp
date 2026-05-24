@@ -7,6 +7,7 @@
 
 #include <mach/vm_page_size.h>
 #include <unistd.h>
+#include <cassert>
 #include <cstdlib>
 
 namespace mlx::core {
@@ -25,12 +26,7 @@ void* Buffer::raw_ptr() {
     return nullptr;
   }
   auto* buf = static_cast<MTL::Buffer*>(ptr_);
-  if (buf->storageMode() == MTL::StorageModePrivate) {
-    throw std::runtime_error(
-        "[metal::Buffer::raw_ptr] Cannot access Metal buffer contents on the "
-        "host. The buffer is not CPU-addressable, for example because it uses "
-        "private storage.");
-  }
+  assert(buf->storageMode() != MTL::StorageModePrivate);
   return buf->contents();
 }
 

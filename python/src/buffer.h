@@ -92,6 +92,7 @@ extern "C" inline int getbuffer(PyObject* obj, Py_buffer* view, int flags) {
     nb::gil_scoped_release nogil;
     a.eval();
   }
+
   std::vector<Py_ssize_t> shape(a.shape().begin(), a.shape().end());
   std::vector<Py_ssize_t> strides(a.strides().begin(), a.strides().end());
   for (auto& s : strides) {
