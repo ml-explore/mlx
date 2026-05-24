@@ -1847,7 +1847,7 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "from_dlpack",
-      [](nb::ndarray<nb::ro, nb::c_contig> x, std::optional<bool> copy) {
+      [](nb::ndarray<nb::ro> x, std::optional<bool> copy) {
         return nd_array_to_mlx(x, std::nullopt, std::nullopt, copy);
       },
       nb::arg(),

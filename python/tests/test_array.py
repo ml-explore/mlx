@@ -2139,6 +2139,30 @@ class TestArray(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.from_dlpack(x, copy=False)
 
+    def test_from_dlpack_cpu_strided(self):
+        x = np.arange(12, dtype=np.float32).reshape(3, 4)
+        view = x.T
+        y = mx.from_dlpack(view)
+
+        self.assertEqual(y.tolist(), view.tolist())
+        expected = view.copy().tolist()
+        x[0, 0] = 99
+        self.assertEqual(y.tolist(), expected)
+
+        stepped = np.arange(20, dtype=np.int32)[2:10:2]
+        y = mx.from_dlpack(stepped)
+        self.assertEqual(y.tolist(), [2, 4, 6, 8])
+        stepped[0] = 99
+        self.assertEqual(y.tolist(), [2, 4, 6, 8])
+
+        broadcast = np.broadcast_to(np.array([7], dtype=np.int32), (3,))
+        y = mx.from_dlpack(broadcast)
+        self.assertEqual(y.tolist(), [7, 7, 7])
+
+        negative_stride = np.arange(5, dtype=np.float32)[::-1]
+        with self.assertRaises(ValueError):
+            mx.from_dlpack(negative_stride)
+
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_import(self):
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
@@ -2220,6 +2244,54 @@ class TestArray(mlx_tests.MLXTestCase):
         view_mx = mx.asarray(view)
         torch.mps.synchronize()
         self.assertEqual((view_mx + 1).tolist(), (view + 1).cpu().numpy().tolist())
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_strided_view(self):
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        view = x.T
+        torch.mps.synchronize()
+        y = mx.asarray(view, copy=False)
+        self.assertEqual(y.tolist(), view.cpu().numpy().tolist())
+
+        x[0, 1] = 99
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), view.cpu().numpy().tolist())
+
+        y_copy = mx.asarray(view, copy=True)
+        expected = view.cpu().numpy().tolist()
+        x[0, 2] = 77
+        torch.mps.synchronize()
+        self.assertEqual(y_copy.tolist(), expected)
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_stepped_view(self):
+        x = torch.arange(20, device="mps", dtype=torch.int32)
+        view = x[2:10:2]
+        torch.mps.synchronize()
+        y = mx.asarray(view, copy=False)
+        self.assertEqual(y.tolist(), [2, 4, 6, 8])
+
+        x[4] = 99
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [2, 99, 6, 8])
+
+        y_copy = mx.asarray(view, copy=True)
+        expected = y.tolist()
+        x[6] = 77
+        torch.mps.synchronize()
+        self.assertEqual(y_copy.tolist(), expected)
+
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_broadcast_stride(self):
+        x = torch.tensor([7], device="mps", dtype=torch.int32)
+        view = x.expand(3)
+        torch.mps.synchronize()
+        y = mx.asarray(view, copy=False)
+        self.assertEqual(y.tolist(), [7, 7, 7])
+
+        x.add_(1)
+        torch.mps.synchronize()
+        self.assertEqual(y.tolist(), [8, 8, 8])
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_bfloat16(self):
