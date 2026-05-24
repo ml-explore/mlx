@@ -1,5 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
+#include <algorithm>
 #include <limits>
 #include <sstream>
 #include <tuple>
@@ -11,6 +12,7 @@
 #include "python/src/utils.h"
 
 #include "mlx/allocator.h"
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/cuda.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/ops.h"
@@ -47,15 +49,31 @@ mx::Shape get_shape(const nb::ndarray<NDParams...>& nd_array) {
   return shape;
 }
 
-template <typename T>
-mx::array nd_array_to_mlx_contiguous(
-    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+template <typename... NDParams>
+mx::Strides get_strides(const nb::ndarray<NDParams...>& nd_array) {
+  mx::Strides strides;
+  strides.reserve(nd_array.ndim());
+  for (int i = 0; i < nd_array.ndim(); i++) {
+    strides.push_back(nd_array.stride(i));
+  }
+  return strides;
+}
+
+size_t strided_storage_size(
     const mx::Shape& shape,
-    mx::Dtype dtype) {
-  // Make a copy of the numpy buffer
-  // Get buffer ptr pass to array constructor
-  auto data_ptr = nd_array.data();
-  return mx::array(static_cast<const T*>(data_ptr), shape, dtype);
+    const mx::Strides& strides) {
+  size_t storage_size = 1;
+  for (int i = 0; i < shape.size(); i++) {
+    if (shape[i] == 0) {
+      return 0;
+    }
+    if (strides[i] < 0) {
+      throw std::invalid_argument(
+          "Cannot convert DLPack arrays with negative strides to mlx array.");
+    }
+    storage_size += (shape[i] - 1) * strides[i];
+  }
+  return storage_size;
 }
 
 template <typename F>
@@ -140,8 +158,42 @@ nb::dlpack::dtype mlx_dtype_to_dl_dtype(mx::Dtype dtype) {
   }
 }
 
+template <typename SrcT>
+mx::array cpu_nd_array_to_mlx(
+    nb::ndarray<nb::ro> nd_array,
+    const mx::Shape& shape,
+    mx::Dtype dst_dtype) {
+  return dispatch_dlpack_dtype(
+      mlx_dtype_to_dl_dtype(dst_dtype),
+      [&]<typename DstT>(mx::Dtype) {
+        auto out = mx::array(shape, dst_dtype, nullptr, {});
+        auto strides = get_strides(nd_array);
+        auto storage_size = strided_storage_size(shape, strides);
+        auto [no_bsx_size, is_row_contiguous, is_col_contiguous] = shape.empty()
+            ? std::make_tuple(storage_size, true, true)
+            : mx::check_contiguity(shape, strides);
+        auto flags = out.flags();
+        flags.contiguous = no_bsx_size == storage_size;
+        flags.row_contiguous = is_row_contiguous;
+        flags.col_contiguous = is_col_contiguous;
+        out.set_data(
+            mx::allocator::malloc(storage_size * mx::size_of(dst_dtype)),
+            storage_size,
+            std::move(strides),
+            flags);
+        if (storage_size > 0) {
+          auto src = static_cast<const SrcT*>(nd_array.data());
+          auto dst = out.data<DstT>();
+          std::copy(src, src + storage_size, dst);
+        }
+        out.set_status(mx::array::Status::available);
+        return out;
+      },
+      "Cannot convert numpy array to mlx array.");
+}
+
 mx::array metal_dlpack_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+    nb::ndarray<nb::ro> nd_array,
     mx::Dtype src_dtype,
     mx::Dtype dst_dtype,
     bool copy) {
@@ -153,19 +205,25 @@ mx::array metal_dlpack_to_mlx(
     throw std::invalid_argument(
         "Cannot convert Metal DLPack dtype to mlx dtype.");
   }
+  auto strides = get_strides(nd_array);
+  auto storage_size = strided_storage_size(shape, strides);
+  auto [no_bsx_size, is_row_contiguous, is_col_contiguous] = shape.empty()
+      ? std::make_tuple(storage_size, true, true)
+      : mx::check_contiguity(shape, strides);
   auto data_handle = nd_array.data_handle();
-  auto out = mx::array(
-      mx::allocator::Buffer(data_handle),
-      shape,
-      src_dtype,
-      [](mx::allocator::Buffer) {});
+  mx::array out(shape, src_dtype, nullptr, {});
+  auto flags = out.flags();
+  flags.contiguous = no_bsx_size == storage_size;
+  flags.row_contiguous = is_row_contiguous;
+  flags.col_contiguous = is_col_contiguous;
   out.set_data(
-      out.buffer(),
-      out.data_size(),
-      out.strides(),
-      out.flags(),
+      mx::allocator::Buffer(data_handle),
+      storage_size,
+      std::move(strides),
+      flags,
       nd_array.byte_offset(),
       [owner = std::move(nd_array)](mx::allocator::Buffer) {});
+  out.set_status(mx::array::Status::available);
 
   if (copy) {
     auto result = mx::astype(out, dst_dtype, true, mx::Device::gpu);
@@ -176,7 +234,7 @@ mx::array metal_dlpack_to_mlx(
 }
 
 mx::array nd_array_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+    nb::ndarray<nb::ro> nd_array,
     std::optional<mx::Dtype> requested_dtype,
     std::optional<nb::dlpack::dtype> src_dlpack_dtype_override,
     std::optional<bool> copy) {
@@ -184,15 +242,17 @@ mx::array nd_array_to_mlx(
   auto src_mlx_dtype =
       mlx_dtype_from_dlpack(src_dlpack_dtype, "Cannot convert array to mlx.");
   auto dst_dtype = requested_dtype.value_or(src_mlx_dtype);
-  bool can_reuse_buffer =
+  auto device_type = nd_array.device_type();
+  bool can_reuse_buffer = device_type == nb::device::cpu::value ||
       mx::allocator::can_reuse_alien_buffer(nd_array.data_handle());
+  // call this for cpu array will raise error, use or to aviod it
   bool should_copy =
       copy.value_or(false) || dst_dtype != src_mlx_dtype || !can_reuse_buffer;
   if (copy.has_value() && copy.value() == false && dst_dtype != src_mlx_dtype) {
     throw std::invalid_argument(
         "Cannot convert DLPack array to requested dtype without a copy.");
   }
-  switch (nd_array.device_type()) {
+  switch (device_type) {
     case nb::device::cpu::value: {
       if (copy.has_value() && copy.value() == false) {
         throw std::invalid_argument(
@@ -201,8 +261,8 @@ mx::array nd_array_to_mlx(
       auto shape = get_shape(nd_array);
       return dispatch_dlpack_dtype(
           src_dlpack_dtype,
-          [&]<typename T>(mx::Dtype) {
-            return nd_array_to_mlx_contiguous<T>(nd_array, shape, dst_dtype);
+          [&]<typename T>(mx::Dtype src_dtype) {
+            return cpu_nd_array_to_mlx<T>(nd_array, shape, dst_dtype);
           },
           "Cannot convert numpy array to mlx array.");
     }
@@ -679,7 +739,7 @@ mx::array create_array(
     check_copy_false(copy);
     return mx::astype(arr, dtype, copy);
   } else if (nb::ndarray_check(v)) {
-    using ContigArray = nb::ndarray<nb::ro, nb::c_contig>;
+    using ContigArray = nb::ndarray<nb::ro>;
     ContigArray nd;
     std::optional<nb::dlpack::dtype> nb_dtype;
     // Nanobind does not recognize bfloat16 numpy array:
