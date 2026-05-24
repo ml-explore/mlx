@@ -5489,14 +5489,9 @@ array tensordot(
   }
 
   auto stream = to_stream(s);
-  auto device = stream.device;
-  if (a.has_primitive()) {
-    device = a.primitive().stream().device;
-  } else if (b.has_primitive()) {
-    device = b.primitive().stream().device;
-  }
   if (a.ndim() == 1 && b.ndim() == 1 && axes_a.size() == 1 &&
-      axes_b.size() == 1 && device == Device::gpu && csize >= 32 * 4096) {
+      axes_b.size() == 1 && stream.device == Device::gpu &&
+      csize >= 32 * 4096) {
     return inner_1d_gpu_chunked(a, b, stream);
   }
 
