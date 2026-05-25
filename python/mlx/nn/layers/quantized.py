@@ -229,12 +229,23 @@ class QuantizedLinear(Module):
         group_size: int = None,
         bits: int = None,
         mode: str = "affine",
+        _skip_init: bool = False,
     ):
         super().__init__()
 
         # Quantization config
         self.group_size, self.bits = _defaults_for_mode(mode, group_size, bits)
         self.mode = mode
+
+        if _skip_init:
+            # Caller will assign self.weight and self.scales (and optionally
+            # self.biases / self.bias) from pre-quantized tensors. Used by
+            # loaders that read codes+scales off disk directly (e.g. native
+            # FP8 checkpoints) and don't want a wasteful re-quant pass.
+            if bias:
+                self.bias = mx.zeros((output_dims,))
+            self.freeze()
+            return
 
         # Initialize the quantized weight
         scale = math.sqrt(1 / input_dims)
