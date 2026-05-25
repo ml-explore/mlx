@@ -1409,6 +1409,98 @@ template <
       w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
+// --------------------------------------------------------------------------
+// block_fp8 gather_qmv (MoE decode path).
+// One threadgroup per (token, expert). Per-token rhs_indices selects the
+// expert slice of w/scales for this token's top-k experts. Calls the same
+// block_fp8_qmv_fast_impl after offset-adjusting the pointers.
+// --------------------------------------------------------------------------
+
+template <typename T>
+METAL_FUNC void block_fp8_adjust_matrix_offsets(
+    const device T*& x,
+    const device uint8_t*& w,
+    const device float*& scales,
+    const device uint32_t* lhs_indices,
+    const device uint32_t* rhs_indices,
+    device T*& y,
+    int output_stride,
+    const constant int& batch_ndims,
+    const constant int* batch_shape,
+    const constant int64_t* lhs_strides,
+    const constant int64_t* rhs_strides,
+    const constant int& x_batch_ndims,
+    const constant int* x_shape,
+    const constant int64_t* x_strides,
+    const constant int& w_batch_ndims,
+    const constant int* w_shape,
+    const constant int64_t* w_strides,
+    const constant int64_t* s_strides,
+    uint3 tid) {
+  uint32_t x_idx;
+  uint32_t w_idx;
+  if (batch_ndims == 1) {
+    x_idx = lhs_indices[tid.z * lhs_strides[0]];
+    w_idx = rhs_indices[tid.z * rhs_strides[0]];
+  } else {
+    ulong2 idx = elem_to_loc_broadcast(
+        tid.z, batch_shape, lhs_strides, rhs_strides, batch_ndims);
+    x_idx = lhs_indices[idx.x];
+    w_idx = rhs_indices[idx.y];
+  }
+  if (x_batch_ndims == 1) {
+    x += x_idx * x_strides[0];
+  } else {
+    x += elem_to_loc(x_idx, x_shape, x_strides, x_batch_ndims);
+  }
+  if (w_batch_ndims == 1) {
+    w += w_idx * w_strides[0];
+    scales += w_idx * s_strides[0];
+  } else {
+    ulong2 idx = elem_to_loc_broadcast(
+        w_idx, w_shape, w_strides, s_strides, w_batch_ndims);
+    w += idx.x;
+    scales += idx.y;
+  }
+  y += tid.z * output_stride;
+}
+
+template <typename T, int group_size, int bits>
+[[kernel]] void block_fp8_gather_qmv_fast(
+    const device uint8_t* w,
+    const device float* scales,
+    const device T* x,
+    const device uint32_t* lhs_indices,
+    const device uint32_t* rhs_indices,
+    device T* y,
+    const constant int& in_vec_size,
+    const constant int& out_vec_size,
+    const constant int& x_batch_ndims,
+    const constant int* x_shape,
+    const constant int64_t* x_strides,
+    const constant int& w_batch_ndims,
+    const constant int* w_shape,
+    const constant int64_t* w_strides,
+    const constant int64_t* s_strides,
+    const constant int& batch_ndims,
+    const constant int* batch_shape,
+    const constant int64_t* lhs_strides,
+    const constant int64_t* rhs_strides,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  int M = x_shape[x_batch_ndims];
+  block_fp8_adjust_matrix_offsets(
+      x, w, scales, lhs_indices, rhs_indices, y,
+      out_vec_size * M,
+      batch_ndims, batch_shape, lhs_strides, rhs_strides,
+      x_batch_ndims, x_shape, x_strides,
+      w_batch_ndims, w_shape, w_strides, s_strides,
+      tid);
+  block_fp8_qmv_fast_impl<T>(
+      w, scales, x, y, in_vec_size, out_vec_size, tid, simd_gid, simd_lid);
+}
+
 template <typename T, int group_size, int bits>
 [[kernel]] void fp_gather_qmv_fast(
     const device uint32_t* w,

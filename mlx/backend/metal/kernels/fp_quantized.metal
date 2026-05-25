@@ -167,4 +167,13 @@ instantiate_quantized_types(float16_t)
 instantiate_block_fp8_qmv_fast(float)
 instantiate_block_fp8_qmv_fast(bfloat16_t)
 instantiate_block_fp8_qmv_fast(float16_t)
+
+#define instantiate_block_fp8_gather_qmv_fast(type) \
+  instantiate_kernel( \
+      "block_fp8_gather_qmv_fast_" #type "_gs_128_b_8", \
+      block_fp8_gather_qmv_fast, type, 128, 8)
+
+instantiate_block_fp8_gather_qmv_fast(float)
+instantiate_block_fp8_gather_qmv_fast(bfloat16_t)
+instantiate_block_fp8_gather_qmv_fast(float16_t)
     // clang-format on
