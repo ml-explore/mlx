@@ -8,6 +8,7 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+#include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/device.h"
 #include "mlx/memory.h"
@@ -95,4 +96,53 @@ void init_metal(nb::module_& m) {
     DEPRECATE("mx.metal.device_info", "mx.device_info");
     return mx::device_info(mx::Device(mx::Device::gpu, 0));
   });
+  metal.def(
+      "enable_profiling",
+      &mx::metal::enable_profiling,
+      R"pbdoc(
+      Enable kernel-level GPU profiling.
+
+      When enabled, each kernel dispatch gets its own command buffer
+      so that per-kernel GPU timestamps can be measured.
+      )pbdoc");
+  metal.def(
+      "disable_profiling",
+      &mx::metal::disable_profiling,
+      R"pbdoc(
+      Disable kernel-level GPU profiling.
+      )pbdoc");
+  metal.def(
+      "profiling_enabled",
+      &mx::metal::profiling_enabled,
+      R"pbdoc(
+      Check if kernel-level GPU profiling is enabled.
+      )pbdoc");
+  metal.def(
+      "get_kernel_stats",
+      []() {
+        auto stats = mx::metal::get_kernel_stats();
+        nb::dict result;
+        for (auto& [name, s] : stats) {
+          nb::dict entry;
+          entry["count"] = s.count;
+          entry["total_us"] = s.total_us;
+          entry["min_us"] = s.min_us;
+          entry["max_us"] = s.max_us;
+          entry["avg_us"] = s.count > 0 ? s.total_us / s.count : 0.0;
+          result[nb::cast(name)] = entry;
+        }
+        return result;
+      },
+      R"pbdoc(
+      Get per-kernel GPU timing statistics.
+
+      Returns a dict mapping kernel names to their stats:
+      ``{name: {count, total_us, min_us, max_us, avg_us}}``.
+      )pbdoc");
+  metal.def(
+      "reset_kernel_stats",
+      &mx::metal::reset_kernel_stats,
+      R"pbdoc(
+      Reset all kernel profiling statistics.
+      )pbdoc");
 }
