@@ -64,9 +64,11 @@ class MLX_API CommandEncoder {
   void dispatch_threads(MTL::Size grid_dims, MTL::Size group_dims);
   void maybeInsertBarrier();
 
-  void set_compute_pipeline_state(MTL::ComputePipelineState* kernel,const std::string& name = "") {
+  void set_compute_pipeline_state(MTL::ComputePipelineState* kernel) {
     get_command_encoder()->setComputePipelineState(kernel);
-    current_kernel_name_ = name;
+    if (device_.profiling_enabled()) {
+      current_kernel_name_ = device_.get_kernel_name(kernel);
+    }
   }
 
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
@@ -196,6 +198,8 @@ class MLX_API Device {
   void record_kernel_time(const std::string& name, double us);
   std::unordered_map<std::string, KernelStats> get_kernel_stats() const;
   void reset_kernel_stats();
+  void register_kernel_name(MTL::ComputePipelineState* k, const std::string& name);
+  std::string get_kernel_name(MTL::ComputePipelineState* k) const;
 
  private:
   NS::SharedPtr<MTL::Library> build_library_(const std::string& source_string);
@@ -245,6 +249,7 @@ class MLX_API Device {
 
   bool profiling_enabled_{false};
   std::unordered_map<std::string, KernelStats> kernel_stats_;
+  std::unordered_map<MTL::ComputePipelineState*, std::string> kernel_name_map_;
   mutable std::mutex profiling_mtx_;
 };
 

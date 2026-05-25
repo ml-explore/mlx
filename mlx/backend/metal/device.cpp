@@ -570,6 +570,19 @@ void Device::reset_kernel_stats() {
   kernel_stats_.clear();
 }
 
+void Device::register_kernel_name(
+    MTL::ComputePipelineState* k,
+    const std::string& name) {
+  std::lock_guard<std::mutex> lk(profiling_mtx_);
+  kernel_name_map_[k] = name;
+}
+
+std::string Device::get_kernel_name(MTL::ComputePipelineState* k) const {
+  std::lock_guard<std::mutex> lk(profiling_mtx_);
+  auto it = kernel_name_map_.find(k);
+  return it != kernel_name_map_.end() ? it->second : "";
+}
+
 MTL::Library* Device::get_library(
     const std::string& name,
     const std::string& path /* = "" */) {
@@ -818,6 +831,7 @@ MTL::ComputePipelineState* Device::get_kernel(
     const MTLFCList& func_consts /* = {} */,
     const std::vector<MTL::Function*>& linked_functions /* = {} */) {
   const auto& kname = hash_name.empty() ? base_name : hash_name;
+  MTL::ComputePipelineState* result = nullptr;
   {
     // Multiple readers allowed
     std::shared_lock lock(kernel_mtx_);
@@ -825,10 +839,16 @@ MTL::ComputePipelineState* Device::get_kernel(
     // Look for cached kernel
     auto& kernel_map_ = library_kernels_[mtl_lib];
     if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
-      return it->second.get();
+      result = it->second.get();
     }
   }
-  return get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);
+  if (!result) {
+    result = get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);
+  }
+  if (profiling_enabled()) {
+    register_kernel_name(result, base_name);
+  }
+  return result;
 }
 
 MTL::ComputePipelineState* Device::get_kernel(
