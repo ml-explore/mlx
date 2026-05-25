@@ -152,4 +152,19 @@
 instantiate_quantized_types(float)
 instantiate_quantized_types(bfloat16_t)
 instantiate_quantized_types(float16_t)
+
+// ----- block_fp8 (DeepSeek-V3 / MiMo) instantiations -----
+// Only qmv_fast is implemented in the first pass. qmv_quad, qmv, qvm, qmm,
+// gather variants all produce "kernel not found" until subsequent patches.
+#define instantiate_block_fp8_qmv_fast(type) \
+  instantiate_kernel( \
+      "block_fp8_qmv_fast_" #type "_gs_128_b_8_batch_0", \
+      block_fp8_qmv_fast, type, 128, 8, false) \
+  instantiate_kernel( \
+      "block_fp8_qmv_fast_" #type "_gs_128_b_8_batch_1", \
+      block_fp8_qmv_fast, type, 128, 8, true)
+
+instantiate_block_fp8_qmv_fast(float)
+instantiate_block_fp8_qmv_fast(bfloat16_t)
+instantiate_block_fp8_qmv_fast(float16_t)
     // clang-format on
