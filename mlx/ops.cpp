@@ -164,14 +164,18 @@ std::pair<int, int> extract_quantized_matmul_dims(
     const std::optional<array>& biases,
     bool transpose,
     int group_size,
-    int bits) {
-  validate_quantized_input(tag, w, scales, group_size, bits, biases, qmode);
+    int bits,
+    QuantizationMode mode = QuantizationMode::Affine) {
+  validate_quantized_input(tag, w, scales, group_size, bits, biases, mode);
 
   int x_inner_dims = x.shape(-1);
 
-  // Calculate the expanded w's dims
-  int w_inner_dims = (transpose) ? w.shape(-1) * 32 / bits : w.shape(-2);
-  int w_outer_dims = (transpose) ? w.shape(-2) : w.shape(-1) * 32 / bits;
+  // Calculate the expanded w's dims. BlockFp8 stores codes unpacked
+  // (1 byte per code), so the *32/bits expansion does not apply.
+  bool packed = (mode != QuantizationMode::BlockFp8);
+  int pack_factor = packed ? (32 / bits) : 1;
+  int w_inner_dims = (transpose) ? w.shape(-1) * pack_factor : w.shape(-2);
+  int w_outer_dims = (transpose) ? w.shape(-2) : w.shape(-1) * pack_factor;
 
   if (w_inner_dims != x_inner_dims) {
     std::ostringstream msg;
@@ -4544,7 +4548,8 @@ array quantized_matmul(
       quantization_params_from_mode(qmode, group_size_, bits_);
   // Check and extract the quantized matrix shape against x
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
-      "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
+      "quantized_matmul", x, w, scales, biases, transpose, group_size, bits,
+      qmode);
 
   if (qmode == QuantizationMode::Affine) {
     dtype = promote_types(x.dtype(), dtype);
@@ -5340,7 +5345,8 @@ array gather_qmm(
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
-      "gather_qmm", x, w, scales, biases, transpose, group_size, bits);
+      "gather_qmm", x, w, scales, biases, transpose, group_size, bits,
+      qmode);
   if (qmode == QuantizationMode::Affine) {
     out_type = promote_types(x.dtype(), out_type);
   } else {
