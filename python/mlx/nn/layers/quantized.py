@@ -11,6 +11,7 @@ from mlx.utils import tree_map_with_path
 def _defaults_for_mode(mode, group_size, bits):
     mode_defaults = {
         "affine": (64, 4),
+        "block_fp8": (128, 8),
         "mxfp4": (32, 4),
         "nvfp4": (16, 4),
         "mxfp8": (32, 8),

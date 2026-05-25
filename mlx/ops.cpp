@@ -80,7 +80,47 @@ void validate_quantized_input(
     const array& scales,
     int group_size,
     int bits,
-    const std::optional<array>& biases = std::nullopt) {
+    const std::optional<array>& biases = std::nullopt,
+    QuantizationMode mode = QuantizationMode::Affine) {
+  // BlockFp8 has a different weight layout: unpacked uint8 codes with
+  // 2D fp32 block scales (DeepSeek-V3 / MiMo convention).
+  if (mode == QuantizationMode::BlockFp8) {
+    if (w.dtype() != uint8) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] The weight matrix should be uint8 for "
+          << "'block_fp8' but received " << w.dtype();
+      throw std::invalid_argument(msg.str());
+    }
+    if (biases) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Biases must be null for 'block_fp8'.";
+      throw std::invalid_argument(msg.str());
+    }
+    // Batch dims (everything before the last 2) must match between w and scales.
+    if (!std::equal(
+            w.shape().begin(), w.shape().end() - 2, scales.shape().begin())) {
+      std::ostringstream msg;
+      msg << "[" << tag
+          << "] Weight and scales should have the same batch shape. "
+          << "Received weight with shape " << w.shape() << ", scales with "
+          << scales.shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    // 2D 128x128 block tiling: both inner dims of w must be 128 * scales dim.
+    if (w.shape(-1) != scales.shape(-1) * group_size ||
+        w.shape(-2) != scales.shape(-2) * group_size) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] For 'block_fp8' weight shape must equal "
+          << "scales shape * " << group_size << " in the last two dims. "
+          << "w.shape() == " << w.shape()
+          << ", scales.shape() == " << scales.shape()
+          << ", group_size=" << group_size;
+      throw std::invalid_argument(msg.str());
+    }
+    return;
+  }
+
+  // Existing path: uint32-packed weight, 1D scale groups.
   if (w.dtype() != uint32) {
     std::ostringstream msg;
     msg << "[" << tag << "] The weight matrix should be uint32 "
@@ -125,7 +165,7 @@ std::pair<int, int> extract_quantized_matmul_dims(
     bool transpose,
     int group_size,
     int bits) {
-  validate_quantized_input(tag, w, scales, group_size, bits, biases);
+  validate_quantized_input(tag, w, scales, group_size, bits, biases, qmode);
 
   int x_inner_dims = x.shape(-1);
 
@@ -4390,6 +4430,10 @@ std::pair<int, int> quantization_params_from_mode(
       default_group_size = 32;
       default_bits = 8;
       break;
+    case QuantizationMode::BlockFp8:
+      default_group_size = 128;
+      default_bits = 8;
+      break;
   }
   return {
       group_size_.has_value() ? *group_size_ : default_group_size,
@@ -4428,6 +4472,13 @@ std::pair<Dtype, QuantizationMode> validate_mode_with_type(
       return {*out_type, qmode};
     } else {
       return {dtype, qmode};
+    }
+  } else if (qmode == QuantizationMode::BlockFp8) {
+    if (scales.dtype() != float32) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Scale type must be float32 for 'block_fp8' "
+          << "but received type " << scales.dtype() << ".";
+      throw std::invalid_argument(msg.str());
     }
   } else if (scales.dtype() != uint8) {
     std::ostringstream msg;
@@ -4554,7 +4605,8 @@ void validate_qqmm_inputs(
     }
     // if scales are provided, check compatibility with quantized w
     else {
-      validate_quantized_input("qqmm", w, *scales_w, group_size, bits);
+      validate_quantized_input("qqmm", w, *scales_w, group_size, bits,
+          std::nullopt, QuantizationMode::Affine);
     }
   }
   // if w is not quantized, dtype must be in {f16, bf16, fp32}

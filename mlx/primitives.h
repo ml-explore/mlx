@@ -152,7 +152,7 @@ class MLX_API UnaryPrimitive : public Primitive {
   UnaryPrimitive& operator=(UnaryPrimitive&& other) = delete;
 };
 
-enum class QuantizationMode { Affine, Mxfp4, Mxfp8, Nvfp4 };
+enum class QuantizationMode { Affine, Mxfp4, Mxfp8, Nvfp4, BlockFp8 };
 
 std::string quantization_mode_to_string(QuantizationMode mode);
 QuantizationMode string_to_quantization_mode(
