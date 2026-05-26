@@ -1837,9 +1837,8 @@ void init_ops(nb::module_& m) {
             dtype (Dtype, optional): The desired data-type for the array.
             copy (bool, optional): Whether to copy the input. If ``True``,
               always copy. If ``False``, never copy. If ``None``, share memory
-              when possible and copy otherwise. Copied DLPack inputs are
-              materialized as row-contiguous MLX arrays, while zero-copy
-              imports preserve the DLPack strides.
+              when possible and copy otherwise. Zero-copy DLPack imports
+              preserve the DLPack strides.
 
         Returns:
             array: An array interpretation of the input.
@@ -1865,9 +1864,8 @@ void init_ops(nb::module_& m) {
               ``__dlpack_device__``.
             copy (bool, optional): Whether to copy the input. If ``True``,
               always copy. If ``False``, never copy. If ``None``, share memory
-              when possible and copy otherwise. Copied inputs are materialized
-              as row-contiguous MLX arrays, while zero-copy imports preserve
-              the DLPack strides.
+              when possible and copy otherwise. Zero-copy imports preserve the
+              DLPack strides.
 
         Returns:
             array: An array containing the input data.

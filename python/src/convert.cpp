@@ -76,19 +76,6 @@ size_t strided_storage_size(
   return storage_size;
 }
 
-size_t strided_offset(
-    size_t index,
-    const mx::Shape& shape,
-    const mx::Strides& strides) {
-  size_t offset = 0;
-  for (size_t i = shape.size(); i-- > 0;) {
-    auto dim_index = index % shape[i];
-    index /= shape[i];
-    offset += dim_index * strides[i];
-  }
-  return offset;
-}
-
 template <typename F>
 auto dispatch_dlpack_dtype(
     nb::dlpack::dtype type,
@@ -181,14 +168,23 @@ mx::array cpu_nd_array_to_mlx(
       [&]<typename DstT>(mx::Dtype) {
         auto out = mx::array(shape, dst_dtype, nullptr, {});
         auto strides = get_strides(nd_array);
-        strided_storage_size(shape, strides);
-        out.set_data(mx::allocator::malloc(out.nbytes()));
-        if (out.size() > 0) {
+        auto storage_size = strided_storage_size(shape, strides);
+        auto [no_bsx_size, is_row_contiguous, is_col_contiguous] = shape.empty()
+            ? std::make_tuple(storage_size, true, true)
+            : mx::check_contiguity(shape, strides);
+        auto flags = out.flags();
+        flags.contiguous = no_bsx_size == storage_size;
+        flags.row_contiguous = is_row_contiguous;
+        flags.col_contiguous = is_col_contiguous;
+        out.set_data(
+            mx::allocator::malloc(storage_size * sizeof(DstT)),
+            storage_size,
+            std::move(strides),
+            flags);
+        if (storage_size > 0) {
           auto src = static_cast<const SrcT*>(nd_array.data());
           auto dst = out.data<DstT>();
-          for (size_t i = 0; i < out.size(); ++i) {
-            dst[i] = static_cast<DstT>(src[strided_offset(i, shape, strides)]);
-          }
+          std::copy(src, src + storage_size, dst);
         }
         out.set_status(mx::array::Status::available);
         return out;
@@ -220,17 +216,11 @@ mx::array metal_dlpack_to_mlx(
   flags.contiguous = no_bsx_size == storage_size;
   flags.row_contiguous = is_row_contiguous;
   flags.col_contiguous = is_col_contiguous;
-  auto import_flags = flags;
-  if (copy && !import_flags.row_contiguous) {
-    // Force the copy primitive to materialize the virtual strided input into a
-    // row-contiguous output instead of preserving a dense non-row layout.
-    import_flags.contiguous = false;
-  }
   out.set_data(
       mx::allocator::Buffer(data_handle),
       storage_size,
       std::move(strides),
-      import_flags,
+      flags,
       nd_array.byte_offset(),
       [owner = std::move(nd_array)](mx::allocator::Buffer) {});
   out.set_status(mx::array::Status::available);

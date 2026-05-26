@@ -2145,8 +2145,8 @@ class TestArray(mlx_tests.MLXTestCase):
         y = mx.from_dlpack(view)
 
         self.assertEqual(y.tolist(), view.tolist())
-        self.assertTrue(memoryview(y).c_contiguous)
-        self.assertEqual(memoryview(y).strides, (12, 4))
+        self.assertFalse(memoryview(y).c_contiguous)
+        self.assertEqual(memoryview(y).strides, view.strides)
         expected = view.copy().tolist()
         x[0, 0] = 99
         self.assertEqual(y.tolist(), expected)
@@ -2154,16 +2154,16 @@ class TestArray(mlx_tests.MLXTestCase):
         stepped = np.arange(20, dtype=np.int32)[2:10:2]
         y = mx.from_dlpack(stepped)
         self.assertEqual(y.tolist(), [2, 4, 6, 8])
-        self.assertTrue(memoryview(y).c_contiguous)
-        self.assertEqual(memoryview(y).strides, (4,))
+        self.assertFalse(memoryview(y).c_contiguous)
+        self.assertEqual(memoryview(y).strides, stepped.strides)
         stepped[0] = 99
         self.assertEqual(y.tolist(), [2, 4, 6, 8])
 
         broadcast = np.broadcast_to(np.array([7], dtype=np.int32), (3,))
         y = mx.from_dlpack(broadcast)
         self.assertEqual(y.tolist(), [7, 7, 7])
-        self.assertTrue(memoryview(y).c_contiguous)
-        self.assertEqual(memoryview(y).strides, (4,))
+        self.assertFalse(memoryview(y).c_contiguous)
+        self.assertEqual(memoryview(y).strides, broadcast.strides)
 
         negative_stride = np.arange(5, dtype=np.float32)[::-1]
         with self.assertRaises(ValueError):
@@ -2265,16 +2265,19 @@ class TestArray(mlx_tests.MLXTestCase):
 
         y_copy = mx.asarray(view, copy=True)
         expected = view.cpu().numpy().tolist()
-        self.assertTrue(memoryview(y_copy).c_contiguous)
-        self.assertEqual(memoryview(y_copy).strides, (12, 4))
+        self.assertFalse(memoryview(y_copy).c_contiguous)
+        self.assertEqual(
+            memoryview(y_copy).strides,
+            tuple(s * view.element_size() for s in view.stride()),
+        )
         x[0, 2] = 77
         torch.mps.synchronize()
         self.assertEqual(y_copy.tolist(), expected)
 
         z = mx.asarray(view, dtype=mx.float16)
         self.assertEqual(z.dtype, mx.float16)
-        self.assertTrue(memoryview(z).c_contiguous)
-        self.assertEqual(memoryview(z).strides, (6, 2))
+        self.assertFalse(memoryview(z).c_contiguous)
+        self.assertEqual(memoryview(z).strides, tuple(s * 2 for s in view.stride()))
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_stepped_view(self):

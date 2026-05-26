@@ -109,8 +109,7 @@ without a copy when the underlying Metal buffer is not private. Private Metal
 buffers are copied into MLX-managed storage instead. Passing ``copy=False``
 requires zero-copy import and raises an error if a copy would be needed.
 Passing ``copy=True`` asks MLX to create a new array instead of reusing the
-Metal buffer. Copied DLPack inputs are materialized as row-contiguous MLX
-arrays; zero-copy imports preserve the DLPack strides. ``mx.array`` also
+Metal buffer. Zero-copy imports preserve the DLPack strides. ``mx.array`` also
 creates a new array instead of reusing the Metal buffer. MLX arrays exported to
 PyTorch with DLPack are exported without a copy on Metal.
 
