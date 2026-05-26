@@ -37,6 +37,9 @@ auto get_quantized_kernel_wrapped(
   }
   template_def = get_template_definition(
       name, fname, type, group_size, bits, std::forward<Args>(args)...);
+  if (std::getenv("MLX_TRACE_KERNELS")) {
+    fprintf(stderr, "[mlx-trace] %s\n", name.c_str());
+  }
   return get_quantized_kernel(d, name, template_def, mode);
 }
 
@@ -61,6 +64,9 @@ auto get_qmm_nax_kernel_wrapped(
   }
   template_def = get_template_definition(
       name, fname, type, group_size, bits, std::forward<Args>(args)...);
+  if (std::getenv("MLX_TRACE_KERNELS")) {
+    fprintf(stderr, "[mlx-trace] %s\n", name.c_str());
+  }
   return get_qmm_nax_kernel(d, name, template_def, mode);
 }
 
