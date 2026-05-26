@@ -70,7 +70,7 @@ mx::array nd_array_to_mlx(
 nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a);
 nb::ndarray<> mlx_to_dlpack(
     const mx::array& a,
-    std::optional<std::tuple<int, int>> dl_device = std::nullopt);
+    std::optional<std::tuple<int, int>> dl_device);
 
 nb::object to_scalar(mx::array& a);
 

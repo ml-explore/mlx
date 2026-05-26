@@ -39,8 +39,7 @@ int check_shape_dim(int64_t dim) {
   return static_cast<int>(dim);
 }
 
-template <typename... NDParams>
-mx::Shape get_shape(const nb::ndarray<NDParams...>& nd_array) {
+mx::Shape get_shape(const nb::ndarray<nb::ro>& nd_array) {
   mx::Shape shape;
   shape.reserve(nd_array.ndim());
   for (int i = 0; i < nd_array.ndim(); i++) {
@@ -49,8 +48,7 @@ mx::Shape get_shape(const nb::ndarray<NDParams...>& nd_array) {
   return shape;
 }
 
-template <typename... NDParams>
-mx::Strides get_strides(const nb::ndarray<NDParams...>& nd_array) {
+mx::Strides get_strides(const nb::ndarray<nb::ro>& nd_array) {
   mx::Strides strides;
   strides.reserve(nd_array.ndim());
   for (int i = 0; i < nd_array.ndim(); i++) {
@@ -74,6 +72,22 @@ size_t strided_storage_size(
     storage_size += (shape[i] - 1) * strides[i];
   }
   return storage_size;
+}
+
+auto get_strided_layout(
+    const nb::ndarray<nb::ro>& nd_array,
+    const mx::Shape& shape) {
+  auto strides = get_strides(nd_array);
+  auto storage_size = strided_storage_size(shape, strides);
+  auto [no_bsx_size, is_row_contiguous, is_col_contiguous] = shape.empty()
+      ? std::make_tuple(storage_size, true, true)
+      : mx::check_contiguity(shape, strides);
+  mx::array::Flags flags{
+      no_bsx_size == storage_size,
+      is_row_contiguous,
+      is_col_contiguous,
+  };
+  return std::make_tuple(storage_size, std::move(strides), flags);
 }
 
 template <typename F>
@@ -167,15 +181,8 @@ mx::array cpu_nd_array_to_mlx(
       mlx_dtype_to_dl_dtype(dst_dtype),
       [&]<typename DstT>(mx::Dtype) {
         auto out = mx::array(shape, dst_dtype, nullptr, {});
-        auto strides = get_strides(nd_array);
-        auto storage_size = strided_storage_size(shape, strides);
-        auto [no_bsx_size, is_row_contiguous, is_col_contiguous] = shape.empty()
-            ? std::make_tuple(storage_size, true, true)
-            : mx::check_contiguity(shape, strides);
-        auto flags = out.flags();
-        flags.contiguous = no_bsx_size == storage_size;
-        flags.row_contiguous = is_row_contiguous;
-        flags.col_contiguous = is_col_contiguous;
+        auto [storage_size, strides, flags] =
+            get_strided_layout(nd_array, shape);
         out.set_data(
             mx::allocator::malloc(storage_size * sizeof(DstT)),
             storage_size,
@@ -192,7 +199,7 @@ mx::array cpu_nd_array_to_mlx(
       "Cannot convert numpy array to mlx array.");
 }
 
-mx::array metal_dlpack_to_mlx(
+mx::array metal_nd_array_to_mlx(
     nb::ndarray<nb::ro> nd_array,
     mx::Dtype src_dtype,
     mx::Dtype dst_dtype,
@@ -205,17 +212,9 @@ mx::array metal_dlpack_to_mlx(
     throw std::invalid_argument(
         "Cannot convert Metal DLPack dtype to mlx dtype.");
   }
-  auto strides = get_strides(nd_array);
-  auto storage_size = strided_storage_size(shape, strides);
-  auto [no_bsx_size, is_row_contiguous, is_col_contiguous] = shape.empty()
-      ? std::make_tuple(storage_size, true, true)
-      : mx::check_contiguity(shape, strides);
+  auto [storage_size, strides, flags] = get_strided_layout(nd_array, shape);
   auto data_handle = nd_array.data_handle();
   mx::array out(shape, src_dtype, nullptr, {});
-  auto flags = out.flags();
-  flags.contiguous = no_bsx_size == storage_size;
-  flags.row_contiguous = is_row_contiguous;
-  flags.col_contiguous = is_col_contiguous;
   out.set_data(
       mx::allocator::Buffer(data_handle),
       storage_size,
@@ -271,7 +270,7 @@ mx::array nd_array_to_mlx(
         throw std::invalid_argument(
             "Cannot import a private Metal DLPack buffer without a copy.");
       }
-      return metal_dlpack_to_mlx(
+      return metal_nd_array_to_mlx(
           nd_array, src_mlx_dtype, dst_dtype, should_copy);
     }
     case nb::device::cuda::value:
@@ -282,66 +281,8 @@ mx::array nd_array_to_mlx(
   }
 }
 
-template <typename T, typename... NDParams>
-nb::ndarray<NDParams...> mlx_to_nd_array_impl(
-    mx::array a,
-    std::optional<nb::dlpack::dtype> t = {}) {
-  {
-    nb::gil_scoped_release nogil;
-    a.eval();
-  }
-  std::vector<size_t> shape(a.shape().begin(), a.shape().end());
-  auto owner = nb::cast(a);
-  return nb::ndarray<NDParams...>(
-      a.data<T>(),
-      a.ndim(),
-      shape.data(),
-      /* owner= */ owner,
-      a.strides().data(),
-      t.value_or(nb::dtype<T>()));
-}
-
 template <typename... NDParams>
-nb::ndarray<NDParams...> mlx_to_nd_array(const mx::array& a) {
-  switch (a.dtype()) {
-    case mx::bool_:
-      return mlx_to_nd_array_impl<bool, NDParams...>(a);
-    case mx::uint8:
-      return mlx_to_nd_array_impl<uint8_t, NDParams...>(a);
-    case mx::uint16:
-      return mlx_to_nd_array_impl<uint16_t, NDParams...>(a);
-    case mx::uint32:
-      return mlx_to_nd_array_impl<uint32_t, NDParams...>(a);
-    case mx::uint64:
-      return mlx_to_nd_array_impl<uint64_t, NDParams...>(a);
-    case mx::int8:
-      return mlx_to_nd_array_impl<int8_t, NDParams...>(a);
-    case mx::int16:
-      return mlx_to_nd_array_impl<int16_t, NDParams...>(a);
-    case mx::int32:
-      return mlx_to_nd_array_impl<int32_t, NDParams...>(a);
-    case mx::int64:
-      return mlx_to_nd_array_impl<int64_t, NDParams...>(a);
-    case mx::float16:
-      return mlx_to_nd_array_impl<mx::float16_t, NDParams...>(a);
-    case mx::bfloat16:
-      throw nb::type_error("bfloat16 arrays cannot be converted to NumPy.");
-    case mx::float32:
-      return mlx_to_nd_array_impl<float, NDParams...>(a);
-    case mx::float64:
-      return mlx_to_nd_array_impl<double, NDParams...>(a);
-    case mx::complex64:
-      return mlx_to_nd_array_impl<std::complex<float>, NDParams...>(a);
-    default:
-      throw nb::type_error("type cannot be converted to NumPy.");
-  }
-}
-
-nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a) {
-  return mlx_to_nd_array<nb::numpy>(a);
-}
-
-nb::ndarray<> mlx_to_dlpack(
+nb::ndarray<NDParams...> mlx_to_nd_array(
     const mx::array& a,
     std::optional<std::tuple<int, int>> dl_device) {
   auto default_device = mx::metal::is_available()
@@ -369,18 +310,14 @@ nb::ndarray<> mlx_to_dlpack(
   {
     nb::gil_scoped_release nogil;
     arr.eval();
-    if (device_type == nb::device::cpu::value) {
-      data = arr.buffer().raw_ptr();
-      byte_offset = arr.offset();
-    } else {
-      data = arr.buffer().ptr();
-      byte_offset = arr.offset();
-    }
   }
+  data = device_type == nb::device::cpu::value ? arr.buffer().raw_ptr()
+                                               : arr.buffer().ptr();
+  byte_offset = arr.offset();
 
   std::vector<size_t> shape(arr.shape().begin(), arr.shape().end());
   auto owner = nb::cast(arr);
-  return nb::ndarray<>(
+  return nb::ndarray<NDParams...>(
       data,
       arr.ndim(),
       shape.data(),
@@ -391,6 +328,19 @@ nb::ndarray<> mlx_to_dlpack(
       device_id,
       '\0',
       byte_offset);
+}
+
+nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a) {
+  if (a.dtype() == mx::bfloat16) {
+    throw nb::type_error("bfloat16 arrays cannot be converted to NumPy.");
+  }
+  return mlx_to_nd_array<nb::numpy>(a, std::tuple{nb::device::cpu::value, 0});
+}
+
+nb::ndarray<> mlx_to_dlpack(
+    const mx::array& a,
+    std::optional<std::tuple<int, int>> dl_device) {
+  return mlx_to_nd_array<>(a, dl_device);
 }
 
 nb::object to_scalar(mx::array& a) {
