@@ -27,7 +27,14 @@ auto get_quantized_kernel_wrapped(
     int bits,
     Args... args) {
   std::string template_def;
-  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
+  std::string fname;
+  if (mode == "affine") {
+    fname = "affine_" + func;
+  } else if (mode == "block_fp8") {
+    fname = "block_fp8_" + func;
+  } else {
+    fname = "fp_" + func;
+  }
   template_def = get_template_definition(
       name, fname, type, group_size, bits, std::forward<Args>(args)...);
   return get_quantized_kernel(d, name, template_def, mode);
@@ -44,7 +51,14 @@ auto get_qmm_nax_kernel_wrapped(
     int bits,
     Args... args) {
   std::string template_def;
-  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
+  std::string fname;
+  if (mode == "affine") {
+    fname = "affine_" + func;
+  } else if (mode == "block_fp8") {
+    fname = "block_fp8_" + func;
+  } else {
+    fname = "fp_" + func;
+  }
   template_def = get_template_definition(
       name, fname, type, group_size, bits, std::forward<Args>(args)...);
   return get_qmm_nax_kernel(d, name, template_def, mode);
@@ -693,7 +707,8 @@ void qmm(
     const Stream& s,
     const std::string& mode) {
   if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
-      (env::enable_tf32() || x.dtype() != float32)) {
+      (env::enable_tf32() || x.dtype() != float32) &&
+      mode != "block_fp8") {
     return qmm_nax(
         /* const array& x = */ x,
         /* const array& w = */ w,
@@ -884,7 +899,8 @@ void gather_qmm(
     const Stream& s,
     const std::string& mode) {
   if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
-      (env::enable_tf32() || x.dtype() != float32)) {
+      (env::enable_tf32() || x.dtype() != float32) &&
+      mode != "block_fp8") {
     return gather_qmm_nax(
         /* const array& x = */ x,
         /* const array& w = */ w,
@@ -1229,7 +1245,8 @@ void gather_qmm_rhs(
     const Stream& s,
     const std::string mode) {
   if (metal::is_nax_available() && transpose &&
-      (env::enable_tf32() || x_.dtype() != float32)) {
+      (env::enable_tf32() || x_.dtype() != float32) &&
+      mode != "block_fp8") {
     return gather_qmm_rhs_nax(
         /* const array& x_ = */ x_,
         /* const array& w_ = */ w_,
