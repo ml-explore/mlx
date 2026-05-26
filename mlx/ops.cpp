@@ -106,13 +106,24 @@ void validate_quantized_input(
           << scales.shape() << ".";
       throw std::invalid_argument(msg.str());
     }
-    // 2D 128x128 block tiling: both inner dims of w must be 128 * scales dim.
-    if (w.shape(-1) != scales.shape(-1) * group_size ||
-        w.shape(-2) != scales.shape(-2) * group_size) {
+    // 2D 128x128 block tiling: weight may be smaller than the scale grid
+    // covers (padding rows in scales are spec-compliant per DeepSeek-V3 /
+    // Xiaomi MiMo convention — e.g. fused QKV with q+k+v not a multiple
+    // of 128). Require: scales covers AT LEAST the weight extent, but no
+    // more than one full block past it.
+    // The scale tensor must cover the weight tensor's extent (each scale
+    // tile covers 128x128 weight elements). It may include trailing padding
+    // rows/cols beyond ceil(w / 128) — common in fused-QKV distributions
+    // where the original storage was padded to a tensor-parallel chunk size.
+    // The kernel never reads past out_row < w.shape[-2], so trailing scales
+    // are safely ignored.
+    auto ceil_div = [](int a, int b) { return (a + b - 1) / b; };
+    if (scales.shape(-1) < ceil_div(w.shape(-1), group_size) ||
+        scales.shape(-2) < ceil_div(w.shape(-2), group_size)) {
       std::ostringstream msg;
-      msg << "[" << tag << "] For 'block_fp8' weight shape must equal "
-          << "scales shape * " << group_size << " in the last two dims. "
-          << "w.shape() == " << w.shape()
+      msg << "[" << tag << "] For 'block_fp8' scales shape must be at "
+          << "least ceil(w.shape / " << group_size << ") in the last two "
+          << "dims. w.shape() == " << w.shape()
           << ", scales.shape() == " << scales.shape()
           << ", group_size=" << group_size;
       throw std::invalid_argument(msg.str());
