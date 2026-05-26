@@ -1117,6 +1117,104 @@ template <typename T, int group_size, int bits, bool batched>
       w, scales, x, y, in_vec_size, out_vec_size, tid, simd_gid, simd_lid);
 }
 
+// --------------------------------------------------------------------------
+// block_fp8 qmm_t (M1: simple-but-correct, qmv-math repeated per M row).
+//
+// Layout for THIS kernel only (not the generic qmm path):
+//   grid_dims  = (N / 8, M, B)        // one threadgroup per (m, n-tile)
+//   group_dims = (32, 2, 1)            // 2 simdgroups, 32 threads each
+//
+// The MLX dispatcher hardcodes (N/32, M/32, B) with (32, 2, 2). The C++
+// dispatcher applies a block_fp8-specific override before invoking us.
+//
+// Each threadgroup produces 8 contiguous N rows of output for one M row,
+// using the same simdgroup dot-product as block_fp8_qmv_fast_impl.
+// --------------------------------------------------------------------------
+template <typename T>
+METAL_FUNC void block_fp8_qmm_t_impl(
+    const device uint8_t* w,
+    const device float* scales,
+    const device T* x,
+    device T* y,
+    const constant int& K,
+    const constant int& N,
+    const constant int& M,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  constexpr int num_simdgroups = 2;
+  constexpr int results_per_simdgroup = 4;
+  constexpr int bits = 8;
+  constexpr int group_size = 128;
+  constexpr int values_per_thread = 8;
+  constexpr int block_size = values_per_thread * SIMD_SIZE;  // 256
+
+  typedef float U;
+  thread U x_thread[values_per_thread];
+  thread U result[results_per_simdgroup] = {0};
+
+  const int in_vec_size_w = K;
+  const int scales_per_row = K / group_size;
+
+  const int m = tid.y;
+  const int out_row = tid.x * (num_simdgroups * results_per_simdgroup) +
+      simd_gid * results_per_simdgroup;
+  const int scale_row = out_row / group_size;
+
+  w += out_row * in_vec_size_w + simd_lid * values_per_thread;
+  scales += scale_row * scales_per_row;
+  x += m * K + simd_lid * values_per_thread;
+  y += m * N + out_row;
+
+  for (int k = 0; k < K; k += block_size) {
+    load_vector<T, U, values_per_thread>(x, x_thread);
+
+    const int sk = (k + simd_lid * values_per_thread) / group_size;
+    U s = scales[sk];
+
+    for (int row = 0; row < results_per_simdgroup; row++) {
+      const device uint8_t* wl = w + row * in_vec_size_w;
+      result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s);
+    }
+
+    w += block_size;
+    x += block_size;
+  }
+
+  for (int row = 0; row < results_per_simdgroup; row++) {
+    result[row] = simd_sum(result[row]);
+    if (simd_lid == 0) {
+      y[row] = static_cast<T>(result[row]);
+    }
+  }
+}
+
+template <typename T, int group_size, int bits, bool aligned_N, bool batched>
+[[kernel]] void block_fp8_qmm_t(
+    const device uint8_t* w,
+    const device float* scales,
+    const device T* x,
+    device T* y,
+    const constant int& K,
+    const constant int& N,
+    const constant int& M,
+    const constant int& x_batch_ndims,
+    const constant int* x_shape,
+    const constant int64_t* x_strides,
+    const constant int& w_batch_ndims,
+    const constant int* w_shape,
+    const constant int64_t* w_strides,
+    const constant int64_t* s_strides,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  // Smoke path: B=1, no batched offsets.
+  (void)x_batch_ndims; (void)x_shape; (void)x_strides;
+  (void)w_batch_ndims; (void)w_shape; (void)w_strides; (void)s_strides;
+  block_fp8_qmm_t_impl<T>(
+      w, scales, x, y, K, N, M, tid, simd_gid, simd_lid);
+}
+
 template <typename T, int group_size, int bits, bool batched>
 [[kernel]] void fp_qmv_fast(
     const device uint32_t* w,

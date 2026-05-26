@@ -176,4 +176,25 @@ instantiate_block_fp8_qmv_fast(float16_t)
 instantiate_block_fp8_gather_qmv_fast(float)
 instantiate_block_fp8_gather_qmv_fast(bfloat16_t)
 instantiate_block_fp8_gather_qmv_fast(float16_t)
+
+// qmm_t: prefill matmul. Per-row qmv math, 8 N rows per threadgroup.
+// 4 variants per type: (aligned_N x batched). Dispatcher selects the right
+// suffix based on N%32 and batch size.
+#define instantiate_block_fp8_qmm_t(type) \
+  instantiate_kernel( \
+      "block_fp8_qmm_t_" #type "_gs_128_b_8_alN_true_batch_0", \
+      block_fp8_qmm_t, type, 128, 8, true, false) \
+  instantiate_kernel( \
+      "block_fp8_qmm_t_" #type "_gs_128_b_8_alN_true_batch_1", \
+      block_fp8_qmm_t, type, 128, 8, true, true) \
+  instantiate_kernel( \
+      "block_fp8_qmm_t_" #type "_gs_128_b_8_alN_false_batch_0", \
+      block_fp8_qmm_t, type, 128, 8, false, false) \
+  instantiate_kernel( \
+      "block_fp8_qmm_t_" #type "_gs_128_b_8_alN_false_batch_1", \
+      block_fp8_qmm_t, type, 128, 8, false, true)
+
+instantiate_block_fp8_qmm_t(float)
+instantiate_block_fp8_qmm_t(bfloat16_t)
+instantiate_block_fp8_qmm_t(float16_t)
     // clang-format on

@@ -735,6 +735,15 @@ void qmm(
   MTL::Size group_dims(32, wn, wm);
   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
 
+  // block_fp8 qmm_t uses qmv-derived geometry: 8 N rows per threadgroup,
+  // one M row per threadgroup, 2 simdgroups. Override the default tiling.
+  if (mode == "block_fp8" && transpose) {
+    constexpr int bn_blockfp8 = 8;   // N rows per threadgroup
+    group_dims = MTL::Size(32, 2, 1);
+    grid_dims = MTL::Size(
+        (N + bn_blockfp8 - 1) / bn_blockfp8, M, B);
+  }
+
   std::string kname;
   kname.reserve(64);
   bool aligned = N % 32 == 0;
@@ -800,6 +809,11 @@ void qmm_splitk(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
+  // block_fp8: no qmm_t_splitk kernel exists yet, force regular qmm.
+  if (mode == "block_fp8") {
+    return qmm(
+        x, w, scales, biases, out, true, group_size, bits, M, N, K, d, s, mode);
+  }
   // Choose split_k to target ~512 threadgroups
   int bm = 32, bn = 32;
   int n_tiles = (N + bn - 1) / bn;
