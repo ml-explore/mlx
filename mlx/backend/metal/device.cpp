@@ -369,6 +369,14 @@ void CommandEncoder::dispatch_threads(
   get_command_encoder()->dispatchThreads(grid_dims, group_dims);
 }
 
+void CommandEncoder::set_compute_pipeline_state(
+    MTL::ComputePipelineState* kernel) {
+  get_command_encoder()->setComputePipelineState(kernel);
+  if (device_.profiling_enabled()) {
+    current_kernel_name_ = device_.get_kernel_name(kernel);
+  }
+}
+
 void CommandEncoder::barrier() {
   get_command_encoder()->memoryBarrier(MTL::BarrierScopeBuffers);
 }

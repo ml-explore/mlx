@@ -64,12 +64,7 @@ class MLX_API CommandEncoder {
   void dispatch_threads(MTL::Size grid_dims, MTL::Size group_dims);
   void maybeInsertBarrier();
 
-  void set_compute_pipeline_state(MTL::ComputePipelineState* kernel) {
-    get_command_encoder()->setComputePipelineState(kernel);
-    if (device_.profiling_enabled()) {
-      current_kernel_name_ = device_.get_kernel_name(kernel);
-    }
-  }
+  void set_compute_pipeline_state(MTL::ComputePipelineState* kernel);
 
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
   void set_vector_bytes(const Vec& vec, size_t nelems, int idx) {
