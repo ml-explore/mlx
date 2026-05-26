@@ -265,8 +265,9 @@ array astype(
   if (dtype == a.dtype() && !copy.value_or(false)) {
     return a;
   }
+  auto copied_shape = a.shape(); // |a| will be moved
   return array(
-      a.shape(),
+      std::move(copied_shape),
       dtype,
       std::make_shared<AsType>(to_stream(s), dtype),
       {std::move(a)});
