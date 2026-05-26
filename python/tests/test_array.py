@@ -2319,7 +2319,7 @@ class TestArray(mlx_tests.MLXTestCase):
         torch.mps.synchronize()
         y = mx.from_dlpack(x, copy=False)
 
-        x.add_(10)
+        x[:] = torch.tensor([10.0, 11.0, 12.0], device="mps")
         torch.mps.synchronize()
         self.assertEqual(y.tolist(), [10.0, 11.0, 12.0])
 
