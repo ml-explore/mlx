@@ -156,7 +156,7 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/attn/kernels/steel_attention ${STEEL_ATTN_HEADERS})
 
   if((MLX_METAL_VERSION GREATER_EQUAL 400) AND (MACOS_SDK_VERSION GREATER_EQUAL
-                                                26.2))
+                                                26.2) AND (NOT MLX_DISABLE_NAX))
 
     build_kernel(steel/gemm/kernels/steel_gemm_fused_nax ${STEEL_NAX_HEADERS})
     build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
@@ -172,6 +172,10 @@ if(NOT MLX_METAL_JIT)
                  ${STEEL_NAX_ATTN_HEADERS})
 
   else()
+    # Reached when (a) the toolchain doesn't qualify (METAL_VERSION<400 or
+    # SDK<26.2), or (b) MLX_DISABLE_NAX=ON. Either way the nax kernels
+    # aren't in the metallib; MLX_METAL_NO_NAX tells C++ dispatchers to
+    # take the non-nax codepath.
     target_compile_definitions(mlx PRIVATE MLX_METAL_NO_NAX)
   endif()
 

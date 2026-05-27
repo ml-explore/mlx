@@ -37,6 +37,9 @@ option(MLX_BUILD_METAL "Build metal backend" ON)
 option(MLX_BUILD_CPU "Build cpu backend" ON)
 option(MLX_BUILD_CUDA "Build cuda backend" OFF)
 option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
+option(MLX_DISABLE_NAX
+       "Skip the Metal-4 nax tensor GEMM/qmm/attention kernels even when the build environment otherwise qualifies (MLX_METAL_VERSION>=400 + SDK>=26.2). Lets downstream projects opt out of the nax codepath on hosts where the installed Metal toolchain miscompiles those kernels — e.g. macOS 26 metalfe-32023.x silently produces wrong matmul outputs for M>~8 rows. The existing else() branch of the metal-version/SDK gate already defines MLX_METAL_NO_NAX, so C++ dispatchers fall back automatically. Default OFF preserves current behaviour."
+       OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
