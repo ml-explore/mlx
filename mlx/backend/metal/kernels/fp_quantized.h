@@ -1215,6 +1215,114 @@ template <typename T, int group_size, int bits, bool aligned_N, bool batched>
       w, scales, x, y, K, N, M, tid, simd_gid, simd_lid);
 }
 
+// --------------------------------------------------------------------------
+// block_fp8 gather_qmm_t (MoE prefill): per-M-row qmv math + expert lookup.
+//
+// Layout for THIS kernel only (not the generic gather_qmm path):
+//   grid_dims  = (N / 8, M, 1)
+//   group_dims = (32, 2, 1)            // 2 simdgroups, 32 threads each
+//
+// rhs_indices[m] picks which expert this M-row uses. We compute the offset
+// into w and scales once per threadgroup, then run the same per-row qmv math
+// as block_fp8_qmm_t_impl.
+// --------------------------------------------------------------------------
+template <typename T>
+METAL_FUNC void block_fp8_gather_qmm_t_impl(
+    const device uint8_t* w,
+    const device float* scales,
+    const device uint32_t* rhs_indices,
+    const device T* x,
+    device T* y,
+    const constant int& K,
+    const constant int& N,
+    const constant int& M,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  constexpr int num_simdgroups = 2;
+  constexpr int results_per_simdgroup = 4;
+  constexpr int bits = 8;
+  constexpr int group_size = 128;
+  constexpr int values_per_thread = 8;
+  constexpr int block_size = values_per_thread * SIMD_SIZE;
+
+  typedef float U;
+  thread U x_thread[values_per_thread];
+  thread U result[results_per_simdgroup] = {0};
+
+  const int in_vec_size_w = K;
+  const int scales_per_row = K / group_size;
+
+  const int m = tid.y;
+
+  // Expert lookup: read rhs_indices[m] once per threadgroup.
+  const uint32_t expert = rhs_indices[m];
+  const size_t w_expert_offset = size_t(expert) * size_t(N) * size_t(in_vec_size_w);
+  const size_t s_expert_offset = size_t(expert) * size_t(N) * size_t(scales_per_row);
+
+  const int out_row = tid.x * (num_simdgroups * results_per_simdgroup) +
+      simd_gid * results_per_simdgroup;
+  const int scale_row = out_row / group_size;
+
+  w += w_expert_offset + out_row * in_vec_size_w + simd_lid * values_per_thread;
+  scales += s_expert_offset + scale_row * scales_per_row;
+  x += m * K + simd_lid * values_per_thread;
+  y += m * N + out_row;
+
+  for (int k = 0; k < K; k += block_size) {
+    load_vector<T, U, values_per_thread>(x, x_thread);
+
+    const int sk = (k + simd_lid * values_per_thread) / group_size;
+    U s = scales[sk];
+
+    for (int row = 0; row < results_per_simdgroup; row++) {
+      const device uint8_t* wl = w + row * in_vec_size_w;
+      result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s);
+    }
+
+    w += block_size;
+    x += block_size;
+  }
+
+  for (int row = 0; row < results_per_simdgroup; row++) {
+    result[row] = simd_sum(result[row]);
+    if (simd_lid == 0) {
+      y[row] = static_cast<T>(result[row]);
+    }
+  }
+}
+
+template <typename T, int group_size, int bits, bool aligned_N>
+[[kernel]] void block_fp8_gather_qmm_t(
+    const device uint8_t* w,
+    const device float* scales,
+    const device uint32_t* rhs_indices,
+    const device T* x,
+    device T* y,
+    const constant int& K,
+    const constant int& N,
+    const constant int& M,
+    const constant int& x_batch_ndims,
+    const constant int* x_shape,
+    const constant int64_t* x_strides,
+    const constant int& w_batch_ndims,
+    const constant int* w_shape,
+    const constant int64_t* w_strides,
+    const constant int64_t* s_strides,
+    const constant int& batch_ndims,
+    const constant int* batch_shape,
+    const constant int64_t* lhs_strides,
+    const constant int64_t* rhs_strides,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  (void)x_batch_ndims; (void)x_shape; (void)x_strides;
+  (void)w_batch_ndims; (void)w_shape; (void)w_strides; (void)s_strides;
+  (void)batch_ndims; (void)batch_shape; (void)lhs_strides; (void)rhs_strides;
+  block_fp8_gather_qmm_t_impl<T>(
+      w, scales, rhs_indices, x, y, K, N, M, tid, simd_gid, simd_lid);
+}
+
 template <typename T, int group_size, int bits, bool batched>
 [[kernel]] void fp_qmv_fast(
     const device uint32_t* w,
