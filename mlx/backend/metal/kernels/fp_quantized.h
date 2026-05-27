@@ -1408,88 +1408,251 @@ template <typename T, int group_size, int bits, bool aligned_N, bool batched>
 }
 
 // --------------------------------------------------------------------------
-// block_fp8 gather_qmm_t (MoE prefill): per-M-row qmv math + expert lookup.
+// block_fp8 gather_qmm_rhs: sorted-indices MoE path (M=1 prefill with large
+// B and B/E >= 4). Mirrors upstream fp_gather_qmm_rhs structurally.
 //
-// Layout for THIS kernel only (not the generic gather_qmm path):
-//   grid_dims  = (N / 8, M, 1)
-//   group_dims = (32, 2, 1)            // 2 simdgroups, 32 threads each
+// Uses BlockFp8QuantizedLoader (2D fp32 scales) instead of the affine
+// QuantizedBlockLoader. fp8 codes are unpacked bytes so pack_factor=1 and
+// bytes_per_pack=1; this simplifies the stride math.
 //
-// rhs_indices[m] picks which expert this M-row uses. We compute the offset
-// into w and scales once per threadgroup, then run the same per-row qmv math
-// as block_fp8_qmm_t_impl.
+// align_M/N/K are file-scope function constants (200/201/202).
 // --------------------------------------------------------------------------
-template <typename T>
-METAL_FUNC void block_fp8_gather_qmm_t_impl(
+template <
+    typename T,
+    int group_size,
+    int bits,
+    int BM,
+    int BN,
+    int BK,
+    int WM,
+    int WN,
+    bool transpose>
+[[kernel]] void block_fp8_gather_qmm_rhs(
+    const device T* x,
     const device uint8_t* w,
     const device float* scales,
-    const device uint32_t* rhs_indices,
-    const device T* x,
+    const device uint32_t* indices,
     device T* y,
-    const constant int& K,
-    const constant int& N,
     const constant int& M,
+    const constant int& N,
+    const constant int& K,
     uint3 tid [[threadgroup_position_in_grid]],
-    uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]]) {
-  constexpr int num_simdgroups = 2;
-  constexpr int results_per_simdgroup = 4;
-  constexpr int bits = 8;
-  constexpr int group_size = 128;
-  constexpr int values_per_thread = 8;
-  constexpr int block_size = values_per_thread * SIMD_SIZE;
+    uint simd_group_id [[simdgroup_index_in_threadgroup]],
+    uint simd_lane_id [[thread_index_in_simdgroup]]) {
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
+  constexpr int BN_padded = (BN + 16 / sizeof(T));
 
-  typedef float U;
-  thread U x_thread[values_per_thread];
-  thread U result[results_per_simdgroup] = {0};
+  using mma_t = mlx::steel::BlockMMA<
+      T, T, BM, BN, BK, WM, WN, false, transpose,
+      BK_padded, transpose ? BK_padded : BN_padded>;
+  using loader_x_t =
+      mlx::steel::BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE>;
+  using loader_w_t = BlockFp8QuantizedLoader<
+      T,
+      transpose ? BN : BK,
+      transpose ? BK : BN,
+      transpose ? BK_padded : BN_padded,
+      transpose,
+      WM * WN * SIMD_SIZE>;
 
-  const int in_vec_size_w = K;
-  const int scales_per_row = K / group_size;
+  threadgroup T Xs[BM * BK_padded];
+  threadgroup T Ws[transpose ? BN * BK_padded : BK * BN_padded];
 
-  const int m = tid.y;
+  // Block layout - fp8 is byte-per-code so K_w = K and N_w = N.
+  const int K_g = K / group_size;
+  const int N_g = N / group_size;
+  const int K_it = K / BK;
+  const size_t stride_w = transpose ? size_t(N) * size_t(K) : size_t(K) * size_t(N);
+  // 2D scale grid: [E, N/gs, K/gs]. Per-expert stride = N_g * K_g.
+  const size_t stride_s = size_t(N_g) * size_t(K_g);
+  const int y_row = tid.y * BM;
+  const int y_col = tid.x * BN;
+  const size_t y_row_long = size_t(y_row);
+  const size_t y_col_long = size_t(y_col);
 
-  // Expert lookup: read rhs_indices[m] once per threadgroup.
-  const uint32_t expert = rhs_indices[m];
-  const size_t w_expert_offset = size_t(expert) * size_t(N) * size_t(in_vec_size_w);
-  const size_t s_expert_offset = size_t(expert) * size_t(N) * size_t(scales_per_row);
+  const short tgp_bm = align_M ? BM : short(min(BM, M - y_row));
+  const short tgp_bn = align_N ? BN : short(min(BN, N - y_col));
 
-  const int out_row = tid.x * (num_simdgroups * results_per_simdgroup) +
-      simd_gid * results_per_simdgroup;
-  const int scale_row = out_row / group_size;
+  const int k_remain = K - K_it * BK;
+  const short2 tile_x = short2(k_remain, tgp_bm);
+  const short2 tile_w =
+      transpose ? short2(k_remain, tgp_bn) : short2(tgp_bn, k_remain);
 
-  w += w_expert_offset + out_row * in_vec_size_w + simd_lid * values_per_thread;
-  scales += s_expert_offset + scale_row * scales_per_row;
-  x += m * K + simd_lid * values_per_thread;
-  y += m * N + out_row;
+  // Move pointers to this block's region.
+  x += y_row_long * K;
+  y += y_row_long * N + y_col_long;
+  w += transpose ? y_col_long * K : y_col_long;
+  // 2D scales: jump to the (y_col / group_size) row-block.
+  scales += (y_col_long / group_size) * size_t(K_g);
 
-  for (int k = 0; k < K; k += block_size) {
-    load_vector<T, U, values_per_thread>(x, x_thread);
+  // s_row_stride for the BlockFp8QuantizedLoader's 2D scale walk:
+  // when transpose=true (qmm_t pattern), reduction is along K, scales are
+  // [N/gs, K/gs], so row stride along N is K_g.
+  // when transpose=false, scales are [K/gs, N/gs], row stride along K is N_g.
+  const int s_row_stride = transpose ? K_g : N_g;
 
-    const int sk = (k + simd_lid * values_per_thread) / group_size;
-    U s = scales[sk];
-
-    for (int row = 0; row < results_per_simdgroup; row++) {
-      const device uint8_t* wl = w + row * in_vec_size_w;
-      result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s);
+  // Per-expert loop: walk M rows, group consecutive identical indices, emit
+  // one MMA pass per group of rows sharing an expert.
+  uint32_t index;
+  short offset;
+  uint32_t index_next = indices[y_row];
+  short offset_next = 0;
+  int n = 0;
+  while (n < tgp_bm) {
+    n++;
+    offset = offset_next;
+    index = index_next;
+    offset_next = tgp_bm;
+    for (; n < tgp_bm; n++) {
+      if (indices[y_row + n] != index) {
+        offset_next = n;
+        index_next = indices[y_row + n];
+        break;
+      }
     }
+    threadgroup_barrier(mem_flags::mem_none);
 
-    w += block_size;
-    x += block_size;
-  }
+    thread mma_t mma_op(simd_group_id, simd_lane_id);
+    thread loader_x_t loader_x(x, K, Xs, simd_group_id, simd_lane_id);
+    thread loader_w_t loader_w(
+        w + index * stride_w,
+        scales + index * stride_s,
+        transpose ? K : N,
+        s_row_stride,
+        Ws,
+        simd_group_id,
+        simd_lane_id);
 
-  for (int row = 0; row < results_per_simdgroup; row++) {
-    result[row] = simd_sum(result[row]);
-    if (simd_lid == 0) {
-      y[row] = static_cast<T>(result[row]);
+    if (align_M && align_N) {
+      gemm_loop_aligned(Xs, Ws, mma_op, loader_x, loader_w, K_it);
+      if (!align_K) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+      }
+      if (offset_next - offset == BM) {
+        mma_op.store_result(y, N);
+      } else {
+        mma_op.store_result_slice(
+            y, N, short2(0, offset), short2(BN, offset_next));
+      }
+    } else {
+      if ((align_M || tgp_bm == BM) && (align_N || tgp_bn == BN)) {
+        gemm_loop_aligned(Xs, Ws, mma_op, loader_x, loader_w, K_it);
+        if (!align_K) {
+          threadgroup_barrier(mem_flags::mem_threadgroup);
+          gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+        }
+        if (offset_next - offset == BM) {
+          mma_op.store_result(y, N);
+        } else {
+          mma_op.store_result_slice(
+              y, N, short2(0, offset), short2(BN, offset_next));
+        }
+      } else if (align_N || tgp_bn == BN) {
+        gemm_loop_unaligned<false, true, transpose>(
+            Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
+        if (!align_K) {
+          threadgroup_barrier(mem_flags::mem_threadgroup);
+          gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+        }
+        mma_op.store_result_slice(
+            y, N, short2(0, offset), short2(BN, offset_next));
+      } else if (align_M || tgp_bm == BM) {
+        gemm_loop_unaligned<true, false, transpose>(
+            Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
+        if (!align_K) {
+          threadgroup_barrier(mem_flags::mem_threadgroup);
+          gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+        }
+        mma_op.store_result_slice(
+            y, N, short2(0, offset), short2(tgp_bn, offset_next));
+      } else {
+        gemm_loop_unaligned<false, false, transpose>(
+            Xs, Ws, mma_op, loader_x, loader_w, K_it, tgp_bm, tgp_bn, BK);
+        if (!align_K) {
+          threadgroup_barrier(mem_flags::mem_threadgroup);
+          gemm_loop_finalize(Xs, Ws, mma_op, loader_x, loader_w, tile_x, tile_w);
+        }
+        mma_op.store_result_slice(
+            y, N, short2(0, offset), short2(tgp_bn, offset_next));
+      }
     }
   }
 }
 
+
+// --------------------------------------------------------------------------
+// block_fp8 gather_qmv (MoE decode path).
+// One threadgroup per (token, expert). Per-token rhs_indices selects the
+// expert slice of w/scales for this token's top-k experts. Calls the same
+// block_fp8_qmv_fast_impl after offset-adjusting the pointers.
+// --------------------------------------------------------------------------
+
+template <typename T>
+METAL_FUNC void block_fp8_adjust_matrix_offsets(
+    const device T*& x,
+    const device uint8_t*& w,
+    const device float*& scales,
+    const device uint32_t* lhs_indices,
+    const device uint32_t* rhs_indices,
+    device T*& y,
+    int output_stride,
+    const constant int& batch_ndims,
+    const constant int* batch_shape,
+    const constant int64_t* lhs_strides,
+    const constant int64_t* rhs_strides,
+    const constant int& x_batch_ndims,
+    const constant int* x_shape,
+    const constant int64_t* x_strides,
+    const constant int& w_batch_ndims,
+    const constant int* w_shape,
+    const constant int64_t* w_strides,
+    const constant int64_t* s_strides,
+    uint3 tid) {
+  uint32_t x_idx;
+  uint32_t w_idx;
+  if (batch_ndims == 1) {
+    x_idx = lhs_indices[tid.z * lhs_strides[0]];
+    w_idx = rhs_indices[tid.z * rhs_strides[0]];
+  } else {
+    ulong2 idx = elem_to_loc_broadcast(
+        tid.z, batch_shape, lhs_strides, rhs_strides, batch_ndims);
+    x_idx = lhs_indices[idx.x];
+    w_idx = rhs_indices[idx.y];
+  }
+  if (x_batch_ndims == 1) {
+    x += x_idx * x_strides[0];
+  } else {
+    x += elem_to_loc(x_idx, x_shape, x_strides, x_batch_ndims);
+  }
+  if (w_batch_ndims == 1) {
+    w += w_idx * w_strides[0];
+    scales += w_idx * s_strides[0];
+  } else {
+    ulong2 idx = elem_to_loc_broadcast(
+        w_idx, w_shape, w_strides, s_strides, w_batch_ndims);
+    w += idx.x;
+    scales += idx.y;
+  }
+  y += tid.z * output_stride;
+}
+
+// --------------------------------------------------------------------------
+// block_fp8 gather_qmm_t (MoE prefill, tiled).
+//
+// Pattern mirrors upstream fp_gather_qmm_t: adjust pointer offsets for the
+// gathered expert via block_fp8_adjust_matrix_offsets, then run the standard
+// block_fp8_qmm_t_impl (tiled BlockMMA + BlockFp8QuantizedLoader).
+//
+// Uses standard MLX dispatcher geometry: (N/32, M/32, B) with (32, 2, 2).
+// --------------------------------------------------------------------------
 template <typename T, int group_size, int bits, bool aligned_N>
 [[kernel]] void block_fp8_gather_qmm_t(
     const device uint8_t* w,
     const device float* scales,
-    const device uint32_t* rhs_indices,
     const device T* x,
+    const device uint32_t* lhs_indices,
+    const device uint32_t* rhs_indices,
     device T* y,
     const constant int& K,
     const constant int& N,
@@ -1506,13 +1669,26 @@ template <typename T, int group_size, int bits, bool aligned_N>
     const constant int64_t* lhs_strides,
     const constant int64_t* rhs_strides,
     uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
-  (void)x_batch_ndims; (void)x_shape; (void)x_strides;
-  (void)w_batch_ndims; (void)w_shape; (void)w_strides; (void)s_strides;
-  (void)batch_ndims; (void)batch_shape; (void)lhs_strides; (void)rhs_strides;
-  block_fp8_gather_qmm_t_impl<T>(
-      w, scales, rhs_indices, x, y, K, N, M, tid, simd_gid, simd_lid);
+  constexpr int BM = 32, BK = 32, BN = 32;
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
+  threadgroup T Xs[BM * BK_padded];
+  threadgroup T Ws[BN * BK_padded];
+
+  block_fp8_adjust_matrix_offsets<T>(
+      x, w, scales,
+      lhs_indices, rhs_indices,
+      y,
+      M * N,
+      batch_ndims, batch_shape, lhs_strides, rhs_strides,
+      x_batch_ndims, x_shape, x_strides,
+      w_batch_ndims, w_shape, w_strides, s_strides,
+      tid);
+
+  block_fp8_qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
+      w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <typename T, int group_size, int bits, bool batched>
@@ -1807,61 +1983,6 @@ template <
       w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
-// --------------------------------------------------------------------------
-// block_fp8 gather_qmv (MoE decode path).
-// One threadgroup per (token, expert). Per-token rhs_indices selects the
-// expert slice of w/scales for this token's top-k experts. Calls the same
-// block_fp8_qmv_fast_impl after offset-adjusting the pointers.
-// --------------------------------------------------------------------------
-
-template <typename T>
-METAL_FUNC void block_fp8_adjust_matrix_offsets(
-    const device T*& x,
-    const device uint8_t*& w,
-    const device float*& scales,
-    const device uint32_t* lhs_indices,
-    const device uint32_t* rhs_indices,
-    device T*& y,
-    int output_stride,
-    const constant int& batch_ndims,
-    const constant int* batch_shape,
-    const constant int64_t* lhs_strides,
-    const constant int64_t* rhs_strides,
-    const constant int& x_batch_ndims,
-    const constant int* x_shape,
-    const constant int64_t* x_strides,
-    const constant int& w_batch_ndims,
-    const constant int* w_shape,
-    const constant int64_t* w_strides,
-    const constant int64_t* s_strides,
-    uint3 tid) {
-  uint32_t x_idx;
-  uint32_t w_idx;
-  if (batch_ndims == 1) {
-    x_idx = lhs_indices[tid.z * lhs_strides[0]];
-    w_idx = rhs_indices[tid.z * rhs_strides[0]];
-  } else {
-    ulong2 idx = elem_to_loc_broadcast(
-        tid.z, batch_shape, lhs_strides, rhs_strides, batch_ndims);
-    x_idx = lhs_indices[idx.x];
-    w_idx = rhs_indices[idx.y];
-  }
-  if (x_batch_ndims == 1) {
-    x += x_idx * x_strides[0];
-  } else {
-    x += elem_to_loc(x_idx, x_shape, x_strides, x_batch_ndims);
-  }
-  if (w_batch_ndims == 1) {
-    w += w_idx * w_strides[0];
-    scales += w_idx * s_strides[0];
-  } else {
-    ulong2 idx = elem_to_loc_broadcast(
-        w_idx, w_shape, w_strides, s_strides, w_batch_ndims);
-    w += idx.x;
-    scales += idx.y;
-  }
-  y += tid.z * output_stride;
-}
 
 template <typename T, int group_size, int bits>
 [[kernel]] void block_fp8_gather_qmv_fast(

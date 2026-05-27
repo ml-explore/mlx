@@ -206,11 +206,13 @@ instantiate_block_fp8_qmm_t(float)
 instantiate_block_fp8_qmm_t(bfloat16_t)
 instantiate_block_fp8_qmm_t(float16_t)
 
-#define instantiate_block_fp8_gather_qmm_t(type) \
-  template [[host_name("block_fp8_gather_qmm_t_" #type "_gs_128_b_8_alN_true")]] \
-  [[kernel]] void block_fp8_gather_qmm_t<type, 128, 8, true>( \
+#define instantiate_block_fp8_gather_qmm_t_one(type, alN, alN_str) \
+  template [[host_name("block_fp8_gather_qmm_t_" #type "_gs_128_b_8_alN_" #alN_str)]] \
+  [[kernel]] void block_fp8_gather_qmm_t<type, 128, 8, alN>( \
       const device uint8_t* w, const device float* scales, \
-      const device uint32_t* rhs_indices, const device type* x, device type* y, \
+      const device type* x, \
+      const device uint32_t* lhs_indices, const device uint32_t* rhs_indices, \
+      device type* y, \
       const constant int& K, const constant int& N, const constant int& M, \
       const constant int& x_batch_ndims, const constant int* x_shape, \
       const constant int64_t* x_strides, const constant int& w_batch_ndims, \
@@ -219,24 +221,22 @@ instantiate_block_fp8_qmm_t(float16_t)
       const constant int* batch_shape, const constant int64_t* lhs_strides, \
       const constant int64_t* rhs_strides, \
       uint3 tid [[threadgroup_position_in_grid]], \
-      uint simd_gid [[simdgroup_index_in_threadgroup]], \
-      uint simd_lid [[thread_index_in_simdgroup]]); \
-  template [[host_name("block_fp8_gather_qmm_t_" #type "_gs_128_b_8_alN_false")]] \
-  [[kernel]] void block_fp8_gather_qmm_t<type, 128, 8, false>( \
-      const device uint8_t* w, const device float* scales, \
-      const device uint32_t* rhs_indices, const device type* x, device type* y, \
-      const constant int& K, const constant int& N, const constant int& M, \
-      const constant int& x_batch_ndims, const constant int* x_shape, \
-      const constant int64_t* x_strides, const constant int& w_batch_ndims, \
-      const constant int* w_shape, const constant int64_t* w_strides, \
-      const constant int64_t* s_strides, const constant int& batch_ndims, \
-      const constant int* batch_shape, const constant int64_t* lhs_strides, \
-      const constant int64_t* rhs_strides, \
-      uint3 tid [[threadgroup_position_in_grid]], \
+      uint lid [[thread_index_in_threadgroup]], \
       uint simd_gid [[simdgroup_index_in_threadgroup]], \
       uint simd_lid [[thread_index_in_simdgroup]]);
+
+#define instantiate_block_fp8_gather_qmm_t(type) \
+  instantiate_block_fp8_gather_qmm_t_one(type, true, true) \
+  instantiate_block_fp8_gather_qmm_t_one(type, false, false)
 
 instantiate_block_fp8_gather_qmm_t(float)
 instantiate_block_fp8_gather_qmm_t(bfloat16_t)
 instantiate_block_fp8_gather_qmm_t(float16_t)
+
+instantiate_gather_qmm_rhs(block_fp8_gather_qmm_rhs, gather_qmm_rhs_nt, float, 16, 32, 32, 1, 2, true, block_fp8, 128, 8)
+instantiate_gather_qmm_rhs(block_fp8_gather_qmm_rhs, gather_qmm_rhs_nn, float, 16, 32, 32, 1, 2, false, block_fp8, 128, 8)
+instantiate_gather_qmm_rhs(block_fp8_gather_qmm_rhs, gather_qmm_rhs_nt, bfloat16_t, 16, 32, 32, 1, 2, true, block_fp8, 128, 8)
+instantiate_gather_qmm_rhs(block_fp8_gather_qmm_rhs, gather_qmm_rhs_nn, bfloat16_t, 16, 32, 32, 1, 2, false, block_fp8, 128, 8)
+instantiate_gather_qmm_rhs(block_fp8_gather_qmm_rhs, gather_qmm_rhs_nt, float16_t, 16, 32, 32, 1, 2, true, block_fp8, 128, 8)
+instantiate_gather_qmm_rhs(block_fp8_gather_qmm_rhs, gather_qmm_rhs_nn, float16_t, 16, 32, 32, 1, 2, false, block_fp8, 128, 8)
     // clang-format on

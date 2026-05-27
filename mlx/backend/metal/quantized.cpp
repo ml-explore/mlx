@@ -942,16 +942,6 @@ void gather_qmm(
   MTL::Size group_dims(32, wn, wm);
   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
 
-  // block_fp8 gather_qmm_t uses qmv-derived geometry: 8 N rows per
-  // threadgroup, one M row per threadgroup, 2 simdgroups. Override the
-  // default tiling to match the kernel layout in fp_quantized.h.
-  if (mode == "block_fp8" && transpose) {
-    constexpr int bn_blockfp8 = 8;
-    group_dims = MTL::Size(32, 2, 1);
-    grid_dims = MTL::Size(
-        (N + bn_blockfp8 - 1) / bn_blockfp8, M, B);
-  }
-
   std::string kname;
   kname.reserve(64);
   bool aligned = N % 32 == 0;
