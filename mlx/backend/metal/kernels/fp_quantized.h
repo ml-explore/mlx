@@ -259,6 +259,146 @@ struct QuantizedBlockLoader {
   }
 };
 
+// --------------------------------------------------------------------------
+// BlockFp8QuantizedLoader: 2D-scale variant for block_fp8 (DeepSeek-V3/MiMo).
+//
+// Layout differences from the fp variant above:
+//   - scales is `device float*` (fp32), not packed uint8 (no dequantize_scale)
+//   - 2D scale grid: scales[row_block * (K/group_size) + col_block]
+//     where row_block = (start_row + bi) / group_size, col_block walks K
+//   - group_size = 128, bits = 8 (enforced; only block_fp8 invariants)
+//
+// API-compatible with QuantizedBlockLoader: same load_unsafe / load_safe /
+// next signatures so we can drop into existing qmm templates by swapping
+// loader_w_t = BlockFp8QuantizedLoader<...>.
+//
+// Caller responsibility: pass `scales_` already offset to the starting tile
+// row block, exactly like the existing fp loader expects scales_ offset to
+// the starting tile row. The constructor handles the bi/bj offset within
+// the tile. The caller also passes scales_stride_K = K / group_size so we
+// know the row-stride in the 2D scale grid.
+// --------------------------------------------------------------------------
+template <
+    typename T,
+    short BROWS,
+    short BCOLS,
+    short dst_ld,
+    short reduction_dim,
+    short tgp_size>
+struct BlockFp8QuantizedLoader {
+  MLX_MTL_CONST short bits = 8;
+  MLX_MTL_CONST short group_size = 128;
+  MLX_MTL_CONST short pack_factor = 1;       // bytes_per_pack = 1 for fp8
+  MLX_MTL_CONST short bytes_per_pack = 1;
+  MLX_MTL_CONST short BCOLS_PACKED = BCOLS;  // codes are unpacked bytes
+  MLX_MTL_CONST short n_reads =
+      (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
+  MLX_MTL_CONST short group_steps = group_size / BCOLS;  // 128/BK steps per scale
+
+  static_assert(
+      BCOLS <= group_size,
+      "block_fp8: BCOLS must be <= 128 group size");
+  static_assert(
+      group_size % BCOLS == 0,
+      "block_fp8: 128 must be divisible by BCOLS");
+  static_assert(
+      (n_reads * pack_factor) <= group_size,
+      "block_fp8: reads per thread must be <= group size");
+
+  const int src_ld;
+  const int tile_stride;
+  short group_step_cnt;
+  const int group_stride;   // for reduction_dim==0 (walking down rows)
+  const int s_row_stride;   // K/group_size, for jumping rows in 2D scale grid
+
+  const short thread_idx;
+  const short bi;
+  const short bj;
+
+  threadgroup T* dst;
+  const device uint8_t* src;
+  const device float* scales;
+
+  BlockFp8QuantizedLoader(
+      const device uint8_t* src_,
+      const device float* scales_,
+      const int src_ld_,
+      const int s_row_stride_,        // = K / group_size
+      threadgroup T* dst_,
+      ushort simd_group_id [[simdgroup_index_in_threadgroup]],
+      ushort simd_lane_id [[thread_index_in_simdgroup]])
+      : src_ld(src_ld_),
+        tile_stride(
+            reduction_dim ? BCOLS_PACKED * bytes_per_pack
+                          : BROWS * src_ld * bytes_per_pack / pack_factor),
+        group_step_cnt(0),
+        group_stride(BROWS * src_ld / group_size),
+        s_row_stride(s_row_stride_),
+        thread_idx(simd_group_id * 32 + simd_lane_id),
+        bi(n_reads * thread_idx / BCOLS_PACKED),
+        bj((n_reads * thread_idx) % BCOLS_PACKED),
+        dst(dst_ + bi * dst_ld + bj * pack_factor),
+        src(src_ + bi * src_ld * bytes_per_pack / pack_factor +
+            bj * bytes_per_pack),
+        // 2D scale offset: (bi / group_size) along rows, (bj / group_size) along cols.
+        scales(
+            scales_ + (bi / group_size) * s_row_stride_ +
+            (bj / group_size)) {}
+
+  void load_unsafe() const {
+    if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
+      return;
+    }
+    typedef float U;
+    U scale = *scales;
+    for (int i = 0; i < n_reads; i++) {
+      dequantize<T, bits>(src[i * bytes_per_pack], T(scale), dst + i * pack_factor);
+    }
+  }
+
+  void load_safe(short2 src_tile_dim) const {
+    if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
+      return;
+    }
+    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
+      for (int i = 0; i < n_reads * pack_factor; i++) dst[i] = T(0);
+      return;
+    }
+    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
+      for (int i = 0; i < n_reads * pack_factor; i++) dst[i] = T(0);
+      return;
+    }
+    typedef float U;
+    U scale = *scales;
+    for (int i = 0; i < n_reads; i++) {
+      dequantize<T, bits>(src[i * bytes_per_pack], T(scale), dst + i * pack_factor);
+    }
+  }
+
+  void next() {
+    src += tile_stride;
+    if (reduction_dim == 1) {
+      // Walk K: advance col_block every group_steps tile-steps (128 K each).
+      if (group_steps > 1) {
+        group_step_cnt++;
+        if (group_step_cnt == group_steps) {
+          group_step_cnt = 0;
+          scales++;   // advance one column in the 2D scale grid
+        }
+      } else {
+        scales++;
+      }
+    } else {
+      // Walk N (rows): advance row_block. BROWS rows per tile = BROWS/group_size
+      // row-blocks. For typical BROWS=32 and group_size=128, that's 32/128 = 0
+      // intra-tile, so this branch only matters when BROWS >= 128.
+      scales += group_stride * s_row_stride / src_ld * group_size;
+      // Equivalent simplification: scales += (BROWS / group_size) * s_row_stride
+      // when BROWS is a multiple of group_size; otherwise needs the full math.
+    }
+  }
+};
+
 template <typename T, int group_size, int bits, int D>
 METAL_FUNC void fp_qmv_quad_impl(
     const device uint32_t* w,
@@ -1118,74 +1258,120 @@ template <typename T, int group_size, int bits, bool batched>
 }
 
 // --------------------------------------------------------------------------
-// block_fp8 qmm_t (M1: simple-but-correct, qmv-math repeated per M row).
+// block_fp8_qmm_t: tiled implementation using BlockFp8QuantizedLoader.
 //
-// Layout for THIS kernel only (not the generic qmm path):
-//   grid_dims  = (N / 8, M, B)        // one threadgroup per (m, n-tile)
-//   group_dims = (32, 2, 1)            // 2 simdgroups, 32 threads each
+// Mirrors upstream fp_qmm_t_impl with loader_w_t = BlockFp8QuantizedLoader.
+// Uses standard MLX dispatcher geometry: grid=(N/32, M/32, B), group=(32, 2, 2).
 //
-// The MLX dispatcher hardcodes (N/32, M/32, B) with (32, 2, 2). The C++
-// dispatcher applies a block_fp8-specific override before invoking us.
-//
-// Each threadgroup produces 8 contiguous N rows of output for one M row,
-// using the same simdgroup dot-product as block_fp8_qmv_fast_impl.
+// Standard MLX tiled BlockMMA pattern with fp32 register accumulation.
 // --------------------------------------------------------------------------
-template <typename T>
+template <
+    typename T,
+    int group_size,
+    int bits,
+    bool aligned_N,
+    int BM = 32,
+    int BK = 32,
+    int BN = 32>
 METAL_FUNC void block_fp8_qmm_t_impl(
     const device uint8_t* w,
     const device float* scales,
     const device T* x,
     device T* y,
+    threadgroup T* Xs,
+    threadgroup T* Ws,
     const constant int& K,
     const constant int& N,
     const constant int& M,
     uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
-  constexpr int num_simdgroups = 2;
-  constexpr int results_per_simdgroup = 4;
-  constexpr int bits = 8;
-  constexpr int group_size = 128;
-  constexpr int values_per_thread = 8;
-  constexpr int block_size = values_per_thread * SIMD_SIZE;  // 256
+  static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
+  (void)lid;
+  constexpr int WM = 2;
+  constexpr int WN = 2;
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
 
-  typedef float U;
-  thread U x_thread[values_per_thread];
-  thread U result[results_per_simdgroup] = {0};
+  using mma_t = mlx::steel::
+      BlockMMA<T, T, BM, BN, BK, WM, WN, false, true, BK_padded, BK_padded>;
+  using loader_x_t =
+      mlx::steel::BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE>;
+  using loader_w_t = BlockFp8QuantizedLoader<
+      T,
+      BN,
+      BK,
+      BK_padded,
+      1,
+      WM * WN * SIMD_SIZE>;
 
-  const int in_vec_size_w = K;
-  const int scales_per_row = K / group_size;
+  const int K_g = K / group_size;  // scale row stride
+  const int y_row = tid.y * BM;
+  const int y_col = tid.x * BN;
 
-  const int m = tid.y;
-  const int out_row = tid.x * (num_simdgroups * results_per_simdgroup) +
-      simd_gid * results_per_simdgroup;
-  const int scale_row = out_row / group_size;
+  x += y_row * static_cast<int64_t>(K);
+  w += y_col * K;                            // 1 byte per code
+  scales += (y_col / group_size) * K_g;      // jump to this N-tile's scale row
+  y += y_row * static_cast<int64_t>(N) + y_col;
 
-  w += out_row * in_vec_size_w + simd_lid * values_per_thread;
-  scales += scale_row * scales_per_row;
-  x += m * K + simd_lid * values_per_thread;
-  y += m * N + out_row;
+  const short num_els = min(BM, M - y_row);
+  const short num_outs = min(BN, N - y_col);
+  loader_x_t loader_x(x, K, Xs, simd_gid, simd_lid);
+  loader_w_t loader_w(w, scales, K, K_g, Ws, simd_gid, simd_lid);
+  mma_t mma_op(simd_gid, simd_lid);
 
-  for (int k = 0; k < K; k += block_size) {
-    load_vector<T, U, values_per_thread>(x, x_thread);
-
-    const int sk = (k + simd_lid * values_per_thread) / group_size;
-    U s = scales[sk];
-
-    for (int row = 0; row < results_per_simdgroup; row++) {
-      const device uint8_t* wl = w + row * in_vec_size_w;
-      result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s);
+  // Aligned K assumed (K % BK == 0). MiMo always satisfies this.
+  if (num_els < BM) {
+    if (!aligned_N && num_outs < BN) {
+      for (int k = 0; k < K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(BK, num_els));
+        loader_w.load_safe(short2(BK, num_outs));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+    } else {
+      for (int k = 0; k < K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(BK, num_els));
+        loader_w.load_unsafe();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
     }
-
-    w += block_size;
-    x += block_size;
+  } else {
+    if (!aligned_N && num_outs < BN) {
+      for (int k = 0; k < K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_unsafe();
+        loader_w.load_safe(short2(BK, num_outs));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+    } else {
+      for (int k = 0; k < K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_unsafe();
+        loader_w.load_unsafe();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+    }
   }
 
-  for (int row = 0; row < results_per_simdgroup; row++) {
-    result[row] = simd_sum(result[row]);
-    if (simd_lid == 0) {
-      y[row] = static_cast<T>(result[row]);
-    }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (num_els < BM || num_outs < BN) {
+    mma_op.store_result_safe(y, N, short2(num_outs, num_els));
+  } else {
+    mma_op.store_result(y, N);
   }
 }
 
@@ -1206,13 +1392,19 @@ template <typename T, int group_size, int bits, bool aligned_N, bool batched>
     const constant int64_t* w_strides,
     const constant int64_t* s_strides,
     uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
-  // Smoke path: B=1, no batched offsets.
   (void)x_batch_ndims; (void)x_shape; (void)x_strides;
   (void)w_batch_ndims; (void)w_shape; (void)w_strides; (void)s_strides;
-  block_fp8_qmm_t_impl<T>(
-      w, scales, x, y, K, N, M, tid, simd_gid, simd_lid);
+
+  constexpr int BM = 32, BK = 32, BN = 32;
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
+  threadgroup T Xs[BM * BK_padded];
+  threadgroup T Ws[BN * BK_padded];
+
+  block_fp8_qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
+      w, scales, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 // --------------------------------------------------------------------------

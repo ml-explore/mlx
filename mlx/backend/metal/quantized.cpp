@@ -741,14 +741,7 @@ void qmm(
   MTL::Size group_dims(32, wn, wm);
   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
 
-  // block_fp8 qmm_t uses qmv-derived geometry: 8 N rows per threadgroup,
-  // one M row per threadgroup, 2 simdgroups. Override the default tiling.
-  if (mode == "block_fp8" && transpose) {
-    constexpr int bn_blockfp8 = 8;   // N rows per threadgroup
-    group_dims = MTL::Size(32, 2, 1);
-    grid_dims = MTL::Size(
-        (N + bn_blockfp8 - 1) / bn_blockfp8, M, B);
-  }
+  // block_fp8 qmm_t v2 uses the standard tiled geometry (no override needed).
 
   std::string kname;
   kname.reserve(64);

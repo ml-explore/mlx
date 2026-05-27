@@ -180,19 +180,27 @@ instantiate_block_fp8_gather_qmv_fast(float16_t)
 // qmm_t: prefill matmul. Per-row qmv math, 8 N rows per threadgroup.
 // 4 variants per type: (aligned_N x batched). Dispatcher selects the right
 // suffix based on N%32 and batch size.
+
+#define instantiate_block_fp8_qmm_t_one(type, alN, alN_str, batched, batched_str) \
+  template [[host_name("block_fp8_qmm_t_" #type "_gs_128_b_8_alN_" #alN_str "_batch_" #batched_str)]] \
+  [[kernel]] void block_fp8_qmm_t<type, 128, 8, alN, batched>( \
+      const device uint8_t* w, const device float* scales, \
+      const device type* x, device type* y, \
+      const constant int& K, const constant int& N, const constant int& M, \
+      const constant int& x_batch_ndims, const constant int* x_shape, \
+      const constant int64_t* x_strides, const constant int& w_batch_ndims, \
+      const constant int* w_shape, const constant int64_t* w_strides, \
+      const constant int64_t* s_strides, \
+      uint3 tid [[threadgroup_position_in_grid]], \
+      uint lid [[thread_index_in_threadgroup]], \
+      uint simd_gid [[simdgroup_index_in_threadgroup]], \
+      uint simd_lid [[thread_index_in_simdgroup]]);
+
 #define instantiate_block_fp8_qmm_t(type) \
-  instantiate_kernel( \
-      "block_fp8_qmm_t_" #type "_gs_128_b_8_alN_true_batch_0", \
-      block_fp8_qmm_t, type, 128, 8, true, false) \
-  instantiate_kernel( \
-      "block_fp8_qmm_t_" #type "_gs_128_b_8_alN_true_batch_1", \
-      block_fp8_qmm_t, type, 128, 8, true, true) \
-  instantiate_kernel( \
-      "block_fp8_qmm_t_" #type "_gs_128_b_8_alN_false_batch_0", \
-      block_fp8_qmm_t, type, 128, 8, false, false) \
-  instantiate_kernel( \
-      "block_fp8_qmm_t_" #type "_gs_128_b_8_alN_false_batch_1", \
-      block_fp8_qmm_t, type, 128, 8, false, true)
+  instantiate_block_fp8_qmm_t_one(type, true, true, false, 0) \
+  instantiate_block_fp8_qmm_t_one(type, true, true, true, 1) \
+  instantiate_block_fp8_qmm_t_one(type, false, false, false, 0) \
+  instantiate_block_fp8_qmm_t_one(type, false, false, true, 1)
 
 instantiate_block_fp8_qmm_t(float)
 instantiate_block_fp8_qmm_t(bfloat16_t)
