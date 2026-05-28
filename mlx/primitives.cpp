@@ -4262,8 +4262,57 @@ std::vector<array> Scan::vjp(
         where(eq_zero, z, grad, stream()),
         stream())};
   } else {
-    // Can probably be implemented by equals and then cummax to make the mask
-    throw std::runtime_error("VJP is not implemented for cumulative min/max");
+    // Cumulative max/min: route each position's cotangent to the input element
+    // that holds the running extreme there, breaking ties toward the latest
+    // element in scan order. The owning index is reconstructed by marking
+    // where the input equals the inclusive running extreme and taking a running
+    // extreme over those indices (cummax picks the largest tied index for a
+    // forward scan and cummin the smallest for a reverse scan). The cotangents
+    // are then scatter-added. Exclusive scans skip the current element, so the
+    // cotangents are first shifted by one in the scan direction.
+    auto in = primals[0];
+    auto cotan = cotangents[0];
+    int n = in.shape(axis_);
+    auto s = stream();
+
+    auto running_extreme = outputs[0];
+    if (!inclusive_) {
+      running_extreme = (reduce_type_ == Scan::Max)
+          ? cummax(in, axis_, reverse_, /* inclusive = */ true, s)
+          : cummin(in, axis_, reverse_, /* inclusive = */ true, s);
+    }
+
+    Shape index_shape(in.ndim(), 1);
+    index_shape[axis_] = n;
+    auto iota =
+        reshape(arange(static_cast<double>(n), int32, s), index_shape, s);
+    auto masked = where(
+        equal(in, running_extreme, s),
+        iota,
+        array(reverse_ ? n : -1, int32),
+        s);
+    auto owner = astype(
+        reverse_ ? cummin(masked, axis_, /* reverse = */ true, true, s)
+                 : cummax(masked, axis_, /* reverse = */ false, true, s),
+        uint32,
+        s);
+
+    if (!inclusive_) {
+      Shape pad_shape = in.shape();
+      pad_shape[axis_] = 1;
+      auto zero = zeros(pad_shape, cotan.dtype(), s);
+      Shape start(in.ndim(), 0);
+      Shape stop = in.shape();
+      if (reverse_) {
+        stop[axis_] = n - 1;
+        cotan = concatenate({zero, slice(cotan, start, stop, s)}, axis_, s);
+      } else {
+        start[axis_] = 1;
+        cotan = concatenate({slice(cotan, start, stop, s), zero}, axis_, s);
+      }
+    }
+
+    return {scatter_add_axis(zeros_like(in, s), owner, cotan, axis_, s)};
   }
 }
 

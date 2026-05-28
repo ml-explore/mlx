@@ -590,6 +590,105 @@ class TestAutograd(mlx_tests.MLXTestCase):
         expected = mx.array([0.0, 0.0, 0.0, 9.0, 1.0])
         self.assertTrue(mx.allclose(out, expected))
 
+    def test_cummax_grad(self):
+        # Ties route to the latest occurrence, matching the cummax indices.
+        a = mx.array([3.0, 3.0, 1.0, 5.0, 5.0])
+
+        def fun(y):
+            return mx.cummax(y).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 2.0, 0.0, 1.0, 1.0]))
+        )
+
+        def fun(y):
+            return mx.cummax(y, inclusive=False).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 2.0, 0.0, 1.0, 0.0]))
+        )
+
+        def fun(y):
+            return mx.cummax(y, reverse=True).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 0.0, 4.0, 1.0]))
+        )
+
+        def fun(y):
+            return mx.cummax(y, reverse=True, inclusive=False).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 0.0, 3.0, 1.0]))
+        )
+
+        # Non-uniform cotangents are routed to the owning index.
+        cot = mx.array([10.0, 1.0, 1.0, 100.0, 1000.0])
+        _, vjps = mx.vjp(lambda y: mx.cummax(y), (a,), (cot,))
+        self.assertTrue(mx.allclose(vjps[0], mx.array([10.0, 2.0, 0.0, 100.0, 1000.0])))
+
+        # 2D along an inner axis.
+        m = mx.array([[1.0, 3.0, 3.0], [4.0, 2.0, 4.0]])
+
+        def fun(y):
+            return mx.cummax(y, axis=1).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(m), mx.array([[1.0, 1.0, 1.0], [2.0, 0.0, 1.0]]))
+        )
+
+        def fun(y):
+            return mx.cummax(y, axis=1, inclusive=False).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(m), mx.array([[1.0, 1.0, 0.0], [2.0, 0.0, 0.0]]))
+        )
+
+    def test_cummin_grad(self):
+        a = mx.array([3.0, 3.0, 1.0, 5.0, 5.0])
+
+        def fun(y):
+            return mx.cummin(y).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 1.0, 3.0, 0.0, 0.0]))
+        )
+
+        def fun(y):
+            return mx.cummin(y, inclusive=False).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 1.0, 2.0, 0.0, 0.0]))
+        )
+
+        def fun(y):
+            return mx.cummin(y, reverse=True).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 3.0, 1.0, 1.0]))
+        )
+
+        def fun(y):
+            return mx.cummin(y, reverse=True, inclusive=False).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 2.0, 1.0, 1.0]))
+        )
+
+        cot = mx.array([10.0, 1.0, 1.0, 100.0, 1000.0])
+        _, vjps = mx.vjp(lambda y: mx.cummin(y), (a,), (cot,))
+        self.assertTrue(mx.allclose(vjps[0], mx.array([10.0, 1.0, 1101.0, 0.0, 0.0])))
+
+        # 2D along the outer axis.
+        m = mx.array([[1.0, 3.0, 3.0], [4.0, 2.0, 4.0]])
+
+        def fun(y):
+            return mx.cummin(y, axis=0).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(m), mx.array([[2.0, 1.0, 2.0], [0.0, 1.0, 0.0]]))
+        )
+
     def test_topk_grad(self):
         a = mx.array([[1, 2, 6, 4, 5], [9, 5, 6, 7, 8]], mx.float32)
 
