@@ -505,17 +505,12 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(compiled_ones_like(y).shape, y_shape)
 
     def test_shapeless_compile_gather_qmm(self):
-        # GatherQMM must implement output_shapes() so shapeless compile can
-        # re-trace without throwing "GatherQMM cannot infer output shapes".
         K, N, num_experts = 64, 32, 4
 
         w = mx.random.normal((num_experts, N, K))
         qw, s, b = mx.quantize(w)
         mx.eval(qw, s, b)
 
-        # x has shape (num_experts, M, K): the batch dim is indexed by idx,
-        # which stays fixed so that lhs_indices and rhs_indices (auto-generated
-        # from w's batch shape) always broadcast.  Only M changes between calls.
         idx = mx.array([0, 1, 2, 3])
         x4 = mx.ones((num_experts, 4, K))
         x8 = mx.ones((num_experts, 8, K))
@@ -528,8 +523,24 @@ class TestCompile(mlx_tests.MLXTestCase):
         cfn = mx.compile(fn, shapeless=True)
 
         self.assertEqual(cfn(x4).shape, fn(x4).shape)
+        self.assertEqual(cfn(x8).shape, fn(x8).shape)
 
-        # Different M — must reuse compiled graph without throwing.
+    def test_shapeless_compile_gather_mm(self):
+        K, N, num_experts = 64, 32, 4
+
+        idx = mx.array([0, 1, 2, 3])
+        b = mx.random.normal((num_experts, K, N))
+        mx.eval(b)
+
+        x4 = mx.ones((num_experts, 4, K))
+        x8 = mx.ones((num_experts, 8, K))
+
+        def fn(x):
+            return mx.gather_mm(x, b, lhs_indices=idx, rhs_indices=idx)
+
+        cfn = mx.compile(fn, shapeless=True)
+
+        self.assertEqual(cfn(x4).shape, fn(x4).shape)
         self.assertEqual(cfn(x8).shape, fn(x8).shape)
 
     def test_compile_with_constant(self):
