@@ -233,6 +233,31 @@ instantiate_block_fp8_gather_qmm_t(float)
 instantiate_block_fp8_gather_qmm_t(bfloat16_t)
 instantiate_block_fp8_gather_qmm_t(float16_t)
 
+#define instantiate_block_fp8_qmm_t_splitk_one(type, alN, alN_str) \
+  template [[host_name("block_fp8_qmm_t_splitk_" #type "_gs_128_b_8_alN_" #alN_str)]] \
+  [[kernel]] void block_fp8_qmm_t_splitk<type, 128, 8, alN>( \
+      const device uint8_t* w [[buffer(0)]], \
+      const device float* scales [[buffer(1)]], \
+      const device type* x [[buffer(2)]], \
+      device type* y [[buffer(3)]], \
+      const constant int& K [[buffer(4)]], \
+      const constant int& N [[buffer(5)]], \
+      const constant int& M [[buffer(6)]], \
+      const constant int& k_partition_size [[buffer(7)]], \
+      const constant int& split_k_partition_stride [[buffer(8)]], \
+      uint3 tid [[threadgroup_position_in_grid]], \
+      uint lid [[thread_index_in_threadgroup]], \
+      uint simd_gid [[simdgroup_index_in_threadgroup]], \
+      uint simd_lid [[thread_index_in_simdgroup]]);
+
+#define instantiate_block_fp8_qmm_t_splitk(type) \
+  instantiate_block_fp8_qmm_t_splitk_one(type, true, true) \
+  instantiate_block_fp8_qmm_t_splitk_one(type, false, false)
+
+instantiate_block_fp8_qmm_t_splitk(float)
+instantiate_block_fp8_qmm_t_splitk(bfloat16_t)
+instantiate_block_fp8_qmm_t_splitk(float16_t)
+
 instantiate_gather_qmm_rhs(block_fp8_gather_qmm_rhs, gather_qmm_rhs_nt, float, 16, 32, 32, 1, 2, true, block_fp8, 128, 8)
 instantiate_gather_qmm_rhs(block_fp8_gather_qmm_rhs, gather_qmm_rhs_nn, float, 16, 32, 32, 1, 2, false, block_fp8, 128, 8)
 instantiate_gather_qmm_rhs(block_fp8_gather_qmm_rhs, gather_qmm_rhs_nt, bfloat16_t, 16, 32, 32, 1, 2, true, block_fp8, 128, 8)

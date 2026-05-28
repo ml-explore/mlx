@@ -808,11 +808,6 @@ void qmm_splitk(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-  // block_fp8: no qmm_t_splitk kernel exists yet, force regular qmm.
-  if (mode == "block_fp8") {
-    return qmm(
-        x, w, scales, biases, out, true, group_size, bits, M, N, K, d, s, mode);
-  }
   // Choose split_k to target ~512 threadgroups
   int bm = 32, bn = 32;
   int n_tiles = (N + bn - 1) / bn;
