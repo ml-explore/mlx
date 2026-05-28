@@ -1218,6 +1218,184 @@ class TestQuantized(mlx_tests.MLXTestCase):
         expected = mx.dequantize(w_q, mx.contiguous(scales), mode=mode)
         self.assertTrue(mx.allclose(w_hat, expected))
 
+    def test_block_fp8_quantize_dequantize(self):
+        for N, K in [(128, 128), (256, 512), (384, 256)]:
+            with self.subTest(N=N, K=K):
+                w = mx.random.normal(shape=(N, K)) * 0.02
+                codes, scales = mx.quantize(w, group_size=128, bits=8, mode="block_fp8")
+                self.assertEqual(codes.dtype, mx.uint8)
+                self.assertEqual(scales.dtype, mx.float32)
+                self.assertEqual(codes.shape, (N, K))
+                self.assertEqual(scales.shape, (N // 128, K // 128))
+                w_hat = mx.dequantize(codes, scales, group_size=128, bits=8, mode="block_fp8")
+                cos = ((w_hat.flatten() @ w.flatten()) / (mx.linalg.norm(w_hat) * mx.linalg.norm(w) + 1e-9)).item()
+                self.assertGreater(cos, 0.99)
+
+    def test_block_fp8_quantize_idempotent(self):
+        # Quantization decisions (the codes) must be stable: re-quantizing a
+        # dequantized tensor must reproduce identical codes. Iterative
+        # quantizers like GPTQ rely on this -- the discrete choice for each
+        # weight position must not change when the input is the dequantized
+        # output of a previous round. The float32 block scales may shift by
+        # ~1e-7 (rounding noise in the max reduction), which is benign.
+        w = mx.random.normal(shape=(256, 512)) * 0.02
+        codes, scales = mx.quantize(w, group_size=128, bits=8, mode="block_fp8")
+        w_hat = mx.dequantize(codes, scales, group_size=128, bits=8, mode="block_fp8")
+        codes2, scales2 = mx.quantize(w_hat, group_size=128, bits=8, mode="block_fp8")
+        self.assertTrue(mx.all(codes == codes2).item())
+        self.assertTrue(mx.allclose(scales, scales2, rtol=1e-3, atol=1e-6).item())
+
+    def test_block_fp8_kernel_coverage(self):
+        # One test exercising every block_fp8 kernel path shipped in this PR
+        # against the dequantize reference. A regression in any kernel makes
+        # the corresponding subTest fail. Subtests are labelled by which
+        # kernel they cover so failures pinpoint the broken commit.
+        import numpy as np
+        np.random.seed(0)
+
+        def cos(a, b):
+            a32 = a.astype(mx.float32).flatten()
+            b32 = b.astype(mx.float32).flatten()
+            return ((a32 @ b32) /
+                    (mx.linalg.norm(a32) * mx.linalg.norm(b32) + 1e-9)).item()
+
+        # ---- Dense quantized_matmul kernels ------------------------------
+        def check_qmm(M, N, K, label):
+            w = mx.random.normal(shape=(N, K)) * 0.02
+            codes, scales = mx.quantize(w, group_size=128, bits=8, mode="block_fp8")
+            w_hat = mx.dequantize(codes, scales, group_size=128, bits=8, mode="block_fp8")
+            x = mx.random.normal(shape=(M, K)).astype(mx.bfloat16)
+            y = mx.quantized_matmul(x, codes, scales, transpose=True,
+                                    group_size=128, bits=8, mode="block_fp8")
+            ref = x.astype(mx.float32) @ w_hat.T
+            self.assertGreater(cos(y, ref), 0.99,
+                               f"{label} M={M} N={N} K={K}")
+
+        # block_fp8_qmv_fast: M=1 decode vector kernel
+        with self.subTest(kernel="block_fp8_qmv_fast"):
+            check_qmm(1, 512, 512, "qmv_fast")
+        # block_fp8_qmm_t: tiled prefill
+        with self.subTest(kernel="block_fp8_qmm_t"):
+            check_qmm(64, 512, 512, "qmm_t")
+        # block_fp8_qmm_t_splitk: short-M, large-K splitk path
+        with self.subTest(kernel="block_fp8_qmm_t_splitk"):
+            check_qmm(4, 128, 4096, "qmm_t_splitk")
+        # block_fp8_qmm_t at larger M (deeper tiled coverage)
+        with self.subTest(kernel="block_fp8_qmm_t_large"):
+            check_qmm(256, 512, 512, "qmm_t_large")
+
+        # ---- MoE gather kernels ------------------------------------------
+        E, N, K = 4, 256, 512
+        w_e = mx.random.normal(shape=(E, N, K)) * 0.02
+        cs = [mx.quantize(w_e[e], group_size=128, bits=8, mode="block_fp8")
+              for e in range(E)]
+        codes_e = mx.stack([c for c, _ in cs], axis=0)
+        scales_e = mx.stack([s for _, s in cs], axis=0)
+        deq_e = [mx.dequantize(c, s, group_size=128, bits=8, mode="block_fp8")
+                 for c, s in cs]
+        mx.eval(codes_e, scales_e)
+
+        def check_gather(T, KP, label):
+            # Mirror SwitchGLU's call pattern exactly: at indices.size >= 64
+            # the tiled rhs-gather kernel REQUIRES globally-sorted indices
+            # (sorted_indices=True). We replicate _gather_sort/_scatter_unsort
+            # from mlx_lm.switch_layers so this subtest exercises the same path
+            # the model uses at prefill.
+            x = mx.random.normal(shape=(T, K)).astype(mx.bfloat16)
+            xe = mx.expand_dims(mx.expand_dims(x, axis=-2), axis=-2)  # (T,1,1,K)
+            inds_np = np.random.randint(0, E, (T, KP)).astype(np.uint32)
+            inds = mx.array(inds_np)
+
+            do_sort = inds.size >= 64
+            if do_sort:
+                # Global sort by expert (matches SwitchGLU._gather_sort).
+                # After sorting, BOTH x and indices stay flat (1D for indices)
+                # -- do NOT reshape indices back to (T,KP) or the kernel's
+                # broadcast against the flat-batched x mismatches.
+                flat = inds.flatten()
+                order = mx.argsort(flat)
+                inv_order = mx.argsort(order)
+                xe_sorted = xe.flatten(0, -3)[order // KP]   # (T*KP, 1, K)
+                inds_sorted = flat[order]                     # (T*KP,) 1D
+            else:
+                xe_sorted, inds_sorted, inv_order = xe, inds, None
+
+            y_sorted = mx.gather_qmm(xe_sorted, codes_e, scales=scales_e,
+                                     rhs_indices=inds_sorted,
+                                     transpose=True, group_size=128, bits=8,
+                                     mode="block_fp8", sorted_indices=do_sort)
+            if do_sort:
+                # Unsort to (T, KP, 1, N).
+                y = y_sorted[inv_order]
+                y = mx.unflatten(y, 0, (T, KP))
+            else:
+                y = y_sorted
+            mx.eval(y)
+            # Reference: per (t, k), x[t] @ deq[inds[t,k]].T (the bf16 math).
+            for t in range(T):
+                for k in range(KP):
+                    e = int(inds_np[t, k])
+                    ref_tk = x[t:t+1].astype(mx.float32) @ deq_e[e].T
+                    self.assertGreater(cos(y[t, k, 0, :], ref_tk), 0.99,
+                                       f"{label} t={t} k={k}")
+
+        # block_fp8_gather_qmv_fast: MoE decode vector path
+        with self.subTest(kernel="block_fp8_gather_qmv_fast"):
+            check_gather(1, 4, "gather_qmv_fast")
+        # block_fp8_gather_qmm_rhs: MoE prefill tiled path
+        with self.subTest(kernel="block_fp8_gather_qmm_rhs"):
+            check_gather(32, 4, "gather_qmm_rhs")
+
+        # ---- Asymmetric SDPA fused vector kernel (Dq=192, Dv=128) -------
+        with self.subTest(kernel="sdpa_fused_asymmetric_192_128"):
+            B, H, L = 1, 8, 16
+            q = mx.random.normal(shape=(B, H, L, 192)).astype(mx.bfloat16)
+            k = mx.random.normal(shape=(B, H, L, 192)).astype(mx.bfloat16)
+            v = mx.random.normal(shape=(B, H, L, 128)).astype(mx.bfloat16)
+            scale = 1.0 / (192 ** 0.5)
+            y_f = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+            # Unfused reference
+            attn = (q.astype(mx.float32) @ k.astype(mx.float32).swapaxes(-1, -2)) * scale
+            attn = mx.softmax(attn, axis=-1)
+            y_r = attn @ v.astype(mx.float32)
+            mx.eval(y_f, y_r)
+            self.assertGreater(cos(y_f, y_r), 0.99, "sdpa asymmetric 192/128")
+
+        # ---- Relaxed scale-shape validator (fused-QKV padding) ----------
+        # Models with fused QKV may emit scales with trailing padding rows
+        # beyond ceil(w / group_size). Kernel must read only the in-bounds
+        # rows; the validator must accept the over-sized scale.
+        with self.subTest(kernel="padded_scale_validator"):
+            N, K = 256, 512
+            w = mx.random.normal(shape=(N, K)) * 0.02
+            codes, scales = mx.quantize(w, group_size=128, bits=8, mode="block_fp8")
+            extra = mx.zeros((1, scales.shape[1]), dtype=mx.float32)
+            scales_padded = mx.concatenate([scales, extra], axis=0)
+            x = mx.random.normal(shape=(4, K)).astype(mx.bfloat16)
+            y_pad = mx.quantized_matmul(x, codes, scales_padded, transpose=True,
+                                        group_size=128, bits=8, mode="block_fp8")
+            y_ref = mx.quantized_matmul(x, codes, scales, transpose=True,
+                                        group_size=128, bits=8, mode="block_fp8")
+            mx.eval(y_pad, y_ref)
+            self.assertTrue(mx.allclose(y_pad, y_ref, atol=1e-3).item(),
+                            "padded scale produced different output")
+
+    def test_block_fp8_outlier_block_scaling(self):
+        w = mx.random.normal(shape=(256, 256)) * 0.02
+        w = w.at[50:60, 100:110].add(5.0)
+        codes, scales = mx.quantize(w, group_size=128, bits=8, mode="block_fp8")
+        w_hat = mx.dequantize(codes, scales, group_size=128, bits=8, mode="block_fp8")
+        clean = (w_hat[200:, :64] - w[200:, :64]).abs().max().item()
+        scale_clean = w[200:, :64].abs().max().item()
+        self.assertLess(clean, scale_clean * 0.1)
+
+    def test_block_fp8_invalid_shapes(self):
+        with self.assertRaises(ValueError):
+            mx.quantize(mx.random.normal(shape=(100, 512)), group_size=128, bits=8, mode="block_fp8")
+        with self.assertRaises(ValueError):
+            bad = mx.zeros((256, 128), dtype=mx.uint32)
+            sc = mx.zeros((2, 4), dtype=mx.float32)
+            mx.dequantize(bad, sc, group_size=128, bits=8, mode="block_fp8")
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
