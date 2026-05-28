@@ -9,3 +9,10 @@
 #include "mlx/backend/cpu/simd/accelerate_simd.h"
 #endif
 #endif
+
+// x86 SIMD: MLX_ENABLE_AVX2 uses Highway as the implementation substrate.
+#if !defined(MLX_USE_ACCELERATE)
+#if defined(MLX_USE_HIGHWAY)
+#include "mlx/backend/cpu/simd/highway_simd.h"
+#endif
+#endif

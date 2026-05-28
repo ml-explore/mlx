@@ -148,7 +148,9 @@ bool supports_avx2_target() {
     return false;
   }
   __cpuidex(info, 7, 0);
-  return info[1] & (1 << 5);
+  bool avx2 = info[1] & (1 << 5);
+  bool bmi2 = info[1] & (1 << 8);
+  return avx2 && bmi2;
 #else
   return false;
 #endif // defined(_M_X64) || defined(_M_IX86) || defined(_M_AMD64)
@@ -157,8 +159,8 @@ bool supports_avx2_target() {
 
 #if defined(__x86_64__) || defined(__i386__) || defined(__amd64__)
   __builtin_cpu_init();
-  return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma") &&
-      __builtin_cpu_supports("f16c");
+  return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("bmi2") &&
+      __builtin_cpu_supports("fma") && __builtin_cpu_supports("f16c");
 #else
   return false;
 #endif
@@ -225,10 +227,17 @@ std::string JitCompiler::build_command(
   if (use_include) {
     compiler_flags += fmt::format(" /I \"{}\"", include_dir);
   }
+#ifdef MLX_USE_HIGHWAY
+  compiler_flags +=
+      " /DMLX_USE_HIGHWAY /DHWY_DISABLED_TARGETS=HWY_AVX2-1 "
+      "/DHWY_DISABLE_PCLMUL_AES /DHWY_COMPILE_ONLY_STATIC";
+#endif
   const VisualStudioInfo& info = GetVisualStudioInfo();
   std::string compiler = info.compiler(use_include);
-  for (const std::string& include : info.includepaths) {
-    compiler_flags += fmt::format(" /I \"{}\"", include);
+  for (const std::string& inc : info.includepaths) {
+    if (!inc.empty()) {
+      compiler_flags += fmt::format(" /I \"{}\"", inc);
+    }
   }
   std::string libpaths;
   for (const std::string& lib : info.libpaths) {
@@ -267,8 +276,18 @@ std::string JitCompiler::build_command(
     if (!extra_flags.empty()) {
       extra_flags += " ";
     }
-    extra_flags += "-mavx2 -mfma -mf16c";
+    // Match the build-time Highway AVX2 target. This assumes the BMI2/FMA/F16C
+    // feature set present on mainstream Intel/AMD AVX2 CPUs.
+    extra_flags += "-mavx2 -mbmi2 -mfma -mf16c";
   }
+#endif
+#ifdef MLX_USE_HIGHWAY
+  if (!extra_flags.empty()) {
+    extra_flags += " ";
+  }
+  extra_flags +=
+      "-DMLX_USE_HIGHWAY -DHWY_DISABLED_TARGETS=HWY_AVX2-1 "
+      "-DHWY_DISABLE_PCLMUL_AES -DHWY_COMPILE_ONLY_STATIC";
 #endif
   return fmt::format(
       "g++ -std=c++17 -O3 -Wall -fPIC -shared {} \"{}\" -o \"{}\" 2>&1",

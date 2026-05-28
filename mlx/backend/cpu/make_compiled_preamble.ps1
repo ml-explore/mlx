@@ -10,7 +10,8 @@ $SRCDIR = $args[2]
 #   on macOS it controls -nobuiltininc and -arch flags for the preprocessor.
 #   MSVC and clang-cl both accept the same preprocessor flags so no distinction needed.)
 # args[4] = CMAKE_SYSTEM_PROCESSOR (unused on Windows)
-$SIMD_FLAGS = $args[5]  # Optional, e.g. "/arch:AVX2" or "-mavx2 -mfma -mf16c"
+$SIMD_FLAGS = $args[5]  # Optional, e.g. "/arch:AVX2" or "-mavx2 -mbmi2 -mfma -mf16c"
+$HIGHWAY_INCLUDE_DIR = $args[6]  # Optional, used when MLX_ENABLE_AVX2 uses Highway
 
 # Detect compiler type: MSVC/clang-cl use /EP, GCC/clang++ use -E -P
 $CL_NAME = [System.IO.Path]::GetFileNameWithoutExtension($CL)
@@ -32,10 +33,25 @@ if ($SIMD_FLAGS) {
 }
 if ($IS_MSVC_LIKE) {
   [void]$CL_ARGS.Add("/I$SRCDIR")
+  if ($HIGHWAY_INCLUDE_DIR) {
+    [void]$CL_ARGS.Add("/I$HIGHWAY_INCLUDE_DIR")
+    [void]$CL_ARGS.Add('/DMLX_USE_HIGHWAY')
+    [void]$CL_ARGS.Add('/DHWY_DISABLED_TARGETS=HWY_AVX2-1')
+    [void]$CL_ARGS.Add('/DHWY_DISABLE_PCLMUL_AES')
+    [void]$CL_ARGS.Add('/DHWY_COMPILE_ONLY_STATIC')
+  }
   [void]$CL_ARGS.Add('/Tp')
 } else {
   [void]$CL_ARGS.Add('-I')
   [void]$CL_ARGS.Add("$SRCDIR")
+  if ($HIGHWAY_INCLUDE_DIR) {
+    [void]$CL_ARGS.Add('-I')
+    [void]$CL_ARGS.Add("$HIGHWAY_INCLUDE_DIR")
+    [void]$CL_ARGS.Add('-DMLX_USE_HIGHWAY')
+    [void]$CL_ARGS.Add('-DHWY_DISABLED_TARGETS=HWY_AVX2-1')
+    [void]$CL_ARGS.Add('-DHWY_DISABLE_PCLMUL_AES')
+    [void]$CL_ARGS.Add('-DHWY_COMPILE_ONLY_STATIC')
+  }
 }
 [void]$CL_ARGS.Add("$SRCDIR/mlx/backend/cpu/compiled_preamble.h")
 
