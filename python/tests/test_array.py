@@ -6,6 +6,7 @@ import pickle
 import platform
 import sys
 import unittest
+import warnings
 import weakref
 from copy import copy, deepcopy
 from itertools import permutations
@@ -2139,6 +2140,72 @@ class TestArray(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.from_dlpack(x, copy=False)
 
+    def test_dlpack_cpu_dtype_mapping(self):
+        class CpuDLPack:
+            def __init__(self, array):
+                self.array = array
+
+            def __dlpack_device__(self):
+                return (1, 0)
+
+            def __dlpack__(self, *args, **kwargs):
+                kwargs["dl_device"] = (1, 0)
+                return self.array.__dlpack__(*args, **kwargs)
+
+        dlpack_to_mlx = [
+            (np.bool_, mx.bool_),
+            (np.uint8, mx.uint8),
+            (np.uint16, mx.uint16),
+            (np.uint32, mx.uint32),
+            (np.uint64, mx.uint64),
+            (np.int8, mx.int8),
+            (np.int16, mx.int16),
+            (np.int32, mx.int32),
+            (np.int64, mx.int64),
+            (np.float16, mx.float16),
+            (np.float32, mx.float32),
+            (np.float64, mx.float32),
+            (np.complex64, mx.complex64),
+            (np.complex128, mx.complex64),
+        ]
+        for np_dtype, mlx_dtype in dlpack_to_mlx:
+            with self.subTest(direction="import", dtype=np_dtype):
+                x = np.ones(3, dtype=np_dtype)
+                y = mx.from_dlpack(x)
+                self.assertEqual(y.dtype, mlx_dtype)
+
+        if torch is not None:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                x = torch.ones(3, dtype=torch.complex32)
+            y = mx.from_dlpack(x)
+            self.assertEqual(y.dtype, mx.complex64)
+
+        mlx_to_dlpack = [
+            (mx.bool_, np.bool_),
+            (mx.uint8, np.uint8),
+            (mx.uint16, np.uint16),
+            (mx.uint32, np.uint32),
+            (mx.uint64, np.uint64),
+            (mx.int8, np.int8),
+            (mx.int16, np.int16),
+            (mx.int32, np.int32),
+            (mx.int64, np.int64),
+            (mx.float16, np.float16),
+            (mx.float32, np.float32),
+            (mx.complex64, np.complex64),
+        ]
+        for mlx_dtype, np_dtype in mlx_to_dlpack:
+            with self.subTest(direction="export", dtype=mlx_dtype):
+                x = mx.ones((3,), dtype=mlx_dtype)
+                y = np.from_dlpack(CpuDLPack(x))
+                self.assertEqual(y.dtype, np_dtype)
+
+        if torch is not None and has_torch_mps:
+            x = mx.ones((3,), dtype=mx.bfloat16)
+            y = torch.from_dlpack(x)
+            self.assertEqual(y.dtype, torch.bfloat16)
+
     def test_from_dlpack_cpu_strided(self):
         x = np.arange(12, dtype=np.float32).reshape(3, 4)
         view = x.T
@@ -2171,6 +2238,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_import(self):
+        assert torch is not None
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         self.assertEqual(x.__dlpack_device__()[0], 8)
 
@@ -2184,6 +2252,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_array_copies_dlpack_input(self):
+        assert torch is not None
         x = torch.arange(3, device="mps", dtype=torch.float32)
         torch.mps.synchronize()
         y = mx.array(x)
@@ -2194,6 +2263,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_asarray_copy_true_copies_dlpack_input(self):
+        assert torch is not None
         x = torch.arange(3, device="mps", dtype=torch.float32)
         torch.mps.synchronize()
         y = mx.asarray(x, copy=True)
@@ -2204,6 +2274,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_zero_copy_shares_updates(self):
+        assert torch is not None
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         torch.mps.synchronize()
         y = mx.asarray(x)
@@ -2218,6 +2289,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_matching_dtype_argument_shares_updates(self):
+        assert torch is not None
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         torch.mps.synchronize()
         y = mx.asarray(x, dtype=mx.float32, copy=False)
@@ -2229,6 +2301,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_different_dtype_argument_copies(self):
+        assert torch is not None
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         torch.mps.synchronize()
         z = mx.asarray(x, dtype=mx.float16)
@@ -2246,6 +2319,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_data_offset(self):
+        assert torch is not None
         view = torch.arange(12, device="mps", dtype=torch.float32)[3:9]
         view_mx = mx.asarray(view)
         torch.mps.synchronize()
@@ -2253,6 +2327,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_strided_view(self):
+        assert torch is not None
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         view = x.T
         torch.mps.synchronize()
@@ -2299,6 +2374,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_broadcast_stride(self):
+        assert torch is not None
         x = torch.tensor([7], device="mps", dtype=torch.int32)
         view = x.expand(3)
         torch.mps.synchronize()
@@ -2311,6 +2387,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_bfloat16(self):
+        assert torch is not None
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
         bf = x.to(torch.bfloat16)
         bf_mx = mx.asarray(bf)
@@ -2324,6 +2401,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_array_operand(self):
+        assert torch is not None
         a = mx.array([1])
         b = torch.tensor([2])
         self.assertTrue(mx.array_equal(a + b, mx.array([3])))
@@ -2334,6 +2412,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_mlx_dlpack_exports_mps_tensor_to_torch(self):
+        assert torch is not None
         x = mx.array([1]).astype(mx.float16)
         mx.eval(x)
         y = torch.utils.dlpack.from_dlpack(x)
@@ -2345,6 +2424,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_mlx_dlpack_exports_mps_tensor_to_torch_tensor(self):
+        assert torch is not None
         x = mx.array([1]).astype(mx.float16)
         mx.eval(x)
         y = torch.tensor(x)
@@ -2371,6 +2451,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_from_dlpack_torch_mps_copy_none_shares_updates(self):
+        assert torch is not None
         x = torch.arange(3, device="mps", dtype=torch.float32)
         torch.mps.synchronize()
         y = mx.from_dlpack(x)
@@ -2385,6 +2466,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_from_dlpack_torch_mps_copy_false_shares_updates(self):
+        assert torch is not None
         x = torch.arange(3, device="mps", dtype=torch.float32)
         torch.mps.synchronize()
         y = mx.from_dlpack(x, copy=False)
@@ -2395,6 +2477,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_from_dlpack_torch_mps_copy_true_copies(self):
+        assert torch is not None
         x = torch.arange(3, device="mps", dtype=torch.float32)
         torch.mps.synchronize()
         y = mx.from_dlpack(x, copy=True)

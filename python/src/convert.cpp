@@ -15,6 +15,7 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/cuda.h"
 #include "mlx/backend/metal/metal.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/ops.h"
 #include "mlx/utils.h"
 
@@ -23,6 +24,19 @@ enum PyScalarT {
   pyint = 1,
   pyfloat = 2,
   pycomplex = 3,
+};
+
+struct DLPackComplex32 {
+  mx::float16_t real;
+  mx::float16_t imag;
+
+  operator float() const {
+    return static_cast<float>(real);
+  }
+
+  operator mx::complex64_t() const {
+    return {static_cast<float>(real), static_cast<float>(imag)};
+  }
 };
 
 int check_shape_dim(int64_t dim) {
@@ -121,6 +135,10 @@ auto dispatch_dlpack_dtype(
     return f.template operator()<float>(mx::float32);
   } else if (type == nb::dtype<double>()) {
     return f.template operator()<double>(mx::float32);
+  } else if (
+      type ==
+      nb::dlpack::dtype{uint8_t(nb::dlpack::dtype_code::Complex), 32, 1}) {
+    return f.template operator()<DLPackComplex32>(mx::complex64);
   } else if (type == nb::dtype<std::complex<float>>()) {
     return f.template operator()<mx::complex64_t>(mx::complex64);
   } else if (type == nb::dtype<std::complex<double>>()) {
@@ -138,38 +156,12 @@ mx::Dtype mlx_dtype_from_dlpack(
 }
 
 nb::dlpack::dtype mlx_dtype_to_dl_dtype(mx::Dtype dtype) {
-  switch (dtype) {
-    case mx::bool_:
-      return nb::dtype<bool>();
-    case mx::uint8:
-      return nb::dtype<uint8_t>();
-    case mx::uint16:
-      return nb::dtype<uint16_t>();
-    case mx::uint32:
-      return nb::dtype<uint32_t>();
-    case mx::uint64:
-      return nb::dtype<uint64_t>();
-    case mx::int8:
-      return nb::dtype<int8_t>();
-    case mx::int16:
-      return nb::dtype<int16_t>();
-    case mx::int32:
-      return nb::dtype<int32_t>();
-    case mx::int64:
-      return nb::dtype<int64_t>();
-    case mx::float16:
-      return nb::dtype<mx::float16_t>();
-    case mx::bfloat16:
-      return nb::dtype<mx::bfloat16_t>();
-    case mx::float32:
-      return nb::dtype<float>();
-    case mx::float64:
-      return nb::dtype<double>();
-    case mx::complex64:
-      return nb::dtype<std::complex<float>>();
-    default:
-      throw nb::buffer_error("Cannot export mlx array with unsupported dtype.");
-  }
+  nb::dlpack::dtype result;
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    result = nb::dtype<T>();
+  });
+  return result;
 }
 
 template <typename SrcT>
@@ -177,26 +169,23 @@ mx::array cpu_nd_array_to_mlx(
     nb::ndarray<nb::ro> nd_array,
     const mx::Shape& shape,
     mx::Dtype dst_dtype) {
-  return dispatch_dlpack_dtype(
-      mlx_dtype_to_dl_dtype(dst_dtype),
-      [&]<typename DstT>(mx::Dtype) {
-        auto out = mx::array(shape, dst_dtype, nullptr, {});
-        auto [storage_size, strides, flags] =
-            get_strided_layout(nd_array, shape);
-        out.set_data(
-            mx::allocator::malloc(storage_size * sizeof(DstT)),
-            storage_size,
-            std::move(strides),
-            flags);
-        if (storage_size > 0) {
-          auto src = static_cast<const SrcT*>(nd_array.data());
-          auto dst = out.data<DstT>();
-          std::copy(src, src + storage_size, dst);
-        }
-        out.set_status(mx::array::Status::available);
-        return out;
-      },
-      "Cannot convert numpy array to mlx array.");
+  auto out = mx::array(shape, dst_dtype, nullptr, {});
+  auto [storage_size, strides, flags] = get_strided_layout(nd_array, shape);
+  out.set_data(
+      mx::allocator::malloc(storage_size * mx::size_of(dst_dtype)),
+      storage_size,
+      std::move(strides),
+      flags);
+  if (storage_size > 0) {
+    dispatch_all_types(dst_dtype, [&](auto type_tag) {
+      using DstT = MLX_GET_TYPE(type_tag);
+      auto src = static_cast<const SrcT*>(nd_array.data());
+      auto dst = out.data<DstT>();
+      std::copy(src, src + storage_size, dst);
+    });
+  }
+  out.set_status(mx::array::Status::available);
+  return out;
 }
 
 mx::array metal_nd_array_to_mlx(
@@ -642,53 +631,11 @@ mx::array array_from_list(nb::tuple pl, std::optional<mx::Dtype> dtype) {
   return array_from_list_impl(pl, dtype);
 }
 
-void check_copy_false(std::optional<bool> copy) {
-  if (copy.has_value() && copy.value() == false) {
-    throw std::invalid_argument(
-        "Unable to avoid copy while creating an array as requested.");
-  }
-}
-
 mx::array create_array(
     nb::object v,
     std::optional<mx::Dtype> t,
     std::optional<bool> copy) {
-  if (nb::isinstance<nb::bool_>(v)) {
-    check_copy_false(copy);
-    return mx::array(nb::cast<bool>(v), t.value_or(mx::bool_));
-  } else if (nb::isinstance<nb::int_>(v)) {
-    check_copy_false(copy);
-    auto val = nb::cast<int64_t>(v);
-    auto default_type = (val > std::numeric_limits<int>::max() ||
-                         val < std::numeric_limits<int>::min())
-        ? mx::int64
-        : mx::int32;
-    return mx::array(val, t.value_or(default_type));
-  } else if (nb::isinstance<nb::float_>(v)) {
-    check_copy_false(copy);
-    auto out_type = t.value_or(mx::float32);
-    if (out_type == mx::float64) {
-      return mx::array(nb::cast<double>(v), out_type);
-    } else {
-      return mx::array(nb::cast<float>(v), out_type);
-    }
-  } else if (PyComplex_Check(v.ptr())) {
-    check_copy_false(copy);
-    return mx::array(
-        static_cast<mx::complex64_t>(nb::cast<std::complex<float>>(v)),
-        t.value_or(mx::complex64));
-  } else if (nb::isinstance<nb::list>(v)) {
-    check_copy_false(copy);
-    return array_from_list(nb::cast<nb::list>(v), t);
-  } else if (nb::isinstance<nb::tuple>(v)) {
-    check_copy_false(copy);
-    return array_from_list(nb::cast<nb::tuple>(v), t);
-  } else if (nb::isinstance<mx::array>(v)) {
-    auto arr = nb::cast<mx::array>(v);
-    auto dtype = t.value_or(arr.dtype());
-    check_copy_false(copy);
-    return mx::astype(arr, dtype, copy);
-  } else if (nb::ndarray_check(v)) {
+  if (!nb::isinstance<mx::array>(v) && nb::ndarray_check(v)) {
     using ContigArray = nb::ndarray<nb::ro>;
     ContigArray nd;
     std::optional<nb::dlpack::dtype> nb_dtype;
@@ -701,8 +648,42 @@ mx::array create_array(
       nd = nb::cast<ContigArray>(v);
     }
     return nd_array_to_mlx(nd, t, nb_dtype, copy);
+  }
+
+  if (copy.has_value() && copy.value() == false) {
+    throw std::invalid_argument(
+        "Unable to avoid copy while creating an array as requested.");
+  }
+
+  if (nb::isinstance<nb::bool_>(v)) {
+    return mx::array(nb::cast<bool>(v), t.value_or(mx::bool_));
+  } else if (nb::isinstance<nb::int_>(v)) {
+    auto val = nb::cast<int64_t>(v);
+    auto default_type = (val > std::numeric_limits<int>::max() ||
+                         val < std::numeric_limits<int>::min())
+        ? mx::int64
+        : mx::int32;
+    return mx::array(val, t.value_or(default_type));
+  } else if (nb::isinstance<nb::float_>(v)) {
+    auto out_type = t.value_or(mx::float32);
+    if (out_type == mx::float64) {
+      return mx::array(nb::cast<double>(v), out_type);
+    } else {
+      return mx::array(nb::cast<float>(v), out_type);
+    }
+  } else if (PyComplex_Check(v.ptr())) {
+    return mx::array(
+        static_cast<mx::complex64_t>(nb::cast<std::complex<float>>(v)),
+        t.value_or(mx::complex64));
+  } else if (nb::isinstance<nb::list>(v)) {
+    return array_from_list(nb::cast<nb::list>(v), t);
+  } else if (nb::isinstance<nb::tuple>(v)) {
+    return array_from_list(nb::cast<nb::tuple>(v), t);
+  } else if (nb::isinstance<mx::array>(v)) {
+    auto arr = nb::cast<mx::array>(v);
+    auto dtype = t.value_or(arr.dtype());
+    return mx::astype(arr, dtype, copy);
   } else {
-    check_copy_false(copy);
     auto arr = to_array_with_accessor(v);
     return mx::astype(arr, t.value_or(arr.dtype()), copy);
   }

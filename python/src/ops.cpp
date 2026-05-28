@@ -1827,7 +1827,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "copy"_a = nb::none(),
       nb::sig(
-          "def asarray(a: Union[scalar, array, Sequence], dtype: "
+          "def asarray(a: Union[scalar, array, Sequence, DLPackCompatible], dtype: "
           "Optional[Dtype] = None, *, copy: Optional[bool] = None) -> array"),
       R"pbdoc(
         Convert the input to an array.
