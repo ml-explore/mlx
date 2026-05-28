@@ -534,8 +534,6 @@ void init_array(nb::module_& m) {
             // https://github.com/dmlc/dlpack/blob/5c210da409e7f1e51ddf445134a4376fdbd70d7d/include/dlpack/dlpack.h#L74
             if (mx::metal::is_available()) {
               return nb::make_tuple(8, 0);
-            } else if (mx::cu::is_available()) {
-              return nb::make_tuple(13, 0);
             } else {
               // CPU device
               return nb::make_tuple(1, 0);

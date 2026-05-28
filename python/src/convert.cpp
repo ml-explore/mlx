@@ -276,8 +276,7 @@ nb::ndarray<NDParams...> mlx_to_nd_array(
     std::optional<std::tuple<int, int>> dl_device) {
   auto default_device = mx::metal::is_available()
       ? std::tuple{nb::device::metal::value, 0}
-      : (mx::cu::is_available() ? std::tuple{nb::device::cuda_managed::value, 0}
-                                : std::tuple{nb::device::cpu::value, 0});
+      : std::tuple{nb::device::cpu::value, 0};
   auto [device_type, device_id] = dl_device.value_or(default_device);
 
   if (device_type == nb::device::cuda::value ||
