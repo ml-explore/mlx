@@ -4875,6 +4875,50 @@ std::vector<array> fp_quantize(
     QuantizationMode mode,
     const std::optional<array>& global_scale /* = std::nullopt */,
     Stream s) {
+  // BlockFp8 (DeepSeek-V3 / MiMo convention): 2D group_size x group_size blocks,
+  // per-block float32 scale, unpacked E4M3 codes. Distinct from the 1D-group
+  // mxfp8/nvfp4 path below, so handle it up front.
+  if (mode == QuantizationMode::BlockFp8) {
+    if (group_size <= 0 || (group_size & (group_size - 1)) != 0) {
+      throw std::invalid_argument(
+          "[quantize] block_fp8 requires a power-of-two group_size.");
+    }
+    int ndim = w.ndim();
+    if (ndim < 2) {
+      throw std::invalid_argument(
+          "[quantize] block_fp8 requires at least a 2D weight.");
+    }
+    int N = w.shape(-2), K = w.shape(-1);
+    if (N % group_size != 0 || K % group_size != 0) {
+      std::ostringstream msg;
+      msg << "[quantize] block_fp8 requires the last two dims to be multiples "
+          << "of group_size=" << group_size << " but got " << w.shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    int Nb = N / group_size, Kb = K / group_size;
+    constexpr float kE4M3Max = 448.0f;
+    // Reshape to the block grid: [..., Nb, gs, Kb, gs]
+    Shape bshape(w.shape().begin(), w.shape().end() - 2);
+    bshape.push_back(Nb); bshape.push_back(group_size);
+    bshape.push_back(Kb); bshape.push_back(group_size);
+    auto wf = astype(w, float32, s);
+    auto wb = reshape(wf, bshape, s);
+    // Per-block max-abs over the two intra-block axes (the gs dims at -3 and -1).
+    int r1 = static_cast<int>(bshape.size()) - 1;
+    int r3 = static_cast<int>(bshape.size()) - 3;
+    auto amax = max(abs(wb, s), std::vector<int>{r3, r1}, true, s);
+    auto scales = divide(amax, array(kE4M3Max, float32), s);
+    // Avoid divide-by-zero for all-zero blocks (scale stays 0, codes -> 0).
+    auto safe = where(equal(scales, array(0.0f, float32), s),
+                      array(1.0f, float32), scales, s);
+    auto codes = to_fp8(divide(wb, safe, s), s);   // uint8 E4M3, [...,Nb,gs,Kb,gs]
+    codes = reshape(codes, w.shape(), s);          // [..., N, K]
+    // Collapse scales to [..., Nb, Kb] float32.
+    Shape sshape(w.shape().begin(), w.shape().end() - 2);
+    sshape.push_back(Nb); sshape.push_back(Kb);
+    scales = reshape(astype(scales, float32, s), sshape, s);
+    return {std::move(codes), std::move(scales)};
+  }
   int expected_gs = mode == QuantizationMode::Nvfp4 ? 16 : 32;
   int expected_bits = mode == QuantizationMode::Mxfp8 ? 8 : 4;
   if (group_size != expected_gs) {
@@ -5124,6 +5168,35 @@ array fp_dequantize(
     QuantizationMode mode,
     const std::optional<array>& global_scale /* = std::nullopt */,
     Stream s) {
+  // BlockFp8 (DeepSeek-V3 / MiMo): unpacked E4M3 codes [..., N, K] with a
+  // per-block float32 scale grid [..., N/gs, K/gs]. Decode = from_fp8(codes)
+  // broadcast-multiplied by the per-block scale. Handled up front because the
+  // shape/packing logic below assumes 1D uint32-packed groups.
+  if (mode == QuantizationMode::BlockFp8) {
+    int ndim = w.ndim();
+    int N = w.shape(-2), K = w.shape(-1);
+    int Nb = scales.shape(-2), Kb = scales.shape(-1);
+    if (group_size <= 0 || N % group_size != 0 || K % group_size != 0 ||
+        Nb != N / group_size || Kb != K / group_size) {
+      std::ostringstream msg;
+      msg << "[dequantize] block_fp8 scale grid must be ceil(w / group_size). "
+          << "w.shape()==" << w.shape() << ", scales.shape()==" << scales.shape()
+          << ", group_size=" << group_size << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    auto decoded = from_fp8(w, out_type, s);  // [..., N, K]
+    // Reshape weight to block grid and broadcast the scale across each block.
+    Shape bshape(w.shape().begin(), w.shape().end() - 2);
+    bshape.push_back(Nb); bshape.push_back(group_size);
+    bshape.push_back(Kb); bshape.push_back(group_size);
+    auto wb = reshape(decoded, bshape, s);
+    // scales [..., Nb, Kb] -> [..., Nb, 1, Kb, 1] to broadcast over the blocks.
+    Shape scb(scales.shape().begin(), scales.shape().end() - 2);
+    scb.push_back(Nb); scb.push_back(1); scb.push_back(Kb); scb.push_back(1);
+    auto sc = reshape(astype(scales, out_type, s), scb, s);
+    auto out = multiply(wb, sc, s);
+    return reshape(out, w.shape(), s);
+  }
   int expected_gs = mode == QuantizationMode::Nvfp4 ? 16 : 32;
   int expected_bits = mode == QuantizationMode::Mxfp8 ? 8 : 4;
   if (group_size != expected_gs) {
@@ -5262,7 +5335,16 @@ array dequantize(
     msg << "[dequantize] Invalid value for group_size: " << group_size;
     throw std::invalid_argument(msg.str());
   }
-  if (w.dtype() != uint32) {
+  // BlockFp8 stores weights as unpacked uint8 fp8 codes; all other modes use
+  // uint32-packed weights. validate_mode_with_type() above already enforces
+  // the per-mode dtype, so this guard mirrors that split instead of assuming
+  // uint32 unconditionally.
+  if (qmode == QuantizationMode::BlockFp8) {
+    if (w.dtype() != uint8) {
+      throw std::invalid_argument(
+          "[dequantize] block_fp8 weights must be given as uint8");
+    }
+  } else if (w.dtype() != uint32) {
     throw std::invalid_argument(
         "[dequantize] The matrix should be given as a uint32");
   }
