@@ -987,6 +987,45 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
         self.assertTrue(mx.array_equal(mx.stack(vjps_multiply), vjps[0]))
 
+    def test_complex_exp_vjp(self):
+        primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        cotangent = mx.random.normal(
+            (
+                3,
+                4,
+                5,
+            ),
+            dtype=mx.complex64,
+        )
+
+        _, vjps = mx.vjp(mx.exp, [primal], [cotangent])
+
+        expected = cotangent * mx.conj(mx.exp(primal))
+
+        # Check against hand-computed vjps
+        self.assertTrue(mx.allclose(vjps[0], expected))
+
+    def test_complex_log_vjp(self):
+        primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        cotangent = mx.random.normal(
+            (
+                3,
+                4,
+                5,
+            ),
+            dtype=mx.complex64,
+        )
+
+        # guard against values too close to the origin
+        primal = mx.where(abs(primal) < 1e-3, 1e-3, primal)
+
+        _, vjps = mx.vjp(mx.log, [primal], [cotangent])
+
+        expected = cotangent * mx.conj(1 / primal)
+
+        # Check against hand-computed vjps
+        self.assertTrue(mx.allclose(vjps[0], expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
