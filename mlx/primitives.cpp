@@ -3776,6 +3776,18 @@ bool GatherQMM::is_equivalent(const Primitive& other) const {
       mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_;
 }
 
+std::vector<Shape> GatherQMM::output_shapes(const std::vector<array>& inputs) {
+  const auto& x = inputs[0];
+  const auto& w = inputs[1];
+  const auto& lhs_indices =
+      (mode_ == QuantizationMode::Affine) ? inputs[4] : inputs[3];
+  int w_outer = transpose_ ? w.shape(-2) : w.shape(-1) * 32 / bits_;
+  auto out_shape = lhs_indices.shape();
+  out_shape.push_back(x.shape(-2));
+  out_shape.push_back(w_outer);
+  return {out_shape};
+}
+
 std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -5880,6 +5892,16 @@ bool GatherMM::is_equivalent(const Primitive& other) const {
   const GatherMM& g_other = static_cast<const GatherMM&>(other);
   return left_sorted_ == g_other.left_sorted_ &&
       right_sorted_ == g_other.right_sorted_;
+}
+
+std::vector<Shape> GatherMM::output_shapes(const std::vector<array>& inputs) {
+  const auto& a = inputs[0];
+  const auto& b = inputs[1];
+  const auto& lhs_indices = inputs[2];
+  auto out_shape = lhs_indices.shape();
+  out_shape.push_back(a.shape(-2));
+  out_shape.push_back(b.shape(-1));
+  return {out_shape};
 }
 
 bool BlockMaskedMM::is_equivalent(const Primitive& other) const {

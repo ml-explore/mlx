@@ -504,6 +504,45 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(compiled_zero_like(y).shape, y_shape)
         self.assertEqual(compiled_ones_like(y).shape, y_shape)
 
+    def test_shapeless_compile_gather_qmm(self):
+        K, N, num_experts = 64, 32, 4
+
+        w = mx.random.normal((num_experts, N, K))
+        qw, s, b = mx.quantize(w)
+        mx.eval(qw, s, b)
+
+        idx = mx.array([0, 1, 2, 3])
+        x4 = mx.ones((num_experts, 4, K))
+        x8 = mx.ones((num_experts, 8, K))
+
+        def fn(x):
+            return mx.gather_qmm(
+                x, qw, s, b, lhs_indices=idx, rhs_indices=idx, transpose=True
+            )
+
+        cfn = mx.compile(fn, shapeless=True)
+
+        self.assertEqual(cfn(x4).shape, fn(x4).shape)
+        self.assertEqual(cfn(x8).shape, fn(x8).shape)
+
+    def test_shapeless_compile_gather_mm(self):
+        K, N, num_experts = 64, 32, 4
+
+        idx = mx.array([0, 1, 2, 3])
+        b = mx.random.normal((num_experts, K, N))
+        mx.eval(b)
+
+        x4 = mx.ones((num_experts, 4, K))
+        x8 = mx.ones((num_experts, 8, K))
+
+        def fn(x):
+            return mx.gather_mm(x, b, lhs_indices=idx, rhs_indices=idx)
+
+        cfn = mx.compile(fn, shapeless=True)
+
+        self.assertEqual(cfn(x4).shape, fn(x4).shape)
+        self.assertEqual(cfn(x8).shape, fn(x8).shape)
+
     def test_compile_with_constant(self):
         # Test float
         @partial(mx.compile)
