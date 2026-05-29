@@ -2,6 +2,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -251,16 +253,17 @@ TEST_CASE("thread_pool parallel_for with exceptions does not deadlock") {
   auto& pool = ThreadPool::instance();
   int nth = std::min(pool.max_threads(), 4);
 
-  std::atomic<bool> finished{false};
+  std::mutex watchdog_mtx;
+  std::condition_variable watchdog_cv;
+  bool finished = false;
 
   std::thread watchdog([&] {
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-    if (!finished.load()) {
-      // Deadlock detected - force fail
+    std::unique_lock<std::mutex> lock(watchdog_mtx);
+    if (!watchdog_cv.wait_for(
+            lock, std::chrono::seconds(5), [&] { return finished; })) {
       FAIL("parallel_for deadlocked after exception");
     }
   });
-  watchdog.detach();
 
   // Only throw from slot 0 (main thread) so it propagates directly
   try {
@@ -273,7 +276,12 @@ TEST_CASE("thread_pool parallel_for with exceptions does not deadlock") {
     // Expected
   }
 
-  finished.store(true);
+  {
+    std::lock_guard<std::mutex> lock(watchdog_mtx);
+    finished = true;
+  }
+  watchdog_cv.notify_one();
+  watchdog.join();
 
   // Verify pool still works after exception
   std::atomic<int> count{0};

@@ -13,20 +13,34 @@ HWY_BEFORE_NAMESPACE();
 namespace mlx::core::simd {
 namespace hn = hwy::HWY_NAMESPACE;
 
+// Highway's AVX3-family x86 targets use 512-bit vectors.
+#if HWY_TARGET == HWY_AVX3 || HWY_TARGET == HWY_AVX3_DL ||       \
+    HWY_TARGET == HWY_AVX3_ZEN4 || HWY_TARGET == HWY_AVX3_SPR || \
+    HWY_TARGET == HWY_AVX10_2
+inline constexpr int highway_max_f32_lanes = 16;
+inline constexpr int highway_max_f64_lanes = 8;
+#elif HWY_TARGET == HWY_AVX2
+inline constexpr int highway_max_f32_lanes = 8;
+inline constexpr int highway_max_f64_lanes = 4;
+#else
+inline constexpr int highway_max_f32_lanes = 4;
+inline constexpr int highway_max_f64_lanes = 2;
+#endif
+
 template <>
-inline constexpr int max_size<float> = 8;
+inline constexpr int max_size<float> = highway_max_f32_lanes;
 template <>
-inline constexpr int max_size<double> = 4;
+inline constexpr int max_size<double> = highway_max_f64_lanes;
 template <>
-inline constexpr int max_size<int32_t> = 8;
+inline constexpr int max_size<int32_t> = highway_max_f32_lanes;
 template <>
-inline constexpr int max_size<uint32_t> = 8;
+inline constexpr int max_size<uint32_t> = highway_max_f32_lanes;
 template <>
 inline constexpr int max_size<uint8_t> = 8;
 template <>
-inline constexpr int max_size<float16_t> = 8;
+inline constexpr int max_size<float16_t> = highway_max_f32_lanes;
 template <>
-inline constexpr int max_size<bfloat16_t> = 8;
+inline constexpr int max_size<bfloat16_t> = highway_max_f32_lanes;
 
 namespace highway_detail {
 
@@ -130,7 +144,11 @@ struct BoolSimdBase {
 
   BoolSimdBase(bool value) {
     if (value) {
-      bits[0] = static_cast<uint8_t>((1u << N) - 1u);
+      for (int i = 0; i < static_cast<int>(sizeof(bits)); ++i) {
+        bits[i] = 0xFF;
+      }
+      bits[sizeof(bits) - 1] &=
+          static_cast<uint8_t>((1u << (((N - 1) % 8) + 1)) - 1u);
     }
   }
 
@@ -189,8 +207,10 @@ struct BoolSimdBase {
     }                                                      \
   };
 
+MLX_HIGHWAY_BOOL_SIMD(2)
 MLX_HIGHWAY_BOOL_SIMD(4)
 MLX_HIGHWAY_BOOL_SIMD(8)
+MLX_HIGHWAY_BOOL_SIMD(16)
 #undef MLX_HIGHWAY_BOOL_SIMD
 
 template <typename T, int N>
@@ -265,6 +285,32 @@ struct Simd {
 };
 
 template <>
+struct Simd<int64_t, 4> {
+  static constexpr int size = 4;
+  Simd<int64_t, 2> lo;
+  Simd<int64_t, 2> hi;
+
+  Simd() = default;
+  Simd(int64_t v) : lo(v), hi(v) {}
+
+  static Simd load(const int64_t* ptr) {
+    Simd out;
+    out.lo = simd::load<int64_t, 2>(ptr);
+    out.hi = simd::load<int64_t, 2>(ptr + 2);
+    return out;
+  }
+
+  void store(int64_t* ptr) const {
+    simd::store(ptr, lo);
+    simd::store(ptr + 2, hi);
+  }
+
+  int64_t operator[](int idx) const {
+    return idx < 2 ? lo[idx] : hi[idx - 2];
+  }
+};
+
+template <>
 struct Simd<int64_t, 8> {
   static constexpr int size = 8;
   Simd<int64_t, 4> lo;
@@ -287,6 +333,32 @@ struct Simd<int64_t, 8> {
 
   int64_t operator[](int idx) const {
     return idx < 4 ? lo[idx] : hi[idx - 4];
+  }
+};
+
+template <>
+struct Simd<uint64_t, 4> {
+  static constexpr int size = 4;
+  Simd<uint64_t, 2> lo;
+  Simd<uint64_t, 2> hi;
+
+  Simd() = default;
+  Simd(uint64_t v) : lo(v), hi(v) {}
+
+  static Simd load(const uint64_t* ptr) {
+    Simd out;
+    out.lo = simd::load<uint64_t, 2>(ptr);
+    out.hi = simd::load<uint64_t, 2>(ptr + 2);
+    return out;
+  }
+
+  void store(uint64_t* ptr) const {
+    simd::store(ptr, lo);
+    simd::store(ptr + 2, hi);
+  }
+
+  uint64_t operator[](int idx) const {
+    return idx < 2 ? lo[idx] : hi[idx - 2];
   }
 };
 

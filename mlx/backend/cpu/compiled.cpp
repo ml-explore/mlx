@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include <dlfcn.h>
 #include <filesystem>
@@ -50,7 +50,7 @@ static CompilerCache& cache() {
 };
 
 // GPU compile is available through the GPU backend. CPU compile requires a
-// usable C++ compiler (MSVC or clang-cl on Windows).
+// supported local C++ JIT compiler.
 namespace detail {
 bool compile_available_for_device(const Device& device) {
   return device == Device::gpu || JitCompiler::available();
@@ -76,27 +76,32 @@ void* compile(
     return it->second;
   }
   std::string source_code = source_builder();
+  auto source_id = std::hash<std::string>{}(source_code);
+  auto source_hash = fmt::format("_{:016x}", source_id);
   std::string kernel_file_name;
 
   // Deal with long kernel names. Maximum length for filename on macOS is 255
   // characters, and on Windows the maximum length for whole path is 260. Clip
-  // file name with a little extra room and append a 16 character hash.
+  // file name with a little extra room and append hashes for the kernel name
+  // and generated source. The source hash keeps scalar and target-specific JIT
+  // preambles from reusing stale libraries with the same kernel symbol.
 #ifdef _WIN32
   constexpr int max_file_name_length = 140;
 #else
   constexpr int max_file_name_length = 245;
 #endif
-  if (kernel_name.size() > max_file_name_length) {
+  auto max_base_length = max_file_name_length - source_hash.size();
+  if (kernel_name.size() > max_base_length) {
     std::ostringstream file_name;
-    file_name
-        << std::string_view(kernel_name).substr(0, max_file_name_length - 16);
+    file_name << std::string_view(kernel_name).substr(0, max_base_length - 16);
     auto file_id =
-        std::hash<std::string>{}(kernel_name.substr(max_file_name_length - 16));
+        std::hash<std::string>{}(kernel_name.substr(max_base_length - 16));
     file_name << "_" << std::hex << std::setw(16) << file_id << std::dec;
     kernel_file_name = file_name.str();
   } else {
     kernel_file_name = kernel_name;
   }
+  kernel_file_name += source_hash;
 
   auto output_dir =
       std::filesystem::temp_directory_path() / "mlx" / version() / "cpu";

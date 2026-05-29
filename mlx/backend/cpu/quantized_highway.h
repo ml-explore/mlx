@@ -18,8 +18,6 @@
 
 namespace mlx::core {
 
-constexpr bool has_simd_qmm = true;
-
 enum class QuantizedHighwayDType : uint8_t {
   Float32,
   Float16,
@@ -41,20 +39,6 @@ constexpr QuantizedHighwayDType quantized_highway_dtype() {
         "Unsupported Highway quantized dtype");
   }
 }
-
-template <>
-struct LoadAsFloat<float16_t, 8> {
-  static inline simd::Simd<float, 8> apply(const float16_t* ptr) {
-    return simd::Simd<float, 8>(simd::load<float16_t, 8>(ptr));
-  }
-};
-
-template <>
-struct LoadAsFloat<bfloat16_t, 8> {
-  static inline simd::Simd<float, 8> apply(const bfloat16_t* ptr) {
-    return simd::Simd<float, 8>(simd::load<bfloat16_t, 8>(ptr));
-  }
-};
 
 void dequant_row_highway_4bit(
     const uint32_t* w_row,
@@ -96,6 +80,19 @@ void qmm_t_int8_highway_row(
     int n_end,
     int K);
 
+bool qmm_t_int8_highway(
+    void* result,
+    const void* x,
+    const uint32_t* w,
+    const void* scales,
+    const void* biases,
+    QuantizedHighwayDType dtype,
+    int bits,
+    int group_size,
+    int M,
+    int N,
+    int K);
+
 void fp_qmm_t_highway_row(
     void* result,
     const void* x,
@@ -106,6 +103,21 @@ void fp_qmm_t_highway_row(
     int group_size,
     int n_start,
     int n_end,
+    int K,
+    float scale_factor,
+    const float* fp4_lut,
+    const float* fp8_lut);
+
+void fp_qmm_t_highway(
+    void* result,
+    const void* x,
+    const uint32_t* w,
+    const uint8_t* scales,
+    QuantizedHighwayDType dtype,
+    int bits,
+    int group_size,
+    int M,
+    int N,
     int K,
     float scale_factor,
     const float* fp4_lut,

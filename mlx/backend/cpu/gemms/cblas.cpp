@@ -304,6 +304,7 @@ void matmul<complex64_t>(
           size_t m_start = m_chunk * tid;
           size_t m_end = std::min(m_start + m_chunk, M);
           if (m_start < m_end) {
+            size_t a_offset = a_transposed ? m_start : m_start * lda;
             cblas_cgemm(
                 CblasRowMajor,
                 a_transposed ? CblasTrans : CblasNoTrans,
@@ -312,7 +313,7 @@ void matmul<complex64_t>(
                 N,
                 K,
                 &calpha,
-                a_ptr + m_start * lda,
+                a_ptr + a_offset,
                 lda,
                 b_ptr,
                 ldb,

@@ -7,10 +7,7 @@
 
 // Spin-wait hint: reduces power consumption and avoids starving sibling
 // hyperthreads during busy-wait loops.
-#if defined(MLX_USE_HIGHWAY)
-#include "hwy/cache_control.h"
-#define MLX_SPIN_PAUSE() hwy::Pause()
-#elif defined(_MSC_VER)
+#if defined(_MSC_VER)
 #include <intrin.h>
 #if defined(_M_ARM64) || defined(_M_ARM)
 #define MLX_SPIN_PAUSE() __yield()
@@ -31,7 +28,6 @@
 #ifdef _WIN32
 #include <windows.h>
 static void (*blas_set_threads)(int) = nullptr;
-static int (*blas_get_threads)() = nullptr;
 static void init_blas_funcs() {
   static bool done = false;
   if (done)
@@ -43,7 +39,6 @@ static void init_blas_funcs() {
   if (h) {
     blas_set_threads =
         (void (*)(int))GetProcAddress(h, "openblas_set_num_threads");
-    blas_get_threads = (int (*)())GetProcAddress(h, "openblas_get_num_threads");
   }
 }
 static void set_blas_threads(int n) {
@@ -51,14 +46,9 @@ static void set_blas_threads(int n) {
   if (blas_set_threads)
     blas_set_threads(n);
 }
-static int get_blas_threads() {
-  init_blas_funcs();
-  return blas_get_threads ? blas_get_threads() : 1;
-}
 #elif defined(__unix__) || defined(__linux__)
 #include <dlfcn.h>
 static void (*blas_set_threads)(int) = nullptr;
-static int (*blas_get_threads)() = nullptr;
 static void init_blas_funcs() {
   static bool done = false;
   if (done)
@@ -66,23 +56,15 @@ static void init_blas_funcs() {
   done = true;
   blas_set_threads =
       (void (*)(int))dlsym(RTLD_DEFAULT, "openblas_set_num_threads");
-  blas_get_threads = (int (*)())dlsym(RTLD_DEFAULT, "openblas_get_num_threads");
 }
 static void set_blas_threads(int n) {
   init_blas_funcs();
   if (blas_set_threads)
     blas_set_threads(n);
 }
-static int get_blas_threads() {
-  init_blas_funcs();
-  return blas_get_threads ? blas_get_threads() : 1;
-}
 #else
 static void set_blas_threads(int n) {
   (void)n;
-}
-static int get_blas_threads() {
-  return 1;
 }
 #endif
 

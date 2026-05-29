@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <type_traits>
 
 #include "mlx/allocator.h"
 #include "mlx/backend/cpu/copy.h"
@@ -12,7 +13,7 @@
 #include "mlx/transforms.h"
 #include "mlx/utils.h"
 
-#if defined(MLX_USE_HIGHWAY)
+#if defined(MLX_USE_HIGHWAY_KERNELS)
 #include "mlx/backend/cpu/norms_highway.h"
 #endif
 
@@ -364,7 +365,7 @@ void rms_norm_float(
     int rows,
     float eps,
     bool has_weight) {
-#if defined(MLX_USE_HIGHWAY)
+#if defined(MLX_USE_HIGHWAY_KERNELS)
   rms_norm_highway_float(x, weight, out, width, rows, eps, has_weight);
 #else
   for (int row = 0; row < rows; row++) {
@@ -384,12 +385,69 @@ void layer_norm_float(
     float eps,
     bool has_weight,
     bool has_bias) {
-#if defined(MLX_USE_HIGHWAY)
+#if defined(MLX_USE_HIGHWAY_KERNELS)
   layer_norm_highway_float(
       x, weight, bias, out, width, rows, eps, has_weight, has_bias);
 #else
   for (int row = 0; row < rows; row++) {
     layer_norm_row_f32(
+        x + row * width,
+        weight,
+        bias,
+        out + row * width,
+        width,
+        eps,
+        has_weight,
+        has_bias);
+  }
+#endif
+}
+
+template <typename T>
+void rms_norm_half(
+    const T* x,
+    const T* weight,
+    T* out,
+    int width,
+    int rows,
+    float eps,
+    bool has_weight) {
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+  if constexpr (std::is_same_v<T, float16_t>) {
+    rms_norm_highway_float16(x, weight, out, width, rows, eps, has_weight);
+  } else {
+    rms_norm_highway_bfloat16(x, weight, out, width, rows, eps, has_weight);
+  }
+#else
+  for (int row = 0; row < rows; row++) {
+    rms_norm_row_half(
+        x + row * width, weight, out + row * width, width, eps, has_weight);
+  }
+#endif
+}
+
+template <typename T>
+void layer_norm_half(
+    const T* x,
+    const T* weight,
+    const T* bias,
+    T* out,
+    int width,
+    int rows,
+    float eps,
+    bool has_weight,
+    bool has_bias) {
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+  if constexpr (std::is_same_v<T, float16_t>) {
+    layer_norm_highway_float16(
+        x, weight, bias, out, width, rows, eps, has_weight, has_bias);
+  } else {
+    layer_norm_highway_bfloat16(
+        x, weight, bias, out, width, rows, eps, has_weight, has_bias);
+  }
+#else
+  for (int row = 0; row < rows; row++) {
+    layer_norm_row_half(
         x + row * width,
         weight,
         bias,
@@ -488,28 +546,20 @@ void RMSNorm::eval_cpu(
             int row_start = rows_per_thread * tid;
             int row_end = std::min(row_start + rows_per_thread, num_rows);
 
-            for (int row = row_start; row < row_end; row++) {
-              rms_norm_row_half(
-                  x_ptr + row * width,
-                  w_ptr,
-                  out_ptr + row * width,
-                  width,
-                  eps,
-                  has_weight);
-            }
+            rms_norm_half(
+                x_ptr + row_start * width,
+                w_ptr,
+                out_ptr + row_start * width,
+                width,
+                row_end - row_start,
+                eps,
+                has_weight);
           });
         });
       } else {
         encoder.dispatch([=]() {
-          for (int row = 0; row < num_rows; row++) {
-            rms_norm_row_half(
-                x_ptr + row * width,
-                w_ptr,
-                out_ptr + row * width,
-                width,
-                eps,
-                has_weight);
-          }
+          rms_norm_half(
+              x_ptr, w_ptr, out_ptr, width, num_rows, eps, has_weight);
         });
       }
       break;
@@ -527,28 +577,20 @@ void RMSNorm::eval_cpu(
             int row_start = rows_per_thread * tid;
             int row_end = std::min(row_start + rows_per_thread, num_rows);
 
-            for (int row = row_start; row < row_end; row++) {
-              rms_norm_row_half(
-                  x_ptr + row * width,
-                  w_ptr,
-                  out_ptr + row * width,
-                  width,
-                  eps,
-                  has_weight);
-            }
+            rms_norm_half(
+                x_ptr + row_start * width,
+                w_ptr,
+                out_ptr + row_start * width,
+                width,
+                row_end - row_start,
+                eps,
+                has_weight);
           });
         });
       } else {
         encoder.dispatch([=]() {
-          for (int row = 0; row < num_rows; row++) {
-            rms_norm_row_half(
-                x_ptr + row * width,
-                w_ptr,
-                out_ptr + row * width,
-                width,
-                eps,
-                has_weight);
-          }
+          rms_norm_half(
+              x_ptr, w_ptr, out_ptr, width, num_rows, eps, has_weight);
         });
       }
       break;
@@ -671,32 +713,30 @@ void LayerNorm::eval_cpu(
             int row_start = rows_per_thread * tid;
             int row_end = std::min(row_start + rows_per_thread, num_rows);
 
-            for (int row = row_start; row < row_end; row++) {
-              layer_norm_row_half(
-                  x_ptr + row * width,
-                  w_ptr,
-                  b_ptr,
-                  out_ptr + row * width,
-                  width,
-                  eps,
-                  has_weight,
-                  has_bias);
-            }
+            layer_norm_half(
+                x_ptr + row_start * width,
+                w_ptr,
+                b_ptr,
+                out_ptr + row_start * width,
+                width,
+                row_end - row_start,
+                eps,
+                has_weight,
+                has_bias);
           });
         });
       } else {
         encoder.dispatch([=]() {
-          for (int row = 0; row < num_rows; row++) {
-            layer_norm_row_half(
-                x_ptr + row * width,
-                w_ptr,
-                b_ptr,
-                out_ptr + row * width,
-                width,
-                eps,
-                has_weight,
-                has_bias);
-          }
+          layer_norm_half(
+              x_ptr,
+              w_ptr,
+              b_ptr,
+              out_ptr,
+              width,
+              num_rows,
+              eps,
+              has_weight,
+              has_bias);
         });
       }
       break;
@@ -715,32 +755,30 @@ void LayerNorm::eval_cpu(
             int row_start = rows_per_thread * tid;
             int row_end = std::min(row_start + rows_per_thread, num_rows);
 
-            for (int row = row_start; row < row_end; row++) {
-              layer_norm_row_half(
-                  x_ptr + row * width,
-                  w_ptr,
-                  b_ptr,
-                  out_ptr + row * width,
-                  width,
-                  eps,
-                  has_weight,
-                  has_bias);
-            }
+            layer_norm_half(
+                x_ptr + row_start * width,
+                w_ptr,
+                b_ptr,
+                out_ptr + row_start * width,
+                width,
+                row_end - row_start,
+                eps,
+                has_weight,
+                has_bias);
           });
         });
       } else {
         encoder.dispatch([=]() {
-          for (int row = 0; row < num_rows; row++) {
-            layer_norm_row_half(
-                x_ptr + row * width,
-                w_ptr,
-                b_ptr,
-                out_ptr + row * width,
-                width,
-                eps,
-                has_weight,
-                has_bias);
-          }
+          layer_norm_half(
+              x_ptr,
+              w_ptr,
+              b_ptr,
+              out_ptr,
+              width,
+              num_rows,
+              eps,
+              has_weight,
+              has_bias);
         });
       }
       break;

@@ -43,19 +43,19 @@ option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_PYTHON_STUBS "Build stub files for python bindings" ON)
 option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 if(MLX_BUILD_CPU AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|x86")
-  set(_AVX2_DEFAULT ON)
+  set(_X86_SIMD_DEFAULT ON)
 else()
-  set(_AVX2_DEFAULT OFF)
+  set(_X86_SIMD_DEFAULT OFF)
 endif()
-option(MLX_ENABLE_AVX2 "Enable AVX2 SIMD on x86 (includes BMI2, FMA, and F16C)"
-       ${_AVX2_DEFAULT})
+option(MLX_ENABLE_X86_SIMD
+       "Enable runtime-dispatched x86 CPU SIMD kernels via Highway"
+       ${_X86_SIMD_DEFAULT})
 set(MLX_HIGHWAY_SOURCE_DIR
     ""
-    CACHE PATH "Path to a local Highway source checkout for MLX_ENABLE_AVX2")
+    CACHE PATH "Path to a local Highway source checkout")
 set(MLX_HIGHWAY_GIT_TAG
     "1.4.0"
-    CACHE STRING
-          "Highway git tag or commit used when MLX_ENABLE_AVX2 fetches Highway")
+    CACHE STRING "Highway git tag or commit used when fetching Highway")
 option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 option(USE_SYSTEM_FMT "Use system's provided fmt library" OFF)

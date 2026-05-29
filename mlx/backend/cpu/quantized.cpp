@@ -17,8 +17,9 @@
 #include "mlx/utils.h"
 
 // ISA-specific SIMD implementations (int8 kernels, dequant, LUT lookups).
-// When AVX2 is enabled on this branch, Highway is the implementation substrate.
-#if defined(MLX_USE_HIGHWAY)
+// Highway kernels are compiled as runtime-dispatched translation units when x86
+// CPU SIMD is enabled.
+#if defined(MLX_USE_HIGHWAY_KERNELS)
 #include "mlx/backend/cpu/quantized_highway.h"
 #else
 // No ISA-specific SIMD available. Provide no-op stubs to fall through to the
@@ -26,8 +27,6 @@
 // portable Simd<T,N> layer.
 #include "mlx/backend/cpu/quantized.h"
 namespace mlx::core {
-
-constexpr bool has_simd_qmm = false;
 
 template <typename T, int bits, int group_size, int NC>
 int try_batch_extract_multi_col(
@@ -824,9 +823,24 @@ void _qmm_t_simd(
   static_assert(
       S % pack_factor == 0 || pack_factor % S == 0,
       "SIMD size and pack factor must be divisible");
-  constexpr int iters_per_word = (S >= pack_factor) ? 1 : (pack_factor / S);
-  constexpr int words_per_iter = (S >= pack_factor) ? (S / pack_factor) : 0;
-
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+  if constexpr (bits == 4 || bits == 8) {
+    if (qmm_t_int8_highway(
+            result,
+            x,
+            w,
+            scales,
+            biases,
+            quantized_highway_dtype<T>(),
+            bits,
+            group_size,
+            M,
+            N,
+            K)) {
+      return;
+    }
+  }
+#endif
   auto& pool = cpu::ThreadPool::instance();
 
   // N-parallel threading: split columns across threads.
@@ -995,7 +1009,7 @@ void _dequant_row_for_blas(
     const float* biases_row,
     float* out,
     int K) {
-#if defined(MLX_USE_HIGHWAY)
+#if defined(MLX_USE_HIGHWAY_KERNELS)
   if constexpr (bits == 4 || bits == 8) {
     _dequant_row_highway<bits, group_size>(
         w_row, scales_row, biases_row, out, K);
@@ -1168,6 +1182,12 @@ void _qmm_dispatch_transpose(
       _qmm_t_blas<T, bits, group_size>(result, x, w, scales, biases, M, N, K);
       return;
     }
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+    if constexpr (bits == 4 || bits == 8) {
+      _qmm_t_simd<T, bits, group_size>(result, x, w, scales, biases, M, N, K);
+      return;
+    }
+#endif
     // SIMD path: S must be >= 4 and must divide pack_factor or vice versa
     constexpr int pack_factor = 32 / bits;
     constexpr int S = simd::max_size<float>;
@@ -1491,7 +1511,7 @@ void fp_qmm_t(
   }
 }
 
-#if !defined(MLX_USE_HIGHWAY)
+#if !defined(MLX_USE_HIGHWAY_KERNELS)
 template <int S, int bits>
 simd::Simd<float, S> fp_extract_bits_simd(const uint32_t* w, int elem_off = 0) {
   if constexpr (S == 1 && bits == 4) {
@@ -1626,7 +1646,7 @@ void fp_qmm_t_simd_row(
     int n_end,
     int K,
     float scale_factor) {
-#if defined(MLX_USE_HIGHWAY)
+#if defined(MLX_USE_HIGHWAY_KERNELS)
   fp_qmm_t_highway_row(
       result,
       x,
@@ -1728,6 +1748,23 @@ void fp_qmm_t_simd(
     int N,
     int K,
     float scale_factor) {
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+  fp_qmm_t_highway(
+      result,
+      x,
+      w,
+      scales,
+      quantized_highway_dtype<T>(),
+      bits,
+      group_size,
+      M,
+      N,
+      K,
+      scale_factor,
+      FP4_LUT,
+      FP8_LUT);
+  return;
+#else
   constexpr int pack_factor = get_pack_factor(bits, 32);
   constexpr int S = simd::max_size<float>;
   static_assert(
@@ -1779,6 +1816,7 @@ void fp_qmm_t_simd(
           result + m * N, x + m * K, w, scales, 0, N, K, scale_factor);
     }
   }
+#endif
 }
 
 template <typename T, int group_size, int bits>
@@ -1793,6 +1831,13 @@ void fp_qmm_dispatch_transpose(
     bool transposed_w,
     float scale_factor) {
   if (transposed_w) {
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+    if constexpr (bits == 4 || bits == 8) {
+      fp_qmm_t_simd<T, group_size, bits>(
+          result, x, w, scales, M, N, K, scale_factor);
+      return;
+    }
+#endif
     // SIMD path: S must be >= 4 and must divide pack_factor or vice versa
     constexpr int fp_pack_factor = get_pack_factor(bits, 32);
     constexpr int S = simd::max_size<float>;

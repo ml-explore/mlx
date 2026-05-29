@@ -11,6 +11,9 @@
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+#include "mlx/backend/cpu/sdpa_highway.h"
+#endif
 #include "mlx/backend/cpu/threading/common.h"
 #include "mlx/fast_primitives.h"
 
@@ -852,6 +855,26 @@ void ScaledDotProductAttention::eval_cpu(
       const float* sinks_ptr = has_sinks ? sinks_arr->data<float>() : nullptr;
 
       encoder.dispatch([=]() {
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+        sdpa_highway(
+            out_ptr,
+            q_ptr,
+            k_ptr,
+            v_ptr,
+            SdpaHighwayDType::Float32,
+            B,
+            n_q_heads,
+            n_kv_heads,
+            M,
+            seq_len,
+            head_dim,
+            scale,
+            do_causal,
+            mask_ptr,
+            has_arr_mask,
+            sinks_ptr,
+            has_sinks);
+#else
         sdpa_impl(
             out_ptr,
             q_ptr,
@@ -869,6 +892,7 @@ void ScaledDotProductAttention::eval_cpu(
             has_arr_mask,
             sinks_ptr,
             has_sinks);
+#endif
       });
       break;
     }
@@ -883,6 +907,26 @@ void ScaledDotProductAttention::eval_cpu(
           has_sinks ? sinks_arr->data<float16_t>() : nullptr;
 
       encoder.dispatch([=]() {
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+        sdpa_highway(
+            out_ptr,
+            q_ptr,
+            k_ptr,
+            v_ptr,
+            SdpaHighwayDType::Float16,
+            B,
+            n_q_heads,
+            n_kv_heads,
+            M,
+            seq_len,
+            head_dim,
+            scale,
+            do_causal,
+            mask_ptr,
+            has_arr_mask,
+            sinks_ptr,
+            has_sinks);
+#else
         sdpa_impl(
             out_ptr,
             q_ptr,
@@ -900,6 +944,7 @@ void ScaledDotProductAttention::eval_cpu(
             has_arr_mask,
             sinks_ptr,
             has_sinks);
+#endif
       });
       break;
     }
@@ -914,6 +959,26 @@ void ScaledDotProductAttention::eval_cpu(
           has_sinks ? sinks_arr->data<bfloat16_t>() : nullptr;
 
       encoder.dispatch([=]() {
+#if defined(MLX_USE_HIGHWAY_KERNELS)
+        sdpa_highway(
+            out_ptr,
+            q_ptr,
+            k_ptr,
+            v_ptr,
+            SdpaHighwayDType::BFloat16,
+            B,
+            n_q_heads,
+            n_kv_heads,
+            M,
+            seq_len,
+            head_dim,
+            scale,
+            do_causal,
+            mask_ptr,
+            has_arr_mask,
+            sinks_ptr,
+            has_sinks);
+#else
         sdpa_impl(
             out_ptr,
             q_ptr,
@@ -931,6 +996,7 @@ void ScaledDotProductAttention::eval_cpu(
             has_arr_mask,
             sinks_ptr,
             has_sinks);
+#endif
       });
       break;
     }

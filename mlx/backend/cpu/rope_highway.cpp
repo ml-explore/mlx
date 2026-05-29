@@ -1,12 +1,20 @@
 // Copyright © 2026 Apple Inc.
 
+// Normally this file is compiled directly and Highway emits its runtime
+// dispatch targets. Native MSVC builds compile this file once per target with
+// MLX_HIGHWAY_MANUAL_TARGET and MLX_HIGHWAY_TARGET_SUFFIX so the same kernels
+// are emitted as one manually suffixed specialization.
+
 #include "mlx/backend/cpu/rope_highway.h"
 
+#if !defined(MLX_HIGHWAY_MANUAL_TARGET)
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "mlx/backend/cpu/rope_highway.cpp"
 #include "hwy/foreach_target.h" // IWYU pragma: keep
+#endif
 
 #include "hwy/highway.h"
+#include "mlx/backend/cpu/highway_utils.h"
 
 HWY_BEFORE_NAMESPACE();
 namespace mlx::core::fast {
@@ -14,120 +22,11 @@ namespace HWY_NAMESPACE {
 namespace {
 
 namespace hn = hwy::HWY_NAMESPACE;
-
-template <typename T, class DF>
-hn::Vec<DF> load_typed_as_f32(DF df, const T* HWY_RESTRICT ptr, size_t idx) {
-  if constexpr (std::is_same_v<T, float>) {
-    return hn::LoadU(df, ptr + idx);
-  } else if constexpr (std::is_same_v<T, float16_t>) {
-    const hn::Rebind<hwy::float16_t, DF> df16;
-    return hn::PromoteTo(
-        df,
-        hn::LoadU(df16, reinterpret_cast<const hwy::float16_t*>(ptr) + idx));
-  } else {
-#if HWY_TARGET == HWY_SCALAR
-    const hn::Rebind<hwy::bfloat16_t, DF> dbf16;
-#else
-    const hn::Repartition<hwy::bfloat16_t, DF> dbf16;
-#endif
-    const hn::Half<decltype(dbf16)> dbf16_half;
-    return hn::PromoteTo(
-        df,
-        hn::LoadU(
-            dbf16_half, reinterpret_cast<const hwy::bfloat16_t*>(ptr) + idx));
-  }
-}
-
-template <typename T, class DF>
-void store_f32_as_typed(DF df, hn::Vec<DF> v, T* HWY_RESTRICT ptr, size_t idx) {
-  if constexpr (std::is_same_v<T, float>) {
-    hn::StoreU(v, df, ptr + idx);
-  } else if constexpr (std::is_same_v<T, float16_t>) {
-    const hn::Rebind<hwy::float16_t, DF> df16;
-    hn::StoreU(
-        hn::DemoteTo(df16, v),
-        df16,
-        reinterpret_cast<hwy::float16_t*>(ptr) + idx);
-  } else {
-#if HWY_TARGET == HWY_SCALAR
-    const hn::Rebind<hwy::bfloat16_t, DF> dbf16;
-#else
-    const hn::Repartition<hwy::bfloat16_t, DF> dbf16;
-#endif
-    const hn::Half<decltype(dbf16)> dbf16_half;
-    hn::StoreU(
-        hn::DemoteTo(dbf16_half, v),
-        dbf16_half,
-        reinterpret_cast<hwy::bfloat16_t*>(ptr) + idx);
-  }
-}
-
-template <typename T, class DF>
-void load_interleaved_typed_as_f32(
-    DF df,
-    const T* HWY_RESTRICT ptr,
-    size_t idx,
-    hn::Vec<DF>& x0,
-    hn::Vec<DF>& x1) {
-  if constexpr (std::is_same_v<T, float>) {
-    hn::LoadInterleaved2(df, ptr + idx, x0, x1);
-  } else if constexpr (std::is_same_v<T, float16_t>) {
-    const hn::Rebind<hwy::float16_t, DF> df16;
-    hn::Vec<decltype(df16)> x0h;
-    hn::Vec<decltype(df16)> x1h;
-    hn::LoadInterleaved2(
-        df16, reinterpret_cast<const hwy::float16_t*>(ptr) + idx, x0h, x1h);
-    x0 = hn::PromoteTo(df, x0h);
-    x1 = hn::PromoteTo(df, x1h);
-  } else {
-#if HWY_TARGET == HWY_SCALAR
-    const hn::Rebind<hwy::bfloat16_t, DF> dbf16;
-#else
-    const hn::Repartition<hwy::bfloat16_t, DF> dbf16;
-#endif
-    const hn::Half<decltype(dbf16)> dbf16_half;
-    hn::Vec<decltype(dbf16_half)> x0h;
-    hn::Vec<decltype(dbf16_half)> x1h;
-    hn::LoadInterleaved2(
-        dbf16_half,
-        reinterpret_cast<const hwy::bfloat16_t*>(ptr) + idx,
-        x0h,
-        x1h);
-    x0 = hn::PromoteTo(df, x0h);
-    x1 = hn::PromoteTo(df, x1h);
-  }
-}
-
-template <typename T, class DF>
-void store_interleaved_f32_as_typed(
-    DF df,
-    hn::Vec<DF> out0,
-    hn::Vec<DF> out1,
-    T* HWY_RESTRICT ptr,
-    size_t idx) {
-  if constexpr (std::is_same_v<T, float>) {
-    hn::StoreInterleaved2(out0, out1, df, ptr + idx);
-  } else if constexpr (std::is_same_v<T, float16_t>) {
-    const hn::Rebind<hwy::float16_t, DF> df16;
-    hn::StoreInterleaved2(
-        hn::DemoteTo(df16, out0),
-        hn::DemoteTo(df16, out1),
-        df16,
-        reinterpret_cast<hwy::float16_t*>(ptr) + idx);
-  } else {
-#if HWY_TARGET == HWY_SCALAR
-    const hn::Rebind<hwy::bfloat16_t, DF> dbf16;
-#else
-    const hn::Repartition<hwy::bfloat16_t, DF> dbf16;
-#endif
-    const hn::Half<decltype(dbf16)> dbf16_half;
-    hn::StoreInterleaved2(
-        hn::DemoteTo(dbf16_half, out0),
-        hn::DemoteTo(dbf16_half, out1),
-        dbf16_half,
-        reinterpret_cast<hwy::bfloat16_t*>(ptr) + idx);
-  }
-}
+namespace hu = mlx::core::highway::HWY_NAMESPACE;
+using hu::load_interleaved_typed_as_f32;
+using hu::load_typed_as_f32;
+using hu::store_f32_as_typed;
+using hu::store_interleaved_f32_as_typed;
 
 template <typename T, bool forward>
 int rope_traditional(
@@ -326,6 +225,75 @@ HWY_AFTER_NAMESPACE();
 #if HWY_ONCE
 namespace mlx::core::fast {
 
+#if defined(MLX_HIGHWAY_MANUAL_TARGET)
+
+#ifndef MLX_HIGHWAY_TARGET_SUFFIX
+#error "MLX_HIGHWAY_TARGET_SUFFIX must be defined for manual Highway targets"
+#endif
+
+#define MLX_HIGHWAY_CONCAT2(a, b) a##b
+#define MLX_HIGHWAY_CONCAT(a, b) MLX_HIGHWAY_CONCAT2(a, b)
+#define MLX_HIGHWAY_TARGET_FUNC(name) \
+  MLX_HIGHWAY_CONCAT(name, MLX_HIGHWAY_TARGET_SUFFIX)
+
+int MLX_HIGHWAY_TARGET_FUNC(rope_traditional_highway_forward)(
+    const void* x_in,
+    void* x_out,
+    RopeHighwayDType dtype,
+    const float* cos_t,
+    const float* sin_t,
+    int half_dims) {
+  int processed = 0;
+  HWY_STATIC_DISPATCH(RopeTraditionalForward)
+  (x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
+  return processed;
+}
+
+int MLX_HIGHWAY_TARGET_FUNC(rope_traditional_highway_reverse)(
+    const void* x_in,
+    void* x_out,
+    RopeHighwayDType dtype,
+    const float* cos_t,
+    const float* sin_t,
+    int half_dims) {
+  int processed = 0;
+  HWY_STATIC_DISPATCH(RopeTraditionalReverse)
+  (x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
+  return processed;
+}
+
+int MLX_HIGHWAY_TARGET_FUNC(rope_non_traditional_highway_forward)(
+    const void* x_in,
+    void* x_out,
+    RopeHighwayDType dtype,
+    const float* cos_t,
+    const float* sin_t,
+    int half_dims) {
+  int processed = 0;
+  HWY_STATIC_DISPATCH(RopeNonTraditionalForward)
+  (x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
+  return processed;
+}
+
+int MLX_HIGHWAY_TARGET_FUNC(rope_non_traditional_highway_reverse)(
+    const void* x_in,
+    void* x_out,
+    RopeHighwayDType dtype,
+    const float* cos_t,
+    const float* sin_t,
+    int half_dims) {
+  int processed = 0;
+  HWY_STATIC_DISPATCH(RopeNonTraditionalReverse)
+  (x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
+  return processed;
+}
+
+#undef MLX_HIGHWAY_TARGET_FUNC
+#undef MLX_HIGHWAY_CONCAT
+#undef MLX_HIGHWAY_CONCAT2
+
+#else
+
 HWY_EXPORT(RopeTraditionalForward);
 HWY_EXPORT(RopeTraditionalReverse);
 HWY_EXPORT(RopeNonTraditionalForward);
@@ -339,8 +307,8 @@ int rope_traditional_highway_forward(
     const float* sin_t,
     int half_dims) {
   int processed = 0;
-  HWY_DYNAMIC_DISPATCH(RopeTraditionalForward)(
-      x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
+  HWY_DYNAMIC_DISPATCH(RopeTraditionalForward)
+  (x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
   return processed;
 }
 
@@ -352,8 +320,8 @@ int rope_traditional_highway_reverse(
     const float* sin_t,
     int half_dims) {
   int processed = 0;
-  HWY_DYNAMIC_DISPATCH(RopeTraditionalReverse)(
-      x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
+  HWY_DYNAMIC_DISPATCH(RopeTraditionalReverse)
+  (x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
   return processed;
 }
 
@@ -365,8 +333,8 @@ int rope_non_traditional_highway_forward(
     const float* sin_t,
     int half_dims) {
   int processed = 0;
-  HWY_DYNAMIC_DISPATCH(RopeNonTraditionalForward)(
-      x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
+  HWY_DYNAMIC_DISPATCH(RopeNonTraditionalForward)
+  (x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
   return processed;
 }
 
@@ -378,10 +346,12 @@ int rope_non_traditional_highway_reverse(
     const float* sin_t,
     int half_dims) {
   int processed = 0;
-  HWY_DYNAMIC_DISPATCH(RopeNonTraditionalReverse)(
-      x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
+  HWY_DYNAMIC_DISPATCH(RopeNonTraditionalReverse)
+  (x_in, x_out, dtype, cos_t, sin_t, half_dims, &processed);
   return processed;
 }
+
+#endif
 
 } // namespace mlx::core::fast
 #endif // HWY_ONCE

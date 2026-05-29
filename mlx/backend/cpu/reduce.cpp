@@ -145,20 +145,19 @@ U parallel_contiguous_reduce(const T* x, size_t size, Op op, U init) {
     return result;
   }
 
-  // Each thread computes a partial reduction
-  // Use cache-line aligned storage to avoid false sharing
-  constexpr size_t CACHE_LINE = 64;
-  constexpr size_t PADDED_SIZE =
-      (sizeof(U) + CACHE_LINE - 1) / CACHE_LINE * CACHE_LINE;
-  std::vector<char> partial_storage(n_threads * PADDED_SIZE);
+  // Each thread computes a partial reduction. Keep each partial on its own
+  // cache line to avoid false sharing while preserving U's alignment/lifetime.
+  struct alignas(64) Partial {
+    U value;
+  };
+  std::vector<Partial> partials(n_threads);
 
   pool.parallel_for(n_threads, [&](int tid, int nth) {
     size_t chunk = (size + nth - 1) / nth;
     size_t start = chunk * tid;
     size_t end = std::min(start + chunk, size);
 
-    U* partial =
-        reinterpret_cast<U*>(partial_storage.data() + tid * PADDED_SIZE);
+    U* partial = &partials[tid].value;
     *partial = init;
 
     if (start < end) {
@@ -170,8 +169,7 @@ U parallel_contiguous_reduce(const T* x, size_t size, Op op, U init) {
   // Final reduction of partial results
   U result = init;
   for (int i = 0; i < n_threads; ++i) {
-    U* partial = reinterpret_cast<U*>(partial_storage.data() + i * PADDED_SIZE);
-    result = op(result, *partial);
+    result = op(result, partials[i].value);
   }
   return result;
 }

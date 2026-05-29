@@ -11,15 +11,15 @@
 #include "mlx/backend/cpu/threading/common.h"
 #include "mlx/fast_primitives.h"
 
-#if defined(MLX_USE_HIGHWAY)
+#if defined(MLX_USE_HIGHWAY_KERNELS)
 #include "mlx/backend/cpu/rope_highway.h"
 #endif
 
 namespace mlx::core::fast {
 
-// ISA-specific SIMD implementations for RoPE. When AVX2 is enabled on this
-// branch, Highway is the implementation substrate.
-#if !defined(MLX_USE_HIGHWAY)
+// ISA-specific SIMD implementations for RoPE. Highway kernels are compiled as
+// runtime-dispatched translation units when x86 CPU SIMD is enabled.
+#if !defined(MLX_USE_HIGHWAY_KERNELS)
 constexpr bool has_simd_rope = false;
 constexpr int simd_rope_min_size = 1;
 template <typename T, bool forward>
@@ -32,7 +32,7 @@ inline int
 rope_non_traditional_simd(const T*, T*, const float*, const float*, int) {
   return 0;
 }
-#endif // !MLX_USE_HIGHWAY
+#endif // !MLX_USE_HIGHWAY_KERNELS
 
 namespace {
 
@@ -89,11 +89,11 @@ inline void rope_apply_non_traditional(
   constexpr int N = max_size<T>;
 
   int j = 0;
-#if defined(MLX_USE_HIGHWAY)
+#if defined(MLX_USE_HIGHWAY_KERNELS)
   j = rope_non_traditional_highway_simd<T, forward>(
       x_in, x_out, cos_t, sin_t, half_dims);
 #endif
-#if !defined(MLX_USE_HIGHWAY)
+#if !defined(MLX_USE_HIGHWAY_KERNELS)
   if constexpr (has_simd_rope && N >= simd_rope_min_size) {
     if (j == 0) {
       j = rope_non_traditional_simd<T, forward>(
@@ -155,11 +155,11 @@ inline void rope_apply_traditional(
 
   int j = 0;
 
-#if defined(MLX_USE_HIGHWAY)
+#if defined(MLX_USE_HIGHWAY_KERNELS)
   j = rope_traditional_highway_simd<T, forward>(
       x_in, x_out, cos_t, sin_t, half_dims);
 #endif
-#if !defined(MLX_USE_HIGHWAY)
+#if !defined(MLX_USE_HIGHWAY_KERNELS)
   if constexpr (has_simd_rope && N >= simd_rope_min_size) {
     if (j == 0) {
       j = rope_traditional_simd<T, forward>(
