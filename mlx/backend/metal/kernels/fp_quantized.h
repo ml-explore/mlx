@@ -1162,6 +1162,7 @@ METAL_FUNC void block_fp8_qmv_fast_impl(
     device T* y,
     const constant int& in_vec_size,
     const constant int& out_vec_size,
+    const int scale_rows,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
@@ -1194,7 +1195,20 @@ METAL_FUNC void block_fp8_qmv_fast_impl(
   // All 4 contiguous output rows in this simdgroup share the same scale row,
   // because results_per_simdgroup (4) <= 128 (block_size_N) and the kernel
   // guarantees N is aligned to bm rows.
-  const int scale_row = out_row / group_size;
+  // per-shard scale-row recovery (flat when scale_rows == ceil(N/128))
+  const int _flat_srows = (out_vec_size + group_size - 1) / group_size;
+  int _shard_rows = out_vec_size, _shard_srows = _flat_srows;
+  if (scale_rows != _flat_srows) {
+    for (int _tp = 2; _tp <= 16; _tp <<= 1) {
+      if (out_vec_size % _tp) continue;
+      const int _sr = out_vec_size / _tp;
+      if (scale_rows == _tp * ((_sr + group_size - 1) / group_size)) {
+        _shard_rows = _sr; _shard_srows = scale_rows / _tp; break;
+      }
+    }
+  }
+  const int _sh = out_row / _shard_rows;
+  const int scale_row = _sh * _shard_srows + (out_row - _sh * _shard_rows) / group_size;
 
   w += out_row * in_vec_size_w + simd_lid * values_per_thread;
   scales += scale_row * scales_per_row;
@@ -1238,6 +1252,7 @@ template <typename T, int group_size, int bits, bool batched>
     device T* y,
     const constant int& in_vec_size,
     const constant int& out_vec_size,
+    const constant int& scale_rows,
     const constant int& x_batch_ndims,
     const constant int* x_shape,
     const constant int64_t* x_strides,
@@ -1254,7 +1269,7 @@ template <typename T, int group_size, int bits, bool batched>
   (void)x_batch_ndims; (void)x_shape; (void)x_strides;
   (void)w_batch_ndims; (void)w_shape; (void)w_strides; (void)s_strides;
   block_fp8_qmv_fast_impl<T>(
-      w, scales, x, y, in_vec_size, out_vec_size, tid, simd_gid, simd_lid);
+      w, scales, x, y, in_vec_size, out_vec_size, scale_rows, tid, simd_gid, simd_lid);
 }
 
 // --------------------------------------------------------------------------
@@ -1283,6 +1298,7 @@ METAL_FUNC void block_fp8_qmm_t_impl(
     const constant int& K,
     const constant int& N,
     const constant int& M,
+    const int scale_rows,
     const int k_loop_limit,
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
@@ -1312,7 +1328,20 @@ METAL_FUNC void block_fp8_qmm_t_impl(
 
   x += y_row * static_cast<int64_t>(K);
   w += y_col * K;                            // 1 byte per code
-  scales += (y_col / group_size) * K_g;      // jump to this N-tile's scale row
+  // per-shard scale-row recovery (flat when scale_rows == ceil(N/128))
+  const int _flat_srows = (N + group_size - 1) / group_size;
+  int _shard_rows = N, _shard_srows = _flat_srows;
+  if (scale_rows != _flat_srows) {
+    for (int _tp = 2; _tp <= 16; _tp <<= 1) {
+      if (N % _tp) continue;
+      const int _sr = N / _tp;
+      if (scale_rows == _tp * ((_sr + group_size - 1) / group_size)) {
+        _shard_rows = _sr; _shard_srows = scale_rows / _tp; break;
+      }
+    }
+  }
+  const int _sh2 = y_col / _shard_rows;
+  scales += (_sh2 * _shard_srows + (y_col - _sh2 * _shard_rows) / group_size) * K_g;
   y += y_row * static_cast<int64_t>(N) + y_col;
 
   const short num_els = min(BM, M - y_row);
@@ -1385,6 +1414,7 @@ template <typename T, int group_size, int bits, bool aligned_N, bool batched>
     const constant int& K,
     const constant int& N,
     const constant int& M,
+    const constant int& scale_rows,
     const constant int& x_batch_ndims,
     const constant int* x_shape,
     const constant int64_t* x_strides,
@@ -1405,7 +1435,7 @@ template <typename T, int group_size, int bits, bool aligned_N, bool batched>
   threadgroup T Ws[BN * BK_padded];
 
   block_fp8_qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
-      w, scales, x, y, Xs, Ws, K, N, M, K, tid, lid, simd_gid, simd_lid);
+      w, scales, x, y, Xs, Ws, K, N, M, scale_rows, K, tid, lid, simd_gid, simd_lid);
 }
 
 // --------------------------------------------------------------------------
@@ -1694,7 +1724,7 @@ template <
   y += tid.z * static_cast<int64_t>(split_k_partition_stride);
 
   block_fp8_qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
-      w, scales, x, y, Xs, Ws, K, N, M, k_partition_size, tid, lid,
+      w, scales, x, y, Xs, Ws, K, N, M, (N + 127) / 128, k_partition_size, tid, lid,
       simd_gid, simd_lid);
 }
 
@@ -1741,7 +1771,7 @@ template <typename T, int group_size, int bits, bool aligned_N>
       tid);
 
   block_fp8_qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
-      w, scales, x, y, Xs, Ws, K, N, M, K, tid, lid, simd_gid, simd_lid);
+      w, scales, x, y, Xs, Ws, K, N, M, (N + 127) / 128, K, tid, lid, simd_gid, simd_lid);
 }
 
 template <typename T, int group_size, int bits, bool batched>
@@ -2070,7 +2100,7 @@ template <typename T, int group_size, int bits>
       w_batch_ndims, w_shape, w_strides, s_strides,
       tid);
   block_fp8_qmv_fast_impl<T>(
-      w, scales, x, y, in_vec_size, out_vec_size, tid, simd_gid, simd_lid);
+      w, scales, x, y, in_vec_size, out_vec_size, (out_vec_size + 127) / 128, tid, simd_gid, simd_lid);
 }
 
 template <typename T, int group_size, int bits>

@@ -187,6 +187,7 @@ instantiate_block_fp8_gather_qmv_fast(float16_t)
       const device uint8_t* w, const device float* scales, \
       const device type* x, device type* y, \
       const constant int& K, const constant int& N, const constant int& M, \
+      const constant int& scale_rows, \
       const constant int& x_batch_ndims, const constant int* x_shape, \
       const constant int64_t* x_strides, const constant int& w_batch_ndims, \
       const constant int* w_shape, const constant int64_t* w_strides, \

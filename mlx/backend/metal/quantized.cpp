@@ -310,6 +310,9 @@ void qmv(
   compute_encoder.set_output_array(out, c++);
   compute_encoder.set_bytes(K, c++);
   compute_encoder.set_bytes(N, c++);
+  if (mode == "block_fp8") {
+    compute_encoder.set_bytes((int)scales.shape(-2), c++);
+  }
   add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, c);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
@@ -789,6 +792,9 @@ void qmm(
   compute_encoder.set_bytes(K, c++);
   compute_encoder.set_bytes(N, c++);
   compute_encoder.set_bytes(M, c++);
+  if (mode == "block_fp8") {
+    compute_encoder.set_bytes((int)scales.shape(-2), c++);
+  }
   add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, c);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
@@ -850,6 +856,9 @@ void qmm_splitk(
   std::string type_string = get_type_string(x.dtype());
   std::string kname;
   kname.reserve(64);
+  if (mode == "block_fp8" && (int)scales.shape(-2) != (N + 127) / 128) {
+    throw std::runtime_error("block_fp8: per-shard-padded scales unsupported on split-k path");
+  }
   concatenate(
       kname,
       mode + "_qmm_t_splitk_",
