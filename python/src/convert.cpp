@@ -26,19 +26,6 @@ enum PyScalarT {
   pycomplex = 3,
 };
 
-struct DLPackComplex32 {
-  mx::float16_t real;
-  mx::float16_t imag;
-
-  operator float() const {
-    return static_cast<float>(real);
-  }
-
-  operator mx::complex64_t() const {
-    return {static_cast<float>(real), static_cast<float>(imag)};
-  }
-};
-
 int check_shape_dim(int64_t dim) {
   if (dim > std::numeric_limits<int>::max() ||
       dim < std::numeric_limits<int>::min()) {
@@ -135,14 +122,8 @@ auto dispatch_dlpack_dtype(
     return f.template operator()<float>(mx::float32);
   } else if (type == nb::dtype<double>()) {
     return f.template operator()<double>(mx::float32);
-  } else if (
-      type ==
-      nb::dlpack::dtype{uint8_t(nb::dlpack::dtype_code::Complex), 32, 1}) {
-    return f.template operator()<DLPackComplex32>(mx::complex64);
   } else if (type == nb::dtype<std::complex<float>>()) {
     return f.template operator()<mx::complex64_t>(mx::complex64);
-  } else if (type == nb::dtype<std::complex<double>>()) {
-    return f.template operator()<mx::complex128_t>(mx::complex64);
   } else {
     throw std::invalid_argument(error_message);
   }
@@ -231,9 +212,11 @@ mx::array nd_array_to_mlx(
       mlx_dtype_from_dlpack(src_dlpack_dtype, "Cannot convert array to mlx.");
   auto dst_dtype = requested_dtype.value_or(src_mlx_dtype);
   auto device_type = nd_array.device_type();
-  bool can_reuse_buffer = device_type == nb::device::cpu::value ||
-      mx::allocator::can_reuse_alien_buffer(nd_array.data_handle());
-  // call this for cpu array will raise error, use or to aviod it
+  // CPU ndarrays are copied below, and their data_handle() is a host pointer,
+  // not a GPU buffer handle that can be queried by the active allocator.
+  bool can_reuse_buffer = device_type == nb::device::cpu::value
+      ? true
+      : mx::allocator::can_reuse_alien_buffer(nd_array.data_handle());
   bool should_copy =
       copy.value_or(false) || dst_dtype != src_mlx_dtype || !can_reuse_buffer;
   if (copy.has_value() && copy.value() == false && dst_dtype != src_mlx_dtype) {
