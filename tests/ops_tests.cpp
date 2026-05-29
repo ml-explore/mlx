@@ -4284,3 +4284,24 @@ TEST_CASE("test max min with nan") {
   CHECK(array_equal(max_result, expected, true).item<bool>());
   CHECK(array_equal(min_result, expected, true).item<bool>());
 }
+
+TEST_CASE("roll and tile shape overflow") {
+  // Shape arithmetic must not overflow (signed-int UB) for large but otherwise
+  // valid int32 inputs; out-of-range results are rejected gracefully.
+  // https://github.com/ml-explore/mlx/issues/3601
+
+  // tile: reps * dim exceeding int32 raises instead of overflowing.
+  CHECK_THROWS_AS(tile(zeros({2}), {2147483647}), std::overflow_error);
+
+  // roll: a shift sum exceeding int32 raises instead of overflowing.
+  CHECK_THROWS_AS(
+      roll(zeros({4}), Shape{2147483647, 2147483647}), std::overflow_error);
+  CHECK_THROWS_AS(
+      roll(zeros({4}), Shape{2147483647, 2147483647}, 0), std::overflow_error);
+
+  // roll: a shift of INT_MIN must not negate-overflow. INT_MIN mod 4 == 0, so
+  // rolling a size-4 axis by INT_MIN is the identity.
+  auto x = array({1, 2, 3, 4});
+  auto rolled = roll(x, -2147483647 - 1);
+  CHECK(array_equal(rolled, x).item<bool>());
+}

@@ -1349,7 +1349,8 @@ array tile(
     }
     expand_shape.push_back(shape[i]);
     broad_shape.push_back(shape[i]);
-    final_shape.push_back(reps[i] * shape[i]);
+    final_shape.push_back(
+        safe_cast(static_cast<int64_t>(reps[i]) * shape[i], "tile"));
   }
 
   auto x = reshape(arr, std::move(expand_shape), s);
@@ -6350,7 +6351,10 @@ array roll(
     if (size == 0) {
       continue; // skip rolling this axis if it has size 0
     }
-    auto split_index = (sh < 0) ? (-sh) % size : size - sh % size;
+    // Promote to 64-bit so negating a shift of INT_MIN does not overflow.
+    int64_t sh64 = sh;
+    auto split_index = static_cast<ShapeElem>(
+        (sh64 < 0) ? (-sh64) % size : size - sh64 % size);
 
     auto parts = split(result, Shape{split_index}, ax, s);
     std::swap(parts[0], parts[1]);
@@ -6369,11 +6373,11 @@ array roll(const array& a, int shift, StreamOrDevice s /* = {} */) {
 }
 
 array roll(const array& a, const Shape& shift, StreamOrDevice s /* = {} */) {
-  int total_shift = 0;
-  for (auto& s : shift) {
-    total_shift += s;
+  int64_t total_shift = 0;
+  for (auto& sh : shift) {
+    total_shift += sh;
   }
-  return roll(a, total_shift, s);
+  return roll(a, safe_cast(total_shift, "roll"), s);
 }
 
 array roll(const array& a, int shift, int axis, StreamOrDevice s /* = {} */) {
@@ -6394,11 +6398,12 @@ array roll(
     const Shape& shift,
     int axis,
     StreamOrDevice s /* = {} */) {
-  int total_shift = 0;
-  for (auto& s : shift) {
-    total_shift += s;
+  int64_t total_shift = 0;
+  for (auto& sh : shift) {
+    total_shift += sh;
   }
-  return roll(a, Shape{total_shift}, std::vector<int>{axis}, s);
+  return roll(
+      a, Shape{safe_cast(total_shift, "roll")}, std::vector<int>{axis}, s);
 }
 
 array real(const array& a, StreamOrDevice s /* = {} */) {
