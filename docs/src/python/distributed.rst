@@ -15,8 +15,11 @@ made available.
     Group
     is_available
     init
+    all_max
+    all_min
     all_sum
     all_gather
     send
     recv
     recv_like
+    sum_scatter
