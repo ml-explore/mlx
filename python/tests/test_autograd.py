@@ -1,10 +1,19 @@
 # Copyright © 2023 Apple Inc.
 
 import gc
+import itertools
 import unittest
 
 import mlx.core as mx
 import mlx_tests
+import numpy as np
+
+try:
+    import torch
+
+    has_torch = True
+except ImportError:
+    has_torch = False
 
 
 class TestAutograd(mlx_tests.MLXTestCase):
@@ -688,6 +697,69 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(
             mx.allclose(mx.grad(fun)(m), mx.array([[2.0, 1.0, 2.0], [0.0, 1.0, 0.0]]))
         )
+
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_cummax_cummin_grad_vs_torch(self):
+        # Cross-check the cumulative max/min VJP against PyTorch autograd over
+        # axes, scan direction, inclusive/exclusive modes, ties, and weighted
+        # cotangents. Torch has no reverse or exclusive scan, so reverse is
+        # emulated by flipping along the axis and exclusive by shifting the
+        # inclusive scan one step (its leading element carries no gradient).
+        def torch_scan(x, axis, reverse, inclusive, op):
+            xf = torch.flip(x, [axis]) if reverse else x
+            scan = torch.cummax if op == "max" else torch.cummin
+            c = scan(xf, axis).values
+            if not inclusive:
+                n = c.size(axis)
+                head = torch.zeros_like(c.narrow(axis, 0, 1))  # constant, no grad
+                c = torch.cat([head, c.narrow(axis, 0, n - 1)], dim=axis)
+            return torch.flip(c, [axis]) if reverse else c
+
+        def mx_scan(z, axis, reverse, inclusive, op):
+            scan = mx.cummax if op == "max" else mx.cummin
+            return scan(z, axis=axis, reverse=reverse, inclusive=inclusive)
+
+        inputs = [
+            np.array([3.0, 3.0, 1.0, 5.0, 5.0, 1.0, 5.0, 2.0], dtype=np.float32),
+            np.array(
+                [[1.0, 3.0, 3.0, 2.0], [4.0, 2.0, 4.0, 4.0], [4.0, 3.0, 1.0, 4.0]],
+                dtype=np.float32,
+            ),
+        ]
+        rng = np.random.default_rng(0)
+        for x_np in inputs:
+            cotangents = {
+                "ones": np.ones_like(x_np),
+                "weighted": rng.uniform(1.0, 9.0, x_np.shape).astype(np.float32),
+            }
+            for axis in range(x_np.ndim):
+                for op, reverse, inclusive in itertools.product(
+                    ("max", "min"), (False, True), (True, False)
+                ):
+                    for cot_name, cot_np in cotangents.items():
+                        with self.subTest(
+                            shape=x_np.shape,
+                            axis=axis,
+                            op=op,
+                            reverse=reverse,
+                            inclusive=inclusive,
+                            cotangent=cot_name,
+                        ):
+                            _, (mx_grad,) = mx.vjp(
+                                lambda z: mx_scan(z, axis, reverse, inclusive, op),
+                                (mx.array(x_np),),
+                                (mx.array(cot_np),),
+                            )
+
+                            xt = torch.tensor(x_np, requires_grad=True)
+                            out = torch_scan(xt, axis, reverse, inclusive, op)
+                            (out * torch.tensor(cot_np)).sum().backward()
+
+                            self.assertTrue(
+                                np.allclose(
+                                    np.array(mx_grad), xt.grad.numpy(), atol=1e-5
+                                )
+                            )
 
     def test_topk_grad(self):
         a = mx.array([[1, 2, 6, 4, 5], [9, 5, 6, 7, 8]], mx.float32)
