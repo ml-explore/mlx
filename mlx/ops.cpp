@@ -1362,6 +1362,53 @@ array tile(
   return reshape(x, std::move(final_shape), s);
 }
 
+array reflect_pad(
+    const array& a,
+    const std::vector<int>& axes,
+    const Shape& low_pad_size,
+    const Shape& high_pad_size,
+    bool include_edge,
+    StreamOrDevice s /* = {} */) {
+  // Reflect (include_edge=false) or symmetric (include_edge=true) padding.
+  // Matches numpy.pad for arbitrary pad sizes (the reflection repeats as needed).
+  // For an out-of-range coordinate r (relative to the original axis [0, n)),
+  // map it back into [0, n) by reflection:
+  //   reflect   -> period 2(n-1), edge NOT repeated
+  //   symmetric -> period 2n,     edge repeated
+  auto reflect_coord = [](int r, int n, bool include_edge) -> int {
+    if (n == 1) {
+      return 0;
+    }
+    if (include_edge) {
+      int period = 2 * n;
+      int m = ((r % period) + period) % period;
+      return m < n ? m : (2 * n - 1 - m);
+    } else {
+      int period = 2 * (n - 1);
+      int m = ((r % period) + period) % period;
+      return m < n ? m : (period - m);
+    }
+  };
+  array out = a;
+  for (size_t i = 0; i < axes.size(); i++) {
+    int ax = axes[i];
+    int L = low_pad_size[i];
+    int H = high_pad_size[i];
+    if (L == 0 && H == 0) {
+      continue;
+    }
+    int n = out.shape(ax);
+    int total = L + n + H;
+    std::vector<int32_t> idx_vec(total);
+    for (int p = 0; p < total; p++) {
+      idx_vec[p] = reflect_coord(p - L, n, include_edge);
+    }
+    array idx = array(idx_vec.begin(), {total}, int32);
+    out = take(out, idx, ax, s);
+  }
+  return out;
+}
+
 array edge_pad(
     const array& a,
     const std::vector<int>& axes,
@@ -1454,6 +1501,10 @@ array pad(
         {a, astype(pad_value, a.dtype(), s)});
   } else if (mode == "edge") {
     return edge_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
+  } else if (mode == "reflect") {
+    return reflect_pad(a, axes, low_pad_size, high_pad_size, false, s);
+  } else if (mode == "symmetric") {
+    return reflect_pad(a, axes, low_pad_size, high_pad_size, true, s);
   } else {
     std::ostringstream msg;
     msg << "Invalid padding mode (" << mode << ") passed to pad";

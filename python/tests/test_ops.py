@@ -2068,6 +2068,38 @@ class TestOps(mlx_tests.MLXTestCase):
             out_mx = mx.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
             self.assertTrue(np.allclose(out_mx, out_np))
 
+    def test_pad_reflect_symmetric(self):
+        # mx.pad reflect/symmetric must match numpy.pad exactly (it is a gather).
+        # Covers in-bounds, multi-reflect (pad larger than the axis), asymmetric
+        # per-axis widths, zero-width sides, and degenerate axes (n == 1, n == 2).
+        cases = [
+            ((8,), [(2, 3)]),
+            ((8,), [(0, 4)]),
+            ((8,), [(3, 0)]),
+            ((8,), [(7, 8)]),
+            ((4,), [(10, 7)]),     # multi-reflect
+            ((4,), [(20, 20)]),    # multi-reflect, both sides
+            ((3,), [(9, 1)]),      # multi-reflect
+            ((1,), [(3, 2)]),      # degenerate axis
+            ((2,), [(5, 6)]),      # smallest non-trivial, multi-reflect
+            ((5, 6), [(2, 3), (1, 2)]),
+            ((5, 6), [(9, 9), (11, 0)]),   # both axes multi-reflect
+            ((3, 4, 5), [(1, 1), (0, 0), (2, 2)]),
+            ((3, 4, 5), [(4, 4), (0, 0), (7, 3)]),
+        ]
+        for mode in ("reflect", "symmetric"):
+            for shape, pw in cases:
+                a_npy = np.random.randn(*shape).astype(np.float32)
+                a_mlx = mx.array(a_npy)
+                b_npy = np.pad(a_npy, pw, mode=mode)
+                b_mlx = mx.pad(a_mlx, pw, mode=mode)
+                self.assertEqual(b_mlx.shape, tuple(b_npy.shape))
+                self.assertTrue(
+                    np.array_equal(np.array(b_mlx), b_npy),
+                    msg=f"mismatch mode={mode} shape={shape} pad={pw}",
+                )
+                self.assertEqual(b_mlx.dtype, mx.float32)
+
     def test_as_strided(self):
         x_npy = np.random.randn(128).astype(np.float32)
         x_mlx = mx.array(x_npy)
