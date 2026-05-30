@@ -147,8 +147,10 @@ struct GEMVKernel {
     // Adjust tail simdgroup to ensure in bound reads
     out_row = out_row + TM <= out_vec_size ? out_row : out_vec_size - TM;
 
-    // Advance matrix
-    mat += out_row * matrix_ld;
+    // Advance matrix. Widen to size_t before multiplying so the row offset
+    // does not truncate to int32 when out_row * matrix_ld exceeds 2^31 — the
+    // failure mode reported in #3591 for large matvecs (e.g. 12347 x 174000).
+    mat += size_t(out_row) * matrix_ld;
 
     constexpr const uniform<int> loop_stride = make_uniform(blockN);
     const uniform<int> in_size = make_uniform(in_vec_size);
@@ -356,7 +358,9 @@ struct GEMVTKernel {
         for (int tm = 0; tm < TM; tm++) {
           auto vc = static_cast<AccT>(v_coeff[tm]);
           for (int tn = 0; tn < TN; tn++) {
-            inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
+            // Widen to size_t: (bm + tm) * marix_ld can exceed 2^31 for large
+            // transposed matvecs — see #3591.
+            inter[tn] = mat[size_t(bm + tm) * marix_ld + out_col + tn];
           }
           for (int tn = 0; tn < TN; tn++) {
             result[tn] += vc * inter[tn];
@@ -372,7 +376,8 @@ struct GEMVTKernel {
 
           MLX_MTL_PRAGMA_UNROLL
           for (int tn = 0; tn < TN; tn++) {
-            inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
+            // Same widening as above — see #3591.
+            inter[tn] = mat[size_t(bm + tm) * marix_ld + out_col + tn];
           }
 
           MLX_MTL_PRAGMA_UNROLL

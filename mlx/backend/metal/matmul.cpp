@@ -2357,7 +2357,7 @@ void gather_mm(
                            (batch_ndim > 0) ? lhs_indices.strides()[0] : 0,
                            /* const int64_t batch_stride_b = */
                            (batch_ndim > 0) ? rhs_indices.strides()[0] : 0,
-                           /* const int64_t batch_stride_d = */ M * N,
+                           /* const int64_t batch_stride_d = */ int64_t(M) * N,
                            /* const int swizzle_log = */ 0,
                            /* const int gemm_k_iterations_aligned = */ (K / bk),
                            /* const int batch_ndim = */ batch_ndim};
@@ -2587,7 +2587,7 @@ void segmented_mm(
                            /* const int tiles_m = */ (M + bm - 1) / bm,
                            /* const int64_t batch_stride_a = */ 0,
                            /* const int64_t batch_stride_b = */ 0,
-                           /* const int64_t batch_stride_d = */ M * N,
+                           /* const int64_t batch_stride_d = */ int64_t(M) * N,
                            /* const int swizzle_log = */ 0,
                            /* const int gemm_k_iterations_aligned = */ 0,
                            /* const int batch_ndim = */ 0};
