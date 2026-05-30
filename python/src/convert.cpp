@@ -124,6 +124,8 @@ auto dispatch_dlpack_dtype(
     return f.template operator()<double>(mx::float32);
   } else if (type == nb::dtype<std::complex<float>>()) {
     return f.template operator()<mx::complex64_t>(mx::complex64);
+  } else if (type == nb::dtype<std::complex<double>>()) {
+    return f.template operator()<std::complex<double>>(mx::complex64);
   } else {
     throw std::invalid_argument(error_message);
   }
