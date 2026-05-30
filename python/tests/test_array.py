@@ -2166,15 +2166,13 @@ class TestArray(mlx_tests.MLXTestCase):
             (np.float32, mx.float32),
             (np.float64, mx.float32),
             (np.complex64, mx.complex64),
+            (np.complex128, mx.complex64),
         ]
         for np_dtype, mlx_dtype in dlpack_to_mlx:
             with self.subTest(direction="import", dtype=np_dtype):
                 x = np.ones(3, dtype=np_dtype)
                 y = mx.from_dlpack(x)
                 self.assertEqual(y.dtype, mlx_dtype)
-
-        with self.assertRaises(ValueError):
-            mx.from_dlpack(np.ones(3, dtype=np.complex128))
 
         if torch is not None:
             with warnings.catch_warnings():
