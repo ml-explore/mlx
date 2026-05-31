@@ -1349,7 +1349,18 @@ array tile(
     }
     expand_shape.push_back(shape[i]);
     broad_shape.push_back(shape[i]);
-    final_shape.push_back(reps[i] * shape[i]);
+    // Compute the tiled dimension in 64 bits so the product cannot overflow
+    // the signed 32-bit ShapeElem (which would be UB).
+    int64_t dim = static_cast<int64_t>(reps[i]) * shape[i];
+    if (dim > std::numeric_limits<ShapeElem>::max()) {
+      std::ostringstream msg;
+      msg << "[tile] Tiling axis " << i << " of size " << shape[i] << " by "
+          << reps[i] << " results in a dimension of size " << dim
+          << " which exceeds the maximum supported size of "
+          << std::numeric_limits<ShapeElem>::max() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    final_shape.push_back(dim);
   }
 
   auto x = reshape(arr, std::move(expand_shape), s);
@@ -6345,14 +6356,17 @@ array roll(
       throw std::invalid_argument(msg.str());
     }
 
-    auto sh = shift[i];
-    auto size = a.shape(ax);
+    // Compute the shift in 64 bits so negating it (for a negative shift)
+    // cannot overflow: -INT_MIN is UB in 32 bits.
+    int64_t sh = shift[i];
+    int64_t size = a.shape(ax);
     if (size == 0) {
       continue; // skip rolling this axis if it has size 0
     }
-    auto split_index = (sh < 0) ? (-sh) % size : size - sh % size;
+    int64_t split_index = (sh < 0) ? (-sh) % size : size - sh % size;
 
-    auto parts = split(result, Shape{split_index}, ax, s);
+    auto parts =
+        split(result, Shape{static_cast<ShapeElem>(split_index)}, ax, s);
     std::swap(parts[0], parts[1]);
     result = concatenate(parts, ax, s);
   }
@@ -6369,11 +6383,19 @@ array roll(const array& a, int shift, StreamOrDevice s /* = {} */) {
 }
 
 array roll(const array& a, const Shape& shift, StreamOrDevice s /* = {} */) {
-  int total_shift = 0;
-  for (auto& s : shift) {
-    total_shift += s;
+  // Accumulate in 64 bits to avoid signed int overflow (UB). Rolling is
+  // periodic in the array size, so reduce modulo the size to keep the result
+  // in the int32 range expected by the scalar-shift overload.
+  int64_t total_shift = 0;
+  for (auto& sh : shift) {
+    total_shift += sh;
   }
-  return roll(a, total_shift, s);
+  if (a.size() > 0) {
+    total_shift %= static_cast<int64_t>(a.size());
+  } else {
+    total_shift = 0;
+  }
+  return roll(a, static_cast<int>(total_shift), s);
 }
 
 array roll(const array& a, int shift, int axis, StreamOrDevice s /* = {} */) {
@@ -6394,11 +6416,19 @@ array roll(
     const Shape& shift,
     int axis,
     StreamOrDevice s /* = {} */) {
-  int total_shift = 0;
-  for (auto& s : shift) {
-    total_shift += s;
+  // Accumulate in 64 bits to avoid signed int overflow (UB). Rolling is
+  // periodic in the axis size, so reduce modulo it to keep the result in the
+  // int32 range expected by the per-axis overload (which validates the axis).
+  int64_t total_shift = 0;
+  for (auto& sh : shift) {
+    total_shift += sh;
   }
-  return roll(a, Shape{total_shift}, std::vector<int>{axis}, s);
+  auto ax = axis < 0 ? axis + static_cast<int>(a.ndim()) : axis;
+  if (ax >= 0 && ax < a.ndim() && a.shape(ax) > 0) {
+    total_shift %= static_cast<int64_t>(a.shape(ax));
+  }
+  return roll(
+      a, Shape{static_cast<ShapeElem>(total_shift)}, std::vector<int>{axis}, s);
 }
 
 array real(const array& a, StreamOrDevice s /* = {} */) {

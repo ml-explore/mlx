@@ -3142,6 +3142,33 @@ class TestOps(mlx_tests.MLXTestCase):
         result = mx.roll(x, [0], [0])
         self.assertTrue(mx.array_equal(result, x))
 
+    def test_shape_op_overflow(self):
+        # Shape ops must not trigger signed-int overflow (UB) when individual
+        # dimensions fit in int32 but their products / sums do not. The output
+        # shape is computed lazily during graph construction, so the overflow
+        # cases below raise without any large allocation. See issue #3601.
+        big = 2**31 - 1  # fits in int32, but big * 2 does not
+
+        # tile: reps * dim must not overflow when forming the output shape.
+        with self.assertRaises(Exception):
+            mx.tile(mx.zeros([2]), [big])
+
+        # roll by INT_MIN: negating the shift must not overflow int32, since
+        # -INT_MIN is UB. 2**31 % 4 == 0, so this rolls back to the original.
+        y = mx.roll(mx.zeros([4]), -(2**31))
+        self.assertEqual(y.shape, (4,))
+
+        # roll: a large sum of per-axis shifts must not overflow the
+        # accumulator. big * 3 exceeds int32; reducing modulo the size keeps
+        # the shift well-defined.
+        x = mx.arange(4)
+        y = mx.roll(x, [big, big, big])
+        mx.eval(y)
+        self.assertEqual(y.shape, (4,))
+
+        # Sane shapes still work unchanged.
+        self.assertEqual(mx.tile(mx.zeros([2, 3]), [2, 2]).shape, (4, 6))
+
     def test_real_imag(self):
         x = mx.random.uniform(shape=(4, 4))
         out = mx.real(x)
