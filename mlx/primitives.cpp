@@ -4391,8 +4391,9 @@ std::vector<array> Scatter::vjp(
         }
       }
     } else {
-      throw std::invalid_argument(
-          "[scatter] Cannot calculate VJP with respect to indices.");
+      // Grads w.r.t. indices are zero
+      vjps.push_back(
+          zeros(primals[num].shape(), primals[num].dtype(), stream()));
     }
   }
   return vjps;
@@ -4503,8 +4504,9 @@ std::vector<array> ScatterAxis::vjp(
     } else if (num == 2) {
       vjps.push_back(take_along_axis(cotangents[0], indices, axis_, stream()));
     } else {
-      throw std::invalid_argument(
-          "[scatter_axis] Cannot calculate VJP with respect to indices.");
+      // Grads w.r.t. indices are zero
+      vjps.push_back(
+          zeros(primals[num].shape(), primals[num].dtype(), stream()));
     }
   }
   return vjps;

@@ -367,6 +367,46 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 0.0, 6.0, 0.0])))
         self.assertTrue(mx.allclose(vjps[1], mx.array([5.0, 7.0])))
 
+    def test_scatter_index_vjp(self):
+        # The gradient with respect to scatter indices is zero, consistent
+        # with gather. Previously this raised. See #1439.
+        def fun(src, idx, updates):
+            return src.at[idx].add(updates)
+
+        src = mx.array([1.0, 2.0, 3.0, 4.0])
+        idx = mx.array([1, 3])
+        updates = mx.array([1.0, 2.0])
+        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
+        _, vjps = mx.vjp(fun, [src, idx, updates], [cotan])
+        mx.eval(vjps)
+        self.assertTrue(mx.array_equal(vjps[1], mx.zeros(idx.shape, dtype=idx.dtype)))
+        self.assertEqual(vjps[1].dtype, idx.dtype)
+
+        # Also cover the original failure mode: differentiable values produce
+        # indices that are then used by scatter.
+        def fun_derived_index(cost, src, updates):
+            idx = mx.argmin(cost, axis=0)
+            return src.at[idx].add(updates)
+
+        cost = mx.array([[4.0, 1.0], [2.0, 3.0], [0.0, 5.0]])
+        _, vjps = mx.vjp(fun_derived_index, [cost, src, updates], [cotan])
+        mx.eval(vjps)
+        self.assertTrue(mx.array_equal(vjps[0], mx.zeros_like(cost)))
+
+        # scatter_axis (put_along_axis) shares the same rule.
+        def fun_axis(a, idx, values):
+            return mx.put_along_axis(a, idx, values, axis=0)
+
+        a = mx.zeros((5, 1))
+        idx2 = mx.array([[0], [3]])
+        values = mx.ones((2, 1))
+        cotan2 = mx.full((5, 1), 2.0)
+        _, vjps2 = mx.vjp(fun_axis, [a, idx2, values], [cotan2])
+        mx.eval(vjps2)
+        self.assertTrue(
+            mx.array_equal(vjps2[1], mx.zeros(idx2.shape, dtype=idx2.dtype))
+        )
+
     def test_slice_update_max_vjp(self):
         def fun(src, updates):
             x = src.at[1:3].maximum(updates)
