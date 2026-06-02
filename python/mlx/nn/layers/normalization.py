@@ -73,7 +73,7 @@ class LayerNorm(Module):
 
     .. math::
 
-        y = \frac{x - E[x]}{\sqrt{Var[x]} + \epsilon} \gamma + \beta,
+        y = \frac{x - E[x]}{\sqrt{Var[x] + \epsilon}} \gamma + \beta,
 
     where :math:`\gamma` and :math:`\beta` are learned per feature dimension
     parameters initialized at 1 and 0 respectively.
@@ -150,7 +150,7 @@ class GroupNorm(Module):
 
     .. math::
 
-        y = \frac{x - E[x]}{\sqrt{Var[x]} + \epsilon} \gamma + \beta,
+        y = \frac{x - E[x]}{\sqrt{Var[x] + \epsilon}} \gamma + \beta,
 
     where :math:`\gamma` and :math:`\beta` are learned per feature dimension
     parameters initialized at 1 and 0 respectively. However, the mean and
@@ -244,7 +244,7 @@ class BatchNorm(Module):
 
     .. math::
 
-        y = \frac{x - E[x]}{\sqrt{Var[x]} + \epsilon} \gamma + \beta,
+        y = \frac{x - E[x]}{\sqrt{Var[x] + \epsilon}} \gamma + \beta,
 
     where :math:`\gamma` and :math:`\beta` are learned per feature dimension
     parameters initialized at 1 and 0 respectively.
