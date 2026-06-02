@@ -541,6 +541,12 @@ def main():
         args.backend = "nccl" if mx.cuda.is_available() else "ring"
     args.env = hostfile.envs + args.env
 
+    # Add terminal size
+    cols, lines = shutil.get_terminal_size((0, 0))
+    if cols > 0 and not any(e.startswith("COLUMNS=") for e in args.env):
+        args.env.append(f"COLUMNS={cols}")
+        args.env.append(f"LINES={lines}")
+
     # Check if the script is a file and convert it to a full path
     if (script := Path(rest[0])).exists() and script.is_file():
         rest[0:1] = [args.python, str(script.resolve())]
