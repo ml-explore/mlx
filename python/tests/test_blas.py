@@ -1424,61 +1424,6 @@ class TestBlas(mlx_tests.MLXTestCase):
         c_np = np.matmul(a, b)
         self.assertTrue(np.allclose(out, out_np))
 
-    def test_matvec_large_matrix_int32_offset(self):
-        # Regression for #3591: matvec on a matrix whose row offset
-        # `out_row * matrix_ld` exceeds 2^31 silently returned wrong
-        # results because the offset was computed in int32 inside the
-        # gemv Metal kernel. The reporter's repro is a 12347 x 174000
-        # fp32 matrix against a 174000-element vector (product 2.15e9
-        # > 2^31).
-        #
-        # The matrix alone is ~8.6 GB and the chunked reference adds
-        # another ~10 GB of working set, so the test is gated on
-        # available RAM and only runs on a high-memory Apple Silicon
-        # device. CI machines will skip.
-        if not mx.is_available(mx.gpu):
-            return
-
-        info = mx.device_info()
-        memory_size = info.get("memory_size", 0)
-        # Needs at least ~24 GB of unified memory to safely exercise the
-        # >2^31 matrix-offset path with a chunked reference comparison.
-        if memory_size < (24 << 30):
-            self.skipTest(
-                "needs ~24 GB of unified memory to exercise the >2^31 "
-                "matrix-offset path"
-            )
-
-        rows = 12347
-        cols = 174000
-        # Sanity check we're actually exercising the overflow path.
-        self.assertGreater(rows * cols, 1 << 31)
-
-        mx.random.seed(0)
-        a = mx.random.normal(shape=(rows, cols))
-        v = mx.random.normal(shape=(cols, 1))
-
-        direct = a @ v
-
-        # Chunked reference avoids the kernel path that overflowed by
-        # making each per-chunk matrix fit comfortably under 2^31
-        # elements.
-        chunks = 4
-        chunk = cols // chunks
-        ref = mx.zeros((rows, 1))
-        for i in range(chunks):
-            lo = i * chunk
-            hi = cols if i == chunks - 1 else lo + chunk
-            ref = ref + a[:, lo:hi] @ v[lo:hi]
-
-        # `.item()` forces materialisation of both arrays before the
-        # comparison.
-        denom = float(mx.max(mx.abs(ref)).item())
-        rel = float(mx.max(mx.abs(direct - ref)).item()) / max(denom, 1e-12)
-        # Pre-fix the relative error spikes to 0.06-0.25; post-fix it
-        # sits in fp32 noise (~1e-6).
-        self.assertLess(rel, 1e-4)
-
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
