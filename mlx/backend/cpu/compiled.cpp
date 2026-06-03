@@ -41,15 +41,18 @@ struct CompilerCache {
 };
 
 static CompilerCache& cache() {
-  static CompilerCache cache_;
-  return cache_;
+  // Leak - see Scheduler singleton comment in scheduler.cpp.
+  // DLib destructors call dlclose() which unmaps JIT .so files;
+  // StreamThreads may still be executing that code at exit.
+  static CompilerCache* cache_ = new CompilerCache;
+  return *cache_;
 };
 
-// GPU compile is always available if the GPU is available and since we are in
-// this file CPU compile is also available.
+// GPU compile is available through the GPU backend. CPU compile requires a
+// usable C++ compiler (MSVC or clang-cl on Windows).
 namespace detail {
 bool compile_available_for_device(const Device& device) {
-  return true;
+  return device == Device::gpu || JitCompiler::available();
 }
 
 } // namespace detail
@@ -100,7 +103,11 @@ void* compile(
     std::filesystem::create_directories(output_dir);
   }
 
+#ifdef _WIN32
+  std::string shared_lib_name = kernel_file_name + ".dll";
+#else
   std::string shared_lib_name = "lib" + kernel_file_name + ".so";
+#endif
   auto shared_lib_path = (output_dir / shared_lib_name).string();
   bool lib_exists = false;
   {

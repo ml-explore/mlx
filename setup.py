@@ -234,7 +234,7 @@ if __name__ == "__main__":
             "ml_dtypes",
             "numpy>=2",
             "pre-commit",
-            "psutil",
+            "psutil>=7.2",
             "torch>=2.9",
             "typing_extensions",
         ],

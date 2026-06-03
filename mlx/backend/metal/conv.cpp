@@ -39,8 +39,8 @@ void explicit_gemm_conv_ND_gpu(
     array& out,
     const MLXConvParams<N>& conv_params) {
   // Get gemm shapes
-  int implicit_M = out.size() / conv_params.O;
-  int implicit_K = wt.size() / conv_params.O;
+  int implicit_M = safe_cast(out.size() / conv_params.O, "conv");
+  int implicit_K = safe_cast(wt.size() / conv_params.O, "conv");
   int implicit_N = conv_params.O;
   // Prepare unfolding array
   Shape unfolded_shape{implicit_M, implicit_K};
@@ -113,8 +113,8 @@ void explicit_gemm_conv_group_ND_gpu(
   const int C_per_group = conv_params.C / conv_params.groups;
   const int O_per_group = conv_params.O / conv_params.groups;
   // Get gemm shapes
-  const int implicit_M = out.size() / conv_params.O;
-  const int implicit_K = wt.size() / conv_params.O;
+  const int implicit_M = safe_cast(out.size() / conv_params.O, "conv");
+  const int implicit_K = safe_cast(wt.size() / conv_params.O, "conv");
   const int implicit_N = O_per_group;
 
   int kernel_size = 1;
@@ -200,7 +200,10 @@ void implicit_gemm_conv_2D_gpu(
   const int O_per_group = conv_params.O / conv_params.groups;
 
   // Deduce implicit gemm size
-  const int implicit_M = conv_params.N * conv_params.oS[0] * conv_params.oS[1];
+  const int implicit_M = safe_cast(
+      static_cast<int64_t>(conv_params.N) * conv_params.oS[0] *
+          conv_params.oS[1],
+      "conv");
   const int implicit_N = O_per_group;
   const int implicit_K = conv_params.wS[0] * conv_params.wS[1] * C_per_group;
 
@@ -329,7 +332,10 @@ void implicit_gemm_conv_2D_general_gpu(
     array& out,
     const MLXConvParams<2>& conv_params) {
   // Deduce implicit gemm size
-  int implicit_M = conv_params.N * conv_params.oS[0] * conv_params.oS[1];
+  int implicit_M = safe_cast(
+      static_cast<int64_t>(conv_params.N) * conv_params.oS[0] *
+          conv_params.oS[1],
+      "conv");
   int implicit_N = conv_params.O;
   int implicit_K = conv_params.wS[0] * conv_params.wS[1] * conv_params.C;
 
@@ -512,8 +518,10 @@ void implicit_gemm_conv_3D_gpu(
   const int O_per_group = conv_params.O / conv_params.groups;
 
   // Deduce implicit gemm size
-  const int implicit_M =
-      conv_params.N * conv_params.oS[0] * conv_params.oS[1] * conv_params.oS[2];
+  const int implicit_M = safe_cast(
+      static_cast<int64_t>(conv_params.N) * conv_params.oS[0] *
+          conv_params.oS[1] * conv_params.oS[2],
+      "conv");
   const int implicit_N = O_per_group;
   const int implicit_K =
       conv_params.wS[0] * conv_params.wS[1] * conv_params.wS[2] * C_per_group;
@@ -962,7 +970,9 @@ void depthwise_conv_2D_gpu(
 
   MTL::Size group_dims = MTL::Size(tc, tw, th);
   MTL::Size grid_dims = MTL::Size(
-      conv_params.C / tc, conv_params.oS[1] / tw, (conv_params.oS[0] / th) * N);
+      conv_params.C / tc,
+      (conv_params.oS[1] + tw - 1) / tw,
+      ((conv_params.oS[0] + th - 1) / th) * N);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
@@ -986,7 +996,6 @@ void dispatch_conv_2D_gpu(
     if (C_per_group == 1 && O_per_group == 1 && is_kdil_one &&
         conv_params.wS[0] <= 7 && conv_params.wS[1] <= 7 &&
         conv_params.str[0] <= 2 && conv_params.str[1] <= 2 &&
-        conv_params.oS[0] % 8 == 0 && conv_params.oS[1] % 8 == 0 &&
         conv_params.wt_strides[1] == conv_params.wS[1] &&
         conv_params.C % 16 == 0 && conv_params.C == conv_params.O) {
       return depthwise_conv_2D_gpu(s, d, in, wt, out, conv_params);
@@ -1001,11 +1010,11 @@ void dispatch_conv_2D_gpu(
   }
 
   // Direct to winograd conv
-  bool inp_large =
-      (conv_params.N * conv_params.iS[0] * conv_params.iS[1]) >= 4096;
+  bool inp_large = (static_cast<int64_t>(conv_params.N) * conv_params.iS[0] *
+                    conv_params.iS[1]) >= 4096;
   bool channels_large = (conv_params.C + conv_params.O) >= 256;
-  bool out_large =
-      (conv_params.N * conv_params.oS[0] * conv_params.oS[1]) >= 256;
+  bool out_large = (static_cast<int64_t>(conv_params.N) * conv_params.oS[0] *
+                    conv_params.oS[1]) >= 256;
   if (!conv_params.flip && is_stride_one && is_kdil_one && is_idil_one &&
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && inp_large &&

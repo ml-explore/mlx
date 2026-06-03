@@ -33,7 +33,7 @@ int check_shape_dim(int64_t dim) {
 
 template <typename T>
 mx::array nd_array_to_mlx_contiguous(
-    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
+    nb::ndarray<nb::ro, nb::c_contig> nd_array,
     const mx::Shape& shape,
     mx::Dtype dtype) {
   // Make a copy of the numpy buffer
@@ -43,9 +43,14 @@ mx::array nd_array_to_mlx_contiguous(
 }
 
 mx::array nd_array_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
+    nb::ndarray<nb::ro, nb::c_contig> nd_array,
     std::optional<mx::Dtype> dtype,
     std::optional<nb::dlpack::dtype> nb_dtype) {
+  if (nd_array.device_type() != nb::device::cpu::value) {
+    throw std::invalid_argument(
+        "Cannot convert non-CPU DLPack array to mlx array.");
+  }
+
   // Compute the shape and size
   mx::Shape shape;
   shape.reserve(nd_array.ndim());
@@ -495,7 +500,7 @@ mx::array create_array(nb::object v, std::optional<mx::Dtype> t) {
     auto arr = nb::cast<mx::array>(v);
     return mx::astype(arr, t.value_or(arr.dtype()));
   } else if (nb::ndarray_check(v)) {
-    using ContigArray = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
+    using ContigArray = nb::ndarray<nb::ro, nb::c_contig>;
     ContigArray nd;
     std::optional<nb::dlpack::dtype> nb_dtype;
     // Nanobind does not recognize bfloat16 numpy array:

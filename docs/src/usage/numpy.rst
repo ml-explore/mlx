@@ -75,13 +75,7 @@ even though no in-place operations on MLX memory are executed.
 PyTorch
 -------
 
-.. warning::
-
-   PyTorch Support for :obj:`memoryview` is experimental and can break for
-   multi-dimensional arrays. Casting to NumPy first is advised for now.
-
-PyTorch supports the buffer protocol, but it requires an explicit
-:obj:`memoryview`.
+PyTorch supports DLPack inputs and can import MLX arrays directly.
 
 .. code-block:: python
 
@@ -89,8 +83,8 @@ PyTorch supports the buffer protocol, but it requires an explicit
   import torch
 
   a = mx.arange(3)
-  b = torch.tensor(memoryview(a))
-  c = mx.array(b)
+  b = torch.tensor(a)
+  c = mx.array(b.cpu())
 
 JAX
 ---

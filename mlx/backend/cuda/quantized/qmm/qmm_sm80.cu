@@ -138,7 +138,7 @@ void qmm_sm80(
   dim3 num_blocks{uint32_t(ceil_div(m, size<0>(cta_tiler))),
                   uint32_t(ceil_div(n, size<1>(cta_tiler))),
                   uint32_t(l)};
-  dim3 block_dims{num_threads};
+  dim3 block_dims{uint32_t(num_threads)};
   void* args[] = {
       &shape_MNKL, &cta_tiler,
       &A, &dA,

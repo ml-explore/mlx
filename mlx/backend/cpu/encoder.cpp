@@ -2,13 +2,22 @@
 
 #include "mlx/backend/cpu/encoder.h"
 
+#include <fmt/format.h>
+
 namespace mlx::core::cpu {
 
+std::unordered_map<int, CommandEncoder>& get_command_encoders() {
+  static thread_local std::unordered_map<int, CommandEncoder> encoders;
+  return encoders;
+}
+
 CommandEncoder& get_command_encoder(Stream stream) {
-  static std::unordered_map<int, CommandEncoder> encoder_map;
-  auto it = encoder_map.find(stream.index);
-  if (it == encoder_map.end()) {
-    it = encoder_map.emplace(stream.index, stream).first;
+  auto& encoders = get_command_encoders();
+  auto it = encoders.find(stream.index);
+  if (it == encoders.end()) {
+    throw std::runtime_error(
+        fmt::format(
+            "There is no Stream(cpu, {}) in current thread.", stream.index));
   }
   return it->second;
 }

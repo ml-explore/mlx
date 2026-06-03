@@ -547,12 +547,6 @@ def main():
         args.env.append(f"COLUMNS={cols}")
         args.env.append(f"LINES={lines}")
 
-    # Check if the script is a file and convert it to a full path
-    if (script := Path(rest[0])).exists() and script.is_file():
-        rest[0:1] = [args.python, str(script.resolve())]
-    elif (command := shutil.which(rest[0])) is not None:
-        rest[0] = command
-
     # Launch
     if args.backend == "ring":
         launch_ring(parser, hostfile.hosts, args, rest)

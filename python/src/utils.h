@@ -24,7 +24,7 @@ using ScalarOrArray = std::variant<
     // Must be above ndarray
     mx::array,
     // Must be above complex
-    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>,
+    nb::ndarray<nb::ro, nb::c_contig>,
     std::complex<float>,
     ArrayLike>;
 
