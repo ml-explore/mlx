@@ -251,6 +251,10 @@ CommandEncoder& Device::get_command_encoder(Stream s) {
   return *it->second;
 }
 
+void Device::clear_encoders() {
+  encoders_.clear();
+}
+
 CommandEncoder::CommandEncoder(Device& d)
     : device_(d), stream_(d), worker_(std::make_unique<Worker>()) {}
 
@@ -355,8 +359,13 @@ void CommandEncoder::reset_graph() {
   }
 }
 
-Device& device(mlx::core::Device device) {
+std::unordered_map<int, Device>& get_devices() {
   static std::unordered_map<int, Device> devices;
+  return devices;
+}
+
+Device& device(mlx::core::Device device) {
+  auto& devices = get_devices();
   static bool flags_set = false;
   if (!flags_set) {
     flags_set = true;
@@ -379,6 +388,13 @@ Device& device(mlx::core::Device device) {
 
 CommandEncoder& get_command_encoder(Stream s) {
   return device(s.device).get_command_encoder(s);
+}
+
+void clear_all_encoders() {
+  auto& devices = get_devices();
+  for (auto& [idx, dev] : devices) {
+    dev.clear_encoders();
+  }
 }
 
 } // namespace mlx::core::rocm
