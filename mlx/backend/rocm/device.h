@@ -101,6 +101,7 @@ class Device {
   void make_current();
 
   CommandEncoder& get_command_encoder(Stream s);
+  void clear_encoders();
 
   int hip_device() const {
     return device_;
@@ -134,6 +135,7 @@ class Device {
 
 Device& device(mlx::core::Device device);
 CommandEncoder& get_command_encoder(Stream s);
+void clear_all_encoders();
 
 // Return an execution policy that does not sync for result.
 // Only available when compiling with HIP compiler

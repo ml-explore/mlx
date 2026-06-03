@@ -49,6 +49,10 @@ void synchronize(Stream s) {
   rocm::get_command_encoder(s).synchronize();
 }
 
+void clear_streams() {
+  rocm::clear_all_encoders();
+}
+
 } // namespace mlx::core::gpu
 
 // --- GPU memcpy for direct KV cache writes ---
