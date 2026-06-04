@@ -406,6 +406,24 @@ auto py_vmap(
   };
 }
 
+void ensure_compile_cache_cleanup() {
+  // Make sure each thread using mx.compile would clear its compile cache
+  // before python interpreter exits.
+  struct ThreadCleanup {
+    ~ThreadCleanup() {
+      if (!mx::detail::compile_cache_empty()) {
+        nb::gil_scoped_acquire gil;
+        mx::detail::compile_clear_cache();
+      }
+    }
+  };
+  static thread_local auto clear_cache = []() {
+    mx::detail::compile_clear_cache();
+    return ThreadCleanup{};
+  }();
+  (void)clear_cache;
+}
+
 struct PyCompiledFun {
   nb::callable fun;
   std::uintptr_t fun_id;
@@ -447,6 +465,8 @@ struct PyCompiledFun {
   };
 
   nb::object call_impl(const nb::args& args, const nb::kwargs& kwargs) {
+    ensure_compile_cache_cleanup();
+
     // Flat array inputs
     std::vector<mx::array> inputs;
 
@@ -1461,23 +1481,7 @@ void init_transforms(nb::module_& m) {
          const nb::object& inputs,
          const nb::object& outputs,
          bool shapeless) {
-        // Make sure each thread using mx.compile would clear its compile cache
-        // before python interpreter exits.
-        struct ThreadCleanup {
-          ~ThreadCleanup() {
-            if (!mx::detail::compile_cache_empty()) {
-              nb::gil_scoped_acquire gil;
-              mx::detail::compile_clear_cache();
-            }
-          }
-        };
-        static thread_local auto clear_cache = []() {
-          // Ensure it is created
-          mx::detail::compile_clear_cache();
-
-          // Ensure it will be cleaned up
-          return ThreadCleanup{};
-        }();
+        ensure_compile_cache_cleanup();
 
         return mlx_func(
             nb::cpp_function(PyCompiledFun{fun, inputs, outputs, shapeless}),

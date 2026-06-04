@@ -4,6 +4,7 @@ import gc
 import inspect
 import io
 import math
+import threading
 from functools import partial, wraps
 from io import StringIO
 
@@ -43,6 +44,33 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = compiled_fn(x, y)
         self.assertEqual(out.dtype, mx.int32)
         self.assertTrue(mx.array_equal(out, mx.array([2, 4])))
+
+    def test_compile_tuple_output_in_thread(self):
+        @mx.compile
+        def fun(x):
+            return x + 1, x * 2
+
+        results = []
+        errors = []
+
+        def worker():
+            try:
+                x = mx.array([1.0])
+                y, z = fun(x)
+                mx.eval(y, z)
+                results.append((y.item(), z.item()))
+            except Exception as e:
+                errors.append(e)
+
+        for _ in range(3):
+            thread = threading.Thread(target=worker)
+            thread.start()
+            thread.join()
+            gc.collect()
+
+        if errors:
+            raise errors[0]
+        self.assertEqual(results, [(2.0, 2.0)] * 3)
 
     def test_compile_grad(self):
         def loss_fn(x):
