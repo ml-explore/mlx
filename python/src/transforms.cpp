@@ -421,7 +421,6 @@ void ensure_compile_cache_cleanup() {
     mx::detail::compile_clear_cache();
     return ThreadCleanup{};
   }();
-  (void)clear_cache;
 }
 
 struct PyCompiledFun {
@@ -1481,8 +1480,6 @@ void init_transforms(nb::module_& m) {
          const nb::object& inputs,
          const nb::object& outputs,
          bool shapeless) {
-        ensure_compile_cache_cleanup();
-
         return mlx_func(
             nb::cpp_function(PyCompiledFun{fun, inputs, outputs, shapeless}),
             fun,
