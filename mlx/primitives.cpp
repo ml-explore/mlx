@@ -1992,7 +1992,7 @@ std::vector<array> Exp::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
-  return {multiply(cotangents[0], outputs[0], stream())};
+  return {multiply(cotangents[0], conjugate(outputs[0], stream()), stream())};
 }
 
 std::vector<array> Exp::jvp(
@@ -2713,7 +2713,15 @@ std::vector<array> Log::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  //   return jvp(primals, cotangents, argnums);
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  auto out = divide(cotangents[0], conjugate(primals[0], stream()), stream());
+  if (base_ != Base::e) {
+    auto scale = 1 / std::log(base_ == Base::ten ? 10.0f : 2.0f);
+    out = multiply(array(scale, out.dtype()), out, stream());
+  }
+  return {out};
 }
 
 std::vector<array> Log::jvp(
