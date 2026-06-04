@@ -360,6 +360,23 @@ class TestLosses(mlx_tests.MLXTestCase):
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
+        # Test with non-default 'p' norm degrees
+        anchors = mx.array([[0.0, 0.0]])
+        positives = mx.array([[2.0, 0.0]])
+        negatives = mx.array([[0.0, 3.0]])
+
+        losses_p1 = nn.losses.triplet_loss(
+            anchors, positives, negatives, p=1, reduction="none"
+        )
+        expected_p1 = mx.array([0.0])
+        self.assertTrue(mx.allclose(losses_p1, expected_p1))
+
+        losses_p3 = nn.losses.triplet_loss(
+            anchors, positives, negatives, p=3, reduction="none"
+        )
+        expected_p3 = mx.array([0.0])
+        self.assertTrue(mx.allclose(losses_p3, expected_p3))
+
     def test_hinge_loss(self):
         inputs = mx.ones((2, 4))
         targets = mx.zeros((2, 4))
