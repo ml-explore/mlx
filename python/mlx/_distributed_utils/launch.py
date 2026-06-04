@@ -541,6 +541,12 @@ def main():
         args.backend = "nccl" if mx.cuda.is_available() else "ring"
     args.env = hostfile.envs + args.env
 
+    # Add terminal size
+    cols, lines = shutil.get_terminal_size((0, 0))
+    if cols > 0 and not any(e.startswith("COLUMNS=") for e in args.env):
+        args.env.append(f"COLUMNS={cols}")
+        args.env.append(f"LINES={lines}")
+
     # Launch
     if args.backend == "ring":
         launch_ring(parser, hostfile.hosts, args, rest)
