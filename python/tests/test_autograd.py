@@ -48,6 +48,72 @@ class TestAutograd(mlx_tests.MLXTestCase):
             _, tangents = mx.jvp(lambda x, _op=op: _op(x, 0.0), [x], [t])
             self.assertEqual(tangents[0].dtype, mx.float32)
 
+    def test_jvp_with_constant_inputs(self):
+        # JVPs of primitives with only a subset of inputs traced used to
+        # index tangents out of bounds and silently return wrong tangents
+        # (issue #3627)
+
+        # d/dt (t + 1)^2 = 2 at t = 0
+        cases = [
+            lambda t: mx.where((t + 1) ** 2 > -1, (t + 1) ** 2, 999.0),
+            lambda t: mx.where((t + 1) ** 2 < -1, 999.0, (t + 1) ** 2),
+            lambda t: mx.where(mx.array(True), (t + 1) ** 2, 999.0),
+            lambda t: mx.where(mx.array(False), 999.0, (t + 1) ** 2),
+        ]
+        for fun in cases:
+            _, (dout,) = mx.jvp(fun, [mx.array(0.0)], [mx.array(1.0)])
+            self.assertEqual(dout.item(), 2.0)
+
+        # The tangent of a where with only the condition traced is zero
+        # with the output's dtype
+        _, (dout,) = mx.jvp(
+            lambda c: mx.where(c > 0, 2.0, 3.0), [mx.array(1.0)], [mx.array(1.0)]
+        )
+        self.assertEqual(dout.item(), 0.0)
+        self.assertEqual(dout.dtype, mx.float32)
+
+        # d/dy atan2(y, x) = x / (x^2 + y^2)
+        _, (dout,) = mx.jvp(
+            lambda y: mx.arctan2(y, mx.array(2.0)), [mx.array(1.0)], [mx.array(1.0)]
+        )
+        self.assertAlmostEqual(dout.item(), 0.4, places=6)
+
+        # d/dx atan2(y, x) = -y / (x^2 + y^2)
+        _, (dout,) = mx.jvp(
+            lambda x: mx.arctan2(mx.array(2.0), x), [mx.array(1.0)], [mx.array(1.0)]
+        )
+        self.assertAlmostEqual(dout.item(), -0.4, places=6)
+
+        # masked_scatter with a constant destination
+        mask = mx.array([True, False, True, False])
+
+        def masked_set(src):
+            dst = mx.zeros(4)
+            dst[mask] = src
+            return dst
+
+        _, (dout,) = mx.jvp(masked_set, [mx.ones(2)], [mx.ones(2)])
+        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 0.0, 1.0, 0.0])))
+
+    def test_jvp_through_bitwise_ops(self):
+        # JVPs of bitwise ops returned one tangent per traced input instead
+        # of one per output which corrupted the tangents of downstream
+        # outputs (issue #3629)
+        def fun(x):
+            b = (x == 0) & (x > -1)
+            return x + b.astype(mx.float32)
+
+        x = mx.array([0.0, 1.0, 2.0])
+        _, (dout,) = mx.jvp(fun, [x], [mx.ones_like(x)])
+        self.assertTrue(mx.array_equal(dout, mx.ones_like(x)))
+
+        def fun(x):
+            b = (x == 0) | (x > 1)
+            return x * b.astype(mx.float32)
+
+        _, (dout,) = mx.jvp(fun, [x], [mx.ones_like(x)])
+        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 0.0, 1.0])))
+
     def test_vjp(self):
         fun = lambda x: 2 * x
         out, dout = mx.vjp(fun, [mx.array(1.0)], [mx.array(2.0)])
