@@ -296,13 +296,13 @@ TEST_CASE("test compile unary fused") {
     CHECK_EQ(out.size(), 1);
 
     auto& p = out[0].primitive();
-    // NB: this test is brittle, will need to update
-    // it if we change compile conditions
+    // Unary ops are fused into the Reduce primitive
     CHECK_EQ(typeid(p), typeid(Reduce));
     auto cout = out[0].inputs()[0];
-    auto& cp = cout.primitive();
-    CHECK_EQ(typeid(cp), typeid(Compiled));
-    CHECK_EQ(cout.inputs()[0].id(), x.id());
+    auto& reduce = static_cast<Reduce&>(p);
+    CHECK(reduce.has_fused_prefix());
+    // The input to Reduce is directly x (not a Compiled primitive)
+    CHECK_EQ(out[0].inputs()[0].id(), x.id());
   }
 
   {
@@ -397,10 +397,11 @@ TEST_CASE("test compile binary fused") {
 
     auto& p = out.primitive();
     CHECK_EQ(typeid(p), typeid(Reduce));
-
+    // With fused-into-reduction, only unary ops (abs) are fused into Reduce
+    // The binary op (Add) remains as the input to fused reduce + abs
     auto cout = out.inputs()[0];
     auto& cp = cout.primitive();
-    CHECK_EQ(typeid(cp), typeid(Compiled));
+    CHECK_EQ(typeid(cp), typeid(Add));
     CHECK_EQ(cout.inputs()[0].id(), x.id());
     CHECK_EQ(cout.inputs()[1].id(), y.id());
   }
@@ -814,5 +815,38 @@ TEST_CASE("test compile random bits") {
   auto in = random::key(0);
   auto expected = fun({in})[0];
   auto out = compile(fun)({in})[0];
+  CHECK(array_equal(out, expected).item<bool>());
+}
+
+TEST_CASE("test compile unary reduction one pass") {
+  auto fun = [](const std::vector<array>& inputs) {
+    auto x = inputs[0];
+    return std::vector<array>{sum(abs(x))};
+  };
+  auto in = ones({128, 128});
+  auto expected = fun({in})[0];
+  auto out = compile(fun)({ones({128, 128})})[0];
+  CHECK(array_equal(out, expected).item<bool>());
+}
+
+TEST_CASE("test compile unary reduction two passes") {
+  auto fun = [](const std::vector<array>& inputs) {
+    auto x = inputs[0];
+    return std::vector<array>{sum(abs(x))};
+  };
+  auto in = ones({1024, 1024});
+  auto expected = fun({in})[0];
+  auto out = compile(fun)({ones({1024, 1024})})[0];
+  CHECK(array_equal(out, expected).item<bool>());
+}
+
+TEST_CASE("test compile unary+constant reduction two passes") {
+  auto fun = [](const std::vector<array>& inputs) {
+    auto x = inputs[0];
+    return std::vector<array>{sum(abs(x) + 1.0f)};
+  };
+  auto in = ones({1024, 1024});
+  auto expected = fun({in})[0];
+  auto out = compile(fun)({ones({1024, 1024})})[0];
   CHECK(array_equal(out, expected).item<bool>());
 }

@@ -2,14 +2,17 @@
 
 #pragma once
 
-#include <numeric>
-
-#include "mlx/backend/common/utils.h"
-#include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+
+// Host-only includes
+#ifndef __CUDACC_RTC__
+#include <numeric>
+#include "mlx/backend/common/utils.h"
+#include "mlx/backend/cuda/device.h"
+#endif
 
 namespace mlx::core {
 
@@ -90,6 +93,7 @@ block_reduce(Block block, Warp warp, T (&vals)[N], T* smem, Op op, T init) {
 
 } // namespace cu
 
+#ifndef __CUDACC_RTC__
 inline void allocate_same_layout(
     array& out,
     const array& in,
@@ -141,5 +145,6 @@ inline void allocate_same_layout(
       fl,
       allocator::free);
 }
+#endif
 
 } // namespace mlx::core
