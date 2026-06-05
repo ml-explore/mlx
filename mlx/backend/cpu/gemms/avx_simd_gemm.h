@@ -175,7 +175,7 @@ static void pack_B_block(
 }
 
 // Single-threaded fp16/bf16 GEMM with fp32 accumulation. Goto-style
-// jc→pc→ic blocking; A and B are packed to fp32 once per panel.
+// jc→ic→pc blocking; A and B are packed to fp32 once per panel.
 template <typename T>
 void simd_gemm_optimized_higher_precision(
     const T* a,
@@ -207,20 +207,17 @@ void simd_gemm_optimized_higher_precision(
   static_assert(MC_BLOCK % MR == 0, "MC_BLOCK must be a multiple of MR");
   static_assert(NC_BLOCK % NR == 0, "NC_BLOCK must be a multiple of NR");
 
-  // Thread-local buffers (grow-only, reused across calls)
-  thread_local aligned_unique_ptr<float> A_packed_buf(MC_BLOCK * KC_BLOCK);
-  thread_local aligned_unique_ptr<float> B_packed_buf(KC_BLOCK * NC_BLOCK);
-  thread_local aligned_unique_ptr<float> C_acc_buf(1);
+  // Fixed-size scratch routed through MLX's allocator. The MC x NC
+  // accumulator stays bounded because pc is nested inside ic below.
+  aligned_scratch A_scratch(MC_BLOCK * KC_BLOCK);
+  aligned_scratch B_scratch(KC_BLOCK * NC_BLOCK);
+  aligned_scratch C_scratch(MC_BLOCK * NC_BLOCK);
 
-  A_packed_buf.reset(MC_BLOCK * KC_BLOCK);
-  B_packed_buf.reset(KC_BLOCK * NC_BLOCK);
-  C_acc_buf.reset(M * NC_BLOCK);
+  float* A_packed = A_scratch.get();
+  float* B_packed = B_scratch.get();
+  float* C_acc = C_scratch.get();
 
-  float* A_packed = A_packed_buf.get();
-  float* B_packed = B_packed_buf.get();
-  float* C_acc = C_acc_buf.get();
-
-  // Scalar fallback for edge tiles (m_micro < MR or n_micro < NR)
+  // Scalar fallback for edge tiles (m_micro < MR or n_micro < NR).
   auto compute_block_scalar_partial = [](
 
                                           const float* A_panel,
@@ -248,27 +245,23 @@ void simd_gemm_optimized_higher_precision(
   for (int jc = 0; jc < N; jc += NC_BLOCK) {
     int nc = std::min(NC_BLOCK, N - jc);
 
-    for (int pc = 0; pc < K; pc += KC_BLOCK) {
-      int kc = std::min(KC_BLOCK, K - pc);
-      bool first_k = (pc == 0);
-      bool last_k = (pc + kc >= K);
+    for (int ic = 0; ic < M; ic += MC_BLOCK) {
+      int mc = std::min(MC_BLOCK, M - ic);
 
-      pack_B_block<T, KC_BLOCK, NC_BLOCK>(
-          b, B_packed, K, N, ldB, pc, jc, kc, nc, b_trans);
+      // Zero the accumulator; it persists across pc so accumulation stays
+      // in fp32. alpha and beta*C are applied at writeback.
+      for (int i = 0; i < mc; ++i) {
+        std::memset(C_acc + i * NC_BLOCK, 0, nc * sizeof(float));
+      }
 
-      for (int ic = 0; ic < M; ic += MC_BLOCK) {
-        int mc = std::min(MC_BLOCK, M - ic);
+      for (int pc = 0; pc < K; pc += KC_BLOCK) {
+        int kc = std::min(KC_BLOCK, K - pc);
 
+        // B is re-packed per ic block to keep the accumulator bounded.
+        pack_B_block<T, KC_BLOCK, NC_BLOCK>(
+            b, B_packed, K, N, ldB, pc, jc, kc, nc, b_trans);
         pack_A_block<T, MC_BLOCK, KC_BLOCK>(
             a, A_packed, M, K, ldA, ic, pc, mc, kc, a_trans);
-
-        // Zero C_acc on first K-panel; alpha and beta*C are applied at
-        // writeback.
-        if (first_k) {
-          for (int i = 0; i < mc; ++i) {
-            std::memset(C_acc + (ic + i) * NC_BLOCK, 0, nc * sizeof(float));
-          }
-        }
 
         // Microkernel loop
         for (int ir = 0; ir < mc; ir += MR) {
@@ -279,20 +272,20 @@ void simd_gemm_optimized_higher_precision(
 
             const float* a_ptr = A_packed + ir;
             const float* b_ptr = B_packed + jr;
-            float* c_ptr = C_acc + (ic + ir) * NC_BLOCK + jr;
+            float* c_ptr = C_acc + ir * NC_BLOCK + jr;
 
             // Prefetch next C_acc tile into L2
             if (jr + NR < nc) {
               for (int pi = 0; pi < MR && ir + pi < mc; ++pi)
                 _mm_prefetch(
                     reinterpret_cast<const char*>(
-                        C_acc + (ic + ir + pi) * NC_BLOCK + jr + NR),
+                        C_acc + (ir + pi) * NC_BLOCK + jr + NR),
                     _MM_HINT_T1);
             } else if (ir + MR < mc) {
               for (int pi = 0; pi < MR && ir + MR + pi < mc; ++pi)
                 _mm_prefetch(
                     reinterpret_cast<const char*>(
-                        C_acc + (ic + ir + MR + pi) * NC_BLOCK),
+                        C_acc + (ir + MR + pi) * NC_BLOCK),
                     _MM_HINT_T1);
             }
 
@@ -313,40 +306,40 @@ void simd_gemm_optimized_higher_precision(
             }
           }
         }
+      } // pc
 
-        // Writeback: C = alpha * acc + beta * C
-        if (last_k) {
-          bool apply_alpha = (alpha != 1.0f);
-          bool apply_beta = (beta != 0.0f);
-          detail::Simd<float, 8> alpha_vec(alpha);
-          detail::Simd<float, 8> beta_vec(beta);
+      // Writeback: C = alpha * acc + beta * C
+      {
+        bool apply_alpha = (alpha != 1.0f);
+        bool apply_beta = (beta != 0.0f);
+        detail::Simd<float, 8> alpha_vec(alpha);
+        detail::Simd<float, 8> beta_vec(beta);
 
-          for (int i = 0; i < mc; ++i) {
-            T* c_row = c + (ic + i) * ldC + jc;
-            float* acc_row = C_acc + (ic + i) * NC_BLOCK;
-            int j = 0;
-            for (; j + sw <= nc; j += sw) {
-              detail::Simd<float, 8> acc = detail::load<float, 8>(acc_row + j);
-              if (apply_alpha)
-                acc = alpha_vec * acc;
-              if (apply_beta) {
-                detail::Simd<float, 8> cv = detail::load_convert_to_float<T>(c_row + j);
-                acc = acc + beta_vec * cv;
-              }
-              detail::store_convert_from_float<T>(c_row + j, acc);
+        for (int i = 0; i < mc; ++i) {
+          T* c_row = c + (ic + i) * ldC + jc;
+          float* acc_row = C_acc + i * NC_BLOCK;
+          int j = 0;
+          for (; j + sw <= nc; j += sw) {
+            detail::Simd<float, 8> acc = detail::load<float, 8>(acc_row + j);
+            if (apply_alpha)
+              acc = alpha_vec * acc;
+            if (apply_beta) {
+              detail::Simd<float, 8> cv = detail::load_convert_to_float<T>(c_row + j);
+              acc = acc + beta_vec * cv;
             }
-            for (; j < nc; ++j) {
-              float val = acc_row[j];
-              if (apply_alpha)
-                val *= alpha;
-              if (apply_beta)
-                val += beta * static_cast<float>(c_row[j]);
-              c_row[j] = static_cast<T>(val);
-            }
+            detail::store_convert_from_float<T>(c_row + j, acc);
+          }
+          for (; j < nc; ++j) {
+            float val = acc_row[j];
+            if (apply_alpha)
+              val *= alpha;
+            if (apply_beta)
+              val += beta * static_cast<float>(c_row[j]);
+            c_row[j] = static_cast<T>(val);
           }
         }
-      } // ic
-    } // pc
+      }
+    } // ic
   } // jc
 }
 

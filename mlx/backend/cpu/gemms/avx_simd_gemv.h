@@ -141,10 +141,9 @@ void simd_gemv(
     float beta) {
   int out_len = (M == 1) ? N : M;
 
-  // Thread-local fp32 accumulator (grow-only).
-  thread_local aligned_unique_ptr<float> acc_buf(1);
-  acc_buf.reset(out_len);
-  float* acc = acc_buf.get();
+  // fp32 accumulator, tracked by MLX's allocator.
+  aligned_scratch acc_scratch(out_len);
+  float* acc = acc_scratch.get();
 
   constexpr int sw = 8;
   std::memset(acc, 0, out_len * sizeof(float));
