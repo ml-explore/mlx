@@ -367,6 +367,12 @@ void LayerNormVJP::eval_gpu(
         ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
     strided_reduce_general_dispatch(
         g, gb, "sum", plan, {0}, compute_encoder, d, s);
+    // The gb reduction reads `g`; the vjp kernel below overwrites `g`'s buffer
+    // in place when the cotangent is donated (gx or gw_temp alias g). That is a
+    // write-after-read hazard, and the command encoder's automatic barriers
+    // only cover read-after-write, so insert one explicitly to keep the
+    // reduction's read of `g` from racing the kernel's overwrite.
+    compute_encoder.barrier();
   }
 
   int simd_size = 32;
