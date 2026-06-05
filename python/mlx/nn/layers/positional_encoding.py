@@ -85,7 +85,19 @@ class SinusoidalPositionalEncoding(Module):
     ):
         super().__init__()
 
-        one_zero = 1 - mx.arange(0, dims // 2) / (dims // 2 - 1)
+        # Sinusoidal embeddings are constructed from sin/cos pairs, so the
+        # embedding dimension must be positive and even.
+        if dims <= 0 or dims % 2 != 0:
+            raise ValueError(
+                f"[SinusoidalPositionalEncoding] dims must be positive and even but got {dims}."
+            )
+
+        # Avoid division by zero when dims == 2 (one frequency pair).
+        if dims == 2:
+            one_zero = mx.array([1.0])
+        else:
+            one_zero = 1 - mx.arange(0, dims // 2) / (dims // 2 - 1)
+
         min_freq = math.log(min_freq)
         max_freq = math.log(max_freq)
 
