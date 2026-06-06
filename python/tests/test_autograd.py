@@ -64,6 +64,14 @@ class TestAutograd(mlx_tests.MLXTestCase):
             _, (dout,) = mx.jvp(fun, [mx.array(0.0)], [mx.array(1.0)])
             self.assertEqual(dout.item(), 2.0)
 
+        # Constant condition with both branches traced
+        _, (dout,) = mx.jvp(
+            lambda a, b: mx.where(mx.array([True, False]), a, b),
+            [mx.zeros(2), mx.zeros(2)],
+            [mx.array([1.0, 2.0]), mx.array([3.0, 4.0])],
+        )
+        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 4.0])))
+
         # The tangent of a where with only the condition traced is zero
         # with the output's dtype
         _, (dout,) = mx.jvp(
@@ -98,7 +106,9 @@ class TestAutograd(mlx_tests.MLXTestCase):
     def test_jvp_through_bitwise_ops(self):
         # JVPs of bitwise ops returned one tangent per traced input instead
         # of one per output which corrupted the tangents of downstream
-        # outputs (issue #3629)
+        # outputs (issue #3629). The corruption is out-of-bounds UB that can
+        # go unnoticed in release builds; the assert in the jvp transform
+        # catches it deterministically in debug builds.
         def fun(x):
             b = (x == 0) & (x > -1)
             return x + b.astype(mx.float32)

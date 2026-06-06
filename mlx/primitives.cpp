@@ -518,7 +518,7 @@ std::vector<array> ArcTan2::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   assert(primals.size() == 2);
-  assert(argnums.size() == 2);
+  assert(cotangents.size() == 1);
 
   const auto& s = stream();
   const array& x1 = primals[0];
