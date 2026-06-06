@@ -133,7 +133,7 @@ CUTE_DEVICE void qmm_naive_mainloop(
   Tensor sB = make_tensor(make_smem_ptr(smem.B.begin()), sB_layout); // (BLK_N,BLK_K)
 
   // Define MMA.
-  auto mma = make_tiled_mma<SM80, Element>(CtaTiler{});
+  auto mma = make_tiled_mma<SM80, Element>(cta_tiler);
   auto num_threads = size(mma);
 
   // Define copy atoms.

@@ -158,42 +158,6 @@ bool supports_qmm_sm80(
   return true;
 }
 
-void qmm_sm80(
-    const array& x,
-    const array& w,
-    const array& scales,
-    const std::optional<array>& biases,
-    const std::optional<array>& lhs_indices,
-    const std::optional<array>& rhs_indices,
-    array& out,
-    int bits,
-    int group_size,
-    QuantizationMode mode,
-    cu::CommandEncoder& encoder) {
-  auto dispatch = [&]<int TileM>() {
-    qmm_sm80_impl<TileM>(
-        x,
-        w,
-        scales,
-        biases,
-        lhs_indices,
-        rhs_indices,
-        out,
-        bits,
-        group_size,
-        mode,
-        encoder);
-  };
-  int m = out.ndim() > 1 ? out.shape(-2) : 1;
-  if (m <= 16) {
-    dispatch.template operator()<16>();
-  } else if (m <= 32) {
-    dispatch.template operator()<32>();
-  } else {
-    dispatch.template operator()<64>();
-  }
-}
-
 bool supports_qmm_naive(
     const array& x,
     const array& w,
