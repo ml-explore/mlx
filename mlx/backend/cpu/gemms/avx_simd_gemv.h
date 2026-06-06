@@ -42,7 +42,8 @@ static void gemv_outer_product(
 
       int j = 0;
       for (; j + sw <= nc; j += sw) {
-        detail::Simd<float, 8> m = detail::load_convert_to_float<T>(mat_row + j);
+        detail::Simd<float, 8> m =
+            detail::load_convert_to_float<T>(mat_row + j);
         detail::Simd<float, 8> c = detail::load<float, sw>(acc_block + j);
         detail::store<float, sw>(
             acc_block + j, detail::fma<float, sw>(v_bcast, m, c));
@@ -79,10 +80,14 @@ static void gemv_dot_product(
     int k = 0;
     for (; k + sw <= K; k += sw) {
       detail::Simd<float, 8> v = detail::load_convert_to_float<T>(vec + k);
-      s0 = detail::fma<float, sw>(detail::load_convert_to_float<T>(r0 + k), v, s0);
-      s1 = detail::fma<float, sw>(detail::load_convert_to_float<T>(r1 + k), v, s1);
-      s2 = detail::fma<float, sw>(detail::load_convert_to_float<T>(r2 + k), v, s2);
-      s3 = detail::fma<float, sw>(detail::load_convert_to_float<T>(r3 + k), v, s3);
+      s0 = detail::fma<float, sw>(
+          detail::load_convert_to_float<T>(r0 + k), v, s0);
+      s1 = detail::fma<float, sw>(
+          detail::load_convert_to_float<T>(r1 + k), v, s1);
+      s2 = detail::fma<float, sw>(
+          detail::load_convert_to_float<T>(r2 + k), v, s2);
+      s3 = detail::fma<float, sw>(
+          detail::load_convert_to_float<T>(r3 + k), v, s3);
     }
 
     float d0 = detail::sum(s0);
@@ -111,7 +116,8 @@ static void gemv_dot_product(
     int k = 0;
     for (; k + sw <= K; k += sw) {
       detail::Simd<float, 8> v = detail::load_convert_to_float<T>(vec + k);
-      s = detail::fma<float, sw>(detail::load_convert_to_float<T>(row + k), v, s);
+      s = detail::fma<float, sw>(
+          detail::load_convert_to_float<T>(row + k), v, s);
     }
 
     float d = detail::sum(s);

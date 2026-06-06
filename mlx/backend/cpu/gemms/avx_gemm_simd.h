@@ -69,7 +69,8 @@ inline Simd<float, 8> operator/(Simd<float, 8> a, Simd<float, 8> b) {
 
 // --- FMA ---
 template <>
-inline Simd<float, 8> fma<float, 8>(Simd<float, 8> a, Simd<float, 8> b, Simd<float, 8> c) {
+inline Simd<float, 8>
+fma<float, 8>(Simd<float, 8> a, Simd<float, 8> b, Simd<float, 8> c) {
   return Simd<float, 8>(_mm256_fmadd_ps(a, b, c));
 }
 
@@ -206,7 +207,6 @@ transpose_8x8_block(const T* src, float* dst, int src_stride, int dst_stride) {
     _mm256_storeu_ps(dst + 5 * dst_stride, r5);
     _mm256_storeu_ps(dst + 6 * dst_stride, r6);
     _mm256_storeu_ps(dst + 7 * dst_stride, r7);
-
   }
 }
 
