@@ -1806,7 +1806,9 @@ std::vector<array> DivMod::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  return {zeros_like(primals[0], stream())};
+  // One tangent per output; inputs are pre-broadcast and pre-promoted
+  auto zero = zeros_like(primals[0], stream());
+  return {zero, zero};
 }
 
 std::pair<std::vector<array>, std::vector<int>> DivMod::vmap(
@@ -3409,12 +3411,12 @@ std::vector<array> Power::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto output = power(primals[0], primals[1], stream());
-  auto grads = vjp(primals, tangents, argnums, {output});
-  if (argnums.size() > 1) {
-    return {add(grads[0], grads[1], stream())};
-  } else {
-    return grads;
+  auto jvp = vjp(primals, {tangents[0]}, {argnums[0]}, {output})[0];
+  for (int i = 1; i < argnums.size(); ++i) {
+    jvp = add(
+        jvp, vjp(primals, {tangents[i]}, {argnums[i]}, {output})[0], stream());
   }
+  return {jvp};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Power::vmap(
@@ -5215,8 +5217,20 @@ std::vector<array> DynamicSliceUpdate::vjp(
 std::vector<array> DynamicSliceUpdate::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>&) {
-  return {slice_update(tangents[0], tangents[1], primals[2], axes_, stream())};
+    const std::vector<int>& argnums) {
+  array tan_src = zeros_like(primals[0], stream());
+  array tan_upd = zeros_like(primals[1], stream());
+  for (int i = 0; i < argnums.size(); ++i) {
+    if (argnums[i] == 0) {
+      tan_src = tangents[i];
+    } else if (argnums[i] == 1) {
+      tan_upd = tangents[i];
+    } else {
+      throw std::invalid_argument(
+          "[DynamicSliceUpdate::jvp] Not supported for start indices");
+    }
+  }
+  return {slice_update(tan_src, tan_upd, primals[2], axes_, stream())};
 }
 
 bool DynamicSliceUpdate::is_equivalent(const Primitive& other) const {
