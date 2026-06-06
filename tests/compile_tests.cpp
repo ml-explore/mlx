@@ -816,3 +816,31 @@ TEST_CASE("test compile random bits") {
   auto out = compile(fun)({in})[0];
   CHECK(array_equal(out, expected).item<bool>());
 }
+
+TEST_CASE("test compile throwing first trace does not poison cache") {
+  // A nullary function whose first trace raises. Without rolling the cache
+  // entry back, the second call with matching (empty) inputs would hit a
+  // half-filled entry, skip tracing, and silently return empty outputs.
+  bool should_throw = true;
+  auto fun = [&should_throw](const std::vector<array>& inputs) {
+    if (should_throw) {
+      throw std::runtime_error("trace failure");
+    }
+    return std::vector<array>{array(1.0f) + array(2.0f)};
+  };
+
+  auto cfun = compile(fun);
+
+  // First call: the trace raises and must propagate.
+  CHECK_THROWS_AS(cfun({}), std::runtime_error);
+
+  // Second call: still raising. It must re-trace and raise again rather than
+  // return an empty result from a poisoned cache entry.
+  CHECK_THROWS_AS(cfun({}), std::runtime_error);
+
+  // Once the function stops raising, a retry must trace cleanly and succeed.
+  should_throw = false;
+  auto out = cfun({});
+  REQUIRE_EQ(out.size(), 1);
+  CHECK_EQ(out[0].item<float>(), 3.0f);
+}
