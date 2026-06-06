@@ -1,131 +1,19 @@
 // Copyright © 2026 Apple Inc.
 
 #include "mlx/backend/cuda/cutlass_utils.cuh"
-#include "mlx/backend/cuda/quantized/quantized_utils.h"
+#include "mlx/backend/cuda/device/qmm_sm90.cuh"
+#include "mlx/backend/cuda/jit_module.h"
+#include "mlx/backend/cuda/quantized/qmm/qmm.h"
+#include "mlx/backend/cuda/quantized/qmm/qmm_utils.h"
 #include "mlx/backend/gpu/copy.h"
-#include "mlx/dtype_utils.h"
 
-#include <cute/tensor.hpp>
-#include <cutlass/cutlass.h>
-#include <cutlass/epilogue/collective/collective_builder.hpp>
-#include <cutlass/gemm/collective/collective_builder.hpp>
-#include <cutlass/gemm/device/gemm_universal_adapter.h>
-#include <cutlass/gemm/kernel/gemm_universal.hpp>
+#include "cuda_jit_sources.h"
 
-#if defined(MLX_CUDA_SM90A_ENABLED)
-
-// We can't put kernel code in mlx::core due to name conflicts of "Shape".
-namespace cutlass_gemm {
+namespace mlx::core {
 
 using namespace cute;
 
-template <
-    int TileN = 16,
-    typename Element,
-    typename Quant,
-    typename GroupSize,
-    typename F>
-void qmm_sm90(
-    const Element* A,
-    const Quant* B,
-    const Element* S,
-    const Element* Z,
-    Element* D,
-    int64_t m,
-    int64_t n,
-    int64_t k,
-    int64_t l,
-    bool broadcast_b,
-    GroupSize group_size,
-    F&& launch_kernel) {
-  constexpr int kAlignmentA = 128 / sizeof_bits<Element>::value;
-  constexpr int kAlignmentB = 128 / sizeof_bits<Quant>::value;
-  constexpr int kTileShapeK =
-      std::max(64, 128 * 8 / sizeof_bits<Element>::value);
-  static_assert(group_size % kTileShapeK == 0);
-
-  using Arch = cutlass::arch::Sm90;
-  using Accumulator = float;
-  using TileShape = Shape<_128, Int<TileN>, Int<kTileShapeK>>;
-  using ClusterShape = Shape<Int<(TileN <= 32) ? 1 : 2>, _1, _1>;
-
-  using Epilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
-      Arch,
-      cutlass::arch::OpClassTensorOp,
-      TileShape,
-      ClusterShape,
-      cutlass::epilogue::collective::EpilogueTileAuto,
-      Accumulator,
-      Accumulator,
-      // ElementC:
-      void,
-      cutlass::layout::ColumnMajor,
-      kAlignmentA,
-      // ElementD:
-      Element,
-      cutlass::layout::ColumnMajor,
-      kAlignmentA,
-      cutlass::epilogue::TmaWarpSpecializedCooperative>::CollectiveOp;
-
-  // Note that A/B are swapped and transposed to use TMA epilogue.
-  using Mainloop = typename cutlass::gemm::collective::CollectiveBuilder<
-      Arch,
-      cutlass::arch::OpClassTensorOp,
-      // ElementA:
-      tuple<Quant, Element, Element>,
-      cutlass::layout::RowMajor,
-      kAlignmentB,
-      // ElementB:
-      Element,
-      cutlass::layout::ColumnMajor,
-      kAlignmentA,
-      Accumulator,
-      TileShape,
-      ClusterShape,
-      cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(
-          sizeof(typename Epilogue::SharedStorage))>,
-      cutlass::gemm::KernelTmaWarpSpecializedCooperative>::CollectiveOp;
-
-  using GemmKernel = cutlass::gemm::kernel::
-      GemmUniversal<Shape<int, int, int, int>, Mainloop, Epilogue>;
-  using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
-
-  auto dA = make_stride(k, Int<1>{}, m * k);
-  auto dB = make_stride(k, Int<1>{}, n * k);
-  auto dS = make_stride(Int<1>{}, n, n * k / group_size);
-  auto dD = make_stride(Int<1>{}, n, m * n);
-  if (broadcast_b) {
-    get<2>(dB) = 0;
-    get<2>(dS) = 0;
-  }
-
-  Gemm gemm;
-  typename Gemm::Arguments args{
-      cutlass::gemm::GemmUniversalMode::kGemm,
-      {int(n), int(m), int(k), int(l)},
-      {B, dB, A, dA, S, dS, group_size, Z},
-      {{1.f, 0.f}, D, dD, D, dD}};
-
-  CHECK_CUTLASS_ERROR(gemm.can_implement(args));
-  CHECK_CUTLASS_ERROR(gemm.initialize(args, nullptr));
-
-  auto* kernel = &cutlass::device_kernel<GemmKernel>;
-  void* kernel_params[] = {const_cast<Gemm::Params*>(&gemm.params())};
-  auto cluster = ClusterShape{};
-  launch_kernel(
-      reinterpret_cast<void*>(kernel),
-      gemm.get_grid_shape(gemm.params()),
-      GemmKernel::get_block_shape(),
-      {static_cast<unsigned>(get<0>(cluster)),
-       static_cast<unsigned>(get<1>(cluster)),
-       static_cast<unsigned>(get<2>(cluster))},
-      GemmKernel::SharedStorageSize,
-      kernel_params);
-}
-
-} // namespace cutlass_gemm
-
-namespace mlx::core {
+namespace {
 
 inline array transpose_last_2_dims(
     const array& x,
@@ -168,17 +56,61 @@ inline void dispatch_quant_types(int bits, const char* tag, F&& f) {
 template <typename F>
 inline void dispatch_groups(int group_size, const char* tag, F&& f) {
   if (group_size == 64) {
-    f(cute::Int<64>{});
+    f.template operator()<64>();
   } else if (group_size == 128) {
-    f(cute::Int<128>{});
+    f.template operator()<128>();
   } else {
     throw std::invalid_argument(
         fmt::format("{} Group size {} is not supported.", tag, group_size));
   }
 }
 
-template <int TileN>
-void qmm_sm90_impl(
+template <typename F>
+inline void dispatch_tile(int m, F&& f) {
+  if (m <= 16) {
+    f.template operator()<16>();
+  } else if (m <= 32) {
+    f.template operator()<32>();
+  } else if (m <= 64) {
+    f.template operator()<64>();
+  } else if (m <= 128) {
+    f.template operator()<128>();
+  } else {
+    f.template operator()<256>();
+  }
+}
+
+template <typename F>
+inline void dispatch_gemm(
+    const array& x,
+    int n,
+    int bits,
+    int group_size,
+    const char* tag,
+    F&& f) {
+  dispatch_element_types(x.dtype(), tag, [&]<typename Element>() {
+    dispatch_tile(n, [&]<int TileN>() {
+      dispatch_quant_types(bits, tag, [&]<typename Quant>() {
+        dispatch_groups(group_size, tag, [&]<int GroupSize>() {
+          auto cta_tiler = make_shape(
+              Int<128>{},
+              Int<TileN>{},
+              Int<std::max(64, 128 * 8 / sizeof_bits_v<Element>)>{});
+          auto gemm = cu::make_qmm_sm90_kernel<
+              GroupSize,
+              Element,
+              Quant,
+              decltype(cta_tiler)>();
+          f(cta_tiler, gemm);
+        });
+      });
+    });
+  });
+}
+
+} // namespace
+
+void qmm_sm90(
     const array& x,
     const array& w,
     const array& scales_,
@@ -189,68 +121,86 @@ void qmm_sm90_impl(
     cu::CommandEncoder& encoder,
     Stream s) {
   const char* tag = "[quantized_matmul]";
-  int m = out.ndim() > 1 ? out.shape(-2) : 1;
-  int n = out.shape(-1);
-  int k = x.shape(-1);
-  int l = out.size() / (m * n);
-  bool broadcast_b = (w.ndim() <= 2) || (w.size() != w.data_size());
+  auto [m, n, k, l, broadcast_b] = make_problem_shape(x, w, out);
+
+  auto dA = make_stride(int64_t(k), Int<1>{}, int64_t(m * k));
+  auto dB = make_stride(int64_t(k), Int<1>{}, int64_t(n * k));
+  auto dS = make_stride(Int<1>{}, int64_t(n), int64_t(n * k / group_size));
+  auto dD = make_stride(Int<1>{}, int64_t(n), int64_t(m * n));
+  if (broadcast_b) {
+    get<2>(dB) = 0;
+    get<2>(dS) = 0;
+  }
 
   // FIXME: Copy happens for every call.
   array scales = transpose_last_2_dims(scales_, encoder, s);
   array biases = transpose_last_2_dims(biases_, encoder, s);
 
-  dispatch_element_types(out.dtype(), tag, [&]<typename Element>() {
-    dispatch_quant_types(bits, tag, [&]<typename Quant>() {
-      dispatch_groups(group_size, tag, [&](auto group_size) {
-        encoder.set_input_array(x);
-        encoder.set_input_array(w);
-        encoder.set_input_array(scales);
-        encoder.set_input_array(biases);
-        encoder.set_output_array(out);
-        cutlass_gemm::qmm_sm90<TileN>(
-            gpu_ptr<Element>(x),
-            gpu_ptr<Quant>(w),
-            gpu_ptr<Element>(scales),
-            gpu_ptr<Element>(biases),
-            gpu_ptr<Element>(out),
-            m,
-            n,
-            k,
-            l,
-            broadcast_b,
-            group_size,
-            [&](auto* kernel,
-                dim3 num_blocks,
-                dim3 block_dims,
-                dim3 cluster_shape,
-                uint32_t smem_bytes,
-                void** args) {
-              encoder.add_kernel_node_raw(
-                  kernel,
-                  num_blocks,
-                  block_dims,
-                  cluster_shape,
-                  smem_bytes,
-                  args);
-            });
-      });
+  dispatch_gemm(x, n, bits, group_size, tag, [&](auto cta_tiler, auto gemm) {
+    // JIT compilation.
+    std::string module_name = fmt::format(
+        "qmm_sm90_{}_n{}_b{}_g{}_affine",
+        dtype_to_string(x.dtype()),
+        int(size<1>(cta_tiler)),
+        bits,
+        group_size);
+
+    auto [ctype_x, ctype_q, ctype_s] = get_qmm_cutlass_types(x, bits);
+    std::string kernel_name = fmt::format(
+        "cutlass::device_kernel<mlx::core::cu::qmm_sm90_kernel_t<{}, {}, {}, {}>>",
+        group_size,
+        ctype_x,
+        ctype_q,
+        cta_tiler_to_string(cta_tiler));
+
+    cu::JitModule& mod =
+        cu::get_jit_module(encoder.device(), module_name, [&]() {
+          return std::make_tuple(
+              false, jit_source_qmm_sm90, std::vector{kernel_name});
+        });
+
+    // Prepare kernel args.
+    using Gemm = decltype(gemm);
+
+    const auto* A = gpu_ptr<typename Gemm::ElementB>(x);
+    const auto* B = gpu_ptr<typename Gemm::ElementA>(w);
+    const auto* S =
+        gpu_ptr<typename Gemm::CollectiveMainloop::ElementScale>(scales);
+    const auto* Z =
+        gpu_ptr<typename Gemm::CollectiveMainloop::ElementZero>(biases);
+    auto* D = gpu_ptr<typename Gemm::ElementD>(out);
+
+    auto params = Gemm::to_underlying_arguments(
+        {cutlass::gemm::GemmUniversalMode::kGemm,
+         {n, m, k, l},
+         {B, dB, A, dA, S, dS, group_size, Z},
+         {{1.f, 0.f}, D, dD, D, dD}},
+        nullptr);
+
+    size_t smem_bytes = Gemm::SharedStorageSize;
+    auto kernel = mod.get_kernel(kernel_name, [&](CUfunction kernel) {
+      if (smem_bytes > 48000) {
+        cuFuncSetAttribute(
+            kernel,
+            CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES,
+            smem_bytes);
+      }
     });
+
+    // Append to CUDA graph.
+    encoder.set_input_array(x);
+    encoder.set_input_array(w);
+    encoder.set_input_array(scales);
+    encoder.set_input_array(biases);
+    encoder.set_output_array(out);
+    encoder.add_kernel_node_ex(
+        kernel,
+        Gemm::get_grid_shape(params),
+        Gemm::get_block_shape(),
+        {},
+        smem_bytes,
+        params);
   });
 }
 
-// clang-format off
-template void qmm_sm90_impl<@TileN@>(
-    const array& x,
-    const array& w,
-    const array& scales,
-    const array& biases,
-    array& out,
-    int bits,
-    int group_size,
-    cu::CommandEncoder& encoder,
-    Stream s);
-// clang-format on
-
 } // namespace mlx::core
-
-#endif // defined(MLX_CUDA_SM90A_ENABLED)
