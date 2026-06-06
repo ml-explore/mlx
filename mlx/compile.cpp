@@ -1124,43 +1124,36 @@ ArrayFnWithExtra compile(
 
     // No matching cache entry existed, so compile
     if (entry.empty) {
-      // Mark the entry as not empty since we are about to fill it. If any of
-      // the steps below throw, roll the flag back so the half-filled entry is
-      // not mistaken for a usable one on a later call with matching inputs.
-      entry.empty = false;
-      try {
-        // Set the constants
-        entry.constants = std::move(constants);
-        // Trace to build the graph
-        std::tie(entry.inputs, entry.outputs, entry.extra) =
-            compile_trace(fun, inputs, shapeless);
+      // Set the constants
+      entry.constants = std::move(constants);
+      // Trace to build the graph
+      std::tie(entry.inputs, entry.outputs, entry.extra) =
+          compile_trace(fun, inputs, shapeless);
 
-        // DFS the graph and get a tape, and a map of array id to (parent,
-        // position in parent inputs)
-        std::unordered_map<uintptr_t, std::vector<std::pair<array, int>>>
-            parents_map;
-        std::tie(entry.tape, parents_map) =
-            compile_dfs(entry.inputs, entry.outputs, inputs);
+      // DFS the graph and get a tape, and a map of array id to (parent,
+      // position in parent inputs)
+      std::unordered_map<uintptr_t, std::vector<std::pair<array, int>>>
+          parents_map;
+      std::tie(entry.tape, parents_map) =
+          compile_dfs(entry.inputs, entry.outputs, inputs);
 
-        // Simplify the tape
-        auto mode = compile_mode().load();
-        if (mode != CompileMode::no_simplify) {
-          compile_simplify(
-              entry.tape, parents_map, entry.outputs, /* passes */ 3);
-        }
-
-        // Kernel fusion to generate Compiled primitives. The tape and
-        // new outputs must be updated accordingly
-        if (mode != CompileMode::no_fuse) {
-          compile_fuse(entry.tape, parents_map, entry.inputs, entry.outputs);
-        }
-      } catch (...) {
-        // Tracing failed, so the entry was never actually filled. Mark it
-        // empty again so a retry re-traces cleanly instead of replacing
-        // against an empty tape and silently returning empty outputs.
-        entry.empty = true;
-        throw;
+      // Simplify the tape
+      auto mode = compile_mode().load();
+      if (mode != CompileMode::no_simplify) {
+        compile_simplify(
+            entry.tape, parents_map, entry.outputs, /* passes */ 3);
       }
+
+      // Kernel fusion to generate Compiled primitives. The tape and
+      // new outputs must be updated accordingly
+      if (mode != CompileMode::no_fuse) {
+        compile_fuse(entry.tape, parents_map, entry.inputs, entry.outputs);
+      }
+
+      // Mark the entry as filled only after every step above completed, so
+      // a throwing first trace leaves the entry empty and a later call
+      // re-traces cleanly instead of hitting a half-filled entry
+      entry.empty = false;
     }
 
     // At this point we must have a tape, now replace the placeholders
