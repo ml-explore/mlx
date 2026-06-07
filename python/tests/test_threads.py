@@ -47,6 +47,66 @@ class TestThreads(mlx_tests.MLXTestCase):
         t2.join()
         self.assertFalse(any(raised))
 
+    def test_concurrent_transforms(self):
+        # Running function transformations from multiple threads concurrently
+        # must not crash or corrupt results. The tracing state used to mark
+        # "we are inside a transformation" is per-thread, so independent traces
+        # on different threads do not interfere.
+        x = mx.array([1.0, 2.0, 3.0])
+        n_iters = 2000
+
+        # Single-threaded references.
+        expected_grad = mx.grad(lambda a: (a * a).sum())(x).tolist()
+        expected_compile = mx.compile(lambda a: a * a + 1)(x).tolist()
+        xb = mx.broadcast_to(x, (8, 3))
+        expected_vmap = mx.vmap(lambda a: a * a)(xb).tolist()
+
+        errors = []
+
+        def grad_worker():
+            try:
+                g = mx.grad(lambda a: (a * a).sum())
+                for _ in range(n_iters):
+                    r = g(x)
+                    mx.eval(r)
+                    if r.tolist() != expected_grad:
+                        errors.append(("grad", r.tolist()))
+                        return
+            except Exception as e:
+                errors.append(("grad", repr(e)))
+
+        def compile_worker():
+            try:
+                f = mx.compile(lambda a: a * a + 1)
+                for _ in range(n_iters):
+                    r = f(x)
+                    mx.eval(r)
+                    if r.tolist() != expected_compile:
+                        errors.append(("compile", r.tolist()))
+                        return
+            except Exception as e:
+                errors.append(("compile", repr(e)))
+
+        def vmap_worker():
+            try:
+                h = mx.vmap(lambda a: a * a)
+                for _ in range(n_iters):
+                    r = h(xb)
+                    mx.eval(r)
+                    if r.tolist() != expected_vmap:
+                        errors.append(("vmap", r.tolist()))
+                        return
+            except Exception as e:
+                errors.append(("vmap", repr(e)))
+
+        workers = [grad_worker, compile_worker, vmap_worker]
+        threads = [threading.Thread(target=workers[i % 3]) for i in range(9)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
