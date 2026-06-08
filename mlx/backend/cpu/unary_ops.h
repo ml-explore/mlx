@@ -94,7 +94,11 @@ struct Sign {
     } else if constexpr (std::is_same_v<T, complex64_t>) {
       return simd::select(x == z, x, Simd<T, N>(x / simd::abs(x)));
     } else {
-      return simd::select(x < z, m, simd::select(x > z, o, z));
+      // For floating types a NaN is neither <, >, nor == 0, so the innermost
+      // branch returns x to propagate NaN (matching NumPy). For integer types
+      // every value is <, >, or == 0, so the x fall-through is never taken.
+      return simd::select(
+          x < z, m, simd::select(x > z, o, simd::select(x == z, z, x)));
     }
   }
   SINGLE()

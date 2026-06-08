@@ -902,6 +902,17 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.sign(a, dtype=np.float32)
         self.assertTrue(np.allclose(result, expected))
 
+        # sign propagates NaN, matching NumPy, for every float type
+        for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+            a = mx.array([float("nan"), -float("nan"), 1.5, -1.5, 0.0], dtype=dtype)
+            result = mx.sign(a)
+            expected = np.sign(np.array(a.astype(mx.float32)))
+            self.assertTrue(
+                np.array_equal(
+                    np.array(result.astype(mx.float32)), expected, equal_nan=True
+                )
+            )
+
         a = mx.array([-1.0, 1.0, 0.0, -2.0, 3.0])
         b = mx.array([-4.0, -3.0, 1.0, 0.0, 3.0])
         c = a + b * 1j

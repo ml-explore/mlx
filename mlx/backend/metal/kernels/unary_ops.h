@@ -316,7 +316,9 @@ struct Sigmoid {
 struct Sign {
   template <typename T>
   T operator()(T x) {
-    return (x > T(0)) - (x < T(0));
+    // x != x is true only for NaN (floating types), which propagates to match
+    // NumPy; integers are never NaN so they take the normal sign path.
+    return (x != x) ? x : T((x > T(0)) - (x < T(0)));
   };
   uint32_t operator()(uint32_t x) {
     return x != 0;
