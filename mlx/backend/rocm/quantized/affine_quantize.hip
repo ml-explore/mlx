@@ -110,7 +110,11 @@ __global__ void affine_dequantize_kernel(
   }
 }
 
-// Optimized dequantize kernel for pack_factor elements at a time
+// Optimized dequantize kernel for pack_factor elements at a time.
+// RDNA 3.5 (gfx1151) with hipcc 7.13 / LLVM 23: Avoid #pragma unroll — the
+// compiler emits incorrectly optimized vectorized stores that corrupt output.
+// Use explicit scalar stores instead (same root cause as the uint4 load fix
+// in qdequant.hpp).
 template <typename T, int BITS>
 __global__ void affine_dequantize_packed_kernel(
     const uint8_t* __restrict__ input,
@@ -120,22 +124,24 @@ __global__ void affine_dequantize_packed_kernel(
     size_t size,
     int group_size) {
   constexpr int pack_factor = 8 / BITS;
-  
+
   size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
   size_t oindex = idx * pack_factor;
-  
+
   if (oindex >= size) {
     return;
   }
-  
+
   size_t gindex = oindex / group_size;
   float scale = static_cast<float>(scales[gindex]);
   float bias = biases ? static_cast<float>(biases[gindex]) : 0.0f;
-  
+
   uint8_t val = input[idx];
-  
-  #pragma unroll
+
+  // Manual unroll with explicit scalar stores — avoids LLVM 23 codegen bug
+  // on RDNA 3.5 that corrupted #pragma unroll vectorized stores.
   for (int i = 0; i < pack_factor; ++i) {
+    if (oindex + i >= size) break;
     uint8_t d;
     if constexpr (BITS == 2) {
       d = (val >> (BITS * i)) & 0x03;
