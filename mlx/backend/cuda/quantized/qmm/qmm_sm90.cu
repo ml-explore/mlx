@@ -1,7 +1,8 @@
 // Copyright © 2026 Apple Inc.
 
-#include "mlx/backend/cuda/cutlass_utils.cuh"
 #include "mlx/backend/cuda/device/qmm_sm90.cuh"
+
+#include "mlx/backend/cuda/cutlass_utils.cuh"
 #include "mlx/backend/cuda/jit_module.h"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
 #include "mlx/backend/cuda/quantized/qmm/qmm_utils.h"
@@ -139,7 +140,7 @@ void qmm_sm90(
   dispatch_gemm(x, n, bits, group_size, tag, [&](auto cta_tiler, auto gemm) {
     // JIT compilation.
     std::string module_name = fmt::format(
-        "qmm_sm90_{}_n{}_b{}_g{}_affine",
+        "qmm_sm90_tn_{}_n{}_b{}_g{}_affine",
         dtype_to_string(x.dtype()),
         int(size<1>(cta_tiler)),
         bits,

@@ -1,6 +1,8 @@
 // Copyright © 2026 Apple Inc.
 
 #include "mlx/backend/cuda/device/qmm_naive.cuh"
+
+#include "mlx/backend/cuda/cutlass_utils.cuh"
 #include "mlx/backend/cuda/jit_module.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
@@ -41,10 +43,10 @@ void qmm_naive(
   bool has_k_residue = (k % cute::size<2>(cta_tiler)) != 0;
 
   std::string module_name = fmt::format(
-      "qmm_naive_{}_{}_{}_m{}_b{}_g{}_{}",
-      dtype_to_string(x.dtype()),
-      transpose ? "k" : "n",
+      "qmm_naive_t{}_{}_{}_m{}_b{}_g{}_{}",
+      transpose ? "n" : "t",
       has_k_residue ? "residue" : "aligned",
+      dtype_to_string(x.dtype()),
       cute::size<0>(cta_tiler),
       bits,
       group_size,

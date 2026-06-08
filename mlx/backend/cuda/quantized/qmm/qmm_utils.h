@@ -2,27 +2,16 @@
 
 #include "mlx/dtype_utils.h"
 
-#include <cute/tensor.hpp>
-
 namespace mlx::core {
 
-namespace {
-
-auto make_problem_shape(const array& x, const array& w, const array& out) {
+inline auto
+make_problem_shape(const array& x, const array& w, const array& out) {
   int m = out.ndim() > 1 ? out.shape(-2) : 1;
   int n = out.shape(-1);
   int k = x.shape(-1);
   int l = out.size() / (m * n);
   bool broadcast_b = (w.ndim() <= 2) || (w.size() != w.data_size());
   return std::make_tuple(m, n, k, l, broadcast_b);
-}
-
-inline auto cta_tiler_to_string(auto cta_tiler) {
-  return fmt::format(
-      "cute::Shape<cute::Int<{}>, cute::Int<{}>, cute::Int<{}>>",
-      int(cute::size<0>(cta_tiler)),
-      int(cute::size<1>(cta_tiler)),
-      int(cute::size<2>(cta_tiler)));
 }
 
 inline const char* get_weight_cutlass_type(const Dtype& dtype) {
@@ -79,7 +68,5 @@ inline std::tuple<const char*, const char*, const char*> get_qmm_cutlass_types(
   auto [ctype_q, ctype_s] = get_quant_cutlass_types(ctype_x, bits, mode);
   return {ctype_x, ctype_q, ctype_s};
 }
-
-} // namespace
 
 } // namespace mlx::core

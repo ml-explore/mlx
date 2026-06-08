@@ -1,6 +1,7 @@
 // Copyright © 2026 Apple Inc.
 
 #include "mlx/backend/cuda/device/cute_dequant.cuh"
+#include "mlx/backend/cuda/device/gemm_sm70.cuh"
 
 #include <cuda/cmath>
 
@@ -9,83 +10,6 @@
 namespace mlx::core::cu {
 
 using namespace cute;
-
-template <typename Element, typename SmemLayoutA, typename SmemLayoutB>
-struct SharedStorage {
-  ArrayEngine<Element, cosize_v<SmemLayoutA>> A;
-  ArrayEngine<Element, cosize_v<SmemLayoutB>> B;
-};
-
-template <bool KMajor = true, typename TileM, typename TileN>
-inline constexpr auto make_smem_layout(TileM bM, TileN bK) {
-  // TODO: Calculate swizzle based on tile shape.
-  if constexpr (KMajor) {
-    auto swizzle = composition(Swizzle<3,3,3>{},
-                               Layout<Shape <_8,Shape <_8, _8>>,
-                                      Stride<_8,Stride<_1,_64>>>{});
-    return tile_to_shape(swizzle, make_shape(bM, bK));
-  } else {
-    auto swizzle = composition(Swizzle<3,3,3>{},
-                               Layout<Shape<_64,_1>, Stride<_1,_64>>{});
-    return tile_to_shape(swizzle, make_shape(bM, bK));
-  }
-}
-
-template <bool KMajor = true, typename CtaTiler>
-inline constexpr auto make_smem_layouts(CtaTiler cta_tiler) {
-  // Note: Kernel launcher assumes cosize being same for all KMajor.
-  auto [bM, bN, bK] = cta_tiler;
-  auto sA_layout = make_smem_layout(bM, bK);
-  auto sB_layout = make_smem_layout<KMajor>(bN, bK);
-  return cute::make_tuple(sA_layout, sB_layout);
-}
-
-template <bool SM80 = false, typename Element = float, typename CtaTiler>
-inline constexpr auto make_tiled_mma(CtaTiler cta_tiler) {
-  // Note: Kernel launcher assumes num_threads being same for all parameters.
-  using Atom = cuda::std::conditional_t<
-      SM80,
-      cuda::std::conditional_t<
-          cuda::std::is_same_v<Element, half_t>,
-          SM80_16x8x16_F32F16F16F32_TN,
-          cuda::std::conditional_t<
-              cuda::std::is_same_v<Element, bfloat16_t>,
-              SM80_16x8x16_F32BF16BF16F32_TN,
-              UniversalFMA<float>
-          >
-      >,
-      UniversalFMA<float, Element, Element>>;
-  if constexpr (!SM80 || cuda::std::is_same_v<Element, float>) {
-    return make_tiled_mma(Atom{}, Layout<Shape<_16,_8,_1>>{});
-  } else {
-    if constexpr (size<0>(cta_tiler) >= 32) {
-      return make_tiled_mma(Atom{}, Layout<Shape<_2,_2,_1>>{}, Tile<_32,_32,_16>{});
-    } else {
-      return make_tiled_mma(Atom{}, Layout<Shape<_1,_4,_1>>{}, Tile<_16,_32,_16>{});
-    }
-  }
-}
-
-template <typename T, bool KMajor = true, bool HasKResidue = false,
-          typename NumThreads, typename TileM, typename TileN>
-inline constexpr auto make_tiled_copy(NumThreads num_threads, TileM bM, TileN bK) {
-  // TODO: Only do 1-element read for the tile of residue.
-  auto n_read = Int<HasKResidue ? 1 : 8>{};
-  auto atom = Copy_Atom<UniversalCopy<uint_bit_t<n_read * sizeof_bits_v<T>>>, T>{};
-  if constexpr (KMajor) {
-    auto k_threads = bK / n_read;
-    return make_tiled_copy(
-        atom,
-        make_layout(make_shape(Int<num_threads / k_threads>{}, k_threads), LayoutRight{}),
-        make_layout(make_shape(Int<1>{}, n_read)));
-  } else {
-    auto m_threads = bM / n_read;
-    return make_tiled_copy(
-        atom,
-        make_layout(make_shape(m_threads, Int<num_threads / m_threads>{}), LayoutLeft{}),
-        make_layout(make_shape(n_read, Int<1>{})));
-  }
-}
 
 template <bool KMajor, bool HasKResidue, bool SM80,
           typename CtaTiler,
@@ -123,7 +47,7 @@ CUTE_DEVICE void qmm_naive_mainloop(
   }
 
   // Define smem layouts.
-  auto [sA_layout, sB_layout] = make_smem_layouts<KMajor>(cta_tiler);
+  auto [sA_layout, sB_layout] = make_smem_layouts<true, KMajor>(cta_tiler);
 
   // Shared memory buffer.
   extern __shared__ char smem_buf[];
@@ -138,8 +62,8 @@ CUTE_DEVICE void qmm_naive_mainloop(
 
   // Define copy atoms.
   auto [bM, bN, bK] = cta_tiler;
-  TiledCopy copy_a = make_tiled_copy<Element, true, HasKResidue>(num_threads, bM, bK);
-  TiledCopy copy_b = make_tiled_copy<Quant, KMajor>(num_threads, bN, bK);
+  TiledCopy copy_a = make_tiled_copy<Element, true, !HasKResidue>(num_threads, bM, bK);
+  TiledCopy copy_b = make_tiled_copy<Quant, KMajor, true>(num_threads, bN, bK);
 
   // Partition the copying of A/B/C tiles across the threads.
   ThrCopy thr_copy_a = copy_a.get_slice(thread_idx);
@@ -274,15 +198,6 @@ CUTE_DEVICE void qmm_naive_mainloop(
     if ((get<0>(tCcC(i)) < m_max_coord) && (get<1>(tCcC(i)) < n_max_coord)) {
       tCgC(i) = Element(tCrC(i));
     }
-  }
-}
-
-template <bool KMajor>
-inline constexpr auto make_matrix_stride(int m, int k) {
-  if constexpr (KMajor) {
-    return make_stride(k, Int<1>{}, m * k);
-  } else {
-    return make_stride(Int<1>{}, m, m * k);
   }
 }
 

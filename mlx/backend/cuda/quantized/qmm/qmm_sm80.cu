@@ -1,6 +1,8 @@
 // Copyright © 2026 Apple Inc.
 
 #include "mlx/backend/cuda/device/qmm_sm80.cuh"
+
+#include "mlx/backend/cuda/cutlass_utils.cuh"
 #include "mlx/backend/cuda/jit_module.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
@@ -37,7 +39,7 @@ void qmm_sm80(
   auto cta_tiler = make_cta_tiler(m, group_size);
 
   std::string module_name = fmt::format(
-      "qmm_sm80_{}_m{}_b{}_g{}_{}",
+      "qmm_sm80_tn_{}_m{}_b{}_g{}_{}",
       dtype_to_string(x.dtype()),
       cute::size<0>(cta_tiler),
       bits,
