@@ -72,7 +72,9 @@ class CommandEncoder {
   bool replay();
 
   // Returns true if a captured graph is ready to replay.
-  bool has_graph() const { return graph_exec_ != nullptr; }
+  bool has_graph() const {
+    return graph_exec_ != nullptr;
+  }
 
   // Discard the captured graph.
   void reset_graph();

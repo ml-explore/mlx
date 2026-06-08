@@ -98,7 +98,8 @@ inline void rocm_unified_free(void* data, bool is_managed) {
 
 // Apply memory hints to slab pages for better GPU performance
 static void apply_slab_hints(void* data, size_t size) {
-  if (!rocm_available()) return;
+  if (!rocm_available())
+    return;
   int device = 0;
   (void)hipGetDevice(&device);
   // Hint: GPU is the primary accessor
@@ -124,7 +125,8 @@ SizeClassPool::~SizeClassPool() {
 }
 
 bool SizeClassPool::grow() {
-  if (!rocm_available() || block_size_ == 0) return false;
+  if (!rocm_available() || block_size_ == 0)
+    return false;
 
   void* data = nullptr;
   try {
@@ -155,7 +157,8 @@ bool SizeClassPool::grow() {
 }
 
 RocmBuffer* SizeClassPool::malloc() {
-  if (next_free_ == nullptr) return nullptr;
+  if (next_free_ == nullptr)
+    return nullptr;
 
   Block* b = next_free_;
   next_free_ = next_free_->next;
@@ -177,7 +180,8 @@ RocmBuffer* SizeClassPool::malloc() {
     size_t count = blocks_per_page_[page];
     if (b >= base && b < base + count) {
       size_t idx = static_cast<size_t>(b - base);
-      b->buf.data = static_cast<char*>(backing_pages_[page]) + idx * block_size_;
+      b->buf.data =
+          static_cast<char*>(backing_pages_[page]) + idx * block_size_;
       b->buf.size = block_size_;
       b->buf.is_managed = is_managed_;
       b->buf.device = -1;
@@ -196,7 +200,8 @@ void SizeClassPool::free(RocmBuffer* buf) {
 }
 
 bool SizeClassPool::in_pool(RocmBuffer* buf) const {
-  if (block_arrays_.empty()) return false;
+  if (block_arrays_.empty())
+    return false;
   auto* b = reinterpret_cast<const Block*>(buf);
 
   // Fast path: single page
@@ -205,7 +210,8 @@ bool SizeClassPool::in_pool(RocmBuffer* buf) const {
   }
 
   for (size_t page = 0; page < block_arrays_.size(); page++) {
-    if (b >= block_arrays_[page] && b < block_arrays_[page] + blocks_per_page_[page]) {
+    if (b >= block_arrays_[page] &&
+        b < block_arrays_[page] + blocks_per_page_[page]) {
       return true;
     }
   }
@@ -218,58 +224,78 @@ bool SizeClassPool::in_pool(RocmBuffer* buf) const {
 
 // Slab page sizes per tier (indexed by size class)
 static constexpr size_t kSlabPageSizes[SlabAllocator::kNumSizeClasses] = {
-  64 * 1024,       // 8B blocks
-  64 * 1024,       // 16B
-  64 * 1024,       // 32B
-  64 * 1024,       // 64B
-  64 * 1024,       // 128B
-  256 * 1024,      // 256B
-  256 * 1024,      // 512B
-  1024 * 1024,     // 1KB
-  1024 * 1024,     // 2KB
-  1024 * 1024,     // 4KB
-  1024 * 1024,     // 8KB
-  1024 * 1024,     // 16KB
-  2 * 1024 * 1024, // 32KB
-  4 * 1024 * 1024, // 64KB
-  8 * 1024 * 1024, // 128KB
-  16 * 1024 * 1024,// 256KB
-  32 * 1024 * 1024,// 512KB
-  64 * 1024 * 1024,// 1MB
+    64 * 1024, // 8B blocks
+    64 * 1024, // 16B
+    64 * 1024, // 32B
+    64 * 1024, // 64B
+    64 * 1024, // 128B
+    256 * 1024, // 256B
+    256 * 1024, // 512B
+    1024 * 1024, // 1KB
+    1024 * 1024, // 2KB
+    1024 * 1024, // 4KB
+    1024 * 1024, // 8KB
+    1024 * 1024, // 16KB
+    2 * 1024 * 1024, // 32KB
+    4 * 1024 * 1024, // 64KB
+    8 * 1024 * 1024, // 128KB
+    16 * 1024 * 1024, // 256KB
+    32 * 1024 * 1024, // 512KB
+    64 * 1024 * 1024, // 1MB
 };
 
 // Whether to pre-allocate each tier at startup
 static constexpr bool kPreallocate[SlabAllocator::kNumSizeClasses] = {
-  true,  true,  true,  true,  true,  // 8B-128B
-  true,  true,                        // 256B-512B
-  true,  true,  true,  true,  true,  // 1KB-16KB
-  false, false, false, false, false, false, // 32KB-1MB: on demand
+    true,
+    true,
+    true,
+    true,
+    true, // 8B-128B
+    true,
+    true, // 256B-512B
+    true,
+    true,
+    true,
+    true,
+    true, // 1KB-16KB
+    false,
+    false,
+    false,
+    false,
+    false,
+    false, // 32KB-1MB: on demand
 };
 
 SlabAllocator::SlabAllocator() {
   for (int i = 0; i < kNumSizeClasses; i++) {
-    size_t block_size = static_cast<size_t>(1) << (i + 3); // 2^3=8 through 2^20=1MB
+    size_t block_size = static_cast<size_t>(1)
+        << (i + 3); // 2^3=8 through 2^20=1MB
     pools_[i].init(block_size, kSlabPageSizes[i]);
   }
 }
 
 int SlabAllocator::size_class_index(size_t size) {
-  if (size == 0 || size > kMaxSlabSize) return -1;
-  if (size <= 8) return 0;
+  if (size == 0 || size > kMaxSlabSize)
+    return -1;
+  if (size <= 8)
+    return 0;
   // ceil(log2(size)) - 3, computed via bit manipulation
   int bits = 64 - __builtin_clzll(size - 1); // ceil(log2(size))
   return bits - 3;
 }
 
 size_t SlabAllocator::round_to_size_class(size_t size) {
-  if (size <= 8) return 8;
-  if (size > kMaxSlabSize) return size;
+  if (size <= 8)
+    return 8;
+  if (size > kMaxSlabSize)
+    return size;
   // Round up to next power of 2
   return static_cast<size_t>(1) << (64 - __builtin_clzll(size - 1));
 }
 
 void SlabAllocator::warmup() {
-  if (!rocm_available()) return;
+  if (!rocm_available())
+    return;
   for (int i = 0; i < kNumSizeClasses; i++) {
     if (kPreallocate[i]) {
       pools_[i].grow();
@@ -279,7 +305,8 @@ void SlabAllocator::warmup() {
 
 RocmBuffer* SlabAllocator::malloc(size_t size) {
   int idx = size_class_index(size);
-  if (idx < 0) return nullptr;
+  if (idx < 0)
+    return nullptr;
   return pools_[idx].malloc();
 }
 
@@ -302,7 +329,8 @@ bool SlabAllocator::in_pool(RocmBuffer* buf) const {
 
 bool SlabAllocator::grow(size_t size) {
   int idx = size_class_index(size);
-  if (idx < 0) return false;
+  if (idx < 0)
+    return false;
   return pools_[idx].grow();
 }
 
@@ -360,7 +388,8 @@ Buffer RocmAllocator::malloc(size_t size) {
   // Arena fast path: deterministic bump allocation for HIP Graph capture
   if (arena_.active()) {
     RocmBuffer* buf = arena_.malloc(size);
-    if (buf) return Buffer{buf};
+    if (buf)
+      return Buffer{buf};
     // Arena exhausted — fall through to normal path
   }
 
@@ -379,7 +408,8 @@ Buffer RocmAllocator::malloc(size_t size) {
       return Buffer{buf};
     }
 
-    // Pool exhausted — grow (holds lock during HIP alloc, acceptable for rare path)
+    // Pool exhausted — grow (holds lock during HIP alloc, acceptable for rare
+    // path)
     if (slab_allocator_.grow(size)) {
       buf = slab_allocator_.malloc(size);
       if (buf) {
@@ -552,7 +582,8 @@ DecodeArena::~DecodeArena() {
 }
 
 bool DecodeArena::begin(size_t capacity_bytes) {
-  if (base_) end();
+  if (base_)
+    end();
 
   // Align capacity to page boundary
   capacity_bytes = (capacity_bytes + 4095) & ~size_t(4095);
@@ -581,7 +612,8 @@ void DecodeArena::reset() {
 }
 
 void DecodeArena::end() {
-  if (!base_) return;
+  if (!base_)
+    return;
   rocm_unified_free(base_, is_managed_);
   base_ = nullptr;
   capacity_ = 0;
@@ -591,11 +623,13 @@ void DecodeArena::end() {
 }
 
 RocmBuffer* DecodeArena::malloc(size_t size) {
-  if (!base_) return nullptr;
+  if (!base_)
+    return nullptr;
 
   // Align to 256 bytes for GPU access patterns
   size_t aligned = (size + 255) & ~size_t(255);
-  if (offset_ + aligned > capacity_) return nullptr;
+  if (offset_ + aligned > capacity_)
+    return nullptr;
 
   void* ptr = static_cast<char*>(base_) + offset_;
   offset_ += aligned;

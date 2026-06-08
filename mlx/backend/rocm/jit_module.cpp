@@ -5,11 +5,11 @@
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/version.h"
 
-#include <cstdlib>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
-#include <functional>
 #include <fstream>
+#include <functional>
 #include <mutex>
 #include <sstream>
 
@@ -42,7 +42,9 @@ struct StderrSuppressor {
       }
     }
   }
-  ~StderrSuppressor() { restore(); }
+  ~StderrSuppressor() {
+    restore();
+  }
   void restore() {
     if (active_) {
       fflush(stderr);
@@ -373,8 +375,7 @@ JitModule::JitModule(
   std::string cache_name = safe_filename(module_name);
 
   // Try to load them from the file cache
-  if (!read_cached_hsaco(
-          hsaco_cache_dir(), cache_name, hsaco, hsaco_kernels)) {
+  if (!read_cached_hsaco(hsaco_cache_dir(), cache_name, hsaco, hsaco_kernels)) {
     auto [precompiled, source_code, kernel_names] = builder();
 
     // Get the HSACO (AMD GPU binary)

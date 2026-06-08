@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include "mlx/backend/rocm/device/config.h"
-#include <hip/hip_runtime.h>
-#include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
+#include <hip/hip_fp16.h>
+#include <hip/hip_runtime.h>
+#include "mlx/backend/rocm/device/config.h"
 
 namespace mlx::core::rocm {
 
@@ -37,7 +37,7 @@ inline constexpr int ROWS_PER_BLOCK = 8;
 // --- Warp reduction ---
 
 __device__ __forceinline__ float warp_reduce_sum(float val) {
-  #pragma unroll
+#pragma unroll
   for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
     val += __shfl_xor(val, offset);
   }
@@ -63,12 +63,11 @@ __device__ __forceinline__ void dequant_and_dot(
     uint32_t packed,
     const float* __restrict__ x_local,
     float& qdot_acc,
-    float& x_sum)
-{
+    float& x_sum) {
   constexpr int pf = pack_factor_u32<BITS>;
   constexpr uint32_t mask = (1u << BITS) - 1u;
 
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < pf; i++) {
     float q = static_cast<float>((packed >> (i * BITS)) & mask);
     qdot_acc += x_local[i] * q;
@@ -86,8 +85,7 @@ __device__ __forceinline__ void dequant_and_dot(
 template <int BITS>
 __device__ __forceinline__ void load_weight_vec(
     const uint32_t* __restrict__ ptr,
-    uint32_t (&out)[packs_per_thread<BITS>])
-{
+    uint32_t (&out)[packs_per_thread<BITS>]) {
   constexpr int PPT = packs_per_thread<BITS>;
   if constexpr (PPT == 2) {
     uint2 v = *reinterpret_cast<const uint2*>(ptr);
@@ -106,7 +104,7 @@ __device__ __forceinline__ void load_weight_vec(
     out[2] = v1.x;
     out[3] = v1.y;
   } else {
-    #pragma unroll
+#pragma unroll
     for (int p = 0; p < PPT; p++) {
       out[p] = ptr[p];
     }
