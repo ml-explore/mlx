@@ -3146,8 +3146,9 @@ std::vector<array> Select::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 3);
-  assert(tangents.size() == 3);
+  assert(tangents.size() == argnums.size());
 
+  // tangents[i] is the tangent for argnums[i] (compact, positional).
   auto jvp_fun = [&](int i) {
     int arg = argnums[i];
 
@@ -3155,21 +3156,21 @@ std::vector<array> Select::jvp(
       return zeros_like(primals[0], stream());
     } else if (arg == 1) {
       return multiply(
-          astype(primals[0], tangents[1].dtype(), stream()),
-          tangents[1],
+          astype(primals[0], tangents[i].dtype(), stream()),
+          tangents[i],
           stream());
     } else {
       return multiply(
           astype(
-              logical_not(primals[0], stream()), tangents[2].dtype(), stream()),
-          tangents[2],
+              logical_not(primals[0], stream()), tangents[i].dtype(), stream()),
+          tangents[i],
           stream());
     }
   };
 
-  array jvp = jvp_fun(argnums[0]);
-  for (int i = 1; i < argnums.size(); i++) {
-    jvp = add(jvp, jvp_fun(argnums[i]));
+  array jvp = jvp_fun(0);
+  for (int i = 1; i < static_cast<int>(argnums.size()); i++) {
+    jvp = add(jvp, jvp_fun(i));
   }
   return {jvp};
 }

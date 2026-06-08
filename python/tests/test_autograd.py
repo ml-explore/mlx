@@ -30,6 +30,56 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].item(), 4.0 * 1.0 + 2.0 * 3.0)
         self.assertEqual(out[1].item(), 4.0 * 1.0 + 6.0 * 3.0)
 
+    def test_jvp_where_tangent_indexing(self):
+        # Regression test for Select::jvp tangent mis-indexing (issue #3627).
+        # When the constant is in the TRUE branch and the traced value is in
+        # the FALSE branch, JVP must return the false-branch tangent, not zero.
+        theta = mx.array(0.0)
+        v = mx.array(1.0)
+        cot = mx.array(1.0)
+
+        # Variant A: traced in TRUE, constant in FALSE — must give +2
+        def fA(x):
+            y = (x + 1.0) ** 2
+            return mx.where(y > -1.0, y, mx.array(999.0))
+
+        _, jvA = mx.jvp(fA, [theta], [v])
+        mx.eval(jvA[0])
+        self.assertAlmostEqual(jvA[0].item(), 2.0, places=5)
+
+        # Variant B: constant in TRUE, traced in FALSE — was returning 0 (bug)
+        def fB(x):
+            y = (x + 1.0) ** 2
+            return mx.where(y < -1.0, mx.array(999.0), y)
+
+        _, jvB = mx.jvp(fB, [theta], [v])
+        mx.eval(jvB[0])
+        self.assertAlmostEqual(jvB[0].item(), 2.0, places=5)
+
+        # Variant C: both branches traced — must give same result as VJP
+        def fC(x):
+            y = (x + 1.0) ** 2
+            z = x + 2.0
+            return mx.where(y > -1.0, y, z)
+
+        _, (vjC,) = mx.vjp(fC, [theta], [cot])
+        _, (jvC,) = mx.jvp(fC, [theta], [v])
+        mx.eval(vjC, jvC)
+        self.assertAlmostEqual(jvC.item(), vjC.item(), places=5)
+
+        # Variant D: JVP through where with only the FALSE branch traced,
+        # using a batched (non-scalar) input to exercise shape handling
+        def fD(x):
+            y = x**2
+            return mx.where(y < 0.0, mx.zeros_like(y), y)
+
+        x_batch = mx.array([-2.0, 0.0, 3.0])
+        v_batch = mx.ones_like(x_batch)
+        _, (jvD,) = mx.jvp(fD, [x_batch], [v_batch])
+        mx.eval(jvD)
+        expected = mx.array([-4.0, 0.0, 6.0])
+        self.assertTrue(mx.allclose(jvD, expected).item())
+
     def test_jvp_comparison_tangent_dtype(self):
         # Comparison op JVP tangents should preserve the input tangent's
         # dtype (e.g. float32), not return bool. Using bool tangents causes
