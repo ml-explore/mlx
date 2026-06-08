@@ -7,7 +7,6 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
-
 MODEL_VARIANTS: dict[str, dict[str, str]] = {
     "glm_4_7_flash_bf16": {
         "mlx_repo": "mlx-community/GLM-4.7-Flash-bf16",
@@ -203,8 +202,9 @@ def run_mlx(cfg: dict[str, str], variant: str, args: argparse.Namespace) -> RunS
     mlx_model = cfg["mlx_repo"]
 
     try:
-        import mlx.core as mx
         import time
+
+        import mlx.core as mx
 
         try:
             import mlx_lm

@@ -39,11 +39,21 @@ class SizeClassPool {
   bool in_pool(RocmBuffer* buf) const;
   bool grow();
 
-  size_t block_size() const { return block_size_; }
-  size_t free_count() const { return free_count_; }
-  size_t total_allocated() const { return backing_pages_.size() * slab_page_size_; }
-  size_t free_memory() const { return free_count_ * block_size_; }
-  bool initialized() const { return block_size_ > 0; }
+  size_t block_size() const {
+    return block_size_;
+  }
+  size_t free_count() const {
+    return free_count_;
+  }
+  size_t total_allocated() const {
+    return backing_pages_.size() * slab_page_size_;
+  }
+  size_t free_memory() const {
+    return free_count_ * block_size_;
+  }
+  bool initialized() const {
+    return block_size_ > 0;
+  }
 
  private:
   union Block {
@@ -126,9 +136,15 @@ class DecodeArena {
   // No-op free (bulk-freed on end()).
   void free(RocmBuffer* /*buf*/) {}
 
-  bool active() const { return base_ != nullptr; }
-  size_t used() const { return offset_; }
-  size_t capacity() const { return capacity_; }
+  bool active() const {
+    return base_ != nullptr;
+  }
+  size_t used() const {
+    return offset_;
+  }
+  size_t capacity() const {
+    return capacity_;
+  }
 
  private:
   void* base_{nullptr};
@@ -179,7 +195,9 @@ class RocmAllocator : public allocator::Allocator {
  public:
   // Arena mode for HIP Graph capture.
   // When active, malloc() returns deterministic addresses from the arena.
-  DecodeArena& arena() { return arena_; }
+  DecodeArena& arena() {
+    return arena_;
+  }
 
  private:
   DecodeArena arena_;

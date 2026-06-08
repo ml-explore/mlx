@@ -70,19 +70,38 @@ namespace mlx::core {
 bool gpu_arena_begin(size_t capacity) {
   return rocm::allocator().arena().begin(capacity);
 }
-void gpu_arena_reset() { rocm::allocator().arena().reset(); }
-void gpu_arena_end() { rocm::allocator().arena().end(); }
-size_t gpu_arena_used() { return rocm::allocator().arena().used(); }
-bool gpu_arena_active() { return rocm::allocator().arena().active(); }
+void gpu_arena_reset() {
+  rocm::allocator().arena().reset();
+}
+void gpu_arena_end() {
+  rocm::allocator().arena().end();
+}
+size_t gpu_arena_used() {
+  return rocm::allocator().arena().used();
+}
+bool gpu_arena_active() {
+  return rocm::allocator().arena().active();
+}
 
 static rocm::CommandEncoder& graph_encoder() {
   return rocm::get_command_encoder(default_stream(Device::gpu));
 }
 
-bool gpu_graph_begin_capture() { graph_encoder().begin_capture(); return true; }
-bool gpu_graph_end_capture() { return graph_encoder().end_capture(); }
-bool gpu_graph_replay() { return graph_encoder().replay(); }
-void gpu_graph_reset() { graph_encoder().reset_graph(); }
-bool gpu_graph_available() { return graph_encoder().has_graph(); }
+bool gpu_graph_begin_capture() {
+  graph_encoder().begin_capture();
+  return true;
+}
+bool gpu_graph_end_capture() {
+  return graph_encoder().end_capture();
+}
+bool gpu_graph_replay() {
+  return graph_encoder().replay();
+}
+void gpu_graph_reset() {
+  graph_encoder().reset_graph();
+}
+bool gpu_graph_available() {
+  return graph_encoder().has_graph();
+}
 
 } // namespace mlx::core

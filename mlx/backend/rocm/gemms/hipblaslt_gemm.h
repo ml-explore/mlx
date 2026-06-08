@@ -57,15 +57,20 @@ void hipblaslt_gemm_batched(
 // (A/B swapped, M/N swapped). Call directly from inside kernel lambdas.
 void hipblaslt_gemm_raw(
     hipStream_t stream,
-    int op_a,  // rocblas_operation / hipblasOperation_t value
+    int op_a, // rocblas_operation / hipblasOperation_t value
     int op_b,
-    int M, int N, int K,
+    int M,
+    int N,
+    int K,
     const float* alpha,
-    const void* a_ptr, int lda,
-    const void* b_ptr, int ldb,
+    const void* a_ptr,
+    int lda,
+    const void* b_ptr,
+    int ldb,
     const float* beta,
-    void* c_ptr, int ldc,
-    int data_type,   // hipDataType value (HIP_R_16BF, HIP_R_16F, HIP_R_32F)
+    void* c_ptr,
+    int ldc,
+    int data_type, // hipDataType value (HIP_R_16BF, HIP_R_16F, HIP_R_32F)
     int compute_type); // hipblasComputeType_t value
 
 } // namespace mlx::core::rocm

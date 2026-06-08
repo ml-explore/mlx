@@ -132,11 +132,19 @@ bool Device::is_rocblas_bf16_available() {
     hipError_t err;
 
     err = hipMalloc(&a_ptr, 4 * 4 * 2); // 4x4 bf16
-    if (err != hipSuccess) return false;
+    if (err != hipSuccess)
+      return false;
     err = hipMalloc(&b_ptr, 4 * 4 * 2);
-    if (err != hipSuccess) { hipFree(a_ptr); return false; }
+    if (err != hipSuccess) {
+      hipFree(a_ptr);
+      return false;
+    }
     err = hipMalloc(&c_ptr, 4 * 4 * 2);
-    if (err != hipSuccess) { hipFree(a_ptr); hipFree(b_ptr); return false; }
+    if (err != hipSuccess) {
+      hipFree(a_ptr);
+      hipFree(b_ptr);
+      return false;
+    }
 
     (void)hipMemset(a_ptr, 0, 4 * 4 * 2);
     (void)hipMemset(b_ptr, 0, 4 * 4 * 2);
@@ -147,15 +155,27 @@ bool Device::is_rocblas_bf16_available() {
         rocblas_,
         rocblas_operation_none,
         rocblas_operation_none,
-        4, 4, 4,
+        4,
+        4,
+        4,
         &alpha,
-        a_ptr, rocblas_datatype_bf16_r, 4,
-        b_ptr, rocblas_datatype_bf16_r, 4,
+        a_ptr,
+        rocblas_datatype_bf16_r,
+        4,
+        b_ptr,
+        rocblas_datatype_bf16_r,
+        4,
         &beta,
-        c_ptr, rocblas_datatype_bf16_r, 4,
-        c_ptr, rocblas_datatype_bf16_r, 4,
+        c_ptr,
+        rocblas_datatype_bf16_r,
+        4,
+        c_ptr,
+        rocblas_datatype_bf16_r,
+        4,
         rocblas_datatype_f32_r,
-        rocblas_gemm_algo_standard, 0, 0);
+        rocblas_gemm_algo_standard,
+        0,
+        0);
 
     // Sync and check if the GPU is still alive
     hipError_t sync_err = hipDeviceSynchronize();
@@ -209,10 +229,15 @@ bool Device::has_native_wmma() {
     // rocWMMA arch allowlist (AMD's official support matrix). Keep in sync
     // with detect_rocm_hw_info() in mlx/backend/rocm/quantized/qmm.hip.
     static const std::vector<std::string> rocwmma_archs = {
-        "gfx908",  "gfx90a",  "gfx942",
-        "gfx1100", "gfx1101", "gfx1102",
+        "gfx908",
+        "gfx90a",
+        "gfx942",
+        "gfx1100",
+        "gfx1101",
+        "gfx1102",
         "gfx1151",
-        "gfx1200", "gfx1201",
+        "gfx1200",
+        "gfx1201",
     };
     for (const auto& a : rocwmma_archs) {
       if (base_arch == a) {
@@ -307,7 +332,8 @@ void CommandEncoder::synchronize() {
 }
 
 void CommandEncoder::begin_capture() {
-  if (capturing_) return;
+  if (capturing_)
+    return;
   device_.make_current();
   // hipStreamBeginCapture records all subsequent operations on this stream
   // into a graph instead of executing them.
@@ -318,7 +344,8 @@ void CommandEncoder::begin_capture() {
 }
 
 bool CommandEncoder::end_capture() {
-  if (!capturing_) return false;
+  if (!capturing_)
+    return false;
   capturing_ = false;
 
   hipGraph_t new_graph = nullptr;
@@ -342,7 +369,8 @@ bool CommandEncoder::end_capture() {
 }
 
 bool CommandEncoder::replay() {
-  if (!graph_exec_) return false;
+  if (!graph_exec_)
+    return false;
   device_.make_current();
   hipError_t err = hipGraphLaunch(graph_exec_, stream_);
   return err == hipSuccess;

@@ -226,8 +226,7 @@ void hipblaslt_gemm_impl(
         std::to_string(static_cast<int>(status)));
   }
 
-  status = hipblasLtMatrixLayoutCreate(
-      &layout_c.layout, data_type, M, N, ldc);
+  status = hipblasLtMatrixLayoutCreate(&layout_c.layout, data_type, M, N, ldc);
   if (status != HIPBLAS_STATUS_SUCCESS) {
     throw std::runtime_error(
         "hipblasLtMatrixLayoutCreate(C) failed: " +
@@ -235,8 +234,7 @@ void hipblaslt_gemm_impl(
   }
 
   // D has the same layout as C (in-place: D == C).
-  status = hipblasLtMatrixLayoutCreate(
-      &layout_d.layout, data_type, M, N, ldc);
+  status = hipblasLtMatrixLayoutCreate(&layout_d.layout, data_type, M, N, ldc);
   if (status != HIPBLAS_STATUS_SUCCESS) {
     throw std::runtime_error(
         "hipblasLtMatrixLayoutCreate(D) failed: " +
@@ -247,10 +245,7 @@ void hipblaslt_gemm_impl(
   if (batch_count > 1) {
     int32_t bc = batch_count;
     hipblasLtMatrixLayoutSetAttribute(
-        layout_a.layout,
-        HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
-        &bc,
-        sizeof(bc));
+        layout_a.layout, HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT, &bc, sizeof(bc));
     hipblasLtMatrixLayoutSetAttribute(
         layout_a.layout,
         HIPBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
@@ -258,10 +253,7 @@ void hipblaslt_gemm_impl(
         sizeof(stride_a));
 
     hipblasLtMatrixLayoutSetAttribute(
-        layout_b.layout,
-        HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
-        &bc,
-        sizeof(bc));
+        layout_b.layout, HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT, &bc, sizeof(bc));
     hipblasLtMatrixLayoutSetAttribute(
         layout_b.layout,
         HIPBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
@@ -269,10 +261,7 @@ void hipblaslt_gemm_impl(
         sizeof(stride_b));
 
     hipblasLtMatrixLayoutSetAttribute(
-        layout_c.layout,
-        HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
-        &bc,
-        sizeof(bc));
+        layout_c.layout, HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT, &bc, sizeof(bc));
     hipblasLtMatrixLayoutSetAttribute(
         layout_c.layout,
         HIPBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
@@ -280,10 +269,7 @@ void hipblaslt_gemm_impl(
         sizeof(stride_c));
 
     hipblasLtMatrixLayoutSetAttribute(
-        layout_d.layout,
-        HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
-        &bc,
-        sizeof(bc));
+        layout_d.layout, HIPBLASLT_MATRIX_LAYOUT_BATCH_COUNT, &bc, sizeof(bc));
     hipblasLtMatrixLayoutSetAttribute(
         layout_d.layout,
         HIPBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
@@ -342,7 +328,8 @@ void hipblaslt_gemm_impl(
   struct TuneKeyHash {
     size_t operator()(const TuneKey& k) const {
       return std::hash<int64_t>()(
-          (int64_t(k.M) << 40) ^ (int64_t(k.N) << 20) ^ k.K ^ (int64_t(k.batch) << 50));
+          (int64_t(k.M) << 40) ^ (int64_t(k.N) << 20) ^ k.K ^
+          (int64_t(k.batch) << 50));
     }
   };
   static std::unordered_map<TuneKey, int, TuneKeyHash> tune_cache;
@@ -369,15 +356,28 @@ void hipblaslt_gemm_impl(
         auto [p, s] = ensure_workspace(device_id, ws_need);
         ws_p = p;
         ws_s = s;
-        if (!ws_p) continue;
+        if (!ws_p)
+          continue;
       }
 
       // Warm-up
       (void)hipblasLtMatmul(
-          handle, matmul_guard.desc, alpha,
-          a_ptr, layout_a.layout, b_ptr, layout_b.layout,
-          beta, c_ptr, layout_c.layout, c_ptr, layout_d.layout,
-          &heuristics[algo_idx].algo, ws_p, ws_s, stream);
+          handle,
+          matmul_guard.desc,
+          alpha,
+          a_ptr,
+          layout_a.layout,
+          b_ptr,
+          layout_b.layout,
+          beta,
+          c_ptr,
+          layout_c.layout,
+          c_ptr,
+          layout_d.layout,
+          &heuristics[algo_idx].algo,
+          ws_p,
+          ws_s,
+          stream);
       (void)hipStreamSynchronize(stream);
 
       // Timed run
@@ -389,10 +389,22 @@ void hipblaslt_gemm_impl(
       static constexpr int kBenchIters = 3;
       for (int r = 0; r < kBenchIters; r++) {
         (void)hipblasLtMatmul(
-            handle, matmul_guard.desc, alpha,
-            a_ptr, layout_a.layout, b_ptr, layout_b.layout,
-            beta, c_ptr, layout_c.layout, c_ptr, layout_d.layout,
-            &heuristics[algo_idx].algo, ws_p, ws_s, stream);
+            handle,
+            matmul_guard.desc,
+            alpha,
+            a_ptr,
+            layout_a.layout,
+            b_ptr,
+            layout_b.layout,
+            beta,
+            c_ptr,
+            layout_c.layout,
+            c_ptr,
+            layout_d.layout,
+            &heuristics[algo_idx].algo,
+            ws_p,
+            ws_s,
+            stream);
       }
 
       (void)hipEventRecord(stop_ev, stream);
@@ -452,8 +464,7 @@ void hipblaslt_gemm_impl(
 
   if (status != HIPBLAS_STATUS_SUCCESS) {
     throw std::runtime_error(
-        "hipblasLtMatmul failed: " +
-        std::to_string(static_cast<int>(status)));
+        "hipblasLtMatmul failed: " + std::to_string(static_cast<int>(status)));
   }
 }
 
@@ -495,43 +506,51 @@ void hipblaslt_gemm(
   hipblasOperation_t op_a = to_hipblas_op(transpose_b);
   hipblasOperation_t op_b = to_hipblas_op(transpose_a);
 
-  static bool dbg = []{
+  static bool dbg = [] {
     fprintf(stderr, "[hipBLASLt] first call\n");
     return true;
   }();
   (void)dbg;
-  fprintf(stderr, "[hipBLASLt] M=%d N=%d K=%d ta=%d tb=%d lda=%d ldb=%d ldc=%d\n",
-      M, N, K, (int)transpose_a, (int)transpose_b, lda, ldb, ldc);
+  fprintf(
+      stderr,
+      "[hipBLASLt] M=%d N=%d K=%d ta=%d tb=%d lda=%d ldb=%d ldc=%d\n",
+      M,
+      N,
+      K,
+      (int)transpose_a,
+      (int)transpose_b,
+      lda,
+      ldb,
+      ldc);
 
   const void* a_ptr = gpu_ptr<void>(a);
   const void* b_ptr = gpu_ptr<void>(b);
   void* c_ptr = gpu_ptr<void>(c);
 
-  encoder.launch_kernel(
-      [=, &encoder](hipStream_t stream) {
-        hipblaslt_gemm_impl(
-            handle,
-            device_id,
-            op_a,
-            op_b,
-            N, // swap M/N for col-major trick
-            M,
-            K,
-            &alpha,
-            b_ptr, // swap A/B
-            ldb,
-            0, // stride_a (unused for non-batched)
-            a_ptr,
-            lda,
-            0, // stride_b (unused for non-batched)
-            &beta,
-            c_ptr,
-            ldc,
-            0, // stride_c (unused for non-batched)
-            1, // batch_count
-            hip_dtype,
-            stream);
-      });
+  encoder.launch_kernel([=, &encoder](hipStream_t stream) {
+    hipblaslt_gemm_impl(
+        handle,
+        device_id,
+        op_a,
+        op_b,
+        N, // swap M/N for col-major trick
+        M,
+        K,
+        &alpha,
+        b_ptr, // swap A/B
+        ldb,
+        0, // stride_a (unused for non-batched)
+        a_ptr,
+        lda,
+        0, // stride_b (unused for non-batched)
+        &beta,
+        c_ptr,
+        ldc,
+        0, // stride_c (unused for non-batched)
+        1, // batch_count
+        hip_dtype,
+        stream);
+  });
 }
 
 void hipblaslt_gemm_batched(
@@ -566,43 +585,47 @@ void hipblaslt_gemm_batched(
   const void* b_ptr = gpu_ptr<void>(b);
   void* c_ptr = gpu_ptr<void>(c);
 
-  encoder.launch_kernel(
-      [=, &encoder](hipStream_t stream) {
-        hipblaslt_gemm_impl(
-            handle,
-            device_id,
-            op_a,
-            op_b,
-            N,
-            M,
-            K,
-            &alpha,
-            b_ptr,
-            ldb,
-            stride_b, // swapped: was b, now is "A" in col-major
-            a_ptr,
-            lda,
-            stride_a, // swapped: was a, now is "B" in col-major
-            &beta,
-            c_ptr,
-            ldc,
-            stride_c,
-            batch_count,
-            hip_dtype,
-            stream);
-      });
+  encoder.launch_kernel([=, &encoder](hipStream_t stream) {
+    hipblaslt_gemm_impl(
+        handle,
+        device_id,
+        op_a,
+        op_b,
+        N,
+        M,
+        K,
+        &alpha,
+        b_ptr,
+        ldb,
+        stride_b, // swapped: was b, now is "A" in col-major
+        a_ptr,
+        lda,
+        stride_a, // swapped: was a, now is "B" in col-major
+        &beta,
+        c_ptr,
+        ldc,
+        stride_c,
+        batch_count,
+        hip_dtype,
+        stream);
+  });
 }
 
 void hipblaslt_gemm_raw(
     hipStream_t stream,
     int op_a,
     int op_b,
-    int M, int N, int K,
+    int M,
+    int N,
+    int K,
     const float* alpha,
-    const void* a_ptr, int lda,
-    const void* b_ptr, int ldb,
+    const void* a_ptr,
+    int lda,
+    const void* b_ptr,
+    int ldb,
     const float* beta,
-    void* c_ptr, int ldc,
+    void* c_ptr,
+    int ldc,
     int data_type_hint,
     int /*compute_type_hint*/) {
   int device_id = 0;
@@ -612,9 +635,15 @@ void hipblaslt_gemm_raw(
   // Map data_type_hint: 1=fp16, 2=bf16, 3=fp32
   hipDataType hip_dtype;
   switch (data_type_hint) {
-    case 1: hip_dtype = HIP_R_16F; break;
-    case 2: hip_dtype = HIP_R_16BF; break;
-    default: hip_dtype = HIP_R_32F; break;
+    case 1:
+      hip_dtype = HIP_R_16F;
+      break;
+    case 2:
+      hip_dtype = HIP_R_16BF;
+      break;
+    default:
+      hip_dtype = HIP_R_32F;
+      break;
   }
 
   hipblaslt_gemm_impl(
@@ -622,13 +651,21 @@ void hipblaslt_gemm_raw(
       device_id,
       static_cast<hipblasOperation_t>(op_a),
       static_cast<hipblasOperation_t>(op_b),
-      M, N, K,
+      M,
+      N,
+      K,
       alpha,
-      a_ptr, lda, 0,
-      b_ptr, ldb, 0,
+      a_ptr,
+      lda,
+      0,
+      b_ptr,
+      ldb,
+      0,
       beta,
-      c_ptr, ldc, 0,
-      1,  // batch_count
+      c_ptr,
+      ldc,
+      0,
+      1, // batch_count
       hip_dtype,
       stream);
 }
