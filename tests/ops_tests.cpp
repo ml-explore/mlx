@@ -2264,6 +2264,42 @@ TEST_CASE("test take") {
   CHECK_THROWS(take(a, zeros({2, 3, 2}), 0));
 }
 
+TEST_CASE("test gather contiguity") {
+  // Regression test for a CPU-backend bug where the gather "fast copy" path
+  // copied a multi-dimensional slice from a column-contiguous source as a raw
+  // (column-major) memory block, producing a transposed/wrong-stride result.
+  // The bug only showed up on the CPU backend and is exercised by:
+  //  - chained takes through a size-1 axis (which produce a col-contiguous
+  //    intermediate), and
+  //  - a direct take from a transposed (col-contiguous) source.
+
+  // Chained gather through size-1 axes (issue repro).
+  {
+    auto u = reshape(array({1.0f, 2.0f}), {2, 1, 1});
+    auto g = take(u, array({0, 1}, int32), 0, Device::cpu);
+    g = take(g, array({0, 0, 0}, int32), 1, Device::cpu);
+    g = take(g, array({0, 0, 0}, int32), 2, Device::cpu);
+    CHECK_EQ(g.shape(), Shape{2, 3, 3});
+    // Each batch must be uniform: batch 0 -> 1.0, batch 1 -> 2.0.
+    auto expected = array(
+        {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+         2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f},
+        {2, 3, 3});
+    CHECK(array_equal(g, expected).item<bool>());
+  }
+
+  // Direct take from a column-contiguous source with a multi-dim slice.
+  {
+    auto base = astype(reshape(arange(24), {4, 3, 2}), int32);
+    auto a = transpose(base, {2, 1, 0}); // [2, 3, 4], col-contiguous
+    auto t = take(a, array({0, 1}, int32), 2, Device::cpu);
+    CHECK_EQ(t.shape(), Shape{2, 3, 2});
+    auto expected = array(
+        {0, 6, 2, 8, 4, 10, 1, 7, 3, 9, 5, 11}, {2, 3, 2}, int32);
+    CHECK(array_equal(t, expected).item<bool>());
+  }
+}
+
 TEST_CASE("test take along axis") {
   // No zero dim arrays
   auto a = array(1);
