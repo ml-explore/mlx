@@ -5,6 +5,9 @@
 
 #include "doctest/doctest.h"
 
+#include <cmath>
+#include <limits>
+
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
 
@@ -107,6 +110,34 @@ TEST_CASE("test enable and disable compile") {
   compile(nullptr);
   enable_compile();
   CHECK_THROWS(compile(nullptr));
+}
+
+std::vector<array> nan_const_fun(const std::vector<array>& inputs) {
+  auto nan = array(std::numeric_limits<float>::quiet_NaN());
+  return {where(greater(inputs[0], array(0.0f)), inputs[0], nan)};
+}
+
+std::vector<array> neg_inf_const_fun(const std::vector<array>& inputs) {
+  auto inf = array(-std::numeric_limits<float>::infinity());
+  return {where(greater(inputs[0], array(0.0f)), inputs[0], inf)};
+}
+
+TEST_CASE("test compile with non-finite constants") {
+  // Regression test: baking a non-finite scalar constant (NaN / infinity) into
+  // a fused compiled kernel used to stream a bare token (e.g. `nan`) into the
+  // generated kernel source, which is not a valid identifier and broke
+  // compilation (notably on the Metal backend).
+  auto out = compile(nan_const_fun)({array({1.0f, -1.0f})})[0];
+  eval(out);
+  CHECK_EQ(out.shape(), Shape{2});
+  CHECK_EQ(out.data<float>()[0], 1.0f);
+  CHECK(std::isnan(out.data<float>()[1]));
+
+  out = compile(neg_inf_const_fun)({array({1.0f, -1.0f})})[0];
+  eval(out);
+  CHECK_EQ(out.data<float>()[0], 1.0f);
+  CHECK(std::isinf(out.data<float>()[1]));
+  CHECK_LT(out.data<float>()[1], 0.0f);
 }
 
 auto add_scalars(const std::vector<array>&) {
