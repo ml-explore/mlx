@@ -615,6 +615,53 @@ class TestExportImport(mlx_tests.MLXTestCase):
         imported = mx.import_function(path)
         self.assertTrue(mx.array_equal(imported(x, y, z)[0], fun(x, y, z)))
 
+    def test_export_matmul_shapeless_mid_dim(self):
+        # Regression test for issue #2607:
+        # shapeless export of (B, T, E) @ (E, H) must allow T to vary on import.
+        # The matmul path flattens the batch dims, does a 2-D matmul, then
+        # unflattens.  Unflatten::output_shapes must infer the new T rather
+        # than returning the trace-time value.
+        path = os.path.join(self.test_dir, "matmul_shapeless.mlxfn")
+
+        E, H = 64, 17
+        arr = mx.arange(E * H, dtype=mx.float32).reshape((E, H)) * (1.0 / (E * H))
+
+        def fn(x):
+            return mx.matmul(x, arr)
+
+        sample = mx.zeros((1, 40, E), dtype=mx.float32)
+        mx.export_function(path, fn, sample, shapeless=True)
+        imported = mx.import_function(path)
+
+        for seq_len in (40, 248, 623):
+            with self.subTest(seq_len=seq_len):
+                x = mx.arange(seq_len * E, dtype=mx.float32).reshape((1, seq_len, E))
+                expected = fn(x)
+                (y,) = imported(x)
+                self.assertEqual(y.shape, (1, seq_len, H))
+                self.assertTrue(mx.allclose(y, expected))
+
+    def test_export_matmul_shapeless_batch_and_mid_dim(self):
+        # Extend shapeless matmul test to higher-rank batched inputs (B, T, E).
+        path = os.path.join(self.test_dir, "matmul_shapeless_batch.mlxfn")
+
+        E, H = 32, 8
+        arr = mx.zeros((E, H), dtype=mx.float32)
+
+        def fn(x):
+            return mx.matmul(x, arr)
+
+        # Trace with batch=2, seq_len=10
+        sample = mx.zeros((2, 10, E), dtype=mx.float32)
+        mx.export_function(path, fn, sample, shapeless=True)
+        imported = mx.import_function(path)
+
+        for seq_len in (10, 50, 100):
+            with self.subTest(seq_len=seq_len):
+                x = mx.zeros((2, seq_len, E), dtype=mx.float32)
+                (y,) = imported(x)
+                self.assertEqual(y.shape, (2, seq_len, H))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

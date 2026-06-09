@@ -2200,7 +2200,36 @@ Shape Unflatten::output_shape(
 }
 
 std::vector<Shape> Unflatten::output_shapes(const std::vector<array>& inputs) {
-  return {Unflatten::output_shape(inputs[0], axis_, shape_)};
+  auto flat_actual = inputs[0].shape()[axis_];
+
+  // Compute the stored product so we can detect a shape mismatch in
+  // shapeless mode (e.g. when the contracted matmul batch dim changes).
+  int flat_stored = 1;
+  for (auto s : shape_) {
+    flat_stored *= s;
+  }
+
+  if (flat_actual == flat_stored) {
+    return {Unflatten::output_shape(inputs[0], axis_, shape_)};
+  }
+
+  // Shapeless mode: the flat dimension changed.  Find the rightmost dimension
+  // in shape_ whose removal leaves a divisor of flat_actual and scale it to
+  // absorb the new size.  This handles the common transformer pattern where
+  // batch dims are static but seq_len is dynamic.
+  for (int i = (int)shape_.size() - 1; i >= 0; --i) {
+    int other = flat_stored / shape_[i];
+    if (other > 0 && flat_actual % other == 0) {
+      Shape dyn_shape = shape_;
+      dyn_shape[i] = flat_actual / other;
+      return {Unflatten::output_shape(inputs[0], axis_, dyn_shape)};
+    }
+  }
+
+  throw std::invalid_argument(
+      "[Unflatten::output_shapes] Cannot infer output shape in shapeless mode: "
+      "flat size " + std::to_string(flat_actual) +
+      " is not divisible by any sub-product of the stored expansion.");
 }
 
 std::pair<std::vector<array>, std::vector<int>> FFT::vmap(
