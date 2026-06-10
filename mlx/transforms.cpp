@@ -71,6 +71,10 @@ std::vector<std::pair<char, char>>& detail::InTracing::trace_stack() {
   return trace_stack_;
 }
 thread_local int detail::InTracing::grad_counter{0};
+int& detail::InExportTracing::counter() {
+  static thread_local int counter_;
+  return counter_;
+}
 thread_local int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
