@@ -496,7 +496,7 @@ class RingImpl {
     // Prefill the pipeline
     for (int lw = 0; lw < n_wires; lw++) {
       int buff = 0;
-      while (N * buff < limits[lw] && buff < PIPELINE) {
+      while (N * buff < limits[lw] - write_offset[lw] && buff < PIPELINE) {
         recv_from(sz, buff, dir, lw);
 
         buff++;
