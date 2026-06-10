@@ -12,8 +12,29 @@
 
 namespace mlx::core::fast {
 
+namespace {
+
+void gated_delta_update_forward_metal(
+  const Stream& s,
+  metal::Device& d){
+			
+	std::string base_name = "gated_delta_update_fwd_float_64_64";
+  std::string hash_name = base_name;
+  metal::MTLFCList func_consts = {};
+
+  auto kernel = get_steel_gated_delta_forward_kernel(
+        d,
+        base_name,
+        hash_name,
+        func_consts);
+}
+    
+
+
+}
+
 bool GatedDeltaUpdate::use_fallback(Stream s) {
-    // always run on GPU for now
+    // TODO: finish implementation
     return false;
 }
 
@@ -34,8 +55,11 @@ void GatedDeltaUpdate::eval_gpu(
     auto& out = outputs[0];
     auto& hf  = outputs[1];
 
-    // TODO: allocate outputs, dispatch Metal kernel
-    throw std::runtime_error("NYI");
+		out.set_data(allocator::malloc(out.nbytes()));
+    hf.set_data(allocator::malloc(hf.nbytes()));
+
+    gated_delta_update_forward_metal(s,d);
+    // throw std::runtime_error("NYI");
 }
 
 bool GatedDeltaUpdate::is_equivalent(const Primitive& other) const {
@@ -43,7 +67,7 @@ bool GatedDeltaUpdate::is_equivalent(const Primitive& other) const {
     if (p == nullptr) {
         return false;
     }
-    // TODO: compare chunk_size and other state fields once added
+    // TODO: finish implementation
     return true;
 }
 
