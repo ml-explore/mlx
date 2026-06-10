@@ -69,15 +69,7 @@ void gather(
   // Each gathered slice is written into the (row-contiguous) output as a
   // sequential block. We can therefore replace the per-element strided read
   // with a single contiguous copy only when the slice is itself laid out
-  // contiguously in row-major order within the source. That holds exactly when
-  // every non-singleton slice dimension has a source stride equal to the
-  // product of the slice sizes of the dimensions inside it. Size-1 dimensions
-  // are skipped since their stride is irrelevant.
-  //
-  // Checking the strides directly (rather than relying on the row/col
-  // contiguous flags) is important: a column-contiguous source is contiguous
-  // in memory but in column-major order, so copying a multi-dimensional slice
-  // as a raw block would transpose it.
+  // contiguously in row-major order within the source.
   bool can_copy = true;
   int64_t expected_stride = 1;
   for (int i = src.ndim() - 1; i >= 0 && can_copy; --i) {

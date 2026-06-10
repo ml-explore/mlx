@@ -2282,8 +2282,24 @@ TEST_CASE("test gather contiguity") {
     CHECK_EQ(g.shape(), Shape{2, 3, 3});
     // Each batch must be uniform: batch 0 -> 1.0, batch 1 -> 2.0.
     auto expected = array(
-        {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-         2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f},
+        {1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f},
         {2, 3, 3});
     CHECK(array_equal(g, expected).item<bool>());
   }
@@ -2294,8 +2310,8 @@ TEST_CASE("test gather contiguity") {
     auto a = transpose(base, {2, 1, 0}); // [2, 3, 4], col-contiguous
     auto t = take(a, array({0, 1}, int32), 2, Device::cpu);
     CHECK_EQ(t.shape(), Shape{2, 3, 2});
-    auto expected = array(
-        {0, 6, 2, 8, 4, 10, 1, 7, 3, 9, 5, 11}, {2, 3, 2}, int32);
+    auto expected =
+        array({0, 6, 2, 8, 4, 10, 1, 7, 3, 9, 5, 11}, {2, 3, 2}, int32);
     CHECK(array_equal(t, expected).item<bool>());
   }
 }
