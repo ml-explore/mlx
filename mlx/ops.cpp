@@ -168,6 +168,10 @@ array arange(
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
 
+  if (step == 0) {
+    throw std::invalid_argument("[arange] step must be nonzero.");
+  }
+
   // Check if start and stop specify a valid range because if not, we have to
   // return an empty array
   if (std::isinf(step) &&

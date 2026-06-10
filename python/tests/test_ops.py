@@ -1433,6 +1433,13 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [0, 1, 2]
         self.assertListEqual(a.tolist(), expected)
 
+        # A zero step has no defined length; it must raise rather than divide by
+        # zero and cast the resulting nan/inf to int (undefined behavior).
+        with self.assertRaises(ValueError):
+            mx.arange(2, 2, 0)
+        with self.assertRaises(ValueError):
+            mx.arange(0, 5, 0)
+
     def test_arange_inferred_dtype(self):
         a = mx.arange(5)
         self.assertEqual(a.dtype, mx.int32)
