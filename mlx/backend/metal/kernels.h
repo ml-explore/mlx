@@ -429,6 +429,14 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     const array& m,
     bool split_d);
 
+MTL::ComputePipelineState* get_steel_gated_delta_forward_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts
+    // TODO: More parameters?
+    );
+
 // Create a GPU kernel template definition for JIT compilation
 template <typename... Args>
 std::string get_template_definition(
