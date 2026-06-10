@@ -56,6 +56,11 @@ class InstanceNorm(Module):
         return f"{self.dims}, eps={self.eps}, affine={'weight' in self}"
 
     def __call__(self, x: mx.array) -> mx.array:
+        if x.ndim < 3:
+            raise ValueError(
+                f"InstanceNorm expects inputs with at least 3 dimensions"
+                f" (N, ..., C) but the input has {x.ndim} dimensions."
+            )
         reduction_axes = tuple(range(1, x.ndim - 1))
         # Compute stats
         mean = mx.mean(x, axis=reduction_axes, keepdims=True)
@@ -182,6 +187,19 @@ class GroupNorm(Module):
         pytorch_compatible: bool = False,
     ):
         super().__init__()
+        if num_groups <= 0:
+            raise ValueError(
+                f"The number of groups ({num_groups}) must be a positive integer."
+            )
+        if dims <= 0:
+            raise ValueError(
+                f"The number of features ({dims}) must be a positive integer."
+            )
+        if dims % num_groups != 0:
+            raise ValueError(
+                f"The number of features ({dims}) must be evenly divisible"
+                f" by the number of groups ({num_groups})."
+            )
         if affine:
             self.bias = mx.zeros((dims,))
             self.weight = mx.ones((dims,))
