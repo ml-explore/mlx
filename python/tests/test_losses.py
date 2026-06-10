@@ -270,6 +270,26 @@ class TestLosses(mlx_tests.MLXTestCase):
         expected_sum = mx.sum(expected_none)
         self.assertEqual(losses_sum, expected_sum)
 
+        # Test a different axis
+        logits = mx.log(mx.softmax(mx.random.normal((4, 8)), axis=-1))
+        targets = mx.array([1, 2, 3, 0])
+        loss = nn.losses.nll_loss(logits.T, targets, axis=0)
+        expected = nn.losses.nll_loss(logits, targets, axis=-1)
+        self.assertTrue(mx.allclose(loss, expected))
+
+        # Test a middle axis on a higher rank input
+        logits = mx.log(mx.softmax(mx.random.normal((2, 5, 3)), axis=1))
+        targets = mx.array([[1, 4, 0], [2, 3, 1]])
+        loss = nn.losses.nll_loss(logits, targets, axis=1)
+        logits_np = np.array(logits)
+        targets_np = np.array(targets)
+        expected = np.zeros((2, 3))
+        for b in range(2):
+            for k in range(3):
+                expected[b, k] = -logits_np[b, targets_np[b, k], k]
+        self.assertEqual(loss.shape, (2, 3))
+        self.assertTrue(np.allclose(np.array(loss), expected))
+
     def test_gaussian_nll_loss(self):
         inputs = mx.array([[0.1, 0.2], [0.3, 0.4]])
         targets = mx.array([[0.2, 0.1], [0.1, 0.2]])

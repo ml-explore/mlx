@@ -249,7 +249,9 @@ def nll_loss(
     Returns:
         array: The computed NLL loss.
     """
-    loss = -mx.take_along_axis(inputs, targets[..., None], axis).squeeze(-1)
+    loss = -mx.take_along_axis(inputs, mx.expand_dims(targets, axis), axis).squeeze(
+        axis
+    )
 
     return _reduce(loss, reduction)
 
