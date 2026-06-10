@@ -21,8 +21,6 @@ constexpr const char* default_header = R"(
 
 #include <cooperative_groups.h>
 
-#define inf cuda::std::numeric_limits<float>::infinity()
-
 )";
 
 std::string template_arguments_hash(
