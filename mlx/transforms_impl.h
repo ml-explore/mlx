@@ -44,7 +44,7 @@ struct InTracing {
   }
 
  private:
-  static int grad_counter;
+  static thread_local int grad_counter;
   static std::vector<std::pair<char, char>>& trace_stack();
 };
 
@@ -61,7 +61,7 @@ struct RetainGraph {
   }
 
  private:
-  static int tracing_counter;
+  static thread_local int tracing_counter;
 };
 
 /** Return true if we are currently performing a function transformation in
