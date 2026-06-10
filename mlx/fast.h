@@ -54,6 +54,16 @@ MLX_API array scaled_dot_product_attention(
     const std::optional<array>& sinks = {},
     StreamOrDevice s = {});
 
+MLX_API std::vector<array> gated_delta_update_forward(
+    const array& queries,
+    const array& keys,
+    const array& values,
+    const array& gates,
+    const array& beta_,
+    const std::optional<array>& initial_state = std::nullopt,
+    StreamOrDevice s = {}
+);
+
 using TemplateArg = std::variant<int, bool, Dtype>;
 using ScalarArg = std::variant<bool, int, float>;
 

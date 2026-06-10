@@ -324,6 +324,43 @@ class ConvertFP8 : public Primitive {
   bool to_fp8_;
 };
 
+class GatedDeltaUpdate : public Custom {
+ public:
+    GatedDeltaUpdate(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback
+      )
+      : Custom(stream, std::move(fallback))
+        {}
+
+  static bool use_fallback(
+      /* TODO */
+      Stream s);
+  static bool supports_bool_mask();
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+
+  bool is_equivalent(const Primitive& other) const override;
+    
+  DEFINE_NAME(GatedDeltaUpdate);
+  DEFINE_INPUT_OUTPUT_SHAPE()
+  auto state() const {
+    return std::make_tuple(
+        nullptr); /* TODO */
+  }
+
+ private:
+    /* TODO */
+};
+
+
 class Quantize : public Custom {
  public:
   explicit Quantize(
