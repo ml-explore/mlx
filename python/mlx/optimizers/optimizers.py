@@ -797,9 +797,7 @@ class Adafactor(Optimizer):
             exp_avg_sq_row / mx.mean(exp_avg_sq_row, axis=-1, keepdims=True)
         )
         c_factor = mx.rsqrt(exp_avg_sq_col)
-        return mx.matmul(
-            mx.expand_dims(r_factor, axis=-1), mx.expand_dims(c_factor, axis=0)
-        )
+        return mx.expand_dims(r_factor, axis=-1) * mx.expand_dims(c_factor, axis=-2)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adafactor parameter and state update."""
