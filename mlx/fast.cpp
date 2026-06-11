@@ -945,11 +945,11 @@ std::vector<array> gated_delta_update_forward(
     auto beta = astype(beta_,   out_dtype, s);
 
     int B  = q.shape(0);
-    int Hk = q.shape(1);		// key heads
-    int T  = q.shape(2);
-    int Dk = q.shape(3);
-    int Hv = v.shape(1);   	// value heads
-    int Dv = v.shape(3);
+		int T  = q.shape(1);
+		int Hk = q.shape(2);
+		int Dk = q.shape(3);
+		int Hv = v.shape(2);
+		int Dv = v.shape(3);
 
     auto h0 = initial_state.has_value()
         ? astype(*initial_state, out_dtype, s)
