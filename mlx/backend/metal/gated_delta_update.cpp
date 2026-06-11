@@ -35,11 +35,11 @@ void GatedDeltaUpdate::eval_gpu(
     auto& hf  = outputs[1];
     
     int B  = q.shape(0);
-    int Hk = q.shape(1);		// key heads
-    int T  = q.shape(2);
-    int Dk = q.shape(3);
-    int Hv = v.shape(1);   	// value heads
-    int Dv = v.shape(3);
+		int T  = q.shape(1);
+		int Hk = q.shape(2);
+		int Dk = q.shape(3);
+		int Hv = v.shape(2);
+		int Dv = v.shape(3);
 
 		out.set_data(allocator::malloc(out.nbytes()));
     hf.set_data(allocator::malloc(hf.nbytes()));
