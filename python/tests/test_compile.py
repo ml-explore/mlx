@@ -45,6 +45,32 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(out.dtype, mx.int32)
         self.assertTrue(mx.array_equal(out, mx.array([2, 4])))
 
+    def test_compile_nonfinite_constants(self):
+        # Regression test: a non-finite scalar constant (NaN / infinity) baked
+        # into a fused compiled kernel used to stream a bare token (e.g. `nan`)
+        # into the generated kernel source, which is not a valid identifier and
+        # broke compilation (notably on the Metal backend).
+        x = mx.array([1.0, -1.0])
+
+        for dtype in (mx.float32, mx.float16, mx.bfloat16):
+            xd = x.astype(dtype)
+
+            nan_fn = mx.compile(
+                lambda a: mx.where(a > 0, a, mx.array(float("nan"), dtype=a.dtype))
+            )
+            out = nan_fn(xd)
+            mx.eval(out)
+            self.assertEqual(out[0].item(), 1.0)
+            self.assertTrue(math.isnan(out[1].item()))
+
+            neg_inf_fn = mx.compile(
+                lambda a: mx.where(a > 0, a, mx.array(float("-inf"), dtype=a.dtype))
+            )
+            out = neg_inf_fn(xd)
+            mx.eval(out)
+            self.assertEqual(out[0].item(), 1.0)
+            self.assertEqual(out[1].item(), float("-inf"))
+
     def test_compile_tuple_output_in_thread(self):
         @mx.compile
         def fun(x):

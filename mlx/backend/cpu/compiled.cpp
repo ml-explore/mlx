@@ -323,6 +323,18 @@ void Compiled::eval_cpu(
   auto fn_ptr = compile(kernel_name, [&, contiguous = contiguous]() {
     std::ostringstream kernel;
     kernel << std::get<2>(JitCompiler::get_preamble()) << std::endl;
+    // The prebuilt preamble is produced by running the preprocessor over
+    // compiled_preamble.h, which consumes the NAN / INFINITY macro definitions
+    // (macros vanish during preprocessing). print_float_constant emits those
+    // macros for non-finite constants, so define them here when missing. The
+    // #ifndef guards avoid clashing when <cmath> is already in scope (e.g. the
+    // include-based preamble path).
+    kernel << "#ifndef INFINITY\n"
+              "#define INFINITY (std::numeric_limits<float>::infinity())\n"
+              "#endif\n";
+    kernel << "#ifndef NAN\n"
+              "#define NAN (std::numeric_limits<float>::quiet_NaN())\n"
+              "#endif\n";
     kernel << "using namespace mlx::core;" << std::endl;
     kernel << "using namespace mlx::core::detail;" << std::endl;
     kernel << "extern \"C\"  {" << std::endl;
