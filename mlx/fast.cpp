@@ -944,13 +944,16 @@ std::vector<array> gated_delta_update_forward(
     auto g    = astype(gates,   out_dtype, s);
     auto beta = astype(beta_,   out_dtype, s);
 
-    int B  = q.shape(0), H  = q.shape(1);
-    int T  = q.shape(2), Dk = q.shape(3);
+    int B  = q.shape(0);
+    int Hk = q.shape(1);		// key heads
+    int T  = q.shape(2);
+    int Dk = q.shape(3);
+    int Hv = v.shape(1);   	// value heads
     int Dv = v.shape(3);
 
     auto h0 = initial_state.has_value()
         ? astype(*initial_state, out_dtype, s)
-        : zeros({B, H, Dk, Dv}, out_dtype, s);
+        : zeros({B, Hv, Dk, Dv}, out_dtype, s);
 
     auto fallback = [](std::vector<array> inputs) -> std::vector<array> {
         throw std::runtime_error("NYI: GatedDeltaUpdate CPU fallback");
@@ -958,7 +961,7 @@ std::vector<array> gated_delta_update_forward(
     };
 
     return array::make_arrays(
-        /* output shapes */ {{B, H, T, Dv}, {B, H, Dk, Dv}},
+        /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dk, Dv}},
         /* dtypes */        {out_dtype, out_dtype},
         /* primitive */     std::make_shared<GatedDeltaUpdate>(to_stream(s), fallback),
         /* inputs */        {q, k, v, g, beta, h0}
