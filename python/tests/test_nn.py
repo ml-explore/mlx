@@ -409,6 +409,16 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(means, 3 * np.ones_like(means), atol=1e-6))
         self.assertTrue(np.allclose(var, 4 * np.ones_like(var), atol=1e-6))
 
+        # Raise for invalid num_groups / dims
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=4, dims=6)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=0, dims=8)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=-1, dims=8)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=4, dims=0)
+
     def test_instance_norm(self):
         # Test InstanceNorm1d
         x = mx.array(
@@ -626,6 +636,9 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
         # Test repr
         self.assertTrue(str(inorm) == "InstanceNorm(3, eps=1e-05, affine=False)")
+        # Raise for inputs without spatial dimensions
+        with self.assertRaises(ValueError):
+            nn.InstanceNorm(dims=8)(mx.zeros((4, 8)))
 
     def test_batch_norm(self):
         mx.random.seed(42)
