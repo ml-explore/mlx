@@ -358,7 +358,7 @@ class GatedDeltaUpdate : public Custom {
   }
 
  private:
-    /* TODO */
+  /* TODO */
 };
 
 
