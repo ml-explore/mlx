@@ -305,6 +305,7 @@ void CommandEncoder::set_input_array(
     buffer_sizes_ += a.data_size();
   }
   auto r_buf = static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
+  next_inputs_.insert(r_buf);
   needs_barrier_ =
       needs_barrier_ | (prev_outputs_.find(r_buf) != prev_outputs_.end());
   auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
@@ -328,6 +329,8 @@ void CommandEncoder::register_output_array(const array& a) {
     concurrent_outputs_.insert(buf);
   } else {
     next_outputs_.insert(buf);
+    needs_barrier_ =
+        needs_barrier_ | (prev_inputs_.find(buf) != prev_inputs_.end());
   }
 }
 
@@ -346,10 +349,13 @@ void CommandEncoder::maybeInsertBarrier() {
   if (needs_barrier_) {
     get_command_encoder()->memoryBarrier(MTL::BarrierScopeBuffers);
     needs_barrier_ = false;
+    prev_inputs_ = std::move(next_inputs_);
     prev_outputs_ = std::move(next_outputs_);
   } else {
+    prev_inputs_.insert(next_inputs_.begin(), next_inputs_.end());
     prev_outputs_.insert(next_outputs_.begin(), next_outputs_.end());
   }
+  next_inputs_.clear();
   next_outputs_.clear();
 }
 
@@ -436,6 +442,8 @@ void CommandEncoder::end_encoding() {
   encoder_.reset();
   needs_barrier_ = false;
   concurrent_ = false;
+  prev_inputs_.clear();
+  next_inputs_.clear();
   prev_outputs_.clear();
   next_outputs_.clear();
   concurrent_outputs_.clear();
