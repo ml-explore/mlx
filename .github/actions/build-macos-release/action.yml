@@ -56,7 +56,7 @@ runs:
       shell: bash
       run: |
         echo "::group::Test local packages"
-        uv pip install numpy torch psutil
+        uv pip install numpy torch
         uv pip install dist/mlx_metal-*-macosx_26_0_arm64.whl
         uv pip install dist/mlx-*-macosx_26_0_arm64.whl
         python -m unittest discover -v python/tests

@@ -671,3 +671,22 @@ TEST_CASE("test negative indexing for shape/strides") {
   CHECK_THROWS_AS(a.shape(2), std::out_of_range);
   CHECK_THROWS_AS(a.strides(2), std::out_of_range);
 }
+
+// https://github.com/ml-explore/mlx/pull/1590
+TEST_CASE("test siblings circular references without eval") {
+  std::weak_ptr<array::Data> tracker;
+  auto fun = [&]() {
+    array key({1, 2});
+    auto splits = split(key, 2);
+    {
+      // Set fake data as a tracker for ArrayDesc's lifetime.
+      splits[0].set_data(allocator::malloc(0));
+      tracker = splits[0].data_shared_ptr();
+    }
+    auto a = reshape(splits[0], {});
+    auto b = reshape(splits[1], {});
+    return b;
+  };
+  fun();
+  CHECK(tracker.expired());
+}

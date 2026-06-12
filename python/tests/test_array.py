@@ -1,6 +1,5 @@
 # Copyright © 2023-2024 Apple Inc.
 
-import gc
 import operator
 import os
 import pickle
@@ -14,7 +13,6 @@ from itertools import permutations
 import mlx.core as mx
 import mlx_tests
 import numpy as np
-import psutil
 
 try:
     import tensorflow as tf
@@ -2278,29 +2276,6 @@ class TestArray(mlx_tests.MLXTestCase):
         for _ in range(100_000):
             x = mx.sin(x)
         mx.eval(x)
-
-    @unittest.skipIf(platform.system() == "Windows", "Memory info not accurate")
-    def test_siblings_without_eval(self):
-        def get_mem():
-            process = psutil.Process(os.getpid())
-            return process.memory_info().rss
-
-        key = mx.array([1, 2])
-
-        def t():
-            a, b = mx.split(key, 2)
-            a = mx.reshape(a, [])
-            b = mx.reshape(b, [])
-            return b
-
-        mx.synchronize()
-        t()
-        gc.collect()
-        expected = get_mem()
-        for _ in range(100):
-            t()
-        used = get_mem()
-        self.assertEqual(expected, used)
 
     def test_scalar_integer_conversion_overflow(self):
         y = mx.array(2000000000, dtype=mx.int32)
