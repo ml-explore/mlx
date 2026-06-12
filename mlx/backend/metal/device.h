@@ -121,7 +121,9 @@ class MLX_API CommandEncoder {
   bool needs_barrier_{false};
   bool concurrent_{false};
   std::vector<array> temporaries_;
+  std::unordered_set<MTL::Resource*> prev_inputs_;
   std::unordered_set<MTL::Resource*> prev_outputs_;
+  std::unordered_set<MTL::Resource*> next_inputs_;
   std::unordered_set<MTL::Resource*> next_outputs_;
   std::unordered_set<MTL::Resource*> concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
