@@ -221,85 +221,113 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   std::set<Stream> open_streams;
-  while (!tape.empty()) {
-    auto arr = std::move(tape.back());
-    tape.pop_back();
+  try {
+    while (!tape.empty()) {
+      auto arr = std::move(tape.back());
+      tape.pop_back();
 
-    auto stream = arr.primitive().stream();
-    open_streams.insert(stream);
+      auto stream = arr.primitive().stream();
+      open_streams.insert(stream);
 
-    if (async) {
-      // Lookup corresponding event
-      auto e = events.find(stream.index);
-      if (e == events.end()) {
-        e = events.emplace(stream.index, Event{stream}).first;
-      }
-      e->second.set_value(1);
-      arr.attach_event(e->second);
-      for (auto& s : arr.siblings()) {
-        s.attach_event(e->second);
-      }
-    }
-
-    for (auto& in : arr.inputs()) {
-      if (auto it = needs_fence.find(in.id()); it != needs_fence.end()) {
-        // Use fence to wait within a single eval
-        // Get the input array's stream fence and wait on the
-        // output arrays stream
-        fences[it->second.first].wait(stream, in);
-      } else if (in.event().valid()) {
-        if (in.event().is_signaled()) {
-          in.detach_event();
-        } else if (in.event().stream() != stream) {
-          // Use event to wait across async eval
-          in.event().wait(stream);
+      if (async) {
+        // Lookup corresponding event
+        auto e = events.find(stream.index);
+        if (e == events.end()) {
+          e = events.emplace(stream.index, Event{stream}).first;
+        }
+        e->second.set_value(1);
+        arr.attach_event(e->second);
+        for (auto& s : arr.siblings()) {
+          s.attach_event(e->second);
         }
       }
-    }
 
-    if (arr.primitive().device() == Device::gpu) {
-      gpu::eval(arr);
-    } else {
-      cpu::eval(arr);
-    }
-
-    if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
-        (get_active_memory() > get_memory_limit() &&
-         scheduler::n_active_tasks() > 0)) {
-      // Commit any open streams
-      for (auto& s : open_streams) {
-        if (s.device == Device::gpu) {
-          gpu::finalize(s);
+      for (auto& in : arr.inputs()) {
+        if (auto it = needs_fence.find(in.id()); it != needs_fence.end()) {
+          // Use fence to wait within a single eval
+          // Get the input array's stream fence and wait on the
+          // output arrays stream
+          fences[it->second.first].wait(stream, in);
+        } else if (in.event().valid()) {
+          if (in.event().is_signaled()) {
+            in.detach_event();
+          } else if (in.event().stream() != stream) {
+            // Use event to wait across async eval
+            in.event().wait(stream);
+          }
         }
       }
-      scheduler::wait_for_one();
-      while (get_active_memory() > get_memory_limit() &&
-             scheduler::n_active_tasks() > 0) {
+
+      if (arr.primitive().device() == Device::gpu) {
+        gpu::eval(arr);
+      } else {
+        cpu::eval(arr);
+      }
+
+      if (scheduler::n_active_tasks() > MAX_ACTIVE_TASKS ||
+          (get_active_memory() > get_memory_limit() &&
+           scheduler::n_active_tasks() > 0)) {
+        // Commit any open streams
+        for (auto& s : open_streams) {
+          if (s.device == Device::gpu) {
+            gpu::finalize(s);
+          }
+        }
         scheduler::wait_for_one();
-      }
-    }
-
-    auto maybe_update_fence = [&fences, &needs_fence, stream](const array& a) {
-      if (auto nf = needs_fence.find(a.id()); nf != needs_fence.end()) {
-        auto it = fences.find(stream.index);
-        if (it == fences.end()) {
-          it = fences.emplace(stream.index, Fence{stream}).first;
+        while (get_active_memory() > get_memory_limit() &&
+               scheduler::n_active_tasks() > 0) {
+          scheduler::wait_for_one();
         }
-        it->second.update(stream, a, nf->second.second);
       }
-    };
 
-    arr.set_status(array::Status::evaluated);
-    // TODO Maybe always want the fence coherent kernel in the same cbuf
-    // as the other kernels?
-    maybe_update_fence(arr);
-    for (auto& sib : arr.siblings()) {
-      sib.set_status(array::Status::evaluated);
-      maybe_update_fence(sib);
+      auto maybe_update_fence =
+          [&fences, &needs_fence, stream](const array& a) {
+            if (auto nf = needs_fence.find(a.id()); nf != needs_fence.end()) {
+              auto it = fences.find(stream.index);
+              if (it == fences.end()) {
+                it = fences.emplace(stream.index, Fence{stream}).first;
+              }
+              it->second.update(stream, a, nf->second.second);
+            }
+          };
+
+      arr.set_status(array::Status::evaluated);
+      // TODO Maybe always want the fence coherent kernel in the same cbuf
+      // as the other kernels?
+      maybe_update_fence(arr);
+      for (auto& sib : arr.siblings()) {
+        sib.set_status(array::Status::evaluated);
+        maybe_update_fence(sib);
+      }
+      if (!arr.is_tracer()) {
+        arr.detach();
+      }
     }
-    if (!arr.is_tracer()) {
-      arr.detach();
+  } catch (...) {
+    // A primitive threw from inside its eval (e.g. argument validation in
+    // eval_gpu, or a JIT compile failure). Arrays evaluated earlier in this
+    // tape are already marked evaluated, but their kernels sit in pending
+    // command buffers that only the epilogue below would commit, and events
+    // attached during this eval would never be signaled. Left that way, a
+    // later read of an affected array returns an unwritten buffer or blocks
+    // forever. Signal the events and flush the touched streams, then let the
+    // exception propagate.
+    for (auto& [idx, e] : events) {
+      try {
+        auto es = e.stream();
+        e.signal(es);
+        open_streams.insert(es);
+      } catch (...) {
+      }
     }
+    for (auto& s : open_streams) {
+      try {
+        synchronize(s);
+      } catch (...) {
+        // Preserve the original exception.
+      }
+    }
+    throw;
   }
 
   // Signal the event in its stream
