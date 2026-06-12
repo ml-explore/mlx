@@ -2228,7 +2228,8 @@ std::vector<Shape> Unflatten::output_shapes(const std::vector<array>& inputs) {
 
   throw std::invalid_argument(
       "[Unflatten::output_shapes] Cannot infer output shape in shapeless mode: "
-      "flat size " + std::to_string(flat_actual) +
+      "flat size " +
+      std::to_string(flat_actual) +
       " is not divisible by any sub-product of the stored expansion.");
 }
 
