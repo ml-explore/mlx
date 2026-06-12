@@ -169,6 +169,17 @@ class TestFast(mlx_tests.MLXTestCase):
                 x, dims, traditional=traditional, base=base, scale=scale, offset=offset
             )
 
+        # Test large transposed input
+        shape = [32, 8192, 32, 128]
+        _, _, base, scale, offset, traditional = defaults
+        x = mx.random.normal(shape=shape).astype(mx.float32)
+        x = x.swapaxes(1, 2)
+        rx_fast = mx.fast.rope(
+            x, shape[3], traditional=traditional, base=base, scale=scale, offset=offset
+        )
+        ref = rope_orig(x, shape[3], traditional, base, scale, offset)
+        self.assertLess(mx.abs(ref - rx_fast).max(), 5e-3)
+
     def test_rope_dims_validation(self):
         T = 4
         feature_dim = 64

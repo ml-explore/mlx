@@ -20,6 +20,8 @@
 
 namespace mlx::core {
 
+static constexpr uint32_t kMaxGridDim = 65535;
+
 template <typename F>
 void dispatch_1_2_3(int n, F&& f) {
   switch (n) {
