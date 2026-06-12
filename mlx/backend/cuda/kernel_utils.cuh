@@ -20,6 +20,19 @@
 
 namespace mlx::core {
 
+static constexpr uint32_t kMaxGridDim = 65535;
+
+inline dim3 get_2d_grid_dims_split_y(
+    uint32_t blocks_x,
+    size_t rest,
+    uint32_t block_y) {
+  uint32_t blocks_y_raw =
+      static_cast<uint32_t>(cuda::ceil_div(rest, size_t{block_y}));
+  uint32_t blocks_z = cuda::ceil_div(blocks_y_raw, kMaxGridDim);
+  uint32_t blocks_y = cuda::ceil_div(blocks_y_raw, blocks_z);
+  return {blocks_x, blocks_y, blocks_z};
+}
+
 template <typename F>
 void dispatch_1_2_3(int n, F&& f) {
   switch (n) {

@@ -204,6 +204,15 @@ class TestFast(mlx_tests.MLXTestCase):
             x, dims=feature_dim, traditional=False, base=10000.0, scale=1.0, offset=0
         )
 
+    @unittest.skipIf(not mx.cuda.is_available(), "requires CUDA")
+    def test_rope_large_uncontiguous_cuda_grid(self):
+        dims = 128
+        x = mx.zeros((9, 8192, 32, dims), dtype=mx.float16).swapaxes(1, 2)
+        y = mx.fast.rope(x, dims, traditional=False, base=10000.0, scale=1.0, offset=0)
+
+        self.assertEqual(y.shape, x.shape)
+        self.assertEqual(mx.max(mx.abs(y)).item(), 0)
+
     def test_rope_with_freqs(self):
         mx.random.seed(0)
 
