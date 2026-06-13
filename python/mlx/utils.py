@@ -97,12 +97,13 @@ def tree_map_with_path(
     elif isinstance(tree, (list, tuple)):
         prefix = f"{path}." if path else ""
         TreeType = type(tree)
-        return TreeType(
+        subtrees = (
             tree_map_with_path(
                 fn, child, *(r[i] for r in rest), is_leaf=is_leaf, path=f"{prefix}{i}"
             )
             for i, child in enumerate(tree)
         )
+        return TreeType(*subtrees) if hasattr(tree, "_fields") else TreeType(subtrees)
     elif isinstance(tree, dict):
         prefix = f"{path}." if path else ""
         return {
