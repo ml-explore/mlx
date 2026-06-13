@@ -117,6 +117,27 @@ def mlx_primitives_sdpa(q, k, v, scale, mask=None):
 
 
 class TestFastSDPA(mlx_tests.MLXTestCase):
+    def test_sdpa_large_head_dim_full_attention(self):
+        qL = 9
+        kL = 16385
+
+        for D in [192, 256]:
+            with self.subTest(head_dim=D):
+                q, k, v, scale, _ = prepare_inputs(
+                    1, qL, kL, D, 1, 1, None, False, mx.float16
+                )
+                ref = mlx_primitives_sdpa(q, k, v, scale)
+                out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
+    def test_sdpa_vector_head_dim_192(self):
+        q, k, v, scale, _ = prepare_inputs(
+            1, 1, 257, 192, 1, 1, None, False, mx.float16
+        )
+        ref = mlx_primitives_sdpa(q, k, v, scale)
+        out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+        self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
     def test_sdpa_vector_kv_transposed_head_seq(self):
         D = 64
         Nq = 4
