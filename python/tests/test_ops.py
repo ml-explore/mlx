@@ -2077,13 +2077,13 @@ class TestOps(mlx_tests.MLXTestCase):
             ((8,), [(0, 4)]),
             ((8,), [(3, 0)]),
             ((8,), [(7, 8)]),
-            ((4,), [(10, 7)]),     # multi-reflect
-            ((4,), [(20, 20)]),    # multi-reflect, both sides
-            ((3,), [(9, 1)]),      # multi-reflect
-            ((1,), [(3, 2)]),      # degenerate axis
-            ((2,), [(5, 6)]),      # smallest non-trivial, multi-reflect
+            ((4,), [(10, 7)]),  # multi-reflect
+            ((4,), [(20, 20)]),  # multi-reflect, both sides
+            ((3,), [(9, 1)]),  # multi-reflect
+            ((1,), [(3, 2)]),  # degenerate axis
+            ((2,), [(5, 6)]),  # smallest non-trivial, multi-reflect
             ((5, 6), [(2, 3), (1, 2)]),
-            ((5, 6), [(9, 9), (11, 0)]),   # both axes multi-reflect
+            ((5, 6), [(9, 9), (11, 0)]),  # both axes multi-reflect
             ((3, 4, 5), [(1, 1), (0, 0), (2, 2)]),
             ((3, 4, 5), [(4, 4), (0, 0), (7, 3)]),
         ]

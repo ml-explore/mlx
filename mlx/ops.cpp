@@ -1370,9 +1370,9 @@ array reflect_pad(
     bool include_edge,
     StreamOrDevice s /* = {} */) {
   // Reflect (include_edge=false) or symmetric (include_edge=true) padding.
-  // Matches numpy.pad for arbitrary pad sizes (the reflection repeats as needed).
-  // For an out-of-range coordinate r (relative to the original axis [0, n)),
-  // map it back into [0, n) by reflection:
+  // Matches numpy.pad for arbitrary pad sizes (the reflection repeats as
+  // needed). For an out-of-range coordinate r (relative to the original axis
+  // [0, n)), map it back into [0, n) by reflection:
   //   reflect   -> period 2(n-1), edge NOT repeated
   //   symmetric -> period 2n,     edge repeated
   auto reflect_coord = [](int r, int n, bool include_edge) -> int {

@@ -2873,9 +2873,7 @@ TEST_CASE("test pad") {
   x = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, {5});
   CHECK(array_equal(
             pad(x, {{2, 2}}, array(0.0f), "reflect"),
-            array(
-                {3.0f, 2.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f, 3.0f},
-                {9}))
+            array({3.0f, 2.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f, 3.0f}, {9}))
             .item<bool>());
   CHECK(array_equal(
             pad(x, {{0, 3}}, array(0.0f), "reflect"),
@@ -2885,22 +2883,32 @@ TEST_CASE("test pad") {
   // symmetric padding (mirror repeating the edge value)
   CHECK(array_equal(
             pad(x, {{2, 2}}, array(0.0f), "symmetric"),
-            array(
-                {2.0f, 1.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 5.0f, 4.0f},
-                {9}))
+            array({2.0f, 1.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 5.0f, 4.0f}, {9}))
             .item<bool>());
   CHECK(array_equal(
             pad(x, {{3, 0}}, array(0.0f), "symmetric"),
             array({3.0f, 2.0f, 1.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, {8}))
             .item<bool>());
 
-  // multi-reflect: pad larger than the axis repeats the reflection (numpy parity)
+  // multi-reflect: pad larger than the axis repeats the reflection (numpy
+  // parity)
   x = array({1.0f, 2.0f, 3.0f}, {3});
   CHECK(array_equal(
             pad(x, {{5, 5}}, array(0.0f), "reflect"),
             array(
-                {2.0f, 1.0f, 2.0f, 3.0f, 2.0f, 1.0f, 2.0f, 3.0f, 2.0f, 1.0f,
-                 2.0f, 3.0f, 2.0f},
+                {2.0f,
+                 1.0f,
+                 2.0f,
+                 3.0f,
+                 2.0f,
+                 1.0f,
+                 2.0f,
+                 3.0f,
+                 2.0f,
+                 1.0f,
+                 2.0f,
+                 3.0f,
+                 2.0f},
                 {13}))
             .item<bool>());
 }
