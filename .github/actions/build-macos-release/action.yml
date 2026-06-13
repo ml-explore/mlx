@@ -52,7 +52,7 @@ runs:
         echo "::endgroup::"
 
     - name: Test local packages
-      if: ${{ inputs.build-backend == 'true' && inputs.macos-target == '26.0' }}
+      if: ${{ inputs.build-backend == 'true' && startsWith(inputs.macos-target, '26.') }}
       shell: bash
       run: |
         echo "::group::Test local packages"
