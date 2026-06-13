@@ -1614,6 +1614,17 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto mode = quantization_mode_to_string(mode_);
   bool w_quantized = (inputs[1].dtype() == uint32);
+  // Tensor-scale nvfp4 (global_scale_x / global_scale_w) is packed into
+  // inputs by ops.cpp but no Metal qqmm kernel currently consumes the
+  // global scales. Reject the request rather than silently dropping them
+  // in the gemv path below.
+  int base_size = w_quantized ? 3 : 2;
+  if (mode_ == QuantizationMode::Nvfp4 &&
+      static_cast<int>(inputs.size()) > base_size) {
+    throw std::runtime_error(
+        "[QQMatmul] Global scale (tensor-scale nvfp4) is not supported "
+        "on the Metal backend.");
+  }
   if (w_quantized && inputs[0].shape(-2) == 1) {
     out.set_data(allocator::malloc(out.nbytes()));
 

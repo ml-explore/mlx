@@ -63,13 +63,15 @@ class Synchronizer : public Primitive {
 // These are used to implement the in_tracing() function the returns true if we
 // are currently under a function transformation and the retain_graph()
 // function which returns true if we are forced to retain the graph during
-// evaluation.
+// evaluation. They are thread_local since a trace belongs to the thread that
+// runs it, so that concurrent transforms on different threads do not race on
+// shared tracing state.
 std::vector<std::pair<char, char>>& detail::InTracing::trace_stack() {
-  static std::vector<std::pair<char, char>> trace_stack_;
+  static thread_local std::vector<std::pair<char, char>> trace_stack_;
   return trace_stack_;
 }
-int detail::InTracing::grad_counter{0};
-int detail::RetainGraph::tracing_counter{0};
+thread_local int detail::InTracing::grad_counter{0};
+thread_local int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
   std::deque<array> tape;

@@ -9,4 +9,4 @@
 #include "mlx/backend/cpu/binary_ops.h"
 // clang-format on
 
-const char* get_kernel_preamble();
+const char* get_prebuilt_preamble();

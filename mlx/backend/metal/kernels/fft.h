@@ -229,7 +229,7 @@ template <int tg_mem_size, typename in_T, typename out_T>
     uint3 grid [[threads_per_grid]]) {
   // Use Rader's algorithm to compute fast FFTs
   // when a prime factor `p` of `n` is greater than 13 but
-  // has `p - 1` Stockham decomposable into to prime factors <= 13.
+  // has `p - 1` Stockham decomposable into prime factors <= 13.
   //
   // E.g. n = 102
   //        = 2 * 3 * 17

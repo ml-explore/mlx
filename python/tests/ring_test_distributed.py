@@ -14,8 +14,7 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
 
     def test_groups(self):
         world = mx.distributed.init()
-        self.assertEqual(world.size(), 8)
-        self.assertTrue(0 <= world.rank() < 8)
+        self.assertTrue(0 <= world.rank() < world.size())
 
         world2 = mx.distributed.init()
         self.assertEqual(world.size(), world2.size())

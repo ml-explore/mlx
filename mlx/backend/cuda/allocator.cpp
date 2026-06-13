@@ -318,7 +318,7 @@ void CudaAllocator::move_to_unified_memory(
   buf.device = -1;
 }
 
-// This must be called with mutex_ aquired
+// This must be called with mutex_ acquired
 void CudaAllocator::free_cuda_buffer(CudaBuffer* buf) {
   if (scalar_pool_.in_pool(buf)) {
     scalar_pool_.free(buf);

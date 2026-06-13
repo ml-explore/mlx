@@ -148,7 +148,7 @@ struct GEMVKernel {
     out_row = out_row + TM <= out_vec_size ? out_row : out_vec_size - TM;
 
     // Advance matrix
-    mat += out_row * matrix_ld;
+    mat += size_t(out_row) * matrix_ld;
 
     constexpr const uniform<int> loop_stride = make_uniform(blockN);
     const uniform<int> in_size = make_uniform(in_vec_size);
@@ -356,7 +356,7 @@ struct GEMVTKernel {
         for (int tm = 0; tm < TM; tm++) {
           auto vc = static_cast<AccT>(v_coeff[tm]);
           for (int tn = 0; tn < TN; tn++) {
-            inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
+            inter[tn] = mat[size_t(bm + tm) * marix_ld + out_col + tn];
           }
           for (int tn = 0; tn < TN; tn++) {
             result[tn] += vc * inter[tn];
@@ -372,7 +372,7 @@ struct GEMVTKernel {
 
           MLX_MTL_PRAGMA_UNROLL
           for (int tn = 0; tn < TN; tn++) {
-            inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
+            inter[tn] = mat[size_t(bm + tm) * marix_ld + out_col + tn];
           }
 
           MLX_MTL_PRAGMA_UNROLL

@@ -4,6 +4,7 @@ import gc
 import inspect
 import io
 import math
+import threading
 from functools import partial, wraps
 from io import StringIO
 
@@ -43,6 +44,59 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = compiled_fn(x, y)
         self.assertEqual(out.dtype, mx.int32)
         self.assertTrue(mx.array_equal(out, mx.array([2, 4])))
+
+    def test_compile_nonfinite_constants(self):
+        # Regression test: a non-finite scalar constant (NaN / infinity) baked
+        # into a fused compiled kernel used to stream a bare token (e.g. `nan`)
+        # into the generated kernel source, which is not a valid identifier and
+        # broke compilation (notably on the Metal backend).
+        x = mx.array([1.0, -1.0])
+
+        for dtype in (mx.float32, mx.float16, mx.bfloat16):
+            xd = x.astype(dtype)
+
+            nan_fn = mx.compile(
+                lambda a: mx.where(a > 0, a, mx.array(float("nan"), dtype=a.dtype))
+            )
+            out = nan_fn(xd)
+            mx.eval(out)
+            self.assertEqual(out[0].item(), 1.0)
+            self.assertTrue(math.isnan(out[1].item()))
+
+            neg_inf_fn = mx.compile(
+                lambda a: mx.where(a > 0, a, mx.array(float("-inf"), dtype=a.dtype))
+            )
+            out = neg_inf_fn(xd)
+            mx.eval(out)
+            self.assertEqual(out[0].item(), 1.0)
+            self.assertEqual(out[1].item(), float("-inf"))
+
+    def test_compile_tuple_output_in_thread(self):
+        @mx.compile
+        def fun(x):
+            return x + 1, x * 2
+
+        results = []
+        errors = []
+
+        def worker():
+            try:
+                x = mx.array([1.0])
+                y, z = fun(x)
+                mx.eval(y, z)
+                results.append((y.item(), z.item()))
+            except Exception as e:
+                errors.append(e)
+
+        for _ in range(3):
+            thread = threading.Thread(target=worker)
+            thread.start()
+            thread.join()
+            gc.collect()
+
+        if errors:
+            raise errors[0]
+        self.assertEqual(results, [(2.0, 2.0)] * 3)
 
     def test_compile_grad(self):
         def loss_fn(x):
@@ -503,6 +557,45 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertEqual(compiled_zero_like(y).shape, y_shape)
         self.assertEqual(compiled_ones_like(y).shape, y_shape)
+
+    def test_shapeless_compile_gather_qmm(self):
+        K, N, num_experts = 64, 32, 4
+
+        w = mx.random.normal((num_experts, N, K))
+        qw, s, b = mx.quantize(w)
+        mx.eval(qw, s, b)
+
+        idx = mx.array([0, 1, 2, 3])
+        x4 = mx.ones((num_experts, 4, K))
+        x8 = mx.ones((num_experts, 8, K))
+
+        def fn(x):
+            return mx.gather_qmm(
+                x, qw, s, b, lhs_indices=idx, rhs_indices=idx, transpose=True
+            )
+
+        cfn = mx.compile(fn, shapeless=True)
+
+        self.assertEqual(cfn(x4).shape, fn(x4).shape)
+        self.assertEqual(cfn(x8).shape, fn(x8).shape)
+
+    def test_shapeless_compile_gather_mm(self):
+        K, N, num_experts = 64, 32, 4
+
+        idx = mx.array([0, 1, 2, 3])
+        b = mx.random.normal((num_experts, K, N))
+        mx.eval(b)
+
+        x4 = mx.ones((num_experts, 4, K))
+        x8 = mx.ones((num_experts, 8, K))
+
+        def fn(x):
+            return mx.gather_mm(x, b, lhs_indices=idx, rhs_indices=idx)
+
+        cfn = mx.compile(fn, shapeless=True)
+
+        self.assertEqual(cfn(x4).shape, fn(x4).shape)
+        self.assertEqual(cfn(x8).shape, fn(x8).shape)
 
     def test_compile_with_constant(self):
         # Test float

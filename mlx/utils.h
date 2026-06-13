@@ -3,6 +3,10 @@
 #pragma once
 
 #include <exception>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
+#include <string_view>
 #include <variant>
 
 #include "mlx/api.h"
@@ -95,6 +99,24 @@ inline Dtype result_type(const array& a, const array& b, const array& c) {
 MLX_API Dtype result_type(const std::vector<array>& arrays);
 
 MLX_API Shape broadcast_shapes(const Shape& s1, const Shape& s2);
+
+template <typename T>
+inline ShapeElem safe_cast(T dim, std::string_view op = "") {
+  constexpr int64_t lo = std::numeric_limits<ShapeElem>::min();
+  constexpr int64_t hi = std::numeric_limits<ShapeElem>::max();
+  auto v = static_cast<int64_t>(dim);
+  if (v < lo || v > hi) {
+    std::ostringstream msg;
+    if (!op.empty()) {
+      msg << "[" << op << "] ";
+    }
+    msg << "Shape dimension " << v << " is outside the supported range [" << lo
+        << ", " << hi
+        << "]. MLX currently uses 32-bit integers for shape dimensions.";
+    throw std::overflow_error(msg.str());
+  }
+  return static_cast<ShapeElem>(v);
+}
 
 /**
  * Returns the axis normalized to be in the range [0, ndim).

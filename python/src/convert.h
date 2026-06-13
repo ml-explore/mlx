@@ -62,7 +62,7 @@ struct ArrayLike {
 };
 
 mx::array nd_array_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
+    nb::ndarray<nb::ro, nb::c_contig> nd_array,
     std::optional<mx::Dtype> mx_dtype,
     std::optional<nb::dlpack::dtype> nb_dtype = std::nullopt);
 

@@ -365,6 +365,28 @@ class TestFast(mlx_tests.MLXTestCase):
         rx = rope_orig(x, dims, traditional, base, scale, offset)
         self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
 
+    def test_rope_single_batch(self):
+        base = 10000.0
+        scale = 1.0
+        offset = 5
+
+        for traditional in [True, False]:
+            for B in [2, 4, 8]:
+                for n_head in [1, 4, 7]:
+                    for dims in [64, 128]:
+                        x = mx.random.uniform(shape=(B, n_head, 1, dims))
+                        mx.eval(x)
+                        rx_fast = mx.fast.rope(
+                            x,
+                            dims,
+                            traditional=traditional,
+                            base=base,
+                            scale=scale,
+                            offset=offset,
+                        )
+                        rx = rope_orig(x, dims, traditional, base, scale, offset)
+                        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
+
     def test_rope_with_large_offset(self):
         x = mx.random.normal(shape=(1, 1, 1024, 32))
         rx_fp32 = mx.fast.rope(

@@ -983,6 +983,7 @@ METAL_FUNC void qvm_impl(
     device T* y,
     const int in_vec_size,
     const int out_vec_size,
+    const int in_vec_stride,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
@@ -1016,7 +1017,7 @@ METAL_FUNC void qvm_impl(
   ws += out_col * bytes_per_pack / pack_factor + simd_lid * out_vec_size_w;
   scales += out_col / group_size + simd_lid * out_vec_size_g;
   biases += out_col / group_size + simd_lid * out_vec_size_g;
-  x += tid.x * in_vec_size + simd_lid;
+  x += tid.x * in_vec_stride + simd_lid;
   y += tid.x * out_vec_size + out_col;
 
   if (out_col >= out_vec_size) {
@@ -1643,6 +1644,7 @@ template <typename T, const int group_size, const int bits, bool batched>
       y,
       in_vec_size,
       out_vec_size,
+      in_vec_size,
       tid,
       simd_gid,
       simd_lid);
@@ -1691,6 +1693,9 @@ template <typename T, const int group_size, const int bits, int split_k = 32>
   int in_vec_size_adj =
       tid.z % split_k == split_k - 1 ? final_block_size : in_vec_size;
 
+  // The in_vec_stride is the full K dimension, not the partition size
+  int in_vec_stride = (split_k - 1) * in_vec_size + final_block_size;
+
   qvm_impl<T, group_size, bits>(
       w,
       scales,
@@ -1699,6 +1704,7 @@ template <typename T, const int group_size, const int bits, int split_k = 32>
       y,
       in_vec_size_adj,
       out_vec_size,
+      in_vec_stride,
       tid,
       simd_gid,
       simd_lid);
@@ -2077,6 +2083,7 @@ template <typename T, int group_size, int bits>
       y,
       in_vec_size,
       out_vec_size,
+      in_vec_size,
       tid,
       simd_gid,
       simd_lid);

@@ -421,7 +421,7 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  cutlass_gather_mm(
+  gather_mm(
       a_transposed, b_transposed, a, b, lhs_indices, rhs_indices, out, encoder);
 }
 

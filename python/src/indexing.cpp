@@ -926,7 +926,7 @@ mlx_compute_slice_update_args(
 }
 
 std::optional<mx::array> extract_boolean_mask(const nb::object& obj) {
-  using NDArray = nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>;
+  using NDArray = nb::ndarray<nb::ro, nb::c_contig>;
   if (nb::isinstance<nb::bool_>(obj)) {
     return mx::array(nb::cast<bool>(obj), mx::bool_);
   } else if (nb::isinstance<mx::array>(obj)) {

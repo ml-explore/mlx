@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #pragma once
 
+#include <cmath>
 #include <functional>
 #include <iomanip>
 
@@ -17,13 +18,30 @@ std::string get_type_string(Dtype d);
 
 template <typename T>
 void print_float_constant(std::ostream& os, const array& x) {
+  auto value = x.item<T>();
+
+  // Non-finite values stream as bare tokens like `nan`/`inf`, which are not
+  // valid identifiers in the generated kernel source and fail to compile.
+  // Emit the INFINITY/NAN macros instead, which are provided by both the
+  // Metal (<metal_stdlib>) and CPU (<cmath>) kernel toolchains. Widen to
+  // double first so the finite check is exact for every float type.
+  double dvalue = static_cast<double>(value);
+  if (std::isnan(dvalue)) {
+    os << "NAN";
+    return;
+  }
+  if (std::isinf(dvalue)) {
+    os << (dvalue < 0 ? "-INFINITY" : "INFINITY");
+    return;
+  }
+
   auto old_precision = os.precision();
   if constexpr (std::is_same_v<T, double>) {
     os << std::setprecision(std::numeric_limits<double>::digits10 + 1);
   } else {
     os << std::setprecision(std::numeric_limits<float>::digits10 + 1);
   }
-  os << x.item<T>() << std::setprecision(old_precision);
+  os << value << std::setprecision(old_precision);
 }
 
 template <typename T>

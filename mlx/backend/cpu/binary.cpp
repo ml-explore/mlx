@@ -54,6 +54,7 @@ void DivMod::eval_cpu(
     switch (out_a.dtype()) {
       case bool_:
         binary_op<bool>(a, b, out_a, out_b, integral_op, bopt);
+        break;
       case uint8:
         binary_op<uint8_t>(a, b, out_a, out_b, integral_op, bopt);
         break;

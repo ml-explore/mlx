@@ -409,6 +409,16 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(means, 3 * np.ones_like(means), atol=1e-6))
         self.assertTrue(np.allclose(var, 4 * np.ones_like(var), atol=1e-6))
 
+        # Raise for invalid num_groups / dims
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=4, dims=6)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=0, dims=8)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=-1, dims=8)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=4, dims=0)
+
     def test_instance_norm(self):
         # Test InstanceNorm1d
         x = mx.array(
@@ -626,6 +636,9 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
         # Test repr
         self.assertTrue(str(inorm) == "InstanceNorm(3, eps=1e-05, affine=False)")
+        # Raise for inputs without spatial dimensions
+        with self.assertRaises(ValueError):
+            nn.InstanceNorm(dims=8)(mx.zeros((4, 8)))
 
     def test_batch_norm(self):
         mx.random.seed(42)
@@ -931,6 +944,17 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertLess(
             mx.abs(similarities[mx.arange(10), mx.arange(10)] - 1).max(), 1e-5
         )
+
+        # dims=2 should be supported (single sin/cos frequency pair)
+        m = nn.SinusoidalPositionalEncoding(2)
+        y = m(x)
+        self.assertEqual(y.shape, (10, 2))
+
+        # Odd and non-positive dimensions are invalid
+        for dims in [0, 1, 3]:
+            with self.subTest(dims=dims):
+                with self.assertRaises(ValueError):
+                    nn.SinusoidalPositionalEncoding(dims)
 
     def test_sigmoid(self):
         x = mx.array([1.0, 0.0, -1.0])

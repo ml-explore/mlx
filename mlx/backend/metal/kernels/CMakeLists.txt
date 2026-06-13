@@ -155,8 +155,9 @@ if(NOT MLX_METAL_JIT)
   build_kernel(gemv_masked steel/utils.h)
   build_kernel(steel/attn/kernels/steel_attention ${STEEL_ATTN_HEADERS})
 
-  if((MLX_METAL_VERSION GREATER_EQUAL 400) AND (MACOS_SDK_VERSION GREATER_EQUAL
-                                                26.2))
+  if(MLX_METAL_VERSION GREATER_EQUAL 400
+     AND MACOS_SDK_VERSION VERSION_GREATER_EQUAL 26.2
+     AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_GREATER_EQUAL 26.2)
 
     build_kernel(steel/gemm/kernels/steel_gemm_fused_nax ${STEEL_NAX_HEADERS})
     build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
@@ -177,9 +178,14 @@ if(NOT MLX_METAL_JIT)
 
 endif()
 
+set(METAL_LINK_FLAGS)
+if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
+  set(METAL_LINK_FLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
+
 add_custom_command(
   OUTPUT ${MLX_METAL_PATH}/mlx.metallib
-  COMMAND xcrun -sdk macosx metal ${KERNEL_AIR} -o
+  COMMAND xcrun -sdk macosx metal ${METAL_LINK_FLAGS} ${KERNEL_AIR} -o
           ${MLX_METAL_PATH}/mlx.metallib
   DEPENDS ${KERNEL_AIR}
   COMMENT "Building mlx.metallib"

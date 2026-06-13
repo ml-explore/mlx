@@ -22,5 +22,7 @@ int main(int argc, char** argv) {
   }
 
   context.applyCommandLine(argc, argv);
-  return context.run();
+  int exit_code = context.run();
+  clear_streams();
+  return exit_code;
 }

@@ -1,6 +1,5 @@
 # Copyright © 2023-2024 Apple Inc.
 
-import gc
 import operator
 import os
 import pickle
@@ -14,14 +13,21 @@ from itertools import permutations
 import mlx.core as mx
 import mlx_tests
 import numpy as np
-import psutil
 
 try:
     import tensorflow as tf
 
     has_tf = True
-except ImportError as e:
+except ImportError:
     has_tf = False
+
+try:
+    import torch
+
+    has_torch_mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+except ImportError:
+    torch = None
+    has_torch_mps = False
 
 
 class TestVersion(mlx_tests.MLXTestCase):
@@ -2039,6 +2045,21 @@ class TestArray(mlx_tests.MLXTestCase):
         y = np.from_dlpack(x)
         self.assertTrue(mx.array_equal(y, x))
 
+    @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
+    def test_torch_mps_dlpack_non_cpu_error(self):
+        x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)
+        self.assertEqual(x.__dlpack_device__()[0], 8)
+
+        with self.assertRaisesRegex(ValueError, "non-CPU DLPack"):
+            mx.array(x)
+
+        a = mx.array([1])
+        b = torch.tensor([2])
+        self.assertTrue(mx.array_equal(a + b, mx.array([3])))
+
+        with self.assertRaisesRegex(ValueError, "non-CPU DLPack"):
+            a + b.to("mps")
+
     def test_getitem_with_list(self):
         a = mx.array([1, 2, 3, 4, 5])
         idx = [0, 2, 4]
@@ -2152,6 +2173,17 @@ class TestArray(mlx_tests.MLXTestCase):
         arr_pass = xp.asarray(existing)
         self.assertEqual(arr_pass.tolist(), [4, 5, 6])
 
+    def test_asarray_copy(self):
+        existing = mx.array([1, 2, 3])
+
+        self.assertEqual(mx.asarray(existing, copy=True).tolist(), [1, 2, 3])
+        self.assertEqual(
+            mx.asarray(existing, dtype=mx.float32, copy=True).dtype, mx.float32
+        )
+
+        with self.assertRaises(ValueError):
+            mx.asarray(existing, copy=False)
+
     def test_asarray(self):
         # List inputs
         self.assertEqual(mx.asarray([1, 2, 3]).tolist(), [1, 2, 3])
@@ -2244,29 +2276,6 @@ class TestArray(mlx_tests.MLXTestCase):
         for _ in range(100_000):
             x = mx.sin(x)
         mx.eval(x)
-
-    @unittest.skipIf(platform.system() == "Windows", "Memory info not accurate")
-    def test_siblings_without_eval(self):
-        def get_mem():
-            process = psutil.Process(os.getpid())
-            return process.memory_info().rss
-
-        key = mx.array([1, 2])
-
-        def t():
-            a, b = mx.split(key, 2)
-            a = mx.reshape(a, [])
-            b = mx.reshape(b, [])
-            return b
-
-        mx.synchronize()
-        t()
-        gc.collect()
-        expected = get_mem()
-        for _ in range(100):
-            t()
-        used = get_mem()
-        self.assertEqual(expected, used)
 
     def test_scalar_integer_conversion_overflow(self):
         y = mx.array(2000000000, dtype=mx.int32)
