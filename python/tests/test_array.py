@@ -2173,6 +2173,23 @@ class TestArray(mlx_tests.MLXTestCase):
         arr_pass = xp.asarray(existing)
         self.assertEqual(arr_pass.tolist(), [4, 5, 6])
 
+        arr_copy = xp.asarray(existing, copy=True)
+        self.assertEqual(arr_copy.tolist(), [4, 5, 6])
+
+    def test_array_namespace_from_dlpack(self):
+        xp = mx.array(1.0).__array_namespace__()
+        self.assertTrue(hasattr(xp, "from_dlpack"))
+
+        src = np.array([[1, 2], [3, 4]], dtype=np.int32)
+        arr = xp.from_dlpack(src)
+        self.assertEqual(arr.tolist(), [[1, 2], [3, 4]])
+        self.assertEqual(arr.dtype, mx.int32)
+
+        src = mx.array([1.0, 2.0])
+        arr = xp.from_dlpack(src)
+        self.assertEqual(arr.tolist(), [1.0, 2.0])
+        self.assertEqual(arr.dtype, mx.float32)
+
     def test_asarray_copy(self):
         existing = mx.array([1, 2, 3])
 
