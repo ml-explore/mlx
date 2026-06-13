@@ -101,6 +101,16 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(params3.m, mx.array([1, 2])))
         self.assertTrue(mx.array_equal(params3.b, mx.array(3)))
 
+        paths = []
+        params4 = mlx.utils.tree_map_with_path(
+            lambda path, x, y: paths.append(path) or x + y, params1, params3
+        )
+
+        self.assertEqual(paths, ["0", "1"])
+        self.assertTrue(isinstance(params4, Params))
+        self.assertTrue(mx.array_equal(params4.m, mx.array([1, 3])))
+        self.assertTrue(mx.array_equal(params4.b, mx.array(5)))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
