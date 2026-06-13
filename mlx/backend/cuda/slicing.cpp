@@ -37,7 +37,11 @@ void concatenate_gpu(
     size_t data_offset = strides[axis] * sizes[i];
     out_slice.copy_shared_buffer(
         out, strides, flags, out_slice.size(), data_offset);
-    copy_gpu_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, s);
+    auto ctype = CopyType::GeneralGeneral;
+    if (axis == 0 && inputs[i].flags().row_contiguous) {
+      ctype = CopyType::Vector;
+    }
+    copy_gpu_inplace(inputs[i], out_slice, ctype, s);
   }
 }
 
