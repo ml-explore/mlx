@@ -111,6 +111,30 @@ __device__ __forceinline__ void load_weight_vec(
   }
 }
 
+// Streaming (non-temporal) weight load for QMV / GEMV (M=1) decode.
+//
+// In a matrix-vector product every weight is read EXACTLY ONCE — there is no
+// weight reuse, so caching the weight stream in L2 only evicts the data that IS
+// reused (the shared X activation vector and the scales/biases). On gfx1151 the
+// L2 is just 2 MB, so a wide weight stream thrashes it and the effective
+// bandwidth oscillates as the L2 hit-rate on X/scales swings.
+//
+// __builtin_nontemporal_load emits `global_load_* slc` (streaming cache bit) on
+// RDNA: the weight bytes flow through without being retained in L2, leaving L2 /
+// the 32 MB MALL for the reused X and scales. Used ONLY by the GEMV path; the
+// GEMM (M>1) path keeps the normal cached load because there weights ARE reused
+// across the M rows.
+template <int BITS>
+__device__ __forceinline__ void load_weight_vec_streaming(
+    const uint32_t* __restrict__ ptr,
+    uint32_t (&out)[packs_per_thread<BITS>]) {
+  constexpr int PPT = packs_per_thread<BITS>;
+#pragma unroll
+  for (int p = 0; p < PPT; p++) {
+    out[p] = __builtin_nontemporal_load(ptr + p);
+  }
+}
+
 // --- Type conversion helpers ---
 
 __device__ __forceinline__ float to_float(__half x) {

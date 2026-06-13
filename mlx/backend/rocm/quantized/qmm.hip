@@ -2955,7 +2955,21 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       tile_n >= 8 && mode_ == QuantizationMode::Affine) {
     enc.launch_kernel([&, x_ptr, w_ptr, scales_ptr, biases_ptr, out_ptr, tile_n](hipStream_t stream) {
       dim3 tiled_block(WARP_SIZE, tile_n);
-      dim3 tiled_grid(M, (N + tile_n - 1) / tile_n);
+      const int n_tiles = (N + tile_n - 1) / tile_n;
+      // Persistent grid: launch a CU-bounded number of column-tile blocks and let
+      // each grid-stride over the rest (kernel loops tile += gridDim.y). This
+      // holds the live block count — and thus the weight-stream bandwidth —
+      // steady, removing the launch ramp/tail that shows up as oscillating
+      // memory bandwidth. For small N (n_tiles below the persistent count) it
+      // collapses to the original one-block-per-tile launch.
+      int blocks_per_cu = (hw_info.max_threads_per_cu > 0)
+          ? (hw_info.max_threads_per_cu / (tile_n * WARP_SIZE)) : 4;
+      if (blocks_per_cu < 1) blocks_per_cu = 1;
+      int persistent_y =
+          (hw_info.num_cus > 0) ? hw_info.num_cus * blocks_per_cu : n_tiles;
+      int grid_y = (n_tiles < persistent_y) ? n_tiles : persistent_y;
+      if (grid_y < 1) grid_y = 1;
+      dim3 tiled_grid(M, grid_y);
 
       #define LAUNCH_TILED(T, ScaleT, BITS_V, GS_V) \
         hipLaunchKernelGGL( \
@@ -2963,7 +2977,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
             tiled_grid, tiled_block, 0, stream, \
             (const T*)x_ptr, (const uint32_t*)w_ptr, \
             (const ScaleT*)scales_ptr, (const ScaleT*)biases_ptr, \
-            (T*)out_ptr, M, N, K, has_bias, tile_n)
+            (T*)out_ptr, M, N, K, has_bias, tile_n, n_tiles)
 
       if (x.dtype() == bfloat16) {
         if (bits_ == 4) {
