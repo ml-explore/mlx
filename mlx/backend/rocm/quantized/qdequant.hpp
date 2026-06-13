@@ -75,6 +75,29 @@ __device__ __forceinline__ void dequant_and_dot(
   }
 }
 
+// GEMV variant: 4 independent qdot partials (dual-issue-friendly). Caller reduces
+// them and applies scale/bias once per group — same result as dequant_and_dot.
+template <int BITS>
+__device__ __forceinline__ void dequant_and_dot4(
+    uint32_t packed,
+    const float* __restrict__ x_local,
+    float (&qdot)[4],
+    float& x_sum) {
+  constexpr int pf = pack_factor_u32<BITS>;
+  constexpr uint32_t mask = (1u << BITS) - 1u;
+
+#pragma unroll
+  for (int i = 0; i < pf; i++) {
+    float q = static_cast<float>((packed >> (i * BITS)) & mask);
+    qdot[i & 3] += x_local[i] * q;
+    x_sum += x_local[i];
+  }
+}
+
+__device__ __forceinline__ float reduce_qdot4(const float (&qdot)[4]) {
+  return (qdot[0] + qdot[1]) + (qdot[2] + qdot[3]);
+}
+
 // --- Vectorized weight load ---
 //
 // Loads PPT uint32 words in a single wide memory transaction instead of
@@ -111,19 +134,8 @@ __device__ __forceinline__ void load_weight_vec(
   }
 }
 
-// Streaming (non-temporal) weight load for QMV / GEMV (M=1) decode.
-//
-// In a matrix-vector product every weight is read EXACTLY ONCE — there is no
-// weight reuse, so caching the weight stream in L2 only evicts the data that IS
-// reused (the shared X activation vector and the scales/biases). On gfx1151 the
-// L2 is just 2 MB, so a wide weight stream thrashes it and the effective
-// bandwidth oscillates as the L2 hit-rate on X/scales swings.
-//
-// __builtin_nontemporal_load emits `global_load_* slc` (streaming cache bit) on
-// RDNA: the weight bytes flow through without being retained in L2, leaving L2 /
-// the 32 MB MALL for the reused X and scales. Used ONLY by the GEMV path; the
-// GEMM (M>1) path keeps the normal cached load because there weights ARE reused
-// across the M rows.
+// Non-temporal weight load for GEMV: weights are read once, so emit streaming
+// (slc) loads that bypass L2, leaving it for the reused X/scales. GEMV-only.
 template <int BITS>
 __device__ __forceinline__ void load_weight_vec_streaming(
     const uint32_t* __restrict__ ptr,

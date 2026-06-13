@@ -146,16 +146,8 @@ inline ArchTuning get_arch_tuning(RocmArchTier tier) {
 inline ArchTuning get_arch_tuning(const HWInfo& hw) {
   auto t = get_arch_tuning(hw.tier);
 
-  // Auto-tune QMV tile_n from L2 size + CU count (not just the tier enum, so
-  // future parts tune automatically). The weight stream has no reuse, so TILE_N
-  // is bounded by how many concurrent column streams the L2 can hold without
-  // evicting the reused X / scales:
-  //   - RDNA 3 / 3.5: only 2 MB L2 -> TILE_N=16. TILE_N=32 makes 1024-thread
-  //     blocks that halve occupancy AND 32 streams thrash the 2 MB L2 (the
-  //     bandwidth oscillation). Only drop to 8 for very small APUs.
-  //   - RDNA 4: 8 MB L2 + 64 MB IC -> TILE_N=24 is safe (no thrash) and reduces
-  //     launch quantization across its 64 CUs. (The previous code wrongly
-  //     clamped RDNA 4 to 16.)
+  // TILE_N is bounded by how many column streams L2 holds without evicting the
+  // reused X/scales. RDNA 3/3.5 (2 MB L2): 16. RDNA 4 (8 MB L2): 24.
   if (hw.tier == RocmArchTier::Rdna3 || hw.tier == RocmArchTier::Rdna35) {
     t.qmv_tile_n = (hw.num_cus <= 16) ? 8 : 16;
   } else if (hw.tier == RocmArchTier::Rdna4) {

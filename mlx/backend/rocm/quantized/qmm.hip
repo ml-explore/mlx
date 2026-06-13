@@ -2956,12 +2956,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     enc.launch_kernel([&, x_ptr, w_ptr, scales_ptr, biases_ptr, out_ptr, tile_n](hipStream_t stream) {
       dim3 tiled_block(WARP_SIZE, tile_n);
       const int n_tiles = (N + tile_n - 1) / tile_n;
-      // Persistent grid: launch a CU-bounded number of column-tile blocks and let
-      // each grid-stride over the rest (kernel loops tile += gridDim.y). This
-      // holds the live block count — and thus the weight-stream bandwidth —
-      // steady, removing the launch ramp/tail that shows up as oscillating
-      // memory bandwidth. For small N (n_tiles below the persistent count) it
-      // collapses to the original one-block-per-tile launch.
+      // Persistent grid: CU-bounded block count, kernel grid-strides the rest.
       int blocks_per_cu = (hw_info.max_threads_per_cu > 0)
           ? (hw_info.max_threads_per_cu / (tile_n * WARP_SIZE)) : 4;
       if (blocks_per_cu < 1) blocks_per_cu = 1;

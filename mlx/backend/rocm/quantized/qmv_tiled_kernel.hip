@@ -57,13 +57,9 @@ void qmv_tiled_kernel(
   const int num_groups = (K + GROUP_SIZE - 1) / GROUP_SIZE;
   const T* x_row = x + m * K;
 
-  // Persistent grid-stride over output-column tiles. The grid is launched with a
-  // CU-bounded number of blocks (not one per tile), and each block walks several
-  // column tiles. This keeps the number of live blocks — and therefore the weight
-  // stream's bandwidth — constant across the whole kernel, flattening the launch
-  // ramp/tail that otherwise shows up as oscillating memory bandwidth. The whole
-  // warp shares threadIdx.y, so `valid` and the __syncthreads below stay
-  // warp/block-uniform.
+  // Grid-stride over column tiles (grid is CU-bounded, not one block per tile) to
+  // keep the live block count steady. threadIdx.y is warp-uniform, so the
+  // __syncthreads below stay block-uniform.
   for (int tile = blockIdx.y; tile < n_tiles; tile += gridDim.y) {
     const int n = tile * tile_n + threadIdx.y;
     const bool valid = (m < M && n < N);
@@ -94,16 +90,13 @@ void qmv_tiled_kernel(
       // Vectorized weight load + dequant + accumulate
       int w_offset = k_base / PF + lane * PPT;
 
-      float group_qdot = 0.0f;
+      float group_qdot4[4] = {0.0f, 0.0f, 0.0f, 0.0f};
       float group_xsum = 0.0f;
 
       int k_val = k_base + lane * VPT;
       int group_idx = k_val / GROUP_SIZE;
 
       uint32_t w_local[PPT];
-      // Warp-uniform branch: all lanes in bounds except possibly last K-tile.
-      // Stream the read-once weights (non-temporal) so they don't evict the
-      // reused X / scales from the small (2 MB on gfx1151) L2.
       if (k_base + BSK <= K) {
         load_weight_vec_streaming<BITS>(w_row + w_offset, w_local);
       } else {
@@ -115,12 +108,12 @@ void qmv_tiled_kernel(
 
       #pragma unroll
       for (int p = 0; p < PPT; p++) {
-        dequant_and_dot<BITS>(w_local[p], &x_local[p * PF], group_qdot, group_xsum);
+        dequant_and_dot4<BITS>(w_local[p], &x_local[p * PF], group_qdot4, group_xsum);
       }
 
       float scale = (group_idx < num_groups) ? to_float(s_row[group_idx]) : 0.0f;
       float bias = (has_bias && group_idx < num_groups) ? to_float(b_row[group_idx]) : 0.0f;
-      acc += scale * group_qdot + bias * group_xsum;
+      acc += scale * reduce_qdot4(group_qdot4) + bias * group_xsum;
     }
 
     if (!valid) continue;
@@ -197,14 +190,14 @@ void gather_qmv_tiled_kernel(
     }
 
     int w_offset = k_base / PF + lane * PPT;
-    float group_qdot = 0.0f;
+    float group_qdot4[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     float group_xsum = 0.0f;
     int k_val = k_base + lane * VPT;
     int group_idx = k_val / GROUP_SIZE;
 
     uint32_t w_local[PPT];
     if (k_base + BSK <= K) {
-      load_weight_vec<BITS>(w_row + w_offset, w_local);
+      load_weight_vec_streaming<BITS>(w_row + w_offset, w_local);
     } else {
       #pragma unroll
       for (int p = 0; p < PPT; p++) {
@@ -214,12 +207,12 @@ void gather_qmv_tiled_kernel(
 
     #pragma unroll
     for (int p = 0; p < PPT; p++) {
-      dequant_and_dot<BITS>(w_local[p], &x_local[p * PF], group_qdot, group_xsum);
+      dequant_and_dot4<BITS>(w_local[p], &x_local[p * PF], group_qdot4, group_xsum);
     }
 
     float scale = (group_idx < num_groups) ? to_float(s_row[group_idx]) : 0.0f;
     float bias = (has_bias && group_idx < num_groups) ? to_float(b_row[group_idx]) : 0.0f;
-    acc += scale * group_qdot + bias * group_xsum;
+    acc += scale * reduce_qdot4(group_qdot4) + bias * group_xsum;
   }
 
   if (!valid) return;
