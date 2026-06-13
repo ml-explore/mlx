@@ -51,6 +51,12 @@ std::tuple<Shape, std::vector<int>, bool> compute_reduce_shape(
     is_noop &= (out_shape.back() == shape[i]);
   }
   std::vector<int> sorted_axes(axes_set.begin(), axes_set.end());
+  // Dimensions that are size 1 at trace time can be dynamic when compiling
+  // shapeless, so the reduction cannot be elided from the graph. Reductions
+  // over no axes stay no-ops since they are shape independent.
+  if (is_noop && !sorted_axes.empty() && detail::in_dynamic_tracing()) {
+    is_noop = false;
+  }
   return {out_shape, sorted_axes, is_noop};
 }
 
