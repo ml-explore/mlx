@@ -20,6 +20,7 @@ using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
 class Device;
+class EventImpl;
 
 class MLX_API CommandEncoder {
  public:
@@ -90,13 +91,12 @@ class MLX_API CommandEncoder {
 
   void barrier();
   void end_encoding();
+  void wait_event(std::shared_ptr<EventImpl> event, uint64_t value);
+  void signal_event(std::shared_ptr<EventImpl> event, uint64_t value);
   bool needs_commit() const;
-  void commit();
+  void commit(std::function<void()> completion = nullptr);
   void synchronize();
 
-  MTL::CommandQueue* get_command_queue() const {
-    return queue_.get();
-  }
   MTL::CommandBuffer* get_command_buffer() const {
     return buffer_.get();
   }
@@ -112,6 +112,13 @@ class MLX_API CommandEncoder {
   NS::SharedPtr<MTL::CommandBuffer> buffer_;
   int buffer_ops_{0};
   size_t buffer_sizes_{0};
+
+  // The events hooked to current command buffer.
+  std::vector<std::shared_ptr<EventImpl>> wait_events_;
+  std::vector<std::tuple<std::shared_ptr<EventImpl>, uint64_t>> signal_events_;
+
+  // Error from previous commited command buffer.
+  std::shared_ptr<std::string> error_;
 
   // Encoder for issuing GPU commands.
   // The members are used within a single ComputeCommandEncoder and will be
