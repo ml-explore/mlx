@@ -29,6 +29,7 @@ Operations
    array_equal
    asarray
    as_strided
+   astype
    atleast_1d
    atleast_2d
    atleast_3d
@@ -59,19 +60,25 @@ Operations
    conv_general
    cos
    cosh
+   count_nonzero
    cummax
    cummin
    cumprod
    cumsum
+   cumulative_prod
+   cumulative_sum
    degrees
    depends
    dequantize
    diag
    diagonal
+   diff
    divide
    divmod
    einsum
    einsum_path
+   empty
+   empty_like
    equal
    erf
    erfinv
@@ -83,6 +90,7 @@ Operations
    floor
    floor_divide
    full
+   full_like
    from_fp8
    gather_mm
    gather_qmm
@@ -116,8 +124,10 @@ Operations
    logical_not
    logical_and
    logical_or
+   logical_xor
    logsumexp
    matmul
+   matrix_transpose
    max
    maximum
    mean
@@ -136,6 +146,7 @@ Operations
    partition
    pad
    permute_dims
+   positive
    power
    prod
    put_along_axis
@@ -189,6 +200,7 @@ Operations
    tri
    tril
    triu
+   trunc
    unflatten
    var
    view

@@ -5660,4 +5660,395 @@ void init_ops(nb::module_& m) {
       Returns:
         array: The array converted to fp8 with type ``uint8``.
   )pbdoc");
+  // Array API elementwise and utility functions.
+  m.def(
+      "positive",
+      [](const mx::array& a, mx::StreamOrDevice s) {
+        return mx::astype(a, a.dtype(), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def positive(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise unary plus. Returns the input unchanged.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: ``a`` unchanged.
+      )pbdoc");
+  m.def(
+      "logical_xor",
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return mx::not_equal(
+            mx::astype(a, mx::bool_, s), mx::astype(b, mx::bool_, s), s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def logical_xor(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise logical exclusive or.
+
+        Args:
+            a (array): First input array or scalar.
+            b (array): Second input array or scalar.
+
+        Returns:
+            array: The boolean array containing the logical xor of ``a`` and ``b``.
+      )pbdoc");
+  m.def(
+      "trunc",
+      [](const ScalarOrArray& a_, mx::StreamOrDevice s) {
+        auto a = to_array(a_);
+        auto zero = mx::array(0, a.dtype());
+        return mx::where(
+            mx::less(a, zero, s), mx::ceil(a, s), mx::floor(a, s), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def trunc(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise truncation towards zero.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The truncated array.
+      )pbdoc");
+  m.def(
+      "count_nonzero",
+      [](const mx::array& a,
+         const IntOrVec& axis,
+         bool keepdims,
+         mx::StreamOrDevice s) {
+        auto nz = mx::astype(
+            mx::not_equal(a, mx::array(0, a.dtype()), s), mx::int32, s);
+        if (std::holds_alternative<std::monostate>(axis)) {
+          return mx::sum(nz, keepdims, s);
+        } else if (auto pv = std::get_if<int>(&axis); pv) {
+          return mx::sum(nz, *pv, keepdims, s);
+        } else {
+          return mx::sum(nz, std::get<std::vector<int>>(axis), keepdims, s);
+        }
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      nb::kw_only(),
+      "keepdims"_a = false,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def count_nonzero(a: array, /, *, axis: Union[None, int, Sequence[int]] = None, keepdims: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Count the number of non-zero elements along the given axis.
+
+        Args:
+            a (array): Input array.
+            axis (int or tuple(int), optional): Axis or axes to count over.
+              Defaults to ``None`` in which case the whole array is counted.
+            keepdims (bool, optional): Keep the reduced axes as size one.
+              Default: ``False``.
+
+        Returns:
+            array: The counts as an ``int32`` array.
+      )pbdoc");
+  m.def(
+      "diff",
+      [](const mx::array& a,
+         int n,
+         int axis,
+         const std::optional<mx::array>& prepend,
+         const std::optional<mx::array>& append,
+         mx::StreamOrDevice s) {
+        int ndim = static_cast<int>(a.ndim());
+        int ax = axis < 0 ? axis + ndim : axis;
+        if (ax < 0 || ax >= ndim) {
+          throw std::invalid_argument(
+              "[diff] Axis is out of bounds for the array.");
+        }
+        if (n < 0) {
+          throw std::invalid_argument("[diff] Order `n` must be non-negative.");
+        }
+        mx::array x = a;
+        if (prepend || append) {
+          std::vector<mx::array> parts;
+          if (prepend) {
+            parts.push_back(*prepend);
+          }
+          parts.push_back(x);
+          if (append) {
+            parts.push_back(*append);
+          }
+          x = mx::concatenate(parts, ax, s);
+        }
+        for (int i = 0; i < n; ++i) {
+          mx::Shape upper_start(x.ndim(), 0);
+          mx::Shape lower_stop = x.shape();
+          mx::Shape strides(x.ndim(), 1);
+          upper_start[ax] = 1;
+          lower_stop[ax] = x.shape(ax) - 1;
+          auto upper = mx::slice(x, upper_start, x.shape(), strides, s);
+          auto lower =
+              mx::slice(x, mx::Shape(x.ndim(), 0), lower_stop, strides, s);
+          x = mx::subtract(upper, lower, s);
+        }
+        return x;
+      },
+      nb::arg(),
+      "n"_a = 1,
+      "axis"_a = -1,
+      nb::kw_only(),
+      "prepend"_a = nb::none(),
+      "append"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def diff(a: array, /, n: int = 1, axis: int = -1, *, prepend: Optional[array] = None, append: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        The n-th discrete difference along the given axis.
+
+        Args:
+            a (array): Input array.
+            n (int, optional): The number of times to difference. Default: ``1``.
+            axis (int, optional): The axis along which to difference.
+              Default: ``-1``.
+            prepend (array, optional): Values to prepend along ``axis`` before
+              differencing.
+            append (array, optional): Values to append along ``axis`` before
+              differencing.
+
+        Returns:
+            array: The n-th differences.
+      )pbdoc");
+  // Array API creation functions.
+  m.def(
+      "full_like",
+      [](const mx::array& a,
+         const ScalarOrArray& vals,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        auto t = dtype.value_or(a.dtype());
+        return mx::full(a.shape(), to_array(vals, t), s);
+      },
+      nb::arg(),
+      "vals"_a,
+      "dtype"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def full_like(a: array, vals: Union[scalar, array], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        An array filled with ``vals`` with the same shape as the input.
+
+        Args:
+            a (array): The input to take the shape from.
+            vals (float or int or array): Values to fill the array with.
+            dtype (Dtype, optional): Data type of the output array. If
+              unspecified the type of the input is used.
+
+        Returns:
+            array: The output array.
+      )pbdoc");
+  m.def(
+      "empty",
+      [](const nb::object& shape,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        return mx::zeros(to_shape(shape), dtype.value_or(mx::float32), s);
+      },
+      "shape"_a,
+      "dtype"_a.none() = mx::float32,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def empty(shape: Union[int, Sequence[int]], dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Construct an uninitialized array.
+
+        MLX does not expose uninitialized memory, so the contents are zero.
+
+        Args:
+            shape (int or list(int)): The shape of the output array.
+            dtype (Dtype, optional): Data type of the output array. Default:
+              ``float32``.
+
+        Returns:
+            array: The output array.
+      )pbdoc");
+  m.def(
+      "empty_like",
+      [](const mx::array& a,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        return mx::zeros(a.shape(), dtype.value_or(a.dtype()), s);
+      },
+      nb::arg(),
+      "dtype"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def empty_like(a: array, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        An uninitialized array with the same shape as the input.
+
+        MLX does not expose uninitialized memory, so the contents are zero.
+
+        Args:
+            a (array): The input to take the shape and type from.
+            dtype (Dtype, optional): Data type of the output array. If
+              unspecified the type of the input is used.
+
+        Returns:
+            array: The output array.
+      )pbdoc");
+  // Array API free-function wrappers.
+  m.def(
+      "astype",
+      [](const mx::array& a, mx::Dtype dtype, mx::StreamOrDevice s) {
+        return mx::astype(a, dtype, s);
+      },
+      nb::arg(),
+      "dtype"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def astype(a: array, dtype: Dtype, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Cast the array to the given type. See also :meth:`array.astype`.
+
+        Args:
+            a (array): Input array.
+            dtype (Dtype): The type to cast to.
+
+        Returns:
+            array: The array cast to ``dtype``.
+      )pbdoc");
+  m.def(
+      "matrix_transpose",
+      [](const mx::array& a, mx::StreamOrDevice s) {
+        if (a.ndim() < 2) {
+          throw std::invalid_argument(
+              "[matrix_transpose] Input must have at least 2 dimensions.");
+        }
+        return mx::swapaxes(a, -2, -1, s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def matrix_transpose(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Transpose the last two dimensions of an array.
+
+        Args:
+            a (array): Input array with at least two dimensions.
+
+        Returns:
+            array: The array with its last two dimensions transposed.
+      )pbdoc");
+  m.def(
+      "cumulative_sum",
+      [](const mx::array& a,
+         std::optional<int> axis,
+         std::optional<mx::Dtype> dtype,
+         bool include_initial,
+         mx::StreamOrDevice s) {
+        mx::array x = dtype ? mx::astype(a, *dtype, s) : a;
+        int ax;
+        if (axis) {
+          ax = *axis;
+        } else {
+          x = mx::reshape(x, {-1}, s);
+          ax = 0;
+        }
+        auto out = mx::cumsum(x, ax, false, true, s);
+        if (include_initial) {
+          int a2 = ax < 0 ? ax + out.ndim() : ax;
+          mx::Shape init_shape = out.shape();
+          init_shape[a2] = 1;
+          out = mx::concatenate(
+              {mx::zeros(init_shape, out.dtype(), s), out}, a2, s);
+        }
+        return out;
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "axis"_a = nb::none(),
+      "dtype"_a = nb::none(),
+      "include_initial"_a = false,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def cumulative_sum(a: array, /, *, axis: Optional[int] = None, dtype: Optional[Dtype] = None, include_initial: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        The cumulative sum of the elements along the given axis.
+
+        Args:
+            a (array): Input array.
+            axis (int, optional): The axis to sum over. If unspecified the
+              cumulative sum of the flattened array is returned.
+            dtype (Dtype, optional): Cast the input to this type before summing.
+            include_initial (bool, optional): Prepend the identity (0) so the
+              output has one extra element along ``axis``. Default: ``False``.
+
+        Returns:
+            array: The cumulative sum.
+      )pbdoc");
+  m.def(
+      "cumulative_prod",
+      [](const mx::array& a,
+         std::optional<int> axis,
+         std::optional<mx::Dtype> dtype,
+         bool include_initial,
+         mx::StreamOrDevice s) {
+        mx::array x = dtype ? mx::astype(a, *dtype, s) : a;
+        int ax;
+        if (axis) {
+          ax = *axis;
+        } else {
+          x = mx::reshape(x, {-1}, s);
+          ax = 0;
+        }
+        auto out = mx::cumprod(x, ax, false, true, s);
+        if (include_initial) {
+          int a2 = ax < 0 ? ax + out.ndim() : ax;
+          mx::Shape init_shape = out.shape();
+          init_shape[a2] = 1;
+          out = mx::concatenate(
+              {mx::ones(init_shape, out.dtype(), s), out}, a2, s);
+        }
+        return out;
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "axis"_a = nb::none(),
+      "dtype"_a = nb::none(),
+      "include_initial"_a = false,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def cumulative_prod(a: array, /, *, axis: Optional[int] = None, dtype: Optional[Dtype] = None, include_initial: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        The cumulative product of the elements along the given axis.
+
+        Args:
+            a (array): Input array.
+            axis (int, optional): The axis to take the product over. If
+              unspecified the cumulative product of the flattened array is
+              returned.
+            dtype (Dtype, optional): Cast the input to this type first.
+            include_initial (bool, optional): Prepend the identity (1) so the
+              output has one extra element along ``axis``. Default: ``False``.
+
+        Returns:
+            array: The cumulative product.
+      )pbdoc");
 }

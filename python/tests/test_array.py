@@ -2159,6 +2159,40 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertTrue(hasattr(api, "array"))
         self.assertTrue(hasattr(api, "add"))
 
+    def test_array_namespace_info(self):
+        xp = mx.array(1.0).__array_namespace__()
+        info = xp.__array_namespace_info__()
+
+        caps = info.capabilities()
+        self.assertIn("boolean indexing", caps)
+        self.assertIn("data-dependent shapes", caps)
+        self.assertIn("max dimensions", caps)
+
+        self.assertEqual(info.default_device(), mx.default_device())
+
+        dd = info.default_dtypes()
+        self.assertEqual(dd["real floating"], mx.float32)
+        self.assertEqual(dd["complex floating"], mx.complex64)
+        self.assertEqual(dd["integral"], mx.int32)
+        self.assertEqual(dd["indexing"], mx.int32)
+
+        devices = info.devices()
+        self.assertGreaterEqual(len(devices), 1)
+        self.assertIn(mx.default_device(), devices)
+
+        all_dtypes = info.dtypes()
+        self.assertEqual(all_dtypes["float32"], mx.float32)
+        self.assertEqual(all_dtypes["bool"], mx.bool_)
+
+        floats = info.dtypes(kind="real floating")
+        self.assertIn("float32", floats)
+        self.assertNotIn("int32", floats)
+
+        ints = info.dtypes(kind=("signed integer", "unsigned integer"))
+        self.assertIn("int8", ints)
+        self.assertIn("uint8", ints)
+        self.assertNotIn("float32", ints)
+
     def test_array_namespace_asarray(self):
         xp = mx.array(1.0).__array_namespace__()
         self.assertTrue(hasattr(xp, "asarray"))
