@@ -4518,6 +4518,12 @@ array quantized_matmul(
 
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
+  if (qmode == QuantizationMode::NF4 &&
+      !(to_stream(s).device == Device::gpu && metal::is_available())) {
+    throw std::invalid_argument(
+        "[quantized_matmul] NF4 quantization mode is only supported on the "
+        "Metal backend.");
+  }
   // Check and extract the quantized matrix shape against x
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
@@ -5333,6 +5339,7 @@ array dequantize(
       out = view(reshape(out, {-1, 4}, s), int8, s);
       auto idx_lo = bitwise_and(out, array(0x0F, int8), s);
       auto idx_hi = right_shift(out, array(4, int8), s);
+      idx_hi = bitwise_and(idx_hi, array(0x0F, int8), s);
       auto lo = gather(lut, idx_lo, 0, {1}, s);
       auto hi = gather(lut, idx_hi, 0, {1}, s);
       out = concatenate({lo, hi}, -1, s);

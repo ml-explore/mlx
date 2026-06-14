@@ -219,6 +219,21 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, group_size=32, mode="nf4", stream=mx.cpu)
         self.assertTrue(mx.allclose(expected, w_hat, rtol=1e-5, atol=1e-5))
 
+        w_q = mx.array(
+            [[0xFEDCBA98, 0x76543210, 0x10325476, 0x98BADCFE]], dtype=mx.uint32
+        )
+        expected = mx.concatenate(
+            [
+                lut[8:],
+                lut[:8],
+                lut[[6, 7, 4, 5, 2, 3, 0, 1]],
+                lut[[14, 15, 12, 13, 10, 11, 8, 9]],
+            ],
+            axis=0,
+        ).reshape(1, 32)
+        w_hat = mx.dequantize(w_q, scales, group_size=32, mode="nf4", stream=mx.cpu)
+        self.assertTrue(mx.allclose(expected, w_hat, rtol=1e-5, atol=1e-5))
+
         a = mx.zeros((4, 64))
         w_q, scales = mx.quantize(a, mode="nf4")
         w_hat = mx.dequantize(w_q, scales, mode="nf4")
@@ -758,6 +773,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
         with self.assertRaises(ValueError):
             mx.quantized_matmul(x, wq, scales16, mode="nf4")
+
+        with self.assertRaises(ValueError):
+            mx.quantized_matmul(x, wq, scales, mode="nf4", stream=mx.cpu)
 
         with self.assertRaises(RuntimeError):
             mx.gather_qmm(
