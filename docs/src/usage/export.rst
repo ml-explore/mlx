@@ -109,6 +109,32 @@ keyword arguments when calling the imported function.
   out, = imported_fun(x, z=y)
 
 
+Saving Metadata
+---------------
+
+You can save additional metadata, such as a model configuration, alongside an
+exported function. The metadata is a dictionary of string keys and string
+values:
+
+.. code-block:: python
+
+  def fun(x, y):
+    return x + y
+
+  metadata = {"description": "adds two arrays", "version": "1.0"}
+  mx.export_function("add.mlxfn", fun, x, y, metadata=metadata)
+
+Read the metadata back when importing the function by passing
+``return_metadata=True``:
+
+.. code-block:: python
+
+  imported_fun, metadata = mx.import_function("add.mlxfn", return_metadata=True)
+
+  # Prints: {'description': 'adds two arrays', 'version': '1.0'}
+  print(metadata)
+
+
 Exporting Modules
 -----------------
 

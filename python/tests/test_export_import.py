@@ -615,6 +615,46 @@ class TestExportImport(mlx_tests.MLXTestCase):
         imported = mx.import_function(path)
         self.assertTrue(mx.array_equal(imported(x, y, z)[0], fun(x, y, z)))
 
+    def test_export_import_metadata(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        def fun(x):
+            return mx.abs(x)
+
+        x = mx.array([1.0, -2.0, 3.0])
+        metadata = {"model": "test", "version": "1.0"}
+
+        mx.export_function(path, fun, x, metadata=metadata)
+
+        # By default no metadata is returned and the callable still works.
+        imported = mx.import_function(path)
+        self.assertTrue(mx.array_equal(imported(x)[0], fun(x)))
+
+        # Request the metadata back.
+        imported, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, metadata)
+        self.assertTrue(mx.array_equal(imported(x)[0], fun(x)))
+
+        # No metadata gives back an empty dictionary.
+        mx.export_function(path, fun, x)
+        _, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, {})
+
+        # Metadata also works with the exporter context manager across
+        # multiple traces (the header is rewritten on each trace).
+        with mx.exporter(path, fun, metadata=metadata) as exporter:
+            exporter(mx.array([1.0]))
+            exporter(mx.array([1.0, 2.0]))
+            exporter(mx.array([1.0, 2.0, 3.0]))
+        imported, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, metadata)
+        for y in (mx.array([1.0]), mx.array([1.0, 2.0, 3.0])):
+            self.assertTrue(mx.array_equal(imported(y)[0], fun(y)))
+
+        # Metadata is not supported with a callback.
+        with self.assertRaises(ValueError):
+            mx.export_function(lambda x: None, fun, x, metadata=metadata)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

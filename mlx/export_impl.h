@@ -27,17 +27,20 @@ struct MLX_API FunctionExporter {
   friend MLX_API FunctionExporter exporter(
       const std::string&,
       const std::function<std::vector<array>(const Args&)>&,
-      bool shapeless);
+      bool shapeless,
+      const std::unordered_map<std::string, std::string>& metadata);
 
   friend MLX_API FunctionExporter exporter(
       const std::string&,
       const std::function<std::vector<array>(const Kwargs&)>&,
-      bool shapeless);
+      bool shapeless,
+      const std::unordered_map<std::string, std::string>& metadata);
 
   friend MLX_API FunctionExporter exporter(
       const std::string&,
       const std::function<std::vector<array>(const Args&, const Kwargs&)>&,
-      bool shapeless);
+      bool shapeless,
+      const std::unordered_map<std::string, std::string>& metadata);
 
   friend MLX_API FunctionExporter exporter(
       const ExportCallback&,
@@ -57,7 +60,8 @@ struct MLX_API FunctionExporter {
   FunctionExporter(
       const std::string& file,
       std::function<std::vector<array>(const Args&, const Kwargs&)> fun,
-      bool shapeless);
+      bool shapeless,
+      std::unordered_map<std::string, std::string> metadata);
 
   FunctionExporter(
       const ExportCallback& callback,
@@ -77,6 +81,7 @@ struct MLX_API FunctionExporter {
   int count{0};
   bool closed{false};
   std::shared_ptr<FunctionTable> ftable;
+  std::unordered_map<std::string, std::string> metadata_;
 };
 
 struct MLX_API ImportedFunction {
@@ -88,12 +93,18 @@ struct MLX_API ImportedFunction {
   std::vector<array> operator()(const Kwargs& kwargs) const;
   std::vector<array> operator()(const Args& args, const Kwargs& kwargs) const;
 
+  // The metadata stored alongside the function when it was exported.
+  const std::unordered_map<std::string, std::string>& metadata() const {
+    return metadata_;
+  }
+
  private:
   ImportedFunction(const std::string& file);
   friend MLX_API ImportedFunction import_function(const std::string&);
   ImportedFunction();
 
   std::shared_ptr<FunctionTable> ftable;
+  std::unordered_map<std::string, std::string> metadata_;
 };
 
 } // namespace mlx::core
