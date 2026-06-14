@@ -537,6 +537,32 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 2e-3)
 
+        for group_size, transposed in product([32, 128], [True, False]):
+            with self.subTest(group_size=group_size, transposed=transposed):
+                M, N, K = 5, 128, 128
+                x = (mx.random.normal(shape=(M, K), key=k1) / K**0.5).astype(
+                    mx.float32
+                )
+                w_shape = (N, K) if transposed else (K, N)
+                w = (mx.random.normal(shape=w_shape, key=k2) / K**0.5).astype(
+                    mx.float32
+                )
+                w_q, scales = mx.quantize(w, group_size=group_size, mode="nf4")
+                w_hat = mx.dequantize(
+                    w_q, scales, group_size=group_size, mode="nf4"
+                )
+                y_q = mx.quantized_matmul(
+                    x,
+                    w_q,
+                    scales,
+                    transpose=transposed,
+                    group_size=group_size,
+                    mode="nf4",
+                )
+                y_hat = (x @ mx.swapaxes(w_hat, -1, -2)) if transposed else (x @ w_hat)
+                self.assertEqual(y_q.shape, y_hat.shape)
+                self.assertLess((y_q - y_hat).abs().max(), 2e-3)
+
     def test_qvm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
