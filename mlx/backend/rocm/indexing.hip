@@ -575,7 +575,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::vector<int64_t> h_indices_strides(std::max(nidx, 1) * std::max(idx_ndim, 1));
 
   for (int i = 0; i < nidx; ++i) {
-    h_indices[i] = inputs[i + 1].data<void>();
+    h_indices[i] = gpu_ptr<void>(inputs[i + 1]);
     for (int j = 0; j < idx_ndim; ++j) {
       h_indices_shape[i * idx_ndim + j] = inputs[i + 1].shape(j);
       h_indices_strides[i * idx_ndim + j] = inputs[i + 1].strides(j);
@@ -616,21 +616,21 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.launch_kernel([&, h_src_shape, h_src_strides, h_slice_sizes, h_axes, 
                          h_indices, h_indices_shape, h_indices_strides](hipStream_t stream) {
     // Copy data to device asynchronously
-    (void)hipMemcpyAsync(src_shape_arr.data<int32_t>(), h_src_shape.data(), 
+    (void)hipMemcpyAsync(gpu_ptr<int32_t>(src_shape_arr), h_src_shape.data(),
                          h_src_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(src_strides_arr.data<int64_t>(), h_src_strides.data(), 
+    (void)hipMemcpyAsync(gpu_ptr<int64_t>(src_strides_arr), h_src_strides.data(),
                          h_src_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(slice_sizes_arr.data<int32_t>(), h_slice_sizes.data(), 
+    (void)hipMemcpyAsync(gpu_ptr<int32_t>(slice_sizes_arr), h_slice_sizes.data(),
                          h_slice_sizes.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
     if (!h_axes.empty()) {
-      (void)hipMemcpyAsync(axes_arr.data<int32_t>(), h_axes.data(), 
+      (void)hipMemcpyAsync(gpu_ptr<int32_t>(axes_arr), h_axes.data(),
                            h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
     }
-    (void)hipMemcpyAsync(indices_arr.data<void*>(), h_indices.data(), 
+    (void)hipMemcpyAsync(gpu_ptr<void*>(indices_arr), h_indices.data(),
                          h_indices.size() * sizeof(void*), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(indices_shape_arr.data<int32_t>(), h_indices_shape.data(), 
+    (void)hipMemcpyAsync(gpu_ptr<int32_t>(indices_shape_arr), h_indices_shape.data(),
                          h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(indices_strides_arr.data<int64_t>(), h_indices_strides.data(), 
+    (void)hipMemcpyAsync(gpu_ptr<int64_t>(indices_strides_arr), h_indices_strides.data(),
                          h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
 
     // Dispatch based on dtype and number of indices
@@ -638,11 +638,11 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
       hipLaunchKernelGGL( \
           (rocm::gather_general_kernel<T, IdxT, NIDX>), \
           dim3(num_blocks), dim3(block_size), 0, stream, \
-          src.data<T>(), out.data<T>(), total, \
-          src_shape_arr.data<int32_t>(), src_strides_arr.data<int64_t>(), src.ndim(), \
-          slice_sizes_arr.data<int32_t>(), slice_size, axes_arr.data<int32_t>(), \
-          (const IdxT* const*)indices_arr.data<void*>(), indices_shape_arr.data<int32_t>(), \
-          indices_strides_arr.data<int64_t>(), idx_ndim)
+          gpu_ptr<T>(src), gpu_ptr<T>(out), total, \
+          gpu_ptr<int32_t>(src_shape_arr), gpu_ptr<int64_t>(src_strides_arr), src.ndim(), \
+          gpu_ptr<int32_t>(slice_sizes_arr), slice_size, gpu_ptr<int32_t>(axes_arr), \
+          (const IdxT* const*)gpu_ptr<void*>(indices_arr), gpu_ptr<int32_t>(indices_shape_arr), \
+          gpu_ptr<int64_t>(indices_strides_arr), idx_ndim)
 
     #define DISPATCH_NIDX(T, IdxT) \
       switch (nidx) { \
@@ -741,7 +741,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::vector<int64_t> h_indices_strides(std::max(nidx, 1) * std::max(idx_ndim, 1));
 
   for (int i = 0; i < nidx; ++i) {
-    h_indices[i] = inputs[i + 1].data<void>();
+    h_indices[i] = gpu_ptr<void>(inputs[i + 1]);
     for (int j = 0; j < idx_ndim; ++j) {
       h_indices_shape[i * idx_ndim + j] = inputs[i + 1].shape(j);
       h_indices_strides[i * idx_ndim + j] = inputs[i + 1].strides(j);
@@ -797,24 +797,24 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.launch_kernel([&, h_upd_shape, h_upd_strides, h_out_shape, h_out_strides, 
                          h_axes, h_indices, h_indices_shape, h_indices_strides, kernel_reduce_type](hipStream_t stream) {
     // Copy data to device asynchronously
-    (void)hipMemcpyAsync(upd_shape_arr.data<int32_t>(), h_upd_shape.data(), 
+    (void)hipMemcpyAsync(gpu_ptr<int32_t>(upd_shape_arr), h_upd_shape.data(),
                          h_upd_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(upd_strides_arr.data<int64_t>(), h_upd_strides.data(), 
+    (void)hipMemcpyAsync(gpu_ptr<int64_t>(upd_strides_arr), h_upd_strides.data(),
                          h_upd_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(out_shape_arr.data<int32_t>(), h_out_shape.data(), 
+    (void)hipMemcpyAsync(gpu_ptr<int32_t>(out_shape_arr), h_out_shape.data(),
                          h_out_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(out_strides_arr.data<int64_t>(), h_out_strides.data(), 
+    (void)hipMemcpyAsync(gpu_ptr<int64_t>(out_strides_arr), h_out_strides.data(),
                          h_out_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
     if (!h_axes.empty()) {
-      (void)hipMemcpyAsync(axes_arr.data<int32_t>(), h_axes.data(), 
+      (void)hipMemcpyAsync(gpu_ptr<int32_t>(axes_arr), h_axes.data(),
                            h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
     }
     if (nidx > 0) {
-      (void)hipMemcpyAsync(indices_arr.data<void*>(), h_indices.data(), 
+      (void)hipMemcpyAsync(gpu_ptr<void*>(indices_arr), h_indices.data(),
                            h_indices.size() * sizeof(void*), hipMemcpyHostToDevice, stream);
-      (void)hipMemcpyAsync(indices_shape_arr.data<int32_t>(), h_indices_shape.data(), 
+      (void)hipMemcpyAsync(gpu_ptr<int32_t>(indices_shape_arr), h_indices_shape.data(),
                            h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-      (void)hipMemcpyAsync(indices_strides_arr.data<int64_t>(), h_indices_strides.data(), 
+      (void)hipMemcpyAsync(gpu_ptr<int64_t>(indices_strides_arr), h_indices_strides.data(),
                            h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
     }
 
@@ -822,11 +822,11 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       hipLaunchKernelGGL( \
           (rocm::scatter_general_kernel<T, IdxT, NIDX, RT>), \
           dim3(num_blocks), dim3(block_size), 0, stream, \
-          upd.data<T>(), out.data<T>(), total, \
-          upd_shape_arr.data<int32_t>(), upd_strides_arr.data<int64_t>(), upd.ndim(), upd_post_idx_size, \
-          out_shape_arr.data<int32_t>(), out_strides_arr.data<int64_t>(), out.ndim(), \
-          axes_arr.data<int32_t>(), (const IdxT* const*)indices_arr.data<void*>(), \
-          indices_shape_arr.data<int32_t>(), indices_strides_arr.data<int64_t>(), idx_ndim)
+          gpu_ptr<T>(upd), gpu_ptr<T>(out), total, \
+          gpu_ptr<int32_t>(upd_shape_arr), gpu_ptr<int64_t>(upd_strides_arr), upd.ndim(), upd_post_idx_size, \
+          gpu_ptr<int32_t>(out_shape_arr), gpu_ptr<int64_t>(out_strides_arr), out.ndim(), \
+          gpu_ptr<int32_t>(axes_arr), (const IdxT* const*)gpu_ptr<void*>(indices_arr), \
+          gpu_ptr<int32_t>(indices_shape_arr), gpu_ptr<int64_t>(indices_strides_arr), idx_ndim)
 
     #define DISPATCH_REDUCE(T, IdxT, NIDX) \
       switch (kernel_reduce_type) { \
@@ -960,7 +960,7 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     hipLaunchKernelGGL( \
         (rocm::gather_axis_kernel<T, IdxT, NDIM, SrcC, IdxC>), \
         dim3(num_blocks), dim3(block_size), 0, stream, \
-        src.data<T>(), idx.data<IdxT>(), out.data<T>(), \
+        gpu_ptr<T>(src), gpu_ptr<IdxT>(idx), gpu_ptr<T>(out), \
         idx_size_pre, idx_size_axis, idx_size_post, \
         shape_param, \
         src_strides_param, \
@@ -1108,7 +1108,7 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     hipLaunchKernelGGL( \
         (rocm::scatter_axis_kernel<T, IdxT, IS_SUM, NDIM, UpdC, IdxC>), \
         dim3(num_blocks), dim3(block_size), 0, stream, \
-        upd.data<T>(), idx.data<IdxT>(), out.data<T>(), \
+        gpu_ptr<T>(upd), gpu_ptr<IdxT>(idx), gpu_ptr<T>(out), \
         idx_size_pre, idx_size_axis, idx_size_post, \
         shape_param, \
         upd_strides_param, \
@@ -1391,8 +1391,8 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
             offset_block,
             0,
             stream,
-            mask_flat.data<bool>(),
-            scatter_offsets.data<uint32_t>(),
+            gpu_ptr<bool>(mask_flat),
+            gpu_ptr<uint32_t>(scatter_offsets),
             mask_batch_size);
 
 #define LAUNCH_MASKED_SCATTER(T, SrcC) \
@@ -1402,10 +1402,10 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       dim3(block_size), \
       0, \
       stream, \
-      mask_flat.data<bool>(), \
-      scatter_offsets.data<uint32_t>(), \
-      src.data<T>(), \
-      out.data<T>(), \
+      gpu_ptr<bool>(mask_flat), \
+      gpu_ptr<uint32_t>(scatter_offsets), \
+      gpu_ptr<T>(src), \
+      gpu_ptr<T>(out), \
       total, \
       src_shape_param, \
       src_strides_param, \

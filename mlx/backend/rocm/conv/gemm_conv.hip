@@ -4,6 +4,7 @@
 #include "mlx/backend/rocm/conv/conv.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/gemms/naive_gemm.h"
+#include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/dtype_utils.h"
 
 #include <hip/hip_runtime.h>
@@ -94,18 +95,18 @@ void depthwise_conv1d(
     switch (in.dtype()) {
       case float32:
         depthwise_conv1d_kernel<float><<<num_blocks, block_dims, 0, stream>>>(
-            in.data<float>(), wt.data<float>(), out.data<float>(), params);
+            gpu_ptr<float>(in), gpu_ptr<float>(wt), gpu_ptr<float>(out), params);
         break;
       case float16:
         depthwise_conv1d_kernel<__half><<<num_blocks, block_dims, 0, stream>>>(
-            in.data<__half>(), wt.data<__half>(), out.data<__half>(), params);
+            gpu_ptr<__half>(in), gpu_ptr<__half>(wt), gpu_ptr<__half>(out), params);
         break;
       case bfloat16:
         depthwise_conv1d_kernel<hip_bfloat16>
             <<<num_blocks, block_dims, 0, stream>>>(
-                in.data<hip_bfloat16>(),
-                wt.data<hip_bfloat16>(),
-                out.data<hip_bfloat16>(),
+                gpu_ptr<hip_bfloat16>(in),
+                gpu_ptr<hip_bfloat16>(wt),
+                gpu_ptr<hip_bfloat16>(out),
                 params);
         break;
       default:
@@ -191,8 +192,8 @@ void launch_unfold_kernel(
     case float32:
       naive_grouped_unfold_transpose_nd<float, NDIM>
           <<<num_blocks, block_dims, 0, stream>>>(
-              in.data<float>(),
-              unfolded.data<float>(),
+              gpu_ptr<float>(in),
+              gpu_ptr<float>(unfolded),
               filter_size,
               out_pixels,
               params);
@@ -200,8 +201,8 @@ void launch_unfold_kernel(
     case float16:
       naive_grouped_unfold_transpose_nd<__half, NDIM>
           <<<num_blocks, block_dims, 0, stream>>>(
-              in.data<__half>(),
-              unfolded.data<__half>(),
+              gpu_ptr<__half>(in),
+              gpu_ptr<__half>(unfolded),
               filter_size,
               out_pixels,
               params);
@@ -209,8 +210,8 @@ void launch_unfold_kernel(
     case bfloat16:
       naive_grouped_unfold_transpose_nd<hip_bfloat16, NDIM>
           <<<num_blocks, block_dims, 0, stream>>>(
-              in.data<hip_bfloat16>(),
-              unfolded.data<hip_bfloat16>(),
+              gpu_ptr<hip_bfloat16>(in),
+              gpu_ptr<hip_bfloat16>(unfolded),
               filter_size,
               out_pixels,
               params);

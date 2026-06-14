@@ -187,10 +187,10 @@ void affine_quantize(
       dim3(block_size),                                \
       0,                                               \
       stream,                                          \
-      w.data<T>(),                                     \
-      wq.data<uint8_t>(),                              \
-      scales.data<ScaleT>(),                           \
-      biases.data<ScaleT>(),                           \
+      gpu_ptr<T>(w),                                   \
+      gpu_ptr<uint8_t>(wq),                            \
+      gpu_ptr<ScaleT>(scales),                         \
+      gpu_ptr<ScaleT>(biases),                         \
       num_groups,                                      \
       group_size)
 
@@ -267,10 +267,10 @@ void affine_dequantize(
       dim3(block_size),                                 \
       0,                                                \
       stream,                                           \
-      wq.data<uint8_t>(),                               \
-      scales.data<T>(),                                 \
-      biases ? biases->data<T>() : nullptr,             \
-      w.data<T>(),                                      \
+      gpu_ptr<uint8_t>(wq),                             \
+      gpu_ptr<T>(scales),                               \
+      biases ? gpu_ptr<T>(*biases) : nullptr,           \
+      gpu_ptr<T>(w),                                    \
       w.size(),                                         \
       group_size)
 
@@ -321,10 +321,10 @@ void affine_dequantize(
       dim3(block_size),                                  \
       0,                                                 \
       stream,                                            \
-      wq.data<uint8_t>(),                                \
-      scales.data<ScaleT>(),                             \
-      biases ? biases->data<ScaleT>() : nullptr,         \
-      w.data<T>(),                                       \
+      gpu_ptr<uint8_t>(wq),                              \
+      gpu_ptr<ScaleT>(scales),                           \
+      biases ? gpu_ptr<ScaleT>(*biases) : nullptr,       \
+      gpu_ptr<T>(w),                                     \
       num_groups,                                        \
       group_size)
 

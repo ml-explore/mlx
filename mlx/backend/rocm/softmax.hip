@@ -333,17 +333,17 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
         hipLaunchKernelGGL(
             (rocm::softmax_kernel<T, AccT, 256, N_READS>),
             dim3(n_rows), dim3(256), 0, stream,
-            in.data<T>(), out.data<T>(), axis_size);
+            gpu_ptr<T>(in), gpu_ptr<T>(out), axis_size);
       } else if (axis_size <= 512 * N_READS) {
         hipLaunchKernelGGL(
             (rocm::softmax_kernel<T, AccT, 512, N_READS>),
             dim3(n_rows), dim3(512), 0, stream,
-            in.data<T>(), out.data<T>(), axis_size);
+            gpu_ptr<T>(in), gpu_ptr<T>(out), axis_size);
       } else {
         hipLaunchKernelGGL(
             (rocm::softmax_kernel<T, AccT, 1024, N_READS>),
             dim3(n_rows), dim3(1024), 0, stream,
-            in.data<T>(), out.data<T>(), axis_size);
+            gpu_ptr<T>(in), gpu_ptr<T>(out), axis_size);
       }
     });
   };

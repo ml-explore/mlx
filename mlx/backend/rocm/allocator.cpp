@@ -67,13 +67,22 @@ static bool is_integrated() {
 inline void* rocm_unified_malloc(size_t size, bool& is_managed) {
   void* data = nullptr;
   hipError_t err;
-  if (is_integrated()) {
-    err = hipExtMallocWithFlags(&data, size, hipDeviceMallocFinegrained);
-    if (err != hipSuccess) {
-      err = hipMallocManaged(&data, size);
-    }
+  // Fine-grained device memory is the right primitive on BOTH targets:
+  //  - Integrated APU (gfx1151): allocates from unified LPDDR5, host-coherent.
+  //  - Discrete RDNA4 (gfx1201): allocates VRAM-RESIDENT memory that is also
+  //    mapped into the host address space over the PCIe BAR (ReBAR). One pointer
+  //    feeds kernels at full VRAM bandwidth (gpu_ptr) and the CPU directly
+  //    (raw_ptr) — no host shadow, no migration, coherent at sync points.
+  // Measured on gfx1201: a 1 GiB fine-grained alloc consumes the full 1074 MB of
+  // VRAM and is CPU read/writable, whereas hipMallocManaged migrates only ~150
+  // MB to the device and streams the rest over PCIe (~11 GB/s).
+  err = hipExtMallocWithFlags(&data, size, hipDeviceMallocFinegrained);
+  if (err == hipSuccess) {
     is_managed = true;
-  } else if (managed_memory_supported()) {
+    return data;
+  }
+  // Fallbacks for platforms without fine-grained device memory.
+  if (managed_memory_supported()) {
     err = hipMallocManaged(&data, size);
     is_managed = true;
   } else {
@@ -96,15 +105,17 @@ inline void rocm_unified_free(void* data, bool is_managed) {
   }
 }
 
-// Apply memory hints to slab pages for better GPU performance
+// Apply memory hints for the managed-memory fallback path. Fine-grained device
+// memory (the primary path) is already VRAM-resident, so these are no-ops there
+// (errors swallowed); they only matter if rocm_unified_malloc fell back to HMM.
 static void apply_slab_hints(void* data, size_t size) {
   if (!rocm_available())
     return;
   int device = 0;
   (void)hipGetDevice(&device);
-  // Hint: GPU is the primary accessor
+  // Hint: GPU is the primary accessor.
   (void)hipMemAdvise(data, size, hipMemAdviseSetAccessedBy, device);
-  // Prefetch to GPU to avoid cold-start page faults
+  // Prefetch to GPU to avoid cold-start page faults.
   (void)hipMemPrefetchAsync(data, size, device, nullptr);
 }
 
@@ -171,6 +182,8 @@ RocmBuffer* SizeClassPool::malloc() {
     b->buf.size = block_size_;
     b->buf.is_managed = is_managed_;
     b->buf.device = -1;
+    b->buf.host_shadow = nullptr;
+    b->buf.host_dirty = false;
     return &b->buf;
   }
 
@@ -185,6 +198,8 @@ RocmBuffer* SizeClassPool::malloc() {
       b->buf.size = block_size_;
       b->buf.is_managed = is_managed_;
       b->buf.device = -1;
+      b->buf.host_shadow = nullptr;
+      b->buf.host_dirty = false;
       return &b->buf;
     }
   }
@@ -436,22 +451,13 @@ Buffer RocmAllocator::malloc(size_t size) {
     }
 
     lock.unlock();
-    if (is_integrated()) {
-      bool is_managed = false;
-      void* data = rocm_unified_malloc(size, is_managed);
-      buf = new RocmBuffer{data, size, is_managed, -1};
-    } else {
-      int device = 0;
-      hipGetDevice(&device);
-      buf = new RocmBuffer{nullptr, size, false, device};
-      hipError_t err = hipMalloc(&buf->data, size);
-      if (err != hipSuccess) {
-        delete buf;
-        std::ostringstream oss;
-        oss << "hipMalloc failed: " << hipGetErrorString(err) << ".";
-        throw std::runtime_error(oss.str());
-      }
-    }
+    // Both the integrated APU and the discrete RDNA4 GPU use fine-grained device
+    // memory with device == -1: the allocation is VRAM-resident (full bandwidth
+    // for kernels via gpu_ptr) and host-coherent over the BAR (CPU access via
+    // raw_ptr returns the same pointer). No host shadow, no migration.
+    bool is_managed = false;
+    void* data = rocm_unified_malloc(size, is_managed);
+    buf = new RocmBuffer{data, size, is_managed, -1, nullptr, false};
     lock.lock();
   }
   active_memory_ += size;
@@ -502,6 +508,10 @@ size_t RocmAllocator::size(Buffer buffer) const {
 }
 
 void RocmAllocator::rocm_free(RocmBuffer* buf) {
+  if (buf->host_shadow) {
+    (void)hipHostFree(buf->host_shadow);
+    buf->host_shadow = nullptr;
+  }
   if (buf->device == -1) {
     rocm_unified_free(buf->data, buf->is_managed);
   } else {
@@ -510,26 +520,45 @@ void RocmAllocator::rocm_free(RocmBuffer* buf) {
   delete buf;
 }
 
-void RocmAllocator::move_to_unified_memory(RocmBuffer& buf) {
+void RocmAllocator::ensure_host_shadow(RocmBuffer& buf) {
+  // Integrated APU buffers are already host-coherent — never reached.
   if (buf.device == -1) {
     return;
   }
-  bool is_managed = false;
-  void* data = rocm_unified_malloc(buf.size, is_managed);
-
-  hipError_t err = hipMemcpy(data, buf.data, buf.size, hipMemcpyDefault);
-  if (err != hipSuccess) {
-    rocm_unified_free(data, is_managed);
-    std::ostringstream oss;
-    oss << "hipMemcpy failed: " << hipGetErrorString(err) << ".";
-    throw std::runtime_error(oss.str());
+  // Allocate the pinned host mirror once, then refresh it from VRAM. The VRAM
+  // copy in buf.data is KEPT (no hipFree, device stays != -1) so gpu_ptr()
+  // keeps feeding kernels the resident device pointer; only CPU reads see the
+  // host mirror. No per-weight VRAM doubling / migration.
+  if (buf.host_shadow == nullptr) {
+    hipError_t err =
+        hipHostMalloc(&buf.host_shadow, buf.size, hipHostMallocDefault);
+    if (err != hipSuccess) {
+      buf.host_shadow = nullptr;
+      std::ostringstream oss;
+      oss << "hipHostMalloc (host shadow) failed: " << hipGetErrorString(err)
+          << ".";
+      throw std::runtime_error(oss.str());
+    }
   }
+  // Refresh from VRAM only when the shadow is NOT already the authoritative copy
+  // (i.e. no un-flushed CPU writes pending) — otherwise we'd clobber them.
+  if (!buf.host_dirty) {
+    hipError_t err =
+        hipMemcpy(buf.host_shadow, buf.data, buf.size, hipMemcpyDeviceToHost);
+    if (err != hipSuccess) {
+      std::ostringstream oss;
+      oss << "hipMemcpy (host shadow) failed: " << hipGetErrorString(err) << ".";
+      throw std::runtime_error(oss.str());
+    }
+  }
+}
 
-  (void)hipFree(buf.data);
-
-  buf.data = data;
-  buf.is_managed = is_managed;
-  buf.device = -1;
+void RocmAllocator::flush_host_shadow(RocmBuffer& buf) {
+  if (buf.host_shadow == nullptr || !buf.host_dirty) {
+    return;
+  }
+  (void)hipMemcpy(buf.data, buf.host_shadow, buf.size, hipMemcpyHostToDevice);
+  buf.host_dirty = false;
 }
 
 size_t RocmAllocator::get_active_memory() const {
@@ -639,11 +668,15 @@ RocmBuffer* DecodeArena::malloc(size_t size) {
     auto& d = descriptors_[desc_index_];
     d.data = ptr;
     d.size = size;
+    d.host_shadow = nullptr;
+    d.host_dirty = false;
     desc_index_++;
     return &d;
   }
 
-  descriptors_.push_back(RocmBuffer{ptr, size, is_managed_, -1});
+  // Fully initialize host_shadow/host_dirty: gpu_ptr() reads host_dirty, so an
+  // uninitialized value could spuriously trigger a flush of a garbage pointer.
+  descriptors_.push_back(RocmBuffer{ptr, size, is_managed_, -1, nullptr, false});
   desc_index_++;
   return &descriptors_.back();
 }
@@ -675,8 +708,13 @@ void* Buffer::raw_ptr() {
       (void)hipStreamSynchronize(nullptr);
     }
   } else {
+    // Discrete GPU: serve the CPU access from the pinned host mirror; keep the
+    // VRAM copy resident. Mark dirty so any CPU write is flushed back to VRAM by
+    // the next gpu_ptr(). Kernels still get VRAM via gpu_ptr().
     (void)hipDeviceSynchronize();
-    rocm::allocator().move_to_unified_memory(cbuf);
+    rocm::allocator().ensure_host_shadow(cbuf);
+    cbuf.host_dirty = true;
+    return cbuf.host_shadow;
   }
   return cbuf.data;
 }

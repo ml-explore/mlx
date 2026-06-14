@@ -172,7 +172,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     encoder.set_output_array(out);
     encoder.launch_kernel([&](hipStream_t stream) {
       uint32_t zero = 0;
-      (void)hipMemcpyAsync(out.data<uint32_t>(), &zero, sizeof(uint32_t), hipMemcpyHostToDevice, stream);
+      (void)hipMemcpyAsync(gpu_ptr<uint32_t>(out), &zero, sizeof(uint32_t), hipMemcpyHostToDevice, stream);
     });
     return;
   }
@@ -206,14 +206,14 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<float, rocm::ArgMax<float>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
-              in.data<float>(), out.data<uint32_t>(), out.size(),
+              gpu_ptr<float>(in), gpu_ptr<uint32_t>(out), out.size(),
               shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         } else {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<float, rocm::ArgMin<float>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
-              in.data<float>(), out.data<uint32_t>(), out.size(),
+              gpu_ptr<float>(in), gpu_ptr<uint32_t>(out), out.size(),
               shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         }
@@ -223,14 +223,14 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<int32_t, rocm::ArgMax<int32_t>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
-              in.data<int32_t>(), out.data<uint32_t>(), out.size(),
+              gpu_ptr<int32_t>(in), gpu_ptr<uint32_t>(out), out.size(),
               shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         } else {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<int32_t, rocm::ArgMin<int32_t>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
-              in.data<int32_t>(), out.data<uint32_t>(), out.size(),
+              gpu_ptr<int32_t>(in), gpu_ptr<uint32_t>(out), out.size(),
               shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         }
@@ -240,14 +240,14 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<__half, rocm::ArgMax<__half>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
-              in.data<__half>(), out.data<uint32_t>(), out.size(),
+              gpu_ptr<__half>(in), gpu_ptr<uint32_t>(out), out.size(),
               shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         } else {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<__half, rocm::ArgMin<__half>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
-              in.data<__half>(), out.data<uint32_t>(), out.size(),
+              gpu_ptr<__half>(in), gpu_ptr<uint32_t>(out), out.size(),
               shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         }
@@ -257,14 +257,14 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<hip_bfloat16, rocm::ArgMax<hip_bfloat16>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
-              in.data<hip_bfloat16>(), out.data<uint32_t>(), out.size(),
+              gpu_ptr<hip_bfloat16>(in), gpu_ptr<uint32_t>(out), out.size(),
               shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         } else {
           hipLaunchKernelGGL(
               (rocm::arg_reduce_general<hip_bfloat16, rocm::ArgMin<hip_bfloat16>, BLOCK_DIM, 4>),
               num_blocks, dim3(BLOCK_DIM), 0, stream,
-              in.data<hip_bfloat16>(), out.data<uint32_t>(), out.size(),
+              gpu_ptr<hip_bfloat16>(in), gpu_ptr<uint32_t>(out), out.size(),
               shape_param, in_strides_param, out_strides_param,
               ndim, axis_stride, axis_size);
         }

@@ -179,8 +179,8 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
       hipLaunchKernelGGL(
           rocm::rbitsc_kernel,
           dim3(num_blocks), dim3(block_size), 0, stream,
-          keys.data<uint32_t>(),
-          out.data<uint8_t>(),
+          gpu_ptr<uint32_t>(keys),
+          gpu_ptr<uint8_t>(out),
           grid_dims_x,
           grid_dims_y,
           odd,
@@ -194,23 +194,23 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
       encoder.add_temporary(shape_arr);
       encoder.add_temporary(strides_arr);
       
-      (void)hipMemcpyAsync(shape_arr.data<int32_t>(), keys.shape().data(), 
+      (void)hipMemcpyAsync(gpu_ptr<int32_t>(shape_arr), keys.shape().data(),
                      keys.ndim() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-      (void)hipMemcpyAsync(strides_arr.data<int64_t>(), keys.strides().data(),
+      (void)hipMemcpyAsync(gpu_ptr<int64_t>(strides_arr), keys.strides().data(),
                      keys.ndim() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
       
       hipLaunchKernelGGL(
           rocm::rbits_kernel,
           dim3(num_blocks), dim3(block_size), 0, stream,
-          keys.data<uint32_t>(),
-          out.data<uint8_t>(),
+          gpu_ptr<uint32_t>(keys),
+          gpu_ptr<uint8_t>(out),
           grid_dims_x,
           grid_dims_y,
           odd,
           bytes_per_key,
           keys.ndim(),
-          shape_arr.data<int32_t>(),
-          strides_arr.data<int64_t>());
+          gpu_ptr<int32_t>(shape_arr),
+          gpu_ptr<int64_t>(strides_arr));
     }
   });
 }

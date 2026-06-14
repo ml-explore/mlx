@@ -73,7 +73,7 @@ void init_reduce(
         hipLaunchKernelGGL(
             (rocm::init_reduce_kernel<T, U, OP>),
             dim3(num_blocks), dim3(block_size), 0, stream,
-            out.data<U>(), out.size());
+            gpu_ptr<U>(out), out.size());
       });
     });
   });

@@ -178,7 +178,7 @@ void fp_quantize(
       hipLaunchKernelGGL( \
           (rocm::fp_quantize_kernel<T, ScaleT, BITS>), \
           dim3(num_blocks), dim3(block_size), 0, stream, \
-          w.data<T>(), wq.data<uint8_t>(), scales.data<ScaleT>(), \
+          gpu_ptr<T>(w), gpu_ptr<uint8_t>(wq), gpu_ptr<ScaleT>(scales), \
           num_groups, group_size)
     
     #define DISPATCH_BITS(T, ScaleT) \
@@ -237,7 +237,7 @@ void fp_dequantize(
         hipLaunchKernelGGL( \
             (rocm::fp_dequantize_packed_kernel<T, BITS>), \
             dim3(num_blocks), dim3(block_size), 0, stream, \
-            wq.data<uint8_t>(), scales.data<T>(), w.data<T>(), \
+            gpu_ptr<uint8_t>(wq), gpu_ptr<T>(scales), gpu_ptr<T>(w), \
             w.size(), group_size)
       
       #define DISPATCH_BITS_PACKED(T) \
@@ -278,7 +278,7 @@ void fp_dequantize(
         hipLaunchKernelGGL( \
             (rocm::fp_dequantize_kernel<T, ScaleT, BITS>), \
             dim3(num_blocks), dim3(block_size), 0, stream, \
-            wq.data<uint8_t>(), scales.data<ScaleT>(), w.data<T>(), \
+            gpu_ptr<uint8_t>(wq), gpu_ptr<ScaleT>(scales), gpu_ptr<T>(w), \
             num_groups, group_size)
       
       #define DISPATCH_BITS(T, ScaleT) \

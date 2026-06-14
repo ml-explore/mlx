@@ -147,7 +147,7 @@ void all_reduce(
         hipLaunchKernelGGL( \
             (rocm::all_reduce_kernel<T, U, rocm::OP, N_READS>), \
             dim3(blocks), dim3(threads), 0, stream, \
-            in.data<T>(), intermediate.data<U>(), block_step, insize)
+            gpu_ptr<T>(in), gpu_ptr<U>(intermediate), block_step, insize)
       
       switch (in.dtype()) {
         case float32:
@@ -207,7 +207,7 @@ void all_reduce(
         hipLaunchKernelGGL( \
             (rocm::all_reduce_kernel<T, U, rocm::OP, N_READS>), \
             dim3(1), dim3(threads), 0, stream, \
-            intermediate.data<T>(), out.data<U>(), block_step, intermediate.size())
+            gpu_ptr<T>(intermediate), gpu_ptr<U>(out), block_step, intermediate.size())
       
       switch (out.dtype()) {
         case float32:
@@ -265,7 +265,7 @@ void all_reduce(
         hipLaunchKernelGGL( \
             (rocm::all_reduce_kernel<T, U, rocm::OP, N_READS>), \
             dim3(1), dim3(threads), 0, stream, \
-            in.data<T>(), out.data<U>(), block_step, insize)
+            gpu_ptr<T>(in), gpu_ptr<U>(out), block_step, insize)
       
       switch (in.dtype()) {
         case float32:

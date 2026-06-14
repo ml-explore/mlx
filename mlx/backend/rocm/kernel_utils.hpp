@@ -28,10 +28,14 @@ namespace mlx::core {
 // For CPU access to managed memory, use array::data<T>() which synchronizes.
 template <typename T>
 inline T* gpu_ptr(array& arr) {
-  return reinterpret_cast<T*>(
-      static_cast<char*>(
-          static_cast<rocm::RocmBuffer*>(arr.buffer().ptr())->data) +
-      arr.offset());
+  auto* buf = static_cast<rocm::RocmBuffer*>(arr.buffer().ptr());
+  // Discrete GPU: if the CPU wrote through the host shadow (raw_ptr), flush it
+  // back to VRAM before a kernel reads it. No-op on the integrated APU and for
+  // buffers never touched on the CPU (host_dirty stays false).
+  if (buf->host_dirty) {
+    rocm::allocator().flush_host_shadow(*buf);
+  }
+  return reinterpret_cast<T*>(static_cast<char*>(buf->data) + arr.offset());
 }
 
 // For const array, keep constness in pointer unless it is untyped.

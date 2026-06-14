@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/primitives.h"
 
@@ -54,8 +55,11 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
         break;
     }
   }
+  // Write straight into the device (VRAM) buffer via gpu_ptr. out.data<void>()
+  // routes through raw_ptr() and, on a discrete GPU, would create/return the
+  // host staging shadow — the kernel data must land in VRAM, not host.
   (void)hipMemcpyAsync(
-      out.data<void>(),
+      gpu_ptr<void>(out),
       out_ptr,
       nbytes,
       hipMemcpyHostToDevice,

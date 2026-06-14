@@ -19,6 +19,16 @@ struct RocmBuffer {
   size_t size;
   bool is_managed;
   int device;
+  // Discrete-GPU only: pinned host mirror that serves CPU reads (raw_ptr)
+  // WITHOUT migrating/freeing the resident VRAM copy in `data`. No default
+  // initializer (keeps RocmBuffer trivial for the SizeClassPool union); set
+  // explicitly in the slab path, aggregate-init'd to null in the large-alloc
+  // paths. Always null on the integrated APU (device == -1).
+  void* host_shadow;
+  // True while host_shadow is the authoritative copy (CPU may have written
+  // through raw_ptr). gpu_ptr() flushes host_shadow -> VRAM and clears it so
+  // kernels see CPU writes; raw_ptr() won't re-pull from VRAM while dirty.
+  bool host_dirty;
 };
 
 // ---------------------------------------------------------------------------
@@ -167,7 +177,13 @@ class RocmAllocator : public allocator::Allocator {
   void free(Buffer buffer) override;
   size_t size(Buffer buffer) const override;
 
-  void move_to_unified_memory(RocmBuffer& buf);
+  // Discrete GPU: ensure buf has an up-to-date pinned host mirror for CPU reads.
+  // Keeps the VRAM copy resident (does not free it or flip device to -1).
+  void ensure_host_shadow(RocmBuffer& buf);
+
+  // Discrete GPU: if buf's host shadow was written by the CPU, copy it back to
+  // VRAM so kernels (gpu_ptr) see the update. No-op otherwise.
+  void flush_host_shadow(RocmBuffer& buf);
 
   size_t get_active_memory() const;
   size_t get_peak_memory() const;

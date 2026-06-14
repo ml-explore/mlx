@@ -180,28 +180,28 @@ void binary_two_op_gpu_inplace(
           hipLaunchKernelGGL( \
               (rocm::binary_two_ss<rocm::OP_TYPE, T, T, int64_t, N_READS>), \
               dim3(num_blocks), dim3(block_size), 0, stream, \
-              a.data<T>(), b.data<T>(), out_a.data<T>(), out_b.data<T>(), \
+              gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
               static_cast<int64_t>(size)); \
           break; \
         case BinaryOpType::ScalarVector: \
           hipLaunchKernelGGL( \
               (rocm::binary_two_sv<rocm::OP_TYPE, T, T, int64_t, N_READS>), \
               dim3(num_blocks), dim3(block_size), 0, stream, \
-              a.data<T>(), b.data<T>(), out_a.data<T>(), out_b.data<T>(), \
+              gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
               static_cast<int64_t>(size)); \
           break; \
         case BinaryOpType::VectorScalar: \
           hipLaunchKernelGGL( \
               (rocm::binary_two_vs<rocm::OP_TYPE, T, T, int64_t, N_READS>), \
               dim3(num_blocks), dim3(block_size), 0, stream, \
-              a.data<T>(), b.data<T>(), out_a.data<T>(), out_b.data<T>(), \
+              gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
               static_cast<int64_t>(size)); \
           break; \
         case BinaryOpType::VectorVector: \
           hipLaunchKernelGGL( \
               (rocm::binary_two_vv<rocm::OP_TYPE, T, T, int64_t, N_READS>), \
               dim3(num_blocks), dim3(block_size), 0, stream, \
-              a.data<T>(), b.data<T>(), out_a.data<T>(), out_b.data<T>(), \
+              gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
               static_cast<int64_t>(size)); \
           break; \
         default: \

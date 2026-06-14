@@ -239,21 +239,21 @@ void RMSNorm::eval_gpu(
         hipLaunchKernelGGL(
             (rocm::rms_norm_kernel<float, BLOCK_DIM, N_READS>),
             dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            x.data<float>(), w.data<float>(), out.data<float>(),
+            gpu_ptr<float>(x), gpu_ptr<float>(w), gpu_ptr<float>(out),
             eps_, axis_size, w_stride);
         break;
       case float16:
         hipLaunchKernelGGL(
             (rocm::rms_norm_kernel<__half, BLOCK_DIM, N_READS>),
             dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            x.data<__half>(), w.data<__half>(), out.data<__half>(),
+            gpu_ptr<__half>(x), gpu_ptr<__half>(w), gpu_ptr<__half>(out),
             eps_, axis_size, w_stride);
         break;
       case bfloat16:
         hipLaunchKernelGGL(
             (rocm::rms_norm_kernel<hip_bfloat16, BLOCK_DIM, N_READS>),
             dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            x.data<hip_bfloat16>(), w.data<hip_bfloat16>(), out.data<hip_bfloat16>(),
+            gpu_ptr<hip_bfloat16>(x), gpu_ptr<hip_bfloat16>(w), gpu_ptr<hip_bfloat16>(out),
             eps_, axis_size, w_stride);
         break;
       default:
@@ -339,24 +339,24 @@ void RMSNormVJP::eval_gpu(
           hipLaunchKernelGGL(
               (rocm::rms_norm_vjp_kernel<float, true, BLOCK_DIM, N_READS>),
               dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              x.data<float>(), w.data<float>(), g.data<float>(),
-              gx.data<float>(), gw_temp.data<float>(),
+              gpu_ptr<float>(x), gpu_ptr<float>(w), gpu_ptr<float>(g),
+              gpu_ptr<float>(gx), gpu_ptr<float>(gw_temp),
               eps_, axis_size, w_stride);
           break;
         case float16:
           hipLaunchKernelGGL(
               (rocm::rms_norm_vjp_kernel<__half, true, BLOCK_DIM, N_READS>),
               dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              x.data<__half>(), w.data<__half>(), g.data<__half>(),
-              gx.data<__half>(), gw_temp.data<__half>(),
+              gpu_ptr<__half>(x), gpu_ptr<__half>(w), gpu_ptr<__half>(g),
+              gpu_ptr<__half>(gx), gpu_ptr<__half>(gw_temp),
               eps_, axis_size, w_stride);
           break;
         case bfloat16:
           hipLaunchKernelGGL(
               (rocm::rms_norm_vjp_kernel<hip_bfloat16, true, BLOCK_DIM, N_READS>),
               dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              x.data<hip_bfloat16>(), w.data<hip_bfloat16>(), g.data<hip_bfloat16>(),
-              gx.data<hip_bfloat16>(), gw_temp.data<hip_bfloat16>(),
+              gpu_ptr<hip_bfloat16>(x), gpu_ptr<hip_bfloat16>(w), gpu_ptr<hip_bfloat16>(g),
+              gpu_ptr<hip_bfloat16>(gx), gpu_ptr<hip_bfloat16>(gw_temp),
               eps_, axis_size, w_stride);
           break;
         default:
@@ -368,24 +368,24 @@ void RMSNormVJP::eval_gpu(
           hipLaunchKernelGGL(
               (rocm::rms_norm_vjp_kernel<float, false, BLOCK_DIM, N_READS>),
               dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              x.data<float>(), w.data<float>(), g.data<float>(),
-              gx.data<float>(), nullptr,
+              gpu_ptr<float>(x), gpu_ptr<float>(w), gpu_ptr<float>(g),
+              gpu_ptr<float>(gx), nullptr,
               eps_, axis_size, w_stride);
           break;
         case float16:
           hipLaunchKernelGGL(
               (rocm::rms_norm_vjp_kernel<__half, false, BLOCK_DIM, N_READS>),
               dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              x.data<__half>(), w.data<__half>(), g.data<__half>(),
-              gx.data<__half>(), nullptr,
+              gpu_ptr<__half>(x), gpu_ptr<__half>(w), gpu_ptr<__half>(g),
+              gpu_ptr<__half>(gx), nullptr,
               eps_, axis_size, w_stride);
           break;
         case bfloat16:
           hipLaunchKernelGGL(
               (rocm::rms_norm_vjp_kernel<hip_bfloat16, false, BLOCK_DIM, N_READS>),
               dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              x.data<hip_bfloat16>(), w.data<hip_bfloat16>(), g.data<hip_bfloat16>(),
-              gx.data<hip_bfloat16>(), nullptr,
+              gpu_ptr<hip_bfloat16>(x), gpu_ptr<hip_bfloat16>(w), gpu_ptr<hip_bfloat16>(g),
+              gpu_ptr<hip_bfloat16>(gx), nullptr,
               eps_, axis_size, w_stride);
           break;
         default:

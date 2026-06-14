@@ -171,19 +171,19 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
         hipLaunchKernelGGL(
             (rocm::logsumexp_kernel<float, float, BLOCK_DIM, N_READS>),
             dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            in.data<float>(), out.data<float>(), axis_size);
+            gpu_ptr<float>(in), gpu_ptr<float>(out), axis_size);
         break;
       case float16:
         hipLaunchKernelGGL(
             (rocm::logsumexp_kernel<__half, float, BLOCK_DIM, N_READS>),
             dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            in.data<__half>(), out.data<__half>(), axis_size);
+            gpu_ptr<__half>(in), gpu_ptr<__half>(out), axis_size);
         break;
       case bfloat16:
         hipLaunchKernelGGL(
             (rocm::logsumexp_kernel<hip_bfloat16, float, BLOCK_DIM, N_READS>),
             dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            in.data<hip_bfloat16>(), out.data<hip_bfloat16>(), axis_size);
+            gpu_ptr<hip_bfloat16>(in), gpu_ptr<hip_bfloat16>(out), axis_size);
         break;
       default:
         throw std::runtime_error("Unsupported type for logsumexp");

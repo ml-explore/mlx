@@ -189,35 +189,35 @@ void launch_binary_general(
   
   encoder.launch_kernel([=, &a, &b, &out, &shape_arr, &strides_a_arr, &strides_b_arr](hipStream_t stream) {
     (void)hipMemcpyAsync(
-        shape_arr.data<int32_t>(),
+        gpu_ptr<int32_t>(shape_arr),
         shape_copy.data(),
         ndim * sizeof(int32_t),
         hipMemcpyHostToDevice,
         stream);
     (void)hipMemcpyAsync(
-        strides_a_arr.data<int64_t>(),
+        gpu_ptr<int64_t>(strides_a_arr),
         strides_a_copy.data(),
         ndim * sizeof(int64_t),
         hipMemcpyHostToDevice,
         stream);
     (void)hipMemcpyAsync(
-        strides_b_arr.data<int64_t>(),
+        gpu_ptr<int64_t>(strides_b_arr),
         strides_b_copy.data(),
         ndim * sizeof(int64_t),
         hipMemcpyHostToDevice,
         stream);
-    
+
     int block_size = 256;
     int num_blocks = (data_size + block_size - 1) / block_size;
-    
+
     hipLaunchKernelGGL(
         (binary_g<Op, InType, OutType, int64_t, 1>),
         dim3(num_blocks), dim3(block_size), 0, stream,
-        a.data<InType>(), b.data<InType>(), out.data<OutType>(),
+        gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
         static_cast<int64_t>(data_size),
-        shape_arr.data<int32_t>(),
-        strides_a_arr.data<int64_t>(),
-        strides_b_arr.data<int64_t>(),
+        gpu_ptr<int32_t>(shape_arr),
+        gpu_ptr<int64_t>(strides_a_arr),
+        gpu_ptr<int64_t>(strides_b_arr),
         ndim);
   });
 }

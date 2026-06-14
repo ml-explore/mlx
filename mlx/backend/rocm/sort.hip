@@ -472,7 +472,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
             }
 
             for (int row = 0; row < n_rows; ++row) {
-              const ValT* in_row = in.data<ValT>() + row * N;
+              const ValT* in_row = gpu_ptr<ValT>(in) + row * N;
 
               // Copy input values to mutable buffer for rocprim.
               CHECK_HIP_ERROR(hipMemcpyAsync(vals_tmp, in_row,
@@ -493,7 +493,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
                   N, 0, sizeof(ValT) * 8, hip_stream);
 
               // Copy result indices to output.
-              uint32_t* out_row = out.data<uint32_t>() + row * N;
+              uint32_t* out_row = gpu_ptr<uint32_t>(out) + row * N;
               CHECK_HIP_ERROR(hipMemcpyAsync(out_row, indices_out,
                   N * sizeof(uint32_t), hipMemcpyDeviceToDevice, hip_stream));
             }
@@ -520,7 +520,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
             CHECK_HIP_ERROR(hipMalloc(&temp_storage, temp_bytes));
 
             for (int row = 0; row < n_rows; ++row) {
-              const ValT* in_row = in.data<ValT>() + row * N;
+              const ValT* in_row = gpu_ptr<ValT>(in) + row * N;
 
               CHECK_HIP_ERROR(hipMemcpyAsync(vals_in, in_row,
                   N * sizeof(ValT), hipMemcpyDeviceToDevice, hip_stream));
@@ -530,7 +530,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
                   vals_in, vals_out_buf,
                   N, 0, sizeof(ValT) * 8, hip_stream);
 
-              ValT* out_row = out.data<ValT>() + row * N;
+              ValT* out_row = gpu_ptr<ValT>(out) + row * N;
               CHECK_HIP_ERROR(hipMemcpyAsync(out_row, vals_out_buf,
                   N * sizeof(ValT), hipMemcpyDeviceToDevice, hip_stream));
             }
@@ -596,8 +596,8 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
               dim3(BLOCK_THREADS, 1, 1),
               0,
               hip_stream,
-              in.data<ValT>(),
-              out.data<OutT>(),
+              gpu_ptr<ValT>(in),
+              gpu_ptr<OutT>(out),
               size_sorted_axis,
               in_stride_sorted,
               out_stride_sorted,

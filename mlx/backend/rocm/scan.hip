@@ -571,8 +571,8 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
                     dim3(block_dim),
                     0,
                     stream,
-                    in.data<T>(),
-                    out.data<U>(),
+                    gpu_ptr<T>(in),
+                    gpu_ptr<U>(out),
                     axis_size);
               } else {
                 constexpr int BM = WARP_SIZE;
@@ -601,8 +601,8 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
                     dim3(block_dim),
                     0,
                     stream,
-                    in.data<T>(),
-                    out.data<U>(),
+                    gpu_ptr<T>(in),
+                    gpu_ptr<U>(out),
                     axis_size,
                     stride,
                     stride_blocks);

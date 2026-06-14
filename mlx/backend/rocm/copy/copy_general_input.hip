@@ -96,8 +96,8 @@ void copy_general_input(
         hipLaunchKernelGGL(
             (rocm::copy_col_row<T>),
             grid, block, 0, stream,
-            reinterpret_cast<const T*>(in.data<void>()) + offset_in,
-            reinterpret_cast<T*>(out.data<void>()) + offset_out,
+            reinterpret_cast<const T*>(gpu_ptr<void>(in)) + offset_in,
+            reinterpret_cast<T*>(gpu_ptr<void>(out)) + offset_out,
             static_cast<int64_t>(shape[0]),
             static_cast<int64_t>(shape[1]));
       });

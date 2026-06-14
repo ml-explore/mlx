@@ -297,7 +297,7 @@ void row_reduce(
           hipLaunchKernelGGL(
               (rocm::row_reduce_simple_kernel<T, U, OP, 4>),
               dim3(out_size), dim3(threads), 0, stream,
-              in.data<T>(), out.data<U>(), out_size, row_size);
+              gpu_ptr<T>(in), gpu_ptr<U>(out), out_size, row_size);
         });
       });
     });
@@ -336,7 +336,7 @@ void row_reduce(
             hipLaunchKernelGGL(
                 (rocm::row_reduce_looped_kernel<T, U, OP, reduce_ndim_val()>),
                 dim3(out_size), dim3(threads), 0, stream,
-                in.data<T>(), out.data<U>(), out_size, row_size,
+                gpu_ptr<T>(in), gpu_ptr<U>(out), out_size, row_size,
                 shape, strides, ndim,
                 non_row_reductions, reduce_shape, reduce_strides, reduce_ndim);
           });

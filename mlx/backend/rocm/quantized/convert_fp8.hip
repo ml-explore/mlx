@@ -129,19 +129,19 @@ void fast::ConvertFP8::eval_gpu(
           hipLaunchKernelGGL(
               (rocm::to_fp8_kernel<float, uint8_t>),
               dim3(num_blocks), dim3(block_size), 0, stream,
-              in.data<float>(), out.data<uint8_t>(), size);
+              gpu_ptr<float>(in), gpu_ptr<uint8_t>(out), size);
           break;
         case float16:
           hipLaunchKernelGGL(
               (rocm::to_fp8_kernel<__half, uint8_t>),
               dim3(num_blocks), dim3(block_size), 0, stream,
-              in.data<__half>(), out.data<uint8_t>(), size);
+              gpu_ptr<__half>(in), gpu_ptr<uint8_t>(out), size);
           break;
         case bfloat16:
           hipLaunchKernelGGL(
               (rocm::to_fp8_kernel<hip_bfloat16, uint8_t>),
               dim3(num_blocks), dim3(block_size), 0, stream,
-              in.data<hip_bfloat16>(), out.data<uint8_t>(), size);
+              gpu_ptr<hip_bfloat16>(in), gpu_ptr<uint8_t>(out), size);
           break;
         default:
           throw std::runtime_error("Unsupported input type for ConvertFP8 (to_fp8)");
@@ -153,19 +153,19 @@ void fast::ConvertFP8::eval_gpu(
           hipLaunchKernelGGL(
               (rocm::from_fp8_kernel<uint8_t, float>),
               dim3(num_blocks), dim3(block_size), 0, stream,
-              in.data<uint8_t>(), out.data<float>(), size);
+              gpu_ptr<uint8_t>(in), gpu_ptr<float>(out), size);
           break;
         case float16:
           hipLaunchKernelGGL(
               (rocm::from_fp8_kernel<uint8_t, __half>),
               dim3(num_blocks), dim3(block_size), 0, stream,
-              in.data<uint8_t>(), out.data<__half>(), size);
+              gpu_ptr<uint8_t>(in), gpu_ptr<__half>(out), size);
           break;
         case bfloat16:
           hipLaunchKernelGGL(
               (rocm::from_fp8_kernel<uint8_t, hip_bfloat16>),
               dim3(num_blocks), dim3(block_size), 0, stream,
-              in.data<uint8_t>(), out.data<hip_bfloat16>(), size);
+              gpu_ptr<uint8_t>(in), gpu_ptr<hip_bfloat16>(out), size);
           break;
         default:
           throw std::runtime_error("Unsupported output type for ConvertFP8 (from_fp8)");

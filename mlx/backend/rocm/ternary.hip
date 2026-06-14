@@ -183,25 +183,25 @@ void ternary_op_gpu_inplace(
       encoder.launch_kernel([=, &a, &b, &c, &out, &shape_arr, &a_strides_arr, &b_strides_arr, &c_strides_arr](hipStream_t stream) {
         // Copy shape and strides to device
         (void)hipMemcpyAsync(
-            shape_arr.data<int32_t>(),
+            gpu_ptr<int32_t>(shape_arr),
             shape_copy.data(),
             ndim * sizeof(int32_t),
             hipMemcpyHostToDevice,
             stream);
         (void)hipMemcpyAsync(
-            a_strides_arr.data<int64_t>(),
+            gpu_ptr<int64_t>(a_strides_arr),
             a_strides_copy.data(),
             ndim * sizeof(int64_t),
             hipMemcpyHostToDevice,
             stream);
         (void)hipMemcpyAsync(
-            b_strides_arr.data<int64_t>(),
+            gpu_ptr<int64_t>(b_strides_arr),
             b_strides_copy.data(),
             ndim * sizeof(int64_t),
             hipMemcpyHostToDevice,
             stream);
         (void)hipMemcpyAsync(
-            c_strides_arr.data<int64_t>(),
+            gpu_ptr<int64_t>(c_strides_arr),
             c_strides_copy.data(),
             ndim * sizeof(int64_t),
             hipMemcpyHostToDevice,
@@ -214,10 +214,10 @@ void ternary_op_gpu_inplace(
               gpu_ptr<const bool>(a), gpu_ptr<const DType>(b), gpu_ptr<const DType>(c),
               gpu_ptr<DType>(out),
               static_cast<int64_t>(rest),
-              shape_arr.data<int32_t>(),
-              a_strides_arr.data<int64_t>(),
-              b_strides_arr.data<int64_t>(),
-              c_strides_arr.data<int64_t>(),
+              gpu_ptr<int32_t>(shape_arr),
+              gpu_ptr<int64_t>(a_strides_arr),
+              gpu_ptr<int64_t>(b_strides_arr),
+              gpu_ptr<int64_t>(c_strides_arr),
               ndim);
         } else {
           hipLaunchKernelGGL(
@@ -226,10 +226,10 @@ void ternary_op_gpu_inplace(
               gpu_ptr<const bool>(a), gpu_ptr<const DType>(b), gpu_ptr<const DType>(c),
               gpu_ptr<DType>(out),
               static_cast<int64_t>(rest),
-              shape_arr.data<int32_t>(),
-              a_strides_arr.data<int64_t>(),
-              b_strides_arr.data<int64_t>(),
-              c_strides_arr.data<int64_t>(),
+              gpu_ptr<int32_t>(shape_arr),
+              gpu_ptr<int64_t>(a_strides_arr),
+              gpu_ptr<int64_t>(b_strides_arr),
+              gpu_ptr<int64_t>(c_strides_arr),
               ndim);
         }
       });
