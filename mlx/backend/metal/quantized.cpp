@@ -36,8 +36,13 @@ auto get_quantized_kernel_wrapped(
     prefix = "fp_";
   }
   std::string fname = prefix + func;
-  template_def = get_template_definition(
-      name, fname, type, group_size, bits, std::forward<Args>(args)...);
+  if (mode == "nf4") {
+    template_def = get_template_definition(
+        name, fname, type, group_size, std::forward<Args>(args)...);
+  } else {
+    template_def = get_template_definition(
+        name, fname, type, group_size, bits, std::forward<Args>(args)...);
+  }
   return get_quantized_kernel(d, name, template_def, mode);
 }
 
@@ -61,8 +66,13 @@ auto get_qmm_nax_kernel_wrapped(
     prefix = "fp_";
   }
   std::string fname = prefix + func;
-  template_def = get_template_definition(
-      name, fname, type, group_size, bits, std::forward<Args>(args)...);
+  if (mode == "nf4") {
+    template_def = get_template_definition(
+        name, fname, type, group_size, std::forward<Args>(args)...);
+  } else {
+    template_def = get_template_definition(
+        name, fname, type, group_size, bits, std::forward<Args>(args)...);
+  }
   return get_qmm_nax_kernel(d, name, template_def, mode);
 }
 
