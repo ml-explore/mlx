@@ -20,8 +20,6 @@
 
 namespace mlx::core {
 
-static constexpr uint32_t kMaxGridDim = 65535;
-
 template <typename F>
 void dispatch_1_2_3(int n, F&& f) {
   switch (n) {
@@ -147,5 +145,14 @@ inline std::tuple<dim3, uint32_t> get_launch_args(
       work_per_thread,
       max_block_dim);
 }
+
+// Get the grid and block dims for a "general" (non-contiguous) kernel. These
+// kernels map the last dimension to the x grid dimension and the product of the
+// remaining dimensions (|rest|) to the y dimension, with each x thread handling
+// |work_per_thread| elements. Because a single grid dimension can not exceed
+// the hardware limit, the y extent is spread across the y and z grid
+// dimensions.
+std::pair<dim3, dim3>
+get_launch_args_general(int dim0, size_t rest, int work_per_thread = 1);
 
 } // namespace mlx::core

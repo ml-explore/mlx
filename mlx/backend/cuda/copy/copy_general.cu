@@ -124,15 +124,8 @@ void copy_general(
               work_per_thread = 4;
             }
 
-            dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
-            auto block_dims = get_block_dims(dim0, rest, 1);
-            uint32_t num_blocks_x = cuda::ceil_div(dim0, block_dims.x);
-            uint32_t num_blocks_y_raw = static_cast<uint32_t>(
-                cuda::ceil_div(rest, size_t{block_dims.y}));
-            uint32_t num_blocks_z =
-                cuda::ceil_div(num_blocks_y_raw, kMaxGridDim);
-            uint32_t num_blocks_y =
-                cuda::ceil_div(num_blocks_y_raw, num_blocks_z);
+            auto [grid_dims, block_dims] =
+                get_launch_args_general(dim0, rest, work_per_thread);
 
             if (ndim <= 3) {
               dispatch_1_2_3(ndim, [&](auto ndim_constant) {
@@ -144,7 +137,7 @@ void copy_general(
                 }
                 encoder.add_kernel_node(
                     kernel,
-                    {num_blocks_x, num_blocks_y, num_blocks_z},
+                    grid_dims,
                     block_dims,
                     in_ptr,
                     out_ptr,
@@ -160,7 +153,7 @@ void copy_general(
               }
               encoder.add_kernel_node(
                   kernel,
-                  {num_blocks_x, num_blocks_y, num_blocks_z},
+                  grid_dims,
                   block_dims,
                   in_ptr,
                   out_ptr,
