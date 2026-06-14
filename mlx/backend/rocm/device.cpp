@@ -312,6 +312,22 @@ void CommandEncoder::maybe_commit() {
 }
 
 void CommandEncoder::commit() {
+  // During graph capture, record ONLY the compute kernels into the graph. The
+  // host-function completion callbacks (which release temporaries) are not
+  // executed under stream capture and would otherwise be baked into the graph
+  // as host nodes that fire on every replay. Temporaries are arena-backed while
+  // capturing (the arena is freed in bulk on end, never per-buffer), so we can
+  // simply drop our references without scheduling a cleanup task. NOTE: this
+  // relies on the DecodeArena being active during capture — otherwise dropping
+  // these refs would return live buffers to the pool while later recorded
+  // kernels still reference them.
+  if (capturing_) {
+    temporaries_.clear();
+    temporary_ptrs_.clear();
+    node_count_ = 0;
+    return;
+  }
+
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
@@ -323,6 +339,11 @@ void CommandEncoder::commit() {
 }
 
 void CommandEncoder::synchronize() {
+  // A capturing stream cannot be synchronized, and there is nothing to wait for
+  // — recorded kernels do not execute until the captured graph is replayed.
+  if (capturing_) {
+    return;
+  }
   (void)hipStreamSynchronize(stream_);
   auto p = std::make_shared<std::promise<void>>();
   std::future<void> f = p->get_future();
@@ -373,7 +394,13 @@ bool CommandEncoder::replay() {
     return false;
   device_.make_current();
   hipError_t err = hipGraphLaunch(graph_exec_, stream_);
-  return err == hipSuccess;
+  if (err != hipSuccess)
+    return false;
+  // The captured kernels run asynchronously on stream_. The completion Events
+  // that eval() would normally wait on were skipped during capture, so wait
+  // here for the replayed work to finish before the caller reads outputs.
+  (void)hipStreamSynchronize(stream_);
+  return true;
 }
 
 void CommandEncoder::reset_graph() {

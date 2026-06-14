@@ -248,6 +248,13 @@ namespace {
 struct EventImpl {
   std::unique_ptr<rocm::CopyableHipEvent> hip;
   std::unique_ptr<rocm::AtomicEvent> atomic;
+  // Set when the event is "signaled" purely on the host because it was created
+  // during HIP graph capture: recording a real completion event onto the
+  // captured stream would bake it into the graph (never fires under capture),
+  // so we skip the device record and treat the event as already satisfied. The
+  // recorded compute kernels still execute on replay; completion is handled by
+  // an explicit stream sync after hipGraphLaunch.
+  bool host_signaled{false};
 
   bool is_created() const {
     return hip || atomic;
@@ -274,6 +281,10 @@ Event::Event(Stream s) : stream_(s) {
 
 void Event::wait() {
   auto* event = static_cast<EventImpl*>(event_.get());
+  // Capture-created event: nothing to wait for on the host (see EventImpl).
+  if (event->host_signaled) {
+    return;
+  }
   assert(event->is_created());
   if (event->hip) {
     assert(value() == 1);
@@ -285,6 +296,9 @@ void Event::wait() {
 
 void Event::wait(Stream s) {
   auto* event = static_cast<EventImpl*>(event_.get());
+  if (event->host_signaled) {
+    return;
+  }
   assert(event->is_created());
   if (event->hip) {
     assert(value() == 1);
@@ -297,6 +311,16 @@ void Event::wait(Stream s) {
 void Event::signal(Stream s) {
   auto* event = static_cast<EventImpl*>(event_.get());
   event->ensure_created(s, value());
+  // During graph capture, do NOT record a completion event onto the captured
+  // stream — it would become a graph node that never fires under capture and
+  // would deadlock eval()'s wait(). Mark it satisfied on the host instead; the
+  // compute kernels are recorded and run on replay, after which the caller
+  // performs an explicit stream sync.
+  if (!(s.device == mlx::core::Device::cpu) &&
+      rocm::get_command_encoder(s).capturing()) {
+    event->host_signaled = true;
+    return;
+  }
   if (event->hip) {
     assert(value() == 1);
     event->hip->record(s);
@@ -307,6 +331,9 @@ void Event::signal(Stream s) {
 
 bool Event::is_signaled() const {
   auto* event = static_cast<EventImpl*>(event_.get());
+  if (event->host_signaled) {
+    return true;
+  }
   if (!event->is_created()) {
     return false;
   }

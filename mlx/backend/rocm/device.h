@@ -76,6 +76,13 @@ class CommandEncoder {
     return graph_exec_ != nullptr;
   }
 
+  // True while this encoder's stream is recording into a HIP graph. Used by the
+  // Event layer to avoid recording completion events onto the captured stream
+  // (they would be baked into the graph and never fire, deadlocking eval).
+  bool capturing() const {
+    return capturing_;
+  }
+
   // Discard the captured graph.
   void reset_graph();
 
