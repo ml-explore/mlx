@@ -276,6 +276,22 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, y_ref.shape)
         self.assertLess((y - y_ref).abs().max(), 2e-3)
 
+    def test_nf4_quantized_embedding(self):
+        emb = nn.Embedding(16, 64)
+        qemb = emb.to_quantized(mode="nf4")
+        self.assertEqual(qemb.group_size, 64)
+        self.assertEqual(qemb.bits, 4)
+        self.assertEqual(qemb.mode, "nf4")
+        self.assertEqual(qemb.scales.dtype, mx.float32)
+        self.assertNotIn("biases", qemb)
+
+        x = mx.array([0, 2, 7, 15])
+        y = qemb(x)
+        y_ref = mx.dequantize(qemb.weight[x], qemb.scales[x], mode="nf4")
+        self.assertEqual(y.shape, (4, 64))
+        self.assertEqual(y.dtype, mx.float32)
+        self.assertTrue(mx.array_equal(y, y_ref))
+
     def test_quantized_sharded_linear_construction(self):
         input_dims, output_dims = 1536, 1024
         for bits in [2, 3, 4, 5, 6, 8]:
