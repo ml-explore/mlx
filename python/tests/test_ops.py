@@ -3446,6 +3446,59 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
+    def test_array_api_aliases(self):
+        # Unary trig/hyperbolic aliases (array API names) must match the
+        # existing numpy-style names. Inputs kept within each function's domain.
+        unit = mx.array([-0.5, 0.0, 0.25, 0.5])
+        ge_one = mx.array([1.0, 1.5, 2.0, 4.0])
+        real = mx.array([-2.0, -0.5, 0.0, 1.0, 3.0])
+        unary = [
+            ("acos", "arccos", unit),
+            ("acosh", "arccosh", ge_one),
+            ("asin", "arcsin", unit),
+            ("asinh", "arcsinh", real),
+            ("atan", "arctan", real),
+            ("atanh", "arctanh", unit),
+        ]
+        for alias, orig, x in unary:
+            self.assertTrue(hasattr(mx, alias))
+            self.assertTrue(
+                mx.array_equal(
+                    getattr(mx, alias)(x), getattr(mx, orig)(x), equal_nan=True
+                ),
+                msg=alias,
+            )
+
+        a = mx.array([1.0, -2.0, 3.0, -4.0])
+        b = mx.array([2.0, 1.0, -1.0, 2.0])
+        self.assertTrue(mx.array_equal(mx.atan2(a, b), mx.arctan2(a, b)))
+        self.assertTrue(mx.array_equal(mx.pow(a, b), mx.power(a, b)))
+
+        ai = mx.array([1, 2, 4, 8], dtype=mx.int32)
+        bi = mx.array([1, 0, 2, 3], dtype=mx.int32)
+        self.assertTrue(
+            mx.array_equal(mx.bitwise_left_shift(ai, bi), mx.left_shift(ai, bi))
+        )
+        self.assertTrue(
+            mx.array_equal(mx.bitwise_right_shift(ai, bi), mx.right_shift(ai, bi))
+        )
+
+        # The aliases must also be reachable through the array API namespace.
+        xp = mx.array(1.0).__array_namespace__()
+        for name in (
+            "acos",
+            "acosh",
+            "asin",
+            "asinh",
+            "atan",
+            "atanh",
+            "atan2",
+            "pow",
+            "bitwise_left_shift",
+            "bitwise_right_shift",
+        ):
+            self.assertTrue(hasattr(xp, name), msg=name)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

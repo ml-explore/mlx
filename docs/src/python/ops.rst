@@ -9,6 +9,8 @@ Operations
   :toctree: _autosummary
 
    abs
+   acos
+   acosh
    add
    addmm
    all
@@ -28,14 +30,21 @@ Operations
    argsort
    array_equal
    asarray
+   asin
+   asinh
    as_strided
+   atan
+   atan2
+   atanh
    atleast_1d
    atleast_2d
    atleast_3d
    bartlett
    bitwise_and
    bitwise_invert
+   bitwise_left_shift
    bitwise_or
+   bitwise_right_shift
    bitwise_xor
    blackman
    block_masked_mm
@@ -139,6 +148,7 @@ Operations
    partition
    pad
    permute_dims
+   pow
    power
    prod
    put_along_axis
