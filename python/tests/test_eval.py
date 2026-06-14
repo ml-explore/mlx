@@ -195,7 +195,7 @@ class TestEval(mlx_tests.MLXTestCase):
         mx.eval(z)
         mx.set_memory_limit(old_limit)
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_eval_exception_does_not_corrupt_state(self):
         # An exception thrown from inside a primitive's eval (here a Metal
         # compile error raised lazily at eval time) must not corrupt arrays
