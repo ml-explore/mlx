@@ -221,6 +221,18 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
         self.assertTrue(isinstance(m.layers[2].scales, mx.array))
 
+        m = nn.Sequential(nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256))
+        nn.quantize(m, mode="nf4")
+        self.assertTrue(isinstance(m.layers[0], nn.QuantizedEmbedding))
+        self.assertTrue(isinstance(m.layers[1], nn.ReLU))
+        self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
+        self.assertEqual(m.layers[2].group_size, 64)
+        self.assertEqual(m.layers[2].bits, 4)
+        self.assertEqual(m.layers[2].mode, "nf4")
+        self.assertTrue(isinstance(m.layers[2].scales, mx.array))
+        self.assertEqual(m.layers[2].scales.dtype, mx.float32)
+        self.assertNotIn("biases", m.layers[2])
+
         m = nn.Sequential(
             nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256, bias=False)
         )
@@ -248,6 +260,21 @@ class TestBase(mlx_tests.MLXTestCase):
         qlin.unfreeze(keys=["scales"])
         size = tree_reduce(lambda acc, p: acc + p.size, qlin.trainable_parameters(), 0)
         self.assertTrue(size > 0)
+
+    def test_nf4_quantized_linear(self):
+        lin = nn.Linear(64, 16, bias=False)
+        qlin = lin.to_quantized(mode="nf4")
+        self.assertEqual(qlin.group_size, 64)
+        self.assertEqual(qlin.bits, 4)
+        self.assertEqual(qlin.mode, "nf4")
+        self.assertNotIn("biases", qlin)
+
+        x = mx.random.normal(shape=(3, 64)).astype(mx.float32)
+        w_hat = mx.dequantize(qlin.weight, qlin.scales, mode="nf4")
+        y = qlin(x)
+        y_ref = x @ w_hat.T
+        self.assertEqual(y.shape, y_ref.shape)
+        self.assertLess((y - y_ref).abs().max(), 2e-3)
 
     def test_quantized_sharded_linear_construction(self):
         input_dims, output_dims = 1536, 1024

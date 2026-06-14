@@ -27,7 +27,15 @@ auto get_quantized_kernel_wrapped(
     int bits,
     Args... args) {
   std::string template_def;
-  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
+  std::string prefix;
+  if (mode == "affine") {
+    prefix = "affine_";
+  } else if (mode == "nf4") {
+    prefix = "nf4_";
+  } else {
+    prefix = "fp_";
+  }
+  std::string fname = prefix + func;
   template_def = get_template_definition(
       name, fname, type, group_size, bits, std::forward<Args>(args)...);
   return get_quantized_kernel(d, name, template_def, mode);
@@ -44,7 +52,15 @@ auto get_qmm_nax_kernel_wrapped(
     int bits,
     Args... args) {
   std::string template_def;
-  std::string fname = ((mode == "affine") ? "affine_" : "fp_") + func;
+  std::string prefix;
+  if (mode == "affine") {
+    prefix = "affine_";
+  } else if (mode == "nf4") {
+    prefix = "nf4_";
+  } else {
+    prefix = "fp_";
+  }
+  std::string fname = prefix + func;
   template_def = get_template_definition(
       name, fname, type, group_size, bits, std::forward<Args>(args)...);
   return get_qmm_nax_kernel(d, name, template_def, mode);
@@ -692,7 +708,8 @@ void qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-  if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
+  if (metal::is_nax_available() && mode != "nf4" && transpose &&
+      (K % 64 == 0) &&
       (env::enable_tf32() || x.dtype() != float32)) {
     return qmm_nax(
         /* const array& x = */ x,
@@ -883,7 +900,8 @@ void gather_qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-  if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
+  if (metal::is_nax_available() && mode != "nf4" && transpose &&
+      (K % 64 == 0) &&
       (env::enable_tf32() || x.dtype() != float32)) {
     return gather_qmm_nax(
         /* const array& x = */ x,
@@ -1228,7 +1246,7 @@ void gather_qmm_rhs(
     metal::Device& d,
     const Stream& s,
     const std::string mode) {
-  if (metal::is_nax_available() && transpose &&
+  if (metal::is_nax_available() && mode != "nf4" && transpose &&
       (env::enable_tf32() || x_.dtype() != float32)) {
     return gather_qmm_rhs_nax(
         /* const array& x_ = */ x_,

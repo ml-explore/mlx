@@ -3433,8 +3433,10 @@ std::string quantization_mode_to_string(QuantizationMode mode) {
     case QuantizationMode::Mxfp8:
       return "mxfp8";
     case QuantizationMode::Nvfp4:
-    default:
       return "nvfp4";
+    case QuantizationMode::NF4:
+    default:
+      return "nf4";
   }
 }
 
@@ -3449,6 +3451,8 @@ QuantizationMode string_to_quantization_mode(
     return QuantizationMode::Mxfp8;
   } else if (mode == "nvfp4") {
     return QuantizationMode::Nvfp4;
+  } else if (mode == "nf4") {
+    return QuantizationMode::NF4;
   }
   std::string msg;
   if (!tag.empty()) {

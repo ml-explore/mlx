@@ -14,6 +14,7 @@ def _defaults_for_mode(mode, group_size, bits):
         "mxfp4": (32, 4),
         "nvfp4": (16, 4),
         "mxfp8": (32, 8),
+        "nf4": (64, 4),
     }
     default_group_size, default_bits = mode_defaults[mode]
     return group_size or default_group_size, bits or default_bits

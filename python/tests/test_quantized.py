@@ -173,6 +173,65 @@ class TestQuantized(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
 
+    def test_nf4_quantize_dequantize(self):
+        lut = mx.array(
+            [
+                -1.0,
+                -0.6961928,
+                -0.5250731,
+                -0.3949175,
+                -0.2844414,
+                -0.1847734,
+                -0.0910500,
+                0.0,
+                0.0795803,
+                0.1609302,
+                0.2461123,
+                0.3379152,
+                0.4407098,
+                0.5626170,
+                0.7229568,
+                1.0,
+            ]
+        )
+        w = mx.tile(lut, (4, 8)).astype(mx.float32)
+
+        w_q, scales = mx.quantize(w, mode="nf4")
+        self.assertEqual(w_q.shape, (4, 16))
+        self.assertEqual(scales.shape, (4, 2))
+        self.assertEqual(scales.dtype, mx.float32)
+
+        w_hat = mx.dequantize(w_q, scales, mode="nf4")
+        self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
+
+        a = mx.zeros((4, 64))
+        w_q, scales = mx.quantize(a, mode="nf4")
+        w_hat = mx.dequantize(w_q, scales, mode="nf4")
+        self.assertTrue(mx.all(w_hat == 0))
+
+        for group_size in [32, 64, 128]:
+            with self.subTest(group_size=group_size):
+                w_q, scales = mx.quantize(w, group_size=group_size, mode="nf4")
+                w_hat = mx.dequantize(
+                    w_q, scales, group_size=group_size, mode="nf4"
+                )
+                self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
+
+        with self.assertRaises(ValueError):
+            mx.quantize(w, bits=3, mode="nf4")
+
+        with self.assertRaises(ValueError):
+            mx.quantize(w, group_size=16, mode="nf4")
+
+        with self.assertRaises(ValueError):
+            mx.dequantize(w_q, scales, bits=3, mode="nf4")
+
+        with self.assertRaises(ValueError):
+            mx.dequantize(w_q, scales.astype(mx.uint8), mode="nf4")
+
+        with self.assertRaises(ValueError):
+            mx.dequantize(w_q, scales, mx.zeros(scales.shape), mode="nf4")
+
     def test_qqmv(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
@@ -431,6 +490,33 @@ class TestQuantized(mlx_tests.MLXTestCase):
             self.assertEqual(y_q.shape, y_hat.shape)
             self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    def test_nf4_qmm(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        tests = product(
+            [1, 8],  # M
+            [64, 128],  # N
+            [64, 128],  # K
+            [True, False],  # transposed
+        )
+        for M, N, K, transposed in tests:
+            with self.subTest(shape=(M, N, K), transposed=transposed):
+                x = (mx.random.normal(shape=(M, K), key=k1) / K**0.5).astype(
+                    mx.float32
+                )
+                w_shape = (N, K) if transposed else (K, N)
+                w = (mx.random.normal(shape=w_shape, key=k2) / K**0.5).astype(
+                    mx.float32
+                )
+                w_q, scales = mx.quantize(w, mode="nf4")
+                w_hat = mx.dequantize(w_q, scales, mode="nf4")
+                y_q = mx.quantized_matmul(
+                    x, w_q, scales, transpose=transposed, mode="nf4"
+                )
+                y_hat = (x @ w_hat.T) if transposed else (x @ w_hat)
+                self.assertEqual(y_q.shape, y_hat.shape)
+                self.assertLess((y_q - y_hat).abs().max(), 2e-3)
+
     def test_qvm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
@@ -616,6 +702,16 @@ class TestQuantized(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.gather_qmm(
                 x, wq, scales, biases, rhs_indices=rhs_indices, bits=4, group_size=32
+            )
+
+        wq, scales = mx.quantize(w, mode="nf4")
+        with self.assertRaises(RuntimeError):
+            mx.gather_qmm(
+                x,
+                wq,
+                scales,
+                rhs_indices=rhs_indices,
+                mode="nf4",
             )
 
     def test_throw(self):

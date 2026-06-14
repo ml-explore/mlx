@@ -858,7 +858,9 @@ MTL::ComputePipelineState* get_quantized_kernel(
         metal::utils(),
         metal::gemm(),
         metal::quantized_utils(),
-        (mode == "affine") ? metal::quantized() : metal::fp_quantized(),
+        (mode == "affine") ? metal::quantized()
+                          : (mode == "nf4") ? metal::nf4_quantized()
+                                            : metal::fp_quantized(),
         template_def);
     return kernel_source;
   });
@@ -886,12 +888,16 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     concatenate(
         kernel_source, metal::utils(), metal::quantized_utils(), metal::gemm());
     bool is_affine = mode == "affine";
+    bool is_nf4 = mode == "nf4";
     concatenate(
         kernel_source,
-        is_affine ? metal::quantized() : metal::fp_quantized(),
+        is_affine ? metal::quantized()
+                  : is_nf4 ? metal::nf4_quantized()
+                           : metal::fp_quantized(),
         get_template_definition(
             lib_name,
-            (is_affine ? "affine" : "fp") + std::string("_gather_qmm_rhs"),
+            (is_affine ? "affine" : is_nf4 ? "nf4" : "fp") +
+                std::string("_gather_qmm_rhs"),
             get_type_string(x.dtype()),
             group_size,
             bits,

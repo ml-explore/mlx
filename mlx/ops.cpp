@@ -4395,6 +4395,10 @@ std::pair<int, int> quantization_params_from_mode(
       default_group_size = 32;
       default_bits = 8;
       break;
+    case QuantizationMode::NF4:
+      default_group_size = 64;
+      default_bits = 4;
+      break;
   }
   return {
       group_size_.has_value() ? *group_size_ : default_group_size,
@@ -4433,6 +4437,24 @@ std::pair<Dtype, QuantizationMode> validate_mode_with_type(
       return {*out_type, qmode};
     } else {
       return {dtype, qmode};
+    }
+  } else if (qmode == QuantizationMode::NF4) {
+    // NF4 uses float32 scales (absmax per block)
+    if (!issubdtype(scales.dtype(), floating)) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] NF4 scale type must be floating point but "
+          << "received type " << scales.dtype() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (biases) {
+      std::ostringstream msg;
+      msg << "[" << tag << "] Biases must be null for NF4 quantization.";
+      throw std::invalid_argument(msg.str());
+    }
+    if (out_type.has_value()) {
+      return {*out_type, qmode};
+    } else {
+      return {scales.dtype(), qmode};
     }
   } else if (scales.dtype() != uint8) {
     std::ostringstream msg;
@@ -4953,6 +4975,53 @@ std::vector<array> quantize(
   validate_global_scale("quantize", qmode, global_scale);
   if (qmode == QuantizationMode::Affine) {
     return affine_quantize(w, group_size, bits, s);
+  } else if (qmode == QuantizationMode::NF4) {
+    if (group_size != 32 && group_size != 64 && group_size != 128) {
+      std::ostringstream msg;
+      msg << "[quantize] nf4 quantization requires group size 32, 64, or 128 "
+          << "but got " << group_size << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (bits != 4) {
+      std::ostringstream msg;
+      msg << "[quantize] nf4 quantization requires bits to be 4 but got "
+          << bits << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    // NF4 quantization: normalize by absmax, map to nearest LUT value
+    // Produces: uint32 packed weights, float32 scales (absmax per group)
+    auto fallback = [group_size, s = to_stream(s)](
+                        const std::vector<array>& inputs) -> std::vector<array> {
+      auto& w = inputs[0];
+      auto new_shape = w.shape();
+      new_shape.back() = -1;
+      auto wq = reshape(w, {-1, group_size}, s);
+      auto scales = max(abs(wq, s), -1, true, s);
+      // Normalize to [-1, 1]
+      auto z = array(0.0f, scales.dtype());
+      auto wn = where(equal(scales, z, s), z, divide(wq, scales, s), s);
+      // NF4 LUT values
+      auto lut = array({
+          -1.0f, -0.6961928f, -0.5250731f, -0.3949175f,
+          -0.2844414f, -0.1847734f, -0.0910500f, 0.0f,
+          0.0795803f, 0.1609302f, 0.2461123f, 0.3379152f,
+          0.4407098f, 0.5626170f, 0.7229568f, 1.0f,
+      });
+      lut = astype(lut, w.dtype(), s);
+      // Find nearest LUT value for each normalized weight
+      wq = argmin(
+          abs(subtract(expand_dims(wn, -1, s), lut, s), s), -1, false, s);
+      // Pack 8 x 4-bit values into uint32
+      auto shifts = power(array(2, uint32), arange(0, 32, 4, uint32, s), s);
+      wq = reshape(wq, {-1, 4, 8}, s);
+      wq = sum(multiply(wq, shifts, s), -1, false, s);
+      wq = reshape(wq, new_shape, s);
+      scales = reshape(squeeze(scales, -1, s), new_shape, s);
+      return {std::move(wq), astype(scales, float32, s)};
+    };
+    // NF4 quantize always uses the graph-based fallback (not a dedicated
+    // GPU kernel) since quantization is a one-time cost.
+    return fallback({w});
   } else {
     return fp_quantize(w, group_size, bits, qmode, global_scale, to_stream(s));
   }
@@ -5223,6 +5292,54 @@ array dequantize(
         affine_dequantize(w, scales, *biases, group_size, bits, s),
         out_type,
         s);
+  } else if (qmode == QuantizationMode::NF4) {
+    if (group_size != 32 && group_size != 64 && group_size != 128) {
+      std::ostringstream msg;
+      msg << "[dequantize] nf4 quantization requires group size 32, 64, or 128 "
+          << "but got " << group_size << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (bits != 4) {
+      std::ostringstream msg;
+      msg << "[dequantize] nf4 quantization requires bits to be 4 but got "
+          << bits << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    // NF4 dequantization: LUT lookup * float32 absmax scale
+    int out_size = w.shape(-1) * 32 / bits;
+    auto fallback =
+        [group_size, out_type, s = to_stream(s)](
+            const std::vector<array>& inputs) mutable -> std::vector<array> {
+      auto out = inputs[0];
+      auto scales = inputs[1];
+      auto lut = array(
+          {-1.0f, -0.6961928f, -0.5250731f, -0.3949175f, -0.2844414f,
+           -0.1847734f, -0.0910500f, 0.0f, 0.0795803f, 0.1609302f,
+           0.2461123f, 0.3379152f, 0.4407098f, 0.5626170f, 0.7229568f, 1.0f},
+          out_type);
+      out = view(reshape(out, {-1, 4}, s), int8, s);
+      auto idx_lo = bitwise_and(out, array(0x0F, int8), s);
+      auto idx_hi = right_shift(out, array(4, int8), s);
+      auto lo = gather(lut, idx_lo, 0, {1}, s);
+      auto hi = gather(lut, idx_hi, 0, {1}, s);
+      out = concatenate({lo, hi}, -1, s);
+      out = reshape(out, {-1, group_size}, s);
+      scales = reshape(astype(scales, out_type, s), {-1, 1}, s);
+      auto wshape = inputs[0].shape();
+      wshape.back() = -1;
+      return {reshape(multiply(out, scales, s), wshape, s)};
+    };
+    if (to_stream(s).device == Device::gpu) {
+      auto out_shape = w.shape();
+      out_shape.back() = out_size;
+      return array(
+          std::move(out_shape),
+          out_type,
+          std::make_shared<fast::Quantize>(
+              to_stream(s), fallback, group_size, bits, qmode, true),
+          {w, scales});
+    }
+    return fallback({w, scales})[0];
   } else {
     return fp_dequantize(
         w,
@@ -5290,6 +5407,11 @@ array gather_qmm(
 
   auto [out_type, qmode] =
       validate_mode_with_type("gather_qmm", scales, biases, std::nullopt, mode);
+  if (qmode == QuantizationMode::NF4) {
+    throw std::runtime_error(
+        "[gather_qmm] NF4 quantization mode is not yet supported for "
+        "gather_qmm. Use quantized_matmul instead.");
+  }
   auto [group_size, bits] =
       quantization_params_from_mode(qmode, group_size_, bits_);
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
