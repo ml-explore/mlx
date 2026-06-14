@@ -29,34 +29,3 @@ constant constexpr float nf4_lut[16] = {
     0.7229568362236023f,
     1.0f,
 };
-
-struct nf4_scalar {
-  // Construct from float: find nearest NF4 level
-  nf4_scalar(float x) {
-    // Binary search / linear scan for nearest value
-    float min_dist = metal::abs(x - nf4_lut[0]);
-    bits = 0;
-    for (uint8_t i = 1; i < 16; i++) {
-      float dist = metal::abs(x - nf4_lut[i]);
-      if (dist < min_dist) {
-        min_dist = dist;
-        bits = i;
-      }
-    }
-  }
-
-  // Dequantize: just a table lookup
-  operator float() const {
-    return nf4_lut[bits & 0x0f];
-  }
-
-  operator float16_t() const {
-    return static_cast<float16_t>(nf4_lut[bits & 0x0f]);
-  }
-
-  operator bfloat16_t() const {
-    return static_cast<bfloat16_t>(nf4_lut[bits & 0x0f]);
-  }
-
-  uint8_t bits;
-};

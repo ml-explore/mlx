@@ -87,12 +87,7 @@
   instantiate_nf4_aligned(qmm_t_splitk, type, true, group_size) \
   instantiate_nf4_aligned(qmm_t_splitk, type, false, group_size)
 
-#define instantiate_nf4_quantize_dequantize(type, group_size) \
-  instantiate_kernel( \
-    "nf4_quantize_" #type "_gs_" #group_size "_b_4", \
-    nf4_quantize, \
-    type, \
-    group_size) \
+#define instantiate_nf4_dequantize(type, group_size) \
   instantiate_kernel( \
     "nf4_dequantize_" #type "_gs_" #group_size "_b_4", \
     nf4_dequantize, \
@@ -104,7 +99,7 @@
   instantiate_nf4_all_quad(type, group_size) \
   instantiate_nf4_all_splitk(type, group_size) \
   instantiate_nf4_all_aligned(type, group_size) \
-  instantiate_nf4_quantize_dequantize(type, group_size)
+  instantiate_nf4_dequantize(type, group_size)
 
 // NF4 with group_size=64 (the bitsandbytes default)
 instantiate_nf4_all(float, 64)

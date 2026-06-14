@@ -4934,6 +4934,30 @@ std::vector<array> fp_quantize(
   return fallback(inputs);
 }
 
+array nf4_lut(Dtype dtype, Stream s) {
+  return astype(
+      array({
+          -1.0f,
+          -0.6961928009986877f,
+          -0.5250730514526367f,
+          -0.39491748809814453f,
+          -0.28444138169288635f,
+          -0.18477343022823334f,
+          -0.09105003625154495f,
+          0.0f,
+          0.07958029955625534f,
+          0.16093020141124725f,
+          0.24611230194568634f,
+          0.33791524171829224f,
+          0.44070982933044434f,
+          0.5626170039176941f,
+          0.7229568362236023f,
+          1.0f,
+      }),
+      dtype,
+      s);
+}
+
 std::vector<array> quantize(
     const array& w,
     std::optional<int> group_size_ /* = std::nullopt */,
@@ -5000,14 +5024,7 @@ std::vector<array> quantize(
       // Normalize to [-1, 1]
       auto z = array(0.0f, scales.dtype());
       auto wn = where(equal(scales, z, s), z, divide(wq, scales, s), s);
-      // NF4 LUT values
-      auto lut = array({
-          -1.0f, -0.6961928f, -0.5250731f, -0.3949175f,
-          -0.2844414f, -0.1847734f, -0.0910500f, 0.0f,
-          0.0795803f, 0.1609302f, 0.2461123f, 0.3379152f,
-          0.4407098f, 0.5626170f, 0.7229568f, 1.0f,
-      });
-      lut = astype(lut, w.dtype(), s);
+      auto lut = nf4_lut(w.dtype(), s);
       // Find nearest LUT value for each normalized weight
       wq = argmin(
           abs(subtract(expand_dims(wn, -1, s), lut, s), s), -1, false, s);
@@ -5312,11 +5329,7 @@ array dequantize(
             const std::vector<array>& inputs) mutable -> std::vector<array> {
       auto out = inputs[0];
       auto scales = inputs[1];
-      auto lut = array(
-          {-1.0f, -0.6961928f, -0.5250731f, -0.3949175f, -0.2844414f,
-           -0.1847734f, -0.0910500f, 0.0f, 0.0795803f, 0.1609302f,
-           0.2461123f, 0.3379152f, 0.4407098f, 0.5626170f, 0.7229568f, 1.0f},
-          out_type);
+      auto lut = nf4_lut(out_type, s);
       out = view(reshape(out, {-1, 4}, s), int8, s);
       auto idx_lo = bitwise_and(out, array(0x0F, int8), s);
       auto idx_hi = right_shift(out, array(4, int8), s);

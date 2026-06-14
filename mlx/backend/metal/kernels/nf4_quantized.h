@@ -51,11 +51,6 @@ inline U nf4_dequantize_value(uint8_t x) {
   return U(nf4_lut[x & 0x0f]);
 }
 
-// Quantize a normalized [-1,1] value to the nearest NF4 index
-inline uint8_t nf4_quantize_value(float x) {
-  return nf4_scalar(x).bits;
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // Vector load helpers (same as fp_quantized.h)
 ///////////////////////////////////////////////////////////////////////////////
@@ -1234,50 +1229,8 @@ template <
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Quantize / Dequantize standalone kernels
+// Dequantize standalone kernel
 ///////////////////////////////////////////////////////////////////////////////
-
-template <typename T, const int group_size>
-[[kernel]] void nf4_quantize(
-    const device T* w [[buffer(0)]],
-    device uint8_t* out [[buffer(1)]],
-    device float* scales_out [[buffer(2)]],
-    uint2 tidx [[thread_position_in_grid]],
-    uint2 grid_dim [[threads_per_grid]]) {
-  size_t index = tidx.x + grid_dim.x * size_t(tidx.y);
-
-  // Compute absmax within the simdgroup (one group = 64 elements = 2 simdgroups)
-  float w_thread = w[index];
-  float absmax;
-  if constexpr (group_size == 64) {
-    // Two halves of the simdgroup cover 64 elements
-    absmax = simd_max(metal::abs(w_thread));
-    // For group_size=64 with simd_size=32, we need cross-simdgroup reduction
-    // This is handled by the dispatch: one thread per element, groups of 64
-    float absmax_l = simd_max(tidx.x < 32 ? metal::abs(w_thread) : 0.0f);
-    float absmax_r = simd_max(tidx.x >= 32 ? metal::abs(w_thread) : 0.0f);
-    absmax = max(absmax_l, absmax_r);
-  } else {
-    absmax = simd_max(metal::abs(w_thread));
-  }
-
-  size_t gindex = index / group_size;
-  if (index % group_size == 0) {
-    scales_out[gindex] = absmax;
-  }
-
-  // Normalize to [-1, 1] and find nearest NF4 level
-  float normalized = (absmax == 0.0f) ? 0.0f : w_thread / absmax;
-  uint8_t output = nf4_quantize_value(normalized);
-
-  // Pack two 4-bit values per byte
-  uint8_t sval = simd_shuffle_down(output, 1);
-  output |= sval << 4;
-
-  if (index % 2 == 0) {
-    out[index / 2] = output;
-  }
-}
 
 template <typename T, const int group_size>
 [[kernel]] void nf4_dequantize(
