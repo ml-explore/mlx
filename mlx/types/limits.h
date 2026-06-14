@@ -30,6 +30,9 @@ struct numeric_limits<float16_t> {
   constexpr static float16_t lowest() {
     return bits_to_half(0xFBFF);
   }
+  static constexpr float16_t min() {
+    return bits_to_half(0x0400);
+  }
   static constexpr float16_t max() {
     return bits_to_half(0x7BFF);
   }
@@ -55,6 +58,9 @@ struct numeric_limits<bfloat16_t> {
  public:
   constexpr static bfloat16_t lowest() {
     return bits_to_bfloat(0xFF7F);
+  }
+  static constexpr bfloat16_t min() {
+    return bits_to_bfloat(0x0080);
   }
   static constexpr bfloat16_t max() {
     return bits_to_bfloat(0x7F7F);
