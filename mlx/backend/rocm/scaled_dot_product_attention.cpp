@@ -87,6 +87,16 @@ bool prefer_flash_for_decode(
     const array& k,
     bool has_arr_mask,
     bool has_sinks) {
+  // The flash (prefill) kernel is catastrophically slow for single-query decode
+  // over long contexts — profiled at ~4.7 ms/call at ~1200 keys vs the ~tens of
+  // microseconds the vector decode kernel needs (it parallelizes over the KV
+  // length). Default decode to the vector kernel; opt back into flash only via
+  // env for experimentation.
+  static const bool enable =
+      std::getenv("MLX_SDPA_DECODE_FLASH") != nullptr;
+  if (!enable) {
+    return false;
+  }
   if (has_arr_mask || has_sinks) {
     return false;
   }
