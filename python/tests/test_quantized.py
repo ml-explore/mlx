@@ -751,6 +751,14 @@ class TestQuantized(mlx_tests.MLXTestCase):
             )
 
         wq, scales = mx.quantize(w, mode="nf4")
+        scales16 = scales.astype(mx.float16)
+        x = mx.random.normal(shape=(1, 256))
+        with self.assertRaises(ValueError):
+            mx.dequantize(wq, scales16, mode="nf4")
+
+        with self.assertRaises(ValueError):
+            mx.quantized_matmul(x, wq, scales16, mode="nf4")
+
         with self.assertRaises(RuntimeError):
             mx.gather_qmm(
                 x,

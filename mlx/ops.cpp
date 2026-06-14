@@ -4439,10 +4439,10 @@ std::pair<Dtype, QuantizationMode> validate_mode_with_type(
       return {dtype, qmode};
     }
   } else if (qmode == QuantizationMode::NF4) {
-    // NF4 uses float32 scales (absmax per block)
-    if (!issubdtype(scales.dtype(), floating)) {
+    // NF4 uses float32 absmax scales.
+    if (scales.dtype() != float32) {
       std::ostringstream msg;
-      msg << "[" << tag << "] NF4 scale type must be floating point but "
+      msg << "[" << tag << "] NF4 scale type must be float32 absmax scales but "
           << "received type " << scales.dtype() << ".";
       throw std::invalid_argument(msg.str());
     }
