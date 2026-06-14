@@ -204,6 +204,21 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, mode="nf4")
         self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
 
+        scale_factors = mx.array([[0.5], [2.0], [0.25], [4.0]])
+        w_scaled = w * scale_factors
+        w_q, scales = mx.quantize(w_scaled, mode="nf4")
+        self.assertTrue(mx.all(scales != 1.0))
+        w_hat = mx.dequantize(w_q, scales, mode="nf4")
+        self.assertTrue(mx.allclose(w_scaled, w_hat, rtol=1e-5, atol=1e-5))
+
+        w_q = mx.array(
+            [[0x76543210, 0xFEDCBA98, 0x76543210, 0xFEDCBA98]], dtype=mx.uint32
+        )
+        scales = mx.ones((1, 1), dtype=mx.float32)
+        expected = mx.concatenate([lut, lut], axis=0).reshape(1, 32)
+        w_hat = mx.dequantize(w_q, scales, group_size=32, mode="nf4", stream=mx.cpu)
+        self.assertTrue(mx.allclose(expected, w_hat, rtol=1e-5, atol=1e-5))
+
         a = mx.zeros((4, 64))
         w_q, scales = mx.quantize(a, mode="nf4")
         w_hat = mx.dequantize(w_q, scales, mode="nf4")
@@ -495,16 +510,21 @@ class TestQuantized(mlx_tests.MLXTestCase):
         k1, k2 = mx.random.split(key)
         tests = product(
             [1, 8],  # M
-            [64, 128],  # N
+            [64, 256],  # N
             [64, 128],  # K
             [True, False],  # transposed
+            [0, 3],  # batch
         )
-        for M, N, K, transposed in tests:
-            with self.subTest(shape=(M, N, K), transposed=transposed):
-                x = (mx.random.normal(shape=(M, K), key=k1) / K**0.5).astype(
+        for M, N, K, transposed, B in tests:
+            with self.subTest(shape=(B, M, N, K), transposed=transposed):
+                x_shape = (M, K) if B == 0 else (B, M, K)
+                x = (mx.random.normal(shape=x_shape, key=k1) / K**0.5).astype(
                     mx.float32
                 )
-                w_shape = (N, K) if transposed else (K, N)
+                if B == 0:
+                    w_shape = (N, K) if transposed else (K, N)
+                else:
+                    w_shape = (B, N, K) if transposed else (B, K, N)
                 w = (mx.random.normal(shape=w_shape, key=k2) / K**0.5).astype(
                     mx.float32
                 )
@@ -513,7 +533,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y_q = mx.quantized_matmul(
                     x, w_q, scales, transpose=transposed, mode="nf4"
                 )
-                y_hat = (x @ w_hat.T) if transposed else (x @ w_hat)
+                y_hat = (x @ mx.swapaxes(w_hat, -1, -2)) if transposed else (x @ w_hat)
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 2e-3)
 

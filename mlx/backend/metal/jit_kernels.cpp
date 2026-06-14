@@ -1,4 +1,6 @@
 // Copyright © 2024 Apple Inc.
+#include <stdexcept>
+
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/kernels.h"
@@ -882,22 +884,21 @@ MTL::ComputePipelineState* get_gather_qmm_kernel(
     int wm,
     int wn,
     bool transpose) {
+  if (mode == "nf4") {
+    throw std::runtime_error("[gather_qmm] NF4 is not supported.");
+  }
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
     concatenate(
         kernel_source, metal::utils(), metal::quantized_utils(), metal::gemm());
     bool is_affine = mode == "affine";
-    bool is_nf4 = mode == "nf4";
     concatenate(
         kernel_source,
-        is_affine ? metal::quantized()
-                  : is_nf4 ? metal::nf4_quantized()
-                           : metal::fp_quantized(),
+        is_affine ? metal::quantized() : metal::fp_quantized(),
         get_template_definition(
             lib_name,
-            (is_affine ? "affine" : is_nf4 ? "nf4" : "fp") +
-                std::string("_gather_qmm_rhs"),
+            (is_affine ? "affine" : "fp") + std::string("_gather_qmm_rhs"),
             get_type_string(x.dtype()),
             group_size,
             bits,

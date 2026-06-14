@@ -927,6 +927,7 @@ METAL_FUNC void nf4_adjust_matrix_offsets(
     const constant int64_t* w_strides,
     const constant int64_t* s_strides,
     uint3 tid [[threadgroup_position_in_grid]]) {
+  constexpr int scale_bytes = 4;
   uint32_t x_idx = tid.z;
   uint32_t w_idx = tid.z;
   if (x_batch_ndims == 1) {
@@ -936,12 +937,12 @@ METAL_FUNC void nf4_adjust_matrix_offsets(
   }
   if (w_batch_ndims == 1) {
     w += w_idx * w_strides[0];
-    scales += w_idx * s_strides[0];
+    scales += w_idx * s_strides[0] * scale_bytes;
   } else {
     ulong2 idx = elem_to_loc_broadcast(
         w_idx, w_shape, w_strides, s_strides, w_batch_ndims);
     w += idx.x;
-    scales += idx.y;
+    scales += idx.y * scale_bytes;
   }
   y += tid.z * output_stride;
 }

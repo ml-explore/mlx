@@ -3435,9 +3435,9 @@ std::string quantization_mode_to_string(QuantizationMode mode) {
     case QuantizationMode::Nvfp4:
       return "nvfp4";
     case QuantizationMode::NF4:
-    default:
       return "nf4";
   }
+  throw std::runtime_error("Unknown QuantizationMode");
 }
 
 QuantizationMode string_to_quantization_mode(
