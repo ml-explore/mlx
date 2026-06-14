@@ -6,7 +6,7 @@
 // as float32 (4 bytes per group) instead of FP8 (1 byte per group).
 //
 // NF4 format: 4-bit indices into a 16-element LUT derived from normal
-// distribution quantiles. Scales are float32 absmax per block of 64.
+// distribution quantiles. Scales are float32 absmax per quantization group.
 
 #include <metal_simdgroup>
 #include <metal_stdlib>

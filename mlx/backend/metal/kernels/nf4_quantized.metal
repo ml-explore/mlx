@@ -7,8 +7,8 @@
 #include "mlx/backend/metal/kernels/quantized_utils.h"
 #include "mlx/backend/metal/kernels/nf4_quantized.h"
 
-// NF4 is always 4-bit with group_size=64.
-// We instantiate for all three compute types.
+// NF4 is always 4-bit. Instantiate the supported group sizes for all three
+// compute types.
 
 #define instantiate_nf4(name, type, group_size) \
   instantiate_kernel( \
