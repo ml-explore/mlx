@@ -146,12 +146,6 @@ inline std::tuple<dim3, uint32_t> get_launch_args(
       max_block_dim);
 }
 
-// Get the grid and block dims for a "general" (non-contiguous) kernel. These
-// kernels map the last dimension to the x grid dimension and the product of the
-// remaining dimensions (|rest|) to the y dimension, with each x thread handling
-// |work_per_thread| elements. Because a single grid dimension can not exceed
-// the hardware limit, the y extent is spread across the y and z grid
-// dimensions.
 std::pair<dim3, dim3>
 get_launch_args_general(int dim0, size_t rest, int work_per_thread = 1);
 
