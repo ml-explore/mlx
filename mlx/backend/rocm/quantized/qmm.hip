@@ -1630,17 +1630,21 @@ __global__ void __launch_bounds__(1024) qmv_warp_shared_kernel(
               float x5 = shared_x[k - chunk_start + 5];
               float x6 = shared_x[k - chunk_start + 6];
               float x7 = shared_x[k - chunk_start + 7];
-              qx_acc = fmaf(x0, w0, qx_acc);
-              qx_acc = fmaf(x1, w1, qx_acc);
-              qx_acc = fmaf(x2, w2, qx_acc);
-              qx_acc = fmaf(x3, w3, qx_acc);
-              qx_acc = fmaf(x4, w4, qx_acc);
-              qx_acc = fmaf(x5, w5, qx_acc);
-              qx_acc = fmaf(x6, w6, qx_acc);
-              qx_acc = fmaf(x7, w7, qx_acc);
+              // Four independent accumulators so RDNA4 can dual-issue the FMAs
+              // (a single serial qx_acc chain runs at half rate). Mirrors the
+              // 8-bit branch above; partial sums are reassociated at group end.
+              qx_acc0 = fmaf(x0, w0, qx_acc0);
+              qx_acc1 = fmaf(x1, w1, qx_acc1);
+              qx_acc2 = fmaf(x2, w2, qx_acc2);
+              qx_acc3 = fmaf(x3, w3, qx_acc3);
+              qx_acc0 = fmaf(x4, w4, qx_acc0);
+              qx_acc1 = fmaf(x5, w5, qx_acc1);
+              qx_acc2 = fmaf(x6, w6, qx_acc2);
+              qx_acc3 = fmaf(x7, w7, qx_acc3);
               if (has_bias)
                 x_group_sum += x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7;
             }
+            qx_acc = qx_acc0 + qx_acc1 + qx_acc2 + qx_acc3;
             for (; k_start + k_local < k_end_g; k_local++) {
               int k = k_start + k_local;
               float x_val = shared_x[k - chunk_start];
@@ -1993,18 +1997,21 @@ __global__ void __launch_bounds__(1024) qmv_warp_shared_batched_kernel(
               float x5 = shared_x[k - chunk_start + 5];
               float x6 = shared_x[k - chunk_start + 6];
               float x7 = shared_x[k - chunk_start + 7];
-              qx_acc = fmaf(x0, w0, qx_acc);
-              qx_acc = fmaf(x1, w1, qx_acc);
-              qx_acc = fmaf(x2, w2, qx_acc);
-              qx_acc = fmaf(x3, w3, qx_acc);
-              qx_acc = fmaf(x4, w4, qx_acc);
-              qx_acc = fmaf(x5, w5, qx_acc);
-              qx_acc = fmaf(x6, w6, qx_acc);
-              qx_acc = fmaf(x7, w7, qx_acc);
+              // Four independent accumulators for RDNA4 dual-issue (mirrors the
+              // 8-bit branch); reassociated at group end.
+              qx_acc0 = fmaf(x0, w0, qx_acc0);
+              qx_acc1 = fmaf(x1, w1, qx_acc1);
+              qx_acc2 = fmaf(x2, w2, qx_acc2);
+              qx_acc3 = fmaf(x3, w3, qx_acc3);
+              qx_acc0 = fmaf(x4, w4, qx_acc0);
+              qx_acc1 = fmaf(x5, w5, qx_acc1);
+              qx_acc2 = fmaf(x6, w6, qx_acc2);
+              qx_acc3 = fmaf(x7, w7, qx_acc3);
               if (has_bias) {
                 x_group_sum += x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7;
               }
             }
+            qx_acc = qx_acc0 + qx_acc1 + qx_acc2 + qx_acc3;
             for (; k_start + k_local < k_end_g; k_local++) {
               int k = k_start + k_local;
               float x_val = shared_x[k - chunk_start];
@@ -4077,18 +4084,21 @@ __global__ void __launch_bounds__(1024) gather_qmv_warp_shared_kernel(
               float x5 = shared_x[k - chunk_start + 5];
               float x6 = shared_x[k - chunk_start + 6];
               float x7 = shared_x[k - chunk_start + 7];
-              qx_acc = fmaf(x0, w0, qx_acc);
-              qx_acc = fmaf(x1, w1, qx_acc);
-              qx_acc = fmaf(x2, w2, qx_acc);
-              qx_acc = fmaf(x3, w3, qx_acc);
-              qx_acc = fmaf(x4, w4, qx_acc);
-              qx_acc = fmaf(x5, w5, qx_acc);
-              qx_acc = fmaf(x6, w6, qx_acc);
-              qx_acc = fmaf(x7, w7, qx_acc);
+              // Four independent accumulators for RDNA4 dual-issue (mirrors the
+              // 8-bit branch); reassociated at group end.
+              qx_acc0 = fmaf(x0, w0, qx_acc0);
+              qx_acc1 = fmaf(x1, w1, qx_acc1);
+              qx_acc2 = fmaf(x2, w2, qx_acc2);
+              qx_acc3 = fmaf(x3, w3, qx_acc3);
+              qx_acc0 = fmaf(x4, w4, qx_acc0);
+              qx_acc1 = fmaf(x5, w5, qx_acc1);
+              qx_acc2 = fmaf(x6, w6, qx_acc2);
+              qx_acc3 = fmaf(x7, w7, qx_acc3);
               if (has_bias) {
                 x_group_sum += x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7;
               }
             }
+            qx_acc = qx_acc0 + qx_acc1 + qx_acc2 + qx_acc3;
             for (; k_start + k_local < k_end_g; k_local++) {
               int k = k_start + k_local;
               float x_val = shared_x[k - chunk_start];
