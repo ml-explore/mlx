@@ -2045,6 +2045,31 @@ class TestArray(mlx_tests.MLXTestCase):
         y = np.from_dlpack(x)
         self.assertTrue(mx.array_equal(y, x))
 
+    def test_from_dlpack(self):
+        # Import from NumPy (buffer / DLPack protocol).
+        a = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+        x = mx.from_dlpack(a)
+        self.assertTrue(isinstance(x, mx.array))
+        self.assertEqual(x.dtype, mx.float32)
+        self.assertTrue(mx.array_equal(x, mx.array(a)))
+
+        b = np.arange(6, dtype=np.int32).reshape(2, 3)
+        self.assertTrue(mx.array_equal(mx.from_dlpack(b), mx.array(b)))
+
+        # Round-trip an MLX array through from_dlpack.
+        y = mx.arange(8).reshape(2, 4)
+        self.assertTrue(mx.array_equal(mx.from_dlpack(y), y))
+
+        # Available on the array API namespace.
+        xp = mx.array(1.0).__array_namespace__()
+        self.assertTrue(hasattr(xp, "from_dlpack"))
+
+        # copy=False and a non-default device are not supported.
+        with self.assertRaises(ValueError):
+            mx.from_dlpack(a, copy=False)
+        with self.assertRaises(ValueError):
+            mx.from_dlpack(a, device=mx.gpu)
+
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_non_cpu_error(self):
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)

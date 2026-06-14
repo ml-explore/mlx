@@ -1796,6 +1796,49 @@ void init_ops(nb::module_& m) {
             ValueError: If ``copy`` is ``False``.
       )pbdoc");
   m.def(
+      "from_dlpack",
+      [](const nb::object& x,
+         const nb::object& device,
+         std::optional<bool> copy) {
+        if (!device.is_none()) {
+          throw std::invalid_argument(
+              "[from_dlpack] Only the default device is supported, so "
+              "``device`` must be ``None``.");
+        }
+        if (copy.has_value() && !*copy) {
+          throw std::invalid_argument(
+              "[from_dlpack] copy=False is not supported.");
+        }
+        return create_array(x, std::nullopt);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "device"_a = nb::none(),
+      "copy"_a = nb::none(),
+      nb::sig(
+          "def from_dlpack(x: object, /, *, device: Optional[Device] = None, copy: Optional[bool] = None) -> array"),
+      R"pbdoc(
+        Construct an array from an object that implements the DLPack or
+        Python buffer protocol (for example a NumPy array or a tensor from
+        another array library).
+
+        Args:
+            x (object): An object exposing ``__dlpack__`` (or the buffer
+              protocol / array interface).
+            device (Device, optional): Must be ``None`` (the default). MLX
+              arrays are not pinned to a device, so only the default placement
+              is supported.
+            copy (bool, optional): Must be ``True`` or unspecified. ``False``
+              is not supported, since MLX always copies the incoming buffer
+              and cannot return a non-copying view.
+
+        Returns:
+            array: An MLX array with a copy of the input's data.
+
+        Raises:
+            ValueError: If ``copy`` is ``False`` or ``device`` is not ``None``.
+      )pbdoc");
+  m.def(
       "zeros_like",
       &mx::zeros_like,
       nb::arg(),
