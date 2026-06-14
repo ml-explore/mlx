@@ -590,6 +590,46 @@ TEST_CASE("test split") {
   CHECK(array_equal(out[3], array({2, 3, 4})).item<bool>());
 }
 
+TEST_CASE("test flip") {
+  array x = array({1, 2, 3, 4});
+  CHECK(array_equal(flip(x), array({4, 3, 2, 1})).item<bool>());
+
+  x = array({0, 1, 2, 3, 4, 5}, {2, 3});
+  CHECK(
+      array_equal(flip(x, 0), array({3, 4, 5, 0, 1, 2}, {2, 3})).item<bool>());
+  CHECK(
+      array_equal(flip(x, 1), array({2, 1, 0, 5, 4, 3}, {2, 3})).item<bool>());
+  CHECK(
+      array_equal(flip(x, -1), array({2, 1, 0, 5, 4, 3}, {2, 3})).item<bool>());
+  // No axes -> flip all.
+  CHECK(array_equal(flip(x), array({5, 4, 3, 2, 1, 0}, {2, 3})).item<bool>());
+  CHECK(array_equal(
+            flip(x, std::vector<int>{0, 1}), array({5, 4, 3, 2, 1, 0}, {2, 3}))
+            .item<bool>());
+
+  CHECK_THROWS(flip(x, 2));
+}
+
+TEST_CASE("test unstack") {
+  array x = array({0, 1, 2, 3, 4, 5}, {3, 2});
+  auto out = unstack(x);
+  CHECK_EQ(out.size(), 3);
+  CHECK(array_equal(out[0], array({0, 1})).item<bool>());
+  CHECK(array_equal(out[1], array({2, 3})).item<bool>());
+  CHECK(array_equal(out[2], array({4, 5})).item<bool>());
+  CHECK_EQ(out[0].shape(), Shape{2});
+
+  out = unstack(x, 1);
+  CHECK_EQ(out.size(), 2);
+  CHECK(array_equal(out[0], array({0, 2, 4})).item<bool>());
+  CHECK(array_equal(out[1], array({1, 3, 5})).item<bool>());
+
+  // stack is the inverse of unstack.
+  CHECK(array_equal(stack(unstack(x, 1), 1), x).item<bool>());
+
+  CHECK_THROWS(unstack(x, 2));
+}
+
 TEST_CASE("test swap and move axes") {
   // Test swapaxes
   array a(0.0);

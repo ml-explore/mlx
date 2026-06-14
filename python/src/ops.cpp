@@ -178,6 +178,60 @@ void init_ops(nb::module_& m) {
             array: The output array with size one axes removed.
       )pbdoc");
   m.def(
+      "flip",
+      [](const mx::array& a, const IntOrVec& v, const mx::StreamOrDevice& s) {
+        if (std::holds_alternative<std::monostate>(v)) {
+          return mx::flip(a, s);
+        } else if (auto pv = std::get_if<int>(&v); pv) {
+          return mx::flip(a, *pv, s);
+        } else {
+          return mx::flip(a, std::get<std::vector<int>>(v), s);
+        }
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def flip(a: array, /, axis: Union[None, int, Sequence[int]] = None, "
+          "*, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Reverse the order of elements along the given axis.
+
+        Args:
+            a (array): Input array.
+            axis (int or tuple(int), optional): Axis or axes to flip over.
+              Defaults to ``None`` in which case all axes are flipped.
+
+        Returns:
+            array: The flipped array.
+      )pbdoc");
+  m.def(
+      "unstack",
+      [](const mx::array& a, int axis, mx::StreamOrDevice s) {
+        return mx::unstack(a, axis, s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "axis"_a = 0,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def unstack(x: array, /, *, axis: int = 0, stream: Union[None, "
+          "Stream, Device] = None) -> list[array]"),
+      R"pbdoc(
+        Split an array into a sequence of arrays along the given axis.
+
+        The inverse of :func:`stack`. The given axis is removed from each of
+        the returned arrays.
+
+        Args:
+            x (array): Input array.
+            axis (int, optional): Axis along which to unstack. Default: ``0``.
+
+        Returns:
+            list(array): A list of arrays, one for each index along ``axis``.
+      )pbdoc");
+  m.def(
       "expand_dims",
       [](const mx::array& a,
          const std::variant<int, std::vector<int>>& v,
