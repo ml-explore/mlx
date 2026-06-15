@@ -3529,6 +3529,14 @@ array scatter_axis(
     return a;
   }
 
+  // TODO, remove when scatter_axis supports 64-bit outputs
+  if (to_stream(s).device == Device::gpu && size_of(a.dtype()) == 8) {
+    std::ostringstream msg;
+    msg << prefix << " GPU scatter does not yet support " << a.dtype()
+        << " for the input or updates.";
+    throw std::invalid_argument(msg.str());
+  }
+
   auto upd = astype(values, a.dtype(), s);
 
   // Squeeze leading singletons out of update
