@@ -121,6 +121,26 @@ class TestAutograd(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.grad(fun)(mx.ones((2, 2)))
 
+    def test_masked_sqrt_grad_is_finite(self):
+        xy = mx.array([[0.0, 0.0], [3.0, 4.0]], dtype=mx.float32)
+        expected = mx.array([[0.0, 0.0], [0.6, 0.8]], dtype=mx.float32)
+
+        def maximum_radius(xy):
+            x, y = xy[..., 0], xy[..., 1]
+            rho = mx.sqrt(x * x + y * y)
+            return mx.maximum(rho, mx.array(1e-10, dtype=rho.dtype)).sum()
+
+        def where_radius(xy):
+            x, y = xy[..., 0], xy[..., 1]
+            rho = mx.sqrt(x * x + y * y)
+            safe_rho = mx.where(rho > 1e-10, rho, mx.array(1e-10, dtype=rho.dtype))
+            return safe_rho.sum()
+
+        for fn in [maximum_radius, where_radius]:
+            grad = mx.grad(fn)(xy)
+            self.assertTrue(mx.all(mx.isfinite(grad)).item())
+            self.assertTrue(mx.allclose(grad, expected))
+
     def test_grad_trees(self):
         fun = lambda x, y: x * y
         value, dfdx = mx.value_and_grad(fun, (0, 1))(mx.array(0.5), mx.array(2.0))
