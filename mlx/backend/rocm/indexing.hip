@@ -28,15 +28,21 @@ __global__ void gather_general_kernel(
     const T* src,
     T* out,
     int64_t size,
-    const int32_t* src_shape,
-    const int64_t* src_strides,
+    // Metadata passed BY VALUE (hip_array in kernel args) rather than via device
+    // pointers. The previous by-pointer form required uploading these to device
+    // buffers via hipMemcpyAsync; under HIP graph capture those H2D nodes record
+    // the (transient) host source pointer and read freed memory on replay,
+    // producing a garbage source offset -> out-of-bounds read -> GPU queue hang
+    // on RDNA4 (gfx1201). By-value metadata is captured correctly and replays.
+    hip_array<int32_t, MAX_NDIM> src_shape,
+    hip_array<int64_t, MAX_NDIM> src_strides,
     int32_t src_ndim,
-    const int32_t* slice_sizes,
+    hip_array<int32_t, MAX_NDIM> slice_sizes,
     uint32_t slice_size,
-    const int32_t* axes,
-    const IdxT* const* indices,
-    const int32_t* indices_shape,
-    const int64_t* indices_strides,
+    hip_array<int32_t, 8> axes,
+    hip_array<const IdxT*, 8> indices,
+    hip_array<int32_t, 8 * MAX_NDIM> indices_shape,
+    hip_array<int64_t, 8 * MAX_NDIM> indices_strides,
     int32_t idx_ndim) {
   int64_t out_idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (out_idx >= size) {
@@ -591,58 +597,33 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   int block_size = 256;
   int num_blocks = (total + block_size - 1) / block_size;
 
-  // Allocate device memory using allocator
-  array src_shape_arr({static_cast<int>(h_src_shape.size())}, int32, nullptr, {});
-  src_shape_arr.set_data(allocator::malloc(h_src_shape.size() * sizeof(int32_t)));
-  
-  array src_strides_arr({static_cast<int>(h_src_strides.size())}, int64, nullptr, {});
-  src_strides_arr.set_data(allocator::malloc(h_src_strides.size() * sizeof(int64_t)));
-  
-  array slice_sizes_arr({static_cast<int>(h_slice_sizes.size())}, int32, nullptr, {});
-  slice_sizes_arr.set_data(allocator::malloc(h_slice_sizes.size() * sizeof(int32_t)));
-  
-  array axes_arr({static_cast<int>(h_axes.size())}, int32, nullptr, {});
-  axes_arr.set_data(allocator::malloc(std::max(h_axes.size(), (size_t)1) * sizeof(int32_t)));
-  
-  array indices_arr({static_cast<int>(h_indices.size())}, int64, nullptr, {});
-  indices_arr.set_data(allocator::malloc(h_indices.size() * sizeof(void*)));
-  
-  array indices_shape_arr({static_cast<int>(h_indices_shape.size())}, int32, nullptr, {});
-  indices_shape_arr.set_data(allocator::malloc(h_indices_shape.size() * sizeof(int32_t)));
-  
-  array indices_strides_arr({static_cast<int>(h_indices_strides.size())}, int64, nullptr, {});
-  indices_strides_arr.set_data(allocator::malloc(h_indices_strides.size() * sizeof(int64_t)));
+  // Pass all metadata BY VALUE (see gather_general_kernel) — no device buffers,
+  // no H2D uploads, so nothing reads stale host memory on HIP graph replay.
+  auto p_src_shape = const_param(h_src_shape);
+  auto p_src_strides = const_param(h_src_strides);
+  auto p_slice_sizes = const_param(h_slice_sizes);
+  auto p_axes = const_param<8>(h_axes);
+  auto p_indices_shape = const_param<8 * MAX_NDIM>(h_indices_shape);
+  auto p_indices_strides = const_param<8 * MAX_NDIM>(h_indices_strides);
+  int32_t src_ndim_v = static_cast<int32_t>(src.ndim());
 
-  encoder.launch_kernel([&, h_src_shape, h_src_strides, h_slice_sizes, h_axes, 
-                         h_indices, h_indices_shape, h_indices_strides](hipStream_t stream) {
-    // Copy data to device asynchronously
-    (void)hipMemcpyAsync(gpu_ptr<int32_t>(src_shape_arr), h_src_shape.data(),
-                         h_src_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(gpu_ptr<int64_t>(src_strides_arr), h_src_strides.data(),
-                         h_src_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(gpu_ptr<int32_t>(slice_sizes_arr), h_slice_sizes.data(),
-                         h_slice_sizes.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    if (!h_axes.empty()) {
-      (void)hipMemcpyAsync(gpu_ptr<int32_t>(axes_arr), h_axes.data(),
-                           h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    }
-    (void)hipMemcpyAsync(gpu_ptr<void*>(indices_arr), h_indices.data(),
-                         h_indices.size() * sizeof(void*), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(gpu_ptr<int32_t>(indices_shape_arr), h_indices_shape.data(),
-                         h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(gpu_ptr<int64_t>(indices_strides_arr), h_indices_strides.data(),
-                         h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-
+  encoder.launch_kernel([&, p_src_shape, p_src_strides, p_slice_sizes, p_axes,
+                         p_indices_shape, p_indices_strides, h_indices,
+                         src_ndim_v](hipStream_t stream) {
     // Dispatch based on dtype and number of indices
     #define LAUNCH_GATHER(T, IdxT, NIDX) \
-      hipLaunchKernelGGL( \
-          (rocm::gather_general_kernel<T, IdxT, NIDX>), \
-          dim3(num_blocks), dim3(block_size), 0, stream, \
-          gpu_ptr<T>(src), gpu_ptr<T>(out), total, \
-          gpu_ptr<int32_t>(src_shape_arr), gpu_ptr<int64_t>(src_strides_arr), src.ndim(), \
-          gpu_ptr<int32_t>(slice_sizes_arr), slice_size, gpu_ptr<int32_t>(axes_arr), \
-          (const IdxT* const*)gpu_ptr<void*>(indices_arr), gpu_ptr<int32_t>(indices_shape_arr), \
-          gpu_ptr<int64_t>(indices_strides_arr), idx_ndim)
+      do { \
+        rocm::hip_array<const IdxT*, 8> idx_ptrs; \
+        for (int _i = 0; _i < (NIDX); ++_i) \
+          idx_ptrs[_i] = reinterpret_cast<const IdxT*>(h_indices[_i]); \
+        hipLaunchKernelGGL( \
+            (rocm::gather_general_kernel<T, IdxT, NIDX>), \
+            dim3(num_blocks), dim3(block_size), 0, stream, \
+            gpu_ptr<T>(src), gpu_ptr<T>(out), total, \
+            p_src_shape, p_src_strides, src_ndim_v, \
+            p_slice_sizes, slice_size, p_axes, \
+            idx_ptrs, p_indices_shape, p_indices_strides, idx_ndim); \
+      } while (0)
 
     #define DISPATCH_NIDX(T, IdxT) \
       switch (nidx) { \

@@ -94,6 +94,11 @@ class CommandEncoder {
   std::vector<std::shared_ptr<array::Data>> temporaries_;
   std::unordered_set<const array::Data*> temporary_ptrs_;
   bool capturing_{false};
+  // Buffers allocated during capture are held alive here (not freed) so their
+  // addresses stay valid and unique for the lifetime of the captured graph —
+  // freeing them mid-capture would let later allocations reuse the same
+  // address, aliasing distinct graph nodes. Released in reset_graph().
+  std::vector<std::shared_ptr<array::Data>> capture_held_;
   hipGraph_t graph_{nullptr};
   hipGraphExec_t graph_exec_{nullptr};
 };

@@ -322,6 +322,11 @@ void CommandEncoder::commit() {
   // these refs would return live buffers to the pool while later recorded
   // kernels still reference them.
   if (capturing_) {
+    // Keep capture-time buffers alive (unique, stable addresses) until the
+    // graph is destroyed — do NOT free them (which would alias graph nodes) and
+    // do NOT schedule a host-function completion (it can't fire under capture).
+    for (auto& d : temporaries_)
+      capture_held_.push_back(std::move(d));
     temporaries_.clear();
     temporary_ptrs_.clear();
     node_count_ = 0;
@@ -357,8 +362,13 @@ void CommandEncoder::begin_capture() {
     return;
   device_.make_current();
   // hipStreamBeginCapture records all subsequent operations on this stream
-  // into a graph instead of executing them.
-  hipError_t err = hipStreamBeginCapture(stream_, hipStreamCaptureModeGlobal);
+  // into a graph instead of executing them. Use ThreadLocal (not Global) mode
+  // so only THIS thread's stream activity is captured — the Worker thread may
+  // still be running completion/free callbacks from prior eager steps, and
+  // capturing those cross-thread ops bakes spurious nodes into the graph that
+  // hang on replay.
+  hipError_t err =
+      hipStreamBeginCapture(stream_, hipStreamCaptureModeThreadLocal);
   if (err == hipSuccess) {
     capturing_ = true;
   }
@@ -379,6 +389,94 @@ bool CommandEncoder::end_capture() {
   reset_graph();
 
   graph_ = new_graph;
+
+  // Patch host->device constant-upload memcpy nodes. Stream capture records
+  // these with the HOST source pointer, but those host buffers are freed before
+  // replay, so on replay the H2D copy reads stale host memory and stalls the
+  // GPU queue. While the host data is still valid (right after capture), copy
+  // each into a persistent device staging buffer and rewrite the node as
+  // device->device so replay reads valid device memory. The staging buffers are
+  // intentionally leaked for the lifetime of the graph.
+  {
+    size_t n = 0;
+    hipGraphGetNodes(graph_, nullptr, &n);
+    std::vector<hipGraphNode_t> nodes(n);
+    hipGraphGetNodes(graph_, nodes.data(), &n);
+    for (size_t i = 0; i < n; i++) {
+      hipGraphNodeType t;
+      if (hipGraphNodeGetType(nodes[i], &t) != hipSuccess ||
+          t != hipGraphNodeTypeMemcpy)
+        continue;
+      hipMemcpy3DParms p{};
+      if (hipGraphMemcpyNodeGetParams(nodes[i], &p) != hipSuccess)
+        continue;
+      if (p.kind != hipMemcpyHostToDevice)
+        continue;
+      size_t bytes = p.extent.width * std::max<size_t>(p.extent.height, 1) *
+          std::max<size_t>(p.extent.depth, 1);
+      if (bytes == 0 || p.srcPtr.ptr == nullptr)
+        continue;
+      void* stage = nullptr;
+      if (hipMalloc(&stage, bytes) != hipSuccess)
+        continue;
+      // Copy the host constant into the staging buffer now (host source is still
+      // valid right after capture) and rewrite the node as device->device.
+      if (hipMemcpy(stage, p.srcPtr.ptr, bytes, hipMemcpyHostToDevice) !=
+          hipSuccess) {
+        hipFree(stage);
+        continue;
+      }
+      p.srcPtr = make_hipPitchedPtr(stage, p.srcPtr.pitch ? p.srcPtr.pitch : bytes,
+                                    p.extent.width, std::max<size_t>(p.extent.height, 1));
+      p.kind = hipMemcpyDeviceToDevice;
+      (void)hipGraphMemcpyNodeSetParams(nodes[i], &p);
+    }
+  }
+
+  static const bool dbg = std::getenv("MLX_GRAPH_DEBUG") != nullptr;
+  if (dbg) {
+    size_t n = 0;
+    hipGraphGetNodes(graph_, nullptr, &n);
+    std::vector<hipGraphNode_t> nodes(n);
+    hipGraphGetNodes(graph_, nodes.data(), &n);
+    int kKernel = 0, kMemcpy = 0, kMemset = 0, kHost = 0, kEmpty = 0,
+        kWaitEvent = 0, kEventRecord = 0, kMemAlloc = 0, kMemFree = 0, kOther = 0;
+    for (size_t i = 0; i < n; i++) {
+      hipGraphNodeType t;
+      if (hipGraphNodeGetType(nodes[i], &t) != hipSuccess) { kOther++; continue; }
+      switch (t) {
+        case hipGraphNodeTypeKernel: kKernel++; break;
+        case hipGraphNodeTypeMemcpy: kMemcpy++; break;
+        case hipGraphNodeTypeMemset: kMemset++; break;
+        case hipGraphNodeTypeHost: kHost++; break;
+        case hipGraphNodeTypeEmpty: kEmpty++; break;
+        case hipGraphNodeTypeWaitEvent: kWaitEvent++; break;
+        case hipGraphNodeTypeEventRecord: kEventRecord++; break;
+        case hipGraphNodeTypeMemAlloc: kMemAlloc++; break;
+        case hipGraphNodeTypeMemFree: kMemFree++; break;
+        default: kOther++; break;
+      }
+    }
+    fprintf(stderr,
+            "[capture] nodes=%zu kernel=%d memcpy=%d memset=%d host=%d empty=%d "
+            "waitEvent=%d eventRecord=%d memAlloc=%d memFree=%d other=%d\n",
+            n, kKernel, kMemcpy, kMemset, kHost, kEmpty, kWaitEvent,
+            kEventRecord, kMemAlloc, kMemFree, kOther);
+    // Inspect memcpy nodes — host->device copies with a stale host source would
+    // fault/stall on replay.
+    for (size_t i = 0; i < n; i++) {
+      hipGraphNodeType t;
+      if (hipGraphNodeGetType(nodes[i], &t) != hipSuccess ||
+          t != hipGraphNodeTypeMemcpy)
+        continue;
+      hipMemcpy3DParms p{};
+      if (hipGraphMemcpyNodeGetParams(nodes[i], &p) == hipSuccess) {
+        fprintf(stderr, "[capture]   memcpy kind=%d bytes=%zu\n", (int)p.kind,
+                p.extent.width * p.extent.height * p.extent.depth);
+      }
+    }
+  }
+
   err = hipGraphInstantiate(&graph_exec_, graph_, nullptr, nullptr, 0);
   if (err != hipSuccess) {
     hipGraphDestroy(graph_);
@@ -393,14 +491,20 @@ bool CommandEncoder::replay() {
   if (!graph_exec_)
     return false;
   device_.make_current();
+  static const bool dbg = std::getenv("MLX_GRAPH_DEBUG") != nullptr;
+  if (dbg) fprintf(stderr, "[replay] launching graph...\n");
   hipError_t err = hipGraphLaunch(graph_exec_, stream_);
+  if (dbg) fprintf(stderr, "[replay] launch returned %d (%s); syncing...\n",
+                   (int)err, hipGetErrorString(err));
   if (err != hipSuccess)
     return false;
   // The captured kernels run asynchronously on stream_. The completion Events
   // that eval() would normally wait on were skipped during capture, so wait
   // here for the replayed work to finish before the caller reads outputs.
-  (void)hipStreamSynchronize(stream_);
-  return true;
+  err = hipStreamSynchronize(stream_);
+  if (dbg) fprintf(stderr, "[replay] sync returned %d (%s)\n",
+                   (int)err, hipGetErrorString(err));
+  return err == hipSuccess;
 }
 
 void CommandEncoder::reset_graph() {
@@ -412,6 +516,8 @@ void CommandEncoder::reset_graph() {
     hipGraphDestroy(graph_);
     graph_ = nullptr;
   }
+  // The captured graph is gone — release the buffers it referenced.
+  capture_held_.clear();
 }
 
 std::unordered_map<int, Device>& get_devices() {
