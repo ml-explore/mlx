@@ -498,20 +498,25 @@ bool CommandEncoder::end_capture() {
   return true;
 }
 
-bool CommandEncoder::replay() {
+bool CommandEncoder::replay(bool sync) {
   if (!graph_exec_)
     return false;
   device_.make_current();
   static const bool dbg = std::getenv("MLX_GRAPH_DEBUG") != nullptr;
-  if (dbg) fprintf(stderr, "[replay] launching graph...\n");
+  if (dbg) fprintf(stderr, "[replay] launching graph (sync=%d)...\n", (int)sync);
   hipError_t err = hipGraphLaunch(graph_exec_, stream_);
-  if (dbg) fprintf(stderr, "[replay] launch returned %d (%s); syncing...\n",
+  if (dbg) fprintf(stderr, "[replay] launch returned %d (%s)\n",
                    (int)err, hipGetErrorString(err));
   if (err != hipSuccess)
     return false;
   // The captured kernels run asynchronously on stream_. The completion Events
-  // that eval() would normally wait on were skipped during capture, so wait
-  // here for the replayed work to finish before the caller reads outputs.
+  // that eval() would normally wait on were skipped during capture. When sync
+  // is requested, wait here for the replayed work to finish before the caller
+  // reads outputs. When async, the caller orders its output reads after this
+  // launch on the SAME stream (subsequent MLX eval on the generation stream),
+  // so no drain is needed and per-token work can pipeline.
+  if (!sync)
+    return true;
   err = hipStreamSynchronize(stream_);
   if (dbg) fprintf(stderr, "[replay] sync returned %d (%s)\n",
                    (int)err, hipGetErrorString(err));

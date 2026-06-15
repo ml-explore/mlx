@@ -95,7 +95,10 @@ bool gpu_graph_end_capture() {
   return graph_encoder().end_capture();
 }
 bool gpu_graph_replay() {
-  return graph_encoder().replay();
+  return graph_encoder().replay(/*sync=*/true);
+}
+bool gpu_graph_replay_async() {
+  return graph_encoder().replay(/*sync=*/false);
 }
 void gpu_graph_reset() {
   graph_encoder().reset_graph();

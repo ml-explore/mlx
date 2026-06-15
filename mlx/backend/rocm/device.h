@@ -69,7 +69,13 @@ class CommandEncoder {
 
   // Replay the previously captured graph. All recorded kernels execute
   // in a single GPU dispatch. Returns false if no graph is available.
-  bool replay();
+  // If sync is true (default) the call blocks until the replayed work
+  // finishes. If false it only launches the graph onto the stream and
+  // returns immediately — the caller must order any reads of the graph's
+  // outputs after it on the SAME stream (subsequent MLX eval on the
+  // generation stream does exactly this), which lets per-token sampling
+  // pipeline instead of draining the GPU every token.
+  bool replay(bool sync = true);
 
   // Returns true if a captured graph is ready to replay.
   bool has_graph() const {
