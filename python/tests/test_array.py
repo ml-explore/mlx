@@ -2045,6 +2045,29 @@ class TestArray(mlx_tests.MLXTestCase):
         y = np.from_dlpack(x)
         self.assertTrue(mx.array_equal(y, x))
 
+    def test_from_dlpack(self):
+        # Import from numpy through the DLPack protocol
+        x_np = np.arange(6, dtype=np.float32).reshape(2, 3)
+        x = mx.from_dlpack(x_np)
+        self.assertEqual(x.shape, (2, 3))
+        self.assertEqual(x.dtype, mx.float32)
+        self.assertTrue(mx.array_equal(x, mx.array(x_np)))
+
+        # Round trip through an mlx array
+        y = mx.array([[1, 2], [3, 4]], dtype=mx.int32)
+        z = mx.from_dlpack(y)
+        self.assertEqual(z.dtype, mx.int32)
+        self.assertTrue(mx.array_equal(z, y))
+
+        # copy=True is allowed, copy=False is not supported
+        self.assertTrue(mx.array_equal(mx.from_dlpack(x_np, copy=True), x))
+        with self.assertRaises(ValueError):
+            mx.from_dlpack(x_np, copy=False)
+
+        # Objects that do not implement the protocol raise
+        with self.assertRaises(ValueError):
+            mx.from_dlpack([1, 2, 3])
+
     @unittest.skipUnless(has_torch_mps, "PyTorch MPS is required")
     def test_torch_mps_dlpack_non_cpu_error(self):
         x = torch.arange(12, device="mps", dtype=torch.float32).reshape(3, 4)

@@ -1796,6 +1796,51 @@ void init_ops(nb::module_& m) {
             ValueError: If ``copy`` is ``False``.
       )pbdoc");
   m.def(
+      "from_dlpack",
+      [](const nb::object& x,
+         const nb::object& device,
+         std::optional<bool> copy) {
+        if (copy.has_value() && !*copy) {
+          throw std::invalid_argument(
+              "[from_dlpack] copy=False is not supported.");
+        }
+        if (!nb::ndarray_check(x)) {
+          throw std::invalid_argument(
+              "[from_dlpack] The input does not implement the DLPack protocol. "
+              "Expected an object exposing __dlpack__.");
+        }
+        return create_array(x, std::nullopt);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "device"_a = nb::none(),
+      "copy"_a = nb::none(),
+      nb::sig(
+          "def from_dlpack(x: object, /, *, device: Optional[Device] = None, copy: Optional[bool] = None) -> array"),
+      R"pbdoc(
+        Construct an array from an object that implements the DLPack protocol.
+
+        This is the Python array API standard entry point for importing arrays
+        from other frameworks (NumPy, PyTorch, ...) without an intermediate
+        copy through NumPy. The input must be on the CPU.
+
+        Args:
+            x (object): An object exposing ``__dlpack__``.
+            device (Device, optional): Accepted for array API compatibility.
+              MLX arrays are not bound to a device, so this is advisory and only
+              ``None`` is meaningful.
+            copy (bool, optional): Must be ``True`` or unspecified. ``False``
+              is not supported, since MLX has no in-place operations and
+              cannot return a non-copying view.
+
+        Returns:
+            array: An MLX array sharing the data layout of the input.
+
+        Raises:
+            ValueError: If ``copy`` is ``False`` or if ``x`` does not implement
+              the DLPack protocol.
+      )pbdoc");
+  m.def(
       "zeros_like",
       &mx::zeros_like,
       nb::arg(),
