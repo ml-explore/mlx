@@ -1,5 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
+#include <atomic>
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/backend/rocm/worker.h"
@@ -357,9 +358,18 @@ void CommandEncoder::synchronize() {
   f.wait();
 }
 
+// Global flag: true while any stream on this process is recording a HIP graph.
+// Lazy library inits (e.g. hipblasLtCreate) abort the process if first called
+// during capture, so they consult this to defer to a non-capturing path.
+std::atomic<bool> g_stream_capturing{false};
+bool stream_capturing() {
+  return g_stream_capturing.load(std::memory_order_relaxed);
+}
+
 void CommandEncoder::begin_capture() {
   if (capturing_)
     return;
+  g_stream_capturing.store(true, std::memory_order_relaxed);
   device_.make_current();
   // hipStreamBeginCapture records all subsequent operations on this stream
   // into a graph instead of executing them. Use ThreadLocal (not Global) mode
@@ -378,6 +388,7 @@ bool CommandEncoder::end_capture() {
   if (!capturing_)
     return false;
   capturing_ = false;
+  g_stream_capturing.store(false, std::memory_order_relaxed);
 
   hipGraph_t new_graph = nullptr;
   hipError_t err = hipStreamEndCapture(stream_, &new_graph);

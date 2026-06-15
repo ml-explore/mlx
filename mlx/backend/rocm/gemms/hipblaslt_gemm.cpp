@@ -475,6 +475,12 @@ bool is_hipblaslt_available() {
   (void)hipGetDevice(&device_id);
   auto& state = get_state(device_id);
   if (!state.initialized) {
+    // Creating the hipBLASLt handle while a HIP graph is being captured aborts
+    // the process. Defer init (the caller falls back to the rocBLAS path) until
+    // capture has finished.
+    if (stream_capturing()) {
+      return false;
+    }
     std::lock_guard<std::mutex> lock(state.mutex);
     init_handle(state, device_id);
   }

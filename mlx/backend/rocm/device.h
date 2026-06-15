@@ -151,6 +151,10 @@ Device& device(mlx::core::Device device);
 CommandEncoder& get_command_encoder(Stream s);
 void clear_all_encoders();
 
+// True while a HIP graph capture is in progress on any stream. Lazy library
+// inits that abort under capture (e.g. hipblasLtCreate) check this.
+bool stream_capturing();
+
 // Return an execution policy that does not sync for result.
 // Only available when compiling with HIP compiler
 #ifdef __HIPCC__
