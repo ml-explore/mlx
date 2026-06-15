@@ -276,7 +276,18 @@ CommandEncoder::CommandEncoder(
     queue_->addResidencySet(residency_set.mtl_residency_set());
   }
   debug_set_stream_queue_label(queue_.get(), index);
-  buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
+  // Use retained references so Metal keeps every referenced MTLBuffer alive
+  // until the command buffer completes. With unretained references the
+  // allocator's buffer cache can deallocate a buffer that an in-flight command
+  // buffer still references: when malloc() finds the cache over its limit it
+  // calls buffer_cache_.release_cached_buffers(), whose callback runs
+  // buf->release() on a cached buffer whose command buffer has not yet
+  // completed. With ResourceHazardTrackingModeUntracked buffers that frees the
+  // underlying allocation out from under the GPU, which fails completion with
+  // kIOGPUCommandBufferCallbackErrorInvalidResource. Retained references let
+  // Metal hold the buffer until the command buffer finishes, so release() from
+  // the cache trim only drops MLX's own ref.
+  buffer_ = NS::RetainPtr(queue_->commandBuffer());
 }
 
 CommandEncoder::~CommandEncoder() {
@@ -510,7 +521,10 @@ void CommandEncoder::commit(std::function<void()> completion) {
         }
       });
   buffer_->commit();
-  buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
+  // Retained references (see CommandEncoder ctor): keep referenced buffers
+  // alive until the command buffer completes so the allocator's cache trim
+  // cannot free a buffer still in use by the GPU.
+  buffer_ = NS::RetainPtr(queue_->commandBuffer());
   buffer_ops_ = 0;
   buffer_sizes_ = 0;
 }
