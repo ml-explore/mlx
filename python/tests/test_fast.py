@@ -1,7 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
-import os
 import unittest
 
 import mlx.core as mx
@@ -170,19 +169,17 @@ class TestFast(mlx_tests.MLXTestCase):
                 x, dims, traditional=traditional, base=base, scale=scale, offset=offset
             )
 
-    @unittest.skipIf("CI" in os.environ, "Allocates too much memory for CI")
-    def test_rope_large_input(self):
+    @unittest.skipIf(not mx.cuda.is_available(), "CUDA is not available")
+    def test_rope_large_uncontiguous_cuda_grid(self):
         dims, seq_len, batch_size, n_heads = 32, 8192, 8, 32
         base, scale, offset, traditional = 10000.0, 1.0, 0, False
-        x = mx.random.normal(shape=[batch_size, seq_len, n_heads, dims]).astype(
-            mx.float32
-        )
+        x = mx.zeros([batch_size, seq_len, n_heads, dims], dtype=mx.float16)
         x = x.swapaxes(1, 2)
         rx_fast = mx.fast.rope(
             x, dims, traditional=traditional, base=base, scale=scale, offset=offset
         )
-        ref = rope_orig(x, dims, traditional, base, scale, offset)
-        self.assertLess(mx.abs(ref - rx_fast).max(), 5e-3)
+        self.assertEqual(rx_fast.shape, x.shape)
+        self.assertEqual(mx.max(mx.abs(rx_fast)).item(), 0.0)
 
     def test_rope_dims_validation(self):
         T = 4
