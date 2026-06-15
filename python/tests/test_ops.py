@@ -2551,6 +2551,9 @@ class TestOps(mlx_tests.MLXTestCase):
         data = mx.array([[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]])
         # Test repeat 0 times
         self.assertCmpNumpy([data, 0], mx.repeat, np.repeat)
+        # Test repeat 0 times along an axis preserves the unrepeated dimensions
+        self.assertCmpNumpy([data, 0], mx.repeat, np.repeat, axis=0)
+        self.assertCmpNumpy([data, 0], mx.repeat, np.repeat, axis=1)
         # Test repeat along axis 0
         self.assertCmpNumpy([data, 2], mx.repeat, np.repeat, axis=0)
         # Test repeat along axis 1

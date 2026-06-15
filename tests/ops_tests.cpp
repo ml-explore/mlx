@@ -3258,8 +3258,12 @@ TEST_CASE("test repeat") {
 
   // 0 repeats
   auto repeat_4 = repeat(data_3, 0, 0);
-  auto expected_4 = array({});
-  CHECK(array_equal(repeat_2, expected_2).item<bool>());
+  auto expected_4 = array(std::initializer_list<int>{}, {0, 3});
+  CHECK(array_equal(repeat_4, expected_4).item<bool>());
+
+  repeat_4 = repeat(data_3, 0, 1);
+  expected_4 = array(std::initializer_list<int>{}, {3, 0});
+  CHECK(array_equal(repeat_4, expected_4).item<bool>());
 
   // negative repeats
   CHECK_THROWS_AS(repeat(data_3, -3, 0), std::invalid_argument);
