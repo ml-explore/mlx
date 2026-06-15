@@ -237,7 +237,7 @@ def step(x: mx.array, threshold: float = 0.0):
         threshold: The value to threshold at.
     """
 
-    return mx.where(x > threshold, 1, 0)
+    return mx.where(x >= threshold, 1, 0)
 
 
 @partial(mx.compile, shapeless=True)

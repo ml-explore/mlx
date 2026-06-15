@@ -972,6 +972,18 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
+    def test_step(self):
+        x = mx.array([-1.0, 0.0, 1.0])
+
+        # Default threshold of 0: the boundary value is included
+        y = nn.step(x)
+        self.assertTrue(mx.array_equal(y, mx.array([0, 1, 1])))
+        self.assertEqual(y.shape, (3,))
+
+        # A custom threshold is also inclusive
+        y = nn.Step(threshold=1.0)(x)
+        self.assertTrue(mx.array_equal(y, mx.array([0, 0, 1])))
+
     def test_leaky_relu(self):
         x = mx.array([1.0, -1.0, 0.0])
         y = nn.leaky_relu(x)
