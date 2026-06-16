@@ -212,6 +212,32 @@ MTL::ComputePipelineState* get_steel_conv_3d_kernel(
     int wn,
     bool small_filter);
 
+MTL::ComputePipelineState* get_gemv_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    bool transpose_mat,
+    int bm,
+    int bn,
+    int sm,
+    int sn,
+    int tm,
+    int tn,
+    bool nc,
+    bool axpby);
+
+MTL::ComputePipelineState* get_gemv_gather_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    bool transpose_mat,
+    int bm,
+    int bn,
+    int sm,
+    int sn,
+    int tm,
+    int tn);
+
 MTL::ComputePipelineState* get_gemv_masked_kernel(
     metal::Device& d,
     const std::string& kernel_name,
