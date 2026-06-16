@@ -205,17 +205,23 @@ __global__ void scatter_general_kernel(
     const T* upd,
     T* out,
     int64_t upd_size,
-    const int32_t* upd_shape,
-    const int64_t* upd_strides,
+    // Metadata passed BY VALUE (hip_array in kernel args) rather than via device
+    // pointers. The previous by-pointer form required uploading these to device
+    // buffers via hipMemcpyAsync; under HIP graph capture those H2D nodes record
+    // the (transient) host source pointer and read freed memory on replay,
+    // producing a garbage source offset -> out-of-bounds read -> GPU queue hang
+    // on RDNA4 (gfx1201). By-value metadata is captured correctly and replays.
+    hip_array<int32_t, MAX_NDIM> upd_shape,
+    hip_array<int64_t, MAX_NDIM> upd_strides,
     int32_t upd_ndim,
     int64_t upd_post_idx_size,
-    const int32_t* out_shape,
-    const int64_t* out_strides,
+    hip_array<int32_t, MAX_NDIM> out_shape,
+    hip_array<int64_t, MAX_NDIM> out_strides,
     int32_t out_ndim,
-    const int32_t* axes,
-    const IdxT* const* indices,
-    const int32_t* indices_shape,
-    const int64_t* indices_strides,
+    hip_array<int32_t, 8> axes,
+    hip_array<const IdxT*, 8> indices,
+    hip_array<int32_t, 8 * MAX_NDIM> indices_shape,
+    hip_array<int64_t, 8 * MAX_NDIM> indices_strides,
     int32_t idx_ndim) {
   int64_t gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid >= upd_size) {
@@ -738,30 +744,17 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   int block_size = 256;
   int num_blocks = (total + block_size - 1) / block_size;
 
-  // Allocate device memory using allocator
-  array upd_shape_arr({static_cast<int>(h_upd_shape.size())}, int32, nullptr, {});
-  upd_shape_arr.set_data(allocator::malloc(h_upd_shape.size() * sizeof(int32_t)));
-  
-  array upd_strides_arr({static_cast<int>(h_upd_strides.size())}, int64, nullptr, {});
-  upd_strides_arr.set_data(allocator::malloc(h_upd_strides.size() * sizeof(int64_t)));
-  
-  array out_shape_arr({static_cast<int>(h_out_shape.size())}, int32, nullptr, {});
-  out_shape_arr.set_data(allocator::malloc(h_out_shape.size() * sizeof(int32_t)));
-  
-  array out_strides_arr({static_cast<int>(h_out_strides.size())}, int64, nullptr, {});
-  out_strides_arr.set_data(allocator::malloc(h_out_strides.size() * sizeof(int64_t)));
-  
-  array axes_arr({static_cast<int>(std::max(h_axes.size(), (size_t)1))}, int32, nullptr, {});
-  axes_arr.set_data(allocator::malloc(std::max(h_axes.size(), (size_t)1) * sizeof(int32_t)));
-  
-  array indices_arr({static_cast<int>(h_indices.size())}, int64, nullptr, {});
-  indices_arr.set_data(allocator::malloc(h_indices.size() * sizeof(void*)));
-  
-  array indices_shape_arr({static_cast<int>(h_indices_shape.size())}, int32, nullptr, {});
-  indices_shape_arr.set_data(allocator::malloc(h_indices_shape.size() * sizeof(int32_t)));
-  
-  array indices_strides_arr({static_cast<int>(h_indices_strides.size())}, int64, nullptr, {});
-  indices_strides_arr.set_data(allocator::malloc(h_indices_strides.size() * sizeof(int64_t)));
+  // Pass all metadata BY VALUE (see scatter_general_kernel) — no device buffers,
+  // no H2D uploads, so nothing reads stale host memory on HIP graph replay.
+  auto p_upd_shape = const_param(h_upd_shape);
+  auto p_upd_strides = const_param(h_upd_strides);
+  auto p_out_shape = const_param(h_out_shape);
+  auto p_out_strides = const_param(h_out_strides);
+  auto p_axes = const_param<8>(h_axes);
+  auto p_indices_shape = const_param<8 * MAX_NDIM>(h_indices_shape);
+  auto p_indices_strides = const_param<8 * MAX_NDIM>(h_indices_strides);
+  int32_t upd_ndim_v = static_cast<int32_t>(upd.ndim());
+  int32_t out_ndim_v = static_cast<int32_t>(out.ndim());
 
   int reduce_type = reduce_type_; // Scatter::ReduceType: Max=0, Min=1, Sum=2, Prod=3, None=4
   // Map to kernel ReduceType: Assign=0, Sum=1, Prod=2, Max=3, Min=4
@@ -775,39 +768,23 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     default: kernel_reduce_type = 0; break;
   }
 
-  encoder.launch_kernel([&, h_upd_shape, h_upd_strides, h_out_shape, h_out_strides, 
-                         h_axes, h_indices, h_indices_shape, h_indices_strides, kernel_reduce_type](hipStream_t stream) {
-    // Copy data to device asynchronously
-    (void)hipMemcpyAsync(gpu_ptr<int32_t>(upd_shape_arr), h_upd_shape.data(),
-                         h_upd_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(gpu_ptr<int64_t>(upd_strides_arr), h_upd_strides.data(),
-                         h_upd_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(gpu_ptr<int32_t>(out_shape_arr), h_out_shape.data(),
-                         h_out_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(gpu_ptr<int64_t>(out_strides_arr), h_out_strides.data(),
-                         h_out_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    if (!h_axes.empty()) {
-      (void)hipMemcpyAsync(gpu_ptr<int32_t>(axes_arr), h_axes.data(),
-                           h_axes.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    }
-    if (nidx > 0) {
-      (void)hipMemcpyAsync(gpu_ptr<void*>(indices_arr), h_indices.data(),
-                           h_indices.size() * sizeof(void*), hipMemcpyHostToDevice, stream);
-      (void)hipMemcpyAsync(gpu_ptr<int32_t>(indices_shape_arr), h_indices_shape.data(),
-                           h_indices_shape.size() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-      (void)hipMemcpyAsync(gpu_ptr<int64_t>(indices_strides_arr), h_indices_strides.data(),
-                           h_indices_strides.size() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    }
-
+  encoder.launch_kernel([&, p_upd_shape, p_upd_strides, p_out_shape, p_out_strides,
+                         p_axes, h_indices, p_indices_shape, p_indices_strides,
+                         upd_ndim_v, out_ndim_v, kernel_reduce_type](hipStream_t stream) {
     #define LAUNCH_SCATTER(T, IdxT, NIDX, RT) \
-      hipLaunchKernelGGL( \
-          (rocm::scatter_general_kernel<T, IdxT, NIDX, RT>), \
-          dim3(num_blocks), dim3(block_size), 0, stream, \
-          gpu_ptr<T>(upd), gpu_ptr<T>(out), total, \
-          gpu_ptr<int32_t>(upd_shape_arr), gpu_ptr<int64_t>(upd_strides_arr), upd.ndim(), upd_post_idx_size, \
-          gpu_ptr<int32_t>(out_shape_arr), gpu_ptr<int64_t>(out_strides_arr), out.ndim(), \
-          gpu_ptr<int32_t>(axes_arr), (const IdxT* const*)gpu_ptr<void*>(indices_arr), \
-          gpu_ptr<int32_t>(indices_shape_arr), gpu_ptr<int64_t>(indices_strides_arr), idx_ndim)
+      do { \
+        rocm::hip_array<const IdxT*, 8> idx_ptrs; \
+        for (int _i = 0; _i < (NIDX); ++_i) \
+          idx_ptrs[_i] = reinterpret_cast<const IdxT*>(h_indices[_i]); \
+        hipLaunchKernelGGL( \
+            (rocm::scatter_general_kernel<T, IdxT, NIDX, RT>), \
+            dim3(num_blocks), dim3(block_size), 0, stream, \
+            gpu_ptr<T>(upd), gpu_ptr<T>(out), total, \
+            p_upd_shape, p_upd_strides, upd_ndim_v, upd_post_idx_size, \
+            p_out_shape, p_out_strides, out_ndim_v, \
+            p_axes, idx_ptrs, \
+            p_indices_shape, p_indices_strides, idx_ndim); \
+      } while (0)
 
     #define DISPATCH_REDUCE(T, IdxT, NIDX) \
       switch (kernel_reduce_type) { \

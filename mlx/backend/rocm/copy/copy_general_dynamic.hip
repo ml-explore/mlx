@@ -3,6 +3,8 @@
 #include "mlx/backend/rocm/copy/copy.hpp"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
+#include "mlx/backend/rocm/device/config.h"
+#include "mlx/backend/rocm/device/utils.hpp"
 
 #include <hip/hip_runtime.h>
 #include <hip/hip_fp16.h>
@@ -54,15 +56,15 @@ __global__ void copy_gg_dynamic_nd(
   out[idx_out + *offset_out] = static_cast<Out>(in[idx_in + *offset_in]);
 }
 
-// General kernel for ndim > 3 (still needs device memory for shape/strides)
+// General kernel for ndim > 3 (shape/strides passed by value)
 template <typename In, typename Out, typename IdxT>
 __global__ void copy_gg_dynamic(
     const In* in,
     Out* out,
     IdxT size,
-    const int32_t* shape,
-    const int64_t* strides_in,
-    const int64_t* strides_out,
+    hip_array<int32_t, MAX_NDIM> shape,
+    hip_array<int64_t, MAX_NDIM> strides_in,
+    hip_array<int64_t, MAX_NDIM> strides_out,
     int ndim,
     const int64_t* offset_in,
     const int64_t* offset_out) {
@@ -193,41 +195,27 @@ void copy_general_dynamic(
     return;
   }
   
-  // For ndim > 3, we need device memory for shape and strides
-  // Allocate device memory synchronously before the lambda
-  int32_t* d_shape = nullptr;
-  int64_t* d_strides_in = nullptr;
-  int64_t* d_strides_out = nullptr;
-  
-  (void)hipMalloc(&d_shape, ndim * sizeof(int32_t));
-  (void)hipMalloc(&d_strides_in, ndim * sizeof(int64_t));
-  (void)hipMalloc(&d_strides_out, ndim * sizeof(int64_t));
-  
-  // Prepare host data
-  std::vector<int32_t> h_shape(shape.begin(), shape.end());
-  std::vector<int64_t> h_strides_in(strides_in.begin(), strides_in.end());
-  std::vector<int64_t> h_strides_out(strides_out.begin(), strides_out.end());
-  
-  encoder.launch_kernel([&, h_shape, h_strides_in, h_strides_out, 
+  // For ndim > 3, pack shape/strides into by-value structs
+  rocm::hip_array<int32_t, MAX_NDIM> shape_arg = {};
+  rocm::hip_array<int64_t, MAX_NDIM> strides_in_arg = {};
+  rocm::hip_array<int64_t, MAX_NDIM> strides_out_arg = {};
+  for (int i = 0; i < ndim; i++) {
+    shape_arg.data_[i] = static_cast<int32_t>(shape[i]);
+    strides_in_arg.data_[i] = strides_in[i];
+    strides_out_arg.data_[i] = strides_out[i];
+  }
+
+  encoder.launch_kernel([&, shape_arg, strides_in_arg, strides_out_arg,
                          in_ptr_base, out_ptr_base,
-                         d_shape, d_strides_in, d_strides_out,
                          dyn_offset_in_ptr, dyn_offset_out_ptr](hipStream_t stream) {
-    // Copy data to device asynchronously
-    (void)hipMemcpyAsync(d_shape, h_shape.data(), 
-                         ndim * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(d_strides_in, h_strides_in.data(), 
-                         ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    (void)hipMemcpyAsync(d_strides_out, h_strides_out.data(), 
-                         ndim * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-    
     #define LAUNCH_COPY_DYNAMIC_GENERAL(InT, OutT, IdxT) \
       hipLaunchKernelGGL( \
           (rocm::copy_gg_dynamic<InT, OutT, IdxT>), \
           dim3(num_blocks), dim3(block_size), 0, stream, \
           static_cast<const InT*>(in_ptr_base) + offset_in, \
           static_cast<OutT*>(out_ptr_base) + offset_out, \
-          static_cast<IdxT>(size), d_shape, \
-          d_strides_in, d_strides_out, \
+          static_cast<IdxT>(size), shape_arg, \
+          strides_in_arg, strides_out_arg, \
           ndim, dyn_offset_in_ptr, dyn_offset_out_ptr)
     
     #define DISPATCH_OUT_TYPE_GEN(InT, IdxT) \
@@ -261,12 +249,7 @@ void copy_general_dynamic(
     } else {
       DISPATCH_IN_TYPE_GEN(int32_t);
     }
-    
-    // Free device memory asynchronously on the stream after kernel completes
-    (void)hipFreeAsync(d_shape, stream);
-    (void)hipFreeAsync(d_strides_in, stream);
-    (void)hipFreeAsync(d_strides_out, stream);
-    
+
     #undef DISPATCH_IN_TYPE_GEN
     #undef DISPATCH_OUT_TYPE_GEN
     #undef LAUNCH_COPY_DYNAMIC_GENERAL

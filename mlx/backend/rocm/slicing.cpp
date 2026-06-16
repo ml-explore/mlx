@@ -69,14 +69,25 @@ array compute_dynamic_offset(
         using int64_t = signed long long;
         using int32_t = signed int;
 
+        #define MAX_NDIM 10
+
         namespace mlx::core::rocm {
+
+        template <typename T, int N>
+        struct hip_array {
+          T data_[N];
+          __host__ __device__ T& operator[](int i) { return data_[i]; }
+          __host__ __device__ const T& operator[](int i) const {
+            return data_[i];
+          }
+        };
 
         template <typename T, int NIDX>
         __global__ void compute_dynamic_offset(
             const T* indices,
             int64_t* offset,
-            const int64_t* strides,
-            const int* axes) {
+            hip_array<int64_t, MAX_NDIM> strides,
+            hip_array<int32_t, MAX_NDIM> axes) {
           int64_t acc = 0;
           #pragma unroll
           for (int i = 0; i < NIDX; ++i) {
@@ -105,13 +116,14 @@ array compute_dynamic_offset(
   encoder.set_input_array(indices);
   encoder.set_output_array(offset);
 
-  // Copy strides and axes to device
-  array strides_arr({static_cast<int>(strides.size())}, int64);
-  array axes_arr({static_cast<int>(axes.size())}, int32);
-  strides_arr.set_data(allocator::malloc(strides_arr.nbytes()));
-  axes_arr.set_data(allocator::malloc(axes_arr.nbytes()));
-  encoder.add_temporary(strides_arr);
-  encoder.add_temporary(axes_arr);
+  rocm::hip_array<int64_t, MAX_NDIM> strides_arg = {};
+  rocm::hip_array<int32_t, MAX_NDIM> axes_arg = {};
+  for (int i = 0; i < static_cast<int>(strides.size()); ++i) {
+    strides_arg.data_[i] = static_cast<int64_t>(strides[i]);
+  }
+  for (int i = 0; i < static_cast<int>(axes.size()); ++i) {
+    axes_arg.data_[i] = static_cast<int32_t>(axes[i]);
+  }
 
   // Get kernel before launching to avoid any potential issues
   auto kernel = mod.get_kernel(kernel_name);
@@ -119,31 +131,14 @@ array compute_dynamic_offset(
   // Get GPU pointers before lambda to avoid synchronization issues
   const void* indices_ptr = gpu_ptr<void>(indices);
   void* offset_ptr = gpu_ptr<void>(offset);
-  void* strides_arr_ptr = gpu_ptr<void>(strides_arr);
-  void* axes_arr_ptr = gpu_ptr<void>(axes_arr);
 
   encoder.launch_kernel(
-      [&, kernel, indices_ptr, offset_ptr, strides_arr_ptr, axes_arr_ptr](
+      [kernel, indices_ptr, offset_ptr, strides_arg, axes_arg](
           hipStream_t stream) {
-        (void)hipMemcpyAsync(
-            strides_arr_ptr,
-            strides.data(),
-            strides.size() * sizeof(int64_t),
-            hipMemcpyHostToDevice,
-            stream);
-        (void)hipMemcpyAsync(
-            axes_arr_ptr,
-            axes.data(),
-            axes.size() * sizeof(int32_t),
-            hipMemcpyHostToDevice,
-            stream);
-
-        // hipModuleLaunchKernel expects args to be an array of pointers to the
-        // arguments
         const void* arg0 = indices_ptr;
         void* arg1 = offset_ptr;
-        void* arg2 = strides_arr_ptr;
-        void* arg3 = axes_arr_ptr;
+        rocm::hip_array<int64_t, MAX_NDIM> arg2 = strides_arg;
+        rocm::hip_array<int32_t, MAX_NDIM> arg3 = axes_arg;
         void* args[] = {&arg0, &arg1, &arg2, &arg3};
         (void)hipModuleLaunchKernel(
             kernel, 1, 1, 1, 1, 1, 1, 0, stream, args, nullptr);

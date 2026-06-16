@@ -171,8 +171,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     auto& encoder = rocm::get_command_encoder(s);
     encoder.set_output_array(out);
     encoder.launch_kernel([&](hipStream_t stream) {
-      uint32_t zero = 0;
-      (void)hipMemcpyAsync(gpu_ptr<uint32_t>(out), &zero, sizeof(uint32_t), hipMemcpyHostToDevice, stream);
+      (void)hipMemsetAsync(gpu_ptr<uint32_t>(out), 0, sizeof(uint32_t), stream);
     });
     return;
   }

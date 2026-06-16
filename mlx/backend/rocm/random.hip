@@ -84,8 +84,8 @@ __global__ void rbitsc_kernel(
 
 __device__ int64_t elem_to_loc_random(
     int64_t elem,
-    const int* shape,
-    const int64_t* strides,
+    const hip_array<int32_t, MAX_NDIM>& shape,
+    const hip_array<int64_t, MAX_NDIM>& strides,
     int ndim) {
   int64_t loc = 0;
   for (int i = ndim - 1; i >= 0; --i) {
@@ -103,8 +103,8 @@ __global__ void rbits_kernel(
     bool odd,
     uint32_t bytes_per_key,
     int32_t ndim,
-    const int* key_shape,
-    const int64_t* key_strides) {
+    hip_array<int32_t, MAX_NDIM> key_shape,
+    hip_array<int64_t, MAX_NDIM> key_strides) {
   uint thread_index = blockIdx.x * blockDim.x + threadIdx.x;
   uint index_x = thread_index % grid_dims_x;
   uint index_y = thread_index / grid_dims_x;
@@ -186,19 +186,13 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
           odd,
           bytes_per_key);
     } else {
-      // Need to copy shape and strides to device
-      array shape_arr({keys.ndim()}, int32);
-      array strides_arr({keys.ndim()}, int64);
-      shape_arr.set_data(allocator::malloc(shape_arr.nbytes()));
-      strides_arr.set_data(allocator::malloc(strides_arr.nbytes()));
-      encoder.add_temporary(shape_arr);
-      encoder.add_temporary(strides_arr);
-      
-      (void)hipMemcpyAsync(gpu_ptr<int32_t>(shape_arr), keys.shape().data(),
-                     keys.ndim() * sizeof(int32_t), hipMemcpyHostToDevice, stream);
-      (void)hipMemcpyAsync(gpu_ptr<int64_t>(strides_arr), keys.strides().data(),
-                     keys.ndim() * sizeof(int64_t), hipMemcpyHostToDevice, stream);
-      
+      rocm::hip_array<int32_t, MAX_NDIM> shape_arg = {};
+      rocm::hip_array<int64_t, MAX_NDIM> strides_arg = {};
+      for (int i = 0; i < keys.ndim(); i++) {
+        shape_arg.data_[i] = static_cast<int32_t>(keys.shape()[i]);
+        strides_arg.data_[i] = keys.strides()[i];
+      }
+
       hipLaunchKernelGGL(
           rocm::rbits_kernel,
           dim3(num_blocks), dim3(block_size), 0, stream,
@@ -209,8 +203,8 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
           odd,
           bytes_per_key,
           keys.ndim(),
-          gpu_ptr<int32_t>(shape_arr),
-          gpu_ptr<int64_t>(strides_arr));
+          shape_arg,
+          strides_arg);
     }
   });
 }
