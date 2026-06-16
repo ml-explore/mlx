@@ -84,8 +84,7 @@ void GatedDeltaUpdate::eval_gpu(
         compute_encoder.add_temporary(W);
         compute_encoder.add_temporary(U);
 
-        // --- kernel 1: compute full W and U ---
-        // all chunks dispatched simultaneously
+        // kernel 1: compute full W and U
         std::string make_wy_name = "make_wy_"
             + get_type_string(q.dtype())          // "float"
             + "_" + std::to_string(Dk)
@@ -105,11 +104,11 @@ void GatedDeltaUpdate::eval_gpu(
         compute_encoder.set_output_array(U,   5);
         compute_encoder.set_bytes(T,          6);
 
-        auto grid_wy   = MTL::Size(Dk, Dv, B * Hv * n_chunks);
+        auto grid_wy   = MTL::Size(32, 4, B * Hv * n_chunks);
         auto threads_wy = MTL::Size(32, 4, 1);
         compute_encoder.dispatch_threads(grid_wy, threads_wy);
 
-        // --- kernel 2: gated delta -- one dispatch, loop inside kernel ---
+        // kernel 2: gated delta
         compute_encoder.set_compute_pipeline_state(delta_kernel);
         compute_encoder.set_input_array(q,      0);
         compute_encoder.set_input_array(k,      1);
@@ -124,6 +123,8 @@ void GatedDeltaUpdate::eval_gpu(
         
         auto grid   = MTL::Size(32, Dv, B * Hv);
         auto threads = MTL::Size(32, 4, 1);
+        // auto grid   = MTL::Size(1, 1, 1);
+        // auto threads = MTL::Size(1, 1, 1);
         compute_encoder.dispatch_threads(grid, threads);
 
     } else {
