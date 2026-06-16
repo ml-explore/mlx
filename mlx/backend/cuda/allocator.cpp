@@ -28,29 +28,6 @@ constexpr int small_block_size = 8;
 // size and small_block_size.
 constexpr int small_pool_size = 4 * page_size;
 
-// Check if running on Windows or Windows Subsystem for Linux
-bool is_windows() {
-#if defined(_WIN32)
-  return true;
-#elif defined(__linux__)
-  // WSL kernels contain "microsoft" or "WSL" in /proc/version
-  static bool is_wsl = []() {
-    std::ifstream version("/proc/version");
-    if (version.is_open()) {
-      std::string line;
-      std::getline(version, line);
-      return line.find("microsoft") != std::string::npos ||
-          line.find("Microsoft") != std::string::npos ||
-          line.find("WSL") != std::string::npos;
-    }
-    return false;
-  }();
-  return is_wsl;
-#else
-  return false;
-#endif
-}
-
 bool supports_managed_memory() {
   static bool managed_memory = []() {
     int device_count = gpu::device_count();
@@ -61,7 +38,15 @@ bool supports_managed_memory() {
       }
       // Empirically on Windows (and WSL) if there is no concurrentManagedAccess
       // the managed memory also does not work.
-      if (is_windows() && !d.concurrent_managed_access()) {
+      // The same has been observed on NVIDIA Tegra, typically on Jetson Orin
+      // Nano boards.
+      // NVIDIA documentation describes Windows, WSL, and Tegra as having a
+      // specific unified memory paradigm called "Limited unified memory
+      // support", which corresponds to concurrentManagedAccess = 0.
+      // See:
+      //   https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/understanding-memory.html#table-unified-memory-levels
+      //   https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/unified-memory.html#um-legacy-devices
+      if (!d.concurrent_managed_access()) {
         return false;
       }
     }
