@@ -4927,7 +4927,51 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
+  // ---- Decode MoE: optional tiled gather-QMV (env-gated A/B) ----
+  // The default warp-shared gather kernel launches very few blocks at decode
+  // (grid z = B = tokens*top_k, small), starving GPU occupancy. The tiled gather
+  // kernel (mirrors the fast 2D qmv_tiled path) also fans out over N tiles, for
+  // far more blocks. It reads the word-packed (uint32) weight layout, so it is
+  // restricted to 4/8-bit affine like the 2D tiled path, and to a unit-stride 1D
+  // batch (the common MoE decode case). Opt in with
+  // MLX_ROCM_GATHER_QMV_USE_TILED=1 to benchmark / enable.
+  static const bool g_use_tiled_gather =
+      (std::getenv("MLX_ROCM_GATHER_QMV_USE_TILED") != nullptr);
+  bool gather_tiled_ok = g_use_tiled_gather && transpose_ &&
+      mode_ == QuantizationMode::Affine && x.dtype() == bfloat16 &&
+      group_size_ == 64 && (bits_ == 4 || bits_ == 8) &&
+      batch_ndim == 1 && batch_strides[0].size() == 1 &&
+      batch_strides[0][0] == 1 && batch_strides[1][0] == 1;
+  int gather_tile_n = 0;
+  if (gather_tiled_ok) {
+    auto gqmm_hw = detect_rocm_hw_info(enc.device());
+    gather_tile_n = rocm::get_arch_tuning(gqmm_hw).qmv_tile_n;
+    while (gather_tile_n > 1 && (N % gather_tile_n) != 0) gather_tile_n /= 2;
+    if (gather_tile_n < 1) gather_tile_n = 1;
+  }
+
   enc.launch_kernel([&](hipStream_t stream) {
+    if (gather_tiled_ok) {
+      dim3 gt_grid(M, (N + gather_tile_n - 1) / gather_tile_n, B);
+      dim3 gt_block(WARP_SIZE, gather_tile_n);
+      int LHS_B = static_cast<int>(x_batch_count);
+      auto launch_gt = [&](auto bits_tag) {
+        constexpr int BITS = decltype(bits_tag)::value;
+        hipLaunchKernelGGL(
+            (rocm::gather_qmv_tiled_kernel<hip_bfloat16, hip_bfloat16, BITS, 64>),
+            gt_grid, gt_block, 0, stream,
+            (const hip_bfloat16*)x_ptr,
+            (const uint32_t*)w_ptr,
+            (const hip_bfloat16*)scales_ptr,
+            (const hip_bfloat16*)biases_ptr,
+            li_ptr, ri_ptr,
+            (hip_bfloat16*)out_ptr,
+            B, M, N, K, E, LHS_B, has_bias, gather_tile_n);
+      };
+      if (bits_ == 4) launch_gt(std::integral_constant<int, 4>{});
+      else launch_gt(std::integral_constant<int, 8>{});
+      return;
+    }
     if (use_fast_gather_qmv && mode_ == QuantizationMode::Affine &&
         x.dtype() == bfloat16 && group_size_ == 64 &&
         (bits_ == 4 || bits_ == 6 || bits_ == 8)) {
