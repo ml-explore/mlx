@@ -44,10 +44,10 @@ __global__ void ternary_g(
     const T* c,
     T* out,
     IdxT size_rest,
-    const int* shape,
-    const int64_t* a_strides,
-    const int64_t* b_strides,
-    const int64_t* c_strides,
+    hip_array<int32_t, MAX_NDIM> shape,
+    hip_array<int64_t, MAX_NDIM> a_strides,
+    hip_array<int64_t, MAX_NDIM> b_strides,
+    hip_array<int64_t, MAX_NDIM> c_strides,
     int ndim) {
   IdxT index_rest = blockIdx.y * blockDim.y + threadIdx.y;
   if (index_rest >= size_rest) {
@@ -148,27 +148,18 @@ void ternary_op_gpu_inplace(
       auto& b_strides_vec = strides_vec[1];
       auto& c_strides_vec = strides_vec[2];
       int ndim = shape_vec.size();
-      
-      // Allocate device memory for shape and strides
-      array shape_arr({ndim}, int32, nullptr, {});
-      array a_strides_arr({ndim}, int64, nullptr, {});
-      array b_strides_arr({ndim}, int64, nullptr, {});
-      array c_strides_arr({ndim}, int64, nullptr, {});
-      shape_arr.set_data(allocator::malloc(shape_arr.nbytes()));
-      a_strides_arr.set_data(allocator::malloc(a_strides_arr.nbytes()));
-      b_strides_arr.set_data(allocator::malloc(b_strides_arr.nbytes()));
-      c_strides_arr.set_data(allocator::malloc(c_strides_arr.nbytes()));
-      encoder.add_temporary(shape_arr);
-      encoder.add_temporary(a_strides_arr);
-      encoder.add_temporary(b_strides_arr);
-      encoder.add_temporary(c_strides_arr);
-      
-      // Copy to vectors for capture
-      std::vector<int32_t> shape_copy(shape_vec.begin(), shape_vec.end());
-      std::vector<int64_t> a_strides_copy(a_strides_vec.begin(), a_strides_vec.end());
-      std::vector<int64_t> b_strides_copy(b_strides_vec.begin(), b_strides_vec.end());
-      std::vector<int64_t> c_strides_copy(c_strides_vec.begin(), c_strides_vec.end());
-      
+
+      rocm::hip_array<int32_t, MAX_NDIM> shape_arg = {};
+      rocm::hip_array<int64_t, MAX_NDIM> a_strides_arg = {};
+      rocm::hip_array<int64_t, MAX_NDIM> b_strides_arg = {};
+      rocm::hip_array<int64_t, MAX_NDIM> c_strides_arg = {};
+      for (int i = 0; i < ndim; i++) {
+        shape_arg.data_[i] = static_cast<int32_t>(shape_vec[i]);
+        a_strides_arg.data_[i] = a_strides_vec[i];
+        b_strides_arg.data_[i] = b_strides_vec[i];
+        c_strides_arg.data_[i] = c_strides_vec[i];
+      }
+
       int dim0 = ndim > 0 ? shape_vec.back() : 1;
       size_t rest = out.size() / dim0;
       
@@ -180,33 +171,7 @@ void ternary_op_gpu_inplace(
       int num_blocks_x = (dim0 + block_x - 1) / block_x;
       int num_blocks_y = (rest + block_y - 1) / block_y;
       
-      encoder.launch_kernel([=, &a, &b, &c, &out, &shape_arr, &a_strides_arr, &b_strides_arr, &c_strides_arr](hipStream_t stream) {
-        // Copy shape and strides to device
-        (void)hipMemcpyAsync(
-            gpu_ptr<int32_t>(shape_arr),
-            shape_copy.data(),
-            ndim * sizeof(int32_t),
-            hipMemcpyHostToDevice,
-            stream);
-        (void)hipMemcpyAsync(
-            gpu_ptr<int64_t>(a_strides_arr),
-            a_strides_copy.data(),
-            ndim * sizeof(int64_t),
-            hipMemcpyHostToDevice,
-            stream);
-        (void)hipMemcpyAsync(
-            gpu_ptr<int64_t>(b_strides_arr),
-            b_strides_copy.data(),
-            ndim * sizeof(int64_t),
-            hipMemcpyHostToDevice,
-            stream);
-        (void)hipMemcpyAsync(
-            gpu_ptr<int64_t>(c_strides_arr),
-            c_strides_copy.data(),
-            ndim * sizeof(int64_t),
-            hipMemcpyHostToDevice,
-            stream);
-        
+      encoder.launch_kernel([=, &a, &b, &c, &out](hipStream_t stream) {
         if (work_per_thread == 4) {
           hipLaunchKernelGGL(
               (rocm::ternary_g<Op, DType, int64_t, 4>),
@@ -214,10 +179,10 @@ void ternary_op_gpu_inplace(
               gpu_ptr<const bool>(a), gpu_ptr<const DType>(b), gpu_ptr<const DType>(c),
               gpu_ptr<DType>(out),
               static_cast<int64_t>(rest),
-              gpu_ptr<int32_t>(shape_arr),
-              gpu_ptr<int64_t>(a_strides_arr),
-              gpu_ptr<int64_t>(b_strides_arr),
-              gpu_ptr<int64_t>(c_strides_arr),
+              shape_arg,
+              a_strides_arg,
+              b_strides_arg,
+              c_strides_arg,
               ndim);
         } else {
           hipLaunchKernelGGL(
@@ -226,10 +191,10 @@ void ternary_op_gpu_inplace(
               gpu_ptr<const bool>(a), gpu_ptr<const DType>(b), gpu_ptr<const DType>(c),
               gpu_ptr<DType>(out),
               static_cast<int64_t>(rest),
-              gpu_ptr<int32_t>(shape_arr),
-              gpu_ptr<int64_t>(a_strides_arr),
-              gpu_ptr<int64_t>(b_strides_arr),
-              gpu_ptr<int64_t>(c_strides_arr),
+              shape_arg,
+              a_strides_arg,
+              b_strides_arg,
+              c_strides_arg,
               ndim);
         }
       });

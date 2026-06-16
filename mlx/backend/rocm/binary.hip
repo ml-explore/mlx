@@ -97,9 +97,9 @@ __global__ void binary_g(
     const In* b,
     Out* out,
     IdxT size,
-    const int* shape,
-    const int64_t* a_strides,
-    const int64_t* b_strides,
+    hip_array<int32_t, MAX_NDIM> shape,
+    hip_array<int64_t, MAX_NDIM> a_strides,
+    hip_array<int64_t, MAX_NDIM> b_strides,
     int ndim) {
   IdxT index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= size) {
@@ -171,42 +171,17 @@ void launch_binary_general(
   auto& strides_b = strides_vec[1];
   int ndim = shape.size();
   size_t data_size = out.size();
-  
-  array shape_arr({ndim}, int32, nullptr, {});
-  array strides_a_arr({ndim}, int64, nullptr, {});
-  array strides_b_arr({ndim}, int64, nullptr, {});
-  shape_arr.set_data(allocator::malloc(shape_arr.nbytes()));
-  strides_a_arr.set_data(allocator::malloc(strides_a_arr.nbytes()));
-  strides_b_arr.set_data(allocator::malloc(strides_b_arr.nbytes()));
-  encoder.add_temporary(shape_arr);
-  encoder.add_temporary(strides_a_arr);
-  encoder.add_temporary(strides_b_arr);
-  
-  // Need to copy shape and strides data before the lambda captures them
-  std::vector<int32_t> shape_copy(shape.begin(), shape.end());
-  std::vector<int64_t> strides_a_copy(strides_a.begin(), strides_a.end());
-  std::vector<int64_t> strides_b_copy(strides_b.begin(), strides_b.end());
-  
-  encoder.launch_kernel([=, &a, &b, &out, &shape_arr, &strides_a_arr, &strides_b_arr](hipStream_t stream) {
-    (void)hipMemcpyAsync(
-        gpu_ptr<int32_t>(shape_arr),
-        shape_copy.data(),
-        ndim * sizeof(int32_t),
-        hipMemcpyHostToDevice,
-        stream);
-    (void)hipMemcpyAsync(
-        gpu_ptr<int64_t>(strides_a_arr),
-        strides_a_copy.data(),
-        ndim * sizeof(int64_t),
-        hipMemcpyHostToDevice,
-        stream);
-    (void)hipMemcpyAsync(
-        gpu_ptr<int64_t>(strides_b_arr),
-        strides_b_copy.data(),
-        ndim * sizeof(int64_t),
-        hipMemcpyHostToDevice,
-        stream);
 
+  hip_array<int32_t, MAX_NDIM> shape_arg = {};
+  hip_array<int64_t, MAX_NDIM> strides_a_arg = {};
+  hip_array<int64_t, MAX_NDIM> strides_b_arg = {};
+  for (int i = 0; i < ndim; i++) {
+    shape_arg.data_[i] = static_cast<int32_t>(shape[i]);
+    strides_a_arg.data_[i] = strides_a[i];
+    strides_b_arg.data_[i] = strides_b[i];
+  }
+
+  encoder.launch_kernel([=, &a, &b, &out](hipStream_t stream) {
     int block_size = 256;
     int num_blocks = (data_size + block_size - 1) / block_size;
 
@@ -215,9 +190,9 @@ void launch_binary_general(
         dim3(num_blocks), dim3(block_size), 0, stream,
         gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
         static_cast<int64_t>(data_size),
-        gpu_ptr<int32_t>(shape_arr),
-        gpu_ptr<int64_t>(strides_a_arr),
-        gpu_ptr<int64_t>(strides_b_arr),
+        shape_arg,
+        strides_a_arg,
+        strides_b_arg,
         ndim);
   });
 }

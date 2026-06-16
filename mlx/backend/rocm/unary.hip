@@ -42,8 +42,8 @@ __global__ void unary_g(
     const In* in,
     Out* out,
     IdxT size_rest,
-    const int* shape,
-    const int64_t* strides,
+    hip_array<int32_t, MAX_NDIM> shape,
+    hip_array<int64_t, MAX_NDIM> strides,
     int ndim) {
   IdxT index_rest = blockIdx.y * blockDim.y + threadIdx.y;
   if (index_rest >= size_rest) {
@@ -181,19 +181,14 @@ void unary_op_gpu_inplace(
           // Non-contiguous case - use unary_g with strided access
           auto [shape_vec, strides_vec] = collapse_contiguous_dims(in);
           int ndim = shape_vec.size();
-          
-          // Allocate device memory for shape and strides
-          array shape_arr({ndim}, int32, nullptr, {});
-          array strides_arr({ndim}, int64, nullptr, {});
-          shape_arr.set_data(allocator::malloc(shape_arr.nbytes()));
-          strides_arr.set_data(allocator::malloc(strides_arr.nbytes()));
-          encoder.add_temporary(shape_arr);
-          encoder.add_temporary(strides_arr);
-          
-          // Copy shape and strides to vectors for capture
-          std::vector<int32_t> shape_copy(shape_vec.begin(), shape_vec.end());
-          std::vector<int64_t> strides_copy(strides_vec.begin(), strides_vec.end());
-          
+
+          rocm::hip_array<int32_t, MAX_NDIM> shape_arg = {};
+          rocm::hip_array<int64_t, MAX_NDIM> strides_arg = {};
+          for (int i = 0; i < ndim; i++) {
+            shape_arg.data_[i] = static_cast<int32_t>(shape_vec[i]);
+            strides_arg.data_[i] = strides_vec[i];
+          }
+
           int dim0 = ndim > 0 ? shape_vec.back() : 1;
           size_t rest = out.size() / dim0;
           
@@ -207,21 +202,7 @@ void unary_op_gpu_inplace(
           int num_blocks_x = (dim0 + block_x - 1) / block_x;
           int num_blocks_y = (rest + block_y - 1) / block_y;
           
-          encoder.launch_kernel([=, &in, &out, &shape_arr, &strides_arr](hipStream_t stream) {
-            // Copy shape and strides to device
-            (void)hipMemcpyAsync(
-                gpu_ptr<int32_t>(shape_arr),
-                shape_copy.data(),
-                ndim * sizeof(int32_t),
-                hipMemcpyHostToDevice,
-                stream);
-            (void)hipMemcpyAsync(
-                gpu_ptr<int64_t>(strides_arr),
-                strides_copy.data(),
-                ndim * sizeof(int64_t),
-                hipMemcpyHostToDevice,
-                stream);
-            
+          encoder.launch_kernel([=, &in, &out](hipStream_t stream) {
             if (large) {
               if (work_per_thread == 4) {
                 hipLaunchKernelGGL(
@@ -229,8 +210,8 @@ void unary_op_gpu_inplace(
                     dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
                     gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
                     static_cast<int64_t>(rest),
-                    gpu_ptr<int32_t>(shape_arr),
-                    gpu_ptr<int64_t>(strides_arr),
+                    shape_arg,
+                    strides_arg,
                     ndim);
               } else {
                 hipLaunchKernelGGL(
@@ -238,8 +219,8 @@ void unary_op_gpu_inplace(
                     dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
                     gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
                     static_cast<int64_t>(rest),
-                    gpu_ptr<int32_t>(shape_arr),
-                    gpu_ptr<int64_t>(strides_arr),
+                    shape_arg,
+                    strides_arg,
                     ndim);
               }
             } else {
@@ -249,8 +230,8 @@ void unary_op_gpu_inplace(
                     dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
                     gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
                     static_cast<int32_t>(rest),
-                    gpu_ptr<int32_t>(shape_arr),
-                    gpu_ptr<int64_t>(strides_arr),
+                    shape_arg,
+                    strides_arg,
                     ndim);
               } else {
                 hipLaunchKernelGGL(
@@ -258,8 +239,8 @@ void unary_op_gpu_inplace(
                     dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
                     gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
                     static_cast<int32_t>(rest),
-                    gpu_ptr<int32_t>(shape_arr),
-                    gpu_ptr<int64_t>(strides_arr),
+                    shape_arg,
+                    strides_arg,
                     ndim);
               }
             }
