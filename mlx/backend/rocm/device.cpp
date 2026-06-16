@@ -298,13 +298,9 @@ void CommandEncoder::add_completed_handler(std::function<void()> task) {
   worker_->add_task(std::move(task));
 }
 
-void CommandEncoder::set_input_array(const array& arr) {
-  // For now, no-op - can be used for dependency tracking
-}
+void CommandEncoder::set_input_array(const array& arr) {}
 
-void CommandEncoder::set_output_array(const array& arr) {
-  // For now, no-op - can be used for dependency tracking
-}
+void CommandEncoder::set_output_array(const array& arr) {}
 
 void CommandEncoder::maybe_commit() {
   if (node_count_ >= env::max_ops_per_buffer(default_max_ops_per_buffer)) {
@@ -366,10 +362,16 @@ bool stream_capturing() {
   return g_stream_capturing.load(std::memory_order_relaxed);
 }
 
+std::atomic<bool> g_graph_active{false};
+bool graph_active() {
+  return g_graph_active.load(std::memory_order_relaxed);
+}
+
 void CommandEncoder::begin_capture() {
   if (capturing_)
     return;
   g_stream_capturing.store(true, std::memory_order_relaxed);
+  g_graph_active.store(true, std::memory_order_relaxed);
   device_.make_current();
   // hipStreamBeginCapture records all subsequent operations on this stream
   // into a graph instead of executing them. Use ThreadLocal (not Global) mode
@@ -534,6 +536,8 @@ void CommandEncoder::reset_graph() {
   }
   // The captured graph is gone — release the buffers it referenced.
   capture_held_.clear();
+  g_graph_active.store(false, std::memory_order_relaxed);
+  flush_graph_deferred_frees();
 }
 
 std::unordered_map<int, Device>& get_devices() {

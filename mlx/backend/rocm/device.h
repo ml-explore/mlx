@@ -161,6 +161,11 @@ void clear_all_encoders();
 // inits that abort under capture (e.g. hipblasLtCreate) check this.
 bool stream_capturing();
 
+// True from capture start until the captured graph is destroyed. The allocator
+// defers all frees while set so graph-referenced buffers stay valid through replay.
+bool graph_active();
+void flush_graph_deferred_frees();
+
 // Return an execution policy that does not sync for result.
 // Only available when compiling with HIP compiler
 #ifdef __HIPCC__

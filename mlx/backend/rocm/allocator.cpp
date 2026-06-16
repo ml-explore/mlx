@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/allocator.h"
+#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/memory.h"
 #include "mlx/utils.h"
@@ -9,6 +10,7 @@
 #include <unistd.h>
 
 #include <cassert>
+#include <mutex>
 #include <sstream>
 
 namespace mlx::core {
@@ -470,9 +472,31 @@ Buffer RocmAllocator::malloc(size_t size) {
   return Buffer{buf};
 }
 
+static std::mutex g_deferred_mutex;
+static std::vector<Buffer> g_deferred_frees;
+
+void flush_graph_deferred_frees() {
+  std::vector<Buffer> to_free;
+  {
+    std::lock_guard<std::mutex> lk(g_deferred_mutex);
+    to_free.swap(g_deferred_frees);
+  }
+  for (auto b : to_free) {
+    allocator().free(b);
+  }
+}
+
 void RocmAllocator::free(Buffer buffer) {
   auto* buf = static_cast<RocmBuffer*>(buffer.ptr());
   if (!buf) {
+    return;
+  }
+
+  // Defer all frees while a captured graph is alive so its baked buffer
+  // addresses stay valid through replay.
+  if (graph_active()) {
+    std::lock_guard<std::mutex> lk(g_deferred_mutex);
+    g_deferred_frees.push_back(buffer);
     return;
   }
 
