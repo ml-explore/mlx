@@ -1011,6 +1011,36 @@ class TestFast(mlx_tests.MLXTestCase):
         out = call_kernel(a, source)
         self.assertTrue(mx.array_equal(out, mx.ones_like(out)))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_mixed_dtypes(self):
+        # Calling the same kernel with different input dtypes in a single
+        # graph should not invalidate pipeline states that are still in use
+        # by an uncommitted command buffer
+        kernel = mx.fast.metal_kernel(
+            name="mixed_dtypes",
+            input_names=["inp"],
+            output_names=["out"],
+            source="""
+                uint elem = thread_position_in_grid.x;
+                out[elem] = inp[elem] + inp[elem];
+            """,
+        )
+
+        def call_kernel(a: mx.array):
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(a.size, 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        a = mx.full((32,), 1.5, dtype=mx.float16)
+        b = mx.full((32,), 2.5, dtype=mx.float32)
+        out = call_kernel(a).astype(mx.float32) + call_kernel(b)
+        self.assertTrue(mx.allclose(out, mx.full((32,), 8.0)))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
