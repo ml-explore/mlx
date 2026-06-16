@@ -596,7 +596,9 @@ void gather_qmm_nax(
   int wn = 2;
   int bm = 64;
   int bn = 64;
-  int bk = 32;
+  // The gather qmm NAX kernels are instantiated with BK = 64 only; any
+  // other value here makes the kernel name lookup fail.
+  int bk = 64;
   MTL::Size group_dims(32, wn, wm);
   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
 
