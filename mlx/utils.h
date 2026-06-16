@@ -76,9 +76,11 @@ MLX_API void abort_with_exception(const std::exception& error);
 struct MLX_API finfo {
   explicit finfo(Dtype dtype);
   Dtype dtype;
+  int bits;
   double min;
   double max;
   double eps;
+  double smallest_normal;
 };
 
 /** Holds information about integral types. */
