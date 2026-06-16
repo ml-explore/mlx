@@ -131,26 +131,32 @@ __device__ void rope_impl(
 
   // For the swapaxes(1,2) layout the (batch, head) pair is not a single
   // linear stride: batch_stride = T * seq_stride, head_stride = strides[0].
+  // When hs_transpose is on the output mirrors the input layout, so the same
+  // decomposition applies to writes as well.
   size_t in_batch_head;
+  size_t out_batch_head;
   if (hs_transpose) {
-    int64_t batch_stride = static_cast<int64_t>(dims.y) * strides[1];
-    in_batch_head = batch_idx * batch_stride + head_idx * strides[0];
+    int64_t in_batch_stride = static_cast<int64_t>(dims.y) * strides[1];
+    int64_t out_batch_stride = static_cast<int64_t>(dims.y) * out_strides[1];
+    in_batch_head = batch_idx * in_batch_stride + head_idx * strides[0];
+    out_batch_head = batch_idx * out_batch_stride + head_idx * out_strides[0];
   } else {
     in_batch_head = mat_idx * strides[0];
+    out_batch_head = mat_idx * out_strides[0];
   }
 
   // Compute the input and output indices
   size_t in_index_1, in_index_2;
   size_t out_index_1, out_index_2;
   if (traditional) {
-    out_index_1 = 2 * pos.x * out_strides[2] + pos.y * out_strides[1] +
-        mat_idx * out_strides[0];
-    out_index_2 = out_index_1 + 1;
+    out_index_1 =
+        2 * pos.x * out_strides[2] + pos.y * out_strides[1] + out_batch_head;
+    out_index_2 = out_index_1 + out_strides[2];
     in_index_1 = 2 * pos.x * strides[2] + pos.y * strides[1] + in_batch_head;
     in_index_2 = in_index_1 + strides[2];
   } else {
-    out_index_1 = pos.x * out_strides[2] + pos.y * out_strides[1] +
-        mat_idx * out_strides[0];
+    out_index_1 =
+        pos.x * out_strides[2] + pos.y * out_strides[1] + out_batch_head;
     out_index_2 = out_index_1 + dims.x * out_strides[2];
     in_index_1 = pos.x * strides[2] + pos.y * strides[1] + in_batch_head;
     in_index_2 = in_index_1 + dims.x * strides[2];
@@ -326,7 +332,18 @@ void RoPE::eval_gpu(
       in.strides()[1] == D && in.strides()[2] == static_cast<int64_t>(N) * D &&
       in.strides()[3] == 1) {
     head_seq_transpose = true;
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    // Mirror the input layout in the output so we can donate when possible
+    // and otherwise write into a buffer that preserves the swapaxes view.
+    if (in.is_donatable()) {
+      donated = true;
+      out.copy_shared_buffer(in);
+    } else {
+      out.set_data(
+          cu::malloc_async(in.data_size() * in.itemsize(), encoder),
+          in.data_size(),
+          in.strides(),
+          in.flags());
+    }
     strides[0] = in.strides()[1];
     strides[1] = in.strides()[2];
     strides[2] = in.strides()[3];
@@ -339,9 +356,18 @@ void RoPE::eval_gpu(
     strides[1] = out.strides()[ndim - 2];
     strides[2] = out.strides()[ndim - 1];
   }
-  out_strides[0] = mat_size;
-  out_strides[1] = out.strides()[ndim - 2];
-  out_strides[2] = out.strides()[ndim - 1];
+  if (head_seq_transpose) {
+    // Output mirrors the swapaxes(1, 2) input: head and seq strides are the
+    // input's strides, and the (batch, head) pair is reassembled by the
+    // hs_transpose path in the kernel.
+    out_strides[0] = strides[0];
+    out_strides[1] = strides[1];
+    out_strides[2] = strides[2];
+  } else {
+    out_strides[0] = mat_size;
+    out_strides[1] = out.strides()[ndim - 2];
+    out_strides[2] = out.strides()[ndim - 1];
+  }
 
   // Some flags to help us dispatch below
   bool single = in.flags().row_contiguous && B == 1 && T == 1;
