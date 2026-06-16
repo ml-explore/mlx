@@ -404,16 +404,28 @@ void RoPE::eval_gpu(
     N *= in.shape(i);
   }
 
-  // We apply rope to less than the whole vector so copy to output and then
-  // apply in-place.
+  // We apply rope to less than the whole vector. Normally that needs a full
+  // copy to `out` (so the untouched [dims_:D] tail is present) followed by an
+  // in-place rotate. But if the input is donatable we can rotate the first
+  // dims_ channels IN PLACE and leave the tail untouched — no copy at all, and
+  // `out` simply adopts the input's (possibly strided) layout. Downstream ops
+  // (SDPA) accept non-contiguous q/k, so this is safe. (Port of ml-explore/mlx
+  // PR #3704, "RoPE without copy".)
   if (dims_ < D) {
     donated = true;
-    auto ctype =
-        (in.flags().row_contiguous) ? CopyType::Vector : CopyType::General;
-    copy_gpu(in, out, ctype, s);
-    strides[0] = mat_size;
-    strides[1] = out.strides()[ndim - 2];
-    strides[2] = out.strides()[ndim - 1];
+    if (in.is_donatable()) {
+      out.copy_shared_buffer(in);
+      strides[0] = mat_size;
+      strides[1] = in.strides()[ndim - 2];
+      strides[2] = in.strides()[ndim - 1];
+    } else {
+      auto ctype =
+          (in.flags().row_contiguous) ? CopyType::Vector : CopyType::General;
+      copy_gpu(in, out, ctype, s);
+      strides[0] = mat_size;
+      strides[1] = out.strides()[ndim - 2];
+      strides[2] = out.strides()[ndim - 1];
+    }
   }
 
   // Either copy or apply in-place
