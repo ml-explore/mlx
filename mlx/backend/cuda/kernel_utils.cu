@@ -49,4 +49,16 @@ std::tuple<dim3, uint32_t> get_launch_args(
   return std::make_tuple(num_blocks, block_dim);
 }
 
+std::pair<dim3, dim3>
+get_launch_args_general(int dim0, size_t rest, int work_per_thread /* = 1 */) {
+  constexpr uint32_t max_grid_yz_dim = 65535;
+  dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
+  dim3 block_dims = get_block_dims(dim0, rest, 1);
+  uint32_t num_blocks_x = cuda::ceil_div(dim0, block_dims.x);
+  uint32_t num_blocks_y = cuda::ceil_div(rest, block_dims.y);
+  uint32_t num_blocks_z = cuda::ceil_div(num_blocks_y, max_grid_yz_dim);
+  num_blocks_y = cuda::ceil_div(num_blocks_y, num_blocks_z);
+  return {dim3(num_blocks_x, num_blocks_y, num_blocks_z), block_dims};
+}
+
 } // namespace mlx::core

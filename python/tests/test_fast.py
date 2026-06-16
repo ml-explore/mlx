@@ -1,6 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
 import unittest
 
 import mlx.core as mx
@@ -168,6 +169,20 @@ class TestFast(mlx_tests.MLXTestCase):
             y = mx.fast.rope(
                 x, dims, traditional=traditional, base=base, scale=scale, offset=offset
             )
+
+    @unittest.skipIf("CI" in os.environ, "Allocates too much memory for CI")
+    def test_rope_large_input(self):
+        dims, seq_len, batch_size, n_heads = 32, 8192, 8, 32
+        base, scale, offset, traditional = 10000.0, 1.0, 0, False
+        x = mx.random.normal(shape=[batch_size, seq_len, n_heads, dims]).astype(
+            mx.float32
+        )
+        x = x.swapaxes(1, 2)
+        rx_fast = mx.fast.rope(
+            x, dims, traditional=traditional, base=base, scale=scale, offset=offset
+        )
+        ref = rope_orig(x, dims, traditional, base, scale, offset)
+        self.assertLess(mx.abs(ref - rx_fast).max(), 5e-3)
 
     def test_rope_dims_validation(self):
         T = 4
