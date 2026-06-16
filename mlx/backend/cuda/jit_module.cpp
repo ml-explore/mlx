@@ -50,12 +50,17 @@ const std::filesystem::path& default_cuda_toolkit_path() {
 const std::vector<std::string>& include_path_args() {
   static std::vector<std::string> cached_args = []() {
     std::vector<std::string> args;
-    // Add path to bundled CCCL headers.
+    // Add path to bundled headers.
     auto root_dir = current_binary_dir();
 #if !defined(_WIN32)
     root_dir = root_dir.parent_path();
 #endif
-    auto path = root_dir / "include" / "cccl";
+    auto path = root_dir / "include";
+    if (std::filesystem::exists(path)) {
+      args.push_back(fmt::format("--include-path={}", path.string()));
+    }
+    // Add path to CCCL headers.
+    path = path / "cccl";
 #if defined(MLX_CCCL_DIR)
     if (!std::filesystem::exists(path)) {
       path = MLX_CCCL_DIR;
@@ -246,9 +251,11 @@ constexpr const char* g_include_names[] = {
     INCLUDE_PREFIX "cast_op.cuh",
     INCLUDE_PREFIX "config.h",
     INCLUDE_PREFIX "complex.cuh",
+    INCLUDE_PREFIX "cute_dequant.cuh",
     INCLUDE_PREFIX "fp16_math.cuh",
     INCLUDE_PREFIX "hadamard.cuh",
     INCLUDE_PREFIX "indexing.cuh",
+    INCLUDE_PREFIX "qmm_naive.cuh",
     INCLUDE_PREFIX "scatter_ops.cuh",
     INCLUDE_PREFIX "unary_ops.cuh",
     INCLUDE_PREFIX "ternary_ops.cuh",
@@ -263,9 +270,11 @@ constexpr const char* g_headers[] = {
     jit_source_cast_op,
     jit_source_config,
     jit_source_complex,
+    jit_source_cute_dequant,
     jit_source_fp16_math,
     jit_source_hadamard,
     jit_source_indexing,
+    jit_source_qmm_naive,
     jit_source_scatter_ops,
     jit_source_unary_ops,
     jit_source_ternary_ops,
@@ -295,8 +304,11 @@ void compile(
     CHECK_NVRTC_ERROR(nvrtcAddNameExpression(prog, name.c_str()));
   }
 
-  // Compile program.
+  // Required for compiling CUTLASS code.
   std::vector<const char*> args;
+  args.push_back("--device-as-default-execution-space");
+
+  // Target current device.
   bool use_sass = compiler_supports_device_sass(device);
   auto cc = device.compute_capability_major();
   std::string arch_tag = (cc >= 9) ? "a" : "";
@@ -310,6 +322,8 @@ void compile(
   for (const auto& include : include_path_args()) {
     args.push_back(include.c_str());
   }
+
+  // Compile program.
   nvrtcResult compile_result =
       nvrtcCompileProgram(prog, args.size(), args.data());
   if (compile_result != NVRTC_SUCCESS) {
@@ -441,7 +455,7 @@ CUfunction JitModule::get_kernel(
 }
 
 JitModule& get_jit_module(
-    const mlx::core::Device& device,
+    Device& device,
     const std::string& name,
     const KernelBuilder& builder,
     bool use_disk_cache) {
@@ -460,8 +474,7 @@ JitModule& get_jit_module(
   std::unique_lock wlock(*mtx);
   auto it = cache->find(name);
   if (it == cache->end()) {
-    auto& d = cu::device(device);
-    it = cache->try_emplace(name, d, name, builder, use_disk_cache).first;
+    it = cache->try_emplace(name, device, name, builder, use_disk_cache).first;
   }
   return it->second;
 }

@@ -286,3 +286,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(cutlass)
 target_include_directories(
   mlx SYSTEM PRIVATE $<BUILD_INTERFACE:${cutlass_SOURCE_DIR}/include>)
+
+# Install CUTLASS headers for JIT.
+install(DIRECTORY ${cutlass_SOURCE_DIR}/include/cute
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY ${cutlass_SOURCE_DIR}/include/cutlass
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
