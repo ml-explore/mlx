@@ -22,6 +22,9 @@ static CustomKernelCache& cache() {
   return cache_;
 };
 
+// Inputs with fewer elements are passed in the constant address space
+constexpr int max_constant_array_size = 8;
+
 std::string write_signature(
     std::string func_name,
     const std::string& header,
@@ -66,7 +69,6 @@ std::string write_signature(
   kernel_source += "(\n";
 
   int index = 0;
-  constexpr int max_constant_array_size = 8;
   // Add inputs
   for (int i = 0; i < inputs.size(); ++i) {
     const auto& name = input_names[i];
@@ -272,6 +274,26 @@ CustomKernelFunction metal_kernel(
       template_hash.pop_back();
       kernel_name += "_";
       kernel_name += template_hash;
+    }
+
+    // The generated source depends on the dtypes of the inputs and outputs
+    // and on how each input is passed (see `write_signature`). Include them
+    // in the kernel name so that a given name always maps to the same
+    // source. Otherwise calling the same kernel with e.g. a different input
+    // dtype would evict the previous pipeline state from the cache while it
+    // may still be in use by an uncommitted command buffer.
+    for (const auto& arr : inputs) {
+      kernel_name += "_";
+      kernel_name += type_to_name(arr);
+      if (arr.ndim() == 0) {
+        kernel_name += "s";
+      } else if (arr.size() < max_constant_array_size) {
+        kernel_name += "c";
+      }
+    }
+    for (const auto& dtype : output_dtypes) {
+      kernel_name += "_";
+      kernel_name += type_to_name(dtype);
     }
 
     std::string kernel_source = write_signature(

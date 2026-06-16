@@ -201,6 +201,10 @@ void init_array(nb::module_& m) {
       )pbdoc")
       .def(nb::init<mx::Dtype>())
       .def_ro(
+          "bits",
+          &mx::finfo::bits,
+          R"pbdoc(The number of bits occupied by the type.)pbdoc")
+      .def_ro(
           "min",
           &mx::finfo::min,
           R"pbdoc(The smallest representable number.)pbdoc")
@@ -215,6 +219,10 @@ void init_array(nb::module_& m) {
             The difference between 1.0 and the next smallest
             representable number larger than 1.0.
           )pbdoc")
+      .def_ro(
+          "smallest_normal",
+          &mx::finfo::smallest_normal,
+          R"pbdoc(The smallest positive normal number.)pbdoc")
       .def_ro("dtype", &mx::finfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
       .def("__repr__", [](const mx::finfo& f) {
         std::ostringstream os;

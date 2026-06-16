@@ -415,8 +415,8 @@ def orthogonal(
     def initializer(a: mx.array) -> mx.array:
         if a.ndim != 2:
             raise ValueError(
-                f"Orthogonal initialization requires a 2D array but got"
-                " a {a.ndim}D array."
+                "Orthogonal initialization requires a 2D array but got"
+                f" a {a.ndim}D array."
             )
 
         rows, cols = a.shape

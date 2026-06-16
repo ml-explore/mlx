@@ -106,12 +106,32 @@ class TestDtypes(mlx_tests.MLXTestCase):
         self.assertEqual(mx.finfo(mx.float32).min, np.finfo(np.float32).min)
         self.assertEqual(mx.finfo(mx.float32).max, np.finfo(np.float32).max)
         self.assertEqual(mx.finfo(mx.float32).eps, np.finfo(np.float32).eps)
+        self.assertEqual(mx.finfo(mx.float32).bits, np.finfo(np.float32).bits)
+        self.assertEqual(
+            mx.finfo(mx.float32).smallest_normal,
+            float(np.finfo(np.float32).smallest_normal),
+        )
         self.assertEqual(mx.finfo(mx.float32).dtype, mx.float32)
 
         self.assertEqual(mx.finfo(mx.float16).min, np.finfo(np.float16).min)
         self.assertEqual(mx.finfo(mx.float16).max, np.finfo(np.float16).max)
         self.assertEqual(mx.finfo(mx.float16).eps, np.finfo(np.float16).eps)
+        self.assertEqual(mx.finfo(mx.float16).bits, np.finfo(np.float16).bits)
+        self.assertEqual(
+            mx.finfo(mx.float16).smallest_normal,
+            float(np.finfo(np.float16).smallest_normal),
+        )
         self.assertEqual(mx.finfo(mx.float16).dtype, mx.float16)
+
+        # bfloat16 has no numpy equivalent; check against known IEEE values.
+        self.assertEqual(mx.finfo(mx.bfloat16).bits, 16)
+        self.assertAlmostEqual(
+            mx.finfo(mx.bfloat16).smallest_normal, 2.0**-126, places=40
+        )
+
+        # finfo of a complex type reports its real component (array API).
+        self.assertEqual(mx.finfo(mx.complex64).dtype, mx.float32)
+        self.assertEqual(mx.finfo(mx.complex64).bits, 32)
 
     def test_iinfo(self):
         with self.assertRaises(ValueError):

@@ -992,6 +992,43 @@ class TestQuantized(mlx_tests.MLXTestCase):
         g2 = mx.grad(f_test)(x, qw, s, b, lhs_indices, rhs_indices)
         self.assertTrue(mx.allclose(g1, g2, atol=1e-4))
 
+    def test_gather_qmm_matrix_path(self):
+        # Regression test for matrix-size gather_qmm with half precision
+        # inputs: on NAX devices the kernel name was built with bk = 32
+        # while the kernels are only instantiated with bk = 64, so the
+        # kernel lookup failed with "Unable to load kernel".
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        dtype = mx.bfloat16 if (mx.default_device() == mx.gpu) else mx.float32
+        E, M, N, K = 4, 64, 512, 512
+        lhs_indices = mx.array([0, 1, 2], dtype=mx.uint32)
+        rhs_indices = mx.array([0, 2, 3], dtype=mx.uint32)
+        for mode in ["affine", "mxfp4"]:
+            with self.subTest(mode=mode):
+                x = (mx.random.normal(shape=(3, M, K), key=k1) / K**0.5).astype(dtype)
+                # Keep w in the same dtype so affine scales do not promote
+                # the matmul to float32 (which would skip the NAX route).
+                w = mx.random.normal(shape=(E, N, K), key=k2).astype(dtype)
+                w_q, *wargs = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(w_q, *wargs, mode=mode)
+                y_q = mx.gather_qmm(
+                    x,
+                    w_q,
+                    *wargs,
+                    lhs_indices=lhs_indices,
+                    rhs_indices=rhs_indices,
+                    transpose=True,
+                    mode=mode,
+                )
+                y_hat = mx.stack(
+                    [
+                        x[i].astype(mx.float32) @ w_hat[int(rhs_indices[i])].T
+                        for i in range(3)
+                    ]
+                ).astype(dtype)
+                self.assertEqual(y_q.shape, y_hat.shape)
+                self.assertLess((y_q - y_hat).abs().max(), 1e-1)
+
     def test_gather_qmm_sorted(self):
         def quantize(w, transpose=True, group_size=None, mode="affine"):
             if mode == "affine":
