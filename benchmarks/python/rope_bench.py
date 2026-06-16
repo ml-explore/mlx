@@ -31,22 +31,5 @@ def time_rope():
     time_fn(rope_mat, x)
 
 
-def time_rope_hs_transposed():
-    rope = nn.RoPE(128)
-
-    # matrix
-    x = mx.random.uniform(shape=(8, 8192, 8, 128)).astype(mx.float16)
-    mx.eval(x)
-    x = x.transpose(0, 2, 1, 3)
-
-    def rope_transposed(x):
-        for _ in range(32):
-            x = rope(x)
-        return x
-
-    time_fn(rope_transposed, x)
-
-
 if __name__ == "__main__":
     time_rope()
-    time_rope_hs_transposed()

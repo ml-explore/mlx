@@ -129,10 +129,6 @@ __device__ void rope_impl(
   float costheta = cos(theta);
   float sintheta = sin(theta);
 
-  // For the swapaxes(1,2) layout the (batch, head) pair is not a single
-  // linear stride: batch_stride = T * seq_stride, head_stride = strides[0].
-  // When hs_transpose is on the output mirrors the input layout, so the same
-  // decomposition applies to writes as well.
   size_t in_batch_head;
   size_t out_batch_head;
   if (hs_transpose) {
@@ -332,8 +328,6 @@ void RoPE::eval_gpu(
       in.strides()[1] == D && in.strides()[2] == static_cast<int64_t>(N) * D &&
       in.strides()[3] == 1) {
     head_seq_transpose = true;
-    // Mirror the input layout in the output so we can donate when possible
-    // and otherwise write into a buffer that preserves the swapaxes view.
     if (in.is_donatable()) {
       donated = true;
       out.copy_shared_buffer(in);
@@ -357,9 +351,6 @@ void RoPE::eval_gpu(
     strides[2] = out.strides()[ndim - 1];
   }
   if (head_seq_transpose) {
-    // Output mirrors the swapaxes(1, 2) input: head and seq strides are the
-    // input's strides, and the (batch, head) pair is reassembled by the
-    // hs_transpose path in the kernel.
     out_strides[0] = strides[0];
     out_strides[1] = strides[1];
     out_strides[2] = strides[2];
