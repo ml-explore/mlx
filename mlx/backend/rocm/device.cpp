@@ -6,6 +6,8 @@
 #include "mlx/backend/rocm/worker.h"
 #include "mlx/utils.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <future>
 #include <iostream>
 #include <sstream>
@@ -23,6 +25,13 @@ constexpr int default_max_ops_per_buffer = 2000;
 
 Device::Device(int device) : device_(device) {
   make_current();
+  {
+    hipDeviceProp_t p;
+    if (hipGetDeviceProperties(&p, device_) == hipSuccess) {
+      fprintf(stderr, "[mlx-rocm] bound HIP device %d: %s (%s)\n",
+              device_, p.gcnArchName, p.name);
+    }
+  }
   // rocBLAS initialization is now lazy - done in get_rocblas_handle()
 }
 
