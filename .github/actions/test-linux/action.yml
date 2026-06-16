@@ -44,6 +44,7 @@ runs:
       shell: bash
       env:
         DEVICE: gpu
+        MLX_PTX_CACHE_DIR: /tmp/mlx-ptx-cache
       run: |
         echo "::group::Python tests - GPU"
         python -m tests discover python/tests -v
