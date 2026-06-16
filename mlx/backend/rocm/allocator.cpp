@@ -3,6 +3,7 @@
 #include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/utils.h"
+#include "mlx/device.h"
 #include "mlx/memory.h"
 #include "mlx/utils.h"
 
@@ -400,6 +401,17 @@ Buffer RocmAllocator::malloc(size_t size) {
     throw std::runtime_error(
         "Cannot allocate ROCm memory: no ROCm-capable device detected. "
         "Please use CPU backend instead.");
+  }
+
+  // Bind the active default GPU before allocating so buffers land in the
+  // selected device's memory, not whatever HIP device happens to be current
+  // (e.g. device 0 from an earlier probe). Without this, selecting a non-default
+  // GPU still allocates the model on device 0.
+  {
+    auto dd = mlx::core::default_device();
+    if (dd.type == mlx::core::Device::gpu) {
+      device(dd).make_current();
+    }
   }
 
   // Arena fast path: deterministic bump allocation for HIP Graph capture
