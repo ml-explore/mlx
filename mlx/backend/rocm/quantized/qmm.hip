@@ -2958,8 +2958,14 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   while (tile_n > 1 && N % tile_n != 0) tile_n /= 2;
 
   static bool use_tiled = (std::getenv("MLX_ROCM_QMV_NO_TILED") == nullptr);
-  if (use_tiled && use_fast_qmv && !can_use_batched_qmv &&
-      tile_n >= 8 && mode_ == QuantizationMode::Affine) {
+  // The tiled QMV kernel (qdequant.hpp pack_factor_u32 = 32/BITS) only packs
+  // correctly for power-of-two widths and is only instantiated for 4/8-bit;
+  // other widths would match nothing here and leave `out` uninitialized.
+  // Restrict to 4/8-bit; 2/5/6-bit fall through to the warp-shared QMV kernel.
+  bool tiled_bits_supported = (bits_ == 4 || bits_ == 8);
+  if (use_tiled && tiled_bits_supported && use_fast_qmv &&
+      !can_use_batched_qmv && tile_n >= 8 &&
+      mode_ == QuantizationMode::Affine) {
     enc.launch_kernel([&, x_ptr, w_ptr, scales_ptr, biases_ptr, out_ptr, tile_n](hipStream_t stream) {
       dim3 tiled_block(WARP_SIZE, tile_n);
       const int n_tiles = (N + tile_n - 1) / tile_n;
