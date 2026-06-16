@@ -181,13 +181,31 @@ std::filesystem::path get_hsaco_path(
 }
 
 // Try to read the cached |hsaco| and |hsaco_kernels| from |cache_dir|.
+// If |expected_source| is non-null, the cached .hip source must match it
+// exactly or the cache is treated as a miss (kernel source changed in place
+// without a version bump — a stale binary would have a mismatched ABI).
 bool read_cached_hsaco(
     const std::filesystem::path& cache_dir,
     const std::string& module_name,
     std::string& hsaco,
-    std::vector<std::pair<std::string, std::string>>& hsaco_kernels) {
+    std::vector<std::pair<std::string, std::string>>& hsaco_kernels,
+    const std::string* expected_source = nullptr) {
   if (cache_dir.empty()) {
     return false;
+  }
+
+  if (expected_source) {
+    auto source_path = get_hsaco_path(cache_dir, module_name, ".hip");
+    std::ifstream source_file(source_path, std::ios::binary);
+    if (!source_file.good()) {
+      return false;
+    }
+    std::string cached_source(
+        (std::istreambuf_iterator<char>(source_file)),
+        std::istreambuf_iterator<char>());
+    if (cached_source != *expected_source) {
+      return false;
+    }
   }
 
   auto hsaco_path = get_hsaco_path(cache_dir, module_name, ".hsaco");
@@ -379,10 +397,19 @@ JitModule::JitModule(
   // Use a safe filename for disk cache to avoid exceeding 255-byte limit
   std::string cache_name = safe_filename(module_name);
 
-  // Try to load them from the file cache
-  if (!read_cached_hsaco(hsaco_cache_dir(), cache_name, hsaco, hsaco_kernels)) {
-    auto [precompiled, source_code, kernel_names] = builder();
+  // Build the source first so the disk cache can be validated against it: a
+  // JIT kernel whose source changed in place (same module_name, no version
+  // bump) must invalidate the cached binary, otherwise a stale binary with a
+  // mismatched argument ABI is loaded and launched.
+  auto [precompiled, source_code, kernel_names] = builder();
 
+  const std::string* expected_source = precompiled ? nullptr : &source_code;
+  if (!read_cached_hsaco(
+          hsaco_cache_dir(),
+          cache_name,
+          hsaco,
+          hsaco_kernels,
+          expected_source)) {
     // Get the HSACO (AMD GPU binary)
     if (precompiled) {
       hsaco = std::move(source_code);
