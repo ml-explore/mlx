@@ -110,13 +110,13 @@ namespace cute {
 
 // Required by tiled copy for 3/5/6-bit weights.
 struct uint24_t {
-  cuda::std::array<std::uint8_t, 3> bytes;
+  cuda::std::array<uint8_t, 3> bytes;
 };
 struct uint40_t {
-  cuda::std::array<std::uint8_t, 5> bytes;
+  cuda::std::array<uint8_t, 5> bytes;
 };
 struct uint48_t {
-  cuda::std::array<std::uint8_t, 6> bytes;
+  cuda::std::array<uint8_t, 6> bytes;
 };
 
 template <>
@@ -134,15 +134,22 @@ struct uint_bit<48> {
 
 } // namespace cute
 
-namespace cutlass_gemm {
+namespace mlx::core::cu {
+
+using namespace cute;
 
 // Whether the quant type is affine quantization.
 template <typename Quant>
 constexpr bool quant_has_bias_v = !cutlass::has_negative_zero_v<Quant>;
 
 // Dequantize CuTe tensors with out = w * s + z.
-__device__ __forceinline__ void
-cute_vectorized_dequant(auto w, auto s, auto z, auto out) {
+template <
+    typename TensorW,
+    typename TensorS,
+    typename TensorZ,
+    typename TensorO>
+CUTE_DEVICE void
+cute_vectorized_dequant(TensorW w, TensorS s, TensorZ z, TensorO out) {
   using namespace cute;
   using Element = typename decltype(out)::value_type;
   using Quant = typename decltype(w)::value_type;
@@ -166,4 +173,36 @@ cute_vectorized_dequant(auto w, auto s, auto z, auto out) {
   copy(make_tensor(make_rmem_ptr<Element>(&w_dq), out.layout()), out);
 }
 
-} // namespace cutlass_gemm
+template <
+    typename TensorW,
+    typename TensorS,
+    typename TensorZ,
+    typename TensorO>
+CUTE_DEVICE void
+cute_naive_dequant(TensorW w, TensorS s, TensorZ z, TensorO out) {
+  using Element = typename decltype(out)::value_type;
+  using Quant = typename decltype(w)::value_type;
+  using Scale = typename decltype(s)::value_type;
+  transform(w, out, [](Quant q) { return Element(q); });
+  transform(out, s, out, [](Element e, Scale s) { return e * Element(s); });
+  if constexpr (quant_has_bias_v<Quant>) {
+    transform(out, z, out, plus{});
+  }
+}
+
+template <
+    typename TensorW,
+    typename TensorS,
+    typename TensorZ,
+    typename TensorO>
+CUTE_DEVICE void cute_dequant(TensorW w, TensorS s, TensorZ z, TensorO out) {
+  if constexpr (
+      stride(coalesce(w.layout())) == Int<1>{} &&
+      is_static_v<decltype(s.layout())>) {
+    cute_vectorized_dequant(w, s, z, out);
+  } else {
+    cute_naive_dequant(w, s, z, out);
+  }
+}
+
+} // namespace mlx::core::cu

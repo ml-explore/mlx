@@ -60,7 +60,9 @@ array compute_dynamic_offset(
       dtype_to_cuda_type(dtype),
       nidx);
 
-  cu::JitModule& mod = cu::get_jit_module(s.device, module_name, [&]() {
+  auto& encoder = cu::get_command_encoder(s);
+
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), module_name, [&]() {
     std::string source = R"(
         #include "mlx/backend/cuda/device/utils.cuh"
 
@@ -85,7 +87,6 @@ array compute_dynamic_offset(
     return std::make_tuple(false, std::move(source), std::vector{kernel_name});
   });
 
-  auto& encoder = cu::get_command_encoder(s);
   // Prepare output.
   array offset({1}, int64, nullptr, {});
   bool donate = indices.is_donatable() &&

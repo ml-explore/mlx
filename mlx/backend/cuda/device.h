@@ -57,7 +57,7 @@ class CommandEncoder {
 
   template <typename F, typename... Params>
   void add_kernel_node_ex(
-      F* func,
+      F func,
       dim3 grid_dim,
       dim3 block_dim,
       dim3 cluster_dim,
@@ -69,13 +69,18 @@ class CommandEncoder {
     ([&](auto&& p) { ptrs[i++] = static_cast<void*>(&p); }(
          std::forward<Params>(params)),
      ...);
-    add_kernel_node_raw(
-        reinterpret_cast<void*>(func),
-        grid_dim,
-        block_dim,
-        cluster_dim,
-        smem_bytes,
-        ptrs);
+    if constexpr (std::is_same_v<F, CUfunction>) {
+      add_kernel_node_raw(
+          func, grid_dim, block_dim, cluster_dim, smem_bytes, ptrs);
+    } else {
+      add_kernel_node_raw(
+          reinterpret_cast<void*>(func),
+          grid_dim,
+          block_dim,
+          cluster_dim,
+          smem_bytes,
+          ptrs);
+    }
   }
 
   void add_kernel_node_raw(

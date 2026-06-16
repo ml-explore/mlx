@@ -1,6 +1,6 @@
 // Copyright © 2026 Apple Inc.
 
-#include "mlx/backend/cuda/quantized/qmm/cute_dequant.cuh"
+#include "mlx/backend/cuda/device/cute_dequant.cuh"
 #include "mlx/dtype_utils.h"
 
 // clang-format off
@@ -181,7 +181,7 @@ CUTE_DEVICE void qmm_sm80_mainloop(
   // Copy S/Z: GMEM => RMEM.
   auto fetch_scales = [&](int tile) {
     copy(g2r_copy_s, g2r_tCgS(_,_,_,tile), g2r_tCrS);
-    if constexpr (quant_has_bias_v<Quant>) {
+    if constexpr (mlx::core::cu::quant_has_bias_v<Quant>) {
       copy(g2r_copy_s, g2r_tCgZ(_,_,_,tile), g2r_tCrZ);
     }
   };
@@ -191,7 +191,7 @@ CUTE_DEVICE void qmm_sm80_mainloop(
     copy(s2r_atom_b, s2r_tCsB(_,_,block,smem_pipe_read), s2r_tCrB(_,_,block));
     CUTE_UNROLL
     for (int n = 0; n < size<1>(tCrB); ++n) {
-      cute_vectorized_dequant(
+      mlx::core::cu::cute_vectorized_dequant(
           tCrB(_,n,block),
           tCrS(_,n,block),
           tCrZ(_,n,block),
