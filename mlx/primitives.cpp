@@ -5374,14 +5374,13 @@ std::vector<array> Sqrt::vjp(
   assert(cotangents.size() == 1);
   auto dtype = primals[0].dtype();
   if (recip_) {
-    auto scaled_cotan =
-        multiply(array(-0.5, dtype), cotangents[0], stream());
+    auto scaled_cotan = multiply(array(-0.5, dtype), cotangents[0], stream());
     auto mask =
         not_equal(cotangents[0], array(0, cotangents[0].dtype()), stream());
     auto output = where(mask, outputs[0], array(1, dtype), stream());
     auto input = where(mask, primals[0], array(1, dtype), stream());
-    auto out = divide(
-        multiply(scaled_cotan, output, stream()), input, stream());
+    auto out =
+        divide(multiply(scaled_cotan, output, stream()), input, stream());
     return {out};
   } else {
     auto scaled_cotan = multiply(array(0.5, dtype), cotangents[0], stream());
