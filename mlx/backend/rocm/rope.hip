@@ -413,7 +413,7 @@ void RoPE::eval_gpu(
   // PR #3704, "RoPE without copy".)
   if (dims_ < D) {
     donated = true;
-    if (in.is_donatable()) {
+    if (in.is_donatable() && in.flags().row_contiguous) {
       out.copy_shared_buffer(in);
       strides[0] = mat_size;
       strides[1] = in.strides()[ndim - 2];
