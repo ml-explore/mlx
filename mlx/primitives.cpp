@@ -2947,10 +2947,16 @@ std::vector<array> LogSumExp::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
-  return {multiply(
-      tangents[0],
-      softmax(primals[0], std::vector<int>{-1}, true, stream()),
-      stream())};
+  // d/dt logsumexp(x) = sum(softmax(x) * t) over the reduced axis. The result
+  // must be summed back to the output shape, not left as a per-element product.
+  return {
+      sum(multiply(
+              tangents[0],
+              softmax(primals[0], std::vector<int>{-1}, true, stream()),
+              stream()),
+          -1,
+          /* keepdims = */ true,
+          stream())};
 }
 
 std::vector<Shape> LogSumExp::output_shapes(const std::vector<array>& inputs) {
