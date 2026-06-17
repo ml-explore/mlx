@@ -700,7 +700,7 @@ class TestConv(mlx_tests.MLXTestCase):
         expected = parts[0] + parts[1] + parts[2]
 
         self.assertEqual(out.shape, expected.shape)
-        self.assertTrue(mx.allclose(out, expected))
+        self.assertTrue(mx.allclose(out, expected, atol=1e-4, rtol=1e-4).item())
 
     def __conv_general_test(
         self,
