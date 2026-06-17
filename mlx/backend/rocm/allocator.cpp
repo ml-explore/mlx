@@ -462,7 +462,20 @@ RocmAllocator::RocmAllocator()
   size_t free, total;
   hipError_t err = hipMemGetInfo(&free, &total);
   if (err == hipSuccess) {
-    memory_limit_ = total * 0.8;
+    int dev = 0;
+    (void)hipGetDevice(&dev);
+    // Integrated APU: unified memory is shared with the CPU/system, so keep a
+    // conservative cap. Discrete GPU: it is dedicated VRAM — use almost all of
+    // it. The old 0.8 cap stranded ~6GB on a 32GB card, so once the working set
+    // crossed 0.8*total every allocation evicted the buffer cache, and on a
+    // discrete GPU each eviction is a blocking hipFree (waits on GPU drain) —
+    // which stalls decode. Leave only a small reserve for driver/fragmentation.
+    if (device_is_integrated(dev)) {
+      memory_limit_ = static_cast<size_t>(total * 0.8);
+    } else {
+      size_t reserve = 256ull << 20; // 256 MB
+      memory_limit_ = (total > reserve) ? (total - reserve) : total;
+    }
     max_pool_size_ = memory_limit_;
   }
 
@@ -807,12 +820,14 @@ void* Buffer::raw_ptr() {
       (void)hipStreamSynchronize(nullptr);
     }
   } else {
-    // Discrete GPU: serve the CPU access from the pinned host mirror; keep the
-    // VRAM copy resident. Mark dirty so any CPU write is flushed back to VRAM by
-    // the next gpu_ptr(). Kernels still get VRAM via gpu_ptr().
+    // Discrete GPU: serve the CPU access from the pinned host mirror (a fresh
+    // D2H copy), keeping the VRAM copy resident and authoritative. Do NOT mark
+    // dirty: raw_ptr() is read-dominated in inference (array::item, detokenize),
+    // and marking dirty made the next gpu_ptr() flush this now-stale shadow back
+    // over VRAM — clobbering data the GPU had since written and producing garbage
+    // output. CPU writes to device buffers go through Load/hipMemcpy, not here.
     (void)hipDeviceSynchronize();
     rocm::allocator().ensure_host_shadow(cbuf);
-    cbuf.host_dirty = true;
     return cbuf.host_shadow;
   }
   return cbuf.data;

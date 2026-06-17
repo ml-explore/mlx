@@ -560,15 +560,19 @@ Device& device(mlx::core::Device device) {
   static bool flags_set = false;
   if (!flags_set) {
     flags_set = true;
-    // Set blocking sync for all devices to reduce CPU usage
+    // Set blocking sync for all devices to reduce CPU usage. Save and restore
+    // the current device so this one-time loop is transparent — forcing device 0
+    // here strands the caller (and desyncs make_current's per-thread cache) when
+    // a non-default GPU (--device 1) is selected.
+    int prev = 0;
+    (void)hipGetDevice(&prev);
     int device_count = 0;
     hipGetDeviceCount(&device_count);
     for (int i = 0; i < device_count; i++) {
       hipSetDevice(i);
       hipSetDeviceFlags(hipDeviceScheduleBlockingSync);
     }
-    // Restore default device
-    hipSetDevice(0);
+    hipSetDevice(prev);
   }
   auto it = devices.find(device.index);
   if (it == devices.end()) {
