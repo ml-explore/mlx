@@ -551,12 +551,10 @@ std::vector<array> ArcTan2::jvp(
   const array& x1 = primals[0];
   const array& x2 = primals[1];
 
-  auto numerator = [&](){
+  auto numerator = [&]() {
     if (argnums.size() == 2) {
       return subtract(
-          multiply(x2, tangents[0], s),
-          multiply(x1, tangents[1], s),
-          s);
+          multiply(x2, tangents[0], s), multiply(x1, tangents[1], s), s);
     } else if (argnums[0] == 0) {
       return multiply(x2, tangents[0], s);
     } else {
