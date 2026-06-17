@@ -34,19 +34,15 @@ __device__ float2_sum warp_reduce_sum_f2(float2_sum val) {
   return val;
 }
 
+// Per-row RMS norm body. `x`/`out` are already offset to this row's base.
 template <typename T, int BLOCK_DIM, int N_READS = 4>
-__global__ void rms_norm_kernel(
+__device__ void rms_norm_row(
     const T* x,
     const T* w,
     T* out,
     float eps,
     uint32_t axis_size,
     int64_t w_stride) {
-  int row = blockIdx.x;
-  
-  x += row * axis_size;
-  out += row * axis_size;
-
   // Compute sum of squares
   float normalizer = 0;
   for (int i = threadIdx.x * N_READS; i < axis_size; i += BLOCK_DIM * N_READS) {
@@ -95,6 +91,47 @@ __global__ void rms_norm_kernel(
       out[idx] = wi * normalized;
     }
   }
+}
+
+// Packed input: rows tightly packed at row * axis_size.
+template <typename T, int BLOCK_DIM, int N_READS = 4>
+__global__ void rms_norm_kernel(
+    const T* x,
+    const T* w,
+    T* out,
+    float eps,
+    uint32_t axis_size,
+    int64_t w_stride) {
+  int row = blockIdx.x;
+  rms_norm_row<T, BLOCK_DIM, N_READS>(
+      x + (int64_t)row * axis_size, w, out + (int64_t)row * axis_size, eps,
+      axis_size, w_stride);
+}
+
+// Strided input: each row's base offset is computed from the leading dims'
+// shape/strides (last dim must be contiguous). Output is packed contiguous.
+// Avoids the contiguous_copy_gpu the host would otherwise insert for a
+// non-packed (sliced/transposed) input, e.g. per-head q/k norm.
+template <typename T, int BLOCK_DIM, int N_READS = 4>
+__global__ void rms_norm_strided_kernel(
+    const T* x,
+    const T* w,
+    T* out,
+    float eps,
+    uint32_t axis_size,
+    int64_t w_stride,
+    int n_row_dims,
+    hip_array<int, 4> row_shape,
+    hip_array<int64_t, 4> row_strides) {
+  int row = blockIdx.x;
+  int64_t x_off = 0;
+  int r = row;
+  for (int d = n_row_dims - 1; d >= 0; --d) {
+    x_off += (int64_t)(r % row_shape[d]) * row_strides[d];
+    r /= row_shape[d];
+  }
+  rms_norm_row<T, BLOCK_DIM, N_READS>(
+      x + x_off, w, out + (int64_t)row * axis_size, eps, axis_size, w_stride);
 }
 
 template <typename T, bool HAS_W, int BLOCK_DIM, int N_READS = 4>
@@ -193,71 +230,85 @@ void RMSNorm::eval_gpu(
   auto& s = stream();
   auto& out = outputs[0];
 
-  // Make sure that the last dimension is contiguous.
-  auto set_output = [&s, &out](const array& x) {
-    bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
-    if (no_copy && x.ndim() > 1) {
-      auto s = x.strides()[x.ndim() - 2];
-      no_copy &= (s == 0 || s == x.shape().back());
-    }
-    if (no_copy) {
-      if (x.is_donatable()) {
-        out.copy_shared_buffer(x);
-      } else {
-        out.set_data(
-            allocator::malloc(x.data_size() * x.itemsize()),
-            x.data_size(),
-            x.strides(),
-            x.flags());
-      }
-      return x;
-    } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      out.copy_shared_buffer(x_copy);
-      return x_copy;
-    }
-  };
-
-  const array x = set_output(inputs[0]);
+  const array& xin = inputs[0];
   const array& w = inputs[1];
+  int ndim = xin.ndim();
+  int32_t axis_size = xin.shape().back();
 
-  int32_t axis_size = x.shape().back();
-  int32_t n_rows = x.data_size() / axis_size;
+  // Layout decision:
+  //  - packed:  rows tightly packed -> fast kernel, output adopts input layout.
+  //  - strided: last dim contiguous but rows not packed (e.g. sliced per-head
+  //             q/k norm) -> strided kernel reads the input in place and writes
+  //             a packed output. Avoids a contiguous_copy_gpu launch.
+  //  - else:    fall back to a contiguous copy.
+  bool last_contig = ndim >= 1 && xin.strides()[ndim - 1] == 1;
+  bool packed = xin.flags().contiguous && last_contig;
+  if (packed && ndim > 1) {
+    auto s2 = xin.strides()[ndim - 2];
+    packed &= (s2 == 0 || s2 == (int64_t)axis_size);
+  }
+  bool strided = !packed && last_contig && (ndim - 1) <= 4;
+
+  array x = xin;
+  if (packed) {
+    if (xin.is_donatable()) {
+      out.copy_shared_buffer(xin);
+    } else {
+      out.set_data(
+          allocator::malloc(xin.data_size() * xin.itemsize()),
+          xin.data_size(), xin.strides(), xin.flags());
+    }
+  } else if (strided) {
+    out.set_data(allocator::malloc(out.nbytes()));  // packed contiguous output
+  } else {
+    x = contiguous_copy_gpu(xin, s);
+    out.copy_shared_buffer(x);
+  }
+
+  const array& xk = strided ? xin : x;
+  int32_t n_rows = (int32_t)(out.size() / axis_size);
   int64_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
 
+  int n_row_dims = ndim - 1;
+  rocm::hip_array<int, 4> row_shape;
+  rocm::hip_array<int64_t, 4> row_strides;
+  if (strided) {
+    for (int d = 0; d < n_row_dims; ++d) {
+      row_shape[d] = (int)xin.shape()[d];
+      row_strides[d] = xin.strides()[d];
+    }
+  }
+
   auto& encoder = rocm::get_command_encoder(s);
-  encoder.set_input_array(x);
+  encoder.set_input_array(xk);
   encoder.set_input_array(w);
   encoder.set_output_array(out);
-  
+
   constexpr int BLOCK_DIM = 256;
   constexpr int N_READS = 4;
-  
+
   encoder.launch_kernel([&](hipStream_t stream) {
+    auto launch = [&](auto tag) {
+      using DT = decltype(tag);
+      if (strided) {
+        hipLaunchKernelGGL(
+            (rocm::rms_norm_strided_kernel<DT, BLOCK_DIM, N_READS>),
+            dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
+            gpu_ptr<DT>(xk), gpu_ptr<DT>(w), gpu_ptr<DT>(out),
+            eps_, axis_size, w_stride, n_row_dims, row_shape, row_strides);
+      } else {
+        hipLaunchKernelGGL(
+            (rocm::rms_norm_kernel<DT, BLOCK_DIM, N_READS>),
+            dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
+            gpu_ptr<DT>(xk), gpu_ptr<DT>(w), gpu_ptr<DT>(out),
+            eps_, axis_size, w_stride);
+      }
+    };
     switch (out.dtype()) {
-      case float32:
-        hipLaunchKernelGGL(
-            (rocm::rms_norm_kernel<float, BLOCK_DIM, N_READS>),
-            dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            gpu_ptr<float>(x), gpu_ptr<float>(w), gpu_ptr<float>(out),
-            eps_, axis_size, w_stride);
-        break;
-      case float16:
-        hipLaunchKernelGGL(
-            (rocm::rms_norm_kernel<__half, BLOCK_DIM, N_READS>),
-            dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            gpu_ptr<__half>(x), gpu_ptr<__half>(w), gpu_ptr<__half>(out),
-            eps_, axis_size, w_stride);
-        break;
-      case bfloat16:
-        hipLaunchKernelGGL(
-            (rocm::rms_norm_kernel<hip_bfloat16, BLOCK_DIM, N_READS>),
-            dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            gpu_ptr<hip_bfloat16>(x), gpu_ptr<hip_bfloat16>(w), gpu_ptr<hip_bfloat16>(out),
-            eps_, axis_size, w_stride);
-        break;
-      default:
-        throw std::runtime_error("Unsupported type for rms_norm");
+      case float32: launch(float{}); break;
+      case float16: launch(__half{}); break;
+      case bfloat16: launch(hip_bfloat16{}); break;
+      default: throw std::runtime_error("Unsupported type for rms_norm");
     }
   });
 }
