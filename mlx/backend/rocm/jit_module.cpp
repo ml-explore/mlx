@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <map>
 #include <mutex>
 #include <sstream>
 
@@ -136,25 +137,35 @@ std::string get_gpu_arch();
 // Get the cache directory for storing compiled results. The GPU arch is part of
 // the path so that, on a multi-GPU host (e.g. an integrated gfx1151 APU + a
 // discrete gfx1201 R9700), kernels compiled for one arch are never loaded on the
-// other — which fails with "no kernel image is available for execution".
+// other — which fails with "no kernel image" or, worse, silently hangs.
+//
+// Resolve per CURRENT-device arch and memoize per arch. A single static path
+// would freeze the arch to whatever device was current at the FIRST call (the
+// default device 0 / APU, e.g. from a load-time static initializer), then serve
+// that arch's cache dir to kernels compiled for the OTHER device — defeating the
+// whole purpose on a multi-GPU host.
 const std::filesystem::path& hsaco_cache_dir() {
-  static std::filesystem::path cache = []() -> std::filesystem::path {
-    std::filesystem::path cache;
-    if (auto c = std::getenv("MLX_HSACO_CACHE_DIR"); c) {
-      cache = std::filesystem::path(c) / get_gpu_arch();
-    } else {
-      cache = std::filesystem::temp_directory_path() / "mlx" / version() /
-          "hsaco" / get_gpu_arch();
+  static std::mutex mtx;
+  static std::map<std::string, std::filesystem::path> by_arch;
+  std::string arch = get_gpu_arch();
+  std::lock_guard<std::mutex> lk(mtx);
+  if (auto it = by_arch.find(arch); it != by_arch.end()) {
+    return it->second;
+  }
+  std::filesystem::path cache;
+  if (auto c = std::getenv("MLX_HSACO_CACHE_DIR"); c) {
+    cache = std::filesystem::path(c) / arch;
+  } else {
+    cache = std::filesystem::temp_directory_path() / "mlx" / version() /
+        "hsaco" / arch;
+  }
+  if (!std::filesystem::exists(cache)) {
+    std::error_code error;
+    if (!std::filesystem::create_directories(cache, error)) {
+      cache = std::filesystem::path();
     }
-    if (!std::filesystem::exists(cache)) {
-      std::error_code error;
-      if (!std::filesystem::create_directories(cache, error)) {
-        return std::filesystem::path();
-      }
-    }
-    return cache;
-  }();
-  return cache;
+  }
+  return by_arch.emplace(std::move(arch), std::move(cache)).first->second;
 }
 
 // Get the path for HSACO file, splitting long names into nested directories.

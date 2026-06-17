@@ -7,6 +7,7 @@
 #include "mlx/scheduler.h"
 
 #include <map>
+#include <mutex>
 #include <thread>
 #include <vector>
 #include <immintrin.h>
@@ -156,22 +157,54 @@ void signal_atomic_callback(void* data) {
   delete pair;
 }
 
+// Pool of 8-byte pinned host counters for AtomicEvent. AtomicEvents are created
+// and destroyed per-eval (via Fence), and hipHostMalloc/hipHostFree are both
+// expensive and, on a discrete GPU, hipHostFree BLOCKS in the driver (it syncs).
+// Recycle the pinned blocks instead of freeing them so the hot path never calls
+// hipHostFree. The blocks (a handful) are intentionally leaked at process exit.
+struct PinnedCounterPool {
+  std::mutex m;
+  std::vector<void*> free_list;
+
+  void* acquire() {
+    {
+      std::lock_guard<std::mutex> lk(m);
+      if (!free_list.empty()) {
+        void* p = free_list.back();
+        free_list.pop_back();
+        return p;
+      }
+    }
+    void* p = nullptr;
+    CHECK_HIP_ERROR(hipHostMalloc(
+        &p, sizeof(std::atomic<uint64_t>),
+        hipHostMallocMapped | hipHostMallocCoherent));
+    return p;
+  }
+
+  void release(void* p) {
+    std::lock_guard<std::mutex> lk(m);
+    free_list.push_back(p);
+  }
+};
+
+PinnedCounterPool& counter_pool() {
+  static PinnedCounterPool* pool = new PinnedCounterPool;
+  return *pool;
+}
+
 } // namespace
 
 AtomicEvent::AtomicEvent() {
-  // Pinned, device-mapped host memory for the completion counter. The GPU
-  // signals it (hipStreamWriteValue64) and the CPU polls it (wait()); on a
-  // discrete GPU over a non-coherent link (TB5 eGPU) device memory is not
-  // visible to the CPU, so the counter MUST live in host memory or the host
-  // poll spins forever. Mapped+coherent so the same pointer is valid on the
-  // device (HIP unified addressing) for the stream write/wait-value ops.
-  void* p = nullptr;
-  CHECK_HIP_ERROR(hipHostMalloc(
-      &p, sizeof(std::atomic<uint64_t>),
-      hipHostMallocMapped | hipHostMallocCoherent));
+  // Completion counter in pinned, device-mapped host memory: the GPU signals it
+  // (hipStreamWriteValue64) and the CPU polls it (wait()). On a discrete GPU over
+  // a non-coherent link (TB5 eGPU) device memory is NOT CPU-visible, so the
+  // counter must live in host memory or the host poll spins forever. Drawn from a
+  // recycling pool — see PinnedCounterPool (hipHostFree blocks on a discrete GPU).
+  void* p = counter_pool().acquire();
   atomic_ = static_cast<std::atomic<uint64_t>*>(p);
   atomic_->store(0, std::memory_order_release);
-  mem_ = std::shared_ptr<void>(p, [](void* q) { (void)hipHostFree(q); });
+  mem_ = std::shared_ptr<void>(p, [](void* q) { counter_pool().release(q); });
 }
 
 void AtomicEvent::wait(uint64_t value) {

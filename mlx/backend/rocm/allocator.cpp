@@ -105,6 +105,20 @@ static bool use_finegrained() {
   return device_is_integrated(dev);
 }
 
+// Device tag stored on each RocmBuffer. -1 means "host-coherent unified memory"
+// (integrated APU): raw_ptr() hands the CPU the pointer directly. A non-negative
+// index means "discrete-GPU VRAM": raw_ptr() routes CPU access through a pinned
+// host shadow (D2H copy), because the CPU cannot coherently read this device's
+// VRAM over a non-coherent link (TB5 eGPU). Without this, array::item<T>() and
+// any host readback (e.g. reading the sampled token) return garbage or hang.
+static int alloc_device_tag() {
+  if (use_finegrained())
+    return -1;
+  int dev = 0;
+  (void)hipGetDevice(&dev);
+  return dev;
+}
+
 inline void* rocm_unified_malloc(size_t size, bool& is_managed) {
   void* data = nullptr;
   hipError_t err;
@@ -244,7 +258,7 @@ RocmBuffer* SizeClassPool::malloc() {
     b->buf.data = static_cast<char*>(backing_pages_[0]) + idx * block_size_;
     b->buf.size = block_size_;
     b->buf.is_managed = is_managed_;
-    b->buf.device = -1;
+    b->buf.device = alloc_device_tag();
     b->buf.host_shadow = nullptr;
     b->buf.host_dirty = false;
     return &b->buf;
@@ -260,7 +274,7 @@ RocmBuffer* SizeClassPool::malloc() {
           static_cast<char*>(backing_pages_[page]) + idx * block_size_;
       b->buf.size = block_size_;
       b->buf.is_managed = is_managed_;
-      b->buf.device = -1;
+      b->buf.device = alloc_device_tag();
       b->buf.host_shadow = nullptr;
       b->buf.host_dirty = false;
       return &b->buf;
@@ -520,7 +534,7 @@ Buffer RocmAllocator::malloc(size_t size) {
     // raw_ptr returns the same pointer). No host shadow, no migration.
     bool is_managed = false;
     void* data = rocm_unified_malloc(size, is_managed);
-    buf = new RocmBuffer{data, size, is_managed, -1, nullptr, false};
+    buf = new RocmBuffer{data, size, is_managed, alloc_device_tag(), nullptr, false};
     lock.lock();
   }
   active_memory_ += size;
