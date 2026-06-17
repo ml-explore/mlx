@@ -683,6 +683,25 @@ class TestConv(mlx_tests.MLXTestCase):
                         N, C, O, idim, kdim, stride, padding, dilation, dtype=dtype
                     )
 
+    def test_conv3d_depth_decomposition(self):
+        mx.random.seed(0)
+        B, T, H, W, C, O = 2, 8, 12, 16, 4, 8
+        kD, kH, kW = 3, 3, 3
+
+        x = mx.random.normal((B, T + kD - 1, H + kH - 1, W + kW - 1, C))
+        w = mx.random.normal((O, kD, kH, kW, C))
+        out = mx.conv_general(x, w, stride=(1, 1, 1), padding=0)
+
+        parts = []
+        for d in range(kD):
+            frames = x[:, d : d + T].reshape(B * T, H + kH - 1, W + kW - 1, C)
+            conv = mx.conv_general(frames, w[:, d], stride=(1, 1), padding=0)
+            parts.append(conv.reshape(B, T, H, W, O))
+        expected = parts[0] + parts[1] + parts[2]
+
+        self.assertEqual(out.shape, expected.shape)
+        self.assertTrue(mx.allclose(out, expected))
+
     def __conv_general_test(
         self,
         in_shape,

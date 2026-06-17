@@ -4358,12 +4358,74 @@ array conv_general(
       padding_hi,
       kernel_dilation,
       input_dilation);
+  auto stream = to_stream(s);
+
+  auto all_equal = [](const std::vector<int>& values, int target) {
+    return std::all_of(values.begin(), values.end(), [target](int value) {
+      return value == target;
+    });
+  };
+
+  const bool low_channel_3d =
+      spatial_dims == 3 && in.shape(4) <= 4 && wt.shape(0) <= 8;
+  const bool enough_depth_work =
+      in.shape(0) > 1 || out_shape[1] >= 14 || in.shape(2) <= 32;
+  if (stream.device == Device::gpu && low_channel_3d && groups == 1 && !flip &&
+      stride[0] == 1 && all_equal(padding_lo, 0) && all_equal(padding_hi, 0) &&
+      all_equal(kernel_dilation, 1) && all_equal(input_dilation, 1) &&
+      wt.shape(1) > 1 && enough_depth_work) {
+    const int out_depth = out_shape[1];
+    std::vector<array> depth_outputs;
+    depth_outputs.reserve(wt.shape(1));
+
+    for (int kd = 0; kd < wt.shape(1); kd++) {
+      auto in_slice = slice(
+          in,
+          {0, kd, 0, 0, 0},
+          {in.shape(0), kd + out_depth, in.shape(2), in.shape(3), in.shape(4)},
+          s);
+      in_slice = reshape(
+          in_slice,
+          {in.shape(0) * out_depth, in.shape(2), in.shape(3), in.shape(4)},
+          s);
+
+      auto wt_slice = slice(
+          wt,
+          {0, kd, 0, 0, 0},
+          {wt.shape(0), kd + 1, wt.shape(2), wt.shape(3), wt.shape(4)},
+          s);
+      wt_slice = reshape(
+          wt_slice, {wt.shape(0), wt.shape(2), wt.shape(3), wt.shape(4)}, s);
+
+      auto conv_out = conv_general(
+          in_slice,
+          wt_slice,
+          {stride[1], stride[2]},
+          {0, 0},
+          {0, 0},
+          {1, 1},
+          {1, 1},
+          groups,
+          false,
+          stream);
+      depth_outputs.push_back(reshape(
+          conv_out,
+          {in.shape(0), out_depth, out_shape[2], out_shape[3], wt.shape(0)},
+          s));
+    }
+
+    auto out = depth_outputs[0];
+    for (int kd = 1; kd < depth_outputs.size(); kd++) {
+      out = add(out, depth_outputs[kd], s);
+    }
+    return out;
+  }
 
   return array(
       std::move(out_shape),
       in.dtype(),
       std::make_shared<Convolution>(
-          to_stream(s),
+          stream,
           stride,
           padding_lo,
           padding_hi,
