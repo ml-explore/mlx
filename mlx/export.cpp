@@ -5,6 +5,7 @@
 #include "mlx/fast_primitives.h"
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
+#include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 #include "mlx/version.h"
 
@@ -789,8 +790,14 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   };
 
   // Trace to build the graph
-  auto [trace_inputs, trace_outputs, extra] =
-      detail::compile_trace(flat_fun, inputs, ftable->shapeless);
+  std::vector<array> trace_inputs;
+  std::vector<array> trace_outputs;
+  std::shared_ptr<void> extra;
+  {
+    detail::InExportTracing export_tracing;
+    std::tie(trace_inputs, trace_outputs, extra) =
+        detail::compile_trace(flat_fun, inputs, ftable->shapeless);
+  }
 
   // DFS the graph and get the tape
   auto [tape, parents_map] =
