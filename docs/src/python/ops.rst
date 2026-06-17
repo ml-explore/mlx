@@ -42,6 +42,7 @@ Operations
    broadcast_arrays
    broadcast_shapes
    broadcast_to
+   can_cast
    ceil
    clip
    concat
@@ -94,6 +95,7 @@ Operations
    identity
    imag
    inner
+   isdtype
    isfinite
    isclose
    isinf
@@ -148,6 +150,7 @@ Operations
    remainder
    repeat
    reshape
+   result_type
    right_shift
    roll
    round

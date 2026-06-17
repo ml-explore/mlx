@@ -5039,6 +5039,133 @@ void init_ops(nb::module_& m) {
           False
       )pbdoc");
   m.def(
+      "result_type",
+      [](const nb::args& arrays_and_dtypes) {
+        auto to_dtype = [](const nb::handle& v) -> mx::Dtype {
+          if (nb::isinstance<mx::array>(v)) {
+            return nb::cast<mx::array>(v).dtype();
+          } else if (nb::isinstance<mx::Dtype>(v)) {
+            return nb::cast<mx::Dtype>(v);
+          } else {
+            throw std::invalid_argument(
+                "[result_type] Inputs must be arrays or dtypes.");
+          }
+        };
+        if (arrays_and_dtypes.size() == 0) {
+          throw std::invalid_argument(
+              "[result_type] At least one array or dtype is required.");
+        }
+        mx::Dtype t = to_dtype(arrays_and_dtypes[0]);
+        for (size_t i = 1; i < arrays_and_dtypes.size(); ++i) {
+          t = mx::promote_types(t, to_dtype(arrays_and_dtypes[i]));
+        }
+        return t;
+      },
+      nb::sig(
+          "def result_type(*arrays_and_dtypes: Union[array, Dtype]) -> Dtype"),
+      R"pbdoc(
+        The type that results from applying type promotion to the inputs.
+
+        Args:
+            *arrays_and_dtypes (array or Dtype): A variable number of arrays
+              or dtypes.
+
+        Returns:
+            Dtype: The result type.
+      )pbdoc");
+  m.def(
+      "can_cast",
+      [](const nb::object& from_, const mx::Dtype& to) {
+        mx::Dtype from_dtype = mx::bool_;
+        if (nb::isinstance<mx::array>(from_)) {
+          from_dtype = nb::cast<mx::array>(from_).dtype();
+        } else if (nb::isinstance<mx::Dtype>(from_)) {
+          from_dtype = nb::cast<mx::Dtype>(from_);
+        } else {
+          throw std::invalid_argument(
+              "[can_cast] `from_` must be an array or a dtype.");
+        }
+        return mx::promote_types(from_dtype, to) == to;
+      },
+      "from_"_a,
+      "to"_a,
+      nb::sig("def can_cast(from_: Union[array, Dtype], to: Dtype) -> bool"),
+      R"pbdoc(
+        Determine if one data type can be cast to another according to type
+        promotion rules.
+
+        ``from_`` can be cast to ``to`` if promoting the two together gives
+        back ``to``.
+
+        Args:
+            from_ (array or Dtype): The source array or dtype.
+            to (Dtype): The destination dtype.
+
+        Returns:
+            bool: Whether the cast can be performed.
+      )pbdoc");
+  m.def(
+      "isdtype",
+      [](const mx::Dtype& dtype, const nb::object& kind) {
+        auto check_one = [&dtype](const nb::handle& k) -> bool {
+          if (nb::isinstance<mx::Dtype>(k)) {
+            return dtype == nb::cast<mx::Dtype>(k);
+          } else if (nb::isinstance<nb::str>(k)) {
+            auto s = nb::cast<std::string>(k);
+            if (s == "bool") {
+              return dtype == mx::bool_;
+            } else if (s == "signed integer") {
+              return mx::issubdtype(dtype, mx::signedinteger);
+            } else if (s == "unsigned integer") {
+              return mx::issubdtype(dtype, mx::unsignedinteger);
+            } else if (s == "integral") {
+              return mx::issubdtype(dtype, mx::integer);
+            } else if (s == "real floating") {
+              return mx::issubdtype(dtype, mx::floating);
+            } else if (s == "complex floating") {
+              return mx::issubdtype(dtype, mx::complexfloating);
+            } else if (s == "numeric") {
+              return mx::issubdtype(dtype, mx::number);
+            } else {
+              std::ostringstream msg;
+              msg << "[isdtype] Unknown data type kind: '" << s << "'.";
+              throw std::invalid_argument(msg.str());
+            }
+          } else {
+            throw std::invalid_argument(
+                "[isdtype] `kind` must be a dtype, a string, or a tuple of "
+                "dtypes and strings.");
+          }
+        };
+        if (nb::isinstance<nb::tuple>(kind)) {
+          for (auto k : nb::cast<nb::tuple>(kind)) {
+            if (check_one(k)) {
+              return true;
+            }
+          }
+          return false;
+        }
+        return check_one(kind);
+      },
+      "dtype"_a,
+      "kind"_a,
+      nb::sig(
+          "def isdtype(dtype: Dtype, kind: Union[Dtype, str, tuple[Union[Dtype, str], ...]]) -> bool"),
+      R"pbdoc(
+        Test whether a dtype belongs to one or more data type kinds.
+
+        Args:
+            dtype (Dtype): The dtype to test.
+            kind (Dtype, str, or tuple): A dtype, a kind string, or a tuple
+              of dtypes and kind strings. Supported kind strings are
+              ``"bool"``, ``"signed integer"``, ``"unsigned integer"``,
+              ``"integral"``, ``"real floating"``, ``"complex floating"``,
+              and ``"numeric"``.
+
+        Returns:
+            bool: ``True`` if ``dtype`` matches any of the given kinds.
+      )pbdoc");
+  m.def(
       "bitwise_and",
       [](const ScalarOrArray& a_,
          const ScalarOrArray& b_,

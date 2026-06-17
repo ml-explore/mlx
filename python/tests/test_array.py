@@ -145,6 +145,55 @@ class TestDtypes(mlx_tests.MLXTestCase):
         self.assertEqual(mx.iinfo(mx.uint32).max, np.iinfo(np.uint32).max)
         self.assertEqual(mx.iinfo(mx.int8).dtype, mx.int8)
 
+    def test_result_type(self):
+        self.assertEqual(mx.result_type(mx.int8, mx.int16), mx.int16)
+        self.assertEqual(mx.result_type(mx.float32, mx.float64), mx.float64)
+        # Accepts arrays as well as dtypes, and more than two inputs.
+        self.assertEqual(
+            mx.result_type(mx.array([1], dtype=mx.int8), mx.int16, mx.int32),
+            mx.int32,
+        )
+        self.assertEqual(
+            mx.result_type(mx.array(1.0), mx.array(1, dtype=mx.int32)),
+            mx.float32,
+        )
+        with self.assertRaises(ValueError):
+            mx.result_type()
+
+    def test_can_cast(self):
+        self.assertTrue(mx.can_cast(mx.int8, mx.int16))
+        self.assertFalse(mx.can_cast(mx.int16, mx.int8))
+        self.assertTrue(mx.can_cast(mx.float32, mx.float64))
+        self.assertFalse(mx.can_cast(mx.float64, mx.float32))
+        self.assertTrue(mx.can_cast(mx.uint8, mx.int16))
+        self.assertFalse(mx.can_cast(mx.uint16, mx.int16))
+        # Accepts an array for the source.
+        self.assertTrue(mx.can_cast(mx.array([1, 2, 3], dtype=mx.int8), mx.int32))
+
+    def test_isdtype(self):
+        self.assertTrue(mx.isdtype(mx.int32, mx.int32))
+        self.assertFalse(mx.isdtype(mx.int32, mx.int16))
+        self.assertTrue(mx.isdtype(mx.int32, "signed integer"))
+        self.assertTrue(mx.isdtype(mx.uint8, "unsigned integer"))
+        self.assertFalse(mx.isdtype(mx.uint8, "signed integer"))
+        self.assertTrue(mx.isdtype(mx.int16, "integral"))
+        self.assertTrue(mx.isdtype(mx.float32, "real floating"))
+        self.assertTrue(mx.isdtype(mx.complex64, "complex floating"))
+        self.assertTrue(mx.isdtype(mx.bool_, "bool"))
+        self.assertFalse(mx.isdtype(mx.bool_, "numeric"))
+        self.assertTrue(mx.isdtype(mx.float32, "numeric"))
+        # Tuple of kinds (any match).
+        self.assertTrue(mx.isdtype(mx.float32, ("integral", "real floating")))
+        self.assertTrue(mx.isdtype(mx.int8, (mx.int8, mx.int16)))
+        self.assertFalse(mx.isdtype(mx.int32, ("bool", "real floating")))
+        with self.assertRaises(ValueError):
+            mx.isdtype(mx.int32, "not a kind")
+
+        # Reachable through the array API namespace.
+        xp = mx.array(1.0).__array_namespace__()
+        for name in ("result_type", "can_cast", "isdtype"):
+            self.assertTrue(hasattr(xp, name), msg=name)
+
 
 class TestEquality(mlx_tests.MLXTestCase):
     def test_array_eq_array(self):
