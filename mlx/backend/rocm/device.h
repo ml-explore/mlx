@@ -140,6 +140,14 @@ class Device {
   // (CDNA1/2/3 + RDNA3 dGPU + gfx1151 + RDNA4). Lazy-cached on first call.
   bool has_native_wmma();
 
+  // Max shared memory (LDS) a single block may use on this device, in bytes,
+  // queried from hipDeviceProp at construction. RDNA3/3.5 report 64 KB; RDNA4
+  // and CDNA may report more. Kernels that size LDS tiles must read this from
+  // the device actually running the op rather than assume a fixed budget.
+  int max_shared_memory_per_block() const {
+    return max_shared_memory_per_block_;
+  }
+
  private:
   int device_;
   rocblas_handle rocblas_{nullptr};
@@ -150,6 +158,7 @@ class Device {
   bool rocblas_bf16_available_{false};
   bool wmma_probed_{false};
   bool has_native_wmma_{false};
+  int max_shared_memory_per_block_{65536};
   std::unordered_map<int, std::unique_ptr<CommandEncoder>> encoders_;
 };
 

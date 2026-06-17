@@ -37,6 +37,9 @@ bool supports_sdpa_flash_wmma(
     bool has_arr_mask,
     bool output_logsumexp);
 
+// LDS bytes the WMMA flash kernel needs for a given head dim.
+int sdpa_flash_wmma_smem(int D);
+
 void sdpa_flash_wmma(
     const array& q,
     const array& k,
@@ -155,9 +158,13 @@ void ScaledDotProductAttention::eval_gpu(
   // Gate on the device's runtime arch — a multi-arch wheel can include the
   // WMMA kernel even when running on a non-WMMA chip (e.g. gfx1030/1103).
 #ifdef MLX_HAS_ROCM_WMMA
+  // Gate WMMA on the LDS budget of the device actually running the op: the
+  // kernel's tiled footprint must fit this device's shared-memory-per-block.
   bool wmma_supported =
       supports_sdpa_flash_wmma(q, k, v, has_arr_mask, output_logsumexp_) &&
-      !has_sinks_ && rocm::device(s.device).has_native_wmma();
+      !has_sinks_ && rocm::device(s.device).has_native_wmma() &&
+      sdpa_flash_wmma_smem(q.shape(-1)) <=
+          rocm::device(s.device).max_shared_memory_per_block();
 #else
   bool wmma_supported = false;
 #endif

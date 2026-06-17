@@ -30,6 +30,9 @@ Device::Device(int device) : device_(device) {
     if (hipGetDeviceProperties(&p, device_) == hipSuccess) {
       fprintf(stderr, "[mlx-rocm] bound HIP device %d: %s (%s)\n",
               device_, p.gcnArchName, p.name);
+      if (p.sharedMemPerBlock > 0) {
+        max_shared_memory_per_block_ = static_cast<int>(p.sharedMemPerBlock);
+      }
     }
   }
   // rocBLAS initialization is now lazy - done in get_rocblas_handle()

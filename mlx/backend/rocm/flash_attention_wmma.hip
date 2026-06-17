@@ -81,12 +81,18 @@ __global__ void __launch_bounds__(128)
         const FAWmmaParams params) {
 #if ROCM_FA_WMMA
   constexpr int WT = 16; // WMMA tile size
-  constexpr int Q_PAD = D + 4;
-  constexpr int KV_PAD = D + 4;
+  // Stage Q/K/V one DW-wide head-dim slice at a time so the LDS footprint is
+  // capped at the D=128 layout for any head dim (D=256 needs two slices). This
+  // keeps the kernel within RDNA's 64 KB LDS budget while still using WMMA.
+  constexpr int DW = (D < 128) ? D : 128;
+  constexpr int N_DCHUNKS = (D + DW - 1) / DW;
+  constexpr int Q_PAD = DW + 4;
+  constexpr int KV_PAD = DW + 4;
   constexpr int S_PAD = BLOCK_N + 4;
   constexpr int P_PAD = BLOCK_N + 4;
   constexpr int M_TILES = BLOCK_M / WT;
   constexpr int N_TILES = BLOCK_N / WT;
+  constexpr int DW_TILES = DW / WT;
   constexpr int D_TILES = (D + WT - 1) / WT;
   constexpr int NTHREADS = 128;
 
@@ -130,15 +136,10 @@ __global__ void __launch_bounds__(128)
   }
   __syncthreads();
 
-  // ---- Load Q tile (once) ----
-  {
-    const T* Q_base = Q + bid_b * params.Q_strides[0]
-                        + bid_h * params.Q_strides[1]
-                        + q_start * params.Q_strides[2];
-    int valid = min(BLOCK_M, params.qL - q_start);
-    load_tile<T, Q_PAD, NTHREADS>(Q_sh, Q_base, params.Q_strides[2], BLOCK_M, D, valid, tid);
-  }
-  __syncthreads();
+  const T* Q_base = Q + bid_b * params.Q_strides[0]
+                      + bid_h * params.Q_strides[1]
+                      + q_start * params.Q_strides[2];
+  const int q_valid = min(BLOCK_M, params.qL - q_start);
 
   // ---- K/V block loop ----
   for (int k_start = 0; k_start < params.kL; k_start += BLOCK_N) {
@@ -152,34 +153,42 @@ __global__ void __launch_bounds__(128)
 
     int k_valid = min(BLOCK_N, params.kL - k_start);
 
-    // ---- Load K ----
-    {
-      const T* K_base = K + bid_b * params.K_strides[0]
-                          + bid_kv_h * params.K_strides[1]
-                          + k_start * params.K_strides[2];
-      load_tile<T, KV_PAD, NTHREADS>(KV_sh, K_base, params.K_strides[2], BLOCK_N, D, k_valid, tid);
-    }
-    __syncthreads();
+    const T* K_base = K + bid_b * params.K_strides[0]
+                        + bid_kv_h * params.K_strides[1]
+                        + k_start * params.K_strides[2];
 
-    // ---- S = Q @ K^T via WMMA ----
-    // Each wave computes S[wave*16 : (wave+1)*16, 0:BLOCK_N]
+    // ---- S = Q @ K^T via WMMA, accumulated over the head dim in DW slices ----
+    // Each wave computes S[wave*16 : (wave+1)*16, 0:BLOCK_N]. For D>DW the Q/K
+    // slices are staged and consumed one DW-wide chunk at a time so LDS stays
+    // bounded; s_acc carries the partial dot products across chunks.
     {
       frag_acc s_acc[N_TILES];
       for (int n = 0; n < N_TILES; n++)
         rocwmma::fill_fragment(s_acc[n], 0.0f);
 
-      for (int d = 0; d < D_TILES; d++) {
-        frag_a q_frag;
-        rocwmma::load_matrix_sync(
-            q_frag, Q_sh + wave * WT * Q_PAD + d * WT, Q_PAD);
+      for (int dc = 0; dc < N_DCHUNKS; dc++) {
+        const int d0 = dc * DW;
+        const int dwid = min(DW, D - d0);
+        load_tile<T, Q_PAD, NTHREADS>(
+            Q_sh, Q_base + d0, params.Q_strides[2], BLOCK_M, dwid, q_valid, tid);
+        load_tile<T, KV_PAD, NTHREADS>(
+            KV_sh, K_base + d0, params.K_strides[2], BLOCK_N, dwid, k_valid, tid);
+        __syncthreads();
 
-        for (int n = 0; n < N_TILES; n++) {
-          frag_b_col k_frag;
-          // col_major load of K[n*16][d*16] gives K^T
+        for (int d = 0; d < DW_TILES; d++) {
+          frag_a q_frag;
           rocwmma::load_matrix_sync(
-              k_frag, KV_sh + n * WT * KV_PAD + d * WT, KV_PAD);
-          rocwmma::mma_sync(s_acc[n], q_frag, k_frag, s_acc[n]);
+              q_frag, Q_sh + wave * WT * Q_PAD + d * WT, Q_PAD);
+
+          for (int n = 0; n < N_TILES; n++) {
+            frag_b_col k_frag;
+            // col_major load of K[n*16][d*16] gives K^T
+            rocwmma::load_matrix_sync(
+                k_frag, KV_sh + n * WT * KV_PAD + d * WT, KV_PAD);
+            rocwmma::mma_sync(s_acc[n], q_frag, k_frag, s_acc[n]);
+          }
         }
+        __syncthreads();
       }
 
       // Scale and store S to shared memory
@@ -291,32 +300,39 @@ __global__ void __launch_bounds__(128)
     }
     __syncthreads();
 
-    // ---- Load V into S_sh (reinterpreted as bf16) ----
-    // S_sh holds BLOCK_M * S_PAD * sizeof(float) = 64*68*4 = 17408 bytes
-    // V needs BLOCK_N * KV_PAD * sizeof(T) = 64*132*2 = 16896 bytes — fits
-    T* V_sh = reinterpret_cast<T*>(S_sh);
+    // ---- O += P @ V via WMMA, output head dim tiled in DW slices ----
+    // P (bf16) stays resident in KV_sh; V is streamed one DW-wide slice into
+    // S_sh (the f32 scores are no longer needed) and consumed immediately, so
+    // a full D=256 V tile never has to coexist with P in LDS.
     {
+      T* P_sh = KV_sh;
+      T* V_sh = reinterpret_cast<T*>(S_sh);
       const T* V_base = V + bid_b * params.V_strides[0]
                           + bid_kv_h * params.V_strides[1]
                           + k_start * params.V_strides[2];
-      load_tile<T, KV_PAD, NTHREADS>(V_sh, V_base, params.V_strides[2], BLOCK_N, D, k_valid, tid);
-    }
-    __syncthreads();
 
-    // ---- O += P @ V via WMMA ----
-    // P in KV_sh [BLOCK_M][P_PAD], V in V_sh [BLOCK_N][KV_PAD]
-    {
-      T* P_sh = KV_sh;
-      for (int d = 0; d < D_TILES; d++) {
-        for (int n = 0; n < N_TILES; n++) {
-          frag_a p_frag;
-          frag_b_row v_frag;
-          rocwmma::load_matrix_sync(
-              p_frag, P_sh + wave * WT * P_PAD + n * WT, P_PAD);
-          rocwmma::load_matrix_sync(
-              v_frag, V_sh + n * WT * KV_PAD + d * WT, KV_PAD);
-          rocwmma::mma_sync(o_acc[d], p_frag, v_frag, o_acc[d]);
+      for (int dc = 0; dc < N_DCHUNKS; dc++) {
+        const int d0 = dc * DW;
+        const int dwid = min(DW, D - d0);
+        load_tile<T, KV_PAD, NTHREADS>(
+            V_sh, V_base + d0, params.V_strides[2], BLOCK_N, dwid, k_valid, tid);
+        __syncthreads();
+
+        for (int dl = 0; dl < DW_TILES; dl++) {
+          const int dglobal = dc * DW_TILES + dl;
+          if (dglobal >= D_TILES)
+            break;
+          for (int n = 0; n < N_TILES; n++) {
+            frag_a p_frag;
+            frag_b_row v_frag;
+            rocwmma::load_matrix_sync(
+                p_frag, P_sh + wave * WT * P_PAD + n * WT, P_PAD);
+            rocwmma::load_matrix_sync(
+                v_frag, V_sh + n * WT * KV_PAD + dl * WT, KV_PAD);
+            rocwmma::mma_sync(o_acc[dglobal], p_frag, v_frag, o_acc[dglobal]);
+          }
         }
+        __syncthreads();
       }
     }
     __syncthreads();
@@ -369,6 +385,19 @@ bool supports_sdpa_flash_wmma(
   return (D == 64 || D == 128 || D == 256);
 }
 
+// Shared-memory (LDS) bytes the WMMA flash kernel needs for a given head dim.
+// The kernel stages Q/K/V one DW=min(D,128)-wide head-dim slice at a time, so
+// the footprint is capped at the D=128 layout regardless of D. Callers compare
+// this against the running device's LDS budget before selecting the kernel.
+int sdpa_flash_wmma_smem(int D) {
+  constexpr int BM = 64, BN = 64;
+  const int DW = (D < 128) ? D : 128;
+  return 2 * BM * (int)sizeof(float)
+       + BM * (DW + 4) * (int)sizeof(uint16_t)
+       + BN * (DW + 4) * (int)sizeof(uint16_t)
+       + BM * (BN + 4) * (int)sizeof(float);
+}
+
 void sdpa_flash_wmma(
     const array& q, const array& k, const array& v,
     float scale, array& o, bool do_causal, Stream s) {
@@ -395,11 +424,8 @@ void sdpa_flash_wmma(
   dim3 grid(H, (qL + BM - 1) / BM, B);
   dim3 block(128);
 
-  // Shared memory: m/l + Q + KV + S
-  int smem = 2 * BM * sizeof(float)         // m, l
-           + BM * (D + 4) * sizeof(hip_bfloat16)  // Q
-           + BN * (D + 4) * sizeof(hip_bfloat16)  // KV
-           + BM * (BN + 4) * sizeof(float);        // S
+  // Shared memory: m/l + Q + KV + S, with Q/KV sized to one DW-wide slice.
+  int smem = sdpa_flash_wmma_smem(D);
 
   auto launch = [&](auto type_tag, auto causal_tag, auto dim_tag) {
     using DT = decltype(type_tag);
