@@ -10,6 +10,8 @@
 #include <hip/hip_runtime.h>
 #include <unistd.h>
 
+#include <cstdio>
+#include <cstdlib>
 #include <cassert>
 #include <mutex>
 #include <sstream>
@@ -70,6 +72,11 @@ static bool is_integrated() {
 inline void* rocm_unified_malloc(size_t size, bool& is_managed) {
   void* data = nullptr;
   hipError_t err;
+  if (size > (256ull << 20) && std::getenv("MLX_ALLOC_DEBUG")) {
+    int d = -1;
+    (void)hipGetDevice(&d);
+    fprintf(stderr, "[alloc] %zu MB on hip device %d\n", size >> 20, d);
+  }
   // Fine-grained device memory is the right primitive on BOTH targets:
   //  - Integrated APU (gfx1151): allocates from unified LPDDR5, host-coherent.
   //  - Discrete RDNA4 (gfx1201): allocates VRAM-RESIDENT memory that is also
@@ -401,17 +408,6 @@ Buffer RocmAllocator::malloc(size_t size) {
     throw std::runtime_error(
         "Cannot allocate ROCm memory: no ROCm-capable device detected. "
         "Please use CPU backend instead.");
-  }
-
-  // Bind the active default GPU before allocating so buffers land in the
-  // selected device's memory, not whatever HIP device happens to be current
-  // (e.g. device 0 from an earlier probe). Without this, selecting a non-default
-  // GPU still allocates the model on device 0.
-  {
-    auto dd = mlx::core::default_device();
-    if (dd.type == mlx::core::Device::gpu) {
-      device(dd).make_current();
-    }
   }
 
   // Arena fast path: deterministic bump allocation for HIP Graph capture
