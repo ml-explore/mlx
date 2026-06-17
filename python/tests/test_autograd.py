@@ -882,6 +882,41 @@ class TestAutograd(mlx_tests.MLXTestCase):
                                 )
                             )
 
+    def test_logcumsumexp_grad(self):
+        # The jvp of logcumsumexp is the running softmax-weighted sum of the
+        # tangents; check it against an explicit reference and against the vjp.
+        x = mx.array([1.0, 3.0, 2.0, 4.0])
+        v = mx.array([1.0, -1.0, 2.0, 0.5])
+        jv = mx.jvp(lambda z: mx.logcumsumexp(z), (x,), (v,))[1][0]
+        # d/dt logcumsumexp(x)_k = sum_{i<=k} softmax(x[:k+1])_i * v_i
+        ref = []
+        for k in range(x.size):
+            w = mx.softmax(x[: k + 1])
+            ref.append(mx.sum(w * v[: k + 1]).item())
+        self.assertTrue(mx.allclose(jv, mx.array(ref)))
+
+        # vjp must be the transpose of the jvp (adjoint test) for every
+        # combination of the reverse / inclusive flags and across axes.
+        mx.random.seed(0)
+        for reverse in (False, True):
+            for inclusive in (True, False):
+                for axis in (0, 1, -1):
+                    a = mx.random.normal((4, 6))
+                    v = mx.random.normal(a.shape)
+                    w = mx.random.normal(a.shape)
+
+                    def fun(z):
+                        return mx.logcumsumexp(
+                            z, axis=axis, reverse=reverse, inclusive=inclusive
+                        )
+
+                    jv = mx.jvp(fun, (a,), (v,))[1][0]
+                    jtw = mx.vjp(fun, (a,), (w,))[1][0]
+                    self.assertTrue(mx.all(mx.isfinite(jv)))
+                    self.assertAlmostEqual(
+                        mx.sum(w * jv).item(), mx.sum(v * jtw).item(), places=4
+                    )
+
     def test_topk_grad(self):
         a = mx.array([[1, 2, 6, 4, 5], [9, 5, 6, 7, 8]], mx.float32)
 

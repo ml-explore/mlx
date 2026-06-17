@@ -4367,6 +4367,42 @@ std::vector<array> Scan::jvp(
 
   if (reduce_type_ == Scan::Sum) {
     return {cumsum(tangents[0], axis_, reverse_, inclusive_, stream())};
+  } else if (reduce_type_ == Scan::LogAddExp) {
+    // d/dt logcumsumexp(x)_k = sum_{i<=k} softmax(x)_i * t_i. Compute it in log
+    // space for stability by splitting the tangent into its positive and
+    // negative parts, mirroring the vjp.
+    auto x = primals[0];
+    auto t = tangents[0];
+    auto y = logcumsumexp(x, axis_, reverse_, inclusive_, stream());
+
+    auto zero = zeros({1}, t.dtype(), stream());
+    auto log_min = array(finfo(t.dtype()).min, t.dtype());
+    auto log_abs_t = log(abs(t, stream()), stream());
+    auto log_t_positive =
+        where(greater(t, zero, stream()), log_abs_t, log_min, stream());
+    auto log_t_negative =
+        where(less(t, zero, stream()), log_abs_t, log_min, stream());
+
+    auto masked_scan = [&](const array& log_t) {
+      return exp(
+          subtract(
+              logcumsumexp(
+                  add(log_t, x, stream()),
+                  axis_,
+                  reverse_,
+                  inclusive_,
+                  stream()),
+              y,
+              stream()),
+          stream());
+    };
+    auto out = subtract(
+        masked_scan(log_t_positive), masked_scan(log_t_negative), stream());
+    // An exclusive scan leaves the first element with no inputs, so the output
+    // is -inf and locally constant there: its jvp is zero (this also avoids an
+    // inf - inf in the expression above).
+    return {
+        where(isneginf(y, stream()), zeros_like(out, stream()), out, stream())};
   } else {
     throw std::runtime_error(
         "JVP is not implemented for cumulative prod/min/max");
