@@ -213,5 +213,6 @@ MLX_API Device& device(mlx::core::Device d);
 MLX_API CommandEncoder& get_command_encoder(Stream s);
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders();
+std::unordered_map<int, CommandEncoder>& get_global_command_encoders();
 
 } // namespace mlx::core::cu

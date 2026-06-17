@@ -69,8 +69,8 @@ MLX_API void set_printoptions(PrintOptions options);
 
 MLX_API PrintFormatter& get_global_formatter();
 
-/** Print the exception and then abort. */
-MLX_API void abort_with_exception(const std::exception& error);
+/** Return whether current thread is the first one that called this function. */
+bool is_main_thread();
 
 /** Holds information about floating-point types. */
 struct MLX_API finfo {
