@@ -170,6 +170,16 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             )
         )
 
+    def test_epsilon_validation(self):
+        # The negative-epsilon error message must match the actual guard,
+        # which rejects eps < 0 and accepts eps == 0 (consistent with the
+        # Adamax check). The message previously claimed ">0".
+        for optimizer in (opt.RMSprop, opt.Adagrad, opt.AdaDelta):
+            with self.assertRaisesRegex(ValueError, ">=0"):
+                optimizer(learning_rate=1e-2, eps=-1.0)
+            # eps == 0 is permitted
+            optimizer(learning_rate=1e-2, eps=0.0)
+
     def test_adam(self):
         params = {
             "first": [mx.zeros((10,)), mx.zeros((1,))],

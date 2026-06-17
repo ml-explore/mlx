@@ -330,7 +330,7 @@ class RMSprop(Optimizer):
             )
         if self.eps < 0.0:
             raise ValueError(
-                f"RMSprop epsilon should be >0, {self.eps} was provided instead"
+                f"RMSprop epsilon should be >=0, {self.eps} was provided instead"
             )
 
     def init_single(self, parameter: mx.array, state: dict):
@@ -381,7 +381,7 @@ class Adagrad(Optimizer):
 
         if self.eps < 0.0:
             raise ValueError(
-                f"Adagrad epsilon should be >0, {self.eps} was provided instead"
+                f"Adagrad epsilon should be >=0, {self.eps} was provided instead"
             )
 
     def init_single(self, parameter: mx.array, state: dict):
@@ -419,7 +419,7 @@ class AdaDelta(Optimizer):
         rho (float, optional): The coefficient :math:`\rho` used for computing a
             running average of squared gradients. Default: ``0.9``
         eps (float, optional): The term :math:`\epsilon` added to the denominator to improve
-          numerical stability. Default: `1e-8`
+          numerical stability. Default: ``1e-6``
     """
 
     def __init__(
@@ -439,7 +439,7 @@ class AdaDelta(Optimizer):
             )
         if self.eps < 0.0:
             raise ValueError(
-                f"AdaDelta epsilon should be >0, {self.eps} was provided instead"
+                f"AdaDelta epsilon should be >=0, {self.eps} was provided instead"
             )
 
     def init_single(self, parameter: mx.array, state: dict):
