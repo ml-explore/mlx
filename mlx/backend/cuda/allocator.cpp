@@ -33,9 +33,6 @@ bool supports_managed_memory() {
     int device_count = gpu::device_count();
     for (int i = 0; i < device_count; ++i) {
       auto& d = cu::device(i);
-      if (!d.managed_memory()) {
-        return false;
-      }
       // Empirically on Windows (and WSL) if there is no concurrentManagedAccess
       // the managed memory also does not work.
       // The same has been observed on NVIDIA Tegra, typically on Jetson Orin
