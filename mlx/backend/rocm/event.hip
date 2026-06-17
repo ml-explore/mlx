@@ -24,12 +24,17 @@ namespace rocm {
 
 namespace {
 
-// Manage cached hipEvent_t objects.
+// Manage cached hipEvent_t objects. Keyed by (device, flags): a hipEvent is
+// bound to the device current when it was created, and recording it on another
+// device's stream is invalid (hangs the queue on a multi-GPU host). So pool and
+// hand back events per device, creating new ones on the CURRENT device.
 struct HipEventPool {
   static HipEventHandle create(int flags) {
-    auto& cache = cache_for(flags);
+    int dev = 0;
+    (void)hipGetDevice(&dev);
+    auto& cache = cache_for(dev, flags);
     if (cache.empty()) {
-      return HipEventHandle(flags);
+      return HipEventHandle(flags); // created on the current device
     } else {
       HipEventHandle ret = std::move(cache.back());
       cache.pop_back();
@@ -38,12 +43,12 @@ struct HipEventPool {
   }
 
   static void release(HipEventHandle event) {
-    cache_for(event.flags).push_back(std::move(event));
+    cache_for(event.device, event.flags).push_back(std::move(event));
   }
 
-  static std::vector<HipEventHandle>& cache_for(int flags) {
-    static std::map<int, std::vector<HipEventHandle>> cache;
-    return cache[flags];
+  static std::vector<HipEventHandle>& cache_for(int device, int flags) {
+    static std::map<std::pair<int, int>, std::vector<HipEventHandle>> cache;
+    return cache[{device, flags}];
   }
 };
 
@@ -52,6 +57,7 @@ struct HipEventPool {
 HipEventHandle::HipEventHandle(int flags) : flags(flags) {
   CHECK_HIP_ERROR(hipEventCreateWithFlags(&handle_, flags));
   assert(handle_ != nullptr);
+  (void)hipGetDevice(&device); // event is bound to the current device
 }
 
 HipEvent::HipEvent(int flags) : event_(HipEventPool::create(flags)) {}
@@ -157,11 +163,15 @@ void signal_atomic_callback(void* data) {
   delete pair;
 }
 
-// Pool of 8-byte pinned host counters for AtomicEvent. AtomicEvents are created
-// and destroyed per-eval (via Fence), and hipHostMalloc/hipHostFree are both
-// expensive and, on a discrete GPU, hipHostFree BLOCKS in the driver (it syncs).
-// Recycle the pinned blocks instead of freeing them so the hot path never calls
-// hipHostFree. The blocks (a handful) are intentionally leaked at process exit.
+// Pool of 8-byte SIGNAL-MEMORY counters for AtomicEvent. The counter is used two
+// ways: the GPU waits on it via hipStreamWaitValue64 (cross-stream Fence) and
+// signals it via hipStreamWriteValue64, AND the CPU polls it (host wait()). HIP
+// REQUIRES the pointer passed to hipStreamWaitValue64/WriteValue64 to be
+// allocated with the hipMallocSignalMemory flag — plain hipHostMalloc memory is
+// accepted by the call (returns success) but the GPU-side wait never observes the
+// value, so on a discrete GPU the stream spins forever (busy 100%, mem-ctrl 0%).
+// Signal memory is host-accessible, so the CPU poll works too. Recycle the blocks
+// (hipFree blocks on a discrete GPU); intentionally leaked at process exit.
 struct PinnedCounterPool {
   std::mutex m;
   std::vector<void*> free_list;
@@ -305,6 +315,10 @@ struct EventImpl {
     if (s.device == mlx::core::Device::cpu || signal_value > 1) {
       atomic = std::make_unique<rocm::AtomicEvent>();
     } else {
+      // Bind the stream's device current before creating the hipEvent — it is
+      // bound to whatever device is current at creation, and recording it on a
+      // different device's stream hangs the queue on a multi-GPU host.
+      (void)rocm::get_command_encoder(s);
       hip = std::make_unique<rocm::CopyableHipEvent>();
     }
   }

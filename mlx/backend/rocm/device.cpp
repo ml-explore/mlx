@@ -582,7 +582,15 @@ Device& device(mlx::core::Device device) {
 }
 
 CommandEncoder& get_command_encoder(Stream s) {
-  return device(s.device).get_command_encoder(s);
+  // Bind the HIP current device to this stream's device. HIP's current device is
+  // per-thread; everything that touches a stream goes through here (eval, kernel
+  // launches, event record/wait, commit, completion callbacks). Without binding,
+  // operations for a non-default GPU (--device 1) execute against device 0 — the
+  // stream/event/kernel land on the wrong device and the queue hangs. With
+  // HIP_VISIBLE_DEVICES the only device IS index 0 so the bug is hidden.
+  auto& d = device(s.device);
+  d.make_current();
+  return d.get_command_encoder(s);
 }
 
 void clear_all_encoders() {

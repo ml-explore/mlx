@@ -820,12 +820,11 @@ void* Buffer::raw_ptr() {
       (void)hipStreamSynchronize(nullptr);
     }
   } else {
-    // Discrete GPU: serve the CPU access from the pinned host mirror (a fresh
-    // D2H copy), keeping the VRAM copy resident and authoritative. Do NOT mark
-    // dirty: raw_ptr() is read-dominated in inference (array::item, detokenize),
-    // and marking dirty made the next gpu_ptr() flush this now-stale shadow back
-    // over VRAM — clobbering data the GPU had since written and producing garbage
-    // output. CPU writes to device buffers go through Load/hipMemcpy, not here.
+    // Discrete GPU: serve CPU access from the pinned host mirror (fresh D2H),
+    // keeping the VRAM copy authoritative. Synchronize the device first so the
+    // producing kernel has finished before the D2H read — a lighter null-stream
+    // query is NOT sufficient (the value may be produced on a non-default stream)
+    // and reading early returns stale zeros (crashes / garbage).
     (void)hipDeviceSynchronize();
     rocm::allocator().ensure_host_shadow(cbuf);
     return cbuf.host_shadow;
