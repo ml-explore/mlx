@@ -1157,8 +1157,10 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Donation: if the input buffer is uniquely owned, share it directly
   // instead of copying. Helps prefill and any slice_update where the
   // source array has no other references.
-  if (in.data_shared_ptr() != nullptr && in.data_shared_ptr().use_count() == 1 &&
-      in.flags().contiguous && in.data_size() == in.size()) {
+  bool can_donate = in.data_shared_ptr() != nullptr &&
+      in.data_shared_ptr().use_count() == 1 && in.flags().contiguous &&
+      in.data_size() == in.size();
+  if (can_donate) {
     out.copy_shared_buffer(in);
   } else {
     auto ctype = in.flags().contiguous && in.size() == in.data_size()
@@ -1219,13 +1221,17 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   int num_blocks = static_cast<int>(
       std::min((adjusted_size + block_size - 1) / block_size, (int64_t)65535));
 
+  // Plain local: a structured binding (data_offset) cannot be captured by the
+  // kernel-launch macro under C++17.
+  int64_t data_offset_v = data_offset;
+
   #define SLICE_UPDATE_LAUNCH(T, Op, OUT_C, UPD_C, UPD_S, NWORK_VAL) \
     hipLaunchKernelGGL( \
         (rocm::slice_update_op_kernel<T, int64_t, Op, OUT_C, UPD_C, UPD_S, NWORK_VAL>), \
         dim3(num_blocks), dim3(block_size), 0, stream, \
         gpu_ptr<T>(upd), gpu_ptr<T>(out), update_size, \
         shape_param, upd_strides_param, ndim, \
-        out_strides_param, data_offset)
+        out_strides_param, data_offset_v)
 
   // Dispatch helper for NWORK
   #define DISPATCH_NWORK(T, Op, OUT_C, UPD_C, UPD_S) \
