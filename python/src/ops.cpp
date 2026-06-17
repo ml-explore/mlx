@@ -5842,146 +5842,16 @@ void init_ops(nb::module_& m) {
         array: The array converted to fp8 with type ``uint8``.
   )pbdoc");
   // Array API standard aliases (https://data-apis.org/array-api/latest/).
-  // These mirror existing operations under their array-API-conformant names.
-  m.def(
-      "acos",
-      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
-        return mx::arccos(to_array(a), s);
-      },
-      nb::arg(),
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def acos(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        See :func:`arccos`.
-      )pbdoc");
-  m.def(
-      "acosh",
-      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
-        return mx::arccosh(to_array(a), s);
-      },
-      nb::arg(),
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def acosh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        See :func:`arccosh`.
-      )pbdoc");
-  m.def(
-      "asin",
-      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
-        return mx::arcsin(to_array(a), s);
-      },
-      nb::arg(),
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def asin(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        See :func:`arcsin`.
-      )pbdoc");
-  m.def(
-      "asinh",
-      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
-        return mx::arcsinh(to_array(a), s);
-      },
-      nb::arg(),
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def asinh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        See :func:`arcsinh`.
-      )pbdoc");
-  m.def(
-      "atan",
-      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
-        return mx::arctan(to_array(a), s);
-      },
-      nb::arg(),
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def atan(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        See :func:`arctan`.
-      )pbdoc");
-  m.def(
-      "atanh",
-      [](const ScalarOrArray& a, mx::StreamOrDevice s) {
-        return mx::arctanh(to_array(a), s);
-      },
-      nb::arg(),
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def atanh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        See :func:`arctanh`.
-      )pbdoc");
-  m.def(
-      "atan2",
-      &mx::arctan2,
-      nb::arg(),
-      nb::arg(),
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def atan2(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        See :func:`arctan2`.
-      )pbdoc");
-  m.def(
-      "pow",
-      [](const ScalarOrArray& a_,
-         const ScalarOrArray& b_,
-         mx::StreamOrDevice s) {
-        auto [a, b] = to_arrays(a_, b_);
-        return mx::power(a, b, s);
-      },
-      nb::arg(),
-      nb::arg(),
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def pow(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        See :func:`power`.
-      )pbdoc");
-  m.def(
-      "bitwise_left_shift",
-      [](const ScalarOrArray& a_,
-         const ScalarOrArray& b_,
-         mx::StreamOrDevice s) {
-        auto [a, b] = to_arrays(a_, b_);
-        return mx::left_shift(a, b, s);
-      },
-      nb::arg(),
-      nb::arg(),
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def bitwise_left_shift(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        See :func:`left_shift`.
-      )pbdoc");
-  m.def(
-      "bitwise_right_shift",
-      [](const ScalarOrArray& a_,
-         const ScalarOrArray& b_,
-         mx::StreamOrDevice s) {
-        auto [a, b] = to_arrays(a_, b_);
-        return mx::right_shift(a, b, s);
-      },
-      nb::arg(),
-      nb::arg(),
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def bitwise_right_shift(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        See :func:`right_shift`.
-      )pbdoc");
+  // Module-level aliases of existing ops; kept out of the public docs per review
+  // (one documented name per op).
+  m.attr("acos") = m.attr("arccos");
+  m.attr("acosh") = m.attr("arccosh");
+  m.attr("asin") = m.attr("arcsin");
+  m.attr("asinh") = m.attr("arcsinh");
+  m.attr("atan") = m.attr("arctan");
+  m.attr("atanh") = m.attr("arctanh");
+  m.attr("atan2") = m.attr("arctan2");
+  m.attr("pow") = m.attr("power");
+  m.attr("bitwise_left_shift") = m.attr("left_shift");
+  m.attr("bitwise_right_shift") = m.attr("right_shift");
 }
