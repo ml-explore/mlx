@@ -600,6 +600,27 @@ class TestAutograd(mlx_tests.MLXTestCase):
         expected = mx.array([[0, 0, 1, 0, 1], [1, 0, 0, 0, 1]], mx.float32)
         self.assertTrue(mx.array_equal(out, expected))
 
+    def test_sort_grad(self):
+        # Sort permutes the input, so its vjp must scatter the cotangents back
+        # to the original positions (the transpose of the permutation), not
+        # gather them forward. A non-involutive permutation exposes the bug.
+        x = mx.array([3.0, 1.0, 2.0, 5.0, 4.0])
+        cotan = mx.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        grad = mx.vjp(lambda a: mx.sort(a), (x,), (cotan,))[1][0]
+        self.assertTrue(mx.array_equal(grad, mx.array([30.0, 10.0, 20.0, 50.0, 40.0])))
+
+        # vjp must be the transpose of the jvp (adjoint test) along each axis.
+        mx.random.seed(0)
+        for axis in (0, 1, -1):
+            a = mx.random.normal((4, 6))
+            v = mx.random.normal(a.shape)
+            w = mx.random.normal(a.shape)
+            jv = mx.jvp(lambda z: mx.sort(z, axis=axis), (a,), (v,))[1][0]
+            jtw = mx.vjp(lambda z: mx.sort(z, axis=axis), (a,), (w,))[1][0]
+            self.assertAlmostEqual(
+                mx.sum(w * jv).item(), mx.sum(v * jtw).item(), places=4
+            )
+
     def test_custom_function(self):
         # Make a custom function
         my_exp = mx.custom_function(mx.exp)

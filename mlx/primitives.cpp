@@ -5289,7 +5289,16 @@ std::vector<array> Sort::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // Sort applies a permutation to the input, so the cotangents must be
+  // scattered back to the original positions (the transpose of the
+  // permutation), not gathered forward as in the jvp.
+  auto sort_idx = argsort(primals[0], axis_, stream());
+  return {put_along_axis(
+      zeros_like(primals[0], stream()),
+      sort_idx,
+      cotangents[0],
+      axis_,
+      stream())};
 }
 
 std::vector<array> Sort::jvp(
