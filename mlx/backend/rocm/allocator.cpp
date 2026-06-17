@@ -69,20 +69,6 @@ static bool is_integrated() {
   return integrated == 1;
 }
 
-// Use FINE-GRAINED device memory on BOTH the integrated APU and the discrete
-// RDNA4 GPU. Fine-grained memory (hipDeviceMallocFinegrained) is VRAM-resident
-// AND mapped into the host address space over the BAR (ReBAR/large-BAR), so a
-// single pointer feeds kernels at full VRAM bandwidth and is directly CPU
-// read/writable — no host shadow, no D2H copy, no per-access device sync. This
-// is what keeps tensors resident on the GPU and is the path that works.
-//
-// The coarse-grained + per-buffer "host shadow" + hipMemcpy(D2H) +
-// hipDeviceSynchronize path was a regression: it pulled data off the device and
-// inserted a host round-trip on every CPU access, which serialized the forward
-// and stalled the GPU queue. Override with MLX_ROCM_FINEGRAINED=0 only to debug.
-// Cached per device index: hipGetDeviceProperties(...).integrated. Used for the
-// memory-limit policy (APU shares system RAM -> conservative cap; discrete GPU
-// has dedicated VRAM -> use almost all of it).
 static bool device_is_integrated(int dev) {
   static int cache[16] = {-1, -1, -1, -1, -1, -1, -1, -1,
                           -1, -1, -1, -1, -1, -1, -1, -1};
@@ -103,11 +89,6 @@ static bool use_finegrained() {
   return true;
 }
 
-// Device tag on each RocmBuffer. -1 means "fine-grained, host-mappable VRAM":
-// raw_ptr() hands the CPU the resident pointer directly (no shadow). A
-// non-negative index would route CPU access through a pinned host shadow (D2H) —
-// only for memory that is genuinely not CPU-mappable. With fine-grained memory
-// (the default) buffers are always -1, keeping data resident on the GPU.
 static int alloc_device_tag() {
   return use_finegrained() ? -1 : 0;
 }
@@ -466,7 +447,7 @@ RocmAllocator::RocmAllocator()
     if (device_is_integrated(dev)) {
       memory_limit_ = static_cast<size_t>(total * 0.8);
     } else {
-      size_t reserve = 256ull << 20; // 256 MB
+      size_t reserve = 512ull << 20; // 512 MB driver/TTM headroom
       memory_limit_ = (total > reserve) ? (total - reserve) : total;
     }
     max_pool_size_ = memory_limit_;
@@ -699,6 +680,14 @@ size_t RocmAllocator::get_cache_memory() const {
 size_t RocmAllocator::set_cache_limit(size_t limit) {
   std::lock_guard lk(mutex_);
   std::swap(limit, max_pool_size_);
+  // Trim the reuse pool down to the new cap NOW, while the caller is at an idle
+  // point (e.g. just after warmup). Otherwise the trim happens lazily on the
+  // next malloc — i.e. during the first forward — and its blocking hipFree
+  // (which on a discrete GPU implicitly synchronizes the device and can force a
+  // TTM eviction) wedges the command queue mid-pass.
+  if (get_cache_memory() > max_pool_size_) {
+    buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
+  }
   return limit;
 }
 

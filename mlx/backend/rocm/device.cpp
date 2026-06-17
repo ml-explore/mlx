@@ -565,19 +565,17 @@ std::unordered_map<int, Device>& get_devices() {
 
 Device& device(mlx::core::Device device) {
   auto& devices = get_devices();
-  static bool flags_set = false;
-  if (!flags_set) {
-    flags_set = true;
-    // Set blocking sync on ONLY the device being used. Iterating every device
-    // (hipSetDevice(i)+hipSetDeviceFlags) creates a context/queue on the other
-    // GPU too; on a multi-GPU host that cross-device coexistence is exactly what
-    // HIP_VISIBLE_DEVICES avoids and what wedges the discrete GPU's queue over a
-    // TB5 link. Touch only this device.
-    hipSetDevice(device.index);
-    hipSetDeviceFlags(hipDeviceScheduleBlockingSync);
-  }
   auto it = devices.find(device.index);
   if (it == devices.end()) {
+    // Set blocking sync flags on THIS device (per index, not a single global
+    // bool: if device 0 were touched first the global gate would leave device 1
+    // unflagged). Must happen while this device is current and before its
+    // context is created — i.e. before the Device is constructed. Iterating every
+    // device would create a context/queue on the other GPU too; on a multi-GPU
+    // host that cross-device coexistence is what wedges the discrete GPU's queue
+    // over a TB5 link, so touch only this device.
+    hipSetDevice(device.index);
+    hipSetDeviceFlags(hipDeviceScheduleBlockingSync);
     it = devices.try_emplace(device.index, device.index).first;
   }
   return it->second;

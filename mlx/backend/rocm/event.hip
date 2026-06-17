@@ -225,16 +225,12 @@ void AtomicEvent::wait(uint64_t value) {
 }
 
 void AtomicEvent::wait(hipStream_t stream, uint64_t value) {
-  // Use hipStreamWaitValue64 if possible to make the GPU wait for the atomic directly.
-  // This avoids blocking the host thread and is much more efficient.
-  // flags = hipStreamWaitValueGte (Greater than or equal)
-  hipError_t err = hipStreamWaitValue64(stream, atomic(), value, hipStreamWaitValueGte, 0xFFFFFFFFFFFFFFFFULL);
-  if (err != hipSuccess) {
-    // Fallback to synchronous wait if hipStreamWaitValue64 is not supported or fails.
-    // hipStreamSynchronize should be blocking if flags are set correctly.
-    CHECK_HIP_ERROR(hipStreamSynchronize(stream));
-    wait(value);
-  }
+  // Do NOT use hipStreamWaitValue64 on the host counter: it requires
+  // hipMallocSignalMemory and silently never observes a plain pinned-host value,
+  // wedging the queue. The counter is signaled by a host callback when the
+  // producer stream reaches the signal point, so block the host here until the
+  // value lands; subsequent work on this stream is correctly ordered after it.
+  wait(value);
 }
 
 void AtomicEvent::wait(Stream s, uint64_t value) {
@@ -254,15 +250,14 @@ void AtomicEvent::signal(uint64_t value) {
 }
 
 void AtomicEvent::signal(hipStream_t stream, uint64_t value) {
-  // Use hipStreamWriteValue64 if possible to signal the atomic directly from the GPU stream.
-  // This is much more efficient than using a host callback.
-  // We don't use flags or mask for now.
-  hipError_t err = hipStreamWriteValue64(stream, atomic(), value, 0);
-  if (err != hipSuccess) {
-    // Fallback to host callback if hipStreamWriteValue64 is not supported or fails.
-    auto* data = new std::pair<std::atomic<uint64_t>*, uint64_t>(atomic(), value);
-    CHECK_HIP_ERROR(hipLaunchHostFunc(stream, signal_atomic_callback, data));
-  }
+  // Signal the host-resident counter from the stream via a host callback that
+  // fires when the stream reaches this point. We do NOT use hipStreamWriteValue64
+  // here: it REQUIRES a hipMallocSignalMemory pointer, but returns success on a
+  // plain pinned-host counter while never actually landing the write — so the
+  // host poll (wait()) spins forever and the discrete-GPU queue wedges (busy
+  // 100%, mem-ctrl 0%). The host callback always delivers the value correctly.
+  auto* data = new std::pair<std::atomic<uint64_t>*, uint64_t>(atomic(), value);
+  CHECK_HIP_ERROR(hipLaunchHostFunc(stream, signal_atomic_callback, data));
 }
 
 void AtomicEvent::signal(Stream s, uint64_t value) {
