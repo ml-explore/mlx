@@ -11,12 +11,24 @@
 namespace mlx::core::gpu {
 
 void init() {
+  // Initialize the SELECTED default GPU's primary context — not device 0. On a
+  // multi-GPU host, creating a context/queue on the other GPU (the APU) too is
+  // what differs from HIP_VISIBLE_DEVICES, and that cross-device queue coexistence
+  // is what wedges the discrete GPU's command queue over a TB5 link. Touch only
+  // the chosen device so the runtime behaves as if it were the only one.
+  auto d = mlx::core::default_device();
+  if (d.type == mlx::core::Device::gpu) {
+    (void)hipSetDevice(d.index);
+  }
   hipFree(nullptr);
 }
 
 void new_stream(Stream s) {
-  rocm::HipEvent(hipEventDefault);
+  // Bind the stream's device FIRST (creates/selects its Device + context), then
+  // warm the event pool on that device — creating the HipEvent before binding
+  // would put it (and its queue interaction) on whatever device is current.
   rocm::get_command_encoder(s);
+  rocm::HipEvent(hipEventDefault);
 }
 
 void eval(array& arr) {

@@ -69,20 +69,20 @@ static bool is_integrated() {
   return integrated == 1;
 }
 
-// Whether to use FINE-GRAINED (host-coherent) device memory. Fine-grained memory
-// requires hardware CPU<->GPU cache coherency:
-//  - Integrated APU (gfx1151): unified LPDDR5 is coherent -> fine-grained works.
-//  - Discrete GPU over a link WITHOUT coherency (e.g. an R9700 in a TB5 eGPU
-//    enclosure): kernels reading fine-grained memory stall forever (100% busy,
-//    never completes). Coarse-grained device memory (hipMalloc) has no coherency
-//    requirement, so kernels run; CPU access is served via the host shadow.
-// Default: fine-grained only on the integrated APU. Override with
-// MLX_ROCM_FINEGRAINED=1/0.
+// Use FINE-GRAINED device memory on BOTH the integrated APU and the discrete
+// RDNA4 GPU. Fine-grained memory (hipDeviceMallocFinegrained) is VRAM-resident
+// AND mapped into the host address space over the BAR (ReBAR/large-BAR), so a
+// single pointer feeds kernels at full VRAM bandwidth and is directly CPU
+// read/writable — no host shadow, no D2H copy, no per-access device sync. This
+// is what keeps tensors resident on the GPU and is the path that works.
 //
-// NOTE: must reflect the CURRENT device, not a process-global cache. The old
-// is_integrated() cached whatever device was current at its first call (device 0,
-// the APU) and so wrongly reported the discrete R9700 as integrated, picking
-// fine-grained on the dGPU and hanging. Cache per device index instead.
+// The coarse-grained + per-buffer "host shadow" + hipMemcpy(D2H) +
+// hipDeviceSynchronize path was a regression: it pulled data off the device and
+// inserted a host round-trip on every CPU access, which serialized the forward
+// and stalled the GPU queue. Override with MLX_ROCM_FINEGRAINED=0 only to debug.
+// Cached per device index: hipGetDeviceProperties(...).integrated. Used for the
+// memory-limit policy (APU shares system RAM -> conservative cap; discrete GPU
+// has dedicated VRAM -> use almost all of it).
 static bool device_is_integrated(int dev) {
   static int cache[16] = {-1, -1, -1, -1, -1, -1, -1, -1,
                           -1, -1, -1, -1, -1, -1, -1, -1};
@@ -100,23 +100,16 @@ static bool device_is_integrated(int dev) {
 static bool use_finegrained() {
   if (const char* e = std::getenv("MLX_ROCM_FINEGRAINED"))
     return std::atoi(e) != 0;
-  int dev = 0;
-  (void)hipGetDevice(&dev);
-  return device_is_integrated(dev);
+  return true;
 }
 
-// Device tag stored on each RocmBuffer. -1 means "host-coherent unified memory"
-// (integrated APU): raw_ptr() hands the CPU the pointer directly. A non-negative
-// index means "discrete-GPU VRAM": raw_ptr() routes CPU access through a pinned
-// host shadow (D2H copy), because the CPU cannot coherently read this device's
-// VRAM over a non-coherent link (TB5 eGPU). Without this, array::item<T>() and
-// any host readback (e.g. reading the sampled token) return garbage or hang.
+// Device tag on each RocmBuffer. -1 means "fine-grained, host-mappable VRAM":
+// raw_ptr() hands the CPU the resident pointer directly (no shadow). A
+// non-negative index would route CPU access through a pinned host shadow (D2H) —
+// only for memory that is genuinely not CPU-mappable. With fine-grained memory
+// (the default) buffers are always -1, keeping data resident on the GPU.
 static int alloc_device_tag() {
-  if (use_finegrained())
-    return -1;
-  int dev = 0;
-  (void)hipGetDevice(&dev);
-  return dev;
+  return use_finegrained() ? -1 : 0;
 }
 
 inline void* rocm_unified_malloc(size_t size, bool& is_managed) {

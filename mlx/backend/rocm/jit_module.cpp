@@ -401,6 +401,11 @@ JitModule::JitModule(
     const std::string& module_name,
     const KernelBuilder& builder,
     bool use_disk_cache) {
+  // Bind the target device before compiling/loading: hipModuleLoadData and
+  // hipModuleGetFunction load into the CURRENT device's context, and the kernels
+  // are later launched on this device's stream. If the module loaded into device
+  // 0's context but launches on device 1, the queue wedges.
+  device.make_current();
   // Will hold the actual device executable source code and kernel names
   std::string hsaco;
   std::vector<std::pair<std::string, std::string>> hsaco_kernels;
@@ -481,9 +486,13 @@ JitModule& get_jit_module(
     const KernelBuilder& builder,
     bool cache) {
   auto& map = get_jit_module_cache();
-  auto it = map.find(name);
+  // Key by device too: a module compiled/loaded into one device's context is not
+  // valid on another. Sharing by name across devices would hand a device-1 launch
+  // a hipFunction_t from device 0's context and wedge the queue.
+  auto key = std::to_string(mlx_device.index) + ":" + name;
+  auto it = map.find(key);
   if (it == map.end()) {
-    it = map.try_emplace(name, device(mlx_device), name, builder, cache).first;
+    it = map.try_emplace(key, device(mlx_device), name, builder, cache).first;
   }
   return it->second;
 }

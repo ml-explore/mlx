@@ -281,6 +281,11 @@ void Device::set_rocblas_stream(hipStream_t stream) {
 }
 
 CommandEncoder& Device::get_command_encoder(Stream s) {
+  // Bind this device current before constructing/returning the encoder. Callers
+  // reach this member directly (e.g. QuantizedMatmul::eval_gpu), and the
+  // encoder's stream + the kernels launched on it must land on this device, not
+  // whatever was current on the calling thread.
+  make_current();
   auto it = encoders_.find(s.index);
   if (it == encoders_.end()) {
     auto [inserted_it, success] =
@@ -295,7 +300,7 @@ void Device::clear_encoders() {
 }
 
 CommandEncoder::CommandEncoder(Device& d)
-    : device_(d), stream_(d), worker_(std::make_unique<Worker>()) {}
+    : device_(d), stream_(d), worker_(std::make_unique<Worker>(d.hip_device())) {}
 
 CommandEncoder::~CommandEncoder() = default;
 
@@ -563,19 +568,13 @@ Device& device(mlx::core::Device device) {
   static bool flags_set = false;
   if (!flags_set) {
     flags_set = true;
-    // Set blocking sync for all devices to reduce CPU usage. Save and restore
-    // the current device so this one-time loop is transparent — forcing device 0
-    // here strands the caller (and desyncs make_current's per-thread cache) when
-    // a non-default GPU (--device 1) is selected.
-    int prev = 0;
-    (void)hipGetDevice(&prev);
-    int device_count = 0;
-    hipGetDeviceCount(&device_count);
-    for (int i = 0; i < device_count; i++) {
-      hipSetDevice(i);
-      hipSetDeviceFlags(hipDeviceScheduleBlockingSync);
-    }
-    hipSetDevice(prev);
+    // Set blocking sync on ONLY the device being used. Iterating every device
+    // (hipSetDevice(i)+hipSetDeviceFlags) creates a context/queue on the other
+    // GPU too; on a multi-GPU host that cross-device coexistence is exactly what
+    // HIP_VISIBLE_DEVICES avoids and what wedges the discrete GPU's queue over a
+    // TB5 link. Touch only this device.
+    hipSetDevice(device.index);
+    hipSetDeviceFlags(hipDeviceScheduleBlockingSync);
   }
   auto it = devices.find(device.index);
   if (it == devices.end()) {

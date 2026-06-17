@@ -20,7 +20,7 @@ class HipEvent;
 // Run tasks in worker thread, synchronized with HIP stream.
 class Worker {
  public:
-  Worker();
+  explicit Worker(int device);
   ~Worker();
 
   Worker(const Worker&) = delete;
@@ -44,6 +44,13 @@ class Worker {
   uint64_t signaled_batch_{0};
 
   bool stop_{false};
+
+  // The HIP device this worker's stream-completion callbacks run against. The
+  // worker thread must hipSetDevice(device_) before running any task: HIP's
+  // current device is per-thread and a freshly spawned thread defaults to device
+  // 0. Running device-1 stream callbacks/frees from a device-0-bound thread is a
+  // cross-device coupling that wedges the queue on a discrete GPU.
+  int device_{0};
 
   // Tasks are put in |pending_tasks_| first, and then moved to
   // |worker_tasks_| when end_batch() is called.

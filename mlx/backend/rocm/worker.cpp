@@ -5,7 +5,7 @@
 
 namespace mlx::core::rocm {
 
-Worker::Worker() : worker_(&Worker::thread_fn, this) {}
+Worker::Worker(int device) : device_(device), worker_(&Worker::thread_fn, this) {}
 
 Worker::~Worker() {
   {
@@ -44,6 +44,11 @@ void Worker::commit(hipStream_t stream) {
 }
 
 void Worker::thread_fn() {
+  // Bind this thread to the encoder's device before running any task. Completion
+  // handlers free temporaries / return buffers to the pool and may issue HIP
+  // calls; they must hit the same device the stream lives on, not the default
+  // device 0. Without this the discrete-GPU queue wedges on a multi-GPU host.
+  (void)hipSetDevice(device_);
   uint64_t current_batch = 0;
   while (!stop_) {
     Tasks tasks;
