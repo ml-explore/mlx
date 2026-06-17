@@ -60,11 +60,17 @@ class AtomicEvent {
 
  private:
   std::atomic<uint64_t>* atomic() const {
-    auto* rbuf = static_cast<RocmBuffer*>(buf_->ptr());
-    return static_cast<std::atomic<uint64_t>*>(rbuf->data);
+    return atomic_;
   }
 
-  std::shared_ptr<allocator::Buffer> buf_;
+  // The completion counter lives in PINNED HOST memory, not device memory. The
+  // GPU writes it (hipStreamWriteValue64) and the CPU polls it (wait()). Device
+  // memory — even fine-grained — is not reliably CPU-coherent on a discrete GPU
+  // over a non-coherent link (e.g. an R9700 in a TB5 eGPU enclosure), so the
+  // host poll would spin forever. Pinned host memory is the canonical GPU->host
+  // signaling path and works on both the integrated APU and a discrete dGPU.
+  std::shared_ptr<void> mem_;
+  std::atomic<uint64_t>* atomic_{nullptr};
 };
 
 } // namespace mlx::core::rocm

@@ -45,7 +45,7 @@ Stream default_stream(Device d) {
   }
   auto& s = default_stream_storage(d);
   if (!s.has_value()) {
-    s = new_stream(d.type);
+    s = new_stream(d);
   }
   return s.value();
 }

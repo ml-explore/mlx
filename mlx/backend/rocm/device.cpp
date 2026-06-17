@@ -260,9 +260,10 @@ bool Device::has_native_wmma() {
 }
 
 void Device::make_current() {
-  // We need to set/get current HIP device very frequently, cache it to reduce
-  // actual calls of HIP APIs. This function assumes single-thread in host.
-  static int current = -1;
+  // HIP's current device is per-thread, so the cache must be too — a process
+  // global lets one thread's binding suppress another's, stranding allocations
+  // on the wrong device in a multi-GPU / multi-stream-thread run.
+  thread_local int current = -1;
   if (current != device_) {
     CHECK_HIP_ERROR(hipSetDevice(device_));
     current = device_;

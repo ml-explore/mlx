@@ -159,14 +159,19 @@ void signal_atomic_callback(void* data) {
 } // namespace
 
 AtomicEvent::AtomicEvent() {
-  buf_ = std::shared_ptr<allocator::Buffer>(
-      new allocator::Buffer{allocator().malloc(sizeof(std::atomic<uint64_t>))},
-      [](allocator::Buffer* ptr) {
-        allocator().free(*ptr);
-        delete ptr;
-      });
-  // Initialize to 0, this will migrate to unified memory if needed
-  *static_cast<uint64_t*>(buf_->raw_ptr()) = 0;
+  // Pinned, device-mapped host memory for the completion counter. The GPU
+  // signals it (hipStreamWriteValue64) and the CPU polls it (wait()); on a
+  // discrete GPU over a non-coherent link (TB5 eGPU) device memory is not
+  // visible to the CPU, so the counter MUST live in host memory or the host
+  // poll spins forever. Mapped+coherent so the same pointer is valid on the
+  // device (HIP unified addressing) for the stream write/wait-value ops.
+  void* p = nullptr;
+  CHECK_HIP_ERROR(hipHostMalloc(
+      &p, sizeof(std::atomic<uint64_t>),
+      hipHostMallocMapped | hipHostMallocCoherent));
+  atomic_ = static_cast<std::atomic<uint64_t>*>(p);
+  atomic_->store(0, std::memory_order_release);
+  mem_ = std::shared_ptr<void>(p, [](void* q) { (void)hipHostFree(q); });
 }
 
 void AtomicEvent::wait(uint64_t value) {
@@ -197,7 +202,7 @@ void AtomicEvent::wait(Stream s, uint64_t value) {
     encoder.commit();
     wait(encoder.stream(), value);
     // Keep the buffer alive until the wait is finished
-    encoder.add_completed_handler([buf = buf_]() {});
+    encoder.add_completed_handler([buf = mem_]() {});
   }
 }
 
@@ -225,7 +230,7 @@ void AtomicEvent::signal(Stream s, uint64_t value) {
     encoder.commit();
     signal(encoder.stream(), value);
     // Keep the buffer alive until it's signaled
-    encoder.add_completed_handler([buf = buf_]() {});
+    encoder.add_completed_handler([buf = mem_]() {});
   }
 }
 

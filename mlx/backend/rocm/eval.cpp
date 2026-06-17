@@ -21,6 +21,12 @@ void new_stream(Stream s) {
 
 void eval(array& arr) {
   auto outputs = arr.outputs();
+  auto& encoder = rocm::get_command_encoder(arr.primitive().stream());
+  // Bind the stream's device before eval_gpu so output buffers allocate on the
+  // same device the kernels run on. Otherwise (multi-GPU) outputs land on
+  // whatever device is current (often device 0) while kernels run on the
+  // stream's device, stranding the model on the wrong GPU.
+  encoder.device().make_current();
   {
     std::vector<array> inputs;
     if (arr.is_tracer()) {
@@ -29,7 +35,6 @@ void eval(array& arr) {
     arr.primitive().eval_gpu(arr.inputs(), outputs);
   }
 
-  auto& encoder = rocm::get_command_encoder(arr.primitive().stream());
   for (auto& in : arr.inputs()) {
     if (in.data_shared_ptr() != arr.data_shared_ptr()) {
       encoder.add_temporary(in);

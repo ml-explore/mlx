@@ -69,24 +69,77 @@ static bool is_integrated() {
   return integrated == 1;
 }
 
+// Whether to use FINE-GRAINED (host-coherent) device memory. Fine-grained memory
+// requires hardware CPU<->GPU cache coherency:
+//  - Integrated APU (gfx1151): unified LPDDR5 is coherent -> fine-grained works.
+//  - Discrete GPU over a link WITHOUT coherency (e.g. an R9700 in a TB5 eGPU
+//    enclosure): kernels reading fine-grained memory stall forever (100% busy,
+//    never completes). Coarse-grained device memory (hipMalloc) has no coherency
+//    requirement, so kernels run; CPU access is served via the host shadow.
+// Default: fine-grained only on the integrated APU. Override with
+// MLX_ROCM_FINEGRAINED=1/0.
+//
+// NOTE: must reflect the CURRENT device, not a process-global cache. The old
+// is_integrated() cached whatever device was current at its first call (device 0,
+// the APU) and so wrongly reported the discrete R9700 as integrated, picking
+// fine-grained on the dGPU and hanging. Cache per device index instead.
+static bool device_is_integrated(int dev) {
+  static int cache[16] = {-1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1};
+  if (dev < 0 || dev >= 16)
+    return false;
+  if (cache[dev] < 0) {
+    hipDeviceProp_t p;
+    cache[dev] =
+        (hipGetDeviceProperties(&p, dev) == hipSuccess && p.integrated == 1) ? 1
+                                                                             : 0;
+  }
+  return cache[dev] == 1;
+}
+
+static bool use_finegrained() {
+  if (const char* e = std::getenv("MLX_ROCM_FINEGRAINED"))
+    return std::atoi(e) != 0;
+  int dev = 0;
+  (void)hipGetDevice(&dev);
+  return device_is_integrated(dev);
+}
+
 inline void* rocm_unified_malloc(size_t size, bool& is_managed) {
   void* data = nullptr;
   hipError_t err;
-  if (size > (256ull << 20) && std::getenv("MLX_ALLOC_DEBUG")) {
+  // Bind the alloc to the MLX-selected GPU. set_default_device(gpu,N) only sets
+  // MLX bookkeeping; it never calls hipSetDevice. Without this, allocations made
+  // OUTSIDE the eval path — notably the slab warmup at allocator construction —
+  // land on whatever device is current (device 0 at startup), so the model's
+  // small/intermediate tensors live on the APU while weights live on the dGPU.
+  // A dGPU kernel then reads APU memory across the (TB5) link and hangs. Use raw
+  // hipSetDevice (NOT device().make_current(), whose Device construction + device-
+  // flags loop faults against device-0's already-created context).
+  {
+    mlx::core::Device dd = mlx::core::default_device();
+    if (dd.type == mlx::core::Device::gpu) {
+      int cur = -1;
+      if (hipGetDevice(&cur) == hipSuccess && cur != dd.index)
+        (void)hipSetDevice(dd.index);
+    }
+  }
+  if (size > (16ull << 20) && std::getenv("MLX_ALLOC_DEBUG")) {
     int d = -1;
     (void)hipGetDevice(&d);
-    fprintf(stderr, "[alloc] %zu MB on hip device %d\n", size >> 20, d);
+    fprintf(stderr, "[alloc] %zu MB curdev=%d defdev=%d finegrained=%d\n",
+            size >> 20, d, mlx::core::default_device().index,
+            (int)use_finegrained());
   }
-  // Fine-grained device memory is the right primitive on BOTH targets:
-  //  - Integrated APU (gfx1151): allocates from unified LPDDR5, host-coherent.
-  //  - Discrete RDNA4 (gfx1201): allocates VRAM-RESIDENT memory that is also
-  //    mapped into the host address space over the PCIe BAR (ReBAR). One pointer
-  //    feeds kernels at full VRAM bandwidth (gpu_ptr) and the CPU directly
-  //    (raw_ptr) — no host shadow, no migration, coherent at sync points.
-  // Measured on gfx1201: a 1 GiB fine-grained alloc consumes the full 1074 MB of
-  // VRAM and is CPU read/writable, whereas hipMallocManaged migrates only ~150
-  // MB to the device and streams the rest over PCIe (~11 GB/s).
-  err = hipExtMallocWithFlags(&data, size, hipDeviceMallocFinegrained);
+  if (use_finegrained()) {
+    // Integrated APU: unified LPDDR5, host-coherent. One pointer feeds kernels
+    // (gpu_ptr) and the CPU (raw_ptr) — no host shadow, coherent at sync points.
+    err = hipExtMallocWithFlags(&data, size, hipDeviceMallocFinegrained);
+  } else {
+    // Discrete GPU: coarse-grained VRAM (no coherency requirement). CPU access
+    // goes through the pinned host shadow (ensure_host_shadow/flush_host_shadow).
+    err = hipMalloc(&data, size);
+  }
   if (err == hipSuccess) {
     is_managed = true;
     return data;
