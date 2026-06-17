@@ -308,9 +308,8 @@ def tree_merge(tree_a, tree_b, merge_fn=None):
 
     if isinstance(tree_a, (list, tuple)) and isinstance(tree_b, (list, tuple)):
         TreeType = type(tree_a)
-        return TreeType(
-            tree_merge(a, b, merge_fn) for a, b in zip_longest(tree_a, tree_b)
-        )
+        subtrees = (tree_merge(a, b, merge_fn) for a, b in zip_longest(tree_a, tree_b))
+        return TreeType(*subtrees) if hasattr(tree_a, "_fields") else TreeType(subtrees)
     elif isinstance(tree_a, dict) and isinstance(tree_b, dict):
         return {
             k: tree_merge(tree_a.get(k, None), tree_b.get(k, None), merge_fn)
