@@ -62,8 +62,11 @@ void clear_streams() {
 
 // --- GPU memcpy for direct KV cache writes ---
 extern "C" void mlx_gpu_memcpy_async(void* dst, const void* src, size_t bytes) {
+  // Use the SELECTED default device's stream, not Device::gpu (which is the
+  // device TYPE = gpu index 0). On a multi-GPU box, --device 1 would otherwise
+  // memcpy KV data on device 0's stream while the data lives on device 1.
   auto& enc = mlx::core::rocm::get_command_encoder(
-      mlx::core::default_stream(mlx::core::Device::gpu));
+      mlx::core::default_stream(mlx::core::default_device()));
   enc.launch_kernel([=](hipStream_t stream) {
     (void)hipMemcpyAsync(dst, src, bytes, hipMemcpyDeviceToDevice, stream);
   });
@@ -89,7 +92,7 @@ bool gpu_arena_active() {
 }
 
 static rocm::CommandEncoder& graph_encoder() {
-  return rocm::get_command_encoder(default_stream(Device::gpu));
+  return rocm::get_command_encoder(default_stream(default_device()));
 }
 
 bool gpu_graph_begin_capture() {
