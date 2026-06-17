@@ -1071,32 +1071,14 @@ void dot_product(
 
   array current = partials;
   kname = "dot_reduce_" + type_to_name(out);
-  auto kernel_final = d.get_kernel(kname);
-  auto kernel_intermediate = d.get_kernel("dot_reduce_float32");
+  kernel = d.get_kernel(kname);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(partials, 0);
+  compute_encoder.set_bytes(blocks, 2);
+  compute_encoder.set_output_array(out, 1);
 
-  while (blocks > 1) {
-    n = blocks;
-    blocks = (n + thread_group_size - 1) / thread_group_size;
-
-    auto kernel = (blocks == 1) ? kernel_final : kernel_intermediate;
-    compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(current, 0);
-    compute_encoder.set_bytes(n, 2);
-
-    if (blocks == 1) {
-      compute_encoder.set_output_array(out, 1);
-    } else {
-      array next({blocks}, float32, nullptr, {});
-      next.set_data(allocator::malloc(next.nbytes()));
-      copies.push_back(next);
-      compute_encoder.set_output_array(next, 1);
-      current = next;
-    }
-
-    compute_encoder.dispatch_threads(
-        MTL::Size(size_t(blocks) * thread_group_size, 1, 1),
-        MTL::Size(thread_group_size, 1, 1));
-  }
+  compute_encoder.dispatch_threads(
+      MTL::Size(thread_group_size, 1, 1), MTL::Size(thread_group_size, 1, 1));
 
   compute_encoder.add_temporaries(std::move(copies));
 }
@@ -1352,8 +1334,8 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
 
-  if (M == 1 && N == 1 && K > 16384 && batch_size_out == 1 && !a_transposed &&
-      !b_transposed && a.flags().row_contiguous && b.flags().row_contiguous) {
+  if (M == 1 && N == 1 && batch_size_out == 1 && a.flags().row_contiguous &&
+      b.flags().row_contiguous) {
     return dot_product(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,

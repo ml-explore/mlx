@@ -11,49 +11,50 @@ template <typename T>
     const device T* b [[buffer(1)]],
     device float* output [[buffer(2)]],
     const constant int& n [[buffer(3)]],
-    uint gid [[thread_position_in_grid]],
     uint tid [[thread_position_in_threadgroup]],
     uint lane [[thread_index_in_simdgroup]],
     uint simd_id [[simdgroup_index_in_threadgroup]],
     uint tg_id [[threadgroup_position_in_grid]]) {
   constexpr int ITEMS_PER_THREAD = 32;
-
-  int start = gid * ITEMS_PER_THREAD;
+  constexpr int VEC = 16 / sizeof(T);
+  int start = (tg_id * 512 + simd_id * 32) * ITEMS_PER_THREAD + lane * VEC;
 
   float c0 = 0.0f;
   float c1 = 0.0f;
   float c2 = 0.0f;
   float c3 = 0.0f;
 
-  // Fast path: no per-element branches.
-  if (start + ITEMS_PER_THREAD <= n) {
-    MLX_MTL_PRAGMA_UNROLL
-    for (int i = 0; i < ITEMS_PER_THREAD; i += 4) {
-      c0 += float(a[start + i + 0]) * float(b[start + i + 0]);
-      c1 += float(a[start + i + 1]) * float(b[start + i + 1]);
-      c2 += float(a[start + i + 2]) * float(b[start + i + 2]);
-      c3 += float(a[start + i + 3]) * float(b[start + i + 3]);
-    }
-  } else {
-    // Tail path only for the last few threads.
-    MLX_MTL_PRAGMA_UNROLL
-    for (int i = 0; i < ITEMS_PER_THREAD; ++i) {
-      int idx = start + i;
-      if (idx < n) {
-        float v = float(a[idx]) * float(b[idx]);
-        switch (i & 3) {
-          case 0:
-            c0 += v;
-            break;
-          case 1:
-            c1 += v;
-            break;
-          case 2:
-            c2 += v;
-            break;
-          default:
-            c3 += v;
-            break;
+  MLX_MTL_PRAGMA_UNROLL
+  for (int i = 0; i < ITEMS_PER_THREAD; i += VEC) {
+    int idx = start + i * ITEMS_PER_THREAD;
+    if (idx + VEC <= n) {
+      MLX_MTL_PRAGMA_UNROLL
+      for (int j = 0; j < VEC; j += 4) {
+        c0 += float(a[idx + j + 0]) * float(b[idx + j + 0]);
+        c1 += float(a[idx + j + 1]) * float(b[idx + j + 1]);
+        c2 += float(a[idx + j + 2]) * float(b[idx + j + 2]);
+        c3 += float(a[idx + j + 3]) * float(b[idx + j + 3]);
+      }
+    } else {
+      MLX_MTL_PRAGMA_UNROLL
+      for (int j = 0; j < VEC; ++j) {
+        int nidx = idx + j;
+        if (nidx < n) {
+          float v = float(a[nidx]) * float(b[nidx]);
+          switch (j & 3) {
+            case 0:
+              c0 += v;
+              break;
+            case 1:
+              c1 += v;
+              break;
+            case 2:
+              c2 += v;
+              break;
+            default:
+              c3 += v;
+              break;
+          }
         }
       }
     }
@@ -84,12 +85,13 @@ template <typename T>
     const device float* input [[buffer(0)]],
     device T* output [[buffer(1)]],
     const constant int& n [[buffer(2)]],
-    uint gid [[thread_position_in_grid]],
     uint tid [[thread_position_in_threadgroup]],
     uint lane [[thread_index_in_simdgroup]],
-    uint simd_id [[simdgroup_index_in_threadgroup]],
-    uint tg_id [[threadgroup_position_in_grid]]) {
-  float c = gid < uint(n) ? float(input[gid]) : 0.0f;
+    uint simd_id [[simdgroup_index_in_threadgroup]]) {
+  float c = 0.0f;
+  for (int i = int(tid); i < n; i += 512) {
+    c += input[i];
+  }
 
   threadgroup float smem[16];
 
@@ -104,7 +106,7 @@ template <typename T>
     c = smem[tid];
     c = simd_sum(c);
     if (tid == 0) {
-      output[tg_id] = T(c);
+      output[0] = T(c);
     }
   }
 }
