@@ -1,6 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import gc
+import math
 import unittest
 
 import mlx.core as mx
@@ -69,6 +70,50 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].item(), 4.0 * 1.0)
         self.assertEqual(out[1].item(), 2.0 * 1.0 + 6.0 * 3.0)
         self.assertEqual(out[2].item(), 4.0 * 3.0)
+
+    def test_jvp_with_partly_traced_inputs(self):
+        # power: each traced input must use its own tangent (issue #3634)
+        fun = lambda a, b: a**b
+        primals = [mx.array(2.0), mx.array(3.0)]
+        dyda = 12.0  # d/da a^b = b * a^(b - 1)
+        dydb = math.log(2.0) * 8.0  # d/db a^b = ln(a) * a^b
+        _, (j,) = mx.jvp(fun, primals, [mx.array(1.0), mx.array(0.0)])
+        self.assertAlmostEqual(j.item(), dyda, places=4)
+        _, (j,) = mx.jvp(fun, primals, [mx.array(0.0), mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dydb, places=4)
+        _, (j,) = mx.jvp(fun, primals, [mx.array(1.0), mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dyda + dydb, places=4)
+        fun = lambda a: a ** mx.array(3.0)
+        _, (j,) = mx.jvp(fun, [mx.array(2.0)], [mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dyda, places=4)
+        fun = lambda b: mx.array(2.0) ** b
+        _, (j,) = mx.jvp(fun, [mx.array(3.0)], [mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dydb, places=4)
+
+        # divmod: one tangent per output, and consuming the second output
+        # used to crash (issue #3634)
+        def fun(x):
+            q, r = mx.divmod(x, mx.array(3.0))
+            return q, -r
+
+        _, (dq, dr) = mx.jvp(fun, [mx.array(7.0)], [mx.array(1.0)])
+        self.assertEqual(dq.item(), 0.0)
+        self.assertEqual(dr.item(), 0.0)
+
+        # slice_update with dynamic start indices and a subset of traced
+        # inputs (issue #3634)
+        src = mx.zeros(4)
+        upd = mx.ones(2)
+        start = mx.array([1])
+        fun = lambda u: mx.slice_update(src, u, start, axes=[0])
+        _, (j,) = mx.jvp(fun, [upd], [mx.ones(2)])
+        self.assertEqual(j.tolist(), [0.0, 1.0, 1.0, 0.0])
+        fun = lambda s: mx.slice_update(s, upd, start, axes=[0])
+        _, (j,) = mx.jvp(fun, [src], [mx.ones(4)])
+        self.assertEqual(j.tolist(), [1.0, 0.0, 0.0, 1.0])
+        fun = lambda s, u: mx.slice_update(s, u, start, axes=[0])
+        _, (j,) = mx.jvp(fun, [src, upd], [mx.ones(4), mx.full(2, 2.0)])
+        self.assertEqual(j.tolist(), [1.0, 2.0, 2.0, 1.0])
 
     def test_grad(self):
         fun = lambda x: x * x
