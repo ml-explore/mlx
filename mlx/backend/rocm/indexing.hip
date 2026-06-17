@@ -84,6 +84,34 @@ __global__ void gather_general_kernel(
   out[out_idx] = src[src_loc];
 }
 
+// Fast contiguous row gather: out[row, :] = src[idx[row], :] where each row is a
+// contiguous block of `row_size` elements. One block per output row, coalesced
+// copy, with the source-row base computed once (no per-element index math).
+// Covers the common axis-0 gather of a row-contiguous source (e.g. the MoE
+// token reorder), which the general kernel does per-element with mod/div loops.
+template <typename T, typename IdxT>
+__global__ void gather_rows_kernel(
+    const T* src,
+    const IdxT* idx,
+    T* out,
+    int64_t n_rows,
+    uint32_t row_size,
+    int32_t src_dim0) {
+  int64_t row = blockIdx.x;
+  if (row >= n_rows) {
+    return;
+  }
+  int64_t r = static_cast<int64_t>(idx[row]);
+  if (r < 0) {
+    r += src_dim0;
+  }
+  const T* srow = src + r * static_cast<int64_t>(row_size);
+  T* orow = out + row * static_cast<int64_t>(row_size);
+  for (uint32_t e = threadIdx.x; e < row_size; e += blockDim.x) {
+    orow[e] = srow[e];
+  }
+}
+
 // Simple gather kernel for axis-based gather (for contiguous arrays)
 template <typename T, typename IdxT, int NDIM, bool SrcC, bool IdxC>
 __global__ void gather_axis_kernel(
@@ -603,6 +631,23 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   int block_size = 256;
   int num_blocks = (total + block_size - 1) / block_size;
 
+  // Fast path: axis-0 full-row gather of a row-contiguous source with a single
+  // contiguous (flattened) index -> coalesced per-row copy (gather_rows_kernel).
+  bool fast_rows = (nidx == 1) && (axes_.size() == 1) && (axes_[0] == 0) &&
+      src.ndim() >= 2 && src.flags().row_contiguous &&
+      inputs[1].flags().contiguous &&
+      ((int)slice_sizes_.size() == (int)src.ndim()) && (slice_sizes_[0] == 1);
+  if (fast_rows) {
+    for (int d = 1; d < (int)src.ndim(); ++d) {
+      if (slice_sizes_[d] != src.shape(d)) {
+        fast_rows = false;
+        break;
+      }
+    }
+  }
+  // Grid is one block per row; keep within the launch limit.
+  fast_rows = fast_rows && (total / (int64_t)slice_size) <= 0x7fffffffLL;
+
   // Pass all metadata BY VALUE (see gather_general_kernel) — no device buffers,
   // no H2D uploads, so nothing reads stale host memory on HIP graph replay.
   auto p_src_shape = const_param(h_src_shape);
@@ -615,7 +660,42 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   encoder.launch_kernel([&, p_src_shape, p_src_strides, p_slice_sizes, p_axes,
                          p_indices_shape, p_indices_strides, h_indices,
-                         src_ndim_v](hipStream_t stream) {
+                         src_ndim_v, fast_rows](hipStream_t stream) {
+    if (fast_rows) {
+      int64_t n_rows = total / (int64_t)slice_size;
+      dim3 grid((unsigned int)n_rows);
+      dim3 blk(256);
+      Dtype it = inputs[1].dtype();
+      #define LAUNCH_ROWS(T, IdxT) \
+        hipLaunchKernelGGL((rocm::gather_rows_kernel<T, IdxT>), grid, blk, 0, \
+            stream, gpu_ptr<T>(src), \
+            reinterpret_cast<const IdxT*>(h_indices[0]), gpu_ptr<T>(out), \
+            n_rows, slice_size, (int32_t)src.shape(0))
+      #define ROWS_BY_T(IdxT) \
+        switch (out.dtype()) { \
+          case float32: LAUNCH_ROWS(float, IdxT); break; \
+          case float16: LAUNCH_ROWS(__half, IdxT); break; \
+          case bfloat16: LAUNCH_ROWS(hip_bfloat16, IdxT); break; \
+          case int32: LAUNCH_ROWS(int32_t, IdxT); break; \
+          case int64: LAUNCH_ROWS(int64_t, IdxT); break; \
+          case uint32: LAUNCH_ROWS(uint32_t, IdxT); break; \
+          case uint64: LAUNCH_ROWS(uint64_t, IdxT); break; \
+          case int8: LAUNCH_ROWS(int8_t, IdxT); break; \
+          case int16: LAUNCH_ROWS(int16_t, IdxT); break; \
+          case uint8: LAUNCH_ROWS(uint8_t, IdxT); break; \
+          case uint16: LAUNCH_ROWS(uint16_t, IdxT); break; \
+          case bool_: LAUNCH_ROWS(bool, IdxT); break; \
+          default: throw std::runtime_error("Unsupported dtype for Gather"); \
+        }
+      if (it == int32 || it == uint32) {
+        ROWS_BY_T(int32_t);
+      } else {
+        ROWS_BY_T(int64_t);
+      }
+      #undef ROWS_BY_T
+      #undef LAUNCH_ROWS
+      return;
+    }
     // Dispatch based on dtype and number of indices
     #define LAUNCH_GATHER(T, IdxT, NIDX) \
       do { \
