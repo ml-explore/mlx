@@ -111,6 +111,16 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(params4.m, mx.array([1, 3])))
         self.assertTrue(mx.array_equal(params4.b, mx.array(5)))
 
+        params5 = mlx.utils.tree_merge(params1, params1, lambda a, b: a + b)
+        self.assertTrue(isinstance(params5, Params))
+        self.assertTrue(mx.array_equal(params5.m, mx.array([0, 2])))
+        self.assertTrue(mx.array_equal(params5.b, mx.array(4)))
+
+        vector3 = mlx.utils.tree_merge(vector1, vector1, lambda a, b: a + b)
+        self.assertTrue(isinstance(vector3, Vector))
+        self.assertTrue(mx.array_equal(vector3[0], mx.array([0, 2])))
+        self.assertTrue(mx.array_equal(vector3[1], mx.array(4)))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
