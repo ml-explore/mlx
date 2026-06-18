@@ -4368,12 +4368,13 @@ array conv_general(
 
   const bool low_channel_3d =
       spatial_dims == 3 && in.shape(4) <= 4 && wt.shape(0) <= 8;
+  const bool unit_dilation =
+      all_equal(kernel_dilation, 1) && all_equal(input_dilation, 1);
   const bool enough_depth_work =
       in.shape(0) > 1 || out_shape[1] >= 14 || in.shape(2) <= 32;
   if (stream.device == Device::gpu && low_channel_3d && groups == 1 && !flip &&
       stride[0] == 1 && all_equal(padding_lo, 0) && all_equal(padding_hi, 0) &&
-      all_equal(kernel_dilation, 1) && all_equal(input_dilation, 1) &&
-      wt.shape(1) > 1 && enough_depth_work) {
+      unit_dilation && wt.shape(1) > 1 && enough_depth_work) {
     const int out_depth = out_shape[1];
     std::vector<array> depth_outputs;
     depth_outputs.reserve(wt.shape(1));
@@ -4415,7 +4416,7 @@ array conv_general(
     }
 
     auto out = depth_outputs[0];
-    for (int kd = 1; kd < depth_outputs.size(); kd++) {
+    for (size_t kd = 1; kd < depth_outputs.size(); kd++) {
       out = add(out, depth_outputs[kd], s);
     }
     return out;

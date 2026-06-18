@@ -690,17 +690,34 @@ class TestConv(mlx_tests.MLXTestCase):
 
         x = mx.random.normal((B, T + kD - 1, H + kH - 1, W + kW - 1, C))
         w = mx.random.normal((O, kD, kH, kW, C))
-        out = mx.conv_general(x, w, stride=(1, 1, 1), padding=0)
 
-        parts = []
-        for d in range(kD):
-            frames = x[:, d : d + T].reshape(B * T, H + kH - 1, W + kW - 1, C)
-            conv = mx.conv_general(frames, w[:, d], stride=(1, 1), padding=0)
-            parts.append(conv.reshape(B, T, H, W, O))
-        expected = parts[0] + parts[1] + parts[2]
+        def decomposed_conv3d(x, w):
+            parts = []
+            for d in range(kD):
+                frames = x[:, d : d + T].reshape(B * T, H + kH - 1, W + kW - 1, C)
+                conv = mx.conv_general(frames, w[:, d], stride=(1, 1), padding=0)
+                parts.append(conv.reshape(B, T, H, W, O))
+            return parts[0] + parts[1] + parts[2]
+
+        out = mx.conv_general(x, w, stride=(1, 1, 1), padding=0)
+        expected = decomposed_conv3d(x, w)
 
         self.assertEqual(out.shape, expected.shape)
         self.assertTrue(mx.allclose(out, expected, atol=1e-4, rtol=1e-4).item())
+
+        cotan = mx.random.normal(out.shape)
+        grads = mx.vjp(
+            lambda x, w: mx.conv_general(x, w, stride=(1, 1, 1), padding=0),
+            (x, w),
+            (cotan,),
+        )[1]
+        expected_grads = mx.vjp(decomposed_conv3d, (x, w), (cotan,))[1]
+        self.assertTrue(
+            mx.allclose(grads[0], expected_grads[0], atol=1e-4, rtol=1e-4).item()
+        )
+        self.assertTrue(
+            mx.allclose(grads[1], expected_grads[1], atol=1e-4, rtol=1e-4).item()
+        )
 
     def __conv_general_test(
         self,
