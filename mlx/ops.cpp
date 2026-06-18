@@ -4370,11 +4370,12 @@ array conv_general(
       spatial_dims == 3 && in.shape(4) <= 4 && wt.shape(0) <= 8;
   const bool unit_dilation =
       all_equal(kernel_dilation, 1) && all_equal(input_dilation, 1);
+  const bool zero_depth_padding = padding_lo[0] == 0 && padding_hi[0] == 0;
   const bool enough_depth_work =
       in.shape(0) > 1 || out_shape[1] >= 14 || in.shape(2) <= 32;
   if (stream.device == Device::gpu && low_channel_3d && groups == 1 && !flip &&
-      stride[0] == 1 && all_equal(padding_lo, 0) && all_equal(padding_hi, 0) &&
-      unit_dilation && wt.shape(1) > 1 && enough_depth_work) {
+      stride[0] == 1 && zero_depth_padding && unit_dilation && wt.shape(1) > 1 &&
+      enough_depth_work) {
     const int out_depth = out_shape[1];
     std::vector<array> depth_outputs;
     depth_outputs.reserve(wt.shape(1));
@@ -4402,8 +4403,8 @@ array conv_general(
           in_slice,
           wt_slice,
           {stride[1], stride[2]},
-          {0, 0},
-          {0, 0},
+          {padding_lo[1], padding_lo[2]},
+          {padding_hi[1], padding_hi[2]},
           {1, 1},
           {1, 1},
           groups,

@@ -689,6 +689,8 @@ class TestConv(mlx_tests.MLXTestCase):
         mx.random.seed(0)
         B, T, H, W, C, O = 2, 8, 12, 16, 4, 8
         kD, kH, kW = 4, 3, 5
+        stride = (1, 2, 1)
+        padding = ([0, 1, 2], [0, 2, 1])
 
         x = mx.random.normal((B, T + kD - 1, H + kH - 1, W + kW - 1, C))
         w = mx.random.normal((O, kD, kH, kW, C))
@@ -697,11 +699,16 @@ class TestConv(mlx_tests.MLXTestCase):
             parts = []
             for d in range(kD):
                 frames = x[:, d : d + T].reshape(B * T, H + kH - 1, W + kW - 1, C)
-                conv = mx.conv_general(frames, w[:, d], stride=(1, 1), padding=0)
-                parts.append(conv.reshape(B, T, H, W, O))
+                conv = mx.conv_general(
+                    frames,
+                    w[:, d],
+                    stride=stride[1:],
+                    padding=(padding[0][1:], padding[1][1:]),
+                )
+                parts.append(conv.reshape(B, T, conv.shape[1], conv.shape[2], O))
             return sum(parts[1:], parts[0])
 
-        out = mx.conv_general(x, w, stride=(1, 1, 1), padding=0)
+        out = mx.conv_general(x, w, stride=stride, padding=padding)
         expected = decomposed_conv3d(x, w)
 
         self.assertEqual(out.shape, expected.shape)
@@ -709,7 +716,7 @@ class TestConv(mlx_tests.MLXTestCase):
 
         cotan = mx.random.normal(out.shape)
         grads = mx.vjp(
-            lambda x, w: mx.conv_general(x, w, stride=(1, 1, 1), padding=0),
+            lambda x, w: mx.conv_general(x, w, stride=stride, padding=padding),
             (x, w),
             (cotan,),
         )[1]
