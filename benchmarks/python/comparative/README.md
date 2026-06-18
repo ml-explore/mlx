@@ -11,5 +11,16 @@ tensor on the cpu.
 `compare.py` runs several benchmarks and compares the speed-up or lack thereof
 in comparison to PyTorch.
 
+Use `--json` to produce machine-readable results suitable for storing as CI
+artifacts. `--repeats` runs each selected benchmark in a fresh process multiple
+times and reports the median as well as the individual samples:
+
+```shell
+python compare.py \
+  --filter "^cumsum --size 1024x1024 --axis 0 --cpu$" \
+  --repeats 3 \
+  --json
+```
+
 Each bench script can be run with `--print-pid` to print the PID and wait for a
 key in order to ease attaching a debugger.

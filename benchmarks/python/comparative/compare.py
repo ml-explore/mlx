@@ -3,7 +3,11 @@
 #!/usr/bin/env python
 
 import argparse
+import json
+import platform
 import re
+import statistics
+import sys
 from pathlib import Path
 from subprocess import run
 
@@ -11,28 +15,70 @@ BENCH_MLX = Path(__file__).parent / "bench_mlx.py"
 BENCH_TORCH = Path(__file__).parent / "bench_torch.py"
 
 
-def run_or_raise(*args, **kwargs):
+def run_or_raise(command):
+    result = run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Command failed: {' '.join(map(str, command))}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
     try:
-        result = run(*args, capture_output=True, **kwargs)
         return float(result.stdout)
     except ValueError:
         raise ValueError(
-            f"stdout: {result.stdout.decode()}\nstderr: {result.stderr.decode()}"
+            f"Command returned invalid timing data: {' '.join(map(str, command))}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
 
 
-def compare(args):
-    t_mlx = run_or_raise(["python", BENCH_MLX] + args)
-    t_torch = run_or_raise(["python", BENCH_TORCH] + args)
+def run_repeated(command, repeats):
+    samples = [run_or_raise(command) for _ in range(repeats)]
+    return {
+        "median_seconds": statistics.median(samples),
+        "min_seconds": min(samples),
+        "max_seconds": max(samples),
+        "samples_seconds": samples,
+    }
 
-    print((t_torch - t_mlx) / t_torch, " ".join(args), sep="\t")
+
+def compare(args, repeats, results):
+    mlx = run_repeated([sys.executable, BENCH_MLX] + args, repeats)
+    torch = run_repeated([sys.executable, BENCH_TORCH] + args, repeats)
+    speedup = (torch["median_seconds"] - mlx["median_seconds"]) / torch[
+        "median_seconds"
+    ]
+    result = {
+        "benchmark": args[0],
+        "arguments": args[1:],
+        "mlx": mlx,
+        "torch": torch,
+        "relative_speedup": speedup,
+    }
+    if results is None:
+        print(speedup, " ".join(args), sep="\t")
+    else:
+        results.append(result)
 
 
-def compare_mlx_dtypes(args, dt1, dt2):
-    t_mlx_dt1 = run_or_raise(["python", BENCH_MLX] + args + ["--dtype", dt1])
-    t_mlx_dt2 = run_or_raise(["python", BENCH_MLX] + args + ["--dtype", dt2])
-
-    print((t_mlx_dt2 - t_mlx_dt1) / t_mlx_dt2, " ".join(args), sep="\t")
+def compare_mlx_dtypes(args, dt1, dt2, repeats, results):
+    first = run_repeated([sys.executable, BENCH_MLX] + args + ["--dtype", dt1], repeats)
+    second = run_repeated(
+        [sys.executable, BENCH_MLX] + args + ["--dtype", dt2], repeats
+    )
+    speedup = (second["median_seconds"] - first["median_seconds"]) / second[
+        "median_seconds"
+    ]
+    result = {
+        "benchmark": args[0],
+        "arguments": args[1:],
+        "dtypes": [dt1, dt2],
+        "mlx": {dt1: first, dt2: second},
+        "relative_speedup": speedup,
+    }
+    if results is None:
+        print(speedup, " ".join(args), sep="\t")
+    else:
+        results.append(result)
 
 
 def make_regex_search(regexes):
@@ -77,18 +123,38 @@ if __name__ == "__main__":
         help="Compare mlx benchmarks between the 2 provided data types",
         nargs=2,
     )
+    parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable benchmark results"
+    )
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=1,
+        help="Run each benchmark this many times and report the median",
+    )
     args, rest = parser.parse_known_args()
+    if args.repeats < 1:
+        parser.error("--repeats must be at least 1")
 
     _filter = make_predicate(args.filter, args.negative_filter)
+    results = [] if args.json else None
 
     if args.mlx_dtypes:
         compare_filtered = lambda x: (
-            compare_mlx_dtypes(x.split() + rest, args.mlx_dtypes[0], args.mlx_dtypes[1])
+            compare_mlx_dtypes(
+                x.split() + rest,
+                args.mlx_dtypes[0],
+                args.mlx_dtypes[1],
+                args.repeats,
+                results,
+            )
             if _filter(x)
             else None
         )
     else:
-        compare_filtered = lambda x: compare(x.split() + rest) if _filter(x) else None
+        compare_filtered = lambda x: (
+            compare(x.split() + rest, args.repeats, results) if _filter(x) else None
+        )
 
     # Binary ops
     compare_filtered("add --size 10x1024x128 --size 1x1024x128 --cpu")
@@ -282,3 +348,21 @@ if __name__ == "__main__":
     compare_filtered("topk --size 32768x128 --axis 1")
     compare_filtered("topk --size 128x128 --axis 0 --cpu")
     compare_filtered("topk --size 128x128 --axis 1 --cpu")
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "metadata": {
+                        "platform": platform.platform(),
+                        "python_version": platform.python_version(),
+                        "python_executable": sys.executable,
+                        "repeats": args.repeats,
+                    },
+                    "results": results,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
