@@ -558,7 +558,7 @@ std::vector<array> ArcTan2::jvp(
     } else if (argnums[0] == 0) {
       return multiply(x2, tangents[0], s);
     } else {
-      return negative(multiply(x1, tangents[1], s), s);
+      return negative(multiply(x1, tangents[0], s), s);
     }
   }();
   return {divide(numerator, add(square(x1, s), square(x2, s), s), s)};
