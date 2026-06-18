@@ -2958,6 +2958,55 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   while (tile_n > 1 && N % tile_n != 0) tile_n /= 2;
 
   static bool use_tiled = (std::getenv("MLX_ROCM_QMV_NO_TILED") == nullptr);
+
+  // Full-wave tiled 6-bit QMV; MLX_ROCM_QMV_6BIT_SLOW reverts to warp_shared.
+  static bool use_6bit_tiled =
+      (std::getenv("MLX_ROCM_QMV_6BIT_SLOW") == nullptr);
+  // GROUP_SIZE must be a multiple of 16 (the per-lane value count) so each
+  // lane's 16 weights fall in a single group → one scale/bias per lane, as the
+  // tiled accumulation assumes. 32/64/128 all satisfy this.
+  bool gs6_supported =
+      (group_size_ == 32 || group_size_ == 64 || group_size_ == 128);
+  bool x6_dtype_supported =
+      (x.dtype() == bfloat16 || x.dtype() == float16);
+  if (use_6bit_tiled && use_tiled && bits_ == 6 && (K % 64) == 0 &&
+      gs6_supported && x6_dtype_supported && use_fast_qmv &&
+      !can_use_batched_qmv && tile_n >= 8 &&
+      mode_ == QuantizationMode::Affine) {
+    enc.launch_kernel([&, x_ptr, w_ptr, scales_ptr, biases_ptr, out_ptr, tile_n](hipStream_t stream) {
+      dim3 tiled_block(WARP_SIZE, tile_n);
+      const int n_tiles = (N + tile_n - 1) / tile_n;
+      int blocks_per_cu = (hw_info.max_threads_per_cu > 0)
+          ? (hw_info.max_threads_per_cu / (tile_n * WARP_SIZE)) : 4;
+      if (blocks_per_cu < 1) blocks_per_cu = 1;
+      int persistent_y =
+          (hw_info.num_cus > 0) ? hw_info.num_cus * blocks_per_cu : n_tiles;
+      int grid_y = (n_tiles < persistent_y) ? n_tiles : persistent_y;
+      if (grid_y < 1) grid_y = 1;
+      dim3 tiled_grid(M, grid_y);
+
+      #define LAUNCH_TILED_6BIT(T, ScaleT, GS_V) \
+        hipLaunchKernelGGL( \
+            (rocm::qmv_tiled_6bit_kernel<T, ScaleT, GS_V>), \
+            tiled_grid, tiled_block, 0, stream, \
+            (const T*)x_ptr, (const uint8_t*)w_ptr, \
+            (const ScaleT*)scales_ptr, (const ScaleT*)biases_ptr, \
+            (T*)out_ptr, M, N, K, has_bias, tile_n, n_tiles)
+
+      if (x.dtype() == bfloat16) {
+        if (group_size_ == 32)  { LAUNCH_TILED_6BIT(hip_bfloat16, hip_bfloat16, 32); }
+        else if (group_size_ == 64)  { LAUNCH_TILED_6BIT(hip_bfloat16, hip_bfloat16, 64); }
+        else if (group_size_ == 128) { LAUNCH_TILED_6BIT(hip_bfloat16, hip_bfloat16, 128); }
+      } else if (x.dtype() == float16) {
+        if (group_size_ == 32)  { LAUNCH_TILED_6BIT(__half, __half, 32); }
+        else if (group_size_ == 64)  { LAUNCH_TILED_6BIT(__half, __half, 64); }
+        else if (group_size_ == 128) { LAUNCH_TILED_6BIT(__half, __half, 128); }
+      }
+      #undef LAUNCH_TILED_6BIT
+    });
+    return;
+  }
+
   // The tiled QMV kernel (qdequant.hpp pack_factor_u32 = 32/BITS) only packs
   // correctly for power-of-two widths and is only instantiated for 4/8-bit;
   // other widths would match nothing here and leave `out` uninitialized.
