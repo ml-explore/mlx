@@ -286,7 +286,7 @@ def gaussian_nll_loss(
         eps (float, optional): Small positive constant for numerical stability.
             Default: ``1e-6``.
         reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
 
     Returns:
         array: The Gaussian NLL loss.
