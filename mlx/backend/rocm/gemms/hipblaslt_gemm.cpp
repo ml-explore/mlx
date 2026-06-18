@@ -512,22 +512,15 @@ void hipblaslt_gemm(
   hipblasOperation_t op_a = to_hipblas_op(transpose_b);
   hipblasOperation_t op_b = to_hipblas_op(transpose_a);
 
-  static bool dbg = [] {
-    fprintf(stderr, "[hipBLASLt] first call\n");
-    return true;
-  }();
-  (void)dbg;
-  fprintf(
-      stderr,
-      "[hipBLASLt] M=%d N=%d K=%d ta=%d tb=%d lda=%d ldb=%d ldc=%d\n",
-      M,
-      N,
-      K,
-      (int)transpose_a,
-      (int)transpose_b,
-      lda,
-      ldb,
-      ldc);
+  // Per-call tracing is a host-side serialization point on the GEMM hot path —
+  // gate it behind an env flag (off by default).
+  static const bool kGemmDebug = std::getenv("MLX_ROCM_GEMM_DEBUG") != nullptr;
+  if (kGemmDebug) {
+    fprintf(
+        stderr,
+        "[hipBLASLt] M=%d N=%d K=%d ta=%d tb=%d lda=%d ldb=%d ldc=%d\n",
+        M, N, K, (int)transpose_a, (int)transpose_b, lda, ldb, ldc);
+  }
 
   const void* a_ptr = gpu_ptr<void>(a);
   const void* b_ptr = gpu_ptr<void>(b);
