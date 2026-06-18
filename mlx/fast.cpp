@@ -923,52 +923,49 @@ bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
 }
 
 std::vector<array> gated_delta_update_forward(
-   const array& queries,
-   const array& keys,
-   const array& values,
-   const array& gates,
-   const array& beta_,
-   const std::optional<array>& initial_state, /* = std::nullopt */
-   const int C,
-   StreamOrDevice s /* = {} */) {
+    const array& queries,
+    const array& keys,
+    const array& values,
+    const array& gates,
+    const array& beta_,
+    const std::optional<array>& initial_state, /* = std::nullopt */
+    const int C,
+    StreamOrDevice s /* = {} */) {
+  // determine output dtype
+  auto promoted = promote_types(queries.dtype(), keys.dtype());
+  auto out_dtype = issubdtype(promoted, float32)
+      ? promoted
+      : promote_types(promoted, float32);
 
-    // determine output dtype
-    auto promoted = promote_types(queries.dtype(), keys.dtype());
-    auto out_dtype = issubdtype(promoted, float32)
-        ? promoted
-        : promote_types(promoted, float32);
+  // cast all inputs
+  auto q = astype(queries, out_dtype, s);
+  auto k = astype(keys, out_dtype, s);
+  auto v = astype(values, out_dtype, s);
+  auto g = astype(gates, out_dtype, s);
+  auto beta = astype(beta_, out_dtype, s);
 
-    // cast all inputs
-    auto q    = astype(queries, out_dtype, s);
-    auto k    = astype(keys,    out_dtype, s);
-    auto v    = astype(values,  out_dtype, s);
-    auto g    = astype(gates,   out_dtype, s);
-    auto beta = astype(beta_,   out_dtype, s);
+  int B = q.shape(0);
+  int T = q.shape(1);
+  int Hk = q.shape(2);
+  int Dk = q.shape(3);
+  int Hv = v.shape(2);
+  int Dv = v.shape(3);
 
-    int B  = q.shape(0);
-		int T  = q.shape(1);
-		int Hk = q.shape(2);
-		int Dk = q.shape(3);
-		int Hv = v.shape(2);
-		int Dv = v.shape(3);
+  auto h0 = initial_state.has_value() ? astype(*initial_state, out_dtype, s)
+                                      : zeros({B, Hv, Dk, Dv}, out_dtype, s);
 
-    auto h0 = initial_state.has_value()
-        ? astype(*initial_state, out_dtype, s)
-        : zeros({B, Hv, Dk, Dv}, out_dtype, s);
+  auto fallback = [](std::vector<array> inputs) -> std::vector<array> {
+    throw std::runtime_error("NYI: GatedDeltaUpdate CPU fallback");
+    return {};
+  };
 
-    auto fallback = [](std::vector<array> inputs) -> std::vector<array> {
-        throw std::runtime_error("NYI: GatedDeltaUpdate CPU fallback");
-        return {};
-    };
-
-    return array::make_arrays(
-        /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dk, Dv}},
-        /* dtypes */        {out_dtype, out_dtype},
-        /* primitive */     std::make_shared<GatedDeltaUpdate>(to_stream(s), fallback, C),
-        /* inputs */        {q, k, v, g, beta, h0}
-    );
+  return array::make_arrays(
+      /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dk, Dv}},
+      /* dtypes */ {out_dtype, out_dtype},
+      /* primitive */
+      std::make_shared<GatedDeltaUpdate>(to_stream(s), fallback, C),
+      /* inputs */ {q, k, v, g, beta, h0});
 }
-
 
 bool Quantize::is_equivalent(const Primitive& other) const {
   const Quantize& p_other = static_cast<const Quantize&>(other);

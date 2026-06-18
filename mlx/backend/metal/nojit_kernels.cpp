@@ -476,8 +476,8 @@ MTL::ComputePipelineState* get_steel_gated_delta_forward_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts
     // TODO: need more parameters?
-    ) {
-	return d.get_kernel(kernel_name, hash_name, func_consts);
+) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 } // namespace mlx::core
