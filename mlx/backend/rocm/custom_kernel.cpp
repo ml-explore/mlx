@@ -278,11 +278,7 @@ void CustomKernel::eval_gpu(
   for (size_t i = 0; i < outputs.size(); ++i) {
     auto& out = outputs[i];
     if (alias_of[i] >= 0) {
-      // In-place: the output shares the aliased input's device buffer. The
-      // kernel reads the input fully before overwriting it, so a captured HIP
-      // graph re-runs reading+writing the same fixed buffer -> the recurrence
-      // accumulates across replays (donation can't apply: the same buffer is an
-      // input too, so its use_count is always > 1).
+      // In-place: output shares the aliased input's device buffer.
       out.copy_shared_buffer(inputs[alias_of[i]]);
     } else if (init_value_) {
       copies.emplace_back(init_value_.value(), out.dtype());

@@ -512,8 +512,7 @@ void hipblaslt_gemm(
   hipblasOperation_t op_a = to_hipblas_op(transpose_b);
   hipblasOperation_t op_b = to_hipblas_op(transpose_a);
 
-  // Per-call tracing is a host-side serialization point on the GEMM hot path —
-  // gate it behind an env flag (off by default).
+  // Per-call GEMM tracing, gated behind an env flag.
   static const bool kGemmDebug = std::getenv("MLX_ROCM_GEMM_DEBUG") != nullptr;
   if (kGemmDebug) {
     fprintf(

@@ -1234,9 +1234,7 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  // Donation: if the input buffer is uniquely owned, share it directly
-  // instead of copying. Helps prefill and any slice_update where the
-  // source array has no other references.
+  // Donate the input buffer when uniquely owned, else copy.
   bool can_donate = in.data_shared_ptr() != nullptr &&
       in.data_shared_ptr().use_count() == 1 && in.flags().contiguous &&
       in.data_size() == in.size();
@@ -1516,14 +1514,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       });
 }
 
-// --- In-place device-position kernels for HIP-graph decode ---
-//
-// MLX functional ops (slice_update donation, compute_dynamic_offset) do NOT
-// survive graph replay: end_capture() rewrites their host-constant uploads into
-// FROZEN device staging buffers, so the value is baked at capture time and the
-// position never advances. A raw in-place kernel has no host upload, so the
-// captured node re-executes against the fixed device buffer and accumulates
-// across replays. These run on the selected device's default (capture) stream.
+// In-place device-position KV kernels for HIP-graph decode.
 
 __global__ void _kv_pos_inc(int* p, int delta) { p[0] += delta; }
 
@@ -1549,9 +1540,7 @@ void gpu_kv_pos_set(array& pos, int v) {
   });
 }
 
-// In-place write of one row into a [B,H,CAP,D] KV buffer at sequence position
-// pos[0] (read on-device at runtime, so it advances across graph replays). row
-// is [B,H,1,D]. No host upload -> survives capture/replay.
+// In-place write of one [B,H,1,D] row into a [B,H,CAP,D] KV buffer at pos[0].
 template <typename T>
 __global__ void _kv_row_write(
     T* kv, const T* row, const int* pos, int B, int H, int CAP, int D) {

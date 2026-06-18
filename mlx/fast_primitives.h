@@ -424,11 +424,7 @@ class CustomKernel : public Primitive {
   std::vector<ScalarArg> scalar_arguments_;
   bool is_precompiled_;
   int shared_memory_;
-  // Output index -> input index. When set, the output reuses the input's device
-  // buffer (in-place), instead of allocating a fresh one. Used so a recurrent
-  // state kernel writes its new state into the SAME buffer it read — the only
-  // way a captured HIP graph's recurrence accumulates across replays. Caller
-  // must guarantee the kernel reads all of the input before overwriting it.
+  // Output index -> input index whose buffer the output reuses in-place.
   std::vector<std::pair<int, int>> output_input_aliases_;
 };
 
