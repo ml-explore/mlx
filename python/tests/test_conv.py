@@ -688,7 +688,7 @@ class TestConv(mlx_tests.MLXTestCase):
         mx.set_default_device(mx.gpu)
         mx.random.seed(0)
         B, T, H, W, C, O = 2, 8, 12, 16, 4, 8
-        kD, kH, kW = 3, 3, 3
+        kD, kH, kW = 4, 3, 5
 
         x = mx.random.normal((B, T + kD - 1, H + kH - 1, W + kW - 1, C))
         w = mx.random.normal((O, kD, kH, kW, C))
@@ -699,7 +699,7 @@ class TestConv(mlx_tests.MLXTestCase):
                 frames = x[:, d : d + T].reshape(B * T, H + kH - 1, W + kW - 1, C)
                 conv = mx.conv_general(frames, w[:, d], stride=(1, 1), padding=0)
                 parts.append(conv.reshape(B, T, H, W, O))
-            return parts[0] + parts[1] + parts[2]
+            return sum(parts[1:], parts[0])
 
         out = mx.conv_general(x, w, stride=(1, 1, 1), padding=0)
         expected = decomposed_conv3d(x, w)
