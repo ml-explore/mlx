@@ -683,7 +683,9 @@ class TestConv(mlx_tests.MLXTestCase):
                         N, C, O, idim, kdim, stride, padding, dilation, dtype=dtype
                     )
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
     def test_conv3d_depth_decomposition(self):
+        mx.set_default_device(mx.gpu)
         mx.random.seed(0)
         B, T, H, W, C, O = 2, 8, 12, 16, 4, 8
         kD, kH, kW = 3, 3, 3
