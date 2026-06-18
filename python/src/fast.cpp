@@ -295,19 +295,19 @@ void init_fast(nb::module_& parent_module) {
             scale = D ** -0.5
             out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask="causal")
       )pbdoc");
-  
+
   m.def(
-        "gated_delta_update_forward",
-        &mlx::core::fast::gated_delta_update_forward,
-        "q"_a,
-        "k"_a,
-        "v"_a,
-        "gates"_a,
-        "beta"_a,
-        "initial_state"_a = nb::none(),   // optional, defaults to None
-        "C"_a = 16,   // optional, defaults to None
-        "stream"_a = nb::none(),          // optional, defaults to None
-        R"(
+      "gated_delta_update_forward",
+      &mlx::core::fast::gated_delta_update_forward,
+      "q"_a,
+      "k"_a,
+      "v"_a,
+      "gates"_a,
+      "beta"_a,
+      "initial_state"_a = nb::none(), // optional, defaults to None
+      "C"_a = 16, // optional, defaults to None
+      "stream"_a = nb::none(), // optional, defaults to None
+      R"(
             Chunked gated delta network forward pass.
 
             Args:
@@ -320,8 +320,7 @@ void init_fast(nb::module_& parent_module) {
 
             Returns:
                 Tuple of (output [B, H, T, Dv], final_state [B, H, Dk, Dv])
-        )"
-  );
+        )");
 
   m.def(
       "metal_kernel",

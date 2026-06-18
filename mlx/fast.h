@@ -62,8 +62,7 @@ MLX_API std::vector<array> gated_delta_update_forward(
     const array& beta_,
     const std::optional<array>& initial_state = std::nullopt,
     const int C = 16,
-    StreamOrDevice s = {}
-);
+    StreamOrDevice s = {});
 
 using TemplateArg = std::variant<int, bool, Dtype>;
 using ScalarArg = std::variant<bool, int, float>;

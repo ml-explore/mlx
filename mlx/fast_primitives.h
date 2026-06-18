@@ -326,13 +326,11 @@ class ConvertFP8 : public Primitive {
 
 class GatedDeltaUpdate : public Custom {
  public:
-    GatedDeltaUpdate(
+  GatedDeltaUpdate(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
-      int C
-      )
-      : Custom(stream, std::move(fallback)), chunk_size(C)
-        {}
+      int C)
+      : Custom(stream, std::move(fallback)), chunk_size(C) {}
 
   static bool use_fallback(
       /* TODO */
@@ -347,20 +345,17 @@ class GatedDeltaUpdate : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-
   bool is_equivalent(const Primitive& other) const override;
-    
+
   DEFINE_NAME(GatedDeltaUpdate);
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
-    return std::make_tuple(
-        nullptr); /* TODO */
+    return std::make_tuple(nullptr); /* TODO */
   }
 
  private:
   int chunk_size;
 };
-
 
 class Quantize : public Custom {
  public:

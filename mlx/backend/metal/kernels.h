@@ -405,7 +405,7 @@ MTL::ComputePipelineState* get_steel_gated_delta_forward_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts
     // TODO: More parameters?
-    );
+);
 
 // Create a GPU kernel template definition for JIT compilation
 template <typename... Args>
