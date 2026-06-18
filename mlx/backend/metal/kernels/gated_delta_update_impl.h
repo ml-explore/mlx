@@ -3,6 +3,14 @@
 #include <metal_stdlib>
 #include "mlx/backend/metal/kernels/utils.h"
 
+// importing steel
+// #include "mlx/backend/metal/kernels/steel/attn/loader.h"
+// #include "mlx/backend/metal/kernels/steel/attn/mma.h"
+// #include "mlx/backend/metal/kernels/steel/attn/params.h"
+// #include "mlx/backend/metal/kernels/steel/attn/transforms.h"
+// #include "mlx/backend/metal/kernels/steel/gemm/params.h"
+// #include "mlx/backend/metal/kernels/steel/utils.h"
+
 using namespace metal;
 
 template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
@@ -124,27 +132,31 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 
 template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
 [[kernel]] void gated_delta_chunk(
-    const device InT* q          					[[buffer(0)]],
-    const device InT* k          					[[buffer(1)]],
-    const device InT* W          					[[buffer(2)]],	 // [B, T, Hv, Dk]
-    const device InT* U          					[[buffer(3)]],   // [B, T, Hv, Dv]
-    const device StT* state_in   					[[buffer(4)]],   // [B, Hv, Dv, Dk]
-	const device InT* g      						[[buffer(5)]],   // [B, T, Hv]
-    device InT* y                					[[buffer(6)]],   // [B, T, Hv, Dv]
-    device StT* state_out        					[[buffer(7)]],   // [B, Hv, Dv, Dk]
-	constant int& T              					[[buffer(8)]],
-    uint3 thread_position_in_grid        	[[thread_position_in_grid]],
-    uint3 thread_position_in_threadgroup 	[[thread_position_in_threadgroup]],
-    uint  thread_index_in_simdgroup      	[[thread_index_in_simdgroup]]
+    const device InT* q          [[buffer(0)]],
+    const device InT* k          [[buffer(1)]],
+    const device InT* W          [[buffer(2)]],   // [B, T, Hv, Dk]
+    const device InT* U          [[buffer(3)]],   // [B, T, Hv, Dv]
+    const device StT* state_in   [[buffer(4)]],   // [B, Hv, Dv, Dk]
+    const device InT* g          [[buffer(5)]],   // [B, T, Hv]
+    device InT* y                [[buffer(6)]],   // [B, T, Hv, Dv]
+    device StT* state_out        [[buffer(7)]],   // [B, Hv, Dv, Dk]
+    constant int& T              [[buffer(8)]],
+    uint3 thread_position_in_grid        [[thread_position_in_grid]],
+    uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
+    uint  thread_index_in_simdgroup      [[thread_index_in_simdgroup]]
 ) {
     auto n        = thread_position_in_grid.z;
 	auto b_idx    = n / Hv;
 	auto hv_idx   = n % Hv;
 	auto hk_idx   = hv_idx / (Hv / Hk);
-	constexpr int n_per_dk = Dk / 32;
+
+	// get coord from steel
+	const short qid = thread_index_in_simdgroup / 4;
+	const short fm = (qid & 4) + ((thread_index_in_simdgroup / 2) % 4);
+	const short fn = (qid & 2) * 2 + (thread_index_in_simdgroup % 2) * 2;
 
 	auto dk_idx = thread_position_in_threadgroup.x;   // simd group id
-	auto dv_idx = thread_position_in_grid.y;
+	auto dv_idx = thread_position_in_grid.y * 8;
 
 	// set up pointers
 	// g: [B, T, Hv]
@@ -165,79 +177,107 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
 	auto i_state = state_in + (n * Dv + dv_idx) * Dk;
 	auto o_state = state_out + (n * Dv + dv_idx) * Dk;
 
-	float state[n_per_dk];
-	for (int i = 0; i < n_per_dk; ++i) {
-		auto s_idx = n_per_dk * dk_idx + i;
-		state[i] = static_cast<float>(i_state[s_idx]);
+    // threadgroup tiles
+    threadgroup float Q_left_tg[C][Dk];    // gamma-scaled Q
+    threadgroup float K_tg[C][Dk];         // raw K
+    threadgroup float W_tg[C][Dk];         // gamma-scaled W (W_left)
+    threadgroup float U_tg[C][8];          // U chunk, 8 dv values
+	threadgroup float K_right_tg[C][Dk];
+
+	simdgroup_float8x8 S_tile[8];
+	simdgroup_float8x8 W_tile, K_tile, Q_tile;
+	simdgroup_float8x8 WS_tile;
+	simdgroup_float8x8 U_tile;
+	simdgroup_float8x8 delta_tile;
+	simdgroup_float8x8 tmp_tile;
+	simdgroup_float8x8 QKt_tile;
+	simdgroup_float8x8 out_tile;
+	simdgroup_float8x8 KD_tile;
+
+	thread auto& kd = KD_tile.thread_elements();
+	thread auto& d_e  = delta_tile.thread_elements();
+	thread auto& u_e  = U_tile.thread_elements();
+	thread auto& ws_e = WS_tile.thread_elements();
+	thread auto& qkt_e = QKt_tile.thread_elements();
+	thread auto& o_e  = out_tile.thread_elements();
+
+    // load initial state into threadgroup
+	for (int kk = 0; kk < Dk; kk += 8) {
+    	simdgroup_load(S_tile[kk/8], i_state + kk, Dk, ulong2(0, 0), true);
 	}
+	threadgroup_barrier(mem_flags::mem_threadgroup);
 
-	float gamma[C];
-	float delta[C];
 
-	for (int t = 0; t < T; t+=C) {
-		gamma[0] = g_[hv_idx];
-		for (int i = 1; i < C; i++) {
-			gamma[i] = gamma[i-1] * g_[i * Hv + hv_idx];
-		}
-		float gamma_C = gamma[C-1];
+    float gamma[C];
 
-		for (int c = 0; c < C; c++) {
-			// W_left[c] @ S^T
-			float ws = 0;
-			float g_c = gamma[c];
-			for (int i = 0; i < n_per_dk; i++) {
-				int s_idx = dk_idx * n_per_dk + i;
-				float w_left = g_c * W_[c * Hk * Dk + s_idx];
-				ws += w_left * state[i];
-			}
-			ws = simd_sum(ws);   
+    for (int t = 0; t < T; t += C) {
+        gamma[0] = g_[hv_idx];
+        for (int i = 1; i < C; i++) {
+            gamma[i] = gamma[i-1] * g_[i * Hv + hv_idx];
+        }
+        float gamma_C = gamma[C-1];
 
-			// delta = U - ws
-			delta[c] = U_[c * Hv * Dv + dv_idx] - ws;
-		}
-		
+        for (int c = 0; c < C; c++) {
+			float kr = gamma_C / gamma[c];
+            for (int d = dk_idx; d < Dk; d += 32) {
+                Q_left_tg[c][d] = gamma[c] * q_[c * Hk * Dk + d];
+                K_tg[c][d]      = k_[c * Hk * Dk + d];
+                W_tg[c][d]      = gamma[c] * W_[c * Hv * Dk + d];
+				K_right_tg[c][d] = kr * K_tg[c][d];
+            }
+        }
 
-		// Compute Output: O = Q_left S^T + Q K^T delta
-		for (int c = 0; c < C; c++) {
-			// Q_left[c] S^T
-			float out_c = 0;
-			float g_c = gamma[c];
-			for (int i = 0; i < n_per_dk; i++) {
-				int s_idx = dk_idx * n_per_dk + i;
-				float q_left = g_c * q_[c * Hk * Dk + s_idx];
-				out_c += q_left * state[i];
-			}
-			out_c = simd_sum(out_c);   
+        for (int idx = dk_idx; idx < C * 8; idx += 32) {
+            int c = idx / 8;
+            int j = idx % 8;
+            U_tg[c][j] = U_[c * Hv * Dv + dv_idx + j];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
 
-			// Q K^T delta
-			for (int j = 0; j <= c; j++) {
-				float qkt = 0;
-				for (int i = 0; i < n_per_dk; i++) {
-					int s_idx = dk_idx * n_per_dk + i;
-					qkt += q_[c * Hk * Dk + s_idx] * k_[j * Hk * Dk + s_idx];
-				}
-				qkt = simd_sum(qkt); 
-				out_c += (gamma[c] / gamma[j]) * qkt * delta[j];
-			}
+        //  WS = W_left @ S^T 
+        WS_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
+        for (int kk = 0; kk < Dk; kk += 8) {
+            simdgroup_load(W_tile, &W_tg[0][kk], Dk);
+            simdgroup_multiply_accumulate(WS_tile, W_tile, S_tile[kk/8], WS_tile);
+        }
 
-			if (thread_index_in_simdgroup == 0) {
-				y[c * Hv * Dv + dv_idx] = out_c;
-			}
-		}
+        // delta = U - WS
+        simdgroup_load(U_tile, &U_tg[0][0], 8);
+   
+		d_e[0] = u_e[0] - ws_e[0];
+		d_e[1] = u_e[1] - ws_e[1];
+        
 
-		// Update state: S = gamma_C * S + delta.T @ K
-		// gamma_C * S
-		for (int i = 0; i < n_per_dk; i++) {
-		    state[i] *= gamma_C;  
-		}
+        // Q_left @ S^T
+        tmp_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
+		QKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
 
-		// delta.T @ K
-		for (int c = 0; c < C; c++) {
-			float k_right = (gamma_C / gamma[c]);   
-			for (int i = 0; i < n_per_dk; i++) {
-				int s_idx = dk_idx * n_per_dk + i;
-				state[i] += k_right * k_[c * Hk * Dk + s_idx] * delta[c];
-			}
+        for (int kk = 0; kk < Dk; kk += 8) {
+            simdgroup_load(Q_tile, &Q_left_tg[0][kk], Dk);
+			simdgroup_load(K_tile, &K_tg[0][kk], Dk, ulong2(0, 0), true);
+
+            simdgroup_multiply_accumulate(tmp_tile, Q_tile, S_tile[kk/8], tmp_tile);
+			simdgroup_multiply_accumulate(QKt_tile, Q_tile, K_tile, QKt_tile);
+        }
+
+
+		// element 0 at (fm, fn), element 1 at (fm, fn+1)
+		qkt_e[0] *= fn > fm ? 0.f : (1.0f / gamma[fn]);
+		qkt_e[1] *= fn + 1 > fm ? 0.f : (1.0f / gamma[fn+1]);
+
+        simdgroup_multiply_accumulate(out_tile, QKt_tile, delta_tile, tmp_tile);
+
+		y[fm * Hv * Dv + dv_idx + fn] = static_cast<InT>(o_e[0]);
+		y[fm * Hv * Dv + dv_idx + fn + 1] = static_cast<InT>(o_e[1]);
+
+
+		for (int kk = 0; kk < Dk; kk += 8) {
+			simdgroup_load(K_tile, &K_right_tg[0][kk], Dk, ulong2(0, 0), true);  
+			simdgroup_multiply(KD_tile, K_tile, delta_tile);
+
+			thread auto& s_e  = S_tile[kk/8].thread_elements();
+			s_e[0] = gamma_C * s_e[0] + kd[0];
+			s_e[1] = gamma_C * s_e[1] + kd[1];
 		}
 
 		// update pointers
@@ -247,10 +287,11 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
 		W_ += C * Hv * Dk;
 		y  += C * Hv * Dv;
 		g_ += C * Hv;
-	}
-	for (int i = 0; i < n_per_dk; ++i) {
-		auto s_idx = n_per_dk * dk_idx + i;
-		o_state[s_idx] = static_cast<StT>(state[i]);
+    }
+
+	// o_state is [Dv, Dk]: o_state[dv][dk] = st_out[dk][dv]
+	for (int kk = 0; kk < Dk; kk += 8) {
+		simdgroup_store(S_tile[kk/8], o_state + kk, Dk, ulong2(0,0), true);   // writes [Dk_block, Dv] layout
 	}
 }
 
