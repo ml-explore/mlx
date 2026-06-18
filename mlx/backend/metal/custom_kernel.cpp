@@ -335,8 +335,18 @@ void CustomKernel::eval_gpu(
 
   std::vector<array> copies;
 
-  for (auto& out : outputs) {
-    if (init_value_) {
+  // Output index -> aliased input index (output reuses the input's buffer).
+  std::vector<int> alias_of(outputs.size(), -1);
+  for (auto& [oi, ii] : output_input_aliases_) {
+    if (oi >= 0 && oi < (int)outputs.size() && ii >= 0 && ii < (int)inputs.size())
+      alias_of[oi] = ii;
+  }
+
+  for (size_t i = 0; i < outputs.size(); ++i) {
+    auto& out = outputs[i];
+    if (alias_of[i] >= 0) {
+      out.copy_shared_buffer(inputs[alias_of[i]]);
+    } else if (init_value_) {
       copies.emplace_back(init_value_.value(), out.dtype());
       fill_gpu(copies.back(), out, s);
     } else {

@@ -22,7 +22,8 @@ CustomKernelFunction hip_kernel(
     const std::string&,
     const std::string&,
     bool,
-    int) {
+    int,
+    std::vector<std::pair<int, int>>) {
   throw std::runtime_error("[hip_kernel] No ROCm back-end.");
 }
 

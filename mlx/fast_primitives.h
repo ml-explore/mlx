@@ -375,7 +375,8 @@ class CustomKernel : public Primitive {
       std::optional<float> init_value,
       std::vector<ScalarArg> scalar_arguments,
       bool is_precompiled,
-      int shared_memory)
+      int shared_memory,
+      std::vector<std::pair<int, int>> output_input_aliases = {})
       : Primitive(stream),
         name_(std::move(name)),
         source_(std::move(source)),
@@ -386,7 +387,8 @@ class CustomKernel : public Primitive {
         init_value_(init_value),
         scalar_arguments_(std::move(scalar_arguments)),
         is_precompiled_(is_precompiled),
-        shared_memory_(shared_memory) {}
+        shared_memory_(shared_memory),
+        output_input_aliases_(std::move(output_input_aliases)) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -422,6 +424,12 @@ class CustomKernel : public Primitive {
   std::vector<ScalarArg> scalar_arguments_;
   bool is_precompiled_;
   int shared_memory_;
+  // Output index -> input index. When set, the output reuses the input's device
+  // buffer (in-place), instead of allocating a fresh one. Used so a recurrent
+  // state kernel writes its new state into the SAME buffer it read — the only
+  // way a captured HIP graph's recurrence accumulates across replays. Caller
+  // must guarantee the kernel reads all of the input before overwriting it.
+  std::vector<std::pair<int, int>> output_input_aliases_;
 };
 
 } // namespace mlx::core::fast

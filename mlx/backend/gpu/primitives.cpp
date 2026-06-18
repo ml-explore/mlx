@@ -125,12 +125,23 @@ void DynamicSliceUpdate::eval_gpu(
     return;
   }
 
-  // Copy or donate input to output
+  // Copy or donate input to output. When the input buffer is uniquely owned
+  // (contiguous, fully materialized), donate it so the dynamic update writes
+  // IN PLACE at the device-computed offset instead of copying the whole buffer
+  // every call. This is what makes a preallocated KV cache O(1) per decode step
+  // and gives it a stable buffer address (HIP-graph capture ready).
   auto s = stream();
-  auto ctype = in.flags().contiguous && in.size() == in.data_size()
-      ? CopyType::Vector
-      : CopyType::General;
-  copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, s);
+  bool can_donate = in.data_shared_ptr() != nullptr &&
+      in.data_shared_ptr().use_count() == 1 && in.flags().contiguous &&
+      in.data_size() == in.size();
+  if (can_donate) {
+    out.copy_shared_buffer(in);
+  } else {
+    auto ctype = in.flags().contiguous && in.size() == in.data_size()
+        ? CopyType::Vector
+        : CopyType::General;
+    copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, s);
+  }
 
   auto out_offset =
       compute_dynamic_offset(start_indices, out.strides(), axes_, s);
