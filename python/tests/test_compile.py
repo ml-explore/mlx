@@ -71,6 +71,47 @@ class TestCompile(mlx_tests.MLXTestCase):
             self.assertEqual(out[0].item(), 1.0)
             self.assertEqual(out[1].item(), float("-inf"))
 
+    def test_compile_negative_strided_slice_update_expr(self):
+        x = mx.arange(6, dtype=mx.float32)
+        expected = mx.array([0, 2, 4, 6, 8, 10], dtype=mx.float32)
+
+        def add_update(x):
+            base = mx.zeros_like(x)
+            base[::-1] += 2.0 * x[::-1]
+            return base
+
+        def set_update(x):
+            base = mx.zeros_like(x)
+            base[::-1] = 2.0 * x[::-1]
+            return base
+
+        def bare_view_update(x):
+            base = mx.zeros_like(x)
+            base[::-1] += x[::-1]
+            return base
+
+        def positive_strided_update(x):
+            base = mx.zeros_like(x)
+            base[::2] += 2.0 * x[::2]
+            return base
+
+        self.assertTrue(mx.array_equal(mx.compile(lambda x: x[::-1] + 0)(x), x[::-1]))
+        self.assertTrue(
+            mx.array_equal(mx.compile(lambda x: x[::-1] * 2)(x), 2 * x[::-1])
+        )
+
+        for fn in (add_update, set_update):
+            self.assertTrue(mx.array_equal(fn(x), expected))
+            self.assertTrue(mx.array_equal(mx.compile(fn)(x), expected))
+
+        self.assertTrue(mx.array_equal(mx.compile(bare_view_update)(x), x))
+        self.assertTrue(
+            mx.array_equal(
+                mx.compile(positive_strided_update)(x),
+                mx.array([0, 0, 4, 0, 8, 0], dtype=mx.float32),
+            )
+        )
+
     def test_compile_tuple_output_in_thread(self):
         @mx.compile
         def fun(x):

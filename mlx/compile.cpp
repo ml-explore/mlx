@@ -13,6 +13,7 @@
 #include "mlx/compile_impl.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/graph_utils.h"
+#include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
@@ -1035,6 +1036,24 @@ std::vector<array> compile_replace(
   }
 
   auto is_load = [](const Primitive& p) { return typeid(p) == typeid(Load); };
+  auto has_negative_strides = [](const array& a) {
+    return std::any_of(a.strides().begin(), a.strides().end(), [](auto s) {
+      return s < 0;
+    });
+  };
+  auto is_negative_strided_slice = [](const array& a) {
+    if (!a.has_primitive()) {
+      return false;
+    }
+    const auto& prim = a.primitive();
+    if (typeid(prim) != typeid(Slice)) {
+      return false;
+    }
+    const auto& strides = std::get<2>(static_cast<const Slice&>(prim).state());
+    return std::any_of(strides.begin(), strides.end(), [](auto s) {
+      return s < 0;
+    });
+  };
 
   for (auto& a : tape) {
     // Arrays in the tape without primitives are either:
@@ -1049,6 +1068,14 @@ std::vector<array> compile_replace(
       std::vector<array> real_inputs;
       for (auto& in : a.inputs()) {
         real_inputs.push_back(trace_to_real.at(in.id()));
+      }
+      const auto& prim = a.primitive();
+      if (typeid(prim) == typeid(Compiled)) {
+        for (auto& in : real_inputs) {
+          if (has_negative_strides(in) || is_negative_strided_slice(in)) {
+            in = contiguous(in, false, a.primitive().stream());
+          }
+        }
       }
       if (a.siblings().empty()) {
         auto shape =
