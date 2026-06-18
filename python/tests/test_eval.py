@@ -195,6 +195,76 @@ class TestEval(mlx_tests.MLXTestCase):
         mx.eval(z)
         mx.set_memory_limit(old_limit)
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    def test_eval_small_gpu_ops_else_branch(self):
+        """
+        Exercise the eval.cpp else-branch where addCompletedHandler is
+        called without a prior commit (needs_commit() == false).
+
+        Small scalar GPU operations keep the command buffer under the commit
+        threshold, repeatedly hitting the async-completion path. On affected
+        macOS versions this path aborts before the fix because the completion
+        handler is added while a compute encoder is still active.
+        """
+        for _ in range(200):
+            x = mx.array([1.0])
+            y = mx.array([2.0])
+            z = x + y
+            mx.eval(z)
+        self.assertEqual(z.item(), 3.0)
+
+        # Also test with multiple small operations chained
+        for _ in range(200):
+            x = mx.array(1.0)
+            x = x + 1.0
+            x = x * 2.0
+            x = mx.abs(x)
+            mx.eval(x)
+        self.assertEqual(x.item(), 4.0)
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    def test_fence_paths_via_multistream_eval(self):
+        """
+        Exercise internal fence wait/update code paths via multi-stream GPU
+        operations. Multi-stream evaluation triggers fence-based stream
+        synchronization, hitting the addCompletedHandler calls in
+        Fence::wait and Fence::update. On affected macOS versions these paths
+        abort before the fix because the completion handler is added while a
+        compute encoder is still active.
+        """
+        s1 = mx.default_stream(mx.gpu)
+        s2 = mx.new_stream(mx.gpu)
+
+        # Interleave operations on two streams to force fence
+        # synchronization between them
+        x = mx.array(1.0)
+        for _ in range(100):
+            x = mx.abs(x, stream=s1)
+            x = mx.abs(x, stream=s2)
+        mx.eval(x)
+        self.assertEqual(x.item(), 1.0)
+
+        # Reverse stream interleaving
+        x = mx.array(2.0)
+        for _ in range(100):
+            x = mx.multiply(x, mx.array(1.0), stream=s2)
+            x = mx.add(x, mx.array(0.0), stream=s1)
+        mx.eval(x)
+        self.assertEqual(x.item(), 2.0)
+
+        # Many streams with overlapping work
+        x = mx.ones((100, 100))
+        s3 = mx.new_stream(mx.gpu)
+        for _ in range(50):
+            x = mx.abs(x, stream=s1)
+            x = mx.abs(x, stream=s2)
+            x = mx.abs(x, stream=s3)
+        mx.eval(x)
+        self.assertTrue(mx.allclose(x, mx.ones((100, 100))))
+
+        # Clean up extra streams
+        del s1, s2, s3
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

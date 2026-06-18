@@ -78,6 +78,7 @@ void Fence::wait(Stream stream, const array& x) {
   compute_encoder.set_bytes(f.count, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
+  compute_encoder.end_encoding();
   compute_encoder.get_command_buffer()->addCompletedHandler(
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
 }
@@ -129,6 +130,7 @@ void Fence::update(Stream stream, const array& x, bool cross_device) {
   compute_encoder.set_bytes(f.count, 1);
   compute_encoder.dispatch_threads(kernel_dims, kernel_dims);
 
+  compute_encoder.end_encoding();
   compute_encoder.get_command_buffer()->addCompletedHandler(
       [fence_ = fence_](MTL::CommandBuffer* cbuf) {});
 }
