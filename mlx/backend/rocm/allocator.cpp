@@ -164,9 +164,11 @@ static void apply_slab_hints(void* data, size_t size) {
     return;
   int device = 0;
   (void)hipGetDevice(&device);
-  // Hint: GPU is the primary accessor.
+  // Managed/SVM hints apply only to integrated (APU) memory. On discrete GPUs
+  // they fail (hsa_amd_svm_attributes_set) and corrupt the HIP runtime.
+  if (!device_is_integrated(device))
+    return;
   (void)hipMemAdvise(data, size, hipMemAdviseSetAccessedBy, device);
-  // Prefetch to GPU to avoid cold-start page faults.
   (void)hipMemPrefetchAsync(data, size, device, nullptr);
 }
 

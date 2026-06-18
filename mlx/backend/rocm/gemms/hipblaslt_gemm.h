@@ -73,4 +73,27 @@ void hipblaslt_gemm_raw(
     int data_type, // hipDataType value (HIP_R_16BF, HIP_R_16F, HIP_R_32F)
     int compute_type); // hipblasComputeType_t value
 
+// True iff this device has e4m3 fp8 GEMM kernels (probed once, cached).
+bool device_has_fp8_gemm(int device_id);
+
+// Raw fp8 (e4m3) GEMM: A/B are e4m3 buffers in column-major convention,
+// a_scale/b_scale are device float scalars applied as descale factors
+// (out = a_scale*b_scale * (A@B)), output written as bf16. Picks the fastest
+// available algorithm for the shape (heuristic top-pick is poor for fp8).
+void hipblaslt_gemm_fp8_raw(
+    hipStream_t stream,
+    int op_a,
+    int op_b,
+    int M,
+    int N,
+    int K,
+    const void* a_ptr,
+    int lda,
+    const void* b_ptr,
+    int ldb,
+    void* c_ptr,
+    int ldc,
+    const float* a_scale,
+    const float* b_scale);
+
 } // namespace mlx::core::rocm

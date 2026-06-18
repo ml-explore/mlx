@@ -122,6 +122,121 @@ hipblasOperation_t to_hipblas_op(bool transpose) {
   return transpose ? HIPBLAS_OP_T : HIPBLAS_OP_N;
 }
 
+// Per-device GEMM capability table, discovered at load time by asking
+// hipBLASLt's heuristic which input types yield kernels on this GPU. This is a
+// runtime probe rather than a hardcoded arch list, so it tracks whatever the
+// installed Tensile library actually supports.
+struct GemmCaps {
+  bool probed{false};
+  bool bf16{false};
+  bool fp8_e4m3{false};
+  bool fp8_e5m2{false};
+  bool int8{false};
+};
+static GemmCaps g_caps[kMaxDevices];
+static std::mutex g_caps_mutex;
+
+// Does this (input, output, compute) combination have any hipBLASLt algorithm
+// on the given handle? AlgoGetHeuristic only inspects descriptors, so no device
+// memory is touched. Uses a representative GEMM shape.
+bool probe_gemm_combo(
+    hipblasLtHandle_t handle,
+    hipDataType in_type,
+    hipDataType out_type,
+    hipblasComputeType_t compute_type) {
+  hipblasLtMatmulDesc_t desc = nullptr;
+  if (hipblasLtMatmulDescCreate(&desc, compute_type, HIP_R_32F) !=
+      HIPBLAS_STATUS_SUCCESS) {
+    return false;
+  }
+  int32_t op_t = HIPBLAS_OP_T, op_n = HIPBLAS_OP_N;
+  hipblasLtMatmulDescSetAttribute(
+      desc, HIPBLASLT_MATMUL_DESC_TRANSA, &op_t, sizeof(op_t));
+  hipblasLtMatmulDescSetAttribute(
+      desc, HIPBLASLT_MATMUL_DESC_TRANSB, &op_n, sizeof(op_n));
+  const int M = 2048, N = 512, K = 2048;
+  hipblasLtMatrixLayout_t la = nullptr, lb = nullptr, lc = nullptr, ld = nullptr;
+  hipblasLtMatrixLayoutCreate(&la, in_type, K, M, K);
+  hipblasLtMatrixLayoutCreate(&lb, in_type, K, N, K);
+  hipblasLtMatrixLayoutCreate(&lc, out_type, M, N, M);
+  hipblasLtMatrixLayoutCreate(&ld, out_type, M, N, M);
+  hipblasLtMatmulPreference_t pref = nullptr;
+  hipblasLtMatmulPreferenceCreate(&pref);
+  uint64_t ws = kMaxWorkspaceBytes;
+  hipblasLtMatmulPreferenceSetAttribute(
+      pref, HIPBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES, &ws, sizeof(ws));
+  hipblasLtMatmulHeuristicResult_t res[4];
+  int count = 0;
+  hipblasStatus_t st = hipblasLtMatmulAlgoGetHeuristic(
+      handle, desc, la, lb, lc, ld, pref, 4, res, &count);
+  if (pref)
+    hipblasLtMatmulPreferenceDestroy(pref);
+  if (ld)
+    hipblasLtMatrixLayoutDestroy(ld);
+  if (lc)
+    hipblasLtMatrixLayoutDestroy(lc);
+  if (lb)
+    hipblasLtMatrixLayoutDestroy(lb);
+  if (la)
+    hipblasLtMatrixLayoutDestroy(la);
+  if (desc)
+    hipblasLtMatmulDescDestroy(desc);
+  return st == HIPBLAS_STATUS_SUCCESS && count > 0;
+}
+
+const GemmCaps& gemm_caps(int device_id) {
+  std::lock_guard<std::mutex> lock(g_caps_mutex);
+  GemmCaps& caps = g_caps[device_id];
+  if (caps.probed) {
+    return caps;
+  }
+  caps.probed = true;
+  hipblasLtHandle_t handle = nullptr;
+  try {
+    handle = get_handle(device_id);
+  } catch (...) {
+    return caps;
+  }
+  caps.bf16 = probe_gemm_combo(handle, HIP_R_16BF, HIP_R_16BF, HIPBLAS_COMPUTE_32F);
+  caps.fp8_e4m3 =
+      probe_gemm_combo(handle, HIP_R_8F_E4M3, HIP_R_16BF, HIPBLAS_COMPUTE_32F);
+  caps.fp8_e5m2 =
+      probe_gemm_combo(handle, HIP_R_8F_E5M2, HIP_R_16BF, HIPBLAS_COMPUTE_32F);
+  caps.int8 = probe_gemm_combo(handle, HIP_R_8I, HIP_R_32I, HIPBLAS_COMPUTE_32I);
+
+  hipDeviceProp_t props;
+  const char* arch =
+      (hipGetDeviceProperties(&props, device_id) == hipSuccess)
+      ? props.gcnArchName
+      : "?";
+  fprintf(
+      stderr,
+      "[hipBLASLt caps] device %d (%s): bf16=%d fp8_e4m3=%d fp8_e5m2=%d int8=%d\n",
+      device_id,
+      arch,
+      caps.bf16,
+      caps.fp8_e4m3,
+      caps.fp8_e5m2,
+      caps.int8);
+  return caps;
+}
+
+// Input precision chosen for a GEMM on a given device. The hardware/library
+// capability table decides which is reachable; accuracy ranks them e4m3 > bf16
+// for our (already-quantized) weights.
+enum class GemmPrecision { Bf16, Fp8E4M3, Fp8E5M2, Int8 };
+
+// Highest-throughput input precision this device can run for half-precision
+// GEMMs while preserving accuracy: fp8 e4m3 where the library has kernels
+// (RDNA4), otherwise bf16 (RDNA3.5 and anything without fp8 Tensile kernels).
+GemmPrecision preferred_gemm_precision(int device_id) {
+  const GemmCaps& caps = gemm_caps(device_id);
+  if (caps.fp8_e4m3) {
+    return GemmPrecision::Fp8E4M3;
+  }
+  return GemmPrecision::Bf16;
+}
+
 // RAII wrappers for hipBLASLt descriptors to avoid leaks on error paths.
 struct MatmulDescGuard {
   hipblasLtMatmulDesc_t desc{nullptr};
@@ -171,33 +286,13 @@ void hipblaslt_gemm_impl(
     hipStream_t stream) {
   hipblasStatus_t status;
 
-  // Compute type: always fp32 accumulation for half-precision inputs.
-  hipblasComputeType_t compute_type = HIPBLAS_COMPUTE_32F;
+  // Discover this device's GEMM capability table on first use (prints once).
+  GemmPrecision precision = preferred_gemm_precision(device_id);
+  (void)precision;
+
   hipDataType scale_type = HIP_R_32F;
-
-  // --- Matmul descriptor ---
-  MatmulDescGuard matmul_guard;
-  status =
-      hipblasLtMatmulDescCreate(&matmul_guard.desc, compute_type, scale_type);
-  if (status != HIPBLAS_STATUS_SUCCESS) {
-    throw std::runtime_error(
-        "hipblasLtMatmulDescCreate failed: " +
-        std::to_string(static_cast<int>(status)));
-  }
-
-  // Set transpose attributes.
   int32_t trans_a_val = static_cast<int32_t>(op_a);
   int32_t trans_b_val = static_cast<int32_t>(op_b);
-  hipblasLtMatmulDescSetAttribute(
-      matmul_guard.desc,
-      HIPBLASLT_MATMUL_DESC_TRANSA,
-      &trans_a_val,
-      sizeof(trans_a_val));
-  hipblasLtMatmulDescSetAttribute(
-      matmul_guard.desc,
-      HIPBLASLT_MATMUL_DESC_TRANSB,
-      &trans_b_val,
-      sizeof(trans_b_val));
 
   // --- Matrix layouts (column-major, as expected by BLAS) ---
   // A is (op_a == N) ? M x K : K x M  in column-major
@@ -298,55 +393,98 @@ void hipblaslt_gemm_impl(
   hipblasLtMatmulHeuristicResult_t heuristics[kMaxAlgos];
   int returned_algo_count = 0;
 
-  status = hipblasLtMatmulAlgoGetHeuristic(
-      handle,
-      matmul_guard.desc,
-      layout_a.layout,
-      layout_b.layout,
-      layout_c.layout,
-      layout_d.layout,
-      pref_guard.pref,
-      kMaxAlgos,
-      heuristics,
-      &returned_algo_count);
-
-  if (status != HIPBLAS_STATUS_SUCCESS || returned_algo_count == 0) {
+  MatmulDescGuard matmul_guard;
+  status = hipblasLtMatmulDescCreate(
+      &matmul_guard.desc, HIPBLAS_COMPUTE_32F, scale_type);
+  if (status != HIPBLAS_STATUS_SUCCESS) {
     throw std::runtime_error(
-        "hipblasLtMatmulAlgoGetHeuristic failed (status=" +
-        std::to_string(static_cast<int>(status)) +
-        ", returned=" + std::to_string(returned_algo_count) + ")");
+        "hipblasLtMatmulDescCreate failed: " +
+        std::to_string(static_cast<int>(status)));
+  }
+  hipblasLtMatmulDescSetAttribute(
+      matmul_guard.desc,
+      HIPBLASLT_MATMUL_DESC_TRANSA,
+      &trans_a_val,
+      sizeof(trans_a_val));
+  hipblasLtMatmulDescSetAttribute(
+      matmul_guard.desc,
+      HIPBLASLT_MATMUL_DESC_TRANSB,
+      &trans_b_val,
+      sizeof(trans_b_val));
+
+  // Per-(shape,dtype,transpose,device) algorithm cache. The chosen heuristic
+  // result is reusable across calls with identical problem geometry, so warm
+  // calls skip AlgoGetHeuristic — the dominant per-call cost for the many small
+  // GEMMs in a forward pass.
+  struct AlgoKey {
+    int M, N, K, batch, dt, ta, tb, dev;
+    bool operator==(const AlgoKey& o) const {
+      return M == o.M && N == o.N && K == o.K && batch == o.batch &&
+          dt == o.dt && ta == o.ta && tb == o.tb && dev == o.dev;
+    }
+  };
+  struct AlgoKeyHash {
+    size_t operator()(const AlgoKey& k) const {
+      size_t h = 1469598103934665603ULL;
+      for (int v : {k.M, k.N, k.K, k.batch, k.dt, k.ta, k.tb, k.dev}) {
+        h = (h ^ static_cast<size_t>(v)) * 1099511628211ULL;
+      }
+      return h;
+    }
+  };
+  static std::mutex algo_mutex;
+  static std::unordered_map<AlgoKey, hipblasLtMatmulHeuristicResult_t, AlgoKeyHash>
+      algo_cache;
+
+  AlgoKey key{
+      M,
+      N,
+      K,
+      batch_count,
+      static_cast<int>(data_type),
+      trans_a_val,
+      trans_b_val,
+      device_id};
+  hipblasLtMatmulHeuristicResult_t heuristic;
+  bool cache_hit = false;
+  {
+    std::lock_guard<std::mutex> lock(algo_mutex);
+    auto cached = algo_cache.find(key);
+    if (cached != algo_cache.end()) {
+      heuristic = cached->second;
+      cache_hit = true;
+    }
   }
 
-  // Auto-tune: on first call for each (M,N,K) shape, benchmark all returned
-  // algorithms and cache the winner. Subsequent calls reuse the cached result.
-  struct TuneKey {
-    int M, N, K, batch;
-    bool operator==(const TuneKey& o) const {
-      return M == o.M && N == o.N && K == o.K && batch == o.batch;
+  if (!cache_hit) {
+    status = hipblasLtMatmulAlgoGetHeuristic(
+        handle,
+        matmul_guard.desc,
+        layout_a.layout,
+        layout_b.layout,
+        layout_c.layout,
+        layout_d.layout,
+        pref_guard.pref,
+        kMaxAlgos,
+        heuristics,
+        &returned_algo_count);
+
+    if (status != HIPBLAS_STATUS_SUCCESS || returned_algo_count == 0) {
+      throw std::runtime_error(
+          "hipblasLtMatmulAlgoGetHeuristic failed (status=" +
+          std::to_string(static_cast<int>(status)) +
+          ", returned=" + std::to_string(returned_algo_count) + ")");
     }
-  };
-  struct TuneKeyHash {
-    size_t operator()(const TuneKey& k) const {
-      return std::hash<int64_t>()(
-          (int64_t(k.M) << 40) ^ (int64_t(k.N) << 20) ^ k.K ^
-          (int64_t(k.batch) << 50));
-    }
-  };
-  static std::unordered_map<TuneKey, int, TuneKeyHash> tune_cache;
 
-  TuneKey key{M, N, K, batch_count};
-  int best_algo_idx = 0;
+    int best_algo_idx = 0;
 
-  // Auto-tuning: benchmark all algorithms to find the fastest for each shape.
-  // Disabled by default — for quantized models the GEMM path is rarely used
-  // and the tuning overhead causes warm prompt regression.
-  // Enable with MLX_ROCM_HIPBLASLT_TUNE=1 for non-quantized models.
-  static bool do_tune = std::getenv("MLX_ROCM_HIPBLASLT_TUNE") != nullptr;
+    // Auto-tuning: benchmark all algorithms to find the fastest for each shape.
+    // Disabled by default — for quantized models the GEMM path is rarely used
+    // and the tuning overhead causes warm prompt regression.
+    // Enable with MLX_ROCM_HIPBLASLT_TUNE=1 for non-quantized models.
+    static bool do_tune = std::getenv("MLX_ROCM_HIPBLASLT_TUNE") != nullptr;
 
-  auto it = tune_cache.find(key);
-  if (it != tune_cache.end()) {
-    best_algo_idx = it->second;
-  } else if (do_tune && returned_algo_count > 1) {
+    if (do_tune && returned_algo_count > 1) {
     double best_time = 1e30;
     for (int algo_idx = 0; algo_idx < returned_algo_count; algo_idx++) {
       size_t ws_need = heuristics[algo_idx].workspaceSize;
@@ -420,13 +558,14 @@ void hipblaslt_gemm_impl(
         best_algo_idx = algo_idx;
       }
     }
-    tune_cache[key] = best_algo_idx;
-  } else {
-    // No tuning: heuristic top pick (index 0)
-    tune_cache[key] = 0;
-  }
+    }
 
-  auto& heuristic = heuristics[best_algo_idx];
+    heuristic = heuristics[best_algo_idx];
+    {
+      std::lock_guard<std::mutex> lock(algo_mutex);
+      algo_cache[key] = heuristic;
+    }
+  }
 
   // --- Workspace allocation ---
   size_t ws_needed = heuristic.workspaceSize;
@@ -666,6 +805,226 @@ void hipblaslt_gemm_raw(
       1, // batch_count
       hip_dtype,
       stream);
+}
+
+bool device_has_fp8_gemm(int device_id) {
+  return gemm_caps(device_id).fp8_e4m3;
+}
+
+void hipblaslt_gemm_fp8_raw(
+    hipStream_t stream,
+    int op_a,
+    int op_b,
+    int M,
+    int N,
+    int K,
+    const void* a_ptr,
+    int lda,
+    const void* b_ptr,
+    int ldb,
+    void* c_ptr,
+    int ldc,
+    const float* a_scale,
+    const float* b_scale) {
+  int device_id = 0;
+  (void)hipGetDevice(&device_id);
+  hipblasLtHandle_t handle = get_handle(device_id);
+
+  MatmulDescGuard desc_guard;
+  if (hipblasLtMatmulDescCreate(
+          &desc_guard.desc, HIPBLAS_COMPUTE_32F, HIP_R_32F) !=
+      HIPBLAS_STATUS_SUCCESS) {
+    throw std::runtime_error("fp8 GEMM: descriptor create failed");
+  }
+  int32_t ta = op_a, tb = op_b;
+  hipblasLtMatmulDescSetAttribute(
+      desc_guard.desc, HIPBLASLT_MATMUL_DESC_TRANSA, &ta, sizeof(ta));
+  hipblasLtMatmulDescSetAttribute(
+      desc_guard.desc, HIPBLASLT_MATMUL_DESC_TRANSB, &tb, sizeof(tb));
+  hipblasLtMatmulDescSetAttribute(
+      desc_guard.desc,
+      HIPBLASLT_MATMUL_DESC_A_SCALE_POINTER,
+      &a_scale,
+      sizeof(a_scale));
+  hipblasLtMatmulDescSetAttribute(
+      desc_guard.desc,
+      HIPBLASLT_MATMUL_DESC_B_SCALE_POINTER,
+      &b_scale,
+      sizeof(b_scale));
+
+  hipblasOperation_t oa = static_cast<hipblasOperation_t>(op_a);
+  hipblasOperation_t ob = static_cast<hipblasOperation_t>(op_b);
+  uint64_t a_rows = (oa == HIPBLAS_OP_N) ? M : K;
+  uint64_t a_cols = (oa == HIPBLAS_OP_N) ? K : M;
+  uint64_t b_rows = (ob == HIPBLAS_OP_N) ? K : N;
+  uint64_t b_cols = (ob == HIPBLAS_OP_N) ? N : K;
+  MatrixLayoutGuard la, lb, lc, ld;
+  hipblasLtMatrixLayoutCreate(&la.layout, HIP_R_8F_E4M3, a_rows, a_cols, lda);
+  hipblasLtMatrixLayoutCreate(&lb.layout, HIP_R_8F_E4M3, b_rows, b_cols, ldb);
+  hipblasLtMatrixLayoutCreate(&lc.layout, HIP_R_16BF, M, N, ldc);
+  hipblasLtMatrixLayoutCreate(&ld.layout, HIP_R_16BF, M, N, ldc);
+
+  PreferenceGuard pref_guard;
+  hipblasLtMatmulPreferenceCreate(&pref_guard.pref);
+  uint64_t max_ws = kMaxWorkspaceBytes;
+  hipblasLtMatmulPreferenceSetAttribute(
+      pref_guard.pref,
+      HIPBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
+      &max_ws,
+      sizeof(max_ws));
+
+  // Best algorithm per (shape, device), tuned once. hipBLASLt's heuristic
+  // top-pick is poor for fp8; timing all candidates on the first call and
+  // caching the winner is worth the one-time cost (shapes repeat every layer).
+  struct Key {
+    int M, N, K, dev;
+    bool operator==(const Key& o) const {
+      return M == o.M && N == o.N && K == o.K && dev == o.dev;
+    }
+  };
+  struct KeyHash {
+    size_t operator()(const Key& k) const {
+      size_t h = 1469598103934665603ULL;
+      for (int v : {k.M, k.N, k.K, k.dev}) {
+        h = (h ^ static_cast<size_t>(v)) * 1099511628211ULL;
+      }
+      return h;
+    }
+  };
+  static std::mutex mtx;
+  static std::unordered_map<Key, hipblasLtMatmulHeuristicResult_t, KeyHash>
+      algo_cache;
+
+  Key key{M, N, K, device_id};
+  hipblasLtMatmulHeuristicResult_t chosen;
+  bool hit = false;
+  {
+    std::lock_guard<std::mutex> lock(mtx);
+    auto it = algo_cache.find(key);
+    if (it != algo_cache.end()) {
+      chosen = it->second;
+      hit = true;
+    }
+  }
+
+  float alpha = 1.0f, beta = 0.0f;
+  if (!hit) {
+    static constexpr int kNA = 16;
+    hipblasLtMatmulHeuristicResult_t res[kNA];
+    int cnt = 0;
+    if (hipblasLtMatmulAlgoGetHeuristic(
+            handle,
+            desc_guard.desc,
+            la.layout,
+            lb.layout,
+            lc.layout,
+            ld.layout,
+            pref_guard.pref,
+            kNA,
+            res,
+            &cnt) != HIPBLAS_STATUS_SUCCESS ||
+        cnt == 0) {
+      throw std::runtime_error("fp8 GEMM: no algorithm for shape");
+    }
+    double best = 1e30;
+    int best_idx = 0;
+    for (int a = 0; a < cnt; ++a) {
+      size_t need = res[a].workspaceSize;
+      void* wp = nullptr;
+      size_t ws = 0;
+      if (need > 0) {
+        auto [p, s] = ensure_workspace(device_id, need);
+        wp = p;
+        ws = s;
+        if (!wp)
+          continue;
+      }
+      if (hipblasLtMatmul(
+              handle,
+              desc_guard.desc,
+              &alpha,
+              a_ptr,
+              la.layout,
+              b_ptr,
+              lb.layout,
+              &beta,
+              c_ptr,
+              lc.layout,
+              c_ptr,
+              ld.layout,
+              &res[a].algo,
+              wp,
+              ws,
+              stream) != HIPBLAS_STATUS_SUCCESS) {
+        continue;
+      }
+      (void)hipStreamSynchronize(stream);
+      hipEvent_t e0, e1;
+      (void)hipEventCreate(&e0);
+      (void)hipEventCreate(&e1);
+      (void)hipEventRecord(e0, stream);
+      for (int r = 0; r < 3; ++r) {
+        (void)hipblasLtMatmul(
+            handle,
+            desc_guard.desc,
+            &alpha,
+            a_ptr,
+            la.layout,
+            b_ptr,
+            lb.layout,
+            &beta,
+            c_ptr,
+            lc.layout,
+            c_ptr,
+            ld.layout,
+            &res[a].algo,
+            wp,
+            ws,
+            stream);
+      }
+      (void)hipEventRecord(e1, stream);
+      (void)hipEventSynchronize(e1);
+      float ms = 0;
+      (void)hipEventElapsedTime(&ms, e0, e1);
+      (void)hipEventDestroy(e0);
+      (void)hipEventDestroy(e1);
+      if (ms < best) {
+        best = ms;
+        best_idx = a;
+      }
+    }
+    chosen = res[best_idx];
+    std::lock_guard<std::mutex> lock(mtx);
+    algo_cache[key] = chosen;
+  }
+
+  size_t need = chosen.workspaceSize;
+  void* wp = nullptr;
+  size_t ws = 0;
+  if (need > 0) {
+    auto [p, s] = ensure_workspace(device_id, need);
+    wp = p;
+    ws = s;
+  }
+  if (hipblasLtMatmul(
+          handle,
+          desc_guard.desc,
+          &alpha,
+          a_ptr,
+          la.layout,
+          b_ptr,
+          lb.layout,
+          &beta,
+          c_ptr,
+          lc.layout,
+          c_ptr,
+          ld.layout,
+          &chosen.algo,
+          wp,
+          ws,
+          stream) != HIPBLAS_STATUS_SUCCESS) {
+    throw std::runtime_error("fp8 GEMM: hipblasLtMatmul failed");
+  }
 }
 
 } // namespace mlx::core::rocm

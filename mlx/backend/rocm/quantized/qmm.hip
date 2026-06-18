@@ -921,6 +921,28 @@ void dequant_rocblas_gemm(
     rocblas_operation op_a = to_rocblas_op(transpose_a);
     rocblas_operation op_b = to_rocblas_op(transpose_b);
 
+    // Prefer hipBLASLt for all supported dtypes. rocBLAS/Tensile ships
+    // incomplete gfx1201 coverage (missing large-tile kernels such as
+    // MT128x128x32) and faults on large prefill GEMMs; hipBLASLt covers them.
+    if (rocm::is_hipblaslt_available() &&
+        (dtype == float32 || dtype == float16 || dtype == bfloat16)) {
+      int dt_hint = (dtype == float16) ? 1 : (dtype == bfloat16) ? 2 : 3;
+      float alpha_f = alpha;
+      float beta_f = beta;
+      try {
+        rocm::hipblaslt_gemm_raw(
+            stream,
+            static_cast<int>(op_b), static_cast<int>(op_a),
+            N, M, K,
+            &alpha_f, b_ptr, ldb, a_ptr, lda,
+            &beta_f, c_ptr, ldc,
+            dt_hint, 0);
+        return;
+      } catch (...) {
+        // Fall through to rocBLAS below.
+      }
+    }
+
     switch (dtype) {
       case float32: {
         float alpha_f = alpha;
