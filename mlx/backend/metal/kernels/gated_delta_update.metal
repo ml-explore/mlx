@@ -31,7 +31,10 @@ using namespace metal;
       c)
 
 #define instantiate_gated_delta_update_chunk_dims(in_type, st_type) \
-  instantiate_gated_delta_update_chunk(in_type, st_type, 64, 64, 4, 4, 16)
+  instantiate_gated_delta_update_chunk(in_type, st_type, 64, 64, 4, 4, 32) \
+  instantiate_gated_delta_update_chunk(in_type, st_type, 64, 64, 4, 4, 16) \
+  instantiate_gated_delta_update_chunk(in_type, st_type, 64, 64, 4, 4, 8) \
+  instantiate_gated_delta_update_chunk(in_type, st_type, 64, 64, 1, 1, 8) \
 
 #define instantiate_make_wy(in_type, dk, dv, hk, hv, c)  \
   instantiate_kernel(                                                        \
@@ -45,7 +48,10 @@ using namespace metal;
       c)
 
 #define instantiate_make_wy_dims(in_type) \
-  instantiate_make_wy(in_type, 64, 64, 4, 4, 16) 
+  instantiate_make_wy(in_type, 64, 64, 4, 4, 32) \
+  instantiate_make_wy(in_type, 64, 64, 4, 4, 16) \
+  instantiate_make_wy(in_type, 64, 64, 4, 4, 8) \
+  instantiate_make_wy(in_type, 64, 64, 1, 1, 8) \
 
 instantiate_gated_delta_update_seq_dims(float, float)
 instantiate_gated_delta_update_chunk_dims(float, float)

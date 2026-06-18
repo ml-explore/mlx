@@ -41,10 +41,10 @@ void GatedDeltaUpdate::eval_gpu(
     int Hv = v.shape(2);
     int Dv = v.shape(3);
 
-    const int C = 16;
+    int C = chunk_size;
     int n_chunks = T / C; // TODO: make general
     
-    std::string kernel_name = C == 1 ? "seq_gated_delta_" : "chunk_gated_delta_";
+    std::string kernel_name = C < 1 ? "seq_gated_delta_" : "chunk_gated_delta_";
     std::string suffix = get_type_string(q.dtype())          // "float"
         + "_" + get_type_string(h0.dtype()) // "float"
         + "_" + std::to_string(Dk)
@@ -52,7 +52,7 @@ void GatedDeltaUpdate::eval_gpu(
         + "_" + std::to_string(Hk)
         + "_" + std::to_string(Hv);
 
-    
+    // printf("C: %d\nname: %s\n",C,kernel_name.c_str());
     std::string base_name = kernel_name + suffix;
 
     base_name += C >= 1 ? "_" + std::to_string(C) : "";
@@ -121,8 +121,8 @@ void GatedDeltaUpdate::eval_gpu(
         compute_encoder.set_bytes(T,            8);
         compute_encoder.set_bytes(n_chunks,     9);
         
-        auto grid   = MTL::Size(32, Dv, B * Hv);
-        auto threads = MTL::Size(32, 4, 1);
+        auto grid   = MTL::Size(32, Dv / 8, B * Hv);
+        auto threads = MTL::Size(32, 1, 1); // get one simdgroup to work
         // auto grid   = MTL::Size(1, 1, 1);
         // auto threads = MTL::Size(1, 1, 1);
         compute_encoder.dispatch_threads(grid, threads);

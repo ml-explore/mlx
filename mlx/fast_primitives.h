@@ -328,9 +328,10 @@ class GatedDeltaUpdate : public Custom {
  public:
     GatedDeltaUpdate(
       Stream stream,
-      std::function<std::vector<array>(std::vector<array>)> fallback
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      int C
       )
-      : Custom(stream, std::move(fallback))
+      : Custom(stream, std::move(fallback)), chunk_size(C)
         {}
 
   static bool use_fallback(
@@ -357,7 +358,7 @@ class GatedDeltaUpdate : public Custom {
   }
 
  private:
-  /* TODO */
+  int chunk_size;
 };
 
 

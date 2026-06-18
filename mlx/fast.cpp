@@ -929,6 +929,7 @@ std::vector<array> gated_delta_update_forward(
    const array& gates,
    const array& beta_,
    const std::optional<array>& initial_state, /* = std::nullopt */
+   const int C,
    StreamOrDevice s /* = {} */) {
 
     // determine output dtype
@@ -963,7 +964,7 @@ std::vector<array> gated_delta_update_forward(
     return array::make_arrays(
         /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dk, Dv}},
         /* dtypes */        {out_dtype, out_dtype},
-        /* primitive */     std::make_shared<GatedDeltaUpdate>(to_stream(s), fallback),
+        /* primitive */     std::make_shared<GatedDeltaUpdate>(to_stream(s), fallback, C),
         /* inputs */        {q, k, v, g, beta, h0}
     );
 }
