@@ -12,6 +12,7 @@
 
 #include <hip/hip_bfloat16.h>
 #include <hip/hip_fp16.h>
+#include <hip/hip_fp8.h>
 #include <hip/hip_runtime.h>
 #include <rocblas/rocblas.h>
 #include <algorithm>
@@ -892,6 +893,279 @@ inline int qmm_gemm_solution_index_bf16(bool batched) {
 
 inline rocblas_operation to_rocblas_op(bool transpose) {
   return transpose ? rocblas_operation_transpose : rocblas_operation_none;
+}
+
+// --- fp8 (e4m3) GEMM path for RDNA4 -----------------------------------------
+// The half-precision activation and dequantized weight are cast to e4m3 with a
+// per-tensor absmax scale, multiplied on fp8 matrix cores (~1.5-2.4x bf16), and
+// descaled back to bf16 by hipBLASLt. fp8 buffers are raw bytes (no MLX dtype).
+
+constexpr float kE4M3Max = 448.0f;
+
+template <typename T>
+__global__ void fp8_absmax_kernel(
+    const T* __restrict__ src, size_t n, float* __restrict__ amax) {
+  __shared__ float sm[256];
+  float local = 0.0f;
+  for (size_t j = blockIdx.x * blockDim.x + threadIdx.x; j < n;
+       j += static_cast<size_t>(gridDim.x) * blockDim.x) {
+    local = fmaxf(local, fabsf(static_cast<float>(src[j])));
+  }
+  sm[threadIdx.x] = local;
+  __syncthreads();
+  for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+    if (threadIdx.x < s) {
+      sm[threadIdx.x] = fmaxf(sm[threadIdx.x], sm[threadIdx.x + s]);
+    }
+    __syncthreads();
+  }
+  if (threadIdx.x == 0) {
+    // Non-negative floats compare monotonically as ints.
+    atomicMax(reinterpret_cast<int*>(amax), __float_as_int(sm[0]));
+  }
+}
+
+// Writes the descale factor (amax/448) hipBLASLt multiplies back into the
+// output. Guards the all-zero case.
+__global__ void fp8_descale_kernel(
+    const float* __restrict__ amax, float* __restrict__ descale) {
+  float a = *amax;
+  *descale = (a > 0.0f) ? (a / kE4M3Max) : 1.0f;
+}
+
+template <typename T>
+__global__ void fp8_cast_kernel(
+    const T* __restrict__ src,
+    size_t n,
+    const float* __restrict__ amax,
+    __hip_fp8_e4m3* __restrict__ dst) {
+  float a = *amax;
+  float inv = (a > 0.0f) ? (kE4M3Max / a) : 0.0f;
+  for (size_t j = blockIdx.x * blockDim.x + threadIdx.x; j < n;
+       j += static_cast<size_t>(gridDim.x) * blockDim.x) {
+    dst[j] = __hip_fp8_e4m3(static_cast<float>(src[j]) * inv);
+  }
+}
+
+template <typename T>
+void fp8_quantize(
+    hipStream_t stream,
+    const T* src,
+    size_t n,
+    float* amax,
+    float* descale,
+    __hip_fp8_e4m3* dst) {
+  int threads = 256;
+  int blocks = static_cast<int>(std::min<size_t>((n + threads - 1) / threads, 4096));
+  fp8_absmax_kernel<T><<<blocks, threads, 0, stream>>>(src, n, amax);
+  fp8_descale_kernel<<<1, 1, 0, stream>>>(amax, descale);
+  fp8_cast_kernel<T><<<blocks, threads, 0, stream>>>(src, n, amax, dst);
+}
+
+// Per-tensor absmax of the dequantized affine weight, computed from the quant
+// params alone (dequant values are linear in q, so the extrema are at q=0 and
+// q=qmax). Reads only scales/biases (group_size x fewer elements than the
+// weight) — no full-weight pass.
+template <typename ScaleT, int BITS>
+__global__ void weight_absmax_kernel(
+    const ScaleT* __restrict__ scales,
+    const ScaleT* __restrict__ biases,
+    int num_groups,
+    float* __restrict__ absmax) {
+  __shared__ float sm[256];
+  float local = 0.0f;
+  constexpr int qmax = (1 << BITS) - 1;
+  for (int g = blockIdx.x * blockDim.x + threadIdx.x; g < num_groups;
+       g += static_cast<int>(gridDim.x) * blockDim.x) {
+    float s = static_cast<float>(scales[g]);
+    float b = biases ? static_cast<float>(biases[g]) : 0.0f;
+    local = fmaxf(local, fmaxf(fabsf(b), fabsf(s * qmax + b)));
+  }
+  sm[threadIdx.x] = local;
+  __syncthreads();
+  for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+    if (threadIdx.x < s) {
+      sm[threadIdx.x] = fmaxf(sm[threadIdx.x], sm[threadIdx.x + s]);
+    }
+    __syncthreads();
+  }
+  if (threadIdx.x == 0) {
+    atomicMax(reinterpret_cast<int*>(absmax), __float_as_int(sm[0]));
+  }
+}
+
+// Dequantize packed affine weights straight to e4m3 (no bf16 intermediate),
+// scaled by 448/absmax. No ROCm/HIP library consumes packed quant, so this is
+// the necessary hand-rolled step.
+template <typename ScaleT, int BITS>
+__global__ void dequant_to_e4m3_kernel(
+    const uint8_t* __restrict__ input,
+    const ScaleT* __restrict__ scales,
+    const ScaleT* __restrict__ biases,
+    __hip_fp8_e4m3* __restrict__ output,
+    int num_groups,
+    int group_size,
+    const float* __restrict__ absmax) {
+  int group_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (group_idx >= num_groups)
+    return;
+  float inv = (*absmax > 0.0f) ? (kE4M3Max / *absmax) : 0.0f;
+  float scale = static_cast<float>(scales[group_idx]);
+  float bias = biases ? static_cast<float>(biases[group_idx]) : 0.0f;
+  int input_base = group_idx * (group_size * BITS / 8);
+  __hip_fp8_e4m3* group_output = output + group_idx * group_size;
+  constexpr uint8_t mask = static_cast<uint8_t>((1u << BITS) - 1u);
+  for (int i = 0; i < group_size; ++i) {
+    int bit_index = i * BITS;
+    int byte_idx = input_base + (bit_index >> 3);
+    int bit_offset = bit_index & 0x7;
+    uint32_t packed = static_cast<uint32_t>(input[byte_idx]);
+    if (bit_offset + BITS > 8) {
+      packed |= static_cast<uint32_t>(input[byte_idx + 1]) << 8;
+    }
+    int qv = static_cast<int>((packed >> bit_offset) & mask);
+    float dq = static_cast<float>(qv) * scale + bias;
+    group_output[i] = __hip_fp8_e4m3(dq * inv);
+  }
+}
+
+// out[M,N] = x[M,K] @ w^T via e4m3 hipBLASLt. The weight is dequantized
+// straight from packed quant to e4m3; the activation is cast to e4m3; hipBLASLt
+// descales both back to bf16. transpose mirrors the dequant_rocblas_gemm
+// convention (transpose_a=false, transpose_b=transpose).
+void dequant_fp8_gemm(
+    rocm::CommandEncoder& enc,
+    bool transpose,
+    int M,
+    int N,
+    int K,
+    const array& x,
+    const array& wq,
+    const array& scales,
+    const std::optional<array>& biases,
+    int group_size,
+    int bits,
+    array& out,
+    int dq_rows,
+    int dq_cols) {
+  array x_fp8(Shape{M, K}, uint8, nullptr, {});
+  x_fp8.set_data(allocator::malloc(x_fp8.nbytes()));
+  array w_fp8(Shape{dq_rows, dq_cols}, uint8, nullptr, {});
+  w_fp8.set_data(allocator::malloc(w_fp8.nbytes()));
+  array scratch(Shape{4}, float32, nullptr, {});
+  scratch.set_data(allocator::malloc(scratch.nbytes()));
+  enc.add_temporary(x_fp8);
+  enc.add_temporary(w_fp8);
+  enc.add_temporary(scratch);
+
+  enc.set_input_array(x);
+  enc.set_input_array(wq);
+  enc.set_input_array(scales);
+  if (biases)
+    enc.set_input_array(*biases);
+  enc.set_output_array(out);
+
+  rocblas_operation op_a = to_rocblas_op(false);
+  rocblas_operation op_b = to_rocblas_op(transpose);
+  int lda = K;
+  int ldb = transpose ? K : N;
+  Dtype xdt = x.dtype();
+  Dtype sdt = scales.dtype();
+  bool has_bias = biases.has_value();
+  size_t nw = static_cast<size_t>(dq_rows) * dq_cols;
+  int wgroups = static_cast<int>(nw / group_size);
+
+  enc.launch_kernel([=, &enc](hipStream_t stream) {
+    const void* xp = gpu_ptr<const void>(x);
+    const void* wqp = gpu_ptr<const void>(wq);
+    const void* sp = gpu_ptr<const void>(scales);
+    const void* bp = has_bias ? gpu_ptr<const void>(*biases) : nullptr;
+    void* op = gpu_ptr<void>(out);
+    float* amax_x = reinterpret_cast<float*>(gpu_ptr<void>(scratch));
+    float* desc_x = amax_x + 1;
+    float* amax_w = amax_x + 2;
+    float* desc_w = amax_x + 3;
+    auto* xf = reinterpret_cast<__hip_fp8_e4m3*>(gpu_ptr<void>(x_fp8));
+    auto* wf = reinterpret_cast<__hip_fp8_e4m3*>(gpu_ptr<void>(w_fp8));
+    size_t nx = static_cast<size_t>(M) * K;
+    (void)hipMemsetAsync(amax_x, 0, sizeof(float), stream);
+    (void)hipMemsetAsync(amax_w, 0, sizeof(float), stream);
+
+    if (xdt == bfloat16) {
+      fp8_quantize<__hip_bfloat16>(
+          stream, static_cast<const __hip_bfloat16*>(xp), nx, amax_x, desc_x, xf);
+    } else {
+      fp8_quantize<__half>(
+          stream, static_cast<const __half*>(xp), nx, amax_x, desc_x, xf);
+    }
+
+    int threads = 256;
+    int blocks = std::max(1, (wgroups + threads - 1) / threads);
+    int absblocks = std::min(blocks, 4096);
+#define LAUNCH_DEQUANT_E4M3(ScaleT, BITS)                                   \
+  do {                                                                      \
+    weight_absmax_kernel<ScaleT, BITS><<<absblocks, threads, 0, stream>>>(  \
+        static_cast<const ScaleT*>(sp),                                     \
+        static_cast<const ScaleT*>(bp),                                     \
+        wgroups,                                                            \
+        amax_w);                                                            \
+    fp8_descale_kernel<<<1, 1, 0, stream>>>(amax_w, desc_w);                \
+    dequant_to_e4m3_kernel<ScaleT, BITS><<<blocks, threads, 0, stream>>>(   \
+        static_cast<const uint8_t*>(wqp),                                   \
+        static_cast<const ScaleT*>(sp),                                     \
+        static_cast<const ScaleT*>(bp),                                     \
+        wf,                                                                 \
+        wgroups,                                                            \
+        group_size,                                                         \
+        amax_w);                                                            \
+  } while (0)
+#define DISPATCH_BITS_E4M3(ScaleT)                  \
+  switch (bits) {                                   \
+    case 2:                                         \
+      LAUNCH_DEQUANT_E4M3(ScaleT, 2);               \
+      break;                                        \
+    case 4:                                         \
+      LAUNCH_DEQUANT_E4M3(ScaleT, 4);               \
+      break;                                        \
+    case 5:                                         \
+      LAUNCH_DEQUANT_E4M3(ScaleT, 5);               \
+      break;                                        \
+    case 6:                                         \
+      LAUNCH_DEQUANT_E4M3(ScaleT, 6);               \
+      break;                                        \
+    case 8:                                         \
+      LAUNCH_DEQUANT_E4M3(ScaleT, 8);               \
+      break;                                        \
+    default:                                        \
+      break;                                        \
+  }
+    if (sdt == bfloat16) {
+      DISPATCH_BITS_E4M3(__hip_bfloat16);
+    } else if (sdt == float16) {
+      DISPATCH_BITS_E4M3(__half);
+    } else {
+      DISPATCH_BITS_E4M3(float);
+    }
+#undef DISPATCH_BITS_E4M3
+#undef LAUNCH_DEQUANT_E4M3
+
+    // Column-major swap: A<-w, B<-x, M<->N (same as the bf16 dequant path).
+    rocm::hipblaslt_gemm_fp8_raw(
+        stream,
+        static_cast<int>(op_b),
+        static_cast<int>(op_a),
+        N,
+        M,
+        K,
+        wf,
+        ldb,
+        xf,
+        lda,
+        op,
+        N,
+        desc_w,
+        desc_x);
+  });
 }
 
 void dequant_rocblas_gemm(
@@ -2730,6 +3004,30 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     int dequant_rows = transpose_ ? N : K;
     int dequant_cols = transpose_ ? K : N;
+
+    // fp8 e4m3 path (RDNA4 prefill): dequantize the weight straight to e4m3 and
+    // cast the activation, then run the GEMM on fp8 matrix cores. Capability-
+    // gated — devices without e4m3 kernels stay on the bf16 dequant path below.
+    if ((mode_ == QuantizationMode::Affine) && (x.dtype() == bfloat16) &&
+        (batch_count == 1) && (x_batch_count == 1) && (w_batch_count == 1) &&
+        (M >= 64) && rocm::device_has_fp8_gemm(d.hip_device())) {
+      dequant_fp8_gemm(
+          enc,
+          transpose_,
+          M,
+          N,
+          K,
+          x,
+          w,
+          scales,
+          biases,
+          group_size_,
+          bits_,
+          out,
+          dequant_rows,
+          dequant_cols);
+      return;
+    }
 
     Shape w_dequant_shape = w.shape();
     w_dequant_shape[w_dequant_shape.size() - 2] = dequant_rows;
