@@ -4991,15 +4991,47 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       group_size_ == 64 && (bits_ == 4 || bits_ == 8) &&
       batch_ndim == 1 && batch_strides[0].size() == 1 &&
       batch_strides[0][0] == 1 && batch_strides[1][0] == 1;
+
+  // Full-wave tiled 6-bit gather; MLX_ROCM_QMV_6BIT_SLOW reverts to warp_shared.
+  static const bool g_use_6bit_tiled_gather =
+      (std::getenv("MLX_ROCM_QMV_6BIT_SLOW") == nullptr);
+  bool g_gs6_supported =
+      (group_size_ == 32 || group_size_ == 64 || group_size_ == 128);
+  bool gather_tiled_6bit_ok = g_use_6bit_tiled_gather && transpose_ &&
+      mode_ == QuantizationMode::Affine && x.dtype() == bfloat16 &&
+      bits_ == 6 && (K % 64) == 0 && g_gs6_supported &&
+      !use_sorted_rhs_schedule &&
+      batch_ndim == 1 && batch_strides[0].size() == 1 &&
+      batch_strides[0][0] == 1 && batch_strides[1][0] == 1;
+
   int gather_tile_n = 0;
-  if (gather_tiled_ok) {
+  if (gather_tiled_ok || gather_tiled_6bit_ok) {
     auto gqmm_hw = detect_rocm_hw_info(enc.device());
     gather_tile_n = rocm::get_arch_tuning(gqmm_hw).qmv_tile_n;
     while (gather_tile_n > 1 && (N % gather_tile_n) != 0) gather_tile_n /= 2;
     if (gather_tile_n < 1) gather_tile_n = 1;
   }
+  if (gather_tiled_6bit_ok && gather_tile_n < 8) gather_tiled_6bit_ok = false;
 
   enc.launch_kernel([&](hipStream_t stream) {
+    if (gather_tiled_6bit_ok) {
+      dim3 gt_grid(M, (N + gather_tile_n - 1) / gather_tile_n, B);
+      dim3 gt_block(WARP_SIZE, gather_tile_n);
+      int LHS_B = static_cast<int>(x_batch_count);
+      #define LAUNCH_GATHER_TILED_6BIT(GS_V) \
+        hipLaunchKernelGGL( \
+            (rocm::gather_qmv_tiled_6bit_kernel<hip_bfloat16, hip_bfloat16, GS_V>), \
+            gt_grid, gt_block, 0, stream, \
+            (const hip_bfloat16*)x_ptr, (const uint8_t*)w_ptr, \
+            (const hip_bfloat16*)scales_ptr, (const hip_bfloat16*)biases_ptr, \
+            li_ptr, ri_ptr, (hip_bfloat16*)out_ptr, \
+            B, M, N, K, E, LHS_B, has_bias, gather_tile_n)
+      if (group_size_ == 32) { LAUNCH_GATHER_TILED_6BIT(32); }
+      else if (group_size_ == 64) { LAUNCH_GATHER_TILED_6BIT(64); }
+      else { LAUNCH_GATHER_TILED_6BIT(128); }
+      #undef LAUNCH_GATHER_TILED_6BIT
+      return;
+    }
     if (gather_tiled_ok) {
       dim3 gt_grid(M, (N + gather_tile_n - 1) / gather_tile_n, B);
       dim3 gt_block(WARP_SIZE, gather_tile_n);

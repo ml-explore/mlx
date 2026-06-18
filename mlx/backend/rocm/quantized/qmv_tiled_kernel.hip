@@ -395,4 +395,111 @@ void gather_qmv_tiled_kernel(
   }
 }
 
+// 6-bit gather (MoE expert-indexed) variant of qmv_tiled_6bit_kernel.
+template <typename T, typename ScaleT, int GROUP_SIZE>
+__global__ __launch_bounds__(TILE_N_MAX * WARP_SIZE)
+void gather_qmv_tiled_6bit_kernel(
+    const T* __restrict__ x,
+    const uint8_t* __restrict__ w,
+    const ScaleT* __restrict__ scales,
+    const ScaleT* __restrict__ biases,
+    const uint32_t* __restrict__ lhs_indices,
+    const uint32_t* __restrict__ rhs_indices,
+    T* __restrict__ out,
+    int B, int M, int N, int K, int E, int LHS_B,
+    bool has_bias,
+    int tile_n) {
+  constexpr int BITS = 6;
+  constexpr int VPT6 = 16;
+  constexpr int BSK6 = VPT6 * WARP_SIZE;
+  constexpr int BYTES_PER_LANE = (VPT6 * BITS) / 8;
+
+  const int batch = blockIdx.z;
+  const int m = blockIdx.x;
+  const int n = blockIdx.y * tile_n + threadIdx.y;
+  const int lane = threadIdx.x;
+  const int tid = threadIdx.y * WARP_SIZE + threadIdx.x;
+  const int nthreads = tile_n * WARP_SIZE;
+
+  const bool valid = (batch < B && m < M && n < N);
+
+  uint32_t lhs_idx = valid ? lhs_indices[batch] : 0;
+  uint32_t rhs_idx = valid ? rhs_indices[batch] : 0;
+  if (lhs_idx >= static_cast<uint32_t>(LHS_B)) lhs_idx = 0;
+  if (rhs_idx >= static_cast<uint32_t>(E)) rhs_idx = 0;
+
+  __shared__ float x_shared[BSK6];
+
+  const int row_bytes = (K * BITS + 7) / 8;
+  const int num_groups = (K + GROUP_SIZE - 1) / GROUP_SIZE;
+  const int clamped_n = (n < N) ? n : 0;
+  const uint8_t* w_row =
+      w + static_cast<int64_t>(rhs_idx) * N * row_bytes + clamped_n * row_bytes;
+  const ScaleT* s_row =
+      scales + static_cast<int64_t>(rhs_idx) * N * num_groups + clamped_n * num_groups;
+  const ScaleT* b_row = has_bias
+      ? (biases + static_cast<int64_t>(rhs_idx) * N * num_groups + clamped_n * num_groups)
+      : nullptr;
+  const T* x_row = x + static_cast<int64_t>(lhs_idx) * M * K + m * K;
+
+  float acc = 0.0f;
+
+  for (int k_base = 0; k_base < K; k_base += BSK6) {
+    __syncthreads();
+    for (int i = tid; i < BSK6; i += nthreads) {
+      int k = k_base + i;
+      x_shared[i] = (k < K && valid) ? to_float(x_row[k]) : 0.0f;
+    }
+    __syncthreads();
+
+    if (!valid) continue;
+
+    float x_local[VPT6];
+    #pragma unroll
+    for (int i = 0; i < VPT6; i++) {
+      x_local[i] = x_shared[lane * VPT6 + i];
+    }
+
+    float group_qdot4[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float group_xsum = 0.0f;
+
+    const int k_val = k_base + lane * VPT6;
+    const int group_idx = k_val / GROUP_SIZE;
+
+    if (k_base + BSK6 <= K) {
+      const uint8_t* w_lane = w_row + ((k_base * BITS) / 8) + lane * BYTES_PER_LANE;
+      dequant_and_dot4_6bit<T, ScaleT, GROUP_SIZE>(
+          w_lane, x_local, group_qdot4, group_xsum);
+    } else {
+      #pragma unroll
+      for (int i = 0; i < VPT6; i++) {
+        int k = k_val + i;
+        if (k < K) {
+          float xv = x_local[i];
+          int bit_index = k * BITS;
+          int byte_idx = bit_index >> 3;
+          int bit_offset = bit_index & 0x7;
+          uint32_t window = static_cast<uint32_t>(w_row[byte_idx]);
+          if (byte_idx + 1 < row_bytes) {
+            window |= static_cast<uint32_t>(w_row[byte_idx + 1]) << 8;
+          }
+          float q = static_cast<float>((window >> bit_offset) & 0x3Fu);
+          group_qdot4[i & 3] += xv * q;
+          group_xsum += xv;
+        }
+      }
+    }
+
+    float scale = (group_idx < num_groups) ? to_float(s_row[group_idx]) : 0.0f;
+    float bias = (has_bias && group_idx < num_groups) ? to_float(b_row[group_idx]) : 0.0f;
+    acc += scale * reduce_qdot4(group_qdot4) + bias * group_xsum;
+  }
+
+  if (!valid) return;
+  acc = warp_reduce_sum(acc);
+  if (lane == 0) {
+    out[batch * M * N + m * N + n] = from_float<T>(acc);
+  }
+}
+
 } // namespace mlx::core::rocm
