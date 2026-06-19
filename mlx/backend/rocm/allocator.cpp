@@ -726,6 +726,22 @@ size_t RocmAllocator::set_cache_limit(size_t limit) {
 }
 
 void RocmAllocator::clear_cache() {
+  // clear() frees every cached buffer with a blocking hipFree. On unified memory
+  // that waits for outstanding GPU work whose completion the worker thread
+  // delivers — and the worker frees through this same mutex_. Holding the lock
+  // across the hipFree would deadlock. Drain the device first so the frees have
+  // nothing to wait on, and release any deferred frees while we are here.
+  (void)hipDeviceSynchronize();
+  {
+    std::vector<RocmBuffer*> to_free;
+    {
+      std::lock_guard<std::mutex> lk(g_pending_free_mutex);
+      to_free.swap(g_pending_frees);
+    }
+    for (auto* b : to_free) {
+      rocm_free(b);
+    }
+  }
   std::lock_guard lk(mutex_);
   buffer_cache_.clear();
 }
