@@ -723,12 +723,24 @@ class TestConv(mlx_tests.MLXTestCase):
             (x, w),
             (cotan,),
         )[1]
-        expected_grads = mx.vjp(decomposed_conv3d, (x, w), (cotan,))[1]
+
+        x_pt = torch.tensor(np.array(x).transpose(0, 4, 1, 2, 3), requires_grad=True)
+        w_pt = torch.tensor(np.array(w).transpose(0, 4, 1, 2, 3), requires_grad=True)
+        cotan_pt = torch.tensor(np.array(cotan).transpose(0, 4, 1, 2, 3))
+        x_pad_pt = F.pad(
+            x_pt,
+            (padding[0][2], padding[1][2], padding[0][1], padding[1][1], 0, 0),
+        )
+        out_pt = F.conv3d(x_pad_pt, w_pt, stride=stride, padding=0)
+        out_pt.backward(cotan_pt)
+        expected_grad_x = mx.array(x_pt.grad.numpy().transpose(0, 2, 3, 4, 1))
+        expected_grad_w = mx.array(w_pt.grad.numpy().transpose(0, 2, 3, 4, 1))
+
         self.assertTrue(
-            mx.allclose(grads[0], expected_grads[0], atol=1e-4, rtol=1e-4).item()
+            mx.allclose(grads[0], expected_grad_x, atol=1e-4, rtol=1e-4).item()
         )
         self.assertTrue(
-            mx.allclose(grads[1], expected_grads[1], atol=1e-4, rtol=1e-4).item()
+            mx.allclose(grads[1], expected_grad_w, atol=1e-4, rtol=1e-4).item()
         )
 
     def __conv_general_test(
