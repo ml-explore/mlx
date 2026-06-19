@@ -81,6 +81,7 @@ Operations
    expand_dims
    eye
    flatten
+   flip
    floor
    floor_divide
    full
@@ -193,6 +194,7 @@ Operations
    tril
    triu
    unflatten
+   unstack
    var
    view
    where
