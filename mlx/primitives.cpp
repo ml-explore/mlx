@@ -2949,10 +2949,11 @@ std::vector<array> LogSumExp::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
-  return {multiply(
+  auto weighted_tangent = multiply(
       tangents[0],
       softmax(primals[0], std::vector<int>{-1}, true, stream()),
-      stream())};
+      stream());
+  return {sum(weighted_tangent, -1, true, stream())};
 }
 
 std::vector<Shape> LogSumExp::output_shapes(const std::vector<array>& inputs) {

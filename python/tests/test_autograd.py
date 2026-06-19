@@ -1032,6 +1032,18 @@ class TestAutograd(mlx_tests.MLXTestCase):
         out, jout = mx.jvp(mx.max, primals=(a,), tangents=(b,))
         self.assertEqual(jout[0].item(), 0)
 
+        a = mx.array([[0.0, 1.0, 2.0], [2.0, 0.0, -1.0]])
+        b = mx.array([[3.0, 5.0, 7.0], [11.0, 13.0, 17.0]])
+        _, jout = mx.jvp(lambda x: mx.logsumexp(x, axis=-1), (a,), (b,))
+        expected = mx.sum(mx.softmax(a, axis=-1) * b, axis=-1)
+        self.assertEqual(jout[0].shape, (2,))
+        self.assertTrue(mx.allclose(jout[0], expected))
+
+        _, jout = mx.jvp(lambda x: mx.logsumexp(x, axis=-1, keepdims=True), (a,), (b,))
+        expected = mx.sum(mx.softmax(a, axis=-1) * b, axis=-1, keepdims=True)
+        self.assertEqual(jout[0].shape, (2, 1))
+        self.assertTrue(mx.allclose(jout[0], expected))
+
     def test_complex_prod_vjp(self):
         def prod(x):
             return x.prod(axis=0)
