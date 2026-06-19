@@ -1026,6 +1026,39 @@ class TestFast(mlx_tests.MLXTestCase):
         out = call_kernel(a, source)
         self.assertTrue(mx.array_equal(out, mx.ones_like(out)))
 
+    def test_custom_metal_kernel_invalid_math_mode(self):
+        with self.assertRaises(ValueError):
+            mx.fast.metal_kernel(
+                name="invalid_math_mode",
+                input_names=["inp"],
+                output_names=["out"],
+                source="out[0] = inp[0];",
+                math_mode="precise",
+            )
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_metal_kernel_safe_math_mode(self):
+        kernel = mx.fast.metal_kernel(
+            name="safe_math_mode",
+            input_names=["inp"],
+            output_names=["out"],
+            source="""
+                uint elem = thread_position_in_grid.x;
+                out[elem] = metal::exp(inp[elem]);
+            """,
+            math_mode="safe",
+        )
+        a = mx.array([-float("inf"), 0.0], dtype=mx.float32)
+        out = kernel(
+            inputs=[a],
+            grid=(a.size, 1, 1),
+            threadgroup=(a.size, 1, 1),
+            output_shapes=[a.shape],
+            output_dtypes=[a.dtype],
+            stream=mx.gpu,
+        )[0]
+        self.assertTrue(mx.array_equal(out, mx.array([0.0, 1.0])))
+
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_kernel_mixed_dtypes(self):
         # Calling the same kernel with different input dtypes in a single
