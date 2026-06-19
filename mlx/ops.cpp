@@ -4373,9 +4373,9 @@ array conv_general(
   const bool zero_depth_padding = padding_lo[0] == 0 && padding_hi[0] == 0;
   const bool enough_depth_work =
       in.shape(0) > 1 || out_shape[1] >= 14 || in.shape(2) <= 32;
-  if (stream.device == Device::gpu && low_channel_3d && groups == 1 && !flip &&
-      stride[0] == 1 && zero_depth_padding && unit_dilation &&
-      wt.shape(1) > 1 && enough_depth_work) {
+  if (stream.device == Device::gpu && metal::is_available() && low_channel_3d &&
+      groups == 1 && !flip && stride[0] == 1 && zero_depth_padding &&
+      unit_dilation && wt.shape(1) > 1 && enough_depth_work) {
     const int out_depth = out_shape[1];
     std::vector<array> depth_outputs;
     depth_outputs.reserve(wt.shape(1));
