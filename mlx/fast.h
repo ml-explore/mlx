@@ -57,6 +57,12 @@ MLX_API array scaled_dot_product_attention(
 using TemplateArg = std::variant<int, bool, Dtype>;
 using ScalarArg = std::variant<bool, int, float>;
 
+enum class MetalKernelMathMode {
+  Safe = 0,
+  Relaxed = 1,
+  Fast = 2,
+};
+
 using CustomKernelFunction = std::function<std::vector<array>(
     const std::vector<array>&,
     const std::vector<Shape>&,
@@ -75,7 +81,8 @@ MLX_API CustomKernelFunction metal_kernel(
     const std::string& source,
     const std::string& header = "",
     bool ensure_row_contiguous = true,
-    bool atomic_outputs = false);
+    bool atomic_outputs = false,
+    MetalKernelMathMode math_mode = MetalKernelMathMode::Safe);
 
 MLX_API CustomKernelFunction cuda_kernel(
     const std::string& name,

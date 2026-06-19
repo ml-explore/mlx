@@ -5,6 +5,7 @@
 #include <Metal/Metal.hpp>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
@@ -170,6 +171,11 @@ class MLX_API Device {
       const std::string& name,
       const std::function<std::string(void)>& builder);
 
+  MTL::Library* get_library(
+      const std::string& name,
+      const std::function<std::string(void)>& builder,
+      std::optional<MTL::MathMode> math_mode);
+
   void clear_library(const std::string& name);
 
   MTL::ComputePipelineState* get_kernel(
@@ -190,7 +196,9 @@ class MLX_API Device {
   }
 
  private:
-  NS::SharedPtr<MTL::Library> build_library_(const std::string& source_string);
+  NS::SharedPtr<MTL::Library> build_library_(
+      const std::string& source_string,
+      std::optional<MTL::MathMode> math_mode = std::nullopt);
 
   NS::SharedPtr<MTL::Function> get_function_(
       const std::string& name,

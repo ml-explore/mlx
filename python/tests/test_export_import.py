@@ -638,6 +638,38 @@ class TestExportImport(mlx_tests.MLXTestCase):
             with self.assertRaisesRegex(RuntimeError, "No Metal back-end"):
                 mx.eval(mx.compile(call)(a))
 
+    def test_export_custom_metal_kernel_with_math_mode(self):
+        source = """
+            uint elem = thread_position_in_grid.x;
+            out[elem] = metal::exp(a[elem]);
+        """
+        kernel = mx.fast.metal_kernel(
+            name="math_mode_export",
+            input_names=["a"],
+            output_names=["out"],
+            source=source,
+            math_mode="safe",
+        )
+
+        def call(a):
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(min(a.size, 256), 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        a = mx.array([-float("inf"), 0.0])
+        path = os.path.join(self.test_dir, "metal_kernel_math_mode.mlxfn")
+        mx.export_function(path, call, a)
+        self.assertTrue(os.path.exists(path))
+
+        if mx.metal.is_available():
+            imported = mx.import_function(path)
+            self.assertTrue(mx.array_equal(imported(a)[0], call(a)))
+
     def test_export_import_multi_with_constants(self):
 
         path = os.path.join(self.test_dir, "fn.mlxfn")
