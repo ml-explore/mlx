@@ -447,7 +447,16 @@ RocmAllocator::RocmAllocator()
     // discrete GPU each eviction is a blocking hipFree (waits on GPU drain) —
     // which stalls decode. Leave only a small reserve for driver/fragmentation.
     if (device_is_integrated(dev)) {
-      memory_limit_ = static_cast<size_t>(total * 0.8);
+      // The APU's managed/fine-grained allocations live in the large unified
+      // pool (system RAM / GTT), but hipMemGetInfo reports only the tiny
+      // device-visible VRAM carveout. Sizing the cache to that carveout makes
+      // the allocator evict on nearly every allocation, and each eviction is a
+      // blocking hipFree that deadlocks under heavy async load (MTP). Size the
+      // limit to system RAM, which is what the unified pool actually draws from.
+      size_t sys_ram = static_cast<size_t>(sysconf(_SC_PHYS_PAGES)) *
+          static_cast<size_t>(sysconf(_SC_PAGE_SIZE));
+      memory_limit_ = std::max(
+          static_cast<size_t>(total * 0.8), static_cast<size_t>(sys_ram * 0.8));
     } else {
       size_t reserve = 512ull << 20; // 512 MB driver/TTM headroom
       memory_limit_ = (total > reserve) ? (total - reserve) : total;
@@ -459,11 +468,29 @@ RocmAllocator::RocmAllocator()
   slab_allocator_.warmup();
 }
 
+// Device frees deferred out of free() so they never run a blocking hipFree on
+// the completion-worker thread (see free()). Drained by malloc on the eval
+// thread, where a blocking hipFree cannot self-deadlock the worker.
+static std::mutex g_pending_free_mutex;
+static std::vector<RocmBuffer*> g_pending_frees;
+
 Buffer RocmAllocator::malloc(size_t size) {
   if (!rocm_available()) {
     throw std::runtime_error(
         "Cannot allocate ROCm memory: no ROCm-capable device detected. "
         "Please use CPU backend instead.");
+  }
+
+  // Drain deferred device frees on this (eval) thread, outside any lock.
+  {
+    std::vector<RocmBuffer*> to_free;
+    {
+      std::lock_guard<std::mutex> lk(g_pending_free_mutex);
+      to_free.swap(g_pending_frees);
+    }
+    for (auto* b : to_free) {
+      rocm_free(b);
+    }
   }
 
   // Arena fast path: deterministic bump allocation for HIP Graph capture
@@ -579,11 +606,16 @@ void RocmAllocator::free(Buffer buffer) {
     return;
   }
 
-  // Large buffers go to the BufferCache
+  // Large buffers go to the BufferCache. When the cache is full do NOT call the
+  // blocking hipFree here: free() can run on the completion-worker thread, and
+  // hipFree on the APU's managed memory blocks waiting for GPU completions that
+  // only the worker delivers — a self-deadlock. Defer it; malloc drains it on
+  // the eval thread where blocking is safe.
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
-    rocm_free(buf);
+    std::lock_guard<std::mutex> lk(g_pending_free_mutex);
+    g_pending_frees.push_back(buf);
   }
 }
 
