@@ -197,6 +197,18 @@ TEST_CASE("test gpu reduce with axes") {
   }
 }
 
+TEST_CASE("test gpu short row reduce batching") {
+  auto x = reshape(arange(0, 4099 * 16, 1, float32), {4099, 16});
+
+  auto sum_gpu = sum(x, -1, false, Device::gpu);
+  auto sum_cpu = sum(x, -1, false, Device::cpu);
+  CHECK(array_equal(sum_gpu, sum_cpu, Device::cpu).item<bool>());
+
+  auto max_gpu = max(x, -1, false, Device::gpu);
+  auto max_cpu = max(x, -1, false, Device::cpu);
+  CHECK(array_equal(max_gpu, max_cpu, Device::cpu).item<bool>());
+}
+
 TEST_CASE("test gpu binary ops") {
   // scalar-scalar
   {

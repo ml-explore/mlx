@@ -261,9 +261,14 @@ void row_reduce_simple(
       int threads = warps * WARP_SIZE;
       dim3 block(threads, 1, 1);
 
-      // Pick the kernel
+      // Pick the kernel. Short row reductions launch many lightly-loaded
+      // blocks, so batch a few rows per block when the tail handling remains
+      // simple.
       auto kernel = cu::row_reduce_simple<T, U, OP, N_READS>;
-      if (grid.x >= 1024) {
+      if (reductions <= WARP_SIZE && grid.x >= 2048) {
+        grid.x = (grid.x + 3) / 4;
+        kernel = cu::row_reduce_simple<T, U, OP, N_READS, 4>;
+      } else if (grid.x >= 1024) {
         grid.x = (grid.x + 1) / 2;
         kernel = cu::row_reduce_simple<T, U, OP, N_READS, 2>;
       }
