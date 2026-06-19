@@ -265,7 +265,10 @@ void row_reduce_simple(
       // blocks, so batch a few rows per block when the tail handling remains
       // simple.
       auto kernel = cu::row_reduce_simple<T, U, OP, N_READS>;
-      if (reductions <= WARP_SIZE && grid.x >= 2048) {
+      if (reductions <= WARP_SIZE / 2 && grid.x >= 4096) {
+        grid.x = (grid.x + 7) / 8;
+        kernel = cu::row_reduce_simple<T, U, OP, N_READS, 8>;
+      } else if (reductions <= WARP_SIZE && grid.x >= 2048) {
         grid.x = (grid.x + 3) / 4;
         kernel = cu::row_reduce_simple<T, U, OP, N_READS, 4>;
       } else if (grid.x >= 1024) {
