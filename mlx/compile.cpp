@@ -1037,9 +1037,8 @@ std::vector<array> compile_replace(
 
   auto is_load = [](const Primitive& p) { return typeid(p) == typeid(Load); };
   auto has_negative_strides = [](const array& a) {
-    return std::any_of(a.strides().begin(), a.strides().end(), [](auto s) {
-      return s < 0;
-    });
+    return std::any_of(
+        a.strides().begin(), a.strides().end(), [](auto s) { return s < 0; });
   };
   auto is_negative_strided_slice = [](const array& a) {
     if (!a.has_primitive()) {
@@ -1050,9 +1049,8 @@ std::vector<array> compile_replace(
       return false;
     }
     const auto& strides = std::get<2>(static_cast<const Slice&>(prim).state());
-    return std::any_of(strides.begin(), strides.end(), [](auto s) {
-      return s < 0;
-    });
+    return std::any_of(
+        strides.begin(), strides.end(), [](auto s) { return s < 0; });
   };
 
   for (auto& a : tape) {
