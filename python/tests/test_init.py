@@ -106,6 +106,15 @@ class TestInit(mlx_tests.MLXTestCase):
             with self.assertRaises(ValueError):
                 result = initializer(mx.zeros((1,)))
 
+        for sparsity in [0.0, 0.25, 0.5, 0.75, 1.0]:
+            result = init.sparse(sparsity, mean=1.0, std=0.0)(
+                mx.array(np.empty((5, 7)))
+            )
+            expected_zeros = int(np.ceil(sparsity * result.shape[0]))
+            self.assertTrue(
+                mx.all(mx.sum(result == 0, axis=0) == expected_zeros).item()
+            )
+
     def test_orthogonal(self):
         initializer = init.orthogonal(gain=1.0, dtype=mx.float32)
 
