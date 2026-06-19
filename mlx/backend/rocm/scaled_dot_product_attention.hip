@@ -4,6 +4,7 @@
 
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/device/utils.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
@@ -274,7 +275,7 @@ void sdpa_vector(
   int gqa_factor = q.shape(1) / k.shape(1);
 
   // Allocate output
-  o.set_data(allocator::malloc(o.nbytes()));
+  o.set_data(mlx::core::rocm::malloc_async(o.nbytes(), encoder));
 
   // Build params struct
   rocm::AttnParams params;

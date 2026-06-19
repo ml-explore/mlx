@@ -6,6 +6,7 @@
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/jit_module.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
@@ -284,7 +285,7 @@ void CustomKernel::eval_gpu(
       copies.emplace_back(init_value_.value(), out.dtype());
       fill_gpu(copies.back(), out, s);
     } else {
-      out.set_data(allocator::malloc(out.nbytes()));
+      out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
     }
   }
 

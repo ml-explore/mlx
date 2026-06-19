@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/primitives.h"
@@ -39,7 +40,7 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = rocm::get_command_encoder(stream());
   auto size = out.size();
   auto nbytes = size * out.itemsize();
-  out.set_data(allocator::malloc(nbytes));
+  out.set_data(mlx::core::rocm::malloc_async(nbytes, encoder));
   // Stage through PINNED host memory. An async H2D copy from pageable memory is
   // unreliable on a discrete GPU over a non-coherent link (TB5 eGPU): the driver
   // must internally stage it, which can stall the stream (queue stuck, GPU shows

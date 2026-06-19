@@ -29,6 +29,10 @@ struct RocmBuffer {
   // through raw_ptr). gpu_ptr() flushes host_shadow -> VRAM and clears it so
   // kernels see CPU writes; raw_ptr() won't re-pull from VRAM while dirty.
   bool host_dirty;
+  // For stream-ordered pool buffers: the stream the buffer was allocated/used
+  // on. hipFreeAsync must run on this same (actively-executing) stream so the
+  // free retires in order behind the buffer's last use and the pool reclaims it.
+  void* alloc_stream;
 };
 
 // ---------------------------------------------------------------------------
@@ -177,6 +181,14 @@ class RocmAllocator : public allocator::Allocator {
   void free(Buffer buffer) override;
   size_t size(Buffer buffer) const override;
 
+  // CUDA-style stream-ordered allocation. When the async pool is enabled and a
+  // real stream is given for a discrete device, allocates GPU-only pool memory
+  // (hipMallocAsync) freed non-blocking (hipFreeAsync). Otherwise falls back to
+  // the unified path (== malloc). CPU access to pool buffers is served by the
+  // existing host-shadow path (device != -1) in Buffer::raw_ptr().
+  Buffer malloc_async(size_t size, int device, void* stream);
+  void free_async(RocmBuffer* buf, void* stream);
+
   // Discrete GPU: ensure buf has an up-to-date pinned host mirror for CPU reads.
   // Keeps the VRAM copy resident (does not free it or flip device to -1).
   void ensure_host_shadow(RocmBuffer& buf);
@@ -203,10 +215,18 @@ class RocmAllocator : public allocator::Allocator {
   std::mutex mutex_;
   size_t memory_limit_;
   size_t max_pool_size_;
+  size_t total_memory_{0};
+  size_t free_limit_{0};
   BufferCache<RocmBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
   SlabAllocator slab_allocator_;
+
+  // Per-device hipMemPool + a dedicated free stream for stream-less frees
+  // (mirrors the CUDA backend). Empty entry => device has no pool support and
+  // uses the blocking path.
+  std::vector<void*> mem_pools_;
+  std::vector<void*> free_streams_;
 
  public:
   // Arena mode for HIP Graph capture.
@@ -220,5 +240,11 @@ class RocmAllocator : public allocator::Allocator {
 };
 
 RocmAllocator& allocator();
+
+class CommandEncoder;
+// Stream-ordered allocation bound to an encoder's device/stream. Primitives
+// call this for their output buffers so transient activations come from the
+// device pool (fast, non-blocking free, in-eval reuse) instead of unified mem.
+Buffer malloc_async(size_t size, CommandEncoder& encoder);
 
 } // namespace mlx::core::rocm

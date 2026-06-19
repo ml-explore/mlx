@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
@@ -411,11 +412,11 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
     array trans = swapaxes_in_eval(in, axis, last_dim);
     in = contiguous_copy_gpu(trans, s);
     encoder.add_temporary(in);
-    out = array(allocator::malloc(out.nbytes()), in.shape(), out.dtype());
+    out = array(mlx::core::rocm::malloc_async(out.nbytes(), encoder), in.shape(), out.dtype());
     encoder.add_temporary(out);
   } else {
     out.set_data(
-        allocator::malloc(in.data_size() * out.itemsize()),
+        mlx::core::rocm::malloc_async(in.data_size() * out.itemsize(), encoder),
         in.data_size(),
         in.strides(),
         in.flags());

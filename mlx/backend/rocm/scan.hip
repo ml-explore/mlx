@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/binary_ops.hpp"
 #include "mlx/backend/rocm/device/cast_op.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
@@ -528,7 +529,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
       out.copy_shared_buffer(in);
     } else {
       out.set_data(
-          allocator::malloc(in.data_size() * out.itemsize()),
+          mlx::core::rocm::malloc_async(in.data_size() * out.itemsize(), encoder),
           in.data_size(),
           in.strides(),
           in.flags());

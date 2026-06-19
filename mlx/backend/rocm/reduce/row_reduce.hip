@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/reduce/reduce.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
@@ -272,8 +273,8 @@ void row_reduce(
     Reduce::ReduceType reduce_type,
     const std::vector<int>& axes,
     const ReductionPlan& plan) {
-  out.set_data(allocator::malloc(out.nbytes()));
-  
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
+
   int row_size = plan.shape.back();
   size_t out_size = out.size();
   

@@ -2,6 +2,7 @@
 
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/binary_ops.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/dtype_utils.h"
@@ -155,9 +156,9 @@ void binary_two_op_gpu_inplace(
   auto& encoder = rocm::get_command_encoder(s);
   
   set_binary_op_output_data(
-      a, b, out_a, bopt, [&](auto n) { return allocator::malloc(n); });
+      a, b, out_a, bopt, [&](auto n) { return mlx::core::rocm::malloc_async(n, encoder); });
   set_binary_op_output_data(
-      a, b, out_b, bopt, [&](auto n) { return allocator::malloc(n); });
+      a, b, out_b, bopt, [&](auto n) { return mlx::core::rocm::malloc_async(n, encoder); });
   
   if (out_a.size() == 0) {
     return;

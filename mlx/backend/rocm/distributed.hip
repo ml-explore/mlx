@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/distributed/primitives.h"
@@ -28,7 +29,7 @@ void AllReduce::eval_gpu(
       out.copy_shared_buffer(in);
       return {in, out};
     } else {
-      out.set_data(allocator::malloc(out.nbytes()));
+      out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
       return {in, out};
     }
   };
@@ -74,7 +75,7 @@ void AllGather::eval_gpu(
   };
 
   auto input = ensure_contiguous(inputs[0]);
-  outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
+  outputs[0].set_data(mlx::core::rocm::malloc_async(outputs[0].nbytes(), encoder));
 
   encoder.set_input_array(input);
   encoder.set_output_array(outputs[0]);
@@ -102,7 +103,7 @@ void ReduceScatter::eval_gpu(
   };
 
   auto input = ensure_contiguous(inputs[0]);
-  outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
+  outputs[0].set_data(mlx::core::rocm::malloc_async(outputs[0].nbytes(), encoder));
 
   encoder.set_input_array(input);
   encoder.set_output_array(outputs[0]);

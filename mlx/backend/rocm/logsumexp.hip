@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/cast_op.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/gpu/copy.h"
@@ -135,7 +136,7 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto in = ensure_contiguous(inputs[0]);
   if (in.flags().row_contiguous) {
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
   } else {
     auto n = in.shape(-1);
     auto flags = in.flags();
@@ -150,7 +151,7 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
     flags.col_contiguous = col_contig;
     out.set_data(
-        allocator::malloc(in.nbytes() / n),
+        mlx::core::rocm::malloc_async(in.nbytes() / n, encoder),
         in.data_size() / n,
         std::move(strides),
         flags);

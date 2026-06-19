@@ -2,6 +2,7 @@
 
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/conv/conv.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/gemms/naive_gemm.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
@@ -283,7 +284,7 @@ void gemm_conv_nd(
   }
 
   array unfolded({mat_M, mat_K}, in.dtype(), nullptr, {});
-  unfolded.set_data(allocator::malloc(unfolded.nbytes()));
+  unfolded.set_data(mlx::core::rocm::malloc_async(unfolded.nbytes(), encoder));
   encoder.add_temporary(unfolded);
 
   int wt_spatial_size = mat_K / params.C;
@@ -375,7 +376,7 @@ void gemm_grouped_conv_nd(
   }
 
   array unfolded({mat_M, mat_K * params.groups}, in.dtype(), nullptr, {});
-  unfolded.set_data(allocator::malloc(unfolded.nbytes()));
+  unfolded.set_data(mlx::core::rocm::malloc_async(unfolded.nbytes(), encoder));
   encoder.add_temporary(unfolded);
 
   int wt_spatial_size = (mat_K * params.groups) / params.C;

@@ -89,6 +89,13 @@ static bool use_finegrained() {
   return true;
 }
 
+// CUDA-style stream-ordered device pool (hipMallocAsync/hipFreeAsync). Always
+// on where the device supports memory pools; allocations fall back to the
+// unified path only for pool-less devices or stream-less requests.
+static bool use_async_pool() {
+  return true;
+}
+
 static int alloc_device_tag() {
   return use_finegrained() ? -1 : 0;
 }
@@ -462,15 +469,44 @@ RocmAllocator::RocmAllocator()
       memory_limit_ = (total > reserve) ? (total - reserve) : total;
     }
     max_pool_size_ = memory_limit_;
+    total_memory_ = total;
+    free_limit_ = (total > memory_limit_) ? (total - memory_limit_) : 0;
+  }
+
+  // Per-device hipMemPool + dedicated free stream for the async pool path.
+  if (use_async_pool()) {
+    int n = 0;
+    (void)hipGetDeviceCount(&n);
+    mem_pools_.resize(n, nullptr);
+    free_streams_.resize(n, nullptr);
+    int saved = 0;
+    (void)hipGetDevice(&saved);
+    for (int i = 0; i < n; ++i) {
+      int supported = 0;
+      (void)hipDeviceGetAttribute(
+          &supported, hipDeviceAttributeMemoryPoolsSupported, i);
+      if (!supported)
+        continue;
+      (void)hipSetDevice(i);
+      hipMemPool_t pool = nullptr;
+      if (hipDeviceGetDefaultMemPool(&pool, i) == hipSuccess) {
+        mem_pools_[i] = pool;
+        hipStream_t s = nullptr;
+        if (hipStreamCreateWithFlags(&s, hipStreamNonBlocking) == hipSuccess)
+          free_streams_[i] = s;
+      }
+    }
+    (void)hipSetDevice(saved);
   }
 
   // Pre-allocate slab pages for common allocation sizes
   slab_allocator_.warmup();
 }
 
-// Device frees deferred out of free() so they never run a blocking hipFree on
-// the completion-worker thread (see free()). Drained by malloc on the eval
-// thread, where a blocking hipFree cannot self-deadlock the worker.
+// Unified-path frees deferred out of free() so they never run a blocking
+// hipFree on the completion-worker thread (which self-deadlocks). Drained by
+// malloc on the eval thread, where a blocking hipFree is safe. Pool buffers
+// don't use this — they free non-blocking via hipFreeAsync.
 static std::mutex g_pending_free_mutex;
 static std::vector<RocmBuffer*> g_pending_frees;
 
@@ -481,7 +517,7 @@ Buffer RocmAllocator::malloc(size_t size) {
         "Please use CPU backend instead.");
   }
 
-  // Drain deferred device frees on this (eval) thread, outside any lock.
+  // Drain deferred unified frees on this (eval) thread, outside any lock.
   {
     std::vector<RocmBuffer*> to_free;
     {
@@ -528,39 +564,88 @@ Buffer RocmAllocator::malloc(size_t size) {
     }
 
     // Slab growth failed — fall through to BufferCache
+    // Slab growth failed — fall through to BufferCache
   } else {
     // Large allocation: page-align
     size = page_size * ((size + page_size - 1) / page_size);
   }
 
-  // Try BufferCache
+  // Stream-less allocations (model load, KV, non-wired primitives) use unified
+  // memory + the BufferCache. The wired primitives route their outputs through
+  // malloc_async (the pool) instead; this path is the safe fallback.
   RocmBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
-    // Memory pressure: try to reclaim cache
     int64_t mem_to_free =
         get_active_memory() + get_cache_memory() + size - memory_limit_;
     if (mem_to_free > 0) {
       buffer_cache_.release_cached_buffers(mem_to_free);
     }
-
     lock.unlock();
-    // Both the integrated APU and the discrete RDNA4 GPU use fine-grained device
-    // memory with device == -1: the allocation is VRAM-resident (full bandwidth
-    // for kernels via gpu_ptr) and host-coherent over the BAR (CPU access via
-    // raw_ptr returns the same pointer). No host shadow, no migration.
     bool is_managed = false;
     void* data = rocm_unified_malloc(size, is_managed);
-    buf = new RocmBuffer{data, size, is_managed, alloc_device_tag(), nullptr, false};
+    buf = new RocmBuffer{data, size, is_managed, alloc_device_tag(), nullptr, false, nullptr};
     lock.lock();
   }
   active_memory_ += size;
   peak_memory_ = std::max(active_memory_, peak_memory_);
-
-  // Maintain cache below limit
   if (get_cache_memory() > max_pool_size_) {
     buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
   return Buffer{buf};
+}
+
+Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
+  hipStream_t stream = static_cast<hipStream_t>(stream_v);
+  // Fall back to the unified path unless the pool is usable for this request.
+  if (!use_async_pool() || stream == nullptr || device < 0 ||
+      device >= static_cast<int>(mem_pools_.size()) ||
+      mem_pools_[device] == nullptr || size == 0 ||
+      size <= SlabAllocator::kMaxSlabSize) {
+    return malloc(size);
+  }
+
+  size = page_size * ((size + page_size - 1) / page_size);
+
+  // Bypass our BufferCache entirely: the hipMemPool already manages reuse and
+  // retention (ReleaseThreshold=MAX). Layering our own eviction on top causes
+  // hipFreeAsync storms that starve the HSA handler pool and wedge. Let the GPU
+  // manage its own memory — alloc straight from the pool.
+  void* data = nullptr;
+  hipError_t err = hipMallocAsync(&data, size, stream);
+  if (err != hipSuccess || !data) {
+    (void)hipGetLastError();
+    return malloc(size); // pool exhausted: fall back to unified
+  }
+  // is_managed=false marks this as a stream-ordered pool buffer (freed via
+  // hipFreeAsync); device>=0 routes CPU access through the host shadow.
+  RocmBuffer* buf = new RocmBuffer{data, size, false, device, nullptr, false, stream};
+  std::lock_guard lock(mutex_);
+  active_memory_ += buf->size;
+  peak_memory_ = std::max(active_memory_, peak_memory_);
+  return Buffer{buf};
+}
+
+void RocmAllocator::free_async(RocmBuffer* buf, void* stream_v) {
+  hipStream_t stream = static_cast<hipStream_t>(stream_v);
+  // Free on the buffer's own alloc/eval stream so the free retires in order
+  // behind its last use and the pool reclaims it (a separate idle free-stream
+  // never executes during a forward, so the pool can't reuse and VRAM grows).
+  if (!stream)
+    stream = static_cast<hipStream_t>(buf->alloc_stream);
+  if (!stream && buf->device >= 0 &&
+      buf->device < static_cast<int>(free_streams_.size())) {
+    stream = static_cast<hipStream_t>(free_streams_[buf->device]);
+  }
+  if (buf->host_shadow) {
+    (void)hipHostFree(buf->host_shadow);
+    buf->host_shadow = nullptr;
+  }
+  if (stream) {
+    (void)hipFreeAsync(buf->data, stream);
+  } else {
+    (void)hipFree(buf->data);
+  }
+  delete buf;
 }
 
 static std::mutex g_deferred_mutex;
@@ -606,11 +691,15 @@ void RocmAllocator::free(Buffer buffer) {
     return;
   }
 
-  // Large buffers go to the BufferCache. When the cache is full do NOT call the
-  // blocking hipFree here: free() can run on the completion-worker thread, and
-  // hipFree on the APU's managed memory blocks waiting for GPU completions that
-  // only the worker delivers — a self-deadlock. Defer it; malloc drains it on
-  // the eval thread where blocking is safe.
+  // Stream-ordered pool buffer (the common case): return it straight to the
+  // hipMemPool via hipFreeAsync on its own stream. The pool owns reuse/retention.
+  if (buf->device >= 0 && !buf->is_managed) {
+    free_async(buf, nullptr);
+    return;
+  }
+
+  // Unified buffer (model load / KV / non-wired primitives). Recycle to the
+  // BufferCache, or defer the blocking hipFree off the worker thread.
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
@@ -628,6 +717,11 @@ size_t RocmAllocator::size(Buffer buffer) const {
 }
 
 void RocmAllocator::rocm_free(RocmBuffer* buf) {
+  // Stream-ordered pool buffer: free non-blocking via hipFreeAsync.
+  if (buf->device >= 0 && !buf->is_managed) {
+    free_async(buf, nullptr);
+    return;
+  }
   if (buf->host_shadow) {
     (void)hipHostFree(buf->host_shadow);
     buf->host_shadow = nullptr;
@@ -726,24 +820,24 @@ size_t RocmAllocator::set_cache_limit(size_t limit) {
 }
 
 void RocmAllocator::clear_cache() {
-  // clear() frees every cached buffer with a blocking hipFree. On unified memory
-  // that waits for outstanding GPU work whose completion the worker thread
-  // delivers — and the worker frees through this same mutex_. Holding the lock
-  // across the hipFree would deadlock. Drain the device first so the frees have
-  // nothing to wait on, and release any deferred frees while we are here.
+  // The hipMemPool owns reuse/retention for pool buffers; releasing memory means
+  // trimming it. Drain the device first so trimmed blocks have no outstanding
+  // work, then drain deferred unified frees on this (safe) thread. Do NOT
+  // blocking-clear the unified BufferCache under pool handler pressure — those
+  // buffers are bounded by max_pool_size_ and reused.
   (void)hipDeviceSynchronize();
-  {
-    std::vector<RocmBuffer*> to_free;
-    {
-      std::lock_guard<std::mutex> lk(g_pending_free_mutex);
-      to_free.swap(g_pending_frees);
-    }
-    for (auto* b : to_free) {
-      rocm_free(b);
-    }
+  for (void* p : mem_pools_) {
+    if (p)
+      (void)hipMemPoolTrimTo(static_cast<hipMemPool_t>(p), 0);
   }
-  std::lock_guard lk(mutex_);
-  buffer_cache_.clear();
+  std::vector<RocmBuffer*> to_free;
+  {
+    std::lock_guard<std::mutex> lk(g_pending_free_mutex);
+    to_free.swap(g_pending_frees);
+  }
+  for (auto* b : to_free) {
+    rocm_free(b);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -820,7 +914,7 @@ RocmBuffer* DecodeArena::malloc(size_t size) {
 
   // Fully initialize host_shadow/host_dirty: gpu_ptr() reads host_dirty, so an
   // uninitialized value could spuriously trigger a flush of a garbage pointer.
-  descriptors_.push_back(RocmBuffer{ptr, size, is_managed_, -1, nullptr, false});
+  descriptors_.push_back(RocmBuffer{ptr, size, is_managed_, -1, nullptr, false, nullptr});
   desc_index_++;
   return &descriptors_.back();
 }
@@ -828,6 +922,13 @@ RocmBuffer* DecodeArena::malloc(size_t size) {
 RocmAllocator& allocator() {
   static RocmAllocator* allocator_ = new RocmAllocator;
   return *allocator_;
+}
+
+Buffer malloc_async(size_t size, CommandEncoder& encoder) {
+  return allocator().malloc_async(
+      size,
+      encoder.device().hip_device(),
+      static_cast<hipStream_t>(encoder.stream()));
 }
 
 } // namespace rocm

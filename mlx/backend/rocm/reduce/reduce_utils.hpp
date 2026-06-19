@@ -6,6 +6,7 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/device/utils.hpp"
 
@@ -107,7 +108,7 @@ inline void allocate_same_layout(
     const std::vector<int>& axes,
     rocm::CommandEncoder& encoder) {
   if (in.flags().row_contiguous) {
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
     return;
   }
 
@@ -146,7 +147,7 @@ inline void allocate_same_layout(
   fl.col_contiguous = cc;
   fl.contiguous = true;
   out.set_data(
-      allocator::malloc(out.nbytes()),
+      mlx::core::rocm::malloc_async(out.nbytes(), encoder),
       data_size,
       final_strides,
       fl,

@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/reduce/reduce.hpp"
 #include "mlx/backend/gpu/copy.h"
@@ -254,9 +255,10 @@ void LayerNorm::eval_gpu(
     std::vector<array>& outputs) {
   auto& s = stream();
   auto& out = outputs[0];
+  auto& encoder = rocm::get_command_encoder(s);
 
   // Make sure that the last dimension is contiguous.
-  auto set_output = [&s, &out](const array& x) {
+  auto set_output = [&s, &out, &encoder](const array& x) {
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
     if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
@@ -267,7 +269,7 @@ void LayerNorm::eval_gpu(
         out.copy_shared_buffer(x);
       } else {
         out.set_data(
-            allocator::malloc(x.data_size() * x.itemsize()),
+            mlx::core::rocm::malloc_async(x.data_size() * x.itemsize(), encoder),
             x.data_size(),
             x.strides(),
             x.flags());
@@ -289,7 +291,6 @@ void LayerNorm::eval_gpu(
   int64_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
   int64_t b_stride = (b.ndim() == 1) ? b.strides()[0] : 0;
 
-  auto& encoder = rocm::get_command_encoder(s);
   encoder.set_input_array(x);
   encoder.set_input_array(w);
   encoder.set_input_array(b);
@@ -368,7 +369,7 @@ void LayerNormVJP::eval_gpu(
     gx.copy_shared_buffer(g);
     g_in_gx = true;
   } else {
-    gx.set_data(allocator::malloc(gx.nbytes()));
+    gx.set_data(mlx::core::rocm::malloc_async(gx.nbytes(), encoder));
   }
   if (g_copied && !g_in_gx) {
     encoder.add_temporary(g);
@@ -387,7 +388,7 @@ void LayerNormVJP::eval_gpu(
       g_in_gw = true;
       gw_temp.copy_shared_buffer(g);
     } else {
-      gw_temp.set_data(allocator::malloc(gw_temp.nbytes()));
+      gw_temp.set_data(mlx::core::rocm::malloc_async(gw_temp.nbytes(), encoder));
       encoder.add_temporary(gw_temp);
     }
   }
@@ -396,7 +397,7 @@ void LayerNormVJP::eval_gpu(
   bool has_gb = (gb.ndim() == 1 && gb.size() == axis_size);
   if (has_gb) {
     // Sum reduction over rows for gb
-    gb.set_data(allocator::malloc(gb.nbytes()));
+    gb.set_data(mlx::core::rocm::malloc_async(gb.nbytes(), encoder));
     // TODO: Implement proper column reduction for gb
     // For now, we'll compute it in the kernel or use a simple reduction
   }

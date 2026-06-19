@@ -3,6 +3,7 @@
 #include "mlx/backend/common/matmul.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/gemms/gemv.h"
 #include "mlx/backend/rocm/gemms/hipblaslt_gemm.h"
 #include "mlx/backend/rocm/gemms/naive_gemm.h"
@@ -988,7 +989,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
 
   int M = a_pre.shape(-2);
   int N = b_pre.shape(-1);
@@ -1021,7 +1022,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (beta_ != 0.0f) {
     copy_gpu(c, out, CopyType::General, s);
   } else {
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
   }
 
   // Check if rocBLAS is available
@@ -1078,7 +1079,7 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
 
   // Extract shapes from inputs.
   int M = a.shape(-2);

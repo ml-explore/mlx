@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/reduce/reduce.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/dtype_utils.h"
@@ -55,7 +56,7 @@ void init_reduce(
     Reduce::ReduceType reduce_type) {
   // Allocate if needed
   if (out.data_shared_ptr() == nullptr) {
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
   }
   
   encoder.set_output_array(out);

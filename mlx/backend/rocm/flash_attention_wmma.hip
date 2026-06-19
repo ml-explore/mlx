@@ -8,6 +8,7 @@
 
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/dtype_utils.h"
 
@@ -407,7 +408,7 @@ void sdpa_flash_wmma(
   int B = q.shape(0), H = q.shape(1), qL = q.shape(2), kL = k.shape(2);
   int D = q.shape(3);
 
-  o.set_data(allocator::malloc(o.nbytes()));
+  o.set_data(mlx::core::rocm::malloc_async(o.nbytes(), enc));
 
   rocm::FAWmmaParams p{};
   p.B = B; p.H = H; p.D = D; p.qL = qL; p.kL = kL;

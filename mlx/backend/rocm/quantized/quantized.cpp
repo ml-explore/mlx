@@ -2,6 +2,7 @@
 
 #include "mlx/backend/rocm/quantized/quantized.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/fast_primitives.h"
 
@@ -52,7 +53,7 @@ void fast::Quantize::eval_gpu(
     auto scales = ensure_row_contiguous(inputs[1], enc, s);
     auto& w = outputs[0];
 
-    w.set_data(allocator::malloc(w.nbytes()));
+    w.set_data(mlx::core::rocm::malloc_async(w.nbytes(), enc));
 
     if (mode_ == QuantizationMode::Affine) {
       auto biases = ensure_row_contiguous(inputs[2], enc, s);
@@ -65,11 +66,11 @@ void fast::Quantize::eval_gpu(
     auto& wq = outputs[0];
     auto& scales = outputs[1];
 
-    wq.set_data(allocator::malloc(wq.nbytes()));
-    scales.set_data(allocator::malloc(scales.nbytes()));
+    wq.set_data(mlx::core::rocm::malloc_async(wq.nbytes(), enc));
+    scales.set_data(mlx::core::rocm::malloc_async(scales.nbytes(), enc));
     if (mode_ == QuantizationMode::Affine) {
       auto& biases = outputs[2];
-      biases.set_data(allocator::malloc(biases.nbytes()));
+      biases.set_data(mlx::core::rocm::malloc_async(biases.nbytes(), enc));
       affine_quantize(w, wq, scales, biases, group_size_, bits_, enc, s);
     } else {
       fp_quantize(w, wq, scales, group_size_, bits_, enc, s);

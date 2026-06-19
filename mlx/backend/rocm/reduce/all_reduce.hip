@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/reduce/reduce.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
@@ -192,9 +193,9 @@ void all_reduce(
     array& out,
     Reduce::ReduceType reduce_type) {
   constexpr int N_READS = 4;
-  
-  out.set_data(allocator::malloc(out.nbytes()));
-  
+
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
+
   auto get_args = [](size_t size, int N) {
     int threads = std::min(512, static_cast<int>((size + N - 1) / N));
     threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
@@ -232,7 +233,7 @@ void all_reduce(
   // For multi-block reduction, we need an intermediate buffer
   if (blocks > 1) {
     array intermediate({blocks}, out.dtype(), nullptr, {});
-    intermediate.set_data(allocator::malloc(intermediate.nbytes()));
+    intermediate.set_data(mlx::core::rocm::malloc_async(intermediate.nbytes(), encoder));
     encoder.add_temporary(intermediate);
     encoder.set_output_array(intermediate);
     

@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/arange.hpp"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/primitives.h"
@@ -15,8 +16,8 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& encoder = rocm::get_command_encoder(s);
   
-  out.set_data(allocator::malloc(out.nbytes()));
-  
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
+
   size_t size = out.size();
   int block_size = 256;
   int num_blocks = (size + block_size - 1) / block_size;

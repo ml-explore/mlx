@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/primitives.h"
 
@@ -152,7 +153,11 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   uint32_t elems_per_key = out.size() / num_keys;
   uint32_t bytes_per_key = out.itemsize() * elems_per_key;
-  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto& s = stream();
+  auto& encoder = rocm::get_command_encoder(s);
+
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
   if (out.size() == 0) {
     return;
   }
@@ -161,8 +166,6 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   uint32_t half_size = out_per_key / 2;
   bool odd = out_per_key % 2;
 
-  auto& s = stream();
-  auto& encoder = rocm::get_command_encoder(s);
   encoder.set_input_array(keys);
   encoder.set_output_array(out);
   

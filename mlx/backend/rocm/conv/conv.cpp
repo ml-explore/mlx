@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/conv/conv.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/primitives.h"
@@ -48,7 +49,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   array wt = inputs[1];
 
   // Allocate output
-  out.set_data(allocator::malloc(out.nbytes()));
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
 
   // Ensure inputs are contiguous
   if (!in.flags().row_contiguous) {

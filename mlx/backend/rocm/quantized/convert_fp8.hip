@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/fast_primitives.h"
 
@@ -115,7 +116,7 @@ void fast::ConvertFP8::eval_gpu(
   const auto& in = inputs[0];
   auto& out = outputs[0];
   
-  out.set_data(allocator::malloc(out.nbytes()));
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), enc));
   
   size_t size = in.size();
   int block_size = 256;

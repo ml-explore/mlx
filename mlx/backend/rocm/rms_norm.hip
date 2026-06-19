@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/reduce/reduce.hpp"
 #include "mlx/backend/gpu/copy.h"
@@ -229,6 +230,7 @@ void RMSNorm::eval_gpu(
     std::vector<array>& outputs) {
   auto& s = stream();
   auto& out = outputs[0];
+  auto& encoder = rocm::get_command_encoder(s);
 
   const array& xin = inputs[0];
   const array& w = inputs[1];
@@ -255,11 +257,11 @@ void RMSNorm::eval_gpu(
       out.copy_shared_buffer(xin);
     } else {
       out.set_data(
-          allocator::malloc(xin.data_size() * xin.itemsize()),
+          mlx::core::rocm::malloc_async(xin.data_size() * xin.itemsize(), encoder),
           xin.data_size(), xin.strides(), xin.flags());
     }
   } else if (strided) {
-    out.set_data(allocator::malloc(out.nbytes()));  // packed contiguous output
+    out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));  // packed contiguous output
   } else {
     x = contiguous_copy_gpu(xin, s);
     out.copy_shared_buffer(x);
@@ -279,7 +281,6 @@ void RMSNorm::eval_gpu(
     }
   }
 
-  auto& encoder = rocm::get_command_encoder(s);
   encoder.set_input_array(xk);
   encoder.set_input_array(w);
   encoder.set_output_array(out);
@@ -352,7 +353,7 @@ void RMSNormVJP::eval_gpu(
     gx.copy_shared_buffer(g);
     g_in_gx = true;
   } else {
-    gx.set_data(allocator::malloc(gx.nbytes()));
+    gx.set_data(mlx::core::rocm::malloc_async(gx.nbytes(), encoder));
   }
   if (g_copied && !g_in_gx) {
     encoder.add_temporary(g);
@@ -369,7 +370,7 @@ void RMSNormVJP::eval_gpu(
     if (!g_in_gx && donate_g) {
       gw_temp.copy_shared_buffer(g);
     } else {
-      gw_temp.set_data(allocator::malloc(gw_temp.nbytes()));
+      gw_temp.set_data(mlx::core::rocm::malloc_async(gw_temp.nbytes(), encoder));
       encoder.add_temporary(gw_temp);
     }
   }

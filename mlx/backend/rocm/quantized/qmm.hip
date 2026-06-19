@@ -221,7 +221,7 @@ inline array ensure_row_contiguous_matrix(
   // Deferred until we know a copy is actually needed and which path to use.
   auto make_output = [&]() -> array {
     array out(x.shape(), x.dtype(), nullptr, {});
-    out.set_data(allocator::malloc(out.nbytes()));
+    out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), enc));
     enc.add_temporary(out);
     return out;
   };
@@ -1049,11 +1049,11 @@ void dequant_fp8_gemm(
     int dq_rows,
     int dq_cols) {
   array x_fp8(Shape{M, K}, uint8, nullptr, {});
-  x_fp8.set_data(allocator::malloc(x_fp8.nbytes()));
+  x_fp8.set_data(mlx::core::rocm::malloc_async(x_fp8.nbytes(), enc));
   array w_fp8(Shape{dq_rows, dq_cols}, uint8, nullptr, {});
-  w_fp8.set_data(allocator::malloc(w_fp8.nbytes()));
+  w_fp8.set_data(mlx::core::rocm::malloc_async(w_fp8.nbytes(), enc));
   array scratch(Shape{4}, float32, nullptr, {});
-  scratch.set_data(allocator::malloc(scratch.nbytes()));
+  scratch.set_data(mlx::core::rocm::malloc_async(scratch.nbytes(), enc));
   enc.add_temporary(x_fp8);
   enc.add_temporary(w_fp8);
   enc.add_temporary(scratch);
@@ -2939,7 +2939,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& d = rocm::device(s.device);
   auto& enc = d.get_command_encoder(s);
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), enc));
 
   array x = ensure_row_contiguous_matrix(inputs[0], enc, s);
   array w = ensure_row_contiguous_matrix(inputs[1], enc, s);
@@ -3069,7 +3069,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       }
 
       if (!cache_hit) {
-        w_dequant.set_data(allocator::malloc(w_dequant.nbytes()));
+        w_dequant.set_data(mlx::core::rocm::malloc_async(w_dequant.nbytes(), enc));
 
         if (mode_ == QuantizationMode::Affine) {
           affine_dequantize(
@@ -3137,7 +3137,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         }
       }
     } else {
-      w_dequant.set_data(allocator::malloc(w_dequant.nbytes()));
+      w_dequant.set_data(mlx::core::rocm::malloc_async(w_dequant.nbytes(), enc));
 
       if (mode_ == QuantizationMode::Affine) {
         affine_dequantize(
@@ -5031,7 +5031,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = rocm::device(s.device);
   auto& enc = d.get_command_encoder(s);
-  out.set_data(allocator::malloc(out.nbytes()));
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), enc));
   array x = ensure_row_contiguous_matrix(inputs[0], enc, s);
   array w = ensure_row_contiguous_matrix(inputs[1], enc, s);
   array scales = ensure_row_contiguous_matrix(inputs[2], enc, s);
@@ -5143,8 +5143,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Upload sorted indices to GPU
     array sorted_ri_arr({B}, uint32, nullptr, {});
     array sorted_li_arr({B}, uint32, nullptr, {});
-    sorted_ri_arr.set_data(allocator::malloc(sorted_ri_arr.nbytes()));
-    sorted_li_arr.set_data(allocator::malloc(sorted_li_arr.nbytes()));
+    sorted_ri_arr.set_data(mlx::core::rocm::malloc_async(sorted_ri_arr.nbytes(), enc));
+    sorted_li_arr.set_data(mlx::core::rocm::malloc_async(sorted_li_arr.nbytes(), enc));
     std::memcpy(sorted_ri_arr.data<uint32_t>(), sorted_ri.data(), B * sizeof(uint32_t));
     std::memcpy(sorted_li_arr.data<uint32_t>(), sorted_li.data(), B * sizeof(uint32_t));
     enc.set_input_array(sorted_ri_arr);
@@ -5152,15 +5152,15 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Also need a mapping from sorted position back to original batch index for output
     array perm_arr({B}, int32, nullptr, {});
-    perm_arr.set_data(allocator::malloc(perm_arr.nbytes()));
+    perm_arr.set_data(mlx::core::rocm::malloc_async(perm_arr.nbytes(), enc));
     std::memcpy(perm_arr.data<int>(), perm.data(), B * sizeof(int));
     enc.set_input_array(perm_arr);
 
     // Upload run info to GPU
     array run_starts_arr({num_runs}, int32, nullptr, {});
     array run_lengths_arr({num_runs}, int32, nullptr, {});
-    run_starts_arr.set_data(allocator::malloc(run_starts_arr.nbytes()));
-    run_lengths_arr.set_data(allocator::malloc(run_lengths_arr.nbytes()));
+    run_starts_arr.set_data(mlx::core::rocm::malloc_async(run_starts_arr.nbytes(), enc));
+    run_lengths_arr.set_data(mlx::core::rocm::malloc_async(run_lengths_arr.nbytes(), enc));
     std::memcpy(run_starts_arr.data<int>(), run_starts_vec.data(), num_runs * sizeof(int));
     std::memcpy(run_lengths_arr.data<int>(), run_lengths_vec.data(), num_runs * sizeof(int));
     enc.set_input_array(run_starts_arr);

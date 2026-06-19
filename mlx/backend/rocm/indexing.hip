@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/jit_module.h"
 #include "mlx/backend/rocm/device/indexing.hpp"
@@ -589,13 +590,13 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() > 0);
   const auto& src = inputs[0];
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  auto& s = stream();
+  auto& encoder = rocm::get_command_encoder(s);
+
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
   if (out.size() == 0) {
     return;
   }
-
-  auto& s = stream();
-  auto& encoder = rocm::get_command_encoder(s);
 
   int nidx = inputs.size() - 1;
   int32_t idx_ndim = nidx > 0 ? inputs[1].ndim() : 0;
@@ -934,14 +935,14 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   const auto& src = inputs[0];
   const auto& idx = inputs[1];
 
-  out.set_data(allocator::malloc(out.nbytes()));
+  auto& s = stream();
+  auto& encoder = rocm::get_command_encoder(s);
+
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
   if (out.size() == 0) {
     return;
   }
 
-  auto& s = stream();
-  auto& encoder = rocm::get_command_encoder(s);
-  
   encoder.set_input_array(src);
   encoder.set_input_array(idx);
   encoder.set_output_array(out);
@@ -1402,7 +1403,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   array scatter_offsets(mask_flat.shape(), uint32, nullptr, {});
-  scatter_offsets.set_data(allocator::malloc(scatter_offsets.nbytes()));
+  scatter_offsets.set_data(mlx::core::rocm::malloc_async(scatter_offsets.nbytes(), encoder));
   encoder.add_temporary(scatter_offsets);
 
   const int64_t batch_count = mask_flat.shape(0);

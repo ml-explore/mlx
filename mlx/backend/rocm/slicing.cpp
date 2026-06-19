@@ -4,6 +4,7 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/gpu/slicing.h"
 #include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/jit_module.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/utils.h"
@@ -109,7 +110,7 @@ array compute_dynamic_offset(
   if (donate) {
     offset.copy_shared_buffer(indices);
   } else {
-    offset.set_data(allocator::malloc(offset.itemsize()));
+    offset.set_data(mlx::core::rocm::malloc_async(offset.itemsize(), encoder));
   }
 
   encoder.add_temporary(offset);
