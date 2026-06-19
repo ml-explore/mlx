@@ -174,13 +174,6 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   auto i_state = state_in + (n * Dv + dv_idx) * Dk;
   auto o_state = state_out + (n * Dv + dv_idx) * Dk;
 
-  // threadgroup tiles
-  threadgroup float Q_left_tg[C][Dk]; // gamma-scaled Q
-  threadgroup float K_tg[C][Dk]; // raw K
-  threadgroup float W_tg[C][Dk]; // gamma-scaled W (W_left)
-  threadgroup float U_tg[C][8]; // U chunk, 8 dv values
-  threadgroup float K_right_tg[C][Dk];
-
   simdgroup_float8x8 S_tile[8];
   simdgroup_float8x8 W_tile, K_tile, Q_tile;
   simdgroup_float8x8 WS_tile;
@@ -197,6 +190,9 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   thread auto& ws_e = WS_tile.thread_elements();
   thread auto& qkt_e = QKt_tile.thread_elements();
   thread auto& o_e = out_tile.thread_elements();
+  thread auto& w_e = W_tile.thread_elements();
+  thread auto& q_e = Q_tile.thread_elements();
+  thread auto& k_e = K_tile.thread_elements();
 
   // load initial state into threadgroup
   for (int kk = 0; kk < Dk; kk += 8) {
@@ -204,41 +200,33 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  float gamma[C];
+  threadgroup float gamma[C];
 
   for (int t = 0; t < T; t += C) {
-    gamma[0] = g_[hv_idx];
-    for (int i = 1; i < C; i++) {
-      gamma[i] = gamma[i - 1] * g_[i * Hv + hv_idx];
-    }
-    float gamma_C = gamma[C - 1];
+    float g_val = (thread_index_in_simdgroup < C)
+        ? g_[thread_index_in_simdgroup * Hv + hv_idx]
+        : 1.0f;
 
-    for (int c = 0; c < C; c++) {
-      float kr = gamma_C / gamma[c];
-      for (int d = dk_idx; d < Dk; d += 32) {
-        Q_left_tg[c][d] = gamma[c] * q_[c * Hk * Dk + d];
-        K_tg[c][d] = k_[c * Hk * Dk + d];
-        W_tg[c][d] = gamma[c] * W_[c * Hv * Dk + d];
-        K_right_tg[c][d] = kr * K_tg[c][d];
-      }
-    }
+    float gamma_val = simd_prefix_inclusive_product(g_val);
 
-    for (int idx = dk_idx; idx < C * 8; idx += 32) {
-      int c = idx / 8;
-      int j = idx % 8;
-      U_tg[c][j] = U_[c * Hv * Dv + dv_idx + j];
+    // Only write within bounds
+    if (thread_index_in_simdgroup < C) {
+      gamma[thread_index_in_simdgroup] = gamma_val;
     }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
 
     //  WS = W_left @ S^T
     WS_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
     for (int kk = 0; kk < Dk; kk += 8) {
-      simdgroup_load(W_tile, &W_tg[0][kk], Dk);
+      simdgroup_load(W_tile, W_ + kk, Hv * Dk);
+
+      w_e[0] *= gamma[fm];
+      w_e[1] *= gamma[fm];
+
       simdgroup_multiply_accumulate(WS_tile, W_tile, S_tile[kk / 8], WS_tile);
     }
 
     // delta = U - WS
-    simdgroup_load(U_tile, &U_tg[0][0], 8);
+    simdgroup_load(U_tile, U_ + dv_idx, Hv * Dv);
 
     d_e[0] = u_e[0] - ws_e[0];
     d_e[1] = u_e[1] - ws_e[1];
@@ -248,8 +236,11 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     QKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
 
     for (int kk = 0; kk < Dk; kk += 8) {
-      simdgroup_load(Q_tile, &Q_left_tg[0][kk], Dk);
-      simdgroup_load(K_tile, &K_tg[0][kk], Dk, ulong2(0, 0), true);
+      simdgroup_load(Q_tile, q_ + kk, Hk * Dk);
+      simdgroup_load(K_tile, k_ + kk, Hk * Dk, ulong2(0, 0), true);
+
+      q_e[0] *= gamma[fm];
+      q_e[1] *= gamma[fm];
 
       simdgroup_multiply_accumulate(tmp_tile, Q_tile, S_tile[kk / 8], tmp_tile);
       simdgroup_multiply_accumulate(QKt_tile, Q_tile, K_tile, QKt_tile);
@@ -265,12 +256,16 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     y[fm * Hv * Dv + dv_idx + fn + 1] = static_cast<InT>(o_e[1]);
 
     for (int kk = 0; kk < Dk; kk += 8) {
-      simdgroup_load(K_tile, &K_right_tg[0][kk], Dk, ulong2(0, 0), true);
+      simdgroup_load(K_tile, k_ + kk, Hk * Dk, ulong2(0, 0), true);
+
+      k_e[0] *= (gamma[C - 1] / gamma[fn]);
+      k_e[1] *= (gamma[C - 1] / gamma[fn + 1]);
+
       simdgroup_multiply(KD_tile, K_tile, delta_tile);
 
       thread auto& s_e = S_tile[kk / 8].thread_elements();
-      s_e[0] = gamma_C * s_e[0] + kd[0];
-      s_e[1] = gamma_C * s_e[1] + kd[1];
+      s_e[0] = gamma[C - 1] * s_e[0] + kd[0];
+      s_e[1] = gamma[C - 1] * s_e[1] + kd[1];
     }
 
     // update pointers
