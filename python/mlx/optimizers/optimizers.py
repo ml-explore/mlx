@@ -328,9 +328,9 @@ class RMSprop(Optimizer):
             raise ValueError(
                 f"RMSprop alpha should be >=0, {self.alpha} was provided instead"
             )
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
-                f"RMSprop epsilon should be >=0, {self.eps} was provided instead"
+                f"RMSprop epsilon should be >0, {self.eps} was provided instead"
             )
 
     def init_single(self, parameter: mx.array, state: dict):
@@ -379,9 +379,9 @@ class Adagrad(Optimizer):
         self._maybe_schedule("learning_rate", learning_rate)
         self.eps = eps
 
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
-                f"Adagrad epsilon should be >=0, {self.eps} was provided instead"
+                f"Adagrad epsilon should be >0, {self.eps} was provided instead"
             )
 
     def init_single(self, parameter: mx.array, state: dict):
@@ -437,9 +437,9 @@ class AdaDelta(Optimizer):
             raise ValueError(
                 f"AdaDelta rho should be >=0, {self.rho} was provided instead"
             )
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
-                f"AdaDelta epsilon should be >=0, {self.eps} was provided instead"
+                f"AdaDelta epsilon should be >0, {self.eps} was provided instead"
             )
 
     def init_single(self, parameter: mx.array, state: dict):
