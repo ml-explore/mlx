@@ -261,7 +261,8 @@ void init_array(nb::module_& m) {
       "ArrayAt",
       R"pbdoc(
       A helper object to apply updates at specific indices.
-      )pbdoc")
+      )pbdoc",
+      nb::pooled(/* capacity = */ 128))
       .def("__getitem__", &ArrayAt::set_indices, "indices"_a.none())
       .def("add", &ArrayAt::add, "value"_a)
       .def("subtract", &ArrayAt::subtract, "value"_a)
@@ -299,7 +300,8 @@ void init_array(nb::module_& m) {
       "array",
       R"pbdoc(An N-dimensional array object.)pbdoc",
       nb::type_slots(array_slots),
-      nb::is_weak_referenceable())
+      nb::is_weak_referenceable(),
+      nb::pooled(/* capacity = */ 128))
       .def(
           "__init__",
           [](mx::array* aptr, nb::object v, std::optional<mx::Dtype> t) {
