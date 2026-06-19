@@ -96,8 +96,9 @@ row_reduce_simple(const T* in, U* out, size_t n_rows, int size) {
     accs[i] = init;
   }
 
+  const size_t max_start_row = n_rows > M ? n_rows - M : 0;
   const size_t start_row =
-      min(n_rows - M, static_cast<size_t>(grid.block_rank() * M));
+      min(max_start_row, static_cast<size_t>(grid.block_rank() * M));
   const size_t full_blocks = size / (block.size() * N);
   const size_t final_offset = full_blocks * (block.size() * N);
   in += start_row * size + block.thread_rank() * N;
