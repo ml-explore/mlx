@@ -645,6 +645,33 @@ array expand_dims(
   return expand_dims_impl(a, std::move(sorted_axes), s);
 }
 
+array flip(
+    const array& a,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  auto ndim = static_cast<int>(a.ndim());
+  Shape start(ndim, 0);
+  Shape stop = a.shape();
+  Shape strides(ndim, 1);
+  for (auto ax : axes) {
+    int axis = normalize_axis_index(ax, ndim, "[flip] ");
+    start[axis] = a.shape(axis) - 1;
+    stop[axis] = -a.shape(axis) - 1;
+    strides[axis] = -1;
+  }
+  return slice(a, std::move(start), std::move(stop), std::move(strides), s);
+}
+
+array flip(const array& a, int axis, StreamOrDevice s /* = {} */) {
+  return flip(a, std::vector<int>{axis}, s);
+}
+
+array flip(const array& a, StreamOrDevice s /* = {} */) {
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  return flip(a, axes, s);
+}
+
 // Slice helper
 namespace {
 
@@ -1146,6 +1173,32 @@ split(const array& a, int num_splits, int axis, StreamOrDevice s /* = {} */) {
 std::vector<array>
 split(const array& a, int num_splits, StreamOrDevice s /* = {} */) {
   return split(a, num_splits, 0, to_stream(s));
+}
+
+std::vector<array>
+unstack(const array& a, int axis, StreamOrDevice s /* = {} */) {
+  auto ndim = static_cast<int>(a.ndim());
+  auto ax = axis < 0 ? axis + ndim : axis;
+  if (ax < 0 || ax >= ndim) {
+    std::ostringstream msg;
+    msg << "[unstack] Invalid axis " << axis << " for array with " << ndim
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto n = a.shape(ax);
+  std::vector<array> res;
+  res.reserve(n);
+  if (n == 0) {
+    return res;
+  }
+  for (auto& part : split(a, n, ax, s)) {
+    res.push_back(squeeze(part, ax, s));
+  }
+  return res;
+}
+
+std::vector<array> unstack(const array& a, StreamOrDevice s /* = {} */) {
+  return unstack(a, 0, s);
 }
 
 std::vector<array> meshgrid(
