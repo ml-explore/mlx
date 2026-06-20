@@ -170,6 +170,16 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             )
         )
 
+    def test_epsilon_validation(self):
+        # RMSprop/Adagrad/AdaDelta accumulators start at zero, so eps == 0 lets a
+        # zero gradient compute 0 / 0 (or sqrt(0) / sqrt(0)), producing NaN
+        # parameters. The guard must reject eps <= 0, and the message says ">0".
+        for optimizer in (opt.RMSprop, opt.Adagrad, opt.AdaDelta):
+            with self.assertRaisesRegex(ValueError, ">0"):
+                optimizer(learning_rate=1e-2, eps=-1.0)
+            with self.assertRaisesRegex(ValueError, ">0"):
+                optimizer(learning_rate=1e-2, eps=0.0)
+
     def test_adam(self):
         params = {
             "first": [mx.zeros((10,)), mx.zeros((1,))],
