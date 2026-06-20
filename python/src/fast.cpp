@@ -105,8 +105,7 @@ mx::fast::CompileOptions parse_compile_options(
   for (auto [key, value] : dict) {
     auto key_str = nb::cast<std::string>(key);
     if (key_str == "math_mode") {
-      options.math_mode =
-          parse_metal_math_mode(nb::cast<std::string>(value));
+      options.math_mode = parse_metal_math_mode(nb::cast<std::string>(value));
     } else {
       std::ostringstream msg;
       msg << "[metal_kernel] Unknown compile option `" << key_str << "`.";
