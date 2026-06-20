@@ -1335,7 +1335,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Gemv specialization
 
   if (M == 1 && N == 1 && batch_size_out == 1 && a.flags().row_contiguous &&
-      b.flags().row_contiguous) {
+      b.flags().row_contiguous && a.dtype() != complex64) {
     return dot_product(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,
