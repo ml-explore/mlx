@@ -5842,8 +5842,6 @@ void init_ops(nb::module_& m) {
         array: The array converted to fp8 with type ``uint8``.
   )pbdoc");
   // Array API standard aliases (https://data-apis.org/array-api/latest/).
-  // Module-level aliases of existing ops; kept out of the public docs per
-  // review (one documented name per op).
   m.attr("acos") = m.attr("arccos");
   m.attr("acosh") = m.attr("arccosh");
   m.attr("asin") = m.attr("arcsin");
