@@ -1033,7 +1033,17 @@ class TestFast(mlx_tests.MLXTestCase):
                 input_names=["inp"],
                 output_names=["out"],
                 source="out[0] = inp[0];",
-                math_mode="precise",
+                compile_options={"math_mode": "precise"},
+            )
+
+    def test_custom_metal_kernel_invalid_compile_options(self):
+        with self.assertRaises(ValueError):
+            mx.fast.metal_kernel(
+                name="invalid_compile_options",
+                input_names=["inp"],
+                output_names=["out"],
+                source="out[0] = inp[0];",
+                compile_options={"unknown": "value"},
             )
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
@@ -1046,7 +1056,7 @@ class TestFast(mlx_tests.MLXTestCase):
                 uint elem = thread_position_in_grid.x;
                 out[elem] = metal::exp(inp[elem]);
             """,
-            math_mode="safe",
+            compile_options={"math_mode": "safe"},
         )
         a = mx.array([-float("inf"), 0.0], dtype=mx.float32)
         out = kernel(
