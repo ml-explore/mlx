@@ -43,6 +43,7 @@ const char* conv();
 const char* steel_conv();
 const char* steel_conv_3d();
 const char* steel_conv_general();
+const char* gemv();
 const char* gemv_masked();
 const char* steel_attention();
 

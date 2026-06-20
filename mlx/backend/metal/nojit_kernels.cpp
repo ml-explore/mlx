@@ -226,6 +226,36 @@ MTL::ComputePipelineState* get_steel_gemm_segmented_kernel(
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_gemv_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    bool,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int,
+    bool,
+    bool) {
+  return d.get_kernel(kernel_name);
+}
+
+MTL::ComputePipelineState* get_gemv_gather_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    bool,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int) {
+  return d.get_kernel(kernel_name);
+}
+
 MTL::ComputePipelineState* get_gemv_masked_kernel(
     metal::Device& d,
     const std::string& kernel_name,
