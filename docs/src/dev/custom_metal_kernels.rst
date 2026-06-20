@@ -53,13 +53,15 @@ JIT compiled. To reduce the overhead from that, build the kernel once with
 Math Mode
 ---------
 
-By default :func:`fast.metal_kernel` compiles kernels with ``math_mode="safe"``
-so special values follow IEEE behavior, for example ``exp(-inf) == 0``. This is
-important for kernels such as masked softmax where causal or sliding-window
-masks depend on exponentiating ``-inf``.
+By default :func:`fast.metal_kernel` compiles kernels with
+``compile_options={"math_mode": "safe"}`` so special values follow IEEE
+behavior, for example ``exp(-inf) == 0``. This is important for kernels such as
+masked softmax where causal or sliding-window masks depend on exponentiating
+``-inf``.
 
 If your kernel does not rely on these edge cases, you can opt in to less strict
-math with ``math_mode="relaxed"`` or ``math_mode="fast"``:
+math with ``compile_options={"math_mode": "relaxed"}`` or
+``compile_options={"math_mode": "fast"}``:
 
 .. code-block:: python
 
@@ -68,7 +70,7 @@ math with ``math_mode="relaxed"`` or ``math_mode="fast"``:
       input_names=["x"],
       output_names=["y"],
       source=source,
-      math_mode="relaxed",
+      compile_options={"math_mode": "relaxed"},
   )
 
 The full function signature will be generated using:

@@ -3,6 +3,7 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 
 namespace mlx::core::fast {
@@ -90,7 +91,7 @@ void CustomKernel::eval_gpu(
   auto lib = d.get_library(
       name_,
       [this] { return metal::utils() + source_; },
-      to_mtl_math_mode(metal_math_mode_));
+      metal::CompileOptions{to_mtl_math_mode(metal_math_mode_)});
   auto kernel = d.get_kernel(name_, lib);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);

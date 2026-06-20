@@ -63,6 +63,10 @@ enum class MetalKernelMathMode {
   Fast = 2,
 };
 
+struct CompileOptions {
+  MetalKernelMathMode math_mode = MetalKernelMathMode::Safe;
+};
+
 using CustomKernelFunction = std::function<std::vector<array>(
     const std::vector<array>&,
     const std::vector<Shape>&,
@@ -82,7 +86,7 @@ MLX_API CustomKernelFunction metal_kernel(
     const std::string& header = "",
     bool ensure_row_contiguous = true,
     bool atomic_outputs = false,
-    MetalKernelMathMode math_mode = MetalKernelMathMode::Safe);
+    CompileOptions compile_options = {});
 
 MLX_API CustomKernelFunction cuda_kernel(
     const std::string& name,

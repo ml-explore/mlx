@@ -648,7 +648,7 @@ class TestExportImport(mlx_tests.MLXTestCase):
             input_names=["a"],
             output_names=["out"],
             source=source,
-            math_mode="safe",
+            compile_options={"math_mode": "safe"},
         )
 
         def call(a):

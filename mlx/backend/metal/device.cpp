@@ -621,7 +621,7 @@ MTL::Library* Device::get_library(
 
 NS::SharedPtr<MTL::Library> Device::build_library_(
     const std::string& source_string,
-    std::optional<MTL::MathMode> math_mode) {
+    CompileOptions compile_options) {
   auto pool = new_scoped_memory_pool();
 
   auto ns_code =
@@ -629,16 +629,17 @@ NS::SharedPtr<MTL::Library> Device::build_library_(
 
   NS::Error* error = nullptr;
   auto options = MTL::CompileOptions::alloc()->init()->autorelease();
-  if (math_mode) {
+  if (compile_options.math_mode) {
+    auto math_mode = *compile_options.math_mode;
     if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
-      options->setMathMode(*math_mode);
+      options->setMathMode(math_mode);
     } else {
-      if (*math_mode == MTL::MathModeRelaxed) {
+      if (math_mode == MTL::MathModeRelaxed) {
         throw std::runtime_error(
             "[metal::Device] Metal math mode `relaxed` requires macOS 15, "
             "iOS 18, tvOS 18, or visionOS 2.");
       }
-      options->setFastMathEnabled(*math_mode == MTL::MathModeFast);
+      options->setFastMathEnabled(math_mode == MTL::MathModeFast);
     }
   } else {
     options->setFastMathEnabled(false);
@@ -784,13 +785,13 @@ NS::SharedPtr<MTL::ComputePipelineState> Device::get_kernel_(
 MTL::Library* Device::get_library(
     const std::string& name,
     const std::function<std::string(void)>& builder) {
-  return get_library(name, builder, std::nullopt);
+  return get_library(name, builder, {});
 }
 
 MTL::Library* Device::get_library(
     const std::string& name,
     const std::function<std::string(void)>& builder,
-    std::optional<MTL::MathMode> math_mode) {
+    CompileOptions compile_options) {
   {
     std::shared_lock rlock(library_mtx_);
     if (auto it = library_map_.find(name); it != library_map_.end()) {
@@ -803,7 +804,7 @@ MTL::Library* Device::get_library(
     return it->second.get();
   }
 
-  auto mtl_lib = build_library_(builder(), math_mode);
+  auto mtl_lib = build_library_(builder(), compile_options);
   library_map_.insert({name, mtl_lib});
   return mtl_lib.get();
 }

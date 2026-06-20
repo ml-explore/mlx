@@ -20,6 +20,10 @@ namespace mlx::core::metal {
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
+struct CompileOptions {
+  std::optional<MTL::MathMode> math_mode = std::nullopt;
+};
+
 class Device;
 class EventImpl;
 
@@ -174,7 +178,7 @@ class MLX_API Device {
   MTL::Library* get_library(
       const std::string& name,
       const std::function<std::string(void)>& builder,
-      std::optional<MTL::MathMode> math_mode);
+      CompileOptions compile_options);
 
   void clear_library(const std::string& name);
 
@@ -198,7 +202,7 @@ class MLX_API Device {
  private:
   NS::SharedPtr<MTL::Library> build_library_(
       const std::string& source_string,
-      std::optional<MTL::MathMode> math_mode = std::nullopt);
+      CompileOptions compile_options = {});
 
   NS::SharedPtr<MTL::Function> get_function_(
       const std::string& name,
