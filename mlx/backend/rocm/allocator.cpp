@@ -595,6 +595,18 @@ Buffer RocmAllocator::malloc(size_t size) {
 }
 
 Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
+  // During HIP-graph capture, route through the DecodeArena like malloc() does.
+  // Otherwise hipMallocAsync below records a MemAlloc node into the captured
+  // graph; such graphs allocate on the first replay but FAIL on the second
+  // ("invalid argument") because the memory node can't re-allocate — freezing
+  // decode after one token. The arena hands back pre-allocated deterministic
+  // addresses, so no MemAlloc node is recorded.
+  if (arena_.active()) {
+    RocmBuffer* buf = arena_.malloc(size);
+    if (buf)
+      return Buffer{buf};
+    // arena exhausted — fall through to the pool path
+  }
   hipStream_t stream = static_cast<hipStream_t>(stream_v);
   // Fall back to the unified path unless the pool is usable for this request.
   if (!use_async_pool() || stream == nullptr || device < 0 ||
@@ -869,7 +881,11 @@ bool DecodeArena::begin(size_t capacity_bytes) {
   is_managed_ = managed;
   desc_index_ = 0;
   descriptors_.clear();
-  descriptors_.reserve(512); // Typical decode step has ~300 allocations
+  // Reserve a hard upper bound so the vector NEVER reallocates: malloc() returns
+  // RocmBuffer* pointers INTO this vector, and the captured graph + live arrays
+  // hold those pointers for the whole decode. A realloc would dangle all of them
+  // (heap corruption). A decode step + per-token sampling stays well under this.
+  descriptors_.reserve(16384);
   return true;
 }
 

@@ -141,11 +141,21 @@ class DecodeArena {
   // Rewind the bump pointer. Next cycle returns same addresses.
   void reset();
 
-  // Rewind the bump pointer to a recorded mark (e.g. the offset right after a
-  // captured graph's buffers). Allocations after the mark (per-token sampling)
-  // are reused each cycle while the graph region [0, mark) stays reserved.
-  void reset_to(size_t mark) {
-    offset_ = mark;
+  // Number of descriptors handed out so far (descriptor mark companion to used()).
+  size_t desc_used() const {
+    return desc_index_;
+  }
+
+  // Rewind BOTH the byte bump pointer and the descriptor index to a recorded
+  // mark (the state right after a captured graph's buffers). The graph region
+  // [0, byte_mark) / descriptors [0, desc_mark) stays reserved and untouched;
+  // per-token sampling reuses the region after the mark each cycle. Rewinding
+  // only bytes (not desc_index_) would grow the descriptor vector unboundedly
+  // (realloc → dangling pointers); rewinding desc_index_ to 0 would reuse and
+  // mutate the graph's descriptor objects (corrupting live arrays).
+  void reset_to(size_t byte_mark, size_t desc_mark) {
+    offset_ = byte_mark;
+    desc_index_ = desc_mark;
   }
 
   // Leave arena mode and free the backing buffer.

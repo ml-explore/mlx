@@ -610,16 +610,17 @@ void hipblaslt_gemm_impl(
 } // namespace
 
 bool is_hipblaslt_available() {
+  // During HIP graph capture, hipBLASLt is non-capturable: handle init aborts,
+  // and even a warm handle runs AlgoGetHeuristic / workspace hipMalloc inside the
+  // matmul, which invalidates the capture ("operation failed due to a previous
+  // error during capture"). Force the rocBLAS fallback for the whole capture.
+  if (stream_capturing()) {
+    return false;
+  }
   int device_id = 0;
   (void)hipGetDevice(&device_id);
   auto& state = get_state(device_id);
   if (!state.initialized) {
-    // Creating the hipBLASLt handle while a HIP graph is being captured aborts
-    // the process. Defer init (the caller falls back to the rocBLAS path) until
-    // capture has finished.
-    if (stream_capturing()) {
-      return false;
-    }
     std::lock_guard<std::mutex> lock(state.mutex);
     init_handle(state, device_id);
   }
