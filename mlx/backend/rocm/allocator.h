@@ -141,6 +141,13 @@ class DecodeArena {
   // Rewind the bump pointer. Next cycle returns same addresses.
   void reset();
 
+  // Rewind the bump pointer to a recorded mark (e.g. the offset right after a
+  // captured graph's buffers). Allocations after the mark (per-token sampling)
+  // are reused each cycle while the graph region [0, mark) stays reserved.
+  void reset_to(size_t mark) {
+    offset_ = mark;
+  }
+
   // Leave arena mode and free the backing buffer.
   void end();
 

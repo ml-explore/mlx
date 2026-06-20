@@ -93,6 +93,9 @@ bool gpu_arena_begin(size_t capacity) {
 void gpu_arena_reset() {
   rocm::allocator().arena().reset();
 }
+void gpu_arena_reset_to(size_t mark) {
+  rocm::allocator().arena().reset_to(mark);
+}
 void gpu_arena_end() {
   rocm::allocator().arena().end();
 }
