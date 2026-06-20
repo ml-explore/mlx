@@ -610,6 +610,11 @@ void hipblaslt_gemm_impl(
 } // namespace
 
 bool is_hipblaslt_available() {
+  // Diagnostic: force the rocBLAS path everywhere to test whether rocBLAS bf16
+  // GEMM is numerically correct for this model.
+  static const bool g_force_rocblas = std::getenv("MLX_NO_HIPBLASLT") != nullptr;
+  if (g_force_rocblas)
+    return false;
   // During HIP graph capture, hipBLASLt is non-capturable: handle init aborts,
   // and even a warm handle runs AlgoGetHeuristic / workspace hipMalloc inside the
   // matmul, which invalidates the capture ("operation failed due to a previous
