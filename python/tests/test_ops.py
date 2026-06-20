@@ -3446,6 +3446,33 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
+    def test_array_api_creation(self):
+        a = mx.arange(6, dtype=mx.int16).reshape(2, 3)
+
+        e = mx.empty((2, 3))
+        self.assertEqual(e.shape, (2, 3))
+        self.assertEqual(e.dtype, mx.float32)
+        self.assertEqual(mx.empty((4,), dtype=mx.int32).dtype, mx.int32)
+
+        el = mx.empty_like(a)
+        self.assertEqual(el.shape, (2, 3))
+        self.assertEqual(el.dtype, mx.int16)
+        self.assertEqual(mx.empty_like(a, dtype=mx.float32).dtype, mx.float32)
+
+    def test_astype_and_matrix_transpose(self):
+        a = mx.array([1, 2, 3], dtype=mx.int32)
+        self.assertEqual(mx.astype(a, mx.float32).dtype, mx.float32)
+        self.assertTrue(mx.array_equal(mx.astype(a, mx.float32), a.astype(mx.float32)))
+
+        m = mx.arange(6).reshape(2, 3)
+        self.assertEqual(mx.matrix_transpose(m).shape, (3, 2))
+        self.assertTrue(mx.array_equal(mx.matrix_transpose(m), mx.swapaxes(m, -2, -1)))
+        # Batched.
+        b = mx.arange(24).reshape(2, 3, 4)
+        self.assertEqual(mx.matrix_transpose(b).shape, (2, 4, 3))
+        with self.assertRaises(ValueError):
+            mx.matrix_transpose(mx.array([1, 2, 3]))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

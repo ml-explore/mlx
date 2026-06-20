@@ -29,6 +29,7 @@ Operations
    array_equal
    asarray
    as_strided
+   astype
    atleast_1d
    atleast_2d
    atleast_3d
@@ -73,6 +74,8 @@ Operations
    divmod
    einsum
    einsum_path
+   empty
+   empty_like
    equal
    erf
    erfinv
@@ -121,6 +124,7 @@ Operations
    logical_or
    logsumexp
    matmul
+   matrix_transpose
    max
    maximum
    mean

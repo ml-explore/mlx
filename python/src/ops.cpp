@@ -5852,4 +5852,54 @@ void init_ops(nb::module_& m) {
   m.attr("pow") = m.attr("power");
   m.attr("bitwise_left_shift") = m.attr("left_shift");
   m.attr("bitwise_right_shift") = m.attr("right_shift");
+  // Array API: empty / empty_like — pure aliases of zeros / zeros_like.
+  // MLX does not expose uninitialized memory, so zeros are a correct
+  // semantic match.
+  m.attr("empty") = m.attr("zeros");
+  m.attr("empty_like") = m.attr("zeros_like");
+  // Array API free-function wrappers.
+  m.def(
+      "astype",
+      [](const mx::array& a, mx::Dtype dtype, mx::StreamOrDevice s) {
+        return mx::astype(a, dtype, s);
+      },
+      nb::arg(),
+      "dtype"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def astype(a: array, dtype: Dtype, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Cast the array to the given type. See also :meth:`array.astype`.
+
+        Args:
+            a (array): Input array.
+            dtype (Dtype): The type to cast to.
+
+        Returns:
+            array: The array cast to ``dtype``.
+      )pbdoc");
+  m.def(
+      "matrix_transpose",
+      [](const mx::array& a, mx::StreamOrDevice s) {
+        if (a.ndim() < 2) {
+          throw std::invalid_argument(
+              "[matrix_transpose] Input must have at least 2 dimensions.");
+        }
+        return mx::swapaxes(a, -2, -1, s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def matrix_transpose(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Transpose the last two dimensions of an array.
+
+        Args:
+            a (array): Input array with at least two dimensions.
+
+        Returns:
+            array: The array with its last two dimensions transposed.
+      )pbdoc");
 }
