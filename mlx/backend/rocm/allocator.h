@@ -167,8 +167,16 @@ class DecodeArena {
   // No-op free (bulk-freed on end()).
   void free(RocmBuffer* /*buf*/) {}
 
+  // active() drives the allocator's routing to the arena. When paused, the
+  // backing stays allocated (so captured-graph buffers remain valid at their
+  // baked addresses) but NEW allocations fall through to the pool. Used after a
+  // capture-once graph is built: the graph keeps its arena buffers, while
+  // per-token sampling allocates from the pool and can't clobber graph buffers.
   bool active() const {
-    return base_ != nullptr;
+    return base_ != nullptr && !paused_;
+  }
+  void set_paused(bool p) {
+    paused_ = p;
   }
   size_t used() const {
     return offset_;
@@ -182,6 +190,7 @@ class DecodeArena {
   size_t capacity_{0};
   size_t offset_{0};
   bool is_managed_{false};
+  bool paused_{false};
 
   // Pre-allocated RocmBuffer descriptors (recycled on reset)
   std::vector<RocmBuffer> descriptors_;

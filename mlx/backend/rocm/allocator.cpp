@@ -880,6 +880,7 @@ bool DecodeArena::begin(size_t capacity_bytes) {
   offset_ = 0;
   is_managed_ = managed;
   desc_index_ = 0;
+  paused_ = false;
   descriptors_.clear();
   // Reserve a hard upper bound so the vector NEVER reallocates: malloc() returns
   // RocmBuffer* pointers INTO this vector, and the captured graph + live arrays
