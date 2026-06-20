@@ -3,6 +3,7 @@
 #pragma once
 
 #include "mlx/array.h"
+#include "mlx/backend/rocm/lru_cache.h"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/stream.h"
 
@@ -15,8 +16,10 @@
 #include <thrust/execution_policy.h>
 #endif
 
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -26,6 +29,10 @@ namespace mlx::core::rocm {
 // Forward declaration
 class Device;
 class Worker;
+
+// Gate for the automatic HIP-graph batching path. Default OFF so the legacy
+// immediate-launch path is unaffected unless MLX_USE_HIP_GRAPHS is set.
+bool use_hip_graphs();
 
 class CommandEncoder {
  public:
@@ -41,10 +48,49 @@ class CommandEncoder {
   template <typename F>
   void launch_kernel(F&& func);
 
+  template <typename Func, typename... Params>
+  void add_kernel_node(
+      Func* func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      uint32_t smem_bytes,
+      Params&&... params) {
+    add_kernel_node_ex(func, grid_dim, block_dim, smem_bytes, params...);
+  }
+
+  template <typename Func, typename... Params>
+  void add_kernel_node_ex(
+      Func* func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      uint32_t smem_bytes,
+      Params&&... params) {
+    constexpr size_t num = sizeof...(Params);
+    void* ptrs[num];
+    size_t i = 0;
+    ([&](auto&& p) { ptrs[i++] = static_cast<void*>(&p); }(
+         std::forward<Params>(params)),
+     ...);
+    add_kernel_node_raw(
+        reinterpret_cast<void*>(func),
+        grid_dim,
+        block_dim,
+        smem_bytes,
+        ptrs);
+  }
+
+  void add_kernel_node_raw(
+      void* func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      uint32_t smem_bytes,
+      void** params);
+
   void add_temporary(const array& arr);
 
   void add_completed_handler(std::function<void()> task);
   void maybe_commit();
+  bool needs_commit();
   void commit();
 
   Device& device() {
@@ -93,6 +139,17 @@ class CommandEncoder {
   void reset_graph();
 
  private:
+  struct GraphNode {
+    hipGraphNode_t node;
+    // K = kernel, E = empty, () = subgraph
+    std::string node_type;
+    std::string id;
+  };
+
+  void insert_graph_dependencies(GraphNode node);
+  void insert_graph_dependencies(std::vector<GraphNode> nodes);
+  void add_child_graph_node(hipGraph_t child, const std::string& key);
+
   Device& device_;
   HipStream stream_;
   std::unique_ptr<Worker> worker_;
@@ -100,6 +157,20 @@ class CommandEncoder {
   std::vector<std::shared_ptr<array::Data>> temporaries_;
   std::unordered_set<const array::Data*> temporary_ptrs_;
   bool capturing_{false};
+
+  // --- Automatic graph-batching state (mirrors CUDA CommandEncoder) ---
+  hipGraph_t build_graph_{nullptr};
+  std::vector<hipGraphNode_t> from_nodes_;
+  std::vector<hipGraphNode_t> to_nodes_;
+  std::string graph_nodes_key_;
+  std::string graph_deps_key_;
+  std::vector<std::uintptr_t> active_deps_;
+  std::vector<std::uintptr_t> active_outputs_;
+  std::unordered_map<std::uintptr_t, GraphNode> node_map_;
+  size_t bytes_in_graph_{0};
+  int max_ops_per_graph_{50};
+  int max_mb_per_graph_{200};
+  LRUCache<hipGraphExec_t> graph_cache_{400};
   // Buffers allocated during capture are held alive here (not freed) so their
   // addresses stay valid and unique for the lifetime of the captured graph —
   // freeing them mid-capture would let later allocations reuse the same
@@ -187,9 +258,29 @@ inline auto thrust_policy(hipStream_t stream) {
 template <typename F>
 void CommandEncoder::launch_kernel(F&& func) {
   device_.make_current();
-  // When capturing, kernel launches are recorded into the HIP graph
-  // automatically via hipStreamBeginCapture. No special handling needed —
-  // hipLaunchKernel on a capturing stream records instead of executing.
+  // Under the automatic graph-batching path, capture this lambda's launches
+  // into a child graph node so the build graph stays complete while individual
+  // kernels are migrated to add_kernel_node. The legacy whole-stream capture
+  // path (capturing_) and the immediate path are left untouched.
+  if (use_hip_graphs() && !capturing_) {
+    hipGraph_t child = nullptr;
+    if (hipStreamBeginCapture(
+            stream_, hipStreamCaptureModeThreadLocal) == hipSuccess) {
+      func(static_cast<hipStream_t>(stream_));
+      if (hipStreamEndCapture(stream_, &child) == hipSuccess && child) {
+        add_child_graph_node(child, "()");
+        hipGraphDestroy(child);
+        node_count_++;
+        return;
+      }
+    }
+    // Fallback: capture failed, run immediately.
+    func(static_cast<hipStream_t>(stream_));
+    node_count_++;
+    return;
+  }
+  // When the legacy path is capturing, kernel launches are recorded into the
+  // HIP graph automatically. Otherwise hipLaunchKernel executes immediately.
   func(static_cast<hipStream_t>(stream_));
   node_count_++;
 }

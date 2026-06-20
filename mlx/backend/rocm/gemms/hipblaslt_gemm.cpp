@@ -62,6 +62,22 @@ void init_handle(HipblasltState& state, int device_id) {
     return;
   }
   state.available = true;
+
+  // Pre-allocate the matmul workspace to the maximum size NOW so that
+  // ensure_workspace() never calls hipMalloc during a HIP-graph capture (a
+  // device alloc on the capturing stream invalidates the graph). Any algorithm
+  // the heuristic returns fits within kMaxWorkspaceBytes, so a single up-front
+  // allocation makes hipblasLtMatmul capture-safe.
+  int prev_dev = 0;
+  (void)hipGetDevice(&prev_dev);
+  (void)hipSetDevice(device_id);
+  if (hipMalloc(&state.workspace, kMaxWorkspaceBytes) == hipSuccess) {
+    state.workspace_size = kMaxWorkspaceBytes;
+  } else {
+    state.workspace = nullptr;
+    state.workspace_size = 0;
+  }
+  (void)hipSetDevice(prev_dev);
 }
 
 hipblasLtHandle_t get_handle(int device_id) {
@@ -615,16 +631,22 @@ bool is_hipblaslt_available() {
   static const bool g_force_rocblas = std::getenv("MLX_NO_HIPBLASLT") != nullptr;
   if (g_force_rocblas)
     return false;
-  // During HIP graph capture, hipBLASLt is non-capturable: handle init aborts,
-  // and even a warm handle runs AlgoGetHeuristic / workspace hipMalloc inside the
-  // matmul, which invalidates the capture ("operation failed due to a previous
-  // error during capture"). Force the rocBLAS fallback for the whole capture.
-  if (stream_capturing()) {
-    return false;
-  }
+  // Opt-out: force rocBLAS during capture (legacy fallback).
+  static const bool g_no_capture =
+      std::getenv("MLX_HIPBLASLT_NO_CAPTURE") != nullptr;
   int device_id = 0;
   (void)hipGetDevice(&device_id);
   auto& state = get_state(device_id);
+  // During HIP-graph capture, hipBLASLt is capture-safe ONLY when warm: the
+  // handle is already created (hipblasLtCreate aborts mid-capture), the
+  // workspace is pre-allocated (no hipMalloc), and the per-shape algorithm is
+  // cached (no AlgoGetHeuristic). Warmup runs the identical decode forward, so
+  // every captured GEMM is warm. If the handle is somehow cold here, fall back
+  // to rocBLAS rather than initialise inside the capture.
+  if (stream_capturing()) {
+    return !g_no_capture && state.initialized && state.available &&
+        state.workspace != nullptr;
+  }
   if (!state.initialized) {
     std::lock_guard<std::mutex> lock(state.mutex);
     init_handle(state, device_id);

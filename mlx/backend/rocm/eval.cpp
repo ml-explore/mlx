@@ -5,6 +5,7 @@
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/event.h"
 #include "mlx/primitives.h"
+#include "mlx/scheduler.h"
 
 #include <hip/hip_runtime.h>
 
@@ -55,7 +56,18 @@ void eval(array& arr) {
   for (auto& s : arr.siblings()) {
     encoder.add_temporary(s);
   }
-  encoder.maybe_commit();
+
+  if (rocm::use_hip_graphs()) {
+    auto& stream = arr.primitive().stream();
+    if (encoder.needs_commit()) {
+      scheduler::notify_new_task(stream);
+      encoder.add_completed_handler(
+          [stream]() { scheduler::notify_task_completion(stream); });
+      encoder.commit();
+    }
+  } else {
+    encoder.maybe_commit();
+  }
 }
 
 void finalize(Stream s) {

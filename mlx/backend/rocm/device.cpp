@@ -21,7 +21,24 @@ namespace {
 // Can be tuned with MLX_MAX_OPS_PER_BUFFER
 constexpr int default_max_ops_per_buffer = 2000;
 
+inline bool is_empty_dim(dim3 dim) {
+  return (dim.x == 0 && dim.y == 0 && dim.z == 0) ||
+      (dim.x == 1 && dim.y == 1 && dim.z == 1);
+}
+
 } // namespace
+
+bool use_hip_graphs() {
+  static bool use_graphs = std::getenv("MLX_USE_HIP_GRAPHS") != nullptr;
+  return use_graphs;
+}
+
+// Per-arch op/MB caps for the build graph. Tunable via env.
+static std::pair<int, int> get_graph_limits() {
+  int ops = env::max_ops_per_buffer(50);
+  int mb = env::max_mb_per_buffer(200);
+  return {ops, mb};
+}
 
 Device::Device(int device) : device_(device) {
   make_current();
@@ -300,9 +317,22 @@ void Device::clear_encoders() {
 }
 
 CommandEncoder::CommandEncoder(Device& d)
-    : device_(d), stream_(d), worker_(std::make_unique<Worker>(d.hip_device())) {}
+    : device_(d),
+      stream_(d),
+      worker_(std::make_unique<Worker>(d.hip_device())) {
+  std::tie(max_ops_per_graph_, max_mb_per_graph_) = get_graph_limits();
+  if (use_hip_graphs()) {
+    device_.make_current();
+    CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
+  }
+}
 
-CommandEncoder::~CommandEncoder() = default;
+CommandEncoder::~CommandEncoder() {
+  if (build_graph_) {
+    hipGraphDestroy(build_graph_);
+    build_graph_ = nullptr;
+  }
+}
 
 void CommandEncoder::add_temporary(const array& arr) {
   auto data = arr.data_shared_ptr();
@@ -316,14 +346,122 @@ void CommandEncoder::add_completed_handler(std::function<void()> task) {
   worker_->add_task(std::move(task));
 }
 
-void CommandEncoder::set_input_array(const array& arr) {}
+void CommandEncoder::set_input_array(const array& arr) {
+  if (!use_hip_graphs()) {
+    return;
+  }
+  bytes_in_graph_ += arr.data_size();
+  auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
+  active_deps_.push_back(id);
+}
 
-void CommandEncoder::set_output_array(const array& arr) {}
+void CommandEncoder::set_output_array(const array& arr) {
+  if (!use_hip_graphs()) {
+    return;
+  }
+  auto id = reinterpret_cast<std::uintptr_t>(arr.buffer().ptr());
+  active_deps_.push_back(id);
+  active_outputs_.push_back(id);
+}
+
+void CommandEncoder::insert_graph_dependencies(GraphNode node) {
+  node.id = std::to_string(node_count_++);
+  std::vector<GraphNode> nodes;
+  nodes.push_back(std::move(node));
+  insert_graph_dependencies(std::move(nodes));
+}
+
+void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
+  for (auto& node : nodes) {
+    graph_nodes_key_ += node.node_type;
+    graph_nodes_key_ += "-";
+  }
+  std::vector<GraphNode> deps;
+  {
+    std::unordered_set<hipGraphNode_t> set_deps;
+    for (auto d : active_deps_) {
+      if (auto it = node_map_.find(d); it != node_map_.end()) {
+        auto [_, inserted] = set_deps.insert(it->second.node);
+        if (inserted) {
+          deps.push_back(it->second);
+        }
+      }
+    }
+  }
+  active_deps_.clear();
+
+  for (auto o : active_outputs_) {
+    for (auto& node : nodes) {
+      node_map_.emplace(o, node).first->second = node;
+    }
+  }
+  active_outputs_.clear();
+
+  for (auto& from : deps) {
+    for (auto& to : nodes) {
+      from_nodes_.push_back(from.node);
+      to_nodes_.push_back(to.node);
+      graph_deps_key_ += from.id;
+      graph_deps_key_ += "-";
+      graph_deps_key_ += to.id;
+      graph_deps_key_ += "-";
+    }
+  }
+}
+
+void CommandEncoder::add_kernel_node_raw(
+    void* func,
+    dim3 grid_dim,
+    dim3 block_dim,
+    uint32_t smem_bytes,
+    void** params) {
+  if (!use_hip_graphs()) {
+    device_.make_current();
+    CHECK_HIP_ERROR(hipLaunchKernel(
+        func, grid_dim, block_dim, params, smem_bytes, stream_));
+    node_count_++;
+    return;
+  }
+
+  hipKernelNodeParams kernel_params = {};
+  kernel_params.func = func;
+  kernel_params.gridDim = grid_dim;
+  kernel_params.blockDim = block_dim;
+  kernel_params.kernelParams = params;
+  kernel_params.sharedMemBytes = smem_bytes;
+  hipGraphNode_t node;
+  CHECK_HIP_ERROR(
+      hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kernel_params));
+  insert_graph_dependencies(GraphNode{node, "K"});
+}
+
+void CommandEncoder::add_child_graph_node(
+    hipGraph_t child,
+    const std::string& key) {
+  hipGraphNode_t node;
+  CHECK_HIP_ERROR(
+      hipGraphAddChildGraphNode(&node, build_graph_, nullptr, 0, child));
+  insert_graph_dependencies(GraphNode{node, key});
+}
 
 void CommandEncoder::maybe_commit() {
+  if (use_hip_graphs()) {
+    if (needs_commit()) {
+      commit();
+    }
+    return;
+  }
   if (node_count_ >= env::max_ops_per_buffer(default_max_ops_per_buffer)) {
     commit();
   }
+}
+
+bool CommandEncoder::needs_commit() {
+  if (!use_hip_graphs()) {
+    return node_count_ >= env::max_ops_per_buffer(default_max_ops_per_buffer);
+  }
+  return (node_count_ > max_ops_per_graph_) ||
+      ((bytes_in_graph_ >> 20) > static_cast<size_t>(max_mb_per_graph_));
 }
 
 void CommandEncoder::commit() {
@@ -352,6 +490,56 @@ void CommandEncoder::commit() {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
   temporary_ptrs_.clear();
+
+  if (use_hip_graphs() && node_count_ > 0) {
+    if (!from_nodes_.empty()) {
+      CHECK_HIP_ERROR(hipGraphAddDependencies(
+          build_graph_,
+          from_nodes_.data(),
+          to_nodes_.data(),
+          from_nodes_.size()));
+    }
+
+    device_.make_current();
+
+    auto graph_key =
+        std::hash<std::string>{}(graph_nodes_key_ + ":" + graph_deps_key_);
+    auto cached = graph_cache_.get(graph_key);
+    hipGraphExec_t graph_exec = cached ? *cached : nullptr;
+
+    if (graph_exec != nullptr) {
+      hipGraphExecUpdateResult update_result;
+      hipGraphNode_t error_node;
+      hipError_t uerr = hipGraphExecUpdate(
+          graph_exec, build_graph_, &error_node, &update_result);
+      if (uerr != hipSuccess ||
+          update_result != hipGraphExecUpdateSuccess) {
+        (void)hipGetLastError();
+        hipGraphExecDestroy(graph_exec);
+        graph_exec = nullptr;
+      }
+    }
+    if (graph_exec == nullptr) {
+      CHECK_HIP_ERROR(hipGraphInstantiate(
+          &graph_exec, build_graph_, nullptr, nullptr, 0));
+      graph_cache_.put(graph_key, graph_exec);
+    }
+
+    CHECK_HIP_ERROR(hipGraphLaunch(graph_exec, stream_));
+
+    // Reset build state for the next chunk.
+    from_nodes_.clear();
+    to_nodes_.clear();
+    graph_nodes_key_.clear();
+    graph_deps_key_.clear();
+    node_map_.clear();
+    active_deps_.clear();
+    active_outputs_.clear();
+    bytes_in_graph_ = 0;
+    hipGraphDestroy(build_graph_);
+    CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
+  }
+
   node_count_ = 0;
 
   // Put completion handlers in a batch.
