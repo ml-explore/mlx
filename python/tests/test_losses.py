@@ -335,6 +335,12 @@ class TestLosses(mlx_tests.MLXTestCase):
         expected_sum_full = mx.sum(expected_none_full)
         self.assertTrue(mx.allclose(losses_sum_full, expected_sum_full))
 
+        # The default reduction is "mean" (matches the documented default): a
+        # scalar equal to the explicit mean reduction, not the per-element array.
+        losses_default = nn.losses.gaussian_nll_loss(inputs, targets, vars)
+        self.assertEqual(losses_default.ndim, 0)
+        self.assertTrue(mx.allclose(losses_default, expected_mean))
+
     def test_kl_div_loss(self):
         p_logits = mx.log(mx.array([[0.5, 0.5], [0.8, 0.2]]))
         q_logits = mx.log(mx.array([[0.5, 0.5], [0.2, 0.8]]))
