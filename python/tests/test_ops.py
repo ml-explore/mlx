@@ -3481,6 +3481,53 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
+    def test_array_api_elementwise(self):
+        a = mx.array([-1.5, -0.5, 0.0, 0.5, 2.7])
+        self.assertEqual(mx.positive(a).tolist(), a.tolist())
+        self.assertEqual(mx.trunc(a).tolist(), [-1.0, 0.0, 0.0, 0.0, 2.0])
+
+        x = mx.array([True, True, False, False])
+        y = mx.array([True, False, True, False])
+        self.assertEqual(mx.logical_xor(x, y).tolist(), [False, True, True, False])
+
+        c = mx.array([[0, 1, 0], [2, 3, 0]])
+        self.assertEqual(mx.count_nonzero(c).item(), 3)
+        self.assertEqual(mx.count_nonzero(c, axis=0).tolist(), [1, 2, 0])
+        self.assertEqual(mx.count_nonzero(c, axis=1).tolist(), [1, 2])
+        self.assertEqual(mx.count_nonzero(c).dtype, mx.int32)
+
+    def test_diff(self):
+        a = mx.array([1, 2, 4, 7, 0])
+        self.assertEqual(mx.diff(a).tolist(), [1, 2, 3, -7])
+        self.assertEqual(mx.diff(a, n=2).tolist(), [1, 1, -10])
+        self.assertEqual(mx.diff(a, n=0).tolist(), a.tolist())
+
+        m = mx.array([[1, 3, 6], [0, 5, 6]])
+        self.assertEqual(mx.diff(m, axis=0).tolist(), [[-1, 2, 0]])
+        self.assertEqual(mx.diff(m, axis=1).tolist(), [[2, 3], [5, 1]])
+
+        # prepend / append.
+        self.assertEqual(
+            mx.diff(mx.array([2, 4, 7]), prepend=mx.array([0])).tolist(),
+            [2, 2, 3],
+        )
+        self.assertEqual(
+            mx.diff(mx.array([2, 4, 7]), append=mx.array([10])).tolist(),
+            [2, 3, 3],
+        )
+
+        with self.assertRaises(ValueError):
+            mx.diff(a, axis=1)
+
+    def test_array_api_creation(self):
+        a = mx.arange(6, dtype=mx.int16).reshape(2, 3)
+
+        fl = mx.full_like(a, 7)
+        self.assertEqual(fl.shape, (2, 3))
+        self.assertEqual(fl.dtype, mx.int16)
+        self.assertTrue(mx.all(fl == 7).item())
+        self.assertEqual(mx.full_like(a, 1.5, dtype=mx.float32).dtype, mx.float32)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

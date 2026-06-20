@@ -5918,4 +5918,162 @@ void init_ops(nb::module_& m) {
   m.attr("empty_like") = m.attr("zeros_like");
   m.attr("matrix_transpose") = m.attr("transpose");
   m.attr("pow") = m.attr("power");
+  // Array API elementwise functions.
+  m.def(
+      "positive",
+      &mx::positive,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def positive(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise unary plus. Returns a copy of the input.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: A copy of ``a``.
+      )pbdoc");
+  m.def(
+      "logical_xor",
+      [](const ScalarOrArray& a_,
+         const ScalarOrArray& b_,
+         mx::StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return mx::logical_xor(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def logical_xor(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise logical exclusive or.
+
+        Args:
+            a (array): First input array or scalar.
+            b (array): Second input array or scalar.
+
+        Returns:
+            array: The boolean array containing the logical xor of ``a`` and ``b``.
+      )pbdoc");
+  m.def(
+      "trunc",
+      &mx::trunc,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def trunc(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise truncation towards zero.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The truncated array.
+      )pbdoc");
+  m.def(
+      "count_nonzero",
+      [](const mx::array& a,
+         const IntOrVec& axis,
+         bool keepdims,
+         mx::StreamOrDevice s) {
+        if (std::holds_alternative<std::monostate>(axis)) {
+          return mx::count_nonzero(a, keepdims, s);
+        } else if (auto pv = std::get_if<int>(&axis); pv) {
+          return mx::count_nonzero(a, *pv, keepdims, s);
+        } else {
+          return mx::count_nonzero(
+              a, std::get<std::vector<int>>(axis), keepdims, s);
+        }
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      nb::kw_only(),
+      "keepdims"_a = false,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def count_nonzero(a: array, /, *, axis: Union[None, int, Sequence[int]] = None, keepdims: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Count the number of non-zero elements along the given axis.
+
+        Args:
+            a (array): Input array.
+            axis (int or tuple(int), optional): Axis or axes to count over.
+              Defaults to ``None`` in which case the whole array is counted.
+            keepdims (bool, optional): Keep the reduced axes as size one.
+              Default: ``False``.
+
+        Returns:
+            array: The counts as an ``int32`` array.
+      )pbdoc");
+  m.def(
+      "diff",
+      [](const mx::array& a,
+         int n,
+         int axis,
+         const std::optional<mx::array>& prepend,
+         const std::optional<mx::array>& append,
+         mx::StreamOrDevice s) {
+        return mx::diff(a, n, axis, prepend, append, s);
+      },
+      nb::arg(),
+      "n"_a = 1,
+      "axis"_a = -1,
+      nb::kw_only(),
+      "prepend"_a = nb::none(),
+      "append"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def diff(a: array, /, n: int = 1, axis: int = -1, *, prepend: Optional[array] = None, append: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        The n-th discrete difference along the given axis.
+
+        Args:
+            a (array): Input array.
+            n (int, optional): The number of times to difference. Default: ``1``.
+            axis (int, optional): The axis along which to difference.
+              Default: ``-1``.
+            prepend (array, optional): Values to prepend along ``axis`` before
+              differencing.
+            append (array, optional): Values to append along ``axis`` before
+              differencing.
+
+        Returns:
+            array: The n-th differences.
+      )pbdoc");
+  // Array API creation functions.
+  m.def(
+      "full_like",
+      [](const mx::array& a,
+         const ScalarOrArray& vals,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        auto t = dtype.value_or(a.dtype());
+        return mx::full_like(a, to_array(vals, t), t, s);
+      },
+      nb::arg(),
+      "vals"_a,
+      "dtype"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def full_like(a: array, vals: Union[scalar, array], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        An array filled with ``vals`` with the same shape as the input.
+
+        Args:
+            a (array): The input to take the shape from.
+            vals (float or int or array): Values to fill the array with.
+            dtype (Dtype, optional): Data type of the output array. If
+              unspecified the type of the input is used.
+
+        Returns:
+            array: The output array.
+      )pbdoc");
 }
