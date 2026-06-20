@@ -5398,14 +5398,24 @@ std::vector<array> Sqrt::vjp(
   auto dtype = primals[0].dtype();
   if (recip_) {
     auto one_over_x_root_x = divide(outputs[0], primals[0], stream());
-    return {multiply(
+    auto vjp = multiply(
         multiply(array(-0.5, dtype), cotangents[0], stream()),
         one_over_x_root_x,
+        stream());
+    return {where(
+        equal(cotangents[0], array(0, dtype), stream()),
+        zeros_like(cotangents[0], stream()),
+        vjp,
         stream())};
   } else {
-    return {divide(
+    auto vjp = divide(
         multiply(array(0.5, dtype), cotangents[0], stream()),
         outputs[0],
+        stream());
+    return {where(
+        equal(cotangents[0], array(0, dtype), stream()),
+        zeros_like(cotangents[0], stream()),
+        vjp,
         stream())};
   }
 }

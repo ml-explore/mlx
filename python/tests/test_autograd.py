@@ -166,6 +166,34 @@ class TestAutograd(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.grad(fun)(mx.ones((2, 2)))
 
+    def test_zero_cotangent_sqrt_vjp_is_finite(self):
+        def fun(xy):
+            x, y = xy[..., 0], xy[..., 1]
+            rho = mx.sqrt(x * x + y * y)
+            return mx.sum(mx.maximum(rho, mx.array(1e-10, dtype=rho.dtype)))
+
+        xy = mx.array(
+            [[0.0, 0.0], [0.5, 0.3], [-0.7, 0.1]],
+            dtype=mx.float32,
+        )
+        grad = mx.grad(fun)(xy)
+
+        self.assertTrue(mx.all(mx.isfinite(grad)).item())
+        self.assertTrue(mx.allclose(grad[0], mx.zeros((2,))).item())
+        self.assertTrue(
+            mx.allclose(
+                grad[1:],
+                mx.array(
+                    [
+                        [0.857493, 0.514496],
+                        [-0.989949, 0.141421],
+                    ],
+                    dtype=mx.float32,
+                ),
+                atol=1e-5,
+            ).item()
+        )
+
     def test_grad_trees(self):
         fun = lambda x, y: x * y
         value, dfdx = mx.value_and_grad(fun, (0, 1))(mx.array(0.5), mx.array(2.0))
