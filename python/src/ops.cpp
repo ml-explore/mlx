@@ -5841,4 +5841,15 @@ void init_ops(nb::module_& m) {
       Returns:
         array: The array converted to fp8 with type ``uint8``.
   )pbdoc");
+  // Array API standard aliases (https://data-apis.org/array-api/latest/).
+  m.attr("acos") = m.attr("arccos");
+  m.attr("acosh") = m.attr("arccosh");
+  m.attr("asin") = m.attr("arcsin");
+  m.attr("asinh") = m.attr("arcsinh");
+  m.attr("atan") = m.attr("arctan");
+  m.attr("atanh") = m.attr("arctanh");
+  m.attr("atan2") = m.attr("arctan2");
+  m.attr("pow") = m.attr("power");
+  m.attr("bitwise_left_shift") = m.attr("left_shift");
+  m.attr("bitwise_right_shift") = m.attr("right_shift");
 }
