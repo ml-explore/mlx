@@ -3486,6 +3486,28 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
+    def test_cumulative_sum_prod(self):
+        a = mx.array([1, 2, 3, 4])
+        self.assertEqual(mx.cumulative_sum(a).tolist(), [1, 3, 6, 10])
+        self.assertEqual(
+            mx.cumulative_sum(a, include_initial=True).tolist(), [0, 1, 3, 6, 10]
+        )
+        self.assertEqual(mx.cumulative_prod(a).tolist(), [1, 2, 6, 24])
+        self.assertEqual(
+            mx.cumulative_prod(a, include_initial=True).tolist(), [1, 1, 2, 6, 24]
+        )
+
+        m = mx.array([[1, 2], [3, 4]])
+        self.assertEqual(mx.cumulative_sum(m, axis=0).tolist(), [[1, 2], [4, 6]])
+        self.assertEqual(mx.cumulative_sum(m, axis=1).tolist(), [[1, 3], [3, 7]])
+        self.assertEqual(
+            mx.cumulative_sum(m, axis=1, include_initial=True).tolist(),
+            [[0, 1, 3], [0, 3, 7]],
+        )
+        # axis=None flattens.
+        self.assertEqual(mx.cumulative_sum(m).tolist(), [1, 3, 6, 10])
+        self.assertEqual(mx.cumulative_sum(a, dtype=mx.float32).dtype, mx.float32)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
