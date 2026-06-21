@@ -202,14 +202,13 @@ CUTE_DEVICE void qmm_naive_mainloop(
       if constexpr (
           cuda::std::is_same_v<Quant, cutlass::float_e2m1_t> &&
           cuda::std::is_same_v<Scale, cutlass::float_e4m3_t>) {
+        // Only nvfp4 supports global scale.
         if (global_scale) {
           tCgC(i) = Element(tCrC(i) * (*global_scale / (F8E4M3_MAX * F4E2M1_MAX)));
-        } else {
-          tCgC(i) = Element(tCrC(i));
+          continue;
         }
-      } else {
-        tCgC(i) = Element(tCrC(i));
       }
+      tCgC(i) = Element(tCrC(i));
     }
   }
 }

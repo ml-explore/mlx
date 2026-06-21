@@ -21,7 +21,7 @@ std::tuple<array, array> quantize_input(
     QuantizationMode mode,
     int bits,
     int group_size,
-    std::optional<array> global_scale = std::nullopt) {
+    std::optional<array> global_scale) {
   const array x = ensure_contiguous(input, encoder, s);
 
   // Compute output shapes
@@ -54,7 +54,7 @@ std::tuple<array, array> quantize_input(
 
 array quantize_dequantize_input(
     const array& x_pre,
-    const std::optional<array>& global_scale_x,
+    const std::optional<array>& global_scale,
     int bits,
     int group_size,
     cu::CommandEncoder& encoder,
@@ -69,7 +69,7 @@ array quantize_dequantize_input(
   if (!donate_x) {
     encoder.add_temporary(xhat);
   }
-  fp_quantize_dequantize(x, xhat, group_size, bits, global_scale_x, encoder, s);
+  fp_quantize_dequantize(x, xhat, group_size, bits, global_scale, encoder, s);
   return xhat;
 }
 
@@ -99,7 +99,6 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   const array& x_pre = inputs[0];
   const array& w_pre = inputs[1];
-  const array& scales_w_pre = inputs[2];
 
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
@@ -107,16 +106,14 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // - 3 inputs: x, w, scales_w (quantized w)
   bool w_quantized = (w_pre.dtype() == uint32);
   int base_size = w_quantized ? 3 : 2;
-  assert(
-      inputs.size() == base_size ||
-      (mode_ == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2));
-
   // For nvfp4, global scales are optional but must be both present or both
   // absent If present, they add 2 more inputs (global_scale_x, global_scale_w)
   bool has_global_scales =
-      mode_ == QuantizationMode::Nvfp4 && inputs.size() > base_size;
-  std::optional<array> global_scale_x = std::nullopt;
-  std::optional<array> global_scale_w = std::nullopt;
+      mode_ == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2;
+  assert(inputs.size() == base_size || has_global_scales);
+
+  std::optional<array> global_scale_x;
+  std::optional<array> global_scale_w;
   if (has_global_scales) {
     global_scale_x = inputs[inputs.size() - 2];
     global_scale_w = inputs[inputs.size() - 1];
@@ -128,12 +125,14 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
             w_pre, encoder, s, mode_, bits_, group_size_, global_scale_w)
       : std::make_tuple(
             ensure_contiguous(w_pre, encoder, s),
-            ensure_contiguous(scales_w_pre, encoder, s));
+            ensure_contiguous(inputs[2], encoder, s));
 
   // Reroute to qmm when: no support in cuBLAS, or doing GEMV.
+  bool can_use_cublas =
+      (mode_ == QuantizationMode::Nvfp4 || mode_ == QuantizationMode::Mxfp8) &&
+      (device.compute_capability_major() >= 10);
   int M = x_pre.shape(-2);
-  bool use_qmm = (device.compute_capability_major() < 10) || (M == 1);
-  use_qmm = true;
+  bool use_qmm = (!can_use_cublas) || (M == 1);
 
   if (use_qmm) {
     array x = quantize_dequantize_input(
@@ -205,6 +204,65 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       scales_w,
       mode_,
       scalars);
+}
+
+void GatherQQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("QQMatmul::eval_gpu");
+
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  const array& x_pre = inputs[0];
+  const array& w_pre = inputs[1];
+  const array& lhs_indices = ensure_row_contiguous(inputs[2], encoder, s);
+  const array& rhs_indices = ensure_row_contiguous(inputs[3], encoder, s);
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+
+  // - 4 inputs: x, w, lhs_indices, rhs_indices (non-quantized w)
+  // - 5 inputs: x, w, lhs_indices, rhs_indices, scales_w (quantized w)
+  bool w_quantized = (w_pre.dtype() == uint32);
+  int base_size = w_quantized ? 5 : 4;
+  // For nvfp4, global scales are optional but must be both present or both
+  // absent If present, they add 2 more inputs (global_scale_x, global_scale_w)
+  bool has_global_scales =
+      mode_ == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2;
+  assert(inputs.size() == base_size || has_global_scales);
+
+  std::optional<array> global_scale_x;
+  std::optional<array> global_scale_w;
+  if (has_global_scales) {
+    global_scale_x = inputs[inputs.size() - 2];
+    global_scale_w = inputs[inputs.size() - 1];
+  }
+
+  // Quantize weights.
+  auto [w_q, scales_w] = !w_quantized
+      ? quantize_input(
+            w_pre, encoder, s, mode_, bits_, group_size_, global_scale_w)
+      : std::make_tuple(
+            ensure_contiguous(w_pre, encoder, s),
+            ensure_contiguous(inputs[4], encoder, s));
+
+  // Quantize activation.
+  array x = quantize_dequantize_input(
+      x_pre, global_scale_x, bits_, group_size_, encoder, s);
+
+  // Reroute to qmm.
+  qmm_naive(
+      x,
+      w_q,
+      scales_w,
+      std::nullopt,
+      global_scale_w,
+      lhs_indices,
+      rhs_indices,
+      out,
+      true, // transpose
+      bits_,
+      group_size_,
+      mode_,
+      encoder);
 }
 
 } // namespace mlx::core
