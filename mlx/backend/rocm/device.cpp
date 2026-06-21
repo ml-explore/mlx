@@ -34,8 +34,13 @@ bool use_hip_graphs() {
 }
 
 // Per-arch op/MB caps for the build graph. Tunable via env.
+// NOTE: capped at 2 (=> graphs of <=3 kernel nodes). ROCm CLR has a per-node
+// kernarg corruption bug (hip#3887 / clr#138) that produces WRONG results once a
+// single instantiated graph holds >~3 heterogeneous kernel nodes — verified here
+// (3-node graphs match eager bit-for-bit; 4+ produce garbage). Until AMD fixes
+// CLR, keep graphs tiny for correctness. This limits the batching speedup.
 static std::pair<int, int> get_graph_limits() {
-  int ops = env::max_ops_per_buffer(50);
+  int ops = env::max_ops_per_buffer(2);
   int mb = env::max_mb_per_buffer(200);
   return {ops, mb};
 }
@@ -324,6 +329,7 @@ CommandEncoder::CommandEncoder(Device& d)
   if (use_hip_graphs()) {
     device_.make_current();
     CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
+    set_graph_active(true);
   }
 }
 
@@ -502,7 +508,6 @@ void CommandEncoder::commit() {
     hipGraphExec_t graph_exec = nullptr;
     CHECK_HIP_ERROR(
         hipGraphInstantiate(&graph_exec, build_graph_, nullptr, nullptr, 0));
-    graph_execs_.push_back(graph_exec);
 
     static const bool dump = std::getenv("MLX_HIP_GRAPH_DUMP") != nullptr;
     if (dump) {
@@ -542,6 +547,11 @@ void CommandEncoder::commit() {
     }
 
     CHECK_HIP_ERROR(hipGraphLaunch(graph_exec, stream_));
+    // Destroy the exec once its (async) launch completes — the completion
+    // handler fires on the worker after the stream passes this commit, so the
+    // exec is freed promptly instead of piling up until synchronize() (which
+    // OOMs over a long generation with many tiny graphs).
+    add_completed_handler([graph_exec]() { hipGraphExecDestroy(graph_exec); });
 
     // Reset build state for the next chunk.
     from_nodes_.clear();
@@ -581,11 +591,9 @@ void CommandEncoder::synchronize() {
   (void)hipStreamSynchronize(stream_);
   // Stream is fully drained; graph execs are done and no longer reference the
   // kernelParams. Destroy the retained execs and release the arg packs.
-  for (auto e : graph_execs_)
-    hipGraphExecDestroy(e);
-  graph_execs_.clear();
   graph_node_args_.clear();
   graph_node_args_prev_.clear();
+  if (use_hip_graphs()) flush_graph_deferred_frees();
 }
 
 // Global flag: true while any stream on this process is recording a HIP graph.

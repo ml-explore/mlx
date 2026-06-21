@@ -8,6 +8,8 @@
 #include "mlx/scheduler.h"
 
 #include <hip/hip_runtime.h>
+#include <cstdlib>
+#include <vector>
 
 namespace mlx::core::gpu {
 
@@ -67,6 +69,28 @@ void eval(array& arr) {
     }
   } else {
     encoder.maybe_commit();
+  }
+
+  // Bisection: force-execute each op and dump an output checksum. Run eager and
+  // graphs-ON with MLX_GRAPH_CHECKSUM and diff -> first divergence = buggy op.
+  static const bool g_cks = std::getenv("MLX_GRAPH_CHECKSUM") != nullptr;
+  if (g_cks) {
+    encoder.commit();
+    encoder.synchronize();
+    static int idx = 0;
+    for (auto& o : outputs) {
+      size_t bytes = o.data_size() * o.itemsize();
+      unsigned long long s = 0;
+      if (bytes > 0 && o.data_shared_ptr() != nullptr) {
+        std::vector<unsigned char> h(bytes);
+        if (hipMemcpy(h.data(), o.data<char>(), bytes,
+                      hipMemcpyDeviceToHost) == hipSuccess) {
+          for (auto c : h)
+            s += c;
+        }
+      }
+      fprintf(stderr, "[cks] %d sum=%llu bytes=%zu\n", idx++, s, bytes);
+    }
   }
 }
 
