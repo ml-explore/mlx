@@ -525,6 +525,43 @@ void CommandEncoder::commit() {
       graph_cache_.put(graph_key, graph_exec);
     }
 
+    static const bool dump = std::getenv("MLX_HIP_GRAPH_DUMP") != nullptr;
+    if (dump) {
+      size_t n = 0;
+      hipGraphGetNodes(build_graph_, nullptr, &n);
+      std::vector<hipGraphNode_t> nodes(n);
+      hipGraphGetNodes(build_graph_, nodes.data(), &n);
+      size_t nedges = 0;
+      hipGraphGetEdges(build_graph_, nullptr, nullptr, &nedges);
+      int k = 0, mcpy = 0, mset = 0, host = 0, child = 0, empty = 0, malloc_n = 0,
+          free_n = 0, other = 0;
+      for (auto nd : nodes) {
+        hipGraphNodeType t;
+        if (hipGraphNodeGetType(nd, &t) != hipSuccess) { other++; continue; }
+        switch (t) {
+          case hipGraphNodeTypeKernel: k++; break;
+          case hipGraphNodeTypeMemcpy: mcpy++; break;
+          case hipGraphNodeTypeMemset: mset++; break;
+          case hipGraphNodeTypeHost: host++; break;
+          case hipGraphNodeTypeGraph: child++; break;
+          case hipGraphNodeTypeEmpty: empty++; break;
+          case hipGraphNodeTypeMemAlloc: malloc_n++; break;
+          case hipGraphNodeTypeMemFree: free_n++; break;
+          default: other++; break;
+        }
+      }
+      fprintf(stderr,
+              "[graph] nodes=%zu edges=%zu kernel=%d memcpy=%d memset=%d "
+              "host=%d child=%d empty=%d memAlloc=%d memFree=%d other=%d\n",
+              n, nedges, k, mcpy, mset, host, child, empty, malloc_n, free_n,
+              other);
+      static int dn = 0;
+      char path[64];
+      snprintf(path, sizeof(path), "/tmp/hipgraph_%d.dot", dn++);
+      hipGraphDebugDotPrint(build_graph_, path, 0);
+      fprintf(stderr, "[graph] dot -> %s\n", path);
+    }
+
     CHECK_HIP_ERROR(hipGraphLaunch(graph_exec, stream_));
 
     // Reset build state for the next chunk.
