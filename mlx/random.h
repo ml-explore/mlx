@@ -93,7 +93,12 @@ inline array uniform(
   return uniform(shape, float32, key, s);
 }
 
-/** Generate samples from the standard normal distribution. */
+/** Generate samples from the standard normal distribution.
+ *
+ * Seeded samples are reproducible for a fixed MLX version, backend, and
+ * hardware target, but are not guaranteed to be bit-exact across different
+ * Apple GPU generations.
+ */
 MLX_API array normal(
     const Shape& shape,
     Dtype dtype,

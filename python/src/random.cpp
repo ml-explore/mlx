@@ -196,6 +196,11 @@ void init_random(nb::module_& parent_module) {
         real numbers and $\text{Re}(x),\text{Im}(x) \sim \mathcal{N}(0,
         \frac{1}{2})$ for complex numbers.
 
+        Seeded samples are reproducible for a fixed MLX version, backend, and
+        hardware target. They are not guaranteed to be bit-exact across
+        different Apple GPU generations because the Metal implementation may
+        use hardware-dependent math paths.
+
         Args:
             shape (list(int), optional): Shape of the output. Default: ``()``.
             dtype (Dtype, optional): Type of the output. Default: ``float32``.
