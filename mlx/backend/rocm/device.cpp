@@ -415,7 +415,17 @@ void CommandEncoder::add_kernel_node_raw(
   hipGraphNode_t node;
   CHECK_HIP_ERROR(
       hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kernel_params));
-  insert_graph_dependencies(GraphNode{node, "K"});
+  // Key the node by its kernel FUNCTION (+ launch dims), not just "K": the exec
+  // cache is reused via hipGraphExecUpdate only on a matching key, and update
+  // can only re-point params of an IDENTICAL kernel sequence. A type-only key
+  // collides distinct kernels and reuses the wrong exec -> garbage output.
+  std::string key = "K";
+  key += std::to_string(reinterpret_cast<std::uintptr_t>(func));
+  key += "_";
+  key += std::to_string(grid_dim.x * grid_dim.y * grid_dim.z);
+  key += "x";
+  key += std::to_string(block_dim.x * block_dim.y * block_dim.z);
+  insert_graph_dependencies(GraphNode{node, key});
 }
 
 void CommandEncoder::add_child_graph_node(
@@ -485,29 +495,14 @@ void CommandEncoder::commit() {
 
     device_.make_current();
 
-    static const bool nocache = std::getenv("MLX_HIP_GRAPH_NOCACHE") != nullptr;
-    auto graph_key =
-        std::hash<std::string>{}(graph_nodes_key_ + ":" + graph_deps_key_);
-    auto cached = nocache ? std::nullopt : graph_cache_.get(graph_key);
-    hipGraphExec_t graph_exec = cached ? *cached : nullptr;
-
-    if (graph_exec != nullptr) {
-      hipGraphExecUpdateResult update_result;
-      hipGraphNode_t error_node;
-      hipError_t uerr = hipGraphExecUpdate(
-          graph_exec, build_graph_, &error_node, &update_result);
-      if (uerr != hipSuccess ||
-          update_result != hipGraphExecUpdateSuccess) {
-        (void)hipGetLastError();
-        hipGraphExecDestroy(graph_exec);
-        graph_exec = nullptr;
-      }
-    }
-    if (graph_exec == nullptr) {
-      CHECK_HIP_ERROR(hipGraphInstantiate(
-          &graph_exec, build_graph_, nullptr, nullptr, 0));
-      graph_cache_.put(graph_key, graph_exec);
-    }
+    // Instantiate a fresh exec each commit and retain it until the stream
+    // drains (destroyed in synchronize()). No exec-cache reuse: hipGraphExecUpdate
+    // keyed on graph structure mis-reuses execs across distinct kernel sequences
+    // and the raw-pointer cache had no destroy-on-evict — both corrupted output.
+    hipGraphExec_t graph_exec = nullptr;
+    CHECK_HIP_ERROR(
+        hipGraphInstantiate(&graph_exec, build_graph_, nullptr, nullptr, 0));
+    graph_execs_.push_back(graph_exec);
 
     static const bool dump = std::getenv("MLX_HIP_GRAPH_DUMP") != nullptr;
     if (dump) {
@@ -584,7 +579,11 @@ void CommandEncoder::synchronize() {
   commit();
   f.wait();
   (void)hipStreamSynchronize(stream_);
-  // Stream is fully drained; graph execs no longer reference the kernelParams.
+  // Stream is fully drained; graph execs are done and no longer reference the
+  // kernelParams. Destroy the retained execs and release the arg packs.
+  for (auto e : graph_execs_)
+    hipGraphExecDestroy(e);
+  graph_execs_.clear();
   graph_node_args_.clear();
   graph_node_args_prev_.clear();
 }

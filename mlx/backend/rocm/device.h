@@ -210,6 +210,9 @@ class CommandEncoder {
   // (async) exec may reference them. Held one extra commit via _prev_.
   std::vector<std::shared_ptr<void>> graph_node_args_;
   std::vector<std::shared_ptr<void>> graph_node_args_prev_;
+  // Instantiated execs retained until the stream drains (destroyed in
+  // synchronize()), since hipGraphLaunch is async.
+  std::vector<hipGraphExec_t> graph_execs_;
   // Buffers allocated during capture are held alive here (not freed) so their
   // addresses stay valid and unique for the lifetime of the captured graph —
   // freeing them mid-capture would let later allocations reuse the same
