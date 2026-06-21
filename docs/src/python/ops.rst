@@ -29,6 +29,7 @@ Operations
    array_equal
    asarray
    as_strided
+   astype
    atleast_1d
    atleast_2d
    atleast_3d
