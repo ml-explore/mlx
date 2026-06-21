@@ -277,6 +277,7 @@ void clear_all_encoders();
 // True while a HIP graph capture is in progress on any stream. Lazy library
 // inits that abort under capture (e.g. hipblasLtCreate) check this.
 bool stream_capturing();
+void set_stream_capturing(bool v);
 
 // True from capture start until the captured graph is destroyed. The allocator
 // defers all frees while set so graph-referenced buffers stay valid through replay.
@@ -299,20 +300,25 @@ void CommandEncoder::launch_kernel(F&& func) {
   // into a child graph node so the build graph stays complete while individual
   // kernels are migrated to add_kernel_node. The legacy whole-stream capture
   // path (capturing_) and the immediate path are left untouched.
-  static const bool bridge =
-      use_hip_graphs() && std::getenv("MLX_HIP_GRAPH_BRIDGE") != nullptr;
-  if (bridge && !capturing_) {
+  // Residual kernels not yet migrated to add_kernel_node (library GEMM, JIT,
+  // memsets) are captured into a child graph node so they join the build graph.
+  // Set the capture flag so library calls (hipBLASLt) fall back to the
+  // capture-safe rocBLAS path instead of aborting under capture.
+  if (use_hip_graphs() && !capturing_) {
     hipGraph_t child = nullptr;
+    set_stream_capturing(true);
     if (hipStreamBeginCapture(
             stream_, hipStreamCaptureModeThreadLocal) == hipSuccess) {
       func(static_cast<hipStream_t>(stream_));
       if (hipStreamEndCapture(stream_, &child) == hipSuccess && child) {
+        set_stream_capturing(false);
         add_child_graph_node(child, "()");
         hipGraphDestroy(child);
         node_count_++;
         return;
       }
     }
+    set_stream_capturing(false);
     func(static_cast<hipStream_t>(stream_));
     node_count_++;
     return;

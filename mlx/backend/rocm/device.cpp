@@ -570,6 +570,9 @@ std::atomic<bool> g_stream_capturing{false};
 bool stream_capturing() {
   return g_stream_capturing.load(std::memory_order_relaxed);
 }
+void set_stream_capturing(bool v) {
+  g_stream_capturing.store(v, std::memory_order_relaxed);
+}
 
 std::atomic<bool> g_graph_active{false};
 bool graph_active() {
