@@ -5,6 +5,7 @@ import inspect
 import io
 import math
 import threading
+import unittest
 from functools import partial, wraps
 from io import StringIO
 
@@ -70,6 +71,25 @@ class TestCompile(mlx_tests.MLXTestCase):
             mx.eval(out)
             self.assertEqual(out[0].item(), 1.0)
             self.assertEqual(out[1].item(), float("-inf"))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_compile_negative_strided_slice_update_expr(self):
+        def add_update(x):
+            out = mx.zeros_like(x)
+            out[::-1] += 2.0 * x[::-1]
+            return out
+
+        def set_update(x):
+            out = mx.zeros_like(x)
+            out[::-1] = 2.0 * x[::-1]
+            return out
+
+        mx.set_default_device(mx.gpu)
+        x = mx.arange(6, dtype=mx.float32)
+        for fn in (add_update, set_update):
+            expected = fn(x)
+            actual = mx.compile(fn)(x)
+            self.assertEqualArray(actual, expected)
 
     def test_compile_tuple_output_in_thread(self):
         @mx.compile
