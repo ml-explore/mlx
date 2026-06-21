@@ -2,6 +2,7 @@
 
 #include "mlx/backend/cuda/device/cute_dequant.cuh"
 #include "mlx/backend/cuda/device/gemm_sm70.cuh"
+#include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cuda/cmath>
 
@@ -25,6 +26,7 @@ CUTE_DEVICE void qmm_naive_mainloop(
     TensorS gS,
     TensorZ gZ,
     TensorC gC,
+    const float* global_scale,
     int m_max_coord,
     int n_max_coord,
     int k_residue,
@@ -32,6 +34,7 @@ CUTE_DEVICE void qmm_naive_mainloop(
   // Get the types of operands.
   using Element = typename decltype(gA)::value_type;
   using Quant = typename decltype(gB)::value_type;
+  using Scale = typename decltype(gS)::value_type;
 
   // Shift tensor so we handle residue of K in the 0th tile.
   gA = domain_offset(make_coord(0, k_residue, 0), gA);
@@ -196,7 +199,17 @@ CUTE_DEVICE void qmm_naive_mainloop(
   CUTE_UNROLL
   for (int i = 0; i < size(tCrC); ++i) {
     if ((get<0>(tCcC(i)) < m_max_coord) && (get<1>(tCcC(i)) < n_max_coord)) {
-      tCgC(i) = Element(tCrC(i));
+      if constexpr (
+          cuda::std::is_same_v<Quant, cutlass::float_e2m1_t> &&
+          cuda::std::is_same_v<Scale, cutlass::float_e4m3_t>) {
+        if (global_scale) {
+          tCgC(i) = Element(tCrC(i) * (*global_scale / (F8E4M3_MAX * F4E2M1_MAX)));
+        } else {
+          tCgC(i) = Element(tCrC(i));
+        }
+      } else {
+        tCgC(i) = Element(tCrC(i));
+      }
     }
   }
 }
@@ -224,6 +237,7 @@ void qmm_naive_kernel(
     const Quant* B,
     const Scale* S,
     const Element* Z,
+    const float* global_scale,
     const uint32_t* lhs_indices,
     const uint32_t* rhs_indices,
     Element* C,
@@ -295,6 +309,7 @@ void qmm_naive_kernel(
       gS,
       gZ,
       gC,
+      global_scale,
       m_max_coord, n_max_coord, k_residue,
       thread_idx);
 }
