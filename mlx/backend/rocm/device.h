@@ -16,11 +16,14 @@
 #include <thrust/execution_policy.h>
 #endif
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
@@ -66,19 +69,48 @@ class CommandEncoder {
       uint32_t smem_bytes,
       Params&&... params) {
     constexpr size_t num = sizeof...(Params);
-    void* ptrs[num];
-    size_t i = 0;
-    ([&](auto&& p) {
-      ptrs[i++] =
-          const_cast<void*>(static_cast<const void*>(std::addressof(p)));
-    }(std::forward<Params>(params)),
-     ...);
+    if (!use_hip_graphs()) {
+      // Immediate launch: kernelParams are consumed synchronously, so
+      // addresses of the caller's locals are fine.
+      void* ptrs[num > 0 ? num : 1];
+      size_t i = 0;
+      ([&](auto&& p) {
+        ptrs[i++] =
+            const_cast<void*>(static_cast<const void*>(std::addressof(p)));
+      }(std::forward<Params>(params)),
+       ...);
+      add_kernel_node_raw(
+          reinterpret_cast<void*>(func), grid_dim, block_dim, smem_bytes, ptrs);
+      return;
+    }
+    // Graph build: a HIP graph kernel node references its kernelParams until the
+    // node is instantiated/updated into the exec graph, which happens later in
+    // commit(). The caller's argument locals are gone by then, so copy the
+    // argument VALUES (and the pointer array) into a heap pack kept alive until
+    // commit() finishes (cleared there).
+    struct Pack {
+      std::tuple<std::decay_t<Params>...> vals;
+      std::array<void*, (num > 0 ? num : 1)> ptrs;
+    };
+    auto pack = std::make_shared<Pack>();
+    pack->vals = std::tuple<std::decay_t<Params>...>(
+        std::forward<Params>(params)...);
+    fill_param_ptrs(pack->vals, pack->ptrs, std::index_sequence_for<Params...>{});
+    graph_node_args_.push_back(pack);
     add_kernel_node_raw(
         reinterpret_cast<void*>(func),
         grid_dim,
         block_dim,
         smem_bytes,
-        ptrs);
+        pack->ptrs.data());
+  }
+
+  template <typename Tuple, typename Arr, size_t... I>
+  static void
+  fill_param_ptrs(Tuple& vals, Arr& ptrs, std::index_sequence<I...>) {
+    ((ptrs[I] = const_cast<void*>(
+          static_cast<const void*>(std::addressof(std::get<I>(vals))))),
+     ...);
   }
 
   void add_kernel_node_raw(
@@ -173,6 +205,9 @@ class CommandEncoder {
   int max_ops_per_graph_{50};
   int max_mb_per_graph_{200};
   LRUCache<hipGraphExec_t> graph_cache_{400};
+  // Per-build kernel-arg packs: keep the kernelParams values alive until the
+  // graph is instantiated/updated into the exec in commit(), then cleared.
+  std::vector<std::shared_ptr<void>> graph_node_args_;
   // Buffers allocated during capture are held alive here (not freed) so their
   // addresses stay valid and unique for the lifetime of the captured graph —
   // freeing them mid-capture would let later allocations reuse the same
@@ -264,7 +299,9 @@ void CommandEncoder::launch_kernel(F&& func) {
   // into a child graph node so the build graph stays complete while individual
   // kernels are migrated to add_kernel_node. The legacy whole-stream capture
   // path (capturing_) and the immediate path are left untouched.
-  if (use_hip_graphs() && !capturing_) {
+  static const bool bridge =
+      use_hip_graphs() && std::getenv("MLX_HIP_GRAPH_BRIDGE") != nullptr;
+  if (bridge && !capturing_) {
     hipGraph_t child = nullptr;
     if (hipStreamBeginCapture(
             stream_, hipStreamCaptureModeThreadLocal) == hipSuccess) {
@@ -276,7 +313,6 @@ void CommandEncoder::launch_kernel(F&& func) {
         return;
       }
     }
-    // Fallback: capture failed, run immediately.
     func(static_cast<hipStream_t>(stream_));
     node_count_++;
     return;

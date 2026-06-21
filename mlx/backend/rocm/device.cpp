@@ -538,6 +538,9 @@ void CommandEncoder::commit() {
     bytes_in_graph_ = 0;
     hipGraphDestroy(build_graph_);
     CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
+    // The exec graph copied the kernelParams during instantiate/exec-update, so
+    // the per-build arg packs are no longer referenced.
+    graph_node_args_.clear();
   }
 
   node_count_ = 0;
