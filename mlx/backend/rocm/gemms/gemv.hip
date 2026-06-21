@@ -467,47 +467,22 @@ void gemv(
     }
   }
 
-  encoder.launch_kernel([&,
-                         mat_ptr,
-                         vec_ptr,
-                         out_base_ptr,
-                         d_batch_shape,
-                         d_mat_strides,
-                         d_vec_strides,
-                         use_inline_batch_params,
-                         inline_batch_params](hipStream_t stream) {
-    auto launch_kernel = [&](auto type_tag, auto n_per_thread) {
-      using T = typename decltype(type_tag)::type;
-      const T* mat = static_cast<const T*>(mat_ptr);
-      const T* vec = static_cast<const T*>(vec_ptr);
-      T* out_ptr = static_cast<T*>(out_base_ptr);
-
-      if (batch_count == 1) {
-        hipLaunchKernelGGL(
-            (gemv_single<T, rows_per_block, n_per_thread()>),
-            dim3(num_blocks_x),
-            block_dims,
-            0,
-            stream,
-            mat,
-            vec,
-            out_ptr,
-            rows,
-            cols);
-      } else if (use_inline_batch_params) {
-        hipLaunchKernelGGL(
-            (gemv_batched_inline<T, rows_per_block, n_per_thread()>),
-            dim3(num_blocks_x, batch_count),
-            block_dims,
-            0,
-            stream,
-            mat,
-            vec,
-            out_ptr,
-            rows,
-            cols,
-            inline_batch_params);
-      } else {
+  if (batch_count > 1 && !use_inline_batch_params) {
+    // Rare fallback: batch_ndim > kMaxInlineBatchDims. Strides live in
+    // stream-ordered device memory freed via hipFreeAsync, so keep this on the
+    // legacy stream-capture path.
+    encoder.launch_kernel([&,
+                           mat_ptr,
+                           vec_ptr,
+                           out_base_ptr,
+                           d_batch_shape,
+                           d_mat_strides,
+                           d_vec_strides](hipStream_t stream) {
+      auto launch_kernel = [&](auto type_tag, auto n_per_thread) {
+        using T = typename decltype(type_tag)::type;
+        const T* mat = static_cast<const T*>(mat_ptr);
+        const T* vec = static_cast<const T*>(vec_ptr);
+        T* out_ptr = static_cast<T*>(out_base_ptr);
         hipLaunchKernelGGL(
             (gemv_batched<T, rows_per_block, n_per_thread()>),
             dim3(num_blocks_x, batch_count),
@@ -523,32 +498,82 @@ void gemv(
             d_mat_strides,
             d_vec_strides,
             static_cast<int>(batch_shape.size()));
-      }
-    };
+      };
 
-    dispatch_n_per_thread(n_per_t, [&](auto n_per_thread) {
-      switch (out.dtype()) {
-        case float32:
-          launch_kernel(type_identity<float>{}, n_per_thread);
-          break;
-        case float16:
-          launch_kernel(type_identity<__half>{}, n_per_thread);
-          break;
-        case bfloat16:
-          launch_kernel(type_identity<hip_bfloat16>{}, n_per_thread);
-          break;
-        case float64:
-          launch_kernel(type_identity<double>{}, n_per_thread);
-          break;
-        default:
-          break;
-      }
-    });
+      dispatch_n_per_thread(n_per_t, [&](auto n_per_thread) {
+        switch (out.dtype()) {
+          case float32:
+            launch_kernel(type_identity<float>{}, n_per_thread);
+            break;
+          case float16:
+            launch_kernel(type_identity<__half>{}, n_per_thread);
+            break;
+          case bfloat16:
+            launch_kernel(type_identity<hip_bfloat16>{}, n_per_thread);
+            break;
+          case float64:
+            launch_kernel(type_identity<double>{}, n_per_thread);
+            break;
+          default:
+            break;
+        }
+      });
 
-    if (batch_count > 1 && !use_inline_batch_params) {
       (void)hipFreeAsync(d_batch_shape, stream);
       (void)hipFreeAsync(d_mat_strides, stream);
       (void)hipFreeAsync(d_vec_strides, stream);
+    });
+    return;
+  }
+
+  auto add_node = [&](auto type_tag, auto n_per_thread) {
+    using T = typename decltype(type_tag)::type;
+    const T* mat = static_cast<const T*>(mat_ptr);
+    const T* vec = static_cast<const T*>(vec_ptr);
+    T* out_ptr = static_cast<T*>(out_base_ptr);
+
+    if (batch_count == 1) {
+      encoder.add_kernel_node(
+          &gemv_single<T, rows_per_block, n_per_thread()>,
+          dim3(num_blocks_x),
+          block_dims,
+          0u,
+          mat,
+          vec,
+          out_ptr,
+          rows,
+          cols);
+    } else {
+      encoder.add_kernel_node(
+          &gemv_batched_inline<T, rows_per_block, n_per_thread()>,
+          dim3(num_blocks_x, batch_count),
+          block_dims,
+          0u,
+          mat,
+          vec,
+          out_ptr,
+          rows,
+          cols,
+          inline_batch_params);
+    }
+  };
+
+  dispatch_n_per_thread(n_per_t, [&](auto n_per_thread) {
+    switch (out.dtype()) {
+      case float32:
+        add_node(type_identity<float>{}, n_per_thread);
+        break;
+      case float16:
+        add_node(type_identity<__half>{}, n_per_thread);
+        break;
+      case bfloat16:
+        add_node(type_identity<hip_bfloat16>{}, n_per_thread);
+        break;
+      case float64:
+        add_node(type_identity<double>{}, n_per_thread);
+        break;
+      default:
+        break;
     }
   });
 }
@@ -673,40 +698,25 @@ void gather_mv(
   const uint32_t* mat_indices_ptr = gpu_ptr<const uint32_t>(mat_indices);
   const uint32_t* vec_indices_ptr = gpu_ptr<const uint32_t>(vec_indices);
 
-  encoder.launch_kernel([&,
-                         mat_ptr,
-                         vec_ptr,
-                         out_ptr,
-                         mat_indices_ptr,
-                         vec_indices_ptr,
-                         d_mat_batch_shape,
-                         d_mat_batch_strides,
-                         d_vec_batch_shape,
-                         d_vec_batch_strides,
-                         d_index_shape,
-                         d_mat_index_strides,
-                         d_vec_index_strides,
-                         use_inline_gather_params,
-                         inline_gather_params](hipStream_t stream) {
-    auto launch_kernel = [&](auto type_tag, auto n_per_thread) {
-      using T = typename decltype(type_tag)::type;
-
-      if (use_inline_gather_params) {
-        hipLaunchKernelGGL(
-            (gemv_gather_inline<T, rows_per_block, n_per_thread()>),
-            dim3(num_blocks_x, batch_size),
-            block_dims,
-            0,
-            stream,
-            static_cast<const T*>(mat_ptr),
-            static_cast<const T*>(vec_ptr),
-            static_cast<T*>(out_ptr),
-            mat_indices_ptr,
-            vec_indices_ptr,
-            rows,
-            cols,
-            inline_gather_params);
-      } else {
+  if (!use_inline_gather_params) {
+    // Rare fallback: batch dims exceed kMaxInlineBatchDims. Params live in
+    // stream-ordered device memory freed via hipFreeAsync, so keep this on the
+    // legacy stream-capture path.
+    encoder.launch_kernel([&,
+                           mat_ptr,
+                           vec_ptr,
+                           out_ptr,
+                           mat_indices_ptr,
+                           vec_indices_ptr,
+                           d_mat_batch_shape,
+                           d_mat_batch_strides,
+                           d_vec_batch_shape,
+                           d_vec_batch_strides,
+                           d_index_shape,
+                           d_mat_index_strides,
+                           d_vec_index_strides](hipStream_t stream) {
+      auto launch_kernel = [&](auto type_tag, auto n_per_thread) {
+        using T = typename decltype(type_tag)::type;
         hipLaunchKernelGGL(
             (gemv_gather<T, rows_per_block, n_per_thread()>),
             dim3(num_blocks_x, batch_size),
@@ -730,29 +740,27 @@ void gather_mv(
             d_mat_index_strides,
             d_vec_index_strides,
             index_batch_ndim);
-      }
-    };
+      };
 
-    dispatch_n_per_thread(n_per_t, [&](auto n_per_thread) {
-      switch (out.dtype()) {
-        case float32:
-          launch_kernel(type_identity<float>{}, n_per_thread);
-          break;
-        case float16:
-          launch_kernel(type_identity<__half>{}, n_per_thread);
-          break;
-        case bfloat16:
-          launch_kernel(type_identity<hip_bfloat16>{}, n_per_thread);
-          break;
-        case float64:
-          launch_kernel(type_identity<double>{}, n_per_thread);
-          break;
-        default:
-          break;
-      }
-    });
+      dispatch_n_per_thread(n_per_t, [&](auto n_per_thread) {
+        switch (out.dtype()) {
+          case float32:
+            launch_kernel(type_identity<float>{}, n_per_thread);
+            break;
+          case float16:
+            launch_kernel(type_identity<__half>{}, n_per_thread);
+            break;
+          case bfloat16:
+            launch_kernel(type_identity<hip_bfloat16>{}, n_per_thread);
+            break;
+          case float64:
+            launch_kernel(type_identity<double>{}, n_per_thread);
+            break;
+          default:
+            break;
+        }
+      });
 
-    if (!use_inline_gather_params) {
       if (d_mat_batch_shape != nullptr) {
         (void)hipFreeAsync(d_mat_batch_shape, stream);
       }
@@ -774,6 +782,43 @@ void gather_mv(
       if (d_vec_index_strides != nullptr) {
         (void)hipFreeAsync(d_vec_index_strides, stream);
       }
+    });
+    return;
+  }
+
+  auto add_node = [&](auto type_tag, auto n_per_thread) {
+    using T = typename decltype(type_tag)::type;
+    encoder.add_kernel_node(
+        &gemv_gather_inline<T, rows_per_block, n_per_thread()>,
+        dim3(num_blocks_x, batch_size),
+        block_dims,
+        0u,
+        static_cast<const T*>(mat_ptr),
+        static_cast<const T*>(vec_ptr),
+        static_cast<T*>(out_ptr),
+        mat_indices_ptr,
+        vec_indices_ptr,
+        rows,
+        cols,
+        inline_gather_params);
+  };
+
+  dispatch_n_per_thread(n_per_t, [&](auto n_per_thread) {
+    switch (out.dtype()) {
+      case float32:
+        add_node(type_identity<float>{}, n_per_thread);
+        break;
+      case float16:
+        add_node(type_identity<__half>{}, n_per_thread);
+        break;
+      case bfloat16:
+        add_node(type_identity<hip_bfloat16>{}, n_per_thread);
+        break;
+      case float64:
+        add_node(type_identity<double>{}, n_per_thread);
+        break;
+      default:
+        break;
     }
   });
 }

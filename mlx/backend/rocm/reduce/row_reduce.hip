@@ -294,12 +294,10 @@ void row_reduce(
         using OP = typename decltype(reduce_type_tag)::type;
         using U = typename rocm::ReduceResult<OP, T>::type;
         
-        encoder.launch_kernel([&](hipStream_t stream) {
-          hipLaunchKernelGGL(
-              (rocm::row_reduce_simple_kernel<T, U, OP, 4>),
-              dim3(out_size), dim3(threads), 0, stream,
-              gpu_ptr<T>(in), gpu_ptr<U>(out), out_size, row_size);
-        });
+        encoder.add_kernel_node(
+            &rocm::row_reduce_simple_kernel<T, U, OP, 4>,
+            dim3(out_size), dim3(threads), 0,
+            gpu_ptr<T>(in), gpu_ptr<U>(out), out_size, row_size);
       });
     });
   } else {
@@ -333,14 +331,12 @@ void row_reduce(
           using OP = typename decltype(reduce_type_tag)::type;
           using U = typename rocm::ReduceResult<OP, T>::type;
           
-          encoder.launch_kernel([&](hipStream_t stream) {
-            hipLaunchKernelGGL(
-                (rocm::row_reduce_looped_kernel<T, U, OP, reduce_ndim_val()>),
-                dim3(out_size), dim3(threads), 0, stream,
-                gpu_ptr<T>(in), gpu_ptr<U>(out), out_size, row_size,
-                shape, strides, ndim,
-                non_row_reductions, reduce_shape, reduce_strides, reduce_ndim);
-          });
+          encoder.add_kernel_node(
+              &rocm::row_reduce_looped_kernel<T, U, OP, reduce_ndim_val()>,
+              dim3(out_size), dim3(threads), 0,
+              gpu_ptr<T>(in), gpu_ptr<U>(out), out_size, row_size,
+              shape, strides, ndim,
+              non_row_reductions, reduce_shape, reduce_strides, reduce_ndim);
         });
       });
     });

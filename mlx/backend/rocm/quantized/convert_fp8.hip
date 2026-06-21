@@ -117,62 +117,63 @@ void fast::ConvertFP8::eval_gpu(
   auto& out = outputs[0];
   
   out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), enc));
-  
+
   size_t size = in.size();
   int block_size = 256;
   int num_blocks = (size + block_size - 1) / block_size;
-  
-  enc.launch_kernel([&](hipStream_t stream) {
-    if (to_fp8_) {
-      // Convert to FP8
-      switch (in.dtype()) {
-        case float32:
-          hipLaunchKernelGGL(
-              (rocm::to_fp8_kernel<float, uint8_t>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              gpu_ptr<float>(in), gpu_ptr<uint8_t>(out), size);
-          break;
-        case float16:
-          hipLaunchKernelGGL(
-              (rocm::to_fp8_kernel<__half, uint8_t>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              gpu_ptr<__half>(in), gpu_ptr<uint8_t>(out), size);
-          break;
-        case bfloat16:
-          hipLaunchKernelGGL(
-              (rocm::to_fp8_kernel<hip_bfloat16, uint8_t>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              gpu_ptr<hip_bfloat16>(in), gpu_ptr<uint8_t>(out), size);
-          break;
-        default:
-          throw std::runtime_error("Unsupported input type for ConvertFP8 (to_fp8)");
-      }
-    } else {
-      // Convert from FP8
-      switch (out.dtype()) {
-        case float32:
-          hipLaunchKernelGGL(
-              (rocm::from_fp8_kernel<uint8_t, float>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              gpu_ptr<uint8_t>(in), gpu_ptr<float>(out), size);
-          break;
-        case float16:
-          hipLaunchKernelGGL(
-              (rocm::from_fp8_kernel<uint8_t, __half>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              gpu_ptr<uint8_t>(in), gpu_ptr<__half>(out), size);
-          break;
-        case bfloat16:
-          hipLaunchKernelGGL(
-              (rocm::from_fp8_kernel<uint8_t, hip_bfloat16>),
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              gpu_ptr<uint8_t>(in), gpu_ptr<hip_bfloat16>(out), size);
-          break;
-        default:
-          throw std::runtime_error("Unsupported output type for ConvertFP8 (from_fp8)");
-      }
+
+  enc.set_input_array(in);
+  enc.set_output_array(out);
+
+  if (to_fp8_) {
+    // Convert to FP8
+    switch (in.dtype()) {
+      case float32:
+        enc.add_kernel_node(
+            &rocm::to_fp8_kernel<float, uint8_t>,
+            dim3(num_blocks), dim3(block_size), 0u,
+            gpu_ptr<float>(in), gpu_ptr<uint8_t>(out), size);
+        break;
+      case float16:
+        enc.add_kernel_node(
+            &rocm::to_fp8_kernel<__half, uint8_t>,
+            dim3(num_blocks), dim3(block_size), 0u,
+            gpu_ptr<__half>(in), gpu_ptr<uint8_t>(out), size);
+        break;
+      case bfloat16:
+        enc.add_kernel_node(
+            &rocm::to_fp8_kernel<hip_bfloat16, uint8_t>,
+            dim3(num_blocks), dim3(block_size), 0u,
+            gpu_ptr<hip_bfloat16>(in), gpu_ptr<uint8_t>(out), size);
+        break;
+      default:
+        throw std::runtime_error("Unsupported input type for ConvertFP8 (to_fp8)");
     }
-  });
+  } else {
+    // Convert from FP8
+    switch (out.dtype()) {
+      case float32:
+        enc.add_kernel_node(
+            &rocm::from_fp8_kernel<uint8_t, float>,
+            dim3(num_blocks), dim3(block_size), 0u,
+            gpu_ptr<uint8_t>(in), gpu_ptr<float>(out), size);
+        break;
+      case float16:
+        enc.add_kernel_node(
+            &rocm::from_fp8_kernel<uint8_t, __half>,
+            dim3(num_blocks), dim3(block_size), 0u,
+            gpu_ptr<uint8_t>(in), gpu_ptr<__half>(out), size);
+        break;
+      case bfloat16:
+        enc.add_kernel_node(
+            &rocm::from_fp8_kernel<uint8_t, hip_bfloat16>,
+            dim3(num_blocks), dim3(block_size), 0u,
+            gpu_ptr<uint8_t>(in), gpu_ptr<hip_bfloat16>(out), size);
+        break;
+      default:
+        throw std::runtime_error("Unsupported output type for ConvertFP8 (from_fp8)");
+    }
+  }
 }
 
 } // namespace mlx::core

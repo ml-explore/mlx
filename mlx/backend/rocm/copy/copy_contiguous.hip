@@ -78,20 +78,16 @@ void copy_contiguous(
         
         const InType* in_ptr = gpu_ptr<const InType>(in) + in_offset;
         OutType* out_ptr = gpu_ptr<OutType>(out) + out_offset;
-        
-        encoder.launch_kernel([&](hipStream_t stream) {
-          if (ctype == CopyType::Scalar) {
-            hipLaunchKernelGGL(
-                (rocm::copy_s<InType, OutType, IdxT, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                in_ptr, out_ptr, static_cast<IdxT>(size));
-          } else {
-            hipLaunchKernelGGL(
-                (rocm::copy_v<InType, OutType, IdxT, N_READS>),
-                dim3(num_blocks), dim3(block_size), 0, stream,
-                in_ptr, out_ptr, static_cast<IdxT>(size));
-          }
-        });
+        IdxT size_arg = static_cast<IdxT>(size);
+
+        auto kernel = &rocm::copy_s<InType, OutType, IdxT, N_READS>;
+        if (ctype != CopyType::Scalar) {
+          kernel = &rocm::copy_v<InType, OutType, IdxT, N_READS>;
+        }
+        encoder.add_kernel_node(
+            kernel,
+            dim3(num_blocks), dim3(block_size), 0,
+            in_ptr, out_ptr, size_arg);
       });
     });
   });

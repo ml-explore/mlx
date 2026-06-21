@@ -282,15 +282,15 @@ inline array ensure_row_contiguous_matrix(
       int num_blocks = static_cast<int>(
           std::min<int64_t>((work_items + block_size - 1) / block_size, 65535));
 
-      enc.launch_kernel([=](hipStream_t stream) {
-        hipLaunchKernelGGL(
-            rocm::strided_row_copy_kernel,
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            src, dst,
-            num_rows, cols_bytes,
-            src_row_stride_bytes, dst_row_stride_bytes,
-            word_copy);
-      });
+      enc.set_input_array(x);
+      enc.set_output_array(x_copy);
+      enc.add_kernel_node(
+          &rocm::strided_row_copy_kernel,
+          dim3(num_blocks), dim3(block_size), 0u,
+          src, dst,
+          num_rows, cols_bytes,
+          src_row_stride_bytes, dst_row_stride_bytes,
+          word_copy);
       return x_copy;
     }
 
@@ -324,15 +324,15 @@ inline array ensure_row_contiguous_matrix(
         int num_blocks = static_cast<int>(
             std::min<int64_t>((work_items + block_size - 1) / block_size, 65535));
 
-        enc.launch_kernel([=](hipStream_t stream) {
-          hipLaunchKernelGGL(
-              rocm::strided_row_copy_kernel,
-              dim3(num_blocks), dim3(block_size), 0, stream,
-              src, dst,
-              slab_rows, cols_bytes,
-              src_row_stride_bytes, dst_row_stride_bytes,
-              word_copy);
-        });
+        enc.set_input_array(x);
+        enc.set_output_array(x_copy);
+        enc.add_kernel_node(
+            &rocm::strided_row_copy_kernel,
+            dim3(num_blocks), dim3(block_size), 0u,
+            src, dst,
+            slab_rows, cols_bytes,
+            src_row_stride_bytes, dst_row_stride_bytes,
+            word_copy);
         return x_copy;
       }
       // batch_count > 1 with interior gap: fall through to general path
@@ -364,14 +364,14 @@ inline array ensure_row_contiguous_matrix(
       strides_bytes_arg.data_[i] = strides[i] * static_cast<int64_t>(elem_bytes);
     }
 
-    enc.launch_kernel([=](hipStream_t stream) {
-      hipLaunchKernelGGL(
-          rocm::strided_general_copy_kernel,
-          dim3(num_blocks), dim3(block_size), 0, stream,
-          src, dst,
-          total_elems, eb, ndim,
-          shapes_arg, strides_bytes_arg);
-    });
+    enc.set_input_array(x);
+    enc.set_output_array(x_copy);
+    enc.add_kernel_node(
+        &rocm::strided_general_copy_kernel,
+        dim3(num_blocks), dim3(block_size), 0u,
+        src, dst,
+        total_elems, eb, ndim,
+        shapes_arg, strides_bytes_arg);
     return x_copy;
   }
 
@@ -3293,7 +3293,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       gs6_supported && x6_dtype_supported && use_fast_qmv &&
       !can_use_batched_qmv && tile_n >= 8 &&
       mode_ == QuantizationMode::Affine) {
-    enc.launch_kernel([&, x_ptr, w_ptr, scales_ptr, biases_ptr, out_ptr, tile_n](hipStream_t stream) {
+    {
       dim3 tiled_block(WARP_SIZE, tile_n);
       const int n_tiles = (N + tile_n - 1) / tile_n;
       int blocks_per_cu = (hw_info.max_threads_per_cu > 0)
@@ -3306,9 +3306,9 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       dim3 tiled_grid(M, grid_y);
 
       #define LAUNCH_TILED_6BIT(T, ScaleT, GS_V) \
-        hipLaunchKernelGGL( \
-            (rocm::qmv_tiled_6bit_kernel<T, ScaleT, GS_V>), \
-            tiled_grid, tiled_block, 0, stream, \
+        enc.add_kernel_node( \
+            &rocm::qmv_tiled_6bit_kernel<T, ScaleT, GS_V>, \
+            tiled_grid, tiled_block, 0u, \
             (const T*)x_ptr, (const uint8_t*)w_ptr, \
             (const ScaleT*)scales_ptr, (const ScaleT*)biases_ptr, \
             (T*)out_ptr, M, N, K, has_bias, tile_n, n_tiles)
@@ -3323,7 +3323,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         else if (group_size_ == 128) { LAUNCH_TILED_6BIT(__half, __half, 128); }
       }
       #undef LAUNCH_TILED_6BIT
-    });
+    }
     return;
   }
 
@@ -3335,7 +3335,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (use_tiled && tiled_bits_supported && use_fast_qmv &&
       !can_use_batched_qmv && tile_n >= 8 &&
       mode_ == QuantizationMode::Affine) {
-    enc.launch_kernel([&, x_ptr, w_ptr, scales_ptr, biases_ptr, out_ptr, tile_n](hipStream_t stream) {
+    {
       dim3 tiled_block(WARP_SIZE, tile_n);
       const int n_tiles = (N + tile_n - 1) / tile_n;
       // Persistent grid: CU-bounded block count, kernel grid-strides the rest.
@@ -3349,9 +3349,9 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       dim3 tiled_grid(M, grid_y);
 
       #define LAUNCH_TILED(T, ScaleT, BITS_V, GS_V) \
-        hipLaunchKernelGGL( \
-            (rocm::qmv_tiled_kernel<T, ScaleT, BITS_V, GS_V>), \
-            tiled_grid, tiled_block, 0, stream, \
+        enc.add_kernel_node( \
+            &rocm::qmv_tiled_kernel<T, ScaleT, BITS_V, GS_V>, \
+            tiled_grid, tiled_block, 0u, \
             (const T*)x_ptr, (const uint32_t*)w_ptr, \
             (const ScaleT*)scales_ptr, (const ScaleT*)biases_ptr, \
             (T*)out_ptr, M, N, K, has_bias, tile_n, n_tiles)
@@ -3378,25 +3378,14 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         }
       }
       #undef LAUNCH_TILED
-    });
+    }
     return;
   }
 
   // The noshared path used to increase cols_per_block for aligned data.
   // Since we always use the shared variant now, no special grid adjustment needed.
 
-  enc.launch_kernel([&,
-                     x_ptr,
-                     w_ptr,
-                     scales_ptr,
-                     biases_ptr,
-                     out_ptr,
-                     fast_threads_per_col,
-                     use_noshared_qmv_variant,
-                     x_batch_stride,
-                     w_batch_stride,
-                     sb_batch_stride,
-                     out_matrix_stride](hipStream_t stream) {
+  {
     auto launch_qmv =
         [&](auto type_tag, auto scale_tag, auto bits_tag, auto gs_tag) {
           using T = typename decltype(type_tag)::type;
@@ -3408,18 +3397,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
             if (use_fast_qmv) {
               if (can_use_batched_qmv) {
                 if (fast_threads_per_col == 16) {
-                  hipLaunchKernelGGL(
-                      (rocm::qmv_warp_shared_batched_kernel<
+                  enc.add_kernel_node(
+                      &rocm::qmv_warp_shared_batched_kernel<
                           T,
                           ScaleT,
                           BITS,
                           GROUP_SIZE,
                           true,
-                          16>),
+                          16>,
                       fast_grid_batched,
                       fast_block,
-                      0,
-                      stream,
+                      0u,
                       (const T*)x_ptr,
                       w_ptr,
                       (const ScaleT*)scales_ptr,
@@ -3434,18 +3422,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                       out_matrix_stride,
                       has_bias);
                 } else {
-                  hipLaunchKernelGGL(
-                      (rocm::qmv_warp_shared_batched_kernel<
+                  enc.add_kernel_node(
+                      &rocm::qmv_warp_shared_batched_kernel<
                           T,
                           ScaleT,
                           BITS,
                           GROUP_SIZE,
                           true,
-                          WARP_SIZE>),
+                          WARP_SIZE>,
                       fast_grid_batched,
                       fast_block,
-                      0,
-                      stream,
+                      0u,
                       (const T*)x_ptr,
                       w_ptr,
                       (const ScaleT*)scales_ptr,
@@ -3463,18 +3450,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
               } else {
                 if (use_noshared_qmv_variant) {
                   if (fast_threads_per_col == 16) {
-                    hipLaunchKernelGGL(
-                        (rocm::qmv_warp_noshared_kernel<
+                    enc.add_kernel_node(
+                        &rocm::qmv_warp_noshared_kernel<
                             T,
                             ScaleT,
                             BITS,
                             GROUP_SIZE,
                             true,
-                            16>),
+                            16>,
                         fast_grid,
                         fast_block,
-                        0,
-                        stream,
+                        0u,
                         (const T*)x_ptr,
                         w_ptr,
                         (const ScaleT*)scales_ptr,
@@ -3485,18 +3471,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                         K,
                         has_bias);
                   } else {
-                    hipLaunchKernelGGL(
-                        (rocm::qmv_warp_noshared_kernel<
+                    enc.add_kernel_node(
+                        &rocm::qmv_warp_noshared_kernel<
                             T,
                             ScaleT,
                             BITS,
                             GROUP_SIZE,
                             true,
-                            WARP_SIZE>),
+                            WARP_SIZE>,
                         fast_grid,
                         fast_block,
-                        0,
-                        stream,
+                        0u,
                         (const T*)x_ptr,
                         w_ptr,
                         (const ScaleT*)scales_ptr,
@@ -3509,18 +3494,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                   }
                 } else {
                   if (fast_threads_per_col == 16) {
-                    hipLaunchKernelGGL(
-                        (rocm::qmv_warp_shared_kernel<
+                    enc.add_kernel_node(
+                        &rocm::qmv_warp_shared_kernel<
                             T,
                             ScaleT,
                             BITS,
                             GROUP_SIZE,
                             true,
-                            16>),
+                            16>,
                         fast_grid,
                         fast_block,
-                        0,
-                        stream,
+                        0u,
                         (const T*)x_ptr,
                         w_ptr,
                         (const ScaleT*)scales_ptr,
@@ -3531,18 +3515,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                         K,
                         has_bias);
                   } else {
-                    hipLaunchKernelGGL(
-                        (rocm::qmv_warp_shared_kernel<
+                    enc.add_kernel_node(
+                        &rocm::qmv_warp_shared_kernel<
                             T,
                             ScaleT,
                             BITS,
                             GROUP_SIZE,
                             true,
-                            WARP_SIZE>),
+                            WARP_SIZE>,
                         fast_grid,
                         fast_block,
-                        0,
-                        stream,
+                        0u,
                         (const T*)x_ptr,
                         w_ptr,
                         (const ScaleT*)scales_ptr,
@@ -3556,12 +3539,11 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                 }
               }
             } else if (transpose_) {
-              hipLaunchKernelGGL(
-                  (rocm::qmv_t_kernel<T, ScaleT, BITS, GROUP_SIZE, true>),
+              enc.add_kernel_node(
+                  &rocm::qmv_t_kernel<T, ScaleT, BITS, GROUP_SIZE, true>,
                   grid,
                   dim3(block_size),
-                  0,
-                  stream,
+                  0u,
                   (const T*)x_ptr,
                   w_ptr,
                   (const ScaleT*)scales_ptr,
@@ -3572,12 +3554,11 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                   K,
                   has_bias);
             } else {
-              hipLaunchKernelGGL(
-                  (rocm::qmv_kernel<T, ScaleT, BITS, GROUP_SIZE, true>),
+              enc.add_kernel_node(
+                  &rocm::qmv_kernel<T, ScaleT, BITS, GROUP_SIZE, true>,
                   grid,
                   dim3(block_size),
-                  0,
-                  stream,
+                  0u,
                   (const T*)x_ptr,
                   w_ptr,
                   (const ScaleT*)scales_ptr,
@@ -3592,18 +3573,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
             if (use_fast_qmv) {
               if (can_use_batched_qmv) {
                 if (fast_threads_per_col == 16) {
-                  hipLaunchKernelGGL(
-                      (rocm::qmv_warp_shared_batched_kernel<
+                  enc.add_kernel_node(
+                      &rocm::qmv_warp_shared_batched_kernel<
                           T,
                           ScaleT,
                           BITS,
                           GROUP_SIZE,
                           false,
-                          16>),
+                          16>,
                       fast_grid_batched,
                       fast_block,
-                      0,
-                      stream,
+                      0u,
                       (const T*)x_ptr,
                       w_ptr,
                       (const ScaleT*)scales_ptr,
@@ -3618,18 +3598,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                       out_matrix_stride,
                       has_bias);
                 } else {
-                  hipLaunchKernelGGL(
-                      (rocm::qmv_warp_shared_batched_kernel<
+                  enc.add_kernel_node(
+                      &rocm::qmv_warp_shared_batched_kernel<
                           T,
                           ScaleT,
                           BITS,
                           GROUP_SIZE,
                           false,
-                          WARP_SIZE>),
+                          WARP_SIZE>,
                       fast_grid_batched,
                       fast_block,
-                      0,
-                      stream,
+                      0u,
                       (const T*)x_ptr,
                       w_ptr,
                       (const ScaleT*)scales_ptr,
@@ -3647,18 +3626,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
               } else {
                 if (use_noshared_qmv_variant) {
                   if (fast_threads_per_col == 16) {
-                    hipLaunchKernelGGL(
-                        (rocm::qmv_warp_noshared_kernel<
+                    enc.add_kernel_node(
+                        &rocm::qmv_warp_noshared_kernel<
                             T,
                             ScaleT,
                             BITS,
                             GROUP_SIZE,
                             false,
-                            16>),
+                            16>,
                         fast_grid,
                         fast_block,
-                        0,
-                        stream,
+                        0u,
                         (const T*)x_ptr,
                         w_ptr,
                         (const ScaleT*)scales_ptr,
@@ -3669,18 +3647,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                         K,
                         has_bias);
                   } else {
-                    hipLaunchKernelGGL(
-                        (rocm::qmv_warp_noshared_kernel<
+                    enc.add_kernel_node(
+                        &rocm::qmv_warp_noshared_kernel<
                             T,
                             ScaleT,
                             BITS,
                             GROUP_SIZE,
                             false,
-                            WARP_SIZE>),
+                            WARP_SIZE>,
                         fast_grid,
                         fast_block,
-                        0,
-                        stream,
+                        0u,
                         (const T*)x_ptr,
                         w_ptr,
                         (const ScaleT*)scales_ptr,
@@ -3693,18 +3670,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                   }
                 } else {
                   if (fast_threads_per_col == 16) {
-                    hipLaunchKernelGGL(
-                        (rocm::qmv_warp_shared_kernel<
+                    enc.add_kernel_node(
+                        &rocm::qmv_warp_shared_kernel<
                             T,
                             ScaleT,
                             BITS,
                             GROUP_SIZE,
                             false,
-                            16>),
+                            16>,
                         fast_grid,
                         fast_block,
-                        0,
-                        stream,
+                        0u,
                         (const T*)x_ptr,
                         w_ptr,
                         (const ScaleT*)scales_ptr,
@@ -3715,18 +3691,17 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                         K,
                         has_bias);
                   } else {
-                    hipLaunchKernelGGL(
-                        (rocm::qmv_warp_shared_kernel<
+                    enc.add_kernel_node(
+                        &rocm::qmv_warp_shared_kernel<
                             T,
                             ScaleT,
                             BITS,
                             GROUP_SIZE,
                             false,
-                            WARP_SIZE>),
+                            WARP_SIZE>,
                         fast_grid,
                         fast_block,
-                        0,
-                        stream,
+                        0u,
                         (const T*)x_ptr,
                         w_ptr,
                         (const ScaleT*)scales_ptr,
@@ -3740,12 +3715,11 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                 }
               }
             } else if (transpose_) {
-              hipLaunchKernelGGL(
-                  (rocm::qmv_t_kernel<T, ScaleT, BITS, GROUP_SIZE, false>),
+              enc.add_kernel_node(
+                  &rocm::qmv_t_kernel<T, ScaleT, BITS, GROUP_SIZE, false>,
                   grid,
                   dim3(block_size),
-                  0,
-                  stream,
+                  0u,
                   (const T*)x_ptr,
                   w_ptr,
                   (const ScaleT*)scales_ptr,
@@ -3756,12 +3730,11 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
                   K,
                   has_bias);
             } else {
-              hipLaunchKernelGGL(
-                  (rocm::qmv_kernel<T, ScaleT, BITS, GROUP_SIZE, false>),
+              enc.add_kernel_node(
+                  &rocm::qmv_kernel<T, ScaleT, BITS, GROUP_SIZE, false>,
                   grid,
                   dim3(block_size),
-                  0,
-                  stream,
+                  0u,
                   (const T*)x_ptr,
                   w_ptr,
                   (const ScaleT*)scales_ptr,
@@ -3858,7 +3831,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
 
 #undef DISPATCH_GROUP_SIZE
-  });
+  }
 }
 
 namespace rocm {
@@ -5186,22 +5159,20 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       // = 512 + 512 + 1024 = 2048 bytes
       size_t wmma_smem = 0;  // static shared memory, declared in-kernel
 
-      enc.launch_kernel([&](hipStream_t stream) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_wmma_prefill_kernel<hip_bfloat16, hip_bfloat16, 4, 64, true>),
-            wmma_grid, wmma_block, wmma_smem, stream,
-            gpu_ptr<const hip_bfloat16>(x),
-            gpu_ptr<const uint8_t>(w),
-            gpu_ptr<const hip_bfloat16>(scales),
-            has_bias ? gpu_ptr<const hip_bfloat16>(*biases) : nullptr,
-            gpu_ptr<const uint32_t>(sorted_li_arr),
-            gpu_ptr<const uint32_t>(sorted_ri_arr),
-            gpu_ptr<const int>(run_starts_arr),
-            gpu_ptr<const int>(run_lengths_arr),
-            gpu_ptr<const int>(perm_arr),
-            gpu_ptr<hip_bfloat16>(out),
-            B, M, N, K, E, has_bias, x_bs);
-      });
+      enc.add_kernel_node_ex(
+          &rocm::gather_qmv_wmma_prefill_kernel<hip_bfloat16, hip_bfloat16, 4, 64, true>,
+          wmma_grid, wmma_block, static_cast<uint32_t>(wmma_smem),
+          gpu_ptr<const hip_bfloat16>(x),
+          gpu_ptr<const uint8_t>(w),
+          gpu_ptr<const hip_bfloat16>(scales),
+          static_cast<const hip_bfloat16*>(has_bias ? gpu_ptr<const hip_bfloat16>(*biases) : nullptr),
+          gpu_ptr<const uint32_t>(sorted_li_arr),
+          gpu_ptr<const uint32_t>(sorted_ri_arr),
+          gpu_ptr<const int>(run_starts_arr),
+          gpu_ptr<const int>(run_lengths_arr),
+          gpu_ptr<const int>(perm_arr),
+          gpu_ptr<hip_bfloat16>(out),
+          B, M, N, K, E, has_bias, x_bs);
       return;
     }
 
@@ -5216,16 +5187,16 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     dim3 pf_block(fast_threads_per_col_pf, fast_cols_per_block_pf);
     dim3 pf_grid(M, (N + fast_cols_per_block_pf - 1) / fast_cols_per_block_pf, num_runs);
 
-    enc.launch_kernel([&](hipStream_t stream) {
+    {
       auto launch_pf = [&](auto bits_tag) {
         constexpr int BITS = decltype(bits_tag)::value;
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_prefill_kernel<hip_bfloat16, hip_bfloat16, BITS, 64, true, 16>),
-            pf_grid, pf_block, 0, stream,
+        enc.add_kernel_node(
+            &rocm::gather_qmv_prefill_kernel<hip_bfloat16, hip_bfloat16, BITS, 64, true, 16>,
+            pf_grid, pf_block, 0u,
             gpu_ptr<const hip_bfloat16>(x),
             gpu_ptr<const uint8_t>(w),
             gpu_ptr<const hip_bfloat16>(scales),
-            has_bias ? gpu_ptr<const hip_bfloat16>(*biases) : nullptr,
+            static_cast<const hip_bfloat16*>(has_bias ? gpu_ptr<const hip_bfloat16>(*biases) : nullptr),
             gpu_ptr<const uint32_t>(sorted_li_arr),
             gpu_ptr<const uint32_t>(sorted_ri_arr),
             gpu_ptr<const int>(run_starts_arr),
@@ -5236,7 +5207,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       };
       if (bits_ == 4) launch_pf(std::integral_constant<int, 4>{});
       else launch_pf(std::integral_constant<int, 8>{});
-    });
+    }
     return;
   }
 
@@ -5274,13 +5245,13 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     dim3 eb_block(eb_threads_per_col, eb_cols_per_block);
     dim3 eb_grid(M, (N + eb_cols_per_block - 1) / eb_cols_per_block, max_unique_experts);
 
-    enc.launch_kernel([&](hipStream_t stream) {
+    {
       auto launch_eb = [&](auto bits_tag) {
         constexpr int BITS = decltype(bits_tag)::value;
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_expert_batched_kernel<
-                hip_bfloat16, hip_bfloat16, BITS, 64, true, 16>),
-            eb_grid, eb_block, 0, stream,
+        enc.add_kernel_node(
+            &rocm::gather_qmv_expert_batched_kernel<
+                hip_bfloat16, hip_bfloat16, BITS, 64, true, 16>,
+            eb_grid, eb_block, 0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -5292,7 +5263,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       };
       if (bits_ == 4) launch_eb(std::integral_constant<int, 4>{});
       else launch_eb(std::integral_constant<int, 8>{});
-    });
+    }
     return;
   }
 
@@ -5333,15 +5304,15 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   if (gather_tiled_6bit_ok && gather_tile_n < 8) gather_tiled_6bit_ok = false;
 
-  enc.launch_kernel([&](hipStream_t stream) {
+  {
     if (gather_tiled_6bit_ok) {
       dim3 gt_grid(M, (N + gather_tile_n - 1) / gather_tile_n, B);
       dim3 gt_block(WARP_SIZE, gather_tile_n);
       int LHS_B = static_cast<int>(x_batch_count);
       #define LAUNCH_GATHER_TILED_6BIT(GS_V) \
-        hipLaunchKernelGGL( \
-            (rocm::gather_qmv_tiled_6bit_kernel<hip_bfloat16, hip_bfloat16, GS_V>), \
-            gt_grid, gt_block, 0, stream, \
+        enc.add_kernel_node( \
+            &rocm::gather_qmv_tiled_6bit_kernel<hip_bfloat16, hip_bfloat16, GS_V>, \
+            gt_grid, gt_block, 0u, \
             (const hip_bfloat16*)x_ptr, (const uint8_t*)w_ptr, \
             (const hip_bfloat16*)scales_ptr, (const hip_bfloat16*)biases_ptr, \
             li_ptr, ri_ptr, (hip_bfloat16*)out_ptr, \
@@ -5358,9 +5329,9 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       int LHS_B = static_cast<int>(x_batch_count);
       auto launch_gt = [&](auto bits_tag) {
         constexpr int BITS = decltype(bits_tag)::value;
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_tiled_kernel<hip_bfloat16, hip_bfloat16, BITS, 64>),
-            gt_grid, gt_block, 0, stream,
+        enc.add_kernel_node(
+            &rocm::gather_qmv_tiled_kernel<hip_bfloat16, hip_bfloat16, BITS, 64>,
+            gt_grid, gt_block, 0u,
             (const hip_bfloat16*)x_ptr,
             (const uint32_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -5379,18 +5350,17 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       auto launch_fast_kernel = [&](auto bits_tag) {
         constexpr int BITS = decltype(bits_tag)::value;
         if (fast_threads_per_col == 16) {
-          hipLaunchKernelGGL(
-              (rocm::gather_qmv_warp_shared_kernel<
+          enc.add_kernel_node(
+              &rocm::gather_qmv_warp_shared_kernel<
                   hip_bfloat16,
                   hip_bfloat16,
                   BITS,
                   64,
                   true,
-                  16>),
+                  16>,
               fast_grid,
               fast_block,
-              0,
-              stream,
+              0u,
               (const hip_bfloat16*)x_ptr,
               (const uint8_t*)w_ptr,
               (const hip_bfloat16*)scales_ptr,
@@ -5411,18 +5381,17 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
               use_sorted_rhs_schedule,
               implicit_x_batch_stride);
         } else {
-          hipLaunchKernelGGL(
-              (rocm::gather_qmv_warp_shared_kernel<
+          enc.add_kernel_node(
+              &rocm::gather_qmv_warp_shared_kernel<
                   hip_bfloat16,
                   hip_bfloat16,
                   BITS,
                   64,
                   true,
-                  WARP_SIZE>),
+                  WARP_SIZE>,
               fast_grid,
               fast_block,
-              0,
-              stream,
+              0u,
               (const hip_bfloat16*)x_ptr,
               (const uint8_t*)w_ptr,
               (const hip_bfloat16*)scales_ptr,
@@ -5459,12 +5428,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     if (x.dtype() == float32) {
       if (bits_ == 8 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 8, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 8, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5483,12 +5451,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 8 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 8, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 8, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5507,12 +5474,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 8 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 8, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 8, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5531,12 +5497,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 5 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 5, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 5, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5555,12 +5520,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 5 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 5, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 5, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5579,12 +5543,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 5 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 5, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 5, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5603,12 +5566,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 6 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 6, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 6, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5627,12 +5589,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 6 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 6, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 6, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5651,12 +5612,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 6 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 6, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 6, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5675,12 +5635,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 4 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 4, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 4, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5699,12 +5658,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 4 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 4, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 4, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5723,12 +5681,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 4 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 4, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 4, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5747,12 +5704,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 2 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 2, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 2, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5771,12 +5727,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 2 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 2, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 2, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5795,12 +5750,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 2 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<float, float, 2, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<float, float, 2, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const float*)x_ptr,
             (const uint8_t*)w_ptr,
             (const float*)scales_ptr,
@@ -5825,12 +5779,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       }
     } else if (x.dtype() == float16) {
       if (bits_ == 8 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 8, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 8, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -5849,12 +5802,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 8 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 8, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 8, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -5873,12 +5825,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 8 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 8, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 8, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -5897,12 +5848,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 5 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 5, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 5, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -5921,12 +5871,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 5 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 5, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 5, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -5945,12 +5894,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 5 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 5, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 5, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -5969,12 +5917,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 6 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 6, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 6, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -5993,12 +5940,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 6 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 6, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 6, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -6017,12 +5963,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 6 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 6, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 6, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -6041,12 +5986,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 4 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 4, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 4, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -6065,12 +6009,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 4 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 4, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 4, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -6089,12 +6032,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 4 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 4, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 4, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -6113,12 +6055,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 2 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 2, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 2, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -6137,12 +6078,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 2 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 2, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 2, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -6161,12 +6101,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 2 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<__half, __half, 2, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<__half, __half, 2, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const __half*)x_ptr,
             (const uint8_t*)w_ptr,
             (const __half*)scales_ptr,
@@ -6191,12 +6130,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       }
     } else if (x.dtype() == bfloat16) {
       if (bits_ == 8 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 8, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 8, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6215,12 +6153,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 8 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 8, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 8, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6239,12 +6176,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 8 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 8, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 8, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6263,12 +6199,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 5 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 5, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 5, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6287,12 +6222,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 5 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 5, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 5, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6311,12 +6245,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 5 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 5, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 5, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6335,12 +6268,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 6 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 6, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 6, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6359,12 +6291,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 6 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 6, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 6, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6383,12 +6314,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 6 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 6, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 6, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6407,12 +6337,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 4 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 4, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 4, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6431,12 +6360,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 4 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 4, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 4, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6455,12 +6383,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 4 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 4, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 4, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6479,12 +6406,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 2 && group_size_ == 32) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 2, 32, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 2, 32, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6503,12 +6429,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 2 && group_size_ == 64) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 2, 64, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 2, 64, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6527,12 +6452,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             E,
             has_bias);
       } else if (bits_ == 2 && group_size_ == 128) {
-        hipLaunchKernelGGL(
-            (rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 2, 128, true>),
+        enc.add_kernel_node(
+            &rocm::gather_qmv_kernel<hip_bfloat16, hip_bfloat16, 2, 128, true>,
             grid,
             dim3(block_size),
-            0,
-            stream,
+            0u,
             (const hip_bfloat16*)x_ptr,
             (const uint8_t*)w_ptr,
             (const hip_bfloat16*)scales_ptr,
@@ -6558,7 +6482,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
 
 #undef has_bias
-  });
+  }
 }
 
 } // namespace mlx::core

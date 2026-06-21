@@ -133,65 +133,66 @@ void copy_general_dynamic(
     int64_t so1 = ndim > 1 ? strides_out[1] : 0;
     int64_t so2 = ndim > 2 ? strides_out[2] : 0;
     
-    encoder.launch_kernel([&, in_ptr_base, out_ptr_base,
-                           s0, s1, s2, si0, si1, si2, so0, so1, so2,
-                           dyn_offset_in_ptr, dyn_offset_out_ptr](hipStream_t stream) {
-      
-      #define LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, NDIM) \
-        hipLaunchKernelGGL( \
-            (rocm::copy_gg_dynamic_nd<InT, OutT, IdxT, NDIM>), \
-            dim3(num_blocks), dim3(block_size), 0, stream, \
-            static_cast<const InT*>(in_ptr_base) + offset_in, \
-            static_cast<OutT*>(out_ptr_base) + offset_out, \
-            static_cast<IdxT>(size), \
+    #define LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, NDIM) \
+      do { \
+        const InT* in_typed = \
+            static_cast<const InT*>(in_ptr_base) + offset_in; \
+        OutT* out_typed = static_cast<OutT*>(out_ptr_base) + offset_out; \
+        IdxT size_arg = static_cast<IdxT>(size); \
+        encoder.add_kernel_node( \
+            &rocm::copy_gg_dynamic_nd<InT, OutT, IdxT, NDIM>, \
+            dim3(num_blocks), dim3(block_size), 0, \
+            in_typed, \
+            out_typed, \
+            size_arg, \
             s0, s1, s2, si0, si1, si2, so0, so1, so2, \
-            dyn_offset_in_ptr, dyn_offset_out_ptr)
-      
-      #define DISPATCH_NDIM_ND(InT, OutT, IdxT) \
-        switch (ndim) { \
-          case 1: LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, 1); break; \
-          case 2: LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, 2); break; \
-          case 3: LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, 3); break; \
-          default: break; \
-        }
-      
-      #define DISPATCH_OUT_TYPE_ND(InT, IdxT) \
-        switch (out.dtype()) { \
-          case float32: DISPATCH_NDIM_ND(InT, float, IdxT); break; \
-          case float16: DISPATCH_NDIM_ND(InT, __half, IdxT); break; \
-          case bfloat16: DISPATCH_NDIM_ND(InT, hip_bfloat16, IdxT); break; \
-          case int32: DISPATCH_NDIM_ND(InT, int32_t, IdxT); break; \
-          case int64: DISPATCH_NDIM_ND(InT, int64_t, IdxT); break; \
-          case uint32: DISPATCH_NDIM_ND(InT, uint32_t, IdxT); break; \
-          case uint8: DISPATCH_NDIM_ND(InT, uint8_t, IdxT); break; \
-          case bool_: DISPATCH_NDIM_ND(InT, bool, IdxT); break; \
-          default: break; \
-        }
-      
-      #define DISPATCH_IN_TYPE_ND(IdxT) \
-        switch (in.dtype()) { \
-          case float32: DISPATCH_OUT_TYPE_ND(float, IdxT); break; \
-          case float16: DISPATCH_OUT_TYPE_ND(__half, IdxT); break; \
-          case bfloat16: DISPATCH_OUT_TYPE_ND(hip_bfloat16, IdxT); break; \
-          case int32: DISPATCH_OUT_TYPE_ND(int32_t, IdxT); break; \
-          case int64: DISPATCH_OUT_TYPE_ND(int64_t, IdxT); break; \
-          case uint32: DISPATCH_OUT_TYPE_ND(uint32_t, IdxT); break; \
-          case uint8: DISPATCH_OUT_TYPE_ND(uint8_t, IdxT); break; \
-          case bool_: DISPATCH_OUT_TYPE_ND(bool, IdxT); break; \
-          default: break; \
-        }
-      
-      if (large) {
-        DISPATCH_IN_TYPE_ND(int64_t);
-      } else {
-        DISPATCH_IN_TYPE_ND(int32_t);
+            dyn_offset_in_ptr, dyn_offset_out_ptr); \
+      } while (0)
+
+    #define DISPATCH_NDIM_ND(InT, OutT, IdxT) \
+      switch (ndim) { \
+        case 1: LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, 1); break; \
+        case 2: LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, 2); break; \
+        case 3: LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, 3); break; \
+        default: break; \
       }
-      
-      #undef DISPATCH_IN_TYPE_ND
-      #undef DISPATCH_OUT_TYPE_ND
-      #undef DISPATCH_NDIM_ND
-      #undef LAUNCH_COPY_DYNAMIC_ND
-    });
+
+    #define DISPATCH_OUT_TYPE_ND(InT, IdxT) \
+      switch (out.dtype()) { \
+        case float32: DISPATCH_NDIM_ND(InT, float, IdxT); break; \
+        case float16: DISPATCH_NDIM_ND(InT, __half, IdxT); break; \
+        case bfloat16: DISPATCH_NDIM_ND(InT, hip_bfloat16, IdxT); break; \
+        case int32: DISPATCH_NDIM_ND(InT, int32_t, IdxT); break; \
+        case int64: DISPATCH_NDIM_ND(InT, int64_t, IdxT); break; \
+        case uint32: DISPATCH_NDIM_ND(InT, uint32_t, IdxT); break; \
+        case uint8: DISPATCH_NDIM_ND(InT, uint8_t, IdxT); break; \
+        case bool_: DISPATCH_NDIM_ND(InT, bool, IdxT); break; \
+        default: break; \
+      }
+
+    #define DISPATCH_IN_TYPE_ND(IdxT) \
+      switch (in.dtype()) { \
+        case float32: DISPATCH_OUT_TYPE_ND(float, IdxT); break; \
+        case float16: DISPATCH_OUT_TYPE_ND(__half, IdxT); break; \
+        case bfloat16: DISPATCH_OUT_TYPE_ND(hip_bfloat16, IdxT); break; \
+        case int32: DISPATCH_OUT_TYPE_ND(int32_t, IdxT); break; \
+        case int64: DISPATCH_OUT_TYPE_ND(int64_t, IdxT); break; \
+        case uint32: DISPATCH_OUT_TYPE_ND(uint32_t, IdxT); break; \
+        case uint8: DISPATCH_OUT_TYPE_ND(uint8_t, IdxT); break; \
+        case bool_: DISPATCH_OUT_TYPE_ND(bool, IdxT); break; \
+        default: break; \
+      }
+
+    if (large) {
+      DISPATCH_IN_TYPE_ND(int64_t);
+    } else {
+      DISPATCH_IN_TYPE_ND(int32_t);
+    }
+
+    #undef DISPATCH_IN_TYPE_ND
+    #undef DISPATCH_OUT_TYPE_ND
+    #undef DISPATCH_NDIM_ND
+    #undef LAUNCH_COPY_DYNAMIC_ND
     return;
   }
   
@@ -205,55 +206,56 @@ void copy_general_dynamic(
     strides_out_arg.data_[i] = strides_out[i];
   }
 
-  encoder.launch_kernel([&, shape_arg, strides_in_arg, strides_out_arg,
-                         in_ptr_base, out_ptr_base,
-                         dyn_offset_in_ptr, dyn_offset_out_ptr](hipStream_t stream) {
-    #define LAUNCH_COPY_DYNAMIC_GENERAL(InT, OutT, IdxT) \
-      hipLaunchKernelGGL( \
-          (rocm::copy_gg_dynamic<InT, OutT, IdxT>), \
-          dim3(num_blocks), dim3(block_size), 0, stream, \
-          static_cast<const InT*>(in_ptr_base) + offset_in, \
-          static_cast<OutT*>(out_ptr_base) + offset_out, \
-          static_cast<IdxT>(size), shape_arg, \
+  #define LAUNCH_COPY_DYNAMIC_GENERAL(InT, OutT, IdxT) \
+    do { \
+      const InT* in_typed = static_cast<const InT*>(in_ptr_base) + offset_in; \
+      OutT* out_typed = static_cast<OutT*>(out_ptr_base) + offset_out; \
+      IdxT size_arg = static_cast<IdxT>(size); \
+      encoder.add_kernel_node( \
+          &rocm::copy_gg_dynamic<InT, OutT, IdxT>, \
+          dim3(num_blocks), dim3(block_size), 0, \
+          in_typed, \
+          out_typed, \
+          size_arg, shape_arg, \
           strides_in_arg, strides_out_arg, \
-          ndim, dyn_offset_in_ptr, dyn_offset_out_ptr)
-    
-    #define DISPATCH_OUT_TYPE_GEN(InT, IdxT) \
-      switch (out.dtype()) { \
-        case float32: LAUNCH_COPY_DYNAMIC_GENERAL(InT, float, IdxT); break; \
-        case float16: LAUNCH_COPY_DYNAMIC_GENERAL(InT, __half, IdxT); break; \
-        case bfloat16: LAUNCH_COPY_DYNAMIC_GENERAL(InT, hip_bfloat16, IdxT); break; \
-        case int32: LAUNCH_COPY_DYNAMIC_GENERAL(InT, int32_t, IdxT); break; \
-        case int64: LAUNCH_COPY_DYNAMIC_GENERAL(InT, int64_t, IdxT); break; \
-        case uint32: LAUNCH_COPY_DYNAMIC_GENERAL(InT, uint32_t, IdxT); break; \
-        case uint8: LAUNCH_COPY_DYNAMIC_GENERAL(InT, uint8_t, IdxT); break; \
-        case bool_: LAUNCH_COPY_DYNAMIC_GENERAL(InT, bool, IdxT); break; \
-        default: break; \
-      }
-    
-    #define DISPATCH_IN_TYPE_GEN(IdxT) \
-      switch (in.dtype()) { \
-        case float32: DISPATCH_OUT_TYPE_GEN(float, IdxT); break; \
-        case float16: DISPATCH_OUT_TYPE_GEN(__half, IdxT); break; \
-        case bfloat16: DISPATCH_OUT_TYPE_GEN(hip_bfloat16, IdxT); break; \
-        case int32: DISPATCH_OUT_TYPE_GEN(int32_t, IdxT); break; \
-        case int64: DISPATCH_OUT_TYPE_GEN(int64_t, IdxT); break; \
-        case uint32: DISPATCH_OUT_TYPE_GEN(uint32_t, IdxT); break; \
-        case uint8: DISPATCH_OUT_TYPE_GEN(uint8_t, IdxT); break; \
-        case bool_: DISPATCH_OUT_TYPE_GEN(bool, IdxT); break; \
-        default: break; \
-      }
-    
-    if (large) {
-      DISPATCH_IN_TYPE_GEN(int64_t);
-    } else {
-      DISPATCH_IN_TYPE_GEN(int32_t);
+          ndim, dyn_offset_in_ptr, dyn_offset_out_ptr); \
+    } while (0)
+
+  #define DISPATCH_OUT_TYPE_GEN(InT, IdxT) \
+    switch (out.dtype()) { \
+      case float32: LAUNCH_COPY_DYNAMIC_GENERAL(InT, float, IdxT); break; \
+      case float16: LAUNCH_COPY_DYNAMIC_GENERAL(InT, __half, IdxT); break; \
+      case bfloat16: LAUNCH_COPY_DYNAMIC_GENERAL(InT, hip_bfloat16, IdxT); break; \
+      case int32: LAUNCH_COPY_DYNAMIC_GENERAL(InT, int32_t, IdxT); break; \
+      case int64: LAUNCH_COPY_DYNAMIC_GENERAL(InT, int64_t, IdxT); break; \
+      case uint32: LAUNCH_COPY_DYNAMIC_GENERAL(InT, uint32_t, IdxT); break; \
+      case uint8: LAUNCH_COPY_DYNAMIC_GENERAL(InT, uint8_t, IdxT); break; \
+      case bool_: LAUNCH_COPY_DYNAMIC_GENERAL(InT, bool, IdxT); break; \
+      default: break; \
     }
 
-    #undef DISPATCH_IN_TYPE_GEN
-    #undef DISPATCH_OUT_TYPE_GEN
-    #undef LAUNCH_COPY_DYNAMIC_GENERAL
-  });
+  #define DISPATCH_IN_TYPE_GEN(IdxT) \
+    switch (in.dtype()) { \
+      case float32: DISPATCH_OUT_TYPE_GEN(float, IdxT); break; \
+      case float16: DISPATCH_OUT_TYPE_GEN(__half, IdxT); break; \
+      case bfloat16: DISPATCH_OUT_TYPE_GEN(hip_bfloat16, IdxT); break; \
+      case int32: DISPATCH_OUT_TYPE_GEN(int32_t, IdxT); break; \
+      case int64: DISPATCH_OUT_TYPE_GEN(int64_t, IdxT); break; \
+      case uint32: DISPATCH_OUT_TYPE_GEN(uint32_t, IdxT); break; \
+      case uint8: DISPATCH_OUT_TYPE_GEN(uint8_t, IdxT); break; \
+      case bool_: DISPATCH_OUT_TYPE_GEN(bool, IdxT); break; \
+      default: break; \
+    }
+
+  if (large) {
+    DISPATCH_IN_TYPE_GEN(int64_t);
+  } else {
+    DISPATCH_IN_TYPE_GEN(int32_t);
+  }
+
+  #undef DISPATCH_IN_TYPE_GEN
+  #undef DISPATCH_OUT_TYPE_GEN
+  #undef LAUNCH_COPY_DYNAMIC_GENERAL
 }
 
 } // namespace mlx::core

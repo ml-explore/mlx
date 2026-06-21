@@ -179,14 +179,12 @@ void affine_quantize(
   enc.set_output_array(scales);
   enc.set_output_array(biases);
 
-  enc.launch_kernel([&](hipStream_t stream) {
 #define LAUNCH_QUANTIZE(T, ScaleT, BITS)               \
-  hipLaunchKernelGGL(                                  \
-      (rocm::affine_quantize_kernel<T, ScaleT, BITS>), \
+  enc.add_kernel_node(                                 \
+      &rocm::affine_quantize_kernel<T, ScaleT, BITS>,  \
       dim3(num_blocks),                                \
       dim3(block_size),                                \
-      0,                                               \
-      stream,                                          \
+      0u,                                              \
       gpu_ptr<T>(w),                                   \
       gpu_ptr<uint8_t>(wq),                            \
       gpu_ptr<ScaleT>(scales),                         \
@@ -233,7 +231,6 @@ void affine_quantize(
 
 #undef DISPATCH_BITS
 #undef LAUNCH_QUANTIZE
-  });
 }
 
 void affine_dequantize(
@@ -259,17 +256,15 @@ void affine_dequantize(
     int block_size = 256;
     int num_blocks = (size + block_size - 1) / block_size;
 
-    enc.launch_kernel([&](hipStream_t stream) {
 #define LAUNCH_DEQUANTIZE_PACKED(T, BITS)               \
-  hipLaunchKernelGGL(                                   \
-      (rocm::affine_dequantize_packed_kernel<T, BITS>), \
+  enc.add_kernel_node(                                  \
+      &rocm::affine_dequantize_packed_kernel<T, BITS>,  \
       dim3(num_blocks),                                 \
       dim3(block_size),                                 \
-      0,                                                \
-      stream,                                           \
+      0u,                                               \
       gpu_ptr<uint8_t>(wq),                             \
       gpu_ptr<T>(scales),                               \
-      biases ? gpu_ptr<T>(*biases) : nullptr,           \
+      static_cast<const T*>(biases ? gpu_ptr<T>(*biases) : nullptr), \
       gpu_ptr<T>(w),                                    \
       w.size(),                                         \
       group_size)
@@ -304,7 +299,6 @@ void affine_dequantize(
 
 #undef DISPATCH_BITS_PACKED
 #undef LAUNCH_DEQUANTIZE_PACKED
-    });
   } else {
     // Fallback for non-power-of-2 bits (3, 5, 6)
     int num_elements = w.size();
@@ -313,17 +307,15 @@ void affine_dequantize(
     int block_size = 256;
     int num_blocks = (num_groups + block_size - 1) / block_size;
 
-    enc.launch_kernel([&](hipStream_t stream) {
 #define LAUNCH_DEQUANTIZE(T, ScaleT, BITS)               \
-  hipLaunchKernelGGL(                                    \
-      (rocm::affine_dequantize_kernel<T, ScaleT, BITS>), \
+  enc.add_kernel_node(                                   \
+      &rocm::affine_dequantize_kernel<T, ScaleT, BITS>,  \
       dim3(num_blocks),                                  \
       dim3(block_size),                                  \
-      0,                                                 \
-      stream,                                            \
+      0u,                                                \
       gpu_ptr<uint8_t>(wq),                              \
       gpu_ptr<ScaleT>(scales),                           \
-      biases ? gpu_ptr<ScaleT>(*biases) : nullptr,       \
+      static_cast<const ScaleT*>(biases ? gpu_ptr<ScaleT>(*biases) : nullptr), \
       gpu_ptr<T>(w),                                     \
       num_groups,                                        \
       group_size)
@@ -358,7 +350,6 @@ void affine_dequantize(
 
 #undef DISPATCH_BITS
 #undef LAUNCH_DEQUANTIZE
-    });
   }
 }
 

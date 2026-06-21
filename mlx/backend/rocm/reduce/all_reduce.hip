@@ -245,12 +245,10 @@ void all_reduce(
         using U = typename ReduceResult<OP, T>::type;
         
         if constexpr (is_valid_reduce_op<OP, T>()) {
-          encoder.launch_kernel([&](hipStream_t stream) {
-            hipLaunchKernelGGL(
-                (rocm::all_reduce_kernel<T, U, OP, N_READS>),
-                dim3(blocks), dim3(threads), 0, stream,
-                gpu_ptr<const T>(in), gpu_ptr<U>(intermediate), block_step, insize);
-          });
+          encoder.add_kernel_node(
+              &rocm::all_reduce_kernel<T, U, OP, N_READS>,
+              dim3(blocks), dim3(threads), 0,
+              gpu_ptr<const T>(in), gpu_ptr<U>(intermediate), block_step, insize);
         }
       });
     });
@@ -270,12 +268,10 @@ void all_reduce(
         using U = typename ReduceResult<OP, T>::type;
         
         if constexpr (is_valid_reduce_op<OP, T>()) {
-          encoder.launch_kernel([&](hipStream_t stream) {
-            hipLaunchKernelGGL(
-                (rocm::all_reduce_kernel<T, U, OP, N_READS>),
-                dim3(1), dim3(threads), 0, stream,
-                gpu_ptr<const T>(intermediate), gpu_ptr<U>(out), block_step, insize);
-          });
+          encoder.add_kernel_node(
+              &rocm::all_reduce_kernel<T, U, OP, N_READS>,
+              dim3(1), dim3(threads), 0,
+              gpu_ptr<const T>(intermediate), gpu_ptr<U>(out), block_step, insize);
         }
       });
     });
@@ -289,12 +285,10 @@ void all_reduce(
         using U = typename ReduceResult<OP, T>::type;
         
         if constexpr (is_valid_reduce_op<OP, T>()) {
-          encoder.launch_kernel([&](hipStream_t stream) {
-            hipLaunchKernelGGL(
-                (rocm::all_reduce_kernel<T, U, OP, N_READS>),
-                dim3(1), dim3(threads), 0, stream,
-                gpu_ptr<const T>(in), gpu_ptr<U>(out), block_step, insize);
-          });
+          encoder.add_kernel_node(
+              &rocm::all_reduce_kernel<T, U, OP, N_READS>,
+              dim3(1), dim3(threads), 0,
+              gpu_ptr<const T>(in), gpu_ptr<U>(out), block_step, insize);
         }
       });
     });

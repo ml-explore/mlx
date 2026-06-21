@@ -70,12 +70,10 @@ void init_reduce(
       using T = hip_type_t<MLX_GET_TYPE(type_tag)>;
       using U = typename rocm::ReduceResult<OP, T>::type;
       
-      encoder.launch_kernel([&](hipStream_t stream) {
-        hipLaunchKernelGGL(
-            (rocm::init_reduce_kernel<T, U, OP>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            gpu_ptr<U>(out), out.size());
-      });
+      encoder.add_kernel_node(
+          &rocm::init_reduce_kernel<T, U, OP>,
+          dim3(num_blocks), dim3(block_size), 0,
+          gpu_ptr<U>(out), out.size());
     });
   });
 }

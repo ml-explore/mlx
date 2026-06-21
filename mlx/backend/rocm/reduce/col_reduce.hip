@@ -416,15 +416,13 @@ void col_reduce_looped(
         dim3 grid = output_grid_for_col_reduce(out, args, BN);
         int blocks = BM * BN / N_READS;
         
-        encoder.launch_kernel([&](hipStream_t stream) {
-          hipLaunchKernelGGL(
-              (rocm::col_reduce_looped<T, U, OP, reduce_ndim(), BM, BN, N_READS>),
-              grid, dim3(blocks), 0, stream,
-              gpu_ptr<T>(in),
-              gpu_ptr<U>(out),
-              args,
-              out.size() / args.reduction_stride);
-        });
+        encoder.add_kernel_node(
+            &rocm::col_reduce_looped<T, U, OP, reduce_ndim(), BM, BN, N_READS>,
+            grid, dim3(blocks), 0,
+            gpu_ptr<T>(in),
+            gpu_ptr<U>(out),
+            args,
+            out.size() / args.reduction_stride);
       });
     });
   });
@@ -454,15 +452,13 @@ void col_reduce_small(
       int block_size = 256;
       int num_blocks = (out.size() + block_size * N_READS - 1) / (block_size * N_READS);
       
-      encoder.launch_kernel([&](hipStream_t stream) {
-        hipLaunchKernelGGL(
-            (rocm::col_reduce_small<T, U, OP, N_READS>),
-            dim3(num_blocks), dim3(block_size), 0, stream,
-            gpu_ptr<T>(in),
-            gpu_ptr<U>(out),
-            args,
-            out.size());
-      });
+      encoder.add_kernel_node(
+          &rocm::col_reduce_small<T, U, OP, N_READS>,
+          dim3(num_blocks), dim3(block_size), 0,
+          gpu_ptr<T>(in),
+          gpu_ptr<U>(out),
+          args,
+          out.size());
     });
   });
 }

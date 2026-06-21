@@ -173,14 +173,13 @@ void fp_quantize(
   enc.set_output_array(wq);
   enc.set_output_array(scales);
   
-  enc.launch_kernel([&](hipStream_t stream) {
     #define LAUNCH_FP_QUANTIZE(T, ScaleT, BITS) \
-      hipLaunchKernelGGL( \
-          (rocm::fp_quantize_kernel<T, ScaleT, BITS>), \
-          dim3(num_blocks), dim3(block_size), 0, stream, \
+      enc.add_kernel_node( \
+          &rocm::fp_quantize_kernel<T, ScaleT, BITS>, \
+          dim3(num_blocks), dim3(block_size), 0u, \
           gpu_ptr<T>(w), gpu_ptr<uint8_t>(wq), gpu_ptr<ScaleT>(scales), \
           num_groups, group_size)
-    
+
     #define DISPATCH_BITS(T, ScaleT) \
       switch (bits) { \
         case 2: LAUNCH_FP_QUANTIZE(T, ScaleT, 2); break; \
@@ -205,10 +204,9 @@ void fp_quantize(
       default:
         throw std::runtime_error("Unsupported dtype for fp_quantize");
     }
-    
+
     #undef DISPATCH_BITS
     #undef LAUNCH_FP_QUANTIZE
-  });
 }
 
 void fp_dequantize(
@@ -232,14 +230,13 @@ void fp_dequantize(
     int block_size = 256;
     int num_blocks = (size + block_size - 1) / block_size;
     
-    enc.launch_kernel([&](hipStream_t stream) {
       #define LAUNCH_FP_DEQUANTIZE_PACKED(T, BITS) \
-        hipLaunchKernelGGL( \
-            (rocm::fp_dequantize_packed_kernel<T, BITS>), \
-            dim3(num_blocks), dim3(block_size), 0, stream, \
+        enc.add_kernel_node( \
+            &rocm::fp_dequantize_packed_kernel<T, BITS>, \
+            dim3(num_blocks), dim3(block_size), 0u, \
             gpu_ptr<uint8_t>(wq), gpu_ptr<T>(scales), gpu_ptr<T>(w), \
             w.size(), group_size)
-      
+
       #define DISPATCH_BITS_PACKED(T) \
         switch (bits) { \
           case 2: LAUNCH_FP_DEQUANTIZE_PACKED(T, 2); break; \
@@ -261,10 +258,9 @@ void fp_dequantize(
         default:
           throw std::runtime_error("Unsupported dtype for fp_dequantize");
       }
-      
+
       #undef DISPATCH_BITS_PACKED
       #undef LAUNCH_FP_DEQUANTIZE_PACKED
-    });
   } else {
     // Fallback for non-power-of-2 bits
     int num_elements = w.size();
@@ -273,14 +269,13 @@ void fp_dequantize(
     int block_size = 256;
     int num_blocks = (num_groups + block_size - 1) / block_size;
     
-    enc.launch_kernel([&](hipStream_t stream) {
       #define LAUNCH_FP_DEQUANTIZE(T, ScaleT, BITS) \
-        hipLaunchKernelGGL( \
-            (rocm::fp_dequantize_kernel<T, ScaleT, BITS>), \
-            dim3(num_blocks), dim3(block_size), 0, stream, \
+        enc.add_kernel_node( \
+            &rocm::fp_dequantize_kernel<T, ScaleT, BITS>, \
+            dim3(num_blocks), dim3(block_size), 0u, \
             gpu_ptr<uint8_t>(wq), gpu_ptr<ScaleT>(scales), gpu_ptr<T>(w), \
             num_groups, group_size)
-      
+
       #define DISPATCH_BITS(T, ScaleT) \
         switch (bits) { \
           case 3: LAUNCH_FP_DEQUANTIZE(T, ScaleT, 3); break; \
@@ -302,10 +297,9 @@ void fp_dequantize(
         default:
           throw std::runtime_error("Unsupported dtype for fp_dequantize");
       }
-      
+
       #undef DISPATCH_BITS
       #undef LAUNCH_FP_DEQUANTIZE
-    });
   }
 }
 
