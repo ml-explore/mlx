@@ -68,8 +68,10 @@ class CommandEncoder {
     constexpr size_t num = sizeof...(Params);
     void* ptrs[num];
     size_t i = 0;
-    ([&](auto&& p) { ptrs[i++] = static_cast<void*>(&p); }(
-         std::forward<Params>(params)),
+    ([&](auto&& p) {
+      ptrs[i++] =
+          const_cast<void*>(static_cast<const void*>(std::addressof(p)));
+    }(std::forward<Params>(params)),
      ...);
     add_kernel_node_raw(
         reinterpret_cast<void*>(func),

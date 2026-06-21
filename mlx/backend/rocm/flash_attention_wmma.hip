@@ -428,17 +428,20 @@ void sdpa_flash_wmma(
   // Shared memory: m/l + Q + KV + S, with Q/KV sized to one DW-wide slice.
   int smem = sdpa_flash_wmma_smem(D);
 
+  enc.set_input_array(q);
+  enc.set_input_array(k);
+  enc.set_input_array(v);
+  enc.set_output_array(o);
+
   auto launch = [&](auto type_tag, auto causal_tag, auto dim_tag) {
     using DT = decltype(type_tag);
     constexpr bool C = decltype(causal_tag)::value;
     constexpr int DD = decltype(dim_tag)::value;
-    enc.launch_kernel([&, p, grid, block, smem](hipStream_t stream) {
-      hipLaunchKernelGGL(
-          (rocm::kernel_sdpa_flash_wmma<DT, C, DD, BM, BN>),
-          grid, block, smem, stream,
-          gpu_ptr<const DT>(q), gpu_ptr<const DT>(k),
-          gpu_ptr<const DT>(v), gpu_ptr<DT>(o), p);
-    });
+    enc.add_kernel_node_ex(
+        &rocm::kernel_sdpa_flash_wmma<DT, C, DD, BM, BN>,
+        grid, block, static_cast<uint32_t>(smem),
+        gpu_ptr<const DT>(q), gpu_ptr<const DT>(k),
+        gpu_ptr<const DT>(v), gpu_ptr<DT>(o), p);
   };
 
   auto dispatch_dim = [&](auto tt, auto ct) {

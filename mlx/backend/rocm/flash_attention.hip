@@ -467,28 +467,22 @@ void sdpa_flash(
     params.M_strides[3] = mask->strides(3);
   }
 
-  const void* q_ptr = gpu_ptr<void>(q);
-  const void* k_ptr = gpu_ptr<void>(k);
-  const void* v_ptr = gpu_ptr<void>(v);
-  void* o_ptr = gpu_ptr<void>(o);
-  const void* mask_ptr = mask ? gpu_ptr<void>(*mask) : nullptr;
-  const void* sinks_ptr = sinks ? gpu_ptr<void>(*sinks) : nullptr;
   bool has_sinks = sinks.has_value();
   bool has_mask_val = mask.has_value();
   bool is_mla = (D_q == 192 && D_v == 256);
 
-  encoder.launch_kernel([&,
-                         q_ptr,
-                         k_ptr,
-                         v_ptr,
-                         o_ptr,
-                         mask_ptr,
-                         sinks_ptr,
-                         has_sinks,
-                         has_mask_val,
-                         is_mla,
-                         D_q,
-                         D_v](hipStream_t stream) {
+  encoder.set_input_array(q);
+  encoder.set_input_array(k);
+  encoder.set_input_array(v);
+  if (mask) {
+    encoder.set_input_array(*mask);
+  }
+  if (sinks) {
+    encoder.set_input_array(*sinks);
+  }
+  encoder.set_output_array(o);
+
+  {
     if (is_mla) {
       // MLA kernel with D_q=192, D_v=256
       // Use BLOCK_N=32 to fit shared memory (K_sh: 24KB + V_sh: 32KB = 56KB <
@@ -503,24 +497,23 @@ void sdpa_flash(
         using DataType = decltype(type_tag);
         constexpr bool causal = decltype(causal_tag)::value;
 
-        hipLaunchKernelGGL(
-            (rocm::kernel_sdpa_flash_mla<
+        encoder.add_kernel_node(
+            &rocm::kernel_sdpa_flash_mla<
                 DataType,
                 causal,
                 192,
                 256,
                 BLOCK_M,
-                BLOCK_N>),
+                BLOCK_N>,
             grid_dim,
             block_dim,
             0,
-            stream,
-            static_cast<const DataType*>(q_ptr),
-            static_cast<const DataType*>(k_ptr),
-            static_cast<const DataType*>(v_ptr),
-            has_mask_val ? static_cast<const DataType*>(mask_ptr) : nullptr,
-            static_cast<DataType*>(o_ptr),
-            has_sinks ? static_cast<const DataType*>(sinks_ptr) : nullptr,
+            gpu_ptr<DataType>(q),
+            gpu_ptr<DataType>(k),
+            gpu_ptr<DataType>(v),
+            has_mask_val ? gpu_ptr<DataType>(*mask) : nullptr,
+            gpu_ptr<DataType>(o),
+            has_sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
             params);
       };
 
@@ -554,22 +547,21 @@ void sdpa_flash(
             constexpr bool causal = decltype(causal_tag)::value;
             constexpr int headdim = decltype(headdim_tag)::value;
 
-            hipLaunchKernelGGL(
-                (rocm::kernel_sdpa_flash_opt<
+            encoder.add_kernel_node(
+                &rocm::kernel_sdpa_flash_opt<
                     DataType,
                     causal,
                     headdim,
                     BLOCK_M,
-                    BLOCK_N>),
+                    BLOCK_N>,
                 grid_dim,
                 block_dim,
                 0,
-                stream,
-                static_cast<const DataType*>(q_ptr),
-                static_cast<const DataType*>(k_ptr),
-                static_cast<const DataType*>(v_ptr),
-                static_cast<DataType*>(o_ptr),
-                has_sinks ? static_cast<const DataType*>(sinks_ptr) : nullptr,
+                gpu_ptr<DataType>(q),
+                gpu_ptr<DataType>(k),
+                gpu_ptr<DataType>(v),
+                gpu_ptr<DataType>(o),
+                has_sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
                 params);
           };
 
@@ -673,7 +665,7 @@ void sdpa_flash(
         }
       }
     }
-  });
+  }
 }
 
 } // namespace mlx::core

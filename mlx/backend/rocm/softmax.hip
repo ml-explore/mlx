@@ -327,25 +327,23 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
     
     constexpr int N_READS = 4;
     
-    encoder.launch_kernel([&](hipStream_t stream) {
-      // Choose block size based on axis size for better occupancy
-      if (axis_size <= 256 * N_READS) {
-        hipLaunchKernelGGL(
-            (rocm::softmax_kernel<T, AccT, 256, N_READS>),
-            dim3(n_rows), dim3(256), 0, stream,
-            gpu_ptr<T>(in), gpu_ptr<T>(out), axis_size);
-      } else if (axis_size <= 512 * N_READS) {
-        hipLaunchKernelGGL(
-            (rocm::softmax_kernel<T, AccT, 512, N_READS>),
-            dim3(n_rows), dim3(512), 0, stream,
-            gpu_ptr<T>(in), gpu_ptr<T>(out), axis_size);
-      } else {
-        hipLaunchKernelGGL(
-            (rocm::softmax_kernel<T, AccT, 1024, N_READS>),
-            dim3(n_rows), dim3(1024), 0, stream,
-            gpu_ptr<T>(in), gpu_ptr<T>(out), axis_size);
-      }
-    });
+    // Choose block size based on axis size for better occupancy
+    if (axis_size <= 256 * N_READS) {
+      encoder.add_kernel_node(
+          &rocm::softmax_kernel<T, AccT, 256, N_READS>,
+          dim3(n_rows), dim3(256), 0,
+          gpu_ptr<T>(in), gpu_ptr<T>(out), axis_size);
+    } else if (axis_size <= 512 * N_READS) {
+      encoder.add_kernel_node(
+          &rocm::softmax_kernel<T, AccT, 512, N_READS>,
+          dim3(n_rows), dim3(512), 0,
+          gpu_ptr<T>(in), gpu_ptr<T>(out), axis_size);
+    } else {
+      encoder.add_kernel_node(
+          &rocm::softmax_kernel<T, AccT, 1024, N_READS>,
+          dim3(n_rows), dim3(1024), 0,
+          gpu_ptr<T>(in), gpu_ptr<T>(out), axis_size);
+    }
   };
   
   switch (out.dtype()) {

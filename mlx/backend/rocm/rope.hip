@@ -470,22 +470,6 @@ void RoPE::eval_gpu(
   }
   encoder.set_output_array(out);
 
-  // Helper lambda to launch kernels - avoids structured binding capture issues
-  auto launch_rope_single = [&](auto kernel, dim3 grid, dim3 block, uint2 dims) {
-    encoder.launch_kernel([&, grid, block, dims](hipStream_t stream) {
-      hipLaunchKernelGGL(
-          kernel,
-          grid, block, 0, stream,
-          gpu_ptr<typename std::remove_pointer<decltype(kernel)>::type::first_argument_type>(donated ? out : in),
-          gpu_ptr<typename std::remove_pointer<decltype(kernel)>::type::first_argument_type>(out),
-          gpu_ptr<int32_t>(offset),
-          scale_,
-          std::log2(base_),
-          mat_size,
-          dims);
-    });
-  };
-
   // Dispatch based on dtype
   dispatch_float_types(out.dtype(), "rope", [&](auto type_tag) {
     using CTYPE = MLX_GET_TYPE(type_tag);
@@ -499,58 +483,29 @@ void RoPE::eval_gpu(
       std::pair<dim3, dim3> gb = rocm::get_grid_and_block_single(half_dims, n_heads);
       dim3 grid = gb.first;
       dim3 block = gb.second;
-      
-      encoder.launch_kernel([=, &encoder, &out, &in, &offset, this](hipStream_t stream) {
-        if (traditional_ && forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope_single_1d<DataType, true, true>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              scale_,
-              std::log2(base_),
-              mat_size,
-              half_dims,
-              n_heads);
-        } else if (traditional_ && !forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope_single_1d<DataType, true, false>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              scale_,
-              std::log2(base_),
-              mat_size,
-              half_dims,
-              n_heads);
-        } else if (!traditional_ && forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope_single_1d<DataType, false, true>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              scale_,
-              std::log2(base_),
-              mat_size,
-              half_dims,
-              n_heads);
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::rope_single_1d<DataType, false, false>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              scale_,
-              std::log2(base_),
-              mat_size,
-              half_dims,
-              n_heads);
-        }
-      });
+
+      const DataType* in_ptr = gpu_ptr<DataType>(donated ? out : in);
+      DataType* out_ptr = gpu_ptr<DataType>(out);
+      const int32_t* off_ptr = gpu_ptr<int32_t>(offset);
+      float base_log2 = std::log2(base_);
+      int64_t stride_v = static_cast<int64_t>(mat_size);
+
+      #define ADD_ROPE_SINGLE_1D(TRAD, FWD) \
+        encoder.add_kernel_node( \
+            &rocm::rope_single_1d<DataType, TRAD, FWD>, \
+            grid, block, 0, \
+            in_ptr, out_ptr, off_ptr, scale_, base_log2, stride_v, \
+            half_dims, n_heads)
+      if (traditional_ && forward_) {
+        ADD_ROPE_SINGLE_1D(true, true);
+      } else if (traditional_ && !forward_) {
+        ADD_ROPE_SINGLE_1D(true, false);
+      } else if (!traditional_ && forward_) {
+        ADD_ROPE_SINGLE_1D(false, true);
+      } else {
+        ADD_ROPE_SINGLE_1D(false, false);
+      }
+      #undef ADD_ROPE_SINGLE_1D
     } else if (single) {
       // Use optimized 1D kernel for single-token decode with freqs
       uint32_t half_dims = dims_ / 2;
@@ -559,62 +514,29 @@ void RoPE::eval_gpu(
       dim3 grid = gb.first;
       dim3 block = gb.second;
       int64_t freq_stride = inputs[2].strides(0);
-      
-      encoder.launch_kernel([=, &encoder, &out, &in, &offset, &inputs, this](hipStream_t stream) {
-        if (traditional_ && forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope_single_freqs_1d<DataType, true, true>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              gpu_ptr<float>(inputs[2]),
-              scale_,
-              mat_size,
-              half_dims,
-              n_heads,
-              freq_stride);
-        } else if (traditional_ && !forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope_single_freqs_1d<DataType, true, false>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              gpu_ptr<float>(inputs[2]),
-              scale_,
-              mat_size,
-              half_dims,
-              n_heads,
-              freq_stride);
-        } else if (!traditional_ && forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope_single_freqs_1d<DataType, false, true>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              gpu_ptr<float>(inputs[2]),
-              scale_,
-              mat_size,
-              half_dims,
-              n_heads,
-              freq_stride);
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::rope_single_freqs_1d<DataType, false, false>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              gpu_ptr<float>(inputs[2]),
-              scale_,
-              mat_size,
-              half_dims,
-              n_heads,
-              freq_stride);
-        }
-      });
+
+      const DataType* in_ptr = gpu_ptr<DataType>(donated ? out : in);
+      DataType* out_ptr = gpu_ptr<DataType>(out);
+      const int32_t* off_ptr = gpu_ptr<int32_t>(offset);
+      const float* freqs_ptr = gpu_ptr<float>(inputs[2]);
+      int64_t stride_v = static_cast<int64_t>(mat_size);
+
+      #define ADD_ROPE_SINGLE_FREQS_1D(TRAD, FWD) \
+        encoder.add_kernel_node( \
+            &rocm::rope_single_freqs_1d<DataType, TRAD, FWD>, \
+            grid, block, 0, \
+            in_ptr, out_ptr, off_ptr, freqs_ptr, scale_, stride_v, \
+            half_dims, n_heads, freq_stride)
+      if (traditional_ && forward_) {
+        ADD_ROPE_SINGLE_FREQS_1D(true, true);
+      } else if (traditional_ && !forward_) {
+        ADD_ROPE_SINGLE_FREQS_1D(true, false);
+      } else if (!traditional_ && forward_) {
+        ADD_ROPE_SINGLE_FREQS_1D(false, true);
+      } else {
+        ADD_ROPE_SINGLE_FREQS_1D(false, false);
+      }
+      #undef ADD_ROPE_SINGLE_FREQS_1D
     } else if (with_freqs) {
       int n_per_thread = 4;
       uint32_t dimz = B * ((N + n_per_thread - 1) / n_per_thread);
@@ -627,74 +549,29 @@ void RoPE::eval_gpu(
         offset_stride = inputs[1].strides()[0];
       }
       int64_t freq_stride = inputs[2].strides(0);
-      
-      encoder.launch_kernel([=, &encoder, &out, &in, &offset, &inputs, this](hipStream_t stream) {
-        if (traditional_ && forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope_freqs<DataType, true, true>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              gpu_ptr<float>(inputs[2]),
-              scale_,
-              std::log2(base_),
-              strides,
-              out_strides,
-              offset_stride,
-              N,
-              dims3,
-              freq_stride);
-        } else if (traditional_ && !forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope_freqs<DataType, true, false>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              gpu_ptr<float>(inputs[2]),
-              scale_,
-              std::log2(base_),
-              strides,
-              out_strides,
-              offset_stride,
-              N,
-              dims3,
-              freq_stride);
-        } else if (!traditional_ && forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope_freqs<DataType, false, true>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              gpu_ptr<float>(inputs[2]),
-              scale_,
-              std::log2(base_),
-              strides,
-              out_strides,
-              offset_stride,
-              N,
-              dims3,
-              freq_stride);
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::rope_freqs<DataType, false, false>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              gpu_ptr<float>(inputs[2]),
-              scale_,
-              std::log2(base_),
-              strides,
-              out_strides,
-              offset_stride,
-              N,
-              dims3,
-              freq_stride);
-        }
-      });
+
+      const DataType* in_ptr = gpu_ptr<DataType>(donated ? out : in);
+      DataType* out_ptr = gpu_ptr<DataType>(out);
+      const int32_t* off_ptr = gpu_ptr<int32_t>(offset);
+      const float* freqs_ptr = gpu_ptr<float>(inputs[2]);
+      float base_log2 = std::log2(base_);
+
+      #define ADD_ROPE_FREQS(TRAD, FWD) \
+        encoder.add_kernel_node( \
+            &rocm::rope_freqs<DataType, TRAD, FWD>, \
+            grid, block, 0, \
+            in_ptr, out_ptr, off_ptr, freqs_ptr, scale_, base_log2, \
+            strides, out_strides, offset_stride, N, dims3, freq_stride)
+      if (traditional_ && forward_) {
+        ADD_ROPE_FREQS(true, true);
+      } else if (traditional_ && !forward_) {
+        ADD_ROPE_FREQS(true, false);
+      } else if (!traditional_ && forward_) {
+        ADD_ROPE_FREQS(false, true);
+      } else {
+        ADD_ROPE_FREQS(false, false);
+      }
+      #undef ADD_ROPE_FREQS
     } else {
       int n_per_thread = 4;
       uint32_t dimz = B * ((N + n_per_thread - 1) / n_per_thread);
@@ -706,66 +583,28 @@ void RoPE::eval_gpu(
       if (inputs[1].ndim() > 0) {
         offset_stride = inputs[1].strides()[0];
       }
-      
-      encoder.launch_kernel([=, &encoder, &out, &in, &offset, this](hipStream_t stream) {
-        if (traditional_ && forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope<DataType, true, true>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              scale_,
-              std::log2(base_),
-              strides,
-              out_strides,
-              offset_stride,
-              N,
-              dims3);
-        } else if (traditional_ && !forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope<DataType, true, false>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              scale_,
-              std::log2(base_),
-              strides,
-              out_strides,
-              offset_stride,
-              N,
-              dims3);
-        } else if (!traditional_ && forward_) {
-          hipLaunchKernelGGL(
-              (rocm::rope<DataType, false, true>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              scale_,
-              std::log2(base_),
-              strides,
-              out_strides,
-              offset_stride,
-              N,
-              dims3);
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::rope<DataType, false, false>),
-              grid, block, 0, stream,
-              gpu_ptr<DataType>(donated ? out : in),
-              gpu_ptr<DataType>(out),
-              gpu_ptr<int32_t>(offset),
-              scale_,
-              std::log2(base_),
-              strides,
-              out_strides,
-              offset_stride,
-              N,
-              dims3);
-        }
-      });
+
+      const DataType* in_ptr = gpu_ptr<DataType>(donated ? out : in);
+      DataType* out_ptr = gpu_ptr<DataType>(out);
+      const int32_t* off_ptr = gpu_ptr<int32_t>(offset);
+      float base_log2 = std::log2(base_);
+
+      #define ADD_ROPE(TRAD, FWD) \
+        encoder.add_kernel_node( \
+            &rocm::rope<DataType, TRAD, FWD>, \
+            grid, block, 0, \
+            in_ptr, out_ptr, off_ptr, scale_, base_log2, \
+            strides, out_strides, offset_stride, N, dims3)
+      if (traditional_ && forward_) {
+        ADD_ROPE(true, true);
+      } else if (traditional_ && !forward_) {
+        ADD_ROPE(true, false);
+      } else if (!traditional_ && forward_) {
+        ADD_ROPE(false, true);
+      } else {
+        ADD_ROPE(false, false);
+      }
+      #undef ADD_ROPE
     }
   });
 }

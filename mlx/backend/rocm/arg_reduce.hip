@@ -198,80 +198,79 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto in_strides_param = const_param(in_strides);
   auto out_strides_param = const_param(out_strides);
   
-  encoder.launch_kernel([&](hipStream_t stream) {
-    switch (in.dtype()) {
-      case float32:
-        if (reduce_type_ == ArgReduce::ArgMax) {
-          hipLaunchKernelGGL(
-              (rocm::arg_reduce_general<float, rocm::ArgMax<float>, BLOCK_DIM, 4>),
-              num_blocks, dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<float>(in), gpu_ptr<uint32_t>(out), out.size(),
-              shape_param, in_strides_param, out_strides_param,
-              ndim, axis_stride, axis_size);
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::arg_reduce_general<float, rocm::ArgMin<float>, BLOCK_DIM, 4>),
-              num_blocks, dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<float>(in), gpu_ptr<uint32_t>(out), out.size(),
-              shape_param, in_strides_param, out_strides_param,
-              ndim, axis_stride, axis_size);
-        }
-        break;
-      case int32:
-        if (reduce_type_ == ArgReduce::ArgMax) {
-          hipLaunchKernelGGL(
-              (rocm::arg_reduce_general<int32_t, rocm::ArgMax<int32_t>, BLOCK_DIM, 4>),
-              num_blocks, dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<int32_t>(in), gpu_ptr<uint32_t>(out), out.size(),
-              shape_param, in_strides_param, out_strides_param,
-              ndim, axis_stride, axis_size);
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::arg_reduce_general<int32_t, rocm::ArgMin<int32_t>, BLOCK_DIM, 4>),
-              num_blocks, dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<int32_t>(in), gpu_ptr<uint32_t>(out), out.size(),
-              shape_param, in_strides_param, out_strides_param,
-              ndim, axis_stride, axis_size);
-        }
-        break;
-      case float16:
-        if (reduce_type_ == ArgReduce::ArgMax) {
-          hipLaunchKernelGGL(
-              (rocm::arg_reduce_general<__half, rocm::ArgMax<__half>, BLOCK_DIM, 4>),
-              num_blocks, dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<__half>(in), gpu_ptr<uint32_t>(out), out.size(),
-              shape_param, in_strides_param, out_strides_param,
-              ndim, axis_stride, axis_size);
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::arg_reduce_general<__half, rocm::ArgMin<__half>, BLOCK_DIM, 4>),
-              num_blocks, dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<__half>(in), gpu_ptr<uint32_t>(out), out.size(),
-              shape_param, in_strides_param, out_strides_param,
-              ndim, axis_stride, axis_size);
-        }
-        break;
-      case bfloat16:
-        if (reduce_type_ == ArgReduce::ArgMax) {
-          hipLaunchKernelGGL(
-              (rocm::arg_reduce_general<hip_bfloat16, rocm::ArgMax<hip_bfloat16>, BLOCK_DIM, 4>),
-              num_blocks, dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<hip_bfloat16>(in), gpu_ptr<uint32_t>(out), out.size(),
-              shape_param, in_strides_param, out_strides_param,
-              ndim, axis_stride, axis_size);
-        } else {
-          hipLaunchKernelGGL(
-              (rocm::arg_reduce_general<hip_bfloat16, rocm::ArgMin<hip_bfloat16>, BLOCK_DIM, 4>),
-              num_blocks, dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<hip_bfloat16>(in), gpu_ptr<uint32_t>(out), out.size(),
-              shape_param, in_strides_param, out_strides_param,
-              ndim, axis_stride, axis_size);
-        }
-        break;
-      default:
-        throw std::runtime_error("Unsupported type for ArgReduce");
-    }
-  });
+  size_t out_size = out.size();
+  switch (in.dtype()) {
+    case float32:
+      if (reduce_type_ == ArgReduce::ArgMax) {
+        encoder.add_kernel_node(
+            &rocm::arg_reduce_general<float, rocm::ArgMax<float>, BLOCK_DIM, 4>,
+            num_blocks, dim3(BLOCK_DIM), 0,
+            gpu_ptr<float>(in), gpu_ptr<uint32_t>(out), out_size,
+            shape_param, in_strides_param, out_strides_param,
+            ndim, axis_stride, axis_size);
+      } else {
+        encoder.add_kernel_node(
+            &rocm::arg_reduce_general<float, rocm::ArgMin<float>, BLOCK_DIM, 4>,
+            num_blocks, dim3(BLOCK_DIM), 0,
+            gpu_ptr<float>(in), gpu_ptr<uint32_t>(out), out_size,
+            shape_param, in_strides_param, out_strides_param,
+            ndim, axis_stride, axis_size);
+      }
+      break;
+    case int32:
+      if (reduce_type_ == ArgReduce::ArgMax) {
+        encoder.add_kernel_node(
+            &rocm::arg_reduce_general<int32_t, rocm::ArgMax<int32_t>, BLOCK_DIM, 4>,
+            num_blocks, dim3(BLOCK_DIM), 0,
+            gpu_ptr<int32_t>(in), gpu_ptr<uint32_t>(out), out_size,
+            shape_param, in_strides_param, out_strides_param,
+            ndim, axis_stride, axis_size);
+      } else {
+        encoder.add_kernel_node(
+            &rocm::arg_reduce_general<int32_t, rocm::ArgMin<int32_t>, BLOCK_DIM, 4>,
+            num_blocks, dim3(BLOCK_DIM), 0,
+            gpu_ptr<int32_t>(in), gpu_ptr<uint32_t>(out), out_size,
+            shape_param, in_strides_param, out_strides_param,
+            ndim, axis_stride, axis_size);
+      }
+      break;
+    case float16:
+      if (reduce_type_ == ArgReduce::ArgMax) {
+        encoder.add_kernel_node(
+            &rocm::arg_reduce_general<__half, rocm::ArgMax<__half>, BLOCK_DIM, 4>,
+            num_blocks, dim3(BLOCK_DIM), 0,
+            gpu_ptr<__half>(in), gpu_ptr<uint32_t>(out), out_size,
+            shape_param, in_strides_param, out_strides_param,
+            ndim, axis_stride, axis_size);
+      } else {
+        encoder.add_kernel_node(
+            &rocm::arg_reduce_general<__half, rocm::ArgMin<__half>, BLOCK_DIM, 4>,
+            num_blocks, dim3(BLOCK_DIM), 0,
+            gpu_ptr<__half>(in), gpu_ptr<uint32_t>(out), out_size,
+            shape_param, in_strides_param, out_strides_param,
+            ndim, axis_stride, axis_size);
+      }
+      break;
+    case bfloat16:
+      if (reduce_type_ == ArgReduce::ArgMax) {
+        encoder.add_kernel_node(
+            &rocm::arg_reduce_general<hip_bfloat16, rocm::ArgMax<hip_bfloat16>, BLOCK_DIM, 4>,
+            num_blocks, dim3(BLOCK_DIM), 0,
+            gpu_ptr<hip_bfloat16>(in), gpu_ptr<uint32_t>(out), out_size,
+            shape_param, in_strides_param, out_strides_param,
+            ndim, axis_stride, axis_size);
+      } else {
+        encoder.add_kernel_node(
+            &rocm::arg_reduce_general<hip_bfloat16, rocm::ArgMin<hip_bfloat16>, BLOCK_DIM, 4>,
+            num_blocks, dim3(BLOCK_DIM), 0,
+            gpu_ptr<hip_bfloat16>(in), gpu_ptr<uint32_t>(out), out_size,
+            shape_param, in_strides_param, out_strides_param,
+            ndim, axis_stride, axis_size);
+      }
+      break;
+    default:
+      throw std::runtime_error("Unsupported type for ArgReduce");
+  }
 }
 
 } // namespace mlx::core

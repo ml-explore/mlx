@@ -554,61 +554,57 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
         using U = typename rocm::ScanResult<Op, T>::type;
         dispatch_bool(inclusive_, [&](auto inclusive) {
           dispatch_bool(reverse_, [&](auto reverse) {
-            encoder.launch_kernel([&](hipStream_t stream) {
-              if (contiguous) {
-                int block_dim = ceildiv(axis_size, N_READS);
-                block_dim = ceildiv(block_dim, WARP_SIZE) * WARP_SIZE;
-                block_dim = std::min(block_dim, WARP_SIZE * WARP_SIZE);
-                int num_blocks = in.data_size() / axis_size;
-                hipLaunchKernelGGL(
-                    (rocm::contiguous_scan<
-                        T,
-                        U,
-                        Op,
-                        N_READS,
-                        inclusive.value,
-                        reverse.value>),
-                    dim3(num_blocks),
-                    dim3(block_dim),
-                    0,
-                    stream,
-                    gpu_ptr<T>(in),
-                    gpu_ptr<U>(out),
-                    axis_size);
+            if (contiguous) {
+              int block_dim = ceildiv(axis_size, N_READS);
+              block_dim = ceildiv(block_dim, WARP_SIZE) * WARP_SIZE;
+              block_dim = std::min(block_dim, WARP_SIZE * WARP_SIZE);
+              int num_blocks = in.data_size() / axis_size;
+              encoder.add_kernel_node(
+                  &rocm::contiguous_scan<
+                      T,
+                      U,
+                      Op,
+                      N_READS,
+                      inclusive.value,
+                      reverse.value>,
+                  dim3(num_blocks),
+                  dim3(block_dim),
+                  0,
+                  gpu_ptr<T>(in),
+                  gpu_ptr<U>(out),
+                  axis_size);
+            } else {
+              constexpr int BM = WARP_SIZE;
+              constexpr int BN = WARP_SIZE;
+              int64_t stride = in.strides()[axis_];
+              int64_t stride_blocks = ceildiv(stride, (int64_t)BN);
+              dim3 num_blocks = get_2d_grid_dims(
+                  in.shape(), in.strides(), axis_size * stride);
+              if (num_blocks.x * stride_blocks <= UINT32_MAX) {
+                num_blocks.x *= stride_blocks;
               } else {
-                constexpr int BM = WARP_SIZE;
-                constexpr int BN = WARP_SIZE;
-                int64_t stride = in.strides()[axis_];
-                int64_t stride_blocks = ceildiv(stride, (int64_t)BN);
-                dim3 num_blocks = get_2d_grid_dims(
-                    in.shape(), in.strides(), axis_size * stride);
-                if (num_blocks.x * stride_blocks <= UINT32_MAX) {
-                  num_blocks.x *= stride_blocks;
-                } else {
-                  num_blocks.y *= stride_blocks;
-                }
-                int block_dim = (BN / N_READS) * WARP_SIZE;
-                hipLaunchKernelGGL(
-                    (rocm::strided_scan<
-                        T,
-                        U,
-                        Op,
-                        N_READS,
-                        BM,
-                        BN,
-                        inclusive.value,
-                        reverse.value>),
-                    num_blocks,
-                    dim3(block_dim),
-                    0,
-                    stream,
-                    gpu_ptr<T>(in),
-                    gpu_ptr<U>(out),
-                    axis_size,
-                    stride,
-                    stride_blocks);
+                num_blocks.y *= stride_blocks;
               }
-            });
+              int block_dim = (BN / N_READS) * WARP_SIZE;
+              encoder.add_kernel_node(
+                  &rocm::strided_scan<
+                      T,
+                      U,
+                      Op,
+                      N_READS,
+                      BM,
+                      BN,
+                      inclusive.value,
+                      reverse.value>,
+                  num_blocks,
+                  dim3(block_dim),
+                  0,
+                  gpu_ptr<T>(in),
+                  gpu_ptr<U>(out),
+                  axis_size,
+                  stride,
+                  stride_blocks);
+            }
           });
         });
       } else {

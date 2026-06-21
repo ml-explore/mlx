@@ -299,33 +299,31 @@ void LayerNorm::eval_gpu(
   constexpr int BLOCK_DIM = 256;
   constexpr int N_READS = 4;
   
-  encoder.launch_kernel([&](hipStream_t stream) {
-    switch (out.dtype()) {
-      case float32:
-        hipLaunchKernelGGL(
-            (rocm::layer_norm_kernel<float, BLOCK_DIM, N_READS>),
-            dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            gpu_ptr<float>(x), gpu_ptr<float>(w), gpu_ptr<float>(b), gpu_ptr<float>(out),
-            eps_, axis_size, w_stride, b_stride);
-        break;
-      case float16:
-        hipLaunchKernelGGL(
-            (rocm::layer_norm_kernel<__half, BLOCK_DIM, N_READS>),
-            dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            gpu_ptr<__half>(x), gpu_ptr<__half>(w), gpu_ptr<__half>(b), gpu_ptr<__half>(out),
-            eps_, axis_size, w_stride, b_stride);
-        break;
-      case bfloat16:
-        hipLaunchKernelGGL(
-            (rocm::layer_norm_kernel<hip_bfloat16, BLOCK_DIM, N_READS>),
-            dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-            gpu_ptr<hip_bfloat16>(x), gpu_ptr<hip_bfloat16>(w), gpu_ptr<hip_bfloat16>(b), gpu_ptr<hip_bfloat16>(out),
-            eps_, axis_size, w_stride, b_stride);
-        break;
-      default:
-        throw std::runtime_error("Unsupported type for layer_norm");
-    }
-  });
+  switch (out.dtype()) {
+    case float32:
+      encoder.add_kernel_node(
+          &rocm::layer_norm_kernel<float, BLOCK_DIM, N_READS>,
+          dim3(n_rows), dim3(BLOCK_DIM), 0,
+          gpu_ptr<float>(x), gpu_ptr<float>(w), gpu_ptr<float>(b), gpu_ptr<float>(out),
+          eps_, axis_size, w_stride, b_stride);
+      break;
+    case float16:
+      encoder.add_kernel_node(
+          &rocm::layer_norm_kernel<__half, BLOCK_DIM, N_READS>,
+          dim3(n_rows), dim3(BLOCK_DIM), 0,
+          gpu_ptr<__half>(x), gpu_ptr<__half>(w), gpu_ptr<__half>(b), gpu_ptr<__half>(out),
+          eps_, axis_size, w_stride, b_stride);
+      break;
+    case bfloat16:
+      encoder.add_kernel_node(
+          &rocm::layer_norm_kernel<hip_bfloat16, BLOCK_DIM, N_READS>,
+          dim3(n_rows), dim3(BLOCK_DIM), 0,
+          gpu_ptr<hip_bfloat16>(x), gpu_ptr<hip_bfloat16>(w), gpu_ptr<hip_bfloat16>(b), gpu_ptr<hip_bfloat16>(out),
+          eps_, axis_size, w_stride, b_stride);
+      break;
+    default:
+      throw std::runtime_error("Unsupported type for layer_norm");
+  }
 }
 
 void LayerNormVJP::eval_gpu(
@@ -411,67 +409,71 @@ void LayerNormVJP::eval_gpu(
   constexpr int BLOCK_DIM = 256;
   constexpr int N_READS = 4;
   
-  encoder.launch_kernel([&](hipStream_t stream) {
-    if (has_w) {
-      switch (gx.dtype()) {
-        case float32:
-          hipLaunchKernelGGL(
-              (rocm::layer_norm_vjp_kernel<float, true, BLOCK_DIM, N_READS>),
-              dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<float>(x), gpu_ptr<float>(w), gpu_ptr<float>(g),
-              gpu_ptr<float>(gx), gpu_ptr<float>(gw_temp),
-              eps_, axis_size, w_stride);
-          break;
-        case float16:
-          hipLaunchKernelGGL(
-              (rocm::layer_norm_vjp_kernel<__half, true, BLOCK_DIM, N_READS>),
-              dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<__half>(x), gpu_ptr<__half>(w), gpu_ptr<__half>(g),
-              gpu_ptr<__half>(gx), gpu_ptr<__half>(gw_temp),
-              eps_, axis_size, w_stride);
-          break;
-        case bfloat16:
-          hipLaunchKernelGGL(
-              (rocm::layer_norm_vjp_kernel<hip_bfloat16, true, BLOCK_DIM, N_READS>),
-              dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<hip_bfloat16>(x), gpu_ptr<hip_bfloat16>(w), gpu_ptr<hip_bfloat16>(g),
-              gpu_ptr<hip_bfloat16>(gx), gpu_ptr<hip_bfloat16>(gw_temp),
-              eps_, axis_size, w_stride);
-          break;
-        default:
-          throw std::runtime_error("Unsupported type for layer_norm_vjp");
-      }
-    } else {
-      switch (gx.dtype()) {
-        case float32:
-          hipLaunchKernelGGL(
-              (rocm::layer_norm_vjp_kernel<float, false, BLOCK_DIM, N_READS>),
-              dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<float>(x), gpu_ptr<float>(w), gpu_ptr<float>(g),
-              gpu_ptr<float>(gx), nullptr,
-              eps_, axis_size, w_stride);
-          break;
-        case float16:
-          hipLaunchKernelGGL(
-              (rocm::layer_norm_vjp_kernel<__half, false, BLOCK_DIM, N_READS>),
-              dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<__half>(x), gpu_ptr<__half>(w), gpu_ptr<__half>(g),
-              gpu_ptr<__half>(gx), nullptr,
-              eps_, axis_size, w_stride);
-          break;
-        case bfloat16:
-          hipLaunchKernelGGL(
-              (rocm::layer_norm_vjp_kernel<hip_bfloat16, false, BLOCK_DIM, N_READS>),
-              dim3(n_rows), dim3(BLOCK_DIM), 0, stream,
-              gpu_ptr<hip_bfloat16>(x), gpu_ptr<hip_bfloat16>(w), gpu_ptr<hip_bfloat16>(g),
-              gpu_ptr<hip_bfloat16>(gx), nullptr,
-              eps_, axis_size, w_stride);
-          break;
-        default:
-          throw std::runtime_error("Unsupported type for layer_norm_vjp");
-      }
+  if (has_w) {
+    switch (gx.dtype()) {
+      case float32:
+        encoder.add_kernel_node(
+            &rocm::layer_norm_vjp_kernel<float, true, BLOCK_DIM, N_READS>,
+            dim3(n_rows), dim3(BLOCK_DIM), 0,
+            gpu_ptr<float>(x), gpu_ptr<float>(w), gpu_ptr<float>(g),
+            gpu_ptr<float>(gx), gpu_ptr<float>(gw_temp),
+            eps_, axis_size, w_stride);
+        break;
+      case float16:
+        encoder.add_kernel_node(
+            &rocm::layer_norm_vjp_kernel<__half, true, BLOCK_DIM, N_READS>,
+            dim3(n_rows), dim3(BLOCK_DIM), 0,
+            gpu_ptr<__half>(x), gpu_ptr<__half>(w), gpu_ptr<__half>(g),
+            gpu_ptr<__half>(gx), gpu_ptr<__half>(gw_temp),
+            eps_, axis_size, w_stride);
+        break;
+      case bfloat16:
+        encoder.add_kernel_node(
+            &rocm::layer_norm_vjp_kernel<hip_bfloat16, true, BLOCK_DIM, N_READS>,
+            dim3(n_rows), dim3(BLOCK_DIM), 0,
+            gpu_ptr<hip_bfloat16>(x), gpu_ptr<hip_bfloat16>(w), gpu_ptr<hip_bfloat16>(g),
+            gpu_ptr<hip_bfloat16>(gx), gpu_ptr<hip_bfloat16>(gw_temp),
+            eps_, axis_size, w_stride);
+        break;
+      default:
+        throw std::runtime_error("Unsupported type for layer_norm_vjp");
     }
-  });
+  } else {
+    switch (gx.dtype()) {
+      case float32: {
+        float* gw_null = nullptr;
+        encoder.add_kernel_node(
+            &rocm::layer_norm_vjp_kernel<float, false, BLOCK_DIM, N_READS>,
+            dim3(n_rows), dim3(BLOCK_DIM), 0,
+            gpu_ptr<float>(x), gpu_ptr<float>(w), gpu_ptr<float>(g),
+            gpu_ptr<float>(gx), gw_null,
+            eps_, axis_size, w_stride);
+        break;
+      }
+      case float16: {
+        __half* gw_null = nullptr;
+        encoder.add_kernel_node(
+            &rocm::layer_norm_vjp_kernel<__half, false, BLOCK_DIM, N_READS>,
+            dim3(n_rows), dim3(BLOCK_DIM), 0,
+            gpu_ptr<__half>(x), gpu_ptr<__half>(w), gpu_ptr<__half>(g),
+            gpu_ptr<__half>(gx), gw_null,
+            eps_, axis_size, w_stride);
+        break;
+      }
+      case bfloat16: {
+        hip_bfloat16* gw_null = nullptr;
+        encoder.add_kernel_node(
+            &rocm::layer_norm_vjp_kernel<hip_bfloat16, false, BLOCK_DIM, N_READS>,
+            dim3(n_rows), dim3(BLOCK_DIM), 0,
+            gpu_ptr<hip_bfloat16>(x), gpu_ptr<hip_bfloat16>(w), gpu_ptr<hip_bfloat16>(g),
+            gpu_ptr<hip_bfloat16>(gx), gw_null,
+            eps_, axis_size, w_stride);
+        break;
+      }
+      default:
+        throw std::runtime_error("Unsupported type for layer_norm_vjp");
+    }
+  }
 
   // Reduce gw_temp to gw if we have weights
   if (has_w) {

@@ -299,15 +299,17 @@ void sdpa_vector(
   params.O_strides[1] = o.strides(1);
   params.O_strides[2] = o.strides(2);
 
-  const void* q_ptr = gpu_ptr<void>(q);
-  const void* k_ptr = gpu_ptr<void>(k);
-  const void* v_ptr = gpu_ptr<void>(v);
-  void* o_ptr = gpu_ptr<void>(o);
-  const void* sinks_ptr = sinks ? gpu_ptr<void>(*sinks) : nullptr;
   bool has_sinks = sinks.has_value();
 
-  encoder.launch_kernel([&, q_ptr, k_ptr, v_ptr, o_ptr, sinks_ptr, has_sinks](
-                            hipStream_t stream) {
+  encoder.set_input_array(q);
+  encoder.set_input_array(k);
+  encoder.set_input_array(v);
+  if (sinks) {
+    encoder.set_input_array(*sinks);
+  }
+  encoder.set_output_array(o);
+
+  {
     dim3 grid_dim(H, qL, B);
     dim3 block_dim(1024, 1, 1); // 32 tiles * 32 threads = 1024
 
@@ -316,17 +318,16 @@ void sdpa_vector(
       constexpr bool causal = decltype(causal_tag)::value;
       constexpr int headdim = decltype(headdim_tag)::value;
 
-      hipLaunchKernelGGL(
-          (rocm::kernel_sdpav_1pass<DataType, causal, headdim>),
+      encoder.add_kernel_node(
+          &rocm::kernel_sdpav_1pass<DataType, causal, headdim>,
           grid_dim,
           block_dim,
           0,
-          stream,
-          static_cast<const DataType*>(q_ptr),
-          static_cast<const DataType*>(k_ptr),
-          static_cast<const DataType*>(v_ptr),
-          static_cast<DataType*>(o_ptr),
-          has_sinks ? static_cast<const DataType*>(sinks_ptr) : nullptr,
+          gpu_ptr<DataType>(q),
+          gpu_ptr<DataType>(k),
+          gpu_ptr<DataType>(v),
+          gpu_ptr<DataType>(o),
+          has_sinks ? gpu_ptr<DataType>(*sinks) : nullptr,
           params);
     };
 
@@ -432,7 +433,7 @@ void sdpa_vector(
               std::integral_constant<int, 256>());
       }
     }
-  });
+  }
 }
 
 } // namespace mlx::core

@@ -177,39 +177,37 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   int num_blocks = (total + block_size - 1) / block_size;
   num_blocks = std::min(num_blocks, 65535);
   
-  encoder.launch_kernel([&](hipStream_t stream) {
-    if (keys.flags().row_contiguous) {
-      hipLaunchKernelGGL(
-          rocm::rbitsc_kernel,
-          dim3(num_blocks), dim3(block_size), 0, stream,
-          gpu_ptr<uint32_t>(keys),
-          gpu_ptr<uint8_t>(out),
-          grid_dims_x,
-          grid_dims_y,
-          odd,
-          bytes_per_key);
-    } else {
-      rocm::hip_array<int32_t, MAX_NDIM> shape_arg = {};
-      rocm::hip_array<int64_t, MAX_NDIM> strides_arg = {};
-      for (int i = 0; i < keys.ndim(); i++) {
-        shape_arg.data_[i] = static_cast<int32_t>(keys.shape()[i]);
-        strides_arg.data_[i] = keys.strides()[i];
-      }
-
-      hipLaunchKernelGGL(
-          rocm::rbits_kernel,
-          dim3(num_blocks), dim3(block_size), 0, stream,
-          gpu_ptr<uint32_t>(keys),
-          gpu_ptr<uint8_t>(out),
-          grid_dims_x,
-          grid_dims_y,
-          odd,
-          bytes_per_key,
-          keys.ndim(),
-          shape_arg,
-          strides_arg);
+  if (keys.flags().row_contiguous) {
+    encoder.add_kernel_node(
+        &rocm::rbitsc_kernel,
+        dim3(num_blocks), dim3(block_size), 0,
+        gpu_ptr<uint32_t>(keys),
+        gpu_ptr<uint8_t>(out),
+        grid_dims_x,
+        grid_dims_y,
+        odd,
+        bytes_per_key);
+  } else {
+    rocm::hip_array<int32_t, MAX_NDIM> shape_arg = {};
+    rocm::hip_array<int64_t, MAX_NDIM> strides_arg = {};
+    for (int i = 0; i < keys.ndim(); i++) {
+      shape_arg.data_[i] = static_cast<int32_t>(keys.shape()[i]);
+      strides_arg.data_[i] = keys.strides()[i];
     }
-  });
+
+    encoder.add_kernel_node(
+        &rocm::rbits_kernel,
+        dim3(num_blocks), dim3(block_size), 0,
+        gpu_ptr<uint32_t>(keys),
+        gpu_ptr<uint8_t>(out),
+        grid_dims_x,
+        grid_dims_y,
+        odd,
+        bytes_per_key,
+        static_cast<int32_t>(keys.ndim()),
+        shape_arg,
+        strides_arg);
+  }
 }
 
 } // namespace mlx::core

@@ -582,49 +582,46 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
     if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
       using ValT = hip_type_t<CTYPE>;
       
-      encoder.launch_kernel([&](hipStream_t hip_stream) {
-        dim3 grid(1, n_rows, 1);
-        
-        // Helper to launch kernel with specific template parameters
-        auto launch_sort = [&](auto argsort_tag, auto block_tag) {
-          constexpr bool ARG_SORT = decltype(argsort_tag)::value;
-          constexpr int BLOCK_THREADS = decltype(block_tag)::value;
-          using OutT = std::conditional_t<ARG_SORT, uint32_t, ValT>;
-          
-          hipLaunchKernelGGL(
-              (rocm::block_sort_kernel<ValT, OutT, ARG_SORT, BLOCK_THREADS, tn>),
-              grid,
-              dim3(BLOCK_THREADS, 1, 1),
-              0,
-              hip_stream,
-              gpu_ptr<ValT>(in),
-              gpu_ptr<OutT>(out),
-              size_sorted_axis,
-              in_stride_sorted,
-              out_stride_sorted,
-              in_stride_segment,
-              out_stride_segment);
-        };
-        
-        // Dispatch based on argsort and block size
-        if (argsort) {
-          switch (bn) {
-            case 32: launch_sort(std::true_type{}, std::integral_constant<int, 32>{}); break;
-            case 64: launch_sort(std::true_type{}, std::integral_constant<int, 64>{}); break;
-            case 128: launch_sort(std::true_type{}, std::integral_constant<int, 128>{}); break;
-            case 256: launch_sort(std::true_type{}, std::integral_constant<int, 256>{}); break;
-            case 512: launch_sort(std::true_type{}, std::integral_constant<int, 512>{}); break;
-          }
-        } else {
-          switch (bn) {
-            case 32: launch_sort(std::false_type{}, std::integral_constant<int, 32>{}); break;
-            case 64: launch_sort(std::false_type{}, std::integral_constant<int, 64>{}); break;
-            case 128: launch_sort(std::false_type{}, std::integral_constant<int, 128>{}); break;
-            case 256: launch_sort(std::false_type{}, std::integral_constant<int, 256>{}); break;
-            case 512: launch_sort(std::false_type{}, std::integral_constant<int, 512>{}); break;
-          }
+      dim3 grid(1, n_rows, 1);
+
+      // Helper to add kernel node with specific template parameters
+      auto launch_sort = [&](auto argsort_tag, auto block_tag) {
+        constexpr bool ARG_SORT = decltype(argsort_tag)::value;
+        constexpr int BLOCK_THREADS = decltype(block_tag)::value;
+        using OutT = std::conditional_t<ARG_SORT, uint32_t, ValT>;
+
+        encoder.add_kernel_node(
+            &rocm::block_sort_kernel<ValT, OutT, ARG_SORT, BLOCK_THREADS, tn>,
+            grid,
+            dim3(BLOCK_THREADS, 1, 1),
+            0,
+            gpu_ptr<ValT>(in),
+            gpu_ptr<OutT>(out),
+            size_sorted_axis,
+            in_stride_sorted,
+            out_stride_sorted,
+            in_stride_segment,
+            out_stride_segment);
+      };
+
+      // Dispatch based on argsort and block size
+      if (argsort) {
+        switch (bn) {
+          case 32: launch_sort(std::true_type{}, std::integral_constant<int, 32>{}); break;
+          case 64: launch_sort(std::true_type{}, std::integral_constant<int, 64>{}); break;
+          case 128: launch_sort(std::true_type{}, std::integral_constant<int, 128>{}); break;
+          case 256: launch_sort(std::true_type{}, std::integral_constant<int, 256>{}); break;
+          case 512: launch_sort(std::true_type{}, std::integral_constant<int, 512>{}); break;
         }
-      });
+      } else {
+        switch (bn) {
+          case 32: launch_sort(std::false_type{}, std::integral_constant<int, 32>{}); break;
+          case 64: launch_sort(std::false_type{}, std::integral_constant<int, 64>{}); break;
+          case 128: launch_sort(std::false_type{}, std::integral_constant<int, 128>{}); break;
+          case 256: launch_sort(std::false_type{}, std::integral_constant<int, 256>{}); break;
+          case 512: launch_sort(std::false_type{}, std::integral_constant<int, 512>{}); break;
+        }
+      }
     } else {
       throw std::runtime_error(
           "ROCm backend does not support sorting complex numbers");

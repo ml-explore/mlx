@@ -174,52 +174,51 @@ void binary_two_op_gpu_inplace(
   size_t size = out_a.data_size();
   int num_blocks = std::min((size + block_size * N_READS - 1) / (block_size * N_READS), (size_t)65535);
   
-  encoder.launch_kernel([&](hipStream_t stream) {
-    #define LAUNCH_BINARY_TWO(T, OP_TYPE) \
-      switch (bopt) { \
-        case BinaryOpType::ScalarScalar: \
-          hipLaunchKernelGGL( \
-              (rocm::binary_two_ss<rocm::OP_TYPE, T, T, int64_t, N_READS>), \
-              dim3(num_blocks), dim3(block_size), 0, stream, \
-              gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
-              static_cast<int64_t>(size)); \
-          break; \
-        case BinaryOpType::ScalarVector: \
-          hipLaunchKernelGGL( \
-              (rocm::binary_two_sv<rocm::OP_TYPE, T, T, int64_t, N_READS>), \
-              dim3(num_blocks), dim3(block_size), 0, stream, \
-              gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
-              static_cast<int64_t>(size)); \
-          break; \
-        case BinaryOpType::VectorScalar: \
-          hipLaunchKernelGGL( \
-              (rocm::binary_two_vs<rocm::OP_TYPE, T, T, int64_t, N_READS>), \
-              dim3(num_blocks), dim3(block_size), 0, stream, \
-              gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
-              static_cast<int64_t>(size)); \
-          break; \
-        case BinaryOpType::VectorVector: \
-          hipLaunchKernelGGL( \
-              (rocm::binary_two_vv<rocm::OP_TYPE, T, T, int64_t, N_READS>), \
-              dim3(num_blocks), dim3(block_size), 0, stream, \
-              gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
-              static_cast<int64_t>(size)); \
-          break; \
-        default: \
-          throw std::runtime_error("Unsupported binary op type for binary_two"); \
-      }
-    
-    if constexpr (std::is_same_v<Op, rocm::DivMod>) {
-      switch (a.dtype()) {
-        case float32: LAUNCH_BINARY_TWO(float, DivMod); break;
-        case int32: LAUNCH_BINARY_TWO(int32_t, DivMod); break;
-        case int64: LAUNCH_BINARY_TWO(int64_t, DivMod); break;
-        default:
-          throw std::runtime_error("Unsupported type for DivMod");
-      }
+  int64_t size_arg = static_cast<int64_t>(size);
+  #define LAUNCH_BINARY_TWO(T, OP_TYPE) \
+    switch (bopt) { \
+      case BinaryOpType::ScalarScalar: \
+        encoder.add_kernel_node( \
+            &rocm::binary_two_ss<rocm::OP_TYPE, T, T, int64_t, N_READS>, \
+            dim3(num_blocks), dim3(block_size), 0, \
+            gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
+            size_arg); \
+        break; \
+      case BinaryOpType::ScalarVector: \
+        encoder.add_kernel_node( \
+            &rocm::binary_two_sv<rocm::OP_TYPE, T, T, int64_t, N_READS>, \
+            dim3(num_blocks), dim3(block_size), 0, \
+            gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
+            size_arg); \
+        break; \
+      case BinaryOpType::VectorScalar: \
+        encoder.add_kernel_node( \
+            &rocm::binary_two_vs<rocm::OP_TYPE, T, T, int64_t, N_READS>, \
+            dim3(num_blocks), dim3(block_size), 0, \
+            gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
+            size_arg); \
+        break; \
+      case BinaryOpType::VectorVector: \
+        encoder.add_kernel_node( \
+            &rocm::binary_two_vv<rocm::OP_TYPE, T, T, int64_t, N_READS>, \
+            dim3(num_blocks), dim3(block_size), 0, \
+            gpu_ptr<const T>(a), gpu_ptr<const T>(b), gpu_ptr<T>(out_a), gpu_ptr<T>(out_b), \
+            size_arg); \
+        break; \
+      default: \
+        throw std::runtime_error("Unsupported binary op type for binary_two"); \
     }
-    #undef LAUNCH_BINARY_TWO
-  });
+
+  if constexpr (std::is_same_v<Op, rocm::DivMod>) {
+    switch (a.dtype()) {
+      case float32: LAUNCH_BINARY_TWO(float, DivMod); break;
+      case int32: LAUNCH_BINARY_TWO(int32_t, DivMod); break;
+      case int64: LAUNCH_BINARY_TWO(int64_t, DivMod); break;
+      default:
+        throw std::runtime_error("Unsupported type for DivMod");
+    }
+  }
+  #undef LAUNCH_BINARY_TWO
 }
 
 template <typename Op>

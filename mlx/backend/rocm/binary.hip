@@ -181,20 +181,19 @@ void launch_binary_general(
     strides_b_arg.data_[i] = strides_b[i];
   }
 
-  encoder.launch_kernel([=, &a, &b, &out](hipStream_t stream) {
-    int block_size = 256;
-    int num_blocks = (data_size + block_size - 1) / block_size;
+  int block_size = 256;
+  int num_blocks = (data_size + block_size - 1) / block_size;
 
-    hipLaunchKernelGGL(
-        (binary_g<Op, InType, OutType, int64_t, 1>),
-        dim3(num_blocks), dim3(block_size), 0, stream,
-        gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
-        static_cast<int64_t>(data_size),
-        shape_arg,
-        strides_a_arg,
-        strides_b_arg,
-        ndim);
-  });
+  int64_t size_arg = static_cast<int64_t>(data_size);
+  encoder.add_kernel_node(
+      &binary_g<Op, InType, OutType, int64_t, 1>,
+      dim3(num_blocks), dim3(block_size), 0,
+      gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+      size_arg,
+      shape_arg,
+      strides_a_arg,
+      strides_b_arg,
+      ndim);
 }
 
 } // namespace rocm
@@ -238,65 +237,65 @@ void binary_op_gpu_inplace(
           int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
           num_blocks = std::max(1, std::min(num_blocks, 65535));
           
-          encoder.launch_kernel([=, &a, &b, &out](hipStream_t stream) {
-            if (bopt == BinaryOpType::ScalarScalar) {
-              if (large) {
-                hipLaunchKernelGGL(
-                    (rocm::binary_ss<Op, InType, OutType, int64_t, N_READS>),
-                    dim3(num_blocks), dim3(block_size), 0, stream,
-                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
-                    static_cast<int64_t>(size));
-              } else {
-                hipLaunchKernelGGL(
-                    (rocm::binary_ss<Op, InType, OutType, uint32_t, N_READS>),
-                    dim3(num_blocks), dim3(block_size), 0, stream,
-                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
-                    static_cast<uint32_t>(size));
-              }
-            } else if (bopt == BinaryOpType::ScalarVector) {
-              if (large) {
-                hipLaunchKernelGGL(
-                    (rocm::binary_sv<Op, InType, OutType, int64_t, N_READS>),
-                    dim3(num_blocks), dim3(block_size), 0, stream,
-                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
-                    static_cast<int64_t>(size));
-              } else {
-                hipLaunchKernelGGL(
-                    (rocm::binary_sv<Op, InType, OutType, uint32_t, N_READS>),
-                    dim3(num_blocks), dim3(block_size), 0, stream,
-                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
-                    static_cast<uint32_t>(size));
-              }
-            } else if (bopt == BinaryOpType::VectorScalar) {
-              if (large) {
-                hipLaunchKernelGGL(
-                    (rocm::binary_vs<Op, InType, OutType, int64_t, N_READS>),
-                    dim3(num_blocks), dim3(block_size), 0, stream,
-                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
-                    static_cast<int64_t>(size));
-              } else {
-                hipLaunchKernelGGL(
-                    (rocm::binary_vs<Op, InType, OutType, uint32_t, N_READS>),
-                    dim3(num_blocks), dim3(block_size), 0, stream,
-                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
-                    static_cast<uint32_t>(size));
-              }
+          int64_t size_large = static_cast<int64_t>(size);
+          uint32_t size_small = static_cast<uint32_t>(size);
+          if (bopt == BinaryOpType::ScalarScalar) {
+            if (large) {
+              encoder.add_kernel_node(
+                  &rocm::binary_ss<Op, InType, OutType, int64_t, N_READS>,
+                  dim3(num_blocks), dim3(block_size), 0,
+                  gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                  size_large);
             } else {
-              if (large) {
-                hipLaunchKernelGGL(
-                    (rocm::binary_vv<Op, InType, OutType, int64_t, N_READS>),
-                    dim3(num_blocks), dim3(block_size), 0, stream,
-                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
-                    static_cast<int64_t>(size));
-              } else {
-                hipLaunchKernelGGL(
-                    (rocm::binary_vv<Op, InType, OutType, uint32_t, N_READS>),
-                    dim3(num_blocks), dim3(block_size), 0, stream,
-                    gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
-                    static_cast<uint32_t>(size));
-              }
+              encoder.add_kernel_node(
+                  &rocm::binary_ss<Op, InType, OutType, uint32_t, N_READS>,
+                  dim3(num_blocks), dim3(block_size), 0,
+                  gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                  size_small);
             }
-          });
+          } else if (bopt == BinaryOpType::ScalarVector) {
+            if (large) {
+              encoder.add_kernel_node(
+                  &rocm::binary_sv<Op, InType, OutType, int64_t, N_READS>,
+                  dim3(num_blocks), dim3(block_size), 0,
+                  gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                  size_large);
+            } else {
+              encoder.add_kernel_node(
+                  &rocm::binary_sv<Op, InType, OutType, uint32_t, N_READS>,
+                  dim3(num_blocks), dim3(block_size), 0,
+                  gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                  size_small);
+            }
+          } else if (bopt == BinaryOpType::VectorScalar) {
+            if (large) {
+              encoder.add_kernel_node(
+                  &rocm::binary_vs<Op, InType, OutType, int64_t, N_READS>,
+                  dim3(num_blocks), dim3(block_size), 0,
+                  gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                  size_large);
+            } else {
+              encoder.add_kernel_node(
+                  &rocm::binary_vs<Op, InType, OutType, uint32_t, N_READS>,
+                  dim3(num_blocks), dim3(block_size), 0,
+                  gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                  size_small);
+            }
+          } else {
+            if (large) {
+              encoder.add_kernel_node(
+                  &rocm::binary_vv<Op, InType, OutType, int64_t, N_READS>,
+                  dim3(num_blocks), dim3(block_size), 0,
+                  gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                  size_large);
+            } else {
+              encoder.add_kernel_node(
+                  &rocm::binary_vv<Op, InType, OutType, uint32_t, N_READS>,
+                  dim3(num_blocks), dim3(block_size), 0,
+                  gpu_ptr<const InType>(a), gpu_ptr<const InType>(b), gpu_ptr<OutType>(out),
+                  size_small);
+            }
+          }
         }
       } else {
         throw std::runtime_error(

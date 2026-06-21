@@ -659,19 +659,18 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto p_indices_strides = const_param<8 * MAX_NDIM>(h_indices_strides);
   int32_t src_ndim_v = static_cast<int32_t>(src.ndim());
 
-  encoder.launch_kernel([&, p_src_shape, p_src_strides, p_slice_sizes, p_axes,
-                         p_indices_shape, p_indices_strides, h_indices,
-                         src_ndim_v, fast_rows](hipStream_t stream) {
+  {
     if (fast_rows) {
       int64_t n_rows = total / (int64_t)slice_size;
       dim3 grid((unsigned int)n_rows);
       dim3 blk(256);
       Dtype it = inputs[1].dtype();
+      int32_t src_dim0 = (int32_t)src.shape(0);
       #define LAUNCH_ROWS(T, IdxT) \
-        hipLaunchKernelGGL((rocm::gather_rows_kernel<T, IdxT>), grid, blk, 0, \
-            stream, gpu_ptr<T>(src), \
+        encoder.add_kernel_node((&rocm::gather_rows_kernel<T, IdxT>), grid, blk, 0, \
+            gpu_ptr<T>(src), \
             reinterpret_cast<const IdxT*>(h_indices[0]), gpu_ptr<T>(out), \
-            n_rows, slice_size, (int32_t)src.shape(0))
+            n_rows, slice_size, src_dim0)
       #define ROWS_BY_T(IdxT) \
         switch (out.dtype()) { \
           case float32: LAUNCH_ROWS(float, IdxT); break; \
@@ -703,9 +702,9 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
         rocm::hip_array<const IdxT*, 8> idx_ptrs; \
         for (int _i = 0; _i < (NIDX); ++_i) \
           idx_ptrs[_i] = reinterpret_cast<const IdxT*>(h_indices[_i]); \
-        hipLaunchKernelGGL( \
-            (rocm::gather_general_kernel<T, IdxT, NIDX>), \
-            dim3(num_blocks), dim3(block_size), 0, stream, \
+        encoder.add_kernel_node( \
+            (&rocm::gather_general_kernel<T, IdxT, NIDX>), \
+            dim3(num_blocks), dim3(block_size), 0, \
             gpu_ptr<T>(src), gpu_ptr<T>(out), total, \
             p_src_shape, p_src_strides, src_ndim_v, \
             p_slice_sizes, slice_size, p_axes, \
@@ -762,7 +761,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     #undef DISPATCH_NIDX
     #undef LAUNCH_GATHER
-  });
+  }
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -849,17 +848,15 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     default: kernel_reduce_type = 0; break;
   }
 
-  encoder.launch_kernel([&, p_upd_shape, p_upd_strides, p_out_shape, p_out_strides,
-                         p_axes, h_indices, p_indices_shape, p_indices_strides,
-                         upd_ndim_v, out_ndim_v, kernel_reduce_type](hipStream_t stream) {
+  {
     #define LAUNCH_SCATTER(T, IdxT, NIDX, RT) \
       do { \
         rocm::hip_array<const IdxT*, 8> idx_ptrs; \
         for (int _i = 0; _i < (NIDX); ++_i) \
           idx_ptrs[_i] = reinterpret_cast<const IdxT*>(h_indices[_i]); \
-        hipLaunchKernelGGL( \
-            (rocm::scatter_general_kernel<T, IdxT, NIDX, RT>), \
-            dim3(num_blocks), dim3(block_size), 0, stream, \
+        encoder.add_kernel_node( \
+            (&rocm::scatter_general_kernel<T, IdxT, NIDX, RT>), \
+            dim3(num_blocks), dim3(block_size), 0, \
             gpu_ptr<T>(upd), gpu_ptr<T>(out), total, \
             p_upd_shape, p_upd_strides, upd_ndim_v, upd_post_idx_size, \
             p_out_shape, p_out_strides, out_ndim_v, \
@@ -927,7 +924,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     #undef DISPATCH_NIDX
     #undef DISPATCH_REDUCE
     #undef LAUNCH_SCATTER
-  });
+  }
 }
 
 void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -996,9 +993,9 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   
   // Dispatch based on ndim, contiguity, and index type
   #define LAUNCH_GATHER_KERNEL(T, IdxT, NDIM, SrcC, IdxC) \
-    hipLaunchKernelGGL( \
-        (rocm::gather_axis_kernel<T, IdxT, NDIM, SrcC, IdxC>), \
-        dim3(num_blocks), dim3(block_size), 0, stream, \
+    encoder.add_kernel_node( \
+        (&rocm::gather_axis_kernel<T, IdxT, NDIM, SrcC, IdxC>), \
+        dim3(num_blocks), dim3(block_size), 0, \
         gpu_ptr<T>(src), gpu_ptr<IdxT>(idx), gpu_ptr<T>(out), \
         idx_size_pre, idx_size_axis, idx_size_post, \
         shape_param, \
@@ -1037,25 +1034,23 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
       DISPATCH_NDIM(T, int64_t); \
     }
   
-  encoder.launch_kernel([&](hipStream_t stream) {
-    switch (src.dtype()) {
-      case float32: DISPATCH_IDX_TYPE(float); break;
-      case int32: DISPATCH_IDX_TYPE(int32_t); break;
-      case uint32: DISPATCH_IDX_TYPE(uint32_t); break;
-      case int64: DISPATCH_IDX_TYPE(int64_t); break;
-      case uint64: DISPATCH_IDX_TYPE(uint64_t); break;
-      case float16: DISPATCH_IDX_TYPE(__half); break;
-      case bfloat16: DISPATCH_IDX_TYPE(hip_bfloat16); break;
-      case int8: DISPATCH_IDX_TYPE(int8_t); break;
-      case uint8: DISPATCH_IDX_TYPE(uint8_t); break;
-      case int16: DISPATCH_IDX_TYPE(int16_t); break;
-      case uint16: DISPATCH_IDX_TYPE(uint16_t); break;
-      case bool_: DISPATCH_IDX_TYPE(bool); break;
-      default:
-        throw std::runtime_error("Unsupported dtype for GatherAxis");
-    }
-  });
-  
+  switch (src.dtype()) {
+    case float32: DISPATCH_IDX_TYPE(float); break;
+    case int32: DISPATCH_IDX_TYPE(int32_t); break;
+    case uint32: DISPATCH_IDX_TYPE(uint32_t); break;
+    case int64: DISPATCH_IDX_TYPE(int64_t); break;
+    case uint64: DISPATCH_IDX_TYPE(uint64_t); break;
+    case float16: DISPATCH_IDX_TYPE(__half); break;
+    case bfloat16: DISPATCH_IDX_TYPE(hip_bfloat16); break;
+    case int8: DISPATCH_IDX_TYPE(int8_t); break;
+    case uint8: DISPATCH_IDX_TYPE(uint8_t); break;
+    case int16: DISPATCH_IDX_TYPE(int16_t); break;
+    case uint16: DISPATCH_IDX_TYPE(uint16_t); break;
+    case bool_: DISPATCH_IDX_TYPE(bool); break;
+    default:
+      throw std::runtime_error("Unsupported dtype for GatherAxis");
+  }
+
   #undef LAUNCH_GATHER_KERNEL
   #undef DISPATCH_CONTIGUOUS
   #undef DISPATCH_NDIM
@@ -1144,9 +1139,9 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool is_sum = (reduce_type_ == ScatterAxis::Sum);
   
   #define LAUNCH_SCATTER_KERNEL(T, IdxT, IS_SUM, NDIM, UpdC, IdxC) \
-    hipLaunchKernelGGL( \
-        (rocm::scatter_axis_kernel<T, IdxT, IS_SUM, NDIM, UpdC, IdxC>), \
-        dim3(num_blocks), dim3(block_size), 0, stream, \
+    encoder.add_kernel_node( \
+        (&rocm::scatter_axis_kernel<T, IdxT, IS_SUM, NDIM, UpdC, IdxC>), \
+        dim3(num_blocks), dim3(block_size), 0, \
         gpu_ptr<T>(upd), gpu_ptr<IdxT>(idx), gpu_ptr<T>(out), \
         idx_size_pre, idx_size_axis, idx_size_post, \
         shape_param, \
@@ -1186,35 +1181,33 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
       DISPATCH_NDIM(T, int64_t, IS_SUM); \
     }
   
-  encoder.launch_kernel([&](hipStream_t stream) {
-    if (is_sum) {
-      // Note: atomicAdd only supports float32 and float64 on ROCm
-      // float16/bfloat16 would need custom atomic implementations
-      switch (upd.dtype()) {
-        case float32: DISPATCH_IDX_TYPE(float, true); break;
-        default:
-          throw std::runtime_error("Unsupported dtype for ScatterAxis Sum (only float32 supported)");
-      }
-    } else {
-      switch (upd.dtype()) {
-        case float32: DISPATCH_IDX_TYPE(float, false); break;
-        case float16: DISPATCH_IDX_TYPE(__half, false); break;
-        case bfloat16: DISPATCH_IDX_TYPE(hip_bfloat16, false); break;
-        case int32: DISPATCH_IDX_TYPE(int32_t, false); break;
-        case int64: DISPATCH_IDX_TYPE(int64_t, false); break;
-        case uint32: DISPATCH_IDX_TYPE(uint32_t, false); break;
-        case uint64: DISPATCH_IDX_TYPE(uint64_t, false); break;
-        case int8: DISPATCH_IDX_TYPE(int8_t, false); break;
-        case int16: DISPATCH_IDX_TYPE(int16_t, false); break;
-        case uint8: DISPATCH_IDX_TYPE(uint8_t, false); break;
-        case uint16: DISPATCH_IDX_TYPE(uint16_t, false); break;
-        case bool_: DISPATCH_IDX_TYPE(bool, false); break;
-        default:
-          throw std::runtime_error("Unsupported dtype for ScatterAxis Assign");
-      }
+  if (is_sum) {
+    // Note: atomicAdd only supports float32 and float64 on ROCm
+    // float16/bfloat16 would need custom atomic implementations
+    switch (upd.dtype()) {
+      case float32: DISPATCH_IDX_TYPE(float, true); break;
+      default:
+        throw std::runtime_error("Unsupported dtype for ScatterAxis Sum (only float32 supported)");
     }
-  });
-  
+  } else {
+    switch (upd.dtype()) {
+      case float32: DISPATCH_IDX_TYPE(float, false); break;
+      case float16: DISPATCH_IDX_TYPE(__half, false); break;
+      case bfloat16: DISPATCH_IDX_TYPE(hip_bfloat16, false); break;
+      case int32: DISPATCH_IDX_TYPE(int32_t, false); break;
+      case int64: DISPATCH_IDX_TYPE(int64_t, false); break;
+      case uint32: DISPATCH_IDX_TYPE(uint32_t, false); break;
+      case uint64: DISPATCH_IDX_TYPE(uint64_t, false); break;
+      case int8: DISPATCH_IDX_TYPE(int8_t, false); break;
+      case int16: DISPATCH_IDX_TYPE(int16_t, false); break;
+      case uint8: DISPATCH_IDX_TYPE(uint8_t, false); break;
+      case uint16: DISPATCH_IDX_TYPE(uint16_t, false); break;
+      case bool_: DISPATCH_IDX_TYPE(bool, false); break;
+      default:
+        throw std::runtime_error("Unsupported dtype for ScatterAxis Assign");
+    }
+  }
+
   #undef LAUNCH_SCATTER_KERNEL
   #undef DISPATCH_CONTIGUOUS
   #undef DISPATCH_NDIM
@@ -1305,9 +1298,9 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
   int64_t data_offset_v = data_offset;
 
   #define SLICE_UPDATE_LAUNCH(T, Op, OUT_C, UPD_C, UPD_S, NWORK_VAL) \
-    hipLaunchKernelGGL( \
-        (rocm::slice_update_op_kernel<T, int64_t, Op, OUT_C, UPD_C, UPD_S, NWORK_VAL>), \
-        dim3(num_blocks), dim3(block_size), 0, stream, \
+    encoder.add_kernel_node( \
+        (&rocm::slice_update_op_kernel<T, int64_t, Op, OUT_C, UPD_C, UPD_S, NWORK_VAL>), \
+        dim3(num_blocks), dim3(block_size), 0, \
         gpu_ptr<T>(upd), gpu_ptr<T>(out), update_size, \
         shape_param, upd_strides_param, ndim, \
         out_strides_param, data_offset_v)
@@ -1349,24 +1342,22 @@ void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
         throw std::runtime_error("SliceUpdate: unsupported reduce type"); \
     }
 
-  encoder.launch_kernel([&](hipStream_t stream) {
-    switch (out.dtype()) {
-      case float32: DISPATCH_SLICE_OP(float); break;
-      case float16: DISPATCH_SLICE_OP(__half); break;
-      case bfloat16: DISPATCH_SLICE_OP(hip_bfloat16); break;
-      case int32: DISPATCH_SLICE_OP(int32_t); break;
-      case int64: DISPATCH_SLICE_OP(int64_t); break;
-      case uint32: DISPATCH_SLICE_OP(uint32_t); break;
-      case uint64: DISPATCH_SLICE_OP(uint64_t); break;
-      case int8: DISPATCH_SLICE_OP(int8_t); break;
-      case int16: DISPATCH_SLICE_OP(int16_t); break;
-      case uint8: DISPATCH_SLICE_OP(uint8_t); break;
-      case uint16: DISPATCH_SLICE_OP(uint16_t); break;
-      case bool_: DISPATCH_SLICE_OP(bool); break;
-      default:
-        throw std::runtime_error("Unsupported dtype for SliceUpdate");
-    }
-  });
+  switch (out.dtype()) {
+    case float32: DISPATCH_SLICE_OP(float); break;
+    case float16: DISPATCH_SLICE_OP(__half); break;
+    case bfloat16: DISPATCH_SLICE_OP(hip_bfloat16); break;
+    case int32: DISPATCH_SLICE_OP(int32_t); break;
+    case int64: DISPATCH_SLICE_OP(int64_t); break;
+    case uint32: DISPATCH_SLICE_OP(uint32_t); break;
+    case uint64: DISPATCH_SLICE_OP(uint64_t); break;
+    case int8: DISPATCH_SLICE_OP(int8_t); break;
+    case int16: DISPATCH_SLICE_OP(int16_t); break;
+    case uint8: DISPATCH_SLICE_OP(uint8_t); break;
+    case uint16: DISPATCH_SLICE_OP(uint16_t); break;
+    case bool_: DISPATCH_SLICE_OP(bool); break;
+    default:
+      throw std::runtime_error("Unsupported dtype for SliceUpdate");
+  }
 
   #undef DISPATCH_SLICE_OP
   #undef DISPATCH_CONTIG
@@ -1416,35 +1407,37 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto src_strides_param = const_param(src_strides);
   const bool src_contiguous = src.flags().row_contiguous;
 
-  encoder.set_input_array(mask_flat);
-  encoder.set_input_array(src);
-  encoder.set_output_array(out);
-
   constexpr int block_size = 256;
   const auto offset_grid = dim3(static_cast<uint32_t>(batch_count));
   const auto offset_block = dim3(block_size);
   const int64_t num_blocks = (total + block_size - 1) / block_size;
+  const int32_t src_ndim_v = static_cast<int32_t>(src.ndim());
 
-  encoder.launch_kernel(
-      [&, src_shape_param, src_strides_param, src_contiguous](
-          hipStream_t stream) {
-        hipLaunchKernelGGL(
-            (rocm::masked_scatter_offsets_kernel<block_size>),
-            offset_grid,
-            offset_block,
-            0,
-            stream,
-            gpu_ptr<bool>(mask_flat),
-            gpu_ptr<uint32_t>(scatter_offsets),
-            mask_batch_size);
+  // Offsets kernel: writes scatter_offsets (registered as output so the
+  // following assign kernel records a graph dependency on it).
+  encoder.set_input_array(mask_flat);
+  encoder.set_output_array(scatter_offsets);
+  encoder.add_kernel_node(
+      &rocm::masked_scatter_offsets_kernel<block_size>,
+      offset_grid,
+      offset_block,
+      0,
+      gpu_ptr<bool>(mask_flat),
+      gpu_ptr<uint32_t>(scatter_offsets),
+      mask_batch_size);
+
+  // Assign kernel: reads mask_flat, scatter_offsets, src; writes out.
+  encoder.set_input_array(mask_flat);
+  encoder.set_input_array(scatter_offsets);
+  encoder.set_input_array(src);
+  encoder.set_output_array(out);
 
 #define LAUNCH_MASKED_SCATTER(T, SrcC) \
-  hipLaunchKernelGGL( \
-      (rocm::masked_scatter_assign_kernel<T, SrcC>), \
+  encoder.add_kernel_node( \
+      (&rocm::masked_scatter_assign_kernel<T, SrcC>), \
       dim3(static_cast<uint32_t>(num_blocks)), \
       dim3(block_size), \
       0, \
-      stream, \
       gpu_ptr<bool>(mask_flat), \
       gpu_ptr<uint32_t>(scatter_offsets), \
       gpu_ptr<T>(src), \
@@ -1452,7 +1445,7 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
       total, \
       src_shape_param, \
       src_strides_param, \
-      src.ndim(), \
+      src_ndim_v, \
       src_batch_size, \
       mask_batch_size)
 
@@ -1463,56 +1456,55 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     LAUNCH_MASKED_SCATTER(T, false);       \
   }
 
-        switch (out.dtype()) {
-          case bool_:
-            DISPATCH_MASKED_SCATTER(bool);
-            break;
-          case uint8:
-            DISPATCH_MASKED_SCATTER(uint8_t);
-            break;
-          case uint16:
-            DISPATCH_MASKED_SCATTER(uint16_t);
-            break;
-          case uint32:
-            DISPATCH_MASKED_SCATTER(uint32_t);
-            break;
-          case uint64:
-            DISPATCH_MASKED_SCATTER(uint64_t);
-            break;
-          case int8:
-            DISPATCH_MASKED_SCATTER(int8_t);
-            break;
-          case int16:
-            DISPATCH_MASKED_SCATTER(int16_t);
-            break;
-          case int32:
-            DISPATCH_MASKED_SCATTER(int32_t);
-            break;
-          case int64:
-            DISPATCH_MASKED_SCATTER(int64_t);
-            break;
-          case float16:
-            DISPATCH_MASKED_SCATTER(__half);
-            break;
-          case float32:
-            DISPATCH_MASKED_SCATTER(float);
-            break;
-          case float64:
-            DISPATCH_MASKED_SCATTER(double);
-            break;
-          case bfloat16:
-            DISPATCH_MASKED_SCATTER(hip_bfloat16);
-            break;
-          case complex64:
-            DISPATCH_MASKED_SCATTER(hipFloatComplex);
-            break;
-          default:
-            throw std::runtime_error("Unsupported dtype for MaskedScatter");
-        }
+  switch (out.dtype()) {
+    case bool_:
+      DISPATCH_MASKED_SCATTER(bool);
+      break;
+    case uint8:
+      DISPATCH_MASKED_SCATTER(uint8_t);
+      break;
+    case uint16:
+      DISPATCH_MASKED_SCATTER(uint16_t);
+      break;
+    case uint32:
+      DISPATCH_MASKED_SCATTER(uint32_t);
+      break;
+    case uint64:
+      DISPATCH_MASKED_SCATTER(uint64_t);
+      break;
+    case int8:
+      DISPATCH_MASKED_SCATTER(int8_t);
+      break;
+    case int16:
+      DISPATCH_MASKED_SCATTER(int16_t);
+      break;
+    case int32:
+      DISPATCH_MASKED_SCATTER(int32_t);
+      break;
+    case int64:
+      DISPATCH_MASKED_SCATTER(int64_t);
+      break;
+    case float16:
+      DISPATCH_MASKED_SCATTER(__half);
+      break;
+    case float32:
+      DISPATCH_MASKED_SCATTER(float);
+      break;
+    case float64:
+      DISPATCH_MASKED_SCATTER(double);
+      break;
+    case bfloat16:
+      DISPATCH_MASKED_SCATTER(hip_bfloat16);
+      break;
+    case complex64:
+      DISPATCH_MASKED_SCATTER(hipFloatComplex);
+      break;
+    default:
+      throw std::runtime_error("Unsupported dtype for MaskedScatter");
+  }
 
 #undef DISPATCH_MASKED_SCATTER
 #undef LAUNCH_MASKED_SCATTER
-      });
 }
 
 // In-place device-position KV kernels for HIP-graph decode.

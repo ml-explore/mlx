@@ -164,19 +164,17 @@ void unary_op_gpu_inplace(
           int num_blocks = (size + block_size * N_READS - 1) / (block_size * N_READS);
           num_blocks = std::min(num_blocks, 65535);
           
-          encoder.launch_kernel([&](hipStream_t stream) {
-            if (large) {
-              hipLaunchKernelGGL(
-                  (rocm::unary_v<Op, InType, OutType, int64_t, N_READS>),
-                  dim3(num_blocks), dim3(block_size), 0, stream,
-                  gpu_ptr<const InType>(in), gpu_ptr<OutType>(out), static_cast<int64_t>(size));
-            } else {
-              hipLaunchKernelGGL(
-                  (rocm::unary_v<Op, InType, OutType, uint32_t, N_READS>),
-                  dim3(num_blocks), dim3(block_size), 0, stream,
-                  gpu_ptr<const InType>(in), gpu_ptr<OutType>(out), static_cast<uint32_t>(size));
-            }
-          });
+          if (large) {
+            encoder.add_kernel_node(
+                &rocm::unary_v<Op, InType, OutType, int64_t, N_READS>,
+                dim3(num_blocks), dim3(block_size), 0,
+                gpu_ptr<const InType>(in), gpu_ptr<OutType>(out), static_cast<int64_t>(size));
+          } else {
+            encoder.add_kernel_node(
+                &rocm::unary_v<Op, InType, OutType, uint32_t, N_READS>,
+                dim3(num_blocks), dim3(block_size), 0,
+                gpu_ptr<const InType>(in), gpu_ptr<OutType>(out), static_cast<uint32_t>(size));
+          }
         } else {
           // Non-contiguous case - use unary_g with strided access
           auto [shape_vec, strides_vec] = collapse_contiguous_dims(in);
@@ -202,49 +200,49 @@ void unary_op_gpu_inplace(
           int num_blocks_x = (dim0 + block_x - 1) / block_x;
           int num_blocks_y = (rest + block_y - 1) / block_y;
           
-          encoder.launch_kernel([=, &in, &out](hipStream_t stream) {
-            if (large) {
-              if (work_per_thread == 4) {
-                hipLaunchKernelGGL(
-                    (rocm::unary_g<Op, InType, OutType, int64_t, 4>),
-                    dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
-                    gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
-                    static_cast<int64_t>(rest),
-                    shape_arg,
-                    strides_arg,
-                    ndim);
-              } else {
-                hipLaunchKernelGGL(
-                    (rocm::unary_g<Op, InType, OutType, int64_t, 1>),
-                    dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
-                    gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
-                    static_cast<int64_t>(rest),
-                    shape_arg,
-                    strides_arg,
-                    ndim);
-              }
+          if (large) {
+            int64_t rest_arg = static_cast<int64_t>(rest);
+            if (work_per_thread == 4) {
+              encoder.add_kernel_node(
+                  &rocm::unary_g<Op, InType, OutType, int64_t, 4>,
+                  dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0,
+                  gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
+                  rest_arg,
+                  shape_arg,
+                  strides_arg,
+                  ndim);
             } else {
-              if (work_per_thread == 4) {
-                hipLaunchKernelGGL(
-                    (rocm::unary_g<Op, InType, OutType, int32_t, 4>),
-                    dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
-                    gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
-                    static_cast<int32_t>(rest),
-                    shape_arg,
-                    strides_arg,
-                    ndim);
-              } else {
-                hipLaunchKernelGGL(
-                    (rocm::unary_g<Op, InType, OutType, int32_t, 1>),
-                    dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0, stream,
-                    gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
-                    static_cast<int32_t>(rest),
-                    shape_arg,
-                    strides_arg,
-                    ndim);
-              }
+              encoder.add_kernel_node(
+                  &rocm::unary_g<Op, InType, OutType, int64_t, 1>,
+                  dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0,
+                  gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
+                  rest_arg,
+                  shape_arg,
+                  strides_arg,
+                  ndim);
             }
-          });
+          } else {
+            int32_t rest_arg = static_cast<int32_t>(rest);
+            if (work_per_thread == 4) {
+              encoder.add_kernel_node(
+                  &rocm::unary_g<Op, InType, OutType, int32_t, 4>,
+                  dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0,
+                  gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
+                  rest_arg,
+                  shape_arg,
+                  strides_arg,
+                  ndim);
+            } else {
+              encoder.add_kernel_node(
+                  &rocm::unary_g<Op, InType, OutType, int32_t, 1>,
+                  dim3(num_blocks_x, num_blocks_y), dim3(block_x, block_y), 0,
+                  gpu_ptr<const InType>(in), gpu_ptr<OutType>(out),
+                  rest_arg,
+                  shape_arg,
+                  strides_arg,
+                  ndim);
+            }
+          }
         }
       }
     });
