@@ -52,6 +52,27 @@ std::tuple<array, array> quantize_input(
   return {std::move(x_q), std::move(scales_x)};
 }
 
+array quantize_dequantize_input(
+    const array& x_pre,
+    const std::optional<array>& global_scale_x,
+    int bits,
+    int group_size,
+    cu::CommandEncoder& encoder,
+    Stream s) {
+  bool donate_x = x_pre.is_donatable();
+  array x = ensure_row_contiguous(x_pre, encoder, s);
+  // If x is a copy it should be donatable
+  donate_x |= x.is_donatable();
+  auto xhat = donate_x
+      ? x
+      : array(cu::malloc_async(x.nbytes(), encoder), x.shape(), x.dtype());
+  if (!donate_x) {
+    encoder.add_temporary(xhat);
+  }
+  fp_quantize_dequantize(x, xhat, group_size, bits, global_scale_x, encoder, s);
+  return xhat;
+}
+
 GemmScalars create_nvfp4_scalars(
     const array& global_scale_x,
     const array& global_scale_w,
@@ -75,10 +96,16 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
   auto& device = encoder.device();
-  bool w_quantized = (inputs[1].dtype() == uint32);
+
+  const array& x_pre = inputs[0];
+  const array& w_pre = inputs[1];
+  const array& scales_w_pre = inputs[2];
+
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   // - 2 inputs: x, w (non-quantized w)
   // - 3 inputs: x, w, scales_w (quantized w)
+  bool w_quantized = (w_pre.dtype() == uint32);
   int base_size = w_quantized ? 3 : 2;
   assert(
       inputs.size() == base_size ||
@@ -95,57 +122,56 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     global_scale_w = inputs[inputs.size() - 1];
   }
 
-  if (w_quantized && inputs[0].shape(-2) == 1) {
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  // Quantize weights.
+  auto [w_q, scales_w] = !w_quantized
+      ? quantize_input(
+            w_pre, encoder, s, mode_, bits_, group_size_, global_scale_w)
+      : std::make_tuple(
+            ensure_contiguous(w_pre, encoder, s),
+            ensure_contiguous(scales_w_pre, encoder, s));
 
-    bool donate_x = inputs[0].is_donatable();
-    array x = ensure_row_contiguous(inputs[0], encoder, s);
-    // If x is a copy it should be donatable
-    donate_x |= x.is_donatable();
-    auto xhat = donate_x
-        ? x
-        : array(cu::malloc_async(x.nbytes(), encoder), x.shape(), x.dtype());
-    if (!donate_x) {
-      encoder.add_temporary(xhat);
+  // Reroute to qmm when: no support in cuBLAS, or doing GEMV.
+  int M = x_pre.shape(-2);
+  bool use_qmm = (device.compute_capability_major() < 10) || (M == 1);
+  use_qmm = true;
+
+  if (use_qmm) {
+    array x = quantize_dequantize_input(
+        x_pre, global_scale_x, bits_, group_size_, encoder, s);
+    if (M < 8) {
+      qmv(x,
+          w_q,
+          scales_w,
+          std::nullopt,
+          global_scale_w,
+          out,
+          bits_,
+          group_size_,
+          mode_,
+          encoder);
+    } else {
+      qmm_naive(
+          x,
+          w_q,
+          scales_w,
+          std::nullopt,
+          global_scale_w,
+          std::nullopt,
+          std::nullopt,
+          out,
+          true, // transpose
+          bits_,
+          group_size_,
+          mode_,
+          encoder);
     }
-    fp_quantize_dequantize(
-        x, xhat, group_size_, bits_, global_scale_x, encoder, s);
-
-    const array& w = inputs[1];
-    const array& scales = inputs[2];
-    qmv(xhat,
-        w,
-        scales,
-        std::nullopt,
-        global_scale_w,
-        out,
-        bits_,
-        group_size_,
-        mode_,
-        encoder);
     return;
   }
 
-  auto cc = device.compute_capability_major() * 100 +
-      device.compute_capability_minor() * 10;
-  if (cc < 1000) {
-    throw std::runtime_error(
-        "[QQMatmul::eval_gpu] QQMM is only supported on GPUs with compute capability 10.0 or higher.");
-  }
+  // Quantize activation.
+  auto [x_q, scales_x] = quantize_input(
+      x_pre, encoder, s, mode_, bits_, group_size_, global_scale_x);
 
-  // Quantize inputs (or use pre-quantized)
-  auto [x_q, scale_x_pre] = quantize_input(
-      inputs[0], encoder, s, mode_, bits_, group_size_, global_scale_x);
-  auto [w_q, scale_w_pre] = !w_quantized
-      ? quantize_input(
-            inputs[1], encoder, s, mode_, bits_, group_size_, global_scale_w)
-      : std::make_tuple(
-            ensure_contiguous(inputs[1], encoder, s),
-            ensure_contiguous(inputs[2], encoder, s));
-
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
-
-  int M = x_q.shape(-2);
   int N = w_q.shape(-2); // transposed
   int K = x_q.shape(-1) * (32 / bits_);
 
@@ -155,8 +181,8 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int64_t ldb = K;
 
   // Repack scales to tiled layout for tensor cores
-  array scale_x = pad_and_swizzle_scales(scale_x_pre, encoder, s);
-  array scale_w = pad_and_swizzle_scales(scale_w_pre, encoder, s);
+  scales_x = pad_and_swizzle_scales(scales_x, encoder, s);
+  scales_w = pad_and_swizzle_scales(scales_w, encoder, s);
 
   GemmScalars scalars;
   if (has_global_scales) {
@@ -175,8 +201,8 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       out,
       x_q,
       w_q,
-      scale_x,
-      scale_w,
+      scales_x,
+      scales_w,
       mode_,
       scalars);
 }
