@@ -1,8 +1,11 @@
 // Copyright © 2024 Apple Inc.
 #include "mlx/fence.h"
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/scheduler.h"
 #include "mlx/utils.h"
+
+#include <exception>
+#include <mutex>
 
 namespace mlx::core {
 
@@ -33,6 +36,8 @@ struct FenceImpl {
   uint32_t count{0};
   void* fence;
   std::unique_ptr<Event> event;
+  std::exception_ptr error;
+  std::mutex error_mtx;
 
   std::atomic_uint* cpu_value() {
     return static_cast<std::atomic_uint*>(
@@ -54,11 +59,28 @@ void Fence::wait(Stream stream, const array& x) {
   }
 
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [fence_ = fence_, count = f.count]() mutable {
-      auto& f = *static_cast<FenceImpl*>(fence_.get());
-      while (f.cpu_value()[0] < count) {
-      }
-    });
+    cpu::get_command_encoder(stream).dispatch(
+        [fence_ = fence_, count = f.count]() mutable {
+          auto& f = *static_cast<FenceImpl*>(fence_.get());
+          while (f.cpu_value()[0] < count) {
+            std::exception_ptr error;
+            {
+              std::lock_guard<std::mutex> lk(f.error_mtx);
+              error = f.error;
+            }
+            if (error) {
+              std::rethrow_exception(error);
+            }
+          }
+          std::exception_ptr error;
+          {
+            std::lock_guard<std::mutex> lk(f.error_mtx);
+            error = f.error;
+          }
+          if (error) {
+            std::rethrow_exception(error);
+          }
+        });
     return;
   }
 
@@ -88,15 +110,34 @@ void Fence::update(Stream stream, const array& x, bool cross_device) {
 
   if (!f.use_fast) {
     f.event->set_value(f.count);
-    f.event->signal(stream);
+    if (stream.device == Device::cpu) {
+      cpu::get_command_encoder(stream).dispatch_unchecked(
+          [event = x.event(), fence_event = *f.event]() mutable {
+            auto error = event.valid() ? event.error() : nullptr;
+            if (error) {
+              fence_event.set_error(std::move(error));
+            }
+          });
+      f.event->signal(stream);
+    } else {
+      f.event->signal(stream);
+    }
     return;
   }
 
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [fence_ = fence_, count = f.count]() mutable {
-      auto& f = *static_cast<FenceImpl*>(fence_.get());
-      f.cpu_value()[0] = count;
-    });
+    cpu::get_command_encoder(stream).dispatch_unchecked(
+        [fence_ = fence_, count = f.count, event = x.event()]() mutable {
+          auto& f = *static_cast<FenceImpl*>(fence_.get());
+          auto error = event.valid() ? event.error() : nullptr;
+          if (error) {
+            std::lock_guard<std::mutex> lk(f.error_mtx);
+            if (!f.error) {
+              f.error = std::move(error);
+            }
+          }
+          f.cpu_value()[0] = count;
+        });
     return;
   }
 

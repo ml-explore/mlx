@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/primitives.h"
-#include "mlx/scheduler.h"
 
 namespace {
 
@@ -51,7 +51,8 @@ void Load::eval_cpu(const std::vector<array>& inputs, array& out) {
     }
   };
   auto fut = io::thread_pool().enqueue(std::move(read_task)).share();
-  scheduler::enqueue(stream(), [fut = std::move(fut)]() { fut.wait(); });
+  cpu::get_command_encoder(stream()).dispatch(
+      [fut = std::move(fut)]() { fut.get(); });
 }
 
 } // namespace mlx::core

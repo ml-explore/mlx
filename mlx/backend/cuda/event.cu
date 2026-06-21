@@ -1,13 +1,14 @@
 // Copyright © 2024 Apple Inc.
 
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/event.h"
 #include "mlx/backend/gpu/device_info.h"
 #include "mlx/event.h"
-#include "mlx/scheduler.h"
 
 #include <map>
+#include <mutex>
 #include <vector>
 
 #include <nvtx3/nvtx3.hpp>
@@ -131,7 +132,7 @@ class CopyableCudaEvent {
 
   void wait(Stream s) {
     if (s.device == mlx::core::Device::cpu) {
-      scheduler::enqueue(s, [*this]() mutable {
+      cpu::get_command_encoder(s).dispatch([*this]() mutable {
         check_recorded();
         event_->wait();
       });
@@ -265,7 +266,8 @@ void AtomicEvent::wait(cudaStream_t stream, uint32_t value) {
 void AtomicEvent::wait(Stream s, uint32_t value) {
   nvtx3::scoped_range r("cu::AtomicEvent::wait(s)");
   if (s.device == mlx::core::Device::cpu) {
-    scheduler::enqueue(s, [*this, value]() mutable { wait(value); });
+    cpu::get_command_encoder(s).dispatch(
+        [*this, value]() mutable { wait(value); });
   } else {
     auto& encoder = get_command_encoder(s);
     encoder.commit();
@@ -292,8 +294,8 @@ void AtomicEvent::signal(Stream s, uint32_t value) {
   if (s.device == mlx::core::Device::cpu) {
     // Signal through a GPU stream so the atomic is updated in GPU - updating
     // the atomic in CPU sometimes does not get GPU notified.
-    scheduler::enqueue(
-        s, [*this, value]() mutable { signal(signal_stream(), value); });
+    cpu::get_command_encoder(s).dispatch_unchecked(
+        [*this, value]() mutable { signal(signal_stream(), value); });
   } else {
     auto& encoder = get_command_encoder(s);
     encoder.commit();
@@ -339,6 +341,8 @@ struct EventImpl {
   // 2. signal value other than 1 has been specified.
   std::unique_ptr<cu::CopyableCudaEvent> cuda;
   std::unique_ptr<cu::AtomicEvent> atomic;
+  std::exception_ptr error;
+  std::mutex mtx;
 
   bool is_created() const {
     return cuda || atomic;
@@ -356,6 +360,35 @@ struct EventImpl {
       cuda = std::make_unique<cu::CopyableCudaEvent>(d);
     }
   }
+
+  void set_error(std::exception_ptr err, uint64_t value) {
+    {
+      std::lock_guard<std::mutex> lk(mtx);
+      if (!error) {
+        error = std::move(err);
+      }
+    }
+    if (atomic) {
+      atomic->signal(value);
+    }
+  }
+
+  void check_error() {
+    std::exception_ptr err;
+    {
+      std::lock_guard<std::mutex> lk(mtx);
+      err = std::move(error);
+      error = nullptr;
+    }
+    if (err) {
+      std::rethrow_exception(err);
+    }
+  }
+
+  std::exception_ptr get_error() {
+    std::lock_guard<std::mutex> lk(mtx);
+    return error;
+  }
 };
 
 } // namespace
@@ -367,6 +400,7 @@ Event::Event(Stream s) : stream_(s) {
 
 void Event::wait() {
   auto* event = static_cast<EventImpl*>(event_.get());
+  event->check_error();
   assert(event->is_created());
   if (event->cuda) {
     assert(value() == 1);
@@ -374,17 +408,35 @@ void Event::wait() {
   } else {
     event->atomic->wait(value());
   }
+  event->check_error();
   CHECK_CUDA_ERROR(cudaPeekAtLastError());
 }
 
 void Event::wait(Stream s) {
-  auto* event = static_cast<EventImpl*>(event_.get());
-  assert(event->is_created());
-  if (event->cuda) {
-    assert(value() == 1);
-    event->cuda->wait(s);
+  if (s.device == mlx::core::Device::cpu) {
+    cpu::get_command_encoder(s).dispatch(
+        [event_ = event_, value = value()]() mutable {
+          auto* event = static_cast<EventImpl*>(event_.get());
+          event->check_error();
+          assert(event->is_created());
+          if (event->cuda) {
+            assert(value == 1);
+            event->cuda->wait();
+          } else {
+            event->atomic->wait(value);
+          }
+          event->check_error();
+        });
   } else {
-    event->atomic->wait(s, value());
+    auto* event = static_cast<EventImpl*>(event_.get());
+    event->check_error();
+    assert(event->is_created());
+    if (event->cuda) {
+      assert(value() == 1);
+      event->cuda->wait(s);
+    } else {
+      event->atomic->wait(s, value());
+    }
   }
 }
 
@@ -401,6 +453,7 @@ void Event::signal(Stream s) {
 
 bool Event::is_signaled() const {
   auto* event = static_cast<EventImpl*>(event_.get());
+  event->check_error();
   if (!event->is_created()) {
     return false;
   }
@@ -410,6 +463,14 @@ bool Event::is_signaled() const {
   } else {
     return event->atomic->is_signaled(value());
   }
+}
+
+void Event::set_error(std::exception_ptr error) {
+  static_cast<EventImpl*>(event_.get())->set_error(std::move(error), value());
+}
+
+std::exception_ptr Event::error() const {
+  return static_cast<EventImpl*>(event_.get())->get_error();
 }
 
 } // namespace mlx::core

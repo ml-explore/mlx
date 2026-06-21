@@ -7,6 +7,33 @@
 
 namespace mlx::core::cpu {
 
+void set_error_event(Stream s, Event event) {
+  get_command_encoder(s).set_error_event(std::move(event));
+}
+
+void clear_error_event(Stream s) {
+  auto& encoders = get_command_encoders();
+  auto it = encoders.find(s.index);
+  if (it != encoders.end()) {
+    it->second.set_error_event(Event{});
+    return;
+  }
+
+  auto& global_encoders = get_global_command_encoders();
+  it = global_encoders.find(s.index);
+  if (it != global_encoders.end()) {
+    it->second.set_error_event(Event{});
+  }
+}
+
+void check_error_event(Stream s, Event event) {
+  get_command_encoder(s).dispatch([event = std::move(event)]() {
+    if (auto error = event.error()) {
+      std::rethrow_exception(error);
+    }
+  });
+}
+
 void new_stream(Stream s) {
   auto& encoders = get_command_encoders();
   encoders.try_emplace(s.index, s);

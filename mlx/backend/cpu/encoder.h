@@ -2,9 +2,11 @@
 
 #pragma once
 
+#include <exception>
 #include <unordered_map>
 
 #include "mlx/array.h"
+#include "mlx/event.h"
 #include "mlx/scheduler.h"
 
 namespace mlx::core::cpu {
@@ -36,28 +38,80 @@ struct MLX_API CommandEncoder {
         std::make_move_iterator(arrays.end()));
   }
 
+  void set_error_event(Event event) {
+    event_ = std::move(event);
+  }
+
   std::vector<array>& temporaries() {
     return temporaries_;
   }
 
   template <class F, class... Args>
   void dispatch(F&& f, Args&&... args) {
-    num_ops_ = (num_ops_ + 1) % DISPATCHES_PER_TASK;
-    auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
-    if (num_ops_ == 0) {
-      scheduler::notify_new_task(stream_);
-      auto task_wrap = [s = stream_, task = std::move(task)]() mutable {
-        task();
-        scheduler::notify_task_completion(s);
-      };
-      scheduler::enqueue(stream_, std::move(task_wrap));
-    } else {
-      scheduler::enqueue(stream_, std::move(task));
-    }
+    dispatch_impl(true, std::forward<F>(f), std::forward<Args>(args)...);
+  }
+
+  template <class F, class... Args>
+  void dispatch_unchecked(F&& f, Args&&... args) {
+    dispatch_impl(false, std::forward<F>(f), std::forward<Args>(args)...);
   }
 
  private:
+  template <class F, class... Args>
+  void dispatch_impl(bool skip_on_error, F&& f, Args&&... args) {
+    num_ops_ = (num_ops_ + 1) % DISPATCHES_PER_TASK;
+    auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
+    auto event = event_;
+    if (num_ops_ == 0) {
+      scheduler::notify_new_task(stream_);
+      auto task_wrap = [s = stream_,
+                        event = std::move(event),
+                        skip_on_error,
+                        task = std::move(task)]() mutable {
+        struct CompletionNotifier {
+          Stream stream;
+          ~CompletionNotifier() {
+            scheduler::notify_task_completion(stream);
+          }
+        } completion{s};
+        if (skip_on_error && event.valid() && event.error()) {
+          return;
+        }
+        try {
+          task();
+        } catch (...) {
+          if (event.valid()) {
+            event.set_error(std::current_exception());
+          } else {
+            throw;
+          }
+        }
+      };
+      scheduler::enqueue(stream_, std::move(task_wrap));
+    } else {
+      scheduler::enqueue(
+          stream_,
+          [event = std::move(event),
+           skip_on_error,
+           task = std::move(task)]() mutable {
+            if (skip_on_error && event.valid() && event.error()) {
+              return;
+            }
+            try {
+              task();
+            } catch (...) {
+              if (event.valid()) {
+                event.set_error(std::current_exception());
+              } else {
+                throw;
+              }
+            }
+          });
+    }
+  }
+
   Stream stream_;
+  Event event_;
   std::vector<array> temporaries_;
   int num_ops_{0};
 };

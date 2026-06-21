@@ -2,6 +2,7 @@
 #pragma once
 
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <stdexcept>
 
@@ -25,6 +26,12 @@ class Event {
 
   // Check if the event has been signaled at its current value
   bool is_signaled() const;
+
+  // Set an error on the event to be raised by wait().
+  void set_error(std::exception_ptr error);
+
+  // Return the current error without clearing it.
+  std::exception_ptr error() const;
 
   // Check if the event is valid
   bool valid() const {

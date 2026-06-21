@@ -1,11 +1,16 @@
 // Copyright © 2023 Apple Inc.
 
+#include <chrono>
+#include <future>
+#include <thread>
+
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
 #include "mlx/scheduler.h"
 
 using namespace mlx::core;
+using namespace std::chrono_literals;
 
 TEST_CASE("test stream management") {
   auto s1 = default_stream(default_device());
@@ -194,6 +199,44 @@ TEST_CASE("test asynchronous launch") {
   f2.wait();
 
   CHECK_EQ(x, 10);
+}
+
+TEST_CASE("test event error wakes waiters") {
+  auto e = Event{default_stream(Device::cpu)};
+  e.set_value(1);
+  e.signal(default_stream(Device::cpu));
+  synchronize(default_stream(Device::cpu));
+
+  e.set_value(2);
+
+  auto waiter = std::async(std::launch::async, [e]() mutable { e.wait(); });
+
+  std::this_thread::sleep_for(10ms);
+  e.set_error(std::make_exception_ptr(std::runtime_error("test error")));
+
+  if (waiter.wait_for(1s) == std::future_status::timeout) {
+    e.signal(default_stream(Device::cpu));
+    FAIL("event waiter was not woken by set_error");
+  }
+  CHECK_THROWS_AS(waiter.get(), std::runtime_error);
+}
+
+TEST_CASE("test event error leaves event signaled after consumption") {
+  auto e = Event{default_stream(Device::cpu)};
+  e.set_value(1);
+  e.signal(default_stream(Device::cpu));
+  synchronize(default_stream(Device::cpu));
+
+  e.set_value(2);
+  e.set_error(std::make_exception_ptr(std::runtime_error("test error")));
+  CHECK_THROWS_AS(e.wait(), std::runtime_error);
+
+  auto waiter = std::async(std::launch::async, [e]() mutable { e.wait(); });
+  if (waiter.wait_for(1s) == std::future_status::timeout) {
+    e.signal(default_stream(Device::cpu));
+    FAIL("event was not signaled after error was consumed");
+  }
+  CHECK_NOTHROW(waiter.get());
 }
 
 TEST_CASE("test stream placement") {

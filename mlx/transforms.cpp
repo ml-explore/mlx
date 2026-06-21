@@ -58,6 +58,26 @@ class Synchronizer : public Primitive {
   DEFINE_NAME(Synchronize);
 };
 
+class CpuErrorEventGuard {
+ public:
+  void set(Stream stream, Event event) {
+    if (stream.device != Device::cpu) {
+      return;
+    }
+    cpu::set_error_event(stream, std::move(event));
+    streams_.insert(stream);
+  }
+
+  ~CpuErrorEventGuard() {
+    for (auto& stream : streams_) {
+      cpu::clear_error_event(stream);
+    }
+  }
+
+ private:
+  std::set<Stream> streams_;
+};
+
 // Initialize the static tracing members from transforms_impl.h
 //
 // These are used to implement the in_tracing() function the returns true if we
@@ -225,6 +245,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   std::set<Stream> open_streams;
+  CpuErrorEventGuard cpu_error_events;
   while (!tape.empty()) {
     auto arr = std::move(tape.back());
     tape.pop_back();
@@ -232,6 +253,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
     auto stream = arr.primitive().stream();
     open_streams.insert(stream);
 
+    Event error_event;
     if (async) {
       // Lookup corresponding event
       auto e = events.find(stream.index);
@@ -239,11 +261,15 @@ array eval_impl(std::vector<array> outputs, bool async) {
         e = events.emplace(stream.index, Event{stream}).first;
       }
       e->second.set_value(1);
+      error_event = e->second;
       arr.attach_event(e->second);
       for (auto& s : arr.siblings()) {
         s.attach_event(e->second);
       }
+    } else {
+      error_event = synchronizer.event();
     }
+    cpu_error_events.set(stream, error_event);
 
     for (auto& in : arr.inputs()) {
       if (auto it = needs_fence.find(in.id()); it != needs_fence.end()) {
@@ -252,7 +278,22 @@ array eval_impl(std::vector<array> outputs, bool async) {
         // output arrays stream
         fences[it->second.first].wait(stream, in);
       } else if (in.event().valid()) {
-        if (in.event().is_signaled()) {
+        if (async && stream.device == Device::cpu) {
+          if (in.event().stream() == stream) {
+            cpu::check_error_event(stream, in.event());
+          } else {
+            in.event().wait(stream);
+          }
+        } else if (async) {
+          if (auto error = in.event().error()) {
+            error_event.set_error(std::move(error));
+          } else if (in.event().is_signaled()) {
+            in.detach_event();
+          } else if (in.event().stream() != stream) {
+            // Use event to wait across async eval
+            in.event().wait(stream);
+          }
+        } else if (in.event().is_signaled()) {
           in.detach_event();
         } else if (in.event().stream() != stream) {
           // Use event to wait across async eval

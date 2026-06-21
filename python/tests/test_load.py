@@ -88,6 +88,35 @@ class TestLoad(mlx_tests.MLXTestCase):
         with self.assertRaises(Exception):
             out = mx.load(save_file, stream=mx.cpu)
 
+    def test_load_npy_read_error(self):
+        save_file = os.path.join(self.test_dir, "truncated.npy")
+        expected = np.arange(16, dtype=np.float32)
+        np.save(save_file, expected)
+        with open(save_file, "r+b") as f:
+            f.truncate(os.path.getsize(save_file) - expected.nbytes)
+
+        out = mx.load(save_file, stream=mx.cpu)
+        with self.assertRaises(RuntimeError):
+            np.array(out)
+
+    def test_async_load_npy_read_error_across_streams(self):
+        save_file = os.path.join(self.test_dir, "truncated_async.npy")
+        expected = np.arange(16, dtype=np.float32)
+        np.save(save_file, expected)
+        with open(save_file, "r+b") as f:
+            f.truncate(os.path.getsize(save_file) - expected.nbytes)
+
+        producer_stream = mx.new_stream(mx.cpu)
+        consumer_stream = mx.new_stream(mx.cpu)
+        out = mx.add(
+            mx.load(save_file, stream=producer_stream),
+            1.0,
+            stream=consumer_stream,
+        )
+        mx.async_eval(out)
+        with self.assertRaises(RuntimeError):
+            np.array(out)
+
     def test_save_and_load_safetensors(self):
         test_file = os.path.join(self.test_dir, "test.safetensors")
         with self.assertRaises(Exception):

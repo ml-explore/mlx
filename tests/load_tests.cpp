@@ -1,8 +1,11 @@
 // Copyright © 2023 Apple Inc.
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 #include "doctest/doctest.h"
@@ -10,9 +13,69 @@
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
+using namespace std::chrono_literals;
 
 std::string get_temp_file(const std::string& name) {
   return std::filesystem::temp_directory_path().append(name).string();
+}
+
+class BlockingFailReader : public io::Reader {
+ public:
+  explicit BlockingFailReader(std::vector<char> data)
+      : data_(std::move(data)),
+        release_(release_promise_.get_future().share()) {}
+
+  bool is_open() const override {
+    return true;
+  }
+
+  bool good() const override {
+    return true;
+  }
+
+  size_t tell() override {
+    return pos_;
+  }
+
+  void seek(int64_t off, std::ios_base::seekdir way) override {
+    if (way == std::ios_base::beg) {
+      pos_ = off;
+    } else if (way == std::ios_base::cur) {
+      pos_ += off;
+    } else {
+      pos_ = data_.size() + off;
+    }
+  }
+
+  void read(char* data, size_t n) override {
+    std::copy(data_.begin() + pos_, data_.begin() + pos_ + n, data);
+    pos_ += n;
+  }
+
+  void read(char*, size_t, size_t) override {
+    release_.wait();
+    throw std::runtime_error("[read] blocked read failed");
+  }
+
+  std::string label() const override {
+    return "blocking fail reader";
+  }
+
+  void release() {
+    release_promise_.set_value();
+  }
+
+ private:
+  std::vector<char> data_;
+  size_t pos_{0};
+  std::promise<void> release_promise_;
+  std::shared_future<void> release_;
+};
+
+std::vector<char> read_file(const std::string& path) {
+  std::ifstream in(path, std::ios::binary);
+  return std::vector<char>(
+      std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
 TEST_CASE("test save_safetensors") {
@@ -341,4 +404,85 @@ TEST_CASE("test single array serialization") {
     CHECK_EQ(a.shape(), b.shape());
     CHECK(array_equal(a, b).item<bool>());
   }
+}
+
+TEST_CASE("test load propagates CPU read errors") {
+  std::string file_path = get_temp_file("test_truncated_arr.npy");
+  auto expected = arange(16, float32, Device::cpu);
+  save(file_path, expected);
+  std::filesystem::resize_file(
+      file_path, std::filesystem::file_size(file_path) - expected.nbytes());
+
+  auto a = load(file_path, Device::cpu);
+  CHECK_THROWS_AS(eval(a), std::runtime_error);
+}
+
+TEST_CASE("test load propagates CPU read errors across streams") {
+  auto good_stream = new_stream(Device::cpu);
+  auto bad_stream = new_stream(Device::cpu);
+
+  std::string file_path = get_temp_file("test_truncated_arr_stream.npy");
+  auto expected = arange(16, float32, Device::cpu);
+  save(file_path, expected);
+  std::filesystem::resize_file(
+      file_path, std::filesystem::file_size(file_path) - expected.nbytes());
+
+  auto good = arange(4, float32, good_stream);
+  auto bad = load(file_path, bad_stream);
+  CHECK_THROWS_AS(eval(good, bad), std::runtime_error);
+}
+
+TEST_CASE("test async load propagates CPU read errors across streams") {
+  auto consumer_stream = new_stream(Device::cpu);
+  auto producer_stream = new_stream(Device::cpu);
+
+  std::string file_path = get_temp_file("test_truncated_arr_async_stream.npy");
+  auto expected = arange(16, float32, Device::cpu);
+  save(file_path, expected);
+  std::filesystem::resize_file(
+      file_path, std::filesystem::file_size(file_path) - expected.nbytes());
+
+  auto bad = load(file_path, producer_stream);
+  auto out = add(bad, array(1.0f), consumer_stream);
+  async_eval(out);
+  CHECK_THROWS_AS(out.wait(), std::runtime_error);
+}
+
+TEST_CASE("test async load error poisons same-stream dependent eval") {
+  auto stream = new_stream(Device::cpu);
+
+  std::string file_path = get_temp_file("test_truncated_arr_same_stream.npy");
+  auto expected = arange(16, float32, Device::cpu);
+  save(file_path, expected);
+  std::filesystem::resize_file(
+      file_path, std::filesystem::file_size(file_path) - expected.nbytes());
+
+  auto bad = load(file_path, stream);
+  async_eval(bad);
+  for (int i = 0; i < 100 && !bad.event().error(); ++i) {
+    std::this_thread::sleep_for(10ms);
+  }
+  REQUIRE(bad.event().error());
+
+  auto out = add(bad, array(1.0f), stream);
+  async_eval(out);
+  CHECK_THROWS_AS(out.wait(), std::runtime_error);
+}
+
+TEST_CASE("test async load error poisons pending same-stream dependent eval") {
+  auto stream = new_stream(Device::cpu);
+
+  std::string file_path = get_temp_file("test_arr_blocking_reader.npy");
+  save(file_path, arange(16, float32, Device::cpu));
+  auto reader = std::make_shared<BlockingFailReader>(read_file(file_path));
+
+  auto bad = load(reader, stream);
+  async_eval(bad);
+
+  auto out = add(bad, array(1.0f), stream);
+  async_eval(out);
+
+  reader->release();
+  CHECK_THROWS_AS(out.wait(), std::runtime_error);
+  CHECK_THROWS_AS(bad.wait(), std::runtime_error);
 }
