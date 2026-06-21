@@ -518,7 +518,7 @@ std::vector<array> ArcTan2::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   assert(primals.size() == 2);
-  assert(argnums.size() == 2);
+  assert(cotangents.size() == 1);
 
   const auto& s = stream();
   const array& x1 = primals[0];
@@ -545,18 +545,23 @@ std::vector<array> ArcTan2::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-  assert(argnums.size() == 2);
+  assert(tangents.size() == argnums.size());
 
   const auto& s = stream();
   const array& x1 = primals[0];
   const array& x2 = primals[1];
-  const array& dx1 = tangents[0];
-  const array& dx2 = tangents[1];
 
-  return {divide(
-      subtract(multiply(x2, dx1, s), multiply(x1, dx2, s), s),
-      add(square(x1, s), square(x2, s), s),
-      s)};
+  auto numerator = [&]() {
+    if (argnums.size() == 2) {
+      return subtract(
+          multiply(x2, tangents[0], s), multiply(x1, tangents[1], s), s);
+    } else if (argnums[0] == 0) {
+      return multiply(x2, tangents[0], s);
+    } else {
+      return negative(multiply(x1, tangents[0], s), s);
+    }
+  }();
+  return {divide(numerator, add(square(x1, s), square(x2, s), s), s)};
 }
 
 std::pair<std::vector<array>, std::vector<int>> ArcTan2::vmap(
@@ -794,11 +799,8 @@ std::vector<array> BitwiseBinary::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-  std::vector<array> vjps = {zeros_like(tangents[0], stream())};
-  if (argnums.size() > 1) {
-    vjps.push_back(vjps.back());
-  }
-  return vjps;
+  auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> BitwiseBinary::vjp(
@@ -806,7 +808,11 @@ std::vector<array> BitwiseBinary::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    vjps.push_back(zeros_like(primals[arg], stream()));
+  }
+  return vjps;
 }
 
 std::vector<array>
@@ -3148,30 +3154,30 @@ std::vector<array> Select::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 3);
-  assert(tangents.size() == 3);
+  assert(tangents.size() == argnums.size());
 
   auto jvp_fun = [&](int i) {
     int arg = argnums[i];
 
     if (arg == 0) {
-      return zeros_like(primals[0], stream());
+      return zeros_like(primals[1], stream());
     } else if (arg == 1) {
       return multiply(
-          astype(primals[0], tangents[1].dtype(), stream()),
-          tangents[1],
+          astype(primals[0], tangents[i].dtype(), stream()),
+          tangents[i],
           stream());
     } else {
       return multiply(
           astype(
-              logical_not(primals[0], stream()), tangents[2].dtype(), stream()),
-          tangents[2],
+              logical_not(primals[0], stream()), tangents[i].dtype(), stream()),
+          tangents[i],
           stream());
     }
   };
 
-  array jvp = jvp_fun(argnums[0]);
+  array jvp = jvp_fun(0);
   for (int i = 1; i < argnums.size(); i++) {
-    jvp = add(jvp, jvp_fun(argnums[i]));
+    jvp = add(jvp, jvp_fun(i));
   }
   return {jvp};
 }
@@ -4656,15 +4662,16 @@ std::vector<array> MaskedScatter::jvp(
   }
 
   array out = zeros_like(dst, s);
-  for (int arg : argnums) {
+  for (int i = 0; i < argnums.size(); ++i) {
+    int arg = argnums[i];
     if (arg == 0) {
-      out = where(mask_b, out, tangents[0], s);
+      out = where(mask_b, out, tangents[i], s);
     } else if (arg == 2) {
       out = array(
           out.shape(),
           out.dtype(),
           std::make_shared<MaskedScatter>(s),
-          {out, mask, tangents[1]});
+          {out, mask, tangents[i]});
     } else {
       throw std::invalid_argument("[masked_scatter] invalid arg index in JVP");
     }
