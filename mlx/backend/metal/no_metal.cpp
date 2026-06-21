@@ -21,6 +21,13 @@ device_info() {
       "[metal::device_info] Cannot get device info without metal backend");
 };
 
+void set_metallib_path(const std::string& path) {}
+
+const std::string& get_metallib_path() {
+  throw std::runtime_error(
+      "[metal::get_metallib_path] Cannot get metallib path without metal backend");
+}
+
 } // namespace metal
 
 } // namespace mlx::core

@@ -30,12 +30,6 @@ struct hash<NS::SharedPtr<T>> {
 
 namespace mlx::core::metal {
 
-static std::string g_metallib_override_path;
-
-void set_metallib_path(const std::string& path) {
-  g_metallib_override_path = path;
-}
-
 namespace {
 
 constexpr const char* default_mtllib_path = METAL_PATH;
@@ -168,13 +162,18 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
 }
 
 MTL::Library* load_default_library(MTL::Device* device) {
-  // Check override path first
-  if (!g_metallib_override_path.empty()) {
+  // Check override path before automatic lookup
+  if (!get_metallib_path().empty()) {
     auto [lib, error] =
-        load_library_from_path(device, g_metallib_override_path.c_str());
-    if (lib) {
-      return lib;
+        load_library_from_path(device, get_metallib_path().c_str());
+    if (!lib) {
+      throw std::runtime_error(
+          fmt::format(
+              "Can not load metallib from specified location \"{}\": {}.",
+              get_metallib_path(),
+              error->localizedDescription()->utf8String()));
     }
+    return lib;
   }
 
   NS::Error* error[5];
