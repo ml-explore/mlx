@@ -643,7 +643,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     // A primitive's jvp returns one tangent per output
     assert(jvps.size() <= outputs.size());
     for (int i = 0; i < jvps.size(); ++i) {
-      tan_map.insert({outputs[i].id(), jvps[i]});
+      tan_map.insert_or_assign(outputs[i].id(), jvps[i]);
     }
   }
 
