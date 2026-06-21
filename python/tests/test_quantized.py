@@ -224,6 +224,58 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    def test_qqmm(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        tests = product(
+            [8, 32, 33, 64],  # M
+            [128, 256],  # N
+            [128, 256],  # K
+            ["nvfp4", "mxfp8"],  # mode
+        )
+        for M, N, K, mode in tests:
+            with self.subTest(shape=(M, N, K), mode=mode):
+                x_shape = (M, K)
+                w_shape = (N, K)
+
+                # TODO: Fix qmm with global scale in Metal/CPU backends.
+                has_global_scale = (
+                    mode == "nvfp4"
+                    and mx.cuda.is_available()
+                    and mx.default_device() == mx.gpu
+                )
+
+                x = mx.random.normal(shape=x_shape, key=k1)
+                global_scale_x = mx.max(mx.abs(x)) if has_global_scale else None
+                x_hat = mx.dequantize(
+                    *mx.quantize(x, mode=mode, global_scale=global_scale_x),
+                    mode=mode,
+                    dtype=mx.float32,
+                    global_scale=global_scale_x,
+                )
+
+                w = mx.random.normal(shape=w_shape, key=k2)
+                global_scale_w = mx.max(mx.abs(w)) if has_global_scale else None
+                w_q, scales = mx.quantize(w, mode=mode, global_scale=global_scale_w)
+                w_hat = mx.dequantize(
+                    w_q,
+                    scales,
+                    mode=mode,
+                    global_scale=global_scale_w,
+                    dtype=mx.float32,
+                )
+                y_q = mx.qqmm(
+                    x,
+                    w_q,
+                    scales,
+                    mode=mode,
+                    global_scale_x=global_scale_x,
+                    global_scale_w=global_scale_w,
+                )
+                y_hat = x_hat @ mx.swapaxes(w_hat, -1, -2)
+                self.assertEqual(y_q.shape, y_hat.shape)
+                self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
     def test_qqmm_metal_global_scale_rejected(self):
         # Tensor-scale nvfp4 (global_scale_x / global_scale_w) is not
         # implemented in the Metal qqmm kernels. mx.qqmm must reject the
