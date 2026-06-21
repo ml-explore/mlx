@@ -283,6 +283,7 @@ void clear_all_encoders();
 // inits that abort under capture (e.g. hipblasLtCreate) check this.
 bool stream_capturing();
 void set_stream_capturing(bool v);
+void set_graph_active(bool v);
 
 // True from capture start until the captured graph is destroyed. The allocator
 // defers all frees while set so graph-referenced buffers stay valid through replay.

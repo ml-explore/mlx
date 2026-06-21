@@ -603,6 +603,9 @@ std::atomic<bool> g_graph_active{false};
 bool graph_active() {
   return g_graph_active.load(std::memory_order_relaxed);
 }
+void set_graph_active(bool v) {
+  g_graph_active.store(v, std::memory_order_relaxed);
+}
 
 void CommandEncoder::begin_capture() {
   if (capturing_)
