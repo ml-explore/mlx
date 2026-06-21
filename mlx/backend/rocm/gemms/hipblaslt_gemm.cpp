@@ -631,22 +631,21 @@ bool is_hipblaslt_available() {
   static const bool g_force_rocblas = std::getenv("MLX_NO_HIPBLASLT") != nullptr;
   if (g_force_rocblas)
     return false;
-  // Opt-out: force rocBLAS during capture (legacy fallback).
-  static const bool g_no_capture =
-      std::getenv("MLX_HIPBLASLT_NO_CAPTURE") != nullptr;
+  // When automatic HIP-graph batching is on, the GEMM is graph-split and run
+  // immediately, but hipBLASLt's lazy hipblasLtCreate / AlgoGetHeuristic /
+  // workspace hipMalloc are non-capturable and abort the process if the stream
+  // is mid-graph. rocBLAS is graph-safe here, so force it whenever graphs are
+  // enabled. (rocBLAS == hipBLASLt speed at decode, so this costs nothing.)
+  static const bool g_graphs =
+      std::getenv("MLX_USE_HIP_GRAPHS") != nullptr;
+  if (g_graphs)
+    return false;
+  // hipBLASLt's lazy init is non-capturable; force rocBLAS during any capture.
+  if (stream_capturing())
+    return false;
   int device_id = 0;
   (void)hipGetDevice(&device_id);
   auto& state = get_state(device_id);
-  // During HIP-graph capture, hipBLASLt is capture-safe ONLY when warm: the
-  // handle is already created (hipblasLtCreate aborts mid-capture), the
-  // workspace is pre-allocated (no hipMalloc), and the per-shape algorithm is
-  // cached (no AlgoGetHeuristic). Warmup runs the identical decode forward, so
-  // every captured GEMM is warm. If the handle is somehow cold here, fall back
-  // to rocBLAS rather than initialise inside the capture.
-  if (stream_capturing()) {
-    return !g_no_capture && state.initialized && state.available &&
-        state.workspace != nullptr;
-  }
   if (!state.initialized) {
     std::lock_guard<std::mutex> lock(state.mutex);
     init_handle(state, device_id);

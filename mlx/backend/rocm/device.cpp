@@ -575,9 +575,9 @@ void CommandEncoder::commit() {
     bytes_in_graph_ = 0;
     hipGraphDestroy(build_graph_);
     CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
-    // The exec graph copied the kernelParams during instantiate/exec-update, so
-    // the per-build arg packs are no longer referenced.
-    graph_node_args_.clear();
+    // NOTE: do NOT free graph_node_args_ here. hipGraphLaunch is async and the
+    // exec references the kernelParams until the stream drains. They are freed
+    // in synchronize() once the stream is idle.
   }
 
   node_count_ = 0;
@@ -598,6 +598,10 @@ void CommandEncoder::synchronize() {
   add_completed_handler([p = std::move(p)]() { p->set_value(); });
   commit();
   f.wait();
+  (void)hipStreamSynchronize(stream_);
+  // Stream is fully drained; graph execs no longer reference the kernelParams.
+  graph_node_args_.clear();
+  graph_node_args_prev_.clear();
 }
 
 // Global flag: true while any stream on this process is recording a HIP graph.

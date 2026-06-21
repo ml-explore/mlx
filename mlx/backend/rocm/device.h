@@ -205,9 +205,10 @@ class CommandEncoder {
   int max_ops_per_graph_{50};
   int max_mb_per_graph_{200};
   LRUCache<hipGraphExec_t> graph_cache_{400};
-  // Per-build kernel-arg packs: keep the kernelParams values alive until the
-  // graph is instantiated/updated into the exec in commit(), then cleared.
+  // Per-build kernel-arg packs: keep the kernelParams values alive while the
+  // (async) exec may reference them. Held one extra commit via _prev_.
   std::vector<std::shared_ptr<void>> graph_node_args_;
+  std::vector<std::shared_ptr<void>> graph_node_args_prev_;
   // Buffers allocated during capture are held alive here (not freed) so their
   // addresses stay valid and unique for the lifetime of the captured graph —
   // freeing them mid-capture would let later allocations reuse the same
@@ -300,27 +301,15 @@ void CommandEncoder::launch_kernel(F&& func) {
   // into a child graph node so the build graph stays complete while individual
   // kernels are migrated to add_kernel_node. The legacy whole-stream capture
   // path (capturing_) and the immediate path are left untouched.
-  // Residual kernels not yet migrated to add_kernel_node (library GEMM, JIT,
-  // memsets) are captured into a child graph node so they join the build graph.
-  // Set the capture flag so library calls (hipBLASLt) fall back to the
-  // capture-safe rocBLAS path instead of aborting under capture.
+  // Residual ops not migrated to add_kernel_node (library GEMM, JIT module
+  // kernels, memsets) can't be HIP graph kernel nodes (no module-func field)
+  // and child-graph capture wedges the GPU on this ROCm. Instead graph-split:
+  // flush+launch the accumulated graph, then run this op immediately on the
+  // same stream (ordered after the graph), and the next op starts a fresh
+  // graph. Library GEMM thus runs OUTSIDE capture, so hipBLASLt won't abort.
   if (use_hip_graphs() && !capturing_) {
-    hipGraph_t child = nullptr;
-    set_stream_capturing(true);
-    if (hipStreamBeginCapture(
-            stream_, hipStreamCaptureModeThreadLocal) == hipSuccess) {
-      func(static_cast<hipStream_t>(stream_));
-      if (hipStreamEndCapture(stream_, &child) == hipSuccess && child) {
-        set_stream_capturing(false);
-        add_child_graph_node(child, "()");
-        hipGraphDestroy(child);
-        node_count_++;
-        return;
-      }
-    }
-    set_stream_capturing(false);
+    commit();
     func(static_cast<hipStream_t>(stream_));
-    node_count_++;
     return;
   }
   // When the legacy path is capturing, kernel launches are recorded into the
