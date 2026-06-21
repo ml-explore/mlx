@@ -196,6 +196,7 @@ class CommandEncoder {
   hipGraph_t build_graph_{nullptr};
   std::vector<hipGraphNode_t> from_nodes_;
   std::vector<hipGraphNode_t> to_nodes_;
+  hipGraphNode_t last_node_{nullptr};
   std::string graph_nodes_key_;
   std::string graph_deps_key_;
   std::vector<std::uintptr_t> active_deps_;

@@ -372,40 +372,23 @@ void CommandEncoder::insert_graph_dependencies(GraphNode node) {
 }
 
 void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
+  // Serialize the graph into a linear chain in submission order. This matches
+  // eager single-stream execution order exactly (correct), while still
+  // collapsing all kernels into one hipGraphLaunch (the batching win). The
+  // dep-based edges from set_input/output_array were unreliable because not
+  // every migrated kernel registers all of its inputs/outputs, leaving missing
+  // edges and races; a linear chain is robust and costs nothing over eager
+  // (which is already serial on the stream).
+  active_deps_.clear();
+  active_outputs_.clear();
   for (auto& node : nodes) {
     graph_nodes_key_ += node.node_type;
     graph_nodes_key_ += "-";
-  }
-  std::vector<GraphNode> deps;
-  {
-    std::unordered_set<hipGraphNode_t> set_deps;
-    for (auto d : active_deps_) {
-      if (auto it = node_map_.find(d); it != node_map_.end()) {
-        auto [_, inserted] = set_deps.insert(it->second.node);
-        if (inserted) {
-          deps.push_back(it->second);
-        }
-      }
+    if (last_node_ != nullptr) {
+      from_nodes_.push_back(last_node_);
+      to_nodes_.push_back(node.node);
     }
-  }
-  active_deps_.clear();
-
-  for (auto o : active_outputs_) {
-    for (auto& node : nodes) {
-      node_map_.emplace(o, node).first->second = node;
-    }
-  }
-  active_outputs_.clear();
-
-  for (auto& from : deps) {
-    for (auto& to : nodes) {
-      from_nodes_.push_back(from.node);
-      to_nodes_.push_back(to.node);
-      graph_deps_key_ += from.id;
-      graph_deps_key_ += "-";
-      graph_deps_key_ += to.id;
-      graph_deps_key_ += "-";
-    }
+    last_node_ = node.node;
   }
 }
 
@@ -502,9 +485,10 @@ void CommandEncoder::commit() {
 
     device_.make_current();
 
+    static const bool nocache = std::getenv("MLX_HIP_GRAPH_NOCACHE") != nullptr;
     auto graph_key =
         std::hash<std::string>{}(graph_nodes_key_ + ":" + graph_deps_key_);
-    auto cached = graph_cache_.get(graph_key);
+    auto cached = nocache ? std::nullopt : graph_cache_.get(graph_key);
     hipGraphExec_t graph_exec = cached ? *cached : nullptr;
 
     if (graph_exec != nullptr) {
@@ -573,6 +557,7 @@ void CommandEncoder::commit() {
     active_deps_.clear();
     active_outputs_.clear();
     bytes_in_graph_ = 0;
+    last_node_ = nullptr;
     hipGraphDestroy(build_graph_);
     CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
     // NOTE: do NOT free graph_node_args_ here. hipGraphLaunch is async and the
