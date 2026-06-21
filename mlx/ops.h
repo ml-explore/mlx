@@ -1546,10 +1546,10 @@ MLX_API array conv_transpose3d(
 
 /** Quantized matmul multiplies x with a quantized matrix w*/
 MLX_API array quantized_matmul(
-    array x,
-    array w,
-    array scales,
-    std::optional<array> biases = std::nullopt,
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases = std::nullopt,
     bool transpose = true,
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
@@ -1578,15 +1578,15 @@ MLX_API array dequantize(
     StreamOrDevice s = {});
 
 MLX_API array qqmm(
-    array x, // input activations
-    array w, // maybe quantized weights
-    const std::optional<array> w_scales = std::nullopt, // optional scales if w
-                                                        // is quantized
+    const array& x, // input activations
+    const array& w, // maybe quantized weights
+    const std::optional<array>& w_scales = std::nullopt, // optional scales if w
+                                                         // is quantized
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "nvfp4",
-    const std::optional<array> global_scale_x = std::nullopt,
-    const std::optional<array> global_scale_w = std::nullopt,
+    const std::optional<array>& global_scale_x = std::nullopt,
+    const std::optional<array>& global_scale_w = std::nullopt,
     StreamOrDevice s = {});
 
 /** Convert an E4M3 float8 to the given floating point dtype. */
@@ -1607,6 +1607,20 @@ MLX_API array gather_qmm(
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
+    bool sorted_indices = false,
+    StreamOrDevice s = {});
+
+MLX_API array gather_qqmm(
+    const array& x,
+    const array& w,
+    const std::optional<array>& scales_w = std::nullopt,
+    const std::optional<array>& lhs_indices = std::nullopt,
+    const std::optional<array>& rhs_indices = std::nullopt,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
+    const std::string& mode = "nvfp4",
+    const std::optional<array>& global_scale_x = std::nullopt,
+    const std::optional<array>& global_scale_w = std::nullopt,
     bool sorted_indices = false,
     StreamOrDevice s = {});
 

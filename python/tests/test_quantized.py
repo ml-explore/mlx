@@ -224,6 +224,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    @unittest.skipIf(
+        not mx.cuda.is_available() or mx.default_device() == mx.cpu,
+        "Only implemented in CUDA",
+    )
     def test_qqmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
@@ -238,15 +242,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 x_shape = (M, K)
                 w_shape = (N, K)
 
-                # TODO: Fix qmm with global scale in Metal/CPU backends.
-                has_global_scale = (
-                    mode == "nvfp4"
-                    and mx.cuda.is_available()
-                    and mx.default_device() == mx.gpu
-                )
-
                 x = mx.random.normal(shape=x_shape, key=k1)
-                global_scale_x = mx.max(mx.abs(x)) if has_global_scale else None
+                global_scale_x = mx.max(mx.abs(x)) if mode == "nvfp4" else None
                 x_hat = mx.dequantize(
                     *mx.quantize(x, mode=mode, global_scale=global_scale_x),
                     mode=mode,
@@ -255,7 +252,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
 
                 w = mx.random.normal(shape=w_shape, key=k2)
-                global_scale_w = mx.max(mx.abs(w)) if has_global_scale else None
+                global_scale_w = mx.max(mx.abs(w)) if mode == "nvfp4" else None
                 w_q, scales = mx.quantize(w, mode=mode, global_scale=global_scale_w)
                 w_hat = mx.dequantize(
                     w_q,
@@ -1123,6 +1120,100 @@ class TestQuantized(mlx_tests.MLXTestCase):
             test_shape(1, 32, 512, **kwargs)
             test_shape(32, 512, 32, transpose=False, **kwargs)
             test_shape(1, 512, 32, transpose=False, **kwargs)
+
+    @unittest.skipIf(
+        not mx.cuda.is_available() or mx.default_device() == mx.cpu,
+        "Only implemented in CUDA",
+    )
+    def test_gather_qqmm(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        batches = (
+            {
+                "batch_A": (1,),
+                "lhs_indices": (0,),
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (1,),
+                "lhs_indices": None,
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (2,),
+                "lhs_indices": None,
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (3,),
+                "lhs_indices": (0, 2),
+                "batch_B": (1,),
+                "rhs_indices": (0,),
+            },
+            {
+                "batch_A": (5,),
+                "lhs_indices": (0, 2),
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+        )
+        tests = product(
+            batches,
+            [1, 32],  # M
+            [32, 256],  # N
+            [32, 256],  # K
+            ["nvfp4", "mxfp8"],  # mode
+        )
+
+        for batch, M, N, K, mode in tests:
+            with self.subTest(shape=(M, N, K), mode=mode, **batch):
+                batch_A, lhs_indices, batch_B, rhs_indices = batch.values()
+                x_shape = (*batch_A, M, K)
+                w_shape = (*batch_B, N, K)
+
+                x = mx.random.normal(shape=x_shape, key=k1)
+                global_scale_x = mx.max(mx.abs(x)) if mode == "nvfp4" else None
+                x_hat = mx.dequantize(
+                    *mx.quantize(x, mode=mode, global_scale=global_scale_x),
+                    mode=mode,
+                    dtype=mx.float32,
+                    global_scale=global_scale_x,
+                )
+
+                w = mx.random.normal(shape=w_shape, key=k2)
+                global_scale_w = mx.max(mx.abs(w)) if mode == "nvfp4" else None
+                w_q, scales = mx.quantize(w, mode=mode, global_scale=global_scale_w)
+                w_hat = mx.dequantize(
+                    w_q,
+                    scales,
+                    mode=mode,
+                    global_scale=global_scale_w,
+                    dtype=mx.float32,
+                )
+
+                if lhs_indices is not None:
+                    lhs_indices = mx.array(lhs_indices)
+                if rhs_indices is not None:
+                    rhs_indices = mx.array(rhs_indices)
+
+                y_q = mx.gather_qqmm(
+                    x,
+                    w_q,
+                    scales,
+                    lhs_indices,
+                    rhs_indices,
+                    mode=mode,
+                    global_scale_x=global_scale_x,
+                    global_scale_w=global_scale_w,
+                )
+                y_hat = mx.gather_mm(
+                    x_hat, mx.swapaxes(w_hat, -1, -2), lhs_indices, rhs_indices
+                )
+                self.assertEqual(y_q.shape, y_hat.shape)
+                self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_qmm_fp_type(self):
         indices = mx.array([[2], [0], [1]], dtype=mx.uint32)

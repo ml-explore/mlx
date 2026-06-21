@@ -1764,6 +1764,10 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void GatherQQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  throw std::runtime_error("[GatherQQMM] NYI");
+}
+
 void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
