@@ -2158,6 +2158,32 @@ array sum(
   return sum(a, std::vector<int>{axis}, keepdims, s);
 }
 
+array count_nonzero(
+    const array& a,
+    bool keepdims /* = false */,
+    StreamOrDevice s /* = {} */) {
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  return count_nonzero(a, axes, keepdims, s);
+}
+
+array count_nonzero(
+    const array& a,
+    int axis,
+    bool keepdims /* = false */,
+    StreamOrDevice s /* = {} */) {
+  return count_nonzero(a, std::vector<int>{axis}, keepdims, s);
+}
+
+array count_nonzero(
+    const array& a,
+    const std::vector<int>& axes,
+    bool keepdims /* = false */,
+    StreamOrDevice s /* = {} */) {
+  auto nz = astype(not_equal(a, array(0, a.dtype()), s), int32, s);
+  return sum(nz, axes, keepdims, s);
+}
+
 array mean(const array& a, bool keepdims, StreamOrDevice s /* = {}*/) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);
@@ -2848,6 +2874,10 @@ array abs(const array& a, StreamOrDevice s /* = {} */) {
   return out;
 }
 
+array positive(const array& a, StreamOrDevice s /* = {} */) {
+  return array(a);
+}
+
 array negative(const array& a, StreamOrDevice s /* = {} */) {
   if (a.dtype() == bool_) {
     auto msg = "[negative] Not supported for bool, use logical_not instead.";
@@ -2898,6 +2928,10 @@ array logical_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 }
 array operator||(const array& a, const array& b) {
   return logical_or(a, b);
+}
+
+array logical_xor(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  return not_equal(astype(a, bool_, s), astype(b, bool_, s), s);
 }
 
 array reciprocal(const array& a, StreamOrDevice s /* = {} */) {
@@ -3050,6 +3084,17 @@ array ceil(const array& a, StreamOrDevice s /* = {} */) {
     throw std::invalid_argument("[floor] Not supported for complex64.");
   }
   return array(a.shape(), a.dtype(), std::make_shared<Ceil>(to_stream(s)), {a});
+}
+
+array trunc(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[trunc] Not supported for complex64.");
+  }
+  if (issubdtype(a.dtype(), integer)) {
+    return array(a);
+  }
+  auto zero = array(0, a.dtype());
+  return where(less(a, zero, s), ceil(a, s), floor(a, s), s);
 }
 
 array square(const array& a, StreamOrDevice s /* = {} */) {
@@ -4061,6 +4106,54 @@ array cummin(
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
   return cummin(flatten(a, s), 0, reverse, inclusive, s);
+}
+
+array diff(
+    const array& a,
+    int n /* = 1 */,
+    int axis /* = -1 */,
+    StreamOrDevice s /* = {} */) {
+  return diff(a, n, axis, std::nullopt, std::nullopt, s);
+}
+
+array diff(
+    const array& a,
+    int n,
+    int axis,
+    const std::optional<array>& prepend,
+    const std::optional<array>& append,
+    StreamOrDevice s /* = {} */) {
+  int ndim = static_cast<int>(a.ndim());
+  int ax = axis < 0 ? axis + ndim : axis;
+  if (ax < 0 || ax >= ndim) {
+    throw std::invalid_argument("[diff] Axis is out of bounds for the array.");
+  }
+  if (n < 0) {
+    throw std::invalid_argument("[diff] Order `n` must be non-negative.");
+  }
+  array x = a;
+  if (prepend || append) {
+    std::vector<array> parts;
+    if (prepend) {
+      parts.push_back(*prepend);
+    }
+    parts.push_back(x);
+    if (append) {
+      parts.push_back(*append);
+    }
+    x = concatenate(parts, ax, s);
+  }
+  for (int i = 0; i < n; ++i) {
+    Shape upper_start(x.ndim(), 0);
+    Shape lower_stop = x.shape();
+    Shape strides(x.ndim(), 1);
+    upper_start[ax] = 1;
+    lower_stop[ax] = x.shape(ax) - 1;
+    auto upper = slice(x, upper_start, x.shape(), strides, s);
+    auto lower = slice(x, Shape(x.ndim(), 0), lower_stop, strides, s);
+    x = subtract(upper, lower, s);
+  }
+  return x;
 }
 
 array logcumsumexp(

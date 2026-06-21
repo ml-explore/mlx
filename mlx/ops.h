@@ -622,6 +622,20 @@ sum(const array& a,
 MLX_API array
 sum(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {});
 
+/** Count the number of non-zero elements in an array. */
+MLX_API array
+count_nonzero(const array& a, bool keepdims = false, StreamOrDevice s = {});
+MLX_API array count_nonzero(
+    const array& a,
+    int axis,
+    bool keepdims = false,
+    StreamOrDevice s = {});
+MLX_API array count_nonzero(
+    const array& a,
+    const std::vector<int>& axes,
+    bool keepdims = false,
+    StreamOrDevice s = {});
+
 /** Computes the mean of the elements of an array. */
 MLX_API array mean(const array& a, bool keepdims, StreamOrDevice s = {});
 inline array mean(const array& a, StreamOrDevice s = {}) {
@@ -883,6 +897,9 @@ MLX_API array logsumexp(
 /** Absolute value of elements in an array. */
 MLX_API array abs(const array& a, StreamOrDevice s = {});
 
+/** Unary plus — return a copy of the array unchanged. */
+MLX_API array positive(const array& a, StreamOrDevice s = {});
+
 /** Negate an array. */
 MLX_API array negative(const array& a, StreamOrDevice s = {});
 MLX_API array operator-(const array& a);
@@ -901,6 +918,10 @@ MLX_API array operator&&(const array& a, const array& b);
 /** Logical or of two arrays */
 MLX_API array logical_or(const array& a, const array& b, StreamOrDevice s = {});
 MLX_API array operator||(const array& a, const array& b);
+
+/** Logical exclusive or of two arrays */
+MLX_API array
+logical_xor(const array& a, const array& b, StreamOrDevice s = {});
 
 /** The reciprocal (1/x) of the elements in an array. */
 MLX_API array reciprocal(const array& a, StreamOrDevice s = {});
@@ -978,6 +999,9 @@ MLX_API array floor(const array& a, StreamOrDevice s = {});
 
 /** Ceil the element of an array. **/
 MLX_API array ceil(const array& a, StreamOrDevice s = {});
+
+/** Truncate the elements of an array towards zero. **/
+MLX_API array trunc(const array& a, StreamOrDevice s = {});
 
 /** Square the elements of an array. */
 MLX_API array square(const array& a, StreamOrDevice s = {});
@@ -1386,6 +1410,18 @@ MLX_API array cummin(
     int axis,
     bool reverse = false,
     bool inclusive = true,
+    StreamOrDevice s = {});
+
+/** The n-th discrete difference along the given axis. */
+MLX_API array
+diff(const array& a, int n = 1, int axis = -1, StreamOrDevice s = {});
+
+MLX_API array diff(
+    const array& a,
+    int n,
+    int axis,
+    const std::optional<array>& prepend,
+    const std::optional<array>& append,
     StreamOrDevice s = {});
 
 /** General convolution with a filter */
