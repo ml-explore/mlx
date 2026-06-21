@@ -3422,7 +3422,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "astype",
-      &mx::astype,
+      [](const mx::array& a, mx::Dtype dtype, mx::StreamOrDevice s) {
+        return mx::astype(a, dtype, s);
+      },
       nb::arg(),
       "dtype"_a,
       nb::kw_only(),
