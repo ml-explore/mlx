@@ -100,11 +100,17 @@ class TestInit(mlx_tests.MLXTestCase):
                 with self.subTest(shape=shape):
                     self.assertEqual(result.shape, shape)
                     self.assertEqual(result.dtype, dtype)
-                    self.assertEqual(
-                        (mx.sum(result == 0) >= 0.5 * shape[0] * shape[1]), True
-                    )
             with self.assertRaises(ValueError):
                 result = initializer(mx.zeros((1,)))
+
+            initializer = init.sparse(sparsity, mean=1.0, std=0.0, dtype=dtype)
+            for shape in [(3, 2), (2, 2), (4, 3)]:
+                result = initializer(mx.array(np.empty(shape)))
+                expected_zeros = int(np.ceil(sparsity * result.shape[0]))
+                with self.subTest(shape=shape, dtype=dtype):
+                    self.assertTrue(
+                        mx.all(mx.sum(result == 0, axis=0) == expected_zeros).item()
+                    )
 
         for sparsity in [0.0, 0.25, 0.5, 0.75, 1.0]:
             result = init.sparse(sparsity, mean=1.0, std=0.0)(

@@ -390,7 +390,8 @@ def sparse(
         order = mx.argsort(mx.random.uniform(shape=a.shape), axis=0)
         a = mx.random.normal(shape=a.shape, scale=std, loc=mean, dtype=dtype)
 
-        a[order[:num_zeros, :], mx.arange(cols).reshape(1, cols)] = 0
+        zeros = mx.zeros((num_zeros, cols), dtype=dtype)
+        a = mx.put_along_axis(a, order[:num_zeros, :], zeros, axis=0)
 
         return a
 
