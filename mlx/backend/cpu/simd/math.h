@@ -7,6 +7,7 @@
 namespace mlx::core::simd {
 
 constexpr float inf = std::numeric_limits<float>::infinity();
+constexpr double inf_double = std::numeric_limits<double>::infinity();
 
 /**
  * Compute exp(x) in an optimizer friendly way as follows:
@@ -28,6 +29,35 @@ template <typename T, int N>
 Simd<T, N> exp(Simd<T, N> in) {
   if constexpr (is_complex<T>) {
     return Simd<T, 1>{std::exp(in.value)};
+  } else if constexpr (std::is_same_v<T, double>) {
+    auto x_init = in;
+    auto x = x_init * 1.4426950408889634; // multiply with log_2(e)
+    Simd<double, N> ipart, fpart;
+    ipart = floor(x + 0.5);
+    fpart = x - ipart;
+
+    x = 6.77872635482254254e-14;
+    x = fma(x, fpart, 1.36914888539041241e-12);
+    x = fma(x, fpart, 2.56784359934881958e-11);
+    x = fma(x, fpart, 4.44553827187081007e-10);
+    x = fma(x, fpart, 7.05491162080112088e-09);
+    x = fma(x, fpart, 1.01780860092396960e-07);
+    x = fma(x, fpart, 1.32154867901443053e-06);
+    x = fma(x, fpart, 1.52527338040598377e-05);
+    x = fma(x, fpart, 1.54035303933816061e-04);
+    x = fma(x, fpart, 1.33335581464284411e-03);
+    x = fma(x, fpart, 9.61812910762847688e-03);
+    x = fma(x, fpart, 5.55041086648215762e-02);
+    x = fma(x, fpart, 2.40226506959100694e-01);
+    x = fma(x, fpart, 6.93147180559945286e-01);
+    x = fma(x, fpart, 1.00000000000000000e+00);
+
+    Simd<int64_t, N> epart = (Simd<int64_t, N>(ipart) + 1023) << 52;
+
+    auto result = select(isnan(x_init), x_init, (*(Simd<double, N>*)&epart) * x);
+    result = select(x_init > 709.0, Simd<double, N>(inf_double), result);
+    result = select(x_init < -708.0, Simd<double, N>(0), result);
+    return result;
   } else {
     Simd<float, N> x_init = in;
     auto x = x_init * 1.442695f; // multiply with log_2(e)

@@ -1521,6 +1521,15 @@ TEST_CASE("test arithmetic unary ops") {
     x = array(2.0);
     CHECK_EQ(exp(x).item<float>(), doctest::Approx(std::exp(2.0f)));
 
+    x = array({0.1, 0.5, 0.9, 1.25}, float64);
+    auto exp_x = exp(x);
+    CHECK_EQ(exp_x.dtype(), float64);
+    for (int i = 0; i < x.size(); ++i) {
+      auto actual = take(exp_x, array(i)).item<double>();
+      auto expected = std::exp(take(x, array(i)).item<double>());
+      CHECK(actual == doctest::Approx(expected).epsilon(1e-12));
+    }
+
     CHECK(array_equal(exp(array({})), array({})).item<bool>());
 
     x = array(neginf);
