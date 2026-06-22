@@ -384,16 +384,14 @@ def sparse(
         if a.ndim != 2:
             raise ValueError("Only tensors with 2 dimensions are supported")
 
-        rows, cols = a.shape
+        rows = a.shape[0]
         num_zeros = int(math.ceil(sparsity * rows))
 
         order = mx.argsort(mx.random.uniform(shape=a.shape), axis=0)
+        mask = mx.argsort(order, axis=0) < num_zeros
         a = mx.random.normal(shape=a.shape, scale=std, loc=mean, dtype=dtype)
 
-        zeros = mx.zeros((num_zeros, cols), dtype=dtype)
-        a = mx.put_along_axis(a, order[:num_zeros, :], zeros, axis=0)
-
-        return a
+        return mx.where(mask, mx.zeros(a.shape, dtype=dtype), a)
 
     return initializer
 
