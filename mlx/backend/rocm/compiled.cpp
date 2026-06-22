@@ -832,20 +832,13 @@ void Compiled::eval_gpu(
       (outputs[0].data_size() + work_per_thread - 1) / work_per_thread;
   int num_blocks = (total_work + block_size - 1) / block_size;
 
-  encoder.launch_kernel([&](hipStream_t stream) {
-    (void)hipModuleLaunchKernel(
-        kernel,
-        num_blocks,
-        1,
-        1,
-        block_size,
-        1,
-        1,
-        0,
-        stream,
-        args.args(),
-        nullptr);
-  });
+  launch_module_kernel(
+      encoder,
+      kernel,
+      dim3(num_blocks, 1, 1),
+      dim3(block_size, 1, 1),
+      0,
+      std::move(args));
 }
 
 } // namespace mlx::core

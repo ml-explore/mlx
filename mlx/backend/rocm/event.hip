@@ -8,6 +8,7 @@
 
 #include <map>
 #include <mutex>
+#include <chrono>
 #include <thread>
 #include <vector>
 #include <immintrin.h>
@@ -67,9 +68,17 @@ HipEvent::~HipEvent() {
 }
 
 void HipEvent::wait() {
+  // MLX_EVENT_BLOCKING: block (hipEventSynchronize) instead of CPU spin-polling.
+  // The device is created with hipDeviceScheduleBlockingSync, so this sleeps the
+  // thread rather than busy-waiting. On a bandwidth-bound APU decode the spin
+  // poll steals shared-memory-controller bandwidth from the GPU, so blocking can
+  // be a net win despite the wakeup latency. Default keeps the legacy spin.
+  static const bool blocking = std::getenv("MLX_EVENT_BLOCKING") != nullptr;
+  if (blocking) {
+    (void)hipEventSynchronize(event_);
+    return;
+  }
   // Spin-wait with hipEventQuery instead of hipEventSynchronize.
-  // On iGPU, the blocking wait in hipEventSynchronize causes CPU-GPU
-  // contention since they share compute resources. Polling is cheaper.
   // Use progressive backoff to reduce hipEventQuery call overhead.
   for (int spins = 0; hipEventQuery(event_) != hipSuccess; spins++) {
     if (spins < 100) {
@@ -219,8 +228,15 @@ AtomicEvent::AtomicEvent() {
 
 void AtomicEvent::wait(uint64_t value) {
   auto* ac = atomic();
+  static const bool blocking = std::getenv("MLX_EVENT_BLOCKING") != nullptr;
   while (ac->load(std::memory_order_acquire) < value) {
-    std::this_thread::yield();
+    if (blocking) {
+      // Sleep briefly instead of hot-yielding so the host poll of this pinned
+      // counter doesn't contend with the GPU on the APU memory controller.
+      std::this_thread::sleep_for(std::chrono::microseconds(50));
+    } else {
+      std::this_thread::yield();
+    }
   }
 }
 

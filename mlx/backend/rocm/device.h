@@ -38,6 +38,12 @@ class Worker;
 // immediate-launch path is unaffected unless MLX_USE_HIP_GRAPHS is set.
 bool use_hip_graphs();
 
+// Inline (graph-splitting) launch counter; see device.cpp diagnostics.
+extern std::atomic<long> g_inline_launches_;
+// Diagnostics: tag inline launches by the primitive currently in eval_gpu.
+void set_current_prim(const char* name);
+void record_inline_launch();
+
 class CommandEncoder {
  public:
   explicit CommandEncoder(Device& d);
@@ -120,6 +126,19 @@ class CommandEncoder {
       dim3 block_dim,
       uint32_t smem_bytes,
       void** params);
+
+  // Add a MODULE-function (hiprtc/JIT or CustomKernel) kernel as a graph node.
+  // ROCm 7.13's hipGraphAddKernelNode accepts a hipFunction_t in
+  // hipKernelNodeParams.func, so JIT-fused kernels need not graph-split. In the
+  // eager path this launches immediately. `args_keepalive` owns the storage that
+  // `params` points into; it is held until the graph is instantiated (commit).
+  void add_module_kernel_node(
+      void* func,
+      dim3 grid_dim,
+      dim3 block_dim,
+      uint32_t smem_bytes,
+      void** params,
+      std::shared_ptr<void> args_keepalive);
 
   void add_temporary(const array& arr);
 
@@ -225,12 +244,22 @@ class CommandEncoder {
     std::shared_ptr<std::atomic<int>> inflight;
     hipGraph_t source_graph{nullptr};
     std::vector<std::shared_ptr<void>> packs;
+    // Source-graph kernel nodes in insertion order. On reuse we refresh each
+    // exec node's params by handle via hipGraphExecKernelNodeSetParams — this is
+    // deterministic and avoids hipGraphExecUpdate's node-matching, which returns
+    // success but mis-maps params in the model's complex DAG.
+    std::vector<hipGraphNode_t> src_nodes;
   };
   std::unordered_map<std::string, std::vector<ExecSlot>> exec_pool_;
   // Per-build kernel-arg packs: keep the kernelParams values alive while the
   // (async) exec may reference them. Held one extra commit via _prev_.
   std::vector<std::shared_ptr<void>> graph_node_args_;
   std::vector<std::shared_ptr<void>> graph_node_args_prev_;
+  // Current build's kernel nodes + their params, in insertion order. Used to (a)
+  // capture src_nodes when a slot is first instantiated, and (b) refresh a reused
+  // exec's params per-node via hipGraphExecKernelNodeSetParams.
+  std::vector<hipGraphNode_t> build_nodes_;
+  std::vector<hipKernelNodeParams> build_node_params_;
   // Instantiated execs retained until the stream drains (destroyed in
   // synchronize()), since hipGraphLaunch is async.
   std::vector<hipGraphExec_t> graph_execs_;
@@ -336,6 +365,7 @@ void CommandEncoder::launch_kernel(F&& func) {
   if (use_hip_graphs() && !capturing_) {
     commit();
     func(static_cast<hipStream_t>(stream_));
+    record_inline_launch();
     return;
   }
   // When the legacy path is capturing, kernel launches are recorded into the

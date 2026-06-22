@@ -355,22 +355,14 @@ void CustomKernel::eval_gpu(
   }
 
   // Launch kernel
-  encoder.launch_kernel([&](hipStream_t stream) {
-    auto kernel = mod.get_kernel(kernel_name);
-
-    (void)hipModuleLaunchKernel(
-        kernel,
-        grid.x,
-        grid.y,
-        grid.z,
-        block.x,
-        block.y,
-        block.z,
-        shared_memory_,
-        stream,
-        args.args(),
-        nullptr);
-  });
+  auto kernel = mod.get_kernel(kernel_name);
+  launch_module_kernel(
+      encoder,
+      kernel,
+      dim3(grid.x, grid.y, grid.z),
+      dim3(block.x, block.y, block.z),
+      shared_memory_,
+      std::move(args));
 }
 
 } // namespace mlx::core::fast

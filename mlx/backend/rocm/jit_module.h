@@ -114,6 +114,37 @@ class JitModule {
   std::unordered_map<std::string, std::pair<hipFunction_t, bool>> kernels_;
 };
 
+// Launch a module (JIT/CustomKernel) function, batching it into the HIP graph
+// when graphs are enabled (its hipFunction_t becomes a graph kernel node) or
+// launching immediately otherwise. When batched, the KernelArgs storage is moved
+// into a heap holder kept alive until the graph is instantiated.
+inline void launch_module_kernel(
+    CommandEncoder& encoder,
+    hipFunction_t kernel,
+    dim3 grid,
+    dim3 block,
+    uint32_t smem_bytes,
+    KernelArgs&& args) {
+  if (use_hip_graphs()) {
+    auto held = std::make_shared<KernelArgs>(std::move(args));
+    encoder.add_module_kernel_node(
+        reinterpret_cast<void*>(kernel),
+        grid,
+        block,
+        smem_bytes,
+        held->args(),
+        std::static_pointer_cast<void>(held));
+  } else {
+    encoder.launch_kernel([&](hipStream_t stream) {
+      (void)hipModuleLaunchKernel(
+          kernel,
+          grid.x, grid.y, grid.z,
+          block.x, block.y, block.z,
+          smem_bytes, stream, args.args(), nullptr);
+    });
+  }
+}
+
 std::unordered_map<std::string, JitModule>& get_jit_module_cache();
 
 JitModule& get_jit_module(

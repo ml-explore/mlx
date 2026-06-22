@@ -57,6 +57,9 @@ void eval(array& arr) {
   // whatever device is current (often device 0) while kernels run on the
   // stream's device, stranding the model on the wrong GPU.
   encoder.device().make_current();
+  if (rocm::use_hip_graphs()) {
+    rocm::set_current_prim(arr.primitive().name());
+  }
   {
     std::vector<array> inputs;
     if (arr.is_tracer()) {

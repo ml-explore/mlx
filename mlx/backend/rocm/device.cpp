@@ -1,5 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
+#include <algorithm>
 #include <atomic>
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/utils.h"
@@ -11,6 +12,7 @@
 #include <cstring>
 #include <future>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -32,6 +34,32 @@ inline bool is_empty_dim(dim3 dim) {
 bool use_hip_graphs() {
   static bool use_graphs = std::getenv("MLX_USE_HIP_GRAPHS") != nullptr;
   return use_graphs;
+}
+
+// Reuse-path diagnostics (MLX_GRAPH_REUSE_STATS).
+std::atomic<long> g_reuse_update_{0};
+std::atomic<long> g_reuse_reinst_{0};
+std::atomic<long> g_reuse_new_{0};
+// Launch-count diagnostics: graph launches (hipGraphLaunch, one per commit) vs
+// inline launches (library GEMM / JIT / memset routed through launch_kernel,
+// which graph-splits). MLX_GRAPH_REUSE_STATS prints these too.
+std::atomic<long> g_graph_launches_{0};
+std::atomic<long> g_inline_launches_{0};
+std::atomic<long> g_kernel_nodes_{0};
+static thread_local const char* g_cur_prim_ = "?";
+static std::mutex g_inline_by_op_mtx_;
+static std::unordered_map<std::string, long> g_inline_by_op_;
+static const bool g_reuse_stats_on_ =
+    std::getenv("MLX_GRAPH_REUSE_STATS") != nullptr;
+void set_current_prim(const char* name) {
+  g_cur_prim_ = name ? name : "?";
+}
+void record_inline_launch() {
+  g_inline_launches_.fetch_add(1, std::memory_order_relaxed);
+  if (g_reuse_stats_on_) {
+    std::lock_guard<std::mutex> lk(g_inline_by_op_mtx_);
+    g_inline_by_op_[g_cur_prim_]++;
+  }
 }
 
 // Per-arch op/MB caps for the build graph. Tunable via env.
@@ -403,13 +431,11 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
     graph_nodes_key_ += "-";
   }
   std::vector<GraphNode> deps;
-  {
-    std::unordered_set<hipGraphNode_t> set_deps;
-    for (auto d : active_deps_) {
-      if (auto it = node_map_.find(d); it != node_map_.end()) {
-        if (set_deps.insert(it->second.node).second) {
-          deps.push_back(it->second);
-        }
+  std::unordered_set<hipGraphNode_t> set_deps;
+  for (auto d : active_deps_) {
+    if (auto it = node_map_.find(d); it != node_map_.end()) {
+      if (set_deps.insert(it->second.node).second) {
+        deps.push_back(it->second);
       }
     }
   }
@@ -432,6 +458,28 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
       graph_deps_key_ += "-";
     }
   }
+
+  // (2) Submission-order CHAIN edge. Serialize every node behind the previously
+  // inserted node so the graph's execution order is a superset of eager's
+  // serial-on-one-stream order — even for kernels that register no I/O (dense
+  // GEMM path and a few others), whose nodes would otherwise have no edges and
+  // race their true producers/consumers at any cap > 1. The chain is
+  // deterministic for a given node sequence, so identical kernel sequences
+  // still produce identical topology and hipGraphExecUpdate stays valid. Skip
+  // an edge already present as a real data dep (avoid an exact duplicate edge).
+  hipGraphNode_t prev = last_node_;
+  for (auto& to : nodes) {
+    // A real-dep edge prev->to was already added iff prev is in set_deps; skip
+    // then so we never add an exact duplicate edge (HIP rejects duplicates).
+    // Internal batch nodes are never external producers, so they always chain.
+    if (prev && !set_deps.count(prev)) {
+      from_nodes_.push_back(prev);
+      to_nodes_.push_back(to.node);
+      graph_deps_key_ += "c-";
+    }
+    prev = to.node;
+  }
+  last_node_ = prev;
 }
 
 void CommandEncoder::add_kernel_node_raw(
@@ -457,6 +505,9 @@ void CommandEncoder::add_kernel_node_raw(
   hipGraphNode_t node;
   CHECK_HIP_ERROR(
       hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kernel_params));
+  g_kernel_nodes_.fetch_add(1, std::memory_order_relaxed);
+  build_nodes_.push_back(node);
+  build_node_params_.push_back(kernel_params);
   // Key the node by its kernel FUNCTION (+ launch dims), not just "K": the exec
   // cache is reused via hipGraphExecUpdate only on a matching key, and update
   // can only re-point params of an IDENTICAL kernel sequence. A type-only key
@@ -468,6 +519,32 @@ void CommandEncoder::add_kernel_node_raw(
   key += "x";
   key += std::to_string(block_dim.x * block_dim.y * block_dim.z);
   insert_graph_dependencies(GraphNode{node, key});
+}
+
+void CommandEncoder::add_module_kernel_node(
+    void* func,
+    dim3 grid_dim,
+    dim3 block_dim,
+    uint32_t smem_bytes,
+    void** params,
+    std::shared_ptr<void> args_keepalive) {
+  if (!use_hip_graphs()) {
+    device_.make_current();
+    CHECK_HIP_ERROR(hipModuleLaunchKernel(
+        reinterpret_cast<hipFunction_t>(func),
+        grid_dim.x, grid_dim.y, grid_dim.z,
+        block_dim.x, block_dim.y, block_dim.z,
+        smem_bytes, stream_, params, nullptr));
+    node_count_++;
+    return;
+  }
+  // Graph path: the node references `params` (which point into the kept-alive
+  // KernelArgs) until commit instantiates the graph. A module hipFunction_t is a
+  // valid hipKernelNodeParams.func on ROCm 7.13 (see device.h note).
+  if (args_keepalive) {
+    graph_node_args_.push_back(std::move(args_keepalive));
+  }
+  add_kernel_node_raw(func, grid_dim, block_dim, smem_bytes, params);
 }
 
 void CommandEncoder::add_child_graph_node(
@@ -540,31 +617,61 @@ void CommandEncoder::commit() {
     static const bool no_reuse = std::getenv("MLX_GRAPH_NO_REUSE") != nullptr;
     hipGraphExec_t graph_exec = nullptr;
     bool cached_exec = false;
+    bool build_graph_adopted = false; // build_graph_ became a slot's source graph
     std::shared_ptr<std::atomic<int>> inflight;
     ExecSlot* used_slot = nullptr;
     if (!no_reuse) {
-      // Reuse an exec for an identical kernel sequence via hipGraphExecUpdate.
-      // Real data-dependency edges give each node a unique identity so the
-      // update re-maps kernelParams correctly. Per-slot Pack ownership (clr#138)
-      // keeps the source graph + arg Packs alive for the exec's life. Only reuse
-      // a drained slot (inflight==0); otherwise grow the pool.
+      // Reuse a drained exec (inflight==0) for an identical kernel sequence. We
+      // DON'T use hipGraphExecUpdate — it returns success but mis-maps params in
+      // the model's complex DAG. Instead we refresh each node's params by handle
+      // (hipGraphExecKernelNodeSetParams), keyed by our own insertion order, which
+      // is deterministic. The slot keeps the source graph + ordered node handles +
+      // arg Packs alive for the exec's life. MLX_GRAPH_REINST_SLOT forces the
+      // reinstantiate fallback (diagnostic).
+      // SetParams reuse is opt-in (MLX_GRAPH_SETPARAMS): it currently corrupts
+      // the kernarg of some complex by-value-struct kernels (e.g. copy_gg_byval)
+      // — hipGraphExecKernelNodeSetParams returns success but nulls the arg
+      // segment. Default to reinstantiate-into-slot, which is correct.
+      static const bool use_setparams =
+          std::getenv("MLX_GRAPH_SETPARAMS") != nullptr;
+      static const bool stats = std::getenv("MLX_GRAPH_REUSE_STATS") != nullptr;
       auto& pool = exec_pool_[graph_nodes_key_ + ":" + graph_deps_key_];
       for (auto& slot : pool) {
         if (slot.inflight->load(std::memory_order_acquire) != 0) {
           continue;
         }
-        hipGraphExecUpdateResult ur;
-        hipGraphNode_t en;
-        if (hipGraphExecUpdate(slot.exec, build_graph_, &en, &ur) ==
-                hipSuccess &&
-            ur == hipGraphExecUpdateSuccess) {
+        bool refreshed = false;
+        if (use_setparams &&
+            slot.src_nodes.size() == build_node_params_.size()) {
+          refreshed = true;
+          for (size_t i = 0; i < slot.src_nodes.size(); i++) {
+            if (hipGraphExecKernelNodeSetParams(
+                    slot.exec, slot.src_nodes[i], &build_node_params_[i]) !=
+                hipSuccess) {
+              (void)hipGetLastError();
+              refreshed = false;
+              break;
+            }
+          }
+        }
+        if (refreshed) {
+          // exec still instantiated from slot.source_graph/src_nodes (unchanged);
+          // only its params were refreshed to point at the current build's Packs.
           graph_exec = slot.exec;
+          if (stats) g_reuse_update_++;
         } else {
-          (void)hipGetLastError();
+          // Fallback: reinstantiate into this slot from the new build graph.
           hipGraphExecDestroy(slot.exec);
           CHECK_HIP_ERROR(hipGraphInstantiate(
               &slot.exec, build_graph_, nullptr, nullptr, 0));
           graph_exec = slot.exec;
+          slot.src_nodes = build_nodes_;
+          if (slot.source_graph) {
+            hipGraphDestroy(slot.source_graph);
+          }
+          slot.source_graph = build_graph_;
+          build_graph_adopted = true;
+          if (stats) g_reuse_reinst_++;
         }
         inflight = slot.inflight;
         used_slot = &slot;
@@ -574,8 +681,10 @@ void CommandEncoder::commit() {
         CHECK_HIP_ERROR(
             hipGraphInstantiate(&graph_exec, build_graph_, nullptr, nullptr, 0));
         inflight = std::make_shared<std::atomic<int>>(0);
-        pool.push_back({graph_exec, inflight, nullptr, {}});
+        pool.push_back({graph_exec, inflight, build_graph_, {}, build_nodes_});
         used_slot = &pool.back();
+        build_graph_adopted = true;
+        if (stats) g_reuse_new_++;
       }
       inflight->store(1, std::memory_order_release);
       cached_exec = true;
@@ -622,6 +731,7 @@ void CommandEncoder::commit() {
     }
 
     CHECK_HIP_ERROR(hipGraphLaunch(graph_exec, stream_));
+    g_graph_launches_.fetch_add(1, std::memory_order_relaxed);
     // The completion handler fires after the stream drains this commit's launch.
     // Pooled execs: clear inflight so the slot can be ExecUpdate-reused.
     // Non-pooled (no_reuse): destroy the exec to avoid leaking it.
@@ -642,19 +752,22 @@ void CommandEncoder::commit() {
     active_outputs_.clear();
     last_node_ = nullptr;
     bytes_in_graph_ = 0;
+    build_nodes_.clear();
+    build_node_params_.clear();
 
     if (cached_exec) {
-      // clr#138: the exec keeps the kernelParams BY POINTER into build_graph_'s
-      // nodes + our Packs, and is relaunched in later tokens, so they must live
-      // as long as it points at them. Transfer ownership to the slot; release the
-      // slot's PREVIOUS graph + Packs — its prior launch has drained (only
-      // inflight==0 slots are reused), so nothing reads them. Build next fresh.
-      if (used_slot->source_graph) {
-        hipGraphDestroy(used_slot->source_graph);
-      }
-      used_slot->source_graph = build_graph_;
+      // The exec references the current build's Packs by pointer (via SetParams
+      // or instantiate) and is relaunched in later tokens, so the Packs must
+      // outlive the slot's next use. Move them into the slot, releasing its prior
+      // Packs — the slot's prior launch has drained (only inflight==0 reused), so
+      // nothing reads them. The slot's source_graph/src_nodes were set above when
+      // adopted; if the new build graph was NOT adopted (SetParams refresh kept
+      // the original source graph), destroy it. Always build the next chunk fresh.
       used_slot->packs = std::move(graph_node_args_);
       graph_node_args_.clear();
+      if (!build_graph_adopted) {
+        hipGraphDestroy(build_graph_);
+      }
       CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
     } else {
       // no_reuse: the exec is destroyed once its launch drains; its Packs stay
@@ -691,6 +804,24 @@ void CommandEncoder::synchronize() {
   graph_node_args_.clear();
   graph_node_args_prev_.clear();
   if (use_hip_graphs()) flush_graph_deferred_frees();
+  static const bool stats = std::getenv("MLX_GRAPH_REUSE_STATS") != nullptr;
+  if (stats) {
+    fprintf(stderr,
+            "[reuse-stats] update=%ld reinst=%ld new=%ld | "
+            "graph_launches=%ld inline_launches=%ld kernel_nodes=%ld\n",
+            g_reuse_update_.load(), g_reuse_reinst_.load(),
+            g_reuse_new_.load(), g_graph_launches_.load(),
+            g_inline_launches_.load(), g_kernel_nodes_.load());
+    std::lock_guard<std::mutex> lk(g_inline_by_op_mtx_);
+    std::vector<std::pair<std::string, long>> v(
+        g_inline_by_op_.begin(), g_inline_by_op_.end());
+    std::sort(v.begin(), v.end(),
+              [](auto& a, auto& b) { return a.second > b.second; });
+    std::string line = "[inline-by-op]";
+    for (size_t i = 0; i < v.size() && i < 12; i++)
+      line += " " + v[i].first + "=" + std::to_string(v[i].second);
+    fprintf(stderr, "%s\n", line.c_str());
+  }
 }
 
 // Global flag: true while any stream on this process is recording a HIP graph.
