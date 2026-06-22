@@ -1850,6 +1850,20 @@ void init_ops(nb::module_& m) {
             ValueError: If ``copy`` is ``False``.
       )pbdoc");
   m.def(
+      "from_dlpack",
+      [](const nb::object& a) { return create_array(a, std::nullopt); },
+      nb::arg(),
+      nb::sig("def from_dlpack(x: object, /) -> array"),
+      R"pbdoc(
+        Convert a DLPack compatible object to an array.
+
+        Args:
+            x: A DLPack compatible object.
+
+        Returns:
+            array: An array view of the DLPack object.
+      )pbdoc");
+  m.def(
       "zeros_like",
       &mx::zeros_like,
       nb::arg(),
