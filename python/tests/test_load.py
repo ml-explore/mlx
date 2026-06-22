@@ -115,6 +115,13 @@ class TestLoad(mlx_tests.MLXTestCase):
         )
         with self.assertRaises(RuntimeError):
             mx.eval(out)
+        # The error should propagate on both streams, but the Event impl of
+        # CUDA backend signals via gpu stream which adds a Fence wait which
+        # does a synchronous wait, so error surfaced early in producer_stream
+        # before poisoning the producer_stream.
+        if not mx.cuda.is_available():
+            with self.assertRaises(RuntimeError):
+                mx.synchronize(producer_stream)
 
     def test_save_and_load_safetensors(self):
         test_file = os.path.join(self.test_dir, "test.safetensors")

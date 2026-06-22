@@ -12,13 +12,12 @@ class EventImpl {
 
   void wait(uint64_t value);
   void signal(uint64_t value);
-  void set_error(Error& error);
 
-  Error* error() const {
-    return error_.load();
+  auto& error() {
+    return error_;
   }
 
-  auto* mtl_event() {
+  auto* mtl_event() const {
     return mtl_event_.get();
   }
 
