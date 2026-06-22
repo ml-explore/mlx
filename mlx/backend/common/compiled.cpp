@@ -240,7 +240,10 @@ bool compiled_use_large_index(
     if (max_size > UINT32_MAX) {
       return true;
     }
-    // Check for negative strides in inputs (strides[0] is the output).
+    // Force int64_t indices when any input has negative strides, since
+    // unsigned elem_to_loc wraps negative values. strides is ordered
+    // [output, input_0, input_1, ...] from compiled_collapse_contiguous_dims;
+    // the output is freshly allocated so its strides are always non-negative.
     for (size_t i = 1; i < strides.size(); ++i) {
       for (auto v : strides[i]) {
         if (v < 0) {
