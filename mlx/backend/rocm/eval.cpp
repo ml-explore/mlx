@@ -9,6 +9,7 @@
 
 #include <hip/hip_runtime.h>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 
 namespace mlx::core::gpu {
@@ -34,9 +35,21 @@ void new_stream(Stream s) {
   rocm::HipEvent(hipEventDefault);
 }
 
+// Ops whose kernels corrupt when batched into a multi-node HIP graph with
+// neighbors (a ROCm CLR kernarg-pool interaction; found by per-op force-execute
+// bisection). Isolate them: flush the graph before AND after so they run alone.
+static bool is_graph_split_op(const char* name) {
+  return std::strcmp(name, "Concatenate") == 0;
+}
+
 void eval(array& arr) {
   auto outputs = arr.outputs();
   auto& encoder = rocm::get_command_encoder(arr.primitive().stream());
+  const bool split =
+      rocm::use_hip_graphs() && is_graph_split_op(arr.primitive().name());
+  if (split) {
+    encoder.commit(); // flush ops accumulated before this one
+  }
   // Bind the stream's device before eval_gpu so output buffers allocate on the
   // same device the kernels run on. Otherwise (multi-GPU) outputs land on
   // whatever device is current (often device 0) while kernels run on the
@@ -61,7 +74,7 @@ void eval(array& arr) {
 
   if (rocm::use_hip_graphs()) {
     auto& stream = arr.primitive().stream();
-    if (encoder.needs_commit()) {
+    if (split || encoder.needs_commit()) {
       scheduler::notify_new_task(stream);
       encoder.add_completed_handler(
           [stream]() { scheduler::notify_task_completion(stream); });
@@ -71,25 +84,23 @@ void eval(array& arr) {
     encoder.maybe_commit();
   }
 
-  // Bisection: force-execute each op and dump an output checksum. Run eager and
-  // graphs-ON with MLX_GRAPH_CHECKSUM and diff -> first divergence = buggy op.
-  static const bool g_cks = std::getenv("MLX_GRAPH_CHECKSUM") != nullptr;
-  if (g_cks) {
-    encoder.commit();
-    encoder.synchronize();
-    static int idx = 0;
-    for (auto& o : outputs) {
-      size_t bytes = o.data_size() * o.itemsize();
-      unsigned long long s = 0;
-      if (bytes > 0 && o.data_shared_ptr() != nullptr) {
-        std::vector<unsigned char> h(bytes);
-        if (hipMemcpy(h.data(), o.data<char>(), bytes,
-                      hipMemcpyDeviceToHost) == hipSuccess) {
-          for (auto c : h)
-            s += c;
-        }
+  // Bisection: batch ops [0, FORCE_FROM) into graphs (per cap), force-execute
+  // (commit+sync = correct) every op >= FORCE_FROM. The smallest FORCE_FROM that
+  // turns the output to garbage pinpoints the first op whose batching breaks.
+  if (rocm::use_hip_graphs()) {
+    static const int force_from = std::getenv("MLX_GRAPH_FORCE_FROM")
+        ? std::atoi(std::getenv("MLX_GRAPH_FORCE_FROM"))
+        : -1;
+    if (force_from >= 0) {
+      static int gidx = 0;
+      int my = gidx++;
+      if (my >= force_from) {
+        encoder.commit();
+        encoder.synchronize();
       }
-      fprintf(stderr, "[cks] %d sum=%llu bytes=%zu\n", idx++, s, bytes);
+      static const bool ftr = std::getenv("MLX_GRAPH_FORCE_TRACE") != nullptr;
+      if (ftr && my >= force_from - 6 && my <= force_from + 1)
+        fprintf(stderr, "[ff] op %d : %s\n", my, arr.primitive().name());
     }
   }
 }

@@ -34,13 +34,11 @@ bool use_hip_graphs() {
 }
 
 // Per-arch op/MB caps for the build graph. Tunable via env.
-// NOTE: capped at 2 (=> graphs of <=3 kernel nodes). ROCm CLR has a per-node
-// kernarg corruption bug (hip#3887 / clr#138) that produces WRONG results once a
-// single instantiated graph holds >~3 heterogeneous kernel nodes — verified here
-// (3-node graphs match eager bit-for-bit; 4+ produce garbage). Until AMD fixes
-// CLR, keep graphs tiny for correctness. This limits the batching speedup.
+// The earlier "corrupts at >3 nodes" was actually one bad op (Concatenate, whose
+// multi-copy kernels corrupt when co-grouped); it is now graph-split in
+// gpu::eval (is_graph_split_op), so large graphs are correct again.
 static std::pair<int, int> get_graph_limits() {
-  int ops = env::max_ops_per_buffer(2);
+  int ops = env::max_ops_per_buffer(50);
   int mb = env::max_mb_per_buffer(200);
   return {ops, mb};
 }
