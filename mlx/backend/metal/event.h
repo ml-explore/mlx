@@ -12,20 +12,17 @@ class EventImpl {
 
   void wait(uint64_t value);
   void signal(uint64_t value);
-  void set_error(std::shared_ptr<std::string> error);
-  void check_error();
 
-  const auto& error() const {
+  Event::Error& error() {
     return error_;
   }
 
-  auto* mtl_event() {
+  auto* mtl_event() const {
     return mtl_event_.get();
   }
 
  private:
-  // TODO: Use std::atomic<std::shared_ptr> when it gets supported in Xcode.
-  std::shared_ptr<std::string> error_;
+  Event::Error error_;
 
   NS::SharedPtr<MTL::SharedEvent> mtl_event_;
 };
