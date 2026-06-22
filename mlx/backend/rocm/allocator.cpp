@@ -693,9 +693,20 @@ void free_graph_generation(uint64_t gen) {
     }
     g_deferred_frees.swap(keep);
   }
-  // force=true: graph_active() is true for the whole auto-batch session, so a
-  // normal free() would just re-defer these and leak them forever.
+  // Diagnostic (MLX_GRAPH_POISON_FREE): instead of releasing, overwrite the
+  // buffer with a sentinel and LEAK it (keep it mapped). If a later kernel reads
+  // a buffer we freed too early, the output turns to garbage (not a crash) and
+  // the buffer stays mapped — so the fault is a read-after-free we can bisect,
+  // rather than an unmapped-page segfault.
+  static const bool poison = std::getenv("MLX_GRAPH_POISON_FREE") != nullptr;
   for (auto b : to_free) {
+    if (poison) {
+      auto* buf = static_cast<RocmBuffer*>(b.ptr());
+      if (buf && buf->data) {
+        (void)hipMemset(buf->data, 0x7F, buf->size);
+      }
+      continue; // leak: keep it mapped with sentinel contents
+    }
     allocator().free(b, /*force=*/true);
   }
 }
@@ -714,7 +725,11 @@ void RocmAllocator::free(Buffer buffer, bool force) {
   // until the chunk launches. Tag with the current generation so it can be
   // reclaimed as soon as that chunk completes (see free_graph_generation).
   // force=true skips this (used by the deferred-free flush itself).
-  if (!force && graph_active()) {
+  // MLX_GRAPH_NODEFER: skip deferral entirely and rely on add_temporary (which
+  // holds every graph input's array::Data until its chunk's completion handler)
+  // — testing whether defer-all is redundant for the auto-batch path.
+  static const bool nodefer = std::getenv("MLX_GRAPH_NODEFER") != nullptr;
+  if (!force && !nodefer && graph_active()) {
     std::lock_guard<std::mutex> lk(g_deferred_mutex);
     g_deferred_frees.push_back({g_graph_gen.load(std::memory_order_relaxed),
                                 buffer});
