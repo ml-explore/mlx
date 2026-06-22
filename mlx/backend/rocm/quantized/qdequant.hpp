@@ -115,17 +115,11 @@ __device__ __forceinline__ void load_weight_vec(
     out[0] = v.x;
     out[1] = v.y;
   } else if constexpr (PPT == 4) {
-    // Two uint2 loads instead of one uint4. The single-uint4 load
-    // (global_load_b128) miscomputes in the 8-bit affine QMV/gather paths
-    // (root cause: HIP_vector_type<unsigned int,4> codegen on RDNA 3.5 with
-    // hipcc 7.13 / LLVM 23). Two paired global_load_b64 ops yield the same
-    // throughput on RDNA 3.5 without the miscompile.
-    uint2 v0 = *reinterpret_cast<const uint2*>(ptr);
-    uint2 v1 = *reinterpret_cast<const uint2*>(ptr + 2);
-    out[0] = v0.x;
-    out[1] = v0.y;
-    out[2] = v1.x;
-    out[3] = v1.y;
+    uint4 v = *reinterpret_cast<const uint4*>(ptr);
+    out[0] = v.x;
+    out[1] = v.y;
+    out[2] = v.z;
+    out[3] = v.w;
   } else {
 #pragma unroll
     for (int p = 0; p < PPT; p++) {
@@ -136,13 +130,34 @@ __device__ __forceinline__ void load_weight_vec(
 
 // Non-temporal weight load for GEMV: weights are read once, so emit streaming
 // (slc) loads that bypass L2, leaving it for the reused X/scales. GEMV-only.
+// Widened to vector transactions (was PPT scalar loads): 4-bit (PPT=2) -> one
+// b64, 8-bit (PPT=4) -> one b128. A single b128 is correct on RDNA 3.5 (gfx1151,
+// hipcc 7.13) — verified bit-identical 8-bit affine decode — so no arch split.
+// Fewer, wider loads raise memory-level parallelism on the latency-bound M=1
+// decode matvec.
 template <int BITS>
 __device__ __forceinline__ void load_weight_vec_streaming(
     const uint32_t* __restrict__ ptr,
     uint32_t (&out)[packs_per_thread<BITS>]) {
   constexpr int PPT = packs_per_thread<BITS>;
+  int p = 0;
 #pragma unroll
-  for (int p = 0; p < PPT; p++) {
+  for (; p + 4 <= PPT; p += 4) {
+    uint4 v = __builtin_nontemporal_load(
+        reinterpret_cast<const uint4*>(ptr) + (p >> 2));
+    out[p] = v.x;
+    out[p + 1] = v.y;
+    out[p + 2] = v.z;
+    out[p + 3] = v.w;
+  }
+#pragma unroll
+  for (; p + 2 <= PPT; p += 2) {
+    uint2 v = __builtin_nontemporal_load(reinterpret_cast<const uint2*>(ptr + p));
+    out[p] = v.x;
+    out[p + 1] = v.y;
+  }
+#pragma unroll
+  for (; p < PPT; p++) {
     out[p] = __builtin_nontemporal_load(ptr + p);
   }
 }

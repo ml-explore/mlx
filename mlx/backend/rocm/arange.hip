@@ -17,6 +17,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = rocm::get_command_encoder(s);
   
   out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
+  encoder.set_output_array(out);
 
   size_t size = out.size();
   int block_size = 256;

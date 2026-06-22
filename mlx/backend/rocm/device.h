@@ -17,6 +17,7 @@
 #endif
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -206,6 +207,26 @@ class CommandEncoder {
   int max_ops_per_graph_{50};
   int max_mb_per_graph_{200};
   LRUCache<hipGraphExec_t> graph_cache_{400};
+  // Per-topology exec pool for hipGraphExecUpdate reuse. The same kernel
+  // sequence (e.g. one GDN layer's graph) recurs many times per token, all
+  // launched async on one stream with NO sync between them. Updating a single
+  // shared exec in-flight corrupts (a queued launch then reads another layer's
+  // params). So we keep a pool per topology key and only ExecUpdate+reuse a
+  // slot whose prior launch has drained (inflight==0); otherwise we grow the
+  // pool. Across tokens (synced) every slot is free, so slot 0 is reused.
+  // ROCm CLR (clr#138) stores kernel-node kernelParams BY POINTER, not a deep
+  // copy (CUDA deep-copies). So a cached exec keeps reading the source graph's
+  // nodes and our arg Packs by address — they must outlive the exec, not be
+  // freed per-token. Each slot OWNS the graph + Packs its exec currently points
+  // at; on reuse (the slot has drained, inflight==0) the old ones are released
+  // and the new build's graph + Packs take their place.
+  struct ExecSlot {
+    hipGraphExec_t exec;
+    std::shared_ptr<std::atomic<int>> inflight;
+    hipGraph_t source_graph{nullptr};
+    std::vector<std::shared_ptr<void>> packs;
+  };
+  std::unordered_map<std::string, std::vector<ExecSlot>> exec_pool_;
   // Per-build kernel-arg packs: keep the kernelParams values alive while the
   // (async) exec may reference them. Held one extra commit via _prev_.
   std::vector<std::shared_ptr<void>> graph_node_args_;

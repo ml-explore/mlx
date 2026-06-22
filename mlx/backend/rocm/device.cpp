@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <future>
 #include <iostream>
 #include <sstream>
@@ -332,6 +333,14 @@ CommandEncoder::CommandEncoder(Device& d)
 }
 
 CommandEncoder::~CommandEncoder() {
+  for (auto& [key, pool] : exec_pool_) {
+    for (auto& slot : pool) {
+      hipGraphExecDestroy(slot.exec);
+      if (slot.source_graph) {
+        hipGraphDestroy(slot.source_graph);
+      }
+    }
+  }
   if (build_graph_) {
     hipGraphDestroy(build_graph_);
     build_graph_ = nullptr;
@@ -376,23 +385,52 @@ void CommandEncoder::insert_graph_dependencies(GraphNode node) {
 }
 
 void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
-  // Serialize the graph into a linear chain in submission order. This matches
-  // eager single-stream execution order exactly (correct), while still
-  // collapsing all kernels into one hipGraphLaunch (the batching win). The
-  // dep-based edges from set_input/output_array were unreliable because not
-  // every migrated kernel registers all of its inputs/outputs, leaving missing
-  // edges and races; a linear chain is robust and costs nothing over eager
-  // (which is already serial on the stream).
-  active_deps_.clear();
-  active_outputs_.clear();
+  // Two edge sets combined:
+  //  (1) REAL data-dependency edges (node_map_: buffer ptr -> producing node).
+  //      These give each node a unique data-flow identity, which
+  //      hipGraphExecUpdate relies on to re-map kernelParams correctly across
+  //      reuse — a bare submission chain leaves same-signature nodes ambiguous
+  //      and corrupts under ExecUpdate.
+  //  (2) A submission-order CHAIN edge (last_node_ -> node) as a backstop. Not
+  //      every migrated kernel registers all of its I/O (the dense GEMM path and
+  //      a few others register nothing), so the real-dep graph alone has missing
+  //      edges -> races -> coherent-but-wrong output. The chain is a superset of
+  //      the true partial order (eager runs serial on one stream), so it fills
+  //      every gap and makes the graph bit-correct vs eager, while the real
+  //      edges still uniquely identify nodes for ExecUpdate.
   for (auto& node : nodes) {
     graph_nodes_key_ += node.node_type;
     graph_nodes_key_ += "-";
-    if (last_node_ != nullptr) {
-      from_nodes_.push_back(last_node_);
-      to_nodes_.push_back(node.node);
+  }
+  std::vector<GraphNode> deps;
+  {
+    std::unordered_set<hipGraphNode_t> set_deps;
+    for (auto d : active_deps_) {
+      if (auto it = node_map_.find(d); it != node_map_.end()) {
+        if (set_deps.insert(it->second.node).second) {
+          deps.push_back(it->second);
+        }
+      }
     }
-    last_node_ = node.node;
+  }
+  active_deps_.clear();
+
+  for (auto o : active_outputs_) {
+    for (auto& node : nodes) {
+      node_map_.emplace(o, node).first->second = node;
+    }
+  }
+  active_outputs_.clear();
+
+  for (auto& from : deps) {
+    for (auto& to : nodes) {
+      from_nodes_.push_back(from.node);
+      to_nodes_.push_back(to.node);
+      graph_deps_key_ += from.id;
+      graph_deps_key_ += "-";
+      graph_deps_key_ += to.id;
+      graph_deps_key_ += "-";
+    }
   }
 }
 
@@ -499,34 +537,48 @@ void CommandEncoder::commit() {
 
     device_.make_current();
 
-    static const bool reuse = std::getenv("MLX_GRAPH_REUSE") != nullptr;
+    static const bool no_reuse = std::getenv("MLX_GRAPH_NO_REUSE") != nullptr;
     hipGraphExec_t graph_exec = nullptr;
     bool cached_exec = false;
-    if (reuse) {
-      // Reuse the exec for an identical kernel sequence via hipGraphExecUpdate
-      // (the key includes each kernel's func ptr + dims, so no cross-sequence
-      // mis-reuse). Avoids a fresh hipGraphInstantiate every commit.
-      size_t key = std::hash<std::string>{}(graph_nodes_key_);
-      auto c = graph_cache_.get(key);
-      if (c) {
-        graph_exec = *c;
+    std::shared_ptr<std::atomic<int>> inflight;
+    ExecSlot* used_slot = nullptr;
+    if (!no_reuse) {
+      // Reuse an exec for an identical kernel sequence via hipGraphExecUpdate.
+      // Real data-dependency edges give each node a unique identity so the
+      // update re-maps kernelParams correctly. Per-slot Pack ownership (clr#138)
+      // keeps the source graph + arg Packs alive for the exec's life. Only reuse
+      // a drained slot (inflight==0); otherwise grow the pool.
+      auto& pool = exec_pool_[graph_nodes_key_ + ":" + graph_deps_key_];
+      for (auto& slot : pool) {
+        if (slot.inflight->load(std::memory_order_acquire) != 0) {
+          continue;
+        }
         hipGraphExecUpdateResult ur;
         hipGraphNode_t en;
-        if (hipGraphExecUpdate(graph_exec, build_graph_, &en, &ur) ==
+        if (hipGraphExecUpdate(slot.exec, build_graph_, &en, &ur) ==
                 hipSuccess &&
             ur == hipGraphExecUpdateSuccess) {
-          cached_exec = true;
+          graph_exec = slot.exec;
         } else {
           (void)hipGetLastError();
-          graph_exec = nullptr;
+          hipGraphExecDestroy(slot.exec);
+          CHECK_HIP_ERROR(hipGraphInstantiate(
+              &slot.exec, build_graph_, nullptr, nullptr, 0));
+          graph_exec = slot.exec;
         }
+        inflight = slot.inflight;
+        used_slot = &slot;
+        break;
       }
       if (graph_exec == nullptr) {
         CHECK_HIP_ERROR(
             hipGraphInstantiate(&graph_exec, build_graph_, nullptr, nullptr, 0));
-        graph_cache_.put(key, graph_exec);
-        cached_exec = true;
+        inflight = std::make_shared<std::atomic<int>>(0);
+        pool.push_back({graph_exec, inflight, nullptr, {}});
+        used_slot = &pool.back();
       }
+      inflight->store(1, std::memory_order_release);
+      cached_exec = true;
     } else {
       CHECK_HIP_ERROR(
           hipGraphInstantiate(&graph_exec, build_graph_, nullptr, nullptr, 0));
@@ -570,10 +622,15 @@ void CommandEncoder::commit() {
     }
 
     CHECK_HIP_ERROR(hipGraphLaunch(graph_exec, stream_));
-    // Destroy the exec once its (async) launch completes (completion handler
-    // fires after the stream passes this commit) — unless it's cached for reuse.
-    if (!cached_exec)
+    // The completion handler fires after the stream drains this commit's launch.
+    // Pooled execs: clear inflight so the slot can be ExecUpdate-reused.
+    // Non-pooled (no_reuse): destroy the exec to avoid leaking it.
+    if (cached_exec) {
+      add_completed_handler(
+          [inflight]() { inflight->store(0, std::memory_order_release); });
+    } else {
       add_completed_handler([graph_exec]() { hipGraphExecDestroy(graph_exec); });
+    }
 
     // Reset build state for the next chunk.
     from_nodes_.clear();
@@ -583,13 +640,30 @@ void CommandEncoder::commit() {
     node_map_.clear();
     active_deps_.clear();
     active_outputs_.clear();
-    bytes_in_graph_ = 0;
     last_node_ = nullptr;
-    hipGraphDestroy(build_graph_);
-    CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
-    // NOTE: do NOT free graph_node_args_ here. hipGraphLaunch is async and the
-    // exec references the kernelParams until the stream drains. They are freed
-    // in synchronize() once the stream is idle.
+    bytes_in_graph_ = 0;
+
+    if (cached_exec) {
+      // clr#138: the exec keeps the kernelParams BY POINTER into build_graph_'s
+      // nodes + our Packs, and is relaunched in later tokens, so they must live
+      // as long as it points at them. Transfer ownership to the slot; release the
+      // slot's PREVIOUS graph + Packs — its prior launch has drained (only
+      // inflight==0 slots are reused), so nothing reads them. Build next fresh.
+      if (used_slot->source_graph) {
+        hipGraphDestroy(used_slot->source_graph);
+      }
+      used_slot->source_graph = build_graph_;
+      used_slot->packs = std::move(graph_node_args_);
+      graph_node_args_.clear();
+      CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
+    } else {
+      // no_reuse: the exec is destroyed once its launch drains; its Packs stay
+      // in graph_node_args_ (freed in synchronize, after the stream is idle).
+      // Instantiate copied the node structure, so destroying build_graph_ now is
+      // safe.
+      hipGraphDestroy(build_graph_);
+      CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
+    }
   }
 
   node_count_ = 0;
@@ -611,8 +685,9 @@ void CommandEncoder::synchronize() {
   commit();
   f.wait();
   (void)hipStreamSynchronize(stream_);
-  // Stream is fully drained; graph execs are done and no longer reference the
-  // kernelParams. Destroy the retained execs and release the arg packs.
+  // Stream is fully drained. Non-cached (no-reuse) execs reference these Packs
+  // until now; cached-exec Packs live in their ExecSlot (clr#138) and are NOT
+  // in these vectors, so clearing here is safe.
   graph_node_args_.clear();
   graph_node_args_prev_.clear();
   if (use_hip_graphs()) flush_graph_deferred_frees();
