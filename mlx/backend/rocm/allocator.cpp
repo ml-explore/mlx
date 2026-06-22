@@ -93,7 +93,11 @@ static bool use_finegrained() {
 // on where the device supports memory pools; allocations fall back to the
 // unified path only for pool-less devices or stream-less requests.
 static bool use_async_pool() {
-  return true;
+  // MLX_ROCM_NO_ASYNC_POOL: fall back to the unified/slab path. The ROCm async
+  // pool (hipMallocAsync) faults inside the driver under the HIP-graph workload
+  // on gfx1201 (R9700) during async decode — this isolates that.
+  static const bool off = std::getenv("MLX_ROCM_NO_ASYNC_POOL") != nullptr;
+  return !off;
 }
 
 static int alloc_device_tag() {
@@ -594,6 +598,12 @@ Buffer RocmAllocator::malloc(size_t size) {
   return Buffer{buf};
 }
 
+// Serializes ROCm async-pool alloc/free across the eval and worker threads.
+static std::mutex& pool_mutex() {
+  static std::mutex m;
+  return m;
+}
+
 Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
   // During HIP-graph capture, route through the DecodeArena like malloc() does.
   // Otherwise hipMallocAsync below records a MemAlloc node into the captured
@@ -623,7 +633,14 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
   // hipFreeAsync storms that starve the HSA handler pool and wedge. Let the GPU
   // manage its own memory — alloc straight from the pool.
   void* data = nullptr;
-  hipError_t err = hipMallocAsync(&data, size, stream);
+  hipError_t err;
+  {
+    // Serialize pool ops: the eval thread allocates here while the worker thread
+    // frees (free_async -> hipFreeAsync) concurrently; the ROCm async pool faults
+    // under concurrent alloc+free on this path. g_pool_mtx orders them.
+    std::lock_guard<std::mutex> plk(pool_mutex());
+    err = hipMallocAsync(&data, size, stream);
+  }
   if (err != hipSuccess || !data) {
     (void)hipGetLastError();
     return malloc(size); // pool exhausted: fall back to unified
@@ -652,10 +669,13 @@ void RocmAllocator::free_async(RocmBuffer* buf, void* stream_v) {
     (void)hipHostFree(buf->host_shadow);
     buf->host_shadow = nullptr;
   }
-  if (stream) {
-    (void)hipFreeAsync(buf->data, stream);
-  } else {
-    (void)hipFree(buf->data);
+  {
+    std::lock_guard<std::mutex> plk(pool_mutex());
+    if (stream) {
+      (void)hipFreeAsync(buf->data, stream);
+    } else {
+      (void)hipFree(buf->data);
+    }
   }
   delete buf;
 }

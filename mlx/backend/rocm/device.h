@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -332,6 +333,11 @@ class Device {
   bool has_native_wmma_{false};
   int max_shared_memory_per_block_{65536};
   std::unordered_map<int, std::unique_ptr<CommandEncoder>> encoders_;
+  // MLX's scheduler runs a thread per stream, so get_command_encoder() can be
+  // called concurrently (incl. cross-stream AtomicEvent::signal during weight
+  // materialization). The map's find/emplace/rehash is not thread-safe — a
+  // concurrent insert hands back a garbage encoder and crashes. Serialize it.
+  std::mutex encoders_mtx_;
 };
 
 Device& device(mlx::core::Device device);

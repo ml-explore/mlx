@@ -357,6 +357,7 @@ CommandEncoder& Device::get_command_encoder(Stream s) {
   // encoder's stream + the kernels launched on it must land on this device, not
   // whatever was current on the calling thread.
   make_current();
+  std::lock_guard<std::mutex> lk(encoders_mtx_);
   auto it = encoders_.find(s.index);
   if (it == encoders_.end()) {
     auto [inserted_it, success] =
