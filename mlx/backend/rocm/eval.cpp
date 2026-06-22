@@ -39,6 +39,8 @@ void new_stream(Stream s) {
 // neighbors (a ROCm CLR kernarg-pool interaction; found by per-op force-execute
 // bisection). Isolate them: flush the graph before AND after so they run alone.
 static bool is_graph_split_op(const char* name) {
+  static const bool no_split = std::getenv("MLX_NO_CONCAT_SPLIT") != nullptr;
+  if (no_split) return false;
   return std::strcmp(name, "Concatenate") == 0;
 }
 

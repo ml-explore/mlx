@@ -499,13 +499,38 @@ void CommandEncoder::commit() {
 
     device_.make_current();
 
-    // Instantiate a fresh exec each commit and retain it until the stream
-    // drains (destroyed in synchronize()). No exec-cache reuse: hipGraphExecUpdate
-    // keyed on graph structure mis-reuses execs across distinct kernel sequences
-    // and the raw-pointer cache had no destroy-on-evict — both corrupted output.
+    static const bool reuse = std::getenv("MLX_GRAPH_REUSE") != nullptr;
     hipGraphExec_t graph_exec = nullptr;
-    CHECK_HIP_ERROR(
-        hipGraphInstantiate(&graph_exec, build_graph_, nullptr, nullptr, 0));
+    bool cached_exec = false;
+    if (reuse) {
+      // Reuse the exec for an identical kernel sequence via hipGraphExecUpdate
+      // (the key includes each kernel's func ptr + dims, so no cross-sequence
+      // mis-reuse). Avoids a fresh hipGraphInstantiate every commit.
+      size_t key = std::hash<std::string>{}(graph_nodes_key_);
+      auto c = graph_cache_.get(key);
+      if (c) {
+        graph_exec = *c;
+        hipGraphExecUpdateResult ur;
+        hipGraphNode_t en;
+        if (hipGraphExecUpdate(graph_exec, build_graph_, &en, &ur) ==
+                hipSuccess &&
+            ur == hipGraphExecUpdateSuccess) {
+          cached_exec = true;
+        } else {
+          (void)hipGetLastError();
+          graph_exec = nullptr;
+        }
+      }
+      if (graph_exec == nullptr) {
+        CHECK_HIP_ERROR(
+            hipGraphInstantiate(&graph_exec, build_graph_, nullptr, nullptr, 0));
+        graph_cache_.put(key, graph_exec);
+        cached_exec = true;
+      }
+    } else {
+      CHECK_HIP_ERROR(
+          hipGraphInstantiate(&graph_exec, build_graph_, nullptr, nullptr, 0));
+    }
 
     static const bool dump = std::getenv("MLX_HIP_GRAPH_DUMP") != nullptr;
     if (dump) {
@@ -545,11 +570,10 @@ void CommandEncoder::commit() {
     }
 
     CHECK_HIP_ERROR(hipGraphLaunch(graph_exec, stream_));
-    // Destroy the exec once its (async) launch completes — the completion
-    // handler fires on the worker after the stream passes this commit, so the
-    // exec is freed promptly instead of piling up until synchronize() (which
-    // OOMs over a long generation with many tiny graphs).
-    add_completed_handler([graph_exec]() { hipGraphExecDestroy(graph_exec); });
+    // Destroy the exec once its (async) launch completes (completion handler
+    // fires after the stream passes this commit) — unless it's cached for reuse.
+    if (!cached_exec)
+      add_completed_handler([graph_exec]() { hipGraphExecDestroy(graph_exec); });
 
     // Reset build state for the next chunk.
     from_nodes_.clear();
