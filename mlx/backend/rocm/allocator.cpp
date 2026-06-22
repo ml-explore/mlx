@@ -661,30 +661,63 @@ void RocmAllocator::free_async(RocmBuffer* buf, void* stream_v) {
 }
 
 static std::mutex g_deferred_mutex;
-static std::vector<Buffer> g_deferred_frees;
+// Frees deferred during graph build, tagged with the graph generation (chunk)
+// active when the buffer was freed. A generation's buffers are reclaimed once
+// that chunk's launch has completed — NOT hoarded until the per-token
+// synchronize, which ballooned graph-mode memory to a whole token's working set.
+static std::vector<std::pair<uint64_t, Buffer>> g_deferred_frees;
+static std::atomic<uint64_t> g_graph_gen{1};
 
-void flush_graph_deferred_frees() {
+uint64_t graph_current_gen() {
+  return g_graph_gen.load(std::memory_order_relaxed);
+}
+void graph_advance_gen() {
+  g_graph_gen.fetch_add(1, std::memory_order_relaxed);
+}
+
+// Reclaim every deferred buffer from a completed generation (<= gen). Launches
+// retire in stream order, so once chunk `gen` is done, all earlier chunks are
+// too — freeing <= gen never races an in-flight node.
+void free_graph_generation(uint64_t gen) {
   std::vector<Buffer> to_free;
   {
     std::lock_guard<std::mutex> lk(g_deferred_mutex);
-    to_free.swap(g_deferred_frees);
+    std::vector<std::pair<uint64_t, Buffer>> keep;
+    keep.reserve(g_deferred_frees.size());
+    for (auto& p : g_deferred_frees) {
+      if (p.first <= gen) {
+        to_free.push_back(p.second);
+      } else {
+        keep.push_back(p);
+      }
+    }
+    g_deferred_frees.swap(keep);
   }
+  // force=true: graph_active() is true for the whole auto-batch session, so a
+  // normal free() would just re-defer these and leak them forever.
   for (auto b : to_free) {
-    allocator().free(b);
+    allocator().free(b, /*force=*/true);
   }
 }
 
-void RocmAllocator::free(Buffer buffer) {
+void flush_graph_deferred_frees() {
+  free_graph_generation(~uint64_t(0));
+}
+
+void RocmAllocator::free(Buffer buffer, bool force) {
   auto* buf = static_cast<RocmBuffer*>(buffer.ptr());
   if (!buf) {
     return;
   }
 
-  // Defer all frees while a captured graph is alive so its baked buffer
-  // addresses stay valid through replay.
-  if (graph_active()) {
+  // Defer frees while a graph is being built so its nodes' buffers stay valid
+  // until the chunk launches. Tag with the current generation so it can be
+  // reclaimed as soon as that chunk completes (see free_graph_generation).
+  // force=true skips this (used by the deferred-free flush itself).
+  if (!force && graph_active()) {
     std::lock_guard<std::mutex> lk(g_deferred_mutex);
-    g_deferred_frees.push_back(buffer);
+    g_deferred_frees.push_back({g_graph_gen.load(std::memory_order_relaxed),
+                                buffer});
     return;
   }
 

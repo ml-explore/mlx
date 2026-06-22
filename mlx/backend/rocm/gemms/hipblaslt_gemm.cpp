@@ -636,9 +636,7 @@ bool is_hipblaslt_available() {
   // workspace hipMalloc are non-capturable and abort the process if the stream
   // is mid-graph. rocBLAS is graph-safe here, so force it whenever graphs are
   // enabled. (rocBLAS == hipBLASLt speed at decode, so this costs nothing.)
-  static const bool g_graphs =
-      std::getenv("MLX_USE_HIP_GRAPHS") != nullptr;
-  if (g_graphs)
+  if (use_hip_graphs())
     return false;
   // hipBLASLt's lazy init is non-capturable; force rocBLAS during any capture.
   if (stream_capturing())

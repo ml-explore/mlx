@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
 #include <future>
 #include <iostream>
 #include <mutex>
@@ -32,7 +33,17 @@ inline bool is_empty_dim(dim3 dim) {
 } // namespace
 
 bool use_hip_graphs() {
-  static bool use_graphs = std::getenv("MLX_USE_HIP_GRAPHS") != nullptr;
+  // Default ON: batching kernel launches into a HIP graph collapses thousands of
+  // per-token launch submissions into a handful — the win is launch/PCIe traffic
+  // and latency on a discrete GPU over a slow link (e.g. a TB5 eGPU), where each
+  // hipLaunchKernel is a separate command crossing the link. Explicit opt-out via
+  // MLX_USE_HIP_GRAPHS=0; any other value (or unset) leaves graphs enabled.
+  static bool use_graphs = [] {
+    const char* e = std::getenv("MLX_USE_HIP_GRAPHS");
+    if (e && (std::strcmp(e, "0") == 0 || std::strcmp(e, "off") == 0))
+      return false;
+    return true;
+  }();
   return use_graphs;
 }
 
@@ -46,6 +57,17 @@ std::atomic<long> g_reuse_new_{0};
 std::atomic<long> g_graph_launches_{0};
 std::atomic<long> g_inline_launches_{0};
 std::atomic<long> g_kernel_nodes_{0};
+// Per-phase CPU time accumulators (microseconds), MLX_GRAPH_REUSE_STATS.
+std::atomic<long> g_t_addnode_us_{0};   // hipGraphAddKernelNode (construction)
+std::atomic<long> g_t_deps_us_{0};      // dependency wiring
+std::atomic<long> g_t_reuse_us_{0};     // instantiate / execupdate / setparams
+std::atomic<long> g_t_launch_us_{0};    // hipGraphLaunch
+std::atomic<long> g_key_collisions_{0}; // matched slot != current build sig
+static inline long now_us() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
 static thread_local const char* g_cur_prim_ = "?";
 static std::mutex g_inline_by_op_mtx_;
 static std::unordered_map<std::string, long> g_inline_by_op_;
@@ -503,21 +525,36 @@ void CommandEncoder::add_kernel_node_raw(
   kernel_params.kernelParams = params;
   kernel_params.sharedMemBytes = smem_bytes;
   hipGraphNode_t node;
+  long _t0 = g_reuse_stats_on_ ? now_us() : 0;
   CHECK_HIP_ERROR(
       hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kernel_params));
+  if (g_reuse_stats_on_) g_t_addnode_us_ += now_us() - _t0;
   g_kernel_nodes_.fetch_add(1, std::memory_order_relaxed);
   build_nodes_.push_back(node);
   build_node_params_.push_back(kernel_params);
-  // Key the node by its kernel FUNCTION (+ launch dims), not just "K": the exec
-  // cache is reused via hipGraphExecUpdate only on a matching key, and update
-  // can only re-point params of an IDENTICAL kernel sequence. A type-only key
-  // collides distinct kernels and reuses the wrong exec -> garbage output.
+  // Key the node by its kernel FUNCTION + FULL launch dims. Reuse (SetParams /
+  // reinstantiate) only re-points params of a structurally IDENTICAL exec, so the
+  // key must distinguish any difference that changes the launch. Using the grid/
+  // block PRODUCT collided distinct shapes (e.g. 2097152x1x1 vs 1024x2048x1) onto
+  // one key; reinstantiate rebuilds and survives that, but SetParams then writes
+  // params onto a mismatched exec node -> the kernel launches the old grid over
+  // new (smaller) buffers -> out-of-bounds. Encode each dim separately.
   std::string key = "K";
   key += std::to_string(reinterpret_cast<std::uintptr_t>(func));
   key += "_";
-  key += std::to_string(grid_dim.x * grid_dim.y * grid_dim.z);
+  key += std::to_string(grid_dim.x);
+  key += ",";
+  key += std::to_string(grid_dim.y);
+  key += ",";
+  key += std::to_string(grid_dim.z);
   key += "x";
-  key += std::to_string(block_dim.x * block_dim.y * block_dim.z);
+  key += std::to_string(block_dim.x);
+  key += ",";
+  key += std::to_string(block_dim.y);
+  key += ",";
+  key += std::to_string(block_dim.z);
+  key += "s";
+  key += std::to_string(smem_bytes);
   insert_graph_dependencies(GraphNode{node, key});
 }
 
@@ -604,6 +641,7 @@ void CommandEncoder::commit() {
   temporary_ptrs_.clear();
 
   if (use_hip_graphs() && node_count_ > 0) {
+    long _td0 = g_reuse_stats_on_ ? now_us() : 0;
     if (!from_nodes_.empty()) {
       CHECK_HIP_ERROR(hipGraphAddDependencies(
           build_graph_,
@@ -611,9 +649,11 @@ void CommandEncoder::commit() {
           to_nodes_.data(),
           from_nodes_.size()));
     }
+    if (g_reuse_stats_on_) g_t_deps_us_ += now_us() - _td0;
 
     device_.make_current();
 
+    long _tr0 = g_reuse_stats_on_ ? now_us() : 0;
     static const bool no_reuse = std::getenv("MLX_GRAPH_NO_REUSE") != nullptr;
     hipGraphExec_t graph_exec = nullptr;
     bool cached_exec = false;
@@ -634,23 +674,84 @@ void CommandEncoder::commit() {
       // segment. Default to reinstantiate-into-slot, which is correct.
       static const bool use_setparams =
           std::getenv("MLX_GRAPH_SETPARAMS") != nullptr;
+      // Pure relaunch: reuse the cached exec with NO param update — correct only
+      // if per-token buffer addresses are stable. Diagnostic for the minimal-call
+      // path.
+      static const bool use_relaunch =
+          std::getenv("MLX_GRAPH_RELAUNCH") != nullptr;
+      static const bool use_execupdate =
+          std::getenv("MLX_GRAPH_EXECUPDATE") != nullptr;
       static const bool stats = std::getenv("MLX_GRAPH_REUSE_STATS") != nullptr;
+      std::vector<std::array<uint64_t, 7>> cur_sig;
+      cur_sig.reserve(build_node_params_.size());
+      for (auto& p : build_node_params_) cur_sig.push_back(node_sig(p));
       auto& pool = exec_pool_[graph_nodes_key_ + ":" + graph_deps_key_];
       for (auto& slot : pool) {
         if (slot.inflight->load(std::memory_order_acquire) != 0) {
           continue;
         }
+        static const bool sp_debug =
+            std::getenv("MLX_GRAPH_SP_DEBUG") != nullptr;
+        // Collision check: does the matched slot's signature equal this build's?
+        if (stats) {
+          bool same = slot.src_sig.size() == cur_sig.size();
+          for (size_t i = 0; same && i < cur_sig.size(); i++)
+            same = slot.src_sig[i] == cur_sig[i];
+          if (!same) g_key_collisions_++;
+        }
         bool refreshed = false;
+        if (use_execupdate) {
+          hipGraphExecUpdateResult ur;
+          hipGraphNode_t en;
+          if (hipGraphExecUpdate(slot.exec, build_graph_, &en, &ur) ==
+                  hipSuccess &&
+              ur == hipGraphExecUpdateSuccess) {
+            graph_exec = slot.exec;
+            refreshed = true;
+            if (stats) g_reuse_update_++;
+            inflight = slot.inflight;
+            used_slot = &slot;
+            build_graph_adopted = true; // exec now bound to build_graph_'s nodes
+            slot.src_nodes = build_nodes_;
+            slot.src_sig = cur_sig;
+            if (slot.source_graph) hipGraphDestroy(slot.source_graph);
+            slot.source_graph = build_graph_;
+            break;
+          }
+          (void)hipGetLastError();
+        }
+        if (use_relaunch &&
+            slot.src_nodes.size() == build_node_params_.size()) {
+          graph_exec = slot.exec; // relaunch as-is
+          refreshed = true;
+          if (stats) g_reuse_update_++;
+          inflight = slot.inflight;
+          used_slot = &slot;
+          // packs of THIS build must stay alive in case the cached exec aliases
+          // any current address; handled by the common bottom transfer.
+          break;
+        }
         if (use_setparams &&
             slot.src_nodes.size() == build_node_params_.size()) {
           refreshed = true;
+          if (sp_debug) (void)hipGetLastError(); // clear stale error
           for (size_t i = 0; i < slot.src_nodes.size(); i++) {
-            if (hipGraphExecKernelNodeSetParams(
-                    slot.exec, slot.src_nodes[i], &build_node_params_[i]) !=
-                hipSuccess) {
-              (void)hipGetLastError();
-              refreshed = false;
-              break;
+            hipError_t e = hipGraphExecKernelNodeSetParams(
+                slot.exec, slot.src_nodes[i], &build_node_params_[i]);
+            hipError_t pe = sp_debug ? hipGetLastError() : hipSuccess;
+            if (e != hipSuccess || pe != hipSuccess) {
+              auto& kp = build_node_params_[i];
+              fprintf(stderr,
+                      "[sp] node %zu/%zu ret=%d pend=%d(%s) func=%p "
+                      "grid=%ux%ux%u block=%ux%ux%u smem=%u\n",
+                      i, slot.src_nodes.size(), (int)e, (int)pe,
+                      hipGetErrorString(pe == hipSuccess ? e : pe), kp.func,
+                      kp.gridDim.x, kp.gridDim.y, kp.gridDim.z, kp.blockDim.x,
+                      kp.blockDim.y, kp.blockDim.z, kp.sharedMemBytes);
+              if (e != hipSuccess) {
+                refreshed = false;
+                break;
+              }
             }
           }
         }
@@ -666,6 +767,7 @@ void CommandEncoder::commit() {
               &slot.exec, build_graph_, nullptr, nullptr, 0));
           graph_exec = slot.exec;
           slot.src_nodes = build_nodes_;
+          slot.src_sig = cur_sig;
           if (slot.source_graph) {
             hipGraphDestroy(slot.source_graph);
           }
@@ -681,7 +783,8 @@ void CommandEncoder::commit() {
         CHECK_HIP_ERROR(
             hipGraphInstantiate(&graph_exec, build_graph_, nullptr, nullptr, 0));
         inflight = std::make_shared<std::atomic<int>>(0);
-        pool.push_back({graph_exec, inflight, build_graph_, {}, build_nodes_});
+        pool.push_back(
+            {graph_exec, inflight, build_graph_, {}, build_nodes_, cur_sig});
         used_slot = &pool.back();
         build_graph_adopted = true;
         if (stats) g_reuse_new_++;
@@ -730,8 +833,31 @@ void CommandEncoder::commit() {
       fprintf(stderr, "[graph] dot -> %s\n", path);
     }
 
+    if (g_reuse_stats_on_) g_t_reuse_us_ += now_us() - _tr0;
+    // Reclaim this chunk's deferred-free buffers once it has drained, bounding
+    // graph-mode memory to a sliding window of chunks instead of a whole forward
+    // (which OOMs a 32GB card). Free with a generation LAG so a buffer is only
+    // released after the next few chunks have also launched — covers cross-chunk
+    // / in-place references that a lag-0 free races (use-after-free). Tunable via
+    // MLX_GRAPH_FREE_LAG.
+    // Opt-in (MLX_GRAPH_FREE_LAG): per-chunk reclaim is currently racy (frees a
+    // buffer the next chunk still references → UAF), so OFF by default — frees
+    // flush safely at the per-token synchronize. The real fix is 100% buffer
+    // reuse (deterministic per-forward addresses), not freeing.
+    static const long free_lag = [] {
+      const char* e = std::getenv("MLX_GRAPH_FREE_LAG");
+      return e ? std::atol(e) : -1;
+    }();
+    uint64_t my_gen = graph_current_gen();
+    graph_advance_gen();
+    long _tl0 = g_reuse_stats_on_ ? now_us() : 0;
     CHECK_HIP_ERROR(hipGraphLaunch(graph_exec, stream_));
+    if (g_reuse_stats_on_) g_t_launch_us_ += now_us() - _tl0;
     g_graph_launches_.fetch_add(1, std::memory_order_relaxed);
+    if (free_lag >= 0 && static_cast<long>(my_gen) > free_lag) {
+      uint64_t fg = my_gen - free_lag;
+      add_completed_handler([fg]() { free_graph_generation(fg); });
+    }
     // The completion handler fires after the stream drains this commit's launch.
     // Pooled execs: clear inflight so the slot can be ExecUpdate-reused.
     // Non-pooled (no_reuse): destroy the exec to avoid leaking it.
@@ -812,6 +938,7 @@ void CommandEncoder::synchronize() {
             g_reuse_update_.load(), g_reuse_reinst_.load(),
             g_reuse_new_.load(), g_graph_launches_.load(),
             g_inline_launches_.load(), g_kernel_nodes_.load());
+    fprintf(stderr, "[key-collisions] %ld\n", g_key_collisions_.load());
     std::lock_guard<std::mutex> lk(g_inline_by_op_mtx_);
     std::vector<std::pair<std::string, long>> v(
         g_inline_by_op_.begin(), g_inline_by_op_.end());
@@ -821,6 +948,11 @@ void CommandEncoder::synchronize() {
     for (size_t i = 0; i < v.size() && i < 12; i++)
       line += " " + v[i].first + "=" + std::to_string(v[i].second);
     fprintf(stderr, "%s\n", line.c_str());
+    fprintf(stderr,
+            "[graph-time-ms] addnode=%ld deps=%ld reuse/instantiate=%ld "
+            "launch=%ld\n",
+            g_t_addnode_us_.load() / 1000, g_t_deps_us_.load() / 1000,
+            g_t_reuse_us_.load() / 1000, g_t_launch_us_.load() / 1000);
   }
 }
 

@@ -249,7 +249,16 @@ class CommandEncoder {
     // deterministic and avoids hipGraphExecUpdate's node-matching, which returns
     // success but mis-maps params in the model's complex DAG.
     std::vector<hipGraphNode_t> src_nodes;
+    // Per-node structural signature (func, grid x/y/z, block x/y/z) captured at
+    // creation, to detect key collisions: if a reused slot's signature differs
+    // from the current build's, the pool key matched two different graphs.
+    std::vector<std::array<uint64_t, 7>> src_sig;
   };
+
+  static std::array<uint64_t, 7> node_sig(const hipKernelNodeParams& p) {
+    return {reinterpret_cast<uint64_t>(p.func), p.gridDim.x, p.gridDim.y,
+            p.gridDim.z, p.blockDim.x, p.blockDim.y, p.blockDim.z};
+  }
   std::unordered_map<std::string, std::vector<ExecSlot>> exec_pool_;
   // Per-build kernel-arg packs: keep the kernelParams values alive while the
   // (async) exec may reference them. Held one extra commit via _prev_.
@@ -339,6 +348,11 @@ void set_graph_active(bool v);
 // defers all frees while set so graph-referenced buffers stay valid through replay.
 bool graph_active();
 void flush_graph_deferred_frees();
+// Per-generation deferred-free lifetime: each graph chunk (commit) frees its own
+// buffers once its launch completes, instead of hoarding until synchronize.
+uint64_t graph_current_gen();
+void graph_advance_gen();
+void free_graph_generation(uint64_t gen);
 
 // Return an execution policy that does not sync for result.
 // Only available when compiling with HIP compiler

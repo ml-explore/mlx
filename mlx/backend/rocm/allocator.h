@@ -204,7 +204,11 @@ class DecodeArena {
 class RocmAllocator : public allocator::Allocator {
  public:
   Buffer malloc(size_t size) override;
-  void free(Buffer buffer) override;
+  void free(Buffer buffer) override { free(buffer, /*force=*/false); }
+  // force=true bypasses the graph-build deferral and actually releases the
+  // buffer. The deferred-free flush must force — routing through the deferring
+  // path would re-defer (the graph is active for the whole session) and leak.
+  void free(Buffer buffer, bool force);
   size_t size(Buffer buffer) const override;
 
   // CUDA-style stream-ordered allocation. When the async pool is enabled and a
