@@ -221,7 +221,11 @@ std::vector<array> Abs::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  // For a complex input the gradient of |z| is the cotangent times sign(z);
+  // its real and imaginary parts are the derivatives w.r.t. Re(z) and Im(z).
+  return {multiply(cotangents[0], sign(primals[0], stream()), stream())};
 }
 
 std::vector<array> Abs::jvp(
@@ -230,7 +234,14 @@ std::vector<array> Abs::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
-  return {multiply(tangents[0], sign(primals[0], stream()), stream())};
+  auto s = sign(primals[0], stream());
+  if (issubdtype(primals[0].dtype(), complexfloating)) {
+    // |z| is real-valued, so its directional derivative is real:
+    //   d|z| = Re(conj(z) * t) / |z| = Re(conj(sign(z)) * t).
+    return {real(
+        multiply(tangents[0], conjugate(s, stream()), stream()), stream())};
+  }
+  return {multiply(tangents[0], s, stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Abs::vmap(
