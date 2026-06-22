@@ -859,6 +859,20 @@ void CommandEncoder::commit() {
       uint64_t fg = my_gen - free_lag;
       add_completed_handler([fg]() { free_graph_generation(fg); });
     }
+    // Safe memory bound: when the deferred-free backlog exceeds a cap, drain the
+    // stream (all in-flight graphs complete, so no node still references the
+    // freed buffers) and flush. Bounds graph-mode peak at ~weights + cap instead
+    // of hoarding a whole forward's intermediates, which OOMs a 32/34GB discrete
+    // card during decode. The sync costs latency only when memory is high.
+    // MLX_GRAPH_DEFER_MAX_MB (default 1024; 0 disables).
+    static const size_t defer_cap = [] {
+      const char* e = std::getenv("MLX_GRAPH_DEFER_MAX_MB");
+      return static_cast<size_t>(e ? std::atoll(e) : 1024) << 20;
+    }();
+    if (defer_cap && graph_deferred_bytes() > defer_cap) {
+      (void)hipStreamSynchronize(stream_);
+      flush_graph_deferred_frees();
+    }
     // The completion handler fires after the stream drains this commit's launch.
     // Pooled execs: clear inflight so the slot can be ExecUpdate-reused.
     // Non-pooled (no_reuse): destroy the exec to avoid leaking it.

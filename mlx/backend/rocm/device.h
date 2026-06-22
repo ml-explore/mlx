@@ -359,6 +359,9 @@ void flush_graph_deferred_frees();
 uint64_t graph_current_gen();
 void graph_advance_gen();
 void free_graph_generation(uint64_t gen);
+// Bytes currently held in the graph deferred-free backlog. commit() drains it
+// (sync + flush) once it exceeds a cap, bounding graph-mode peak memory.
+size_t graph_deferred_bytes();
 
 // Return an execution policy that does not sync for result.
 // Only available when compiling with HIP compiler

@@ -687,6 +687,11 @@ static std::mutex g_deferred_mutex;
 // synchronize, which ballooned graph-mode memory to a whole token's working set.
 static std::vector<std::pair<uint64_t, Buffer>> g_deferred_frees;
 static std::atomic<uint64_t> g_graph_gen{1};
+static std::atomic<size_t> g_deferred_bytes{0};
+
+size_t graph_deferred_bytes() {
+  return g_deferred_bytes.load(std::memory_order_relaxed);
+}
 
 uint64_t graph_current_gen() {
   return g_graph_gen.load(std::memory_order_relaxed);
@@ -720,8 +725,11 @@ void free_graph_generation(uint64_t gen) {
   // rather than an unmapped-page segfault.
   static const bool poison = std::getenv("MLX_GRAPH_POISON_FREE") != nullptr;
   for (auto b : to_free) {
+    auto* buf = static_cast<RocmBuffer*>(b.ptr());
+    if (buf) {
+      g_deferred_bytes.fetch_sub(buf->size, std::memory_order_relaxed);
+    }
     if (poison) {
-      auto* buf = static_cast<RocmBuffer*>(b.ptr());
       if (buf && buf->data) {
         (void)hipMemset(buf->data, 0x7F, buf->size);
       }
@@ -750,6 +758,7 @@ void RocmAllocator::free(Buffer buffer, bool force) {
   // — testing whether defer-all is redundant for the auto-batch path.
   static const bool nodefer = std::getenv("MLX_GRAPH_NODEFER") != nullptr;
   if (!force && !nodefer && graph_active()) {
+    g_deferred_bytes.fetch_add(buf->size, std::memory_order_relaxed);
     std::lock_guard<std::mutex> lk(g_deferred_mutex);
     g_deferred_frees.push_back({g_graph_gen.load(std::memory_order_relaxed),
                                 buffer});
