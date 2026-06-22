@@ -743,6 +743,37 @@ void flush_graph_deferred_frees() {
   free_graph_generation(~uint64_t(0));
 }
 
+// Reclaim a completed generation's STREAM-ORDERED pool buffers via hipFreeAsync
+// on their alloc (= generation) stream. Called inline at commit() right after the
+// chunk's hipGraphLaunch, so the free is queued AFTER the launch on the same
+// stream and retires after the graph that reads the buffer — no blocking pipeline
+// drain. Unified/slab buffers (not stream-ordered) are left deferred for the
+// synchronize flush / the sync+flush cap backstop.
+void free_graph_generation_async(uint64_t gen) {
+  std::vector<Buffer> to_free;
+  {
+    std::lock_guard<std::mutex> lk(g_deferred_mutex);
+    std::vector<std::pair<uint64_t, Buffer>> keep;
+    keep.reserve(g_deferred_frees.size());
+    for (auto& p : g_deferred_frees) {
+      auto* buf = static_cast<RocmBuffer*>(p.second.ptr());
+      bool stream_ordered = buf && buf->device >= 0 && !buf->is_managed &&
+          buf->alloc_stream != nullptr;
+      if (p.first <= gen && stream_ordered) {
+        g_deferred_bytes.fetch_sub(buf->size, std::memory_order_relaxed);
+        to_free.push_back(p.second);
+      } else {
+        keep.push_back(p);
+      }
+    }
+    g_deferred_frees.swap(keep);
+  }
+  for (auto b : to_free) {
+    // force=true -> free_async -> hipFreeAsync(buf->data, buf->alloc_stream).
+    allocator().free(b, /*force=*/true);
+  }
+}
+
 void RocmAllocator::free(Buffer buffer, bool force) {
   auto* buf = static_cast<RocmBuffer*>(buffer.ptr());
   if (!buf) {
