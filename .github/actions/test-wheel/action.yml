@@ -1,0 +1,50 @@
+name: 'Test wheel'
+description: 'Run tests with the built wheels'
+
+inputs:
+  toolkit:
+    description: 'Which toolkit to test'
+    required: false
+    default: 'cpu'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Get Python version
+      id: python
+      shell: bash
+      run: python -c "import sys; print(f'version={sys.version_info.major}.{sys.version_info.minor}')" >> $GITHUB_OUTPUT
+
+    - name: Download frontend packages
+      uses: actions/download-artifact@v8
+      with:
+        pattern: frontend-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.version }}
+        path: wheelhouse
+
+    - name: Download backend packages
+      uses: actions/download-artifact@v8
+      with:
+        pattern: backend-${{ inputs.toolkit}}-${{ runner.os }}-${{ runner.arch }}
+        path: wheelhouse
+
+    - name: Test local packages
+      shell: bash
+      run: |
+        echo "::group::Test local packages"
+        uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+        uv pip install numpy
+        if ${{ inputs.toolkit == 'cpu' }} ; then
+          uv pip install wheelhouse/mlx_cpu*.whl
+          uv pip install wheelhouse/mlx-*.whl
+        elif ${{ startsWith(inputs.toolkit, 'cuda') }} ; then
+          uv pip install wheelhouse/mlx_cuda*.whl
+          uv pip install wheelhouse/mlx-*.whl
+        elif ${{ inputs.toolkit == 'metal' }} ; then
+          uv pip install wheelhouse/mlx_metal-*-macosx_26_0_arm64.whl
+          uv pip install wheelhouse/mlx-*-macosx_26_0_arm64.whl
+        else
+          echo "No matching backend wheel to install"
+          exit 1
+        fi
+        python -m unittest discover -v python/tests
+        echo "::endgroup::"

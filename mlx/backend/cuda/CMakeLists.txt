@@ -72,6 +72,10 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
+# Put dynamic defines in the dirs.cpp file.
+add_library(mlx_dirs OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/dirs.cpp)
+target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_dirs>)
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/binary)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 
@@ -197,8 +201,8 @@ if(WIN32)
   # Pass the locations where CUDA DLLs are placed.
   if(NOT MLX_LOAD_CUDA_LIBS_FROM_PYTHON)
     target_compile_definitions(
-      mlx PUBLIC MLX_CUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}/x64"
-                 MLX_CUDNN_BIN_DIR="${CUDNN_BIN_DIR}")
+      mlx_dirs PRIVATE MLX_CUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}/x64"
+                       MLX_CUDNN_BIN_DIR="${CUDNN_BIN_DIR}")
   endif()
 else()
   # For POSIX we rely on RPATH to search for CUDA libs.
@@ -208,9 +212,11 @@ else()
       APPEND
       PROPERTY INSTALL_RPATH
                # The paths here should match the install_requires in setup.py.
+               "$ORIGIN/../../nvidia/cu13/lib"
                "$ORIGIN/../../nvidia/cublas/lib"
                "$ORIGIN/../../nvidia/cuda_nvrtc/lib"
                "$ORIGIN/../../nvidia/cudnn/lib"
+               "$ORIGIN/../../nvidia/cufft/lib"
                "$ORIGIN/../../nvidia/nccl/lib")
   endif()
 endif()
@@ -233,7 +239,7 @@ install(DIRECTORY ${cccl_SOURCE_DIR}/include/nv
 # The binary of C++ tests will not be installed so it can not find the CCCL
 # headers, and we have to hard-code the path.
 if(MLX_BUILD_TESTS)
-  target_compile_definitions(mlx
+  target_compile_definitions(mlx_dirs
                              PRIVATE MLX_CCCL_DIR="${cccl_SOURCE_DIR}/include")
 endif()
 

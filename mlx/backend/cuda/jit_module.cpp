@@ -16,6 +16,9 @@
 
 namespace mlx::core::cu {
 
+// Defined in dirs.cpp to avoid invalidating compile cache.
+const char* cccl_dir();
+
 namespace {
 
 #define CHECK_NVRTC_ERROR(cmd) check_nvrtc_error(#cmd, (cmd))
@@ -61,11 +64,9 @@ const std::vector<std::string>& include_path_args() {
     }
     // Add path to CCCL headers.
     path = path / "cccl";
-#if defined(MLX_CCCL_DIR)
-    if (!std::filesystem::exists(path)) {
-      path = MLX_CCCL_DIR;
+    if (!std::filesystem::exists(path) && cccl_dir()) {
+      path = cccl_dir();
     }
-#endif
     if (std::filesystem::exists(path)) {
       args.push_back(fmt::format("--include-path={}", path.string()));
     }
