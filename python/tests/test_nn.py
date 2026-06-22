@@ -330,6 +330,19 @@ class TestBase(mlx_tests.MLXTestCase):
         m = MyModel()
         m.update_modules(m.leaf_modules())
 
+        # A list with more entries than the destination is rejected when strict
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        with self.assertRaises(ValueError):
+            m.update_modules({"layers": [{}, {}, nn.Linear(3, 4)]})
+
+        # ...and the extra entries are skipped (not a crash) when strict=False
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        m.update_modules(
+            {"layers": [{}, nn.Linear(3, 4), nn.Linear(5, 5)]}, strict=False
+        )
+        self.assertEqual(len(m.layers), 2)
+        self.assertEqual(m.layers[1].weight.shape, (4, 3))
+
     def test_parameter_deletion(self):
         m = nn.Linear(32, 32)
         del m.weight
