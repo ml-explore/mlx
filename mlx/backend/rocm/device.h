@@ -168,40 +168,6 @@ class CommandEncoder {
   // Wait until kernels and completion handlers are finished
   void synchronize();
 
-  // --- Graph capture API ---
-  // Begin recording all kernel launches into a HIP graph.
-  // While capturing, launch_kernel dispatches are recorded (not executed).
-  void begin_capture();
-
-  // End recording and instantiate the captured graph.
-  // Returns true if capture succeeded (graph is ready to replay).
-  bool end_capture();
-
-  // Replay the previously captured graph. All recorded kernels execute
-  // in a single GPU dispatch. Returns false if no graph is available.
-  // If sync is true (default) the call blocks until the replayed work
-  // finishes. If false it only launches the graph onto the stream and
-  // returns immediately — the caller must order any reads of the graph's
-  // outputs after it on the SAME stream (subsequent MLX eval on the
-  // generation stream does exactly this), which lets per-token sampling
-  // pipeline instead of draining the GPU every token.
-  bool replay(bool sync = true);
-
-  // Returns true if a captured graph is ready to replay.
-  bool has_graph() const {
-    return graph_exec_ != nullptr;
-  }
-
-  // True while this encoder's stream is recording into a HIP graph. Used by the
-  // Event layer to avoid recording completion events onto the captured stream
-  // (they would be baked into the graph and never fire, deadlocking eval).
-  bool capturing() const {
-    return capturing_;
-  }
-
-  // Discard the captured graph.
-  void reset_graph();
-
  private:
   struct GraphNode {
     hipGraphNode_t node;
@@ -220,7 +186,6 @@ class CommandEncoder {
   int node_count_{0};
   std::vector<std::shared_ptr<array::Data>> temporaries_;
   std::unordered_set<const array::Data*> temporary_ptrs_;
-  bool capturing_{false};
 
   // --- Automatic graph-batching state (mirrors CUDA CommandEncoder) ---
   hipGraph_t build_graph_{nullptr};
@@ -266,16 +231,6 @@ class CommandEncoder {
   // Current build's kernel nodes + their params, in insertion order.
   std::vector<hipGraphNode_t> build_nodes_;
   std::vector<hipKernelNodeParams> build_node_params_;
-  // Instantiated execs retained until the stream drains (destroyed in
-  // synchronize()), since hipGraphLaunch is async.
-  std::vector<hipGraphExec_t> graph_execs_;
-  // Buffers allocated during capture are held alive here (not freed) so their
-  // addresses stay valid and unique for the lifetime of the captured graph —
-  // freeing them mid-capture would let later allocations reuse the same
-  // address, aliasing distinct graph nodes. Released in reset_graph().
-  std::vector<std::shared_ptr<array::Data>> capture_held_;
-  hipGraph_t graph_{nullptr};
-  hipGraphExec_t graph_exec_{nullptr};
 };
 
 class Device {
@@ -380,24 +335,16 @@ inline auto thrust_policy(hipStream_t stream) {
 template <typename F>
 void CommandEncoder::launch_kernel(F&& func) {
   device_.make_current();
-  // Under the automatic graph-batching path, capture this lambda's launches
-  // into a child graph node so the build graph stays complete while individual
-  // kernels are migrated to add_kernel_node. The legacy whole-stream capture
-  // path (capturing_) and the immediate path are left untouched.
   // Residual ops not migrated to add_kernel_node (library GEMM, JIT module
-  // kernels, memsets) can't be HIP graph kernel nodes (no module-func field)
-  // and child-graph capture wedges the GPU on this ROCm. Instead graph-split:
-  // flush+launch the accumulated graph, then run this op immediately on the
-  // same stream (ordered after the graph), and the next op starts a fresh
-  // graph. Library GEMM thus runs OUTSIDE capture, so hipBLASLt won't abort.
-  if (use_hip_graphs() && !capturing_) {
+  // kernels, memsets) can't be HIP graph kernel nodes. Graph-split: flush+launch
+  // the accumulated graph, run this op immediately on the same stream (ordered
+  // after the graph), and start the next graph fresh.
+  if (use_hip_graphs()) {
     commit();
     func(static_cast<hipStream_t>(stream_));
     record_inline_launch();
     return;
   }
-  // When the legacy path is capturing, kernel launches are recorded into the
-  // HIP graph automatically. Otherwise hipLaunchKernel executes immediately.
   func(static_cast<hipStream_t>(stream_));
   node_count_++;
 }

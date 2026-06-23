@@ -121,56 +121,8 @@ extern "C" void mlx_gpu_memcpy_async(void* dst, const void* src, size_t bytes) {
 // --- Arena + Graph wrappers (called from engine code without HIP headers) ---
 namespace mlx::core {
 
-bool gpu_arena_begin(size_t capacity) {
-  return rocm::allocator().arena().begin(capacity);
-}
-void gpu_arena_reset() {
-  rocm::allocator().arena().reset();
-}
-size_t gpu_arena_desc_used() {
-  return rocm::allocator().arena().desc_used();
-}
-void gpu_arena_reset_to(size_t byte_mark, size_t desc_mark) {
-  rocm::allocator().arena().reset_to(byte_mark, desc_mark);
-}
-void gpu_arena_set_paused(bool p) {
-  rocm::allocator().arena().set_paused(p);
-}
-void gpu_arena_end() {
-  rocm::allocator().arena().end();
-}
-size_t gpu_arena_used() {
-  return rocm::allocator().arena().used();
-}
-bool gpu_arena_active() {
-  return rocm::allocator().arena().active();
-}
-
-static rocm::CommandEncoder& graph_encoder() {
-  return rocm::get_command_encoder(default_stream(default_device()));
-}
-
-bool gpu_graph_begin_capture() {
-  graph_encoder().begin_capture();
-  return true;
-}
-bool gpu_graph_end_capture() {
-  return graph_encoder().end_capture();
-}
-bool gpu_graph_replay() {
-  return graph_encoder().replay(/*sync=*/true);
-}
-bool gpu_graph_replay_async() {
-  return graph_encoder().replay(/*sync=*/false);
-}
-void gpu_graph_reset() {
-  graph_encoder().reset_graph();
-}
 void gpu_set_graph_decode_mode(bool v) {
   rocm::set_graph_decode_mode(v);
-}
-bool gpu_graph_available() {
-  return graph_encoder().has_graph();
 }
 
 } // namespace mlx::core

@@ -374,16 +374,6 @@ void Event::wait(Stream s) {
 void Event::signal(Stream s) {
   auto* event = static_cast<EventImpl*>(event_.get());
   event->ensure_created(s, value());
-  // During graph capture, do NOT record a completion event onto the captured
-  // stream — it would become a graph node that never fires under capture and
-  // would deadlock eval()'s wait(). Mark it satisfied on the host instead; the
-  // compute kernels are recorded and run on replay, after which the caller
-  // performs an explicit stream sync.
-  if (!(s.device == mlx::core::Device::cpu) &&
-      rocm::get_command_encoder(s).capturing()) {
-    event->host_signaled = true;
-    return;
-  }
   if (event->hip) {
     assert(value() == 1);
     event->hip->record(s);
