@@ -140,24 +140,11 @@ __device__ __forceinline__ void load_weight_vec_streaming(
     const uint32_t* __restrict__ ptr,
     uint32_t (&out)[packs_per_thread<BITS>]) {
   constexpr int PPT = packs_per_thread<BITS>;
-  int p = 0;
+  // Scalar nontemporal loads — the compiler coalesces adjacent ones. The old
+  // uint2/uint4 vector-typed __builtin_nontemporal_load hack is rejected by the
+  // clang toolchain (nontemporal builtin not valid on vector types).
 #pragma unroll
-  for (; p + 4 <= PPT; p += 4) {
-    uint4 v = __builtin_nontemporal_load(
-        reinterpret_cast<const uint4*>(ptr) + (p >> 2));
-    out[p] = v.x;
-    out[p + 1] = v.y;
-    out[p + 2] = v.z;
-    out[p + 3] = v.w;
-  }
-#pragma unroll
-  for (; p + 2 <= PPT; p += 2) {
-    uint2 v = __builtin_nontemporal_load(reinterpret_cast<const uint2*>(ptr + p));
-    out[p] = v.x;
-    out[p + 1] = v.y;
-  }
-#pragma unroll
-  for (; p < PPT; p++) {
+  for (int p = 0; p < PPT; p++) {
     out[p] = __builtin_nontemporal_load(ptr + p);
   }
 }

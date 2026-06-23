@@ -100,9 +100,13 @@ class CommandEncoder {
       std::tuple<std::decay_t<Params>...> vals;
       std::array<void*, (num > 0 ? num : 1)> ptrs;
     };
-    auto pack = std::make_shared<Pack>();
-    pack->vals = std::tuple<std::decay_t<Params>...>(
-        std::forward<Params>(params)...);
+    // Construct the value tuple in place — default-constructing Pack (and thus
+    // the tuple) requires every decayed arg type to be default-constructible,
+    // which some kernels' arg types are not (deleted default ctor on a clean
+    // build).
+    auto pack = std::make_shared<Pack>(Pack{
+        std::tuple<std::decay_t<Params>...>(std::forward<Params>(params)...),
+        {}});
     fill_param_ptrs(pack->vals, pack->ptrs, std::index_sequence_for<Params...>{});
     graph_node_args_.push_back(pack);
     add_kernel_node_raw(
