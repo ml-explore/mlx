@@ -3450,24 +3450,10 @@ void init_ops(nb::module_& m) {
          std::optional<mx::Dtype> dtype,
          bool include_initial,
          mx::StreamOrDevice s) {
-        mx::array x = dtype ? mx::astype(a, *dtype, s) : a;
-        int ax;
         if (axis) {
-          ax = *axis;
-        } else {
-          x = mx::reshape(x, {-1}, s);
-          ax = 0;
+          return mx::cumsum(a, *axis, reverse, inclusive, dtype, include_initial, s);
         }
-        auto out = mx::cumsum(x, ax, reverse, inclusive, s);
-        if (include_initial) {
-          int a2 = ax < 0 ? ax + static_cast<int>(out.ndim()) : ax;
-          mx::Shape init_shape = out.shape();
-          init_shape[a2] = 1;
-          auto init = mx::zeros(init_shape, out.dtype(), s);
-          out = reverse ? mx::concatenate({out, init}, a2, s)
-                        : mx::concatenate({init, out}, a2, s);
-        }
-        return out;
+        return mx::cumsum(a, reverse, inclusive, dtype, include_initial, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
@@ -3506,24 +3492,10 @@ void init_ops(nb::module_& m) {
          std::optional<mx::Dtype> dtype,
          bool include_initial,
          mx::StreamOrDevice s) {
-        mx::array x = dtype ? mx::astype(a, *dtype, s) : a;
-        int ax;
         if (axis) {
-          ax = *axis;
-        } else {
-          x = mx::reshape(x, {-1}, s);
-          ax = 0;
+          return mx::cumprod(a, *axis, reverse, inclusive, dtype, include_initial, s);
         }
-        auto out = mx::cumprod(x, ax, reverse, inclusive, s);
-        if (include_initial) {
-          int a2 = ax < 0 ? ax + static_cast<int>(out.ndim()) : ax;
-          mx::Shape init_shape = out.shape();
-          init_shape[a2] = 1;
-          auto init = mx::ones(init_shape, out.dtype(), s);
-          out = reverse ? mx::concatenate({out, init}, a2, s)
-                        : mx::concatenate({init, out}, a2, s);
-        }
-        return out;
+        return mx::cumprod(a, reverse, inclusive, dtype, include_initial, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
