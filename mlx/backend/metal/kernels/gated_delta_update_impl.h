@@ -14,6 +14,37 @@
 using namespace metal;
 
 #define AT(TILE, IDX) TILE.thread_elements()[IDX]
+#define SUB(TILE0, TILE1, TILE2)                \
+  {                                             \
+    AT(TILE0, 0) = AT(TILE1, 0) - AT(TILE2, 0); \
+    AT(TILE0, 1) = AT(TILE1, 1) - AT(TILE2, 1); \
+  }
+#define FMA(TILE0, S, TILE1, TILE2)                 \
+  {                                                 \
+    AT(TILE0, 0) = S * AT(TILE1, 0) + AT(TILE2, 0); \
+    AT(TILE0, 1) = S * AT(TILE1, 1) + AT(TILE2, 1); \
+  }
+
+#define SCALE(TILE0, S) \
+  {                     \
+    AT(TILE0, 0) *= S;  \
+    AT(TILE0, 1) *= S;  \
+  }
+#define SCALE2(TILE0, S0, S1) \
+  {                           \
+    AT(TILE0, 0) *= S0;       \
+    AT(TILE0, 1) *= S1;       \
+  }
+#define SCALE_TRI(TILE0, S0, S1)            \
+  {                                         \
+    AT(TILE0, 0) *= fn > fm ? 0.f : S0;     \
+    AT(TILE0, 1) *= fn + 1 > fm ? 0.f : S1; \
+  }
+#define SCALE_TRIEQ(TILE0, S0, S1)           \
+  {                                          \
+    AT(TILE0, 0) *= fn >= fm ? 0.f : S0;     \
+    AT(TILE0, 1) *= fn + 1 >= fm ? 0.f : S1; \
+  }
 
 template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
 [[kernel]] void gated_delta_fused_chunk(
@@ -77,7 +108,6 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   for (int kk = 0; kk < Dk; kk += 8) {
     simdgroup_load(S_tile[kk / 8], i_state + kk, Dk, ulong2(0, 0), true);
   }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
 
   for (int t = 0; t < T; t += C) {
     float g_val = (thread_index_in_simdgroup < C)
@@ -102,14 +132,12 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     KKtK_tile = KKt_tile;
     KKtV_tile = KKt_tile;
 
-    AT(KKtK_tile, 0) = fn >= fm ? 0.f : AT(KKtK_tile, 0) * beta_fm;
-    AT(KKtV_tile, 0) =
-        fn >= fm ? 0.f : AT(KKtV_tile, 0) * beta_fm * (gamma[fm] / gamma[fn]);
-
-    AT(KKtK_tile, 1) = fn + 1 >= fm ? 0.f : AT(KKtK_tile, 1) * beta_fm;
-    AT(KKtV_tile, 1) = fn + 1 >= fm
-        ? 0.f
-        : AT(KKtV_tile, 1) * beta_fm * (gamma[fm] / gamma[fn + 1]);
+    // elementwise multiplication by Gamma and beta (for V) and beta (for K)
+    SCALE_TRIEQ(KKtK_tile, beta_fm, beta_fm)
+    SCALE_TRIEQ(
+        KKtV_tile,
+        beta_fm * (gamma[fm] / gamma[fn]),
+        beta_fm * (gamma[fm] / gamma[fn + 1]))
 
     WS_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
     // Use the Neumann series: (I - T)^-1 = sum T^k, instead of doing forward
@@ -118,17 +146,14 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     // less memory movements.
     for (int kk = 0; kk < Dk; kk += 8) {
       simdgroup_load(K_tile, k_ + kk, Dk * Hk);
-      AT(K_tile, 0) *= beta_fm;
-      AT(K_tile, 1) *= beta_fm;
+      SCALE(K_tile, beta_fm)
       W_tile = K_tile;
       for (int iter = 0; iter < C - 1; iter++) {
         simdgroup_multiply(X_tile, KKtK_tile, W_tile);
-        AT(W_tile, 0) = AT(K_tile, 0) - AT(X_tile, 0);
-        AT(W_tile, 1) = AT(K_tile, 1) - AT(X_tile, 1);
+        SUB(W_tile, K_tile, X_tile)
       }
 
-      AT(W_tile, 0) *= gamma[fm];
-      AT(W_tile, 1) *= gamma[fm];
+      SCALE(W_tile, gamma[fm])
 
       //  WS = W_left @ S^T
       simdgroup_multiply_accumulate(WS_tile, W_tile, S_tile[kk / 8], WS_tile);
@@ -140,32 +165,26 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     U_tile = V_tile;
     for (int iter = 0; iter < C - 1; iter++) {
       simdgroup_multiply(X_tile, KKtV_tile, U_tile);
-      AT(U_tile, 0) = AT(V_tile, 0) - AT(X_tile, 0);
-      AT(U_tile, 1) = AT(V_tile, 1) - AT(X_tile, 1);
+      SUB(U_tile, V_tile, X_tile)
     }
 
     // delta = U - WS
-    AT(delta_tile, 0) = AT(U_tile, 0) - AT(WS_tile, 0);
-    AT(delta_tile, 1) = AT(U_tile, 1) - AT(WS_tile, 1);
+    SUB(delta_tile, U_tile, WS_tile)
 
     // Q_left @ S^T
     tmp_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
     QKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
-
     for (int kk = 0; kk < Dk; kk += 8) {
       simdgroup_load(Q_tile, q_ + kk, Hk * Dk);
       simdgroup_load(K_tile, k_ + kk, Hk * Dk, ulong2(0, 0), true);
 
-      AT(Q_tile, 0) *= gamma[fm];
-      AT(Q_tile, 1) *= gamma[fm];
+      SCALE(Q_tile, gamma[fm])
 
       simdgroup_multiply_accumulate(tmp_tile, Q_tile, S_tile[kk / 8], tmp_tile);
       simdgroup_multiply_accumulate(QKt_tile, Q_tile, K_tile, QKt_tile);
     }
 
-    // element 0 at (fm, fn), element 1 at (fm, fn+1)
-    AT(QKt_tile, 0) *= fn > fm ? 0.f : (1.0f / gamma[fn]);
-    AT(QKt_tile, 1) *= fn + 1 > fm ? 0.f : (1.0f / gamma[fn + 1]);
+    SCALE_TRI(QKt_tile, (1.0f / gamma[fn]), (1.0f / gamma[fn + 1]))
 
     simdgroup_multiply_accumulate(out_tile, QKt_tile, delta_tile, tmp_tile);
 
@@ -175,15 +194,11 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     for (int kk = 0; kk < Dk; kk += 8) {
       simdgroup_load(K_tile, k_ + kk, Hk * Dk, ulong2(0, 0), true);
 
-      AT(K_tile, 0) *= (gamma[C - 1] / gamma[fn]);
-      AT(K_tile, 1) *= (gamma[C - 1] / gamma[fn + 1]);
+      SCALE2(K_tile, (gamma[C - 1] / gamma[fn]), (gamma[C - 1] / gamma[fn + 1]))
 
       simdgroup_multiply(KD_tile, K_tile, delta_tile);
 
-      AT(S_tile[kk / 8], 0) =
-          gamma[C - 1] * AT(S_tile[kk / 8], 0) + AT(KD_tile, 0);
-      AT(S_tile[kk / 8], 1) =
-          gamma[C - 1] * AT(S_tile[kk / 8], 1) + AT(KD_tile, 1);
+      FMA(S_tile[kk / 8], gamma[C - 1], S_tile[kk / 8], KD_tile)
     }
 
     // advance pointers
