@@ -1142,7 +1142,19 @@ void gemv_axbpy(
 
   // Encode and dispatch kernel
   auto& compute_encoder = metal::get_command_encoder(s);
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = get_gemv_kernel(
+      d,
+      kname.str(),
+      out,
+      transpose_mat,
+      bm,
+      bn,
+      sm,
+      sn,
+      tm,
+      tn,
+      !contiguous_kernel,
+      do_axpby);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
@@ -2214,7 +2226,8 @@ void gather_mv(
         << tm << "_tn" << tn;
 
   // Encode and dispatch kernel
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = get_gemv_gather_kernel(
+      d, kname.str(), out, transpose_mat, bm, bn, sm, sn, tm, tn);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
@@ -2357,7 +2370,7 @@ void gather_mm(
                            (batch_ndim > 0) ? lhs_indices.strides()[0] : 0,
                            /* const int64_t batch_stride_b = */
                            (batch_ndim > 0) ? rhs_indices.strides()[0] : 0,
-                           /* const int64_t batch_stride_d = */ M * N,
+                           /* const int64_t batch_stride_d = */ int64_t(M) * N,
                            /* const int swizzle_log = */ 0,
                            /* const int gemm_k_iterations_aligned = */ (K / bk),
                            /* const int batch_ndim = */ batch_ndim};
@@ -2587,7 +2600,7 @@ void segmented_mm(
                            /* const int tiles_m = */ (M + bm - 1) / bm,
                            /* const int64_t batch_stride_a = */ 0,
                            /* const int64_t batch_stride_b = */ 0,
-                           /* const int64_t batch_stride_d = */ M * N,
+                           /* const int64_t batch_stride_d = */ int64_t(M) * N,
                            /* const int swizzle_log = */ 0,
                            /* const int gemm_k_iterations_aligned = */ 0,
                            /* const int batch_ndim = */ 0};

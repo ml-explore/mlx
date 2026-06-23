@@ -590,6 +590,46 @@ TEST_CASE("test split") {
   CHECK(array_equal(out[3], array({2, 3, 4})).item<bool>());
 }
 
+TEST_CASE("test flip") {
+  array x = array({1, 2, 3, 4});
+  CHECK(array_equal(flip(x), array({4, 3, 2, 1})).item<bool>());
+
+  x = array({0, 1, 2, 3, 4, 5}, {2, 3});
+  CHECK(
+      array_equal(flip(x, 0), array({3, 4, 5, 0, 1, 2}, {2, 3})).item<bool>());
+  CHECK(
+      array_equal(flip(x, 1), array({2, 1, 0, 5, 4, 3}, {2, 3})).item<bool>());
+  CHECK(
+      array_equal(flip(x, -1), array({2, 1, 0, 5, 4, 3}, {2, 3})).item<bool>());
+  // No axes -> flip all.
+  CHECK(array_equal(flip(x), array({5, 4, 3, 2, 1, 0}, {2, 3})).item<bool>());
+  CHECK(array_equal(
+            flip(x, std::vector<int>{0, 1}), array({5, 4, 3, 2, 1, 0}, {2, 3}))
+            .item<bool>());
+
+  CHECK_THROWS(flip(x, 2));
+}
+
+TEST_CASE("test unstack") {
+  array x = array({0, 1, 2, 3, 4, 5}, {3, 2});
+  auto out = unstack(x);
+  CHECK_EQ(out.size(), 3);
+  CHECK(array_equal(out[0], array({0, 1})).item<bool>());
+  CHECK(array_equal(out[1], array({2, 3})).item<bool>());
+  CHECK(array_equal(out[2], array({4, 5})).item<bool>());
+  CHECK_EQ(out[0].shape(), Shape{2});
+
+  out = unstack(x, 1);
+  CHECK_EQ(out.size(), 2);
+  CHECK(array_equal(out[0], array({0, 2, 4})).item<bool>());
+  CHECK(array_equal(out[1], array({1, 3, 5})).item<bool>());
+
+  // stack is the inverse of unstack.
+  CHECK(array_equal(stack(unstack(x, 1), 1), x).item<bool>());
+
+  CHECK_THROWS(unstack(x, 2));
+}
+
 TEST_CASE("test swap and move axes") {
   // Test swapaxes
   array a(0.0);
@@ -3258,8 +3298,12 @@ TEST_CASE("test repeat") {
 
   // 0 repeats
   auto repeat_4 = repeat(data_3, 0, 0);
-  auto expected_4 = array({});
-  CHECK(array_equal(repeat_2, expected_2).item<bool>());
+  auto expected_4 = array(std::initializer_list<int>{}, {0, 3});
+  CHECK(array_equal(repeat_4, expected_4).item<bool>());
+
+  repeat_4 = repeat(data_3, 0, 1);
+  expected_4 = array(std::initializer_list<int>{}, {3, 0});
+  CHECK(array_equal(repeat_4, expected_4).item<bool>());
 
   // negative repeats
   CHECK_THROWS_AS(repeat(data_3, -3, 0), std::invalid_argument);
@@ -4283,4 +4327,25 @@ TEST_CASE("test max min with nan") {
   auto expected = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
   CHECK(array_equal(max_result, expected, true).item<bool>());
   CHECK(array_equal(min_result, expected, true).item<bool>());
+}
+
+TEST_CASE("roll and tile shape overflow") {
+  // Shape arithmetic must not overflow (signed-int UB) for large but otherwise
+  // valid int32 inputs; out-of-range results are rejected gracefully.
+  // https://github.com/ml-explore/mlx/issues/3601
+
+  // tile: reps * dim exceeding int32 raises instead of overflowing.
+  CHECK_THROWS_AS(tile(zeros({2}), {2147483647}), std::overflow_error);
+
+  // roll: a shift sum exceeding int32 raises instead of overflowing.
+  CHECK_THROWS_AS(
+      roll(zeros({4}), Shape{2147483647, 2147483647}), std::overflow_error);
+  CHECK_THROWS_AS(
+      roll(zeros({4}), Shape{2147483647, 2147483647}, 0), std::overflow_error);
+
+  // roll: a shift of INT_MIN must not negate-overflow. INT_MIN mod 4 == 0, so
+  // rolling a size-4 axis by INT_MIN is the identity.
+  auto x = array({1, 2, 3, 4});
+  auto rolled = roll(x, -2147483647 - 1);
+  CHECK(array_equal(rolled, x).item<bool>());
 }

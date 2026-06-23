@@ -4,61 +4,72 @@ description: 'Build and test MLX on macOS'
 runs:
   using: "composite"
   steps:
-    - name: Install dependencies
+    - name: Install Python package
       env:
         DEBUG: 1
         CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
-      shell: bash -l {0}
+      shell: bash
       run: |
-        pip install --upgrade pip
-        pip install cmake setuptools typing_extensions
-        pip install -e ".[dev]" -v
+        echo "::group::Install Python package"
+        uv pip install -e ".[dev]" -v
+        echo "::endgroup::"
 
     - name: Install tests dependencies
-      shell: bash -l {0}
+      shell: bash
       run: |
-        pip install tensorflow
+        echo "::group::Install tests dependencies"
+        uv pip install tensorflow
+        echo "::endgroup::"
 
     - name: Run Python tests
-      shell: bash -l {0}
+      shell: bash
       env:
         LOW_MEMORY: 1
       run: |
+        echo "::group::Run Python tests"
         DEVICE=cpu python -m unittest discover -v python/tests
         DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m unittest discover -v python/tests
         mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
         mlx.launch --verbose -n 8 python python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
         if $(grep "\[WARN\]" stderr.log); then echo "Distributed ring test failed"; exit 1; fi
-    
+        echo "::endgroup::"
+
     - name: Build example extension
-      shell: bash -l {0}
+      shell: bash
       run: |
+        echo "::group::Build example extension"
         cd examples/extensions
-        pip install -r requirements.txt
-        python setup.py build_ext --inplace
-        python test.py
-    
+        uv pip install -r requirements.txt
+        uv run --no-project setup.py build_ext --inplace
+        uv run --no-project test.py
+        echo "::endgroup::"
+
     - name: Build CPP only
-      shell: bash -l {0}
+      shell: bash
       run: |
+        echo "::group::Build CPP only"
         mkdir -p build
         cd build
         cmake ..
         make -j $(sysctl -n hw.ncpu)
+        echo "::endgroup::"
 
     - name: Run CPP tests
-      shell: bash -l {0}
+      shell: bash
       env:
         DEVICE: gpu
         METAL_DEVICE_WRAPPER_TYPE: 1
         METAL_DEBUG_ERROR_MODE: 0
       run: |
+        echo "::group::Run CPP tests"
         ./build/tests/tests
         ./build/tests/test_teardown
+        echo "::endgroup::"
 
     - name: Build small binary with JIT
-      shell: bash -l {0}
+      shell: bash
       run: |
+        echo "::group::Build small binary with JIT"
         mkdir -p build
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel \
@@ -68,15 +79,18 @@ runs:
           -DMLX_BUILD_GGUF=OFF \
           -DMLX_METAL_JIT=ON
         make -j $(sysctl -n hw.ncpu)
-    
+        echo "::endgroup::"
+
     - name: Run Python tests with JIT
-      shell: bash -l {0}
+      shell: bash
       env:
         LOW_MEMORY: 1
         DEVICE: gpu
         METAL_DEVICE_WRAPPER_TYPE: 1
         METAL_DEBUG_ERROR_MODE: 0
       run: |
+        echo "::group::Run Python tests with JIT"
         CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
-          pip install -e . -v
+          uv pip install -e . -v
         python -m unittest discover -v python/tests
+        echo "::endgroup::"

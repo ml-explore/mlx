@@ -635,3 +635,54 @@ TEST_CASE("test gpu depthwise conv2d non-mod-8 spatial") {
     CHECK(allclose(out_cpu, out_gpu, 1e-4, 1e-4).item<bool>());
   }
 }
+
+TEST_CASE("test layer norm vjp bias grad race") {
+  // Regression test for a write-after-read (WAR) hazard in
+  // LayerNormVJP::eval_gpu (mlx/backend/metal/normalization.cpp).
+  //
+  // The bias-gradient reduction reads the cotangent `g` and is dispatched
+  // before the main vjp kernel. When the cotangent is donatable the kernel
+  // overwrites `g`'s buffer in place (gx / gw_temp alias g), a WAR hazard.
+  // The Metal command encoder uses concurrent dispatch and only auto-inserts
+  // barriers for read-after-write, so without an explicit barrier the reduction
+  // races the kernel and the bias gradient is intermittently wrong (error on
+  // the order of the value magnitude). The gradients for x and w are
+  // unaffected.
+  //
+  // A batched input makes the cotangent donatable, which is required to trigger
+  // the aliasing. It is a race, so we loop; pre-fix this trips within a couple
+  // thousand iterations, post-fix the GPU result matches the CPU reference
+  // exactly on every iteration.
+  auto x = random::normal({2, 4, 8}, float32, 0.0f, 1.0f, random::key(0));
+  auto w = random::normal({8}, float32, 0.0f, 1.0f, random::key(1));
+  auto b = random::normal({8}, float32, 0.0f, 1.0f, random::key(2));
+  eval(x, w, b);
+
+  auto loss = [](const std::vector<array>& p, Device dev) {
+    return mean(fast::layer_norm(p[0], p[1], p[2], 1e-5f, dev), dev);
+  };
+  auto gb_fn = [&](Device dev) {
+    return grad(
+        [&loss, dev](const std::vector<array>& p) { return loss(p, dev); },
+        std::vector<int>{0, 1, 2});
+  };
+
+  // CPU reference for d/db (ground truth). Verify it is deterministic: a
+  // CPU-vs-CPU self-check must be exactly zero before trusting it.
+  auto gb_ref = gb_fn(Device::cpu)({x, w, b})[2];
+  auto gb_ref2 = gb_fn(Device::cpu)({x, w, b})[2];
+  eval(gb_ref, gb_ref2);
+  CHECK_EQ(max(abs(gb_ref - gb_ref2)).item<float>(), 0.0f);
+
+  auto gpu_grad = gb_fn(Device::gpu);
+  float worst = 0.0f;
+  for (int i = 0; i < 3000; ++i) {
+    auto gb_gpu = gpu_grad({x, w, b})[2];
+    float diff = max(abs(gb_gpu - gb_ref), Device::cpu).item<float>();
+    worst = std::max(worst, diff);
+    if (diff > 1e-5) {
+      break; // Fail fast once the race is observed.
+    }
+  }
+  CHECK(worst <= 1e-5);
+}

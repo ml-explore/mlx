@@ -409,6 +409,16 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(means, 3 * np.ones_like(means), atol=1e-6))
         self.assertTrue(np.allclose(var, 4 * np.ones_like(var), atol=1e-6))
 
+        # Raise for invalid num_groups / dims
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=4, dims=6)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=0, dims=8)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=-1, dims=8)
+        with self.assertRaises(ValueError):
+            nn.GroupNorm(num_groups=4, dims=0)
+
     def test_instance_norm(self):
         # Test InstanceNorm1d
         x = mx.array(
@@ -626,6 +636,9 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
         # Test repr
         self.assertTrue(str(inorm) == "InstanceNorm(3, eps=1e-05, affine=False)")
+        # Raise for inputs without spatial dimensions
+        with self.assertRaises(ValueError):
+            nn.InstanceNorm(dims=8)(mx.zeros((4, 8)))
 
     def test_batch_norm(self):
         mx.random.seed(42)
@@ -875,6 +888,16 @@ class TestLayers(mlx_tests.MLXTestCase):
         y = c(x)
         self.assertEqual(y.shape, (4, 7, 7, 8))
 
+    def test_conv_transpose_extra_repr(self):
+        self.assertIn(
+            "kernel_size=(3, 5)",
+            str(nn.ConvTranspose2d(4, 8, kernel_size=(3, 5))),
+        )
+        self.assertIn(
+            "kernel_size=(2, 3, 4)",
+            str(nn.ConvTranspose3d(4, 8, kernel_size=(2, 3, 4))),
+        )
+
     def test_sequential(self):
         x = mx.ones((10, 2))
         m = nn.Sequential(nn.Linear(2, 10), nn.ReLU(), nn.Linear(10, 1))
@@ -932,6 +955,17 @@ class TestLayers(mlx_tests.MLXTestCase):
             mx.abs(similarities[mx.arange(10), mx.arange(10)] - 1).max(), 1e-5
         )
 
+        # dims=2 should be supported (single sin/cos frequency pair)
+        m = nn.SinusoidalPositionalEncoding(2)
+        y = m(x)
+        self.assertEqual(y.shape, (10, 2))
+
+        # Odd and non-positive dimensions are invalid
+        for dims in [0, 1, 3]:
+            with self.subTest(dims=dims):
+                with self.assertRaises(ValueError):
+                    nn.SinusoidalPositionalEncoding(dims)
+
     def test_sigmoid(self):
         x = mx.array([1.0, 0.0, -1.0])
         y1 = mx.sigmoid(x)
@@ -947,6 +981,18 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(y, mx.array([1.0, 0.0, 0.0])))
         self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
+
+    def test_step(self):
+        x = mx.array([-1.0, 0.0, 1.0])
+
+        # Default threshold of 0: the boundary value is included
+        y = nn.step(x)
+        self.assertTrue(mx.array_equal(y, mx.array([0, 1, 1])))
+        self.assertEqual(y.shape, (3,))
+
+        # A custom threshold is also inclusive
+        y = nn.Step(threshold=1.0)(x)
+        self.assertTrue(mx.array_equal(y, mx.array([0, 0, 1])))
 
     def test_leaky_relu(self):
         x = mx.array([1.0, -1.0, 0.0])

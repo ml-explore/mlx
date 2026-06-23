@@ -1374,6 +1374,42 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [1, 2, 3, 4])
         self.assertEqual(z.tolist(), [5, 6, 7])
 
+    def test_flip(self):
+        a_np = np.arange(6).reshape(2, 3)
+        a = mx.array(a_np)
+        for axis in [None, 0, 1, -1, (0, 1)]:
+            self.assertTrue(
+                np.array_equal(mx.flip(a, axis=axis), np.flip(a_np, axis=axis)),
+                msg=f"axis={axis}",
+            )
+
+        # 1D
+        b_np = np.array([1, 2, 3, 4])
+        self.assertTrue(np.array_equal(mx.flip(mx.array(b_np)), np.flip(b_np)))
+
+        with self.assertRaises(ValueError):
+            mx.flip(a, axis=2)
+
+    def test_unstack(self):
+        a_np = np.arange(6).reshape(3, 2)
+        a = mx.array(a_np)
+        for axis in [0, 1, -1]:
+            parts = mx.unstack(a, axis=axis)
+            expected = np.unstack(a_np, axis=axis)
+            self.assertEqual(len(parts), len(expected))
+            for p, e in zip(parts, expected):
+                self.assertTrue(np.array_equal(p, e))
+                self.assertEqual(p.shape, e.shape)
+
+        # Default axis is 0.
+        self.assertTrue(np.array_equal(mx.unstack(a)[1], np.unstack(a_np)[1]))
+
+        # stack is the inverse of unstack.
+        self.assertTrue(mx.array_equal(mx.stack(mx.unstack(a, axis=1), axis=1), a))
+
+        with self.assertRaises(ValueError):
+            mx.unstack(a, axis=2)
+
     def test_split_invalid_num_splits(self):
         """Regression: split with num_splits <= 0 should raise, not crash."""
         a = mx.arange(6)
@@ -1432,6 +1468,13 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.arange(stop=3)
         expected = [0, 1, 2]
         self.assertListEqual(a.tolist(), expected)
+
+        # A zero step has no defined length; it must raise rather than divide by
+        # zero and cast the resulting nan/inf to int (undefined behavior).
+        with self.assertRaises(ValueError):
+            mx.arange(2, 2, 0)
+        with self.assertRaises(ValueError):
+            mx.arange(0, 5, 0)
 
     def test_arange_inferred_dtype(self):
         a = mx.arange(5)
@@ -2544,6 +2587,9 @@ class TestOps(mlx_tests.MLXTestCase):
         data = mx.array([[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]])
         # Test repeat 0 times
         self.assertCmpNumpy([data, 0], mx.repeat, np.repeat)
+        # Test repeat 0 times along an axis preserves the unrepeated dimensions
+        self.assertCmpNumpy([data, 0], mx.repeat, np.repeat, axis=0)
+        self.assertCmpNumpy([data, 0], mx.repeat, np.repeat, axis=1)
         # Test repeat along axis 0
         self.assertCmpNumpy([data, 2], mx.repeat, np.repeat, axis=0)
         # Test repeat along axis 1

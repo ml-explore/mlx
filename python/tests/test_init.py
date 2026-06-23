@@ -134,6 +134,11 @@ class TestInit(mlx_tests.MLXTestCase):
             "Orthogonal init failed on a rectangular matrix.",
         )
 
+        # A non-2D input reports its actual number of dimensions
+        with self.assertRaises(ValueError) as cm:
+            initializer(mx.zeros((2, 3, 4), dtype=mx.float32))
+        self.assertIn("3D array", str(cm.exception))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

@@ -2,6 +2,7 @@
 
 import gc
 import itertools
+import math
 import unittest
 
 import mlx.core as mx
@@ -57,6 +58,82 @@ class TestAutograd(mlx_tests.MLXTestCase):
             _, tangents = mx.jvp(lambda x, _op=op: _op(x, 0.0), [x], [t])
             self.assertEqual(tangents[0].dtype, mx.float32)
 
+    def test_jvp_with_constant_inputs(self):
+        # JVPs of primitives with only a subset of inputs traced used to
+        # index tangents out of bounds and silently return wrong tangents
+        # (issue #3627)
+
+        # d/dt (t + 1)^2 = 2 at t = 0
+        cases = [
+            lambda t: mx.where((t + 1) ** 2 > -1, (t + 1) ** 2, 999.0),
+            lambda t: mx.where((t + 1) ** 2 < -1, 999.0, (t + 1) ** 2),
+            lambda t: mx.where(mx.array(True), (t + 1) ** 2, 999.0),
+            lambda t: mx.where(mx.array(False), 999.0, (t + 1) ** 2),
+        ]
+        for fun in cases:
+            _, (dout,) = mx.jvp(fun, [mx.array(0.0)], [mx.array(1.0)])
+            self.assertEqual(dout.item(), 2.0)
+
+        # Constant condition with both branches traced
+        _, (dout,) = mx.jvp(
+            lambda a, b: mx.where(mx.array([True, False]), a, b),
+            [mx.zeros(2), mx.zeros(2)],
+            [mx.array([1.0, 2.0]), mx.array([3.0, 4.0])],
+        )
+        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 4.0])))
+
+        # The tangent of a where with only the condition traced is zero
+        # with the output's dtype
+        _, (dout,) = mx.jvp(
+            lambda c: mx.where(c > 0, 2.0, 3.0), [mx.array(1.0)], [mx.array(1.0)]
+        )
+        self.assertEqual(dout.item(), 0.0)
+        self.assertEqual(dout.dtype, mx.float32)
+
+        # d/dy atan2(y, x) = x / (x^2 + y^2)
+        _, (dout,) = mx.jvp(
+            lambda y: mx.arctan2(y, mx.array(2.0)), [mx.array(1.0)], [mx.array(1.0)]
+        )
+        self.assertAlmostEqual(dout.item(), 0.4, places=6)
+
+        # d/dx atan2(y, x) = -y / (x^2 + y^2)
+        _, (dout,) = mx.jvp(
+            lambda x: mx.arctan2(mx.array(2.0), x), [mx.array(1.0)], [mx.array(1.0)]
+        )
+        self.assertAlmostEqual(dout.item(), -0.4, places=6)
+
+        # masked_scatter with a constant destination
+        mask = mx.array([True, False, True, False])
+
+        def masked_set(src):
+            dst = mx.zeros(4)
+            dst[mask] = src
+            return dst
+
+        _, (dout,) = mx.jvp(masked_set, [mx.ones(2)], [mx.ones(2)])
+        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 0.0, 1.0, 0.0])))
+
+    def test_jvp_through_bitwise_ops(self):
+        # JVPs of bitwise ops returned one tangent per traced input instead
+        # of one per output which corrupted the tangents of downstream
+        # outputs (issue #3629). The corruption is out-of-bounds UB that can
+        # go unnoticed in release builds; the assert in the jvp transform
+        # catches it deterministically in debug builds.
+        def fun(x):
+            b = (x == 0) & (x > -1)
+            return x + b.astype(mx.float32)
+
+        x = mx.array([0.0, 1.0, 2.0])
+        _, (dout,) = mx.jvp(fun, [x], [mx.ones_like(x)])
+        self.assertTrue(mx.array_equal(dout, mx.ones_like(x)))
+
+        def fun(x):
+            b = (x == 0) | (x > 1)
+            return x * b.astype(mx.float32)
+
+        _, (dout,) = mx.jvp(fun, [x], [mx.ones_like(x)])
+        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 0.0, 1.0])))
+
     def test_vjp(self):
         fun = lambda x: 2 * x
         out, dout = mx.vjp(fun, [mx.array(1.0)], [mx.array(2.0)])
@@ -78,6 +155,50 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].item(), 4.0 * 1.0)
         self.assertEqual(out[1].item(), 2.0 * 1.0 + 6.0 * 3.0)
         self.assertEqual(out[2].item(), 4.0 * 3.0)
+
+    def test_jvp_with_partly_traced_inputs(self):
+        # power: each traced input must use its own tangent (issue #3634)
+        fun = lambda a, b: a**b
+        primals = [mx.array(2.0), mx.array(3.0)]
+        dyda = 12.0  # d/da a^b = b * a^(b - 1)
+        dydb = math.log(2.0) * 8.0  # d/db a^b = ln(a) * a^b
+        _, (j,) = mx.jvp(fun, primals, [mx.array(1.0), mx.array(0.0)])
+        self.assertAlmostEqual(j.item(), dyda, places=4)
+        _, (j,) = mx.jvp(fun, primals, [mx.array(0.0), mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dydb, places=4)
+        _, (j,) = mx.jvp(fun, primals, [mx.array(1.0), mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dyda + dydb, places=4)
+        fun = lambda a: a ** mx.array(3.0)
+        _, (j,) = mx.jvp(fun, [mx.array(2.0)], [mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dyda, places=4)
+        fun = lambda b: mx.array(2.0) ** b
+        _, (j,) = mx.jvp(fun, [mx.array(3.0)], [mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dydb, places=4)
+
+        # divmod: one tangent per output, and consuming the second output
+        # used to crash (issue #3634)
+        def fun(x):
+            q, r = mx.divmod(x, mx.array(3.0))
+            return q, -r
+
+        _, (dq, dr) = mx.jvp(fun, [mx.array(7.0)], [mx.array(1.0)])
+        self.assertEqual(dq.item(), 0.0)
+        self.assertEqual(dr.item(), 0.0)
+
+        # slice_update with dynamic start indices and a subset of traced
+        # inputs (issue #3634)
+        src = mx.zeros(4)
+        upd = mx.ones(2)
+        start = mx.array([1])
+        fun = lambda u: mx.slice_update(src, u, start, axes=[0])
+        _, (j,) = mx.jvp(fun, [upd], [mx.ones(2)])
+        self.assertEqual(j.tolist(), [0.0, 1.0, 1.0, 0.0])
+        fun = lambda s: mx.slice_update(s, upd, start, axes=[0])
+        _, (j,) = mx.jvp(fun, [src], [mx.ones(4)])
+        self.assertEqual(j.tolist(), [1.0, 0.0, 0.0, 1.0])
+        fun = lambda s, u: mx.slice_update(s, u, start, axes=[0])
+        _, (j,) = mx.jvp(fun, [src, upd], [mx.ones(4), mx.full(2, 2.0)])
+        self.assertEqual(j.tolist(), [1.0, 2.0, 2.0, 1.0])
 
     def test_grad(self):
         fun = lambda x: x * x
@@ -771,6 +892,27 @@ class TestAutograd(mlx_tests.MLXTestCase):
         expected = mx.array([[0, 0, 1, 0, 1], [1, 0, 0, 0, 1]], mx.float32)
         self.assertTrue(mx.array_equal(out, expected))
 
+    def test_sort_grad(self):
+        # Sort permutes the input, so its vjp must scatter the cotangents back
+        # to the original positions (the transpose of the permutation), not
+        # gather them forward. A non-involutive permutation exposes the bug.
+        x = mx.array([3.0, 1.0, 2.0, 5.0, 4.0])
+        cotan = mx.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        grad = mx.vjp(lambda a: mx.sort(a), (x,), (cotan,))[1][0]
+        self.assertTrue(mx.array_equal(grad, mx.array([30.0, 10.0, 20.0, 50.0, 40.0])))
+
+        # vjp must be the transpose of the jvp (adjoint test) along each axis.
+        mx.random.seed(0)
+        for axis in (0, 1, -1):
+            a = mx.random.normal((4, 6))
+            v = mx.random.normal(a.shape)
+            w = mx.random.normal(a.shape)
+            jv = mx.jvp(lambda z: mx.sort(z, axis=axis), (a,), (v,))[1][0]
+            jtw = mx.vjp(lambda z: mx.sort(z, axis=axis), (a,), (w,))[1][0]
+            self.assertAlmostEqual(
+                mx.sum(w * jv).item(), mx.sum(v * jtw).item(), places=4
+            )
+
     def test_custom_function(self):
         # Make a custom function
         my_exp = mx.custom_function(mx.exp)
@@ -1157,6 +1299,45 @@ class TestAutograd(mlx_tests.MLXTestCase):
         _, vjps_multiply = mx.vjp(mx.multiply, [primal[0], primal[1]], [cotangent])
 
         self.assertTrue(mx.array_equal(mx.stack(vjps_multiply), vjps[0]))
+
+    def test_complex_exp_vjp(self):
+        primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        cotangent = mx.random.normal(
+            (
+                3,
+                4,
+                5,
+            ),
+            dtype=mx.complex64,
+        )
+
+        _, vjps = mx.vjp(mx.exp, [primal], [cotangent])
+
+        expected = cotangent * mx.conj(mx.exp(primal))
+
+        # Check against hand-computed vjps
+        self.assertTrue(mx.allclose(vjps[0], expected))
+
+    def test_complex_log_vjp(self):
+        primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        cotangent = mx.random.normal(
+            (
+                3,
+                4,
+                5,
+            ),
+            dtype=mx.complex64,
+        )
+
+        # guard against values too close to the origin
+        primal = mx.where(abs(primal) < 1e-3, 1e-3, primal)
+
+        _, vjps = mx.vjp(mx.log, [primal], [cotangent])
+
+        expected = cotangent * mx.conj(1 / primal)
+
+        # Check against hand-computed vjps
+        self.assertTrue(mx.allclose(vjps[0], expected))
 
 
 if __name__ == "__main__":

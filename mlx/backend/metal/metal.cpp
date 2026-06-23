@@ -7,6 +7,12 @@
 
 namespace mlx::core::metal {
 
+namespace {
+
+std::string g_metallib_path;
+
+} // namespace
+
 bool is_available() {
   return true;
 }
@@ -44,6 +50,14 @@ void stop_capture() {
   auto pool = new_scoped_memory_pool();
   auto manager = MTL::CaptureManager::sharedCaptureManager();
   manager->stopCapture();
+}
+
+void set_metallib_path(const std::string& path) {
+  g_metallib_path = path;
+}
+
+const std::string& get_metallib_path() {
+  return g_metallib_path;
 }
 
 } // namespace mlx::core::metal

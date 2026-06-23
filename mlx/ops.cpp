@@ -168,6 +168,10 @@ array arange(
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
 
+  if (step == 0) {
+    throw std::invalid_argument("[arange] step must be nonzero.");
+  }
+
   // Check if start and stop specify a valid range because if not, we have to
   // return an empty array
   if (std::isinf(step) &&
@@ -257,8 +261,12 @@ array linspace(
       s);
 }
 
-array astype(array a, Dtype dtype, StreamOrDevice s /* = {} */) {
-  if (dtype == a.dtype()) {
+array astype(
+    array a,
+    Dtype dtype,
+    std::optional<bool> copy,
+    StreamOrDevice s /* = {} */) {
+  if (dtype == a.dtype() && !copy.value_or(false)) {
     return a;
   }
   auto copied_shape = a.shape(); // |a| will be moved
@@ -639,6 +647,33 @@ array expand_dims(
   }
   std::vector<int> sorted_axes(unique_axes.begin(), unique_axes.end());
   return expand_dims_impl(a, std::move(sorted_axes), s);
+}
+
+array flip(
+    const array& a,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  auto ndim = static_cast<int>(a.ndim());
+  Shape start(ndim, 0);
+  Shape stop = a.shape();
+  Shape strides(ndim, 1);
+  for (auto ax : axes) {
+    int axis = normalize_axis_index(ax, ndim, "[flip] ");
+    start[axis] = a.shape(axis) - 1;
+    stop[axis] = -a.shape(axis) - 1;
+    strides[axis] = -1;
+  }
+  return slice(a, std::move(start), std::move(stop), std::move(strides), s);
+}
+
+array flip(const array& a, int axis, StreamOrDevice s /* = {} */) {
+  return flip(a, std::vector<int>{axis}, s);
+}
+
+array flip(const array& a, StreamOrDevice s /* = {} */) {
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  return flip(a, axes, s);
 }
 
 // Slice helper
@@ -1144,6 +1179,32 @@ split(const array& a, int num_splits, StreamOrDevice s /* = {} */) {
   return split(a, num_splits, 0, to_stream(s));
 }
 
+std::vector<array>
+unstack(const array& a, int axis, StreamOrDevice s /* = {} */) {
+  auto ndim = static_cast<int>(a.ndim());
+  auto ax = axis < 0 ? axis + ndim : axis;
+  if (ax < 0 || ax >= ndim) {
+    std::ostringstream msg;
+    msg << "[unstack] Invalid axis " << axis << " for array with " << ndim
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto n = a.shape(ax);
+  std::vector<array> res;
+  res.reserve(n);
+  if (n == 0) {
+    return res;
+  }
+  for (auto& part : split(a, n, ax, s)) {
+    res.push_back(squeeze(part, ax, s));
+  }
+  return res;
+}
+
+std::vector<array> unstack(const array& a, StreamOrDevice s /* = {} */) {
+  return unstack(a, 0, s);
+}
+
 std::vector<array> meshgrid(
     const std::vector<array>& arrays,
     bool sparse /* = false */,
@@ -1302,7 +1363,9 @@ array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
   }
 
   if (repeats == 0) {
-    return array({}, arr.dtype());
+    auto shape = arr.shape();
+    shape[axis] = 0;
+    return array(std::initializer_list<int>{}, shape, arr.dtype());
   }
 
   if (repeats == 1) {
@@ -1349,7 +1412,8 @@ array tile(
     }
     expand_shape.push_back(shape[i]);
     broad_shape.push_back(shape[i]);
-    final_shape.push_back(reps[i] * shape[i]);
+    final_shape.push_back(
+        safe_cast(static_cast<int64_t>(reps[i]) * shape[i], "tile"));
   }
 
   auto x = reshape(arr, std::move(expand_shape), s);
@@ -6350,7 +6414,10 @@ array roll(
     if (size == 0) {
       continue; // skip rolling this axis if it has size 0
     }
-    auto split_index = (sh < 0) ? (-sh) % size : size - sh % size;
+    // Promote to 64-bit so negating a shift of INT_MIN does not overflow.
+    int64_t sh64 = sh;
+    auto split_index = static_cast<ShapeElem>(
+        (sh64 < 0) ? (-sh64) % size : size - sh64 % size);
 
     auto parts = split(result, Shape{split_index}, ax, s);
     std::swap(parts[0], parts[1]);
@@ -6369,11 +6436,11 @@ array roll(const array& a, int shift, StreamOrDevice s /* = {} */) {
 }
 
 array roll(const array& a, const Shape& shift, StreamOrDevice s /* = {} */) {
-  int total_shift = 0;
-  for (auto& s : shift) {
-    total_shift += s;
+  int64_t total_shift = 0;
+  for (auto& sh : shift) {
+    total_shift += sh;
   }
-  return roll(a, total_shift, s);
+  return roll(a, safe_cast(total_shift, "roll"), s);
 }
 
 array roll(const array& a, int shift, int axis, StreamOrDevice s /* = {} */) {
@@ -6394,11 +6461,12 @@ array roll(
     const Shape& shift,
     int axis,
     StreamOrDevice s /* = {} */) {
-  int total_shift = 0;
-  for (auto& s : shift) {
-    total_shift += s;
+  int64_t total_shift = 0;
+  for (auto& sh : shift) {
+    total_shift += sh;
   }
-  return roll(a, Shape{total_shift}, std::vector<int>{axis}, s);
+  return roll(
+      a, Shape{safe_cast(total_shift, "roll")}, std::vector<int>{axis}, s);
 }
 
 array real(const array& a, StreamOrDevice s /* = {} */) {

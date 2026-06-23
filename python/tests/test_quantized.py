@@ -268,6 +268,38 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 tol = 1e-3 if dtype == mx.float32 else 1.5e-3
                 self.assertLess((y_q - y_hat).abs().max(), tol)
 
+    def test_qmm_large_dims(self):
+        # Regression test for an int16 overflow in the NAX qmm kernels:
+        # the per-simdgroup edge sizes were computed as
+        # min(SN, short(N - (y_col + tn))), which wraps for distances
+        # over 32767 and made store_safe skip a contiguous band of output
+        # columns [N - 65536, N - 32768) whenever the M-tile was partial.
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
+        group_size, bits = 64, 4
+        K = 128
+        tests = [
+            (16, 32840),  # unaligned N > 2**15, M < 32: partial M-tile
+            (33, 32840),  # unaligned N > 2**15, M % 32 != 0
+            (33000, 64),  # M > 2**15: row distance overflows (aligned N)
+        ]
+        for M, N in tests:
+            with self.subTest(shape=(M, N, K)):
+                x = mx.random.normal(shape=(M, K), key=k1) / K**0.5
+                w = mx.random.normal(shape=(N, K), key=k2) / K**0.5
+                x = x.astype(dtype)
+                w = w.astype(dtype)
+                w_q, scales, biases = mx.quantize(w, group_size, bits)
+                w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
+                y_q = mx.quantized_matmul(
+                    x, w_q, scales, biases, True, group_size, bits
+                )
+                y_hat = x @ w_hat.T
+                self.assertEqual(y_q.shape, y_hat.shape)
+                tol = 1e-3 if dtype == mx.float32 else 1.5e-3
+                self.assertLess((y_q - y_hat).abs().max(), tol)
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
@@ -991,6 +1023,43 @@ class TestQuantized(mlx_tests.MLXTestCase):
         g1 = mx.grad(f_ref)(x, w_hat, lhs_indices, rhs_indices)
         g2 = mx.grad(f_test)(x, qw, s, b, lhs_indices, rhs_indices)
         self.assertTrue(mx.allclose(g1, g2, atol=1e-4))
+
+    def test_gather_qmm_matrix_path(self):
+        # Regression test for matrix-size gather_qmm with half precision
+        # inputs: on NAX devices the kernel name was built with bk = 32
+        # while the kernels are only instantiated with bk = 64, so the
+        # kernel lookup failed with "Unable to load kernel".
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        dtype = mx.bfloat16 if (mx.default_device() == mx.gpu) else mx.float32
+        E, M, N, K = 4, 64, 512, 512
+        lhs_indices = mx.array([0, 1, 2], dtype=mx.uint32)
+        rhs_indices = mx.array([0, 2, 3], dtype=mx.uint32)
+        for mode in ["affine", "mxfp4"]:
+            with self.subTest(mode=mode):
+                x = (mx.random.normal(shape=(3, M, K), key=k1) / K**0.5).astype(dtype)
+                # Keep w in the same dtype so affine scales do not promote
+                # the matmul to float32 (which would skip the NAX route).
+                w = mx.random.normal(shape=(E, N, K), key=k2).astype(dtype)
+                w_q, *wargs = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(w_q, *wargs, mode=mode)
+                y_q = mx.gather_qmm(
+                    x,
+                    w_q,
+                    *wargs,
+                    lhs_indices=lhs_indices,
+                    rhs_indices=rhs_indices,
+                    transpose=True,
+                    mode=mode,
+                )
+                y_hat = mx.stack(
+                    [
+                        x[i].astype(mx.float32) @ w_hat[int(rhs_indices[i])].T
+                        for i in range(3)
+                    ]
+                ).astype(dtype)
+                self.assertEqual(y_q.shape, y_hat.shape)
+                self.assertLess((y_q - y_hat).abs().max(), 1e-1)
 
     def test_gather_qmm_sorted(self):
         def quantize(w, transpose=True, group_size=None, mode="affine"):

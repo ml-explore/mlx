@@ -518,7 +518,7 @@ std::vector<array> ArcTan2::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   assert(primals.size() == 2);
-  assert(argnums.size() == 2);
+  assert(cotangents.size() == 1);
 
   const auto& s = stream();
   const array& x1 = primals[0];
@@ -545,18 +545,23 @@ std::vector<array> ArcTan2::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-  assert(argnums.size() == 2);
+  assert(tangents.size() == argnums.size());
 
   const auto& s = stream();
   const array& x1 = primals[0];
   const array& x2 = primals[1];
-  const array& dx1 = tangents[0];
-  const array& dx2 = tangents[1];
 
-  return {divide(
-      subtract(multiply(x2, dx1, s), multiply(x1, dx2, s), s),
-      add(square(x1, s), square(x2, s), s),
-      s)};
+  auto numerator = [&]() {
+    if (argnums.size() == 2) {
+      return subtract(
+          multiply(x2, tangents[0], s), multiply(x1, tangents[1], s), s);
+    } else if (argnums[0] == 0) {
+      return multiply(x2, tangents[0], s);
+    } else {
+      return negative(multiply(x1, tangents[0], s), s);
+    }
+  }();
+  return {divide(numerator, add(square(x1, s), square(x2, s), s), s)};
 }
 
 std::pair<std::vector<array>, std::vector<int>> ArcTan2::vmap(
@@ -794,11 +799,8 @@ std::vector<array> BitwiseBinary::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-  std::vector<array> vjps = {zeros_like(tangents[0], stream())};
-  if (argnums.size() > 1) {
-    vjps.push_back(vjps.back());
-  }
-  return vjps;
+  auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> BitwiseBinary::vjp(
@@ -806,7 +808,11 @@ std::vector<array> BitwiseBinary::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    vjps.push_back(zeros_like(primals[arg], stream()));
+  }
+  return vjps;
 }
 
 std::vector<array>
@@ -1806,7 +1812,9 @@ std::vector<array> DivMod::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  return {zeros_like(primals[0], stream())};
+  // One tangent per output; inputs are pre-broadcast and pre-promoted
+  auto zero = zeros_like(primals[0], stream());
+  return {zero, zero};
 }
 
 std::pair<std::vector<array>, std::vector<int>> DivMod::vmap(
@@ -1992,7 +2000,7 @@ std::vector<array> Exp::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
-  return {multiply(cotangents[0], outputs[0], stream())};
+  return {multiply(cotangents[0], conjugate(outputs[0], stream()), stream())};
 }
 
 std::vector<array> Exp::jvp(
@@ -2713,7 +2721,15 @@ std::vector<array> Log::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  //   return jvp(primals, cotangents, argnums);
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  auto out = divide(cotangents[0], conjugate(primals[0], stream()), stream());
+  if (base_ != Base::e) {
+    auto scale = 1 / std::log(base_ == Base::ten ? 10.0f : 2.0f);
+    out = multiply(array(scale, out.dtype()), out, stream());
+  }
+  return {out};
 }
 
 std::vector<array> Log::jvp(
@@ -3138,30 +3154,30 @@ std::vector<array> Select::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 3);
-  assert(tangents.size() == 3);
+  assert(tangents.size() == argnums.size());
 
   auto jvp_fun = [&](int i) {
     int arg = argnums[i];
 
     if (arg == 0) {
-      return zeros_like(primals[0], stream());
+      return zeros_like(primals[1], stream());
     } else if (arg == 1) {
       return multiply(
-          astype(primals[0], tangents[1].dtype(), stream()),
-          tangents[1],
+          astype(primals[0], tangents[i].dtype(), stream()),
+          tangents[i],
           stream());
     } else {
       return multiply(
           astype(
-              logical_not(primals[0], stream()), tangents[2].dtype(), stream()),
-          tangents[2],
+              logical_not(primals[0], stream()), tangents[i].dtype(), stream()),
+          tangents[i],
           stream());
     }
   };
 
-  array jvp = jvp_fun(argnums[0]);
+  array jvp = jvp_fun(0);
   for (int i = 1; i < argnums.size(); i++) {
-    jvp = add(jvp, jvp_fun(argnums[i]));
+    jvp = add(jvp, jvp_fun(i));
   }
   return {jvp};
 }
@@ -3401,12 +3417,12 @@ std::vector<array> Power::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto output = power(primals[0], primals[1], stream());
-  auto grads = vjp(primals, tangents, argnums, {output});
-  if (argnums.size() > 1) {
-    return {add(grads[0], grads[1], stream())};
-  } else {
-    return grads;
+  auto jvp = vjp(primals, {tangents[0]}, {argnums[0]}, {output})[0];
+  for (int i = 1; i < argnums.size(); ++i) {
+    jvp = add(
+        jvp, vjp(primals, {tangents[i]}, {argnums[i]}, {output})[0], stream());
   }
+  return {jvp};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Power::vmap(
@@ -3774,6 +3790,18 @@ bool GatherQMM::is_equivalent(const Primitive& other) const {
   const GatherQMM& qm_other = static_cast<const GatherQMM&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
       mode_ == qm_other.mode_ && transpose_ == qm_other.transpose_;
+}
+
+std::vector<Shape> GatherQMM::output_shapes(const std::vector<array>& inputs) {
+  const auto& x = inputs[0];
+  const auto& w = inputs[1];
+  const auto& lhs_indices =
+      (mode_ == QuantizationMode::Affine) ? inputs[4] : inputs[3];
+  int w_outer = transpose_ ? w.shape(-2) : w.shape(-1) * 32 / bits_;
+  auto out_shape = lhs_indices.shape();
+  out_shape.push_back(x.shape(-2));
+  out_shape.push_back(w_outer);
+  return {out_shape};
 }
 
 std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
@@ -4688,15 +4716,16 @@ std::vector<array> MaskedScatter::jvp(
   }
 
   array out = zeros_like(dst, s);
-  for (int arg : argnums) {
+  for (int i = 0; i < argnums.size(); ++i) {
+    int arg = argnums[i];
     if (arg == 0) {
-      out = where(mask_b, out, tangents[0], s);
+      out = where(mask_b, out, tangents[i], s);
     } else if (arg == 2) {
       out = array(
           out.shape(),
           out.dtype(),
           std::make_shared<MaskedScatter>(s),
-          {out, mask, tangents[1]});
+          {out, mask, tangents[i]});
     } else {
       throw std::invalid_argument("[masked_scatter] invalid arg index in JVP");
     }
@@ -5249,8 +5278,20 @@ std::vector<array> DynamicSliceUpdate::vjp(
 std::vector<array> DynamicSliceUpdate::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>&) {
-  return {slice_update(tangents[0], tangents[1], primals[2], axes_, stream())};
+    const std::vector<int>& argnums) {
+  array tan_src = zeros_like(primals[0], stream());
+  array tan_upd = zeros_like(primals[1], stream());
+  for (int i = 0; i < argnums.size(); ++i) {
+    if (argnums[i] == 0) {
+      tan_src = tangents[i];
+    } else if (argnums[i] == 1) {
+      tan_upd = tangents[i];
+    } else {
+      throw std::invalid_argument(
+          "[DynamicSliceUpdate::jvp] Not supported for start indices");
+    }
+  }
+  return {slice_update(tan_src, tan_upd, primals[2], axes_, stream())};
 }
 
 bool DynamicSliceUpdate::is_equivalent(const Primitive& other) const {
@@ -5323,7 +5364,16 @@ std::vector<array> Sort::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // Sort applies a permutation to the input, so the cotangents must be
+  // scattered back to the original positions (the transpose of the
+  // permutation), not gathered forward as in the jvp.
+  auto sort_idx = argsort(primals[0], axis_, stream());
+  return {put_along_axis(
+      zeros_like(primals[0], stream()),
+      sort_idx,
+      cotangents[0],
+      axis_,
+      stream())};
 }
 
 std::vector<array> Sort::jvp(
@@ -5934,6 +5984,16 @@ bool GatherMM::is_equivalent(const Primitive& other) const {
   const GatherMM& g_other = static_cast<const GatherMM&>(other);
   return left_sorted_ == g_other.left_sorted_ &&
       right_sorted_ == g_other.right_sorted_;
+}
+
+std::vector<Shape> GatherMM::output_shapes(const std::vector<array>& inputs) {
+  const auto& a = inputs[0];
+  const auto& b = inputs[1];
+  const auto& lhs_indices = inputs[2];
+  auto out_shape = lhs_indices.shape();
+  out_shape.push_back(a.shape(-2));
+  out_shape.push_back(b.shape(-1));
+  return {out_shape};
 }
 
 bool BlockMaskedMM::is_equivalent(const Primitive& other) const {

@@ -69,6 +69,11 @@ MLX_API void set_printoptions(PrintOptions options);
 
 MLX_API PrintFormatter& get_global_formatter();
 
+/** Return whether current thread is the first one that called this function. */
+bool is_main_thread();
+
+MLX_API array host_accessible_array(array a);
+
 /** Print the exception and then abort. */
 MLX_API void abort_with_exception(const std::exception& error);
 
@@ -76,9 +81,11 @@ MLX_API void abort_with_exception(const std::exception& error);
 struct MLX_API finfo {
   explicit finfo(Dtype dtype);
   Dtype dtype;
+  int bits;
   double min;
   double max;
   double eps;
+  double smallest_normal;
 };
 
 /** Holds information about integral types. */
