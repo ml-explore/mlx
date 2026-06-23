@@ -117,87 +117,6 @@ class SlabAllocator {
 };
 
 // ---------------------------------------------------------------------------
-// DecodeArena — deterministic bump allocator for HIP Graph capture
-// ---------------------------------------------------------------------------
-// During decode, the allocation pattern is fixed: same sizes in the same
-// order every step. The arena allocates from a pre-sized contiguous buffer,
-// guaranteeing identical pointers on each reset+replay cycle.
-//
-// Usage:
-//   arena.begin(estimated_bytes);  // allocate backing buffer
-//   // ... run decode step (allocations go through arena) ...
-//   arena.reset();                 // rewind bump pointer for next step
-//   // ... replay same step (same pointers) ...
-//   arena.end();                   // release backing buffer
-
-class DecodeArena {
- public:
-  DecodeArena() = default;
-  ~DecodeArena();
-
-  // Allocate the backing buffer and enter arena mode.
-  bool begin(size_t capacity_bytes);
-
-  // Rewind the bump pointer. Next cycle returns same addresses.
-  void reset();
-
-  // Number of descriptors handed out so far (descriptor mark companion to used()).
-  size_t desc_used() const {
-    return desc_index_;
-  }
-
-  // Rewind BOTH the byte bump pointer and the descriptor index to a recorded
-  // mark (the state right after a captured graph's buffers). The graph region
-  // [0, byte_mark) / descriptors [0, desc_mark) stays reserved and untouched;
-  // per-token sampling reuses the region after the mark each cycle. Rewinding
-  // only bytes (not desc_index_) would grow the descriptor vector unboundedly
-  // (realloc → dangling pointers); rewinding desc_index_ to 0 would reuse and
-  // mutate the graph's descriptor objects (corrupting live arrays).
-  void reset_to(size_t byte_mark, size_t desc_mark) {
-    offset_ = byte_mark;
-    desc_index_ = desc_mark;
-  }
-
-  // Leave arena mode and free the backing buffer.
-  void end();
-
-  // Bump-allocate from the arena. Returns nullptr if inactive or exhausted.
-  RocmBuffer* malloc(size_t size);
-
-  // No-op free (bulk-freed on end()).
-  void free(RocmBuffer* /*buf*/) {}
-
-  // active() drives the allocator's routing to the arena. When paused, the
-  // backing stays allocated (so captured-graph buffers remain valid at their
-  // baked addresses) but NEW allocations fall through to the pool. Used after a
-  // capture-once graph is built: the graph keeps its arena buffers, while
-  // per-token sampling allocates from the pool and can't clobber graph buffers.
-  bool active() const {
-    return base_ != nullptr && !paused_;
-  }
-  void set_paused(bool p) {
-    paused_ = p;
-  }
-  size_t used() const {
-    return offset_;
-  }
-  size_t capacity() const {
-    return capacity_;
-  }
-
- private:
-  void* base_{nullptr};
-  size_t capacity_{0};
-  size_t offset_{0};
-  bool is_managed_{false};
-  bool paused_{false};
-
-  // Pre-allocated RocmBuffer descriptors (recycled on reset)
-  std::vector<RocmBuffer> descriptors_;
-  size_t desc_index_{0};
-};
-
-// ---------------------------------------------------------------------------
 // RocmAllocator
 // ---------------------------------------------------------------------------
 
@@ -257,16 +176,6 @@ class RocmAllocator : public allocator::Allocator {
   // uses the blocking path.
   std::vector<void*> mem_pools_;
   std::vector<void*> free_streams_;
-
- public:
-  // Arena mode for HIP Graph capture.
-  // When active, malloc() returns deterministic addresses from the arena.
-  DecodeArena& arena() {
-    return arena_;
-  }
-
- private:
-  DecodeArena arena_;
 };
 
 RocmAllocator& allocator();

@@ -533,14 +533,6 @@ Buffer RocmAllocator::malloc(size_t size) {
     }
   }
 
-  // Arena fast path: deterministic bump allocation for HIP Graph capture
-  if (arena_.active()) {
-    RocmBuffer* buf = arena_.malloc(size);
-    if (buf)
-      return Buffer{buf};
-    // Arena exhausted — fall through to normal path
-  }
-
   auto orig_size = size;
   std::unique_lock lock(mutex_);
 
@@ -605,18 +597,6 @@ static std::mutex& pool_mutex() {
 }
 
 Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
-  // During HIP-graph capture, route through the DecodeArena like malloc() does.
-  // Otherwise hipMallocAsync below records a MemAlloc node into the captured
-  // graph; such graphs allocate on the first replay but FAIL on the second
-  // ("invalid argument") because the memory node can't re-allocate — freezing
-  // decode after one token. The arena hands back pre-allocated deterministic
-  // addresses, so no MemAlloc node is recorded.
-  if (arena_.active()) {
-    RocmBuffer* buf = arena_.malloc(size);
-    if (buf)
-      return Buffer{buf};
-    // arena exhausted — fall through to the pool path
-  }
   hipStream_t stream = static_cast<hipStream_t>(stream_v);
   // Fall back to the unified path unless the pool is usable for this request.
   if (!use_async_pool() || stream == nullptr || device < 0 ||
@@ -796,12 +776,6 @@ void RocmAllocator::free(Buffer buffer, bool force) {
     return;
   }
 
-  // Arena fast path: no-op (memory freed in bulk on arena.end())
-  if (arena_.active()) {
-    arena_.free(buf);
-    return;
-  }
-
   std::unique_lock lock(mutex_);
   active_memory_ -= buf->size;
 
@@ -960,89 +934,6 @@ void RocmAllocator::clear_cache() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// DecodeArena implementation
-// ---------------------------------------------------------------------------
-
-DecodeArena::~DecodeArena() {
-  end();
-}
-
-bool DecodeArena::begin(size_t capacity_bytes) {
-  if (base_)
-    end();
-
-  // Align capacity to page boundary
-  capacity_bytes = (capacity_bytes + 4095) & ~size_t(4095);
-
-  bool managed = false;
-  void* data = nullptr;
-  try {
-    data = rocm_unified_malloc(capacity_bytes, managed);
-  } catch (...) {
-    return false;
-  }
-
-  base_ = data;
-  capacity_ = capacity_bytes;
-  offset_ = 0;
-  is_managed_ = managed;
-  desc_index_ = 0;
-  paused_ = false;
-  descriptors_.clear();
-  // Reserve a hard upper bound so the vector NEVER reallocates: malloc() returns
-  // RocmBuffer* pointers INTO this vector, and the captured graph + live arrays
-  // hold those pointers for the whole decode. A realloc would dangle all of them
-  // (heap corruption). A decode step + per-token sampling stays well under this.
-  descriptors_.reserve(16384);
-  return true;
-}
-
-void DecodeArena::reset() {
-  offset_ = 0;
-  desc_index_ = 0;
-}
-
-void DecodeArena::end() {
-  if (!base_)
-    return;
-  rocm_unified_free(base_, is_managed_);
-  base_ = nullptr;
-  capacity_ = 0;
-  offset_ = 0;
-  descriptors_.clear();
-  desc_index_ = 0;
-}
-
-RocmBuffer* DecodeArena::malloc(size_t size) {
-  if (!base_)
-    return nullptr;
-
-  // Align to 256 bytes for GPU access patterns
-  size_t aligned = (size + 255) & ~size_t(255);
-  if (offset_ + aligned > capacity_)
-    return nullptr;
-
-  void* ptr = static_cast<char*>(base_) + offset_;
-  offset_ += aligned;
-
-  // Reuse or create a RocmBuffer descriptor
-  if (desc_index_ < descriptors_.size()) {
-    auto& d = descriptors_[desc_index_];
-    d.data = ptr;
-    d.size = size;
-    d.host_shadow = nullptr;
-    d.host_dirty = false;
-    desc_index_++;
-    return &d;
-  }
-
-  // Fully initialize host_shadow/host_dirty: gpu_ptr() reads host_dirty, so an
-  // uninitialized value could spuriously trigger a flush of a garbage pointer.
-  descriptors_.push_back(RocmBuffer{ptr, size, is_managed_, -1, nullptr, false, nullptr});
-  desc_index_++;
-  return &descriptors_.back();
-}
 
 RocmAllocator& allocator() {
   static RocmAllocator* allocator_ = new RocmAllocator;
