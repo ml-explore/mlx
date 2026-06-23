@@ -951,6 +951,16 @@ void hipblaslt_gemm_fp8_raw(
         cnt == 0) {
       throw std::runtime_error("fp8 GEMM: no algorithm for shape");
     }
+    // Timing candidate algos requires synchronizing the stream, which is illegal
+    // while it is in HIP-graph capture (the sync invalidates the capture and
+    // every following matmul fails). Under capture, take the heuristic's top pick
+    // — it records into the captured graph and runs on replay. Benchmark only
+    // when not capturing.
+    hipStreamCaptureStatus cap_st = hipStreamCaptureStatusNone;
+    (void)hipStreamGetCaptureInfo(stream, &cap_st, nullptr);
+    if (cap_st != hipStreamCaptureStatusNone) {
+      chosen = res[0];
+    } else {
     double best = 1e30;
     int best_idx = 0;
     for (int a = 0; a < cnt; ++a) {
@@ -964,7 +974,7 @@ void hipblaslt_gemm_fp8_raw(
         if (!wp)
           continue;
       }
-      if (hipblasLtMatmul(
+      hipblasStatus_t feas = hipblasLtMatmul(
               handle,
               desc_guard.desc,
               &alpha,
@@ -980,7 +990,8 @@ void hipblaslt_gemm_fp8_raw(
               &res[a].algo,
               wp,
               ws,
-              stream) != HIPBLAS_STATUS_SUCCESS) {
+              stream);
+      if (feas != HIPBLAS_STATUS_SUCCESS) {
         continue;
       }
       (void)hipStreamSynchronize(stream);
@@ -1019,6 +1030,7 @@ void hipblaslt_gemm_fp8_raw(
       }
     }
     chosen = res[best_idx];
+    }
     std::lock_guard<std::mutex> lock(mtx);
     algo_cache[key] = chosen;
   }
@@ -1031,7 +1043,7 @@ void hipblaslt_gemm_fp8_raw(
     wp = p;
     ws = s;
   }
-  if (hipblasLtMatmul(
+  hipblasStatus_t fst = hipblasLtMatmul(
           handle,
           desc_guard.desc,
           &alpha,
@@ -1047,8 +1059,11 @@ void hipblaslt_gemm_fp8_raw(
           &chosen.algo,
           wp,
           ws,
-          stream) != HIPBLAS_STATUS_SUCCESS) {
-    throw std::runtime_error("fp8 GEMM: hipblasLtMatmul failed");
+          stream);
+  if (fst != HIPBLAS_STATUS_SUCCESS) {
+    throw std::runtime_error(
+        "fp8 GEMM: hipblasLtMatmul failed (status " + std::to_string((int)fst) +
+        ")");
   }
 }
 
