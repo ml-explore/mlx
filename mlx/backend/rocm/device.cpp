@@ -82,6 +82,9 @@ static std::mutex g_inline_by_op_mtx_;
 static std::unordered_map<std::string, long> g_inline_by_op_;
 static const bool g_reuse_stats_on_ =
     std::getenv("MLX_GRAPH_REUSE_STATS") != nullptr;
+bool graph_reuse_stats_on() {
+  return g_reuse_stats_on_;
+}
 void set_current_prim(const char* name) {
   g_cur_prim_ = name ? name : "?";
 }
@@ -534,14 +537,17 @@ void CommandEncoder::add_kernel_node_raw(
   kernel_params.blockDim = block_dim;
   kernel_params.kernelParams = params;
   kernel_params.sharedMemBytes = smem_bytes;
+  add_kernel_node_kp(kernel_params);
+}
+
+void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
   hipGraphNode_t node;
   long _t0 = g_reuse_stats_on_ ? now_us() : 0;
-  CHECK_HIP_ERROR(
-      hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kernel_params));
+  CHECK_HIP_ERROR(hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kp));
   if (g_reuse_stats_on_) g_t_addnode_us_ += now_us() - _t0;
   g_kernel_nodes_.fetch_add(1, std::memory_order_relaxed);
   build_nodes_.push_back(node);
-  build_node_params_.push_back(kernel_params);
+  build_node_params_.push_back(kp);
   build_arghash_.push_back(pending_arghash_);
   // Key the node by its kernel FUNCTION + FULL launch dims. Reuse (SetParams /
   // reinstantiate) only re-points params of a structurally IDENTICAL exec, so the
@@ -551,21 +557,21 @@ void CommandEncoder::add_kernel_node_raw(
   // params onto a mismatched exec node -> the kernel launches the old grid over
   // new (smaller) buffers -> out-of-bounds. Encode each dim separately.
   std::string key = "K";
-  key += std::to_string(reinterpret_cast<std::uintptr_t>(func));
+  key += std::to_string(reinterpret_cast<std::uintptr_t>(kp.func));
   key += "_";
-  key += std::to_string(grid_dim.x);
+  key += std::to_string(kp.gridDim.x);
   key += ",";
-  key += std::to_string(grid_dim.y);
+  key += std::to_string(kp.gridDim.y);
   key += ",";
-  key += std::to_string(grid_dim.z);
+  key += std::to_string(kp.gridDim.z);
   key += "x";
-  key += std::to_string(block_dim.x);
+  key += std::to_string(kp.blockDim.x);
   key += ",";
-  key += std::to_string(block_dim.y);
+  key += std::to_string(kp.blockDim.y);
   key += ",";
-  key += std::to_string(block_dim.z);
+  key += std::to_string(kp.blockDim.z);
   key += "s";
-  key += std::to_string(smem_bytes);
+  key += std::to_string(kp.sharedMemBytes);
   insert_graph_dependencies(GraphNode{node, key});
 }
 
@@ -600,6 +606,70 @@ void CommandEncoder::add_module_kernel_node(
 void CommandEncoder::add_child_graph_node(
     hipGraph_t child,
     const std::string& key) {
+  // hipGraphExecUpdate does NOT refresh kernel params nested inside child-graph
+  // nodes (confirmed: it returns success but the child keeps stale kernargs), so
+  // embedding a child node silently breaks graph reuse across tokens. Flatten the
+  // child's kernels into build_graph_ as TOP-LEVEL kernel nodes via the normal
+  // add path so ExecUpdate refreshes them. The child's kernelParams point at the
+  // caller's arg storage (kept alive like any other op), and chain-edge ordering
+  // serializes the flattened nodes correctly. Fall back to embedding the child
+  // as-is only if it contains non-kernel nodes (none observed in practice).
+  size_t n = 0;
+  hipGraphGetNodes(child, nullptr, &n);
+  std::vector<hipGraphNode_t> cnodes(n);
+  if (n) {
+    hipGraphGetNodes(child, cnodes.data(), &n);
+  }
+  // Topologically order the child's kernels (Kahn) so chain-edge serialization
+  // never places a consumer before its producer.
+  size_t ne = 0;
+  hipGraphGetEdges(child, nullptr, nullptr, &ne);
+  std::vector<hipGraphNode_t> cfrom(ne), cto(ne);
+  if (ne) {
+    hipGraphGetEdges(child, cfrom.data(), cto.data(), &ne);
+  }
+  bool all_kernels = n > 0;
+  for (size_t i = 0; i < n; i++) {
+    hipGraphNodeType t;
+    if (hipGraphNodeGetType(cnodes[i], &t) != hipSuccess ||
+        t != hipGraphNodeTypeKernel) {
+      all_kernels = false;
+      break;
+    }
+  }
+  if (all_kernels) {
+    std::unordered_map<hipGraphNode_t, int> indeg;
+    std::unordered_map<hipGraphNode_t, std::vector<hipGraphNode_t>> succ;
+    for (auto nd : cnodes) indeg[nd] = 0;
+    for (size_t i = 0; i < ne; i++) {
+      succ[cfrom[i]].push_back(cto[i]);
+      indeg[cto[i]]++;
+    }
+    std::vector<hipGraphNode_t> order;
+    order.reserve(n);
+    for (auto nd : cnodes)
+      if (indeg[nd] == 0) order.push_back(nd);
+    for (size_t h = 0; h < order.size(); h++)
+      for (auto s : succ[order[h]])
+        if (--indeg[s] == 0) order.push_back(s);
+    if (order.size() == n) {
+      bool ok = true;
+      std::vector<hipKernelNodeParams> kps(n);
+      for (size_t i = 0; i < n && ok; i++) {
+        kps[i] = {};
+        if (hipGraphKernelNodeGetParams(order[i], &kps[i]) != hipSuccess)
+          ok = false;
+      }
+      if (ok) {
+        for (size_t i = 0; i < n; i++) {
+          pending_arghash_ = 0; // child kernarg layout unknown to the tracker
+          add_kernel_node_kp(kps[i]); // preserve full params (kernelParams+extra)
+        }
+        return;
+      }
+    }
+  }
+  // Fallback: embed the child as-is (non-kernel nodes or topo failure).
   hipGraphNode_t node;
   CHECK_HIP_ERROR(
       hipGraphAddChildGraphNode(&node, build_graph_, nullptr, 0, child));
@@ -694,6 +764,19 @@ void CommandEncoder::commit() {
           std::getenv("MLX_GRAPH_RELAUNCH") != nullptr;
       static const bool use_execupdate =
           std::getenv("MLX_GRAPH_EXECUPDATE") != nullptr;
+      // Bisect: only ExecUpdate commits whose node-count is within [min,max];
+      // others reinstantiate. Sweep to isolate which commit class EU breaks on.
+      static const size_t eu_min = [] {
+        const char* e = std::getenv("MLX_GRAPH_EU_MIN");
+        return e ? (size_t)std::atoll(e) : 0;
+      }();
+      static const size_t eu_max = [] {
+        const char* e = std::getenv("MLX_GRAPH_EU_MAX");
+        return e ? (size_t)std::atoll(e) : (size_t)-1;
+      }();
+      const bool eu_size_ok =
+          build_node_params_.size() >= eu_min &&
+          build_node_params_.size() <= eu_max;
       static const bool stats = std::getenv("MLX_GRAPH_REUSE_STATS") != nullptr;
       std::vector<std::array<uint64_t, 7>> cur_sig;
       cur_sig.reserve(build_node_params_.size());
@@ -735,7 +818,7 @@ void CommandEncoder::commit() {
           if (!same) g_key_collisions_++;
         }
         bool refreshed = false;
-        if (use_execupdate) {
+        if (use_execupdate && eu_size_ok) {
           hipGraphExecUpdateResult ur;
           hipGraphNode_t en;
           if (hipGraphExecUpdate(slot.exec, build_graph_, &en, &ur) ==

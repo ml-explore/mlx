@@ -39,6 +39,9 @@ class Worker;
 // immediate-launch path is unaffected unless MLX_USE_HIP_GRAPHS is set.
 bool use_hip_graphs();
 
+// True when MLX_GRAPH_REUSE_STATS is set (per-node change tracking diagnostics).
+bool graph_reuse_stats_on();
+
 // Inline (graph-splitting) launch counter; see device.cpp diagnostics.
 extern std::atomic<long> g_inline_launches_;
 // Diagnostics: tag inline launches by the primitive currently in eval_gpu.
@@ -109,19 +112,23 @@ class CommandEncoder {
         {}});
     fill_param_ptrs(pack->vals, pack->ptrs, std::index_sequence_for<Params...>{});
     graph_node_args_.push_back(pack);
-    // Hash ALL arg bytes from the typed tuple — safe here (storage valid, sizes
-    // known at compile time). Captures every value that affects a replay.
-    uint64_t h = 1469598103934665603ull;
-    auto hash_one = [&h](auto const& v) {
-      const unsigned char* p =
-          reinterpret_cast<const unsigned char*>(std::addressof(v));
-      for (size_t i = 0; i < sizeof(v); i++) {
-        h ^= p[i];
-        h *= 1099511628211ull;
-      }
-    };
-    std::apply([&](auto const&... xs) { (hash_one(xs), ...); }, pack->vals);
-    pending_arghash_ = h;
+    // Diagnostic only (MLX_GRAPH_REUSE_STATS): hash ALL arg bytes from the typed
+    // tuple to measure which nodes' kernargs change per token. Skipped otherwise
+    // to keep the kernel-build path free of per-arg work.
+    pending_arghash_ = 0;
+    if (graph_reuse_stats_on()) {
+      uint64_t h = 1469598103934665603ull;
+      auto hash_one = [&h](auto const& v) {
+        const unsigned char* p =
+            reinterpret_cast<const unsigned char*>(std::addressof(v));
+        for (size_t i = 0; i < sizeof(v); i++) {
+          h ^= p[i];
+          h *= 1099511628211ull;
+        }
+      };
+      std::apply([&](auto const&... xs) { (hash_one(xs), ...); }, pack->vals);
+      pending_arghash_ = h;
+    }
     add_kernel_node_raw(
         reinterpret_cast<void*>(func),
         grid_dim,
@@ -145,6 +152,11 @@ class CommandEncoder {
       dim3 block_dim,
       uint32_t smem_bytes,
       void** params);
+
+  // Add a kernel node from a fully-formed params struct (preserves both
+  // kernelParams and extra). Used by add_kernel_node_raw and by the child-graph
+  // flattening path. Does all bookkeeping + dependency wiring.
+  void add_kernel_node_kp(const hipKernelNodeParams& kp);
 
   // Add a MODULE-function (hiprtc/JIT or CustomKernel) kernel as a graph node.
   // ROCm 7.13's hipGraphAddKernelNode accepts a hipFunction_t in
