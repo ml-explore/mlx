@@ -63,6 +63,7 @@ std::atomic<long> g_t_deps_us_{0};      // dependency wiring
 std::atomic<long> g_t_reuse_us_{0};     // instantiate / execupdate / setparams
 std::atomic<long> g_t_launch_us_{0};    // hipGraphLaunch
 std::atomic<long> g_key_collisions_{0}; // matched slot != current build sig
+std::atomic<long> g_sp_sig_mismatch_{0}; // SetParams per-node sig mismatch (A1)
 static inline long now_us() {
   return std::chrono::duration_cast<std::chrono::microseconds>(
              std::chrono::steady_clock::now().time_since_epoch())
@@ -734,6 +735,19 @@ void CommandEncoder::commit() {
         }
         if (use_setparams &&
             slot.src_nodes.size() == build_node_params_.size()) {
+          // Step 4 (plan A1): src_nodes[i] (captured at instantiate) must be the
+          // SAME kernel as build_node_params_[i] (this commit) at every index, or
+          // SetParams writes one kernel's params onto another's exec node. Size
+          // match is necessary but not sufficient — assert per-node signature.
+          bool sig_ok = slot.src_sig.size() == cur_sig.size();
+          for (size_t i = 0; sig_ok && i < cur_sig.size(); i++)
+            sig_ok = (slot.src_sig[i] == cur_sig[i]);
+          if (!sig_ok) {
+            g_sp_sig_mismatch_++;
+            if (sp_debug)
+              fprintf(stderr, "[sp] sig-mismatch -> reinstantiate fallback\n");
+            // leave refreshed=false -> reinstantiate fallback below
+          } else {
           refreshed = true;
           if (sp_debug) (void)hipGetLastError(); // clear stale error
           for (size_t i = 0; i < slot.src_nodes.size(); i++) {
@@ -754,6 +768,7 @@ void CommandEncoder::commit() {
                 break;
               }
             }
+          }
           }
         }
         if (refreshed) {
@@ -956,6 +971,7 @@ void CommandEncoder::synchronize() {
             g_reuse_new_.load(), g_graph_launches_.load(),
             g_inline_launches_.load(), g_kernel_nodes_.load());
     fprintf(stderr, "[key-collisions] %ld\n", g_key_collisions_.load());
+    fprintf(stderr, "[sp-sig-mismatch] %ld\n", g_sp_sig_mismatch_.load());
     std::lock_guard<std::mutex> lk(g_inline_by_op_mtx_);
     std::vector<std::pair<std::string, long>> v(
         g_inline_by_op_.begin(), g_inline_by_op_.end());
