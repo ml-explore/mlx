@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <dlfcn.h>
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/backend/rocm/worker.h"
@@ -64,6 +65,13 @@ std::atomic<long> g_t_reuse_us_{0};     // instantiate / execupdate / setparams
 std::atomic<long> g_t_launch_us_{0};    // hipGraphLaunch
 std::atomic<long> g_key_collisions_{0}; // matched slot != current build sig
 std::atomic<long> g_sp_sig_mismatch_{0}; // SetParams per-node sig mismatch (A1)
+// Change tracking: across reused slots, how many node arg0 values changed vs
+// total node-reuses, and the set of distinct kernel funcs that ever changed.
+std::atomic<long> g_arg_total_{0};
+std::atomic<long> g_arg_changed_{0};
+std::atomic<long> g_arg_untracked_{0};
+std::mutex g_changed_funcs_mtx_;
+std::unordered_map<uint64_t, long> g_changed_funcs_;
 static inline long now_us() {
   return std::chrono::duration_cast<std::chrono::microseconds>(
              std::chrono::steady_clock::now().time_since_epoch())
@@ -534,6 +542,7 @@ void CommandEncoder::add_kernel_node_raw(
   g_kernel_nodes_.fetch_add(1, std::memory_order_relaxed);
   build_nodes_.push_back(node);
   build_node_params_.push_back(kernel_params);
+  build_arghash_.push_back(pending_arghash_);
   // Key the node by its kernel FUNCTION + FULL launch dims. Reuse (SetParams /
   // reinstantiate) only re-points params of a structurally IDENTICAL exec, so the
   // key must distinguish any difference that changes the launch. Using the grid/
@@ -566,7 +575,8 @@ void CommandEncoder::add_module_kernel_node(
     dim3 block_dim,
     uint32_t smem_bytes,
     void** params,
-    std::shared_ptr<void> args_keepalive) {
+    std::shared_ptr<void> args_keepalive,
+    uint64_t arghash) {
   if (!use_hip_graphs()) {
     device_.make_current();
     CHECK_HIP_ERROR(hipModuleLaunchKernel(
@@ -583,6 +593,7 @@ void CommandEncoder::add_module_kernel_node(
   if (args_keepalive) {
     graph_node_args_.push_back(std::move(args_keepalive));
   }
+  pending_arghash_ = arghash; // from KernelArgs::arg_hash() (0 if not provided)
   add_kernel_node_raw(func, grid_dim, block_dim, smem_bytes, params);
 }
 
@@ -687,6 +698,9 @@ void CommandEncoder::commit() {
       std::vector<std::array<uint64_t, 7>> cur_sig;
       cur_sig.reserve(build_node_params_.size());
       for (auto& p : build_node_params_) cur_sig.push_back(node_sig(p));
+      // Per-node arg-hash captured safely at build time. Used to measure how
+      // many nodes' kernargs change per token.
+      std::vector<uint64_t>& cur_args = build_arghash_;
       auto& pool = exec_pool_[graph_nodes_key_ + ":" + graph_deps_key_];
       for (auto& slot : pool) {
         if (slot.inflight->load(std::memory_order_acquire) != 0) {
@@ -694,6 +708,25 @@ void CommandEncoder::commit() {
         }
         static const bool sp_debug =
             std::getenv("MLX_GRAPH_SP_DEBUG") != nullptr;
+        // Change measurement: how many nodes' primary buffer changed since this
+        // slot's last use? Drives "refresh only changed nodes" (and tells us
+        // whether the by-value-struct copy kernels are among the changers).
+        if (stats && slot.last_args.size() == cur_args.size()) {
+          long changed = 0, untracked = 0;
+          for (size_t i = 0; i < cur_args.size(); i++) {
+            if (cur_args[i] == 0) untracked++; // module/JIT node, hash not taken
+            if (slot.last_args[i] != cur_args[i]) {
+              changed++;
+              std::lock_guard<std::mutex> lk(g_changed_funcs_mtx_);
+              g_changed_funcs_[reinterpret_cast<uint64_t>(
+                  build_node_params_[i].func)]++;
+            }
+          }
+          g_arg_total_ += static_cast<long>(cur_args.size());
+          g_arg_changed_ += changed;
+          g_arg_untracked_ += untracked;
+        }
+        slot.last_args = cur_args;
         // Collision check: does the matched slot's signature equal this build's?
         if (stats) {
           bool same = slot.src_sig.size() == cur_sig.size();
@@ -800,7 +833,8 @@ void CommandEncoder::commit() {
             hipGraphInstantiate(&graph_exec, build_graph_, nullptr, nullptr, 0));
         inflight = std::make_shared<std::atomic<int>>(0);
         pool.push_back(
-            {graph_exec, inflight, build_graph_, {}, build_nodes_, cur_sig});
+            {graph_exec, inflight, build_graph_, {}, build_nodes_, cur_sig,
+             cur_args});
         used_slot = &pool.back();
         build_graph_adopted = true;
         if (stats) g_reuse_new_++;
@@ -912,6 +946,7 @@ void CommandEncoder::commit() {
     bytes_in_graph_ = 0;
     build_nodes_.clear();
     build_node_params_.clear();
+    build_arghash_.clear();
 
     if (cached_exec) {
       // The exec references the current build's Packs by pointer (via SetParams
@@ -972,6 +1007,29 @@ void CommandEncoder::synchronize() {
             g_inline_launches_.load(), g_kernel_nodes_.load());
     fprintf(stderr, "[key-collisions] %ld\n", g_key_collisions_.load());
     fprintf(stderr, "[sp-sig-mismatch] %ld\n", g_sp_sig_mismatch_.load());
+    {
+      std::lock_guard<std::mutex> lk(g_changed_funcs_mtx_);
+      long tot = g_arg_total_.load(), chg = g_arg_changed_.load();
+      long untr = g_arg_untracked_.load();
+      fprintf(stderr,
+              "[arg-change] changed=%ld/%ld nodes (%.1f%%) untracked(JIT)=%ld "
+              "across %zu distinct changing funcs\n",
+              chg, tot, tot ? 100.0 * chg / tot : 0.0, untr,
+              g_changed_funcs_.size());
+      std::vector<std::pair<uint64_t, long>> v(g_changed_funcs_.begin(),
+                                               g_changed_funcs_.end());
+      std::sort(v.begin(), v.end(),
+                [](auto& a, auto& b) { return a.second > b.second; });
+      for (size_t i = 0; i < v.size() && i < 16; i++) {
+        Dl_info di;
+        const char* nm = (dladdr(reinterpret_cast<void*>(v[i].first), &di) &&
+                          di.dli_sname)
+            ? di.dli_sname
+            : "?";
+        fprintf(stderr, "  [chg-func] %p x%ld %s\n",
+                reinterpret_cast<void*>(v[i].first), v[i].second, nm);
+      }
+    }
     std::lock_guard<std::mutex> lk(g_inline_by_op_mtx_);
     std::vector<std::pair<std::string, long>> v(
         g_inline_by_op_.begin(), g_inline_by_op_.end());
