@@ -1339,6 +1339,34 @@ class TestAutograd(mlx_tests.MLXTestCase):
         # Check against hand-computed vjps
         self.assertTrue(mx.allclose(vjps[0], expected))
 
+    def test_complex_abs_grad(self):
+        mx.random.seed(0)
+        primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        # guard against values too close to the origin where |z| is not smooth
+        primal = mx.where(abs(primal) < 1e-3, 1e-3 + 0j, primal)
+
+        # |z| is real-valued, so its jvp is real:
+        #   d|z| = Re(conj(z) * t) / |z|
+        tangent = mx.random.normal(primal.shape, dtype=mx.complex64)
+        _, (jvp,) = mx.jvp(mx.abs, [primal], [tangent])
+        expected = mx.real(mx.conj(primal) * tangent) / mx.abs(primal)
+        self.assertEqual(jvp.dtype, mx.float32)
+        self.assertTrue(mx.allclose(jvp, expected, atol=1e-5))
+
+        # The vjp's real and imaginary parts are the gradients w.r.t. Re(z) and
+        # Im(z); for a real cotangent this is cotangent * sign(z).
+        cotangent = mx.random.normal(primal.shape)
+        _, (vjp,) = mx.vjp(mx.abs, [primal], [cotangent])
+        self.assertTrue(
+            mx.allclose(vjp, cotangent * (primal / mx.abs(primal)), atol=1e-5)
+        )
+
+        # Real inputs are unaffected.
+        x = mx.random.normal((10,))
+        t = mx.random.normal((10,))
+        _, (jvp,) = mx.jvp(mx.abs, [x], [t])
+        self.assertTrue(mx.allclose(jvp, mx.sign(x) * t))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
