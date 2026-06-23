@@ -269,7 +269,7 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
             norm(
                 x,
                 std::numeric_limits<double>::infinity(),
-                std::vector<int>{0, 1},
+                std::vector<int>{-2, -1},
                 false,
                 Device::cpu),
             array({21.0, 48.0}))
@@ -278,7 +278,7 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
             norm(
                 x,
                 -std::numeric_limits<double>::infinity(),
-                std::vector<int>{0, 1},
+                std::vector<int>{-2, -1},
                 false,
                 Device::cpu),
             array({3.0, 30.0}))
