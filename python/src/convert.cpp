@@ -159,12 +159,15 @@ mx::array cpu_nd_array_to_mlx(
       storage_size,
       std::move(strides),
       flags);
-  if (storage_size > 0) {
+  // Copy the structured binding into a local: some compilers (e.g. Apple
+  // clang 15) cannot capture a structured binding in a lambda.
+  auto size = storage_size;
+  if (size > 0) {
     dispatch_all_types(dst_dtype, [&](auto type_tag) {
       using DstT = MLX_GET_TYPE(type_tag);
       auto src = static_cast<const SrcT*>(nd_array.data());
       auto dst = out.data<DstT>();
-      std::copy(src, src + storage_size, dst);
+      std::copy(src, src + size, dst);
     });
   }
   out.set_status(mx::array::Status::available);
