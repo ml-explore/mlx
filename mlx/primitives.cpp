@@ -4290,8 +4290,62 @@ std::vector<array> Scan::vjp(
         where(eq_zero, z, grad, stream()),
         stream())};
   } else {
-    // Can probably be implemented by equals and then cummax to make the mask
-    throw std::runtime_error("VJP is not implemented for cumulative min/max");
+    // Cumulative max/min: route each position's cotangent to the input element
+    // that holds the running extreme there, breaking ties toward the latest
+    // element in scan order. The owning index is reconstructed by marking
+    // where the input equals the inclusive running extreme and taking a running
+    // extreme over those indices (cummax picks the largest tied index for a
+    // forward scan and cummin the smallest for a reverse scan). The cotangents
+    // are then scatter-added. For exclusive scans, outputs[0] is already the
+    // inclusive running extreme shifted by one, so we slice the input,
+    // outputs[0], and the cotangents to length n-1; scatter_add_axis broadcasts
+    // the shorter updates into the full-sized gradient.
+    auto in = primals[0];
+    auto cotan = cotangents[0];
+    int n = in.shape(axis_);
+    auto s = stream();
+
+    auto in_window = in;
+    auto extreme_window = outputs[0];
+    Shape start;
+    Shape stop;
+
+    if (!inclusive_) {
+      start = Shape(in.ndim(), 0);
+      stop = in.shape();
+
+      start[axis_] = (reverse_) ? 1 : 0;
+      stop[axis_] = (reverse_) ? n : n - 1;
+      in_window = slice(in, start, stop, s);
+
+      start[axis_] = (reverse_) ? 0 : 1;
+      stop[axis_] = (reverse_) ? n - 1 : n;
+      extreme_window = slice(outputs[0], start, stop, s);
+    }
+
+    Shape index_shape(in.ndim(), 1);
+    index_shape[axis_] = (inclusive_) ? n : n - 1;
+    auto iota = reshape(
+        (inclusive_) ? arange(0, n, s)
+                     : ((reverse_) ? arange(1, n, s) : arange(0, n - 1, s)),
+        index_shape,
+        s);
+    auto masked = where(
+        equal(in_window, extreme_window, s),
+        iota,
+        array(reverse_ ? n : -1, int32),
+        s);
+    auto owner = astype(
+        reverse_ ? cummin(masked, axis_, /* reverse = */ true, true, s)
+                 : cummax(masked, axis_, /* reverse = */ false, true, s),
+        uint32,
+        s);
+
+    if (!inclusive_) {
+      cotan = slice(cotan, std::move(start), std::move(stop), s);
+    }
+
+    return {scatter_add_axis(zeros_like(in, s), owner, cotan, axis_, s)};
   }
 }
 
