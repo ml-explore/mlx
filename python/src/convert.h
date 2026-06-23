@@ -2,12 +2,12 @@
 #pragma once
 
 #include <optional>
+#include <tuple>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 
 #include "mlx/array.h"
-#include "mlx/ops.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
@@ -62,18 +62,24 @@ struct ArrayLike {
 };
 
 mx::array nd_array_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+    nb::ndarray<nb::ro> nd_array,
     std::optional<mx::Dtype> mx_dtype,
-    std::optional<nb::dlpack::dtype> nb_dtype = std::nullopt);
+    std::optional<nb::dlpack::dtype> src_dlpack_dtype_override = std::nullopt,
+    std::optional<bool> copy = std::nullopt);
 
 nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a);
-nb::ndarray<> mlx_to_dlpack(const mx::array& a);
+nb::ndarray<> mlx_to_dlpack(
+    const mx::array& a,
+    std::optional<std::tuple<int, int>> dl_device);
 
 nb::object to_scalar(mx::array& a);
 
 nb::object tolist(mx::array& a);
 
-mx::array create_array(nb::object v, std::optional<mx::Dtype> t);
+mx::array create_array(
+    nb::object v,
+    std::optional<mx::Dtype> t,
+    std::optional<bool> copy = true);
 mx::array array_from_list(nb::list pl, std::optional<mx::Dtype> dtype);
 mx::array array_from_list(nb::tuple pl, std::optional<mx::Dtype> dtype);
 

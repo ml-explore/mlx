@@ -261,8 +261,12 @@ array linspace(
       s);
 }
 
-array astype(array a, Dtype dtype, StreamOrDevice s /* = {} */) {
-  if (dtype == a.dtype()) {
+array astype(
+    array a,
+    Dtype dtype,
+    std::optional<bool> copy,
+    StreamOrDevice s /* = {} */) {
+  if (dtype == a.dtype() && !copy.value_or(false)) {
     return a;
   }
   auto copied_shape = a.shape(); // |a| will be moved

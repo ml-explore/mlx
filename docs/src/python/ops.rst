@@ -86,6 +86,7 @@ Operations
    floor
    floor_divide
    full
+   from_dlpack
    from_fp8
    gather_mm
    gather_qmm
