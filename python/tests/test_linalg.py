@@ -72,7 +72,6 @@ class TestLinalg(mlx_tests.MLXTestCase):
             x_np = np.arange(1, math.prod(shape) + 1, dtype=np.float32).reshape(shape)
             neg_indices = [-i for i in range(1, x_np.ndim + 1)]
             neg_axes = [list(p) for p in itertools.permutations(neg_indices, 2)]
-            print(neg_axes)
             for ord in norms:
                 for axes in neg_axes:
                     out_np = np.linalg.norm(
