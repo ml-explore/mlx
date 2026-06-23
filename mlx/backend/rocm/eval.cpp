@@ -90,26 +90,6 @@ void eval(array& arr) {
   } else {
     encoder.maybe_commit();
   }
-
-  // Bisection: batch ops [0, FORCE_FROM) into graphs (per cap), force-execute
-  // (commit+sync = correct) every op >= FORCE_FROM. The smallest FORCE_FROM that
-  // turns the output to garbage pinpoints the first op whose batching breaks.
-  if (rocm::use_hip_graphs()) {
-    static const int force_from = std::getenv("MLX_GRAPH_FORCE_FROM")
-        ? std::atoi(std::getenv("MLX_GRAPH_FORCE_FROM"))
-        : -1;
-    if (force_from >= 0) {
-      static int gidx = 0;
-      int my = gidx++;
-      if (my >= force_from) {
-        encoder.commit();
-        encoder.synchronize();
-      }
-      static const bool ftr = std::getenv("MLX_GRAPH_FORCE_TRACE") != nullptr;
-      if (ftr && my >= force_from - 6 && my <= force_from + 1)
-        fprintf(stderr, "[ff] op %d : %s\n", my, arr.primitive().name());
-    }
-  }
 }
 
 void finalize(Stream s) {

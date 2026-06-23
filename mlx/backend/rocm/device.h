@@ -39,9 +39,6 @@ class Worker;
 // immediate-launch path is unaffected unless MLX_USE_HIP_GRAPHS is set.
 bool use_hip_graphs();
 
-// True when MLX_GRAPH_REUSE_STATS is set (per-node change tracking diagnostics).
-bool graph_reuse_stats_on();
-
 // Inline (graph-splitting) launch counter; see device.cpp diagnostics.
 extern std::atomic<long> g_inline_launches_;
 // Diagnostics: tag inline launches by the primitive currently in eval_gpu.
@@ -112,30 +109,12 @@ class CommandEncoder {
         {}});
     fill_param_ptrs(pack->vals, pack->ptrs, std::index_sequence_for<Params...>{});
     graph_node_args_.push_back(pack);
-    // Diagnostic only (MLX_GRAPH_REUSE_STATS): hash ALL arg bytes from the typed
-    // tuple to measure which nodes' kernargs change per token. Skipped otherwise
-    // to keep the kernel-build path free of per-arg work.
-    pending_arghash_ = 0;
-    if (graph_reuse_stats_on()) {
-      uint64_t h = 1469598103934665603ull;
-      auto hash_one = [&h](auto const& v) {
-        const unsigned char* p =
-            reinterpret_cast<const unsigned char*>(std::addressof(v));
-        for (size_t i = 0; i < sizeof(v); i++) {
-          h ^= p[i];
-          h *= 1099511628211ull;
-        }
-      };
-      std::apply([&](auto const&... xs) { (hash_one(xs), ...); }, pack->vals);
-      pending_arghash_ = h;
-    }
     add_kernel_node_raw(
         reinterpret_cast<void*>(func),
         grid_dim,
         block_dim,
         smem_bytes,
         pack->ptrs.data());
-    pending_arghash_ = 0;
   }
 
   template <typename Tuple, typename Arr, size_t... I>
@@ -169,8 +148,7 @@ class CommandEncoder {
       dim3 block_dim,
       uint32_t smem_bytes,
       void** params,
-      std::shared_ptr<void> args_keepalive,
-      uint64_t arghash = 0);
+      std::shared_ptr<void> args_keepalive);
 
   void add_temporary(const array& arr);
 
@@ -276,42 +254,18 @@ class CommandEncoder {
     std::shared_ptr<std::atomic<int>> inflight;
     hipGraph_t source_graph{nullptr};
     std::vector<std::shared_ptr<void>> packs;
-    // Source-graph kernel nodes in insertion order. On reuse we refresh each
-    // exec node's params by handle via hipGraphExecKernelNodeSetParams — this is
-    // deterministic and avoids hipGraphExecUpdate's node-matching, which returns
-    // success but mis-maps params in the model's complex DAG.
+    // Source-graph kernel nodes in insertion order (kept for the exec's life).
     std::vector<hipGraphNode_t> src_nodes;
-    // Per-node structural signature (func, grid x/y/z, block x/y/z) captured at
-    // creation, to detect key collisions: if a reused slot's signature differs
-    // from the current build's, the pool key matched two different graphs.
-    std::vector<std::array<uint64_t, 7>> src_sig;
-    // Per-node arg-hash from the last commit that used this slot. Compared on
-    // reuse to count how many nodes' kernargs actually change token-to-token —
-    // the basis for refreshing ONLY the changed nodes instead of every node.
-    std::vector<uint64_t> last_args;
   };
 
-  static std::array<uint64_t, 7> node_sig(const hipKernelNodeParams& p) {
-    return {reinterpret_cast<uint64_t>(p.func), p.gridDim.x, p.gridDim.y,
-            p.gridDim.z, p.blockDim.x, p.blockDim.y, p.blockDim.z};
-  }
   std::unordered_map<std::string, std::vector<ExecSlot>> exec_pool_;
   // Per-build kernel-arg packs: keep the kernelParams values alive while the
   // (async) exec may reference them. Held one extra commit via _prev_.
   std::vector<std::shared_ptr<void>> graph_node_args_;
   std::vector<std::shared_ptr<void>> graph_node_args_prev_;
-  // Current build's kernel nodes + their params, in insertion order. Used to (a)
-  // capture src_nodes when a slot is first instantiated, and (b) refresh a reused
-  // exec's params per-node via hipGraphExecKernelNodeSetParams.
+  // Current build's kernel nodes + their params, in insertion order.
   std::vector<hipGraphNode_t> build_nodes_;
   std::vector<hipKernelNodeParams> build_node_params_;
-  // Per-node FNV-1a hash over ALL kernel-arg bytes (pointers, scalars, by-value
-  // structs), captured at node-build time from the typed tuple where the storage
-  // is known-valid. 0 for module/raw nodes (arg types unknown). Compared across
-  // tokens to count which nodes' kernargs actually change — the basis for
-  // refreshing ONLY changed nodes.
-  std::vector<uint64_t> build_arghash_;
-  uint64_t pending_arghash_{0};
   // Instantiated execs retained until the stream drains (destroyed in
   // synchronize()), since hipGraphLaunch is async.
   std::vector<hipGraphExec_t> graph_execs_;

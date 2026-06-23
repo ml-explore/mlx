@@ -74,37 +74,6 @@ struct KernelArgs {
     args_.push_back(const_cast<void*>(v));
   }
 
-  // FNV-1a hash over all stored arg VALUES (buffer pointers + scalars + vector
-  // contents). Used to detect which graph nodes' kernargs actually change
-  // token-to-token, so a reused exec can refresh only the changed nodes.
-  uint64_t arg_hash() const {
-    uint64_t h = 1469598103934665603ull;
-    auto mix = [&h](const void* p, size_t n) {
-      const unsigned char* b = static_cast<const unsigned char*>(p);
-      for (size_t i = 0; i < n; i++) {
-        h ^= b[i];
-        h *= 1099511628211ull;
-      }
-    };
-    for (auto const& a : storage_) {
-      std::visit(
-          [&](auto const& v) {
-            using T = std::decay_t<decltype(v)>;
-            if constexpr (std::is_same_v<T, std::monostate>) {
-            } else if constexpr (
-                std::is_same_v<T, SmallVector<const void*>> ||
-                std::is_same_v<T, SmallVector<int32_t>> ||
-                std::is_same_v<T, SmallVector<int64_t>>) {
-              mix(v.data(), v.size() * sizeof(typename T::value_type));
-            } else {
-              mix(&v, sizeof(v));
-            }
-          },
-          a);
-    }
-    return h;
-  }
-
  private:
   std::vector<void*> args_;
 
@@ -158,15 +127,13 @@ inline void launch_module_kernel(
     KernelArgs&& args) {
   if (use_hip_graphs()) {
     auto held = std::make_shared<KernelArgs>(std::move(args));
-    uint64_t hsh = held->arg_hash();
     encoder.add_module_kernel_node(
         reinterpret_cast<void*>(kernel),
         grid,
         block,
         smem_bytes,
         held->args(),
-        std::static_pointer_cast<void>(held),
-        hsh);
+        std::static_pointer_cast<void>(held));
   } else {
     encoder.launch_kernel([&](hipStream_t stream) {
       (void)hipModuleLaunchKernel(
