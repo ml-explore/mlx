@@ -2641,6 +2641,27 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertCmpNumpy([(1, 1, 2), (3, 2)], mx.inner, np.inner)
         self.assertCmpNumpy([(2, 3, 4), (4,)], mx.inner, np.inner)
 
+    def test_vecdot(self):
+        a = mx.array([[1, 2, 3], [4, 5, 6]])
+        b = mx.array([[7, 8, 9], [10, 11, 12]])
+        self.assertEqual(mx.vecdot(a, b).tolist(), [50, 167])
+        self.assertEqual(mx.vecdot(a, b, axis=0).tolist(), [47, 71, 99])
+
+        a = mx.array([1 + 2j, 3 + 4j])
+        b = mx.array([5 + 6j, 7 + 8j])
+        expected = np.vdot(np.array([1 + 2j, 3 + 4j]), np.array([5 + 6j, 7 + 8j]))
+        self.assertTrue(np.allclose(mx.vecdot(a, b), expected))
+
+        xp = mx.array(1.0).__array_namespace__()
+        self.assertEqual(xp.vecdot(mx.array([1, 2]), mx.array([3, 4])).item(), 11)
+
+        with self.assertRaises(ValueError):
+            mx.vecdot(mx.array(1), mx.array([1]))
+        with self.assertRaises(ValueError):
+            mx.vecdot(mx.array([1, 2]), mx.array([1, 2]), axis=1)
+        with self.assertRaises(ValueError):
+            mx.vecdot(mx.array([1, 2]), mx.array([1]))
+
     def test_outer(self):
         self.assertCmpNumpy([(3,), (3,)], mx.outer, np.outer)
         self.assertCmpNumpy(

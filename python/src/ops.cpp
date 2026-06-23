@@ -4738,6 +4738,27 @@ void init_ops(nb::module_& m) {
         array: The inner product.
     )pbdoc");
   m.def(
+      "vecdot",
+      &mx::vecdot,
+      nb::arg(),
+      nb::arg(),
+      "axis"_a = -1,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def vecdot(a: array, b: array, /, *, axis: int = -1, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Compute the vector dot product of two arrays along an axis.
+
+      Args:
+        a (array): Input array
+        b (array): Input array
+        axis (int, optional): Axis over which to compute the dot product. Default: ``-1``.
+
+      Returns:
+        array: The vector dot product.
+    )pbdoc");
+  m.def(
       "outer",
       &mx::outer,
       nb::arg(),

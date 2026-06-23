@@ -1574,6 +1574,10 @@ MLX_API array outer(const array& a, const array& b, StreamOrDevice s = {});
 /** Compute the inner product of two vectors. */
 MLX_API array inner(const array& a, const array& b, StreamOrDevice s = {});
 
+/** Compute a vector dot product along an axis. */
+MLX_API array
+vecdot(const array& a, const array& b, int axis = -1, StreamOrDevice s = {});
+
 /** Compute D = beta * C + alpha * (A @ B) */
 MLX_API array addmm(
     array c,
