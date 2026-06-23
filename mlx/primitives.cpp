@@ -4268,26 +4268,42 @@ std::vector<array> Scan::vjp(
     // where the input equals the inclusive running extreme and taking a running
     // extreme over those indices (cummax picks the largest tied index for a
     // forward scan and cummin the smallest for a reverse scan). The cotangents
-    // are then scatter-added. Exclusive scans skip the current element, so the
-    // cotangents are first shifted by one in the scan direction.
+    // are then scatter-added. For exclusive scans, outputs[0] is already the
+    // inclusive running extreme shifted by one, so we slice the input,
+    // outputs[0], and the cotangents to length n-1; scatter_add_axis broadcasts
+    // the shorter updates into the full-sized gradient.
     auto in = primals[0];
     auto cotan = cotangents[0];
     int n = in.shape(axis_);
     auto s = stream();
 
-    auto running_extreme = outputs[0];
+    auto in_window = in;
+    auto extreme_window = outputs[0];
+    Shape start;
+    Shape stop;
+
     if (!inclusive_) {
-      running_extreme = (reduce_type_ == Scan::Max)
-          ? cummax(in, axis_, reverse_, /* inclusive = */ true, s)
-          : cummin(in, axis_, reverse_, /* inclusive = */ true, s);
+      start = Shape(in.ndim(), 0);
+      stop = in.shape();
+
+      start[axis_] = (reverse_) ? 1 : 0;
+      stop[axis_] = (reverse_) ? n : n - 1;
+      in_window = slice(in, start, stop, s);
+
+      start[axis_] = (reverse_) ? 0 : 1;
+      stop[axis_] = (reverse_) ? n - 1 : n;
+      extreme_window = slice(outputs[0], start, stop, s);
     }
 
     Shape index_shape(in.ndim(), 1);
-    index_shape[axis_] = n;
-    auto iota =
-        reshape(arange(static_cast<double>(n), int32, s), index_shape, s);
+    index_shape[axis_] = (inclusive_) ? n : n - 1;
+    auto iota = reshape(
+        (inclusive_) ? arange(0, n, s)
+                     : ((reverse_) ? arange(1, n, s) : arange(0, n - 1, s)),
+        index_shape,
+        s);
     auto masked = where(
-        equal(in, running_extreme, s),
+        equal(in_window, extreme_window, s),
         iota,
         array(reverse_ ? n : -1, int32),
         s);
@@ -4298,18 +4314,7 @@ std::vector<array> Scan::vjp(
         s);
 
     if (!inclusive_) {
-      Shape pad_shape = in.shape();
-      pad_shape[axis_] = 1;
-      auto zero = zeros(pad_shape, cotan.dtype(), s);
-      Shape start(in.ndim(), 0);
-      Shape stop = in.shape();
-      if (reverse_) {
-        stop[axis_] = n - 1;
-        cotan = concatenate({zero, slice(cotan, start, stop, s)}, axis_, s);
-      } else {
-        start[axis_] = 1;
-        cotan = concatenate({slice(cotan, start, stop, s), zero}, axis_, s);
-      }
+      cotan = slice(cotan, std::move(start), std::move(stop), s);
     }
 
     return {scatter_add_axis(zeros_like(in, s), owner, cotan, axis_, s)};
