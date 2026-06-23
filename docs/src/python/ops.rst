@@ -65,8 +65,6 @@ Operations
    cummin
    cumprod
    cumsum
-   cumulative_prod
-   cumulative_sum
    degrees
    depends
    dequantize

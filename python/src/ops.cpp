@@ -3447,32 +3447,52 @@ void init_ops(nb::module_& m) {
          std::optional<int> axis,
          bool reverse,
          bool inclusive,
+         std::optional<mx::Dtype> dtype,
+         bool include_initial,
          mx::StreamOrDevice s) {
+        mx::array x = dtype ? mx::astype(a, *dtype, s) : a;
+        int ax;
         if (axis) {
-          return mx::cumsum(a, *axis, reverse, inclusive, s);
+          ax = *axis;
         } else {
-          return mx::cumsum(mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
+          x = mx::reshape(x, {-1}, s);
+          ax = 0;
         }
+        auto out = mx::cumsum(x, ax, reverse, inclusive, s);
+        if (include_initial) {
+          int a2 = ax < 0 ? ax + static_cast<int>(out.ndim()) : ax;
+          mx::Shape init_shape = out.shape();
+          init_shape[a2] = 1;
+          auto init = mx::zeros(init_shape, out.dtype(), s);
+          out = reverse ? mx::concatenate({out, init}, a2, s)
+                        : mx::concatenate({init, out}, a2, s);
+        }
+        return out;
       },
       nb::arg(),
       "axis"_a = nb::none(),
       nb::kw_only(),
       "reverse"_a = false,
       "inclusive"_a = true,
+      "dtype"_a = nb::none(),
+      "include_initial"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def cumsum(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cumsum(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, dtype: Optional[Dtype] = None, include_initial: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the cumulative sum of the elements along the given axis.
 
         Args:
-          a (array): Input array
+          a (array): Input array.
           axis (int, optional): Optional axis to compute the cumulative sum
             over. If unspecified the cumulative sum of the flattened array is
             returned.
           reverse (bool): Perform the cumulative sum in reverse.
           inclusive (bool): The i-th element of the output includes the i-th
             element of the input.
+          dtype (Dtype, optional): Cast the input to this type before summing.
+          include_initial (bool): Prepend the identity element (0) so the
+            output has one extra element along the given axis.
 
         Returns:
           array: The output array.
@@ -3483,32 +3503,52 @@ void init_ops(nb::module_& m) {
          std::optional<int> axis,
          bool reverse,
          bool inclusive,
+         std::optional<mx::Dtype> dtype,
+         bool include_initial,
          mx::StreamOrDevice s) {
+        mx::array x = dtype ? mx::astype(a, *dtype, s) : a;
+        int ax;
         if (axis) {
-          return mx::cumprod(a, *axis, reverse, inclusive, s);
+          ax = *axis;
         } else {
-          return mx::cumprod(mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
+          x = mx::reshape(x, {-1}, s);
+          ax = 0;
         }
+        auto out = mx::cumprod(x, ax, reverse, inclusive, s);
+        if (include_initial) {
+          int a2 = ax < 0 ? ax + static_cast<int>(out.ndim()) : ax;
+          mx::Shape init_shape = out.shape();
+          init_shape[a2] = 1;
+          auto init = mx::ones(init_shape, out.dtype(), s);
+          out = reverse ? mx::concatenate({out, init}, a2, s)
+                        : mx::concatenate({init, out}, a2, s);
+        }
+        return out;
       },
       nb::arg(),
       "axis"_a = nb::none(),
       nb::kw_only(),
       "reverse"_a = false,
       "inclusive"_a = true,
+      "dtype"_a = nb::none(),
+      "include_initial"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def cumprod(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cumprod(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, dtype: Optional[Dtype] = None, include_initial: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the cumulative product of the elements along the given axis.
 
         Args:
-          a (array): Input array
+          a (array): Input array.
           axis (int, optional): Optional axis to compute the cumulative product
-            over. If unspecified the cumulative product of the flattened array is
-            returned.
+            over. If unspecified the cumulative product of the flattened array
+            is returned.
           reverse (bool): Perform the cumulative product in reverse.
           inclusive (bool): The i-th element of the output includes the i-th
             element of the input.
+          dtype (Dtype, optional): Cast the input to this type before multiplying.
+          include_initial (bool): Prepend the identity element (1) so the
+            output has one extra element along the given axis.
 
         Returns:
           array: The output array.
@@ -5918,118 +5958,6 @@ void init_ops(nb::module_& m) {
   m.attr("empty_like") = m.attr("zeros_like");
   m.attr("matrix_transpose") = m.attr("transpose");
   m.attr("pow") = m.attr("power");
-  // Array API: cumulative_sum and cumulative_prod extend cumsum/cumprod with
-  // dtype and include_initial as specified by the array API standard.
-  m.def(
-      "cumulative_sum",
-      [](const mx::array& a,
-         std::optional<int> axis,
-         bool reverse,
-         bool inclusive,
-         std::optional<mx::Dtype> dtype,
-         bool include_initial,
-         mx::StreamOrDevice s) {
-        mx::array x = dtype ? mx::astype(a, *dtype, s) : a;
-        int ax;
-        if (axis) {
-          ax = *axis;
-        } else {
-          x = mx::reshape(x, {-1}, s);
-          ax = 0;
-        }
-        auto out = mx::cumsum(x, ax, reverse, inclusive, s);
-        if (include_initial) {
-          int a2 = ax < 0 ? ax + static_cast<int>(out.ndim()) : ax;
-          mx::Shape init_shape = out.shape();
-          init_shape[a2] = 1;
-          auto init = mx::zeros(init_shape, out.dtype(), s);
-          out = reverse ? mx::concatenate({out, init}, a2, s)
-                        : mx::concatenate({init, out}, a2, s);
-        }
-        return out;
-      },
-      nb::arg(),
-      "axis"_a = nb::none(),
-      nb::kw_only(),
-      "reverse"_a = false,
-      "inclusive"_a = true,
-      "dtype"_a = nb::none(),
-      "include_initial"_a = false,
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def cumulative_sum(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, dtype: Optional[Dtype] = None, include_initial: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        Return the cumulative sum of the elements along the given axis.
-
-        Args:
-          a (array): Input array.
-          axis (int, optional): Optional axis to compute the cumulative sum
-            over. If unspecified the cumulative sum of the flattened array is
-            returned.
-          reverse (bool): Perform the cumulative sum in reverse.
-          inclusive (bool): The i-th element of the output includes the i-th
-            element of the input.
-          dtype (Dtype, optional): Cast the input to this type before summing.
-          include_initial (bool): Prepend the identity element (0) so the
-            output has one extra element along the given axis.
-
-        Returns:
-          array: The output array.
-      )pbdoc");
-  m.def(
-      "cumulative_prod",
-      [](const mx::array& a,
-         std::optional<int> axis,
-         bool reverse,
-         bool inclusive,
-         std::optional<mx::Dtype> dtype,
-         bool include_initial,
-         mx::StreamOrDevice s) {
-        mx::array x = dtype ? mx::astype(a, *dtype, s) : a;
-        int ax;
-        if (axis) {
-          ax = *axis;
-        } else {
-          x = mx::reshape(x, {-1}, s);
-          ax = 0;
-        }
-        auto out = mx::cumprod(x, ax, reverse, inclusive, s);
-        if (include_initial) {
-          int a2 = ax < 0 ? ax + static_cast<int>(out.ndim()) : ax;
-          mx::Shape init_shape = out.shape();
-          init_shape[a2] = 1;
-          auto init = mx::ones(init_shape, out.dtype(), s);
-          out = reverse ? mx::concatenate({out, init}, a2, s)
-                        : mx::concatenate({init, out}, a2, s);
-        }
-        return out;
-      },
-      nb::arg(),
-      "axis"_a = nb::none(),
-      nb::kw_only(),
-      "reverse"_a = false,
-      "inclusive"_a = true,
-      "dtype"_a = nb::none(),
-      "include_initial"_a = false,
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def cumulative_prod(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, dtype: Optional[Dtype] = None, include_initial: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-        Return the cumulative product of the elements along the given axis.
-
-        Args:
-          a (array): Input array.
-          axis (int, optional): Optional axis to compute the cumulative product
-            over. If unspecified the cumulative product of the flattened array
-            is returned.
-          reverse (bool): Perform the cumulative product in reverse.
-          inclusive (bool): The i-th element of the output includes the i-th
-            element of the input.
-          dtype (Dtype, optional): Cast the input to this type before multiplying.
-          include_initial (bool): Prepend the identity element (1) so the
-            output has one extra element along the given axis.
-
-        Returns:
-          array: The output array.
-      )pbdoc");
+  m.attr("cumulative_sum") = m.attr("cumsum");
+  m.attr("cumulative_prod") = m.attr("cumprod");
 }
