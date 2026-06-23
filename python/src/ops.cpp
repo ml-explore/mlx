@@ -3477,6 +3477,8 @@ void init_ops(nb::module_& m) {
       "dtype"_a = nb::none(),
       "include_initial"_a = false,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def cumsum(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, dtype: Optional[Dtype] = None, include_initial: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the cumulative sum of the elements along the given axis.
 
@@ -3531,6 +3533,8 @@ void init_ops(nb::module_& m) {
       "dtype"_a = nb::none(),
       "include_initial"_a = false,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def cumprod(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, dtype: Optional[Dtype] = None, include_initial: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the cumulative product of the elements along the given axis.
 
