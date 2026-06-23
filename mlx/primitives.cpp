@@ -223,8 +223,6 @@ std::vector<array> Abs::vjp(
     const std::vector<array>&) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
-  // For a complex input the gradient of |z| is the cotangent times sign(z);
-  // its real and imaginary parts are the derivatives w.r.t. Re(z) and Im(z).
   return {multiply(cotangents[0], sign(primals[0], stream()), stream())};
 }
 
