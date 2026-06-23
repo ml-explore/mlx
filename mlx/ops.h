@@ -47,7 +47,11 @@ MLX_API array linspace(
     StreamOrDevice s = {});
 
 /** Convert an array to the given data type. */
-MLX_API array astype(array a, Dtype dtype, StreamOrDevice s = {});
+MLX_API array
+astype(array a, Dtype dtype, std::optional<bool> copy, StreamOrDevice s = {});
+inline array astype(array a, Dtype dtype, StreamOrDevice s = {}) {
+  return astype(std::move(a), dtype, std::nullopt, s);
+}
 
 /** Create a view of an array with the given shape and strides. */
 MLX_API array as_strided(

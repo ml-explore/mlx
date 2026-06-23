@@ -1821,33 +1821,54 @@ void init_ops(nb::module_& m) {
       "asarray",
       [](const nb::object& a,
          std::optional<mx::Dtype> dtype,
-         std::optional<bool> copy) {
-        if (copy.has_value() && !*copy) {
-          throw std::invalid_argument("[asarray] copy=False is not supported.");
-        }
-        return create_array(a, dtype);
-      },
+         std::optional<bool> copy) { return create_array(a, dtype, copy); },
       nb::arg(),
       "dtype"_a = nb::none(),
       nb::kw_only(),
       "copy"_a = nb::none(),
       nb::sig(
-          "def asarray(a: Union[scalar, array, Sequence], dtype: Optional[Dtype] = None, *, copy: Optional[bool] = None) -> array"),
+          "def asarray(a: Union[scalar, array, Sequence, DLPackCompatible], dtype: "
+          "Optional[Dtype] = None, *, copy: Optional[bool] = None) -> array"),
       R"pbdoc(
         Convert the input to an array.
 
         Args:
             a: Input data.
             dtype (Dtype, optional): The desired data-type for the array.
-            copy (bool, optional): Must be ``True`` or unspecified. ``False``
-              is not supported, since MLX has no in-place operations and
-              cannot return a non-copying view.
+            copy (bool, optional): Whether to copy the input. If ``True``,
+              always copy. If ``False``, never copy. If ``None``, share memory
+              when possible and copy otherwise. Zero-copy DLPack imports
+              preserve the DLPack strides.
 
         Returns:
             array: An array interpretation of the input.
 
         Raises:
-            ValueError: If ``copy`` is ``False``.
+            ValueError: If ``copy`` is ``False`` and a copy is required.
+      )pbdoc");
+  m.def(
+      "from_dlpack",
+      [](nb::ndarray<nb::ro> x, std::optional<bool> copy) {
+        return nd_array_to_mlx(x, std::nullopt, std::nullopt, copy);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "copy"_a = nb::none(),
+      nb::sig(
+          "def from_dlpack(x: DLPackCompatible, /, *, copy: Optional[bool] = None) -> array"),
+      R"pbdoc(
+        Create an array from an object that supports DLPack.
+
+        Args:
+            x: Input object implementing ``__dlpack__`` and
+              ``__dlpack_device__``.
+            copy (bool, optional): Whether to copy the input. If ``True``,
+              always copy. If ``False``, never copy. If ``None``, share memory
+              when possible and copy otherwise. Zero-copy imports preserve the
+              DLPack strides.
+
+        Returns:
+            array: An array containing the input data.
       )pbdoc");
   m.def(
       "zeros_like",
@@ -3401,7 +3422,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "astype",
-      &mx::astype,
+      [](const mx::array& a, mx::Dtype dtype, mx::StreamOrDevice s) {
+        return mx::astype(a, dtype, s);
+      },
       nb::arg(),
       "dtype"_a,
       nb::kw_only(),
