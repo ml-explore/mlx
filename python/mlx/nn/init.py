@@ -385,12 +385,16 @@ def sparse(
             raise ValueError("Only tensors with 2 dimensions are supported")
 
         rows, cols = a.shape
-        num_zeros = int(math.ceil(sparsity * cols))
+        num_zeros = int(math.ceil(sparsity * rows))
 
-        order = mx.argsort(mx.random.uniform(shape=a.shape), axis=1)
+        # Zero out `num_zeros` random entries in each column, matching the
+        # documented "fraction of elements in each column" contract. Sorting a
+        # per-column random key (axis=0) picks the zeroed rows independently for
+        # every column.
+        order = mx.argsort(mx.random.uniform(shape=a.shape), axis=0)
         a = mx.random.normal(shape=a.shape, scale=std, loc=mean, dtype=dtype)
 
-        a[mx.arange(rows).reshape(rows, 1), order[:, :num_zeros]] = 0
+        a[order[:num_zeros, :], mx.arange(cols).reshape(1, cols)] = 0
 
         return a
 

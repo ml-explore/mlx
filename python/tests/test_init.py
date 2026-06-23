@@ -1,4 +1,5 @@
 # Copyright © 2023 Apple Inc.
+import math
 import unittest
 
 import mlx.core as mx
@@ -105,6 +106,20 @@ class TestInit(mlx_tests.MLXTestCase):
                     )
             with self.assertRaises(ValueError):
                 result = initializer(mx.zeros((1,)))
+
+    def test_sparse_zeros_per_column(self):
+        # The documented contract (matching PyTorch's nn.init.sparse_) is that
+        # `sparsity` is the fraction of elements in each *column* set to zero,
+        # i.e. every column must contain exactly ceil(sparsity * rows) zeros
+        # regardless of the matrix shape. A per-row implementation breaks this
+        # for non-square inputs.
+        for sparsity, shape in [(0.5, (10, 4)), (0.3, (10, 5)), (0.5, (2, 2))]:
+            rows, _ = shape
+            expected = int(math.ceil(sparsity * rows))
+            result = init.sparse(sparsity)(mx.zeros(shape))
+            zeros_per_col = mx.sum(result == 0, axis=0)
+            with self.subTest(shape=shape, sparsity=sparsity):
+                self.assertTrue(mx.all(zeros_per_col == expected).item())
 
     def test_orthogonal(self):
         initializer = init.orthogonal(gain=1.0, dtype=mx.float32)
