@@ -1110,6 +1110,45 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].shape, (3, 1, 4, 2))
         self.assertEqual(out[1].shape, (2, 2, 5))
 
+    def test_shapeless_compile_reduce_after_gather(self):
+        # Reductions over dimensions that happen to have size 1 at trace time
+        # used to be elided from the graph, so replays with larger dynamic
+        # shapes returned stale values (issue #3201)
+        buf = mx.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        reductions = [
+            mx.sum,
+            mx.mean,
+            mx.prod,
+            mx.min,
+            mx.max,
+            mx.all,
+            mx.any,
+            mx.argmin,
+            mx.argmax,
+        ]
+        for reduction in reductions:
+
+            def fun(buf, idx):
+                return reduction(mx.take(buf, idx, axis=0))
+
+            # Trace with a size-1 reduction and replay with larger sizes
+            cfun = mx.compile(fun, shapeless=True)
+            for n in [1, 2, 3, 4]:
+                idx = mx.arange(n)
+                self.assertTrue(
+                    mx.array_equal(cfun(buf, idx), fun(buf, idx)),
+                    f"{reduction.__name__} failed for n={n}",
+                )
+
+            # Replay with size 1 so the reduction is an identity at runtime
+            cfun = mx.compile(fun, shapeless=True)
+            for n in [2, 1]:
+                idx = mx.arange(n)
+                self.assertTrue(
+                    mx.array_equal(cfun(buf, idx), fun(buf, idx)),
+                    f"{reduction.__name__} failed for replay with n={n}",
+                )
+
     def test_leaks(self):
         gc.collect()
         if mx.metal.is_available():

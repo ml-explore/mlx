@@ -15,12 +15,20 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   array in = inputs[0];
 
-  // Make sure no identity reductions trickle down here.
   assert(!axes_.empty());
-  assert(out.size() != in.size());
 
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
+
+  // When all the reduced axes have size 1 at runtime, which can happen with
+  // shapeless compilation, the reduction is the identity so just cast-copy
+  // the input to the output.
+  if (out.size() == in.size()) {
+    CopyType ctype =
+        in.flags().contiguous ? CopyType::Vector : CopyType::General;
+    copy_gpu(in, out, ctype, s);
+    return;
+  }
 
   if (in.size() == 0) {
     init_reduce(encoder, in, out, reduce_type_);
