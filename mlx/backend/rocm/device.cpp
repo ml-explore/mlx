@@ -692,6 +692,13 @@ bool CommandEncoder::needs_commit() {
   if (!use_hip_graphs()) {
     return node_count_ >= env::max_ops_per_buffer(default_max_ops_per_buffer);
   }
+  // Decode-mode: never split mid-forward — the whole single-token forward becomes
+  // one graph, committed once at finalize, refreshed via ExecUpdate. Decode's live
+  // intermediates are small, so the per-graph caps (which bound prefill) aren't
+  // needed here.
+  if (graph_decode_mode()) {
+    return false;
+  }
   return (node_count_ > max_ops_per_graph_) ||
       ((bytes_in_graph_ >> 20) > static_cast<size_t>(max_mb_per_graph_));
 }
@@ -762,8 +769,11 @@ void CommandEncoder::commit() {
       // path.
       static const bool use_relaunch =
           std::getenv("MLX_GRAPH_RELAUNCH") != nullptr;
-      static const bool use_execupdate =
-          std::getenv("MLX_GRAPH_EXECUPDATE") != nullptr;
+      // ExecUpdate: refresh a cached exec's params in one call (vs reinstantiate).
+      // Forced on in decode-mode (the whole-forward graph is reused every token);
+      // also opt-in globally via MLX_GRAPH_EXECUPDATE.
+      const bool use_execupdate =
+          std::getenv("MLX_GRAPH_EXECUPDATE") != nullptr || graph_decode_mode();
       // Bisect: only ExecUpdate commits whose node-count is within [min,max];
       // others reinstantiate. Sweep to isolate which commit class EU breaks on.
       static const size_t eu_min = [] {
@@ -1147,6 +1157,23 @@ bool graph_active() {
 }
 void set_graph_active(bool v) {
   g_graph_active.store(v, std::memory_order_relaxed);
+}
+
+// Decode-mode: a single-token forward accrues into ONE graph (no mid-forward
+// commit) that is refreshed via hipGraphExecUpdate and launched once per token.
+// Set by the generation loop for Lstep==1 steps; prefill leaves it off so its
+// large intermediates stay bounded by the per-graph caps. Disable entirely with
+// MLX_GRAPH_DECODE=0.
+static std::atomic<bool> g_graph_decode_mode{false};
+bool graph_decode_mode() {
+  static const bool enabled = [] {
+    const char* e = std::getenv("MLX_GRAPH_DECODE");
+    return !(e && std::string(e) == "0");
+  }();
+  return enabled && g_graph_decode_mode.load(std::memory_order_relaxed);
+}
+void set_graph_decode_mode(bool v) {
+  g_graph_decode_mode.store(v, std::memory_order_relaxed);
 }
 
 void CommandEncoder::begin_capture() {

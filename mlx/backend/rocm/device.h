@@ -395,6 +395,12 @@ void set_graph_active(bool v);
 // True from capture start until the captured graph is destroyed. The allocator
 // defers all frees while set so graph-referenced buffers stay valid through replay.
 bool graph_active();
+
+// Decode-mode: single-token forward = one graph, refreshed via ExecUpdate and
+// launched once/token. Set per-step by the generation loop; MLX_GRAPH_DECODE=0
+// disables. See device.cpp.
+bool graph_decode_mode();
+void set_graph_decode_mode(bool v);
 void flush_graph_deferred_frees();
 // Per-generation deferred-free lifetime: each graph chunk (commit) frees its own
 // buffers once its launch completes, instead of hoarding until synchronize.

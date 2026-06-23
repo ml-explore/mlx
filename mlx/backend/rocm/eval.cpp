@@ -40,7 +40,9 @@ void new_stream(Stream s) {
 // bisection). Isolate them: flush the graph before AND after so they run alone.
 static bool is_graph_split_op(const char* name) {
   static const bool no_split = std::getenv("MLX_NO_CONCAT_SPLIT") != nullptr;
-  if (no_split) return false;
+  // Decode-mode keeps the whole forward in one graph, so Concatenate must be a
+  // graph node (validated bit-identical via ExecUpdate), never a split point.
+  if (no_split || rocm::graph_decode_mode()) return false;
   return std::strcmp(name, "Concatenate") == 0;
 }
 
@@ -183,6 +185,9 @@ bool gpu_graph_replay_async() {
 }
 void gpu_graph_reset() {
   graph_encoder().reset_graph();
+}
+void gpu_set_graph_decode_mode(bool v) {
+  rocm::set_graph_decode_mode(v);
 }
 bool gpu_graph_available() {
   return graph_encoder().has_graph();
