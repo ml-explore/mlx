@@ -92,6 +92,56 @@ class TestLinalg(mlx_tests.MLXTestCase):
         out_mx = mx.linalg.norm(x_mx, ord="fro")
         self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
 
+    def test_matrix_norm(self):
+        shapes = [(2, 3), (2, 3, 4), (2, 2, 3, 4)]
+        ords = ["fro", 1, -1, float("inf"), -float("inf")]
+
+        for shape in shapes:
+            x_np = np.arange(1, math.prod(shape) + 1, dtype=np.float32).reshape(shape)
+            x_mx = mx.array(x_np)
+            for ord_ in ords:
+                for keepdims in [False, True]:
+                    out_np = np.linalg.norm(
+                        x_np, ord=ord_, axis=(-2, -1), keepdims=keepdims
+                    )
+                    out_mx = mx.matrix_norm(x_mx, ord=ord_, keepdims=keepdims)
+                    with self.subTest(shape=shape, ord=ord_, keepdims=keepdims):
+                        self.assertTrue(
+                            np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6)
+                        )
+
+        x_np = np.arange(1, 13, dtype=np.float32).reshape(3, 4)
+        x_mx = mx.array(x_np)
+        self.assertTrue(np.allclose(mx.matrix_norm(x_mx), np.linalg.norm(x_np)))
+
+        x_np = np.arange(1, 13, dtype=np.float32).reshape(3, 4) + 1j * np.arange(
+            13, 25, dtype=np.float32
+        ).reshape(3, 4)
+        x_mx = mx.array(x_np)
+        self.assertTrue(
+            np.allclose(
+                mx.matrix_norm(x_mx),
+                np.linalg.norm(x_np, ord="fro", axis=(-2, -1)),
+                atol=1e-5,
+                rtol=1e-6,
+            )
+        )
+
+        for ord_ in [2, -2, "nuc"]:
+            out_np = np.linalg.norm(x_np, ord=ord_, axis=(-2, -1))
+            out_mx = mx.matrix_norm(x_mx, ord=ord_, stream=mx.cpu)
+            with self.subTest(ord=ord_):
+                self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-5))
+
+        xp = mx.array(1.0).__array_namespace__()
+        self.assertTrue(np.allclose(xp.matrix_norm(mx.eye(2)).item(), math.sqrt(2)))
+
+        with self.assertRaises(ValueError):
+            mx.matrix_norm(mx.array([1.0, 2.0]))
+
+        with self.assertRaises(ValueError):
+            mx.matrix_norm(mx.eye(2), ord=0)
+
     def test_qr_factorization(self):
         with self.assertRaises(ValueError):
             mx.linalg.qr(mx.array(0.0))

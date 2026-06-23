@@ -192,7 +192,7 @@ class TestDtypes(mlx_tests.MLXTestCase):
 
         # Reachable through the array API namespace.
         xp = mx.array(1.0).__array_namespace__()
-        for name in ("result_type", "can_cast", "isdtype"):
+        for name in ("result_type", "can_cast", "isdtype", "matrix_norm"):
             self.assertTrue(hasattr(xp, name), msg=name)
 
 
