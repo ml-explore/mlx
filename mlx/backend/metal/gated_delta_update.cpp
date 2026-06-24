@@ -115,7 +115,7 @@ void GatedDeltaUpdate::eval_gpu(
     // compute_encoder.set_bytes(n_chunks, 9);
 
     // auto grid = MTL::Size(32, Dv / 8, B * Hv);
-    // auto threads = MTL::Size(32, 1, 1); // get one simdgroup to work
+    // auto threads = MTL::Size(32, 1, 1);
     // // auto grid   = MTL::Size(1, 1, 1);
     // // auto threads = MTL::Size(1, 1, 1);
     // compute_encoder.dispatch_threads(grid, threads);
@@ -133,7 +133,7 @@ void GatedDeltaUpdate::eval_gpu(
     compute_encoder.set_bytes(T, 8);
 
     auto grid = MTL::Size(32, Dv / 8, B * Hv);
-    auto threads = MTL::Size(32, 1, 1); // get one simdgroup to work
+    auto threads = MTL::Size(32, 1, 1);
     // auto grid   = MTL::Size(1, 1, 1);
     // auto threads = MTL::Size(1, 1, 1);
     compute_encoder.dispatch_threads(grid, threads);
