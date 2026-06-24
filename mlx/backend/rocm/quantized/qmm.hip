@@ -5086,6 +5086,109 @@ __global__ void __launch_bounds__(1024) gather_qmv_idot_warp_shared_kernel(
   }
 }
 
+// Wide-load gather QMV (4-bit affine, decode). Flat per-(batch,col) warp with
+// 128-bit (uint4 = 32 nibbles) weight loads instead of the per-group 32-bit
+// loop, to raise effective gather bandwidth (microbench: R9700 77->398 GB/s).
+// Activation read from global (tiny, L2-cached). Per-group affine applied
+// inline. Requires K % 32 == 0; GROUP_SIZE in {32,64,128}. Gated MLX_QMV_WIDE.
+template <typename T, typename ScaleT, int GROUP_SIZE>
+__global__ void __launch_bounds__(1024) gather_qmv_wide_kernel(
+    const T* __restrict__ x,
+    const uint8_t* __restrict__ w,
+    const ScaleT* __restrict__ scales,
+    const ScaleT* __restrict__ biases,
+    const uint32_t* __restrict__ lhs_indices,
+    const uint32_t* __restrict__ rhs_indices,
+    const rocm::Shape batch_shape,
+    const rocm::Strides lhs_idx_strides,
+    const rocm::Strides rhs_idx_strides,
+    int batch_ndim,
+    T* __restrict__ out,
+    int B,
+    int M,
+    int N,
+    int K,
+    int E,
+    bool has_bias,
+    bool implicit_lhs,
+    int64_t implicit_x_batch_stride) {
+  int lane = threadIdx.x;
+  int col = blockIdx.y * blockDim.y + threadIdx.y;
+  int row = blockIdx.x;
+  int batch = blockIdx.z;
+  if (batch >= B || row >= M)
+    return;
+
+  int64_t rhs_loc = 0, lhs_loc = 0;
+  if (batch_ndim == 1) {
+    rhs_loc = static_cast<int64_t>(batch) * rhs_idx_strides[0];
+    if (!implicit_lhs)
+      lhs_loc = static_cast<int64_t>(batch) * lhs_idx_strides[0];
+  } else if (batch_ndim > 1) {
+    int64_t e = batch;
+    for (int i = batch_ndim - 1; i >= 0; --i) {
+      int64_t c = e % batch_shape.data_[i];
+      rhs_loc += c * rhs_idx_strides.data_[i];
+      if (!implicit_lhs)
+        lhs_loc += c * lhs_idx_strides.data_[i];
+      e /= batch_shape.data_[i];
+    }
+  }
+  uint32_t lhs_idx = implicit_lhs ? 0u : lhs_indices[lhs_loc];
+  uint32_t rhs_idx = rhs_indices[rhs_loc];
+  bool col_valid = col < N;
+  bool expert_valid = rhs_idx < static_cast<uint32_t>(E);
+
+  int num_groups = (K + GROUP_SIZE - 1) / GROUP_SIZE;
+  int row_bytes = (K * 4 + 7) / 8;
+  float acc = 0.0f;
+  if (col_valid && expert_valid) {
+    int64_t w_bs = static_cast<int64_t>(N) * row_bytes;
+    int64_t sb_bs = static_cast<int64_t>(N) * num_groups;
+    const uint8_t* wr = w + static_cast<int64_t>(rhs_idx) * w_bs +
+        static_cast<int64_t>(col) * row_bytes;
+    const ScaleT* scr = scales + static_cast<int64_t>(rhs_idx) * sb_bs +
+        static_cast<int64_t>(col) * num_groups;
+    const ScaleT* bcr = has_bias
+        ? (biases + static_cast<int64_t>(rhs_idx) * sb_bs +
+           static_cast<int64_t>(col) * num_groups)
+        : nullptr;
+    int64_t x_off = implicit_lhs
+        ? (static_cast<int64_t>(batch) * implicit_x_batch_stride)
+        : (static_cast<int64_t>(lhs_idx) * static_cast<int64_t>(M) * K);
+    const T* xr = x + x_off + static_cast<int64_t>(row) * K;
+
+    for (int k = lane * 32; k < K; k += 32 * 32) {
+      int g = k / GROUP_SIZE;
+      float s = load_scale_value<ScaleT, GROUP_SIZE, true>(scr[g]);
+      float b = has_bias ? static_cast<float>(bcr[g]) : 0.0f;
+      uint4 wv = *reinterpret_cast<const uint4*>(&wr[k / 2]);
+      const uint32_t* wp = reinterpret_cast<const uint32_t*>(&wv);
+      float la = 0.0f, lx = 0.0f;
+#pragma unroll
+      for (int q = 0; q < 4; ++q) {
+        uint32_t wd = wp[q];
+        int kb = k + q * 8;
+#pragma unroll
+        for (int j = 0; j < 8; ++j) {
+          float xv = static_cast<float>(xr[kb + j]);
+          int nib = (wd >> (4 * j)) & 0xF;
+          la += xv * static_cast<float>(nib);
+          if (has_bias)
+            lx += xv;
+        }
+      }
+      acc += s * la + b * lx;
+    }
+  }
+#pragma unroll
+  for (int o = 16; o > 0; o >>= 1)
+    acc += __shfl_down(acc, o);
+  if (col_valid && lane == 0)
+    out[(static_cast<int64_t>(batch) * M + row) * N + col] =
+        expert_valid ? static_cast<T>(acc) : static_cast<T>(0);
+}
+
 template <typename T, typename ScaleT, int BITS, int GROUP_SIZE, bool AFFINE>
 __global__ void gather_qmv_kernel(
     const T* __restrict__ x,
@@ -5738,6 +5841,32 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       else launch_gt(std::integral_constant<int, 8>{});
       return;
     }
+    // Wide-load (128-bit / uint4) gather decode path (4-bit affine), gated by
+    // MLX_QMV_WIDE. Raises gather weight-read bandwidth (microbench R9700
+    // 77->398 GB/s). Flat per-(batch,col) warp; requires K % 32 == 0.
+    static bool use_wide_gather = (std::getenv("MLX_QMV_WIDE") != nullptr);
+    if (use_wide_gather && use_fast_gather_qmv &&
+        mode_ == QuantizationMode::Affine && x.dtype() == bfloat16 &&
+        bits_ == 4 && (K % 32 == 0) && has_bias &&
+        (group_size_ == 32 || group_size_ == 64 || group_size_ == 128)) {
+      int wcols = 8;
+      dim3 wblock(32, wcols);
+      dim3 wgrid(M, (N + wcols - 1) / wcols, B);
+#define LAUNCH_WIDE(GS)                                                       \
+  enc.add_kernel_node(                                                        \
+      &rocm::gather_qmv_wide_kernel<hip_bfloat16, hip_bfloat16, GS>, wgrid,   \
+      wblock, 0u, (const hip_bfloat16*)x_ptr, (const uint8_t*)w_ptr,          \
+      (const hip_bfloat16*)scales_ptr, (const hip_bfloat16*)biases_ptr,       \
+      li_ptr, ri_ptr, batch_shape_param, lhs_idx_strides_param,               \
+      rhs_idx_strides_param, batch_ndim, (hip_bfloat16*)out_ptr, B, M, N, K,  \
+      E, has_bias, use_sorted_rhs_schedule, implicit_x_batch_stride)
+      if (group_size_ == 32) { LAUNCH_WIDE(32); }
+      else if (group_size_ == 64) { LAUNCH_WIDE(64); }
+      else { LAUNCH_WIDE(128); }
+#undef LAUNCH_WIDE
+      return;
+    }
+
     // int8 integer-dot decode gather path (4-bit affine). Experimental and OFF
     // by default (separate from MLX_QMV_IDOT): measured net-NEGATIVE on MoE decode
     // because the expert gather is latency/launch bound, not issue bound, so the
