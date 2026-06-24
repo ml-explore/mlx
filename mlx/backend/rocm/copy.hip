@@ -5,7 +5,50 @@
 #include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <mutex>
+#include <string>
+#include <vector>
+
 namespace mlx::core {
+
+namespace {
+// Env-gated (MLX_COUNT_COPIES) attribution of general copies by shape, to find
+// which model ops generate the copy_gg/copy_g kernels. Prints a histogram at exit.
+struct CopyStats {
+  std::mutex mu;
+  std::map<std::string, long> hist;
+  bool on = std::getenv("MLX_COUNT_COPIES") != nullptr;
+  void record(CopyType ct, const Shape& sh) {
+    if (!on) return;
+    std::string key = (ct == CopyType::GeneralGeneral) ? "GG " : "G  ";
+    key += "[";
+    for (size_t i = 0; i < sh.size(); ++i) {
+      key += std::to_string(sh[i]);
+      if (i + 1 < sh.size()) key += ",";
+    }
+    key += "]";
+    std::lock_guard<std::mutex> g(mu);
+    hist[key]++;
+  }
+  ~CopyStats() {
+    if (!on) return;
+    long tot = 0;
+    for (auto& kv : hist) tot += kv.second;
+    std::vector<std::pair<std::string, long>> v(hist.begin(), hist.end());
+    std::sort(v.begin(), v.end(),
+              [](auto& a, auto& b) { return a.second > b.second; });
+    fprintf(stderr, "\n=== MLX_COUNT_COPIES: %ld general copies, top shapes ===\n",
+            tot);
+    for (size_t i = 0; i < v.size() && i < 40; ++i)
+      fprintf(stderr, "%8ld  %s\n", v[i].second, v[i].first.c_str());
+  }
+};
+CopyStats g_copy_stats;
+} // namespace
 
 void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   auto& encoder = rocm::get_command_encoder(s);
@@ -93,6 +136,7 @@ void copy_gpu_inplace(
   }
 
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
+    g_copy_stats.record(ctype, shape);
     auto [shape_collapsed, strides_vec] = collapse_contiguous_dims(
         shape, std::vector{strides_in, strides_out}, INT32_MAX);
     if (ctype == CopyType::General) {

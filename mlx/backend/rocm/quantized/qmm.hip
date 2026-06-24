@@ -2932,6 +2932,119 @@ __global__ void qmv_t_kernel(
   out[row * N + col] = static_cast<T>(acc);
 }
 
+// ---------------------------------------------------------------------------
+// int8 integer-dot QMV (4-bit affine). Activation is quantized to int8
+// (per-group scale dx + exact group-sum Sx) in a prepass; weight nibbles are
+// fed straight to v_dot4_i32_iu8. Affine dequant: scale*dx*<q_int> + bias*Sx.
+// Gated by MLX_QMV_IDOT. Mirrors llama.cpp mmvq (integer dot, not matrix core).
+// ---------------------------------------------------------------------------
+__device__ __forceinline__ int sudot4_iu8(int wcodes, int xcodes, int acc) {
+  return __builtin_amdgcn_sudot4(false, wcodes, true, xcodes, acc, false);
+}
+
+template <typename T, int GROUP_SIZE>
+__global__ void quantize_act_q8_kernel(
+    const T* __restrict__ x,
+    int32_t* __restrict__ xpack,
+    float* __restrict__ dx,
+    float* __restrict__ Sx,
+    int M,
+    int K) {
+  int row = blockIdx.x;
+  if (row >= M)
+    return;
+  int ng = K / GROUP_SIZE;
+  int nwords = K / 8;
+  const T* xr = x + static_cast<size_t>(row) * K;
+  int tid = threadIdx.x, nt = blockDim.x;
+  for (int g = tid; g < ng; g += nt) {
+    float mx = 0.0f, sm = 0.0f;
+    int base = g * GROUP_SIZE;
+    for (int j = 0; j < GROUP_SIZE; ++j) {
+      float v = static_cast<float>(xr[base + j]);
+      mx = fmaxf(mx, fabsf(v));
+      sm += v;
+    }
+    float d = mx / 127.0f;
+    if (d == 0.0f)
+      d = 1.0f;
+    dx[static_cast<size_t>(row) * ng + g] = d;
+    Sx[static_cast<size_t>(row) * ng + g] = sm;
+  }
+  __syncthreads();
+  for (int wi = tid; wi < nwords; wi += nt) {
+    int base = wi * 8;
+    int g = base / GROUP_SIZE;
+    float inv = 1.0f / dx[static_cast<size_t>(row) * ng + g];
+    int8_t q[8];
+#pragma unroll
+    for (int j = 0; j < 8; ++j) {
+      int qq = __float2int_rn(static_cast<float>(xr[base + j]) * inv);
+      qq = qq < -127 ? -127 : (qq > 127 ? 127 : qq);
+      q[j] = static_cast<int8_t>(qq);
+    }
+    int even = static_cast<uint8_t>(q[0]) | (static_cast<uint8_t>(q[2]) << 8) |
+        (static_cast<uint8_t>(q[4]) << 16) | (static_cast<uint8_t>(q[6]) << 24);
+    int odd = static_cast<uint8_t>(q[1]) | (static_cast<uint8_t>(q[3]) << 8) |
+        (static_cast<uint8_t>(q[5]) << 16) | (static_cast<uint8_t>(q[7]) << 24);
+    size_t o = (static_cast<size_t>(row) * nwords + wi) * 2;
+    xpack[o] = even;
+    xpack[o + 1] = odd;
+  }
+}
+
+template <typename T, typename ScaleT, int GROUP_SIZE>
+__global__ void qmv_idot_kernel(
+    const int32_t* __restrict__ xpack,
+    const uint8_t* __restrict__ w,
+    const ScaleT* __restrict__ scales,
+    const ScaleT* __restrict__ biases,
+    const float* __restrict__ dx,
+    const float* __restrict__ Sx,
+    T* __restrict__ out,
+    int M,
+    int N,
+    int K,
+    bool has_bias) {
+  int lane = threadIdx.x;
+  int col = blockIdx.x * blockDim.y + threadIdx.y;
+  int row = blockIdx.y;
+  if (row >= M || col >= N)
+    return;
+  int ng = K / GROUP_SIZE;
+  int nwords = K / 8;
+  int row_bytes = (K + 1) / 2;
+  const uint32_t* wr =
+      reinterpret_cast<const uint32_t*>(w + static_cast<size_t>(col) * row_bytes);
+  const int32_t* xr = xpack + static_cast<size_t>(row) * nwords * 2;
+  float acc = 0.0f;
+  for (int wi = lane; wi < nwords; wi += 32) {
+    uint32_t vui = wr[wi];
+    int ew = vui & 0x0F0F0F0F;
+    int ow = (vui >> 4) & 0x0F0F0F0F;
+    int q = sudot4_iu8(ew, xr[2 * wi], 0);
+    q = sudot4_iu8(ow, xr[2 * wi + 1], q);
+    int g = (wi * 8) / GROUP_SIZE;
+    float scale =
+        load_scale_value<ScaleT, GROUP_SIZE, true>(scales[static_cast<size_t>(col) * ng + g]);
+    acc += scale * dx[static_cast<size_t>(row) * ng + g] * static_cast<float>(q);
+  }
+#pragma unroll
+  for (int o = 16; o > 0; o >>= 1)
+    acc += __shfl_down(acc, o);
+  float bsum = 0.0f;
+  if (has_bias) {
+    for (int g = lane; g < ng; g += 32)
+      bsum += static_cast<float>(biases[static_cast<size_t>(col) * ng + g]) *
+          Sx[static_cast<size_t>(row) * ng + g];
+#pragma unroll
+    for (int o = 16; o > 0; o >>= 1)
+      bsum += __shfl_down(bsum, o);
+  }
+  if (lane == 0)
+    out[static_cast<size_t>(row) * N + col] = static_cast<T>(acc + bsum);
+}
+
 } // namespace rocm
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -3324,6 +3437,57 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       }
       #undef LAUNCH_TILED_6BIT
     }
+    return;
+  }
+
+  // int8 integer-dot QMV (4-bit affine, small-M decode). Quantize activation to
+  // int8 (per-group scale+sum) in a prepass, then v_dot4_i32_iu8. Gated by
+  // MLX_QMV_IDOT so it's an opt-in A/B against the tiled path.
+  static bool use_idot_qmv = (std::getenv("MLX_QMV_IDOT") != nullptr);
+  if (use_idot_qmv && bits_ == 4 && mode_ == QuantizationMode::Affine &&
+      has_bias && transpose_ && batch_count == 1 && non_batched && M >= 1 &&
+      M <= 8 && (K % 8 == 0) && (K % group_size_ == 0) &&
+      (group_size_ == 32 || group_size_ == 64 || group_size_ == 128) &&
+      (x.dtype() == bfloat16 || x.dtype() == float16)) {
+    int ng = K / group_size_;
+    int nwords = K / 8;
+    array xpack({M, nwords * 2}, int32, nullptr, {});
+    xpack.set_data(mlx::core::rocm::malloc_async(xpack.nbytes(), enc));
+    array dxq({M, ng}, float32, nullptr, {});
+    dxq.set_data(mlx::core::rocm::malloc_async(dxq.nbytes(), enc));
+    array sxq({M, ng}, float32, nullptr, {});
+    sxq.set_data(mlx::core::rocm::malloc_async(sxq.nbytes(), enc));
+    enc.set_output_array(xpack);
+    enc.set_output_array(dxq);
+    enc.set_output_array(sxq);
+    int32_t* xpack_ptr = gpu_ptr<int32_t>(xpack);
+    float* dxq_ptr = gpu_ptr<float>(dxq);
+    float* sxq_ptr = gpu_ptr<float>(sxq);
+
+    dim3 q_grid(M), q_block(256);
+    dim3 mv_block(32, 8);
+    dim3 mv_grid((N + 7) / 8, M);
+
+#define LAUNCH_IDOT(TT, ST, GS)                                            \
+  enc.add_kernel_node(                                                     \
+      &rocm::quantize_act_q8_kernel<TT, GS>, q_grid, q_block, 0u,          \
+      (const TT*)x_ptr, xpack_ptr, dxq_ptr, sxq_ptr, M, K);                \
+  enc.add_kernel_node(                                                     \
+      &rocm::qmv_idot_kernel<TT, ST, GS>, mv_grid, mv_block, 0u,           \
+      (const int32_t*)xpack_ptr, w_ptr, (const ST*)scales_ptr,             \
+      (const ST*)biases_ptr, (const float*)dxq_ptr, (const float*)sxq_ptr, \
+      (TT*)out_ptr, M, N, K, has_bias)
+
+    if (x.dtype() == bfloat16) {
+      if (group_size_ == 32) { LAUNCH_IDOT(hip_bfloat16, hip_bfloat16, 32); }
+      else if (group_size_ == 64) { LAUNCH_IDOT(hip_bfloat16, hip_bfloat16, 64); }
+      else { LAUNCH_IDOT(hip_bfloat16, hip_bfloat16, 128); }
+    } else {
+      if (group_size_ == 32) { LAUNCH_IDOT(__half, __half, 32); }
+      else if (group_size_ == 64) { LAUNCH_IDOT(__half, __half, 64); }
+      else { LAUNCH_IDOT(__half, __half, 128); }
+    }
+#undef LAUNCH_IDOT
     return;
   }
 
@@ -4066,6 +4230,130 @@ __global__ void __launch_bounds__(1024) gather_qmv_expert_batched_kernel(
   }
 }
 
+// int8 integer-dot gather expert QMV (4-bit affine, decode). Activation already
+// quantized to int8 (xpack even/odd + per-group scale dxq + sum sxq) by a
+// prepass; expert weight nibbles fed to v_dot4_i32_iu8. Same run-find as the
+// fp32 expert kernel; only the inner matmul changes. THREADS_PER_COL = 32.
+template <typename T, typename ScaleT, int GROUP_SIZE>
+__global__ void __launch_bounds__(1024) gather_qmv_idot_expert_batched_kernel(
+    const int32_t* __restrict__ xpack,
+    const uint8_t* __restrict__ w,
+    const ScaleT* __restrict__ scales,
+    const ScaleT* __restrict__ biases,
+    const float* __restrict__ dxq,
+    const float* __restrict__ sxq,
+    const uint32_t* __restrict__ lhs_indices,
+    const uint32_t* __restrict__ rhs_indices,
+    T* __restrict__ out,
+    int B,
+    int M,
+    int N,
+    int K,
+    int E,
+    bool has_bias,
+    bool implicit_lhs,
+    int64_t implicit_x_batch_stride) {
+  const int lane = threadIdx.x;
+  const int warp_idx = threadIdx.y;
+  const int col = blockIdx.y * blockDim.y + warp_idx;
+  const int row = blockIdx.x;
+  const int expert_slot = blockIdx.z;
+  if (row >= M || col >= N)
+    return;
+
+  int run_start = 0, run_end = 0;
+  uint32_t expert_id = 0;
+  if (lane == 0 && warp_idx == 0) {
+    int pos = 0;
+    for (int skip = 0; skip < expert_slot && pos < B; ++skip) {
+      uint32_t cur_val = rhs_indices[pos];
+      int lo = pos + 1, hi = B;
+      while (lo < hi) {
+        int mid = (lo + hi) >> 1;
+        if (rhs_indices[mid] == cur_val) lo = mid + 1;
+        else hi = mid;
+      }
+      pos = lo;
+    }
+    if (pos < B) {
+      run_start = pos;
+      expert_id = rhs_indices[pos];
+      int lo = pos + 1, hi = B;
+      while (lo < hi) {
+        int mid = (lo + hi) >> 1;
+        if (rhs_indices[mid] == expert_id) lo = mid + 1;
+        else hi = mid;
+      }
+      run_end = lo;
+    }
+  }
+  __shared__ int s_run_start, s_run_end;
+  __shared__ uint32_t s_expert_id;
+  if (lane == 0 && warp_idx == 0) {
+    s_run_start = run_start;
+    s_run_end = run_end;
+    s_expert_id = expert_id;
+  }
+  __syncthreads();
+  run_start = s_run_start;
+  run_end = s_run_end;
+  expert_id = s_expert_id;
+  if (run_end <= run_start)
+    return;
+  if (expert_id >= static_cast<uint32_t>(E))
+    return;
+
+  const int num_groups = (K + GROUP_SIZE - 1) / GROUP_SIZE;
+  const int row_bytes = (K * 4 + 7) / 8;
+  const int wpg = GROUP_SIZE / 8;
+  const int nwords = K / 8;
+  int64_t w_expert_stride = static_cast<int64_t>(N) * row_bytes;
+  int64_t sb_expert_stride = static_cast<int64_t>(N) * num_groups;
+  const uint32_t* wr = reinterpret_cast<const uint32_t*>(
+      w + static_cast<int64_t>(expert_id) * w_expert_stride +
+      static_cast<int64_t>(col) * row_bytes);
+  const ScaleT* scales_row = scales +
+      static_cast<int64_t>(expert_id) * sb_expert_stride +
+      static_cast<int64_t>(col) * num_groups;
+  const ScaleT* biases_row = has_bias
+      ? (biases + static_cast<int64_t>(expert_id) * sb_expert_stride +
+         static_cast<int64_t>(col) * num_groups)
+      : nullptr;
+
+  int64_t x_batch_stride = static_cast<int64_t>(M) * K;
+  for (int b = run_start; b < run_end; ++b) {
+    uint32_t lhs_idx = implicit_lhs ? 0u : lhs_indices[b];
+    int64_t x_offset = implicit_lhs
+        ? (static_cast<int64_t>(b) * implicit_x_batch_stride)
+        : (static_cast<int64_t>(lhs_idx) * x_batch_stride);
+    int64_t arow = x_offset / K + row;
+    const int32_t* xpack_row = xpack + arow * nwords * 2;
+    const float* dxr = dxq + arow * num_groups;
+    const float* sxr = sxq + arow * num_groups;
+
+    float acc = 0.0f;
+    for (int g = 0; g < num_groups; ++g) {
+      float scale =
+          load_scale_value<ScaleT, GROUP_SIZE, true>(scales_row[g]);
+      float bias_val = has_bias ? static_cast<float>(biases_row[g]) : 0.0f;
+      int w0 = g * wpg, w1 = w0 + wpg;
+      int qsum = 0;
+      for (int wi = w0 + lane; wi < w1; wi += 32) {
+        uint32_t vui = wr[wi];
+        int ew = vui & 0x0F0F0F0F;
+        int ow = (vui >> 4) & 0x0F0F0F0F;
+        qsum = sudot4_iu8(ew, xpack_row[2 * wi], qsum);
+        qsum = sudot4_iu8(ow, xpack_row[2 * wi + 1], qsum);
+      }
+      float qf = subgroup_reduce_sum_qmm<32>(static_cast<float>(qsum));
+      acc += scale * dxr[g] * qf + bias_val * sxr[g];
+    }
+    if (lane == 0)
+      out[static_cast<int64_t>(b) * M * N + static_cast<int64_t>(row) * N +
+          col] = static_cast<T>(acc);
+  }
+}
+
 // ======================================================================
 // Prefill-optimized gather QMV: groups batch elements by expert.
 //
@@ -4686,6 +4974,112 @@ __global__ void __launch_bounds__(1024) gather_qmv_warp_shared_kernel(
   }
 
   acc = subgroup_reduce_sum_qmm<THREADS_PER_COL>(acc);
+  if (col_valid && lane == 0) {
+    int64_t out_offset = (static_cast<int64_t>(batch) * M + row) * N + col;
+    out[out_offset] = expert_valid ? static_cast<T>(acc) : static_cast<T>(0);
+  }
+}
+
+// int8 integer-dot decode gather QMV (4-bit affine). One block per routing
+// entry (batch=blockIdx.z); activation already quantized to int8 by a prepass
+// (xpack even/odd + per-group scale dxq + sum sxq). 32 lanes per column.
+template <typename T, typename ScaleT, int GROUP_SIZE>
+__global__ void __launch_bounds__(1024) gather_qmv_idot_warp_shared_kernel(
+    const int32_t* __restrict__ xpack,
+    const uint8_t* __restrict__ w,
+    const ScaleT* __restrict__ scales,
+    const ScaleT* __restrict__ biases,
+    const float* __restrict__ dxq,
+    const float* __restrict__ sxq,
+    const uint32_t* __restrict__ lhs_indices,
+    const uint32_t* __restrict__ rhs_indices,
+    const rocm::Shape batch_shape,
+    const rocm::Strides lhs_idx_strides,
+    const rocm::Strides rhs_idx_strides,
+    int batch_ndim,
+    T* __restrict__ out,
+    int B,
+    int M,
+    int N,
+    int K,
+    int E,
+    bool has_bias,
+    bool implicit_lhs,
+    int64_t implicit_x_batch_stride) {
+  const int lane = threadIdx.x;
+  const int warp_idx = threadIdx.y;
+  const int col = blockIdx.y * blockDim.y + warp_idx;
+  const int row = blockIdx.x;
+  const int batch = blockIdx.z;
+  if (batch >= B || row >= M)
+    return;
+
+  int64_t rhs_idx_loc = 0, lhs_idx_loc = 0;
+  if (batch_ndim == 1) {
+    rhs_idx_loc = static_cast<int64_t>(batch) * rhs_idx_strides[0];
+    if (!implicit_lhs)
+      lhs_idx_loc = static_cast<int64_t>(batch) * lhs_idx_strides[0];
+  } else if (batch_ndim > 1) {
+    int64_t elem = batch;
+    for (int i = batch_ndim - 1; i >= 0; --i) {
+      int64_t coord = elem % batch_shape.data_[i];
+      rhs_idx_loc += coord * rhs_idx_strides.data_[i];
+      if (!implicit_lhs)
+        lhs_idx_loc += coord * lhs_idx_strides.data_[i];
+      elem /= batch_shape.data_[i];
+    }
+  }
+  uint32_t lhs_idx = implicit_lhs ? 0u : lhs_indices[lhs_idx_loc];
+  uint32_t rhs_idx = rhs_indices[rhs_idx_loc];
+
+  const bool col_valid = col < N;
+  const bool expert_valid = rhs_idx < static_cast<uint32_t>(E);
+
+  const int num_groups = (K + GROUP_SIZE - 1) / GROUP_SIZE;
+  const int row_bytes = (K * 4 + 7) / 8;
+  const int wpg = GROUP_SIZE / 8;
+  const int nwords = K / 8;
+
+  float acc = 0.0f;
+  if (col_valid && expert_valid) {
+    int64_t w_batch_stride = static_cast<int64_t>(N) * row_bytes;
+    int64_t sb_batch_stride = static_cast<int64_t>(N) * num_groups;
+    const uint32_t* wr = reinterpret_cast<const uint32_t*>(
+        w + static_cast<int64_t>(rhs_idx) * w_batch_stride +
+        static_cast<int64_t>(col) * row_bytes);
+    const ScaleT* scales_row = scales +
+        static_cast<int64_t>(rhs_idx) * sb_batch_stride +
+        static_cast<int64_t>(col) * num_groups;
+    const ScaleT* biases_row = has_bias
+        ? (biases + static_cast<int64_t>(rhs_idx) * sb_batch_stride +
+           static_cast<int64_t>(col) * num_groups)
+        : nullptr;
+
+    int64_t x_batch_offset = implicit_lhs
+        ? (static_cast<int64_t>(batch) * implicit_x_batch_stride)
+        : (static_cast<int64_t>(lhs_idx) * static_cast<int64_t>(M) * K);
+    int64_t arow = x_batch_offset / K + row;
+    const int32_t* xpack_row = xpack + arow * nwords * 2;
+    const float* dxr = dxq + arow * num_groups;
+    const float* sxr = sxq + arow * num_groups;
+
+    for (int g = 0; g < num_groups; ++g) {
+      float scale =
+          load_scale_value<ScaleT, GROUP_SIZE, true>(scales_row[g]);
+      float bias_val = has_bias ? static_cast<float>(biases_row[g]) : 0.0f;
+      int w0 = g * wpg, w1 = w0 + wpg;
+      int qsum = 0;
+      for (int wi = w0 + lane; wi < w1; wi += 32) {
+        uint32_t vui = wr[wi];
+        int ew = vui & 0x0F0F0F0F;
+        int ow = (vui >> 4) & 0x0F0F0F0F;
+        qsum = sudot4_iu8(ew, xpack_row[2 * wi], qsum);
+        qsum = sudot4_iu8(ow, xpack_row[2 * wi + 1], qsum);
+      }
+      float qf = subgroup_reduce_sum_qmm<32>(static_cast<float>(qsum));
+      acc += scale * dxr[g] * qf + bias_val * sxr[g];
+    }
+  }
   if (col_valid && lane == 0) {
     int64_t out_offset = (static_cast<int64_t>(batch) * M + row) * N + col;
     out[out_offset] = expert_valid ? static_cast<T>(acc) : static_cast<T>(0);
@@ -5344,6 +5738,53 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       else launch_gt(std::integral_constant<int, 8>{});
       return;
     }
+    // int8 integer-dot decode gather path (4-bit affine). Experimental and OFF
+    // by default (separate from MLX_QMV_IDOT): measured net-NEGATIVE on MoE decode
+    // because the expert gather is latency/launch bound, not issue bound, so the
+    // per-call activation-quant prepass overhead dominates. Kept behind its own
+    // flag for A/B; the dense QuantizedMatmul idot path remains a win.
+    static bool use_idot_gather =
+        (std::getenv("MLX_QMV_IDOT_GATHER") != nullptr);
+    if (use_idot_gather && use_fast_gather_qmv &&
+        mode_ == QuantizationMode::Affine && x.dtype() == bfloat16 &&
+        group_size_ == 64 && bits_ == 4 && (K % 8 == 0) && has_bias) {
+      int ng = K / 64;
+      int nwords = K / 8;
+      int x_rows = static_cast<int>(x.size() / K);
+      array xpack({x_rows, nwords * 2}, int32, nullptr, {});
+      xpack.set_data(mlx::core::rocm::malloc_async(xpack.nbytes(), enc));
+      array dxq({x_rows, ng}, float32, nullptr, {});
+      dxq.set_data(mlx::core::rocm::malloc_async(dxq.nbytes(), enc));
+      array sxq({x_rows, ng}, float32, nullptr, {});
+      sxq.set_data(mlx::core::rocm::malloc_async(sxq.nbytes(), enc));
+      enc.set_output_array(xpack);
+      enc.set_output_array(dxq);
+      enc.set_output_array(sxq);
+      int32_t* xpack_ptr = gpu_ptr<int32_t>(xpack);
+      float* dxq_ptr = gpu_ptr<float>(dxq);
+      float* sxq_ptr = gpu_ptr<float>(sxq);
+
+      enc.add_kernel_node(
+          &rocm::quantize_act_q8_kernel<hip_bfloat16, 64>,
+          dim3(x_rows), dim3(256), 0u,
+          (const hip_bfloat16*)x_ptr, xpack_ptr, dxq_ptr, sxq_ptr, x_rows, K);
+
+      int idot_cols = 8;
+      dim3 idot_block(32, idot_cols);
+      dim3 idot_grid(M, (N + idot_cols - 1) / idot_cols, B);
+      enc.add_kernel_node(
+          &rocm::gather_qmv_idot_warp_shared_kernel<hip_bfloat16, hip_bfloat16, 64>,
+          idot_grid, idot_block, 0u,
+          (const int32_t*)xpack_ptr, (const uint8_t*)w_ptr,
+          (const hip_bfloat16*)scales_ptr, (const hip_bfloat16*)biases_ptr,
+          (const float*)dxq_ptr, (const float*)sxq_ptr,
+          li_ptr, ri_ptr, batch_shape_param, lhs_idx_strides_param,
+          rhs_idx_strides_param, batch_ndim, (hip_bfloat16*)out_ptr,
+          B, M, N, K, E, has_bias, use_sorted_rhs_schedule,
+          implicit_x_batch_stride);
+      return;
+    }
+
     if (use_fast_gather_qmv && mode_ == QuantizationMode::Affine &&
         x.dtype() == bfloat16 && group_size_ == 64 &&
         (bits_ == 4 || bits_ == 6 || bits_ == 8)) {
