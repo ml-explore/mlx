@@ -13,7 +13,6 @@
 #include <nanobind/stl/vector.h>
 
 #include "mlx/einsum.h"
-#include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/utils.h"
 #include "python/src/convert.h"
@@ -4737,48 +4736,6 @@ void init_ops(nb::module_& m) {
 
       Returns:
         array: The inner product.
-    )pbdoc");
-  m.def(
-      "matrix_norm",
-      [](const mx::array& a,
-         const bool keepdims,
-         const std::variant<int, double, std::string>& ord_,
-         mx::StreamOrDevice s) {
-        if (a.ndim() < 2) {
-          throw std::invalid_argument(
-              "[matrix_norm] Input array must have at least 2 dimensions.");
-        }
-        std::vector<int> axis{
-            static_cast<int>(a.ndim()) - 2, static_cast<int>(a.ndim()) - 1};
-        if (auto pv = std::get_if<std::string>(&ord_); pv) {
-          return mx::linalg::norm(a, *pv, axis, keepdims, s);
-        }
-        double ord;
-        if (auto pv = std::get_if<int>(&ord_); pv) {
-          ord = *pv;
-        } else {
-          ord = std::get<double>(ord_);
-        }
-        return mx::linalg::norm(a, ord, axis, keepdims, s);
-      },
-      nb::arg(),
-      nb::kw_only(),
-      "keepdims"_a = false,
-      "ord"_a = "fro",
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def matrix_norm(a: array, /, *, keepdims: bool = False, ord: Union[int, float, str] = 'fro', stream: Union[None, Stream, Device] = None) -> array"),
-      R"pbdoc(
-      Compute the matrix norm over the last two axes.
-
-      Args:
-        a (array): Input array.
-        ord (int, float or str, optional): Order of the norm. Default: ``"fro"``.
-        keepdims (bool, optional): If ``True``, the normed axes remain as dimensions
-          with size one. Default: ``False``.
-
-      Returns:
-        array: The matrix norm.
     )pbdoc");
   m.def(
       "outer",
