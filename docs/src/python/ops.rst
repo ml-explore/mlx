@@ -123,7 +123,6 @@ Operations
    logical_or
    logsumexp
    matmul
-   matrix_norm
    max
    maximum
    mean

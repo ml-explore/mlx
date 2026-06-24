@@ -92,12 +92,6 @@ class TestLinalg(mlx_tests.MLXTestCase):
         out_mx = mx.linalg.norm(x_mx, ord="fro")
         self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
 
-    def test_matrix_norm(self):
-        self.assertIs(mx.matrix_norm, mx.linalg.norm)
-        xp = mx.array(1.0).__array_namespace__()
-        self.assertIs(xp.matrix_norm, mx.linalg.norm)
-        self.assertTrue(np.allclose(mx.matrix_norm(mx.eye(2)).item(), math.sqrt(2)))
-
     def test_qr_factorization(self):
         with self.assertRaises(ValueError):
             mx.linalg.qr(mx.array(0.0))
