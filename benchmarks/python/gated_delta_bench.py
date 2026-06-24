@@ -118,7 +118,7 @@ def benchmark_shape(B, T, H, Dk, Dv, chunk_sizes):
     out_ref, hf_ref = gated_delta_ref(q, k, v, g, b, state=h0)
     mx.eval(out_ref, hf_ref)
 
-    out, hf = mx.fast.gated_delta_update_forward(q, k, v, g, b, initial_state=h0, C=0)
+    out, hf = mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0, C=0)
     mx.eval(out, hf)
 
     atol = 1e-2
@@ -132,8 +132,7 @@ def benchmark_shape(B, T, H, Dk, Dv, chunk_sizes):
     assert hf_close, f"state mismatch!  max diff: {hf_max_diff:.2e}"
 
     ms_seq = (
-        bench(do_kernel_bench, mx.fast.gated_delta_update_forward, q, k, v, g, b, h0, 0)
-        * 1000
+        bench(do_kernel_bench, mx.fast.gated_delta_update, q, k, v, g, b, h0, 0) * 1000
     )
 
     speedups = []
@@ -142,9 +141,7 @@ def benchmark_shape(B, T, H, Dk, Dv, chunk_sizes):
     for C in non_zero_Cs:
         try:
             h0 = mx.zeros((B, H, Dv, Dk), dtype=mx.float32)
-            out, hf = mx.fast.gated_delta_update_forward(
-                q, k, v, g, b, initial_state=h0, C=C
-            )
+            out, hf = mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0, C=C)
             mx.eval(out, hf)
 
             err_out = mx.abs(out - out_ref).max().item()
@@ -153,7 +150,7 @@ def benchmark_shape(B, T, H, Dk, Dv, chunk_sizes):
             ms_c = (
                 bench(
                     do_kernel_bench,
-                    mx.fast.gated_delta_update_forward,
+                    mx.fast.gated_delta_update,
                     q,
                     k,
                     v,
@@ -247,9 +244,7 @@ def run_profile():
     mx.eval(out_ref, hf_ref)
 
     for C in CS:
-        out, hf = mx.fast.gated_delta_update_forward(
-            q, k, v, g, b, initial_state=h0, C=C
-        )
+        out, hf = mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0, C=C)
         mx.eval(out, hf)
 
         assert list(out.shape) == [B, T, H, Dv]
@@ -268,9 +263,7 @@ def run_profile():
         assert out_close, f"output mismatch! max diff: {out_max_diff:.2e}"
         assert hf_close, f"state mismatch!  max diff: {hf_max_diff:.2e}"
 
-        profile(
-            do_kernel_bench, mx.fast.gated_delta_update_forward, q, k, v, g, b, h0, C
-        )
+        profile(do_kernel_bench, mx.fast.gated_delta_update, q, k, v, g, b, h0, C)
 
 
 if __name__ == "__main__":

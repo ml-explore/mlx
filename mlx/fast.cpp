@@ -922,7 +922,7 @@ bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
       has_sinks_ == a_other.has_sinks_;
 }
 
-std::vector<array> gated_delta_update_forward(
+std::vector<array> gated_delta_update(
     const array& queries,
     const array& keys,
     const array& values,

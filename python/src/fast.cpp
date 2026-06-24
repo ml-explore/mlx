@@ -334,8 +334,8 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
-      "gated_delta_update_forward",
-      &mlx::core::fast::gated_delta_update_forward,
+      "gated_delta_update",
+      &mlx::core::fast::gated_delta_update,
       "q"_a,
       "k"_a,
       "v"_a,
