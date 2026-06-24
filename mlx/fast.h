@@ -60,7 +60,7 @@ MLX_API array scaled_dot_product_attention(
     bool force_fused = false,
     StreamOrDevice s = {});
 
-MLX_API std::vector<array> gated_delta_update_forward(
+MLX_API std::vector<array> gated_delta_update(
     const array& queries,
     const array& keys,
     const array& values,
