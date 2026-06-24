@@ -160,8 +160,6 @@ mx::array cpu_nd_array_to_mlx(
       std::move(strides),
       flags);
   if (storage_size > 0) {
-    // Some compilers (e.g. Apple clang 15) cannot capture a structured
-    // binding in a lambda, so alias it with an init-capture.
     dispatch_all_types(
         dst_dtype, [&, storage_size = storage_size](auto type_tag) {
           using DstT = MLX_GET_TYPE(type_tag);
