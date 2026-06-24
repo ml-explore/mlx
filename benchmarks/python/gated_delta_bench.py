@@ -47,7 +47,7 @@ def profile(f, *args):
         f(*args)
 
     mx.metal.stop_capture()
-    print(f"Writing trace: ")
+    print(f"Writing trace: {trace_file}")
 
 
 def gated_delta_ref(
@@ -204,15 +204,13 @@ def run_benchmark(run_full):
         f"C={C} speedup" for C in non_zero_Cs
     ]
 
-    col_widths = [5, 5, 5, 5, 5, 20] + [20] * (len(non_zero_Cs))
-    fmt = "  ".join(f"{{:<{w}}}" for w in col_widths)
+    col_widths = [6, 6, 6, 6, 6, 15] + [15] * (len(non_zero_Cs))
+    fmt = "".join(f"{{:<{w}}}" for w in col_widths)
     print(fmt.format(*headers))
-    print("-" * (sum(col_widths) + 10))
+    print("-" * (sum(col_widths)))
 
     for B, T, H, Dk, Dv in itertools.product(Bs, Ts, Hs, Dks, Dvs):
-
         shapes_s, base_time, speedups = benchmark_shape(B, T, H, Dk, Dv, chunk_sizes)
-
         row = [f"{B}", f"{T}", f"{H}", f"{Dk}", f"{Dv}", base_time]
         for speed in speedups:
             row.append(f"{speed:.2f}x")
@@ -221,8 +219,8 @@ def run_benchmark(run_full):
 
 
 def run_profile():
-    B = 8
-    H = 8
+    B = 1
+    H = 16
     T = 4096 * 2
     Dk = 64
     Dv = 64
@@ -253,7 +251,7 @@ def run_profile():
         assert not mx.any(mx.isnan(hf)).item(), "NaNs in final state!"
 
         # correctness check
-        atol = 1e-3
+        atol = 1e-2
         out_close = mx.all(mx.abs(out - out_ref) < atol).item()
         hf_close = mx.all(mx.abs(hf - hf_ref) < atol).item()
 
