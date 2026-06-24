@@ -160,12 +160,13 @@ mx::array cpu_nd_array_to_mlx(
       std::move(strides),
       flags);
   if (storage_size > 0) {
-    dispatch_all_types(dst_dtype, [&](auto type_tag) {
-      using DstT = MLX_GET_TYPE(type_tag);
-      auto src = static_cast<const SrcT*>(nd_array.data());
-      auto dst = out.data<DstT>();
-      std::copy(src, src + storage_size, dst);
-    });
+    dispatch_all_types(
+        dst_dtype, [&, storage_size = storage_size](auto type_tag) {
+          using DstT = MLX_GET_TYPE(type_tag);
+          auto src = static_cast<const SrcT*>(nd_array.data());
+          auto dst = out.data<DstT>();
+          std::copy(src, src + storage_size, dst);
+        });
   }
   out.set_status(mx::array::Status::available);
   return out;
