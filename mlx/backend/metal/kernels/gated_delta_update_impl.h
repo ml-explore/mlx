@@ -65,8 +65,10 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   auto hk_idx = hv_idx / (Hv / Hk);
 
   const short qid = thread_index_in_simdgroup / 4;
-  const short fm = (qid & 4) + ((thread_index_in_simdgroup / 2) % 4);
-  const short fn = (qid & 2) * 2 + (thread_index_in_simdgroup % 2) * 2;
+  const short fm = (qid & 4) +
+      ((thread_index_in_simdgroup / 2) % 4); // row coordinate of the held tile
+  const short fn = (qid & 2) * 2 +
+      (thread_index_in_simdgroup % 2) * 2; // column coordinate of the held tile
 
   auto dv_idx = thread_position_in_grid.y * 8;
 
@@ -160,8 +162,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     }
 
     simdgroup_load(V_tile, v_ + dv_idx, Dv * Hv);
-    AT(V_tile, 0) *= beta_fm;
-    AT(V_tile, 1) *= beta_fm;
+    SCALE(V_tile, beta_fm)
     U_tile = V_tile;
     for (int iter = 0; iter < C - 1; iter++) {
       simdgroup_multiply(X_tile, KKtV_tile, U_tile);
@@ -171,7 +172,6 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     // delta = U - WS
     SUB(delta_tile, U_tile, WS_tile)
 
-    // Q_left @ S^T
     tmp_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
     QKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
     for (int kk = 0; kk < Dk; kk += 8) {
@@ -180,10 +180,12 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
 
       SCALE(Q_tile, gamma[fm])
 
+      // Q_left @ S^T
       simdgroup_multiply_accumulate(tmp_tile, Q_tile, S_tile[kk / 8], tmp_tile);
       simdgroup_multiply_accumulate(QKt_tile, Q_tile, K_tile, QKt_tile);
     }
 
+    // (Q @ K) * Gamma, in the paper they use M here but it's probably a typo.
     SCALE_TRI(QKt_tile, (1.0f / gamma[fn]), (1.0f / gamma[fn + 1]))
 
     simdgroup_multiply_accumulate(out_tile, QKt_tile, delta_tile, tmp_tile);
