@@ -1353,6 +1353,20 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(b.size, 0)
         self.assertEqual(b.shape, a.shape)
 
+        # 64-bit outputs are not supported by the Metal scatter and should
+        # raise a clean error rather than failing the Metal JIT build. The CPU
+        # and CUDA backends handle them fine.
+        idx = mx.array([[0], [1], [2], [3]])
+        for dt in (mx.int64, mx.uint64):
+            x = mx.zeros((4, 8), dtype=dt)
+            upd = mx.ones((4, 1), dtype=dt)
+            if mx.metal.is_available():
+                with self.assertRaises(ValueError):
+                    mx.eval(mx.put_along_axis(x, idx, upd, axis=1, stream=mx.gpu))
+            out = mx.put_along_axis(x, idx, upd, axis=1, stream=mx.cpu)
+            self.assertEqual(out.dtype, dt)
+            mx.eval(out)
+
     def test_split(self):
         a = mx.array([1, 2, 3])
         splits = mx.split(a, 3)
