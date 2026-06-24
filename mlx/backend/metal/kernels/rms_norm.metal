@@ -67,12 +67,14 @@ template <typename T, int N_READS = RMS_N_READS>
   out += gid * size_t(axis_size) + lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
     for (int i = 0; i < N_READS; i++) {
-      out[i] = w[w_stride * i] * static_cast<T>(thread_x[i] * local_inv_mean[0]);
+      out[i] =
+          w[w_stride * i] * static_cast<T>(thread_x[i] * local_inv_mean[0]);
     }
   } else {
     for (int i = 0; i < N_READS; i++) {
       if ((lid * N_READS + i) < axis_size) {
-        out[i] = w[w_stride * i] * static_cast<T>(thread_x[i] * local_inv_mean[0]);
+        out[i] =
+            w[w_stride * i] * static_cast<T>(thread_x[i] * local_inv_mean[0]);
       }
     }
   }
