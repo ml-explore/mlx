@@ -61,7 +61,7 @@ MLX_API std::vector<array> gated_delta_update(
     const array& gates,
     const array& beta_,
     const std::optional<array>& initial_state = std::nullopt,
-    const int C = 16,
+    const int C = 8,
     StreamOrDevice s = {});
 
 using TemplateArg = std::variant<int, bool, Dtype>;
