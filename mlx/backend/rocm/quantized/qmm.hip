@@ -3045,6 +3045,62 @@ __global__ void qmv_idot_kernel(
     out[static_cast<size_t>(row) * N + col] = static_cast<T>(acc + bsum);
 }
 
+// Dense wide-load QMV (4-bit affine, decode). One warp per output column, flat
+// full-K loop with 128-bit (uint4 = 32 nibbles) weight loads. Microbench
+// sustains ~175 GB/s on real 8MB matmuls vs qmv_tiled's ~108 (kernel-bound, not
+// size/interleaving). Activation from global (L2-cached). Gated MLX_QMV_WIDE.
+// Requires K % 32 == 0; GROUP_SIZE in {32,64,128}.
+template <typename T, typename ScaleT, int GROUP_SIZE>
+__global__ void __launch_bounds__(1024) qmv_wide_kernel(
+    const T* __restrict__ x,
+    const uint8_t* __restrict__ w,
+    const ScaleT* __restrict__ scales,
+    const ScaleT* __restrict__ biases,
+    T* __restrict__ out,
+    int M,
+    int N,
+    int K,
+    bool has_bias) {
+  int lane = threadIdx.x;
+  int col = blockIdx.x * blockDim.y + threadIdx.y;
+  int row = blockIdx.y;
+  if (row >= M || col >= N)
+    return;
+  int ng = (K + GROUP_SIZE - 1) / GROUP_SIZE;
+  int row_bytes = (K * 4 + 7) / 8;
+  const uint8_t* wr = w + static_cast<size_t>(col) * row_bytes;
+  const ScaleT* scr = scales + static_cast<size_t>(col) * ng;
+  const ScaleT* bcr = has_bias ? (biases + static_cast<size_t>(col) * ng) : nullptr;
+  const T* xr = x + static_cast<size_t>(row) * K;
+  float acc = 0.0f;
+  for (int k = lane * 32; k < K; k += 32 * 32) {
+    int g = k / GROUP_SIZE;
+    float s = load_scale_value<ScaleT, GROUP_SIZE, true>(scr[g]);
+    float b = has_bias ? static_cast<float>(bcr[g]) : 0.0f;
+    uint4 wv = *reinterpret_cast<const uint4*>(&wr[k / 2]);
+    const uint32_t* wp = reinterpret_cast<const uint32_t*>(&wv);
+    float la = 0.0f, lx = 0.0f;
+#pragma unroll
+    for (int q = 0; q < 4; ++q) {
+      uint32_t wd = wp[q];
+      int kb = k + q * 8;
+#pragma unroll
+      for (int j = 0; j < 8; ++j) {
+        float xv = static_cast<float>(xr[kb + j]);
+        la += xv * static_cast<float>((wd >> (4 * j)) & 0xF);
+        if (has_bias)
+          lx += xv;
+      }
+    }
+    acc += s * la + b * lx;
+  }
+#pragma unroll
+  for (int o = 16; o > 0; o >>= 1)
+    acc += __shfl_down(acc, o);
+  if (lane == 0)
+    out[static_cast<size_t>(row) * N + col] = static_cast<T>(acc);
+}
+
 } // namespace rocm
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -3437,6 +3493,35 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       }
       #undef LAUNCH_TILED_6BIT
     }
+    return;
+  }
+
+  // Dense wide-load (128-bit / uint4) QMV decode path (4-bit affine), gated by
+  // MLX_QMV_WIDE. Replaces qmv_tiled for decode; microbench ~175 vs ~108 GB/s.
+  static bool use_wide_qmv = (std::getenv("MLX_QMV_WIDE") != nullptr);
+  if (use_wide_qmv && bits_ == 4 && mode_ == QuantizationMode::Affine &&
+      has_bias && transpose_ && batch_count == 1 && non_batched && M >= 1 &&
+      M <= 8 && (K % 32 == 0) &&
+      (group_size_ == 32 || group_size_ == 64 || group_size_ == 128) &&
+      (x.dtype() == bfloat16 || x.dtype() == float16)) {
+    int wcols = 8;
+    dim3 wblock(32, wcols);
+    dim3 wgrid((N + wcols - 1) / wcols, M);
+#define LAUNCH_QMV_WIDE(TT, ST, GS)                                          \
+  enc.add_kernel_node(                                                       \
+      &rocm::qmv_wide_kernel<TT, ST, GS>, wgrid, wblock, 0u,                 \
+      (const TT*)x_ptr, w_ptr, (const ST*)scales_ptr, (const ST*)biases_ptr, \
+      (TT*)out_ptr, M, N, K, has_bias)
+    if (x.dtype() == bfloat16) {
+      if (group_size_ == 32) { LAUNCH_QMV_WIDE(hip_bfloat16, hip_bfloat16, 32); }
+      else if (group_size_ == 64) { LAUNCH_QMV_WIDE(hip_bfloat16, hip_bfloat16, 64); }
+      else { LAUNCH_QMV_WIDE(hip_bfloat16, hip_bfloat16, 128); }
+    } else {
+      if (group_size_ == 32) { LAUNCH_QMV_WIDE(__half, __half, 32); }
+      else if (group_size_ == 64) { LAUNCH_QMV_WIDE(__half, __half, 64); }
+      else { LAUNCH_QMV_WIDE(__half, __half, 128); }
+    }
+#undef LAUNCH_QMV_WIDE
     return;
   }
 
