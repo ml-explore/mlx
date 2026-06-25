@@ -725,23 +725,18 @@ void CommandEncoder::commit() {
     bool ok = slot != nullptr;
     if (ok) {
       device_.make_current();
-      // Update the slot's OWN persistent source graph (idle -> by-pointer safe).
+      // Re-point the exec's nodes DIRECTLY (hipGraphExecKernelNodeSetParams).
+      // These slots are force-grown (instantiated, never ExecUpdate'd), so
+      // src_nodes are the exec's own instantiation nodes -> valid. Avoids both the
+      // node-by-node rebuild AND ExecUpdate-from-a-mutated-source (which returns
+      // success but produces a faulting exec).
       for (size_t i = 0; i < build_node_params_.size(); ++i) {
-        if (hipGraphKernelNodeSetParams(
-                slot->src_nodes[i], &build_node_params_[i]) != hipSuccess) {
+        if (hipGraphExecKernelNodeSetParams(
+                slot->exec, slot->src_nodes[i], &build_node_params_[i]) !=
+            hipSuccess) {
           (void)hipGetLastError();
           ok = false;
           break;
-        }
-      }
-      if (ok) {
-        hipGraphExecUpdateResult ur;
-        hipGraphNode_t en;
-        if (hipGraphExecUpdate(slot->exec, slot->source_graph, &en, &ur) !=
-                hipSuccess ||
-            ur != hipGraphExecUpdateSuccess) {
-          (void)hipGetLastError();
-          ok = false;
         }
       }
     }
@@ -870,7 +865,6 @@ void CommandEncoder::commit() {
           to_nodes_.data(),
           from_nodes_.size()));
     }
-
     device_.make_current();
 
     hipGraphExec_t graph_exec = nullptr;
