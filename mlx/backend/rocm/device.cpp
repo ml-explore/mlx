@@ -499,14 +499,10 @@ void CommandEncoder::add_kernel_node_raw(
   add_kernel_node_kp(kernel_params);
 }
 
-void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
-  hipGraphNode_t node;
-  CHECK_HIP_ERROR(hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kp));
-  build_nodes_.push_back(node);
-  build_node_params_.push_back(kp);
-  // Key the node by its kernel FUNCTION + FULL launch dims so a reused exec is
-  // re-pointed only onto a structurally identical graph. The grid/block PRODUCT
-  // collided distinct shapes (e.g. 2097152x1x1 vs 1024x2048x1); encode each dim.
+// Key the node by its kernel FUNCTION + FULL launch dims so a reused exec is
+// re-pointed only onto a structurally identical graph. The grid/block PRODUCT
+// collided distinct shapes (e.g. 2097152x1x1 vs 1024x2048x1); encode each dim.
+std::string CommandEncoder::kernel_node_key(const hipKernelNodeParams& kp) {
   std::string key = "K";
   key += std::to_string(reinterpret_cast<std::uintptr_t>(kp.func));
   key += "_";
@@ -523,6 +519,41 @@ void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
   key += std::to_string(kp.blockDim.z);
   key += "s";
   key += std::to_string(kp.sharedMemBytes);
+  return key;
+}
+
+void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
+  // Build-once decode replay: at the first node of a decode-mode token, if the
+  // persistent source graph is already built for the (stable) decode topology,
+  // switch to param-update mode — re-point the existing source nodes instead of
+  // adding new ones; commit() then ExecUpdates a drained pooled exec from it.
+  static const bool replay_enabled = [] {
+    const char* e = std::getenv("MLX_GRAPH_REPLAY");
+    return e && (std::strcmp(e, "1") == 0 || std::strcmp(e, "on") == 0);
+  }();
+  if (replay_enabled && !replay_active_ && node_count_ == 0 &&
+      build_node_params_.empty() && use_hip_graphs() && graph_decode_mode() &&
+      !decode_key_.empty()) {
+    replay_active_ = true;
+  }
+
+  std::string key = kernel_node_key(kp);
+  if (replay_active_) {
+    // Buffer only (no AddKernelNode). Use a UNIQUE fake node handle so
+    // insert_graph_dependencies' handle-based dedup + chain edges reproduce the
+    // EXACT same topology key as the real build. commit() re-points a drained
+    // replay exec (ExecKernelNodeSetParams) or self-instantiates a new one.
+    build_node_params_.push_back(kp);
+    auto fake = reinterpret_cast<hipGraphNode_t>(
+        static_cast<std::uintptr_t>(build_node_params_.size()));
+    insert_graph_dependencies(GraphNode{fake, key});
+    return;
+  }
+
+  hipGraphNode_t node;
+  CHECK_HIP_ERROR(hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kp));
+  build_nodes_.push_back(node);
+  build_node_params_.push_back(kp);
   insert_graph_dependencies(GraphNode{node, key});
 }
 
@@ -657,6 +688,119 @@ void CommandEncoder::commit() {
   }
   temporary_ptrs_.clear();
 
+  // Multi-topology decode replay: this token was buffered (no AddKernelNode). If
+  // a drained cached exec matches this topology, re-point its params + relaunch.
+  if (use_hip_graphs() && replay_active_ && node_count_ > 0) {
+    std::string full_key = graph_nodes_key_ + ":" + graph_deps_key_;
+    auto it = replay_pool_.find(full_key);
+    ExecSlot* slot = nullptr;
+    if (it != replay_pool_.end()) {
+      for (auto& s : it->second) {
+        if (s.inflight->load(std::memory_order_acquire) == 0 &&
+            s.src_nodes.size() == build_node_params_.size()) {
+          slot = &s;
+          break;
+        }
+      }
+    }
+    bool ok = slot != nullptr;
+    if (ok) {
+      device_.make_current();
+      for (size_t i = 0; i < build_node_params_.size(); ++i) {
+        if (hipGraphExecKernelNodeSetParams(
+                slot->exec, slot->src_nodes[i], &build_node_params_[i]) !=
+            hipSuccess) {
+          (void)hipGetLastError();
+          ok = false;
+          break;
+        }
+      }
+    }
+    if (ok) {
+      // This token's arg Packs must outlive the launch (CLR keeps kernelParams
+      // by pointer); hand them to the slot, releasing the prior token's.
+      slot->packs = std::move(graph_node_args_);
+      graph_node_args_.clear();
+      auto inflight = slot->inflight;
+      inflight->store(1, std::memory_order_release);
+      add_completed_handler(
+          [inflight]() { inflight->store(0, std::memory_order_release); });
+      uint64_t my_gen = graph_current_gen();
+      graph_advance_gen();
+      CHECK_HIP_ERROR(hipGraphLaunch(slot->exec, stream_));
+      free_graph_generation_async(my_gen);
+      // Per-token reset (build_graph_ stayed empty; keep it).
+      from_nodes_.clear();
+      to_nodes_.clear();
+      graph_nodes_key_.clear();
+      graph_deps_key_.clear();
+      node_map_.clear();
+      active_deps_.clear();
+      active_outputs_.clear();
+      last_node_ = nullptr;
+      bytes_in_graph_ = 0;
+      build_nodes_.clear();
+      build_node_params_.clear();
+      replay_active_ = false;
+      node_count_ = 0;
+      worker_->commit(stream_);
+      return;
+    }
+    // All cached execs in flight (or first sight): materialize the buffered
+    // kernels into a real graph (translating the fake index-encoding edge handles)
+    // and instantiate a NEW slot — self-contained, mirroring the normal path's
+    // instantiate so we never touch its shared build state mid-flight.
+    replay_active_ = false;
+    std::vector<hipGraphNode_t> real(build_node_params_.size());
+    for (size_t i = 0; i < build_node_params_.size(); ++i) {
+      CHECK_HIP_ERROR(hipGraphAddKernelNode(
+          &real[i], build_graph_, nullptr, 0, &build_node_params_[i]));
+    }
+    std::vector<hipGraphNode_t> efrom, eto;
+    efrom.reserve(from_nodes_.size());
+    eto.reserve(to_nodes_.size());
+    for (size_t e = 0; e < from_nodes_.size(); ++e) {
+      auto fi = reinterpret_cast<std::uintptr_t>(from_nodes_[e]) - 1;
+      auto ti = reinterpret_cast<std::uintptr_t>(to_nodes_[e]) - 1;
+      if (fi < real.size() && ti < real.size() && fi != ti) {
+        efrom.push_back(real[fi]);
+        eto.push_back(real[ti]);
+      }
+    }
+    if (!efrom.empty()) {
+      CHECK_HIP_ERROR(hipGraphAddDependencies(
+          build_graph_, efrom.data(), eto.data(), efrom.size()));
+    }
+    device_.make_current();
+    hipGraphExec_t exec = nullptr;
+    CHECK_HIP_ERROR(hipGraphInstantiate(&exec, build_graph_, nullptr, nullptr, 0));
+    auto inflight = std::make_shared<std::atomic<int>>(1);
+    replay_pool_[full_key].push_back(
+        {exec, inflight, build_graph_, std::move(graph_node_args_), real});
+    graph_node_args_.clear();
+    add_completed_handler(
+        [inflight]() { inflight->store(0, std::memory_order_release); });
+    uint64_t mg = graph_current_gen();
+    graph_advance_gen();
+    CHECK_HIP_ERROR(hipGraphLaunch(exec, stream_));
+    free_graph_generation_async(mg);
+    CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
+    from_nodes_.clear();
+    to_nodes_.clear();
+    graph_nodes_key_.clear();
+    graph_deps_key_.clear();
+    node_map_.clear();
+    active_deps_.clear();
+    active_outputs_.clear();
+    last_node_ = nullptr;
+    bytes_in_graph_ = 0;
+    build_nodes_.clear();
+    build_node_params_.clear();
+    node_count_ = 0;
+    worker_->commit(stream_);
+    return;
+  }
+
   if (use_hip_graphs() && node_count_ > 0) {
     if (!from_nodes_.empty()) {
       CHECK_HIP_ERROR(hipGraphAddDependencies(
@@ -766,6 +910,18 @@ void CommandEncoder::commit() {
     // clear inflight so the slot can be reused next token.
     add_completed_handler(
         [inflight]() { inflight->store(0, std::memory_order_release); });
+
+    // Lock in the stable decode topology key once it recurs on two consecutive
+    // tokens (the first decode token after prefill differs). Thereafter, matching
+    // tokens replay (build-once) — re-point a drained slot's params, no rebuild.
+    if (graph_decode_mode() && used_slot && decode_key_.empty()) {
+      std::string fk = graph_nodes_key_ + ":" + graph_deps_key_;
+      if (fk == pending_decode_key_) {
+        decode_key_ = fk;
+      } else {
+        pending_decode_key_ = std::move(fk);
+      }
+    }
 
     // Reset build state for the next chunk.
     from_nodes_.clear();

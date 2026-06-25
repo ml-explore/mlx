@@ -231,6 +231,28 @@ class CommandEncoder {
   // Current build's kernel nodes + their params, in insertion order.
   std::vector<hipGraphNode_t> build_nodes_;
   std::vector<hipKernelNodeParams> build_node_params_;
+
+  // --- Build-once decode-graph replay ---
+  // In decode mode the single-token forward has ONE stable topology (proven by
+  // ExecUpdate succeeding every token). After the first build caches an exec, we
+  // stop rebuilding the graph node-by-node: subsequent tokens buffer the kernel
+  // params and only re-point the cached exec's nodes (hipGraphExecKernelNodeSetParams)
+  // then relaunch. Eliminates ~1000 hipGraphAddKernelNode/token.
+  // Build-once decode replay via a PERSISTENT source graph: the decode topology
+  // is stable, so we build its source graph (build_graph_/build_nodes_) ONCE, then
+  // each token update the source nodes' params with hipGraphKernelNodeSetParams
+  // (no AddKernelNode rebuild) and hipGraphExecUpdate a drained pooled exec from
+  // it (the proven path). replay_active_ marks a token being param-updated.
+  bool replay_active_{false};
+  std::string decode_key_;          // confirmed-stable decode topology key
+  std::string pending_decode_key_;  // last decode build's key (stability check)
+  static std::string kernel_node_key(const hipKernelNodeParams& kp);
+  // Replay execs are instantiated by us (src_nodes are the instantiation graph's
+  // nodes), so hipGraphExecKernelNodeSetParams is valid — unlike the ExecUpdate-
+  // managed exec_pool_ slots whose node handles bind to a stale graph, and unlike
+  // a persistent source graph (ROCm stores kernelParams by pointer, so one source
+  // can't safely feed multiple pooled execs).
+  std::unordered_map<std::string, std::vector<ExecSlot>> replay_pool_;
 };
 
 class Device {
