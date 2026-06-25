@@ -358,9 +358,15 @@ def sparse(
 ) -> Callable[[mx.array], mx.array]:
     r"""An initializer that returns a sparse matrix.
 
+    Sparsity is applied along each row: every row has the same fraction of its
+    entries set to zero. With a weight matrix applied as ``x @ w.T``, this
+    limits each output feature to at most a ``1 - sparsity`` fraction of the
+    input features, following the sparse initialization of Martens, J. (2010),
+    "Deep learning via Hessian-free optimization".
+
     Args:
-        sparsity (float): The fraction of elements in each column to be set to
-        zero.
+        sparsity (float): The fraction of elements in each row to be set to
+          zero.
         mean (float, optional): Mean of the normal distribution. Default:
           ``0.0``.
         std (float, optional): Standard deviation of the normal distribution.
@@ -376,8 +382,8 @@ def sparse(
 
         >>> init_fn = nn.init.sparse(sparsity=0.5)
         >>> init_fn(mx.zeros((2, 2)))
-        array([[-1.91187, -0.117483],
-       [0, 0]], dtype=float32)
+        array([[-1.91187, 0],
+       [0, -0.117483]], dtype=float32)
     """
 
     def initializer(a: mx.array) -> mx.array:
@@ -385,16 +391,16 @@ def sparse(
             raise ValueError("Only tensors with 2 dimensions are supported")
 
         rows, cols = a.shape
-        num_zeros = int(math.ceil(sparsity * rows))
+        num_zeros = int(math.ceil(sparsity * cols))
 
-        # Zero out `num_zeros` random entries in each column, matching the
-        # documented "fraction of elements in each column" contract. Sorting a
-        # per-column random key (axis=0) picks the zeroed rows independently for
-        # every column.
-        order = mx.argsort(mx.random.uniform(shape=a.shape), axis=0)
+        # Zero out `num_zeros` random entries in each row, so every row (output
+        # feature) drops the same fraction of its input connections. Sorting a
+        # per-row random key (axis=1) picks the zeroed columns independently for
+        # every row.
+        order = mx.argsort(mx.random.uniform(shape=a.shape), axis=1)
         a = mx.random.normal(shape=a.shape, scale=std, loc=mean, dtype=dtype)
 
-        a[order[:num_zeros, :], mx.arange(cols).reshape(1, cols)] = 0
+        a[mx.arange(rows).reshape(rows, 1), order[:, :num_zeros]] = 0
 
         return a
 

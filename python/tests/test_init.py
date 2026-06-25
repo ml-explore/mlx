@@ -107,19 +107,18 @@ class TestInit(mlx_tests.MLXTestCase):
             with self.assertRaises(ValueError):
                 result = initializer(mx.zeros((1,)))
 
-    def test_sparse_zeros_per_column(self):
-        # The documented contract (matching PyTorch's nn.init.sparse_) is that
-        # `sparsity` is the fraction of elements in each *column* set to zero,
-        # i.e. every column must contain exactly ceil(sparsity * rows) zeros
-        # regardless of the matrix shape. A per-row implementation breaks this
-        # for non-square inputs.
-        for sparsity, shape in [(0.5, (10, 4)), (0.3, (10, 5)), (0.5, (2, 2))]:
-            rows, _ = shape
-            expected = int(math.ceil(sparsity * rows))
+    def test_sparse_zeros_per_row(self):
+        # Sparsity is applied along each row: every row drops exactly
+        # ceil(sparsity * cols) of its entries, independent of matrix shape, so
+        # each output feature (a row of `w` used as `x @ w.T`) keeps the same
+        # number of input connections.
+        for sparsity, shape in [(0.5, (4, 10)), (0.3, (5, 10)), (0.5, (2, 2))]:
+            _, cols = shape
+            expected = int(math.ceil(sparsity * cols))
             result = init.sparse(sparsity)(mx.zeros(shape))
-            zeros_per_col = mx.sum(result == 0, axis=0)
+            zeros_per_row = mx.sum(result == 0, axis=1)
             with self.subTest(shape=shape, sparsity=sparsity):
-                self.assertTrue(mx.all(zeros_per_col == expected).item())
+                self.assertTrue(mx.all(zeros_per_row == expected).item())
 
     def test_orthogonal(self):
         initializer = init.orthogonal(gain=1.0, dtype=mx.float32)
