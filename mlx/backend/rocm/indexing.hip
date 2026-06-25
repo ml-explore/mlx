@@ -1535,4 +1535,20 @@ void gpu_kv_pos_set(array& pos, int v) {
   });
 }
 
+// Device->device int32 scalar copy. Feeds the freshly-sampled token (on a
+// transient arena address) into the fixed-address graph-decode input buffer so
+// the recorded graph's embedding gather reads the new token without the buffer
+// being reallocated. Runs on-stream, so it orders after the producing forward.
+__global__ void _scalar_copy_i32(int* dst, const int* src) { dst[0] = src[0]; }
+void gpu_scalar_copy_i32(array& dst, array& src) {
+  auto& enc = rocm::get_command_encoder(default_stream(default_device()));
+  int* d = gpu_ptr<int>(dst);
+  int* s = gpu_ptr<int>(src);
+  enc.set_input_array(src);
+  enc.set_output_array(dst);
+  enc.launch_kernel([d, s](hipStream_t st) {
+    hipLaunchKernelGGL(_scalar_copy_i32, dim3(1), dim3(1), 0, st, d, s);
+  });
+}
+
 } // namespace mlx::core
