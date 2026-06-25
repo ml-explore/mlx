@@ -253,6 +253,32 @@ class CommandEncoder {
   // a persistent source graph (ROCm stores kernelParams by pointer, so one source
   // can't safely feed multiple pooled execs).
   std::unordered_map<std::string, std::vector<ExecSlot>> replay_pool_;
+
+ public:
+  // --- Pure-relaunch decode (deterministic-arena) ---
+  // With the decode arena, every per-token buffer address is identical, so a
+  // graph built once is bit-valid on every relaunch — NO SetParams, NO
+  // ExecUpdate. record: token's commits instantiate as normal but each exec is
+  // kept and appended to the chain. replay: each commit relaunches the next
+  // recorded exec verbatim and discards the freshly-built nodes. On any chunk
+  // mismatch we disable pure mode and fall back to the normal build path.
+  void decode_pure_begin_record();
+  void decode_pure_begin_replay();
+  void decode_pure_end();
+  bool decode_pure_recording() const { return decode_pure_mode_ == 1; }
+  bool decode_pure_replaying() const { return decode_pure_mode_ == 2; }
+  size_t decode_pure_chain_len() const { return decode_pure_chain_.size(); }
+
+ private:
+  struct PureExec {
+    hipGraphExec_t exec{nullptr};
+    hipGraph_t graph{nullptr};                      // source, owned for exec life
+    std::vector<std::shared_ptr<void>> packs;       // kernarg storage, by-pointer
+  };
+  int decode_pure_mode_{0};      // 0=off 1=record 2=replay
+  size_t decode_pure_idx_{0};    // commit index within the current replay token
+  std::vector<PureExec> decode_pure_chain_;
+  bool commit_pure();            // handle commit() in pure mode; false => fall through
 };
 
 class Device {

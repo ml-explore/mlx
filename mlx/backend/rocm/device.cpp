@@ -694,11 +694,109 @@ bool CommandEncoder::needs_commit() {
       ((bytes_in_graph_ >> 20) > static_cast<size_t>(max_mb_per_graph_));
 }
 
+void CommandEncoder::decode_pure_end() {
+  decode_pure_mode_ = 0;
+  decode_pure_idx_ = 0;
+  for (auto& pe : decode_pure_chain_) {
+    if (pe.exec) hipGraphExecDestroy(pe.exec);
+    if (pe.graph) hipGraphDestroy(pe.graph);
+  }
+  decode_pure_chain_.clear();
+}
+
+void CommandEncoder::decode_pure_begin_record() {
+  decode_pure_end();   // drop any prior chain
+  decode_pure_mode_ = 1;
+  decode_pure_idx_ = 0;
+}
+
+void CommandEncoder::decode_pure_begin_replay() {
+  decode_pure_mode_ = 2;
+  decode_pure_idx_ = 0;
+}
+
+// Reset the per-chunk build accounting (mirrors the tail of the normal commit
+// path). recreate_graph=true destroys and re-creates build_graph_ (used on
+// replay, where the forward populated it with nodes we discard).
+bool CommandEncoder::commit_pure() {
+  if (decode_pure_mode_ == 0 || !use_hip_graphs() || node_count_ == 0) {
+    return false;
+  }
+  device_.make_current();
+
+  auto reset_build = [&](bool recreate_graph) {
+    if (recreate_graph) {
+      hipGraphDestroy(build_graph_);
+      CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));
+    }
+    from_nodes_.clear();
+    to_nodes_.clear();
+    graph_nodes_key_.clear();
+    graph_deps_key_.clear();
+    node_map_.clear();
+    active_deps_.clear();
+    active_outputs_.clear();
+    last_node_ = nullptr;
+    bytes_in_graph_ = 0;
+    build_nodes_.clear();
+    build_node_params_.clear();
+    node_count_ = 0;
+  };
+
+  if (decode_pure_mode_ == 2) {
+    // REPLAY: relaunch the next recorded exec verbatim; discard the freshly
+    // built nodes. The deterministic arena guarantees this token's buffer
+    // addresses match the recorded exec's baked pointers.
+    if (decode_pure_idx_ >= decode_pure_chain_.size()) {
+      decode_pure_mode_ = 0;   // topology drift (more commits than recorded)
+      return false;            // fall back to the normal build path
+    }
+    auto& pe = decode_pure_chain_[decode_pure_idx_++];
+    graph_node_args_.clear();  // this token's packs are unused
+    uint64_t mg = graph_current_gen();
+    graph_advance_gen();
+    CHECK_HIP_ERROR(hipGraphLaunch(pe.exec, stream_));
+    free_graph_generation_async(mg);
+    reset_build(/*recreate_graph=*/true);
+    worker_->commit(stream_);
+    return true;
+  }
+
+  // RECORD: nodes were added to build_graph_ via the normal add path. Add the
+  // dependency edges, instantiate, launch, and KEEP the exec + its source graph
+  // + kernarg packs alive in the chain. A fresh build_graph_ is made for the
+  // next chunk (the recorded exec owns this one).
+  if (!from_nodes_.empty()) {
+    CHECK_HIP_ERROR(hipGraphAddDependencies(
+        build_graph_, from_nodes_.data(), to_nodes_.data(),
+        from_nodes_.size()));
+  }
+  hipGraphExec_t exec = nullptr;
+  CHECK_HIP_ERROR(hipGraphInstantiate(&exec, build_graph_, nullptr, nullptr, 0));
+  uint64_t mg = graph_current_gen();
+  graph_advance_gen();
+  CHECK_HIP_ERROR(hipGraphLaunch(exec, stream_));
+  free_graph_generation_async(mg);
+  decode_pure_chain_.push_back(
+      PureExec{exec, build_graph_, std::move(graph_node_args_)});
+  graph_node_args_.clear();
+  CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));  // fresh for next chunk
+  reset_build(/*recreate_graph=*/false);
+  worker_->commit(stream_);
+  return true;
+}
+
 void CommandEncoder::commit() {
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
   temporary_ptrs_.clear();
+
+  // Pure-relaunch decode (deterministic arena): record/replay the per-token
+  // graph chain without any SetParams/ExecUpdate. Returns true when handled.
+  if (commit_pure()) {
+    return;
+  }
 
   // Build-once decode replay: this token was buffered (no AddKernelNode). If a
   // DRAINED pooled exec for the stable decode topology exists, re-point its
@@ -1117,3 +1215,23 @@ void clear_all_encoders() {
 }
 
 } // namespace mlx::core::rocm
+
+// --- Pure-relaunch decode bridge (called from the engine's decode loop) ------
+namespace mlx::core {
+void decode_pure_record() {
+  rocm::get_command_encoder(default_stream(default_device()))
+      .decode_pure_begin_record();
+}
+void decode_pure_replay() {
+  rocm::get_command_encoder(default_stream(default_device()))
+      .decode_pure_begin_replay();
+}
+void decode_pure_off() {
+  rocm::get_command_encoder(default_stream(default_device()))
+      .decode_pure_end();
+}
+size_t decode_pure_chain_len() {
+  return rocm::get_command_encoder(default_stream(default_device()))
+      .decode_pure_chain_len();
+}
+} // namespace mlx::core
