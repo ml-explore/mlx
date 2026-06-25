@@ -99,20 +99,15 @@ __global__ void rope_single_freqs(
       in, out, *offset, inv_freq, scale, stride, pos, dims);
 }
 
-template <
-    typename T,
-    bool traditional,
-    bool forward,
-    bool hs_transpose,
-    int N = 4>
+template <typename T, bool traditional, bool forward, int N = 4>
 __device__ void rope_impl(
     const T* in,
     T* out,
     const int* offset,
     float inv_freq,
     float scale,
-    const cuda::std::array<int64_t, 3> strides,
-    const cuda::std::array<int64_t, 3> out_strides,
+    const cuda::std::array<int64_t, 4> strides,
+    const cuda::std::array<int64_t, 4> out_strides,
     int64_t offset_stride,
     int n_head,
     uint3 pos,
@@ -122,40 +117,31 @@ __device__ void rope_impl(
   auto batch_idx = (pos.z * N) / n_head_up;
   auto batch_offset = offset[batch_idx * offset_stride];
   float L = scale * static_cast<float>(pos.y + batch_offset);
-  auto mat_idx = batch_idx * n_head + head_idx;
 
   // Compute costheta, sintheta
   float theta = L * inv_freq;
   float costheta = cos(theta);
   float sintheta = sin(theta);
 
-  size_t in_batch_head;
-  size_t out_batch_head;
-  if (hs_transpose) {
-    int64_t in_batch_stride = static_cast<int64_t>(dims.y) * strides[1];
-    int64_t out_batch_stride = static_cast<int64_t>(dims.y) * out_strides[1];
-    in_batch_head = batch_idx * in_batch_stride + head_idx * strides[0];
-    out_batch_head = batch_idx * out_batch_stride + head_idx * out_strides[0];
-  } else {
-    in_batch_head = mat_idx * strides[0];
-    out_batch_head = mat_idx * out_strides[0];
-  }
+  size_t in_batch_head = batch_idx * strides[0] + head_idx * strides[1];
+  size_t out_batch_head =
+      batch_idx * out_strides[0] + head_idx * out_strides[1];
 
   // Compute the input and output indices
   size_t in_index_1, in_index_2;
   size_t out_index_1, out_index_2;
   if (traditional) {
     out_index_1 =
-        2 * pos.x * out_strides[2] + pos.y * out_strides[1] + out_batch_head;
-    out_index_2 = out_index_1 + out_strides[2];
-    in_index_1 = 2 * pos.x * strides[2] + pos.y * strides[1] + in_batch_head;
-    in_index_2 = in_index_1 + strides[2];
+        2 * pos.x * out_strides[3] + pos.y * out_strides[2] + out_batch_head;
+    out_index_2 = out_index_1 + out_strides[3];
+    in_index_1 = 2 * pos.x * strides[3] + pos.y * strides[2] + in_batch_head;
+    in_index_2 = in_index_1 + strides[3];
   } else {
     out_index_1 =
-        pos.x * out_strides[2] + pos.y * out_strides[1] + out_batch_head;
-    out_index_2 = out_index_1 + dims.x * out_strides[2];
-    in_index_1 = pos.x * strides[2] + pos.y * strides[1] + in_batch_head;
-    in_index_2 = in_index_1 + dims.x * strides[2];
+        pos.x * out_strides[3] + pos.y * out_strides[2] + out_batch_head;
+    out_index_2 = out_index_1 + dims.x * out_strides[3];
+    in_index_1 = pos.x * strides[3] + pos.y * strides[2] + in_batch_head;
+    in_index_2 = in_index_1 + dims.x * strides[3];
   }
   for (int i = 0; i < N && head_idx + i < n_head; ++i) {
     // Read and write the output
@@ -172,22 +158,22 @@ __device__ void rope_impl(
     }
     out[out_index_1] = static_cast<T>(rx1);
     out[out_index_2] = static_cast<T>(rx2);
-    in_index_1 += strides[0];
-    in_index_2 += strides[0];
-    out_index_1 += out_strides[0];
-    out_index_2 += out_strides[0];
+    in_index_1 += strides[1];
+    in_index_2 += strides[1];
+    out_index_1 += out_strides[1];
+    out_index_2 += out_strides[1];
   }
 }
 
-template <typename T, bool traditional, bool forward, bool hs_transpose>
+template <typename T, bool traditional, bool forward>
 __global__ void rope(
     const T* in,
     T* out,
     const int32_t* offset,
     float scale,
     float base,
-    const __grid_constant__ cuda::std::array<int64_t, 3> strides,
-    const __grid_constant__ cuda::std::array<int64_t, 3> out_strides,
+    const __grid_constant__ cuda::std::array<int64_t, 4> strides,
+    const __grid_constant__ cuda::std::array<int64_t, 4> out_strides,
     int64_t offset_stride,
     int n_head,
     uint3 dims) {
@@ -201,7 +187,7 @@ __global__ void rope(
 
   float d = static_cast<float>(pos.x) / static_cast<float>(dims.x);
   float inv_freq = exp2(-d * base);
-  rope_impl<T, traditional, forward, hs_transpose>(
+  rope_impl<T, traditional, forward>(
       in,
       out,
       offset,
@@ -215,7 +201,7 @@ __global__ void rope(
       dims);
 }
 
-template <typename T, bool traditional, bool forward, bool hs_transpose>
+template <typename T, bool traditional, bool forward>
 __global__ void rope_freqs(
     const T* in,
     T* out,
@@ -223,8 +209,8 @@ __global__ void rope_freqs(
     const float* freqs,
     float scale,
     float base,
-    const __grid_constant__ cuda::std::array<int64_t, 3> strides,
-    const __grid_constant__ cuda::std::array<int64_t, 3> out_strides,
+    const __grid_constant__ cuda::std::array<int64_t, 4> strides,
+    const __grid_constant__ cuda::std::array<int64_t, 4> out_strides,
     int64_t offset_stride,
     int n_head,
     uint3 dims,
@@ -238,7 +224,7 @@ __global__ void rope_freqs(
   }
 
   float inv_freq = 1.0 / freqs[freq_stride * pos.x];
-  rope_impl<T, traditional, forward, hs_transpose>(
+  rope_impl<T, traditional, forward>(
       in,
       out,
       offset,
@@ -271,94 +257,61 @@ void RoPE::eval_gpu(
   auto& offset = inputs[1];
   auto& out = outputs[0];
 
-  cuda::std::array<int64_t, 3> strides;
-  cuda::std::array<int64_t, 3> out_strides;
+  cuda::std::array<int64_t, 4> strides;
+  cuda::std::array<int64_t, 4> out_strides;
   bool donated = false;
-  bool head_seq_transpose = false;
   int ndim = in.ndim();
 
   int B = in.shape(0);
   int T = in.shape(-2);
   int D = in.shape(-1);
   size_t mat_size = T * D;
-  int dispatch_ndim = ndim;
-  while (in.shape(-dispatch_ndim) == 1 && dispatch_ndim > 3) {
-    dispatch_ndim--;
-  }
 
   int N = 1;
   for (int i = 1; i < (ndim - 2); ++i) {
     N *= in.shape(i);
   }
 
-  // We apply rope to less that the whole vector so copy to output and then
-  // apply in-place.
-  if (dims_ < D) {
-    donated = true;
-    auto ctype =
-        (in.flags().row_contiguous) ? CopyType::Vector : CopyType::General;
-    copy_gpu(in, out, ctype, s);
-    strides[0] = mat_size;
-    strides[1] = out.strides()[ndim - 2];
-    strides[2] = out.strides()[ndim - 1];
-  }
+  // if input has < 4 dims or row_contiguous: if we can donate the input, reuse
+  // the buffer if in is not donatable, we allocate a new buffer for the output
+  // with the same strides as input if input has > 4 dims and is not
+  // row_contigous, we copy the input to a new buffer (we should not be here
+  // often) in case it is partial rotation: we reuse if input is donatable and
+  // copy if it is not donatable
+  bool partial = dims_ < D;
+  bool layout_ok = ndim <= 4 || in.flags().row_contiguous;
 
-  // Either copy or apply in-place
-  else if (in.flags().row_contiguous) {
+  if (layout_ok) {
     if (in.is_donatable()) {
       donated = true;
       out.copy_shared_buffer(in);
-    } else {
-      out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    }
-    strides[0] = mat_size;
-    strides[1] = in.strides()[ndim - 2];
-    strides[2] = in.strides()[ndim - 1];
-  } else if (dispatch_ndim == 3) {
-    // Handle non-contiguous 3D inputs
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    strides[0] = in.strides()[ndim - 3];
-    strides[1] = in.strides()[ndim - 2];
-    strides[2] = in.strides()[ndim - 1];
-  } else if (
-      ndim == 4 &&
-      // batch dim is regularly strided
-      in.strides()[0] == static_cast<int64_t>(T) * N * D &&
-      // sequence and head dimensions are transposed (x.swapaxes(1, 2))
-      in.strides()[1] == D && in.strides()[2] == static_cast<int64_t>(N) * D &&
-      in.strides()[3] == 1) {
-    head_seq_transpose = true;
-    if (in.is_donatable()) {
-      donated = true;
-      out.copy_shared_buffer(in);
-    } else {
+    } else if (!partial) {
       out.set_data(
           cu::malloc_async(in.data_size() * in.itemsize(), encoder),
           in.data_size(),
           in.strides(),
           in.flags());
+    } else {
+      donated = true;
+      auto ctype =
+          in.flags().row_contiguous ? CopyType::Vector : CopyType::General;
+      copy_gpu(in, out, ctype, s);
     }
-    strides[0] = in.strides()[1];
-    strides[1] = in.strides()[2];
-    strides[2] = in.strides()[3];
   } else {
-    // Copy non-contiguous > 3D inputs into the output and treat
-    // input as donated
     donated = true;
     copy_gpu(in, out, CopyType::General, s);
-    strides[0] = mat_size;
-    strides[1] = out.strides()[ndim - 2];
-    strides[2] = out.strides()[ndim - 1];
   }
-  if (head_seq_transpose) {
-    out_strides[0] = strides[0];
-    out_strides[1] = strides[1];
-    out_strides[2] = strides[2];
-  } else {
-    out_strides[0] = mat_size;
-    out_strides[1] = out.strides()[ndim - 2];
-    out_strides[2] = out.strides()[ndim - 1];
-  }
+  const auto& src_strides = donated ? out.strides() : in.strides();
+  strides[0] = src_strides[0];
+  strides[1] = src_strides[ndim - 3];
+  strides[2] = src_strides[ndim - 2];
+  strides[3] = src_strides[ndim - 1];
+
+  const auto& dst_strides = out.strides();
+  out_strides[0] = dst_strides[0];
+  out_strides[1] = dst_strides[ndim - 3];
+  out_strides[2] = dst_strides[ndim - 2];
+  out_strides[3] = dst_strides[ndim - 1];
 
   // Some flags to help us dispatch below
   bool single = in.flags().row_contiguous && B == 1 && T == 1;
@@ -374,100 +327,91 @@ void RoPE::eval_gpu(
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     dispatch_bool(traditional_, [&](auto traditional) {
       dispatch_bool(forward_, [&](auto forward) {
-        dispatch_bool(head_seq_transpose, [&](auto hs_transpose) {
-          if (single && !with_freqs) {
-            auto kernel =
-                cu::rope_single<DataType, traditional.value, forward.value>;
-            uint2 dims = make_uint2(dims_ / 2, N);
-            auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
-            encoder.add_kernel_node(
-                kernel,
-                grid,
-                block,
-                gpu_ptr<DataType>(donated ? out : in),
-                gpu_ptr<DataType>(out),
-                gpu_ptr<int32_t>(offset),
-                scale_,
-                std::log2(base_),
-                mat_size,
-                dims);
-          } else if (single) {
-            auto kernel = cu::
-                rope_single_freqs<DataType, traditional.value, forward.value>;
-            uint2 dims = make_uint2(dims_ / 2, N);
-            auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
-            encoder.add_kernel_node(
-                kernel,
-                grid,
-                block,
-                gpu_ptr<DataType>(donated ? out : in),
-                gpu_ptr<DataType>(out),
-                gpu_ptr<int32_t>(offset),
-                gpu_ptr<float>(inputs[2]),
-                scale_,
-                mat_size,
-                dims,
-                inputs[2].strides(0));
-          } else if (with_freqs) {
-            auto kernel = cu::rope_freqs<
-                DataType,
-                traditional.value,
-                forward.value,
-                hs_transpose.value>;
-            int n_per_thread = 4;
-            uint32_t dimz = B * ((N + n_per_thread - 1) / n_per_thread);
-            uint3 dims = make_uint3(dims_ / 2, T, dimz);
-            auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
-            int64_t offset_stride = 0;
-            if (inputs[1].ndim() > 0) {
-              offset_stride = inputs[1].strides()[0];
-            }
-            encoder.add_kernel_node(
-                kernel,
-                grid,
-                block,
-                gpu_ptr<DataType>(donated ? out : in),
-                gpu_ptr<DataType>(out),
-                gpu_ptr<int32_t>(offset),
-                gpu_ptr<float>(inputs[2]),
-                scale_,
-                std::log2(base_),
-                strides,
-                out_strides,
-                offset_stride,
-                N,
-                dims,
-                inputs[2].strides(0));
-          } else {
-            auto kernel = cu::rope<
-                DataType,
-                traditional.value,
-                forward.value,
-                hs_transpose.value>;
-            int n_per_thread = 4;
-            uint32_t dimz = B * ((N + n_per_thread - 1) / n_per_thread);
-            uint3 dims = make_uint3(dims_ / 2, T, dimz);
-            auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
-            int64_t offset_stride = 0;
-            if (inputs[1].ndim() > 0) {
-              offset_stride = inputs[1].strides()[0];
-            }
-            encoder.add_kernel_node(
-                kernel,
-                grid,
-                block,
-                gpu_ptr<DataType>(donated ? out : in),
-                gpu_ptr<DataType>(out),
-                gpu_ptr<int32_t>(offset),
-                scale_,
-                std::log2(base_),
-                strides,
-                out_strides,
-                offset_stride,
-                N,
-                dims);
+        if (single && !with_freqs) {
+          auto kernel =
+              cu::rope_single<DataType, traditional.value, forward.value>;
+          uint2 dims = make_uint2(dims_ / 2, N);
+          auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              gpu_ptr<DataType>(donated ? out : in),
+              gpu_ptr<DataType>(out),
+              gpu_ptr<int32_t>(offset),
+              scale_,
+              std::log2(base_),
+              mat_size,
+              dims);
+        } else if (single) {
+          auto kernel =
+              cu::rope_single_freqs<DataType, traditional.value, forward.value>;
+          uint2 dims = make_uint2(dims_ / 2, N);
+          auto [grid, block] = get_grid_and_block(dims.x, dims.y, 1);
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              gpu_ptr<DataType>(donated ? out : in),
+              gpu_ptr<DataType>(out),
+              gpu_ptr<int32_t>(offset),
+              gpu_ptr<float>(inputs[2]),
+              scale_,
+              mat_size,
+              dims,
+              inputs[2].strides(0));
+        } else if (with_freqs) {
+          auto kernel =
+              cu::rope_freqs<DataType, traditional.value, forward.value>;
+          int n_per_thread = 4;
+          uint32_t dimz = B * ((N + n_per_thread - 1) / n_per_thread);
+          uint3 dims = make_uint3(dims_ / 2, T, dimz);
+          auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
+          int64_t offset_stride = 0;
+          if (inputs[1].ndim() > 0) {
+            offset_stride = inputs[1].strides()[0];
           }
-        });
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              gpu_ptr<DataType>(donated ? out : in),
+              gpu_ptr<DataType>(out),
+              gpu_ptr<int32_t>(offset),
+              gpu_ptr<float>(inputs[2]),
+              scale_,
+              std::log2(base_),
+              strides,
+              out_strides,
+              offset_stride,
+              N,
+              dims,
+              inputs[2].strides(0));
+        } else {
+          auto kernel = cu::rope<DataType, traditional.value, forward.value>;
+          int n_per_thread = 4;
+          uint32_t dimz = B * ((N + n_per_thread - 1) / n_per_thread);
+          uint3 dims = make_uint3(dims_ / 2, T, dimz);
+          auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
+          int64_t offset_stride = 0;
+          if (inputs[1].ndim() > 0) {
+            offset_stride = inputs[1].strides()[0];
+          }
+          encoder.add_kernel_node(
+              kernel,
+              grid,
+              block,
+              gpu_ptr<DataType>(donated ? out : in),
+              gpu_ptr<DataType>(out),
+              gpu_ptr<int32_t>(offset),
+              scale_,
+              std::log2(base_),
+              strides,
+              out_strides,
+              offset_stride,
+              N,
+              dims);
+        }
       });
     });
   });
