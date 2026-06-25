@@ -1507,4 +1507,32 @@ void MaskedScatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 #undef LAUNCH_MASKED_SCATTER
 }
 
+// --- Device-position scalar for capture-once HIP-graph decode ---
+// The decode position lives in a fixed-address [1] int32 device buffer. The
+// captured graph bakes that address; RoPE / causal-mask / KV-write read it
+// device-side, so they advance every replay. The position is advanced IN PLACE
+// (no realloc -> address stays valid) by these raw kernels, loop-owned (called
+// between replays, never inside the captured graph — an in-graph pos++ races the
+// readers as a write-after-read hazard).
+__global__ void _kv_pos_inc(int* p, int delta) { p[0] += delta; }
+void gpu_kv_pos_increment(array& pos, int delta) {
+  auto& enc = rocm::get_command_encoder(default_stream(default_device()));
+  int* p = gpu_ptr<int>(pos);
+  enc.set_input_array(pos);
+  enc.set_output_array(pos);
+  enc.launch_kernel([p, delta](hipStream_t s) {
+    hipLaunchKernelGGL(_kv_pos_inc, dim3(1), dim3(1), 0, s, p, delta);
+  });
+}
+
+__global__ void _kv_pos_set(int* p, int v) { p[0] = v; }
+void gpu_kv_pos_set(array& pos, int v) {
+  auto& enc = rocm::get_command_encoder(default_stream(default_device()));
+  int* p = gpu_ptr<int>(pos);
+  enc.set_output_array(pos);
+  enc.launch_kernel([p, v](hipStream_t s) {
+    hipLaunchKernelGGL(_kv_pos_set, dim3(1), dim3(1), 0, s, p, v);
+  });
+}
+
 } // namespace mlx::core
