@@ -3048,8 +3048,8 @@ __global__ void qmv_idot_kernel(
 // Dense wide-load QMV (4-bit affine, decode). One warp per output column, flat
 // full-K loop with 128-bit (uint4 = 32 nibbles) weight loads. Microbench
 // sustains ~175 GB/s on real 8MB matmuls vs qmv_tiled's ~108 (kernel-bound, not
-// size/interleaving). Activation from global (L2-cached). Gated MLX_QMV_WIDE.
-// Requires K % 32 == 0; GROUP_SIZE in {32,64,128}.
+// size/interleaving). Activation from global (L2-cached). Default on; opt out
+// with MLX_QMV_NO_WIDE. Requires K % 32 == 0; GROUP_SIZE in {32,64,128}.
 template <typename T, typename ScaleT, int GROUP_SIZE>
 __global__ void __launch_bounds__(1024) qmv_wide_kernel(
     const T* __restrict__ x,
@@ -5176,7 +5176,8 @@ __global__ void __launch_bounds__(1024) gather_qmv_idot_warp_shared_kernel(
 // 128-bit (uint4 = 32 nibbles) weight loads instead of the per-group 32-bit
 // loop, to raise effective gather bandwidth (microbench: R9700 77->398 GB/s).
 // Activation read from global (tiny, L2-cached). Per-group affine applied
-// inline. Requires K % 32 == 0; GROUP_SIZE in {32,64,128}. Gated MLX_QMV_WIDE.
+// inline. Requires K % 32 == 0; GROUP_SIZE in {32,64,128}. Default on; opt out
+// with MLX_QMV_NO_WIDE.
 template <typename T, typename ScaleT, int GROUP_SIZE>
 __global__ void __launch_bounds__(1024) gather_qmv_wide_kernel(
     const T* __restrict__ x,
