@@ -1339,6 +1339,28 @@ class TestAutograd(mlx_tests.MLXTestCase):
         # Check against hand-computed vjps
         self.assertTrue(mx.allclose(vjps[0], expected))
 
+    def test_complex_unary_vjps(self):
+        # For a holomorphic f the vjp is cotangent * conj(f'(z)); these ops used
+        # to delegate to their jvp and drop the conjugate for complex inputs.
+        mx.random.seed(0)
+        z = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        cotangent = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        z = mx.where(abs(z) < 1e-3, 1e-3 + 0j, z)
+
+        ops = {
+            mx.square: lambda x: 2 * x,
+            mx.sin: mx.cos,
+            mx.sinh: mx.cosh,
+            mx.cosh: mx.sinh,
+            mx.tan: lambda x: 1 / mx.cos(x) ** 2,
+            mx.tanh: lambda x: 1 - mx.tanh(x) ** 2,
+            mx.log1p: lambda x: 1 / (1 + x),
+        }
+        for fn, deriv in ops.items():
+            _, (vjp,) = mx.vjp(fn, [z], [cotangent])
+            expected = cotangent * mx.conj(deriv(z))
+            self.assertTrue(mx.allclose(vjp, expected, atol=1e-5), msg=str(fn))
+
     def test_complex_abs_grad(self):
         mx.random.seed(0)
         primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
