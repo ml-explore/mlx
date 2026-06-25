@@ -954,9 +954,21 @@ std::vector<array> gated_delta_update(
   auto h0 = initial_state.has_value() ? astype(*initial_state, out_dtype, s)
                                       : zeros({B, Hv, Dk, Dv}, out_dtype, s);
 
-  auto fallback = [](std::vector<array> inputs) -> std::vector<array> {
+  auto fallback = [B, T, Hk, Dk, Hv, Dv, s](std::vector<array> inputs) {
+    auto q = astype(inputs[0], float32, s);
+    auto k = astype(inputs[1], float32, s);
+    auto v = astype(inputs[2], float32, s);
+    auto g = astype(inputs[3], float32, s);
+    auto beta = astype(inputs[4], float32, s);
+    auto state = astype(inputs[5], float32, s);
+
+    std::vector<array> outputs;
+    for (int t = 0; t < T; t++) {
+      // TODO. Implement
+    }
     throw std::runtime_error("NYI: GatedDeltaUpdate CPU fallback");
-    return {};
+    auto out = concatenate(outputs, 1, s);
+    return std::vector<array>{out, state};
   };
 
   return array::make_arrays(
