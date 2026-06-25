@@ -521,6 +521,16 @@ Buffer RocmAllocator::malloc(size_t size) {
         "Please use CPU backend instead.");
   }
 
+  // Deterministic decode arena: serve transient decode allocations from the
+  // rewound bump region so addresses replay identically each token. On overflow
+  // arena_alloc returns nullptr and we fall through to the normal path.
+  if (decode_arena_.active) {
+    std::lock_guard lock(mutex_);
+    if (RocmBuffer* b = arena_alloc(size)) {
+      return Buffer{b};
+    }
+  }
+
   // Drain deferred unified frees on this (eval) thread, outside any lock.
   {
     std::vector<RocmBuffer*> to_free;
@@ -597,6 +607,15 @@ static std::mutex& pool_mutex() {
 }
 
 Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
+  // Deterministic decode arena takes priority over the stream-ordered pool so
+  // per-token activation addresses replay identically (see arena_alloc).
+  if (decode_arena_.active && size > 0) {
+    std::lock_guard lock(mutex_);
+    if (RocmBuffer* b = arena_alloc(size)) {
+      return Buffer{b};
+    }
+  }
+
   hipStream_t stream = static_cast<hipStream_t>(stream_v);
   // Fall back to the unified path unless the pool is usable for this request.
   if (!use_async_pool() || stream == nullptr || device < 0 ||
@@ -760,6 +779,13 @@ void RocmAllocator::free(Buffer buffer, bool force) {
     return;
   }
 
+  // Decode-arena buffers are owned by the arena (whole region rewound per
+  // token); individual frees are no-ops. The backing region is released only by
+  // the allocator teardown. Identify by pointer-range so RocmBuffer stays POD.
+  if (decode_arena_.contains(buf->data)) {
+    return;
+  }
+
   // Defer frees while a graph is being built so its nodes' buffers stay valid
   // until the chunk launches. Tag with the current generation so it can be
   // reclaimed as soon as that chunk completes (see free_graph_generation).
@@ -808,6 +834,86 @@ size_t RocmAllocator::size(Buffer buffer) const {
     return 0;
   }
   return buf->size;
+}
+
+// --- Deterministic decode arena ---------------------------------------------
+// Bump-allocate `size` from the arena. Caller holds mutex_. Returns nullptr on
+// overflow (caller falls back to the normal pool, keeping correctness; the
+// token is then non-deterministic and the engine must rebuild rather than
+// relaunch). Wrappers live in a deque so their RocmBuffer* stay stable and are
+// recycled across token resets — allocation #N reuses wrapper #N at the same
+// arena offset, hence the same device address every token.
+RocmBuffer* RocmAllocator::arena_alloc(size_t size) {
+  auto& a = decode_arena_;
+  if (!a.active || !a.base || size == 0) {
+    return nullptr;
+  }
+  size_t aligned = (size + 255) & ~size_t(255);
+  if (a.offset + aligned > a.capacity) {
+    a.overflowed = true;
+    return nullptr;
+  }
+  RocmBuffer* rb;
+  if (a.next_wrapper < a.wrappers.size()) {
+    rb = &a.wrappers[a.next_wrapper];
+  } else {
+    a.wrappers.emplace_back();
+    rb = &a.wrappers.back();
+  }
+  a.next_wrapper++;
+  rb->data = static_cast<char*>(a.base) + a.offset;
+  rb->size = size;
+  rb->is_managed = true;   // unified backing; raw_ptr serves CPU reads directly
+  rb->device = -1;         // unified (APU): no host shadow
+  rb->host_shadow = nullptr;
+  rb->host_dirty = false;
+  rb->alloc_stream = nullptr;
+  a.offset += aligned;
+  a.high_water = std::max(a.high_water, a.offset);
+  return rb;
+}
+
+bool RocmAllocator::decode_arena_begin(size_t capacity, int device,
+                                       void* stream) {
+  (void)device;
+  (void)stream;
+  std::lock_guard lock(mutex_);
+  if (!decode_arena_.base || decode_arena_.capacity < capacity) {
+    if (decode_arena_.base) {
+      (void)hipFree(decode_arena_.base);
+      active_memory_ -= decode_arena_.capacity;
+      decode_arena_.base = nullptr;
+      decode_arena_.capacity = 0;
+    }
+    void* p = nullptr;
+    // Unified backing so the APU CPU (logits sampling) reads it directly.
+    if (hipMallocManaged(&p, capacity) != hipSuccess || !p) {
+      (void)hipGetLastError();
+      return false;
+    }
+    decode_arena_.base = p;
+    decode_arena_.capacity = capacity;
+    active_memory_ += capacity;
+    peak_memory_ = std::max(active_memory_, peak_memory_);
+  }
+  decode_arena_.offset = 0;
+  decode_arena_.next_wrapper = 0;
+  decode_arena_.overflowed = false;
+  decode_arena_.high_water = 0;
+  decode_arena_.active = true;
+  return true;
+}
+
+void RocmAllocator::decode_arena_reset() {
+  std::lock_guard lock(mutex_);
+  decode_arena_.offset = 0;
+  decode_arena_.next_wrapper = 0;
+  decode_arena_.overflowed = false;
+}
+
+void RocmAllocator::decode_arena_end() {
+  std::lock_guard lock(mutex_);
+  decode_arena_.active = false;
 }
 
 void RocmAllocator::rocm_free(RocmBuffer* buf) {
@@ -1011,6 +1117,26 @@ void clear_cache() {
 // Not supported in ROCm.
 size_t set_wired_limit(size_t) {
   return 0;
+}
+
+// --- Decode-arena bridge (called from the engine's graph-decode loop) -------
+bool decode_arena_begin(size_t capacity, int device, void* stream) {
+  return rocm::allocator().decode_arena_begin(capacity, device, stream);
+}
+void decode_arena_reset() {
+  rocm::allocator().decode_arena_reset();
+}
+void decode_arena_end() {
+  rocm::allocator().decode_arena_end();
+}
+bool decode_arena_active() {
+  return rocm::allocator().decode_arena_active();
+}
+size_t decode_arena_high_water() {
+  return rocm::allocator().decode_arena_high_water();
+}
+bool decode_arena_overflowed() {
+  return rocm::allocator().decode_arena_overflowed();
 }
 
 } // namespace mlx::core

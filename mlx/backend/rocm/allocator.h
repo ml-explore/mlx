@@ -5,6 +5,7 @@
 #include "mlx/allocator.h"
 #include "mlx/backend/common/buffer_cache.h"
 
+#include <deque>
 #include <mutex>
 #include <set>
 #include <utility>
@@ -33,6 +34,36 @@ struct RocmBuffer {
   // on. hipFreeAsync must run on this same (actively-executing) stream so the
   // free retires in order behind the buffer's last use and the pool reclaims it.
   void* alloc_stream;
+};
+
+// ---------------------------------------------------------------------------
+// DecodeArena — deterministic bump allocator for build-once HIP-graph decode.
+//
+// During steady-state decode the op tape is identical every token, so if each
+// transient activation is bump-allocated from a fixed backing region that is
+// rewound to its base before every token, allocation #N lands at the SAME
+// device address every token. That determinism is what lets a graph built once
+// be relaunched: its kernel nodes' baked input/output pointers stay valid, and
+// the relaunch writes outputs exactly where the next token's eval expects them.
+//
+// Off by default and fully inert until decode_arena_begin(); every allocator
+// hook is guarded by `active` so the production path is byte-identical.
+// ---------------------------------------------------------------------------
+struct DecodeArena {
+  void* base{nullptr};       // backing region (allocated once)
+  size_t capacity{0};
+  size_t offset{0};          // bump pointer, rewound each token
+  bool active{false};
+  bool overflowed{false};    // a token's allocs exceeded capacity (fell back)
+  int device{-1};
+  std::deque<RocmBuffer> wrappers;  // stable RocmBuffer*; recycled per token
+  size_t next_wrapper{0};
+  size_t high_water{0};      // max offset seen (for sizing diagnostics)
+
+  bool contains(const void* p) const {
+    return base && p >= base &&
+           p < static_cast<const char*>(base) + capacity;
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -146,6 +177,17 @@ class RocmAllocator : public allocator::Allocator {
   // VRAM so kernels (gpu_ptr) see the update. No-op otherwise.
   void flush_host_shadow(RocmBuffer& buf);
 
+  // --- Deterministic decode arena (build-once HIP-graph decode) ---
+  // Allocate the backing region (once) and arm the arena: subsequent
+  // malloc/malloc_async serve from it deterministically. reset rewinds to base
+  // (call before each token); end disarms (allocs return to the normal pool).
+  bool decode_arena_begin(size_t capacity, int device, void* stream);
+  void decode_arena_reset();
+  void decode_arena_end();
+  bool decode_arena_active() const { return decode_arena_.active; }
+  size_t decode_arena_high_water() const { return decode_arena_.high_water; }
+  bool decode_arena_overflowed() const { return decode_arena_.overflowed; }
+
   size_t get_active_memory() const;
   size_t get_peak_memory() const;
   void reset_peak_memory();
@@ -170,6 +212,9 @@ class RocmAllocator : public allocator::Allocator {
   size_t active_memory_{0};
   size_t peak_memory_{0};
   SlabAllocator slab_allocator_;
+  DecodeArena decode_arena_;
+  // Serve `size` bump from the arena; returns nullptr wrapper on overflow.
+  RocmBuffer* arena_alloc(size_t size);
 
   // Per-device hipMemPool + a dedicated free stream for stream-less frees
   // (mirrors the CUDA backend). Empty entry => device has no pool support and
