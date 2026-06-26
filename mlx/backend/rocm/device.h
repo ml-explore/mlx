@@ -400,8 +400,36 @@ void CommandEncoder::launch_kernel(F&& func) {
   // the accumulated graph, run this op immediately on the same stream (ordered
   // after the graph), and start the next graph fresh.
   if (use_hip_graphs()) {
+    static const bool capture_lib = [] {
+      const char* e = std::getenv("MLX_GRAPH_PREFILL_REPLAY");
+      return e && e[0] == '1';
+    }();
+    auto hstream = static_cast<hipStream_t>(stream_);
+    if (capture_lib && !graph_decode_mode()) {
+      hipError_t be = hipStreamBeginCapture(hstream, hipStreamCaptureModeThreadLocal);
+      if (be == hipSuccess) {
+        func(hstream);
+        hipGraph_t child = nullptr;
+        hipError_t ee = hipStreamEndCapture(hstream, &child);
+        if (ee == hipSuccess && child) {
+          size_t nn = 0; hipGraphGetNodes(child, nullptr, &nn);
+          if (nn > 0) {
+            add_child_graph_node(child, "lib");
+            hipGraphDestroy(child);
+            return;
+          }
+          hipGraphDestroy(child);
+        } else if (child) hipGraphDestroy(child);
+        if (child) hipGraphDestroy(child);
+        (void)hipGetLastError();
+      } else {
+        if (std::getenv("MLX_GRAPH_SPLIT_LOG"))
+          fprintf(stderr, "[cap-fail] begin err=%s\n", hipGetErrorString(be));
+        (void)hipGetLastError();
+      }
+    }
     commit();
-    func(static_cast<hipStream_t>(stream_));
+    func(hstream);
     record_inline_launch();
     return;
   }

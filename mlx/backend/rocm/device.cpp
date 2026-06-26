@@ -13,6 +13,7 @@
 #include <chrono>
 #include <future>
 #include <iostream>
+#include <map>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -589,11 +590,39 @@ void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
   hipGraphNode_t node;
   hipError_t kn_err = hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kp);
   if (kn_err != hipSuccess) {
-    // Some kernels can't be HIP graph nodes (certain single-block reduction / JIT
-    // kernels are rejected with invalid-argument). Don't abort — graph-split like
-    // launch_kernel(): flush the accumulated graph, run this kernel eagerly
-    // (ordered after, same stream), and continue building a fresh graph.
+    // ROCm's hipGraphAddKernelNode rejects some kernels with invalid-argument
+    // (certain WMMA / single-block / JIT kernels). In replay mode, don't split —
+    // CAPTURE the launch into a child graph node (CUDA's model: capture records
+    // any launched kernel that the manual node API won't accept), so the chunk
+    // stays ~1 fragment. Else fall back to the eager graph-split.
     (void)hipGetLastError();
+    static const bool cap_reject = [] {
+      const char* e = std::getenv("MLX_GRAPH_PREFILL_REPLAY");
+      return e && e[0] == '1';
+    }();
+    if (cap_reject && !graph_decode_mode()) {
+      device_.make_current();
+      hipError_t be = hipStreamBeginCapture(stream_, hipStreamCaptureModeThreadLocal);
+      if (be == hipSuccess) {
+        (void)hipLaunchKernel(kp.func, kp.gridDim, kp.blockDim, kp.kernelParams,
+                              kp.sharedMemBytes, stream_);
+        hipGraph_t child = nullptr;
+        hipError_t ee = hipStreamEndCapture(stream_, &child);
+        if (ee == hipSuccess && child) {
+          size_t nn = 0;
+          hipGraphGetNodes(child, nullptr, &nn);
+          if (nn > 0) {
+            add_child_graph_node(child, key);
+            hipGraphDestroy(child);
+            return;
+          }
+          hipGraphDestroy(child);
+        } else if (child) {
+          hipGraphDestroy(child);
+        }
+        (void)hipGetLastError();
+      }
+    }
     commit();
     device_.make_current();
     (void)hipLaunchKernel(kp.func, kp.gridDim, kp.blockDim, kp.kernelParams,
