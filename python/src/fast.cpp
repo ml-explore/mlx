@@ -302,10 +302,10 @@ void init_fast(nb::module_& parent_module) {
       "q"_a,
       "k"_a,
       "v"_a,
-      "gates"_a,
+      "gamma"_a,
       "beta"_a,
       "initial_state"_a = nb::none(), // optional, defaults to None
-      "C"_a = 8, // optional, defaults to None
+      "C"_a = 0, // optional, defaults to 0
       "stream"_a = nb::none(), // optional, defaults to None
       R"(
             Chunked gated delta network forward pass.
@@ -314,7 +314,7 @@ void init_fast(nb::module_& parent_module) {
                 q: Queries [B, H, T, Dk]
                 k: Keys [B, H, T, Dk]
                 v: Values [B, H, T, Dv]
-                gates: Log-decay gates [B, H, T]
+                gamma: 
                 beta: Delta update rates [B, H, T]
                 initial_state: Optional initial hidden state [B, H, Dk, Dv]
 
