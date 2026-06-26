@@ -1334,7 +1334,6 @@ MLX_API array cumsum(
     bool reverse = false,
     bool inclusive = true,
     std::optional<Dtype> dtype = std::nullopt,
-    bool include_initial = false,
     StreamOrDevice s = {});
 
 /** Cumulative sum of an array along the given axis. */
@@ -1344,7 +1343,6 @@ MLX_API array cumsum(
     bool reverse = false,
     bool inclusive = true,
     std::optional<Dtype> dtype = std::nullopt,
-    bool include_initial = false,
     StreamOrDevice s = {});
 
 /** Cumulative product of an array. */
@@ -1353,7 +1351,6 @@ MLX_API array cumprod(
     bool reverse = false,
     bool inclusive = true,
     std::optional<Dtype> dtype = std::nullopt,
-    bool include_initial = false,
     StreamOrDevice s = {});
 
 /** Cumulative product of an array along the given axis. */
@@ -1363,7 +1360,6 @@ MLX_API array cumprod(
     bool reverse = false,
     bool inclusive = true,
     std::optional<Dtype> dtype = std::nullopt,
-    bool include_initial = false,
     StreamOrDevice s = {});
 
 /** Cumulative max of an array. */
