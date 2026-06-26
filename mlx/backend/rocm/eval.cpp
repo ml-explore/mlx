@@ -35,6 +35,11 @@ void new_stream(Stream s) {
   rocm::HipEvent(hipEventDefault);
 }
 
+void new_thread_unsafe_stream(Stream s) {
+  rocm::get_command_encoder(s);
+  rocm::HipEvent(hipEventDefault);
+}
+
 // Ops whose kernels corrupt when batched into a multi-node HIP graph with
 // neighbors (a ROCm CLR kernarg-pool interaction; found by per-op force-execute
 // bisection). Isolate them: flush the graph before AND after so they run alone.
