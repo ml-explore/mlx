@@ -16,6 +16,27 @@ mlx.core.__suffix__:
   scalar: TypeAlias = Union[int, float, bool]
   list_or_scalar: TypeAlias = Union[scalar, list["list_or_scalar"]]
   bool_: Dtype = ...
+  def while_loop(
+      cond_fun: Callable[[Any], Union[bool, array]],
+      body_fun: Callable[[Any], Any],
+      init_val: Any,
+      *,
+      max_iterations: Optional[int] = None,
+      chunk_size: int = 16,
+  ) -> Any:
+      """Run a while loop with chunked speculative execution.
+
+      Repeatedly applies ``body_fun`` while ``cond_fun`` is true, amortizing
+      the per-iteration host-GPU sync: a compiled chunk applies up to
+      ``chunk_size`` body iterations lazily (with a running mask so iterations
+      past termination are no-ops) before a *single* host sync.
+
+      Not differentiable and not traceable inside ``mx.grad``/``mx.compile``/
+      ``mx.vmap`` (raises). ``body_fun`` is evaluated eagerly on every
+      speculative iteration (keep it pure and total). All carry leaves must be
+      ``mx.array``.
+      """
+      ...
 
 mlx.core.distributed.__prefix__:
   from mlx.core import array, Dtype, Device, Stream, scalar

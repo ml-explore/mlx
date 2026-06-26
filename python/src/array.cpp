@@ -801,6 +801,11 @@ void init_array(nb::module_& m) {
       .def("__neg__", [](const mx::array& a) { return -a; })
       .def("__bool__", [](mx::array& a) { return nb::bool_(to_scalar(a)); })
       .def(
+          "is_tracer",
+          &mx::array::is_tracer,
+          "True if this array is a tracer being traced inside a function "
+          "transformation such as grad, compile, or vmap.")
+      .def(
           "__repr__",
           [](mx::array& a) {
             nb::gil_scoped_release nogil;
