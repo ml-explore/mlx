@@ -246,8 +246,14 @@ enum class GemmPrecision { Bf16, Fp8E4M3, Fp8E5M2, Int8 };
 // GEMMs while preserving accuracy: fp8 e4m3 where the library has kernels
 // (RDNA4), otherwise bf16 (RDNA3.5 and anything without fp8 Tensile kernels).
 GemmPrecision preferred_gemm_precision(int device_id) {
+  // fp8 e4m3 activation GEMM loses precision (and may be kernel-buggy on some
+  // RDNA4 drivers) — long-context prefill on gfx1201 garbles. Allow forcing bf16.
+  static const bool force_bf16 = [] {
+    const char* e = std::getenv("MLX_ROCM_GEMM_BF16");
+    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O');
+  }();
   const GemmCaps& caps = gemm_caps(device_id);
-  if (caps.fp8_e4m3) {
+  if (caps.fp8_e4m3 && !force_bf16) {
     return GemmPrecision::Fp8E4M3;
   }
   return GemmPrecision::Bf16;
