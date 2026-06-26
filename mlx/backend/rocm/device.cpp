@@ -556,7 +556,12 @@ void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
     return e && e[0] == '1';
   }();
   const std::string& rkey = graph_decode_mode() ? decode_key_ : prefill_key_;
-  const bool replay_mode_ok = graph_decode_mode() ? true : prefill_replay;
+  // Build-skip replay (replay_active_) is decode-only: prefill captures library/
+  // rejected kernels into the graph each chunk, and capture needs the launch — it
+  // can't be build-skipped. Prefill instead uses ExecUpdate (re-capture + refresh
+  // a cached exec instead of re-instantiate; see use_execupdate in commit()).
+  (void)prefill_replay;
+  const bool replay_mode_ok = graph_decode_mode();
   if (replay_enabled && replay_mode_ok && !replay_active_ && node_count_ == 0 &&
       build_node_params_.empty() && use_hip_graphs() && !rkey.empty()) {
     // Only once the normal path has grown the pool to N execs for this topology,
