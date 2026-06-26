@@ -40,6 +40,8 @@ void GatedDeltaUpdate::eval_gpu(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
+  // printf("%d %d %d %d %d %d\n",B,T,Hk,Hv,Dk,Dv);
+
   int C = chunk_size;
   int n_chunks = T / C; // TODO: make general
 
