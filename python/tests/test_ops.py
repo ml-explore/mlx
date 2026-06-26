@@ -1353,6 +1353,18 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(b.size, 0)
         self.assertEqual(b.shape, a.shape)
 
+    def test_put_along_axis_unsupported_type(self):
+        if not mx.metal.is_available():
+            return
+        
+        source = mx.zeros((2, 2))
+        indices = mx.array([[0, 1], [0, 1]])
+        update = mx.array([[1, 2], [3, 4]], dtype=mx.int64)
+        
+        with self.assertRaises(ValueError):
+            out = mx.put_along_axis(source, indices, update, axis=1, stream=mx.gpu)
+            mx.eval(out)
+
     def test_split(self):
         a = mx.array([1, 2, 3])
         splits = mx.split(a, 3)
