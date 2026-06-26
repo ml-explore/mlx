@@ -533,6 +533,15 @@ std::string CommandEncoder::kernel_node_key(const hipKernelNodeParams& kp) {
 }
 
 void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
+  // A launch with any zero grid/block dim is a no-op: hipLaunchKernel tolerates
+  // it (eager path), but hipGraphAddKernelNode rejects it with "invalid
+  // argument". Skip it entirely — it does no work, and skipping is consistent
+  // across tokens so the decode topology stays stable for replay.
+  if (kp.func == nullptr || kp.gridDim.x == 0 || kp.gridDim.y == 0 ||
+      kp.gridDim.z == 0 || kp.blockDim.x == 0 || kp.blockDim.y == 0 ||
+      kp.blockDim.z == 0) {
+    return;
+  }
   // Build-once decode replay: at the first node of a decode-mode token, if the
   // persistent source graph is already built for the (stable) decode topology,
   // switch to param-update mode — re-point the existing source nodes instead of
@@ -573,7 +582,20 @@ void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
   }
 
   hipGraphNode_t node;
-  CHECK_HIP_ERROR(hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kp));
+  hipError_t kn_err = hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kp);
+  if (kn_err != hipSuccess) {
+    // Some kernels can't be HIP graph nodes (certain single-block reduction / JIT
+    // kernels are rejected with invalid-argument). Don't abort — graph-split like
+    // launch_kernel(): flush the accumulated graph, run this kernel eagerly
+    // (ordered after, same stream), and continue building a fresh graph.
+    (void)hipGetLastError();
+    commit();
+    device_.make_current();
+    (void)hipLaunchKernel(kp.func, kp.gridDim, kp.blockDim, kp.kernelParams,
+                          kp.sharedMemBytes, stream_);
+    record_inline_launch();
+    return;
+  }
   build_nodes_.push_back(node);
   build_node_params_.push_back(kp);
   insert_graph_dependencies(GraphNode{node, key});
