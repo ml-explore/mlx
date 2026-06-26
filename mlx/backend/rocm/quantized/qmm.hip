@@ -5401,7 +5401,7 @@ __global__ void gather_qmv_kernel(
 // an empty stub; dispatch checks prevent it from being launched there.
 // ======================================================================
 template <typename T, typename ScaleT, int BITS, int GROUP_SIZE, bool AFFINE>
-__global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
+__global__ void __launch_bounds__(128) gather_qmv_wmma_prefill_kernel(
     const T* __restrict__ x,
     const uint32_t* __restrict__ w,
     const ScaleT* __restrict__ scales,
@@ -5420,22 +5420,29 @@ __global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
   static_assert(BITS == 4, "WMMA prefill kernel only supports 4-bit quantized weights");
   static_assert(AFFINE, "WMMA prefill kernel only supports affine quantization");
 
-  // Register-tiled segmented GEMM (ported from the validated standalone
-  // grouped_q4: 128-bit weight/x loads, bit-level unpack, MT*NT WMMA tiles per
-  // warp). One warp computes a BM(token) x BN(col) output of one expert-run.
+  // Register-tiled segmented GEMM, 4 warps/block. The 4 warps SHARE one gathered
+  // sX tile (each warp owns a 32-col slab of a 128-col block tile), so the X gather
+  // happens once per 4 N-tiles instead of once per N-tile -> 4x less X traffic and
+  // 4 resident warps/WGP for latency hiding. 128-bit weight/x loads, nibble unpack.
   constexpr int WM = 16, WN = 16, WK = 16;
-  constexpr int MT = 4, NT = 2;            // register tile: BM=64 rows, BN=32 cols
-  constexpr int BM = WM * MT, BN = WN * NT;
+  constexpr int MT = 4, NT = 2;            // per-warp tile: BM=64 rows, BN_W=32 cols
+  constexpr int NWARP = 4;
+  constexpr int BM = WM * MT;              // 64 token rows / block
+  constexpr int BN_W = WN * NT;            // 32 cols / warp
+  constexpr int BN = BN_W * NWARP;         // 128 cols / block
   constexpr int BK = GROUP_SIZE;           // one quant group per K-tile (=64)
   constexpr int U4S = (BK * BITS) / 128;   // 128-bit (uint4) weight loads per tile
   constexpr int CH = BK / 8;               // uint4 chunks per gathered x row (bf16)
 
+  const int tid  = threadIdx.x;            // 0..127
+  const int warp = tid >> 5;               // 0..3
+  const int lane = tid & 31;               // 0..31
   const int run_id   = blockIdx.z;
   const int run_start = run_starts[run_id];
   const int run_len   = run_lengths[run_id];
   const int row0 = blockIdx.x * BM;        // first token-in-run for this tile
-  const int n0   = blockIdx.y * BN;        // first output column
-  const int lane = threadIdx.x;            // 0..31
+  const int n0   = blockIdx.y * BN;        // first output column (block)
+  const int wn0  = n0 + warp * BN_W;       // first output column (this warp)
   if (run_len == 0 || row0 >= run_len || n0 >= N) return;
 
   // GPU grouping launches one run per expert, so run_id IS the expert index.
@@ -5450,8 +5457,8 @@ __global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
   const ScaleT*   Bb = has_bias
       ? (biases + static_cast<int64_t>(rhs_idx) * N * Kg) : nullptr;
 
-  __shared__ hip_bfloat16 sX[BM][BK];      // gathered x rows
-  __shared__ hip_bfloat16 sB[BK][BN];      // dequantized weight tile
+  __shared__ hip_bfloat16 sX[BM][BK];      // gathered x rows (shared by all 4 warps)
+  __shared__ hip_bfloat16 sB[BK][BN];      // dequantized weight tile (128 cols)
 
   using frag_a   = rocwmma::fragment<rocwmma::matrix_a,   WM, WN, WK, hip_bfloat16, rocwmma::row_major>;
   using frag_b   = rocwmma::fragment<rocwmma::matrix_b,   WM, WN, WK, hip_bfloat16, rocwmma::row_major>;
@@ -5464,9 +5471,8 @@ __global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
     for (int t = 0; t < NT; ++t) rocwmma::fill_fragment(cf[mt][t], 0.0f);
 
   for (int kk = 0; kk < K; kk += BK) {
-    // gather x tile: BM token rows x BK cols, 128-bit (uint4) loads
-    #pragma unroll
-    for (int idx = lane; idx < BM * CH; idx += 32) {
+    // gather x tile once for the whole block: BM rows x BK cols, all 128 threads
+    for (int idx = tid; idx < BM * CH; idx += NWARP * 32) {
       const int r = idx / CH, ch = idx % CH, br = row0 + r;
       uint4* dst = reinterpret_cast<uint4*>(&sX[r][ch * 8]);
       if (br < run_len) {
@@ -5477,28 +5483,33 @@ __global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
         *dst = uint4{0, 0, 0, 0};
       }
     }
-    // dequantize weight tile: BN cols, 128-bit loads + nibble unpack
-    #pragma unroll
-    for (int c = 0; c < BN; c += 32) {
-      const int col = c + lane, n = n0 + col;
-      const uint32_t* wb = &Wb[static_cast<int64_t>(n) * Kp + (kk * BITS) / 32];
-      const int bg = kk / GROUP_SIZE;
-      const float scl = static_cast<float>(Sb[n * Kg + bg]);
-      const float bia = has_bias ? static_cast<float>(Bb[n * Kg + bg]) : 0.0f;
-      #pragma unroll
-      for (int u = 0; u < U4S; ++u) {
-        const uint4 wv = *reinterpret_cast<const uint4*>(wb + u * 4);
-        const uint32_t* wp = reinterpret_cast<const uint32_t*>(&wv);
+    // dequantize this warp's 32-col slab of the weight tile, 128-bit loads.
+    // Columns past N (last block when N%128!=0) are zero-filled, not read.
+    {
+      const int col = warp * BN_W + lane, n = wn0 + lane;
+      if (n < N) {
+        const uint32_t* wb = &Wb[static_cast<int64_t>(n) * Kp + (kk * BITS) / 32];
+        const int bg = kk / GROUP_SIZE;
+        const float scl = static_cast<float>(Sb[n * Kg + bg]);
+        const float bia = has_bias ? static_cast<float>(Bb[n * Kg + bg]) : 0.0f;
         #pragma unroll
-        for (int q = 0; q < 4; ++q) {
-          const uint32_t wd = wp[q];
+        for (int u = 0; u < U4S; ++u) {
+          const uint4 wv = *reinterpret_cast<const uint4*>(wb + u * 4);
+          const uint32_t* wp = reinterpret_cast<const uint32_t*>(&wv);
           #pragma unroll
-          for (int j = 0; j < 8; ++j) {
-            const int k = (u * 4 + q) * 8 + j;
-            sB[k][col] = static_cast<hip_bfloat16>(
-                float((wd >> (4 * j)) & 0xF) * scl + bia);
+          for (int q = 0; q < 4; ++q) {
+            const uint32_t wd = wp[q];
+            #pragma unroll
+            for (int j = 0; j < 8; ++j) {
+              const int k = (u * 4 + q) * 8 + j;
+              sB[k][col] = static_cast<hip_bfloat16>(
+                  float((wd >> (4 * j)) & 0xF) * scl + bia);
+            }
           }
         }
+      } else {
+        #pragma unroll
+        for (int k = 0; k < BK; ++k) sB[k][col] = static_cast<hip_bfloat16>(0.0f);
       }
     }
     __syncthreads();
@@ -5511,7 +5522,7 @@ __global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
       #pragma unroll
       for (int t = 0; t < NT; ++t) {
         frag_b bf;
-        rocwmma::load_matrix_sync(bf, &sB[ks][t * WN], BN);
+        rocwmma::load_matrix_sync(bf, &sB[ks][warp * BN_W + t * WN], BN);
         #pragma unroll
         for (int mt = 0; mt < MT; ++mt)
           rocwmma::mma_sync(cf[mt][t], af[mt], bf, cf[mt][t]);
@@ -5525,11 +5536,12 @@ __global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
   for (int mt = 0; mt < MT; ++mt)
     #pragma unroll
     for (int t = 0; t < NT; ++t)
-      rocwmma::store_matrix_sync(&sC[mt * WM][t * WN], cf[mt][t], BN, rocwmma::mem_row_major);
+      rocwmma::store_matrix_sync(&sC[mt * WM][warp * BN_W + t * WN], cf[mt][t], BN,
+                                 rocwmma::mem_row_major);
   __syncthreads();
-  for (int idx = lane; idx < BM * BN; idx += 32) {
+  for (int idx = tid; idx < BM * BN; idx += NWARP * 32) {
     const int r = idx / BN, c = idx % BN, br = row0 + r;
-    if (br < run_len) {
+    if (br < run_len && (n0 + c) < N) {
       const int orig_batch = out_perm[run_start + br];
       out[static_cast<int64_t>(orig_batch) * M * N + n0 + c] =
           static_cast<T>(sC[r][c]);
@@ -5742,8 +5754,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         grid_x = (max_run_len + 63) / 64;
       }
 
-      dim3 wmma_block(32, 1, 1);
-      dim3 wmma_grid(grid_x, (N + 31) / 32, E);
+      dim3 wmma_block(128, 1, 1);          // 4 warps
+      dim3 wmma_grid(grid_x, (N + 127) / 128, E);
       enc.add_kernel_node_ex(
           &rocm::gather_qmv_wmma_prefill_kernel<hip_bfloat16, hip_bfloat16, 4, 64, true>,
           wmma_grid, wmma_block, 0u,
