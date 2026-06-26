@@ -370,6 +370,9 @@ class TestLayers(mlx_tests.MLXTestCase):
         inputs1 = mx.zeros((10, 2))
         inputs2 = mx.zeros((10, 4))
         layer = nn.Bilinear(input1_dims=2, input2_dims=4, output_dims=6)
+        # Weight is stored as [output_dims, input2_dims, input1_dims]; pin it so
+        # the documented shape stays in sync with the implementation.
+        self.assertEqual(layer.weight.shape, (6, 4, 2))
         outputs = layer(inputs1, inputs2)
         self.assertEqual(outputs.shape, (10, 6))
 

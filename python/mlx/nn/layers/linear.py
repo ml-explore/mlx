@@ -118,7 +118,7 @@ class Bilinear(Module):
         y_i = x_1^\top W_i x_2 + b_i
 
     where:
-    :math:`W` has shape ``[output_dims, input1_dims, input2_dims]``, :math:`b` has shape ``[output_dims ]``,
+    :math:`W` has shape ``[output_dims, input2_dims, input1_dims]``, :math:`b` has shape ``[output_dims ]``,
     and :math:`i` indexes the output dimension.
 
     The values are initialized from the uniform distribution :math:`\mathcal{U}(-{k}, {k})`,
