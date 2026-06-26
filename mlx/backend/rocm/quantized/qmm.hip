@@ -5403,7 +5403,7 @@ __global__ void gather_qmv_kernel(
 template <typename T, typename ScaleT, int BITS, int GROUP_SIZE, bool AFFINE>
 __global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
     const T* __restrict__ x,
-    const uint8_t* __restrict__ w,
+    const uint32_t* __restrict__ w,
     const ScaleT* __restrict__ scales,
     const ScaleT* __restrict__ biases,
     const uint32_t* __restrict__ lhs_indices,
@@ -5420,163 +5420,118 @@ __global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
   static_assert(BITS == 4, "WMMA prefill kernel only supports 4-bit quantized weights");
   static_assert(AFFINE, "WMMA prefill kernel only supports affine quantization");
 
-  constexpr int WMMA_M = 16;
-  constexpr int WMMA_N = 16;
-  constexpr int WMMA_K = 16;
+  // Register-tiled segmented GEMM (ported from the validated standalone
+  // grouped_q4: 128-bit weight/x loads, bit-level unpack, MT*NT WMMA tiles per
+  // warp). One warp computes a BM(token) x BN(col) output of one expert-run.
+  constexpr int WM = 16, WN = 16, WK = 16;
+  constexpr int MT = 4, NT = 2;            // register tile: BM=64 rows, BN=32 cols
+  constexpr int BM = WM * MT, BN = WN * NT;
+  constexpr int BK = GROUP_SIZE;           // one quant group per K-tile (=64)
+  constexpr int U4S = (BK * BITS) / 128;   // 128-bit (uint4) weight loads per tile
+  constexpr int CH = BK / 8;               // uint4 chunks per gathered x row (bf16)
 
-  // Tile coordinates in the output matrix
-  const int tile_row = blockIdx.x * WMMA_M;  // starting row of this 16x16 tile
-  const int tile_col = blockIdx.y * WMMA_N;  // starting col of this 16x16 tile
   const int run_id   = blockIdx.z;
-
-  // Bounds check -- the dispatch guarantees M and N are multiples of 16,
-  // but guard anyway for safety.
-  if (tile_row >= M || tile_col >= N) return;
-
-  const int lane = threadIdx.x;  // 0..31
-
-  // Run info
   const int run_start = run_starts[run_id];
   const int run_len   = run_lengths[run_id];
+  const int row0 = blockIdx.x * BM;        // first token-in-run for this tile
+  const int n0   = blockIdx.y * BN;        // first output column
+  const int lane = threadIdx.x;            // 0..31
+  if (row0 >= run_len || n0 >= N) return;
 
   const uint32_t rhs_idx = rhs_indices[run_start];
   if (rhs_idx >= static_cast<uint32_t>(E)) return;
 
-  // Weight layout constants
-  const int num_groups = (K + GROUP_SIZE - 1) / GROUP_SIZE;
-  const int row_bytes  = (K * BITS + 7) / 8;  // bytes per weight row (one output col)
-  const int64_t w_expert_stride  = static_cast<int64_t>(N) * row_bytes;
-  const int64_t sb_expert_stride = static_cast<int64_t>(N) * num_groups;
+  const int Kp = K * BITS / 32;            // uint32 per weight row
+  const int Kg = K / GROUP_SIZE;           // quant groups per row
+  const uint32_t* Wb = w      + static_cast<int64_t>(rhs_idx) * N * Kp;
+  const ScaleT*   Sb = scales + static_cast<int64_t>(rhs_idx) * N * Kg;
+  const ScaleT*   Bb = has_bias
+      ? (biases + static_cast<int64_t>(rhs_idx) * N * Kg) : nullptr;
 
-  // Base pointers for this expert
-  const uint8_t* w_expert  = w      + static_cast<int64_t>(rhs_idx) * w_expert_stride;
-  const ScaleT*  s_expert  = scales + static_cast<int64_t>(rhs_idx) * sb_expert_stride;
-  const ScaleT*  b_expert  = has_bias
-      ? (biases + static_cast<int64_t>(rhs_idx) * sb_expert_stride)
-      : nullptr;
+  __shared__ hip_bfloat16 sX[BM][BK];      // gathered x rows
+  __shared__ hip_bfloat16 sB[BK][BN];      // dequantized weight tile
 
-  // Shared memory for dequantized weight tile [WMMA_K x WMMA_N] in row-major
-  // and for x tile [WMMA_M x WMMA_K] in row-major.
-  // Total: (16*16 + 16*16) * sizeof(hip_bfloat16) = 1024 bytes
-  __shared__ hip_bfloat16 smem_w[WMMA_K * WMMA_N];  // [16][16] row-major
-  __shared__ hip_bfloat16 smem_x[WMMA_M * WMMA_K];  // [16][16] row-major
+  using frag_a   = rocwmma::fragment<rocwmma::matrix_a,   WM, WN, WK, hip_bfloat16, rocwmma::row_major>;
+  using frag_b   = rocwmma::fragment<rocwmma::matrix_b,   WM, WN, WK, hip_bfloat16, rocwmma::row_major>;
+  using frag_acc = rocwmma::fragment<rocwmma::accumulator, WM, WN, WK, float>;
 
-  // Fragment types for bf16 input, f32 accumulation
-  using frag_a   = rocwmma::fragment<rocwmma::matrix_a,   WMMA_M, WMMA_N, WMMA_K, hip_bfloat16, rocwmma::row_major>;
-  using frag_b   = rocwmma::fragment<rocwmma::matrix_b,   WMMA_M, WMMA_N, WMMA_K, hip_bfloat16, rocwmma::row_major>;
-  using frag_acc = rocwmma::fragment<rocwmma::accumulator, WMMA_M, WMMA_N, WMMA_K, float>;
-
-  // Process each batch element in the run
-  for (int r = 0; r < run_len; ++r) {
-    const int batch = run_start + r;
-    const uint32_t lhs_idx = lhs_indices[batch];
-    const T* x_base = x + static_cast<int64_t>(lhs_idx) * x_batch_stride
-                        + static_cast<int64_t>(tile_row) * K;
-
-    // Zero the accumulator for this batch element
-    frag_acc acc;
-    rocwmma::fill_fragment(acc, 0.0f);
-
-    // Loop over K dimension in chunks of WMMA_K (16)
-    for (int k_base = 0; k_base < K; k_base += WMMA_K) {
-      // --- Load x tile [WMMA_M x WMMA_K] into shared memory ---
-      // 32 lanes load 256 elements (16x16) -> 8 elements per lane
-      // Pad with zero for rows beyond M (handles non-16-aligned M)
-      #pragma unroll
-      for (int i = 0; i < (WMMA_M * WMMA_K + 31) / 32; ++i) {
-        int idx = lane + i * 32;
-        if (idx < WMMA_M * WMMA_K) {
-          int m_local = idx / WMMA_K;
-          int k_local = idx % WMMA_K;
-          int m_global = tile_row + m_local;
-          int k_global = k_base + k_local;
-          if (m_global < M && k_global < K) {
-            smem_x[idx] = x_base[m_local * K + k_global];
-          } else {
-            smem_x[idx] = static_cast<hip_bfloat16>(0.0f);
-          }
-        }
-      }
-
-      // --- Dequantize weight tile [WMMA_K x WMMA_N] into shared memory ---
-      // Layout: smem_w[k][n] = dequant(w[expert, tile_col + n, k_base + k])
-      // w is stored as [N, row_bytes], each row for one output column.
-      // We need 16 columns x 16 K values = 256 values, 8 per lane.
-      #pragma unroll
-      for (int i = 0; i < (WMMA_K * WMMA_N + 31) / 32; ++i) {
-        int idx = lane + i * 32;
-        if (idx < WMMA_K * WMMA_N) {
-          int k_local = idx / WMMA_N;  // row in [K, N]
-          int n_local = idx % WMMA_N;  // col in [K, N]
-          int k_global = k_base + k_local;
-          int n_global = tile_col + n_local;
-
-          if (k_global < K) {
-            // Pointer to weight row for output column n_global
-            const uint8_t* w_row = w_expert + static_cast<int64_t>(n_global) * row_bytes;
-
-            // Extract 4-bit quantized value
-            uint8_t packed = w_row[k_global >> 1];
-            uint8_t quant_val = (k_global & 1) ? (packed >> 4) : (packed & 0xF);
-
-            // Dequantize: val = scale * quant_val + bias
-            int group_idx = k_global / GROUP_SIZE;
-            float scale = static_cast<float>(
-                s_expert[static_cast<int64_t>(n_global) * num_groups + group_idx]);
-            float bias_val = has_bias
-                ? static_cast<float>(
-                    b_expert[static_cast<int64_t>(n_global) * num_groups + group_idx])
-                : 0.0f;
-            float dequant = scale * static_cast<float>(quant_val) + bias_val;
-            smem_w[idx] = static_cast<hip_bfloat16>(dequant);
-          } else {
-            smem_w[idx] = static_cast<hip_bfloat16>(0.0f);
-          }
-        }
-      }
-
-      __syncthreads();
-
-      // --- Load fragments from shared memory and perform MMA ---
-      frag_a a_frag;
-      frag_b b_frag;
-
-      // Load A from smem_x [WMMA_M x WMMA_K], row-major, ldm = WMMA_K
-      rocwmma::load_matrix_sync(a_frag, smem_x, WMMA_K);
-      // Load B from smem_w [WMMA_K x WMMA_N], row-major, ldm = WMMA_N
-      rocwmma::load_matrix_sync(b_frag, smem_w, WMMA_N);
-
-      // D = A * B + C
-      rocwmma::mma_sync(acc, a_frag, b_frag, acc);
-
-      __syncthreads();
-    }
-
-    // --- Store the 16x16 result tile ---
-    // Store f32 accumulator to shared memory, then convert to bf16 for output.
-    __shared__ float smem_out_f32[WMMA_M * WMMA_N];
-
-    rocwmma::store_matrix_sync(smem_out_f32, acc, WMMA_N, rocwmma::mem_row_major);
-    __syncthreads();
-
-    // Convert f32 -> bf16 and write to global output (mask out-of-bounds rows)
-    // Use out_perm to map sorted batch position back to original output position
-    const int orig_batch = out_perm[batch];
-    T* out_base = out + static_cast<int64_t>(orig_batch) * M * N
-                      + static_cast<int64_t>(tile_row) * N
-                      + tile_col;
+  frag_acc cf[MT][NT];
+  #pragma unroll
+  for (int mt = 0; mt < MT; ++mt)
     #pragma unroll
-    for (int i = 0; i < (WMMA_M * WMMA_N + 31) / 32; ++i) {
-      int idx = lane + i * 32;
-      if (idx < WMMA_M * WMMA_N) {
-        int m_local = idx / WMMA_N;
-        int n_local = idx % WMMA_N;
-        if (tile_row + m_local < M) {
-          out_base[m_local * N + n_local] = static_cast<T>(smem_out_f32[idx]);
+    for (int t = 0; t < NT; ++t) rocwmma::fill_fragment(cf[mt][t], 0.0f);
+
+  for (int kk = 0; kk < K; kk += BK) {
+    // gather x tile: BM token rows x BK cols, 128-bit (uint4) loads
+    #pragma unroll
+    for (int idx = lane; idx < BM * CH; idx += 32) {
+      const int r = idx / CH, ch = idx % CH, br = row0 + r;
+      uint4* dst = reinterpret_cast<uint4*>(&sX[r][ch * 8]);
+      if (br < run_len) {
+        const uint32_t tok = lhs_indices[run_start + br];
+        *dst = *reinterpret_cast<const uint4*>(
+            &x[static_cast<int64_t>(tok) * x_batch_stride + kk + ch * 8]);
+      } else {
+        *dst = uint4{0, 0, 0, 0};
+      }
+    }
+    // dequantize weight tile: BN cols, 128-bit loads + nibble unpack
+    #pragma unroll
+    for (int c = 0; c < BN; c += 32) {
+      const int col = c + lane, n = n0 + col;
+      const uint32_t* wb = &Wb[static_cast<int64_t>(n) * Kp + (kk * BITS) / 32];
+      const int bg = kk / GROUP_SIZE;
+      const float scl = static_cast<float>(Sb[n * Kg + bg]);
+      const float bia = has_bias ? static_cast<float>(Bb[n * Kg + bg]) : 0.0f;
+      #pragma unroll
+      for (int u = 0; u < U4S; ++u) {
+        const uint4 wv = *reinterpret_cast<const uint4*>(wb + u * 4);
+        const uint32_t* wp = reinterpret_cast<const uint32_t*>(&wv);
+        #pragma unroll
+        for (int q = 0; q < 4; ++q) {
+          const uint32_t wd = wp[q];
+          #pragma unroll
+          for (int j = 0; j < 8; ++j) {
+            const int k = (u * 4 + q) * 8 + j;
+            sB[k][col] = static_cast<hip_bfloat16>(
+                float((wd >> (4 * j)) & 0xF) * scl + bia);
+          }
         }
       }
     }
     __syncthreads();
+    #pragma unroll
+    for (int ks = 0; ks < BK; ks += WK) {
+      frag_a af[MT];
+      #pragma unroll
+      for (int mt = 0; mt < MT; ++mt)
+        rocwmma::load_matrix_sync(af[mt], &sX[mt * WM][ks], BK);
+      #pragma unroll
+      for (int t = 0; t < NT; ++t) {
+        frag_b bf;
+        rocwmma::load_matrix_sync(bf, &sB[ks][t * WN], BN);
+        #pragma unroll
+        for (int mt = 0; mt < MT; ++mt)
+          rocwmma::mma_sync(cf[mt][t], af[mt], bf, cf[mt][t]);
+      }
+    }
+    __syncthreads();
+  }
+
+  __shared__ float sC[BM][BN];
+  #pragma unroll
+  for (int mt = 0; mt < MT; ++mt)
+    #pragma unroll
+    for (int t = 0; t < NT; ++t)
+      rocwmma::store_matrix_sync(&sC[mt * WM][t * WN], cf[mt][t], BN, rocwmma::mem_row_major);
+  __syncthreads();
+  for (int idx = lane; idx < BM * BN; idx += 32) {
+    const int r = idx / BN, c = idx % BN, br = row0 + r;
+    if (br < run_len) {
+      const int orig_batch = out_perm[run_start + br];
+      out[static_cast<int64_t>(orig_batch) * M * N + n0 + c] =
+          static_cast<T>(sC[r][c]);
+    }
   }
 
 #endif // ROCM_HAS_WMMA
@@ -5661,14 +5616,37 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Works with both sorted and unsorted rhs_indices; we sort on CPU.
   // NOTE: MLX's MoE expands tokens to B individual M=1 calls, so M>1 is rare.
   // The WMMA prefill kernel is used when upstream batching produces M>1.
-  if (M > 1 && transpose_ && E > 0 && batch_ndim == 1 &&
+  // Grouped (segmented) WMMA prefill: MLX feeds M==1 with B = tokens*top_k batch
+  // elements. Sort by expert into runs and pack each run's tokens into the WMMA
+  // M dimension (matrix-matrix), instead of the old per-token M=1 QMV. Gate on B
+  // being large enough that runs fill tiles (prefill, not decode).
+  static const bool kGroupedPrefillEnabled = [] {
+    const char* e = std::getenv("MLX_ROCM_GROUPED_PREFILL");
+    return e && std::atoi(e) != 0;  // opt-in; WIP, regresses until kernel+GPU-grouping land
+  }();
+  static const int kGroupedPrefillMinB = [] {
+    const char* e = std::getenv("MLX_ROCM_GROUPED_PREFILL_MIN_B");
+    return e ? std::atoi(e) : 64;
+  }();
+  if (kGroupedPrefillEnabled && M == 1 && B >= kGroupedPrefillMinB && transpose_ &&
+      E > 0 && batch_ndim == 1 &&
       mode_ == QuantizationMode::Affine && x.dtype() == bfloat16 &&
-      group_size_ == 64 && (bits_ == 4 || bits_ == 8)) {
+      group_size_ == 64 && bits_ == 4) {
     // Sort batch elements by expert to form contiguous runs.
     // This allows the kernel to process all tokens for one expert together,
     // sharing weight reads. We create a sorted permutation on CPU.
-    const auto* ri_cpu = rhs_indices.data<uint32_t>();
-    const auto* li_cpu = lhs_indices.data<uint32_t>();
+    // Copy indices to host. rhs/lhs_indices live in DEVICE memory; reading their
+    // .data() pointer on the host corrupts the heap on discrete GPUs (only the
+    // unified-memory APU tolerates it). hipMemcpy after a stream sync is correct
+    // on both. (This sync is the per-call overhead the GPU-grouping rewrite kills.)
+    enc.synchronize();
+    std::vector<uint32_t> ri_host(B), li_host(B);
+    (void)hipMemcpy(ri_host.data(), gpu_ptr<const uint32_t>(rhs_indices),
+                    B * sizeof(uint32_t), hipMemcpyDeviceToHost);
+    (void)hipMemcpy(li_host.data(), gpu_ptr<const uint32_t>(lhs_indices),
+                    B * sizeof(uint32_t), hipMemcpyDeviceToHost);
+    const uint32_t* ri_cpu = ri_host.data();
+    const uint32_t* li_cpu = li_host.data();
 
     // Create sort permutation by expert index
     std::vector<int> perm(B);
@@ -5696,6 +5674,10 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       }
     }
     int num_runs = static_cast<int>(run_starts_vec.size());
+    int max_run_len =
+        run_lengths_vec.empty()
+            ? 0
+            : *std::max_element(run_lengths_vec.begin(), run_lengths_vec.end());
 
     // Upload sorted indices to GPU
     array sorted_ri_arr({B}, uint32, nullptr, {});
@@ -5731,23 +5713,22 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Gate on the device arch: a multi-arch build can compile this kernel
     // for a target whose gcnArchName isn't on the rocWMMA allowlist
     // (e.g. gfx1030/1103) — dispatching there would crash.
-    bool use_wmma = d.has_native_wmma() && (M >= 2) && (N % 16 == 0) &&
-        (bits_ == 4);
+    bool use_wmma = d.has_native_wmma() && (N % 16 == 0) && (bits_ == 4);
     use_wmma = parse_warp_kernel_env("MLX_ROCM_GATHER_QMV_USE_WMMA", use_wmma);
 
     if (use_wmma) {
-      // One wave32 per 16x16 output tile
+      // One wave32 per BM(64-token) x BN(32-col) register-tiled output.
       dim3 wmma_block(32, 1, 1);
-      dim3 wmma_grid((M + 15) / 16, (N + 15) / 16, num_runs);
-      // Shared memory: smem_w[16*16] + smem_x[16*16] bf16 + smem_out_f32[16*16] f32
-      // = 512 + 512 + 1024 = 2048 bytes
+      // grid.x tiles the run's TOKENS (max run len) in BM=64 chunks; grid.y the
+      // N columns in BN=32 chunks.
+      dim3 wmma_grid((max_run_len + 63) / 64, (N + 31) / 32, num_runs);
       size_t wmma_smem = 0;  // static shared memory, declared in-kernel
 
       enc.add_kernel_node_ex(
           &rocm::gather_qmv_wmma_prefill_kernel<hip_bfloat16, hip_bfloat16, 4, 64, true>,
           wmma_grid, wmma_block, static_cast<uint32_t>(wmma_smem),
           gpu_ptr<const hip_bfloat16>(x),
-          gpu_ptr<const uint8_t>(w),
+          gpu_ptr<const uint32_t>(w),
           gpu_ptr<const hip_bfloat16>(scales),
           static_cast<const hip_bfloat16*>(has_bias ? gpu_ptr<const hip_bfloat16>(*biases) : nullptr),
           gpu_ptr<const uint32_t>(sorted_li_arr),
