@@ -5726,17 +5726,24 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
       int64_t x_bs = (x_batch_count == 1) ? 0 : static_cast<int64_t>(M) * K;
 
-      // Read back max run length so grid.x bounds the token tiles to the largest
-      // run, not B — otherwise ~98% of x-tiles are empty (huge launch waste). One
-      // 4-byte DtoH, far cheaper than the old host sort + 2xB index copy.
-      enc.synchronize();
-      int max_run_len = 0;
-      (void)hipMemcpy(&max_run_len, gpu_ptr<const int>(max_rl_arr), sizeof(int),
-                      hipMemcpyDeviceToHost);
-      if (max_run_len <= 0) return;
+      // Bound grid.x to the largest run's token tiles (not B) so ~98% of x-tiles
+      // aren't empty. Eager: read back max_run_len (one 4-byte DtoH). Under graph
+      // capture a host sync is illegal, so fall back to the data-independent
+      // worst case (ceil(B/64)); empty tiles past a run return immediately.
+      int grid_x;
+      if (rocm::use_hip_graphs()) {
+        grid_x = (B + 63) / 64;
+      } else {
+        enc.synchronize();
+        int max_run_len = 0;
+        (void)hipMemcpy(&max_run_len, gpu_ptr<const int>(max_rl_arr), sizeof(int),
+                        hipMemcpyDeviceToHost);
+        if (max_run_len <= 0) return;
+        grid_x = (max_run_len + 63) / 64;
+      }
 
       dim3 wmma_block(32, 1, 1);
-      dim3 wmma_grid((max_run_len + 63) / 64, (N + 31) / 32, E);
+      dim3 wmma_grid(grid_x, (N + 31) / 32, E);
       enc.add_kernel_node_ex(
           &rocm::gather_qmv_wmma_prefill_kernel<hip_bfloat16, hip_bfloat16, 4, 64, true>,
           wmma_grid, wmma_block, 0u,

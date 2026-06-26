@@ -32,16 +32,29 @@ inline bool is_empty_dim(dim3 dim) {
 
 } // namespace
 
+// True while the engine is in a single-token decode step; false during prefill
+// (multi-token) and outside generation. Set by set_graph_decode_mode().
+static std::atomic<bool> g_graph_decode_mode{false};
+
 bool use_hip_graphs() {
-  // Default OFF: the rebuild-every-token graph path is a net loss vs eager on the
-  // integrated APU (graph build/instantiate overhead exceeds the launch-batching
-  // win when launches are cheap). Opt in with MLX_USE_HIP_GRAPHS=1 (e.g. on a
-  // launch-bound discrete GPU over a slow link, or for build-once replay).
-  static bool use_graphs = [] {
+  // Default OFF: the rebuild-every-eval graph path is a net loss vs eager when
+  // launches are cheap (build/instantiate overhead exceeds the launch-batching
+  // win, and one-shot prefill has no replay to amortize the build).
+  // Independent opt-in per region: MLX_HIP_GRAPH_PREFILL / MLX_HIP_GRAPH_DECODE.
+  // Legacy MLX_USE_HIP_GRAPHS=1 turns both on.
+  static const bool legacy = [] {
     const char* e = std::getenv("MLX_USE_HIP_GRAPHS");
     return e && (std::strcmp(e, "1") == 0 || std::strcmp(e, "on") == 0);
   }();
-  return use_graphs;
+  static const bool prefill = legacy || [] {
+    const char* e = std::getenv("MLX_HIP_GRAPH_PREFILL");
+    return e && (std::strcmp(e, "1") == 0 || std::strcmp(e, "on") == 0);
+  }();
+  static const bool decode = legacy || [] {
+    const char* e = std::getenv("MLX_HIP_GRAPH_DECODE");
+    return e && (std::strcmp(e, "1") == 0 || std::strcmp(e, "on") == 0);
+  }();
+  return g_graph_decode_mode.load(std::memory_order_relaxed) ? decode : prefill;
 }
 
 // Count of inline (graph-splitting) launches — library GEMM / JIT / memset run
@@ -1180,7 +1193,6 @@ void set_graph_active(bool v) {
 // Set by the generation loop for Lstep==1 steps; prefill leaves it off so its
 // large intermediates stay bounded by the per-graph caps. Disable entirely with
 // MLX_GRAPH_DECODE=0.
-static std::atomic<bool> g_graph_decode_mode{false};
 bool graph_decode_mode() {
   static const bool enabled = [] {
     const char* e = std::getenv("MLX_GRAPH_DECODE");
