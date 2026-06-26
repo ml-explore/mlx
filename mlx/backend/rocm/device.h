@@ -246,6 +246,8 @@ class CommandEncoder {
   bool replay_active_{false};
   std::string decode_key_;          // confirmed-stable decode topology key
   std::string pending_decode_key_;  // last decode build's key (stability check)
+  std::string prefill_key_;         // confirmed-stable prefill-chunk topology key
+  std::string pending_prefill_key_; // last prefill chunk's key (stability check)
   static std::string kernel_node_key(const hipKernelNodeParams& kp);
   // Replay execs are instantiated by us (src_nodes are the instantiation graph's
   // nodes), so hipGraphExecKernelNodeSetParams is valid — unlike the ExecUpdate-

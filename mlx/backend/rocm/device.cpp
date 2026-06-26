@@ -550,9 +550,14 @@ void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
     const char* e = std::getenv("MLX_GRAPH_REPLAY");
     return e && (std::strcmp(e, "1") == 0 || std::strcmp(e, "on") == 0);
   }();
-  if (replay_enabled && !replay_active_ && node_count_ == 0 &&
-      build_node_params_.empty() && use_hip_graphs() && graph_decode_mode() &&
-      !decode_key_.empty()) {
+  static const bool prefill_replay = [] {
+    const char* e = std::getenv("MLX_GRAPH_PREFILL_REPLAY");
+    return e && e[0] == '1';
+  }();
+  const std::string& rkey = graph_decode_mode() ? decode_key_ : prefill_key_;
+  const bool replay_mode_ok = graph_decode_mode() ? true : prefill_replay;
+  if (replay_enabled && replay_mode_ok && !replay_active_ && node_count_ == 0 &&
+      build_node_params_.empty() && use_hip_graphs() && !rkey.empty()) {
     // Only once the normal path has grown the pool to N execs for this topology,
     // so replay always finds a drained slot (completion-handler flags lag the GPU,
     // so the in-flight pipeline can be a few deep) -> always a HIT (re-point via
@@ -562,7 +567,7 @@ void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
       const char* e = std::getenv("MLX_GRAPH_REPLAY_SLOTS");
       return e ? std::max<size_t>(2, std::atoi(e)) : 4;
     }();
-    auto it = exec_pool_.find(decode_key_);
+    auto it = exec_pool_.find(rkey);
     if (it != exec_pool_.end() && it->second.size() >= replay_slots) {
       replay_active_ = true;
     }
@@ -861,10 +866,12 @@ void CommandEncoder::commit() {
   // node-by-node rebuild. On a miss, materialize into build_graph_ and fall
   // through to the normal instantiate path.
   if (use_hip_graphs() && replay_active_ && node_count_ > 0) {
+    const std::string& replay_key =
+        graph_decode_mode() ? decode_key_ : prefill_key_;
     std::string full_key = graph_nodes_key_ + ":" + graph_deps_key_;
     ExecSlot* slot = nullptr;
-    if (full_key == decode_key_) {
-      auto it = exec_pool_.find(decode_key_);
+    if (full_key == replay_key) {
+      auto it = exec_pool_.find(replay_key);
       if (it != exec_pool_.end()) {
         for (auto& s : it->second) {
           if (s.inflight->load(std::memory_order_acquire) == 0 &&
@@ -872,6 +879,21 @@ void CommandEncoder::commit() {
               s.src_nodes.size() == build_node_params_.size()) {
             slot = &s;
             break;
+          }
+        }
+        // Anti-hang (prefill): no drained slot means the clone+instantiate miss
+        // path below would hipGraphInstantiate while execs are live on the stream
+        // — that hangs on ROCm. Prefill chunks are coarse/sequential, so drain the
+        // stream (every exec goes idle) and reuse ANY matching slot via SetParams.
+        if (!slot && !graph_decode_mode()) {
+          (void)hipStreamSynchronize(stream_);
+          for (auto& s : it->second) {
+            if (s.source_graph &&
+                s.src_nodes.size() == build_node_params_.size()) {
+              s.inflight->store(0, std::memory_order_release);  // drained by sync
+              slot = &s;
+              break;
+            }
           }
         }
       }
@@ -930,8 +952,8 @@ void CommandEncoder::commit() {
     hipGraph_t base_graph = nullptr;
     std::vector<hipGraphNode_t> base_nodes;
     {
-      auto pit = exec_pool_.find(decode_key_);
-      if (full_key == decode_key_ && pit != exec_pool_.end()) {
+      auto pit = exec_pool_.find(replay_key);
+      if (full_key == replay_key && pit != exec_pool_.end()) {
         for (auto& s : pit->second) {
           if (s.source_graph &&
               s.src_nodes.size() == build_node_params_.size()) {
@@ -961,7 +983,7 @@ void CommandEncoder::commit() {
         hipGraphExec_t e2 = nullptr;
         CHECK_HIP_ERROR(hipGraphInstantiate(&e2, g2, nullptr, nullptr, 0));
         auto inflight = std::make_shared<std::atomic<int>>(1);
-        exec_pool_[decode_key_].push_back(
+        exec_pool_[replay_key].push_back(
             {e2, inflight, g2, std::move(graph_node_args_), n2});
         graph_node_args_.clear();
         add_completed_handler(
@@ -1030,7 +1052,11 @@ void CommandEncoder::commit() {
     // cached exec's params in one hipGraphExecUpdate; otherwise (or if ExecUpdate
     // fails) reinstantiate into the slot. The slot owns the source graph + arg
     // Packs for the exec's life (CLR stores kernelParams by pointer).
-    const bool use_execupdate = graph_decode_mode();
+    static const bool prefill_replay_cu = [] {
+      const char* e = std::getenv("MLX_GRAPH_PREFILL_REPLAY");
+      return e && e[0] == '1';
+    }();
+    const bool use_execupdate = graph_decode_mode() || prefill_replay_cu;
     auto& pool = exec_pool_[graph_nodes_key_ + ":" + graph_deps_key_];
     // For the stable decode topology, grow the pool to N execs (skip reuse until
     // then) so replay always finds a drained slot despite completion-flag lag.
@@ -1038,8 +1064,10 @@ void CommandEncoder::commit() {
       const char* e = std::getenv("MLX_GRAPH_REPLAY_SLOTS");
       return e ? std::max<size_t>(2, std::atoi(e)) : 4;
     }();
-    const bool force_grow = use_execupdate && !decode_key_.empty() &&
-        (graph_nodes_key_ + ":" + graph_deps_key_) == decode_key_ &&
+    const std::string& grow_key =
+        graph_decode_mode() ? decode_key_ : prefill_key_;
+    const bool force_grow = use_execupdate && !grow_key.empty() &&
+        (graph_nodes_key_ + ":" + graph_deps_key_) == grow_key &&
         pool.size() < replay_slots;
     for (auto& slot : pool) {
       if (force_grow) break;
@@ -1139,6 +1167,16 @@ void CommandEncoder::commit() {
         decode_key_ = fk;
       } else {
         pending_decode_key_ = std::move(fk);
+      }
+    }
+    // Same for prefill: lock the full-size-chunk topology once it recurs (chunk 2
+    // matches chunk 1), then later chunks build-once/replay it.
+    if (!graph_decode_mode() && used_slot && prefill_key_.empty()) {
+      std::string fk = graph_nodes_key_ + ":" + graph_deps_key_;
+      if (fk == pending_prefill_key_) {
+        prefill_key_ = fk;
+      } else {
+        pending_prefill_key_ = std::move(fk);
       }
     }
 
