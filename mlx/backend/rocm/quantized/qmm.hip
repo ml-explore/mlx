@@ -5440,10 +5440,9 @@ __global__ void __launch_bounds__(128) gather_qmv_wmma_prefill_kernel(
   const int run_id   = blockIdx.z;
   const int run_start = run_starts[run_id];
   const int run_len   = run_lengths[run_id];
-  const int row0 = blockIdx.x * BM;        // first token-in-run for this tile
   const int n0   = blockIdx.y * BN;        // first output column (block)
   const int wn0  = n0 + warp * BN_W;       // first output column (this warp)
-  if (run_len == 0 || row0 >= run_len || n0 >= N) return;
+  if (run_len == 0 || n0 >= N) return;
 
   // GPU grouping launches one run per expert, so run_id IS the expert index.
   const uint32_t rhs_idx = static_cast<uint32_t>(run_id);
@@ -5459,11 +5458,16 @@ __global__ void __launch_bounds__(128) gather_qmv_wmma_prefill_kernel(
 
   __shared__ hip_bfloat16 sX[BM][BK];      // gathered x rows (shared by all 4 warps)
   __shared__ hip_bfloat16 sB[BK][BN];      // dequantized weight tile (128 cols)
+  __shared__ float sC[BM][BN];
 
   using frag_a   = rocwmma::fragment<rocwmma::matrix_a,   WM, WN, WK, hip_bfloat16, rocwmma::row_major>;
   using frag_b   = rocwmma::fragment<rocwmma::matrix_b,   WM, WN, WK, hip_bfloat16, rocwmma::row_major>;
   using frag_acc = rocwmma::fragment<rocwmma::accumulator, WM, WN, WK, float>;
 
+  // Grid-stride over the run's token-tiles: grid.x is a bounded occupancy knob
+  // (not correctness), so the dispatch needs no max_run_len readback/sync and
+  // launches no excess empty blocks. A block covers tiles row0, row0+stride, ...
+  for (int row0 = blockIdx.x * BM; row0 < run_len; row0 += gridDim.x * BM) {
   frag_acc cf[MT][NT];
   #pragma unroll
   for (int mt = 0; mt < MT; ++mt)
@@ -5531,7 +5535,6 @@ __global__ void __launch_bounds__(128) gather_qmv_wmma_prefill_kernel(
     __syncthreads();
   }
 
-  __shared__ float sC[BM][BN];
   #pragma unroll
   for (int mt = 0; mt < MT; ++mt)
     #pragma unroll
@@ -5547,6 +5550,8 @@ __global__ void __launch_bounds__(128) gather_qmv_wmma_prefill_kernel(
           static_cast<T>(sC[r][c]);
     }
   }
+  __syncthreads();  // all threads done reading sC before next tile overwrites smem
+  }  // grid-stride row0 loop
 
 #endif // ROCM_HAS_WMMA
 }
@@ -5742,18 +5747,18 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       // aren't empty. Eager: read back max_run_len (one 4-byte DtoH). Under graph
       // capture a host sync is illegal, so fall back to the data-independent
       // worst case (ceil(B/64)); empty tiles past a run return immediately.
-      int grid_x;
-      if (rocm::use_hip_graphs()) {
-        grid_x = (B + 63) / 64;
-      } else {
-        enc.synchronize();
-        int max_run_len = 0;
-        (void)hipMemcpy(&max_run_len, gpu_ptr<const int>(max_rl_arr), sizeof(int),
-                        hipMemcpyDeviceToHost);
-        if (max_run_len <= 0) return;
-        grid_x = (max_run_len + 63) / 64;
-      }
-
+      // grid.x is a bounded occupancy knob: the kernel grid-strides over each
+      // run's token-tiles, so any run length is covered regardless of grid.x.
+      // Size it to ~4x the average run's tiles — enough parallelism for moderate
+      // routing imbalance, far fewer empty blocks than ceil(B/64), and crucially
+      // NO max_run_len readback (that needed a full pipeline-draining
+      // enc.synchronize() per gather_qmm call, which tanked small-input PP/s).
+      static const int gridx_mult = [] {
+        const char* e = std::getenv("MLX_GRIDX_MULT");
+        return e ? std::max(1, std::atoi(e)) : 4;
+      }();
+      const int avg_tiles = ((B + E - 1) / E + 63) / 64;
+      int grid_x = std::max(1, std::min((B + 63) / 64, avg_tiles * gridx_mult));
       dim3 wmma_block(128, 1, 1);          // 4 warps
       dim3 wmma_grid(grid_x, (N + 127) / 128, E);
       enc.add_kernel_node_ex(
