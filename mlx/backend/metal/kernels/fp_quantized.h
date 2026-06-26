@@ -586,20 +586,20 @@ METAL_FUNC void fp_qmv_wide_impl(
       const device uint16_t* wq = (const device uint16_t*)wg;
 #pragma unroll
       for (int i = 0; i < nf4; i++) {
-        w4[i] = s *
-            float4(Dequantize<4>{}(wq[i]),
-                   Dequantize<4>{}(wq[i] >> 4),
-                   Dequantize<4>{}(wq[i] >> 8),
-                   Dequantize<4>{}(wq[i] >> 12));
+        w4[i] = float4(
+            Dequantize<4>{}(wq[i]),
+            Dequantize<4>{}(wq[i] >> 4),
+            Dequantize<4>{}(wq[i] >> 8),
+            Dequantize<4>{}(wq[i] >> 12));
       }
     } else {
 #pragma unroll
       for (int i = 0; i < nf4; i++) {
-        w4[i] = s *
-            float4(Dequantize<8>{}(wg[4 * i]),
-                   Dequantize<8>{}(wg[4 * i + 1]),
-                   Dequantize<8>{}(wg[4 * i + 2]),
-                   Dequantize<8>{}(wg[4 * i + 3]));
+        w4[i] = float4(
+            Dequantize<8>{}(wg[4 * i]),
+            Dequantize<8>{}(wg[4 * i + 1]),
+            Dequantize<8>{}(wg[4 * i + 2]),
+            Dequantize<8>{}(wg[4 * i + 3]));
       }
     }
 
@@ -611,7 +611,7 @@ METAL_FUNC void fp_qmv_wide_impl(
       for (int j = 0; j < nf4; j++) {
         acc += dot(w4[j], float4(xv4[j]));
       }
-      result[v] += acc;
+      result[v] += s * acc;
     }
   }
 
