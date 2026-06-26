@@ -1471,6 +1471,37 @@ class TestLayers(mlx_tests.MLXTestCase):
             "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=False)",
         )
 
+    def test_upsample_align_corners_one_dim(self):
+        x = mx.arange(1, 5).reshape((1, 2, 2, 1))
+
+        up = nn.Upsample(scale_factor=0.5, mode="linear", align_corners=True)
+        out = up(x)
+        self.assertEqual(out.shape, (1, 1, 1, 1))
+        self.assertTrue(np.allclose(out, x[:, :1, :1, :]))
+
+        up = nn.Upsample(scale_factor=(0.5, 2), mode="linear", align_corners=True)
+        out = up(x)
+        expected = mx.array([[[[1.0], [4.0 / 3.0], [5.0 / 3.0], [2.0]]]])
+        self.assertEqual(out.shape, (1, 1, 4, 1))
+        self.assertTrue(np.allclose(out, expected))
+
+        up = nn.Upsample(scale_factor=(2, 0.5), mode="linear", align_corners=True)
+        out = up(x)
+        expected = mx.array([[[[1.0]], [[5.0 / 3.0]], [[7.0 / 3.0]], [[3.0]]]])
+        self.assertEqual(out.shape, (1, 4, 1, 1))
+        self.assertTrue(np.allclose(out, expected))
+
+        up = nn.Upsample(scale_factor=0.5, mode="cubic", align_corners=True)
+        out = up(x)
+        self.assertEqual(out.shape, (1, 1, 1, 1))
+        self.assertTrue(np.allclose(out, x[:, :1, :1, :]))
+
+        x_1d = mx.arange(0, 4).reshape((1, 4, 1)).astype(mx.float32)
+        up = nn.Upsample(scale_factor=0.25, mode="linear", align_corners=True)
+        out = up(x_1d)
+        self.assertEqual(out.shape, (1, 1, 1))
+        self.assertTrue(np.allclose(out, x_1d[:, :1, :]))
+
     def test_pooling(self):
         # Test 1d pooling
         x = mx.array(
