@@ -1416,14 +1416,6 @@ MLX_API array cummin(
 MLX_API array
 diff(const array& a, int n = 1, int axis = -1, StreamOrDevice s = {});
 
-MLX_API array diff(
-    const array& a,
-    int n,
-    int axis,
-    const std::optional<array>& prepend,
-    const std::optional<array>& append,
-    StreamOrDevice s = {});
-
 /** General convolution with a filter */
 MLX_API array conv_general(
     array input,

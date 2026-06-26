@@ -6014,23 +6014,16 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "diff",
-      [](const mx::array& a,
-         int n,
-         int axis,
-         const std::optional<mx::array>& prepend,
-         const std::optional<mx::array>& append,
-         mx::StreamOrDevice s) {
-        return mx::diff(a, n, axis, prepend, append, s);
+      [](const mx::array& a, int n, int axis, mx::StreamOrDevice s) {
+        return mx::diff(a, n, axis, s);
       },
       nb::arg(),
       "n"_a = 1,
       "axis"_a = -1,
       nb::kw_only(),
-      "prepend"_a = nb::none(),
-      "append"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def diff(a: array, /, n: int = 1, axis: int = -1, *, prepend: Optional[array] = None, append: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def diff(a: array, /, n: int = 1, axis: int = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         The n-th discrete difference along the given axis.
 
@@ -6039,10 +6032,6 @@ void init_ops(nb::module_& m) {
             n (int, optional): The number of times to difference. Default: ``1``.
             axis (int, optional): The axis along which to difference.
               Default: ``-1``.
-            prepend (array, optional): Values to prepend along ``axis`` before
-              differencing.
-            append (array, optional): Values to append along ``axis`` before
-              differencing.
 
         Returns:
             array: The n-th differences.

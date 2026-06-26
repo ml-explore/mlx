@@ -3506,16 +3506,6 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.diff(m, axis=0).tolist(), [[-1, 2, 0]])
         self.assertEqual(mx.diff(m, axis=1).tolist(), [[2, 3], [5, 1]])
 
-        # prepend / append.
-        self.assertEqual(
-            mx.diff(mx.array([2, 4, 7]), prepend=mx.array([0])).tolist(),
-            [2, 2, 3],
-        )
-        self.assertEqual(
-            mx.diff(mx.array([2, 4, 7]), append=mx.array([10])).tolist(),
-            [2, 3, 3],
-        )
-
         with self.assertRaises(ValueError):
             mx.diff(a, axis=1)
 

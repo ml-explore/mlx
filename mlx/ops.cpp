@@ -4113,16 +4113,6 @@ array diff(
     int n /* = 1 */,
     int axis /* = -1 */,
     StreamOrDevice s /* = {} */) {
-  return diff(a, n, axis, std::nullopt, std::nullopt, s);
-}
-
-array diff(
-    const array& a,
-    int n,
-    int axis,
-    const std::optional<array>& prepend,
-    const std::optional<array>& append,
-    StreamOrDevice s /* = {} */) {
   int ndim = static_cast<int>(a.ndim());
   int ax = axis < 0 ? axis + ndim : axis;
   if (ax < 0 || ax >= ndim) {
@@ -4132,17 +4122,6 @@ array diff(
     throw std::invalid_argument("[diff] Order `n` must be non-negative.");
   }
   array x = a;
-  if (prepend || append) {
-    std::vector<array> parts;
-    if (prepend) {
-      parts.push_back(*prepend);
-    }
-    parts.push_back(x);
-    if (append) {
-      parts.push_back(*append);
-    }
-    x = concatenate(parts, ax, s);
-  }
   for (int i = 0; i < n; ++i) {
     Shape upper_start(x.ndim(), 0);
     Shape lower_stop = x.shape();
