@@ -33,16 +33,13 @@ inline bool is_empty_dim(dim3 dim) {
 } // namespace
 
 bool use_hip_graphs() {
-  // Default ON: batching kernel launches into a HIP graph collapses thousands of
-  // per-token launch submissions into a handful — the win is launch/PCIe traffic
-  // and latency on a discrete GPU over a slow link (e.g. a TB5 eGPU), where each
-  // hipLaunchKernel is a separate command crossing the link. Explicit opt-out via
-  // MLX_USE_HIP_GRAPHS=0; any other value (or unset) leaves graphs enabled.
+  // Default OFF: the rebuild-every-token graph path is a net loss vs eager on the
+  // integrated APU (graph build/instantiate overhead exceeds the launch-batching
+  // win when launches are cheap). Opt in with MLX_USE_HIP_GRAPHS=1 (e.g. on a
+  // launch-bound discrete GPU over a slow link, or for build-once replay).
   static bool use_graphs = [] {
     const char* e = std::getenv("MLX_USE_HIP_GRAPHS");
-    if (e && (std::strcmp(e, "0") == 0 || std::strcmp(e, "off") == 0))
-      return false;
-    return true;
+    return e && (std::strcmp(e, "1") == 0 || std::strcmp(e, "on") == 0);
   }();
   return use_graphs;
 }
@@ -730,6 +727,14 @@ void CommandEncoder::decode_pure_begin_replay(int slot) {
   decode_pure_idx_ = 0;
 }
 
+void CommandEncoder::decode_pure_relaunch_all(int slot) {
+  device_.make_current();
+  for (auto& pe : decode_pure_chain_[slot & 1]) {
+    CHECK_HIP_ERROR(hipGraphLaunch(pe.exec, stream_));
+  }
+  worker_->commit(stream_);
+}
+
 // Reset the per-chunk build accounting (mirrors the tail of the normal commit
 // path). recreate_graph=true destroys and re-creates build_graph_ (used on
 // replay, where the forward populated it with nodes we discard).
@@ -1241,6 +1246,10 @@ void decode_pure_record(int slot) {
 void decode_pure_replay(int slot) {
   rocm::get_command_encoder(default_stream(default_device()))
       .decode_pure_begin_replay(slot);
+}
+void decode_pure_relaunch_all(int slot) {
+  rocm::get_command_encoder(default_stream(default_device()))
+      .decode_pure_relaunch_all(slot);
 }
 void decode_pure_off() {
   rocm::get_command_encoder(default_stream(default_device()))

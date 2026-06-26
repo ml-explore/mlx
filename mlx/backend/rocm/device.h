@@ -270,6 +270,7 @@ class CommandEncoder {
   // by pos&1, bake the correct fixed slots — no dynamic parity index needed.
   void decode_pure_begin_record(int slot);
   void decode_pure_begin_replay(int slot);
+  void decode_pure_relaunch_all(int slot);  // relaunch chain[slot] in order
   void decode_pure_end();
   bool decode_pure_recording() const { return decode_pure_mode_ == 1; }
   bool decode_pure_replaying() const { return decode_pure_mode_ == 2; }
