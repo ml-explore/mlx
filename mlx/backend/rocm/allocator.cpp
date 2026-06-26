@@ -491,6 +491,21 @@ RocmAllocator::RocmAllocator()
           &supported, hipDeviceAttributeMemoryPoolsSupported, i);
       if (!supported)
         continue;
+      // gfx1201 (RDNA4): the ROCm async pool's stream-ordered reuse
+      // (hipMallocAsync) hands back blocks whose prior owner's work hasn't
+      // drained — regardless of our free discipline (confirmed: synchronizing the
+      // stream before every free does NOT help; only avoiding hipMallocAsync
+      // does). It produces intermittent garbage at long-context prefill. Leave
+      // this device on the unified/slab path (malloc_async falls back when the
+      // pool is null). Override with MLX_ROCM_FORCE_ASYNC_POOL=1.
+      {
+        hipDeviceProp_t props{};
+        if (hipGetDeviceProperties(&props, i) == hipSuccess &&
+            std::string(props.gcnArchName).find("gfx1201") != std::string::npos &&
+            !std::getenv("MLX_ROCM_FORCE_ASYNC_POOL")) {
+          continue;
+        }
+      }
       (void)hipSetDevice(i);
       hipMemPool_t pool = nullptr;
       if (hipDeviceGetDefaultMemPool(&pool, i) == hipSuccess) {
