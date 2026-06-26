@@ -697,21 +697,36 @@ bool CommandEncoder::needs_commit() {
 void CommandEncoder::decode_pure_end() {
   decode_pure_mode_ = 0;
   decode_pure_idx_ = 0;
-  for (auto& pe : decode_pure_chain_) {
+  for (int p = 0; p < 2; ++p) {
+    for (auto& pe : decode_pure_chain_[p]) {
+      if (pe.exec) hipGraphExecDestroy(pe.exec);
+      if (pe.graph) hipGraphDestroy(pe.graph);
+    }
+    decode_pure_chain_[p].clear();
+  }
+}
+
+void CommandEncoder::decode_pure_begin_record(int slot) {
+  // Drop any prior chain for this parity slot (keep the other parity's chain).
+  for (auto& pe : decode_pure_chain_[slot & 1]) {
     if (pe.exec) hipGraphExecDestroy(pe.exec);
     if (pe.graph) hipGraphDestroy(pe.graph);
   }
-  decode_pure_chain_.clear();
-}
-
-void CommandEncoder::decode_pure_begin_record() {
-  decode_pure_end();   // drop any prior chain
+  decode_pure_chain_[slot & 1].clear();
   decode_pure_mode_ = 1;
+  decode_pure_slot_ = slot & 1;
   decode_pure_idx_ = 0;
 }
 
-void CommandEncoder::decode_pure_begin_replay() {
+void CommandEncoder::decode_pure_begin_replay(int slot) {
+  static const bool dbg = std::getenv("MLX_PURE_CHAINDBG") != nullptr;
+  if (dbg && decode_pure_mode_ == 2) {
+    fprintf(stderr, "[chain] prev token consumed %zu / %zu recorded (slot %d)\n",
+            decode_pure_idx_, decode_pure_chain_[decode_pure_slot_].size(),
+            decode_pure_slot_);
+  }
   decode_pure_mode_ = 2;
+  decode_pure_slot_ = slot & 1;
   decode_pure_idx_ = 0;
 }
 
@@ -747,11 +762,12 @@ bool CommandEncoder::commit_pure() {
     // REPLAY: relaunch the next recorded exec verbatim; discard the freshly
     // built nodes. The deterministic arena guarantees this token's buffer
     // addresses match the recorded exec's baked pointers.
-    if (decode_pure_idx_ >= decode_pure_chain_.size()) {
+    auto& chain = decode_pure_chain_[decode_pure_slot_];
+    if (decode_pure_idx_ >= chain.size()) {
       decode_pure_mode_ = 0;   // topology drift (more commits than recorded)
       return false;            // fall back to the normal build path
     }
-    auto& pe = decode_pure_chain_[decode_pure_idx_++];
+    auto& pe = chain[decode_pure_idx_++];
     graph_node_args_.clear();  // this token's packs are unused
     uint64_t mg = graph_current_gen();
     graph_advance_gen();
@@ -777,7 +793,7 @@ bool CommandEncoder::commit_pure() {
   graph_advance_gen();
   CHECK_HIP_ERROR(hipGraphLaunch(exec, stream_));
   free_graph_generation_async(mg);
-  decode_pure_chain_.push_back(
+  decode_pure_chain_[decode_pure_slot_].push_back(
       PureExec{exec, build_graph_, std::move(graph_node_args_)});
   graph_node_args_.clear();
   CHECK_HIP_ERROR(hipGraphCreate(&build_graph_, 0));  // fresh for next chunk
@@ -1218,20 +1234,20 @@ void clear_all_encoders() {
 
 // --- Pure-relaunch decode bridge (called from the engine's decode loop) ------
 namespace mlx::core {
-void decode_pure_record() {
+void decode_pure_record(int slot) {
   rocm::get_command_encoder(default_stream(default_device()))
-      .decode_pure_begin_record();
+      .decode_pure_begin_record(slot);
 }
-void decode_pure_replay() {
+void decode_pure_replay(int slot) {
   rocm::get_command_encoder(default_stream(default_device()))
-      .decode_pure_begin_replay();
+      .decode_pure_begin_replay(slot);
 }
 void decode_pure_off() {
   rocm::get_command_encoder(default_stream(default_device()))
       .decode_pure_end();
 }
-size_t decode_pure_chain_len() {
+size_t decode_pure_chain_len(int slot) {
   return rocm::get_command_encoder(default_stream(default_device()))
-      .decode_pure_chain_len();
+      .decode_pure_chain_len(slot);
 }
 } // namespace mlx::core

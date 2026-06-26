@@ -262,12 +262,20 @@ class CommandEncoder {
   // kept and appended to the chain. replay: each commit relaunches the next
   // recorded exec verbatim and discards the freshly-built nodes. On any chunk
   // mismatch we disable pure mode and fall back to the normal build path.
-  void decode_pure_begin_record();
-  void decode_pure_begin_replay();
+  // slot selects which of the two parity chains to record into / replay from.
+  // The hybrid GatedDeltaNet recurrent state ping-pongs by pos&1 (read slot p,
+  // write slot 1-p), so the read/write indices differ between even and odd
+  // tokens. One recorded graph bakes one parity's slots; reusing it on the other
+  // parity reads/writes the wrong slot. Two graphs (one per parity), alternated
+  // by pos&1, bake the correct fixed slots — no dynamic parity index needed.
+  void decode_pure_begin_record(int slot);
+  void decode_pure_begin_replay(int slot);
   void decode_pure_end();
   bool decode_pure_recording() const { return decode_pure_mode_ == 1; }
   bool decode_pure_replaying() const { return decode_pure_mode_ == 2; }
-  size_t decode_pure_chain_len() const { return decode_pure_chain_.size(); }
+  size_t decode_pure_chain_len(int slot) const {
+    return decode_pure_chain_[slot & 1].size();
+  }
 
  private:
   struct PureExec {
@@ -276,8 +284,9 @@ class CommandEncoder {
     std::vector<std::shared_ptr<void>> packs;       // kernarg storage, by-pointer
   };
   int decode_pure_mode_{0};      // 0=off 1=record 2=replay
+  int decode_pure_slot_{0};      // active parity chain (0/1)
   size_t decode_pure_idx_{0};    // commit index within the current replay token
-  std::vector<PureExec> decode_pure_chain_;
+  std::vector<PureExec> decode_pure_chain_[2];
   bool commit_pure();            // handle commit() in pure mode; false => fall through
 };
 

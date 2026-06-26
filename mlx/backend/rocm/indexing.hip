@@ -1551,4 +1551,18 @@ void gpu_scalar_copy_i32(array& dst, array& src) {
   });
 }
 
+// Immediate (graph-split) device buffer copy src->dst. Used by the decode loop
+// to move GDN scratch state into the read buffer between relaunches.
+void gpu_buffer_copy(array& dst, array& src) {
+  auto& enc = rocm::get_command_encoder(default_stream(default_device()));
+  char* d = gpu_ptr<char>(dst);
+  char* s = gpu_ptr<char>(src);
+  size_t bytes = src.nbytes();
+  enc.set_input_array(src);
+  enc.set_output_array(dst);
+  enc.launch_kernel([d, s, bytes](hipStream_t st) {
+    (void)hipMemcpyAsync(d, s, bytes, hipMemcpyDeviceToDevice, st);
+  });
+}
+
 } // namespace mlx::core
