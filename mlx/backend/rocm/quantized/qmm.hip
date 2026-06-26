@@ -3101,6 +3101,140 @@ __global__ void __launch_bounds__(1024) qmv_wide_kernel(
     out[static_cast<size_t>(row) * N + col] = static_cast<T>(acc);
 }
 
+// Dense fused WMMA quantized GEMM (q4/q6/q8 affine), graph-addable.
+//   out[M,N] = x[M,K] @ dequant(w)[K,N], w stored [N, K*BITS/32] packed (transpose).
+// Unpacks packed weights in-kernel (128-bit loads, bit-level) — no bf16 weight
+// materialization (vs the dequant+rocBLAS path), so it both runs as a single
+// add_kernel_node graph node (no graph fragmentation) and avoids the dequant
+// memory traffic. 4 warps/block share the gathered x tile; grid-strides over M.
+template <typename T, typename ScaleT, int BITS, int GROUP_SIZE, bool HAS_BIAS>
+__global__ void __launch_bounds__(128) qmm_wmma_dense_kernel(
+    const T* __restrict__ x,
+    const uint32_t* __restrict__ w,
+    const ScaleT* __restrict__ scales,
+    const ScaleT* __restrict__ biases,
+    T* __restrict__ out,
+    int M, int N, int K) {
+#if ROCM_HAS_WMMA
+  constexpr int WM = 16, WN = 16, WK = 16, MT = 4, NT = 2, NWARP = 4;
+  constexpr int BM = WM * MT;          // 64 token rows / block
+  constexpr int BN_W = WN * NT;        // 32 cols / warp
+  constexpr int BN = BN_W * NWARP;     // 128 cols / block
+  constexpr int BK = GROUP_SIZE;       // one quant group per K-tile (=64)
+  constexpr int CH = BK / 8;           // uint4 chunks per gathered x row (bf16)
+
+  const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
+  const int n0 = blockIdx.y * BN, wn0 = n0 + warp * BN_W;
+  if (n0 >= N) return;
+  const int Kp = K * BITS / 32;        // uint32 per weight row
+  const int Kg = K / GROUP_SIZE;       // quant groups per row
+
+  __shared__ hip_bfloat16 sX[BM][BK];
+  __shared__ hip_bfloat16 sB[BK][BN];
+  __shared__ float sC[BM][BN];
+  using frag_a   = rocwmma::fragment<rocwmma::matrix_a,   WM, WN, WK, hip_bfloat16, rocwmma::row_major>;
+  using frag_b   = rocwmma::fragment<rocwmma::matrix_b,   WM, WN, WK, hip_bfloat16, rocwmma::row_major>;
+  using frag_acc = rocwmma::fragment<rocwmma::accumulator, WM, WN, WK, float>;
+
+  for (int m0 = blockIdx.x * BM; m0 < M; m0 += gridDim.x * BM) {
+    frag_acc cf[MT][NT];
+    #pragma unroll
+    for (int mt = 0; mt < MT; ++mt)
+      #pragma unroll
+      for (int t = 0; t < NT; ++t) rocwmma::fill_fragment(cf[mt][t], 0.0f);
+
+    for (int kk = 0; kk < K; kk += BK) {
+      // gather x tile: BM contiguous rows x BK cols, 128-bit loads
+      for (int idx = tid; idx < BM * CH; idx += NWARP * 32) {
+        const int r = idx / CH, ch = idx % CH, row = m0 + r;
+        uint4* dst = reinterpret_cast<uint4*>(&sX[r][ch * 8]);
+        if (row < M)
+          *dst = *reinterpret_cast<const uint4*>(&x[static_cast<int64_t>(row) * K + kk + ch * 8]);
+        else
+          *dst = uint4{0, 0, 0, 0};
+      }
+      // dequantize this warp's 32-col slab (one column per lane), BITS-generic
+      {
+        const int col = warp * BN_W + lane, n = wn0 + lane;
+        if (n < N) {
+          const int bg = kk / GROUP_SIZE;
+          const float scl = static_cast<float>(scales[n * Kg + bg]);
+          const float bia = HAS_BIAS ? static_cast<float>(biases[n * Kg + bg]) : 0.0f;
+          const uint32_t* wbase = &w[static_cast<int64_t>(n) * Kp + (kk * BITS) / 32];
+          if constexpr (BITS == 6) {
+            uint32_t wl[BK * 6 / 32];
+            #pragma unroll
+            for (int u = 0; u < (BK * 6 / 128); ++u)
+              reinterpret_cast<uint4*>(wl)[u] =
+                  *reinterpret_cast<const uint4*>(wbase + u * 4);
+            #pragma unroll
+            for (int k = 0; k < BK; ++k) {
+              const int b = k * 6, idx2 = b >> 5, off = b & 31;
+              const uint64_t w64 = uint64_t(wl[idx2]) |
+                  (uint64_t((idx2 + 1 < BK * 6 / 32) ? wl[idx2 + 1] : 0u) << 32);
+              const uint32_t q = uint32_t(w64 >> off) & 0x3Fu;
+              sB[k][col] = static_cast<hip_bfloat16>(float(q) * scl + bia);
+            }
+          } else {
+            constexpr int WPER = 32 / BITS;
+            constexpr int U4S = (BK * BITS) / 128;
+            constexpr uint32_t QM = (1u << BITS) - 1u;
+            #pragma unroll
+            for (int u = 0; u < U4S; ++u) {
+              const uint4 wv = *reinterpret_cast<const uint4*>(wbase + u * 4);
+              const uint32_t* wp = reinterpret_cast<const uint32_t*>(&wv);
+              #pragma unroll
+              for (int q = 0; q < 4; ++q) {
+                const uint32_t wd = wp[q];
+                #pragma unroll
+                for (int j = 0; j < WPER; ++j) {
+                  const int k = (u * 4 + q) * WPER + j;
+                  sB[k][col] = static_cast<hip_bfloat16>(
+                      float((wd >> (BITS * j)) & QM) * scl + bia);
+                }
+              }
+            }
+          }
+        } else {
+          #pragma unroll
+          for (int k = 0; k < BK; ++k) sB[k][col] = static_cast<hip_bfloat16>(0.0f);
+        }
+      }
+      __syncthreads();
+      #pragma unroll
+      for (int ks = 0; ks < BK; ks += WK) {
+        frag_a af[MT];
+        #pragma unroll
+        for (int mt = 0; mt < MT; ++mt)
+          rocwmma::load_matrix_sync(af[mt], &sX[mt * WM][ks], BK);
+        #pragma unroll
+        for (int t = 0; t < NT; ++t) {
+          frag_b bf;
+          rocwmma::load_matrix_sync(bf, &sB[ks][warp * BN_W + t * WN], BN);
+          #pragma unroll
+          for (int mt = 0; mt < MT; ++mt)
+            rocwmma::mma_sync(cf[mt][t], af[mt], bf, cf[mt][t]);
+        }
+      }
+      __syncthreads();
+    }
+    #pragma unroll
+    for (int mt = 0; mt < MT; ++mt)
+      #pragma unroll
+      for (int t = 0; t < NT; ++t)
+        rocwmma::store_matrix_sync(&sC[mt * WM][warp * BN_W + t * WN], cf[mt][t], BN,
+                                   rocwmma::mem_row_major);
+    __syncthreads();
+    for (int idx = tid; idx < BM * BN; idx += NWARP * 32) {
+      const int r = idx / BN, c = idx % BN, row = m0 + r;
+      if (row < M && (n0 + c) < N)
+        out[static_cast<int64_t>(row) * N + n0 + c] = static_cast<T>(sC[r][c]);
+    }
+    __syncthreads();
+  }
+#endif // ROCM_HAS_WMMA
+}
+
 } // namespace rocm
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -3156,6 +3290,55 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool dequant_gemm_supported_mode = (mode_ == QuantizationMode::Affine);
   bool should_prefer_dequant = should_use_dequant_gemm_path(
       M, N, K, batch_count, non_batched, transpose_, can_use_batched_qmv, d);
+
+  // Fused WMMA quantized GEMM (q4/q6/q8): graph-addable single node (no rocBLAS
+  // split) AND no dequant materialization. Opt in with MLX_ROCM_WMMA_QMM=1, or
+  // auto-on under HIP graphs (where avoiding the rocBLAS graph-split is the point);
+  // eager keeps rocBLAS unless forced. Single (non-batched) bf16 affine prefill.
+  {
+    static const bool wmma_qmm_env = [] {
+      const char* e = std::getenv("MLX_ROCM_WMMA_QMM");
+      return e && e[0] == '1';
+    }();
+    static const bool wmma_qmm_off = [] {
+      const char* e = std::getenv("MLX_ROCM_WMMA_QMM");
+      return e && e[0] == '0';
+    }();
+    const bool want_wmma =
+        !wmma_qmm_off && (wmma_qmm_env || rocm::use_hip_graphs());
+    if (want_wmma && transpose_ && mode_ == QuantizationMode::Affine &&
+        x.dtype() == bfloat16 && scales.dtype() == bfloat16 &&
+        (!biases.has_value() || biases->dtype() == bfloat16) &&
+        batch_count == 1 && x_batch_count == 1 && w_batch_count == 1 && M > 1 &&
+        (N % 16 == 0) && group_size_ == 64 && (K % 64 == 0) &&
+        (bits_ == 4 || bits_ == 6 || bits_ == 8) && d.has_native_wmma()) {
+      dim3 block(128, 1, 1);
+      dim3 grid((M + 63) / 64, (N + 127) / 128, 1);
+      const bool hb = biases.has_value();
+      auto launch = [&](auto bits_tag, auto hb_tag) {
+        constexpr int BITS = decltype(bits_tag)::value;
+        constexpr bool HB = decltype(hb_tag)::value;
+        enc.add_kernel_node(
+            &rocm::qmm_wmma_dense_kernel<hip_bfloat16, hip_bfloat16, BITS, 64, HB>,
+            grid, block, 0u,
+            gpu_ptr<const hip_bfloat16>(x),
+            gpu_ptr<const uint32_t>(w),
+            gpu_ptr<const hip_bfloat16>(scales),
+            static_cast<const hip_bfloat16*>(
+                hb ? gpu_ptr<const hip_bfloat16>(*biases) : nullptr),
+            gpu_ptr<hip_bfloat16>(out),
+            M, N, K);
+      };
+      auto by_bias = [&](auto bits_tag) {
+        if (hb) launch(bits_tag, std::true_type{});
+        else launch(bits_tag, std::false_type{});
+      };
+      if (bits_ == 4) by_bias(std::integral_constant<int, 4>{});
+      else if (bits_ == 6) by_bias(std::integral_constant<int, 6>{});
+      else by_bias(std::integral_constant<int, 8>{});
+      return;
+    }
+  }
 
   // Dequant + rocBLAS GEMM path
   // Disable with MLX_ROCM_QMM_DEQUANT_GEMM=0 if needed
