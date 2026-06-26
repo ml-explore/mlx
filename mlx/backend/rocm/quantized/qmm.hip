@@ -5436,9 +5436,11 @@ __global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
   const int row0 = blockIdx.x * BM;        // first token-in-run for this tile
   const int n0   = blockIdx.y * BN;        // first output column
   const int lane = threadIdx.x;            // 0..31
-  if (row0 >= run_len || n0 >= N) return;
+  if (run_len == 0 || row0 >= run_len || n0 >= N) return;
 
-  const uint32_t rhs_idx = rhs_indices[run_start];
+  // GPU grouping launches one run per expert, so run_id IS the expert index.
+  const uint32_t rhs_idx = static_cast<uint32_t>(run_id);
+  (void)rhs_indices;
   if (rhs_idx >= static_cast<uint32_t>(E)) return;
 
   const int Kp = K * BITS / 32;            // uint32 per weight row
@@ -5537,6 +5539,49 @@ __global__ void __launch_bounds__(32) gather_qmv_wmma_prefill_kernel(
 #endif // ROCM_HAS_WMMA
 }
 
+// ---- GPU-side expert grouping (counting sort; keys = expert in [0,E)) ----
+// Replaces the per-call host sort + device sync. All on-device, no host round
+// trip. Runs map 1:1 to experts (run_id == expert), so the GEMM reads run_id as
+// its expert and the launch needs no host-side run counts.
+__global__ void moe_group_zero_kernel(int* a, int* b, int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < n) { a[i] = 0; b[i] = 0; }
+}
+__global__ void moe_group_count_kernel(
+    const uint32_t* __restrict__ rhs, int B, int E, int* __restrict__ counts) {
+  int b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (b < B) { uint32_t e = rhs[b]; if (e < static_cast<uint32_t>(E)) atomicAdd(&counts[e], 1); }
+}
+__global__ void moe_group_scan_kernel(
+    const int* __restrict__ counts, int E,
+    int* __restrict__ run_starts, int* __restrict__ run_lengths,
+    int* __restrict__ max_run_len) {
+  if (blockIdx.x == 0 && threadIdx.x == 0) {
+    int acc = 0, mx = 0;
+    for (int e = 0; e < E; ++e) {
+      run_starts[e] = acc;
+      run_lengths[e] = counts[e];
+      acc += counts[e];
+      if (counts[e] > mx) mx = counts[e];
+    }
+    *max_run_len = mx;
+  }
+}
+__global__ void moe_group_scatter_kernel(
+    const uint32_t* __restrict__ rhs, const uint32_t* __restrict__ lhs, int B, int E,
+    const int* __restrict__ run_starts, int* __restrict__ cursors,
+    uint32_t* __restrict__ sorted_li, int* __restrict__ perm) {
+  int b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (b < B) {
+    uint32_t e = rhs[b];
+    if (e < static_cast<uint32_t>(E)) {
+      int pos = run_starts[e] + atomicAdd(&cursors[e], 1);
+      sorted_li[pos] = lhs[b];
+      perm[pos] = b;
+    }
+  }
+}
+
 } // namespace rocm
 
 void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -5632,107 +5677,75 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       E > 0 && batch_ndim == 1 &&
       mode_ == QuantizationMode::Affine && x.dtype() == bfloat16 &&
       group_size_ == 64 && bits_ == 4) {
-    // Sort batch elements by expert to form contiguous runs.
-    // This allows the kernel to process all tokens for one expert together,
-    // sharing weight reads. We create a sorted permutation on CPU.
-    // Copy indices to host. rhs/lhs_indices live in DEVICE memory; reading their
-    // .data() pointer on the host corrupts the heap on discrete GPUs (only the
-    // unified-memory APU tolerates it). hipMemcpy after a stream sync is correct
-    // on both. (This sync is the per-call overhead the GPU-grouping rewrite kills.)
-    enc.synchronize();
-    std::vector<uint32_t> ri_host(B), li_host(B);
-    (void)hipMemcpy(ri_host.data(), gpu_ptr<const uint32_t>(rhs_indices),
-                    B * sizeof(uint32_t), hipMemcpyDeviceToHost);
-    (void)hipMemcpy(li_host.data(), gpu_ptr<const uint32_t>(lhs_indices),
-                    B * sizeof(uint32_t), hipMemcpyDeviceToHost);
-    const uint32_t* ri_cpu = ri_host.data();
-    const uint32_t* li_cpu = li_host.data();
-
-    // Create sort permutation by expert index
-    std::vector<int> perm(B);
-    std::iota(perm.begin(), perm.end(), 0);
-    std::sort(perm.begin(), perm.end(), [&](int a, int b) {
-      return ri_cpu[a] < ri_cpu[b];
-    });
-
-    // Build sorted index arrays and compute runs
-    std::vector<uint32_t> sorted_ri(B), sorted_li(B);
-    for (int i = 0; i < B; ++i) {
-      sorted_ri[i] = ri_cpu[perm[i]];
-      sorted_li[i] = li_cpu[perm[i]];
-    }
-
-    std::vector<int> run_starts_vec, run_lengths_vec;
-    run_starts_vec.reserve(E);
-    run_lengths_vec.reserve(E);
-    int run_begin = 0;
-    for (int b = 1; b <= B; ++b) {
-      if (b == B || sorted_ri[b] != sorted_ri[run_begin]) {
-        run_starts_vec.push_back(run_begin);
-        run_lengths_vec.push_back(b - run_begin);
-        run_begin = b;
-      }
-    }
-    int num_runs = static_cast<int>(run_starts_vec.size());
-    int max_run_len =
-        run_lengths_vec.empty()
-            ? 0
-            : *std::max_element(run_lengths_vec.begin(), run_lengths_vec.end());
-
-    // Upload sorted indices to GPU
-    array sorted_ri_arr({B}, uint32, nullptr, {});
-    array sorted_li_arr({B}, uint32, nullptr, {});
-    sorted_ri_arr.set_data(mlx::core::rocm::malloc_async(sorted_ri_arr.nbytes(), enc));
-    sorted_li_arr.set_data(mlx::core::rocm::malloc_async(sorted_li_arr.nbytes(), enc));
-    std::memcpy(sorted_ri_arr.data<uint32_t>(), sorted_ri.data(), B * sizeof(uint32_t));
-    std::memcpy(sorted_li_arr.data<uint32_t>(), sorted_li.data(), B * sizeof(uint32_t));
-    enc.set_input_array(sorted_ri_arr);
-    enc.set_input_array(sorted_li_arr);
-
-    // Also need a mapping from sorted position back to original batch index for output
-    array perm_arr({B}, int32, nullptr, {});
-    perm_arr.set_data(mlx::core::rocm::malloc_async(perm_arr.nbytes(), enc));
-    std::memcpy(perm_arr.data<int>(), perm.data(), B * sizeof(int));
-    enc.set_input_array(perm_arr);
-
-    // Upload run info to GPU
-    array run_starts_arr({num_runs}, int32, nullptr, {});
-    array run_lengths_arr({num_runs}, int32, nullptr, {});
-    run_starts_arr.set_data(mlx::core::rocm::malloc_async(run_starts_arr.nbytes(), enc));
-    run_lengths_arr.set_data(mlx::core::rocm::malloc_async(run_lengths_arr.nbytes(), enc));
-    std::memcpy(run_starts_arr.data<int>(), run_starts_vec.data(), num_runs * sizeof(int));
-    std::memcpy(run_lengths_arr.data<int>(), run_lengths_vec.data(), num_runs * sizeof(int));
-    enc.set_input_array(run_starts_arr);
-    enc.set_input_array(run_lengths_arr);
-
-    int64_t x_bs = (x_batch_count == 1) ? 0 : static_cast<int64_t>(M) * K;
-
-    // ---- WMMA path: use 16x16x16 wave matrix multiply when tiles align ----
-    // WMMA tiles are 16x16; kernel handles non-aligned M with bounds masking.
-    // N must be 16-aligned (typical for transformer hidden dimensions).
-    // Gate on the device arch: a multi-arch build can compile this kernel
-    // for a target whose gcnArchName isn't on the rocWMMA allowlist
-    // (e.g. gfx1030/1103) — dispatching there would crash.
+    // WMMA arch gate (must hold for the grouped path to be worthwhile).
     bool use_wmma = d.has_native_wmma() && (N % 16 == 0) && (bits_ == 4);
     use_wmma = parse_warp_kernel_env("MLX_ROCM_GATHER_QMV_USE_WMMA", use_wmma);
-
     if (use_wmma) {
-      // One wave32 per BM(64-token) x BN(32-col) register-tiled output.
-      dim3 wmma_block(32, 1, 1);
-      // grid.x tiles the run's TOKENS (max run len) in BM=64 chunks; grid.y the
-      // N columns in BN=32 chunks.
-      dim3 wmma_grid((max_run_len + 63) / 64, (N + 31) / 32, num_runs);
-      size_t wmma_smem = 0;  // static shared memory, declared in-kernel
+      // ---- GPU-side counting-sort grouping (no host round trip) ----
+      // counts/cursors/run_starts/run_lengths are per-expert (E); sorted_li/perm
+      // are per-batch-elem (B). Runs map 1:1 to experts.
+      array counts_arr({E}, int32, nullptr, {});
+      array cursors_arr({E}, int32, nullptr, {});
+      array run_starts_arr({E}, int32, nullptr, {});
+      array run_lengths_arr({E}, int32, nullptr, {});
+      array sorted_li_arr({B}, uint32, nullptr, {});
+      array perm_arr({B}, int32, nullptr, {});
+      array max_rl_arr({1}, int32, nullptr, {});
+      counts_arr.set_data(mlx::core::rocm::malloc_async(counts_arr.nbytes(), enc));
+      cursors_arr.set_data(mlx::core::rocm::malloc_async(cursors_arr.nbytes(), enc));
+      run_starts_arr.set_data(mlx::core::rocm::malloc_async(run_starts_arr.nbytes(), enc));
+      run_lengths_arr.set_data(mlx::core::rocm::malloc_async(run_lengths_arr.nbytes(), enc));
+      sorted_li_arr.set_data(mlx::core::rocm::malloc_async(sorted_li_arr.nbytes(), enc));
+      perm_arr.set_data(mlx::core::rocm::malloc_async(perm_arr.nbytes(), enc));
+      max_rl_arr.set_data(mlx::core::rocm::malloc_async(max_rl_arr.nbytes(), enc));
+      enc.set_input_array(counts_arr);
+      enc.set_input_array(cursors_arr);
+      enc.set_input_array(run_starts_arr);
+      enc.set_input_array(run_lengths_arr);
+      enc.set_input_array(sorted_li_arr);
+      enc.set_input_array(perm_arr);
+      enc.set_input_array(max_rl_arr);
 
+      const int gthreads = 256;
+      enc.add_kernel_node(
+          &rocm::moe_group_zero_kernel, dim3((E + gthreads - 1) / gthreads), dim3(gthreads), 0u,
+          gpu_ptr<int>(counts_arr), gpu_ptr<int>(cursors_arr), E);
+      enc.add_kernel_node(
+          &rocm::moe_group_count_kernel, dim3((B + gthreads - 1) / gthreads), dim3(gthreads), 0u,
+          gpu_ptr<const uint32_t>(rhs_indices), B, E, gpu_ptr<int>(counts_arr));
+      enc.add_kernel_node(
+          &rocm::moe_group_scan_kernel, dim3(1), dim3(1), 0u,
+          gpu_ptr<const int>(counts_arr), E,
+          gpu_ptr<int>(run_starts_arr), gpu_ptr<int>(run_lengths_arr),
+          gpu_ptr<int>(max_rl_arr));
+      enc.add_kernel_node(
+          &rocm::moe_group_scatter_kernel, dim3((B + gthreads - 1) / gthreads), dim3(gthreads), 0u,
+          gpu_ptr<const uint32_t>(rhs_indices), gpu_ptr<const uint32_t>(lhs_indices), B, E,
+          gpu_ptr<const int>(run_starts_arr), gpu_ptr<int>(cursors_arr),
+          gpu_ptr<uint32_t>(sorted_li_arr), gpu_ptr<int>(perm_arr));
+
+      int64_t x_bs = (x_batch_count == 1) ? 0 : static_cast<int64_t>(M) * K;
+
+      // Read back max run length so grid.x bounds the token tiles to the largest
+      // run, not B — otherwise ~98% of x-tiles are empty (huge launch waste). One
+      // 4-byte DtoH, far cheaper than the old host sort + 2xB index copy.
+      enc.synchronize();
+      int max_run_len = 0;
+      (void)hipMemcpy(&max_run_len, gpu_ptr<const int>(max_rl_arr), sizeof(int),
+                      hipMemcpyDeviceToHost);
+      if (max_run_len <= 0) return;
+
+      dim3 wmma_block(32, 1, 1);
+      dim3 wmma_grid((max_run_len + 63) / 64, (N + 31) / 32, E);
       enc.add_kernel_node_ex(
           &rocm::gather_qmv_wmma_prefill_kernel<hip_bfloat16, hip_bfloat16, 4, 64, true>,
-          wmma_grid, wmma_block, static_cast<uint32_t>(wmma_smem),
+          wmma_grid, wmma_block, 0u,
           gpu_ptr<const hip_bfloat16>(x),
           gpu_ptr<const uint32_t>(w),
           gpu_ptr<const hip_bfloat16>(scales),
           static_cast<const hip_bfloat16*>(has_bias ? gpu_ptr<const hip_bfloat16>(*biases) : nullptr),
           gpu_ptr<const uint32_t>(sorted_li_arr),
-          gpu_ptr<const uint32_t>(sorted_ri_arr),
+          gpu_ptr<const uint32_t>(rhs_indices),
           gpu_ptr<const int>(run_starts_arr),
           gpu_ptr<const int>(run_lengths_arr),
           gpu_ptr<const int>(perm_arr),
@@ -5740,40 +5753,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
           B, M, N, K, E, has_bias, x_bs);
       return;
     }
-
-    // ---- Scalar prefill fallback ----
-    int fast_threads_per_col_pf = select_qmv_threads_per_col(K, N, bits_, num_runs);
-    int fast_cols_per_block_pf = select_qmv_cols_per_block(K, N, bits_);
-    int max_cpb = rocm::kMaxThreadsPerBlock / fast_threads_per_col_pf;
-    while (fast_cols_per_block_pf > max_cpb) fast_cols_per_block_pf /= 2;
-    while (fast_cols_per_block_pf > 1 && (N % fast_cols_per_block_pf) != 0 && fast_cols_per_block_pf > 8)
-      fast_cols_per_block_pf /= 2;
-
-    dim3 pf_block(fast_threads_per_col_pf, fast_cols_per_block_pf);
-    dim3 pf_grid(M, (N + fast_cols_per_block_pf - 1) / fast_cols_per_block_pf, num_runs);
-
-    {
-      auto launch_pf = [&](auto bits_tag) {
-        constexpr int BITS = decltype(bits_tag)::value;
-        enc.add_kernel_node(
-            &rocm::gather_qmv_prefill_kernel<hip_bfloat16, hip_bfloat16, BITS, 64, true, 16>,
-            pf_grid, pf_block, 0u,
-            gpu_ptr<const hip_bfloat16>(x),
-            gpu_ptr<const uint8_t>(w),
-            gpu_ptr<const hip_bfloat16>(scales),
-            static_cast<const hip_bfloat16*>(has_bias ? gpu_ptr<const hip_bfloat16>(*biases) : nullptr),
-            gpu_ptr<const uint32_t>(sorted_li_arr),
-            gpu_ptr<const uint32_t>(sorted_ri_arr),
-            gpu_ptr<const int>(run_starts_arr),
-            gpu_ptr<const int>(run_lengths_arr),
-            gpu_ptr<const int>(perm_arr),
-            gpu_ptr<hip_bfloat16>(out),
-            B, M, N, K, E, has_bias, x_bs);
-      };
-      if (bits_ == 4) launch_pf(std::integral_constant<int, 4>{});
-      else launch_pf(std::integral_constant<int, 8>{});
-    }
-    return;
+    // !use_wmma: fall through to the standard (non-grouped) dispatch below.
   }
 
   const void *x_ptr = gpu_ptr<void>(x), *w_ptr = gpu_ptr<void>(w),
