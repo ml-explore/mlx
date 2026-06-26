@@ -328,7 +328,7 @@ class RMSprop(Optimizer):
             raise ValueError(
                 f"RMSprop alpha should be >=0, {self.alpha} was provided instead"
             )
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
                 f"RMSprop epsilon should be >0, {self.eps} was provided instead"
             )
@@ -379,7 +379,7 @@ class Adagrad(Optimizer):
         self._maybe_schedule("learning_rate", learning_rate)
         self.eps = eps
 
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
                 f"Adagrad epsilon should be >0, {self.eps} was provided instead"
             )
@@ -419,7 +419,7 @@ class AdaDelta(Optimizer):
         rho (float, optional): The coefficient :math:`\rho` used for computing a
             running average of squared gradients. Default: ``0.9``
         eps (float, optional): The term :math:`\epsilon` added to the denominator to improve
-          numerical stability. Default: `1e-8`
+          numerical stability. Default: ``1e-6``
     """
 
     def __init__(
@@ -437,7 +437,7 @@ class AdaDelta(Optimizer):
             raise ValueError(
                 f"AdaDelta rho should be >=0, {self.rho} was provided instead"
             )
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
                 f"AdaDelta epsilon should be >0, {self.eps} was provided instead"
             )

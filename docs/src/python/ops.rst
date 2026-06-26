@@ -29,6 +29,7 @@ Operations
    array_equal
    asarray
    as_strided
+   astype
    atleast_1d
    atleast_2d
    atleast_3d
@@ -42,6 +43,7 @@ Operations
    broadcast_arrays
    broadcast_shapes
    broadcast_to
+   can_cast
    ceil
    clip
    concat
@@ -80,9 +82,11 @@ Operations
    expand_dims
    eye
    flatten
+   flip
    floor
    floor_divide
    full
+   from_dlpack
    from_fp8
    gather_mm
    gather_qmm
@@ -94,6 +98,7 @@ Operations
    identity
    imag
    inner
+   isdtype
    isfinite
    isclose
    isinf
@@ -148,6 +153,7 @@ Operations
    remainder
    repeat
    reshape
+   result_type
    right_shift
    roll
    round
@@ -190,6 +196,7 @@ Operations
    tril
    triu
    unflatten
+   unstack
    var
    view
    where

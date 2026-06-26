@@ -12,6 +12,11 @@ void new_stream(Stream s) {
   encoders.try_emplace(s.index, s);
 }
 
+void new_thread_unsafe_stream(Stream s) {
+  auto& encoders = get_global_command_encoders();
+  encoders.try_emplace(s.index, s);
+}
+
 void clear_streams() {
   get_command_encoders().clear();
 }

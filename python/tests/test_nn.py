@@ -330,6 +330,19 @@ class TestBase(mlx_tests.MLXTestCase):
         m = MyModel()
         m.update_modules(m.leaf_modules())
 
+        # A list with more entries than the destination is rejected when strict
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        with self.assertRaises(ValueError):
+            m.update_modules({"layers": [{}, {}, nn.Linear(3, 4)]})
+
+        # ...and the extra entries are skipped (not a crash) when strict=False
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        m.update_modules(
+            {"layers": [{}, nn.Linear(3, 4), nn.Linear(5, 5)]}, strict=False
+        )
+        self.assertEqual(len(m.layers), 2)
+        self.assertEqual(m.layers[1].weight.shape, (4, 3))
+
     def test_parameter_deletion(self):
         m = nn.Linear(32, 32)
         del m.weight
@@ -888,6 +901,16 @@ class TestLayers(mlx_tests.MLXTestCase):
         y = c(x)
         self.assertEqual(y.shape, (4, 7, 7, 8))
 
+    def test_conv_transpose_extra_repr(self):
+        self.assertIn(
+            "kernel_size=(3, 5)",
+            str(nn.ConvTranspose2d(4, 8, kernel_size=(3, 5))),
+        )
+        self.assertIn(
+            "kernel_size=(2, 3, 4)",
+            str(nn.ConvTranspose3d(4, 8, kernel_size=(2, 3, 4))),
+        )
+
     def test_sequential(self):
         x = mx.ones((10, 2))
         m = nn.Sequential(nn.Linear(2, 10), nn.ReLU(), nn.Linear(10, 1))
@@ -971,6 +994,18 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(y, mx.array([1.0, 0.0, 0.0])))
         self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
+
+    def test_step(self):
+        x = mx.array([-1.0, 0.0, 1.0])
+
+        # Default threshold of 0: the boundary value is included
+        y = nn.step(x)
+        self.assertTrue(mx.array_equal(y, mx.array([0, 1, 1])))
+        self.assertEqual(y.shape, (3,))
+
+        # A custom threshold is also inclusive
+        y = nn.Step(threshold=1.0)(x)
+        self.assertTrue(mx.array_equal(y, mx.array([0, 0, 1])))
 
     def test_leaky_relu(self):
         x = mx.array([1.0, -1.0, 0.0])

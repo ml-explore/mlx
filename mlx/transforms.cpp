@@ -71,6 +71,10 @@ std::vector<std::pair<char, char>>& detail::InTracing::trace_stack() {
   return trace_stack_;
 }
 thread_local int detail::InTracing::grad_counter{0};
+int& detail::InExportTracing::counter() {
+  static thread_local int counter_;
+  return counter_;
+}
 thread_local int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
@@ -636,6 +640,8 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
 
     auto jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
     auto outputs = a.outputs();
+    // A primitive's jvp returns one tangent per output
+    assert(jvps.size() <= outputs.size());
     for (int i = 0; i < jvps.size(); ++i) {
       tan_map.insert({outputs[i].id(), jvps[i]});
     }

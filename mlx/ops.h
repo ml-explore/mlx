@@ -47,7 +47,11 @@ MLX_API array linspace(
     StreamOrDevice s = {});
 
 /** Convert an array to the given data type. */
-MLX_API array astype(array a, Dtype dtype, StreamOrDevice s = {});
+MLX_API array
+astype(array a, Dtype dtype, std::optional<bool> copy, StreamOrDevice s = {});
+inline array astype(array a, Dtype dtype, StreamOrDevice s = {}) {
+  return astype(std::move(a), dtype, std::nullopt, s);
+}
 
 /** Create a view of an array with the given shape and strides. */
 MLX_API array as_strided(
@@ -170,6 +174,16 @@ MLX_API array expand_dims(
 
 /** Add a singleton dimension at the given axis. */
 MLX_API array expand_dims(const array& a, int axis, StreamOrDevice s = {});
+
+/** Reverse the order of the elements along the given axes. */
+MLX_API array
+flip(const array& a, const std::vector<int>& axes, StreamOrDevice s = {});
+
+/** Reverse the order of the elements along the given axis. */
+MLX_API array flip(const array& a, int axis, StreamOrDevice s = {});
+
+/** Reverse the order of the elements along all axes. */
+MLX_API array flip(const array& a, StreamOrDevice s = {});
 
 /** Slice an array. */
 MLX_API array slice(
@@ -305,6 +319,11 @@ MLX_API std::vector<array>
 split(const array& a, const Shape& indices, int axis, StreamOrDevice s = {});
 MLX_API std::vector<array>
 split(const array& a, const Shape& indices, StreamOrDevice s = {});
+
+/** Split an array into a sequence of arrays along an axis, removing it. */
+MLX_API std::vector<array>
+unstack(const array& a, int axis, StreamOrDevice s = {});
+MLX_API std::vector<array> unstack(const array& a, StreamOrDevice s = {});
 
 /** A vector of coordinate arrays from coordinate vectors. */
 MLX_API std::vector<array> meshgrid(

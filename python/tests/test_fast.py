@@ -1,6 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
 import unittest
 
 import mlx.core as mx
@@ -168,6 +169,20 @@ class TestFast(mlx_tests.MLXTestCase):
             y = mx.fast.rope(
                 x, dims, traditional=traditional, base=base, scale=scale, offset=offset
             )
+
+    @unittest.skipIf("CI" in os.environ, "Allocates too much memory for CI")
+    def test_rope_large_input(self):
+        dims, seq_len, batch_size, n_heads = 32, 8192, 8, 32
+        base, scale, offset, traditional = 10000.0, 1.0, 0, False
+        x = mx.random.normal(shape=[batch_size, seq_len, n_heads, dims]).astype(
+            mx.float32
+        )
+        x = x.swapaxes(1, 2)
+        rx_fast = mx.fast.rope(
+            x, dims, traditional=traditional, base=base, scale=scale, offset=offset
+        )
+        ref = rope_orig(x, dims, traditional, base, scale, offset)
+        self.assertLess(mx.abs(ref - rx_fast).max(), 5e-3)
 
     def test_rope_dims_validation(self):
         T = 4
@@ -1010,6 +1025,36 @@ class TestFast(mlx_tests.MLXTestCase):
         """
         out = call_kernel(a, source)
         self.assertTrue(mx.array_equal(out, mx.ones_like(out)))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_mixed_dtypes(self):
+        # Calling the same kernel with different input dtypes in a single
+        # graph should not invalidate pipeline states that are still in use
+        # by an uncommitted command buffer
+        kernel = mx.fast.metal_kernel(
+            name="mixed_dtypes",
+            input_names=["inp"],
+            output_names=["out"],
+            source="""
+                uint elem = thread_position_in_grid.x;
+                out[elem] = inp[elem] + inp[elem];
+            """,
+        )
+
+        def call_kernel(a: mx.array):
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(a.size, 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        a = mx.full((32,), 1.5, dtype=mx.float16)
+        b = mx.full((32,), 2.5, dtype=mx.float32)
+        out = call_kernel(a).astype(mx.float32) + call_kernel(b)
+        self.assertTrue(mx.allclose(out, mx.full((32,), 8.0)))
 
 
 if __name__ == "__main__":

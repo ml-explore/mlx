@@ -3,7 +3,6 @@
 #include <stdexcept>
 
 #include "mlx/backend/metal/metal.h"
-#include "mlx/fast.h"
 
 namespace mlx::core {
 
@@ -22,21 +21,13 @@ device_info() {
       "[metal::device_info] Cannot get device info without metal backend");
 };
 
-} // namespace metal
+void set_metallib_path(const std::string& path) {}
 
-namespace fast {
-
-CustomKernelFunction metal_kernel(
-    const std::string&,
-    const std::vector<std::string>&,
-    const std::vector<std::string>&,
-    const std::string&,
-    const std::string&,
-    bool,
-    bool) {
-  throw std::runtime_error("[metal_kernel] No Metal back-end.");
+const std::string& get_metallib_path() {
+  throw std::runtime_error(
+      "[metal::get_metallib_path] Cannot get metallib path without metal backend");
 }
 
-} // namespace fast
+} // namespace metal
 
 } // namespace mlx::core

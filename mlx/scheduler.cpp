@@ -3,6 +3,7 @@
 #include "mlx/scheduler.h"
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/gpu/eval.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 
@@ -33,6 +34,7 @@ void clear_streams() {
 namespace scheduler {
 
 Scheduler::Scheduler() {
+  is_main_thread();
   gpu::init();
 }
 

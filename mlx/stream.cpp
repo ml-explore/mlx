@@ -77,6 +77,19 @@ Stream new_stream(Device d) {
   return s;
 }
 
+Stream new_thread_unsafe_stream(Device d) {
+  auto& [streams, mtx] = all_streams();
+  std::unique_lock lock(mtx);
+  int index = streams.size();
+  auto& s = streams.emplace_back(index, d);
+  if (d == Device::gpu) {
+    gpu::new_thread_unsafe_stream(s);
+  } else {
+    cpu::new_thread_unsafe_stream(s);
+  }
+  return s;
+}
+
 ThreadLocalStream new_thread_local_stream(Device d) {
   auto& [streams, mtx] = thread_local_streams();
   std::lock_guard lock(mtx);

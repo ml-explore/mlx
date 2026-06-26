@@ -8,10 +8,12 @@
 
 namespace mlx::core {
 
-void unpack_32_4(uint8_t* data, int8_t* dst) {
+// Unpacks a block of 32 4-bit weights. `data` must point at the first
+// quant byte, past the block header.
+void unpack_32_4(const uint8_t* data, int8_t* dst) {
   std::fill_n(dst, 16, 0);
   for (int j = 0; j < 16; ++j) {
-    uint8_t x = (data[j + 2] & 0x0F); // j+2 to skip scale bytes.
+    uint8_t x = (data[j] & 0x0F);
     if (j % 2 != 0) {
       x <<= 4;
     }
@@ -19,7 +21,7 @@ void unpack_32_4(uint8_t* data, int8_t* dst) {
   }
   // Last 16 weights are in the higher bits
   for (int j = 0; j < 16; ++j) {
-    uint8_t x = (data[j + 2] >> 4);
+    uint8_t x = (data[j] >> 4);
     if (j % 2 != 0) {
       x <<= 4;
     }
@@ -42,7 +44,7 @@ void extract_q4_0_data(
   for (int64_t i = 0; i < scales_arr.size(); i++) {
     scales[i] = *((float16_t*)data);
     biases[i] = -8 * scales[i];
-    unpack_32_4(data, weights);
+    unpack_32_4(data + 2, weights); // skip the scale bytes
     weights += 16;
     data += bytes_per_block;
   }
@@ -64,7 +66,7 @@ void extract_q4_1_data(
   for (int64_t i = 0; i < scales_arr.size(); i++) {
     scales[i] = *((float16_t*)data);
     biases[i] = *((float16_t*)(data) + 1);
-    unpack_32_4(data, weights);
+    unpack_32_4(data + 4, weights); // skip the scale and bias bytes
     weights += 16;
     data += bytes_per_block;
   }

@@ -240,6 +240,7 @@ MLX_API Device& device(mlx::core::Device);
 MLX_API CommandEncoder& get_command_encoder(Stream s);
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders();
+std::unordered_map<int, CommandEncoder>& get_global_command_encoders();
 NS::SharedPtr<NS::AutoreleasePool> new_scoped_memory_pool();
 
 bool is_nax_available();

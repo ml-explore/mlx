@@ -70,9 +70,6 @@ inline std::tuple<dim3, dim3> get_swizzle_launch_args(
 
 namespace cu {
 
-constexpr float F8E4M3_MAX = 448.0f;
-constexpr float F4E2M1_MAX = 6.0f;
-
 __global__ void compute_qqmm_pointers(
     float* alpha_out,
     float* beta_out,

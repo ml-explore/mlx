@@ -15,8 +15,8 @@ NAMESPACE_BEGIN(NB_NAMESPACE)
 NAMESPACE_BEGIN(detail)
 
 template <typename Type, size_t Size, typename Alloc>
-struct type_caster<mlx::core::SmallVector<Type, Size, Alloc>> {
-  using List = mlx::core::SmallVector<Type, Size, Alloc>;
+struct type_caster<::mlx::core::SmallVector<Type, Size, Alloc>> {
+  using List = ::mlx::core::SmallVector<Type, Size, Alloc>;
   using Caster = make_caster<Type>;
 
   // For narrow integer element types we fetch each element through a wider

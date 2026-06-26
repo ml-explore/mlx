@@ -162,6 +162,20 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
 }
 
 MTL::Library* load_default_library(MTL::Device* device) {
+  // Check override path before automatic lookup
+  if (!get_metallib_path().empty()) {
+    auto [lib, error] =
+        load_library_from_path(device, get_metallib_path().c_str());
+    if (!lib) {
+      throw std::runtime_error(
+          fmt::format(
+              "Can not load metallib from specified location \"{}\": {}.",
+              get_metallib_path(),
+              error->localizedDescription()->utf8String()));
+    }
+    return lib;
+  }
+
   NS::Error* error[5];
   MTL::Library* lib;
   // First try the colocated mlx.metallib
@@ -871,14 +885,24 @@ CommandEncoder& get_command_encoder(Stream s) {
   auto& encoders = get_command_encoders();
   auto it = encoders.find(s.index);
   if (it == encoders.end()) {
-    throw std::runtime_error(
-        fmt::format("There is no Stream(gpu, {}) in current thread.", s.index));
+    auto& global_encoders = get_global_command_encoders();
+    it = global_encoders.find(s.index);
+    if (it == global_encoders.end()) {
+      throw std::runtime_error(
+          fmt::format(
+              "There is no Stream(gpu, {}) in current thread.", s.index));
+    }
   }
   return it->second;
 }
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders() {
   static thread_local std::unordered_map<int, CommandEncoder> encoders;
+  return encoders;
+}
+
+std::unordered_map<int, CommandEncoder>& get_global_command_encoders() {
+  static std::unordered_map<int, CommandEncoder> encoders;
   return encoders;
 }
 
