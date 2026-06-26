@@ -1,4 +1,4 @@
-// Copyright © 2023-24 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #pragma once
 
@@ -10,3 +10,10 @@
 // clang-format on
 
 const char* get_prebuilt_preamble();
+
+#ifdef MLX_HAVE_JIT_PREAMBLE_HWY_AVX2
+const char* get_prebuilt_preamble_avx2();
+#endif
+#ifdef MLX_HAVE_JIT_PREAMBLE_HWY_AVX3
+const char* get_prebuilt_preamble_avx3();
+#endif

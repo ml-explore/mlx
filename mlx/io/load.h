@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #pragma once
 
@@ -6,7 +6,7 @@
 #include <sstream>
 
 #include <fcntl.h>
-#ifdef _MSC_VER
+#ifdef _WIN32
 #include <io.h>
 #else
 #include <sys/stat.h>
@@ -28,6 +28,16 @@ namespace mlx::core {
 namespace io {
 
 ThreadPool& thread_pool();
+
+#ifdef _WIN32
+inline int64_t seek_fd(int fd, int64_t off, int origin) {
+  return _lseeki64(fd, off, origin);
+}
+#else
+inline int64_t seek_fd(int fd, int64_t off, int origin) {
+  return lseek(fd, off, origin);
+}
+#endif
 
 class Reader {
  public:
@@ -75,7 +85,7 @@ class ParallelFileReader : public Reader {
   }
 
   size_t tell() override {
-    return lseek(fd_, 0, SEEK_CUR);
+    return seek_fd(fd_, 0, SEEK_CUR);
   }
 
   // Warning: do not use this function from multiple threads as
@@ -83,11 +93,11 @@ class ParallelFileReader : public Reader {
   void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
       override {
     if (way == std::ios_base::beg) {
-      lseek(fd_, off, SEEK_SET);
+      seek_fd(fd_, off, SEEK_SET);
     } else if (way == std::ios_base::end) {
-      lseek(fd_, off, SEEK_END);
+      seek_fd(fd_, off, SEEK_END);
     } else {
-      lseek(fd_, off, SEEK_CUR);
+      seek_fd(fd_, off, SEEK_CUR);
     }
   }
 
@@ -139,17 +149,17 @@ class FileWriter : public Writer {
   }
 
   size_t tell() override {
-    return lseek(fd_, 0, SEEK_CUR);
+    return seek_fd(fd_, 0, SEEK_CUR);
   }
 
   void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
       override {
     if (way == std::ios_base::beg) {
-      lseek(fd_, off, SEEK_SET);
+      seek_fd(fd_, off, SEEK_SET);
     } else if (way == std::ios_base::end) {
-      lseek(fd_, off, SEEK_END);
+      seek_fd(fd_, off, SEEK_END);
     } else {
-      lseek(fd_, off, SEEK_CUR);
+      seek_fd(fd_, off, SEEK_CUR);
     }
   }
 

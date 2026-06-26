@@ -5,7 +5,10 @@
 #include "mlx/backend/cpu/compiled_preamble.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <sstream>
 #include <vector>
 
@@ -20,6 +23,16 @@ namespace mlx::core {
 
 namespace {
 
+enum class JitPreambleTier {
+  Scalar,
+  HwyAvx2,
+  HwyAvx3,
+};
+
+// Preamble tiers are independent of Highway's runtime-dispatched kernel
+// targets. CMake only embeds the available preambles; the JIT chooses the best
+// one for the local CPU and runtime compiler.
+
 #if defined(_MSC_VER)
 
 // Split string into array.
@@ -33,6 +46,17 @@ std::vector<std::string> str_split(const std::string& str, char delimiter) {
   return tokens;
 }
 
+std::string get_env_var(const char* name) {
+  char* value = nullptr;
+  size_t size = 0;
+  if (_dupenv_s(&value, &size, name) != 0 || value == nullptr) {
+    return {};
+  }
+  std::string result(value);
+  std::free(value);
+  return result;
+}
+
 // Get path information about MSVC.
 struct VisualStudioInfo {
   VisualStudioInfo() {
@@ -44,8 +68,8 @@ struct VisualStudioInfo {
     // Get path of Visual Studio.
     // Use -latest to get only the most recent installation when multiple
     // versions are installed, avoiding path concatenation issues.
-    auto pf86 = std::getenv("ProgramFiles(x86)");
-    if (!pf86) {
+    std::string pf86 = get_env_var("ProgramFiles(x86)");
+    if (pf86.empty()) {
       throw std::runtime_error(
           "ProgramFiles(x86) environment variable not set.");
     }
@@ -95,7 +119,10 @@ struct VisualStudioInfo {
     }
   }
 
-  std::string compiler(bool use_include) const {
+  std::string compiler(bool use_include, JitPreambleTier tier) const {
+    if (tier == JitPreambleTier::HwyAvx3 && !clang_cl.empty()) {
+      return clang_cl;
+    }
     if (use_include) {
       // With installed headers, either cl.exe or clang-cl can parse the source.
       // Prefer cl.exe since it is part of the standard Visual Studio C++
@@ -127,7 +154,58 @@ const VisualStudioInfo& GetVisualStudioInfo() {
 
 #endif // defined(_MSC_VER)
 
-bool supports_avx2_target() {
+#if !defined(_MSC_VER)
+std::string jit_cxx_compiler() {
+  if (const char* compiler = std::getenv("MLX_JIT_CXX");
+      compiler && compiler[0] != '\0') {
+    return compiler;
+  }
+#if defined(__clang__)
+  return "clang++";
+#else
+  return "g++";
+#endif
+}
+
+std::string command_executable(const std::string& executable) {
+#if defined(_WIN32)
+  if (executable.find_first_of(" \t\"") == std::string::npos) {
+    return executable;
+  }
+#endif
+  return fmt::format("\"{}\"", executable);
+}
+
+std::string command_path(const std::filesystem::path& path) {
+#if defined(_WIN32)
+  return path.generic_string();
+#else
+  return path.string();
+#endif
+}
+#endif // !defined(_MSC_VER)
+
+std::filesystem::path find_jit_include_dir(bool require_highway) {
+  std::vector<std::filesystem::path> roots;
+  auto binary_dir = current_binary_dir();
+  roots.push_back(binary_dir);
+#if !defined(_WIN32)
+  roots.push_back(binary_dir.parent_path());
+#endif
+
+  for (const auto& root : roots) {
+    auto include_dir = root / "include";
+    auto preamble_header = include_dir / "mlx/backend/cpu/compiled_preamble.h";
+    auto highway_header = include_dir / "hwy/highway.h";
+    if (std::filesystem::exists(preamble_header) &&
+        (!require_highway || std::filesystem::exists(highway_header))) {
+      return include_dir;
+    }
+  }
+  return {};
+}
+
+bool supports_hwy_avx2_preamble() {
 #if defined(_MSC_VER)
 
 #if defined(_M_X64) || defined(_M_IX86) || defined(_M_AMD64)
@@ -148,7 +226,9 @@ bool supports_avx2_target() {
     return false;
   }
   __cpuidex(info, 7, 0);
-  return info[1] & (1 << 5);
+  bool avx2 = info[1] & (1 << 5);
+  bool bmi2 = info[1] & (1 << 8);
+  return avx2 && bmi2;
 #else
   return false;
 #endif // defined(_M_X64) || defined(_M_IX86) || defined(_M_AMD64)
@@ -157,8 +237,8 @@ bool supports_avx2_target() {
 
 #if defined(__x86_64__) || defined(__i386__) || defined(__amd64__)
   __builtin_cpu_init();
-  return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma") &&
-      __builtin_cpu_supports("f16c");
+  return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("bmi2") &&
+      __builtin_cpu_supports("fma") && __builtin_cpu_supports("f16c");
 #else
   return false;
 #endif
@@ -168,20 +248,109 @@ bool supports_avx2_target() {
 #endif // defined(_MSC_VER)
 }
 
+#if defined(MLX_HAVE_JIT_PREAMBLE_HWY_AVX3)
+
+bool supports_hwy_avx3_preamble() {
+#if defined(_MSC_VER)
+
+#if defined(_M_X64) || defined(_M_IX86) || defined(_M_AMD64)
+  int info[4];
+  __cpuid(info, 0);
+  if (info[0] < 7) {
+    return false;
+  }
+  __cpuid(info, 1);
+  const uint32_t ecx = static_cast<uint32_t>(info[2]);
+  const bool os_avx = (ecx & (1u << 27)) && (ecx & (1u << 28));
+  const bool fma = ecx & (1u << 12);
+  const bool f16c = ecx & (1u << 29);
+  if (!os_avx) {
+    return false;
+  }
+  const unsigned long long xcr0 = _xgetbv(0);
+  if ((xcr0 & 0xE6) != 0xE6) {
+    return false;
+  }
+  __cpuidex(info, 7, 0);
+  const uint32_t ebx = static_cast<uint32_t>(info[1]);
+  const bool bmi2 = ebx & (1u << 8);
+  const bool avx512f = ebx & (1u << 16);
+  const bool avx512dq = ebx & (1u << 17);
+  const bool avx512cd = ebx & (1u << 28);
+  const bool avx512bw = ebx & (1u << 30);
+  const bool avx512vl = ebx & (1u << 31);
+  return avx512f && avx512dq && avx512cd && avx512bw && avx512vl && bmi2 &&
+      fma && f16c;
+#else
+  return false;
+#endif // defined(_M_X64) || defined(_M_IX86) || defined(_M_AMD64)
+
+#elif defined(__GNUC__) || defined(__clang__)
+
+#if defined(__x86_64__) || defined(__i386__) || defined(__amd64__)
+  __builtin_cpu_init();
+  return __builtin_cpu_supports("avx512f") &&
+      __builtin_cpu_supports("avx512dq") &&
+      __builtin_cpu_supports("avx512cd") &&
+      __builtin_cpu_supports("avx512bw") &&
+      __builtin_cpu_supports("avx512vl") && __builtin_cpu_supports("bmi2") &&
+      __builtin_cpu_supports("fma") && __builtin_cpu_supports("f16c");
+#else
+  return false;
+#endif
+
+#else
+  return false;
+#endif
+}
+
+bool can_compile_hwy_avx3_preamble() {
+#if defined(_MSC_VER)
+  return !GetVisualStudioInfo().clang_cl.empty();
+#else
+  return true;
+#endif
+}
+
+#endif // defined(MLX_HAVE_JIT_PREAMBLE_HWY_AVX3)
+
+JitPreambleTier select_jit_preamble_tier() {
+#if defined(MLX_HAVE_JIT_PREAMBLE_HWY_AVX3)
+  if (supports_hwy_avx3_preamble() && can_compile_hwy_avx3_preamble()) {
+    return JitPreambleTier::HwyAvx3;
+  }
+#endif
+#if defined(MLX_HAVE_JIT_PREAMBLE_HWY_AVX2)
+  if (supports_hwy_avx2_preamble()) {
+    return JitPreambleTier::HwyAvx2;
+  }
+#endif
+  return JitPreambleTier::Scalar;
+}
+
+JitPreambleTier jit_preamble_tier() {
+  static JitPreambleTier tier = select_jit_preamble_tier();
+  return tier;
+}
+
+bool use_hwy_avx2_preamble() {
+  return jit_preamble_tier() == JitPreambleTier::HwyAvx2;
+}
+
+bool use_hwy_avx3_preamble() {
+  return jit_preamble_tier() == JitPreambleTier::HwyAvx3;
+}
+
 } // namespace
 
 const std::tuple<bool, std::string, std::string>& JitCompiler::get_preamble() {
-  static auto preamble = []() -> std::tuple<bool, std::string, std::string> {
+  static auto scalar_preamble =
+      []() -> std::tuple<bool, std::string, std::string> {
     // Check whether the headers are shipped with the binary, if so use the
     // preamble from the headers, otherwise use the prebuilt one embedded in
     // binary, which may not work with all compilers.
-    auto root_dir = current_binary_dir();
-#if !defined(_WIN32)
-    root_dir = root_dir.parent_path();
-#endif
-    auto include_dir = root_dir / "include";
-    if (std::filesystem::exists(
-            include_dir / "mlx/backend/cpu/compiled_preamble.h")) {
+    auto include_dir = find_jit_include_dir(false);
+    if (!include_dir.empty()) {
       return std::make_tuple(
           true,
           include_dir.string(),
@@ -190,7 +359,53 @@ const std::tuple<bool, std::string, std::string>& JitCompiler::get_preamble() {
       return std::make_tuple(false, "", get_prebuilt_preamble());
     }
   }();
-  return preamble;
+#if defined(MLX_HAVE_JIT_PREAMBLE_HWY_AVX2)
+  static auto avx2_preamble =
+      []() -> std::tuple<bool, std::string, std::string> {
+    // Check whether the headers are shipped with the binary, if so use the
+    // preamble from the headers, otherwise use the prebuilt one embedded in
+    // binary, which may not work with all compilers.
+    auto include_dir = find_jit_include_dir(true);
+    if (!include_dir.empty()) {
+      return std::make_tuple(
+          true,
+          include_dir.string(),
+          "#define MLX_USE_HIGHWAY_JIT_SIMD\n"
+          "#define HWY_COMPILE_ONLY_STATIC\n"
+          "#define HWY_DISABLE_PCLMUL_AES\n"
+          "#include \"mlx/backend/cpu/compiled_preamble.h\"\n");
+    } else {
+      // Installed MLX headers alone are not enough for the Highway SIMD facade.
+      // Wheels can still use the embedded prebuilt AVX2 preamble without
+      // shipping Highway headers as a runtime payload.
+      return std::make_tuple(false, "", get_prebuilt_preamble_avx2());
+    }
+  }();
+#if defined(MLX_HAVE_JIT_PREAMBLE_HWY_AVX3)
+  static auto avx3_preamble =
+      []() -> std::tuple<bool, std::string, std::string> {
+    auto include_dir = find_jit_include_dir(true);
+    if (!include_dir.empty()) {
+      return std::make_tuple(
+          true,
+          include_dir.string(),
+          "#define MLX_USE_HIGHWAY_JIT_SIMD\n"
+          "#define HWY_COMPILE_ONLY_STATIC\n"
+          "#define HWY_DISABLE_PCLMUL_AES\n"
+          "#include \"mlx/backend/cpu/compiled_preamble.h\"\n");
+    } else {
+      return std::make_tuple(false, "", get_prebuilt_preamble_avx3());
+    }
+  }();
+  if (use_hwy_avx3_preamble()) {
+    return avx3_preamble;
+  }
+#endif
+  if (use_hwy_avx2_preamble()) {
+    return avx2_preamble;
+  }
+#endif
+  return scalar_preamble;
 }
 
 bool JitCompiler::available() {
@@ -199,7 +414,7 @@ bool JitCompiler::available() {
     try {
       bool use_include = std::get<0>(get_preamble());
       const auto& info = GetVisualStudioInfo();
-      return !info.compiler(use_include).empty();
+      return !info.compiler(use_include, jit_preamble_tier()).empty();
     } catch (...) {
       return false;
     }
@@ -207,11 +422,18 @@ bool JitCompiler::available() {
   return result;
 #else
 #ifdef _WIN32
-  static int result = std::system("g++ --version > NUL 2>&1");
+  // Windows CPU JIT is only enabled for the Visual Studio ABI path above.
+  // MinGW-style JIT code was slower than the runtime-dispatched kernels in
+  // testing and has a more fragile runtime DLL discovery story.
+  return false;
 #else
-  static int result = std::system("g++ --version > /dev/null 2>&1");
-#endif
+  static int result = std::system(
+      fmt::format(
+          "{} --version > /dev/null 2>&1",
+          command_executable(jit_cxx_compiler()))
+          .c_str());
   return result == 0;
+#endif
 #endif
 }
 
@@ -226,9 +448,11 @@ std::string JitCompiler::build_command(
     compiler_flags += fmt::format(" /I \"{}\"", include_dir);
   }
   const VisualStudioInfo& info = GetVisualStudioInfo();
-  std::string compiler = info.compiler(use_include);
-  for (const std::string& include : info.includepaths) {
-    compiler_flags += fmt::format(" /I \"{}\"", include);
+  std::string compiler = info.compiler(use_include, jit_preamble_tier());
+  for (const std::string& inc : info.includepaths) {
+    if (!inc.empty()) {
+      compiler_flags += fmt::format(" /I \"{}\"", inc);
+    }
   }
   std::string libpaths;
   for (const std::string& lib : info.libpaths) {
@@ -240,8 +464,14 @@ std::string JitCompiler::build_command(
   if (!info.clang_cl.empty() && compiler == info.clang_cl) {
     compiler_flags += " -Wno-everything";
   }
-#ifdef __AVX2__
-  if (supports_avx2_target()) {
+#if defined(MLX_HAVE_JIT_PREAMBLE_HWY_AVX2) || \
+    defined(MLX_HAVE_JIT_PREAMBLE_HWY_AVX3)
+  if (use_hwy_avx3_preamble()) {
+    compiler_flags +=
+        " /clang:-mavx512f /clang:-mavx512vl /clang:-mavx512bw"
+        " /clang:-mavx512dq /clang:-mavx512cd /clang:-mbmi2"
+        " /clang:-mfma /clang:-mf16c";
+  } else if (use_hwy_avx2_preamble()) {
     compiler_flags += " /arch:AVX2";
   }
 #endif
@@ -262,19 +492,30 @@ std::string JitCompiler::build_command(
   if (use_include) {
     extra_flags = fmt::format("-I \"{}\"", include_dir);
   }
-#ifdef __AVX2__
-  if (supports_avx2_target()) {
+#if defined(MLX_HAVE_JIT_PREAMBLE_HWY_AVX2) || \
+    defined(MLX_HAVE_JIT_PREAMBLE_HWY_AVX3)
+  if (use_hwy_avx3_preamble()) {
     if (!extra_flags.empty()) {
       extra_flags += " ";
     }
-    extra_flags += "-mavx2 -mfma -mf16c";
+    extra_flags +=
+        "-mavx512f -mavx512vl -mavx512bw -mavx512dq -mavx512cd "
+        "-mbmi2 -mfma -mf16c";
+  } else if (use_hwy_avx2_preamble()) {
+    if (!extra_flags.empty()) {
+      extra_flags += " ";
+    }
+    // JIT code is compiled locally, so it can pin to the current CPU after the
+    // runtime feature check while the shipped MLX binary remains baseline-safe.
+    extra_flags += "-mavx2 -mbmi2 -mfma -mf16c";
   }
 #endif
   return fmt::format(
-      "g++ -std=c++17 -O3 -Wall -fPIC -shared {} \"{}\" -o \"{}\" 2>&1",
+      "{} -std=c++17 -O3 -Wall -fPIC -shared {} \"{}\" -o \"{}\" 2>&1",
+      command_executable(jit_cxx_compiler()),
       extra_flags,
-      (dir / source_file_name).string(),
-      (dir / shared_lib_name).string());
+      command_path(dir / source_file_name),
+      command_path(dir / shared_lib_name));
 #endif
 }
 

@@ -26,6 +26,7 @@ target_sources(
           einsum_tests.cpp
           export_import_tests.cpp
           eval_tests.cpp
+          fast_tests.cpp
           fft_tests.cpp
           load_tests.cpp
           ops_tests.cpp
@@ -34,14 +35,24 @@ target_sources(
           utils_tests.cpp
           vmap_tests.cpp
           linalg_tests.cpp
+          thread_pool_tests.cpp
           ${METAL_TEST_SOURCES})
 
 target_link_libraries(tests PRIVATE mlx doctest)
 target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})
 target_link_options(tests PRIVATE ${SANITIZER_LINK_FLAGS})
 
-doctest_discover_tests(tests)
+set(MLX_TEST_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+if(WIN32)
+  # OpenBLAS is copied to the build root on Windows. Run test discovery from
+  # there so the test executable can find libopenblas.dll at startup.
+  set(MLX_TEST_WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+endif()
+
+doctest_discover_tests(tests WORKING_DIRECTORY ${MLX_TEST_WORKING_DIRECTORY})
 add_test(NAME tests COMMAND tests)
+set_tests_properties(tests PROPERTIES WORKING_DIRECTORY
+                                      ${MLX_TEST_WORKING_DIRECTORY})
 
 # Standalone test: verify clean exit when GPU work is in-flight during teardown.
 # (Cannot be a doctest case because the crash occurs during static destruction.)

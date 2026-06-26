@@ -11,7 +11,9 @@ GCC=$2
 SRCDIR=$3
 CLANG=$4
 ARCH=$5
-SIMD_FLAGS=$6  # Optional, e.g. "-mavx2 -mfma -mf16c"
+SIMD_FLAGS=$6  # Optional, e.g. "-mavx2 -mbmi2 -mfma -mf16c"
+EXTRA_INCLUDE=$7  # Optional, e.g. Highway headers for JIT SIMD preambles.
+FUNCTION_NAME=${8:-get_prebuilt_preamble}
 
 if [ "$CLANG" = "TRUE" ]; then
   read -r -d '' INCLUDES <<- EOM
@@ -28,10 +30,18 @@ else
 CC_FLAGS="-std=c++17"
 fi
 
-CONTENT=$("$GCC" $CC_FLAGS $SIMD_FLAGS -I "$SRCDIR" -E -P "$SRCDIR/mlx/backend/cpu/compiled_preamble.h" 2>/dev/null)
+EXTRA_INCLUDE_FLAGS=()
+if [ -n "$EXTRA_INCLUDE" ]; then
+  EXTRA_INCLUDE_FLAGS=(-I "$EXTRA_INCLUDE")
+fi
+
+CONTENT=$(
+  "$GCC" $CC_FLAGS $SIMD_FLAGS -I "$SRCDIR" "${EXTRA_INCLUDE_FLAGS[@]}" \
+    -E -P "$SRCDIR/mlx/backend/cpu/compiled_preamble.h" 2>/dev/null
+)
 
 cat << EOF > "$OUTPUT_FILE"
-const char* get_prebuilt_preamble() {
+const char* $FUNCTION_NAME() {
 return R"preamble(
 $INCLUDES
 $CONTENT

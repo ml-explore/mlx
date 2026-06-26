@@ -1,4 +1,4 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2026 Apple Inc.
 
 import unittest
 from itertools import product
@@ -249,6 +249,44 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 stream=mx.gpu,
             )
             mx.eval(y)
+
+    def test_qqmv_nvfp4_global_scale(self):
+        if mx.default_device() == mx.gpu:
+            self.skipTest("nvfp4 global scales are not supported on Metal")
+
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        x = mx.random.normal(shape=(1, 256), key=k1)
+        w = mx.random.normal(shape=(128, 256), key=k2)
+        x_scale = x.abs().max().astype(mx.float32)
+        w_scale = w.abs().max().astype(mx.float32)
+
+        x_hat = mx.dequantize(
+            *mx.quantize(x, mode="nvfp4", global_scale=x_scale),
+            mode="nvfp4",
+            dtype=mx.float32,
+            global_scale=x_scale,
+        )
+        w_q, scales = mx.quantize(w, mode="nvfp4", global_scale=w_scale)
+        w_hat = mx.dequantize(
+            w_q,
+            scales,
+            mode="nvfp4",
+            dtype=mx.float32,
+            global_scale=w_scale,
+        )
+
+        y_q = mx.qqmm(
+            x,
+            w_q,
+            scales,
+            mode="nvfp4",
+            global_scale_x=x_scale,
+            global_scale_w=w_scale,
+        )
+        y_hat = x_hat @ mx.swapaxes(w_hat, -1, -2)
+        self.assertEqual(y_q.shape, y_hat.shape)
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_qmm(self):
         key = mx.random.key(0)
