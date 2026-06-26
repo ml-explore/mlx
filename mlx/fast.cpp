@@ -944,6 +944,12 @@ std::vector<array> gated_delta_update(
   auto g = astype(gates, out_dtype, s);
   auto beta = astype(beta_, out_dtype, s);
 
+  q = contiguous(q, false, s);
+  k = contiguous(k, false, s);
+  v = contiguous(v, false, s);
+  g = contiguous(g, false, s);
+  beta = contiguous(beta, false, s);
+
   int B = q.shape(0);
   int T = q.shape(1);
   int Hk = q.shape(2);
@@ -951,8 +957,20 @@ std::vector<array> gated_delta_update(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
+  int pad_size = (C != 0) ? (C - T % C) % C : 0;
+  int T_padded = T > 1 ? T + pad_size : T;
+
+  if (pad_size > 1) {
+    q = pad(q, {1}, {0}, {pad_size}, array(0.0f, out_dtype), "constant", s);
+    k = pad(k, {1}, {0}, {pad_size}, array(0.0f, out_dtype), "constant", s);
+    v = pad(v, {1}, {0}, {pad_size}, array(0.0f, out_dtype), "constant", s);
+    g = pad(g, {1}, {0}, {pad_size}, array(1.0f, out_dtype), "constant", s);
+    beta =
+        pad(beta, {1}, {0}, {pad_size}, array(0.0f, out_dtype), "constant", s);
+  }
+
   auto h0 = initial_state.has_value() ? astype(*initial_state, out_dtype, s)
-                                      : zeros({B, Hv, Dk, Dv}, out_dtype, s);
+                                      : zeros({B, Hv, Dv, Dk}, out_dtype, s);
 
   auto fallback = [B, T, Hk, Dk, Hv, Dv, s](std::vector<array> inputs) {
     auto q = astype(inputs[0], float32, s);
@@ -971,12 +989,19 @@ std::vector<array> gated_delta_update(
     return std::vector<array>{out, state};
   };
 
-  return array::make_arrays(
-      /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dk, Dv}},
+  auto result = array::make_arrays(
+      /* output shapes */ {{B, T_padded, Hv, Dv}, {B, Hv, Dv, Dk}},
       /* dtypes */ {out_dtype, out_dtype},
       /* primitive */
       std::make_shared<GatedDeltaUpdate>(to_stream(s), fallback, C),
       /* inputs */ {q, k, v, g, beta, h0});
+
+  // slice output back to original T
+  if (pad_size > 0) {
+    result[0] = slice(result[0], {0, 0, 0, 0}, {B, T, Hv, Dv}, s);
+  }
+
+  return result;
 }
 
 bool Quantize::is_equivalent(const Primitive& other) const {
