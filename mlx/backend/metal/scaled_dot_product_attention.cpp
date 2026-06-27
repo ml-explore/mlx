@@ -174,7 +174,10 @@ void sdpa_full_self_attention_metal(
     bool do_causal_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
-  if (metal::is_nax_available() && q.shape(3) != 80 &&
+  // head_dim >= 192 only reaches the fused path for long sequences (see
+  // use_fallback); the NAX kernel family has no bd=192/256 instantiations,
+  // so route those shapes to the legacy steel kernel which does.
+  if (metal::is_nax_available() && q.shape(3) != 80 && q.shape(3) < 192 &&
       (env::enable_tf32() || q.dtype() != float32)) {
     return sdpa_full_self_attention_nax(
         /* const Stream& s = */ s,
@@ -621,9 +624,17 @@ bool ScaledDotProductAttention::use_fallback(
   const bool sdpa_vector_supported_head_dim =
       query_head_dim == value_head_dim &&
       (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
-       query_head_dim == 256);
+       query_head_dim == 192 || query_head_dim == 256);
+  // For head_dim >= 192, the fused full-attention kernel is slower than
+  // unfused for short sequences. Only route to fused when kL is large enough
+  // that the unfused path would exceed Metal buffer limits (the fused kernel
+  // tiles K/V so it scales to arbitrary sequence lengths).
+  const bool sdpa_full_large_hd_ok =
+      (query_head_dim == 192 || query_head_dim == 256) &&
+      key_sequence_length > 16384;
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
+      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128 ||
+       sdpa_full_large_hd_ok);
 
   const bool sdpa_full_supported_mask = !has_mask || has_arr_mask ||
       (query_sequence_length <= key_sequence_length && do_causal);
