@@ -825,8 +825,6 @@ void CommandEncoder::decode_pure_relaunch_all(int slot) {
 
 bool CommandEncoder::decode_capture_begin() {
   device_.make_current();
-  if (decode_cap_exec_) { hipGraphExecDestroy(decode_cap_exec_); decode_cap_exec_ = nullptr; }
-  if (decode_cap_graph_) { hipGraphDestroy(decode_cap_graph_); decode_cap_graph_ = nullptr; }
   g_decode_capturing.store(true, std::memory_order_relaxed);
   hipError_t e = hipStreamBeginCapture(stream_, hipStreamCaptureModeThreadLocal);
   if (e != hipSuccess) {
@@ -839,8 +837,9 @@ bool CommandEncoder::decode_capture_begin() {
   return true;
 }
 
-bool CommandEncoder::decode_capture_end_record() {
+bool CommandEncoder::decode_capture_end_record(int slot) {
   device_.make_current();
+  slot &= 1;
   static const bool dbg = std::getenv("MLX_PURE_DEBUG") != nullptr;
   hipGraph_t g = nullptr;
   hipError_t ee = hipStreamEndCapture(stream_, &g);
@@ -883,8 +882,10 @@ bool CommandEncoder::decode_capture_end_record() {
     (void)hipGetLastError();
     return false;
   }
-  decode_cap_graph_ = g;
-  decode_cap_exec_ = exec;
+  if (decode_cap_exec_[slot]) hipGraphExecDestroy(decode_cap_exec_[slot]);
+  if (decode_cap_graph_[slot]) hipGraphDestroy(decode_cap_graph_[slot]);
+  decode_cap_graph_[slot] = g;
+  decode_cap_exec_[slot] = exec;
   // Stream capture records WITHOUT executing — run the exec once to actually
   // compute the record token's logits/state.
   CHECK_HIP_ERROR(hipGraphLaunch(exec, stream_));
@@ -892,17 +893,20 @@ bool CommandEncoder::decode_capture_end_record() {
   return true;
 }
 
-bool CommandEncoder::decode_capture_replay() {
-  if (!decode_cap_exec_) return false;
+bool CommandEncoder::decode_capture_replay(int slot) {
+  slot &= 1;
+  if (!decode_cap_exec_[slot]) return false;
   device_.make_current();
-  CHECK_HIP_ERROR(hipGraphLaunch(decode_cap_exec_, stream_));
+  CHECK_HIP_ERROR(hipGraphLaunch(decode_cap_exec_[slot], stream_));
   worker_->commit(stream_);
   return true;
 }
 
 void CommandEncoder::decode_capture_destroy() {
-  if (decode_cap_exec_) { hipGraphExecDestroy(decode_cap_exec_); decode_cap_exec_ = nullptr; }
-  if (decode_cap_graph_) { hipGraphDestroy(decode_cap_graph_); decode_cap_graph_ = nullptr; }
+  for (int s = 0; s < 2; ++s) {
+    if (decode_cap_exec_[s]) { hipGraphExecDestroy(decode_cap_exec_[s]); decode_cap_exec_[s] = nullptr; }
+    if (decode_cap_graph_[s]) { hipGraphDestroy(decode_cap_graph_[s]); decode_cap_graph_[s] = nullptr; }
+  }
 }
 
 // Reset the per-chunk build accounting (mirrors the tail of the normal commit
@@ -1469,13 +1473,13 @@ bool decode_capture_begin() {
   return rocm::get_command_encoder(default_stream(default_device()))
       .decode_capture_begin();
 }
-bool decode_capture_end_record() {
+bool decode_capture_end_record(int slot) {
   return rocm::get_command_encoder(default_stream(default_device()))
-      .decode_capture_end_record();
+      .decode_capture_end_record(slot);
 }
-bool decode_capture_replay() {
+bool decode_capture_replay(int slot) {
   return rocm::get_command_encoder(default_stream(default_device()))
-      .decode_capture_replay();
+      .decode_capture_replay(slot);
 }
 void decode_capture_destroy() {
   rocm::get_command_encoder(default_stream(default_device()))
