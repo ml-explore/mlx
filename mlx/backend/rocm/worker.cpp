@@ -3,7 +3,12 @@
 #include "mlx/backend/rocm/worker.h"
 #include "mlx/backend/rocm/utils.h"
 
+#include <atomic>
+
 namespace mlx::core::rocm {
+
+// Defined in device.cpp. True during a full decode-step stream capture.
+extern std::atomic<bool> g_decode_capturing;
 
 Worker::Worker(int device) : device_(device), worker_(&Worker::thread_fn, this) {}
 
@@ -38,6 +43,15 @@ void Worker::commit(hipStream_t stream) {
     std::lock_guard lock(mtx_);
     // Move pending tasks into ready tasks
     worker_tasks_[++committed_batch_] = std::move(pending_tasks_);
+  }
+  // During a full decode-step capture, hipLaunchHostFunc can't be recorded into
+  // the captured graph (and would re-fire on every replay). Signal completion
+  // inline so batch accounting stays consistent and tasks (frees) still run.
+  // The captured kernels haven't executed yet, but the deterministic decode
+  // arena makes freeing/reusing those buffers safe across the record token.
+  if (g_decode_capturing.load(std::memory_order_relaxed)) {
+    signal(this);
+    return;
   }
   // Use hipLaunchHostFunc to signal when stream operations complete
   (void)hipLaunchHostFunc(stream, signal, this);

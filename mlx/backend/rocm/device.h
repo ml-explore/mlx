@@ -274,6 +274,18 @@ class CommandEncoder {
   void decode_pure_begin_replay(int slot);
   void decode_pure_relaunch_all(int slot);  // relaunch chain[slot] in order
   void decode_pure_end();
+
+  // Full decode-step stream capture (build-once / replay). With graphs OFF the
+  // whole call_fn launches eagerly on stream_; we capture it into ONE graph,
+  // instantiate ONE exec, then relaunch that exec verbatim every token. Captures
+  // EVERYTHING (manual kernels + library/JIT/memset), unlike the manual-node
+  // chain which drops the ~1.4k inline ops. Returns false on any failure so the
+  // engine falls back to eager.
+  bool decode_capture_begin();          // begin stream capture (graphs must be off)
+  bool decode_capture_end_record();     // end capture, instantiate, launch once
+  bool decode_capture_replay();         // relaunch the captured exec
+  void decode_capture_destroy();        // free exec/graph
+  bool decode_captured() const { return decode_cap_exec_ != nullptr; }
   bool decode_pure_recording() const { return decode_pure_mode_ == 1; }
   bool decode_pure_replaying() const { return decode_pure_mode_ == 2; }
   size_t decode_pure_chain_len(int slot) const {
@@ -290,6 +302,8 @@ class CommandEncoder {
   int decode_pure_slot_{0};      // active parity chain (0/1)
   size_t decode_pure_idx_{0};    // commit index within the current replay token
   std::vector<PureExec> decode_pure_chain_[2];
+  hipGraphExec_t decode_cap_exec_{nullptr};   // full decode-step captured exec
+  hipGraph_t decode_cap_graph_{nullptr};      // its source graph (owned)
   bool commit_pure();            // handle commit() in pure mode; false => fall through
 };
 

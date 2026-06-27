@@ -61,6 +61,11 @@ bool use_hip_graphs() {
 // Count of inline (graph-splitting) launches — library GEMM / JIT / memset run
 // outside the graph via launch_kernel. Declared extern in device.h.
 std::atomic<long> g_inline_launches_{0};
+// True while a full decode-step stream capture is in progress. The worker's
+// completion signaling uses hipLaunchHostFunc, which is NOT stream-capturable
+// (and a captured host node would re-fire on every replay). While capturing we
+// skip the host callback and signal completion inline instead (see Worker).
+std::atomic<bool> g_decode_capturing{false};
 void set_current_prim(const char*) {}
 void record_inline_launch() {
   g_inline_launches_.fetch_add(1, std::memory_order_relaxed);
@@ -809,6 +814,97 @@ void CommandEncoder::decode_pure_relaunch_all(int slot) {
   worker_->commit(stream_);
 }
 
+// --- Full decode-step stream capture (build-once / replay) ------------------
+// The manual-node chain can't capture the ~1.4k library/JIT/memset ops that go
+// through launch_kernel during decode. Instead, run the whole forward with
+// graphs OFF (every kernel launches on stream_), wrap it in one stream capture,
+// and relaunch that single exec each token. The deterministic decode arena makes
+// every token's buffer addresses identical, so the captured exec's baked
+// pointers stay valid; per-token input/position/GDN-state are injected into
+// those fixed buffers before each relaunch.
+
+bool CommandEncoder::decode_capture_begin() {
+  device_.make_current();
+  if (decode_cap_exec_) { hipGraphExecDestroy(decode_cap_exec_); decode_cap_exec_ = nullptr; }
+  if (decode_cap_graph_) { hipGraphDestroy(decode_cap_graph_); decode_cap_graph_ = nullptr; }
+  g_decode_capturing.store(true, std::memory_order_relaxed);
+  hipError_t e = hipStreamBeginCapture(stream_, hipStreamCaptureModeThreadLocal);
+  if (e != hipSuccess) {
+    g_decode_capturing.store(false, std::memory_order_relaxed);
+    (void)hipGetLastError();
+    static const bool dbg = std::getenv("MLX_PURE_DEBUG") != nullptr;
+    if (dbg) fprintf(stderr, "[cap] BeginCapture failed: %s\n", hipGetErrorString(e));
+    return false;
+  }
+  return true;
+}
+
+bool CommandEncoder::decode_capture_end_record() {
+  device_.make_current();
+  static const bool dbg = std::getenv("MLX_PURE_DEBUG") != nullptr;
+  hipGraph_t g = nullptr;
+  hipError_t ee = hipStreamEndCapture(stream_, &g);
+  g_decode_capturing.store(false, std::memory_order_relaxed);
+  if (ee != hipSuccess || !g) {
+    if (g) hipGraphDestroy(g);
+    (void)hipGetLastError();
+    if (dbg) fprintf(stderr, "[cap] EndCapture failed: %s\n", hipGetErrorString(ee));
+    return false;
+  }
+  size_t nn = 0;
+  hipGraphGetNodes(g, nullptr, &nn);
+  if (dbg) {
+    fprintf(stderr, "[cap] captured %zu nodes\n", nn);
+    std::vector<hipGraphNode_t> nodes(nn);
+    if (hipGraphGetNodes(g, nodes.data(), &nn) == hipSuccess) {
+      int n_kernel = 0, n_memcpy = 0, n_memset = 0, n_event = 0, n_other = 0;
+      for (auto& nd : nodes) {
+        hipGraphNodeType ty;
+        if (hipGraphNodeGetType(nd, &ty) != hipSuccess) { n_other++; continue; }
+        switch (ty) {
+          case hipGraphNodeTypeKernel: n_kernel++; break;
+          case hipGraphNodeTypeMemcpy: n_memcpy++; break;
+          case hipGraphNodeTypeMemset: n_memset++; break;
+          case hipGraphNodeTypeEventRecord:
+          case hipGraphNodeTypeWaitEvent: n_event++; break;
+          default: n_other++; break;
+        }
+      }
+      fprintf(stderr, "[cap] node types: kernel=%d memcpy=%d memset=%d event=%d other=%d\n",
+              n_kernel, n_memcpy, n_memset, n_event, n_other);
+    }
+  }
+  if (nn == 0) { hipGraphDestroy(g); return false; }
+  hipGraphExec_t exec = nullptr;
+  hipError_t ie = hipGraphInstantiate(&exec, g, nullptr, nullptr, 0);
+  if (ie != hipSuccess) {
+    if (dbg) fprintf(stderr, "[cap] Instantiate failed: %s\n", hipGetErrorString(ie));
+    hipGraphDestroy(g);
+    (void)hipGetLastError();
+    return false;
+  }
+  decode_cap_graph_ = g;
+  decode_cap_exec_ = exec;
+  // Stream capture records WITHOUT executing — run the exec once to actually
+  // compute the record token's logits/state.
+  CHECK_HIP_ERROR(hipGraphLaunch(exec, stream_));
+  worker_->commit(stream_);
+  return true;
+}
+
+bool CommandEncoder::decode_capture_replay() {
+  if (!decode_cap_exec_) return false;
+  device_.make_current();
+  CHECK_HIP_ERROR(hipGraphLaunch(decode_cap_exec_, stream_));
+  worker_->commit(stream_);
+  return true;
+}
+
+void CommandEncoder::decode_capture_destroy() {
+  if (decode_cap_exec_) { hipGraphExecDestroy(decode_cap_exec_); decode_cap_exec_ = nullptr; }
+  if (decode_cap_graph_) { hipGraphDestroy(decode_cap_graph_); decode_cap_graph_ = nullptr; }
+}
+
 // Reset the per-chunk build accounting (mirrors the tail of the normal commit
 // path). recreate_graph=true destroys and re-creates build_graph_ (used on
 // replay, where the forward populated it with nodes we discard).
@@ -1364,5 +1460,25 @@ void decode_pure_off() {
 size_t decode_pure_chain_len(int slot) {
   return rocm::get_command_encoder(default_stream(default_device()))
       .decode_pure_chain_len(slot);
+}
+long decode_inline_launch_count() {
+  return rocm::g_inline_launches_.load(std::memory_order_relaxed);
+}
+// Full decode-step stream-capture bridge.
+bool decode_capture_begin() {
+  return rocm::get_command_encoder(default_stream(default_device()))
+      .decode_capture_begin();
+}
+bool decode_capture_end_record() {
+  return rocm::get_command_encoder(default_stream(default_device()))
+      .decode_capture_end_record();
+}
+bool decode_capture_replay() {
+  return rocm::get_command_encoder(default_stream(default_device()))
+      .decode_capture_replay();
+}
+void decode_capture_destroy() {
+  rocm::get_command_encoder(default_stream(default_device()))
+      .decode_capture_destroy();
 }
 } // namespace mlx::core

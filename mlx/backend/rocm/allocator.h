@@ -59,6 +59,12 @@ struct DecodeArena {
   std::deque<RocmBuffer> wrappers;  // stable RocmBuffer*; recycled per token
   size_t next_wrapper{0};
   size_t high_water{0};      // max offset seen (for sizing diagnostics)
+  // Replay floor: full-capture replay relaunches a recorded exec whose baked
+  // buffers occupy [0, floor_offset). Per-token eager sampling must allocate
+  // ABOVE that region (and not reuse the recorded buffers' wrappers, e.g. the
+  // held logits), so reset-for-replay rewinds to the floor instead of 0.
+  size_t floor_offset{0};
+  size_t floor_wrapper{0};
 
   bool contains(const void* p) const {
     return base && p >= base &&
@@ -183,6 +189,11 @@ class RocmAllocator : public allocator::Allocator {
   // (call before each token); end disarms (allocs return to the normal pool).
   bool decode_arena_begin(size_t capacity, int device, void* stream);
   void decode_arena_reset();
+  // Mark the current bump pointer as the replay floor (call once after the
+  // captured forward's allocations are done, before record-token sampling).
+  void decode_arena_freeze_floor();
+  // Rewind to the replay floor (call before each replay relaunch's sampling).
+  void decode_arena_reset_to_floor();
   void decode_arena_end();
   bool decode_arena_active() const { return decode_arena_.active; }
   size_t decode_arena_high_water() const { return decode_arena_.high_water; }

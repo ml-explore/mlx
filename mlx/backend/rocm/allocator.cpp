@@ -901,8 +901,14 @@ bool RocmAllocator::decode_arena_begin(size_t capacity, int device,
       decode_arena_.capacity = 0;
     }
     void* p = nullptr;
-    // Unified backing so the APU CPU (logits sampling) reads it directly.
-    if (hipMallocManaged(&p, capacity) != hipSuccess || !p) {
+    // Use the same backing as the normal allocator: fine-grained device memory
+    // on the APU (host-coherent, NO managed-migration overhead) and proper VRAM
+    // on a dGPU. hipMallocManaged here makes the captured forward pay GPU page-
+    // fault/migration costs every relaunch, which erased the graph's launch-
+    // batching win. rocm_unified_malloc throws on hard failure.
+    bool arena_managed = false;
+    p = rocm_unified_malloc(capacity, arena_managed);
+    if (!p) {
       (void)hipGetLastError();
       return false;
     }
@@ -923,6 +929,21 @@ void RocmAllocator::decode_arena_reset() {
   std::lock_guard lock(mutex_);
   decode_arena_.offset = 0;
   decode_arena_.next_wrapper = 0;
+  decode_arena_.overflowed = false;
+}
+
+void RocmAllocator::decode_arena_freeze_floor() {
+  std::lock_guard lock(mutex_);
+  decode_arena_.floor_offset = decode_arena_.offset;
+  decode_arena_.floor_wrapper = decode_arena_.next_wrapper;
+}
+
+void RocmAllocator::decode_arena_reset_to_floor() {
+  std::lock_guard lock(mutex_);
+  // Preserve [0, floor_offset) (the recorded exec's baked buffers) and their
+  // wrappers; new (sampling) allocations resume above the floor.
+  decode_arena_.offset = decode_arena_.floor_offset;
+  decode_arena_.next_wrapper = decode_arena_.floor_wrapper;
   decode_arena_.overflowed = false;
 }
 
@@ -1140,6 +1161,12 @@ bool decode_arena_begin(size_t capacity, int device, void* stream) {
 }
 void decode_arena_reset() {
   rocm::allocator().decode_arena_reset();
+}
+void decode_arena_freeze_floor() {
+  rocm::allocator().decode_arena_freeze_floor();
+}
+void decode_arena_reset_to_floor() {
+  rocm::allocator().decode_arena_reset_to_floor();
 }
 void decode_arena_end() {
   rocm::allocator().decode_arena_end();
