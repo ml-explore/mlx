@@ -242,39 +242,14 @@ class CommandEncoder {
   // is stable, so we build its source graph (build_graph_/build_nodes_) ONCE, then
   // each token update the source nodes' params with hipGraphKernelNodeSetParams
   // (no AddKernelNode rebuild) and hipGraphExecUpdate a drained pooled exec from
-  // it (the proven path). replay_active_ marks a token being param-updated.
-  bool replay_active_{false};
+  // it (the proven path).
   std::string decode_key_;          // confirmed-stable decode topology key
   std::string pending_decode_key_;  // last decode build's key (stability check)
   std::string prefill_key_;         // confirmed-stable prefill-chunk topology key
   std::string pending_prefill_key_; // last prefill chunk's key (stability check)
   static std::string kernel_node_key(const hipKernelNodeParams& kp);
-  // Replay execs are instantiated by us (src_nodes are the instantiation graph's
-  // nodes), so hipGraphExecKernelNodeSetParams is valid — unlike the ExecUpdate-
-  // managed exec_pool_ slots whose node handles bind to a stale graph, and unlike
-  // a persistent source graph (ROCm stores kernelParams by pointer, so one source
-  // can't safely feed multiple pooled execs).
-  std::unordered_map<std::string, std::vector<ExecSlot>> replay_pool_;
 
  public:
-  // --- Pure-relaunch decode (deterministic-arena) ---
-  // With the decode arena, every per-token buffer address is identical, so a
-  // graph built once is bit-valid on every relaunch — NO SetParams, NO
-  // ExecUpdate. record: token's commits instantiate as normal but each exec is
-  // kept and appended to the chain. replay: each commit relaunches the next
-  // recorded exec verbatim and discards the freshly-built nodes. On any chunk
-  // mismatch we disable pure mode and fall back to the normal build path.
-  // slot selects which of the two parity chains to record into / replay from.
-  // The hybrid GatedDeltaNet recurrent state ping-pongs by pos&1 (read slot p,
-  // write slot 1-p), so the read/write indices differ between even and odd
-  // tokens. One recorded graph bakes one parity's slots; reusing it on the other
-  // parity reads/writes the wrong slot. Two graphs (one per parity), alternated
-  // by pos&1, bake the correct fixed slots — no dynamic parity index needed.
-  void decode_pure_begin_record(int slot);
-  void decode_pure_begin_replay(int slot);
-  void decode_pure_relaunch_all(int slot);  // relaunch chain[slot] in order
-  void decode_pure_end();
-
   // Full decode-step stream capture (build-once / replay). With graphs OFF the
   // whole call_fn launches eagerly on stream_; we capture it into ONE graph,
   // instantiate ONE exec, then relaunch that exec verbatim every token. Captures
@@ -286,25 +261,10 @@ class CommandEncoder {
   bool decode_capture_replay(int slot);      // relaunch the captured exec in slot
   void decode_capture_destroy();        // free both exec/graph slots
   bool decode_captured(int slot) const { return decode_cap_exec_[slot & 1] != nullptr; }
-  bool decode_pure_recording() const { return decode_pure_mode_ == 1; }
-  bool decode_pure_replaying() const { return decode_pure_mode_ == 2; }
-  size_t decode_pure_chain_len(int slot) const {
-    return decode_pure_chain_[slot & 1].size();
-  }
 
  private:
-  struct PureExec {
-    hipGraphExec_t exec{nullptr};
-    hipGraph_t graph{nullptr};                      // source, owned for exec life
-    std::vector<std::shared_ptr<void>> packs;       // kernarg storage, by-pointer
-  };
-  int decode_pure_mode_{0};      // 0=off 1=record 2=replay
-  int decode_pure_slot_{0};      // active parity chain (0/1)
-  size_t decode_pure_idx_{0};    // commit index within the current replay token
-  std::vector<PureExec> decode_pure_chain_[2];
   hipGraphExec_t decode_cap_exec_[2]{nullptr, nullptr};  // per-parity captured exec
   hipGraph_t decode_cap_graph_[2]{nullptr, nullptr};     // their source graphs (owned)
-  bool commit_pure();            // handle commit() in pure mode; false => fall through
 };
 
 class Device {
