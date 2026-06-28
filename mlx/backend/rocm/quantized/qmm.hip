@@ -144,21 +144,6 @@ __global__ void strided_general_copy_kernel(
   }
 }
 
-#if ROCM_HAS_WMMA
-__global__ void wmma_probe_kernel(float* out) {
-  rocwmma::fragment<rocwmma::matrix_a, 16, 16, 16, hip_bfloat16, rocwmma::row_major> af;
-  rocwmma::fragment<rocwmma::matrix_b, 16, 16, 16, hip_bfloat16, rocwmma::row_major> bf;
-  rocwmma::fragment<rocwmma::accumulator, 16, 16, 16, float> cf;
-  rocwmma::fill_fragment(af, hip_bfloat16(1.0f));
-  rocwmma::fill_fragment(bf, hip_bfloat16(1.0f));
-  rocwmma::fill_fragment(cf, 0.0f);
-  rocwmma::mma_sync(cf, af, bf, cf);
-  rocwmma::store_matrix_sync(out, cf, 16, rocwmma::mem_row_major);
-}
-#else
-__global__ void wmma_probe_kernel(float* out) {}
-#endif
-
 } // namespace rocm
 
 namespace {
@@ -569,22 +554,6 @@ inline int select_qmv_threads_per_col(int K, int N, int bits, int batch_count) {
 // Local aliases for backward compatibility within this file.
 using RocmQmvArchTier = rocm::RocmArchTier;
 
-inline bool probe_native_wmma(rocm::Device& d) {
-  d.make_current();
-  float* dout = nullptr;
-  if (hipMalloc(&dout, 256 * sizeof(float)) != hipSuccess) return false;
-  (void)hipMemset(dout, 0, 256 * sizeof(float));
-  hipLaunchKernelGGL(rocm::wmma_probe_kernel, dim3(1), dim3(WARP_SIZE), 0, 0, dout);
-  bool ok = false;
-  if (hipGetLastError() == hipSuccess && hipDeviceSynchronize() == hipSuccess) {
-    float h0 = 0.0f;
-    if (hipMemcpy(&h0, dout, sizeof(float), hipMemcpyDeviceToHost) == hipSuccess)
-      ok = (h0 > 15.5f && h0 < 16.5f);
-  }
-  (void)hipFree(dout);
-  return ok;
-}
-
 inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
   static std::mutex hw_mutex;
   static std::unordered_map<int, rocm::HWInfo> hw_cache;
@@ -633,8 +602,21 @@ inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
         hw.simds_per_cu = 4;
       }
 
+      static const char* const kWmmaArches[] = {
+          "gfx908",  "gfx90a",  "gfx942",
+          "gfx1100", "gfx1101", "gfx1102",
+          "gfx1151", "gfx1152",
+          "gfx1200", "gfx1201",
+      };
+      for (const char* a : kWmmaArches) {
+        if (std::strstr(arch_name, a) != nullptr) {
+          hw.has_native_wmma = true;
+          break;
+        }
+      }
     }
-    hw.has_native_wmma = probe_native_wmma(d);
+    fprintf(stderr, "[mlx-rocm] %s native_wmma=%d cus=%d\n",
+            arch_name ? arch_name : "?", (int)hw.has_native_wmma, hw.num_cus);
   }
 
   {
