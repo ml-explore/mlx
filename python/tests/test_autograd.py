@@ -913,6 +913,33 @@ class TestAutograd(mlx_tests.MLXTestCase):
                 mx.sum(w * jv).item(), mx.sum(v * jtw).item(), places=4
             )
 
+    def test_logsumexp_grad(self):
+        # The jvp of logsumexp reduces along the axis (sum of softmax * tangent),
+        # so the tangent it returns must have the reduced output shape, not the
+        # input shape.
+        x = mx.array([[1.0, 2.0, 3.0], [4.0, 1.0, 0.0]])
+        v = mx.array([[1.0, 0.0, -1.0], [2.0, 1.0, 0.0]])
+        jv = mx.jvp(lambda z: mx.logsumexp(z, axis=-1, keepdims=True), (x,), (v,))[1][0]
+        self.assertEqual(jv.shape, (2, 1))
+        expected = mx.sum(mx.softmax(x, axis=-1) * v, axis=-1, keepdims=True)
+        self.assertTrue(mx.allclose(jv, expected))
+
+        # vjp must be the transpose of the jvp (adjoint test).
+        mx.random.seed(0)
+        for keepdims in (True, False):
+            a = mx.random.normal((4, 6))
+            v = mx.random.normal(a.shape)
+
+            def fun(z):
+                return mx.logsumexp(z, axis=-1, keepdims=keepdims)
+
+            w = mx.random.normal(fun(a).shape)
+            jv = mx.jvp(fun, (a,), (v,))[1][0]
+            jtw = mx.vjp(fun, (a,), (w,))[1][0]
+            self.assertAlmostEqual(
+                mx.sum(w * jv).item(), mx.sum(v * jtw).item(), places=4
+            )
+
     def test_custom_function(self):
         # Make a custom function
         my_exp = mx.custom_function(mx.exp)
