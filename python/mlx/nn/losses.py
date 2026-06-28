@@ -599,7 +599,7 @@ def margin_ranking_loss(
         >>> inputs2 = mx.array([0.75596, 0.225763, 0.256995])
         >>> loss = nn.losses.margin_ranking_loss(inputs1, inputs2, targets)
         >>> loss
-        array(0.773433, dtype=float32)
+        array([1.32937, 0.990929, 0], dtype=float32)
     """
     if not (inputs1.shape == inputs2.shape == targets.shape):
         raise ValueError(

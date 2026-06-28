@@ -5534,6 +5534,28 @@ array inner(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   return tensordot(a, b, {-1}, {-1}, s);
 }
 
+array vecdot(
+    const array& a,
+    const array& b,
+    int axis /* = -1 */,
+    StreamOrDevice s /* = {} */) {
+  if (a.ndim() == 0 || b.ndim() == 0) {
+    throw std::invalid_argument("[vecdot] inputs must be at least 1D.");
+  }
+  int ax = axis < 0 ? axis + a.ndim() : axis;
+  if (ax < 0 || ax >= a.ndim()) {
+    throw std::invalid_argument("[vecdot] axis is out of bounds.");
+  }
+  if (axis < 0 ? axis + b.ndim() != ax : axis >= b.ndim()) {
+    throw std::invalid_argument("[vecdot] axis is out of bounds.");
+  }
+  if (a.shape(ax) != b.shape(ax)) {
+    throw std::invalid_argument(
+        "[vecdot] a and b must have the same size along axis.");
+  }
+  return sum(multiply(conjugate(a, s), b, s), ax, false, s);
+}
+
 /** Compute D = beta * C + alpha * (A @ B) */
 array addmm(
     array c,
