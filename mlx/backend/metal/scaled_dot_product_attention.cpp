@@ -619,9 +619,10 @@ bool ScaledDotProductAttention::use_fallback(
   const int gqa_factor = num_query_heads / num_kv_heads;
 
   const bool sdpa_vector_supported_head_dim =
-      query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
-       query_head_dim == 256);
+      (query_head_dim == value_head_dim &&
+       (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
+        query_head_dim == 256)) ||
+      (query_head_dim == 192 && value_head_dim == 128);
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
       (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
 
