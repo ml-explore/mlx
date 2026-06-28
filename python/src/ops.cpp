@@ -298,6 +298,23 @@ void init_ops(nb::module_& m) {
             array: The sign of ``a``.
       )pbdoc");
   m.def(
+      "positive",
+      &mx::positive,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def positive(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise unary plus. Returns a copy of the input.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: A copy of ``a``.
+      )pbdoc");
+  m.def(
       "negative",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
         return mx::negative(to_array(a), s);
@@ -734,6 +751,23 @@ void init_ops(nb::module_& m) {
             array: The matrix product of ``a`` and ``b``.
       )pbdoc");
   m.def(
+      "trunc",
+      &mx::trunc,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def trunc(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise truncation towards zero.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The truncated array.
+      )pbdoc");
+  m.def(
       "square",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
         return mx::square(to_array(a), s);
@@ -871,6 +905,27 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The boolean array containing the logical or of ``a`` and ``b``.
     )pbdoc");
+  m.def(
+      "logical_xor",
+      [](const ScalarOrArray& a, const ScalarOrArray& b, mx::StreamOrDevice s) {
+        return mx::logical_xor(to_array(a), to_array(b), s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def logical_xor(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise logical exclusive or.
+
+        Args:
+            a (array): First input array or scalar.
+            b (array): Second input array or scalar.
+
+        Returns:
+            array: The boolean array containing the logical xor of ``a`` and ``b``.
+      )pbdoc");
   m.def(
       "logaddexp",
       [](const ScalarOrArray& a_,
@@ -1793,6 +1848,34 @@ void init_ops(nb::module_& m) {
             array: The output array with the specified shape and values.
       )pbdoc");
   m.def(
+      "full_like",
+      [](const mx::array& a,
+         const ScalarOrArray& vals,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        auto t = dtype.value_or(a.dtype());
+        return mx::full_like(a, to_array(vals, t), t, s);
+      },
+      nb::arg(),
+      "vals"_a,
+      "dtype"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def full_like(a: array, vals: Union[scalar, array], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        An array filled with ``vals`` with the same shape as the input.
+
+        Args:
+            a (array): The input to take the shape from.
+            vals (float or int or array): Values to fill the array with.
+            dtype (Dtype, optional): Data type of the output array. If
+              unspecified the type of the input is used.
+
+        Returns:
+            array: The output array.
+      )pbdoc");
+  m.def(
       "zeros",
       [](const nb::object& shape,
          std::optional<mx::Dtype> dtype,
@@ -2493,6 +2576,41 @@ void init_ops(nb::module_& m) {
 
         Returns:
             array: The output array with the corresponding axes reduced.
+      )pbdoc");
+  m.def(
+      "count_nonzero",
+      [](const mx::array& a,
+         const IntOrVec& axis,
+         bool keepdims,
+         mx::StreamOrDevice s) {
+        if (std::holds_alternative<std::monostate>(axis)) {
+          return mx::count_nonzero(a, keepdims, s);
+        } else if (auto pv = std::get_if<int>(&axis); pv) {
+          return mx::count_nonzero(a, *pv, keepdims, s);
+        } else {
+          return mx::count_nonzero(
+              a, std::get<std::vector<int>>(axis), keepdims, s);
+        }
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      nb::kw_only(),
+      "keepdims"_a = false,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def count_nonzero(a: array, /, *, axis: Union[None, int, Sequence[int]] = None, keepdims: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Count the number of non-zero elements along the given axis.
+
+        Args:
+            a (array): Input array.
+            axis (int or tuple(int), optional): Axis or axes to count over.
+              Defaults to ``None`` in which case the whole array is counted.
+            keepdims (bool, optional): Keep the reduced axes as size one.
+              Default: ``False``.
+
+        Returns:
+            array: The counts as an ``int32`` array.
       )pbdoc");
   m.def(
       "prod",
@@ -3584,6 +3702,28 @@ void init_ops(nb::module_& m) {
 
         Returns:
           array: The output array.
+      )pbdoc");
+  m.def(
+      "diff",
+      &mx::diff,
+      nb::arg(),
+      "n"_a = 1,
+      "axis"_a = -1,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def diff(a: array, /, n: int = 1, axis: int = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        The n-th discrete difference along the given axis.
+
+        Args:
+            a (array): Input array.
+            n (int, optional): The number of times to difference. Default: ``1``.
+            axis (int, optional): The axis along which to difference.
+              Default: ``-1``.
+
+        Returns:
+            array: The n-th differences.
       )pbdoc");
   m.def(
       "conj",

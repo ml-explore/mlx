@@ -65,11 +65,13 @@ Operations
    cummin
    cumprod
    cumsum
+   count_nonzero
    degrees
    depends
    dequantize
    diag
    diagonal
+   diff
    divide
    divmod
    einsum
@@ -87,6 +89,7 @@ Operations
    floor_divide
    full
    from_dlpack
+   full_like
    from_fp8
    gather_mm
    gather_qmm
@@ -121,6 +124,7 @@ Operations
    logical_not
    logical_and
    logical_or
+   logical_xor
    logsumexp
    matmul
    max
@@ -141,6 +145,7 @@ Operations
    partition
    pad
    permute_dims
+   positive
    power
    prod
    put_along_axis
@@ -195,6 +200,7 @@ Operations
    tri
    tril
    triu
+   trunc
    unflatten
    unstack
    vecdot
