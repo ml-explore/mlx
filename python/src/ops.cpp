@@ -5918,10 +5918,10 @@ void init_ops(nb::module_& m) {
   m.attr("atan2") = m.attr("arctan2");
   m.attr("bitwise_left_shift") = m.attr("left_shift");
   m.attr("bitwise_right_shift") = m.attr("right_shift");
+  m.attr("cumulative_prod") = m.attr("cumprod");
+  m.attr("cumulative_sum") = m.attr("cumsum");
   m.attr("empty") = m.attr("zeros");
   m.attr("empty_like") = m.attr("zeros_like");
   m.attr("matrix_transpose") = m.attr("transpose");
   m.attr("pow") = m.attr("power");
-  m.attr("cumulative_sum") = m.attr("cumsum");
-  m.attr("cumulative_prod") = m.attr("cumprod");
 }
