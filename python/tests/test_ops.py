@@ -3244,6 +3244,11 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.slice(x, mx.array([1, 2, 3]), (0, 1, 2), (3, 2, 1))
         self.assertTrue(mx.array_equal(expected, out))
 
+        x = mx.arange(5 * 6 * 7 * 8).reshape(5, 6, 7, 8)
+        expected = x[1:3, 2:4, 3:5, 4:6]
+        out = mx.slice(x, mx.array([1, 2, 3, 4]), (0, 1, 2, 3), (2, 2, 2, 2))
+        self.assertTrue(mx.array_equal(expected, out))
+
         x = mx.zeros(shape=(4, 4, 4))
         update = mx.random.randint(0, 100, shape=(3, 2, 1))
         out = mx.slice_update(x, update, mx.array([1, 2, 3]), (0, 1, 2))
