@@ -1357,7 +1357,12 @@ MLX_API array cumsum(
     const array& a,
     bool reverse = false,
     bool inclusive = true,
+    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
+inline array
+cumsum(const array& a, bool reverse, bool inclusive, StreamOrDevice s) {
+  return cumsum(a, reverse, inclusive, std::nullopt, s);
+}
 
 /** Cumulative sum of an array along the given axis. */
 MLX_API array cumsum(
@@ -1365,14 +1370,28 @@ MLX_API array cumsum(
     int axis,
     bool reverse = false,
     bool inclusive = true,
+    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
+inline array cumsum(
+    const array& a,
+    int axis,
+    bool reverse,
+    bool inclusive,
+    StreamOrDevice s) {
+  return cumsum(a, axis, reverse, inclusive, std::nullopt, s);
+}
 
 /** Cumulative product of an array. */
 MLX_API array cumprod(
     const array& a,
     bool reverse = false,
     bool inclusive = true,
+    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
+inline array
+cumprod(const array& a, bool reverse, bool inclusive, StreamOrDevice s) {
+  return cumprod(a, reverse, inclusive, std::nullopt, s);
+}
 
 /** Cumulative product of an array along the given axis. */
 MLX_API array cumprod(
@@ -1380,7 +1399,16 @@ MLX_API array cumprod(
     int axis,
     bool reverse = false,
     bool inclusive = true,
+    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
+inline array cumprod(
+    const array& a,
+    int axis,
+    bool reverse,
+    bool inclusive,
+    StreamOrDevice s) {
+  return cumprod(a, axis, reverse, inclusive, std::nullopt, s);
+}
 
 /** Cumulative max of an array. */
 MLX_API array cummax(

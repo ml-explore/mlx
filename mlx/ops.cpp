@@ -3992,6 +3992,7 @@ array cumsum(
     int axis,
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
+    std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
   int ndim = a.ndim();
   if (axis >= ndim || axis < -ndim) {
@@ -4001,21 +4002,24 @@ array cumsum(
     throw std::invalid_argument(msg.str());
   }
   axis = (axis + a.ndim()) % a.ndim();
-  auto out_type = a.dtype() == bool_ ? int32 : a.dtype();
+  auto x = dtype ? astype(a, *dtype, s) : a;
+  auto out_type = x.dtype() == bool_ ? int32 : x.dtype();
   return array(
-      a.shape(),
+      x.shape(),
       out_type,
       std::make_shared<Scan>(
           to_stream(s), Scan::ReduceType::Sum, axis, reverse, inclusive),
-      {a});
+      {x});
 }
 
 array cumsum(
     const array& a,
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
+    std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
-  return cumsum(flatten(a, to_stream(s)), 0, reverse, inclusive, to_stream(s));
+  return cumsum(
+      flatten(a, to_stream(s)), 0, reverse, inclusive, dtype, to_stream(s));
 }
 
 array cumprod(
@@ -4023,6 +4027,7 @@ array cumprod(
     int axis,
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
+    std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
   int ndim = a.ndim();
   if (axis >= ndim || axis < -ndim) {
@@ -4032,20 +4037,22 @@ array cumprod(
     throw std::invalid_argument(msg.str());
   }
   axis = (axis + a.ndim()) % a.ndim();
+  auto x = dtype ? astype(a, *dtype, s) : a;
   return array(
-      a.shape(),
-      a.dtype(),
+      x.shape(),
+      x.dtype(),
       std::make_shared<Scan>(
           to_stream(s), Scan::ReduceType::Prod, axis, reverse, inclusive),
-      {a});
+      {x});
 }
 
 array cumprod(
     const array& a,
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
+    std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
-  return cumprod(flatten(a, s), 0, reverse, inclusive, s);
+  return cumprod(flatten(a, s), 0, reverse, inclusive, dtype, s);
 }
 
 array cummax(

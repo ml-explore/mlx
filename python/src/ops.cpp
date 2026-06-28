@@ -3565,32 +3565,34 @@ void init_ops(nb::module_& m) {
          std::optional<int> axis,
          bool reverse,
          bool inclusive,
+         std::optional<mx::Dtype> dtype,
          mx::StreamOrDevice s) {
         if (axis) {
-          return mx::cumsum(a, *axis, reverse, inclusive, s);
-        } else {
-          return mx::cumsum(mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
+          return mx::cumsum(a, *axis, reverse, inclusive, dtype, s);
         }
+        return mx::cumsum(a, reverse, inclusive, dtype, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
       nb::kw_only(),
       "reverse"_a = false,
       "inclusive"_a = true,
+      "dtype"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cumsum(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cumsum(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, dtype: Optional[Dtype] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the cumulative sum of the elements along the given axis.
 
         Args:
-          a (array): Input array
+          a (array): Input array.
           axis (int, optional): Optional axis to compute the cumulative sum
             over. If unspecified the cumulative sum of the flattened array is
             returned.
           reverse (bool): Perform the cumulative sum in reverse.
           inclusive (bool): The i-th element of the output includes the i-th
             element of the input.
+          dtype (Dtype, optional): Cast the input to this type before summing.
 
         Returns:
           array: The output array.
@@ -3601,32 +3603,34 @@ void init_ops(nb::module_& m) {
          std::optional<int> axis,
          bool reverse,
          bool inclusive,
+         std::optional<mx::Dtype> dtype,
          mx::StreamOrDevice s) {
         if (axis) {
-          return mx::cumprod(a, *axis, reverse, inclusive, s);
-        } else {
-          return mx::cumprod(mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
+          return mx::cumprod(a, *axis, reverse, inclusive, dtype, s);
         }
+        return mx::cumprod(a, reverse, inclusive, dtype, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
       nb::kw_only(),
       "reverse"_a = false,
       "inclusive"_a = true,
+      "dtype"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cumprod(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cumprod(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, dtype: Optional[Dtype] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the cumulative product of the elements along the given axis.
 
         Args:
-          a (array): Input array
+          a (array): Input array.
           axis (int, optional): Optional axis to compute the cumulative product
-            over. If unspecified the cumulative product of the flattened array is
-            returned.
+            over. If unspecified the cumulative product of the flattened array
+            is returned.
           reverse (bool): Perform the cumulative product in reverse.
           inclusive (bool): The i-th element of the output includes the i-th
             element of the input.
+          dtype (Dtype, optional): Cast the input to this type before multiplying.
 
         Returns:
           array: The output array.
@@ -6054,6 +6058,8 @@ void init_ops(nb::module_& m) {
   m.attr("atan2") = m.attr("arctan2");
   m.attr("bitwise_left_shift") = m.attr("left_shift");
   m.attr("bitwise_right_shift") = m.attr("right_shift");
+  m.attr("cumulative_prod") = m.attr("cumprod");
+  m.attr("cumulative_sum") = m.attr("cumsum");
   m.attr("empty") = m.attr("zeros");
   m.attr("empty_like") = m.attr("zeros_like");
   m.attr("matrix_transpose") = m.attr("transpose");
