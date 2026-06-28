@@ -144,6 +144,21 @@ __global__ void strided_general_copy_kernel(
   }
 }
 
+#if ROCM_HAS_WMMA
+__global__ void wmma_probe_kernel(float* out) {
+  rocwmma::fragment<rocwmma::matrix_a, 16, 16, 16, hip_bfloat16, rocwmma::row_major> af;
+  rocwmma::fragment<rocwmma::matrix_b, 16, 16, 16, hip_bfloat16, rocwmma::row_major> bf;
+  rocwmma::fragment<rocwmma::accumulator, 16, 16, 16, float> cf;
+  rocwmma::fill_fragment(af, hip_bfloat16(1.0f));
+  rocwmma::fill_fragment(bf, hip_bfloat16(1.0f));
+  rocwmma::fill_fragment(cf, 0.0f);
+  rocwmma::mma_sync(cf, af, bf, cf);
+  rocwmma::store_matrix_sync(out, cf, 16, rocwmma::mem_row_major);
+}
+#else
+__global__ void wmma_probe_kernel(float* out) {}
+#endif
+
 } // namespace rocm
 
 namespace {
@@ -554,6 +569,22 @@ inline int select_qmv_threads_per_col(int K, int N, int bits, int batch_count) {
 // Local aliases for backward compatibility within this file.
 using RocmQmvArchTier = rocm::RocmArchTier;
 
+inline bool probe_native_wmma(rocm::Device& d) {
+  d.make_current();
+  float* dout = nullptr;
+  if (hipMalloc(&dout, 256 * sizeof(float)) != hipSuccess) return false;
+  (void)hipMemset(dout, 0, 256 * sizeof(float));
+  hipLaunchKernelGGL(rocm::wmma_probe_kernel, dim3(1), dim3(WARP_SIZE), 0, 0, dout);
+  bool ok = false;
+  if (hipGetLastError() == hipSuccess && hipDeviceSynchronize() == hipSuccess) {
+    float h0 = 0.0f;
+    if (hipMemcpy(&h0, dout, sizeof(float), hipMemcpyDeviceToHost) == hipSuccess)
+      ok = (h0 > 15.5f && h0 < 16.5f);
+  }
+  (void)hipFree(dout);
+  return ok;
+}
+
 inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
   static std::mutex hw_mutex;
   static std::unordered_map<int, rocm::HWInfo> hw_cache;
@@ -602,22 +633,8 @@ inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
         hw.simds_per_cu = 4;
       }
 
-      // rocWMMA library arch allowlist (AMD's official support matrix).
-      // CDNA1/2/3 use MFMA under rocwmma; RDNA3 dGPU + gfx1151 + RDNA4 use
-      // hardware WMMA. Excludes gfx1103/1150/1152 and all gfx10xx (RDNA1/2).
-      static const char* const kRocwmmaArches[] = {
-          "gfx908",  "gfx90a",  "gfx942",
-          "gfx1100", "gfx1101", "gfx1102",
-          "gfx1151",
-          "gfx1200", "gfx1201",
-      };
-      for (const char* a : kRocwmmaArches) {
-        if (std::strstr(arch_name, a) != nullptr) {
-          hw.has_native_wmma = true;
-          break;
-        }
-      }
     }
+    hw.has_native_wmma = probe_native_wmma(d);
   }
 
   {
@@ -3307,21 +3324,16 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool should_prefer_dequant = should_use_dequant_gemm_path(
       M, N, K, batch_count, non_batched, transpose_, can_use_batched_qmv, d);
 
-  // Fused WMMA quantized GEMM (q4/q6/q8): graph-addable single node (no rocBLAS
-  // split) AND no dequant materialization. Opt in with MLX_ROCM_WMMA_QMM=1, or
-  // auto-on under HIP graphs (where avoiding the rocBLAS graph-split is the point);
-  // eager keeps rocBLAS unless forced. Single (non-batched) bf16 affine prefill.
+  // Fused WMMA quantized GEMM (q4/q6/q8): graph-addable single node, no dequant
+  // materialization. Default ON where the device has native WMMA (opt out with
+  // MLX_ROCM_WMMA_QMM=0); dispatch below falls to rocBLAS when WMMA is absent or
+  // the shape doesn't qualify. Single (non-batched) bf16 affine prefill.
   {
-    static const bool wmma_qmm_env = [] {
-      const char* e = std::getenv("MLX_ROCM_WMMA_QMM");
-      return e && e[0] == '1';
-    }();
     static const bool wmma_qmm_off = [] {
       const char* e = std::getenv("MLX_ROCM_WMMA_QMM");
       return e && e[0] == '0';
     }();
-    const bool want_wmma =
-        !wmma_qmm_off && (wmma_qmm_env || rocm::use_hip_graphs());
+    const bool want_wmma = !wmma_qmm_off;
     if (want_wmma && transpose_ && mode_ == QuantizationMode::Affine &&
         x.dtype() == bfloat16 && scales.dtype() == bfloat16 &&
         (!biases.has_value() || biases->dtype() == bfloat16) &&
