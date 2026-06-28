@@ -197,6 +197,7 @@ Operations
    triu
    unflatten
    unstack
+   vecdot
    var
    view
    where
