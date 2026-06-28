@@ -38,24 +38,11 @@ inline bool is_empty_dim(dim3 dim) {
 static std::atomic<bool> g_graph_decode_mode{false};
 
 bool use_hip_graphs() {
-  // Default OFF: the rebuild-every-eval graph path is a net loss vs eager when
-  // launches are cheap (build/instantiate overhead exceeds the launch-batching
-  // win, and one-shot prefill has no replay to amortize the build).
-  // Independent opt-in per region: MLX_HIP_GRAPH_PREFILL / MLX_HIP_GRAPH_DECODE.
-  // Legacy MLX_USE_HIP_GRAPHS=1 turns both on.
-  static const bool legacy = [] {
-    const char* e = std::getenv("MLX_USE_HIP_GRAPHS");
-    return e && (std::strcmp(e, "1") == 0 || std::strcmp(e, "on") == 0);
-  }();
-  static const bool prefill = legacy || [] {
-    const char* e = std::getenv("MLX_HIP_GRAPH_PREFILL");
-    return e && (std::strcmp(e, "1") == 0 || std::strcmp(e, "on") == 0);
-  }();
-  static const bool decode = legacy || [] {
-    const char* e = std::getenv("MLX_HIP_GRAPH_DECODE");
-    return e && (std::strcmp(e, "1") == 0 || std::strcmp(e, "on") == 0);
-  }();
-  return g_graph_decode_mode.load(std::memory_order_relaxed) ? decode : prefill;
+  // The rebuild-every-eval graph-build path is a net loss vs eager (and the
+  // prefill variant segfaults on RDNA3.5). Decode uses build-once capture/replay
+  // (decode_capture_*) and prefill uses the WMMA GEMM — neither goes through
+  // here — so this path is permanently off.
+  return false;
 }
 
 // Count of inline (graph-splitting) launches — library GEMM / JIT / memset run
