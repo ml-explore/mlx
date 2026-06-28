@@ -65,6 +65,7 @@ Operations
    cummin
    cumprod
    cumsum
+   count_nonzero
    degrees
    depends
    dequantize
