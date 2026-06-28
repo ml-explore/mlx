@@ -1701,7 +1701,10 @@ std::vector<array> Cosh::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Cosh::jvp(
@@ -2775,7 +2778,10 @@ std::vector<array> Log1p::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Log1p::jvp(
@@ -4873,7 +4879,10 @@ std::vector<array> Sin::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Sin::jvp(
@@ -4898,7 +4907,10 @@ std::vector<array> Sinh::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Sinh::jvp(
@@ -5441,7 +5453,10 @@ std::vector<array> Square::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Square::jvp(
@@ -5613,7 +5628,10 @@ std::vector<array> Tan::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Tan::jvp(
@@ -5639,7 +5657,10 @@ std::vector<array> Tanh::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Tanh::jvp(
