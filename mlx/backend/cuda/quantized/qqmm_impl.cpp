@@ -20,7 +20,8 @@ void qqmm_impl(
     const array& a_scale,
     const array& b_scale,
     QuantizationMode mode,
-    const GemmScalars& scalars) {
+    const GemmScalars& scalars,
+    const std::optional<array>& bias) {
   std::string qmode = quantization_mode_to_string(mode);
 
   CublasQQMM qqmm(
@@ -38,6 +39,14 @@ void qqmm_impl(
       0, // b_batch_stride
       out.dtype(),
       qmode);
+
+  // Note: Unlike regular GEMM, no complex64 check is needed here because
+  // quantized matmul only supports real floating types (float16, bfloat16,
+  // float32). The type constraint is enforced in validate_qqmm_inputs() in
+  // ops.cpp.
+  if (bias) {
+    qqmm.set_bias(encoder, *bias);
+  }
 
   if (scalars.has_values()) {
     qqmm.run(
