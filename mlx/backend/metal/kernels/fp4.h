@@ -1,5 +1,8 @@
 #pragma once
 
+constant constexpr float F8E4M3_MAX = 448.0f;
+constant constexpr float F4E2M1_MAX = 6.0f;
+
 struct fp4_e2m1 {
   fp4_e2m1(float x) {
     if (metal::isnan(x)) {

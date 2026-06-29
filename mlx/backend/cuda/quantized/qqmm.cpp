@@ -125,7 +125,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
             w_pre, encoder, s, mode_, bits_, group_size_, global_scale_w)
       : std::make_tuple(
             ensure_contiguous(w_pre, encoder, s),
-            ensure_contiguous(inputs[2], encoder, s));
+            ensure_contiguous(inputs[base_size - 1], encoder, s));
 
   // Reroute to qmm when: no support in cuBLAS, or doing GEMV.
   bool can_use_cublas =
@@ -242,7 +242,7 @@ void GatherQQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             w_pre, encoder, s, mode_, bits_, group_size_, global_scale_w)
       : std::make_tuple(
             ensure_contiguous(w_pre, encoder, s),
-            ensure_contiguous(inputs[4], encoder, s));
+            ensure_contiguous(inputs[base_size - 1], encoder, s));
 
   // Quantize activation.
   array x = quantize_dequantize_input(
