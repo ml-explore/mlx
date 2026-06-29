@@ -329,13 +329,8 @@ TCPAllGather::TCPAllGather(int rank, int size, const char* addr)
   }
 }
 
-TCPAllGather::TCPAllGather(TCPAllGather&& ag)
-    : rank_(ag.rank_), size_(ag.size_), sockets_(std::move(ag.sockets_)) {
-  ag.rank_ = -1;
-  ag.size_ = -1;
-}
-
 void TCPAllGather::operator()(const char* src, char* dst, size_t n_bytes) {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (rank_ == 0) {
     std::copy(src, src + n_bytes, dst);
     for (int i = 1; i < size_; i++) {

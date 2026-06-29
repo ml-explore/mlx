@@ -5,6 +5,7 @@
 #include <infiniband/verbs.h>
 
 #include <functional>
+#include <mutex>
 #include <span>
 #include <sstream>
 #include <unordered_map>
@@ -273,10 +274,11 @@ using AllGatherFn =
 class TCPAllGather {
  public:
   TCPAllGather(int rank, int size, const char* addr);
-  TCPAllGather(TCPAllGather&& ag);
 
   TCPAllGather(const TCPAllGather&) = delete;
-  TCPAllGather operator=(const TCPAllGather&) = delete;
+  TCPAllGather(TCPAllGather&&) = delete;
+  TCPAllGather& operator=(const TCPAllGather&) = delete;
+  TCPAllGather& operator=(TCPAllGather&&) = delete;
 
   void operator()(const char* src, char* dst, size_t n_bytes);
 
@@ -284,6 +286,7 @@ class TCPAllGather {
   int rank_;
   int size_;
   std::vector<TCPSocket> sockets_;
+  std::mutex mutex_;
 };
 
 /**
