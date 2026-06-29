@@ -256,7 +256,7 @@ class GroupNorm(Module):
 
 
 class BatchNorm(Module):
-    r"""Applies Batch Normalization over a 2D or 3D input.
+    r"""Applies Batch Normalization over a 2D, 3D or 4D input.
 
     Computes
 
