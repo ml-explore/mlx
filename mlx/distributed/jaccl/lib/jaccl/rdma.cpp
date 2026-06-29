@@ -294,7 +294,7 @@ std::vector<Connection> create_connections(
   return connections;
 }
 
-SideChannel::SideChannel(int rank, int size, const char* addr)
+TCPAllGather::TCPAllGather(int rank, int size, const char* addr)
     : rank_(rank), size_(size) {
   auto address = parse_address(addr);
 
@@ -329,8 +329,34 @@ SideChannel::SideChannel(int rank, int size, const char* addr)
   }
 }
 
+TCPAllGather::TCPAllGather(TCPAllGather&& ag)
+    : rank_(ag.rank_), size_(ag.size_), sockets_(std::move(ag.sockets_)) {
+  ag.rank_ = -1;
+  ag.size_ = -1;
+}
+
+void TCPAllGather::operator()(const char* src, char* dst, size_t n_bytes) {
+  if (rank_ == 0) {
+    std::copy(src, src + n_bytes, dst);
+    for (int i = 1; i < size_; i++) {
+      sockets_[i - 1].recv(IBV_TAG, dst + i * n_bytes, n_bytes);
+    }
+    for (int i = 1; i < size_; i++) {
+      sockets_[i - 1].send(IBV_TAG, dst, size_ * n_bytes);
+    }
+  } else {
+    sockets_[0].send(IBV_TAG, src, n_bytes);
+    sockets_[0].recv(IBV_TAG, dst, size_ * n_bytes);
+  }
+}
+
+SideChannel::SideChannel(int rank, int size, AllGatherFn agf)
+    : rank_(rank), size_(size), all_gather_fn_(std::move(agf)) {}
+
 SideChannel::SideChannel(SideChannel&& sc)
-    : rank_(sc.rank_), size_(sc.size_), sockets_(std::move(sc.sockets_)) {
+    : rank_(sc.rank_),
+      size_(sc.size_),
+      all_gather_fn_(std::move(sc.all_gather_fn_)) {
   sc.rank_ = -1;
   sc.size_ = -1;
 }

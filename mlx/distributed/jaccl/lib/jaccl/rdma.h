@@ -4,6 +4,7 @@
 
 #include <infiniband/verbs.h>
 
+#include <functional>
 #include <span>
 #include <sstream>
 #include <unordered_map>
@@ -258,6 +259,34 @@ inline int poll(
 }
 
 /**
+ * A function that performs an all-gather across ranks.
+ *
+ * Args:
+ *   src: Pointer to this rank's data of size n_bytes.
+ *   dst: Pointer to an output buffer of size size_ * n_bytes. After the call,
+ *        dst[r * n_bytes, (r+1) * n_bytes] contains the data from rank r.
+ *   n_bytes: The number of bytes contributed by each rank.
+ */
+using AllGatherFn =
+    std::function<void(const char* src, char* dst, size_t n_bytes)>;
+
+class TCPAllGather {
+ public:
+  TCPAllGather(int rank, int size, const char* addr);
+  TCPAllGather(TCPAllGather&& ag);
+
+  TCPAllGather(const TCPAllGather&) = delete;
+  TCPAllGather operator=(const TCPAllGather&) = delete;
+
+  void operator()(const char* src, char* dst, size_t n_bytes);
+
+ private:
+  int rank_;
+  int size_;
+  std::vector<TCPSocket> sockets_;
+};
+
+/**
  * Implement a TCP side channel to exchange information about the RDMA
  * connections.
  *
@@ -266,7 +295,7 @@ inline int poll(
  */
 class SideChannel {
  public:
-  SideChannel(int rank, int size, const char* addr);
+  SideChannel(int rank, int size, AllGatherFn agf);
   SideChannel(SideChannel&& sc);
 
   SideChannel(const SideChannel&) = delete;
@@ -280,54 +309,37 @@ class SideChannel {
     if constexpr (is_container<T>::value) {
       using U = typename T::value_type;
 
-      // Share the lengths first and set the communication size to be the
+      // Share the lengths first to set the communication size to be the
       // maximum length of the containers.
       auto lengths = all_gather<int>(v.size());
       auto max_len = *std::max_element(lengths.begin(), lengths.end());
-      for (auto& s : result) {
-        s.resize(max_len);
-      }
 
-      // All gather of length max_len
-      if (rank_ == 0) {
-        std::copy(v.begin(), v.end(), result[rank_].begin());
-        for (int i = 1; i < size_; i++) {
-          sockets_[i - 1].recv(IBV_TAG, result[i].data(), sizeof(U) * max_len);
-        }
-        for (int i = 1; i < size_; i++) {
-          for (int j = 0; j < size_; j++) {
-            sockets_[i - 1].send(
-                IBV_TAG, result[j].data(), sizeof(U) * max_len);
-          }
-        }
-      } else {
-        std::copy(v.begin(), v.end(), result[rank_].begin());
-        sockets_[0].send(IBV_TAG, result[rank_].data(), sizeof(U) * max_len);
-        for (int i = 0; i < size_; i++) {
-          sockets_[0].recv(IBV_TAG, result[i].data(), sizeof(U) * max_len);
-        }
-      }
+      // Allocate flat memory for the all gather
+      std::vector<U> buffer;
+      buffer.resize(max_len * (size_ + 1));
 
-      // Resize the outputs back to the original length
+      // Copy our value and share it
+      std::copy(v.begin(), v.end(), buffer.begin());
+      all_gather_fn_(
+          reinterpret_cast<const char*>(&buffer[0]),
+          reinterpret_cast<char*>(&buffer[max_len]),
+          max_len * sizeof(U));
+
+      // Put the values into the individual containers
       for (int i = 0; i < size_; i++) {
-        result[i].resize(lengths[i]);
+        std::copy(
+            buffer.begin() + (i + 1) * max_len,
+            buffer.begin() + (i + 1) * max_len + lengths[i],
+            std::inserter(result[i], result[i].end()));
       }
     }
 
     // T is a scalar
     else {
-      if (rank_ == 0) {
-        result[rank_] = v;
-        for (int i = 1; i < size_; i++) {
-          sockets_[i - 1].recv(IBV_TAG, &result[i], sizeof(T));
-        }
-        for (int i = 1; i < size_; i++) {
-          sockets_[i - 1].send(IBV_TAG, result.data(), size_ * sizeof(T));
-        }
-      } else {
-        sockets_[0].send(IBV_TAG, &v, sizeof(T));
-        sockets_[0].recv(IBV_TAG, result.data(), size_ * sizeof(T));
-      }
+      all_gather_fn_(
+          reinterpret_cast<const char*>(&v),
+          reinterpret_cast<char*>(result.data()),
+          sizeof(T));
     }
 
     return result;
@@ -342,7 +354,7 @@ class SideChannel {
  private:
   int rank_;
   int size_;
-  std::vector<TCPSocket> sockets_;
+  AllGatherFn all_gather_fn_;
 };
 
 } // namespace jaccl
