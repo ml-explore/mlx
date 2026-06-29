@@ -161,11 +161,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(w_hat == 0))
 
         # Test nvfp4 quantize/dequantize with tensor-scale global_scale
-        # currently supported only on cpu and cuda
-        if not mx.metal.is_available():
-            global_scale = w.abs().max().astype(mx.float32)
-        else:
-            global_scale = None
+        global_scale = w.abs().max().astype(mx.float32)
 
         w_q, scales = mx.quantize(w, mode="nvfp4", global_scale=global_scale)
         w_hat = mx.dequantize(
@@ -178,7 +174,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         k1, k2 = mx.random.split(key)
         tests = product(
             [256, 512, 67],  # M
-            [64, 256],  # N
+            [64, 256, 512],  # N
             ["nvfp4", "mxfp8"],  # mode
         )
         for M, N, mode in tests:
@@ -186,12 +182,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 x_shape = (1, N)
                 w_shape = (M, N)
 
-                # TODO: Fix qmv with global scale in Metal/CPU backends.
-                has_global_scale = (
-                    mode == "nvfp4"
-                    and mx.cuda.is_available()
-                    and mx.default_device() == mx.gpu
-                )
+                # TODO: Fix qmv with global scale in CPU backend.
+                has_global_scale = mode == "nvfp4" and mx.default_device() == mx.gpu
 
                 x = mx.random.normal(shape=x_shape, key=k1)
                 global_scale_x = mx.max(mx.abs(x)) if has_global_scale else None
@@ -224,11 +216,11 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
-    @unittest.skipIf(
-        not mx.cuda.is_available() or mx.default_device() == mx.cpu,
-        "Only implemented in CUDA",
-    )
     def test_qqmm(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Not implemented for CPU")
+            return
+
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
         tests = product(
@@ -272,32 +264,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y_hat = x_hat @ mx.swapaxes(w_hat, -1, -2)
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
-
-    def test_qqmm_metal_global_scale_rejected(self):
-        # Tensor-scale nvfp4 (global_scale_x / global_scale_w) is not
-        # implemented in the Metal qqmm kernels. mx.qqmm must reject the
-        # request on Metal rather than silently dropping the global scales
-        # in the gemv path and producing incorrect results.
-        if not mx.metal.is_available():
-            return
-
-        w = mx.random.normal(shape=(64, 64))
-        w_q, scales = mx.quantize(w, mode="nvfp4")
-        x = mx.random.normal(shape=(1, 64))
-        gx = mx.array(1.0, dtype=mx.float32)
-        gw = mx.array(1.0, dtype=mx.float32)
-
-        with self.assertRaises(RuntimeError):
-            y = mx.qqmm(
-                x,
-                w_q,
-                scales,
-                mode="nvfp4",
-                global_scale_x=gx,
-                global_scale_w=gw,
-                stream=mx.gpu,
-            )
-            mx.eval(y)
 
     def test_qmm(self):
         key = mx.random.key(0)
@@ -1121,11 +1087,11 @@ class TestQuantized(mlx_tests.MLXTestCase):
             test_shape(32, 512, 32, transpose=False, **kwargs)
             test_shape(1, 512, 32, transpose=False, **kwargs)
 
-    @unittest.skipIf(
-        not mx.cuda.is_available() or mx.default_device() == mx.cpu,
-        "Only implemented in CUDA",
-    )
     def test_gather_qqmm(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Not implemented for CPU")
+            return
+
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
         batches = (

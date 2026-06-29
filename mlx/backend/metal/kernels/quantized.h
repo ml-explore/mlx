@@ -1591,7 +1591,12 @@ template <typename T, int group_size, int bits, int D, bool batched>
       quad_lid);
 }
 
-template <typename T, int group_size, int bits, bool batched>
+template <
+    typename T,
+    int group_size,
+    int bits,
+    bool batched,
+    bool has_global_scale = false>
 [[kernel]] void affine_qmv_fast(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1643,7 +1648,12 @@ template <typename T, int group_size, int bits, bool batched>
       simd_lid);
 }
 
-template <typename T, const int group_size, const int bits, bool batched>
+template <
+    typename T,
+    int group_size,
+    const int bits,
+    bool batched,
+    bool has_global_scale = false>
 [[kernel]] void affine_qmv(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1754,7 +1764,12 @@ template <
       simd_lid);
 }
 
-template <typename T, const int group_size, const int bits, bool batched>
+template <
+    typename T,
+    const int group_size,
+    const int bits,
+    bool batched,
+    bool has_global_scale = false>
 [[kernel]] void affine_qvm(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -2001,12 +2016,13 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const bool batched,
-    const int BM = 32,
-    const int BK = 32,
-    const int BN = 32>
+    int group_size,
+    int bits,
+    bool batched,
+    bool has_global_scale = false,
+    int BM = 32,
+    int BK = 32,
+    int BN = 32>
 [[kernel]] void affine_qmm_n(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -2059,7 +2075,7 @@ template <
       w, scales, biases, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
-template <typename T, int group_size, int bits>
+template <typename T, int group_size, int bits, bool has_global_scale = false>
 [[kernel]] void affine_gather_qmv_fast(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -2121,7 +2137,7 @@ template <typename T, int group_size, int bits>
       simd_lid);
 }
 
-template <typename T, int group_size, int bits>
+template <typename T, int group_size, int bits, bool has_global_scale = false>
 [[kernel]] void affine_gather_qmv(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -2183,7 +2199,7 @@ template <typename T, int group_size, int bits>
       simd_lid);
 }
 
-template <typename T, int group_size, int bits>
+template <typename T, int group_size, int bits, bool has_global_scale = false>
 [[kernel]] void affine_gather_qvm(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -2330,11 +2346,12 @@ template <
 
 template <
     typename T,
-    const int group_size,
-    const int bits,
-    const int BM = 32,
-    const int BK = 32,
-    const int BN = 32>
+    int group_size,
+    int bits,
+    bool has_global_scale = false,
+    int BM = 32,
+    int BK = 32,
+    int BN = 32>
 [[kernel]] void affine_gather_qmm_n(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -2592,7 +2609,7 @@ template <
   }
 }
 
-template <typename T, const int group_size, const int bits>
+template <typename T, int group_size, int bits, bool has_global_scale = false>
 [[kernel]] void affine_quantize(
     const device T* w [[buffer(0)]],
     device uint8_t* out [[buffer(1)]],
@@ -2697,7 +2714,7 @@ template <typename T, const int group_size, const int bits>
   }
 }
 
-template <typename T, const int group_size, const int bits>
+template <typename T, int group_size, int bits, bool has_global_scale = false>
 [[kernel]] void affine_dequantize(
     const device uint8_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
