@@ -1675,7 +1675,10 @@ std::vector<array> Cos::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return {jvp(primals, cotangents, argnums)};
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Cos::jvp(
@@ -5487,8 +5490,11 @@ std::vector<array> Sqrt::vjp(
   assert(primals.size() == 1);
   assert(cotangents.size() == 1);
   auto dtype = primals[0].dtype();
+  // The vjp is cotangent * conj(f'(z)); conjugating the derivative factor is a
+  // no-op for real inputs.
   if (recip_) {
-    auto one_over_x_root_x = divide(outputs[0], primals[0], stream());
+    auto one_over_x_root_x =
+        conjugate(divide(outputs[0], primals[0], stream()), stream());
     return {multiply(
         multiply(array(-0.5, dtype), cotangents[0], stream()),
         one_over_x_root_x,
@@ -5496,7 +5502,7 @@ std::vector<array> Sqrt::vjp(
   } else {
     return {divide(
         multiply(array(0.5, dtype), cotangents[0], stream()),
-        outputs[0],
+        conjugate(outputs[0], stream()),
         stream())};
   }
 }
