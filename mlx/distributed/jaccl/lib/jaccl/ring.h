@@ -24,7 +24,7 @@ class RingGroup : public Group {
       int size,
       const std::vector<std::string>& left_devices,
       const std::vector<std::string>& right_devices,
-      const std::string& coordinator_addr);
+      SideChannel sc);
 
   int rank() override {
     return rank_;
