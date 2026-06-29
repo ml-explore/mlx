@@ -209,6 +209,7 @@ if(MLX_BUILD_METAL)
     if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 14.0)
       message(FATAL_ERROR "MLX requires macOS >= 14.0")
     endif()
+    message(STATUS "Building for macOS ${CMAKE_OSX_DEPLOYMENT_TARGET}")
 
     # Get Metal version.
     set(XCRUN_FLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
@@ -278,19 +279,29 @@ if(MLX_BUILD_CPU)
     add_compile_definitions(MLX_USE_ACCELERATE)
     add_compile_definitions(ACCELERATE_NEW_LAPACK)
   elseif(WIN32)
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
+      set(OPENBLAS_ZIP "OpenBLAS-0.3.33-woa64-dll.zip")
+      set(OPENBLAS_LIB "openblas")
+      set(OPENBLAS_INC "include/openblas")
+    else()
+      set(OPENBLAS_ZIP "OpenBLAS-0.3.33-x64.zip")
+      set(OPENBLAS_LIB "libopenblas")
+      set(OPENBLAS_INC "include")
+    endif()
     # Download and link prebuilt binaries of OpenBLAS. Note that we can only
     # link with the dynamic library, the prebuilt binaries were built with MinGW
     # so static-linking would require linking with MinGW's runtime.
     FetchContent_Declare(
       openblas
-      URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.31/OpenBLAS-0.3.31-x64.zip"
+      URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.33/${OPENBLAS_ZIP}"
     )
     FetchContent_MakeAvailable(openblas)
-    target_link_libraries(mlx
-                          PRIVATE "${openblas_SOURCE_DIR}/lib/libopenblas.lib")
-    target_include_directories(mlx PRIVATE "${openblas_SOURCE_DIR}/include")
+    target_link_libraries(
+      mlx PRIVATE "${openblas_SOURCE_DIR}/lib/${OPENBLAS_LIB}.lib")
+    target_include_directories(mlx
+                               PRIVATE "${openblas_SOURCE_DIR}/${OPENBLAS_INC}")
     # Make sure the DLL file is placed in the same dir with executables.
-    set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/libopenblas.dll")
+    set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/${OPENBLAS_LIB}.dll")
     add_custom_command(
       TARGET mlx
       POST_BUILD
