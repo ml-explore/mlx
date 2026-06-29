@@ -1,13 +1,13 @@
 // Copyright © 2025 Apple Inc.
 
 #include <fstream>
+#include <memory>
 #include <sstream>
 
 #include <json.hpp>
 
 #include "jaccl/jaccl.h"
 #include "jaccl/mesh.h"
-#include "jaccl/rdma.h"
 #include "jaccl/ring.h"
 
 using json = nlohmann::json;
@@ -106,6 +106,11 @@ Config& Config::prefer_ring(bool prefer /* = true */) {
   return *this;
 }
 
+Config& Config::set_all_gather(AllGatherFn agf) {
+  all_gather_fn_ = std::move(agf);
+  return *this;
+}
+
 bool Config::is_valid_mesh() const {
   if (size_ < 2) {
     return false;
@@ -166,6 +171,21 @@ Config::get_ring_connectivity() const {
   return std::make_pair(devices_[rank_][left], devices_[rank_][right]);
 }
 
+SideChannel Config::get_side_channel() const {
+  if (all_gather_fn_) {
+    return SideChannel(rank_, size_, all_gather_fn_);
+  }
+
+  auto tcp =
+      std::make_shared<TCPAllGather>(rank_, size_, get_coordinator().c_str());
+  return SideChannel(
+      rank_,
+      size_,
+      [tcp = std::move(tcp)](const char* src, char* dst, size_t n_bytes) {
+        (*tcp)(src, dst, n_bytes);
+      });
+}
+
 std::optional<Config> Config::from_env() {
   const char* dev_file = getenv("JACCL_IBV_DEVICES", "MLX_IBV_DEVICES");
   const char* coordinator =
@@ -209,15 +229,15 @@ std::shared_ptr<Group> init(const Config& cfg, bool strict /* = false */) {
   if (cfg.get_prefer_ring() && cfg.is_valid_ring()) {
     auto [left, right] = cfg.get_ring_connectivity();
     return std::make_shared<RingGroup>(
-        cfg.get_rank(), cfg.get_size(), left, right, cfg.get_coordinator());
+        cfg.get_rank(), cfg.get_size(), left, right, cfg.get_side_channel());
   } else if (cfg.is_valid_mesh()) {
     auto mesh = cfg.get_mesh_connectivity();
     return std::make_shared<MeshGroup>(
-        cfg.get_rank(), mesh, cfg.get_coordinator());
+        cfg.get_rank(), mesh, cfg.get_side_channel());
   } else if (cfg.is_valid_ring()) {
     auto [left, right] = cfg.get_ring_connectivity();
     return std::make_shared<RingGroup>(
-        cfg.get_rank(), cfg.get_size(), left, right, cfg.get_coordinator());
+        cfg.get_rank(), cfg.get_size(), left, right, cfg.get_side_channel());
   } else {
     if (!strict) {
       return nullptr;

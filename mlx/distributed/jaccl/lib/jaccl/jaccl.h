@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "jaccl/group.h"
+#include "jaccl/rdma.h"
 
 namespace jaccl {
 
@@ -18,6 +19,7 @@ class Config {
   Config& set_devices(
       std::vector<std::vector<std::vector<std::string>>> devices);
   Config& prefer_ring(bool prefer = true);
+  Config& set_all_gather(AllGatherFn agf);
 
   bool is_valid_mesh() const;
   bool is_valid_ring() const;
@@ -46,12 +48,14 @@ class Config {
   std::vector<std::string> get_mesh_connectivity() const;
   std::pair<std::vector<std::string>, std::vector<std::string>>
   get_ring_connectivity() const;
+  SideChannel get_side_channel() const;
 
   int rank_;
   int size_;
   std::string coordinator_;
   std::vector<std::vector<std::vector<std::string>>> devices_;
   bool prefer_ring_;
+  AllGatherFn all_gather_fn_;
 };
 
 /**
