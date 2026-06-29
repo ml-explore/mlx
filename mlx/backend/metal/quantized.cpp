@@ -134,7 +134,7 @@ inline int add_strides_and_shapes(
     const std::optional<array>& biases,
     int offset) {
   if (skip) {
-    return 0;
+    return offset;
   }
 
   // TODO: Collapse batch dimensions
@@ -170,6 +170,209 @@ inline int add_gather_strides_and_shapes(
   compute_encoder.set_vector_bytes(strides[1], offset++);
 
   return offset;
+}
+
+auto get_quantize_kernel_dims(
+    MTL::ComputePipelineState* kernel,
+    const array& w,
+    const array& out,
+    int group_size,
+    int bits,
+    bool dequantize = false) {
+  // Treat uint32 as uint8 in kernel
+  constexpr int uint8_per_uint32 = 4;
+  constexpr int simd_size = 32;
+  int packs_per_int = (bits == 3 || bits == 5) ? 8 : bits == 6 ? 4 : 8 / bits;
+  int per_thread =
+      dequantize ? packs_per_int : std::max(group_size / simd_size, 1);
+  size_t nthreads =
+      dequantize ? out.size() / packs_per_int : w.size() / per_thread;
+
+  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+  if (thread_group_size > nthreads) {
+    thread_group_size = nthreads;
+  }
+  auto group_dims = MTL::Size(thread_group_size, 1, 1);
+  bool use_2d = nthreads > UINT_MAX;
+  auto grid_shape = w.shape();
+  if (dequantize) {
+    grid_shape.back() *= uint8_per_uint32;
+  } else {
+    grid_shape.back() /= per_thread;
+  }
+  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(grid_shape, w.strides())
+                               : MTL::Size(nthreads, 1, 1);
+  return std::make_tuple(grid_dims, group_dims);
+}
+
+void quantize_impl(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs,
+    QuantizationMode mode,
+    int group_size,
+    int bits,
+    bool dequantize,
+    Stream s) {
+  auto& w_pre = inputs[0];
+  auto& out = outputs[0];
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  auto& d = metal::device(s.device);
+  auto& compute_encoder = metal::get_command_encoder(s);
+
+  bool has_biases = (mode == QuantizationMode::Affine);
+  bool has_global_scale = !has_biases && (inputs.size() > (1 + dequantize));
+
+  auto w = ensure_row_contiguous(w_pre, d, s);
+  if (dequantize) {
+    auto scales = ensure_row_contiguous(inputs[1], d, s);
+    compute_encoder.set_input_array(w, 0);
+    compute_encoder.set_input_array(scales, 1);
+    if (has_biases) {
+      auto biases = ensure_row_contiguous(inputs[2], d, s);
+      compute_encoder.set_input_array(biases, 2);
+    } else if (has_global_scale) {
+      compute_encoder.set_input_array(inputs[2], 2);
+    }
+    compute_encoder.set_output_array(out, 3);
+  } else {
+    auto& scales = outputs[1];
+    scales.set_data(allocator::malloc(scales.nbytes()));
+    compute_encoder.set_input_array(w, 0);
+    compute_encoder.set_output_array(out, 1);
+    compute_encoder.set_output_array(scales, 2);
+    if (has_biases) {
+      auto& biases = outputs[2];
+      biases.set_data(allocator::malloc(biases.nbytes()));
+      compute_encoder.set_output_array(biases, 3);
+    } else if (has_global_scale) {
+      compute_encoder.set_input_array(inputs[1], 3);
+    }
+  }
+
+  auto type_string = dequantize ? get_type_string(out.dtype())
+                                : get_type_string(w_pre.dtype());
+  auto mode_string = quantization_mode_to_string(mode);
+  std::string kname;
+  concatenate(
+      kname,
+      mode_string + (dequantize ? "_dequantize" : "_quantize"),
+      "_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits);
+  if (!has_biases) {
+    concatenate(kname, "_hgs_", has_global_scale ? "true" : "false");
+  }
+  auto kernel = get_quantized_kernel_wrapped(
+      d,
+      kname,
+      dequantize ? "dequantize" : "quantize",
+      mode_string,
+      type_string,
+      group_size,
+      bits,
+      has_global_scale);
+
+  auto [grid_dims, group_dims] =
+      get_quantize_kernel_dims(kernel, w, out, group_size, bits, dequantize);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+auto quantize_input(
+    const array& w,
+    const std::optional<array>& global_scale,
+    QuantizationMode mode,
+    int group_size,
+    int bits,
+    metal::Device& d,
+    Stream s) {
+  auto wq_shape = w.shape();
+  wq_shape.back() = w.shape(-1) * bits / 32;
+  auto scales_shape = w.shape();
+  scales_shape.back() = w.shape(-1) / group_size;
+
+  std::vector<array> inputs{w};
+  if (global_scale) {
+    inputs.push_back(*global_scale);
+  }
+  std::vector<array> outputs{
+      array(wq_shape, uint32, nullptr, {}),
+      array(scales_shape, uint8, nullptr, {})};
+  auto& compute_encoder = metal::get_command_encoder(s);
+  compute_encoder.add_temporary(outputs[0]);
+  compute_encoder.add_temporary(outputs[1]);
+  quantize_impl(inputs, outputs, mode, group_size, bits, false, s);
+  return std::make_tuple(outputs[0], outputs[1]);
+}
+
+void fp_quantize_dequantize(
+    const array& in,
+    const std::optional<array>& global_scale,
+    array& out,
+    const std::string& mode,
+    int group_size,
+    int bits,
+    metal::Device& d,
+    const Stream& s) {
+  auto& compute_encoder = metal::get_command_encoder(s);
+
+  auto w = ensure_row_contiguous(in, d, s);
+  compute_encoder.set_input_array(w, 0);
+  if (global_scale) {
+    compute_encoder.set_input_array(*global_scale, 1);
+  }
+  compute_encoder.set_output_array(out, 2);
+  auto type_string = get_type_string(in.dtype());
+  std::string kname;
+  concatenate(
+      kname,
+      mode + "_quantize_dequantize_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_hgs_",
+      global_scale ? "true" : "false");
+  auto kernel = get_quantized_kernel_wrapped(
+      d,
+      kname,
+      "quantize_dequantize",
+      mode,
+      type_string,
+      group_size,
+      bits,
+      global_scale.has_value());
+
+  auto [grid_dims, group_dims] =
+      get_quantize_kernel_dims(kernel, w, out, group_size, bits);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
+array quantize_dequantize_input(
+    const array& x_pre,
+    const std::optional<array>& global_scale,
+    const std::string& mode,
+    int group_size,
+    int bits,
+    metal::Device& d,
+    Stream s) {
+  bool donate_x = x_pre.is_donatable();
+  array x = ensure_row_contiguous(x_pre, d, s);
+  // If x is a copy it should be donatable
+  donate_x |= x.is_donatable();
+  auto xhat =
+      donate_x ? x : array(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
+  if (!donate_x) {
+    metal::get_command_encoder(s).add_temporary(xhat);
+  }
+  fp_quantize_dequantize(x, global_scale, xhat, mode, group_size, bits, d, s);
+  return xhat;
 }
 
 } // namespace
@@ -237,6 +440,7 @@ void qmv(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     array& out,
     int group_size,
     int bits,
@@ -266,7 +470,8 @@ void qmv(
       group_size,
       "_b_",
       bits,
-      B > 1 ? "_batch_1" : "_batch_0");
+      B > 1 ? "_batch_1" : "_batch_0",
+      global_scale ? "_hgs" : "");
   auto kernel = get_quantized_kernel_wrapped(
       d,
       kname,
@@ -275,17 +480,20 @@ void qmv(
       type_string,
       group_size,
       bits,
-      B > 1);
+      B > 1,
+      global_scale.has_value());
 
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  int c = 0;
-  compute_encoder.set_input_array(w, c++);
-  compute_encoder.set_input_array(scales, c++);
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
   if (biases) {
-    compute_encoder.set_input_array(*biases, c++);
+    compute_encoder.set_input_array(*biases, 2);
+  } else if (global_scale) {
+    compute_encoder.set_input_array(*global_scale, 2);
   }
+  int c = 3;
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_output_array(out, c++);
   compute_encoder.set_bytes(K, c++);
@@ -511,6 +719,7 @@ void qvm(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     array& out,
     int group_size,
     int bits,
@@ -539,18 +748,29 @@ void qvm(
       group_size,
       "_b_",
       bits,
-      B > 1 ? "_batch_1" : "_batch_0");
+      B > 1 ? "_batch_1" : "_batch_0",
+      global_scale ? "_hgs" : "");
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "qvm", mode, type_string, group_size, bits, B > 1);
+      d,
+      kname,
+      "qvm",
+      mode,
+      type_string,
+      group_size,
+      bits,
+      B > 1,
+      global_scale.has_value());
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  int c = 0;
-  compute_encoder.set_input_array(w, c++);
-  compute_encoder.set_input_array(scales, c++);
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
   if (biases) {
-    compute_encoder.set_input_array(*biases, c++);
+    compute_encoder.set_input_array(*biases, 2);
+  } else if (global_scale) {
+    compute_encoder.set_input_array(*global_scale, 2);
   }
+  int c = 3;
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_output_array(out, c++);
   compute_encoder.set_bytes(K, c++);
@@ -1054,6 +1274,7 @@ void gather_qmv(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     const array& lhs_indices,
     const array& rhs_indices,
     array& out,
@@ -1083,7 +1304,8 @@ void gather_qmv(
       "_gs_",
       group_size,
       "_b_",
-      bits);
+      bits,
+      global_scale ? "_hgs" : "");
 
   auto kernel = get_quantized_kernel_wrapped(
       d,
@@ -1092,17 +1314,20 @@ void gather_qmv(
       mode,
       type_string,
       group_size,
-      bits);
+      bits,
+      global_scale.has_value());
 
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  int c = 0;
-  compute_encoder.set_input_array(w, c++);
-  compute_encoder.set_input_array(scales, c++);
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
   if (biases) {
-    compute_encoder.set_input_array(*biases, c++);
+    compute_encoder.set_input_array(*biases, 2);
+  } else if (global_scale) {
+    compute_encoder.set_input_array(*global_scale, 2);
   }
+  int c = 3;
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_input_array(lhs_indices, c++);
   compute_encoder.set_input_array(rhs_indices, c++);
@@ -1120,6 +1345,7 @@ void gather_qvm(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     const array& lhs_indices,
     const array& rhs_indices,
     array& out,
@@ -1149,18 +1375,28 @@ void gather_qvm(
       "_gs_",
       group_size,
       "_b_",
-      bits);
+      bits,
+      global_scale ? "_hgs" : "");
   auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "gather_qvm", mode, type_string, group_size, bits);
+      d,
+      kname,
+      "gather_qvm",
+      mode,
+      type_string,
+      group_size,
+      bits,
+      global_scale.has_value());
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  int c = 0;
-  compute_encoder.set_input_array(w, c++);
-  compute_encoder.set_input_array(scales, c++);
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
   if (biases) {
-    compute_encoder.set_input_array(*biases, c++);
+    compute_encoder.set_input_array(*biases, 2);
+  } else if (global_scale) {
+    compute_encoder.set_input_array(*global_scale, 2);
   }
+  int c = 3;
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_input_array(lhs_indices, c++);
   compute_encoder.set_input_array(rhs_indices, c++);
@@ -1459,6 +1695,7 @@ void dispatch_qmv(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     array& out,
     int group_size,
     int bits,
@@ -1469,18 +1706,31 @@ void dispatch_qmv(
     const Stream& s,
     const std::string& mode) {
   // It is a qmv with a small inner dimension so route to qmv_quad kernel
-  if ((K == 128 || K == 64) && is_power_of_2(bits)) {
+  if ((K == 128 || K == 64) && is_power_of_2(bits) && !global_scale) {
     qmv_quad(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
     return;
   }
 
   // Small batch so route to qmv_wide, which reuses each weight group across the
   // M vectors.
-  if (M >= 2 && use_qmv_wide(mode, d)) {
+  if (M >= 2 && use_qmv_wide(mode, d) && !global_scale) {
     qmv_wide(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
     return;
   }
-  qmv(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+  qmv(x,
+      w,
+      scales,
+      biases,
+      global_scale,
+      out,
+      group_size,
+      bits,
+      M,
+      N,
+      K,
+      d,
+      s,
+      mode);
 }
 
 void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -1536,13 +1786,39 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Run of the mill qmv
   if (transpose_) {
     dispatch_qmv(
-        x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+        x,
+        w,
+        scales,
+        biases,
+        std::nullopt,
+        out,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
     return;
   }
 
   // Run of the mill qvm
   if (K < 1024) {
-    qvm(x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+    qvm(x,
+        w,
+        scales,
+        biases,
+        std::nullopt,
+        out,
+        group_size_,
+        bits_,
+        M,
+        N,
+        K,
+        d,
+        s,
+        mode);
     return;
   }
 
@@ -1628,6 +1904,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         w,
         scales,
         biases,
+        std::nullopt,
         lhs_indices,
         rhs_indices,
         out,
@@ -1647,6 +1924,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       w,
       scales,
       biases,
+      std::nullopt,
       lhs_indices,
       rhs_indices,
       out,
@@ -1660,198 +1938,133 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       mode);
 }
 
-void quantize_dequantize(
-    const array& in,
-    array& out,
-    std::string mode,
-    int group_size,
-    int bits,
-    metal::Device& d,
-    const Stream& s) {
-  auto& compute_encoder = metal::get_command_encoder(s);
-
-  auto w = ensure_row_contiguous(in, d, s);
-  compute_encoder.set_input_array(w, 0);
-  compute_encoder.set_output_array(out, 1);
-  auto type_string = get_type_string(in.dtype());
-  std::string kname;
-  concatenate(
-      kname,
-      mode + "_quantize_dequantize_",
-      type_string,
-      "_gs_",
-      group_size,
-      "_b_",
-      bits);
-  auto kernel = get_quantized_kernel_wrapped(
-      d, kname, "quantize_dequantize", mode, type_string, group_size, bits);
-
-  compute_encoder.set_compute_pipeline_state(kernel);
-
-  constexpr int uint8_per_uint32 = 4;
-  constexpr int simd_size = 32;
-  int packs_per_int = (bits == 3 || bits == 5) ? 8 : bits == 6 ? 4 : 8 / bits;
-  int per_thread = std::max(group_size / simd_size, 1);
-  size_t nthreads = w.size() / per_thread;
-
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  if (thread_group_size > nthreads) {
-    thread_group_size = nthreads;
-  }
-  auto group_dims = MTL::Size(thread_group_size, 1, 1);
-  bool use_2d = nthreads > UINT_MAX;
-  auto grid_shape = w.shape();
-  grid_shape.back() /= per_thread;
-  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(grid_shape, w.strides())
-                               : MTL::Size(nthreads, 1, 1);
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
-}
-
 void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
+  const array& x_pre = inputs[0];
+  const array& w_pre = inputs[1];
   auto mode = quantization_mode_to_string(mode_);
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  // - 2 inputs: x, w (non-quantized w)
+  // - 3 inputs: x, w, scales_w (quantized w)
   bool w_quantized = (inputs[1].dtype() == uint32);
-  // Tensor-scale nvfp4 (global_scale_x / global_scale_w) is packed into
-  // inputs by ops.cpp but no Metal qqmm kernel currently consumes the
-  // global scales. Reject the request rather than silently dropping them
-  // in the gemv path below.
   int base_size = w_quantized ? 3 : 2;
-  if (mode_ == QuantizationMode::Nvfp4 &&
-      static_cast<int>(inputs.size()) > base_size) {
-    throw std::runtime_error(
-        "[QQMatmul] Global scale (tensor-scale nvfp4) is not supported "
-        "on the Metal backend.");
+  // For nvfp4, global scales are optional but must be both present or both
+  // absent If present, they add 2 more inputs (global_scale_x, global_scale_w)
+  bool has_global_scales =
+      mode_ == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2;
+  assert(inputs.size() == base_size || has_global_scales);
+
+  std::optional<array> global_scale_x;
+  std::optional<array> global_scale_w;
+  if (has_global_scales) {
+    global_scale_x = inputs[inputs.size() - 2];
+    global_scale_w = inputs[inputs.size() - 1];
   }
-  if (w_quantized && inputs[0].shape(-2) == 1) {
-    out.set_data(allocator::malloc(out.nbytes()));
 
-    bool donate_x = inputs[0].is_donatable();
-    array x = ensure_row_contiguous(inputs[0], d, s);
-    // If x is a copy it should be donatable
-    donate_x |= x.is_donatable();
-    auto xhat = donate_x
-        ? x
-        : array(allocator::malloc(x.nbytes()), x.shape(), x.dtype());
-    quantize_dequantize(x, xhat, mode, group_size_, bits_, d, s);
+  // Quantize weights.
+  auto [w_q, scales_w] = !w_quantized
+      ? quantize_input(w_pre, global_scale_w, mode_, group_size_, bits_, d, s)
+      : std::make_tuple(
+            ensure_row_contiguous_matrix(w_pre, d, s),
+            ensure_row_contiguous_matrix(inputs[base_size - 1], d, s));
 
-    // Make sure the last two dims of w and s are contiguous
-    array w = ensure_row_contiguous_matrix(inputs[1], d, s);
-    array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
+  // Quantize activation.
+  array x = quantize_dequantize_input(
+      x_pre, global_scale_x, mode, group_size_, bits_, d, s);
 
-    bool non_batched = w.ndim() == 2;
-    int K = x.shape(-1);
-    int M = non_batched ? x.size() / K : x.shape(-2);
-    int N = out.shape(-1);
-    dispatch_qmv(
-        xhat,
-        w,
-        scales,
-        std::nullopt,
-        out,
-        group_size_,
-        bits_,
-        M,
-        N,
-        K,
-        d,
-        s,
-        mode);
-    return;
-  } else {
-    throw std::runtime_error("[QQMatmul] NYI for the general case");
-  }
+  bool non_batched = w_q.ndim() == 2;
+  int K = x.shape(-1);
+  int M = non_batched ? x.size() / K : x.shape(-2);
+  int N = out.shape(-1);
+  dispatch_qmv(
+      x,
+      w_q,
+      scales_w,
+      std::nullopt,
+      global_scale_w,
+      out,
+      group_size_,
+      bits_,
+      M,
+      N,
+      K,
+      d,
+      s,
+      mode);
 }
 
 void GatherQQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
-  throw std::runtime_error("[GatherQQMM] NYI");
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  const array& x_pre = inputs[0];
+  const array& w_pre = inputs[1];
+  const array& lhs_indices = ensure_row_contiguous(inputs[2], d, s);
+  const array& rhs_indices = ensure_row_contiguous(inputs[3], d, s);
+  auto mode = quantization_mode_to_string(mode_);
+
+  out.set_data(allocator::malloc(out.nbytes()));
+
+  // - 4 inputs: x, w (non-quantized w)
+  // - 5 inputs: x, w, scales_w (quantized w)
+  bool w_quantized = (inputs[1].dtype() == uint32);
+  int base_size = w_quantized ? 5 : 4;
+  // For nvfp4, global scales are optional but must be both present or both
+  // absent If present, they add 2 more inputs (global_scale_x, global_scale_w)
+  bool has_global_scales =
+      mode_ == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2;
+  assert(inputs.size() == base_size || has_global_scales);
+
+  std::optional<array> global_scale_x;
+  std::optional<array> global_scale_w;
+  if (has_global_scales) {
+    global_scale_x = inputs[inputs.size() - 2];
+    global_scale_w = inputs[inputs.size() - 1];
+  }
+
+  // Quantize weights.
+  auto [w_q, scales_w] = !w_quantized
+      ? quantize_input(w_pre, global_scale_w, mode_, group_size_, bits_, d, s)
+      : std::make_tuple(
+            ensure_row_contiguous_matrix(w_pre, d, s),
+            ensure_row_contiguous_matrix(inputs[base_size - 1], d, s));
+
+  // Quantize activation.
+  array x = quantize_dequantize_input(
+      x_pre, global_scale_x, mode, group_size_, bits_, d, s);
+
+  bool non_batched = w_q.ndim() == 2;
+  int K = x.shape(-1);
+  int M = non_batched ? x.size() / K : x.shape(-2);
+  int N = out.shape(-1);
+  gather_qmv(
+      x,
+      w_q,
+      scales_w,
+      std::nullopt,
+      global_scale_w,
+      lhs_indices,
+      rhs_indices,
+      out,
+      group_size_,
+      bits_,
+      M,
+      N,
+      K,
+      d,
+      s,
+      mode);
 }
 
 void fast::Quantize::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  auto& w_pre = inputs[0];
-  auto& out = outputs[0];
-  out.set_data(allocator::malloc(out.nbytes()));
-
-  auto& s = stream();
-  auto& d = metal::device(s.device);
-  auto& compute_encoder = metal::get_command_encoder(s);
-
-  auto w = ensure_row_contiguous(w_pre, d, s);
-  if (dequantize_) {
-    auto scales = ensure_row_contiguous(inputs[1], d, s);
-    if (mode_ == QuantizationMode::Affine) {
-      auto biases = ensure_row_contiguous(inputs[2], d, s);
-      compute_encoder.set_input_array(biases, 2);
-    }
-    compute_encoder.set_input_array(w, 0);
-    compute_encoder.set_input_array(scales, 1);
-    compute_encoder.set_output_array(out, 3);
-  } else {
-    auto& scales = outputs[1];
-    scales.set_data(allocator::malloc(scales.nbytes()));
-    if (mode_ == QuantizationMode::Affine) {
-      auto& biases = outputs[2];
-      biases.set_data(allocator::malloc(biases.nbytes()));
-      compute_encoder.set_output_array(biases, 3);
-    }
-    compute_encoder.set_input_array(w, 0);
-    compute_encoder.set_output_array(out, 1);
-    compute_encoder.set_output_array(scales, 2);
-  }
-
-  auto type_string = dequantize_ ? get_type_string(out.dtype())
-                                 : get_type_string(w_pre.dtype());
-  auto mode = quantization_mode_to_string(mode_);
-  std::string kname;
-  concatenate(
-      kname,
-      mode + (dequantize_ ? "_dequantize" : "_quantize"),
-      "_",
-      type_string,
-      "_gs_",
-      group_size_,
-      "_b_",
-      bits_);
-  auto kernel = get_quantized_kernel_wrapped(
-      d,
-      kname,
-      dequantize_ ? "dequantize" : "quantize",
-      mode,
-      type_string,
-      group_size_,
-      bits_);
-
-  compute_encoder.set_compute_pipeline_state(kernel);
-
-  // Treat uint32 as uint8 in kernel
-  constexpr int uint8_per_uint32 = 4;
-  constexpr int simd_size = 32;
-  int packs_per_int = (bits_ == 3 || bits_ == 5) ? 8
-      : bits_ == 6                               ? 4
-                                                 : 8 / bits_;
-  int per_thread =
-      dequantize_ ? packs_per_int : std::max(group_size_ / simd_size, 1);
-  size_t nthreads =
-      dequantize_ ? out.size() / packs_per_int : w.size() / per_thread;
-
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  if (thread_group_size > nthreads) {
-    thread_group_size = nthreads;
-  }
-  auto group_dims = MTL::Size(thread_group_size, 1, 1);
-  bool use_2d = nthreads > UINT_MAX;
-  auto grid_shape = w.shape();
-  if (dequantize_) {
-    grid_shape.back() *= uint8_per_uint32;
-  } else {
-    grid_shape.back() /= per_thread;
-  }
-  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(grid_shape, w.strides())
-                               : MTL::Size(nthreads, 1, 1);
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
+  quantize_impl(
+      inputs, outputs, mode_, group_size_, bits_, dequantize_, stream());
 }
 
 void fast::ConvertFP8::eval_gpu(
