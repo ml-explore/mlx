@@ -1388,6 +1388,27 @@ class TestAutograd(mlx_tests.MLXTestCase):
             expected = cotangent * mx.conj(deriv(z))
             self.assertTrue(mx.allclose(vjp, expected, atol=1e-5), msg=str(fn))
 
+    def test_complex_cos_sqrt_vjps(self):
+        # cos delegated to its jvp, and sqrt/rsqrt computed the derivative
+        # without conjugating it, so all three dropped the conjugate for
+        # complex inputs.
+        mx.random.seed(0)
+        cotangent = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+
+        z = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        _, (vjp,) = mx.vjp(mx.cos, [z], [cotangent])
+        self.assertTrue(mx.allclose(vjp, cotangent * mx.conj(-mx.sin(z)), atol=1e-5))
+
+        # sqrt / rsqrt: keep away from the branch cut on the negative axis.
+        z = 1.0 + 0.3 * mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        _, (vjp,) = mx.vjp(mx.sqrt, [z], [cotangent])
+        self.assertTrue(
+            mx.allclose(vjp, cotangent * mx.conj(0.5 / mx.sqrt(z)), atol=1e-5)
+        )
+        _, (vjp,) = mx.vjp(mx.rsqrt, [z], [cotangent])
+        expected = cotangent * mx.conj(-0.5 * z ** (-1.5))
+        self.assertTrue(mx.allclose(vjp, expected, atol=1e-5))
+
     def test_complex_abs_grad(self):
         mx.random.seed(0)
         primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
