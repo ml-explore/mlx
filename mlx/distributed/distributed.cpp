@@ -138,9 +138,19 @@ Group Group::split(int color, int key /* = -1 */) const {
   return Group(group_->split(color, key));
 }
 
-Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
+namespace {
+
+std::unordered_map<std::string, std::shared_ptr<detail::GroupImpl>>&
+get_backends() {
   static std::unordered_map<std::string, std::shared_ptr<detail::GroupImpl>>
       backends;
+  return backends;
+}
+
+} // namespace
+
+Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
+  auto& backends = get_backends();
 
   // Already initialized so return the group.
   if (auto g = backends.find(bk); g != backends.end()) {
@@ -192,6 +202,10 @@ Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
   }
   backends.insert({std::move(bk_), group});
   return Group(group);
+}
+
+void clear_backends() {
+  get_backends().clear();
 }
 
 } // namespace mlx::core::distributed

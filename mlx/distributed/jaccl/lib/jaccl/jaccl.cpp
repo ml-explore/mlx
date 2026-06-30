@@ -75,13 +75,34 @@ namespace jaccl {
 
 Config::Config() : rank_(0), size_(0) {}
 
+Config& Config::set_rank(const char* rank_str) {
+  if (rank_str) {
+    rank_ = std::atoi(rank_str);
+  }
+  return *this;
+}
+
 Config& Config::set_rank(int rank) {
   rank_ = rank;
   return *this;
 }
 
+Config& Config::set_coordinator(const char* coordinator) {
+  if (coordinator != nullptr) {
+    coordinator_ = coordinator;
+  }
+  return *this;
+}
+
 Config& Config::set_coordinator(std::string coordinator) {
   coordinator_ = std::move(coordinator);
+  return *this;
+}
+
+Config& Config::set_devices_from_file(const char* dev_file) {
+  if (dev_file) {
+    set_devices(parse_devices_json(dev_file));
+  }
   return *this;
 }
 
@@ -108,6 +129,12 @@ Config& Config::prefer_ring(bool prefer /* = true */) {
 
 Config& Config::set_all_gather(AllGatherFn agf) {
   all_gather_fn_ = std::move(agf);
+  return *this;
+}
+
+Config& Config::set_all_gather_factory(
+    std::function<AllGatherFn(int, int)> factory) {
+  all_gather_factory_ = std::move(factory);
   return *this;
 }
 
@@ -147,6 +174,12 @@ bool Config::is_valid_ring() const {
   return true;
 }
 
+bool Config::is_valid() const {
+  return size_ >= 1 && rank_ < size_ && rank_ >= 0 &&
+      (!coordinator_.empty() || all_gather_factory_ || all_gather_fn_) &&
+      (is_valid_mesh() || is_valid_ring());
+}
+
 std::vector<std::string> Config::get_mesh_connectivity() const {
   if (!is_valid_mesh()) {
     throw std::runtime_error("[jaccl] The devices do not form a valid mesh.");
@@ -172,6 +205,10 @@ Config::get_ring_connectivity() const {
 }
 
 SideChannel Config::get_side_channel() const {
+  if (all_gather_factory_) {
+    return SideChannel(rank_, size_, all_gather_factory_(rank_, size_));
+  }
+
   if (all_gather_fn_) {
     return SideChannel(rank_, size_, all_gather_fn_);
   }
@@ -186,21 +223,17 @@ SideChannel Config::get_side_channel() const {
       });
 }
 
-std::optional<Config> Config::from_env() {
+Config Config::from_env() {
   const char* dev_file = getenv("JACCL_IBV_DEVICES", "MLX_IBV_DEVICES");
   const char* coordinator =
       getenv("JACCL_COORDINATOR", "MLX_JACCL_COORDINATOR");
   const char* rank_str = getenv("JACCL_RANK", "MLX_RANK");
   const char* ring = getenv("JACCL_RING", "MLX_JACCL_RING");
 
-  if (!dev_file || !coordinator || !rank_str) {
-    return std::nullopt;
-  }
-
   return Config()
-      .set_rank(std::atoi(rank_str))
+      .set_rank(rank_str)
       .set_coordinator(coordinator)
-      .set_devices(parse_devices_json(dev_file))
+      .set_devices_from_file(dev_file)
       .prefer_ring(ring != nullptr);
 }
 
@@ -210,7 +243,7 @@ bool is_available() {
 
 std::shared_ptr<Group> init(bool strict /* = false */) {
   auto cfg = Config::from_env();
-  if (!cfg.has_value()) {
+  if (!cfg.is_valid()) {
     if (strict) {
       std::ostringstream msg;
       msg << "[jaccl] You need to provide via environment variables a rank "
@@ -222,7 +255,25 @@ std::shared_ptr<Group> init(bool strict /* = false */) {
     return nullptr;
   }
 
-  return init(*cfg, strict);
+  return init(cfg, strict);
+}
+
+std::shared_ptr<Group> init(
+    bool strict,
+    std::function<AllGatherFn(int, int)> factory) {
+  auto cfg = Config::from_env().set_all_gather_factory(factory);
+  if (!cfg.is_valid()) {
+    if (strict) {
+      std::ostringstream msg;
+      msg << "[jaccl] You need to provide via environment variables a rank "
+          << "(JACCL_RANK/MLX_RANK) and a device file "
+          << "(JACCL_IBV_DEVICES/MLX_IBV_DEVICES)";
+      throw std::runtime_error(msg.str());
+    }
+    return nullptr;
+  }
+
+  return init(cfg, strict);
 }
 
 std::shared_ptr<Group> init(const Config& cfg, bool strict /* = false */) {
