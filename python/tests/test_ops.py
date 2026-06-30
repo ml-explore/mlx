@@ -1054,6 +1054,14 @@ class TestOps(mlx_tests.MLXTestCase):
         np.seterr(over=errs["over"])
         self.assertTrue(np.allclose(result, expected, rtol=1e-3, atol=1e-4))
 
+        # Complex inputs: expm1(z) = exp(z) - 1, not expm1(Re(z)).
+        c = np.array(
+            [0.5 + 0.7j, -1.0 + 2.0j, 0.0 + 1.0j, 2.0 - 0.5j, 0.01 + 0.02j],
+            dtype=np.complex64,
+        )
+        result = mx.expm1(mx.array(c))
+        self.assertTrue(np.allclose(result, np.exp(c) - 1, rtol=1e-4, atol=1e-5))
+
     def test_erf(self):
         inputs = [-5, 0.0, 0.5, 1.0, 2.0, 10.0]
         x = mx.array(inputs)

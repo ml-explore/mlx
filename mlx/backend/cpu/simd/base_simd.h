@@ -99,7 +99,6 @@ DEFAULT_UNARY(atanh, std::atanh)
 DEFAULT_UNARY(ceil, std::ceil)
 DEFAULT_UNARY(conj, std::conj)
 DEFAULT_UNARY(cosh, std::cosh)
-DEFAULT_UNARY(expm1, std::expm1)
 DEFAULT_UNARY(floor, std::floor)
 DEFAULT_UNARY(log, std::log)
 DEFAULT_UNARY(log10, std::log10)
@@ -127,6 +126,16 @@ Simd<T, 1> log1p(Simd<T, 1> in) {
     }
   } else {
     return Simd<T, 1>{std::log1p(in.value)};
+  }
+}
+
+template <typename T>
+Simd<T, 1> expm1(Simd<T, 1> in) {
+  if constexpr (is_complex<T>) {
+    // std::expm1 has no complex overload; use the defining identity.
+    return Simd<T, 1>{std::exp(in.value) - T(1)};
+  } else {
+    return Simd<T, 1>{std::expm1(in.value)};
   }
 }
 
