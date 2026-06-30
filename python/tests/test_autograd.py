@@ -1388,6 +1388,31 @@ class TestAutograd(mlx_tests.MLXTestCase):
             expected = cotangent * mx.conj(deriv(z))
             self.assertTrue(mx.allclose(vjp, expected, atol=1e-5), msg=str(fn))
 
+    def test_complex_inverse_trig_vjps(self):
+        # Same conjugate fix for the inverse trig / hyperbolic ops. Use small
+        # magnitudes to stay away from the branch cuts.
+        mx.random.seed(0)
+        z = 0.3 * mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        cotangent = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+
+        ops = {
+            mx.arcsin: lambda x: 1 / mx.sqrt(1 - x**2),
+            mx.arccos: lambda x: -1 / mx.sqrt(1 - x**2),
+            mx.arctan: lambda x: 1 / (1 + x**2),
+            mx.arcsinh: lambda x: 1 / mx.sqrt(1 + x**2),
+            mx.arctanh: lambda x: 1 / (1 - x**2),
+        }
+        for fn, deriv in ops.items():
+            _, (vjp,) = mx.vjp(fn, [z], [cotangent])
+            expected = cotangent * mx.conj(deriv(z))
+            self.assertTrue(mx.allclose(vjp, expected, atol=1e-5), msg=str(fn))
+
+        # arccosh's branch cut is on (-inf, 1]; evaluate to the right of it.
+        zc = 1.5 + 0.3 * mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        _, (vjp,) = mx.vjp(mx.arccosh, [zc], [cotangent])
+        expected = cotangent * mx.conj(1 / mx.sqrt(zc**2 - 1))
+        self.assertTrue(mx.allclose(vjp, expected, atol=1e-5))
+
     def test_complex_abs_grad(self):
         mx.random.seed(0)
         primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
