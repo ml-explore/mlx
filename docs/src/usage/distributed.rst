@@ -347,6 +347,33 @@ of a gigantic model using MLX LM.
    and GPU need to collaborate for some computation and is pretty critical for
    low-latency communication since the communication is done by the CPU.
 
+Custom side channel
+^^^^^^^^^^^^^^^^^^^
+
+During initialization JACCL exchanges RDMA connection metadata between ranks
+over a side channel. By default this is a simple TCP star all-gather, but you
+can provide your own side-channel all-gather via the
+``all_gather_factory`` argument of :func:`mlx.core.distributed.init` when using
+``backend='jaccl'``.
+
+The factory is called once per rank with ``(rank, size)`` and must return a
+callable with signature ``f(src: bytes, n_bytes: int) -> bytes``. The returned
+bytes must have length ``size * n_bytes`` and contain the inputs from all ranks
+concatenated in rank order.
+
+.. code-block:: python
+
+    def make_side_channel(rank, size):
+        def all_gather(src: bytes, n_bytes: int) -> bytes:
+            # Exchange src with all ranks and return size * n_bytes bytes
+            ...
+        return all_gather
+
+    world = mx.distributed.init(
+        backend="jaccl",
+        all_gather_factory=make_side_channel,
+    )
+
 .. _nccl_section:
 
 Getting Started with NCCL
