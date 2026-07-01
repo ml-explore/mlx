@@ -95,6 +95,29 @@ dimension should be less than or equal to the corresponding grid dimension.
 Passing ``verbose=True`` to :func:`ast.metal_kernel.__call__` will print the
 generated code for debugging purposes.
 
+Math Mode
+---------
+
+By default :func:`fast.metal_kernel` compiles kernels with
+``compile_options={"math_mode": "safe"}`` so special values follow IEEE
+behavior, for example ``exp(-inf) == 0``. This is important for kernels such as
+masked softmax where causal or sliding-window masks depend on exponentiating
+``-inf``.
+
+If your kernel does not rely on these edge cases, you can opt in to less strict
+math with ``compile_options={"math_mode": "relaxed"}`` or
+``compile_options={"math_mode": "fast"}``:
+
+.. code-block:: python
+
+  kernel = mx.fast.metal_kernel(
+      name="my_kernel",
+      input_names=["x"],
+      output_names=["y"],
+      source=source,
+      compile_options={"math_mode": "relaxed"},
+  )
+
 Using Shape/Strides
 -------------------
 
