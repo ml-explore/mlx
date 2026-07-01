@@ -45,23 +45,29 @@ class RingImpl {
 
   RingImpl() : rank_(0), size_(1), n_conns_(0) {}
 
-  // Copy the received chunk straight into the output. Used by the all gather
-  // pass of the all reduce and by the standalone all gather.
+  // Copy the received chunk into the output. Used by the all gather passes.
   struct CopyOp {
     template <typename T>
-    inline void operator()(const T* recv, T* out, int64_t n) const {
+    inline void operator()(const T* recv, const T*, T* out, int64_t n) const {
       std::copy(recv, recv + std::max<int64_t>(0, n), out);
     }
   };
 
-  // Adapts a reduction op (SumOp/MaxOp/...) to the recv handler signature used
-  // by ring_pass. Reduces the received chunk into the output in place.
-  template <typename ReduceOp>
+  // Reduce the received chunk with this rank's own input for the chunk. When
+  // in place (input aliases output) we use the fast two argument kernel;
+  // otherwise the fused out of place kernel seeds the output from the input.
+  template <typename ReduceOp, bool INPLACE>
   struct ReduceRecvOp {
     ReduceOp reduce_op;
     template <typename T>
-    inline void operator()(const T* recv, T* out, int64_t n) const {
-      reduce_op(recv, out, std::max<int64_t>(0, n));
+    inline void operator()(const T* recv, const T* base, T* out, int64_t n)
+        const {
+      n = std::max<int64_t>(0, n);
+      if constexpr (INPLACE) {
+        reduce_op(recv, out, n);
+      } else {
+        reduce_op(base, recv, out, n);
+      }
     }
   };
 
@@ -72,11 +78,6 @@ class RingImpl {
       int64_t size,
       int n_wires,
       ReduceOp reduce_op) {
-    // If not inplace all reduce then copy the input to the output first
-    if (in_ptr != out_ptr) {
-      std::memcpy(out_ptr, in_ptr, size * sizeof(T));
-    }
-
     int64_t chunk_size = (size + size_ - 1) / size_;
     int64_t size_per_wire =
         (chunk_size + (MAX_DIR * n_wires) - 1) / (MAX_DIR * n_wires);
@@ -88,7 +89,14 @@ class RingImpl {
     // threadpool and run concurrently instead of sequentially.
     for (int lw = 0; lw < n_wires; lw++) {
       all_reduce_wire<MAX_DIR>(
-          out_ptr, size, chunk_size, size_per_wire, n_wires, lw, reduce_op);
+          in_ptr,
+          out_ptr,
+          size,
+          chunk_size,
+          size_per_wire,
+          n_wires,
+          lw,
+          reduce_op);
     }
   }
 
@@ -102,6 +110,7 @@ class RingImpl {
   // belong to wire lw, so several wires can run concurrently.
   template <int MAX_DIR, typename T, typename ReduceOp>
   void all_reduce_wire(
+      const T* in_ptr,
       T* out_ptr,
       int64_t size,
       int64_t chunk_size,
@@ -130,9 +139,37 @@ class RingImpl {
     }
 
     // First reduce scatter, then all gather. The offsets carry over from the
-    // reduce scatter into the all gather. The only difference between the two
-    // passes is what the recv handler does with the received chunk: reduce it
-    // in place vs. copy it out.
+    // reduce scatter into the all gather. Pick the in place vs out of place
+    // reduction kernel once so the hot loop stays branch free.
+    if (in_ptr == out_ptr) {
+      ring_pass<MAX_DIR, T>(
+          lw,
+          size,
+          chunk_size,
+          size_ * chunk_size,
+          size_per_wire,
+          wire_offset,
+          region_end,
+          send_offset,
+          recv_offset,
+          in_ptr,
+          out_ptr,
+          ReduceRecvOp<ReduceOp, true>{reduce_op});
+    } else {
+      ring_pass<MAX_DIR, T>(
+          lw,
+          size,
+          chunk_size,
+          size_ * chunk_size,
+          size_per_wire,
+          wire_offset,
+          region_end,
+          send_offset,
+          recv_offset,
+          in_ptr,
+          out_ptr,
+          ReduceRecvOp<ReduceOp, false>{reduce_op});
+    }
     ring_pass<MAX_DIR, T>(
         lw,
         size,
@@ -144,17 +181,6 @@ class RingImpl {
         send_offset,
         recv_offset,
         out_ptr,
-        ReduceRecvOp<ReduceOp>{reduce_op});
-    ring_pass<MAX_DIR, T>(
-        lw,
-        size,
-        chunk_size,
-        size_ * chunk_size,
-        size_per_wire,
-        wire_offset,
-        region_end,
-        send_offset,
-        recv_offset,
         out_ptr,
         CopyOp{});
   }
@@ -210,23 +236,25 @@ class RingImpl {
         send_offset,
         recv_offset,
         out_ptr,
+        out_ptr,
         CopyOp{});
   }
 
   // Run size_ - 1 pipelined ring steps for a single wire in every direction.
   //
   // At every step each direction sends its current slice to a neighbor and
-  // receives the neighbor's slice, which recv_op either reduces into or copies
-  // into out_ptr. After each step the send and recv windows rotate around the
-  // ring (direction 0 backward, direction 1 forward). This is the shared engine
+  // receives the neighbor's slice, which recv_op either reduces or copies into
+  // out_ptr. After each step the send and recv windows rotate around the ring
+  // (direction 0 backward, direction 1 forward). This is the shared engine
   // behind both all reduce passes and all gather.
   //
-  // wire_offset is the element offset of this wire's slice within a chunk and
-  // region_end is the element end (within a chunk) of each direction's region.
-  // send_offset and recv_offset are the starting window offsets and are updated
-  // in place so callers can chain passes (the all reduce reuses them). stride
-  // is how many elements a window moves per step (chunk_size for the all
-  // reduce, n_bytes for the all gather) and total is the wrap around modulus.
+  // The first step sends from in_ptr, later steps from out_ptr; this lets the
+  // all reduce seed its output without an up front copy. Callers that stage
+  // into out_ptr (both all gather paths) pass out_ptr for in_ptr. wire_offset
+  // is this wire's element offset within a chunk, region_end the end of each
+  // direction's region. send_offset and recv_offset are the starting windows,
+  // updated in place so callers can chain passes. stride is the elements a
+  // window moves per step and total is the wrap around modulus.
   template <int MAX_DIR, typename T, typename RecvOp>
   inline void ring_pass(
       int lw,
@@ -238,6 +266,7 @@ class RingImpl {
       const int64_t (&region_end)[MAX_DIR],
       int64_t (&send_offset)[MAX_DIR],
       int64_t (&recv_offset)[MAX_DIR],
+      const T* in_ptr,
       T* out_ptr,
       RecvOp recv_op) {
     constexpr int PIPELINE = 2;
@@ -263,6 +292,10 @@ class RingImpl {
     set_limits();
 
     for (int k = 0; k < size_ - 1; k++) {
+      // Step 0 sends this rank's own input; later steps send the accumulated
+      // partial from out_ptr.
+      const T* send_base = (k == 0) ? in_ptr : out_ptr;
+
       // Prefill the pipeline
       int buff = 0;
       while (buff < n_steps && buff < PIPELINE) {
@@ -272,8 +305,8 @@ class RingImpl {
         for (int lr = 0; lr < MAX_DIR; lr++) {
           int64_t offset = wire_offset[lr] + send_count[lr] * N;
           std::copy(
-              out_ptr + send_offset[lr] + offset,
-              out_ptr + send_offset[lr] +
+              send_base + send_offset[lr] + offset,
+              send_base + send_offset[lr] +
                   std::max(offset, std::min(offset + N, send_limits[lr])),
               send_buffer(sz, buff, lr, lw).template begin<T>());
           send_count[lr]++;
@@ -300,8 +333,8 @@ class RingImpl {
           if (work_type == SEND_WR && send_count[lr] < n_steps) {
             int64_t offset = wire_offset[lr] + send_count[lr] * N;
             std::copy(
-                out_ptr + send_offset[lr] + offset,
-                out_ptr + send_offset[lr] +
+                send_base + send_offset[lr] + offset,
+                send_base + send_offset[lr] +
                     std::max(offset, std::min(offset + N, send_limits[lr])),
                 send_buffer(sz, buff, lr, lw).template begin<T>());
             send_to(sz, buff, lr, lw);
@@ -311,8 +344,11 @@ class RingImpl {
 
           else if (work_type == RECV_WR) {
             int64_t offset = wire_offset[lr] + recv_count[lr] * N;
+            // The base operand is this rank's own input for the chunk; the all
+            // gather passes copy and ignore it.
             recv_op(
                 recv_buffer(sz, buff, lr, lw).template begin<T>(),
+                in_ptr + recv_offset[lr] + offset,
                 out_ptr + recv_offset[lr] + offset,
                 std::min(N, recv_limits[lr] - offset));
             recv_count[lr]++;
