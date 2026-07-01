@@ -1,0 +1,125 @@
+// Copyright © 2026 Apple Inc.
+
+#include <metal_simdgroup>
+
+#include "mlx/backend/metal/kernels/defines.h"
+#include "mlx/backend/metal/kernels/utils.h"
+
+template <typename T>
+[[kernel]] void dot_product(
+    const device T* a [[buffer(0)]],
+    const device T* b [[buffer(1)]],
+    device float* output [[buffer(2)]],
+    const constant int& n [[buffer(3)]],
+    uint tid [[thread_position_in_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]],
+    uint simd_id [[simdgroup_index_in_threadgroup]],
+    uint tg_id [[threadgroup_position_in_grid]]) {
+  constexpr int ITEMS_PER_THREAD = 32;
+  constexpr int VEC = 16 / sizeof(T);
+  int start = (tg_id * 512 + simd_id * 32) * ITEMS_PER_THREAD + lane * VEC;
+
+  float c0 = 0.0f;
+  float c1 = 0.0f;
+  float c2 = 0.0f;
+  float c3 = 0.0f;
+
+  MLX_MTL_PRAGMA_UNROLL
+  for (int i = 0; i < ITEMS_PER_THREAD; i += VEC) {
+    int idx = start + i * ITEMS_PER_THREAD;
+    if (idx + VEC <= n) {
+      MLX_MTL_PRAGMA_UNROLL
+      for (int j = 0; j < VEC; j += 4) {
+        c0 += float(a[idx + j + 0]) * float(b[idx + j + 0]);
+        c1 += float(a[idx + j + 1]) * float(b[idx + j + 1]);
+        c2 += float(a[idx + j + 2]) * float(b[idx + j + 2]);
+        c3 += float(a[idx + j + 3]) * float(b[idx + j + 3]);
+      }
+    } else {
+      MLX_MTL_PRAGMA_UNROLL
+      for (int j = 0; j < VEC; ++j) {
+        int nidx = idx + j;
+        if (nidx < n) {
+          float v = float(a[nidx]) * float(b[nidx]);
+          switch (j & 3) {
+            case 0:
+              c0 += v;
+              break;
+            case 1:
+              c1 += v;
+              break;
+            case 2:
+              c2 += v;
+              break;
+            default:
+              c3 += v;
+              break;
+          }
+        }
+      }
+    }
+  }
+
+  threadgroup float smem[16];
+
+  float c = c0 + c1 + c2 + c3;
+  c = simd_sum(c);
+
+  if (lane == 0) {
+    smem[simd_id] = c;
+  }
+
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  if (tid < 16) {
+    c = smem[tid];
+    c = simd_sum(c);
+    if (tid == 0) {
+      output[tg_id] = c;
+    }
+  }
+}
+
+template <typename T>
+[[kernel]] void dot_reduce(
+    const device float* input [[buffer(0)]],
+    device T* output [[buffer(1)]],
+    const constant int& n [[buffer(2)]],
+    uint tid [[thread_position_in_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]],
+    uint simd_id [[simdgroup_index_in_threadgroup]]) {
+  float c = 0.0f;
+  for (int i = int(tid); i < n; i += 512) {
+    c += input[i];
+  }
+
+  threadgroup float smem[16];
+
+  c = simd_sum(c);
+  if (lane == 0) {
+    smem[simd_id] = c;
+  }
+
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  if (tid < 16) {
+    c = smem[tid];
+    c = simd_sum(c);
+    if (tid == 0) {
+      output[0] = T(c);
+    }
+  }
+}
+
+#define instantiate_dot_product_kernel(name, itype) \
+  instantiate_kernel("dot_product_" #name, dot_product, itype)
+
+#define instantiate_dot_reduce_kernel(name, otype) \
+  instantiate_kernel("dot_reduce_" #name, dot_reduce, otype)
+
+instantiate_dot_product_kernel(float32, float);
+instantiate_dot_product_kernel(float16, half);
+instantiate_dot_product_kernel(bfloat16, bfloat16_t);
+instantiate_dot_reduce_kernel(float32, float);
+instantiate_dot_reduce_kernel(float16, half);
+instantiate_dot_reduce_kernel(bfloat16, bfloat16_t);

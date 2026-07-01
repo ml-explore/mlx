@@ -1039,6 +1039,50 @@ void steel_matmul_axpby(
 // GEMV dispatch
 ///////////////////////////////////////////////////////////////////////////////
 
+void dot_product(
+    const Stream& s,
+    metal::Device& d,
+    const array& a,
+    const array& b,
+    array& out,
+    int K,
+    std::vector<array>& copies) {
+  constexpr int thread_group_size = 512;
+  constexpr int items_per_thread = 32;
+  auto& compute_encoder = metal::get_command_encoder(s);
+  std::string kname = "dot_product_" + type_to_name(a);
+  auto kernel = d.get_kernel(kname);
+
+  int n = K;
+  int threads = (n + items_per_thread - 1) / items_per_thread;
+  int blocks = (threads + thread_group_size - 1) / thread_group_size;
+
+  array partials({blocks}, float32, nullptr, {});
+  partials.set_data(allocator::malloc(partials.nbytes()));
+  copies.push_back(partials);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(partials, 2);
+  compute_encoder.set_bytes(n, 3);
+  compute_encoder.dispatch_threads(
+      MTL::Size(size_t(blocks) * thread_group_size, 1, 1),
+      MTL::Size(thread_group_size, 1, 1));
+
+  array current = partials;
+  kname = "dot_reduce_" + type_to_name(out);
+  kernel = d.get_kernel(kname);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(partials, 0);
+  compute_encoder.set_bytes(blocks, 2);
+  compute_encoder.set_output_array(out, 1);
+
+  compute_encoder.dispatch_threads(
+      MTL::Size(thread_group_size, 1, 1), MTL::Size(thread_group_size, 1, 1));
+
+  compute_encoder.add_temporaries(std::move(copies));
+}
+
 template <bool CHECK_AB = true>
 void gemv_axbpy(
     const Stream& s,
@@ -1289,6 +1333,18 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
+
+  if (M == 1 && N == 1 && batch_size_out == 1 && a.flags().row_contiguous &&
+      b.flags().row_contiguous && a.dtype() != complex64) {
+    return dot_product(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ a,
+        /* const array& b = */ b,
+        /* array& out = */ out,
+        /* int K = */ K,
+        /* std::vector<array>& copies = */ copies);
+  }
 
   // Route to gemv if needed
   if (std::min(M, N) == 1) {
