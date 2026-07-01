@@ -1185,6 +1185,18 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (5,))
         self.assertEqual(y.dtype, mx.float32)
 
+        y = nn.HardShrink()(x)
+        expected_y = mx.array([1.0, 0.0, 0.0, 0.0, -1.5])
+        self.assertTrue(mx.array_equal(y, expected_y))
+        self.assertEqual(y.shape, (5,))
+        self.assertEqual(y.dtype, mx.float32)
+
+        y = nn.HardShrink(lambd=0.1)(x)
+        expected_y = mx.array([1.0, -0.5, 0.0, 0.5, -1.5])
+        self.assertTrue(mx.array_equal(y, expected_y))
+        self.assertEqual(y.shape, (5,))
+        self.assertEqual(y.dtype, mx.float32)
+
     def test_rope(self):
         for kwargs in [{}, {"traditional": False}, {"base": 10000}, {"scale": 0.25}]:
             rope = nn.RoPE(4, **kwargs)
