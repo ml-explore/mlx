@@ -1026,7 +1026,8 @@ class TestFast(mlx_tests.MLXTestCase):
         out = call_kernel(a, source)
         self.assertTrue(mx.array_equal(out, mx.ones_like(out)))
 
-    def test_custom_metal_kernel_invalid_math_mode(self):
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_metal_kernel_math_mode(self):
         with self.assertRaises(ValueError):
             mx.fast.metal_kernel(
                 name="invalid_math_mode",
@@ -1036,7 +1037,6 @@ class TestFast(mlx_tests.MLXTestCase):
                 compile_options={"math_mode": "precise"},
             )
 
-    def test_custom_metal_kernel_invalid_compile_options(self):
         with self.assertRaises(ValueError):
             mx.fast.metal_kernel(
                 name="invalid_compile_options",
@@ -1046,8 +1046,6 @@ class TestFast(mlx_tests.MLXTestCase):
                 compile_options={"unknown": "value"},
             )
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
-    def test_custom_metal_kernel_math_mode(self):
         # Numerical special cases such as exp(-inf) can agree between math
         # modes, so they don't reliably detect whether the mode was applied.
         # Branch on the compiler's __FAST_MATH__ macro instead: it is defined

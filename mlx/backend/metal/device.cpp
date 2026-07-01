@@ -34,6 +34,34 @@ namespace {
 
 constexpr const char* default_mtllib_path = METAL_PATH;
 
+void set_compile_options(
+    MTL::CompileOptions* mtl_options,
+    const CompileOptions& compile_options) {
+  if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
+    switch (compile_options.math_mode) {
+      case MathMode::Safe:
+        mtl_options->setMathMode(MTL::MathModeSafe);
+        break;
+      case MathMode::Relaxed:
+        mtl_options->setMathMode(MTL::MathModeRelaxed);
+        break;
+      case MathMode::Fast:
+        mtl_options->setMathMode(MTL::MathModeFast);
+        break;
+      default:
+        throw std::invalid_argument("[metal::Device] Invalid math mode.");
+    }
+  } else {
+    if (compile_options.math_mode == MathMode::Relaxed) {
+      throw std::runtime_error(
+          "[metal::Device] Metal math mode `relaxed` requires macOS 15, "
+          "iOS 18, tvOS 18, or visionOS 2.");
+    }
+    mtl_options->setFastMathEnabled(
+        compile_options.math_mode == MathMode::Fast);
+  }
+}
+
 auto get_metal_version() {
   auto get_metal_version_ = []() {
     if (__builtin_available(macOS 26, iOS 26, tvOS 26, visionOS 26, *)) {
@@ -621,7 +649,7 @@ MTL::Library* Device::get_library(
 
 NS::SharedPtr<MTL::Library> Device::build_library_(
     const std::string& source_string,
-    CompileOptions compile_options) {
+    const CompileOptions& compile_options) {
   auto pool = new_scoped_memory_pool();
 
   auto ns_code =
@@ -629,21 +657,7 @@ NS::SharedPtr<MTL::Library> Device::build_library_(
 
   NS::Error* error = nullptr;
   auto options = MTL::CompileOptions::alloc()->init()->autorelease();
-  if (compile_options.math_mode) {
-    auto math_mode = *compile_options.math_mode;
-    if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
-      options->setMathMode(math_mode);
-    } else {
-      if (math_mode == MTL::MathModeRelaxed) {
-        throw std::runtime_error(
-            "[metal::Device] Metal math mode `relaxed` requires macOS 15, "
-            "iOS 18, tvOS 18, or visionOS 2.");
-      }
-      options->setFastMathEnabled(math_mode == MTL::MathModeFast);
-    }
-  } else {
-    options->setFastMathEnabled(false);
-  }
+  set_compile_options(options, compile_options);
   options->setLanguageVersion(get_metal_version());
 #ifndef NDEBUG
   if (options->languageVersion() >= MTL::LanguageVersion3_2) {
@@ -784,14 +798,8 @@ NS::SharedPtr<MTL::ComputePipelineState> Device::get_kernel_(
 
 MTL::Library* Device::get_library(
     const std::string& name,
+    const CompileOptions& compile_options,
     const std::function<std::string(void)>& builder) {
-  return get_library(name, builder, {});
-}
-
-MTL::Library* Device::get_library(
-    const std::string& name,
-    const std::function<std::string(void)>& builder,
-    CompileOptions compile_options) {
   {
     std::shared_lock rlock(library_mtx_);
     if (auto it = library_map_.find(name); it != library_map_.end()) {
