@@ -57,14 +57,56 @@ class RingImpl {
       std::memcpy(out_ptr, in_ptr, size * sizeof(T));
     }
 
-    constexpr int PIPELINE = 2;
-    constexpr int WC_NUM = PIPELINE * RING_MAX_CONNS * 2 * MAX_DIR;
     int64_t chunk_size = (size + size_ - 1) / size_;
     int64_t size_per_wire =
         (chunk_size + (MAX_DIR * n_wires) - 1) / (MAX_DIR * n_wires);
+
+    // Split the reduce scatter + all gather across the available wires. Each
+    // wire handles a contiguous slice of each chunk in every direction.
+    //
+    // TODO: These calls are independent so they should be dispatched to a
+    // threadpool and run concurrently instead of sequentially.
+    for (int lw = 0; lw < n_wires; lw++) {
+      all_reduce_wire<MAX_DIR>(
+          out_ptr, size, chunk_size, size_per_wire, n_wires, lw, reduce_op);
+    }
+  }
+
+  // Perform the ring all reduce (reduce scatter followed by all gather) for a
+  // single wire `lw`.
+  //
+  // Every chunk of `chunk_size` elements is divided into `MAX_DIR` directional
+  // regions and each region is further split into `n_wires` contiguous slices
+  // of `size_per_wire` elements. This function is responsible for slice `lw` in
+  // every direction and only touches `left_[lw]` / `right_[lw]` and the buffers
+  // that belong to wire `lw`, so several wires can run concurrently.
+  template <int MAX_DIR, typename T, typename ReduceOp>
+  void all_reduce_wire(
+      T* out_ptr,
+      int64_t size,
+      int64_t chunk_size,
+      int64_t size_per_wire,
+      int n_wires,
+      int lw,
+      ReduceOp reduce_op) {
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE * 2 * MAX_DIR;
     auto [sz, N] = buffer_size_from_message(size_per_wire * sizeof(T));
     N /= sizeof(T);
     int64_t n_steps = (size_per_wire + N - 1) / N;
+
+    // The element offset (within a chunk) of this wire's slice in each
+    // direction and the end of each direction's region. Wire slices are
+    // contiguous rather than interleaved. Direction `lr` owns the chunk region
+    // [lr * n_wires * size_per_wire, (lr + 1) * n_wires * size_per_wire) (the
+    // last region is clamped to chunk_size).
+    int64_t wire_offset[MAX_DIR];
+    int64_t region_end[MAX_DIR];
+    for (int lr = 0; lr < MAX_DIR; lr++) {
+      wire_offset[lr] = lr * n_wires * size_per_wire +
+          static_cast<int64_t>(lw) * size_per_wire;
+      region_end[lr] = std::min(chunk_size, (lr + 1) * n_wires * size_per_wire);
+    }
 
     // Counters to maintain the state of transfers
     int in_flight = 0;
@@ -73,26 +115,21 @@ class RingImpl {
     int64_t recv_offset[MAX_DIR];
     int64_t send_limits[MAX_DIR];
     int64_t recv_limits[MAX_DIR];
-    int send_count[MAX_DIR * RING_MAX_CONNS] = {0};
-    int recv_count[MAX_DIR * RING_MAX_CONNS] = {0};
+    int send_count[MAX_DIR] = {0};
+    int recv_count[MAX_DIR] = {0};
     send_offset[0] = rank_ * chunk_size;
     recv_offset[0] = ((rank_ + size_ - 1) % size_) * chunk_size;
+    send_limits[0] =
+        std::min(region_end[0], std::max<int64_t>(0, size - send_offset[0]));
+    recv_limits[0] =
+        std::min(region_end[0], std::max<int64_t>(0, size - recv_offset[0]));
     if constexpr (MAX_DIR == 2) {
       send_offset[1] = rank_ * chunk_size;
       recv_offset[1] = ((rank_ + 1) % size_) * chunk_size;
-      send_limits[0] = std::min(
-          n_wires * size_per_wire, std::max<int64_t>(0, size - send_offset[0]));
       send_limits[1] =
-          std::min(chunk_size, std::max<int64_t>(0, size - send_offset[1]));
-      recv_limits[0] = std::min(
-          n_wires * size_per_wire, std::max<int64_t>(0, size - recv_offset[0]));
+          std::min(region_end[1], std::max<int64_t>(0, size - send_offset[1]));
       recv_limits[1] =
-          std::min(chunk_size, std::max<int64_t>(0, size - recv_offset[1]));
-    } else {
-      send_limits[0] =
-          std::min(chunk_size, std::max<int64_t>(0, size - send_offset[0]));
-      recv_limits[0] =
-          std::min(chunk_size, std::max<int64_t>(0, size - recv_offset[0]));
+          std::min(region_end[1], std::max<int64_t>(0, size - recv_offset[1]));
     }
 
     // First reduce scatter
@@ -103,24 +140,22 @@ class RingImpl {
       // Prefill the pipeline
       int buff = 0;
       while (buff < n_steps && buff < PIPELINE) {
-        post_recv_all<MAX_DIR>(sz, buff, n_wires);
         for (int lr = 0; lr < MAX_DIR; lr++) {
-          for (int lw = 0; lw < n_wires; lw++) {
-            int64_t offset = lw * N +
-                send_count[lr * RING_MAX_CONNS + lw] * n_wires * N +
-                lr * n_wires * size_per_wire;
-            std::copy(
-                out_ptr + send_offset[lr] + offset,
-                out_ptr + send_offset[lr] +
-                    std::max(offset, std::min(offset + N, send_limits[lr])),
-                send_buffer(sz, buff, lr, lw).begin<T>());
-            send_count[lr * RING_MAX_CONNS + lw]++;
-          }
+          recv_from(sz, buff, lr, lw);
         }
-        post_send_all<MAX_DIR>(sz, buff, n_wires);
+        for (int lr = 0; lr < MAX_DIR; lr++) {
+          int64_t offset = wire_offset[lr] + send_count[lr] * N;
+          std::copy(
+              out_ptr + send_offset[lr] + offset,
+              out_ptr + send_offset[lr] +
+                  std::max(offset, std::min(offset + N, send_limits[lr])),
+              send_buffer(sz, buff, lr, lw).begin<T>());
+          send_count[lr]++;
+          send_to(sz, buff, lr, lw);
+        }
 
         buff++;
-        in_flight += 2 * MAX_DIR * n_wires;
+        in_flight += 2 * MAX_DIR;
       }
 
       // Main loop
@@ -128,19 +163,16 @@ class RingImpl {
       // Keep going until we have no longer data in flight.
       while (in_flight > 0) {
         ibv_wc wc[WC_NUM];
-        int n = poll(left_, right_, WC_NUM, wc);
+        int n = poll_wire(lw, WC_NUM, wc);
         for (int i = 0; i < n; i++) {
           int work_type = wc[i].wr_id >> 16;
           int buff = (wc[i].wr_id >> 8) & 0xff;
-          int wire = wc[i].wr_id & 0xff;
-          int lr = wire / RING_MAX_CONNS;
-          int lw = wire % RING_MAX_CONNS;
+          int lr = wc[i].wr_id & 0xff;
 
           in_flight--;
 
-          if (work_type == SEND_WR && send_count[wire] < n_steps) {
-            int64_t offset = lw * N + send_count[wire] * n_wires * N +
-                lr * n_wires * size_per_wire;
+          if (work_type == SEND_WR && send_count[lr] < n_steps) {
+            int64_t offset = wire_offset[lr] + send_count[lr] * N;
             std::copy(
                 out_ptr + send_offset[lr] + offset,
                 out_ptr + send_offset[lr] +
@@ -148,18 +180,17 @@ class RingImpl {
                 send_buffer(sz, buff, lr, lw).begin<T>());
             send_to(sz, buff, lr, lw);
             in_flight++;
-            send_count[wire]++;
+            send_count[lr]++;
           }
 
           else if (work_type == RECV_WR) {
-            int64_t offset = lw * N + recv_count[wire] * n_wires * N +
-                lr * n_wires * size_per_wire;
+            int64_t offset = wire_offset[lr] + recv_count[lr] * N;
             reduce_op(
                 recv_buffer(sz, buff, lr, lw).begin<T>(),
                 out_ptr + recv_offset[lr] + offset,
                 std::max<int64_t>(0, std::min(N, recv_limits[lr] - offset)));
-            recv_count[wire]++;
-            if (recv_count[wire] + (PIPELINE - 1) < n_steps) {
+            recv_count[lr]++;
+            if (recv_count[lr] + (PIPELINE - 1) < n_steps) {
               recv_from(sz, buff, lr, lw);
               in_flight++;
             }
@@ -171,27 +202,20 @@ class RingImpl {
           chunk_multiple_size;
       recv_offset[0] = (recv_offset[0] + chunk_multiple_size - chunk_size) %
           chunk_multiple_size;
+      send_limits[0] =
+          std::min(region_end[0], std::max<int64_t>(0, size - send_offset[0]));
+      recv_limits[0] =
+          std::min(region_end[0], std::max<int64_t>(0, size - recv_offset[0]));
       if constexpr (MAX_DIR == 2) {
         send_offset[1] = (send_offset[1] + chunk_size) % chunk_multiple_size;
         recv_offset[1] = (recv_offset[1] + chunk_size) % chunk_multiple_size;
-        send_limits[0] = std::min(
-            n_wires * size_per_wire,
-            std::max<int64_t>(0, size - send_offset[0]));
-        send_limits[1] =
-            std::min(chunk_size, std::max<int64_t>(0, size - send_offset[1]));
-        recv_limits[0] = std::min(
-            n_wires * size_per_wire,
-            std::max<int64_t>(0, size - recv_offset[0]));
-        recv_limits[1] =
-            std::min(chunk_size, std::max<int64_t>(0, size - recv_offset[1]));
-      } else {
-        send_limits[0] =
-            std::min(chunk_size, std::max<int64_t>(0, size - send_offset[0]));
-        recv_limits[0] =
-            std::min(chunk_size, std::max<int64_t>(0, size - recv_offset[0]));
+        send_limits[1] = std::min(
+            region_end[1], std::max<int64_t>(0, size - send_offset[1]));
+        recv_limits[1] = std::min(
+            region_end[1], std::max<int64_t>(0, size - recv_offset[1]));
       }
-      for (int i = 0; i < MAX_DIR * RING_MAX_CONNS; i++) {
-        send_count[i] = recv_count[i] = 0;
+      for (int lr = 0; lr < MAX_DIR; lr++) {
+        send_count[lr] = recv_count[lr] = 0;
       }
     }
 
@@ -202,24 +226,22 @@ class RingImpl {
       // Prefill the pipeline
       int buff = 0;
       while (buff < n_steps && buff < PIPELINE) {
-        post_recv_all<MAX_DIR>(sz, buff, n_wires);
         for (int lr = 0; lr < MAX_DIR; lr++) {
-          for (int lw = 0; lw < n_wires; lw++) {
-            int64_t offset = lw * N +
-                send_count[lr * RING_MAX_CONNS + lw] * n_wires * N +
-                lr * n_wires * size_per_wire;
-            std::copy(
-                out_ptr + send_offset[lr] + offset,
-                out_ptr + send_offset[lr] +
-                    std::max(offset, std::min(offset + N, send_limits[lr])),
-                send_buffer(sz, buff, lr, lw).begin<T>());
-            send_count[lr * RING_MAX_CONNS + lw]++;
-          }
+          recv_from(sz, buff, lr, lw);
         }
-        post_send_all<MAX_DIR>(sz, buff, n_wires);
+        for (int lr = 0; lr < MAX_DIR; lr++) {
+          int64_t offset = wire_offset[lr] + send_count[lr] * N;
+          std::copy(
+              out_ptr + send_offset[lr] + offset,
+              out_ptr + send_offset[lr] +
+                  std::max(offset, std::min(offset + N, send_limits[lr])),
+              send_buffer(sz, buff, lr, lw).begin<T>());
+          send_count[lr]++;
+          send_to(sz, buff, lr, lw);
+        }
 
         buff++;
-        in_flight += 2 * MAX_DIR * n_wires;
+        in_flight += 2 * MAX_DIR;
       }
 
       // Main loop
@@ -227,19 +249,16 @@ class RingImpl {
       // Keep going until we have no longer data in flight.
       while (in_flight > 0) {
         ibv_wc wc[WC_NUM];
-        int n = poll(left_, right_, WC_NUM, wc);
+        int n = poll_wire(lw, WC_NUM, wc);
         for (int i = 0; i < n; i++) {
           int work_type = wc[i].wr_id >> 16;
           int buff = (wc[i].wr_id >> 8) & 0xff;
-          int wire = wc[i].wr_id & 0xff;
-          int lr = wire / RING_MAX_CONNS;
-          int lw = wire % RING_MAX_CONNS;
+          int lr = wc[i].wr_id & 0xff;
 
           in_flight--;
 
-          if (work_type == SEND_WR && send_count[wire] < n_steps) {
-            int64_t offset = lw * N + send_count[wire] * n_wires * N +
-                lr * n_wires * size_per_wire;
+          if (work_type == SEND_WR && send_count[lr] < n_steps) {
+            int64_t offset = wire_offset[lr] + send_count[lr] * N;
             std::copy(
                 out_ptr + send_offset[lr] + offset,
                 out_ptr + send_offset[lr] +
@@ -247,19 +266,18 @@ class RingImpl {
                 send_buffer(sz, buff, lr, lw).begin<T>());
             send_to(sz, buff, lr, lw);
             in_flight++;
-            send_count[wire]++;
+            send_count[lr]++;
           }
 
           else if (work_type == RECV_WR) {
-            int64_t offset = lw * N + recv_count[wire] * n_wires * N +
-                lr * n_wires * size_per_wire;
+            int64_t offset = wire_offset[lr] + recv_count[lr] * N;
             std::copy(
                 recv_buffer(sz, buff, lr, lw).begin<T>(),
                 recv_buffer(sz, buff, lr, lw).begin<T>() +
                     std::max<int64_t>(0, std::min(N, recv_limits[lr] - offset)),
                 out_ptr + recv_offset[lr] + offset);
-            recv_count[wire]++;
-            if (recv_count[wire] + (PIPELINE - 1) < n_steps) {
+            recv_count[lr]++;
+            if (recv_count[lr] + (PIPELINE - 1) < n_steps) {
               recv_from(sz, buff, lr, lw);
               in_flight++;
             }
@@ -271,27 +289,20 @@ class RingImpl {
           chunk_multiple_size;
       recv_offset[0] = (recv_offset[0] + chunk_multiple_size - chunk_size) %
           chunk_multiple_size;
+      send_limits[0] =
+          std::min(region_end[0], std::max<int64_t>(0, size - send_offset[0]));
+      recv_limits[0] =
+          std::min(region_end[0], std::max<int64_t>(0, size - recv_offset[0]));
       if constexpr (MAX_DIR == 2) {
         send_offset[1] = (send_offset[1] + chunk_size) % chunk_multiple_size;
         recv_offset[1] = (recv_offset[1] + chunk_size) % chunk_multiple_size;
-        send_limits[0] = std::min(
-            n_wires * size_per_wire,
-            std::max<int64_t>(0, size - send_offset[0]));
-        send_limits[1] =
-            std::min(chunk_size, std::max<int64_t>(0, size - send_offset[1]));
-        recv_limits[0] = std::min(
-            n_wires * size_per_wire,
-            std::max<int64_t>(0, size - recv_offset[0]));
-        recv_limits[1] =
-            std::min(chunk_size, std::max<int64_t>(0, size - recv_offset[1]));
-      } else {
-        send_limits[0] =
-            std::min(chunk_size, std::max<int64_t>(0, size - send_offset[0]));
-        recv_limits[0] =
-            std::min(chunk_size, std::max<int64_t>(0, size - recv_offset[0]));
+        send_limits[1] = std::min(
+            region_end[1], std::max<int64_t>(0, size - send_offset[1]));
+        recv_limits[1] = std::min(
+            region_end[1], std::max<int64_t>(0, size - recv_offset[1]));
       }
-      for (int i = 0; i < MAX_DIR * RING_MAX_CONNS; i++) {
-        send_count[i] = recv_count[i] = 0;
+      for (int lr = 0; lr < MAX_DIR; lr++) {
+        send_count[lr] = recv_count[lr] = 0;
       }
     }
   }
@@ -301,25 +312,52 @@ class RingImpl {
     // Copy our data to the appropriate place
     std::memcpy(out_ptr + rank_ * n_bytes, in_ptr, n_bytes);
 
-    constexpr int PIPELINE = 2;
-    constexpr int WC_NUM = PIPELINE * RING_MAX_CONNS * 2 * 2;
+    // Split the all gather across the available wires. Each wire handles a
+    // contiguous slice of every rank's data in both directions.
+    //
+    // TODO: These calls are independent so they should be dispatched to a
+    // threadpool and run concurrently instead of sequentially.
     size_t n_bytes_per_wire = (n_bytes + (2 * n_wires) - 1) / (2 * n_wires);
+    for (int lw = 0; lw < n_wires; lw++) {
+      all_gather_wire(out_ptr, n_bytes, n_bytes_per_wire, lw);
+    }
+  }
+
+  // Perform the ring all gather for a single wire `lw`.
+  //
+  // The wire is responsible for the contiguous slice
+  //   [lw * n_bytes_per_wire, (lw + 1) * n_bytes_per_wire)
+  // of every rank's `n_bytes` region, sent in the left direction (lr == 0),
+  // and the mirrored slice sent in the right direction (lr == 1).
+  //
+  // This function only ever touches `left_[lw]` / `right_[lw]` and the buffers
+  // that belong to wire `lw` so several wires can run concurrently.
+  void all_gather_wire(
+      char* out_ptr,
+      int64_t n_bytes,
+      size_t n_bytes_per_wire,
+      int lw) {
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE * 2;
     size_t out_bytes = n_bytes * size_;
     auto [sz, N] = buffer_size_from_message(n_bytes_per_wire);
     int n_steps = (n_bytes_per_wire + N - 1) / N;
+
+    // The byte offset (within a rank's region) that this wire is responsible
+    // for. Wire slices are contiguous rather than interleaved.
+    int64_t wire_offset = static_cast<int64_t>(lw) * n_bytes_per_wire;
 
     // Counters to maintain the state of transfers
     int in_flight = 0;
     int64_t send_offset[2];
     int64_t recv_offset[2];
     int64_t limits[2];
-    int send_count[2 * RING_MAX_CONNS] = {0};
-    int recv_count[2 * RING_MAX_CONNS] = {0};
+    int send_count[2] = {0};
+    int recv_count[2] = {0};
     send_offset[0] = send_offset[1] = rank_ * n_bytes;
     recv_offset[0] = ((rank_ + size_ - 1) % size_) * n_bytes;
     recv_offset[1] = ((rank_ + 1) % size_) * n_bytes;
-    limits[0] = n_wires * n_bytes_per_wire;
-    limits[1] = n_bytes;
+    limits[0] = limits[1] = n_bytes;
 
     // Possible perf improvement by not syncing at every step but running ahead
     // as needed.
@@ -327,24 +365,22 @@ class RingImpl {
       // Prefill the pipeline
       int buff = 0;
       while (buff < n_steps && buff < PIPELINE) {
-        post_recv_all(sz, buff);
         for (int lr = 0; lr < 2; lr++) {
-          for (int lw = 0; lw < n_wires; lw++) {
-            int64_t offset = lw * N +
-                send_count[lr * RING_MAX_CONNS + lw] * n_wires * N +
-                lr * n_wires * n_bytes_per_wire;
-            std::copy(
-                out_ptr + send_offset[lr] + offset,
-                out_ptr + send_offset[lr] +
-                    std::max(offset, std::min(offset + N, limits[lr])),
-                send_buffer(sz, buff, lr, lw).begin<char>());
-            send_count[lr * RING_MAX_CONNS + lw]++;
-          }
+          recv_from(sz, buff, lr, lw);
         }
-        post_send_all(sz, buff);
+        for (int lr = 0; lr < 2; lr++) {
+          int64_t offset = wire_offset + send_count[lr] * N;
+          std::copy(
+              out_ptr + send_offset[lr] + offset,
+              out_ptr + send_offset[lr] +
+                  std::max(offset, std::min(offset + N, limits[lr])),
+              send_buffer(sz, buff, lr, lw).begin<char>());
+          send_count[lr]++;
+          send_to(sz, buff, lr, lw);
+        }
 
         buff++;
-        in_flight += 2 * 2 * n_wires;
+        in_flight += 2 * 2;
       }
 
       // Main loop
@@ -352,19 +388,16 @@ class RingImpl {
       // Keep going until we have no longer data in flight.
       while (in_flight > 0) {
         ibv_wc wc[WC_NUM];
-        int n = poll(left_, right_, WC_NUM, wc);
+        int n = poll_wire(lw, WC_NUM, wc);
         for (int i = 0; i < n; i++) {
           int work_type = wc[i].wr_id >> 16;
           int buff = (wc[i].wr_id >> 8) & 0xff;
-          int wire = wc[i].wr_id & 0xff;
-          int lr = wire / RING_MAX_CONNS;
-          int lw = wire % RING_MAX_CONNS;
+          int lr = wc[i].wr_id & 0xff;
 
           in_flight--;
 
-          if (work_type == SEND_WR && send_count[wire] < n_steps) {
-            int64_t offset = lw * N + send_count[wire] * n_wires * N +
-                lr * n_wires * n_bytes_per_wire;
+          if (work_type == SEND_WR && send_count[lr] < n_steps) {
+            int64_t offset = wire_offset + send_count[lr] * N;
             std::copy(
                 out_ptr + send_offset[lr] + offset,
                 out_ptr + send_offset[lr] +
@@ -372,19 +405,18 @@ class RingImpl {
                 send_buffer(sz, buff, lr, lw).begin<char>());
             send_to(sz, buff, lr, lw);
             in_flight++;
-            send_count[wire]++;
+            send_count[lr]++;
           }
 
           else if (work_type == RECV_WR) {
-            int64_t offset = lw * N + recv_count[wire] * n_wires * N +
-                lr * n_wires * n_bytes_per_wire;
+            int64_t offset = wire_offset + recv_count[lr] * N;
             std::copy(
                 recv_buffer(sz, buff, lr, lw).begin<char>(),
                 recv_buffer(sz, buff, lr, lw).begin<char>() +
                     std::max<int64_t>(0, std::min(N, limits[lr] - offset)),
                 out_ptr + recv_offset[lr] + offset);
-            recv_count[wire]++;
-            if (recv_count[wire] + (PIPELINE - 1) < n_steps) {
+            recv_count[lr]++;
+            if (recv_count[lr] + (PIPELINE - 1) < n_steps) {
               recv_from(sz, buff, lr, lw);
               in_flight++;
             }
@@ -396,9 +428,8 @@ class RingImpl {
       recv_offset[0] = (recv_offset[0] + out_bytes - n_bytes) % out_bytes;
       send_offset[1] = (send_offset[1] + n_bytes) % out_bytes;
       recv_offset[1] = (recv_offset[1] + n_bytes) % out_bytes;
-      for (int i = 0; i < 2 * RING_MAX_CONNS; i++) {
-        send_count[i] = recv_count[i] = 0;
-      }
+      send_count[0] = send_count[1] = 0;
+      recv_count[0] = recv_count[1] = 0;
     }
   }
 
@@ -408,37 +439,53 @@ class RingImpl {
     // In the case that size_ == 2 then left == right so we bias send towards
     // left and recv towards right so that the selections will be correct for
     // the 2 node case.
-    auto& conns = (dst == left) ? left_ : right_;
     int dir = dst == left;
 
-    constexpr int PIPELINE = 2;
-    constexpr int WC_NUM = PIPELINE * RING_MAX_CONNS;
-
     int64_t bytes_per_wire = (n_bytes + n_wires - 1) / n_wires;
+
+    // Split the send across the available wires. Each wire handles the
+    // contiguous slice [lw * bytes_per_wire, (lw + 1) * bytes_per_wire).
+    //
+    // TODO: These calls are independent so they should be dispatched to a
+    // threadpool and run concurrently instead of sequentially.
+    for (int lw = 0; lw < n_wires; lw++) {
+      send_wire(in_ptr, n_bytes, dir, bytes_per_wire, lw);
+    }
+  }
+
+  // Perform a point-to-point send for a single wire `lw`.
+  //
+  // Only touches the connection / buffers of wire `lw` so several wires can run
+  // concurrently.
+  void send_wire(
+      const char* in_ptr,
+      int64_t n_bytes,
+      int dir,
+      int64_t bytes_per_wire,
+      int lw) {
+    auto& conns = dir ? left_ : right_;
+
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE;
+
     auto [sz, N] = buffer_size_from_message(bytes_per_wire);
 
     int in_flight = 0;
-    int64_t read_offset[RING_MAX_CONNS];
-    int64_t limits[RING_MAX_CONNS];
-    for (int lw = 0; lw < n_wires; lw++) {
-      read_offset[lw] = std::min(lw * bytes_per_wire, n_bytes);
-      limits[lw] = std::min((lw + 1) * bytes_per_wire, n_bytes);
-    }
+    int64_t read_offset = std::min(lw * bytes_per_wire, n_bytes);
+    int64_t limit = std::min((lw + 1) * bytes_per_wire, n_bytes);
 
     // Prefill the pipeline
-    for (int lw = 0; lw < n_wires; lw++) {
-      int buff = 0;
-      while (read_offset[lw] < limits[lw] && buff < PIPELINE) {
-        std::copy(
-            in_ptr + read_offset[lw],
-            in_ptr + std::min(read_offset[lw] + N, limits[lw]),
-            send_buffer(sz, buff, dir, lw).begin<char>());
-        send_to(sz, buff, dir, lw);
+    int buff = 0;
+    while (read_offset < limit && buff < PIPELINE) {
+      std::copy(
+          in_ptr + read_offset,
+          in_ptr + std::min(read_offset + N, limit),
+          send_buffer(sz, buff, dir, lw).begin<char>());
+      send_to(sz, buff, dir, lw);
 
-        buff++;
-        read_offset[lw] += N;
-        in_flight++;
-      }
+      buff++;
+      read_offset += N;
+      in_flight++;
     }
 
     // Main loop
@@ -448,22 +495,20 @@ class RingImpl {
       // If a send was completed and we have more data to send then go ahead
       // and send them.
       ibv_wc wc[WC_NUM];
-      int n = poll(conns, WC_NUM, wc);
+      int n = conns[lw].poll(WC_NUM, wc);
       for (int i = 0; i < n; i++) {
         int buff = (wc[i].wr_id >> 8) & 0xff;
-        int wire = wc[i].wr_id & 0xff;
-        int lw = wire % RING_MAX_CONNS;
 
         in_flight--;
 
-        if (read_offset[lw] < limits[lw]) {
+        if (read_offset < limit) {
           std::copy(
-              in_ptr + read_offset[lw],
-              in_ptr + std::min(read_offset[lw] + N, limits[lw]),
+              in_ptr + read_offset,
+              in_ptr + std::min(read_offset + N, limit),
               send_buffer(sz, buff, dir, lw).begin<char>());
           send_to(sz, buff, dir, lw);
 
-          read_offset[lw] += N;
+          read_offset += N;
           in_flight++;
         }
       }
@@ -476,32 +521,48 @@ class RingImpl {
     // In the case that size_ == 2 then left == right so we bias send towards
     // left and recv towards right so that the selections will be correct for
     // the 2 node case.
-    auto& conns = (src == right) ? right_ : left_;
     int dir = src == right;
 
-    constexpr int PIPELINE = 2;
-    constexpr int WC_NUM = PIPELINE * RING_MAX_CONNS;
-
     int64_t bytes_per_wire = (n_bytes + n_wires - 1) / n_wires;
+
+    // Split the recv across the available wires. Each wire handles the
+    // contiguous slice [lw * bytes_per_wire, (lw + 1) * bytes_per_wire).
+    //
+    // TODO: These calls are independent so they should be dispatched to a
+    // threadpool and run concurrently instead of sequentially.
+    for (int lw = 0; lw < n_wires; lw++) {
+      recv_wire(out_ptr, n_bytes, dir, bytes_per_wire, lw);
+    }
+  }
+
+  // Perform a point-to-point recv for a single wire `lw`.
+  //
+  // Only touches the connection / buffers of wire `lw` so several wires can run
+  // concurrently.
+  void recv_wire(
+      char* out_ptr,
+      int64_t n_bytes,
+      int dir,
+      int64_t bytes_per_wire,
+      int lw) {
+    auto& conns = dir ? right_ : left_;
+
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE;
+
     auto [sz, N] = buffer_size_from_message(bytes_per_wire);
 
     int in_flight = 0;
-    int64_t write_offset[RING_MAX_CONNS];
-    int64_t limits[RING_MAX_CONNS];
-    for (int lw = 0; lw < n_wires; lw++) {
-      write_offset[lw] = std::min(lw * bytes_per_wire, n_bytes);
-      limits[lw] = std::min((lw + 1) * bytes_per_wire, n_bytes);
-    }
+    int64_t write_offset = std::min(lw * bytes_per_wire, n_bytes);
+    int64_t limit = std::min((lw + 1) * bytes_per_wire, n_bytes);
 
     // Prefill the pipeline
-    for (int lw = 0; lw < n_wires; lw++) {
-      int buff = 0;
-      while (N * buff < limits[lw] && buff < PIPELINE) {
-        recv_from(sz, buff, dir, lw);
+    int buff = 0;
+    while (write_offset + N * buff < limit && buff < PIPELINE) {
+      recv_from(sz, buff, dir, lw);
 
-        buff++;
-        in_flight++;
-      }
+      buff++;
+      in_flight++;
     }
 
     // Main loop
@@ -511,11 +572,9 @@ class RingImpl {
       // If a recv was completed copy it to the output and if we have more
       // data to fetch post another recv.
       ibv_wc wc[WC_NUM];
-      int n = poll(conns, WC_NUM, wc);
+      int n = conns[lw].poll(WC_NUM, wc);
       for (int i = 0; i < n; i++) {
         int buff = (wc[i].wr_id >> 8) & 0xff;
-        int wire = wc[i].wr_id & 0xff;
-        int lw = wire % RING_MAX_CONNS;
 
         in_flight--;
 
@@ -523,11 +582,11 @@ class RingImpl {
             recv_buffer(sz, buff, dir, lw).begin<char>(),
             recv_buffer(sz, buff, dir, lw).begin<char>() +
                 std::max<int64_t>(
-                    0, std::min<int64_t>(limits[lw] - write_offset[lw], N)),
-            out_ptr + write_offset[lw]);
-        write_offset[lw] += N;
+                    0, std::min<int64_t>(limit - write_offset, N)),
+            out_ptr + write_offset);
+        write_offset += N;
 
-        if (write_offset[lw] + (PIPELINE - 1) * N < limits[lw]) {
+        if (write_offset + (PIPELINE - 1) * N < limit) {
           recv_from(sz, buff, dir, lw);
 
           in_flight++;
@@ -538,36 +597,17 @@ class RingImpl {
 
  private:
   void send_to(int sz, int buff, int left_right, int wire) {
-    if (left_right) {
-      left_[wire].post_send(
-          send_buffer_left(sz, buff, wire),
-          SEND_WR << 16 | buff << 8 | (RING_MAX_CONNS + wire));
-    } else {
-      right_[wire].post_send(
-          send_buffer_right(sz, buff, wire), SEND_WR << 16 | buff << 8 | wire);
-    }
+    auto& conns = left_right ? left_ : right_;
+    conns[wire].post_send(
+        send_buffer(sz, buff, left_right, wire),
+        SEND_WR << 16 | buff << 8 | left_right);
   }
 
   void recv_from(int sz, int buff, int left_right, int wire) {
-    if (left_right) {
-      right_[wire].post_recv(
-          recv_buffer_right(sz, buff, wire),
-          RECV_WR << 16 | buff << 8 | (RING_MAX_CONNS + wire));
-    } else {
-      left_[wire].post_recv(
-          recv_buffer_left(sz, buff, wire), RECV_WR << 16 | buff << 8 | wire);
-    }
-  }
-
-  SharedBuffer& send_buffer_right(int sz, int buff, int wire) {
-    return send_buffers_
-        [sz * NUM_BUFFERS * n_conns_ * 2 + buff * n_conns_ * 2 + wire];
-  }
-
-  SharedBuffer& send_buffer_left(int sz, int buff, int wire) {
-    return send_buffers_
-        [sz * NUM_BUFFERS * n_conns_ * 2 + buff * n_conns_ * 2 + n_conns_ +
-         wire];
+    auto& conns = left_right ? right_ : left_;
+    conns[wire].post_recv(
+        recv_buffer(sz, buff, left_right, wire),
+        RECV_WR << 16 | buff << 8 | left_right);
   }
 
   SharedBuffer& send_buffer(int sz, int buff, int left_right, int wire) {
@@ -576,47 +616,24 @@ class RingImpl {
          left_right * n_conns_ + wire];
   }
 
-  SharedBuffer& recv_buffer_left(int sz, int buff, int wire) {
-    return recv_buffers_
-        [sz * NUM_BUFFERS * n_conns_ * 2 + buff * n_conns_ * 2 + wire];
-  }
-
-  SharedBuffer& recv_buffer_right(int sz, int buff, int wire) {
-    return recv_buffers_
-        [sz * NUM_BUFFERS * n_conns_ * 2 + buff * n_conns_ * 2 + n_conns_ +
-         wire];
-  }
-
   SharedBuffer& recv_buffer(int sz, int buff, int left_right, int wire) {
     return recv_buffers_
         [sz * NUM_BUFFERS * n_conns_ * 2 + buff * n_conns_ * 2 +
          left_right * n_conns_ + wire];
   }
 
-  template <int MAX_DIR>
-  void post_recv_all(int sz, int buff, int n_wires) {
-    for (int lr = 0; lr < MAX_DIR; lr++) {
-      for (int lw = 0; lw < n_wires; lw++) {
-        recv_from(sz, buff, lr, lw);
-      }
-    }
-  }
-
-  void post_recv_all(int sz, int buff) {
-    post_recv_all<2>(sz, buff, n_conns_);
-  }
-
-  template <int MAX_DIR>
-  void post_send_all(int sz, int buff, int n_wires) {
-    for (int lr = 0; lr < MAX_DIR; lr++) {
-      for (int lw = 0; lw < n_wires; lw++) {
-        send_to(sz, buff, lr, lw);
-      }
-    }
-  }
-
-  void post_send_all(int sz, int buff) {
-    post_send_all<2>(sz, buff, n_conns_);
+  // Poll the completion queues that belong to a single wire.
+  //
+  // A wire always uses both its left and right connections (direction 0 sends
+  // right / receives left, direction 1 sends left / receives right) so both are
+  // polled here. Restricting polling to a single wire's connections is what
+  // allows several wires to run concurrently.
+  int poll_wire(int wire, int num_completions, ibv_wc* work_completions) {
+    return poll(
+        std::span<Connection>(&left_[wire], 1),
+        std::span<Connection>(&right_[wire], 1),
+        num_completions,
+        work_completions);
   }
 
   int rank_;
