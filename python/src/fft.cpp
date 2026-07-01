@@ -633,4 +633,124 @@ void init_fft(nb::module_& parent_module) {
         Returns:
             array: The inverse-shifted array with the same shape as the input.
       )pbdoc");
+  m.def(
+      "stft",
+      [](const mx::array& x,
+         int n_fft,
+         const std::optional<int>& hop_length,
+         const std::optional<int>& win_length,
+         const std::optional<mx::array>& window,
+         bool center,
+         const std::string& pad_mode,
+         const std::string& norm,
+         const std::optional<bool>& onesided,
+         mx::StreamOrDevice s) {
+        auto fft_norm = parse_norm(norm, "stft");
+        return mx::fft::stft(
+            x,
+            n_fft,
+            hop_length,
+            win_length,
+            window,
+            center,
+            pad_mode,
+            fft_norm,
+            onesided,
+            s);
+      },
+      "x"_a,
+      "n_fft"_a = 2048,
+      "hop_length"_a = nb::none(),
+      "win_length"_a = nb::none(),
+      "window"_a = nb::none(),
+      "center"_a = true,
+      "pad_mode"_a = "reflect",
+      "norm"_a = "backward",
+      "onesided"_a = nb::none(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Short-Time Fourier Transform.
+
+        Splits the last axis of ``x`` into overlapping frames of length
+        ``n_fft``, applies ``window``, and takes the Fourier Transform of each
+        frame. The output is always complex with shape ``(..., n_freq, n_frames)``.
+
+        Args:
+            x (array): The input array.
+            n_fft (int, optional): Size of the Fourier Transform. Default is ``2048``.
+            hop_length (int, optional): Samples between frames. Default is ``n_fft // 4``.
+            win_length (int, optional): Window size. Default is ``n_fft``.
+            window (array, optional): A one-dimensional window, centered and
+               zero-padded to ``n_fft``. Default is a rectangular window.
+            center (bool, optional): Pad both ends so frames are centered. Default is ``True``.
+            pad_mode (str, optional): One of ``"reflect"``, ``"constant"``, or
+               ``"edge"``, used when ``center`` is ``True``. Default is ``"reflect"``.
+            norm (str, optional): One of ``"backward"``, ``"ortho"``, or
+               ``"forward"``. Default is ``"backward"``.
+            onesided (bool, optional): Return only non-negative frequencies.
+               Default is ``True`` for real input and ``False`` for complex input.
+
+        Returns:
+            array: The STFT of ``x``.
+      )pbdoc");
+  m.def(
+      "istft",
+      [](const mx::array& stft_matrix,
+         const std::optional<int>& n_fft,
+         const std::optional<int>& hop_length,
+         const std::optional<int>& win_length,
+         const std::optional<mx::array>& window,
+         bool center,
+         const std::string& norm,
+         const std::optional<bool>& onesided,
+         const std::optional<int>& length,
+         mx::StreamOrDevice s) {
+        auto fft_norm = parse_norm(norm, "istft");
+        return mx::fft::istft(
+            stft_matrix,
+            n_fft,
+            hop_length,
+            win_length,
+            window,
+            center,
+            fft_norm,
+            onesided,
+            length,
+            s);
+      },
+      "stft_matrix"_a,
+      "n_fft"_a = nb::none(),
+      "hop_length"_a = nb::none(),
+      "win_length"_a = nb::none(),
+      "window"_a = nb::none(),
+      "center"_a = true,
+      "norm"_a = "backward",
+      "onesided"_a = nb::none(),
+      "length"_a = nb::none(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Inverse Short-Time Fourier Transform.
+
+        Inverts :func:`stft` by overlap-adding the windowed inverse transform
+        of each frame, normalized by the squared-window envelope.
+
+        Args:
+            stft_matrix (array): The STFT with shape ``(..., n_freq, n_frames)``.
+            n_fft (int, optional): Size of the Fourier Transform. Default is
+               inferred from ``n_freq`` and ``onesided``. The onesided inference
+               is even; pass ``n_fft`` for an odd transform size.
+            hop_length (int, optional): Samples between frames. Default is ``n_fft // 4``.
+            win_length (int, optional): Window size. Default is ``n_fft``.
+            window (array, optional): A one-dimensional window. Default is a
+               rectangular window.
+            center (bool, optional): Whether the STFT was centered. Default is ``True``.
+            norm (str, optional): One of ``"backward"``, ``"ortho"``, or
+               ``"forward"``. Default is ``"backward"``.
+            onesided (bool, optional): Whether the STFT has only non-negative
+               frequencies. Default is ``True``.
+            length (int, optional): Trim or zero-pad the output to this length.
+
+        Returns:
+            array: The reconstructed signal.
+      )pbdoc");
 }
