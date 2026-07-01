@@ -288,8 +288,9 @@ void Compiled::eval_gpu(
   auto [contiguous, shape, strides_vec] =
       compiled_collapse_contiguous_dims(inputs, outputs[0], is_constant_);
 
-  // Whether to use large index.
-  bool large = compiled_use_large_index(inputs, outputs, contiguous);
+  // Whether to use large index (also true for negative strides).
+  bool large =
+      compiled_use_large_index(inputs, outputs, contiguous, strides_vec);
 
   cu::KernelArgs args;
   // Put inputs.

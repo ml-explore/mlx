@@ -1454,6 +1454,53 @@ class TestCompile(mlx_tests.MLXTestCase):
             np.asarray(out, copy=False).__array_interface__["data"][0], in_ptr
         )
 
+    def test_compile_negative_strides(self):
+        # 1D negative stride with elementwise expression
+        @mx.compile
+        def f(x):
+            return 2.0 * x[::-1]
+
+        x = mx.arange(8, dtype=mx.float32)
+        expected = 2.0 * x[::-1]
+        self.assertTrue(mx.array_equal(f(x), expected))
+
+        # 1D negative stride with slice update
+        def g_eager(x):
+            base = mx.zeros_like(x)
+            base[::-1] += 2.0 * x[::-1]
+            return base
+
+        g_compiled = mx.compile(g_eager)
+        expected = g_eager(x)
+        self.assertTrue(mx.array_equal(g_compiled(x), expected))
+
+        # 2D negative stride
+        @mx.compile
+        def h(x):
+            return x[::-1] + 1.0
+
+        y = mx.arange(12, dtype=mx.float32).reshape(3, 4)
+        expected = y[::-1] + 1.0
+        self.assertTrue(mx.array_equal(h(y), expected))
+
+        # Mixed positive and negative strides
+        @mx.compile
+        def m(x):
+            return x[::-1, ::2] * 3.0
+
+        z = mx.arange(24, dtype=mx.float32).reshape(4, 6)
+        expected = z[::-1, ::2] * 3.0
+        self.assertTrue(mx.array_equal(m(z), expected))
+
+        # 4D negative stride (exercises work_per_thread > 1 path)
+        @mx.compile
+        def p(x):
+            return x + 1.0
+
+        w = mx.arange(120, dtype=mx.float32).reshape(2, 3, 4, 5)
+        expected = w[::-1, :, ::-1, :] + 1.0
+        self.assertTrue(mx.array_equal(p(w[::-1, :, ::-1, :]), expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

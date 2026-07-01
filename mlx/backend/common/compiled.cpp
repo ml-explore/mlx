@@ -102,7 +102,7 @@ bool compiled_check_contiguity(
   }
   if (non_scalar_inputs > 1 && !all_row_contig && !all_col_contig) {
     contiguous = false;
-  } else if (non_scalar_inputs == 1 && !all_contig) {
+  } else if (non_scalar_inputs == 1 && !(all_row_contig || all_col_contig)) {
     contiguous = false;
   } else if (non_scalar_inputs == 0 && !shape.empty()) {
     contiguous = false;
@@ -224,7 +224,8 @@ std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
 bool compiled_use_large_index(
     const std::vector<array>& inputs,
     const std::vector<array>& outputs,
-    bool contiguous) {
+    bool contiguous,
+    const std::vector<Strides>& strides) {
   if (contiguous) {
     size_t max_size = 0;
     for (const auto& in : inputs) {
@@ -236,7 +237,21 @@ bool compiled_use_large_index(
     for (const auto& o : outputs) {
       max_size = std::max(max_size, o.size());
     }
-    return max_size > UINT32_MAX;
+    if (max_size > UINT32_MAX) {
+      return true;
+    }
+    // Force int64_t indices when any input has negative strides, since
+    // unsigned elem_to_loc wraps negative values. strides is ordered
+    // [output, input_0, input_1, ...] from compiled_collapse_contiguous_dims;
+    // the output is freshly allocated so its strides are always non-negative.
+    for (size_t i = 1; i < strides.size(); ++i) {
+      for (auto v : strides[i]) {
+        if (v < 0) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }
 
