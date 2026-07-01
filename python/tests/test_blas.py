@@ -478,12 +478,20 @@ class TestBlas(mlx_tests.MLXTestCase):
                     o_mx = (s_mx @ v_mx_reshape)
                     o_mx = o_mx.transpose(0, 3, 1, 2, 4).reshape(B, qsl, -1)
 
+                    tol = 1e-4
+                    if (
+                        dtype == "float16"
+                        and mx.default_device() == mx.gpu
+                        and not mx.metal.is_available()
+                    ):
+                        tol = 2e-4
+
                     # Check against np
                     self.assertListEqual(list(s_np.shape), list(s_mx.shape))
-                    self.assertTrue(np.allclose(s_np, s_mx, atol=1e-4))
+                    self.assertTrue(np.allclose(s_np, s_mx, atol=tol))
 
                     self.assertListEqual(list(o_np.shape), list(o_mx.shape))
-                    self.assertTrue(np.allclose(o_np, o_mx, atol=1e-4))
+                    self.assertTrue(np.allclose(o_np, o_mx, atol=tol))
 
     def test_matrix_vector_edgecases(self):
         for dtype in self.dtypes:

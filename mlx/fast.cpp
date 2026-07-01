@@ -726,9 +726,11 @@ array scaled_dot_product_attention(
     auto k = inputs[1];
     auto v = inputs[2];
     if (n_repeats > 1) {
-      q = unflatten(q, 1, {n_kv_heads, n_repeats}, s);
-      k = expand_dims(k, 2, s);
-      v = expand_dims(v, 2, s);
+      // Avoid high-rank broadcasted matmul for GQA in the fallback path.
+      // Some backends are unstable with that layout; repeating k/v heads keeps
+      // the computation in standard 4D matmul form.
+      k = repeat(k, n_repeats, 1, s);
+      v = repeat(v, n_repeats, 1, s);
     }
     auto scores = matmul(q, swapaxes(k, -1, -2, s), s);
     if (has_arr_mask || do_causal) {
@@ -747,14 +749,6 @@ array scaled_dot_product_attention(
         return inputs[3];
       };
       auto mask = make_or_fetch_mask();
-
-      if (n_repeats > 1 && mask.ndim() >= 3) {
-        if (mask.shape(-3) == 1) {
-          mask = expand_dims(mask, -3, s);
-        } else {
-          mask = unflatten(mask, -3, {n_kv_heads, n_repeats}, s);
-        }
-      }
       if (mask.dtype() == bool_) {
         scores = where(
             mask, scores, array(finfo(scores.dtype()).min, scores.dtype()), s);
@@ -782,9 +776,6 @@ array scaled_dot_product_attention(
       scores = slice(scores, std::move(start), std::move(stop), s);
     }
     auto out = matmul(scores, v, s);
-    if (n_repeats > 1) {
-      out = flatten(out, 1, 2, s);
-    }
     return std::vector<array>{out};
   };
 

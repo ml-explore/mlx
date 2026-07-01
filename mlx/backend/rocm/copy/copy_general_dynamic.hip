@@ -1,0 +1,261 @@
+// Copyright © 2025 Apple Inc.
+
+#include "mlx/backend/rocm/copy/copy.hpp"
+#include "mlx/backend/rocm/device.h"
+#include "mlx/backend/rocm/kernel_utils.hpp"
+#include "mlx/backend/rocm/device/config.h"
+#include "mlx/backend/rocm/device/utils.hpp"
+
+#include <hip/hip_runtime.h>
+#include <hip/hip_fp16.h>
+#include <hip/hip_bfloat16.h>
+#include <array>
+
+namespace mlx::core {
+
+namespace rocm {
+
+// Kernel with fixed-size arrays passed by value (no device memory needed)
+template <typename In, typename Out, typename IdxT, int NDIM>
+__global__ void copy_gg_dynamic_nd(
+    const In* in,
+    Out* out,
+    IdxT size,
+    const int32_t shape0, const int32_t shape1, const int32_t shape2,
+    const int64_t strides_in0, const int64_t strides_in1, const int64_t strides_in2,
+    const int64_t strides_out0, const int64_t strides_out1, const int64_t strides_out2,
+    const int64_t* offset_in,
+    const int64_t* offset_out) {
+  IdxT index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= size) return;
+  
+  // Compute input and output locations
+  IdxT idx_in = 0;
+  IdxT idx_out = 0;
+  IdxT elem = index;
+  
+  // Unroll based on NDIM
+  if constexpr (NDIM >= 3) {
+    IdxT dim_idx = elem % shape2;
+    elem /= shape2;
+    idx_in += dim_idx * strides_in2;
+    idx_out += dim_idx * strides_out2;
+  }
+  if constexpr (NDIM >= 2) {
+    IdxT dim_idx = elem % shape1;
+    elem /= shape1;
+    idx_in += dim_idx * strides_in1;
+    idx_out += dim_idx * strides_out1;
+  }
+  if constexpr (NDIM >= 1) {
+    IdxT dim_idx = elem % shape0;
+    idx_in += dim_idx * strides_in0;
+    idx_out += dim_idx * strides_out0;
+  }
+  
+  out[idx_out + *offset_out] = static_cast<Out>(in[idx_in + *offset_in]);
+}
+
+// General kernel for ndim > 3 (shape/strides passed by value)
+template <typename In, typename Out, typename IdxT>
+__global__ void copy_gg_dynamic(
+    const In* in,
+    Out* out,
+    IdxT size,
+    hip_array<int32_t, MAX_NDIM> shape,
+    hip_array<int64_t, MAX_NDIM> strides_in,
+    hip_array<int64_t, MAX_NDIM> strides_out,
+    int ndim,
+    const int64_t* offset_in,
+    const int64_t* offset_out) {
+  IdxT index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= size) return;
+  
+  // Compute input and output locations
+  IdxT idx_in = 0;
+  IdxT idx_out = 0;
+  IdxT elem = index;
+  
+  for (int i = ndim - 1; i >= 0; --i) {
+    IdxT dim_idx = elem % shape[i];
+    elem /= shape[i];
+    idx_in += dim_idx * strides_in[i];
+    idx_out += dim_idx * strides_out[i];
+  }
+  
+  out[idx_out + *offset_out] = static_cast<Out>(in[idx_in + *offset_in]);
+}
+
+} // namespace rocm
+
+void copy_general_dynamic(
+    rocm::CommandEncoder& encoder,
+    CopyType ctype,
+    const array& in,
+    array& out,
+    int64_t offset_in,
+    int64_t offset_out,
+    const Shape& shape,
+    const Strides& strides_in,
+    const Strides& strides_out,
+    const array& dynamic_offset_in,
+    const array& dynamic_offset_out) {
+  
+  encoder.set_input_array(in);
+  encoder.set_input_array(dynamic_offset_in);
+  encoder.set_input_array(dynamic_offset_out);
+  encoder.set_output_array(out);
+  
+  int ndim = shape.size();
+  size_t size = out.size();
+  
+  int block_size = 256;
+  int num_blocks = (size + block_size - 1) / block_size;
+  
+  bool large = in.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
+  
+  // Get GPU pointers before lambda to avoid synchronization issues
+  const void* in_ptr_base = gpu_ptr<void>(in);
+  void* out_ptr_base = gpu_ptr<void>(out);
+  const int64_t* dyn_offset_in_ptr = gpu_ptr<int64_t>(dynamic_offset_in);
+  const int64_t* dyn_offset_out_ptr = gpu_ptr<int64_t>(dynamic_offset_out);
+  
+  // For ndim <= 3, pass shape and strides as kernel arguments (no device memory needed)
+  if (ndim <= 3) {
+    // Pad arrays to size 3
+    int32_t s0 = ndim > 0 ? static_cast<int32_t>(shape[0]) : 1;
+    int32_t s1 = ndim > 1 ? static_cast<int32_t>(shape[1]) : 1;
+    int32_t s2 = ndim > 2 ? static_cast<int32_t>(shape[2]) : 1;
+    int64_t si0 = ndim > 0 ? strides_in[0] : 0;
+    int64_t si1 = ndim > 1 ? strides_in[1] : 0;
+    int64_t si2 = ndim > 2 ? strides_in[2] : 0;
+    int64_t so0 = ndim > 0 ? strides_out[0] : 0;
+    int64_t so1 = ndim > 1 ? strides_out[1] : 0;
+    int64_t so2 = ndim > 2 ? strides_out[2] : 0;
+    
+    #define LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, NDIM) \
+      do { \
+        const InT* in_typed = \
+            static_cast<const InT*>(in_ptr_base) + offset_in; \
+        OutT* out_typed = static_cast<OutT*>(out_ptr_base) + offset_out; \
+        IdxT size_arg = static_cast<IdxT>(size); \
+        encoder.add_kernel_node( \
+            &rocm::copy_gg_dynamic_nd<InT, OutT, IdxT, NDIM>, \
+            dim3(num_blocks), dim3(block_size), 0, \
+            in_typed, \
+            out_typed, \
+            size_arg, \
+            s0, s1, s2, si0, si1, si2, so0, so1, so2, \
+            dyn_offset_in_ptr, dyn_offset_out_ptr); \
+      } while (0)
+
+    #define DISPATCH_NDIM_ND(InT, OutT, IdxT) \
+      switch (ndim) { \
+        case 1: LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, 1); break; \
+        case 2: LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, 2); break; \
+        case 3: LAUNCH_COPY_DYNAMIC_ND(InT, OutT, IdxT, 3); break; \
+        default: break; \
+      }
+
+    #define DISPATCH_OUT_TYPE_ND(InT, IdxT) \
+      switch (out.dtype()) { \
+        case float32: DISPATCH_NDIM_ND(InT, float, IdxT); break; \
+        case float16: DISPATCH_NDIM_ND(InT, __half, IdxT); break; \
+        case bfloat16: DISPATCH_NDIM_ND(InT, hip_bfloat16, IdxT); break; \
+        case int32: DISPATCH_NDIM_ND(InT, int32_t, IdxT); break; \
+        case int64: DISPATCH_NDIM_ND(InT, int64_t, IdxT); break; \
+        case uint32: DISPATCH_NDIM_ND(InT, uint32_t, IdxT); break; \
+        case uint8: DISPATCH_NDIM_ND(InT, uint8_t, IdxT); break; \
+        case bool_: DISPATCH_NDIM_ND(InT, bool, IdxT); break; \
+        default: break; \
+      }
+
+    #define DISPATCH_IN_TYPE_ND(IdxT) \
+      switch (in.dtype()) { \
+        case float32: DISPATCH_OUT_TYPE_ND(float, IdxT); break; \
+        case float16: DISPATCH_OUT_TYPE_ND(__half, IdxT); break; \
+        case bfloat16: DISPATCH_OUT_TYPE_ND(hip_bfloat16, IdxT); break; \
+        case int32: DISPATCH_OUT_TYPE_ND(int32_t, IdxT); break; \
+        case int64: DISPATCH_OUT_TYPE_ND(int64_t, IdxT); break; \
+        case uint32: DISPATCH_OUT_TYPE_ND(uint32_t, IdxT); break; \
+        case uint8: DISPATCH_OUT_TYPE_ND(uint8_t, IdxT); break; \
+        case bool_: DISPATCH_OUT_TYPE_ND(bool, IdxT); break; \
+        default: break; \
+      }
+
+    if (large) {
+      DISPATCH_IN_TYPE_ND(int64_t);
+    } else {
+      DISPATCH_IN_TYPE_ND(int32_t);
+    }
+
+    #undef DISPATCH_IN_TYPE_ND
+    #undef DISPATCH_OUT_TYPE_ND
+    #undef DISPATCH_NDIM_ND
+    #undef LAUNCH_COPY_DYNAMIC_ND
+    return;
+  }
+  
+  // For ndim > 3, pack shape/strides into by-value structs
+  rocm::hip_array<int32_t, MAX_NDIM> shape_arg = {};
+  rocm::hip_array<int64_t, MAX_NDIM> strides_in_arg = {};
+  rocm::hip_array<int64_t, MAX_NDIM> strides_out_arg = {};
+  for (int i = 0; i < ndim; i++) {
+    shape_arg.data_[i] = static_cast<int32_t>(shape[i]);
+    strides_in_arg.data_[i] = strides_in[i];
+    strides_out_arg.data_[i] = strides_out[i];
+  }
+
+  #define LAUNCH_COPY_DYNAMIC_GENERAL(InT, OutT, IdxT) \
+    do { \
+      const InT* in_typed = static_cast<const InT*>(in_ptr_base) + offset_in; \
+      OutT* out_typed = static_cast<OutT*>(out_ptr_base) + offset_out; \
+      IdxT size_arg = static_cast<IdxT>(size); \
+      encoder.add_kernel_node( \
+          &rocm::copy_gg_dynamic<InT, OutT, IdxT>, \
+          dim3(num_blocks), dim3(block_size), 0, \
+          in_typed, \
+          out_typed, \
+          size_arg, shape_arg, \
+          strides_in_arg, strides_out_arg, \
+          ndim, dyn_offset_in_ptr, dyn_offset_out_ptr); \
+    } while (0)
+
+  #define DISPATCH_OUT_TYPE_GEN(InT, IdxT) \
+    switch (out.dtype()) { \
+      case float32: LAUNCH_COPY_DYNAMIC_GENERAL(InT, float, IdxT); break; \
+      case float16: LAUNCH_COPY_DYNAMIC_GENERAL(InT, __half, IdxT); break; \
+      case bfloat16: LAUNCH_COPY_DYNAMIC_GENERAL(InT, hip_bfloat16, IdxT); break; \
+      case int32: LAUNCH_COPY_DYNAMIC_GENERAL(InT, int32_t, IdxT); break; \
+      case int64: LAUNCH_COPY_DYNAMIC_GENERAL(InT, int64_t, IdxT); break; \
+      case uint32: LAUNCH_COPY_DYNAMIC_GENERAL(InT, uint32_t, IdxT); break; \
+      case uint8: LAUNCH_COPY_DYNAMIC_GENERAL(InT, uint8_t, IdxT); break; \
+      case bool_: LAUNCH_COPY_DYNAMIC_GENERAL(InT, bool, IdxT); break; \
+      default: break; \
+    }
+
+  #define DISPATCH_IN_TYPE_GEN(IdxT) \
+    switch (in.dtype()) { \
+      case float32: DISPATCH_OUT_TYPE_GEN(float, IdxT); break; \
+      case float16: DISPATCH_OUT_TYPE_GEN(__half, IdxT); break; \
+      case bfloat16: DISPATCH_OUT_TYPE_GEN(hip_bfloat16, IdxT); break; \
+      case int32: DISPATCH_OUT_TYPE_GEN(int32_t, IdxT); break; \
+      case int64: DISPATCH_OUT_TYPE_GEN(int64_t, IdxT); break; \
+      case uint32: DISPATCH_OUT_TYPE_GEN(uint32_t, IdxT); break; \
+      case uint8: DISPATCH_OUT_TYPE_GEN(uint8_t, IdxT); break; \
+      case bool_: DISPATCH_OUT_TYPE_GEN(bool, IdxT); break; \
+      default: break; \
+    }
+
+  if (large) {
+    DISPATCH_IN_TYPE_GEN(int64_t);
+  } else {
+    DISPATCH_IN_TYPE_GEN(int32_t);
+  }
+
+  #undef DISPATCH_IN_TYPE_GEN
+  #undef DISPATCH_OUT_TYPE_GEN
+  #undef LAUNCH_COPY_DYNAMIC_GENERAL
+}
+
+} // namespace mlx::core

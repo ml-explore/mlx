@@ -20,25 +20,17 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     kL = k.shape[2]
 
     if n_repeats > 1:
-        q = mx.reshape(q, [B, n_kv_heads, n_repeats, L, -1])
-        k = mx.expand_dims(k, 2)
-        v = mx.expand_dims(v, 2)
+        k = mx.repeat(k, repeats=n_repeats, axis=-3)
+        v = mx.repeat(v, repeats=n_repeats, axis=-3)
 
     scores = q @ mx.swapaxes(k, -1, -2)
     is_causal = mask == "causal"
     if mask is not None:
-
         if is_causal:
             offset = kL - L
             q_indices = mx.arange(L) + offset
             k_indices = mx.arange(kL)
             mask = q_indices[:, None] >= k_indices[None]
-
-        if n_repeats > 1 and mask.ndim >= 3:
-            if mask.shape[-3] == 1:
-                mask = mx.expand_dims(mask, -3)
-            else:
-                mask = mx.unflatten(mask, -3, (n_kv_heads, n_repeats))
 
         if mask.dtype == mx.bool_:
             scores = mx.where(mask, scores, mx.finfo(scores.dtype).min)
@@ -47,8 +39,6 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
 
     if sinks is not None:
         sinks = mx.expand_dims(sinks, (0, 2, 3))
-        if n_repeats > 1:
-            sinks = mx.unflatten(sinks, 1, (n_kv_heads, n_repeats))
         score_shape = list(scores.shape)
         score_shape[-1] = 1
         sinks = mx.broadcast_to(sinks, score_shape)
@@ -59,8 +49,6 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
         scores = scores[..., 1:]
 
     out = scores @ v
-    if n_repeats > 1:
-        out = mx.reshape(out, [B, n_q_heads, L, -1])
     return out
 
 
