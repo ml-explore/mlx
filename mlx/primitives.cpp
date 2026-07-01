@@ -3825,6 +3825,22 @@ std::vector<Shape> GatherQMM::output_shapes(const std::vector<array>& inputs) {
   return {out_shape};
 }
 
+bool GatherQQMM::is_equivalent(const Primitive& other) const {
+  const GatherQQMM& qm_other = static_cast<const GatherQQMM&>(other);
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
+      mode_ == qm_other.mode_;
+}
+
+std::vector<Shape> GatherQQMM::output_shapes(const std::vector<array>& inputs) {
+  const auto& x = inputs[0];
+  const auto& w = inputs[1];
+  const auto& lhs_indices = inputs[2];
+  auto out_shape = lhs_indices.shape();
+  out_shape.push_back(x.shape(-2));
+  out_shape.push_back(w.shape(-2));
+  return {out_shape};
+}
+
 std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

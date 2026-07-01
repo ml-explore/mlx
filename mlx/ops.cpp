@@ -65,11 +65,26 @@ Dtype at_least_float(const Dtype& d) {
 }
 
 array indices_or_default(
-    std::optional<array> indices,
+    std::string_view tag,
+    const std::optional<array>& indices,
     const array& x,
     StreamOrDevice s) {
+  if (x.ndim() < 2) {
+    std::ostringstream msg;
+    msg << tag
+        << " Input must have at least two dimensions but got input with shape "
+        << x.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
   if (indices.has_value()) {
-    return indices.value();
+    if (!issubdtype(indices->dtype(), integer)) {
+      std::ostringstream msg;
+      msg << tag
+          << " Got indices with invalid dtype. Indices must be integral.";
+      throw std::invalid_argument(msg.str());
+    }
+    return astype(indices.value(), uint32);
   }
 
   Shape shape(x.shape().begin(), x.shape().end() - 2);
@@ -4626,10 +4641,10 @@ void validate_global_scale(
 }
 
 array quantized_matmul(
-    array x,
-    array w,
-    array scales,
-    std::optional<array> biases /* = std::nullopt */,
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases /* = std::nullopt */,
     bool transpose /* = true */,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
@@ -4678,13 +4693,13 @@ array quantized_matmul(
 }
 
 void validate_qqmm_inputs(
-    array x,
-    array w,
-    std::optional<array> scales_w,
+    const array& x,
+    const array& w,
+    const std::optional<array>& scales_w,
     int group_size,
     int bits,
-    std::optional<array> global_scale_x,
-    std::optional<array> global_scale_w,
+    const std::optional<array>& global_scale_x,
+    const std::optional<array>& global_scale_w,
     QuantizationMode qmode) {
   // check 2D (for now)
   if (x.ndim() > 2 || w.ndim() > 2) {
@@ -4738,9 +4753,9 @@ void validate_qqmm_inputs(
 }
 
 std::pair<int, int> extract_qqmm_dims(
-    array x,
-    array w,
-    std::optional<array> scales_w,
+    const array& x,
+    const array& w,
+    const std::optional<array>& scales_w,
     int group_size,
     int bits) {
   if (w.dtype() != uint32) {
@@ -4768,24 +4783,17 @@ std::pair<int, int> extract_qqmm_dims(
 }
 
 array qqmm(
-    array in_x,
-    array w,
-    std::optional<array> scales_w,
+    const array& in_x,
+    const array& w,
+    const std::optional<array>& scales_w,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
-    const std::optional<array> global_scale_x /* = std::nullopt */,
-    const std::optional<array> global_scale_w /* = std::nullopt */,
+    const std::optional<array>& global_scale_x /* = std::nullopt */,
+    const std::optional<array>& global_scale_w /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
   auto qmode = string_to_quantization_mode(mode, "qqmm");
-  // cuBLAS block scaled matmul only supports nvfp4 and mxfp8
-  if (qmode != QuantizationMode::Nvfp4 && qmode != QuantizationMode::Mxfp8) {
-    std::ostringstream msg;
-    msg << "[qqmm] Only 'nvfp4' and 'mxfp8' quantization modes are supported but '"
-        << mode << "' was provided.";
-    throw std::invalid_argument(msg.str());
-  }
   // we need to check 2 cases:
   // 1. w is quantized, scales is provided
   // 2. w is not quantized, scales is not provided
@@ -5088,12 +5096,6 @@ std::vector<array> quantize(
         << " matrix has shape " << w.shape();
     throw std::invalid_argument(msg.str());
   }
-  if (to_stream(s).device == Device::gpu && metal::is_available() &&
-      global_scale.has_value()) {
-    std::ostringstream msg;
-    msg << "[quantize] Global scale is not supported on the Metal backend.";
-    throw std::invalid_argument(msg.str());
-  }
   validate_global_scale("quantize", qmode, global_scale);
   if (qmode == QuantizationMode::Affine) {
     return affine_quantize(w, group_size, bits, s);
@@ -5353,13 +5355,6 @@ array dequantize(
         << "but it has only " << w.ndim() << ".";
     throw std::invalid_argument(msg.str());
   }
-  if (global_scale.has_value()) {
-    if (to_stream(s).device == Device::gpu && metal::is_available()) {
-      std::ostringstream msg;
-      msg << "[dequantize] Global scale is not supported on the Metal backend.";
-      throw std::invalid_argument(msg.str());
-    }
-  }
   validate_global_scale("dequantize", qmode, global_scale);
 
   if (qmode == QuantizationMode::Affine) {
@@ -5452,29 +5447,10 @@ array gather_qmm(
   }
 
   // Extract indices and broadcast them
-  array lhs_indices = indices_or_default(lhs_indices_, x, s);
-  array rhs_indices = indices_or_default(rhs_indices_, w, s);
+  array lhs_indices = indices_or_default("[gather_qmm]", lhs_indices_, x, s);
+  array rhs_indices = indices_or_default("[gather_qmm]", rhs_indices_, w, s);
   std::tie(lhs_indices, rhs_indices) =
       broadcast_arrays(lhs_indices, rhs_indices, s);
-
-  if (!issubdtype(lhs_indices.dtype(), integer)) {
-    throw std::invalid_argument(
-        "[gather_qmm] Got lhs_indices with invalid dtype. Indices must be integral.");
-  }
-
-  if (!issubdtype(rhs_indices.dtype(), integer)) {
-    throw std::invalid_argument(
-        "[gather_qmm] Got rhs_indices with invalid dtype. Indices must be integral.");
-  }
-  if (x.ndim() < 2) {
-    std::ostringstream msg;
-    msg << "[gather_qmm] Non-quantized input must have at least two"
-        << " dimensions but got input with shape " << x.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  lhs_indices = astype(lhs_indices, uint32, s);
-  rhs_indices = astype(rhs_indices, uint32, s);
 
   // Compute the full output shape
   auto out_shape = lhs_indices.shape();
@@ -5508,6 +5484,56 @@ array gather_qmm(
           transpose,
           sorted_indices && !rhs_indices_,
           sorted_indices && !lhs_indices_),
+      std::move(inputs));
+}
+
+array gather_qqmm(
+    const array& x,
+    const array& w,
+    const std::optional<array>& scales_w,
+    const std::optional<array>& lhs_indices_,
+    const std::optional<array>& rhs_indices_,
+    std::optional<int> group_size_,
+    std::optional<int> bits_,
+    const std::string& mode,
+    const std::optional<array>& global_scale_x,
+    const std::optional<array>& global_scale_w,
+    bool sorted_indices,
+    StreamOrDevice s) {
+  auto stream = to_stream(s);
+  auto qmode = string_to_quantization_mode(mode, "gather_qqmm");
+  auto [group_size, bits] =
+      quantization_params_from_mode(qmode, group_size_, bits_);
+
+  // Extract indices and broadcast them
+  array lhs_indices = indices_or_default("[gather_qqmm]", lhs_indices_, x, s);
+  array rhs_indices = indices_or_default("[gather_qqmm]", rhs_indices_, w, s);
+  std::tie(lhs_indices, rhs_indices) =
+      broadcast_arrays(lhs_indices, rhs_indices, s);
+
+  std::vector<array> inputs = {
+      x,
+      w,
+      lhs_indices,
+      rhs_indices,
+  };
+  if (scales_w.has_value()) {
+    inputs.push_back(*scales_w);
+  }
+  if (global_scale_x.has_value() && global_scale_w.has_value()) {
+    inputs.push_back(*global_scale_x);
+    inputs.push_back(*global_scale_w);
+  }
+
+  auto [w_inner_dims, w_outer_dims] =
+      extract_qqmm_dims(x, w, scales_w, group_size, bits);
+  auto out_shape = lhs_indices.shape();
+  out_shape.push_back(x.shape(-2));
+  out_shape.push_back(w_outer_dims);
+  return array(
+      std::move(out_shape),
+      x.dtype(),
+      std::make_shared<GatherQQMM>(stream, group_size, bits, qmode),
       std::move(inputs));
 }
 
@@ -6009,27 +6035,13 @@ array gather_mm(
   b = astype(b, out_type, s);
 
   // Handle broadcasting
-  array lhs_indices = indices_or_default(lhs_indices_, a, s);
-  array rhs_indices = indices_or_default(rhs_indices_, b, s);
-
-  if (!issubdtype(lhs_indices.dtype(), integer)) {
-    throw std::invalid_argument(
-        "[gather_mm] Got lhs_indices with invalid dtype. Indices must be integral.");
-  }
-
-  if (!issubdtype(rhs_indices.dtype(), integer)) {
-    throw std::invalid_argument(
-        "[gather_mm] Got rhs_indices with invalid dtype. Indices must be integral.");
-  }
-
-  lhs_indices = astype(lhs_indices, uint32, s);
-  rhs_indices = astype(rhs_indices, uint32, s);
+  array lhs_indices = indices_or_default("[gather_mm]", lhs_indices_, a, s);
+  array rhs_indices = indices_or_default("[gather_mm]", rhs_indices_, b, s);
+  std::tie(lhs_indices, rhs_indices) =
+      broadcast_arrays(lhs_indices, rhs_indices, s);
 
   int M = a.shape(-2);
   int N = b.shape(-1);
-
-  std::tie(lhs_indices, rhs_indices) =
-      broadcast_arrays(lhs_indices, rhs_indices, s);
 
   auto out_shape = lhs_indices.shape();
   out_shape.push_back(M);
