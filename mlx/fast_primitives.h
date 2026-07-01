@@ -3,6 +3,7 @@
 #include <optional>
 #include <variant>
 
+#include "mlx/backend/common/metal_kernel.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core::fast {
@@ -376,7 +377,7 @@ class CustomKernel : public Primitive {
       std::vector<ScalarArg> scalar_arguments,
       bool is_precompiled,
       int shared_memory,
-      std::optional<int> metal_math_mode = std::nullopt)
+      CompileOptions::Data compile_options = {})
       : Primitive(stream),
         name_(std::move(name)),
         source_(std::move(source)),
@@ -388,7 +389,7 @@ class CustomKernel : public Primitive {
         scalar_arguments_(std::move(scalar_arguments)),
         is_precompiled_(is_precompiled),
         shared_memory_(shared_memory),
-        metal_math_mode_(metal_math_mode) {}
+        compile_options_(compile_options) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -411,7 +412,7 @@ class CustomKernel : public Primitive {
         scalar_arguments_,
         is_precompiled_,
         shared_memory_,
-        metal_math_mode_);
+        compile_options_);
   }
 
  private:
@@ -425,7 +426,7 @@ class CustomKernel : public Primitive {
   std::vector<ScalarArg> scalar_arguments_;
   bool is_precompiled_;
   int shared_memory_;
-  std::optional<int> metal_math_mode_;
+  CompileOptions::Data compile_options_;
 };
 
 } // namespace mlx::core::fast

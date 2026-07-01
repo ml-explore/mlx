@@ -1,15 +1,15 @@
 // Copyright © 2024 Apple Inc.
 
+#include "mlx/backend/common/metal_kernel.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/utils.h"
-#include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 
 namespace mlx::core::fast {
 
 struct CustomKernelCache {
-  std::unordered_map<std::string, std::pair<std::string, std::optional<int>>>
+  std::unordered_map<std::string, std::pair<std::string, CompileOptions::Data>>
       libraries;
 };
 
@@ -17,22 +17,6 @@ static CustomKernelCache& cache() {
   static CustomKernelCache cache_;
   return cache_;
 };
-
-std::optional<MTL::MathMode> to_mtl_math_mode(std::optional<int> math_mode) {
-  if (!math_mode) {
-    return std::nullopt;
-  }
-  switch (*math_mode) {
-    case static_cast<int>(MetalKernelMathMode::Safe):
-      return MTL::MathModeSafe;
-    case static_cast<int>(MetalKernelMathMode::Relaxed):
-      return MTL::MathModeRelaxed;
-    case static_cast<int>(MetalKernelMathMode::Fast):
-      return MTL::MathModeFast;
-    default:
-      throw std::invalid_argument("[metal_kernel] Invalid Metal math mode.");
-  }
-}
 
 void CustomKernel::eval_gpu(
     const std::vector<array>& inputs,
@@ -77,21 +61,19 @@ void CustomKernel::eval_gpu(
     if (auto it = kernel_cache.libraries.find(name_);
         it != kernel_cache.libraries.end()) {
       if (it->second.first != source_ ||
-          it->second.second != metal_math_mode_) {
+          it->second.second != compile_options_) {
         auto& d = metal::device(s.device);
         d.clear_library(name_);
-        it->second = {source_, metal_math_mode_};
+        it->second = std::make_tuple(source_, compile_options_);
       }
     } else {
       kernel_cache.libraries.emplace(
-          name_, std::make_pair(source_, metal_math_mode_));
+          name_, std::make_tuple(source_, compile_options_));
     }
   }
 
   auto lib = d.get_library(
-      name_,
-      [this] { return metal::utils() + source_; },
-      metal::CompileOptions{to_mtl_math_mode(metal_math_mode_)});
+      name_, compile_options_, [this] { return metal::utils() + source_; });
   auto kernel = d.get_kernel(name_, lib);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);

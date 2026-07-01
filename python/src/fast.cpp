@@ -75,44 +75,41 @@ struct PyCustomKernelFunction {
   const char* tag_;
 };
 
-mx::fast::MetalKernelMathMode parse_metal_math_mode(
-    const std::string& math_mode) {
+mx::MathMode parse_metal_math_mode(const std::string& math_mode) {
   if (math_mode == "safe") {
-    return mx::fast::MetalKernelMathMode::Safe;
+    return mx::MathMode::Safe;
   } else if (math_mode == "relaxed") {
-    return mx::fast::MetalKernelMathMode::Relaxed;
+    return mx::MathMode::Relaxed;
   } else if (math_mode == "fast") {
-    return mx::fast::MetalKernelMathMode::Fast;
+    return mx::MathMode::Fast;
   }
   throw std::invalid_argument(
       "[metal_kernel] Expected math_mode to be 'safe', 'relaxed', or 'fast'.");
 }
 
-mx::fast::CompileOptions parse_compile_options(
-    const nb::object& compile_options) {
-  mx::fast::CompileOptions options;
-
-  if (compile_options.is_none()) {
-    return options;
+mx::CompileOptions parse_compile_options(const nb::object& obj) {
+  mx::CompileOptions result;
+  if (obj.is_none()) {
+    return result;
   }
 
-  if (!nb::isinstance<nb::dict>(compile_options)) {
+  if (!nb::isinstance<nb::dict>(obj)) {
     throw std::invalid_argument(
         "[metal_kernel] Expected `compile_options` to be a dict.");
   }
 
-  nb::dict dict = nb::cast<nb::dict>(compile_options);
+  nb::dict dict = nb::cast<nb::dict>(obj);
   for (auto [key, value] : dict) {
     auto key_str = nb::cast<std::string>(key);
     if (key_str == "math_mode") {
-      options.math_mode = parse_metal_math_mode(nb::cast<std::string>(value));
+      result.math_mode = parse_metal_math_mode(nb::cast<std::string>(value));
     } else {
       std::ostringstream msg;
       msg << "[metal_kernel] Unknown compile option `" << key_str << "`.";
       throw std::invalid_argument(msg.str());
     }
   }
-  return options;
+  return result;
 }
 
 } // namespace

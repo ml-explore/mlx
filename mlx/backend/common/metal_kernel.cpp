@@ -207,7 +207,7 @@ CustomKernelFunction metal_kernel(
     const std::string& header /* = "" */,
     bool ensure_row_contiguous /* = true */,
     bool atomic_outputs /* = false */,
-    CompileOptions compile_options /* = {} */) {
+    const CompileOptions& compile_options /* = {} */) {
   if (output_names.empty()) {
     throw std::invalid_argument(
         "[metal_kernel] Must specify at least one output.");
@@ -362,7 +362,7 @@ CustomKernelFunction metal_kernel(
             std::vector<ScalarArg>{},
             false,
             0,
-            static_cast<int>(compile_options.math_mode)),
+            compile_options.serialize()),
         std::move(inputs));
   };
 }
