@@ -321,7 +321,7 @@ def kl_div_loss(
 
     .. code-block:: python
 
-        mx.exp(targets) * (targets - inputs).sum(axis)
+        (mx.exp(targets) * (targets - inputs)).sum(axis)
 
     Args:
         inputs (array): Log probabilities for the predicted distribution.
