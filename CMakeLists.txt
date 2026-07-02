@@ -265,6 +265,34 @@ if(WIN32)
 endif()
 
 if(MLX_BUILD_CPU)
+  # ----------------------------- x86 SIMD --------------------------------
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i[3-9]86")
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-mavx2" HAS_AVX2)
+    check_cxx_compiler_flag("-mfma" HAS_FMA)
+    check_cxx_compiler_flag("-mf16c" HAS_F16C)
+
+    if(HAS_AVX2
+       AND HAS_FMA
+       AND HAS_F16C)
+      message(
+        STATUS "Compiler supports AVX2/FMA/F16C - enabling AVX2 SIMD backend")
+      target_compile_options(mlx PRIVATE -mavx2 -mfma -mf16c)
+    else()
+      message(
+        STATUS "Missing required x86 SIMD support - using base SIMD backend")
+      if(NOT HAS_AVX2)
+        message(STATUS "  Missing: AVX2")
+      endif()
+      if(NOT HAS_FMA)
+        message(STATUS "  Missing: FMA")
+      endif()
+      if(NOT HAS_F16C)
+        message(STATUS "  Missing: F16C")
+      endif()
+    endif()
+  endif()
+
   find_library(ACCELERATE_LIBRARY Accelerate)
   if(ACCELERATE_LIBRARY)
     message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
