@@ -2,9 +2,11 @@
 
 #pragma once
 
+#include <future>
 #include <span>
 
 #include "jaccl/rdma.h"
+#include "jaccl/threadpool.h"
 
 constexpr int RING_MAX_CONNS = 4;
 
@@ -18,14 +20,16 @@ class RingImpl {
       std::vector<Connection>& left,
       std::vector<Connection>& right,
       std::vector<SharedBuffer>& send_buffers,
-      std::vector<SharedBuffer>& recv_buffers)
+      std::vector<SharedBuffer>& recv_buffers,
+      ThreadPool* pool = nullptr)
       : rank_(rank),
         size_(size),
         n_conns_(left.size()),
         left_(left),
         right_(right),
         send_buffers_(send_buffers),
-        recv_buffers_(recv_buffers) {}
+        recv_buffers_(recv_buffers),
+        pool_(pool) {}
 
   RingImpl(
       int rank,
@@ -34,16 +38,18 @@ class RingImpl {
       Connection* right_begin,
       size_t n_conns,
       std::vector<SharedBuffer>& send_buffers,
-      std::vector<SharedBuffer>& recv_buffers)
+      std::vector<SharedBuffer>& recv_buffers,
+      ThreadPool* pool = nullptr)
       : rank_(rank),
         size_(size),
         n_conns_(n_conns),
         left_(left_begin, n_conns),
         right_(right_begin, n_conns),
         send_buffers_(send_buffers),
-        recv_buffers_(recv_buffers) {}
+        recv_buffers_(recv_buffers),
+        pool_(pool) {}
 
-  RingImpl() : rank_(0), size_(1), n_conns_(0) {}
+  RingImpl() : rank_(0), size_(1), n_conns_(0), pool_(nullptr) {}
 
   // Copy the received chunk into the output. Used by the all gather passes.
   struct CopyOp {
@@ -84,10 +90,7 @@ class RingImpl {
 
     // Split the reduce scatter + all gather across the available wires. Each
     // wire handles a contiguous slice of each chunk in every direction.
-    //
-    // TODO: These calls are independent so they should be dispatched to a
-    // threadpool and run concurrently instead of sequentially.
-    for (int lw = 0; lw < n_wires; lw++) {
+    dispatch_wires(n_wires, [&](int lw) {
       all_reduce_wire<MAX_DIR>(
           in_ptr,
           out_ptr,
@@ -97,7 +100,7 @@ class RingImpl {
           n_wires,
           lw,
           reduce_op);
-    }
+    });
   }
 
   // Perform the ring all reduce (reduce scatter followed by all gather) for a
@@ -192,14 +195,11 @@ class RingImpl {
 
     // Split the all gather across the available wires. Each wire handles a
     // contiguous slice of every rank's data in both directions.
-    //
-    // TODO: These calls are independent so they should be dispatched to a
-    // threadpool and run concurrently instead of sequentially.
     size_t n_bytes_per_wire = (n_bytes + (2 * n_wires) - 1) / (2 * n_wires);
-    for (int lw = 0; lw < n_wires; lw++) {
+    dispatch_wires(n_wires, [&](int lw) {
       all_gather_wire(
           out_ptr, n_bytes, static_cast<int64_t>(n_bytes_per_wire), lw);
-    }
+    });
   }
 
   // Perform the ring all gather for a single wire lw.
@@ -386,12 +386,9 @@ class RingImpl {
 
     // Split the send across the available wires. Each wire handles the
     // contiguous slice [lw * bytes_per_wire, (lw + 1) * bytes_per_wire).
-    //
-    // TODO: These calls are independent so they should be dispatched to a
-    // threadpool and run concurrently instead of sequentially.
-    for (int lw = 0; lw < n_wires; lw++) {
+    dispatch_wires(n_wires, [&](int lw) {
       send_wire(in_ptr, n_bytes, dir, bytes_per_wire, lw);
-    }
+    });
   }
 
   // Perform a point-to-point send for a single wire lw.
@@ -468,12 +465,9 @@ class RingImpl {
 
     // Split the recv across the available wires. Each wire handles the
     // contiguous slice [lw * bytes_per_wire, (lw + 1) * bytes_per_wire).
-    //
-    // TODO: These calls are independent so they should be dispatched to a
-    // threadpool and run concurrently instead of sequentially.
-    for (int lw = 0; lw < n_wires; lw++) {
+    dispatch_wires(n_wires, [&](int lw) {
       recv_wire(out_ptr, n_bytes, dir, bytes_per_wire, lw);
-    }
+    });
   }
 
   // Perform a point-to-point recv for a single wire lw.
@@ -577,6 +571,38 @@ class RingImpl {
         work_completions);
   }
 
+  // Run fn(lw) for each wire, the first n_wires - 1 on the pool and the last
+  // inline, then wait for the pool calls before returning.
+  template <typename Fn>
+  void dispatch_wires(int n_wires, Fn&& fn) {
+    if (n_wires <= 1 || pool_ == nullptr) {
+      for (int lw = 0; lw < n_wires; lw++) {
+        fn(lw);
+      }
+      return;
+    }
+
+    std::vector<std::future<void>> futures;
+    futures.reserve(n_wires - 1);
+    for (int lw = 0; lw < n_wires - 1; lw++) {
+      futures.emplace_back(pool_->enqueue(fn, lw));
+    }
+
+    // Wait for the pool calls even if the inline one throws, so they never
+    // outlive this frame.
+    try {
+      fn(n_wires - 1);
+    } catch (...) {
+      for (auto& f : futures) {
+        f.wait();
+      }
+      throw;
+    }
+    for (auto& f : futures) {
+      f.wait();
+    }
+  }
+
   int rank_;
   int size_;
   int n_conns_;
@@ -584,6 +610,7 @@ class RingImpl {
   std::span<Connection> right_;
   std::span<SharedBuffer> send_buffers_;
   std::span<SharedBuffer> recv_buffers_;
+  ThreadPool* pool_;
 };
 
 } // namespace jaccl
