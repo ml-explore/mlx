@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <utility>
 
+#include <fmt/format.h>
+
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 
@@ -51,7 +53,14 @@ void Load::eval_cpu(const std::vector<array>& inputs, array& out) {
     }
   };
   auto fut = io::thread_pool().enqueue(std::move(read_task)).share();
-  scheduler::enqueue(stream(), [fut = std::move(fut)]() { fut.wait(); });
+  auto s = stream();
+  scheduler::enqueue(s, [s, fut = std::move(fut)]() {
+    try {
+      fut.get();
+    } catch (const std::exception& error) {
+      scheduler::set_error(s, fmt::format("[Load::eval_cpu] {}", error.what()));
+    }
+  });
 }
 
 } // namespace mlx::core

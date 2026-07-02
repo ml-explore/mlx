@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <future>
+#include <list>
 #include <queue>
 #include <shared_mutex>
 #include <thread>
@@ -76,6 +77,10 @@ class MLX_API Scheduler {
   Scheduler& operator=(Scheduler&&) = delete;
 
   void enqueue(Stream s, std::function<void()> task);
+  void wait_event(Stream s, Event event, std::function<void(Event&)> task);
+  void signal_event(Stream s, Event event, std::function<void(Event&)> task);
+  void set_error(Stream s, Event::Error error);
+  void finalize(Stream s);
 
   void notify_new_task(const Stream& stream) {
     {
@@ -115,13 +120,37 @@ class MLX_API Scheduler {
   std::shared_mutex threads_mtx_;
   std::condition_variable completion_cv;
   std::mutex mtx;
+
+  std::unordered_map<int, Event::Error> errors_;
+  std::mutex error_mtx_;
 };
 
 MLX_API Scheduler& scheduler();
 
 template <typename F>
-void enqueue(const Stream& stream, F&& f) {
-  scheduler().enqueue(stream, std::forward<F>(f));
+inline void enqueue(Stream s, F&& f) {
+  scheduler().enqueue(s, std::forward<F>(f));
+}
+
+// Like enqueue but the task is used for processing the passed event.
+template <typename F>
+inline void wait_event(Stream s, Event event, F&& f) {
+  scheduler().wait_event(s, std::move(event), std::forward<F>(f));
+}
+
+template <typename F>
+inline void signal_event(Stream s, Event event, F&& f) {
+  scheduler().signal_event(s, std::move(event), std::forward<F>(f));
+}
+
+// Set error in all the pending events associated with the stream.
+inline void set_error(Stream s, const std::string& error) {
+  scheduler().set_error(s, std::make_shared<std::string>(error));
+}
+
+// Mark the end of eval.
+inline void finalize(Stream s) {
+  scheduler().finalize(s);
 }
 
 inline int n_active_tasks() {

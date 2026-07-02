@@ -13,6 +13,7 @@
 
 namespace mlx::core::cu {
 
+class CopyableCudaEvent;
 class Device;
 
 // RAII-managed move-only wrapper of cudaEvent_t.
@@ -66,14 +67,29 @@ class AtomicEvent {
   uint32_t value() const;
 
  private:
-  const CudaStream& signal_stream();
-
   uint32_t* ptr() const {
     return static_cast<uint32_t*>(buf_.get());
   }
 
   bool coherent_;
   std::shared_ptr<void> buf_;
+};
+
+struct EventImpl {
+  Event::Error error;
+
+  // CudaEvent is preferred when possible because it is fast, however we have
+  // to fallback to AtomicEvent in following cases:
+  // 1. the event is used to wait/signal a cpu stream;
+  // 2. signal value other than 1 has been specified.
+  std::unique_ptr<cu::CopyableCudaEvent> cuda;
+  std::unique_ptr<cu::AtomicEvent> atomic;
+
+  bool is_created() const {
+    return cuda || atomic;
+  }
+
+  void ensure_created(Stream s, uint64_t signal_value);
 };
 
 } // namespace mlx::core::cu

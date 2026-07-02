@@ -311,6 +311,9 @@ array eval_impl(std::vector<array> outputs, bool async) {
     if (auto e = events.find(s.index); e != events.end()) {
       e->second.signal(s);
     }
+    if (s.device == Device::cpu) {
+      scheduler::finalize(s);
+    }
     if (s.device == Device::gpu) {
       gpu::finalize(s);
     }
