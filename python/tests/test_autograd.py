@@ -444,6 +444,25 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(dfdx, mx.array([1.0, 1.0])))
         self.assertEqual(dfdx.dtype, mx.float32)
 
+    def test_scatter_index_vjp_is_zero(self):
+        def scatter_fun(w):
+            idx = mx.argsort(w)[:2]
+            out = mx.zeros((4,))
+            out[idx] = w[:2]
+            return out.sum()
+
+        grad = mx.grad(scatter_fun)(mx.array([4.0, 3.0, 2.0, 1.0]))
+        self.assertTrue(mx.array_equal(grad, mx.array([1.0, 1.0, 0.0, 0.0])))
+
+        def scatter_axis_fun(w):
+            idx = mx.argsort(w, axis=1)[:, :1]
+            updates = w.sum(axis=1, keepdims=True)
+            out = mx.put_along_axis(mx.zeros((3, 3)), idx, updates, axis=1)
+            return out.sum()
+
+        grad = mx.grad(scatter_axis_fun)(mx.ones((3, 3)))
+        self.assertTrue(mx.array_equal(grad, mx.ones((3, 3))))
+
     def test_scatter_add_vjp(self):
         def fun(src, updates):
             x = src.at[mx.array([1, 3])].add(updates)
