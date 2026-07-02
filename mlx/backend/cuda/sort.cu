@@ -7,6 +7,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/fp16_math.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
+#include "mlx/backend/cuda/sort_radix.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
@@ -1050,12 +1051,38 @@ void gpu_sort(
   gpu_merge_sort(s, in, out, axis, argsort);
 }
 
+bool use_radix_argsort(const array& in, int axis) {
+  // uint8-only for now
+  if (in.dtype() != uint8) {
+    return false;
+  }
+  if (axis != in.ndim() - 1) {
+    return false;
+  }
+  if (!in.flags().row_contiguous) {
+    return false;
+  }
+  if (in.ndim() != 1) {
+    return false;
+  }
+  // Require at least one full tile worth of data, for smaller merge sort should
+  // be faster
+  if (in.size() < cu::TILE_SIZE) {
+    return false;
+  }
+  return true;
+}
+
 } // namespace
 
 void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("ArgSort::eval_gpu");
   assert(inputs.size() == 1);
-  gpu_sort(stream(), inputs[0], out, axis_, true);
+  if (use_radix_argsort(inputs[0], axis_)) {
+    radix_argsort(stream(), inputs[0], out);
+  } else {
+    gpu_sort(stream(), inputs[0], out, axis_, true);
+  }
 }
 
 void Sort::eval_gpu(const std::vector<array>& inputs, array& out) {

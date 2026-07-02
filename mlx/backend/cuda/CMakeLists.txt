@@ -56,6 +56,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/sort_radix.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmm.cu
