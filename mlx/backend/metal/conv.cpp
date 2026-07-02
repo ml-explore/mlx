@@ -696,13 +696,14 @@ void conv_2D_gpu(
 //
 // The 3D implicit-gemm path has no Winograd / 3x3-specialized kernel, so a
 // (small KD) 3D conv is 2-5x slower than decomposing it into KD 2D convs, each
-// of which hits the tuned 2D dispatch (Winograd for 3x3 stride-1). For each depth
-// tap kd we run a 2D conv over the OD output frames (a zero-copy strided view of
-// the input at depth offset kd) with the weight's depth slice, and accumulate.
+// of which hits the tuned 2D dispatch (Winograd for 3x3 stride-1). For each
+// depth tap kd we run a 2D conv over the OD output frames (a zero-copy strided
+// view of the input at depth offset kd) with the weight's depth slice, and
+// accumulate.
 //
-// Preconditions (enforced by the dispatch guard): input dilation 1, depth stride
-// and depth kernel-dilation 1, no depth padding, groups == 1, N == 1, mod16
-// channels, and KD small. Other cases fall through to the implicit gemm.
+// Preconditions (enforced by the dispatch guard): input dilation 1, depth
+// stride and depth kernel-dilation 1, no depth padding, groups == 1, N == 1,
+// mod16 channels, and KD small. Other cases fall through to the implicit gemm.
 void small_kd_conv_3D_gpu(
     const Stream& s,
     metal::Device& d,
@@ -752,8 +753,8 @@ void small_kd_conv_3D_gpu(
             static_cast<size_t>(KH) * KW * C,
         static_cast<int64_t>(kd) * KH * KW * C);
 
-    // 2D conv into a fresh output; conv_2D_gpu allocates and dispatches (Winograd
-    // etc.). Spatial params come from dims 1,2 of the 3D params.
+    // 2D conv into a fresh output; conv_2D_gpu allocates and dispatches
+    // (Winograd etc.). Spatial params come from dims 1,2 of the 3D params.
     array conv_out({OD, OH, OW, O}, out.dtype(), nullptr, {});
     conv_2D_gpu(
         s,
