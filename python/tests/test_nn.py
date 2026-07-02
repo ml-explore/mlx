@@ -770,6 +770,16 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertIn("weight", bn_trainable)
         self.assertIn("bias", bn_trainable)
 
+        # test with 4D input (NHWC)
+        mx.random.seed(42)
+        x = mx.random.normal((2, 3, 3, 6), dtype=mx.float32)
+        bn = nn.BatchNorm(num_features=6, affine=True)
+        y = bn(x)
+        self.assertTrue(x.shape == y.shape)
+        # batch norm over an NHWC input normalizes each channel across N, H, W
+        self.assertTrue(mx.allclose(y.mean(axis=(0, 1, 2)), mx.zeros((6,)), atol=1e-5))
+        self.assertTrue(mx.allclose(y.var(axis=(0, 1, 2)), mx.ones((6,)), atol=1e-2))
+
     def test_batch_norm_stats(self):
         batch_size = 2
         num_features = 4
