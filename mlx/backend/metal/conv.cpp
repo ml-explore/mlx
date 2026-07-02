@@ -777,12 +777,11 @@ void small_kd_conv_3D_gpu(
       binary_op_gpu_inplace({acc, conv_out}, acc, "Add", s);
       copies.push_back(conv_out);
     }
-    copies.push_back(in_2d);
-    copies.push_back(wt_2d);
   }
 
   // Repoint the [1, OD, OH, OW, O] output at the contiguous [OD, OH, OW, O]
-  // accumulator buffer (same element count).
+  // accumulator buffer (same element count). No temporary needed for `acc`
+  // since `out` shares its buffer.
   out.copy_shared_buffer(
       acc,
       {static_cast<int64_t>(OD) * OH * OW * O,
@@ -793,7 +792,6 @@ void small_kd_conv_3D_gpu(
       {true, true, false},
       static_cast<size_t>(OD) * OH * OW * O,
       0);
-  copies.push_back(acc);
 }
 
 void dispatch_conv_3D_gpu(
