@@ -296,9 +296,12 @@ void dispatch_group_dim(int axis_size, F&& f) {
       std::integral_constant<int, 1>(),
       std::integral_constant<int, 4>());
   } else if (axis_size <= n_per_thread * 32 * 2) {
+    // BlockBroadcastReduce is block-wide. Rows that need more than one
+    // reduction group cannot share a block without mixing their partial
+    // reductions.
     f(std::integral_constant<int, 32>{},
       std::integral_constant<int, 2>(),
-      std::integral_constant<int, 2>());
+      std::integral_constant<int, 1>());
   } else if (axis_size <= n_per_thread * 32 * 4) {
     f(std::integral_constant<int, 32>{},
       std::integral_constant<int, 4>(),
