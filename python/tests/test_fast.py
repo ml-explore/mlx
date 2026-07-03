@@ -428,7 +428,7 @@ class TestFast(mlx_tests.MLXTestCase):
 
         dtypes = [mx.float32, mx.float16, mx.bfloat16]
         epss = [1e-3, 1e-5]
-        dimss = [31, 32, 33]
+        dimss = [31, 32, 33, 256, 512]
         defaults = (mx.float32, 1e-5, 32)
 
         for dtype in dtypes:
@@ -482,70 +482,24 @@ class TestFast(mlx_tests.MLXTestCase):
             x = mx.random.uniform(shape=(1, 5))
             mx.fast.rms_norm(x, mx.ones((4,)), 1e-5)
 
-    @unittest.skipIf(not mx.cuda.is_available(), "CUDA is not available")
-    def test_rms_norm_cuda_small_multi_row(self):
-        default_device = mx.default_device()
-        mx.set_default_device(mx.gpu)
-        try:
-            cases = [
-                (mx.float32, 2, 256, 1e-4),
-                (mx.float16, 2, 512, 2e-2),
-                (mx.bfloat16, 2, 512, 2e-2),
-            ]
-            for dtype, rows, dims, tolerance in cases:
-                base = mx.reshape(
-                    mx.arange(rows * dims, dtype=mx.float32), (rows, dims)
-                )
-                scales = mx.reshape(mx.arange(1, rows + 1, dtype=mx.float32), (rows, 1))
-                x = ((base % 17 - 8) * scales).astype(dtype)
-                weight = (1 + mx.arange(dims, dtype=mx.float32) / dims).astype(dtype)
-
-                rx = rms_norm(x, weight, 1e-5)
-                rx_fast = mx.fast.rms_norm(x, weight, 1e-5)
-                self.assertLess(mx.abs(rx - rx_fast).max(), tolerance)
-        finally:
-            mx.set_default_device(default_device)
-
-    @unittest.skipIf(not mx.cuda.is_available(), "CUDA is not available")
-    def test_rms_norm_grad_cuda_small_multi_row(self):
-        default_device = mx.default_device()
-        mx.set_default_device(mx.gpu)
-        try:
-            rows, dims, eps = 2, 256, 1e-5
-            base = mx.reshape(mx.arange(rows * dims, dtype=mx.float32), (rows, dims))
-            scales = mx.reshape(mx.arange(1, rows + 1, dtype=mx.float32), (rows, 1))
-            x = (base % 17 - 8) * scales
-            w = 1 + mx.arange(dims, dtype=mx.float32) / dims
-            y = mx.cos(base / 7)
-
-            f1 = lambda x, w, y: (rms_norm(x, w, eps) * y).sum()
-            f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, eps) * y).sum()
-
-            gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
-            gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
-            self.assertLess(mx.abs(gx1 - gx2).max(), 1e-4)
-            self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-4)
-        finally:
-            mx.set_default_device(default_device)
-
     def test_rms_norm_grad(self):
-        D = 32
         eps = 1e-5
         f1 = lambda x, w, y: (rms_norm(x, w, eps) * y).sum()
         f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, eps) * y).sum()
         f3 = lambda x, y: (rms_norm(x, mx.ones((x.shape[-1],)), eps) * y).sum()
         f4 = lambda x, y: (mx.fast.rms_norm(x, None, eps) * y).sum()
 
-        x = mx.random.uniform(shape=(8, 100, D))
-        w = mx.random.uniform(shape=(D,))
-        y = mx.random.uniform(shape=(8, 100, D))
-        gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
-        gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
-        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
-        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
-        gx1 = mx.grad(f3, argnums=(0,))(x, y)
-        gx2 = mx.grad(f4, argnums=(0,))(x, y)
-        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        for D in [32, 256]:
+            x = mx.random.uniform(shape=(8, 100, D))
+            w = mx.random.uniform(shape=(D,))
+            y = mx.random.uniform(shape=(8, 100, D))
+            gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
+            gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
+            self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+            self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+            gx1 = mx.grad(f3, argnums=(0,))(x, y)
+            gx2 = mx.grad(f4, argnums=(0,))(x, y)
+            self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
 
         D = 8192
         x = mx.random.uniform(shape=(2, 2, D))
