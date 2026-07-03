@@ -39,7 +39,7 @@ class Optimizer:
         :meth:`Optimizer.update`.
 
         Args:
-            model (dict): A Python tree of parameters.
+            parameters (dict): A Python tree of parameters.
 
         Example:
             >>> optimizer = optim.SGD(learning_rate=1e-1, momentum=0.9)
