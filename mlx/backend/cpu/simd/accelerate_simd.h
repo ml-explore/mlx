@@ -7,8 +7,10 @@
 #include <stdint.h>
 #include <cmath>
 #include <complex>
+#include <type_traits>
 
 #include "mlx/backend/cpu/simd/base_simd.h"
+#include "mlx/types/half_types.h"
 
 // There seems to be a bug in simd/base_simd.h
 // __XROS_2_0 is not defined, the expression evaluates
@@ -59,10 +61,14 @@ struct Simd {
 
   Simd<T, N>() {}
 
-  template <typename U>
+  template <
+      typename U,
+      typename = std::enable_if_t<!std::is_same_v<U, bfloat16_t>>>
   Simd<T, N>(Simd<U, N> other) : value(asd::convert<scalar_t>(other.value)) {}
 
-  template <typename U>
+  template <
+      typename U,
+      typename = std::enable_if_t<!std::is_same_v<U, Simd<bfloat16_t, N>>>>
   Simd<T, N>(U v) : value(v){};
 
   Simd<T, N>(Simd<T, N / 2> x, Simd<T, N / 2> y) {
@@ -327,3 +333,4 @@ T prod(Simd<T, N> x) {
 #if __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
 #include "mlx/backend/cpu/simd/accelerate_fp16_simd.h"
 #endif
+#include "mlx/backend/cpu/simd/neon_bf16_simd.h"

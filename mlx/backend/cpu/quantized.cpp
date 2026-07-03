@@ -4,6 +4,7 @@
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
+#include "mlx/backend/cpu/parallel.h"
 #include "mlx/backend/cpu/simd/simd.h"
 #include "mlx/backend/cpu/unary.h"
 #include "mlx/backend/cpu/unary_ops.h"
@@ -160,20 +161,26 @@ void _qmm_t(
     const T* biases,
     int M,
     int N,
-    int K) {
+    int K,
+    int n0,
+    int n1) {
   constexpr int bitmask = (1 << bits) - 1;
 
   constexpr int pack_factor = get_pack_factor(bits, 8);
   constexpr int bytes_per_pack = get_bytes_per_pack(bits);
   constexpr int packs_in_group = group_size / pack_factor;
+  const size_t bytes_per_row = size_t(K / pack_factor) * bytes_per_pack;
+  const size_t groups_per_row = K / group_size;
 
   for (int m = 0; m < M; m++) {
-    const uint8_t* w_local = (const uint8_t*)w;
-    const T* scales_local = scales;
-    const T* biases_local = biases;
+    const T* x_row = x + size_t(m) * K;
+    T* result_row = result + size_t(m) * N;
+    const uint8_t* w_local = (const uint8_t*)w + size_t(n0) * bytes_per_row;
+    const T* scales_local = scales + size_t(n0) * groups_per_row;
+    const T* biases_local = biases + size_t(n0) * groups_per_row;
 
-    for (int n = 0; n < N; n++) {
-      const T* x_local = x;
+    for (int n = n0; n < n1; n++) {
+      const T* x_local = x_row;
       T sum = 0;
       for (int k = 0; k < K; k += group_size) {
         T scale = *scales_local++;
@@ -203,11 +210,8 @@ void _qmm_t(
           }
         }
       }
-      *result = sum;
-      result++;
+      result_row[n] = sum;
     }
-
-    x += K;
   }
 }
 
@@ -245,25 +249,31 @@ void _qmm_t_simd(
     const T* biases,
     int M,
     int N,
-    int K) {
+    int K,
+    int n0,
+    int n1) {
   constexpr int pack_factor = 32 / bits;
   constexpr int packs_in_group = group_size / pack_factor;
   constexpr int S = simd::max_size<T>;
   static_assert(
       S % pack_factor == 0, "SIMD size must be divisible by pack factor");
   constexpr int packs_per_simd = S / pack_factor;
+  const size_t words_per_row = size_t(K) * bits / 32;
+  const size_t groups_per_row = K / group_size;
 
   for (int m = 0; m < M; m++) {
-    const uint32_t* w_local = w;
-    const T* scales_local = scales;
-    const T* biases_local = biases;
+    const T* x_row = x + size_t(m) * K;
+    T* result_row = result + size_t(m) * N;
+    const uint32_t* w_local = w + size_t(n0) * words_per_row;
+    const T* scales_local = scales + size_t(n0) * groups_per_row;
+    const T* biases_local = biases + size_t(n0) * groups_per_row;
 
-    for (int n = 0; n < N; n++) {
+    for (int n = n0; n < n1; n++) {
       simd::Simd<float, S> acc(0);
-      auto x_local = x;
+      auto x_local = x_row;
       for (int k = 0; k < K; k += group_size) {
-        T scale = *scales_local++;
-        T bias = *biases_local++;
+        float scale = *scales_local++;
+        float bias = *biases_local++;
 
         for (int kw = 0; kw < packs_in_group; kw += packs_per_simd) {
           auto wf = simd::Simd<float, S>(extract_bits_simd<bits, S>(w_local));
@@ -276,12 +286,123 @@ void _qmm_t_simd(
         }
       }
 
-      *result = T(simd::sum(acc));
-      result++;
+      result_row[n] = T(simd::sum(acc));
     }
-    x += K;
   }
 }
+
+#if defined(__ARM_FEATURE_DOTPROD)
+
+inline bool int8_qmm_enabled() {
+  static bool enabled = []() {
+    const char* env = std::getenv("MLX_CPU_INT8_QMM");
+    return !(env && env[0] == '0');
+  }();
+  return enabled;
+}
+
+// Quantize one row of activations to a signed 8-bit value per element with a
+// float scale per group. Also keeps the scaled group sum (~ the sum of x over
+// the group) so the affine bias term needs no second pass.
+template <typename T>
+void quantize_row_i8(
+    const T* x,
+    int K,
+    int group_size,
+    int8_t* xq,
+    float* gscale,
+    float* gsum) {
+  for (int k = 0, g = 0; k < K; k += group_size, g++) {
+    float amax = 0.0f;
+    for (int i = 0; i < group_size; i++) {
+      amax = std::max(amax, std::abs(static_cast<float>(x[k + i])));
+    }
+    float scale = amax > 0.0f ? amax / 127.0f : 1.0f;
+    float inv = 1.0f / scale;
+    int sum = 0;
+    for (int i = 0; i < group_size; i++) {
+      int q = (int)lrintf(static_cast<float>(x[k + i]) * inv);
+      xq[k + i] = (int8_t)q;
+      sum += q;
+    }
+    gscale[g] = scale;
+    gsum[g] = scale * (float)sum;
+  }
+  // Deinterleave every 32-block to the nibble layout (even elements then odd
+  // elements) once per row, so the matmul inner loop needs no shuffles.
+  for (int k = 0; k < K; k += 32) {
+    int8x16_t a = vld1q_s8(xq + k);
+    int8x16_t b = vld1q_s8(xq + k + 16);
+    int8x16x2_t u = vuzpq_s8(a, b);
+    vst1q_s8(xq + k, u.val[0]);
+    vst1q_s8(xq + k + 16, u.val[1]);
+  }
+}
+
+// 4-bit affine matmul against int8-quantized activations using SDOT. The
+// nibbles are recentered to [-8, 7] so the dot product is signed x signed
+// (dotprod extension only, no i8mm); the +8 shift folds into the bias term:
+//   sum(w x) = s_w s_x sum(q' xq) + (8 s_w + b_w) (s_x sum(xq))
+template <typename T, int group_size>
+void _qmm_t_i8(
+    T* result,
+    const int8_t* xq,
+    const float* gscale,
+    const float* gsum,
+    const uint32_t* w,
+    const T* scales,
+    const T* biases,
+    int M,
+    int N,
+    int K,
+    int n0,
+    int n1) {
+  const size_t words_per_row = size_t(K) / 8;
+  const size_t groups_per_row = K / group_size;
+  const uint8x16_t low_mask = vdupq_n_u8(0x0F);
+  const int8x16_t eight = vdupq_n_s8(8);
+
+  for (int m = 0; m < M; m++) {
+    const int8_t* xq_row = xq + size_t(m) * K;
+    const float* gs_row = gscale + size_t(m) * groups_per_row;
+    const float* gsum_row = gsum + size_t(m) * groups_per_row;
+    T* result_row = result + size_t(m) * N;
+
+    const uint8_t* w_local =
+        (const uint8_t*)(w + size_t(n0) * words_per_row);
+    const T* sc_local = scales + size_t(n0) * groups_per_row;
+    const T* bi_local = biases + size_t(n0) * groups_per_row;
+
+    for (int n = n0; n < n1; n++) {
+      float32x4_t dot_acc = vdupq_n_f32(0.0f);
+      float bias_acc = 0.0f;
+      for (size_t g = 0; g < groups_per_row; g++) {
+        int32x4_t acc = vdupq_n_s32(0);
+        const int8_t* xg = xq_row + g * group_size;
+        for (int c = 0; c < group_size; c += 32) {
+          uint8x16_t wb = vld1q_u8(w_local);
+          w_local += 16;
+          // low nibbles are the even elements, high nibbles the odd ones;
+          // xq rows are pre-deinterleaved to match
+          int8x16_t lo =
+              vsubq_s8(vreinterpretq_s8_u8(vandq_u8(wb, low_mask)), eight);
+          int8x16_t hi =
+              vsubq_s8(vreinterpretq_s8_u8(vshrq_n_u8(wb, 4)), eight);
+          acc = vdotq_s32(acc, lo, vld1q_s8(xg + c));
+          acc = vdotq_s32(acc, hi, vld1q_s8(xg + c + 16));
+        }
+        float s_w = static_cast<float>(*sc_local++);
+        float b_w = static_cast<float>(*bi_local++);
+        dot_acc = vfmaq_n_f32(
+            dot_acc, vcvtq_f32_s32(acc), s_w * gs_row[g]);
+        bias_acc += (8.0f * s_w + b_w) * gsum_row[g];
+      }
+      result_row[n] = static_cast<T>(vaddvq_f32(dot_acc) + bias_acc);
+    }
+  }
+}
+
+#endif // __ARM_FEATURE_DOTPROD
 
 template <typename T, int bits, int group_size>
 void _qmm_dispatch_transpose(
@@ -295,11 +416,54 @@ void _qmm_dispatch_transpose(
     int K,
     bool transposed_w) {
   if (transposed_w) {
+#if defined(__ARM_FEATURE_DOTPROD)
+    if constexpr (bits == 4 && group_size % 32 == 0) {
+      if (int8_qmm_enabled()) {
+        int groups = K / group_size;
+        std::vector<int8_t> xq(size_t(M) * K);
+        std::vector<float> gscale(size_t(M) * groups);
+        std::vector<float> gsum(size_t(M) * groups);
+        cpu::parallel_for_rows(M, size_t(K), [&](int m0, int m1) {
+          for (int m = m0; m < m1; m++) {
+            quantize_row_i8(
+                x + size_t(m) * K,
+                K,
+                group_size,
+                xq.data() + size_t(m) * K,
+                gscale.data() + size_t(m) * groups,
+                gsum.data() + size_t(m) * groups);
+          }
+        });
+        cpu::parallel_for_rows(N, size_t(M) * K, [&](int n0, int n1) {
+          _qmm_t_i8<T, group_size>(
+              result,
+              xq.data(),
+              gscale.data(),
+              gsum.data(),
+              w,
+              scales,
+              biases,
+              M,
+              N,
+              K,
+              n0,
+              n1);
+        });
+        return;
+      }
+    }
+#endif // __ARM_FEATURE_DOTPROD
     // the simd size must be a multiple of the number of elements per word
     if constexpr (32 % bits == 0 && simd::max_size<T> % (32 / bits) == 0) {
-      _qmm_t_simd<T, bits, group_size>(result, x, w, scales, biases, M, N, K);
+      cpu::parallel_for_rows(N, size_t(M) * K, [&](int n0, int n1) {
+        _qmm_t_simd<T, bits, group_size>(
+            result, x, w, scales, biases, M, N, K, n0, n1);
+      });
     } else {
-      _qmm_t<T, bits, group_size>(result, x, w, scales, biases, M, N, K);
+      cpu::parallel_for_rows(N, size_t(M) * K, [&](int n0, int n1) {
+        _qmm_t<T, bits, group_size>(
+            result, x, w, scales, biases, M, N, K, n0, n1);
+      });
     }
   } else {
     _qmm<T, bits, group_size>(result, x, w, scales, biases, M, N, K);
@@ -496,16 +660,22 @@ void fp_qmm_t(
     const uint8_t* scales,
     int M,
     int N,
-    int K) {
+    int K,
+    int n0,
+    int n1) {
   constexpr int pack_factor = get_pack_factor(bits, 8);
   constexpr int packs_in_group = group_size / pack_factor;
+  const size_t bytes_per_row = K / pack_factor;
+  const size_t groups_per_row = K / group_size;
 
   for (int m = 0; m < M; m++) {
-    const uint8_t* w_local = (const uint8_t*)w;
-    const uint8_t* scales_local = scales;
+    const T* x_row = x + size_t(m) * K;
+    T* result_row = result + size_t(m) * N;
+    const uint8_t* w_local = (const uint8_t*)w + size_t(n0) * bytes_per_row;
+    const uint8_t* scales_local = scales + size_t(n0) * groups_per_row;
 
-    for (int n = 0; n < N; n++) {
-      const T* x_local = x;
+    for (int n = n0; n < n1; n++) {
+      const T* x_local = x_row;
       T sum = 0;
       for (int k = 0; k < K; k += group_size) {
         T scale = dequantize_scale<T, group_size>(*scales_local++);
@@ -524,11 +694,8 @@ void fp_qmm_t(
         }
         sum += scale * gsum;
       }
-      *result = sum;
-      result++;
+      result_row[n] = sum;
     }
-
-    x += K;
   }
 }
 
@@ -562,23 +729,29 @@ void fp_qmm_t_simd(
     const uint8_t* scales,
     int M,
     int N,
-    int K) {
+    int K,
+    int n0,
+    int n1) {
   constexpr int pack_factor = get_pack_factor(bits, 32);
   constexpr int packs_in_group = group_size / pack_factor;
   constexpr int S = simd::max_size<T>;
   static_assert(
       S % pack_factor == 0, "SIMD size must be divisible by pack factor");
   constexpr int packs_per_simd = S / pack_factor;
+  const size_t words_per_row = K / pack_factor;
+  const size_t groups_per_row = K / group_size;
 
   for (int m = 0; m < M; m++) {
-    const uint32_t* w_local = w;
-    const uint8_t* scales_local = scales;
+    const T* x_row = x + size_t(m) * K;
+    T* result_row = result + size_t(m) * N;
+    const uint32_t* w_local = w + size_t(n0) * words_per_row;
+    const uint8_t* scales_local = scales + size_t(n0) * groups_per_row;
 
-    for (int n = 0; n < N; n++) {
+    for (int n = n0; n < n1; n++) {
       simd::Simd<float, S> acc(0);
-      auto x_local = x;
+      auto x_local = x_row;
       for (int k = 0; k < K; k += group_size) {
-        T scale = dequantize_scale<T, group_size>(*scales_local++);
+        float scale = dequantize_scale<float, group_size>(*scales_local++);
 
         simd::Simd<float, S> g_acc(0);
         for (int kw = 0; kw < packs_in_group; kw += packs_per_simd) {
@@ -592,10 +765,8 @@ void fp_qmm_t_simd(
         acc = acc + scale * g_acc;
       }
 
-      *result = T(simd::sum(acc));
-      result++;
+      result_row[n] = T(simd::sum(acc));
     }
-    x += K;
   }
 }
 
@@ -612,9 +783,14 @@ void fp_qmm_dispatch_transpose(
   if (transposed_w) {
     // the simd size must be a multiple of the number of elements per word
     if constexpr (simd::max_size<T> % 8 == 0) {
-      fp_qmm_t_simd<T, group_size, bits>(result, x, w, scales, M, N, K);
+      cpu::parallel_for_rows(N, size_t(M) * K, [&](int n0, int n1) {
+        fp_qmm_t_simd<T, group_size, bits>(
+            result, x, w, scales, M, N, K, n0, n1);
+      });
     } else {
-      fp_qmm_t<T, group_size, bits>(result, x, w, scales, M, N, K);
+      cpu::parallel_for_rows(N, size_t(M) * K, [&](int n0, int n1) {
+        fp_qmm_t<T, group_size, bits>(result, x, w, scales, M, N, K, n0, n1);
+      });
     }
   } else {
     fp_qmm<T, group_size, bits>(result, x, w, scales, M, N, K);
