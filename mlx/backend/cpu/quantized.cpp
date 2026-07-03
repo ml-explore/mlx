@@ -308,7 +308,8 @@ void quantize_row_i8(
     int group_size,
     int8_t* xq,
     float* gscale,
-    float* gsum) {
+    float* gsum,
+    bool deinterleave) {
   for (int k = 0, g = 0; k < K; k += group_size, g++) {
     float amax = 0.0f;
     for (int i = 0; i < group_size; i++) {
@@ -325,16 +326,18 @@ void quantize_row_i8(
     gscale[g] = scale;
     gsum[g] = scale * (float)sum;
   }
-  for (int k = 0; k < K; k += 32) {
-    int8x16_t a = vld1q_s8(xq + k);
-    int8x16_t b = vld1q_s8(xq + k + 16);
-    int8x16x2_t u = vuzpq_s8(a, b);
-    vst1q_s8(xq + k, u.val[0]);
-    vst1q_s8(xq + k + 16, u.val[1]);
+  if (deinterleave) {
+    for (int k = 0; k < K; k += 32) {
+      int8x16_t a = vld1q_s8(xq + k);
+      int8x16_t b = vld1q_s8(xq + k + 16);
+      int8x16x2_t u = vuzpq_s8(a, b);
+      vst1q_s8(xq + k, u.val[0]);
+      vst1q_s8(xq + k + 16, u.val[1]);
+    }
   }
 }
 
-template <typename T, int group_size>
+template <typename T, int group_size, int bits>
 void _qmm_t_i8(
     T* result,
     const int8_t* xq,
@@ -348,12 +351,82 @@ void _qmm_t_i8(
     int K,
     int n0,
     int n1) {
-  const size_t words_per_row = size_t(K) / 8;
+  constexpr float w_offset = bits == 4 ? 8.0f : 128.0f;
+  const size_t words_per_row = size_t(K) * bits / 32;
   const size_t groups_per_row = K / group_size;
   const uint8x16_t low_mask = vdupq_n_u8(0x0F);
   const int8x16_t eight = vdupq_n_s8(8);
+  const int8x16_t sign_flip = vdupq_n_s8(int8_t(0x80));
 
-  for (int m = 0; m < M; m++) {
+  int m = 0;
+  for (; m + 4 <= M; m += 4) {
+    const int8_t* xq_rows[4];
+    const float* gs_rows[4];
+    const float* gsum_rows[4];
+    T* result_rows[4];
+    for (int t = 0; t < 4; t++) {
+      xq_rows[t] = xq + size_t(m + t) * K;
+      gs_rows[t] = gscale + size_t(m + t) * groups_per_row;
+      gsum_rows[t] = gsum + size_t(m + t) * groups_per_row;
+      result_rows[t] = result + size_t(m + t) * N;
+    }
+    const uint8_t* w_local =
+        (const uint8_t*)(w + size_t(n0) * words_per_row);
+    const T* sc_local = scales + size_t(n0) * groups_per_row;
+    const T* bi_local = biases + size_t(n0) * groups_per_row;
+
+    for (int n = n0; n < n1; n++) {
+      float32x4_t dot_acc[4] = {
+          vdupq_n_f32(0.0f),
+          vdupq_n_f32(0.0f),
+          vdupq_n_f32(0.0f),
+          vdupq_n_f32(0.0f)};
+      float bias_acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+      for (size_t g = 0; g < groups_per_row; g++) {
+        int32x4_t acc[4] = {
+            vdupq_n_s32(0),
+            vdupq_n_s32(0),
+            vdupq_n_s32(0),
+            vdupq_n_s32(0)};
+        const size_t go = g * group_size;
+        if constexpr (bits == 4) {
+          for (int c = 0; c < group_size; c += 32) {
+            uint8x16_t wb = vld1q_u8(w_local);
+            w_local += 16;
+            int8x16_t lo =
+                vsubq_s8(vreinterpretq_s8_u8(vandq_u8(wb, low_mask)), eight);
+            int8x16_t hi =
+                vsubq_s8(vreinterpretq_s8_u8(vshrq_n_u8(wb, 4)), eight);
+            for (int t = 0; t < 4; t++) {
+              acc[t] = vdotq_s32(acc[t], lo, vld1q_s8(xq_rows[t] + go + c));
+              acc[t] =
+                  vdotq_s32(acc[t], hi, vld1q_s8(xq_rows[t] + go + c + 16));
+            }
+          }
+        } else {
+          for (int c = 0; c < group_size; c += 16) {
+            int8x16_t wb = veorq_s8(
+                vreinterpretq_s8_u8(vld1q_u8(w_local)), sign_flip);
+            w_local += 16;
+            for (int t = 0; t < 4; t++) {
+              acc[t] = vdotq_s32(acc[t], wb, vld1q_s8(xq_rows[t] + go + c));
+            }
+          }
+        }
+        float s_w = static_cast<float>(*sc_local++);
+        float b_w = static_cast<float>(*bi_local++);
+        for (int t = 0; t < 4; t++) {
+          dot_acc[t] = vfmaq_n_f32(
+              dot_acc[t], vcvtq_f32_s32(acc[t]), s_w * gs_rows[t][g]);
+          bias_acc[t] += (w_offset * s_w + b_w) * gsum_rows[t][g];
+        }
+      }
+      for (int t = 0; t < 4; t++) {
+        result_rows[t][n] = static_cast<T>(vaddvq_f32(dot_acc[t]) + bias_acc[t]);
+      }
+    }
+  }
+  for (; m < M; m++) {
     const int8_t* xq_row = xq + size_t(m) * K;
     const float* gs_row = gscale + size_t(m) * groups_per_row;
     const float* gsum_row = gsum + size_t(m) * groups_per_row;
@@ -370,21 +443,30 @@ void _qmm_t_i8(
       for (size_t g = 0; g < groups_per_row; g++) {
         int32x4_t acc = vdupq_n_s32(0);
         const int8_t* xg = xq_row + g * group_size;
-        for (int c = 0; c < group_size; c += 32) {
-          uint8x16_t wb = vld1q_u8(w_local);
-          w_local += 16;
-          int8x16_t lo =
-              vsubq_s8(vreinterpretq_s8_u8(vandq_u8(wb, low_mask)), eight);
-          int8x16_t hi =
-              vsubq_s8(vreinterpretq_s8_u8(vshrq_n_u8(wb, 4)), eight);
-          acc = vdotq_s32(acc, lo, vld1q_s8(xg + c));
-          acc = vdotq_s32(acc, hi, vld1q_s8(xg + c + 16));
+        if constexpr (bits == 4) {
+          for (int c = 0; c < group_size; c += 32) {
+            uint8x16_t wb = vld1q_u8(w_local);
+            w_local += 16;
+            int8x16_t lo =
+                vsubq_s8(vreinterpretq_s8_u8(vandq_u8(wb, low_mask)), eight);
+            int8x16_t hi =
+                vsubq_s8(vreinterpretq_s8_u8(vshrq_n_u8(wb, 4)), eight);
+            acc = vdotq_s32(acc, lo, vld1q_s8(xg + c));
+            acc = vdotq_s32(acc, hi, vld1q_s8(xg + c + 16));
+          }
+        } else {
+          for (int c = 0; c < group_size; c += 16) {
+            int8x16_t wb = veorq_s8(
+                vreinterpretq_s8_u8(vld1q_u8(w_local)), sign_flip);
+            w_local += 16;
+            acc = vdotq_s32(acc, wb, vld1q_s8(xg + c));
+          }
         }
         float s_w = static_cast<float>(*sc_local++);
         float b_w = static_cast<float>(*bi_local++);
         dot_acc = vfmaq_n_f32(
             dot_acc, vcvtq_f32_s32(acc), s_w * gs_row[g]);
-        bias_acc += (8.0f * s_w + b_w) * gsum_row[g];
+        bias_acc += (w_offset * s_w + b_w) * gsum_row[g];
       }
       result_row[n] = static_cast<T>(vaddvq_f32(dot_acc) + bias_acc);
     }
@@ -406,7 +488,7 @@ void _qmm_dispatch_transpose(
     bool transposed_w) {
   if (transposed_w) {
 #if defined(__ARM_FEATURE_DOTPROD)
-    if constexpr (bits == 4 && group_size % 32 == 0) {
+    if constexpr ((bits == 4 || bits == 8) && group_size % 32 == 0) {
       if (int8_qmm_enabled()) {
         int groups = K / group_size;
         std::vector<int8_t> xq(size_t(M) * K);
@@ -420,11 +502,12 @@ void _qmm_dispatch_transpose(
                 group_size,
                 xq.data() + size_t(m) * K,
                 gscale.data() + size_t(m) * groups,
-                gsum.data() + size_t(m) * groups);
+                gsum.data() + size_t(m) * groups,
+                bits == 4);
           }
         });
         cpu::parallel_for_rows(N, size_t(M) * K, [&](int n0, int n1) {
-          _qmm_t_i8<T, group_size>(
+          _qmm_t_i8<T, group_size, bits>(
               result,
               xq.data(),
               gscale.data(),
