@@ -179,9 +179,9 @@ class Conv3d(Module):
         kernel_size (int or tuple): The size of the convolution filters.
         stride (int or tuple, optional): The size of the stride when
             applying the filter. Default: ``1``.
-        dilation (int or tuple, optional): The dilation of the convolution.
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
+        dilation (int or tuple, optional): The dilation of the convolution.
         bias (bool, optional): If ``True`` add a learnable bias to the
             output. Default: ``True``
     """
