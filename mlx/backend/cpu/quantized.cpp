@@ -301,9 +301,6 @@ inline bool int8_qmm_enabled() {
   return enabled;
 }
 
-// Quantize one row of activations to a signed 8-bit value per element with a
-// float scale per group. Also keeps the scaled group sum (~ the sum of x over
-// the group) so the affine bias term needs no second pass.
 template <typename T>
 void quantize_row_i8(
     const T* x,
@@ -328,8 +325,6 @@ void quantize_row_i8(
     gscale[g] = scale;
     gsum[g] = scale * (float)sum;
   }
-  // Deinterleave every 32-block to the nibble layout (even elements then odd
-  // elements) once per row, so the matmul inner loop needs no shuffles.
   for (int k = 0; k < K; k += 32) {
     int8x16_t a = vld1q_s8(xq + k);
     int8x16_t b = vld1q_s8(xq + k + 16);
@@ -339,10 +334,6 @@ void quantize_row_i8(
   }
 }
 
-// 4-bit affine matmul against int8-quantized activations using SDOT. The
-// nibbles are recentered to [-8, 7] so the dot product is signed x signed
-// (dotprod extension only, no i8mm); the +8 shift folds into the bias term:
-//   sum(w x) = s_w s_x sum(q' xq) + (8 s_w + b_w) (s_x sum(xq))
 template <typename T, int group_size>
 void _qmm_t_i8(
     T* result,
@@ -382,8 +373,6 @@ void _qmm_t_i8(
         for (int c = 0; c < group_size; c += 32) {
           uint8x16_t wb = vld1q_u8(w_local);
           w_local += 16;
-          // low nibbles are the even elements, high nibbles the odd ones;
-          // xq rows are pre-deinterleaved to match
           int8x16_t lo =
               vsubq_s8(vreinterpretq_s8_u8(vandq_u8(wb, low_mask)), eight);
           int8x16_t hi =

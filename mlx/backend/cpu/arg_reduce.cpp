@@ -33,11 +33,6 @@ void arg_reduce(const array& in, array& out, const OpT& op, int axis) {
   }
 }
 
-// Finds the first index of the row extreme with SIMD: reduce to the extreme
-// value in float32 (half types convert on load; no narrowing round trips),
-// then scan blocks for its first occurrence. The SIMD maxima have fmax
-// semantics (NaNs are dropped) and the reduction order differs from the
-// sequential loop, so rows containing NaN fall back to it exactly.
 template <typename T, bool ArgMin>
 uint32_t arg_extreme_row(const T* row, uint32_t n) {
   constexpr int S = simd::max_size<T>;
