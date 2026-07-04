@@ -37,6 +37,10 @@ target_sources(
           ${METAL_TEST_SOURCES})
 
 target_link_libraries(tests PRIVATE mlx doctest)
+if(TARGET jaccl)
+  target_sources(tests PRIVATE jaccl_tests.cpp)
+  target_link_libraries(tests PRIVATE jaccl)
+endif()
 target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})
 target_link_options(tests PRIVATE ${SANITIZER_LINK_FLAGS})
 

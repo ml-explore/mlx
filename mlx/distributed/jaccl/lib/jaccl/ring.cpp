@@ -89,6 +89,33 @@ void RingGroup::initialize() {
 }
 
 void RingGroup::allocate_buffers() {
+  if (left_.size() != static_cast<size_t>(n_conns_) ||
+      right_.size() != static_cast<size_t>(n_conns_)) {
+    std::ostringstream msg;
+    msg << "[jaccl] Expected " << n_conns_
+        << " ring connections in each direction but found " << left_.size()
+        << " left and " << right_.size() << " right.";
+    throw std::runtime_error(msg.str());
+  }
+  for (int wire = 0; wire < n_conns_; wire++) {
+    if (left_[wire].protection_domain == nullptr) {
+      std::ostringstream msg;
+      msg << "[jaccl] Missing RDMA protection domain for left ring "
+          << "connection " << wire
+          << ". Check that ibv_devices lists rdma_* devices and that "
+          << "JACCL_IBV_DEVICES/MLX_IBV_DEVICES names available RDMA devices.";
+      throw std::runtime_error(msg.str());
+    }
+    if (right_[wire].protection_domain == nullptr) {
+      std::ostringstream msg;
+      msg << "[jaccl] Missing RDMA protection domain for right ring "
+          << "connection " << wire
+          << ". Check that ibv_devices lists rdma_* devices and that "
+          << "JACCL_IBV_DEVICES/MLX_IBV_DEVICES names available RDMA devices.";
+      throw std::runtime_error(msg.str());
+    }
+  }
+
   // Deregister any buffers and free the memory
   send_buffers_.clear();
   recv_buffers_.clear();

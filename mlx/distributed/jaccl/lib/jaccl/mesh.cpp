@@ -81,6 +81,25 @@ void MeshGroup::initialize() {
 }
 
 void MeshGroup::allocate_buffers() {
+  if (connections_.size() != static_cast<size_t>(size_)) {
+    std::ostringstream msg;
+    msg << "[jaccl] Expected " << size_ << " mesh connections but found "
+        << connections_.size() << ".";
+    throw std::runtime_error(msg.str());
+  }
+  for (int peer = 0; peer < size_; peer++) {
+    if (peer == rank_) {
+      continue;
+    }
+    if (connections_[peer].protection_domain == nullptr) {
+      std::ostringstream msg;
+      msg << "[jaccl] Missing RDMA protection domain for mesh peer " << peer
+          << ". Check that ibv_devices lists rdma_* devices and that "
+          << "JACCL_IBV_DEVICES/MLX_IBV_DEVICES names available RDMA devices.";
+      throw std::runtime_error(msg.str());
+    }
+  }
+
   // Deregister any buffers and free the memory
   buffers_.clear();
   ring_send_buffers_.clear();

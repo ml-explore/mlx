@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
+#include <string>
 
 #include "jaccl/rdma.h"
 
@@ -90,6 +92,13 @@ SharedBuffer::~SharedBuffer() {
 }
 
 void SharedBuffer::register_to_protection_domain(ibv_pd* protection_domain) {
+  if (protection_domain == nullptr) {
+    throw std::runtime_error(
+        "[jaccl] Cannot register an RDMA memory region without a protection "
+        "domain. Check that ibv_devices lists rdma_* devices and that "
+        "JACCL_IBV_DEVICES/MLX_IBV_DEVICES names an available RDMA device.");
+  }
+
   auto [it, inserted] = memory_regions_.insert({protection_domain, nullptr});
   if (!inserted) {
     throw std::runtime_error(
@@ -139,6 +148,13 @@ Connection::~Connection() {
 }
 
 void Connection::allocate_protection_domain() {
+  if (ctx == nullptr) {
+    throw std::runtime_error(
+        "[jaccl] Cannot allocate an RDMA protection domain without a device "
+        "context. Check that ibv_devices lists rdma_* devices and that "
+        "JACCL_IBV_DEVICES/MLX_IBV_DEVICES names an available RDMA device.");
+  }
+
   protection_domain = ibv().alloc_pd(ctx);
   if (protection_domain == nullptr) {
     throw std::runtime_error("[jaccl] Couldn't allocate protection domain");
@@ -265,9 +281,54 @@ void Connection::queue_pair_rts() {
 
 std::vector<Connection> create_connections(
     const std::vector<std::string>& device_names) {
+  if (!ibv().is_available()) {
+    throw std::runtime_error(
+        "[jaccl] JACCL RDMA support is unavailable because librdma.dylib "
+        "could not be loaded. Check Thunderbolt RDMA support and that "
+        "ibv_devices can list RDMA devices.");
+  }
+
+  struct DeviceListGuard {
+    ibv_device** devices;
+
+    ~DeviceListGuard() {
+      if (devices != nullptr) {
+        ibv().free_device_list(devices);
+      }
+    }
+  };
+
   std::vector<Connection> connections;
+  connections.reserve(device_names.size());
+
   int num_devices = 0;
   ibv_device** devices = ibv().get_device_list(&num_devices);
+  DeviceListGuard device_list_guard{devices};
+
+  auto available_devices = [&]() {
+    std::ostringstream msg;
+    if (devices == nullptr || num_devices <= 0) {
+      msg << "No RDMA devices were found. JACCL requires ibv_devices to "
+          << "list rdma_* devices.";
+      return msg.str();
+    }
+
+    msg << "Available RDMA devices:";
+    bool found_device = false;
+    for (int i = 0; devices != nullptr && i < num_devices; i++) {
+      const char* device_name = ibv().get_device_name(devices[i]);
+      if (device_name == nullptr) {
+        continue;
+      }
+      msg << (found_device ? "," : "") << " " << device_name;
+      found_device = true;
+    }
+    if (!found_device) {
+      msg << " none.";
+    }
+    return msg.str();
+  };
+
   for (auto& name : device_names) {
     // Empty so add a nullptr context
     if (name.empty()) {
@@ -276,8 +337,11 @@ std::vector<Connection> create_connections(
     }
 
     // Search for the name and try to open the device
-    for (int i = 0; i < num_devices; i++) {
-      if (name == ibv().get_device_name(devices[i])) {
+    bool found = false;
+    for (int i = 0; devices != nullptr && i < num_devices; i++) {
+      const char* device_name = ibv().get_device_name(devices[i]);
+      if (device_name != nullptr && name == device_name) {
+        found = true;
         auto ctx = ibv().open_device(devices[i]);
         if (ctx == nullptr) {
           std::ostringstream msg;
@@ -288,8 +352,15 @@ std::vector<Connection> create_connections(
         break;
       }
     }
+    if (!found) {
+      std::ostringstream msg;
+      msg << "[jaccl] Requested RDMA device '" << name << "' was not found. "
+          << available_devices()
+          << " Check JACCL_IBV_DEVICES/MLX_IBV_DEVICES or run ibv_devices to "
+          << "see the RDMA devices available to JACCL.";
+      throw std::runtime_error(msg.str());
+    }
   }
-  ibv().free_device_list(devices);
 
   return connections;
 }
