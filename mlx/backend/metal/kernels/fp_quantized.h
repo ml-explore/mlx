@@ -440,7 +440,7 @@ METAL_FUNC void fp_qmv_impl(
         auto wl = (const device uint8_t*)(ws + row * in_vec_size_w);
         const device auto* sl = scales + row * in_vec_size_g;
 
-        uint8_t s = sl[0];
+        U s = dequantize_scale<U, group_size>(sl[0]);
         result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s);
       }
 
