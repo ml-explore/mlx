@@ -3,6 +3,7 @@
 #include "mlx/backend/cpu/encoder.h"
 
 #include <fmt/format.h>
+#include <thread>
 
 namespace mlx::core::cpu {
 
@@ -29,6 +30,20 @@ std::unordered_map<int, CommandEncoder>& get_command_encoders() {
 std::unordered_map<int, CommandEncoder>& get_global_command_encoders() {
   static std::unordered_map<int, CommandEncoder> encoders;
   return encoders;
+}
+
+size_t thread_pool_size() {
+  static size_t size = [] {
+    auto n = std::thread::hardware_concurrency();
+    return n == 0 ? 4 : n;
+  }();
+  return size;
+}
+
+ThreadPool& thread_pool() {
+  // Leak - see Scheduler singleton comment in scheduler.cpp.
+  static ThreadPool* pool = new ThreadPool{thread_pool_size()};
+  return *pool;
 }
 
 } // namespace mlx::core::cpu

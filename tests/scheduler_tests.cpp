@@ -2,6 +2,7 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/backend/cpu/encoder.h"
 #include "mlx/mlx.h"
 #include "mlx/scheduler.h"
 
@@ -248,4 +249,33 @@ TEST_CASE("test scheduler races") {
     y = exp(y);
   }
   eval(a, y);
+}
+
+TEST_CASE("test cpu dispatch parallel") {
+  auto s = default_stream(Device::cpu);
+  auto& encoder = cpu::get_command_encoder(s);
+
+  std::vector<int> out(1024, 0);
+  std::atomic<int> chunks{0};
+
+  encoder.dispatch_parallel(
+      out.size(),
+      [&](size_t start, size_t end) {
+        chunks++;
+        for (size_t i = start; i < end; ++i) {
+          out[i] = static_cast<int>(i);
+        }
+      },
+      64);
+
+  synchronize(s);
+
+  for (size_t i = 0; i < out.size(); ++i) {
+    CHECK_EQ(out[i], static_cast<int>(i));
+  }
+  auto expected_chunks =
+      std::min(cpu::thread_pool_size(), out.size() / size_t{64});
+  expected_chunks = std::max<size_t>(expected_chunks, 1);
+
+  CHECK_EQ(chunks.load(), expected_chunks);
 }
