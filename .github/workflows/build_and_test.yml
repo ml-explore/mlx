@@ -72,23 +72,62 @@ jobs:
       - uses: ./.github/actions/test-windows
         if: matrix.os == 'Windows' && matrix.toolkit == 'cpu'
 
-  mac_build_and_test:
-    name: macOS (${{ matrix.macos-target }})
+  mac_build:
+    name: macOS (${{ matrix.macos-target }}, ${{ matrix.toolkit }})
     if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
-        macos-target: ["14.0", "15.0", "26.2"]
-    runs-on: [self-hosted, macos]
-    env:
-      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
+        macos-target: ['14.0', '15.0', '26.2']
+        toolkit: ['cpu', 'metal', 'jit']
+    runs-on: 'macos-26'
     needs: check_lint
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        id: setup
+        with:
+          toolkit: ${{ matrix.toolkit }}
+          ccache-key: 'test-${{ matrix.macos-target }}'
+          # Use the compile cache of metal build for all builds.
+          ccache-save: ${{ matrix.toolkit == 'metal' }}
+          ccache-toolkit: 'metal'
+      - uses: ./.github/actions/build-macos
+        with:
+          cmake-args: ${{ steps.setup.outputs.cmake-args }}
+          macos-target: ${{ matrix.macos-target }}
+      - uses: ./.github/actions/test-macos
+        if: matrix.toolkit == 'cpu'
+        with:
+          toolkit: 'cpu'
+      - uses: actions/upload-artifact@v7
+        if: matrix.toolkit == 'metal'
+        with:
+          name: mlx-${{ matrix.toolkit }}-macos${{ matrix.macos-target }}
+          path: |
+            dist/mlx-*.whl
+            build/mlx/backend/metal/kernels/mlx.metallib
+            build/tests/tests
+          if-no-files-found: error
+
+  mac_test:
+    name: Test macOS
+    if: github.repository == 'ml-explore/mlx'
+    runs-on: [self-hosted, macos]
+    needs: mac_build
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
         with:
           toolkit: 'metal'
-          ccache-key: 'test-${{ matrix.macos-target }}'
-      - uses: ./.github/actions/build-macos
+          use-ccache: false
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifact
+          pattern: mlx-metal-*
+      - run: ls -lhR artifact
+      - uses: ./.github/actions/test-macos
+        with:
+          toolkit: 'metal'
 
   build_documentation:
     name: Build Documentation
