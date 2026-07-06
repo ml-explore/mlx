@@ -19,8 +19,8 @@ runs:
         CMAKE_ARGS: ${{ inputs.cmake-args }}
       run: |
         echo "::group::Install Python package"
-        # Install cpu-only torch to save space
-        uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+        # Install cpu-only torch to save space.
+        uv pip install torch --torch-backend=cpu
         uv pip install --no-build-isolation -e ".[dev]" -v
         echo "::endgroup::"
 
