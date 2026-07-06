@@ -20,9 +20,7 @@ runs:
       run: |
         echo "::group::Install Python package"
         # Install cpu-only torch to save space.
-        # Fall back to PyPI if PyTorch index has issues.
-        uv pip install torch --index-url https://download.pytorch.org/whl/cpu \
-          || uv pip install torch
+        uv pip install torch --torch-backend=cpu
         uv pip install --no-build-isolation -e ".[dev]" -v
         echo "::endgroup::"
 
