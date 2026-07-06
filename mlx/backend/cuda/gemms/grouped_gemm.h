@@ -10,6 +10,11 @@ class CommandEncoder;
 
 class array;
 
+array compute_first_token_offset(
+    const array& indices,
+    int group_count,
+    cu::CommandEncoder& encoder);
+
 void cutlass_grouped_gemm_unaligned(
     bool a_transposed,
     int lda,
