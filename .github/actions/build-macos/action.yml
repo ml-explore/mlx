@@ -1,96 +1,47 @@
-name: 'Build and Test on macOS'
-description: 'Build and test MLX on macOS'
+name: 'Build macOS'
+description: 'Build C++ and Python binaries for testing on macOS'
+
+inputs:
+  cmake-args:
+    description: 'The args for generating CMake project'
+    required: true
+  macos-target:
+    description: 'The target macOS version to build for'
+    required: false
+    default: '26.2'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
-    - name: Install Python package
+    - name: Install dependencies
+      shell: bash
+      run: |
+        echo "::group::Install dependencies"
+        uv pip install 'build<=1.4.2' setuptools
+        echo "::endgroup::"
+
+    - name: Build wheel
+      shell: bash
       env:
         DEBUG: 1
-        CMAKE_ARGS: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
-      shell: bash
+        CMAKE_ARGS: ${{ inputs.cmake-args }}
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
-        echo "::group::Install Python package"
-        uv pip install -e ".[dev]" -v
-        echo "::endgroup::"
-
-    - name: Install tests dependencies
-      shell: bash
-      run: |
-        echo "::group::Install tests dependencies"
-        uv pip install tensorflow
-        echo "::endgroup::"
-
-    - name: Run Python tests
-      shell: bash
-      env:
-        LOW_MEMORY: 1
-      run: |
-        echo "::group::Run Python tests"
-        DEVICE=cpu python -m unittest discover -v python/tests
-        DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m unittest discover -v python/tests
-        mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
-        mlx.launch --verbose -n 8 python python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
-        if $(grep "\[WARN\]" stderr.log); then echo "Distributed ring test failed"; exit 1; fi
-        echo "::endgroup::"
-
-    - name: Build example extension
-      shell: bash
-      run: |
-        echo "::group::Build example extension"
-        cd examples/extensions
-        uv pip install -r requirements.txt
-        uv run --no-project setup.py build_ext --inplace
-        uv run --no-project test.py
+        echo "::group::Build wheel"
+        python -m build -w
         echo "::endgroup::"
 
     - name: Build CPP only
       shell: bash
+      env:
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         echo "::group::Build CPP only"
-        mkdir -p build
-        cd build
-        cmake ..
-        make -j $(sysctl -n hw.ncpu)
-        echo "::endgroup::"
-
-    - name: Run CPP tests
-      shell: bash
-      env:
-        DEVICE: gpu
-        METAL_DEVICE_WRAPPER_TYPE: 1
-        METAL_DEBUG_ERROR_MODE: 0
-      run: |
-        echo "::group::Run CPP tests"
-        ./build/tests/tests
-        ./build/tests/test_teardown
-        echo "::endgroup::"
-
-    - name: Build small binary with JIT
-      shell: bash
-      run: |
-        echo "::group::Build small binary with JIT"
-        mkdir -p build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel \
-          -DBUILD_SHARED_LIBS=ON \
-          -DMLX_BUILD_CPU=OFF \
-          -DMLX_BUILD_SAFETENSORS=OFF \
-          -DMLX_BUILD_GGUF=OFF \
-          -DMLX_METAL_JIT=ON
-        make -j $(sysctl -n hw.ncpu)
-        echo "::endgroup::"
-
-    - name: Run Python tests with JIT
-      shell: bash
-      env:
-        LOW_MEMORY: 1
-        DEVICE: gpu
-        METAL_DEVICE_WRAPPER_TYPE: 1
-        METAL_DEBUG_ERROR_MODE: 0
-      run: |
-        echo "::group::Run Python tests with JIT"
-        CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
-          uv pip install -e . -v
-        python -m unittest discover -v python/tests
+        if ${{ contains(inputs.cmake-args, 'CMAKE_BUILD_TYPE') }} ; then
+          cmake . -B build ${{ inputs.cmake-args }}
+        else
+          cmake . -B build ${{ inputs.cmake-args }} \
+            -DCMAKE_BUILD_TYPE=Debug
+        fi
+        cmake --build build -j $(sysctl -n hw.physicalcpu)
         echo "::endgroup::"

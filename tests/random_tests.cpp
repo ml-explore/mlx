@@ -297,7 +297,7 @@ TEST_CASE("test random uniform") {
   //   print(jax.prng.threefry_prng_impl.random_bits(key, 32, shape))
 
   constexpr auto to_float = [](uint32_t n) {
-    return static_cast<float>(n) / UINT32_MAX;
+    return float(n) / float(UINT32_MAX);
   };
 
   {
