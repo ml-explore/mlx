@@ -79,3 +79,10 @@ uv.lock
 .cache/
 # vim
 *.swp
+
+# keys
+*.pem
+
+build.sh
+github-runner/
+sync_fork.sh

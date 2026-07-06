@@ -6,10 +6,23 @@
 #include "mlx/backend/gpu/device_info.h"
 #include "mlx/device.h"
 
+#ifdef MLX_USE_ROCM
+#include "mlx/backend/rocm/rocm.h"
+#endif
+
 namespace mlx::core {
 
 Device& mutable_default_device() {
-  static Device default_device{gpu::is_available() ? Device::gpu : Device::cpu};
+  Device::DeviceType default_type = Device::cpu;
+  if (gpu::is_available()) {
+    default_type = Device::gpu;
+  }
+#ifdef MLX_USE_ROCM
+  else if (rocm::is_available()) {
+    default_type = Device::gpu; // ROCm devices use the generic gpu type
+  }
+#endif
+  static Device default_device{default_type};
   return default_device;
 }
 
@@ -30,7 +43,12 @@ bool is_available(const Device& d) {
     case Device::cpu:
       return cpu::is_available() && (d.index < cpu::device_count());
     case Device::gpu:
+#ifdef MLX_USE_ROCM
+      return (gpu::is_available() || rocm::is_available()) &&
+          (d.index < gpu::device_count());
+#else
       return gpu::is_available() && (d.index < gpu::device_count());
+#endif
   }
   // appease compiler
   return false;

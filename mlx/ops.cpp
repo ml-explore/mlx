@@ -4819,6 +4819,58 @@ array qqmm(
     inputs.push_back(*global_scale_w);
   }
 
+#if defined(MLX_USE_ROCM)
+  if (stream.device == Device::gpu) {
+    auto xq = quantize(x, group_size, bits, mode, global_scale_x, stream);
+    auto xhat = dequantize(
+        xq[0],
+        xq[1],
+        std::nullopt,
+        group_size,
+        bits,
+        mode,
+        global_scale_x,
+        x.dtype(),
+        stream);
+
+    auto what = [&]() {
+      if (w.dtype() == uint32) {
+        return dequantize(
+            w,
+            *scales_w,
+            std::nullopt,
+            group_size,
+            bits,
+            mode,
+            global_scale_w,
+            x.dtype(),
+            stream);
+      }
+      auto wq = quantize(w, group_size, bits, mode, global_scale_w, stream);
+      return dequantize(
+          wq[0],
+          wq[1],
+          std::nullopt,
+          group_size,
+          bits,
+          mode,
+          global_scale_w,
+          x.dtype(),
+          stream);
+    }();
+
+    auto out = matmul(xhat, swapaxes(what, -1, -2, stream), stream);
+    if (in_x.ndim() > 2) {
+      auto orig_shape = in_x.shape();
+      orig_shape.pop_back();
+      out = unflatten(out, 0, std::move(orig_shape), stream);
+    } else if (in_x.ndim() == 1) {
+      out = squeeze(out, 0, stream);
+    }
+    return out;
+  }
+#endif
+
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
   auto out = array(
@@ -5040,6 +5092,12 @@ std::vector<array> fp_quantize(
     scales = reshape(scales, new_shape, s);
     return {std::move(wq), std::move(scales)};
   };
+
+#if defined(MLX_USE_ROCM)
+  if (s.device == Device::gpu) {
+    return fallback(inputs);
+  }
+#endif
 
   if (s.device == Device::gpu) {
     auto wq_shape = w.shape();
@@ -5305,6 +5363,21 @@ array fp_dequantize(
     }
     return {reshape(multiply(out, scales, s), wshape, s)};
   };
+
+#if defined(MLX_USE_ROCM)
+  if (s.device == Device::gpu) {
+    return dequantize(
+        w,
+        scales,
+        std::nullopt,
+        group_size,
+        bits,
+        quantization_mode_to_string(mode),
+        global_scale,
+        out_type,
+        Device::cpu);
+  }
+#endif
 
   if (s.device == Device::gpu) {
     auto out_shape = w.shape();

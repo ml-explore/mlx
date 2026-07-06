@@ -86,6 +86,18 @@ MLX_API CustomKernelFunction cuda_kernel(
     bool ensure_row_contiguous = true,
     int shared_memory = 0);
 
+MLX_API CustomKernelFunction hip_kernel(
+    const std::string& name,
+    const std::vector<std::string>& input_names,
+    const std::vector<std::string>& output_names,
+    const std::string& source,
+    const std::string& header = "",
+    bool ensure_row_contiguous = true,
+    int shared_memory = 0,
+    // Output index -> input index to alias (output reuses the input's buffer,
+    // in place). Used for recurrent-state kernels under HIP-graph capture.
+    std::vector<std::pair<int, int>> output_input_aliases = {});
+
 MLX_API std::vector<array> precompiled_cuda_kernel(
     const std::string& name,
     const std::string& compiled_source,

@@ -530,6 +530,120 @@ void init_fast(nb::module_& parent_module) {
      )pbdoc");
 
   m.def(
+      "hip_kernel",
+      [](const std::string& name,
+         const std::vector<std::string>& input_names,
+         const std::vector<std::string>& output_names,
+         const std::string& source,
+         const std::string& header,
+         bool ensure_row_contiguous,
+         int shared_mem) {
+        auto kernel = mx::fast::hip_kernel(
+            name,
+            input_names,
+            output_names,
+            source,
+            header,
+            ensure_row_contiguous,
+            shared_mem);
+        return nb::cpp_function(
+            PyCustomKernelFunction(std::move(kernel), "[hip_kernel]"),
+            nb::kw_only(),
+            "inputs"_a,
+            "output_shapes"_a,
+            "output_dtypes"_a,
+            "grid"_a,
+            "threadgroup"_a,
+            "template"_a = nb::none(),
+            "init_value"_a = nb::none(),
+            "verbose"_a = false,
+            "stream"_a = nb::none(),
+            nb::sig(
+                "def __call__(self, *, inputs: List[Union[scalar, array]], output_shapes: List[Sequence[int]], output_dtypes: List[Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: Optional[List[Tuple[str, Union[bool, int, Dtype]]]] = None, init_value: Optional[float] = None, verbose: bool = false, stream: Union[None, Stream, Device] = None)"),
+            R"pbdoc(
+            Run the kernel.
+
+            Args:
+              inputs (List[array]): The inputs passed to the HIP kernel.
+              output_shapes (List[Sequence[int]]): The list of shapes for each output in ``output_names``.
+              output_dtypes (List[Dtype]): The list of data types for each output in ``output_names``.
+              grid (tuple[int, int, int]): 3-tuple specifying the grid to launch the kernel with.
+              threadgroup (tuple[int, int, int]): 3-tuple specifying the threadgroup size to use.
+              template (List[Tuple[str, Union[bool, int, Dtype]]], optional): Template arguments.
+                  These will be added as template arguments to the kernel definition. Default: ``None``.
+              init_value (float, optional): Optional value to use to initialize all of the output arrays.
+                  By default, output arrays are uninitialized. Default: ``None``.
+              verbose (bool, optional): Whether to print the full generated source code of the kernel
+                  when it is run. Default: ``False``.
+              stream (mx.stream, optional): Stream to run the kernel on. Default: ``None``.
+
+            Returns:
+              List[array]: The list of output arrays.)pbdoc");
+      },
+      "name"_a,
+      "input_names"_a,
+      "output_names"_a,
+      "source"_a,
+      "header"_a = "",
+      "ensure_row_contiguous"_a = true,
+      "shared_memory"_a = 0,
+      R"pbdoc(
+      A jit-compiled custom HIP kernel defined from a source string.
+
+      Args:
+        name (str): Name for the kernel.
+        input_names (List[str]): The parameter names of the inputs in the
+           function signature.
+        output_names (List[str]): The parameter names of the outputs in the
+           function signature.
+        source (str): Source code. This is the body of a function in HIP,
+           the function signature will be automatically generated.
+        header (str): Header source code to include before the main function.
+           Useful for helper functions or includes that should live outside of
+           the main function body.
+        ensure_row_contiguous (bool): Whether to ensure the inputs are row contiguous
+           before the kernel runs. Default: ``True``.
+        shared_memory (int): The dynamic shared memory to request for the
+          kernel. A value of 0 means no dynamic shared memory. Default: ``0``.
+
+      Returns:
+        Callable ``hip_kernel``.
+
+      Example:
+
+        .. code-block:: python
+
+          def exp_elementwise(a: mx.array):
+              source = '''
+                  int elem = blockIdx.x * blockDim.x + threadIdx.x;
+                  T tmp = inp[elem];
+                  out[elem] = exp(tmp);
+              '''
+
+              kernel = mx.fast.hip_kernel(
+                  name="myexp",
+                  input_names=["inp"],
+                  output_names=["out"],
+                  source=source
+              )
+
+              outputs = kernel(
+                  inputs=[a],
+                  template=[("T", a.dtype)],
+                  grid=(a.size, 1, 1),
+                  threadgroup=(256, 1, 1),
+                  output_shapes=[a.shape],
+                  output_dtypes=[a.dtype],
+                  verbose=True,
+              )
+              return outputs[0]
+
+          a = mx.random.normal(shape=(16, 16)).astype(mx.float16)
+          b = exp_elementwise(a)
+          assert mx.allclose(b, mx.exp(a))
+     )pbdoc");
+
+  m.def(
       "precompiled_cuda_kernel",
       [](const std::string& name,
          const nb::bytes compiled_source,
