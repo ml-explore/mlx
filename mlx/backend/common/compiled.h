@@ -66,8 +66,9 @@ inline bool is_scalar(const array& x) {
   return x.ndim() == 0;
 }
 
-// Check if we can use a contiguous operation given inputs and the output shape
-bool compiled_check_contiguity(
+// Check if we can use a contiguous operation given inputs and the output shape.
+// Also returns if any input has negative strides.
+std::pair<bool, bool> compiled_check_contiguity(
     const std::vector<array>& inputs,
     const Shape& shape);
 
@@ -81,18 +82,16 @@ void compiled_allocate_outputs(
         allocator::malloc);
 
 // Collapse contiguous dims ignoring scalars and constants.
-std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
+std::tuple<bool, bool, Shape, std::vector<Strides>>
+compiled_collapse_contiguous_dims(
     const std::vector<array>& inputs,
     const array& out,
     const std::function<bool(size_t)>& is_constant);
 
 // Return whether the kernel should use large index.
-// Also returns true when any non-contiguous input has negative strides,
-// since unsigned index arithmetic wraps negative stride values.
 bool compiled_use_large_index(
     const std::vector<array>& inputs,
     const std::vector<array>& outputs,
-    bool contiguous,
-    const std::vector<Strides>& strides = {});
+    bool contiguous);
 
 } // namespace mlx::core
