@@ -1027,6 +1027,67 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(out, mx.ones_like(out)))
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_metal_kernel_math_mode(self):
+        with self.assertRaises(ValueError):
+            mx.fast.metal_kernel(
+                name="invalid_math_mode",
+                input_names=["inp"],
+                output_names=["out"],
+                source="out[0] = inp[0];",
+                compile_options={"math_mode": "precise"},
+            )
+
+        with self.assertRaises(ValueError):
+            mx.fast.metal_kernel(
+                name="invalid_compile_options",
+                input_names=["inp"],
+                output_names=["out"],
+                source="out[0] = inp[0];",
+                compile_options={"unknown": "value"},
+            )
+
+        # Numerical special cases such as exp(-inf) can agree between math
+        # modes, so they don't reliably detect whether the mode was applied.
+        # Branch on the compiler's __FAST_MATH__ macro instead: it is defined
+        # only when fast math is enabled, so the test fails if the selected
+        # math mode is not forwarded to the Metal compiler.
+        source = """
+            uint elem = thread_position_in_grid.x;
+            #if defined(__FAST_MATH__) && __FAST_MATH__
+            out[elem] = 1.0f;
+            #else
+            out[elem] = 0.0f;
+            #endif
+        """
+
+        a = mx.zeros((4,), dtype=mx.float32)
+        expected = {
+            "safe": mx.zeros_like(a),
+            "fast": mx.ones_like(a),
+        }
+
+        # Reuse the same kernel name across modes so the library cache is forced
+        # to rebuild when the math mode changes, guarding against a stale build
+        # being returned for a different mode.
+        for mode, expected_out in expected.items():
+            kernel = mx.fast.metal_kernel(
+                name="math_mode",
+                input_names=["inp"],
+                output_names=["out"],
+                source=source,
+                compile_options={"math_mode": mode},
+            )
+            out = kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(a.size, 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+            self.assertTrue(mx.array_equal(out, expected_out))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_kernel_mixed_dtypes(self):
         # Calling the same kernel with different input dtypes in a single
         # graph should not invalidate pipeline states that are still in use
