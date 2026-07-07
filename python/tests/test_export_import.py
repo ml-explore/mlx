@@ -704,6 +704,50 @@ class TestExportImport(mlx_tests.MLXTestCase):
         imported = mx.import_function(path)
         self.assertTrue(mx.array_equal(imported(x, y, z)[0], fun(x, y, z)))
 
+    def test_export_matmul_shapeless_mid_dim(self):
+        path = os.path.join(self.test_dir, "matmul_shapeless.mlxfn")
+
+        E, H = 64, 17
+        arr = mx.arange(E * H, dtype=mx.float32).reshape((E, H)) * (1.0 / (E * H))
+
+        def fn(x):
+            return mx.matmul(x, arr)
+
+        sample = mx.zeros((1, 40, E), dtype=mx.float32)
+        mx.export_function(path, fn, sample, shapeless=True)
+        imported = mx.import_function(path)
+
+        for seq_len in (40, 248, 623):
+            with self.subTest(seq_len=seq_len):
+                x = mx.arange(seq_len * E, dtype=mx.float32).reshape((1, seq_len, E))
+                expected = fn(x)
+                (y,) = imported(x)
+                self.assertEqual(y.shape, (1, seq_len, H))
+                self.assertTrue(mx.allclose(y, expected))
+
+    def test_export_matmul_shapeless_batch_and_mid_dim(self):
+        path = os.path.join(self.test_dir, "matmul_shapeless_batch.mlxfn")
+
+        B, E, H = 2, 32, 8
+        arr = mx.arange(E * H, dtype=mx.float32).reshape((E, H)) * (1.0 / (E * H))
+
+        def fn(x):
+            return mx.matmul(x, arr)
+
+        sample = mx.zeros((B, 10, E), dtype=mx.float32)
+        mx.export_function(path, fn, sample, shapeless=True)
+        imported = mx.import_function(path)
+
+        for seq_len in (10, 50, 100):
+            with self.subTest(seq_len=seq_len):
+                x = mx.arange(B * seq_len * E, dtype=mx.float32).reshape(
+                    (B, seq_len, E)
+                )
+                expected = fn(x)
+                (y,) = imported(x)
+                self.assertEqual(y.shape, (B, seq_len, H))
+                self.assertTrue(mx.allclose(y, expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
