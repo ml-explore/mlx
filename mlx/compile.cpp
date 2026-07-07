@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -11,6 +12,7 @@
 #include "mlx/backend/common/compiled.h"
 #include "mlx/compile.h"
 #include "mlx/compile_impl.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
@@ -210,6 +212,234 @@ std::vector<Shape> Compiled::output_shapes(const std::vector<array>& inputs) {
   }
   // All outputs have the same shape
   return std::vector<Shape>(outputs_.size(), out_shape);
+}
+
+CompiledMatmul::CompiledMatmul(
+    Stream stream,
+    std::shared_ptr<Primitive> matmul,
+    std::shared_ptr<Compiled> epilogue)
+    : UnaryPrimitive(stream),
+      matmul_(std::move(matmul)),
+      epilogue_(std::move(epilogue)) {}
+
+std::vector<array> CompiledMatmul::vjp(
+    const std::vector<array>&,
+    const std::vector<array>&,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  throw std::runtime_error("[CompiledMatmul] Cannot vjp primitive.");
+}
+
+std::vector<array> CompiledMatmul::jvp(
+    const std::vector<array>&,
+    const std::vector<array>&,
+    const std::vector<int>&) {
+  throw std::runtime_error("[CompiledMatmul] Cannot jvp primitive.");
+}
+
+std::pair<std::vector<array>, std::vector<int>> CompiledMatmul::vmap(
+    const std::vector<array>&,
+    const std::vector<int>&) {
+  throw std::runtime_error("[CompiledMatmul] Cannot vmap primitive.");
+}
+
+bool CompiledMatmul::is_equivalent(const Primitive& other) const {
+  const CompiledMatmul& o = static_cast<const CompiledMatmul&>(other);
+  auto& p = *matmul_;
+  auto& op = *o.matmul_;
+  return typeid(p) == typeid(op) && matmul_->is_equivalent(*o.matmul_) &&
+      epilogue_->is_equivalent(*o.epilogue_);
+}
+
+const char* CompiledMatmul::name() const {
+  if (name_.empty()) {
+    std::ostringstream os;
+    os << "CompiledMatmul" << epilogue_->name();
+    name_ = os.str();
+  }
+  return name_.c_str();
+}
+
+std::vector<Shape> CompiledMatmul::output_shapes(
+    const std::vector<array>& inputs) {
+  // first finds the matmul (producer) output shapes and uses that as the input
+  // for the elementwise chain accounts for broadcasts within elementwise
+  auto n_producer = inputs.size() - (epilogue_->inputs().size() - 1);
+  auto acc_shape = matmul_->output_shapes(
+      std::vector<array>(inputs.begin(), inputs.begin() + n_producer))[0];
+  std::vector<array> ep_inputs;
+  ep_inputs.emplace_back(
+      std::move(acc_shape),
+      epilogue_->inputs()[0].dtype(),
+      nullptr,
+      std::vector<array>{});
+  ep_inputs.insert(ep_inputs.end(), inputs.begin() + n_producer, inputs.end());
+  return epilogue_->output_shapes(ep_inputs);
+}
+
+// checks if a scalar value is a float (if so converts) or not
+static std::optional<float> scalar_constant_value(const array& x) {
+  if (!x.is_available() || !issubdtype(x.dtype(), number) ||
+      x.dtype() == complex64) {
+    return std::nullopt;
+  }
+  float v;
+  dispatch_real_types(x.dtype(), "scalar_constant_value", [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    v = static_cast<float>(x.data<T>()[0]);
+  });
+  return v;
+}
+
+// !! while there is no arbitrary elementwise chain epilogue codegen, required
+// in the backends
+// !! to check whether we can run the fused AddMM operation
+bool CompiledMatmul::matches_addmm(float& alpha, float& beta, int& c_index)
+    const {
+  // AddMM type: alpha * a@b + beta * c (c must be a runtime input)
+
+  auto& tape = epilogue_->tape();
+  auto& ep_inputs = epilogue_->inputs();
+  if (typeid(*matmul_) != typeid(Matmul) || tape.empty() ||
+      ep_inputs.size() < 2) {
+    return false;
+  }
+  auto& acc = ep_inputs[0];
+  auto& add = tape.back();
+
+  // verifies dtypes
+  if (!issubdtype(add.dtype(), floating) || acc.dtype() != add.dtype() ||
+      add.shape() != acc.shape()) {
+    return false;
+  }
+  if (typeid(add.primitive()) != typeid(Add) || add.inputs().size() != 2) {
+    return false;
+  }
+
+  // returns true for all except the output
+  auto is_intermediate = [&](const array& x) {
+    for (size_t j = 0; j + 1 < tape.size(); ++j) {
+      if (tape[j].id() == x.id()) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // retrieves next non-broadcast node in the tape
+  auto peel = [&](const array* x, std::vector<uintptr_t>& used) {
+    while (is_intermediate(*x) && typeid(x->primitive()) == typeid(Broadcast)) {
+      used.push_back(x->id());
+      x = &x->inputs()[0];
+    }
+    return x;
+  };
+
+  // is x in an input of the epilogue - if so return index, else -1
+  auto input_index = [&](const array& x) -> int {
+    for (size_t i = 0; i < ep_inputs.size(); ++i) {
+      if (ep_inputs[i].id() == x.id()) {
+        return i;
+      }
+    }
+    return -1;
+  };
+
+  // checks if x is a baked scalar constant and if so, converts to a float
+  auto constant_scale =
+      [&](const array& x,
+          std::vector<uintptr_t>& used) -> std::optional<float> {
+    auto* leaf = peel(&x, used);
+    auto i = input_index(*leaf);
+    if (i == -1 || !epilogue_->is_constant(i) ||
+        leaf->size() != 1) { // returns -1 if not an epi input, leaf size != 1
+                             // => not a scalar
+      return std::nullopt;
+    }
+    return scalar_constant_value(*leaf);
+  };
+
+  // holds an operand of the final Add - op = scale * ep_inputs[index]
+  // used tracks tape entries consumed, verifies no leftover nodes
+  struct Operand {
+    int index;
+    float scale;
+    std::vector<uintptr_t> used;
+  };
+
+  // runs on both inputs to Add to ensure parse whether they're direct
+  // epi_inputs or Multiply() or neither (breaks fusion)
+  auto resolve = [&](const array& raw) -> std::optional<Operand> {
+    Operand r{-1, 1.0f, {}}; // null initialising for not epi_input, default
+                             // scale and no nodes consumed
+
+    // checks if Add input is an epilogue input directly
+    auto* x =
+        peel(&raw, r.used); // peels off broadcasts to first node - returned in
+                            // GPU backend with inputs reshaped
+    r.index = input_index(*x); // checks for x is epi_input
+    if (r.index >= 0) {
+      return x->dtype() == add.dtype() ? std::optional(r) : std::nullopt;
+    }
+
+    // checks whether node is an internal Multiply as in Add(Multiply(a@b, 2),
+    // c)
+    if (!is_intermediate(*x) || x->dtype() != add.dtype() ||
+        typeid(x->primitive()) != typeid(Multiply) || x->inputs().size() != 2) {
+      return std::nullopt;
+    }
+
+    r.used.push_back(x->id());
+
+    // checks both combinations for multiply (a@b * c) or (c * a@b) to determine
+    // which is an epi_input and which is the constant
+    for (int k = 0; k < 2; ++k) {
+      Operand cand = r;
+      auto* base = peel(&x->inputs()[k], cand.used);
+      cand.index = input_index(*base);
+      if (cand.index < 0 || base->dtype() != add.dtype()) {
+        continue;
+      }
+      if (auto s = constant_scale(x->inputs()[1 - k], cand.used)) {
+        cand.scale = *s;
+        return cand;
+      }
+    }
+    return std::nullopt;
+  };
+
+  // Add(lhs, rhs) with {lhs, rhs} == {alpha * acc, beta * c} in either order
+  auto lhs = resolve(add.inputs()[0]);
+  auto rhs = resolve(add.inputs()[1]);
+  if (!lhs || !rhs) {
+    return false;
+  }
+
+  // ensures acc is lhs
+  if (rhs->index == 0) {
+    std::swap(lhs, rhs);
+  }
+
+  // ensures that rhs does does not hold acc and c is a runtime input
+  if (lhs->index != 0 || rhs->index == 0 ||
+      epilogue_->is_constant(rhs->index)) {
+    return false;
+  }
+
+  // The match must account for the whole tape; a leftover op means the
+  // epilogue computes more than addmm
+  std::unordered_set<uintptr_t> used = {add.id()};
+  used.insert(lhs->used.begin(), lhs->used.end());
+  used.insert(rhs->used.begin(), rhs->used.end());
+  if (used.size() != tape.size()) {
+    return false;
+  }
+  alpha = lhs->scale;
+  beta = rhs->scale;
+  // The node's inputs are the producer's operands (two: it is a Matmul)
+  // followed by the epilogue's inputs after the accumulator
+  c_index = rhs->index + 1;
+  return true;
 }
 
 namespace detail {
@@ -779,6 +1009,188 @@ void compile_simplify(
   }
 }
 
+// Attach a matmul-like producer to an elementwise consumer chain
+// Compiled region assembled by compile_fuse or a lone fusable primitive --
+// as the epilogue of a CompiledMatmul node. The pass is greedy and does no
+// pattern gating: backends dispatch the fused AddMM kernel when the
+// epilogue matches (see matches_addmm) and otherwise run the structured
+// fallback (producer into a scratch accumulator, then the epilogue
+// kernel) leaving it unfused. Runs right
+// after compile_fuse so the epilogue picks up whole elementwise chains,
+// and keeps the parents map fully consistent.
+void compile_fuse_matmul(
+    std::vector<array>& tape,
+    ParentsMap& parents_map,
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  std::unordered_map<uintptr_t, array> output_map;
+  for (auto& o : outputs) {
+    output_map.insert({o.id(), o});
+  }
+  std::unordered_set<uintptr_t> input_ids;
+  for (auto& in : inputs) {
+    input_ids.insert(in.id());
+  }
+
+  // Producers: matmul-like ops whose kernels can absorb an epilogue.
+  // Widening this is the extension point; the mechanics below assume
+  // nothing about the producer kind or arity.
+  auto is_fusable_producer = [](const Primitive& p) {
+    return typeid(p) == typeid(Matmul);
+  };
+
+  // The single consumer of x, or nothing when x must stay materialized: x
+  // is a global output, has several parents, is referenced at more than one
+  // argument position (x + x with x = a@b must not fuse), or the consumer
+  // has is multi-output or runs on another stream.
+  auto unique_consumer = [&](const array& x) -> std::optional<array> {
+    if (output_map.find(x.id()) != output_map.end()) { // global output
+      return std::nullopt;
+    }
+    auto pit = parents_map.find(x.id());
+    if (pit == parents_map.end() ||
+        pit->second.size() != 1) { // x has no or multiple parents
+      return std::nullopt;
+    }
+    auto& consumer = pit->second[0].first;
+    int refs = 0;
+    for (auto& in : consumer.inputs()) {
+      refs += (in.id() == x.id()); // counts consumer's parents
+    }
+    if (refs != 1 || !consumer.has_primitive() || // verifies consumer has
+                                                  // primitive or one parent
+        !consumer.siblings().empty() || // verifies consumer is not multi-output
+        consumer.primitive().stream() !=
+            x.primitive().stream()) { // verifies consumer is on same stream
+      return std::nullopt;
+    }
+    return consumer;
+  };
+
+  std::unordered_set<uintptr_t> dropped;
+  std::unordered_map<uintptr_t, array> replacements;
+  for (auto& arr : tape) {
+    if (!arr.has_primitive() ||
+        !is_fusable_producer(arr.primitive())) { // fusable producer
+      continue;
+    }
+    auto consumer = unique_consumer(arr);
+    if (!consumer) { // unique consumer
+      continue;
+    }
+
+    // Synthesize the epilogue with the producer's result in slot 0: reuse
+    // the consumer's compiled region as is, or wrap a lone elementwise
+    // primitive into a single-op tape. A Broadcast consumer is excluded for
+    // the same reason as in compile_fuse: materializing its output would
+    // blow up memory.
+    auto& cp = consumer->primitive();
+    std::shared_ptr<Compiled> epilogue;
+    std::vector<array> ep_inputs = {arr};
+    std::unordered_set<uintptr_t> constant_ids;
+
+    // consumer is pre-compiled
+    if (typeid(cp) == typeid(Compiled)) {
+      auto& region = static_cast<const Compiled&>(cp);
+      for (size_t i = 0; i < region.inputs().size(); ++i) {
+        auto& in = region.inputs()[i];
+        if (in.id() == arr.id()) {
+          continue; // skips matmul acc - not double added - alr at ep_inputs[0]
+        }
+        ep_inputs.push_back(in);
+        if (region.is_constant(i)) {
+          constant_ids.insert(in.id());
+        }
+      }
+      epilogue = std::make_shared<Compiled>(
+          cp.stream(),
+          ep_inputs,
+          region.outputs(),
+          region.tape(),
+          std::move(constant_ids));
+
+    } else if (is_fusable(cp) && !is_broadcast(cp)) {
+      for (auto& in : consumer->inputs()) {
+        if (in.id() == arr.id()) {
+          continue; // skips matmul acc
+        }
+        ep_inputs.push_back(in);
+        // Scalar constant - same as above
+        if (in.size() == 1 && !in.has_primitive() &&
+            input_ids.find(in.id()) == input_ids.end()) {
+          constant_ids.insert(in.id());
+        }
+      }
+      epilogue = std::make_shared<Compiled>(
+          cp.stream(),
+          ep_inputs,
+          std::vector<array>{*consumer},
+          std::vector<array>{*consumer},
+          std::move(constant_ids));
+    } else {
+      continue;
+    }
+
+    // The node's inputs are the producer's operands followed by the
+    // epilogue's extra inputs; the accumulator stays internal
+    std::vector<array> new_inputs = arr.inputs();
+    new_inputs.insert(new_inputs.end(), ep_inputs.begin() + 1, ep_inputs.end());
+    array new_node(
+        consumer->shape(),
+        consumer->dtype(),
+        std::make_shared<CompiledMatmul>(
+            arr.primitive().stream(), arr.primitive_ptr(), std::move(epilogue)),
+        new_inputs);
+
+    // Rewriting tape so that producers of fused kernel point correctly
+    for (int i = 0; i < new_inputs.size(); ++i) {
+      auto& pairs = parents_map[new_inputs[i].id()];
+      pairs.erase(
+          std::remove_if(
+              pairs.begin(),
+              pairs.end(),
+              [&](auto& p) {
+                return p.first.id() == arr.id() ||
+                    p.first.id() == consumer->id();
+              }),
+          pairs.end());
+      pairs.push_back({new_node, i});
+    }
+    // Rewriting tape so that consumers of fused output point correctly
+    merge_one(new_node, *consumer, parents_map);
+    if (auto it = output_map.find(consumer->id()); it != output_map.end()) {
+      it->second = new_node;
+    }
+    parents_map.erase(arr.id());
+    parents_map.erase(consumer->id());
+
+    dropped.insert(arr.id());
+    replacements.insert({consumer->id(), new_node});
+  }
+
+  if (replacements.empty()) {
+    return;
+  }
+
+  std::vector<array> new_tape;
+  new_tape.reserve(tape.size());
+  for (auto& arr : tape) {
+    if (dropped.find(arr.id()) != dropped.end()) {
+      continue;
+    }
+    if (auto it = replacements.find(arr.id()); it != replacements.end()) {
+      new_tape.push_back(it->second);
+    } else {
+      new_tape.push_back(arr);
+    }
+  }
+  tape = std::move(new_tape);
+
+  for (auto& o : outputs) {
+    o = output_map.at(o.id());
+  }
+}
+
 // Extract sub-graphs of the graph that can be compiled
 // and replace them with a Compiled Primitive.
 void compile_fuse(
@@ -1148,6 +1560,10 @@ ArrayFnWithExtra compile(
       // new outputs must be updated accordingly
       if (mode != CompileMode::no_fuse) {
         compile_fuse(entry.tape, parents_map, entry.inputs, entry.outputs);
+        // Greedy: attach the assembled elementwise regions (or lone
+        // elementwise consumers) to their matmul producers as epilogues.
+        compile_fuse_matmul(
+            entry.tape, parents_map, entry.inputs, entry.outputs);
       }
 
       // Mark the entry as filled only after every step above completed, so

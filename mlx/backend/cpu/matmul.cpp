@@ -163,4 +163,42 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   matmul_general(inputs[0], inputs[1], out, stream(), alpha_, beta_);
 }
 
+void CompiledMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
+  float alpha, beta;
+  int c_index;
+  if (matches_addmm(alpha, beta, c_index)) {
+    // AddMM expects c pre-broadcast to the output shape (the addmm op
+    // guarantees this); rebuild the view when the epilogue absorbed the
+    // Broadcast
+    auto c = inputs[c_index];
+    if (c.shape() != out.shape()) {
+      array cb(out.shape(), c.dtype(), nullptr, {});
+      Broadcast(stream(), out.shape()).eval_cpu({c}, cb);
+      c = std::move(cb);
+    }
+    AddMM addmm(stream(), alpha, beta);
+    addmm.eval_cpu({inputs[0], inputs[1], c}, out);
+    return;
+  }
+
+  // Fallback: run the producer into a scratch accumulator, then the epilogue
+  // kernel with the accumulator in input slot 0. The accumulator has the
+  // producer's shape and dtype; the epilogue may promote or broadcast it.
+  auto mm_arity = inputs.size() - (epilogue_->inputs().size() - 1);
+  std::vector<array> mm_inputs(inputs.begin(), inputs.begin() + mm_arity);
+  std::vector<array> acc_outputs = {array(
+      matmul_->output_shapes(mm_inputs)[0],
+      epilogue_->inputs()[0].dtype(),
+      nullptr,
+      {})};
+  matmul_->eval_cpu(mm_inputs, acc_outputs);
+  auto& acc = acc_outputs[0];
+
+  std::vector<array> ep_inputs = {acc};
+  ep_inputs.insert(ep_inputs.end(), inputs.begin() + mm_arity, inputs.end());
+  std::vector<array> ep_outputs = {out};
+  epilogue_->eval_cpu(ep_inputs, ep_outputs);
+  cpu::get_command_encoder(stream()).add_temporary(std::move(acc));
+}
+
 } // namespace mlx::core

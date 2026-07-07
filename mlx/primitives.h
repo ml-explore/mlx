@@ -659,6 +659,19 @@ class MLX_API Compiled : public Primitive {
     return kernel_lib_;
   }
 
+  const std::vector<array>& inputs() const {
+    return inputs_;
+  }
+  const std::vector<array>& outputs() const {
+    return outputs_;
+  }
+  const std::vector<array>& tape() const {
+    return tape_;
+  }
+  bool is_constant(size_t i) const {
+    return is_constant_(i);
+  }
+
  private:
   const std::vector<array> inputs_;
   const std::vector<array> outputs_;
@@ -668,6 +681,55 @@ class MLX_API Compiled : public Primitive {
 
   mutable std::string name_;
   std::string kernel_lib_;
+};
+
+class MLX_API CompiledMatmul : public UnaryPrimitive {
+ public:
+  /*
+   * A matmul-like producer fused with an elementwise epilogue. Constructed
+   * only by the compiler (compile_fuse_matmul). Invariants:
+   * - epilogue_->inputs()[0] is the producer's output (the accumulator slot);
+   *   it never appears in this node's own input list.
+   * - epilogue_ has a single output. Its tape is elementwise (with broadcast
+   *   semantics), so the output shape is the broadcast of the producer's
+   *   output shape with the extra inputs' shapes.
+   * - This node's inputs are the producer's operands followed by
+   *   epilogue_->inputs()[1..].
+   */
+  explicit CompiledMatmul(
+      Stream stream,
+      std::shared_ptr<Primitive> matmul,
+      std::shared_ptr<Compiled> epilogue);
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  const char* name() const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  bool is_equivalent(const Primitive& other) const override;
+
+  const Primitive& matmul() const {
+    return *matmul_;
+  }
+  const Compiled& epilogue() const {
+    return *epilogue_;
+  }
+
+  // True when the producer/epilogue pair is expressible as
+  // AddMM(alpha, beta) on {inputs[0], inputs[1], inputs[c_index]}, filling
+  // in the scales baked into the epilogue as scalar constants and the
+  // position of c in this node's inputs. Backends use this to dispatch the
+  // existing fused AddMM kernel in place of both nodes; c may still need
+  // broadcasting to the output shape when the epilogue absorbed its
+  // Broadcast.
+  bool matches_addmm(float& alpha, float& beta, int& c_index) const;
+
+ private:
+  std::shared_ptr<Primitive> matmul_;
+  std::shared_ptr<Compiled> epilogue_;
+  mutable std::string name_;
 };
 
 class Concatenate : public UnaryPrimitive {

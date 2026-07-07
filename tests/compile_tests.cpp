@@ -8,6 +8,7 @@
 #include <cmath>
 #include <limits>
 
+#include "mlx/compile_impl.h"
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
 
@@ -874,4 +875,368 @@ TEST_CASE("test compile throwing first trace does not poison cache") {
   auto out = cfun({});
   REQUIRE_EQ(out.size(), 1);
   CHECK_EQ(out[0].item<float>(), 3.0f);
+}
+
+auto matmul_bias_fun(const std::vector<array>& inputs) {
+  return std::vector<array>{matmul(inputs[0], inputs[1]) + inputs[2]};
+}
+
+// copy for deterministic compile checking
+auto matmul_bias_fun_copy(const std::vector<array>& inputs) {
+  return std::vector<array>{matmul(inputs[0], inputs[1]) + inputs[2]};
+}
+
+// Compare matmul-fusion results with tolerance for AddMM reassociation:
+// fused alpha/beta scaling happens inside GEMM, not as separate ops.
+bool matmul_allclose(const array& x, const array& y) {
+  return allclose(x, y, /* rtol = */ 1e-4, /* atol = */ 1e-5).item<bool>();
+}
+
+// Proves whether compile produced a CompiledMatmul by checking the root
+// primitive, then verifies the fused graph matches the original function.
+array check_matmul_fusion(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    const std::vector<array>& args,
+    bool fused) {
+  auto out = compile(fun)(args)[0];
+  auto& p = out.primitive();
+  CHECK_EQ(typeid(p) == typeid(CompiledMatmul), fused);
+  CHECK(matmul_allclose(out, fun(args)[0]));
+  return out;
+}
+
+TEST_CASE("test compile matmul epilogue fused") {
+  auto a = random::uniform({4, 8});
+  auto b = random::uniform({8, 16});
+  auto bias = random::uniform({16});
+  eval(a, b, bias);
+
+  // Proves matmul+bias fuses into one CompiledMatmul by checking the root
+  // primitive, preserved {a,b,bias} inputs, and numerical parity.
+  {
+    auto out = compile(matmul_bias_fun)({a, b, bias})[0];
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(CompiledMatmul));
+    REQUIRE_EQ(out.inputs().size(), 3);
+    CHECK_EQ(out.inputs()[0].id(), a.id());
+    CHECK_EQ(out.inputs()[1].id(), b.id());
+    CHECK_EQ(out.inputs()[2].id(), bias.id());
+    CHECK(matmul_allclose(out, matmul_bias_fun({a, b, bias})[0]));
+  }
+
+  // Proves equivalent matmul epilogues compare equal by compiling two
+  // structurally identical functions and checking is_equivalent.
+  CHECK(compile(matmul_bias_fun)({a, b, bias})[0].primitive().is_equivalent(
+      compile(matmul_bias_fun_copy)({a, b, bias})[0].primitive()));
+}
+
+TEST_CASE("test compile matmul epilogue guards") {
+  auto a = random::uniform({4, 8});
+  auto b = random::uniform({8, 16});
+  auto bias = random::uniform({16});
+  auto c = random::uniform({4, 16});
+  eval(a, b, bias, c);
+
+  // Proves shared matmul producers are not absorbed by checking a matmul with
+  // two consumers remains materialized and both outputs match eager results.
+  {
+    auto fun = [](const std::vector<array>& ins) {
+      auto x = matmul(ins[0], ins[1]);
+      return std::vector<array>{x + ins[2], x * array(2.0f)};
+    };
+    auto outs = compile(fun)({a, b, bias});
+    // Check structure before parity, since eval can detach the graph.
+    for (int i = 0; i < 2; ++i) {
+      auto& p = outs[i].primitive();
+      CHECK_NE(typeid(p), typeid(CompiledMatmul));
+    }
+    auto& mp = outs[0].inputs()[0].primitive();
+    CHECK_EQ(typeid(mp), typeid(Matmul));
+    auto expected = fun({a, b, bias});
+    for (int i = 0; i < 2; ++i) {
+      CHECK(matmul_allclose(outs[i], expected[i]));
+    }
+  }
+
+  // Proves a self-referential activation can be an epilogue by compiling
+  // x*sigmoid(x) after matmul and checking it fuses with correct values.
+  check_matmul_fusion(
+      [](const std::vector<array>& ins) {
+        auto x = matmul(ins[0], ins[1]);
+        return std::vector<array>{x * sigmoid(x)};
+      },
+      {a, b},
+      true);
+
+  // Proves duplicate references block matmul fusion by using x+x and checking
+  // the matmul stays as a separate producer.
+  {
+    auto fun = [](const std::vector<array>& ins) {
+      auto x = matmul(ins[0], ins[1]);
+      return std::vector<array>{x + x};
+    };
+    auto out = compile(fun)({a, b})[0];
+    // Check structure before parity, since eval can detach the graph.
+    auto& p = out.primitive();
+    CHECK_NE(typeid(p), typeid(CompiledMatmul));
+    auto& mp = out.inputs()[0].primitive();
+    CHECK_EQ(typeid(mp), typeid(Matmul));
+    CHECK(matmul_allclose(out, fun({a, b})[0]));
+  }
+
+  // Proves cross-stream consumers are rejected by putting Add on a new stream
+  // and checking it remains above a separate Matmul.
+  {
+    auto fun = [](const std::vector<array>& ins) {
+      auto s2 = new_stream(default_device());
+      auto x = matmul(ins[0], ins[1]);
+      return std::vector<array>{add(x, ins[2], s2)};
+    };
+    auto out = compile(fun)({a, b, c})[0];
+    // Check structure before parity, since eval can detach the graph.
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Add));
+    auto& mp = out.inputs()[0].primitive();
+    CHECK_EQ(typeid(mp), typeid(Matmul));
+    CHECK(matmul_allclose(out, fun({a, b, c})[0]));
+  }
+
+  // Proves Broadcast consumers are excluded by broadcasting matmul output and
+  // checking the Broadcast remains above a separate Matmul.
+  {
+    auto fun = [](const std::vector<array>& ins) {
+      return std::vector<array>{
+          broadcast_to(matmul(ins[0], ins[1]), {3, 4, 16})};
+    };
+    auto out = compile(fun)({a, b})[0];
+    auto& p = out.primitive();
+    CHECK_NE(typeid(p), typeid(CompiledMatmul));
+    auto& mp = out.inputs()[0].primitive();
+    CHECK_EQ(typeid(mp), typeid(Matmul));
+    CHECK(matmul_allclose(out, fun({a, b})[0]));
+  }
+
+  // Proves non-fusable consumers are rejected by reducing matmul output and
+  // checking Reduce remains above a separate Matmul.
+  {
+    auto fun = [](const std::vector<array>& ins) {
+      return std::vector<array>{sum(matmul(ins[0], ins[1]), true)};
+    };
+    auto out = compile(fun)({a, b})[0];
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Reduce));
+    auto& mp = out.inputs()[0].primitive();
+    CHECK_EQ(typeid(mp), typeid(Matmul));
+    CHECK(matmul_allclose(out, fun({a, b})[0]));
+  }
+
+  // Proves global-output matmuls are not absorbed by returning x and x+bias,
+  // then checking x remains a Matmul and values match eager.
+  {
+    auto fun = [](const std::vector<array>& ins) {
+      auto x = matmul(ins[0], ins[1]);
+      return std::vector<array>{x, x + ins[2]};
+    };
+    auto outs = compile(fun)({a, b, c});
+    auto& p0 = outs[0].primitive();
+    CHECK_EQ(typeid(p0), typeid(Matmul));
+    auto& p1 = outs[1].primitive();
+    CHECK_NE(typeid(p1), typeid(CompiledMatmul));
+    auto expected = fun({a, b, c});
+    for (int i = 0; i < 2; ++i) {
+      CHECK(matmul_allclose(outs[i], expected[i]));
+    }
+  }
+
+  // Proves no_fuse disables both normal fusion and matmul epilogue fusion by
+  // checking matmul+bias stays as Add over Matmul.
+  {
+    detail::compile_clear_cache();
+    set_compile_mode(CompileMode::no_fuse);
+    auto out = compile(matmul_bias_fun)({a, b, c})[0];
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Add));
+    CHECK(matmul_allclose(out, matmul_bias_fun({a, b, c})[0]));
+    set_compile_mode(CompileMode::enabled);
+    detail::compile_clear_cache();
+  }
+}
+
+TEST_CASE("test compile matmul epilogue shapes") {
+  auto a = random::uniform({4, 8});
+  auto b = random::uniform({8, 16});
+  auto bias = random::uniform({16});
+  eval(a, b, bias);
+
+  // Proves batched matmul+bias preserves broadcast semantics by fusing
+  // {2,4,8}@{2,8,16}+{16} and checking parity.
+  auto a3 = random::uniform({2, 4, 8});
+  auto b3 = random::uniform({2, 8, 16});
+  eval(a3, b3);
+  check_matmul_fusion(matmul_bias_fun, {a3, b3, bias}, true);
+
+  // Proves lone elementwise consumers become epilogues by fusing matmul*c
+  // with a runtime matrix operand and checking parity.
+  auto c = random::uniform({4, 16});
+  eval(c);
+  check_matmul_fusion(
+      [](const std::vector<array>& ins) {
+        return std::vector<array>{matmul(ins[0], ins[1]) * ins[2]};
+      },
+      {a, b, c},
+      true);
+
+  // Proves vector-matmul epilogues stay correct by compiling v@b+bias and
+  // checking parity without depending on reshape-heavy graph structure.
+  {
+    auto v = random::uniform({8});
+    eval(v);
+    auto fun = [](const std::vector<array>& ins) {
+      return std::vector<array>{matmul(ins[0], ins[1]) + ins[2]};
+    };
+    auto out = compile(fun)({v, b, bias})[0];
+    CHECK(matmul_allclose(out, fun({v, b, bias})[0]));
+  }
+
+  // Proves shapeless fallback epilogues compute new shapes by reusing
+  // matmul+bias+ReLU with different input rows and checking parity.
+  {
+    auto relu_bias = [](const std::vector<array>& ins) {
+      auto y = matmul(ins[0], ins[1]) + ins[2];
+      return std::vector<array>{maximum(y, array(0.0f))};
+    };
+    auto cfun = compile(+relu_bias, /* shapeless = */ true);
+    auto out = cfun({a, b, bias})[0];
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(CompiledMatmul));
+    auto a2 = random::uniform({7, 8});
+    eval(a2);
+    for (auto& lhs : {a, a2}) {
+      CHECK(matmul_allclose(
+          cfun({lhs, b, bias})[0], relu_bias({lhs, b, bias})[0]));
+    }
+  }
+}
+
+TEST_CASE("test compile matmul epilogue chained") {
+  // Proves chained matmuls each absorb their own epilogue by checking the
+  // final CompiledMatmul consumes another CompiledMatmul and matches eager.
+  auto a = random::uniform({4, 8});
+  auto b = random::uniform({8, 16});
+  auto w = random::uniform({16, 8});
+  auto bias = random::uniform({8});
+  eval(a, b, w, bias);
+
+  auto fun = [](const std::vector<array>& ins) {
+    auto h = maximum(matmul(ins[0], ins[1]), array(0.0f));
+    return std::vector<array>{matmul(h, ins[2]) + ins[3]};
+  };
+  auto out = compile(fun)({a, b, w, bias})[0];
+  // Structure first: eval detaches the graph
+  auto& p = out.primitive();
+  CHECK_EQ(typeid(p), typeid(CompiledMatmul));
+  auto& hp = out.inputs()[0].primitive();
+  CHECK_EQ(typeid(hp), typeid(CompiledMatmul));
+  CHECK(matmul_allclose(out, fun({a, b, w, bias})[0]));
+}
+
+TEST_CASE("test compiled matmul addmm dispatch") {
+  // Proves matches_addmm drives backend dispatch by inspecting real
+  // CompiledMatmul nodes for AddMM eligibility and extracted parameters.
+  auto a = random::uniform({4, 8});
+  auto b = random::uniform({8, 16});
+  auto c = random::uniform({4, 16});
+  eval(a, b, c);
+
+  float alpha, beta;
+  int c_index;
+
+  // Proves AddMM-shaped epilogues report alpha, beta, and c_index correctly
+  // by matching them against the compiled node's runtime inputs.
+  {
+    auto fun = [](const std::vector<array>& ins) {
+      return std::vector<array>{
+          array(0.5f) * matmul(ins[0], ins[1]) + array(-1.5f) * ins[2]};
+    };
+    auto out = compile(fun)({a, b, c})[0];
+    auto p = std::dynamic_pointer_cast<CompiledMatmul>(out.primitive_ptr());
+    REQUIRE(p);
+    CHECK(p->matches_addmm(alpha, beta, c_index));
+    CHECK_EQ(alpha, 0.5f);
+    CHECK_EQ(beta, -1.5f);
+    CHECK_EQ(out.inputs()[c_index].id(), c.id());
+    CHECK(matmul_allclose(out, fun({a, b, c})[0]));
+  }
+
+  // Proves non-AddMM fused epilogues reject AddMM dispatch by adding ReLU and
+  // checking matches_addmm returns false while values still match.
+  {
+    auto fun = [](const std::vector<array>& ins) {
+      auto y = matmul(ins[0], ins[1]) + ins[2];
+      return std::vector<array>{maximum(y, array(0.0f))};
+    };
+    auto out = compile(fun)({a, b, c})[0];
+    auto p = std::dynamic_pointer_cast<CompiledMatmul>(out.primitive_ptr());
+    REQUIRE(p);
+    CHECK(!p->matches_addmm(alpha, beta, c_index));
+    CHECK(matmul_allclose(out, fun({a, b, c})[0]));
+  }
+}
+
+TEST_CASE("test compiled matmul fallback") {
+  // Proves the fallback evaluator and equivalence checks by hand-building a
+  // CompiledMatmul with a Multiply epilogue and comparing variants.
+  auto s = default_stream(default_device());
+  auto a = random::uniform({4, 8});
+  auto b = random::uniform({8, 16});
+  auto c = random::uniform({4, 16});
+  eval(a, b, c);
+
+  // Build a one-op epilogue over placeholder accumulator/c inputs so the test
+  // can vary epilogue and producer primitives directly.
+  array acc(Shape{4, 16}, float32, nullptr, {});
+  array c_in(Shape{4, 16}, float32, nullptr, {});
+  auto make_epilogue = [&](std::shared_ptr<Primitive> op) {
+    array r(
+        Shape{4, 16}, float32, std::move(op), std::vector<array>{acc, c_in});
+    return std::make_shared<Compiled>(
+        s,
+        std::vector<array>{acc, c_in},
+        std::vector<array>{r},
+        std::vector<array>{r},
+        std::unordered_set<uintptr_t>{});
+  };
+
+  array out(
+      Shape{4, 16},
+      float32,
+      std::make_shared<CompiledMatmul>(
+          s,
+          std::make_shared<Matmul>(s),
+          make_epilogue(std::make_shared<Multiply>(s))),
+      std::vector<array>{a, b, c});
+
+  // Proves epilogue structure participates in equivalence by comparing
+  // Multiply and Add epilogues before eval detaches the graph.
+  CompiledMatmul with_add(
+      s, std::make_shared<Matmul>(s), make_epilogue(std::make_shared<Add>(s)));
+  CHECK(!out.primitive().is_equivalent(with_add));
+
+  // Proves producer primitive type participates in equivalence by comparing
+  // Matmul and AddMM producers with the same Multiply epilogue.
+  CompiledMatmul with_addmm_producer(
+      s,
+      std::make_shared<AddMM>(s, 1.0f, 1.0f),
+      make_epilogue(std::make_shared<Multiply>(s)));
+  CHECK(!out.primitive().is_equivalent(with_addmm_producer));
+
+  // Proves identical producer and epilogue structures compare equivalent by
+  // constructing a matching CompiledMatmul.
+  CompiledMatmul same(
+      s,
+      std::make_shared<Matmul>(s),
+      make_epilogue(std::make_shared<Multiply>(s)));
+  CHECK(out.primitive().is_equivalent(same));
+
+  CHECK(matmul_allclose(out, matmul(a, b) * c));
 }
