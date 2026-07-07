@@ -5,16 +5,28 @@
 #include <sys/socket.h>
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace mlx::core::distributed::detail {
 
+/**
+ * A resolved endpoint. Holds all getaddrinfo results so socket setup can
+ * try each candidate until one works.
+ */
 struct address_t {
-  sockaddr_storage addr;
-  socklen_t len;
+  struct candidate_t {
+    int family;
+    int socktype;
+    int protocol;
+    sockaddr_storage addr;
+    socklen_t len;
 
-  const sockaddr* get() const {
-    return (struct sockaddr*)&addr;
-  }
+    const sockaddr* get() const {
+      return (struct sockaddr*)&addr;
+    }
+  };
+
+  std::vector<candidate_t> candidates;
 };
 
 /**

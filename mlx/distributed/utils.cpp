@@ -26,10 +26,25 @@ address_t parse_address(const std::string& ip, const std::string& port) {
     throw std::runtime_error(msg.str());
   }
 
+  // Keep all resolved addresses (v4 and v6) so socket setup can try each
+  // candidate until one binds/connects.
   address_t result;
-  memcpy(&result.addr, res->ai_addr, res->ai_addrlen);
-  result.len = res->ai_addrlen;
+  for (struct addrinfo* p = res; p != nullptr; p = p->ai_next) {
+    address_t::candidate_t c;
+    c.family = p->ai_family;
+    c.socktype = p->ai_socktype;
+    c.protocol = p->ai_protocol;
+    memcpy(&c.addr, p->ai_addr, p->ai_addrlen);
+    c.len = p->ai_addrlen;
+    result.candidates.push_back(c);
+  }
   freeaddrinfo(res);
+
+  if (result.candidates.empty()) {
+    std::ostringstream msg;
+    msg << "No usable addresses for " << ip << ":" << port;
+    throw std::runtime_error(msg.str());
+  }
 
   return result;
 }
@@ -51,12 +66,10 @@ address_t parse_address(const std::string& ip_port) {
 }
 
 TCPSocket::TCPSocket(const char* tag) {
-  sock_ = socket(AF_INET, SOCK_STREAM, 0);
-  if (sock_ < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't create socket (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
-  }
+  // Socket creation is deferred to listen()/connect() where the address
+  // family of the chosen candidate is known.
+  (void)tag;
+  sock_ = -1;
 }
 
 TCPSocket::TCPSocket(TCPSocket&& s) {
@@ -88,39 +101,48 @@ int TCPSocket::detach() {
 }
 
 void TCPSocket::listen(const char* tag, const address_t& addr) {
-  int success;
+  int last_errno = 0;
 
-  // Make sure we can launch immediately after shutdown by setting the
-  // reuseaddr option so that we don't get address already in use errors
-  int enable = 1;
-  success = setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
-  if (success < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't enable reuseaddr (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
-  }
-  success = setsockopt(sock_, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int));
-  if (success < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't enable reuseport (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
+  // Try each resolved candidate and keep the first that binds and listens.
+  for (const auto& c : addr.candidates) {
+    int sock = socket(c.family, c.socktype, c.protocol);
+    if (sock < 0) {
+      last_errno = errno;
+      continue;
+    }
+
+    // Make sure we can launch immediately after shutdown by setting the
+    // reuseaddr option so that we don't get address already in use errors
+    int enable = 1;
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0 ||
+        setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) < 0) {
+      last_errno = errno;
+      close(sock);
+      continue;
+    }
+
+    // Bind the socket to the address and port
+    if (bind(sock, c.get(), c.len) < 0) {
+      last_errno = errno;
+      close(sock);
+      continue;
+    }
+
+    // Prepare waiting for connections
+    if (::listen(sock, 0) < 0) {
+      last_errno = errno;
+      close(sock);
+      continue;
+    }
+
+    sock_ = sock;
+    return;
   }
 
-  // Bind the socket to the address and port
-  success = bind(sock_, addr.get(), addr.len);
-  if (success < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't bind socket (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
-  }
-
-  // Prepare waiting for connections
-  success = ::listen(sock_, 0);
-  if (success < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't listen (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
-  }
+  std::ostringstream msg;
+  msg << tag << " Couldn't listen on any resolved address (last error: "
+      << last_errno << ")";
+  throw std::runtime_error(msg.str());
 }
 
 TCPSocket TCPSocket::accept(const char* tag) {
@@ -166,22 +188,25 @@ TCPSocket TCPSocket::connect(
     int num_retries,
     int wait,
     std::function<void(int, int)> cb) {
-  int sock, success;
+  int last_errno = 0;
 
-  // Attempt to connect `num_retries` times with exponential backoff.
+  // Attempt to connect `num_retries` times with exponential backoff. Each
+  // attempt tries every resolved candidate; failed sockets are closed before
+  // moving on.
   for (int attempt = 0; attempt < num_retries; attempt++) {
-    // Create the socket
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-      std::ostringstream msg;
-      msg << tag << " Couldn't create socket to connect (error: " << errno
-          << ")";
-      throw std::runtime_error(msg.str());
-    }
+    for (const auto& c : addr.candidates) {
+      int sock = socket(c.family, c.socktype, c.protocol);
+      if (sock < 0) {
+        last_errno = errno;
+        continue;
+      }
 
-    success = ::connect(sock, addr.get(), addr.len);
-    if (success == 0) {
-      break;
+      if (::connect(sock, c.get(), c.len) == 0) {
+        return TCPSocket(sock);
+      }
+
+      last_errno = errno;
+      close(sock);
     }
 
     if (cb != nullptr) {
@@ -194,13 +219,10 @@ TCPSocket TCPSocket::connect(
     wait <<= 1;
   }
 
-  if (success < 0) {
-    std::ostringstream msg;
-    msg << tag << " Couldn't connect (error: " << errno << ")";
-    throw std::runtime_error(msg.str());
-  }
-
-  return TCPSocket(sock);
+  std::ostringstream msg;
+  msg << tag << " Couldn't connect to any resolved address (last error: "
+      << last_errno << ")";
+  throw std::runtime_error(msg.str());
 }
 
 } // namespace mlx::core::distributed::detail

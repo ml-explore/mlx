@@ -141,7 +141,10 @@ Connection::~Connection() {
 void Connection::allocate_protection_domain() {
   protection_domain = ibv().alloc_pd(ctx);
   if (protection_domain == nullptr) {
-    throw std::runtime_error("[jaccl] Couldn't allocate protection domain");
+    throw std::runtime_error(
+        "[JACCL] RDMA initialization failed: ibv_alloc_pd returned null. "
+        "Ensure the process has the com.apple.private.IORDMAFamilyUC "
+        "entitlement.");
   }
 }
 
