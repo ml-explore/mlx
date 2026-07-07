@@ -41,4 +41,12 @@ void cutlass_segmented_mm(
     array& out,
     cu::CommandEncoder& encoder);
 
+void cudnn_grouped_mm(
+    const array& x,
+    const array& w,
+    const array& rhs_indices,
+    const std::optional<array>& lhs_indices,
+    array& out,
+    cu::CommandEncoder& encoder);
+
 } // namespace mlx::core

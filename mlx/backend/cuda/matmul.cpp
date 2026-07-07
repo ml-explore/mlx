@@ -394,8 +394,15 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto lhs_indices = ensure_row_contiguous(inputs[2], encoder, s);
   auto rhs_indices = ensure_row_contiguous(inputs[3], encoder, s);
 
-  // We are walking a in order and b is also in order so we can batch up the
-  // matmuls and reuse reading a and b.
+// We are walking a in order and b is also in order so we can batch up the
+// matmuls and reuse reading a and b.
+#if CUDNN_VERSION >= 91800:
+  if (right_sorted_ == true) {
+    cudnn_grouped_mm(
+        a, b, rhs_indices, std::optional<array>(lhs_indices), out, encoder);
+    return;
+  }
+#endif
   if (M == 1 && right_sorted_ == true) {
     cutlass_grouped_gemm_unaligned(
         a_transposed,

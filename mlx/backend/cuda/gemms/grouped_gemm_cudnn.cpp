@@ -40,12 +40,14 @@ struct GatherMMCacheKey {
   std::array<int64_t, GMM_NDIM> x_strides;
   std::array<int, GMM_NDIM> w_shape;
   std::array<int64_t, GMM_NDIM> w_strides;
+  std::array<int, GMM_NDIM> out_shape;
 };
 
 inline BytesKey<GatherMMCacheKey> build_grouped_mm_key(
     cu::CommandEncoder& encoder,
     const array& x,
     const array& w,
+    const array& out,
     int mode) {
   BytesKey<GatherMMCacheKey> key;
   key.pod.device_id = encoder.device().cuda_device();
@@ -55,17 +57,11 @@ inline BytesKey<GatherMMCacheKey> build_grouped_mm_key(
   key.pod.x_strides = vector_key<GMM_NDIM>(x.strides());
   key.pod.w_shape = vector_key<GMM_NDIM>(w.shape());
   key.pod.w_strides = vector_key<GMM_NDIM>(w.strides());
+  key.pod.out_shape = vector_key<GMM_NDIM>(out.shape());
   return key;
 }
 
-enum UIDS {
-  X,
-  W,
-  TOKEN_OFFSETS,
-  TOKEN_INDEX,
-  TOKEN_KS,
-  O,
-};
+enum UIDS { X, W, TOKEN_OFFSETS, TOKEN_INDEX, O };
 
 fe::MoeGroupedMatmulMode_t grouped_mm_mode(
     const std::optional<array>& lhs_indices) {
@@ -78,8 +74,8 @@ DnnGraph grouped_mm_graph(
     const array& x,
     const array& w,
     const array& offsets,
+    const array& rhs_indices,
     const std::optional<array>& lhs_indices,
-    int top_k,
     const array& output) {
   DnnGraph graph(handle, x.dtype());
 
@@ -91,18 +87,16 @@ DnnGraph grouped_mm_graph(
 
   auto moe_grouped_matmul_attr = fe::graph::Moe_grouped_matmul_attributes()
                                      .set_name("grouped_matmul")
-                                     .set_mode(mode)
-                                     .set_top_k(top_k);
+                                     .set_mode(mode);
+
+  std::shared_ptr<fe::graph::Tensor_attributes> token_index = nullptr;
+  std::shared_ptr<fe::graph::Tensor_attributes> token_ks = nullptr;
+  if (lhs_indices) {
+    token_index = graph.tensor("TOKEN_INDEX", TOKEN_INDEX, *lhs_indices);
+  }
 
   auto out_ = graph.moe_grouped_matmul(
-      x_,
-      w_,
-      offsets_,
-      lhs_indices.has_value()
-          ? graph.tensor("TOKEN_INDEX", TOKEN_INDEX, *lhs_indices)
-          : nullptr,
-      nullptr,
-      moe_grouped_matmul_attr);
+      x_, w_, offsets_, token_index, token_ks, moe_grouped_matmul_attr);
   graph.tensor(out_, O, output)->set_output(true);
 
   CHECK_CUDNN_ERROR(graph.prepare());
@@ -121,15 +115,16 @@ auto& grouped_mm_cache() {
 // rhs_indices (per-slot expert id) always an input to calculate the offsets.
 // lhs_indices selects the mode: provided -> GATHER (gather rows before matmul),
 // absent -> NONE (rows already grouped by expert)
-void grouped_mm_cudnn(
+// currently we support only gatehr and none
+void cudnn_grouped_mm(
     const array& x,
     const array& w,
     const array& rhs_indices,
-    const std::optional<array>& lhs_indices,
-    int top_k,
+    const std::optional<array>&
+        lhs_indices, // for gather/scatter mode, optional
     array& out,
     Stream s) {
-  nvtx3::scoped_range r("grouped_mm_cudnn");
+  nvtx3::scoped_range r("cudnn_grouped_mm");
 
   auto& encoder = cu::get_command_encoder(s);
   auto handle = get_cudnn_handle(encoder.device());
@@ -140,11 +135,10 @@ void grouped_mm_cudnn(
   int group_count = w_c.shape(0);
   array token_offsets = compute_token_offset(rhs_indices, group_count, encoder);
 
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
-
   encoder.set_input_array(x_c);
   encoder.set_input_array(w_c);
   encoder.set_input_array(token_offsets);
+
   if (lhs_indices.has_value()) {
     encoder.set_input_array(*lhs_indices);
   }
@@ -152,12 +146,12 @@ void grouped_mm_cudnn(
 
   int mode = static_cast<int>(grouped_mm_mode(lhs_indices));
 
-  auto cache_key = build_grouped_mm_key(encoder, x_c, w_c, mode);
+  auto cache_key = build_grouped_mm_key(encoder, x_c, w_c, out, mode);
   auto& cache = grouped_mm_cache();
   auto it = cache.find(cache_key);
   if (it == cache.end()) {
     auto graph = grouped_mm_graph(
-        handle, x_c, w_c, token_offsets, lhs_indices, top_k, out);
+        handle, x_c, w_c, token_offsets, rhs_indices, lhs_indices, out);
     it = cache.emplace(cache_key, std::move(graph)).first;
   }
   auto& graph = it->second;

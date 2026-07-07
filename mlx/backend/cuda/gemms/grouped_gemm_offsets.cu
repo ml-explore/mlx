@@ -40,7 +40,7 @@ array compute_token_offset(
     cu::CommandEncoder& encoder) {
   array offsets(
       cu::malloc_async(group_count * sizeof(int32_t), encoder),
-      {group_count, 1, 1},
+      {group_count, 1, 1}, // 3D broadcasting required by cudnn
       int32);
   encoder.add_temporary(offsets);
 
