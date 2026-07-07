@@ -51,6 +51,7 @@ jobs:
     runs-on: |-
       ${{ case(matrix.os == 'Windows',
                case(matrix.arch == 'aarch64', 'windows-11-arm',
+                    startsWith(matrix.toolkit, 'cuda'), 'windows-2022-large',
                     'windows-2022'),
                case(matrix.arch == 'x86_64' && startsWith(matrix.toolkit, 'cuda'), 'gpu-t4-4-core',
                     matrix.arch == 'aarch64', 'ubuntu-22.04-arm',
