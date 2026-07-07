@@ -737,7 +737,7 @@ void steel_gemm_splitk_axpby_nax(
       /* const std::string& kernel_name = */ base_name,
       /* const std::string& hash_name = */ hash_name,
       /* const metal::MTLFCList& func_consts = */ func_consts,
-      /* const array& out = */ C_split,
+      /* const array& in = */ a,
       /* bool transpose_a = */ transpose_a,
       /* bool transpose_b = */ transpose_b,
       /* int bm = */ bm,
