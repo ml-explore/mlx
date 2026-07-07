@@ -14,6 +14,7 @@ Linear Algebra
     cholesky
     cholesky_inv
     cross
+    det
     qr
     svd
     eigvals
@@ -23,5 +24,6 @@ Linear Algebra
     lu
     lu_factor
     pinv
+    slogdet
     solve
     solve_triangular

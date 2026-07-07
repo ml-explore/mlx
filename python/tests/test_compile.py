@@ -4,6 +4,7 @@ import gc
 import inspect
 import io
 import math
+import threading
 from functools import partial, wraps
 from io import StringIO
 
@@ -43,6 +44,59 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = compiled_fn(x, y)
         self.assertEqual(out.dtype, mx.int32)
         self.assertTrue(mx.array_equal(out, mx.array([2, 4])))
+
+    def test_compile_nonfinite_constants(self):
+        # Regression test: a non-finite scalar constant (NaN / infinity) baked
+        # into a fused compiled kernel used to stream a bare token (e.g. `nan`)
+        # into the generated kernel source, which is not a valid identifier and
+        # broke compilation (notably on the Metal backend).
+        x = mx.array([1.0, -1.0])
+
+        for dtype in (mx.float32, mx.float16, mx.bfloat16):
+            xd = x.astype(dtype)
+
+            nan_fn = mx.compile(
+                lambda a: mx.where(a > 0, a, mx.array(float("nan"), dtype=a.dtype))
+            )
+            out = nan_fn(xd)
+            mx.eval(out)
+            self.assertEqual(out[0].item(), 1.0)
+            self.assertTrue(math.isnan(out[1].item()))
+
+            neg_inf_fn = mx.compile(
+                lambda a: mx.where(a > 0, a, mx.array(float("-inf"), dtype=a.dtype))
+            )
+            out = neg_inf_fn(xd)
+            mx.eval(out)
+            self.assertEqual(out[0].item(), 1.0)
+            self.assertEqual(out[1].item(), float("-inf"))
+
+    def test_compile_tuple_output_in_thread(self):
+        @mx.compile
+        def fun(x):
+            return x + 1, x * 2
+
+        results = []
+        errors = []
+
+        def worker():
+            try:
+                x = mx.array([1.0])
+                y, z = fun(x)
+                mx.eval(y, z)
+                results.append((y.item(), z.item()))
+            except Exception as e:
+                errors.append(e)
+
+        for _ in range(3):
+            thread = threading.Thread(target=worker)
+            thread.start()
+            thread.join()
+            gc.collect()
+
+        if errors:
+            raise errors[0]
+        self.assertEqual(results, [(2.0, 2.0)] * 3)
 
     def test_compile_grad(self):
         def loss_fn(x):
@@ -504,6 +558,45 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(compiled_zero_like(y).shape, y_shape)
         self.assertEqual(compiled_ones_like(y).shape, y_shape)
 
+    def test_shapeless_compile_gather_qmm(self):
+        K, N, num_experts = 64, 32, 4
+
+        w = mx.random.normal((num_experts, N, K))
+        qw, s, b = mx.quantize(w)
+        mx.eval(qw, s, b)
+
+        idx = mx.array([0, 1, 2, 3])
+        x4 = mx.ones((num_experts, 4, K))
+        x8 = mx.ones((num_experts, 8, K))
+
+        def fn(x):
+            return mx.gather_qmm(
+                x, qw, s, b, lhs_indices=idx, rhs_indices=idx, transpose=True
+            )
+
+        cfn = mx.compile(fn, shapeless=True)
+
+        self.assertEqual(cfn(x4).shape, fn(x4).shape)
+        self.assertEqual(cfn(x8).shape, fn(x8).shape)
+
+    def test_shapeless_compile_gather_mm(self):
+        K, N, num_experts = 64, 32, 4
+
+        idx = mx.array([0, 1, 2, 3])
+        b = mx.random.normal((num_experts, K, N))
+        mx.eval(b)
+
+        x4 = mx.ones((num_experts, 4, K))
+        x8 = mx.ones((num_experts, 8, K))
+
+        def fn(x):
+            return mx.gather_mm(x, b, lhs_indices=idx, rhs_indices=idx)
+
+        cfn = mx.compile(fn, shapeless=True)
+
+        self.assertEqual(cfn(x4).shape, fn(x4).shape)
+        self.assertEqual(cfn(x8).shape, fn(x8).shape)
+
     def test_compile_with_constant(self):
         # Test float
         @partial(mx.compile)
@@ -884,6 +977,34 @@ class TestCompile(mlx_tests.MLXTestCase):
         fun = mx.compile(lambda a, b: a @ b, shapeless=True)
         self.assertTrue(mx.allclose(fun(a, b), a @ b))
 
+    def test_shapeless_compile_addmm(self):
+        def fun(c, a, b):
+            return mx.addmm(c, a, b)
+
+        cfun = mx.compile(fun, shapeless=True)
+
+        # First shape
+        c = mx.ones((2, 4))
+        a = mx.ones((2, 3))
+        b = mx.ones((3, 4))
+        self.assertTrue(mx.allclose(cfun(c, a, b), fun(c, a, b)))
+
+        # Different shape, same ranks — should not recompile
+        c = mx.ones((3, 5))
+        a = mx.ones((3, 6))
+        b = mx.ones((6, 5))
+        self.assertTrue(mx.allclose(cfun(c, a, b), fun(c, a, b)))
+
+        # With alpha and beta
+        fun2 = mx.compile(
+            lambda c, a, b: mx.addmm(c, a, b, alpha=2.0, beta=3.0), shapeless=True
+        )
+        c = mx.ones((2, 4))
+        a = mx.ones((2, 3))
+        b = mx.ones((3, 4))
+        expected = 3.0 * c + 2.0 * (a @ b)
+        self.assertTrue(mx.allclose(fun2(c, a, b), expected))
+
     def test_shapeless_compile_slice_update(self):
         def fun(x):
             x[2] = mx.array([3.0])
@@ -988,6 +1109,45 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertEqual(out[0].shape, (3, 1, 4, 2))
         self.assertEqual(out[1].shape, (2, 2, 5))
+
+    def test_shapeless_compile_reduce_after_gather(self):
+        # Reductions over dimensions that happen to have size 1 at trace time
+        # used to be elided from the graph, so replays with larger dynamic
+        # shapes returned stale values (issue #3201)
+        buf = mx.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        reductions = [
+            mx.sum,
+            mx.mean,
+            mx.prod,
+            mx.min,
+            mx.max,
+            mx.all,
+            mx.any,
+            mx.argmin,
+            mx.argmax,
+        ]
+        for reduction in reductions:
+
+            def fun(buf, idx):
+                return reduction(mx.take(buf, idx, axis=0))
+
+            # Trace with a size-1 reduction and replay with larger sizes
+            cfun = mx.compile(fun, shapeless=True)
+            for n in [1, 2, 3, 4]:
+                idx = mx.arange(n)
+                self.assertTrue(
+                    mx.array_equal(cfun(buf, idx), fun(buf, idx)),
+                    f"{reduction.__name__} failed for n={n}",
+                )
+
+            # Replay with size 1 so the reduction is an identity at runtime
+            cfun = mx.compile(fun, shapeless=True)
+            for n in [2, 1]:
+                idx = mx.arange(n)
+                self.assertTrue(
+                    mx.array_equal(cfun(buf, idx), fun(buf, idx)),
+                    f"{reduction.__name__} failed for replay with n={n}",
+                )
 
     def test_leaks(self):
         gc.collect()
@@ -1293,6 +1453,53 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(
             np.asarray(out, copy=False).__array_interface__["data"][0], in_ptr
         )
+
+    def test_compile_negative_strides(self):
+        # 1D negative stride with elementwise expression
+        @mx.compile
+        def f(x):
+            return 2.0 * x[::-1]
+
+        x = mx.arange(8, dtype=mx.float32)
+        expected = 2.0 * x[::-1]
+        self.assertTrue(mx.array_equal(f(x), expected))
+
+        # 1D negative stride with slice update
+        def g_eager(x):
+            base = mx.zeros_like(x)
+            base[::-1] += 2.0 * x[::-1]
+            return base
+
+        g_compiled = mx.compile(g_eager)
+        expected = g_eager(x)
+        self.assertTrue(mx.array_equal(g_compiled(x), expected))
+
+        # 2D negative stride
+        @mx.compile
+        def h(x):
+            return x[::-1] + 1.0
+
+        y = mx.arange(12, dtype=mx.float32).reshape(3, 4)
+        expected = y[::-1] + 1.0
+        self.assertTrue(mx.array_equal(h(y), expected))
+
+        # Mixed positive and negative strides
+        @mx.compile
+        def m(x):
+            return x[::-1, ::2] * 3.0
+
+        z = mx.arange(24, dtype=mx.float32).reshape(4, 6)
+        expected = z[::-1, ::2] * 3.0
+        self.assertTrue(mx.array_equal(m(z), expected))
+
+        # 4D negative stride (exercises work_per_thread > 1 path)
+        @mx.compile
+        def p(x):
+            return x + 1.0
+
+        w = mx.arange(120, dtype=mx.float32).reshape(2, 3, 4, 5)
+        expected = w[::-1, :, ::-1, :] + 1.0
+        self.assertTrue(mx.array_equal(p(w[::-1, :, ::-1, :]), expected))
 
 
 if __name__ == "__main__":

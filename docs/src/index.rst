@@ -32,7 +32,7 @@ are the CPU and GPU.
    install
 
 .. toctree::
-   :caption: Usage 
+   :caption: Usage
    :maxdepth: 1
 
    usage/quick_start
@@ -78,6 +78,7 @@ are the CPU and GPU.
    python/optimizers
    python/distributed
    python/tree_utils
+   python/printoptions
 
 .. toctree::
    :caption: C++ API Reference

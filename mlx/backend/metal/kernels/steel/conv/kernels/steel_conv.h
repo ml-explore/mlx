@@ -135,7 +135,7 @@ implicit_gemm_conv_2d(
   C += tid.z * N;
 
   B += c_col * K;
-  C += c_row * (N * params->groups) + c_col;
+  C += static_cast<size_t>(c_row) * N * params->groups + c_col;
 
   const int2 offsets_a(0, c_row);
   const int2 offsets_b(0, c_col);

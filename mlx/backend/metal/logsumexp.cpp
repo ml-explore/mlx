@@ -19,14 +19,15 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   auto& s = stream();
   auto& d = metal::device(s.device);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   // Make sure that the last dimension is contiguous
-  auto ensure_contiguous = [&s, &d](const array& x) {
+  auto ensure_contiguous = [&](const array& x) {
     if (x.flags().contiguous && x.strides()[x.ndim() - 1] == 1) {
       return x;
     } else {
       array x_copy = contiguous_copy_gpu(x, s);
-      d.add_temporary(x_copy, s.index);
+      compute_encoder.add_temporary(x_copy);
       return x_copy;
     }
   };
@@ -66,7 +67,6 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   kernel_name += type_to_name(out);
 
   auto kernel = get_logsumexp_kernel(d, kernel_name, out);
-  auto& compute_encoder = d.get_command_encoder(s.index);
   {
     MTL::Size grid_dims, group_dims;
     if (axis_size <= looped_limit) {

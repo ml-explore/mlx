@@ -118,7 +118,7 @@ void RoPE::eval_gpu(
       {&head_seq_transpose, MTL::DataType::DataTypeBool, 3}};
 
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   float base = std::log2(base_);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -133,8 +133,9 @@ void RoPE::eval_gpu(
   if (single) {
     compute_encoder.set_bytes(out_strides, 1, 4);
     uint32_t dim0 = dims_ / 2;
-    group_dims = get_block_dims(dim0, N, 1);
-    grid_dims = MTL::Size(dim0, N, 1);
+    uint32_t dim1 = B * N;
+    group_dims = get_block_dims(dim0, dim1, 1);
+    grid_dims = MTL::Size(dim0, dim1, 1);
   } else {
     compute_encoder.set_bytes(strides, 3, 4);
     compute_encoder.set_bytes(out_strides, 3, 5);

@@ -2,43 +2,12 @@
 
 #include "mlx/backend/cuda/cublas_utils.h"
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/backend/gpu/device_info.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
+
 namespace cublas_utils {
-
-namespace {
-
-struct CublasPreference {
-  CublasPreference(cu::Device& device) {
-    // The recommended cublas workspace size is 4 MiB for pre-Hopper and 32 MiB
-    // for Hopper+:
-    // https://docs.nvidia.com/cuda/cublas/#cublassetworkspace
-    uint64_t MiB = 1024 * 1024;
-    uint64_t workspace_size =
-        device.compute_capability_major() >= 9 ? 32 * MiB : 4 * MiB;
-
-    CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceCreate(&pref_));
-    CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceSetAttribute(
-        pref_,
-        CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
-        &workspace_size,
-        sizeof(uint64_t)));
-  }
-
-  ~CublasPreference() {
-    CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceDestroy(pref_));
-  }
-
-  cublasLtMatmulPreference_t pref_{nullptr};
-};
-
-} // namespace
-
-cublasLtMatmulPreference_t get_preference(cu::Device& device) {
-  static CublasPreference pref(device);
-  return pref.pref_;
-}
 
 cublasLtMatrixLayout_t create_matrix_layout(
     cudaDataType_t type,
@@ -70,6 +39,59 @@ cublasLtMatrixLayout_t create_matrix_layout(
 
 } // namespace cublas_utils
 
+namespace {
+
+auto& cublas_handles_cache() {
+  struct CublasHandles {
+    ~CublasHandles() {
+      if (handle) {
+        CHECK_CUBLAS_ERROR(cublasLtDestroy(handle));
+        CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceDestroy(pref));
+      }
+    }
+    cublasLtHandle_t handle{nullptr};
+    cublasLtMatmulPreference_t pref{nullptr};
+  };
+  static thread_local std::vector<CublasHandles> cache(gpu::device_count());
+  return cache;
+}
+
+auto get_cublas_handles(cu::Device& device) {
+  auto& storage = cublas_handles_cache().at(device.cuda_device());
+  if (!storage.handle) {
+    // Create cublasLt handle.
+    device.make_current();
+    CHECK_CUBLAS_ERROR(cublasLtCreate(&storage.handle));
+    // The recommended cublas workspace size is 4 MiB for pre-Hopper and 32
+    // MiB for Hopper+:
+    // https://docs.nvidia.com/cuda/cublas/#cublassetworkspace
+    uint64_t MiB = 1024 * 1024;
+    uint64_t workspace_size =
+        device.compute_capability_major() >= 9 ? 32 * MiB : 4 * MiB;
+    CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceCreate(&storage.pref));
+    CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceSetAttribute(
+        storage.pref,
+        CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
+        &workspace_size,
+        sizeof(uint64_t)));
+  }
+  return std::make_tuple(storage.handle, storage.pref);
+}
+
+} // namespace
+
+void check_cublas_error(const char* name, cublasStatus_t err) {
+  if (err != CUBLAS_STATUS_SUCCESS) {
+    // TODO: Use cublasGetStatusString when it is widely available.
+    throw std::runtime_error(
+        fmt::format("{} failed with code: {}.", name, static_cast<int>(err)));
+  }
+}
+
+void init_cublas_handles_cache() {
+  cublas_handles_cache();
+}
+
 CublasMatmulBase::~CublasMatmulBase() {
   CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutDestroy(a_desc_));
   CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutDestroy(b_desc_));
@@ -98,8 +120,7 @@ void CublasMatmulBase::init_base(
   M_ = a_rows;
   N_ = b_cols;
   scale_type_ = scale_type;
-  handle_ = device.get_cublaslt_handle();
-  pref_ = cublas_utils::get_preference(device);
+  std::tie(handle_, pref_) = get_cublas_handles(device);
   heuristic_.state = CUBLAS_STATUS_NOT_INITIALIZED;
 
   CHECK_CUBLAS_ERROR(

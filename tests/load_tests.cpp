@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <vector>
 
@@ -38,6 +39,79 @@ TEST_CASE("test save_safetensors") {
   CHECK_EQ(test2.dtype(), float32);
   CHECK_EQ(test2.shape(), Shape{2, 2});
   CHECK(array_equal(test2, ones({2, 2})).item<bool>());
+}
+
+// Helper to write a raw safetensors file from a JSON header and data buffer
+void write_raw_safetensors(
+    const std::string& path,
+    const std::string& json_header,
+    const std::vector<char>& data) {
+  std::ofstream out(path, std::ios::binary);
+  uint64_t header_len = json_header.size();
+  out.write(reinterpret_cast<const char*>(&header_len), 8);
+  out.write(json_header.data(), json_header.size());
+  out.write(data.data(), data.size());
+}
+
+TEST_CASE("test safetensors file boundary validation") {
+  // Test that loading a safetensors file where data_offsets extend beyond the
+  // actual file size throws an error instead of reading out-of-bounds memory.
+
+  SUBCASE("data_offsets beyond file boundary") {
+    std::string file_path = get_temp_file("test_oob_safetensors.safetensors");
+
+    // Create a header claiming a 4MB tensor but only provide 4 bytes of data
+    std::string json_header =
+        R"({"tensor":{"dtype":"F32","shape":[1000,1000],"data_offsets":[0,4000000]}})";
+    std::vector<char> data(4, 0); // Only 4 bytes of actual data
+
+    write_raw_safetensors(file_path, json_header, data);
+    CHECK_THROWS_AS(load_safetensors(file_path), std::runtime_error);
+  }
+
+  SUBCASE("data_offsets begin > end") {
+    std::string file_path = get_temp_file("test_reversed_offsets.safetensors");
+
+    std::string json_header =
+        R"({"tensor":{"dtype":"F32","shape":[1],"data_offsets":[100,0]}})";
+    std::vector<char> data(200, 0);
+
+    write_raw_safetensors(file_path, json_header, data);
+    CHECK_THROWS_AS(load_safetensors(file_path), std::runtime_error);
+  }
+
+  SUBCASE("valid file still loads correctly") {
+    std::string file_path = get_temp_file("test_valid_safetensors.safetensors");
+    auto map = std::unordered_map<std::string, array>();
+    map.insert({"test", array({1.0, 2.0, 3.0, 4.0})});
+    save_safetensors(file_path, map);
+    auto [dict, metadata] = load_safetensors(file_path);
+
+    CHECK_EQ(dict.size(), 1);
+    CHECK_EQ(dict.count("test"), 1);
+    array test = dict.at("test");
+    CHECK(array_equal(test, array({1.0, 2.0, 3.0, 4.0})).item<bool>());
+  }
+
+  SUBCASE("mismatched data_offsets") {
+    std::string file_path = get_temp_file("test_bad_offsets.safetensors");
+    std::string json_header =
+        R"({"t":{"dtype":"F32","shape":[10,10],"data_offsets":[0,4]}})";
+    std::vector<char> data(400, 0);
+
+    write_raw_safetensors(file_path, json_header, data);
+    CHECK_THROWS_AS(load_safetensors(file_path), std::runtime_error);
+  }
+
+  SUBCASE("bad data_offsets count") {
+    std::string file_path = get_temp_file("test_bad_offsets_count.safetensors");
+    std::string json_header =
+        R"({"t":{"dtype":"F32","shape":[1],"data_offsets":[0,4,8]}})";
+    std::vector<char> data(4, 0);
+
+    write_raw_safetensors(file_path, json_header, data);
+    CHECK_THROWS_AS(load_safetensors(file_path), std::runtime_error);
+  }
 }
 
 TEST_CASE("test gguf") {

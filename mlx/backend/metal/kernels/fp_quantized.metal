@@ -52,6 +52,17 @@
       D,       \
       batched)
 
+#define instantiate_quantized_wide(mode, name, type, vecs_per_tg, k_lanes, group_size, bits, batched) \
+  instantiate_kernel( \
+      #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_nv_" #vecs_per_tg "_kl_" #k_lanes "_batch_" #batched, \
+      fp_ ## name,    \
+      type,    \
+      group_size,      \
+      bits,       \
+      vecs_per_tg,       \
+      k_lanes,       \
+      batched)
+
 #define instantiate_quantized_split_k(mode, name, type, split_k, group_size, bits) \
   instantiate_kernel( \
       #mode "_" #name "_" #type "_gs_" #group_size "_b_" #bits "_spk_" #split_k, \
@@ -105,9 +116,22 @@
   instantiate_quantized_quad(mode, qmv_quad, type, 128, 1, group_size, bits) \
   instantiate_quantized_quad(mode, qmv_quad, type, 128, 0, group_size, bits)
 
+// vecs_per_tg (input-vector tile) 2..5; the fp path uses k_lanes=16.
+#define instantiate_quantized_wide_wrap(mode, name, type, vecs_per_tg, k_lanes, group_size, bits) \
+  instantiate_quantized_wide(mode, name, type, vecs_per_tg, k_lanes, group_size, bits, 0)         \
+  instantiate_quantized_wide(mode, name, type, vecs_per_tg, k_lanes, group_size, bits, 1)
+
+#define instantiate_quantized_all_wide(type, mode, group_size, bits) \
+  instantiate_quantized_wide_wrap(mode, qmv_wide, type, 2, 16, group_size, bits) \
+  instantiate_quantized_wide_wrap(mode, qmv_wide, type, 3, 16, group_size, bits) \
+  instantiate_quantized_wide_wrap(mode, qmv_wide, type, 4, 16, group_size, bits) \
+  instantiate_quantized_wide_wrap(mode, qmv_wide, type, 5, 16, group_size, bits)
+
 #define instantiate_quantized_all_splitk(type, mode, group_size, bits) \
   instantiate_quantized_split_k(mode, qvm_split_k, type, 8, group_size, bits) \
-  instantiate_quantized_split_k(mode, qvm_split_k, type, 32, group_size, bits)
+  instantiate_quantized_split_k(mode, qvm_split_k, type, 32, group_size, bits) \
+  instantiate_quantized_aligned(mode, qmm_t_splitk, type, true, group_size, bits) \
+  instantiate_quantized_aligned(mode, qmm_t_splitk, type, false, group_size, bits)
 
 #define instantiate_quantized_all_rhs(type, mode, group_size, bits) \
   instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, gather_qmm_rhs_nt, type, 16, 32, 32, 1, 2, true, mode, group_size, bits) \
@@ -137,6 +161,7 @@
   instantiate_quantized_all_batched(type, mode, group_size, bits) \
   instantiate_quantized_all_single(type, mode, group_size, bits)  \
   instantiate_quantized_all_quad(type, mode, group_size, bits)    \
+  instantiate_quantized_all_wide(type, mode, group_size, bits)    \
   instantiate_quantized_all_splitk(type, mode, group_size, bits)  \
   instantiate_quantized_all_aligned(type, mode, group_size, bits) \
   instantiate_quantized_all_rhs(type, mode, group_size, bits)     \

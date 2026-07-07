@@ -220,8 +220,6 @@ constexpr const char* g_jit_includes = R"(
 #include "mlx/backend/cuda/device/utils.cuh"
 
 #include <cooperative_groups.h>
-
-#define inf cuda::std::numeric_limits<float>::infinity()
 )";
 
 void Compiled::eval_gpu(
@@ -239,7 +237,9 @@ void Compiled::eval_gpu(
   }
   int work_per_thread = 16 / max_size;
 
-  cu::JitModule& mod = cu::get_jit_module(s.device, lib_name(), [&]() {
+  auto& encoder = cu::get_command_encoder(s);
+
+  cu::JitModule& mod = cu::get_jit_module(encoder.device(), lib_name(), [&]() {
     // Build source code.
     cu::FusedKernelBuilder builder{
         g_jit_includes, lib_name(), inputs_, outputs_, tape_, is_constant_};
@@ -285,11 +285,12 @@ void Compiled::eval_gpu(
 
   // Collapse contiguous dims to route to a faster kernel if possible. Also
   // handle all broadcasting.
-  auto [contiguous, shape, strides_vec] =
+  auto [contiguous, negative_strides, shape, strides_vec] =
       compiled_collapse_contiguous_dims(inputs, outputs[0], is_constant_);
 
-  // Whether to use large index.
-  bool large = compiled_use_large_index(inputs, outputs, contiguous);
+  // Whether to use large index (also true for negative strides).
+  bool large =
+      negative_strides || compiled_use_large_index(inputs, outputs, contiguous);
 
   cu::KernelArgs args;
   // Put inputs.
@@ -304,8 +305,6 @@ void Compiled::eval_gpu(
       args.append_ptr(strides_vec[strides_index++].data());
     }
   }
-
-  auto& encoder = cu::get_command_encoder(s);
 
   // Put outputs.
   compiled_allocate_outputs(

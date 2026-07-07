@@ -1,25 +1,21 @@
 // Copyright © 2026 Apple Inc.
 
+#include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/quantized/qmm/qmm.h"
+#include "mlx/backend/cuda/quantized/qmm/qmm_utils.h"
 
 #include <cute/tensor.hpp>
 
 namespace mlx::core {
 
-#if defined(MLX_CUDA_SM90A_ENABLED)
-// Defined in qmm_impl_sm90_xxx.cu files.
-template <typename TileShape, typename ClusterShape>
-void qmm_impl_sm90(
-    const array& x,
-    const array& w,
-    const array& scales,
-    const array& biases,
-    array& out,
-    int bits,
-    int group_size,
-    cu::CommandEncoder& encoder,
-    Stream s);
-#endif // defined(MLX_CUDA_SM90A_ENABLED)
+namespace {
+
+inline bool is_last_2_dims_row_contiguous(const array& x) {
+  return x.flags().contiguous && (x.ndim() >= 2) && (x.strides(-1) == 1) &&
+      (x.strides(-2) == x.shape(-1));
+}
+
+} // namespace
 
 bool supports_qmm_sm90(
     const array& x,
@@ -35,21 +31,25 @@ bool supports_qmm_sm90(
   if (device.compute_capability_major() != 9) {
     return false;
   }
-  int k = x.shape(-1);
+  auto [m, n, k, l, broadcast_b] = make_problem_shape(x, w, out);
+  if ((n * w.itemsize()) % 16 != 0) { // TMA alignment
+    return false;
+  }
   if (k % 64 != 0) {
     return false;
   }
   if (!biases) {
     return false;
   }
-  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
-      !scales.flags().row_contiguous || !biases->flags().row_contiguous) {
+  if (!is_last_2_dims_row_contiguous(w) ||
+      !is_last_2_dims_row_contiguous(scales) ||
+      !is_last_2_dims_row_contiguous(*biases)) {
     return false;
   }
   if (!transpose) {
     return false;
   }
-  if (bits % 2 != 0) {
+  if (bits != 4 && bits != 8) {
     return false;
   }
   if (group_size < k) {
@@ -61,40 +61,67 @@ bool supports_qmm_sm90(
   return true;
 }
 
-void qmm_sm90(
+bool supports_qmm_sm80(
     const array& x,
     const array& w,
     const array& scales,
-    const array& biases,
-    array& out,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
     int bits,
     int group_size,
-    cu::CommandEncoder& encoder,
-    Stream s) {
-#if defined(MLX_CUDA_SM90A_ENABLED)
-  auto dispatch = [&]<int tile_m, int tile_n, int cluster_m>() {
-    using cute::Int;
-    using TileShapeMN = cute::Shape<Int<tile_m>, Int<tile_n>>;
-    using ClusterShape = cute::Shape<Int<cluster_m>, Int<1>, Int<1>>;
-    qmm_impl_sm90<TileShapeMN, ClusterShape>(
-        x, w, scales, biases, out, bits, group_size, encoder, s);
-  };
-  int m = out.shape(-2);
-  if (m <= 16) {
-    dispatch.template operator()<128, 16, 1>();
-  } else if (m <= 32) {
-    dispatch.template operator()<128, 32, 1>();
-  } else if (m <= 64) {
-    dispatch.template operator()<128, 64, 2>();
-  } else if (m <= 128) {
-    dispatch.template operator()<128, 128, 2>();
-  } else {
-    dispatch.template operator()<128, 256, 2>();
+    QuantizationMode mode,
+    cu::Device& device) {
+  if (device.compute_capability_major() < 8) {
+    return false;
   }
-#else
-  throw std::runtime_error(
-      "[quantized_matmul] Hopper-only kernel is not available.");
-#endif // defined(MLX_CUDA_SM90A_ENABLED)
+  int n = out.shape(-1);
+  int k = x.shape(-1);
+  if ((n % 128 != 0) || (k % std::max(64, group_size) != 0)) {
+    return false;
+  }
+  if (!is_last_2_dims_row_contiguous(w) ||
+      !is_last_2_dims_row_contiguous(scales)) {
+    return false;
+  }
+  if (biases && !is_last_2_dims_row_contiguous(*biases)) {
+    return false;
+  }
+  if (x.dtype() != float16 && x.dtype() != bfloat16) {
+    return false;
+  }
+  if (!transpose) {
+    return false;
+  }
+  if (bits != 4 && bits != 8) {
+    return false;
+  }
+  return true;
+}
+
+bool supports_qmm_naive(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    const array& out,
+    bool transpose,
+    int bits,
+    int group_size,
+    QuantizationMode mode,
+    cu::Device& device) {
+  int k = x.shape(-1);
+  if (transpose && (k % std::max(64, group_size) != 0)) {
+    return false;
+  }
+  if (!is_last_2_dims_row_contiguous(w) ||
+      !is_last_2_dims_row_contiguous(scales)) {
+    return false;
+  }
+  if (biases && !is_last_2_dims_row_contiguous(*biases)) {
+    return false;
+  }
+  return true;
 }
 
 bool supports_fp_qmv(
@@ -144,11 +171,11 @@ bool supports_qmv(
   if (k % 8 != 0) {
     return false;
   }
-  if (!x.flags().row_contiguous || !w.flags().row_contiguous ||
-      !scales.flags().row_contiguous) {
+  if (!is_last_2_dims_row_contiguous(w) ||
+      !is_last_2_dims_row_contiguous(scales)) {
     return false;
   }
-  if (biases && !biases->flags().row_contiguous) {
+  if (biases && !is_last_2_dims_row_contiguous(*biases)) {
     return false;
   }
   if (!transpose) {

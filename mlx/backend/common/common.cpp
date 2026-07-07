@@ -19,26 +19,27 @@ void AsStrided::eval(const std::vector<array>& inputs, array& out) {
         "AsStrided must be used with row contiguous arrays only.");
   }
 
-  // Compute the flags given the shape and strides
-  bool row_contiguous = true, col_contiguous = true;
-  size_t r = 1, c = 1;
-  for (int i = strides_.size() - 1, j = 0; i >= 0; i--, j++) {
-    row_contiguous &= (r == strides_[i]) || (shape_[i] == 1);
-    col_contiguous &= (c == strides_[j]) || (shape_[j] == 1);
-    r *= shape_[i];
-    c *= shape_[j];
+  auto [no_bsx_size, row_contiguous, col_contiguous] =
+      check_contiguity(shape_, strides_);
+
+  int64_t l = 0, h = 0;
+  bool has_negative_stride = false;
+  for (int i = 0; i < strides_.size(); i++) {
+    auto delta = strides_[i] * (shape_[i] - 1);
+    if (strides_[i] >= 0) {
+      h += delta;
+    } else {
+      l += delta;
+      has_negative_stride |= shape_[i] > 1;
+    }
   }
+  size_t data_size = out.size() == 0 ? 0 : (h - l) + 1;
+
   auto flags = in.flags();
-  // TODO: Compute the contiguous flag in a better way cause now we are
-  //       unnecessarily strict.
-  flags.contiguous = row_contiguous || col_contiguous;
+  flags.contiguous =
+      out.size() == 0 || (!has_negative_stride && no_bsx_size == data_size);
   flags.row_contiguous = row_contiguous;
   flags.col_contiguous = col_contiguous;
-
-  // There is no easy way to compute the actual data size so we use out.size().
-  // The contiguous flag will almost certainly not be set so no code should
-  // rely on data_size anyway.
-  size_t data_size = out.size();
 
   return out.copy_shared_buffer(in, strides_, flags, data_size, offset_);
 }

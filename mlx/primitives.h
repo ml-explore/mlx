@@ -200,6 +200,7 @@ class AddMM : public UnaryPrimitive {
   DEFINE_NAME(AddMM)
 
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   std::pair<float, float> state() const {
     return {alpha_, beta_};
   };
@@ -542,6 +543,7 @@ class GatherMM : public UnaryPrimitive {
 
   DEFINE_NAME(GatherMM)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
     return std::make_pair(left_sorted_, right_sorted_);
   }
@@ -697,6 +699,7 @@ class Conjugate : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
+  DEFINE_GRADS()
   DEFINE_NAME(Conjugate)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
@@ -1698,6 +1701,7 @@ class GatherQMM : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_NAME(GatherQMM)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
     return std::make_tuple(
         group_size_, bits_, mode_, transpose_, left_sorted_, right_sorted_);
@@ -2055,12 +2059,16 @@ class Slice : public UnaryPrimitive {
 
 class SliceUpdate : public UnaryPrimitive {
  public:
+  enum ReduceType { Max, Min, Sum, Prod, None };
+
   explicit SliceUpdate(
       Stream stream,
+      ReduceType reduce_type,
       const Shape& start_indices,
       const Shape& end_indices,
       const Shape& strides)
       : UnaryPrimitive(stream),
+        reduce_type_(reduce_type),
         start_indices_(start_indices),
         end_indices_(end_indices),
         strides_(strides) {}
@@ -2070,14 +2078,32 @@ class SliceUpdate : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_NAME(SliceUpdate)
+
+  const char* name() const override {
+    switch (reduce_type_) {
+      case Sum:
+        return "SliceUpdate Sum";
+      case Prod:
+        return "SliceUpdate Prod";
+      case Min:
+        return "SliceUpdate Min";
+      case Max:
+        return "SliceUpdate Max";
+      case None:
+        return "SliceUpdate";
+    }
+    return "<unknown SliceUpdate>";
+  }
+
   bool is_equivalent(const Primitive& other) const override;
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
-    return std::make_tuple(start_indices_, end_indices_, strides_);
+    return std::make_tuple(
+        reduce_type_, start_indices_, end_indices_, strides_);
   }
 
  private:
+  ReduceType reduce_type_;
   Shape start_indices_;
   Shape end_indices_;
   Shape strides_;

@@ -63,7 +63,7 @@ void single_block_sort(
   auto kernel = get_sort_kernel(d, kname.str(), in, out, bn, tn);
 
   // Prepare command encoder
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Set inputs
@@ -160,7 +160,7 @@ void multi_block_sort(
       dev_vals_0, dev_vals_1, dev_idxs_0, dev_idxs_1, block_partitions};
 
   // Prepare command encoder
-  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = metal::get_command_encoder(s);
 
   // Do blockwise sort
   {
@@ -268,7 +268,7 @@ void multi_block_sort(
       (axis == in.ndim() - 1) ? CopyType::Vector : CopyType::General,
       s);
 
-  d.add_temporaries(std::move(copies), s.index);
+  compute_encoder.add_temporaries(std::move(copies));
 }
 
 void gpu_merge_sort(

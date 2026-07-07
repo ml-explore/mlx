@@ -3,6 +3,7 @@
 #include "doctest/doctest.h"
 
 #include <cmath>
+#include <limits>
 
 #include "mlx/mlx.h"
 #include "mlx/ops.h"
@@ -170,7 +171,24 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
   CHECK_EQ(
       norm(x, 2.0, std::vector<int>{-2, -1}, false, Device::cpu).item<float>(),
       doctest::Approx(14.226707));
-
+  CHECK_EQ(
+      norm(
+          x,
+          std::numeric_limits<double>::infinity(),
+          std::vector<int>{-2, -1},
+          false,
+          Device::cpu)
+          .item<float>(),
+      doctest::Approx(21.0));
+  CHECK_EQ(
+      norm(
+          x,
+          -std::numeric_limits<double>::infinity(),
+          std::vector<int>{-2, -1},
+          false,
+          Device::cpu)
+          .item<float>(),
+      doctest::Approx(3.0));
   x = reshape(arange(18, float32), {2, 3, 3});
   CHECK_THROWS(norm(x, 2.0, std::vector{0, 1, 2}));
   CHECK(allclose(
@@ -246,6 +264,24 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
             array({4.979028e-16, 7.009628e-16}),
             /* rtol = */ 1e-5,
             /* atol = */ 1e-6)
+            .item<bool>());
+  CHECK(allclose(
+            norm(
+                x,
+                std::numeric_limits<double>::infinity(),
+                std::vector<int>{-2, -1},
+                false,
+                Device::cpu),
+            array({21.0, 48.0}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(
+                x,
+                -std::numeric_limits<double>::infinity(),
+                std::vector<int>{-2, -1},
+                false,
+                Device::cpu),
+            array({3.0, 30.0}))
             .item<bool>());
 }
 
@@ -636,4 +672,69 @@ TEST_CASE("test solve_triangluar") {
   result = linalg::solve_triangular(a, b, /* upper = */ true, Device::cpu);
   expected = array({-3., 2., 3.});
   CHECK(allclose(expected, result).item<bool>());
+}
+
+TEST_CASE("test det") {
+  // 1x1 fast path
+  {
+    array a = array({5.0f}, {1, 1});
+    auto d = det(a, Device::cpu);
+    CHECK_EQ(d.item<float>(), doctest::Approx(5.0f));
+  }
+
+  // 2x2 fast path: det([[1,2],[3,4]]) = -2
+  {
+    array a = array({1.0f, 2.0f, 3.0f, 4.0f}, {2, 2});
+    auto d = det(a, Device::cpu);
+    CHECK_EQ(d.item<float>(), doctest::Approx(-2.0f));
+  }
+
+  // 3x3 fast path: det([[1,2,3],[0,1,4],[5,6,0]]) = 1
+  {
+    array a =
+        array({1.0f, 2.0f, 3.0f, 0.0f, 1.0f, 4.0f, 5.0f, 6.0f, 0.0f}, {3, 3});
+    auto d = det(a, Device::cpu);
+    CHECK_EQ(d.item<float>(), doctest::Approx(1.0f));
+  }
+
+  // 4x4 LU path: identity matrix det = 1
+  {
+    array a = eye(4);
+    auto d = det(a, Device::cpu);
+    CHECK_EQ(d.item<float>(), doctest::Approx(1.0f));
+  }
+
+  // Non-square should throw
+  CHECK_THROWS(
+      det(array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {2, 3}), Device::cpu));
+
+  // 1D should throw
+  CHECK_THROWS(det(array({1.0f, 2.0f}), Device::cpu));
+}
+
+TEST_CASE("test slogdet") {
+  // 2x2: det = -2, so sign = -1, logabsdet = log(2)
+  {
+    array a = array({1.0f, 2.0f, 3.0f, 4.0f}, {2, 2});
+    auto [s, logabs] = slogdet(a, Device::cpu);
+    CHECK_EQ(s.item<float>(), doctest::Approx(-1.0f));
+    CHECK_EQ(logabs.item<float>(), doctest::Approx(std::log(2.0f)));
+  }
+
+  // Identity: sign = 1, logabsdet = 0
+  {
+    array a = eye(4);
+    auto [s, logabs] = slogdet(a, Device::cpu);
+    CHECK_EQ(s.item<float>(), doctest::Approx(1.0f));
+    CHECK_EQ(logabs.item<float>(), doctest::Approx(0.0f));
+  }
+
+  // Singular: sign = 0, logabsdet = -inf
+  {
+    array a = array({1.0f, 2.0f, 2.0f, 4.0f}, {2, 2});
+    auto [s, logabs] = slogdet(a, Device::cpu);
+    CHECK_EQ(s.item<float>(), 0.0f);
+    CHECK(std::isinf(logabs.item<float>()));
+    CHECK(logabs.item<float>() < 0);
+  }
 }

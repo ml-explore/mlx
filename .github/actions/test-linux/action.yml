@@ -1,15 +1,24 @@
-name: 'Run Linux tests'
-
-inputs:
-  has-gpu:
-    description: 'Run GPU tests'
-    required: false
-    default: false
+name: 'Run tests'
+description: 'Run Python and C++ tests on Linux'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
+    - name: Check GPU support
+      id: gpu-check
+      shell: bash
+      run: |
+        echo "::group::Check GPU support"
+        if __nvcc_device_query ; then
+          echo "good=true" >> $GITHUB_OUTPUT
+        else
+          echo "good=false" >> $GITHUB_OUTPUT
+        fi
+        echo
+        echo "::endgroup::"
+
     - name: Run MPI tests
+      if: steps.gpu-check.outputs.good == 'false'
       shell: bash
       run: |
         echo "::group::MPI tests"
@@ -17,11 +26,11 @@ runs:
         echo "::endgroup::"
 
     - name: Run distributed tests
-      if: ${{ inputs.has-gpu == 'false' }}
+      if: steps.gpu-check.outputs.good == 'false'
       shell: bash
       run: |
         echo "::group::Distributed tests"
-        mlx.launch --verbose -n 8 python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+        mlx.launch --verbose -n 8 python python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
         if grep -Fq '[WARN]' stderr.log ; then
           grep -F '[WARN]' stderr.log
           echo "Distributed ring test failed";
@@ -30,7 +39,7 @@ runs:
         echo "::endgroup::"
 
     - name: Run Python tests - CPU
-      if: ${{ inputs.has-gpu == 'false' }}
+      if: steps.gpu-check.outputs.good == 'false'
       shell: bash
       env:
         DEVICE: cpu
@@ -40,7 +49,7 @@ runs:
         echo "::endgroup::"
 
     - name: Run Python tests - GPU
-      if: ${{ inputs.has-gpu == 'true' }}
+      if: steps.gpu-check.outputs.good == 'true'
       shell: bash
       env:
         DEVICE: gpu
@@ -55,15 +64,27 @@ runs:
         DEVICE: cpu
       run: |
         echo "::group::CPP tests - CPU"
-        ./build/tests/tests
+        ./build/cpp/mlx/tests/tests
         echo "::endgroup::"
 
     - name: Run CPP tests - GPU
-      if: ${{ inputs.has-gpu == 'true' }}
+      if: steps.gpu-check.outputs.good == 'true'
       shell: bash
       env:
         DEVICE: gpu
       run: |
         echo "::group::CPP tests - GPU"
-        ./build/tests/tests -sfe="*fft_tests.cpp,*linalg_tests.cpp"
+        ./build/cpp/mlx/tests/tests -sfe="*linalg_tests.cpp"
+        echo "::endgroup::"
+
+    - name: Show stack trace on crash
+      if: failure()
+      shell: bash
+      run: |
+        echo "::group::Show stack trace on crash"
+        set +e
+        sleep 10
+        if coredumpctl list; then
+          coredumpctl debug --debugger-arguments="-batch -ex 'thread apply all bt'"
+        fi
         echo "::endgroup::"

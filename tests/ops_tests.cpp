@@ -367,6 +367,104 @@ TEST_CASE("test slice update") {
   CHECK(array_equal(slice(out, {4}, {8}, {1}), y).item<bool>());
 }
 
+TEST_CASE("test slice update add") {
+  // Basic slice update add
+  auto x = zeros({8}, float32);
+  auto y = ones({4}, float32);
+  auto out = slice_update_add(x, y, {2}, {6}, {1});
+  auto expected = array({0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Overlapping slice update add
+  x = zeros({8}, float32);
+  y = ones({4}, float32);
+  out = slice_update_add(x, y, {2}, {6}, {1});
+  out = slice_update_add(out, y, {4}, {8}, {1});
+  expected = array({0.0f, 0.0f, 1.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Slice update add with stride
+  x = zeros({10}, float32);
+  y = ones({3}, float32);
+  out = slice_update_add(x, y, {1}, {7}, {2});
+  expected =
+      array({0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // 2D slice update add
+  x = zeros({4, 4}, float32);
+  y = ones({2, 2}, float32);
+  out = slice_update_add(x, y, {1, 1}, {3, 3}, {1, 1});
+  expected = reshape(
+      array(
+          {0.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           1.0f,
+           1.0f,
+           0.0f,
+           0.0f,
+           1.0f,
+           1.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           0.0f},
+          {4, 4}),
+      {4, 4});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Overlapping 2D slice update add
+  x = zeros({4, 4}, float32);
+  y = ones({2, 2}, float32);
+  out = slice_update_add(x, y, {0, 0}, {2, 2}, {1, 1});
+  out = slice_update_add(out, y, {1, 1}, {3, 3}, {1, 1});
+  expected = reshape(
+      array(
+          {1.0f,
+           1.0f,
+           0.0f,
+           0.0f,
+           1.0f,
+           2.0f,
+           1.0f,
+           0.0f,
+           0.0f,
+           1.0f,
+           1.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           0.0f,
+           0.0f},
+          {4, 4}),
+      {4, 4});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Slice update add with different dtypes
+  x = zeros({4}, int32);
+  y = ones({2}, int32);
+  out = slice_update_add(x, y, {1}, {3}, {1});
+  expected = array({0, 1, 1, 0});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Empty slice update add
+  x = arange(4, float32);
+  y = array({});
+  out = slice_update_add(x, y, {0}, {0}, {1});
+  CHECK(array_equal(out, x).item<bool>());
+
+  // Full array slice update add
+  x = ones({4}, float32);
+  y = full({4}, 2.0f, float32);
+  out = slice_update_add(x, y, {0}, {4}, {1});
+  expected = array({3.0f, 3.0f, 3.0f, 3.0f});
+  CHECK(array_equal(out, expected).item<bool>());
+}
+
 TEST_CASE("test dynamic slice") {
   auto src = reshape(arange(6), {2, 3});
   CHECK_THROWS(slice(src, array({1, 0, 0}), {0, 0, 0}, {1, 1}));
@@ -490,6 +588,46 @@ TEST_CASE("test split") {
   CHECK(array_equal(out[1], array({})).item<bool>());
   CHECK(array_equal(out[2], array({1})).item<bool>());
   CHECK(array_equal(out[3], array({2, 3, 4})).item<bool>());
+}
+
+TEST_CASE("test flip") {
+  array x = array({1, 2, 3, 4});
+  CHECK(array_equal(flip(x), array({4, 3, 2, 1})).item<bool>());
+
+  x = array({0, 1, 2, 3, 4, 5}, {2, 3});
+  CHECK(
+      array_equal(flip(x, 0), array({3, 4, 5, 0, 1, 2}, {2, 3})).item<bool>());
+  CHECK(
+      array_equal(flip(x, 1), array({2, 1, 0, 5, 4, 3}, {2, 3})).item<bool>());
+  CHECK(
+      array_equal(flip(x, -1), array({2, 1, 0, 5, 4, 3}, {2, 3})).item<bool>());
+  // No axes -> flip all.
+  CHECK(array_equal(flip(x), array({5, 4, 3, 2, 1, 0}, {2, 3})).item<bool>());
+  CHECK(array_equal(
+            flip(x, std::vector<int>{0, 1}), array({5, 4, 3, 2, 1, 0}, {2, 3}))
+            .item<bool>());
+
+  CHECK_THROWS(flip(x, 2));
+}
+
+TEST_CASE("test unstack") {
+  array x = array({0, 1, 2, 3, 4, 5}, {3, 2});
+  auto out = unstack(x);
+  CHECK_EQ(out.size(), 3);
+  CHECK(array_equal(out[0], array({0, 1})).item<bool>());
+  CHECK(array_equal(out[1], array({2, 3})).item<bool>());
+  CHECK(array_equal(out[2], array({4, 5})).item<bool>());
+  CHECK_EQ(out[0].shape(), Shape{2});
+
+  out = unstack(x, 1);
+  CHECK_EQ(out.size(), 2);
+  CHECK(array_equal(out[0], array({0, 2, 4})).item<bool>());
+  CHECK(array_equal(out[1], array({1, 3, 5})).item<bool>());
+
+  // stack is the inverse of unstack.
+  CHECK(array_equal(stack(unstack(x, 1), 1), x).item<bool>());
+
+  CHECK_THROWS(unstack(x, 2));
 }
 
 TEST_CASE("test swap and move axes") {
@@ -2166,6 +2304,58 @@ TEST_CASE("test take") {
   CHECK_THROWS(take(a, zeros({2, 3, 2}), 0));
 }
 
+TEST_CASE("test gather contiguity") {
+  // Regression test for a CPU-backend bug where the gather "fast copy" path
+  // copied a multi-dimensional slice from a column-contiguous source as a raw
+  // (column-major) memory block, producing a transposed/wrong-stride result.
+  // The bug only showed up on the CPU backend and is exercised by:
+  //  - chained takes through a size-1 axis (which produce a col-contiguous
+  //    intermediate), and
+  //  - a direct take from a transposed (col-contiguous) source.
+
+  // Chained gather through size-1 axes (issue repro).
+  {
+    auto u = reshape(array({1.0f, 2.0f}), {2, 1, 1});
+    auto g = take(u, array({0, 1}, int32), 0, Device::cpu);
+    g = take(g, array({0, 0, 0}, int32), 1, Device::cpu);
+    g = take(g, array({0, 0, 0}, int32), 2, Device::cpu);
+    CHECK_EQ(g.shape(), Shape{2, 3, 3});
+    // Each batch must be uniform: batch 0 -> 1.0, batch 1 -> 2.0.
+    auto expected = array(
+        {1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         1.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f,
+         2.0f},
+        {2, 3, 3});
+    CHECK(array_equal(g, expected).item<bool>());
+  }
+
+  // Direct take from a column-contiguous source with a multi-dim slice.
+  {
+    auto base = astype(reshape(arange(24), {4, 3, 2}), int32);
+    auto a = transpose(base, {2, 1, 0}); // [2, 3, 4], col-contiguous
+    auto t = take(a, array({0, 1}, int32), 2, Device::cpu);
+    CHECK_EQ(t.shape(), Shape{2, 3, 2});
+    auto expected =
+        array({0, 6, 2, 8, 4, 10, 1, 7, 3, 9, 5, 11}, {2, 3, 2}, int32);
+    CHECK(array_equal(t, expected).item<bool>());
+  }
+}
+
 TEST_CASE("test take along axis") {
   // No zero dim arrays
   auto a = array(1);
@@ -2441,11 +2631,6 @@ TEST_CASE("test scatter") {
 }
 
 TEST_CASE("test masked_scatter") {
-  if (cu::is_available()) {
-    INFO("Skipping masked_scatter cuda ops tests");
-    return;
-  }
-
   // Wrong mask dtype
   CHECK_THROWS(masked_scatter(array({1, 2}), array({1, 2}), array({1, 2})));
 
@@ -2644,11 +2829,41 @@ TEST_CASE("test as_strided op") {
   auto x = arange(10);
   auto y = as_strided(x, {3, 3}, {1, 1}, 0);
   auto expected = array({0, 1, 2, 1, 2, 3, 2, 3, 4}, {3, 3});
+  eval(y);
   CHECK(array_equal(y, expected).item<bool>());
+  CHECK_EQ(y.data_size(), 5);
+  CHECK_FALSE(y.flags().contiguous);
 
   y = as_strided(x, {3, 3}, {0, 3}, 0);
   expected = array({0, 3, 6, 0, 3, 6, 0, 3, 6}, {3, 3});
+  eval(y);
   CHECK(array_equal(y, expected).item<bool>());
+  CHECK_EQ(y.data_size(), 7);
+  CHECK_FALSE(y.flags().contiguous);
+
+  x = arange(24);
+  y = as_strided(x, {2, 3, 4}, {3, 1, 6}, 0);
+  expected = array(
+      {0, 6, 12, 18, 1, 7,  13, 19, 2, 8,  14, 20,
+       3, 9, 15, 21, 4, 10, 16, 22, 5, 11, 17, 23},
+      {2, 3, 4});
+  eval(y);
+  CHECK(array_equal(y, expected).item<bool>());
+  CHECK_EQ(y.data_size(), 24);
+  CHECK(y.flags().contiguous);
+  CHECK_FALSE(y.flags().row_contiguous);
+  CHECK_FALSE(y.flags().col_contiguous);
+
+  auto z = astype(y, float32);
+  CHECK(array_equal(z, astype(expected, float32)).item<bool>());
+
+  x = arange(10);
+  y = as_strided(x, {10}, {-1}, 9);
+  expected = array({9, 8, 7, 6, 5, 4, 3, 2, 1, 0}, {10});
+  eval(y);
+  CHECK(array_equal(y, expected).item<bool>());
+  CHECK_EQ(y.data_size(), 10);
+  CHECK_FALSE(y.flags().contiguous);
 
   x = reshape(x, {2, 5}); // 0 1 2 3 ...
   x = transpose(x, {1, 0}); // 0 5 1 6 2 7 ...
@@ -3135,8 +3350,12 @@ TEST_CASE("test repeat") {
 
   // 0 repeats
   auto repeat_4 = repeat(data_3, 0, 0);
-  auto expected_4 = array({});
-  CHECK(array_equal(repeat_2, expected_2).item<bool>());
+  auto expected_4 = array(std::initializer_list<int>{}, {0, 3});
+  CHECK(array_equal(repeat_4, expected_4).item<bool>());
+
+  repeat_4 = repeat(data_3, 0, 1);
+  expected_4 = array(std::initializer_list<int>{}, {3, 0});
+  CHECK(array_equal(repeat_4, expected_4).item<bool>());
 
   // negative repeats
   CHECK_THROWS_AS(repeat(data_3, -3, 0), std::invalid_argument);
@@ -4160,4 +4379,25 @@ TEST_CASE("test max min with nan") {
   auto expected = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
   CHECK(array_equal(max_result, expected, true).item<bool>());
   CHECK(array_equal(min_result, expected, true).item<bool>());
+}
+
+TEST_CASE("roll and tile shape overflow") {
+  // Shape arithmetic must not overflow (signed-int UB) for large but otherwise
+  // valid int32 inputs; out-of-range results are rejected gracefully.
+  // https://github.com/ml-explore/mlx/issues/3601
+
+  // tile: reps * dim exceeding int32 raises instead of overflowing.
+  CHECK_THROWS_AS(tile(zeros({2}), {2147483647}), std::overflow_error);
+
+  // roll: a shift sum exceeding int32 raises instead of overflowing.
+  CHECK_THROWS_AS(
+      roll(zeros({4}), Shape{2147483647, 2147483647}), std::overflow_error);
+  CHECK_THROWS_AS(
+      roll(zeros({4}), Shape{2147483647, 2147483647}, 0), std::overflow_error);
+
+  // roll: a shift of INT_MIN must not negate-overflow. INT_MIN mod 4 == 0, so
+  // rolling a size-4 axis by INT_MIN is the identity.
+  auto x = array({1, 2, 3, 4});
+  auto rolled = roll(x, -2147483647 - 1);
+  CHECK(array_equal(rolled, x).item<bool>());
 }

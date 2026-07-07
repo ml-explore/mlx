@@ -7,6 +7,12 @@
 
 namespace mlx::core::metal {
 
+namespace {
+
+std::string g_metallib_path;
+
+} // namespace
+
 bool is_available() {
   return true;
 }
@@ -14,7 +20,7 @@ bool is_available() {
 void start_capture(std::string path, NS::Object* object) {
   auto pool = new_scoped_memory_pool();
 
-  auto descriptor = MTL::CaptureDescriptor::alloc()->init();
+  auto descriptor = MTL::CaptureDescriptor::alloc()->init()->autorelease();
   descriptor->setCaptureObject(object);
 
   if (!path.empty()) {
@@ -27,7 +33,6 @@ void start_capture(std::string path, NS::Object* object) {
   auto manager = MTL::CaptureManager::sharedCaptureManager();
   NS::Error* error;
   bool started = manager->startCapture(descriptor, &error);
-  descriptor->release();
   if (!started) {
     std::ostringstream msg;
     msg << "[metal::start_capture] Failed to start: "
@@ -45,6 +50,14 @@ void stop_capture() {
   auto pool = new_scoped_memory_pool();
   auto manager = MTL::CaptureManager::sharedCaptureManager();
   manager->stopCapture();
+}
+
+void set_metallib_path(const std::string& path) {
+  g_metallib_path = path;
+}
+
+const std::string& get_metallib_path() {
+  return g_metallib_path;
 }
 
 } // namespace mlx::core::metal

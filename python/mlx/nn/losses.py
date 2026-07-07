@@ -65,7 +65,7 @@ def cross_entropy(
         array([0.348587, 0.348587], dtype=float32)
     """
     if label_smoothing < 0 or label_smoothing >= 1:
-        raise ValueError(f"Label smoothing must in [0, 1), got {label_smoothing}.")
+        raise ValueError(f"Label smoothing must be in [0, 1), got {label_smoothing}.")
 
     # Whether targets are class indices or probabilities
     targets_as_probs = targets.ndim == logits.ndim
@@ -136,8 +136,8 @@ def binary_cross_entropy(
         inputs (array): The predicted values. If ``with_logits`` is ``True``, then
             ``inputs`` are unnormalized logits. Otherwise, ``inputs`` are probabilities.
         targets (array): The binary target values in {0, 1}.
-        with_logits (bool, optional): Whether ``inputs`` are logits. Default: ``True``.
         weights (array, optional): Optional weights for each target. Default: ``None``.
+        with_logits (bool, optional): Whether ``inputs`` are logits. Default: ``True``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
 
@@ -249,7 +249,9 @@ def nll_loss(
     Returns:
         array: The computed NLL loss.
     """
-    loss = -mx.take_along_axis(inputs, targets[..., None], axis).squeeze(-1)
+    loss = -mx.take_along_axis(inputs, mx.expand_dims(targets, axis), axis).squeeze(
+        axis
+    )
 
     return _reduce(loss, reduction)
 
@@ -272,7 +274,7 @@ def gaussian_nll_loss(
         \ \epsilon\right)\right) + \frac{\left(\text{inputs} - \text{targets} \right)^2}
         {\max\left(\text{vars}, \ \epsilon \right)}\right) + \text{const.}
 
-    where ``inputs`` are the predicted means and ``vars`` are the the
+    where ``inputs`` are the predicted means and ``vars`` are the
     predicted variances.
 
     Args:
@@ -284,7 +286,7 @@ def gaussian_nll_loss(
         eps (float, optional): Small positive constant for numerical stability.
             Default: ``1e-6``.
         reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
 
     Returns:
         array: The Gaussian NLL loss.
@@ -319,7 +321,7 @@ def kl_div_loss(
 
     .. code-block:: python
 
-        mx.exp(targets) * (targets - inputs).sum(axis)
+        (mx.exp(targets) * (targets - inputs)).sum(axis)
 
     Args:
         inputs (array): Log probabilities for the predicted distribution.
@@ -408,7 +410,8 @@ def triplet_loss(
         axis (int, optional): The distribution axis. Default: ``-1``.
         p (int, optional): The norm degree for pairwise distance. Default: ``2``.
         margin (float, optional): Margin for the triplet loss. Defaults to ``1.0``.
-        eps (float, optional): Small positive constant to prevent numerical instability. Defaults to ``1e-6``.
+        eps (float, optional): Small positive constant added to the p-norm sum
+          before taking the ``1 / p`` power. Defaults to ``1e-6``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
@@ -416,12 +419,13 @@ def triplet_loss(
         array: Computed triplet loss. If reduction is "none", returns a tensor of the same shape as input;
                   if reduction is "mean" or "sum", returns a scalar tensor.
     """
-    loss = mx.maximum(
-        mx.sqrt(mx.power(anchors - positives, p).sum(axis) + eps)
-        - mx.sqrt(mx.power(anchors - negatives, p).sum(axis) + eps)
-        + margin,
-        0,
+    pos_dist = mx.power(
+        mx.power(mx.abs(anchors - positives), p).sum(axis) + eps, 1.0 / p
     )
+    neg_dist = mx.power(
+        mx.power(mx.abs(anchors - negatives), p).sum(axis) + eps, 1.0 / p
+    )
+    loss = mx.maximum(pos_dist - neg_dist + margin, 0)
     return _reduce(loss, reduction)
 
 
@@ -595,7 +599,7 @@ def margin_ranking_loss(
         >>> inputs2 = mx.array([0.75596, 0.225763, 0.256995])
         >>> loss = nn.losses.margin_ranking_loss(inputs1, inputs2, targets)
         >>> loss
-        array(0.773433, dtype=float32)
+        array([1.32937, 0.990929, 0], dtype=float32)
     """
     if not (inputs1.shape == inputs2.shape == targets.shape):
         raise ValueError(

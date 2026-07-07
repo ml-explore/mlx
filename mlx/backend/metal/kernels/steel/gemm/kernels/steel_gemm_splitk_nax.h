@@ -72,15 +72,12 @@ template <
       (c_row_long * params->ldc + c_col_long);
 
   // NAX tile configuration
-  constexpr short UM = 16;
-  constexpr short UN = 32;
-  constexpr short UK = 16;
   constexpr short SM = BM / WM;
   constexpr short SN = BN / WN;
   constexpr short SK = 32;
 
-  constexpr short TM = SM / UM;
-  constexpr short TN = SN / UN;
+  constexpr short TM = SM / 16;
+  constexpr short TN = SN / 16;
 
   // Calculate simdgroup offsets and alignment
   const short tm = SM * (simd_group_id / WN);
@@ -100,8 +97,7 @@ template <
   B += transpose_b ? (tn * params->ldb) : tn;
   C += tm * params->ldc + tn;
 
-  using DSubTile = NAXSubTile<AccumType, UM, UN>;
-  NAXTile<AccumType, TM, TN, DSubTile> Dtile;
+  NAXTile<AccumType, TM, TN> Dtile;
 
   // gemm_loop through the partition
   // Check K-alignment at runtime (partition-specific)
@@ -123,9 +119,6 @@ template <
             kAlignedM.value,
             kAlignedN.value,
             kAlignedK.value,
-            UM,
-            UN,
-            UK,
             AccumType>(
             A,
             B,

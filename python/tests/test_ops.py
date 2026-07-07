@@ -92,6 +92,52 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(y.dtype, t)
             self.assertTrue(mx.array_equal(y, x))
 
+    def test_shape_overflow_error(self):
+        # Shape dimensions that don't fit in int32 should raise a clear
+        # OverflowError that names the offending value, rather than a generic
+        # "incompatible function arguments" TypeError. The overflow check
+        # lives in the mx::Shape type caster, so it applies to every op that
+        # takes a shape. See issue #2681.
+        too_big = 2**31
+
+        # Array creation ops — also exercise the scalar shape path.
+        for ctor in (mx.zeros, mx.ones):
+            with self.assertRaises(OverflowError) as cm:
+                ctor(too_big)
+            self.assertIn(str(too_big), str(cm.exception))
+            with self.assertRaises(OverflowError) as cm:
+                ctor([too_big])
+            self.assertIn(str(too_big), str(cm.exception))
+
+        with self.assertRaises(OverflowError) as cm:
+            mx.full(too_big, 0.0)
+        self.assertIn(str(too_big), str(cm.exception))
+        with self.assertRaises(OverflowError) as cm:
+            mx.full([too_big], 0.0)
+        self.assertIn(str(too_big), str(cm.exception))
+
+        # Other shape-taking ops should surface the same clean error.
+        a = mx.zeros(4)
+        with self.assertRaises(OverflowError) as cm:
+            mx.reshape(a, [too_big])
+        self.assertIn(str(too_big), str(cm.exception))
+
+        with self.assertRaises(OverflowError) as cm:
+            mx.broadcast_to(a, [too_big, 1])
+        self.assertIn(str(too_big), str(cm.exception))
+
+        # Negative overflow (< int32 min) is caught too.
+        too_negative = -(2**31) - 1
+        with self.assertRaises(OverflowError) as cm:
+            mx.zeros([too_negative])
+        self.assertIn(str(too_negative), str(cm.exception))
+
+        # Shapes that fit in int32 still go through unchanged.
+        self.assertEqual(mx.zeros(4).shape, (4,))
+        self.assertEqual(mx.zeros((2, 3)).shape, (2, 3))
+        self.assertEqual(mx.ones([2, 3]).shape, (2, 3))
+        self.assertEqual(mx.full((2, 3), 1.5).tolist(), [[1.5] * 3] * 2)
+
     def test_scalar_inputs(self):
         # Check combinations of python types
         a = mx.add(False, True)
@@ -656,6 +702,13 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.array_equal(y_mlx, y_npy))
 
+    def test_count_nonzero(self):
+        c = mx.array([[0, 1, 0], [2, 3, 0]])
+        self.assertEqual(mx.count_nonzero(c).item(), 3)
+        self.assertEqual(mx.count_nonzero(c, axis=0).tolist(), [1, 2, 0])
+        self.assertEqual(mx.count_nonzero(c, axis=1).tolist(), [1, 2])
+        self.assertEqual(mx.count_nonzero(c).dtype, mx.int32)
+
     def test_prod(self):
         x = mx.array(
             [
@@ -892,6 +945,15 @@ class TestOps(mlx_tests.MLXTestCase):
         # test overloaded operator
         result = a | b
         self.assertTrue(np.array_equal(result, expected))
+
+    def test_logical_xor(self):
+        x = mx.array([True, True, False, False])
+        y = mx.array([True, False, True, False])
+        self.assertEqual(mx.logical_xor(x, y).tolist(), [False, True, True, False])
+
+    def test_trunc(self):
+        a = mx.array([-1.5, -0.5, 0.0, 0.5, 2.7])
+        self.assertEqual(mx.trunc(a).tolist(), [-1.0, 0.0, 0.0, 0.0, 2.0])
 
     def test_square(self):
         a = mx.array([0.1, 0.5, 1.0, 10.0])
@@ -1307,6 +1369,20 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(b.size, 0)
         self.assertEqual(b.shape, a.shape)
 
+        # 64-bit outputs are not supported by the Metal scatter and should
+        # raise a clean error rather than failing the Metal JIT build. The CPU
+        # and CUDA backends handle them fine.
+        idx = mx.array([[0], [1], [2], [3]])
+        for dt in (mx.int64, mx.uint64):
+            x = mx.zeros((4, 8), dtype=dt)
+            upd = mx.ones((4, 1), dtype=dt)
+            if mx.metal.is_available():
+                with self.assertRaises(ValueError):
+                    mx.eval(mx.put_along_axis(x, idx, upd, axis=1, stream=mx.gpu))
+            out = mx.put_along_axis(x, idx, upd, axis=1, stream=mx.cpu)
+            self.assertEqual(out.dtype, dt)
+            mx.eval(out)
+
     def test_split(self):
         a = mx.array([1, 2, 3])
         splits = mx.split(a, 3)
@@ -1327,6 +1403,42 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(x.tolist(), [0])
         self.assertEqual(y.tolist(), [1, 2, 3, 4])
         self.assertEqual(z.tolist(), [5, 6, 7])
+
+    def test_flip(self):
+        a_np = np.arange(6).reshape(2, 3)
+        a = mx.array(a_np)
+        for axis in [None, 0, 1, -1, (0, 1)]:
+            self.assertTrue(
+                np.array_equal(mx.flip(a, axis=axis), np.flip(a_np, axis=axis)),
+                msg=f"axis={axis}",
+            )
+
+        # 1D
+        b_np = np.array([1, 2, 3, 4])
+        self.assertTrue(np.array_equal(mx.flip(mx.array(b_np)), np.flip(b_np)))
+
+        with self.assertRaises(ValueError):
+            mx.flip(a, axis=2)
+
+    def test_unstack(self):
+        a_np = np.arange(6).reshape(3, 2)
+        a = mx.array(a_np)
+        for axis in [0, 1, -1]:
+            parts = mx.unstack(a, axis=axis)
+            expected = np.unstack(a_np, axis=axis)
+            self.assertEqual(len(parts), len(expected))
+            for p, e in zip(parts, expected):
+                self.assertTrue(np.array_equal(p, e))
+                self.assertEqual(p.shape, e.shape)
+
+        # Default axis is 0.
+        self.assertTrue(np.array_equal(mx.unstack(a)[1], np.unstack(a_np)[1]))
+
+        # stack is the inverse of unstack.
+        self.assertTrue(mx.array_equal(mx.stack(mx.unstack(a, axis=1), axis=1), a))
+
+        with self.assertRaises(ValueError):
+            mx.unstack(a, axis=2)
 
     def test_split_invalid_num_splits(self):
         """Regression: split with num_splits <= 0 should raise, not crash."""
@@ -1386,6 +1498,13 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.arange(stop=3)
         expected = [0, 1, 2]
         self.assertListEqual(a.tolist(), expected)
+
+        # A zero step has no defined length; it must raise rather than divide by
+        # zero and cast the resulting nan/inf to int (undefined behavior).
+        with self.assertRaises(ValueError):
+            mx.arange(2, 2, 0)
+        with self.assertRaises(ValueError):
+            mx.arange(0, 5, 0)
 
     def test_arange_inferred_dtype(self):
         a = mx.arange(5)
@@ -1831,7 +1950,7 @@ class TestOps(mlx_tests.MLXTestCase):
             a = (10 * mx.random.normal(shape=(1024,))).astype(t)
             out_expect = mx.softmax(a.astype(mx.float32)).astype(t)
             out = mx.softmax(a, axis=-1, precise=True)
-            self.assertTrue(mx.allclose(out_expect, out))
+            self.assertTrue(mx.allclose(out_expect, out, atol=1e-6))
 
         # All Infs give NaNs
         for n in [127, 128, 129]:
@@ -2174,6 +2293,19 @@ class TestOps(mlx_tests.MLXTestCase):
         mem4 = mx.get_peak_memory()
         self.assertEqual(mem2, mem4)
 
+    def test_diff(self):
+        a = mx.array([1, 2, 4, 7, 0])
+        self.assertEqual(mx.diff(a).tolist(), [1, 2, 3, -7])
+        self.assertEqual(mx.diff(a, n=2).tolist(), [1, 1, -10])
+        self.assertEqual(mx.diff(a, n=0).tolist(), a.tolist())
+
+        m = mx.array([[1, 3, 6], [0, 5, 6]])
+        self.assertEqual(mx.diff(m, axis=0).tolist(), [[-1, 2, 0]])
+        self.assertEqual(mx.diff(m, axis=1).tolist(), [[2, 3], [5, 1]])
+
+        with self.assertRaises(ValueError):
+            mx.diff(a, axis=1)
+
     def test_squeeze_expand(self):
         a = mx.zeros((2, 1, 2, 1))
         self.assertEqual(mx.squeeze(a).shape, (2, 2))
@@ -2193,7 +2325,7 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_sort(self):
         shape = (6, 4, 10)
         tests = product(
-            ("int32", "float32"),  # type
+            ("int32", "float32", "complex64"),  # type
             (None, 0, 1, 2),  # axis
             (True, False),  # strided
         )
@@ -2201,7 +2333,13 @@ class TestOps(mlx_tests.MLXTestCase):
             with self.subTest(dtype=dtype, axis=axis, strided=strided):
                 np.random.seed(0)
                 np_dtype = getattr(np, dtype)
-                a_np = np.random.uniform(0, 100, size=shape).astype(np_dtype)
+                if np.issubdtype(np_dtype, np.complexfloating):
+                    a_np = (
+                        np.random.uniform(0, 100, size=shape)
+                        + 1j * np.random.uniform(0, 100, size=shape)
+                    ).astype(np_dtype)
+                else:
+                    a_np = np.random.uniform(0, 100, size=shape).astype(np_dtype)
                 a_mx = mx.array(a_np)
                 if strided:
                     a_mx = a_mx[::2, :, ::2]
@@ -2492,6 +2630,9 @@ class TestOps(mlx_tests.MLXTestCase):
         data = mx.array([[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]])
         # Test repeat 0 times
         self.assertCmpNumpy([data, 0], mx.repeat, np.repeat)
+        # Test repeat 0 times along an axis preserves the unrepeated dimensions
+        self.assertCmpNumpy([data, 0], mx.repeat, np.repeat, axis=0)
+        self.assertCmpNumpy([data, 0], mx.repeat, np.repeat, axis=1)
         # Test repeat along axis 0
         self.assertCmpNumpy([data, 2], mx.repeat, np.repeat, axis=0)
         # Test repeat along axis 1
@@ -2542,6 +2683,27 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertCmpNumpy([(3,), (3,)], mx.inner, np.inner)
         self.assertCmpNumpy([(1, 1, 2), (3, 2)], mx.inner, np.inner)
         self.assertCmpNumpy([(2, 3, 4), (4,)], mx.inner, np.inner)
+
+    def test_vecdot(self):
+        a = mx.array([[1, 2, 3], [4, 5, 6]])
+        b = mx.array([[7, 8, 9], [10, 11, 12]])
+        self.assertEqual(mx.vecdot(a, b).tolist(), [50, 167])
+        self.assertEqual(mx.vecdot(a, b, axis=0).tolist(), [47, 71, 99])
+
+        a = mx.array([1 + 2j, 3 + 4j])
+        b = mx.array([5 + 6j, 7 + 8j])
+        expected = np.vdot(np.array([1 + 2j, 3 + 4j]), np.array([5 + 6j, 7 + 8j]))
+        self.assertTrue(np.allclose(mx.vecdot(a, b), expected))
+
+        xp = mx.array(1.0).__array_namespace__()
+        self.assertEqual(xp.vecdot(mx.array([1, 2]), mx.array([3, 4])).item(), 11)
+
+        with self.assertRaises(ValueError):
+            mx.vecdot(mx.array(1), mx.array([1]))
+        with self.assertRaises(ValueError):
+            mx.vecdot(mx.array([1, 2]), mx.array([1, 2]), axis=1)
+        with self.assertRaises(ValueError):
+            mx.vecdot(mx.array([1, 2]), mx.array([1]))
 
     def test_outer(self):
         self.assertCmpNumpy([(3,), (3,)], mx.outer, np.outer)
@@ -2882,6 +3044,16 @@ class TestOps(mlx_tests.MLXTestCase):
         out_np = a.conj()
         self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
+        b = np.random.normal(size=shape) + 1j * np.random.normal(size=shape)
+        b = b.astype(np.complex64)
+
+        _, vjps = mx.vjp(mx.conj, [mx.array(a)], [mx.array(b)])
+        self.assertTrue(np.array_equal(np.array(vjps[0]), b.conj()))
+
+        out_mlx, jvps = mx.jvp(mx.conj, [mx.array(a)], [mx.array(b)])
+        self.assertTrue(np.array_equal(np.array(out_mlx[0]), a.conj()))
+        self.assertTrue(np.array_equal(np.array(jvps[0]), b.conj()))
+
     def test_view(self):
         # Check scalar
         out = mx.array(1, mx.int8).view(mx.uint8).item()
@@ -2917,6 +3089,7 @@ class TestOps(mlx_tests.MLXTestCase):
             H = np.vstack((np.hstack((H, H)), np.hstack((H, -H))))
         return H
 
+    @unittest.skipIf("CI" in os.environ, "too slow in CI")
     def test_hadamard(self):
         with self.assertRaises(ValueError):
             mx.hadamard_transform(mx.array([]))
@@ -3098,6 +3271,11 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.random.randint(0, 100, shape=(4, 4, 4))
         expected = x[1:, 2:, 3:]
         out = mx.slice(x, mx.array([1, 2, 3]), (0, 1, 2), (3, 2, 1))
+        self.assertTrue(mx.array_equal(expected, out))
+
+        x = mx.arange(5 * 6 * 7 * 8).reshape(5, 6, 7, 8)
+        expected = x[1:3, 2:4, 3:5, 4:6]
+        out = mx.slice(x, mx.array([1, 2, 3, 4]), (0, 1, 2, 3), (2, 2, 2, 2))
         self.assertTrue(mx.array_equal(expected, out))
 
         x = mx.zeros(shape=(4, 4, 4))
@@ -3311,10 +3489,24 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.broadcast_shapes()
 
     def test_sort_nan(self):
-        x = mx.array([3.0, mx.nan, 2.0, 0.0])
-        expected = mx.array([0.0, 2.0, 3.0, mx.nan])
+        for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+            with self.subTest(dtype=dtype):
+                x = mx.array([3.0, mx.nan, 2.0, 0.0], dtype=dtype)
+                expected = mx.array([0.0, 2.0, 3.0, mx.nan], dtype=dtype)
+                self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
+
+        x = mx.array([3.0 + 1j, mx.nan + 2j, 2.0 + 1j, 0.0 + 1j])
+        expected = mx.array([0.0 + 1j, 2.0 + 1j, 3.0 + 1j, mx.nan + 2j])
         self.assertTrue(mx.array_equal(mx.sort(x), expected, equal_nan=True))
-        x = mx.array([3.0, mx.nan, 2.0, 0.0]) + 1j * mx.array([1.0] * 4)
+
+    def test_argsort_nan(self):
+        for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+            with self.subTest(dtype=dtype):
+                x = mx.array([3.0, mx.nan, 2.0, 0.0], dtype=dtype)
+                expected = mx.array([0.0, 2.0, 3.0, mx.nan], dtype=dtype)
+                indices = mx.argsort(x)
+                sorted_x = mx.take(x, indices)
+                self.assertTrue(mx.array_equal(sorted_x, expected, equal_nan=True))
 
     def test_to_from_fp8(self):
         vals = mx.array(

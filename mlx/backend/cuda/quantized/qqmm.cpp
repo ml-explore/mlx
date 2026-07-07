@@ -76,22 +76,27 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cu::get_command_encoder(s);
   auto& device = encoder.device();
   bool w_quantized = (inputs[1].dtype() == uint32);
-  int base_size = w_quantized ? 3 : 2;
 
+  // - 2 inputs: x, w (non-quantized w)
+  // - 3 inputs: x, w, scales_w (quantized w)
+  int base_size = w_quantized ? 3 : 2;
   assert(
       inputs.size() == base_size ||
       (mode_ == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2));
 
+  // For nvfp4, global scales are optional but must be both present or both
+  // absent If present, they add 2 more inputs (global_scale_x, global_scale_w)
+  bool has_global_scales =
+      mode_ == QuantizationMode::Nvfp4 && inputs.size() > base_size;
+  std::optional<array> global_scale_x = std::nullopt;
+  std::optional<array> global_scale_w = std::nullopt;
+  if (has_global_scales) {
+    global_scale_x = inputs[inputs.size() - 2];
+    global_scale_w = inputs[inputs.size() - 1];
+  }
+
   if (w_quantized && inputs[0].shape(-2) == 1) {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
-
-    // For nvfp4, get global scale for x from inputs if present
-    bool has_global_scale =
-        mode_ == QuantizationMode::Nvfp4 && inputs.size() > base_size;
-    std::optional<array> global_scale = std::nullopt;
-    if (has_global_scale) {
-      global_scale = inputs[inputs.size() - 2];
-    }
 
     bool donate_x = inputs[0].is_donatable();
     array x = ensure_row_contiguous(inputs[0], encoder, s);
@@ -104,11 +109,20 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       encoder.add_temporary(xhat);
     }
     fp_quantize_dequantize(
-        x, xhat, group_size_, bits_, global_scale, encoder, s);
+        x, xhat, group_size_, bits_, global_scale_x, encoder, s);
 
     const array& w = inputs[1];
     const array& scales = inputs[2];
-    qmv(xhat, w, scales, std::nullopt, out, bits_, group_size_, mode_, encoder);
+    qmv(xhat,
+        w,
+        scales,
+        std::nullopt,
+        global_scale_w,
+        out,
+        bits_,
+        group_size_,
+        mode_,
+        encoder);
     return;
   }
 
@@ -117,22 +131,6 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (cc < 1000) {
     throw std::runtime_error(
         "[QQMatmul::eval_gpu] QQMM is only supported on GPUs with compute capability 10.0 or higher.");
-  }
-
-  // - 2 inputs: x, w (non-quantized w)
-  // - 3 inputs: x, w, scales_w (quantized w)
-
-  // For nvfp4, global scales are optional but must be both present or both
-  // absent If present, they add 2 more inputs (global_scale_x, global_scale_w)
-  bool has_global_scales =
-      mode_ == QuantizationMode::Nvfp4 && inputs.size() > base_size;
-
-  // For nvfp4, get global scales from inputs if present
-  std::optional<array> global_scale_x = std::nullopt;
-  std::optional<array> global_scale_w = std::nullopt;
-  if (has_global_scales) {
-    global_scale_x = inputs[inputs.size() - 2];
-    global_scale_w = inputs[inputs.size() - 1];
   }
 
   // Quantize inputs (or use pre-quantized)

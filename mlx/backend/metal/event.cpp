@@ -1,62 +1,92 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/event.h"
-#include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/event.h"
 #include "mlx/scheduler.h"
 
 namespace mlx::core {
 
-Event::Event(Stream stream) : stream_(stream) {
-  auto dtor = [](void* ptr) {
-    auto p = metal::new_scoped_memory_pool();
-    static_cast<MTL::SharedEvent*>(ptr)->release();
-  };
-  auto p = metal::new_scoped_memory_pool();
-  event_ = std::shared_ptr<void>(
-      metal::device(Device::gpu).mtl_device()->newSharedEvent(), dtor);
-  if (event_ == nullptr) {
+///////////////////////////////////////////////////////////////////////////////
+// EventImpl implementations
+///////////////////////////////////////////////////////////////////////////////
+
+namespace metal {
+
+EventImpl::EventImpl(Device& d) {
+  auto p = new_scoped_memory_pool();
+  mtl_event_ = NS::TransferPtr(d.mtl_device()->newSharedEvent());
+  if (!mtl_event_) {
     throw std::runtime_error(
         "[Event::Event] Failed to create Metal shared event.");
   }
 }
 
-void Event::wait() {
-  if (!static_cast<MTL::SharedEvent*>(event_.get())
-           ->waitUntilSignaledValue(value(), -1)) {
-    throw std::runtime_error("[Event::wait] Timed out");
+EventImpl::~EventImpl() {
+  auto p = new_scoped_memory_pool();
+  mtl_event_.reset();
+}
+
+void EventImpl::wait(uint64_t value) {
+  check_error();
+  mtl_event_->waitUntilSignaledValue(value, -1); // never times out
+  check_error();
+}
+
+void EventImpl::signal(uint64_t value) {
+  mtl_event_->setSignaledValue(value);
+}
+
+void EventImpl::set_error(std::shared_ptr<std::string> error) {
+  std::atomic_store(&error_, std::move(error));
+}
+
+void EventImpl::check_error() {
+  auto error = std::atomic_exchange(&error_, {});
+  if (error) {
+    throw std::runtime_error(*error);
   }
 }
 
+} // namespace metal
+
+///////////////////////////////////////////////////////////////////////////////
+// Event implementations
+///////////////////////////////////////////////////////////////////////////////
+
+Event::Event(Stream stream) : stream_(stream) {
+  event_ = std::make_shared<metal::EventImpl>(metal::device(stream.device));
+}
+
+void Event::wait() {
+  static_cast<metal::EventImpl*>(event_.get())->wait(value());
+}
+
 void Event::wait(Stream stream) {
+  auto impl = std::static_pointer_cast<metal::EventImpl>(event_);
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [*this]() mutable { wait(); });
+    scheduler::enqueue(stream, [impl = std::move(impl), value = value()]() {
+      impl->wait(value);
+    });
   } else {
-    auto& d = metal::device(stream.device);
-    d.end_encoding(stream.index);
-    auto command_buffer = d.get_command_buffer(stream.index);
-    command_buffer->encodeWait(static_cast<MTL::Event*>(event_.get()), value());
-    command_buffer->addCompletedHandler([*this](MTL::CommandBuffer*) {});
+    auto& encoder = metal::get_command_encoder(stream);
+    encoder.wait_event(std::move(impl), value());
   }
 }
 
 void Event::signal(Stream stream) {
+  auto impl = std::static_pointer_cast<metal::EventImpl>(event_);
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [*this]() mutable {
-      static_cast<MTL::SharedEvent*>(event_.get())->setSignaledValue(value());
+    scheduler::enqueue(stream, [impl = std::move(impl), value = value()]() {
+      impl->signal(value);
     });
   } else {
-    auto& d = metal::device(stream.device);
-    d.end_encoding(stream.index);
-    auto command_buffer = d.get_command_buffer(stream.index);
-    command_buffer->encodeSignalEvent(
-        static_cast<MTL::Event*>(event_.get()), value());
-    command_buffer->addCompletedHandler([*this](MTL::CommandBuffer*) {});
+    auto& encoder = metal::get_command_encoder(stream);
+    encoder.signal_event(std::move(impl), value());
   }
 }
 
 bool Event::is_signaled() const {
-  return static_cast<MTL::SharedEvent*>(event_.get())->signaledValue() >=
-      value();
+  auto* mtl_event = static_cast<metal::EventImpl*>(event_.get())->mtl_event();
+  return mtl_event->signaledValue() >= value();
 }
 
 } // namespace mlx::core

@@ -10,9 +10,12 @@
 
 namespace mlx::core::gpu {
 
-void new_stream(Stream stream);
+void init();
+void new_stream(Stream s);
+void new_thread_unsafe_stream(Stream s);
 void eval(array& arr);
 void finalize(Stream s);
 void synchronize(Stream s);
+void clear_streams();
 
 } // namespace mlx::core::gpu

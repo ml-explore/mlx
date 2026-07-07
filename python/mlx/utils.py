@@ -1,4 +1,5 @@
 # Copyright © 2023 Apple Inc.
+
 from collections import defaultdict
 from itertools import zip_longest
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -96,12 +97,13 @@ def tree_map_with_path(
     elif isinstance(tree, (list, tuple)):
         prefix = f"{path}." if path else ""
         TreeType = type(tree)
-        return TreeType(
+        subtrees = (
             tree_map_with_path(
                 fn, child, *(r[i] for r in rest), is_leaf=is_leaf, path=f"{prefix}{i}"
             )
             for i, child in enumerate(tree)
         )
+        return TreeType(*subtrees) if hasattr(tree, "_fields") else TreeType(subtrees)
     elif isinstance(tree, dict):
         prefix = f"{path}." if path else ""
         return {
@@ -306,9 +308,8 @@ def tree_merge(tree_a, tree_b, merge_fn=None):
 
     if isinstance(tree_a, (list, tuple)) and isinstance(tree_b, (list, tuple)):
         TreeType = type(tree_a)
-        return TreeType(
-            tree_merge(a, b, merge_fn) for a, b in zip_longest(tree_a, tree_b)
-        )
+        subtrees = (tree_merge(a, b, merge_fn) for a, b in zip_longest(tree_a, tree_b))
+        return TreeType(*subtrees) if hasattr(tree_a, "_fields") else TreeType(subtrees)
     elif isinstance(tree_a, dict) and isinstance(tree_b, dict):
         return {
             k: tree_merge(tree_a.get(k, None), tree_b.get(k, None), merge_fn)

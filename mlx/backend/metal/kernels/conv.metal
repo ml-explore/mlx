@@ -206,7 +206,7 @@ template <typename T>
 
   threadgroup T ins[TGH * TGW * TGC];
 
-  const int n_tgblocks_h = params.oS[0] / th;
+  const int n_tgblocks_h = (params.oS[0] + th - 1) / th;
   const int n = tid.z / n_tgblocks_h;
   const int tghid = tid.z % n_tgblocks_h;
   const int oh = tghid * th + lid.z;
@@ -276,6 +276,10 @@ template <typename T>
     }
   }
   threadgroup_barrier(mem_flags::mem_none);
+
+  if (oh >= params.oS[0] || ow >= params.oS[1]) {
+    return;
+  }
 
   out += n * params.out_strides[0] + oh * params.out_strides[1] +
       ow * params.out_strides[2];

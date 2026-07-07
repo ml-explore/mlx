@@ -1,6 +1,9 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <array>
+#include <chrono>
+#include <cmath>
+#include <future>
 
 #include "doctest/doctest.h"
 #include "mlx/mlx.h"
@@ -477,6 +480,38 @@ TEST_CASE("test gpu validation") {
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
 }
 
+TEST_CASE("test gpu int32 shape overflow errors") {
+  // (2^30, 2).flatten() — product 2^31 doesn't fit in ShapeElem.
+  // Issue #2681 reported wrapped shape (-2147483648,) and a
+  // 2^64 - X reported size. The lazy graph is never evaluated.
+  auto a = zeros({1 << 30, 2});
+  CHECK_THROWS_AS(flatten(a), std::overflow_error);
+
+  // conv_general output > 2^31 elements with each per-dim < 2^31.
+  // Total elements 524290 * 64 * 64 = 2,147,491,840.
+  int n = static_cast<int>((int64_t{1} << 31) / (64 * 64) + 2);
+  auto x = ones({n, 8, 8, 1}, float16);
+  auto w = ones({1, 1, 1, 1}, float16);
+  auto y = conv_general(
+      /* input = */ x,
+      /* weight = */ w,
+      /* stride = */ {1, 1},
+      /* padding_lo = */ {0, 0},
+      /* padding_hi = */ {0, 0},
+      /* kernel_dilation = */ {1, 1},
+      /* input_dilation = */ {9, 9},
+      /* groups = */ 1,
+      /* flip = */ false);
+  CHECK_EQ(y.shape(), Shape{n, 64, 64, 1});
+
+  // reshape with inferred dim that won't fit in ShapeElem — issue #3327.
+  CHECK_THROWS_AS(reshape(y, {-1}), std::overflow_error);
+
+  // take(a, idx) routes through an internal flatten — overflows on flatten.
+  auto idx = array({0u}, uint32);
+  CHECK_THROWS_AS(take(y, idx), std::overflow_error);
+}
+
 TEST_CASE("test memory info") {
   // Test cache limits
   {
@@ -520,4 +555,134 @@ TEST_CASE("test memory info") {
 
   clear_cache();
   CHECK_EQ(get_cache_memory(), 0);
+}
+
+TEST_CASE("test scatter_prod with NaN does not hang") {
+  // Regression test for the NaN CAS workaround in atomic.h. The std::async
+  // timeout converts a wedged GPU into a test failure.
+  auto run_with_timeout = [](auto fn) {
+    auto fut = std::async(std::launch::async, std::move(fn));
+    REQUIRE(
+        fut.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+    return fut.get();
+  };
+
+  float nan = std::nanf("");
+
+  // NaN-valued update colliding with a normal update on the same slot.
+  {
+    auto out = run_with_timeout([&] {
+      auto x = array({1.0f, 1.0f, 1.0f, 1.0f});
+      auto idx = array({0, 0});
+      auto upd = array({nan, 2.0f}, {2, 1});
+      auto y = scatter_prod(x, idx, upd, 0, Device::gpu);
+      eval(y);
+      return y;
+    });
+    CHECK(std::isnan(out.data<float>()[0]));
+  }
+
+  // NaN already in memory before any update lands.
+  {
+    auto out = run_with_timeout([&] {
+      auto x = array({nan, 1.0f, 1.0f, 1.0f});
+      auto idx = array({0, 0});
+      auto upd = array({2.0f, 3.0f}, {2, 1});
+      auto y = scatter_prod(x, idx, upd, 0, Device::gpu);
+      eval(y);
+      return y;
+    });
+    CHECK(std::isnan(out.data<float>()[0]));
+  }
+}
+
+TEST_CASE("test gpu depthwise conv2d non-mod-8 spatial") {
+  // Depthwise Metal kernel is gated on C_per_group == 1, C == O, C % 16 == 0,
+  // kernel <= 7, stride <= 2. Previously the dispatch also required the
+  // output spatial dims to be multiples of 8; non-multiples fell back to the
+  // gemm path. These cases exercise the tail-tile dispatch now handled by
+  // the depthwise kernel itself and verify GPU ≈ CPU.
+  struct Case {
+    int N, H, W, C, kH, kW;
+    std::pair<int, int> stride;
+    std::pair<int, int> padding;
+  };
+  std::vector<Case> cases = {
+      // Matches the issue reproducer resolutions, reduced batch.
+      {1, 15, 15, 16, 3, 3, {1, 1}, {1, 1}},
+      {1, 30, 30, 32, 3, 3, {1, 1}, {1, 1}},
+      {1, 60, 60, 16, 3, 3, {1, 1}, {1, 1}},
+      // Non-square and non-matching alignment on the two spatial axes.
+      {1, 17, 30, 16, 5, 5, {1, 1}, {2, 2}},
+      {1, 8, 13, 16, 3, 3, {1, 1}, {1, 1}},
+      // Stride 2 with non-mod-8 output.
+      {1, 19, 19, 32, 3, 3, {2, 2}, {1, 1}},
+  };
+
+  auto key = random::key(42);
+  for (const auto& c : cases) {
+    auto in = random::normal(
+        {c.N, c.H, c.W, c.C}, float32, 0.0f, 1.0f, key, Device::cpu);
+    auto wt = random::normal(
+        {c.C, c.kH, c.kW, 1}, float32, 0.0f, 1.0f, key, Device::cpu);
+    eval(in);
+    eval(wt);
+
+    auto out_cpu =
+        conv2d(in, wt, c.stride, c.padding, {1, 1}, c.C, Device::cpu);
+    auto out_gpu =
+        conv2d(in, wt, c.stride, c.padding, {1, 1}, c.C, Device::gpu);
+    CHECK(allclose(out_cpu, out_gpu, 1e-4, 1e-4).item<bool>());
+  }
+}
+
+TEST_CASE("test layer norm vjp bias grad race") {
+  // Regression test for a write-after-read (WAR) hazard in
+  // LayerNormVJP::eval_gpu (mlx/backend/metal/normalization.cpp).
+  //
+  // The bias-gradient reduction reads the cotangent `g` and is dispatched
+  // before the main vjp kernel. When the cotangent is donatable the kernel
+  // overwrites `g`'s buffer in place (gx / gw_temp alias g), a WAR hazard.
+  // The Metal command encoder uses concurrent dispatch and only auto-inserts
+  // barriers for read-after-write, so without an explicit barrier the reduction
+  // races the kernel and the bias gradient is intermittently wrong (error on
+  // the order of the value magnitude). The gradients for x and w are
+  // unaffected.
+  //
+  // A batched input makes the cotangent donatable, which is required to trigger
+  // the aliasing. It is a race, so we loop; pre-fix this trips within a couple
+  // thousand iterations, post-fix the GPU result matches the CPU reference
+  // exactly on every iteration.
+  auto x = random::normal({2, 4, 8}, float32, 0.0f, 1.0f, random::key(0));
+  auto w = random::normal({8}, float32, 0.0f, 1.0f, random::key(1));
+  auto b = random::normal({8}, float32, 0.0f, 1.0f, random::key(2));
+  eval(x, w, b);
+
+  auto loss = [](const std::vector<array>& p, Device dev) {
+    return mean(fast::layer_norm(p[0], p[1], p[2], 1e-5f, dev), dev);
+  };
+  auto gb_fn = [&](Device dev) {
+    return grad(
+        [&loss, dev](const std::vector<array>& p) { return loss(p, dev); },
+        std::vector<int>{0, 1, 2});
+  };
+
+  // CPU reference for d/db (ground truth). Verify it is deterministic: a
+  // CPU-vs-CPU self-check must be exactly zero before trusting it.
+  auto gb_ref = gb_fn(Device::cpu)({x, w, b})[2];
+  auto gb_ref2 = gb_fn(Device::cpu)({x, w, b})[2];
+  eval(gb_ref, gb_ref2);
+  CHECK_EQ(max(abs(gb_ref - gb_ref2)).item<float>(), 0.0f);
+
+  auto gpu_grad = gb_fn(Device::gpu);
+  float worst = 0.0f;
+  for (int i = 0; i < 3000; ++i) {
+    auto gb_gpu = gpu_grad({x, w, b})[2];
+    float diff = max(abs(gb_gpu - gb_ref), Device::cpu).item<float>();
+    worst = std::max(worst, diff);
+    if (diff > 1e-5) {
+      break; // Fail fast once the race is observed.
+    }
+  }
+  CHECK(worst <= 1e-5);
 }

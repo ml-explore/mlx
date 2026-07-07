@@ -9,11 +9,15 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <shared_mutex>
 
 #include <fmt/format.h>
 #include <nvrtc.h>
 
 namespace mlx::core::cu {
+
+// Defined in dirs.cpp to avoid invalidating compile cache.
+const char* cccl_dir();
 
 namespace {
 
@@ -26,47 +30,65 @@ void check_nvrtc_error(const char* name, nvrtcResult err) {
   }
 }
 
+// Return the default path to CUDA toolkit.
+const std::filesystem::path& default_cuda_toolkit_path() {
+#if defined(_WIN32)
+  static auto cached_path = []() -> std::filesystem::path {
+    std::filesystem::path root(
+        LR"(C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA)");
+    for (auto& file : std::filesystem::directory_iterator(root)) {
+      if (std::filesystem::exists(file.path() / "include" / "cuda.h")) {
+        return file.path();
+      }
+    }
+    return {};
+  }();
+#else
+  static std::filesystem::path cached_path = "/usr/local/cuda";
+#endif
+  return cached_path;
+}
+
 // Return the --include-path args used for invoking NVRTC.
 const std::vector<std::string>& include_path_args() {
   static std::vector<std::string> cached_args = []() {
     std::vector<std::string> args;
-    // Add path to bundled CCCL headers.
+    // Add path to bundled headers.
     auto root_dir = current_binary_dir();
 #if !defined(_WIN32)
     root_dir = root_dir.parent_path();
 #endif
-    auto path = root_dir / "include" / "cccl";
-#if defined(MLX_CCCL_DIR)
-    if (!std::filesystem::exists(path)) {
-      path = MLX_CCCL_DIR;
+    auto path = root_dir / "include";
+    if (std::filesystem::exists(path)) {
+      args.push_back(fmt::format("--include-path={}", path.string()));
     }
-#endif
+    // Add path to CCCL headers.
+    path = path / "cccl";
+    if (!std::filesystem::exists(path) && cccl_dir()) {
+      path = cccl_dir();
+    }
     if (std::filesystem::exists(path)) {
       args.push_back(fmt::format("--include-path={}", path.string()));
     }
     // Add path to CUDA runtime headers, try local-installed python package
     // first and then system-installed headers.
     path = root_dir.parent_path() / "nvidia" / "cuda_runtime" / "include";
-    if (std::filesystem::exists(path)) {
-      args.push_back(fmt::format("--include-path={}", path.string()));
-    } else {
+    if (!std::filesystem::exists(path)) {
       const char* home = std::getenv("CUDA_HOME");
       if (!home) {
         home = std::getenv("CUDA_PATH");
       }
-#if defined(__linux__)
-      if (!home) {
-        home = "/usr/local/cuda";
+      path = home ? std::filesystem::path(home) : default_cuda_toolkit_path();
+      if (!path.empty()) {
+        path = path / "include";
       }
-#endif
-      if (home && std::filesystem::exists(home)) {
-        args.push_back(fmt::format("--include-path={}/include", home));
-      } else {
+      if (path.empty() || !std::filesystem::exists(path)) {
         throw std::runtime_error(
             "Can not find locations of CUDA headers, please set environment "
             "variable CUDA_HOME or CUDA_PATH.");
       }
     }
+    args.push_back(fmt::format("--include-path={}", path.string()));
     return args;
   }();
   return cached_args;
@@ -230,9 +252,14 @@ constexpr const char* g_include_names[] = {
     INCLUDE_PREFIX "cast_op.cuh",
     INCLUDE_PREFIX "config.h",
     INCLUDE_PREFIX "complex.cuh",
+    INCLUDE_PREFIX "cute_dequant.cuh",
     INCLUDE_PREFIX "fp16_math.cuh",
+    INCLUDE_PREFIX "gemm_sm70.cuh",
     INCLUDE_PREFIX "hadamard.cuh",
     INCLUDE_PREFIX "indexing.cuh",
+    INCLUDE_PREFIX "qmm_naive.cuh",
+    INCLUDE_PREFIX "qmm_sm80.cuh",
+    INCLUDE_PREFIX "qmm_sm90.cuh",
     INCLUDE_PREFIX "scatter_ops.cuh",
     INCLUDE_PREFIX "unary_ops.cuh",
     INCLUDE_PREFIX "ternary_ops.cuh",
@@ -247,9 +274,14 @@ constexpr const char* g_headers[] = {
     jit_source_cast_op,
     jit_source_config,
     jit_source_complex,
+    jit_source_cute_dequant,
     jit_source_fp16_math,
+    jit_source_gemm_sm70,
     jit_source_hadamard,
     jit_source_indexing,
+    jit_source_qmm_naive,
+    jit_source_qmm_sm80,
+    jit_source_qmm_sm90,
     jit_source_scatter_ops,
     jit_source_unary_ops,
     jit_source_ternary_ops,
@@ -279,8 +311,11 @@ void compile(
     CHECK_NVRTC_ERROR(nvrtcAddNameExpression(prog, name.c_str()));
   }
 
-  // Compile program.
+  // Required for compiling CUTLASS code.
   std::vector<const char*> args;
+  args.push_back("--device-as-default-execution-space");
+
+  // Target current device.
   bool use_sass = compiler_supports_device_sass(device);
   auto cc = device.compute_capability_major();
   std::string arch_tag = (cc >= 9) ? "a" : "";
@@ -294,6 +329,8 @@ void compile(
   for (const auto& include : include_path_args()) {
     args.push_back(include.c_str());
   }
+
+  // Compile program.
   nvrtcResult compile_result =
       nvrtcCompileProgram(prog, args.size(), args.data());
   if (compile_result != NVRTC_SUCCESS) {
@@ -424,20 +461,27 @@ CUfunction JitModule::get_kernel(
   return get_kernel_and_dims(kernel_name, std::move(configure_kernel)).first;
 }
 
-std::unordered_map<std::string, JitModule>& get_jit_module_cache() {
-  static std::unordered_map<std::string, JitModule> map;
-  return map;
-}
-
 JitModule& get_jit_module(
-    const mlx::core::Device& device,
+    Device& device,
     const std::string& name,
     const KernelBuilder& builder,
-    bool cache) {
-  auto& map = get_jit_module_cache();
-  auto it = map.find(name);
-  if (it == map.end()) {
-    it = map.try_emplace(name, cu::device(device), name, builder, cache).first;
+    bool use_disk_cache) {
+  // The cache are leak intentionally as user code may still be running JIT
+  // compiled code after main thread teardown.
+  static auto* cache = new std::unordered_map<std::string, JitModule>;
+  static auto* mtx = new std::shared_mutex;
+
+  {
+    std::shared_lock rlock(*mtx);
+    if (auto it = cache->find(name); it != cache->end()) {
+      return it->second;
+    }
+  }
+
+  std::unique_lock wlock(*mtx);
+  auto it = cache->find(name);
+  if (it == cache->end()) {
+    it = cache->try_emplace(name, device, name, builder, use_disk_cache).first;
   }
   return it->second;
 }

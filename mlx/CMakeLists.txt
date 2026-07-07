@@ -14,6 +14,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/scheduler.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/stream.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
@@ -48,9 +49,11 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(mlx PRIVATE -Wno-psabi)
 endif()
 
-if(MSVC)
-  # Some of CUDA's headers include windows.h, which defines min/max macros.
+if(WIN32)
+  # windows.h defines min/max macros that conflict with std::min/std::max.
   target_compile_definitions(mlx PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
+if(MSVC)
   # Unicode support in fmt does not compile in .cu files.
   target_compile_definitions(mlx PRIVATE FMT_UNICODE=0)
   # Disable some MSVC warnings to speed up compilation.

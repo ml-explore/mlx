@@ -1,6 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
 import unittest
 
 import mlx.core as mx
@@ -168,6 +169,20 @@ class TestFast(mlx_tests.MLXTestCase):
             y = mx.fast.rope(
                 x, dims, traditional=traditional, base=base, scale=scale, offset=offset
             )
+
+    @unittest.skipIf("CI" in os.environ, "Allocates too much memory for CI")
+    def test_rope_large_input(self):
+        dims, seq_len, batch_size, n_heads = 32, 8192, 8, 32
+        base, scale, offset, traditional = 10000.0, 1.0, 0, False
+        x = mx.random.normal(shape=[batch_size, seq_len, n_heads, dims]).astype(
+            mx.float32
+        )
+        x = x.swapaxes(1, 2)
+        rx_fast = mx.fast.rope(
+            x, dims, traditional=traditional, base=base, scale=scale, offset=offset
+        )
+        ref = rope_orig(x, dims, traditional, base, scale, offset)
+        self.assertLess(mx.abs(ref - rx_fast).max(), 5e-3)
 
     def test_rope_dims_validation(self):
         T = 4
@@ -365,6 +380,28 @@ class TestFast(mlx_tests.MLXTestCase):
         rx = rope_orig(x, dims, traditional, base, scale, offset)
         self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
 
+    def test_rope_single_batch(self):
+        base = 10000.0
+        scale = 1.0
+        offset = 5
+
+        for traditional in [True, False]:
+            for B in [2, 4, 8]:
+                for n_head in [1, 4, 7]:
+                    for dims in [64, 128]:
+                        x = mx.random.uniform(shape=(B, n_head, 1, dims))
+                        mx.eval(x)
+                        rx_fast = mx.fast.rope(
+                            x,
+                            dims,
+                            traditional=traditional,
+                            base=base,
+                            scale=scale,
+                            offset=offset,
+                        )
+                        rx = rope_orig(x, dims, traditional, base, scale, offset)
+                        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
+
     def test_rope_with_large_offset(self):
         x = mx.random.normal(shape=(1, 1, 1024, 32))
         rx_fp32 = mx.fast.rope(
@@ -391,7 +428,7 @@ class TestFast(mlx_tests.MLXTestCase):
 
         dtypes = [mx.float32, mx.float16, mx.bfloat16]
         epss = [1e-3, 1e-5]
-        dimss = [31, 32, 33]
+        dimss = [31, 32, 33, 256, 512]
         defaults = (mx.float32, 1e-5, 32)
 
         for dtype in dtypes:
@@ -446,23 +483,23 @@ class TestFast(mlx_tests.MLXTestCase):
             mx.fast.rms_norm(x, mx.ones((4,)), 1e-5)
 
     def test_rms_norm_grad(self):
-        D = 32
         eps = 1e-5
         f1 = lambda x, w, y: (rms_norm(x, w, eps) * y).sum()
         f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, eps) * y).sum()
         f3 = lambda x, y: (rms_norm(x, mx.ones((x.shape[-1],)), eps) * y).sum()
         f4 = lambda x, y: (mx.fast.rms_norm(x, None, eps) * y).sum()
 
-        x = mx.random.uniform(shape=(8, 100, D))
-        w = mx.random.uniform(shape=(D,))
-        y = mx.random.uniform(shape=(8, 100, D))
-        gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
-        gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
-        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
-        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
-        gx1 = mx.grad(f3, argnums=(0,))(x, y)
-        gx2 = mx.grad(f4, argnums=(0,))(x, y)
-        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        for D in [32, 256]:
+            x = mx.random.uniform(shape=(8, 100, D))
+            w = mx.random.uniform(shape=(D,))
+            y = mx.random.uniform(shape=(8, 100, D))
+            gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
+            gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
+            self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+            self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+            gx1 = mx.grad(f3, argnums=(0,))(x, y)
+            gx2 = mx.grad(f4, argnums=(0,))(x, y)
+            self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
 
         D = 8192
         x = mx.random.uniform(shape=(2, 2, D))
@@ -988,6 +1025,97 @@ class TestFast(mlx_tests.MLXTestCase):
         """
         out = call_kernel(a, source)
         self.assertTrue(mx.array_equal(out, mx.ones_like(out)))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_metal_kernel_math_mode(self):
+        with self.assertRaises(ValueError):
+            mx.fast.metal_kernel(
+                name="invalid_math_mode",
+                input_names=["inp"],
+                output_names=["out"],
+                source="out[0] = inp[0];",
+                compile_options={"math_mode": "precise"},
+            )
+
+        with self.assertRaises(ValueError):
+            mx.fast.metal_kernel(
+                name="invalid_compile_options",
+                input_names=["inp"],
+                output_names=["out"],
+                source="out[0] = inp[0];",
+                compile_options={"unknown": "value"},
+            )
+
+        # Numerical special cases such as exp(-inf) can agree between math
+        # modes, so they don't reliably detect whether the mode was applied.
+        # Branch on the compiler's __FAST_MATH__ macro instead: it is defined
+        # only when fast math is enabled, so the test fails if the selected
+        # math mode is not forwarded to the Metal compiler.
+        source = """
+            uint elem = thread_position_in_grid.x;
+            #if defined(__FAST_MATH__) && __FAST_MATH__
+            out[elem] = 1.0f;
+            #else
+            out[elem] = 0.0f;
+            #endif
+        """
+
+        a = mx.zeros((4,), dtype=mx.float32)
+        expected = {
+            "safe": mx.zeros_like(a),
+            "fast": mx.ones_like(a),
+        }
+
+        # Reuse the same kernel name across modes so the library cache is forced
+        # to rebuild when the math mode changes, guarding against a stale build
+        # being returned for a different mode.
+        for mode, expected_out in expected.items():
+            kernel = mx.fast.metal_kernel(
+                name="math_mode",
+                input_names=["inp"],
+                output_names=["out"],
+                source=source,
+                compile_options={"math_mode": mode},
+            )
+            out = kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(a.size, 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+            self.assertTrue(mx.array_equal(out, expected_out))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_mixed_dtypes(self):
+        # Calling the same kernel with different input dtypes in a single
+        # graph should not invalidate pipeline states that are still in use
+        # by an uncommitted command buffer
+        kernel = mx.fast.metal_kernel(
+            name="mixed_dtypes",
+            input_names=["inp"],
+            output_names=["out"],
+            source="""
+                uint elem = thread_position_in_grid.x;
+                out[elem] = inp[elem] + inp[elem];
+            """,
+        )
+
+        def call_kernel(a: mx.array):
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(a.size, 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        a = mx.full((32,), 1.5, dtype=mx.float16)
+        b = mx.full((32,), 2.5, dtype=mx.float32)
+        out = call_kernel(a).astype(mx.float32) + call_kernel(b)
+        self.assertTrue(mx.allclose(out, mx.full((32,), 8.0)))
 
 
 if __name__ == "__main__":

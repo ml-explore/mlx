@@ -406,6 +406,23 @@ auto py_vmap(
   };
 }
 
+void ensure_compile_cache_cleanup() {
+  // Make sure each thread using mx.compile would clear its compile cache
+  // before python interpreter exits.
+  struct ThreadCleanup {
+    ~ThreadCleanup() {
+      if (!mx::detail::compile_cache_empty()) {
+        nb::gil_scoped_acquire gil;
+        mx::detail::compile_clear_cache();
+      }
+    }
+  };
+  static thread_local auto clear_cache = []() {
+    mx::detail::compile_clear_cache();
+    return ThreadCleanup{};
+  }();
+}
+
 struct PyCompiledFun {
   nb::callable fun;
   std::uintptr_t fun_id;
@@ -447,6 +464,8 @@ struct PyCompiledFun {
   };
 
   nb::object call_impl(const nb::args& args, const nb::kwargs& kwargs) {
+    ensure_compile_cache_cleanup();
+
     // Flat array inputs
     std::vector<mx::array> inputs;
 
@@ -1499,7 +1518,7 @@ void init_transforms(nb::module_& m) {
 
         Returns:
             Callable: A compiled function which has the same input arguments
-            as ``fun`` and returns the the same output(s).
+            as ``fun`` and returns the same output(s).
       )pbdoc");
   m.def(
       "disable_compile",
@@ -1535,8 +1554,9 @@ void init_transforms(nb::module_& m) {
           computation.
       )pbdoc");
 
-  // Register static Python object cleanup before the interpreter exits
+  // Ensure the main thread cleanup will happen before the interpreter goes
+  // away. As a result if the other threads join the main thread we should have
+  // a clean tear-down.
   auto atexit = nb::module_::import_("atexit");
-  atexit.attr("register")(
-      nb::cpp_function([]() { mx::detail::compile_clear_cache(); }));
+  atexit.attr("register")(nb::cpp_function(&mx::detail::compile_clear_cache));
 }

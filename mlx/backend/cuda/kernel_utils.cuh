@@ -89,7 +89,8 @@ using cuda_type_t = typename CTypeToCudaType<T>::type;
 template <typename T>
 inline constexpr bool is_floating_v =
     cuda::std::is_same_v<T, float> || cuda::std::is_same_v<T, double> ||
-    cuda::std::is_same_v<T, float16_t> || cuda::std::is_same_v<T, bfloat16_t>;
+    cuda::std::is_same_v<T, float16_t> || cuda::std::is_same_v<T, bfloat16_t> ||
+    cuda::std::is_same_v<T, __half> || cuda::std::is_same_v<T, __nv_bfloat16>;
 
 // Type traits for detecting complex numbers.
 template <typename T>
@@ -144,5 +145,8 @@ inline std::tuple<dim3, uint32_t> get_launch_args(
       work_per_thread,
       max_block_dim);
 }
+
+std::pair<dim3, dim3>
+get_launch_args_general(int dim0, size_t rest, int work_per_thread = 1);
 
 } // namespace mlx::core
