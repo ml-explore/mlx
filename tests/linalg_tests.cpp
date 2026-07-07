@@ -3,6 +3,7 @@
 #include "doctest/doctest.h"
 
 #include <cmath>
+#include <limits>
 
 #include "mlx/mlx.h"
 #include "mlx/ops.h"
@@ -170,7 +171,24 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
   CHECK_EQ(
       norm(x, 2.0, std::vector<int>{-2, -1}, false, Device::cpu).item<float>(),
       doctest::Approx(14.226707));
-
+  CHECK_EQ(
+      norm(
+          x,
+          std::numeric_limits<double>::infinity(),
+          std::vector<int>{-2, -1},
+          false,
+          Device::cpu)
+          .item<float>(),
+      doctest::Approx(21.0));
+  CHECK_EQ(
+      norm(
+          x,
+          -std::numeric_limits<double>::infinity(),
+          std::vector<int>{-2, -1},
+          false,
+          Device::cpu)
+          .item<float>(),
+      doctest::Approx(3.0));
   x = reshape(arange(18, float32), {2, 3, 3});
   CHECK_THROWS(norm(x, 2.0, std::vector{0, 1, 2}));
   CHECK(allclose(
@@ -246,6 +264,24 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
             array({4.979028e-16, 7.009628e-16}),
             /* rtol = */ 1e-5,
             /* atol = */ 1e-6)
+            .item<bool>());
+  CHECK(allclose(
+            norm(
+                x,
+                std::numeric_limits<double>::infinity(),
+                std::vector<int>{-2, -1},
+                false,
+                Device::cpu),
+            array({21.0, 48.0}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(
+                x,
+                -std::numeric_limits<double>::infinity(),
+                std::vector<int>{-2, -1},
+                false,
+                Device::cpu),
+            array({3.0, 30.0}))
             .item<bool>());
 }
 
