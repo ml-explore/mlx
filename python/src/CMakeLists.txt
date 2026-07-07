@@ -2,6 +2,7 @@ nanobind_add_module(
   core
   NB_STATIC
   STABLE_ABI
+  FREE_THREADED
   LTO
   NOMINSIZE
   NB_DOMAIN
