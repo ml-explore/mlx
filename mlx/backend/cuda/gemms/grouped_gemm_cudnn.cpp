@@ -69,6 +69,18 @@ fe::MoeGroupedMatmulMode_t grouped_mm_mode(
                                  : fe::MoeGroupedMatmulMode_t::NONE;
 }
 
+// we need to reshape output and input to be {1, T, K} instead of {T, 1, K}
+// to match the cudnn grouped mm interface
+void set_moe_layout(
+    std::shared_ptr<fe::graph::Tensor_attributes>& t,
+    const array& x) {
+  int64_t L = x.shape(0);
+  int64_t D = x.shape(-1);
+  int64_t sL = x.strides(0);
+  int64_t sD = x.strides(-1);
+  t->set_dim({1, L, D}).set_stride({L * sL, sL, sD});
+}
+
 DnnGraph grouped_mm_graph(
     cudnnHandle_t handle,
     const array& x,
@@ -82,6 +94,7 @@ DnnGraph grouped_mm_graph(
   auto mode = grouped_mm_mode(lhs_indices);
 
   auto x_ = graph.tensor("X", X, x);
+  set_moe_layout(x_, x);
   auto w_ = graph.tensor("W", W, w);
   auto offsets_ = graph.tensor("TOKEN_OFFSETS", TOKEN_OFFSETS, offsets);
 
@@ -97,7 +110,9 @@ DnnGraph grouped_mm_graph(
 
   auto out_ = graph.moe_grouped_matmul(
       x_, w_, offsets_, token_index, token_ks, moe_grouped_matmul_attr);
-  graph.tensor(out_, O, output)->set_output(true);
+  graph.tensor(out_, O, output);
+  set_moe_layout(out_, output);
+  out_->set_output(true);
 
   CHECK_CUDNN_ERROR(graph.prepare());
   graph.select_behavior_notes(
@@ -112,6 +127,8 @@ auto& grouped_mm_cache() {
   return cache;
 }
 
+} // namespace
+
 // rhs_indices (per-slot expert id) always an input to calculate the offsets.
 // lhs_indices selects the mode: provided -> GATHER (gather rows before matmul),
 // absent -> NONE (rows already grouped by expert)
@@ -123,7 +140,7 @@ void cudnn_grouped_mm(
     const std::optional<array>&
         lhs_indices, // for gather/scatter mode, optional
     array& out,
-    Stream s) {
+    cu::CommandEncoder& encoder) {
   nvtx3::scoped_range r("cudnn_grouped_mm");
 
   auto& encoder = cu::get_command_encoder(s);
@@ -166,7 +183,5 @@ void cudnn_grouped_mm(
   }
   CHECK_CUDNN_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
 }
-
-} // namespace
 
 } // namespace mlx::core

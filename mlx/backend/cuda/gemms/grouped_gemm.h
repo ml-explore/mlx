@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <optional>
+
 namespace mlx::core {
 
 namespace cu {
@@ -9,6 +11,7 @@ class CommandEncoder;
 }
 
 class array;
+struct Stream;
 
 array compute_first_token_offset(
     const array& indices,
@@ -44,8 +47,6 @@ void cutlass_segmented_mm(
 void cudnn_grouped_mm(
     const array& x,
     const array& w,
-    const array& rhs_indices,
-    const std::optional<array>& lhs_indices,
     array& out,
     cu::CommandEncoder& encoder);
 
