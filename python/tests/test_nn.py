@@ -672,7 +672,9 @@ class TestLayers(mlx_tests.MLXTestCase):
             ],
         )
         expected_mean = mx.array([0.008929, 0.005680, -0.016092, 0.027778])
-        expected_var = mx.array([0.928435, 1.00455, 1.04117, 0.94258])
+        expected_var = 0.9 * mx.ones_like(bn.running_var) + 0.1 * mx.var(
+            x, axis=0, ddof=1
+        )
         self.assertTrue(x.shape == y.shape)
         self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
         self.assertTrue(mx.allclose(bn.running_mean, expected_mean, atol=1e-5))
@@ -681,14 +683,8 @@ class TestLayers(mlx_tests.MLXTestCase):
         # test eval mode
         bn.eval()
         y = bn(x)
-        expected_y = mx.array(
-            [
-                [-0.15984, 1.73159, -1.25456, 1.57891],
-                [-0.872193, -1.4281, -0.414439, -0.228678],
-                [0.602743, -0.30566, -0.554687, 0.139639],
-                [0.252199, 0.29066, -0.599572, -0.0512532],
-                [0.594096, -0.0334829, 2.11359, -0.151081],
-            ]
+        expected_y = (
+            bn.weight * (x - expected_mean) * mx.rsqrt(expected_var + bn.eps) + bn.bias
         )
 
         self.assertTrue(x.shape == y.shape)
@@ -742,7 +738,9 @@ class TestLayers(mlx_tests.MLXTestCase):
         expected_mean = mx.array(
             [[[0.00207845, -5.3259e-05, 0.04755, -0.0697296, 0.0236228]]]
         )
-        expected_var = mx.array([[[0.968415, 1.05322, 0.96913, 0.932305, 0.967224]]])
+        expected_var = 0.9 * mx.ones_like(bn.running_var) + 0.1 * mx.var(
+            x, axis=(0, 1), ddof=1
+        )
         self.assertTrue(mx.allclose(bn.running_mean, expected_mean, atol=1e-5))
         self.assertTrue(mx.allclose(bn.running_var, expected_var, atol=1e-5))
 
@@ -797,9 +795,42 @@ class TestLayers(mlx_tests.MLXTestCase):
 
         normalized_data = batch_norm(data)
         means = mx.mean(data, axis=0)
-        variances = mx.var(data, axis=0)
+        batch_variances = mx.var(data, axis=0)
+        running_variances = mx.var(data, axis=0, ddof=1)
         running_mean = (1 - momentum) * running_mean + momentum * means
-        running_var = (1 - momentum) * running_var + momentum * variances
+        running_var = (1 - momentum) * running_var + momentum * running_variances
+        expected_normalized_var = batch_variances / (batch_variances + batch_norm.eps)
+        self.assertTrue(
+            mx.allclose(
+                mx.var(normalized_data, axis=0),
+                expected_normalized_var,
+                atol=1e-5,
+            )
+        )
+        self.assertTrue(mx.allclose(batch_norm.running_mean, running_mean, atol=1e-5))
+        self.assertTrue(mx.allclose(batch_norm.running_var, running_var, atol=1e-5))
+
+        batch_norm = nn.BatchNorm(num_features)
+
+        batch_norm.train()
+        running_mean = batch_norm.running_mean
+        running_var = batch_norm.running_var
+        data = mx.random.normal((batch_size, h, num_features))
+
+        normalized_data = batch_norm(data)
+        means = mx.mean(data, axis=(0, 1))
+        batch_variances = mx.var(data, axis=(0, 1))
+        running_variances = mx.var(data, axis=(0, 1), ddof=1)
+        running_mean = (1 - momentum) * running_mean + momentum * means
+        running_var = (1 - momentum) * running_var + momentum * running_variances
+        expected_normalized_var = batch_variances / (batch_variances + batch_norm.eps)
+        self.assertTrue(
+            mx.allclose(
+                mx.var(normalized_data, axis=(0, 1)),
+                expected_normalized_var,
+                atol=1e-5,
+            )
+        )
         self.assertTrue(mx.allclose(batch_norm.running_mean, running_mean, atol=1e-5))
         self.assertTrue(mx.allclose(batch_norm.running_var, running_var, atol=1e-5))
 
@@ -812,10 +843,29 @@ class TestLayers(mlx_tests.MLXTestCase):
 
         normalized_data = batch_norm(data)
         means = mx.mean(data, axis=(0, 1, 2))
-        variances = mx.var(data, axis=(0, 1, 2))
+        batch_variances = mx.var(data, axis=(0, 1, 2))
+        running_variances = mx.var(data, axis=(0, 1, 2), ddof=1)
         running_mean = (1 - momentum) * running_mean + momentum * means
-        running_var = (1 - momentum) * running_var + momentum * variances
+        running_var = (1 - momentum) * running_var + momentum * running_variances
+        expected_normalized_var = batch_variances / (batch_variances + batch_norm.eps)
+        self.assertTrue(
+            mx.allclose(
+                mx.var(normalized_data, axis=(0, 1, 2)),
+                expected_normalized_var,
+                atol=1e-5,
+            )
+        )
         self.assertTrue(mx.allclose(batch_norm.running_mean, running_mean, atol=1e-5))
+        self.assertTrue(mx.allclose(batch_norm.running_var, running_var, atol=1e-5))
+
+        batch_norm = nn.BatchNorm(num_features)
+
+        batch_norm.train()
+        running_var = batch_norm.running_var
+        data = mx.random.normal((1, num_features))
+
+        batch_norm(data)
+        running_var = (1 - momentum) * running_var + momentum * mx.var(data, axis=0)
         self.assertTrue(mx.allclose(batch_norm.running_var, running_var, atol=1e-5))
 
         self.assertEqual(batch_norm.running_mean.shape, running_mean.shape)

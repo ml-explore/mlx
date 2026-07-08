@@ -371,8 +371,14 @@ class BatchNorm(Module):
         mean, var = self._calc_stats(x)
         if self.training and self.track_running_stats:
             mu = self.momentum
+            stats_size = 1
+            for size in x.shape[:-1]:
+                stats_size *= size
+            running_var = (
+                var * (stats_size / (stats_size - 1)) if stats_size > 1 else var
+            )
             self.running_mean = (1 - mu) * self.running_mean + mu * mean
-            self.running_var = (1 - mu) * self.running_var + mu * var
+            self.running_var = (1 - mu) * self.running_var + mu * running_var
         elif self.track_running_stats:
             mean = self.running_mean
             var = self.running_var
