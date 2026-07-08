@@ -87,12 +87,13 @@ class LayerNorm(Module):
 
     Args:
         dims (int): The feature dimension of the input to normalize over
-        eps (float): A small additive constant for numerical stability
+        eps (float): A small additive constant for numerical stability.
+            Default: ``1e-5``.
         affine (bool): If True learn an affine transform to apply after the
-            normalization
+            normalization. Default: ``True``.
         bias (bool): If True include a translation to the affine
             transformation. If set to False the transformation is not really affine
-            just scaling.
+            just scaling. Default: ``True``.
     """
 
     def __init__(
@@ -133,7 +134,8 @@ class RMSNorm(Module):
 
     Args:
         dims (int): The feature dimension of the input to normalize over
-        eps (float): A small additive constant for numerical stability
+        eps (float): A small additive constant for numerical stability.
+            Default: ``1e-5``.
     """
 
     def __init__(self, dims: int, eps: float = 1e-5):
@@ -171,11 +173,12 @@ class GroupNorm(Module):
     Args:
         num_groups (int): Number of groups to separate the features into
         dims (int): The feature dimensions of the input to normalize over
-        eps (float): A small additive constant for numerical stability
+        eps (float): A small additive constant for numerical stability.
+            Default: ``1e-5``.
         affine (bool): If True learn an affine transform to apply after the
-            normalization.
+            normalization. Default: ``True``.
         pytorch_compatible (bool): If True perform the group normalization in
-            the same order/grouping as PyTorch.
+            the same order/grouping as PyTorch. Default: ``False``.
     """
 
     def __init__(
