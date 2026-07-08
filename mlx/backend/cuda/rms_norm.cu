@@ -298,7 +298,7 @@ void dispatch_group_dim(int axis_size, F&& f) {
   } else if (axis_size <= n_per_thread * 32 * 2) {
     f(std::integral_constant<int, 32>{},
       std::integral_constant<int, 2>(),
-      std::integral_constant<int, 2>());
+      std::integral_constant<int, 1>());
   } else if (axis_size <= n_per_thread * 32 * 4) {
     f(std::integral_constant<int, 32>{},
       std::integral_constant<int, 4>(),
@@ -369,6 +369,7 @@ void RMSNorm::eval_gpu(
       dispatch_group_dim<N_READS>(
           axis_size, [&](auto group_dim, auto n_groups, auto groups_per_block) {
             constexpr int block_dim = n_groups() * group_dim();
+            static_assert(block_dim <= 32 || groups_per_block() == 1);
             auto kernel =
                 cu::rms_norm_small<DataType, block_dim, group_dim(), N_READS>;
             auto n_blocks =
@@ -479,6 +480,7 @@ void RMSNormVJP::eval_gpu(
             axis_size,
             [&](auto group_dim, auto n_groups, auto groups_per_block) {
               constexpr int block_dim = group_dim() * n_groups();
+              static_assert(block_dim <= 32 || groups_per_block() == 1);
               auto kernel = cu::rms_norm_vjp_small<
                   DataType,
                   has_w_constant.value,

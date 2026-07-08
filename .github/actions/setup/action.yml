@@ -22,6 +22,10 @@ inputs:
     description: 'Whether the ccache in this workflow will be saved'
     required: false
     default: 'auto'
+  ccache-toolkit:
+    description: 'Use this instead of inputs.toolkit in the ccache key'
+    required: false
+    default: ''
 
 outputs:
   cmake-args:
@@ -83,8 +87,19 @@ runs:
       if: inputs.use-ccache == 'true'
       uses: hendrikmuhs/ccache-action@v1.2.23
       with:
-        key: v7-${{ inputs.ccache-key }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolkit }}
-        max-size: ${{ inputs.toolkit == 'cpu' && '200MB' || '600MB' }}
+        key: v7-${{ inputs.ccache-key }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.ccache-toolkit || inputs.toolkit }}
+        max-size: |-
+          ${{ case(inputs.ccache-key == 'release',
+                   case(startsWith(inputs.toolkit, 'cuda'), '150MB',
+                        '60MB'),
+                   case(startsWith(inputs.toolkit, 'cuda'),
+                        case(runner.os == 'Linux' && runner.arch == 'x64', '500MB',
+                             runner.os == 'Linux', '240MB',
+                             '120MB'),
+                        runner.os == 'macOS' && inputs.toolkit == 'metal', '200MB',
+                        runner.os == 'macOS', '150MB',
+                        '60MB'))
+          }}
         save: ${{ !startsWith(github.ref, 'refs/pull/') && (inputs.ccache-save != 'false') }}
         # ccache-action bug: running "apt-get update" fails on large arm runner.
         update-package-index: false
@@ -110,6 +125,10 @@ runs:
         echo PATH=$PATH >> $GITHUB_ENV
         # Search python packages in .venv
         echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
+        # Use PTX ccache for CUDA.
+        if ${{ startsWith(inputs.toolkit, 'cuda') }} ; then
+          echo MLX_PTX_CACHE_DIR=/tmp/mlx-ptx-cache >> $GITHUB_ENV
+        fi
         echo "::endgroup::"
 
     - name: Setup Python venv (Windows)
@@ -217,6 +236,23 @@ runs:
         cmakeArgs=(
           "-G Ninja"
         )
+        if ${{ runner.os == 'macOS' }} ; then
+          if ${{ inputs.toolkit == 'cpu' }} ; then
+            cmakeArgs+=("-DMLX_BUILD_METAL=OFF")
+          else
+            cmakeArgs+=("-DMLX_BUILD_METAL=ON")
+            if ${{ inputs.toolkit == 'jit' }} ; then
+              cmakeArgs+=(
+                "-DBUILD_SHARED_LIBS=ON"
+                "-DCMAKE_BUILD_TYPE=MinSizeRel"
+                "-DMLX_BUILD_CPU=OFF"
+                "-DMLX_BUILD_SAFETENSORS=OFF"
+                "-DMLX_BUILD_GGUF=OFF"
+                "-DMLX_METAL_JIT=ON"
+              )
+            fi
+          fi
+        fi
         if ${{ runner.os == 'Windows' }} ; then
           cmakeArgs+=(
             "-DCMAKE_C_COMPILER=cl"

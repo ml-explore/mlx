@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: 'Publish to PyPi'
+        description: 'Publish to PyPI'
         required: false
         type: boolean
       dev-release:
@@ -111,7 +111,7 @@ jobs:
     runs-on: |-
       ${{ case(matrix.os == 'Windows',
                case(matrix.arch == 'aarch64', 'windows-11-arm',
-                    'windows-2022'),
+                    'windows-2022-large'),
                case(matrix.arch == 'aarch64', 'ubuntu-22-large-arm',
                     'ubuntu-22-large'))
       }}

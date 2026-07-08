@@ -66,43 +66,18 @@ void gather(
     array& out,
     const std::vector<int>& axes,
     const Shape& slice_sizes) {
-  // If the array is row contiguous then we can do a contiguous copy given
-  // two conditions on the slice size:
-  // - Any number of leading ones in the slice sizes are allowed
-  // - All other slice sizes match the corresponding dimension except the
-  //   first non-singleton slice size
-  // If the array is col contiguous then the reverse is the case:
-  // - Any number of trailing ones in the slice sizes are allowed
-  // - All other slice sizes match the corresponding dimension except the
-  //   first non-singleton slice size from the end
-
-  bool can_copy = false;
-  if (src.flags().row_contiguous) {
-    can_copy = true;
-
-    // Ignore leading 1s
-    int i = 0;
-    for (; i < slice_sizes.size() && slice_sizes[i] == 1; ++i)
-      ;
-
-    // Check the remaining
-    i++;
-    for (; i < src.ndim() && can_copy; ++i) {
-      can_copy = (src.shape(i) == slice_sizes[i]);
+  // Each gathered slice is written into the (row-contiguous) output as a
+  // sequential block. We can therefore replace the per-element strided read
+  // with a single contiguous copy only when the slice is itself laid out
+  // contiguously in row-major order within the source.
+  bool can_copy = true;
+  int64_t expected_stride = 1;
+  for (int i = src.ndim() - 1; i >= 0 && can_copy; --i) {
+    if (slice_sizes[i] == 1) {
+      continue;
     }
-  } else if (src.flags().col_contiguous) {
-    can_copy = true;
-
-    // Ignore trailing 1s
-    int i = slice_sizes.size() - 1;
-    for (; i >= 0 && slice_sizes[i] == 1; --i)
-      ;
-
-    // Skip the next slice size and check the remaining
-    i--;
-    for (; i >= 0 && can_copy; --i) {
-      can_copy = (src.shape(i) == slice_sizes[i]);
-    }
+    can_copy = (src.strides()[i] == expected_stride);
+    expected_stride *= slice_sizes[i];
   }
   size_t slice_size = 1;
   for (auto s : slice_sizes) {
