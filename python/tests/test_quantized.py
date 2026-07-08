@@ -435,7 +435,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
         tests = product(
-            [256, 512, 67],  # M
+            [256, 512, 67, 5, 7],  # M -- 5, 7 exercise out_vec_size < 8 (#3762)
             [64, 256],  # N
             [0, 1, 3, 8],  # B
         )

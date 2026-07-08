@@ -136,8 +136,8 @@ def binary_cross_entropy(
         inputs (array): The predicted values. If ``with_logits`` is ``True``, then
             ``inputs`` are unnormalized logits. Otherwise, ``inputs`` are probabilities.
         targets (array): The binary target values in {0, 1}.
-        with_logits (bool, optional): Whether ``inputs`` are logits. Default: ``True``.
         weights (array, optional): Optional weights for each target. Default: ``None``.
+        with_logits (bool, optional): Whether ``inputs`` are logits. Default: ``True``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
 

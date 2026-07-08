@@ -31,7 +31,8 @@ runs:
       shell: bash
       run: |
         echo "::group::Test local packages"
-        uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+        # Fall back to PyPI if PyTorch index has issues.
+        uv pip install torch --torch-backend=cpu
         uv pip install numpy
         if ${{ inputs.toolkit == 'cpu' }} ; then
           uv pip install wheelhouse/mlx_cpu*.whl
