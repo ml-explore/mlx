@@ -15,7 +15,7 @@ runs:
   steps:
     - name: Install dependencies
       shell: bash
-      run: uv pip install 'build<=1.4.2' setuptools
+      run: uv pip install build setuptools
 
     - name: Build wheel
       shell: bash
