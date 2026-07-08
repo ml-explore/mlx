@@ -1239,6 +1239,24 @@ class TestBlas(mlx_tests.MLXTestCase):
             self.assertEqual(r.shape, t.shape)
             self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
 
+    def test_gather_matmul_index_vjp_requires_stop_gradient(self):
+        a = mx.ones((4, 1, 2, 2))
+        b = mx.ones((4, 1, 2, 2))
+
+        def fun(w):
+            indices = mx.reshape(mx.argsort(w)[:2], (1, 2))
+            return mx.gather_mm(a, b, indices, indices).sum()
+
+        with self.assertRaisesRegex(ValueError, "stop_gradient"):
+            mx.grad(fun)(mx.array([3.0, 1.0, 2.0, 0.0]))
+
+        def fun_stopped(w):
+            indices = mx.stop_gradient(mx.reshape(mx.argsort(w)[:2], (1, 2)))
+            return mx.gather_mm(a, b, indices, indices).sum()
+
+        grad = mx.grad(fun_stopped)(mx.array([3.0, 1.0, 2.0, 0.0]))
+        self.assertTrue(mx.array_equal(grad, mx.zeros((4,))))
+
     def test_gather_mm_sorted(self):
         def gather_mm_ref(a, b, rhs):
             b = b[rhs]
