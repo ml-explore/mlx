@@ -35,7 +35,7 @@ runs:
       shell: bash
       run: |
         echo "::group::Install dependencies"
-        uv pip install 'build<=1.4.2' setuptools
+        uv pip install build setuptools
         if ${{ runner.os == 'Linux' }} ; then
           uv pip install auditwheel patchelf
         fi
@@ -50,8 +50,7 @@ runs:
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         echo "::group::Build frontend package"
-        python setup.py clean --all
-        MLX_BUILD_STAGE=1 python -m build -w
+        MLX_BUILD_FRONTEND_PACKAGE=1 python -m build -w
         echo "::endgroup::"
 
     - name: Post-process frontend package
@@ -77,8 +76,8 @@ runs:
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         echo "::group::Build backend package"
+        MLX_BUILD_BACKEND_PACKAGE=1 python -m build -w
         python setup.py clean --all
-        MLX_BUILD_STAGE=2 python -m build -w
         echo "::endgroup::"
 
     - name: Post-process backend package

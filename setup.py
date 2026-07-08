@@ -53,7 +53,22 @@ def get_version():
     return version
 
 
-build_stage = int(os.environ.get("MLX_BUILD_STAGE", 0))
+# Release builds for PyPi are separated into 2 packages:
+#
+# Frontend package:
+#  - Triggered with `MLX_BUILD_FRONTEND_PACKAGE=1`
+#  - Include everything except backend-specific binaries (e.g. libmlx.so, mlx.metallib, etc)
+#  - Wheel has Python ABI and platform tags
+#  - Wheel should be built for the cross-product of python version and platforms
+#  - Package name is "mlx" and it depends on backend packages (e.g. mlx-metal, mlx-cuda)
+# Backend package:
+#  - Triggered with `MLX_BUILD_BACKEND_PACKAGE=1`
+#  - Include headers and backend binaries.
+#  - Wheel has only platform tags
+#  - Wheel should be built only for different platforms
+#  - Package name is back-end specific, e.g mlx-metal, mlx-cuda
+build_frontend = int(os.environ.get("MLX_BUILD_FRONTEND_PACKAGE", 0))
+build_backend = int(os.environ.get("MLX_BUILD_BACKEND_PACKAGE", 0))
 build_macos = platform.system() == "Darwin"
 build_cuda = "MLX_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
 
@@ -88,17 +103,9 @@ class CMakeBuild(build_ext):
         if not build_temp.exists():
             build_temp.mkdir(parents=True)
 
-        install_prefix = extdir
-        pybind_out_dir = extdir
-        if build_stage == 1:
-            # Don't include MLX libraries in the wheel
-            install_prefix = build_temp
-        elif build_stage == 2:
-            # Don't include Python bindings in the wheel
-            pybind_out_dir = build_temp
         cmake_args = [
-            f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
-            f"-DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY={pybind_out_dir}",
+            f"-DCMAKE_INSTALL_PREFIX={extdir}",
+            f"-DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY={extdir}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
             f"-DPython_EXECUTABLE={sys.executable}",
             "-DMLX_BUILD_PYTHON_BINDINGS=ON",
@@ -113,8 +120,7 @@ class CMakeBuild(build_ext):
         if "CMAKE_ARGS" in os.environ:
             cmake_args += [item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
 
-        # For release wheel force building for all supported arches.
-        if build_stage == 2 and build_cuda:
+        if build_backend and build_cuda:
             # Last arch is always real and virtual for forward-compatibility
             cuda_archs = [
                 "75-real",
@@ -191,10 +197,34 @@ class CMakeBuild(build_ext):
 class MLXBdistWheel(bdist_wheel):
     def get_tag(self) -> tuple[str, str, str]:
         impl, abi, plat_name = super().get_tag()
-        if build_stage == 2:
+        if build_backend:
             impl = self.python_tag
             abi = "none"
         return (impl, abi, plat_name)
+
+    def write_wheelfile(self, *args, **kwargs) -> None:
+        super().write_wheelfile(*args, **kwargs)
+
+        mlx_dir = Path(self.bdist_dir, "mlx")
+
+        def is_backend_file(file):
+            if file.is_relative_to(Path(mlx_dir, "lib")):
+                return True
+            if file.is_relative_to(Path(mlx_dir, "include")):
+                return True
+            if file.is_relative_to(Path(mlx_dir, "share")):
+                return True
+            if file.suffix == ".dll":
+                return True
+            return False
+
+        if build_frontend or build_backend:
+            for file in Path(self.bdist_dir).rglob("*"):
+                if not file.is_relative_to(mlx_dir) or not file.is_file():
+                    continue
+                bf = is_backend_file(file)
+                if (build_frontend and bf) or (build_backend and not bf):
+                    file.unlink()
 
 
 # Read the content of README.md
@@ -260,24 +290,8 @@ if __name__ == "__main__":
     }
     install_requires = []
 
-    # Release builds for PyPi are in two stages.
-    # Each stage should be run from a clean build:
-    #   python setup.py clean --all
-    #
-    # Stage 1:
-    #  - Triggered with `MLX_BUILD_STAGE=1`
-    #  - Include everything except backend-specific binaries (e.g. libmlx.so, mlx.metallib, etc)
-    #  - Wheel has Python ABI and platform tags
-    #  - Wheel should be built for the cross-product of python version and platforms
-    #  - Package name is mlx and it depends on subpackage in stage 2 (e.g. mlx-metal)
-    # Stage 2:
-    #  - Triggered with `MLX_BUILD_STAGE=2`
-    #  - Includes only backend-specific binaries (e.g. libmlx.so, mlx.metallib, etc)
-    #  - Wheel has only platform tags
-    #  - Wheel should be built only for different platforms
-    #  - Package name is back-end specific, e.g mlx-metal
-    if build_stage != 2:
-        if build_stage == 1:
+    if not build_backend:
+        if build_frontend:
             install_requires.append(
                 f'mlx-metal=={version}; platform_system == "Darwin"'
             )
