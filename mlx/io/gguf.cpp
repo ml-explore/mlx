@@ -161,7 +161,7 @@ void set_mx_value_from_gguf(
           value = array(reinterpret_cast<uint64_t*>(data), {size}, uint64);
           break;
         case GGUF_VALUE_TYPE_INT64:
-          value = array(reinterpret_cast<uint64_t*>(data), {size}, int64);
+          value = array(reinterpret_cast<int64_t*>(data), {size}, int64);
           break;
         case GGUF_VALUE_TYPE_FLOAT32:
           value = array(reinterpret_cast<float*>(data), {size}, float32);
