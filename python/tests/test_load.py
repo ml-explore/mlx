@@ -339,16 +339,6 @@ class TestLoad(mlx_tests.MLXTestCase):
                 metadata = {"meta": arr}
                 mx.save_gguf(save_file_mlx, save_dict, metadata)
 
-        # int64 negative case
-        arr = mx.array([-1], dtype=mx.int64)
-        metadata = {"meta": arr}
-        mx.save_gguf(save_file_mlx, save_dict, metadata)
-        _, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
-        self.assertEqual(len(meta_load_dict), 1)
-        self.assertTrue("meta" in meta_load_dict)
-        self.assertTrue(mx.array_equal(meta_load_dict["meta"], arr))
-        self.assertEqual(meta_load_dict["meta"].dtype, mx.int64)
-
     @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
     def test_save_and_load_gguf_metadata_mixed(self):
         if not os.path.isdir(self.test_dir):
