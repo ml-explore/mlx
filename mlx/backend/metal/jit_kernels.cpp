@@ -326,6 +326,38 @@ MTL::ComputePipelineState* get_logsumexp_kernel(
   return d.get_kernel(kernel_name, lib);
 }
 
+MTL::ComputePipelineState* get_cholesky_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out) {
+  // kernel_name is "cholesky_{shared,device}_{type}", e.g.
+  // "cholesky_shared_float32". Build both variants into one library per type.
+  std::string tname = kernel_name.substr(kernel_name.rfind('_') + 1);
+  std::string lib_name = "cholesky_" + tname;
+  auto lib = d.get_library(lib_name, [&] {
+    auto t_str = get_type_string(out.dtype());
+    std::string kernel_source;
+    kernel_source = metal::utils();
+    kernel_source += metal::cholesky();
+    kernel_source += get_template_definition(
+        "cholesky_simd_" + tname, "cholesky_simd", t_str);
+    kernel_source += get_template_definition(
+        "cholesky_shared_" + tname, "cholesky_shared", t_str);
+    kernel_source += get_template_definition(
+        "cholesky_panel_" + tname, "cholesky_panel", t_str);
+    kernel_source += get_template_definition(
+        "cholesky_syrk32_" + tname, "cholesky_syrk", t_str, 32);
+    kernel_source += get_template_definition(
+        "cholesky_syrk64_" + tname, "cholesky_syrk", t_str, 64);
+    kernel_source += get_template_definition(
+        "cholesky_fixup_" + tname, "cholesky_fixup", t_str);
+    kernel_source += get_template_definition(
+        "cholesky_device_" + tname, "cholesky_device", t_str);
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
 MTL::ComputePipelineState* get_scan_kernel(
     metal::Device& d,
     const std::string& kernel_name,

@@ -156,6 +156,10 @@ NO_GPU(Transpose)
 NO_GPU(Unflatten)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)
+
+bool Cholesky::use_fallback(Dtype, int, size_t, Stream) {
+  return true;
+}
 NO_GPU_MULTI(Eigh)
 NO_GPU_MULTI(Eig)
 NO_GPU(View)

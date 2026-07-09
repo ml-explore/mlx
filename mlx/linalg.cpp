@@ -335,7 +335,6 @@ array cholesky(
     const array& a,
     bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
-  check_cpu_stream(s, "[linalg::cholesky]");
   check_float(a.dtype(), "[linalg::cholesky]");
   if (a.ndim() < 2) {
     std::ostringstream msg;
@@ -350,11 +349,19 @@ array cholesky(
         "[linalg::cholesky] Cholesky decomposition is only defined for square "
         "matrices.");
   }
+
+  // Batches of float32 matrices go to the GPU when that is faster than the
+  // CPU; every other shape uses the CPU implementation.
+  auto stream = to_stream(s);
+  if (stream.device == Device::gpu) {
+    int n = a.shape(-1);
+    size_t num_matrices = (n > 0) ? a.size() / (size_t(n) * n) : 0;
+    if (Cholesky::use_fallback(a.dtype(), n, num_matrices, stream)) {
+      stream = default_stream(Device::cpu);
+    }
+  }
   return array(
-      a.shape(),
-      a.dtype(),
-      std::make_shared<Cholesky>(to_stream(s), upper),
-      {a});
+      a.shape(), a.dtype(), std::make_shared<Cholesky>(stream, upper), {a});
 }
 
 array pinv(const array& a, StreamOrDevice s /* = {} */) {

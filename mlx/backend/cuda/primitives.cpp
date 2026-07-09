@@ -29,6 +29,10 @@ NO_GPU_MULTI(QRF)
 NO_GPU_MULTI(SVD)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)
+
+bool Cholesky::use_fallback(Dtype, int, size_t, Stream) {
+  return true;
+}
 NO_GPU_MULTI(Eig)
 NO_GPU_MULTI(Eigh)
 

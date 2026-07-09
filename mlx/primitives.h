@@ -2474,6 +2474,10 @@ class Cholesky : public UnaryPrimitive {
   explicit Cholesky(Stream stream, bool upper)
       : UnaryPrimitive(stream), upper_(upper) {}
 
+  // Whether to run this shape on the CPU (the GPU kernels only beat the CPU
+  // for sufficiently large batches).
+  static bool use_fallback(Dtype dtype, int n, size_t num_matrices, Stream s);
+
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
   auto state() const {

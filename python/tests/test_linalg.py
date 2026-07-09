@@ -276,6 +276,51 @@ class TestLinalg(mlx_tests.MLXTestCase):
         for M, L in zip(AB, Ls):
             self.assertTrue(mx.allclose(L @ L.T, M, rtol=1e-5, atol=1e-7))
 
+    def test_cholesky_gpu(self):
+        if not mx.is_available(mx.gpu):
+            return
+        mx.random.seed(7)
+
+        # Batches above the dispatch threshold run on the GPU; each shape
+        # exercises one of the Metal kernel paths.
+        for batch, n in [
+            (1200, 16),
+            (600, 32),
+            (600, 48),
+            (300, 96),
+            (150, 160),
+            (120, 256),
+        ]:
+            X = mx.random.normal((batch, n, n))
+            A = X @ X.swapaxes(-1, -2) + n * mx.eye(n)
+            for upper in (False, True):
+                L = mx.linalg.cholesky(A, upper=upper, stream=mx.gpu)
+                rec = L.swapaxes(-1, -2) @ L if upper else L @ L.swapaxes(-1, -2)
+                self.assertTrue(mx.allclose(rec, A, rtol=1e-4, atol=1e-4))
+                # The other triangle is exactly zero
+                if upper:
+                    self.assertTrue(mx.all(L == mx.triu(L)))
+                else:
+                    self.assertTrue(mx.all(L == mx.tril(L)))
+
+        # Shapes below the threshold and non-float32 inputs transparently use
+        # the CPU implementation on a GPU stream.
+        X = mx.random.normal((2, 8, 8))
+        A = X @ X.swapaxes(-1, -2) + 8 * mx.eye(8)
+        L = mx.linalg.cholesky(A, stream=mx.gpu)
+        self.assertTrue(mx.allclose(L @ L.swapaxes(-1, -2), A, rtol=1e-5, atol=1e-6))
+        Ad = A.astype(mx.float64, stream=mx.cpu)
+        Ld = mx.linalg.cholesky(Ad, stream=mx.gpu)
+        rec = mx.matmul(Ld, mx.swapaxes(Ld, -1, -2, stream=mx.cpu), stream=mx.cpu)
+        self.assertTrue(mx.allclose(rec, Ad, rtol=1e-8, atol=1e-8, stream=mx.cpu))
+
+        # Zero-size inputs
+        for shape in [(0, 4, 4), (3, 0, 0)]:
+            for stream in (mx.cpu, mx.gpu):
+                L = mx.linalg.cholesky(mx.zeros(shape), stream=stream)
+                mx.eval(L)
+                self.assertEqual(L.shape, shape)
+
     def test_pseudo_inverse(self):
         A = mx.array([[1, 2, 3], [6, -5, 4], [-9, 8, 7]], dtype=mx.float32)
         A_plus = mx.linalg.pinv(A, stream=mx.cpu)
