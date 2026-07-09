@@ -43,7 +43,6 @@ void GatedDeltaUpdate::eval_gpu(
   // printf("%d %d %d %d %d %d\n",B,T,Hk,Hv,Dk,Dv);
 
   int C = chunk_size;
-  int n_chunks = T / C; // TODO: make general
 
   std::string suffix = get_type_string(q.dtype()) // "float"
       + "_" + get_type_string(h0.dtype()) // "float"
@@ -55,7 +54,40 @@ void GatedDeltaUpdate::eval_gpu(
   out.set_data(allocator::malloc(out.nbytes()));
   hf.set_data(allocator::malloc(hf.nbytes()));
 
+  fill_gpu(array(0, out.dtype()), out, s);
+
   switch (C) {
+    case 16: {
+      std::string kernel_name = "gated_delta_fused_nax_";
+
+      // printf("C: %d\nname: %s\n",C,kernel_name.c_str());
+      std::string base_name = kernel_name + suffix;
+
+      base_name += "_" + std::to_string(C);
+
+      std::string hash_name = base_name;
+
+      metal::MTLFCList func_consts = {};
+
+      auto delta_kernel = get_steel_gated_delta_forward_kernel(
+          d, base_name, hash_name, func_consts);
+
+      compute_encoder.set_compute_pipeline_state(delta_kernel);
+      compute_encoder.set_input_array(q, 0);
+      compute_encoder.set_input_array(k, 1);
+      compute_encoder.set_input_array(v, 2);
+      compute_encoder.set_input_array(h0, 3); // initial state in
+      compute_encoder.set_input_array(g, 4);
+      compute_encoder.set_input_array(beta, 5);
+      compute_encoder.set_output_array(out, 6);
+      compute_encoder.set_output_array(hf, 7); // final state out
+      compute_encoder.set_bytes(T, 8);
+
+      auto grid = MTL::Size(32, Dv / 16, B * Hv);
+      auto threads = MTL::Size(32, 1, 1);
+      compute_encoder.dispatch_threads(grid, threads);
+      break;
+    }
     case 8: {
       std::string kernel_name = "gated_delta_fused_chunk_";
 
