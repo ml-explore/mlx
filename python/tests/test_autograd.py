@@ -493,9 +493,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
             idx = mx.stop_gradient(mx.argsort(w, axis=1)[:, :1])
             return mx.take_along_axis(w, idx, axis=1).sum()
 
-        grad = mx.grad(gather_axis_fun)(
-            mx.array([[3.0, 2.0, 1.0], [1.0, 3.0, 2.0]])
-        )
+        grad = mx.grad(gather_axis_fun)(mx.array([[3.0, 2.0, 1.0], [1.0, 3.0, 2.0]]))
         self.assertTrue(
             mx.array_equal(
                 grad,
