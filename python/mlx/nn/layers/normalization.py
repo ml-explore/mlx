@@ -374,8 +374,12 @@ class BatchNorm(Module):
             stats_size = 1
             for size in x.shape[:-1]:
                 stats_size *= size
+            # Normalize with biased batch variance, but store the unbiased
+            # estimate for inference. Keep stats_size == 1 finite.
             running_var = (
-                var * (stats_size / (stats_size - 1)) if stats_size > 1 else var
+                mx.var(x, axis=tuple(range(0, x.ndim - 1)), ddof=1)
+                if stats_size > 1
+                else var
             )
             self.running_mean = (1 - mu) * self.running_mean + mu * mean
             self.running_var = (1 - mu) * self.running_var + mu * running_var
