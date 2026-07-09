@@ -292,28 +292,49 @@ __global__ void gather_batched_gemm_kernel(
   const T* B_batch = B + b_offset;
   T* C_batch = C + static_cast<int64_t>(batch) * stride_c;
 
-  if (row < M && col < N) {
-    Acc sum = Acc(0);
+  // LDS-tiled accumulate (was a naive O(K) global-load loop — dominated MoE
+  // training time on gfx1151 at ~0.5 TFLOP/s). Same tile sizes as tiled_gemm.
+  __shared__ Acc As[TILE_M][TILE_K];
+  __shared__ Acc Bs[TILE_K][TILE_N];
 
-    for (int k = 0; k < K; ++k) {
-      Acc a_val;
-      Acc b_val;
+  Acc sum = Acc(0);
+  const int tx = threadIdx.x;
+  const int ty = threadIdx.y;
 
+  for (int t = 0; t < (K + TILE_K - 1) / TILE_K; ++t) {
+    int a_col = t * TILE_K + tx;
+    if (row < M && a_col < K) {
       if constexpr (TransA) {
-        a_val = static_cast<Acc>(A_batch[k * lda + row]);
+        As[ty][tx] = static_cast<Acc>(A_batch[a_col * lda + row]);
       } else {
-        a_val = static_cast<Acc>(A_batch[row * lda + k]);
+        As[ty][tx] = static_cast<Acc>(A_batch[row * lda + a_col]);
       }
-
-      if constexpr (TransB) {
-        b_val = static_cast<Acc>(B_batch[col * ldb + k]);
-      } else {
-        b_val = static_cast<Acc>(B_batch[k * ldb + col]);
-      }
-
-      sum += a_val * b_val;
+    } else {
+      As[ty][tx] = Acc(0);
     }
 
+    int b_row = t * TILE_K + ty;
+    if (b_row < K && col < N) {
+      if constexpr (TransB) {
+        Bs[ty][tx] = static_cast<Acc>(B_batch[col * ldb + b_row]);
+      } else {
+        Bs[ty][tx] = static_cast<Acc>(B_batch[b_row * ldb + col]);
+      }
+    } else {
+      Bs[ty][tx] = Acc(0);
+    }
+
+    __syncthreads();
+
+#pragma unroll
+    for (int k = 0; k < TILE_K; ++k) {
+      sum += As[ty][k] * Bs[k][tx];
+    }
+
+    __syncthreads();
+  }
+
+  if (row < M && col < N) {
     if (beta != 0.0f) {
       C_batch[row * N + col] = static_cast<T>(
           alpha * sum + beta * static_cast<Acc>(C_batch[row * N + col]));

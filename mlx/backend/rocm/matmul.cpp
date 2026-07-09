@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <cstdlib>
+#include <string>
 #include <cstring>
 #include <numeric>
 #include <vector>
@@ -1065,6 +1066,15 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 // Sorted-rhs gather_mm (M==1): collapse consecutive tokens that share an expert
 // into dense GEMMs. Matches CUDA gather_mm_rhs intent for MoE prefill/train.
+// Disable with MLX_ROCM_SORTED_GATHER=0 to fall back to gemv_gather.
+static bool sorted_gather_enabled() {
+  static const bool on = [] {
+    const char* e = std::getenv("MLX_ROCM_SORTED_GATHER");
+    return !(e && std::string(e) == "0");
+  }();
+  return on;
+}
+
 static bool try_sorted_rhs_gather_mm(
     rocm::CommandEncoder& encoder,
     const array& a,
@@ -1078,10 +1088,10 @@ static bool try_sorted_rhs_gather_mm(
     bool b_transposed,
     int64_t ldb) {
   (void)lda;
-  if (a_transposed) {
+  if (!sorted_gather_enabled()) {
     return false;
   }
-  if (!rocm::is_hipblaslt_available()) {
+  if (a_transposed) {
     return false;
   }
 
@@ -1103,12 +1113,17 @@ static bool try_sorted_rhs_gather_mm(
   encoder.set_input_array(rhs_indices);
   encoder.set_output_array(out);
 
+  // Indices live on the encoder stream — never hipMemcpy on the null stream
+  // (deadlocks / races with the MLX worker stream).
   std::vector<uint32_t> rhs(static_cast<size_t>(batch));
-  CHECK_HIP_ERROR(hipMemcpy(
+  hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
+  CHECK_HIP_ERROR(hipMemcpyAsync(
       rhs.data(),
       gpu_ptr<const uint32_t>(rhs_indices),
       rhs.size() * sizeof(uint32_t),
-      hipMemcpyDeviceToHost));
+      hipMemcpyDeviceToHost,
+      hs));
+  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
 
   mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
   mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
@@ -1130,11 +1145,8 @@ static bool try_sorted_rhs_gather_mm(
     return off;
   };
 
-  const size_t esize = size_of(a.dtype());
-  const char* a_base = static_cast<const char*>(gpu_ptr<const void>(a));
-  const char* b_base = static_cast<const char*>(gpu_ptr<const void>(b));
-  char* out_base = static_cast<char*>(gpu_ptr<void>(out));
-
+  // Use LDS-tiled naive GEMM per expert run. hipBLASLt on gfx1151 hangs / pegs
+  // the GPU for these pointer-offset MoE shapes in practice.
   int start = 0;
   while (start < batch) {
     uint32_t e = rhs[static_cast<size_t>(start)];
@@ -1143,29 +1155,23 @@ static bool try_sorted_rhs_gather_mm(
       ++end;
     }
     int Mseg = end - start;
-    const void* a_ptr =
-        a_base + static_cast<size_t>(start) * static_cast<size_t>(K) * esize;
-    const void* b_ptr =
-        b_base + static_cast<size_t>(expert_offset(e)) * esize;
-    void* c_ptr =
-        out_base + static_cast<size_t>(start) * static_cast<size_t>(N) * esize;
-
-    rocm::hipblaslt_gemm_ptrs(
+    rocm::naive_gemm_with_offset(
         encoder,
-        /*transpose_a=*/false,
-        b_transposed,
+        a,
+        b,
+        out,
         Mseg,
         N,
         K,
-        1.0f,
-        a_ptr,
+        /*a_transposed=*/false,
         /*lda=*/K,
-        b_ptr,
-        static_cast<int>(ldb),
-        0.0f,
-        c_ptr,
-        N,
-        a.dtype());
+        /*a_offset=*/static_cast<int64_t>(start) * K,
+        b_transposed,
+        ldb,
+        /*b_offset=*/expert_offset(e),
+        /*out_offset=*/static_cast<int64_t>(start) * N,
+        1.0f,
+        0.0f);
     start = end;
   }
   return true;
@@ -1289,29 +1295,29 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Segments are small (typically #experts). Host-side split lets us dispatch
   // one tuned hipBLASLt GEMM per segment instead of a naive gather kernel.
+  // Must D2H on the encoder stream (see try_sorted_rhs_gather_mm).
   std::vector<uint32_t> segs(static_cast<size_t>(num_segments) * 2);
-  CHECK_HIP_ERROR(hipMemcpy(
+  hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
+  CHECK_HIP_ERROR(hipMemcpyAsync(
       segs.data(),
       gpu_ptr<const uint32_t>(segments),
       segs.size() * sizeof(uint32_t),
-      hipMemcpyDeviceToHost));
-
-  const size_t esize = size_of(a.dtype());
-  const char* a_base = static_cast<const char*>(gpu_ptr<const void>(a));
-  const char* b_base = static_cast<const char*>(gpu_ptr<const void>(b));
-  char* out_base = static_cast<char*>(gpu_ptr<void>(out));
+      hipMemcpyDeviceToHost,
+      hs));
+  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
 
   const int64_t a_k_stride = a.strides()[a.ndim() - 1];
   const int64_t b_k_stride = b.strides()[b.ndim() - 2];
   const int64_t out_stride = static_cast<int64_t>(M) * N;
+  const size_t esize = size_of(a.dtype());
+  char* out_base = static_cast<char*>(gpu_ptr<void>(out));
 
-  const bool use_lt = rocm::is_hipblaslt_available();
-
+  // LDS-tiled offset GEMMs only. hipBLASLt pointer-offset path pegs gfx1151.
   for (int i = 0; i < num_segments; ++i) {
     uint32_t k0 = segs[static_cast<size_t>(2 * i)];
     uint32_t k1 = segs[static_cast<size_t>(2 * i + 1)];
-    void* c_ptr = out_base + static_cast<size_t>(i) * out_stride * esize;
     if (k1 <= k0) {
+      void* c_ptr = out_base + static_cast<size_t>(i) * out_stride * esize;
       size_t bytes = static_cast<size_t>(out_stride) * esize;
       encoder.launch_kernel([c_ptr, bytes](hipStream_t stream) {
         (void)hipMemsetAsync(c_ptr, 0, bytes, stream);
@@ -1319,47 +1325,23 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       continue;
     }
     int Kseg = static_cast<int>(k1 - k0);
-    const void* a_ptr = a_base +
-        static_cast<size_t>(k0) * static_cast<size_t>(a_k_stride) * esize;
-    const void* b_ptr = b_base +
-        static_cast<size_t>(k0) * static_cast<size_t>(b_k_stride) * esize;
-
-    if (use_lt) {
-      rocm::hipblaslt_gemm_ptrs(
-          encoder,
-          a_transposed,
-          b_transposed,
-          M,
-          N,
-          Kseg,
-          1.0f,
-          a_ptr,
-          static_cast<int>(lda),
-          b_ptr,
-          static_cast<int>(ldb),
-          0.0f,
-          c_ptr,
-          N,
-          a.dtype());
-    } else {
-      rocm::naive_gemm_with_offset(
-          encoder,
-          a,
-          b,
-          out,
-          M,
-          N,
-          Kseg,
-          a_transposed,
-          lda,
-          static_cast<int64_t>(k0) * a_k_stride,
-          b_transposed,
-          ldb,
-          static_cast<int64_t>(k0) * b_k_stride,
-          static_cast<int64_t>(i) * out_stride,
-          1.0f,
-          0.0f);
-    }
+    rocm::naive_gemm_with_offset(
+        encoder,
+        a,
+        b,
+        out,
+        M,
+        N,
+        Kseg,
+        a_transposed,
+        lda,
+        static_cast<int64_t>(k0) * a_k_stride,
+        b_transposed,
+        ldb,
+        static_cast<int64_t>(k0) * b_k_stride,
+        static_cast<int64_t>(i) * out_stride,
+        1.0f,
+        0.0f);
   }
 }
 
