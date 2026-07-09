@@ -9,6 +9,7 @@
 
 #include "mlx/ops.h"
 #include "mlx/random.h"
+#include "python/src/random.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
@@ -63,15 +64,57 @@ PyKeySequence& default_key() {
   return ks;
 }
 
+// A process-global sentinel for `mx.random.state`. Since it is the same object
+// on every thread, capturing it (e.g. with `mx.compile`) is thread-independent;
+// the pytree traversal in trees.cpp resolves it to the calling thread's key.
+class RandomState {};
+
+nb::object random_state_sentinel() {
+  static nb::object sentinel;
+  if (sentinel.ptr() == nullptr) {
+    sentinel = nb::cast(RandomState{});
+    sentinel.inc_ref();
+  }
+  return sentinel;
+}
+
+bool is_random_state(nb::handle obj) {
+  return obj.ptr() == random_state_sentinel().ptr();
+}
+
+mx::array random_state_key() {
+  return nb::cast<mx::array>(default_key().state()[0]);
+}
+
+void set_random_state_key(const mx::array& key) {
+  default_key().state()[0] = nb::cast(key);
+}
+
 void init_random(nb::module_& parent_module) {
   auto m = parent_module.def_submodule(
       "random",
       "mlx.core.random: functionality related to random number generation");
 
+  nb::class_<RandomState>(m, "_RandomState")
+      .def("__len__", [](const RandomState&) { return 1; })
+      .def(
+          "__getitem__",
+          [](const RandomState&, int i) -> nb::object {
+            if (i != 0 && i != -1) {
+              throw nb::index_error("random state index out of range");
+            }
+            return default_key().state()[0];
+          },
+          "index"_a)
+      .def("__iter__", [](const RandomState&) {
+        return nb::iter(default_key().state());
+      });
+
   m.def("__getattr__", [&](nb::handle key) -> nb::object {
     // Create random.state lazily to avoid initializing device during import.
     if (nb::isinstance<nb::str>(key) && nb::cast<std::string>(key) == "state") {
-      return default_key().state();
+      default_key().state();
+      return random_state_sentinel();
     }
     return nb::steal(PyErr_Format(
         PyExc_AttributeError,

@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "python/src/trees.h"
+#include "python/src/random.h"
 
 template <typename T, typename U, typename V>
 void validate_subtrees(const std::vector<nb::object>& subtrees) {
@@ -153,7 +154,10 @@ void tree_visit(
 void tree_visit(nb::handle tree, std::function<void(nb::handle)> visitor) {
   std::function<void(nb::handle)> recurse;
   recurse = [&](nb::handle subtree) {
-    if (nb::isinstance<nb::list>(subtree) ||
+    if (is_random_state(subtree)) {
+      visitor(nb::cast(random_state_key()));
+    } else if (
+        nb::isinstance<nb::list>(subtree) ||
         nb::isinstance<nb::tuple>(subtree)) {
       for (auto item : subtree) {
         recurse(item);
@@ -175,7 +179,12 @@ void tree_visit_update(
     std::function<nb::object(nb::handle)> visitor) {
   std::function<nb::object(nb::handle)> recurse;
   recurse = [&](nb::handle subtree) {
-    if (nb::isinstance<nb::list>(subtree)) {
+    if (is_random_state(subtree)) {
+      // Read/write the calling thread's key; keep the sentinel in the tree.
+      set_random_state_key(
+          nb::cast<mx::array>(visitor(nb::cast(random_state_key()))));
+      return nb::cast<nb::object>(subtree);
+    } else if (nb::isinstance<nb::list>(subtree)) {
       auto l = nb::cast<nb::list>(subtree);
       for (int i = 0; i < l.size(); ++i) {
         l[i] = recurse(l[i]);
