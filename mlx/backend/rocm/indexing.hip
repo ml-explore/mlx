@@ -6,6 +6,7 @@
 #include "mlx/backend/rocm/jit_module.h"
 #include "mlx/backend/rocm/device/indexing.hpp"
 #include "mlx/backend/rocm/device/binary_ops.hpp"
+#include "mlx/backend/rocm/device/atomic_ops.hpp"
 #include "mlx/backend/rocm/device/utils.hpp"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/common/slicing.h"
@@ -222,7 +223,10 @@ __global__ void scatter_axis_kernel(
   out_loc += elem_to_loc_nd<NDIM>(elem_idx + x, shape.data_, out_strides.data_);
   
   if constexpr (IS_SUM) {
-    atomicAdd(&out[out_loc], upd[upd_loc]);
+    // atomic_add has CAS-based specializations for hip_bfloat16 / __half, so
+    // the Sum reduction (embedding-lookup / MoE-gather gradient) works for the
+    // half-precision dtypes too, not just float32 as a raw atomicAdd would.
+    atomic_add(&out[out_loc], upd[upd_loc]);
   } else {
     out[out_loc] = upd[upd_loc];
   }
@@ -1182,12 +1186,16 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   
   if (is_sum) {
-    // Note: atomicAdd only supports float32 and float64 on ROCm
-    // float16/bfloat16 would need custom atomic implementations
+    // atomic_add (device/atomic_ops.hpp) provides native atomicAdd for float32
+    // and CAS-loop specializations for float16/bfloat16, so the Sum reduction —
+    // the gradient op for embedding lookups and MoE expert gathers — covers the
+    // half-precision dtypes too.
     switch (upd.dtype()) {
       case float32: DISPATCH_IDX_TYPE(float, true); break;
+      case float16: DISPATCH_IDX_TYPE(__half, true); break;
+      case bfloat16: DISPATCH_IDX_TYPE(hip_bfloat16, true); break;
       default:
-        throw std::runtime_error("Unsupported dtype for ScatterAxis Sum (only float32 supported)");
+        throw std::runtime_error("Unsupported dtype for ScatterAxis Sum (only float32/float16/bfloat16 supported)");
     }
   } else {
     switch (upd.dtype()) {
