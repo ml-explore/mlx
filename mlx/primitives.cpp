@@ -141,10 +141,15 @@ array gather_mm_grad(
     // scatter_add_axis requires a 1-D index vector matching the length of the
     // flattened token axis. Callers (e.g. MoE) often pass [N,1,1]-shaped
     // rhs_indices; flatten before counting per-expert runs.
+    //
+    // Count in float32: ROCm ScatterAxis Sum only supports f32/f16/bf16 (not
+    // uint32). Counts fit exactly in f32 mantissa for MoE batch sizes.
     auto rhs_flat = flatten(rhs_indices, /*start_axis=*/0, /*end_axis=*/-1, s);
-    auto segments = zeros({num_segments}, uint32, s);
-    segments = scatter_add_axis(segments, rhs_flat, array(M, uint32), 0, s);
-    segments = cumsum(segments, 0, false, true, s);
+    auto counts = zeros({num_segments}, float32, s);
+    counts = scatter_add_axis(
+        counts, rhs_flat, array(static_cast<float>(M), float32), 0, s);
+    counts = cumsum(counts, 0, false, true, s);
+    auto segments = astype(counts, uint32, s);
     segments = concatenate({array({0}, {1}, uint32), segments}, 0, s);
     segments = as_strided(segments, {num_segments, 2}, {1, 1}, 0, s);
 
@@ -5957,7 +5962,9 @@ std::vector<array> GatherMM::vjp(
           sorted,
           stream());
       if (sorted && no_broadcast) {
-        vjps.push_back(g);
+        // g may carry an extra singleton M from gather_mm when activations
+        // were 4-D (…,1,K); reshape back to primal a.
+        vjps.push_back(reshape(g, a.shape(), stream()));
       } else {
         vjps.push_back(reshape(
             scatter_add(

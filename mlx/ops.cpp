@@ -6011,11 +6011,12 @@ array gather_mm(
   auto out = array(
       std::move(out_shape),
       out_type,
-      // Note: right_sorted requires omitting lhs_indices. Passing an explicit
-      // identity arange (common for MoE) forces the generic path — which is
-      // required for correct shapes with 4-D activations (omitting lhs
-      // currently mis-broadcasts). ROCm still benefits from LDS-tiled
-      // gather_batched_gemm on the generic path.
+      // right_sorted is only set when lhs is omitted (identity default). MoE
+      // often passes an explicit identity arange for correct 4-D broadcast;
+      // that clears right_sorted so VJP stays on the generic path. ROCm forward
+      // still detects identity lhs in try_moe_segment_gather_mm. Do NOT set
+      // right_sorted when both indices are provided: ROCm SegmentedMM weight
+      // VJP currently disagrees with the generic path and can NaN training.
       std::make_shared<GatherMM>(
           to_stream(s),
           sorted_indices && !rhs_indices_,

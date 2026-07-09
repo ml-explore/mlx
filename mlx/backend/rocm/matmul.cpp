@@ -1276,11 +1276,11 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [transposed_a, lda, a_] = check_transpose(encoder, s, a);
   auto [transposed_b, ldb, b_] = check_transpose(encoder, s, b);
 
-  // MoE win: M==1 + identity lhs + long rhs runs → segment GEMMs, not gemv.
-  // lemonseed always passes explicit arange lhs, so right_sorted_ is false;
-  // we still detect identity lhs on the host (cheap vs GEMM).
+  // MoE win: M==1 + identity/pre-gathered a + long rhs runs → segment GEMMs.
+  // right_sorted_ means sequential a (lhs omitted). With explicit identity
+  // arange (common for MoE 4-D shapes) the flag is false; we D2H-check lhs.
   if (M == 1) {
-    const bool assume_id = right_sorted_; // no lhs, or flag means sequential a
+    const bool assume_id = right_sorted_; // sequential a when flag set
     if (try_moe_segment_gather_mm(
             encoder,
             a_,
