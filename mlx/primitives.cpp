@@ -4721,7 +4721,8 @@ std::vector<array> MaskedScatter::vjp(
       vjps.push_back(reshape(gsrc_flat, src.shape(), s));
     } else {
       throw std::invalid_argument(
-          "[masked_scatter] Cannot calculate VJP with respect to mask.");
+          "[masked_scatter] Cannot calculate VJP with respect to mask. "
+          "Use stop_gradient on mask to stop gradients from being computed.");
     }
   }
   return vjps;
@@ -5753,7 +5754,8 @@ std::vector<array> BlockMaskedMM::vjp(
   if ((needs_lhs_mask_vjp && primals[op_mask_idx].dtype() == bool_) ||
       (needs_rhs_mask_vjp && primals[op_mask_idx + 1].dtype() == bool_)) {
     throw std::invalid_argument(
-        "[BlockMaskedMM] Cannot calculate VJP with respect to boolean masks.");
+        "[BlockMaskedMM] Cannot calculate VJP with respect to boolean masks. "
+        "Use stop_gradient on masks to stop gradients from being computed.");
   }
 
   auto expand_mask = [&](array mask, int Y, int X) {
@@ -5950,7 +5952,8 @@ std::vector<array> BlockMaskedMM::vjp(
 
     } else {
       throw std::invalid_argument(
-          "[BlockMaskedMM] Cannot calculate VJP with respect to masks.");
+          "[BlockMaskedMM] Cannot calculate VJP with respect to masks. "
+          "Use stop_gradient on masks to stop gradients from being computed.");
     }
   }
   return vjps;
