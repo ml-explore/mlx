@@ -2483,7 +2483,7 @@ std::vector<array> Gather::vjp(
     if (argnum > 0) {
       throw std::invalid_argument(
           "[gather] Cannot calculate VJP with respect to indices. "
-          "Use mx.stop_gradient on indices to make this explicit.");
+          "Use stop_gradient on indices to stop gradients from being computed.");
     } else {
       auto src = zeros_like(primals[0], stream());
       std::vector<array> inds(primals.begin() + 1, primals.end());
@@ -2500,7 +2500,7 @@ std::vector<array> Gather::jvp(
   if (argnums.size() > 1 || argnums[0] != 0) {
     throw std::invalid_argument(
         "[gather] Cannot calculate JVP with respect to indices. "
-        "Use mx.stop_gradient on indices to make this explicit.");
+        "Use stop_gradient on indices to stop gradients from being computed.");
   }
   std::vector<array> inds(primals.begin() + 1, primals.end());
   return {gather(tangents[0], inds, axes_, slice_sizes_, stream())};
@@ -2549,7 +2549,7 @@ std::vector<array> GatherAxis::vjp(
     if (argnum > 0) {
       throw std::invalid_argument(
           "[gather_axis] Cannot calculate VJP with respect to indices. "
-          "Use mx.stop_gradient on indices to make this explicit.");
+          "Use stop_gradient on indices to stop gradients from being computed.");
     } else {
       auto src = zeros_like(primals[0], stream());
       vjps.push_back(array(
@@ -2569,7 +2569,7 @@ std::vector<array> GatherAxis::jvp(
   if (argnums.size() > 1 || argnums[0] != 0) {
     throw std::invalid_argument(
         "[gather_axis] Cannot calculate JVP with respect to indices. "
-        "Use mx.stop_gradient on indices to make this explicit.");
+        "Use stop_gradient on indices to stop gradients from being computed.");
   }
   return {take_along_axis(tangents[0], primals[1], axis_, stream())};
 }
@@ -4486,7 +4486,7 @@ std::vector<array> Scatter::vjp(
     } else {
       throw std::invalid_argument(
           "[scatter] Cannot calculate VJP with respect to indices. "
-          "Use mx.stop_gradient on indices to make this explicit.");
+          "Use stop_gradient on indices to stop gradients from being computed.");
     }
   }
   return vjps;
@@ -4599,7 +4599,7 @@ std::vector<array> ScatterAxis::vjp(
     } else {
       throw std::invalid_argument(
           "[scatter_axis] Cannot calculate VJP with respect to indices. "
-          "Use mx.stop_gradient on indices to make this explicit.");
+          "Use stop_gradient on indices to stop gradients from being computed.");
     }
   }
   return vjps;
@@ -4613,7 +4613,7 @@ std::vector<array> ScatterAxis::jvp(
     if (arg == 1) {
       throw std::invalid_argument(
           "[scatter_axis] Cannot calculate JVP with respect to indices. "
-          "Use mx.stop_gradient on indices to make this explicit.");
+          "Use stop_gradient on indices to stop gradients from being computed.");
     }
   }
   if (argnums.size() == 2) {
@@ -6016,7 +6016,7 @@ std::vector<array> GatherMM::vjp(
     } else {
       throw std::invalid_argument(
           "[GatherMM] Cannot calculate VJP with respect to indices. "
-          "Use mx.stop_gradient on indices to make this explicit.");
+          "Use stop_gradient on indices to stop gradients from being computed.");
     }
   }
   return vjps;
