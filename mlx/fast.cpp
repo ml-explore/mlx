@@ -944,6 +944,9 @@ std::vector<array> gated_delta_update(
   auto g = astype(gates, out_dtype, s);
   auto beta = astype(beta_, out_dtype, s);
 
+  // wrong, not as fast. This kind of operations need to be done in
+  // the eval gpu inside a function that checks for shapes and strides
+  // TODO: mode this
   q = contiguous(q, false, s);
   k = contiguous(k, false, s);
   v = contiguous(v, false, s);
