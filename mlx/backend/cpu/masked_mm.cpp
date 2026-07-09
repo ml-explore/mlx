@@ -605,4 +605,8 @@ void SegmentedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
+void GroupedMM::eval_cpu(const std::vector<array>&, array&) {
+  throw std::runtime_error("[GroupedMM::eval_cpu] CPU grouped_mm NYI.");
+}
+
 } // namespace mlx::core

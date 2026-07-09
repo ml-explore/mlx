@@ -1669,6 +1669,14 @@ MLX_API array gather_mm(
 MLX_API array
 segmented_mm(array a, array b, array segments, StreamOrDevice s = {});
 
+/**
+ * Compute a matrix product over groups of rows. The rows of the first input
+ * are sorted by group and the offsets into each group are provided so that
+ * each group is multiplied by its corresponding matrix in the second input.
+ */
+MLX_API array
+grouped_mm(array a, array b, array token_offsets, StreamOrDevice s = {});
+
 /** Extract a diagonal or construct a diagonal array */
 MLX_API array diagonal(
     const array& a,

@@ -50,7 +50,7 @@ array compute_token_offset(
   int block = 256;
   int grid = (group_count + block - 1) / block;
   encoder.add_kernel_node(
-      cu::first_token_offset_kernel,
+      cu::token_offset_kernel,
       grid,
       block,
       gpu_ptr<uint32_t>(indices),

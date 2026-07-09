@@ -2638,4 +2638,8 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   segmented_mm(a, b, segments, out, M, N, K, d, s);
 }
 
+void GroupedMM::eval_gpu(const std::vector<array>&, array&) {
+  throw std::runtime_error("[GroupedMM::eval_gpu] Metal grouped_mm NYI.");
+}
+
 } // namespace mlx::core

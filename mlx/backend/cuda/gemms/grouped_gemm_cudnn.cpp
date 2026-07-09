@@ -13,22 +13,9 @@
 
 namespace mlx::core {
 
+#if CUDNN_VERSION >= 91800
+
 namespace {
-
-array prepare_grouped_mm_w(const array& w, Stream s) {
-  // todo
-  return w;
-}
-
-array prepare_grouped_mm_x(const array& x, Stream s) {
-  if (x.strides(-1) != 1) {
-    array x_copy = contiguous_copy_gpu(x, s);
-    auto& encoder = cu::get_command_encoder(s);
-    encoder.add_temporary(x_copy);
-    return x_copy;
-  }
-  return x;
-}
 
 constexpr int GMM_NDIM = 3;
 
@@ -47,12 +34,11 @@ inline BytesKey<GatherMMCacheKey> build_grouped_mm_key(
     cu::CommandEncoder& encoder,
     const array& x,
     const array& w,
-    const array& out,
-    int mode) {
+    const array& out) {
   BytesKey<GatherMMCacheKey> key;
   key.pod.device_id = encoder.device().cuda_device();
   key.pod.cudnn_dtype = dtype_to_cudnn_type(x.dtype());
-  key.pod.mode = mode;
+  key.pod.mode = 0; // NONE
   key.pod.x_shape = vector_key<GMM_NDIM>(x.shape());
   key.pod.x_strides = vector_key<GMM_NDIM>(x.strides());
   key.pod.w_shape = vector_key<GMM_NDIM>(w.shape());
@@ -63,14 +49,8 @@ inline BytesKey<GatherMMCacheKey> build_grouped_mm_key(
 
 enum UIDS { X, W, TOKEN_OFFSETS, TOKEN_INDEX, O };
 
-fe::MoeGroupedMatmulMode_t grouped_mm_mode(
-    const std::optional<array>& lhs_indices) {
-  return lhs_indices.has_value() ? fe::MoeGroupedMatmulMode_t::GATHER
-                                 : fe::MoeGroupedMatmulMode_t::NONE;
-}
-
-// we need to reshape output and input to be {1, T, K} instead of {T, 1, K}
-// to match the cudnn grouped mm interface
+// cudnn expects specific shape and strides for grouped matmul:
+// [1, T, H]
 void set_moe_layout(
     std::shared_ptr<fe::graph::Tensor_attributes>& t,
     const array& x) {
@@ -85,31 +65,26 @@ DnnGraph grouped_mm_graph(
     cudnnHandle_t handle,
     const array& x,
     const array& w,
-    const array& offsets,
-    const array& rhs_indices,
-    const std::optional<array>& lhs_indices,
+    const array& token_offsets,
     const array& output) {
   DnnGraph graph(handle, x.dtype());
-
-  auto mode = grouped_mm_mode(lhs_indices);
 
   auto x_ = graph.tensor("X", X, x);
   set_moe_layout(x_, x);
   auto w_ = graph.tensor("W", W, w);
-  auto offsets_ = graph.tensor("TOKEN_OFFSETS", TOKEN_OFFSETS, offsets);
+  auto token_offsets_ =
+      graph.tensor("TOKEN_OFFSETS", TOKEN_OFFSETS, token_offsets);
 
-  auto moe_grouped_matmul_attr = fe::graph::Moe_grouped_matmul_attributes()
-                                     .set_name("grouped_matmul")
-                                     .set_mode(mode);
+  auto moe_grouped_matmul_attr =
+      fe::graph::Moe_grouped_matmul_attributes()
+          .set_name("grouped_matmul")
+          .set_mode(fe::MoeGroupedMatmulMode_t::NONE);
 
   std::shared_ptr<fe::graph::Tensor_attributes> token_index = nullptr;
   std::shared_ptr<fe::graph::Tensor_attributes> token_ks = nullptr;
-  if (lhs_indices) {
-    token_index = graph.tensor("TOKEN_INDEX", TOKEN_INDEX, *lhs_indices);
-  }
 
   auto out_ = graph.moe_grouped_matmul(
-      x_, w_, offsets_, token_index, token_ks, moe_grouped_matmul_attr);
+      x_, w_, token_offsets_, token_index, token_ks, moe_grouped_matmul_attr);
   graph.tensor(out_, O, output);
   set_moe_layout(out_, output);
   out_->set_output(true);
@@ -129,59 +104,38 @@ auto& grouped_mm_cache() {
 
 } // namespace
 
-// rhs_indices (per-slot expert id) always an input to calculate the offsets.
-// lhs_indices selects the mode: provided -> GATHER (gather rows before matmul),
-// absent -> NONE (rows already grouped by expert)
-// currently we support only gatehr and none
 void cudnn_grouped_mm(
     const array& x,
     const array& w,
-    const array& rhs_indices,
-    const std::optional<array>&
-        lhs_indices, // for gather/scatter mode, optional
+    const array& token_offsets, // precomputed offsets for each expert
     array& out,
     cu::CommandEncoder& encoder) {
   nvtx3::scoped_range r("cudnn_grouped_mm");
 
-  auto& encoder = cu::get_command_encoder(s);
   auto handle = get_cudnn_handle(encoder.device());
 
-  array x_c = prepare_grouped_mm_x(x, s);
-  array w_c = prepare_grouped_mm_w(w, s);
-
-  int group_count = w_c.shape(0);
-  array token_offsets = compute_token_offset(rhs_indices, group_count, encoder);
-
-  encoder.set_input_array(x_c);
-  encoder.set_input_array(w_c);
+  encoder.set_input_array(x);
+  encoder.set_input_array(w);
   encoder.set_input_array(token_offsets);
-
-  if (lhs_indices.has_value()) {
-    encoder.set_input_array(*lhs_indices);
-  }
   encoder.set_output_array(out);
 
-  int mode = static_cast<int>(grouped_mm_mode(lhs_indices));
-
-  auto cache_key = build_grouped_mm_key(encoder, x_c, w_c, out, mode);
+  auto cache_key = build_grouped_mm_key(encoder, x, w, out);
   auto& cache = grouped_mm_cache();
   auto it = cache.find(cache_key);
   if (it == cache.end()) {
-    auto graph = grouped_mm_graph(
-        handle, x_c, w_c, token_offsets, rhs_indices, lhs_indices, out);
+    auto graph = grouped_mm_graph(handle, x, w, token_offsets, out);
     it = cache.emplace(cache_key, std::move(graph)).first;
   }
   auto& graph = it->second;
 
   std::unordered_map<int64_t, void*> variant_pack{
-      {X, gpu_ptr<void>(x_c)},
-      {W, gpu_ptr<void>(w_c)},
+      {X, gpu_ptr<void>(x)},
+      {W, gpu_ptr<void>(w)},
       {TOKEN_OFFSETS, gpu_ptr<void>(token_offsets)},
       {O, gpu_ptr<void>(out)}};
-  if (lhs_indices.has_value()) {
-    variant_pack[TOKEN_INDEX] = gpu_ptr<void>(*lhs_indices);
-  }
   CHECK_CUDNN_ERROR(graph.encode_graph(encoder, std::move(variant_pack)));
 }
+
+#endif
 
 } // namespace mlx::core

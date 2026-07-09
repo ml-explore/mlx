@@ -6107,6 +6107,62 @@ array segmented_mm(
       {std::move(a), std::move(b), std::move(segments)});
 }
 
+array grouped_mm(
+    array a,
+    array b,
+    array token_offsets,
+    StreamOrDevice s /* = {} */) {
+  if (b.ndim() != 3) {
+    std::ostringstream msg;
+    msg << "[grouped_mm] Second input must have 3 dimensions (num_groups, N, K) but "
+        << "b.ndim() == " << b.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.ndim() != 2) {
+    std::ostringstream msg;
+    msg << "[grouped_mm] First input must have 2 dimensions but "
+        << "a.ndim() == " << a.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.shape(-1) != b.shape(-2)) {
+    std::ostringstream msg;
+    msg << "[grouped_mm] Last dimension of first input with shape " << a.shape()
+        << " must match second to last dimension of"
+        << " second input with shape " << b.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out_type = result_type(a, b);
+  if (!issubdtype(out_type, floating)) {
+    std::ostringstream msg;
+    msg << "[grouped_mm] Only real floating point types are supported but "
+        << a.dtype() << " and " << b.dtype()
+        << " were provided which results in " << out_type
+        << ", which is not a real floating point type.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  a = astype(a, out_type, s);
+  b = astype(b, out_type, s);
+
+  if (!issubdtype(token_offsets.dtype(), integer)) {
+    throw std::invalid_argument(
+        "[grouped_mm] Got token_offsets with invalid dtype. Indices must be integral.");
+  }
+  token_offsets = astype(token_offsets, uint32, s);
+
+  auto out_shape = a.shape();
+  out_shape.back() = b.shape(-1);
+
+  return array(
+      std::move(out_shape),
+      out_type,
+      std::make_shared<GroupedMM>(to_stream(s)),
+      {std::move(a), std::move(b), std::move(token_offsets)});
+}
+
 array diagonal(
     const array& a,
     int offset /* = 0 */,
