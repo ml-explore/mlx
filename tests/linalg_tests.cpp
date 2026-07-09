@@ -189,6 +189,13 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
           Device::cpu)
           .item<float>(),
       doctest::Approx(3.0));
+  CHECK_EQ(
+      norm(x, -1, std::vector<int>{-1, -2}, false, Device::cpu).item<float>(),
+      doctest::Approx(3.0));
+  CHECK_EQ(
+      norm(x, 1, std::vector<int>{-1, -2}, false, Device::cpu).item<float>(),
+      doctest::Approx(21.0));
+
   x = reshape(arange(18, float32), {2, 3, 3});
   CHECK_THROWS(norm(x, 2.0, std::vector{0, 1, 2}));
   CHECK(allclose(
@@ -281,6 +288,14 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
                 std::vector<int>{-2, -1},
                 false,
                 Device::cpu),
+            array({3.0, 30.0}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(x, 1, std::vector<int>{-1, -2}, false, Device::cpu),
+            array({21.0, 48.0}))
+            .item<bool>());
+  CHECK(allclose(
+            norm(x, 1, std::vector<int>{-1, -2}, false, Device::cpu),
             array({3.0, 30.0}))
             .item<bool>());
 }

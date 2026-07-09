@@ -87,12 +87,16 @@ inline array matrix_norm(
   auto row_axis = axis[0];
   auto col_axis = axis[1];
   if (ord == -1.0) {
+    row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
+    col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
     col_axis -= (!keepdims && col_axis > row_axis && col_axis > 0);
     return astype(
         min(sum(abs(a, s), row_axis, keepdims, s), col_axis, keepdims, s),
         dtype,
         s);
   } else if (ord == 1.0) {
+    row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
+    col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
     col_axis -= (!keepdims && col_axis > row_axis && col_axis > 0);
     return astype(
         max(sum(abs(a, s), row_axis, keepdims, s), col_axis, keepdims, s),
