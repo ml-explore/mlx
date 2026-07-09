@@ -1064,9 +1064,11 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
-// Sorted-rhs gather_mm (M==1): collapse consecutive tokens that share an expert
-// into dense GEMMs. Matches CUDA gather_mm_rhs intent for MoE prefill/train.
-// Disable with MLX_ROCM_SORTED_GATHER=0 to fall back to gemv_gather.
+// MoE-style gather_mm (M==1): collapse consecutive tokens that share an expert
+// into one LDS-tiled GEMM per run. Correct when lhs is the identity arange
+// (token rows already ordered in `a` — lemonseed pre-gathers via flat[src]).
+// Does not require right_sorted_ (that flag is false when Python passes an
+// explicit arange lhs). Disable with MLX_ROCM_SORTED_GATHER=0.
 static bool sorted_gather_enabled() {
   static const bool on = [] {
     const char* e = std::getenv("MLX_ROCM_SORTED_GATHER");
@@ -1075,10 +1077,25 @@ static bool sorted_gather_enabled() {
   return on;
 }
 
-static bool try_sorted_rhs_gather_mm(
+// Minimum average tokens per distinct expert run to prefer segment GEMMs over
+// gemv_gather. Below this, per-token gemv is usually cheaper (D2H + tiny GEMMs).
+static int moe_segment_min_avg() {
+  static const int v = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_SEG_MIN");
+    if (!e || !*e)
+      return 4;
+    char* end = nullptr;
+    long x = std::strtol(e, &end, 10);
+    return (end != e && x >= 1) ? static_cast<int>(x) : 4;
+  }();
+  return v;
+}
+
+static bool try_moe_segment_gather_mm(
     rocm::CommandEncoder& encoder,
     const array& a,
     const array& b,
+    const array& lhs_indices,
     const array& rhs_indices,
     array& out,
     int N,
@@ -1086,7 +1103,8 @@ static bool try_sorted_rhs_gather_mm(
     bool a_transposed,
     int64_t lda,
     bool b_transposed,
-    int64_t ldb) {
+    int64_t ldb,
+    bool assume_identity_lhs) {
   (void)lda;
   if (!sorted_gather_enabled()) {
     return false;
@@ -1095,12 +1113,13 @@ static bool try_sorted_rhs_gather_mm(
     return false;
   }
 
+  // out is [..., M=1, N] → batch of vectors
   const int batch = static_cast<int>(out.size() / static_cast<size_t>(N));
   if (batch <= 0) {
     return false;
   }
 
-  // Require a to be a contiguous batch of 1xK rows: shape (..., 1, K).
+  // Contiguous batch of 1×K rows (pre-gathered token features).
   if (a.shape(-2) != 1 || a.shape(-1) != K) {
     return false;
   }
@@ -1108,22 +1127,68 @@ static bool try_sorted_rhs_gather_mm(
     return false;
   }
 
+  // Need flat index buffers (one index per batch row).
+  if (static_cast<int>(rhs_indices.size()) < batch) {
+    return false;
+  }
+  if (!assume_identity_lhs && static_cast<int>(lhs_indices.size()) < batch) {
+    return false;
+  }
+
   encoder.set_input_array(a);
   encoder.set_input_array(b);
   encoder.set_input_array(rhs_indices);
+  if (!assume_identity_lhs) {
+    encoder.set_input_array(lhs_indices);
+  }
   encoder.set_output_array(out);
 
-  // Indices live on the encoder stream — never hipMemcpy on the null stream
-  // (deadlocks / races with the MLX worker stream).
-  std::vector<uint32_t> rhs(static_cast<size_t>(batch));
   hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
+  std::vector<uint32_t> rhs(static_cast<size_t>(batch));
   CHECK_HIP_ERROR(hipMemcpyAsync(
       rhs.data(),
       gpu_ptr<const uint32_t>(rhs_indices),
       rhs.size() * sizeof(uint32_t),
       hipMemcpyDeviceToHost,
       hs));
+
+  std::vector<uint32_t> lhs;
+  if (!assume_identity_lhs) {
+    lhs.resize(static_cast<size_t>(batch));
+    CHECK_HIP_ERROR(hipMemcpyAsync(
+        lhs.data(),
+        gpu_ptr<const uint32_t>(lhs_indices),
+        lhs.size() * sizeof(uint32_t),
+        hipMemcpyDeviceToHost,
+        hs));
+  }
   CHECK_HIP_ERROR(hipStreamSynchronize(hs));
+
+  if (!assume_identity_lhs) {
+    for (int i = 0; i < batch; ++i) {
+      if (lhs[static_cast<size_t>(i)] != static_cast<uint32_t>(i)) {
+        return false; // non-identity lhs → cannot treat a as dense [batch,K]
+      }
+    }
+  }
+
+  // Count runs of equal rhs. If average run length is tiny, gemv is better.
+  int n_runs = 0;
+  for (int i = 0; i < batch;) {
+    uint32_t e = rhs[static_cast<size_t>(i)];
+    int j = i + 1;
+    while (j < batch && rhs[static_cast<size_t>(j)] == e) {
+      ++j;
+    }
+    ++n_runs;
+    i = j;
+  }
+  if (n_runs <= 0) {
+    return false;
+  }
+  if (batch / n_runs < moe_segment_min_avg()) {
+    return false;
+  }
 
   mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
   mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
@@ -1145,8 +1210,7 @@ static bool try_sorted_rhs_gather_mm(
     return off;
   };
 
-  // Use LDS-tiled naive GEMM per expert run. hipBLASLt on gfx1151 hangs / pegs
-  // the GPU for these pointer-offset MoE shapes in practice.
+  // One LDS-tiled GEMM per consecutive expert run: (Mseg × K) @ (K × N).
   int start = 0;
   while (start < batch) {
     uint32_t e = rhs[static_cast<size_t>(start)];
@@ -1205,12 +1269,16 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [transposed_a, lda, a_] = check_transpose(encoder, s, a);
   auto [transposed_b, ldb, b_] = check_transpose(encoder, s, b);
 
-  // Prefer sorted-rhs dense segments (MoE) over per-token gemv.
-  if (M == 1 && right_sorted_) {
-    if (try_sorted_rhs_gather_mm(
+  // MoE win: M==1 + identity lhs + long rhs runs → segment GEMMs, not gemv.
+  // lemonseed always passes explicit arange lhs, so right_sorted_ is false;
+  // we still detect identity lhs on the host (cheap vs GEMM).
+  if (M == 1) {
+    const bool assume_id = right_sorted_; // no lhs, or flag means sequential a
+    if (try_moe_segment_gather_mm(
             encoder,
             a_,
             b_,
+            lhs_indices,
             rhs_indices,
             out,
             N,
@@ -1218,7 +1286,8 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             transposed_a,
             lda,
             transposed_b,
-            ldb)) {
+            ldb,
+            /*assume_identity_lhs=*/assume_id)) {
       return;
     }
   }
