@@ -1205,7 +1205,7 @@ class TestArray(mlx_tests.MLXTestCase):
         ind = mx.array([0, 1, 0]).astype(mx.float32)
 
         def index_fn(x, ind):
-            return x[ind.astype(mx.int32)].sum()
+            return x[mx.stop_gradient(ind.astype(mx.int32))].sum()
 
         grad_x, grad_ind = mx.grad(index_fn, argnums=(0, 1))(x, ind)
         expected = mx.array([[2, 2], [1, 1]])
