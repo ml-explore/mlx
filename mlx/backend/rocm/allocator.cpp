@@ -1123,6 +1123,12 @@ void* Buffer::raw_ptr() {
   return cbuf.data;
 }
 
+
+// Alien (externally-owned) buffers can be wrapped without a copy, matching
+// the cuda/metal/no_gpu backends (this was missing for ROCm).
+bool can_reuse_alien_buffer(void* /*ptr*/) {
+  return true;
+}
 } // namespace allocator
 
 size_t get_active_memory() {
