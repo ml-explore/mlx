@@ -1078,15 +1078,15 @@ static bool sorted_gather_enabled() {
 }
 
 // Minimum average tokens per distinct expert run to prefer segment GEMMs over
-// gemv_gather. Below this, per-token gemv is usually cheaper (D2H + tiny GEMMs).
+// gemv_gather. Default 1: even short runs use tiled GEMM (large K×N MoE).
 static int moe_segment_min_avg() {
   static const int v = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_SEG_MIN");
     if (!e || !*e)
-      return 4;
+      return 1;
     char* end = nullptr;
     long x = std::strtol(e, &end, 10);
-    return (end != e && x >= 1) ? static_cast<int>(x) : 4;
+    return (end != e && x >= 1) ? static_cast<int>(x) : 1;
   }();
   return v;
 }
@@ -1119,11 +1119,18 @@ static bool try_moe_segment_gather_mm(
     return false;
   }
 
-  // Contiguous batch of 1×K rows (pre-gathered token features).
+  // Contiguous batch of 1×K token rows (pre-gathered features).
+  // shape (..., 1, K). Unit dims often have stride 0 in MLX — do NOT require
+  // strides[-2]==K (that false-rejected lemonseed's [B,1,1,K] layout and left
+  // us on gemv_gather for ~55% of GPU time).
   if (a.shape(-2) != 1 || a.shape(-1) != K) {
     return false;
   }
-  if (a.strides()[a.ndim() - 1] != 1 || a.strides()[a.ndim() - 2] != K) {
+  if (a.strides()[a.ndim() - 1] != 1) {
+    return false;
+  }
+  // Tight pack: batch successive panels at offsets 0, K, 2K, ...
+  if (a.size() != static_cast<size_t>(batch) * static_cast<size_t>(K)) {
     return false;
   }
 
