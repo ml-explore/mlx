@@ -657,6 +657,57 @@ bool is_hipblaslt_available() {
   return state.available;
 }
 
+void hipblaslt_gemm_ptrs(
+    CommandEncoder& encoder,
+    bool transpose_a,
+    bool transpose_b,
+    int M,
+    int N,
+    int K,
+    float alpha,
+    const void* a_ptr,
+    int lda,
+    const void* b_ptr,
+    int ldb,
+    float beta,
+    void* c_ptr,
+    int ldc,
+    Dtype dtype) {
+  int device_id = encoder.device().hip_device();
+  hipblasLtHandle_t handle = get_handle(device_id);
+  hipDataType hip_dtype = to_hipblaslt_dtype(dtype);
+
+  // hipBLASLt uses column-major layout. MLX stores row-major, so we swap A
+  // and B and compute C^T = B^T * A^T, just like the rocBLAS path.
+  hipblasOperation_t op_a = to_hipblas_op(transpose_b);
+  hipblasOperation_t op_b = to_hipblas_op(transpose_a);
+
+  encoder.launch_kernel([=](hipStream_t stream) {
+    hipblaslt_gemm_impl(
+        handle,
+        device_id,
+        op_a,
+        op_b,
+        N, // swap M/N for col-major trick
+        M,
+        K,
+        &alpha,
+        b_ptr, // swap A/B
+        ldb,
+        0,
+        a_ptr,
+        lda,
+        0,
+        &beta,
+        c_ptr,
+        ldc,
+        0,
+        1,
+        hip_dtype,
+        stream);
+  });
+}
+
 void hipblaslt_gemm(
     CommandEncoder& encoder,
     bool transpose_a,

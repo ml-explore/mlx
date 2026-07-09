@@ -55,6 +55,24 @@ void hipblaslt_gemm_batched(
 
 // Raw hipBLASLt GEMM — parameters already in column-major convention
 // (A/B swapped, M/N swapped). Call directly from inside kernel lambdas.
+// Same as hipblaslt_gemm but with raw device pointers (segmented / offset GEMMs).
+void hipblaslt_gemm_ptrs(
+    CommandEncoder& encoder,
+    bool transpose_a,
+    bool transpose_b,
+    int M,
+    int N,
+    int K,
+    float alpha,
+    const void* a,
+    int lda,
+    const void* b,
+    int ldb,
+    float beta,
+    void* c,
+    int ldc,
+    Dtype dtype);
+
 void hipblaslt_gemm_raw(
     hipStream_t stream,
     int op_a, // rocblas_operation / hipblasOperation_t value

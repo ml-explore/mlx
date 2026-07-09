@@ -8,6 +8,7 @@
 #include "mlx/backend/rocm/gemms/hipblaslt_gemm.h"
 #include "mlx/backend/rocm/gemms/naive_gemm.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
+#include "mlx/backend/rocm/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/types/half_types.h"
 
@@ -18,6 +19,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <numeric>
+#include <vector>
 
 namespace mlx::core {
 
@@ -1061,6 +1063,114 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+// Sorted-rhs gather_mm (M==1): collapse consecutive tokens that share an expert
+// into dense GEMMs. Matches CUDA gather_mm_rhs intent for MoE prefill/train.
+static bool try_sorted_rhs_gather_mm(
+    rocm::CommandEncoder& encoder,
+    const array& a,
+    const array& b,
+    const array& rhs_indices,
+    array& out,
+    int N,
+    int K,
+    bool a_transposed,
+    int64_t lda,
+    bool b_transposed,
+    int64_t ldb) {
+  (void)lda;
+  if (a_transposed) {
+    return false;
+  }
+  if (!rocm::is_hipblaslt_available()) {
+    return false;
+  }
+
+  const int batch = static_cast<int>(out.size() / static_cast<size_t>(N));
+  if (batch <= 0) {
+    return false;
+  }
+
+  // Require a to be a contiguous batch of 1xK rows: shape (..., 1, K).
+  if (a.shape(-2) != 1 || a.shape(-1) != K) {
+    return false;
+  }
+  if (a.strides()[a.ndim() - 1] != 1 || a.strides()[a.ndim() - 2] != K) {
+    return false;
+  }
+
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(rhs_indices);
+  encoder.set_output_array(out);
+
+  std::vector<uint32_t> rhs(static_cast<size_t>(batch));
+  CHECK_HIP_ERROR(hipMemcpy(
+      rhs.data(),
+      gpu_ptr<const uint32_t>(rhs_indices),
+      rhs.size() * sizeof(uint32_t),
+      hipMemcpyDeviceToHost));
+
+  mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
+  mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
+
+  auto expert_offset = [&](uint32_t expert) -> int64_t {
+    if (b_batch_shape.empty()) {
+      return 0;
+    }
+    if (b_batch_shape.size() == 1) {
+      return static_cast<int64_t>(expert) * b_batch_strides[0];
+    }
+    int64_t off = 0;
+    int64_t idx = static_cast<int64_t>(expert);
+    for (int d = static_cast<int>(b_batch_shape.size()) - 1; d >= 0; --d) {
+      int64_t coord = idx % b_batch_shape[d];
+      idx /= b_batch_shape[d];
+      off += coord * b_batch_strides[d];
+    }
+    return off;
+  };
+
+  const size_t esize = size_of(a.dtype());
+  const char* a_base = static_cast<const char*>(gpu_ptr<const void>(a));
+  const char* b_base = static_cast<const char*>(gpu_ptr<const void>(b));
+  char* out_base = static_cast<char*>(gpu_ptr<void>(out));
+
+  int start = 0;
+  while (start < batch) {
+    uint32_t e = rhs[static_cast<size_t>(start)];
+    int end = start + 1;
+    while (end < batch && rhs[static_cast<size_t>(end)] == e) {
+      ++end;
+    }
+    int Mseg = end - start;
+    const void* a_ptr =
+        a_base + static_cast<size_t>(start) * static_cast<size_t>(K) * esize;
+    const void* b_ptr =
+        b_base + static_cast<size_t>(expert_offset(e)) * esize;
+    void* c_ptr =
+        out_base + static_cast<size_t>(start) * static_cast<size_t>(N) * esize;
+
+    rocm::hipblaslt_gemm_ptrs(
+        encoder,
+        /*transpose_a=*/false,
+        b_transposed,
+        Mseg,
+        N,
+        K,
+        1.0f,
+        a_ptr,
+        /*lda=*/K,
+        b_ptr,
+        static_cast<int>(ldb),
+        0.0f,
+        c_ptr,
+        N,
+        a.dtype());
+    start = end;
+  }
+  return true;
+}
+
 void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& encoder = rocm::get_command_encoder(s);
@@ -1088,6 +1198,24 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto [transposed_a, lda, a_] = check_transpose(encoder, s, a);
   auto [transposed_b, ldb, b_] = check_transpose(encoder, s, b);
+
+  // Prefer sorted-rhs dense segments (MoE) over per-token gemv.
+  if (M == 1 && right_sorted_) {
+    if (try_sorted_rhs_gather_mm(
+            encoder,
+            a_,
+            b_,
+            rhs_indices,
+            out,
+            N,
+            K,
+            transposed_a,
+            lda,
+            transposed_b,
+            ldb)) {
+      return;
+    }
+  }
 
   auto use_gemv = rocm::can_use_gemv(M, N, K, transposed_a, transposed_b);
 
@@ -1119,6 +1247,120 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       ldb,
       1.0f,
       0.0f);
+}
+
+// SegmentedMM: out[i] = A[:, k0:k1] @ B[k0:k1, :] for each segment [k0, k1).
+// Used by gather_mm weight VJP when indices are sorted (MoE training).
+void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = stream();
+  auto& encoder = rocm::get_command_encoder(s);
+
+  assert(inputs.size() == 3);
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
+  auto& segments_pre = inputs[2];
+
+  if (out.size() == 0 || a_pre.size() == 0 || b_pre.size() == 0) {
+    array zero(0, a_pre.dtype());
+    encoder.add_temporary(zero);
+    fill_gpu(zero, out, s);
+    return;
+  }
+
+  out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
+
+  int M = a_pre.shape(-2);
+  int N = b_pre.shape(-1);
+  int num_segments = static_cast<int>(segments_pre.size() / 2);
+
+  auto [a_transposed, lda, a] = check_transpose(encoder, s, a_pre);
+  auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
+
+  array segments = segments_pre;
+  if (!segments_pre.flags().row_contiguous) {
+    segments = contiguous_copy_gpu(segments_pre, s);
+    encoder.add_temporary(segments);
+  }
+
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(segments);
+  encoder.set_output_array(out);
+
+  // Segments are small (typically #experts). Host-side split lets us dispatch
+  // one tuned hipBLASLt GEMM per segment instead of a naive gather kernel.
+  std::vector<uint32_t> segs(static_cast<size_t>(num_segments) * 2);
+  CHECK_HIP_ERROR(hipMemcpy(
+      segs.data(),
+      gpu_ptr<const uint32_t>(segments),
+      segs.size() * sizeof(uint32_t),
+      hipMemcpyDeviceToHost));
+
+  const size_t esize = size_of(a.dtype());
+  const char* a_base = static_cast<const char*>(gpu_ptr<const void>(a));
+  const char* b_base = static_cast<const char*>(gpu_ptr<const void>(b));
+  char* out_base = static_cast<char*>(gpu_ptr<void>(out));
+
+  const int64_t a_k_stride = a.strides()[a.ndim() - 1];
+  const int64_t b_k_stride = b.strides()[b.ndim() - 2];
+  const int64_t out_stride = static_cast<int64_t>(M) * N;
+
+  const bool use_lt = rocm::is_hipblaslt_available();
+
+  for (int i = 0; i < num_segments; ++i) {
+    uint32_t k0 = segs[static_cast<size_t>(2 * i)];
+    uint32_t k1 = segs[static_cast<size_t>(2 * i + 1)];
+    void* c_ptr = out_base + static_cast<size_t>(i) * out_stride * esize;
+    if (k1 <= k0) {
+      size_t bytes = static_cast<size_t>(out_stride) * esize;
+      encoder.launch_kernel([c_ptr, bytes](hipStream_t stream) {
+        (void)hipMemsetAsync(c_ptr, 0, bytes, stream);
+      });
+      continue;
+    }
+    int Kseg = static_cast<int>(k1 - k0);
+    const void* a_ptr = a_base +
+        static_cast<size_t>(k0) * static_cast<size_t>(a_k_stride) * esize;
+    const void* b_ptr = b_base +
+        static_cast<size_t>(k0) * static_cast<size_t>(b_k_stride) * esize;
+
+    if (use_lt) {
+      rocm::hipblaslt_gemm_ptrs(
+          encoder,
+          a_transposed,
+          b_transposed,
+          M,
+          N,
+          Kseg,
+          1.0f,
+          a_ptr,
+          static_cast<int>(lda),
+          b_ptr,
+          static_cast<int>(ldb),
+          0.0f,
+          c_ptr,
+          N,
+          a.dtype());
+    } else {
+      rocm::naive_gemm_with_offset(
+          encoder,
+          a,
+          b,
+          out,
+          M,
+          N,
+          Kseg,
+          a_transposed,
+          lda,
+          static_cast<int64_t>(k0) * a_k_stride,
+          b_transposed,
+          ldb,
+          static_cast<int64_t>(k0) * b_k_stride,
+          static_cast<int64_t>(i) * out_stride,
+          1.0f,
+          0.0f);
+    }
+  }
 }
 
 } // namespace mlx::core

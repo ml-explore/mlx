@@ -34,7 +34,7 @@ NO_GPU(Hadamard)
 NO_GPU_MULTI(LUF)
 NO_GPU_MULTI(QRF)
 NO_GPU(QQMatmul)
-NO_GPU(SegmentedMM)
+// SegmentedMM implemented in matmul.cpp
 NO_GPU_MULTI(SVD)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)

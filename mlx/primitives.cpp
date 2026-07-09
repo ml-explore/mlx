@@ -138,8 +138,12 @@ array gather_mm_grad(
   // computation via a segmented matmul. We just need to calculate the segments
   // using the indices.
   if (sorted) {
+    // scatter_add_axis requires a 1-D index vector matching the length of the
+    // flattened token axis. Callers (e.g. MoE) often pass [N,1,1]-shaped
+    // rhs_indices; flatten before counting per-expert runs.
+    auto rhs_flat = flatten(rhs_indices, /*start_axis=*/0, /*end_axis=*/-1, s);
     auto segments = zeros({num_segments}, uint32, s);
-    segments = scatter_add_axis(segments, rhs_indices, array(M, uint32), 0, s);
+    segments = scatter_add_axis(segments, rhs_flat, array(M, uint32), 0, s);
     segments = cumsum(segments, 0, false, true, s);
     segments = concatenate({array({0}, {1}, uint32), segments}, 0, s);
     segments = as_strided(segments, {num_segments, 2}, {1, 1}, 0, s);
