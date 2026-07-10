@@ -153,8 +153,9 @@ void tree_visit(
 
 void tree_visit(nb::handle tree, std::function<void(nb::handle)> visitor) {
   std::function<void(nb::handle)> recurse;
+  auto random_state = random_state_sentinel();
   recurse = [&](nb::handle subtree) {
-    if (is_random_state(subtree)) {
+    if (subtree.is(random_state)) {
       visitor(nb::cast(random_state_key()));
     } else if (
         nb::isinstance<nb::list>(subtree) ||
@@ -178,8 +179,9 @@ void tree_visit_update(
     nb::object tree,
     std::function<nb::object(nb::handle)> visitor) {
   std::function<nb::object(nb::handle)> recurse;
+  auto random_state = random_state_sentinel();
   recurse = [&](nb::handle subtree) {
-    if (is_random_state(subtree)) {
+    if (subtree.is(random_state)) {
       // Read/write the calling thread's key; keep the sentinel in the tree.
       set_random_state_key(
           nb::cast<mx::array>(visitor(nb::cast(random_state_key()))));
@@ -271,14 +273,12 @@ nb::object tree_unflatten(
 }
 
 nb::object structure_sentinel() {
-  static nb::object sentinel;
-
-  if (sentinel.ptr() == nullptr) {
-    sentinel = nb::capsule(&sentinel);
-    // probably not needed but this should make certain that we won't ever
-    // delete the sentinel
+  static nb::object sentinel = []() {
+    PyObject* raw_obj = PyObject_New(PyObject, &PyBaseObject_Type);
+    nb::object sentinel = nb::steal(raw_obj);
     sentinel.inc_ref();
-  }
+    return sentinel;
+  }();
 
   return sentinel;
 }

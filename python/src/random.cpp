@@ -70,16 +70,13 @@ PyKeySequence& default_key() {
 class RandomState {};
 
 nb::object random_state_sentinel() {
-  static nb::object sentinel;
-  if (sentinel.ptr() == nullptr) {
-    sentinel = nb::cast(RandomState{});
+  static nb::object sentinel = []() {
+    auto sentinel = nb::cast(RandomState{});
     sentinel.inc_ref();
-  }
-  return sentinel;
-}
+    return sentinel;
+  }();
 
-bool is_random_state(nb::handle obj) {
-  return obj.ptr() == random_state_sentinel().ptr();
+  return sentinel;
 }
 
 mx::array random_state_key() {
