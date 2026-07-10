@@ -6020,7 +6020,12 @@ array gather_mm(
       std::make_shared<GatherMM>(
           to_stream(s),
           sorted_indices && !rhs_indices_,
-          sorted_indices && !lhs_indices_),
+          // right_sorted_: enable the segmented_mm weight-VJP whenever the caller
+          // asserts sorted_indices (rhs sorted), even if an explicit identity lhs
+          // was passed (as MoE does for 4-D broadcast). segmented_mm is verified
+          // correct on gfx942/CDNA3 and avoids the generic VJP that materializes
+          // [N*K, N, K] (~73GB per projection) and blows up MoE training memory.
+          sorted_indices),
       {std::move(a),
        std::move(b),
        std::move(lhs_indices),

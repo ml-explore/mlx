@@ -1137,11 +1137,23 @@ static bool try_moe_segment_gather_mm(
     return false;
   }
 
-  // Need flat index buffers (one index per batch row).
-  if (static_cast<int>(rhs_indices.size()) < batch) {
+  // Need flat index buffers (one index per batch row). The host copy below
+  // reads `batch` *contiguous* uint32; a non-row-contiguous index view (which
+  // the gather_mm VJP produces on the backward pass) would read out of bounds
+  // -> illegal memory access. Bail to the generic gather path in that case.
+  // Require an EXACT one-index-per-row match, not just >=: the backward
+  // gather_mm VJP reuses this primitive with index arrays whose logical size no
+  // longer equals `batch` (or that alias a smaller physical buffer), and reading
+  // `batch` contiguous uint32 from them overruns the allocation -> illegal
+  // access. Exact size + row-contiguous keeps this on the true forward pattern
+  // and routes everything else to the generic gather path.
+  if (static_cast<size_t>(rhs_indices.size()) != static_cast<size_t>(batch) ||
+      !rhs_indices.flags().row_contiguous) {
     return false;
   }
-  if (!assume_identity_lhs && static_cast<int>(lhs_indices.size()) < batch) {
+  if (!assume_identity_lhs &&
+      (static_cast<size_t>(lhs_indices.size()) != static_cast<size_t>(batch) ||
+       !lhs_indices.flags().row_contiguous)) {
     return false;
   }
 

@@ -196,7 +196,13 @@ template <
     bool reverse>
 __global__ void contiguous_scan(const T* in, U* out, int32_t axis_size) {
   // Calculate block and thread indices
-  int block_rank = blockIdx.x;
+  // Full linear block index across the WHOLE grid (matches the CUDA backend's
+  // cg::this_grid().block_rank()). The host can launch a 2D grid (get_2d_grid_dims
+  // + the stride_blocks multiply), so using only blockIdx.x mis-indexes every
+  // block with blockIdx.y>0 -> out-of-bounds read -> SEGV. 64-bit to be safe.
+  int64_t block_rank = static_cast<int64_t>(blockIdx.x) +
+      static_cast<int64_t>(blockIdx.y) * gridDim.x +
+      static_cast<int64_t>(blockIdx.z) * gridDim.x * gridDim.y;
   int thread_rank = threadIdx.x;
   int block_size = blockDim.x;
   int warp_id = thread_rank / WARP_SIZE;
@@ -296,7 +302,13 @@ __global__ void strided_scan(
     int32_t axis_size,
     int64_t stride,
     int64_t stride_blocks) {
-  int block_rank = blockIdx.x;
+  // Full linear block index across the WHOLE grid (matches the CUDA backend's
+  // cg::this_grid().block_rank()). The host can launch a 2D grid (get_2d_grid_dims
+  // + the stride_blocks multiply), so using only blockIdx.x mis-indexes every
+  // block with blockIdx.y>0 -> out-of-bounds read -> SEGV. 64-bit to be safe.
+  int64_t block_rank = static_cast<int64_t>(blockIdx.x) +
+      static_cast<int64_t>(blockIdx.y) * gridDim.x +
+      static_cast<int64_t>(blockIdx.z) * gridDim.x * gridDim.y;
   int thread_rank = threadIdx.x;
   int warp_id = thread_rank / WARP_SIZE;
   int lane_id = thread_rank % WARP_SIZE;
