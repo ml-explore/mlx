@@ -1109,7 +1109,10 @@ static bool try_moe_segment_gather_mm(
   if (!sorted_gather_enabled()) {
     return false;
   }
-  if (a_transposed) {
+  // For M==1 the transpose flag is spurious ([1,K] == [K,1] data); the batch is
+  // still [batch,K] contiguous (verified by the strideLast==1 guard below), so
+  // the segment GEMM math is valid. Only reject a genuine M>1 transpose.
+  if (a_transposed && a.shape(-2) != 1) {
     return false;
   }
 
@@ -1217,7 +1220,13 @@ static bool try_moe_segment_gather_mm(
     return off;
   };
 
-  // One LDS-tiled GEMM per consecutive expert run: (Mseg × K) @ (K × N).
+  // One hipBLASLt GEMM per consecutive expert run: (Mseg × K) @ (K × N).
+  // Matrix-core GEMM on CDNA3 instead of naive/gemv. base ptrs computed once.
+  const bool moe_use_blaslt = rocm::is_hipblaslt_available();
+  const size_t moe_esz = a.itemsize();
+  const char* moe_aB = static_cast<const char*>(gpu_ptr<void>(a));
+  const char* moe_bB = static_cast<const char*>(gpu_ptr<void>(b));
+  char* moe_cB = static_cast<char*>(gpu_ptr<void>(out));
   int start = 0;
   while (start < batch) {
     uint32_t e = rhs[static_cast<size_t>(start)];
@@ -1226,23 +1235,19 @@ static bool try_moe_segment_gather_mm(
       ++end;
     }
     int Mseg = end - start;
-    rocm::naive_gemm_with_offset(
-        encoder,
-        a,
-        b,
-        out,
-        Mseg,
-        N,
-        K,
-        /*a_transposed=*/false,
-        /*lda=*/K,
-        /*a_offset=*/static_cast<int64_t>(start) * K,
-        b_transposed,
-        ldb,
-        /*b_offset=*/expert_offset(e),
-        /*out_offset=*/static_cast<int64_t>(start) * N,
-        1.0f,
-        0.0f);
+    if (moe_use_blaslt) {
+      rocm::hipblaslt_gemm_ptrs(
+          encoder, /*transpose_a=*/false, b_transposed, Mseg, N, K, 1.0f,
+          moe_aB + static_cast<size_t>(start) * K * moe_esz, /*lda=*/K,
+          moe_bB + static_cast<size_t>(expert_offset(e)) * moe_esz, ldb,
+          0.0f, moe_cB + static_cast<size_t>(start) * N * moe_esz, /*ldc=*/N,
+          a.dtype());
+    } else {
+      rocm::naive_gemm_with_offset(
+          encoder, a, b, out, Mseg, N, K, /*a_transposed=*/false, /*lda=*/K,
+          static_cast<int64_t>(start) * K, b_transposed, ldb, expert_offset(e),
+          static_cast<int64_t>(start) * N, 1.0f, 0.0f);
+    }
     start = end;
   }
   return true;
