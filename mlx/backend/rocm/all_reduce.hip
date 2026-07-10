@@ -102,9 +102,10 @@ void all_reduce(
 
   out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
 
-  auto get_args = [](size_t size, int N) {
+  int warp = encoder.device().warp_size();
+  auto get_args = [warp](size_t size, int N) {
     int threads = std::min(512, static_cast<int>((size + N - 1) / N));
-    threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    threads = ((threads + warp - 1) / warp) * warp;
     int reductions_per_step = threads * N;
     size_t steps_needed = (size + reductions_per_step - 1) / reductions_per_step;
     

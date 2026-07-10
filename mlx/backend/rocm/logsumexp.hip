@@ -42,7 +42,7 @@ __device__ T warp_reduce_sum_lse(T val) {
 
 template <typename T, typename AccT, int BLOCK_DIM, int N_READS = 4>
 __global__ void logsumexp_kernel(const T* in, T* out, int axis_size) {
-  int row = blockIdx.x;
+  size_t row = blockIdx.x;
   
   in += row * axis_size;
 

@@ -40,7 +40,13 @@
 // This MUST match the CMAKE_HIP_ARCHITECTURES setting.
 // For RDNA (gfx10xx, gfx11xx, gfx12xx): 32
 // For CDNA/GCN (gfx9xx): 64
-#define WARP_SIZE 32
+// Auto-detected: the ROCm CMakeLists sets MLX_HOST_WARP_SIZE from the target arch
+// (CDNA/gfx9xx=64, RDNA=32) so host code matches the device wavefront size.
+#if defined(MLX_HOST_WARP_SIZE)
+#define WARP_SIZE MLX_HOST_WARP_SIZE
+#else
+#define WARP_SIZE 64  // gfx942/CDNA default
+#endif
 #endif
 
 namespace mlx::core::rocm {

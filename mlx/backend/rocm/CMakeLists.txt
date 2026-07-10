@@ -261,6 +261,13 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/hipblaslt_gemm.cpp)
 
 target_compile_definitions(mlx PRIVATE MLX_USE_ROCM)
+# Host WARP_SIZE must match the device wavefront (device uses __AMDGCN_WAVEFRONT_SIZE__).
+# CDNA/GCN (gfx9xx) = 64, RDNA (gfx10/11/12xx) = 32. Auto-detected from the arch.
+if(CMAKE_HIP_ARCHITECTURES MATCHES "gfx9")
+  target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=64)
+else()
+  target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=32)
+endif()
 if(MLX_HAS_ROCM_WMMA)
   target_compile_definitions(mlx PRIVATE MLX_HAS_ROCM_WMMA)
 endif()

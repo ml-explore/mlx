@@ -74,7 +74,7 @@ __device__ T warp_reduce_sum(T val) {
 // Reference: https://github.com/NVIDIA/online-softmax
 template <typename T, typename AccT, int BLOCK_DIM, int N_READS = 4>
 __global__ void softmax_kernel(const T* in, T* out, int axis_size) {
-  int row = blockIdx.x;
+  size_t row = blockIdx.x;
   int thread_rank = threadIdx.x;
   int lane = thread_rank % WARP_SIZE;
   int warp_id = thread_rank / WARP_SIZE;
@@ -162,7 +162,7 @@ __global__ void softmax_kernel(const T* in, T* out, int axis_size) {
 // Vectorized softmax kernel for better memory throughput
 template <typename T, typename AccT, int BLOCK_DIM, int N_READS = 4>
 __global__ void softmax_kernel_vectorized(const T* in, T* out, int axis_size) {
-  int row = blockIdx.x;
+  size_t row = blockIdx.x;
   int thread_rank = threadIdx.x;
   int lane = thread_rank % WARP_SIZE;
   int warp_id = thread_rank / WARP_SIZE;

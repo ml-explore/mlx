@@ -2938,7 +2938,14 @@ __global__ void qmv_t_kernel(
 // Gated by MLX_QMV_IDOT. Mirrors llama.cpp mmvq (integer dot, not matrix core).
 // ---------------------------------------------------------------------------
 __device__ __forceinline__ int sudot4_iu8(int wcodes, int xcodes, int acc) {
-  return __builtin_amdgcn_sudot4(false, wcodes, true, xcodes, acc, false);
+  int _s = acc;
+#pragma unroll
+  for (int _i = 0; _i < 4; ++_i) {
+    unsigned int _w = (unsigned int)((wcodes >> (8 * _i)) & 0xFF);
+    int _x = (int)(signed char)((xcodes >> (8 * _i)) & 0xFF);
+    _s += (int)_w * _x;
+  }
+  return _s;
 }
 
 template <typename T, int GROUP_SIZE>

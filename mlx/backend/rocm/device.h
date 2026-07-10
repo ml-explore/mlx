@@ -306,6 +306,14 @@ class Device {
     return max_shared_memory_per_block_;
   }
 
+  // Wavefront (warp) size of this device, queried from hipDeviceProp at
+  // construction (CDNA/gfx9xx=64, RDNA=32). Host-side launch math (block dims,
+  // warp counts) must use THIS runtime value, not a compile-time constant, or a
+  // 32-vs-64 mismatch mis-reduces the warp kernels -> NaN.
+  int warp_size() const {
+    return warp_size_;
+  }
+
  private:
   int device_;
   rocblas_handle rocblas_{nullptr};
@@ -317,6 +325,7 @@ class Device {
   bool wmma_probed_{false};
   bool has_native_wmma_{false};
   int max_shared_memory_per_block_{65536};
+  int warp_size_{64};
   std::unordered_map<int, std::unique_ptr<CommandEncoder>> encoders_;
   // MLX's scheduler runs a thread per stream, so get_command_encoder() can be
   // called concurrently (incl. cross-stream AtomicEvent::signal during weight

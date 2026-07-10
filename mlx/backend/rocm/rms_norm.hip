@@ -103,7 +103,7 @@ __global__ void rms_norm_kernel(
     float eps,
     uint32_t axis_size,
     int64_t w_stride) {
-  int row = blockIdx.x;
+  size_t row = blockIdx.x;
   rms_norm_row<T, BLOCK_DIM, N_READS>(
       x + (int64_t)row * axis_size, w, out + (int64_t)row * axis_size, eps,
       axis_size, w_stride);
@@ -124,7 +124,7 @@ __global__ void rms_norm_strided_kernel(
     int n_row_dims,
     hip_array<int, 4> row_shape,
     hip_array<int64_t, 4> row_strides) {
-  int row = blockIdx.x;
+  size_t row = blockIdx.x;
   int64_t x_off = 0;
   int r = row;
   for (int d = n_row_dims - 1; d >= 0; --d) {
@@ -145,7 +145,7 @@ __global__ void rms_norm_vjp_kernel(
     float eps,
     int32_t axis_size,
     int64_t w_stride) {
-  int row = blockIdx.x;
+  size_t row = blockIdx.x;
   
   x += row * axis_size;
   g += row * axis_size;

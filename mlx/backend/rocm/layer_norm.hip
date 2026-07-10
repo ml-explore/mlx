@@ -46,7 +46,7 @@ __global__ void layer_norm_kernel(
     int32_t axis_size,
     int64_t w_stride,
     int64_t b_stride) {
-  int row = blockIdx.x;
+  size_t row = blockIdx.x;
   
   x += row * axis_size;
   out += row * axis_size;
@@ -139,7 +139,7 @@ __global__ void layer_norm_vjp_kernel(
     float eps,
     int32_t axis_size,
     int64_t w_stride) {
-  int row = blockIdx.x;
+  size_t row = blockIdx.x;
   
   x += row * axis_size;
   g += row * axis_size;

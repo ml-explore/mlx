@@ -78,6 +78,9 @@ Device::Device(int device) : device_(device) {
       if (p.sharedMemPerBlock > 0) {
         max_shared_memory_per_block_ = static_cast<int>(p.sharedMemPerBlock);
       }
+      if (p.warpSize > 0) {
+        warp_size_ = p.warpSize;
+      }
     }
   }
   // rocBLAS initialization is now lazy - done in get_rocblas_handle()
