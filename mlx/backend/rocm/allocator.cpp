@@ -143,6 +143,17 @@ inline void* rocm_unified_malloc(size_t size, bool& is_managed) {
     is_managed = true;
     return data;
   }
+  // Discrete-GPU training (MI300X): falling back to hipMallocManaged spills
+  // into GTT (system RAM) once HBM is exhausted — silent thrash / SEGV later.
+  // Set MLX_ROCM_NO_MANAGED_FALLBACK=1 to fail fast instead of using GTT.
+  // (Default keeps managed fallback for small APU / HMM platforms.)
+  if (std::getenv("MLX_ROCM_NO_MANAGED_FALLBACK") != nullptr) {
+    std::ostringstream oss;
+    oss << "hipMalloc failed (device VRAM exhausted); managed/GTT fallback "
+           "disabled via MLX_ROCM_NO_MANAGED_FALLBACK: "
+        << hipGetErrorString(err) << " size=" << size << ".";
+    throw std::runtime_error(oss.str());
+  }
   // Fallbacks for platforms without fine-grained device memory.
   if (managed_memory_supported()) {
     err = hipMallocManaged(&data, size);
