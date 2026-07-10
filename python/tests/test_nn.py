@@ -814,18 +814,22 @@ class TestLayers(mlx_tests.MLXTestCase):
             if from_torch:
                 torch_y = torch_y.transpose(from_torch)
 
-            np.testing.assert_allclose(np.array(mlx_y), torch_y, rtol=1e-4, atol=1e-4)
-            np.testing.assert_allclose(
-                np.array(mlx_bn.running_mean),
-                torch_bn.running_mean.detach().numpy(),
-                rtol=1e-5,
-                atol=1e-5,
+            self.assertTrue(mx.allclose(mlx_y, mx.array(torch_y), rtol=1e-4, atol=1e-4))
+            self.assertTrue(
+                mx.allclose(
+                    mlx_bn.running_mean,
+                    mx.array(torch_bn.running_mean.detach().numpy()),
+                    rtol=1e-5,
+                    atol=1e-5,
+                )
             )
-            np.testing.assert_allclose(
-                np.array(mlx_bn.running_var),
-                torch_bn.running_var.detach().numpy(),
-                rtol=1e-4,
-                atol=1e-4,
+            self.assertTrue(
+                mx.allclose(
+                    mlx_bn.running_var,
+                    mx.array(torch_bn.running_var.detach().numpy()),
+                    rtol=1e-4,
+                    atol=1e-4,
+                )
             )
 
             mlx_bn.eval()
@@ -835,7 +839,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             torch_y = torch_bn(torch.from_numpy(x_torch_np)).detach().numpy()
             if from_torch:
                 torch_y = torch_y.transpose(from_torch)
-            np.testing.assert_allclose(np.array(mlx_y), torch_y, rtol=1e-4, atol=1e-4)
+            self.assertTrue(mx.allclose(mlx_y, mx.array(torch_y), rtol=1e-4, atol=1e-4))
 
         check_batch_norm((5, 4), torch.nn.BatchNorm1d)
         check_batch_norm(
@@ -856,7 +860,6 @@ class TestLayers(mlx_tests.MLXTestCase):
         num_features = 4
         h = 3
         w = 3
-        momentum = 0.1
 
         batch_norm = nn.BatchNorm(num_features)
         batch_norm.train()
@@ -877,15 +880,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(batch_norm.running_var.shape, (num_features,))
 
         batch_norm = nn.BatchNorm(num_features)
-
         batch_norm.train()
-        running_var = batch_norm.running_var
         data = mx.random.normal((1, num_features))
 
-        normalized_data = batch_norm(data)
-        self.assertTrue(np.all(np.isfinite(normalized_data)))
-        running_var = (1 - momentum) * running_var + momentum * mx.var(data, axis=0)
-        self.assertTrue(mx.allclose(batch_norm.running_var, running_var, atol=1e-5))
+        with self.assertRaises(ValueError):
+            batch_norm(data)
 
     def test_conv1d(self):
         N = 5
