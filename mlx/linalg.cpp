@@ -84,43 +84,33 @@ inline array matrix_norm(
     bool keepdims,
     StreamOrDevice s) {
   auto dtype = at_least_float(a.dtype());
-  auto row_axis = axis[0];
-  auto col_axis = axis[1];
+  int row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
+  int col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
   if (ord == -1.0) {
-    row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
-    col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
     col_axis -= (!keepdims && col_axis > row_axis && col_axis > 0);
     return astype(
         min(sum(abs(a, s), row_axis, keepdims, s), col_axis, keepdims, s),
         dtype,
         s);
   } else if (ord == 1.0) {
-    row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
-    col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
     col_axis -= (!keepdims && col_axis > row_axis && col_axis > 0);
     return astype(
         max(sum(abs(a, s), row_axis, keepdims, s), col_axis, keepdims, s),
         dtype,
         s);
   } else if (ord == std::numeric_limits<double>::infinity()) {
-    row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
-    col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
     row_axis -= (!keepdims && row_axis > col_axis && row_axis > 0);
     return astype(
         max(sum(abs(a, s), col_axis, keepdims, s), row_axis, keepdims, s),
         dtype,
         s);
   } else if (ord == -std::numeric_limits<double>::infinity()) {
-    row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
-    col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
     row_axis -= (!keepdims && row_axis > col_axis && row_axis > 0);
     return astype(
         min(sum(abs(a, s), col_axis, keepdims, s), row_axis, keepdims, s),
         dtype,
         s);
   } else if (ord == 2.0 || ord == -2.0) {
-    row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
-    col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
     auto a_matrix = (row_axis > col_axis)
         ? moveaxis(moveaxis(a, row_axis, -1, s), col_axis, -1, s)
         : moveaxis(moveaxis(a, col_axis, -1, s), row_axis, -2, s);

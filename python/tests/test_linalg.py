@@ -65,7 +65,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 with self.subTest(shape=shape, keepdims=keepdims):
                     self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
 
-        # tests for negative indexing: -1/1inf/-inf/
+        # tests for negative indexing: -1/1/inf/-inf/
         norms = [-1, 1, -float("inf"), float("inf")]
         for shape in [(3, 3), (2, 3, 3), (2, 3, 3, 3)]:
             x_mx = mx.arange(1, math.prod(shape) + 1, dtype=mx.float32).reshape(shape)
