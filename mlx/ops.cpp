@@ -6151,7 +6151,7 @@ array grouped_mm(
     throw std::invalid_argument(
         "[grouped_mm] Got token_offsets with invalid dtype. Indices must be integral.");
   }
-  token_offsets = astype(token_offsets, uint32, s);
+  token_offsets = astype(token_offsets, int32, s);
 
   auto out_shape = a.shape();
   out_shape.back() = b.shape(-1);

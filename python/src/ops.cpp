@@ -4824,6 +4824,28 @@ void init_ops(nb::module_& m) {
           array: The result per segment of shape ``MxN``.
       )pbdoc");
   m.def(
+      "grouped_mm",
+      &mx::grouped_mm,
+      nb::arg(),
+      nb::arg(),
+      "token_offsets"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def grouped_mm(a: array, b: array, /, *, token_offsets: array, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Perform a matrix multiplication but segment the inner dimension and
+        save the result for each segment separately.
+
+        Args:
+          a (array): Input array of shape ``MxK``.
+          b (array): Input array of shape ``ExKxN``.
+          token_offsets (array): The offsets into the inner dimension for each segment.
+
+        Returns:
+          array: The result of shape ``MxN``.
+      )pbdoc");
+  m.def(
       "tensordot",
       [](const mx::array& a,
          const mx::array& b,
