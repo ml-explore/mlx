@@ -737,7 +737,7 @@ void steel_gemm_splitk_axpby_nax(
       /* const std::string& kernel_name = */ base_name,
       /* const std::string& hash_name = */ hash_name,
       /* const metal::MTLFCList& func_consts = */ func_consts,
-      /* const array& out = */ C_split,
+      /* const array& in = */ a,
       /* bool transpose_a = */ transpose_a,
       /* bool transpose_b = */ transpose_b,
       /* int bm = */ bm,
@@ -1142,7 +1142,19 @@ void gemv_axbpy(
 
   // Encode and dispatch kernel
   auto& compute_encoder = metal::get_command_encoder(s);
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = get_gemv_kernel(
+      d,
+      kname.str(),
+      out,
+      transpose_mat,
+      bm,
+      bn,
+      sm,
+      sn,
+      tm,
+      tn,
+      !contiguous_kernel,
+      do_axpby);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
@@ -2214,7 +2226,8 @@ void gather_mv(
         << tm << "_tn" << tn;
 
   // Encode and dispatch kernel
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = get_gemv_gather_kernel(
+      d, kname.str(), out, transpose_mat, bm, bn, sm, sn, tm, tn);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;

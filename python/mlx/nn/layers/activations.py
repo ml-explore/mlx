@@ -237,7 +237,7 @@ def step(x: mx.array, threshold: float = 0.0):
         threshold: The value to threshold at.
     """
 
-    return mx.where(x > threshold, 1, 0)
+    return mx.where(x >= threshold, 1, 0)
 
 
 @partial(mx.compile, shapeless=True)
@@ -642,7 +642,6 @@ class HardTanh(Module):
     """
 
 
-@_make_activation_module(hard_shrink)
 class HardShrink(Module):
     r"""Applies the HardShrink function.
 
@@ -651,6 +650,13 @@ class HardShrink(Module):
     Args:
         lambd: the :math:`\lambda` value for Hardshrink. Default: ``0.5``
     """
+
+    def __init__(self, lambd=0.5):
+        super().__init__()
+        self.lambd = lambd
+
+    def __call__(self, x):
+        return hard_shrink(x, self.lambd)
 
 
 @_make_activation_module(softmin)

@@ -111,7 +111,7 @@ class JitModule {
 };
 
 JitModule& get_jit_module(
-    const mlx::core::Device& device,
+    Device& device,
     const std::string& name,
     const KernelBuilder& builder,
     bool use_disk_cache = true);

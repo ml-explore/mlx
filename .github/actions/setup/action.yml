@@ -1,0 +1,292 @@
+name: 'Setup environment'
+description: 'Install dependencies for Linux and Windows builds'
+
+inputs:
+  toolkit:
+    description: 'Which toolkit to install'
+    required: false
+    default: 'cpu'
+  python-version:
+    description: 'Version of python to set up'
+    required: false
+    default: '3.12'
+  use-ccache:
+    description: 'Whether to enable ccache'
+    required: false
+    default: 'true'
+  ccache-key:
+    description: 'Extra key to use in the key of ccache'
+    required: false
+    default: 'test'
+  ccache-save:
+    description: 'Whether the ccache in this workflow will be saved'
+    required: false
+    default: 'auto'
+  ccache-toolkit:
+    description: 'Use this instead of inputs.toolkit in the ccache key'
+    required: false
+    default: ''
+
+outputs:
+  cmake-args:
+    description: 'The args for generating CMake project'
+    value: ${{ steps.cmake-args.outputs.cmakeArgs }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Linux dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        echo "::group::Install common dependencies"
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+            gdb g++ ninja-build zip \
+            libblas-dev liblapack-dev liblapacke-dev \
+            openmpi-bin openmpi-common libopenmpi-dev
+        echo "::endgroup::"
+
+    - name: Install macOS dependencies
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        echo "::group::Install macOS dependencies"
+        brew install openmpi
+        xcodebuild -showComponent MetalToolchain
+        echo "::endgroup::"
+
+    - name: Setup Windows environment
+      if: runner.os == 'Windows'
+      shell: cmd
+      run: |
+        echo "::group::Setup environment"
+        :: Find out path to Visual Studio.
+        pushd "C:\Program Files (x86)\Microsoft Visual Studio\Installer\"
+        for /f "delims=" %%x in ('.\vswhere.exe -latest -property InstallationPath') do set VSPATH=%%x
+        popd
+        :: Import Visual stubs vars.
+        call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" ${{ runner.arch }}
+        :: Avoid using default TMP which uses short path and causes mismatch of CCACHE_BASEDIR.
+        set TMP=%RUNNER_TEMP%
+        set TEMP=%RUNNER_TEMP%
+        set UV_CACHE_DIR=%RUNNER_TEMP%
+        :: The cuda headers are downloaded.
+        set CCACHE_COMPILERCHECK=content
+        set CCACHE_SLOPPINESS=include_file_ctime,include_file_mtime
+        :: Export to all steps.
+        >>%GITHUB_ENV% set
+        echo "::endgroup::"
+
+    - uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: false
+        quiet: true
+
+    - name: Use ccache
+      if: inputs.use-ccache == 'true'
+      uses: hendrikmuhs/ccache-action@v1.2.23
+      with:
+        key: v7-${{ inputs.ccache-key }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.ccache-toolkit || inputs.toolkit }}
+        max-size: |-
+          ${{ case(inputs.ccache-key == 'release',
+                   case(startsWith(inputs.toolkit, 'cuda'), '150MB',
+                        '60MB'),
+                   case(startsWith(inputs.toolkit, 'cuda'),
+                        case(runner.os == 'Linux' && runner.arch == 'x64', '500MB',
+                             runner.os == 'Linux', '240MB',
+                             '120MB'),
+                        runner.os == 'macOS' && inputs.toolkit == 'metal', '200MB',
+                        runner.os == 'macOS', '150MB',
+                        '60MB'))
+          }}
+        save: ${{ !startsWith(github.ref, 'refs/pull/') && (inputs.ccache-save != 'false') }}
+        # ccache-action bug: running "apt-get update" fails on large arm runner.
+        update-package-index: false
+
+    - name: Cache JIT-compiled CUDA kernels
+      if: runner.os == 'Linux' && startsWith(inputs.toolkit, 'cuda')
+      uses: actions/cache@v5
+      with:
+        path: /tmp/mlx-ptx-cache
+        key: >-
+          ptx-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolkit }}-
+          ${{ hashFiles('mlx/backend/cuda/**') }}
+
+    - name: Setup Python venv
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        echo "::group::Setup Python venv"
+        uv venv --python ${{ inputs.python-version }} --managed-python
+        # Make sure all builds use the same cmake binary.
+        uv pip install cmake
+        source .venv/bin/activate
+        echo PATH=$PATH >> $GITHUB_ENV
+        # Search python packages in .venv
+        echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
+        # Use PTX ccache for CUDA.
+        if ${{ startsWith(inputs.toolkit, 'cuda') }} ; then
+          echo MLX_PTX_CACHE_DIR=/tmp/mlx-ptx-cache >> $GITHUB_ENV
+        fi
+        echo "::endgroup::"
+
+    - name: Setup Python venv (Windows)
+      if: runner.os == 'Windows'
+      shell: cmd
+      run: |
+        echo "::group::Setup Python venv"
+        uv venv --python ${{ inputs.python-version }}${{ runner.arch == 'arm64' && '-arm64' || ''}} || exit /b
+        uv pip install cmake
+        call ".venv/Scripts/activate.bat"
+        >>%GITHUB_ENV% set
+        echo "::endgroup::"
+
+    - name: Install CUDA toolkit (Linux)
+      if: runner.os == 'Linux' && startsWith(inputs.toolkit, 'cuda')
+      shell: bash
+      env:
+        PACKAGES: |
+          {
+            "cuda-12.6": "libcudnn9-dev-cuda-12 cuda-compiler-12-6 cuda-libraries-dev-12-6",
+            "cuda-12.9": "libcudnn9-dev-cuda-12 cuda-compiler-12-9 cuda-libraries-dev-12-9",
+            "cuda-13.0": "libcudnn9-dev-cuda-13 cuda-compiler-13-0 cuda-libraries-dev-13-0"
+          }
+      run: |
+        echo "::group::Install CUDA toolkit"
+        # The CUDA binaries are hosted in the "sbsa" repo, the "arm64" repo is
+        # Jetson specific. SBSA means Arm Server Base System Architecture.
+        ARCH=${{ runner.arch == 'arm64' && 'sbsa' || 'x86_64' }}
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/$ARCH/cuda-keyring_1.1-1_all.deb
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+            libnccl2 libnccl-dev \
+            ${{ fromJson(env.PACKAGES)[inputs.toolkit] }}
+        echo "/usr/local/${{ inputs.toolkit }}/bin" >> $GITHUB_PATH
+        echo "::endgroup::"
+
+    - name: Install CUDA Toolkit (Windows)
+      if: runner.os == 'Windows' && startsWith(inputs.toolkit, 'cuda')
+      shell: powershell
+      env:
+        INSTALLERS: |
+          {
+            "cuda-12.6": "https://developer.download.nvidia.com/compute/cuda/12.6.3/local_installers/cuda_12.6.3_561.17_windows.exe",
+            "cuda-12.9": "https://developer.download.nvidia.com/compute/cuda/12.9.1/local_installers/cuda_12.9.1_576.57_windows.exe",
+            "cuda-13.0": "https://developer.download.nvidia.com/compute/cuda/13.0.2/local_installers/cuda_13.0.2_windows.exe"
+          }
+        PACKAGES: |
+          {
+            "cuda-12.6": ["cudart_12.6", "nvcc_12.6", "cublas_12.6", "cublas_dev_12.6", "cufft_12.6", "cufft_dev_12.6", "nvrtc_12.6", "nvrtc_dev_12.6"],
+            "cuda-12.9": ["cudart_12.9", "nvcc_12.9", "cublas_12.9", "cublas_dev_12.9", "cufft_12.9", "cufft_dev_12.9", "nvrtc_12.9", "nvrtc_dev_12.9"],
+            "cuda-13.0": ["cudart_13.0", "nvcc_13.0", "cublas_13.0", "cublas_dev_13.0", "cufft_13.0", "cufft_dev_13.0", "nvrtc_13.0", "nvrtc_dev_13.0", "crt_13.0", "nvvm_13.0", "nvptxcompiler_13.0"],
+          }
+      run: |
+        echo "::group::Install CUDA toolkit"
+        $ErrorActionPreference = "Stop"
+        $cudaUrl = "${{ fromJson(env.INSTALLERS)[inputs.toolkit] }}"
+        $cudaInstaller = "./install.exe"
+
+        echo "Downloading '$cudaUrl'..."
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($cudaUrl, $cudaInstaller)
+        echo "Downloaded: $cudaInstaller ($(([math]::Round((Get-Item $cudaInstaller).Length / 1MB, 2))) MB)"
+
+        $args = "-s ${{ join(fromJson(env.PACKAGES)[inputs.toolkit], ' ') }}"
+        echo "Running '$cudaInstaller $args'..."
+        Start-Process -FilePath $cudaInstaller -ArgumentList "$args" -NoNewWindow -Wait
+        $cudaPath = (Resolve-Path "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\*").path
+        echo "$cudaPath\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        echo "::endgroup::"
+
+    - name: Install cuDNN (Windows)
+      if: runner.os == 'Windows' && startsWith(inputs.toolkit, 'cuda')
+      id: cudnn
+      shell: powershell
+      env:
+        ARCHIVES: |
+          {
+            "cuda-12.6": "https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-9.23.2.1_cuda12-archive.zip",
+            "cuda-12.9": "https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-9.23.2.1_cuda12-archive.zip",
+            "cuda-13.0": "https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-9.23.2.1_cuda13-archive.zip"
+          }
+      run: |
+        echo "::group::Install cuDNN"
+        $ErrorActionPreference = "Stop"
+        $cudnnUrl = "${{ fromJson(env.ARCHIVES)[inputs.toolkit] }}"
+        $cudnnZip = "cudnn.zip"
+
+        echo "Downloading '$cudnnUrl'..."
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($cudnnUrl, $cudnnZip)
+        echo "Downloaded: $cudnnZip ($(([math]::Round((Get-Item $cudnnZip).Length / 1MB, 2))) MB)"
+
+        echo "Extracing..."
+        Expand-Archive -Path $cudnnZip -DestinationPath cudnn-extracted
+        $cudnnDir = (Get-ChildItem -Path cudnn-extracted -Directory)[0].FullName
+        echo "cudnnDir=$($cudnnDir -replace '\\', '/')" | Out-File -FilePath $env:GITHUB_OUTPUT
+        echo "::endgroup::"
+
+    - name: Generate CMake args
+      id: cmake-args
+      shell: bash
+      run: |
+        echo "::group::Generate CMake args"
+        cmakeArgs=(
+          "-G Ninja"
+        )
+        if ${{ runner.os == 'macOS' }} ; then
+          if ${{ inputs.toolkit == 'cpu' }} ; then
+            cmakeArgs+=("-DMLX_BUILD_METAL=OFF")
+          else
+            cmakeArgs+=("-DMLX_BUILD_METAL=ON")
+            if ${{ inputs.toolkit == 'jit' }} ; then
+              cmakeArgs+=(
+                "-DBUILD_SHARED_LIBS=ON"
+                "-DCMAKE_BUILD_TYPE=MinSizeRel"
+                "-DMLX_BUILD_CPU=OFF"
+                "-DMLX_BUILD_SAFETENSORS=OFF"
+                "-DMLX_BUILD_GGUF=OFF"
+                "-DMLX_METAL_JIT=ON"
+              )
+            fi
+          fi
+        fi
+        if ${{ runner.os == 'Windows' }} ; then
+          cmakeArgs+=(
+            "-DCMAKE_C_COMPILER=cl"
+            "-DCMAKE_CXX_COMPILER=cl"
+            "-DCMAKE_RC_COMPILER=rc"
+          )
+        else
+          cmakeArgs+=(
+            "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
+          )
+        fi
+        if ${{ startsWith(inputs.toolkit, 'cuda') }} ; then
+          cmakeArgs+=("-DMLX_BUILD_CUDA=ON")
+          # Some machines have no GPU.
+          if ! __nvcc_device_query ; then
+            # Use a fallback arch for testing.
+            cmakeArgs+=("-DMLX_CUDA_ARCHITECTURES=80")
+            # Can not build tests and stubs when the built executables can not run.
+            cmakeArgs+=("-DMLX_BUILD_TESTS=OFF")
+            cmakeArgs+=("-DMLX_BUILD_PYTHON_STUBS=OFF")
+          fi
+          echo
+          # Set cuDNN paths.
+          if ${{ runner.os == 'Windows' }} ; then
+            cmakeArgs+=(
+              "-DCUDNN_INCLUDE_PATH=${{ steps.cudnn.outputs.cudnnDir }}/include"
+              "-DCUDNN_LIBRARY_PATH=${{ steps.cudnn.outputs.cudnnDir }}/lib/x64"
+            )
+          fi
+        else
+          cmakeArgs+=("-DMLX_BUILD_CUDA=OFF")
+        fi
+        # Pass to following steps.
+        IFS=" "
+        echo ${cmakeArgs[*]}
+        echo "cmakeArgs=${cmakeArgs[*]}" >> $GITHUB_OUTPUT
+        echo "::endgroup::"

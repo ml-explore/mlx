@@ -29,6 +29,7 @@ Operations
    array_equal
    asarray
    as_strided
+   astype
    atleast_1d
    atleast_2d
    atleast_3d
@@ -42,6 +43,7 @@ Operations
    broadcast_arrays
    broadcast_shapes
    broadcast_to
+   can_cast
    ceil
    clip
    concat
@@ -63,11 +65,13 @@ Operations
    cummin
    cumprod
    cumsum
+   count_nonzero
    degrees
    depends
    dequantize
    diag
    diagonal
+   diff
    divide
    divmod
    einsum
@@ -80,9 +84,12 @@ Operations
    expand_dims
    eye
    flatten
+   flip
    floor
    floor_divide
    full
+   from_dlpack
+   full_like
    from_fp8
    gather_mm
    gather_qmm
@@ -94,6 +101,7 @@ Operations
    identity
    imag
    inner
+   isdtype
    isfinite
    isclose
    isinf
@@ -116,6 +124,7 @@ Operations
    logical_not
    logical_and
    logical_or
+   logical_xor
    logsumexp
    matmul
    max
@@ -136,6 +145,7 @@ Operations
    partition
    pad
    permute_dims
+   positive
    power
    prod
    put_along_axis
@@ -148,6 +158,7 @@ Operations
    remainder
    repeat
    reshape
+   result_type
    right_shift
    roll
    round
@@ -189,7 +200,10 @@ Operations
    tri
    tril
    triu
+   trunc
    unflatten
+   unstack
+   vecdot
    var
    view
    where

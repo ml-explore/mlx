@@ -1,10 +1,20 @@
 # Copyright © 2023 Apple Inc.
 
 import gc
+import itertools
+import math
 import unittest
 
 import mlx.core as mx
 import mlx_tests
+import numpy as np
+
+try:
+    import torch
+
+    has_torch = True
+except ImportError:
+    has_torch = False
 
 
 class TestAutograd(mlx_tests.MLXTestCase):
@@ -48,6 +58,82 @@ class TestAutograd(mlx_tests.MLXTestCase):
             _, tangents = mx.jvp(lambda x, _op=op: _op(x, 0.0), [x], [t])
             self.assertEqual(tangents[0].dtype, mx.float32)
 
+    def test_jvp_with_constant_inputs(self):
+        # JVPs of primitives with only a subset of inputs traced used to
+        # index tangents out of bounds and silently return wrong tangents
+        # (issue #3627)
+
+        # d/dt (t + 1)^2 = 2 at t = 0
+        cases = [
+            lambda t: mx.where((t + 1) ** 2 > -1, (t + 1) ** 2, 999.0),
+            lambda t: mx.where((t + 1) ** 2 < -1, 999.0, (t + 1) ** 2),
+            lambda t: mx.where(mx.array(True), (t + 1) ** 2, 999.0),
+            lambda t: mx.where(mx.array(False), 999.0, (t + 1) ** 2),
+        ]
+        for fun in cases:
+            _, (dout,) = mx.jvp(fun, [mx.array(0.0)], [mx.array(1.0)])
+            self.assertEqual(dout.item(), 2.0)
+
+        # Constant condition with both branches traced
+        _, (dout,) = mx.jvp(
+            lambda a, b: mx.where(mx.array([True, False]), a, b),
+            [mx.zeros(2), mx.zeros(2)],
+            [mx.array([1.0, 2.0]), mx.array([3.0, 4.0])],
+        )
+        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 4.0])))
+
+        # The tangent of a where with only the condition traced is zero
+        # with the output's dtype
+        _, (dout,) = mx.jvp(
+            lambda c: mx.where(c > 0, 2.0, 3.0), [mx.array(1.0)], [mx.array(1.0)]
+        )
+        self.assertEqual(dout.item(), 0.0)
+        self.assertEqual(dout.dtype, mx.float32)
+
+        # d/dy atan2(y, x) = x / (x^2 + y^2)
+        _, (dout,) = mx.jvp(
+            lambda y: mx.arctan2(y, mx.array(2.0)), [mx.array(1.0)], [mx.array(1.0)]
+        )
+        self.assertAlmostEqual(dout.item(), 0.4, places=6)
+
+        # d/dx atan2(y, x) = -y / (x^2 + y^2)
+        _, (dout,) = mx.jvp(
+            lambda x: mx.arctan2(mx.array(2.0), x), [mx.array(1.0)], [mx.array(1.0)]
+        )
+        self.assertAlmostEqual(dout.item(), -0.4, places=6)
+
+        # masked_scatter with a constant destination
+        mask = mx.array([True, False, True, False])
+
+        def masked_set(src):
+            dst = mx.zeros(4)
+            dst[mask] = src
+            return dst
+
+        _, (dout,) = mx.jvp(masked_set, [mx.ones(2)], [mx.ones(2)])
+        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 0.0, 1.0, 0.0])))
+
+    def test_jvp_through_bitwise_ops(self):
+        # JVPs of bitwise ops returned one tangent per traced input instead
+        # of one per output which corrupted the tangents of downstream
+        # outputs (issue #3629). The corruption is out-of-bounds UB that can
+        # go unnoticed in release builds; the assert in the jvp transform
+        # catches it deterministically in debug builds.
+        def fun(x):
+            b = (x == 0) & (x > -1)
+            return x + b.astype(mx.float32)
+
+        x = mx.array([0.0, 1.0, 2.0])
+        _, (dout,) = mx.jvp(fun, [x], [mx.ones_like(x)])
+        self.assertTrue(mx.array_equal(dout, mx.ones_like(x)))
+
+        def fun(x):
+            b = (x == 0) | (x > 1)
+            return x * b.astype(mx.float32)
+
+        _, (dout,) = mx.jvp(fun, [x], [mx.ones_like(x)])
+        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 0.0, 1.0])))
+
     def test_vjp(self):
         fun = lambda x: 2 * x
         out, dout = mx.vjp(fun, [mx.array(1.0)], [mx.array(2.0)])
@@ -69,6 +155,50 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].item(), 4.0 * 1.0)
         self.assertEqual(out[1].item(), 2.0 * 1.0 + 6.0 * 3.0)
         self.assertEqual(out[2].item(), 4.0 * 3.0)
+
+    def test_jvp_with_partly_traced_inputs(self):
+        # power: each traced input must use its own tangent (issue #3634)
+        fun = lambda a, b: a**b
+        primals = [mx.array(2.0), mx.array(3.0)]
+        dyda = 12.0  # d/da a^b = b * a^(b - 1)
+        dydb = math.log(2.0) * 8.0  # d/db a^b = ln(a) * a^b
+        _, (j,) = mx.jvp(fun, primals, [mx.array(1.0), mx.array(0.0)])
+        self.assertAlmostEqual(j.item(), dyda, places=4)
+        _, (j,) = mx.jvp(fun, primals, [mx.array(0.0), mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dydb, places=4)
+        _, (j,) = mx.jvp(fun, primals, [mx.array(1.0), mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dyda + dydb, places=4)
+        fun = lambda a: a ** mx.array(3.0)
+        _, (j,) = mx.jvp(fun, [mx.array(2.0)], [mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dyda, places=4)
+        fun = lambda b: mx.array(2.0) ** b
+        _, (j,) = mx.jvp(fun, [mx.array(3.0)], [mx.array(1.0)])
+        self.assertAlmostEqual(j.item(), dydb, places=4)
+
+        # divmod: one tangent per output, and consuming the second output
+        # used to crash (issue #3634)
+        def fun(x):
+            q, r = mx.divmod(x, mx.array(3.0))
+            return q, -r
+
+        _, (dq, dr) = mx.jvp(fun, [mx.array(7.0)], [mx.array(1.0)])
+        self.assertEqual(dq.item(), 0.0)
+        self.assertEqual(dr.item(), 0.0)
+
+        # slice_update with dynamic start indices and a subset of traced
+        # inputs (issue #3634)
+        src = mx.zeros(4)
+        upd = mx.ones(2)
+        start = mx.array([1])
+        fun = lambda u: mx.slice_update(src, u, start, axes=[0])
+        _, (j,) = mx.jvp(fun, [upd], [mx.ones(2)])
+        self.assertEqual(j.tolist(), [0.0, 1.0, 1.0, 0.0])
+        fun = lambda s: mx.slice_update(s, upd, start, axes=[0])
+        _, (j,) = mx.jvp(fun, [src], [mx.ones(4)])
+        self.assertEqual(j.tolist(), [1.0, 0.0, 0.0, 1.0])
+        fun = lambda s, u: mx.slice_update(s, u, start, axes=[0])
+        _, (j,) = mx.jvp(fun, [src, upd], [mx.ones(4), mx.full(2, 2.0)])
+        self.assertEqual(j.tolist(), [1.0, 2.0, 2.0, 1.0])
 
     def test_grad(self):
         fun = lambda x: x * x
@@ -590,6 +720,168 @@ class TestAutograd(mlx_tests.MLXTestCase):
         expected = mx.array([0.0, 0.0, 0.0, 9.0, 1.0])
         self.assertTrue(mx.allclose(out, expected))
 
+    def test_cummax_grad(self):
+        # Ties route to the latest occurrence, matching the cummax indices.
+        a = mx.array([3.0, 3.0, 1.0, 5.0, 5.0])
+
+        def fun(y):
+            return mx.cummax(y).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 2.0, 0.0, 1.0, 1.0]))
+        )
+
+        def fun(y):
+            return mx.cummax(y, inclusive=False).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 2.0, 0.0, 1.0, 0.0]))
+        )
+
+        def fun(y):
+            return mx.cummax(y, reverse=True).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 0.0, 4.0, 1.0]))
+        )
+
+        def fun(y):
+            return mx.cummax(y, reverse=True, inclusive=False).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 0.0, 3.0, 1.0]))
+        )
+
+        # Non-uniform cotangents are routed to the owning index.
+        cot = mx.array([10.0, 1.0, 1.0, 100.0, 1000.0])
+        _, vjps = mx.vjp(lambda y: mx.cummax(y), (a,), (cot,))
+        self.assertTrue(mx.allclose(vjps[0], mx.array([10.0, 2.0, 0.0, 100.0, 1000.0])))
+
+        # 2D along an inner axis.
+        m = mx.array([[1.0, 3.0, 3.0], [4.0, 2.0, 4.0]])
+
+        def fun(y):
+            return mx.cummax(y, axis=1).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(m), mx.array([[1.0, 1.0, 1.0], [2.0, 0.0, 1.0]]))
+        )
+
+        def fun(y):
+            return mx.cummax(y, axis=1, inclusive=False).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(m), mx.array([[1.0, 1.0, 0.0], [2.0, 0.0, 0.0]]))
+        )
+
+    def test_cummin_grad(self):
+        a = mx.array([3.0, 3.0, 1.0, 5.0, 5.0])
+
+        def fun(y):
+            return mx.cummin(y).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 1.0, 3.0, 0.0, 0.0]))
+        )
+
+        def fun(y):
+            return mx.cummin(y, inclusive=False).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 1.0, 2.0, 0.0, 0.0]))
+        )
+
+        def fun(y):
+            return mx.cummin(y, reverse=True).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 3.0, 1.0, 1.0]))
+        )
+
+        def fun(y):
+            return mx.cummin(y, reverse=True, inclusive=False).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 2.0, 1.0, 1.0]))
+        )
+
+        cot = mx.array([10.0, 1.0, 1.0, 100.0, 1000.0])
+        _, vjps = mx.vjp(lambda y: mx.cummin(y), (a,), (cot,))
+        self.assertTrue(mx.allclose(vjps[0], mx.array([10.0, 1.0, 1101.0, 0.0, 0.0])))
+
+        # 2D along the outer axis.
+        m = mx.array([[1.0, 3.0, 3.0], [4.0, 2.0, 4.0]])
+
+        def fun(y):
+            return mx.cummin(y, axis=0).sum()
+
+        self.assertTrue(
+            mx.allclose(mx.grad(fun)(m), mx.array([[2.0, 1.0, 2.0], [0.0, 1.0, 0.0]]))
+        )
+
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_cummax_cummin_grad_vs_torch(self):
+        # Cross-check the cumulative max/min VJP against PyTorch autograd over
+        # axes, scan direction, inclusive/exclusive modes, ties, and weighted
+        # cotangents. Torch has no reverse or exclusive scan, so reverse is
+        # emulated by flipping along the axis and exclusive by shifting the
+        # inclusive scan one step (its leading element carries no gradient).
+        def torch_scan(x, axis, reverse, inclusive, op):
+            xf = torch.flip(x, [axis]) if reverse else x
+            scan = torch.cummax if op == "max" else torch.cummin
+            c = scan(xf, axis).values
+            if not inclusive:
+                n = c.size(axis)
+                head = torch.zeros_like(c.narrow(axis, 0, 1))  # constant, no grad
+                c = torch.cat([head, c.narrow(axis, 0, n - 1)], dim=axis)
+            return torch.flip(c, [axis]) if reverse else c
+
+        def mx_scan(z, axis, reverse, inclusive, op):
+            scan = mx.cummax if op == "max" else mx.cummin
+            return scan(z, axis=axis, reverse=reverse, inclusive=inclusive)
+
+        inputs = [
+            np.array([3.0, 3.0, 1.0, 5.0, 5.0, 1.0, 5.0, 2.0], dtype=np.float32),
+            np.array(
+                [[1.0, 3.0, 3.0, 2.0], [4.0, 2.0, 4.0, 4.0], [4.0, 3.0, 1.0, 4.0]],
+                dtype=np.float32,
+            ),
+        ]
+        rng = np.random.default_rng(0)
+        for x_np in inputs:
+            cotangents = {
+                "ones": np.ones_like(x_np),
+                "weighted": rng.uniform(1.0, 9.0, x_np.shape).astype(np.float32),
+            }
+            for axis in range(x_np.ndim):
+                for op, reverse, inclusive in itertools.product(
+                    ("max", "min"), (False, True), (True, False)
+                ):
+                    for cot_name, cot_np in cotangents.items():
+                        with self.subTest(
+                            shape=x_np.shape,
+                            axis=axis,
+                            op=op,
+                            reverse=reverse,
+                            inclusive=inclusive,
+                            cotangent=cot_name,
+                        ):
+                            _, (mx_grad,) = mx.vjp(
+                                lambda z: mx_scan(z, axis, reverse, inclusive, op),
+                                (mx.array(x_np),),
+                                (mx.array(cot_np),),
+                            )
+
+                            xt = torch.tensor(x_np, requires_grad=True)
+                            out = torch_scan(xt, axis, reverse, inclusive, op)
+                            (out * torch.tensor(cot_np)).sum().backward()
+
+                            self.assertTrue(
+                                np.allclose(
+                                    np.array(mx_grad), xt.grad.numpy(), atol=1e-5
+                                )
+                            )
+
     def test_topk_grad(self):
         a = mx.array([[1, 2, 6, 4, 5], [9, 5, 6, 7, 8]], mx.float32)
 
@@ -599,6 +891,54 @@ class TestAutograd(mlx_tests.MLXTestCase):
         out = mx.vjp(fun, (a,), (mx.ones((2, 2)),))[1][0]
         expected = mx.array([[0, 0, 1, 0, 1], [1, 0, 0, 0, 1]], mx.float32)
         self.assertTrue(mx.array_equal(out, expected))
+
+    def test_sort_grad(self):
+        # Sort permutes the input, so its vjp must scatter the cotangents back
+        # to the original positions (the transpose of the permutation), not
+        # gather them forward. A non-involutive permutation exposes the bug.
+        x = mx.array([3.0, 1.0, 2.0, 5.0, 4.0])
+        cotan = mx.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        grad = mx.vjp(lambda a: mx.sort(a), (x,), (cotan,))[1][0]
+        self.assertTrue(mx.array_equal(grad, mx.array([30.0, 10.0, 20.0, 50.0, 40.0])))
+
+        # vjp must be the transpose of the jvp (adjoint test) along each axis.
+        mx.random.seed(0)
+        for axis in (0, 1, -1):
+            a = mx.random.normal((4, 6))
+            v = mx.random.normal(a.shape)
+            w = mx.random.normal(a.shape)
+            jv = mx.jvp(lambda z: mx.sort(z, axis=axis), (a,), (v,))[1][0]
+            jtw = mx.vjp(lambda z: mx.sort(z, axis=axis), (a,), (w,))[1][0]
+            self.assertAlmostEqual(
+                mx.sum(w * jv).item(), mx.sum(v * jtw).item(), places=4
+            )
+
+    def test_logsumexp_grad(self):
+        # The jvp of logsumexp reduces along the axis (sum of softmax * tangent),
+        # so the tangent it returns must have the reduced output shape, not the
+        # input shape.
+        x = mx.array([[1.0, 2.0, 3.0], [4.0, 1.0, 0.0]])
+        v = mx.array([[1.0, 0.0, -1.0], [2.0, 1.0, 0.0]])
+        jv = mx.jvp(lambda z: mx.logsumexp(z, axis=-1, keepdims=True), (x,), (v,))[1][0]
+        self.assertEqual(jv.shape, (2, 1))
+        expected = mx.sum(mx.softmax(x, axis=-1) * v, axis=-1, keepdims=True)
+        self.assertTrue(mx.allclose(jv, expected))
+
+        # vjp must be the transpose of the jvp (adjoint test).
+        mx.random.seed(0)
+        for keepdims in (True, False):
+            a = mx.random.normal((4, 6))
+            v = mx.random.normal(a.shape)
+
+            def fun(z):
+                return mx.logsumexp(z, axis=-1, keepdims=keepdims)
+
+            w = mx.random.normal(fun(a).shape)
+            jv = mx.jvp(fun, (a,), (v,))[1][0]
+            jtw = mx.vjp(fun, (a,), (w,))[1][0]
+            self.assertAlmostEqual(
+                mx.sum(w * jv).item(), mx.sum(v * jtw).item(), places=4
+            )
 
     def test_custom_function(self):
         # Make a custom function
@@ -1025,6 +1365,56 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
         # Check against hand-computed vjps
         self.assertTrue(mx.allclose(vjps[0], expected))
+
+    def test_complex_unary_vjps(self):
+        # For a holomorphic f the vjp is cotangent * conj(f'(z)); these ops used
+        # to delegate to their jvp and drop the conjugate for complex inputs.
+        mx.random.seed(0)
+        z = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        cotangent = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        z = mx.where(abs(z) < 1e-3, 1e-3 + 0j, z)
+
+        ops = {
+            mx.square: lambda x: 2 * x,
+            mx.sin: mx.cos,
+            mx.sinh: mx.cosh,
+            mx.cosh: mx.sinh,
+            mx.tan: lambda x: 1 / mx.cos(x) ** 2,
+            mx.tanh: lambda x: 1 - mx.tanh(x) ** 2,
+            mx.log1p: lambda x: 1 / (1 + x),
+        }
+        for fn, deriv in ops.items():
+            _, (vjp,) = mx.vjp(fn, [z], [cotangent])
+            expected = cotangent * mx.conj(deriv(z))
+            self.assertTrue(mx.allclose(vjp, expected, atol=1e-5), msg=str(fn))
+
+    def test_complex_abs_grad(self):
+        mx.random.seed(0)
+        primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        # guard against values too close to the origin where |z| is not smooth
+        primal = mx.where(abs(primal) < 1e-3, 1e-3 + 0j, primal)
+
+        # |z| is real-valued, so its jvp is real:
+        #   d|z| = Re(conj(z) * t) / |z|
+        tangent = mx.random.normal(primal.shape, dtype=mx.complex64)
+        _, (jvp,) = mx.jvp(mx.abs, [primal], [tangent])
+        expected = mx.real(mx.conj(primal) * tangent) / mx.abs(primal)
+        self.assertEqual(jvp.dtype, mx.float32)
+        self.assertTrue(mx.allclose(jvp, expected, atol=1e-5))
+
+        # The vjp's real and imaginary parts are the gradients w.r.t. Re(z) and
+        # Im(z); for a real cotangent this is cotangent * sign(z).
+        cotangent = mx.random.normal(primal.shape)
+        _, (vjp,) = mx.vjp(mx.abs, [primal], [cotangent])
+        self.assertTrue(
+            mx.allclose(vjp, cotangent * (primal / mx.abs(primal)), atol=1e-5)
+        )
+
+        # Real inputs are unaffected.
+        x = mx.random.normal((10,))
+        t = mx.random.normal((10,))
+        _, (jvp,) = mx.jvp(mx.abs, [x], [t])
+        self.assertTrue(mx.allclose(jvp, mx.sign(x) * t))
 
 
 if __name__ == "__main__":

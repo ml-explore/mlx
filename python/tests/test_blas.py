@@ -8,6 +8,9 @@ import mlx.core as mx
 import mlx_tests
 import numpy as np
 
+# Ignore matmul warnings.
+np.seterr(divide="ignore", over="ignore", invalid="ignore")
+
 
 class TestBlas(mlx_tests.MLXTestCase):
     @property

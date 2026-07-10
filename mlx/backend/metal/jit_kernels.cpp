@@ -698,6 +698,70 @@ MTL::ComputePipelineState* get_steel_gemm_segmented_kernel(
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_gemv_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    bool transpose_mat,
+    int bm,
+    int bn,
+    int sm,
+    int sn,
+    int tm,
+    int tn,
+    bool nc,
+    bool axpby) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::gemv()
+                  << get_template_definition(
+                         lib_name,
+                         transpose_mat ? "gemv_t" : "gemv",
+                         get_type_string(out.dtype()),
+                         bm,
+                         bn,
+                         sm,
+                         sn,
+                         tm,
+                         tn,
+                         nc ? 1 : 0,
+                         axpby ? 1 : 0);
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
+MTL::ComputePipelineState* get_gemv_gather_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    bool transpose_mat,
+    int bm,
+    int bn,
+    int sm,
+    int sn,
+    int tm,
+    int tn) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::gemv()
+                  << get_template_definition(
+                         lib_name,
+                         transpose_mat ? "gemv_t_gather" : "gemv_gather",
+                         get_type_string(out.dtype()),
+                         bm,
+                         bn,
+                         sm,
+                         sn,
+                         tm,
+                         tn);
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
 MTL::ComputePipelineState* get_gemv_masked_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -983,7 +1047,7 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_nax_kernel(
     const std::string& kernel_name,
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
-    const array& out,
+    const array& in,
     bool transpose_a,
     bool transpose_b,
     int bm,
@@ -999,7 +1063,7 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_nax_kernel(
                   << get_template_definition(
                          lib_name,
                          "gemm_splitk_nax",
-                         get_type_string(out.dtype()),
+                         get_type_string(in.dtype()),
                          bm,
                          bn,
                          bk,

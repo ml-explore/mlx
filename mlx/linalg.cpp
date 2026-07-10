@@ -99,12 +99,16 @@ inline array matrix_norm(
         dtype,
         s);
   } else if (ord == std::numeric_limits<double>::infinity()) {
+    row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
+    col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
     row_axis -= (!keepdims && row_axis > col_axis && row_axis > 0);
     return astype(
         max(sum(abs(a, s), col_axis, keepdims, s), row_axis, keepdims, s),
         dtype,
         s);
   } else if (ord == -std::numeric_limits<double>::infinity()) {
+    row_axis = (axis[0] < 0) ? axis[0] + a.ndim() : axis[0];
+    col_axis = (axis[1] < 0) ? axis[1] + a.ndim() : axis[1];
     row_axis -= (!keepdims && row_axis > col_axis && row_axis > 0);
     return astype(
         min(sum(abs(a, s), col_axis, keepdims, s), row_axis, keepdims, s),

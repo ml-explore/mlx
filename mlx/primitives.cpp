@@ -221,7 +221,9 @@ std::vector<array> Abs::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {multiply(cotangents[0], sign(primals[0], stream()), stream())};
 }
 
 std::vector<array> Abs::jvp(
@@ -230,7 +232,14 @@ std::vector<array> Abs::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
-  return {multiply(tangents[0], sign(primals[0], stream()), stream())};
+  auto s = sign(primals[0], stream());
+  if (issubdtype(primals[0].dtype(), complexfloating)) {
+    // |z| is real-valued, so its directional derivative is real:
+    //   d|z| = Re(conj(z) * t) / |z| = Re(conj(sign(z)) * t).
+    return {real(
+        multiply(tangents[0], conjugate(s, stream()), stream()), stream())};
+  }
+  return {multiply(tangents[0], s, stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Abs::vmap(
@@ -518,7 +527,7 @@ std::vector<array> ArcTan2::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   assert(primals.size() == 2);
-  assert(argnums.size() == 2);
+  assert(cotangents.size() == 1);
 
   const auto& s = stream();
   const array& x1 = primals[0];
@@ -545,18 +554,23 @@ std::vector<array> ArcTan2::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-  assert(argnums.size() == 2);
+  assert(tangents.size() == argnums.size());
 
   const auto& s = stream();
   const array& x1 = primals[0];
   const array& x2 = primals[1];
-  const array& dx1 = tangents[0];
-  const array& dx2 = tangents[1];
 
-  return {divide(
-      subtract(multiply(x2, dx1, s), multiply(x1, dx2, s), s),
-      add(square(x1, s), square(x2, s), s),
-      s)};
+  auto numerator = [&]() {
+    if (argnums.size() == 2) {
+      return subtract(
+          multiply(x2, tangents[0], s), multiply(x1, tangents[1], s), s);
+    } else if (argnums[0] == 0) {
+      return multiply(x2, tangents[0], s);
+    } else {
+      return negative(multiply(x1, tangents[0], s), s);
+    }
+  }();
+  return {divide(numerator, add(square(x1, s), square(x2, s), s), s)};
 }
 
 std::pair<std::vector<array>, std::vector<int>> ArcTan2::vmap(
@@ -794,11 +808,8 @@ std::vector<array> BitwiseBinary::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-  std::vector<array> vjps = {zeros_like(tangents[0], stream())};
-  if (argnums.size() > 1) {
-    vjps.push_back(vjps.back());
-  }
-  return vjps;
+  auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
+  return {zeros(shape, tangents[0].dtype(), stream())};
 }
 
 std::vector<array> BitwiseBinary::vjp(
@@ -806,7 +817,11 @@ std::vector<array> BitwiseBinary::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    vjps.push_back(zeros_like(primals[arg], stream()));
+  }
+  return vjps;
 }
 
 std::vector<array>
@@ -1686,7 +1701,10 @@ std::vector<array> Cosh::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Cosh::jvp(
@@ -1806,7 +1824,9 @@ std::vector<array> DivMod::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  return {zeros_like(primals[0], stream())};
+  // One tangent per output; inputs are pre-broadcast and pre-promoted
+  auto zero = zeros_like(primals[0], stream());
+  return {zero, zero};
 }
 
 std::pair<std::vector<array>, std::vector<int>> DivMod::vmap(
@@ -2758,7 +2778,10 @@ std::vector<array> Log1p::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Log1p::jvp(
@@ -2947,10 +2970,16 @@ std::vector<array> LogSumExp::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
-  return {multiply(
-      tangents[0],
-      softmax(primals[0], std::vector<int>{-1}, true, stream()),
-      stream())};
+  // d/dt logsumexp(x) = sum(softmax(x) * t) over the reduced axis. The result
+  // must be summed back to the output shape, not left as a per-element product.
+  return {
+      sum(multiply(
+              tangents[0],
+              softmax(primals[0], std::vector<int>{-1}, true, stream()),
+              stream()),
+          -1,
+          /* keepdims = */ true,
+          stream())};
 }
 
 std::vector<Shape> LogSumExp::output_shapes(const std::vector<array>& inputs) {
@@ -3146,30 +3175,30 @@ std::vector<array> Select::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 3);
-  assert(tangents.size() == 3);
+  assert(tangents.size() == argnums.size());
 
   auto jvp_fun = [&](int i) {
     int arg = argnums[i];
 
     if (arg == 0) {
-      return zeros_like(primals[0], stream());
+      return zeros_like(primals[1], stream());
     } else if (arg == 1) {
       return multiply(
-          astype(primals[0], tangents[1].dtype(), stream()),
-          tangents[1],
+          astype(primals[0], tangents[i].dtype(), stream()),
+          tangents[i],
           stream());
     } else {
       return multiply(
           astype(
-              logical_not(primals[0], stream()), tangents[2].dtype(), stream()),
-          tangents[2],
+              logical_not(primals[0], stream()), tangents[i].dtype(), stream()),
+          tangents[i],
           stream());
     }
   };
 
-  array jvp = jvp_fun(argnums[0]);
+  array jvp = jvp_fun(0);
   for (int i = 1; i < argnums.size(); i++) {
-    jvp = add(jvp, jvp_fun(argnums[i]));
+    jvp = add(jvp, jvp_fun(i));
   }
   return {jvp};
 }
@@ -3409,12 +3438,12 @@ std::vector<array> Power::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   auto output = power(primals[0], primals[1], stream());
-  auto grads = vjp(primals, tangents, argnums, {output});
-  if (argnums.size() > 1) {
-    return {add(grads[0], grads[1], stream())};
-  } else {
-    return grads;
+  auto jvp = vjp(primals, {tangents[0]}, {argnums[0]}, {output})[0];
+  for (int i = 1; i < argnums.size(); ++i) {
+    jvp = add(
+        jvp, vjp(primals, {tangents[i]}, {argnums[i]}, {output})[0], stream());
   }
+  return {jvp};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Power::vmap(
@@ -4282,8 +4311,62 @@ std::vector<array> Scan::vjp(
         where(eq_zero, z, grad, stream()),
         stream())};
   } else {
-    // Can probably be implemented by equals and then cummax to make the mask
-    throw std::runtime_error("VJP is not implemented for cumulative min/max");
+    // Cumulative max/min: route each position's cotangent to the input element
+    // that holds the running extreme there, breaking ties toward the latest
+    // element in scan order. The owning index is reconstructed by marking
+    // where the input equals the inclusive running extreme and taking a running
+    // extreme over those indices (cummax picks the largest tied index for a
+    // forward scan and cummin the smallest for a reverse scan). The cotangents
+    // are then scatter-added. For exclusive scans, outputs[0] is already the
+    // inclusive running extreme shifted by one, so we slice the input,
+    // outputs[0], and the cotangents to length n-1; scatter_add_axis broadcasts
+    // the shorter updates into the full-sized gradient.
+    auto in = primals[0];
+    auto cotan = cotangents[0];
+    int n = in.shape(axis_);
+    auto s = stream();
+
+    auto in_window = in;
+    auto extreme_window = outputs[0];
+    Shape start;
+    Shape stop;
+
+    if (!inclusive_) {
+      start = Shape(in.ndim(), 0);
+      stop = in.shape();
+
+      start[axis_] = (reverse_) ? 1 : 0;
+      stop[axis_] = (reverse_) ? n : n - 1;
+      in_window = slice(in, start, stop, s);
+
+      start[axis_] = (reverse_) ? 0 : 1;
+      stop[axis_] = (reverse_) ? n - 1 : n;
+      extreme_window = slice(outputs[0], start, stop, s);
+    }
+
+    Shape index_shape(in.ndim(), 1);
+    index_shape[axis_] = (inclusive_) ? n : n - 1;
+    auto iota = reshape(
+        (inclusive_) ? arange(0, n, s)
+                     : ((reverse_) ? arange(1, n, s) : arange(0, n - 1, s)),
+        index_shape,
+        s);
+    auto masked = where(
+        equal(in_window, extreme_window, s),
+        iota,
+        array(reverse_ ? n : -1, int32),
+        s);
+    auto owner = astype(
+        reverse_ ? cummin(masked, axis_, /* reverse = */ true, true, s)
+                 : cummax(masked, axis_, /* reverse = */ false, true, s),
+        uint32,
+        s);
+
+    if (!inclusive_) {
+      cotan = slice(cotan, std::move(start), std::move(stop), s);
+    }
+
+    return {scatter_add_axis(zeros_like(in, s), owner, cotan, axis_, s)};
   }
 }
 
@@ -4654,15 +4737,16 @@ std::vector<array> MaskedScatter::jvp(
   }
 
   array out = zeros_like(dst, s);
-  for (int arg : argnums) {
+  for (int i = 0; i < argnums.size(); ++i) {
+    int arg = argnums[i];
     if (arg == 0) {
-      out = where(mask_b, out, tangents[0], s);
+      out = where(mask_b, out, tangents[i], s);
     } else if (arg == 2) {
       out = array(
           out.shape(),
           out.dtype(),
           std::make_shared<MaskedScatter>(s),
-          {out, mask, tangents[1]});
+          {out, mask, tangents[i]});
     } else {
       throw std::invalid_argument("[masked_scatter] invalid arg index in JVP");
     }
@@ -4795,7 +4879,10 @@ std::vector<array> Sin::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Sin::jvp(
@@ -4820,7 +4907,10 @@ std::vector<array> Sinh::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Sinh::jvp(
@@ -5215,8 +5305,20 @@ std::vector<array> DynamicSliceUpdate::vjp(
 std::vector<array> DynamicSliceUpdate::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
-    const std::vector<int>&) {
-  return {slice_update(tangents[0], tangents[1], primals[2], axes_, stream())};
+    const std::vector<int>& argnums) {
+  array tan_src = zeros_like(primals[0], stream());
+  array tan_upd = zeros_like(primals[1], stream());
+  for (int i = 0; i < argnums.size(); ++i) {
+    if (argnums[i] == 0) {
+      tan_src = tangents[i];
+    } else if (argnums[i] == 1) {
+      tan_upd = tangents[i];
+    } else {
+      throw std::invalid_argument(
+          "[DynamicSliceUpdate::jvp] Not supported for start indices");
+    }
+  }
+  return {slice_update(tan_src, tan_upd, primals[2], axes_, stream())};
 }
 
 bool DynamicSliceUpdate::is_equivalent(const Primitive& other) const {
@@ -5289,7 +5391,16 @@ std::vector<array> Sort::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // Sort applies a permutation to the input, so the cotangents must be
+  // scattered back to the original positions (the transpose of the
+  // permutation), not gathered forward as in the jvp.
+  auto sort_idx = argsort(primals[0], axis_, stream());
+  return {put_along_axis(
+      zeros_like(primals[0], stream()),
+      sort_idx,
+      cotangents[0],
+      axis_,
+      stream())};
 }
 
 std::vector<array> Sort::jvp(
@@ -5342,7 +5453,10 @@ std::vector<array> Square::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Square::jvp(
@@ -5514,7 +5628,10 @@ std::vector<array> Tan::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Tan::jvp(
@@ -5540,7 +5657,10 @@ std::vector<array> Tanh::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+  // The vjp conjugates the jvp's multiplier (a no-op for real inputs).
+  return {conjugate(
+      jvp(primals, {conjugate(cotangents[0], stream())}, argnums)[0],
+      stream())};
 }
 
 std::vector<array> Tanh::jvp(

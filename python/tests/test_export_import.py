@@ -581,6 +581,95 @@ class TestExportImport(mlx_tests.MLXTestCase):
         out = imported(a)[0]
         self.assertTrue(mx.allclose(expected, out))
 
+    def test_export_custom_metal_kernel_without_evaluation(self):
+        source = """
+            uint elem = thread_position_in_grid.x;
+            out[elem] = a[elem];
+        """
+        kernel = mx.fast.metal_kernel(
+            name="export_only",
+            input_names=["a"],
+            output_names=["out"],
+            source=source,
+        )
+
+        def call(a):
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(min(a.size, 256), 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        a = mx.zeros((2, 2))
+        for shapeless in (False, True):
+            path = os.path.join(
+                self.test_dir,
+                f"metal_kernel_export_only_{shapeless}.mlxfn",
+            )
+            mx.export_function(path, call, a, shapeless=shapeless)
+            self.assertTrue(os.path.exists(path))
+
+            # A shapeless import can't be called since CustomKernel does
+            # not support shape inference
+            if mx.metal.is_available() and not shapeless:
+                imported = mx.import_function(path)
+                self.assertTrue(mx.array_equal(imported(a)[0], call(a)))
+
+        def call_cpu(a):
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(min(a.size, 256), 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.cpu,
+            )[0]
+
+        path = os.path.join(self.test_dir, "metal_kernel_export_cpu.mlxfn")
+        with self.assertRaisesRegex(ValueError, "Only supports the GPU"):
+            mx.export_function(path, call_cpu, a)
+
+        if not mx.metal.is_available():
+            with self.assertRaisesRegex(RuntimeError, "No Metal back-end"):
+                call(a)
+            with self.assertRaisesRegex(RuntimeError, "No Metal back-end"):
+                mx.eval(mx.compile(call)(a))
+
+    def test_export_custom_metal_kernel_with_math_mode(self):
+        source = """
+            uint elem = thread_position_in_grid.x;
+            out[elem] = metal::exp(a[elem]);
+        """
+        kernel = mx.fast.metal_kernel(
+            name="math_mode_export",
+            input_names=["a"],
+            output_names=["out"],
+            source=source,
+            compile_options={"math_mode": "safe"},
+        )
+
+        def call(a):
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(min(a.size, 256), 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        a = mx.array([-float("inf"), 0.0])
+        path = os.path.join(self.test_dir, "metal_kernel_math_mode.mlxfn")
+        mx.export_function(path, call, a)
+        self.assertTrue(os.path.exists(path))
+
+        if mx.metal.is_available():
+            imported = mx.import_function(path)
+            self.assertTrue(mx.array_equal(imported(a)[0], call(a)))
+
     def test_export_import_multi_with_constants(self):
 
         path = os.path.join(self.test_dir, "fn.mlxfn")

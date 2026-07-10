@@ -68,6 +68,14 @@ class CMakeExtension(Extension):
 
 
 class CMakeBuild(build_ext):
+    def finalize_options(self) -> None:
+        super().finalize_options()
+
+        # Setuptools does some clever things for Windows to make it
+        # more "native" but eventually made our life harder, revert back.
+        if platform.system() == "Windows":
+            self.build_temp = os.path.dirname(self.build_temp)
+
     def build_extension(self, ext: CMakeExtension) -> None:
         # Must be in this form due to bug in .resolve() only fixed in Python 3.10+
         ext_fullpath = Path.cwd() / self.get_ext_fullpath(ext.name)  # type: ignore[no-untyped-call]
@@ -99,28 +107,30 @@ class CMakeBuild(build_ext):
             "-DMLX_BUILD_EXAMPLES=OFF",
             "-DBUILD_SHARED_LIBS=ON",
         ]
-        if build_stage == 2 and build_cuda:
-            # Last arch is always real and virtual for forward-compatibility
-            cuda_archs = ";".join(
-                (
-                    "75-real",
-                    "80-real",
-                    "90a-real",
-                    "100a-real",
-                    "120a-real",
-                    "120-virtual",
-                )
-            )
-            cmake_args += [f"-DMLX_CUDA_ARCHITECTURES={cuda_archs}"]
-            # Search CUDA libs from python packages.
-            cmake_args += ["-DMLX_LOAD_CUDA_LIBS_FROM_PYTHON=ON"]
 
-        # Some generators require explcitly passing config when building.
-        build_args = ["--config", cfg]
         # Adding CMake arguments set as environment variable
         # (needed e.g. to build for ARM OSx on conda-forge)
         if "CMAKE_ARGS" in os.environ:
             cmake_args += [item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
+
+        # For release wheel force building for all supported arches.
+        if build_stage == 2 and build_cuda:
+            # Last arch is always real and virtual for forward-compatibility
+            cuda_archs = [
+                "75-real",
+                "80-real",
+                "120a-real",
+                "120-virtual",
+            ]
+            if platform.system() == "Linux":
+                cuda_archs += [
+                    "90a-real",
+                    "100a-real",
+                    "121a-real",
+                ]
+            cmake_args += [f"-DMLX_CUDA_ARCHITECTURES={';'.join(cuda_archs)}"]
+            # Search CUDA libs from python packages.
+            cmake_args += ["-DMLX_LOAD_CUDA_LIBS_FROM_PYTHON=ON"]
 
         # Pass version to C++
         cmake_args += [f"-DMLX_VERSION={self.distribution.get_version()}"]  # type: ignore[attr-defined]
@@ -131,13 +141,17 @@ class CMakeBuild(build_ext):
             if archs:
                 cmake_args += ["-DCMAKE_OSX_ARCHITECTURES={}".format(";".join(archs))]
 
+        # Some generators require explcitly passing config when building.
+        build_args = ["--config", cfg]
+
         # Set CMAKE_BUILD_PARALLEL_LEVEL to control the parallel build level
         # across all generators.
         if "CMAKE_BUILD_PARALLEL_LEVEL" not in os.environ:
             build_args += [f"-j{os.cpu_count()}"]
 
         # Avoid cache miss when building from temporary dirs.
-        os.environ["CCACHE_BASEDIR"] = os.path.realpath(self.build_temp)
+        os.environ["CCACHE_BASEDIR"] = os.path.realpath(build_temp)
+        os.environ["CCACHE_IGNOREHEADERS"] = os.path.realpath(build_temp)
         os.environ["CCACHE_NOHASHDIR"] = "true"
 
         subprocess.run(
@@ -234,7 +248,6 @@ if __name__ == "__main__":
             "ml_dtypes",
             "numpy>=2",
             "pre-commit",
-            "psutil>=7.2",
             "torch>=2.9",
             "typing_extensions",
         ],
@@ -290,24 +303,29 @@ if __name__ == "__main__":
             toolkit = cuda_toolkit_major_version()
             name = f"mlx-cuda-{toolkit}"
             # Note: update following files when new dependency is added:
-            # * .github/actions/build-cuda-release/action.yml
+            # * .github/actions/build-wheel/action.yml
             # * mlx/backend/cuda/CMakeLists.txt
+            install_requires += [
+                f"nvidia-cudnn-cu{toolkit}==9.*",
+            ]
+            if platform.system() == "Linux":
+                install_requires += [
+                    f"nvidia-nccl-cu{toolkit}",
+                ]
             if toolkit == 12:
                 install_requires += [
                     "nvidia-cublas-cu12==12.9.*",
+                    "nvidia-cufft-cu12==11.4.*",
                     "nvidia-cuda-nvrtc-cu12==12.9.*",
                 ]
             elif toolkit == 13:
                 install_requires += [
                     "nvidia-cublas",
+                    "nvidia-cufft",
                     "nvidia-cuda-nvrtc",
                 ]
             else:
                 raise ValueError(f"Unknown toolkit {toolkit}")
-            install_requires += [
-                f"nvidia-cudnn-cu{toolkit}==9.*",
-                f"nvidia-nccl-cu{toolkit}",
-            ]
 
         else:
             name = "mlx-cpu"

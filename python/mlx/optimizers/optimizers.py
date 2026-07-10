@@ -39,7 +39,7 @@ class Optimizer:
         :meth:`Optimizer.update`.
 
         Args:
-            model (dict): A Python tree of parameters.
+            parameters (dict): A Python tree of parameters.
 
         Example:
             >>> optimizer = optim.SGD(learning_rate=1e-1, momentum=0.9)
@@ -328,7 +328,7 @@ class RMSprop(Optimizer):
             raise ValueError(
                 f"RMSprop alpha should be >=0, {self.alpha} was provided instead"
             )
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
                 f"RMSprop epsilon should be >0, {self.eps} was provided instead"
             )
@@ -379,7 +379,7 @@ class Adagrad(Optimizer):
         self._maybe_schedule("learning_rate", learning_rate)
         self.eps = eps
 
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
                 f"Adagrad epsilon should be >0, {self.eps} was provided instead"
             )
@@ -419,7 +419,7 @@ class AdaDelta(Optimizer):
         rho (float, optional): The coefficient :math:`\rho` used for computing a
             running average of squared gradients. Default: ``0.9``
         eps (float, optional): The term :math:`\epsilon` added to the denominator to improve
-          numerical stability. Default: `1e-8`
+          numerical stability. Default: ``1e-6``
     """
 
     def __init__(
@@ -437,7 +437,7 @@ class AdaDelta(Optimizer):
             raise ValueError(
                 f"AdaDelta rho should be >=0, {self.rho} was provided instead"
             )
-        if self.eps < 0.0:
+        if self.eps <= 0.0:
             raise ValueError(
                 f"AdaDelta epsilon should be >0, {self.eps} was provided instead"
             )
@@ -797,9 +797,7 @@ class Adafactor(Optimizer):
             exp_avg_sq_row / mx.mean(exp_avg_sq_row, axis=-1, keepdims=True)
         )
         c_factor = mx.rsqrt(exp_avg_sq_col)
-        return mx.matmul(
-            mx.expand_dims(r_factor, axis=-1), mx.expand_dims(c_factor, axis=0)
-        )
+        return mx.expand_dims(r_factor, axis=-1) * mx.expand_dims(c_factor, axis=-2)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adafactor parameter and state update."""

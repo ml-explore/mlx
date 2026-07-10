@@ -21,8 +21,6 @@ constexpr const char* default_header = R"(
 
 #include <cooperative_groups.h>
 
-#define inf cuda::std::numeric_limits<float>::infinity()
-
 )";
 
 std::string template_arguments_hash(
@@ -313,7 +311,7 @@ void CustomKernel::eval_gpu(
   std::string kernel_name =
       (is_precompiled_) ? name_ : "mlx::core::cu::" + name_;
   cu::JitModule& mod = cu::get_jit_module(
-      s.device,
+      encoder.device(),
       name_,
       [&]() {
         return std::make_tuple(

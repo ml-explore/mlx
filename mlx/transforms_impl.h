@@ -48,6 +48,22 @@ struct InTracing {
   static std::vector<std::pair<char, char>>& trace_stack();
 };
 
+struct InExportTracing {
+  InExportTracing() {
+    counter()++;
+  }
+  ~InExportTracing() {
+    counter()--;
+  }
+
+  static bool in_export_tracing() {
+    return counter() > 0;
+  }
+
+ private:
+  static int& counter();
+};
+
 struct RetainGraph {
   RetainGraph() {
     tracing_counter++;
@@ -68,6 +84,11 @@ struct RetainGraph {
  * order to keep the graph when evaluating tracer arrays. */
 inline bool in_tracing() {
   return detail::InTracing::in_tracing();
+}
+
+/** Return true if the current trace is being recorded for export. */
+inline bool in_export_tracing() {
+  return detail::InExportTracing::in_export_tracing();
 }
 
 /** Return true if we are in a dynamic (shapeless) trace used for compiling or

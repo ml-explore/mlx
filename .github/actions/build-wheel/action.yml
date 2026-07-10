@@ -1,0 +1,115 @@
+name: 'Build wheel'
+description: 'Build the Python wheels for release on all platforms'
+
+inputs:
+  cmake-args:
+    description: 'The args for generating CMake project'
+    required: true
+  build-frontend:
+    description: 'Build the frontend mlx package'
+    required: false
+    default: 'true'
+  build-backend:
+    description: 'Build the backend mlx-cpu/mlx-cuda/mlx-metal packages'
+    required: false
+    default: 'true'
+  macos-target:
+    description: 'The target macOS version to build for'
+    required: false
+    default: '26.2'
+  arch-tag:
+    description: 'Platform architecture tag'
+    required: false
+    default: |-
+      ${{ case(runner.arch == 'x64', 'x86_64',
+               runner.arch == 'x86', 'i686',
+               runner.arch == 'arm', 'armv7l',
+               runner.arch == 'arm64', 'aarch64',
+               'unknown')
+      }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install dependencies
+      shell: bash
+      run: |
+        echo "::group::Install dependencies"
+        uv pip install 'build<=1.4.2' setuptools
+        if ${{ runner.os == 'Linux' }} ; then
+          uv pip install auditwheel patchelf
+        fi
+        mkdir -p wheelhouse
+        echo "::endgroup::"
+
+    - name: Build frontend package
+      if: inputs.build-frontend == 'true'
+      shell: bash
+      env:
+        CMAKE_ARGS: ${{ inputs.cmake-args }}
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
+      run: |
+        echo "::group::Build frontend package"
+        python setup.py clean --all
+        MLX_BUILD_STAGE=1 python -m build -w
+        echo "::endgroup::"
+
+    - name: Post-process frontend package
+      if: inputs.build-frontend == 'true'
+      shell: bash
+      run: |
+        echo "::group::Post-process frontend package"
+        if ${{ runner.os == 'Linux' }} ; then
+          auditwheel repair dist/mlx-*.whl \
+            --plat manylinux_2_35_${{ inputs.arch-tag }} \
+            --exclude libmlx.so* \
+            --only-plat
+        else
+          mv dist/mlx-*.whl wheelhouse/
+        fi
+        echo "::endgroup::"
+
+    - name: Build backend package
+      if: inputs.build-backend == 'true'
+      shell: bash
+      env:
+        CMAKE_ARGS: ${{ inputs.cmake-args }}
+        MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
+      run: |
+        echo "::group::Build backend package"
+        python setup.py clean --all
+        MLX_BUILD_STAGE=2 python -m build -w
+        echo "::endgroup::"
+
+    - name: Post-process backend package
+      if: inputs.build-backend == 'true'
+      shell: bash
+      run: |
+        echo "::group::Post-process backend package"
+        if ${{ runner.os == 'Linux' }} ; then
+          if [ -f dist/mlx_cpu*.whl ]; then
+            auditwheel repair dist/mlx_cpu*.whl \
+              --plat manylinux_2_35_${{ inputs.arch-tag }}
+          fi
+          if [ -f dist/mlx_cuda*.whl ]; then
+            auditwheel repair dist/mlx_cuda*.whl \
+              --plat manylinux_2_35_${{ inputs.arch-tag }} \
+              --exclude libcublas* \
+              --exclude libcuda* \
+              --exclude libcudnn* \
+              --exclude libcufft* \
+              --exclude libnccl* \
+              --exclude libnvrtc*
+          fi
+        else
+          if [ -f dist/mlx_cpu*.whl ]; then
+            mv dist/mlx_cpu*.whl wheelhouse/
+          fi
+          if [ -f dist/mlx_cuda*.whl ]; then
+            mv dist/mlx_cuda*.whl wheelhouse/
+          fi
+          if [ -f dist/mlx_metal*.whl ]; then
+            mv dist/mlx_metal*.whl wheelhouse/
+          fi
+        fi
+        echo "::endgroup::"

@@ -69,11 +69,7 @@ TEST_CASE("test default stream in threads") {
 }
 
 TEST_CASE("test access stream in other thread") {
-  if (!gpu::is_available()) {
-    return;
-  }
-
-  auto main_thread_stream = new_stream(Device::gpu);
+  auto main_thread_stream = new_stream(default_device());
   eval(arange(10, main_thread_stream));
 
   bool error_caught = false;
@@ -102,6 +98,20 @@ TEST_CASE("test new stream in threads") {
   for (auto& t : threads) {
     t.join();
   }
+}
+
+TEST_CASE("test thread unsafe stream") {
+  auto s = new_thread_unsafe_stream(default_device());
+  int expected = sum(arange(10, s)).item<int>();
+
+  int actual = 0;
+  std::thread t([&] {
+    actual = sum(arange(10, s)).item<int>();
+    clear_streams();
+  });
+  t.join();
+
+  CHECK_EQ(expected, actual);
 }
 
 TEST_CASE("test thread local stream") {

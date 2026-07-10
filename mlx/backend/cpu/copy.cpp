@@ -70,7 +70,6 @@ void copy_general_general(
       dynamic_i_offset ? dynamic_i_offset->data<int64_t>() : nullptr;
   auto o_offset_ptr =
       dynamic_o_offset ? dynamic_o_offset->data<int64_t>() : nullptr;
-  auto size = src.size();
   if (data_shape.empty()) {
     auto val = static_cast<DstT>(*src_ptr);
     *dst_ptr = val;
@@ -107,6 +106,8 @@ void copy_general_general(
     dst_ptr += o_offset_ptr[0];
   }
 
+  auto size = std::accumulate(
+      shape.begin(), shape.end(), int64_t{1}, std::multiplies<int64_t>());
   ContiguousIterator in(shape, strides[0], ndim - 3);
   ContiguousIterator out(shape, strides[1], ndim - 3);
   auto stride = std::accumulate(

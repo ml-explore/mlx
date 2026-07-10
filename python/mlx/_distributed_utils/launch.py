@@ -49,7 +49,7 @@ class RemoteProcess(CommandProcess):
         is_local = host == "127.0.0.1"
         cmd = RemoteProcess.make_launch_script(rank, cwd, files, env, command, is_local)
         if not is_local:
-            cmd = f"ssh -tt -o LogLevel=QUIET {host} {shlex.quote(cmd)}"
+            cmd = f"ssh -tt -o LogLevel=QUIET {shlex.quote(host)} {shlex.quote(cmd)}"
 
         self._host = host
         self._pidfile = None
@@ -91,7 +91,7 @@ class RemoteProcess(CommandProcess):
         # Kill the remote program if possible
         cmd = RemoteProcess.make_kill_script(self._pidfile)
         if not self._is_local:
-            cmd = f"ssh {self._host} {shlex.quote(cmd)}"
+            cmd = f"ssh {shlex.quote(self._host)} {shlex.quote(cmd)}"
         c = run(
             cmd,
             check=True,

@@ -20,71 +20,115 @@ jobs:
     name: Check Lint
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pre-commit/action@v3.0.1
 
-  linux_build_and_test:
-    name: Linux (cpu, ${{ matrix.arch }})
-    needs: check_lint
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: ['x86_64', 'aarch64']
-    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-22.04' || 'ubuntu-22.04-arm' }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-linux
-      - uses: ./.github/actions/build-linux
-      - uses: ./.github/actions/test-linux
-      - run: df -h
-
-  cuda_build_and_test:
-    name: Linux (${{ matrix.toolkit }}, ${{ matrix.arch }})
+  build_and_test:
+    name: ${{ matrix.os }} (${{ matrix.toolkit }}, ${{ matrix.arch }})
     if: github.repository == 'ml-explore/mlx'
     needs: check_lint
     strategy:
       fail-fast: false
       matrix:
+        os: ['Linux', 'Windows']
         arch: ['x86_64', 'aarch64']
-        toolkit: ['cuda-12.6', 'cuda-12.9']
-    runs-on: ${{ matrix.arch == 'x86_64' && 'gpu-t4-4-core' || 'ubuntu-22.04-arm' }}
+        toolkit: ['cpu', 'cuda-12.6', 'cuda-12.9', 'cuda-13.0']
+        exclude:
+          # CUDA does not support Windows on arm.
+          - os: 'Windows'
+            arch: 'aarch64'
+            toolkit: 'cuda-12.6'
+          - os: 'Windows'
+            arch: 'aarch64'
+            toolkit: 'cuda-12.9'
+          - os: 'Windows'
+            arch: 'aarch64'
+            toolkit: 'cuda-13.0'
+          # CUDA 12.6 does not compile with CUTLASS on Windows.
+          - os: 'Windows'
+            arch: 'x86_64'
+            toolkit: 'cuda-12.6'
+    runs-on: |-
+      ${{ case(matrix.os == 'Windows',
+               case(matrix.arch == 'aarch64', 'windows-11-arm',
+                    startsWith(matrix.toolkit, 'cuda'), 'windows-2022-large',
+                    'windows-2022'),
+               case(matrix.arch == 'x86_64' && startsWith(matrix.toolkit, 'cuda'), 'gpu-t4-4-core',
+                    matrix.arch == 'aarch64', 'ubuntu-22.04-arm',
+                    'ubuntu-22.04'))
+      }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-linux
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        id: setup
         with:
           toolkit: ${{ matrix.toolkit }}
-      - uses: ./.github/actions/build-linux
+      - uses: ./.github/actions/build
         with:
-          toolkit: ${{ matrix.toolkit }}
+          cmake-args: ${{ steps.setup.outputs.cmake-args }}
+          # For MSVC, Ninja/Release is the only config supported by ccache.
+          debug: ${{ matrix.os != 'Windows' }}
       - uses: ./.github/actions/test-linux
-        if: matrix.arch == 'x86_64'
-        with:
-          has-gpu: true
-
-  mac_build_and_test:
-    name: macOS (${{ matrix.macos-target }})
-    if: github.repository == 'ml-explore/mlx'
-    strategy:
-      matrix:
-        macos-target: ["14.0", "15.0", "26.0"]
-    runs-on: [self-hosted, macos]
-    env:
-      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
-    needs: check_lint
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-macos
-      - uses: ./.github/actions/build-macos
-
-  windows_build_and_test:
-    name: Windows (cpu, x86_64)
-    needs: check_lint
-    runs-on: windows-2025
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-windows
-      - uses: ./.github/actions/build-windows
+        if: matrix.os == 'Linux' && (matrix.toolkit == 'cpu' || matrix.arch == 'x86_64')
       - uses: ./.github/actions/test-windows
+        if: matrix.os == 'Windows' && matrix.toolkit == 'cpu'
+
+  mac_build:
+    name: macOS (${{ matrix.macos-target }}, ${{ matrix.toolkit }})
+    if: github.repository == 'ml-explore/mlx'
+    strategy:
+      matrix:
+        macos-target: ['14.0', '15.0', '26.2']
+        toolkit: ['cpu', 'metal', 'jit']
+    runs-on: 'macos-26'
+    needs: check_lint
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        id: setup
+        with:
+          toolkit: ${{ matrix.toolkit }}
+          ccache-key: 'test-${{ matrix.macos-target }}'
+          # Use the compile cache of metal build for all builds.
+          ccache-save: ${{ matrix.toolkit == 'metal' }}
+          ccache-toolkit: 'metal'
+      - uses: ./.github/actions/build-macos
+        with:
+          cmake-args: ${{ steps.setup.outputs.cmake-args }}
+          macos-target: ${{ matrix.macos-target }}
+      - uses: ./.github/actions/test-macos
+        if: matrix.toolkit == 'cpu'
+        with:
+          toolkit: 'cpu'
+      - uses: actions/upload-artifact@v7
+        if: matrix.toolkit == 'metal'
+        with:
+          name: mlx-${{ matrix.toolkit }}-macos${{ matrix.macos-target }}
+          path: |
+            dist/mlx-*.whl
+            build/mlx/backend/metal/kernels/mlx.metallib
+            build/tests/tests
+          if-no-files-found: error
+
+  mac_test:
+    name: Test macOS
+    if: github.repository == 'ml-explore/mlx'
+    runs-on: [self-hosted, macos]
+    needs: mac_build
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          toolkit: 'metal'
+          use-ccache: false
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifact
+          pattern: mlx-metal-*
+      - run: ls -lhR artifact
+      - uses: ./.github/actions/test-macos
+        with:
+          toolkit: 'metal'
 
   build_documentation:
     name: Build Documentation
@@ -92,7 +136,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: check_lint
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/build-docs
 
   linux_sanitizer_build_and_test:
@@ -107,7 +151,7 @@ jobs:
     runs-on: ubuntu-22.04-arm
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Dependencies
         run: |
@@ -145,7 +189,7 @@ jobs:
       image: fedora:42
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: CPP Build Test - No Release
         run: |

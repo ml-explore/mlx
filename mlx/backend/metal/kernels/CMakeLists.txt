@@ -48,7 +48,6 @@ endfunction(build_kernel)
 
 build_kernel(arg_reduce)
 build_kernel(conv steel/conv/params.h)
-build_kernel(gemv steel/utils.h)
 build_kernel(layer_norm)
 build_kernel(random)
 build_kernel(rms_norm)
@@ -152,11 +151,13 @@ if(NOT MLX_METAL_JIT)
   build_kernel(steel/gemm/kernels/steel_gemm_masked ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_splitk ${STEEL_HEADERS})
   build_kernel(steel/gemm/kernels/steel_gemm_segmented ${STEEL_HEADERS})
+  build_kernel(gemv steel/utils.h)
   build_kernel(gemv_masked steel/utils.h)
   build_kernel(steel/attn/kernels/steel_attention ${STEEL_ATTN_HEADERS})
 
-  if((MLX_METAL_VERSION GREATER_EQUAL 400) AND (MACOS_SDK_VERSION GREATER_EQUAL
-                                                26.2))
+  if(MLX_METAL_VERSION GREATER_EQUAL 400
+     AND MACOS_SDK_VERSION VERSION_GREATER_EQUAL 26.2
+     AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_GREATER_EQUAL 26.2)
 
     build_kernel(steel/gemm/kernels/steel_gemm_fused_nax ${STEEL_NAX_HEADERS})
     build_kernel(steel/gemm/kernels/steel_gemm_gather_nax ${STEEL_NAX_HEADERS})
@@ -172,6 +173,11 @@ if(NOT MLX_METAL_JIT)
                  ${STEEL_NAX_ATTN_HEADERS})
 
   else()
+    message(
+      WARNING "NAX kernels require Metal 4, macOS SDK >= 26.2, and "
+              "MACOSX_DEPLOYMENT_TARGET >= 26.2 (SDK ${MACOS_SDK_VERSION}, "
+              "CMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}). "
+              "Building without NAX kernels.")
     target_compile_definitions(mlx PRIVATE MLX_METAL_NO_NAX)
   endif()
 

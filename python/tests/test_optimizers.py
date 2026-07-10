@@ -170,6 +170,16 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             )
         )
 
+    def test_epsilon_validation(self):
+        # RMSprop/Adagrad/AdaDelta accumulators start at zero, so eps == 0 lets a
+        # zero gradient compute 0 / 0 (or sqrt(0) / sqrt(0)), producing NaN
+        # parameters. The guard must reject eps <= 0, and the message says ">0".
+        for optimizer in (opt.RMSprop, opt.Adagrad, opt.AdaDelta):
+            with self.assertRaisesRegex(ValueError, ">0"):
+                optimizer(learning_rate=1e-2, eps=-1.0)
+            with self.assertRaisesRegex(ValueError, ">0"):
+                optimizer(learning_rate=1e-2, eps=0.0)
+
     def test_adam(self):
         params = {
             "first": [mx.zeros((10,)), mx.zeros((1,))],
@@ -285,6 +295,27 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             self.assertEqual(xp["x"].dtype, x.dtype)
             self.assertEqual(xp["x"].shape, x.shape)
         self.assertEqual(optimizer.state["step"], 2)
+
+        # Parameters with more than 2 dimensions also use the factored update
+        x = mx.zeros((2, 3, 4))
+        params = {"x": x}
+        grad = {"x": mx.ones_like(x)}
+        optimizer = opt.Adafactor()
+        for _ in range(2):
+            xp = optimizer.apply_gradients(grad, params)
+            self.assertEqual(xp["x"].shape, x.shape)
+            self.assertTrue(mx.isfinite(xp["x"]).all())
+            params = xp
+
+        # The factored estimate is a per-batch separable outer product
+        row = mx.array([[1.0, 4.0, 9.0], [16.0, 25.0, 36.0]])
+        col = mx.array([[1.0, 4.0, 9.0, 16.0], [25.0, 36.0, 49.0, 64.0]])
+        got = np.array(opt.Adafactor()._approximate_exp_moving_avg(row, col))
+        row_np, col_np = np.array(row), np.array(col)
+        r = 1.0 / np.sqrt(row_np / row_np.mean(axis=-1, keepdims=True))
+        c = 1.0 / np.sqrt(col_np)
+        expected = r[..., :, None] * c[..., None, :]
+        self.assertTrue(np.allclose(got, expected))
 
     def test_muon(self):
         params = {

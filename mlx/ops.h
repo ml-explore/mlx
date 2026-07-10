@@ -47,7 +47,11 @@ MLX_API array linspace(
     StreamOrDevice s = {});
 
 /** Convert an array to the given data type. */
-MLX_API array astype(array a, Dtype dtype, StreamOrDevice s = {});
+MLX_API array
+astype(array a, Dtype dtype, std::optional<bool> copy, StreamOrDevice s = {});
+inline array astype(array a, Dtype dtype, StreamOrDevice s = {}) {
+  return astype(std::move(a), dtype, std::nullopt, s);
+}
 
 /** Create a view of an array with the given shape and strides. */
 MLX_API array as_strided(
@@ -170,6 +174,16 @@ MLX_API array expand_dims(
 
 /** Add a singleton dimension at the given axis. */
 MLX_API array expand_dims(const array& a, int axis, StreamOrDevice s = {});
+
+/** Reverse the order of the elements along the given axes. */
+MLX_API array
+flip(const array& a, const std::vector<int>& axes, StreamOrDevice s = {});
+
+/** Reverse the order of the elements along the given axis. */
+MLX_API array flip(const array& a, int axis, StreamOrDevice s = {});
+
+/** Reverse the order of the elements along all axes. */
+MLX_API array flip(const array& a, StreamOrDevice s = {});
 
 /** Slice an array. */
 MLX_API array slice(
@@ -305,6 +319,11 @@ MLX_API std::vector<array>
 split(const array& a, const Shape& indices, int axis, StreamOrDevice s = {});
 MLX_API std::vector<array>
 split(const array& a, const Shape& indices, StreamOrDevice s = {});
+
+/** Split an array into a sequence of arrays along an axis, removing it. */
+MLX_API std::vector<array>
+unstack(const array& a, int axis, StreamOrDevice s = {});
+MLX_API std::vector<array> unstack(const array& a, StreamOrDevice s = {});
 
 /** A vector of coordinate arrays from coordinate vectors. */
 MLX_API std::vector<array> meshgrid(
@@ -603,6 +622,20 @@ sum(const array& a,
 MLX_API array
 sum(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {});
 
+/** Count the number of non-zero elements in an array. */
+MLX_API array
+count_nonzero(const array& a, bool keepdims = false, StreamOrDevice s = {});
+MLX_API array count_nonzero(
+    const array& a,
+    int axis,
+    bool keepdims = false,
+    StreamOrDevice s = {});
+MLX_API array count_nonzero(
+    const array& a,
+    const std::vector<int>& axes,
+    bool keepdims = false,
+    StreamOrDevice s = {});
+
 /** Computes the mean of the elements of an array. */
 MLX_API array mean(const array& a, bool keepdims, StreamOrDevice s = {});
 inline array mean(const array& a, StreamOrDevice s = {}) {
@@ -864,6 +897,9 @@ MLX_API array logsumexp(
 /** Absolute value of elements in an array. */
 MLX_API array abs(const array& a, StreamOrDevice s = {});
 
+/** Unary plus — return a copy of the array unchanged. */
+MLX_API array positive(const array& a, StreamOrDevice s = {});
+
 /** Negate an array. */
 MLX_API array negative(const array& a, StreamOrDevice s = {});
 MLX_API array operator-(const array& a);
@@ -882,6 +918,10 @@ MLX_API array operator&&(const array& a, const array& b);
 /** Logical or of two arrays */
 MLX_API array logical_or(const array& a, const array& b, StreamOrDevice s = {});
 MLX_API array operator||(const array& a, const array& b);
+
+/** Logical exclusive or of two arrays */
+MLX_API array
+logical_xor(const array& a, const array& b, StreamOrDevice s = {});
 
 /** The reciprocal (1/x) of the elements in an array. */
 MLX_API array reciprocal(const array& a, StreamOrDevice s = {});
@@ -959,6 +999,9 @@ MLX_API array floor(const array& a, StreamOrDevice s = {});
 
 /** Ceil the element of an array. **/
 MLX_API array ceil(const array& a, StreamOrDevice s = {});
+
+/** Truncate the elements of an array towards zero. **/
+MLX_API array trunc(const array& a, StreamOrDevice s = {});
 
 /** Square the elements of an array. */
 MLX_API array square(const array& a, StreamOrDevice s = {});
@@ -1314,7 +1357,12 @@ MLX_API array cumsum(
     const array& a,
     bool reverse = false,
     bool inclusive = true,
+    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
+inline array
+cumsum(const array& a, bool reverse, bool inclusive, StreamOrDevice s) {
+  return cumsum(a, reverse, inclusive, std::nullopt, s);
+}
 
 /** Cumulative sum of an array along the given axis. */
 MLX_API array cumsum(
@@ -1322,14 +1370,28 @@ MLX_API array cumsum(
     int axis,
     bool reverse = false,
     bool inclusive = true,
+    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
+inline array cumsum(
+    const array& a,
+    int axis,
+    bool reverse,
+    bool inclusive,
+    StreamOrDevice s) {
+  return cumsum(a, axis, reverse, inclusive, std::nullopt, s);
+}
 
 /** Cumulative product of an array. */
 MLX_API array cumprod(
     const array& a,
     bool reverse = false,
     bool inclusive = true,
+    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
+inline array
+cumprod(const array& a, bool reverse, bool inclusive, StreamOrDevice s) {
+  return cumprod(a, reverse, inclusive, std::nullopt, s);
+}
 
 /** Cumulative product of an array along the given axis. */
 MLX_API array cumprod(
@@ -1337,7 +1399,16 @@ MLX_API array cumprod(
     int axis,
     bool reverse = false,
     bool inclusive = true,
+    std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
+inline array cumprod(
+    const array& a,
+    int axis,
+    bool reverse,
+    bool inclusive,
+    StreamOrDevice s) {
+  return cumprod(a, axis, reverse, inclusive, std::nullopt, s);
+}
 
 /** Cumulative max of an array. */
 MLX_API array cummax(
@@ -1368,6 +1439,10 @@ MLX_API array cummin(
     bool reverse = false,
     bool inclusive = true,
     StreamOrDevice s = {});
+
+/** The n-th discrete difference along the given axis. */
+MLX_API array
+diff(const array& a, int n = 1, int axis = -1, StreamOrDevice s = {});
 
 /** General convolution with a filter */
 MLX_API array conv_general(
@@ -1554,6 +1629,10 @@ MLX_API array outer(const array& a, const array& b, StreamOrDevice s = {});
 
 /** Compute the inner product of two vectors. */
 MLX_API array inner(const array& a, const array& b, StreamOrDevice s = {});
+
+/** Compute a vector dot product along an axis. */
+MLX_API array
+vecdot(const array& a, const array& b, int axis = -1, StreamOrDevice s = {});
 
 /** Compute D = beta * C + alpha * (A @ B) */
 MLX_API array addmm(
