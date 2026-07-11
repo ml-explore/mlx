@@ -174,8 +174,11 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   int64_t total = static_cast<int64_t>(grid_dims_x) * grid_dims_y;
   
   int block_size = 256;
-  int num_blocks = (total + block_size - 1) / block_size;
-  num_blocks = std::min(num_blocks, 65535);
+  // HIP gridDim.x supports up to 2^31-1 blocks. The old std::min(..., 65535)
+  // was a legacy pre-Fermi CUDA grid limit; it truncated large launches so the
+  // tail of big random tensors (e.g. embedding init) was left uninitialized.
+  int64_t nb64 = (total + block_size - 1) / block_size;
+  int num_blocks = static_cast<int>(std::min<int64_t>(nb64, 2147483647LL));
   
   if (keys.flags().row_contiguous) {
     encoder.add_kernel_node(
