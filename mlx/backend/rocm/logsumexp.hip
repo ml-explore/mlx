@@ -97,8 +97,9 @@ __global__ void logsumexp_kernel(const T* in, T* out, int axis_size) {
   
   // Second warp reduce (only first warp)
   if (warp_id == 0) {
-    prevmax = maxval;
     maxval = (lane < num_warps) ? shared_max[lane] : -1e38f;
+    prevmax = maxval;  // FIX: per-warp max BEFORE the global reduce, so each
+                       // warp's normalizer rescales by exp(warp_max - global_max)
     maxval = warp_reduce_max_lse(maxval);
     
     normalizer = (lane < num_warps) ? shared_norm[lane] : 0;
