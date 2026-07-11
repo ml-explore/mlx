@@ -199,7 +199,7 @@ def glorot_uniform(
     units according to:
 
     .. math::
-        \sigma = \gamma \sqrt{\frac{6.0}{\text{fan\_in} + \text{fan\_out}}}
+        \text{limit} = \gamma \sqrt{\frac{6.0}{\text{fan\_in} + \text{fan\_out}}}
 
     For more details see the original reference: `Understanding the difficulty
     of training deep feedforward neural networks
@@ -301,7 +301,7 @@ def he_uniform(
 
     .. math::
 
-        \sigma = \gamma \sqrt{\frac{3.0}{\text{fan}}}
+        \text{limit} = \gamma \sqrt{\frac{3.0}{\text{fan}}}
 
     where :math:`\text{fan}` is either the number of input units when the
     ``mode`` is ``"fan_in"`` or output units when the ``mode`` is
