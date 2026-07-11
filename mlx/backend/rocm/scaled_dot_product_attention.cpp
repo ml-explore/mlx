@@ -160,7 +160,11 @@ void ScaledDotProductAttention::eval_gpu(
 #ifdef MLX_HAS_ROCM_WMMA
   // Gate WMMA on the LDS budget of the device actually running the op: the
   // kernel's tiled footprint must fit this device's shared-memory-per-block.
-  bool wmma_supported =
+  // Escape hatch for A/B profiling: MLX_SDPA_NO_WMMA=1 forces the scalar flash
+  // / vector path even where the matrix-core kernel is available.
+  static const bool wmma_disabled =
+      std::getenv("MLX_SDPA_NO_WMMA") != nullptr;
+  bool wmma_supported = !wmma_disabled &&
       supports_sdpa_flash_wmma(q, k, v, has_arr_mask, output_logsumexp_) &&
       !has_sinks_ && rocm::device(s.device).has_native_wmma() &&
       sdpa_flash_wmma_smem(q.shape(-1)) <=

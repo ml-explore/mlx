@@ -32,7 +32,7 @@ struct FAWmmaParams {
 };
 
 // Helper: collaborative load from global to shared memory
-template <typename T, int STRIDE, int NTHREADS>
+template <typename T, int STRIDE>
 __device__ void load_tile(
     T* __restrict__ dst,
     const T* __restrict__ src_base,
@@ -40,11 +40,12 @@ __device__ void load_tile(
     int rows,
     int cols,
     int valid_rows,
-    int tid) {
+    int tid,
+    int nthreads) {
   const int total = rows * cols;
-  const int per_t = (total + NTHREADS - 1) / NTHREADS;
+  const int per_t = (total + nthreads - 1) / nthreads;
   for (int i = 0; i < per_t; i++) {
-    int idx = i * NTHREADS + tid;
+    int idx = i * nthreads + tid;
     if (idx < total) {
       int r = idx / cols;
       int c = idx % cols;
@@ -56,9 +57,9 @@ __device__ void load_tile(
   const int pad = STRIDE - cols;
   if (pad > 0) {
     const int total_pad = rows * pad;
-    const int per_p = (total_pad + NTHREADS - 1) / NTHREADS;
+    const int per_p = (total_pad + nthreads - 1) / nthreads;
     for (int i = 0; i < per_p; i++) {
-      int idx = i * NTHREADS + tid;
+      int idx = i * nthreads + tid;
       if (idx < total_pad) {
         int r = idx / pad;
         dst[r * STRIDE + cols + (idx % pad)] = static_cast<T>(0.0f);
@@ -73,7 +74,7 @@ template <
     int D,
     int BLOCK_M = 64,
     int BLOCK_N = 64>
-__global__ void __launch_bounds__(128)
+__global__ void __launch_bounds__(256)
     kernel_sdpa_flash_wmma(
         const T* __restrict__ Q,
         const T* __restrict__ K,
@@ -95,15 +96,26 @@ __global__ void __launch_bounds__(128)
   constexpr int N_TILES = BLOCK_N / WT;
   constexpr int DW_TILES = DW / WT;
   constexpr int D_TILES = (D + WT - 1) / WT;
-  constexpr int NTHREADS = 128;
+  // Wavefront-size-aware threading. A rocWMMA 16x16x16 fragment op is executed
+  // collectively by one full hardware wavefront: 64 lanes on CDNA (gfx9xx,
+  // MFMA) and 32 lanes on RDNA (gfx11xx, WMMA). The block launches one full
+  // wavefront per 16-row M-tile (M_TILES waves), so NTHREADS = M_TILES*WAVE
+  // (256 on CDNA, 128 on RDNA). Keeping one wave == one 16-row tile preserves
+  // the entire tile geometry and shared-memory layout across both ISAs.
+#ifdef __AMDGCN_WAVEFRONT_SIZE__
+  constexpr int WAVE = __AMDGCN_WAVEFRONT_SIZE__;
+#else
+  constexpr int WAVE = 64;
+#endif
+  const int NTHREADS = blockDim.x; // = M_TILES * WAVE
 
   const int bid_b = blockIdx.z;
   const int bid_h = blockIdx.x;
   const int bid_kv_h = bid_h / params.gqa_factor;
   const int q_start = blockIdx.y * BLOCK_M;
   const int tid = threadIdx.x;
-  const int wave = tid / 32;
-  const int lane = tid % 32;
+  const int wave = tid / WAVE;
+  const int lane = tid % WAVE;
 
   if (q_start >= params.qL) return;
 
@@ -170,10 +182,12 @@ __global__ void __launch_bounds__(128)
       for (int dc = 0; dc < N_DCHUNKS; dc++) {
         const int d0 = dc * DW;
         const int dwid = min(DW, D - d0);
-        load_tile<T, Q_PAD, NTHREADS>(
-            Q_sh, Q_base + d0, params.Q_strides[2], BLOCK_M, dwid, q_valid, tid);
-        load_tile<T, KV_PAD, NTHREADS>(
-            KV_sh, K_base + d0, params.K_strides[2], BLOCK_N, dwid, k_valid, tid);
+        load_tile<T, Q_PAD>(
+            Q_sh, Q_base + d0, params.Q_strides[2], BLOCK_M, dwid, q_valid, tid,
+            NTHREADS);
+        load_tile<T, KV_PAD>(
+            KV_sh, K_base + d0, params.K_strides[2], BLOCK_N, dwid, k_valid, tid,
+            NTHREADS);
         __syncthreads();
 
         for (int d = 0; d < DW_TILES; d++) {
@@ -315,8 +329,9 @@ __global__ void __launch_bounds__(128)
       for (int dc = 0; dc < N_DCHUNKS; dc++) {
         const int d0 = dc * DW;
         const int dwid = min(DW, D - d0);
-        load_tile<T, KV_PAD, NTHREADS>(
-            V_sh, V_base + d0, params.V_strides[2], BLOCK_N, dwid, k_valid, tid);
+        load_tile<T, KV_PAD>(
+            V_sh, V_base + d0, params.V_strides[2], BLOCK_N, dwid, k_valid, tid,
+            NTHREADS);
         __syncthreads();
 
         for (int dl = 0; dl < DW_TILES; dl++) {
@@ -422,8 +437,12 @@ void sdpa_flash_wmma(
   }
 
   constexpr int BM = 64, BN = 64;
+  constexpr int WT = 16;
   dim3 grid(H, (qL + BM - 1) / BM, B);
-  dim3 block(128);
+  // One full hardware wavefront per 16-row M-tile: 64 lanes on CDNA (MFMA),
+  // 32 on RDNA (WMMA). rocWMMA maps the 16x16x16 fragment op onto the whole
+  // wavefront, so the launched block width must track the device warp size.
+  dim3 block((BM / WT) * d.warp_size());
 
   // Shared memory: m/l + Q + KV + S, with Q/KV sized to one DW-wide slice.
   int smem = sdpa_flash_wmma_smem(D);

@@ -26,11 +26,16 @@ endif()
 message(
   STATUS "ROCm backend using HIP architectures: ${CMAKE_HIP_ARCHITECTURES}")
 
-# Check if any target architecture supports WMMA (RDNA 3 / gfx11xx and RDNA 4 /
-# gfx12xx)
+# Check if any target architecture provides rocWMMA matrix-core tiles: RDNA 3 /
+# gfx11xx and RDNA 4 / gfx12xx expose native WMMA, while CDNA (gfx908 MI100,
+# gfx90a MI200, gfx942 MI300) map the same rocWMMA fragment API onto MFMA. The
+# flash_attention_wmma kernel is wavefront-size-aware so it runs on both.
 set(MLX_HAS_ROCM_WMMA OFF)
 foreach(arch ${CMAKE_HIP_ARCHITECTURES})
-  if(arch MATCHES "^gfx1[12]")
+  if(arch MATCHES "^gfx1[12]"
+     OR arch STREQUAL "gfx908"
+     OR arch STREQUAL "gfx90a"
+     OR arch STREQUAL "gfx942")
     set(MLX_HAS_ROCM_WMMA ON)
     break()
   endif()
