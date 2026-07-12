@@ -64,9 +64,11 @@ from mlx.nn.layers.convolution_transpose import (
 )
 from mlx.nn.layers.distributed import (
     AllToShardedLinear,
+    FullyShardedModule,
     QuantizedAllToShardedLinear,
     QuantizedShardedToAllLinear,
     ShardedToAllLinear,
+    fully_shard,
 )
 from mlx.nn.layers.dropout import Dropout, Dropout2d, Dropout3d
 from mlx.nn.layers.embedding import Embedding
