@@ -387,9 +387,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   S_tile.load(i_state, Dk);
 
   mlx::steel::NAXTile<InT, 1, 2> K_tile, Q_tile;
-  mlx::steel::NAXTile<InT, 1, Dk / 16> KP_tile; // panel
   mlx::steel::NAXTile<InT, 1, Dk / 16> W_tile; // panel
-  mlx::steel::NAXTile<InT, 1, Dk / 16> XP_tile; // panel
 
   mlx::steel::NAXTile<InT, 1, 1> X_tile;
 
@@ -400,7 +398,6 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   mlx::steel::NAXTile<InT, 1, 1> tmp_tile;
   mlx::steel::NAXTile<InT, 1, 1> QKt_tile;
   mlx::steel::NAXTile<InT, 1, 1> out_tile;
-  mlx::steel::NAXTile<InT, 1, 1> K1_tile, Q1_tile;
   mlx::steel::NAXTile<InT, 1, 2> KD_tile;
   mlx::steel::NAXTile<InT, 1, 1> Tinv_tile;
 
@@ -440,6 +437,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     // I can only do matmuls with a dimension 32. This one is _easy_
     // i just do two tiles for the reduction
     KKt_tile.clear();
+    // KP_tile.load(k_, Dk * Hk);
     for (int kk = 0; kk < Dk; kk += 32) { // two 16-tiles per iter
       K_tile.load(k_ + kk, Dk * Hk);
       mlx::steel::mmak<float, float, float, false, true>(
@@ -461,23 +459,12 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     SCALE_TRIEQ_NAX1(KKtK_tile, beta_fm)
     SCALE_TRIEQ_NAX(KKtV_tile, beta_fm, gamma)
 
-    // W = (I - diag(b)(KK.T))^-1 diag(b)K
-    // diag(b)K
-    KP_tile.load(k_, Dk * Hk);
-    SCALE_BETA_NAX(KP_tile, beta_fm)
-
     // (I - diag(b)(KK.T))^-1 = sum T^k
     // Tinv = (I + L_W)^{-1} = sum -L_W_k
     // T0 - T + T2 - T3 + T4 - T5 + T6 - T7 + T8
     // I - T(I - T(I - T(I - T(I - T(I - T(I - T(I - T(I))))))))
     // Update 10.7: compute the above as (1 - T)(1 + T^2)(1 + T^4)(1 + T^8)
     //    => 6 mults instead of 14
-
-    Z.clear();
-    STEEL_PRAGMA_UNROLL
-    for (short e = 0; e < decltype(P_tile)::kElemsPerFrag; e++) {
-      AT_NAX(P_tile, e) = AT_NAX(KKtK_tile, e);
-    }
 
     // S = I + x = I - KKtV
     SUB_NAX(Tinv_tile, I_tile, KKtK_tile) // Tinv = I - T  (2 terms)
@@ -490,10 +477,10 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
         false,
         mpp::tensor_ops::matmul2d_descriptor::mode::multiply>(
         P_tile.frag_at(0, 0),
-        P_tile.frag_at(0, 0),
+        KKtK_tile.frag_at(0, 0),
         Z.frag_at(0, 0),
         metal::bool_constant<false>{},
-        P_tile.frag_at(0, 0),
+        KKtK_tile.frag_at(0, 0),
         Z.frag_at(0, 0),
         metal::bool_constant<false>{});
 
@@ -511,9 +498,19 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     }
     // OUTPUT(Tinv_tile)
 
+    // W = (I - diag(b)(KK.T))^-1 diag(b)K
+    // diag(b)K
+    // SCALE_BETA_NAX(KP_tile, beta_fm)
     // W = Tinv @ (diag(beta) K)
     STEEL_PRAGMA_UNROLL
     for (short nn = 0; nn < Dk / 16; nn += 2) {
+      K_tile.load(k_ + nn * 16, Dk * Hk);
+      STEEL_PRAGMA_UNROLL
+      for (short _i = 0; _i < decltype(K_tile)::kElemsPerTile; _i++) {
+        const short _w = _i % mlx::steel::BaseNAXFrag::kElemsPerFrag;
+        AT_NAX(K_tile, _i) *= beta_fm[_w >> 2];
+      }
+
       mlx::steel::mman<
           float,
           float,
@@ -525,18 +522,11 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
           W_tile.frag_at(0, nn + 1),
           Tinv_tile.frag_at(0, 0), // A = Tinv (reused across N)
           metal::bool_constant<false>{},
-          KP_tile.frag_at(0, nn), // B = beta-scaled K
-          KP_tile.frag_at(0, nn + 1),
+          K_tile.frag_at(0, 0), // B = beta-scaled K
+          K_tile.frag_at(0, 1),
           metal::bool_constant<false>{});
     }
     SCALE_ROW_NAX(W_tile, gamma)
-
-    Z.clear();
-    STEEL_PRAGMA_UNROLL
-    for (short e = 0; e < decltype(P_tile)::kElemsPerFrag; e++) {
-      AT_NAX(P_tile, e) = AT_NAX(KKtV_tile, e);
-    }
-
     // S = I + x = I - KKtV
     // Tinv = (1 - x)(1 + x^2)(1 + x^4)(1 + x^8)
     SUB_NAX(Tinv_tile, I_tile, KKtV_tile)
@@ -550,10 +540,10 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
         false,
         mpp::tensor_ops::matmul2d_descriptor::mode::multiply>(
         P_tile.frag_at(0, 0),
-        P_tile.frag_at(0, 0),
+        KKtV_tile.frag_at(0, 0),
         Z.frag_at(0, 0),
         metal::bool_constant<false>{},
-        P_tile.frag_at(0, 0),
+        KKtV_tile.frag_at(0, 0),
         Z.frag_at(0, 0),
         metal::bool_constant<false>{});
 
