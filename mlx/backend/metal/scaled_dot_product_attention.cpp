@@ -18,30 +18,92 @@ namespace {
 void sdpa_full_self_attention_nax(
     const Stream& s,
     metal::Device& d,
-    const array& q,
-    const array& k,
-    const array& v,
+    const array& q_in,
+    const array& k_in,
+    const array& v_in,
     const float scale,
-    array& o,
+    array& o_in,
     bool do_causal_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
   using namespace mlx::steel;
 
+  int bd = q_in.shape(-1);
   int wm = 4;
-  int wn = 1;
+  // bd=256 uses the head-dim-split kernel (wn=2): halving the per-simdgroup
+  // accumulator working set is what recovers tensor-unit throughput at this
+  // head width.
+  int wn = bd == 256 ? 2 : 1;
 
-  int bd = q.shape(-1);
   int bq = 64;
+  // bk=32 everywhere: with the head-dim split at bd=256 this puts the
+  // per-simdgroup accumulator set (S 2 + O 8 fragments) at exact bd=128
+  // parity, which is what restores tensor-unit throughput (42.8 vs
+  // 47.7 TF at 8192^2).
   int bk = 32;
 
-  int B = q.shape(0);
-  int H = q.shape(1);
-  int D = q.shape(3);
-  int gqa_factor = q.shape(1) / k.shape(1);
+  int B = q_in.shape(0);
+  int H = q_in.shape(1);
+  int D = q_in.shape(3);
+  int gqa_factor = q_in.shape(1) / k_in.shape(1);
 
-  int qL = q.shape(2);
-  int kL = k.shape(2);
+  int qL = q_in.shape(2);
+  int kL = k_in.shape(2);
+
+  // The causal offset must keep describing the true diagonal even when the
+  // inputs get padded below.
+  const int qL_off = kL - qL;
+
+  // For head_dim 256 the unaligned pipelines (align_Q/align_K = false)
+  // spill registers and slow every block down ~3x, not just the ragged edge
+  // ones. Pad ragged causal inputs up to the tile sizes and take the
+  // aligned pipeline instead: with qL_off computed from the true lengths,
+  // the causal bound c <= r + qL_off never reaches a padded key column for
+  // any true query row, and the padded query rows are dropped by the copy
+  // back into o. The pads are zero-filled so the padded value rows cannot
+  // poison P @ V with NaNs (their probabilities are exactly zero).
+  std::optional<array> q_pad, k_pad, v_pad, o_pad;
+  if (bd == 256 && do_causal_ && !mask.has_value() &&
+      ((qL % bq) || (kL % bk))) {
+    auto& enc = metal::get_command_encoder(s);
+    auto pad_seq = [&](const array& src, int Lp) {
+      array dst(
+          {src.shape(0), src.shape(1), Lp, src.shape(3)},
+          src.dtype(),
+          nullptr,
+          {});
+      array zero(0, src.dtype());
+      fill_gpu(zero, dst, s);
+      array dst_slice(src.shape(), dst.dtype(), nullptr, {});
+      dst_slice.copy_shared_buffer(
+          dst, dst.strides(), dst.flags(), dst_slice.size(), 0);
+      copy_gpu_inplace(src, dst_slice, CopyType::GeneralGeneral, s);
+      enc.add_temporary(std::move(zero));
+      enc.add_temporary(std::move(dst_slice));
+      enc.add_temporary(dst);
+      return dst;
+    };
+
+    if (qL % bq) {
+      int qLp = bq * ((qL + bq - 1) / bq);
+      q_pad = pad_seq(q_in, qLp);
+      o_pad = array({B, H, qLp, D}, o_in.dtype(), nullptr, {});
+      o_pad->set_data(allocator::malloc(o_pad->nbytes()));
+      enc.add_temporary(*o_pad);
+      qL = qLp;
+    }
+    if (kL % bk) {
+      int kLp = bk * ((kL + bk - 1) / bk);
+      k_pad = pad_seq(k_in, kLp);
+      v_pad = pad_seq(v_in, kLp);
+      kL = kLp;
+    }
+  }
+
+  const array& q = q_pad ? *q_pad : q_in;
+  const array& k = k_pad ? *k_pad : k_in;
+  const array& v = v_pad ? *v_pad : v_in;
+  array& o = o_pad ? *o_pad : o_in;
 
   const bool align_Q = (qL % bq) == 0;
   const bool align_K = (kL % bk) == 0;
@@ -131,7 +193,7 @@ void sdpa_full_self_attention_nax(
 
       /* int qL_rem = */ (qL - NQ_aligned * bq),
       /* int kL_rem = */ (kL - NK_aligned * bk),
-      /* int qL_off = */ (kL - qL),
+      /* int qL_off = */ qL_off,
 
       /* int64_t Q_strides[3] = */ {q.strides(0), q.strides(1), q.strides(2)},
       /* int64_t K_strides[3] = */ {k.strides(0), k.strides(1), k.strides(2)},
@@ -161,6 +223,15 @@ void sdpa_full_self_attention_nax(
   MTL::Size group_dims = MTL::Size(32, wm, wn);
 
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+  // Drop the padded query rows.
+  if (o_pad) {
+    array o_slice(o_in.shape(), o_pad->dtype(), nullptr, {});
+    o_slice.copy_shared_buffer(
+        *o_pad, o_pad->strides(), o_pad->flags(), o_slice.size(), 0);
+    copy_gpu_inplace(o_slice, o_in, CopyType::GeneralGeneral, s);
+    compute_encoder.add_temporary(std::move(o_slice));
+  }
 }
 
 void sdpa_full_self_attention_metal(
@@ -623,8 +694,25 @@ bool ScaledDotProductAttention::use_fallback(
        (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
         query_head_dim == 256)) ||
       (query_head_dim == 192 && value_head_dim == 128);
+  // head_dim 256 is only instantiated for the NAX kernel, so it must match
+  // the exact condition under which sdpa_full_self_attention_metal routes
+  // to it. It is further gated to the shapes where the fused kernel beats
+  // the unfused graph (measured on M5 Max): large, nearly-square causal
+  // blocks. On offset rectangles (kL >> qL, i.e. chunked prefill against a
+  // long cache) the causal block-skip amortizes away and the unfused
+  // graph's GEMMs win; below ~2k queries there are too few query blocks to
+  // fill the machine.
+  const bool takes_nax_full_path = metal::is_nax_available() &&
+      (env::enable_tf32() || q.dtype() != float32);
+  // The head-dim-split kernel beats the unfused graph on every measured
+  // causal shape with qL >= 1024, rectangles included (M5 Max); below that
+  // there are too few query blocks to fill the machine against a long
+  // cache (512x8192 measures 1.08x of unfused).
+  const bool sdpa_full_supported_256 = takes_nax_full_path && do_causal &&
+      !has_arr_mask && query_sequence_length >= 1024;
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
+      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128 ||
+       (query_head_dim == 256 && sdpa_full_supported_256));
 
   const bool sdpa_full_supported_mask = !has_mask || has_arr_mask ||
       (query_sequence_length <= key_sequence_length && do_causal);
