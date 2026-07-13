@@ -21,6 +21,11 @@ using namespace mpp::tensor_ops;
     AT(TILE0, 0) = AT(TILE1, 0) - AT(TILE2, 0); \
     AT(TILE0, 1) = AT(TILE1, 1) - AT(TILE2, 1); \
   }
+#define ADD(TILE0, TILE1, TILE2)                \
+  {                                             \
+    AT(TILE0, 0) = AT(TILE1, 0) + AT(TILE2, 0); \
+    AT(TILE0, 1) = AT(TILE1, 1) + AT(TILE2, 1); \
+  }
 #define FMA(TILE0, S, TILE1, TILE2)                 \
   {                                                 \
     AT(TILE0, 0) = S * AT(TILE1, 0) + AT(TILE2, 0); \
@@ -96,14 +101,15 @@ using namespace mpp::tensor_ops;
     }                                                               \
   }
 
-// gamma is indexed by absolute column; get_coord(idx).x gives that column.
-#define SCALE2_NAX(TILE0, GAMMA)                                    \
-  {                                                                 \
-    STEEL_PRAGMA_UNROLL                                             \
-    for (short _i = 0; _i < decltype(TILE0)::kElemsPerFrag; _i++) { \
-      const short _fm = mlx::steel::BaseNAXFrag::get_coord(_i).y;   \
-      AT_NAX(TILE0, _i) *= (GAMMA)[(C) - 1] / (GAMMA)[_fm];         \
-    }                                                               \
+#define SCALE2_NAX(TILE0, GAMMA)                                         \
+  {                                                                      \
+    STEEL_PRAGMA_UNROLL                                                  \
+    for (short _i = 0; _i < decltype(TILE0)::kElemsPerTile; _i++) {      \
+      const short _fm = mlx::steel::BaseNAXFrag::get_coord(              \
+                            _i % mlx::steel::BaseNAXFrag::kElemsPerFrag) \
+                            .y;                                          \
+      AT_NAX(TILE0, _i) *= (GAMMA)[(C) - 1] / (GAMMA)[_fm];              \
+    }                                                                    \
   }
 
 #define SCALE_TRI_NAX(TILE0, GAMMA)                                            \
@@ -274,6 +280,18 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   auto hv_idx = n % Hv;
   auto hk_idx = hv_idx / (Hv / Hk);
 
+#define OUTPUT_16(T) \
+  T.store(y, 16);    \
+  return;
+
+#define OUTPUT_S(T, S) \
+  T.store(y, S);       \
+  return;
+
+// pick the 3rd argument as the macro name
+#define OUTPUT_GET(_1, _2, NAME, ...) NAME
+#define OUTPUT(...) OUTPUT_GET(__VA_ARGS__, OUTPUT_S, OUTPUT_16)(__VA_ARGS__)
+
   const ushort simd_lane_id = __metal_get_thread_index_in_simdgroup(ushort());
   const short qid = simd_lane_id >> 2;
   const short fm = ((qid & 4) | ((simd_lane_id >> 1) & 3));
@@ -319,12 +337,12 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   mlx::steel::NAXTile<InT, 1, 1> QKt_tile;
   mlx::steel::NAXTile<InT, 1, 1> out_tile;
   mlx::steel::NAXTile<InT, 1, 1> K1_tile, Q1_tile;
-  mlx::steel::NAXTile<InT, 1, 1> KD_tile;
+  mlx::steel::NAXTile<InT, 1, 2> KD_tile;
   mlx::steel::NAXTile<InT, 1, 1> Tinv_tile;
 
   mlx::steel::NAXTile<InT, 1, 1> KKtK_tile, KKtV_tile, KKt_tile;
 
-  // Annoyingly one dimension needs to be 32 so for now let's see if this works
+  mlx::steel::NAXTile<InT, 1, 1> P_tile;
 
   mlx::steel::NAXTile<InT, 1, 1> I_tile; // Declare and init eye
   STEEL_PRAGMA_UNROLL
@@ -372,10 +390,6 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
           metal::bool_constant<true>{});
     }
 
-#define OUTPUT(T) \
-  T.store(y, 16); \
-  return;
-
     // KKt_tile.store(y,16);
     // return;
 
@@ -394,8 +408,20 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     // Tinv = (I + L_W)^{-1} = sum -L_W_k
     // T0 - T + T2 - T3 + T4 - T5 + T6 - T7 + T8
     // I - T(I - T(I - T(I - T(I - T(I - T(I - T(I - T(I))))))))
-    SUB_NAX(Tinv_tile, I_tile, KKtK_tile)
-    for (int iter = 0; iter < C - 2; iter++) {
+    // Update 10.7: compute the above as (1 - T)(1 + T^2)(1 + T^4)(1 + T^8)
+    //    => 6 mults instead of 14
+
+    Z.clear();
+    STEEL_PRAGMA_UNROLL
+    for (short e = 0; e < decltype(P_tile)::kElemsPerFrag; e++) {
+      AT_NAX(P_tile, e) = AT_NAX(KKtK_tile, e);
+    }
+
+    // S = I + x = I - KKtV
+    SUB_NAX(Tinv_tile, I_tile, KKtK_tile) // Tinv = I - T  (2 terms)
+    STEEL_PRAGMA_UNROLL
+    for (int step = 1; (1 << step) < C; step++) { //
+      // P2 = P · P
       mlx::steel::mmak<
           float,
           float,
@@ -403,15 +429,23 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
           false,
           false,
           mpp::tensor_ops::matmul2d_descriptor::mode::multiply>(
-          TMP_tile.frag_at(0, 0),
-          KKtK_tile.frag_at(0, 0),
+          P_tile.frag_at(0, 0),
+          P_tile.frag_at(0, 0),
           Z.frag_at(0, 0),
           metal::bool_constant<false>{},
-          Tinv_tile.frag_at(0, 0),
+          P_tile.frag_at(0, 0),
           Z.frag_at(0, 0),
           metal::bool_constant<false>{});
-      // W = K - X
-      SUB_NAX(Tinv_tile, I_tile, TMP_tile)
+
+      // Tinv = S · P2
+      mlx::steel::mmak<float, float, float, false, false>(
+          Tinv_tile.frag_at(0, 0),
+          Tinv_tile.frag_at(0, 0),
+          Z.frag_at(0, 0),
+          metal::bool_constant<false>{},
+          P_tile.frag_at(0, 0),
+          Z.frag_at(0, 0),
+          metal::bool_constant<false>{});
     }
     // OUTPUT(Tinv_tile)
 
@@ -435,12 +469,18 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     }
     SCALE_ROW_NAX(W_tile, gamma)
 
-    V_tile.load(v_ + dv_idx, Dv * Hv);
-    SCALE_BETA_NAX(V_tile, beta_fm)
     Z.clear();
+    STEEL_PRAGMA_UNROLL
+    for (short e = 0; e < decltype(P_tile)::kElemsPerFrag; e++) {
+      AT_NAX(P_tile, e) = AT_NAX(KKtV_tile, e);
+    }
+
+    // S = I + x = I - KKtV
+    // Tinv = (1 - x)(1 + x^2)(1 + x^4)(1 + x^8)
     SUB_NAX(Tinv_tile, I_tile, KKtV_tile)
-    U_tile = V_tile;
-    for (int iter = 0; iter < C - 2; iter++) {
+    STEEL_PRAGMA_UNROLL
+    for (int step = 1; (1 << step) < C; step++) {
+      // P^2
       mlx::steel::mmak<
           float,
           float,
@@ -448,17 +488,26 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
           false,
           false,
           mpp::tensor_ops::matmul2d_descriptor::mode::multiply>(
-          TMP_tile.frag_at(0, 0),
-          KKtV_tile.frag_at(0, 0),
+          P_tile.frag_at(0, 0),
+          P_tile.frag_at(0, 0),
           Z.frag_at(0, 0),
           metal::bool_constant<false>{},
-          Tinv_tile.frag_at(0, 0),
+          P_tile.frag_at(0, 0),
           Z.frag_at(0, 0),
           metal::bool_constant<false>{});
 
-      SUB_NAX(Tinv_tile, I_tile, TMP_tile)
+      // Tinv = S · P2
+      mlx::steel::mmak<float, float, float, false, false>(
+          Tinv_tile.frag_at(0, 0),
+          Tinv_tile.frag_at(0, 0),
+          Z.frag_at(0, 0),
+          metal::bool_constant<false>{},
+          P_tile.frag_at(0, 0),
+          Z.frag_at(0, 0),
+          metal::bool_constant<false>{});
     }
-
+    V_tile.load(v_ + dv_idx, Dv * Hv);
+    SCALE_BETA_NAX(V_tile, beta_fm)
     // U = Tinv @ diag(b)V
     mlx::steel::mmak<
         float,
@@ -491,14 +540,6 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     // OUTPUT(WS_tile)
 
     SUB_NAX(delta_tile, U_tile, WS_tile)
-    // STEEL_PRAGMA_UNROLL
-    // for (short _i = 0; _i < decltype(delta_tile)::kElemsPerFrag; _i++) {
-    //   const short2 _c = mlx::steel::BaseNAXFrag::get_coord(_i);
-    //   const short _fn = _c.x;
-    //   const short _fm = _c.y;
-    //   AT_NAX(delta_tile, _i) = _fn >= 8 ? 0 : AT_NAX(delta_tile, _i);
-    // }
-    // OUTPUT(delta_tile)
 
     tmp_tile.clear();
     QKt_tile.clear();
@@ -546,13 +587,12 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     out_tile.store(y + dv_idx, Hv * Dv);
     // OUTPUT(out_tile);
 
-    for (int kk = 0; kk < Dk; kk += 16) {
-      K1_tile.load(k_ + kk, Hk * Dk);
-      SCALE2_NAX(K1_tile, gamma)
+    for (int nn = 0; nn < Dk / 16; nn += 2) {
+      K_tile.load(k_ + nn * 16, Hk * Dk);
+      SCALE2_NAX(K_tile, gamma)
 
-      // KD = delta @ K.T so that I can sum to S directly
-      KD_tile.clear();
-      mlx::steel::mmak<
+      // KD = delta.T @ K so that I can sum to S directly
+      mlx::steel::mman<
           float,
           InT,
           float,
@@ -560,18 +600,23 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
           false,
           mpp::tensor_ops::matmul2d_descriptor::mode::multiply>(
           KD_tile.frag_at(0, 0),
+          KD_tile.frag_at(0, 1),
           delta_tile.frag_at(0, 0),
-          Z.frag_at(0, 0),
           metal::bool_constant<true>{},
-          K1_tile.frag_at(0, 0),
-          Z.frag_at(0, 0),
+          K_tile.frag_at(0, 0),
+          K_tile.frag_at(0, 1),
           metal::bool_constant<false>{});
 
       FMA_NAX(
-          S_tile.frag_at(0, kk / 16),
+          S_tile.frag_at(0, nn),
           gamma[C - 1],
-          S_tile.frag_at(0, kk / 16),
+          S_tile.frag_at(0, nn),
           KD_tile.frag_at(0, 0))
+      FMA_NAX(
+          S_tile.frag_at(0, nn + 1),
+          gamma[C - 1],
+          S_tile.frag_at(0, nn + 1),
+          KD_tile.frag_at(0, 1))
     }
     // OUTPUT(out_tile);
 
@@ -691,12 +736,15 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     // Tinv = (I + L_W)^{-1} = sum -L_W_k
     // T0 - T + T2 - T3 + T4 - T5 + T6 - T7 + T8
     // I - T(I - T(I - T(I - T(I - T(I - T(I - T(I - T(I))))))))
-    simdgroup_float8x8 Tinv;
+    simdgroup_float8x8 Tinv, P; //
+    // S = I + x = I - KKtK
+    AT(P, 0) = AT(KKtK_tile, 0);
+    AT(P, 1) = AT(KKtK_tile, 1);
     SUB(Tinv, I_tile, KKtK_tile)
-    for (int iter = 0; iter < C - 2; iter++) {
-      simdgroup_float8x8 TMP;
-      simdgroup_multiply(TMP, KKtK_tile, Tinv); // L @ Tinv
-      SUB(Tinv, I_tile, TMP) // Tinv = I - L @ Tinv
+
+    for (int step = 1; (1 << step) < C; step++) {
+      simdgroup_multiply(P, P, P);
+      simdgroup_multiply_accumulate(Tinv, Tinv, P, Tinv);
     }
     // OUTPUT(Tinv)
 
@@ -713,13 +761,18 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     }
     // OUTPUT(WS_tile)
 
+    AT(P, 0) = AT(KKtV_tile, 0);
+    AT(P, 1) = AT(KKtV_tile, 1);
+    SUB(Tinv, I_tile, KKtV_tile)
+    for (int step = 1; (1 << step) < C; step++) {
+      simdgroup_multiply(P, P, P);
+      simdgroup_multiply_accumulate(Tinv, Tinv, P, Tinv);
+    }
+
+    // U = Tinv @ (beta * V)
     simdgroup_load(V_tile, v_ + dv_idx, Dv * Hv);
     SCALE(V_tile, beta_fm)
-    U_tile = V_tile;
-    for (int iter = 0; iter < C - 1; iter++) {
-      simdgroup_multiply(X_tile, KKtV_tile, U_tile);
-      SUB(U_tile, V_tile, X_tile)
-    }
+    simdgroup_multiply(U_tile, Tinv, V_tile);
 
     // delta = U - WS
     SUB(delta_tile, U_tile, WS_tile)
