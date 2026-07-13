@@ -117,6 +117,80 @@ def mlx_primitives_sdpa(q, k, v, scale, mask=None):
 
 
 class TestFastSDPA(mlx_tests.MLXTestCase):
+    def test_sdpa_full_head_dim_256_tf32_disabled(self):
+        # float32 with tf32 disabled must NOT be routed to the fused path:
+        # only the NAX kernel is instantiated for head_dim 256, so a
+        # predicate mismatch shows up as a kernel-load failure. TF32 is a
+        # process-wide setting, so exercise it in a subprocess.
+        import os
+        import subprocess
+        import sys
+
+        # qL >= 2048 so that, predicate mismatch aside, the shape would
+        # otherwise be routed to the fused path.
+        script = (
+            "import mlx.core as mx\n"
+            "q = mx.random.normal(shape=(1, 4, 2048, 256))\n"
+            "k = mx.random.normal(shape=(1, 2, 2048, 256))\n"
+            "v = mx.random.normal(shape=(1, 2, 2048, 256))\n"
+            "out = mx.fast.scaled_dot_product_attention("
+            "q, k, v, scale=0.0625, mask='causal')\n"
+            "mx.eval(out)\n"
+            "print('ok')\n"
+        )
+        env = dict(os.environ, MLX_ENABLE_TF32="0")
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("ok", result.stdout)
+
+    def test_sdpa_full_head_dim_256(self):
+        # On NAX devices, large nearly-square causal blocks take the fused
+        # path, with ragged lengths padded up to the tile size inside the
+        # dispatch; everything else takes the unfused fallback. All of it
+        # must be correct.
+        D = 256
+        Nq, Nkv = 8, 2
+        scale = D**-0.5
+        mx.random.seed(0)
+        cases = [
+            # (qL, kL, mask): unfused fallback shapes
+            (17, 17, None),
+            (17, 17, "causal"),
+            (128, 128, "causal"),
+            (512, 512, "causal"),
+            # fused on NAX: aligned square, ragged square (padded), aligned
+            # rectangle at the routing boundary, ragged rectangle (padded)
+            (2048, 2048, "causal"),
+            (2049, 2049, "causal"),
+            (2048, 2560, "causal"),
+            (2049, 2560, "causal"),
+        ]
+        for dtype in (mx.float32, mx.bfloat16):
+            for qL, kL, mask in cases:
+                with self.subTest(dtype=dtype, qL=qL, kL=kL, mask=mask):
+                    q = (5e-1 * mx.random.normal(shape=(1, Nq, qL, D))).astype(dtype)
+                    k = (5e-1 * mx.random.normal(shape=(1, Nkv, kL, D))).astype(dtype)
+                    v = (5e-1 * mx.random.normal(shape=(1, Nkv, kL, D))).astype(dtype)
+                    k_rep = mx.repeat(k, Nq // Nkv, axis=1)
+                    v_rep = mx.repeat(v, Nq // Nkv, axis=1)
+                    ref = mlx_primitives_sdpa(q, k_rep, v_rep, scale, mask=mask)
+                    out = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=mask
+                    )
+                    self.assertEqual(out.shape, ref.shape)
+                    if dtype == mx.float32:
+                        # The fused shapes run through tf32 tensor ops when
+                        # MLX_ENABLE_TF32 is on (the default).
+                        tol = 1e-3 if qL >= 2048 else 1e-4
+                    else:
+                        tol = 5e-3
+                    self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
     def test_sdpa_vector_kv_transposed_head_seq(self):
         D = 64
         Nq = 4
