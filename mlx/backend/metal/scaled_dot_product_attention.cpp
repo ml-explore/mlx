@@ -702,8 +702,8 @@ bool ScaledDotProductAttention::use_fallback(
   // long cache) the causal block-skip amortizes away and the unfused
   // graph's GEMMs win; below ~2k queries there are too few query blocks to
   // fill the machine.
-  const bool takes_nax_full_path = metal::is_nax_available() &&
-      (env::enable_tf32() || q.dtype() != float32);
+  const bool takes_nax_full_path =
+      metal::is_nax_available() && (env::enable_tf32() || q.dtype() != float32);
   // The head-dim-split kernel beats the unfused graph on every measured
   // causal shape with qL >= 1024, rectangles included (M5 Max); below that
   // there are too few query blocks to fill the machine against a long
