@@ -30,6 +30,23 @@ ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   return result;
 }
 
+inline int max_unfold_rows(metal::Device& d, size_t row_bytes, int total_rows) {
+  size_t max_buffer = d.mtl_device()->maxBufferLength();
+  size_t max_rows = row_bytes == 0 ? total_rows : max_buffer / row_bytes;
+  // Force a smaller tile (tests, or to bound the unfold buffer further).
+  if (int forced = env::get_var("MLX_CONV_UNFOLD_TILE_ROWS", 0); forced > 0) {
+    max_rows = std::min(max_rows, static_cast<size_t>(forced));
+  }
+  if (max_rows == 0) {
+    std::ostringstream msg;
+    msg << "[conv] A single unfolding row needs " << row_bytes
+        << " bytes, which exceeds the maximum Metal buffer size of "
+        << max_buffer << " bytes.";
+    throw std::runtime_error(msg.str());
+  }
+  return static_cast<int>(std::min(max_rows, static_cast<size_t>(total_rows)));
+}
+
 template <int N>
 void explicit_gemm_conv_ND_gpu(
     const Stream& s,
@@ -42,36 +59,12 @@ void explicit_gemm_conv_ND_gpu(
   int implicit_M = safe_cast(out.size() / conv_params.O, "conv");
   int implicit_K = safe_cast(wt.size() / conv_params.O, "conv");
   int implicit_N = conv_params.O;
-  // Prepare unfolding array
-  Shape unfolded_shape{implicit_M, implicit_K};
-  array in_unfolded(unfolded_shape, in.dtype(), nullptr, {});
-
-  in_unfolded.set_data(allocator::malloc(in_unfolded.nbytes()));
-
   // Prepare unfolding kernel
   std::string kname;
   kname.reserve(32);
-  concatenate(kname, "naive_unfold_nd_", type_to_name(in_unfolded), "_", N);
+  concatenate(kname, "naive_unfold_nd_", type_to_name(in), "_", N);
   auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kname);
-  compute_encoder.set_compute_pipeline_state(kernel);
-
-  compute_encoder.set_input_array(in, 0);
-  compute_encoder.set_output_array(in_unfolded, 1);
-
-  compute_encoder.set_bytes(conv_params, 2);
-
-  // Launch unfolding kernel
-  size_t tgp_x = std::min(conv_params.C, 64);
-  tgp_x = 32 * ((tgp_x + 32 - 1) / 32);
-  size_t tgp_y = 256 / tgp_x;
-
-  MTL::Size grid_dims = MTL::Size(
-      conv_params.C, unfolded_shape[1] / conv_params.C, unfolded_shape[0]);
-  MTL::Size group_dims = MTL::Size(
-      std::min(tgp_x, grid_dims.width), std::min(tgp_y, grid_dims.height), 1);
-
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
 
   // Reshape weight
   Shape wt_reshape{implicit_K, implicit_N};
@@ -82,23 +75,73 @@ void explicit_gemm_conv_ND_gpu(
   wt_flags.col_contiguous = true;
   wt_reshaped.copy_shared_buffer(wt, wt_restride, wt_flags, wt.data_size());
 
-  // Perform gemm
-  std::vector<array> copies = {in_unfolded};
-  return steel_matmul(
-      s,
-      d,
-      /*a = */ in_unfolded,
-      /*b = */ wt_reshaped,
-      /*c = */ out,
-      /*M = */ implicit_M,
-      /*N = */ implicit_N,
-      /*K = */ implicit_K,
-      /*batch_size_out = */ 1,
-      /*a_cols = */ implicit_K,
-      /*b_cols = */ implicit_K,
-      /*a_transposed = */ false,
-      /*b_transposed = */ true,
-      /*copies = */ copies);
+  // 2D view of the output; each tile writes a row window of it.
+  Strides out_2d_strides{
+      out.strides()[out.ndim() - 2], out.strides()[out.ndim() - 1]};
+  array out_2d({implicit_M, implicit_N}, out.dtype(), nullptr, {});
+  out_2d.copy_shared_buffer(out, out_2d_strides, out.flags(), out.data_size());
+
+  // The full unfold buffer can exceed maxBufferLength, so unfold and gemm in
+  // row tiles reusing one buffer, keeping peak memory at a single tile.
+  size_t row_bytes = static_cast<size_t>(implicit_K) * in.itemsize();
+  int max_rows = max_unfold_rows(d, row_bytes, implicit_M);
+
+  array in_unfolded({max_rows, implicit_K}, in.dtype(), nullptr, {});
+  in_unfolded.set_data(allocator::malloc(in_unfolded.nbytes()));
+
+  for (int row_offset = 0; row_offset < implicit_M; row_offset += max_rows) {
+    int tile_rows = std::min(max_rows, implicit_M - row_offset);
+
+    // Tile view of the reused unfold buffer.
+    array in_tile({tile_rows, implicit_K}, in.dtype(), nullptr, {});
+    in_tile.copy_shared_buffer(
+        in_unfolded,
+        in_unfolded.strides(),
+        in_unfolded.flags(),
+        in_tile.size());
+
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(in_tile, 1);
+    compute_encoder.set_bytes(conv_params, 2);
+    compute_encoder.set_bytes(row_offset, 3);
+
+    size_t tgp_x = std::min(conv_params.C, 64);
+    tgp_x = 32 * ((tgp_x + 32 - 1) / 32);
+    size_t tgp_y = 256 / tgp_x;
+
+    MTL::Size grid_dims =
+        MTL::Size(conv_params.C, implicit_K / conv_params.C, tile_rows);
+    MTL::Size group_dims = MTL::Size(
+        std::min(tgp_x, grid_dims.width), std::min(tgp_y, grid_dims.height), 1);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+
+    // Gemm the tile into its output rows.
+    array out_tile({tile_rows, implicit_N}, out.dtype(), nullptr, {});
+    out_tile.copy_shared_buffer(
+        out_2d,
+        out_2d_strides,
+        out_2d.flags(),
+        out_tile.size(),
+        static_cast<int64_t>(row_offset) * out_2d_strides[0]);
+
+    std::vector<array> copies = {in_tile};
+    steel_matmul(
+        s,
+        d,
+        /*a = */ in_tile,
+        /*b = */ wt_reshaped,
+        /*c = */ out_tile,
+        /*M = */ tile_rows,
+        /*N = */ implicit_N,
+        /*K = */ implicit_K,
+        /*batch_size_out = */ 1,
+        /*a_cols = */ implicit_K,
+        /*b_cols = */ implicit_K,
+        /*a_transposed = */ false,
+        /*b_transposed = */ true,
+        /*copies = */ copies);
+  }
 }
 
 template <int N>
@@ -122,36 +165,12 @@ void explicit_gemm_conv_group_ND_gpu(
     kernel_size *= conv_params.wS[i];
   }
 
-  // Prepare unfolding array
-  Shape unfolded_shape{implicit_M, implicit_K * groups};
-  array in_unfolded(unfolded_shape, in.dtype(), nullptr, {});
-  in_unfolded.set_data(allocator::malloc(in_unfolded.nbytes()));
-
   // Prepare unfolding kernel
   std::string kname;
   kname.reserve(32);
-  concatenate(
-      kname, "naive_unfold_transpose_nd_", type_to_name(in_unfolded), "_", N);
+  concatenate(kname, "naive_unfold_transpose_nd_", type_to_name(in), "_", N);
   auto& compute_encoder = metal::get_command_encoder(s);
   auto kernel = d.get_kernel(kname);
-  compute_encoder.set_compute_pipeline_state(kernel);
-
-  compute_encoder.set_input_array(in, 0);
-  compute_encoder.set_output_array(in_unfolded, 1);
-
-  compute_encoder.set_bytes(conv_params, 2);
-
-  // Launch unfolding kernel
-  size_t tgp_x = std::min(conv_params.C, 64);
-  tgp_x = 32 * ((tgp_x + 32 - 1) / 32);
-  size_t tgp_y = 256 / tgp_x;
-
-  MTL::Size grid_dims = MTL::Size(
-      conv_params.C, unfolded_shape[1] / conv_params.C, unfolded_shape[0]);
-  MTL::Size group_dims = MTL::Size(
-      std::min(tgp_x, grid_dims.width), std::min(tgp_y, grid_dims.height), 1);
-
-  compute_encoder.dispatch_threads(grid_dims, group_dims);
 
   // Transpose kernel weights so that we can slice them by contiguous chunks
   // of channel groups.
@@ -163,29 +182,79 @@ void explicit_gemm_conv_group_ND_gpu(
   // Materialize
   array wt_transpose = contiguous_copy_gpu(wt_view, s);
 
-  // Perform gemm
-  std::vector<array> copies = {in_unfolded, wt_transpose};
-  return steel_matmul_regular(
-      /* const Stream& s = */ s,
-      /* Device& d = */ d,
-      /* const array& a = */ in_unfolded,
-      /* const array& b = */ wt_transpose,
-      /* array& c = */ out,
-      /* int M = */ implicit_M,
-      /* int N = */ implicit_N,
-      /* int K = */ implicit_K,
-      /* int batch_size_out = */ groups,
-      /* int lda = */ implicit_K * groups,
-      /* int ldb = */ implicit_K,
-      /* int ldd = */ implicit_N * groups,
-      /* bool transpose_a = */ false,
-      /* bool transpose_b = */ true,
-      /* std::vector<array>& copies = */ copies,
-      /* Shape batch_shape = */ {1},
-      /* Strides batch_strides = */ {0},
-      /* int64_t A_batch_strides = */ int64_t(implicit_K),
-      /* int64_t B_batch_strides = */ int64_t(implicit_N) * implicit_K,
-      /* int64_t matrix_stride_out = */ int64_t(implicit_N));
+  // 2D view of the output; each tile writes a row window of it.
+  Strides out_2d_strides{
+      out.strides()[out.ndim() - 2], out.strides()[out.ndim() - 1]};
+  array out_2d({implicit_M, conv_params.O}, out.dtype(), nullptr, {});
+  out_2d.copy_shared_buffer(out, out_2d_strides, out.flags(), out.data_size());
+
+  // The full unfold buffer can exceed maxBufferLength, so unfold and gemm in
+  // row tiles reusing one buffer, keeping peak memory at a single tile.
+  size_t row_bytes = static_cast<size_t>(implicit_K) * groups * in.itemsize();
+  int max_rows = max_unfold_rows(d, row_bytes, implicit_M);
+
+  array in_unfolded({max_rows, implicit_K * groups}, in.dtype(), nullptr, {});
+  in_unfolded.set_data(allocator::malloc(in_unfolded.nbytes()));
+
+  for (int row_offset = 0; row_offset < implicit_M; row_offset += max_rows) {
+    int tile_rows = std::min(max_rows, implicit_M - row_offset);
+
+    // Tile view of the reused unfold buffer.
+    array in_tile({tile_rows, implicit_K * groups}, in.dtype(), nullptr, {});
+    in_tile.copy_shared_buffer(
+        in_unfolded,
+        in_unfolded.strides(),
+        in_unfolded.flags(),
+        in_tile.size());
+
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(in_tile, 1);
+    compute_encoder.set_bytes(conv_params, 2);
+    compute_encoder.set_bytes(row_offset, 3);
+
+    size_t tgp_x = std::min(conv_params.C, 64);
+    tgp_x = 32 * ((tgp_x + 32 - 1) / 32);
+    size_t tgp_y = 256 / tgp_x;
+
+    MTL::Size grid_dims = MTL::Size(
+        conv_params.C, (implicit_K * groups) / conv_params.C, tile_rows);
+    MTL::Size group_dims = MTL::Size(
+        std::min(tgp_x, grid_dims.width), std::min(tgp_y, grid_dims.height), 1);
+    compute_encoder.dispatch_threads(grid_dims, group_dims);
+
+    // Gemm the tile into its output rows.
+    array out_tile({tile_rows, conv_params.O}, out.dtype(), nullptr, {});
+    out_tile.copy_shared_buffer(
+        out_2d,
+        out_2d_strides,
+        out_2d.flags(),
+        out_tile.size(),
+        static_cast<int64_t>(row_offset) * out_2d_strides[0]);
+
+    std::vector<array> copies = {in_tile, wt_transpose};
+    steel_matmul_regular(
+        /* const Stream& s = */ s,
+        /* Device& d = */ d,
+        /* const array& a = */ in_tile,
+        /* const array& b = */ wt_transpose,
+        /* array& c = */ out_tile,
+        /* int M = */ tile_rows,
+        /* int N = */ implicit_N,
+        /* int K = */ implicit_K,
+        /* int batch_size_out = */ groups,
+        /* int lda = */ implicit_K * groups,
+        /* int ldb = */ implicit_K,
+        /* int ldd = */ implicit_N * groups,
+        /* bool transpose_a = */ false,
+        /* bool transpose_b = */ true,
+        /* std::vector<array>& copies = */ copies,
+        /* Shape batch_shape = */ {1},
+        /* Strides batch_strides = */ {0},
+        /* int64_t A_batch_strides = */ int64_t(implicit_K),
+        /* int64_t B_batch_strides = */ int64_t(implicit_N) * implicit_K,
+        /* int64_t matrix_stride_out = */ int64_t(implicit_N));
+  }
 }
 
 void implicit_gemm_conv_2D_gpu(
