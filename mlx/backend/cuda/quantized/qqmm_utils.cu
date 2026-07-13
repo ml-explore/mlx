@@ -43,9 +43,6 @@ namespace mlx::core {
 //          [508, 509, 510, 511]]]]],
 namespace cu {
 
-constexpr float F8E4M3_MAX = 448.0f;
-constexpr float F4E2M1_MAX = 6.0f;
-
 constexpr int TILE_ROWS = 128;
 constexpr int TILE_COLS = 4;
 constexpr int TILES_PER_LANE = 1;
