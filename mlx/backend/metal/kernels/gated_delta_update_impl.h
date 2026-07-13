@@ -568,27 +568,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
           K_tile.frag_at(0, 0),
           K_tile.frag_at(0, 1),
           metal::bool_constant<true>{});
-    }
-    // OUTPUT(tmp_tile)
 
-    SCALE_TRI_NAX(QKt_tile, gamma)
-    // OUTPUT(QKt_tile)
-
-    out_tile = tmp_tile;
-    mlx::steel::mmak<float, float, float, false, false>(
-        out_tile.frag_at(0, 0),
-        QKt_tile.frag_at(0, 0),
-        Z.frag_at(0, 0),
-        metal::bool_constant<false>{},
-        delta_tile.frag_at(0, 0),
-        Z.frag_at(0, 0),
-        metal::bool_constant<false>{});
-
-    out_tile.store(y + dv_idx, Hv * Dv);
-    // OUTPUT(out_tile);
-
-    for (int nn = 0; nn < Dk / 16; nn += 2) {
-      K_tile.load(k_ + nn * 16, Hk * Dk);
       SCALE2_NAX(K_tile, gamma)
 
       // KD = delta.T @ K so that I can sum to S directly
@@ -608,16 +588,65 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
           metal::bool_constant<false>{});
 
       FMA_NAX(
-          S_tile.frag_at(0, nn),
+          S_tile.frag_at(0, kk / 16),
           gamma[C - 1],
-          S_tile.frag_at(0, nn),
+          S_tile.frag_at(0, kk / 16),
           KD_tile.frag_at(0, 0))
       FMA_NAX(
-          S_tile.frag_at(0, nn + 1),
+          S_tile.frag_at(0, kk / 16 + 1),
           gamma[C - 1],
-          S_tile.frag_at(0, nn + 1),
+          S_tile.frag_at(0, kk / 16 + 1),
           KD_tile.frag_at(0, 1))
     }
+    // OUTPUT(tmp_tile)
+
+    SCALE_TRI_NAX(QKt_tile, gamma)
+    // OUTPUT(QKt_tile)
+
+    out_tile = tmp_tile;
+    mlx::steel::mmak<float, float, float, false, false>(
+        out_tile.frag_at(0, 0),
+        QKt_tile.frag_at(0, 0),
+        Z.frag_at(0, 0),
+        metal::bool_constant<false>{},
+        delta_tile.frag_at(0, 0),
+        Z.frag_at(0, 0),
+        metal::bool_constant<false>{});
+
+    out_tile.store(y + dv_idx, Hv * Dv);
+    // OUTPUT(out_tile);
+
+    // for (int nn = 0; nn < Dk / 16; nn += 2) {
+    //   K_tile.load(k_ + nn * 16, Hk * Dk);
+    //   SCALE2_NAX(K_tile, gamma)
+
+    //   // KD = delta.T @ K so that I can sum to S directly
+    //   mlx::steel::mman<
+    //       float,
+    //       InT,
+    //       float,
+    //       true,
+    //       false,
+    //       mpp::tensor_ops::matmul2d_descriptor::mode::multiply>(
+    //       KD_tile.frag_at(0, 0),
+    //       KD_tile.frag_at(0, 1),
+    //       delta_tile.frag_at(0, 0),
+    //       metal::bool_constant<true>{},
+    //       K_tile.frag_at(0, 0),
+    //       K_tile.frag_at(0, 1),
+    //       metal::bool_constant<false>{});
+
+    //   FMA_NAX(
+    //       S_tile.frag_at(0, nn),
+    //       gamma[C - 1],
+    //       S_tile.frag_at(0, nn),
+    //       KD_tile.frag_at(0, 0))
+    //   FMA_NAX(
+    //       S_tile.frag_at(0, nn + 1),
+    //       gamma[C - 1],
+    //       S_tile.frag_at(0, nn + 1),
+    //       KD_tile.frag_at(0, 1))
+    // }
     // OUTPUT(out_tile);
 
     // advance pointers
