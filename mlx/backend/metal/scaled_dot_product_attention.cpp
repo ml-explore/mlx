@@ -415,6 +415,31 @@ void sdpa_vector(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+// Query rows processed serially by each simdgroup in the 2 pass vector
+// kernel. Bounded by register pressure: larger head dims hold more per-lane
+// accumulator state (see MAX_NQ in sdpa_vector.h).
+inline int sdpa_vector_max_nq(int query_head_dim) {
+  return query_head_dim <= 128 ? 4 : 2;
+}
+
+inline bool sdpa_vector_supported_shape(
+    int query_head_dim,
+    int value_head_dim,
+    int query_sequence_length,
+    int key_sequence_length,
+    int gqa_factor) {
+  const bool supported_head_dim =
+      (query_head_dim == value_head_dim &&
+       (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
+        query_head_dim == 256)) ||
+      (query_head_dim == 192 && value_head_dim == 128);
+  const int max_nq = sdpa_vector_max_nq(query_head_dim);
+  const int min_rows_per_tg = (query_sequence_length + max_nq - 1) / max_nq;
+  return supported_head_dim && query_sequence_length <= 16 &&
+      query_sequence_length <= key_sequence_length &&
+      gqa_factor * min_rows_per_tg <= 32;
+}
+
 void sdpa_vector_2pass(
     const Stream& s,
     metal::Device& d,
@@ -438,7 +463,16 @@ void sdpa_vector_2pass(
 
   // Compute the necessary sizes
   int gqa_factor = q.shape(1) / k.shape(1);
-  int n_simds = gqa_factor * q.shape(2);
+  int q_seq_len = q.shape(2);
+  // Rows per simdgroup: grow nq until the threadgroup fits its simdgroups
+  // (32 lanes x gqa_factor x rows_per_tg <= 1024 threads).
+  int max_nq = sdpa_vector_max_nq(q.shape(-1));
+  int nq = 1;
+  while (nq < max_nq && gqa_factor * ((q_seq_len + nq - 1) / nq) > 32) {
+    nq *= 2;
+  }
+  int rows_per_tg = (q_seq_len + nq - 1) / nq;
+  int n_simds = gqa_factor * rows_per_tg;
 
   char devc = d.get_architecture().back();
   int N = k.shape(2);
@@ -481,7 +515,7 @@ void sdpa_vector_2pass(
   size_t k_seq_stride = k.strides()[2];
   size_t v_head_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
   size_t v_seq_stride = v.strides()[2];
-  MTL::Size group_dims(32, gqa_factor, q.shape(2));
+  MTL::Size group_dims(32, gqa_factor, rows_per_tg);
   MTL::Size grid_dims(k.shape(1), q.shape(0), blocks);
 
   // Allocate the intermediates
@@ -516,6 +550,7 @@ void sdpa_vector_2pass(
       {&float_mask, MTL::DataType::DataTypeBool, 24},
       {&has_sinks, MTL::DataType::DataTypeBool, 25},
       {&blocks, MTL::DataType::DataTypeInt, 26},
+      {&nq, MTL::DataType::DataTypeInt, 27},
   };
   std::string hash_name = kname;
   hash_name += has_mask ? (bool_mask ? "_boolmask" : "_floatmask") : "_nomask";
@@ -523,9 +558,26 @@ void sdpa_vector_2pass(
   hash_name += do_causal ? "_c" : "_nc";
   hash_name += has_sinks ? "_sinks_" : "_nosinks_";
   hash_name += std::to_string(blocks);
+  auto base_hash_name = hash_name;
+  hash_name += "_nq";
+  hash_name += std::to_string(nq);
 
   // Get the kernel
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
+  // High register pressure can lower the pipeline's threadgroup limit;
+  // trade threadgroup rows for more rows per simdgroup when that happens.
+  while (nq < max_nq &&
+         kernel->maxTotalThreadsPerThreadgroup() <
+             static_cast<NS::UInteger>(32 * n_simds)) {
+    nq *= 2;
+    rows_per_tg = (q_seq_len + nq - 1) / nq;
+    n_simds = gqa_factor * rows_per_tg;
+    group_dims = MTL::Size(32, gqa_factor, rows_per_tg);
+    hash_name = base_hash_name;
+    hash_name += "_nq";
+    hash_name += std::to_string(nq);
+    kernel = d.get_kernel(kname, hash_name, func_consts);
+  }
   check_kernel_threadgroup_size(kernel, group_dims, hash_name);
 
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -537,6 +589,7 @@ void sdpa_vector_2pass(
   compute_encoder.set_output_array(intermediate, 3);
   compute_encoder.set_output_array(sums, 4);
   compute_encoder.set_output_array(maxs, 5);
+  compute_encoder.set_bytes(q_seq_len, 6);
   compute_encoder.set_bytes(N, 7);
   compute_encoder.set_bytes(k_head_stride, 8);
   compute_encoder.set_bytes(k_seq_stride, 9);
@@ -618,11 +671,6 @@ bool ScaledDotProductAttention::use_fallback(
   const int num_kv_heads = k.shape(1);
   const int gqa_factor = num_query_heads / num_kv_heads;
 
-  const bool sdpa_vector_supported_head_dim =
-      (query_head_dim == value_head_dim &&
-       (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
-        query_head_dim == 256)) ||
-      (query_head_dim == 192 && value_head_dim == 128);
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
       (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128);
 
@@ -632,10 +680,12 @@ bool ScaledDotProductAttention::use_fallback(
   const bool supports_sdpa_full = query_sequence_length > 8 &&
       sdpa_full_supported_mask && sdpa_full_supported_head_dim;
 
-  const bool supports_sdpa_vector = (query_sequence_length <= 8) &&
-      (query_sequence_length <= key_sequence_length) &&
-      sdpa_vector_supported_head_dim &&
-      (query_sequence_length * gqa_factor) <= 32;
+  const bool supports_sdpa_vector = sdpa_vector_supported_shape(
+      query_head_dim,
+      value_head_dim,
+      query_sequence_length,
+      key_sequence_length,
+      gqa_factor);
 
   return !(supports_sdpa_full || supports_sdpa_vector);
 }
@@ -682,8 +732,25 @@ void ScaledDotProductAttention::eval_gpu(
   }
   bool has_arr_mask = inputs.size() > (3 + has_sinks_);
 
-  // We are in vector mode ie single query
-  if (q_pre.shape(2) <= 8) {
+  // We are in vector mode ie a small number of query rows (decode and
+  // speculative-decoding verify shapes)
+  const int query_seq_len = q_pre.shape(2);
+  const bool vector_supported = sdpa_vector_supported_shape(
+      q_pre.shape(-1),
+      v_pre.shape(-1),
+      query_seq_len,
+      k_pre.shape(2),
+      q_pre.shape(1) / k_pre.shape(1));
+  const bool full_supported_head_dim = q_pre.shape(-1) == v_pre.shape(-1) &&
+      (q_pre.shape(-1) == 64 || q_pre.shape(-1) == 80 ||
+       q_pre.shape(-1) == 128);
+  // For 8 < qL <= 16 route to the vector path when the keys are long enough
+  // that its block-parallel reduction over the sequence beats the full
+  // attention kernel's single query tile, or when the full kernel does not
+  // support the head dim.
+  if (vector_supported &&
+      (query_seq_len <= 8 || k_pre.shape(2) >= 1024 ||
+       !full_supported_head_dim)) {
     auto q_copy_unless = [](const array& arr) {
       if (arr.flags().row_contiguous) {
         return true;

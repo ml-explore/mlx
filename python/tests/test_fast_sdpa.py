@@ -280,28 +280,29 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         L = 4096
         scale = 1.0
         mx.random.seed(0)
-        q = 5e-1 * mx.random.normal(shape=(1, Nq, Lq, D))
-        k = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
-        v = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
+        for Lq, Nkv in product((8, 12, 16), (1, 2)):
+            q = 5e-1 * mx.random.normal(shape=(1, Nq, Lq, D))
+            k = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
+            v = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
 
-        masks = [
-            None,
-            mx.array(True),
-            mx.array([True] * (L - 10) + [False] * 10),
-            mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
-            mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
-            "causal",
-        ]
-        for m in masks:
-            ref = mlx_primitives_sdpa(q, k, v, scale, mask=m)
-            out = mx.fast.scaled_dot_product_attention(
-                q,
-                k,
-                v,
-                scale=scale,
-                mask=m,
-            )
-            self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+            masks = [
+                None,
+                mx.array(True),
+                mx.array([True] * (L - 10) + [False] * 10),
+                mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
+                mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+                "causal",
+            ]
+            for m in masks:
+                ref = mlx_ref_attn(q, k, v, scale, mask=m)
+                out = mx.fast.scaled_dot_product_attention(
+                    q,
+                    k,
+                    v,
+                    scale=scale,
+                    mask=m,
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     @unittest.skip("Different head and value dims is not enabled")
     def test_sdpa_vector_value_dims(self):
