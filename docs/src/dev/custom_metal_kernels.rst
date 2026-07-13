@@ -62,7 +62,7 @@ The full function signature will be generated using:
     so we add ``device float16_t* out``.
 * Template parameters passed using ``template``
     In the above, ``template=[("T", mx.float32)]`` adds a template of ``template <typename T>`` to the function
-    and instantiates the template with ``custom_kernel_myexp_float<float>``.
+    and instantiates the template with ``custom_kernel_myexp_float_float16_t_float16_t<float>``.
     Template parameters can be ``mx.core.Dtype``, ``int`` or ``bool``.
 * Metal attributes used in ``source`` such as ``[[thread_position_in_grid]]``
     These will be added as function arguments.
@@ -73,7 +73,7 @@ Putting this all together, the generated function signature for ``myexp`` is as 
 .. code-block:: cpp
 
   template <typename T>
-  [[kernel]] void custom_kernel_myexp_float(
+  [[kernel]] void custom_kernel_myexp_float_float16_t_float16_t(
     const device float16_t* inp [[buffer(0)]],
     device float16_t* out [[buffer(1)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]]) {
@@ -84,7 +84,7 @@ Putting this all together, the generated function signature for ``myexp`` is as 
 
   }
 
-  template [[host_name("custom_kernel_myexp_float")]] [[kernel]] decltype(custom_kernel_myexp_float<float>) custom_kernel_myexp_float<float>;
+  template [[host_name("custom_kernel_myexp_float_float16_t_float16_t")]] [[kernel]] decltype(custom_kernel_myexp_float_float16_t_float16_t<float>) custom_kernel_myexp_float_float16_t_float16_t<float>;
 
 Note: ``grid`` and ``threadgroup`` are parameters to the Metal `dispatchThreads
 <https://developer.apple.com/documentation/metal/mtlcomputecommandencoder/2866532-dispatchthreads>`_
@@ -94,6 +94,29 @@ dimension should be less than or equal to the corresponding grid dimension.
 
 Passing ``verbose=True`` to :func:`ast.metal_kernel.__call__` will print the
 generated code for debugging purposes.
+
+Math Mode
+---------
+
+By default :func:`fast.metal_kernel` compiles kernels with
+``compile_options={"math_mode": "safe"}`` so special values follow IEEE
+behavior, for example ``exp(-inf) == 0``. This is important for kernels such as
+masked softmax where causal or sliding-window masks depend on exponentiating
+``-inf``.
+
+If your kernel does not rely on these edge cases, you can opt in to less strict
+math with ``compile_options={"math_mode": "relaxed"}`` or
+``compile_options={"math_mode": "fast"}``:
+
+.. code-block:: python
+
+  kernel = mx.fast.metal_kernel(
+      name="my_kernel",
+      input_names=["x"],
+      output_names=["y"],
+      source=source,
+      compile_options={"math_mode": "relaxed"},
+  )
 
 Using Shape/Strides
 -------------------

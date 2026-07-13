@@ -1,4 +1,5 @@
 import math
+import os
 import unittest
 from itertools import product
 
@@ -443,6 +444,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 self.assertLessEqual(mx.max(diff).item(), atol)
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "too slow on CPU")
+    @unittest.skipIf(mx.cuda.is_available() and "CI" in os.environ, "not enough memory")
     def test_sdpa_long_masked_sequence(self):
         # Test for int16 overflow in steel_attention_nax.h mask
         # indexing (col_pos declared as short, overflows when kL > 32767).

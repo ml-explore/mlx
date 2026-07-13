@@ -31,6 +31,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/block_mask.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/gemv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/cublas_gemm.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/gemms/gather_gemm.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/grouped_gemm_unaligned.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
@@ -57,6 +58,12 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmm.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmm_naive.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmm_sm80.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmm_sm90.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/qmv.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm/fp_qmv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/affine_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/fp_quantize.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/quantized.cpp
@@ -65,8 +72,11 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
+# Put dynamic defines in the dirs.cpp file.
+add_library(mlx_dirs OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/dirs.cpp)
+target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:mlx_dirs>)
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/binary)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/quantized/qmm)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 
 # fp4 is not available on < 12.8
@@ -119,11 +129,12 @@ target_compile_options(mlx
 target_compile_options(
   mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>")
 
-if(MSVC)
-  # Ignore warnings from CUTLASS.
-  target_compile_options(
-    mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=2908">)
-else()
+# Ignore warnings from CUTLASS.
+target_compile_options(
+  mlx
+  PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe="--diag_suppress=186,2908,2361">)
+
+if(NOT MSVC)
   # Required for generating optimized CUTLASS code.
   target_compile_options(
     mlx PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fno-strict-aliasing>")
@@ -166,13 +177,6 @@ message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
 set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
                                      "${MLX_CUDA_ARCHITECTURES}")
 
-# Skip Hopper-only kernels when not building for sm90a.
-if(NOT DEFINED ENV{MLX_DISABLE_SM90A_KERNELS}
-   AND (("90a" IN_LIST MLX_CUDA_ARCHITECTURES) OR ("90a-real" IN_LIST
-                                                   MLX_CUDA_ARCHITECTURES)))
-  target_compile_definitions(mlx PRIVATE MLX_CUDA_SM90A_ENABLED)
-endif()
-
 # Search CUDA libs from installed python packages.
 if(WIN32)
   # Resolve paths of unfound DLL at runtime.
@@ -197,8 +201,8 @@ if(WIN32)
   # Pass the locations where CUDA DLLs are placed.
   if(NOT MLX_LOAD_CUDA_LIBS_FROM_PYTHON)
     target_compile_definitions(
-      mlx PUBLIC MLX_CUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}/x64"
-                 MLX_CUDNN_BIN_DIR="${CUDNN_BIN_DIR}")
+      mlx_dirs PRIVATE MLX_CUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}/x64"
+                       MLX_CUDNN_BIN_DIR="${CUDNN_BIN_DIR}")
   endif()
 else()
   # For POSIX we rely on RPATH to search for CUDA libs.
@@ -208,9 +212,11 @@ else()
       APPEND
       PROPERTY INSTALL_RPATH
                # The paths here should match the install_requires in setup.py.
+               "$ORIGIN/../../nvidia/cu13/lib"
                "$ORIGIN/../../nvidia/cublas/lib"
                "$ORIGIN/../../nvidia/cuda_nvrtc/lib"
                "$ORIGIN/../../nvidia/cudnn/lib"
+               "$ORIGIN/../../nvidia/cufft/lib"
                "$ORIGIN/../../nvidia/nccl/lib")
   endif()
 endif()
@@ -233,7 +239,7 @@ install(DIRECTORY ${cccl_SOURCE_DIR}/include/nv
 # The binary of C++ tests will not be installed so it can not find the CCCL
 # headers, and we have to hard-code the path.
 if(MLX_BUILD_TESTS)
-  target_compile_definitions(mlx
+  target_compile_definitions(mlx_dirs
                              PRIVATE MLX_CCCL_DIR="${cccl_SOURCE_DIR}/include")
 endif()
 
@@ -279,9 +285,15 @@ target_link_libraries(mlx PRIVATE CUDNN::cudnn_all)
 FetchContent_Declare(
   cutlass
   GIT_REPOSITORY https://github.com/NVIDIA/cutlass.git
-  GIT_TAG v4.3.5
+  GIT_TAG v4.4.2
   GIT_SHALLOW TRUE
   SOURCE_SUBDIR include EXCLUDE_FROM_ALL)
 FetchContent_MakeAvailable(cutlass)
 target_include_directories(
   mlx SYSTEM PRIVATE $<BUILD_INTERFACE:${cutlass_SOURCE_DIR}/include>)
+
+# Install CUTLASS headers for JIT.
+install(DIRECTORY ${cutlass_SOURCE_DIR}/include/cute
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY ${cutlass_SOURCE_DIR}/include/cutlass
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

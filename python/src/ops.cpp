@@ -15,6 +15,7 @@
 #include "mlx/einsum.h"
 #include "mlx/ops.h"
 #include "mlx/utils.h"
+#include "python/src/convert.h"
 #include "python/src/load.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
@@ -43,6 +44,13 @@ double scalar_to_double(Scalar s) {
   } else {
     return static_cast<double>(std::get<bool>(s));
   }
+}
+
+mx::Shape to_shape(const nb::object& shape) {
+  if (nb::isinstance<nb::int_>(shape)) {
+    return {check_shape_dim(nb::cast<int64_t>(shape))};
+  }
+  return nb::cast<mx::Shape>(shape);
 }
 
 void init_ops(nb::module_& m) {
@@ -170,6 +178,60 @@ void init_ops(nb::module_& m) {
             array: The output array with size one axes removed.
       )pbdoc");
   m.def(
+      "flip",
+      [](const mx::array& a, const IntOrVec& v, const mx::StreamOrDevice& s) {
+        if (std::holds_alternative<std::monostate>(v)) {
+          return mx::flip(a, s);
+        } else if (auto pv = std::get_if<int>(&v); pv) {
+          return mx::flip(a, *pv, s);
+        } else {
+          return mx::flip(a, std::get<std::vector<int>>(v), s);
+        }
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def flip(a: array, /, axis: Union[None, int, Sequence[int]] = None, "
+          "*, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Reverse the order of elements along the given axis.
+
+        Args:
+            a (array): Input array.
+            axis (int or tuple(int), optional): Axis or axes to flip over.
+              Defaults to ``None`` in which case all axes are flipped.
+
+        Returns:
+            array: The flipped array.
+      )pbdoc");
+  m.def(
+      "unstack",
+      [](const mx::array& a, int axis, mx::StreamOrDevice s) {
+        return mx::unstack(a, axis, s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "axis"_a = 0,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def unstack(x: array, /, *, axis: int = 0, stream: Union[None, "
+          "Stream, Device] = None) -> list[array]"),
+      R"pbdoc(
+        Split an array into a sequence of arrays along the given axis.
+
+        The inverse of :func:`stack`. The given axis is removed from each of
+        the returned arrays.
+
+        Args:
+            x (array): Input array.
+            axis (int, optional): Axis along which to unstack. Default: ``0``.
+
+        Returns:
+            list(array): A list of arrays, one for each index along ``axis``.
+      )pbdoc");
+  m.def(
       "expand_dims",
       [](const mx::array& a,
          const std::variant<int, std::vector<int>>& v,
@@ -234,6 +296,23 @@ void init_ops(nb::module_& m) {
 
         Returns:
             array: The sign of ``a``.
+      )pbdoc");
+  m.def(
+      "positive",
+      &mx::positive,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def positive(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise unary plus. Returns a copy of the input.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: A copy of ``a``.
       )pbdoc");
   m.def(
       "negative",
@@ -672,6 +751,23 @@ void init_ops(nb::module_& m) {
             array: The matrix product of ``a`` and ``b``.
       )pbdoc");
   m.def(
+      "trunc",
+      &mx::trunc,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def trunc(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise truncation towards zero.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The truncated array.
+      )pbdoc");
+  m.def(
       "square",
       [](const ScalarOrArray& a, mx::StreamOrDevice s) {
         return mx::square(to_array(a), s);
@@ -810,6 +906,27 @@ void init_ops(nb::module_& m) {
             array: The boolean array containing the logical or of ``a`` and ``b``.
     )pbdoc");
   m.def(
+      "logical_xor",
+      [](const ScalarOrArray& a, const ScalarOrArray& b, mx::StreamOrDevice s) {
+        return mx::logical_xor(to_array(a), to_array(b), s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def logical_xor(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise logical exclusive or.
+
+        Args:
+            a (array): First input array or scalar.
+            b (array): Second input array or scalar.
+
+        Returns:
+            array: The boolean array containing the logical xor of ``a`` and ``b``.
+      )pbdoc");
+  m.def(
       "logaddexp",
       [](const ScalarOrArray& a_,
          const ScalarOrArray& b_,
@@ -829,7 +946,7 @@ void init_ops(nb::module_& m) {
         This is a numerically stable log-add-exp of two arrays with numpy-style
         broadcasting semantics. Either or both input arrays can also be scalars.
 
-        The computation is is a numerically stable version of ``log(exp(a) + exp(b))``.
+        The computation is a numerically stable version of ``log(exp(a) + exp(b))``.
 
         Args:
             a (array): Input array or scalar.
@@ -1702,15 +1819,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "full",
-      [](const std::variant<int, mx::Shape>& shape,
+      [](const nb::object& shape,
          const ScalarOrArray& vals,
          std::optional<mx::Dtype> dtype,
          mx::StreamOrDevice s) {
-        if (auto pv = std::get_if<int>(&shape); pv) {
-          return mx::full({*pv}, to_array(vals, dtype), s);
-        } else {
-          return mx::full(std::get<mx::Shape>(shape), to_array(vals, dtype), s);
-        }
+        return mx::full(to_shape(shape), to_array(vals, dtype), s);
       },
       "shape"_a,
       "vals"_a,
@@ -1735,16 +1848,40 @@ void init_ops(nb::module_& m) {
             array: The output array with the specified shape and values.
       )pbdoc");
   m.def(
+      "full_like",
+      [](const mx::array& a,
+         const ScalarOrArray& vals,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        auto t = dtype.value_or(a.dtype());
+        return mx::full_like(a, to_array(vals, t), t, s);
+      },
+      nb::arg(),
+      "vals"_a,
+      "dtype"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def full_like(a: array, vals: Union[scalar, array], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        An array filled with ``vals`` with the same shape as the input.
+
+        Args:
+            a (array): The input to take the shape from.
+            vals (float or int or array): Values to fill the array with.
+            dtype (Dtype, optional): Data type of the output array. If
+              unspecified the type of the input is used.
+
+        Returns:
+            array: The output array.
+      )pbdoc");
+  m.def(
       "zeros",
-      [](const std::variant<int, mx::Shape>& shape,
+      [](const nb::object& shape,
          std::optional<mx::Dtype> dtype,
          mx::StreamOrDevice s) {
         auto t = dtype.value_or(mx::float32);
-        if (auto pv = std::get_if<int>(&shape); pv) {
-          return mx::zeros({*pv}, t, s);
-        } else {
-          return mx::zeros(std::get<mx::Shape>(shape), t, s);
-        }
+        return mx::zeros(to_shape(shape), t, s);
       },
       "shape"_a,
       "dtype"_a.none() = mx::float32,
@@ -1765,23 +1902,56 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "asarray",
-      [](const nb::object& a, std::optional<mx::Dtype> dtype) {
-        return create_array(a, dtype);
-      },
+      [](const nb::object& a,
+         std::optional<mx::Dtype> dtype,
+         std::optional<bool> copy) { return create_array(a, dtype, copy); },
       nb::arg(),
       "dtype"_a = nb::none(),
+      nb::kw_only(),
+      "copy"_a = nb::none(),
       nb::sig(
-          "def asarray(a: Union[scalar, array, Sequence], dtype: "
-          "Optional[Dtype] = None) -> array"),
+          "def asarray(a: Union[scalar, array, Sequence, DLPackCompatible], dtype: "
+          "Optional[Dtype] = None, *, copy: Optional[bool] = None) -> array"),
       R"pbdoc(
         Convert the input to an array.
 
         Args:
             a: Input data.
             dtype (Dtype, optional): The desired data-type for the array.
+            copy (bool, optional): Whether to copy the input. If ``True``,
+              always copy. If ``False``, never copy. If ``None``, share memory
+              when possible and copy otherwise. Zero-copy DLPack imports
+              preserve the DLPack strides.
 
         Returns:
             array: An array interpretation of the input.
+
+        Raises:
+            ValueError: If ``copy`` is ``False`` and a copy is required.
+      )pbdoc");
+  m.def(
+      "from_dlpack",
+      [](nb::ndarray<nb::ro> x, std::optional<bool> copy) {
+        return nd_array_to_mlx(x, std::nullopt, std::nullopt, copy);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "copy"_a = nb::none(),
+      nb::sig(
+          "def from_dlpack(x: DLPackCompatible, /, *, copy: Optional[bool] = None) -> array"),
+      R"pbdoc(
+        Create an array from an object that supports DLPack.
+
+        Args:
+            x: Input object implementing ``__dlpack__`` and
+              ``__dlpack_device__``.
+            copy (bool, optional): Whether to copy the input. If ``True``,
+              always copy. If ``False``, never copy. If ``None``, share memory
+              when possible and copy otherwise. Zero-copy imports preserve the
+              DLPack strides.
+
+        Returns:
+            array: An array containing the input data.
       )pbdoc");
   m.def(
       "zeros_like",
@@ -1802,15 +1972,11 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "ones",
-      [](const std::variant<int, mx::Shape>& shape,
+      [](const nb::object& shape,
          std::optional<mx::Dtype> dtype,
          mx::StreamOrDevice s) {
         auto t = dtype.value_or(mx::float32);
-        if (auto pv = std::get_if<int>(&shape); pv) {
-          return mx::ones({*pv}, t, s);
-        } else {
-          return mx::ones(std::get<mx::Shape>(shape), t, s);
-        }
+        return mx::ones(to_shape(shape), t, s);
       },
       "shape"_a,
       "dtype"_a.none() = mx::float32,
@@ -2412,6 +2578,41 @@ void init_ops(nb::module_& m) {
             array: The output array with the corresponding axes reduced.
       )pbdoc");
   m.def(
+      "count_nonzero",
+      [](const mx::array& a,
+         const IntOrVec& axis,
+         bool keepdims,
+         mx::StreamOrDevice s) {
+        if (std::holds_alternative<std::monostate>(axis)) {
+          return mx::count_nonzero(a, keepdims, s);
+        } else if (auto pv = std::get_if<int>(&axis); pv) {
+          return mx::count_nonzero(a, *pv, keepdims, s);
+        } else {
+          return mx::count_nonzero(
+              a, std::get<std::vector<int>>(axis), keepdims, s);
+        }
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      nb::kw_only(),
+      "keepdims"_a = false,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def count_nonzero(a: array, /, *, axis: Union[None, int, Sequence[int]] = None, keepdims: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Count the number of non-zero elements along the given axis.
+
+        Args:
+            a (array): Input array.
+            axis (int or tuple(int), optional): Axis or axes to count over.
+              Defaults to ``None`` in which case the whole array is counted.
+            keepdims (bool, optional): Keep the reduced axes as size one.
+              Default: ``False``.
+
+        Returns:
+            array: The counts as an ``int32`` array.
+      )pbdoc");
+  m.def(
       "prod",
       [](const mx::array& a,
          const IntOrVec& axis,
@@ -2821,6 +3022,9 @@ void init_ops(nb::module_& m) {
       R"pbdoc(
         Returns a sorted copy of the array.
 
+        The sort is stable, meaning equal elements preserve their relative
+        order. ``NaN`` values are placed at the end.
+
         Args:
             a (array): Input array.
             axis (int or None, optional): Optional axis to sort over.
@@ -2847,6 +3051,9 @@ void init_ops(nb::module_& m) {
           "def argsort(a: array, /, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Returns the indices that sort the array.
+
+        The sort is stable, meaning equal elements preserve their relative
+        order. ``NaN`` values are placed at the end.
 
         Args:
             a (array): Input array.
@@ -3332,37 +3539,60 @@ void init_ops(nb::module_& m) {
           array: The output array which is the strided view of the input.
       )pbdoc");
   m.def(
+      "astype",
+      [](const mx::array& a, mx::Dtype dtype, mx::StreamOrDevice s) {
+        return mx::astype(a, dtype, s);
+      },
+      nb::arg(),
+      "dtype"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def astype(a: array, dtype: Dtype, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Cast the array to a specified type.
+
+        Args:
+          a (array): Input array.
+          dtype (Dtype): Type to which the array is cast.
+
+        Returns:
+          array: The array with type ``dtype``.
+      )pbdoc");
+  m.def(
       "cumsum",
       [](const mx::array& a,
          std::optional<int> axis,
          bool reverse,
          bool inclusive,
+         std::optional<mx::Dtype> dtype,
          mx::StreamOrDevice s) {
         if (axis) {
-          return mx::cumsum(a, *axis, reverse, inclusive, s);
-        } else {
-          return mx::cumsum(mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
+          return mx::cumsum(a, *axis, reverse, inclusive, dtype, s);
         }
+        return mx::cumsum(a, reverse, inclusive, dtype, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
       nb::kw_only(),
       "reverse"_a = false,
       "inclusive"_a = true,
+      "dtype"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cumsum(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cumsum(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, dtype: Optional[Dtype] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the cumulative sum of the elements along the given axis.
 
         Args:
-          a (array): Input array
+          a (array): Input array.
           axis (int, optional): Optional axis to compute the cumulative sum
             over. If unspecified the cumulative sum of the flattened array is
             returned.
           reverse (bool): Perform the cumulative sum in reverse.
           inclusive (bool): The i-th element of the output includes the i-th
             element of the input.
+          dtype (Dtype, optional): Cast the input to this type before summing.
 
         Returns:
           array: The output array.
@@ -3373,32 +3603,34 @@ void init_ops(nb::module_& m) {
          std::optional<int> axis,
          bool reverse,
          bool inclusive,
+         std::optional<mx::Dtype> dtype,
          mx::StreamOrDevice s) {
         if (axis) {
-          return mx::cumprod(a, *axis, reverse, inclusive, s);
-        } else {
-          return mx::cumprod(mx::reshape(a, {-1}, s), 0, reverse, inclusive, s);
+          return mx::cumprod(a, *axis, reverse, inclusive, dtype, s);
         }
+        return mx::cumprod(a, reverse, inclusive, dtype, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
       nb::kw_only(),
       "reverse"_a = false,
       "inclusive"_a = true,
+      "dtype"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cumprod(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cumprod(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, dtype: Optional[Dtype] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the cumulative product of the elements along the given axis.
 
         Args:
-          a (array): Input array
+          a (array): Input array.
           axis (int, optional): Optional axis to compute the cumulative product
-            over. If unspecified the cumulative product of the flattened array is
-            returned.
+            over. If unspecified the cumulative product of the flattened array
+            is returned.
           reverse (bool): Perform the cumulative product in reverse.
           inclusive (bool): The i-th element of the output includes the i-th
             element of the input.
+          dtype (Dtype, optional): Cast the input to this type before multiplying.
 
         Returns:
           array: The output array.
@@ -3474,6 +3706,28 @@ void init_ops(nb::module_& m) {
 
         Returns:
           array: The output array.
+      )pbdoc");
+  m.def(
+      "diff",
+      &mx::diff,
+      nb::arg(),
+      "n"_a = 1,
+      "axis"_a = -1,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def diff(a: array, /, n: int = 1, axis: int = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        The n-th discrete difference along the given axis.
+
+        Args:
+            a (array): Input array.
+            n (int, optional): The number of times to difference. Default: ``1``.
+            axis (int, optional): The axis along which to difference.
+              Default: ``-1``.
+
+        Returns:
+            array: The n-th differences.
       )pbdoc");
   m.def(
       "conj",
@@ -4628,6 +4882,27 @@ void init_ops(nb::module_& m) {
         array: The inner product.
     )pbdoc");
   m.def(
+      "vecdot",
+      &mx::vecdot,
+      nb::arg(),
+      nb::arg(),
+      "axis"_a = -1,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def vecdot(a: array, b: array, /, *, axis: int = -1, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Compute the vector dot product of two arrays along an axis.
+
+      Args:
+        a (array): Input array
+        b (array): Input array
+        axis (int, optional): Axis over which to compute the dot product. Default: ``-1``.
+
+      Returns:
+        array: The vector dot product.
+    )pbdoc");
+  m.def(
       "outer",
       &mx::outer,
       nb::arg(),
@@ -5023,6 +5298,133 @@ void init_ops(nb::module_& m) {
           True
           >>> mx.issubdtype(mx.signedinteger, mx.floating)
           False
+      )pbdoc");
+  m.def(
+      "result_type",
+      [](const nb::args& arrays_and_dtypes) {
+        auto to_dtype = [](const nb::handle& v) -> mx::Dtype {
+          if (nb::isinstance<mx::array>(v)) {
+            return nb::cast<mx::array>(v).dtype();
+          } else if (nb::isinstance<mx::Dtype>(v)) {
+            return nb::cast<mx::Dtype>(v);
+          } else {
+            throw std::invalid_argument(
+                "[result_type] Inputs must be arrays or dtypes.");
+          }
+        };
+        if (arrays_and_dtypes.size() == 0) {
+          throw std::invalid_argument(
+              "[result_type] At least one array or dtype is required.");
+        }
+        mx::Dtype t = to_dtype(arrays_and_dtypes[0]);
+        for (size_t i = 1; i < arrays_and_dtypes.size(); ++i) {
+          t = mx::promote_types(t, to_dtype(arrays_and_dtypes[i]));
+        }
+        return t;
+      },
+      nb::sig(
+          "def result_type(*arrays_and_dtypes: Union[array, Dtype]) -> Dtype"),
+      R"pbdoc(
+        The type that results from applying type promotion to the inputs.
+
+        Args:
+            *arrays_and_dtypes (array or Dtype): A variable number of arrays
+              or dtypes.
+
+        Returns:
+            Dtype: The result type.
+      )pbdoc");
+  m.def(
+      "can_cast",
+      [](const nb::object& from_, const mx::Dtype& to) {
+        mx::Dtype from_dtype = mx::bool_;
+        if (nb::isinstance<mx::array>(from_)) {
+          from_dtype = nb::cast<mx::array>(from_).dtype();
+        } else if (nb::isinstance<mx::Dtype>(from_)) {
+          from_dtype = nb::cast<mx::Dtype>(from_);
+        } else {
+          throw std::invalid_argument(
+              "[can_cast] `from_` must be an array or a dtype.");
+        }
+        return mx::promote_types(from_dtype, to) == to;
+      },
+      "from_"_a,
+      "to"_a,
+      nb::sig("def can_cast(from_: Union[array, Dtype], to: Dtype) -> bool"),
+      R"pbdoc(
+        Determine if one data type can be cast to another according to type
+        promotion rules.
+
+        ``from_`` can be cast to ``to`` if promoting the two together gives
+        back ``to``.
+
+        Args:
+            from_ (array or Dtype): The source array or dtype.
+            to (Dtype): The destination dtype.
+
+        Returns:
+            bool: Whether the cast can be performed.
+      )pbdoc");
+  m.def(
+      "isdtype",
+      [](const mx::Dtype& dtype, const nb::object& kind) {
+        auto check_one = [&dtype](const nb::handle& k) -> bool {
+          if (nb::isinstance<mx::Dtype>(k)) {
+            return dtype == nb::cast<mx::Dtype>(k);
+          } else if (nb::isinstance<nb::str>(k)) {
+            auto s = nb::cast<std::string>(k);
+            if (s == "bool") {
+              return dtype == mx::bool_;
+            } else if (s == "signed integer") {
+              return mx::issubdtype(dtype, mx::signedinteger);
+            } else if (s == "unsigned integer") {
+              return mx::issubdtype(dtype, mx::unsignedinteger);
+            } else if (s == "integral") {
+              return mx::issubdtype(dtype, mx::integer);
+            } else if (s == "real floating") {
+              return mx::issubdtype(dtype, mx::floating);
+            } else if (s == "complex floating") {
+              return mx::issubdtype(dtype, mx::complexfloating);
+            } else if (s == "numeric") {
+              return mx::issubdtype(dtype, mx::number);
+            } else {
+              std::ostringstream msg;
+              msg << "[isdtype] Unknown data type kind: '" << s << "'.";
+              throw std::invalid_argument(msg.str());
+            }
+          } else {
+            throw std::invalid_argument(
+                "[isdtype] `kind` must be a dtype, a string, or a tuple of "
+                "dtypes and strings.");
+          }
+        };
+        if (nb::isinstance<nb::tuple>(kind)) {
+          for (auto k : nb::cast<nb::tuple>(kind)) {
+            if (check_one(k)) {
+              return true;
+            }
+          }
+          return false;
+        }
+        return check_one(kind);
+      },
+      "dtype"_a,
+      "kind"_a,
+      nb::sig(
+          "def isdtype(dtype: Dtype, kind: Union[Dtype, str, tuple[Union[Dtype, str], ...]]) -> bool"),
+      R"pbdoc(
+        Test whether a dtype belongs to one or more data type kinds.
+
+        Args:
+            dtype (Dtype): The dtype to test.
+            kind (Dtype, str, or tuple): A dtype, a kind string, or a tuple
+              of dtypes and kind strings. Supported kind strings are
+              ``"bool"``, ``"signed integer"``, ``"unsigned integer"``,
+              ``"integral"``, ``"real floating"``, ``"complex floating"``,
+              and ``"numeric"``.
+
+        Returns:
+            bool: ``True`` if ``dtype`` matches any of the given kinds.
       )pbdoc");
   m.def(
       "bitwise_and",
@@ -5646,4 +6048,20 @@ void init_ops(nb::module_& m) {
       Returns:
         array: The array converted to fp8 with type ``uint8``.
   )pbdoc");
+  // Array API standard aliases (https://data-apis.org/array-api/latest/).
+  m.attr("acos") = m.attr("arccos");
+  m.attr("acosh") = m.attr("arccosh");
+  m.attr("asin") = m.attr("arcsin");
+  m.attr("asinh") = m.attr("arcsinh");
+  m.attr("atan") = m.attr("arctan");
+  m.attr("atanh") = m.attr("arctanh");
+  m.attr("atan2") = m.attr("arctan2");
+  m.attr("bitwise_left_shift") = m.attr("left_shift");
+  m.attr("bitwise_right_shift") = m.attr("right_shift");
+  m.attr("cumulative_prod") = m.attr("cumprod");
+  m.attr("cumulative_sum") = m.attr("cumsum");
+  m.attr("empty") = m.attr("zeros");
+  m.attr("empty_like") = m.attr("zeros_like");
+  m.attr("matrix_transpose") = m.attr("transpose");
+  m.attr("pow") = m.attr("power");
 }

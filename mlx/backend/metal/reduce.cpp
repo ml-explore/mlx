@@ -952,9 +952,17 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   array in = inputs[0];
 
-  // Make sure no identity reductions trickle down here
   assert(!axes_.empty());
-  assert(out.size() != in.size());
+
+  // When all the reduced axes have size 1 at runtime, which can happen with
+  // shapeless compilation, the reduction is the identity so just cast-copy
+  // the input to the output.
+  if (out.size() == in.size()) {
+    CopyType ctype =
+        in.flags().contiguous ? CopyType::Vector : CopyType::General;
+    copy_gpu(in, out, ctype, stream());
+    return;
+  }
 
   // Continue with reduction operation
   // Minimum of 4 bytes since we use size 4 structs for all reduce

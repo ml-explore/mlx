@@ -75,22 +75,62 @@ even though no in-place operations on MLX memory are executed.
 PyTorch
 -------
 
-.. warning::
-
-   PyTorch Support for :obj:`memoryview` is experimental and can break for
-   multi-dimensional arrays. Casting to NumPy first is advised for now.
-
-PyTorch supports the buffer protocol, but it requires an explicit
-:obj:`memoryview`.
+PyTorch supports DLPack inputs and can import MLX arrays directly.
+MLX can also import PyTorch tensors through DLPack with ``mx.asarray`` or
+``mx.from_dlpack``. Use ``torch.as_tensor`` to import an MLX array with
+DLPack; ``torch.tensor`` copies the data instead. Similarly, ``mx.asarray``
+can share DLPack inputs when possible, while ``mx.array`` copies:
 
 .. code-block:: python
 
   import mlx.core as mx
   import torch
 
-  a = mx.arange(3)
-  b = torch.tensor(memoryview(a))
+  a = mx.arange(3, dtype=mx.float32)
+  mx.eval(a)
+
+  shared = torch.as_tensor(a)
+  copied = torch.tensor(a)
+
+Creating an MLX array from a CPU tensor copies the data into MLX-owned storage.
+The arrays do not share memory:
+
+.. code-block:: python
+
+  b = torch.arange(3)
   c = mx.array(b)
+
+  b += 10
+  print(c.tolist()) # [0, 1, 2]
+
+Metal DLPack inputs are different. If a PyTorch MPS tensor is passed to
+``mx.asarray`` or to ``mx.from_dlpack`` with ``copy=None``, MLX imports it
+without a copy when the underlying Metal buffer is not private. Private Metal
+buffers are copied into MLX-managed storage instead. Passing ``copy=False``
+requires zero-copy import and raises an error if a copy would be needed.
+Passing ``copy=True`` asks MLX to create a new array instead of reusing the
+Metal buffer. Zero-copy imports preserve the DLPack strides. ``mx.array`` also
+creates a new array instead of reusing the Metal buffer. MLX arrays exported to
+PyTorch with DLPack are exported without a copy on Metal.
+
+In particular, PyTorch 2.12 and later use shared storage for ordinary MPS
+tensors on Apple silicon, while older PyTorch versions may use private storage
+and require a copy on import. DLPack conversion does not synchronize pending
+Metal work; synchronize or evaluate the producing framework before reading the
+converted array.
+
+.. code-block:: python
+
+  b = torch.arange(3, device="mps", dtype=torch.float32)
+  torch.mps.synchronize()
+  c = mx.asarray(b) # zero-copy if the Metal buffer can be reused
+  d = mx.from_dlpack(b, copy=True) # explicit copy
+
+.. code-block:: python
+
+  a = mx.arange(3, dtype=mx.float32)
+  mx.eval(a)
+  b = torch.as_tensor(a) # zero-copy DLPack import on Metal
 
 JAX
 ---

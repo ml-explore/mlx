@@ -23,10 +23,6 @@ struct integral_constant {
   METAL_FUNC constexpr operator value_type() const noexcept {
     return value;
   }
-
-  // METAL_FUNC constexpr value_type operator()() const noexcept {
-  //   return value;
-  // }
 };
 
 template <bool B>

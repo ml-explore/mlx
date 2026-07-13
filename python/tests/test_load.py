@@ -2,6 +2,7 @@
 
 import os
 import platform
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -163,6 +164,87 @@ class TestLoad(mlx_tests.MLXTestCase):
         load_dict = mx.load(Path(save_file_mlx))
         self.assertTrue("test" in load_dict)
         self.assertTrue(mx.array_equal(load_dict["test"], save_dict["test"]))
+
+    @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
+    def test_load_gguf_quantized(self):
+        # Write a minimal GGUF v3 file with one quantized tensor and check
+        # that the loaded (weight, scales, biases) triplet dequantizes to the
+        # values prescribed by the GGML block formats.
+        rows, cols = 2, 64
+        n_blocks = rows * cols // 32
+        np.random.seed(7)
+
+        def write_gguf(path, ggml_type_id, blocks):
+            with open(path, "wb") as f:
+                f.write(b"GGUF")
+                # version, tensor count, metadata kv count
+                f.write(struct.pack("<IQQ", 3, 1, 0))
+                name = b"tensor.weight"
+                f.write(struct.pack("<Q", len(name)) + name)
+                # dims are stored in GGML order: ne[0] = cols, ne[1] = rows
+                f.write(struct.pack("<IQQIQ", 2, cols, rows, ggml_type_id, 0))
+                f.write(b"\x00" * (-f.tell() % 32))  # default alignment
+                f.write(blocks.tobytes())
+
+        def packed_nibbles(q):
+            # GGML nibble order: byte j = element j | element j + 16 << 4
+            return (q[:, :16] | (q[:, 16:] << 4)).astype(np.uint8)
+
+        d = np.full((n_blocks, 1), 0.5, dtype=np.float16)
+        m = np.full((n_blocks, 1), -1.25, dtype=np.float16)
+        q4 = np.random.randint(0, 16, size=(n_blocks, 32)).astype(np.uint8)
+        q8 = np.random.randint(-128, 128, size=(n_blocks, 32)).astype(np.int8)
+        d32 = d.astype(np.float32)
+        m32 = m.astype(np.float32)
+
+        # (name, ggml type id, bits, block bytes, expected dequantized values)
+        cases = [
+            (
+                "Q4_0",
+                2,
+                4,
+                np.concatenate([d.view(np.uint8), packed_nibbles(q4)], axis=1),
+                d32 * (q4.astype(np.float32) - 8),
+            ),
+            (
+                "Q4_1",
+                3,
+                4,
+                np.concatenate(
+                    [d.view(np.uint8), m.view(np.uint8), packed_nibbles(q4)],
+                    axis=1,
+                ),
+                d32 * q4.astype(np.float32) + m32,
+            ),
+            (
+                "Q8_0",
+                8,
+                8,
+                np.concatenate([d.view(np.uint8), q8.view(np.uint8)], axis=1),
+                d32 * q8.astype(np.float32),
+            ),
+        ]
+        for name, type_id, bits, blocks, expected in cases:
+            with self.subTest(qtype=name):
+                save_file = os.path.join(self.test_dir, f"quant_{name}.gguf")
+                write_gguf(save_file, type_id, blocks)
+                load_dict = mx.load(save_file)
+                self.assertEqual(load_dict["tensor.weight"].dtype, mx.uint32)
+                self.assertEqual(load_dict["tensor.scales"].shape, (rows, cols // 32))
+                self.assertEqual(load_dict["tensor.biases"].shape, (rows, cols // 32))
+                dequantized = mx.dequantize(
+                    load_dict["tensor.weight"],
+                    load_dict["tensor.scales"],
+                    load_dict["tensor.biases"],
+                    group_size=32,
+                    bits=bits,
+                )
+                self.assertTrue(
+                    np.array_equal(
+                        np.array(dequantized, copy=False).astype(np.float32),
+                        expected.reshape(rows, cols),
+                    )
+                )
 
     def test_load_f8_e4m3(self):
         if not os.path.isdir(self.test_dir):

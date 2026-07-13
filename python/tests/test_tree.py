@@ -91,6 +91,36 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(params2.m, mx.array([1, 2])))
         self.assertTrue(mx.array_equal(params2.b, mx.array(3)))
 
+        paths = []
+        params3 = mlx.utils.tree_map_with_path(
+            lambda path, x: paths.append(path) or x + 1, params1
+        )
+
+        self.assertEqual(paths, ["0", "1"])
+        self.assertTrue(isinstance(params3, Params))
+        self.assertTrue(mx.array_equal(params3.m, mx.array([1, 2])))
+        self.assertTrue(mx.array_equal(params3.b, mx.array(3)))
+
+        paths = []
+        params4 = mlx.utils.tree_map_with_path(
+            lambda path, x, y: paths.append(path) or x + y, params1, params3
+        )
+
+        self.assertEqual(paths, ["0", "1"])
+        self.assertTrue(isinstance(params4, Params))
+        self.assertTrue(mx.array_equal(params4.m, mx.array([1, 3])))
+        self.assertTrue(mx.array_equal(params4.b, mx.array(5)))
+
+        params5 = mlx.utils.tree_merge(params1, params1, lambda a, b: a + b)
+        self.assertTrue(isinstance(params5, Params))
+        self.assertTrue(mx.array_equal(params5.m, mx.array([0, 2])))
+        self.assertTrue(mx.array_equal(params5.b, mx.array(4)))
+
+        vector3 = mlx.utils.tree_merge(vector1, vector1, lambda a, b: a + b)
+        self.assertTrue(isinstance(vector3, Vector))
+        self.assertTrue(mx.array_equal(vector3[0], mx.array([0, 2])))
+        self.assertTrue(mx.array_equal(vector3[1], mx.array(4)))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

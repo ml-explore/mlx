@@ -137,8 +137,9 @@ Compiled::Compiled(
     }
   }
   os << "_";
-  for (const auto& x : inputs) {
-    if (constant_ids.find(x.id()) != constant_ids.end()) {
+  // Iterate the moved-into members; the parameters are moved-from above.
+  for (const auto& x : inputs_) {
+    if (constant_ids_.find(x.id()) != constant_ids_.end()) {
       continue;
     }
     os << kindof(x.dtype()) << x.itemsize();
@@ -1123,8 +1124,6 @@ ArrayFnWithExtra compile(
 
     // No matching cache entry existed, so compile
     if (entry.empty) {
-      // Mark the entry as not empty since we are about to fill it
-      entry.empty = false;
       // Set the constants
       entry.constants = std::move(constants);
       // Trace to build the graph
@@ -1150,6 +1149,11 @@ ArrayFnWithExtra compile(
       if (mode != CompileMode::no_fuse) {
         compile_fuse(entry.tape, parents_map, entry.inputs, entry.outputs);
       }
+
+      // Mark the entry as filled only after every step above completed, so
+      // a throwing first trace leaves the entry empty and a later call
+      // re-traces cleanly instead of hitting a half-filled entry
+      entry.empty = false;
     }
 
     // At this point we must have a tape, now replace the placeholders

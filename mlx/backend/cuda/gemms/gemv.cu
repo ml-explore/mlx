@@ -167,7 +167,7 @@ __global__ void gemv_gather(
 }
 
 bool can_use_gemv(int M, int N, int K, bool a_transposed, bool b_transposed) {
-  return K % 32 == 0 && ((M == 1 && b_transposed) || (N == 1 && !a_transposed));
+  return (M == 1 && b_transposed) || (N == 1 && !a_transposed);
 }
 
 template <typename F>

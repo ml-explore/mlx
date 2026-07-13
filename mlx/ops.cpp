@@ -51,6 +51,12 @@ std::tuple<Shape, std::vector<int>, bool> compute_reduce_shape(
     is_noop &= (out_shape.back() == shape[i]);
   }
   std::vector<int> sorted_axes(axes_set.begin(), axes_set.end());
+  // Dimensions that are size 1 at trace time can be dynamic when compiling
+  // shapeless, so the reduction cannot be elided from the graph. Reductions
+  // over no axes stay no-ops since they are shape independent.
+  if (is_noop && !sorted_axes.empty() && detail::in_dynamic_tracing()) {
+    is_noop = false;
+  }
   return {out_shape, sorted_axes, is_noop};
 }
 
@@ -67,8 +73,10 @@ array indices_or_default(
   }
 
   Shape shape(x.shape().begin(), x.shape().end() - 2);
-  int total =
-      std::reduce(shape.begin(), shape.end(), 1, std::multiplies<int>());
+  int total = safe_cast(
+      std::reduce(
+          shape.begin(), shape.end(), int64_t{1}, std::multiplies<int64_t>{}),
+      "gather");
   return reshape(arange(total, uint32, s), std::move(shape), s);
 }
 
@@ -166,6 +174,10 @@ array arange(
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
 
+  if (step == 0) {
+    throw std::invalid_argument("[arange] step must be nonzero.");
+  }
+
   // Check if start and stop specify a valid range because if not, we have to
   // return an empty array
   if (std::isinf(step) &&
@@ -255,8 +267,12 @@ array linspace(
       s);
 }
 
-array astype(array a, Dtype dtype, StreamOrDevice s /* = {} */) {
-  if (dtype == a.dtype()) {
+array astype(
+    array a,
+    Dtype dtype,
+    std::optional<bool> copy,
+    StreamOrDevice s /* = {} */) {
+  if (dtype == a.dtype() && !copy.value_or(false)) {
     return a;
   }
   auto copied_shape = a.shape(); // |a| will be moved
@@ -433,7 +449,7 @@ array unflatten(
     }
   }
   if (infer_idx >= 0) {
-    shape[infer_idx] = a.shape(ax) / size;
+    shape[infer_idx] = safe_cast(a.shape(ax) / size, "unflatten");
     size *= shape[infer_idx];
   }
   if (size != a.shape(ax)) {
@@ -637,6 +653,33 @@ array expand_dims(
   }
   std::vector<int> sorted_axes(unique_axes.begin(), unique_axes.end());
   return expand_dims_impl(a, std::move(sorted_axes), s);
+}
+
+array flip(
+    const array& a,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  auto ndim = static_cast<int>(a.ndim());
+  Shape start(ndim, 0);
+  Shape stop = a.shape();
+  Shape strides(ndim, 1);
+  for (auto ax : axes) {
+    int axis = normalize_axis_index(ax, ndim, "[flip] ");
+    start[axis] = a.shape(axis) - 1;
+    stop[axis] = -a.shape(axis) - 1;
+    strides[axis] = -1;
+  }
+  return slice(a, std::move(start), std::move(stop), std::move(strides), s);
+}
+
+array flip(const array& a, int axis, StreamOrDevice s /* = {} */) {
+  return flip(a, std::vector<int>{axis}, s);
+}
+
+array flip(const array& a, StreamOrDevice s /* = {} */) {
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  return flip(a, axes, s);
 }
 
 // Slice helper
@@ -1142,6 +1185,32 @@ split(const array& a, int num_splits, StreamOrDevice s /* = {} */) {
   return split(a, num_splits, 0, to_stream(s));
 }
 
+std::vector<array>
+unstack(const array& a, int axis, StreamOrDevice s /* = {} */) {
+  auto ndim = static_cast<int>(a.ndim());
+  auto ax = axis < 0 ? axis + ndim : axis;
+  if (ax < 0 || ax >= ndim) {
+    std::ostringstream msg;
+    msg << "[unstack] Invalid axis " << axis << " for array with " << ndim
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto n = a.shape(ax);
+  std::vector<array> res;
+  res.reserve(n);
+  if (n == 0) {
+    return res;
+  }
+  for (auto& part : split(a, n, ax, s)) {
+    res.push_back(squeeze(part, ax, s));
+  }
+  return res;
+}
+
+std::vector<array> unstack(const array& a, StreamOrDevice s /* = {} */) {
+  return unstack(a, 0, s);
+}
+
 std::vector<array> meshgrid(
     const std::vector<array>& arrays,
     bool sparse /* = false */,
@@ -1300,7 +1369,9 @@ array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
   }
 
   if (repeats == 0) {
-    return array({}, arr.dtype());
+    auto shape = arr.shape();
+    shape[axis] = 0;
+    return array(std::initializer_list<int>{}, shape, arr.dtype());
   }
 
   if (repeats == 1) {
@@ -1347,7 +1418,8 @@ array tile(
     }
     expand_shape.push_back(shape[i]);
     broad_shape.push_back(shape[i]);
-    final_shape.push_back(reps[i] * shape[i]);
+    final_shape.push_back(
+        safe_cast(static_cast<int64_t>(reps[i]) * shape[i], "tile"));
   }
 
   auto x = reshape(arr, std::move(expand_shape), s);
@@ -2086,6 +2158,32 @@ array sum(
   return sum(a, std::vector<int>{axis}, keepdims, s);
 }
 
+array count_nonzero(
+    const array& a,
+    bool keepdims /* = false */,
+    StreamOrDevice s /* = {} */) {
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  return count_nonzero(a, axes, keepdims, s);
+}
+
+array count_nonzero(
+    const array& a,
+    int axis,
+    bool keepdims /* = false */,
+    StreamOrDevice s /* = {} */) {
+  return count_nonzero(a, std::vector<int>{axis}, keepdims, s);
+}
+
+array count_nonzero(
+    const array& a,
+    const std::vector<int>& axes,
+    bool keepdims /* = false */,
+    StreamOrDevice s /* = {} */) {
+  auto nz = astype(not_equal(a, array(0, a.dtype()), s), int32, s);
+  return sum(nz, axes, keepdims, s);
+}
+
 array mean(const array& a, bool keepdims, StreamOrDevice s /* = {}*/) {
   std::vector<int> axes(a.ndim());
   std::iota(axes.begin(), axes.end(), 0);
@@ -2776,6 +2874,10 @@ array abs(const array& a, StreamOrDevice s /* = {} */) {
   return out;
 }
 
+array positive(const array& a, StreamOrDevice s /* = {} */) {
+  return array(a);
+}
+
 array negative(const array& a, StreamOrDevice s /* = {} */) {
   if (a.dtype() == bool_) {
     auto msg = "[negative] Not supported for bool, use logical_not instead.";
@@ -2826,6 +2928,10 @@ array logical_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 }
 array operator||(const array& a, const array& b) {
   return logical_or(a, b);
+}
+
+array logical_xor(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  return not_equal(astype(a, bool_, s), astype(b, bool_, s), s);
 }
 
 array reciprocal(const array& a, StreamOrDevice s /* = {} */) {
@@ -2978,6 +3084,17 @@ array ceil(const array& a, StreamOrDevice s /* = {} */) {
     throw std::invalid_argument("[floor] Not supported for complex64.");
   }
   return array(a.shape(), a.dtype(), std::make_shared<Ceil>(to_stream(s)), {a});
+}
+
+array trunc(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[trunc] Not supported for complex64.");
+  }
+  if (issubdtype(a.dtype(), integer)) {
+    return array(a);
+  }
+  auto zero = array(0, a.dtype());
+  return where(less(a, zero, s), ceil(a, s), floor(a, s), s);
 }
 
 array square(const array& a, StreamOrDevice s /* = {} */) {
@@ -3875,6 +3992,7 @@ array cumsum(
     int axis,
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
+    std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
   int ndim = a.ndim();
   if (axis >= ndim || axis < -ndim) {
@@ -3884,21 +4002,24 @@ array cumsum(
     throw std::invalid_argument(msg.str());
   }
   axis = (axis + a.ndim()) % a.ndim();
-  auto out_type = a.dtype() == bool_ ? int32 : a.dtype();
+  auto x = dtype ? astype(a, *dtype, s) : a;
+  auto out_type = x.dtype() == bool_ ? int32 : x.dtype();
   return array(
-      a.shape(),
+      x.shape(),
       out_type,
       std::make_shared<Scan>(
           to_stream(s), Scan::ReduceType::Sum, axis, reverse, inclusive),
-      {a});
+      {x});
 }
 
 array cumsum(
     const array& a,
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
+    std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
-  return cumsum(flatten(a, to_stream(s)), 0, reverse, inclusive, to_stream(s));
+  return cumsum(
+      flatten(a, to_stream(s)), 0, reverse, inclusive, dtype, to_stream(s));
 }
 
 array cumprod(
@@ -3906,6 +4027,7 @@ array cumprod(
     int axis,
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
+    std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
   int ndim = a.ndim();
   if (axis >= ndim || axis < -ndim) {
@@ -3915,20 +4037,22 @@ array cumprod(
     throw std::invalid_argument(msg.str());
   }
   axis = (axis + a.ndim()) % a.ndim();
+  auto x = dtype ? astype(a, *dtype, s) : a;
   return array(
-      a.shape(),
-      a.dtype(),
+      x.shape(),
+      x.dtype(),
       std::make_shared<Scan>(
           to_stream(s), Scan::ReduceType::Prod, axis, reverse, inclusive),
-      {a});
+      {x});
 }
 
 array cumprod(
     const array& a,
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
+    std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
-  return cumprod(flatten(a, s), 0, reverse, inclusive, s);
+  return cumprod(flatten(a, s), 0, reverse, inclusive, dtype, s);
 }
 
 array cummax(
@@ -3989,6 +4113,33 @@ array cummin(
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
   return cummin(flatten(a, s), 0, reverse, inclusive, s);
+}
+
+array diff(
+    const array& a,
+    int n /* = 1 */,
+    int axis /* = -1 */,
+    StreamOrDevice s /* = {} */) {
+  int ndim = static_cast<int>(a.ndim());
+  int ax = axis < 0 ? axis + ndim : axis;
+  if (ax < 0 || ax >= ndim) {
+    throw std::invalid_argument("[diff] Axis is out of bounds for the array.");
+  }
+  if (n < 0) {
+    throw std::invalid_argument("[diff] Order `n` must be non-negative.");
+  }
+  array x = a;
+  for (int i = 0; i < n; ++i) {
+    Shape upper_start(x.ndim(), 0);
+    Shape lower_stop = x.shape();
+    Shape strides(x.ndim(), 1);
+    upper_start[ax] = 1;
+    lower_stop[ax] = x.shape(ax) - 1;
+    auto upper = slice(x, upper_start, x.shape(), strides, s);
+    auto lower = slice(x, Shape(x.ndim(), 0), lower_stop, strides, s);
+    x = subtract(upper, lower, s);
+  }
+  return x;
 }
 
 array logcumsumexp(
@@ -5462,6 +5613,28 @@ array inner(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   return tensordot(a, b, {-1}, {-1}, s);
 }
 
+array vecdot(
+    const array& a,
+    const array& b,
+    int axis /* = -1 */,
+    StreamOrDevice s /* = {} */) {
+  if (a.ndim() == 0 || b.ndim() == 0) {
+    throw std::invalid_argument("[vecdot] inputs must be at least 1D.");
+  }
+  int ax = axis < 0 ? axis + a.ndim() : axis;
+  if (ax < 0 || ax >= a.ndim()) {
+    throw std::invalid_argument("[vecdot] axis is out of bounds.");
+  }
+  if (axis < 0 ? axis + b.ndim() != ax : axis >= b.ndim()) {
+    throw std::invalid_argument("[vecdot] axis is out of bounds.");
+  }
+  if (a.shape(ax) != b.shape(ax)) {
+    throw std::invalid_argument(
+        "[vecdot] a and b must have the same size along axis.");
+  }
+  return sum(multiply(conjugate(a, s), b, s), ax, false, s);
+}
+
 /** Compute D = beta * C + alpha * (A @ B) */
 array addmm(
     array c,
@@ -6348,7 +6521,10 @@ array roll(
     if (size == 0) {
       continue; // skip rolling this axis if it has size 0
     }
-    auto split_index = (sh < 0) ? (-sh) % size : size - sh % size;
+    // Promote to 64-bit so negating a shift of INT_MIN does not overflow.
+    int64_t sh64 = sh;
+    auto split_index = static_cast<ShapeElem>(
+        (sh64 < 0) ? (-sh64) % size : size - sh64 % size);
 
     auto parts = split(result, Shape{split_index}, ax, s);
     std::swap(parts[0], parts[1]);
@@ -6367,11 +6543,11 @@ array roll(const array& a, int shift, StreamOrDevice s /* = {} */) {
 }
 
 array roll(const array& a, const Shape& shift, StreamOrDevice s /* = {} */) {
-  int total_shift = 0;
-  for (auto& s : shift) {
-    total_shift += s;
+  int64_t total_shift = 0;
+  for (auto& sh : shift) {
+    total_shift += sh;
   }
-  return roll(a, total_shift, s);
+  return roll(a, safe_cast(total_shift, "roll"), s);
 }
 
 array roll(const array& a, int shift, int axis, StreamOrDevice s /* = {} */) {
@@ -6392,11 +6568,12 @@ array roll(
     const Shape& shift,
     int axis,
     StreamOrDevice s /* = {} */) {
-  int total_shift = 0;
-  for (auto& s : shift) {
-    total_shift += s;
+  int64_t total_shift = 0;
+  for (auto& sh : shift) {
+    total_shift += sh;
   }
-  return roll(a, Shape{total_shift}, std::vector<int>{axis}, s);
+  return roll(
+      a, Shape{safe_cast(total_shift, "roll")}, std::vector<int>{axis}, s);
 }
 
 array real(const array& a, StreamOrDevice s /* = {} */) {

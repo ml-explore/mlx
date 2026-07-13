@@ -1,5 +1,5 @@
 mlx.core.__prefix__:
-  from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, ParamSpec, TypeVar
+  from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence, Tuple, Union, ParamSpec, TypeVar
   import sys
   if sys.version_info >= (3, 10):
     from typing import TypeAlias
@@ -7,6 +7,9 @@ mlx.core.__prefix__:
     from typing_extensions import TypeAlias
   P = ParamSpec("P")
   R = TypeVar("R")
+  class DLPackCompatible(Protocol):
+    __dlpack__: Callable[..., Any]
+    __dlpack_device__: Callable[..., Any]
 
 mlx.core.__suffix__:
   from typing import Union

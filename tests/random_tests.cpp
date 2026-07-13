@@ -297,7 +297,7 @@ TEST_CASE("test random uniform") {
   //   print(jax.prng.threefry_prng_impl.random_bits(key, 32, shape))
 
   constexpr auto to_float = [](uint32_t n) {
-    return static_cast<float>(n) / UINT32_MAX;
+    return float(n) / float(UINT32_MAX);
   };
 
   {
@@ -355,7 +355,7 @@ TEST_CASE("test random uniform") {
     CHECK(all(less(out, array(1.0f))).item<bool>());
     CHECK(all(greater_equal(out, array(0.0f))).item<bool>());
     CHECK(!all(equal(out, array(0.0f))).item<bool>());
-    CHECK(abs(float(mean(out).item<float16_t>()) - 0.5f) < 0.02);
+    CHECK(abs(mean(astype(out, float32)).item<float>() - 0.5f) < 0.02);
   }
 
   {
@@ -365,7 +365,7 @@ TEST_CASE("test random uniform") {
     CHECK(all(less(out, array(1.0f))).item<bool>());
     CHECK(all(greater_equal(out, array(0.0f))).item<bool>());
     CHECK(!all(equal(out, array(0.0f))).item<bool>());
-    CHECK(abs(float(mean(out).item<bfloat16_t>()) - 0.5f) < 0.02);
+    CHECK(abs(mean(astype(out, float32)).item<float>() - 0.5f) < 0.02);
   }
 }
 

@@ -56,6 +56,11 @@ class InstanceNorm(Module):
         return f"{self.dims}, eps={self.eps}, affine={'weight' in self}"
 
     def __call__(self, x: mx.array) -> mx.array:
+        if x.ndim < 3:
+            raise ValueError(
+                f"InstanceNorm expects inputs with at least 3 dimensions"
+                f" (N, ..., C) but the input has {x.ndim} dimensions."
+            )
         reduction_axes = tuple(range(1, x.ndim - 1))
         # Compute stats
         mean = mx.mean(x, axis=reduction_axes, keepdims=True)
@@ -73,7 +78,7 @@ class LayerNorm(Module):
 
     .. math::
 
-        y = \frac{x - E[x]}{\sqrt{Var[x]} + \epsilon} \gamma + \beta,
+        y = \frac{x - E[x]}{\sqrt{Var[x] + \epsilon}} \gamma + \beta,
 
     where :math:`\gamma` and :math:`\beta` are learned per feature dimension
     parameters initialized at 1 and 0 respectively.
@@ -82,12 +87,13 @@ class LayerNorm(Module):
 
     Args:
         dims (int): The feature dimension of the input to normalize over
-        eps (float): A small additive constant for numerical stability
+        eps (float): A small additive constant for numerical stability.
+            Default: ``1e-5``.
         affine (bool): If True learn an affine transform to apply after the
-            normalization
+            normalization. Default: ``True``.
         bias (bool): If True include a translation to the affine
             transformation. If set to False the transformation is not really affine
-            just scaling.
+            just scaling. Default: ``True``.
     """
 
     def __init__(
@@ -128,7 +134,8 @@ class RMSNorm(Module):
 
     Args:
         dims (int): The feature dimension of the input to normalize over
-        eps (float): A small additive constant for numerical stability
+        eps (float): A small additive constant for numerical stability.
+            Default: ``1e-5``.
     """
 
     def __init__(self, dims: int, eps: float = 1e-5):
@@ -150,7 +157,7 @@ class GroupNorm(Module):
 
     .. math::
 
-        y = \frac{x - E[x]}{\sqrt{Var[x]} + \epsilon} \gamma + \beta,
+        y = \frac{x - E[x]}{\sqrt{Var[x] + \epsilon}} \gamma + \beta,
 
     where :math:`\gamma` and :math:`\beta` are learned per feature dimension
     parameters initialized at 1 and 0 respectively. However, the mean and
@@ -166,11 +173,12 @@ class GroupNorm(Module):
     Args:
         num_groups (int): Number of groups to separate the features into
         dims (int): The feature dimensions of the input to normalize over
-        eps (float): A small additive constant for numerical stability
+        eps (float): A small additive constant for numerical stability.
+            Default: ``1e-5``.
         affine (bool): If True learn an affine transform to apply after the
-            normalization.
+            normalization. Default: ``True``.
         pytorch_compatible (bool): If True perform the group normalization in
-            the same order/grouping as PyTorch.
+            the same order/grouping as PyTorch. Default: ``False``.
     """
 
     def __init__(
@@ -182,6 +190,19 @@ class GroupNorm(Module):
         pytorch_compatible: bool = False,
     ):
         super().__init__()
+        if num_groups <= 0:
+            raise ValueError(
+                f"The number of groups ({num_groups}) must be a positive integer."
+            )
+        if dims <= 0:
+            raise ValueError(
+                f"The number of features ({dims}) must be a positive integer."
+            )
+        if dims % num_groups != 0:
+            raise ValueError(
+                f"The number of features ({dims}) must be evenly divisible"
+                f" by the number of groups ({num_groups})."
+            )
         if affine:
             self.bias = mx.zeros((dims,))
             self.weight = mx.ones((dims,))
@@ -238,13 +259,13 @@ class GroupNorm(Module):
 
 
 class BatchNorm(Module):
-    r"""Applies Batch Normalization over a 2D or 3D input.
+    r"""Applies Batch Normalization over a 2D, 3D or 4D input.
 
     Computes
 
     .. math::
 
-        y = \frac{x - E[x]}{\sqrt{Var[x]} + \epsilon} \gamma + \beta,
+        y = \frac{x - E[x]}{\sqrt{Var[x] + \epsilon}} \gamma + \beta,
 
     where :math:`\gamma` and :math:`\beta` are learned per feature dimension
     parameters initialized at 1 and 0 respectively.

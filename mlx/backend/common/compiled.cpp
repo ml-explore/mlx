@@ -82,7 +82,16 @@ std::string get_type_string(Dtype d) {
   }
 }
 
-bool compiled_check_contiguity(
+bool has_negative_strides(const array& x) {
+  for (auto s : x.strides()) {
+    if (s < 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::pair<bool, bool> compiled_check_contiguity(
     const std::vector<array>& inputs,
     const Shape& shape) {
   bool contiguous = true;
@@ -90,6 +99,7 @@ bool compiled_check_contiguity(
   bool all_row_contig = true;
   bool all_col_contig = true;
   int non_scalar_inputs = 0;
+  bool negative_strides = false;
   for (const auto& x : inputs) {
     if (is_scalar(x)) {
       continue;
@@ -99,6 +109,7 @@ bool compiled_check_contiguity(
     all_contig &= (x.flags().contiguous && shape_eq);
     all_row_contig &= (x.flags().row_contiguous && shape_eq);
     all_col_contig &= (x.flags().col_contiguous && shape_eq);
+    negative_strides |= has_negative_strides(x);
   }
   if (non_scalar_inputs > 1 && !all_row_contig && !all_col_contig) {
     contiguous = false;
@@ -107,7 +118,7 @@ bool compiled_check_contiguity(
   } else if (non_scalar_inputs == 0 && !shape.empty()) {
     contiguous = false;
   }
-  return contiguous;
+  return {contiguous, negative_strides};
 }
 
 void compiled_allocate_outputs(
@@ -170,14 +181,16 @@ void compiled_allocate_outputs(
   }
 }
 
-std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
+std::tuple<bool, bool, Shape, std::vector<Strides>>
+compiled_collapse_contiguous_dims(
     const std::vector<array>& inputs,
     const array& out,
     const std::function<bool(size_t)>& is_constant) {
   const Shape& shape = out.shape();
-  bool contiguous = compiled_check_contiguity(inputs, shape);
-  if (contiguous) {
-    return {true, shape, {}};
+  auto [contiguous, negative_strides] =
+      compiled_check_contiguity(inputs, shape);
+  if (contiguous && !negative_strides) {
+    return {true, false, shape, {}};
   }
 
   std::vector<Strides> strides_vec{out.strides()};
@@ -218,7 +231,11 @@ std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
   }
 
   auto tup = collapse_contiguous_dims(shape, strides_vec, INT32_MAX);
-  return {false, std::move(std::get<0>(tup)), std::move(std::get<1>(tup))};
+  return {
+      false,
+      negative_strides,
+      std::move(std::get<0>(tup)),
+      std::move(std::get<1>(tup))};
 }
 
 bool compiled_use_large_index(

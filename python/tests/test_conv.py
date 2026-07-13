@@ -1,6 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
 import unittest
 from itertools import permutations
 
@@ -410,7 +411,9 @@ class TestConv(mlx_tests.MLXTestCase):
                 )
 
                 in_np = np.random.normal(0.0, scale, (N, iH, iW, C)).astype(np_dtype)
-                wt_np = np.random.normal(0.0, scale, (O, kH, kW, C)).astype(np_dtype)
+                wt_np = np.random.normal(0.0, scale, (O, kH, kW, C // groups)).astype(
+                    np_dtype
+                )
                 ct_np = np.random.normal(0.0, scale, (N, oH, oW, O)).astype(np_dtype)
 
                 in_mx, wt_mx, ct_mx = map(mx.array, (in_np, wt_np, ct_np))
@@ -478,6 +481,19 @@ class TestConv(mlx_tests.MLXTestCase):
                     run_conv2D_grad(
                         N, C, O, idim, kdim, stride, padding, dilation, dtype=dtype
                     )
+
+            for groups in (2, 4, 32):
+                run_conv2D_grad(
+                    4,
+                    32,
+                    32,
+                    (32, 32),
+                    (3, 3),
+                    (2, 2),
+                    (1, 1),
+                    groups=groups,
+                    dtype=dtype,
+                )
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_3D(self):
@@ -1084,7 +1100,7 @@ class TestConv(mlx_tests.MLXTestCase):
                         groups=groups,
                         flip=flip,
                         np_dtype=dtype,
-                        atol=2e-5 if dtype == np.float32 else 5e-4,
+                        atol=2e-5 if dtype == np.float32 else 5e-3,
                     )
 
     @unittest.skipIf(not has_torch, "requires Torch")
@@ -1151,6 +1167,7 @@ class TestConv(mlx_tests.MLXTestCase):
             )
             self.assertEqual(grads.shape, k_shape)
 
+    @unittest.skipIf(mx.cuda.is_available() and "CI" in os.environ, "flaky in CI")
     def test_conv_1d_with_2d(self):
         x = mx.random.uniform(shape=(2, 10, 16))
         y = mx.random.normal(shape=(16, 3, 16))

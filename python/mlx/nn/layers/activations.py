@@ -66,7 +66,7 @@ def leaky_relu(x, negative_slope=0.01):
 def log_softmax(x, axis=-1):
     r"""Applies the Log Softmax function.
 
-    Applies :math:`x + \log \sum_i e^{x_i}` element wise.
+    Applies :math:`x - \log \sum_i e^{x_i}` element wise.
     """
     return x - mx.logsumexp(x, axis=axis, keepdims=True)
 
@@ -176,7 +176,7 @@ def gelu_approx(x):
 
     .. math::
 
-        x = 0.5 * x * \left(1 + \text{Tanh}\left((\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right)
+        x = 0.5 * x * \left(1 + \text{Tanh}\left(\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right)
 
     """
     return 0.5 * x * (1 + mx.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * x**3)))
@@ -237,7 +237,7 @@ def step(x: mx.array, threshold: float = 0.0):
         threshold: The value to threshold at.
     """
 
-    return mx.where(x > threshold, 1, 0)
+    return mx.where(x >= threshold, 1, 0)
 
 
 @partial(mx.compile, shapeless=True)
@@ -552,7 +552,7 @@ class GELU(Module):
     However, if ``approx`` is set to 'precise' or 'fast' it applies
 
     .. math::
-        \textrm{GELUApprox}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left((\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right) \\
+        \textrm{GELUApprox}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left(\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right) \\
         \textrm{GELUFast}(x) &= x * \sigma\left(1.702 * x\right)
 
     respectively.
@@ -642,7 +642,6 @@ class HardTanh(Module):
     """
 
 
-@_make_activation_module(hard_shrink)
 class HardShrink(Module):
     r"""Applies the HardShrink function.
 
@@ -651,6 +650,13 @@ class HardShrink(Module):
     Args:
         lambd: the :math:`\lambda` value for Hardshrink. Default: ``0.5``
     """
+
+    def __init__(self, lambd=0.5):
+        super().__init__()
+        self.lambd = lambd
+
+    def __call__(self, x):
+        return hard_shrink(x, self.lambd)
 
 
 @_make_activation_module(softmin)

@@ -270,6 +270,26 @@ class TestLosses(mlx_tests.MLXTestCase):
         expected_sum = mx.sum(expected_none)
         self.assertEqual(losses_sum, expected_sum)
 
+        # Test a different axis
+        logits = mx.log(mx.softmax(mx.random.normal((4, 8)), axis=-1))
+        targets = mx.array([1, 2, 3, 0])
+        loss = nn.losses.nll_loss(logits.T, targets, axis=0)
+        expected = nn.losses.nll_loss(logits, targets, axis=-1)
+        self.assertTrue(mx.allclose(loss, expected))
+
+        # Test a middle axis on a higher rank input
+        logits = mx.log(mx.softmax(mx.random.normal((2, 5, 3)), axis=1))
+        targets = mx.array([[1, 4, 0], [2, 3, 1]])
+        loss = nn.losses.nll_loss(logits, targets, axis=1)
+        logits_np = np.array(logits)
+        targets_np = np.array(targets)
+        expected = np.zeros((2, 3))
+        for b in range(2):
+            for k in range(3):
+                expected[b, k] = -logits_np[b, targets_np[b, k], k]
+        self.assertEqual(loss.shape, (2, 3))
+        self.assertTrue(np.allclose(np.array(loss), expected))
+
     def test_gaussian_nll_loss(self):
         inputs = mx.array([[0.1, 0.2], [0.3, 0.4]])
         targets = mx.array([[0.2, 0.1], [0.1, 0.2]])
@@ -315,6 +335,12 @@ class TestLosses(mlx_tests.MLXTestCase):
         expected_sum_full = mx.sum(expected_none_full)
         self.assertTrue(mx.allclose(losses_sum_full, expected_sum_full))
 
+        # The default reduction is "mean" (matches the documented default): a
+        # scalar equal to the explicit mean reduction, not the per-element array.
+        losses_default = nn.losses.gaussian_nll_loss(inputs, targets, vars)
+        self.assertEqual(losses_default.ndim, 0)
+        self.assertTrue(mx.allclose(losses_default, expected_mean))
+
     def test_kl_div_loss(self):
         p_logits = mx.log(mx.array([[0.5, 0.5], [0.8, 0.2]]))
         q_logits = mx.log(mx.array([[0.5, 0.5], [0.2, 0.8]]))
@@ -323,6 +349,12 @@ class TestLosses(mlx_tests.MLXTestCase):
         losses_none = nn.losses.kl_div_loss(p_logits, q_logits, reduction="none")
         expected_none = mx.array([0.0, 0.831777])
         self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # The documented formula must match the implementation: the sum reduces
+        # the elementwise product over `axis`, so the multiply has to be inside
+        # the sum (parenthesization matters).
+        documented = (mx.exp(q_logits) * (q_logits - p_logits)).sum(axis=-1)
+        self.assertTrue(mx.allclose(losses_none, documented))
 
         # Test with reduction 'mean'
         losses_mean = nn.losses.kl_div_loss(p_logits, q_logits, reduction="mean")
@@ -359,6 +391,23 @@ class TestLosses(mlx_tests.MLXTestCase):
         )
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
+        # Test with non-default 'p' norm degrees
+        anchors = mx.array([[0.0, 0.0]])
+        positives = mx.array([[2.0, 0.0]])
+        negatives = mx.array([[0.0, 3.0]])
+
+        losses_p1 = nn.losses.triplet_loss(
+            anchors, positives, negatives, p=1, reduction="none"
+        )
+        expected_p1 = mx.array([0.0])
+        self.assertTrue(mx.allclose(losses_p1, expected_p1))
+
+        losses_p3 = nn.losses.triplet_loss(
+            anchors, positives, negatives, p=3, reduction="none"
+        )
+        expected_p3 = mx.array([0.0])
+        self.assertTrue(mx.allclose(losses_p3, expected_p3))
 
     def test_hinge_loss(self):
         inputs = mx.ones((2, 4))

@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 #include "mlx/dtype_utils.h"
@@ -17,6 +18,8 @@ Stream to_stream(StreamOrDevice s) {
     return default_stream(default_device());
   } else if (std::holds_alternative<Device>(s)) {
     return default_stream(std::get<Device>(s));
+  } else if (std::holds_alternative<ThreadLocalStream>(s)) {
+    return stream_from_thread_local_stream(std::get<ThreadLocalStream>(s));
   } else {
     return std::get<Stream>(s);
   }
@@ -116,11 +119,9 @@ void set_printoptions(PrintOptions options) {
   formatter.format_options = options;
 }
 
-void abort_with_exception(const std::exception& error) {
-  std::ostringstream msg;
-  msg << "Terminating due to uncaught exception: " << error.what();
-  std::cerr << msg.str() << std::endl;
-  std::abort();
+bool is_main_thread() {
+  static auto main_thread_id = std::this_thread::get_id();
+  return main_thread_id == std::this_thread::get_id();
 }
 
 Dtype result_type(const std::vector<array>& arrays) {
@@ -303,10 +304,17 @@ std::string get_var(const char* name, const char* default_value) {
 } // namespace env
 
 template <typename T>
-void set_finfo_limits(double& min, double& max, double& eps) {
+void set_finfo_limits(
+    int& bits,
+    double& min,
+    double& max,
+    double& eps,
+    double& smallest_normal) {
+  bits = 8 * sizeof(T);
   min = numeric_limits<T>::lowest();
   max = numeric_limits<T>::max();
   eps = numeric_limits<T>::epsilon();
+  smallest_normal = numeric_limits<T>::min();
 }
 
 finfo::finfo(Dtype dtype) : dtype(dtype) {
@@ -316,16 +324,16 @@ finfo::finfo(Dtype dtype) : dtype(dtype) {
     throw std::invalid_argument(msg.str());
   }
   if (dtype == float32) {
-    set_finfo_limits<float>(min, max, eps);
+    set_finfo_limits<float>(bits, min, max, eps, smallest_normal);
   } else if (dtype == float16) {
-    set_finfo_limits<float16_t>(min, max, eps);
+    set_finfo_limits<float16_t>(bits, min, max, eps, smallest_normal);
   } else if (dtype == bfloat16) {
-    set_finfo_limits<bfloat16_t>(min, max, eps);
+    set_finfo_limits<bfloat16_t>(bits, min, max, eps, smallest_normal);
   } else if (dtype == float64) {
-    set_finfo_limits<double>(min, max, eps);
+    set_finfo_limits<double>(bits, min, max, eps, smallest_normal);
   } else if (dtype == complex64) {
     this->dtype = float32;
-    set_finfo_limits<float>(min, max, eps);
+    set_finfo_limits<float>(bits, min, max, eps, smallest_normal);
   }
 }
 

@@ -27,19 +27,26 @@ Operations
    argpartition
    argsort
    array_equal
+   asarray
    as_strided
+   astype
    atleast_1d
    atleast_2d
    atleast_3d
+   bartlett
    bitwise_and
    bitwise_invert
    bitwise_or
    bitwise_xor
+   blackman
    block_masked_mm
    broadcast_arrays
+   broadcast_shapes
    broadcast_to
+   can_cast
    ceil
    clip
+   concat
    concatenate
    contiguous
    conj
@@ -58,10 +65,13 @@ Operations
    cummin
    cumprod
    cumsum
+   count_nonzero
    degrees
+   depends
    dequantize
    diag
    diagonal
+   diff
    divide
    divmod
    einsum
@@ -74,17 +84,24 @@ Operations
    expand_dims
    eye
    flatten
+   flip
    floor
    floor_divide
    full
+   from_dlpack
+   full_like
+   from_fp8
    gather_mm
    gather_qmm
    greater
    greater_equal
    hadamard_transform
+   hamming
+   hanning
    identity
    imag
    inner
+   isdtype
    isfinite
    isclose
    isinf
@@ -107,6 +124,7 @@ Operations
    logical_not
    logical_and
    logical_or
+   logical_xor
    logsumexp
    matmul
    max
@@ -126,17 +144,21 @@ Operations
    outer
    partition
    pad
+   permute_dims
+   positive
    power
    prod
    put_along_axis
    quantize
    quantized_matmul
+   qqmm
    radians
    real
    reciprocal
    remainder
    repeat
    reshape
+   result_type
    right_shift
    roll
    round
@@ -152,6 +174,7 @@ Operations
    sinh
    slice
    slice_update
+   segmented_mm
    softmax
    sort
    split
@@ -171,12 +194,16 @@ Operations
    tensordot
    tile
    topk
+   to_fp8
    trace
    transpose
    tri
    tril
    triu
+   trunc
    unflatten
+   unstack
+   vecdot
    var
    view
    where

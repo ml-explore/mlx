@@ -1000,10 +1000,10 @@ METAL_FUNC void qmm_t_nax_tgp_impl(
   constexpr bool transpose_a = false;
   constexpr bool transpose_b = true;
 
-  const short sgp_sm = min(SM, short(M - (y_row + tm)));
+  const short sgp_sm = min(int(SM), M - (y_row + tm));
   const bool is_unaligned_sm = (sgp_sm != SM);
 
-  const short sgp_sn = aligned_N ? SN : min(SN, short(N - (y_col + tn)));
+  const short sgp_sn = aligned_N ? SN : min(int(SN), N - (y_col + tn));
 
   const short tgp_bn = aligned_N ? BN : min(BN, int(N - (y_col)));
   const bool is_unaligned_bn = aligned_N ? false : (tgp_bn != BN);

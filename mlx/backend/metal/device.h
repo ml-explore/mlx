@@ -11,6 +11,7 @@
 #include <unordered_set>
 
 #include "mlx/array.h"
+#include "mlx/backend/common/metal_kernel.h"
 #include "mlx/backend/metal/resident.h"
 #include "mlx/device.h"
 
@@ -20,6 +21,7 @@ using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
 class Device;
+class EventImpl;
 
 class MLX_API CommandEncoder {
  public:
@@ -90,13 +92,12 @@ class MLX_API CommandEncoder {
 
   void barrier();
   void end_encoding();
+  void wait_event(std::shared_ptr<EventImpl> event, uint64_t value);
+  void signal_event(std::shared_ptr<EventImpl> event, uint64_t value);
   bool needs_commit() const;
-  void commit();
+  void commit(std::function<void()> completion = nullptr);
   void synchronize();
 
-  MTL::CommandQueue* get_command_queue() const {
-    return queue_.get();
-  }
   MTL::CommandBuffer* get_command_buffer() const {
     return buffer_.get();
   }
@@ -113,6 +114,13 @@ class MLX_API CommandEncoder {
   int buffer_ops_{0};
   size_t buffer_sizes_{0};
 
+  // The events hooked to current command buffer.
+  std::vector<std::shared_ptr<EventImpl>> wait_events_;
+  std::vector<std::tuple<std::shared_ptr<EventImpl>, uint64_t>> signal_events_;
+
+  // Error from previous commited command buffer.
+  std::shared_ptr<std::string> error_;
+
   // Encoder for issuing GPU commands.
   // The members are used within a single ComputeCommandEncoder and will be
   // reset after calling end_encoding().
@@ -121,7 +129,9 @@ class MLX_API CommandEncoder {
   bool needs_barrier_{false};
   bool concurrent_{false};
   std::vector<array> temporaries_;
+  std::unordered_set<MTL::Resource*> prev_inputs_;
   std::unordered_set<MTL::Resource*> prev_outputs_;
+  std::unordered_set<MTL::Resource*> next_inputs_;
   std::unordered_set<MTL::Resource*> next_outputs_;
   std::unordered_set<MTL::Resource*> concurrent_outputs_;
   std::unordered_set<const void*> all_inputs_;
@@ -159,7 +169,14 @@ class MLX_API Device {
 
   MTL::Library* get_library(
       const std::string& name,
+      const CompileOptions& compile_options,
       const std::function<std::string(void)>& builder);
+
+  MTL::Library* get_library(
+      const std::string& name,
+      const std::function<std::string(void)>& builder) {
+    return get_library(name, {}, builder);
+  }
 
   void clear_library(const std::string& name);
 
@@ -181,7 +198,9 @@ class MLX_API Device {
   }
 
  private:
-  NS::SharedPtr<MTL::Library> build_library_(const std::string& source_string);
+  NS::SharedPtr<MTL::Library> build_library_(
+      const std::string& source_string,
+      const CompileOptions& compile_options = {});
 
   NS::SharedPtr<MTL::Function> get_function_(
       const std::string& name,
@@ -231,6 +250,7 @@ MLX_API Device& device(mlx::core::Device);
 MLX_API CommandEncoder& get_command_encoder(Stream s);
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders();
+std::unordered_map<int, CommandEncoder>& get_global_command_encoders();
 NS::SharedPtr<NS::AutoreleasePool> new_scoped_memory_pool();
 
 bool is_nax_available();

@@ -55,7 +55,7 @@ message(
     "Building MLX for ${CMAKE_SYSTEM_PROCESSOR} processor on ${CMAKE_SYSTEM_NAME}"
 )
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
     if(NOT MLX_ENABLE_X64_MAC)
       message(
@@ -70,6 +70,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
       message(WARNING "Building for x86_64 arch is not officially supported.")
     endif()
   endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  # Enable the Metal backend by default on iOS; the caller selects the SDK.
 else()
   set(MLX_BUILD_METAL OFF)
 endif()
@@ -178,33 +180,52 @@ if(MLX_BUILD_METAL)
     add_compile_definitions(MLX_METAL_DEBUG)
   endif()
 
-  # Throw an error if xcrun not found
-  execute_process(
-    COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
-    OUTPUT_VARIABLE MACOS_SDK_VERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+  # Probe the macOS SDK only on Darwin. On iOS the caller selects the SDK, so
+  # version detection is deferred and the baseline Metal feature set is used.
+  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # Get the host macOS version.
+    execute_process(
+      COMMAND sw_vers -productVersion
+      OUTPUT_VARIABLE MACOS_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+    message(STATUS "Building on macOS ${MACOS_VERSION}")
 
-  if(${MACOS_SDK_VERSION} LESS 14.0)
-    message(
-      FATAL_ERROR
-        "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON")
+    # Get macOS SDK version.
+    execute_process(
+      COMMAND xcrun -sdk macosx --show-sdk-version
+      OUTPUT_VARIABLE MACOS_SDK_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+    if(MACOS_SDK_VERSION VERSION_LESS 14.0)
+      message(
+        FATAL_ERROR
+          "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON")
+    endif()
+    message(STATUS "Building with macOS ${MACOS_SDK_VERSION} SDK")
+
+    # Build for the host system if CMAKE_OSX_DEPLOYMENT_TARGET is not set.
+    if(CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
+      set(CMAKE_OSX_DEPLOYMENT_TARGET "${MACOS_VERSION}")
+    endif()
+    if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 14.0)
+      message(FATAL_ERROR "MLX requires macOS >= 14.0")
+    endif()
+    message(STATUS "Building for macOS ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+
+    # Get Metal version.
+    set(XCRUN_FLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    execute_process(
+      COMMAND
+        zsh "-c"
+        "echo \"__METAL_VERSION__\" | xcrun -sdk macosx metal ${XCRUN_FLAGS} -E -x metal -P - | tail -1"
+      OUTPUT_VARIABLE MLX_METAL_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+    message(STATUS "Metal version: ${MLX_METAL_VERSION}")
+  else()
+    set(MLX_METAL_VERSION 0)
   endif()
-  message(STATUS "Building with macOS SDK version ${MACOS_SDK_VERSION}")
 
   set(METAL_CPP_URL
       https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip)
-
-  if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
-    if(${CMAKE_OSX_DEPLOYMENT_TARGET} LESS 14.0)
-      message(FATAL_ERROR "MLX requires macOS >= 14.0")
-    endif()
-    set(XCRUN_FLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
-  endif()
-  execute_process(
-    COMMAND
-      zsh "-c"
-      "echo \"__METAL_VERSION__\" | xcrun -sdk macosx metal ${XCRUN_FLAGS} -E -x metal -P - | tail -1 | tr -d '\n'"
-    OUTPUT_VARIABLE MLX_METAL_VERSION COMMAND_ERROR_IS_FATAL ANY)
   FetchContent_Declare(metal_cpp URL ${METAL_CPP_URL})
   FetchContent_MakeAvailable(metal_cpp)
   target_include_directories(
@@ -258,19 +279,29 @@ if(MLX_BUILD_CPU)
     add_compile_definitions(MLX_USE_ACCELERATE)
     add_compile_definitions(ACCELERATE_NEW_LAPACK)
   elseif(WIN32)
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
+      set(OPENBLAS_ZIP "OpenBLAS-0.3.33-woa64-dll.zip")
+      set(OPENBLAS_LIB "openblas")
+      set(OPENBLAS_INC "include/openblas")
+    else()
+      set(OPENBLAS_ZIP "OpenBLAS-0.3.33-x64.zip")
+      set(OPENBLAS_LIB "libopenblas")
+      set(OPENBLAS_INC "include")
+    endif()
     # Download and link prebuilt binaries of OpenBLAS. Note that we can only
     # link with the dynamic library, the prebuilt binaries were built with MinGW
     # so static-linking would require linking with MinGW's runtime.
     FetchContent_Declare(
       openblas
-      URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.31/OpenBLAS-0.3.31-x64.zip"
+      URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.33/${OPENBLAS_ZIP}"
     )
     FetchContent_MakeAvailable(openblas)
-    target_link_libraries(mlx
-                          PRIVATE "${openblas_SOURCE_DIR}/lib/libopenblas.lib")
-    target_include_directories(mlx PRIVATE "${openblas_SOURCE_DIR}/include")
+    target_link_libraries(
+      mlx PRIVATE "${openblas_SOURCE_DIR}/lib/${OPENBLAS_LIB}.lib")
+    target_include_directories(mlx
+                               PRIVATE "${openblas_SOURCE_DIR}/${OPENBLAS_INC}")
     # Make sure the DLL file is placed in the same dir with executables.
-    set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/libopenblas.dll")
+    set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/${OPENBLAS_LIB}.dll")
     add_custom_command(
       TARGET mlx
       POST_BUILD
@@ -321,6 +352,15 @@ FetchContent_MakeAvailable(json)
 target_include_directories(
   mlx PRIVATE $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>)
 
+# Add standalone JACCL library (RDMA over Thunderbolt distributed backend)
+if(MLX_BUILD_CPU
+   AND ${CMAKE_SYSTEM_NAME} MATCHES "Darwin"
+   AND DEFINED MACOS_SDK_VERSION
+   AND MACOS_SDK_VERSION GREATER_EQUAL 26.2)
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx/distributed/jaccl/lib
+                   ${CMAKE_BINARY_DIR}/jaccl)
+endif()
+
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)
 
 target_include_directories(
@@ -348,7 +388,7 @@ if(MLX_BUILD_PYTHON_BINDINGS)
   FetchContent_Declare(
     nanobind
     GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-    GIT_TAG v2.10.2
+    GIT_TAG v2.13.0
     GIT_SHALLOW TRUE
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(nanobind)

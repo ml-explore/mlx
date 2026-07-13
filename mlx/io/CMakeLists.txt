@@ -17,6 +17,11 @@ if(MLX_BUILD_GGUF)
                              PRIVATE $<BUILD_INTERFACE:${gguflib_SOURCE_DIR}>)
   add_library(gguflib STATIC ${gguflib_SOURCE_DIR}/fp16.c
                              ${gguflib_SOURCE_DIR}/gguflib.c)
+  # gguflib uses assert() to reject malformed tensor headers (e.g. ndim > 8).
+  # Those checks are otherwise compiled out by -DNDEBUG in release builds, which
+  # leaves out-of-bounds reads/writes unguarded when loading untrusted GGUF
+  # files. Force NDEBUG off for this target so the asserts stay live.
+  target_compile_options(gguflib PRIVATE -UNDEBUG)
   target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:gguflib>)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gguf.cpp
                              ${CMAKE_CURRENT_SOURCE_DIR}/gguf_quants.cpp)
