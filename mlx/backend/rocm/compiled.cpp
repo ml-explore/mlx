@@ -194,6 +194,21 @@ constexpr const char* g_jit_includes = R"(
 #include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
 
+// Non-finite scalar constants are emitted by the shared codegen
+// (mlx/backend/common/compiled.h: print_float_constant) as the bare tokens
+// NAN / INFINITY / -INFINITY, which it expects the backend toolchain to define
+// (Metal via <metal_stdlib>, CPU via <cmath>). hiprtc does NOT pull in <cmath>,
+// so those tokens are undeclared and any compiled kernel carrying a non-finite
+// constant (e.g. isinf/isfinite lowering, reduction identities) fails to build
+// with "use of undeclared identifier 'INFINITY'". Provide them here, matching
+// what the CPU backend injects into its generated source.
+#ifndef INFINITY
+#define INFINITY (__builtin_huge_valf())
+#endif
+#ifndef NAN
+#define NAN (__builtin_nanf(""))
+#endif
+
 // Standard type definitions for JIT compilation
 using uint32_t = unsigned int;
 using int32_t = signed int;
