@@ -419,7 +419,8 @@ bool supports_sdpa_flash_wmma(
   if (has_arr_mask) return false;
   if (q.dtype() != bfloat16 && q.dtype() != float16) return false;
   int D = q.shape(-1);
-  if (D != v.shape(-1)) return false;
+  if (D != v.shape(-1) || D != k.shape(-1)) return false;
+  if (q.shape(1) % k.shape(1) != 0) return false; // GQA factor integer
   (void)output_logsumexp;
   return (D == 64 || D == 128 || D == 256);
 }

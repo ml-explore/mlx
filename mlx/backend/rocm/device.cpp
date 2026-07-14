@@ -77,13 +77,26 @@ Device::Device(int device) : device_(device) {
   {
     hipDeviceProp_t p;
     if (hipGetDeviceProperties(&p, device_) == hipSuccess) {
-      fprintf(stderr, "[mlx-rocm] bound HIP device %d: %s (%s)\n",
-              device_, p.gcnArchName, p.name);
+      fprintf(
+          stderr,
+          "[mlx-rocm] bound HIP device %d: %s (%s) cus=%d warp=%d lds=%dKB\n",
+          device_,
+          p.gcnArchName,
+          p.name,
+          p.multiProcessorCount,
+          p.warpSize,
+          p.sharedMemPerBlock / 1024);
       if (p.sharedMemPerBlock > 0) {
         max_shared_memory_per_block_ = static_cast<int>(p.sharedMemPerBlock);
       }
       if (p.warpSize > 0) {
         warp_size_ = p.warpSize;
+      }
+      if (p.multiProcessorCount > 0) {
+        num_cus_ = p.multiProcessorCount;
+      }
+      if (p.maxThreadsPerBlock > 0) {
+        max_threads_per_block_ = p.maxThreadsPerBlock;
       }
     }
   }
@@ -146,7 +159,7 @@ rocblas_handle Device::get_rocblas_handle() {
                 << "Matrix multiplication operations will not be available. "
                 << "Supported architectures: gfx908, gfx90a, gfx942, gfx950, "
                 << "gfx1030, gfx1100, gfx1101, gfx1102, gfx1150, gfx1151, "
-                << "gfx1200, gfx1201." << std::endl;
+                << "gfx1152, gfx1200, gfx1201." << std::endl;
     } else {
       rocblas_status status = rocblas_create_handle(&rocblas_);
       if (status != rocblas_status_success) {
@@ -291,8 +304,10 @@ bool Device::has_native_wmma() {
       base_arch = base_arch.substr(0, colon_pos);
     }
 
-    // rocWMMA arch allowlist (AMD's official support matrix). Keep in sync
-    // with detect_rocm_hw_info() in mlx/backend/rocm/quantized/qmm.hip.
+    // rocWMMA arch allowlist. Keep in sync with detect_rocm_hw_info() in
+    // mlx/backend/rocm/quantized/qmm.hip. RDNA3.5: gfx1150/1151/1152 all have
+    // WMMA; Device used to omit 1150/1152 which forced flash/qmm off on those
+    // parts (incl. reduced-CU gfx1152 instances).
     static const std::vector<std::string> rocwmma_archs = {
         "gfx908",
         "gfx90a",
@@ -300,7 +315,11 @@ bool Device::has_native_wmma() {
         "gfx1100",
         "gfx1101",
         "gfx1102",
+        "gfx1103",
+        "gfx1150",
         "gfx1151",
+        "gfx1152",
+        "gfx1153",
         "gfx1200",
         "gfx1201",
     };

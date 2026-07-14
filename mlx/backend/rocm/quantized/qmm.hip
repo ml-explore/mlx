@@ -572,9 +572,11 @@ inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
   hipError_t err = hipGetDeviceProperties(&props, hip_device);
 
   rocm::HWInfo hw{};
-  hw.tier = (WARP_SIZE == 32) ? RocmQmvArchTier::Rdna2 : RocmQmvArchTier::Cdna;
-
+  // Prefer runtime warp size over compile-time WARP_SIZE so multi-arch fatbins
+  // still classify RDNA vs CDNA correctly when host code was compiled wave64.
   if (err == hipSuccess) {
+    hw.tier = (props.warpSize == 32) ? RocmQmvArchTier::Rdna2
+                                    : RocmQmvArchTier::Cdna;
     hw.num_cus = props.multiProcessorCount;
     hw.max_threads_per_cu = props.maxThreadsPerMultiProcessor;
     hw.shared_mem_per_cu = props.sharedMemPerBlock;
@@ -602,10 +604,11 @@ inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
         hw.simds_per_cu = 4;
       }
 
+      // Keep in sync with Device::has_native_wmma() in device.cpp.
       static const char* const kWmmaArches[] = {
           "gfx908",  "gfx90a",  "gfx942",
-          "gfx1100", "gfx1101", "gfx1102",
-          "gfx1151", "gfx1152",
+          "gfx1100", "gfx1101", "gfx1102", "gfx1103",
+          "gfx1150", "gfx1151", "gfx1152", "gfx1153",
           "gfx1200", "gfx1201",
       };
       for (const char* a : kWmmaArches) {

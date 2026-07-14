@@ -17,6 +17,9 @@
 #include <hip/hip_bfloat16.h>
 #include <hip/hip_runtime.h>
 
+#include <algorithm>
+#include <stdexcept>
+#include <string>
 #include <type_traits>
 
 namespace mlx::core {
@@ -63,6 +66,8 @@ __global__ void kernel_sdpa_delta_row(
 }
 
 // FA-2 bwd for fixed D; float LDS tiles; float32 global accum for dQ/dK/dV.
+// BM=BN=32 keeps LDS under 64 KB on RDNA3.5 / MI300X default sharedMemPerBlock.
+// (64×64 tiles need ~98 KB and fail to launch on many devices.)
 template <typename T, bool do_causal, int D>
 __global__ void __launch_bounds__(256) kernel_sdpa_flash_bwd_f32acc(
     const T* __restrict__ Q,
@@ -75,7 +80,7 @@ __global__ void __launch_bounds__(256) kernel_sdpa_flash_bwd_f32acc(
     float* __restrict__ dKf,
     float* __restrict__ dVf,
     rocm::FABwdParams p) {
-  constexpr int BM = 64, BN = 64, NTHREADS = 256;
+  constexpr int BM = 32, BN = 32, NTHREADS = 256;
   const int bid_b = blockIdx.z;
   const int bid_h = blockIdx.x;
   const int bid_kv = bid_h / p.gqa_factor;
@@ -247,6 +252,14 @@ __global__ void kernel_zero_f32(float* p, size_t n) {
 
 } // namespace
 
+namespace mlx::core {
+
+// Bytes of dynamic LDS for kernel_sdpa_flash_bwd_f32acc with BM=BN=32.
+int sdpa_flash_bwd_smem(int D) {
+  constexpr int BM = 32, BN = 32;
+  return (2 * BM + BM * BN + 3 * BM * D + 2 * BN * D) * (int)sizeof(float);
+}
+
 bool supports_sdpa_flash_wmma_bwd(
     const array& q,
     const array& k,
@@ -258,10 +271,9 @@ bool supports_sdpa_flash_wmma_bwd(
   if (q.dtype() != bfloat16 && q.dtype() != float16)
     return false;
   int D = q.shape(-1);
-  if (D != (int)v.shape(-1))
+  if (D != (int)v.shape(-1) || D != (int)k.shape(-1))
     return false;
-  // LDS: ~ (2*64 + 64*64 + 5*64*D) * 4 bytes. D=128 → ~200KB too big for 64KB.
-  // Keep D=64 for v1 (lemonseed head dim).
+  // Keep D=64 for v1 (lemonseed head dim); LDS scales with D.
   if (D != 64)
     return false;
   if (q.shape(1) % k.shape(1) != 0)
@@ -385,15 +397,16 @@ void sdpa_flash_wmma_bwd(
   else
     launch_delta(__half{});
 
-  constexpr int BM = 64;
+  constexpr int BM = 32;
   dim3 grid(H, (qL + BM - 1) / BM, B);
   dim3 block(256);
-  // lse+delta + S + Q+dO+K+V+dQ
-  int smem =
-      (2 * BM + BM * BM + BM * D + BM * D + BN * D + BN * D + BM * D) *
-      (int)sizeof(float);
-  constexpr int BN = 64;
-  smem = (2 * BM + BM * BN + 3 * BM * D + 2 * BN * D) * (int)sizeof(float);
+  int smem = sdpa_flash_bwd_smem(D);
+  if (smem > dev.max_shared_memory_per_block()) {
+    throw std::runtime_error(
+        "[sdpa_flash_wmma_bwd] LDS " + std::to_string(smem) +
+        " exceeds device budget " +
+        std::to_string(dev.max_shared_memory_per_block()));
+  }
 
   auto launch_bwd = [&](auto tag, auto ctag) {
     using DT = decltype(tag);

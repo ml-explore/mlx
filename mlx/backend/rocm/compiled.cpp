@@ -7,6 +7,7 @@
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 
+#include <climits>
 #include <sstream>
 
 namespace mlx::core {
@@ -954,11 +955,17 @@ void Compiled::eval_gpu(
 
   auto kernel = mod.get_kernel(kernel_name);
 
-  // Calculate launch configuration
-  int block_size = 256;
+  // Calculate launch configuration — use runtime CU/warp-aware block size so
+  // reduced-CU devices (e.g. gfx1152 partitions) pack better occupancy.
   int64_t total_work =
       (outputs[0].data_size() + work_per_thread - 1) / work_per_thread;
-  int num_blocks = (total_work + block_size - 1) / block_size;
+  int block_size = encoder.device().preferred_block_size(
+      total_work > INT_MAX ? -1 : static_cast<int>(total_work));
+  int num_blocks =
+      static_cast<int>((total_work + block_size - 1) / block_size);
+  if (num_blocks < 1) {
+    num_blocks = 1;
+  }
 
   launch_module_kernel(
       encoder,

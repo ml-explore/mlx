@@ -59,6 +59,7 @@ bool supports_sdpa_flash_wmma_bwd(
     const array& v,
     bool has_arr_mask,
     bool has_sinks);
+int sdpa_flash_bwd_smem(int D);
 
 void sdpa_flash_wmma_bwd(
     const array& q,
@@ -150,11 +151,33 @@ bool ScaledDotProductAttention::use_fallback(
     bool do_causal,
     bool /*is_training*/,
     bool output_logsumexp,
-    Stream /*s*/) {
-  return !supports_sdpa_vector(
-             q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp) &&
-      !supports_sdpa_flash(
-          q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp);
+    Stream s) {
+  // Vector + scalar flash reject output_logsumexp. WMMA flash can emit LSE and
+  // must be counted here or MLX_SDPA_FLASH_VJP never attaches (frontend only
+  // requests LSE when VJP is non-fallback, and VJP needs LSE forward).
+  // Note: this is static — no has_sinks_ available. Sinks + LSE is rare; eval
+  // still refuses sinks on the WMMA path.
+  bool vector_ok = supports_sdpa_vector(
+      q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp);
+  bool flash_ok = supports_sdpa_flash(
+      q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp);
+#ifdef MLX_HAS_ROCM_WMMA
+  static const bool wmma_disabled =
+      std::getenv("MLX_SDPA_NO_WMMA") != nullptr;
+  bool wmma_ok = !wmma_disabled &&
+      supports_sdpa_flash_wmma(q, k, v, has_arr_mask, output_logsumexp) &&
+      s.device == Device::gpu && rocm::device(s.device).has_native_wmma() &&
+      sdpa_flash_wmma_smem(q.shape(-1)) <=
+          rocm::device(s.device).max_shared_memory_per_block();
+  // LSE train path needs qL > 4 so eval_gpu takes WMMA (vector is decode-only).
+  if (output_logsumexp) {
+    wmma_ok = wmma_ok && q.shape(2) > 4;
+  }
+#else
+  bool wmma_ok = false;
+  (void)s;
+#endif
+  return !vector_ok && !flash_ok && !wmma_ok;
 }
 
 bool ScaledDotProductAttention::supports_bool_mask() {
@@ -264,6 +287,10 @@ bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
   if (!rocm::device(s.device).has_native_wmma()) {
     return true;
   }
+  if (sdpa_flash_bwd_smem(q.shape(-1)) >
+      rocm::device(s.device).max_shared_memory_per_block()) {
+    return true;
+  }
   return false;
 #else
   (void)q;
@@ -291,9 +318,11 @@ void ScaledDotProductAttentionVJP::eval_gpu(
     throw std::runtime_error(
         "SDPA flash VJP does not support array masks or sinks yet.");
   }
-  if (!supports_sdpa_flash_wmma_bwd(q, k, v, /*has_arr_mask=*/false, has_sinks_)) {
+  if (!supports_sdpa_flash_wmma_bwd(q, k, v, /*has_arr_mask=*/false, has_sinks_) ||
+      sdpa_flash_bwd_smem(q.shape(-1)) >
+          rocm::device(s.device).max_shared_memory_per_block()) {
     throw std::runtime_error(
-        "SDPA flash VJP shape not supported (need D=64 bf16/fp16).");
+        "SDPA flash VJP shape/LDS not supported (need D=64 bf16/fp16, LDS fit).");
   }
 
   assert(outputs.size() == 3);

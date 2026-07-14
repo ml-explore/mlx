@@ -30,7 +30,8 @@
     defined(__gfx1033__) || defined(__gfx1034__) || defined(__gfx1035__) || \
     defined(__gfx1036__) || defined(__gfx1100__) || defined(__gfx1101__) || \
     defined(__gfx1102__) || defined(__gfx1103__) || defined(__gfx1150__) || \
-    defined(__gfx1151__) || defined(__gfx1200__) || defined(__gfx1201__)
+    defined(__gfx1151__) || defined(__gfx1152__) || defined(__gfx1153__) || \
+    defined(__gfx1200__) || defined(__gfx1201__)
 #define WARP_SIZE 32
 #else
 #define WARP_SIZE 64
@@ -110,7 +111,7 @@ struct HWInfo {
   int shared_mem_per_cu; // Shared/LDS memory per CU in bytes
   int l2_cache_bytes; // L2/Infinity Cache size
   bool has_native_wmma; // True if arch is on rocWMMA allowlist
-                        // (CDNA1/2/3 + RDNA3 dGPU + gfx1151 + RDNA4)
+                        // (CDNA + RDNA3 dGPU + RDNA3.5 gfx1150–1152 + RDNA4)
 };
 
 // Per-architecture tuning parameters for quantized matvec and attention
@@ -154,8 +155,19 @@ inline ArchTuning get_arch_tuning(const HWInfo& hw) {
 
   // TILE_N is bounded by how many column streams L2 holds without evicting the
   // reused X/scales. RDNA 3/3.5 (2 MB L2): 16. RDNA 4 (8 MB L2): 24.
+  // Reduced-CU gfx1152 partitions often report <=8–16 CUs — shrink tiles so
+  // more workgroups stay resident instead of oversubscribing L2 with wide tiles.
   if (hw.tier == RocmArchTier::Rdna3 || hw.tier == RocmArchTier::Rdna35) {
-    t.qmv_tile_n = (hw.num_cus <= 16) ? 8 : 16;
+    if (hw.num_cus > 0 && hw.num_cus <= 8) {
+      t.qmv_tile_n = 8;
+      t.fa_block_m = 32;
+      t.fa_block_n = 32;
+      t.qmv_crossover_small = 20;
+      t.qmv_crossover_medium = 14;
+      t.qmv_crossover_large = 10;
+    } else {
+      t.qmv_tile_n = (hw.num_cus <= 16) ? 8 : 16;
+    }
   } else if (hw.tier == RocmArchTier::Rdna4) {
     if (hw.num_cus <= 16) {
       t.qmv_tile_n = 8;

@@ -295,7 +295,7 @@ class Device {
   bool is_rocblas_bf16_available();
 
   // True iff this device's gcnArchName is on the rocWMMA arch allowlist
-  // (CDNA1/2/3 + RDNA3 dGPU + gfx1151 + RDNA4). Lazy-cached on first call.
+  // (CDNA1/2/3 + RDNA3 dGPU + RDNA3.5 gfx1150–1152 + RDNA4). Lazy-cached.
   bool has_native_wmma();
 
   // True iff CDNA2 (gfx90a) or CDNA3 (gfx942): clean bf16 MFMA
@@ -320,6 +320,37 @@ class Device {
     return warp_size_;
   }
 
+  // Compute units (hipDeviceProp::multiProcessorCount). Reduced-CU RDNA3.5
+  // partitions (e.g. gfx1152 VF) report far fewer CUs than desktop parts —
+  // kernels should prefer larger tiles / fewer blocks when num_cus is low.
+  int num_cus() const {
+    return num_cus_;
+  }
+
+  int max_threads_per_block() const {
+    return max_threads_per_block_;
+  }
+
+  // Prefer block sizes that pack full wavefronts and stay under device limits.
+  // cu-aware: on very small GPUs keep occupancy high with smaller blocks when
+  // the work is tiny; still multiple of warp_size.
+  int preferred_block_size(int work_items = -1) const {
+    int w = warp_size_ > 0 ? warp_size_ : 32;
+    int cap = max_threads_per_block_ > w ? max_threads_per_block_ : w;
+    int bs = 256;
+    if (num_cus_ > 0 && num_cus_ <= 8) {
+      bs = 128; // low-CU: smaller blocks → more concurrent CUs for tiny grids
+    }
+    if (work_items > 0 && work_items < bs) {
+      bs = ((work_items + w - 1) / w) * w;
+      if (bs < w)
+        bs = w;
+    }
+    if (bs > cap)
+      bs = (cap / w) * w;
+    return bs > w ? bs : w;
+  }
+
  private:
   int device_;
   rocblas_handle rocblas_{nullptr};
@@ -334,6 +365,8 @@ class Device {
   bool cdna_mfma_ok_{false};
   int max_shared_memory_per_block_{65536};
   int warp_size_{64};
+  int num_cus_{0};
+  int max_threads_per_block_{1024};
   std::unordered_map<int, std::unique_ptr<CommandEncoder>> encoders_;
   // MLX's scheduler runs a thread per stream, so get_command_encoder() can be
   // called concurrently (incl. cross-stream AtomicEvent::signal during weight
