@@ -13,7 +13,10 @@
 namespace mlx::core::fast {
 
 bool GatedDeltaUpdate::use_fallback(Stream s) {
-  // TODO: finish implementation
+  // TODO: finish implementation. What else is needed?
+  if (s.device == Device::cpu) {
+    return true;
+  }
   return false;
 }
 
@@ -200,7 +203,7 @@ void GatedDeltaUpdate::eval_gpu(
     }
     default: {
       throw std::runtime_error(
-          "NYI: Only sequential and chunk size 8 are supported");
+          "NYI: Only sequential and chunk size 8,16 are supported");
     }
   }
 }
