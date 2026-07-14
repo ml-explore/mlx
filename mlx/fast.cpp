@@ -930,8 +930,10 @@ std::vector<array> gated_delta_update(
     const array& beta_,
     const std::optional<array>& initial_state, /* = std::nullopt */
     const int C,
-    StreamOrDevice s /* = {} */) {
+    StreamOrDevice s_ /* = {} */) {
   // determine output dtype
+  auto s = to_stream(s_);
+
   auto promoted = promote_types(queries.dtype(), keys.dtype());
   auto out_dtype = issubdtype(promoted, float32)
       ? promoted
@@ -985,25 +987,80 @@ std::vector<array> gated_delta_update(
 
     std::vector<array> outputs;
     for (int t = 0; t < T; t++) {
-      // TODO. Implement
+      auto get_t = [&](const array& a, int t) {
+        Shape start(a.ndim(), 0), stop = a.shape();
+        start[1] = t;
+        stop[1] = t + 1; // [:, t:t+1, ...]
+        return squeeze(slice(a, start, stop, s), 1, s); // drop the time axis
+      };
+      // q_t = q[:, t]  # [B, H, Dk]
+      // k_t = k[:, t]  # [B, H, Dk]
+      // v_t = v[:, t]  # [B, H, Dv]
+      // g_t = g[:, t]  # [B, H] or [B, H, Dk]
+      // beta_t = beta[:, t]  # [B, H]
+      auto q_t = get_t(q, t);
+      auto k_t = get_t(k, t);
+      auto v_t = get_t(v, t);
+      auto g_t = get_t(g, t);
+      auto beta_t = get_t(beta, t);
+
+      // if g_t.ndim == 2:
+      //       decay = g_t[..., None, None]  # [B, H, 1, 1]
+      //   else:
+      //       decay = g_t[..., None, :]  # [B, H, 1, Dk]
+      auto decay = (g_t.ndim() == 2)
+          ? expand_dims(g_t, {-1, -2}, s) // [B,H,1,1]
+          : expand_dims(g_t, -2, s); // [B,H,1,Dk]
+
+      // state = state * decay
+      state = multiply(state, decay, s);
+
+      // kv_mem = (state * k_t[..., None, :]).sum(axis=-1)
+      auto kv =
+          sum(multiply(state, expand_dims(k_t, -2, s), s),
+              -1,
+              false,
+              s); // [B,H,Dv]
+
+      // delta = (v_t - kv_mem) * beta_t[..., None]  # [B, H, Dv]
+      auto delta = subtract(v_t, kv, s);
+      delta = multiply(delta, expand_dims(beta_t, -1, s), s);
+
+      // state = state + delta[..., None] * k_t[..., None, :]  # [B, H, Dv, Dk]
+      state =
+          add(state,
+              multiply(expand_dims(delta, -1, s), expand_dims(k_t, -2, s), s),
+              s);
+
+      // o_t = (state * q_t[..., None, :]).sum(axis=-1)
+      auto o_t = sum(multiply(state, expand_dims(q_t, -2, s), s), -1, false, s);
+      outputs.push_back(o_t);
     }
-    throw std::runtime_error("NYI: GatedDeltaUpdate CPU fallback");
-    auto out = concatenate(outputs, 1, s);
+    // mx.stack(outputs, axis=1)
+    auto out = stack(outputs, 1, s);
     return std::vector<array>{out, state};
   };
 
-  auto result = array::make_arrays(
-      /* output shapes */ {{B, T_padded, Hv, Dv}, {B, Hv, Dv, Dk}},
-      /* dtypes */ {out_dtype, out_dtype},
-      /* primitive */
-      std::make_shared<GatedDeltaUpdate>(to_stream(s), fallback, C),
-      /* inputs */ {q, k, v, g, beta, h0});
+  if (!GatedDeltaUpdate::use_fallback(s)) {
+    auto result = array::make_arrays(
+        /* output shapes */ {{B, T_padded, Hv, Dv}, {B, Hv, Dv, Dk}},
+        /* dtypes */ {out_dtype, out_dtype},
+        /* primitive */
+        std::make_shared<GatedDeltaUpdate>(s, fallback, C),
+        /* inputs */ {q, k, v, g, beta, h0});
 
-  // slice output back to original T
+    // slice output back to original T
+    if (pad_size > 0) {
+      result[0] = slice(result[0], {0, 0, 0, 0}, {B, T, Hv, Dv}, s);
+    }
+
+    return result;
+  }
+
+  auto result = fallback({q, k, v, g, beta, h0});
   if (pad_size > 0) {
     result[0] = slice(result[0], {0, 0, 0, 0}, {B, T, Hv, Dv}, s);
   }
-
   return result;
 }
 
