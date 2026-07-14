@@ -4,6 +4,7 @@
 #include "mlx/backend/rocm/device.h"
 #include "mlx/fast_primitives.h"
 
+#include <cstdlib>
 #include <hip/hip_runtime.h>
 
 namespace mlx::core {
@@ -40,6 +41,7 @@ bool supports_sdpa_flash_wmma(
 // LDS bytes the WMMA flash kernel needs for a given head dim.
 int sdpa_flash_wmma_smem(int D);
 
+// lse: optional float32 [B,H,qL,1] for training VJP (null when not requested).
 void sdpa_flash_wmma(
     const array& q,
     const array& k,
@@ -47,7 +49,8 @@ void sdpa_flash_wmma(
     float scale,
     array& o,
     bool do_causal,
-    Stream s);
+    Stream s,
+    array* lse = nullptr);
 #endif
 
 // Defined in flash_attention.hip
@@ -181,8 +184,14 @@ void ScaledDotProductAttention::eval_gpu(
 
   if (wmma_supported && q.shape(2) > 4) {
 #ifdef MLX_HAS_ROCM_WMMA
-    // Use WMMA kernel for prefill (qL > 4); decode still uses vector kernel
-    sdpa_flash_wmma(q, k, v, scale_, out, do_causal_, s);
+    // Use WMMA kernel for prefill (qL > 4); decode still uses vector kernel.
+    // When output_logsumexp_ is set (training + fast VJP), write LSE into
+    // outputs[1] for the fused backward. VJP itself is still gated separately.
+    array* lse_ptr = nullptr;
+    if (output_logsumexp_ && outputs.size() > 1) {
+      lse_ptr = &stats;
+    }
+    sdpa_flash_wmma(q, k, v, scale_, out, do_causal_, s, lse_ptr);
 #endif
   } else if (flash_first) {
     if (has_sinks_) {
@@ -213,16 +222,31 @@ void ScaledDotProductAttention::eval_gpu(
 }
 
 bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
-  // Always use fallback for VJP on ROCm for now
+  // Fused flash VJP is not wired yet (needs flash_attention_bwd_wmma). LSE
+  // emit for WMMA forward is in place; keep VJP on the dense fallback so
+  // training does not request output_logsumexp until both land together.
+  // Opt-in scaffolding: MLX_SDPA_FLASH_VJP=1 will flip this when bwd ships.
+  // Kill-switch once default-on: MLX_SDPA_NO_FLASH_VJP=1.
+  (void)q;
+  (void)s;
+  static const bool want =
+      std::getenv("MLX_SDPA_FLASH_VJP") != nullptr &&
+      std::getenv("MLX_SDPA_NO_FLASH_VJP") == nullptr;
+  // Until bwd kernel exists, always fall back even if env requests fast VJP.
+  if (want) {
+    // Reserved: return false when sdpa_flash_wmma_bwd is ready + shape gates.
+  }
   return true;
 }
 
 void ScaledDotProductAttentionVJP::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  // VJP uses CPU fallback
+  // Reached only if use_fallback returns false. Dense path is taken by the
+  // framework before this primitive is created while use_fallback is true.
   throw std::runtime_error(
-      "SDPA VJP not yet implemented for ROCm. Using CPU fallback.");
+      "SDPA VJP fused path not yet implemented for ROCm "
+      "(needs flash_attention_bwd_wmma). Keep MLX_SDPA_FLASH_VJP unset.");
 }
 
 } // namespace fast

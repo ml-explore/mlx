@@ -42,6 +42,10 @@ bool use_hip_graphs() {
   // prefill variant segfaults on RDNA3.5). Decode uses build-once capture/replay
   // (decode_capture_*) and prefill uses the WMMA GEMM — neither goes through
   // here — so this path is permanently off.
+  //
+  // Train graphs: also hard-off until a TrainArena (see RocmAllocator
+  // train_arena_*) wraps the step tape with stable addresses. Flipping this
+  // without an arena reintroduces aperture violations / wrong loss.
   return false;
 }
 

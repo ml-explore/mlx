@@ -199,6 +199,24 @@ class RocmAllocator : public allocator::Allocator {
   size_t decode_arena_high_water() const { return decode_arena_.high_water; }
   bool decode_arena_overflowed() const { return decode_arena_.overflowed; }
 
+  // --- Train / generic graph arena (same bump region as decode) ---
+  // Training graphs need identical addresses every step (CLR stores kernargs
+  // by pointer). These aliases expose the decode bump arena under train-facing
+  // names so future train capture can share one implementation. Do NOT enable
+  // use_hip_graphs() for train until a step wraps value_and_grad in
+  // train_arena_begin/reset and MoE shapes are fixed or padded.
+  // Env reserved for future opt-in: MLX_TRAIN_ARENA=1 (not wired into eval yet).
+  bool train_arena_begin(size_t capacity, int device, void* stream) {
+    return decode_arena_begin(capacity, device, stream);
+  }
+  void train_arena_reset() { decode_arena_reset(); }
+  void train_arena_freeze_floor() { decode_arena_freeze_floor(); }
+  void train_arena_reset_to_floor() { decode_arena_reset_to_floor(); }
+  void train_arena_end() { decode_arena_end(); }
+  bool train_arena_active() const { return decode_arena_active(); }
+  size_t train_arena_high_water() const { return decode_arena_high_water(); }
+  bool train_arena_overflowed() const { return decode_arena_overflowed(); }
+
   size_t get_active_memory() const;
   size_t get_peak_memory() const;
   void reset_peak_memory();

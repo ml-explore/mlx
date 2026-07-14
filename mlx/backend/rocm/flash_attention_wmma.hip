@@ -29,6 +29,9 @@ struct FAWmmaParams {
   int B, H, D, qL, kL, gqa_factor;
   float scale;
   int64_t Q_strides[3], K_strides[3], V_strides[3], O_strides[3];
+  // Optional LSE output strides for shape [B, H, qL, 1] (float32). Unused when
+  // LSE ptr is null. Contiguous layout: LSE_strides[0]=H*qL, [1]=qL, [2]=1.
+  int64_t LSE_strides[3];
 };
 
 // Helper: collaborative load from global to shared memory
@@ -80,6 +83,9 @@ __global__ void __launch_bounds__(256)
         const T* __restrict__ K,
         const T* __restrict__ V,
         T* __restrict__ O,
+        // Optional logsumexp output (float32), shape [B,H,qL,1]. Null → skip.
+        // Written as LSE_i = m_i + log(l_i) for FlashAttention-2 VJP.
+        float* __restrict__ LSE,
         const FAWmmaParams params) {
 #if ROCM_FA_WMMA
   constexpr int WT = 16; // WMMA tile size
@@ -381,6 +387,20 @@ __global__ void __launch_bounds__(256)
       }
       __syncthreads();
     }
+
+    // FlashAttention-2 stats: LSE = m + log(l). Required for fused VJP; written
+    // once after O is normalized so m/l match the final online softmax state.
+    if (LSE != nullptr && lane < WT) {
+      int row = wave * WT + lane;
+      int q_idx = q_start + row;
+      if (q_idx < params.qL) {
+        float m = m_arr[row];
+        float l = l_arr[row];
+        float lse = (l > 0.0f) ? (m + logf(l)) : -1e30f;
+        LSE[bid_b * params.LSE_strides[0] + bid_h * params.LSE_strides[1] +
+            q_idx * params.LSE_strides[2]] = lse;
+      }
+    }
   }
 #endif // ROCM_FA_WMMA
 }
@@ -394,10 +414,13 @@ bool supports_sdpa_flash_wmma(
     bool has_arr_mask, bool output_logsumexp) {
   // Host-side check: always enabled when compiled for WMMA-capable targets.
   // The kernel itself guards with #if ROCM_FA_WMMA for device code.
-  if (output_logsumexp || has_arr_mask) return false;
+  // output_logsumexp is supported (LSE write in finalize); required for fused
+  // VJP but harmless for inference when stats are not requested.
+  if (has_arr_mask) return false;
   if (q.dtype() != bfloat16 && q.dtype() != float16) return false;
   int D = q.shape(-1);
   if (D != v.shape(-1)) return false;
+  (void)output_logsumexp;
   return (D == 64 || D == 128 || D == 256);
 }
 
@@ -415,8 +438,14 @@ int sdpa_flash_wmma_smem(int D) {
 }
 
 void sdpa_flash_wmma(
-    const array& q, const array& k, const array& v,
-    float scale, array& o, bool do_causal, Stream s) {
+    const array& q,
+    const array& k,
+    const array& v,
+    float scale,
+    array& o,
+    bool do_causal,
+    Stream s,
+    array* lse /* nullable float32 [B,H,qL,1] */) {
   auto& d = rocm::device(s.device);
   auto& enc = d.get_command_encoder(s);
 
@@ -424,6 +453,9 @@ void sdpa_flash_wmma(
   int D = q.shape(3);
 
   o.set_data(mlx::core::rocm::malloc_async(o.nbytes(), enc));
+  if (lse != nullptr) {
+    lse->set_data(mlx::core::rocm::malloc_async(lse->nbytes(), enc));
+  }
 
   rocm::FAWmmaParams p{};
   p.B = B; p.H = H; p.D = D; p.qL = qL; p.kL = kL;
@@ -435,6 +467,10 @@ void sdpa_flash_wmma(
     p.V_strides[i] = v.strides(i);
     p.O_strides[i] = o.strides(i);
   }
+  // Contiguous [B,H,qL,1] layout for LSE.
+  p.LSE_strides[0] = static_cast<int64_t>(H) * qL;
+  p.LSE_strides[1] = qL;
+  p.LSE_strides[2] = 1;
 
   constexpr int BM = 64, BN = 64;
   constexpr int WT = 16;
@@ -451,6 +487,11 @@ void sdpa_flash_wmma(
   enc.set_input_array(k);
   enc.set_input_array(v);
   enc.set_output_array(o);
+  if (lse != nullptr) {
+    enc.set_output_array(*lse);
+  }
+
+  float* lse_ptr = lse ? gpu_ptr<float>(*lse) : nullptr;
 
   auto launch = [&](auto type_tag, auto causal_tag, auto dim_tag) {
     using DT = decltype(type_tag);
@@ -460,7 +501,7 @@ void sdpa_flash_wmma(
         &rocm::kernel_sdpa_flash_wmma<DT, C, DD, BM, BN>,
         grid, block, static_cast<uint32_t>(smem),
         gpu_ptr<const DT>(q), gpu_ptr<const DT>(k),
-        gpu_ptr<const DT>(v), gpu_ptr<DT>(o), p);
+        gpu_ptr<const DT>(v), gpu_ptr<DT>(o), lse_ptr, p);
   };
 
   auto dispatch_dim = [&](auto tt, auto ct) {
