@@ -947,11 +947,11 @@ std::vector<array> gated_delta_update(
   // wrong, not as fast. This kind of operations need to be done in
   // the eval gpu inside a function that checks for shapes and strides
   // TODO: mode this
-  q = contiguous(q, false, s);
-  k = contiguous(k, false, s);
-  v = contiguous(v, false, s);
-  g = contiguous(g, false, s);
-  beta = contiguous(beta, false, s);
+  // q = contiguous(q, false, s);
+  // k = contiguous(k, false, s);
+  // v = contiguous(v, false, s);
+  // g = contiguous(g, false, s);
+  // beta = contiguous(beta, false, s);
 
   int B = q.shape(0);
   int T = q.shape(1);
