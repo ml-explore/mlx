@@ -17,18 +17,61 @@ bool GatedDeltaUpdate::use_fallback(Stream s) {
   return false;
 }
 
+inline array
+ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
+  if (!x.flags().row_contiguous) {
+    array x_copy = contiguous_copy_gpu(x, s);
+    metal::get_command_encoder(s).add_temporary(x_copy);
+    return x_copy;
+  } else {
+    return x;
+  }
+}
+
+#define PRINT_STRIDES(arr)                 \
+  printf(                                  \
+      "%s strides: %lld %lld %lld %lld\n", \
+      #arr,                                \
+      arr.strides()[0],                    \
+      arr.strides()[1],                    \
+      arr.strides()[2],                    \
+      arr.strides()[3])
+
+#define PRINT_SHAPES(arr)                 \
+  printf(                                 \
+      "%s shapes: %lld %lld %lld %lld\n", \
+      #arr,                               \
+      arr.shape()[0],                     \
+      arr.shape()[1],                     \
+      arr.shape()[2],                     \
+      arr.shape()[3])
+
+#define PRINT_ARR(arr)                      \
+  if (arr.flags().row_contiguous)           \
+    printf("%s is row contiguous\n", #arr); \
+  PRINT_SHAPES(arr);                        \
+  PRINT_STRIDES(arr);                       \
+  printf("\n");
+
 void GatedDeltaUpdate::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
-  auto& q = inputs[0];
-  auto& k = inputs[1];
-  auto& v = inputs[2];
-  auto& g = inputs[3];
-  auto& beta = inputs[4];
-  auto& h0 = inputs[5];
+  // auto& q = inputs[0];
+  // auto& k = inputs[1];
+  // auto& v = inputs[2];
+  // auto& g = inputs[3];
+  // auto& beta = inputs[4];
+  // auto& h0 = inputs[5];
+
+  auto q = ensure_row_contiguous(inputs[0], d, s);
+  auto k = ensure_row_contiguous(inputs[1], d, s);
+  auto v = ensure_row_contiguous(inputs[2], d, s);
+  auto g = ensure_row_contiguous(inputs[3], d, s);
+  auto beta = ensure_row_contiguous(inputs[4], d, s);
+  auto h0 = ensure_row_contiguous(inputs[5], d, s);
 
   auto& out = outputs[0];
   auto& hf = outputs[1];
@@ -40,6 +83,12 @@ void GatedDeltaUpdate::eval_gpu(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
+  // PRINT_ARR(q);
+  // PRINT_ARR(k);
+  // PRINT_ARR(v);
+  // PRINT_ARR(g);
+  // PRINT_ARR(beta);
+  // PRINT_ARR(h0);
   // printf("%d %d %d %d %d %d\n",B,T,Hk,Hv,Dk,Dv);
 
   int C = chunk_size;
@@ -84,6 +133,7 @@ void GatedDeltaUpdate::eval_gpu(
       compute_encoder.set_bytes(T, 8);
 
       auto grid = MTL::Size(32, Dv / 16, B * Hv);
+      // auto grid = MTL::Size(32, 1, 1);
       auto threads = MTL::Size(32, 1, 1);
       compute_encoder.dispatch_threads(grid, threads);
       break;
@@ -115,6 +165,7 @@ void GatedDeltaUpdate::eval_gpu(
       compute_encoder.set_bytes(T, 8);
 
       auto grid = MTL::Size(32, Dv / 8, B * Hv);
+      // auto grid = MTL::Size(32, 1, 1);
       auto threads = MTL::Size(32, 1, 1);
       compute_encoder.dispatch_threads(grid, threads);
       break;
