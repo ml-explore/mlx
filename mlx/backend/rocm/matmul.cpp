@@ -30,9 +30,23 @@ std::tuple<bool, int64_t, array>
 check_transpose(rocm::CommandEncoder& enc, const Stream& s, const array& arr) {
   auto stx = arr.strides()[arr.ndim() - 2];
   auto sty = arr.strides()[arr.ndim() - 1];
+  // Contiguous last-two dims: hipBLASLt/rocBLAS can take strided batch views
+  // without packing. Avoiding contiguous_copy_gpu here is the main GEMM-side
+  // "don't force a copy before the fused library GEMM" win on ROCm.
   if (sty == 1 && stx == arr.shape(-1)) {
     return std::make_tuple(false, stx, arr);
   } else if (stx == 1 && sty == arr.shape(-2)) {
+    return std::make_tuple(true, sty, arr);
+  } else if (
+      sty == 1 && stx > 0 &&
+      static_cast<int64_t>(stx) >= static_cast<int64_t>(arr.shape(-1))) {
+    // Row-major last dim with padded leading dimension (common after slice /
+    // broadcast expand). Still a valid GEMM without materialize.
+    return std::make_tuple(false, stx, arr);
+  } else if (
+      stx == 1 && sty > 0 &&
+      static_cast<int64_t>(sty) >= static_cast<int64_t>(arr.shape(-2))) {
+    // Column-major last-two with padded ldb.
     return std::make_tuple(true, sty, arr);
   } else {
     array arr_copy = contiguous_copy_gpu(arr, s);

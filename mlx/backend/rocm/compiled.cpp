@@ -699,6 +699,15 @@ UNARY_FLOAT_OP(Asinh, asinhf)
 UNARY_FLOAT_OP(Acosh, acoshf)
 UNARY_FLOAT_OP(Atanh, atanhf)
 
+// Primitive::name() uses Arc* / BitwiseInvert (Metal/CUDA device headers match).
+// hiprtc fused kernels instantiate by that name — alias the short C lib names.
+using ArcSin = Asin;
+using ArcCos = Acos;
+using ArcTan = Atan;
+using ArcSinh = Asinh;
+using ArcCosh = Acosh;
+using ArcTanh = Atanh;
+
 struct LogicalNot {
   template <typename T>
   __device__ bool operator()(T x) { return !x; }
@@ -707,6 +716,34 @@ struct LogicalNot {
 struct BitwiseNot {
   template <typename T>
   __device__ T operator()(T x) { return ~x; }
+};
+using BitwiseInvert = BitwiseNot;
+
+// Equal::name() may return "NaNEqual" when equal_nan is set.
+struct NaNEqual {
+  template <typename T>
+  __device__ bool operator()(T x, T y) {
+    // Match CPU NaNEqual: true if both NaN or x==y
+    float fx = static_cast<float>(x);
+    float fy = static_cast<float>(y);
+    bool xn = !(fx == fx);
+    bool yn = !(fy == fy);
+    return (xn && yn) || (fx == fy);
+  }
+};
+
+// complex64 helpers used by some compiled graphs (identity on reals)
+struct Real {
+  template <typename T>
+  __device__ T operator()(T x) { return x; }
+};
+struct Imag {
+  template <typename T>
+  __device__ T operator()(T x) { return T(0); }
+};
+struct Conjugate {
+  template <typename T>
+  __device__ T operator()(T x) { return x; }
 };
 
 #undef UNARY_FLOAT_OP

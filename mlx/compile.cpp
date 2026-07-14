@@ -20,8 +20,12 @@
 
 namespace mlx::core {
 
-constexpr int max_compile_depth = 11;
-constexpr int max_compile_arrays = 24;
+// Depth/array limits gate how large an elementwise chain becomes one Compiled
+// kernel. Metal/CUDA use the same compile.cpp policy; raise slightly so ROCm
+// train graphs (AdamW cast glue, residual chains) collapse more launches
+// without blowing hiprtc compile time. Was 11/24.
+constexpr int max_compile_depth = 16;
+constexpr int max_compile_arrays = 32;
 
 bool is_unary(const Primitive& p) {
   return (
