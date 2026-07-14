@@ -640,6 +640,8 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
 
     auto jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
     auto outputs = a.outputs();
+    // A primitive's jvp returns one tangent per output
+    assert(jvps.size() <= outputs.size());
     for (int i = 0; i < jvps.size(); ++i) {
       tan_map.insert({outputs[i].id(), jvps[i]});
     }

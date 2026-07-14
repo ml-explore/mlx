@@ -411,7 +411,9 @@ class TestConv(mlx_tests.MLXTestCase):
                 )
 
                 in_np = np.random.normal(0.0, scale, (N, iH, iW, C)).astype(np_dtype)
-                wt_np = np.random.normal(0.0, scale, (O, kH, kW, C)).astype(np_dtype)
+                wt_np = np.random.normal(0.0, scale, (O, kH, kW, C // groups)).astype(
+                    np_dtype
+                )
                 ct_np = np.random.normal(0.0, scale, (N, oH, oW, O)).astype(np_dtype)
 
                 in_mx, wt_mx, ct_mx = map(mx.array, (in_np, wt_np, ct_np))
@@ -479,6 +481,19 @@ class TestConv(mlx_tests.MLXTestCase):
                     run_conv2D_grad(
                         N, C, O, idim, kdim, stride, padding, dilation, dtype=dtype
                     )
+
+            for groups in (2, 4, 32):
+                run_conv2D_grad(
+                    4,
+                    32,
+                    32,
+                    (32, 32),
+                    (3, 3),
+                    (2, 2),
+                    (1, 1),
+                    groups=groups,
+                    dtype=dtype,
+                )
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_3D(self):

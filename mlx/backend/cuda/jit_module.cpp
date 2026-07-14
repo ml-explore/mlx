@@ -16,6 +16,9 @@
 
 namespace mlx::core::cu {
 
+// Defined in dirs.cpp to avoid invalidating compile cache.
+const char* cccl_dir();
+
 namespace {
 
 #define CHECK_NVRTC_ERROR(cmd) check_nvrtc_error(#cmd, (cmd))
@@ -61,11 +64,9 @@ const std::vector<std::string>& include_path_args() {
     }
     // Add path to CCCL headers.
     path = path / "cccl";
-#if defined(MLX_CCCL_DIR)
-    if (!std::filesystem::exists(path)) {
-      path = MLX_CCCL_DIR;
+    if (!std::filesystem::exists(path) && cccl_dir()) {
+      path = cccl_dir();
     }
-#endif
     if (std::filesystem::exists(path)) {
       args.push_back(fmt::format("--include-path={}", path.string()));
     }
@@ -253,9 +254,12 @@ constexpr const char* g_include_names[] = {
     INCLUDE_PREFIX "complex.cuh",
     INCLUDE_PREFIX "cute_dequant.cuh",
     INCLUDE_PREFIX "fp16_math.cuh",
+    INCLUDE_PREFIX "gemm_sm70.cuh",
     INCLUDE_PREFIX "hadamard.cuh",
     INCLUDE_PREFIX "indexing.cuh",
     INCLUDE_PREFIX "qmm_naive.cuh",
+    INCLUDE_PREFIX "qmm_sm80.cuh",
+    INCLUDE_PREFIX "qmm_sm90.cuh",
     INCLUDE_PREFIX "scatter_ops.cuh",
     INCLUDE_PREFIX "unary_ops.cuh",
     INCLUDE_PREFIX "ternary_ops.cuh",
@@ -272,9 +276,12 @@ constexpr const char* g_headers[] = {
     jit_source_complex,
     jit_source_cute_dequant,
     jit_source_fp16_math,
+    jit_source_gemm_sm70,
     jit_source_hadamard,
     jit_source_indexing,
     jit_source_qmm_naive,
+    jit_source_qmm_sm80,
+    jit_source_qmm_sm90,
     jit_source_scatter_ops,
     jit_source_unary_ops,
     jit_source_ternary_ops,

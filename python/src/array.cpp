@@ -2,11 +2,13 @@
 #include <cstdint>
 #include <cstring>
 #include <sstream>
+#include <tuple>
 
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/typing.h>
@@ -305,7 +307,7 @@ void init_array(nb::module_& m) {
       .def(
           "__init__",
           [](mx::array* aptr, nb::object v, std::optional<mx::Dtype> t) {
-            new (aptr) mx::array(create_array(v, t));
+            new (aptr) mx::array(create_array(v, t, true));
           },
           "val"_a,
           "dtype"_a = nb::none(),
@@ -383,7 +385,9 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def(
           "astype",
-          &mx::astype,
+          [](const mx::array& a, mx::Dtype dtype, mx::StreamOrDevice s) {
+            return mx::astype(a, dtype, s);
+          },
           "dtype"_a,
           "stream"_a = nb::none(),
           R"pbdoc(
@@ -489,7 +493,7 @@ void init_array(nb::module_& m) {
               throw std::invalid_argument(
                   "Invalid pickle state: expected (ndarray, Dtype::Val)");
             }
-            using ND = nb::ndarray<nb::ro, nb::c_contig>;
+            using ND = nb::ndarray<nb::ro>;
             ND nd = nb::cast<ND>(state[0]);
             auto val = static_cast<mx::Dtype::Val>(nb::cast<uint8_t>(state[1]));
             if (val == mx::Dtype::Val::bfloat16) {
@@ -506,7 +510,23 @@ void init_array(nb::module_& m) {
               new (&arr) mx::array(nd_array_to_mlx(nd, std::nullopt));
             }
           })
-      .def("__dlpack__", [](const mx::array& a) { return mlx_to_dlpack(a); })
+      .def(
+          "__dlpack__",
+          [](const mx::array& a,
+             nb::object,
+             nb::object,
+             std::optional<std::tuple<int, int>> dl_device,
+             std::optional<bool> copy) {
+            if (copy.value_or(false)) {
+              return mlx_to_dlpack(mx::astype(a, a.dtype(), true), dl_device);
+            }
+            return mlx_to_dlpack(a, dl_device);
+          },
+          nb::kw_only(),
+          "stream"_a = nb::none(),
+          "max_version"_a = nb::none(),
+          "dl_device"_a = nb::none(),
+          "copy"_a = nb::none())
       .def(
           "__dlpack_device__",
           [](const mx::array& a) {
@@ -514,8 +534,6 @@ void init_array(nb::module_& m) {
             // https://github.com/dmlc/dlpack/blob/5c210da409e7f1e51ddf445134a4376fdbd70d7d/include/dlpack/dlpack.h#L74
             if (mx::metal::is_available()) {
               return nb::make_tuple(8, 0);
-            } else if (mx::cu::is_available()) {
-              return nb::make_tuple(13, 0);
             } else {
               // CPU device
               return nb::make_tuple(1, 0);

@@ -11,11 +11,11 @@ __pycache__/
 *.metallib
 
 # Distribution / packaging
+/build/
 python/mlx/core
 python/mlx/share
 python/mlx/include
 .Python
-build/
 develop-eggs/
 dist/
 downloads/

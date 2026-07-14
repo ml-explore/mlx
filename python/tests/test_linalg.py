@@ -65,6 +65,26 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 with self.subTest(shape=shape, keepdims=keepdims):
                     self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
 
+        # neg/pos inf norm test
+        norms = [-float("inf"), float("inf")]
+        for shape in [(3, 3), (2, 3, 3), (2, 3, 3, 3)]:
+            x_mx = mx.arange(1, math.prod(shape) + 1, dtype=mx.float32).reshape(shape)
+            x_np = np.arange(1, math.prod(shape) + 1, dtype=np.float32).reshape(shape)
+            neg_indices = [-i for i in range(1, x_np.ndim + 1)]
+            neg_axes = [list(p) for p in itertools.permutations(neg_indices, 2)]
+            for ord in norms:
+                for axes in neg_axes:
+                    out_np = np.linalg.norm(
+                        x_np,
+                        ord=np.inf if ord == float("inf") else -np.inf,
+                        axis=tuple(axes),
+                    )
+                    out_mx = mx.linalg.norm(x_mx, ord=ord, axis=axes)
+                    with self.subTest(ord=ord, axes=axes):
+                        self.assertTrue(
+                            np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6)
+                        )
+
     def test_complex_norm(self):
         for shape in [(3,), (2, 3), (2, 3, 3)]:
             x_np = np.random.uniform(size=shape).astype(

@@ -398,12 +398,14 @@ class TestFFT(mlx_tests.MLXTestCase):
                 x = mx.random.normal(sh)
             else:
                 x = mx.random.normal((*sh, 2)).view(mx.complex64).squeeze()
+            mx.eval(x)
+            x_torch = torch.tensor(x, device="cpu")
             fx = f(x)
-            gx = g(torch.tensor(x))
+            gx = g(x_torch)
             self.assertLess((fx - gx).abs().max() / gx.abs().mean(), 1e-4)
 
             dfdx = mx.grad(f)(x)
-            dgdx = torch.func.grad(g)(torch.tensor(x))
+            dgdx = torch.func.grad(g)(x_torch)
             self.assertLess((dfdx - dgdx).abs().max() / dgdx.abs().mean(), 1e-4)
 
 

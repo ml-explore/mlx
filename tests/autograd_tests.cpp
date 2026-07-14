@@ -1316,6 +1316,68 @@ TEST_CASE("test scan grads") {
     CHECK(array_equal(out, expected).item<bool>());
   }
 
+  // Test cummax
+  {
+    int axis = 0;
+    int reverse = false;
+    int inclusive = true;
+    auto fun = [&axis, &reverse, &inclusive](array x) {
+      return cummax(x, axis, reverse, inclusive);
+    };
+
+    auto x = array({3.0f, 3.0f, 1.0f, 5.0f, 5.0f}, {5});
+    auto g = ones({5});
+    auto out = vjp(fun, x, g).second;
+    auto expected = array({1.0f, 2.0f, 0.0f, 1.0f, 1.0f}, {5});
+    CHECK(array_equal(out, expected).item<bool>());
+
+    reverse = true;
+    out = vjp(fun, x, g).second;
+    expected = array({0.0f, 0.0f, 0.0f, 4.0f, 1.0f}, {5});
+    CHECK(array_equal(out, expected).item<bool>());
+
+    inclusive = false;
+    out = vjp(fun, x, g).second;
+    expected = array({0.0f, 0.0f, 0.0f, 3.0f, 1.0f}, {5});
+    CHECK(array_equal(out, expected).item<bool>());
+
+    reverse = false;
+    out = vjp(fun, x, g).second;
+    expected = array({1.0f, 2.0f, 0.0f, 1.0f, 0.0f}, {5});
+    CHECK(array_equal(out, expected).item<bool>());
+  }
+
+  // Test cummin
+  {
+    int axis = 0;
+    int reverse = false;
+    int inclusive = true;
+    auto fun = [&axis, &reverse, &inclusive](array x) {
+      return cummin(x, axis, reverse, inclusive);
+    };
+
+    auto x = array({3.0f, 3.0f, 1.0f, 5.0f, 5.0f}, {5});
+    auto g = ones({5});
+    auto out = vjp(fun, x, g).second;
+    auto expected = array({1.0f, 1.0f, 3.0f, 0.0f, 0.0f}, {5});
+    CHECK(array_equal(out, expected).item<bool>());
+
+    reverse = true;
+    out = vjp(fun, x, g).second;
+    expected = array({0.0f, 0.0f, 3.0f, 1.0f, 1.0f}, {5});
+    CHECK(array_equal(out, expected).item<bool>());
+
+    inclusive = false;
+    out = vjp(fun, x, g).second;
+    expected = array({0.0f, 0.0f, 2.0f, 1.0f, 1.0f}, {5});
+    CHECK(array_equal(out, expected).item<bool>());
+
+    reverse = false;
+    out = vjp(fun, x, g).second;
+    expected = array({1.0f, 1.0f, 2.0f, 0.0f, 0.0f}, {5});
+    CHECK(array_equal(out, expected).item<bool>());
+  }
+
   // Test cumsum jvp
   {
     int axis = 0;

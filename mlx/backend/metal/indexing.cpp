@@ -519,6 +519,12 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
+  if (size_of(out.dtype()) == 8) {
+    std::ostringstream msg;
+    msg << "[ScatterAxis::eval_gpu] Does not support " << out.dtype();
+    throw std::invalid_argument(msg.str());
+  }
+
   auto& src = inputs[0];
   auto& idx = inputs[1];
   auto& upd = inputs[2];

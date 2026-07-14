@@ -34,6 +34,34 @@ namespace {
 
 constexpr const char* default_mtllib_path = METAL_PATH;
 
+void set_compile_options(
+    MTL::CompileOptions* mtl_options,
+    const CompileOptions& compile_options) {
+  if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
+    switch (compile_options.math_mode) {
+      case MathMode::Safe:
+        mtl_options->setMathMode(MTL::MathModeSafe);
+        break;
+      case MathMode::Relaxed:
+        mtl_options->setMathMode(MTL::MathModeRelaxed);
+        break;
+      case MathMode::Fast:
+        mtl_options->setMathMode(MTL::MathModeFast);
+        break;
+      default:
+        throw std::invalid_argument("[metal::Device] Invalid math mode.");
+    }
+  } else {
+    if (compile_options.math_mode == MathMode::Relaxed) {
+      throw std::runtime_error(
+          "[metal::Device] Metal math mode `relaxed` requires macOS 15, "
+          "iOS 18, tvOS 18, or visionOS 2.");
+    }
+    mtl_options->setFastMathEnabled(
+        compile_options.math_mode == MathMode::Fast);
+  }
+}
+
 auto get_metal_version() {
   auto get_metal_version_ = []() {
     if (__builtin_available(macOS 26, iOS 26, tvOS 26, visionOS 26, *)) {
@@ -162,6 +190,20 @@ std::pair<MTL::Library*, NS::Error*> load_swiftpm_library(
 }
 
 MTL::Library* load_default_library(MTL::Device* device) {
+  // Check override path before automatic lookup
+  if (!get_metallib_path().empty()) {
+    auto [lib, error] =
+        load_library_from_path(device, get_metallib_path().c_str());
+    if (!lib) {
+      throw std::runtime_error(
+          fmt::format(
+              "Can not load metallib from specified location \"{}\": {}.",
+              get_metallib_path(),
+              error->localizedDescription()->utf8String()));
+    }
+    return lib;
+  }
+
   NS::Error* error[5];
   MTL::Library* lib;
   // First try the colocated mlx.metallib
@@ -606,7 +648,8 @@ MTL::Library* Device::get_library(
 }
 
 NS::SharedPtr<MTL::Library> Device::build_library_(
-    const std::string& source_string) {
+    const std::string& source_string,
+    const CompileOptions& compile_options) {
   auto pool = new_scoped_memory_pool();
 
   auto ns_code =
@@ -614,7 +657,7 @@ NS::SharedPtr<MTL::Library> Device::build_library_(
 
   NS::Error* error = nullptr;
   auto options = MTL::CompileOptions::alloc()->init()->autorelease();
-  options->setFastMathEnabled(false);
+  set_compile_options(options, compile_options);
   options->setLanguageVersion(get_metal_version());
 #ifndef NDEBUG
   if (options->languageVersion() >= MTL::LanguageVersion3_2) {
@@ -755,6 +798,7 @@ NS::SharedPtr<MTL::ComputePipelineState> Device::get_kernel_(
 
 MTL::Library* Device::get_library(
     const std::string& name,
+    const CompileOptions& compile_options,
     const std::function<std::string(void)>& builder) {
   {
     std::shared_lock rlock(library_mtx_);
@@ -768,7 +812,7 @@ MTL::Library* Device::get_library(
     return it->second.get();
   }
 
-  auto mtl_lib = build_library_(builder());
+  auto mtl_lib = build_library_(builder(), compile_options);
   library_map_.insert({name, mtl_lib});
   return mtl_lib.get();
 }

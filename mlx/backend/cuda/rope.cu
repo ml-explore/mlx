@@ -106,8 +106,8 @@ __device__ void rope_impl(
     const int* offset,
     float inv_freq,
     float scale,
-    const cuda::std::array<int64_t, 3> strides,
-    const cuda::std::array<int64_t, 3> out_strides,
+    const cuda::std::array<int64_t, 4> strides,
+    const cuda::std::array<int64_t, 4> out_strides,
     int64_t offset_stride,
     int n_head,
     uint3 pos,
@@ -117,29 +117,31 @@ __device__ void rope_impl(
   auto batch_idx = (pos.z * N) / n_head_up;
   auto batch_offset = offset[batch_idx * offset_stride];
   float L = scale * static_cast<float>(pos.y + batch_offset);
-  auto mat_idx = batch_idx * n_head + head_idx;
 
   // Compute costheta, sintheta
   float theta = L * inv_freq;
   float costheta = cos(theta);
   float sintheta = sin(theta);
 
+  size_t in_batch_head = batch_idx * strides[0] + head_idx * strides[1];
+  size_t out_batch_head =
+      batch_idx * out_strides[0] + head_idx * out_strides[1];
+
   // Compute the input and output indices
   size_t in_index_1, in_index_2;
   size_t out_index_1, out_index_2;
   if (traditional) {
-    out_index_1 = 2 * pos.x * out_strides[2] + pos.y * out_strides[1] +
-        mat_idx * out_strides[0];
-    out_index_2 = out_index_1 + 1;
-    in_index_1 =
-        2 * pos.x * strides[2] + pos.y * strides[1] + mat_idx * strides[0];
-    in_index_2 = in_index_1 + strides[2];
+    out_index_1 =
+        2 * pos.x * out_strides[3] + pos.y * out_strides[2] + out_batch_head;
+    out_index_2 = out_index_1 + out_strides[3];
+    in_index_1 = 2 * pos.x * strides[3] + pos.y * strides[2] + in_batch_head;
+    in_index_2 = in_index_1 + strides[3];
   } else {
-    out_index_1 = pos.x * out_strides[2] + pos.y * out_strides[1] +
-        mat_idx * out_strides[0];
-    out_index_2 = out_index_1 + dims.x * out_strides[2];
-    in_index_1 = pos.x * strides[2] + pos.y * strides[1] + mat_idx * strides[0];
-    in_index_2 = in_index_1 + dims.x * strides[2];
+    out_index_1 =
+        pos.x * out_strides[3] + pos.y * out_strides[2] + out_batch_head;
+    out_index_2 = out_index_1 + dims.x * out_strides[3];
+    in_index_1 = pos.x * strides[3] + pos.y * strides[2] + in_batch_head;
+    in_index_2 = in_index_1 + dims.x * strides[3];
   }
   for (int i = 0; i < N && head_idx + i < n_head; ++i) {
     // Read and write the output
@@ -156,10 +158,10 @@ __device__ void rope_impl(
     }
     out[out_index_1] = static_cast<T>(rx1);
     out[out_index_2] = static_cast<T>(rx2);
-    in_index_1 += strides[0];
-    in_index_2 += strides[0];
-    out_index_1 += out_strides[0];
-    out_index_2 += out_strides[0];
+    in_index_1 += strides[1];
+    in_index_2 += strides[1];
+    out_index_1 += out_strides[1];
+    out_index_2 += out_strides[1];
   }
 }
 
@@ -170,8 +172,8 @@ __global__ void rope(
     const int32_t* offset,
     float scale,
     float base,
-    const __grid_constant__ cuda::std::array<int64_t, 3> strides,
-    const __grid_constant__ cuda::std::array<int64_t, 3> out_strides,
+    const __grid_constant__ cuda::std::array<int64_t, 4> strides,
+    const __grid_constant__ cuda::std::array<int64_t, 4> out_strides,
     int64_t offset_stride,
     int n_head,
     uint3 dims) {
@@ -207,8 +209,8 @@ __global__ void rope_freqs(
     const float* freqs,
     float scale,
     float base,
-    const __grid_constant__ cuda::std::array<int64_t, 3> strides,
-    const __grid_constant__ cuda::std::array<int64_t, 3> out_strides,
+    const __grid_constant__ cuda::std::array<int64_t, 4> strides,
+    const __grid_constant__ cuda::std::array<int64_t, 4> out_strides,
     int64_t offset_stride,
     int n_head,
     uint3 dims,
@@ -255,8 +257,8 @@ void RoPE::eval_gpu(
   auto& offset = inputs[1];
   auto& out = outputs[0];
 
-  cuda::std::array<int64_t, 3> strides;
-  cuda::std::array<int64_t, 3> out_strides;
+  cuda::std::array<int64_t, 4> strides;
+  cuda::std::array<int64_t, 4> out_strides;
   bool donated = false;
   int ndim = in.ndim();
 
@@ -264,57 +266,52 @@ void RoPE::eval_gpu(
   int T = in.shape(-2);
   int D = in.shape(-1);
   size_t mat_size = T * D;
-  int dispatch_ndim = ndim;
-  while (in.shape(-dispatch_ndim) == 1 && dispatch_ndim > 3) {
-    dispatch_ndim--;
-  }
 
   int N = 1;
   for (int i = 1; i < (ndim - 2); ++i) {
     N *= in.shape(i);
   }
 
-  // We apply rope to less that the whole vector so copy to output and then
-  // apply in-place.
-  if (dims_ < D) {
-    donated = true;
-    auto ctype =
-        (in.flags().row_contiguous) ? CopyType::Vector : CopyType::General;
-    copy_gpu(in, out, ctype, s);
-    strides[0] = mat_size;
-    strides[1] = out.strides()[ndim - 2];
-    strides[2] = out.strides()[ndim - 1];
-  }
+  // if input has < 4 dims or row_contiguous: if we can donate the input, reuse
+  // the buffer if in is not donatable, we allocate a new buffer for the output
+  // with the same strides as input if input has > 4 dims and is not
+  // row_contigous, we copy the input to a new buffer (we should not be here
+  // often) in case it is partial rotation: we reuse if input is donatable and
+  // copy if it is not donatable
+  bool partial = dims_ < D;
+  bool layout_ok = ndim <= 4 || in.flags().row_contiguous;
 
-  // Either copy or apply in-place
-  else if (in.flags().row_contiguous) {
+  if (layout_ok) {
     if (in.is_donatable()) {
       donated = true;
       out.copy_shared_buffer(in);
+    } else if (!partial) {
+      out.set_data(
+          cu::malloc_async(in.data_size() * in.itemsize(), encoder),
+          in.data_size(),
+          in.strides(),
+          in.flags());
     } else {
-      out.set_data(cu::malloc_async(out.nbytes(), encoder));
+      donated = true;
+      auto ctype =
+          in.flags().row_contiguous ? CopyType::Vector : CopyType::General;
+      copy_gpu(in, out, ctype, s);
     }
-    strides[0] = mat_size;
-    strides[1] = in.strides()[ndim - 2];
-    strides[2] = in.strides()[ndim - 1];
-  } else if (dispatch_ndim == 3) {
-    // Handle non-contiguous 3D inputs
-    out.set_data(cu::malloc_async(out.nbytes(), encoder));
-    strides[0] = in.strides()[ndim - 3];
-    strides[1] = in.strides()[ndim - 2];
-    strides[2] = in.strides()[ndim - 1];
   } else {
-    // Copy non-contiguous > 3D inputs into the output and treat
-    // input as donated
     donated = true;
     copy_gpu(in, out, CopyType::General, s);
-    strides[0] = mat_size;
-    strides[1] = out.strides()[ndim - 2];
-    strides[2] = out.strides()[ndim - 1];
   }
-  out_strides[0] = mat_size;
-  out_strides[1] = out.strides()[ndim - 2];
-  out_strides[2] = out.strides()[ndim - 1];
+  const auto& src_strides = donated ? out.strides() : in.strides();
+  strides[0] = src_strides[0];
+  strides[1] = src_strides[ndim - 3];
+  strides[2] = src_strides[ndim - 2];
+  strides[3] = src_strides[ndim - 1];
+
+  const auto& dst_strides = out.strides();
+  out_strides[0] = dst_strides[0];
+  out_strides[1] = dst_strides[ndim - 3];
+  out_strides[2] = dst_strides[ndim - 2];
+  out_strides[3] = dst_strides[ndim - 1];
 
   // Some flags to help us dispatch below
   bool single = in.flags().row_contiguous && B == 1 && T == 1;
@@ -327,9 +324,9 @@ void RoPE::eval_gpu(
   }
   encoder.set_output_array(out);
   dispatch_float_types(out.dtype(), "rope", [&](auto type_tag) {
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     dispatch_bool(traditional_, [&](auto traditional) {
       dispatch_bool(forward_, [&](auto forward) {
-        using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
         if (single && !with_freqs) {
           auto kernel =
               cu::rope_single<DataType, traditional.value, forward.value>;

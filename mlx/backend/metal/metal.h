@@ -22,4 +22,9 @@ MLX_API const
     std::unordered_map<std::string, std::variant<std::string, size_t>>&
     device_info();
 
+/* Set a custom path to mlx.metallib. Must be called before any MLX operation.
+ */
+MLX_API void set_metallib_path(const std::string& path);
+MLX_API const std::string& get_metallib_path();
+
 } // namespace mlx::core::metal

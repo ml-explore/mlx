@@ -122,6 +122,7 @@ void qmv(
     const array& w,
     const array& scales,
     const std::optional<array>& biases,
+    const std::optional<array>& global_scale,
     array& out,
     int bits,
     int group_size,

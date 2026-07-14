@@ -1,4 +1,5 @@
 # Copyright © 2023 Apple Inc.
+import math
 import unittest
 
 import mlx.core as mx
@@ -105,6 +106,19 @@ class TestInit(mlx_tests.MLXTestCase):
                     )
             with self.assertRaises(ValueError):
                 result = initializer(mx.zeros((1,)))
+
+    def test_sparse_zeros_per_row(self):
+        # Sparsity is applied along each row: every row drops exactly
+        # ceil(sparsity * cols) of its entries, independent of matrix shape, so
+        # each output feature (a row of `w` used as `x @ w.T`) keeps the same
+        # number of input connections.
+        for sparsity, shape in [(0.5, (4, 10)), (0.3, (5, 10)), (0.5, (2, 2))]:
+            _, cols = shape
+            expected = int(math.ceil(sparsity * cols))
+            result = init.sparse(sparsity)(mx.zeros(shape))
+            zeros_per_row = mx.sum(result == 0, axis=1)
+            with self.subTest(shape=shape, sparsity=sparsity):
+                self.assertTrue(mx.all(zeros_per_row == expected).item())
 
     def test_orthogonal(self):
         initializer = init.orthogonal(gain=1.0, dtype=mx.float32)

@@ -84,7 +84,16 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (can_use_fp_qmv) {
       fp_qmv(x, w, scales, out, bits_, group_size_, encoder, s);
     } else {
-      qmv(x, w, scales, biases, out, bits_, group_size_, mode_, encoder);
+      qmv(x,
+          w,
+          scales,
+          biases,
+          std::nullopt,
+          out,
+          bits_,
+          group_size_,
+          mode_,
+          encoder);
     }
   };
 

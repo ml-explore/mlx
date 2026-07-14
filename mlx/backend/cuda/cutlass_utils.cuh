@@ -2,8 +2,10 @@
 
 #pragma once
 
+#include "mlx/backend/cuda/utils.h"
 #include "mlx/dtype.h"
 
+#include <cute/int_tuple.hpp>
 #include <cutlass/bfloat16.h>
 #include <cutlass/half.h>
 #include <fmt/format.h>
@@ -42,5 +44,25 @@ struct CTypeToCutlassType<bfloat16_t> {
 
 template <typename T>
 using cutlass_type_t = typename CTypeToCutlassType<T>::type;
+
+// Convert Dtype to CUTLASS C++ types.
+inline const char* dtype_to_cutlass_type(const Dtype& dtype) {
+  if (dtype == float16) {
+    return "cutlass::half_t";
+  }
+  if (dtype == bfloat16) {
+    return "cutlass::bfloat16_t";
+  }
+  return dtype_to_cuda_type(dtype);
+}
+
+// Convert cute shape to string.
+inline auto cta_tiler_to_string(auto cta_tiler) {
+  return fmt::format(
+      "cute::Shape<cute::Int<{}>, cute::Int<{}>, cute::Int<{}>>",
+      int(cute::size<0>(cta_tiler)),
+      int(cute::size<1>(cta_tiler)),
+      int(cute::size<2>(cta_tiler)));
+}
 
 } // namespace mlx::core

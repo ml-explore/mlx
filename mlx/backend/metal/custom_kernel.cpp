@@ -1,5 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
+#include "mlx/backend/common/metal_kernel.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/utils.h"
@@ -8,7 +9,8 @@
 namespace mlx::core::fast {
 
 struct CustomKernelCache {
-  std::unordered_map<std::string, std::string> libraries;
+  std::unordered_map<std::string, std::pair<std::string, CompileOptions::Data>>
+      libraries;
 };
 
 static CustomKernelCache& cache() {
@@ -58,17 +60,20 @@ void CustomKernel::eval_gpu(
     auto& kernel_cache = cache();
     if (auto it = kernel_cache.libraries.find(name_);
         it != kernel_cache.libraries.end()) {
-      if (it->second != source_) {
+      if (it->second.first != source_ ||
+          it->second.second != compile_options_) {
         auto& d = metal::device(s.device);
         d.clear_library(name_);
-        it->second = source_;
+        it->second = std::make_tuple(source_, compile_options_);
       }
     } else {
-      kernel_cache.libraries.emplace(name_, source_);
+      kernel_cache.libraries.emplace(
+          name_, std::make_tuple(source_, compile_options_));
     }
   }
 
-  auto lib = d.get_library(name_, [this] { return metal::utils() + source_; });
+  auto lib = d.get_library(
+      name_, compile_options_, [this] { return metal::utils() + source_; });
   auto kernel = d.get_kernel(name_, lib);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);

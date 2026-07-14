@@ -72,4 +72,6 @@ inline void release(Buffer buffer) {
   allocator().release(buffer);
 }
 
+MLX_API bool can_reuse_alien_buffer(void* ptr);
+
 } // namespace mlx::core::allocator

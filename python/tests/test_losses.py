@@ -350,6 +350,12 @@ class TestLosses(mlx_tests.MLXTestCase):
         expected_none = mx.array([0.0, 0.831777])
         self.assertTrue(mx.allclose(losses_none, expected_none))
 
+        # The documented formula must match the implementation: the sum reduces
+        # the elementwise product over `axis`, so the multiply has to be inside
+        # the sum (parenthesization matters).
+        documented = (mx.exp(q_logits) * (q_logits - p_logits)).sum(axis=-1)
+        self.assertTrue(mx.allclose(losses_none, documented))
+
         # Test with reduction 'mean'
         losses_mean = nn.losses.kl_div_loss(p_logits, q_logits, reduction="mean")
         expected_mean = mx.mean(expected_none)

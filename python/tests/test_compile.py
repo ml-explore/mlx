@@ -1110,6 +1110,45 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(out[0].shape, (3, 1, 4, 2))
         self.assertEqual(out[1].shape, (2, 2, 5))
 
+    def test_shapeless_compile_reduce_after_gather(self):
+        # Reductions over dimensions that happen to have size 1 at trace time
+        # used to be elided from the graph, so replays with larger dynamic
+        # shapes returned stale values (issue #3201)
+        buf = mx.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        reductions = [
+            mx.sum,
+            mx.mean,
+            mx.prod,
+            mx.min,
+            mx.max,
+            mx.all,
+            mx.any,
+            mx.argmin,
+            mx.argmax,
+        ]
+        for reduction in reductions:
+
+            def fun(buf, idx):
+                return reduction(mx.take(buf, idx, axis=0))
+
+            # Trace with a size-1 reduction and replay with larger sizes
+            cfun = mx.compile(fun, shapeless=True)
+            for n in [1, 2, 3, 4]:
+                idx = mx.arange(n)
+                self.assertTrue(
+                    mx.array_equal(cfun(buf, idx), fun(buf, idx)),
+                    f"{reduction.__name__} failed for n={n}",
+                )
+
+            # Replay with size 1 so the reduction is an identity at runtime
+            cfun = mx.compile(fun, shapeless=True)
+            for n in [2, 1]:
+                idx = mx.arange(n)
+                self.assertTrue(
+                    mx.array_equal(cfun(buf, idx), fun(buf, idx)),
+                    f"{reduction.__name__} failed for replay with n={n}",
+                )
+
     def test_leaks(self):
         gc.collect()
         if mx.metal.is_available():
@@ -1414,6 +1453,53 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(
             np.asarray(out, copy=False).__array_interface__["data"][0], in_ptr
         )
+
+    def test_compile_negative_strides(self):
+        # 1D negative stride with elementwise expression
+        @mx.compile
+        def f(x):
+            return 2.0 * x[::-1]
+
+        x = mx.arange(8, dtype=mx.float32)
+        expected = 2.0 * x[::-1]
+        self.assertTrue(mx.array_equal(f(x), expected))
+
+        # 1D negative stride with slice update
+        def g_eager(x):
+            base = mx.zeros_like(x)
+            base[::-1] += 2.0 * x[::-1]
+            return base
+
+        g_compiled = mx.compile(g_eager)
+        expected = g_eager(x)
+        self.assertTrue(mx.array_equal(g_compiled(x), expected))
+
+        # 2D negative stride
+        @mx.compile
+        def h(x):
+            return x[::-1] + 1.0
+
+        y = mx.arange(12, dtype=mx.float32).reshape(3, 4)
+        expected = y[::-1] + 1.0
+        self.assertTrue(mx.array_equal(h(y), expected))
+
+        # Mixed positive and negative strides
+        @mx.compile
+        def m(x):
+            return x[::-1, ::2] * 3.0
+
+        z = mx.arange(24, dtype=mx.float32).reshape(4, 6)
+        expected = z[::-1, ::2] * 3.0
+        self.assertTrue(mx.array_equal(m(z), expected))
+
+        # 4D negative stride (exercises work_per_thread > 1 path)
+        @mx.compile
+        def p(x):
+            return x + 1.0
+
+        w = mx.arange(120, dtype=mx.float32).reshape(2, 3, 4, 5)
+        expected = w[::-1, :, ::-1, :] + 1.0
+        self.assertTrue(mx.array_equal(p(w[::-1, :, ::-1, :]), expected))
 
 
 if __name__ == "__main__":

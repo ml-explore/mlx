@@ -428,7 +428,7 @@ class TestFast(mlx_tests.MLXTestCase):
 
         dtypes = [mx.float32, mx.float16, mx.bfloat16]
         epss = [1e-3, 1e-5]
-        dimss = [31, 32, 33]
+        dimss = [31, 32, 33, 256, 512]
         defaults = (mx.float32, 1e-5, 32)
 
         for dtype in dtypes:
@@ -483,23 +483,23 @@ class TestFast(mlx_tests.MLXTestCase):
             mx.fast.rms_norm(x, mx.ones((4,)), 1e-5)
 
     def test_rms_norm_grad(self):
-        D = 32
         eps = 1e-5
         f1 = lambda x, w, y: (rms_norm(x, w, eps) * y).sum()
         f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, eps) * y).sum()
         f3 = lambda x, y: (rms_norm(x, mx.ones((x.shape[-1],)), eps) * y).sum()
         f4 = lambda x, y: (mx.fast.rms_norm(x, None, eps) * y).sum()
 
-        x = mx.random.uniform(shape=(8, 100, D))
-        w = mx.random.uniform(shape=(D,))
-        y = mx.random.uniform(shape=(8, 100, D))
-        gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
-        gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
-        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
-        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
-        gx1 = mx.grad(f3, argnums=(0,))(x, y)
-        gx2 = mx.grad(f4, argnums=(0,))(x, y)
-        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        for D in [32, 256]:
+            x = mx.random.uniform(shape=(8, 100, D))
+            w = mx.random.uniform(shape=(D,))
+            y = mx.random.uniform(shape=(8, 100, D))
+            gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
+            gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
+            self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+            self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+            gx1 = mx.grad(f3, argnums=(0,))(x, y)
+            gx2 = mx.grad(f4, argnums=(0,))(x, y)
+            self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
 
         D = 8192
         x = mx.random.uniform(shape=(2, 2, D))
@@ -1025,6 +1025,67 @@ class TestFast(mlx_tests.MLXTestCase):
         """
         out = call_kernel(a, source)
         self.assertTrue(mx.array_equal(out, mx.ones_like(out)))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_metal_kernel_math_mode(self):
+        with self.assertRaises(ValueError):
+            mx.fast.metal_kernel(
+                name="invalid_math_mode",
+                input_names=["inp"],
+                output_names=["out"],
+                source="out[0] = inp[0];",
+                compile_options={"math_mode": "precise"},
+            )
+
+        with self.assertRaises(ValueError):
+            mx.fast.metal_kernel(
+                name="invalid_compile_options",
+                input_names=["inp"],
+                output_names=["out"],
+                source="out[0] = inp[0];",
+                compile_options={"unknown": "value"},
+            )
+
+        # Numerical special cases such as exp(-inf) can agree between math
+        # modes, so they don't reliably detect whether the mode was applied.
+        # Branch on the compiler's __FAST_MATH__ macro instead: it is defined
+        # only when fast math is enabled, so the test fails if the selected
+        # math mode is not forwarded to the Metal compiler.
+        source = """
+            uint elem = thread_position_in_grid.x;
+            #if defined(__FAST_MATH__) && __FAST_MATH__
+            out[elem] = 1.0f;
+            #else
+            out[elem] = 0.0f;
+            #endif
+        """
+
+        a = mx.zeros((4,), dtype=mx.float32)
+        expected = {
+            "safe": mx.zeros_like(a),
+            "fast": mx.ones_like(a),
+        }
+
+        # Reuse the same kernel name across modes so the library cache is forced
+        # to rebuild when the math mode changes, guarding against a stale build
+        # being returned for a different mode.
+        for mode, expected_out in expected.items():
+            kernel = mx.fast.metal_kernel(
+                name="math_mode",
+                input_names=["inp"],
+                output_names=["out"],
+                source=source,
+                compile_options={"math_mode": mode},
+            )
+            out = kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(a.size, 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+            self.assertTrue(mx.array_equal(out, expected_out))
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_kernel_mixed_dtypes(self):

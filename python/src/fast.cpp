@@ -75,6 +75,43 @@ struct PyCustomKernelFunction {
   const char* tag_;
 };
 
+mx::MathMode parse_metal_math_mode(const std::string& math_mode) {
+  if (math_mode == "safe") {
+    return mx::MathMode::Safe;
+  } else if (math_mode == "relaxed") {
+    return mx::MathMode::Relaxed;
+  } else if (math_mode == "fast") {
+    return mx::MathMode::Fast;
+  }
+  throw std::invalid_argument(
+      "[metal_kernel] Expected math_mode to be 'safe', 'relaxed', or 'fast'.");
+}
+
+mx::CompileOptions parse_compile_options(const nb::object& obj) {
+  mx::CompileOptions result;
+  if (obj.is_none()) {
+    return result;
+  }
+
+  if (!nb::isinstance<nb::dict>(obj)) {
+    throw std::invalid_argument(
+        "[metal_kernel] Expected `compile_options` to be a dict.");
+  }
+
+  nb::dict dict = nb::cast<nb::dict>(obj);
+  for (auto [key, value] : dict) {
+    auto key_str = nb::cast<std::string>(key);
+    if (key_str == "math_mode") {
+      result.math_mode = parse_metal_math_mode(nb::cast<std::string>(value));
+    } else {
+      std::ostringstream msg;
+      msg << "[metal_kernel] Unknown compile option `" << key_str << "`.";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+  return result;
+}
+
 } // namespace
 
 void init_fast(nb::module_& parent_module) {
@@ -304,7 +341,8 @@ void init_fast(nb::module_& parent_module) {
          const std::string& source,
          const std::string& header,
          bool ensure_row_contiguous,
-         bool atomic_outputs) {
+         bool atomic_outputs,
+         const nb::object& compile_options) {
         auto kernel = mx::fast::metal_kernel(
             name,
             input_names,
@@ -312,7 +350,8 @@ void init_fast(nb::module_& parent_module) {
             source,
             header,
             ensure_row_contiguous,
-            atomic_outputs);
+            atomic_outputs,
+            parse_compile_options(compile_options));
         return nb::cpp_function(
             PyCustomKernelFunction(std::move(kernel), "[metal_kernel]"),
             nb::kw_only(),
@@ -356,6 +395,7 @@ void init_fast(nb::module_& parent_module) {
       "header"_a = "",
       "ensure_row_contiguous"_a = true,
       "atomic_outputs"_a = false,
+      "compile_options"_a = nb::none(),
       R"pbdoc(
       A jit-compiled custom Metal kernel defined from a source string.
 
@@ -376,6 +416,12 @@ void init_fast(nb::module_& parent_module) {
            before the kernel runs. Default: ``True``.
         atomic_outputs (bool): Whether to use atomic outputs in the function signature
            e.g. ``device atomic<float>``. Default: ``False``.
+        compile_options (dict, optional): Options to compile the Metal kernel
+           with. Supported options:
+
+           * ``"math_mode"``: The Metal math mode: ``"safe"``, ``"relaxed"``,
+             or ``"fast"``. ``"safe"`` preserves IEEE behavior for special
+             values such as ``exp(-inf) == 0``. Default: ``"safe"``.
 
       Returns:
         Callable ``metal_kernel``.

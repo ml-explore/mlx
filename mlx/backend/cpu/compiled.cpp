@@ -298,7 +298,7 @@ void Compiled::eval_cpu(
 
   // Collapse contiguous dims to route to a faster kernel if possible. Also
   // handle all broadcasting.
-  auto [contiguous, shape, strides] =
+  auto [contiguous, negative_strides, shape, strides] =
       compiled_collapse_contiguous_dims(inputs, outputs[0], is_constant_);
 
   // Collect function input arguments.

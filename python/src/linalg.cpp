@@ -733,4 +733,6 @@ void init_linalg(nb::module_& parent_module) {
             >>> logabsdet
             array(0.693147, dtype=float32)
       )pbdoc");
+  // Array API standard aliases (https://data-apis.org/array-api/latest/).
+  parent_module.attr("matrix_norm") = m.attr("norm");
 }

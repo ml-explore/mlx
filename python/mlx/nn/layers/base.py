@@ -634,6 +634,13 @@ def _update_modules(dst, modules, strict):
                 raise ValueError(f'Module does not have sub-module named "{k}".')
     elif isinstance(modules, list):
         for i in range(len(modules)):
+            if i >= len(dst):
+                if strict:
+                    raise ValueError(
+                        f"List index {i} is out of bounds for "
+                        f"destination of length {len(dst)}."
+                    )
+                continue
             current_value = dst[i]
             new_value = modules[i]
             if Module.is_module(current_value) and Module.is_module(new_value):

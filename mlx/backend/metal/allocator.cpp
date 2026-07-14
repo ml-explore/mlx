@@ -7,6 +7,7 @@
 
 #include <mach/vm_page_size.h>
 #include <unistd.h>
+#include <cassert>
 #include <cstdlib>
 
 namespace mlx::core {
@@ -24,7 +25,17 @@ void* Buffer::raw_ptr() {
   if (!ptr_) {
     return nullptr;
   }
-  return static_cast<MTL::Buffer*>(ptr_)->contents();
+  auto* buf = static_cast<MTL::Buffer*>(ptr_);
+  assert(buf->storageMode() != MTL::StorageModePrivate);
+  return buf->contents();
+}
+
+bool can_reuse_alien_buffer(void* ptr) {
+  if (!ptr) {
+    return true;
+  }
+  auto* buf = static_cast<MTL::Buffer*>(ptr);
+  return buf->storageMode() != MTL::StorageModePrivate;
 }
 
 } // namespace allocator

@@ -1,0 +1,79 @@
+name: 'Run tests'
+description: 'Run Python and C++ tests on macOS'
+
+inputs:
+  toolkit:
+    description: 'Which toolkit to test'
+    required: false
+    default: 'cpu'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install tests dependencies
+      shell: bash
+      run: |
+        echo "::group::Install tests dependencies"
+        uv pip install tensorflow
+        echo "::endgroup::"
+
+    - name: Run Python tests
+      shell: bash
+      env:
+        METAL_DEBUG_ERROR_MODE: 0
+        METAL_DEVICE_WRAPPER_TYPE: 1
+      run: |
+        run_tests() {
+          for WHEEL in dist/*.whl; do
+            break
+          done
+
+          echo "::group::Install $WHEEL"
+          uv pip install $WHEEL
+          echo "::endgroup::"
+
+          echo "::group::Run CPP tests"
+          ./build/tests/tests
+          echo "::endgroup::"
+
+          echo "::group::Run distributed tests"
+          # TODO: Re-enable for GPU after openmpi updating their libprrte
+          # dependency: https://github.com/openpmix/prrte/issues/2416
+          if ${{ inputs.toolkit == 'cpu' }} ; then
+            mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib uv run python/tests/mpi_test_distributed.py
+          fi
+          mlx.launch --verbose -n 8 uv run python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+          if $(grep "\[WARN\]" stderr.log); then
+            echo "Distributed ring test failed"
+            exit 1
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Run Python tests"
+          python -m unittest discover -v python/tests
+          echo "::endgroup::"
+
+          if ${{ inputs.toolkit != 'cpu' }} ; then
+            echo "::group::Build example extension"
+            pushd examples/extensions
+            uv pip install -r requirements.txt
+            uv run setup.py build_ext --inplace
+            uv run test.py
+            popd
+            echo "::endgroup::"
+          fi
+        }
+
+        if [[ -d artifact ]] ; then
+          for SUBDIR in artifact/*; do
+            rm -rf build dist
+            mv $SUBDIR/* .
+            # Downloaded binaries all lose executable permission.
+            find build -type f -exec chmod 755 {} \;
+            # Path to metallib is hard-coded so move it besides executable.
+            mv build/mlx/backend/metal/kernels/mlx.metallib build/tests
+            run_tests
+          done
+        else
+          run_tests
+        fi

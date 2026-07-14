@@ -398,6 +398,10 @@ void* Buffer::raw_ptr() {
   return cbuf.data;
 }
 
+bool can_reuse_alien_buffer(void* ptr) {
+  return true;
+}
+
 } // namespace allocator
 
 size_t get_active_memory() {

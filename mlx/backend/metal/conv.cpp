@@ -989,9 +989,13 @@ void dispatch_conv_2D_gpu(
   bool is_kdil_one = conv_params.kdil[0] == 1 && conv_params.kdil[1] == 1;
   bool is_idil_one = conv_params.idil[0] == 1 && conv_params.idil[1] == 1;
 
-  if (is_idil_one && conv_params.groups > 1) {
+  if (conv_params.groups > 1) {
     const int C_per_group = conv_params.C / conv_params.groups;
     const int O_per_group = conv_params.O / conv_params.groups;
+
+    if (!is_idil_one) {
+      return explicit_gemm_conv_group_ND_gpu(s, d, in, wt, out, conv_params);
+    }
 
     if (C_per_group == 1 && O_per_group == 1 && is_kdil_one &&
         conv_params.wS[0] <= 7 && conv_params.wS[1] <= 7 &&

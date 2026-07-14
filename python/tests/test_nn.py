@@ -330,6 +330,19 @@ class TestBase(mlx_tests.MLXTestCase):
         m = MyModel()
         m.update_modules(m.leaf_modules())
 
+        # A list with more entries than the destination is rejected when strict
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        with self.assertRaises(ValueError):
+            m.update_modules({"layers": [{}, {}, nn.Linear(3, 4)]})
+
+        # ...and the extra entries are skipped (not a crash) when strict=False
+        m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
+        m.update_modules(
+            {"layers": [{}, nn.Linear(3, 4), nn.Linear(5, 5)]}, strict=False
+        )
+        self.assertEqual(len(m.layers), 2)
+        self.assertEqual(m.layers[1].weight.shape, (4, 3))
+
     def test_parameter_deletion(self):
         m = nn.Linear(32, 32)
         del m.weight
@@ -757,6 +770,16 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertIn("weight", bn_trainable)
         self.assertIn("bias", bn_trainable)
 
+        # test with 4D input (NHWC)
+        mx.random.seed(42)
+        x = mx.random.normal((2, 3, 3, 6), dtype=mx.float32)
+        bn = nn.BatchNorm(num_features=6, affine=True)
+        y = bn(x)
+        self.assertTrue(x.shape == y.shape)
+        # batch norm over an NHWC input normalizes each channel across N, H, W
+        self.assertTrue(mx.allclose(y.mean(axis=(0, 1, 2)), mx.zeros((6,)), atol=1e-5))
+        self.assertTrue(mx.allclose(y.var(axis=(0, 1, 2)), mx.ones((6,)), atol=1e-2))
+
     def test_batch_norm_stats(self):
         batch_size = 2
         num_features = 4
@@ -1162,6 +1185,18 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (5,))
         self.assertEqual(y.dtype, mx.float32)
 
+        y = nn.HardShrink()(x)
+        expected_y = mx.array([1.0, 0.0, 0.0, 0.0, -1.5])
+        self.assertTrue(mx.array_equal(y, expected_y))
+        self.assertEqual(y.shape, (5,))
+        self.assertEqual(y.dtype, mx.float32)
+
+        y = nn.HardShrink(lambd=0.1)(x)
+        expected_y = mx.array([1.0, -0.5, 0.0, 0.5, -1.5])
+        self.assertTrue(mx.array_equal(y, expected_y))
+        self.assertEqual(y.shape, (5,))
+        self.assertEqual(y.dtype, mx.float32)
+
     def test_rope(self):
         for kwargs in [{}, {"traditional": False}, {"base": 10000}, {"scale": 0.25}]:
             rope = nn.RoPE(4, **kwargs)
@@ -1457,6 +1492,37 @@ class TestLayers(mlx_tests.MLXTestCase):
             str(nn.Upsample(scale_factor=(2, 3))),
             "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=False)",
         )
+
+    def test_upsample_align_corners_one_dim(self):
+        x = mx.arange(1, 5).reshape((1, 2, 2, 1))
+
+        up = nn.Upsample(scale_factor=0.5, mode="linear", align_corners=True)
+        out = up(x)
+        self.assertEqual(out.shape, (1, 1, 1, 1))
+        self.assertTrue(np.allclose(out, x[:, :1, :1, :]))
+
+        up = nn.Upsample(scale_factor=(0.5, 2), mode="linear", align_corners=True)
+        out = up(x)
+        expected = mx.array([[[[1.0], [4.0 / 3.0], [5.0 / 3.0], [2.0]]]])
+        self.assertEqual(out.shape, (1, 1, 4, 1))
+        self.assertTrue(np.allclose(out, expected))
+
+        up = nn.Upsample(scale_factor=(2, 0.5), mode="linear", align_corners=True)
+        out = up(x)
+        expected = mx.array([[[[1.0]], [[5.0 / 3.0]], [[7.0 / 3.0]], [[3.0]]]])
+        self.assertEqual(out.shape, (1, 4, 1, 1))
+        self.assertTrue(np.allclose(out, expected))
+
+        up = nn.Upsample(scale_factor=0.5, mode="cubic", align_corners=True)
+        out = up(x)
+        self.assertEqual(out.shape, (1, 1, 1, 1))
+        self.assertTrue(np.allclose(out, x[:, :1, :1, :]))
+
+        x_1d = mx.arange(0, 4).reshape((1, 4, 1)).astype(mx.float32)
+        up = nn.Upsample(scale_factor=0.25, mode="linear", align_corners=True)
+        out = up(x_1d)
+        self.assertEqual(out.shape, (1, 1, 1))
+        self.assertTrue(np.allclose(out, x_1d[:, :1, :]))
 
     def test_pooling(self):
         # Test 1d pooling

@@ -136,8 +136,8 @@ def binary_cross_entropy(
         inputs (array): The predicted values. If ``with_logits`` is ``True``, then
             ``inputs`` are unnormalized logits. Otherwise, ``inputs`` are probabilities.
         targets (array): The binary target values in {0, 1}.
-        with_logits (bool, optional): Whether ``inputs`` are logits. Default: ``True``.
         weights (array, optional): Optional weights for each target. Default: ``None``.
+        with_logits (bool, optional): Whether ``inputs`` are logits. Default: ``True``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
 
@@ -321,7 +321,7 @@ def kl_div_loss(
 
     .. code-block:: python
 
-        mx.exp(targets) * (targets - inputs).sum(axis)
+        (mx.exp(targets) * (targets - inputs)).sum(axis)
 
     Args:
         inputs (array): Log probabilities for the predicted distribution.
@@ -599,7 +599,7 @@ def margin_ranking_loss(
         >>> inputs2 = mx.array([0.75596, 0.225763, 0.256995])
         >>> loss = nn.losses.margin_ranking_loss(inputs1, inputs2, targets)
         >>> loss
-        array(0.773433, dtype=float32)
+        array([1.32937, 0.990929, 0], dtype=float32)
     """
     if not (inputs1.shape == inputs2.shape == targets.shape):
         raise ValueError(

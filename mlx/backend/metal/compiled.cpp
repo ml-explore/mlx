@@ -139,8 +139,8 @@ inline void build_kernel(
     os += fmt::format("  {0} index_{1} = ", idx_type, xname);
     if (ndim == 1) {
       int offset = i * ndim;
-      os +=
-          fmt::format("elem_to_loc_1<uint>(pos.x, in_strides[{0}]);\n", offset);
+      os += fmt::format(
+          "elem_to_loc_1<{0}>(pos.x, in_strides[{1}]);\n", idx_type, offset);
     } else if (ndim == 2) {
       int offset = i * ndim;
       os += fmt::format(
@@ -316,20 +316,20 @@ void Compiled::eval_gpu(
           /* dynamic_dims = */ false,
           /* use_big_index = */ false,
           /* work_per_thread = */ i > 3 ? 2 : 1);
-      if (i > 1) {
-        build_kernel(
-            kernel,
-            kernel_lib_ + "_strided_" + std::to_string(i) + "_large",
-            inputs_,
-            outputs_,
-            tape_,
-            is_constant_,
-            /* contiguous = */ false,
-            /* ndim = */ i,
-            /* dynamic_dims = */ false,
-            /* use_big_index = */ true,
-            /* work_per_thread = */ i > 3 ? 4 : 1);
-      }
+      // Generate int64_t index variant for all ndim, including ndim=1.
+      // Negative strides force large mode even for small arrays.
+      build_kernel(
+          kernel,
+          kernel_lib_ + "_strided_" + std::to_string(i) + "_large",
+          inputs_,
+          outputs_,
+          tape_,
+          is_constant_,
+          /* contiguous = */ false,
+          /* ndim = */ i,
+          /* dynamic_dims = */ false,
+          /* use_big_index = */ true,
+          /* work_per_thread = */ i > 3 ? 4 : 1);
     }
     build_kernel(
         kernel,
@@ -360,11 +360,12 @@ void Compiled::eval_gpu(
 
   // Collapse contiguous dims to route to a faster kernel if possible. Also
   // handle all broadcasting.
-  auto [contiguous, shape, strides] =
+  auto [contiguous, negative_strides, shape, strides] =
       compiled_collapse_contiguous_dims(inputs, outputs[0], is_constant_);
 
-  // Whether to use large index.
-  bool large = compiled_use_large_index(inputs, outputs, contiguous);
+  // Whether to use large index (also true for negative strides).
+  bool large =
+      negative_strides || compiled_use_large_index(inputs, outputs, contiguous);
 
   // Get the kernel from the lib
   int ndim = shape.size();

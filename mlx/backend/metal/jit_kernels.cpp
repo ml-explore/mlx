@@ -1047,7 +1047,7 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_nax_kernel(
     const std::string& kernel_name,
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
-    const array& out,
+    const array& in,
     bool transpose_a,
     bool transpose_b,
     int bm,
@@ -1063,7 +1063,7 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_nax_kernel(
                   << get_template_definition(
                          lib_name,
                          "gemm_splitk_nax",
-                         get_type_string(out.dtype()),
+                         get_type_string(in.dtype()),
                          bm,
                          bn,
                          bk,

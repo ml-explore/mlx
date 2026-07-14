@@ -178,6 +178,10 @@ void* Buffer::raw_ptr() {
   return static_cast<size_t*>(ptr_) + 1;
 }
 
+bool can_reuse_alien_buffer(void*) {
+  return true;
+}
+
 } // namespace allocator
 
 size_t get_active_memory() {

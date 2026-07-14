@@ -295,6 +295,96 @@ void qmv(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+// affine qmv_wide only beats qmv on gen-15+; fp benefits on every gen.
+inline bool use_qmv_wide(const std::string& mode, metal::Device& d) {
+  return mode != "affine" || d.get_architecture_gen() >= 15;
+}
+
+// Dispatches qmv_wide (fp modes -> fp_qmv_wide, affine -> affine_qmv_wide):
+// vecs_per_tg input vectors streamed and reused per weight group.
+void qmv_wide(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s,
+    const std::string& mode) {
+  // vecs_per_tg is the per-threadgroup input-vector tile. Each tile re-reads
+  // the weights, so use the fewest tiles, then the smallest tile that fills
+  // them.
+  int n_tiles = (M + 4) / 5; // ceil(M / 5); tile size caps at 5
+  int vecs_per_tg = (M + n_tiles - 1) / n_tiles;
+
+  // k_lanes: lanes reducing K per output row (32/k_lanes rows per simdgroup).
+  // The affine subchunk decode has enough ALU per weight load to favor more
+  // rows per simdgroup (kl8); the fp modes' vectorized dot is balanced at 16.
+  int k_lanes = mode == "affine" ? 8 : 16;
+  constexpr int num_simdgroups = 2;
+  int B = out.size() / M / N;
+  bool batched = B > 1;
+  // Output rows per threadgroup: (32 / k_lanes) per simdgroup x num_simdgroups.
+  int rows_per_tg = (32 / k_lanes) * num_simdgroups;
+
+  MTL::Size group_dims(32, num_simdgroups, 1);
+  MTL::Size grid_dims(
+      (M + vecs_per_tg - 1) / vecs_per_tg,
+      (N + rows_per_tg - 1) / rows_per_tg,
+      B);
+
+  std::string kname;
+  kname.reserve(64);
+  std::string type_string = get_type_string(x.dtype());
+  concatenate(
+      kname,
+      mode + "_qmv_wide_",
+      type_string,
+      "_gs_",
+      group_size,
+      "_b_",
+      bits,
+      "_nv_",
+      vecs_per_tg,
+      "_kl_",
+      k_lanes,
+      batched ? "_batch_1" : "_batch_0");
+  auto kernel = get_quantized_kernel_wrapped(
+      d,
+      kname,
+      "qmv_wide",
+      mode,
+      type_string,
+      group_size,
+      bits,
+      vecs_per_tg,
+      k_lanes,
+      batched);
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
+  }
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_output_array(out, c++);
+  compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(M, c++);
+  add_strides_and_shapes(compute_encoder, !batched, x, w, scales, biases, c);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void qvm_split_k(
     const array& x,
     const array& w,
@@ -1381,6 +1471,13 @@ void dispatch_qmv(
   // It is a qmv with a small inner dimension so route to qmv_quad kernel
   if ((K == 128 || K == 64) && is_power_of_2(bits)) {
     qmv_quad(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
+    return;
+  }
+
+  // Small batch so route to qmv_wide, which reuses each weight group across the
+  // M vectors.
+  if (M >= 2 && use_qmv_wide(mode, d)) {
+    qmv_wide(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
     return;
   }
   qmv(x, w, scales, biases, out, group_size, bits, M, N, K, d, s, mode);
