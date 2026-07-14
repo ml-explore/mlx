@@ -279,8 +279,12 @@ void row_reduce(
   size_t out_size = out.size();
   
   // Calculate threads based on row size
-  int threads = std::min(256, ((row_size + 3) / 4 + 32 - 1) / 32 * 32);
-  threads = std::max(threads, 32);
+  // Wave64 fix (CDNA3): round the block to full wavefronts. Hardcoded 32
+  // gave half-wave (32-thread) blocks on wave64 -> ~50% occupancy for
+  // row_reduce_simple. WARP_SIZE = MLX_HOST_WARP_SIZE (64 on gfx9xx).
+  int threads = std::min(
+      256, ((row_size + 3) / 4 + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE);
+  threads = std::max(threads, WARP_SIZE);
   
   encoder.set_input_array(in);
   encoder.set_output_array(out);

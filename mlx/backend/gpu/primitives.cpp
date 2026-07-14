@@ -34,9 +34,20 @@ void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("AsType::eval_gpu");
+  auto& in = inputs[0];
+  // Same-dtype cast is a view: never launch identity copy_v / copy_g when the
+  // only "work" is reinterpreting dtype metadata. Cuts avoidable ROCm copy
+  // traffic that Metal often never sees (fused away or donated).
+  if (in.dtype() == out.dtype()) {
+    if (in.flags().row_contiguous || in.flags().col_contiguous ||
+        in.flags().contiguous) {
+      out.copy_shared_buffer(in);
+      return;
+    }
+  }
   CopyType ctype =
-      inputs[0].flags().contiguous ? CopyType::Vector : CopyType::General;
-  copy_gpu(inputs[0], out, ctype);
+      in.flags().contiguous ? CopyType::Vector : CopyType::General;
+  copy_gpu(in, out, ctype);
 }
 
 void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
