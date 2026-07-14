@@ -177,6 +177,8 @@ set(HIP_SOURCES
 
 if(MLX_HAS_ROCM_WMMA)
   list(APPEND HIP_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/flash_attention_wmma.hip)
+  list(APPEND HIP_SOURCES
+       ${CMAKE_CURRENT_SOURCE_DIR}/flash_attention_bwd_wmma.hip)
 endif()
 
 # Create output directory for compiled objects

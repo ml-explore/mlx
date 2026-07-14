@@ -16,4 +16,21 @@ void init_rocm(nb::module_& m) {
       R"pbdoc(
       Check if the ROCm back-end is available.
       )pbdoc");
+
+  // Deterministic bump arena for future train HIP-graph capture. Does not
+  // enable graphs. Opt-in from Python; default training leaves this unused.
+  rocm.def(
+      "train_arena_begin",
+      &mx::rocm::train_arena_begin,
+      nb::arg("capacity_bytes"),
+      R"pbdoc(
+      Allocate/arm a fixed HBM bump region for stable device addresses.
+      Returns False on failure. Call train_arena_reset() before each step
+      when capturing train graphs (not required for eager train).
+      )pbdoc");
+  rocm.def("train_arena_reset", &mx::rocm::train_arena_reset);
+  rocm.def("train_arena_end", &mx::rocm::train_arena_end);
+  rocm.def("train_arena_active", &mx::rocm::train_arena_active);
+  rocm.def("train_arena_high_water", &mx::rocm::train_arena_high_water);
+  rocm.def("train_arena_overflowed", &mx::rocm::train_arena_overflowed);
 }

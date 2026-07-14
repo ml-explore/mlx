@@ -51,6 +51,28 @@ void sdpa_flash_wmma(
     bool do_causal,
     Stream s,
     array* lse = nullptr);
+
+// Defined in flash_attention_bwd_wmma.hip
+bool supports_sdpa_flash_wmma_bwd(
+    const array& q,
+    const array& k,
+    const array& v,
+    bool has_arr_mask,
+    bool has_sinks);
+
+void sdpa_flash_wmma_bwd(
+    const array& q,
+    const array& k,
+    const array& v,
+    const array& o,
+    const array& lse,
+    const array& d_o,
+    float scale,
+    bool do_causal,
+    array& d_q,
+    array& d_k,
+    array& d_v,
+    Stream s);
 #endif
 
 // Defined in flash_attention.hip
@@ -222,31 +244,68 @@ void ScaledDotProductAttention::eval_gpu(
 }
 
 bool ScaledDotProductAttentionVJP::use_fallback(const array& q, Stream s) {
-  // Fused flash VJP is not wired yet (needs flash_attention_bwd_wmma). LSE
-  // emit for WMMA forward is in place; keep VJP on the dense fallback so
-  // training does not request output_logsumexp until both land together.
-  // Opt-in scaffolding: MLX_SDPA_FLASH_VJP=1 will flip this when bwd ships.
-  // Kill-switch once default-on: MLX_SDPA_NO_FLASH_VJP=1.
-  (void)q;
-  (void)s;
+  // Opt-in fused flash VJP (LSE forward + tiled bwd). Default OFF until
+  // lemonseed train A/B is green. Kill-switch: MLX_SDPA_NO_FLASH_VJP=1.
+  static const bool no_flash_vjp =
+      std::getenv("MLX_SDPA_NO_FLASH_VJP") != nullptr;
   static const bool want =
-      std::getenv("MLX_SDPA_FLASH_VJP") != nullptr &&
-      std::getenv("MLX_SDPA_NO_FLASH_VJP") == nullptr;
-  // Until bwd kernel exists, always fall back even if env requests fast VJP.
-  if (want) {
-    // Reserved: return false when sdpa_flash_wmma_bwd is ready + shape gates.
+      std::getenv("MLX_SDPA_FLASH_VJP") != nullptr && !no_flash_vjp;
+  if (!want || s.device == Device::cpu) {
+    return true;
   }
+#ifdef MLX_HAS_ROCM_WMMA
+  // Shape gates match supports_sdpa_flash_wmma_bwd (no mask/sinks, D=64).
+  if (q.dtype() != bfloat16 && q.dtype() != float16) {
+    return true;
+  }
+  if (q.shape(-1) != 64) {
+    return true;
+  }
+  if (!rocm::device(s.device).has_native_wmma()) {
+    return true;
+  }
+  return false;
+#else
+  (void)q;
   return true;
+#endif
 }
 
 void ScaledDotProductAttentionVJP::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  // Reached only if use_fallback returns false. Dense path is taken by the
-  // framework before this primitive is created while use_fallback is true.
-  throw std::runtime_error(
-      "SDPA VJP fused path not yet implemented for ROCm "
-      "(needs flash_attention_bwd_wmma). Keep MLX_SDPA_FLASH_VJP unset.");
+#ifdef MLX_HAS_ROCM_WMMA
+  auto& s = stream();
+  assert(inputs.size() >= 6);
+  int primals_size = static_cast<int>(inputs.size()) - 3;
+  bool has_arr_mask = primals_size > 3 + static_cast<int>(has_sinks_);
+
+  array q = prepare_sdpa_input(inputs[0], s);
+  array k = prepare_sdpa_input(inputs[1], s);
+  array v = prepare_sdpa_input(inputs[2], s);
+  array o = prepare_sdpa_input(inputs[primals_size], s);
+  array stats = prepare_sdpa_input(inputs[primals_size + 1], s);
+  array d_o = prepare_sdpa_input(inputs[primals_size + 2], s);
+
+  if (has_arr_mask || has_sinks_) {
+    throw std::runtime_error(
+        "SDPA flash VJP does not support array masks or sinks yet.");
+  }
+  if (!supports_sdpa_flash_wmma_bwd(q, k, v, /*has_arr_mask=*/false, has_sinks_)) {
+    throw std::runtime_error(
+        "SDPA flash VJP shape not supported (need D=64 bf16/fp16).");
+  }
+
+  assert(outputs.size() == 3);
+  auto& d_q = outputs[0];
+  auto& d_k = outputs[1];
+  auto& d_v = outputs[2];
+
+  sdpa_flash_wmma_bwd(
+      q, k, v, o, stats, d_o, scale_, do_causal_, d_q, d_k, d_v, s);
+#else
+  throw std::runtime_error("SDPA flash VJP requires MLX_HAS_ROCM_WMMA.");
+#endif
 }
 
 } // namespace fast

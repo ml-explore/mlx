@@ -11,6 +11,21 @@ bool is_available() {
   return false;
 }
 
+bool train_arena_begin(size_t) {
+  return false;
+}
+void train_arena_reset() {}
+void train_arena_end() {}
+bool train_arena_active() {
+  return false;
+}
+size_t train_arena_high_water() {
+  return 0;
+}
+bool train_arena_overflowed() {
+  return false;
+}
+
 } // namespace rocm
 
 namespace fast {
