@@ -1418,23 +1418,55 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       continue;
     }
     int Kseg = static_cast<int>(k1 - k0);
-    rocm::naive_gemm_with_offset(
-        encoder,
-        a,
-        b,
-        out,
-        M,
-        N,
-        Kseg,
-        a_transposed,
-        lda,
-        static_cast<int64_t>(k0) * a_k_stride,
-        b_transposed,
-        ldb,
-        static_cast<int64_t>(k0) * b_k_stride,
-        static_cast<int64_t>(i) * out_stride,
-        1.0f,
-        0.0f);
+    // CDNA2/3: one hipBLASLt MFMA GEMM per segment (matrix cores, ~8x the naive
+    // VALU tiled kernel). Gated to gfx90a/gfx942 via supports_cdna_mfma_gemm() --
+    // gfx1151's pointer-offset path pegs, gfx908 bf16 MFMA differs -- those keep
+    // the naive offset GEMM below. bf16/fp16/fp32 only.
+    const Dtype seg_dt = a.dtype();
+    // Kill-switch: MLX_SEGMM_NAIVE=1 forces the naive offset GEMM everywhere.
+    static const bool seg_use_blaslt = std::getenv("MLX_SEGMM_NAIVE") == nullptr;
+    if (seg_use_blaslt && encoder.device().supports_cdna_mfma_gemm() &&
+        (seg_dt == bfloat16 || seg_dt == float16 || seg_dt == float32)) {
+      const char* a_seg = static_cast<const char*>(gpu_ptr<void>(a)) +
+          static_cast<size_t>(static_cast<int64_t>(k0) * a_k_stride) * esize;
+      const char* b_seg = static_cast<const char*>(gpu_ptr<void>(b)) +
+          static_cast<size_t>(static_cast<int64_t>(k0) * b_k_stride) * esize;
+      char* c_seg = out_base + static_cast<size_t>(i) * out_stride * esize;
+      rocm::hipblaslt_gemm_ptrs(
+          encoder,
+          a_transposed,
+          b_transposed,
+          M,
+          N,
+          Kseg,
+          1.0f,
+          a_seg,
+          static_cast<int>(lda),
+          b_seg,
+          static_cast<int>(ldb),
+          0.0f,
+          c_seg,
+          N,
+          seg_dt);
+    } else {
+      rocm::naive_gemm_with_offset(
+          encoder,
+          a,
+          b,
+          out,
+          M,
+          N,
+          Kseg,
+          a_transposed,
+          lda,
+          static_cast<int64_t>(k0) * a_k_stride,
+          b_transposed,
+          ldb,
+          static_cast<int64_t>(k0) * b_k_stride,
+          static_cast<int64_t>(i) * out_stride,
+          1.0f,
+          0.0f);
+    }
   }
 }
 

@@ -298,6 +298,12 @@ class Device {
   // (CDNA1/2/3 + RDNA3 dGPU + gfx1151 + RDNA4). Lazy-cached on first call.
   bool has_native_wmma();
 
+  // True iff CDNA2 (gfx90a) or CDNA3 (gfx942): clean bf16 MFMA
+  // (v_mfma_f32_16x16x16bf16) AND a working hipBLASLt pointer-offset GEMM.
+  // gfx1151 pegs on offset GEMMs, gfx908 bf16 MFMA differs, RDNA uses WMMA —
+  // all fall back. Lazy-cached.
+  bool supports_cdna_mfma_gemm();
+
   // Max shared memory (LDS) a single block may use on this device, in bytes,
   // queried from hipDeviceProp at construction. RDNA3/3.5 report 64 KB; RDNA4
   // and CDNA may report more. Kernels that size LDS tiles must read this from
@@ -324,6 +330,8 @@ class Device {
   bool rocblas_bf16_available_{false};
   bool wmma_probed_{false};
   bool has_native_wmma_{false};
+  bool cdna_mfma_probed_{false};
+  bool cdna_mfma_ok_{false};
   int max_shared_memory_per_block_{65536};
   int warp_size_{64};
   std::unordered_map<int, std::unique_ptr<CommandEncoder>> encoders_;

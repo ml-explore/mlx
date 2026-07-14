@@ -310,6 +310,27 @@ bool Device::has_native_wmma() {
   return has_native_wmma_;
 }
 
+bool Device::supports_cdna_mfma_gemm() {
+  if (!cdna_mfma_probed_) {
+    cdna_mfma_probed_ = true;
+    hipDeviceProp_t props;
+    if (hipGetDeviceProperties(&props, device_) != hipSuccess) {
+      cdna_mfma_ok_ = false;
+      return cdna_mfma_ok_;
+    }
+    std::string base_arch = props.gcnArchName;
+    size_t colon_pos = base_arch.find(':');
+    if (colon_pos != std::string::npos) {
+      base_arch = base_arch.substr(0, colon_pos);
+    }
+    // CDNA2 (gfx90a) + CDNA3 (gfx942) only: clean v_mfma_f32_16x16x16bf16 and a
+    // working hipBLASLt pointer-offset GEMM. gfx1151 (RDNA3.5) pegs on the
+    // offset path; gfx908 (CDNA1) bf16 MFMA differs; RDNA/others use WMMA.
+    cdna_mfma_ok_ = (base_arch == "gfx90a" || base_arch == "gfx942");
+  }
+  return cdna_mfma_ok_;
+}
+
 void Device::make_current() {
   // HIP's current device is per-thread, so the cache must be too — a process
   // global lets one thread's binding suppress another's, stranding allocations
