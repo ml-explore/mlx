@@ -305,7 +305,9 @@ void hipblaslt_gemm_impl(
     int64_t stride_c,
     int batch_count,
     hipDataType data_type,
-    hipStream_t stream) {
+    hipStream_t stream,
+    const void* bias_ptr = nullptr,
+    int epilogue_i = 1 /* HIPBLASLT_EPILOGUE_DEFAULT */) {
   hipblasStatus_t status;
 
   // Discover this device's GEMM capability table on first use (prints once).
@@ -434,21 +436,75 @@ void hipblaslt_gemm_impl(
       &trans_b_val,
       sizeof(trans_b_val));
 
-  // Per-(shape,dtype,transpose,device) algorithm cache. The chosen heuristic
+  // Fused epilogue (bias / GELU / Swish). Bias vector length = D rows after the
+  // col-major M/N swap → matches original row-major N (feature dim).
+  static const bool no_epi =
+      std::getenv("MLX_ROCM_NO_HIPBLASLT_EPILOGUE") != nullptr;
+  hipblasLtEpilogue_t epilogue =
+      static_cast<hipblasLtEpilogue_t>(no_epi ? 1 : epilogue_i);
+  if (!no_epi && bias_ptr != nullptr &&
+      epilogue != HIPBLASLT_EPILOGUE_DEFAULT) {
+    status = hipblasLtMatmulDescSetAttribute(
+        matmul_guard.desc,
+        HIPBLASLT_MATMUL_DESC_EPILOGUE,
+        &epilogue,
+        sizeof(epilogue));
+    if (status != HIPBLAS_STATUS_SUCCESS) {
+      throw std::runtime_error("hipblasLt set EPILOGUE failed");
+    }
+    status = hipblasLtMatmulDescSetAttribute(
+        matmul_guard.desc,
+        HIPBLASLT_MATMUL_DESC_BIAS_POINTER,
+        &bias_ptr,
+        sizeof(bias_ptr));
+    if (status != HIPBLAS_STATUS_SUCCESS) {
+      throw std::runtime_error("hipblasLt set BIAS_POINTER failed");
+    }
+    int32_t bias_dt = static_cast<int32_t>(data_type);
+    status = hipblasLtMatmulDescSetAttribute(
+        matmul_guard.desc,
+        HIPBLASLT_MATMUL_DESC_BIAS_DATA_TYPE,
+        &bias_dt,
+        sizeof(bias_dt));
+    if (status != HIPBLAS_STATUS_SUCCESS) {
+      throw std::runtime_error("hipblasLt set BIAS_DATA_TYPE failed");
+    }
+  } else if (
+      !no_epi && bias_ptr == nullptr &&
+      epilogue != HIPBLASLT_EPILOGUE_DEFAULT &&
+      epilogue != HIPBLASLT_EPILOGUE_BIAS &&
+      epilogue != HIPBLASLT_EPILOGUE_RELU_BIAS &&
+      epilogue != HIPBLASLT_EPILOGUE_GELU_BIAS &&
+      epilogue != HIPBLASLT_EPILOGUE_SWISH_BIAS_EXT &&
+      epilogue != HIPBLASLT_EPILOGUE_SIGMOID_BIAS_EXT) {
+    // Act-only epilogues (GELU/SWISH/RELU/SIGMOID without bias).
+    status = hipblasLtMatmulDescSetAttribute(
+        matmul_guard.desc,
+        HIPBLASLT_MATMUL_DESC_EPILOGUE,
+        &epilogue,
+        sizeof(epilogue));
+    if (status != HIPBLAS_STATUS_SUCCESS) {
+      throw std::runtime_error("hipblasLt set act EPILOGUE failed");
+    }
+  }
+
+  // Per-(shape,dtype,transpose,device,epilogue) algorithm cache. The chosen heuristic
   // result is reusable across calls with identical problem geometry, so warm
   // calls skip AlgoGetHeuristic — the dominant per-call cost for the many small
   // GEMMs in a forward pass.
   struct AlgoKey {
-    int M, N, K, batch, dt, ta, tb, dev;
+    int M, N, K, batch, dt, ta, tb, dev, epi;
     bool operator==(const AlgoKey& o) const {
       return M == o.M && N == o.N && K == o.K && batch == o.batch &&
-          dt == o.dt && ta == o.ta && tb == o.tb && dev == o.dev;
+          dt == o.dt && ta == o.ta && tb == o.tb && dev == o.dev &&
+          epi == o.epi;
     }
   };
   struct AlgoKeyHash {
     size_t operator()(const AlgoKey& k) const {
       size_t h = 1469598103934665603ULL;
-      for (int v : {k.M, k.N, k.K, k.batch, k.dt, k.ta, k.tb, k.dev}) {
+      for (int v :
+           {k.M, k.N, k.K, k.batch, k.dt, k.ta, k.tb, k.dev, k.epi}) {
         h = (h ^ static_cast<size_t>(v)) * 1099511628211ULL;
       }
       return h;
@@ -466,7 +522,8 @@ void hipblaslt_gemm_impl(
       static_cast<int>(data_type),
       trans_a_val,
       trans_b_val,
-      device_id};
+      device_id,
+      static_cast<int>(epilogue)};
   hipblasLtMatmulHeuristicResult_t heuristic;
   bool cache_hit = false;
   {
@@ -724,6 +781,44 @@ void hipblaslt_gemm(
     array& c,
     int ldc,
     Dtype dtype) {
+  hipblaslt_gemm_epilogue(
+      encoder,
+      transpose_a,
+      transpose_b,
+      M,
+      N,
+      K,
+      alpha,
+      a,
+      lda,
+      b,
+      ldb,
+      beta,
+      c,
+      ldc,
+      dtype,
+      /*bias=*/nullptr,
+      /*epilogue=*/1);
+}
+
+void hipblaslt_gemm_epilogue(
+    CommandEncoder& encoder,
+    bool transpose_a,
+    bool transpose_b,
+    int M,
+    int N,
+    int K,
+    float alpha,
+    const array& a,
+    int lda,
+    const array& b,
+    int ldb,
+    float beta,
+    array& c,
+    int ldc,
+    Dtype dtype,
+    const array* bias,
+    int epilogue) {
   int device_id = encoder.device().hip_device();
   hipblasLtHandle_t handle = get_handle(device_id);
   hipDataType hip_dtype = to_hipblaslt_dtype(dtype);
@@ -733,20 +828,36 @@ void hipblaslt_gemm(
   hipblasOperation_t op_a = to_hipblas_op(transpose_b);
   hipblasOperation_t op_b = to_hipblas_op(transpose_a);
 
-  // Per-call GEMM tracing, gated behind an env flag.
   static const bool kGemmDebug = std::getenv("MLX_ROCM_GEMM_DEBUG") != nullptr;
   if (kGemmDebug) {
     fprintf(
         stderr,
-        "[hipBLASLt] M=%d N=%d K=%d ta=%d tb=%d lda=%d ldb=%d ldc=%d\n",
-        M, N, K, (int)transpose_a, (int)transpose_b, lda, ldb, ldc);
+        "[hipBLASLt] M=%d N=%d K=%d ta=%d tb=%d epi=%d bias=%d\n",
+        M,
+        N,
+        K,
+        (int)transpose_a,
+        (int)transpose_b,
+        epilogue,
+        bias != nullptr);
   }
 
   const void* a_ptr = gpu_ptr<void>(a);
   const void* b_ptr = gpu_ptr<void>(b);
   void* c_ptr = gpu_ptr<void>(c);
+  const void* bias_ptr = bias ? gpu_ptr<void>(*bias) : nullptr;
+
+  // Graph dep bookkeeping (no-op when HIP graphs are off). Bias is an extra
+  // read that the DEFAULT GEMM path does not register.
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  if (bias) {
+    encoder.set_input_array(*bias);
+  }
+  encoder.set_output_array(c);
 
   encoder.launch_kernel([=, &encoder](hipStream_t stream) {
+    (void)encoder;
     hipblaslt_gemm_impl(
         handle,
         device_id,
@@ -758,17 +869,19 @@ void hipblaslt_gemm(
         &alpha,
         b_ptr, // swap A/B
         ldb,
-        0, // stride_a (unused for non-batched)
+        0,
         a_ptr,
         lda,
-        0, // stride_b (unused for non-batched)
+        0,
         &beta,
         c_ptr,
         ldc,
-        0, // stride_c (unused for non-batched)
-        1, // batch_count
+        0,
+        1,
         hip_dtype,
-        stream);
+        stream,
+        bias_ptr,
+        epilogue);
   });
 }
 

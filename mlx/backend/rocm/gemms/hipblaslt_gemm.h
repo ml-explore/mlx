@@ -32,6 +32,29 @@ void hipblaslt_gemm(
     int ldc,
     Dtype dtype);
 
+// Optional fused epilogue (bias / GELU / Swish / combos). Bias length must match
+// the GEMM N dim (output features) for the usual Linear row-major layout.
+// epilogue: hipblasLtEpilogue_t cast to int (HIPBLASLT_EPILOGUE_*).
+// Kill-switch: MLX_ROCM_NO_HIPBLASLT_EPILOGUE=1 forces DEFAULT (no epi).
+void hipblaslt_gemm_epilogue(
+    CommandEncoder& encoder,
+    bool transpose_a,
+    bool transpose_b,
+    int M,
+    int N,
+    int K,
+    float alpha,
+    const array& a,
+    int lda,
+    const array& b,
+    int ldb,
+    float beta,
+    array& c,
+    int ldc,
+    Dtype dtype,
+    const array* bias, // nullable; length N when used
+    int epilogue); // hipblasLtEpilogue_t
+
 void hipblaslt_gemm_batched(
     CommandEncoder& encoder,
     bool transpose_a,

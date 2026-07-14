@@ -102,17 +102,41 @@ struct FusedKernelBuilder {
           "  }\n";
     }
 
+    // Vectorized contiguous reads (CUDA parity): pack work_per_thread elements
+    // into AlignedVector via wide load when the pointer is aligned.
+    if (contiguous) {
+      for (size_t i = 0; i < inputs.size(); ++i) {
+        const auto& x = inputs[i];
+        if (is_scalar(x) || is_constant(i)) {
+          continue;
+        }
+        const std::string& xname = namer.get_name(x);
+        std::string type = dtype_to_hip_type(x.dtype());
+        os += "  auto vec_" + xname + " = load_vector<work_per_thread, " +
+            type + ">(" + xname + " + index, 0, size - index, " + type +
+            "(0));\n";
+      }
+    }
+
+    // Output vectors (both contiguous and strided paths store via store_vector
+    // so the last partial vector is bounded by size - index).
+    for (const auto& x : outputs) {
+      const std::string& xname = namer.get_name(x);
+      std::string type = dtype_to_hip_type(x.dtype());
+      os += "  AlignedVector<" + type + ", work_per_thread> vec_" + xname +
+          ";\n";
+    }
+
     // Work loop
     if (!contiguous) {
       os +=
           "\n"
-          "  for (int i = 0; i < work_per_thread && index + i < size; i++) {\n";
+          "  for (int i = 0; i < work_per_thread && index < size; i++) {\n";
     } else {
       os +=
           "\n"
           "  #pragma unroll\n"
-          "  for (int i = 0; i < work_per_thread; i++) {\n"
-          "    if (index + i >= size) break;\n";
+          "  for (int i = 0; i < work_per_thread; i++) {\n";
     }
 
     // Read inputs.
@@ -128,7 +152,7 @@ struct FusedKernelBuilder {
       } else if (is_scalar(x)) {
         value = xname + "[0]";
       } else if (contiguous) {
-        value = xname + "[index + i]";
+        value = "vec_" + xname + "[i]";
       } else {
         value = xname + "[" + xname + "_idx]";
       }
@@ -156,16 +180,10 @@ struct FusedKernelBuilder {
           std::string("    ") + type + " tmp_" + xname + " = " + value + ";\n";
     }
 
-    // Write output.
+    // Write output into the local vector.
     for (const auto& x : outputs) {
-      std::string xname = namer.get_name(x);
-      if (contiguous) {
-        os +=
-            std::string("    ") + xname + "[index + i] = tmp_" + xname + ";\n";
-      } else {
-        os +=
-            std::string("    ") + xname + "[index + i] = tmp_" + xname + ";\n";
-      }
+      os += "    vec_" + namer.get_name(x) + "[i] = tmp_" + namer.get_name(x) +
+          ";\n";
     }
 
     // End of work loop
@@ -182,6 +200,15 @@ struct FusedKernelBuilder {
       }
     }
     os += "  }\n";
+
+    // Wide store of outputs (handles partial last vector via size bound).
+    // Outputs of Compiled are contiguous in linear order; strided path still
+    // packs work_per_thread consecutive linear elements starting at `index`
+    // (CUDA parity — work_per_thread forced to 1 when last dim not divisible).
+    for (const auto& x : outputs) {
+      os += "  store_vector(" + namer.get_name(x) + " + index, 0, vec_" +
+          namer.get_name(x) + ", size - index);\n";
+    }
 
     os += "}\n";
   }
@@ -456,6 +483,55 @@ __device__ inline __half atan2f(__half y, __half x) {
 
 // Include device operations
 namespace mlx::core::rocm {
+
+// Vectorized load/store for fused Compiled kernels (CUDA FusedKernelBuilder
+// parity). hiprtc cannot #include device/utils.hpp, so the helpers live here.
+template <typename T, int N>
+struct alignas(sizeof(T) * N) AlignedVector {
+  T val[N];
+  __device__ T& operator[](int i) { return val[i]; }
+  __device__ T operator[](int i) const { return val[i]; }
+};
+
+template <int N, typename T>
+__device__ inline bool is_aligned_ptr(const T* x) {
+  return (reinterpret_cast<size_t>(x) % (N * sizeof(T))) == 0;
+}
+template <int N, typename T>
+__device__ inline bool is_aligned_ptr(T* x) {
+  return (reinterpret_cast<size_t>(x) % (N * sizeof(T))) == 0;
+}
+
+template <int N, typename T, typename SizeT>
+__device__ inline AlignedVector<T, N>
+load_vector(const T* ptr, uint32_t offset, SizeT size, T fallback) {
+  if (is_aligned_ptr<N>(ptr) && SizeT((offset + 1) * N) <= size) {
+    auto* from = reinterpret_cast<const AlignedVector<T, N>*>(ptr);
+    return from[offset];
+  }
+  AlignedVector<T, N> v;
+  #pragma unroll
+  for (int i = 0; i < N; ++i) {
+    v[i] = SizeT(N * offset + i) < size ? ptr[offset * N + i] : fallback;
+  }
+  return v;
+}
+
+template <int N, typename T, typename SizeT>
+__device__ inline void store_vector(
+    T* ptr,
+    uint32_t offset,
+    const AlignedVector<T, N>& vec,
+    SizeT size) {
+  if (is_aligned_ptr<N>(ptr) && SizeT((offset + 1) * N) <= size) {
+    auto* to = reinterpret_cast<AlignedVector<T, N>*>(ptr);
+    to[offset] = vec;
+  } else {
+    for (int i = 0; SizeT(offset * N + i) < size && i < N; ++i) {
+      ptr[offset * N + i] = vec[i];
+    }
+  }
+}
 
 // Binary ops — promote half/bfloat16 through float to avoid precision loss
 // that compounds across 28-36 transformer layers in LLM inference.

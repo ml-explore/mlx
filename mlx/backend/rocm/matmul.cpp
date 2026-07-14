@@ -1035,6 +1035,49 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [a_transposed, lda, a] = check_transpose(encoder, s, a_pre);
   auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
 
+  // Fused Linear: alpha*(A@B) + bias when C is a 1-D bias of length N.
+  // hipBLASLt EPILOGUE_BIAS collapses the separate bias-add kernel that Metal
+  // often fuses via epilogue / graph fusion. GELU/Swish act epilogues are
+  // available via hipblaslt_gemm_epilogue API (act-only or *_BIAS combos) for
+  // future graph pattern-matching; Linear bias is the hot path today.
+  // Opt-out: MLX_ROCM_NO_HIPBLASLT_EPILOGUE=1.
+  const bool bias_vec = c.ndim() == 1 && static_cast<int>(c.size()) == N &&
+      c.dtype() == a.dtype() && alpha_ == 1.0f && beta_ == 1.0f;
+  if (bias_vec && (a.dtype() == bfloat16 || a.dtype() == float16) &&
+      rocm::is_hipblaslt_available()) {
+    try {
+      out.set_data(mlx::core::rocm::malloc_async(out.nbytes(), encoder));
+      encoder.set_input_array(a);
+      encoder.set_input_array(b);
+      encoder.set_input_array(c);
+      encoder.set_output_array(out);
+      // HIPBLASLT_EPILOGUE_BIAS == 4 (hipblaslt.h); keep numeric to avoid
+      // pulling the hipBLASLt header into matmul.cpp.
+      constexpr int kEpilogueBias = 4;
+      rocm::hipblaslt_gemm_epilogue(
+          encoder,
+          a_transposed,
+          b_transposed,
+          M,
+          N,
+          K,
+          /*alpha=*/1.0f,
+          a,
+          lda,
+          b,
+          ldb,
+          /*beta=*/0.0f,
+          out,
+          N,
+          a.dtype(),
+          &c,
+          kEpilogueBias);
+      return;
+    } catch (...) {
+      // Fall through to copy-C + GEMM path.
+    }
+  }
+
   // Copy C into out only when beta uses it.
   if (beta_ != 0.0f) {
     copy_gpu(c, out, CopyType::General, s);
