@@ -463,6 +463,266 @@ size_t SlabAllocator::free_memory() const {
 }
 
 // ---------------------------------------------------------------------------
+// ManagedDevicePool
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr size_t kManagedAlign = 256;
+// Prefer modest slabs so fully-free slabs can hipFree back to the driver
+// often (a single 8GB slab with one live page cannot shrink).
+constexpr size_t kManagedMinSlab = 64ull << 20; // 64 MiB
+constexpr size_t kManagedMaxSlab = 256ull << 20; // 256 MiB
+
+size_t managed_align(size_t n) {
+  return (n + kManagedAlign - 1) & ~(kManagedAlign - 1);
+}
+
+} // namespace
+
+ManagedDevicePool::~ManagedDevicePool() {
+  for (auto& s : slabs_) {
+    if (s.base)
+      (void)hipFree(s.base);
+  }
+  slabs_.clear();
+  free_by_addr_.clear();
+  free_by_size_.clear();
+  live_.clear();
+}
+
+bool ManagedDevicePool::owns(const void* ptr) const {
+  if (!ptr)
+    return false;
+  auto p = static_cast<const char*>(ptr);
+  for (const auto& s : slabs_) {
+    if (!s.base)
+      continue;
+    auto b = static_cast<const char*>(s.base);
+    if (p >= b && p < b + s.capacity)
+      return true;
+  }
+  return false;
+}
+
+void ManagedDevicePool::insert_free(void* ptr, size_t size, size_t slab_idx) {
+  if (!ptr || size == 0)
+    return;
+  // Coalesce with next free block if adjacent.
+  auto next = free_by_addr_.lower_bound(ptr);
+  if (next != free_by_addr_.end()) {
+    char* end = static_cast<char*>(ptr) + size;
+    if (end == static_cast<char*>(next->first) &&
+        next->second.slab_idx == slab_idx) {
+      // absorb next
+      auto range = free_by_size_.equal_range(next->second.size);
+      for (auto it = range.first; it != range.second; ++it) {
+        if (it->second == next->first) {
+          free_by_size_.erase(it);
+          break;
+        }
+      }
+      size += next->second.size;
+      free_list_bytes_ -= next->second.size;
+      free_by_addr_.erase(next);
+    }
+  }
+  // Coalesce with previous free block if adjacent.
+  auto prev = free_by_addr_.lower_bound(ptr);
+  if (prev != free_by_addr_.begin()) {
+    --prev;
+    char* prev_end =
+        static_cast<char*>(prev->second.ptr) + prev->second.size;
+    if (prev_end == ptr && prev->second.slab_idx == slab_idx) {
+      auto range = free_by_size_.equal_range(prev->second.size);
+      for (auto it = range.first; it != range.second; ++it) {
+        if (it->second == prev->first) {
+          free_by_size_.erase(it);
+          break;
+        }
+      }
+      size += prev->second.size;
+      free_list_bytes_ -= prev->second.size;
+      ptr = prev->second.ptr;
+      free_by_addr_.erase(prev);
+    }
+  }
+  FreeBlock fb{ptr, size, slab_idx};
+  free_by_addr_[ptr] = fb;
+  free_by_size_.emplace(size, ptr);
+  free_list_bytes_ += size;
+}
+
+bool ManagedDevicePool::take_fit(size_t size, FreeBlock& out) {
+  auto it = free_by_size_.lower_bound(size);
+  if (it == free_by_size_.end())
+    return false;
+  // Prefer near fit (≤2×) when available; else first large enough.
+  auto best = it;
+  for (auto j = it; j != free_by_size_.end() && j->first <= size * 2 + (1u << 20);
+       ++j) {
+    best = j;
+    break; // lower_bound already smallest >= size
+  }
+  void* ptr = best->second;
+  free_by_size_.erase(best);
+  auto ait = free_by_addr_.find(ptr);
+  if (ait == free_by_addr_.end())
+    return false;
+  free_list_bytes_ -= ait->second.size;
+  out = ait->second;
+  free_by_addr_.erase(ait);
+  return true;
+}
+
+bool ManagedDevicePool::grow_slab(size_t need, int device) {
+  size_t cap = need;
+  if (cap < kManagedMinSlab)
+    cap = kManagedMinSlab;
+  if (cap > kManagedMaxSlab && need <= kManagedMaxSlab)
+    cap = kManagedMaxSlab;
+  // Requests larger than max slab get an exact-sized dedicated slab.
+  if (need > kManagedMaxSlab)
+    cap = managed_align(need);
+  cap = managed_align(cap);
+
+  void* base = nullptr;
+  hipError_t err = hipMalloc(&base, cap);
+  if (err != hipSuccess || !base) {
+    (void)hipGetLastError();
+    // Retry exact need.
+    cap = managed_align(need);
+    err = hipMalloc(&base, cap);
+    if (err != hipSuccess || !base) {
+      (void)hipGetLastError();
+      return false;
+    }
+  }
+  Slab s;
+  s.base = base;
+  s.capacity = cap;
+  s.live_bytes = 0;
+  s.device = device;
+  slabs_.push_back(s);
+  reserved_bytes_ += cap;
+  insert_free(base, cap, slabs_.size() - 1);
+  return true;
+}
+
+RocmBuffer* ManagedDevicePool::malloc(size_t size, int device) {
+  if (size == 0) {
+    return new RocmBuffer{nullptr, 0, true, device, nullptr, false, nullptr};
+  }
+  size = managed_align(size);
+  FreeBlock blk;
+  if (!take_fit(size, blk)) {
+    if (!grow_slab(size, device))
+      return nullptr;
+    if (!take_fit(size, blk))
+      return nullptr;
+  }
+  void* ptr = blk.ptr;
+  size_t rem = blk.size - size;
+  if (rem >= kManagedAlign) {
+    insert_free(static_cast<char*>(ptr) + size, rem, blk.slab_idx);
+  } else {
+    // Keep remainder attached (slight waste).
+    size = blk.size;
+  }
+  slabs_[blk.slab_idx].live_bytes += size;
+  live_[ptr] = LiveBlock{size, blk.slab_idx};
+  live_bytes_ += size;
+  // is_managed=true → not hipMallocAsync stream-pool; device>=0 → VRAM.
+  // free goes through ManagedDevicePool via owns().
+  return new RocmBuffer{
+      ptr, size, /*is_managed=*/true, device, nullptr, false, nullptr};
+}
+
+void ManagedDevicePool::free(RocmBuffer* buf) {
+  if (!buf) {
+    return;
+  }
+  if (buf->host_shadow) {
+    (void)hipHostFree(buf->host_shadow);
+    buf->host_shadow = nullptr;
+  }
+  void* ptr = buf->data;
+  if (ptr) {
+    auto it = live_.find(ptr);
+    if (it != live_.end()) {
+      size_t sz = it->second.size;
+      size_t si = it->second.slab_idx;
+      live_bytes_ -= sz;
+      if (si < slabs_.size()) {
+        if (slabs_[si].live_bytes >= sz)
+          slabs_[si].live_bytes -= sz;
+        else
+          slabs_[si].live_bytes = 0;
+      }
+      live_.erase(it);
+      insert_free(ptr, sz, si);
+      // Shrink: if this slab is fully free, return it to the driver.
+      if (si < slabs_.size() && slabs_[si].live_bytes == 0 && slabs_[si].base) {
+        // Remove all free blocks belonging to this slab.
+        for (auto fit = free_by_addr_.begin(); fit != free_by_addr_.end();) {
+          if (fit->second.slab_idx == si) {
+            free_list_bytes_ -= fit->second.size;
+            auto range = free_by_size_.equal_range(fit->second.size);
+            for (auto sit = range.first; sit != range.second; ++sit) {
+              if (sit->second == fit->first) {
+                free_by_size_.erase(sit);
+                break;
+              }
+            }
+            fit = free_by_addr_.erase(fit);
+          } else {
+            ++fit;
+          }
+        }
+        reserved_bytes_ -= slabs_[si].capacity;
+        (void)hipFree(slabs_[si].base);
+        slabs_[si].base = nullptr;
+        slabs_[si].capacity = 0;
+      }
+    } else {
+      // Not tracked as live — still try hipFree if outside pool (shouldn't).
+      (void)hipFree(ptr);
+    }
+  }
+  buf->data = nullptr;
+  delete buf;
+}
+
+size_t ManagedDevicePool::shrink() {
+  size_t freed = 0;
+  for (size_t si = 0; si < slabs_.size(); ++si) {
+    if (!slabs_[si].base || slabs_[si].live_bytes > 0)
+      continue;
+    for (auto fit = free_by_addr_.begin(); fit != free_by_addr_.end();) {
+      if (fit->second.slab_idx == si) {
+        free_list_bytes_ -= fit->second.size;
+        auto range = free_by_size_.equal_range(fit->second.size);
+        for (auto sit = range.first; sit != range.second; ++sit) {
+          if (sit->second == fit->first) {
+            free_by_size_.erase(sit);
+            break;
+          }
+        }
+        fit = free_by_addr_.erase(fit);
+      } else {
+        ++fit;
+      }
+    }
+    freed += slabs_[si].capacity;
+    reserved_bytes_ -= slabs_[si].capacity;
+    (void)hipFree(slabs_[si].base);
+    slabs_[si].base = nullptr;
+    slabs_[si].capacity = 0;
+  }
+  return freed;
+}
+
+// ---------------------------------------------------------------------------
 // RocmAllocator
 // ---------------------------------------------------------------------------
 
@@ -488,10 +748,11 @@ static void drain_device_frees() {
     if (!b)
       continue;
     // Already removed from active_memory_. Just release device memory + shell.
-    // Pool buffers: stream-ordered free. Others: blocking hipFree (caller
-    // should only queue these after GPU completion / cache eviction).
+    auto& alloc = allocator();
+    if (alloc.free_if_managed_pool(b))
+      continue;
     if (b->device >= 0 && !b->is_managed) {
-      allocator().free_async(b, b->alloc_stream);
+      alloc.free_async(b, b->alloc_stream);
     } else {
       if (b->host_shadow) {
         (void)hipHostFree(b->host_shadow);
@@ -507,6 +768,16 @@ static void drain_device_frees() {
       delete b;
     }
   }
+}
+
+bool RocmAllocator::free_if_managed_pool(RocmBuffer* buf) {
+  if (!buf || !buf->data)
+    return false;
+  std::lock_guard lock(mutex_);
+  if (!managed_pool_.owns(buf->data))
+    return false;
+  managed_pool_.free(buf);
+  return true;
 }
 
 RocmAllocator::RocmAllocator()
@@ -605,6 +876,20 @@ RocmAllocator::RocmAllocator()
 
   // Pre-allocate slab pages for common allocation sizes
   slab_allocator_.warmup();
+
+  // Managed grow/shrink pool default ON for discrete GPUs.
+  // MLX_ROCM_MANAGED_POOL=0 disables; =1 forces on (even integrated).
+  {
+    const char* e = std::getenv("MLX_ROCM_MANAGED_POOL");
+    int dev = 0;
+    (void)hipGetDevice(&dev);
+    if (e && (e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n'))
+      use_managed_pool_ = false;
+    else if (e && (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y'))
+      use_managed_pool_ = true;
+    else
+      use_managed_pool_ = !device_is_integrated(dev);
+  }
 }
 
 Buffer RocmAllocator::malloc(size_t size) {
@@ -660,9 +945,26 @@ Buffer RocmAllocator::malloc(size_t size) {
     size = page_size * ((size + page_size - 1) / page_size);
   }
 
-  // Stream-less allocations (model load, KV, non-wired primitives) use unified
-  // memory + the BufferCache. The wired primitives route their outputs through
-  // malloc_async (the pool) instead; this path is the safe fallback.
+  // Large discrete allocs: single ManagedDevicePool (grow free-list, shrink
+  // empty slabs). Model weights + activations share one manager; free when
+  // last array ref drops returns the block without hipMemPool pin / GTT.
+  if (use_managed_pool_ && size > SlabAllocator::kMaxSlabSize &&
+      alloc_device_tag() >= 0) {
+    int64_t mem_to_free =
+        get_active_memory() + get_cache_memory() + size - memory_limit_;
+    if (mem_to_free > 0) {
+      buffer_cache_.release_cached_buffers(static_cast<size_t>(mem_to_free));
+    }
+    RocmBuffer* mbuf = managed_pool_.malloc(size, alloc_device_tag());
+    if (mbuf) {
+      active_memory_ += mbuf->size;
+      peak_memory_ = std::max(active_memory_, peak_memory_);
+      return Buffer{mbuf};
+    }
+    // Fall through to unified if grow failed.
+  }
+
+  // Stream-less / small / managed-pool-off: BufferCache + hipMalloc.
   RocmBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
     int64_t mem_to_free =
@@ -709,12 +1011,12 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
 
   hipStream_t stream = static_cast<hipStream_t>(stream_v);
 
-  // No usable compute stream / pool → Metal-like unified path (BufferCache +
-  // hipMalloc). Never hipMallocAsync without a stream to free on later.
-  if (!use_async_pool() || stream == nullptr || device < 0 ||
-      device >= static_cast<int>(mem_pools_.size()) ||
-      mem_pools_[device] == nullptr ||
-      size <= SlabAllocator::kMaxSlabSize) {
+  // Prefer ManagedDevicePool for large discrete allocs (default). Falls back
+  // to malloc() which also uses the managed pool. hipMallocAsync only if
+  // FORCE_ASYNC_POOL and managed pool off.
+  if (use_managed_pool_ || !use_async_pool() || stream == nullptr ||
+      device < 0 || device >= static_cast<int>(mem_pools_.size()) ||
+      mem_pools_[device] == nullptr || size <= SlabAllocator::kMaxSlabSize) {
     return malloc(size);
   }
 
@@ -955,19 +1257,21 @@ void RocmAllocator::free(Buffer buffer, bool force) {
     return;
   }
 
-  // Stream-ordered pool buffer: ALWAYS hipFreeAsync on its alloc stream.
-  // Do not BufferCache these — host free can race GPU; only stream free is safe
-  // on ROCm (CUDA's pool tolerates host BufferCache reuse; ROCm does not).
+  // Managed grow/shrink pool: last ref dropped → free list (coalesced); empty
+  // slabs hipFree'd. This is the path the user asked for.
+  if (buf->data && managed_pool_.owns(buf->data)) {
+    managed_pool_.free(buf);
+    return;
+  }
+
+  // Stream-ordered hipMallocAsync buffer: free_async on alloc stream only.
   if (buf->device >= 0 && !buf->is_managed) {
     lock.unlock();
     free_async(buf, nullptr);
     return;
   }
 
-  // Metal/CUDA-like: recycle into BufferCache until max_pool_size_ (default
-  // 1–8GB). Large MoE temps reuse without hipFree/hipMalloc every op — that
-  // free/malloc storm was 90% of HIP host wall and left GPU ~82% idle.
-  // Cap still small vs 192GB so overflow actually hipFree's and GTT stays off.
+  // Other hipMalloc / unified: BufferCache until max_pool_size_, else free.
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
     return;
@@ -1245,10 +1549,11 @@ size_t RocmAllocator::set_cache_limit(size_t limit) {
 }
 
 void RocmAllocator::clear_cache() {
-  // Drop BufferCache + trim hipMemPool residual so HBM returns to the free list.
+  // Drop BufferCache + shrink managed pool empty slabs + trim hipMemPool.
   {
     std::lock_guard lock(mutex_);
     buffer_cache_.clear();
+    managed_pool_.shrink();
   }
   drain_device_frees();
   (void)hipDeviceSynchronize();
@@ -1256,9 +1561,7 @@ void RocmAllocator::clear_cache() {
     if (p)
       (void)hipMemPoolTrimTo(static_cast<hipMemPool_t>(p), 0);
   }
-  // Any remaining deferred (legacy) — drain again.
   drain_device_frees();
-  // keep structure of old code below for any residual path
   std::vector<RocmBuffer*> to_free;
   {
     std::lock_guard<std::mutex> lk(g_pending_free_mutex);

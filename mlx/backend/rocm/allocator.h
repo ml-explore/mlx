@@ -6,8 +6,10 @@
 #include "mlx/backend/common/buffer_cache.h"
 
 #include <deque>
+#include <map>
 #include <mutex>
 #include <set>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -154,6 +156,69 @@ class SlabAllocator {
 };
 
 // ---------------------------------------------------------------------------
+// ManagedDevicePool — single owner of large discrete-GPU HBM for train/eval.
+//
+// Grow when a request cannot be satisfied from free blocks; free returns the
+// block to an address-sorted free list (coalesced) when the last array ref
+// drops; whole slabs with zero live bytes are hipFree'd (shrink).
+//
+// Unlike hipMemPool, this is host-visible and shrinks. Unlike BufferCache of
+// raw hipMallocAsync pointers, every block is tracked by one manager.
+// ---------------------------------------------------------------------------
+class ManagedDevicePool {
+ public:
+  ManagedDevicePool() = default;
+  ~ManagedDevicePool();
+
+  ManagedDevicePool(const ManagedDevicePool&) = delete;
+  ManagedDevicePool& operator=(const ManagedDevicePool&) = delete;
+
+  // Allocate `size` bytes (will page-align). Returns null RocmBuffer* on failure.
+  // Caller owns the RocmBuffer shell; free() returns HBM to the free list.
+  RocmBuffer* malloc(size_t size, int device);
+  // Return a buffer from this pool. Deletes the RocmBuffer shell.
+  void free(RocmBuffer* buf);
+  bool owns(const void* ptr) const;
+  size_t live_bytes() const { return live_bytes_; }
+  size_t reserved_bytes() const { return reserved_bytes_; }
+  size_t free_list_bytes() const { return free_list_bytes_; }
+  // Drop fully-empty slabs back to the driver.
+  size_t shrink();
+
+ private:
+  struct Slab {
+    void* base{nullptr};
+    size_t capacity{0};
+    size_t live_bytes{0}; // sum of outstanding allocs in this slab
+    int device{-1};
+  };
+  struct FreeBlock {
+    void* ptr{nullptr};
+    size_t size{0};
+    size_t slab_idx{0};
+  };
+  struct LiveBlock {
+    size_t size{0};
+    size_t slab_idx{0};
+  };
+
+  bool grow_slab(size_t need, int device);
+  void insert_free(void* ptr, size_t size, size_t slab_idx);
+  // Returns true and fills `out` if a free block >= size was taken.
+  bool take_fit(size_t size, FreeBlock& out);
+
+  std::vector<Slab> slabs_;
+  // Address-ordered free list (per whole pool) for coalescing.
+  std::map<void*, FreeBlock> free_by_addr_;
+  // Size multimap into free_by_addr_ keys for best-fit.
+  std::multimap<size_t, void*> free_by_size_;
+  std::unordered_map<void*, LiveBlock> live_;
+  size_t live_bytes_{0};
+  size_t reserved_bytes_{0};
+  size_t free_list_bytes_{0};
+};
+
+// ---------------------------------------------------------------------------
 // RocmAllocator
 // ---------------------------------------------------------------------------
 
@@ -229,6 +294,9 @@ class RocmAllocator : public allocator::Allocator {
   size_t set_cache_limit(size_t limit);
   void clear_cache();
 
+  // Called from deferred free drain (outside allocator lock).
+  bool free_if_managed_pool(RocmBuffer* buf);
+
  private:
   void rocm_free(RocmBuffer* buf);
 
@@ -247,6 +315,10 @@ class RocmAllocator : public allocator::Allocator {
   DecodeArena decode_arena_;
   // Serve `size` bump from the arena; returns nullptr wrapper on overflow.
   RocmBuffer* arena_alloc(size_t size);
+
+  // Single managed HBM pool (grow/shrink free-list) for large discrete allocs.
+  ManagedDevicePool managed_pool_;
+  bool use_managed_pool_{true};
 
   // Per-device hipMemPool + a dedicated free stream for stream-less frees
   // (mirrors the CUDA backend). Empty entry => device has no pool support and
