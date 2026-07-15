@@ -84,17 +84,33 @@ static bool device_is_integrated(int dev) {
   return cache[dev] == 1;
 }
 
+// Fine-grained = host-coherent device mem (APU). On discrete (MI300X) default
+// OFF — coarse hipMalloc VRAM. Override with MLX_ROCM_FINEGRAINED=1/0.
 static bool use_finegrained() {
   if (const char* e = std::getenv("MLX_ROCM_FINEGRAINED"))
     return std::atoi(e) != 0;
+  int dev = 0;
+  if (hipGetDevice(&dev) == hipSuccess && !device_is_integrated(dev))
+    return false;
   return true;
 }
 
-// CUDA always uses the default mem pool when supported. Escape hatch only:
-// MLX_ROCM_NO_ASYNC_POOL=1 forces hipMalloc path (device=-1).
+// Stream-ordered hipMallocAsync. Default OFF on ROCm: the host BufferCache is
+// the CUDA-style recycle path; hipMemPool + hipFreeAsync has caused gfx page
+// faults / IMA 700 on MI300X when buffers are retagged across streams.
+// Set MLX_ROCM_USE_ASYNC_POOL=1 to enable (CUDA-like device pools).
+// MLX_ROCM_NO_ASYNC_POOL=1 forces off (legacy name).
 static bool use_async_pool() {
-  static const bool off = std::getenv("MLX_ROCM_NO_ASYNC_POOL") != nullptr;
-  return !off;
+  static const bool forced_off =
+      std::getenv("MLX_ROCM_NO_ASYNC_POOL") != nullptr;
+  static const bool forced_on =
+      std::getenv("MLX_ROCM_USE_ASYNC_POOL") != nullptr ||
+      std::getenv("MLX_ROCM_FORCE_ASYNC_POOL") != nullptr;
+  if (forced_off)
+    return false;
+  if (forced_on)
+    return true;
+  return false; // safe default on ROCm
 }
 
 static void ensure_mlx_device_current() {
@@ -481,12 +497,27 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
       }
     }
   } else {
-    // Cache hit: re-bind stream for free_async ordering (CUDA does not store
-    // stream on the buffer; ROCm free needs it when cache-evicted).
-    if (device >= 0 && stream) {
+    // Cache hit. CUDA: if cached buffer is on a different device, move to
+    // unified. Never retag device=-1 (hipMalloc) as a stream-pool buffer —
+    // that made free_async call hipFreeAsync on hipMalloc memory → page faults.
+    if (buf->device >= 0 && device >= 0 && buf->device != device) {
+      // Cross-device: drop to unified for safety (sync copy).
+      void* data = nullptr;
+      bool is_managed = true;
+      lock.unlock();
+      data = unified_malloc(buf->size, is_managed);
+      (void)hipMemcpy(data, buf->data, buf->size, hipMemcpyDeviceToDevice);
+      free_async(*buf);
+      buf->data = data;
+      buf->is_managed = is_managed;
+      buf->device = -1;
+      buf->alloc_stream = nullptr;
+      lock.lock();
+    } else if (buf->device >= 0 && stream && !buf->is_managed) {
+      // Same stream-pool buffer: remember last stream for free_async ordering.
       buf->alloc_stream = stream;
-      buf->device = device;
     }
+    // device==-1 buffers stay device==-1 regardless of request.
   }
 
   active_memory_ += buf->size;
