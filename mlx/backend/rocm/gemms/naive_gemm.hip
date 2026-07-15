@@ -2035,9 +2035,8 @@ int moe_pack_m_pad(
   }
   int measured = moe_max_run_length_sync(encoder, expert_ids, T, E);
   int floor_h = moe_pack_m_pad_heuristic(T, E);
-  // Take max(measured, 2×avg heuristic) then +12.5% slack (was +50% — bloated
-  // pack buffers and pushed MI300X into GTT spill). Grow-only cache still
-  // raises M_pad if a later batch needs more.
+  // max(measured, 2×avg) + 12.5% — enough slack to avoid pack OOB/IMA, not
+  // the old +50% that ballooned HBM. Grow-only cache still lifts later.
   int m = measured > floor_h ? measured : floor_h;
   m = align32_clamp(m + m / 8, T);
   {

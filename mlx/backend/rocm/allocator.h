@@ -167,11 +167,14 @@ class RocmAllocator : public allocator::Allocator {
   void free(Buffer buffer, bool force);
   size_t size(Buffer buffer) const override;
 
-  // CUDA-style stream-ordered allocation. When the async pool is enabled and a
-  // real stream is given for a discrete device, allocates GPU-only pool memory
-  // (hipMallocAsync) freed non-blocking (hipFreeAsync). Otherwise falls back to
-  // the unified path (== malloc). CPU access to pool buffers is served by the
-  // existing host-shadow path (device != -1) in Buffer::raw_ptr().
+  // CUDA/Metal-aligned: wrap externally-owned device memory (no copy).
+  Buffer make_buffer(void* ptr, size_t size) override;
+  void release(Buffer buffer) override;
+
+  // CUDA-style stream-ordered allocation + BufferCache (see cuda/allocator.cpp).
+  // When the async pool is enabled and a real stream is given for a discrete
+  // device, prefers hipMallocAsync; free recycles into BufferCache first (same
+  // as CUDA/Metal), and only hipFreeAsync when the cache is full.
   Buffer malloc_async(size_t size, int device, void* stream);
   void free_async(RocmBuffer* buf, void* stream);
 

@@ -141,17 +141,11 @@ void MoeSwigluSorted::eval_gpu(
     // M_pad: cached max-run (1 sync per T,E shape — not per layer).
     int M_pad = rocm::moe_pack_m_pad(encoder, ids, T, E);
 
-    // Grow-only workspace: 5×[E,M,D/I] + slot_map + counts (no hipMallocAsync).
-    const size_t esz = size_of(bfloat16);
-    const size_t bytes_need =
-        2ull * static_cast<size_t>(E) * M_pad * D * esz + // x, y
-        3ull * static_cast<size_t>(E) * M_pad * I * esz + // gate, up, h
-        static_cast<size_t>(E) * M_pad * sizeof(int32_t) + // slot_map
-        static_cast<size_t>(E) * sizeof(int32_t); // counts
-    rocm::moe_ws_begin(encoder, bytes_need);
+    // Tracked malloc_async temps (NOT side hipMalloc workspace — that bypassed
+    // MLX accounting and pinned HBM → GTT spill on MI300X).
     auto mk_tmp = [&](Shape sh, Dtype dt = bfloat16) {
       array a(sh, dt, nullptr, {});
-      rocm::moe_ws_alloc(encoder, a);
+      a.set_data(rocm::malloc_async(a.nbytes(), encoder));
       encoder.add_temporary(a);
       return a;
     };
@@ -498,7 +492,7 @@ void MoeSwigluSortedVJP::eval_gpu(
 
   auto mk = [&](Shape sh, Dtype dt = bfloat16) {
     array a(sh, dt, nullptr, {});
-    rocm::moe_ws_alloc(encoder, a);
+    a.set_data(rocm::malloc_async(a.nbytes(), encoder));
     encoder.add_temporary(a);
     return a;
   };
@@ -508,14 +502,6 @@ void MoeSwigluSortedVJP::eval_gpu(
     // ---- Pack VJP (MFMA, shared slot_map). M_pad cached per (T,E).
     // Skip unused [T,I] temps (legacy/device-seg only) — saves ~6×T×I allocs.
     int M_pad = rocm::moe_pack_m_pad(encoder, ids, T, E);
-
-    const size_t bf = size_of(bfloat16);
-    const size_t bytes_need =
-        4ull * static_cast<size_t>(E) * M_pad * D * bf + // x,dy,dx,dx_u
-        6ull * static_cast<size_t>(E) * M_pad * I * bf + // gate,up,h,dh,dg,du
-        static_cast<size_t>(E) * M_pad * sizeof(int32_t) +
-        static_cast<size_t>(E) * sizeof(int32_t);
-    rocm::moe_ws_begin(encoder, bytes_need);
 
     array packed_x = mk(Shape{E, M_pad, D});
     array packed_dy = mk(Shape{E, M_pad, D});
@@ -591,12 +577,6 @@ void MoeSwigluSortedVJP::eval_gpu(
   }
 
   // Legacy / device-seg need [T,I] intermediates (not used by pack path above).
-  {
-    const size_t mid_bytes =
-        6ull * static_cast<size_t>(T) * I * size_of(bfloat16) +
-        static_cast<size_t>(T) * D * size_of(bfloat16); // dx_u on device-seg
-    rocm::moe_ws_begin(encoder, mid_bytes);
-  }
   array gate = mk(Shape{T, I});
   array up = mk(Shape{T, I});
   array h = mk(Shape{T, I});

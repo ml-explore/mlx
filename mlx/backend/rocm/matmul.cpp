@@ -1367,17 +1367,6 @@ static bool try_moe_segment_gather_mm(
     if (M_fixed < 32)
       M_fixed = 32;
     // Temporaries: packed_a [E,M,K], packed_c [E,M,N], slot_map [E,M], counts [E]
-    // Grow-only MoE workspace (shared with fused MoE pack) — kill per-layer
-    // hipMallocAsync for gather_mm pack temps.
-    {
-      const size_t esz = size_of(a.dtype());
-      const size_t need =
-          static_cast<size_t>(n_experts) * M_fixed * K * esz +
-          static_cast<size_t>(n_experts) * M_fixed * N * esz +
-          static_cast<size_t>(n_experts) * M_fixed * sizeof(int32_t) +
-          static_cast<size_t>(n_experts) * sizeof(int32_t);
-      rocm::moe_ws_begin(encoder, need);
-    }
     array packed_a(
         mlx::core::Shape{n_experts, M_fixed, K}, a.dtype(), nullptr, {});
     array packed_c(
@@ -1385,10 +1374,10 @@ static bool try_moe_segment_gather_mm(
     array slot_map(
         mlx::core::Shape{n_experts, M_fixed}, int32, nullptr, {});
     array counts(mlx::core::Shape{n_experts}, int32, nullptr, {});
-    rocm::moe_ws_alloc(encoder, packed_a);
-    rocm::moe_ws_alloc(encoder, packed_c);
-    rocm::moe_ws_alloc(encoder, slot_map);
-    rocm::moe_ws_alloc(encoder, counts);
+    packed_a.set_data(mlx::core::rocm::malloc_async(packed_a.nbytes(), encoder));
+    packed_c.set_data(mlx::core::rocm::malloc_async(packed_c.nbytes(), encoder));
+    slot_map.set_data(mlx::core::rocm::malloc_async(slot_map.nbytes(), encoder));
+    counts.set_data(mlx::core::rocm::malloc_async(counts.nbytes(), encoder));
     encoder.add_temporary(packed_a);
     encoder.add_temporary(packed_c);
     encoder.add_temporary(slot_map);
