@@ -157,21 +157,21 @@ void MoeSwigluSorted::eval_gpu(
   hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
   CHECK_HIP_ERROR(hipMemcpyAsync(
       pin,
-      rocm::gpu_ptr<const uint32_t>(ids),
+      gpu_ptr<const uint32_t>(ids),
       need * sizeof(uint32_t),
       hipMemcpyDeviceToHost,
       hs));
   CHECK_HIP_ERROR(hipStreamSynchronize(hs));
 
   const size_t esz = sizeof(uint16_t); // bf16
-  const char* xB = static_cast<const char*>(rocm::gpu_ptr<void>(x));
-  const char* wgB = static_cast<const char*>(rocm::gpu_ptr<void>(wg));
-  const char* wuB = static_cast<const char*>(rocm::gpu_ptr<void>(wu));
-  const char* wdB = static_cast<const char*>(rocm::gpu_ptr<void>(wd));
-  char* gateB = static_cast<char*>(rocm::gpu_ptr<void>(gate));
-  char* upB = static_cast<char*>(rocm::gpu_ptr<void>(up));
-  char* hB = static_cast<char*>(rocm::gpu_ptr<void>(h));
-  char* outB = static_cast<char*>(rocm::gpu_ptr<void>(out));
+  const char* xB = static_cast<const char*>(gpu_ptr<void>(x));
+  const char* wgB = static_cast<const char*>(gpu_ptr<void>(wg));
+  const char* wuB = static_cast<const char*>(gpu_ptr<void>(wu));
+  const char* wdB = static_cast<const char*>(gpu_ptr<void>(wd));
+  char* gateB = static_cast<char*>(gpu_ptr<void>(gate));
+  char* upB = static_cast<char*>(gpu_ptr<void>(up));
+  char* hB = static_cast<char*>(gpu_ptr<void>(h));
+  char* outB = static_cast<char*>(gpu_ptr<void>(out));
 
   // Weight layouts match lemonseed gather_mm after swapaxes:
   //   w_gate/w_up [E,D,I]: x[M,D] @ B[D,I] → [M,I]
