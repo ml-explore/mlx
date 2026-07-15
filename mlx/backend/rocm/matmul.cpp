@@ -1337,8 +1337,147 @@ static bool try_moe_segment_gather_mm(
   }
 
   hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
-  // Pinned staging for D2H — pageable vectors make every MoE sorted-gather
-  // pay a slow staging bounce + full stream sync. Grow-only pinned buffers.
+
+  auto expert_offset_fn = [&](uint32_t expert) -> int64_t {
+    if (b_batch_shape.empty()) {
+      return 0;
+    }
+    if (b_batch_shape.size() == 1) {
+      return static_cast<int64_t>(expert) * b_batch_strides[0];
+    }
+    int64_t off = 0;
+    int64_t idx = static_cast<int64_t>(expert);
+    for (int d = static_cast<int>(b_batch_shape.size()) - 1; d >= 0; --d) {
+      int64_t coord = idx % b_batch_shape[d];
+      idx /= b_batch_shape[d];
+      off += coord * b_batch_strides[d];
+    }
+    return off;
+  };
+
+  // Async host path (default when lhs is identity / right_sorted): D2H indices
+  // + RLE + hipBLASLt launches run inside hipLaunchHostFunc so the main thread
+  // never hipStreamSynchronize. That was the train-step pipeline drain (~80%
+  // idle). Kill-switch: MLX_ROCM_MOE_SYNC=1 restores blocking sync.
+  static const bool force_sync_moe = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_SYNC");
+    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+                 e[0] == 'T');
+  }();
+
+  if (assume_identity_lhs && rocm::is_hipblaslt_available() && !force_sync_moe) {
+    struct MoeAsyncJob {
+      uint32_t* pin{nullptr};
+      int batch{0};
+      int N{0};
+      int K{0};
+      bool b_transposed{false};
+      int64_t ldb{0};
+      size_t esz{0};
+      const char* aB{nullptr};
+      const char* bB{nullptr};
+      char* cB{nullptr};
+      int b_ndim{0};
+      int64_t b_shape[4]{};
+      int64_t b_strides[4]{};
+      Dtype dtype{};
+      int device_id{0};
+      hipStream_t stream{nullptr};
+      int min_avg{1};
+    };
+
+    auto* job = new MoeAsyncJob();
+    job->batch = batch;
+    job->N = N;
+    job->K = K;
+    job->b_transposed = b_transposed;
+    job->ldb = ldb;
+    job->esz = a.itemsize();
+    job->aB = static_cast<const char*>(gpu_ptr<void>(a));
+    job->bB = static_cast<const char*>(gpu_ptr<void>(b));
+    job->cB = static_cast<char*>(gpu_ptr<void>(out));
+    job->dtype = a.dtype();
+    job->device_id = encoder.device().hip_device();
+    job->stream = hs;
+    job->min_avg = moe_segment_min_avg();
+    job->b_ndim = static_cast<int>(b_batch_shape.size());
+    for (int d = 0; d < job->b_ndim && d < 4; ++d) {
+      job->b_shape[d] = b_batch_shape[d];
+      job->b_strides[d] = b_batch_strides[d];
+    }
+
+    const size_t need = static_cast<size_t>(batch);
+    CHECK_HIP_ERROR(hipHostMalloc(
+        reinterpret_cast<void**>(&job->pin),
+        need * sizeof(uint32_t),
+        hipHostMallocDefault));
+
+    // Enqueue D2H + host callback that launches segment GEMMs. Main thread
+    // returns immediately so MLX can keep building the step graph.
+    encoder.launch_kernel([job, need, rhs = gpu_ptr<const uint32_t>(rhs_indices)](
+                              hipStream_t stream) {
+      CHECK_HIP_ERROR(hipMemcpyAsync(
+          job->pin, rhs, need * sizeof(uint32_t), hipMemcpyDeviceToHost, stream));
+
+      // Non-capturing lambda → function pointer for hipLaunchHostFunc.
+      auto cb = [](void* user) {
+        auto* j = static_cast<MoeAsyncJob*>(user);
+        auto expert_off = [&](uint32_t expert) -> int64_t {
+          if (j->b_ndim <= 0)
+            return 0;
+          if (j->b_ndim == 1)
+            return static_cast<int64_t>(expert) * j->b_strides[0];
+          int64_t off = 0;
+          int64_t idx = static_cast<int64_t>(expert);
+          for (int d = j->b_ndim - 1; d >= 0; --d) {
+            int64_t coord = idx % j->b_shape[d];
+            idx /= j->b_shape[d];
+            off += coord * j->b_strides[d];
+          }
+          return off;
+        };
+
+        int start = 0;
+        while (start < j->batch) {
+          uint32_t e = j->pin[static_cast<size_t>(start)];
+          int end = start + 1;
+          while (end < j->batch && j->pin[static_cast<size_t>(end)] == e)
+            ++end;
+          int Mseg = end - start;
+          if (Mseg > 0) {
+            try {
+              rocm::hipblaslt_gemm_rowmajor_on_stream(
+                  j->stream,
+                  j->device_id,
+                  /*transpose_a=*/false,
+                  j->b_transposed,
+                  Mseg,
+                  j->N,
+                  j->K,
+                  1.0f,
+                  j->aB + static_cast<size_t>(start) * j->K * j->esz,
+                  /*lda=*/j->K,
+                  j->bB + static_cast<size_t>(expert_off(e)) * j->esz,
+                  static_cast<int>(j->ldb),
+                  0.0f,
+                  j->cB + static_cast<size_t>(start) * j->N * j->esz,
+                  /*ldc=*/j->N,
+                  j->dtype);
+            } catch (...) {
+              // Host callbacks must not throw into the HIP runtime.
+            }
+          }
+          start = end;
+        }
+        (void)hipHostFree(j->pin);
+        delete j;
+      };
+      (void)hipLaunchHostFunc(stream, cb, job);
+    });
+    return true;
+  }
+
+  // Synchronous host path (lhs identity check needed, or MLX_ROCM_MOE_SYNC=1).
   static thread_local uint32_t* pin_rhs = nullptr;
   static thread_local uint32_t* pin_lhs = nullptr;
   static thread_local size_t pin_cap = 0;
@@ -1384,7 +1523,6 @@ static bool try_moe_segment_gather_mm(
     }
   }
 
-  // Count runs of equal rhs. If average run length is tiny, gemv is better.
   int n_runs = 0;
   for (int i = 0; i < batch;) {
     uint32_t e = pin_rhs[static_cast<size_t>(i)];
@@ -1402,24 +1540,6 @@ static bool try_moe_segment_gather_mm(
     return false;
   }
 
-  auto expert_offset = [&](uint32_t expert) -> int64_t {
-    if (b_batch_shape.empty()) {
-      return 0;
-    }
-    if (b_batch_shape.size() == 1) {
-      return static_cast<int64_t>(expert) * b_batch_strides[0];
-    }
-    int64_t off = 0;
-    int64_t idx = static_cast<int64_t>(expert);
-    for (int d = static_cast<int>(b_batch_shape.size()) - 1; d >= 0; --d) {
-      int64_t coord = idx % b_batch_shape[d];
-      idx /= b_batch_shape[d];
-      off += coord * b_batch_strides[d];
-    }
-    return off;
-  };
-
-  // Host path: one hipBLASLt GEMM per expert run (MLX_ROCM_MOE_HOST_SEG=1).
   const bool moe_use_blaslt = rocm::is_hipblaslt_available();
   const size_t moe_esz = a.itemsize();
   const char* moe_aB = static_cast<const char*>(gpu_ptr<void>(a));
@@ -1437,13 +1557,13 @@ static bool try_moe_segment_gather_mm(
       rocm::hipblaslt_gemm_ptrs(
           encoder, /*transpose_a=*/false, b_transposed, Mseg, N, K, 1.0f,
           moe_aB + static_cast<size_t>(start) * K * moe_esz, /*lda=*/K,
-          moe_bB + static_cast<size_t>(expert_offset(e)) * moe_esz, ldb,
+          moe_bB + static_cast<size_t>(expert_offset_fn(e)) * moe_esz, ldb,
           0.0f, moe_cB + static_cast<size_t>(start) * N * moe_esz, /*ldc=*/N,
           a.dtype());
     } else {
       rocm::naive_gemm_with_offset(
           encoder, a, b, out, Mseg, N, K, /*a_transposed=*/false, /*lda=*/K,
-          static_cast<int64_t>(start) * K, b_transposed, ldb, expert_offset(e),
+          static_cast<int64_t>(start) * K, b_transposed, ldb, expert_offset_fn(e),
           static_cast<int64_t>(start) * N, 1.0f, 0.0f);
     }
     start = end;

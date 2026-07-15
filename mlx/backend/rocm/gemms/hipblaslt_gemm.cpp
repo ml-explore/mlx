@@ -822,6 +822,54 @@ void hipblaslt_gemm_ptrs(
   });
 }
 
+void hipblaslt_gemm_rowmajor_on_stream(
+    hipStream_t stream,
+    int device_id,
+    bool transpose_a,
+    bool transpose_b,
+    int M,
+    int N,
+    int K,
+    float alpha,
+    const void* a_ptr,
+    int lda,
+    const void* b_ptr,
+    int ldb,
+    float beta,
+    void* c_ptr,
+    int ldc,
+    Dtype dtype) {
+  hipblasLtHandle_t handle = get_handle(device_id);
+  hipDataType hip_dtype = to_hipblaslt_dtype(dtype);
+  hipblasOperation_t op_a = to_hipblas_op(transpose_b);
+  hipblasOperation_t op_b = to_hipblas_op(transpose_a);
+  // Keep alpha/beta alive for the async enqueue (hipBLASLt reads by pointer).
+  // Static per-call is unsafe under concurrency; use locals — hipblasLtMatmul
+  // only needs them until the call returns (it copies scalar params).
+  hipblaslt_gemm_impl(
+      handle,
+      device_id,
+      op_a,
+      op_b,
+      N,
+      M,
+      K,
+      &alpha,
+      b_ptr,
+      ldb,
+      0,
+      a_ptr,
+      lda,
+      0,
+      &beta,
+      c_ptr,
+      ldc,
+      0,
+      1,
+      hip_dtype,
+      stream);
+}
+
 void hipblaslt_gemm(
     CommandEncoder& encoder,
     bool transpose_a,

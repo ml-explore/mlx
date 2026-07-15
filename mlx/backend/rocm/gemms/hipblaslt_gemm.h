@@ -96,6 +96,27 @@ void hipblaslt_gemm_ptrs(
     int ldc,
     Dtype dtype);
 
+// Row-major MLX convention (same as hipblaslt_gemm_ptrs) but callable from a
+// host callback / raw stream without a CommandEncoder. Used by async MoE
+// segment launch (hipLaunchHostFunc) so the main thread never StreamSynchronize.
+void hipblaslt_gemm_rowmajor_on_stream(
+    hipStream_t stream,
+    int device_id,
+    bool transpose_a,
+    bool transpose_b,
+    int M,
+    int N,
+    int K,
+    float alpha,
+    const void* a,
+    int lda,
+    const void* b,
+    int ldb,
+    float beta,
+    void* c,
+    int ldc,
+    Dtype dtype);
+
 void hipblaslt_gemm_raw(
     hipStream_t stream,
     int op_a, // rocblas_operation / hipblasOperation_t value
