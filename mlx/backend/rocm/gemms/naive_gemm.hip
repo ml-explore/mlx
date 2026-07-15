@@ -2035,10 +2035,11 @@ int moe_pack_m_pad(
   }
   int measured = moe_max_run_length_sync(encoder, expert_ids, T, E);
   int floor_h = moe_pack_m_pad_heuristic(T, E);
-  // Take max(measured, 2×avg heuristic) then +50% slack so later batches with
-  // the same T but worse load never overflow pack (silent slot drop → IMA).
+  // Take max(measured, 2×avg heuristic) then +12.5% slack (was +50% — bloated
+  // pack buffers and pushed MI300X into GTT spill). Grow-only cache still
+  // raises M_pad if a later batch needs more.
   int m = measured > floor_h ? measured : floor_h;
-  m = align32_clamp(m + m / 2, T);
+  m = align32_clamp(m + m / 8, T);
   {
     std::lock_guard<std::mutex> g(mu);
     auto it = cache.find(key);
@@ -2050,7 +2051,13 @@ int moe_pack_m_pad(
 }
 
 // ---------------------------------------------------------------------------
-// MoE pack workspace (grow-only bump pool)
+// MoE pack workspace — single bump slab, stream-ordered free on grow.
+//
+// Earlier grow-only path *retired* old slabs forever (untracked hipMalloc) →
+// VRAM filled to 100% + GTT spill. Now:
+//   - size to exact need (+2MiB page align), no 50% capacity bloat
+//   - hipMallocAsync / hipFreeAsync on the eval stream (ordered free)
+//   - one live base; free previous on grow after prior work on that stream
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -2060,9 +2067,6 @@ struct MoeWs {
   size_t capacity{0};
   size_t offset{0};
   int device{-1};
-  // Previous bases kept mapped for process lifetime so in-flight kernels that
-  // still reference an old slab after grow never see a free.
-  std::vector<void*> retired;
 };
 
 MoeWs& moe_ws() {
@@ -2074,6 +2078,58 @@ size_t align_up_256(size_t n) {
   return (n + 255) & ~size_t(255);
 }
 
+size_t align_up_page(size_t n) {
+  constexpr size_t kPage = 2ull << 20; // 2 MiB
+  return (n + kPage - 1) & ~(kPage - 1);
+}
+
+// Grow to at least `need` bytes. Frees the previous base with hipFreeAsync on
+// `stream` so free retires after any prior kernels that still read it.
+void moe_ws_ensure_locked(
+    MoeWs& w,
+    size_t need,
+    int device,
+    hipStream_t stream) {
+  need = align_up_page(need);
+  if (need == 0)
+    return;
+  if (w.base != nullptr && need <= w.capacity && w.device == device)
+    return;
+
+  void* p = nullptr;
+  hipError_t err = hipSuccess;
+  if (stream) {
+    err = hipMallocAsync(&p, need, stream);
+  } else {
+    err = hipMalloc(&p, need);
+  }
+  if (err != hipSuccess || !p) {
+    (void)hipGetLastError();
+    // Fallback: blocking alloc (e.g. pool exhausted).
+    p = nullptr;
+    err = hipMalloc(&p, need);
+  }
+  if (err != hipSuccess || !p) {
+    (void)hipGetLastError();
+    throw std::runtime_error(
+        "moe_ws: hipMalloc failed (" + std::to_string(need) + " bytes)");
+  }
+
+  if (w.base) {
+    // Stream-ordered free: safe once prior MoE kernels on this stream finish.
+    // Do NOT keep retired slabs — that was the GTT/VRAM leak.
+    if (stream) {
+      (void)hipFreeAsync(w.base, stream);
+    } else {
+      (void)hipFree(w.base);
+    }
+  }
+  w.base = p;
+  w.capacity = need;
+  w.device = device;
+  w.offset = 0;
+}
+
 } // namespace
 
 void moe_ws_begin(CommandEncoder& encoder, size_t bytes_needed) {
@@ -2082,35 +2138,10 @@ void moe_ws_begin(CommandEncoder& encoder, size_t bytes_needed) {
   w.offset = 0;
   if (bytes_needed == 0)
     return;
-  // Pad a bit so tiny under-estimates don't force a mid-primitive grow.
-  size_t need = align_up_256(bytes_needed + (1 << 20));
-  int dev = encoder.device().hip_device();
-  if (need <= w.capacity && w.base != nullptr && w.device == dev)
-    return;
-
-  size_t new_cap = need + need / 2;
-  // 2 MiB pages — reduces fragmentation and matches common HBM alloc granularity.
-  constexpr size_t kPage = 2ull << 20;
-  new_cap = (new_cap + kPage - 1) & ~(kPage - 1);
-  if (new_cap < (64ull << 20))
-    new_cap = 64ull << 20;
-
-  void* p = nullptr;
-  // Synchronous hipMalloc once per grow (rare). Avoids hipMallocAsync storm and
-  // does not thrash the serialized mem pool under concurrent free.
-  hipError_t err = hipMalloc(&p, new_cap);
-  if (err != hipSuccess || !p) {
-    (void)hipGetLastError();
-    throw std::runtime_error(
-        "moe_ws_begin: hipMalloc failed for MoE workspace (" +
-        std::to_string(new_cap) + " bytes)");
-  }
-  if (w.base)
-    w.retired.push_back(w.base);
-  w.base = p;
-  w.capacity = new_cap;
-  w.device = dev;
-  w.offset = 0;
+  // Exact need + small headroom for alignment of individual bumps (not 50%).
+  size_t need = bytes_needed + (1 << 20);
+  hipStream_t st = static_cast<hipStream_t>(encoder.stream());
+  moe_ws_ensure_locked(w, need, encoder.device().hip_device(), st);
 }
 
 void moe_ws_alloc(CommandEncoder& encoder, array& a) {
@@ -2119,32 +2150,35 @@ void moe_ws_alloc(CommandEncoder& encoder, array& a) {
 
   auto& w = moe_ws();
   std::lock_guard<std::mutex> g(w.mu);
+  hipStream_t st = static_cast<hipStream_t>(encoder.stream());
+  int dev = encoder.device().hip_device();
   if (!w.base || w.offset + aligned > w.capacity) {
-    // Grow while holding the lock. In-flight arrays from *this* primitive still
-    // point into the old base (kept in retired) — only new allocs use new base.
+    // Under-estimate from begin(): grow to current offset + remaining request.
+    // Freeing old base is OK only if no live shell from *this* primitive still
+    // points into it — callers must size begin() correctly. Fallback path
+    // stream-syncs first so in-flight shells' kernels complete before free.
     size_t need = w.offset + aligned + (1 << 20);
-    size_t new_cap = need + need / 2;
-    constexpr size_t kPage = 2ull << 20;
-    new_cap = (new_cap + kPage - 1) & ~(kPage - 1);
-    void* p = nullptr;
-    hipError_t err = hipMalloc(&p, new_cap);
-    if (err != hipSuccess || !p) {
-      (void)hipGetLastError();
-      throw std::runtime_error("moe_ws_alloc: hipMalloc grow failed");
+    if (w.base && w.offset > 0) {
+      // Mid-primitive grow is rare (begin under-sized). Sync so prior bumps'
+      // kernels (already enqueued) finish before we free the slab they use.
+      if (st)
+        (void)hipStreamSynchronize(st);
+      else
+        (void)hipDeviceSynchronize();
+      // After sync, free old immediately (sync free) then alloc fresh.
+      (void)hipFree(w.base);
+      w.base = nullptr;
+      w.capacity = 0;
+      w.offset = 0;
+      need = aligned + (1 << 20);
     }
-    if (w.base)
-      w.retired.push_back(w.base);
-    w.base = p;
-    w.capacity = new_cap;
-    w.device = encoder.device().hip_device();
-    // New base starts empty; prior shells still reference retired bases.
-    w.offset = 0;
+    moe_ws_ensure_locked(w, need, dev, st);
   }
 
   void* ptr = static_cast<char*>(w.base) + w.offset;
   w.offset += aligned;
 
-  // Shell RocmBuffer; device memory owned by the pool, never freed per-array.
+  // Shell only — HBM owned by the single live slab (freed on grow / process end).
   auto* rb = new RocmBuffer{
       ptr,
       nbytes,
@@ -2154,7 +2188,6 @@ void moe_ws_alloc(CommandEncoder& encoder, array& a) {
       /*host_dirty=*/false,
       /*alloc_stream=*/encoder.stream()};
   a.set_data(allocator::Buffer{rb}, [](allocator::Buffer b) {
-    // Free only the wrapper — HBM stays in the grow-only pool.
     delete static_cast<RocmBuffer*>(b.ptr());
   });
 }
