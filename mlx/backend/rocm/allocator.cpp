@@ -644,6 +644,7 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
 
   hipStream_t stream = static_cast<hipStream_t>(stream_v);
   // Fall back to the unified path unless the pool is usable for this request.
+  // Matches CUDA: tiny/stream-less → non-async path.
   if (!use_async_pool() || stream == nullptr || device < 0 ||
       device >= static_cast<int>(mem_pools_.size()) ||
       mem_pools_[device] == nullptr || size == 0 ||
@@ -653,29 +654,71 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
 
   size = page_size * ((size + page_size - 1) / page_size);
 
-  // Bypass our BufferCache entirely: the hipMemPool already manages reuse and
-  // retention (ReleaseThreshold=MAX). Layering our own eviction on top causes
-  // hipFreeAsync storms that starve the HSA handler pool and wedge. Let the GPU
-  // manage its own memory — alloc straight from the pool.
-  void* data = nullptr;
-  hipError_t err;
-  {
-    // Serialize pool ops: the eval thread allocates here while the worker thread
-    // frees (free_async -> hipFreeAsync) concurrently; the ROCm async pool faults
-    // under concurrent alloc+free on this path. g_pool_mtx orders them.
-    std::lock_guard<std::mutex> plk(pool_mutex());
-    err = hipMallocAsync(&data, size, stream);
+  // CUDA-aligned path (see mlx/backend/cuda/allocator.cpp::malloc_async):
+  //   1) reuse BufferCache (host-side size bins) — kills hipMallocAsync storms
+  //   2) under memory_limit pressure, release cache (real hipFreeAsync)
+  //   3) only then hipMallocAsync
+  // The previous ROCm path bypassed BufferCache entirely ("hipMemPool owns
+  // reuse"). On MI300X that produced ~35k hipMallocAsync/step, peak HBM
+  // inflation, and GTT spill — MLX active_memory dropped on free while the
+  // driver still held unreclaimed pool memory. Metal/CUDA always recycle
+  // through BufferCache first; match them.
+  std::unique_lock lock(mutex_);
+  RocmBuffer* buf = buffer_cache_.reuse_from_cache(size);
+  if (!buf) {
+    int64_t mem_to_free =
+        static_cast<int64_t>(get_active_memory()) +
+        static_cast<int64_t>(get_cache_memory()) + static_cast<int64_t>(size) -
+        static_cast<int64_t>(memory_limit_);
+    if (mem_to_free > 0) {
+      buffer_cache_.release_cached_buffers(static_cast<size_t>(mem_to_free));
+    }
+    lock.unlock();
+
+    void* data = nullptr;
+    hipError_t err;
+    {
+      // Serialize pool ops: eval thread allocs while worker may free_async.
+      std::lock_guard<std::mutex> plk(pool_mutex());
+      err = hipMallocAsync(&data, size, stream);
+    }
+    if (err != hipSuccess || !data) {
+      (void)hipGetLastError();
+      // Do NOT fall back to hipMallocManaged / GTT. Prefer hard fail or the
+      // discrete hipMalloc path which also respects NO_MANAGED_FALLBACK.
+      return malloc(size);
+    }
+    // is_managed=false → stream-ordered pool buffer (freed via hipFreeAsync).
+    buf = new RocmBuffer{
+        data, size, false, device, nullptr, false, stream};
+
+    lock.lock();
+    // If the hipMemPool has reserved more than (total - free_limit), trim our
+    // host cache so subsequent frees return VRAM (mirrors CUDA).
+    if (get_cache_memory() > 0 && device >= 0 &&
+        device < static_cast<int>(mem_pools_.size()) && mem_pools_[device]) {
+      size_t used = 0;
+      hipError_t aerr = hipMemPoolGetAttribute(
+          static_cast<hipMemPool_t>(mem_pools_[device]),
+          hipMemPoolAttrReservedMemCurrent,
+          &used);
+      if (aerr == hipSuccess && used > (total_memory_ - free_limit_)) {
+        buffer_cache_.release_cached_buffers(free_limit_);
+      }
+    }
+  } else {
+    // Cache hit: re-bind to the current stream so a later free_async retires
+    // in order behind this use (CUDA doesn't store stream on the buffer;
+    // we do for ROCm free discipline).
+    buf->alloc_stream = stream;
+    buf->device = device;
   }
-  if (err != hipSuccess || !data) {
-    (void)hipGetLastError();
-    return malloc(size); // pool exhausted: fall back to unified
-  }
-  // is_managed=false marks this as a stream-ordered pool buffer (freed via
-  // hipFreeAsync); device>=0 routes CPU access through the host shadow.
-  RocmBuffer* buf = new RocmBuffer{data, size, false, device, nullptr, false, stream};
-  std::lock_guard lock(mutex_);
+
   active_memory_ += buf->size;
   peak_memory_ = std::max(active_memory_, peak_memory_);
+  if (get_cache_memory() > max_pool_size_) {
+    buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
+  }
   return Buffer{buf};
 }
 
@@ -837,21 +880,27 @@ void RocmAllocator::free(Buffer buffer, bool force) {
     return;
   }
 
-  // Stream-ordered pool buffer (the common case): return it straight to the
-  // hipMemPool via hipFreeAsync on its own stream. The pool owns reuse/retention.
-  if (buf->device >= 0 && !buf->is_managed) {
-    free_async(buf, nullptr);
+  // CUDA/Metal-aligned: recycle into BufferCache first (device-pool AND
+  // unified). Only when the cache is at max_pool_size_ do we really free
+  // (hipFreeAsync for pool buffers, deferred hipFree for unified). Immediate
+  // hipFreeAsync-on-every-free was the old path and caused:
+  //   - hipMallocAsync storms (no host-side size reuse)
+  //   - VRAM held by the driver pool while active_memory looked low
+  //   - GTT spill once HBM filled
+  if (get_cache_memory() < max_pool_size_) {
+    buffer_cache_.recycle_to_cache(buf);
     return;
   }
 
-  // Unified buffer (model load / KV / non-wired primitives). Recycle to the
-  // BufferCache, or defer the blocking hipFree off the worker thread.
-  if (get_cache_memory() < max_pool_size_) {
-    buffer_cache_.recycle_to_cache(buf);
-  } else {
-    std::lock_guard<std::mutex> lk(g_pending_free_mutex);
-    g_pending_frees.push_back(buf);
+  // Cache full: really release.
+  if (buf->device >= 0 && !buf->is_managed) {
+    // Stream-ordered pool buffer.
+    free_async(buf, nullptr);
+    return;
   }
+  // Unified / blocking path — never hipFree on the worker if we can defer.
+  std::lock_guard<std::mutex> lk(g_pending_free_mutex);
+  g_pending_frees.push_back(buf);
 }
 
 size_t RocmAllocator::size(Buffer buffer) const {
@@ -1067,11 +1116,13 @@ size_t RocmAllocator::set_cache_limit(size_t limit) {
 }
 
 void RocmAllocator::clear_cache() {
-  // The hipMemPool owns reuse/retention for pool buffers; releasing memory means
-  // trimming it. Drain the device first so trimmed blocks have no outstanding
-  // work, then drain deferred unified frees on this (safe) thread. Do NOT
-  // blocking-clear the unified BufferCache under pool handler pressure — those
-  // buffers are bounded by max_pool_size_ and reused.
+  // Match CUDA/Metal: drop BufferCache first (returns VRAM via free_async /
+  // hipFree), then trim the hipMemPool residual. Sync so in-flight frees retire
+  // before trim.
+  {
+    std::lock_guard lock(mutex_);
+    buffer_cache_.clear();
+  }
   (void)hipDeviceSynchronize();
   for (void* p : mem_pools_) {
     if (p)
