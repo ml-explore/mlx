@@ -1,8 +1,10 @@
 // Copyright © 2025 Apple Inc.
 //
-// Fused sorted-MoE SwiGLU: one host D2H of expert ids + segment GEMMs for
-// gate, up, silu_mul, and down. Replaces three separate gather_mm calls that
-// each pipeline-drained the train step.
+// Fused sorted-MoE SwiGLU as a compile-safe Primitive:
+// one host D2H of expert ids + segment GEMMs for gate, up, silu_mul, and down.
+// Replaces three separate gather_mm calls that each pipeline-drained the train step.
+//
+// VJP uses the gather_mm fallback (Custom base) so value_and_grad / compile work.
 
 #include "mlx/backend/rocm/rocm.h"
 #include "mlx/backend/rocm/device.h"
@@ -13,105 +15,97 @@
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/device.h"
+#include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/stream.h"
-#include "mlx/transforms.h"
 #include "mlx/utils.h"
 
 #include <hip/hip_runtime.h>
 
 #include <algorithm>
+#include <functional>
 #include <stdexcept>
+#include <vector>
 
 namespace mlx::core::rocm {
 
-array moe_swiglu_sorted(
-    const array& x_in,
-    const array& w_gate,
-    const array& w_up,
-    const array& w_down,
-    const array& expert_ids_in,
-    StreamOrDevice s) {
-  // x: [T, D]
-  // w_gate/w_up: [E, D, I]  (same as lemonseed gather_mm after swapaxes)
-  // w_down: [E, I, D]       (same as lemonseed wd_t after swapaxes)
-  // ids: [T] uint32 sorted by expert
-  // out: [T, D]
-  if (!is_available()) {
-    throw std::runtime_error("moe_swiglu_sorted requires ROCm");
-  }
-  if (x_in.ndim() != 2 || expert_ids_in.ndim() != 1 ||
-      w_gate.ndim() != 3 || w_up.ndim() != 3 || w_down.ndim() != 3) {
-    throw std::invalid_argument(
-        "moe_swiglu_sorted: expected x[T,D], w_gate/up[E,D,I], w_down[E,I,D], ids[T]");
-  }
-  if (x_in.dtype() != bfloat16 || w_gate.dtype() != bfloat16 ||
-      w_up.dtype() != bfloat16 || w_down.dtype() != bfloat16) {
-    throw std::invalid_argument("moe_swiglu_sorted: bf16 only");
-  }
-  if (expert_ids_in.dtype() != uint32) {
-    throw std::invalid_argument("moe_swiglu_sorted: expert_ids must be uint32");
+namespace {
+
+// Compile-safe primitive: eval_gpu only (no mid-transform eval).
+class MoeSwigluSorted : public fast::Custom {
+ public:
+  explicit MoeSwigluSorted(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, std::move(fallback)) {}
+
+  void eval_cpu(const std::vector<array>&, std::vector<array>&) override {
+    throw std::runtime_error("MoeSwigluSorted has no CPU implementation");
   }
 
-  const int T = x_in.shape(0);
-  const int D = x_in.shape(1);
-  const int E = w_gate.shape(0);
-  const int I = w_gate.shape(2); // [E, D, I]
-  if (w_gate.shape(1) != D || w_up.shape(0) != E || w_up.shape(1) != D ||
-      w_up.shape(2) != I || w_down.shape(0) != E || w_down.shape(1) != I ||
-      w_down.shape(2) != D || expert_ids_in.shape(0) != T) {
-    throw std::invalid_argument("moe_swiglu_sorted: shape mismatch");
-  }
+  void eval_gpu(
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs) override;
+
+  DEFINE_NAME(MoeSwigluSorted)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
+void MoeSwigluSorted::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  // inputs: x[T,D], w_gate[E,D,I], w_up[E,D,I], w_down[E,I,D], ids[T]
+  // outputs[0]: y[T,D]
+  assert(inputs.size() == 5);
+  assert(outputs.size() == 1);
+
+  auto& s = stream();
+  auto& encoder = get_command_encoder(s);
+  array& out = outputs[0];
+
+  array x = inputs[0];
+  array wg = inputs[1];
+  array wu = inputs[2];
+  array wd = inputs[3];
+  array ids = inputs[4];
+
+  const int T = x.shape(0);
+  const int D = x.shape(1);
+  const int E = wg.shape(0);
+  const int I = wg.shape(2);
+
   if (T == 0) {
-    array empty_out({0, D}, bfloat16, nullptr, {});
-    return empty_out;
+    out.set_data(malloc_async(0, encoder));
+    return;
   }
 
-  Stream stream = to_stream(s);
-  if (stream.device.type != ::mlx::core::Device::DeviceType::gpu) {
-    throw std::runtime_error("moe_swiglu_sorted: GPU stream required");
-  }
-  // Realize inputs before reading device pointers.
-  eval({x_in, w_gate, w_up, w_down, expert_ids_in});
-
-  auto& encoder = get_command_encoder(stream);
-
-  // Contiguous copies if needed.
-  array x = x_in;
-  array ids = expert_ids_in;
-  array wg = w_gate;
-  array wu = w_up;
-  array wd = w_down;
+  // Contiguous copies if needed (inputs already realized by the evaluator).
   if (!x.flags().row_contiguous) {
-    x = contiguous_copy_gpu(x, stream);
+    x = contiguous_copy_gpu(x, s);
     encoder.add_temporary(x);
   }
   if (!ids.flags().row_contiguous) {
-    ids = contiguous_copy_gpu(ids, stream);
+    ids = contiguous_copy_gpu(ids, s);
     encoder.add_temporary(ids);
   }
   if (!wg.flags().row_contiguous) {
-    wg = contiguous_copy_gpu(wg, stream);
+    wg = contiguous_copy_gpu(wg, s);
     encoder.add_temporary(wg);
   }
   if (!wu.flags().row_contiguous) {
-    wu = contiguous_copy_gpu(wu, stream);
+    wu = contiguous_copy_gpu(wu, s);
     encoder.add_temporary(wu);
   }
   if (!wd.flags().row_contiguous) {
-    wd = contiguous_copy_gpu(wd, stream);
+    wd = contiguous_copy_gpu(wd, s);
     encoder.add_temporary(wd);
   }
 
-  // Buffer ctor starts Status::available (unlike prim=nullptr ctor).
-  // Match sort.hip: array(Buffer, shape, dtype).
-  ::mlx::core::Shape out_shape{T, D};
+  out.set_data(
+      malloc_async(static_cast<size_t>(T) * D * size_of(bfloat16), encoder));
+
   ::mlx::core::Shape mid_shape{T, I};
-  array out(
-      malloc_async(static_cast<size_t>(T) * D * size_of(bfloat16), encoder),
-      out_shape,
-      bfloat16,
-      allocator::free);
   array gate(
       malloc_async(static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
       mid_shape,
@@ -174,18 +168,18 @@ array moe_swiglu_sorted(
   char* outB = static_cast<char*>(gpu_ptr<void>(out));
 
   // Weight layouts match lemonseed gather_mm after swapaxes:
-  //   w_gate/w_up [E,D,I]: x[M,D] @ B[D,I] → [M,I]  (no transpose)
-  //   w_down [E,I,D]:      h[M,I] @ B[I,D] → [M,D]  (no transpose)
-  const int64_t wg_stride = static_cast<int64_t>(D) * I; // elements / expert
+  //   w_gate/w_up [E,D,I]: x[M,D] @ B[D,I] → [M,I]
+  //   w_down [E,I,D]:      h[M,I] @ B[I,D] → [M,D]
+  const int64_t wg_stride = static_cast<int64_t>(D) * I;
   const int64_t wu_stride = wg_stride;
   const int64_t wd_stride = static_cast<int64_t>(I) * D;
 
-  // Exact-M: one host sync above; each expert uses its true token count.
+  // Exact-M: each expert uses its true token count (no pad).
   int start = 0;
   while (start < T) {
     uint32_t e = pin[static_cast<size_t>(start)];
     if (static_cast<int>(e) >= E) {
-      throw std::runtime_error("moe_swiglu_sorted: expert id out of range");
+      throw std::runtime_error("MoeSwigluSorted: expert id out of range");
     }
     int end = start + 1;
     while (end < T && pin[static_cast<size_t>(end)] == e)
@@ -196,7 +190,7 @@ array moe_swiglu_sorted(
       continue;
     }
 
-    // gate = x @ Wg  Wg:[D,I]
+    // gate = x @ Wg
     hipblaslt_gemm_ptrs(
         encoder,
         /*transpose_a=*/false,
@@ -235,7 +229,6 @@ array moe_swiglu_sorted(
     start = end;
   }
 
-  // silu(gate)*up for all tokens (exact-M, full buffer)
   silu_mul_bf16(
       encoder,
       gpu_ptr<void>(gate),
@@ -254,7 +247,6 @@ array moe_swiglu_sorted(
       start = end;
       continue;
     }
-    // out = h @ Wd  Wd:[I,D]
     hipblaslt_gemm_ptrs(
         encoder,
         false,
@@ -273,10 +265,97 @@ array moe_swiglu_sorted(
         bfloat16);
     start = end;
   }
+  // No final stream sync — evaluator owns completion / fences.
+}
 
-  // Eager helper: ensure GPU finished before Python touches `out`.
-  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
-  return out;
+// Differentiable fallback for VJP / jvp / vmap via Custom base.
+// Same math as lemonseed sorted gather_mm SwiGLU path.
+std::vector<array> moe_swiglu_fallback(
+    const std::vector<array>& inputs,
+    Stream s) {
+  const array& x = inputs[0]; // [T, D]
+  const array& wg = inputs[1]; // [E, D, I]
+  const array& wu = inputs[2];
+  const array& wd = inputs[3]; // [E, I, D]
+  const array& ids = inputs[4]; // [T]
+
+  const int T = x.shape(0);
+  if (T == 0) {
+    return {array(Shape{0, x.shape(1)}, x.dtype(), nullptr, {})};
+  }
+
+  // xg: [T, 1, 1, D], lhs identity, rhs = sorted expert ids
+  auto xg = reshape(x, Shape{T, 1, 1, x.shape(1)}, s);
+  auto lhs = reshape(arange(T, uint32, s), Shape{T, 1, 1}, s);
+  auto rhs = reshape(ids, Shape{T, 1, 1}, s);
+
+  auto gate = gather_mm(xg, wg, lhs, rhs, /*sorted_indices=*/true, s);
+  auto up = gather_mm(xg, wu, lhs, rhs, /*sorted_indices=*/true, s);
+  // silu(g)*u = g * sigmoid(g) * u
+  auto h = multiply(multiply(gate, sigmoid(gate, s), s), up, s);
+  auto down = gather_mm(h, wd, lhs, rhs, /*sorted_indices=*/true, s);
+  return {reshape(down, Shape{T, x.shape(1)}, s)};
+}
+
+} // namespace
+
+array moe_swiglu_sorted(
+    const array& x_in,
+    const array& w_gate,
+    const array& w_up,
+    const array& w_down,
+    const array& expert_ids_in,
+    StreamOrDevice s_in) {
+  // x: [T, D]
+  // w_gate/w_up: [E, D, I]
+  // w_down: [E, I, D]
+  // ids: [T] uint32 sorted by expert
+  // out: [T, D]
+  if (!is_available()) {
+    throw std::runtime_error("moe_swiglu_sorted requires ROCm");
+  }
+  if (x_in.ndim() != 2 || expert_ids_in.ndim() != 1 || w_gate.ndim() != 3 ||
+      w_up.ndim() != 3 || w_down.ndim() != 3) {
+    throw std::invalid_argument(
+        "moe_swiglu_sorted: expected x[T,D], w_gate/up[E,D,I], w_down[E,I,D], ids[T]");
+  }
+  if (x_in.dtype() != bfloat16 || w_gate.dtype() != bfloat16 ||
+      w_up.dtype() != bfloat16 || w_down.dtype() != bfloat16) {
+    throw std::invalid_argument("moe_swiglu_sorted: bf16 only");
+  }
+  if (expert_ids_in.dtype() != uint32) {
+    throw std::invalid_argument("moe_swiglu_sorted: expert_ids must be uint32");
+  }
+
+  const int T = x_in.shape(0);
+  const int D = x_in.shape(1);
+  const int E = w_gate.shape(0);
+  const int I = w_gate.shape(2);
+  if (w_gate.shape(1) != D || w_up.shape(0) != E || w_up.shape(1) != D ||
+      w_up.shape(2) != I || w_down.shape(0) != E || w_down.shape(1) != I ||
+      w_down.shape(2) != D || expert_ids_in.shape(0) != T) {
+    throw std::invalid_argument("moe_swiglu_sorted: shape mismatch");
+  }
+
+  Stream s = to_stream(s_in, Device::gpu);
+  if (s.device.type != ::mlx::core::Device::DeviceType::gpu) {
+    throw std::runtime_error("moe_swiglu_sorted: GPU stream required");
+  }
+
+  if (T == 0) {
+    return array(Shape{0, D}, bfloat16, nullptr, {});
+  }
+
+  auto fallback = [s](const std::vector<array>& inputs) {
+    return moe_swiglu_fallback(inputs, s);
+  };
+
+  // Lazy array with Primitive — safe under mx.compile / value_and_grad.
+  return array(
+      Shape{T, D},
+      bfloat16,
+      std::make_shared<MoeSwigluSorted>(s, std::move(fallback)),
+      {x_in, w_gate, w_up, w_down, expert_ids_in});
 }
 
 } // namespace mlx::core::rocm

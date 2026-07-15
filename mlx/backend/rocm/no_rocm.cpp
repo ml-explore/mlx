@@ -3,6 +3,8 @@
 #include "mlx/backend/rocm/rocm.h"
 #include "mlx/fast.h"
 
+#include <stdexcept>
+
 namespace mlx::core {
 
 namespace rocm {
@@ -24,6 +26,16 @@ size_t train_arena_high_water() {
 }
 bool train_arena_overflowed() {
   return false;
+}
+
+array moe_swiglu_sorted(
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    StreamOrDevice) {
+  throw std::runtime_error("moe_swiglu_sorted requires ROCm");
 }
 
 } // namespace rocm

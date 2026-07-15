@@ -1,11 +1,14 @@
 // Copyright © 2025 Apple Inc.
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/variant.h>
 
 #include "mlx/backend/rocm/rocm.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
+using namespace nb::literals;
 
 void init_rocm(nb::module_& m) {
   nb::module_ rocm = m.def_submodule("rocm", "mlx.rocm");
@@ -40,22 +43,24 @@ void init_rocm(nb::module_& m) {
          const mx::array& w_gate,
          const mx::array& w_up,
          const mx::array& w_down,
-         const mx::array& expert_ids) {
+         const mx::array& expert_ids,
+         mx::StreamOrDevice s) {
+        // Default empty → gpu (factory requires GPU stream).
+        if (std::holds_alternative<std::monostate>(s)) {
+          s = mx::Device(mx::Device::gpu);
+        }
         return mx::rocm::moe_swiglu_sorted(
-            x,
-            w_gate,
-            w_up,
-            w_down,
-            expert_ids,
-            mx::Device(mx::Device::gpu));
+            x, w_gate, w_up, w_down, expert_ids, s);
       },
-      nb::arg("x"),
-      nb::arg("w_gate"),
-      nb::arg("w_up"),
-      nb::arg("w_down"),
-      nb::arg("expert_ids"),
+      "x"_a,
+      "w_gate"_a,
+      "w_up"_a,
+      "w_down"_a,
+      "expert_ids"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
       R"pbdoc(
-        Fused sorted-MoE SwiGLU (one host sync for gate+up+silu+down).
+        Fused sorted-MoE SwiGLU (compile-safe Primitive; one host sync).
 
         x: [T, D] bf16
         w_gate, w_up: [E, D, I] bf16 (after swapaxes of Linear [E,I,D])
