@@ -1522,9 +1522,23 @@ static bool try_moe_segment_gather_mm(
   const bool cache_hit = !no_pin_cache && assume_identity_lhs &&
       pin_rhs_dev == rhs_dev && pin_rhs_n == need && pin_reuses_left > 0;
 
+  static const bool pin_stats = std::getenv("MLX_ROCM_MOE_PIN_STATS") != nullptr;
+  static thread_local long pin_hits = 0, pin_misses = 0;
+
   if (cache_hit) {
     --pin_reuses_left;
+    ++pin_hits;
   } else {
+    ++pin_misses;
+    if (pin_stats && ((pin_hits + pin_misses) % 200) == 0) {
+      fprintf(
+          stderr,
+          "[moe-pin] hits=%ld misses=%ld hit_rate=%.1f%% assume_id=%d\n",
+          pin_hits,
+          pin_misses,
+          100.0 * pin_hits / std::max(1L, pin_hits + pin_misses),
+          (int)assume_identity_lhs);
+    }
     CHECK_HIP_ERROR(hipMemcpyAsync(
         pin_rhs,
         rhs_dev,
