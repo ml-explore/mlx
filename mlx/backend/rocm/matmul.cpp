@@ -1361,8 +1361,8 @@ static bool try_moe_segment_gather_mm(
       M_fixed = std::min(M_fixed, batch);
       M_fixed = (M_fixed + 31) & ~31;
     } else {
-      // Zero-sync: host-known pad (always safe, some pad FLOPs).
-      M_fixed = (batch + 31) & ~31;
+      // Tight pad: device max expert-run + 4B D2H (avoids full-T OOM/FLOPs).
+      M_fixed = rocm::moe_max_run_length_sync(encoder, rhs_indices, batch, n_experts);
     }
     if (M_fixed < 32)
       M_fixed = 32;

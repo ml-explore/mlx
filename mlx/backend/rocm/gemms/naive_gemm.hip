@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/gemms/naive_gemm.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/dtype_utils.h"
@@ -1194,6 +1195,21 @@ __global__ void moe_sorted_segments_kernel(
   segments[2 * e + 1] = static_cast<uint32_t>(hi);
 }
 
+__global__ void moe_max_run_length_kernel(
+    const uint32_t* __restrict__ idx,
+    int* __restrict__ max_run,
+    int T,
+    int E) {
+  int e = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (e >= E)
+    return;
+  int lo = moe_lower_bound(idx, T, static_cast<uint32_t>(e));
+  int hi = moe_upper_bound(idx, T, static_cast<uint32_t>(e));
+  int len = hi - lo;
+  if (len > 0)
+    atomicMax(max_run, len);
+}
+
 template <typename T, bool TransA, bool TransB>
 __global__ void segmented_mm_device_kernel(
     const T* __restrict__ A,
@@ -1874,6 +1890,57 @@ void moe_sorted_segments(
     hipLaunchKernelGGL(
         moe_sorted_segments_kernel, grid, block, 0, stream, idx, seg, T, E);
   });
+}
+
+void moe_max_run_length(
+    CommandEncoder& encoder,
+    const array& expert_ids,
+    array& max_run,
+    int T,
+    int E) {
+  encoder.set_input_array(expert_ids);
+  encoder.set_output_array(max_run);
+  const uint32_t* idx = gpu_ptr<const uint32_t>(expert_ids);
+  int* mxp = gpu_ptr<int>(max_run);
+  encoder.launch_kernel([=](hipStream_t stream) {
+    (void)hipMemsetAsync(mxp, 0, sizeof(int), stream);
+    dim3 block(256);
+    dim3 grid((E + 255) / 256);
+    hipLaunchKernelGGL(
+        moe_max_run_length_kernel, grid, block, 0, stream, idx, mxp, T, E);
+  });
+}
+
+int moe_max_run_length_sync(
+    CommandEncoder& encoder,
+    const array& expert_ids,
+    int T,
+    int E) {
+  if (T <= 0 || E <= 0)
+    return 32;
+  array max_run(Shape{}, int32, nullptr, {});
+  max_run.set_data(rocm::malloc_async(sizeof(int), encoder));
+  encoder.add_temporary(max_run);
+  moe_max_run_length(encoder, expert_ids, max_run, T, E);
+
+  static thread_local int* pin = nullptr;
+  if (!pin) {
+    CHECK_HIP_ERROR(hipHostMalloc(
+        reinterpret_cast<void**>(&pin), sizeof(int), hipHostMallocDefault));
+  }
+  hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
+  CHECK_HIP_ERROR(hipMemcpyAsync(
+      pin, gpu_ptr<const int>(max_run), sizeof(int), hipMemcpyDeviceToHost, hs));
+  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
+  int m = *pin;
+  if (m < 1)
+    m = 1;
+  if (m > T)
+    m = T;
+  m = (m + 31) & ~31;
+  if (m < 32)
+    m = 32;
+  return m;
 }
 
 void segmented_mm_device(

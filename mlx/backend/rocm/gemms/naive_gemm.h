@@ -121,6 +121,23 @@ void moe_sorted_expert_gemm(
     int64_t ldb,
     int64_t b_expert_stride);
 
+// Max expert run length in sorted expert_ids[T] → device scalar int32 (atomicMax).
+// No host sync. Caller may D2H 4 bytes to size M_pad (tiny sync) or keep on device.
+void moe_max_run_length(
+    CommandEncoder& encoder,
+    const array& expert_ids, // [T] uint32 sorted
+    array& max_run, // scalar int32 on device (init to 0 or 1)
+    int T,
+    int E);
+
+// Device max-run + 4-byte D2H + align_up(32). One tiny stream sync.
+// Prefer this over M_pad=T (full-T pad OOMs and wastes FLOPs on large T).
+int moe_max_run_length_sync(
+    CommandEncoder& encoder,
+    const array& expert_ids,
+    int T,
+    int E);
+
 // Pack sorted MoE tokens into a dense [E, M_fixed, K] buffer (atomic slots).
 // slot_map[e, s] = source token row, or -1 if unused. counts[e] = tokens packed.
 void moe_pack_tokens(

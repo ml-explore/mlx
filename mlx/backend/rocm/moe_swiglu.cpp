@@ -137,10 +137,9 @@ void MoeSwigluSorted::eval_gpu(
   }();
 
   if (use_zero_sync && rocm::is_hipblaslt_available() && E > 0 && E <= 256) {
-    // ---- Zero-sync pack + strided-batched hipBLASLt (no D2H) ----
-    int M_pad = (T + 31) & ~31;
-    if (M_pad < 32)
-      M_pad = 32;
+    // ---- Pack + strided-batched hipBLASLt ----
+    // M_pad from device max expert-run (4B D2H). Full-T pad OOMs on large T.
+    int M_pad = rocm::moe_max_run_length_sync(encoder, ids, T, E);
 
     auto mk_tmp = [&](Shape sh, Dtype dt = bfloat16) {
       array a(sh, dt, nullptr, {});
@@ -504,10 +503,8 @@ void MoeSwigluSortedVJP::eval_gpu(
 
   if (use_zero_sync && !use_device_seg && rocm::is_hipblaslt_available() &&
       E > 0 && E <= 256) {
-    // ---- Zero-sync pack VJP (MFMA, shared slot_map, no host) ----
-    int M_pad = (T + 31) & ~31;
-    if (M_pad < 32)
-      M_pad = 32;
+    // ---- Pack VJP (MFMA, shared slot_map). M_pad = device max-run (4B D2H).
+    int M_pad = rocm::moe_max_run_length_sync(encoder, ids, T, E);
 
     array packed_x = mk(Shape{E, M_pad, D});
     array packed_dy = mk(Shape{E, M_pad, D});
