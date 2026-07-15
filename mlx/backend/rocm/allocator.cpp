@@ -642,16 +642,15 @@ void RocmAllocator::free(Buffer buffer, bool force) {
 
   std::unique_lock lock(mutex_);
   active_memory_ -= buf->size;
-  // Always recycle first. CUDA frees immediately when cache is at
-  // max_pool_size_; on ROCm that hipFree path is catastrophic (100–500 ms
-  // stalls in the bwd→Adam gap while the freelist is full of same-sized
-  // blocks the next step needs). Recycle this buffer (MRU), then trim the
-  // LRU tail if over the cap — same bound, but the just-freed sizes stay
-  // available for the next malloc hit.
+  // Always recycle; never hipFree on the free() path.
+  //
+  // rocprof: 90–500 ms GPU idle gaps right before fused_adamw were almost
+  // 100% hipFree. CUDA frees immediately when cache >= max_pool_size_; on
+  // ROCm that is catastrophic — the bwd→Adam transition drops tens of GB of
+  // same-sized activations that the *next* step needs, and hipFree is a
+  // blocking drain. Bound HBM only from malloc_async (memory_limit_ pressure
+  // + max_pool_size_ trim there), where a miss already has to wait.
   buffer_cache_.recycle_to_cache(buf);
-  if (get_cache_memory() > max_pool_size_) {
-    buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
-  }
 }
 
 Buffer RocmAllocator::make_buffer(void* ptr, size_t size) {
