@@ -281,20 +281,20 @@ std::vector<array> moe_swiglu_fallback(
 
   const int T = x.shape(0);
   if (T == 0) {
-    return {array(Shape{0, x.shape(1)}, x.dtype(), nullptr, {})};
+    return {array(::mlx::core::Shape{0, x.shape(1)}, x.dtype(), nullptr, {})};
   }
 
   // xg: [T, 1, 1, D], lhs identity, rhs = sorted expert ids
-  auto xg = reshape(x, Shape{T, 1, 1, x.shape(1)}, s);
-  auto lhs = reshape(arange(T, uint32, s), Shape{T, 1, 1}, s);
-  auto rhs = reshape(ids, Shape{T, 1, 1}, s);
+  auto xg = reshape(x, ::mlx::core::Shape{T, 1, 1, x.shape(1)}, s);
+  auto lhs = reshape(arange(T, uint32, s), ::mlx::core::Shape{T, 1, 1}, s);
+  auto rhs = reshape(ids, ::mlx::core::Shape{T, 1, 1}, s);
 
   auto gate = gather_mm(xg, wg, lhs, rhs, /*sorted_indices=*/true, s);
   auto up = gather_mm(xg, wu, lhs, rhs, /*sorted_indices=*/true, s);
   // silu(g)*u = g * sigmoid(g) * u
   auto h = multiply(multiply(gate, sigmoid(gate, s), s), up, s);
   auto down = gather_mm(h, wd, lhs, rhs, /*sorted_indices=*/true, s);
-  return {reshape(down, Shape{T, x.shape(1)}, s)};
+  return {reshape(down, ::mlx::core::Shape{T, x.shape(1)}, s)};
 }
 
 } // namespace
