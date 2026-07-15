@@ -10,7 +10,9 @@
 #include "mlx/backend/rocm/gemms/hipblaslt_gemm.h"
 #include "mlx/backend/rocm/gemms/naive_gemm.h"
 #include "mlx/backend/rocm/utils.h"
+#include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/device.h"
 #include "mlx/ops.h"
 #include "mlx/stream.h"
 #include "mlx/utils.h"
@@ -65,7 +67,7 @@ array moe_swiglu_sorted(
   }
 
   Stream stream = to_stream(s);
-  if (stream.device != Device::gpu) {
+  if (stream.device.type != Device::DeviceType::gpu) {
     throw std::runtime_error("moe_swiglu_sorted: GPU stream required");
   }
   auto& encoder = get_command_encoder(stream);
