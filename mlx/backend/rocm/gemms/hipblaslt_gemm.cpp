@@ -420,7 +420,12 @@ void hipblaslt_gemm_impl(
       if (status != HIPBLAS_STATUS_SUCCESS) {
         throw std::runtime_error(
             "hipblasLtMatmul (pipe cache) failed: " +
-            std::to_string(static_cast<int>(status)));
+            std::to_string(static_cast<int>(status)) + " MNK=" +
+            std::to_string(M) + "," + std::to_string(N) + "," +
+            std::to_string(K) + " lda/b/c=" + std::to_string(lda) + "," +
+            std::to_string(ldb) + "," + std::to_string(ldc) + " op=" +
+            std::to_string(static_cast<int>(op_a)) + "," +
+            std::to_string(static_cast<int>(op_b)));
       }
       return;
     }
