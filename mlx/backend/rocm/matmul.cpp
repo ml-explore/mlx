@@ -27,6 +27,79 @@ namespace mlx::core {
 
 namespace {
 
+// Async MoE segment launch job (filled on main thread, consumed in host-func).
+struct MoeAsyncJob {
+  uint32_t* pin{nullptr};
+  int batch{0};
+  int N{0};
+  int K{0};
+  bool b_transposed{false};
+  int64_t ldb{0};
+  size_t esz{0};
+  const char* aB{nullptr};
+  const char* bB{nullptr};
+  char* cB{nullptr};
+  int b_ndim{0};
+  int64_t b_shape[4]{};
+  int64_t b_strides[4]{};
+  Dtype dtype{float32};
+  int device_id{0};
+  hipStream_t stream{nullptr};
+};
+
+static void moe_async_host_cb(void* user) {
+  auto* j = static_cast<MoeAsyncJob*>(user);
+  auto expert_off = [&](uint32_t expert) -> int64_t {
+    if (j->b_ndim <= 0)
+      return 0;
+    if (j->b_ndim == 1)
+      return static_cast<int64_t>(expert) * j->b_strides[0];
+    int64_t off = 0;
+    int64_t idx = static_cast<int64_t>(expert);
+    for (int d = j->b_ndim - 1; d >= 0; --d) {
+      int64_t coord = idx % j->b_shape[d];
+      idx /= j->b_shape[d];
+      off += coord * j->b_strides[d];
+    }
+    return off;
+  };
+
+  int start = 0;
+  while (start < j->batch) {
+    uint32_t e = j->pin[static_cast<size_t>(start)];
+    int end = start + 1;
+    while (end < j->batch && j->pin[static_cast<size_t>(end)] == e)
+      ++end;
+    int Mseg = end - start;
+    if (Mseg > 0) {
+      try {
+        rocm::hipblaslt_gemm_rowmajor_on_stream(
+            j->stream,
+            j->device_id,
+            /*transpose_a=*/false,
+            j->b_transposed,
+            Mseg,
+            j->N,
+            j->K,
+            1.0f,
+            j->aB + static_cast<size_t>(start) * j->K * j->esz,
+            /*lda=*/j->K,
+            j->bB + static_cast<size_t>(expert_off(e)) * j->esz,
+            static_cast<int>(j->ldb),
+            0.0f,
+            j->cB + static_cast<size_t>(start) * j->N * j->esz,
+            /*ldc=*/j->N,
+            j->dtype);
+      } catch (...) {
+        // Host callbacks must not throw into the HIP runtime.
+      }
+    }
+    start = end;
+  }
+  (void)hipHostFree(j->pin);
+  delete j;
+}
+
 std::tuple<bool, int64_t, array>
 check_transpose(rocm::CommandEncoder& enc, const Stream& s, const array& arr) {
   auto stx = arr.strides()[arr.ndim() - 2];
@@ -1366,26 +1439,6 @@ static bool try_moe_segment_gather_mm(
   }();
 
   if (assume_identity_lhs && rocm::is_hipblaslt_available() && !force_sync_moe) {
-    struct MoeAsyncJob {
-      uint32_t* pin{nullptr};
-      int batch{0};
-      int N{0};
-      int K{0};
-      bool b_transposed{false};
-      int64_t ldb{0};
-      size_t esz{0};
-      const char* aB{nullptr};
-      const char* bB{nullptr};
-      char* cB{nullptr};
-      int b_ndim{0};
-      int64_t b_shape[4]{};
-      int64_t b_strides[4]{};
-      Dtype dtype{};
-      int device_id{0};
-      hipStream_t stream{nullptr};
-      int min_avg{1};
-    };
-
     auto* job = new MoeAsyncJob();
     job->batch = batch;
     job->N = N;
@@ -1399,7 +1452,6 @@ static bool try_moe_segment_gather_mm(
     job->dtype = a.dtype();
     job->device_id = encoder.device().hip_device();
     job->stream = hs;
-    job->min_avg = moe_segment_min_avg();
     job->b_ndim = static_cast<int>(b_batch_shape.size());
     for (int d = 0; d < job->b_ndim && d < 4; ++d) {
       job->b_shape[d] = b_batch_shape[d];
@@ -1412,67 +1464,17 @@ static bool try_moe_segment_gather_mm(
         need * sizeof(uint32_t),
         hipHostMallocDefault));
 
+    const uint32_t* rhs_dev = gpu_ptr<const uint32_t>(rhs_indices);
     // Enqueue D2H + host callback that launches segment GEMMs. Main thread
     // returns immediately so MLX can keep building the step graph.
-    encoder.launch_kernel([job, need, rhs = gpu_ptr<const uint32_t>(rhs_indices)](
-                              hipStream_t stream) {
-      CHECK_HIP_ERROR(hipMemcpyAsync(
-          job->pin, rhs, need * sizeof(uint32_t), hipMemcpyDeviceToHost, stream));
-
-      // Non-capturing lambda → function pointer for hipLaunchHostFunc.
-      auto cb = [](void* user) {
-        auto* j = static_cast<MoeAsyncJob*>(user);
-        auto expert_off = [&](uint32_t expert) -> int64_t {
-          if (j->b_ndim <= 0)
-            return 0;
-          if (j->b_ndim == 1)
-            return static_cast<int64_t>(expert) * j->b_strides[0];
-          int64_t off = 0;
-          int64_t idx = static_cast<int64_t>(expert);
-          for (int d = j->b_ndim - 1; d >= 0; --d) {
-            int64_t coord = idx % j->b_shape[d];
-            idx /= j->b_shape[d];
-            off += coord * j->b_strides[d];
-          }
-          return off;
-        };
-
-        int start = 0;
-        while (start < j->batch) {
-          uint32_t e = j->pin[static_cast<size_t>(start)];
-          int end = start + 1;
-          while (end < j->batch && j->pin[static_cast<size_t>(end)] == e)
-            ++end;
-          int Mseg = end - start;
-          if (Mseg > 0) {
-            try {
-              rocm::hipblaslt_gemm_rowmajor_on_stream(
-                  j->stream,
-                  j->device_id,
-                  /*transpose_a=*/false,
-                  j->b_transposed,
-                  Mseg,
-                  j->N,
-                  j->K,
-                  1.0f,
-                  j->aB + static_cast<size_t>(start) * j->K * j->esz,
-                  /*lda=*/j->K,
-                  j->bB + static_cast<size_t>(expert_off(e)) * j->esz,
-                  static_cast<int>(j->ldb),
-                  0.0f,
-                  j->cB + static_cast<size_t>(start) * j->N * j->esz,
-                  /*ldc=*/j->N,
-                  j->dtype);
-            } catch (...) {
-              // Host callbacks must not throw into the HIP runtime.
-            }
-          }
-          start = end;
-        }
-        (void)hipHostFree(j->pin);
-        delete j;
-      };
-      (void)hipLaunchHostFunc(stream, cb, job);
+    encoder.launch_kernel([job, need, rhs_dev](hipStream_t stream) {
+      (void)hipMemcpyAsync(
+          job->pin,
+          rhs_dev,
+          need * sizeof(uint32_t),
+          hipMemcpyDeviceToHost,
+          stream);
+      (void)hipLaunchHostFunc(stream, moe_async_host_cb, job);
     });
     return true;
   }
