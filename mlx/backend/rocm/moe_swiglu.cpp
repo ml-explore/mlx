@@ -71,6 +71,9 @@ array moe_swiglu_sorted(
   if (stream.device.type != ::mlx::core::Device::DeviceType::gpu) {
     throw std::runtime_error("moe_swiglu_sorted: GPU stream required");
   }
+  // Realize inputs before reading device pointers.
+  eval({x_in, w_gate, w_up, w_down, expert_ids_in});
+
   auto& encoder = get_command_encoder(stream);
 
   // Contiguous copies if needed.
@@ -108,6 +111,10 @@ array moe_swiglu_sorted(
   gate.set_data(malloc_async(gate.nbytes(), encoder));
   up.set_data(malloc_async(up.nbytes(), encoder));
   h.set_data(malloc_async(h.nbytes(), encoder));
+  // Leaf buffers (no Primitive) must be marked available or eval() throws.
+  gate.set_status(array::Status::available);
+  up.set_status(array::Status::available);
+  h.set_status(array::Status::available);
   encoder.add_temporary(gate);
   encoder.add_temporary(up);
   encoder.add_temporary(h);
@@ -255,6 +262,8 @@ array moe_swiglu_sorted(
     start = end;
   }
 
+  // Eager helper: ensure GPU finished before Python touches `out`.
+  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
   return out;
 }
 
