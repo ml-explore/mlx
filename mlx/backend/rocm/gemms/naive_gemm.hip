@@ -2030,11 +2030,17 @@ int moe_pack_m_pad(
     if (it != cache.end())
       return it->second;
   }
-  int m = moe_max_run_length_sync(encoder, expert_ids, T, E);
-  // Slack for residual imbalance on later batches with same T.
-  m = align32_clamp(m + m / 8, T);
+  int measured = moe_max_run_length_sync(encoder, expert_ids, T, E);
+  int floor_h = moe_pack_m_pad_heuristic(T, E);
+  // Take max(measured, 2×avg heuristic) then +50% slack so later batches with
+  // the same T but worse load never overflow pack (silent slot drop → IMA).
+  int m = measured > floor_h ? measured : floor_h;
+  m = align32_clamp(m + m / 2, T);
   {
     std::lock_guard<std::mutex> g(mu);
+    auto it = cache.find(key);
+    if (it != cache.end() && it->second > m)
+      m = it->second; // grow-only
     cache[key] = m;
   }
   return m;
