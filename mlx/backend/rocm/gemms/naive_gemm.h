@@ -175,6 +175,14 @@ void bf16_add_inplace(
     void* out,
     int n);
 
+// out[j,i] = in[i,j] for matrix (rows, cols) bf16 (row-major).
+void bf16_transpose_2d(
+    CommandEncoder& encoder,
+    const void* in,
+    void* out,
+    int rows,
+    int cols);
+
 // Device-side SegmentedMM: out[s] = A[:,k0:k1] @ B[k0:k1,:] with (k0,k1) from
 // device segments[2*s], segments[2*s+1]. No host D2H / stream sync.
 void segmented_mm_device(

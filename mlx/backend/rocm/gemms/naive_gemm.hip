@@ -1487,6 +1487,41 @@ void bf16_add_inplace(
   });
 }
 
+__global__ void bf16_transpose_2d_kernel(
+    const hip_bfloat16* __restrict__ in,
+    hip_bfloat16* __restrict__ out,
+    int rows,
+    int cols) {
+  int i = blockIdx.y * blockDim.y + threadIdx.y;
+  int j = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < rows && j < cols) {
+    out[static_cast<size_t>(j) * rows + i] =
+        in[static_cast<size_t>(i) * cols + j];
+  }
+}
+
+void bf16_transpose_2d(
+    CommandEncoder& encoder,
+    const void* in,
+    void* out,
+    int rows,
+    int cols) {
+  encoder.launch_kernel([=](hipStream_t stream) {
+    dim3 block(16, 16);
+    dim3 grid((cols + 15) / 16, (rows + 15) / 16);
+    hipLaunchKernelGGL(
+        bf16_transpose_2d_kernel,
+        grid,
+        block,
+        0,
+        stream,
+        static_cast<const hip_bfloat16*>(in),
+        static_cast<hip_bfloat16*>(out),
+        rows,
+        cols);
+  });
+}
+
 void moe_sorted_expert_gemm(
     CommandEncoder& encoder,
     const array& a,
