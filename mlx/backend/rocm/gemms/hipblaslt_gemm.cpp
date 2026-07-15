@@ -12,6 +12,10 @@
 #include <mutex>
 #include <unordered_map>
 
+// Older hipBLASLt lacks some *_EXT epilogue enums (notably
+// HIPBLASLT_EPILOGUE_SIGMOID_BIAS_EXT). Comparisons below are #ifdef-guarded so
+// consumer builds (gfx1152 / 860M) compile against stock ROCm headers.
+
 namespace mlx::core::rocm {
 
 namespace {
@@ -590,10 +594,17 @@ void hipblaslt_gemm_impl(
       epilogue != HIPBLASLT_EPILOGUE_DEFAULT &&
       epilogue != HIPBLASLT_EPILOGUE_BIAS &&
       epilogue != HIPBLASLT_EPILOGUE_RELU_BIAS &&
-      epilogue != HIPBLASLT_EPILOGUE_GELU_BIAS &&
-      epilogue != HIPBLASLT_EPILOGUE_SWISH_BIAS_EXT &&
-      epilogue != HIPBLASLT_EPILOGUE_SIGMOID_BIAS_EXT) {
+      epilogue != HIPBLASLT_EPILOGUE_GELU_BIAS
+#ifdef HIPBLASLT_EPILOGUE_SWISH_BIAS_EXT
+      && epilogue != HIPBLASLT_EPILOGUE_SWISH_BIAS_EXT
+#endif
+#ifdef HIPBLASLT_EPILOGUE_SIGMOID_BIAS_EXT
+      && epilogue != HIPBLASLT_EPILOGUE_SIGMOID_BIAS_EXT
+#endif
+  ) {
     // Act-only epilogues (GELU/SWISH/RELU/SIGMOID without bias).
+    // Bias-fused EXT variants are excluded when the installed hipBLASLt
+    // headers define them; older ROCm omits SIGMOID_BIAS_EXT entirely.
     status = hipblasLtMatmulDescSetAttribute(
         matmul_guard.desc,
         HIPBLASLT_MATMUL_DESC_EPILOGUE,
