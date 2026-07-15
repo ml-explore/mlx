@@ -22,11 +22,13 @@ using allocator::Buffer;
 
 // Matches CudaBuffer + fields required for discrete-GPU host access and
 // stream-ordered free (CUDA uses move_to_unified_memory instead of shadow).
+// Field order is ABI-stable for brace-init sites outside this file
+// (e.g. gemms/naive_gemm.hip): data, size, is_managed, device, ...
 struct RocmBuffer {
   void* data;
   size_t size;
-  int device; // -1 for unified / non-pool
   bool is_managed;
+  int device; // -1 for unified / non-pool
   void* host_shadow;
   bool host_dirty;
   void* alloc_stream; // stream used for hipMallocAsync / hipFreeAsync

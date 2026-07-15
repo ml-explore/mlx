@@ -394,7 +394,7 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
 
   if (size == 0) {
     return Buffer{new RocmBuffer{
-        nullptr, 0, -1, true, nullptr, false, nullptr}};
+        nullptr, 0, /*is_managed=*/true, /*device=*/-1, nullptr, false, nullptr}};
   }
 
   hipStream_t stream = static_cast<hipStream_t>(stream_v);
@@ -441,7 +441,7 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
       if (device == -1) {
         data = unified_malloc(size, is_managed);
         buf = new RocmBuffer{
-            data, size, -1, is_managed, nullptr, false, nullptr};
+            data, size, is_managed, /*device=*/-1, nullptr, false, nullptr};
       } else {
         (void)hipSetDevice(device);
         hipError_t err = hipMallocAsync(&data, size, stream);
@@ -455,8 +455,8 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
         buf = new RocmBuffer{
             data,
             size,
-            device,
             /*is_managed=*/false,
+            device,
             nullptr,
             false,
             stream};
@@ -626,8 +626,8 @@ Buffer RocmAllocator::make_buffer(void* ptr, size_t size) {
   auto* rb = new RocmBuffer{
       ptr,
       size,
-      -1,
       /*is_managed=*/true,
+      /*device=*/-1,
       nullptr,
       false,
       reinterpret_cast<void*>(static_cast<uintptr_t>(1))}; // alien sentinel
