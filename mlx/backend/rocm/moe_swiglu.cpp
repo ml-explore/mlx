@@ -105,24 +105,28 @@ array moe_swiglu_sorted(
 
   // Buffer ctor starts Status::available (unlike prim=nullptr ctor).
   // Match sort.hip: array(Buffer, shape, dtype).
-  Shape out_shape{T, D};
-  Shape mid_shape{T, I};
+  ::mlx::core::Shape out_shape{T, D};
+  ::mlx::core::Shape mid_shape{T, I};
   array out(
       malloc_async(static_cast<size_t>(T) * D * size_of(bfloat16), encoder),
       out_shape,
-      bfloat16);
+      bfloat16,
+      allocator::free);
   array gate(
       malloc_async(static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
       mid_shape,
-      bfloat16);
+      bfloat16,
+      allocator::free);
   array up(
       malloc_async(static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
       mid_shape,
-      bfloat16);
+      bfloat16,
+      allocator::free);
   array h(
       malloc_async(static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
       mid_shape,
-      bfloat16);
+      bfloat16,
+      allocator::free);
   encoder.add_temporary(gate);
   encoder.add_temporary(up);
   encoder.add_temporary(h);
