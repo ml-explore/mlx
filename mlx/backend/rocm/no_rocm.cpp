@@ -4,6 +4,7 @@
 #include "mlx/fast.h"
 
 #include <stdexcept>
+#include <vector>
 
 namespace mlx::core {
 
@@ -36,6 +37,17 @@ array moe_swiglu_sorted(
     const array&,
     StreamOrDevice) {
   throw std::runtime_error("moe_swiglu_sorted requires ROCm");
+}
+
+std::vector<array> moe_swiglu_sorted_vjp(
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    const array&,
+    StreamOrDevice) {
+  throw std::runtime_error("moe_swiglu_sorted_vjp requires ROCm");
 }
 
 } // namespace rocm

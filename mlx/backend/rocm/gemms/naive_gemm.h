@@ -153,6 +153,21 @@ void silu_mul_bf16(
     void* h,
     int n);
 
+// SwiGLU mid + elementwise bwd (all length-n bf16):
+//   h  = silu(g) * u
+//   du = dh * silu(g)
+//   dg = dh * u * dsilu(g)
+// where silu(g)=g*sigmoid(g), dsilu=s*(1+g*(1-s)), s=sigmoid(g).
+void swiglu_bwd_elem_bf16(
+    CommandEncoder& encoder,
+    const void* gate,
+    const void* up,
+    const void* dh,
+    void* h,
+    void* dg,
+    void* du,
+    int n);
+
 // Device-side SegmentedMM: out[s] = A[:,k0:k1] @ B[k0:k1,:] with (k0,k1) from
 // device segments[2*s], segments[2*s+1]. No host D2H / stream sync.
 void segmented_mm_device(

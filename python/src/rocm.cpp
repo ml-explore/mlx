@@ -3,6 +3,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/variant.h>
+#include <nanobind/stl/vector.h>
 
 #include "mlx/backend/rocm/rocm.h"
 
@@ -67,5 +68,35 @@ void init_rocm(nb::module_& m) {
         w_down: [E, I, D] bf16 (after swapaxes of Linear [E,D,I])
         expert_ids: [T] uint32, sorted by expert
         Returns y: [T, D] bf16
+      )pbdoc");
+
+  rocm.def(
+      "moe_swiglu_sorted_vjp",
+      [](const mx::array& x,
+         const mx::array& w_gate,
+         const mx::array& w_up,
+         const mx::array& w_down,
+         const mx::array& expert_ids,
+         const mx::array& dy,
+         mx::StreamOrDevice s) {
+        if (std::holds_alternative<std::monostate>(s)) {
+          s = mx::Device(mx::Device::gpu);
+        }
+        return mx::rocm::moe_swiglu_sorted_vjp(
+            x, w_gate, w_up, w_down, expert_ids, dy, s);
+      },
+      "x"_a,
+      "w_gate"_a,
+      "w_up"_a,
+      "w_down"_a,
+      "expert_ids"_a,
+      "dy"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Fused sorted-MoE SwiGLU VJP (one host sync for recompute+grads).
+
+        Same weight layouts as moe_swiglu_sorted. Returns
+        (dx, dw_gate, dw_up, dw_down) all bf16.
       )pbdoc");
 }

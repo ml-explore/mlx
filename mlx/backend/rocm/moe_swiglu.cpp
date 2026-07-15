@@ -302,6 +302,406 @@ std::vector<array> moe_swiglu_fallback(
   return {reshape(down, Shape{T, x.shape(1)}, s)};
 }
 
+// Fused bwd Primitive: one D2H + recompute + all grads (exact-M GEMMs).
+// inputs: x, wg, wu, wd, ids, dy
+// outputs: dx, dwg, dwu, dwd
+class MoeSwigluSortedVJP : public Primitive {
+ public:
+  explicit MoeSwigluSortedVJP(Stream stream) : Primitive(stream) {}
+
+  void eval_cpu(const std::vector<array>&, std::vector<array>&) override {
+    throw std::runtime_error("MoeSwigluSortedVJP has no CPU implementation");
+  }
+
+  void eval_gpu(
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs) override;
+
+  DEFINE_NAME(MoeSwigluSortedVJP)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    // dx, dwg, dwu, dwd
+    return {inputs[0].shape(),
+            inputs[1].shape(),
+            inputs[2].shape(),
+            inputs[3].shape()};
+  }
+};
+
+void MoeSwigluSortedVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() == 6);
+  assert(outputs.size() == 4);
+
+  auto& s = stream();
+  auto& encoder = rocm::get_command_encoder(s);
+
+  array x = inputs[0];
+  array wg = inputs[1];
+  array wu = inputs[2];
+  array wd = inputs[3];
+  array ids = inputs[4];
+  array dy = inputs[5];
+
+  const int T = x.shape(0);
+  const int D = x.shape(1);
+  const int E = wg.shape(0);
+  const int I = wg.shape(2);
+
+  auto contig = [&](array a) {
+    if (!a.flags().row_contiguous) {
+      a = contiguous_copy_gpu(a, s);
+      encoder.add_temporary(a);
+    }
+    return a;
+  };
+  x = contig(x);
+  wg = contig(wg);
+  wu = contig(wu);
+  wd = contig(wd);
+  ids = contig(ids);
+  dy = contig(dy);
+
+  array& dx = outputs[0];
+  array& dwg = outputs[1];
+  array& dwu = outputs[2];
+  array& dwd = outputs[3];
+
+  auto alloc = [&](array& a, size_t nbytes) {
+    a.set_data(rocm::malloc_async(nbytes, encoder));
+  };
+  const size_t esz = sizeof(uint16_t);
+  alloc(dx, static_cast<size_t>(T) * D * esz);
+  alloc(dwg, static_cast<size_t>(E) * D * I * esz);
+  alloc(dwu, static_cast<size_t>(E) * D * I * esz);
+  alloc(dwd, static_cast<size_t>(E) * I * D * esz);
+
+  if (T == 0) {
+    // Zero weight grads for empty batch.
+    encoder.launch_kernel([ptr = gpu_ptr<void>(dwg),
+                           n = dwg.nbytes()](hipStream_t st) {
+      (void)hipMemsetAsync(ptr, 0, n, st);
+    });
+    encoder.launch_kernel([ptr = gpu_ptr<void>(dwu),
+                           n = dwu.nbytes()](hipStream_t st) {
+      (void)hipMemsetAsync(ptr, 0, n, st);
+    });
+    encoder.launch_kernel([ptr = gpu_ptr<void>(dwd),
+                           n = dwd.nbytes()](hipStream_t st) {
+      (void)hipMemsetAsync(ptr, 0, n, st);
+    });
+    return;
+  }
+
+  Shape mid{T, I};
+  array gate(
+      rocm::malloc_async(static_cast<size_t>(T) * I * esz, encoder),
+      mid,
+      bfloat16,
+      allocator::free);
+  array up(
+      rocm::malloc_async(static_cast<size_t>(T) * I * esz, encoder),
+      mid,
+      bfloat16,
+      allocator::free);
+  array h(
+      rocm::malloc_async(static_cast<size_t>(T) * I * esz, encoder),
+      mid,
+      bfloat16,
+      allocator::free);
+  array dh(
+      rocm::malloc_async(static_cast<size_t>(T) * I * esz, encoder),
+      mid,
+      bfloat16,
+      allocator::free);
+  array dg(
+      rocm::malloc_async(static_cast<size_t>(T) * I * esz, encoder),
+      mid,
+      bfloat16,
+      allocator::free);
+  array du(
+      rocm::malloc_async(static_cast<size_t>(T) * I * esz, encoder),
+      mid,
+      bfloat16,
+      allocator::free);
+  for (array* t : {&gate, &up, &h, &dh, &dg, &du}) {
+    encoder.add_temporary(*t);
+  }
+
+  for (const array& a : {x, wg, wu, wd, ids, dy}) {
+    encoder.set_input_array(a);
+  }
+  for (array* o : {&dx, &dwg, &dwu, &dwd, &gate, &up, &h, &dh, &dg, &du}) {
+    encoder.set_output_array(*o);
+  }
+
+  // Zero weight grads once (experts not hit stay 0).
+  encoder.launch_kernel([ptr = gpu_ptr<void>(dwg),
+                         n = dwg.nbytes()](hipStream_t st) {
+    (void)hipMemsetAsync(ptr, 0, n, st);
+  });
+  encoder.launch_kernel([ptr = gpu_ptr<void>(dwu),
+                         n = dwu.nbytes()](hipStream_t st) {
+    (void)hipMemsetAsync(ptr, 0, n, st);
+  });
+  encoder.launch_kernel([ptr = gpu_ptr<void>(dwd),
+                         n = dwd.nbytes()](hipStream_t st) {
+    (void)hipMemsetAsync(ptr, 0, n, st);
+  });
+
+  // One D2H of expert ids.
+  static thread_local uint32_t* pin = nullptr;
+  static thread_local size_t pin_cap = 0;
+  const size_t need = static_cast<size_t>(T);
+  if (need > pin_cap) {
+    if (pin)
+      (void)hipHostFree(pin);
+    pin_cap = need + need / 2 + 1024;
+    CHECK_HIP_ERROR(hipHostMalloc(
+        reinterpret_cast<void**>(&pin),
+        pin_cap * sizeof(uint32_t),
+        hipHostMallocDefault));
+  }
+  hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
+  CHECK_HIP_ERROR(hipMemcpyAsync(
+      pin,
+      gpu_ptr<const uint32_t>(ids),
+      need * sizeof(uint32_t),
+      hipMemcpyDeviceToHost,
+      hs));
+  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
+
+  const char* xB = static_cast<const char*>(gpu_ptr<void>(x));
+  const char* wgB = static_cast<const char*>(gpu_ptr<void>(wg));
+  const char* wuB = static_cast<const char*>(gpu_ptr<void>(wu));
+  const char* wdB = static_cast<const char*>(gpu_ptr<void>(wd));
+  const char* dyB = static_cast<const char*>(gpu_ptr<void>(dy));
+  char* gateB = static_cast<char*>(gpu_ptr<void>(gate));
+  char* upB = static_cast<char*>(gpu_ptr<void>(up));
+  char* hB = static_cast<char*>(gpu_ptr<void>(h));
+  char* dhB = static_cast<char*>(gpu_ptr<void>(dh));
+  char* dgB = static_cast<char*>(gpu_ptr<void>(dg));
+  char* duB = static_cast<char*>(gpu_ptr<void>(du));
+  char* dxB = static_cast<char*>(gpu_ptr<void>(dx));
+  char* dwgB = static_cast<char*>(gpu_ptr<void>(dwg));
+  char* dwuB = static_cast<char*>(gpu_ptr<void>(dwu));
+  char* dwdB = static_cast<char*>(gpu_ptr<void>(dwd));
+
+  const int64_t wg_stride = static_cast<int64_t>(D) * I;
+  const int64_t wd_stride = static_cast<int64_t>(I) * D;
+
+  // Pass 1: recompute gate/up per expert (exact-M).
+  int start = 0;
+  while (start < T) {
+    uint32_t e = pin[static_cast<size_t>(start)];
+    if (static_cast<int>(e) >= E) {
+      throw std::runtime_error("MoeSwigluSortedVJP: expert id out of range");
+    }
+    int end = start + 1;
+    while (end < T && pin[static_cast<size_t>(end)] == e)
+      ++end;
+    int Mseg = end - start;
+    if (Mseg <= 0) {
+      start = end;
+      continue;
+    }
+    const size_t xoff = static_cast<size_t>(start) * D * esz;
+    const size_t ioff = static_cast<size_t>(start) * I * esz;
+    const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
+
+    // g = x @ Wg  [M,D]@[D,I]
+    rocm::hipblaslt_gemm_ptrs(
+        encoder,
+        false,
+        false,
+        Mseg,
+        I,
+        D,
+        1.0f,
+        xB + xoff,
+        D,
+        wgB + wgoff,
+        I,
+        0.0f,
+        gateB + ioff,
+        I,
+        bfloat16);
+    // u = x @ Wu
+    rocm::hipblaslt_gemm_ptrs(
+        encoder,
+        false,
+        false,
+        Mseg,
+        I,
+        D,
+        1.0f,
+        xB + xoff,
+        D,
+        wuB + static_cast<size_t>(e) * wg_stride * esz,
+        I,
+        0.0f,
+        upB + ioff,
+        I,
+        bfloat16);
+    start = end;
+  }
+
+  // Pass 2: dh = dy @ Wd.T  [M,D]@[D,I] with Wd stored [I,D]
+  start = 0;
+  while (start < T) {
+    uint32_t e = pin[static_cast<size_t>(start)];
+    int end = start + 1;
+    while (end < T && pin[static_cast<size_t>(end)] == e)
+      ++end;
+    int Mseg = end - start;
+    if (Mseg <= 0) {
+      start = end;
+      continue;
+    }
+    const size_t doff = static_cast<size_t>(start) * D * esz;
+    const size_t ioff = static_cast<size_t>(start) * I * esz;
+    // C = A @ B^T : A=dy[M,D], B=Wd[I,D] → [M,I]
+    rocm::hipblaslt_gemm_ptrs(
+        encoder,
+        false,
+        true,
+        Mseg,
+        I,
+        D,
+        1.0f,
+        dyB + doff,
+        D,
+        wdB + static_cast<size_t>(e) * wd_stride * esz,
+        D, // ldb of [I,D]
+        0.0f,
+        dhB + ioff,
+        I,
+        bfloat16);
+    start = end;
+  }
+
+  // Elementwise: h, dg, du from g, u, dh
+  rocm::swiglu_bwd_elem_bf16(
+      encoder,
+      gpu_ptr<void>(gate),
+      gpu_ptr<void>(up),
+      gpu_ptr<void>(dh),
+      gpu_ptr<void>(h),
+      gpu_ptr<void>(dg),
+      gpu_ptr<void>(du),
+      T * I);
+
+  // Pass 3: dx = dg @ Wg.T + du @ Wu.T; dW* segment GEMMs
+  start = 0;
+  while (start < T) {
+    uint32_t e = pin[static_cast<size_t>(start)];
+    int end = start + 1;
+    while (end < T && pin[static_cast<size_t>(end)] == e)
+      ++end;
+    int Mseg = end - start;
+    if (Mseg <= 0) {
+      start = end;
+      continue;
+    }
+    const size_t xoff = static_cast<size_t>(start) * D * esz;
+    const size_t doff = static_cast<size_t>(start) * D * esz;
+    const size_t ioff = static_cast<size_t>(start) * I * esz;
+    const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
+    const size_t wdoff = static_cast<size_t>(e) * wd_stride * esz;
+
+    // dx = dg @ Wg.T  [M,I]@[I,D]
+    rocm::hipblaslt_gemm_ptrs(
+        encoder,
+        false,
+        true,
+        Mseg,
+        D,
+        I,
+        1.0f,
+        dgB + ioff,
+        I,
+        wgB + wgoff,
+        I, // Wg [D,I]
+        0.0f,
+        dxB + doff,
+        D,
+        bfloat16);
+    // dx += du @ Wu.T
+    rocm::hipblaslt_gemm_ptrs(
+        encoder,
+        false,
+        true,
+        Mseg,
+        D,
+        I,
+        1.0f,
+        duB + ioff,
+        I,
+        wuB + wgoff,
+        I,
+        1.0f,
+        dxB + doff,
+        D,
+        bfloat16);
+
+    // dWg = x.T @ dg  [D,M]@[M,I] → [D,I]
+    rocm::hipblaslt_gemm_ptrs(
+        encoder,
+        true,
+        false,
+        D,
+        I,
+        Mseg,
+        1.0f,
+        xB + xoff,
+        D,
+        dgB + ioff,
+        I,
+        0.0f,
+        dwgB + wgoff,
+        I,
+        bfloat16);
+    // dWu = x.T @ du
+    rocm::hipblaslt_gemm_ptrs(
+        encoder,
+        true,
+        false,
+        D,
+        I,
+        Mseg,
+        1.0f,
+        xB + xoff,
+        D,
+        duB + ioff,
+        I,
+        0.0f,
+        dwuB + wgoff,
+        I,
+        bfloat16);
+    // dWd = h.T @ dy  [I,M]@[M,D] → [I,D]
+    rocm::hipblaslt_gemm_ptrs(
+        encoder,
+        true,
+        false,
+        I,
+        D,
+        Mseg,
+        1.0f,
+        hB + ioff,
+        I,
+        dyB + doff,
+        D,
+        0.0f,
+        dwdB + wdoff,
+        D,
+        bfloat16);
+
+    start = end;
+  }
+}
+
 } // namespace
 
 namespace rocm {
@@ -365,6 +765,59 @@ array moe_swiglu_sorted(
       bfloat16,
       std::make_shared<MoeSwigluSorted>(s, std::move(fallback)),
       {x_in, w_gate, w_up, w_down, expert_ids_in});
+}
+
+std::vector<array> moe_swiglu_sorted_vjp(
+    const array& x_in,
+    const array& w_gate,
+    const array& w_up,
+    const array& w_down,
+    const array& expert_ids_in,
+    const array& dy_in,
+    StreamOrDevice s_in) {
+  if (!is_available()) {
+    throw std::runtime_error("moe_swiglu_sorted_vjp requires ROCm");
+  }
+  if (x_in.ndim() != 2 || expert_ids_in.ndim() != 1 || dy_in.ndim() != 2 ||
+      w_gate.ndim() != 3 || w_up.ndim() != 3 || w_down.ndim() != 3) {
+    throw std::invalid_argument(
+        "moe_swiglu_sorted_vjp: expected x/dy[T,D], w_gate/up[E,D,I], "
+        "w_down[E,I,D], ids[T]");
+  }
+  if (x_in.dtype() != bfloat16 || w_gate.dtype() != bfloat16 ||
+      w_up.dtype() != bfloat16 || w_down.dtype() != bfloat16 ||
+      dy_in.dtype() != bfloat16) {
+    throw std::invalid_argument("moe_swiglu_sorted_vjp: bf16 only");
+  }
+  if (expert_ids_in.dtype() != uint32) {
+    throw std::invalid_argument(
+        "moe_swiglu_sorted_vjp: expert_ids must be uint32");
+  }
+
+  const int T = x_in.shape(0);
+  const int D = x_in.shape(1);
+  const int E = w_gate.shape(0);
+  const int I = w_gate.shape(2);
+  if (w_gate.shape(1) != D || w_up.shape(0) != E || w_up.shape(1) != D ||
+      w_up.shape(2) != I || w_down.shape(0) != E || w_down.shape(1) != I ||
+      w_down.shape(2) != D || expert_ids_in.shape(0) != T ||
+      dy_in.shape(0) != T || dy_in.shape(1) != D) {
+    throw std::invalid_argument("moe_swiglu_sorted_vjp: shape mismatch");
+  }
+
+  Stream s = to_stream(s_in, ::mlx::core::Device::gpu);
+  if (s.device.type != ::mlx::core::Device::DeviceType::gpu) {
+    throw std::runtime_error("moe_swiglu_sorted_vjp: GPU stream required");
+  }
+
+  return array::make_arrays(
+      {::mlx::core::Shape{T, D},
+       ::mlx::core::Shape{E, D, I},
+       ::mlx::core::Shape{E, D, I},
+       ::mlx::core::Shape{E, I, D}},
+      {bfloat16, bfloat16, bfloat16, bfloat16},
+      std::make_shared<MoeSwigluSortedVJP>(s),
+      {x_in, w_gate, w_up, w_down, expert_ids_in, dy_in});
 }
 
 } // namespace rocm

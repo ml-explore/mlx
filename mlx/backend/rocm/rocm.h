@@ -8,6 +8,7 @@
 #include "mlx/utils.h"
 
 #include <cstddef>
+#include <vector>
 
 namespace mlx::core::rocm {
 
@@ -36,6 +37,18 @@ MLX_API array moe_swiglu_sorted(
     const array& w_up,
     const array& w_down,
     const array& expert_ids,
+    StreamOrDevice s = {});
+
+// Fused sorted-MoE SwiGLU VJP (one D2H sync for recompute + all grads).
+// x: [T,D]  w_gate/up: [E,D,I]  w_down: [E,I,D]  ids: [T]  dy: [T,D]  (bf16)
+// returns {dx[T,D], dw_gate[E,D,I], dw_up[E,D,I], dw_down[E,I,D]}
+MLX_API std::vector<array> moe_swiglu_sorted_vjp(
+    const array& x,
+    const array& w_gate,
+    const array& w_up,
+    const array& w_down,
+    const array& expert_ids,
+    const array& dy,
     StreamOrDevice s = {});
 
 } // namespace mlx::core::rocm

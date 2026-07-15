@@ -1406,6 +1406,56 @@ void silu_mul_bf16(
   });
 }
 
+__global__ void swiglu_bwd_elem_bf16_kernel(
+    const hip_bfloat16* __restrict__ g,
+    const hip_bfloat16* __restrict__ u,
+    const hip_bfloat16* __restrict__ dh,
+    hip_bfloat16* __restrict__ h,
+    hip_bfloat16* __restrict__ dg,
+    hip_bfloat16* __restrict__ du,
+    int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n)
+    return;
+  float gf = static_cast<float>(g[i]);
+  float uf = static_cast<float>(u[i]);
+  float dhf = static_cast<float>(dh[i]);
+  float s = 1.0f / (1.0f + expf(-gf));
+  float silu = gf * s;
+  float dsilu = s * (1.0f + gf * (1.0f - s));
+  h[i] = static_cast<hip_bfloat16>(silu * uf);
+  du[i] = static_cast<hip_bfloat16>(dhf * silu);
+  dg[i] = static_cast<hip_bfloat16>(dhf * uf * dsilu);
+}
+
+void swiglu_bwd_elem_bf16(
+    CommandEncoder& encoder,
+    const void* gate,
+    const void* up,
+    const void* dh,
+    void* h,
+    void* dg,
+    void* du,
+    int n) {
+  encoder.launch_kernel([=](hipStream_t stream) {
+    dim3 block(256);
+    dim3 grid((n + 255) / 256);
+    hipLaunchKernelGGL(
+        swiglu_bwd_elem_bf16_kernel,
+        grid,
+        block,
+        0,
+        stream,
+        static_cast<const hip_bfloat16*>(gate),
+        static_cast<const hip_bfloat16*>(up),
+        static_cast<const hip_bfloat16*>(dh),
+        static_cast<hip_bfloat16*>(h),
+        static_cast<hip_bfloat16*>(dg),
+        static_cast<hip_bfloat16*>(du),
+        n);
+  });
+}
+
 void moe_sorted_expert_gemm(
     CommandEncoder& encoder,
     const array& a,
