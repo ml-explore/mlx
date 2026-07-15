@@ -148,6 +148,23 @@ int moe_pack_m_pad(
     int T,
     int E);
 
+// ---------------------------------------------------------------------------
+// MoE pack workspace — grow-only bump pool (kills hipMallocAsync storm).
+//
+// rocprof: ~35k hipMallocAsync/step (~7s host wall). Pack temps are large and
+// same-shaped across layers; allocate one device slab once and bump-suballoc
+// per MoE primitive. Same-stream sequential eval → reuse is safe after reset.
+//
+// Usage (Shape is mlx::core::Shape — avoid rocm::Shape / hip_array clash):
+//   moe_ws_begin(encoder, total_bytes_for_this_primitive);
+//   array t({E, M, D}, bfloat16, nullptr, {});
+//   moe_ws_alloc(encoder, t);
+//   encoder.add_temporary(t);
+// ---------------------------------------------------------------------------
+void moe_ws_begin(CommandEncoder& encoder, size_t bytes_needed);
+// Bump-alloc device storage for a pre-shaped empty array (no free of HBM).
+void moe_ws_alloc(CommandEncoder& encoder, array& a);
+
 // Pack sorted MoE tokens into a dense [E, M_fixed, K] buffer (atomic slots).
 // slot_map[e, s] = source token row, or -1 if unused. counts[e] = tokens packed.
 void moe_pack_tokens(

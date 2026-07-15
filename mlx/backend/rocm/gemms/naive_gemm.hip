@@ -12,8 +12,11 @@
 
 #include <cstdlib>
 #include <mutex>
+#include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <unordered_map>
+#include <vector>
 
 namespace mlx::core::rocm {
 
@@ -2044,6 +2047,116 @@ int moe_pack_m_pad(
     cache[key] = m;
   }
   return m;
+}
+
+// ---------------------------------------------------------------------------
+// MoE pack workspace (grow-only bump pool)
+// ---------------------------------------------------------------------------
+namespace {
+
+struct MoeWs {
+  std::mutex mu;
+  void* base{nullptr};
+  size_t capacity{0};
+  size_t offset{0};
+  int device{-1};
+  // Previous bases kept mapped for process lifetime so in-flight kernels that
+  // still reference an old slab after grow never see a free.
+  std::vector<void*> retired;
+};
+
+MoeWs& moe_ws() {
+  static MoeWs* w = new MoeWs;
+  return *w;
+}
+
+size_t align_up_256(size_t n) {
+  return (n + 255) & ~size_t(255);
+}
+
+} // namespace
+
+void moe_ws_begin(CommandEncoder& encoder, size_t bytes_needed) {
+  auto& w = moe_ws();
+  std::lock_guard<std::mutex> g(w.mu);
+  w.offset = 0;
+  if (bytes_needed == 0)
+    return;
+  // Pad a bit so tiny under-estimates don't force a mid-primitive grow.
+  size_t need = align_up_256(bytes_needed + (1 << 20));
+  int dev = encoder.device().hip_device();
+  if (need <= w.capacity && w.base != nullptr && w.device == dev)
+    return;
+
+  size_t new_cap = need + need / 2;
+  // 2 MiB pages — reduces fragmentation and matches common HBM alloc granularity.
+  constexpr size_t kPage = 2ull << 20;
+  new_cap = (new_cap + kPage - 1) & ~(kPage - 1);
+  if (new_cap < (64ull << 20))
+    new_cap = 64ull << 20;
+
+  void* p = nullptr;
+  // Synchronous hipMalloc once per grow (rare). Avoids hipMallocAsync storm and
+  // does not thrash the serialized mem pool under concurrent free.
+  hipError_t err = hipMalloc(&p, new_cap);
+  if (err != hipSuccess || !p) {
+    (void)hipGetLastError();
+    throw std::runtime_error(
+        "moe_ws_begin: hipMalloc failed for MoE workspace (" +
+        std::to_string(new_cap) + " bytes)");
+  }
+  if (w.base)
+    w.retired.push_back(w.base);
+  w.base = p;
+  w.capacity = new_cap;
+  w.device = dev;
+  w.offset = 0;
+}
+
+void moe_ws_alloc(CommandEncoder& encoder, array& a) {
+  size_t nbytes = a.nbytes();
+  size_t aligned = align_up_256(nbytes == 0 ? 256 : nbytes);
+
+  auto& w = moe_ws();
+  std::lock_guard<std::mutex> g(w.mu);
+  if (!w.base || w.offset + aligned > w.capacity) {
+    // Grow while holding the lock. In-flight arrays from *this* primitive still
+    // point into the old base (kept in retired) — only new allocs use new base.
+    size_t need = w.offset + aligned + (1 << 20);
+    size_t new_cap = need + need / 2;
+    constexpr size_t kPage = 2ull << 20;
+    new_cap = (new_cap + kPage - 1) & ~(kPage - 1);
+    void* p = nullptr;
+    hipError_t err = hipMalloc(&p, new_cap);
+    if (err != hipSuccess || !p) {
+      (void)hipGetLastError();
+      throw std::runtime_error("moe_ws_alloc: hipMalloc grow failed");
+    }
+    if (w.base)
+      w.retired.push_back(w.base);
+    w.base = p;
+    w.capacity = new_cap;
+    w.device = encoder.device().hip_device();
+    // New base starts empty; prior shells still reference retired bases.
+    w.offset = 0;
+  }
+
+  void* ptr = static_cast<char*>(w.base) + w.offset;
+  w.offset += aligned;
+
+  // Shell RocmBuffer; device memory owned by the pool, never freed per-array.
+  auto* rb = new RocmBuffer{
+      ptr,
+      nbytes,
+      /*is_managed=*/false,
+      w.device,
+      /*host_shadow=*/nullptr,
+      /*host_dirty=*/false,
+      /*alloc_stream=*/encoder.stream()};
+  a.set_data(allocator::Buffer{rb}, [](allocator::Buffer b) {
+    // Free only the wrapper — HBM stays in the grow-only pool.
+    delete static_cast<RocmBuffer*>(b.ptr());
+  });
 }
 
 void segmented_mm_device(
