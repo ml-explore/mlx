@@ -269,27 +269,45 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/hipblaslt_gemm.cpp)
 
 target_compile_definitions(mlx PRIVATE MLX_USE_ROCM)
-# Host WARP_SIZE fallback (device uses __AMDGCN_WAVEFRONT_SIZE__).
-# CRITICAL: multi-arch fatbins (e.g. lemon-mlx-engine lists gfx942 + gfx1152)
-# used to MATCH "gfx9" and pin host WARP_SIZE=64 forever — then launches on
-# wave32 iGPUs used dim3(64, ...) into kernels compiled for 32 → garbage text.
-# Prefer runtime Device::warp_size() / HWInfo::warp_size for all launch dims.
-# Only pin a host default when the arch list is single-family.
+# Host WARP_SIZE compile-time fallback (device uses __AMDGCN_WAVEFRONT_SIZE__).
+#
+# Policy:
+#   RDNA (gfx10/11/12, incl. gfx1152) → wavefront **32**
+#   CDNA-only (gfx9xx only)            → wavefront **64**
+#
+# CRITICAL: multi-arch fatbins (lemon-mlx-engine lists gfx942 + gfx1152) used
+# to MATCH "gfx9" first and pin host WARP_SIZE=64 forever — then launches on
+# wave32 RDNA used dim3(64, ...) into kernels compiled for 32 → garbage text
+# ("!!!!!!"). If ANY RDNA arch is present, host default is 32.
+# Launch sites must still use runtime Device::warp_size() / HWInfo::warp_size.
 set(_MLX_HIP_ARCHS "${CMAKE_HIP_ARCHITECTURES}")
 string(REPLACE ";" " " _MLX_HIP_ARCHS_SP "${_MLX_HIP_ARCHS}")
-if(_MLX_HIP_ARCHS_SP MATCHES "gfx9" AND NOT _MLX_HIP_ARCHS_SP MATCHES "gfx1[012]")
-  # CDNA/GCN only
-  target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=64)
-elseif(_MLX_HIP_ARCHS_SP MATCHES "gfx1[012]" AND NOT _MLX_HIP_ARCHS_SP MATCHES "gfx9")
-  # RDNA only
+set(_MLX_HAS_RDNA FALSE)
+set(_MLX_HAS_CDNA FALSE)
+if(_MLX_HIP_ARCHS_SP MATCHES "gfx1[012]")
+  set(_MLX_HAS_RDNA TRUE)
+endif()
+if(_MLX_HIP_ARCHS_SP MATCHES "gfx9")
+  set(_MLX_HAS_CDNA TRUE)
+endif()
+if(_MLX_HAS_RDNA)
+  # RDNA present (alone or mixed with CDNA): host fallback is always 32.
   target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=32)
+  if(_MLX_HAS_CDNA)
+    message(STATUS
+      "MLX ROCm: multi-arch (RDNA+CDNA) — MLX_HOST_WARP_SIZE=32 (RDNA); "
+      "launches use runtime warp_size() so CDNA still gets 64 at run time")
+  else()
+    message(STATUS "MLX ROCm: RDNA-only — MLX_HOST_WARP_SIZE=32")
+  endif()
+elseif(_MLX_HAS_CDNA)
+  target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=64)
+  message(STATUS "MLX ROCm: CDNA-only — MLX_HOST_WARP_SIZE=64")
 else()
-  # Mixed multi-arch: do not lie with a fixed host warp. Default 32 (RDNA is
-  # the usual consumer target); all launch sites must use runtime warp_size.
+  # Unknown arch string — RDNA-safe default.
   target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=32)
   message(STATUS
-    "MLX ROCm: multi-arch HIP list — MLX_HOST_WARP_SIZE=32 fallback; "
-    "launches use runtime warp_size()")
+    "MLX ROCm: unrecognized HIP arch list — MLX_HOST_WARP_SIZE=32 (RDNA default)")
 endif()
 if(MLX_HAS_ROCM_WMMA)
   target_compile_definitions(mlx PRIVATE MLX_HAS_ROCM_WMMA)

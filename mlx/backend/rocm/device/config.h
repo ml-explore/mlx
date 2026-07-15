@@ -8,23 +8,22 @@
 #define MAX_NDIM 10
 
 // AMD GPU warp (wavefront) size varies by architecture:
-// - CDNA/GCN (gfx9xx and earlier): 64
-// - RDNA (gfx10xx, gfx11xx, gfx12xx): 32
+// - RDNA (gfx10xx, gfx11xx, gfx12xx, including gfx1152 / 860M): **32**
+// - CDNA/GCN (gfx9xx MI-series): **64**
 //
-// The __AMDGCN_WAVEFRONT_SIZE__ macro is defined by the HIP compiler
-// based on the target architecture. We use it when available for device code.
+// Device code: always use the compiler wavefront size for the offload arch.
+// Host code: MLX_HOST_WARP_SIZE from CMake (RDNA→32, CDNA-only→64). Host
+// launch dims must still prefer runtime HWInfo::warp_size / Device::warp_size()
+// so multi-arch fatbins are correct on every device.
 //
-// IMPORTANT: For host code, we need a consistent value that matches the
-// compiled device code. Since we compile for specific architectures via
-// CMAKE_HIP_ARCHITECTURES, we need to ensure host and device agree.
-//
-// For now, we default to 32 (RDNA) since that's the most common consumer GPU.
-// If targeting CDNA/GCN architectures, change this to 64.
+// Policy: RDNA = 32. Never launch dim3(64, ...) on RDNA — that produces
+// garbage QMV / decode (e.g. "!!!!!!" on gfx1152).
 #if defined(__AMDGCN_WAVEFRONT_SIZE__)
-// Device code: use the compiler-provided value
+// Device code: use the compiler-provided value (32 on RDNA, 64 on CDNA).
 #define WARP_SIZE __AMDGCN_WAVEFRONT_SIZE__
 #elif defined(__HIP_DEVICE_COMPILE__)
-// Device code without wavefront size macro - check architecture macros
+// Device code without wavefront size macro - classify by architecture macros.
+// All RDNA generations are wave32.
 #if defined(__gfx1010__) || defined(__gfx1011__) || defined(__gfx1012__) || \
     defined(__gfx1030__) || defined(__gfx1031__) || defined(__gfx1032__) || \
     defined(__gfx1033__) || defined(__gfx1034__) || defined(__gfx1035__) || \
@@ -32,21 +31,18 @@
     defined(__gfx1102__) || defined(__gfx1103__) || defined(__gfx1150__) || \
     defined(__gfx1151__) || defined(__gfx1152__) || defined(__gfx1153__) || \
     defined(__gfx1200__) || defined(__gfx1201__)
-#define WARP_SIZE 32
+#define WARP_SIZE 32 // RDNA
 #else
-#define WARP_SIZE 64
+#define WARP_SIZE 64 // CDNA/GCN
 #endif
 #else
-// Host code: use a fixed value that matches the target architecture.
-// This MUST match the CMAKE_HIP_ARCHITECTURES setting.
-// For RDNA (gfx10xx, gfx11xx, gfx12xx): 32
-// For CDNA/GCN (gfx9xx): 64
-// Auto-detected: the ROCm CMakeLists sets MLX_HOST_WARP_SIZE from the target arch
-// (CDNA/gfx9xx=64, RDNA=32) so host code matches the device wavefront size.
+// Host code fallback when CMake did not define MLX_HOST_WARP_SIZE.
+// Default **32 (RDNA)** — consumer / multi-arch builds. CDNA-only builds must
+// set MLX_HOST_WARP_SIZE=64 via CMake (gfx9-only arch list).
 #if defined(MLX_HOST_WARP_SIZE)
 #define WARP_SIZE MLX_HOST_WARP_SIZE
 #else
-#define WARP_SIZE 64  // gfx942/CDNA default
+#define WARP_SIZE 32 // RDNA default (was 64 — wrong for gfx10/11/12)
 #endif
 #endif
 
