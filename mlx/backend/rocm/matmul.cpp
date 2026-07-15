@@ -1225,20 +1225,95 @@ static bool try_moe_segment_gather_mm(
   mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
   mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
 
-  // Opt-in fully device-side path: binary-search expert runs on GPU — no
-  // hipMemcpy D2H + hipStreamSynchronize. VALU tiled kernel is more stable
-  // (no host drain) but currently slower than hipBLASLt MFMA on MI300X
-  // (~4.6k vs ~6k wall mean). Enable with MLX_ROCM_MOE_DEVICE_SEG=1.
-  // Default remains host+hipBLASLt (peaks ~11–12k).
+  // Pack + strided-batched hipBLASLt (default for bf16 1-D expert MoE):
+  //   pack tokens → [E, M_fixed, K] on device, ONE batched MFMA GEMM with
+  //   host-known fixed shapes (no D2H / no stream sync), scatter back.
+  // M_fixed = batch so a single expert getting all tokens never overflows
+  // (E× overcompute on empty rows; still wins vs host-sync pipeline drain).
+  // Kill-switch: MLX_ROCM_MOE_HOST_SEG=1 → old per-run host path.
+  // VALU-only device path: MLX_ROCM_MOE_DEVICE_SEG=1.
+  static const bool force_host_seg = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_HOST_SEG");
+    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+                 e[0] == 'T');
+  }();
   static const bool use_device_seg = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_DEVICE_SEG");
     return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
                  e[0] == 'T');
   }();
-  if (use_device_seg && assume_identity_lhs && b_batch_shape.size() == 1 &&
-      b_batch_shape[0] > 0 && b_batch_shape[0] <= 256 &&
+  const int n_experts =
+      (b_batch_shape.size() == 1) ? static_cast<int>(b_batch_shape[0]) : 0;
+  if (!force_host_seg && assume_identity_lhs && n_experts > 0 &&
+      n_experts <= 256 && a.dtype() == bfloat16 &&
+      rocm::is_hipblaslt_available() && !use_device_seg) {
+    const int M_fixed = batch; // never overflow; empty rows zero from pack memset
+    // Temporaries: packed_a [E,M,K], packed_c [E,M,N], slot_map [E,M], counts [E]
+    array packed_a(
+        mlx::core::Shape{n_experts, M_fixed, K}, a.dtype(), nullptr, {});
+    array packed_c(
+        mlx::core::Shape{n_experts, M_fixed, N}, a.dtype(), nullptr, {});
+    array slot_map(
+        mlx::core::Shape{n_experts, M_fixed}, int32, nullptr, {});
+    array counts(mlx::core::Shape{n_experts}, int32, nullptr, {});
+    packed_a.set_data(mlx::core::rocm::malloc_async(packed_a.nbytes(), encoder));
+    packed_c.set_data(mlx::core::rocm::malloc_async(packed_c.nbytes(), encoder));
+    slot_map.set_data(mlx::core::rocm::malloc_async(slot_map.nbytes(), encoder));
+    counts.set_data(mlx::core::rocm::malloc_async(counts.nbytes(), encoder));
+    encoder.add_temporary(packed_a);
+    encoder.add_temporary(packed_c);
+    encoder.add_temporary(slot_map);
+    encoder.add_temporary(counts);
+
+    // a is [batch, 1, K] or similar — need flat [batch, K] view for pack.
+    // Contiguous batch*K was verified earlier (a.size() == batch*K).
+    rocm::moe_pack_tokens(
+        encoder, a, rhs_indices, packed_a, slot_map, counts, batch, K,
+        n_experts, M_fixed);
+
+    // B: [E, K, N] or transposed [E, N, K]. Stride between experts.
+    const int64_t b_expert_stride = b_batch_strides.empty()
+        ? 0
+        : static_cast<int64_t>(b_batch_strides[0]);
+    const int64_t stride_a = static_cast<int64_t>(M_fixed) * K;
+    const int64_t stride_c = static_cast<int64_t>(M_fixed) * N;
+    // hipblaslt_gemm_batched expects row-major MLX arrays; lda = K for A [M,K].
+    rocm::hipblaslt_gemm_batched(
+        encoder,
+        /*transpose_a=*/false,
+        b_transposed,
+        M_fixed,
+        N,
+        K,
+        1.0f,
+        packed_a,
+        /*lda=*/K,
+        stride_a,
+        b,
+        ldb,
+        b_expert_stride,
+        0.0f,
+        packed_c,
+        /*ldc=*/N,
+        stride_c,
+        n_experts,
+        a.dtype());
+
+    // Zero out then scatter packed results (out may have garbage).
+    {
+      void* op = gpu_ptr<void>(out);
+      size_t nbytes = out.nbytes();
+      encoder.launch_kernel([op, nbytes](hipStream_t stream) {
+        (void)hipMemsetAsync(op, 0, nbytes, stream);
+      });
+    }
+    rocm::moe_unpack_tokens(
+        encoder, packed_c, slot_map, out, n_experts, M_fixed, N);
+    return true;
+  }
+  if (use_device_seg && assume_identity_lhs && n_experts > 0 &&
+      n_experts <= 256 &&
       (a.dtype() == bfloat16 || a.dtype() == float16 || a.dtype() == float32)) {
-    const int n_experts = static_cast<int>(b_batch_shape[0]);
     const int64_t b_expert_stride = b_batch_strides.empty()
         ? 0
         : static_cast<int64_t>(b_batch_strides[0]);

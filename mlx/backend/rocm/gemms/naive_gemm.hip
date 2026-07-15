@@ -1218,6 +1218,158 @@ __global__ void segmented_mm_device_kernel(
 
 } // namespace
 
+// ---- MoE pack / unpack for fixed-shape strided-batched hipBLASLt ------------
+// One thread per token (atomic once), then vectorized copy of the K-vector.
+__global__ void moe_pack_kernel(
+    const hip_bfloat16* __restrict__ A,
+    const uint32_t* __restrict__ idx,
+    hip_bfloat16* __restrict__ packed,
+    int* __restrict__ slot_map,
+    int* __restrict__ counts,
+    int batch,
+    int K,
+    int M_fixed) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= batch)
+    return;
+  uint32_t e = idx[i];
+  int slot = atomicAdd(counts + static_cast<int>(e), 1);
+  if (slot >= M_fixed)
+    return; // overflow — caller must size M_fixed large enough
+  slot_map[static_cast<int64_t>(e) * M_fixed + slot] = i;
+  const hip_bfloat16* src = A + static_cast<int64_t>(i) * K;
+  hip_bfloat16* dst =
+      packed + (static_cast<int64_t>(e) * M_fixed + slot) * K;
+  // 4 bf16 = 8 bytes = one float2
+  if ((K & 3) == 0) {
+    const float2* s2 = reinterpret_cast<const float2*>(src);
+    float2* d2 = reinterpret_cast<float2*>(dst);
+    int n2 = K >> 2;
+    for (int k = 0; k < n2; ++k)
+      d2[k] = s2[k];
+  } else {
+    for (int k = 0; k < K; ++k)
+      dst[k] = src[k];
+  }
+}
+
+__global__ void moe_unpack_kernel(
+    const hip_bfloat16* __restrict__ packed_c,
+    const int* __restrict__ slot_map,
+    hip_bfloat16* __restrict__ C,
+    int n_experts,
+    int M_fixed,
+    int N) {
+  int e = blockIdx.z;
+  int s = blockIdx.y * blockDim.y + threadIdx.y;
+  int n = blockIdx.x * blockDim.x + threadIdx.x;
+  if (e >= n_experts || s >= M_fixed || n >= N)
+    return;
+  int src = slot_map[static_cast<int64_t>(e) * M_fixed + s];
+  if (src < 0)
+    return;
+  C[static_cast<int64_t>(src) * N + n] =
+      packed_c[(static_cast<int64_t>(e) * M_fixed + s) * N + n];
+}
+
+__global__ void moe_fill_neg1(int* slot_map, int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < n)
+    slot_map[i] = -1;
+}
+
+void moe_pack_tokens(
+    CommandEncoder& encoder,
+    const array& a,
+    const array& rhs_indices,
+    array& packed_a,
+    array& slot_map,
+    array& counts,
+    int batch,
+    int K,
+    int n_experts,
+    int M_fixed) {
+  encoder.set_input_array(a);
+  encoder.set_input_array(rhs_indices);
+  encoder.set_output_array(packed_a);
+  encoder.set_output_array(slot_map);
+  encoder.set_output_array(counts);
+
+  const void* a_ptr = gpu_ptr<void>(a);
+  const uint32_t* idx_ptr = gpu_ptr<const uint32_t>(rhs_indices);
+  void* packed_ptr = gpu_ptr<void>(packed_a);
+  int* map_ptr = gpu_ptr<int>(slot_map);
+  int* counts_ptr = gpu_ptr<int>(counts);
+  const int map_n = n_experts * M_fixed;
+  const size_t packed_bytes = packed_a.nbytes();
+  const size_t counts_bytes = counts.nbytes();
+
+  encoder.launch_kernel([=](hipStream_t stream) {
+    (void)hipMemsetAsync(counts_ptr, 0, counts_bytes, stream);
+    (void)hipMemsetAsync(packed_ptr, 0, packed_bytes, stream);
+    dim3 bfill(256);
+    dim3 gfill((map_n + 255) / 256);
+    hipLaunchKernelGGL(moe_fill_neg1, gfill, bfill, 0, stream, map_ptr, map_n);
+
+    dim3 block(256);
+    dim3 grid((batch + 255) / 256);
+    if (a.dtype() == bfloat16) {
+      hipLaunchKernelGGL(
+          moe_pack_kernel,
+          grid,
+          block,
+          0,
+          stream,
+          static_cast<const hip_bfloat16*>(a_ptr),
+          idx_ptr,
+          static_cast<hip_bfloat16*>(packed_ptr),
+          map_ptr,
+          counts_ptr,
+          batch,
+          K,
+          M_fixed);
+    } else {
+      throw std::runtime_error("moe_pack_tokens: only bfloat16 supported");
+    }
+  });
+}
+
+void moe_unpack_tokens(
+    CommandEncoder& encoder,
+    const array& packed_c,
+    const array& slot_map,
+    array& out,
+    int n_experts,
+    int M_fixed,
+    int N) {
+  encoder.set_input_array(packed_c);
+  encoder.set_input_array(slot_map);
+  encoder.set_output_array(out);
+  const void* pc = gpu_ptr<void>(packed_c);
+  const int* map_ptr = gpu_ptr<const int>(slot_map);
+  void* out_ptr = gpu_ptr<void>(out);
+
+  dim3 block(32, 8);
+  dim3 grid((N + 31) / 32, (M_fixed + 7) / 8, n_experts);
+  encoder.launch_kernel([=](hipStream_t stream) {
+    if (out.dtype() != bfloat16) {
+      throw std::runtime_error("moe_unpack_tokens: only bfloat16 supported");
+    }
+    hipLaunchKernelGGL(
+        moe_unpack_kernel,
+        grid,
+        block,
+        0,
+        stream,
+        static_cast<const hip_bfloat16*>(pc),
+        map_ptr,
+        static_cast<hip_bfloat16*>(out_ptr),
+        n_experts,
+        M_fixed,
+        N);
+  });
+}
+
 void moe_sorted_expert_gemm(
     CommandEncoder& encoder,
     const array& a,

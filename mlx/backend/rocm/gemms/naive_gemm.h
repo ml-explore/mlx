@@ -121,6 +121,30 @@ void moe_sorted_expert_gemm(
     int64_t ldb,
     int64_t b_expert_stride);
 
+// Pack sorted MoE tokens into a dense [E, M_fixed, K] buffer (atomic slots).
+// slot_map[e, s] = source token row, or -1 if unused. counts[e] = tokens packed.
+void moe_pack_tokens(
+    CommandEncoder& encoder,
+    const array& a, // [batch, K]
+    const array& rhs_indices, // [batch] expert ids
+    array& packed_a, // [E, M_fixed, K]
+    array& slot_map, // [E, M_fixed] int32
+    array& counts, // [E] int32
+    int batch,
+    int K,
+    int n_experts,
+    int M_fixed);
+
+// Scatter packed [E, M_fixed, N] gemm output back to [batch, N] via slot_map.
+void moe_unpack_tokens(
+    CommandEncoder& encoder,
+    const array& packed_c, // [E, M_fixed, N]
+    const array& slot_map, // [E, M_fixed] int32
+    array& out, // [batch, N] (M=1 layout OK as flat batch*N)
+    int n_experts,
+    int M_fixed,
+    int N);
+
 // Device-side SegmentedMM: out[s] = A[:,k0:k1] @ B[k0:k1,:] with (k0,k1) from
 // device segments[2*s], segments[2*s+1]. No host D2H / stream sync.
 void segmented_mm_device(
