@@ -1299,10 +1299,11 @@ static bool try_moe_segment_gather_mm(
   mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
   mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
 
-  // Pack + strided-batched hipBLASLt (default ON for bf16 1-D MoE):
-  // D2H indices once, compute exact max run length (no 2× pad), pack to
-  // [E,M_exact,K], ONE batched MFMA GEMM, unpack. Kill-switch:
-  // MLX_ROCM_MOE_PACK=0. VALU device path: MLX_ROCM_MOE_DEVICE_SEG=1.
+  // Pack + strided-batched hipBLASLt (default ON for bf16 1-D MoE).
+  // ZERO-SYNC: M_pad = align_up(batch, 32) is host-known (worst-case one
+  // expert takes all tokens) → NO D2H / StreamSynchronize. Kill-switch:
+  // MLX_ROCM_MOE_PACK=0. VALU: MLX_ROCM_MOE_DEVICE_SEG=1.
+  // Legacy exact-max-run via D2H: MLX_ROCM_MOE_PACK_EXACT=1 (slower, syncs).
   static const bool use_pack = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_PACK");
     if (!e || !*e)
@@ -1315,43 +1316,54 @@ static bool try_moe_segment_gather_mm(
     return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
                  e[0] == 'T');
   }();
+  static const bool pack_exact_d2h = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_PACK_EXACT");
+    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+                 e[0] == 'T');
+  }();
   const int n_experts =
       (b_batch_shape.size() == 1) ? static_cast<int>(b_batch_shape[0]) : 0;
   if (use_pack && assume_identity_lhs && n_experts > 0 &&
       n_experts <= 256 && a.dtype() == bfloat16 &&
       rocm::is_hipblaslt_available() && !use_device_seg) {
-    // Exact-M: D2H indices, measure max run length (no 2× average pad).
-    hipStream_t hs_pack = static_cast<hipStream_t>(encoder.stream());
-    static thread_local uint32_t* pin_pack = nullptr;
-    static thread_local size_t pin_pack_cap = 0;
-    const size_t need_pack = static_cast<size_t>(batch);
-    if (need_pack > pin_pack_cap) {
-      if (pin_pack)
-        (void)hipHostFree(pin_pack);
-      pin_pack_cap = need_pack + need_pack / 2 + 1024;
-      CHECK_HIP_ERROR(hipHostMalloc(
-          reinterpret_cast<void**>(&pin_pack),
-          pin_pack_cap * sizeof(uint32_t),
-          hipHostMallocDefault));
+    int M_fixed;
+    if (pack_exact_d2h) {
+      // Legacy: D2H ids, measure max run (syncs — avoid for train).
+      hipStream_t hs_pack = static_cast<hipStream_t>(encoder.stream());
+      static thread_local uint32_t* pin_pack = nullptr;
+      static thread_local size_t pin_pack_cap = 0;
+      const size_t need_pack = static_cast<size_t>(batch);
+      if (need_pack > pin_pack_cap) {
+        if (pin_pack)
+          (void)hipHostFree(pin_pack);
+        pin_pack_cap = need_pack + need_pack / 2 + 1024;
+        CHECK_HIP_ERROR(hipHostMalloc(
+            reinterpret_cast<void**>(&pin_pack),
+            pin_pack_cap * sizeof(uint32_t),
+            hipHostMallocDefault));
+      }
+      CHECK_HIP_ERROR(hipMemcpyAsync(
+          pin_pack,
+          gpu_ptr<const uint32_t>(rhs_indices),
+          need_pack * sizeof(uint32_t),
+          hipMemcpyDeviceToHost,
+          hs_pack));
+      CHECK_HIP_ERROR(hipStreamSynchronize(hs_pack));
+      M_fixed = 1;
+      for (int i = 0; i < batch;) {
+        uint32_t e = pin_pack[static_cast<size_t>(i)];
+        int j = i + 1;
+        while (j < batch && pin_pack[static_cast<size_t>(j)] == e)
+          ++j;
+        M_fixed = std::max(M_fixed, j - i);
+        i = j;
+      }
+      M_fixed = std::min(M_fixed, batch);
+      M_fixed = (M_fixed + 31) & ~31;
+    } else {
+      // Zero-sync: host-known pad (always safe, some pad FLOPs).
+      M_fixed = (batch + 31) & ~31;
     }
-    CHECK_HIP_ERROR(hipMemcpyAsync(
-        pin_pack,
-        gpu_ptr<const uint32_t>(rhs_indices),
-        need_pack * sizeof(uint32_t),
-        hipMemcpyDeviceToHost,
-        hs_pack));
-    CHECK_HIP_ERROR(hipStreamSynchronize(hs_pack));
-    int M_fixed = 1;
-    for (int i = 0; i < batch;) {
-      uint32_t e = pin_pack[static_cast<size_t>(i)];
-      int j = i + 1;
-      while (j < batch && pin_pack[static_cast<size_t>(j)] == e)
-        ++j;
-      M_fixed = std::max(M_fixed, j - i);
-      i = j;
-    }
-    M_fixed = std::min(M_fixed, batch);
-    M_fixed = (M_fixed + 31) & ~31; // tile align
     if (M_fixed < 32)
       M_fixed = 32;
     // Temporaries: packed_a [E,M,K], packed_c [E,M,N], slot_map [E,M], counts [E]

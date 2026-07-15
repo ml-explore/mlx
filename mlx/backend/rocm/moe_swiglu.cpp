@@ -115,38 +115,12 @@ void MoeSwigluSorted::eval_gpu(
   out.set_data(rocm::malloc_async(
       static_cast<size_t>(T) * D * size_of(bfloat16), encoder));
 
-  Shape mid_shape{T, I};
-  array gate(
-      rocm::malloc_async(
-          static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
-      mid_shape,
-      bfloat16,
-      allocator::free);
-  array up(
-      rocm::malloc_async(
-          static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
-      mid_shape,
-      bfloat16,
-      allocator::free);
-  array h(
-      rocm::malloc_async(
-          static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
-      mid_shape,
-      bfloat16,
-      allocator::free);
-  encoder.add_temporary(gate);
-  encoder.add_temporary(up);
-  encoder.add_temporary(h);
-
   encoder.set_input_array(x);
   encoder.set_input_array(wg);
   encoder.set_input_array(wu);
   encoder.set_input_array(wd);
   encoder.set_input_array(ids);
   encoder.set_output_array(out);
-  encoder.set_output_array(gate);
-  encoder.set_output_array(up);
-  encoder.set_output_array(h);
 
   // Weight layouts match lemonseed gather_mm after swapaxes:
   //   w_gate/w_up [E,D,I]: x[M,D] @ B[D,I] → [M,I]
@@ -164,8 +138,6 @@ void MoeSwigluSorted::eval_gpu(
 
   if (use_zero_sync && rocm::is_hipblaslt_available() && E > 0 && E <= 256) {
     // ---- Zero-sync pack + strided-batched hipBLASLt (no D2H) ----
-    // M_pad is host-known (worst-case: all tokens one expert). Pad rows zeroed
-    // by pack path; unpack scatters only real slots.
     int M_pad = (T + 31) & ~31;
     if (M_pad < 32)
       M_pad = 32;
@@ -191,7 +163,6 @@ void MoeSwigluSorted::eval_gpu(
     const int64_t stride_mid = static_cast<int64_t>(M_pad) * I;
     const int64_t stride_y = static_cast<int64_t>(M_pad) * D;
 
-    // gate = x @ Wg, up = x @ Wu  (NN)
     rocm::hipblaslt_gemm_batched(
         encoder, false, false, M_pad, I, D, 1.0f, packed_x, /*lda=*/D,
         stride_x, wg, /*ldb=*/I, wg_stride, 0.0f, packed_gate, /*ldc=*/I,
@@ -207,29 +178,42 @@ void MoeSwigluSorted::eval_gpu(
         gpu_ptr<void>(packed_h),
         E * M_pad * I);
 
-    // y = h @ Wd
     rocm::hipblaslt_gemm_batched(
         encoder, false, false, M_pad, D, I, 1.0f, packed_h, /*lda=*/I,
         stride_mid, wd, /*ldb=*/D, wd_stride, 0.0f, packed_y, /*ldc=*/D,
         stride_y, E, bfloat16);
 
-    {
-      void* op = gpu_ptr<void>(out);
-      size_t nbytes = out.nbytes();
-      encoder.launch_kernel([op, nbytes](hipStream_t st) {
-        (void)hipMemsetAsync(op, 0, nbytes, st);
-      });
-    }
+    // Every token is packed exactly once → unpack covers all rows of out.
     rocm::moe_unpack_tokens(encoder, packed_y, slot_map, out, E, M_pad, D);
-
-    // Also materialize gate/up/h into the [T,I] temps for any consumer that
-    // expects them as named intermediates (not required for out alone).
-    // Keep temps live for graph deps; values unused by out path.
-    (void)gate;
-    (void)up;
-    (void)h;
     return;
   }
+
+  // Legacy host-RLE path needs [T,I] mids.
+  Shape mid_shape{T, I};
+  array gate(
+      rocm::malloc_async(
+          static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
+      mid_shape,
+      bfloat16,
+      allocator::free);
+  array up(
+      rocm::malloc_async(
+          static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
+      mid_shape,
+      bfloat16,
+      allocator::free);
+  array h(
+      rocm::malloc_async(
+          static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
+      mid_shape,
+      bfloat16,
+      allocator::free);
+  encoder.add_temporary(gate);
+  encoder.add_temporary(up);
+  encoder.add_temporary(h);
+  encoder.set_output_array(gate);
+  encoder.set_output_array(up);
+  encoder.set_output_array(h);
 
   // ---- Legacy: one D2H of expert ids + exact-M per-segment GEMMs ----
   static thread_local uint32_t* pin = nullptr;
