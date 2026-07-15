@@ -1225,17 +1225,17 @@ static bool try_moe_segment_gather_mm(
   mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
   mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
 
-  // Fully device-side path (default): binary-search expert runs on GPU — no
-  // hipMemcpy D2H + hipStreamSynchronize. Those syncs pipeline-drain the train
-  // step and sawtooth wall tok/s (~6k mean / 11k peaks). Only requires the
-  // common MoE layout: 1-D expert batch, identity/pre-gathered lhs, sorted rhs.
-  // Kill-switch / force host+hipBLASLt: MLX_ROCM_MOE_HOST_SEG=1.
-  static const bool force_host_seg = [] {
-    const char* e = std::getenv("MLX_ROCM_MOE_HOST_SEG");
+  // Opt-in fully device-side path: binary-search expert runs on GPU — no
+  // hipMemcpy D2H + hipStreamSynchronize. VALU tiled kernel is more stable
+  // (no host drain) but currently slower than hipBLASLt MFMA on MI300X
+  // (~4.6k vs ~6k wall mean). Enable with MLX_ROCM_MOE_DEVICE_SEG=1.
+  // Default remains host+hipBLASLt (peaks ~11–12k).
+  static const bool use_device_seg = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_DEVICE_SEG");
     return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
                  e[0] == 'T');
   }();
-  if (!force_host_seg && assume_identity_lhs && b_batch_shape.size() == 1 &&
+  if (use_device_seg && assume_identity_lhs && b_batch_shape.size() == 1 &&
       b_batch_shape[0] > 0 && b_batch_shape[0] <= 256 &&
       (a.dtype() == bfloat16 || a.dtype() == float16 || a.dtype() == float32)) {
     const int n_experts = static_cast<int>(b_batch_shape[0]);
@@ -1498,15 +1498,14 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   const int64_t b_k_stride = b.strides()[b.ndim() - 2];
   const int64_t out_stride = static_cast<int64_t>(M) * N;
 
-  // Default: device-side segmented MM (segments stay on GPU — no stream sync).
-  // Host+hipBLASLt path: MLX_SEGMM_HOST=1 (or legacy MLX_SEGMM_NAIVE for
-  // host-side naive offset GEMMs only).
-  static const bool seg_host = [] {
-    const char* e = std::getenv("MLX_SEGMM_HOST");
+  // Opt-in device-side SegmentedMM (no stream sync). Enable with
+  // MLX_SEGMM_DEVICE=1. Default host+hipBLASLt is faster on MI300X today.
+  static const bool seg_device = [] {
+    const char* e = std::getenv("MLX_SEGMM_DEVICE");
     return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
                  e[0] == 'T');
   }();
-  if (!seg_host &&
+  if (seg_device &&
       (a.dtype() == bfloat16 || a.dtype() == float16 || a.dtype() == float32)) {
     rocm::segmented_mm_device(
         encoder,
@@ -1527,7 +1526,7 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  // Host path: D2H segment table + one hipBLASLt/naive GEMM per segment.
+  // Host path (default): D2H segment table + one hipBLASLt/naive GEMM per segment.
   static thread_local uint32_t* pin_segs = nullptr;
   static thread_local size_t pin_segs_cap = 0;
   const size_t nseg_u32 = static_cast<size_t>(num_segments) * 2;
