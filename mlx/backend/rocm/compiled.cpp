@@ -853,11 +853,15 @@ void Compiled::eval_gpu(
   auto& s = stream();
 
   // Determine the work per thread for the vectorized reads/writes.
+  // Prefer 32B vectors (was 16B) to cut launch count on large elementwise
+  // fused graphs (bf16 → 16 elems/thread, fp32 → 8).
   int max_size = 1;
   for (const auto& x : outputs) {
     max_size = (max_size > x.itemsize()) ? max_size : x.itemsize();
   }
-  int work_per_thread = 16 / max_size;
+  int work_per_thread = 32 / max_size;
+  if (work_per_thread < 1)
+    work_per_thread = 1;
 
   rocm::JitModule& mod = rocm::get_jit_module(s.device, lib_name(), [&]() {
     // Build source code.

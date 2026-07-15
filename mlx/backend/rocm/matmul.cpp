@@ -1299,16 +1299,16 @@ static bool try_moe_segment_gather_mm(
   mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
   mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
 
-  // Pack + strided-batched hipBLASLt (opt-in MLX_ROCM_MOE_PACK=1):
-  //   pack tokens → [E, M_fixed, K] on device, ONE batched MFMA GEMM with
-  //   host-known fixed shapes (no D2H / no stream sync), scatter back.
-  // M_fixed ≈ 2× average tokens/expert. Currently ~5.6k wall mean on MI300X
-  // (more stable, fewer 11k peaks) — default remains host+hipBLASLt until
-  // pad overhead is reduced. VALU device path: MLX_ROCM_MOE_DEVICE_SEG=1.
+  // Pack + strided-batched hipBLASLt (default ON for bf16 1-D MoE):
+  // D2H indices once, compute exact max run length (no 2× pad), pack to
+  // [E,M_exact,K], ONE batched MFMA GEMM, unpack. Kill-switch:
+  // MLX_ROCM_MOE_PACK=0. VALU device path: MLX_ROCM_MOE_DEVICE_SEG=1.
   static const bool use_pack = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_PACK");
-    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
-                 e[0] == 'T');
+    if (!e || !*e)
+      return true; // default ON
+    return !(e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' ||
+             e[0] == 'N');
   }();
   static const bool use_device_seg = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_DEVICE_SEG");
@@ -1320,10 +1320,40 @@ static bool try_moe_segment_gather_mm(
   if (use_pack && assume_identity_lhs && n_experts > 0 &&
       n_experts <= 256 && a.dtype() == bfloat16 &&
       rocm::is_hipblaslt_available() && !use_device_seg) {
-    // 2× mean tokens/expert, min 32, max batch. Align up to 32 for GEMM tiles.
-    int M_fixed = std::max(32, ((batch + n_experts - 1) / n_experts) * 2);
+    // Exact-M: D2H indices, measure max run length (no 2× average pad).
+    hipStream_t hs_pack = static_cast<hipStream_t>(encoder.stream());
+    static thread_local uint32_t* pin_pack = nullptr;
+    static thread_local size_t pin_pack_cap = 0;
+    const size_t need_pack = static_cast<size_t>(batch);
+    if (need_pack > pin_pack_cap) {
+      if (pin_pack)
+        (void)hipHostFree(pin_pack);
+      pin_pack_cap = need_pack + need_pack / 2 + 1024;
+      CHECK_HIP_ERROR(hipHostMalloc(
+          reinterpret_cast<void**>(&pin_pack),
+          pin_pack_cap * sizeof(uint32_t),
+          hipHostMallocDefault));
+    }
+    CHECK_HIP_ERROR(hipMemcpyAsync(
+        pin_pack,
+        gpu_ptr<const uint32_t>(rhs_indices),
+        need_pack * sizeof(uint32_t),
+        hipMemcpyDeviceToHost,
+        hs_pack));
+    CHECK_HIP_ERROR(hipStreamSynchronize(hs_pack));
+    int M_fixed = 1;
+    for (int i = 0; i < batch;) {
+      uint32_t e = pin_pack[static_cast<size_t>(i)];
+      int j = i + 1;
+      while (j < batch && pin_pack[static_cast<size_t>(j)] == e)
+        ++j;
+      M_fixed = std::max(M_fixed, j - i);
+      i = j;
+    }
     M_fixed = std::min(M_fixed, batch);
-    M_fixed = (M_fixed + 31) & ~31;
+    M_fixed = (M_fixed + 31) & ~31; // tile align
+    if (M_fixed < 32)
+      M_fixed = 32;
     // Temporaries: packed_a [E,M,K], packed_c [E,M,N], slot_map [E,M], counts [E]
     array packed_a(
         mlx::core::Shape{n_experts, M_fixed, K}, a.dtype(), nullptr, {});

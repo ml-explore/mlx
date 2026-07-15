@@ -145,6 +145,14 @@ void moe_unpack_tokens(
     int M_fixed,
     int N);
 
+// h = silu(g) * u for n bf16 elements (fused MoE SwiGLU mid).
+void silu_mul_bf16(
+    CommandEncoder& encoder,
+    const void* gate,
+    const void* up,
+    void* h,
+    int n);
+
 // Device-side SegmentedMM: out[s] = A[:,k0:k1] @ B[k0:k1,:] with (k0,k1) from
 // device segments[2*s], segments[2*s+1]. No host D2H / stream sync.
 void segmented_mm_device(

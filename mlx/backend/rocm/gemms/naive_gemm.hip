@@ -1370,6 +1370,42 @@ void moe_unpack_tokens(
   });
 }
 
+__global__ void silu_mul_bf16_kernel(
+    const hip_bfloat16* __restrict__ g,
+    const hip_bfloat16* __restrict__ u,
+    hip_bfloat16* __restrict__ h,
+    int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n)
+    return;
+  float gf = static_cast<float>(g[i]);
+  float uf = static_cast<float>(u[i]);
+  float s = 1.0f / (1.0f + expf(-gf));
+  h[i] = static_cast<hip_bfloat16>(gf * s * uf);
+}
+
+void silu_mul_bf16(
+    CommandEncoder& encoder,
+    const void* gate,
+    const void* up,
+    void* h,
+    int n) {
+  encoder.launch_kernel([=](hipStream_t stream) {
+    dim3 block(256);
+    dim3 grid((n + 255) / 256);
+    hipLaunchKernelGGL(
+        silu_mul_bf16_kernel,
+        grid,
+        block,
+        0,
+        stream,
+        static_cast<const hip_bfloat16*>(gate),
+        static_cast<const hip_bfloat16*>(up),
+        static_cast<hip_bfloat16*>(h),
+        n);
+  });
+}
+
 void moe_sorted_expert_gemm(
     CommandEncoder& encoder,
     const array& a,

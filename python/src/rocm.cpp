@@ -33,4 +33,23 @@ void init_rocm(nb::module_& m) {
   rocm.def("train_arena_active", &mx::rocm::train_arena_active);
   rocm.def("train_arena_high_water", &mx::rocm::train_arena_high_water);
   rocm.def("train_arena_overflowed", &mx::rocm::train_arena_overflowed);
+
+  rocm.def(
+      "moe_swiglu_sorted",
+      &mx::rocm::moe_swiglu_sorted,
+      nb::arg("x"),
+      nb::arg("w_gate"),
+      nb::arg("w_up"),
+      nb::arg("w_down"),
+      nb::arg("expert_ids"),
+      nb::arg("stream") = nb::none(),
+      R"pbdoc(
+        Fused sorted-MoE SwiGLU (one host sync for gate+up+silu+down).
+
+        x: [T, D] bf16
+        w_gate, w_up: [E, D, I] bf16 (after swapaxes of Linear [E,I,D])
+        w_down: [E, I, D] bf16 (after swapaxes of Linear [E,D,I])
+        expert_ids: [T] uint32, sorted by expert
+        Returns y: [T, D] bf16
+      )pbdoc");
 }
