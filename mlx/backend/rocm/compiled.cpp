@@ -862,6 +862,10 @@ void Compiled::eval_gpu(
   int work_per_thread = 32 / max_size;
   if (work_per_thread < 1)
     work_per_thread = 1;
+  // Cap to the largest WPT we always instantiate below (i8 → 32 would
+  // otherwise miss the symbol table).
+  if (work_per_thread > 16)
+    work_per_thread = 16;
 
   rocm::JitModule& mod = rocm::get_jit_module(s.device, lib_name(), [&]() {
     // Build source code.
@@ -873,15 +877,19 @@ void Compiled::eval_gpu(
     builder.build("_strided", false);
     builder.os += "\n} // namespace mlx::core::rocm\n";
 
-    // Build kernel names.
+    // Instantiate a fixed set of work_per_thread values so HSACO disk cache
+    // stays valid across 16B→32B vector-width changes (source is a template;
+    // only the symbol list changes otherwise, and cache keys on source alone).
+    // Cover: 1 (fallback), 4 (fp64/16B-era fp32), 8 (32B fp32), 16 (32B bf16).
+    const std::array<int, 4> wpts = {1, 4, 8, 16};
     std::vector<std::string> kernel_names;
-    kernel_names.push_back(
-        std::string("mlx::core::rocm::") + lib_name() +
-        "_contiguous<uint32_t, " + std::to_string(work_per_thread) + ">");
-    kernel_names.push_back(
-        std::string("mlx::core::rocm::") + lib_name() +
-        "_contiguous<int64_t, " + std::to_string(work_per_thread) + ">");
-    for (auto wpt : std::array<int, 2>{1, work_per_thread}) {
+    for (int wpt : wpts) {
+      kernel_names.push_back(
+          std::string("mlx::core::rocm::") + lib_name() +
+          "_contiguous<uint32_t, " + std::to_string(wpt) + ">");
+      kernel_names.push_back(
+          std::string("mlx::core::rocm::") + lib_name() +
+          "_contiguous<int64_t, " + std::to_string(wpt) + ">");
       for (int i = 1; i <= MAX_NDIM; ++i) {
         kernel_names.push_back(
             std::string("mlx::core::rocm::") + lib_name() + "_strided<" +
