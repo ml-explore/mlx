@@ -343,7 +343,7 @@ array moe_swiglu_sorted(
   }
 
   if (T == 0) {
-    return array(Shape{0, D}, bfloat16, nullptr, {});
+    return array(::mlx::core::Shape{0, D}, bfloat16, nullptr, {});
   }
 
   auto fallback = [s](const std::vector<array>& inputs) {
@@ -352,7 +352,7 @@ array moe_swiglu_sorted(
 
   // Lazy array with Primitive — safe under mx.compile / value_and_grad.
   return array(
-      Shape{T, D},
+      ::mlx::core::Shape{T, D},
       bfloat16,
       std::make_shared<MoeSwigluSorted>(s, std::move(fallback)),
       {x_in, w_gate, w_up, w_down, expert_ids_in});
