@@ -843,9 +843,26 @@ void hipblaslt_gemm_rowmajor_on_stream(
   hipDataType hip_dtype = to_hipblaslt_dtype(dtype);
   hipblasOperation_t op_a = to_hipblas_op(transpose_b);
   hipblasOperation_t op_b = to_hipblas_op(transpose_a);
-  // Keep alpha/beta alive for the async enqueue (hipBLASLt reads by pointer).
-  // Static per-call is unsafe under concurrency; use locals — hipblasLtMatmul
-  // only needs them until the call returns (it copies scalar params).
+  // hipBLASLt may keep host alpha/beta pointers until the stream kernel
+  // completes. Use process-lifetime constants for the common 1/0 case; heap
+  // a pair only for unusual scales (leaked deliberately — rare).
+  const float* a_ptr_s;
+  const float* b_ptr_s;
+  if (alpha == 1.0f && beta == 0.0f) {
+    static const float kOne = 1.0f;
+    static const float kZero = 0.0f;
+    a_ptr_s = &kOne;
+    b_ptr_s = &kZero;
+  } else if (alpha == 1.0f && beta == 1.0f) {
+    static const float kOne = 1.0f;
+    a_ptr_s = &kOne;
+    b_ptr_s = &kOne;
+  } else {
+    // Rare path: leak a stable pair (MoE async always uses 1/0).
+    float* p = new float[2]{alpha, beta};
+    a_ptr_s = &p[0];
+    b_ptr_s = &p[1];
+  }
   hipblaslt_gemm_impl(
       handle,
       device_id,
@@ -854,14 +871,14 @@ void hipblaslt_gemm_rowmajor_on_stream(
       N,
       M,
       K,
-      &alpha,
+      a_ptr_s,
       b_ptr,
       ldb,
       0,
       a_ptr,
       lda,
       0,
-      &beta,
+      b_ptr_s,
       c_ptr,
       ldc,
       0,
