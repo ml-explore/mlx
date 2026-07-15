@@ -6,10 +6,8 @@
 #include "mlx/backend/common/buffer_cache.h"
 
 #include <deque>
-#include <map>
 #include <mutex>
 #include <set>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -23,59 +21,38 @@ struct RocmBuffer {
   bool is_managed;
   int device;
   // Discrete-GPU only: pinned host mirror that serves CPU reads (raw_ptr)
-  // WITHOUT migrating/freeing the resident VRAM copy in `data`. No default
-  // initializer (keeps RocmBuffer trivial for the SizeClassPool union); set
-  // explicitly in the slab path, aggregate-init'd to null in the large-alloc
-  // paths. Always null on the integrated APU (device == -1).
+  // WITHOUT migrating/freeing the resident VRAM copy in `data`.
   void* host_shadow;
-  // True while host_shadow is the authoritative copy (CPU may have written
-  // through raw_ptr). gpu_ptr() flushes host_shadow -> VRAM and clears it so
-  // kernels see CPU writes; raw_ptr() won't re-pull from VRAM while dirty.
   bool host_dirty;
-  // For stream-ordered pool buffers: the stream the buffer was allocated/used
-  // on. hipFreeAsync must run on this same (actively-executing) stream so the
-  // free retires in order behind the buffer's last use and the pool reclaims it.
+  // Stream the buffer was allocated/used on (for hipFreeAsync ordering).
   void* alloc_stream;
 };
 
 // ---------------------------------------------------------------------------
 // DecodeArena — deterministic bump allocator for build-once HIP-graph decode.
-//
-// During steady-state decode the op tape is identical every token, so if each
-// transient activation is bump-allocated from a fixed backing region that is
-// rewound to its base before every token, allocation #N lands at the SAME
-// device address every token. That determinism is what lets a graph built once
-// be relaunched: its kernel nodes' baked input/output pointers stay valid, and
-// the relaunch writes outputs exactly where the next token's eval expects them.
-//
-// Off by default and fully inert until decode_arena_begin(); every allocator
-// hook is guarded by `active` so the production path is byte-identical.
 // ---------------------------------------------------------------------------
 struct DecodeArena {
-  void* base{nullptr};       // backing region (allocated once)
+  void* base{nullptr};
   size_t capacity{0};
-  size_t offset{0};          // bump pointer, rewound each token
+  size_t offset{0};
   bool active{false};
-  bool overflowed{false};    // a token's allocs exceeded capacity (fell back)
+  bool overflowed{false};
   int device{-1};
-  std::deque<RocmBuffer> wrappers;  // stable RocmBuffer*; recycled per token
+  std::deque<RocmBuffer> wrappers;
   size_t next_wrapper{0};
-  size_t high_water{0};      // max offset seen (for sizing diagnostics)
-  // Replay floor: full-capture replay relaunches a recorded exec whose baked
-  // buffers occupy [0, floor_offset). Per-token eager sampling must allocate
-  // ABOVE that region (and not reuse the recorded buffers' wrappers, e.g. the
-  // held logits), so reset-for-replay rewinds to the floor instead of 0.
+  size_t high_water{0};
   size_t floor_offset{0};
   size_t floor_wrapper{0};
 
   bool contains(const void* p) const {
     return base && p >= base &&
-           p < static_cast<const char*>(base) + capacity;
+        p < static_cast<const char*>(base) + capacity;
   }
 };
 
 // ---------------------------------------------------------------------------
-// SizeClassPool — fixed-size block pool with free list
+// SizeClassPool / SlabAllocator — small fixed-size blocks (ROCm-only helper;
+// CUDA uses a tiny scalar pool instead). Kept for ≤1MB fast path.
 // ---------------------------------------------------------------------------
 
 class SizeClassPool {
@@ -127,10 +104,6 @@ class SizeClassPool {
   size_t total_blocks_{0};
 };
 
-// ---------------------------------------------------------------------------
-// SlabAllocator — multi-tier slab allocator for sizes <= 1MB
-// ---------------------------------------------------------------------------
-
 class SlabAllocator {
  public:
   static constexpr int kNumSizeClasses = 18;
@@ -156,142 +129,77 @@ class SlabAllocator {
 };
 
 // ---------------------------------------------------------------------------
-// ManagedDevicePool — single owner of large discrete-GPU HBM for train/eval.
+// RocmAllocator — CUDA-aligned memory management
 //
-// Grow when a request cannot be satisfied from free blocks; free returns the
-// block to an address-sorted free list (coalesced) when the last array ref
-// drops; whole slabs with zero live bytes are hipFree'd (shrink).
-//
-// Unlike hipMemPool, this is host-visible and shrinks. Unlike BufferCache of
-// raw hipMallocAsync pointers, every block is tracked by one manager.
-// ---------------------------------------------------------------------------
-class ManagedDevicePool {
- public:
-  ManagedDevicePool() = default;
-  ~ManagedDevicePool();
-
-  ManagedDevicePool(const ManagedDevicePool&) = delete;
-  ManagedDevicePool& operator=(const ManagedDevicePool&) = delete;
-
-  // Allocate `size` bytes (will page-align). Returns null RocmBuffer* on failure.
-  // Caller owns the RocmBuffer shell; free() returns HBM to the free list.
-  RocmBuffer* malloc(size_t size, int device);
-  // Return a buffer from this pool. Deletes the RocmBuffer shell.
-  // Does NOT hipFree — block stays in free-list for reuse (kills alloc storm).
-  void free(RocmBuffer* buf);
-  bool owns(const void* ptr) const;
-  size_t live_bytes() const { return live_bytes_; }
-  size_t reserved_bytes() const { return reserved_bytes_; }
-  size_t free_list_bytes() const { return free_list_bytes_; }
-  // Stats (debug / train log).
-  uint64_t alloc_hits() const { return alloc_hits_; }
-  uint64_t alloc_grows() const { return alloc_grows_; }
-  uint64_t free_to_list() const { return free_to_list_; }
-  // Drop fully-empty slabs back to the driver (explicit only).
-  size_t shrink();
-
- private:
-  struct Slab {
-    void* base{nullptr};
-    size_t capacity{0};
-    size_t live_bytes{0}; // sum of outstanding allocs in this slab
-    int device{-1};
-  };
-  struct FreeBlock {
-    void* ptr{nullptr};
-    size_t size{0};
-    size_t slab_idx{0};
-  };
-  struct LiveBlock {
-    size_t size{0};
-    size_t slab_idx{0};
-  };
-
-  bool grow_slab(size_t need, int device);
-  void insert_free(void* ptr, size_t size, size_t slab_idx);
-  // Returns true and fills `out` if a free block >= size was taken.
-  bool take_fit(size_t size, FreeBlock& out);
-
-  std::vector<Slab> slabs_;
-  // Address-ordered free list (per whole pool) for coalescing.
-  std::map<void*, FreeBlock> free_by_addr_;
-  // Size multimap into free_by_addr_ keys for best-fit.
-  std::multimap<size_t, void*> free_by_size_;
-  std::unordered_map<void*, LiveBlock> live_;
-  size_t live_bytes_{0};
-  size_t reserved_bytes_{0};
-  size_t free_list_bytes_{0};
-  uint64_t alloc_hits_{0};
-  uint64_t alloc_grows_{0};
-  uint64_t free_to_list_{0};
-};
-
-// ---------------------------------------------------------------------------
-// RocmAllocator
+// Matches mlx/backend/cuda/allocator.cpp:
+//   malloc_async: BufferCache hit → else hipMallocAsync / hipMalloc
+//   free:         recycle BufferCache → else hipFreeAsync / hipFree
+//   max_pool_size_ defaults to memory_limit_ (host free-list can hold reused
+//   buffers up to the limit; real free only under pressure / over cache cap).
 // ---------------------------------------------------------------------------
 
 class RocmAllocator : public allocator::Allocator {
  public:
   Buffer malloc(size_t size) override;
-  void free(Buffer buffer) override { free(buffer, /*force=*/false); }
-  // force=true bypasses the graph-build deferral and actually releases the
-  // buffer. The deferred-free flush must force — routing through the deferring
-  // path would re-defer (the graph is active for the whole session) and leak.
+  void free(Buffer buffer) override {
+    free(buffer, /*force=*/false);
+  }
   void free(Buffer buffer, bool force);
   size_t size(Buffer buffer) const override;
 
-  // CUDA/Metal-aligned: wrap externally-owned device memory (no copy).
   Buffer make_buffer(void* ptr, size_t size) override;
   void release(Buffer buffer) override;
 
-  // CUDA-style stream-ordered allocation + BufferCache (see cuda/allocator.cpp).
-  // When the async pool is enabled and a real stream is given for a discrete
-  // device, prefers hipMallocAsync; free recycles into BufferCache first (same
-  // as CUDA/Metal), and only hipFreeAsync when the cache is full.
+  // CUDA: Buffer malloc_async(size, device, stream)
   Buffer malloc_async(size_t size, int device, void* stream);
-  void free_async(RocmBuffer* buf, void* stream);
 
-  // Discrete GPU: ensure buf has an up-to-date pinned host mirror for CPU reads.
-  // Keeps the VRAM copy resident (does not free it or flip device to -1).
+  // CUDA-style: free device memory only (does not delete RocmBuffer shell).
+  void free_device(RocmBuffer& buf, void* stream = nullptr);
+  // CUDA free_cuda_buffer: free device mem + delete shell (BufferCache free_).
+  void free_rocm_buffer(RocmBuffer* buf);
+
   void ensure_host_shadow(RocmBuffer& buf);
-
-  // Discrete GPU: if buf's host shadow was written by the CPU, copy it back to
-  // VRAM so kernels (gpu_ptr) see the update. No-op otherwise.
   void flush_host_shadow(RocmBuffer& buf);
 
-  // --- Deterministic decode arena (build-once HIP-graph decode) ---
-  // Allocate the backing region (once) and arm the arena: subsequent
-  // malloc/malloc_async serve from it deterministically. reset rewinds to base
-  // (call before each token); end disarms (allocs return to the normal pool).
   bool decode_arena_begin(size_t capacity, int device, void* stream);
   void decode_arena_reset();
-  // Mark the current bump pointer as the replay floor (call once after the
-  // captured forward's allocations are done, before record-token sampling).
   void decode_arena_freeze_floor();
-  // Rewind to the replay floor (call before each replay relaunch's sampling).
   void decode_arena_reset_to_floor();
   void decode_arena_end();
-  bool decode_arena_active() const { return decode_arena_.active; }
-  size_t decode_arena_high_water() const { return decode_arena_.high_water; }
-  bool decode_arena_overflowed() const { return decode_arena_.overflowed; }
+  bool decode_arena_active() const {
+    return decode_arena_.active;
+  }
+  size_t decode_arena_high_water() const {
+    return decode_arena_.high_water;
+  }
+  bool decode_arena_overflowed() const {
+    return decode_arena_.overflowed;
+  }
 
-  // --- Train / generic graph arena (same bump region as decode) ---
-  // Training graphs need identical addresses every step (CLR stores kernargs
-  // by pointer). These aliases expose the decode bump arena under train-facing
-  // names so future train capture can share one implementation. Do NOT enable
-  // use_hip_graphs() for train until a step wraps value_and_grad in
-  // train_arena_begin/reset and MoE shapes are fixed or padded.
-  // Env reserved for future opt-in: MLX_TRAIN_ARENA=1 (not wired into eval yet).
   bool train_arena_begin(size_t capacity, int device, void* stream) {
     return decode_arena_begin(capacity, device, stream);
   }
-  void train_arena_reset() { decode_arena_reset(); }
-  void train_arena_freeze_floor() { decode_arena_freeze_floor(); }
-  void train_arena_reset_to_floor() { decode_arena_reset_to_floor(); }
-  void train_arena_end() { decode_arena_end(); }
-  bool train_arena_active() const { return decode_arena_active(); }
-  size_t train_arena_high_water() const { return decode_arena_high_water(); }
-  bool train_arena_overflowed() const { return decode_arena_overflowed(); }
+  void train_arena_reset() {
+    decode_arena_reset();
+  }
+  void train_arena_freeze_floor() {
+    decode_arena_freeze_floor();
+  }
+  void train_arena_reset_to_floor() {
+    decode_arena_reset_to_floor();
+  }
+  void train_arena_end() {
+    decode_arena_end();
+  }
+  bool train_arena_active() const {
+    return decode_arena_active();
+  }
+  size_t train_arena_high_water() const {
+    return decode_arena_high_water();
+  }
+  bool train_arena_overflowed() const {
+    return decode_arena_overflowed();
+  }
 
   size_t get_active_memory() const;
   size_t get_peak_memory() const;
@@ -302,35 +210,22 @@ class RocmAllocator : public allocator::Allocator {
   size_t set_cache_limit(size_t limit);
   void clear_cache();
 
-  // Called from deferred free drain (outside allocator lock).
-  bool free_if_managed_pool(RocmBuffer* buf);
-
  private:
-  void rocm_free(RocmBuffer* buf);
-
   RocmAllocator();
   friend RocmAllocator& allocator();
 
   std::mutex mutex_;
   size_t memory_limit_;
-  size_t max_pool_size_;
+  size_t free_limit_;
   size_t total_memory_{0};
-  size_t free_limit_{0};
+  size_t max_pool_size_;
   BufferCache<RocmBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
   SlabAllocator slab_allocator_;
   DecodeArena decode_arena_;
-  // Serve `size` bump from the arena; returns nullptr wrapper on overflow.
   RocmBuffer* arena_alloc(size_t size);
 
-  // Single managed HBM pool (grow/shrink free-list) for large discrete allocs.
-  ManagedDevicePool managed_pool_;
-  bool use_managed_pool_{true};
-
-  // Per-device hipMemPool + a dedicated free stream for stream-less frees
-  // (mirrors the CUDA backend). Empty entry => device has no pool support and
-  // uses the blocking path.
   std::vector<void*> mem_pools_;
   std::vector<void*> free_streams_;
 };
@@ -338,9 +233,6 @@ class RocmAllocator : public allocator::Allocator {
 RocmAllocator& allocator();
 
 class CommandEncoder;
-// Stream-ordered allocation bound to an encoder's device/stream. Primitives
-// call this for their output buffers so transient activations come from the
-// device pool (fast, non-blocking free, in-eval reuse) instead of unified mem.
 Buffer malloc_async(size_t size, CommandEncoder& encoder);
 
 } // namespace mlx::core::rocm
