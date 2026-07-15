@@ -417,18 +417,9 @@ void MoeSwigluSortedVJP::eval_gpu(
     (void)hipMemsetAsync(ptr, 0, n, st);
   });
 
-  // Fully device-side path (NO host StreamSynchronize): pack via atomics,
-  // batched GEMMs, unpack. Avoids pipeline drains that kill train peaks.
-  // M_fixed: heuristic upper bound from T (sorted MoE worst-case = T when
-  // one expert takes all). Align 32 for hipBLASLt.
-  int M_fixed = T;
-  M_fixed = (M_fixed + 31) & ~31;
-  if (M_fixed < 32)
-    M_fixed = 32;
-  // Cap pad blowup for sparse routing: use min(T, next pow2 of T/E * 4)
-  // but never below max possible. Simpler: T is fine for MoD (~600).
-  if (M_fixed > T)
-    M_fixed = (T + 31) & ~31;
+  // Device pack + tiny counts D2H (E ints only) for exact-M GEMMs.
+  // Avoids full-ids sync AND pad-to-T FLOP waste (was ~E× slower than pure).
+  int M_fixed = (T + 31) & ~31;
   if (M_fixed < 32)
     M_fixed = 32;
 
@@ -455,7 +446,7 @@ void MoeSwigluSortedVJP::eval_gpu(
   array slot = mk(Shape{E, M_fixed}, int32);
   array cnt = mk(Shape{E}, int32);
 
-  // Joint pack: concat(x,dy) → pack → split so x/dy share the same slot map.
+  // Joint pack x|dy so slots match.
   array xdy = mk(Shape{T, 2 * D});
   rocm::bf16_concat_rows(
       encoder, gpu_ptr<void>(x), gpu_ptr<void>(dy), gpu_ptr<void>(xdy), T, D);
@@ -470,82 +461,103 @@ void MoeSwigluSortedVJP::eval_gpu(
       E * M_fixed,
       D);
 
-  // Batched NN recompute
-  if (rocm::is_hipblaslt_available()) {
-    rocm::hipblaslt_gemm_batched(
-        encoder, false, false, M_fixed, I, D, 1.0f, px, D, stride_x, wg, I,
-        wg_stride, 0.0f, pg, I, stride_i, E, bfloat16);
-    rocm::hipblaslt_gemm_batched(
-        encoder, false, false, M_fixed, I, D, 1.0f, px, D, stride_x, wu, I,
-        wg_stride, 0.0f, pu, I, stride_i, E, bfloat16);
-  } else {
-    throw std::runtime_error("MoeSwigluSortedVJP: hipBLASLt required");
+  // Tiny D2H: only per-expert counts (E×4B) for exact-M GEMMs.
+  static thread_local int* pin_cnt = nullptr;
+  static thread_local size_t pin_cnt_cap = 0;
+  if (static_cast<size_t>(E) > pin_cnt_cap) {
+    if (pin_cnt)
+      (void)hipHostFree(pin_cnt);
+    pin_cnt_cap = static_cast<size_t>(E) + 8;
+    CHECK_HIP_ERROR(hipHostMalloc(
+        reinterpret_cast<void**>(&pin_cnt),
+        pin_cnt_cap * sizeof(int),
+        hipHostMallocDefault));
   }
+  hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
+  CHECK_HIP_ERROR(hipMemcpyAsync(
+      pin_cnt,
+      gpu_ptr<const int>(cnt),
+      static_cast<size_t>(E) * sizeof(int),
+      hipMemcpyDeviceToHost,
+      hs));
+  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
 
-  // dh = dy @ Wd.T via E rocBLAS TN (no host sync)
-  {
-    char* pdyB = static_cast<char*>(gpu_ptr<void>(pdy));
-    char* pdhB = static_cast<char*>(gpu_ptr<void>(pdh));
-    char* wdB = static_cast<char*>(gpu_ptr<void>(wd));
-    for (int e = 0; e < E; ++e) {
-      rocm::rocblas_gemm_ptrs(
-          encoder, false, true, M_fixed, I, D, 1.0f,
-          pdyB + e * stride_x * esz, D, wdB + e * wd_stride * esz, D, 0.0f,
-          pdhB + e * stride_i * esz, I, bfloat16);
+  char* pxB = static_cast<char*>(gpu_ptr<void>(px));
+  char* pdyB = static_cast<char*>(gpu_ptr<void>(pdy));
+  char* pgB = static_cast<char*>(gpu_ptr<void>(pg));
+  char* puB = static_cast<char*>(gpu_ptr<void>(pu));
+  char* phB = static_cast<char*>(gpu_ptr<void>(ph));
+  char* pdhB = static_cast<char*>(gpu_ptr<void>(pdh));
+  char* pdgB = static_cast<char*>(gpu_ptr<void>(pdg));
+  char* pduB = static_cast<char*>(gpu_ptr<void>(pdu));
+  char* pdxB = static_cast<char*>(gpu_ptr<void>(pdx));
+  char* wgB = static_cast<char*>(gpu_ptr<void>(wg));
+  char* wuB = static_cast<char*>(gpu_ptr<void>(wu));
+  char* wdB = static_cast<char*>(gpu_ptr<void>(wd));
+  char* dwgB = static_cast<char*>(gpu_ptr<void>(dwg));
+  char* dwuB = static_cast<char*>(gpu_ptr<void>(dwu));
+  char* dwdB = static_cast<char*>(gpu_ptr<void>(dwd));
+
+  // Exact-M per expert (NN hipBLASLt / TN rocBLAS).
+  for (int e = 0; e < E; ++e) {
+    int Mseg = pin_cnt[e];
+    if (Mseg <= 0)
+      continue;
+    if (Mseg > M_fixed) {
+      throw std::runtime_error(
+          "MoeSwigluSortedVJP: pack overflow (increase M_fixed)");
     }
+    const size_t xoff = static_cast<size_t>(e) * stride_x * esz;
+    const size_t ioff = static_cast<size_t>(e) * stride_i * esz;
+    const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
+    const size_t wdoff = static_cast<size_t>(e) * wd_stride * esz;
+
+    // gate/up recompute
+    rocm::hipblaslt_gemm_ptrs(
+        encoder, false, false, Mseg, I, D, 1.0f, pxB + xoff, D, wgB + wgoff, I,
+        0.0f, pgB + ioff, I, bfloat16);
+    rocm::hipblaslt_gemm_ptrs(
+        encoder, false, false, Mseg, I, D, 1.0f, pxB + xoff, D, wuB + wgoff, I,
+        0.0f, puB + ioff, I, bfloat16);
+    // dh = dy @ Wd.T
+    rocm::rocblas_gemm_ptrs(
+        encoder, false, true, Mseg, I, D, 1.0f, pdyB + xoff, D, wdB + wdoff, D,
+        0.0f, pdhB + ioff, I, bfloat16);
   }
 
+  // Elementwise on packed (full pad is fine — zeros stay zero)
   rocm::swiglu_bwd_elem_bf16(
       encoder, gpu_ptr<void>(pg), gpu_ptr<void>(pu), gpu_ptr<void>(pdh),
       gpu_ptr<void>(ph), gpu_ptr<void>(pdg), gpu_ptr<void>(pdu),
       E * M_fixed * I);
 
-  // dx packed
-  {
-    char* pdgB = static_cast<char*>(gpu_ptr<void>(pdg));
-    char* pduB = static_cast<char*>(gpu_ptr<void>(pdu));
-    char* pdxB = static_cast<char*>(gpu_ptr<void>(pdx));
-    char* wgB = static_cast<char*>(gpu_ptr<void>(wg));
-    char* wuB = static_cast<char*>(gpu_ptr<void>(wu));
-    for (int e = 0; e < E; ++e) {
-      rocm::rocblas_gemm_ptrs(
-          encoder, false, true, M_fixed, D, I, 1.0f,
-          pdgB + e * stride_i * esz, I, wgB + e * wg_stride * esz, I, 0.0f,
-          pdxB + e * stride_x * esz, D, bfloat16);
-      rocm::rocblas_gemm_ptrs(
-          encoder, false, true, M_fixed, D, I, 1.0f,
-          pduB + e * stride_i * esz, I, wuB + e * wg_stride * esz, I, 1.0f,
-          pdxB + e * stride_x * esz, D, bfloat16);
-    }
+  for (int e = 0; e < E; ++e) {
+    int Mseg = pin_cnt[e];
+    if (Mseg <= 0)
+      continue;
+    const size_t xoff = static_cast<size_t>(e) * stride_x * esz;
+    const size_t ioff = static_cast<size_t>(e) * stride_i * esz;
+    const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
+    const size_t wdoff = static_cast<size_t>(e) * wd_stride * esz;
+
+    rocm::rocblas_gemm_ptrs(
+        encoder, false, true, Mseg, D, I, 1.0f, pdgB + ioff, I, wgB + wgoff, I,
+        0.0f, pdxB + xoff, D, bfloat16);
+    rocm::rocblas_gemm_ptrs(
+        encoder, false, true, Mseg, D, I, 1.0f, pduB + ioff, I, wuB + wgoff, I,
+        1.0f, pdxB + xoff, D, bfloat16);
+
+    rocm::rocblas_gemm_ptrs(
+        encoder, true, false, D, I, Mseg, 1.0f, pxB + xoff, D, pdgB + ioff, I,
+        0.0f, dwgB + wgoff, I, bfloat16);
+    rocm::rocblas_gemm_ptrs(
+        encoder, true, false, D, I, Mseg, 1.0f, pxB + xoff, D, pduB + ioff, I,
+        0.0f, dwuB + wgoff, I, bfloat16);
+    rocm::rocblas_gemm_ptrs(
+        encoder, true, false, I, D, Mseg, 1.0f, phB + ioff, I, pdyB + xoff, D,
+        0.0f, dwdB + wdoff, D, bfloat16);
   }
 
-  // dW with pad zeros (exact): dWg = px.T @ pdg over M_fixed
-  {
-    char* pxB = static_cast<char*>(gpu_ptr<void>(px));
-    char* pdgB = static_cast<char*>(gpu_ptr<void>(pdg));
-    char* pduB = static_cast<char*>(gpu_ptr<void>(pdu));
-    char* phB = static_cast<char*>(gpu_ptr<void>(ph));
-    char* pdyB = static_cast<char*>(gpu_ptr<void>(pdy));
-    char* dwgB = static_cast<char*>(gpu_ptr<void>(dwg));
-    char* dwuB = static_cast<char*>(gpu_ptr<void>(dwu));
-    char* dwdB = static_cast<char*>(gpu_ptr<void>(dwd));
-    for (int e = 0; e < E; ++e) {
-      rocm::rocblas_gemm_ptrs(
-          encoder, true, false, D, I, M_fixed, 1.0f,
-          pxB + e * stride_x * esz, D, pdgB + e * stride_i * esz, I, 0.0f,
-          dwgB + e * wg_stride * esz, I, bfloat16);
-      rocm::rocblas_gemm_ptrs(
-          encoder, true, false, D, I, M_fixed, 1.0f,
-          pxB + e * stride_x * esz, D, pduB + e * stride_i * esz, I, 0.0f,
-          dwuB + e * wg_stride * esz, I, bfloat16);
-      rocm::rocblas_gemm_ptrs(
-          encoder, true, false, I, D, M_fixed, 1.0f,
-          phB + e * stride_i * esz, I, pdyB + e * stride_x * esz, D, 0.0f,
-          dwdB + e * wd_stride * esz, D, bfloat16);
-    }
-  }
-
-  // Unpack pdx → dx via slot map from joint pack
   {
     void* op = gpu_ptr<void>(dx);
     encoder.launch_kernel([op, n = dx.nbytes()](hipStream_t st) {
