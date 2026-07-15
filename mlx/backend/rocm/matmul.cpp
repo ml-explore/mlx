@@ -15,6 +15,7 @@
 #include <hip/hip_runtime.h>
 #include <rocblas/rocblas.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <string>
@@ -1228,10 +1229,10 @@ static bool try_moe_segment_gather_mm(
   // Pack + strided-batched hipBLASLt (default for bf16 1-D expert MoE):
   //   pack tokens → [E, M_fixed, K] on device, ONE batched MFMA GEMM with
   //   host-known fixed shapes (no D2H / no stream sync), scatter back.
-  // M_fixed = batch so a single expert getting all tokens never overflows
-  // (E× overcompute on empty rows; still wins vs host-sync pipeline drain).
-  // Kill-switch: MLX_ROCM_MOE_HOST_SEG=1 → old per-run host path.
-  // VALU-only device path: MLX_ROCM_MOE_DEVICE_SEG=1.
+  // M_fixed ≈ 2× average tokens/expert (not full batch — E× pad is too slow).
+  // Extremely skewed routing can overflow (tokens beyond M_fixed dropped);
+  // lemonseed MoE load-balance keeps this rare. Force exact host path with
+  // MLX_ROCM_MOE_HOST_SEG=1. VALU device path: MLX_ROCM_MOE_DEVICE_SEG=1.
   static const bool force_host_seg = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_HOST_SEG");
     return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
@@ -1247,7 +1248,10 @@ static bool try_moe_segment_gather_mm(
   if (!force_host_seg && assume_identity_lhs && n_experts > 0 &&
       n_experts <= 256 && a.dtype() == bfloat16 &&
       rocm::is_hipblaslt_available() && !use_device_seg) {
-    const int M_fixed = batch; // never overflow; empty rows zero from pack memset
+    // 2× mean tokens/expert, min 32, max batch. Align up to 32 for GEMM tiles.
+    int M_fixed = std::max(32, ((batch + n_experts - 1) / n_experts) * 2);
+    M_fixed = std::min(M_fixed, batch);
+    M_fixed = (M_fixed + 31) & ~31;
     // Temporaries: packed_a [E,M,K], packed_c [E,M,N], slot_map [E,M], counts [E]
     array packed_a(
         mlx::core::Shape{n_experts, M_fixed, K}, a.dtype(), nullptr, {});
