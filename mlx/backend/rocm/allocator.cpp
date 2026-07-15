@@ -93,23 +93,26 @@ static bool use_finegrained() {
 
 // Stream-ordered hipMemPool (hipMallocAsync / hipFreeAsync).
 //
-// MLX bugs that made this path "unsafe" (fixed below):
-//  1) free_async fell back to an idle free_streams_[dev] that never joins the
-//     compute stream → pool reclaims while kernels still use the block (IMA).
-//  2) Host BufferCache of hipMallocAsync pointers (CUDA does this safely only
-//     because free is post-complete OR same-stream reorder; ROCm free() often
-//     runs at end of eval_gpu before kernels finish — cache reuse ⇒ UAF).
-//  3) max_pool_size_ == memory_limit_ held ALL freed unified buffers in HBM
-//     → VRAM full → GTT spill (looked like a 1.5B model "using 196GB").
-//  4) hipMallocManaged fallback on discrete GPUs → silent GTT.
+// DEFAULT OFF on discrete GPUs. hipMemPool retention is what pinned ~192GB HBM
+// and spilled 10GB+ into GTT on MI300X train while a 1.5B model only needs
+// ~15GB weights+Adam + ~30–70GB live acts. Metal uses host BufferCache + real
+// free; CUDA's pool is better behaved. ROCm pool kept reserved pages forever.
 //
-// Correct model (Metal-like for host reuse, CUDA-like for stream free):
-//  - Pool buffers: hipMallocAsync + hipFreeAsync on the SAME compute stream.
-//    Never BufferCache them. Never free on an idle side stream.
-//  - Unified/hipMalloc: BufferCache with a small max_pool_size_ (few GB).
+//   MLX_ROCM_FORCE_ASYNC_POOL=1  opt-in async (decode experiments only)
+//   MLX_ROCM_NO_ASYNC_POOL=1     force off (default behavior on dGPU)
 static bool use_async_pool() {
-  static const bool off = std::getenv("MLX_ROCM_NO_ASYNC_POOL") != nullptr;
-  return !off;
+  static const int mode = [] {
+    if (std::getenv("MLX_ROCM_FORCE_ASYNC_POOL"))
+      return 1;
+    if (std::getenv("MLX_ROCM_NO_ASYNC_POOL"))
+      return 0;
+    // Discrete default OFF; integrated may use async if present.
+    int dev = 0;
+    if (hipGetDevice(&dev) != hipSuccess)
+      return 0;
+    return device_is_integrated(dev) ? 1 : 0;
+  }();
+  return mode != 0;
 }
 
 static int alloc_device_tag() {
@@ -548,16 +551,9 @@ RocmAllocator::RocmAllocator()
     }
     total_memory_ = total;
     free_limit_ = (total > memory_limit_) ? (total - memory_limit_) : 0;
-    // CRITICAL: do NOT set max_pool_size_ = memory_limit_. That lets the
-    // BufferCache hold almost all of HBM as "freed" buffers; the driver then
-    // spills new allocs into GTT. Cap reuse cache at 4GB (or 5% of VRAM).
-    {
-      size_t cap = 4ull << 30;
-      size_t pct = total / 20; // 5%
-      max_pool_size_ = cap < pct ? cap : pct;
-      if (max_pool_size_ < (512ull << 20))
-        max_pool_size_ = 512ull << 20;
-    }
+    // Host reuse cache: big enough for MoE pack temps (few GB), tiny vs 192GB.
+    // Overridden by mx.set_cache_limit / LEMONSEED_CACHE_LIMIT_GB.
+    max_pool_size_ = 8ull << 30;
   }
 
   // Per-device hipMemPool + dedicated free stream for the async pool path.
@@ -968,7 +964,10 @@ void RocmAllocator::free(Buffer buffer, bool force) {
     return;
   }
 
-  // Unified / hipMalloc buffers: Metal-like BufferCache (safe — no stream pool).
+  // Metal/CUDA-like: recycle into BufferCache until max_pool_size_ (default
+  // 1–8GB). Large MoE temps reuse without hipFree/hipMalloc every op — that
+  // free/malloc storm was 90% of HIP host wall and left GPU ~82% idle.
+  // Cap still small vs 192GB so overflow actually hipFree's and GTT stays off.
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
     return;
