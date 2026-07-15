@@ -14,6 +14,7 @@
 #include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/gemms/hipblaslt_gemm.h"
 #include "mlx/backend/rocm/gemms/naive_gemm.h"
+#include "mlx/backend/rocm/gemms/rocblas_gemm.h"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/gpu/copy.h"
@@ -492,116 +493,39 @@ void MoeSwigluSortedVJP::eval_gpu(
   const int64_t wg_stride = static_cast<int64_t>(D) * I;
   const int64_t wd_stride = static_cast<int64_t>(I) * D;
 
-  // Scan segments: max M for pad scratch (hipBLASLt BF16 MFMA needs aligned
-  // dims; unaligned M like 423 fails with status 3 on transpose GEMMs).
-  int max_m = 1;
-  for (int i = 0; i < T;) {
-    uint32_t e = pin[static_cast<size_t>(i)];
-    int j = i + 1;
-    while (j < T && pin[static_cast<size_t>(j)] == e)
-      ++j;
-    max_m = std::max(max_m, j - i);
-    i = j;
-  }
-  const int max_mp = (max_m + 15) & ~15;
-  const int max_feat = std::max(D, I);
-  // padA [max_mp, max_feat], padC [max_mp, max_feat]
-  array padA(
-      rocm::malloc_async(
-          static_cast<size_t>(max_mp) * max_feat * esz, encoder),
-      Shape{max_mp, max_feat},
-      bfloat16,
-      allocator::free);
-  array padC(
-      rocm::malloc_async(
-          static_cast<size_t>(max_mp) * max_feat * esz, encoder),
-      Shape{max_mp, max_feat},
-      bfloat16,
-      allocator::free);
-  encoder.add_temporary(padA);
-  encoder.add_temporary(padC);
-  char* padAB = static_cast<char*>(gpu_ptr<void>(padA));
-  char* padCB = static_cast<char*>(gpu_ptr<void>(padC));
-
-  // All GEMMs are non-transpose (hipBLASLt transpose path fails under the
-  // full train graph on gfx942). Weight transpose is materialised with a
-  // cheap bf16_transpose_2d into pad scratch, then NN GEMM.
-  // NN GEMM C[M,N]=A[M,K]@B[K,N]; pad M to 16 for MFMA.
-  auto gemm_nn = [&](int Mseg,
-                     int N,
-                     int K,
-                     const char* a,
-                     int lda,
-                     const char* b,
-                     int ldb,
-                     float beta,
-                     char* c,
-                     int ldc) {
-    const int Mp = (Mseg + 15) & ~15;
-    if (Mp == Mseg) {
+  // Unified GEMM: NN → hipBLASLt (fast MFMA); TN/NT/TT → rocBLAS (robust under
+  // full train graph — hipBLASLt transpose fails with status 3 on gfx942).
+  // Exact-M (no pad): rocBLAS accepts arbitrary M; hipBLASLt NN also works
+  // for MoE segment sizes (same as forward fused path).
+  const bool use_rocblas = encoder.device().is_rocblas_available();
+  auto gemm = [&](bool ta,
+                  bool tb,
+                  int Mseg,
+                  int N,
+                  int K,
+                  const char* a,
+                  int lda,
+                  const char* b,
+                  int ldb,
+                  float beta,
+                  char* c,
+                  int ldc) {
+    if (ta || tb || !rocm::is_hipblaslt_available()) {
+      if (!use_rocblas) {
+        throw std::runtime_error(
+            "MoeSwigluSortedVJP: rocBLAS required for transpose GEMMs");
+      }
+      rocm::rocblas_gemm_ptrs(
+          encoder, ta, tb, Mseg, N, K, 1.0f, a, lda, b, ldb, beta, c, ldc,
+          bfloat16);
+    } else {
       rocm::hipblaslt_gemm_ptrs(
           encoder, false, false, Mseg, N, K, 1.0f, a, lda, b, ldb, beta, c,
           ldc, bfloat16);
-      return;
-    }
-    encoder.launch_kernel([=](hipStream_t st) {
-      (void)hipMemsetAsync(padAB, 0, static_cast<size_t>(Mp) * K * esz, st);
-      (void)hipMemsetAsync(padCB, 0, static_cast<size_t>(Mp) * N * esz, st);
-      if (lda == K) {
-        (void)hipMemcpyAsync(
-            padAB, a, static_cast<size_t>(Mseg) * K * esz,
-            hipMemcpyDeviceToDevice, st);
-      } else {
-        for (int r = 0; r < Mseg; ++r) {
-          (void)hipMemcpyAsync(
-              padAB + static_cast<size_t>(r) * K * esz,
-              a + static_cast<size_t>(r) * lda * esz,
-              static_cast<size_t>(K) * esz,
-              hipMemcpyDeviceToDevice,
-              st);
-        }
-      }
-    });
-    rocm::hipblaslt_gemm_ptrs(
-        encoder, false, false, Mp, N, K, 1.0f, padAB, K, b, ldb, 0.0f, padCB, N,
-        bfloat16);
-    if (beta == 0.0f) {
-      encoder.launch_kernel([=](hipStream_t st) {
-        if (ldc == N) {
-          (void)hipMemcpyAsync(
-              c, padCB, static_cast<size_t>(Mseg) * N * esz,
-              hipMemcpyDeviceToDevice, st);
-        } else {
-          for (int r = 0; r < Mseg; ++r) {
-            (void)hipMemcpyAsync(
-                c + static_cast<size_t>(r) * ldc * esz,
-                padCB + static_cast<size_t>(r) * N * esz,
-                static_cast<size_t>(N) * esz,
-                hipMemcpyDeviceToDevice,
-                st);
-          }
-        }
-      });
-    } else {
-      if (ldc != N) {
-        throw std::runtime_error(
-            "MoeSwigluSortedVJP: padded beta=1 requires ldc==N");
-      }
-      rocm::bf16_add_inplace(encoder, padCB, c, Mseg * N);
     }
   };
 
-  // Scratch for transposed weights: [max(D,I), max(D,I)] fits Wg^T and Wd^T.
-  array wT(
-      rocm::malloc_async(
-          static_cast<size_t>(max_feat) * max_feat * esz, encoder),
-      Shape{max_feat, max_feat},
-      bfloat16,
-      allocator::free);
-  encoder.add_temporary(wT);
-  char* wTB = static_cast<char*>(gpu_ptr<void>(wT));
-
-  // Pass 1: recompute gate/up (NN)
+  // Pass 1: recompute gate/up (NN hipBLASLt)
   int start = 0;
   while (start < T) {
     uint32_t e = pin[static_cast<size_t>(start)];
@@ -620,14 +544,15 @@ void MoeSwigluSortedVJP::eval_gpu(
     const size_t ioff = static_cast<size_t>(start) * I * esz;
     const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
 
-    gemm_nn(Mseg, I, D, xB + xoff, D, wgB + wgoff, I, 0.0f, gateB + ioff, I);
-    gemm_nn(
-        Mseg, I, D, xB + xoff, D,
-        wuB + static_cast<size_t>(e) * wg_stride * esz, I, 0.0f, upB + ioff, I);
+    gemm(false, false, Mseg, I, D, xB + xoff, D, wgB + wgoff, I, 0.0f,
+         gateB + ioff, I);
+    gemm(false, false, Mseg, I, D, xB + xoff, D,
+         wuB + static_cast<size_t>(e) * wg_stride * esz, I, 0.0f, upB + ioff,
+         I);
     start = end;
   }
 
-  // Pass 2: dh = dy @ Wd.T  → transpose Wd[I,D]→[D,I], then NN
+  // Pass 2: dh = dy @ Wd.T  (TN rocBLAS)
   start = 0;
   while (start < T) {
     uint32_t e = pin[static_cast<size_t>(start)];
@@ -641,10 +566,10 @@ void MoeSwigluSortedVJP::eval_gpu(
     }
     const size_t doff = static_cast<size_t>(start) * D * esz;
     const size_t ioff = static_cast<size_t>(start) * I * esz;
-    const size_t wdoff = static_cast<size_t>(e) * wd_stride * esz;
-    rocm::bf16_transpose_2d(
-        encoder, wdB + wdoff, wTB, /*rows=*/I, /*cols=*/D);
-    gemm_nn(Mseg, I, D, dyB + doff, D, wTB, I, 0.0f, dhB + ioff, I);
+    // Wd [I,D]: C[M,I] = A[M,D] @ B[I,D]^T
+    gemm(false, true, Mseg, I, D, dyB + doff, D,
+         wdB + static_cast<size_t>(e) * wd_stride * esz, D, 0.0f, dhB + ioff,
+         I);
     start = end;
   }
 
@@ -658,7 +583,7 @@ void MoeSwigluSortedVJP::eval_gpu(
       gpu_ptr<void>(du),
       T * I);
 
-  // Pass 3: dx = dg@Wg.T + du@Wu.T; dW via (dg.T@x) with explicit transpose
+  // Pass 3: dx and dW (TN/NT rocBLAS)
   start = 0;
   while (start < T) {
     uint32_t e = pin[static_cast<size_t>(start)];
@@ -676,67 +601,22 @@ void MoeSwigluSortedVJP::eval_gpu(
     const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
     const size_t wdoff = static_cast<size_t>(e) * wd_stride * esz;
 
-    // Wg [D,I] → [I,D]
-    rocm::bf16_transpose_2d(encoder, wgB + wgoff, wTB, D, I);
-    gemm_nn(Mseg, D, I, dgB + ioff, I, wTB, D, 0.0f, dxB + doff, D);
-    rocm::bf16_transpose_2d(
-        encoder, wuB + wgoff, wTB, D, I);
-    gemm_nn(Mseg, D, I, duB + ioff, I, wTB, D, 1.0f, dxB + doff, D);
+    // dx = dg @ Wg.T; Wg [D,I]
+    gemm(false, true, Mseg, D, I, dgB + ioff, I, wgB + wgoff, I, 0.0f,
+         dxB + doff, D);
+    // dx += du @ Wu.T
+    gemm(false, true, Mseg, D, I, duB + ioff, I, wuB + wgoff, I, 1.0f,
+         dxB + doff, D);
 
-    // dWg [D,I] = x.T @ dg → transpose x [M,D]→[D,M] into pad, NN with dg
-    // Use padAB as [D, Mp] after transpose of padded x.
-    {
-      const int Mp = (Mseg + 15) & ~15;
-      // pad x into padCB as [Mp,D], transpose to padAB as [D,Mp]
-      encoder.launch_kernel([=](hipStream_t st) {
-        (void)hipMemsetAsync(padCB, 0, static_cast<size_t>(Mp) * D * esz, st);
-        (void)hipMemcpyAsync(
-            padCB, xB + xoff, static_cast<size_t>(Mseg) * D * esz,
-            hipMemcpyDeviceToDevice, st);
-      });
-      rocm::bf16_transpose_2d(encoder, padCB, padAB, Mp, D); // out [D,Mp]
-      // Also pad dg into padCB as [Mp,I]
-      encoder.launch_kernel([=](hipStream_t st) {
-        (void)hipMemsetAsync(padCB, 0, static_cast<size_t>(Mp) * I * esz, st);
-        (void)hipMemcpyAsync(
-            padCB, dgB + ioff, static_cast<size_t>(Mseg) * I * esz,
-            hipMemcpyDeviceToDevice, st);
-      });
-      // dWg = xT[D,Mp] @ dg[Mp,I]
-      rocm::hipblaslt_gemm_ptrs(
-          encoder, false, false, D, I, Mp, 1.0f, padAB, Mp, padCB, I, 0.0f,
-          dwgB + wgoff, I, bfloat16);
-
-      // dWu similarly
-      encoder.launch_kernel([=](hipStream_t st) {
-        (void)hipMemsetAsync(padCB, 0, static_cast<size_t>(Mp) * I * esz, st);
-        (void)hipMemcpyAsync(
-            padCB, duB + ioff, static_cast<size_t>(Mseg) * I * esz,
-            hipMemcpyDeviceToDevice, st);
-      });
-      // need xT still in padAB
-      rocm::hipblaslt_gemm_ptrs(
-          encoder, false, false, D, I, Mp, 1.0f, padAB, Mp, padCB, I, 0.0f,
-          dwuB + wgoff, I, bfloat16);
-
-      // dWd [I,D] = h.T @ dy → hT [I,Mp] @ dy[Mp,D]
-      encoder.launch_kernel([=](hipStream_t st) {
-        (void)hipMemsetAsync(padCB, 0, static_cast<size_t>(Mp) * I * esz, st);
-        (void)hipMemcpyAsync(
-            padCB, hB + ioff, static_cast<size_t>(Mseg) * I * esz,
-            hipMemcpyDeviceToDevice, st);
-      });
-      rocm::bf16_transpose_2d(encoder, padCB, padAB, Mp, I); // [I,Mp]
-      encoder.launch_kernel([=](hipStream_t st) {
-        (void)hipMemsetAsync(padCB, 0, static_cast<size_t>(Mp) * D * esz, st);
-        (void)hipMemcpyAsync(
-            padCB, dyB + doff, static_cast<size_t>(Mseg) * D * esz,
-            hipMemcpyDeviceToDevice, st);
-      });
-      rocm::hipblaslt_gemm_ptrs(
-          encoder, false, false, I, D, Mp, 1.0f, padAB, Mp, padCB, D, 0.0f,
-          dwdB + wdoff, D, bfloat16);
-    }
+    // dWg = x.T @ dg → [D,I]
+    gemm(true, false, D, I, Mseg, xB + xoff, D, dgB + ioff, I, 0.0f,
+         dwgB + wgoff, I);
+    // dWu = x.T @ du
+    gemm(true, false, D, I, Mseg, xB + xoff, D, duB + ioff, I, 0.0f,
+         dwuB + wgoff, I);
+    // dWd = h.T @ dy → [I,D]
+    gemm(true, false, I, D, Mseg, hB + ioff, I, dyB + doff, D, 0.0f,
+         dwdB + wdoff, D);
 
     start = end;
   }

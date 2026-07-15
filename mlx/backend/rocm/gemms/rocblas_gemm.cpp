@@ -292,6 +292,135 @@ void rocblas_gemm(
   });
 }
 
+void rocblas_gemm_ptrs(
+    CommandEncoder& encoder,
+    bool transpose_a,
+    bool transpose_b,
+    int M,
+    int N,
+    int K,
+    float alpha,
+    const void* a_ptr,
+    int lda,
+    const void* b_ptr,
+    int ldb,
+    float beta,
+    void* c_ptr,
+    int ldc,
+    Dtype dtype) {
+  if (!encoder.device().is_rocblas_available()) {
+    throw std::runtime_error("rocblas_gemm_ptrs: rocBLAS unavailable");
+  }
+  // Process-lifetime alpha/beta (same rationale as hipblaslt_gemm_ptrs).
+  const float* alpha_p;
+  const float* beta_p;
+  if (alpha == 1.0f && beta == 0.0f) {
+    static const float kOne = 1.0f, kZero = 0.0f;
+    alpha_p = &kOne;
+    beta_p = &kZero;
+  } else if (alpha == 1.0f && beta == 1.0f) {
+    static const float kOne = 1.0f;
+    alpha_p = &kOne;
+    beta_p = &kOne;
+  } else {
+    float* p = new float[2]{alpha, beta};
+    alpha_p = &p[0];
+    beta_p = &p[1];
+  }
+
+  // Row-major MLX → col-major rocBLAS: swap A/B and M/N (matches hipblaslt).
+  rocblas_operation op_a = to_rocblas_op(transpose_b);
+  rocblas_operation op_b = to_rocblas_op(transpose_a);
+
+  encoder.launch_kernel([=, &encoder](hipStream_t stream) {
+    encoder.device().set_rocblas_stream(stream);
+    rocblas_handle handle = encoder.device().get_rocblas_handle();
+
+    if (dtype == bfloat16) {
+      rocblas_status status = rocblas_gemm_ex(
+          handle,
+          op_a,
+          op_b,
+          N,
+          M,
+          K,
+          alpha_p,
+          b_ptr,
+          rocblas_datatype_bf16_r,
+          ldb,
+          a_ptr,
+          rocblas_datatype_bf16_r,
+          lda,
+          beta_p,
+          c_ptr,
+          rocblas_datatype_bf16_r,
+          ldc,
+          c_ptr,
+          rocblas_datatype_bf16_r,
+          ldc,
+          rocblas_datatype_f32_r,
+          rocblas_gemm_algo_standard,
+          0,
+          0);
+      if (status != rocblas_status_success) {
+        throw std::runtime_error(
+            "rocblas_gemm_ptrs bf16 failed: " +
+            std::to_string(static_cast<int>(status)) + " MNK=" +
+            std::to_string(M) + "," + std::to_string(N) + "," +
+            std::to_string(K));
+      }
+    } else if (dtype == float16) {
+      // alpha/beta as half via float intermediates for the rare path.
+      rocblas_half alpha_h, beta_h;
+      float16_t af = static_cast<float16_t>(alpha);
+      float16_t bf = static_cast<float16_t>(beta);
+      std::memcpy(&alpha_h, &af, sizeof(rocblas_half));
+      std::memcpy(&beta_h, &bf, sizeof(rocblas_half));
+      rocblas_status status = rocblas_hgemm(
+          handle,
+          op_a,
+          op_b,
+          N,
+          M,
+          K,
+          &alpha_h,
+          reinterpret_cast<const rocblas_half*>(
+              static_cast<const uint16_t*>(b_ptr)),
+          ldb,
+          reinterpret_cast<const rocblas_half*>(
+              static_cast<const uint16_t*>(a_ptr)),
+          lda,
+          &beta_h,
+          reinterpret_cast<rocblas_half*>(static_cast<uint16_t*>(c_ptr)),
+          ldc);
+      if (status != rocblas_status_success) {
+        throw std::runtime_error("rocblas_gemm_ptrs fp16 failed");
+      }
+    } else if (dtype == float32) {
+      rocblas_status status = rocblas_sgemm(
+          handle,
+          op_a,
+          op_b,
+          N,
+          M,
+          K,
+          alpha_p,
+          static_cast<const float*>(b_ptr),
+          ldb,
+          static_cast<const float*>(a_ptr),
+          lda,
+          beta_p,
+          static_cast<float*>(c_ptr),
+          ldc);
+      if (status != rocblas_status_success) {
+        throw std::runtime_error("rocblas_gemm_ptrs f32 failed");
+      }
+    } else {
+      throw std::runtime_error("rocblas_gemm_ptrs: unsupported dtype");
+    }
+  });
+}
+
 void rocblas_gemm_batched(
     CommandEncoder& encoder,
     bool transpose_a,
