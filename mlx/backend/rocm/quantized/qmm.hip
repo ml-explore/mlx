@@ -581,6 +581,10 @@ inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
     hw.max_threads_per_cu = props.maxThreadsPerMultiProcessor;
     hw.shared_mem_per_cu = props.sharedMemPerBlock;
     hw.l2_cache_bytes = props.l2CacheSize;
+    hw.warp_size = props.warpSize > 0 ? props.warpSize : WARP_SIZE;
+    hw.is_low_cu_igpu = (hw.num_cus > 0 && hw.num_cus <= 8);
+    if (const char* e = std::getenv("MLX_ROCM_FORCE_LOW_CU"); e && e[0] == '1')
+      hw.is_low_cu_igpu = true;
 
     const char* arch_name = props.gcnArchName;
     if (arch_name != nullptr) {
@@ -593,6 +597,10 @@ inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
                  std::strstr(arch_name, "gfx1152") != nullptr) {
         hw.tier = RocmQmvArchTier::Rdna35;
         hw.simds_per_cu = 2;
+        // Integrated Radeon 800M/860M class: always treat as low-CU for tuning
+        // even if a future driver reports a higher multiProcessorCount.
+        if (hw.num_cus > 0 && hw.num_cus <= 16)
+          hw.is_low_cu_igpu = true;
       } else if (std::strstr(arch_name, "gfx11") != nullptr) {
         hw.tier = RocmQmvArchTier::Rdna3;
         hw.simds_per_cu = 2;
@@ -618,8 +626,14 @@ inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
         }
       }
     }
-    fprintf(stderr, "[mlx-rocm] %s native_wmma=%d cus=%d\n",
-            arch_name ? arch_name : "?", (int)hw.has_native_wmma, hw.num_cus);
+    fprintf(stderr,
+            "[mlx-rocm] %s native_wmma=%d cus=%d warp=%d low_cu=%d host_WARP_SIZE=%d\n",
+            arch_name ? arch_name : "?",
+            (int)hw.has_native_wmma,
+            hw.num_cus,
+            hw.warp_size,
+            (int)hw.is_low_cu_igpu,
+            (int)WARP_SIZE);
   }
 
   {
@@ -3320,12 +3334,23 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // materialization. Default ON where the device has native WMMA (opt out with
   // MLX_ROCM_WMMA_QMM=0); dispatch below falls to rocBLAS when WMMA is absent or
   // the shape doesn't qualify. Single (non-batched) bf16 affine prefill.
+  // Low-CU iGPUs (gfx1152 4–8 CU): skip WMMA-QMM — fat 64×128 tiles thrash the
+  // tiny L2 and have produced garbage/NaN under APU memory pressure; QMV/dequant
+  // paths are safer. Force on with MLX_ROCM_WMMA_QMM=1.
   {
-    static const bool wmma_qmm_off = [] {
+    static const int wmma_qmm_env = [] {
       const char* e = std::getenv("MLX_ROCM_WMMA_QMM");
-      return e && e[0] == '0';
+      if (!e)
+        return -1; // default
+      if (e[0] == '0')
+        return 0;
+      if (e[0] == '1')
+        return 1;
+      return -1;
     }();
-    const bool want_wmma = !wmma_qmm_off;
+    auto hw_early = detect_rocm_hw_info(d);
+    const bool want_wmma = (wmma_qmm_env == 1) ||
+        (wmma_qmm_env < 0 && !hw_early.is_low_cu_igpu);
     if (want_wmma && transpose_ && mode_ == QuantizationMode::Affine &&
         x.dtype() == bfloat16 && scales.dtype() == bfloat16 &&
         (!biases.has_value() || biases->dtype() == bfloat16) &&
@@ -3661,15 +3686,23 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       (group_size_ == 32 || group_size_ == 64 || group_size_ == 128);
   bool x6_dtype_supported =
       (x.dtype() == bfloat16 || x.dtype() == float16);
+  // Host launch dims MUST use runtime wavefront size (hw_info.warp_size), not
+  // compile-time WARP_SIZE. lemon-mlx-engine multi-arch fatbins match "gfx9"
+  // and set MLX_HOST_WARP_SIZE=64 even when the running device is gfx1152/32 —
+  // launching dim3(64, tile_n) into kernels compiled for wave32 produces
+  // garbage output (wrong lane/warp reductions).
+  const int host_warp =
+      (hw_info.warp_size > 0) ? hw_info.warp_size : d.warp_size();
+
   if (use_6bit_tiled && use_tiled && bits_ == 6 && (K % 64) == 0 &&
       gs6_supported && x6_dtype_supported && use_fast_qmv &&
-      !can_use_batched_qmv && tile_n >= 8 &&
+      !can_use_batched_qmv && tile_n >= 4 &&
       mode_ == QuantizationMode::Affine) {
     {
-      dim3 tiled_block(WARP_SIZE, tile_n);
+      dim3 tiled_block(host_warp, tile_n);
       const int n_tiles = (N + tile_n - 1) / tile_n;
       int blocks_per_cu = (hw_info.max_threads_per_cu > 0)
-          ? (hw_info.max_threads_per_cu / (tile_n * WARP_SIZE)) : 4;
+          ? (hw_info.max_threads_per_cu / (tile_n * host_warp)) : 4;
       if (blocks_per_cu < 1) blocks_per_cu = 1;
       int persistent_y =
           (hw_info.num_cus > 0) ? hw_info.num_cus * blocks_per_cu : n_tiles;
@@ -3710,7 +3743,11 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       (group_size_ == 32 || group_size_ == 64 || group_size_ == 128) &&
       (x.dtype() == bfloat16 || x.dtype() == float16);
   if (wide_ok) {
-    int wcols = 8;
+    int wcols = hw_info.is_low_cu_igpu ? 4 : 8;
+    // Wave32 kernels only (hardcoded 32 in qmv_wide). Skip on CDNA host_warp=64.
+    if (host_warp != 32) {
+      // fall through to tiled / warp-shared
+    } else {
     dim3 wblock(32, wcols);
     dim3 wgrid((N + wcols - 1) / wcols, M);
 #define LAUNCH_QMV_WIDE(TT, ST, GS, BV)                                      \
@@ -3734,6 +3771,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 #undef LAUNCH_QMV_WIDE_GS
 #undef LAUNCH_QMV_WIDE
     return;
+    } // host_warp == 32
   }
 
   // int8 integer-dot QMV (4-bit affine, small-M decode). Quantize activation to
@@ -3792,15 +3830,16 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // other widths would match nothing here and leave `out` uninitialized.
   // Restrict to 4/8-bit; 2/5/6-bit fall through to the warp-shared QMV kernel.
   bool tiled_bits_supported = (bits_ == 4 || bits_ == 8);
+  // tile_n can be 4 on low-CU gfx1152 — still a valid tiled path.
   if (use_tiled && tiled_bits_supported && use_fast_qmv &&
-      !can_use_batched_qmv && tile_n >= 8 &&
+      !can_use_batched_qmv && tile_n >= 4 &&
       mode_ == QuantizationMode::Affine) {
     {
-      dim3 tiled_block(WARP_SIZE, tile_n);
+      dim3 tiled_block(host_warp, tile_n);
       const int n_tiles = (N + tile_n - 1) / tile_n;
       // Persistent grid: CU-bounded block count, kernel grid-strides the rest.
       int blocks_per_cu = (hw_info.max_threads_per_cu > 0)
-          ? (hw_info.max_threads_per_cu / (tile_n * WARP_SIZE)) : 4;
+          ? (hw_info.max_threads_per_cu / (tile_n * host_warp)) : 4;
       if (blocks_per_cu < 1) blocks_per_cu = 1;
       int persistent_y =
           (hw_info.num_cus > 0) ? hw_info.num_cus * blocks_per_cu : n_tiles;
@@ -6075,18 +6114,21 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       batch_strides[0][0] == 1 && batch_strides[1][0] == 1;
 
   int gather_tile_n = 0;
+  int gather_warp = WARP_SIZE;
   if (gather_tiled_ok || gather_tiled_6bit_ok) {
     auto gqmm_hw = detect_rocm_hw_info(enc.device());
     gather_tile_n = rocm::get_arch_tuning(gqmm_hw).qmv_tile_n;
+    gather_warp =
+        (gqmm_hw.warp_size > 0) ? gqmm_hw.warp_size : enc.device().warp_size();
     while (gather_tile_n > 1 && (N % gather_tile_n) != 0) gather_tile_n /= 2;
     if (gather_tile_n < 1) gather_tile_n = 1;
   }
-  if (gather_tiled_6bit_ok && gather_tile_n < 8) gather_tiled_6bit_ok = false;
+  if (gather_tiled_6bit_ok && gather_tile_n < 4) gather_tiled_6bit_ok = false;
 
   {
     if (gather_tiled_6bit_ok) {
       dim3 gt_grid(M, (N + gather_tile_n - 1) / gather_tile_n, B);
-      dim3 gt_block(WARP_SIZE, gather_tile_n);
+      dim3 gt_block(gather_warp, gather_tile_n);
       int LHS_B = static_cast<int>(x_batch_count);
       #define LAUNCH_GATHER_TILED_6BIT(GS_V) \
         enc.add_kernel_node( \
@@ -6104,7 +6146,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
     if (gather_tiled_ok) {
       dim3 gt_grid(M, (N + gather_tile_n - 1) / gather_tile_n, B);
-      dim3 gt_block(WARP_SIZE, gather_tile_n);
+      dim3 gt_block(gather_warp, gather_tile_n);
       int LHS_B = static_cast<int>(x_batch_count);
       auto launch_gt = [&](auto bits_tag) {
         constexpr int BITS = decltype(bits_tag)::value;

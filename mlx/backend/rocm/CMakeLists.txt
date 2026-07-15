@@ -269,12 +269,27 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/gemms/hipblaslt_gemm.cpp)
 
 target_compile_definitions(mlx PRIVATE MLX_USE_ROCM)
-# Host WARP_SIZE must match the device wavefront (device uses __AMDGCN_WAVEFRONT_SIZE__).
-# CDNA/GCN (gfx9xx) = 64, RDNA (gfx10/11/12xx) = 32. Auto-detected from the arch.
-if(CMAKE_HIP_ARCHITECTURES MATCHES "gfx9")
+# Host WARP_SIZE fallback (device uses __AMDGCN_WAVEFRONT_SIZE__).
+# CRITICAL: multi-arch fatbins (e.g. lemon-mlx-engine lists gfx942 + gfx1152)
+# used to MATCH "gfx9" and pin host WARP_SIZE=64 forever — then launches on
+# wave32 iGPUs used dim3(64, ...) into kernels compiled for 32 → garbage text.
+# Prefer runtime Device::warp_size() / HWInfo::warp_size for all launch dims.
+# Only pin a host default when the arch list is single-family.
+set(_MLX_HIP_ARCHS "${CMAKE_HIP_ARCHITECTURES}")
+string(REPLACE ";" " " _MLX_HIP_ARCHS_SP "${_MLX_HIP_ARCHS}")
+if(_MLX_HIP_ARCHS_SP MATCHES "gfx9" AND NOT _MLX_HIP_ARCHS_SP MATCHES "gfx1[012]")
+  # CDNA/GCN only
   target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=64)
-else()
+elseif(_MLX_HIP_ARCHS_SP MATCHES "gfx1[012]" AND NOT _MLX_HIP_ARCHS_SP MATCHES "gfx9")
+  # RDNA only
   target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=32)
+else()
+  # Mixed multi-arch: do not lie with a fixed host warp. Default 32 (RDNA is
+  # the usual consumer target); all launch sites must use runtime warp_size.
+  target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=32)
+  message(STATUS
+    "MLX ROCm: multi-arch HIP list — MLX_HOST_WARP_SIZE=32 fallback; "
+    "launches use runtime warp_size()")
 endif()
 if(MLX_HAS_ROCM_WMMA)
   target_compile_definitions(mlx PRIVATE MLX_HAS_ROCM_WMMA)

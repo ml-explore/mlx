@@ -388,7 +388,9 @@ void gemv(
   encoder.set_input_array(b);
   encoder.set_output_array(out);
 
-  dim3 block_dims{WARP_SIZE, rows_per_block};
+  // Runtime wavefront — not compile-time WARP_SIZE (multi-arch host pin).
+  dim3 block_dims{
+      static_cast<unsigned>(encoder.device().warp_size()), rows_per_block};
   int rows;
   int cols = K;
 
@@ -593,7 +595,9 @@ void gather_mv(
   encoder.set_input_array(vec_indices);
   encoder.set_output_array(out);
 
-  dim3 block_dims{WARP_SIZE, rows_per_block};
+  // Runtime wavefront — not compile-time WARP_SIZE (multi-arch host pin).
+  dim3 block_dims{
+      static_cast<unsigned>(encoder.device().warp_size()), rows_per_block};
   int rows = N;
   int cols = K;
   uint32_t batch_size = static_cast<uint32_t>(out.size() / N);
