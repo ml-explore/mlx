@@ -183,6 +183,24 @@ void bf16_transpose_2d(
     int rows,
     int cols);
 
+// out[i] = concat(a[i], b[i]) for T rows of width K (bf16). out is [T, 2K].
+void bf16_concat_rows(
+    CommandEncoder& encoder,
+    const void* a,
+    const void* b,
+    void* out,
+    int T,
+    int K);
+
+// Split [T, 2K] into a[T,K] and b[T,K] (or [E,M,2K]→ two [E,M,K] with same layout).
+void bf16_split_rows(
+    CommandEncoder& encoder,
+    const void* ab,
+    void* a,
+    void* b,
+    int rows,
+    int K);
+
 // Device-side SegmentedMM: out[s] = A[:,k0:k1] @ B[k0:k1,:] with (k0,k1) from
 // device segments[2*s], segments[2*s+1]. No host D2H / stream sync.
 void segmented_mm_device(

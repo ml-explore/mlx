@@ -1522,6 +1522,88 @@ void bf16_transpose_2d(
   });
 }
 
+__global__ void bf16_concat_rows_kernel(
+    const hip_bfloat16* __restrict__ a,
+    const hip_bfloat16* __restrict__ b,
+    hip_bfloat16* __restrict__ out,
+    int T,
+    int K) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int n = T * K;
+  if (i >= n)
+    return;
+  int row = i / K;
+  int col = i % K;
+  out[row * (2 * K) + col] = a[i];
+  out[row * (2 * K) + K + col] = b[i];
+}
+
+void bf16_concat_rows(
+    CommandEncoder& encoder,
+    const void* a,
+    const void* b,
+    void* out,
+    int T,
+    int K) {
+  encoder.launch_kernel([=](hipStream_t stream) {
+    int n = T * K;
+    dim3 block(256);
+    dim3 grid((n + 255) / 256);
+    hipLaunchKernelGGL(
+        bf16_concat_rows_kernel,
+        grid,
+        block,
+        0,
+        stream,
+        static_cast<const hip_bfloat16*>(a),
+        static_cast<const hip_bfloat16*>(b),
+        static_cast<hip_bfloat16*>(out),
+        T,
+        K);
+  });
+}
+
+__global__ void bf16_split_rows_kernel(
+    const hip_bfloat16* __restrict__ ab,
+    hip_bfloat16* __restrict__ a,
+    hip_bfloat16* __restrict__ b,
+    int rows,
+    int K) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int n = rows * K;
+  if (i >= n)
+    return;
+  int row = i / K;
+  int col = i % K;
+  a[i] = ab[row * (2 * K) + col];
+  b[i] = ab[row * (2 * K) + K + col];
+}
+
+void bf16_split_rows(
+    CommandEncoder& encoder,
+    const void* ab,
+    void* a,
+    void* b,
+    int rows,
+    int K) {
+  encoder.launch_kernel([=](hipStream_t stream) {
+    int n = rows * K;
+    dim3 block(256);
+    dim3 grid((n + 255) / 256);
+    hipLaunchKernelGGL(
+        bf16_split_rows_kernel,
+        grid,
+        block,
+        0,
+        stream,
+        static_cast<const hip_bfloat16*>(ab),
+        static_cast<hip_bfloat16*>(a),
+        static_cast<hip_bfloat16*>(b),
+        rows,
+        K);
+  });
+}
+
 void moe_sorted_expert_gemm(
     CommandEncoder& encoder,
     const array& a,
