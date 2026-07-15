@@ -235,9 +235,9 @@ void MoeSwigluSorted::eval_gpu(
 
   rocm::silu_mul_bf16(
       encoder,
-      rocm::gpu_ptr<void>(gate),
-      rocm::gpu_ptr<void>(up),
-      rocm::gpu_ptr<void>(h),
+      gpu_ptr<void>(gate),
+      gpu_ptr<void>(up),
+      gpu_ptr<void>(h),
       T * I);
 
   start = 0;
