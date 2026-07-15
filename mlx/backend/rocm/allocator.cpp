@@ -438,70 +438,82 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
   std::unique_lock lock(mutex_);
   RocmBuffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
-    // If we have a lot of memory pressure try to reclaim from the cache.
-    int64_t mem_to_free = static_cast<int64_t>(get_active_memory()) +
-        static_cast<int64_t>(get_cache_memory()) + static_cast<int64_t>(size) -
-        static_cast<int64_t>(memory_limit_);
-    if (mem_to_free > 0) {
-      buffer_cache_.release_cached_buffers(static_cast<size_t>(mem_to_free));
-    }
-
-    // Try the scalar pool first (CUDA).
+    // Scalar pool first (CUDA).
     if (size <= static_cast<size_t>(small_block_size)) {
       buf = scalar_pool_.malloc();
     }
     lock.unlock();
-    if (!buf) {
+
+    auto try_device_alloc = [&]() -> RocmBuffer* {
       void* data = nullptr;
       bool is_managed = true;
       if (device == -1) {
-        data = unified_malloc(size, is_managed);
-        buf = new RocmBuffer{
-            data, size, is_managed, /*device=*/-1, nullptr, false, nullptr};
-      } else {
-        (void)hipSetDevice(device);
-        hipError_t err = hipMallocAsync(&data, size, stream);
-        if (err != hipSuccess || !data) {
-          (void)hipGetLastError();
-          std::ostringstream msg;
-          msg << "[malloc_async] Unable to allocate " << size << " bytes: "
-              << hipGetErrorString(err);
-          throw std::runtime_error(msg.str());
+        try {
+          data = unified_malloc(size, is_managed);
+        } catch (...) {
+          return nullptr;
         }
-        buf = new RocmBuffer{
-            data,
-            size,
-            /*is_managed=*/false,
-            device,
-            nullptr,
-            false,
-            stream};
+        return new RocmBuffer{
+            data, size, is_managed, /*device=*/-1, nullptr, false, nullptr};
+      }
+      (void)hipSetDevice(device);
+      hipError_t err = hipMallocAsync(&data, size, stream);
+      if (err != hipSuccess || !data) {
+        (void)hipGetLastError();
+        return nullptr;
+      }
+      return new RocmBuffer{
+          data,
+          size,
+          /*is_managed=*/false,
+          device,
+          nullptr,
+          false,
+          stream};
+    };
+
+    // ROCm: allocate FIRST, reclaim cache only on failure.
+    // Eager release under memory_limit_/max_pool_size_ (CUDA-style) caused
+    // 18s+ of hipFree / step and 90–500ms pre-Adam GPU idle gaps — free was
+    // dumping same-sized blocks the next op re-malloc'd. hipFree is a
+    // blocking drain on this stack; keep buffers in BufferCache until HBM
+    // actually refuses an alloc.
+    if (!buf) {
+      buf = try_device_alloc();
+    }
+    if (!buf) {
+      lock.lock();
+      // Drop enough cached memory to cover this request (at least size).
+      size_t want = std::max(size, size_t(1) << 28); // ≥256MB batch free
+      if (get_cache_memory() > 0) {
+        buffer_cache_.release_cached_buffers(
+            std::min(want, get_cache_memory()));
+      }
+      // Also try the soft limit reclaim if still huge.
+      int64_t mem_to_free = static_cast<int64_t>(get_active_memory()) +
+          static_cast<int64_t>(get_cache_memory()) + static_cast<int64_t>(size) -
+          static_cast<int64_t>(memory_limit_);
+      if (mem_to_free > 0 && get_cache_memory() > 0) {
+        buffer_cache_.release_cached_buffers(static_cast<size_t>(mem_to_free));
+      }
+      if (size <= static_cast<size_t>(small_block_size)) {
+        buf = scalar_pool_.malloc();
+      }
+      lock.unlock();
+      if (!buf) {
+        buf = try_device_alloc();
+      }
+      if (!buf) {
+        throw std::runtime_error(
+            "[malloc_async] Unable to allocate " + std::to_string(size) +
+            " bytes (cache reclaim failed).");
       }
     }
     lock.lock();
-
-    // CUDA: if any mem pool reserved is huge, release host cache.
-    if (get_cache_memory() > 0) {
-      for (size_t i = 0; i < mem_pools_.size(); ++i) {
-        auto* p = static_cast<hipMemPool_t>(mem_pools_[i]);
-        if (!p) {
-          continue;
-        }
-        size_t used = 0;
-        if (hipMemPoolGetAttribute(
-                p, hipMemPoolAttrReservedMemCurrent, &used) == hipSuccess &&
-            used > (total_memory_ - free_limit_)) {
-          buffer_cache_.release_cached_buffers(free_limit_);
-          break;
-        }
-      }
-    }
   } else {
-    // Cache hit. CUDA: if cached buffer is on a different device, move to
-    // unified. Never retag device=-1 (hipMalloc) as a stream-pool buffer —
-    // that made free_async call hipFreeAsync on hipMalloc memory → page faults.
+    // Cache hit. Never retag device=-1 as stream-pool (hipFreeAsync on
+    // hipMalloc → page faults).
     if (buf->device >= 0 && device >= 0 && buf->device != device) {
-      // Cross-device: drop to unified for safety (sync copy).
       void* data = nullptr;
       bool is_managed = true;
       lock.unlock();
@@ -514,19 +526,14 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
       buf->alloc_stream = nullptr;
       lock.lock();
     } else if (buf->device >= 0 && stream && !buf->is_managed) {
-      // Same stream-pool buffer: remember last stream for free_async ordering.
       buf->alloc_stream = stream;
     }
-    // device==-1 buffers stay device==-1 regardless of request.
   }
 
   active_memory_ += buf->size;
   peak_memory_ = std::max(active_memory_, peak_memory_);
-
-  // Maintain the cache below the requested limit.
-  if (get_cache_memory() > max_pool_size_) {
-    buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
-  }
+  // No eager max_pool_size_ trim here — that was the free/alloc storm.
+  // clear_cache() / set_cache_limit() still shrink explicitly.
   return Buffer{buf};
 }
 
