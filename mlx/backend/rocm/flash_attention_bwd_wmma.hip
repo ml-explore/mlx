@@ -66,8 +66,8 @@ __global__ void kernel_sdpa_delta_row(
 }
 
 // FA-2 bwd for fixed D; float LDS tiles; float32 global accum for dQ/dK/dV.
-// BM=BN=32 keeps LDS under 64 KB on RDNA3.5 / MI300X default sharedMemPerBlock.
-// (64×64 tiles need ~98 KB and fail to launch on many devices.)
+// BM=64, BN=16: more Q-row parallelism, LDS ~62 KB (fits 64 KB devices).
+// 64×64 tiles need ~98 KB and fail to launch on MI300X/RDNA3.5.
 template <typename T, bool do_causal, int D>
 __global__ void __launch_bounds__(256) kernel_sdpa_flash_bwd_f32acc(
     const T* __restrict__ Q,
@@ -80,7 +80,7 @@ __global__ void __launch_bounds__(256) kernel_sdpa_flash_bwd_f32acc(
     float* __restrict__ dKf,
     float* __restrict__ dVf,
     rocm::FABwdParams p) {
-  constexpr int BM = 32, BN = 32, NTHREADS = 256;
+  constexpr int BM = 64, BN = 16, NTHREADS = 256;
   const int bid_b = blockIdx.z;
   const int bid_h = blockIdx.x;
   const int bid_kv = bid_h / p.gqa_factor;
@@ -254,9 +254,9 @@ __global__ void kernel_zero_f32(float* p, size_t n) {
 
 // ---- Host interface (still inside namespace mlx::core) ----
 
-// Bytes of dynamic LDS for kernel_sdpa_flash_bwd_f32acc with BM=BN=32.
+// Bytes of dynamic LDS for kernel_sdpa_flash_bwd_f32acc with BM=64, BN=16.
 int sdpa_flash_bwd_smem(int D) {
-  constexpr int BM = 32, BN = 32;
+  constexpr int BM = 64, BN = 16;
   return (2 * BM + BM * BN + 3 * BM * D + 2 * BN * D) * (int)sizeof(float);
 }
 
@@ -397,7 +397,7 @@ void sdpa_flash_wmma_bwd(
   else
     launch_delta(__half{});
 
-  constexpr int BM = 32;
+  constexpr int BM = 64;
   dim3 grid(H, (qL + BM - 1) / BM, B);
   dim3 block(256);
   int smem = sdpa_flash_bwd_smem(D);

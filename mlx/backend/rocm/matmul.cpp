@@ -1223,21 +1223,40 @@ static bool try_moe_segment_gather_mm(
   encoder.set_output_array(out);
 
   hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
-  std::vector<uint32_t> rhs(static_cast<size_t>(batch));
+  // Pinned staging for D2H — pageable vectors make every MoE sorted-gather
+  // pay a slow staging bounce + full stream sync. Grow-only pinned buffers.
+  static thread_local uint32_t* pin_rhs = nullptr;
+  static thread_local uint32_t* pin_lhs = nullptr;
+  static thread_local size_t pin_cap = 0;
+  const size_t need = static_cast<size_t>(batch);
+  if (need > pin_cap) {
+    if (pin_rhs)
+      (void)hipHostFree(pin_rhs);
+    if (pin_lhs)
+      (void)hipHostFree(pin_lhs);
+    pin_rhs = pin_lhs = nullptr;
+    pin_cap = need + need / 2 + 1024;
+    CHECK_HIP_ERROR(hipHostMalloc(
+        reinterpret_cast<void**>(&pin_rhs),
+        pin_cap * sizeof(uint32_t),
+        hipHostMallocDefault));
+    CHECK_HIP_ERROR(hipHostMalloc(
+        reinterpret_cast<void**>(&pin_lhs),
+        pin_cap * sizeof(uint32_t),
+        hipHostMallocDefault));
+  }
   CHECK_HIP_ERROR(hipMemcpyAsync(
-      rhs.data(),
+      pin_rhs,
       gpu_ptr<const uint32_t>(rhs_indices),
-      rhs.size() * sizeof(uint32_t),
+      need * sizeof(uint32_t),
       hipMemcpyDeviceToHost,
       hs));
 
-  std::vector<uint32_t> lhs;
   if (!assume_identity_lhs) {
-    lhs.resize(static_cast<size_t>(batch));
     CHECK_HIP_ERROR(hipMemcpyAsync(
-        lhs.data(),
+        pin_lhs,
         gpu_ptr<const uint32_t>(lhs_indices),
-        lhs.size() * sizeof(uint32_t),
+        need * sizeof(uint32_t),
         hipMemcpyDeviceToHost,
         hs));
   }
@@ -1245,7 +1264,7 @@ static bool try_moe_segment_gather_mm(
 
   if (!assume_identity_lhs) {
     for (int i = 0; i < batch; ++i) {
-      if (lhs[static_cast<size_t>(i)] != static_cast<uint32_t>(i)) {
+      if (pin_lhs[static_cast<size_t>(i)] != static_cast<uint32_t>(i)) {
         return false; // non-identity lhs → cannot treat a as dense [batch,K]
       }
     }
@@ -1254,9 +1273,9 @@ static bool try_moe_segment_gather_mm(
   // Count runs of equal rhs. If average run length is tiny, gemv is better.
   int n_runs = 0;
   for (int i = 0; i < batch;) {
-    uint32_t e = rhs[static_cast<size_t>(i)];
+    uint32_t e = pin_rhs[static_cast<size_t>(i)];
     int j = i + 1;
-    while (j < batch && rhs[static_cast<size_t>(j)] == e) {
+    while (j < batch && pin_rhs[static_cast<size_t>(j)] == e) {
       ++j;
     }
     ++n_runs;
@@ -1298,9 +1317,9 @@ static bool try_moe_segment_gather_mm(
   char* moe_cB = static_cast<char*>(gpu_ptr<void>(out));
   int start = 0;
   while (start < batch) {
-    uint32_t e = rhs[static_cast<size_t>(start)];
+    uint32_t e = pin_rhs[static_cast<size_t>(start)];
     int end = start + 1;
-    while (end < batch && rhs[static_cast<size_t>(end)] == e) {
+    while (end < batch && pin_rhs[static_cast<size_t>(end)] == e) {
       ++end;
     }
     int Mseg = end - start;
@@ -1445,13 +1464,24 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Segments are small (typically #experts). Host-side split lets us dispatch
   // one tuned hipBLASLt GEMM per segment instead of a naive gather kernel.
-  // Must D2H on the encoder stream (see try_sorted_rhs_gather_mm).
-  std::vector<uint32_t> segs(static_cast<size_t>(num_segments) * 2);
+  // Pinned D2H (same rationale as try_moe_segment_gather_mm).
+  static thread_local uint32_t* pin_segs = nullptr;
+  static thread_local size_t pin_segs_cap = 0;
+  const size_t nseg_u32 = static_cast<size_t>(num_segments) * 2;
+  if (nseg_u32 > pin_segs_cap) {
+    if (pin_segs)
+      (void)hipHostFree(pin_segs);
+    pin_segs_cap = nseg_u32 + 64;
+    CHECK_HIP_ERROR(hipHostMalloc(
+        reinterpret_cast<void**>(&pin_segs),
+        pin_segs_cap * sizeof(uint32_t),
+        hipHostMallocDefault));
+  }
   hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
   CHECK_HIP_ERROR(hipMemcpyAsync(
-      segs.data(),
+      pin_segs,
       gpu_ptr<const uint32_t>(segments),
-      segs.size() * sizeof(uint32_t),
+      nseg_u32 * sizeof(uint32_t),
       hipMemcpyDeviceToHost,
       hs));
   CHECK_HIP_ERROR(hipStreamSynchronize(hs));
@@ -1464,8 +1494,8 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // LDS-tiled offset GEMMs only. hipBLASLt pointer-offset path pegs gfx1151.
   for (int i = 0; i < num_segments; ++i) {
-    uint32_t k0 = segs[static_cast<size_t>(2 * i)];
-    uint32_t k1 = segs[static_cast<size_t>(2 * i + 1)];
+    uint32_t k0 = pin_segs[static_cast<size_t>(2 * i)];
+    uint32_t k1 = pin_segs[static_cast<size_t>(2 * i + 1)];
     if (k1 <= k0) {
       void* c_ptr = out_base + static_cast<size_t>(i) * out_stride * esize;
       size_t bytes = static_cast<size_t>(out_stride) * esize;
