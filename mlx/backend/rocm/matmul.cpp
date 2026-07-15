@@ -1226,15 +1226,14 @@ static bool try_moe_segment_gather_mm(
   mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
   mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
 
-  // Pack + strided-batched hipBLASLt (default for bf16 1-D expert MoE):
+  // Pack + strided-batched hipBLASLt (opt-in MLX_ROCM_MOE_PACK=1):
   //   pack tokens → [E, M_fixed, K] on device, ONE batched MFMA GEMM with
   //   host-known fixed shapes (no D2H / no stream sync), scatter back.
-  // M_fixed ≈ 2× average tokens/expert (not full batch — E× pad is too slow).
-  // Extremely skewed routing can overflow (tokens beyond M_fixed dropped);
-  // lemonseed MoE load-balance keeps this rare. Force exact host path with
-  // MLX_ROCM_MOE_HOST_SEG=1. VALU device path: MLX_ROCM_MOE_DEVICE_SEG=1.
-  static const bool force_host_seg = [] {
-    const char* e = std::getenv("MLX_ROCM_MOE_HOST_SEG");
+  // M_fixed ≈ 2× average tokens/expert. Currently ~5.6k wall mean on MI300X
+  // (more stable, fewer 11k peaks) — default remains host+hipBLASLt until
+  // pad overhead is reduced. VALU device path: MLX_ROCM_MOE_DEVICE_SEG=1.
+  static const bool use_pack = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_PACK");
     return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
                  e[0] == 'T');
   }();
@@ -1245,7 +1244,7 @@ static bool try_moe_segment_gather_mm(
   }();
   const int n_experts =
       (b_batch_shape.size() == 1) ? static_cast<int>(b_batch_shape[0]) : 0;
-  if (!force_host_seg && assume_identity_lhs && n_experts > 0 &&
+  if (use_pack && assume_identity_lhs && n_experts > 0 &&
       n_experts <= 256 && a.dtype() == bfloat16 &&
       rocm::is_hipblaslt_available() && !use_device_seg) {
     // 2× mean tokens/expert, min 32, max batch. Align up to 32 for GEMM tiles.
