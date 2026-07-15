@@ -417,17 +417,23 @@ void hipblaslt_gemm_impl(
           ws_ptr,
           ws_actual,
           stream);
-      if (status != HIPBLAS_STATUS_SUCCESS) {
-        throw std::runtime_error(
-            "hipblasLtMatmul (pipe cache) failed: " +
-            std::to_string(static_cast<int>(status)) + " MNK=" +
-            std::to_string(M) + "," + std::to_string(N) + "," +
-            std::to_string(K) + " lda/b/c=" + std::to_string(lda) + "," +
-            std::to_string(ldb) + "," + std::to_string(ldc) + " op=" +
-            std::to_string(static_cast<int>(op_a)) + "," +
-            std::to_string(static_cast<int>(op_b)));
+      if (status == HIPBLAS_STATUS_SUCCESS) {
+        return;
       }
-      return;
+      // Stale/incompatible algo (common when bucketed NN algos were reused for
+      // TN, or dims changed). Drop the pipe entry and rebuild below.
+      {
+        std::lock_guard<std::mutex> lock(g_pipe_mutex);
+        auto it = g_pipe_cache.find(pkey);
+        if (it != g_pipe_cache.end()) {
+          (void)hipblasLtMatrixLayoutDestroy(it->second.layout_a);
+          (void)hipblasLtMatrixLayoutDestroy(it->second.layout_b);
+          (void)hipblasLtMatrixLayoutDestroy(it->second.layout_c);
+          (void)hipblasLtMatrixLayoutDestroy(it->second.layout_d);
+          (void)hipblasLtMatmulDescDestroy(it->second.desc);
+          g_pipe_cache.erase(it);
+        }
+      }
     }
   }
 
@@ -653,11 +659,18 @@ void hipblaslt_gemm_impl(
       return 8192;
     return ((x + 1023) / 1024) * 1024;
   };
+  // Bucket NN only. Transpose (TN/NT/TT) heuristics are NOT portable across
+  // nearby sizes — reusing a bucketed algo under train caused
+  // hipblasLtMatmul status 3 (INVALID_VALUE) for MoE VJP TN GEMMs.
+  // Force exact keys for any transpose; NN keeps bucketing for MoE thrash.
   static const bool exact_cache =
       std::getenv("MLX_HIPBLASLT_EXACT_CACHE") != nullptr;
-  const int cache_M = exact_cache ? M : gemm_dim_bucket(M);
-  const int cache_N = exact_cache ? N : gemm_dim_bucket(N);
-  const int cache_K = exact_cache ? K : gemm_dim_bucket(K);
+  const bool has_transpose =
+      (op_a != HIPBLAS_OP_N) || (op_b != HIPBLAS_OP_N);
+  const bool use_exact = exact_cache || has_transpose;
+  const int cache_M = use_exact ? M : gemm_dim_bucket(M);
+  const int cache_N = use_exact ? N : gemm_dim_bucket(N);
+  const int cache_K = use_exact ? K : gemm_dim_bucket(K);
 
   struct AlgoKey {
     int M, N, K, batch, dt, ta, tb, dev, epi;
@@ -906,6 +919,69 @@ void hipblaslt_gemm_impl(
       ws_ptr,
       ws_actual,
       stream);
+
+  // One retry with a fresh exact-size heuristic if the cached algo is bad
+  // (bucketed NN hit used on a slightly different geometry).
+  if (status != HIPBLAS_STATUS_SUCCESS && cache_hit) {
+    {
+      std::lock_guard<std::mutex> lock(algo_mutex);
+      algo_cache.erase(key);
+    }
+    status = hipblasLtMatmulAlgoGetHeuristic(
+        handle,
+        use_desc,
+        use_la,
+        use_lb,
+        use_lc,
+        use_ld,
+        pref_guard.pref,
+        kMaxAlgos,
+        heuristics,
+        &returned_algo_count);
+    if (status == HIPBLAS_STATUS_SUCCESS && returned_algo_count > 0) {
+      heuristic = heuristics[0];
+      {
+        std::lock_guard<std::mutex> lock(algo_mutex);
+        // Store under exact dims so TN never reuses a neighbor's algo.
+        AlgoKey exact_key{
+            M,
+            N,
+            K,
+            batch_count,
+            static_cast<int>(data_type),
+            trans_a_val,
+            trans_b_val,
+            device_id,
+            static_cast<int>(epilogue)};
+        algo_cache[exact_key] = heuristic;
+      }
+      size_t ws2 = heuristic.workspaceSize;
+      void* wp2 = nullptr;
+      size_t ws2a = 0;
+      if (ws2 > 0) {
+        auto [p, s] = ensure_workspace(device_id, ws2);
+        wp2 = p;
+        ws2a = s;
+      }
+      status = hipblasLtMatmul(
+          handle,
+          use_desc,
+          alpha,
+          a_ptr,
+          use_la,
+          b_ptr,
+          use_lb,
+          beta,
+          c_ptr,
+          use_lc,
+          c_ptr,
+          use_ld,
+          &heuristic.algo,
+          wp2,
+          ws2a,
+          stream);
+    }
+  }
 
   if (status != HIPBLAS_STATUS_SUCCESS) {
     throw std::runtime_error(

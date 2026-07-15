@@ -1141,6 +1141,20 @@ __global__ void moe_sorted_expert_gemm_kernel(
   }
 }
 
+__global__ void moe_sorted_segments_kernel(
+    const uint32_t* __restrict__ idx,
+    uint32_t* __restrict__ segments,
+    int T,
+    int E) {
+  int e = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (e >= E)
+    return;
+  int lo = moe_lower_bound(idx, T, static_cast<uint32_t>(e));
+  int hi = moe_upper_bound(idx, T, static_cast<uint32_t>(e));
+  segments[2 * e] = static_cast<uint32_t>(lo);
+  segments[2 * e + 1] = static_cast<uint32_t>(hi);
+}
+
 template <typename T, bool TransA, bool TransB>
 __global__ void segmented_mm_device_kernel(
     const T* __restrict__ A,
@@ -1743,6 +1757,24 @@ void moe_sorted_expert_gemm(
       default:
         throw std::runtime_error("Unsupported dtype for moe_sorted_expert_gemm");
     }
+  });
+}
+
+void moe_sorted_segments(
+    CommandEncoder& encoder,
+    const array& expert_ids,
+    array& segments,
+    int T,
+    int E) {
+  encoder.set_input_array(expert_ids);
+  encoder.set_output_array(segments);
+  const uint32_t* idx = gpu_ptr<const uint32_t>(expert_ids);
+  uint32_t* seg = gpu_ptr<uint32_t>(segments);
+  encoder.launch_kernel([=](hipStream_t stream) {
+    dim3 block(256);
+    dim3 grid((E + 255) / 256);
+    hipLaunchKernelGGL(
+        moe_sorted_segments_kernel, grid, block, 0, stream, idx, seg, T, E);
   });
 }
 

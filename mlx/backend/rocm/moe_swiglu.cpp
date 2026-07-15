@@ -403,138 +403,82 @@ void MoeSwigluSortedVJP::eval_gpu(
     encoder.set_output_array(*o);
   }
 
-  // Zero weight grads once (experts not hit stay 0).
-  encoder.launch_kernel([ptr = gpu_ptr<void>(dwg),
-                         n = dwg.nbytes()](hipStream_t st) {
-    (void)hipMemsetAsync(ptr, 0, n, st);
-  });
-  encoder.launch_kernel([ptr = gpu_ptr<void>(dwu),
-                         n = dwu.nbytes()](hipStream_t st) {
-    (void)hipMemsetAsync(ptr, 0, n, st);
-  });
-  encoder.launch_kernel([ptr = gpu_ptr<void>(dwd),
-                         n = dwd.nbytes()](hipStream_t st) {
-    (void)hipMemsetAsync(ptr, 0, n, st);
-  });
-
-  // Device pack + tiny counts D2H (E ints only) for exact-M GEMMs.
-  // Avoids full-ids sync AND pad-to-T FLOP waste (was ~E× slower than pure).
-  int M_fixed = (T + 31) & ~31;
-  if (M_fixed < 32)
-    M_fixed = 32;
-
+  // Fully device-side exact-M (no host D2H): binary-search segments on-device.
+  // hipBLASLt TN status=3 under train fixed via exact algo keys for transpose;
+  // here VALU device kernels stay zero-sync + exact-M for MoE VJP.
   const int64_t wg_stride = static_cast<int64_t>(D) * I;
   const int64_t wd_stride = static_cast<int64_t>(I) * D;
-  const int64_t stride_x = static_cast<int64_t>(M_fixed) * D;
-  const int64_t stride_i = static_cast<int64_t>(M_fixed) * I;
 
-  auto mk = [&](Shape sh, Dtype dt = bfloat16) {
-    array a(sh, dt, nullptr, {});
+  auto mk = [&](Shape sh) {
+    array a(sh, bfloat16, nullptr, {});
     a.set_data(rocm::malloc_async(a.nbytes(), encoder));
     encoder.add_temporary(a);
     return a;
   };
-  array px = mk(Shape{E, M_fixed, D});
-  array pdy = mk(Shape{E, M_fixed, D});
-  array pg = mk(Shape{E, M_fixed, I});
-  array pu = mk(Shape{E, M_fixed, I});
-  array ph = mk(Shape{E, M_fixed, I});
-  array pdh = mk(Shape{E, M_fixed, I});
-  array pdg = mk(Shape{E, M_fixed, I});
-  array pdu = mk(Shape{E, M_fixed, I});
-  array pdx = mk(Shape{E, M_fixed, D});
-  array slot = mk(Shape{E, M_fixed}, int32);
-  array cnt = mk(Shape{E}, int32);
+  array gate = mk(Shape{T, I});
+  array up = mk(Shape{T, I});
+  array h = mk(Shape{T, I});
+  array dh = mk(Shape{T, I});
+  array dg = mk(Shape{T, I});
+  array du = mk(Shape{T, I});
 
-  // Joint pack x|dy so slots match.
-  array xdy = mk(Shape{T, 2 * D});
-  rocm::bf16_concat_rows(
-      encoder, gpu_ptr<void>(x), gpu_ptr<void>(dy), gpu_ptr<void>(xdy), T, D);
-  array pxdy = mk(Shape{E, M_fixed, 2 * D});
-  rocm::moe_pack_tokens(
-      encoder, xdy, ids, pxdy, slot, cnt, T, 2 * D, E, M_fixed);
-  rocm::bf16_split_rows(
-      encoder,
-      gpu_ptr<void>(pxdy),
-      gpu_ptr<void>(px),
-      gpu_ptr<void>(pdy),
-      E * M_fixed,
-      D);
-
-  // Zero-sync path: batched/padded GEMMs (pad rows are zero → correct dW).
-  // Prefer this over tiny counts D2H: host sync per layer kills pipeline peaks.
-  if (rocm::is_hipblaslt_available()) {
-    rocm::hipblaslt_gemm_batched(
-        encoder, false, false, M_fixed, I, D, 1.0f, px, D, stride_x, wg, I,
-        wg_stride, 0.0f, pg, I, stride_i, E, bfloat16);
-    rocm::hipblaslt_gemm_batched(
-        encoder, false, false, M_fixed, I, D, 1.0f, px, D, stride_x, wu, I,
-        wg_stride, 0.0f, pu, I, stride_i, E, bfloat16);
-  } else {
-    throw std::runtime_error("MoeSwigluSortedVJP: hipBLASLt required");
-  }
-
-  // TN via rocBLAS (E expert launches, no host wait)
-  {
-    char* pdyB = static_cast<char*>(gpu_ptr<void>(pdy));
-    char* pdhB = static_cast<char*>(gpu_ptr<void>(pdh));
-    char* wdB = static_cast<char*>(gpu_ptr<void>(wd));
-    for (int e = 0; e < E; ++e) {
-      rocm::rocblas_gemm_ptrs(
-          encoder, false, true, M_fixed, I, D, 1.0f,
-          pdyB + e * stride_x * esz, D, wdB + e * wd_stride * esz, D, 0.0f,
-          pdhB + e * stride_i * esz, I, bfloat16);
-    }
-  }
+  // gate = x @ Wg, up = x @ Wu  (NN, Wg[E,D,I])
+  rocm::moe_sorted_expert_gemm(
+      encoder, x, wg, ids, gate, T, /*N=*/I, /*K=*/D, E,
+      /*b_transposed=*/false, /*ldb=*/I, wg_stride);
+  rocm::moe_sorted_expert_gemm(
+      encoder, x, wu, ids, up, T, I, D, E, false, I, wg_stride);
+  // dh = dy @ Wd.T  Wd[E,I,D] as TransB with ldb=D
+  rocm::moe_sorted_expert_gemm(
+      encoder, dy, wd, ids, dh, T, /*N=*/I, /*K=*/D, E,
+      /*b_transposed=*/true, /*ldb=*/D, wd_stride);
 
   rocm::swiglu_bwd_elem_bf16(
-      encoder, gpu_ptr<void>(pg), gpu_ptr<void>(pu), gpu_ptr<void>(pdh),
-      gpu_ptr<void>(ph), gpu_ptr<void>(pdg), gpu_ptr<void>(pdu),
-      E * M_fixed * I);
+      encoder,
+      gpu_ptr<void>(gate),
+      gpu_ptr<void>(up),
+      gpu_ptr<void>(dh),
+      gpu_ptr<void>(h),
+      gpu_ptr<void>(dg),
+      gpu_ptr<void>(du),
+      T * I);
 
-  {
-    char* pdgB = static_cast<char*>(gpu_ptr<void>(pdg));
-    char* pduB = static_cast<char*>(gpu_ptr<void>(pdu));
-    char* pdxB = static_cast<char*>(gpu_ptr<void>(pdx));
-    char* pxB = static_cast<char*>(gpu_ptr<void>(px));
-    char* phB = static_cast<char*>(gpu_ptr<void>(ph));
-    char* pdyB = static_cast<char*>(gpu_ptr<void>(pdy));
-    char* wgB = static_cast<char*>(gpu_ptr<void>(wg));
-    char* wuB = static_cast<char*>(gpu_ptr<void>(wu));
-    char* dwgB = static_cast<char*>(gpu_ptr<void>(dwg));
-    char* dwuB = static_cast<char*>(gpu_ptr<void>(dwu));
-    char* dwdB = static_cast<char*>(gpu_ptr<void>(dwd));
-    for (int e = 0; e < E; ++e) {
-      rocm::rocblas_gemm_ptrs(
-          encoder, false, true, M_fixed, D, I, 1.0f,
-          pdgB + e * stride_i * esz, I, wgB + e * wg_stride * esz, I, 0.0f,
-          pdxB + e * stride_x * esz, D, bfloat16);
-      rocm::rocblas_gemm_ptrs(
-          encoder, false, true, M_fixed, D, I, 1.0f,
-          pduB + e * stride_i * esz, I, wuB + e * wg_stride * esz, I, 1.0f,
-          pdxB + e * stride_x * esz, D, bfloat16);
-      rocm::rocblas_gemm_ptrs(
-          encoder, true, false, D, I, M_fixed, 1.0f,
-          pxB + e * stride_x * esz, D, pdgB + e * stride_i * esz, I, 0.0f,
-          dwgB + e * wg_stride * esz, I, bfloat16);
-      rocm::rocblas_gemm_ptrs(
-          encoder, true, false, D, I, M_fixed, 1.0f,
-          pxB + e * stride_x * esz, D, pduB + e * stride_i * esz, I, 0.0f,
-          dwuB + e * wg_stride * esz, I, bfloat16);
-      rocm::rocblas_gemm_ptrs(
-          encoder, true, false, I, D, M_fixed, 1.0f,
-          phB + e * stride_i * esz, I, pdyB + e * stride_x * esz, D, 0.0f,
-          dwdB + e * wd_stride * esz, D, bfloat16);
-    }
-  }
-
+  // dx = dg @ Wg.T  (memset first; device kernel has no beta)
   {
     void* op = gpu_ptr<void>(dx);
     encoder.launch_kernel([op, n = dx.nbytes()](hipStream_t st) {
       (void)hipMemsetAsync(op, 0, n, st);
     });
   }
-  rocm::moe_unpack_tokens(encoder, pdx, slot, dx, E, M_fixed, D);
+  rocm::moe_sorted_expert_gemm(
+      encoder, dg, wg, ids, dx, T, /*N=*/D, /*K=*/I, E, true, I, wg_stride);
+  array dx_u = mk(Shape{T, D});
+  rocm::moe_sorted_expert_gemm(
+      encoder, du, wu, ids, dx_u, T, D, I, E, true, I, wg_stride);
+  rocm::bf16_add_inplace(
+      encoder, gpu_ptr<void>(dx_u), gpu_ptr<void>(dx), T * D);
+
+  // Device segments [E,2] then segmented_mm for dW
+  array segments(Shape{E, 2}, uint32, nullptr, {});
+  segments.set_data(rocm::malloc_async(segments.nbytes(), encoder));
+  encoder.add_temporary(segments);
+  rocm::moe_sorted_segments(encoder, ids, segments, T, E);
+
+  // dWg[E,D,I] = x.T @ dg
+  rocm::segmented_mm_device(
+      encoder, x, dg, segments, dwg, /*M=*/D, /*N=*/I, E,
+      /*a_transposed=*/true, /*lda=*/D, /*a_k_stride=*/D,
+      /*b_transposed=*/false, /*ldb=*/I, /*b_k_stride=*/I,
+      /*out_stride=*/wg_stride);
+  // dWu[E,D,I] = x.T @ du
+  rocm::segmented_mm_device(
+      encoder, x, du, segments, dwu, D, I, E, true, D, D, false, I, I,
+      wg_stride);
+  // dWd[E,I,D] = h.T @ dy
+  rocm::segmented_mm_device(
+      encoder, h, dy, segments, dwd, /*M=*/I, /*N=*/D, E, true, /*lda=*/I,
+      /*a_k_stride=*/I, false, /*ldb=*/D, /*b_k_stride=*/D,
+      /*out_stride=*/wd_stride);
 }
 
 } // namespace

@@ -201,6 +201,15 @@ void bf16_split_rows(
     int rows,
     int K);
 
+// Write segments[e] = {lo, hi} for sorted expert_ids[T] over e=0..E-1 (uint32).
+// Fully device-side; no host sync.
+void moe_sorted_segments(
+    CommandEncoder& encoder,
+    const array& expert_ids, // [T] uint32 sorted
+    array& segments, // [E, 2] uint32
+    int T,
+    int E);
+
 // Device-side SegmentedMM: out[s] = A[:,k0:k1] @ B[k0:k1,:] with (k0,k1) from
 // device segments[2*s], segments[2*s+1]. No host D2H / stream sync.
 void segmented_mm_device(
