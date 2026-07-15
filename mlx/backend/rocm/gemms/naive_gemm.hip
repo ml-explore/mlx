@@ -1392,7 +1392,8 @@ void segmented_mm_device(
 
   encoder.launch_kernel([=](hipStream_t stream) {
     auto launch = [&](auto* typed_a, auto* typed_b, auto* typed_c) {
-      using T = std::remove_pointer_t<decltype(typed_a)>;
+      // typed_a is const T* — strip pointer AND const so Acc is not const float.
+      using T = std::remove_const_t<std::remove_pointer_t<decltype(typed_a)>>;
       if (a_transposed && b_transposed) {
         hipLaunchKernelGGL(
             (segmented_mm_device_kernel<T, true, true>),
