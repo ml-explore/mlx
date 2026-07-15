@@ -177,12 +177,17 @@ class ManagedDevicePool {
   // Caller owns the RocmBuffer shell; free() returns HBM to the free list.
   RocmBuffer* malloc(size_t size, int device);
   // Return a buffer from this pool. Deletes the RocmBuffer shell.
+  // Does NOT hipFree — block stays in free-list for reuse (kills alloc storm).
   void free(RocmBuffer* buf);
   bool owns(const void* ptr) const;
   size_t live_bytes() const { return live_bytes_; }
   size_t reserved_bytes() const { return reserved_bytes_; }
   size_t free_list_bytes() const { return free_list_bytes_; }
-  // Drop fully-empty slabs back to the driver.
+  // Stats (debug / train log).
+  uint64_t alloc_hits() const { return alloc_hits_; }
+  uint64_t alloc_grows() const { return alloc_grows_; }
+  uint64_t free_to_list() const { return free_to_list_; }
+  // Drop fully-empty slabs back to the driver (explicit only).
   size_t shrink();
 
  private:
@@ -216,6 +221,9 @@ class ManagedDevicePool {
   size_t live_bytes_{0};
   size_t reserved_bytes_{0};
   size_t free_list_bytes_{0};
+  uint64_t alloc_hits_{0};
+  uint64_t alloc_grows_{0};
+  uint64_t free_to_list_{0};
 };
 
 // ---------------------------------------------------------------------------

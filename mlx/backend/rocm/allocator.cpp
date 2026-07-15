@@ -618,8 +618,11 @@ RocmBuffer* ManagedDevicePool::malloc(size_t size, int device) {
   if (!take_fit(size, blk)) {
     if (!grow_slab(size, device))
       return nullptr;
+    ++alloc_grows_;
     if (!take_fit(size, blk))
       return nullptr;
+  } else {
+    ++alloc_hits_;
   }
   void* ptr = blk.ptr;
   size_t rem = blk.size - size;
@@ -660,30 +663,9 @@ void ManagedDevicePool::free(RocmBuffer* buf) {
           slabs_[si].live_bytes = 0;
       }
       live_.erase(it);
+      // Free-list only — no hipFree. Reuse is the point (cut alloc/free wall).
       insert_free(ptr, sz, si);
-      // Shrink: if this slab is fully free, return it to the driver.
-      if (si < slabs_.size() && slabs_[si].live_bytes == 0 && slabs_[si].base) {
-        // Remove all free blocks belonging to this slab.
-        for (auto fit = free_by_addr_.begin(); fit != free_by_addr_.end();) {
-          if (fit->second.slab_idx == si) {
-            free_list_bytes_ -= fit->second.size;
-            auto range = free_by_size_.equal_range(fit->second.size);
-            for (auto sit = range.first; sit != range.second; ++sit) {
-              if (sit->second == fit->first) {
-                free_by_size_.erase(sit);
-                break;
-              }
-            }
-            fit = free_by_addr_.erase(fit);
-          } else {
-            ++fit;
-          }
-        }
-        reserved_bytes_ -= slabs_[si].capacity;
-        (void)hipFree(slabs_[si].base);
-        slabs_[si].base = nullptr;
-        slabs_[si].capacity = 0;
-      }
+      ++free_to_list_;
     } else {
       // Not tracked as live — still try hipFree if outside pool (shouldn't).
       (void)hipFree(ptr);
