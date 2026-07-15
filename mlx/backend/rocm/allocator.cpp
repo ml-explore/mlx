@@ -642,11 +642,15 @@ void RocmAllocator::free(Buffer buffer, bool force) {
 
   std::unique_lock lock(mutex_);
   active_memory_ -= buf->size;
-  // CUDA: recycle BufferCache if under cap, else free_cuda_buffer.
-  if (get_cache_memory() < max_pool_size_) {
-    buffer_cache_.recycle_to_cache(buf);
-  } else {
-    free_rocm_buffer(buf);
+  // Always recycle first. CUDA frees immediately when cache is at
+  // max_pool_size_; on ROCm that hipFree path is catastrophic (100–500 ms
+  // stalls in the bwd→Adam gap while the freelist is full of same-sized
+  // blocks the next step needs). Recycle this buffer (MRU), then trim the
+  // LRU tail if over the cap — same bound, but the just-freed sizes stay
+  // available for the next malloc hit.
+  buffer_cache_.recycle_to_cache(buf);
+  if (get_cache_memory() > max_pool_size_) {
+    buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
 }
 
