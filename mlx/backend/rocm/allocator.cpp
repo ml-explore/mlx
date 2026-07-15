@@ -256,7 +256,13 @@ RocmAllocator::RocmAllocator()
     : buffer_cache_(
           page_size,
           [](RocmBuffer* buf) { return buf->size; },
-          [](RocmBuffer* buf) { free_rocm_buffer_cb(buf); }),
+          [](RocmBuffer* buf) { free_rocm_buffer_cb(buf); },
+          // Exact-size freelist only (min util 1.0). Fixed-shape train reuses
+          // the same rounded sizes every step → 100% fill of recycled blocks.
+          // Oversized 2× reuse left half the allocation idle and fragmented
+          // HBM; those slabs are never handed out and get reclaimed via
+          // hipFree/hipFreeAsync when we need room.
+          /*min_utilization=*/1.0f),
       memory_limit_(0),
       free_limit_(0),
       max_pool_size_(0),
@@ -473,34 +479,32 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
     };
 
     // Fixed-shape training reuses the same rounded sizes every step. Policy:
-    //   1) exact BufferCache hit (see buffer_cache.h) — no HIP
-    //   2) hipMalloc without touching the freelist
-    //   3) only if active+cache approaches physical HBM, release LRU cache
-    //   4) if hipMalloc still fails, release more and retry once
-    // Never release against the soft memory_limit_ alone — that caused the
-    // free/alloc storm (hipFree 18s/step, 90–500ms pre-Adam gaps). hipFree on
-    // a full device can also hang; leave ~2GB headroom.
+    //   1) exact BufferCache hit — no HIP (100% fill of recycled blocks)
+    //   2) reclaim freelist if active+cache would exceed ~85% HBM (leave room
+    //      so hipMalloc never runs the device to 0 MB free — that hangs KFD)
+    //   3) hipMalloc / hipMallocAsync
+    //   4) on failure, hipFreeAsync-capable reclaim more and retry
+    // Soft memory_limit_ is NOT used for reclaim (caused free/alloc storms).
     if (!buf) {
-      const size_t hbm_cap = (total_memory_ > (2ull << 30))
-          ? (total_memory_ - (2ull << 30))
-          : total_memory_;
-      auto maybe_reclaim_to_fit = [&](size_t need) {
+      // Leave ≥15% HBM free so the driver/TTM never hits 0 MB free (OOR hang).
+      const size_t hbm_cap = static_cast<size_t>(total_memory_ * 0.85);
+      auto reclaim = [&](size_t need) {
         int64_t over = static_cast<int64_t>(get_active_memory()) +
-            static_cast<int64_t>(get_cache_memory()) + static_cast<int64_t>(need) -
-            static_cast<int64_t>(hbm_cap);
+            static_cast<int64_t>(get_cache_memory()) +
+            static_cast<int64_t>(need) - static_cast<int64_t>(hbm_cap);
         if (over > 0 && get_cache_memory() > 0) {
+          // free_ callback → free_rocm_buffer → hipFreeAsync when pool path.
           buffer_cache_.release_cached_buffers(static_cast<size_t>(over));
         }
       };
 
       lock.lock();
-      maybe_reclaim_to_fit(size);
+      reclaim(size);
       lock.unlock();
 
       buf = try_device_alloc();
       if (!buf) {
         lock.lock();
-        // True OOM path: drop at least this request (and a chunk) from cache.
         size_t want = std::max(size * 2, size_t(1) << 30);
         if (get_cache_memory() > 0) {
           buffer_cache_.release_cached_buffers(
