@@ -331,6 +331,18 @@ class Device {
     return max_threads_per_block_;
   }
 
+  // Max work-per-thread for fused Compiled kernels (vectorized loads).
+  // Wave32 / low-CU iGPUs (e.g. gfx1152) are more fragile with 32B vectors
+  // (WPT=16 for bf16); prefer 8 so we stay within always-instantiated, low
+  // register-pressure specializations. CDNA/dGPU can use 16.
+  int max_compiled_work_per_thread() const {
+    int w = warp_size_ > 0 ? warp_size_ : 32;
+    if (w <= 32 && num_cus_ > 0 && num_cus_ <= 16) {
+      return 8;
+    }
+    return 16;
+  }
+
   // Prefer block sizes that pack full wavefronts and stay under device limits.
   // cu-aware: on very small GPUs keep occupancy high with smaller blocks when
   // the work is tiny; still multiple of warp_size.

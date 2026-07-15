@@ -13,6 +13,7 @@
 #include <map>
 #include <mutex>
 #include <sstream>
+#include <unordered_set>
 
 #include <fcntl.h>
 #include <hip/hiprtc.h>
@@ -420,12 +421,30 @@ JitModule::JitModule(
   auto [precompiled, source_code, kernel_names] = builder();
 
   const std::string* expected_source = precompiled ? nullptr : &source_code;
-  if (!read_cached_hsaco(
-          hsaco_cache_dir(),
-          cache_name,
-          hsaco,
-          hsaco_kernels,
-          expected_source)) {
+  bool cache_hit = read_cached_hsaco(
+      hsaco_cache_dir(), cache_name, hsaco, hsaco_kernels, expected_source);
+
+  // Source-only cache keys miss symbol-list growth (e.g. work_per_thread
+  // expanded 1/4/8 → 1/4/8/16). A hit with incomplete .txt then throws
+  // "There is no kernel named …_strided<…, 16>" at launch. Require every
+  // requested name to be present; otherwise recompile.
+  if (cache_hit && !precompiled) {
+    std::unordered_set<std::string> have;
+    have.reserve(hsaco_kernels.size());
+    for (const auto& p : hsaco_kernels) {
+      have.insert(p.first);
+    }
+    for (const auto& name : kernel_names) {
+      if (!have.count(name)) {
+        cache_hit = false;
+        hsaco.clear();
+        hsaco_kernels.clear();
+        break;
+      }
+    }
+  }
+
+  if (!cache_hit) {
     // Get the HSACO (AMD GPU binary)
     if (precompiled) {
       hsaco = std::move(source_code);

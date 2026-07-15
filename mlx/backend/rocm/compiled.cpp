@@ -854,7 +854,8 @@ void Compiled::eval_gpu(
 
   // Determine the work per thread for the vectorized reads/writes.
   // Prefer 32B vectors (was 16B) to cut launch count on large elementwise
-  // fused graphs (bf16 → 16 elems/thread, fp32 → 8).
+  // fused graphs (bf16 → 16 elems/thread, fp32 → 8). Cap by device capability
+  // (wave32/low-CU iGPUs prefer smaller WPT — see max_compiled_work_per_thread).
   int max_size = 1;
   for (const auto& x : outputs) {
     max_size = (max_size > x.itemsize()) ? max_size : x.itemsize();
@@ -862,8 +863,12 @@ void Compiled::eval_gpu(
   int work_per_thread = 32 / max_size;
   if (work_per_thread < 1)
     work_per_thread = 1;
+  const int max_wpt =
+      rocm::device(s.device).max_compiled_work_per_thread();
   // Cap to the largest WPT we always instantiate below (i8 → 32 would
-  // otherwise miss the symbol table).
+  // otherwise miss the symbol table) and to device capability.
+  if (work_per_thread > max_wpt)
+    work_per_thread = max_wpt;
   if (work_per_thread > 16)
     work_per_thread = 16;
 
@@ -946,16 +951,20 @@ void Compiled::eval_gpu(
     work_per_thread = 1;
   }
 
-  // Launch kernel.
+  // Launch kernel. Fall back through the fixed WPT set if a symbol is missing
+  // (stale HSACO cache or arch that failed a wide-vector specialization).
   const char* index_type = large ? "int64_t" : "uint32_t";
-  std::string kernel_name = std::string("mlx::core::rocm::") + lib_name();
-  if (contiguous) {
-    kernel_name += std::string("_contiguous<") + index_type + ", " +
-        std::to_string(work_per_thread) + ">";
-  } else {
-    kernel_name += std::string("_strided<") + std::to_string(shape.size()) +
-        ", " + index_type + ", " + std::to_string(work_per_thread) + ">";
-  }
+  auto make_name = [&](int wpt) {
+    std::string kernel_name = std::string("mlx::core::rocm::") + lib_name();
+    if (contiguous) {
+      kernel_name += std::string("_contiguous<") + index_type + ", " +
+          std::to_string(wpt) + ">";
+    } else {
+      kernel_name += std::string("_strided<") + std::to_string(shape.size()) +
+          ", " + index_type + ", " + std::to_string(wpt) + ">";
+    }
+    return kernel_name;
+  };
 
   auto& encoder = rocm::get_command_encoder(s);
   for (const auto& in : inputs) {
@@ -965,7 +974,28 @@ void Compiled::eval_gpu(
     encoder.set_output_array(out);
   }
 
-  auto kernel = mod.get_kernel(kernel_name);
+  // Prefer chosen WPT, then 8, 4, 1 (all always instantiated).
+  const int fallback_wpts[] = {
+      work_per_thread, 8, 4, 1};
+  hipFunction_t kernel = nullptr;
+  for (int wpt : fallback_wpts) {
+    if (wpt > max_wpt || wpt < 1)
+      continue;
+    if (!contiguous && shape.back() % wpt != 0)
+      continue;
+    try {
+      kernel = mod.get_kernel(make_name(wpt));
+      work_per_thread = wpt;
+      break;
+    } catch (const std::runtime_error&) {
+      // try next specialization
+    }
+  }
+  if (!kernel) {
+    // Last resort: WPT=1 always exists after a valid compile.
+    work_per_thread = 1;
+    kernel = mod.get_kernel(make_name(1));
+  }
 
   // Calculate launch configuration — use runtime CU/warp-aware block size so
   // reduced-CU devices (e.g. gfx1152 partitions) pack better occupancy.
