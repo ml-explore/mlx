@@ -1918,20 +1918,32 @@ int moe_max_run_length_sync(
     int E) {
   if (T <= 0 || E <= 0)
     return 32;
-  array max_run(Shape{}, int32, nullptr, {});
+  // Scalar int32 on device (shape {1} — empty Shape{} not always constructible).
+  array max_run({1}, int32, nullptr, {});
   max_run.set_data(rocm::malloc_async(sizeof(int), encoder));
   encoder.add_temporary(max_run);
   moe_max_run_length(encoder, expert_ids, max_run, T, E);
 
   static thread_local int* pin = nullptr;
   if (!pin) {
-    CHECK_HIP_ERROR(hipHostMalloc(
-        reinterpret_cast<void**>(&pin), sizeof(int), hipHostMallocDefault));
+    if (hipHostMalloc(
+            reinterpret_cast<void**>(&pin), sizeof(int), hipHostMallocDefault) !=
+        hipSuccess) {
+      throw std::runtime_error("moe_max_run_length_sync: hipHostMalloc failed");
+    }
   }
   hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
-  CHECK_HIP_ERROR(hipMemcpyAsync(
-      pin, gpu_ptr<const int>(max_run), sizeof(int), hipMemcpyDeviceToHost, hs));
-  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
+  if (hipMemcpyAsync(
+          pin,
+          gpu_ptr<const int>(max_run),
+          sizeof(int),
+          hipMemcpyDeviceToHost,
+          hs) != hipSuccess) {
+    throw std::runtime_error("moe_max_run_length_sync: D2H failed");
+  }
+  if (hipStreamSynchronize(hs) != hipSuccess) {
+    throw std::runtime_error("moe_max_run_length_sync: sync failed");
+  }
   int m = *pin;
   if (m < 1)
     m = 1;
