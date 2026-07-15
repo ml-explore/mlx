@@ -403,11 +403,41 @@ void MoeSwigluSortedVJP::eval_gpu(
     encoder.set_output_array(*o);
   }
 
-  // Fully device-side exact-M (no host D2H): binary-search segments on-device.
-  // hipBLASLt TN status=3 under train fixed via exact algo keys for transpose;
-  // here VALU device kernels stay zero-sync + exact-M for MoE VJP.
+  // Exact-M host RLE (one tiny D2H of expert ids — same as fused forward) +
+  // hipBLASLt for NN and TN (TN status=3 fixed: exact algo keys for transpose).
+  // Faster than device VALU tiles; zero pad waste vs pack-to-T.
+  static thread_local uint32_t* pin = nullptr;
+  static thread_local size_t pin_cap = 0;
+  const size_t need = static_cast<size_t>(T);
+  if (need > pin_cap) {
+    if (pin)
+      (void)hipHostFree(pin);
+    pin_cap = need + need / 2 + 1024;
+    CHECK_HIP_ERROR(hipHostMalloc(
+        reinterpret_cast<void**>(&pin),
+        pin_cap * sizeof(uint32_t),
+        hipHostMallocDefault));
+  }
+  hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
+  CHECK_HIP_ERROR(hipMemcpyAsync(
+      pin,
+      gpu_ptr<const uint32_t>(ids),
+      need * sizeof(uint32_t),
+      hipMemcpyDeviceToHost,
+      hs));
+  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
+
   const int64_t wg_stride = static_cast<int64_t>(D) * I;
   const int64_t wd_stride = static_cast<int64_t>(I) * D;
+  const char* xB = static_cast<const char*>(gpu_ptr<void>(x));
+  const char* dyB = static_cast<const char*>(gpu_ptr<void>(dy));
+  const char* wgB = static_cast<const char*>(gpu_ptr<void>(wg));
+  const char* wuB = static_cast<const char*>(gpu_ptr<void>(wu));
+  const char* wdB = static_cast<const char*>(gpu_ptr<void>(wd));
+  char* dwgB = static_cast<char*>(gpu_ptr<void>(dwg));
+  char* dwuB = static_cast<char*>(gpu_ptr<void>(dwu));
+  char* dwdB = static_cast<char*>(gpu_ptr<void>(dwd));
+  char* dxB = static_cast<char*>(gpu_ptr<void>(dx));
 
   auto mk = [&](Shape sh) {
     array a(sh, bfloat16, nullptr, {});
@@ -421,64 +451,102 @@ void MoeSwigluSortedVJP::eval_gpu(
   array dh = mk(Shape{T, I});
   array dg = mk(Shape{T, I});
   array du = mk(Shape{T, I});
+  char* gateB = static_cast<char*>(gpu_ptr<void>(gate));
+  char* upB = static_cast<char*>(gpu_ptr<void>(up));
+  char* hB = static_cast<char*>(gpu_ptr<void>(h));
+  char* dhB = static_cast<char*>(gpu_ptr<void>(dh));
+  char* dgB = static_cast<char*>(gpu_ptr<void>(dg));
+  char* duB = static_cast<char*>(gpu_ptr<void>(du));
 
-  // gate = x @ Wg, up = x @ Wu  (NN, Wg[E,D,I])
-  rocm::moe_sorted_expert_gemm(
-      encoder, x, wg, ids, gate, T, /*N=*/I, /*K=*/D, E,
-      /*b_transposed=*/false, /*ldb=*/I, wg_stride);
-  rocm::moe_sorted_expert_gemm(
-      encoder, x, wu, ids, up, T, I, D, E, false, I, wg_stride);
-  // dh = dy @ Wd.T  Wd[E,I,D] as TransB with ldb=D
-  rocm::moe_sorted_expert_gemm(
-      encoder, dy, wd, ids, dh, T, /*N=*/I, /*K=*/D, E,
-      /*b_transposed=*/true, /*ldb=*/D, wd_stride);
+  // Zero dW (empty experts stay 0)
+  encoder.launch_kernel([ptr = gpu_ptr<void>(dwg), n = dwg.nbytes()](hipStream_t st) {
+    (void)hipMemsetAsync(ptr, 0, n, st);
+  });
+  encoder.launch_kernel([ptr = gpu_ptr<void>(dwu), n = dwu.nbytes()](hipStream_t st) {
+    (void)hipMemsetAsync(ptr, 0, n, st);
+  });
+  encoder.launch_kernel([ptr = gpu_ptr<void>(dwd), n = dwd.nbytes()](hipStream_t st) {
+    (void)hipMemsetAsync(ptr, 0, n, st);
+  });
+
+  auto gemm = [&](bool ta, bool tb, int M, int N, int K, const char* a, int lda,
+                  const char* b, int ldb, float beta, char* c, int ldc) {
+    // Prefer hipBLASLt for all layouts (TN fixed). rocBLAS fallback if needed.
+    if (rocm::is_hipblaslt_available()) {
+      rocm::hipblaslt_gemm_ptrs(
+          encoder, ta, tb, M, N, K, 1.0f, a, lda, b, ldb, beta, c, ldc,
+          bfloat16);
+    } else {
+      rocm::rocblas_gemm_ptrs(
+          encoder, ta, tb, M, N, K, 1.0f, a, lda, b, ldb, beta, c, ldc,
+          bfloat16);
+    }
+  };
+
+  // Pass 1: recompute gate/up + dh
+  int start = 0;
+  while (start < T) {
+    uint32_t e = pin[static_cast<size_t>(start)];
+    if (static_cast<int>(e) >= E) {
+      throw std::runtime_error("MoeSwigluSortedVJP: expert id out of range");
+    }
+    int end = start + 1;
+    while (end < T && pin[static_cast<size_t>(end)] == e)
+      ++end;
+    int Mseg = end - start;
+    if (Mseg <= 0) {
+      start = end;
+      continue;
+    }
+    const size_t xoff = static_cast<size_t>(start) * D * esz;
+    const size_t ioff = static_cast<size_t>(start) * I * esz;
+    const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
+    const size_t wdoff = static_cast<size_t>(e) * wd_stride * esz;
+
+    gemm(false, false, Mseg, I, D, xB + xoff, D, wgB + wgoff, I, 0.0f,
+         gateB + ioff, I);
+    gemm(false, false, Mseg, I, D, xB + xoff, D, wuB + wgoff, I, 0.0f,
+         upB + ioff, I);
+    // dh = dy @ Wd.T
+    gemm(false, true, Mseg, I, D, dyB + xoff, D, wdB + wdoff, D, 0.0f,
+         dhB + ioff, I);
+    start = end;
+  }
 
   rocm::swiglu_bwd_elem_bf16(
-      encoder,
-      gpu_ptr<void>(gate),
-      gpu_ptr<void>(up),
-      gpu_ptr<void>(dh),
-      gpu_ptr<void>(h),
-      gpu_ptr<void>(dg),
-      gpu_ptr<void>(du),
-      T * I);
+      encoder, gpu_ptr<void>(gate), gpu_ptr<void>(up), gpu_ptr<void>(dh),
+      gpu_ptr<void>(h), gpu_ptr<void>(dg), gpu_ptr<void>(du), T * I);
 
-  // dx = dg @ Wg.T  (memset first; device kernel has no beta)
-  {
-    void* op = gpu_ptr<void>(dx);
-    encoder.launch_kernel([op, n = dx.nbytes()](hipStream_t st) {
-      (void)hipMemsetAsync(op, 0, n, st);
-    });
+  // Pass 2: dx + dW
+  start = 0;
+  while (start < T) {
+    uint32_t e = pin[static_cast<size_t>(start)];
+    int end = start + 1;
+    while (end < T && pin[static_cast<size_t>(end)] == e)
+      ++end;
+    int Mseg = end - start;
+    if (Mseg <= 0) {
+      start = end;
+      continue;
+    }
+    const size_t xoff = static_cast<size_t>(start) * D * esz;
+    const size_t ioff = static_cast<size_t>(start) * I * esz;
+    const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
+    const size_t wdoff = static_cast<size_t>(e) * wd_stride * esz;
+
+    gemm(false, true, Mseg, D, I, dgB + ioff, I, wgB + wgoff, I, 0.0f,
+         dxB + xoff, D);
+    gemm(false, true, Mseg, D, I, duB + ioff, I, wuB + wgoff, I, 1.0f,
+         dxB + xoff, D);
+
+    gemm(true, false, D, I, Mseg, xB + xoff, D, dgB + ioff, I, 0.0f,
+         dwgB + wgoff, I);
+    gemm(true, false, D, I, Mseg, xB + xoff, D, duB + ioff, I, 0.0f,
+         dwuB + wgoff, I);
+    gemm(true, false, I, D, Mseg, hB + ioff, I, dyB + xoff, D, 0.0f,
+         dwdB + wdoff, D);
+    start = end;
   }
-  rocm::moe_sorted_expert_gemm(
-      encoder, dg, wg, ids, dx, T, /*N=*/D, /*K=*/I, E, true, I, wg_stride);
-  array dx_u = mk(Shape{T, D});
-  rocm::moe_sorted_expert_gemm(
-      encoder, du, wu, ids, dx_u, T, D, I, E, true, I, wg_stride);
-  rocm::bf16_add_inplace(
-      encoder, gpu_ptr<void>(dx_u), gpu_ptr<void>(dx), T * D);
-
-  // Device segments [E,2] then segmented_mm for dW
-  array segments(Shape{E, 2}, uint32, nullptr, {});
-  segments.set_data(rocm::malloc_async(segments.nbytes(), encoder));
-  encoder.add_temporary(segments);
-  rocm::moe_sorted_segments(encoder, ids, segments, T, E);
-
-  // dWg[E,D,I] = x.T @ dg
-  rocm::segmented_mm_device(
-      encoder, x, dg, segments, dwg, /*M=*/D, /*N=*/I, E,
-      /*a_transposed=*/true, /*lda=*/D, /*a_k_stride=*/D,
-      /*b_transposed=*/false, /*ldb=*/I, /*b_k_stride=*/I,
-      /*out_stride=*/wg_stride);
-  // dWu[E,D,I] = x.T @ du
-  rocm::segmented_mm_device(
-      encoder, x, du, segments, dwu, D, I, E, true, D, D, false, I, I,
-      wg_stride);
-  // dWd[E,I,D] = h.T @ dy
-  rocm::segmented_mm_device(
-      encoder, h, dy, segments, dwd, /*M=*/I, /*N=*/D, E, true, /*lda=*/I,
-      /*a_k_stride=*/I, false, /*ldb=*/D, /*b_k_stride=*/D,
-      /*out_stride=*/wd_stride);
 }
 
 } // namespace
