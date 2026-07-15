@@ -8,16 +8,19 @@
 #define MAX_NDIM 10
 
 // AMD GPU warp (wavefront) size varies by architecture:
-// - RDNA (gfx10xx, gfx11xx, gfx12xx, including gfx1152 / 860M): **32**
+// - RDNA2/3/3.5/4 (gfx10xx–gfx12xx, incl. gfx1152 / 860M and gfx1200): **32**
 // - CDNA/GCN (gfx9xx MI-series): **64**
+//
+// RDNA4 is still wave32 (same as RDNA2/3). Optional host override only:
+//   cmake -DMLX_HOST_WARP_SIZE=32|64
+//   env   MLX_ROCM_FORCE_WARP_SIZE=32|64   (runtime launch override; debug)
 //
 // Device code: always use the compiler wavefront size for the offload arch.
 // Host code: MLX_HOST_WARP_SIZE from CMake (RDNA→32, CDNA-only→64). Host
 // launch dims must still prefer runtime HWInfo::warp_size / Device::warp_size()
 // so multi-arch fatbins are correct on every device.
 //
-// Policy: RDNA = 32. Never launch dim3(64, ...) on RDNA — that produces
-// garbage QMV / decode (e.g. "!!!!!!" on gfx1152).
+// Never launch dim3(64, ...) on RDNA — garbage QMV / decode ("!!!!!!").
 #if defined(__AMDGCN_WAVEFRONT_SIZE__)
 // Device code: use the compiler-provided value (32 on RDNA, 64 on CDNA).
 #define WARP_SIZE __AMDGCN_WAVEFRONT_SIZE__

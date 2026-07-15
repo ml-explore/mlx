@@ -582,6 +582,10 @@ inline rocm::HWInfo detect_rocm_hw_info(rocm::Device& d) {
     hw.shared_mem_per_cu = props.sharedMemPerBlock;
     hw.l2_cache_bytes = props.l2CacheSize;
     hw.warp_size = props.warpSize > 0 ? props.warpSize : WARP_SIZE;
+    // Prefer Device runtime (honors MLX_ROCM_FORCE_WARP_SIZE) over raw props.
+    if (d.warp_size() > 0) {
+      hw.warp_size = d.warp_size();
+    }
     hw.is_low_cu_igpu = (hw.num_cus > 0 && hw.num_cus <= 8);
     if (const char* e = std::getenv("MLX_ROCM_FORCE_LOW_CU"); e && e[0] == '1')
       hw.is_low_cu_igpu = true;

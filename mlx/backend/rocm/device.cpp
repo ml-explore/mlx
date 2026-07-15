@@ -98,6 +98,25 @@ Device::Device(int device) : device_(device) {
       if (p.maxThreadsPerBlock > 0) {
         max_threads_per_block_ = p.maxThreadsPerBlock;
       }
+      // Optional debug/experiment override (RDNA is hardware wave32 including
+      // RDNA4; only set this if you know you need a different launch width).
+      // Wrong value vs device kernels → garbage QMV / decode.
+      if (const char* fw = std::getenv("MLX_ROCM_FORCE_WARP_SIZE")) {
+        int forced = std::atoi(fw);
+        if (forced == 32 || forced == 64) {
+          fprintf(
+              stderr,
+              "[mlx-rocm] MLX_ROCM_FORCE_WARP_SIZE=%d overrides device warp=%d\n",
+              forced,
+              warp_size_);
+          warp_size_ = forced;
+        } else {
+          fprintf(
+              stderr,
+              "[mlx-rocm] ignoring MLX_ROCM_FORCE_WARP_SIZE=%s (want 32 or 64)\n",
+              fw);
+        }
+      }
     }
   }
   // rocBLAS initialization is now lazy - done in get_rocblas_handle()
