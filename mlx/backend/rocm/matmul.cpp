@@ -1428,17 +1428,18 @@ static bool try_moe_segment_gather_mm(
     return off;
   };
 
-  // Async host path (default when lhs is identity / right_sorted): D2H indices
-  // + RLE + hipBLASLt launches run inside hipLaunchHostFunc so the main thread
-  // never hipStreamSynchronize. That was the train-step pipeline drain (~80%
-  // idle). Kill-switch: MLX_ROCM_MOE_SYNC=1 restores blocking sync.
-  static const bool force_sync_moe = [] {
-    const char* e = std::getenv("MLX_ROCM_MOE_SYNC");
+  // Async host path (opt-in MLX_ROCM_MOE_ASYNC=1): D2H + RLE + hipBLASLt inside
+  // hipLaunchHostFunc so the main thread never StreamSynchronize. Can deadlock
+  // on some ROCm builds when the main thread also syncs the same stream — keep
+  // OFF by default until validated; default remains blocking host path.
+  static const bool use_async_moe = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_ASYNC");
     return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
                  e[0] == 'T');
   }();
 
-  if (assume_identity_lhs && rocm::is_hipblaslt_available() && !force_sync_moe) {
+  if (use_async_moe && assume_identity_lhs &&
+      rocm::is_hipblaslt_available()) {
     auto* job = new MoeAsyncJob();
     job->batch = batch;
     job->N = N;
