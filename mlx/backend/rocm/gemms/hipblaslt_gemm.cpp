@@ -492,6 +492,63 @@ void hipblaslt_gemm_impl(
   // result is reusable across calls with identical problem geometry, so warm
   // calls skip AlgoGetHeuristic — the dominant per-call cost for the many small
   // GEMMs in a forward pass.
+  //
+  // MoE gather_mm / SegmentedMM change M (or K) every step with routing. Exact-M
+  // keys thrash this cache and re-run AlgoGetHeuristic on the host (tens of ms
+  // per miss) — that shows up as ~70–80% GPU idle and sawtooth wall tok/s
+  // (peaks ~11–12k when the cache is warm, mean ~5–6k when thrashing).
+  // Bucket dims upward for the cache key only; the real matmul still uses the
+  // exact layouts below. Algos selected for a nearby larger-or-equal size are
+  // valid at launch (M/N/K live in the layout descriptors). Workspace is the
+  // preallocated 32 MB pool, so a slightly larger bucket never under-allocates.
+  // Kill-switch: MLX_HIPBLASLT_EXACT_CACHE=1 restores exact-size keys.
+  auto gemm_dim_bucket = [](int x) -> int {
+    if (x <= 0)
+      return 0;
+    if (x <= 16)
+      return 16;
+    if (x <= 32)
+      return 32;
+    if (x <= 48)
+      return 48;
+    if (x <= 64)
+      return 64;
+    if (x <= 96)
+      return 96;
+    if (x <= 128)
+      return 128;
+    if (x <= 192)
+      return 192;
+    if (x <= 256)
+      return 256;
+    if (x <= 384)
+      return 384;
+    if (x <= 512)
+      return 512;
+    if (x <= 768)
+      return 768;
+    if (x <= 1024)
+      return 1024;
+    if (x <= 1536)
+      return 1536;
+    if (x <= 2048)
+      return 2048;
+    if (x <= 3072)
+      return 3072;
+    if (x <= 4096)
+      return 4096;
+    if (x <= 6144)
+      return 6144;
+    if (x <= 8192)
+      return 8192;
+    return ((x + 1023) / 1024) * 1024;
+  };
+  static const bool exact_cache =
+      std::getenv("MLX_HIPBLASLT_EXACT_CACHE") != nullptr;
+  const int cache_M = exact_cache ? M : gemm_dim_bucket(M);
+  const int cache_N = exact_cache ? N : gemm_dim_bucket(N);
+  const int cache_K = exact_cache ? K : gemm_dim_bucket(K);
+
   struct AlgoKey {
     int M, N, K, batch, dt, ta, tb, dev, epi;
     bool operator==(const AlgoKey& o) const {
@@ -515,9 +572,9 @@ void hipblaslt_gemm_impl(
       algo_cache;
 
   AlgoKey key{
-      M,
-      N,
-      K,
+      cache_M,
+      cache_N,
+      cache_K,
       batch_count,
       static_cast<int>(data_type),
       trans_a_val,
