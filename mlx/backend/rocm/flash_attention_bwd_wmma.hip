@@ -302,9 +302,9 @@ void sdpa_flash_wmma_bwd(
   int Hkv = k.shape(1);
   int gqa = H / Hkv;
 
-  d_q.set_data(mlx::core::rocm::malloc_async(d_q.nbytes(), enc));
-  d_k.set_data(mlx::core::rocm::malloc_async(d_k.nbytes(), enc));
-  d_v.set_data(mlx::core::rocm::malloc_async(d_v.nbytes(), enc));
+  d_q.set_data(rocm::malloc_async(d_q.nbytes(), enc));
+  d_k.set_data(rocm::malloc_async(d_k.nbytes(), enc));
+  d_v.set_data(rocm::malloc_async(d_v.nbytes(), enc));
 
   size_t n_dq = (size_t)B * H * qL * D;
   size_t n_dk = (size_t)B * Hkv * kL * D;
@@ -313,10 +313,10 @@ void sdpa_flash_wmma_bwd(
   array dKf({(int)n_dk}, float32, nullptr, {});
   array dVf({(int)n_dk}, float32, nullptr, {});
   array Delta({(int)n_delta}, float32, nullptr, {});
-  dQf.set_data(mlx::core::rocm::malloc_async(dQf.nbytes(), enc));
-  dKf.set_data(mlx::core::rocm::malloc_async(dKf.nbytes(), enc));
-  dVf.set_data(mlx::core::rocm::malloc_async(dVf.nbytes(), enc));
-  Delta.set_data(mlx::core::rocm::malloc_async(Delta.nbytes(), enc));
+  dQf.set_data(rocm::malloc_async(dQf.nbytes(), enc));
+  dKf.set_data(rocm::malloc_async(dKf.nbytes(), enc));
+  dVf.set_data(rocm::malloc_async(dVf.nbytes(), enc));
+  Delta.set_data(rocm::malloc_async(Delta.nbytes(), enc));
   enc.add_temporary(dQf);
   enc.add_temporary(dKf);
   enc.add_temporary(dVf);

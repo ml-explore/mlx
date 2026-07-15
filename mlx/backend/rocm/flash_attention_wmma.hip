@@ -453,9 +453,9 @@ void sdpa_flash_wmma(
   int B = q.shape(0), H = q.shape(1), qL = q.shape(2), kL = k.shape(2);
   int D = q.shape(3);
 
-  o.set_data(mlx::core::rocm::malloc_async(o.nbytes(), enc));
+  o.set_data(rocm::malloc_async(o.nbytes(), enc));
   if (lse != nullptr) {
-    lse->set_data(mlx::core::rocm::malloc_async(lse->nbytes(), enc));
+    lse->set_data(rocm::malloc_async(lse->nbytes(), enc));
   }
 
   rocm::FAWmmaParams p{};
