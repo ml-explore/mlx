@@ -67,7 +67,7 @@ array moe_swiglu_sorted(
   }
 
   Stream stream = to_stream(s);
-  if (stream.device.type != Device::DeviceType::gpu) {
+  if (stream.device.type != ::mlx::core::Device::DeviceType::gpu) {
     throw std::runtime_error("moe_swiglu_sorted: GPU stream required");
   }
   auto& encoder = get_command_encoder(stream);
