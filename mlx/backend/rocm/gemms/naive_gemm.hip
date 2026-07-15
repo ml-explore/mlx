@@ -1423,6 +1423,64 @@ void moe_unpack_tokens(
   });
 }
 
+// Gather src rows into packed using an existing slot_map (shared packing).
+__global__ void moe_pack_using_slot_map_kernel(
+    const hip_bfloat16* __restrict__ src,
+    const int* __restrict__ slot_map,
+    hip_bfloat16* __restrict__ packed,
+    int n_experts,
+    int M_fixed,
+    int N) {
+  int e = blockIdx.z;
+  int s = blockIdx.y * blockDim.y + threadIdx.y;
+  int n = blockIdx.x * blockDim.x + threadIdx.x;
+  if (e >= n_experts || s >= M_fixed || n >= N)
+    return;
+  int src_i = slot_map[static_cast<int64_t>(e) * M_fixed + s];
+  hip_bfloat16* dst =
+      packed + (static_cast<int64_t>(e) * M_fixed + s) * N + n;
+  if (src_i < 0) {
+    *dst = hip_bfloat16(0.0f);
+    return;
+  }
+  *dst = src[static_cast<int64_t>(src_i) * N + n];
+}
+
+void moe_pack_using_slot_map(
+    CommandEncoder& encoder,
+    const array& src,
+    const array& slot_map,
+    array& packed,
+    int n_experts,
+    int M_fixed,
+    int N) {
+  encoder.set_input_array(src);
+  encoder.set_input_array(slot_map);
+  encoder.set_output_array(packed);
+  if (src.dtype() != bfloat16) {
+    throw std::runtime_error("moe_pack_using_slot_map: only bfloat16");
+  }
+  const void* sp = gpu_ptr<void>(src);
+  const int* map_ptr = gpu_ptr<const int>(slot_map);
+  void* pp = gpu_ptr<void>(packed);
+  dim3 block(32, 8);
+  dim3 grid((N + 31) / 32, (M_fixed + 7) / 8, n_experts);
+  encoder.launch_kernel([=](hipStream_t stream) {
+    hipLaunchKernelGGL(
+        moe_pack_using_slot_map_kernel,
+        grid,
+        block,
+        0,
+        stream,
+        static_cast<const hip_bfloat16*>(sp),
+        map_ptr,
+        static_cast<hip_bfloat16*>(pp),
+        n_experts,
+        M_fixed,
+        N);
+  });
+}
+
 __global__ void silu_mul_bf16_kernel(
     const hip_bfloat16* __restrict__ g,
     const hip_bfloat16* __restrict__ u,

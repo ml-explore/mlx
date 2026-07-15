@@ -145,6 +145,17 @@ void moe_unpack_tokens(
     int M_fixed,
     int N);
 
+// Inverse of unpack: packed[e,s,:] = src[slot_map[e,s], :] (0 if slot < 0).
+// Use after moe_pack_tokens so multiple tensors share one slot_map (VJP).
+void moe_pack_using_slot_map(
+    CommandEncoder& encoder,
+    const array& src, // [batch, N] bf16
+    const array& slot_map, // [E, M_fixed] int32
+    array& packed, // [E, M_fixed, N] bf16
+    int n_experts,
+    int M_fixed,
+    int N);
+
 // h = silu(g) * u for n bf16 elements (fused MoE SwiGLU mid).
 void silu_mul_bf16(
     CommandEncoder& encoder,

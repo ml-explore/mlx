@@ -1,10 +1,15 @@
 // Copyright © 2025 Apple Inc.
 //
-// Fused sorted-MoE SwiGLU as a compile-safe Primitive:
-// one host D2H of expert ids + segment GEMMs for gate, up, silu_mul, and down.
-// Replaces three separate gather_mm calls that each pipeline-drained the train step.
+// Fused sorted-MoE SwiGLU as a compile-safe Primitive.
 //
-// VJP uses the gather_mm fallback (Custom base) so value_and_grad / compile work.
+// Paths (env):
+//   MLX_ROCM_MOE_ZERO_SYNC=1 (default ON): pack → [E,M_pad,*] + strided-batched
+//     hipBLASLt. M_pad = align_up(T,32) is host-known → NO mid-graph D2H /
+//     StreamSynchronize. Pad rows are zero; exact tokens via slot_map unpack.
+//   MLX_ROCM_MOE_ZERO_SYNC=0: legacy host-RLE exact-M (D2H ids + per-segment GEMM).
+//
+// VJP: same ZERO_SYNC pack default; MLX_ROCM_MOE_VJP_DEVICE_SEG=1 = VALU tiles;
+//      ZERO_SYNC=0 = device segments + tiny [E,2] D2H + hipBLASLt.
 //
 // NOTE: Primitive class lives in mlx::core (not rocm) to avoid Shape/Device name
 // collisions with mlx::core::rocm::Shape (hip_array) and related aliases.
@@ -143,7 +148,90 @@ void MoeSwigluSorted::eval_gpu(
   encoder.set_output_array(up);
   encoder.set_output_array(h);
 
-  // One D2H of expert ids — the only host sync for the whole SwiGLU.
+  // Weight layouts match lemonseed gather_mm after swapaxes:
+  //   w_gate/w_up [E,D,I]: x[M,D] @ B[D,I] → [M,I]
+  //   w_down [E,I,D]:      h[M,I] @ B[I,D] → [M,D]
+  const int64_t wg_stride = static_cast<int64_t>(D) * I;
+  const int64_t wd_stride = static_cast<int64_t>(I) * D;
+
+  static const bool use_zero_sync = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_ZERO_SYNC");
+    if (!e || !*e)
+      return true; // port default ON
+    return !(e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' ||
+             e[0] == 'N');
+  }();
+
+  if (use_zero_sync && rocm::is_hipblaslt_available() && E > 0 && E <= 256) {
+    // ---- Zero-sync pack + strided-batched hipBLASLt (no D2H) ----
+    // M_pad is host-known (worst-case: all tokens one expert). Pad rows zeroed
+    // by pack path; unpack scatters only real slots.
+    int M_pad = (T + 31) & ~31;
+    if (M_pad < 32)
+      M_pad = 32;
+
+    auto mk_tmp = [&](Shape sh, Dtype dt = bfloat16) {
+      array a(sh, dt, nullptr, {});
+      a.set_data(rocm::malloc_async(a.nbytes(), encoder));
+      encoder.add_temporary(a);
+      return a;
+    };
+    array packed_x = mk_tmp(Shape{E, M_pad, D});
+    array packed_gate = mk_tmp(Shape{E, M_pad, I});
+    array packed_up = mk_tmp(Shape{E, M_pad, I});
+    array packed_h = mk_tmp(Shape{E, M_pad, I});
+    array packed_y = mk_tmp(Shape{E, M_pad, D});
+    array slot_map = mk_tmp(Shape{E, M_pad}, int32);
+    array counts = mk_tmp(Shape{E}, int32);
+
+    rocm::moe_pack_tokens(
+        encoder, x, ids, packed_x, slot_map, counts, T, D, E, M_pad);
+
+    const int64_t stride_x = static_cast<int64_t>(M_pad) * D;
+    const int64_t stride_mid = static_cast<int64_t>(M_pad) * I;
+    const int64_t stride_y = static_cast<int64_t>(M_pad) * D;
+
+    // gate = x @ Wg, up = x @ Wu  (NN)
+    rocm::hipblaslt_gemm_batched(
+        encoder, false, false, M_pad, I, D, 1.0f, packed_x, /*lda=*/D,
+        stride_x, wg, /*ldb=*/I, wg_stride, 0.0f, packed_gate, /*ldc=*/I,
+        stride_mid, E, bfloat16);
+    rocm::hipblaslt_gemm_batched(
+        encoder, false, false, M_pad, I, D, 1.0f, packed_x, D, stride_x, wu,
+        I, wg_stride, 0.0f, packed_up, I, stride_mid, E, bfloat16);
+
+    rocm::silu_mul_bf16(
+        encoder,
+        gpu_ptr<void>(packed_gate),
+        gpu_ptr<void>(packed_up),
+        gpu_ptr<void>(packed_h),
+        E * M_pad * I);
+
+    // y = h @ Wd
+    rocm::hipblaslt_gemm_batched(
+        encoder, false, false, M_pad, D, I, 1.0f, packed_h, /*lda=*/I,
+        stride_mid, wd, /*ldb=*/D, wd_stride, 0.0f, packed_y, /*ldc=*/D,
+        stride_y, E, bfloat16);
+
+    {
+      void* op = gpu_ptr<void>(out);
+      size_t nbytes = out.nbytes();
+      encoder.launch_kernel([op, nbytes](hipStream_t st) {
+        (void)hipMemsetAsync(op, 0, nbytes, st);
+      });
+    }
+    rocm::moe_unpack_tokens(encoder, packed_y, slot_map, out, E, M_pad, D);
+
+    // Also materialize gate/up/h into the [T,I] temps for any consumer that
+    // expects them as named intermediates (not required for out alone).
+    // Keep temps live for graph deps; values unused by out path.
+    (void)gate;
+    (void)up;
+    (void)h;
+    return;
+  }
+
+  // ---- Legacy: one D2H of expert ids + exact-M per-segment GEMMs ----
   static thread_local uint32_t* pin = nullptr;
   static thread_local size_t pin_cap = 0;
   const size_t need = static_cast<size_t>(T);
@@ -175,14 +263,6 @@ void MoeSwigluSorted::eval_gpu(
   char* hB = static_cast<char*>(gpu_ptr<void>(h));
   char* outB = static_cast<char*>(gpu_ptr<void>(out));
 
-  // Weight layouts match lemonseed gather_mm after swapaxes:
-  //   w_gate/w_up [E,D,I]: x[M,D] @ B[D,I] → [M,I]
-  //   w_down [E,I,D]:      h[M,I] @ B[I,D] → [M,D]
-  const int64_t wg_stride = static_cast<int64_t>(D) * I;
-  const int64_t wu_stride = wg_stride;
-  const int64_t wd_stride = static_cast<int64_t>(I) * D;
-
-  // Exact-M: each expert uses its true token count (no pad).
   int start = 0;
   while (start < T) {
     uint32_t e = pin[static_cast<size_t>(start)];
@@ -225,7 +305,7 @@ void MoeSwigluSorted::eval_gpu(
         1.0f,
         xB + static_cast<size_t>(start) * D * esz,
         D,
-        wuB + static_cast<size_t>(e) * wu_stride * esz,
+        wuB + static_cast<size_t>(e) * wg_stride * esz,
         I,
         0.0f,
         upB + static_cast<size_t>(start) * I * esz,
@@ -406,9 +486,16 @@ void MoeSwigluSortedVJP::eval_gpu(
   }
 
   // Paths:
-  //   default: device segments [E,2] + tiny D2H + hipBLASLt exact-M (MFMA)
-  //   MLX_ROCM_MOE_VJP_DEVICE_SEG=1: zero-sync VALU token-tiled (no D2H)
-  // TN status=3 under train fixed via exact algo keys for transpose GEMMs.
+  //   MLX_ROCM_MOE_ZERO_SYNC=1 (default): pack + batched hipBLASLt (no D2H)
+  //   MLX_ROCM_MOE_VJP_DEVICE_SEG=1: VALU token-tiled + segmented dW
+  //   ZERO_SYNC=0: segments + tiny [E,2] D2H + hipBLASLt exact-M
+  static const bool use_zero_sync = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_ZERO_SYNC");
+    if (!e || !*e)
+      return true;
+    return !(e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' ||
+             e[0] == 'N');
+  }();
   static const bool use_device_seg = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_VJP_DEVICE_SEG");
     return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
@@ -418,8 +505,8 @@ void MoeSwigluSortedVJP::eval_gpu(
   const int64_t wg_stride = static_cast<int64_t>(D) * I;
   const int64_t wd_stride = static_cast<int64_t>(I) * D;
 
-  auto mk = [&](Shape sh) {
-    array a(sh, bfloat16, nullptr, {});
+  auto mk = [&](Shape sh, Dtype dt = bfloat16) {
+    array a(sh, dt, nullptr, {});
     a.set_data(rocm::malloc_async(a.nbytes(), encoder));
     encoder.add_temporary(a);
     return a;
@@ -431,8 +518,95 @@ void MoeSwigluSortedVJP::eval_gpu(
   array dg = mk(Shape{T, I});
   array du = mk(Shape{T, I});
 
+  if (use_zero_sync && !use_device_seg && rocm::is_hipblaslt_available() &&
+      E > 0 && E <= 256) {
+    // ---- Zero-sync pack VJP (MFMA, shared slot_map, no host) ----
+    int M_pad = (T + 31) & ~31;
+    if (M_pad < 32)
+      M_pad = 32;
+
+    array packed_x = mk(Shape{E, M_pad, D});
+    array packed_dy = mk(Shape{E, M_pad, D});
+    array packed_gate = mk(Shape{E, M_pad, I});
+    array packed_up = mk(Shape{E, M_pad, I});
+    array packed_h = mk(Shape{E, M_pad, I});
+    array packed_dh = mk(Shape{E, M_pad, I});
+    array packed_dg = mk(Shape{E, M_pad, I});
+    array packed_du = mk(Shape{E, M_pad, I});
+    array packed_dx = mk(Shape{E, M_pad, D});
+    array packed_dx_u = mk(Shape{E, M_pad, D});
+    array slot_map = mk(Shape{E, M_pad}, int32);
+    array counts = mk(Shape{E}, int32);
+
+    rocm::moe_pack_tokens(
+        encoder, x, ids, packed_x, slot_map, counts, T, D, E, M_pad);
+    rocm::moe_pack_using_slot_map(
+        encoder, dy, slot_map, packed_dy, E, M_pad, D);
+
+    const int64_t stride_x = static_cast<int64_t>(M_pad) * D;
+    const int64_t stride_mid = static_cast<int64_t>(M_pad) * I;
+
+    rocm::hipblaslt_gemm_batched(
+        encoder, false, false, M_pad, I, D, 1.0f, packed_x, D, stride_x, wg,
+        I, wg_stride, 0.0f, packed_gate, I, stride_mid, E, bfloat16);
+    rocm::hipblaslt_gemm_batched(
+        encoder, false, false, M_pad, I, D, 1.0f, packed_x, D, stride_x, wu,
+        I, wg_stride, 0.0f, packed_up, I, stride_mid, E, bfloat16);
+    rocm::hipblaslt_gemm_batched(
+        encoder, false, true, M_pad, I, D, 1.0f, packed_dy, D, stride_x, wd,
+        D, wd_stride, 0.0f, packed_dh, I, stride_mid, E, bfloat16);
+
+    rocm::swiglu_bwd_elem_bf16(
+        encoder,
+        gpu_ptr<void>(packed_gate),
+        gpu_ptr<void>(packed_up),
+        gpu_ptr<void>(packed_dh),
+        gpu_ptr<void>(packed_h),
+        gpu_ptr<void>(packed_dg),
+        gpu_ptr<void>(packed_du),
+        E * M_pad * I);
+
+    rocm::hipblaslt_gemm_batched(
+        encoder, false, true, M_pad, D, I, 1.0f, packed_dg, I, stride_mid, wg,
+        I, wg_stride, 0.0f, packed_dx, D, stride_x, E, bfloat16);
+    rocm::hipblaslt_gemm_batched(
+        encoder, false, true, M_pad, D, I, 1.0f, packed_du, I, stride_mid, wu,
+        I, wg_stride, 0.0f, packed_dx_u, D, stride_x, E, bfloat16);
+    rocm::bf16_add_inplace(
+        encoder,
+        gpu_ptr<void>(packed_dx_u),
+        gpu_ptr<void>(packed_dx),
+        E * M_pad * D);
+
+    {
+      void* op = gpu_ptr<void>(dx);
+      encoder.launch_kernel([op, n = dx.nbytes()](hipStream_t st) {
+        (void)hipMemsetAsync(op, 0, n, st);
+      });
+    }
+    rocm::moe_unpack_tokens(encoder, packed_dx, slot_map, dx, E, M_pad, D);
+
+    rocm::hipblaslt_gemm_batched(
+        encoder, true, false, D, I, M_pad, 1.0f, packed_x, D, stride_x,
+        packed_dg, I, stride_mid, 0.0f, dwg, I, wg_stride, E, bfloat16);
+    rocm::hipblaslt_gemm_batched(
+        encoder, true, false, D, I, M_pad, 1.0f, packed_x, D, stride_x,
+        packed_du, I, stride_mid, 0.0f, dwu, I, wg_stride, E, bfloat16);
+    rocm::hipblaslt_gemm_batched(
+        encoder, true, false, I, D, M_pad, 1.0f, packed_h, I, stride_mid,
+        packed_dy, D, stride_x, 0.0f, dwd, D, wd_stride, E, bfloat16);
+
+    (void)gate;
+    (void)up;
+    (void)h;
+    (void)dh;
+    (void)dg;
+    (void)du;
+    return;
+  }
+
   if (use_device_seg) {
-    // ---- Zero-sync device exact-M (VALU token-tiled; pipeline-friendly) ----
+    // ---- Explicit VALU device path ----
     rocm::moe_sorted_expert_gemm(
         encoder, x, wg, ids, gate, T, /*N=*/I, /*K=*/D, E,
         /*b_transposed=*/false, /*ldb=*/I, wg_stride);
@@ -486,8 +660,8 @@ void MoeSwigluSortedVJP::eval_gpu(
     return;
   }
 
-  // ---- Device segments + tiny D2H [E,2] + hipBLASLt exact-M (default) ----
-  // Segments found on-device; host only reads E pairs (not full T ids).
+  // ---- Legacy: device segments + tiny D2H [E,2] + hipBLASLt exact-M ----
+  // Only when MLX_ROCM_MOE_ZERO_SYNC=0.
   array segments(Shape{E, 2}, uint32, nullptr, {});
   segments.set_data(rocm::malloc_async(segments.nbytes(), encoder));
   encoder.add_temporary(segments);
