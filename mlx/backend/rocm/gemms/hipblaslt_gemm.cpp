@@ -961,6 +961,27 @@ void hipblaslt_gemm_ptrs(
   hipblasOperation_t op_a = to_hipblas_op(transpose_b);
   hipblasOperation_t op_b = to_hipblas_op(transpose_a);
 
+  // hipBLASLt may retain host alpha/beta pointers until the stream kernel
+  // finishes. Never pass addresses of [=]-captured stack floats — under a
+  // full train graph those die before the launch runs (status 3 INVALID).
+  // Process-lifetime constants for the common scales (same as rowmajor_on_stream).
+  const float* alpha_p;
+  const float* beta_p;
+  if (alpha == 1.0f && beta == 0.0f) {
+    static const float kOne = 1.0f, kZero = 0.0f;
+    alpha_p = &kOne;
+    beta_p = &kZero;
+  } else if (alpha == 1.0f && beta == 1.0f) {
+    static const float kOne = 1.0f;
+    alpha_p = &kOne;
+    beta_p = &kOne;
+  } else {
+    // Rare scales: leak a stable pair (MoE uses only 1/0 and 1/1).
+    float* p = new float[2]{alpha, beta};
+    alpha_p = &p[0];
+    beta_p = &p[1];
+  }
+
   encoder.launch_kernel([=](hipStream_t stream) {
     hipblaslt_gemm_impl(
         handle,
@@ -970,14 +991,14 @@ void hipblaslt_gemm_ptrs(
         N, // swap M/N for col-major trick
         M,
         K,
-        &alpha,
+        alpha_p,
         b_ptr, // swap A/B
         ldb,
         0,
         a_ptr,
         lda,
         0,
-        &beta,
+        beta_p,
         c_ptr,
         ldc,
         0,
