@@ -282,6 +282,44 @@ struct PreferenceGuard {
   }
 };
 
+// Persistent GEMM pipeline (layouts + matmul desc + heuristic). Avoids
+// create/destroy + AlgoGetHeuristic on every call — the multi-ms host gaps
+// between dense GEMMs in train profiles. Exact geometry keys (not bucketed):
+// layouts encode real M/N/K. Process-lifetime; never destroyed.
+struct GemmPipeKey {
+  int M, N, K, lda, ldb, ldc, batch, dt, ta, tb, dev, epi;
+  int64_t sa, sb, sc;
+  bool operator==(const GemmPipeKey& o) const {
+    return M == o.M && N == o.N && K == o.K && lda == o.lda && ldb == o.ldb &&
+        ldc == o.ldc && batch == o.batch && dt == o.dt && ta == o.ta &&
+        tb == o.tb && dev == o.dev && epi == o.epi && sa == o.sa && sb == o.sb &&
+        sc == o.sc;
+  }
+};
+struct GemmPipeKeyHash {
+  size_t operator()(const GemmPipeKey& k) const {
+    size_t h = 1469598103934665603ULL;
+    auto mix = [&](size_t v) { h = (h ^ v) * 1099511628211ULL; };
+    for (int v : {k.M, k.N, k.K, k.lda, k.ldb, k.ldc, k.batch, k.dt, k.ta, k.tb,
+                  k.dev, k.epi})
+      mix(static_cast<size_t>(v));
+    mix(static_cast<size_t>(k.sa));
+    mix(static_cast<size_t>(k.sb));
+    mix(static_cast<size_t>(k.sc));
+    return h;
+  }
+};
+struct GemmPipe {
+  hipblasLtMatrixLayout_t layout_a{nullptr};
+  hipblasLtMatrixLayout_t layout_b{nullptr};
+  hipblasLtMatrixLayout_t layout_c{nullptr};
+  hipblasLtMatrixLayout_t layout_d{nullptr};
+  hipblasLtMatmulDesc_t desc{nullptr};
+  hipblasLtMatmulHeuristicResult_t heuristic{};
+};
+static std::mutex g_pipe_mutex;
+static std::unordered_map<GemmPipeKey, GemmPipe, GemmPipeKeyHash> g_pipe_cache;
+
 // Core implementation: set up descriptors, find the best algorithm, and
 // execute the matmul on the given stream.
 void hipblaslt_gemm_impl(
@@ -317,6 +355,76 @@ void hipblaslt_gemm_impl(
   hipDataType scale_type = HIP_R_32F;
   int32_t trans_a_val = static_cast<int32_t>(op_a);
   int32_t trans_b_val = static_cast<int32_t>(op_b);
+
+  static const bool no_epi =
+      std::getenv("MLX_ROCM_NO_HIPBLASLT_EPILOGUE") != nullptr;
+  hipblasLtEpilogue_t epilogue =
+      static_cast<hipblasLtEpilogue_t>(no_epi ? 1 : epilogue_i);
+
+  // Fast path: full pipeline cache (no bias). ~all train dense + MoE segment
+  // GEMMs hit this after warm-up.
+  static const bool no_pipe_cache =
+      std::getenv("MLX_HIPBLASLT_NO_PIPE_CACHE") != nullptr;
+  if (!no_pipe_cache && bias_ptr == nullptr &&
+      epilogue == HIPBLASLT_EPILOGUE_DEFAULT) {
+    GemmPipeKey pkey{
+        M,
+        N,
+        K,
+        lda,
+        ldb,
+        ldc,
+        batch_count,
+        static_cast<int>(data_type),
+        trans_a_val,
+        trans_b_val,
+        device_id,
+        static_cast<int>(epilogue),
+        stride_a,
+        stride_b,
+        stride_c};
+    GemmPipe* pipe = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(g_pipe_mutex);
+      auto it = g_pipe_cache.find(pkey);
+      if (it != g_pipe_cache.end()) {
+        pipe = &it->second;
+      }
+    }
+    if (pipe) {
+      size_t ws_needed = pipe->heuristic.workspaceSize;
+      void* ws_ptr = nullptr;
+      size_t ws_actual = 0;
+      if (ws_needed > 0) {
+        auto [p, s] = ensure_workspace(device_id, ws_needed);
+        ws_ptr = p;
+        ws_actual = s;
+      }
+      status = hipblasLtMatmul(
+          handle,
+          pipe->desc,
+          alpha,
+          a_ptr,
+          pipe->layout_a,
+          b_ptr,
+          pipe->layout_b,
+          beta,
+          c_ptr,
+          pipe->layout_c,
+          c_ptr,
+          pipe->layout_d,
+          &pipe->heuristic.algo,
+          ws_ptr,
+          ws_actual,
+          stream);
+      if (status != HIPBLAS_STATUS_SUCCESS) {
+        throw std::runtime_error(
+            "hipblasLtMatmul (pipe cache) failed: " +
+            std::to_string(static_cast<int>(status)));
+      }
+      return;
+    }
+  }
 
   // --- Matrix layouts (column-major, as expected by BLAS) ---
   // A is (op_a == N) ? M x K : K x M  in column-major
@@ -438,10 +546,7 @@ void hipblaslt_gemm_impl(
 
   // Fused epilogue (bias / GELU / Swish). Bias vector length = D rows after the
   // col-major M/N swap → matches original row-major N (feature dim).
-  static const bool no_epi =
-      std::getenv("MLX_ROCM_NO_HIPBLASLT_EPILOGUE") != nullptr;
-  hipblasLtEpilogue_t epilogue =
-      static_cast<hipblasLtEpilogue_t>(no_epi ? 1 : epilogue_i);
+  // no_epi / epilogue already computed above for the pipe-cache fast path.
   if (!no_epi && bias_ptr != nullptr &&
       epilogue != HIPBLASLT_EPILOGUE_DEFAULT) {
     status = hipblasLtMatmulDescSetAttribute(
@@ -718,20 +823,80 @@ void hipblaslt_gemm_impl(
     }
   }
 
+  // Promote this miss into the persistent pipe cache (no-bias default epi only).
+  // Steal ownership from RAII guards so layouts/desc outlive this call.
+  hipblasLtMatrixLayout_t use_la = layout_a.layout;
+  hipblasLtMatrixLayout_t use_lb = layout_b.layout;
+  hipblasLtMatrixLayout_t use_lc = layout_c.layout;
+  hipblasLtMatrixLayout_t use_ld = layout_d.layout;
+  hipblasLtMatmulDesc_t use_desc = matmul_guard.desc;
+  if (!no_pipe_cache && bias_ptr == nullptr &&
+      epilogue == HIPBLASLT_EPILOGUE_DEFAULT) {
+    GemmPipeKey pkey{
+        M,
+        N,
+        K,
+        lda,
+        ldb,
+        ldc,
+        batch_count,
+        static_cast<int>(data_type),
+        trans_a_val,
+        trans_b_val,
+        device_id,
+        static_cast<int>(epilogue),
+        stride_a,
+        stride_b,
+        stride_c};
+    GemmPipe entry;
+    entry.layout_a = layout_a.layout;
+    entry.layout_b = layout_b.layout;
+    entry.layout_c = layout_c.layout;
+    entry.layout_d = layout_d.layout;
+    entry.desc = matmul_guard.desc;
+    entry.heuristic = heuristic;
+    layout_a.layout = nullptr;
+    layout_b.layout = nullptr;
+    layout_c.layout = nullptr;
+    layout_d.layout = nullptr;
+    matmul_guard.desc = nullptr;
+    use_la = entry.layout_a;
+    use_lb = entry.layout_b;
+    use_lc = entry.layout_c;
+    use_ld = entry.layout_d;
+    use_desc = entry.desc;
+    std::lock_guard<std::mutex> lock(g_pipe_mutex);
+    // Another thread may have filled the same key; prefer existing, free ours.
+    auto [it, inserted] = g_pipe_cache.emplace(pkey, entry);
+    if (!inserted) {
+      (void)hipblasLtMatrixLayoutDestroy(entry.layout_a);
+      (void)hipblasLtMatrixLayoutDestroy(entry.layout_b);
+      (void)hipblasLtMatrixLayoutDestroy(entry.layout_c);
+      (void)hipblasLtMatrixLayoutDestroy(entry.layout_d);
+      (void)hipblasLtMatmulDescDestroy(entry.desc);
+      use_la = it->second.layout_a;
+      use_lb = it->second.layout_b;
+      use_lc = it->second.layout_c;
+      use_ld = it->second.layout_d;
+      use_desc = it->second.desc;
+      heuristic = it->second.heuristic;
+    }
+  }
+
   // --- Execute the matmul ---
   status = hipblasLtMatmul(
       handle,
-      matmul_guard.desc,
+      use_desc,
       alpha,
       a_ptr,
-      layout_a.layout,
+      use_la,
       b_ptr,
-      layout_b.layout,
+      use_lb,
       beta,
       c_ptr,
-      layout_c.layout,
+      use_lc,
       c_ptr, // D == C (in-place)
-      layout_d.layout,
+      use_ld,
       &heuristic.algo,
       ws_ptr,
       ws_actual,
