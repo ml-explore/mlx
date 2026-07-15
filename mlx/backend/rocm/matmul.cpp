@@ -1480,10 +1480,24 @@ static bool try_moe_segment_gather_mm(
     return true;
   }
 
-  // Synchronous host path (lhs identity check needed, or MLX_ROCM_MOE_SYNC=1).
+  // Synchronous host path. Pin-cache: SwiGLU does gather_mm ×3 (gate/up/down)
+  // with the same sorted rhs indices. Reuse the pinned copy for 2 more calls
+  // after each D2H so we pay one stream sync per MoE proj trio instead of three
+  // — the main train-step pipeline drain. reuses_left hits 0 before the next
+  // layer so a recycled device pointer with new data cannot serve a stale pin.
+  // Kill-switch: MLX_ROCM_MOE_NO_PIN_CACHE=1.
   static thread_local uint32_t* pin_rhs = nullptr;
   static thread_local uint32_t* pin_lhs = nullptr;
   static thread_local size_t pin_cap = 0;
+  static thread_local const void* pin_rhs_dev = nullptr;
+  static thread_local size_t pin_rhs_n = 0;
+  static thread_local int pin_reuses_left = 0;
+  static const bool no_pin_cache = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_NO_PIN_CACHE");
+    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+                 e[0] == 'T');
+  }();
+
   const size_t need = static_cast<size_t>(batch);
   if (need > pin_cap) {
     if (pin_rhs)
@@ -1492,6 +1506,8 @@ static bool try_moe_segment_gather_mm(
       (void)hipHostFree(pin_lhs);
     pin_rhs = pin_lhs = nullptr;
     pin_cap = need + need / 2 + 1024;
+    pin_rhs_dev = nullptr;
+    pin_reuses_left = 0;
     CHECK_HIP_ERROR(hipHostMalloc(
         reinterpret_cast<void**>(&pin_rhs),
         pin_cap * sizeof(uint32_t),
@@ -1501,29 +1517,44 @@ static bool try_moe_segment_gather_mm(
         pin_cap * sizeof(uint32_t),
         hipHostMallocDefault));
   }
-  CHECK_HIP_ERROR(hipMemcpyAsync(
-      pin_rhs,
-      gpu_ptr<const uint32_t>(rhs_indices),
-      need * sizeof(uint32_t),
-      hipMemcpyDeviceToHost,
-      hs));
 
-  if (!assume_identity_lhs) {
+  const void* rhs_dev = gpu_ptr<const uint32_t>(rhs_indices);
+  const bool cache_hit = !no_pin_cache && assume_identity_lhs &&
+      pin_rhs_dev == rhs_dev && pin_rhs_n == need && pin_reuses_left > 0;
+
+  if (cache_hit) {
+    --pin_reuses_left;
+  } else {
     CHECK_HIP_ERROR(hipMemcpyAsync(
-        pin_lhs,
-        gpu_ptr<const uint32_t>(lhs_indices),
+        pin_rhs,
+        rhs_dev,
         need * sizeof(uint32_t),
         hipMemcpyDeviceToHost,
         hs));
-  }
-  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
 
-  if (!assume_identity_lhs) {
-    for (int i = 0; i < batch; ++i) {
-      if (pin_lhs[static_cast<size_t>(i)] != static_cast<uint32_t>(i)) {
-        return false; // non-identity lhs → cannot treat a as dense [batch,K]
+    if (!assume_identity_lhs) {
+      CHECK_HIP_ERROR(hipMemcpyAsync(
+          pin_lhs,
+          gpu_ptr<const uint32_t>(lhs_indices),
+          need * sizeof(uint32_t),
+          hipMemcpyDeviceToHost,
+          hs));
+    }
+    CHECK_HIP_ERROR(hipStreamSynchronize(hs));
+
+    if (!assume_identity_lhs) {
+      for (int i = 0; i < batch; ++i) {
+        if (pin_lhs[static_cast<size_t>(i)] != static_cast<uint32_t>(i)) {
+          pin_rhs_dev = nullptr;
+          pin_reuses_left = 0;
+          return false; // non-identity lhs → cannot treat a as dense [batch,K]
+        }
       }
     }
+    // Allow gate→up→down to share this pin (2 further hits after this call).
+    pin_rhs_dev = rhs_dev;
+    pin_rhs_n = need;
+    pin_reuses_left = assume_identity_lhs && !no_pin_cache ? 2 : 0;
   }
 
   int n_runs = 0;
@@ -1728,26 +1759,48 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Host path (default): D2H segment table + one hipBLASLt/naive GEMM per segment.
+  // Pin-cache: MoE weight VJP does 3× segmented_mm with the same segments
+  // (dW_gate/up/down). Reuse pin for 2 more hits after each D2H.
   static thread_local uint32_t* pin_segs = nullptr;
   static thread_local size_t pin_segs_cap = 0;
+  static thread_local const void* pin_segs_dev = nullptr;
+  static thread_local size_t pin_segs_n = 0;
+  static thread_local int pin_segs_reuses = 0;
+  static const bool no_seg_cache = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_NO_PIN_CACHE");
+    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+                 e[0] == 'T');
+  }();
   const size_t nseg_u32 = static_cast<size_t>(num_segments) * 2;
   if (nseg_u32 > pin_segs_cap) {
     if (pin_segs)
       (void)hipHostFree(pin_segs);
     pin_segs_cap = nseg_u32 + 64;
+    pin_segs_dev = nullptr;
+    pin_segs_reuses = 0;
     CHECK_HIP_ERROR(hipHostMalloc(
         reinterpret_cast<void**>(&pin_segs),
         pin_segs_cap * sizeof(uint32_t),
         hipHostMallocDefault));
   }
   hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
-  CHECK_HIP_ERROR(hipMemcpyAsync(
-      pin_segs,
-      gpu_ptr<const uint32_t>(segments),
-      nseg_u32 * sizeof(uint32_t),
-      hipMemcpyDeviceToHost,
-      hs));
-  CHECK_HIP_ERROR(hipStreamSynchronize(hs));
+  const void* segs_dev = gpu_ptr<const uint32_t>(segments);
+  const bool seg_hit = !no_seg_cache && pin_segs_dev == segs_dev &&
+      pin_segs_n == nseg_u32 && pin_segs_reuses > 0;
+  if (seg_hit) {
+    --pin_segs_reuses;
+  } else {
+    CHECK_HIP_ERROR(hipMemcpyAsync(
+        pin_segs,
+        segs_dev,
+        nseg_u32 * sizeof(uint32_t),
+        hipMemcpyDeviceToHost,
+        hs));
+    CHECK_HIP_ERROR(hipStreamSynchronize(hs));
+    pin_segs_dev = segs_dev;
+    pin_segs_n = nseg_u32;
+    pin_segs_reuses = no_seg_cache ? 0 : 2;
+  }
 
   const size_t esize = size_of(a.dtype());
   char* out_base = static_cast<char*>(gpu_ptr<void>(out));
