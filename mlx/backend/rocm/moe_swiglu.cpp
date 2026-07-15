@@ -103,18 +103,23 @@ array moe_swiglu_sorted(
     encoder.add_temporary(wd);
   }
 
-  array out({T, D}, bfloat16, nullptr, {});
-  out.set_data(malloc_async(out.nbytes(), encoder));
-  array gate({T, I}, bfloat16, nullptr, {});
-  array up({T, I}, bfloat16, nullptr, {});
-  array h({T, I}, bfloat16, nullptr, {});
-  gate.set_data(malloc_async(gate.nbytes(), encoder));
-  up.set_data(malloc_async(up.nbytes(), encoder));
-  h.set_data(malloc_async(h.nbytes(), encoder));
-  // Leaf buffers (no Primitive) must be marked available or eval() throws.
-  gate.set_status(array::Status::available);
-  up.set_status(array::Status::available);
-  h.set_status(array::Status::available);
+  // Buffer ctor starts Status::available (unlike prim=nullptr ctor).
+  array out(
+      malloc_async(static_cast<size_t>(T) * D * size_of(bfloat16), encoder),
+      Shape{T, D},
+      bfloat16);
+  array gate(
+      malloc_async(static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
+      Shape{T, I},
+      bfloat16);
+  array up(
+      malloc_async(static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
+      Shape{T, I},
+      bfloat16);
+  array h(
+      malloc_async(static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
+      Shape{T, I},
+      bfloat16);
   encoder.add_temporary(gate);
   encoder.add_temporary(up);
   encoder.add_temporary(h);
@@ -264,6 +269,7 @@ array moe_swiglu_sorted(
 
   // Eager helper: ensure GPU finished before Python touches `out`.
   CHECK_HIP_ERROR(hipStreamSynchronize(hs));
+  out.set_status(array::Status::available);
   return out;
 }
 
