@@ -1033,8 +1033,9 @@ void naive_gemm_with_offset_ldc(
 
 // ---------------------------------------------------------------------------
 // Device-side MoE sorted expert GEMM (no host sync).
-// grid: (ceil(N/TN), ceil(batch/TM), E)
-// Each expert binary-searches its [start,end) run in sorted rhs indices.
+// Token-tiled grid: (ceil(N/TN), ceil(batch/TM)) — O(T·N) blocks, NOT O(T·N·E).
+// Sorted ids → most tiles are single-expert (shared B); boundary tiles fall
+// back to per-row expert lookup.
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -1084,57 +1085,95 @@ __global__ void moe_sorted_expert_gemm_kernel(
     int64_t b_expert_stride,
     int ldb) {
   using Acc = typename GemmAccType<T>::type;
-  const int e = static_cast<int>(blockIdx.z);
-  // All threads in the block must take the same early-exit (empty expert) so
-  // later __syncthreads stay matched. Per-thread bounds are handled with masks.
-  const int start = moe_lower_bound(idx, batch, static_cast<uint32_t>(e));
-  const int end = moe_upper_bound(idx, batch, static_cast<uint32_t>(e));
-  const int Mseg = end - start;
-  if (Mseg <= 0) {
-    return;
-  }
-
   const int tx = static_cast<int>(threadIdx.x);
   const int ty = static_cast<int>(threadIdx.y);
-  const int local_row = static_cast<int>(blockIdx.y) * MOE_TM + ty;
-  const int col = static_cast<int>(blockIdx.x) * MOE_TN + tx;
-  const int row = start + local_row;
-  const bool active = (local_row < Mseg) && (col < N);
+  const int row0 = static_cast<int>(blockIdx.y) * MOE_TM;
+  const int col0 = static_cast<int>(blockIdx.x) * MOE_TN;
+  const int row = row0 + ty;
+  const int col = col0 + tx;
+  if (row0 >= batch) {
+    return;
+  }
+  const int last = (row0 + MOE_TM <= batch) ? (row0 + MOE_TM - 1) : (batch - 1);
+  const uint32_t e0 = idx[row0];
+  const uint32_t e1 = idx[last];
+  const bool single_expert = (e0 == e1);
+  const bool active = (row < batch) && (col < N);
 
-  const T* Be = B + static_cast<int64_t>(e) * b_expert_stride;
   Acc sum = Acc(0);
   __shared__ Acc As[MOE_TM][MOE_TK];
   __shared__ Acc Bs[MOE_TK][MOE_TN];
 
-  for (int t = 0; t < (K + MOE_TK - 1) / MOE_TK; ++t) {
-    const int a_col = t * MOE_TK + tx;
-    if (ty < MOE_TM && tx < MOE_TK) {
-      if (local_row < Mseg && a_col < K) {
-        As[ty][tx] = static_cast<Acc>(A[static_cast<int64_t>(row) * K + a_col]);
-      } else {
-        As[ty][tx] = Acc(0);
-      }
-    }
-    const int b_k = t * MOE_TK + ty;
-    if (ty < MOE_TK && tx < MOE_TN) {
-      if (b_k < K && col < N) {
-        if constexpr (TransB) {
-          Bs[ty][tx] = static_cast<Acc>(Be[static_cast<int64_t>(col) * ldb + b_k]);
+  if (single_expert) {
+    // Fast path: whole tile is one expert run → shared A and B tiles.
+    const T* Be = B + static_cast<int64_t>(e0) * b_expert_stride;
+    for (int t = 0; t < (K + MOE_TK - 1) / MOE_TK; ++t) {
+      const int a_col = t * MOE_TK + tx;
+      if (ty < MOE_TM && tx < MOE_TK) {
+        if (row < batch && a_col < K) {
+          As[ty][tx] =
+              static_cast<Acc>(A[static_cast<int64_t>(row) * K + a_col]);
         } else {
-          Bs[ty][tx] = static_cast<Acc>(Be[static_cast<int64_t>(b_k) * ldb + col]);
+          As[ty][tx] = Acc(0);
         }
-      } else {
-        Bs[ty][tx] = Acc(0);
       }
-    }
-    __syncthreads();
-    if (active) {
+      const int b_k = t * MOE_TK + ty;
+      if (ty < MOE_TK && tx < MOE_TN) {
+        if (b_k < K && col < N) {
+          if constexpr (TransB) {
+            Bs[ty][tx] = static_cast<Acc>(
+                Be[static_cast<int64_t>(col) * ldb + b_k]);
+          } else {
+            Bs[ty][tx] = static_cast<Acc>(
+                Be[static_cast<int64_t>(b_k) * ldb + col]);
+          }
+        } else {
+          Bs[ty][tx] = Acc(0);
+        }
+      }
+      __syncthreads();
+      if (active) {
 #pragma unroll
-      for (int kk = 0; kk < MOE_TK; ++kk) {
-        sum += As[ty][kk] * Bs[kk][tx];
+        for (int kk = 0; kk < MOE_TK; ++kk) {
+          sum += As[ty][kk] * Bs[kk][tx];
+        }
       }
+      __syncthreads();
     }
-    __syncthreads();
+  } else {
+    // Boundary tile: rows may straddle expert runs. Shared A, per-row B.
+    for (int t = 0; t < (K + MOE_TK - 1) / MOE_TK; ++t) {
+      const int a_col = t * MOE_TK + tx;
+      if (ty < MOE_TM && tx < MOE_TK) {
+        if (row < batch && a_col < K) {
+          As[ty][tx] =
+              static_cast<Acc>(A[static_cast<int64_t>(row) * K + a_col]);
+        } else {
+          As[ty][tx] = Acc(0);
+        }
+      }
+      __syncthreads();
+      if (active) {
+        const uint32_t e = idx[row];
+        const T* Be = B + static_cast<int64_t>(e) * b_expert_stride;
+#pragma unroll
+        for (int kk = 0; kk < MOE_TK; ++kk) {
+          const int b_k = t * MOE_TK + kk;
+          Acc bv = Acc(0);
+          if (b_k < K) {
+            if constexpr (TransB) {
+              bv = static_cast<Acc>(
+                  Be[static_cast<int64_t>(col) * ldb + b_k]);
+            } else {
+              bv = static_cast<Acc>(
+                  Be[static_cast<int64_t>(b_k) * ldb + col]);
+            }
+          }
+          sum += As[ty][kk] * bv;
+        }
+      }
+      __syncthreads();
+    }
   }
   if (active) {
     C[static_cast<int64_t>(row) * N + col] = static_cast<T>(sum);
@@ -1641,11 +1680,12 @@ void moe_sorted_expert_gemm(
   void* out_ptr = gpu_ptr<void>(out);
   const uint32_t* idx_ptr = gpu_ptr<const uint32_t>(rhs_indices);
 
+  // Token-tiled: no expert grid dim. n_experts kept in API for callers.
+  (void)n_experts;
   dim3 block(MOE_TN, MOE_TM);
   dim3 grid(
       (N + MOE_TN - 1) / MOE_TN,
-      (batch + MOE_TM - 1) / MOE_TM,
-      n_experts);
+      (batch + MOE_TM - 1) / MOE_TM);
 
   encoder.launch_kernel([=](hipStream_t stream) {
     switch (a.dtype()) {

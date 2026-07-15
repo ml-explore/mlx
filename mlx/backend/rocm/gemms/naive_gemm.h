@@ -103,10 +103,10 @@ void naive_gemm_with_offset_ldc(
     float beta = 0.0f);
 
 // Device-side MoE sorted-gather GEMM: no host D2H / stream sync.
-// A is [batch, K] contiguous (M=1 token rows pre-stacked). B is expert-batched
-// with 1-D batch dim E (stride b_expert_stride elements). rhs_indices[batch]
-// must be sorted by expert id in 0..E-1. Each expert's token run is found by
-// binary search on-device; C[start:end] = A[start:end] @ B[e].
+// A is [batch, K] contiguous. B is expert-batched with stride b_expert_stride.
+// rhs_indices[batch] must be sorted by expert id. Token-tiled launch (O(T·N)
+// blocks): each tile loads expert from idx; single-expert tiles share B tiles.
+// C[i] = A[i] @ B[idx[i]].
 void moe_sorted_expert_gemm(
     CommandEncoder& encoder,
     const array& a,

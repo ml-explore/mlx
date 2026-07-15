@@ -27,6 +27,7 @@
 #include <hip/hip_runtime.h>
 
 #include <cassert>
+#include <cstdlib>
 #include <functional>
 #include <stdexcept>
 #include <vector>
@@ -303,7 +304,7 @@ std::vector<array> moe_swiglu_fallback(
   return {reshape(down, Shape{T, x.shape(1)}, s)};
 }
 
-// Fused bwd Primitive: one D2H + recompute + all grads (exact-M GEMMs).
+// Fused bwd Primitive: zero-sync device exact-M (default) or host-RLE hipBLASLt.
 // inputs: x, wg, wu, wd, ids, dy
 // outputs: dx, dwg, dwu, dwd
 class MoeSwigluSortedVJP : public Primitive {
@@ -403,9 +404,88 @@ void MoeSwigluSortedVJP::eval_gpu(
     encoder.set_output_array(*o);
   }
 
-  // Exact-M host RLE (one tiny D2H of expert ids — same as fused forward) +
-  // hipBLASLt for NN and TN (TN status=3 fixed: exact algo keys for transpose).
-  // Faster than device VALU tiles; zero pad waste vs pack-to-T.
+  // Default: zero-sync device-segmented exact-M (token-tiled expert GEMM +
+  // device segments for dW). No D2H / StreamSynchronize — pipeline-friendly.
+  // Kill-switch MLX_ROCM_MOE_VJP_HIPBLAS=1 → host-RLE + hipBLASLt (MFMA) path.
+  static const bool use_hipblas_vjp = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_VJP_HIPBLAS");
+    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+                 e[0] == 'T');
+  }();
+
+  const int64_t wg_stride = static_cast<int64_t>(D) * I;
+  const int64_t wd_stride = static_cast<int64_t>(I) * D;
+
+  auto mk = [&](Shape sh) {
+    array a(sh, bfloat16, nullptr, {});
+    a.set_data(rocm::malloc_async(a.nbytes(), encoder));
+    encoder.add_temporary(a);
+    return a;
+  };
+  array gate = mk(Shape{T, I});
+  array up = mk(Shape{T, I});
+  array h = mk(Shape{T, I});
+  array dh = mk(Shape{T, I});
+  array dg = mk(Shape{T, I});
+  array du = mk(Shape{T, I});
+
+  if (!use_hipblas_vjp) {
+    // ---- Zero-sync device exact-M path ----
+    rocm::moe_sorted_expert_gemm(
+        encoder, x, wg, ids, gate, T, /*N=*/I, /*K=*/D, E,
+        /*b_transposed=*/false, /*ldb=*/I, wg_stride);
+    rocm::moe_sorted_expert_gemm(
+        encoder, x, wu, ids, up, T, I, D, E, false, I, wg_stride);
+    rocm::moe_sorted_expert_gemm(
+        encoder, dy, wd, ids, dh, T, /*N=*/I, /*K=*/D, E,
+        /*b_transposed=*/true, /*ldb=*/D, wd_stride);
+
+    rocm::swiglu_bwd_elem_bf16(
+        encoder,
+        gpu_ptr<void>(gate),
+        gpu_ptr<void>(up),
+        gpu_ptr<void>(dh),
+        gpu_ptr<void>(h),
+        gpu_ptr<void>(dg),
+        gpu_ptr<void>(du),
+        T * I);
+
+    // dx = dg @ Wg.T + du @ Wu.T  (device kernel has no beta)
+    {
+      void* op = gpu_ptr<void>(dx);
+      encoder.launch_kernel([op, n = dx.nbytes()](hipStream_t st) {
+        (void)hipMemsetAsync(op, 0, n, st);
+      });
+    }
+    rocm::moe_sorted_expert_gemm(
+        encoder, dg, wg, ids, dx, T, /*N=*/D, /*K=*/I, E, true, I, wg_stride);
+    array dx_u = mk(Shape{T, D});
+    rocm::moe_sorted_expert_gemm(
+        encoder, du, wu, ids, dx_u, T, D, I, E, true, I, wg_stride);
+    rocm::bf16_add_inplace(
+        encoder, gpu_ptr<void>(dx_u), gpu_ptr<void>(dx), T * D);
+
+    array segments(Shape{E, 2}, uint32, nullptr, {});
+    segments.set_data(rocm::malloc_async(segments.nbytes(), encoder));
+    encoder.add_temporary(segments);
+    rocm::moe_sorted_segments(encoder, ids, segments, T, E);
+
+    rocm::segmented_mm_device(
+        encoder, x, dg, segments, dwg, /*M=*/D, /*N=*/I, E,
+        /*a_transposed=*/true, /*lda=*/D, /*a_k_stride=*/D,
+        /*b_transposed=*/false, /*ldb=*/I, /*b_k_stride=*/I,
+        /*out_stride=*/wg_stride);
+    rocm::segmented_mm_device(
+        encoder, x, du, segments, dwu, D, I, E, true, D, D, false, I, I,
+        wg_stride);
+    rocm::segmented_mm_device(
+        encoder, h, dy, segments, dwd, /*M=*/I, /*N=*/D, E, true, /*lda=*/I,
+        /*a_k_stride=*/I, false, /*ldb=*/D, /*b_k_stride=*/D,
+        /*out_stride=*/wd_stride);
+    return;
+  }
+
+  // ---- Host-RLE + hipBLASLt exact-M (opt-in MFMA path) ----
   static thread_local uint32_t* pin = nullptr;
   static thread_local size_t pin_cap = 0;
   const size_t need = static_cast<size_t>(T);
@@ -427,8 +507,6 @@ void MoeSwigluSortedVJP::eval_gpu(
       hs));
   CHECK_HIP_ERROR(hipStreamSynchronize(hs));
 
-  const int64_t wg_stride = static_cast<int64_t>(D) * I;
-  const int64_t wd_stride = static_cast<int64_t>(I) * D;
   const char* xB = static_cast<const char*>(gpu_ptr<void>(x));
   const char* dyB = static_cast<const char*>(gpu_ptr<void>(dy));
   const char* wgB = static_cast<const char*>(gpu_ptr<void>(wg));
@@ -438,19 +516,6 @@ void MoeSwigluSortedVJP::eval_gpu(
   char* dwuB = static_cast<char*>(gpu_ptr<void>(dwu));
   char* dwdB = static_cast<char*>(gpu_ptr<void>(dwd));
   char* dxB = static_cast<char*>(gpu_ptr<void>(dx));
-
-  auto mk = [&](Shape sh) {
-    array a(sh, bfloat16, nullptr, {});
-    a.set_data(rocm::malloc_async(a.nbytes(), encoder));
-    encoder.add_temporary(a);
-    return a;
-  };
-  array gate = mk(Shape{T, I});
-  array up = mk(Shape{T, I});
-  array h = mk(Shape{T, I});
-  array dh = mk(Shape{T, I});
-  array dg = mk(Shape{T, I});
-  array du = mk(Shape{T, I});
   char* gateB = static_cast<char*>(gpu_ptr<void>(gate));
   char* upB = static_cast<char*>(gpu_ptr<void>(up));
   char* hB = static_cast<char*>(gpu_ptr<void>(h));
@@ -458,7 +523,6 @@ void MoeSwigluSortedVJP::eval_gpu(
   char* dgB = static_cast<char*>(gpu_ptr<void>(dg));
   char* duB = static_cast<char*>(gpu_ptr<void>(du));
 
-  // Zero dW (empty experts stay 0)
   encoder.launch_kernel([ptr = gpu_ptr<void>(dwg), n = dwg.nbytes()](hipStream_t st) {
     (void)hipMemsetAsync(ptr, 0, n, st);
   });
@@ -471,7 +535,6 @@ void MoeSwigluSortedVJP::eval_gpu(
 
   auto gemm = [&](bool ta, bool tb, int M, int N, int K, const char* a, int lda,
                   const char* b, int ldb, float beta, char* c, int ldc) {
-    // Prefer hipBLASLt for all layouts (TN fixed). rocBLAS fallback if needed.
     if (rocm::is_hipblaslt_available()) {
       rocm::hipblaslt_gemm_ptrs(
           encoder, ta, tb, M, N, K, 1.0f, a, lda, b, ldb, beta, c, ldc,
@@ -483,7 +546,6 @@ void MoeSwigluSortedVJP::eval_gpu(
     }
   };
 
-  // Pass 1: recompute gate/up + dh
   int start = 0;
   while (start < T) {
     uint32_t e = pin[static_cast<size_t>(start)];
@@ -507,7 +569,6 @@ void MoeSwigluSortedVJP::eval_gpu(
          gateB + ioff, I);
     gemm(false, false, Mseg, I, D, xB + xoff, D, wuB + wgoff, I, 0.0f,
          upB + ioff, I);
-    // dh = dy @ Wd.T
     gemm(false, true, Mseg, I, D, dyB + xoff, D, wdB + wdoff, D, 0.0f,
          dhB + ioff, I);
     start = end;
@@ -517,7 +578,6 @@ void MoeSwigluSortedVJP::eval_gpu(
       encoder, gpu_ptr<void>(gate), gpu_ptr<void>(up), gpu_ptr<void>(dh),
       gpu_ptr<void>(h), gpu_ptr<void>(dg), gpu_ptr<void>(du), T * I);
 
-  // Pass 2: dx + dW
   start = 0;
   while (start < T) {
     uint32_t e = pin[static_cast<size_t>(start)];
