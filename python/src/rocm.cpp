@@ -42,7 +42,12 @@ void init_rocm(nb::module_& m) {
          const mx::array& w_down,
          const mx::array& expert_ids) {
         return mx::rocm::moe_swiglu_sorted(
-            x, w_gate, w_up, w_down, expert_ids, mx::Device::gpu);
+            x,
+            w_gate,
+            w_up,
+            w_down,
+            expert_ids,
+            mx::Device(mx::Device::gpu));
       },
       nb::arg("x"),
       nb::arg("w_gate"),

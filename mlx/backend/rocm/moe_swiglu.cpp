@@ -15,6 +15,7 @@
 #include "mlx/device.h"
 #include "mlx/ops.h"
 #include "mlx/stream.h"
+#include "mlx/transforms.h"
 #include "mlx/utils.h"
 
 #include <hip/hip_runtime.h>
