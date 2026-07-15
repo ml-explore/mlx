@@ -304,7 +304,8 @@ std::vector<array> moe_swiglu_fallback(
   return {reshape(down, Shape{T, x.shape(1)}, s)};
 }
 
-// Fused bwd Primitive: zero-sync device exact-M (default) or host-RLE hipBLASLt.
+// Fused bwd Primitive: device-segmented exact-M + hipBLASLt (default), or
+// zero-sync VALU path (MLX_ROCM_MOE_VJP_DEVICE_SEG=1).
 // inputs: x, wg, wu, wd, ids, dy
 // outputs: dx, dwg, dwu, dwd
 class MoeSwigluSortedVJP : public Primitive {
@@ -404,11 +405,12 @@ void MoeSwigluSortedVJP::eval_gpu(
     encoder.set_output_array(*o);
   }
 
-  // Default: zero-sync device-segmented exact-M (token-tiled expert GEMM +
-  // device segments for dW). No D2H / StreamSynchronize — pipeline-friendly.
-  // Kill-switch MLX_ROCM_MOE_VJP_HIPBLAS=1 → host-RLE + hipBLASLt (MFMA) path.
-  static const bool use_hipblas_vjp = [] {
-    const char* e = std::getenv("MLX_ROCM_MOE_VJP_HIPBLAS");
+  // Paths:
+  //   default: device segments [E,2] + tiny D2H + hipBLASLt exact-M (MFMA)
+  //   MLX_ROCM_MOE_VJP_DEVICE_SEG=1: zero-sync VALU token-tiled (no D2H)
+  // TN status=3 under train fixed via exact algo keys for transpose GEMMs.
+  static const bool use_device_seg = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_VJP_DEVICE_SEG");
     return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
                  e[0] == 'T');
   }();
@@ -429,8 +431,8 @@ void MoeSwigluSortedVJP::eval_gpu(
   array dg = mk(Shape{T, I});
   array du = mk(Shape{T, I});
 
-  if (!use_hipblas_vjp) {
-    // ---- Zero-sync device exact-M path ----
+  if (use_device_seg) {
+    // ---- Zero-sync device exact-M (VALU token-tiled; pipeline-friendly) ----
     rocm::moe_sorted_expert_gemm(
         encoder, x, wg, ids, gate, T, /*N=*/I, /*K=*/D, E,
         /*b_transposed=*/false, /*ldb=*/I, wg_stride);
@@ -450,7 +452,6 @@ void MoeSwigluSortedVJP::eval_gpu(
         gpu_ptr<void>(du),
         T * I);
 
-    // dx = dg @ Wg.T + du @ Wu.T  (device kernel has no beta)
     {
       void* op = gpu_ptr<void>(dx);
       encoder.launch_kernel([op, n = dx.nbytes()](hipStream_t st) {
@@ -485,24 +486,30 @@ void MoeSwigluSortedVJP::eval_gpu(
     return;
   }
 
-  // ---- Host-RLE + hipBLASLt exact-M (opt-in MFMA path) ----
-  static thread_local uint32_t* pin = nullptr;
-  static thread_local size_t pin_cap = 0;
-  const size_t need = static_cast<size_t>(T);
-  if (need > pin_cap) {
-    if (pin)
-      (void)hipHostFree(pin);
-    pin_cap = need + need / 2 + 1024;
+  // ---- Device segments + tiny D2H [E,2] + hipBLASLt exact-M (default) ----
+  // Segments found on-device; host only reads E pairs (not full T ids).
+  array segments(Shape{E, 2}, uint32, nullptr, {});
+  segments.set_data(rocm::malloc_async(segments.nbytes(), encoder));
+  encoder.add_temporary(segments);
+  rocm::moe_sorted_segments(encoder, ids, segments, T, E);
+
+  static thread_local uint32_t* pin_seg = nullptr;
+  static thread_local size_t pin_seg_cap = 0;
+  const size_t seg_need = static_cast<size_t>(E) * 2;
+  if (seg_need > pin_seg_cap) {
+    if (pin_seg)
+      (void)hipHostFree(pin_seg);
+    pin_seg_cap = seg_need + 64;
     CHECK_HIP_ERROR(hipHostMalloc(
-        reinterpret_cast<void**>(&pin),
-        pin_cap * sizeof(uint32_t),
+        reinterpret_cast<void**>(&pin_seg),
+        pin_seg_cap * sizeof(uint32_t),
         hipHostMallocDefault));
   }
   hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
   CHECK_HIP_ERROR(hipMemcpyAsync(
-      pin,
-      gpu_ptr<const uint32_t>(ids),
-      need * sizeof(uint32_t),
+      pin_seg,
+      gpu_ptr<const uint32_t>(segments),
+      seg_need * sizeof(uint32_t),
       hipMemcpyDeviceToHost,
       hs));
   CHECK_HIP_ERROR(hipStreamSynchronize(hs));
@@ -546,19 +553,15 @@ void MoeSwigluSortedVJP::eval_gpu(
     }
   };
 
-  int start = 0;
-  while (start < T) {
-    uint32_t e = pin[static_cast<size_t>(start)];
-    if (static_cast<int>(e) >= E) {
-      throw std::runtime_error("MoeSwigluSortedVJP: expert id out of range");
-    }
-    int end = start + 1;
-    while (end < T && pin[static_cast<size_t>(end)] == e)
-      ++end;
-    int Mseg = end - start;
-    if (Mseg <= 0) {
-      start = end;
+  // Pass 1: recompute gate/up + dh (exact-M per expert from device segments)
+  for (int e = 0; e < E; ++e) {
+    const int start = static_cast<int>(pin_seg[static_cast<size_t>(2 * e)]);
+    const int end = static_cast<int>(pin_seg[static_cast<size_t>(2 * e + 1)]);
+    const int Mseg = end - start;
+    if (Mseg <= 0)
       continue;
+    if (start < 0 || end > T || start > end) {
+      throw std::runtime_error("MoeSwigluSortedVJP: bad device segments");
     }
     const size_t xoff = static_cast<size_t>(start) * D * esz;
     const size_t ioff = static_cast<size_t>(start) * I * esz;
@@ -571,24 +574,19 @@ void MoeSwigluSortedVJP::eval_gpu(
          upB + ioff, I);
     gemm(false, true, Mseg, I, D, dyB + xoff, D, wdB + wdoff, D, 0.0f,
          dhB + ioff, I);
-    start = end;
   }
 
   rocm::swiglu_bwd_elem_bf16(
       encoder, gpu_ptr<void>(gate), gpu_ptr<void>(up), gpu_ptr<void>(dh),
       gpu_ptr<void>(h), gpu_ptr<void>(dg), gpu_ptr<void>(du), T * I);
 
-  start = 0;
-  while (start < T) {
-    uint32_t e = pin[static_cast<size_t>(start)];
-    int end = start + 1;
-    while (end < T && pin[static_cast<size_t>(end)] == e)
-      ++end;
-    int Mseg = end - start;
-    if (Mseg <= 0) {
-      start = end;
+  // Pass 2: dx + dW
+  for (int e = 0; e < E; ++e) {
+    const int start = static_cast<int>(pin_seg[static_cast<size_t>(2 * e)]);
+    const int end = static_cast<int>(pin_seg[static_cast<size_t>(2 * e + 1)]);
+    const int Mseg = end - start;
+    if (Mseg <= 0)
       continue;
-    }
     const size_t xoff = static_cast<size_t>(start) * D * esz;
     const size_t ioff = static_cast<size_t>(start) * I * esz;
     const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
@@ -605,7 +603,6 @@ void MoeSwigluSortedVJP::eval_gpu(
          dwuB + wgoff, I);
     gemm(true, false, I, D, Mseg, hB + ioff, I, dyB + xoff, D, 0.0f,
          dwdB + wdoff, D);
-    start = end;
   }
 }
 
