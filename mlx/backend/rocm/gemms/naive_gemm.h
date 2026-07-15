@@ -102,4 +102,42 @@ void naive_gemm_with_offset_ldc(
     float alpha = 1.0f,
     float beta = 0.0f);
 
+// Device-side MoE sorted-gather GEMM: no host D2H / stream sync.
+// A is [batch, K] contiguous (M=1 token rows pre-stacked). B is expert-batched
+// with 1-D batch dim E (stride b_expert_stride elements). rhs_indices[batch]
+// must be sorted by expert id in 0..E-1. Each expert's token run is found by
+// binary search on-device; C[start:end] = A[start:end] @ B[e].
+void moe_sorted_expert_gemm(
+    CommandEncoder& encoder,
+    const array& a,
+    const array& b,
+    const array& rhs_indices,
+    array& out,
+    int batch,
+    int N,
+    int K,
+    int n_experts,
+    bool b_transposed,
+    int64_t ldb,
+    int64_t b_expert_stride);
+
+// Device-side SegmentedMM: out[s] = A[:,k0:k1] @ B[k0:k1,:] with (k0,k1) from
+// device segments[2*s], segments[2*s+1]. No host D2H / stream sync.
+void segmented_mm_device(
+    CommandEncoder& encoder,
+    const array& a,
+    const array& b,
+    const array& segments,
+    array& out,
+    int M,
+    int N,
+    int num_segments,
+    bool a_transposed,
+    int64_t lda,
+    int64_t a_k_stride,
+    bool b_transposed,
+    int64_t ldb,
+    int64_t b_k_stride,
+    int64_t out_stride);
+
 } // namespace mlx::core::rocm

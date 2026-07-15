@@ -9,6 +9,8 @@
 #include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
 
+#include <type_traits>
+
 namespace mlx::core::rocm {
 
 // Tile sizes for the naive GEMM kernel
@@ -1025,6 +1027,467 @@ void naive_gemm_with_offset_ldc(
         break;
       default:
         throw std::runtime_error("Unsupported dtype for naive GEMM with offset");
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Device-side MoE sorted expert GEMM (no host sync).
+// grid: (ceil(N/TN), ceil(batch/TM), E)
+// Each expert binary-searches its [start,end) run in sorted rhs indices.
+// ---------------------------------------------------------------------------
+namespace {
+
+constexpr int MOE_TM = 32;
+constexpr int MOE_TN = 32;
+constexpr int MOE_TK = 16;
+
+__device__ __forceinline__ int moe_lower_bound(
+    const uint32_t* idx,
+    int n,
+    uint32_t e) {
+  int lo = 0, hi = n;
+  while (lo < hi) {
+    int mid = (lo + hi) >> 1;
+    if (idx[mid] < e)
+      lo = mid + 1;
+    else
+      hi = mid;
+  }
+  return lo;
+}
+
+__device__ __forceinline__ int moe_upper_bound(
+    const uint32_t* idx,
+    int n,
+    uint32_t e) {
+  int lo = 0, hi = n;
+  while (lo < hi) {
+    int mid = (lo + hi) >> 1;
+    if (idx[mid] <= e)
+      lo = mid + 1;
+    else
+      hi = mid;
+  }
+  return lo;
+}
+
+template <typename T, bool TransB>
+__global__ void moe_sorted_expert_gemm_kernel(
+    const T* __restrict__ A,
+    const T* __restrict__ B,
+    T* __restrict__ C,
+    const uint32_t* __restrict__ idx,
+    int batch,
+    int K,
+    int N,
+    int64_t b_expert_stride,
+    int ldb) {
+  using Acc = typename GemmAccType<T>::type;
+  const int e = static_cast<int>(blockIdx.z);
+  // All threads in the block must take the same early-exit (empty expert) so
+  // later __syncthreads stay matched. Per-thread bounds are handled with masks.
+  const int start = moe_lower_bound(idx, batch, static_cast<uint32_t>(e));
+  const int end = moe_upper_bound(idx, batch, static_cast<uint32_t>(e));
+  const int Mseg = end - start;
+  if (Mseg <= 0) {
+    return;
+  }
+
+  const int tx = static_cast<int>(threadIdx.x);
+  const int ty = static_cast<int>(threadIdx.y);
+  const int local_row = static_cast<int>(blockIdx.y) * MOE_TM + ty;
+  const int col = static_cast<int>(blockIdx.x) * MOE_TN + tx;
+  const int row = start + local_row;
+  const bool active = (local_row < Mseg) && (col < N);
+
+  const T* Be = B + static_cast<int64_t>(e) * b_expert_stride;
+  Acc sum = Acc(0);
+  __shared__ Acc As[MOE_TM][MOE_TK];
+  __shared__ Acc Bs[MOE_TK][MOE_TN];
+
+  for (int t = 0; t < (K + MOE_TK - 1) / MOE_TK; ++t) {
+    const int a_col = t * MOE_TK + tx;
+    if (ty < MOE_TM && tx < MOE_TK) {
+      if (local_row < Mseg && a_col < K) {
+        As[ty][tx] = static_cast<Acc>(A[static_cast<int64_t>(row) * K + a_col]);
+      } else {
+        As[ty][tx] = Acc(0);
+      }
+    }
+    const int b_k = t * MOE_TK + ty;
+    if (ty < MOE_TK && tx < MOE_TN) {
+      if (b_k < K && col < N) {
+        if constexpr (TransB) {
+          Bs[ty][tx] = static_cast<Acc>(Be[static_cast<int64_t>(col) * ldb + b_k]);
+        } else {
+          Bs[ty][tx] = static_cast<Acc>(Be[static_cast<int64_t>(b_k) * ldb + col]);
+        }
+      } else {
+        Bs[ty][tx] = Acc(0);
+      }
+    }
+    __syncthreads();
+    if (active) {
+#pragma unroll
+      for (int kk = 0; kk < MOE_TK; ++kk) {
+        sum += As[ty][kk] * Bs[kk][tx];
+      }
+    }
+    __syncthreads();
+  }
+  if (active) {
+    C[static_cast<int64_t>(row) * N + col] = static_cast<T>(sum);
+  }
+}
+
+template <typename T, bool TransA, bool TransB>
+__global__ void segmented_mm_device_kernel(
+    const T* __restrict__ A,
+    const T* __restrict__ B,
+    T* __restrict__ C,
+    const uint32_t* __restrict__ segments,
+    int M,
+    int N,
+    int64_t a_k_stride,
+    int64_t b_k_stride,
+    int64_t out_stride,
+    int lda,
+    int ldb) {
+  using Acc = typename GemmAccType<T>::type;
+  const int seg = static_cast<int>(blockIdx.z);
+  const uint32_t k0 = segments[2 * seg];
+  const uint32_t k1 = segments[2 * seg + 1];
+  const int Kseg = (k1 > k0) ? static_cast<int>(k1 - k0) : 0;
+
+  const int tx = static_cast<int>(threadIdx.x);
+  const int ty = static_cast<int>(threadIdx.y);
+  const int row = static_cast<int>(blockIdx.y) * TILE_M + ty;
+  const int col = static_cast<int>(blockIdx.x) * TILE_N + tx;
+
+  T* Cseg = C + static_cast<int64_t>(seg) * out_stride;
+  const bool in_tile = (row < M) && (col < N);
+  if (Kseg <= 0) {
+    if (in_tile) {
+      Cseg[static_cast<int64_t>(row) * N + col] = static_cast<T>(0);
+    }
+    return;
+  }
+
+  const T* Aseg = A + static_cast<int64_t>(k0) * a_k_stride;
+  const T* Bseg = B + static_cast<int64_t>(k0) * b_k_stride;
+
+  Acc sum = Acc(0);
+  __shared__ Acc As[TILE_M][TILE_K];
+  __shared__ Acc Bs[TILE_K][TILE_N];
+
+  for (int t = 0; t < (Kseg + TILE_K - 1) / TILE_K; ++t) {
+    const int a_col = t * TILE_K + tx;
+    if (row < M && a_col < Kseg) {
+      if constexpr (TransA) {
+        As[ty][tx] = static_cast<Acc>(Aseg[static_cast<int64_t>(a_col) * lda + row]);
+      } else {
+        As[ty][tx] = static_cast<Acc>(Aseg[static_cast<int64_t>(row) * lda + a_col]);
+      }
+    } else {
+      As[ty][tx] = Acc(0);
+    }
+    const int b_row = t * TILE_K + ty;
+    if (b_row < Kseg && col < N) {
+      if constexpr (TransB) {
+        Bs[ty][tx] = static_cast<Acc>(Bseg[static_cast<int64_t>(col) * ldb + b_row]);
+      } else {
+        Bs[ty][tx] = static_cast<Acc>(Bseg[static_cast<int64_t>(b_row) * ldb + col]);
+      }
+    } else {
+      Bs[ty][tx] = Acc(0);
+    }
+    __syncthreads();
+    if (in_tile) {
+#pragma unroll
+      for (int kk = 0; kk < TILE_K; ++kk) {
+        sum += As[ty][kk] * Bs[kk][tx];
+      }
+    }
+    __syncthreads();
+  }
+  if (in_tile) {
+    Cseg[static_cast<int64_t>(row) * N + col] = static_cast<T>(sum);
+  }
+}
+
+} // namespace
+
+void moe_sorted_expert_gemm(
+    CommandEncoder& encoder,
+    const array& a,
+    const array& b,
+    const array& rhs_indices,
+    array& out,
+    int batch,
+    int N,
+    int K,
+    int n_experts,
+    bool b_transposed,
+    int64_t ldb,
+    int64_t b_expert_stride) {
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(rhs_indices);
+  encoder.set_output_array(out);
+
+  const void* a_ptr = gpu_ptr<void>(a);
+  const void* b_ptr = gpu_ptr<void>(b);
+  void* out_ptr = gpu_ptr<void>(out);
+  const uint32_t* idx_ptr = gpu_ptr<const uint32_t>(rhs_indices);
+
+  dim3 block(MOE_TN, MOE_TM);
+  dim3 grid(
+      (N + MOE_TN - 1) / MOE_TN,
+      (batch + MOE_TM - 1) / MOE_TM,
+      n_experts);
+
+  encoder.launch_kernel([=](hipStream_t stream) {
+    switch (a.dtype()) {
+      case float32:
+        if (b_transposed) {
+          hipLaunchKernelGGL(
+              (moe_sorted_expert_gemm_kernel<float, true>),
+              grid,
+              block,
+              0,
+              stream,
+              static_cast<const float*>(a_ptr),
+              static_cast<const float*>(b_ptr),
+              static_cast<float*>(out_ptr),
+              idx_ptr,
+              batch,
+              K,
+              N,
+              b_expert_stride,
+              static_cast<int>(ldb));
+        } else {
+          hipLaunchKernelGGL(
+              (moe_sorted_expert_gemm_kernel<float, false>),
+              grid,
+              block,
+              0,
+              stream,
+              static_cast<const float*>(a_ptr),
+              static_cast<const float*>(b_ptr),
+              static_cast<float*>(out_ptr),
+              idx_ptr,
+              batch,
+              K,
+              N,
+              b_expert_stride,
+              static_cast<int>(ldb));
+        }
+        break;
+      case bfloat16:
+        if (b_transposed) {
+          hipLaunchKernelGGL(
+              (moe_sorted_expert_gemm_kernel<hip_bfloat16, true>),
+              grid,
+              block,
+              0,
+              stream,
+              static_cast<const hip_bfloat16*>(a_ptr),
+              static_cast<const hip_bfloat16*>(b_ptr),
+              static_cast<hip_bfloat16*>(out_ptr),
+              idx_ptr,
+              batch,
+              K,
+              N,
+              b_expert_stride,
+              static_cast<int>(ldb));
+        } else {
+          hipLaunchKernelGGL(
+              (moe_sorted_expert_gemm_kernel<hip_bfloat16, false>),
+              grid,
+              block,
+              0,
+              stream,
+              static_cast<const hip_bfloat16*>(a_ptr),
+              static_cast<const hip_bfloat16*>(b_ptr),
+              static_cast<hip_bfloat16*>(out_ptr),
+              idx_ptr,
+              batch,
+              K,
+              N,
+              b_expert_stride,
+              static_cast<int>(ldb));
+        }
+        break;
+      case float16:
+        if (b_transposed) {
+          hipLaunchKernelGGL(
+              (moe_sorted_expert_gemm_kernel<__half, true>),
+              grid,
+              block,
+              0,
+              stream,
+              static_cast<const __half*>(a_ptr),
+              static_cast<const __half*>(b_ptr),
+              static_cast<__half*>(out_ptr),
+              idx_ptr,
+              batch,
+              K,
+              N,
+              b_expert_stride,
+              static_cast<int>(ldb));
+        } else {
+          hipLaunchKernelGGL(
+              (moe_sorted_expert_gemm_kernel<__half, false>),
+              grid,
+              block,
+              0,
+              stream,
+              static_cast<const __half*>(a_ptr),
+              static_cast<const __half*>(b_ptr),
+              static_cast<__half*>(out_ptr),
+              idx_ptr,
+              batch,
+              K,
+              N,
+              b_expert_stride,
+              static_cast<int>(ldb));
+        }
+        break;
+      default:
+        throw std::runtime_error("Unsupported dtype for moe_sorted_expert_gemm");
+    }
+  });
+}
+
+void segmented_mm_device(
+    CommandEncoder& encoder,
+    const array& a,
+    const array& b,
+    const array& segments,
+    array& out,
+    int M,
+    int N,
+    int num_segments,
+    bool a_transposed,
+    int64_t lda,
+    int64_t a_k_stride,
+    bool b_transposed,
+    int64_t ldb,
+    int64_t b_k_stride,
+    int64_t out_stride) {
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(segments);
+  encoder.set_output_array(out);
+
+  const void* a_ptr = gpu_ptr<void>(a);
+  const void* b_ptr = gpu_ptr<void>(b);
+  void* out_ptr = gpu_ptr<void>(out);
+  const uint32_t* seg_ptr = gpu_ptr<const uint32_t>(segments);
+
+  dim3 block(TILE_N, TILE_M);
+  dim3 grid(
+      (N + TILE_N - 1) / TILE_N, (M + TILE_M - 1) / TILE_M, num_segments);
+
+  encoder.launch_kernel([=](hipStream_t stream) {
+    auto launch = [&](auto* typed_a, auto* typed_b, auto* typed_c) {
+      using T = std::remove_pointer_t<decltype(typed_a)>;
+      if (a_transposed && b_transposed) {
+        hipLaunchKernelGGL(
+            (segmented_mm_device_kernel<T, true, true>),
+            grid,
+            block,
+            0,
+            stream,
+            typed_a,
+            typed_b,
+            typed_c,
+            seg_ptr,
+            M,
+            N,
+            a_k_stride,
+            b_k_stride,
+            out_stride,
+            static_cast<int>(lda),
+            static_cast<int>(ldb));
+      } else if (a_transposed && !b_transposed) {
+        hipLaunchKernelGGL(
+            (segmented_mm_device_kernel<T, true, false>),
+            grid,
+            block,
+            0,
+            stream,
+            typed_a,
+            typed_b,
+            typed_c,
+            seg_ptr,
+            M,
+            N,
+            a_k_stride,
+            b_k_stride,
+            out_stride,
+            static_cast<int>(lda),
+            static_cast<int>(ldb));
+      } else if (!a_transposed && b_transposed) {
+        hipLaunchKernelGGL(
+            (segmented_mm_device_kernel<T, false, true>),
+            grid,
+            block,
+            0,
+            stream,
+            typed_a,
+            typed_b,
+            typed_c,
+            seg_ptr,
+            M,
+            N,
+            a_k_stride,
+            b_k_stride,
+            out_stride,
+            static_cast<int>(lda),
+            static_cast<int>(ldb));
+      } else {
+        hipLaunchKernelGGL(
+            (segmented_mm_device_kernel<T, false, false>),
+            grid,
+            block,
+            0,
+            stream,
+            typed_a,
+            typed_b,
+            typed_c,
+            seg_ptr,
+            M,
+            N,
+            a_k_stride,
+            b_k_stride,
+            out_stride,
+            static_cast<int>(lda),
+            static_cast<int>(ldb));
+      }
+    };
+    switch (a.dtype()) {
+      case float32:
+        launch(
+            static_cast<const float*>(a_ptr),
+            static_cast<const float*>(b_ptr),
+            static_cast<float*>(out_ptr));
+        break;
+      case bfloat16:
+        launch(
+            static_cast<const hip_bfloat16*>(a_ptr),
+            static_cast<const hip_bfloat16*>(b_ptr),
+            static_cast<hip_bfloat16*>(out_ptr));
+        break;
+      case float16:
+        launch(
+            static_cast<const __half*>(a_ptr),
+            static_cast<const __half*>(b_ptr),
+            static_cast<__half*>(out_ptr));
+        break;
+      default:
+        throw std::runtime_error("Unsupported dtype for segmented_mm_device");
     }
   });
 }

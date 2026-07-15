@@ -1222,6 +1222,42 @@ static bool try_moe_segment_gather_mm(
   }
   encoder.set_output_array(out);
 
+  mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
+  mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
+
+  // Fully device-side path (default): binary-search expert runs on GPU — no
+  // hipMemcpy D2H + hipStreamSynchronize. Those syncs pipeline-drain the train
+  // step and sawtooth wall tok/s (~6k mean / 11k peaks). Only requires the
+  // common MoE layout: 1-D expert batch, identity/pre-gathered lhs, sorted rhs.
+  // Kill-switch / force host+hipBLASLt: MLX_ROCM_MOE_HOST_SEG=1.
+  static const bool force_host_seg = [] {
+    const char* e = std::getenv("MLX_ROCM_MOE_HOST_SEG");
+    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+                 e[0] == 'T');
+  }();
+  if (!force_host_seg && assume_identity_lhs && b_batch_shape.size() == 1 &&
+      b_batch_shape[0] > 0 && b_batch_shape[0] <= 256 &&
+      (a.dtype() == bfloat16 || a.dtype() == float16 || a.dtype() == float32)) {
+    const int n_experts = static_cast<int>(b_batch_shape[0]);
+    const int64_t b_expert_stride = b_batch_strides.empty()
+        ? 0
+        : static_cast<int64_t>(b_batch_strides[0]);
+    rocm::moe_sorted_expert_gemm(
+        encoder,
+        a,
+        b,
+        rhs_indices,
+        out,
+        batch,
+        N,
+        K,
+        n_experts,
+        b_transposed,
+        ldb,
+        b_expert_stride);
+    return true;
+  }
+
   hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
   // Pinned staging for D2H — pageable vectors make every MoE sorted-gather
   // pay a slow staging bounce + full stream sync. Grow-only pinned buffers.
@@ -1288,9 +1324,6 @@ static bool try_moe_segment_gather_mm(
     return false;
   }
 
-  mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
-  mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
-
   auto expert_offset = [&](uint32_t expert) -> int64_t {
     if (b_batch_shape.empty()) {
       return 0;
@@ -1308,8 +1341,7 @@ static bool try_moe_segment_gather_mm(
     return off;
   };
 
-  // One hipBLASLt GEMM per consecutive expert run: (Mseg × K) @ (K × N).
-  // Matrix-core GEMM on CDNA3 instead of naive/gemv. base ptrs computed once.
+  // Host path: one hipBLASLt GEMM per expert run (MLX_ROCM_MOE_HOST_SEG=1).
   const bool moe_use_blaslt = rocm::is_hipblaslt_available();
   const size_t moe_esz = a.itemsize();
   const char* moe_aB = static_cast<const char*>(gpu_ptr<void>(a));
@@ -1462,9 +1494,40 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(segments);
   encoder.set_output_array(out);
 
-  // Segments are small (typically #experts). Host-side split lets us dispatch
-  // one tuned hipBLASLt GEMM per segment instead of a naive gather kernel.
-  // Pinned D2H (same rationale as try_moe_segment_gather_mm).
+  const int64_t a_k_stride = a.strides()[a.ndim() - 1];
+  const int64_t b_k_stride = b.strides()[b.ndim() - 2];
+  const int64_t out_stride = static_cast<int64_t>(M) * N;
+
+  // Default: device-side segmented MM (segments stay on GPU — no stream sync).
+  // Host+hipBLASLt path: MLX_SEGMM_HOST=1 (or legacy MLX_SEGMM_NAIVE for
+  // host-side naive offset GEMMs only).
+  static const bool seg_host = [] {
+    const char* e = std::getenv("MLX_SEGMM_HOST");
+    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+                 e[0] == 'T');
+  }();
+  if (!seg_host &&
+      (a.dtype() == bfloat16 || a.dtype() == float16 || a.dtype() == float32)) {
+    rocm::segmented_mm_device(
+        encoder,
+        a,
+        b,
+        segments,
+        out,
+        M,
+        N,
+        num_segments,
+        a_transposed,
+        lda,
+        a_k_stride,
+        b_transposed,
+        ldb,
+        b_k_stride,
+        out_stride);
+    return;
+  }
+
+  // Host path: D2H segment table + one hipBLASLt/naive GEMM per segment.
   static thread_local uint32_t* pin_segs = nullptr;
   static thread_local size_t pin_segs_cap = 0;
   const size_t nseg_u32 = static_cast<size_t>(num_segments) * 2;
@@ -1486,13 +1549,9 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       hs));
   CHECK_HIP_ERROR(hipStreamSynchronize(hs));
 
-  const int64_t a_k_stride = a.strides()[a.ndim() - 1];
-  const int64_t b_k_stride = b.strides()[b.ndim() - 2];
-  const int64_t out_stride = static_cast<int64_t>(M) * N;
   const size_t esize = size_of(a.dtype());
   char* out_base = static_cast<char*>(gpu_ptr<void>(out));
 
-  // LDS-tiled offset GEMMs only. hipBLASLt pointer-offset path pegs gfx1151.
   for (int i = 0; i < num_segments; ++i) {
     uint32_t k0 = pin_segs[static_cast<size_t>(2 * i)];
     uint32_t k1 = pin_segs[static_cast<size_t>(2 * i + 1)];
@@ -1505,12 +1564,7 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       continue;
     }
     int Kseg = static_cast<int>(k1 - k0);
-    // CDNA2/3: one hipBLASLt MFMA GEMM per segment (matrix cores, ~8x the naive
-    // VALU tiled kernel). Gated to gfx90a/gfx942 via supports_cdna_mfma_gemm() --
-    // gfx1151's pointer-offset path pegs, gfx908 bf16 MFMA differs -- those keep
-    // the naive offset GEMM below. bf16/fp16/fp32 only.
     const Dtype seg_dt = a.dtype();
-    // Kill-switch: MLX_SEGMM_NAIVE=1 forces the naive offset GEMM everywhere.
     static const bool seg_use_blaslt = std::getenv("MLX_SEGMM_NAIVE") == nullptr;
     if (seg_use_blaslt && encoder.device().supports_cdna_mfma_gemm() &&
         (seg_dt == bfloat16 || seg_dt == float16 || seg_dt == float32)) {
