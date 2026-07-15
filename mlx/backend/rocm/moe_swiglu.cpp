@@ -5,6 +5,9 @@
 // Replaces three separate gather_mm calls that each pipeline-drained the train step.
 //
 // VJP uses the gather_mm fallback (Custom base) so value_and_grad / compile work.
+//
+// NOTE: Primitive class lives in mlx::core (not rocm) to avoid Shape/Device name
+// collisions with mlx::core::rocm::Shape (hip_array) and related aliases.
 
 #include "mlx/backend/rocm/rocm.h"
 #include "mlx/backend/rocm/device.h"
@@ -22,12 +25,12 @@
 
 #include <hip/hip_runtime.h>
 
-#include <algorithm>
+#include <cassert>
 #include <functional>
 #include <stdexcept>
 #include <vector>
 
-namespace mlx::core::rocm {
+namespace mlx::core {
 
 namespace {
 
@@ -61,7 +64,7 @@ void MoeSwigluSorted::eval_gpu(
   assert(outputs.size() == 1);
 
   auto& s = stream();
-  auto& encoder = get_command_encoder(s);
+  auto& encoder = rocm::get_command_encoder(s);
   array& out = outputs[0];
 
   array x = inputs[0];
@@ -76,7 +79,7 @@ void MoeSwigluSorted::eval_gpu(
   const int I = wg.shape(2);
 
   if (T == 0) {
-    out.set_data(malloc_async(0, encoder));
+    out.set_data(rocm::malloc_async(0, encoder));
     return;
   }
 
@@ -102,22 +105,25 @@ void MoeSwigluSorted::eval_gpu(
     encoder.add_temporary(wd);
   }
 
-  out.set_data(
-      malloc_async(static_cast<size_t>(T) * D * size_of(bfloat16), encoder));
+  out.set_data(rocm::malloc_async(
+      static_cast<size_t>(T) * D * size_of(bfloat16), encoder));
 
-  ::mlx::core::Shape mid_shape{T, I};
+  Shape mid_shape{T, I};
   array gate(
-      malloc_async(static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
+      rocm::malloc_async(
+          static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
       mid_shape,
       bfloat16,
       allocator::free);
   array up(
-      malloc_async(static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
+      rocm::malloc_async(
+          static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
       mid_shape,
       bfloat16,
       allocator::free);
   array h(
-      malloc_async(static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
+      rocm::malloc_async(
+          static_cast<size_t>(T) * I * size_of(bfloat16), encoder),
       mid_shape,
       bfloat16,
       allocator::free);
@@ -151,21 +157,21 @@ void MoeSwigluSorted::eval_gpu(
   hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
   CHECK_HIP_ERROR(hipMemcpyAsync(
       pin,
-      gpu_ptr<const uint32_t>(ids),
+      rocm::gpu_ptr<const uint32_t>(ids),
       need * sizeof(uint32_t),
       hipMemcpyDeviceToHost,
       hs));
   CHECK_HIP_ERROR(hipStreamSynchronize(hs));
 
   const size_t esz = sizeof(uint16_t); // bf16
-  const char* xB = static_cast<const char*>(gpu_ptr<void>(x));
-  const char* wgB = static_cast<const char*>(gpu_ptr<void>(wg));
-  const char* wuB = static_cast<const char*>(gpu_ptr<void>(wu));
-  const char* wdB = static_cast<const char*>(gpu_ptr<void>(wd));
-  char* gateB = static_cast<char*>(gpu_ptr<void>(gate));
-  char* upB = static_cast<char*>(gpu_ptr<void>(up));
-  char* hB = static_cast<char*>(gpu_ptr<void>(h));
-  char* outB = static_cast<char*>(gpu_ptr<void>(out));
+  const char* xB = static_cast<const char*>(rocm::gpu_ptr<void>(x));
+  const char* wgB = static_cast<const char*>(rocm::gpu_ptr<void>(wg));
+  const char* wuB = static_cast<const char*>(rocm::gpu_ptr<void>(wu));
+  const char* wdB = static_cast<const char*>(rocm::gpu_ptr<void>(wd));
+  char* gateB = static_cast<char*>(rocm::gpu_ptr<void>(gate));
+  char* upB = static_cast<char*>(rocm::gpu_ptr<void>(up));
+  char* hB = static_cast<char*>(rocm::gpu_ptr<void>(h));
+  char* outB = static_cast<char*>(rocm::gpu_ptr<void>(out));
 
   // Weight layouts match lemonseed gather_mm after swapaxes:
   //   w_gate/w_up [E,D,I]: x[M,D] @ B[D,I] → [M,I]
@@ -190,8 +196,7 @@ void MoeSwigluSorted::eval_gpu(
       continue;
     }
 
-    // gate = x @ Wg
-    hipblaslt_gemm_ptrs(
+    rocm::hipblaslt_gemm_ptrs(
         encoder,
         /*transpose_a=*/false,
         /*transpose_b=*/false,
@@ -208,8 +213,7 @@ void MoeSwigluSorted::eval_gpu(
         /*ldc=*/I,
         bfloat16);
 
-    // up = x @ Wu
-    hipblaslt_gemm_ptrs(
+    rocm::hipblaslt_gemm_ptrs(
         encoder,
         false,
         false,
@@ -229,11 +233,11 @@ void MoeSwigluSorted::eval_gpu(
     start = end;
   }
 
-  silu_mul_bf16(
+  rocm::silu_mul_bf16(
       encoder,
-      gpu_ptr<void>(gate),
-      gpu_ptr<void>(up),
-      gpu_ptr<void>(h),
+      rocm::gpu_ptr<void>(gate),
+      rocm::gpu_ptr<void>(up),
+      rocm::gpu_ptr<void>(h),
       T * I);
 
   start = 0;
@@ -247,7 +251,7 @@ void MoeSwigluSorted::eval_gpu(
       start = end;
       continue;
     }
-    hipblaslt_gemm_ptrs(
+    rocm::hipblaslt_gemm_ptrs(
         encoder,
         false,
         false,
@@ -269,7 +273,6 @@ void MoeSwigluSorted::eval_gpu(
 }
 
 // Differentiable fallback for VJP / jvp / vmap via Custom base.
-// Same math as lemonseed sorted gather_mm SwiGLU path.
 std::vector<array> moe_swiglu_fallback(
     const std::vector<array>& inputs,
     Stream s) {
@@ -281,23 +284,24 @@ std::vector<array> moe_swiglu_fallback(
 
   const int T = x.shape(0);
   if (T == 0) {
-    return {array(::mlx::core::Shape{0, x.shape(1)}, x.dtype(), nullptr, {})};
+    return {array(Shape{0, x.shape(1)}, x.dtype(), nullptr, {})};
   }
 
-  // xg: [T, 1, 1, D], lhs identity, rhs = sorted expert ids
-  auto xg = reshape(x, ::mlx::core::Shape{T, 1, 1, x.shape(1)}, s);
-  auto lhs = reshape(arange(T, uint32, s), ::mlx::core::Shape{T, 1, 1}, s);
-  auto rhs = reshape(ids, ::mlx::core::Shape{T, 1, 1}, s);
+  auto xg = reshape(x, Shape{T, 1, 1, x.shape(1)}, s);
+  auto lhs = reshape(arange(T, uint32, s), Shape{T, 1, 1}, s);
+  auto rhs = reshape(ids, Shape{T, 1, 1}, s);
 
   auto gate = gather_mm(xg, wg, lhs, rhs, /*sorted_indices=*/true, s);
   auto up = gather_mm(xg, wu, lhs, rhs, /*sorted_indices=*/true, s);
   // silu(g)*u = g * sigmoid(g) * u
   auto h = multiply(multiply(gate, sigmoid(gate, s), s), up, s);
   auto down = gather_mm(h, wd, lhs, rhs, /*sorted_indices=*/true, s);
-  return {reshape(down, ::mlx::core::Shape{T, x.shape(1)}, s)};
+  return {reshape(down, Shape{T, x.shape(1)}, s)};
 }
 
 } // namespace
+
+namespace rocm {
 
 array moe_swiglu_sorted(
     const array& x_in,
@@ -337,7 +341,9 @@ array moe_swiglu_sorted(
     throw std::invalid_argument("moe_swiglu_sorted: shape mismatch");
   }
 
-  Stream s = to_stream(s_in, Device::gpu);
+  // Force GPU stream (default monostate → gpu, not host default).
+  // Fully-qualify Device/Shape: rocm:: namespace aliases collide with core.
+  Stream s = to_stream(s_in, ::mlx::core::Device::gpu);
   if (s.device.type != ::mlx::core::Device::DeviceType::gpu) {
     throw std::runtime_error("moe_swiglu_sorted: GPU stream required");
   }
@@ -358,4 +364,6 @@ array moe_swiglu_sorted(
       {x_in, w_gate, w_up, w_down, expert_ids_in});
 }
 
-} // namespace mlx::core::rocm
+} // namespace rocm
+
+} // namespace mlx::core
