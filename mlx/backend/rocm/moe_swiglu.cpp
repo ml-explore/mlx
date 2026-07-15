@@ -288,8 +288,11 @@ std::vector<array> moe_swiglu_fallback(
   }
 
   auto xg = reshape(x, Shape{T, 1, 1, x.shape(1)}, s);
-  auto lhs = reshape(arange(T, uint32, s), Shape{T, 1, 1}, s);
-  auto rhs = reshape(ids, Shape{T, 1, 1}, s);
+  // Indices are discrete routing — never differentiable (GatherMM rejects
+  // index VJP). stop_gradient keeps value_and_grad on x/weights working.
+  auto lhs = reshape(
+      stop_gradient(arange(T, uint32, s), s), Shape{T, 1, 1}, s);
+  auto rhs = reshape(stop_gradient(ids, s), Shape{T, 1, 1}, s);
 
   auto gate = gather_mm(xg, wg, lhs, rhs, /*sorted_indices=*/true, s);
   auto up = gather_mm(xg, wu, lhs, rhs, /*sorted_indices=*/true, s);
