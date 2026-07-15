@@ -1456,6 +1456,37 @@ void swiglu_bwd_elem_bf16(
   });
 }
 
+__global__ void bf16_add_inplace_kernel(
+    const hip_bfloat16* __restrict__ src,
+    hip_bfloat16* __restrict__ out,
+    int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n)
+    return;
+  out[i] = static_cast<hip_bfloat16>(
+      static_cast<float>(out[i]) + static_cast<float>(src[i]));
+}
+
+void bf16_add_inplace(
+    CommandEncoder& encoder,
+    const void* src,
+    void* out,
+    int n) {
+  encoder.launch_kernel([=](hipStream_t stream) {
+    dim3 block(256);
+    dim3 grid((n + 255) / 256);
+    hipLaunchKernelGGL(
+        bf16_add_inplace_kernel,
+        grid,
+        block,
+        0,
+        stream,
+        static_cast<const hip_bfloat16*>(src),
+        static_cast<hip_bfloat16*>(out),
+        n);
+  });
+}
+
 void moe_sorted_expert_gemm(
     CommandEncoder& encoder,
     const array& a,

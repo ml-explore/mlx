@@ -168,6 +168,13 @@ void swiglu_bwd_elem_bf16(
     void* du,
     int n);
 
+// out[i] += src[i] for n bf16 elements (used by padded VJP beta=1 path).
+void bf16_add_inplace(
+    CommandEncoder& encoder,
+    const void* src,
+    void* out,
+    int n);
+
 // Device-side SegmentedMM: out[s] = A[:,k0:k1] @ B[k0:k1,:] with (k0,k1) from
 // device segments[2*s], segments[2*s+1]. No host D2H / stream sync.
 void segmented_mm_device(
