@@ -1,4 +1,10 @@
 // Copyright © 2025 Apple Inc.
+//
+// ROCm allocator — mirrors mlx/backend/cuda/allocator.h exactly.
+// Device free/alloc: BufferCache recycle, hipMallocAsync / hipFreeAsync
+// (or hipMalloc / hipFree when no stream/pool). Only ROCm-specific extras
+// are host_shadow (discrete GPU CPU access) and optional decode arena /
+// graph deferred free.
 
 #pragma once
 
@@ -7,7 +13,6 @@
 
 #include <deque>
 #include <mutex>
-#include <set>
 #include <utility>
 #include <vector>
 
@@ -15,21 +20,49 @@ namespace mlx::core::rocm {
 
 using allocator::Buffer;
 
+// Matches CudaBuffer + fields required for discrete-GPU host access and
+// stream-ordered free (CUDA uses move_to_unified_memory instead of shadow).
 struct RocmBuffer {
   void* data;
   size_t size;
+  int device; // -1 for unified / non-pool
   bool is_managed;
-  int device;
-  // Discrete-GPU only: pinned host mirror that serves CPU reads (raw_ptr)
-  // WITHOUT migrating/freeing the resident VRAM copy in `data`.
   void* host_shadow;
   bool host_dirty;
-  // Stream the buffer was allocated/used on (for hipFreeAsync ordering).
-  void* alloc_stream;
+  void* alloc_stream; // stream used for hipMallocAsync / hipFreeAsync
 };
 
 // ---------------------------------------------------------------------------
-// DecodeArena — deterministic bump allocator for build-once HIP-graph decode.
+// SmallSizePool — identical to CUDA (8-byte scalar freelist only).
+// ---------------------------------------------------------------------------
+
+class SmallSizePool {
+ private:
+  union Block {
+    Block* next;
+    RocmBuffer buf;
+  };
+
+  Block* buffer_{nullptr};
+  void* data_{nullptr};
+  bool data_managed_{true};
+  Block* next_free_{nullptr};
+
+ public:
+  SmallSizePool();
+  ~SmallSizePool();
+
+  SmallSizePool(const SmallSizePool&) = delete;
+  SmallSizePool& operator=(const SmallSizePool&) = delete;
+
+  RocmBuffer* malloc();
+  void free(RocmBuffer* buf);
+  bool in_pool(RocmBuffer* buf);
+};
+
+// ---------------------------------------------------------------------------
+// DecodeArena — optional bump allocator for HIP-graph decode (not in CUDA).
+// Training does not use this; only the graph-decode engine does.
 // ---------------------------------------------------------------------------
 struct DecodeArena {
   void* base{nullptr};
@@ -51,96 +84,13 @@ struct DecodeArena {
 };
 
 // ---------------------------------------------------------------------------
-// SizeClassPool / SlabAllocator — small fixed-size blocks (ROCm-only helper;
-// CUDA uses a tiny scalar pool instead). Kept for ≤1MB fast path.
-// ---------------------------------------------------------------------------
-
-class SizeClassPool {
- public:
-  SizeClassPool() = default;
-  ~SizeClassPool();
-
-  SizeClassPool(const SizeClassPool&) = delete;
-  SizeClassPool& operator=(const SizeClassPool&) = delete;
-
-  void init(size_t block_size, size_t slab_page_size);
-  RocmBuffer* malloc();
-  void free(RocmBuffer* buf);
-  bool in_pool(RocmBuffer* buf) const;
-  bool grow();
-
-  size_t block_size() const {
-    return block_size_;
-  }
-  size_t free_count() const {
-    return free_count_;
-  }
-  size_t total_allocated() const {
-    return backing_pages_.size() * slab_page_size_;
-  }
-  size_t free_memory() const {
-    return free_count_ * block_size_;
-  }
-  bool initialized() const {
-    return block_size_ > 0;
-  }
-
- private:
-  union Block {
-    Block* next;
-    RocmBuffer buf;
-  };
-
-  size_t block_size_{0};
-  size_t slab_page_size_{0};
-  bool is_managed_{false};
-
-  std::vector<void*> backing_pages_;
-  std::vector<Block*> block_arrays_;
-  std::vector<size_t> blocks_per_page_;
-
-  Block* next_free_{nullptr};
-  size_t free_count_{0};
-  size_t total_blocks_{0};
-};
-
-class SlabAllocator {
- public:
-  static constexpr int kNumSizeClasses = 18;
-  static constexpr size_t kMaxSlabSize = 1 << 20;
-
-  SlabAllocator();
-  ~SlabAllocator() = default;
-
-  RocmBuffer* malloc(size_t size);
-  void free(RocmBuffer* buf);
-  bool in_pool(RocmBuffer* buf) const;
-  bool grow(size_t size);
-  void warmup();
-
-  size_t total_allocated() const;
-  size_t free_memory() const;
-
-  static int size_class_index(size_t size);
-  static size_t round_to_size_class(size_t size);
-
- private:
-  SizeClassPool pools_[kNumSizeClasses];
-};
-
-// ---------------------------------------------------------------------------
-// RocmAllocator — CUDA-aligned memory management
-//
-// Matches mlx/backend/cuda/allocator.cpp:
-//   malloc_async: BufferCache hit → else hipMallocAsync / hipMalloc
-//   free:         recycle BufferCache → else hipFreeAsync / hipFree
-//   max_pool_size_ defaults to memory_limit_ (host free-list can hold reused
-//   buffers up to the limit; real free only under pressure / over cache cap).
+// RocmAllocator — same control flow as CudaAllocator.
 // ---------------------------------------------------------------------------
 
 class RocmAllocator : public allocator::Allocator {
  public:
   Buffer malloc(size_t size) override;
+  Buffer malloc_async(size_t size, int device, void* stream);
   void free(Buffer buffer) override {
     free(buffer, /*force=*/false);
   }
@@ -150,12 +100,9 @@ class RocmAllocator : public allocator::Allocator {
   Buffer make_buffer(void* ptr, size_t size) override;
   void release(Buffer buffer) override;
 
-  // CUDA: Buffer malloc_async(size, device, stream)
-  Buffer malloc_async(size_t size, int device, void* stream);
-
-  // CUDA-style: free device memory only (does not delete RocmBuffer shell).
-  void free_device(RocmBuffer& buf, void* stream = nullptr);
-  // CUDA free_cuda_buffer: free device mem + delete shell (BufferCache free_).
+  // Free device storage only (CUDA free_async).
+  void free_async(RocmBuffer& buf, void* stream = nullptr);
+  // Free device + delete shell (CUDA free_cuda_buffer).
   void free_rocm_buffer(RocmBuffer* buf);
 
   void ensure_host_shadow(RocmBuffer& buf);
@@ -214,6 +161,8 @@ class RocmAllocator : public allocator::Allocator {
   RocmAllocator();
   friend RocmAllocator& allocator();
 
+  RocmBuffer* arena_alloc(size_t size);
+
   std::mutex mutex_;
   size_t memory_limit_;
   size_t free_limit_;
@@ -222,12 +171,10 @@ class RocmAllocator : public allocator::Allocator {
   BufferCache<RocmBuffer> buffer_cache_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
-  SlabAllocator slab_allocator_;
-  DecodeArena decode_arena_;
-  RocmBuffer* arena_alloc(size_t size);
-
-  std::vector<void*> mem_pools_;
   std::vector<void*> free_streams_;
+  std::vector<void*> mem_pools_;
+  SmallSizePool scalar_pool_;
+  DecodeArena decode_arena_;
 };
 
 RocmAllocator& allocator();
