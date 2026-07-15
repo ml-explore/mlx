@@ -252,7 +252,7 @@ __global__ void kernel_zero_f32(float* p, size_t n) {
 
 } // namespace
 
-namespace mlx::core {
+// ---- Host interface (still inside namespace mlx::core) ----
 
 // Bytes of dynamic LDS for kernel_sdpa_flash_bwd_f32acc with BM=BN=32.
 int sdpa_flash_bwd_smem(int D) {
