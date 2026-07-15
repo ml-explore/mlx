@@ -472,41 +472,52 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
           stream};
     };
 
-    // ROCm: allocate FIRST, reclaim cache only on failure.
-    // Eager release under memory_limit_/max_pool_size_ (CUDA-style) caused
-    // 18s+ of hipFree / step and 90–500ms pre-Adam GPU idle gaps — free was
-    // dumping same-sized blocks the next op re-malloc'd. hipFree is a
-    // blocking drain on this stack; keep buffers in BufferCache until HBM
-    // actually refuses an alloc.
+    // Fixed-shape training reuses the same rounded sizes every step. Policy:
+    //   1) exact BufferCache hit (see buffer_cache.h) — no HIP
+    //   2) hipMalloc without touching the freelist
+    //   3) only if active+cache approaches physical HBM, release LRU cache
+    //   4) if hipMalloc still fails, release more and retry once
+    // Never release against the soft memory_limit_ alone — that caused the
+    // free/alloc storm (hipFree 18s/step, 90–500ms pre-Adam gaps). hipFree on
+    // a full device can also hang; leave ~2GB headroom.
     if (!buf) {
-      buf = try_device_alloc();
-    }
-    if (!buf) {
+      const size_t hbm_cap = (total_memory_ > (2ull << 30))
+          ? (total_memory_ - (2ull << 30))
+          : total_memory_;
+      auto maybe_reclaim_to_fit = [&](size_t need) {
+        int64_t over = static_cast<int64_t>(get_active_memory()) +
+            static_cast<int64_t>(get_cache_memory()) + static_cast<int64_t>(need) -
+            static_cast<int64_t>(hbm_cap);
+        if (over > 0 && get_cache_memory() > 0) {
+          buffer_cache_.release_cached_buffers(static_cast<size_t>(over));
+        }
+      };
+
       lock.lock();
-      // Drop enough cached memory to cover this request (at least size).
-      size_t want = std::max(size, size_t(1) << 28); // ≥256MB batch free
-      if (get_cache_memory() > 0) {
-        buffer_cache_.release_cached_buffers(
-            std::min(want, get_cache_memory()));
-      }
-      // Also try the soft limit reclaim if still huge.
-      int64_t mem_to_free = static_cast<int64_t>(get_active_memory()) +
-          static_cast<int64_t>(get_cache_memory()) + static_cast<int64_t>(size) -
-          static_cast<int64_t>(memory_limit_);
-      if (mem_to_free > 0 && get_cache_memory() > 0) {
-        buffer_cache_.release_cached_buffers(static_cast<size_t>(mem_to_free));
-      }
-      if (size <= static_cast<size_t>(small_block_size)) {
-        buf = scalar_pool_.malloc();
-      }
+      maybe_reclaim_to_fit(size);
       lock.unlock();
+
+      buf = try_device_alloc();
       if (!buf) {
-        buf = try_device_alloc();
-      }
-      if (!buf) {
-        throw std::runtime_error(
-            "[malloc_async] Unable to allocate " + std::to_string(size) +
-            " bytes (cache reclaim failed).");
+        lock.lock();
+        // True OOM path: drop at least this request (and a chunk) from cache.
+        size_t want = std::max(size * 2, size_t(1) << 30);
+        if (get_cache_memory() > 0) {
+          buffer_cache_.release_cached_buffers(
+              std::min(want, get_cache_memory()));
+        }
+        if (size <= static_cast<size_t>(small_block_size)) {
+          buf = scalar_pool_.malloc();
+        }
+        lock.unlock();
+        if (!buf) {
+          buf = try_device_alloc();
+        }
+        if (!buf) {
+          throw std::runtime_error(
+              "[malloc_async] Unable to allocate " + std::to_string(size) +
+              " bytes (HBM full after cache reclaim).");
+        }
       }
     }
     lock.lock();

@@ -28,18 +28,30 @@ class BufferCache {
   BufferCache& operator=(const BufferCache&) = delete;
 
   T* reuse_from_cache(size_t size) {
-    // Find the closest buffer in pool.
+    // Prefer exact size first. Fixed-shape training (same B/T every step)
+    // allocates identical rounded sizes; exact hits avoid both hipMalloc and
+    // wasteful 2× oversize reuse that fragments the freelist.
+    {
+      auto range = buffer_pool_.equal_range(size);
+      if (range.first != range.second) {
+        auto it = range.first;
+        T* buf = it->second->buf;
+        pool_size_ -= it->first;
+        remove_from_list(it->second);
+        buffer_pool_.erase(it);
+        return buf;
+      }
+    }
+
+    // Closest larger buffer within tolerance.
     auto it = buffer_pool_.lower_bound(size);
     if (it == buffer_pool_.end() ||
         it->first >= std::min(2 * size, size + 2 * page_size_)) {
       return nullptr;
     }
 
-    // Collect from the cache.
     T* buf = it->second->buf;
     pool_size_ -= it->first;
-
-    // Remove from record.
     remove_from_list(it->second);
     buffer_pool_.erase(it);
     return buf;
