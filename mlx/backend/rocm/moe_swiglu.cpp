@@ -138,8 +138,8 @@ void MoeSwigluSorted::eval_gpu(
 
   if (use_zero_sync && rocm::is_hipblaslt_available() && E > 0 && E <= 256) {
     // ---- Pack + strided-batched hipBLASLt ----
-    // M_pad from device max expert-run (4B D2H). Full-T pad OOMs on large T.
-    int M_pad = rocm::moe_max_run_length_sync(encoder, ids, T, E);
+    // M_pad: cached max-run (1 sync per T,E shape — not per layer).
+    int M_pad = rocm::moe_pack_m_pad(encoder, ids, T, E);
 
     auto mk_tmp = [&](Shape sh, Dtype dt = bfloat16) {
       array a(sh, dt, nullptr, {});

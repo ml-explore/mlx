@@ -130,9 +130,19 @@ void moe_max_run_length(
     int T,
     int E);
 
-// Device max-run + 4-byte D2H + align_up(32). One tiny stream sync.
-// Prefer this over M_pad=T (full-T pad OOMs and wastes FLOPs on large T).
+// Device max-run + 4-byte D2H + align_up(32). One stream sync (expensive —
+// rocprof: ~150×/step when used naively). Prefer moe_pack_m_pad().
 int moe_max_run_length_sync(
+    CommandEncoder& encoder,
+    const array& expert_ids,
+    int T,
+    int E);
+
+// Host-side M_pad for pack GEMMs. Caches max-run per (T,E) so we StreamSynchronize
+// once per shape, not once per MoE layer. Env:
+//   MLX_ROCM_MOE_PAD_SYNC=always — remeasure every call (debug)
+//   MLX_ROCM_MOE_PAD_SYNC=0      — heuristic only, never D2H (may OOB if extreme imbalance)
+int moe_pack_m_pad(
     CommandEncoder& encoder,
     const array& expert_ids,
     int T,

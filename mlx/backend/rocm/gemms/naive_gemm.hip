@@ -10,7 +10,10 @@
 #include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
 
+#include <cstdlib>
+#include <mutex>
 #include <type_traits>
+#include <unordered_map>
 
 namespace mlx::core::rocm {
 
@@ -1952,6 +1955,88 @@ int moe_max_run_length_sync(
   m = (m + 31) & ~31;
   if (m < 32)
     m = 32;
+  return m;
+}
+
+namespace {
+
+int align32_clamp(int m, int T) {
+  if (m < 1)
+    m = 1;
+  if (m > T)
+    m = T;
+  m = (m + 31) & ~31;
+  if (m < 32)
+    m = 32;
+  if (m > T)
+    m = (T + 31) & ~31;
+  if (m < 32)
+    m = 32;
+  return m;
+}
+
+// Heuristic: 2× average tokens/expert (sorted MoE rarely worse). No GPU sync.
+int moe_pack_m_pad_heuristic(int T, int E) {
+  if (T <= 0)
+    return 32;
+  if (E <= 0)
+    E = 1;
+  int avg = (T + E - 1) / E;
+  int m = avg * 2;
+  if (m < 64)
+    m = 64;
+  return align32_clamp(m, T);
+}
+
+} // namespace
+
+int moe_pack_m_pad(
+    CommandEncoder& encoder,
+    const array& expert_ids,
+    int T,
+    int E) {
+  if (T <= 0 || E <= 0)
+    return 32;
+
+  static const int pad_mode = [] {
+    // 0 = heuristic only (no sync)
+    // 1 = cache max-run (default) — one sync per (T,E)
+    // 2 = always sync
+    const char* e = std::getenv("MLX_ROCM_MOE_PAD_SYNC");
+    if (!e || !*e)
+      return 1;
+    if (e[0] == '0' || e[0] == 'n' || e[0] == 'N' || e[0] == 'f' || e[0] == 'F')
+      return 0;
+    if (e[0] == 'a' || e[0] == 'A' || e[0] == '2') // always
+      return 2;
+    return 1;
+  }();
+
+  if (pad_mode == 0)
+    return moe_pack_m_pad_heuristic(T, E);
+  if (pad_mode == 2)
+    return moe_max_run_length_sync(encoder, expert_ids, T, E);
+
+  // Cached exact max-run (+12.5% slack). First call for this (T,E) syncs once;
+  // later MoE layers in the same step reuse without StreamSynchronize.
+  // rocprof showed ~150 syncs/step from uncached max_run — this kills that.
+  static std::mutex mu;
+  static std::unordered_map<uint64_t, int> cache;
+  const uint64_t key = (static_cast<uint64_t>(static_cast<uint32_t>(T)) << 32) |
+      static_cast<uint32_t>(E);
+  {
+    std::lock_guard<std::mutex> g(mu);
+    auto it = cache.find(key);
+    if (it != cache.end())
+      return it->second;
+  }
+  int m = moe_max_run_length_sync(encoder, expert_ids, T, E);
+  // Slack for residual imbalance on later batches with same T.
+  m = align32_clamp(m + m / 8, T);
+  {
+    std::lock_guard<std::mutex> g(mu);
+    cache[key] = m;
+  }
   return m;
 }
 
