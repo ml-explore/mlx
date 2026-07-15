@@ -10,6 +10,7 @@
 #include <hip/hip_fp16.h>
 #include <hip/hip_bfloat16.h>
 
+#include <cstdint>
 #include <cstdlib>
 #include <mutex>
 #include <stdexcept>
@@ -1294,7 +1295,15 @@ __global__ void segmented_mm_device_kernel(
 } // namespace
 
 // ---- MoE pack / unpack for fixed-shape strided-batched hipBLASLt ------------
-// One thread per token (atomic once), then vectorized copy of the K-vector.
+// One thread per token (atomic once), then copy of the K-vector.
+//
+// SAFETY (MI300X MEMORY_APERTURE_VIOLATION was here in train):
+//  1) Expert id MUST be bounds-checked before counts[e] / slot_map[e,*].
+//     Bad or non-uint32 routing ids (e.g. int32 -1 → 0xFFFFFFFF) walked off
+//     the counts buffer and faulted the wave.
+//  2) float2 vectorized copy requires 8-byte alignment. bf16 rows are often
+//     only 2-byte aligned → misaligned float2 load/store → aperture violation.
+//     Only use float2 when BOTH pointers are 8-byte aligned.
 __global__ void moe_pack_kernel(
     const hip_bfloat16* __restrict__ A,
     const uint32_t* __restrict__ idx,
@@ -1303,20 +1312,26 @@ __global__ void moe_pack_kernel(
     int* __restrict__ counts,
     int batch,
     int K,
-    int M_fixed) {
+    int M_fixed,
+    int n_experts) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= batch)
     return;
   uint32_t e = idx[i];
+  // Reject OOB / garbage expert ids (prevents counts[e] aperture faults).
+  if (e >= static_cast<uint32_t>(n_experts))
+    return;
   int slot = atomicAdd(counts + static_cast<int>(e), 1);
-  if (slot >= M_fixed)
+  if (slot < 0 || slot >= M_fixed)
     return; // overflow — caller must size M_fixed large enough
   slot_map[static_cast<int64_t>(e) * M_fixed + slot] = i;
   const hip_bfloat16* src = A + static_cast<int64_t>(i) * K;
   hip_bfloat16* dst =
       packed + (static_cast<int64_t>(e) * M_fixed + slot) * K;
-  // 4 bf16 = 8 bytes = one float2
-  if ((K & 3) == 0) {
+  const uintptr_t as = reinterpret_cast<uintptr_t>(src);
+  const uintptr_t ad = reinterpret_cast<uintptr_t>(dst);
+  // 4 bf16 = 8 bytes = one float2 — only if 8-byte aligned.
+  if ((K & 3) == 0 && (as & 7u) == 0 && (ad & 7u) == 0) {
     const float2* s2 = reinterpret_cast<const float2*>(src);
     float2* d2 = reinterpret_cast<float2*>(dst);
     int n2 = K >> 2;
@@ -1334,14 +1349,15 @@ __global__ void moe_unpack_kernel(
     hip_bfloat16* __restrict__ C,
     int n_experts,
     int M_fixed,
-    int N) {
+    int N,
+    int batch) {
   int e = blockIdx.z;
   int s = blockIdx.y * blockDim.y + threadIdx.y;
   int n = blockIdx.x * blockDim.x + threadIdx.x;
   if (e >= n_experts || s >= M_fixed || n >= N)
     return;
   int src = slot_map[static_cast<int64_t>(e) * M_fixed + s];
-  if (src < 0)
+  if (src < 0 || src >= batch)
     return;
   C[static_cast<int64_t>(src) * N + n] =
       packed_c[(static_cast<int64_t>(e) * M_fixed + s) * N + n];
@@ -1402,7 +1418,8 @@ void moe_pack_tokens(
           counts_ptr,
           batch,
           K,
-          M_fixed);
+          M_fixed,
+          n_experts);
     } else {
       throw std::runtime_error("moe_pack_tokens: only bfloat16 supported");
     }
@@ -1423,6 +1440,8 @@ void moe_unpack_tokens(
   const void* pc = gpu_ptr<void>(packed_c);
   const int* map_ptr = gpu_ptr<const int>(slot_map);
   void* out_ptr = gpu_ptr<void>(out);
+  const int batch =
+      (N > 0) ? static_cast<int>(out.size() / static_cast<size_t>(N)) : 0;
 
   dim3 block(32, 8);
   dim3 grid((N + 31) / 32, (M_fixed + 7) / 8, n_experts);
@@ -1441,7 +1460,8 @@ void moe_unpack_tokens(
         static_cast<hip_bfloat16*>(out_ptr),
         n_experts,
         M_fixed,
-        N);
+        N,
+        batch);
   });
 }
 
@@ -1452,7 +1472,8 @@ __global__ void moe_pack_using_slot_map_kernel(
     hip_bfloat16* __restrict__ packed,
     int n_experts,
     int M_fixed,
-    int N) {
+    int N,
+    int batch) {
   int e = blockIdx.z;
   int s = blockIdx.y * blockDim.y + threadIdx.y;
   int n = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1461,7 +1482,8 @@ __global__ void moe_pack_using_slot_map_kernel(
   int src_i = slot_map[static_cast<int64_t>(e) * M_fixed + s];
   hip_bfloat16* dst =
       packed + (static_cast<int64_t>(e) * M_fixed + s) * N + n;
-  if (src_i < 0) {
+  // Invalid / OOB source row → zero (never load past src[batch, N]).
+  if (src_i < 0 || src_i >= batch) {
     *dst = hip_bfloat16(0.0f);
     return;
   }
@@ -1485,6 +1507,9 @@ void moe_pack_using_slot_map(
   const void* sp = gpu_ptr<void>(src);
   const int* map_ptr = gpu_ptr<const int>(slot_map);
   void* pp = gpu_ptr<void>(packed);
+  // src is [batch, N] row-major; batch = src.size() / N when N>0.
+  const int batch =
+      (N > 0) ? static_cast<int>(src.size() / static_cast<size_t>(N)) : 0;
   dim3 block(32, 8);
   dim3 grid((N + 31) / 32, (M_fixed + 7) / 8, n_experts);
   encoder.launch_kernel([=](hipStream_t stream) {
@@ -1499,7 +1524,8 @@ void moe_pack_using_slot_map(
         static_cast<hip_bfloat16*>(pp),
         n_experts,
         M_fixed,
-        N);
+        N,
+        batch);
   });
 }
 
@@ -2035,10 +2061,11 @@ int moe_pack_m_pad(
   }
   int measured = moe_max_run_length_sync(encoder, expert_ids, T, E);
   int floor_h = moe_pack_m_pad_heuristic(T, E);
-  // max(measured, 2×avg) + 12.5% — enough slack to avoid pack OOB/IMA, not
-  // the old +50% that ballooned HBM. Grow-only cache still lifts later.
+  // max(measured, 2×avg) + 25% slack. Grow-only cache: routing can get more
+  // imbalanced after the first measure; under-size is now non-fatal (pack
+  // drops overflow tokens) but we still prefer not to drop.
   int m = measured > floor_h ? measured : floor_h;
-  m = align32_clamp(m + m / 8, T);
+  m = align32_clamp(m + m / 4, T);
   {
     std::lock_guard<std::mutex> g(mu);
     auto it = cache.find(key);
