@@ -51,7 +51,18 @@ struct BlockBroadcastReduce {
   }
 };
 
-template <typename T, int BLOCK_DIM, int REDUCE_DIM, int N_READS = 4>
+// xs and ws stays in registers
+// each thread does N_CHUNKS_THREAD vectorised interleaved loads of width
+// N_READS x, w, out in majority of cases should be 16 bytes aligned -> using
+// unsafe_load_vector if not aligned -> fall back to load_vector we do it like
+// this because of the register presure: load_vector allocates registers for
+// loop load fall back and occupancy drops to 30-40% -> x2 slow down
+template <
+    typename T,
+    int BLOCK_SIZE,
+    int N_CHUNKS_THREAD,
+    bool ALIGNED,
+    int N_READS = 8>
 __global__ void rms_norm_small(
     const T* x,
     const T* w,
@@ -63,40 +74,61 @@ __global__ void rms_norm_small(
   auto grid = cg::this_grid();
   auto block = cg::this_thread_block();
 
-  using BlockReduceT = BlockBroadcastReduce<float, BLOCK_DIM, REDUCE_DIM>;
+  using BlockReduceT = BlockBroadcastReduce<float, BLOCK_SIZE>;
   __shared__ typename BlockReduceT::TempStorage temp;
 
-  auto row =
-      (grid.block_rank() * block.dim_threads().y) + block.thread_index().y;
+  auto row = grid.block_rank();
   if (row >= n_rows) {
     return;
   }
   x += row * axis_size;
   out += row * axis_size;
 
-  // Normalizer.
+  AlignedVector<T, N_READS> xn[N_CHUNKS_THREAD];
+
   float normalizer = 0;
   auto index = block.thread_index().x;
-  auto xn = load_vector<N_READS>(x, index, axis_size, T(0));
 #pragma unroll
-  for (int i = 0; i < N_READS; ++i) {
-    float t = static_cast<float>(xn[i]);
-    normalizer += t * t;
+  for (int i = 0; i < N_CHUNKS_THREAD; i++) {
+    int offset = BLOCK_SIZE * i + index;
+    if constexpr (ALIGNED) {
+      xn[i] = unsafe_load_vector<N_READS>(x, offset);
+    } else {
+      xn[i] = load_vector<N_READS>(x, offset, axis_size, T(0));
+    }
+#pragma unroll
+    for (int j = 0; j < N_READS; ++j) {
+      float t = static_cast<float>(xn[i][j]);
+      normalizer += t * t;
+    }
   }
-
   normalizer = BlockReduceT{block, temp}.Sum(normalizer);
   normalizer = rsqrt(normalizer / axis_size + eps);
 
-  // Outputs.
-  auto wn = load_vector<N_READS>(w, index, axis_size, w_stride, T(0));
 #pragma unroll
-  for (int i = 0; i < N_READS; ++i) {
-    float y = static_cast<float>(xn[i]) * normalizer;
-    xn[i] = wn[i] * static_cast<T>(y);
+  for (int i = 0; i < N_CHUNKS_THREAD; i++) {
+    int offset = BLOCK_SIZE * i + index;
+    AlignedVector<T, N_READS> wn;
+    if constexpr (ALIGNED) {
+      wn = unsafe_load_vector<N_READS>(w, offset);
+    } else {
+      wn = load_vector<N_READS>(w, offset, axis_size, w_stride, T(0));
+    }
+#pragma unroll
+    for (int j = 0; j < N_READS; j++) {
+      float y = static_cast<float>(xn[i][j]) * normalizer;
+      xn[i][j] = wn[j] * static_cast<T>(y);
+    }
+    if constexpr (ALIGNED) {
+      unsafe_store_vector<N_READS>(out, offset, xn[i]);
+    } else {
+      store_vector<N_READS>(out, offset, xn[i], axis_size);
+    }
   }
-  store_vector<N_READS>(out, index, xn, axis_size);
 }
 
+// TODO: load x to the shared memory and reload from shared memory after the
+// reduction
 template <typename T, int BLOCK_DIM, int N_READS = 4>
 __global__ void rms_norm(
     const T* x,
@@ -318,6 +350,32 @@ void dispatch_group_dim(int axis_size, F&& f) {
   }
 }
 
+template <int N_READS, typename F>
+void dispatch_num_chunks(int axis_size, F&& f) {
+  if (axis_size <= N_READS * 64) {
+    f(std::integral_constant<int, 64>{}, std::integral_constant<int, 1>{});
+    return;
+  }
+  auto block_size = std::integral_constant<int, 128>{};
+  if (axis_size <= N_READS * 128 * 1) {
+    f(block_size, std::integral_constant<int, 1>{});
+  } else if (axis_size <= N_READS * 128 * 2) {
+    f(block_size, std::integral_constant<int, 2>{});
+  } else if (axis_size <= N_READS * 128 * 3) {
+    f(block_size, std::integral_constant<int, 3>{});
+  } else if (axis_size <= N_READS * 128 * 4) {
+    f(block_size, std::integral_constant<int, 4>{});
+  } else if (axis_size <= N_READS * 128 * 5) {
+    f(block_size, std::integral_constant<int, 5>{});
+  } else if (axis_size <= N_READS * 128 * 6) {
+    f(block_size, std::integral_constant<int, 6>{});
+  } else if (axis_size <= N_READS * 128 * 7) {
+    f(block_size, std::integral_constant<int, 7>{});
+  } else {
+    f(block_size, std::integral_constant<int, 8>{});
+  }
+}
+
 // TODO: There are duplicate code with backend/metal/normalization.cpp
 void RMSNorm::eval_gpu(
     const std::vector<array>& inputs,
@@ -365,26 +423,34 @@ void RMSNorm::eval_gpu(
   dispatch_float_types(out.dtype(), "rms_norm", [&](auto type_tag) {
     using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
     constexpr int N_READS = 16 / sizeof(DataType);
-    if (axis_size <= N_READS * 1024) {
-      dispatch_group_dim<N_READS>(
-          axis_size, [&](auto group_dim, auto n_groups, auto groups_per_block) {
-            constexpr int block_dim = n_groups() * group_dim();
-            static_assert(block_dim <= 32 || groups_per_block() == 1);
-            auto kernel =
-                cu::rms_norm_small<DataType, block_dim, group_dim(), N_READS>;
-            auto n_blocks =
-                (n_rows + groups_per_block() - 1) / groups_per_block();
-            encoder.add_kernel_node(
-                kernel,
-                n_blocks,
-                {block_dim, groups_per_block()},
-                gpu_ptr<DataType>(x),
-                gpu_ptr<DataType>(w),
-                gpu_ptr<DataType>(out),
-                eps_,
-                axis_size,
-                n_rows,
-                w_stride);
+    if (axis_size <= N_READS * 128 * 8) {
+      dispatch_num_chunks<N_READS>(
+          axis_size, [&](auto block_size, auto n_chunks) {
+            constexpr int BLOCK_SIZE = block_size();
+            bool aligned = (axis_size == N_READS * BLOCK_SIZE * n_chunks()) &&
+                (w_stride == 1) &&
+                (reinterpret_cast<uintptr_t>(gpu_ptr<DataType>(x)) % 16 == 0) &&
+                (reinterpret_cast<uintptr_t>(gpu_ptr<DataType>(w)) % 16 == 0) &&
+                (reinterpret_cast<uintptr_t>(gpu_ptr<DataType>(out)) % 16 == 0);
+            dispatch_bool(aligned, [&](auto aligned_tag) {
+              auto kernel = cu::rms_norm_small<
+                  DataType,
+                  BLOCK_SIZE,
+                  n_chunks(),
+                  aligned_tag.value,
+                  N_READS>;
+              encoder.add_kernel_node(
+                  kernel,
+                  n_rows,
+                  BLOCK_SIZE,
+                  gpu_ptr<DataType>(x),
+                  gpu_ptr<DataType>(w),
+                  gpu_ptr<DataType>(out),
+                  eps_,
+                  axis_size,
+                  n_rows,
+                  w_stride);
+            });
           });
     } else {
       auto kernel = cu::rms_norm<DataType, 1024, N_READS>;
