@@ -36,6 +36,13 @@ using json = nlohmann::json;
 
 namespace mlx::core {
 
+#ifdef MLX_ROCM_HOST_STAGE
+namespace rocm {
+// Defined in mlx/backend/rocm/host_stage.cpp.
+bool staged_write(io::Writer& out, const array& a);
+} // namespace rocm
+#endif
+
 std::string dtype_to_safetensor_str(Dtype t) {
   switch (t) {
     case float32:
@@ -270,6 +277,15 @@ void save_safetensors(
   out_stream->write(reinterpret_cast<char*>(&header_len), 8);
   out_stream->write(header.c_str(), header_len);
   for (auto& [key, arr] : a) {
+#ifdef MLX_ROCM_HOST_STAGE
+    // On ROCm the array lives in BAR-mapped VRAM: writing straight from
+    // arr.data<char>() makes the CPU read it uncached at ~30 MB/s. staged_write
+    // DMAs it through a pinned buffer instead (~50 GB/s), and returns false
+    // only if it has emitted nothing yet.
+    if (rocm::staged_write(*out_stream, arr)) {
+      continue;
+    }
+#endif
     out_stream->write(arr.data<char>(), arr.nbytes());
   }
 }

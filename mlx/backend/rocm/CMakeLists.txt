@@ -252,6 +252,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device_info.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/host_stage.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/jit_module.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
@@ -392,3 +393,7 @@ target_include_directories(mlx PRIVATE ${HIP_INCLUDE_DIRS})
 
 # Add HIP platform define for C++ files
 target_compile_definitions(mlx PRIVATE __HIP_PLATFORM_AMD__=1)
+
+# Route safetensors host reads through a pinned hipMemcpy bounce buffer.
+# Without this the CPU walks BAR-mapped VRAM at ~30 MB/s (see host_stage.cpp).
+target_compile_definitions(mlx PRIVATE MLX_ROCM_HOST_STAGE=1)
