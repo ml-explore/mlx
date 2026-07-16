@@ -2049,29 +2049,50 @@ int moe_pack_m_pad(
   // Cached exact max-run (+12.5% slack). First call for this (T,E) syncs once;
   // later MoE layers in the same step reuse without StreamSynchronize.
   // rocprof showed ~150 syncs/step from uncached max_run — this kills that.
+  // Re-measure every kRemeasureCalls hits. The key is (T,E) only, so for a
+  // fixed geometry this cache holds a SINGLE entry that would otherwise be
+  // measured once at process start and frozen forever. Routing imbalance is
+  // not static: as the router specializes, an expert's max run grows past the
+  // first measurement, tokens overflow M_fixed, and moe_pack_kernel silently
+  // drops them (rate climbing over a run). Periodic re-measure lets the cache
+  // follow that drift; the sync cost is amortized to ~1 per kRemeasureCalls
+  // (vs ~150/step uncached, which is what the cache was added to kill).
+  constexpr uint64_t kRemeasureCalls = 512;
   static std::mutex mu;
-  static std::unordered_map<uint64_t, int> cache;
+  struct Cached {
+    int m;
+    uint64_t calls;
+  };
+  static std::unordered_map<uint64_t, Cached> cache;
   const uint64_t key = (static_cast<uint64_t>(static_cast<uint32_t>(T)) << 32) |
       static_cast<uint32_t>(E);
   {
     std::lock_guard<std::mutex> g(mu);
     auto it = cache.find(key);
-    if (it != cache.end())
-      return it->second;
+    if (it != cache.end() && (++it->second.calls % kRemeasureCalls) != 0)
+      return it->second.m; // fall through on the Nth call to re-measure
   }
   int measured = moe_max_run_length_sync(encoder, expert_ids, T, E);
   int floor_h = moe_pack_m_pad_heuristic(T, E);
-  // max(measured, 2×avg) + 25% slack. Grow-only cache: routing can get more
-  // imbalanced after the first measure; under-size is now non-fatal (pack
-  // drops overflow tokens) but we still prefer not to drop.
+  // max(measured, 2×avg) + 25% slack. Grow-only, and re-measured every
+  // kRemeasureCalls so the cache follows routing drift instead of freezing at
+  // the step-0 measurement. NOTE: a drop is NOT benign on every path — the
+  // fused forward (moe_swiglu.cpp) used to leave dropped rows unwritten, which
+  // surfaced recycled memory (NaN). That path now memsets, so a drop costs a
+  // zeroed token rather than a NaN — still a real quality loss, hence the
+  // re-measure.
   int m = measured > floor_h ? measured : floor_h;
   m = align32_clamp(m + m / 4, T);
   {
     std::lock_guard<std::mutex> g(mu);
     auto it = cache.find(key);
-    if (it != cache.end() && it->second > m)
-      m = it->second; // grow-only
-    cache[key] = m;
+    uint64_t calls = 0;
+    if (it != cache.end()) {
+      calls = it->second.calls;
+      if (it->second.m > m)
+        m = it->second.m; // grow-only: never shrink into a drop
+    }
+    cache[key] = Cached{m, calls};
   }
   return m;
 }
