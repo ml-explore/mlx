@@ -221,15 +221,26 @@ __global__ void __launch_bounds__(256)
             rocwmma::mem_row_major);
       }
     }
-    __syncthreads();
+    // rocWMMA store_matrix_sync to LDS does NOT guarantee visibility to other
+    // waves (or even to scalar loads) with a plain __syncthreads(). Flush the
+    // matrix-unit LDS traffic before the online-softmax scalar readers run.
+    //
+    // Row ownership MUST match the WMMA writer: wave w owns rows [w*16, w*16+16).
+    // The old "if (tid < BLOCK_M)" softmax had wave0 lanes 16..31 read rows
+    // 16..31 written by wave1 — a cross-wave LDS read of WMMA stores. That is
+    // why L<=16 (single wave of real query rows) passed while L>=32 diverged.
+    rocwmma::synchronize_workgroup();
 
-    // ---- Online softmax (scalar, 64 threads handle 64 rows) ----
-    float my_scale_old = 0.0f;
-    if (tid < BLOCK_M) {
-      int q_idx = q_start + tid;
+    // ---- Online softmax: each wave processes its own 16 query rows ----
+    // Dynamic smem slot for per-row scale_old (avoids static/dynamic LDS aliasing).
+    float* wave_scale = reinterpret_cast<float*>(
+        reinterpret_cast<char*>(S_sh) + BLOCK_M * S_PAD * sizeof(float));
+    if (lane < WT) {
+      int row = wave * WT + lane; // 0..BLOCK_M-1, one row per lane of this wave
+      int q_idx = q_start + row;
       bool valid = q_idx < params.qL;
-      float old_m = m_arr[tid];
-      float old_l = l_arr[tid];
+      float old_m = m_arr[row];
+      float old_l = l_arr[row];
 
       float new_m = old_m;
       if (valid) {
@@ -238,7 +249,7 @@ __global__ void __launch_bounds__(256)
           if constexpr (do_causal)
             use = (k_start + j) <= (params.kL - params.qL + q_idx);
           if (use)
-            new_m = fmaxf(new_m, S_sh[tid * S_PAD + j]);
+            new_m = fmaxf(new_m, S_sh[row * S_PAD + j]);
         }
       }
 
@@ -251,21 +262,18 @@ __global__ void __launch_bounds__(256)
           use = use && ((k_start + j) <= (params.kL - params.qL + q_idx));
 
         if (use) {
-          float p = expf(S_sh[tid * S_PAD + j] - new_m);
-          S_sh[tid * S_PAD + j] = p;
+          float p = expf(S_sh[row * S_PAD + j] - new_m);
+          S_sh[row * S_PAD + j] = p;
           row_sum += p;
         } else {
-          S_sh[tid * S_PAD + j] = 0.0f;
+          S_sh[row * S_PAD + j] = 0.0f;
         }
       }
 
-      m_arr[tid] = new_m;
-      l_arr[tid] = old_l * scale_old + row_sum;
-      my_scale_old = scale_old;
+      m_arr[row] = new_m;
+      l_arr[row] = old_l * scale_old + row_sum;
+      wave_scale[row] = scale_old;
     }
-    // Broadcast scale_old to all lanes in each wave via shared memory
-    __shared__ float wave_scale[BLOCK_M];
-    if (tid < BLOCK_M) wave_scale[tid] = my_scale_old;
     __syncthreads();
 
     // ---- Rescale O accumulators by scale_old ----
@@ -280,7 +288,9 @@ __global__ void __launch_bounds__(256)
         rocwmma::store_matrix_sync(
             o_tmp + wave * WT * OT_PAD, o_acc[d], OT_PAD,
             rocwmma::mem_row_major);
-        __syncthreads();
+        // Flush WMMA→LDS before scalar row scale (same-wave, but required by
+        // rocWMMA LDS semantics; also keeps multi-arch behavior consistent).
+        rocwmma::synchronize_workgroup();
 
         // Scale rows (only 16 threads needed per wave)
         if (lane < WT) {
@@ -369,7 +379,7 @@ __global__ void __launch_bounds__(256)
       rocwmma::store_matrix_sync(
           o_tmp + wave * WT * OT_PAD, o_acc[d], OT_PAD,
           rocwmma::mem_row_major);
-      __syncthreads();
+      rocwmma::synchronize_workgroup();
 
       if (lane < WT) {
         int row = wave * WT + lane;
@@ -432,10 +442,13 @@ bool supports_sdpa_flash_wmma(
 int sdpa_flash_wmma_smem(int D) {
   constexpr int BM = 64, BN = 64;
   const int DW = (D < 128) ? D : 128;
+  // Layout: m[BM] l[BM] | Q[BM,DW+4] | KV[BN,DW+4] | S[BM,BN+4] | wave_scale[BM]
+  // wave_scale is dynamic (not static __shared__) so it is accounted here.
   return 2 * BM * (int)sizeof(float)
        + BM * (DW + 4) * (int)sizeof(uint16_t)
        + BN * (DW + 4) * (int)sizeof(uint16_t)
-       + BM * (BN + 4) * (int)sizeof(float);
+       + BM * (BN + 4) * (int)sizeof(float)
+       + BM * (int)sizeof(float);
 }
 
 void sdpa_flash_wmma(
