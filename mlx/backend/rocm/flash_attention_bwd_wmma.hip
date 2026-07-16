@@ -187,6 +187,13 @@ __global__ void __launch_bounds__(256) kernel_sdpa_flash_bwd_f32acc(
                (size_t)(k_start + c) * D + d],
           acc);
     }
+    // Barrier BEFORE overwriting S_sh: the dV loop above reads S_sh (=P) across
+    // all q-rows for each k-col, and the dS loop below overwrites the same
+    // S_sh. Without this sync a thread in dS can clobber S_sh[r,c] before a
+    // thread in dV has finished reading it -> corrupted dV. Manifests on wave32
+    // (8 wavefronts/block on RDNA vs 4 on CDNA) and compounds across K-tiles
+    // (L>=BN), matching the observed L=8-ok / L>=64-diverge on gfx1152/RDNA4.
+    __syncthreads();
 
     // dS = P * (dO @ V^T - Delta)
     for (int idx = tid; idx < BM * BN; idx += NTHREADS) {
