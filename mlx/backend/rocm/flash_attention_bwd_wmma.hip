@@ -68,7 +68,7 @@ __global__ void kernel_sdpa_delta_row(
 // FA-2 bwd for fixed D; float LDS tiles; float32 global accum for dQ/dK/dV.
 // BM=64, BN=16: more Q-row parallelism, LDS ~62 KB (fits 64 KB devices).
 // 64×64 tiles need ~98 KB and fail to launch on MI300X/RDNA3.5.
-template <typename T, bool do_causal, int D>
+template <typename T, bool do_causal, int D, int BM>
 __global__ void __launch_bounds__(256) kernel_sdpa_flash_bwd_f32acc(
     const T* __restrict__ Q,
     const T* __restrict__ K,
@@ -80,7 +80,12 @@ __global__ void __launch_bounds__(256) kernel_sdpa_flash_bwd_f32acc(
     float* __restrict__ dKf,
     float* __restrict__ dVf,
     rocm::FABwdParams p) {
-  constexpr int BM = 64, BN = 16, NTHREADS = 256;
+  // BM is a template param so the host can shrink the Q-tile for large head
+  // dims: LDS = (2*BM + BM*BN + 3*BM*D + 2*BN*D) floats must fit the device
+  // budget. D=64->BM=64 (60.5KB), D=128->BM=16 (41KB), D=256->BM=8 (56.6KB).
+  // Shrinking BM only adds grid blocks (grid.y = ceil(qL/BM)); the compute is
+  // D-agnostic, so this is correctness-preserving.
+  constexpr int BN = 16, NTHREADS = 256;
   const int bid_b = blockIdx.z;
   const int bid_h = blockIdx.x;
   const int bid_kv = bid_h / p.gqa_factor;
@@ -262,8 +267,8 @@ __global__ void kernel_zero_f32(float* p, size_t n) {
 // ---- Host interface (still inside namespace mlx::core) ----
 
 // Bytes of dynamic LDS for kernel_sdpa_flash_bwd_f32acc with BM=64, BN=16.
-int sdpa_flash_bwd_smem(int D) {
-  constexpr int BM = 64, BN = 16;
+int sdpa_flash_bwd_smem(int D, int BM) {
+  constexpr int BN = 16;
   return (2 * BM + BM * BN + 3 * BM * D + 2 * BN * D) * (int)sizeof(float);
 }
 
@@ -280,8 +285,9 @@ bool supports_sdpa_flash_wmma_bwd(
   int D = q.shape(-1);
   if (D != (int)v.shape(-1) || D != (int)k.shape(-1))
     return false;
-  // Keep D=64 for v1 (lemonseed head dim); LDS scales with D.
-  if (D != 64)
+  // Supported head dims: 64 (lemonseed), 128 (Qwen3.6), 256. BM shrinks with D
+  // so LDS stays under the device budget (see kernel_sdpa_flash_bwd_f32acc).
+  if (D != 64 && D != 128 && D != 256)
     return false;
   if (q.shape(1) % k.shape(1) != 0)
     return false;
@@ -404,35 +410,49 @@ void sdpa_flash_wmma_bwd(
   else
     launch_delta(__half{});
 
-  constexpr int BM = 64;
-  dim3 grid(H, (qL + BM - 1) / BM, B);
   dim3 block(256);
-  int smem = sdpa_flash_bwd_smem(D);
-  if (smem > dev.max_shared_memory_per_block()) {
-    throw std::runtime_error(
-        "[sdpa_flash_wmma_bwd] LDS " + std::to_string(smem) +
-        " exceeds device budget " +
-        std::to_string(dev.max_shared_memory_per_block()));
-  }
 
   auto launch_bwd = [&](auto tag, auto ctag) {
     using DT = decltype(tag);
     constexpr bool C = decltype(ctag)::value;
-    enc.add_kernel_node_ex(
-        &kernel_sdpa_flash_bwd_f32acc<DT, C, 64>,
-        grid,
-        block,
-        static_cast<uint32_t>(smem),
-        gpu_ptr<const DT>(q),
-        gpu_ptr<const DT>(k),
-        gpu_ptr<const DT>(v),
-        gpu_ptr<const float>(lse),
-        gpu_ptr<const float>(Delta),
-        gpu_ptr<const DT>(d_o),
-        gpu_ptr<float>(dQf),
-        gpu_ptr<float>(dKf),
-        gpu_ptr<float>(dVf),
-        p);
+    // Pick the Q-tile BM per head dim so LDS fits, then launch the matching
+    // compile-time instantiation. grid.y and smem both derive from that BM.
+    auto go = [&](auto Dc, auto BMc) {
+      constexpr int Dv = decltype(Dc)::value;
+      constexpr int BMv = decltype(BMc)::value;
+      dim3 grid(H, (qL + BMv - 1) / BMv, B);
+      int smem = sdpa_flash_bwd_smem(Dv, BMv);
+      if (smem > dev.max_shared_memory_per_block()) {
+        throw std::runtime_error(
+            "[sdpa_flash_wmma_bwd] LDS " + std::to_string(smem) +
+            " exceeds device budget " +
+            std::to_string(dev.max_shared_memory_per_block()));
+      }
+      enc.add_kernel_node_ex(
+          &kernel_sdpa_flash_bwd_f32acc<DT, C, Dv, BMv>,
+          grid,
+          block,
+          static_cast<uint32_t>(smem),
+          gpu_ptr<const DT>(q),
+          gpu_ptr<const DT>(k),
+          gpu_ptr<const DT>(v),
+          gpu_ptr<const float>(lse),
+          gpu_ptr<const float>(Delta),
+          gpu_ptr<const DT>(d_o),
+          gpu_ptr<float>(dQf),
+          gpu_ptr<float>(dKf),
+          gpu_ptr<float>(dVf),
+          p);
+    };
+    if (D == 64)
+      go(std::integral_constant<int, 64>{}, std::integral_constant<int, 64>{});
+    else if (D == 128)
+      go(std::integral_constant<int, 128>{}, std::integral_constant<int, 16>{});
+    else if (D == 256)
+      go(std::integral_constant<int, 256>{}, std::integral_constant<int, 8>{});
+    else
+      throw std::runtime_error(
+          "[sdpa_flash_wmma_bwd] unsupported head dim " + std::to_string(D));
   };
 
   if (q.dtype() == bfloat16) {
