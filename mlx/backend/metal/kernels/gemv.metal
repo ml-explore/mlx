@@ -110,3 +110,39 @@ instantiate_gemv_t_bs_blocks(float32, float);
 instantiate_gemv_t_bs_blocks(float16, half);
 instantiate_gemv_t_bs_blocks(bfloat16, bfloat16_t);
 instantiate_gemv_t_bs_blocks(complex64, complex64_t); // clang-format on
+
+// Batch addressing and axpby are function constants. M == 1 stays with
+// gemv, so tiles start at two vectors.
+// clang-format off
+#define instantiate_gemv_wide_helper(name, itype, nv, kl) \
+  instantiate_kernel(                                    \
+      "gemv_wide_" #name "_nv" #nv "_kl" #kl,             \
+      gemv_wide, itype, nv, kl)
+
+#define instantiate_gemv_wide(name, itype, kl) \
+  instantiate_gemv_wide_helper(name, itype, 2, kl)  \
+  instantiate_gemv_wide_helper(name, itype, 3, kl)  \
+  instantiate_gemv_wide_helper(name, itype, 4, kl)  \
+  instantiate_gemv_wide_helper(name, itype, 5, kl) // clang-format on
+
+instantiate_gemv_wide(float16, half, 16);
+instantiate_gemv_wide(bfloat16, bfloat16_t, 16);
+instantiate_gemv_wide(float16, half, 32);
+instantiate_gemv_wide(bfloat16, bfloat16_t, 32);
+
+// clang-format off
+#define instantiate_gemv_wide_gather_helper(name, itype, nv, kl) \
+  instantiate_kernel(                                            \
+      "gemv_wide_gather_" #name "_nv" #nv "_kl" #kl,             \
+      gemv_wide_gather, itype, nv, kl)
+
+#define instantiate_gemv_wide_gather(name, itype, kl) \
+  instantiate_gemv_wide_gather_helper(name, itype, 2, kl)  \
+  instantiate_gemv_wide_gather_helper(name, itype, 3, kl)  \
+  instantiate_gemv_wide_gather_helper(name, itype, 4, kl)  \
+  instantiate_gemv_wide_gather_helper(name, itype, 5, kl) // clang-format on
+
+instantiate_gemv_wide_gather(float16, half, 16);
+instantiate_gemv_wide_gather(bfloat16, bfloat16_t, 16);
+instantiate_gemv_wide_gather(float16, half, 32);
+instantiate_gemv_wide_gather(bfloat16, bfloat16_t, 32);
