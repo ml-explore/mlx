@@ -184,7 +184,31 @@ void MoeSwigluSorted::eval_gpu(
         stride_mid, wd, /*ldb=*/D, wd_stride, 0.0f, packed_y, /*ldc=*/D,
         stride_y, E, bfloat16);
 
-    // Every token is packed exactly once → unpack covers all rows of out.
+    // Zero `out` before the scatter — moe_pack_kernel DROPS tokens when the
+    // expert id is out of range or when the expert's run exceeds M_fixed
+    // (naive_gemm.hip: `if (e >= n_experts) return;` and
+    // `if (slot < 0 || slot >= M_fixed) return;`). A dropped token leaves
+    // slot_map[e,slot] = -1, moe_unpack_kernel skips src < 0, and that row of
+    // `out` is never written — so it returns whatever malloc_async recycled.
+    //
+    // That is not merely wrong-but-finite: freed slot_map temps are int32
+    // filled with -1 (moe_fill_neg1), and 0xFFFF reinterpreted as bf16 is
+    // exp=0xFF with a non-zero mantissa == NaN. Recycling one of those into an
+    // unwritten row is a NaN generator, which is exactly the intermittent
+    // forward NaN observed on MI300X (non-deterministic in which buffer the
+    // allocator hands back; rate grows as router imbalance outpaces the cached
+    // M_pad).
+    //
+    // matmul.cpp's gather_mm path and the VJP below already memset for this
+    // reason ("out may have garbage"); the fused forward was the one path that
+    // did not. Zeroing makes a dropped token contribute 0 instead of NaN.
+    {
+      void* op = gpu_ptr<void>(out);
+      const size_t nbytes = out.nbytes();
+      encoder.launch_kernel([op, nbytes](hipStream_t stream) {
+        (void)hipMemsetAsync(op, 0, nbytes, stream);
+      });
+    }
     rocm::moe_unpack_tokens(encoder, packed_y, slot_map, out, E, M_pad, D);
     return;
   }
