@@ -267,8 +267,14 @@ __global__ void kernel_zero_f32(float* p, size_t n) {
 // ---- Host interface (still inside namespace mlx::core) ----
 
 // Bytes of dynamic LDS for kernel_sdpa_flash_bwd_f32acc with BM=64, BN=16.
-int sdpa_flash_bwd_smem(int D, int BM) {
+// Q-tile BM per head dim so LDS fits a 64KB device (used by both the launch
+// and the fallback-size check). Single source of truth for the BM mapping.
+constexpr int sdpa_flash_bwd_bm(int D) {
+  return D <= 64 ? 64 : (D == 128 ? 16 : 8);  // D=256 -> 8
+}
+int sdpa_flash_bwd_smem(int D) {
   constexpr int BN = 16;
+  const int BM = sdpa_flash_bwd_bm(D);
   return (2 * BM + BM * BN + 3 * BM * D + 2 * BN * D) * (int)sizeof(float);
 }
 
@@ -417,11 +423,11 @@ void sdpa_flash_wmma_bwd(
     constexpr bool C = decltype(ctag)::value;
     // Pick the Q-tile BM per head dim so LDS fits, then launch the matching
     // compile-time instantiation. grid.y and smem both derive from that BM.
-    auto go = [&](auto Dc, auto BMc) {
+    auto go = [&](auto Dc) {
       constexpr int Dv = decltype(Dc)::value;
-      constexpr int BMv = decltype(BMc)::value;
+      constexpr int BMv = sdpa_flash_bwd_bm(Dv);
       dim3 grid(H, (qL + BMv - 1) / BMv, B);
-      int smem = sdpa_flash_bwd_smem(Dv, BMv);
+      int smem = sdpa_flash_bwd_smem(Dv);
       if (smem > dev.max_shared_memory_per_block()) {
         throw std::runtime_error(
             "[sdpa_flash_wmma_bwd] LDS " + std::to_string(smem) +
@@ -445,11 +451,11 @@ void sdpa_flash_wmma_bwd(
           p);
     };
     if (D == 64)
-      go(std::integral_constant<int, 64>{}, std::integral_constant<int, 64>{});
+      go(std::integral_constant<int, 64>{});
     else if (D == 128)
-      go(std::integral_constant<int, 128>{}, std::integral_constant<int, 16>{});
+      go(std::integral_constant<int, 128>{});
     else if (D == 256)
-      go(std::integral_constant<int, 256>{}, std::integral_constant<int, 8>{});
+      go(std::integral_constant<int, 256>{});
     else
       throw std::runtime_error(
           "[sdpa_flash_wmma_bwd] unsupported head dim " + std::to_string(D));
