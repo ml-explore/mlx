@@ -9,6 +9,7 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/allocator.h"
+#include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/dtype_utils.h"
 
@@ -104,15 +105,17 @@ __global__ void __launch_bounds__(256)
   constexpr int D_TILES = (D + WT - 1) / WT;
   // Wavefront-size-aware threading. A rocWMMA 16x16x16 fragment op is executed
   // collectively by one full hardware wavefront: 64 lanes on CDNA (gfx9xx,
-  // MFMA) and 32 lanes on RDNA (gfx11xx, WMMA). The block launches one full
-  // wavefront per 16-row M-tile (M_TILES waves), so NTHREADS = M_TILES*WAVE
-  // (256 on CDNA, 128 on RDNA). Keeping one wave == one 16-row tile preserves
-  // the entire tile geometry and shared-memory layout across both ISAs.
-#ifdef __AMDGCN_WAVEFRONT_SIZE__
-  constexpr int WAVE = __AMDGCN_WAVEFRONT_SIZE__;
-#else
-  constexpr int WAVE = 64;
-#endif
+  // MFMA) and 32 lanes on RDNA (gfx10/11/12, incl. gfx1151/1152 WMMA). The
+  // block launches one full wavefront per 16-row M-tile (M_TILES waves), so
+  // NTHREADS = M_TILES*WAVE (256 on CDNA, 128 on RDNA).
+  //
+  // CRITICAL: use WARP_SIZE from device/config.h (arch macros), NOT a bare
+  // __AMDGCN_WAVEFRONT_SIZE__ fallback to 64. On some hipcc/gfx115x toolchains
+  // that macro is missing in device TU and the old `#else 64` path made
+  // wave=tid/64 with a 128-thread RDNA launch — only rows 0..31 were produced
+  // (L<=32 OK, L>=33 diverge). Matches host launch: (BM/WT)*device.warp_size().
+  constexpr int WAVE = WARP_SIZE;
+  static_assert(WAVE == 32 || WAVE == 64, "unexpected wavefront size");
   const int NTHREADS = blockDim.x; // = M_TILES * WAVE
 
   const int bid_b = blockIdx.z;
