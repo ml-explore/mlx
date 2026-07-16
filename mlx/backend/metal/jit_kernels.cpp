@@ -8,6 +8,40 @@ using namespace fmt::literals;
 
 namespace mlx::core {
 
+#ifdef MLX_METAL_NO_NAX
+// NAX JIT preambles are only generated (via make_jit_source) when the SDK
+// requirement is met. On older SDKs they are skipped and MLX_METAL_NO_NAX is
+// defined, so is_nax_available() returns false and the get_*_nax_kernel entry
+// points below are never reached. These empty definitions only exist to satisfy
+// the linker for this translation unit.
+namespace metal {
+const char* gemm_nax() {
+  return "";
+}
+const char* steel_gemm_fused_nax() {
+  return "";
+}
+const char* steel_gemm_gather_nax() {
+  return "";
+}
+const char* steel_gemm_splitk_nax() {
+  return "";
+}
+const char* steel_gemm_segmented_nax() {
+  return "";
+}
+const char* quantized_nax() {
+  return "";
+}
+const char* fp_quantized_nax() {
+  return "";
+}
+const char* steel_attention_nax() {
+  return "";
+}
+} // namespace metal
+#endif // MLX_METAL_NO_NAX
+
 MTL::ComputePipelineState* get_arange_kernel(
     metal::Device& d,
     const std::string& kernel_name,
