@@ -64,6 +64,11 @@ MTL::ComputePipelineState* get_logsumexp_kernel(
     const std::string& kernel_name,
     const array& out);
 
+MTL::ComputePipelineState* get_cholesky_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out);
+
 MTL::ComputePipelineState* get_scan_kernel(
     metal::Device& d,
     const std::string& kernel_name,

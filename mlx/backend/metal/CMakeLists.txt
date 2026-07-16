@@ -44,6 +44,7 @@ if(MLX_METAL_JIT)
   make_jit_source(binary_two)
   make_jit_source(fft kernels/fft/radix.h kernels/fft/readwrite.h)
   make_jit_source(logsumexp)
+  make_jit_source(cholesky)
   make_jit_source(ternary)
   make_jit_source(softmax)
   make_jit_source(scan)
@@ -106,6 +107,7 @@ target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/binary.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/cholesky.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device_info.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
