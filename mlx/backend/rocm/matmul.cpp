@@ -1661,6 +1661,159 @@ static bool try_moe_segment_gather_mm(
   return true;
 }
 
+// Sorted-rhs gather_mm (M==1): collapse consecutive tokens that share an expert
+// into dense GEMMs. Matches CUDA gather_mm_rhs intent for MoE prefill/train.
+static bool try_sorted_rhs_gather_mm(
+    rocm::CommandEncoder& encoder,
+    const array& a,
+    const array& b,
+    const array& rhs_indices,
+    array& out,
+    int N,
+    int K,
+    bool a_transposed,
+    int64_t lda,
+    bool b_transposed,
+    int64_t ldb) {
+  (void)lda;
+  if (a_transposed) {
+    return false;
+  }
+  if (!rocm::is_hipblaslt_available()) {
+    return false;
+  }
+
+  const int batch = static_cast<int>(out.size() / static_cast<size_t>(N));
+  if (batch <= 0) {
+    return false;
+  }
+
+  // Require a to be a contiguous batch of 1xK rows: shape (..., 1, K).
+  if (a.shape(-2) != 1 || a.shape(-1) != K) {
+    return false;
+  }
+  if (a.strides()[a.ndim() - 1] != 1 || a.strides()[a.ndim() - 2] != K) {
+    return false;
+  }
+  // The dense-segment path below indexes a as a_base + start*K*esize, i.e. it
+  // assumes the batch stride == K. That only holds when a is fully row
+  // contiguous; otherwise (padded/sliced batch) fall back to the naive path.
+  if (!a.flags().row_contiguous) {
+    return false;
+  }
+
+  encoder.set_input_array(a);
+  encoder.set_input_array(b);
+  encoder.set_input_array(rhs_indices);
+  encoder.set_output_array(out);
+
+  // NOTE(perf): per-call device->host copy of rhs_indices on the training hot
+  // path. It is required — the expert-id per token must be read on the host to
+  // form dense GEMM segments — and cannot be cached (indices change every call).
+  // Cost is batch*4 bytes + one sync; negligible vs the GEMMs it enables.
+  //
+  // The copy MUST be issued on the encoder stream and explicitly synchronized.
+  // MLX ROCm streams are created with hipStreamNonBlocking (see utils.cpp), so
+  // they do NOT implicitly order against the legacy NULL stream: a plain
+  // hipMemcpy here does not wait for the router kernel that writes rhs_indices,
+  // and the host reads stale/garbage expert ids. Pinned staging keeps the copy
+  // off the pageable path (same pattern as try_moe_segment_gather_mm).
+  hipStream_t hs_rhs = static_cast<hipStream_t>(encoder.stream());
+  static thread_local uint32_t* pin_rhs = nullptr;
+  static thread_local size_t pin_rhs_cap = 0;
+  const size_t need_rhs = static_cast<size_t>(batch);
+  if (need_rhs > pin_rhs_cap) {
+    if (pin_rhs)
+      (void)hipHostFree(pin_rhs);
+    pin_rhs_cap = need_rhs + need_rhs / 2 + 1024;
+    CHECK_HIP_ERROR(hipHostMalloc(
+        reinterpret_cast<void**>(&pin_rhs),
+        pin_rhs_cap * sizeof(uint32_t),
+        hipHostMallocDefault));
+  }
+  CHECK_HIP_ERROR(hipMemcpyAsync(
+      pin_rhs,
+      gpu_ptr<const uint32_t>(rhs_indices),
+      need_rhs * sizeof(uint32_t),
+      hipMemcpyDeviceToHost,
+      hs_rhs));
+  CHECK_HIP_ERROR(hipStreamSynchronize(hs_rhs));
+  const uint32_t* rhs = pin_rhs;
+
+  // Bound the expert ids before they are used as a pointer offset into b. Same
+  // class of bug as the moe_pack aperture fix (f99ec23e): a garbage or signed
+  // -1 id (0xFFFFFFFF as uint32) indexes far outside b, so hipBLASLt reads
+  // unmapped or foreign memory — NaN output, or an aperture fault. On anything
+  // out of range fall back to the generic path instead of computing on garbage.
+  const int64_t n_experts_rhs = static_cast<int64_t>(
+      b.size() / static_cast<size_t>(b.shape(-1)) / static_cast<size_t>(b.shape(-2)));
+  for (size_t i = 0; i < need_rhs; ++i) {
+    if (static_cast<int64_t>(rhs[i]) >= n_experts_rhs) {
+      return false;
+    }
+  }
+
+  mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
+  mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
+
+  auto expert_offset = [&](uint32_t expert) -> int64_t {
+    if (b_batch_shape.empty()) {
+      return 0;
+    }
+    if (b_batch_shape.size() == 1) {
+      return static_cast<int64_t>(expert) * b_batch_strides[0];
+    }
+    int64_t off = 0;
+    int64_t idx = static_cast<int64_t>(expert);
+    for (int d = static_cast<int>(b_batch_shape.size()) - 1; d >= 0; --d) {
+      int64_t coord = idx % b_batch_shape[d];
+      idx /= b_batch_shape[d];
+      off += coord * b_batch_strides[d];
+    }
+    return off;
+  };
+
+  const size_t esize = size_of(a.dtype());
+  const char* a_base = static_cast<const char*>(gpu_ptr<const void>(a));
+  const char* b_base = static_cast<const char*>(gpu_ptr<const void>(b));
+  char* out_base = static_cast<char*>(gpu_ptr<void>(out));
+
+  int start = 0;
+  while (start < batch) {
+    uint32_t e = rhs[static_cast<size_t>(start)];
+    int end = start + 1;
+    while (end < batch && rhs[static_cast<size_t>(end)] == e) {
+      ++end;
+    }
+    int Mseg = end - start;
+    const void* a_ptr =
+        a_base + static_cast<size_t>(start) * static_cast<size_t>(K) * esize;
+    const void* b_ptr =
+        b_base + static_cast<size_t>(expert_offset(e)) * esize;
+    void* c_ptr =
+        out_base + static_cast<size_t>(start) * static_cast<size_t>(N) * esize;
+
+    rocm::hipblaslt_gemm_ptrs(
+        encoder,
+        /*transpose_a=*/false,
+        b_transposed,
+        Mseg,
+        N,
+        K,
+        1.0f,
+        a_ptr,
+        /*lda=*/K,
+        b_ptr,
+        static_cast<int>(ldb),
+        0.0f,
+        c_ptr,
+        N,
+        a.dtype());
+    start = end;
+  }
+  return true;
+}
+
 void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& encoder = rocm::get_command_encoder(s);
@@ -1689,16 +1842,12 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [transposed_a, lda, a_] = check_transpose(encoder, s, a);
   auto [transposed_b, ldb, b_] = check_transpose(encoder, s, b);
 
-  // MoE win: M==1 + identity/pre-gathered a + long rhs runs → segment GEMMs.
-  // right_sorted_ means sequential a (lhs omitted). With explicit identity
-  // arange (common for MoE 4-D shapes) the flag is false; we D2H-check lhs.
-  if (M == 1) {
-    const bool assume_id = right_sorted_; // sequential a when flag set
-    if (try_moe_segment_gather_mm(
+  // Prefer sorted-rhs dense segments (MoE) over per-token gemv.
+  if (M == 1 && right_sorted_) {
+    if (try_sorted_rhs_gather_mm(
             encoder,
             a_,
             b_,
-            lhs_indices,
             rhs_indices,
             out,
             N,
@@ -1706,8 +1855,7 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
             transposed_a,
             lda,
             transposed_b,
-            ldb,
-            /*assume_identity_lhs=*/assume_id)) {
+            ldb)) {
       return;
     }
   }
@@ -1782,90 +1930,53 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(segments);
   encoder.set_output_array(out);
 
+  // Segments are small (typically #experts). Host-side split lets us dispatch
+  // one tuned hipBLASLt GEMM per segment instead of a naive gather kernel.
+  //
+  // Issue on the encoder stream and synchronize explicitly: MLX ROCm streams
+  // are hipStreamNonBlocking (utils.cpp), so a plain hipMemcpy on the NULL
+  // stream does not order against the kernel producing `segments` — nor
+  // against the contiguous_copy_gpu just above, which is enqueued on this very
+  // stream. An unordered read yields stale k0/k1, which are used directly as
+  // pointer offsets into a/b below (OOB GEMM reads -> NaN or aperture fault).
+  std::vector<uint32_t> segs(static_cast<size_t>(num_segments) * 2);
+  {
+    hipStream_t hs_seg = static_cast<hipStream_t>(encoder.stream());
+    CHECK_HIP_ERROR(hipMemcpyAsync(
+        segs.data(),
+        gpu_ptr<const uint32_t>(segments),
+        segs.size() * sizeof(uint32_t),
+        hipMemcpyDeviceToHost,
+        hs_seg));
+    CHECK_HIP_ERROR(hipStreamSynchronize(hs_seg));
+  }
+
+  // Clamp segment bounds to the real K extent before they become pointer
+  // offsets (cf. moe_pack aperture fix f99ec23e: never let an id/row read from
+  // device memory index a buffer unchecked).
+  const uint32_t k_total = static_cast<uint32_t>(a.shape(-1));
+  for (size_t i = 0; i < segs.size(); ++i) {
+    if (segs[i] > k_total) {
+      segs[i] = k_total;
+    }
+  }
+
+  const size_t esize = size_of(a.dtype());
+  const char* a_base = static_cast<const char*>(gpu_ptr<const void>(a));
+  const char* b_base = static_cast<const char*>(gpu_ptr<const void>(b));
+  char* out_base = static_cast<char*>(gpu_ptr<void>(out));
+
   const int64_t a_k_stride = a.strides()[a.ndim() - 1];
   const int64_t b_k_stride = b.strides()[b.ndim() - 2];
   const int64_t out_stride = static_cast<int64_t>(M) * N;
 
-  // Opt-in device-side SegmentedMM (no stream sync). Enable with
-  // MLX_SEGMM_DEVICE=1. Default host+hipBLASLt is faster on MI300X today.
-  static const bool seg_device = [] {
-    const char* e = std::getenv("MLX_SEGMM_DEVICE");
-    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
-                 e[0] == 'T');
-  }();
-  if (seg_device &&
-      (a.dtype() == bfloat16 || a.dtype() == float16 || a.dtype() == float32)) {
-    rocm::segmented_mm_device(
-        encoder,
-        a,
-        b,
-        segments,
-        out,
-        M,
-        N,
-        num_segments,
-        a_transposed,
-        lda,
-        a_k_stride,
-        b_transposed,
-        ldb,
-        b_k_stride,
-        out_stride);
-    return;
-  }
-
-  // Host path (default): D2H segment table + one hipBLASLt/naive GEMM per segment.
-  // Pin-cache: MoE weight VJP does 3× segmented_mm with the same segments
-  // (dW_gate/up/down). Reuse pin for 2 more hits after each D2H.
-  static thread_local uint32_t* pin_segs = nullptr;
-  static thread_local size_t pin_segs_cap = 0;
-  static thread_local const void* pin_segs_dev = nullptr;
-  static thread_local size_t pin_segs_n = 0;
-  static thread_local int pin_segs_reuses = 0;
-  static const bool no_seg_cache = [] {
-    const char* e = std::getenv("MLX_ROCM_MOE_NO_PIN_CACHE");
-    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
-                 e[0] == 'T');
-  }();
-  const size_t nseg_u32 = static_cast<size_t>(num_segments) * 2;
-  if (nseg_u32 > pin_segs_cap) {
-    if (pin_segs)
-      (void)hipHostFree(pin_segs);
-    pin_segs_cap = nseg_u32 + 64;
-    pin_segs_dev = nullptr;
-    pin_segs_reuses = 0;
-    CHECK_HIP_ERROR(hipHostMalloc(
-        reinterpret_cast<void**>(&pin_segs),
-        pin_segs_cap * sizeof(uint32_t),
-        hipHostMallocDefault));
-  }
-  hipStream_t hs = static_cast<hipStream_t>(encoder.stream());
-  const void* segs_dev = gpu_ptr<const uint32_t>(segments);
-  const bool seg_hit = !no_seg_cache && pin_segs_dev == segs_dev &&
-      pin_segs_n == nseg_u32 && pin_segs_reuses > 0;
-  if (seg_hit) {
-    --pin_segs_reuses;
-  } else {
-    CHECK_HIP_ERROR(hipMemcpyAsync(
-        pin_segs,
-        segs_dev,
-        nseg_u32 * sizeof(uint32_t),
-        hipMemcpyDeviceToHost,
-        hs));
-    CHECK_HIP_ERROR(hipStreamSynchronize(hs));
-    pin_segs_dev = segs_dev;
-    pin_segs_n = nseg_u32;
-    pin_segs_reuses = no_seg_cache ? 0 : 2;
-  }
-
-  const size_t esize = size_of(a.dtype());
-  char* out_base = static_cast<char*>(gpu_ptr<void>(out));
+  const bool use_lt = rocm::is_hipblaslt_available();
 
   for (int i = 0; i < num_segments; ++i) {
-    uint32_t k0 = pin_segs[static_cast<size_t>(2 * i)];
-    uint32_t k1 = pin_segs[static_cast<size_t>(2 * i + 1)];
+    uint32_t k0 = segs[static_cast<size_t>(2 * i)];
+    uint32_t k1 = segs[static_cast<size_t>(2 * i + 1)];
+    void* c_ptr = out_base + static_cast<size_t>(i) * out_stride * esize;
     if (k1 <= k0) {
-      void* c_ptr = out_base + static_cast<size_t>(i) * out_stride * esize;
       size_t bytes = static_cast<size_t>(out_stride) * esize;
       encoder.launch_kernel([c_ptr, bytes](hipStream_t stream) {
         (void)hipMemsetAsync(c_ptr, 0, bytes, stream);
@@ -1873,15 +1984,12 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       continue;
     }
     int Kseg = static_cast<int>(k1 - k0);
-    const Dtype seg_dt = a.dtype();
-    static const bool seg_use_blaslt = std::getenv("MLX_SEGMM_NAIVE") == nullptr;
-    if (seg_use_blaslt && encoder.device().supports_cdna_mfma_gemm() &&
-        (seg_dt == bfloat16 || seg_dt == float16 || seg_dt == float32)) {
-      const char* a_seg = static_cast<const char*>(gpu_ptr<void>(a)) +
-          static_cast<size_t>(static_cast<int64_t>(k0) * a_k_stride) * esize;
-      const char* b_seg = static_cast<const char*>(gpu_ptr<void>(b)) +
-          static_cast<size_t>(static_cast<int64_t>(k0) * b_k_stride) * esize;
-      char* c_seg = out_base + static_cast<size_t>(i) * out_stride * esize;
+    const void* a_ptr = a_base +
+        static_cast<size_t>(k0) * static_cast<size_t>(a_k_stride) * esize;
+    const void* b_ptr = b_base +
+        static_cast<size_t>(k0) * static_cast<size_t>(b_k_stride) * esize;
+
+    if (use_lt) {
       rocm::hipblaslt_gemm_ptrs(
           encoder,
           a_transposed,
@@ -1890,14 +1998,14 @@ void SegmentedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
           N,
           Kseg,
           1.0f,
-          a_seg,
+          a_ptr,
           static_cast<int>(lda),
-          b_seg,
+          b_ptr,
           static_cast<int>(ldb),
           0.0f,
-          c_seg,
+          c_ptr,
           N,
-          seg_dt);
+          a.dtype());
     } else {
       rocm::naive_gemm_with_offset(
           encoder,
