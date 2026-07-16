@@ -161,3 +161,38 @@ TEST_CASE("test export function on different stream") {
   // Should make a new stream that we can run computation on
   eval(import_function(file_path)({array({0, 1, 2})}));
 }
+
+TEST_CASE("test export import with metadata") {
+  std::string file_path = get_temp_file("model.mlxfn");
+
+  auto fun = [](const std::vector<array>& args) -> std::vector<array> {
+    return {abs(args[0])};
+  };
+
+  // A value above 2^31 and a non-power-of-two float, to catch narrowing
+  std::unordered_map<std::string, MetadataValue> metadata = {
+      {"name", std::string("model")},
+      {"params", int64_t(7000000000)},
+      {"lr", 0.1}};
+
+  export_function(file_path, fun, {array({0, 1, 2})}, false, metadata);
+
+  auto imported = import_function(file_path);
+  CHECK(imported.metadata() == metadata);
+  CHECK(std::get<std::string>(imported.metadata().at("name")) == "model");
+  CHECK(std::get<int64_t>(imported.metadata().at("params")) == 7000000000);
+  CHECK(std::get<double>(imported.metadata().at("lr")) == 0.1);
+  eval(imported({array({0, 1, 2})}));
+
+  // No metadata gives an empty map
+  export_function(file_path, fun, {array({0, 1, 2})});
+  CHECK(import_function(file_path).metadata().empty());
+
+  // Metadata survives the per-trace header rewrite of a multi-trace export
+  {
+    auto fn_exporter = exporter(file_path, fun, false, metadata);
+    fn_exporter({array({0, 1})});
+    fn_exporter({array({0, 1, 2})});
+  }
+  CHECK(import_function(file_path).metadata() == metadata);
+}

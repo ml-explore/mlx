@@ -704,6 +704,50 @@ class TestExportImport(mlx_tests.MLXTestCase):
         imported = mx.import_function(path)
         self.assertTrue(mx.array_equal(imported(x, y, z)[0], fun(x, y, z)))
 
+    def test_export_import_metadata(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        def fun(x):
+            return mx.abs(x)
+
+        x = mx.array([1.0, -2.0, 3.0])
+        # A value above 2**31 and a non-exact float, to catch narrowing
+        metadata = {"name": "model", "params": 7_000_000_000, "lr": 0.1}
+
+        mx.export_function(path, fun, x, metadata=metadata)
+
+        # No metadata returned by default, callable still works
+        imported = mx.import_function(path)
+        self.assertTrue(mx.array_equal(imported(x)[0], fun(x)))
+
+        # Metadata read back with value types and exact values preserved
+        imported, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, metadata)
+        self.assertIsInstance(imported_metadata["name"], str)
+        self.assertIsInstance(imported_metadata["params"], int)
+        self.assertIsInstance(imported_metadata["lr"], float)
+        self.assertTrue(mx.array_equal(imported(x)[0], fun(x)))
+
+        # No metadata gives an empty dict
+        mx.export_function(path, fun, x)
+        _, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, {})
+
+        # Metadata survives the per-trace header rewrite of a multi-trace export
+        with mx.exporter(path, fun, metadata=metadata) as exporter:
+            exporter(mx.array([1.0]))
+            exporter(mx.array([1.0, 2.0]))
+        _, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, metadata)
+
+        # Unsupported value types are rejected
+        with self.assertRaises(TypeError):
+            mx.export_function(path, fun, x, metadata={"bad": [1, 2]})
+
+        # Metadata is not supported with a callback
+        with self.assertRaises(ValueError):
+            mx.export_function(lambda x: None, fun, x, metadata=metadata)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

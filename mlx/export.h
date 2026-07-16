@@ -14,6 +14,11 @@ namespace mlx::core {
 using Args = std::vector<array>;
 using Kwargs = std::unordered_map<std::string, array>;
 
+// Metadata values saved alongside an exported function. The integer and
+// floating point alternatives are 64-bit to hold Python int and float without
+// narrowing (e.g. a parameter count above 2^31, or a non-power-of-two float).
+using MetadataValue = std::variant<std::string, int64_t, double>;
+
 // Possible types for a Primitive's state
 using StateT = std::variant<
     bool,
@@ -50,17 +55,20 @@ struct FunctionExporter;
 MLX_API FunctionExporter exporter(
     const std::string& file,
     const std::function<std::vector<array>(const Args&)>& fun,
-    bool shapeless = false);
+    bool shapeless = false,
+    const std::unordered_map<std::string, MetadataValue>& metadata = {});
 
 MLX_API FunctionExporter exporter(
     const std::string& file,
     const std::function<std::vector<array>(const Kwargs&)>& fun,
-    bool shapeless = false);
+    bool shapeless = false,
+    const std::unordered_map<std::string, MetadataValue>& metadata = {});
 
 MLX_API FunctionExporter exporter(
     const std::string& path,
     const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
-    bool shapeless = false);
+    bool shapeless = false,
+    const std::unordered_map<std::string, MetadataValue>& metadata = {});
 
 /**
  * Export a function to a file.
@@ -69,20 +77,23 @@ MLX_API void export_function(
     const std::string& file,
     const std::function<std::vector<array>(const Args&)>& fun,
     const Args& args,
-    bool shapeless = false);
+    bool shapeless = false,
+    const std::unordered_map<std::string, MetadataValue>& metadata = {});
 
 MLX_API void export_function(
     const std::string& file,
     const std::function<std::vector<array>(const Kwargs&)>& fun,
     const Kwargs& kwargs,
-    bool shapeless = false);
+    bool shapeless = false,
+    const std::unordered_map<std::string, MetadataValue>& metadata = {});
 
 MLX_API void export_function(
     const std::string& file,
     const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
     const Args& args,
     const Kwargs& kwargs,
-    bool shapeless = false);
+    bool shapeless = false,
+    const std::unordered_map<std::string, MetadataValue>& metadata = {});
 
 struct ImportedFunction;
 

@@ -260,6 +260,55 @@ array deserialize(Reader& is) {
   return array(std::move(shape), type, nullptr, std::vector<array>{});
 }
 
+enum class MetadataValueType { String = 0, Int = 1, Float = 2 };
+
+void serialize(
+    Writer& os,
+    const std::unordered_map<std::string, MetadataValue>& metadata) {
+  serialize(os, static_cast<uint64_t>(metadata.size()));
+  for (auto& [key, value] : metadata) {
+    serialize(os, key);
+    std::visit(
+        [&os](auto&& v) {
+          using T = std::decay_t<decltype(v)>;
+          if constexpr (std::is_same_v<T, std::string>) {
+            serialize(os, MetadataValueType::String);
+          } else if constexpr (std::is_same_v<T, int64_t>) {
+            serialize(os, MetadataValueType::Int);
+          } else if constexpr (std::is_same_v<T, double>) {
+            serialize(os, MetadataValueType::Float);
+          }
+          serialize(os, v);
+        },
+        value);
+  }
+}
+
+template <>
+std::unordered_map<std::string, MetadataValue> deserialize(Reader& is) {
+  std::unordered_map<std::string, MetadataValue> metadata;
+  auto size = deserialize<uint64_t>(is);
+  metadata.reserve(size);
+  for (uint64_t i = 0; i < size; ++i) {
+    auto key = deserialize<std::string>(is);
+    switch (deserialize<MetadataValueType>(is)) {
+      case MetadataValueType::String:
+        metadata.emplace(std::move(key), deserialize<std::string>(is));
+        break;
+      case MetadataValueType::Int:
+        metadata.emplace(std::move(key), deserialize<int64_t>(is));
+        break;
+      case MetadataValueType::Float:
+        metadata.emplace(std::move(key), deserialize<double>(is));
+        break;
+      default:
+        throw std::runtime_error(
+            "[import_function] Unknown metadata value type.");
+    }
+  }
+  return metadata;
+}
+
 template <typename, typename = void>
 constexpr bool has_state = false;
 
@@ -521,10 +570,15 @@ struct PrimitiveFactory {
   };
 };
 
-void write_header(Writer& os, int count, bool shapeless) {
+void write_header(
+    Writer& os,
+    int count,
+    bool shapeless,
+    const std::unordered_map<std::string, MetadataValue>& metadata) {
   serialize(os, std::string(version()));
   serialize(os, count);
   serialize(os, shapeless);
+  serialize(os, metadata);
 }
 
 // A struct to hold and retrieve the graphs that are exported / imported
@@ -674,14 +728,16 @@ FunctionTable::Function* FunctionTable::find(
 FunctionExporter::FunctionExporter(
     const std::string& file,
     std::function<std::vector<array>(const Args&, const Kwargs&)> fun,
-    bool shapeless)
+    bool shapeless,
+    std::unordered_map<std::string, MetadataValue> metadata)
     : os(file),
       fun(std::move(fun)),
-      ftable(std::make_shared<FunctionTable>(shapeless)) {
+      ftable(std::make_shared<FunctionTable>(shapeless)),
+      metadata_(std::move(metadata)) {
   if (!os.is_open()) {
     throw std::runtime_error("[export_function] Failed to open " + file);
   }
-  write_header(os, count, shapeless);
+  write_header(os, count, shapeless, metadata_);
 }
 
 FunctionExporter::FunctionExporter(
@@ -819,7 +875,7 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   // Update the header
   auto pos = os.tell();
   os.seek(0);
-  write_header(os, count, ftable->shapeless);
+  write_header(os, count, ftable->shapeless, metadata_);
   os.seek(pos);
   serialize(os, kwarg_keys);
 
@@ -898,44 +954,51 @@ void FunctionExporter::operator()(const Args& args, const Kwargs& kwargs) {
 FunctionExporter exporter(
     const std::string& file,
     const std::function<std::vector<array>(const Args&)>& fun,
-    bool shapeless /* = false */) {
+    bool shapeless /* = false */,
+    const std::unordered_map<std::string, MetadataValue>& metadata /* = {} */) {
   return FunctionExporter{
       file,
       [fun](const Args& args, const Kwargs&) { return fun(args); },
-      shapeless};
+      shapeless,
+      metadata};
 }
 
 FunctionExporter exporter(
     const std::string& file,
     const std::function<std::vector<array>(const Kwargs&)>& fun,
-    bool shapeless /* = false */) {
+    bool shapeless /* = false */,
+    const std::unordered_map<std::string, MetadataValue>& metadata /* = {} */) {
   return exporter(
       file,
       [fun](const Args&, const Kwargs kwargs) { return fun(kwargs); },
-      shapeless);
+      shapeless,
+      metadata);
 }
 
 FunctionExporter exporter(
     const std::string& file,
     const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
-    bool shapeless /* = false */) {
-  return FunctionExporter{file, fun, shapeless};
+    bool shapeless /* = false */,
+    const std::unordered_map<std::string, MetadataValue>& metadata /* = {} */) {
+  return FunctionExporter{file, fun, shapeless, metadata};
 }
 
 void export_function(
     const std::string& file,
     const std::function<std::vector<array>(const Args&)>& fun,
     const Args& args,
-    bool shapeless /* = false */) {
-  exporter(file, fun, shapeless)(args);
+    bool shapeless /* = false */,
+    const std::unordered_map<std::string, MetadataValue>& metadata /* = {} */) {
+  exporter(file, fun, shapeless, metadata)(args);
 }
 
 void export_function(
     const std::string& file,
     const std::function<std::vector<array>(const Kwargs&)>& fun,
     const Kwargs& kwargs,
-    bool shapeless /* = false */) {
-  exporter(file, fun, shapeless)(kwargs);
+    bool shapeless /* = false */,
+    const std::unordered_map<std::string, MetadataValue>& metadata /* = {} */) {
+  exporter(file, fun, shapeless, metadata)(kwargs);
 }
 
 void export_function(
@@ -943,8 +1006,9 @@ void export_function(
     const std::function<std::vector<array>(const Args&, const Kwargs&)>& fun,
     const Args& args,
     const Kwargs& kwargs,
-    bool shapeless /* = false */) {
-  exporter(file, fun, shapeless)(args, kwargs);
+    bool shapeless /* = false */,
+    const std::unordered_map<std::string, MetadataValue>& metadata /* = {} */) {
+  exporter(file, fun, shapeless, metadata)(args, kwargs);
 }
 
 FunctionExporter exporter(
@@ -1054,6 +1118,7 @@ ImportedFunction::ImportedFunction(const std::string& file)
   auto mlx_version = deserialize<std::string>(is);
   auto function_count = deserialize<int>(is);
   ftable->shapeless = deserialize<bool>(is);
+  metadata_ = deserialize<std::unordered_map<std::string, MetadataValue>>(is);
   std::unordered_map<std::uintptr_t, array> constants;
 
   auto import_one = [&]() {
