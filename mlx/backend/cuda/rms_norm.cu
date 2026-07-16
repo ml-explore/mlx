@@ -51,8 +51,8 @@ struct BlockBroadcastReduce {
   }
 };
 
-// xs and ws stays in registers
-// each thread does N_CHUNKS_THREAD vectorised interleaved loads of width
+// xs and ws stay in registers
+// Each thread does N_CHUNKS_THREAD vectorised interleaved loads of width
 // N_READS x, w, out in majority of cases should be 16 bytes aligned -> using
 // unsafe_load_vector if not aligned -> fall back to load_vector we do it like
 // this because of the register presure: load_vector allocates registers for
@@ -350,29 +350,39 @@ void dispatch_group_dim(int axis_size, F&& f) {
   }
 }
 
-template <int N_READS, typename F>
-void dispatch_num_chunks(int axis_size, F&& f) {
-  if (axis_size <= N_READS * 64) {
-    f(std::integral_constant<int, 64>{}, std::integral_constant<int, 1>{});
-    return;
-  }
-  auto block_size = std::integral_constant<int, 128>{};
-  if (axis_size <= N_READS * 128 * 1) {
+template <int BLOCK_SIZE, typename F>
+void dispatch_chunks(int n_chunks, F&& f) {
+  auto block_size = std::integral_constant<int, BLOCK_SIZE>{};
+  if (n_chunks <= 1) {
     f(block_size, std::integral_constant<int, 1>{});
-  } else if (axis_size <= N_READS * 128 * 2) {
+  } else if (n_chunks <= 2) {
     f(block_size, std::integral_constant<int, 2>{});
-  } else if (axis_size <= N_READS * 128 * 3) {
+  } else if (n_chunks <= 3) {
     f(block_size, std::integral_constant<int, 3>{});
-  } else if (axis_size <= N_READS * 128 * 4) {
+  } else if (n_chunks <= 4) {
     f(block_size, std::integral_constant<int, 4>{});
-  } else if (axis_size <= N_READS * 128 * 5) {
+  } else if (n_chunks <= 5) {
     f(block_size, std::integral_constant<int, 5>{});
-  } else if (axis_size <= N_READS * 128 * 6) {
+  } else if (n_chunks <= 6) {
     f(block_size, std::integral_constant<int, 6>{});
-  } else if (axis_size <= N_READS * 128 * 7) {
+  } else if (n_chunks <= 7) {
     f(block_size, std::integral_constant<int, 7>{});
   } else {
     f(block_size, std::integral_constant<int, 8>{});
+  }
+}
+
+template <int N_READS, typename F>
+void dispatch_num_chunks(int axis_size, F&& f) {
+  int nvec = (axis_size + N_READS - 1) / N_READS;
+  if (axis_size <= N_READS * 64) {
+    f(std::integral_constant<int, 64>{}, std::integral_constant<int, 1>{});
+  } else if (nvec % 128 == 0 && nvec / 128 <= 8) {
+    dispatch_chunks<128>(nvec / 128, f);
+  } else if (nvec % 64 == 0 && nvec / 64 <= 8) {
+    dispatch_chunks<64>(nvec / 64, f);
+  } else {
+    dispatch_chunks<128>((nvec + 127) / 128, f);
   }
 }
 
@@ -427,7 +437,8 @@ void RMSNorm::eval_gpu(
       dispatch_num_chunks<N_READS>(
           axis_size, [&](auto block_size, auto n_chunks) {
             constexpr int BLOCK_SIZE = block_size();
-            bool aligned = (axis_size == N_READS * BLOCK_SIZE * n_chunks()) &&
+            constexpr int N_CHUNKS = n_chunks();
+            bool aligned = (axis_size == N_READS * BLOCK_SIZE * N_CHUNKS) &&
                 (w_stride == 1) &&
                 (reinterpret_cast<uintptr_t>(gpu_ptr<DataType>(x)) % 16 == 0) &&
                 (reinterpret_cast<uintptr_t>(gpu_ptr<DataType>(w)) % 16 == 0) &&
@@ -436,7 +447,7 @@ void RMSNorm::eval_gpu(
               auto kernel = cu::rms_norm_small<
                   DataType,
                   BLOCK_SIZE,
-                  n_chunks(),
+                  N_CHUNKS,
                   aligned_tag.value,
                   N_READS>;
               encoder.add_kernel_node(
