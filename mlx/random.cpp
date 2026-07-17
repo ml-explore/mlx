@@ -82,6 +82,30 @@ array split(const array& key, int num, StreamOrDevice s /* = {} */) {
   return bits({num, 2}, 4, key, s);
 }
 
+array advance(const array& key, size_t steps, StreamOrDevice s /* = {} */) {
+  if (key.dtype() != uint32) {
+    std::ostringstream msg;
+    msg << "[advance] Expected key type uint32 but received " << key.dtype()
+        << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (key.ndim() == 0 || key.shape(-1) != 2) {
+    std::ostringstream msg;
+    msg << "[advance] Expected key shape (..., 2) but received " << key.shape()
+        << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (steps == 0) {
+    return key;
+  }
+  auto stream = to_stream(s);
+  return array(
+      key.shape(),
+      uint32,
+      std::make_shared<RandomAdvance>(stream, steps),
+      {key});
+}
+
 // Get the next representable value below 1.0 for half precision
 // floating point types (fp16, bf16)
 template <typename T>

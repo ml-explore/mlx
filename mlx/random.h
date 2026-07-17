@@ -60,6 +60,9 @@ MLX_API std::pair<array, array> split(const array& key, StreamOrDevice s = {});
 /** Split the rng key into `num` keys. */
 MLX_API array split(const array& key, int num, StreamOrDevice s = {});
 
+/** Advance a PRNG key by repeated split state transitions. */
+MLX_API array advance(const array& key, size_t steps, StreamOrDevice s = {});
+
 /** Generate uniform random numbers between low and high. */
 MLX_API array uniform(
     const array& low,

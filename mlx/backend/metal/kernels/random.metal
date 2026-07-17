@@ -31,6 +31,27 @@ rbits threefry2x32_hash(const thread uint2& key, uint2 count) {
   return v;
 }
 
+[[kernel]] void radvance(
+    device const uint32_t* keys,
+    device uint32_t* out,
+    constant const ulong& steps,
+    constant const int& ndim,
+    constant const int* key_shape,
+    constant const int64_t* key_strides,
+    uint index [[thread_position_in_grid]]) {
+  auto kidx = 2 * index;
+  auto k1_elem = elem_to_loc(kidx, key_shape, key_strides, ndim);
+  auto k2_elem = elem_to_loc(kidx + 1, key_shape, key_strides, ndim);
+  auto key = uint2(keys[k1_elem], keys[k2_elem]);
+  for (ulong step = 0; step < steps; ++step) {
+    auto left = threefry2x32_hash(key, uint2(0, 2));
+    auto right = threefry2x32_hash(key, uint2(1, 3));
+    key = uint2(left.val.x, right.val.x);
+  }
+  out[kidx] = key.x;
+  out[kidx + 1] = key.y;
+}
+
 [[kernel]] void rbitsc(
     device const uint32_t* keys,
     device char* out,

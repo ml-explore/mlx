@@ -15,6 +15,7 @@
 #include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/random.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -3869,6 +3870,19 @@ std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
 bool RandomBits::is_equivalent(const Primitive& other) const {
   const RandomBits& r_other = static_cast<const RandomBits&>(other);
   return shape_ == r_other.shape_ && width_ == r_other.width_;
+}
+
+std::pair<std::vector<array>, std::vector<int>> RandomAdvance::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{random::advance(inputs[0], steps_, stream())}, {axes[0]}};
+}
+
+bool RandomAdvance::is_equivalent(const Primitive& other) const {
+  const RandomAdvance& r_other = static_cast<const RandomAdvance&>(other);
+  return steps_ == r_other.steps_;
 }
 
 std::vector<array> Real::vjp(

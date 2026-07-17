@@ -200,6 +200,33 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
+void RandomAdvance::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  auto& keys = inputs[0];
+  size_t num_keys = keys.size() / 2;
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+  auto kernel = d.get_kernel("radvance");
+  auto& compute_encoder = metal::get_command_encoder(s);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(keys, 0);
+  compute_encoder.set_output_array(out, 1);
+  uint64_t steps = steps_;
+  int ndim = keys.ndim();
+  compute_encoder.set_bytes(steps, 2);
+  compute_encoder.set_bytes(ndim, 3);
+  compute_encoder.set_vector_bytes(keys.shape(), 4);
+  compute_encoder.set_vector_bytes(keys.strides(), 5);
+  auto grid_dims = MTL::Size(num_keys, 1, 1);
+  auto group_dims = get_block_dims(num_keys, 1, 1);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
 void QRF::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {

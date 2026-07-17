@@ -41,6 +41,73 @@ class TestRandom(mlx_tests.MLXTestCase):
         keys = mx.random.split(key, 10)
         self.assertEqual(keys.shape, (10, 2))
 
+    def test_key_advance(self):
+        for seed in [0, 1, 7, 2**32 + 17]:
+            for steps in [0, 1, 2, 16, 100]:
+                expected = mx.random.key(seed)
+                for _ in range(steps):
+                    expected = mx.random.split(expected)[0]
+                actual = mx.random._advance(mx.random.key(seed), steps)
+                self.assertTrue(mx.array_equal(expected, actual))
+
+        keys = mx.stack([mx.random.key(0), mx.random.key(1)])
+        expected = mx.stack([mx.random._advance(k, 16) for k in keys])
+        actual = mx.random._advance(keys, 16)
+        self.assertTrue(mx.array_equal(expected, actual))
+
+        vmapped = mx.vmap(lambda k: mx.random._advance(k, 16))(keys)
+        compiled = mx.compile(lambda k: mx.random._advance(k, 16))(keys)
+        self.assertTrue(mx.array_equal(expected, vmapped))
+        self.assertTrue(mx.array_equal(expected, compiled))
+
+    def test_discarded_global_random_values_preserve_sequence(self):
+        mx.random.seed(7)
+        held = mx.random.uniform(shape=(8,))
+        for _ in range(32):
+            mx.random.uniform(shape=(8,))
+        actual = mx.random.uniform(shape=(8,))
+
+        key = mx.random.key(7)
+        key, held_key = mx.random.split(key)
+        expected_held = mx.random.uniform(shape=(8,), key=held_key)
+        for _ in range(32):
+            key = mx.random.split(key)[0]
+        key, actual_key = mx.random.split(key)
+        expected = mx.random.uniform(shape=(8,), key=actual_key)
+
+        # Evaluate the compressed tail first, then a previously held output.
+        # The rewrite must not mutate the semantics of either graph.
+        self.assertTrue(mx.array_equal(actual, expected))
+        self.assertTrue(mx.array_equal(held, expected_held))
+
+    def test_used_global_random_values_keep_shared_chain(self):
+        mx.random.seed(42)
+        actual = [mx.random.uniform(shape=(8,)) for _ in range(32)]
+
+        key = mx.random.key(42)
+        expected = []
+        for _ in range(32):
+            key, sample_key = mx.random.split(key)
+            expected.append(mx.random.uniform(shape=(8,), key=sample_key))
+
+        mx.eval(*actual, *expected)
+        self.assertTrue(all(mx.array_equal(a, b) for a, b in zip(actual, expected)))
+
+    def test_discarded_global_random_async_eval(self):
+        mx.random.seed(9)
+        for _ in range(100):
+            mx.random.uniform(shape=(8,))
+        actual = mx.random.uniform(shape=(8,))
+
+        key = mx.random.key(9)
+        for _ in range(100):
+            key = mx.random.split(key)[0]
+        _, sample_key = mx.random.split(key)
+        expected = mx.random.uniform(shape=(8,), key=sample_key)
+
+        mx.async_eval(actual)
+        self.assertTrue(mx.array_equal(actual, expected))
+
     def test_uniform(self):
         key = mx.random.key(0)
         a = mx.random.uniform(key=key)

@@ -130,6 +130,33 @@ __global__ void rbits(
   }
 }
 
+__global__ void radvance(
+    const uint32_t* keys,
+    uint32_t* out,
+    uint64_t steps,
+    uint32_t num_keys,
+    int32_t ndim,
+    const __grid_constant__ Shape key_shape,
+    const __grid_constant__ Strides key_strides) {
+  auto grid = cg::this_grid();
+  uint32_t index = grid.thread_rank();
+  if (index >= num_keys) {
+    return;
+  }
+  auto kidx = 2 * index;
+  auto k1_elem = elem_to_loc(kidx, key_shape.data(), key_strides.data(), ndim);
+  auto k2_elem =
+      elem_to_loc(kidx + 1, key_shape.data(), key_strides.data(), ndim);
+  auto key = uint2{keys[k1_elem], keys[k2_elem]};
+  for (uint64_t step = 0; step < steps; ++step) {
+    auto left = threefry2x32_hash(key, uint2{0, 2});
+    auto right = threefry2x32_hash(key, uint2{1, 3});
+    key = uint2{left.val.x, right.val.x};
+  }
+  out[kidx] = key.x;
+  out[kidx + 1] = key.y;
+}
+
 } // namespace cu
 
 void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -195,6 +222,36 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
         const_param(keys.shape()),
         const_param(keys.strides()));
   }
+}
+
+void RandomAdvance::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("RandomAdvance::eval_gpu");
+  assert(inputs.size() == 1);
+  auto& keys = inputs[0];
+  size_t num_keys = keys.size() / 2;
+  if (num_keys >= UINT32_MAX) {
+    throw std::runtime_error(
+        "[RandomAdvance::eval_gpu] Large size unsupported");
+  }
+  auto& encoder = cu::get_command_encoder(stream());
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  if (out.size() == 0) {
+    return;
+  }
+  encoder.set_input_array(keys);
+  encoder.set_output_array(out);
+  auto [grid, block] = get_grid_and_block(num_keys, 1, 1);
+  encoder.add_kernel_node(
+      cu::radvance,
+      grid,
+      block,
+      gpu_ptr<uint32_t>(keys),
+      gpu_ptr<uint32_t>(out),
+      steps_,
+      static_cast<uint32_t>(num_keys),
+      keys.ndim(),
+      const_param(keys.shape()),
+      const_param(keys.strides()));
 }
 
 } // namespace mlx::core

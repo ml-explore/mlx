@@ -1736,6 +1736,26 @@ class RandomBits : public UnaryPrimitive {
   int width_;
 };
 
+class RandomAdvance : public UnaryPrimitive {
+ public:
+  explicit RandomAdvance(Stream stream, size_t steps)
+      : UnaryPrimitive(stream), steps_(steps) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_NAME(RandomAdvance)
+  bool is_equivalent(const Primitive& other) const override;
+  DEFINE_INPUT_OUTPUT_SHAPE()
+  size_t state() const {
+    return steps_;
+  }
+
+ private:
+  size_t steps_;
+};
+
 class Real : public UnaryPrimitive {
  public:
   explicit Real(Stream stream) : UnaryPrimitive(stream) {}

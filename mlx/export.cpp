@@ -400,6 +400,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(QuantizedMatmul),
       SERIALIZE_PRIMITIVE(GatherQMM),
       SERIALIZE_PRIMITIVE(RandomBits),
+      SERIALIZE_PRIMITIVE(RandomAdvance),
       SERIALIZE_PRIMITIVE(Real),
       SERIALIZE_PRIMITIVE(Remainder),
       SERIALIZE_PRIMITIVE(Reshape),

@@ -15,6 +15,7 @@
 #include "mlx/memory.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/random.h"
 #include "mlx/scheduler.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
@@ -42,6 +43,71 @@ array make_tracer(const array& p) {
   auto out = copy(source, s);
   out.set_tracer(true);
   return out;
+}
+
+template <typename T>
+bool is_primitive_type(const array& a) {
+  if (!a.has_primitive()) {
+    return false;
+  }
+  auto& primitive = a.primitive();
+  return typeid(primitive) == typeid(T);
+}
+
+// Compress only random-state runs whose intermediate sample-key branch is
+// absent from the current eval roots. Candidate discovery is folded into
+// eval's existing degree walk; only a graph that is actually rewritten needs
+// a second degree walk.
+bool compress_discarded_random_state_chains(
+    std::vector<array>& random_sample_targets,
+    const std::unordered_set<uintptr_t>& reachable_sample_keys,
+    const std::unordered_set<uintptr_t>& roots) {
+  static constexpr size_t kMinAdvanceSteps = 16;
+  bool rewritten = false;
+  for (auto& node : random_sample_targets) {
+    if (node.inputs().size() != 1 || !is_primitive_type<RandomBits>(node)) {
+      continue;
+    }
+
+    auto state = node.inputs()[0];
+    auto base = state;
+    size_t steps = 0;
+    while (state.inputs().size() == 1 &&
+           roots.find(state.id()) == roots.end() &&
+           is_primitive_type<Reshape>(state)) {
+      auto split_state = state.inputs()[0];
+      if (split_state.inputs().size() != 1 ||
+          !is_primitive_type<Split>(split_state) ||
+          split_state.sibling_position() != 0) {
+        break;
+      }
+
+      auto split_outputs = split_state.outputs();
+      if (split_outputs.size() != 2 ||
+          reachable_sample_keys.find(split_outputs[1].id()) !=
+              reachable_sample_keys.end()) {
+        break;
+      }
+
+      auto random_bits = split_state.inputs()[0];
+      if (random_bits.inputs().size() != 1 ||
+          !is_primitive_type<RandomBits>(random_bits) ||
+          random_bits.dtype() != uint32 || random_bits.shape() != Shape{2, 2}) {
+        break;
+      }
+
+      base = random_bits.inputs()[0];
+      state = base;
+      steps++;
+    }
+
+    if (steps >= kMinAdvanceSteps) {
+      node.inputs()[0] =
+          random::advance(base, steps, node.primitive().stream());
+      rewritten = true;
+    }
+  }
+  return rewritten;
 }
 
 } // namespace
@@ -110,76 +176,113 @@ array eval_impl(std::vector<array> outputs, bool async) {
   {
     // Record the degree of each input
     std::unordered_map<std::uintptr_t, int> cache;
+    std::unordered_set<uintptr_t> roots;
+    std::unordered_set<uintptr_t> reachable_sample_keys;
+    std::unordered_set<uintptr_t> random_sample_target_ids;
+    std::vector<array> random_sample_targets;
+    for (auto& output : synchronizer.inputs()) {
+      roots.insert(output.id());
+    }
 
-    std::stack<std::pair<std::reference_wrapper<array>, int>> dfs;
-    dfs.emplace(synchronizer, 0);
-    while (!dfs.empty()) {
-      auto& [a_ref, idx] = dfs.top();
-      auto& a = a_ref.get();
+    auto record_random_sample = [&](const array& a) {
+      if (a.sibling_position() != 1 || a.inputs().size() != 1 ||
+          !is_primitive_type<Split>(a)) {
+        return;
+      }
+      reachable_sample_keys.insert(a.id());
+      auto random_bits = a.inputs()[0];
+      if (random_bits.shape() == Shape{2, 2} && random_bits.dtype() == uint32 &&
+          is_primitive_type<RandomBits>(random_bits) &&
+          random_sample_target_ids.insert(random_bits.id()).second) {
+        random_sample_targets.push_back(std::move(random_bits));
+      }
+    };
+    for (auto& output : synchronizer.inputs()) {
+      record_random_sample(output);
+    }
 
-      if (idx < a.inputs().size()) {
-        // Add an input, and continue
-        auto& in = a.inputs()[idx++];
+    auto record_degrees = [&](bool collect_random_samples) {
+      std::stack<std::pair<std::reference_wrapper<array>, int>> dfs;
+      dfs.emplace(synchronizer, 0);
+      while (!dfs.empty()) {
+        auto& [a_ref, idx] = dfs.top();
+        auto& a = a_ref.get();
 
-        if (in.status() == array::Status::unscheduled) {
-          if (async && in.is_tracer()) {
-            throw std::invalid_argument(
-                "[async_eval] Not allowed inside a graph transformation.");
+        if (idx < a.inputs().size()) {
+          // Add an input, and continue
+          auto& in = a.inputs()[idx++];
+          if (collect_random_samples) {
+            record_random_sample(in);
           }
-          if (!in.has_primitive()) {
-            if (in.is_tracer()) {
+
+          if (in.status() == array::Status::unscheduled) {
+            if (async && in.is_tracer()) {
               throw std::invalid_argument(
-                  "[eval] Attempting to eval an array during function"
-                  " transformations like compile or vmap is not allowed.");
+                  "[async_eval] Not allowed inside a graph transformation.");
             }
-            throw std::runtime_error(
-                "[eval] Attempting to eval an array without a primitive.\n"
-                "If you are compiling a function, make sure all the inputs "
-                "and outputs are captured:\n"
-                "https://ml-explore.github.io/mlx/build/html/usage/compile.html#pure-functions.\n"
-                "If you are not using compile, this may be a bug. "
-                "Please file an issue here:\n"
-                "https://github.com/ml-explore/mlx/issues.");
-          }
-          if (a.primitive().stream() != in.primitive().stream()) {
-            bool device_switch =
-                a.primitive().stream().device != in.primitive().stream().device;
-            auto [it, inserted] = needs_fence.emplace(
-                in.id(),
-                std::make_pair(in.primitive().stream().index, device_switch));
-            if (!inserted) {
-              it->second.second |= device_switch;
+            if (!in.has_primitive()) {
+              if (in.is_tracer()) {
+                throw std::invalid_argument(
+                    "[eval] Attempting to eval an array during function"
+                    " transformations like compile or vmap is not allowed.");
+              }
+              throw std::runtime_error(
+                  "[eval] Attempting to eval an array without a primitive.\n"
+                  "If you are compiling a function, make sure all the inputs "
+                  "and outputs are captured:\n"
+                  "https://ml-explore.github.io/mlx/build/html/usage/compile.html#pure-functions.\n"
+                  "If you are not using compile, this may be a bug. "
+                  "Please file an issue here:\n"
+                  "https://github.com/ml-explore/mlx/issues.");
+            }
+            if (a.primitive().stream() != in.primitive().stream()) {
+              bool device_switch = a.primitive().stream().device !=
+                  in.primitive().stream().device;
+              auto [it, inserted] = needs_fence.emplace(
+                  in.id(),
+                  std::make_pair(in.primitive().stream().index, device_switch));
+              if (!inserted) {
+                it->second.second |= device_switch;
+              }
             }
           }
-        }
 
-        // All siblings have the same degree
-        auto cache_it = cache.find(in.id());
-        if (cache_it == cache.end()) {
-          dfs.emplace(in, 0);
-          cache.insert({in.id(), 1});
-          for (auto& s : in.siblings()) {
-            cache.insert({s.id(), 1});
+          // All siblings have the same degree
+          auto cache_it = cache.find(in.id());
+          if (cache_it == cache.end()) {
+            dfs.emplace(in, 0);
+            cache.insert({in.id(), 1});
+            for (auto& s : in.siblings()) {
+              cache.insert({s.id(), 1});
+            }
+          } else {
+            cache_it->second++;
+            for (auto& s : in.siblings()) {
+              cache[s.id()]++;
+            }
           }
-        } else {
-          cache_it->second++;
-          for (auto& s : in.siblings()) {
-            cache[s.id()]++;
-          }
+          continue;
         }
-        continue;
+        if ((a.status() != array::Status::unscheduled) && !a.is_tracer() &&
+            a.has_primitive()) {
+          // If the array is evaluated and is no longer a tracer, detach it
+          a.detach();
+        }
+        dfs.pop();
       }
-      if ((a.status() != array::Status::unscheduled) && !a.is_tracer() &&
-          a.has_primitive()) {
-        // If the array is evaluated and is no longer a tracer, detach it
-        a.detach();
-      }
-      dfs.pop();
+    };
+
+    record_degrees(true);
+    if (compress_discarded_random_state_chains(
+            random_sample_targets, reachable_sample_keys, roots)) {
+      cache.clear();
+      needs_fence.clear();
+      record_degrees(false);
     }
 
     // Build the tape in BFS order with a width limit
     int max_width = env::bfs_max_width();
-    dfs = std::stack<std::pair<std::reference_wrapper<array>, int>>();
+    std::stack<std::pair<std::reference_wrapper<array>, int>> dfs;
     tape.push_back(synchronizer);
     for (int i = 0; !cache.empty() && (i < tape.size() || !dfs.empty());) {
       auto& a = (i >= tape.size()) ? dfs.top().first.get() : tape[i];

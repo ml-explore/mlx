@@ -332,6 +332,42 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
+void RandomAdvance::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  auto& keys = inputs[0];
+  size_t num_keys = keys.size() / 2;
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  auto in_ptr = keys.data<uint32_t>();
+  auto out_ptr = out.data<uint32_t>();
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_input_array(keys);
+  encoder.set_output_array(out);
+  encoder.dispatch([in_ptr,
+                    out_ptr,
+                    num_keys,
+                    steps = steps_,
+                    shape = keys.shape(),
+                    strides = keys.strides()]() {
+    for (size_t i = 0; i < num_keys; ++i) {
+      auto kidx = 2 * i;
+      auto key = std::make_pair(
+          in_ptr[elem_to_loc(kidx, shape, strides)],
+          in_ptr[elem_to_loc(kidx + 1, shape, strides)]);
+      for (size_t step = 0; step < steps; ++step) {
+        auto left = random::threefry2x32_hash(key, {0, 2});
+        auto right = random::threefry2x32_hash(key, {1, 3});
+        key = {left.first, right.first};
+      }
+      out_ptr[kidx] = key.first;
+      out_ptr[kidx + 1] = key.second;
+    }
+  });
+}
+
 void Reshape::eval_cpu(const std::vector<array>& inputs, array& out) {
   reshape(inputs[0], out);
 }

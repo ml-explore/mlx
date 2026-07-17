@@ -121,6 +121,14 @@ void init_random(nb::module_& parent_module) {
             array: The array of sub keys with ``num`` as its first dimension.
       )pbdoc");
   m.def(
+      "_advance",
+      &mx::random::advance,
+      "key"_a,
+      "steps"_a,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def _advance(key: array, steps: int, stream: Union[None, Stream, Device] = None) -> array"));
+  m.def(
       "uniform",
       [](const ScalarOrArray& low,
          const ScalarOrArray& high,
