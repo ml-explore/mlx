@@ -682,6 +682,46 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                         tolerance = {"rtol": 1e-2, "atol": 1e-2}
                     self.assertTrue(mx.allclose(ref, out, **tolerance))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel required")
+    def test_sdpa_vmap_uses_fused_kernel(self):
+        """Verify vmap'd SDPA dispatches the fused Metal kernel, not the
+        decomposed fallback.  The fused kernel and the fallback use different
+        accumulation orders, producing distinguishable float16 results for
+        large enough shapes.  We check that vmap output matches the
+        non-vmapped (fused) output exactly."""
+        D = 64
+        L = 128  # L > 8 → sdpa_full kernel path
+        scale = 1.0 / math.sqrt(D)
+        B = 4
+
+        for n_q, n_kv in [(32, 32), (32, 8), (16, 4)]:
+            with self.subTest(n_q_heads=n_q, n_kv_heads=n_kv):
+                mx.random.seed(42)
+                q = mx.random.normal((B, n_q, L, D), dtype=mx.float16)
+                k = mx.random.normal((B, n_kv, L, D), dtype=mx.float16)
+                v = mx.random.normal((B, n_kv, L, D), dtype=mx.float16)
+                mx.eval(q, k, v)
+
+                # Non-vmapped SDPA — uses fused Metal kernel
+                kernel_out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+
+                # Vmapped SDPA — should also use fused kernel
+                def f(qi, ki, vi):
+                    return mx.fast.scaled_dot_product_attention(
+                        qi[None], ki[None], vi[None], scale=scale
+                    )[0]
+
+                vmap_out = mx.vmap(f)(q, k, v)
+                mx.eval(kernel_out, vmap_out)
+
+                # Fused kernel output must match exactly (same kernel, same
+                # accumulation).  If vmap fell back to the decomposed path,
+                # float16 rounding differences would cause a mismatch.
+                self.assertTrue(
+                    mx.array_equal(kernel_out, vmap_out),
+                    f"vmap path did not use fused kernel for ({n_q},{n_kv})",
+                )
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
