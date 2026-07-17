@@ -42,6 +42,16 @@
       aligned,                                                               \
       batched)
 
+#define instantiate_quantized_aligned_batched_bm(name, type, group_size, bits, aligned, batched, bm) \
+  instantiate_kernel( \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned "_batch_" #batched "_bm_" #bm, \
+      name, type, group_size, bits, aligned, batched, bm, 32, 32)
+
+#define instantiate_quantized_batched_bm(name, type, group_size, bits, batched, bm) \
+  instantiate_kernel( \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_batch_" #batched "_bm_" #bm, \
+      name, type, group_size, bits, batched, bm, 32, 32)
+
 #define instantiate_quantized_quad(name, type, group_size, bits, D, batched)     \
   instantiate_kernel(                                                            \
       #name "_" #type "_gs_" #group_size "_b_" #bits "_d_" #D "_batch_" #batched, \
@@ -94,7 +104,9 @@
   instantiate_quantized_batched_wrap(affine_qmv_fast, type, group_size, bits)     \
   instantiate_quantized_batched_wrap(affine_qmv, type, group_size, bits)     \
   instantiate_quantized_batched_wrap(affine_qvm, type, group_size, bits)     \
-  instantiate_quantized_batched_wrap(affine_qmm_n, type, group_size, bits)
+  instantiate_quantized_batched_wrap(affine_qmm_n, type, group_size, bits) \
+  instantiate_quantized_batched_bm(affine_qmm_n, type, group_size, bits, 1, 16) \
+  instantiate_quantized_batched_bm(affine_qmm_n, type, group_size, bits, 0, 16)
 
 #define instantiate_quantized_all_single(type, group_size, bits) \
   instantiate_quantized(affine_quantize, type, group_size, bits) \
@@ -110,7 +122,11 @@
   instantiate_quantized_aligned_batched(affine_qmm_t, type, group_size, bits, true, 1) \
   instantiate_quantized_aligned_batched(affine_qmm_t, type, group_size, bits, true, 0) \
   instantiate_quantized_aligned_batched(affine_qmm_t, type, group_size, bits, false, 1) \
-  instantiate_quantized_aligned_batched(affine_qmm_t, type, group_size, bits, false, 0)
+  instantiate_quantized_aligned_batched(affine_qmm_t, type, group_size, bits, false, 0) \
+  instantiate_quantized_aligned_batched_bm(affine_qmm_t, type, group_size, bits, true, 1, 16) \
+  instantiate_quantized_aligned_batched_bm(affine_qmm_t, type, group_size, bits, true, 0, 16) \
+  instantiate_quantized_aligned_batched_bm(affine_qmm_t, type, group_size, bits, false, 1, 16) \
+  instantiate_quantized_aligned_batched_bm(affine_qmm_t, type, group_size, bits, false, 0, 16)
 
 #define instantiate_quantized_all_quad(type, group_size, bits)   \
   instantiate_quantized_quad(affine_qmv_quad, type, group_size, bits, 64, 1)   \
