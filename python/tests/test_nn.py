@@ -242,6 +242,106 @@ class TestBase(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError) as context:
             nn.quantize(m, group_size=32, mode="mxfp8", quantize_input=True)
 
+        # A broad predicate that incidentally matches a module without
+        # to_quantized (a norm, an activation, ...) should skip that module
+        # rather than abort the whole call.
+        class NotQuantizable(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.weight = mx.zeros((8, 64))
+
+        class Block(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.proj = nn.Linear(64, 64)
+                self.gate = NotQuantizable()
+
+        m = Block()
+        nn.quantize(m, group_size=64, bits=4, class_predicate=lambda p, m: True)
+        self.assertTrue(isinstance(m.proj, nn.QuantizedLinear))
+        self.assertTrue(isinstance(m.gate, NotQuantizable))
+        self.assertFalse(isinstance(m.gate, nn.QuantizedLinear))
+
+        # Same when the predicate returns a params dict instead of True.
+        m = Block()
+        nn.quantize(
+            m,
+            class_predicate=lambda p, mod: {"group_size": 64, "bits": 4},
+        )
+        self.assertTrue(isinstance(m.proj, nn.QuantizedLinear))
+        self.assertTrue(isinstance(m.gate, NotQuantizable))
+
+        # A predicate that also selects a quantizable module is fine: the
+        # quantizable one is converted and the rest are skipped, no raise.
+        m = Block()
+        nn.quantize(
+            m,
+            group_size=64,
+            bits=4,
+            class_predicate=lambda p, mod: isinstance(mod, (nn.Linear, NotQuantizable)),
+        )
+        self.assertTrue(isinstance(m.proj, nn.QuantizedLinear))
+        self.assertTrue(isinstance(m.gate, NotQuantizable))
+
+        # A predicate that selects *only* modules without to_quantized asked
+        # for something impossible, so it should raise rather than silently
+        # return an unchanged model. The error names the offending type.
+        m = Block()
+        with self.assertRaises(ValueError) as context:
+            nn.quantize(
+                m, class_predicate=lambda p, mod: isinstance(mod, NotQuantizable)
+            )
+        self.assertIn("NotQuantizable", str(context.exception))
+        # The model must be left unchanged on that error path.
+        self.assertTrue(isinstance(m.proj, nn.Linear))
+        self.assertFalse(isinstance(m.proj, nn.QuantizedLinear))
+        self.assertTrue(isinstance(m.gate, NotQuantizable))
+
+        # A predicate returning neither a bool nor a dict is an error.
+        m = Block()
+        with self.assertRaises(ValueError):
+            nn.quantize(m, class_predicate=lambda p, mod: 3.5)
+
+        # A predicate that selects nothing at all is a no-op, not an error.
+        m = Block()
+        nn.quantize(m, group_size=64, bits=4, class_predicate=lambda p, mod: False)
+        self.assertTrue(isinstance(m.proj, nn.Linear))
+        self.assertTrue(isinstance(m.gate, NotQuantizable))
+
+        # A predicate returning a shared params dict must not have that dict
+        # mutated as it is applied across modules.
+        shared = {"group_size": 64, "bits": 4, "quantize_input": False}
+        m = nn.Sequential(nn.Linear(64, 64), nn.Linear(64, 64))
+        nn.quantize(m, class_predicate=lambda p, mod: shared)
+        self.assertTrue(isinstance(m.layers[0], nn.QuantizedLinear))
+        self.assertTrue(isinstance(m.layers[1], nn.QuantizedLinear))
+        self.assertEqual(shared, {"group_size": 64, "bits": 4, "quantize_input": False})
+
+        # quantize_input passed through a params dict is honored.
+        m = nn.Sequential(nn.Linear(64, 64, bias=False))
+        nn.quantize(
+            m,
+            class_predicate=lambda p, mod: {
+                "group_size": 32,
+                "mode": "mxfp8",
+                "quantize_input": True,
+            },
+        )
+        self.assertTrue(isinstance(m.layers[0], nn.QQLinear))
+
+        # The default predicate stays lenient: a model whose leaves cannot be
+        # quantized is returned unchanged rather than raising.
+        class NoQuantizableLeaves(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.a = NotQuantizable()
+                self.b = NotQuantizable()
+
+        m = NoQuantizableLeaves()
+        nn.quantize(m, group_size=64, bits=4)
+        self.assertTrue(isinstance(m.a, NotQuantizable))
+        self.assertTrue(isinstance(m.b, NotQuantizable))
+
     def test_quantize_freeze(self):
         lin = nn.Linear(512, 512)
         qlin = lin.to_quantized()

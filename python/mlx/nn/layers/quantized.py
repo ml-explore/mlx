@@ -50,8 +50,13 @@ def quantize(
         class_predicate (Optional[Callable]): A callable which receives the
            :obj:`Module` path and :obj:`Module` itself and returns ``True`` or a
            dict of params for ``to_quantized`` if it should be quantized and
-           ``False`` otherwise. If ``None``, then all layers that define a
-           ``to_quantized()`` method are quantized. Default: ``None``.
+           ``False`` otherwise. A module selected by the predicate but without a
+           ``to_quantized()`` method (for example a normalization or activation
+           layer) is skipped rather than quantized, so a broad predicate can be
+           applied to a whole model. If the predicate selects *only* such
+           modules and nothing is quantized, a :obj:`ValueError` is raised, since
+           that request cannot be satisfied. If ``None``, then all layers that
+           define a ``to_quantized()`` method are quantized. Default: ``None``.
 
     Example:
         Weight only quantization for all layers that define a ``to_quantized()`` method:
@@ -64,34 +69,55 @@ def quantize(
         >>> predicate = lambda p, m: isinstance(m, nn.Linear)
         >>> nn.quantize(model, mode="nvfp4", quantize_input=True, class_predicate=predicate)
     """
+    # The default predicate only selects quantizable leaves, so it never trips
+    # the "selected only unquantizable modules" diagnostic below.
     class_predicate = class_predicate or (lambda _, m: hasattr(m, "to_quantized"))
 
+    # A broad predicate (e.g. ``lambda p, m: True``) may match leaves that have
+    # no ``to_quantized()`` method, such as norms or activations. Those are
+    # skipped so the predicate can be applied to a whole model. We still want to
+    # flag a predicate that selects *only* such modules, so track whether
+    # anything was quantized and which unquantizable types were selected.
+    quantized_any = False
+    unquantizable_selected = set()
+
     def _maybe_quantize(path, m):
-        if bool_or_params := class_predicate(path, m):
-            if hasattr(m, "to_quantized"):
-                if isinstance(bool_or_params, bool):
-                    kwargs = {"group_size": group_size, "bits": bits, "mode": mode}
-                    if quantize_input:
-                        kwargs["quantize_input"] = quantize_input
-                    return m.to_quantized(**kwargs)
-                elif isinstance(bool_or_params, dict):
-                    if ("quantize_input" in bool_or_params) and not bool_or_params[
-                        "quantize_input"
-                    ]:
-                        bool_or_params.pop("quantize_input")
-                    return m.to_quantized(**bool_or_params)
-                else:
-                    raise ValueError(
-                        "``class_predicate`` must return a bool"
-                        " or a dict of parameters to pass to ``to_quantized``"
-                    )
-            else:
-                raise ValueError(f"Unable to quantize model of type {type(m)}")
-        else:
+        nonlocal quantized_any
+        bool_or_params = class_predicate(path, m)
+        if not bool_or_params:
             return m
+        if not hasattr(m, "to_quantized"):
+            unquantizable_selected.add(type(m).__name__)
+            return m
+
+        if isinstance(bool_or_params, bool):
+            kwargs = {"group_size": group_size, "bits": bits, "mode": mode}
+            if quantize_input:
+                kwargs["quantize_input"] = quantize_input
+        elif isinstance(bool_or_params, dict):
+            # Copy so a predicate returning a shared dict is not mutated.
+            kwargs = dict(bool_or_params)
+            if not kwargs.get("quantize_input", True):
+                kwargs.pop("quantize_input")
+        else:
+            raise ValueError(
+                "``class_predicate`` must return a bool"
+                " or a dict of parameters to pass to ``to_quantized``"
+            )
+
+        quantized_any = True
+        return m.to_quantized(**kwargs)
 
     leaves = model.leaf_modules()
     leaves = tree_map_with_path(_maybe_quantize, leaves, is_leaf=Module.is_module)
+
+    if unquantizable_selected and not quantized_any:
+        types = ", ".join(sorted(unquantizable_selected))
+        raise ValueError(
+            f"``class_predicate`` selected only modules without a "
+            f"``to_quantized()`` method ({types}); nothing could be quantized."
+        )
+
     model.update_modules(leaves)
 
 
