@@ -332,6 +332,62 @@ void RandomBits::eval_cpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
+void CategoricalSearch::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto s = stream();
+  auto& encoder = cpu::get_command_encoder(s);
+  auto ensure_contiguous = [&s, &encoder](const array& x) {
+    if (x.flags().row_contiguous) {
+      return x;
+    }
+    auto x_copy = contiguous_copy_cpu(x, s);
+    encoder.add_temporary(x_copy);
+    return x_copy;
+  };
+  auto cdf = ensure_contiguous(inputs[0]);
+  auto random_bits = ensure_contiguous(inputs[1]);
+  const size_t num_categories = cdf.shape(-1);
+  const size_t num_samples = random_bits.shape(-1);
+  const size_t num_rows = cdf.size() / num_categories;
+
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  const auto* cdf_ptr = cdf.data<uint64_t>();
+  const auto* bits_ptr = random_bits.data<uint32_t>();
+  auto* out_ptr = out.data<uint32_t>();
+  encoder.set_input_array(cdf);
+  encoder.set_input_array(random_bits);
+  encoder.set_output_array(out);
+  encoder.dispatch([=]() {
+    for (size_t row = 0; row < num_rows; ++row) {
+      const auto* row_cdf = cdf_ptr + row * num_categories;
+      const auto total = row_cdf[num_categories - 1];
+      const auto total_high = total >> 32;
+      const auto total_low = total & 0xffffffffULL;
+      for (size_t sample = 0; sample < num_samples; ++sample) {
+        const uint64_t random_word = bits_ptr[row * num_samples + sample];
+        uint64_t target = random_word * total_high;
+        target += (random_word * total_low) >> 32;
+        size_t low = 0;
+        size_t high = num_categories;
+        while (low < high) {
+          const size_t middle = low + (high - low) / 2;
+          if (target < row_cdf[middle]) {
+            high = middle;
+          } else {
+            low = middle + 1;
+          }
+        }
+        out_ptr[row * num_samples + sample] =
+            static_cast<uint32_t>(std::min(low, num_categories - 1));
+      }
+    }
+  });
+}
+
 void Reshape::eval_cpu(const std::vector<array>& inputs, array& out) {
   reshape(inputs[0], out);
 }

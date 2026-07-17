@@ -237,6 +237,25 @@ MLX_API array categorical(
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {});
 
+/** Search a canonical uint64 CDF using one uint32 word per sample.
+ *
+ * The CDF and random bits must have matching batch dimensions and shapes
+ * (..., N) and (..., M) respectively. The output has shape (..., M) and
+ * dtype uint32.
+ */
+MLX_API array categorical_search(
+    const array& cdf,
+    const array& random_bits,
+    StreamOrDevice s = {});
+
+/** Fixed-point inverse-CDF categorical candidate for the num_samples API. */
+MLX_API array categorical_fixed(
+    const array& logits,
+    int axis,
+    int num_samples,
+    const std::optional<array>& key = std::nullopt,
+    StreamOrDevice s = {});
+
 /** Generate samples from the laplace distribution. */
 MLX_API array laplace(
     const Shape& shape,

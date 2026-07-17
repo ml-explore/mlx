@@ -101,3 +101,32 @@ rbits threefry2x32_hash(const thread uint2& key, uint2 count) {
     }
   }
 }
+
+[[kernel]] void categorical_search(
+    device const ulong* cdf,
+    device const uint* random_bits,
+    device uint* out,
+    constant const ulong& num_categories,
+    constant const ulong& num_samples,
+    uint index [[thread_position_in_grid]]) {
+  ulong row = index / num_samples;
+  ulong row_offset = row * num_categories;
+  ulong total = cdf[row_offset + num_categories - 1];
+  ulong random_value = random_bits[index];
+  ulong total_high = total >> 32;
+  ulong total_low = total & 0xfffffffful;
+  ulong target = random_value * total_high;
+  target += (random_value * total_low) >> 32;
+
+  ulong low = 0;
+  ulong high = num_categories;
+  while (low < high) {
+    ulong middle = low + (high - low) / 2;
+    if (target < cdf[row_offset + middle]) {
+      high = middle;
+    } else {
+      low = middle + 1;
+    }
+  }
+  out[index] = min(low, num_categories - 1);
+}

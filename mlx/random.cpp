@@ -1,8 +1,10 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <cmath>
+#include <limits>
 #include <sstream>
 
+#include "mlx/backend/metal/metal.h"
 #include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -422,11 +424,23 @@ array categorical(
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
   axis = get_valid_axis(axis, logits_.ndim());
+  auto stream = to_stream(s);
+  auto num_categories = logits_.shape(axis);
+  if (stream.device == Device::gpu && metal::is_available() &&
+      num_categories > 0 && num_samples > 0) {
+    constexpr uint64_t inverse_cdf_threshold = 1 << 19;
+    auto batch_size = logits_.size() / num_categories;
+    long double gumbel_elements =
+        static_cast<long double>(batch_size) * num_categories * num_samples;
+    if (gumbel_elements >= inverse_cdf_threshold) {
+      return categorical_fixed(logits_, axis, num_samples, key, stream);
+    }
+  }
   auto logits = expand_dims(logits_, -1);
   auto shape = logits.shape();
   shape.erase(shape.begin() + axis);
   shape.back() = num_samples;
-  return categorical_impl(logits, axis, shape, key, s);
+  return categorical_impl(logits, axis, shape, key, stream);
 }
 
 array categorical(
@@ -438,6 +452,118 @@ array categorical(
   auto shape = logits.shape();
   shape.erase(shape.begin() + axis);
   return categorical_impl(logits, axis, shape, key, s);
+}
+
+array categorical_search(
+    const array& cdf,
+    const array& random_bits,
+    StreamOrDevice s /* = {} */) {
+  if (cdf.dtype() != uint64) {
+    throw std::invalid_argument("[categorical_search] Expected uint64 CDF.");
+  }
+  if (random_bits.dtype() != uint32) {
+    throw std::invalid_argument(
+        "[categorical_search] Expected uint32 random bits.");
+  }
+  if (cdf.ndim() < 1 || random_bits.ndim() < 1) {
+    throw std::invalid_argument(
+        "[categorical_search] Inputs must have at least one dimension.");
+  }
+  if (cdf.ndim() != random_bits.ndim()) {
+    throw std::invalid_argument(
+        "[categorical_search] Inputs must have the same rank.");
+  }
+  if (cdf.shape(-1) == 0 || random_bits.shape(-1) == 0) {
+    throw std::invalid_argument(
+        "[categorical_search] Category and sample dimensions must be nonzero.");
+  }
+  if (cdf.shape(-1) > std::numeric_limits<uint32_t>::max()) {
+    throw std::invalid_argument(
+        "[categorical_search] Category dimension exceeds uint32 output range.");
+  }
+  for (int i = 0; i < cdf.ndim() - 1; ++i) {
+    if (cdf.shape(i) != random_bits.shape(i)) {
+      throw std::invalid_argument(
+          "[categorical_search] Batch dimensions must match.");
+    }
+  }
+
+  auto stream = to_stream(s);
+  return array(
+      random_bits.shape(),
+      uint32,
+      std::make_shared<CategoricalSearch>(stream),
+      {cdf, random_bits});
+}
+
+array categorical_fixed(
+    const array& logits,
+    int axis,
+    int num_samples,
+    const std::optional<array>& key /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  axis = get_valid_axis(axis, logits.ndim());
+  if (logits.shape(axis) == 0) {
+    throw std::invalid_argument(
+        "[categorical] Category dimension must be nonzero.");
+  }
+  if (num_samples <= 0) {
+    throw std::invalid_argument("[categorical] num_samples must be positive.");
+  }
+
+  auto stream = to_stream(s);
+  auto canonical_logits = moveaxis(logits, axis, -1, stream);
+  canonical_logits = astype(canonical_logits, float32, stream);
+
+  // Match the current Gumbel-max behavior without allowing NaN or infinity to
+  // reach the fixed-point cast. Positive infinity wins deterministically at
+  // its first occurrence. NaNs act as masked values when a finite category is
+  // present. Rows containing only NaN/-inf select category zero, as does the
+  // current argmax-based implementation.
+  auto positive_infinity = isposinf(canonical_logits, stream);
+  auto has_positive_infinity = any(positive_infinity, -1, true, stream);
+  auto has_finite = any(isfinite(canonical_logits, stream), -1, true, stream);
+  auto all_masked = logical_and(
+      logical_not(has_positive_infinity, stream),
+      logical_not(has_finite, stream),
+      stream);
+  auto special_row = logical_or(has_positive_infinity, all_masked, stream);
+
+  auto finite_logits = where(
+      isnan(canonical_logits, stream),
+      array(-std::numeric_limits<float>::infinity(), float32),
+      canonical_logits,
+      stream);
+  auto safe_logits = where(
+      special_row, zeros_like(canonical_logits, stream), finite_logits, stream);
+  auto probabilities = softmax(safe_logits, -1, false, stream);
+
+  auto positive_rank = cumsum(
+      astype(positive_infinity, uint32, stream), -1, false, true, stream);
+  auto first_positive_infinity = logical_and(
+      positive_infinity,
+      equal(positive_rank, array(1, uint32), stream),
+      stream);
+  auto first_category = equal(
+      arange(canonical_logits.shape(-1), stream), array(0, int32), stream);
+  auto special_probabilities = where(
+      has_positive_infinity, first_positive_infinity, first_category, stream);
+  probabilities = where(
+      special_row,
+      astype(special_probabilities, float32, stream),
+      probabilities,
+      stream);
+  constexpr float scale = 4503599627370496.0f;
+  auto weights = astype(
+      round(multiply(probabilities, array(scale, float32), stream), stream),
+      uint64,
+      stream);
+  auto cdf = cumsum(weights, -1, false, true, stream);
+
+  auto output_shape = canonical_logits.shape();
+  output_shape.back() = num_samples;
+  auto random_words = bits(output_shape, 4, key, stream);
+  return categorical_search(cdf, random_words, stream);
 }
 
 array laplace(

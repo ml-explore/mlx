@@ -15,6 +15,7 @@
 #include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/random.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -3864,6 +3865,46 @@ std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
       std::make_shared<RandomBits>(stream(), shape, width_),
       {key});
   return {{out}, {kax}};
+}
+
+std::pair<std::vector<array>, std::vector<int>> CategoricalSearch::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 2);
+  assert(axes.size() == 2);
+
+  auto cdf = inputs[0];
+  auto random_bits = inputs[1];
+  int out_axis = -1;
+  if (axes[0] >= 0 && axes[1] >= 0) {
+    if (axes[0] == cdf.ndim() - 1 || axes[1] == random_bits.ndim() - 1) {
+      throw std::invalid_argument(
+          "[categorical_search] Cannot vmap category or sample dimensions.");
+    }
+    random_bits = moveaxis(random_bits, axes[1], axes[0], stream());
+    out_axis = axes[0];
+  } else if (axes[0] >= 0) {
+    if (axes[0] == cdf.ndim() - 1) {
+      throw std::invalid_argument(
+          "[categorical_search] Cannot vmap the category dimension.");
+    }
+    random_bits = expand_dims(random_bits, axes[0], stream());
+    auto shape = random_bits.shape();
+    shape[axes[0]] = cdf.shape(axes[0]);
+    random_bits = broadcast_to(random_bits, shape, stream());
+    out_axis = axes[0];
+  } else if (axes[1] >= 0) {
+    if (axes[1] == random_bits.ndim() - 1) {
+      throw std::invalid_argument(
+          "[categorical_search] Cannot vmap the sample dimension.");
+    }
+    cdf = expand_dims(cdf, axes[1], stream());
+    auto shape = cdf.shape();
+    shape[axes[1]] = random_bits.shape(axes[1]);
+    cdf = broadcast_to(cdf, shape, stream());
+    out_axis = axes[1];
+  }
+  return {{random::categorical_search(cdf, random_bits, stream())}, {out_axis}};
 }
 
 bool RandomBits::is_equivalent(const Primitive& other) const {

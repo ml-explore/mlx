@@ -131,6 +131,25 @@ class TestExportImport(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             imported(mx.array(1.0), [mx.array(1.0)])
 
+    def test_categorical_search_export_import(self):
+        path = os.path.join(self.test_dir, "categorical_search.mlxfn")
+        cdf = mx.array([[5, 20, 100]], dtype=mx.uint64)
+        random_bits = mx.array(
+            [[0, 1 << 31, (1 << 32) - 1]], dtype=mx.uint32
+        )
+
+        def search(cdf, random_bits):
+            return mx.random._categorical_search(
+                cdf, random_bits, stream=mx.gpu
+            )
+
+        expected = search(cdf, random_bits)
+        mx.export_function(path, search, cdf, random_bits)
+        imported = mx.import_function(path)
+        (actual,) = imported(cdf, random_bits)
+        mx.eval(expected, actual)
+        self.assertTrue(mx.array_equal(actual, expected))
+
     def test_export_random_sample(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
 

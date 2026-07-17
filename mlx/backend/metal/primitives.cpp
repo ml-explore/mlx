@@ -200,6 +200,42 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
+void CategoricalSearch::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+  auto& compute_encoder = metal::get_command_encoder(s);
+  auto ensure_contiguous = [&s, &compute_encoder](const array& x) {
+    if (x.flags().row_contiguous) {
+      return x;
+    }
+    auto x_copy = contiguous_copy_gpu(x, s);
+    compute_encoder.add_temporary(x_copy);
+    return x_copy;
+  };
+  auto cdf = ensure_contiguous(inputs[0]);
+  auto random_bits = ensure_contiguous(inputs[1]);
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  const uint64_t num_categories = cdf.shape(-1);
+  const uint64_t num_samples = random_bits.shape(-1);
+  auto kernel = d.get_kernel("categorical_search");
+  const size_t nthreads = out.size();
+  MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
+  MTL::Size group_dims = MTL::Size(
+      std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(cdf, 0);
+  compute_encoder.set_input_array(random_bits, 1);
+  compute_encoder.set_output_array(out, 2);
+  compute_encoder.set_bytes(num_categories, 3);
+  compute_encoder.set_bytes(num_samples, 4);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
 void QRF::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
