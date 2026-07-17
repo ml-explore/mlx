@@ -173,6 +173,11 @@ if(NOT MLX_METAL_JIT)
                  ${STEEL_NAX_ATTN_HEADERS})
 
   else()
+    message(
+      WARNING "NAX kernels require Metal 4, macOS SDK >= 26.2, and "
+              "MACOSX_DEPLOYMENT_TARGET >= 26.2 (SDK ${MACOS_SDK_VERSION}, "
+              "CMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}). "
+              "Building without NAX kernels.")
     target_compile_definitions(mlx PRIVATE MLX_METAL_NO_NAX)
   endif()
 
