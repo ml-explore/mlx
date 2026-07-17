@@ -10,6 +10,7 @@
 #define MTL_PRIVATE_IMPLEMENTATION
 
 #include "mlx/backend/common/utils.h"
+#include "mlx/backend/metal/allocator.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/event.h"
 #include "mlx/backend/metal/metal.h"
@@ -445,6 +446,18 @@ void CommandEncoder::end_encoding() {
     all_inputs_.erase(t.buffer().ptr());
   }
 
+  // Let the allocator know these buffers are in use until this command buffer
+  // finishes, so it won't reuse them out from under a running kernel. The
+  // completion handler below retires them. Temporaries are already held alive
+  // as arrays there, so we leave them out.
+  std::vector<const void*> in_flight_bufs;
+  in_flight_bufs.reserve(all_inputs_.size() + all_outputs_.size());
+  in_flight_bufs.insert(
+      in_flight_bufs.end(), all_inputs_.begin(), all_inputs_.end());
+  in_flight_bufs.insert(
+      in_flight_bufs.end(), all_outputs_.begin(), all_outputs_.end());
+  metal::allocator().mark_in_flight(in_flight_bufs);
+
   // Keep references to the fences we waited on and put them in the completion
   // handler so they are not prematurely released.
   std::unordered_set<NS::SharedPtr<MTL::Fence>> waiting_on;
@@ -469,8 +482,10 @@ void CommandEncoder::end_encoding() {
                                 fence = std::move(fence_),
                                 temporaries = std::move(temporaries_),
                                 all_outputs = std::move(all_outputs_),
+                                in_flight_bufs = std::move(in_flight_bufs),
                                 waiting_on = std::move(waiting_on)](
                                    MTL::CommandBuffer*) mutable {
+    metal::allocator().retire_in_flight(in_flight_bufs);
     std::lock_guard lk(outputs_mtx_);
     for (auto& o : all_outputs) {
       if (auto it = prev_ce_outputs_.find(o); it != prev_ce_outputs_.end()) {

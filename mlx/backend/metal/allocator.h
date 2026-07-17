@@ -4,6 +4,8 @@
 
 #include <map>
 #include <mutex>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "mlx/allocator.h"
@@ -42,6 +44,15 @@ class MetalAllocator : public allocator::Allocator {
   size_t set_wired_limit(size_t limit);
   void clear_cache();
 
+  // We don't track hazards and command buffers can run concurrently across
+  // streams, so a buffer freed on the host while a kernel is still using it
+  // must not be reused yet -- otherwise a later allocation lands on the same
+  // memory mid-kernel (e.g. a bf16 write showing up in an int32 buffer). Mark a
+  // command buffer's buffers when its encoding ends, and retire them from its
+  // completion handler so the allocator knows when they're safe to reuse.
+  void mark_in_flight(const std::vector<const void*>& buffers);
+  void retire_in_flight(const std::vector<const void*>& buffers);
+
  private:
   MTL::Device* device_;
 
@@ -71,6 +82,11 @@ class MetalAllocator : public allocator::Allocator {
   size_t wired_limit_{0};
   size_t num_resources_{0};
   size_t resource_limit_{0};
+
+  // How many in-flight command buffers still reference each buffer, and the
+  // buffers that were freed while in flight and are waiting to be recycled.
+  std::unordered_map<MTL::Buffer*, int> in_flight_;
+  std::unordered_set<MTL::Buffer*> deferred_recycle_;
 
   std::mutex mutex_;
 };
