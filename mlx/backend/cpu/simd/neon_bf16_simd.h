@@ -72,9 +72,9 @@ struct Simd<bfloat16_t, BF16_N> {
   uint16x8_t value;
 };
 
-#define DEFINE_BF16_UNARY_OP(name)                                       \
-  inline Simd<bfloat16_t, BF16_N> name(Simd<bfloat16_t, BF16_N> a) {     \
-    return Simd<bfloat16_t, BF16_N>(name(Simd<float, BF16_N>(a)));       \
+#define DEFINE_BF16_UNARY_OP(name)                                   \
+  inline Simd<bfloat16_t, BF16_N> name(Simd<bfloat16_t, BF16_N> a) { \
+    return Simd<bfloat16_t, BF16_N>(name(Simd<float, BF16_N>(a)));   \
   }
 
 DEFINE_BF16_UNARY_OP(abs)
@@ -108,19 +108,19 @@ inline Simd<bool, BF16_N> operator!(Simd<bfloat16_t, BF16_N> v) {
   return !Simd<float, BF16_N>(v);
 }
 
-#define DEFINE_BF16_BINARY_OP(name)                                          \
-  inline Simd<bfloat16_t, BF16_N> name(                                     \
-      Simd<bfloat16_t, BF16_N> a, Simd<bfloat16_t, BF16_N> b) {             \
-    return Simd<bfloat16_t, BF16_N>(                                        \
-        name(Simd<float, BF16_N>(a), Simd<float, BF16_N>(b)));              \
-  }                                                                          \
-  template <typename T>                                                      \
-  Simd<bfloat16_t, BF16_N> name(Simd<bfloat16_t, BF16_N> a, T b) {          \
-    return name(a, Simd<bfloat16_t, BF16_N>(b));                            \
-  }                                                                          \
-  template <typename T>                                                      \
-  Simd<bfloat16_t, BF16_N> name(T a, Simd<bfloat16_t, BF16_N> b) {          \
-    return name(Simd<bfloat16_t, BF16_N>(a), b);                            \
+#define DEFINE_BF16_BINARY_OP(name)                                \
+  inline Simd<bfloat16_t, BF16_N> name(                            \
+      Simd<bfloat16_t, BF16_N> a, Simd<bfloat16_t, BF16_N> b) {    \
+    return Simd<bfloat16_t, BF16_N>(                               \
+        name(Simd<float, BF16_N>(a), Simd<float, BF16_N>(b)));     \
+  }                                                                \
+  template <typename T>                                            \
+  Simd<bfloat16_t, BF16_N> name(Simd<bfloat16_t, BF16_N> a, T b) { \
+    return name(a, Simd<bfloat16_t, BF16_N>(b));                   \
+  }                                                                \
+  template <typename T>                                            \
+  Simd<bfloat16_t, BF16_N> name(T a, Simd<bfloat16_t, BF16_N> b) { \
+    return name(Simd<bfloat16_t, BF16_N>(a), b);                   \
   }
 
 DEFINE_BF16_BINARY_OP(operator+)
@@ -133,18 +133,18 @@ DEFINE_BF16_BINARY_OP(atan2)
 DEFINE_BF16_BINARY_OP(remainder)
 DEFINE_BF16_BINARY_OP(pow)
 
-#define DEFINE_BF16_COMPARISON(Op)                                           \
-  inline Simd<bool, BF16_N> operator Op(                                     \
-      Simd<bfloat16_t, BF16_N> a, Simd<bfloat16_t, BF16_N> b) {              \
-    return Simd<float, BF16_N>(a) Op Simd<float, BF16_N>(b);                 \
-  }                                                                          \
-  template <typename T>                                                      \
-  Simd<bool, BF16_N> operator Op(Simd<bfloat16_t, BF16_N> a, T b) {          \
-    return a Op Simd<bfloat16_t, BF16_N>(b);                                 \
-  }                                                                          \
-  template <typename T>                                                      \
-  Simd<bool, BF16_N> operator Op(T a, Simd<bfloat16_t, BF16_N> b) {          \
-    return Simd<bfloat16_t, BF16_N>(a) Op b;                                 \
+#define DEFINE_BF16_COMPARISON(Op)                                  \
+  inline Simd<bool, BF16_N> operator Op(                            \
+      Simd<bfloat16_t, BF16_N> a, Simd<bfloat16_t, BF16_N> b) {     \
+    return Simd<float, BF16_N>(a) Op Simd<float, BF16_N>(b);        \
+  }                                                                 \
+  template <typename T>                                             \
+  Simd<bool, BF16_N> operator Op(Simd<bfloat16_t, BF16_N> a, T b) { \
+    return a Op Simd<bfloat16_t, BF16_N>(b);                        \
+  }                                                                 \
+  template <typename T>                                             \
+  Simd<bool, BF16_N> operator Op(T a, Simd<bfloat16_t, BF16_N> b) { \
+    return Simd<bfloat16_t, BF16_N>(a) Op b;                        \
   }
 
 DEFINE_BF16_COMPARISON(==)
@@ -184,10 +184,10 @@ inline Simd<bfloat16_t, BF16_N> clamp(
 template <typename T>
 Simd<bfloat16_t, BF16_N>
 fma(Simd<bfloat16_t, BF16_N> x, Simd<bfloat16_t, BF16_N> y, T z) {
-  return Simd<bfloat16_t, BF16_N>(fma(
-      Simd<float, BF16_N>(x),
-      Simd<float, BF16_N>(y),
-      Simd<float, BF16_N>(Simd<bfloat16_t, BF16_N>(z))));
+  return Simd<bfloat16_t, BF16_N>(
+      fma(Simd<float, BF16_N>(x),
+          Simd<float, BF16_N>(y),
+          Simd<float, BF16_N>(Simd<bfloat16_t, BF16_N>(z))));
 }
 
 template <typename MaskT>

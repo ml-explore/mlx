@@ -370,8 +370,7 @@ void _qmm_t_i8(
       gsum_rows[t] = gsum + size_t(m + t) * groups_per_row;
       result_rows[t] = result + size_t(m + t) * N;
     }
-    const uint8_t* w_local =
-        (const uint8_t*)(w + size_t(n0) * words_per_row);
+    const uint8_t* w_local = (const uint8_t*)(w + size_t(n0) * words_per_row);
     const T* sc_local = scales + size_t(n0) * groups_per_row;
     const T* bi_local = biases + size_t(n0) * groups_per_row;
 
@@ -384,10 +383,7 @@ void _qmm_t_i8(
       float bias_acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
       for (size_t g = 0; g < groups_per_row; g++) {
         int32x4_t acc[4] = {
-            vdupq_n_s32(0),
-            vdupq_n_s32(0),
-            vdupq_n_s32(0),
-            vdupq_n_s32(0)};
+            vdupq_n_s32(0), vdupq_n_s32(0), vdupq_n_s32(0), vdupq_n_s32(0)};
         const size_t go = g * group_size;
         if constexpr (bits == 4) {
           for (int c = 0; c < group_size; c += 32) {
@@ -405,8 +401,8 @@ void _qmm_t_i8(
           }
         } else {
           for (int c = 0; c < group_size; c += 16) {
-            int8x16_t wb = veorq_s8(
-                vreinterpretq_s8_u8(vld1q_u8(w_local)), sign_flip);
+            int8x16_t wb =
+                veorq_s8(vreinterpretq_s8_u8(vld1q_u8(w_local)), sign_flip);
             w_local += 16;
             for (int t = 0; t < 4; t++) {
               acc[t] = vdotq_s32(acc[t], wb, vld1q_s8(xq_rows[t] + go + c));
@@ -422,7 +418,8 @@ void _qmm_t_i8(
         }
       }
       for (int t = 0; t < 4; t++) {
-        result_rows[t][n] = static_cast<T>(vaddvq_f32(dot_acc[t]) + bias_acc[t]);
+        result_rows[t][n] =
+            static_cast<T>(vaddvq_f32(dot_acc[t]) + bias_acc[t]);
       }
     }
   }
@@ -432,8 +429,7 @@ void _qmm_t_i8(
     const float* gsum_row = gsum + size_t(m) * groups_per_row;
     T* result_row = result + size_t(m) * N;
 
-    const uint8_t* w_local =
-        (const uint8_t*)(w + size_t(n0) * words_per_row);
+    const uint8_t* w_local = (const uint8_t*)(w + size_t(n0) * words_per_row);
     const T* sc_local = scales + size_t(n0) * groups_per_row;
     const T* bi_local = biases + size_t(n0) * groups_per_row;
 
@@ -456,16 +452,15 @@ void _qmm_t_i8(
           }
         } else {
           for (int c = 0; c < group_size; c += 16) {
-            int8x16_t wb = veorq_s8(
-                vreinterpretq_s8_u8(vld1q_u8(w_local)), sign_flip);
+            int8x16_t wb =
+                veorq_s8(vreinterpretq_s8_u8(vld1q_u8(w_local)), sign_flip);
             w_local += 16;
             acc = vdotq_s32(acc, wb, vld1q_s8(xg + c));
           }
         }
         float s_w = static_cast<float>(*sc_local++);
         float b_w = static_cast<float>(*bi_local++);
-        dot_acc = vfmaq_n_f32(
-            dot_acc, vcvtq_f32_s32(acc), s_w * gs_row[g]);
+        dot_acc = vfmaq_n_f32(dot_acc, vcvtq_f32_s32(acc), s_w * gs_row[g]);
         bias_acc += (w_offset * s_w + b_w) * gsum_row[g];
       }
       result_row[n] = static_cast<T>(vaddvq_f32(dot_acc) + bias_acc);

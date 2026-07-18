@@ -75,8 +75,7 @@ class KernelPool {
     uint64_t seen = 0;
     while (true) {
       for (int spins = 0;
-           generation_.load(std::memory_order_acquire) == seen &&
-           spins < 20000;
+           generation_.load(std::memory_order_acquire) == seen && spins < 20000;
            spins++) {
       }
       const std::function<void(int)>* fn;
@@ -121,8 +120,8 @@ void parallel_for_rows(int n, size_t work_per_row, F&& fn) {
     fn(0, n);
     return;
   }
-  int chunk = int(std::max<size_t>(
-      8, min_chunk_work / std::max<size_t>(1, work_per_row)));
+  int chunk = int(
+      std::max<size_t>(8, min_chunk_work / std::max<size_t>(1, work_per_row)));
   int n_chunks = (n + chunk - 1) / chunk;
   if (n_chunks <= 1) {
     fn(0, n);
