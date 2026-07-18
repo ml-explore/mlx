@@ -296,7 +296,7 @@ void _qmm_t_simd(
 inline bool int8_qmm_enabled() {
   static bool enabled = []() {
     const char* env = std::getenv("MLX_CPU_INT8_QMM");
-    return !(env && env[0] == '0');
+    return env && env[0] == '1';
   }();
   return enabled;
 }
