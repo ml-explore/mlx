@@ -260,6 +260,11 @@ void scan_dispatch(
 void Scan::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
   auto& encoder = cpu::get_command_encoder(stream());
 
   // Ensure contiguity
