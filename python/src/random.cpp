@@ -9,6 +9,7 @@
 
 #include "mlx/ops.h"
 #include "mlx/random.h"
+#include "mlx/random_impl.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
 

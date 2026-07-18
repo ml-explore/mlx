@@ -9,6 +9,7 @@
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/random.h"
+#include "mlx/random_impl.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::random {
@@ -427,7 +428,8 @@ array categorical(
   auto stream = to_stream(s);
   auto num_categories = logits_.shape(axis);
   if (stream.device == Device::gpu && metal::is_available() &&
-      num_categories > 0 && num_samples > 0) {
+      !issubdtype(logits_.dtype(), complexfloating) && num_categories > 0 &&
+      num_samples > 0) {
     constexpr uint64_t inverse_cdf_threshold = 1 << 19;
     auto batch_size = logits_.size() / num_categories;
     long double gumbel_elements =

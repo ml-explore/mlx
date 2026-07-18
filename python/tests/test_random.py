@@ -361,18 +361,12 @@ class TestRandom(mlx_tests.MLXTestCase):
         ]
 
         def search(one_cdf, one_bits):
-            return mx.random._categorical_search(
-                one_cdf, one_bits, stream=mx.cpu
-            )
+            return mx.random._categorical_search(one_cdf, one_bits, stream=mx.cpu)
 
         direct = search(cdf, random_bits)
-        metal = mx.random._categorical_search(
-            cdf, random_bits, stream=mx.gpu
-        )
-        mx.eval(direct, metal)
+        mx.eval(direct)
         self.assertEqual(direct.tolist(), expected)
         self.assertEqual(direct.dtype, mx.uint32)
-        self.assertTrue(mx.array_equal(metal, direct))
 
         both_mapped = mx.vmap(search)(cdf, random_bits)
         cdf_only = mx.vmap(search, in_axes=(0, None))(cdf, random_bits[0])
@@ -390,15 +384,20 @@ class TestRandom(mlx_tests.MLXTestCase):
 
         compiled = mx.compile(search)(cdf, random_bits)
         compiled_vmap = mx.compile(mx.vmap(search))(cdf, random_bits)
-        metal_vmap = mx.vmap(
-            lambda one_cdf, one_bits: mx.random._categorical_search(
-                one_cdf, one_bits, stream=mx.gpu
-            )
-        )(cdf, random_bits)
-        mx.eval(compiled, compiled_vmap, metal_vmap)
+        mx.eval(compiled, compiled_vmap)
         self.assertTrue(mx.array_equal(compiled, direct))
         self.assertTrue(mx.array_equal(compiled_vmap, direct))
-        self.assertTrue(mx.array_equal(metal_vmap, direct))
+
+        if mx.metal.is_available():
+            metal = mx.random._categorical_search(cdf, random_bits, stream=mx.gpu)
+            metal_vmap = mx.vmap(
+                lambda one_cdf, one_bits: mx.random._categorical_search(
+                    one_cdf, one_bits, stream=mx.gpu
+                )
+            )(cdf, random_bits)
+            mx.eval(metal, metal_vmap)
+            self.assertTrue(mx.array_equal(metal, direct))
+            self.assertTrue(mx.array_equal(metal_vmap, direct))
 
         one_dimensional = search(cdf[0, 0], random_bits[0, 0])
         mx.eval(one_dimensional)
@@ -413,11 +412,9 @@ class TestRandom(mlx_tests.MLXTestCase):
 
     def test_categorical_fixed_source_candidate(self):
         key = mx.random.key(17)
-        logits = mx.array(
-            [[-3.0, -1.0, 0.0, 2.0], [1.0, -2.0, 0.5, -0.5]]
-        )
+        logits = mx.array([[-3.0, -1.0, 0.0, 2.0], [1.0, -2.0, 0.5, -0.5]])
 
-        def candidate(one_logits, one_key, stream=mx.gpu):
+        def candidate(one_logits, one_key, stream=mx.cpu):
             return mx.random._categorical_fixed(
                 one_logits,
                 num_samples=257,
@@ -426,17 +423,20 @@ class TestRandom(mlx_tests.MLXTestCase):
                 stream=stream,
             )
 
-        gpu = candidate(logits, key)
-        cpu = candidate(logits, key, mx.cpu)
+        cpu = candidate(logits, key)
         repeated = candidate(logits, key)
         shifted = candidate(logits + mx.array([[7.0], [-9.0]]), key)
-        mx.eval(gpu, cpu, repeated, shifted)
-        self.assertEqual(gpu.shape, (2, 257))
-        self.assertEqual(gpu.dtype, mx.uint32)
-        self.assertTrue(mx.array_equal(gpu, cpu))
-        self.assertTrue(mx.array_equal(gpu, repeated))
-        self.assertTrue(mx.array_equal(gpu, shifted))
-        self.assertTrue(mx.all(gpu < 4).item())
+        mx.eval(cpu, repeated, shifted)
+        self.assertEqual(cpu.shape, (2, 257))
+        self.assertEqual(cpu.dtype, mx.uint32)
+        self.assertTrue(mx.array_equal(cpu, repeated))
+        self.assertTrue(mx.array_equal(cpu, shifted))
+        self.assertTrue(mx.all(cpu < 4).item())
+
+        if mx.metal.is_available():
+            gpu = candidate(logits, key, mx.gpu)
+            mx.eval(gpu)
+            self.assertTrue(mx.array_equal(gpu, cpu))
 
         for dtype in [mx.float16, mx.bfloat16, mx.int32, mx.bool_]:
             typed = logits.astype(dtype)
@@ -451,18 +451,21 @@ class TestRandom(mlx_tests.MLXTestCase):
             num_samples=5,
             axis=0,
             key=key,
+            stream=mx.cpu,
         )
         axis_one = mx.random._categorical_fixed(
             axis_logits,
             num_samples=5,
             axis=1,
             key=key,
+            stream=mx.cpu,
         )
         axis_last = mx.random._categorical_fixed(
             axis_logits,
             num_samples=5,
             axis=-1,
             key=key,
+            stream=mx.cpu,
         )
         self.assertEqual(axis_zero.shape, (3, 4, 5))
         self.assertEqual(axis_one.shape, (2, 4, 5))
@@ -472,6 +475,7 @@ class TestRandom(mlx_tests.MLXTestCase):
             mx.array([[-math.inf, 0.0, -math.inf]]),
             num_samples=100,
             key=key,
+            stream=mx.cpu,
         )
         mx.eval(masked)
         self.assertTrue(mx.all(masked == 1).item())
@@ -486,35 +490,34 @@ class TestRandom(mlx_tests.MLXTestCase):
         ]
         for values, expected_index in nonfinite_cases:
             special_logits = mx.array([values])
-            special_gpu = mx.random._categorical_fixed(
-                special_logits, num_samples=100, key=key, stream=mx.gpu
-            )
             special_cpu = mx.random._categorical_fixed(
                 special_logits, num_samples=100, key=key, stream=mx.cpu
             )
-            mx.eval(special_gpu, special_cpu)
-            self.assertTrue(mx.all(special_gpu == expected_index).item())
-            self.assertTrue(mx.array_equal(special_gpu, special_cpu))
+            mx.eval(special_cpu)
+            self.assertTrue(mx.all(special_cpu == expected_index).item())
+            if mx.metal.is_available():
+                special_gpu = mx.random._categorical_fixed(
+                    special_logits, num_samples=100, key=key, stream=mx.gpu
+                )
+                mx.eval(special_gpu)
+                self.assertTrue(mx.array_equal(special_gpu, special_cpu))
 
         nan_masked = mx.random._categorical_fixed(
             mx.array([[math.nan, 0.0, 1.0]]),
             num_samples=1_000,
             key=key,
+            stream=mx.cpu,
         )
         mx.eval(nan_masked)
         self.assertTrue(mx.all(nan_masked != 0).item())
 
-        mapped_logits = mx.array(
-            [[-1.0, 0.0, 1.0], [1.0, -1.0, 0.0], [0.5, 1.5, -0.5]]
-        )
+        mapped_logits = mx.array([[-1.0, 0.0, 1.0], [1.0, -1.0, 0.0], [0.5, 1.5, -0.5]])
         mapped_keys = mx.random.split(mx.random.key(3), num=3)
         both = mx.vmap(candidate)(mapped_logits, mapped_keys)
         logits_only = mx.vmap(candidate, in_axes=(0, None))(
             mapped_logits, mapped_keys[0]
         )
-        keys_only = mx.vmap(candidate, in_axes=(None, 0))(
-            mapped_logits[0], mapped_keys
-        )
+        keys_only = mx.vmap(candidate, in_axes=(None, 0))(mapped_logits[0], mapped_keys)
         both_expected = mx.stack(
             [candidate(mapped_logits[i], mapped_keys[i]) for i in range(3)]
         )
@@ -525,9 +528,7 @@ class TestRandom(mlx_tests.MLXTestCase):
             [candidate(mapped_logits[0], mapped_keys[i]) for i in range(3)]
         )
         compiled = mx.compile(candidate)(mapped_logits[0], mapped_keys[0])
-        compiled_vmap = mx.compile(mx.vmap(candidate))(
-            mapped_logits, mapped_keys
-        )
+        compiled_vmap = mx.compile(mx.vmap(candidate))(mapped_logits, mapped_keys)
         mx.eval(
             both,
             logits_only,
@@ -550,12 +551,15 @@ class TestRandom(mlx_tests.MLXTestCase):
             mx.export_to_dot(output, array)
             return output.getvalue()
 
+        backend_stream = mx.gpu if mx.is_available(mx.gpu) else mx.cpu
+        expect_fixed = mx.metal.is_available()
+
         outside_logits = mx.zeros((256,))
         outside = mx.random.categorical(
             outside_logits,
             num_samples=256,
             key=mx.random.key(0),
-            stream=mx.gpu,
+            stream=backend_stream,
         )
         self.assertNotIn("CategoricalSearch", graph(outside))
         self.assertIn("ArgReduce", graph(outside))
@@ -565,10 +569,24 @@ class TestRandom(mlx_tests.MLXTestCase):
             inside_logits,
             num_samples=256,
             key=mx.random.key(0),
-            stream=mx.gpu,
+            stream=backend_stream,
         )
-        self.assertIn("CategoricalSearch", graph(inside))
-        self.assertNotIn("ArgReduce", graph(inside))
+        if expect_fixed:
+            self.assertIn("CategoricalSearch", graph(inside))
+            self.assertNotIn("ArgReduce", graph(inside))
+        else:
+            self.assertNotIn("CategoricalSearch", graph(inside))
+            self.assertIn("ArgReduce", graph(inside))
+
+        complex_logits = mx.zeros((1024,), dtype=mx.complex64)
+        complex_sample = mx.random.categorical(
+            complex_logits,
+            num_samples=512,
+            key=mx.random.key(0),
+            stream=backend_stream,
+        )
+        self.assertNotIn("CategoricalSearch", graph(complex_sample))
+        self.assertIn("ArgReduce", graph(complex_sample))
 
         cpu_fallback = mx.random.categorical(
             inside_logits,
@@ -587,19 +605,18 @@ class TestRandom(mlx_tests.MLXTestCase):
                 one_logits,
                 num_samples=1024,
                 key=one_key,
-                stream=mx.gpu,
+                stream=backend_stream,
             )
 
         mapped = mx.vmap(sample)(mapped_logits, mapped_keys)
-        compiled_mapped = mx.compile(mx.vmap(sample))(
-            mapped_logits, mapped_keys
-        )
+        compiled_mapped = mx.compile(mx.vmap(sample))(mapped_logits, mapped_keys)
         nested_logits = mx.zeros((3, 2, 1024))
         nested_mapped = mx.vmap(sample)(nested_logits, mapped_keys)
-        nested_compiled = mx.compile(mx.vmap(sample))(
-            nested_logits, mapped_keys
-        )
-        self.assertIn("CategoricalSearch", graph(mapped))
+        nested_compiled = mx.compile(mx.vmap(sample))(nested_logits, mapped_keys)
+        if expect_fixed:
+            self.assertIn("CategoricalSearch", graph(mapped))
+        else:
+            self.assertNotIn("CategoricalSearch", graph(mapped))
         mx.eval(
             inside,
             cpu_fallback,

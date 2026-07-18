@@ -15,7 +15,7 @@
 #include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
-#include "mlx/random.h"
+#include "mlx/random_impl.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
