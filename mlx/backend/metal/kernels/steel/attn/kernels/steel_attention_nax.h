@@ -17,6 +17,7 @@ constant bool align_K [[function_constant(201)]];
 constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
 constant bool has_sinks [[function_constant(302)]];
+constant bool has_window [[function_constant(303)]];
 
 template <typename T>
 struct TransformScale {
@@ -174,9 +175,10 @@ template <
   }
 
   int kb_lim = params->NK;
+  int kb_start = 0;
   int kb_min_causal = params->NK;
 
-  if (do_causal) {
+  if (do_causal || has_window) {
     int q_max = (tid.x + 1) * BQ + params->qL_off;
     kb_lim = (q_max + BK - 1) / BK;
     kb_lim = min(params->NK, kb_lim);
@@ -184,6 +186,17 @@ template <
     int q_min = tid.x * BQ + params->qL_off;
     q_min = max(0, q_min);
     kb_min_causal = (q_min / BK);
+  }
+
+  if (has_window) {
+    int q_min = tid.x * BQ + params->qL_off;
+    int k_min = q_min - params->window_size + 1;
+    if (k_min > 0) {
+      kb_start = k_min / BK;
+      if (kb_start > kb_lim) {
+        kb_start = kb_lim;
+      }
+    }
   }
 
   const bool is_last_bq = int(tid.x) == (params->NQ_aligned);
@@ -194,7 +207,7 @@ template <
   const short lim_rows_k = params->kL_rem;
 
   // Loop over KV seq length
-  for (int kb = 0; kb < kb_lim; kb++) {
+  for (int kb = kb_start; kb < kb_lim; kb++) {
     const int is_last_k = (kb == (params->NK_aligned));
 
     // Do S = Q @ K.T
@@ -275,8 +288,8 @@ template <
       }
     }
 
-    // Mask out if causal
-    if (do_causal && kb >= kb_min_causal) {
+    // Mask out if causal or past the right edge of the sliding window.
+    if ((do_causal || has_window) && kb >= kb_min_causal) {
       constexpr auto neg_inf = Limits<AccumType>::finite_min;
 
       const int base_row = tid.x * BQ + params->qL_off + tm;
@@ -297,6 +310,33 @@ template <
               const auto c = base_col + ik * kU + jj + sn;
               const auto loc = ii * stile_t::kFragThrCols + jj;
               fg[loc] = (r < c) ? neg_inf : fg[loc];
+            }
+          }
+        }
+      }
+    }
+
+    if (has_window && kb < (kb_start + ((BQ + BK - 1) / BK))) {
+      constexpr auto neg_inf = Limits<AccumType>::finite_min;
+
+      const int base_row = tid.x * BQ + params->qL_off + tm;
+      const int base_col = kb * BK;
+
+      STEEL_PRAGMA_UNROLL
+      for (short iq = 0; iq < TQ; iq++) {
+        STEEL_PRAGMA_UNROLL
+        for (short ik = 0; ik < TK; ik++) {
+          thread auto& fg = Stile.frag_at(iq, ik);
+
+          STEEL_PRAGMA_UNROLL
+          for (short ii = 0; ii < stile_t::kFragThrRows; ii++) {
+            STEEL_PRAGMA_UNROLL
+            for (short jj = 0; jj < stile_t::kFragThrCols; jj++) {
+              const auto r =
+                  base_row + iq * kU + ii * stile_t::kFragRowsJump + sm;
+              const auto c = base_col + ik * kU + jj + sn;
+              const auto loc = ii * stile_t::kFragThrCols + jj;
+              fg[loc] = ((r - c) >= params->window_size) ? neg_inf : fg[loc];
             }
           }
         }

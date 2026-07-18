@@ -603,6 +603,48 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 atol = 1e-5 if dtype == mx.float32 else 1e-2
                 self.assertTrue(mx.allclose(out, expected, atol=atol))
 
+    def test_sdpa_window_non_causal(self):
+        B, N, L, D = 1, 1, 5, 32
+        scale = 1 / math.sqrt(D)
+        window_size = 2
+
+        q = mx.random.normal(shape=(B, N, L, D), dtype=mx.float32)
+        k = mx.random.normal(shape=(B, N, L, D), dtype=mx.float32)
+        v = mx.random.normal(shape=(B, N, L, D), dtype=mx.float32)
+
+        q_idx = mx.expand_dims(mx.arange(L), 1)
+        k_idx = mx.expand_dims(mx.arange(L), 0)
+        mask = mx.logical_and(q_idx >= k_idx, q_idx < k_idx + window_size)
+
+        expected = mlx_ref_attn(q, k, v, scale, mask=mask)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, window_size=window_size
+        )
+
+        self.assertTrue(mx.allclose(out, expected, atol=1e-5))
+
+    def test_sdpa_window_disabled_values(self):
+        B, N, L, D = 1, 1, 5, 32
+        scale = 1 / math.sqrt(D)
+
+        q = mx.random.normal(shape=(B, N, L, D), dtype=mx.float32)
+        k = mx.random.normal(shape=(B, N, L, D), dtype=mx.float32)
+        v = mx.random.normal(shape=(B, N, L, D), dtype=mx.float32)
+
+        expected = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, window_size=-1
+        )
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, window_size=0
+        )
+
+        self.assertTrue(mx.allclose(out, expected, atol=1e-5))
+
+        with self.assertRaises(ValueError):
+            mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=scale, window_size=-2
+            )
+
     def test_sdpa_grad(self):
         # High tolerance due to cuDNN SDPA kernel requiring tf32.
         tolerance = {"rtol": 1e-2, "atol": 1e-2}
