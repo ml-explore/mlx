@@ -195,6 +195,38 @@ class TestEval(mlx_tests.MLXTestCase):
         mx.eval(z)
         mx.set_memory_limit(old_limit)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_eval_exception_does_not_corrupt_state(self):
+        # An exception thrown from inside a primitive's eval (here a Metal
+        # compile error raised lazily at eval time) must not corrupt arrays
+        # evaluated earlier in the same batch: they are already marked
+        # evaluated, so their pending command buffers must still be
+        # committed before the exception propagates.
+        a = mx.full((1024,), 3.0)
+        b = a * 2.0  # encoded in the same eval batch as the failing kernel
+
+        kernel = mx.fast.metal_kernel(
+            name="test_eval_exception_bad_kernel",
+            input_names=["inp"],
+            output_names=["out"],
+            source="this is not metal code {",
+        )
+        with self.assertRaises(Exception):
+            (y,) = kernel(
+                inputs=[b],
+                output_shapes=[b.shape],
+                output_dtypes=[b.dtype],
+                grid=(1, 1, 1),
+                threadgroup=(1, 1, 1),
+            )
+            mx.eval(y)
+
+        self.assertTrue(mx.all(b == 6.0).item())
+
+        # Fresh computations after the failure stay correct.
+        x = mx.full((512,), 2.0)
+        self.assertEqual((x + 1.0).sum().item(), 512.0 * 3.0)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
