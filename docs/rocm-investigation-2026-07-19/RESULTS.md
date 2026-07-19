@@ -12,11 +12,12 @@
 
 ## Upstream draft PR
 
-**Draft PR (docs only):** https://github.com/NripeshN/mlx/pull/12  
-**Head:** `lemonade-sdk/mlx` branch `investigate/rocm-dual-load-segv`  
+**Draft PR (docs only):** https://github.com/NripeshN/mlx/pull/13  
+**Head:** `antmikinka/mlx` → https://github.com/antmikinka/mlx-rocm branch `investigate/rocm-dual-load-segv`  
 **Base:** `NripeshN/mlx` `rocm-support`  
 
-Note: `antmikinka/mlx` / `antmikinka/mlx-rocm` are forks of **ml-explore/mlx**, not NripeshN — PRs to NripeshN must use **lemonade-sdk/mlx** (fork of NripeshN/mlx). NripeshN/mlx has **issues disabled**; draft PR is the discussion vehicle.
+Note: GitHub renames `antmikinka/mlx` → **`antmikinka/mlx-rocm`**. NripeshN/mlx has **issues disabled**; draft PR is the discussion vehicle.  
+PR #12 (lemonade-sdk head) was **closed** as wrong head.
 
 
 | Question | Answer |
