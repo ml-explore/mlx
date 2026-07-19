@@ -71,15 +71,16 @@ static bool managed_memory_supported() {
 }
 
 static bool device_is_integrated(int dev) {
-  static int cache[16] = {-1, -1, -1, -1, -1, -1, -1, -1,
-                          -1, -1, -1, -1, -1, -1, -1, -1};
+  static int cache[16] = {
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
   if (dev < 0 || dev >= 16)
     return false;
   if (cache[dev] < 0) {
     hipDeviceProp_t p;
     cache[dev] =
-        (hipGetDeviceProperties(&p, dev) == hipSuccess && p.integrated == 1) ? 1
-                                                                             : 0;
+        (hipGetDeviceProperties(&p, dev) == hipSuccess && p.integrated == 1)
+        ? 1
+        : 0;
   }
   return cache[dev] == 1;
 }
@@ -149,8 +150,10 @@ inline void* unified_malloc(size_t size, bool& is_managed) {
   {
     int dev = 0;
     (void)hipGetDevice(&dev);
-    const bool allow = std::getenv("MLX_ROCM_ALLOW_MANAGED_FALLBACK") != nullptr;
-    const bool forbid = std::getenv("MLX_ROCM_NO_MANAGED_FALLBACK") != nullptr ||
+    const bool allow =
+        std::getenv("MLX_ROCM_ALLOW_MANAGED_FALLBACK") != nullptr;
+    const bool forbid =
+        std::getenv("MLX_ROCM_NO_MANAGED_FALLBACK") != nullptr ||
         (!allow && !device_is_integrated(dev));
     if (forbid) {
       std::ostringstream oss;
@@ -291,7 +294,8 @@ RocmAllocator::RocmAllocator()
   } else {
     memory_limit_ = static_cast<size_t>(total_memory_ * 0.95);
   }
-  free_limit_ = total_memory_ > memory_limit_ ? total_memory_ - memory_limit_ : 0;
+  free_limit_ =
+      total_memory_ > memory_limit_ ? total_memory_ - memory_limit_ : 0;
   max_pool_size_ = memory_limit_;
 
   // CUDA: per-device default mem pool + free stream when pools supported.
@@ -315,7 +319,8 @@ RocmAllocator::RocmAllocator()
       {
         hipDeviceProp_t props{};
         if (hipGetDeviceProperties(&props, i) == hipSuccess &&
-            std::string(props.gcnArchName).find("gfx1201") != std::string::npos &&
+            std::string(props.gcnArchName).find("gfx1201") !=
+                std::string::npos &&
             !std::getenv("MLX_ROCM_FORCE_ASYNC_POOL")) {
           continue;
         }
@@ -324,8 +329,8 @@ RocmAllocator::RocmAllocator()
       hipMemPool_t pool = nullptr;
       if (hipDeviceGetDefaultMemPool(&pool, i) == hipSuccess) {
         mem_pools_[i] = pool;
-        // CUDA does not set ReleaseThreshold. On ROCm the default can pin nearly
-        // all HBM after fat steps → GTT spill. Release aggressively (0).
+        // CUDA does not set ReleaseThreshold. On ROCm the default can pin
+        // nearly all HBM after fat steps → GTT spill. Release aggressively (0).
         uint64_t threshold = 0;
         (void)hipMemPoolSetAttribute(
             pool, hipMemPoolAttrReleaseThreshold, &threshold);
@@ -416,7 +421,13 @@ Buffer RocmAllocator::malloc_async(size_t size, int device, void* stream_v) {
 
   if (size == 0) {
     return Buffer{new RocmBuffer{
-        nullptr, 0, /*is_managed=*/true, /*device=*/-1, nullptr, false, nullptr}};
+        nullptr,
+        0,
+        /*is_managed=*/true,
+        /*device=*/-1,
+        nullptr,
+        false,
+        nullptr}};
   }
 
   hipStream_t stream = static_cast<hipStream_t>(stream_v);
@@ -831,7 +842,8 @@ void RocmAllocator::ensure_host_shadow(RocmBuffer& buf) {
         hipMemcpy(buf.host_shadow, buf.data, buf.size, hipMemcpyDeviceToHost);
     if (err != hipSuccess) {
       std::ostringstream oss;
-      oss << "hipMemcpy (host shadow) failed: " << hipGetErrorString(err) << ".";
+      oss << "hipMemcpy (host shadow) failed: " << hipGetErrorString(err)
+          << ".";
       throw std::runtime_error(oss.str());
     }
   }
@@ -865,7 +877,8 @@ size_t RocmAllocator::get_memory_limit() {
 size_t RocmAllocator::set_memory_limit(size_t limit) {
   std::lock_guard lock(mutex_);
   std::swap(limit, memory_limit_);
-  free_limit_ = total_memory_ > memory_limit_ ? total_memory_ - memory_limit_ : 0;
+  free_limit_ =
+      total_memory_ > memory_limit_ ? total_memory_ - memory_limit_ : 0;
   return limit;
 }
 

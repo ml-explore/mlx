@@ -2,8 +2,8 @@
 
 #include "mlx/backend/common/matmul.h"
 #include "mlx/backend/gpu/copy.h"
-#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/allocator.h"
+#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/gemms/gemv.h"
 #include "mlx/backend/rocm/gemms/hipblaslt_gemm.h"
 #include "mlx/backend/rocm/gemms/naive_gemm.h"
@@ -18,9 +18,9 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
-#include <string>
 #include <cstring>
 #include <numeric>
+#include <string>
 #include <vector>
 
 namespace mlx::core {
@@ -1274,10 +1274,10 @@ static bool try_moe_segment_gather_mm(
   // -> illegal memory access. Bail to the generic gather path in that case.
   // Require an EXACT one-index-per-row match, not just >=: the backward
   // gather_mm VJP reuses this primitive with index arrays whose logical size no
-  // longer equals `batch` (or that alias a smaller physical buffer), and reading
-  // `batch` contiguous uint32 from them overruns the allocation -> illegal
-  // access. Exact size + row-contiguous keeps this on the true forward pattern
-  // and routes everything else to the generic gather path.
+  // longer equals `batch` (or that alias a smaller physical buffer), and
+  // reading `batch` contiguous uint32 from them overruns the allocation ->
+  // illegal access. Exact size + row-contiguous keeps this on the true forward
+  // pattern and routes everything else to the generic gather path.
   if (static_cast<size_t>(rhs_indices.size()) != static_cast<size_t>(batch) ||
       !rhs_indices.flags().row_contiguous) {
     return false;
@@ -1297,7 +1297,8 @@ static bool try_moe_segment_gather_mm(
   encoder.set_output_array(out);
 
   mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
-  mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
+  mlx::core::Strides b_batch_strides{
+      b.strides().begin(), b.strides().end() - 2};
 
   // Pack + strided-batched hipBLASLt (default ON for bf16 1-D MoE).
   // ZERO-SYNC: M_pad = align_up(batch, 32) is host-known (worst-case one
@@ -1308,24 +1309,27 @@ static bool try_moe_segment_gather_mm(
     const char* e = std::getenv("MLX_ROCM_MOE_PACK");
     if (!e || !*e)
       return true; // default ON
-    return !(e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' ||
-             e[0] == 'N');
+    return !(
+        e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' ||
+        e[0] == 'N');
   }();
   static const bool use_device_seg = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_DEVICE_SEG");
-    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
-                 e[0] == 'T');
+    return e &&
+        (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+         e[0] == 'T');
   }();
   static const bool pack_exact_d2h = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_PACK_EXACT");
-    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
-                 e[0] == 'T');
+    return e &&
+        (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+         e[0] == 'T');
   }();
   const int n_experts =
       (b_batch_shape.size() == 1) ? static_cast<int>(b_batch_shape[0]) : 0;
-  if (use_pack && assume_identity_lhs && n_experts > 0 &&
-      n_experts <= 256 && a.dtype() == bfloat16 &&
-      rocm::is_hipblaslt_available() && !use_device_seg) {
+  if (use_pack && assume_identity_lhs && n_experts > 0 && n_experts <= 256 &&
+      a.dtype() == bfloat16 && rocm::is_hipblaslt_available() &&
+      !use_device_seg) {
     int M_fixed;
     if (pack_exact_d2h) {
       // Legacy: D2H ids, measure max run (syncs — avoid for train).
@@ -1366,17 +1370,20 @@ static bool try_moe_segment_gather_mm(
     }
     if (M_fixed < 32)
       M_fixed = 32;
-    // Temporaries: packed_a [E,M,K], packed_c [E,M,N], slot_map [E,M], counts [E]
+    // Temporaries: packed_a [E,M,K], packed_c [E,M,N], slot_map [E,M], counts
+    // [E]
     array packed_a(
         mlx::core::Shape{n_experts, M_fixed, K}, a.dtype(), nullptr, {});
     array packed_c(
         mlx::core::Shape{n_experts, M_fixed, N}, a.dtype(), nullptr, {});
-    array slot_map(
-        mlx::core::Shape{n_experts, M_fixed}, int32, nullptr, {});
+    array slot_map(mlx::core::Shape{n_experts, M_fixed}, int32, nullptr, {});
     array counts(mlx::core::Shape{n_experts}, int32, nullptr, {});
-    packed_a.set_data(mlx::core::rocm::malloc_async(packed_a.nbytes(), encoder));
-    packed_c.set_data(mlx::core::rocm::malloc_async(packed_c.nbytes(), encoder));
-    slot_map.set_data(mlx::core::rocm::malloc_async(slot_map.nbytes(), encoder));
+    packed_a.set_data(
+        mlx::core::rocm::malloc_async(packed_a.nbytes(), encoder));
+    packed_c.set_data(
+        mlx::core::rocm::malloc_async(packed_c.nbytes(), encoder));
+    slot_map.set_data(
+        mlx::core::rocm::malloc_async(slot_map.nbytes(), encoder));
     counts.set_data(mlx::core::rocm::malloc_async(counts.nbytes(), encoder));
     encoder.add_temporary(packed_a);
     encoder.add_temporary(packed_c);
@@ -1386,13 +1393,20 @@ static bool try_moe_segment_gather_mm(
     // a is [batch, 1, K] or similar — need flat [batch, K] view for pack.
     // Contiguous batch*K was verified earlier (a.size() == batch*K).
     rocm::moe_pack_tokens(
-        encoder, a, rhs_indices, packed_a, slot_map, counts, batch, K,
-        n_experts, M_fixed);
+        encoder,
+        a,
+        rhs_indices,
+        packed_a,
+        slot_map,
+        counts,
+        batch,
+        K,
+        n_experts,
+        M_fixed);
 
     // B: [E, K, N] or transposed [E, N, K]. Stride between experts.
-    const int64_t b_expert_stride = b_batch_strides.empty()
-        ? 0
-        : static_cast<int64_t>(b_batch_strides[0]);
+    const int64_t b_expert_stride =
+        b_batch_strides.empty() ? 0 : static_cast<int64_t>(b_batch_strides[0]);
     const int64_t stride_a = static_cast<int64_t>(M_fixed) * K;
     const int64_t stride_c = static_cast<int64_t>(M_fixed) * N;
     // hipblaslt_gemm_batched expects row-major MLX arrays; lda = K for A [M,K].
@@ -1432,9 +1446,8 @@ static bool try_moe_segment_gather_mm(
   if (use_device_seg && assume_identity_lhs && n_experts > 0 &&
       n_experts <= 256 &&
       (a.dtype() == bfloat16 || a.dtype() == float16 || a.dtype() == float32)) {
-    const int64_t b_expert_stride = b_batch_strides.empty()
-        ? 0
-        : static_cast<int64_t>(b_batch_strides[0]);
+    const int64_t b_expert_stride =
+        b_batch_strides.empty() ? 0 : static_cast<int64_t>(b_batch_strides[0]);
     rocm::moe_sorted_expert_gemm(
         encoder,
         a,
@@ -1476,12 +1489,12 @@ static bool try_moe_segment_gather_mm(
   // OFF by default until validated; default remains blocking host path.
   static const bool use_async_moe = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_ASYNC");
-    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
-                 e[0] == 'T');
+    return e &&
+        (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+         e[0] == 'T');
   }();
 
-  if (use_async_moe && assume_identity_lhs &&
-      rocm::is_hipblaslt_available()) {
+  if (use_async_moe && assume_identity_lhs && rocm::is_hipblaslt_available()) {
     auto* job = new MoeAsyncJob();
     job->batch = batch;
     job->N = N;
@@ -1536,8 +1549,9 @@ static bool try_moe_segment_gather_mm(
   static thread_local int pin_reuses_left = 0;
   static const bool no_pin_cache = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_NO_PIN_CACHE");
-    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
-                 e[0] == 'T');
+    return e &&
+        (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+         e[0] == 'T');
   }();
 
   const size_t need = static_cast<size_t>(batch);
@@ -1564,7 +1578,8 @@ static bool try_moe_segment_gather_mm(
   const bool cache_hit = !no_pin_cache && assume_identity_lhs &&
       pin_rhs_dev == rhs_dev && pin_rhs_n == need && pin_reuses_left > 0;
 
-  static const bool pin_stats = std::getenv("MLX_ROCM_MOE_PIN_STATS") != nullptr;
+  static const bool pin_stats =
+      std::getenv("MLX_ROCM_MOE_PIN_STATS") != nullptr;
   static thread_local long pin_hits = 0, pin_misses = 0;
 
   if (cache_hit) {
@@ -1582,11 +1597,7 @@ static bool try_moe_segment_gather_mm(
           (int)assume_identity_lhs);
     }
     CHECK_HIP_ERROR(hipMemcpyAsync(
-        pin_rhs,
-        rhs_dev,
-        need * sizeof(uint32_t),
-        hipMemcpyDeviceToHost,
-        hs));
+        pin_rhs, rhs_dev, need * sizeof(uint32_t), hipMemcpyDeviceToHost, hs));
 
     if (!assume_identity_lhs) {
       CHECK_HIP_ERROR(hipMemcpyAsync(
@@ -1645,16 +1656,39 @@ static bool try_moe_segment_gather_mm(
     int Mseg = end - start;
     if (moe_use_blaslt) {
       rocm::hipblaslt_gemm_ptrs(
-          encoder, /*transpose_a=*/false, b_transposed, Mseg, N, K, 1.0f,
-          moe_aB + static_cast<size_t>(start) * K * moe_esz, /*lda=*/K,
-          moe_bB + static_cast<size_t>(expert_offset_fn(e)) * moe_esz, ldb,
-          0.0f, moe_cB + static_cast<size_t>(start) * N * moe_esz, /*ldc=*/N,
+          encoder,
+          /*transpose_a=*/false,
+          b_transposed,
+          Mseg,
+          N,
+          K,
+          1.0f,
+          moe_aB + static_cast<size_t>(start) * K * moe_esz,
+          /*lda=*/K,
+          moe_bB + static_cast<size_t>(expert_offset_fn(e)) * moe_esz,
+          ldb,
+          0.0f,
+          moe_cB + static_cast<size_t>(start) * N * moe_esz,
+          /*ldc=*/N,
           a.dtype());
     } else {
       rocm::naive_gemm_with_offset(
-          encoder, a, b, out, Mseg, N, K, /*a_transposed=*/false, /*lda=*/K,
-          static_cast<int64_t>(start) * K, b_transposed, ldb, expert_offset_fn(e),
-          static_cast<int64_t>(start) * N, 1.0f, 0.0f);
+          encoder,
+          a,
+          b,
+          out,
+          Mseg,
+          N,
+          K,
+          /*a_transposed=*/false,
+          /*lda=*/K,
+          static_cast<int64_t>(start) * K,
+          b_transposed,
+          ldb,
+          expert_offset_fn(e),
+          static_cast<int64_t>(start) * N,
+          1.0f,
+          0.0f);
     }
     start = end;
   }
@@ -1709,8 +1743,9 @@ static bool try_sorted_rhs_gather_mm(
 
   // NOTE(perf): per-call device->host copy of rhs_indices on the training hot
   // path. It is required — the expert-id per token must be read on the host to
-  // form dense GEMM segments — and cannot be cached (indices change every call).
-  // Cost is batch*4 bytes + one sync; negligible vs the GEMMs it enables.
+  // form dense GEMM segments — and cannot be cached (indices change every
+  // call). Cost is batch*4 bytes + one sync; negligible vs the GEMMs it
+  // enables.
   //
   // The copy MUST be issued on the encoder stream and explicitly synchronized.
   // MLX ROCm streams are created with hipStreamNonBlocking (see utils.cpp), so
@@ -1746,7 +1781,8 @@ static bool try_sorted_rhs_gather_mm(
   // unmapped or foreign memory — NaN output, or an aperture fault. On anything
   // out of range fall back to the generic path instead of computing on garbage.
   const int64_t n_experts_rhs = static_cast<int64_t>(
-      b.size() / static_cast<size_t>(b.shape(-1)) / static_cast<size_t>(b.shape(-2)));
+      b.size() / static_cast<size_t>(b.shape(-1)) /
+      static_cast<size_t>(b.shape(-2)));
   for (size_t i = 0; i < need_rhs; ++i) {
     if (static_cast<int64_t>(rhs[i]) >= n_experts_rhs) {
       return false;
@@ -1754,7 +1790,8 @@ static bool try_sorted_rhs_gather_mm(
   }
 
   mlx::core::Shape b_batch_shape{b.shape().begin(), b.shape().end() - 2};
-  mlx::core::Strides b_batch_strides{b.strides().begin(), b.strides().end() - 2};
+  mlx::core::Strides b_batch_strides{
+      b.strides().begin(), b.strides().end() - 2};
 
   auto expert_offset = [&](uint32_t expert) -> int64_t {
     if (b_batch_shape.empty()) {
@@ -1788,8 +1825,7 @@ static bool try_sorted_rhs_gather_mm(
     int Mseg = end - start;
     const void* a_ptr =
         a_base + static_cast<size_t>(start) * static_cast<size_t>(K) * esize;
-    const void* b_ptr =
-        b_base + static_cast<size_t>(expert_offset(e)) * esize;
+    const void* b_ptr = b_base + static_cast<size_t>(expert_offset(e)) * esize;
     void* c_ptr =
         out_base + static_cast<size_t>(start) * static_cast<size_t>(N) * esize;
 

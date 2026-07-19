@@ -112,7 +112,8 @@ struct HWInfo {
   int warp_size; // Runtime wavefront size (32 RDNA, 64 CDNA). Prefer this for
                  // host launch dims over compile-time WARP_SIZE — multi-arch
                  // fatbins pin MLX_HOST_WARP_SIZE from gfx9 in the arch list
-                 // (64) even when running on gfx1152 (32), which yields garbage.
+                 // (64) even when running on gfx1152 (32), which yields
+                 // garbage.
   bool has_native_wmma; // True if arch is on rocWMMA allowlist
                         // (CDNA + RDNA3 dGPU + RDNA3.5 gfx1150–1152 + RDNA4)
   bool is_low_cu_igpu; // num_cus <= 8 (or forced): prefer safer tiles / paths
@@ -153,7 +154,8 @@ inline ArchTuning get_arch_tuning(RocmArchTier tier) {
 }
 
 // Auto-tune using full hardware info. Adjusts TILE_N based on CU count:
-// fewer CUs → smaller tiles so more workgroups stay resident (not thrashing L2).
+// fewer CUs → smaller tiles so more workgroups stay resident (not thrashing
+// L2).
 inline ArchTuning get_arch_tuning(const HWInfo& hw) {
   auto t = get_arch_tuning(hw.tier);
 
@@ -161,8 +163,7 @@ inline ArchTuning get_arch_tuning(const HWInfo& hw) {
   // reused X/scales. RDNA 3/3.5 (2 MB L2): 16. RDNA 4 (8 MB L2): 24.
   // Reduced-CU gfx1152 (often 4–8 CUs, 860M / Ryzen AI iGPU): shrink tiles and
   // FA blocks hard — wide tiles oversubscribe L2 and tank occupancy.
-  const bool low_cu =
-      hw.is_low_cu_igpu || (hw.num_cus > 0 && hw.num_cus <= 8);
+  const bool low_cu = hw.is_low_cu_igpu || (hw.num_cus > 0 && hw.num_cus <= 8);
   if (hw.tier == RocmArchTier::Rdna3 || hw.tier == RocmArchTier::Rdna35) {
     if (low_cu) {
       t.qmv_tile_n = 4; // was 8 — 8 CUs need even narrower columns

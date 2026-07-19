@@ -1,8 +1,8 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/rocm/conv/conv.h"
-#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/rocm/allocator.h"
 #include "mlx/backend/rocm/device.h"
 #include "mlx/primitives.h"
 

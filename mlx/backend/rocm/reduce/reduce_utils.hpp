@@ -5,8 +5,8 @@
 #include <numeric>
 
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/allocator.h"
+#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/device/config.h"
 #include "mlx/backend/rocm/device/utils.hpp"
 

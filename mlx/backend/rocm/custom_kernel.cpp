@@ -5,8 +5,8 @@
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/gpu/copy.h"
-#include "mlx/backend/rocm/jit_module.h"
 #include "mlx/backend/rocm/allocator.h"
+#include "mlx/backend/rocm/jit_module.h"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
@@ -271,7 +271,8 @@ void CustomKernel::eval_gpu(
   // Output index -> input index it aliases (reuses the buffer in place).
   std::vector<int> alias_of(outputs.size(), -1);
   for (auto& [oi, ii] : output_input_aliases_) {
-    if (oi >= 0 && oi < (int)outputs.size() && ii >= 0 && ii < (int)inputs.size())
+    if (oi >= 0 && oi < (int)outputs.size() && ii >= 0 &&
+        ii < (int)inputs.size())
       alias_of[oi] = ii;
   }
 

@@ -272,16 +272,14 @@ target_sources(
 target_compile_definitions(mlx PRIVATE MLX_USE_ROCM)
 # Host WARP_SIZE compile-time fallback (device uses __AMDGCN_WAVEFRONT_SIZE__).
 #
-# Policy (hardware):
-#   RDNA2/3/3.5/4 (gfx10/11/12, incl. gfx1152 and gfx1200/1201) → wavefront **32**
-#   CDNA-only (gfx9xx only)                                       → wavefront **64**
+# Policy (hardware): RDNA2/3/3.5/4 (gfx10/11/12, incl. gfx1152 and gfx1200/1201)
+# → wavefront **32** CDNA-only (gfx9xx only) → wavefront **64**
 #
 # RDNA4 is still wave32 (same as RDNA2/3). Do not special-case it to 64.
 #
-# Optional override (experiments / future hardware):
-#   cmake -DMLX_HOST_WARP_SIZE=32|64 ...
-# Runtime launch override (debug only; wrong value → garbage decode):
-#   MLX_ROCM_FORCE_WARP_SIZE=32|64
+# Optional override (experiments / future hardware): cmake
+# -DMLX_HOST_WARP_SIZE=32|64 ... Runtime launch override (debug only; wrong
+# value → garbage decode): MLX_ROCM_FORCE_WARP_SIZE=32|64
 #
 # CRITICAL: multi-arch fatbins used to MATCH "gfx9" first and pin host 64 —
 # launches on wave32 RDNA used dim3(64,...) → garbage ("!!!!!!"). If ANY RDNA
@@ -301,25 +299,32 @@ if(_MLX_HIP_ARCHS_SP MATCHES "gfx9")
   set(_MLX_HAS_CDNA TRUE)
 endif()
 
-# Explicit -DMLX_HOST_WARP_SIZE=32|64 wins (optional flag, incl. RDNA4 experiments).
+# Explicit -DMLX_HOST_WARP_SIZE=32|64 wins (optional flag, incl. RDNA4
+# experiments).
 if(DEFINED MLX_HOST_WARP_SIZE AND NOT "${MLX_HOST_WARP_SIZE}" STREQUAL "")
-  if(NOT MLX_HOST_WARP_SIZE STREQUAL "32" AND NOT MLX_HOST_WARP_SIZE STREQUAL "64")
-    message(FATAL_ERROR "MLX_HOST_WARP_SIZE must be 32 or 64 (got ${MLX_HOST_WARP_SIZE})")
+  if(NOT MLX_HOST_WARP_SIZE STREQUAL "32" AND NOT MLX_HOST_WARP_SIZE STREQUAL
+                                              "64")
+    message(
+      FATAL_ERROR
+        "MLX_HOST_WARP_SIZE must be 32 or 64 (got ${MLX_HOST_WARP_SIZE})")
   endif()
-  target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=${MLX_HOST_WARP_SIZE})
-  message(STATUS
-    "MLX ROCm: MLX_HOST_WARP_SIZE=${MLX_HOST_WARP_SIZE} (explicit cmake override)")
+  target_compile_definitions(mlx
+                             PRIVATE MLX_HOST_WARP_SIZE=${MLX_HOST_WARP_SIZE})
+  message(
+    STATUS
+      "MLX ROCm: MLX_HOST_WARP_SIZE=${MLX_HOST_WARP_SIZE} (explicit cmake override)"
+  )
 elseif(_MLX_HAS_RDNA)
   # RDNA present (alone or mixed with CDNA), including RDNA4: host fallback 32.
   target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=32)
   if(_MLX_HAS_CDNA)
-    message(STATUS
-      "MLX ROCm: multi-arch (RDNA+CDNA) — MLX_HOST_WARP_SIZE=32 (RDNA); "
-      "launches use runtime warp_size() so CDNA still gets 64 at run time")
+    message(
+      STATUS
+        "MLX ROCm: multi-arch (RDNA+CDNA) — MLX_HOST_WARP_SIZE=32 (RDNA); "
+        "launches use runtime warp_size() so CDNA still gets 64 at run time")
   elseif(_MLX_HAS_RDNA4)
-    message(STATUS
-      "MLX ROCm: RDNA4 (wave32) — MLX_HOST_WARP_SIZE=32 "
-      "(override with -DMLX_HOST_WARP_SIZE= if needed)")
+    message(STATUS "MLX ROCm: RDNA4 (wave32) — MLX_HOST_WARP_SIZE=32 "
+                   "(override with -DMLX_HOST_WARP_SIZE= if needed)")
   else()
     message(STATUS "MLX ROCm: RDNA-only — MLX_HOST_WARP_SIZE=32")
   endif()
@@ -328,8 +333,10 @@ elseif(_MLX_HAS_CDNA)
   message(STATUS "MLX ROCm: CDNA-only — MLX_HOST_WARP_SIZE=64")
 else()
   target_compile_definitions(mlx PRIVATE MLX_HOST_WARP_SIZE=32)
-  message(STATUS
-    "MLX ROCm: unrecognized HIP arch list — MLX_HOST_WARP_SIZE=32 (RDNA default)")
+  message(
+    STATUS
+      "MLX ROCm: unrecognized HIP arch list — MLX_HOST_WARP_SIZE=32 (RDNA default)"
+  )
 endif()
 if(MLX_HAS_ROCM_WMMA)
   target_compile_definitions(mlx PRIVATE MLX_HAS_ROCM_WMMA)
@@ -394,6 +401,6 @@ target_include_directories(mlx PRIVATE ${HIP_INCLUDE_DIRS})
 # Add HIP platform define for C++ files
 target_compile_definitions(mlx PRIVATE __HIP_PLATFORM_AMD__=1)
 
-# Route safetensors host reads through a pinned hipMemcpy bounce buffer.
-# Without this the CPU walks BAR-mapped VRAM at ~30 MB/s (see host_stage.cpp).
+# Route safetensors host reads through a pinned hipMemcpy bounce buffer. Without
+# this the CPU walks BAR-mapped VRAM at ~30 MB/s (see host_stage.cpp).
 target_compile_definitions(mlx PRIVATE MLX_ROCM_HOST_STAGE=1)

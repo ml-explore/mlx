@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <utility>
 
-#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/allocator.h"
+#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/primitives.h"
@@ -42,10 +42,10 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto nbytes = size * out.itemsize();
   out.set_data(mlx::core::rocm::malloc_async(nbytes, encoder));
   // Stage through PINNED host memory. An async H2D copy from pageable memory is
-  // unreliable on a discrete GPU over a non-coherent link (TB5 eGPU): the driver
-  // must internally stage it, which can stall the stream (queue stuck, GPU shows
-  // busy, the eval's sync never returns). Pinned memory DMAs directly and lets
-  // the copy actually run asynchronously.
+  // unreliable on a discrete GPU over a non-coherent link (TB5 eGPU): the
+  // driver must internally stage it, which can stall the stream (queue stuck,
+  // GPU shows busy, the eval's sync never returns). Pinned memory DMAs directly
+  // and lets the copy actually run asynchronously.
   void* out_ptr = nullptr;
   if (hipHostMalloc(&out_ptr, nbytes, hipHostMallocDefault) != hipSuccess ||
       out_ptr == nullptr) {
@@ -54,9 +54,15 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
     reader_->read(static_cast<char*>(out_ptr), nbytes, offset_);
     if (swap_endianness_) {
       switch (out.itemsize()) {
-        case 2: swap_endianness<2>(reinterpret_cast<uint8_t*>(out_ptr), size); break;
-        case 4: swap_endianness<4>(reinterpret_cast<uint8_t*>(out_ptr), size); break;
-        case 8: swap_endianness<8>(reinterpret_cast<uint8_t*>(out_ptr), size); break;
+        case 2:
+          swap_endianness<2>(reinterpret_cast<uint8_t*>(out_ptr), size);
+          break;
+        case 4:
+          swap_endianness<4>(reinterpret_cast<uint8_t*>(out_ptr), size);
+          break;
+        case 8:
+          swap_endianness<8>(reinterpret_cast<uint8_t*>(out_ptr), size);
+          break;
       }
     }
     (void)hipMemcpy(gpu_ptr<void>(out), out_ptr, nbytes, hipMemcpyHostToDevice);

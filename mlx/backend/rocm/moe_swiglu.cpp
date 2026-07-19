@@ -6,23 +6,24 @@
 //   MLX_ROCM_MOE_ZERO_SYNC=1 (default ON): pack → [E,M_pad,*] + strided-batched
 //     hipBLASLt. M_pad = align_up(T,32) is host-known → NO mid-graph D2H /
 //     StreamSynchronize. Pad rows are zero; exact tokens via slot_map unpack.
-//   MLX_ROCM_MOE_ZERO_SYNC=0: legacy host-RLE exact-M (D2H ids + per-segment GEMM).
+//   MLX_ROCM_MOE_ZERO_SYNC=0: legacy host-RLE exact-M (D2H ids + per-segment
+//   GEMM).
 //
 // VJP: same ZERO_SYNC pack default; MLX_ROCM_MOE_VJP_DEVICE_SEG=1 = VALU tiles;
 //      ZERO_SYNC=0 = device segments + tiny [E,2] D2H + hipBLASLt.
 //
-// NOTE: Primitive class lives in mlx::core (not rocm) to avoid Shape/Device name
-// collisions with mlx::core::rocm::Shape (hip_array) and related aliases.
+// NOTE: Primitive class lives in mlx::core (not rocm) to avoid Shape/Device
+// name collisions with mlx::core::rocm::Shape (hip_array) and related aliases.
 
-#include "mlx/backend/rocm/rocm.h"
-#include "mlx/backend/rocm/device.h"
+#include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/rocm/allocator.h"
+#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/gemms/hipblaslt_gemm.h"
 #include "mlx/backend/rocm/gemms/naive_gemm.h"
 #include "mlx/backend/rocm/gemms/rocblas_gemm.h"
-#include "mlx/backend/rocm/utils.h"
 #include "mlx/backend/rocm/kernel_utils.hpp"
-#include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/rocm/rocm.h"
+#include "mlx/backend/rocm/utils.h"
 #include "mlx/device.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
@@ -53,9 +54,8 @@ class MoeSwigluSorted : public fast::Custom {
     throw std::runtime_error("MoeSwigluSorted has no CPU implementation");
   }
 
-  void eval_gpu(
-      const std::vector<array>& inputs,
-      std::vector<array>& outputs) override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
 
   DEFINE_NAME(MoeSwigluSorted)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -112,8 +112,9 @@ void MoeSwigluSorted::eval_gpu(
     encoder.add_temporary(wd);
   }
 
-  out.set_data(rocm::malloc_async(
-      static_cast<size_t>(T) * D * size_of(bfloat16), encoder));
+  out.set_data(
+      rocm::malloc_async(
+          static_cast<size_t>(T) * D * size_of(bfloat16), encoder));
 
   encoder.set_input_array(x);
   encoder.set_input_array(wg);
@@ -132,8 +133,9 @@ void MoeSwigluSorted::eval_gpu(
     const char* e = std::getenv("MLX_ROCM_MOE_ZERO_SYNC");
     if (!e || !*e)
       return true; // port default ON
-    return !(e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' ||
-             e[0] == 'N');
+    return !(
+        e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' ||
+        e[0] == 'N');
   }();
 
   if (use_zero_sync && rocm::is_hipblaslt_available() && E > 0 && E <= 256) {
@@ -165,12 +167,45 @@ void MoeSwigluSorted::eval_gpu(
     const int64_t stride_y = static_cast<int64_t>(M_pad) * D;
 
     rocm::hipblaslt_gemm_batched(
-        encoder, false, false, M_pad, I, D, 1.0f, packed_x, /*lda=*/D,
-        stride_x, wg, /*ldb=*/I, wg_stride, 0.0f, packed_gate, /*ldc=*/I,
-        stride_mid, E, bfloat16);
+        encoder,
+        false,
+        false,
+        M_pad,
+        I,
+        D,
+        1.0f,
+        packed_x,
+        /*lda=*/D,
+        stride_x,
+        wg,
+        /*ldb=*/I,
+        wg_stride,
+        0.0f,
+        packed_gate,
+        /*ldc=*/I,
+        stride_mid,
+        E,
+        bfloat16);
     rocm::hipblaslt_gemm_batched(
-        encoder, false, false, M_pad, I, D, 1.0f, packed_x, D, stride_x, wu,
-        I, wg_stride, 0.0f, packed_up, I, stride_mid, E, bfloat16);
+        encoder,
+        false,
+        false,
+        M_pad,
+        I,
+        D,
+        1.0f,
+        packed_x,
+        D,
+        stride_x,
+        wu,
+        I,
+        wg_stride,
+        0.0f,
+        packed_up,
+        I,
+        stride_mid,
+        E,
+        bfloat16);
 
     rocm::silu_mul_bf16(
         encoder,
@@ -180,9 +215,25 @@ void MoeSwigluSorted::eval_gpu(
         E * M_pad * I);
 
     rocm::hipblaslt_gemm_batched(
-        encoder, false, false, M_pad, D, I, 1.0f, packed_h, /*lda=*/I,
-        stride_mid, wd, /*ldb=*/D, wd_stride, 0.0f, packed_y, /*ldc=*/D,
-        stride_y, E, bfloat16);
+        encoder,
+        false,
+        false,
+        M_pad,
+        D,
+        I,
+        1.0f,
+        packed_h,
+        /*lda=*/I,
+        stride_mid,
+        wd,
+        /*ldb=*/D,
+        wd_stride,
+        0.0f,
+        packed_y,
+        /*ldc=*/D,
+        stride_y,
+        E,
+        bfloat16);
 
     // Zero `out` before the scatter — moe_pack_kernel DROPS tokens when the
     // expert id is out of range or when the expert's run exceeds M_fixed
@@ -325,11 +376,7 @@ void MoeSwigluSorted::eval_gpu(
   }
 
   rocm::silu_mul_bf16(
-      encoder,
-      gpu_ptr<void>(gate),
-      gpu_ptr<void>(up),
-      gpu_ptr<void>(h),
-      T * I);
+      encoder, gpu_ptr<void>(gate), gpu_ptr<void>(up), gpu_ptr<void>(h), T * I);
 
   start = 0;
   while (start < T) {
@@ -381,8 +428,7 @@ std::vector<array> moe_swiglu_fallback(
   auto xg = reshape(x, Shape{T, 1, 1, x.shape(1)}, s);
   // Indices are discrete routing — never differentiable (GatherMM rejects
   // index VJP). stop_gradient keeps value_and_grad on x/weights working.
-  auto lhs = reshape(
-      stop_gradient(arange(T, uint32, s), s), Shape{T, 1, 1}, s);
+  auto lhs = reshape(stop_gradient(arange(T, uint32, s), s), Shape{T, 1, 1}, s);
   auto rhs = reshape(stop_gradient(ids, s), Shape{T, 1, 1}, s);
 
   auto gate = gather_mm(xg, wg, lhs, rhs, /*sorted_indices=*/true, s);
@@ -405,19 +451,19 @@ class MoeSwigluSortedVJP : public Primitive {
     throw std::runtime_error("MoeSwigluSortedVJP has no CPU implementation");
   }
 
-  void eval_gpu(
-      const std::vector<array>& inputs,
-      std::vector<array>& outputs) override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
 
   DEFINE_NAME(MoeSwigluSortedVJP)
   DEFINE_DEFAULT_IS_EQUIVALENT()
 
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
     // dx, dwg, dwu, dwd
-    return {inputs[0].shape(),
-            inputs[1].shape(),
-            inputs[2].shape(),
-            inputs[3].shape()};
+    return {
+        inputs[0].shape(),
+        inputs[1].shape(),
+        inputs[2].shape(),
+        inputs[3].shape()};
   }
 };
 
@@ -472,18 +518,18 @@ void MoeSwigluSortedVJP::eval_gpu(
 
   if (T == 0) {
     // Zero weight grads for empty batch.
-    encoder.launch_kernel([ptr = gpu_ptr<void>(dwg),
-                           n = dwg.nbytes()](hipStream_t st) {
-      (void)hipMemsetAsync(ptr, 0, n, st);
-    });
-    encoder.launch_kernel([ptr = gpu_ptr<void>(dwu),
-                           n = dwu.nbytes()](hipStream_t st) {
-      (void)hipMemsetAsync(ptr, 0, n, st);
-    });
-    encoder.launch_kernel([ptr = gpu_ptr<void>(dwd),
-                           n = dwd.nbytes()](hipStream_t st) {
-      (void)hipMemsetAsync(ptr, 0, n, st);
-    });
+    encoder.launch_kernel(
+        [ptr = gpu_ptr<void>(dwg), n = dwg.nbytes()](hipStream_t st) {
+          (void)hipMemsetAsync(ptr, 0, n, st);
+        });
+    encoder.launch_kernel(
+        [ptr = gpu_ptr<void>(dwu), n = dwu.nbytes()](hipStream_t st) {
+          (void)hipMemsetAsync(ptr, 0, n, st);
+        });
+    encoder.launch_kernel(
+        [ptr = gpu_ptr<void>(dwd), n = dwd.nbytes()](hipStream_t st) {
+          (void)hipMemsetAsync(ptr, 0, n, st);
+        });
     return;
   }
 
@@ -502,13 +548,15 @@ void MoeSwigluSortedVJP::eval_gpu(
     const char* e = std::getenv("MLX_ROCM_MOE_ZERO_SYNC");
     if (!e || !*e)
       return true;
-    return !(e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' ||
-             e[0] == 'N');
+    return !(
+        e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' ||
+        e[0] == 'N');
   }();
   static const bool use_device_seg = [] {
     const char* e = std::getenv("MLX_ROCM_MOE_VJP_DEVICE_SEG");
-    return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
-                 e[0] == 'T');
+    return e &&
+        (e[0] == '1' || e[0] == 'o' || e[0] == 'O' || e[0] == 't' ||
+         e[0] == 'T');
   }();
 
   const int64_t wg_stride = static_cast<int64_t>(D) * I;
@@ -549,14 +597,65 @@ void MoeSwigluSortedVJP::eval_gpu(
     const int64_t stride_mid = static_cast<int64_t>(M_pad) * I;
 
     rocm::hipblaslt_gemm_batched(
-        encoder, false, false, M_pad, I, D, 1.0f, packed_x, D, stride_x, wg,
-        I, wg_stride, 0.0f, packed_gate, I, stride_mid, E, bfloat16);
+        encoder,
+        false,
+        false,
+        M_pad,
+        I,
+        D,
+        1.0f,
+        packed_x,
+        D,
+        stride_x,
+        wg,
+        I,
+        wg_stride,
+        0.0f,
+        packed_gate,
+        I,
+        stride_mid,
+        E,
+        bfloat16);
     rocm::hipblaslt_gemm_batched(
-        encoder, false, false, M_pad, I, D, 1.0f, packed_x, D, stride_x, wu,
-        I, wg_stride, 0.0f, packed_up, I, stride_mid, E, bfloat16);
+        encoder,
+        false,
+        false,
+        M_pad,
+        I,
+        D,
+        1.0f,
+        packed_x,
+        D,
+        stride_x,
+        wu,
+        I,
+        wg_stride,
+        0.0f,
+        packed_up,
+        I,
+        stride_mid,
+        E,
+        bfloat16);
     rocm::hipblaslt_gemm_batched(
-        encoder, false, true, M_pad, I, D, 1.0f, packed_dy, D, stride_x, wd,
-        D, wd_stride, 0.0f, packed_dh, I, stride_mid, E, bfloat16);
+        encoder,
+        false,
+        true,
+        M_pad,
+        I,
+        D,
+        1.0f,
+        packed_dy,
+        D,
+        stride_x,
+        wd,
+        D,
+        wd_stride,
+        0.0f,
+        packed_dh,
+        I,
+        stride_mid,
+        E,
+        bfloat16);
 
     rocm::swiglu_bwd_elem_bf16(
         encoder,
@@ -569,11 +668,45 @@ void MoeSwigluSortedVJP::eval_gpu(
         E * M_pad * I);
 
     rocm::hipblaslt_gemm_batched(
-        encoder, false, true, M_pad, D, I, 1.0f, packed_dg, I, stride_mid, wg,
-        I, wg_stride, 0.0f, packed_dx, D, stride_x, E, bfloat16);
+        encoder,
+        false,
+        true,
+        M_pad,
+        D,
+        I,
+        1.0f,
+        packed_dg,
+        I,
+        stride_mid,
+        wg,
+        I,
+        wg_stride,
+        0.0f,
+        packed_dx,
+        D,
+        stride_x,
+        E,
+        bfloat16);
     rocm::hipblaslt_gemm_batched(
-        encoder, false, true, M_pad, D, I, 1.0f, packed_du, I, stride_mid, wu,
-        I, wg_stride, 0.0f, packed_dx_u, D, stride_x, E, bfloat16);
+        encoder,
+        false,
+        true,
+        M_pad,
+        D,
+        I,
+        1.0f,
+        packed_du,
+        I,
+        stride_mid,
+        wu,
+        I,
+        wg_stride,
+        0.0f,
+        packed_dx_u,
+        D,
+        stride_x,
+        E,
+        bfloat16);
     rocm::bf16_add_inplace(
         encoder,
         gpu_ptr<void>(packed_dx_u),
@@ -589,14 +722,65 @@ void MoeSwigluSortedVJP::eval_gpu(
     rocm::moe_unpack_tokens(encoder, packed_dx, slot_map, dx, E, M_pad, D);
 
     rocm::hipblaslt_gemm_batched(
-        encoder, true, false, D, I, M_pad, 1.0f, packed_x, D, stride_x,
-        packed_dg, I, stride_mid, 0.0f, dwg, I, wg_stride, E, bfloat16);
+        encoder,
+        true,
+        false,
+        D,
+        I,
+        M_pad,
+        1.0f,
+        packed_x,
+        D,
+        stride_x,
+        packed_dg,
+        I,
+        stride_mid,
+        0.0f,
+        dwg,
+        I,
+        wg_stride,
+        E,
+        bfloat16);
     rocm::hipblaslt_gemm_batched(
-        encoder, true, false, D, I, M_pad, 1.0f, packed_x, D, stride_x,
-        packed_du, I, stride_mid, 0.0f, dwu, I, wg_stride, E, bfloat16);
+        encoder,
+        true,
+        false,
+        D,
+        I,
+        M_pad,
+        1.0f,
+        packed_x,
+        D,
+        stride_x,
+        packed_du,
+        I,
+        stride_mid,
+        0.0f,
+        dwu,
+        I,
+        wg_stride,
+        E,
+        bfloat16);
     rocm::hipblaslt_gemm_batched(
-        encoder, true, false, I, D, M_pad, 1.0f, packed_h, I, stride_mid,
-        packed_dy, D, stride_x, 0.0f, dwd, D, wd_stride, E, bfloat16);
+        encoder,
+        true,
+        false,
+        I,
+        D,
+        M_pad,
+        1.0f,
+        packed_h,
+        I,
+        stride_mid,
+        packed_dy,
+        D,
+        stride_x,
+        0.0f,
+        dwd,
+        D,
+        wd_stride,
+        E,
+        bfloat16);
     return;
   }
 
@@ -611,13 +795,33 @@ void MoeSwigluSortedVJP::eval_gpu(
   if (use_device_seg) {
     // ---- Explicit VALU device path ----
     rocm::moe_sorted_expert_gemm(
-        encoder, x, wg, ids, gate, T, /*N=*/I, /*K=*/D, E,
-        /*b_transposed=*/false, /*ldb=*/I, wg_stride);
+        encoder,
+        x,
+        wg,
+        ids,
+        gate,
+        T,
+        /*N=*/I,
+        /*K=*/D,
+        E,
+        /*b_transposed=*/false,
+        /*ldb=*/I,
+        wg_stride);
     rocm::moe_sorted_expert_gemm(
         encoder, x, wu, ids, up, T, I, D, E, false, I, wg_stride);
     rocm::moe_sorted_expert_gemm(
-        encoder, dy, wd, ids, dh, T, /*N=*/I, /*K=*/D, E,
-        /*b_transposed=*/true, /*ldb=*/D, wd_stride);
+        encoder,
+        dy,
+        wd,
+        ids,
+        dh,
+        T,
+        /*N=*/I,
+        /*K=*/D,
+        E,
+        /*b_transposed=*/true,
+        /*ldb=*/D,
+        wd_stride);
 
     rocm::swiglu_bwd_elem_bf16(
         encoder,
@@ -649,16 +853,52 @@ void MoeSwigluSortedVJP::eval_gpu(
     rocm::moe_sorted_segments(encoder, ids, segments, T, E);
 
     rocm::segmented_mm_device(
-        encoder, x, dg, segments, dwg, /*M=*/D, /*N=*/I, E,
-        /*a_transposed=*/true, /*lda=*/D, /*a_k_stride=*/D,
-        /*b_transposed=*/false, /*ldb=*/I, /*b_k_stride=*/I,
+        encoder,
+        x,
+        dg,
+        segments,
+        dwg,
+        /*M=*/D,
+        /*N=*/I,
+        E,
+        /*a_transposed=*/true,
+        /*lda=*/D,
+        /*a_k_stride=*/D,
+        /*b_transposed=*/false,
+        /*ldb=*/I,
+        /*b_k_stride=*/I,
         /*out_stride=*/wg_stride);
     rocm::segmented_mm_device(
-        encoder, x, du, segments, dwu, D, I, E, true, D, D, false, I, I,
+        encoder,
+        x,
+        du,
+        segments,
+        dwu,
+        D,
+        I,
+        E,
+        true,
+        D,
+        D,
+        false,
+        I,
+        I,
         wg_stride);
     rocm::segmented_mm_device(
-        encoder, h, dy, segments, dwd, /*M=*/I, /*N=*/D, E, true, /*lda=*/I,
-        /*a_k_stride=*/I, false, /*ldb=*/D, /*b_k_stride=*/D,
+        encoder,
+        h,
+        dy,
+        segments,
+        dwd,
+        /*M=*/I,
+        /*N=*/D,
+        E,
+        true,
+        /*lda=*/I,
+        /*a_k_stride=*/I,
+        false,
+        /*ldb=*/D,
+        /*b_k_stride=*/D,
         /*out_stride=*/wd_stride);
     return;
   }
@@ -707,25 +947,64 @@ void MoeSwigluSortedVJP::eval_gpu(
   char* dgB = static_cast<char*>(gpu_ptr<void>(dg));
   char* duB = static_cast<char*>(gpu_ptr<void>(du));
 
-  encoder.launch_kernel([ptr = gpu_ptr<void>(dwg), n = dwg.nbytes()](hipStream_t st) {
-    (void)hipMemsetAsync(ptr, 0, n, st);
-  });
-  encoder.launch_kernel([ptr = gpu_ptr<void>(dwu), n = dwu.nbytes()](hipStream_t st) {
-    (void)hipMemsetAsync(ptr, 0, n, st);
-  });
-  encoder.launch_kernel([ptr = gpu_ptr<void>(dwd), n = dwd.nbytes()](hipStream_t st) {
-    (void)hipMemsetAsync(ptr, 0, n, st);
-  });
+  encoder.launch_kernel(
+      [ptr = gpu_ptr<void>(dwg), n = dwg.nbytes()](hipStream_t st) {
+        (void)hipMemsetAsync(ptr, 0, n, st);
+      });
+  encoder.launch_kernel(
+      [ptr = gpu_ptr<void>(dwu), n = dwu.nbytes()](hipStream_t st) {
+        (void)hipMemsetAsync(ptr, 0, n, st);
+      });
+  encoder.launch_kernel(
+      [ptr = gpu_ptr<void>(dwd), n = dwd.nbytes()](hipStream_t st) {
+        (void)hipMemsetAsync(ptr, 0, n, st);
+      });
 
-  auto gemm = [&](bool ta, bool tb, int M, int N, int K, const char* a, int lda,
-                  const char* b, int ldb, float beta, char* c, int ldc) {
+  auto gemm = [&](bool ta,
+                  bool tb,
+                  int M,
+                  int N,
+                  int K,
+                  const char* a,
+                  int lda,
+                  const char* b,
+                  int ldb,
+                  float beta,
+                  char* c,
+                  int ldc) {
     if (rocm::is_hipblaslt_available()) {
       rocm::hipblaslt_gemm_ptrs(
-          encoder, ta, tb, M, N, K, 1.0f, a, lda, b, ldb, beta, c, ldc,
+          encoder,
+          ta,
+          tb,
+          M,
+          N,
+          K,
+          1.0f,
+          a,
+          lda,
+          b,
+          ldb,
+          beta,
+          c,
+          ldc,
           bfloat16);
     } else {
       rocm::rocblas_gemm_ptrs(
-          encoder, ta, tb, M, N, K, 1.0f, a, lda, b, ldb, beta, c, ldc,
+          encoder,
+          ta,
+          tb,
+          M,
+          N,
+          K,
+          1.0f,
+          a,
+          lda,
+          b,
+          ldb,
+          beta,
+          c,
+          ldc,
           bfloat16);
     }
   };
@@ -745,17 +1024,56 @@ void MoeSwigluSortedVJP::eval_gpu(
     const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
     const size_t wdoff = static_cast<size_t>(e) * wd_stride * esz;
 
-    gemm(false, false, Mseg, I, D, xB + xoff, D, wgB + wgoff, I, 0.0f,
-         gateB + ioff, I);
-    gemm(false, false, Mseg, I, D, xB + xoff, D, wuB + wgoff, I, 0.0f,
-         upB + ioff, I);
-    gemm(false, true, Mseg, I, D, dyB + xoff, D, wdB + wdoff, D, 0.0f,
-         dhB + ioff, I);
+    gemm(
+        false,
+        false,
+        Mseg,
+        I,
+        D,
+        xB + xoff,
+        D,
+        wgB + wgoff,
+        I,
+        0.0f,
+        gateB + ioff,
+        I);
+    gemm(
+        false,
+        false,
+        Mseg,
+        I,
+        D,
+        xB + xoff,
+        D,
+        wuB + wgoff,
+        I,
+        0.0f,
+        upB + ioff,
+        I);
+    gemm(
+        false,
+        true,
+        Mseg,
+        I,
+        D,
+        dyB + xoff,
+        D,
+        wdB + wdoff,
+        D,
+        0.0f,
+        dhB + ioff,
+        I);
   }
 
   rocm::swiglu_bwd_elem_bf16(
-      encoder, gpu_ptr<void>(gate), gpu_ptr<void>(up), gpu_ptr<void>(dh),
-      gpu_ptr<void>(h), gpu_ptr<void>(dg), gpu_ptr<void>(du), T * I);
+      encoder,
+      gpu_ptr<void>(gate),
+      gpu_ptr<void>(up),
+      gpu_ptr<void>(dh),
+      gpu_ptr<void>(h),
+      gpu_ptr<void>(dg),
+      gpu_ptr<void>(du),
+      T * I);
 
   // Pass 2: dx + dW
   for (int e = 0; e < E; ++e) {
@@ -769,17 +1087,72 @@ void MoeSwigluSortedVJP::eval_gpu(
     const size_t wgoff = static_cast<size_t>(e) * wg_stride * esz;
     const size_t wdoff = static_cast<size_t>(e) * wd_stride * esz;
 
-    gemm(false, true, Mseg, D, I, dgB + ioff, I, wgB + wgoff, I, 0.0f,
-         dxB + xoff, D);
-    gemm(false, true, Mseg, D, I, duB + ioff, I, wuB + wgoff, I, 1.0f,
-         dxB + xoff, D);
+    gemm(
+        false,
+        true,
+        Mseg,
+        D,
+        I,
+        dgB + ioff,
+        I,
+        wgB + wgoff,
+        I,
+        0.0f,
+        dxB + xoff,
+        D);
+    gemm(
+        false,
+        true,
+        Mseg,
+        D,
+        I,
+        duB + ioff,
+        I,
+        wuB + wgoff,
+        I,
+        1.0f,
+        dxB + xoff,
+        D);
 
-    gemm(true, false, D, I, Mseg, xB + xoff, D, dgB + ioff, I, 0.0f,
-         dwgB + wgoff, I);
-    gemm(true, false, D, I, Mseg, xB + xoff, D, duB + ioff, I, 0.0f,
-         dwuB + wgoff, I);
-    gemm(true, false, I, D, Mseg, hB + ioff, I, dyB + xoff, D, 0.0f,
-         dwdB + wdoff, D);
+    gemm(
+        true,
+        false,
+        D,
+        I,
+        Mseg,
+        xB + xoff,
+        D,
+        dgB + ioff,
+        I,
+        0.0f,
+        dwgB + wgoff,
+        I);
+    gemm(
+        true,
+        false,
+        D,
+        I,
+        Mseg,
+        xB + xoff,
+        D,
+        duB + ioff,
+        I,
+        0.0f,
+        dwuB + wgoff,
+        I);
+    gemm(
+        true,
+        false,
+        I,
+        D,
+        Mseg,
+        hB + ioff,
+        I,
+        dyB + xoff,
+        D,
+        0.0f,
+        dwdB + wdoff,
+        D);
   }
 }
 

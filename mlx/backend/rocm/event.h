@@ -17,8 +17,9 @@ struct HipEventHandle : public HipHandle<hipEvent_t, hipEventDestroy> {
   HipEventHandle(int flags);
   int flags;
   // The HIP device the event was created on. A hipEvent is bound to its device:
-  // recording it on a stream of a DIFFERENT device is invalid and on a multi-GPU
-  // host hangs the queue. The pool must hand back an event from the right device.
+  // recording it on a stream of a DIFFERENT device is invalid and on a
+  // multi-GPU host hangs the queue. The pool must hand back an event from the
+  // right device.
   int device{0};
 };
 

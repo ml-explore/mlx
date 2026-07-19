@@ -17,9 +17,10 @@ namespace mlx::core::gpu {
 void init() {
   // Initialize the SELECTED default GPU's primary context — not device 0. On a
   // multi-GPU host, creating a context/queue on the other GPU (the APU) too is
-  // what differs from HIP_VISIBLE_DEVICES, and that cross-device queue coexistence
-  // is what wedges the discrete GPU's command queue over a TB5 link. Touch only
-  // the chosen device so the runtime behaves as if it were the only one.
+  // what differs from HIP_VISIBLE_DEVICES, and that cross-device queue
+  // coexistence is what wedges the discrete GPU's command queue over a TB5
+  // link. Touch only the chosen device so the runtime behaves as if it were the
+  // only one.
   auto d = mlx::core::default_device();
   if (d.type == mlx::core::Device::gpu) {
     (void)hipSetDevice(d.index);
@@ -47,7 +48,8 @@ static bool is_graph_split_op(const char* name) {
   static const bool no_split = std::getenv("MLX_NO_CONCAT_SPLIT") != nullptr;
   // Decode-mode keeps the whole forward in one graph, so Concatenate must be a
   // graph node (validated bit-identical via ExecUpdate), never a split point.
-  if (no_split || rocm::graph_decode_mode()) return false;
+  if (no_split || rocm::graph_decode_mode())
+    return false;
   return std::strcmp(name, "Concatenate") == 0;
 }
 
