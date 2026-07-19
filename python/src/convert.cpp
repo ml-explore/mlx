@@ -239,6 +239,15 @@ mx::array nd_array_to_mlx(
           throw std::invalid_argument(
               "Cannot import a CPU DLPack array without a copy on this backend.");
         }
+        // The buffer is reinterpreted, not converted, so the source element
+        // size must match the destination dtype. MLX maps some numpy dtypes to
+        // a different-width mlx dtype (e.g. float64 -> float32), which the
+        // dst==src check above does not catch; guard on the physical size.
+        if (nd_array.itemsize() != mx::size_of(dst_dtype)) {
+          throw std::invalid_argument(
+              "Cannot import a CPU DLPack array without a copy: the source "
+              "element size does not match the destination dtype.");
+        }
         auto [storage_size, strides, flags] =
             get_strided_layout(nd_array, shape);
         auto offset = nd_array.byte_offset();
