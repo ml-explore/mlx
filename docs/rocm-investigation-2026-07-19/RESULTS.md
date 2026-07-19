@@ -10,6 +10,15 @@
 
 ## Executive verdict
 
+## Upstream draft PR
+
+**Draft PR (docs only):** https://github.com/NripeshN/mlx/pull/12  
+**Head:** `lemonade-sdk/mlx` branch `investigate/rocm-dual-load-segv`  
+**Base:** `NripeshN/mlx` `rocm-support`  
+
+Note: `antmikinka/mlx` / `antmikinka/mlx-rocm` are forks of **ml-explore/mlx**, not NripeshN — PRs to NripeshN must use **lemonade-sdk/mlx** (fork of NripeshN/mlx). NripeshN/mlx has **issues disabled**; draft PR is the discussion vehicle.
+
+
 | Question | Answer |
 |----------|--------|
 | Is there a **confirmed mlx ROCm failure mode** on this machine? | **YES — dual large-model process load → SIGSEGV (exit 139)** |
