@@ -228,11 +228,41 @@ mx::array nd_array_to_mlx(
   }
   switch (device_type) {
     case nb::device::cpu::value: {
-      if (copy.has_value() && copy.value() == false) {
-        throw std::invalid_argument(
-            "Cannot import a CPU DLPack array without a copy.");
-      }
       auto shape = get_shape(nd_array);
+      if (copy.has_value() && copy.value() == false) {
+        // Zero-copy import of a CPU host buffer. On unified memory the host
+        // pointer is GPU-addressable, so adopt it directly via the Metal
+        // allocator (newBufferWithBytesNoCopy) instead of copying. Requires a
+        // page-aligned pointer; make_buffer returns a null buffer otherwise.
+        // A dtype conversion has already been rejected above for copy==false.
+        if (!mx::metal::is_available()) {
+          throw std::invalid_argument(
+              "Cannot import a CPU DLPack array without a copy on this backend.");
+        }
+        auto [storage_size, strides, flags] =
+            get_strided_layout(nd_array, shape);
+        auto offset = nd_array.byte_offset();
+        auto buf = mx::allocator::make_buffer(
+            const_cast<void*>(nd_array.data()),
+            storage_size * mx::size_of(dst_dtype));
+        if (buf.ptr() == nullptr) {
+          throw std::invalid_argument(
+              "Cannot import a CPU DLPack array without a copy: the buffer is "
+              "not page-aligned.");
+        }
+        mx::array out(shape, dst_dtype, nullptr, {});
+        out.set_data(
+            buf,
+            storage_size,
+            std::move(strides),
+            flags,
+            offset,
+            [owner = std::move(nd_array)](mx::allocator::Buffer b) {
+              mx::allocator::free(b);
+            });
+        out.set_status(mx::array::Status::available);
+        return out;
+      }
       return dispatch_dlpack_dtype(
           src_dlpack_dtype,
           [&]<typename T>(mx::Dtype src_dtype) {
