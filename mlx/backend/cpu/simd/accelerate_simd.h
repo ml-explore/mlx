@@ -63,12 +63,17 @@ struct Simd {
 
   template <
       typename U,
-      typename = std::enable_if_t<!std::is_same_v<U, bfloat16_t>>>
+      typename = std::enable_if_t<
+          !std::is_same_v<U, bfloat16_t> &&
+          (MLX_SIMD_LIBRARY_VERSION >= 6 || !std::is_same_v<U, float16_t>)>>
   Simd<T, N>(Simd<U, N> other) : value(asd::convert<scalar_t>(other.value)) {}
 
   template <
       typename U,
-      typename = std::enable_if_t<!std::is_same_v<U, Simd<bfloat16_t, N>>>>
+      typename = std::enable_if_t<
+          !std::is_same_v<U, Simd<bfloat16_t, N>> &&
+          (MLX_SIMD_LIBRARY_VERSION >= 6 ||
+           !std::is_same_v<U, Simd<float16_t, N>>)>>
   Simd<T, N>(U v) : value(v){};
 
   Simd<T, N>(Simd<T, N / 2> x, Simd<T, N / 2> y) {
