@@ -22,7 +22,7 @@
 namespace mlx::core::rocm {
 // True from HIP-graph capture start until the captured graph is destroyed.
 bool graph_active();
-}
+} // namespace mlx::core::rocm
 #endif
 
 namespace mlx::core {
@@ -45,8 +45,7 @@ void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {
       return;
     }
   }
-  CopyType ctype =
-      in.flags().contiguous ? CopyType::Vector : CopyType::General;
+  CopyType ctype = in.flags().contiguous ? CopyType::Vector : CopyType::General;
   copy_gpu(in, out, ctype);
 }
 

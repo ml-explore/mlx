@@ -118,3 +118,12 @@ On this APU: **never** run two full 35B MLX processes. Engine docs (loop6) alrea
 | Clear Thought | Falsified “exclusive chat always broken”; confirmed dual-load |
 
 *End of investigation pack. Next loop: optional issue draft PR or pure-mlx microbench for OOM handling.*
+
+## CI / lint (PR #13)
+
+CI runs `pre-commit` with **`--all-files`** (see `.github/workflows/build_and_test.yml` → pre-commit/action default).  
+The investigation docs alone do not touch C++ sources, but **Check Lint** still formats the whole tree against clang-format v21 / cmake-format.  
+
+This branch includes a **lint-only** commit so `Check Lint` is green for maintainer review. No intentional behavior change in ROCm kernels.
+
+

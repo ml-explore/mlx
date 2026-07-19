@@ -80,8 +80,7 @@ struct DecodeArena {
   size_t floor_wrapper{0};
 
   bool contains(const void* p) const {
-    return base && p >= base &&
-        p < static_cast<const char*>(base) + capacity;
+    return base && p >= base && p < static_cast<const char*>(base) + capacity;
   }
 };
 

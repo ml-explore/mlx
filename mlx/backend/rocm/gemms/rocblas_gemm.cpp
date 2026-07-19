@@ -365,8 +365,8 @@ void rocblas_gemm_ptrs(
       if (status != rocblas_status_success) {
         throw std::runtime_error(
             "rocblas_gemm_ptrs bf16 failed: " +
-            std::to_string(static_cast<int>(status)) + " MNK=" +
-            std::to_string(M) + "," + std::to_string(N) + "," +
+            std::to_string(static_cast<int>(status)) +
+            " MNK=" + std::to_string(M) + "," + std::to_string(N) + "," +
             std::to_string(K));
       }
     } else if (dtype == float16) {

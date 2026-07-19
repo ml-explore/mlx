@@ -121,8 +121,9 @@ void moe_sorted_expert_gemm(
     int64_t ldb,
     int64_t b_expert_stride);
 
-// Max expert run length in sorted expert_ids[T] → device scalar int32 (atomicMax).
-// No host sync. Caller may D2H 4 bytes to size M_pad (tiny sync) or keep on device.
+// Max expert run length in sorted expert_ids[T] → device scalar int32
+// (atomicMax). No host sync. Caller may D2H 4 bytes to size M_pad (tiny sync)
+// or keep on device.
 void moe_max_run_length(
     CommandEncoder& encoder,
     const array& expert_ids, // [T] uint32 sorted
@@ -138,10 +139,11 @@ int moe_max_run_length_sync(
     int T,
     int E);
 
-// Host-side M_pad for pack GEMMs. Caches max-run per (T,E) so we StreamSynchronize
-// once per shape, not once per MoE layer. Env:
+// Host-side M_pad for pack GEMMs. Caches max-run per (T,E) so we
+// StreamSynchronize once per shape, not once per MoE layer. Env:
 //   MLX_ROCM_MOE_PAD_SYNC=always — remeasure every call (debug)
-//   MLX_ROCM_MOE_PAD_SYNC=0      — heuristic only, never D2H (may OOB if extreme imbalance)
+//   MLX_ROCM_MOE_PAD_SYNC=0      — heuristic only, never D2H (may OOB if
+//   extreme imbalance)
 int moe_pack_m_pad(
     CommandEncoder& encoder,
     const array& expert_ids,
@@ -166,7 +168,8 @@ void moe_ws_begin(CommandEncoder& encoder, size_t bytes_needed);
 void moe_ws_alloc(CommandEncoder& encoder, array& a);
 
 // Pack sorted MoE tokens into a dense [E, M_fixed, K] buffer (atomic slots).
-// slot_map[e, s] = source token row, or -1 if unused. counts[e] = tokens packed.
+// slot_map[e, s] = source token row, or -1 if unused. counts[e] = tokens
+// packed.
 void moe_pack_tokens(
     CommandEncoder& encoder,
     const array& a, // [batch, K]
@@ -247,7 +250,8 @@ void bf16_concat_rows(
     int T,
     int K);
 
-// Split [T, 2K] into a[T,K] and b[T,K] (or [E,M,2K]→ two [E,M,K] with same layout).
+// Split [T, 2K] into a[T,K] and b[T,K] (or [E,M,2K]→ two [E,M,K] with same
+// layout).
 void bf16_split_rows(
     CommandEncoder& encoder,
     const void* ab,

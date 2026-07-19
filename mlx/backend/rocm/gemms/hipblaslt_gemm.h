@@ -32,8 +32,8 @@ void hipblaslt_gemm(
     int ldc,
     Dtype dtype);
 
-// Optional fused epilogue (bias / GELU / Swish / combos). Bias length must match
-// the GEMM N dim (output features) for the usual Linear row-major layout.
+// Optional fused epilogue (bias / GELU / Swish / combos). Bias length must
+// match the GEMM N dim (output features) for the usual Linear row-major layout.
 // epilogue: hipblasLtEpilogue_t cast to int (HIPBLASLT_EPILOGUE_*).
 // Kill-switch: MLX_ROCM_NO_HIPBLASLT_EPILOGUE=1 forces DEFAULT (no epi).
 void hipblaslt_gemm_epilogue(
@@ -78,7 +78,8 @@ void hipblaslt_gemm_batched(
 
 // Raw hipBLASLt GEMM — parameters already in column-major convention
 // (A/B swapped, M/N swapped). Call directly from inside kernel lambdas.
-// Same as hipblaslt_gemm but with raw device pointers (segmented / offset GEMMs).
+// Same as hipblaslt_gemm but with raw device pointers (segmented / offset
+// GEMMs).
 void hipblaslt_gemm_ptrs(
     CommandEncoder& encoder,
     bool transpose_a,
@@ -98,7 +99,8 @@ void hipblaslt_gemm_ptrs(
 
 // Row-major MLX convention (same as hipblaslt_gemm_ptrs) but callable from a
 // host callback / raw stream without a CommandEncoder. Used by async MoE
-// segment launch (hipLaunchHostFunc) so the main thread never StreamSynchronize.
+// segment launch (hipLaunchHostFunc) so the main thread never
+// StreamSynchronize.
 void hipblaslt_gemm_rowmajor_on_stream(
     hipStream_t stream,
     int device_id,

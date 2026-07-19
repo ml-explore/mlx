@@ -1,16 +1,16 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/rocm/device.h"
 #include <algorithm>
 #include <atomic>
-#include "mlx/backend/rocm/device.h"
 #include "mlx/backend/rocm/utils.h"
 #include "mlx/backend/rocm/worker.h"
 #include "mlx/utils.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <chrono>
 #include <future>
 #include <iostream>
 #include <map>
@@ -39,9 +39,9 @@ static std::atomic<bool> g_graph_decode_mode{false};
 
 bool use_hip_graphs() {
   // The rebuild-every-eval graph-build path is a net loss vs eager (and the
-  // prefill variant segfaults on RDNA3.5). Decode uses build-once capture/replay
-  // (decode_capture_*) and prefill uses the WMMA GEMM — neither goes through
-  // here — so this path is permanently off.
+  // prefill variant segfaults on RDNA3.5). Decode uses build-once
+  // capture/replay (decode_capture_*) and prefill uses the WMMA GEMM — neither
+  // goes through here — so this path is permanently off.
   //
   // Train graphs: also hard-off until a TrainArena (see RocmAllocator
   // train_arena_*) wraps the step tape with stable addresses. Flipping this
@@ -63,8 +63,8 @@ void record_inline_launch() {
 }
 
 // Per-arch op/MB caps for the build graph. Tunable via env.
-// The earlier "corrupts at >3 nodes" was actually one bad op (Concatenate, whose
-// multi-copy kernels corrupt when co-grouped); it is now graph-split in
+// The earlier "corrupts at >3 nodes" was actually one bad op (Concatenate,
+// whose multi-copy kernels corrupt when co-grouped); it is now graph-split in
 // gpu::eval (is_graph_split_op), so large graphs are correct again.
 static std::pair<int, int> get_graph_limits() {
   int ops = env::max_ops_per_buffer(50);
@@ -483,12 +483,12 @@ void CommandEncoder::insert_graph_dependencies(std::vector<GraphNode> nodes) {
   //      reuse — a bare submission chain leaves same-signature nodes ambiguous
   //      and corrupts under ExecUpdate.
   //  (2) A submission-order CHAIN edge (last_node_ -> node) as a backstop. Not
-  //      every migrated kernel registers all of its I/O (the dense GEMM path and
-  //      a few others register nothing), so the real-dep graph alone has missing
-  //      edges -> races -> coherent-but-wrong output. The chain is a superset of
-  //      the true partial order (eager runs serial on one stream), so it fills
-  //      every gap and makes the graph bit-correct vs eager, while the real
-  //      edges still uniquely identify nodes for ExecUpdate.
+  //      every migrated kernel registers all of its I/O (the dense GEMM path
+  //      and a few others register nothing), so the real-dep graph alone has
+  //      missing edges -> races -> coherent-but-wrong output. The chain is a
+  //      superset of the true partial order (eager runs serial on one stream),
+  //      so it fills every gap and makes the graph bit-correct vs eager, while
+  //      the real edges still uniquely identify nodes for ExecUpdate.
   for (auto& node : nodes) {
     graph_nodes_key_ += node.node_type;
     graph_nodes_key_ += "-";
@@ -604,13 +604,14 @@ void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
   std::string key = kernel_node_key(kp);
 
   hipGraphNode_t node;
-  hipError_t kn_err = hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kp);
+  hipError_t kn_err =
+      hipGraphAddKernelNode(&node, build_graph_, nullptr, 0, &kp);
   if (kn_err != hipSuccess) {
     // ROCm's hipGraphAddKernelNode rejects some kernels with invalid-argument
-    // (certain WMMA / single-block / JIT kernels). In replay mode, don't split —
-    // CAPTURE the launch into a child graph node (CUDA's model: capture records
-    // any launched kernel that the manual node API won't accept), so the chunk
-    // stays ~1 fragment. Else fall back to the eager graph-split.
+    // (certain WMMA / single-block / JIT kernels). In replay mode, don't split
+    // — CAPTURE the launch into a child graph node (CUDA's model: capture
+    // records any launched kernel that the manual node API won't accept), so
+    // the chunk stays ~1 fragment. Else fall back to the eager graph-split.
     (void)hipGetLastError();
     static const bool cap_reject = [] {
       const char* e = std::getenv("MLX_GRAPH_PREFILL_REPLAY");
@@ -618,10 +619,16 @@ void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
     }();
     if (cap_reject && !graph_decode_mode()) {
       device_.make_current();
-      hipError_t be = hipStreamBeginCapture(stream_, hipStreamCaptureModeThreadLocal);
+      hipError_t be =
+          hipStreamBeginCapture(stream_, hipStreamCaptureModeThreadLocal);
       if (be == hipSuccess) {
-        (void)hipLaunchKernel(kp.func, kp.gridDim, kp.blockDim, kp.kernelParams,
-                              kp.sharedMemBytes, stream_);
+        (void)hipLaunchKernel(
+            kp.func,
+            kp.gridDim,
+            kp.blockDim,
+            kp.kernelParams,
+            kp.sharedMemBytes,
+            stream_);
         hipGraph_t child = nullptr;
         hipError_t ee = hipStreamEndCapture(stream_, &child);
         if (ee == hipSuccess && child) {
@@ -641,8 +648,13 @@ void CommandEncoder::add_kernel_node_kp(const hipKernelNodeParams& kp) {
     }
     commit();
     device_.make_current();
-    (void)hipLaunchKernel(kp.func, kp.gridDim, kp.blockDim, kp.kernelParams,
-                          kp.sharedMemBytes, stream_);
+    (void)hipLaunchKernel(
+        kp.func,
+        kp.gridDim,
+        kp.blockDim,
+        kp.kernelParams,
+        kp.sharedMemBytes,
+        stream_);
     record_inline_launch();
     return;
   }
@@ -662,15 +674,22 @@ void CommandEncoder::add_module_kernel_node(
     device_.make_current();
     CHECK_HIP_ERROR(hipModuleLaunchKernel(
         reinterpret_cast<hipFunction_t>(func),
-        grid_dim.x, grid_dim.y, grid_dim.z,
-        block_dim.x, block_dim.y, block_dim.z,
-        smem_bytes, stream_, params, nullptr));
+        grid_dim.x,
+        grid_dim.y,
+        grid_dim.z,
+        block_dim.x,
+        block_dim.y,
+        block_dim.z,
+        smem_bytes,
+        stream_,
+        params,
+        nullptr));
     node_count_++;
     return;
   }
   // Graph path: the node references `params` (which point into the kept-alive
-  // KernelArgs) until commit instantiates the graph. A module hipFunction_t is a
-  // valid hipKernelNodeParams.func on ROCm 7.13 (see device.h note).
+  // KernelArgs) until commit instantiates the graph. A module hipFunction_t is
+  // a valid hipKernelNodeParams.func on ROCm 7.13 (see device.h note).
   if (args_keepalive) {
     graph_node_args_.push_back(std::move(args_keepalive));
   }
@@ -681,13 +700,14 @@ void CommandEncoder::add_child_graph_node(
     hipGraph_t child,
     const std::string& key) {
   // hipGraphExecUpdate does NOT refresh kernel params nested inside child-graph
-  // nodes (confirmed: it returns success but the child keeps stale kernargs), so
-  // embedding a child node silently breaks graph reuse across tokens. Flatten the
-  // child's kernels into build_graph_ as TOP-LEVEL kernel nodes via the normal
-  // add path so ExecUpdate refreshes them. The child's kernelParams point at the
-  // caller's arg storage (kept alive like any other op), and chain-edge ordering
-  // serializes the flattened nodes correctly. Fall back to embedding the child
-  // as-is only if it contains non-kernel nodes (none observed in practice).
+  // nodes (confirmed: it returns success but the child keeps stale kernargs),
+  // so embedding a child node silently breaks graph reuse across tokens.
+  // Flatten the child's kernels into build_graph_ as TOP-LEVEL kernel nodes via
+  // the normal add path so ExecUpdate refreshes them. The child's kernelParams
+  // point at the caller's arg storage (kept alive like any other op), and
+  // chain-edge ordering serializes the flattened nodes correctly. Fall back to
+  // embedding the child as-is only if it contains non-kernel nodes (none
+  // observed in practice).
   size_t n = 0;
   hipGraphGetNodes(child, nullptr, &n);
   std::vector<hipGraphNode_t> cnodes(n);
@@ -714,7 +734,8 @@ void CommandEncoder::add_child_graph_node(
   if (all_kernels) {
     std::unordered_map<hipGraphNode_t, int> indeg;
     std::unordered_map<hipGraphNode_t, std::vector<hipGraphNode_t>> succ;
-    for (auto nd : cnodes) indeg[nd] = 0;
+    for (auto nd : cnodes)
+      indeg[nd] = 0;
     for (size_t i = 0; i < ne; i++) {
       succ[cfrom[i]].push_back(cto[i]);
       indeg[cto[i]]++;
@@ -722,10 +743,12 @@ void CommandEncoder::add_child_graph_node(
     std::vector<hipGraphNode_t> order;
     order.reserve(n);
     for (auto nd : cnodes)
-      if (indeg[nd] == 0) order.push_back(nd);
+      if (indeg[nd] == 0)
+        order.push_back(nd);
     for (size_t h = 0; h < order.size(); h++)
       for (auto s : succ[order[h]])
-        if (--indeg[s] == 0) order.push_back(s);
+        if (--indeg[s] == 0)
+          order.push_back(s);
     if (order.size() == n) {
       bool ok = true;
       std::vector<hipKernelNodeParams> kps(n);
@@ -736,7 +759,8 @@ void CommandEncoder::add_child_graph_node(
       }
       if (ok) {
         for (size_t i = 0; i < n; i++) {
-          add_kernel_node_kp(kps[i]); // preserve full params (kernelParams+extra)
+          add_kernel_node_kp(
+              kps[i]); // preserve full params (kernelParams+extra)
         }
         return;
       }
@@ -765,10 +789,10 @@ bool CommandEncoder::needs_commit() {
   if (!use_hip_graphs()) {
     return node_count_ >= env::max_ops_per_buffer(default_max_ops_per_buffer);
   }
-  // Decode-mode: never split mid-forward — the whole single-token forward becomes
-  // one graph, committed once at finalize, refreshed via ExecUpdate. Decode's live
-  // intermediates are small, so the per-graph caps (which bound prefill) aren't
-  // needed here.
+  // Decode-mode: never split mid-forward — the whole single-token forward
+  // becomes one graph, committed once at finalize, refreshed via ExecUpdate.
+  // Decode's live intermediates are small, so the per-graph caps (which bound
+  // prefill) aren't needed here.
   if (graph_decode_mode()) {
     return false;
   }
@@ -780,20 +804,22 @@ bool CommandEncoder::needs_commit() {
 // The manual-node chain can't capture the ~1.4k library/JIT/memset ops that go
 // through launch_kernel during decode. Instead, run the whole forward with
 // graphs OFF (every kernel launches on stream_), wrap it in one stream capture,
-// and relaunch that single exec each token. The deterministic decode arena makes
-// every token's buffer addresses identical, so the captured exec's baked
+// and relaunch that single exec each token. The deterministic decode arena
+// makes every token's buffer addresses identical, so the captured exec's baked
 // pointers stay valid; per-token input/position/GDN-state are injected into
 // those fixed buffers before each relaunch.
 
 bool CommandEncoder::decode_capture_begin() {
   device_.make_current();
   g_decode_capturing.store(true, std::memory_order_relaxed);
-  hipError_t e = hipStreamBeginCapture(stream_, hipStreamCaptureModeThreadLocal);
+  hipError_t e =
+      hipStreamBeginCapture(stream_, hipStreamCaptureModeThreadLocal);
   if (e != hipSuccess) {
     g_decode_capturing.store(false, std::memory_order_relaxed);
     (void)hipGetLastError();
     static const bool dbg = std::getenv("MLX_PURE_DEBUG") != nullptr;
-    if (dbg) fprintf(stderr, "[cap] BeginCapture failed: %s\n", hipGetErrorString(e));
+    if (dbg)
+      fprintf(stderr, "[cap] BeginCapture failed: %s\n", hipGetErrorString(e));
     return false;
   }
   return true;
@@ -807,9 +833,11 @@ bool CommandEncoder::decode_capture_end_record(int slot) {
   hipError_t ee = hipStreamEndCapture(stream_, &g);
   g_decode_capturing.store(false, std::memory_order_relaxed);
   if (ee != hipSuccess || !g) {
-    if (g) hipGraphDestroy(g);
+    if (g)
+      hipGraphDestroy(g);
     (void)hipGetLastError();
-    if (dbg) fprintf(stderr, "[cap] EndCapture failed: %s\n", hipGetErrorString(ee));
+    if (dbg)
+      fprintf(stderr, "[cap] EndCapture failed: %s\n", hipGetErrorString(ee));
     return false;
   }
   size_t nn = 0;
@@ -821,31 +849,56 @@ bool CommandEncoder::decode_capture_end_record(int slot) {
       int n_kernel = 0, n_memcpy = 0, n_memset = 0, n_event = 0, n_other = 0;
       for (auto& nd : nodes) {
         hipGraphNodeType ty;
-        if (hipGraphNodeGetType(nd, &ty) != hipSuccess) { n_other++; continue; }
+        if (hipGraphNodeGetType(nd, &ty) != hipSuccess) {
+          n_other++;
+          continue;
+        }
         switch (ty) {
-          case hipGraphNodeTypeKernel: n_kernel++; break;
-          case hipGraphNodeTypeMemcpy: n_memcpy++; break;
-          case hipGraphNodeTypeMemset: n_memset++; break;
+          case hipGraphNodeTypeKernel:
+            n_kernel++;
+            break;
+          case hipGraphNodeTypeMemcpy:
+            n_memcpy++;
+            break;
+          case hipGraphNodeTypeMemset:
+            n_memset++;
+            break;
           case hipGraphNodeTypeEventRecord:
-          case hipGraphNodeTypeWaitEvent: n_event++; break;
-          default: n_other++; break;
+          case hipGraphNodeTypeWaitEvent:
+            n_event++;
+            break;
+          default:
+            n_other++;
+            break;
         }
       }
-      fprintf(stderr, "[cap] node types: kernel=%d memcpy=%d memset=%d event=%d other=%d\n",
-              n_kernel, n_memcpy, n_memset, n_event, n_other);
+      fprintf(
+          stderr,
+          "[cap] node types: kernel=%d memcpy=%d memset=%d event=%d other=%d\n",
+          n_kernel,
+          n_memcpy,
+          n_memset,
+          n_event,
+          n_other);
     }
   }
-  if (nn == 0) { hipGraphDestroy(g); return false; }
+  if (nn == 0) {
+    hipGraphDestroy(g);
+    return false;
+  }
   hipGraphExec_t exec = nullptr;
   hipError_t ie = hipGraphInstantiate(&exec, g, nullptr, nullptr, 0);
   if (ie != hipSuccess) {
-    if (dbg) fprintf(stderr, "[cap] Instantiate failed: %s\n", hipGetErrorString(ie));
+    if (dbg)
+      fprintf(stderr, "[cap] Instantiate failed: %s\n", hipGetErrorString(ie));
     hipGraphDestroy(g);
     (void)hipGetLastError();
     return false;
   }
-  if (decode_cap_exec_[slot]) hipGraphExecDestroy(decode_cap_exec_[slot]);
-  if (decode_cap_graph_[slot]) hipGraphDestroy(decode_cap_graph_[slot]);
+  if (decode_cap_exec_[slot])
+    hipGraphExecDestroy(decode_cap_exec_[slot]);
+  if (decode_cap_graph_[slot])
+    hipGraphDestroy(decode_cap_graph_[slot]);
   decode_cap_graph_[slot] = g;
   decode_cap_exec_[slot] = exec;
   // Stream capture records WITHOUT executing — run the exec once to actually
@@ -857,7 +910,8 @@ bool CommandEncoder::decode_capture_end_record(int slot) {
 
 bool CommandEncoder::decode_capture_replay(int slot) {
   slot &= 1;
-  if (!decode_cap_exec_[slot]) return false;
+  if (!decode_cap_exec_[slot])
+    return false;
   device_.make_current();
   CHECK_HIP_ERROR(hipGraphLaunch(decode_cap_exec_[slot], stream_));
   worker_->commit(stream_);
@@ -866,8 +920,14 @@ bool CommandEncoder::decode_capture_replay(int slot) {
 
 void CommandEncoder::decode_capture_destroy() {
   for (int s = 0; s < 2; ++s) {
-    if (decode_cap_exec_[s]) { hipGraphExecDestroy(decode_cap_exec_[s]); decode_cap_exec_[s] = nullptr; }
-    if (decode_cap_graph_[s]) { hipGraphDestroy(decode_cap_graph_[s]); decode_cap_graph_[s] = nullptr; }
+    if (decode_cap_exec_[s]) {
+      hipGraphExecDestroy(decode_cap_exec_[s]);
+      decode_cap_exec_[s] = nullptr;
+    }
+    if (decode_cap_graph_[s]) {
+      hipGraphDestroy(decode_cap_graph_[s]);
+      decode_cap_graph_[s] = nullptr;
+    }
   }
 }
 
@@ -888,22 +948,25 @@ void CommandEncoder::commit() {
     device_.make_current();
 
     hipGraphExec_t graph_exec = nullptr;
-    bool build_graph_adopted = false; // build_graph_ became a slot's source graph
+    bool build_graph_adopted =
+        false; // build_graph_ became a slot's source graph
     std::shared_ptr<std::atomic<int>> inflight;
     ExecSlot* used_slot = nullptr;
     // Reuse a drained exec (inflight==0) for an identical kernel sequence. In
     // decode-mode the whole-forward graph recurs every token, so refresh the
-    // cached exec's params in one hipGraphExecUpdate; otherwise (or if ExecUpdate
-    // fails) reinstantiate into the slot. The slot owns the source graph + arg
-    // Packs for the exec's life (CLR stores kernelParams by pointer).
+    // cached exec's params in one hipGraphExecUpdate; otherwise (or if
+    // ExecUpdate fails) reinstantiate into the slot. The slot owns the source
+    // graph + arg Packs for the exec's life (CLR stores kernelParams by
+    // pointer).
     static const bool prefill_replay_cu = [] {
       const char* e = std::getenv("MLX_GRAPH_PREFILL_REPLAY");
       return e && e[0] == '1';
     }();
     const bool use_execupdate = graph_decode_mode() || prefill_replay_cu;
     auto& pool = exec_pool_[graph_nodes_key_ + ":" + graph_deps_key_];
-    // For the stable decode topology, grow the pool to N execs (skip reuse until
-    // then) so replay always finds a drained slot despite completion-flag lag.
+    // For the stable decode topology, grow the pool to N execs (skip reuse
+    // until then) so replay always finds a drained slot despite completion-flag
+    // lag.
     static const size_t replay_slots = [] {
       const char* e = std::getenv("MLX_GRAPH_REPLAY_SLOTS");
       return e ? std::max<size_t>(2, std::atoi(e)) : 4;
@@ -914,7 +977,8 @@ void CommandEncoder::commit() {
         (graph_nodes_key_ + ":" + graph_deps_key_) == grow_key &&
         pool.size() < replay_slots;
     for (auto& slot : pool) {
-      if (force_grow) break;
+      if (force_grow)
+        break;
       if (slot.inflight->load(std::memory_order_acquire) != 0) {
         continue;
       }
@@ -922,12 +986,14 @@ void CommandEncoder::commit() {
       if (use_execupdate) {
         hipGraphExecUpdateResult ur;
         hipGraphNode_t en;
-        if (hipGraphExecUpdate(slot.exec, build_graph_, &en, &ur) == hipSuccess &&
+        if (hipGraphExecUpdate(slot.exec, build_graph_, &en, &ur) ==
+                hipSuccess &&
             ur == hipGraphExecUpdateSuccess) {
           refreshed = true;
           build_graph_adopted = true; // exec now bound to build_graph_'s nodes
           slot.src_nodes = build_nodes_;
-          if (slot.source_graph) hipGraphDestroy(slot.source_graph);
+          if (slot.source_graph)
+            hipGraphDestroy(slot.source_graph);
           slot.source_graph = build_graph_;
         } else {
           (void)hipGetLastError();
@@ -942,7 +1008,8 @@ void CommandEncoder::commit() {
             hipGraphInstantiate(&slot.exec, build_graph_, nullptr, nullptr, 0));
         graph_exec = slot.exec;
         slot.src_nodes = build_nodes_;
-        if (slot.source_graph) hipGraphDestroy(slot.source_graph);
+        if (slot.source_graph)
+          hipGraphDestroy(slot.source_graph);
         slot.source_graph = build_graph_;
         build_graph_adopted = true;
       }
@@ -961,15 +1028,15 @@ void CommandEncoder::commit() {
     inflight->store(1, std::memory_order_release);
 
     // Reclaim this chunk's deferred-free buffers once it has drained, bounding
-    // graph-mode memory to a sliding window of chunks instead of a whole forward
-    // (which OOMs a 32GB card). Free with a generation LAG so a buffer is only
-    // released after the next few chunks have also launched — covers cross-chunk
-    // / in-place references that a lag-0 free races (use-after-free). Tunable via
-    // MLX_GRAPH_FREE_LAG.
-    // Opt-in (MLX_GRAPH_FREE_LAG): per-chunk reclaim is currently racy (frees a
-    // buffer the next chunk still references → UAF), so OFF by default — frees
-    // flush safely at the per-token synchronize. The real fix is 100% buffer
-    // reuse (deterministic per-forward addresses), not freeing.
+    // graph-mode memory to a sliding window of chunks instead of a whole
+    // forward (which OOMs a 32GB card). Free with a generation LAG so a buffer
+    // is only released after the next few chunks have also launched — covers
+    // cross-chunk / in-place references that a lag-0 free races
+    // (use-after-free). Tunable via MLX_GRAPH_FREE_LAG. Opt-in
+    // (MLX_GRAPH_FREE_LAG): per-chunk reclaim is currently racy (frees a buffer
+    // the next chunk still references → UAF), so OFF by default — frees flush
+    // safely at the per-token synchronize. The real fix is 100% buffer reuse
+    // (deterministic per-forward addresses), not freeing.
     static const long free_lag = [] {
       const char* e = std::getenv("MLX_GRAPH_FREE_LAG");
       return e ? std::atol(e) : -1;
@@ -983,8 +1050,8 @@ void CommandEncoder::commit() {
     }
     // Reclaim this chunk's stream-ordered POOL buffers now, via hipFreeAsync
     // queued right after the launch on stream_ (retires after the graph; no
-    // blocking drain). This is the common case on the discrete pool and keeps the
-    // peak bounded without stalling the pipeline.
+    // blocking drain). This is the common case on the discrete pool and keeps
+    // the peak bounded without stalling the pipeline.
     free_graph_generation_async(my_gen);
     // Backstop ONLY for the non-stream-ordered remainder (unified/slab buffers,
     // rare on the discrete path): if that residual backlog still exceeds a cap,
@@ -997,14 +1064,15 @@ void CommandEncoder::commit() {
       (void)hipStreamSynchronize(stream_);
       flush_graph_deferred_frees();
     }
-    // The completion handler fires after the stream drains this commit's launch;
-    // clear inflight so the slot can be reused next token.
+    // The completion handler fires after the stream drains this commit's
+    // launch; clear inflight so the slot can be reused next token.
     add_completed_handler(
         [inflight]() { inflight->store(0, std::memory_order_release); });
 
     // Lock in the stable decode topology key once it recurs on two consecutive
-    // tokens (the first decode token after prefill differs). Thereafter, matching
-    // tokens replay (build-once) — re-point a drained slot's params, no rebuild.
+    // tokens (the first decode token after prefill differs). Thereafter,
+    // matching tokens replay (build-once) — re-point a drained slot's params,
+    // no rebuild.
     if (graph_decode_mode() && used_slot && decode_key_.empty()) {
       std::string fk = graph_nodes_key_ + ":" + graph_deps_key_;
       if (fk == pending_decode_key_) {
@@ -1013,8 +1081,8 @@ void CommandEncoder::commit() {
         pending_decode_key_ = std::move(fk);
       }
     }
-    // Same for prefill: lock the full-size-chunk topology once it recurs (chunk 2
-    // matches chunk 1), then later chunks build-once/replay it.
+    // Same for prefill: lock the full-size-chunk topology once it recurs (chunk
+    // 2 matches chunk 1), then later chunks build-once/replay it.
     if (!graph_decode_mode() && used_slot && prefill_key_.empty()) {
       std::string fk = graph_nodes_key_ + ":" + graph_deps_key_;
       if (fk == pending_prefill_key_) {
@@ -1070,7 +1138,8 @@ void CommandEncoder::synchronize() {
   // in these vectors, so clearing here is safe.
   graph_node_args_.clear();
   graph_node_args_prev_.clear();
-  if (use_hip_graphs()) flush_graph_deferred_frees();
+  if (use_hip_graphs())
+    flush_graph_deferred_frees();
 }
 
 // Global flag: true while any stream on this process is recording a HIP graph.
@@ -1108,7 +1177,6 @@ void set_graph_decode_mode(bool v) {
   g_graph_decode_mode.store(v, std::memory_order_relaxed);
 }
 
-
 std::unordered_map<int, Device>& get_devices() {
   static std::unordered_map<int, Device> devices;
   return devices;
@@ -1121,10 +1189,10 @@ Device& device(mlx::core::Device device) {
     // Set blocking sync flags on THIS device (per index, not a single global
     // bool: if device 0 were touched first the global gate would leave device 1
     // unflagged). Must happen while this device is current and before its
-    // context is created — i.e. before the Device is constructed. Iterating every
-    // device would create a context/queue on the other GPU too; on a multi-GPU
-    // host that cross-device coexistence is what wedges the discrete GPU's queue
-    // over a TB5 link, so touch only this device.
+    // context is created — i.e. before the Device is constructed. Iterating
+    // every device would create a context/queue on the other GPU too; on a
+    // multi-GPU host that cross-device coexistence is what wedges the discrete
+    // GPU's queue over a TB5 link, so touch only this device.
     hipSetDevice(device.index);
     hipSetDeviceFlags(hipDeviceScheduleBlockingSync);
     it = devices.try_emplace(device.index, device.index).first;
@@ -1133,12 +1201,13 @@ Device& device(mlx::core::Device device) {
 }
 
 CommandEncoder& get_command_encoder(Stream s) {
-  // Bind the HIP current device to this stream's device. HIP's current device is
-  // per-thread; everything that touches a stream goes through here (eval, kernel
-  // launches, event record/wait, commit, completion callbacks). Without binding,
-  // operations for a non-default GPU (--device 1) execute against device 0 — the
-  // stream/event/kernel land on the wrong device and the queue hangs. With
-  // HIP_VISIBLE_DEVICES the only device IS index 0 so the bug is hidden.
+  // Bind the HIP current device to this stream's device. HIP's current device
+  // is per-thread; everything that touches a stream goes through here (eval,
+  // kernel launches, event record/wait, commit, completion callbacks). Without
+  // binding, operations for a non-default GPU (--device 1) execute against
+  // device 0 — the stream/event/kernel land on the wrong device and the queue
+  // hangs. With HIP_VISIBLE_DEVICES the only device IS index 0 so the bug is
+  // hidden.
   auto& d = device(s.device);
   d.make_current();
   return d.get_command_encoder(s);

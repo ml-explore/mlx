@@ -124,8 +124,8 @@ struct FusedKernelBuilder {
     for (const auto& x : outputs) {
       const std::string& xname = namer.get_name(x);
       std::string type = dtype_to_hip_type(x.dtype());
-      os += "  AlignedVector<" + type + ", work_per_thread> vec_" + xname +
-          ";\n";
+      os +=
+          "  AlignedVector<" + type + ", work_per_thread> vec_" + xname + ";\n";
     }
 
     // Work loop
@@ -855,7 +855,8 @@ void Compiled::eval_gpu(
   // Determine the work per thread for the vectorized reads/writes.
   // Prefer 32B vectors (was 16B) to cut launch count on large elementwise
   // fused graphs (bf16 → 16 elems/thread, fp32 → 8). Cap by device capability
-  // (wave32/low-CU iGPUs prefer smaller WPT — see max_compiled_work_per_thread).
+  // (wave32/low-CU iGPUs prefer smaller WPT — see
+  // max_compiled_work_per_thread).
   int max_size = 1;
   for (const auto& x : outputs) {
     max_size = (max_size > x.itemsize()) ? max_size : x.itemsize();
@@ -863,8 +864,7 @@ void Compiled::eval_gpu(
   int work_per_thread = 32 / max_size;
   if (work_per_thread < 1)
     work_per_thread = 1;
-  const int max_wpt =
-      rocm::device(s.device).max_compiled_work_per_thread();
+  const int max_wpt = rocm::device(s.device).max_compiled_work_per_thread();
   // Cap to the largest WPT we always instantiate below (i8 → 32 would
   // otherwise miss the symbol table) and to device capability.
   if (work_per_thread > max_wpt)
@@ -975,8 +975,7 @@ void Compiled::eval_gpu(
   }
 
   // Prefer chosen WPT, then 8, 4, 1 (all always instantiated).
-  const int fallback_wpts[] = {
-      work_per_thread, 8, 4, 1};
+  const int fallback_wpts[] = {work_per_thread, 8, 4, 1};
   hipFunction_t kernel = nullptr;
   for (int wpt : fallback_wpts) {
     if (wpt > max_wpt || wpt < 1)
@@ -1003,8 +1002,7 @@ void Compiled::eval_gpu(
       (outputs[0].data_size() + work_per_thread - 1) / work_per_thread;
   int block_size = encoder.device().preferred_block_size(
       total_work > INT_MAX ? -1 : static_cast<int>(total_work));
-  int num_blocks =
-      static_cast<int>((total_work + block_size - 1) / block_size);
+  int num_blocks = static_cast<int>((total_work + block_size - 1) / block_size);
   if (num_blocks < 1) {
     num_blocks = 1;
   }

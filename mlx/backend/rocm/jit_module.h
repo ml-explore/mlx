@@ -116,8 +116,8 @@ class JitModule {
 
 // Launch a module (JIT/CustomKernel) function, batching it into the HIP graph
 // when graphs are enabled (its hipFunction_t becomes a graph kernel node) or
-// launching immediately otherwise. When batched, the KernelArgs storage is moved
-// into a heap holder kept alive until the graph is instantiated.
+// launching immediately otherwise. When batched, the KernelArgs storage is
+// moved into a heap holder kept alive until the graph is instantiated.
 inline void launch_module_kernel(
     CommandEncoder& encoder,
     hipFunction_t kernel,
@@ -138,9 +138,16 @@ inline void launch_module_kernel(
     encoder.launch_kernel([&](hipStream_t stream) {
       (void)hipModuleLaunchKernel(
           kernel,
-          grid.x, grid.y, grid.z,
-          block.x, block.y, block.z,
-          smem_bytes, stream, args.args(), nullptr);
+          grid.x,
+          grid.y,
+          grid.z,
+          block.x,
+          block.y,
+          block.z,
+          smem_bytes,
+          stream,
+          args.args(),
+          nullptr);
     });
   }
 }

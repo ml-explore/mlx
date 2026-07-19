@@ -75,8 +75,9 @@ __device__ __forceinline__ void dequant_and_dot(
   }
 }
 
-// GEMV variant: 4 independent qdot partials (dual-issue-friendly). Caller reduces
-// them and applies scale/bias once per group — same result as dequant_and_dot.
+// GEMV variant: 4 independent qdot partials (dual-issue-friendly). Caller
+// reduces them and applies scale/bias once per group — same result as
+// dequant_and_dot.
 template <int BITS>
 __device__ __forceinline__ void dequant_and_dot4(
     uint32_t packed,
@@ -131,10 +132,10 @@ __device__ __forceinline__ void load_weight_vec(
 // Non-temporal weight load for GEMV: weights are read once, so emit streaming
 // (slc) loads that bypass L2, leaving it for the reused X/scales. GEMV-only.
 // Widened to vector transactions (was PPT scalar loads): 4-bit (PPT=2) -> one
-// b64, 8-bit (PPT=4) -> one b128. A single b128 is correct on RDNA 3.5 (gfx1151,
-// hipcc 7.13) — verified bit-identical 8-bit affine decode — so no arch split.
-// Fewer, wider loads raise memory-level parallelism on the latency-bound M=1
-// decode matvec.
+// b64, 8-bit (PPT=4) -> one b128. A single b128 is correct on RDNA 3.5
+// (gfx1151, hipcc 7.13) — verified bit-identical 8-bit affine decode — so no
+// arch split. Fewer, wider loads raise memory-level parallelism on the
+// latency-bound M=1 decode matvec.
 template <int BITS>
 __device__ __forceinline__ void load_weight_vec_streaming(
     const uint32_t* __restrict__ ptr,

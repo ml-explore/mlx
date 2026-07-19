@@ -4,8 +4,8 @@
 #include "mlx/backend/rocm/device.h"
 #include "mlx/fast_primitives.h"
 
-#include <cstdlib>
 #include <hip/hip_runtime.h>
+#include <cstdlib>
 
 namespace mlx::core {
 
@@ -121,8 +121,7 @@ bool prefer_flash_for_decode(
   // microseconds the vector decode kernel needs (it parallelizes over the KV
   // length). Default decode to the vector kernel; opt back into flash only via
   // env for experimentation.
-  static const bool enable =
-      std::getenv("MLX_SDPA_DECODE_FLASH") != nullptr;
+  static const bool enable = std::getenv("MLX_SDPA_DECODE_FLASH") != nullptr;
   if (!enable) {
     return false;
   }
@@ -162,8 +161,7 @@ bool ScaledDotProductAttention::use_fallback(
   bool flash_ok = supports_sdpa_flash(
       q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp);
 #ifdef MLX_HAS_ROCM_WMMA
-  static const bool wmma_disabled =
-      std::getenv("MLX_SDPA_NO_WMMA") != nullptr;
+  static const bool wmma_disabled = std::getenv("MLX_SDPA_NO_WMMA") != nullptr;
   bool wmma_ok = !wmma_disabled &&
       supports_sdpa_flash_wmma(q, k, v, has_arr_mask, output_logsumexp) &&
       s.device == Device::gpu && rocm::device(s.device).has_native_wmma() &&
@@ -210,8 +208,7 @@ void ScaledDotProductAttention::eval_gpu(
   // kernel's tiled footprint must fit this device's shared-memory-per-block.
   // Escape hatch for A/B profiling: MLX_SDPA_NO_WMMA=1 forces the scalar flash
   // / vector path even where the matrix-core kernel is available.
-  static const bool wmma_disabled =
-      std::getenv("MLX_SDPA_NO_WMMA") != nullptr;
+  static const bool wmma_disabled = std::getenv("MLX_SDPA_NO_WMMA") != nullptr;
   bool wmma_supported = !wmma_disabled &&
       supports_sdpa_flash_wmma(q, k, v, has_arr_mask, output_logsumexp_) &&
       !has_sinks_ && rocm::device(s.device).has_native_wmma() &&
@@ -318,7 +315,8 @@ void ScaledDotProductAttentionVJP::eval_gpu(
     throw std::runtime_error(
         "SDPA flash VJP does not support array masks or sinks yet.");
   }
-  if (!supports_sdpa_flash_wmma_bwd(q, k, v, /*has_arr_mask=*/false, has_sinks_) ||
+  if (!supports_sdpa_flash_wmma_bwd(
+          q, k, v, /*has_arr_mask=*/false, has_sinks_) ||
       sdpa_flash_bwd_smem(q.shape(-1)) >
           rocm::device(s.device).max_shared_memory_per_block()) {
     throw std::runtime_error(

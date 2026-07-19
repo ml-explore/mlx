@@ -175,7 +175,8 @@ bool probe_gemm_combo(
   hipblasLtMatmulDescSetAttribute(
       desc, HIPBLASLT_MATMUL_DESC_TRANSB, &op_n, sizeof(op_n));
   const int M = 2048, N = 512, K = 2048;
-  hipblasLtMatrixLayout_t la = nullptr, lb = nullptr, lc = nullptr, ld = nullptr;
+  hipblasLtMatrixLayout_t la = nullptr, lb = nullptr, lc = nullptr,
+                          ld = nullptr;
   hipblasLtMatrixLayoutCreate(&la, in_type, K, M, K);
   hipblasLtMatrixLayoutCreate(&lb, in_type, K, N, K);
   hipblasLtMatrixLayoutCreate(&lc, out_type, M, N, M);
@@ -217,16 +218,17 @@ const GemmCaps& gemm_caps(int device_id) {
   } catch (...) {
     return caps;
   }
-  caps.bf16 = probe_gemm_combo(handle, HIP_R_16BF, HIP_R_16BF, HIPBLAS_COMPUTE_32F);
+  caps.bf16 =
+      probe_gemm_combo(handle, HIP_R_16BF, HIP_R_16BF, HIPBLAS_COMPUTE_32F);
   caps.fp8_e4m3 =
       probe_gemm_combo(handle, HIP_R_8F_E4M3, HIP_R_16BF, HIPBLAS_COMPUTE_32F);
   caps.fp8_e5m2 =
       probe_gemm_combo(handle, HIP_R_8F_E5M2, HIP_R_16BF, HIPBLAS_COMPUTE_32F);
-  caps.int8 = probe_gemm_combo(handle, HIP_R_8I, HIP_R_32I, HIPBLAS_COMPUTE_32I);
+  caps.int8 =
+      probe_gemm_combo(handle, HIP_R_8I, HIP_R_32I, HIPBLAS_COMPUTE_32I);
 
   hipDeviceProp_t props;
-  const char* arch =
-      (hipGetDeviceProperties(&props, device_id) == hipSuccess)
+  const char* arch = (hipGetDeviceProperties(&props, device_id) == hipSuccess)
       ? props.gcnArchName
       : "?";
   fprintf(
@@ -251,7 +253,8 @@ enum class GemmPrecision { Bf16, Fp8E4M3, Fp8E5M2, Int8 };
 // (RDNA4), otherwise bf16 (RDNA3.5 and anything without fp8 Tensile kernels).
 GemmPrecision preferred_gemm_precision(int device_id) {
   // fp8 e4m3 activation GEMM loses precision (and may be kernel-buggy on some
-  // RDNA4 drivers) — long-context prefill on gfx1201 garbles. Allow forcing bf16.
+  // RDNA4 drivers) — long-context prefill on gfx1201 garbles. Allow forcing
+  // bf16.
   static const bool force_bf16 = [] {
     const char* e = std::getenv("MLX_ROCM_GEMM_BF16");
     return e && (e[0] == '1' || e[0] == 'o' || e[0] == 'O');
@@ -296,16 +299,27 @@ struct GemmPipeKey {
   bool operator==(const GemmPipeKey& o) const {
     return M == o.M && N == o.N && K == o.K && lda == o.lda && ldb == o.ldb &&
         ldc == o.ldc && batch == o.batch && dt == o.dt && ta == o.ta &&
-        tb == o.tb && dev == o.dev && epi == o.epi && sa == o.sa && sb == o.sb &&
-        sc == o.sc;
+        tb == o.tb && dev == o.dev && epi == o.epi && sa == o.sa &&
+        sb == o.sb && sc == o.sc;
   }
 };
 struct GemmPipeKeyHash {
   size_t operator()(const GemmPipeKey& k) const {
     size_t h = 1469598103934665603ULL;
     auto mix = [&](size_t v) { h = (h ^ v) * 1099511628211ULL; };
-    for (int v : {k.M, k.N, k.K, k.lda, k.ldb, k.ldc, k.batch, k.dt, k.ta, k.tb,
-                  k.dev, k.epi})
+    for (int v :
+         {k.M,
+          k.N,
+          k.K,
+          k.lda,
+          k.ldb,
+          k.ldc,
+          k.batch,
+          k.dt,
+          k.ta,
+          k.tb,
+          k.dev,
+          k.epi})
       mix(static_cast<size_t>(v));
     mix(static_cast<size_t>(k.sa));
     mix(static_cast<size_t>(k.sb));
@@ -615,15 +629,15 @@ void hipblaslt_gemm_impl(
     }
   }
 
-  // Per-(shape,dtype,transpose,device,epilogue) algorithm cache. The chosen heuristic
-  // result is reusable across calls with identical problem geometry, so warm
-  // calls skip AlgoGetHeuristic — the dominant per-call cost for the many small
-  // GEMMs in a forward pass.
+  // Per-(shape,dtype,transpose,device,epilogue) algorithm cache. The chosen
+  // heuristic result is reusable across calls with identical problem geometry,
+  // so warm calls skip AlgoGetHeuristic — the dominant per-call cost for the
+  // many small GEMMs in a forward pass.
   //
-  // MoE gather_mm / SegmentedMM change M (or K) every step with routing. Exact-M
-  // keys thrash this cache and re-run AlgoGetHeuristic on the host (tens of ms
-  // per miss) — that shows up as ~70–80% GPU idle and sawtooth wall tok/s
-  // (peaks ~11–12k when the cache is warm, mean ~5–6k when thrashing).
+  // MoE gather_mm / SegmentedMM change M (or K) every step with routing.
+  // Exact-M keys thrash this cache and re-run AlgoGetHeuristic on the host
+  // (tens of ms per miss) — that shows up as ~70–80% GPU idle and sawtooth wall
+  // tok/s (peaks ~11–12k when the cache is warm, mean ~5–6k when thrashing).
   // Bucket dims upward for the cache key only; the real matmul still uses the
   // exact layouts below. Algos selected for a nearby larger-or-equal size are
   // valid at launch (M/N/K live in the layout descriptors). Workspace is the
@@ -676,8 +690,7 @@ void hipblaslt_gemm_impl(
   // Force exact keys for any transpose; NN keeps bucketing for MoE thrash.
   static const bool exact_cache =
       std::getenv("MLX_HIPBLASLT_EXACT_CACHE") != nullptr;
-  const bool has_transpose =
-      (op_a != HIPBLAS_OP_N) || (op_b != HIPBLAS_OP_N);
+  const bool has_transpose = (op_a != HIPBLAS_OP_N) || (op_b != HIPBLAS_OP_N);
   const bool use_exact = exact_cache || has_transpose;
   const int cache_M = use_exact ? M : gemm_dim_bucket(M);
   const int cache_N = use_exact ? N : gemm_dim_bucket(N);
@@ -694,16 +707,16 @@ void hipblaslt_gemm_impl(
   struct AlgoKeyHash {
     size_t operator()(const AlgoKey& k) const {
       size_t h = 1469598103934665603ULL;
-      for (int v :
-           {k.M, k.N, k.K, k.batch, k.dt, k.ta, k.tb, k.dev, k.epi}) {
+      for (int v : {k.M, k.N, k.K, k.batch, k.dt, k.ta, k.tb, k.dev, k.epi}) {
         h = (h ^ static_cast<size_t>(v)) * 1099511628211ULL;
       }
       return h;
     }
   };
   static std::mutex algo_mutex;
-  static std::unordered_map<AlgoKey, hipblasLtMatmulHeuristicResult_t, AlgoKeyHash>
-      algo_cache;
+  static std::
+      unordered_map<AlgoKey, hipblasLtMatmulHeuristicResult_t, AlgoKeyHash>
+          algo_cache;
 
   AlgoKey key{
       cache_M,
@@ -755,47 +768,20 @@ void hipblaslt_gemm_impl(
     static bool do_tune = std::getenv("MLX_ROCM_HIPBLASLT_TUNE") != nullptr;
 
     if (do_tune && returned_algo_count > 1) {
-    double best_time = 1e30;
-    for (int algo_idx = 0; algo_idx < returned_algo_count; algo_idx++) {
-      size_t ws_need = heuristics[algo_idx].workspaceSize;
-      void* ws_p = nullptr;
-      size_t ws_s = 0;
-      if (ws_need > 0) {
-        auto [p, s] = ensure_workspace(device_id, ws_need);
-        ws_p = p;
-        ws_s = s;
-        if (!ws_p)
-          continue;
-      }
+      double best_time = 1e30;
+      for (int algo_idx = 0; algo_idx < returned_algo_count; algo_idx++) {
+        size_t ws_need = heuristics[algo_idx].workspaceSize;
+        void* ws_p = nullptr;
+        size_t ws_s = 0;
+        if (ws_need > 0) {
+          auto [p, s] = ensure_workspace(device_id, ws_need);
+          ws_p = p;
+          ws_s = s;
+          if (!ws_p)
+            continue;
+        }
 
-      // Warm-up
-      (void)hipblasLtMatmul(
-          handle,
-          matmul_guard.desc,
-          alpha,
-          a_ptr,
-          layout_a.layout,
-          b_ptr,
-          layout_b.layout,
-          beta,
-          c_ptr,
-          layout_c.layout,
-          c_ptr,
-          layout_d.layout,
-          &heuristics[algo_idx].algo,
-          ws_p,
-          ws_s,
-          stream);
-      (void)hipStreamSynchronize(stream);
-
-      // Timed run
-      hipEvent_t start_ev, stop_ev;
-      (void)hipEventCreate(&start_ev);
-      (void)hipEventCreate(&stop_ev);
-      (void)hipEventRecord(start_ev, stream);
-
-      static constexpr int kBenchIters = 3;
-      for (int r = 0; r < kBenchIters; r++) {
+        // Warm-up
         (void)hipblasLtMatmul(
             handle,
             matmul_guard.desc,
@@ -813,21 +799,48 @@ void hipblaslt_gemm_impl(
             ws_p,
             ws_s,
             stream);
-      }
+        (void)hipStreamSynchronize(stream);
 
-      (void)hipEventRecord(stop_ev, stream);
-      (void)hipStreamSynchronize(stream);
-      float ms = 0;
-      (void)hipEventElapsedTime(&ms, start_ev, stop_ev);
-      (void)hipEventDestroy(start_ev);
-      (void)hipEventDestroy(stop_ev);
+        // Timed run
+        hipEvent_t start_ev, stop_ev;
+        (void)hipEventCreate(&start_ev);
+        (void)hipEventCreate(&stop_ev);
+        (void)hipEventRecord(start_ev, stream);
 
-      double avg = ms / kBenchIters;
-      if (avg < best_time) {
-        best_time = avg;
-        best_algo_idx = algo_idx;
+        static constexpr int kBenchIters = 3;
+        for (int r = 0; r < kBenchIters; r++) {
+          (void)hipblasLtMatmul(
+              handle,
+              matmul_guard.desc,
+              alpha,
+              a_ptr,
+              layout_a.layout,
+              b_ptr,
+              layout_b.layout,
+              beta,
+              c_ptr,
+              layout_c.layout,
+              c_ptr,
+              layout_d.layout,
+              &heuristics[algo_idx].algo,
+              ws_p,
+              ws_s,
+              stream);
+        }
+
+        (void)hipEventRecord(stop_ev, stream);
+        (void)hipStreamSynchronize(stream);
+        float ms = 0;
+        (void)hipEventElapsedTime(&ms, start_ev, stop_ev);
+        (void)hipEventDestroy(start_ev);
+        (void)hipEventDestroy(stop_ev);
+
+        double avg = ms / kBenchIters;
+        if (avg < best_time) {
+          best_time = avg;
+          best_algo_idx = algo_idx;
+        }
       }
-    }
     }
 
     heuristic = heuristics[best_algo_idx];
@@ -852,8 +865,8 @@ void hipblaslt_gemm_impl(
     }
   }
 
-  // Promote this miss into the persistent pipe cache (no-bias default epi only).
-  // Steal ownership from RAII guards so layouts/desc outlive this call.
+  // Promote this miss into the persistent pipe cache (no-bias default epi
+  // only). Steal ownership from RAII guards so layouts/desc outlive this call.
   hipblasLtMatrixLayout_t use_la = layout_a.layout;
   hipblasLtMatrixLayout_t use_lb = layout_b.layout;
   hipblasLtMatrixLayout_t use_lc = layout_c.layout;
@@ -999,10 +1012,10 @@ void hipblaslt_gemm_impl(
         "hipblasLtMatmul failed: " + std::to_string(static_cast<int>(status)) +
         " MNK=" + std::to_string(M) + "," + std::to_string(N) + "," +
         std::to_string(K) + " lda/b/c=" + std::to_string(lda) + "," +
-        std::to_string(ldb) + "," + std::to_string(ldc) + " op=" +
-        std::to_string(static_cast<int>(op_a)) + "," +
-        std::to_string(static_cast<int>(op_b)) + " batch=" +
-        std::to_string(batch_count));
+        std::to_string(ldb) + "," + std::to_string(ldc) +
+        " op=" + std::to_string(static_cast<int>(op_a)) + "," +
+        std::to_string(static_cast<int>(op_b)) +
+        " batch=" + std::to_string(batch_count));
   }
 }
 
@@ -1011,7 +1024,8 @@ void hipblaslt_gemm_impl(
 bool is_hipblaslt_available() {
   // Diagnostic: force the rocBLAS path everywhere to test whether rocBLAS bf16
   // GEMM is numerically correct for this model.
-  static const bool g_force_rocblas = std::getenv("MLX_NO_HIPBLASLT") != nullptr;
+  static const bool g_force_rocblas =
+      std::getenv("MLX_NO_HIPBLASLT") != nullptr;
   if (g_force_rocblas)
     return false;
   // When automatic HIP-graph batching is on, the GEMM is graph-split and run
@@ -1062,7 +1076,8 @@ void hipblaslt_gemm_ptrs(
   // hipBLASLt may retain host alpha/beta pointers until the stream kernel
   // finishes. Never pass addresses of [=]-captured stack floats — under a
   // full train graph those die before the launch runs (status 3 INVALID).
-  // Process-lifetime constants for the common scales (same as rowmajor_on_stream).
+  // Process-lifetime constants for the common scales (same as
+  // rowmajor_on_stream).
   const float* alpha_p;
   const float* beta_p;
   if (alpha == 1.0f && beta == 0.0f) {
@@ -1527,56 +1542,30 @@ void hipblaslt_gemm_fp8_raw(
         cnt == 0) {
       throw std::runtime_error("fp8 GEMM: no algorithm for shape");
     }
-    // Timing candidate algos requires synchronizing the stream, which is illegal
-    // while it is in HIP-graph capture (the sync invalidates the capture and
-    // every following matmul fails). Under capture, take the heuristic's top pick
-    // — it records into the captured graph and runs on replay. Benchmark only
-    // when not capturing.
+    // Timing candidate algos requires synchronizing the stream, which is
+    // illegal while it is in HIP-graph capture (the sync invalidates the
+    // capture and every following matmul fails). Under capture, take the
+    // heuristic's top pick — it records into the captured graph and runs on
+    // replay. Benchmark only when not capturing.
     hipStreamCaptureStatus cap_st = hipStreamCaptureStatusNone;
     (void)hipStreamGetCaptureInfo(stream, &cap_st, nullptr);
     if (cap_st != hipStreamCaptureStatusNone) {
       chosen = res[0];
     } else {
-    double best = 1e30;
-    int best_idx = 0;
-    for (int a = 0; a < cnt; ++a) {
-      size_t need = res[a].workspaceSize;
-      void* wp = nullptr;
-      size_t ws = 0;
-      if (need > 0) {
-        auto [p, s] = ensure_workspace(device_id, need);
-        wp = p;
-        ws = s;
-        if (!wp)
-          continue;
-      }
-      hipblasStatus_t feas = hipblasLtMatmul(
-              handle,
-              desc_guard.desc,
-              &alpha,
-              a_ptr,
-              la.layout,
-              b_ptr,
-              lb.layout,
-              &beta,
-              c_ptr,
-              lc.layout,
-              c_ptr,
-              ld.layout,
-              &res[a].algo,
-              wp,
-              ws,
-              stream);
-      if (feas != HIPBLAS_STATUS_SUCCESS) {
-        continue;
-      }
-      (void)hipStreamSynchronize(stream);
-      hipEvent_t e0, e1;
-      (void)hipEventCreate(&e0);
-      (void)hipEventCreate(&e1);
-      (void)hipEventRecord(e0, stream);
-      for (int r = 0; r < 3; ++r) {
-        (void)hipblasLtMatmul(
+      double best = 1e30;
+      int best_idx = 0;
+      for (int a = 0; a < cnt; ++a) {
+        size_t need = res[a].workspaceSize;
+        void* wp = nullptr;
+        size_t ws = 0;
+        if (need > 0) {
+          auto [p, s] = ensure_workspace(device_id, need);
+          wp = p;
+          ws = s;
+          if (!wp)
+            continue;
+        }
+        hipblasStatus_t feas = hipblasLtMatmul(
             handle,
             desc_guard.desc,
             &alpha,
@@ -1593,19 +1582,45 @@ void hipblaslt_gemm_fp8_raw(
             wp,
             ws,
             stream);
+        if (feas != HIPBLAS_STATUS_SUCCESS) {
+          continue;
+        }
+        (void)hipStreamSynchronize(stream);
+        hipEvent_t e0, e1;
+        (void)hipEventCreate(&e0);
+        (void)hipEventCreate(&e1);
+        (void)hipEventRecord(e0, stream);
+        for (int r = 0; r < 3; ++r) {
+          (void)hipblasLtMatmul(
+              handle,
+              desc_guard.desc,
+              &alpha,
+              a_ptr,
+              la.layout,
+              b_ptr,
+              lb.layout,
+              &beta,
+              c_ptr,
+              lc.layout,
+              c_ptr,
+              ld.layout,
+              &res[a].algo,
+              wp,
+              ws,
+              stream);
+        }
+        (void)hipEventRecord(e1, stream);
+        (void)hipEventSynchronize(e1);
+        float ms = 0;
+        (void)hipEventElapsedTime(&ms, e0, e1);
+        (void)hipEventDestroy(e0);
+        (void)hipEventDestroy(e1);
+        if (ms < best) {
+          best = ms;
+          best_idx = a;
+        }
       }
-      (void)hipEventRecord(e1, stream);
-      (void)hipEventSynchronize(e1);
-      float ms = 0;
-      (void)hipEventElapsedTime(&ms, e0, e1);
-      (void)hipEventDestroy(e0);
-      (void)hipEventDestroy(e1);
-      if (ms < best) {
-        best = ms;
-        best_idx = a;
-      }
-    }
-    chosen = res[best_idx];
+      chosen = res[best_idx];
     }
     std::lock_guard<std::mutex> lock(mtx);
     algo_cache[key] = chosen;
@@ -1620,22 +1635,22 @@ void hipblaslt_gemm_fp8_raw(
     ws = s;
   }
   hipblasStatus_t fst = hipblasLtMatmul(
-          handle,
-          desc_guard.desc,
-          &alpha,
-          a_ptr,
-          la.layout,
-          b_ptr,
-          lb.layout,
-          &beta,
-          c_ptr,
-          lc.layout,
-          c_ptr,
-          ld.layout,
-          &chosen.algo,
-          wp,
-          ws,
-          stream);
+      handle,
+      desc_guard.desc,
+      &alpha,
+      a_ptr,
+      la.layout,
+      b_ptr,
+      lb.layout,
+      &beta,
+      c_ptr,
+      lc.layout,
+      c_ptr,
+      ld.layout,
+      &chosen.algo,
+      wp,
+      ws,
+      stream);
   if (fst != HIPBLAS_STATUS_SUCCESS) {
     throw std::runtime_error(
         "fp8 GEMM: hipblasLtMatmul failed (status " + std::to_string((int)fst) +

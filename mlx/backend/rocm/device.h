@@ -25,8 +25,8 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
-#include <utility>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace mlx::core::rocm {
@@ -82,18 +82,19 @@ class CommandEncoder {
       // addresses of the caller's locals are fine.
       void* ptrs[num > 0 ? num : 1];
       size_t i = 0;
-      ([&](auto&& p) {
-        ptrs[i++] =
-            const_cast<void*>(static_cast<const void*>(std::addressof(p)));
-      }(std::forward<Params>(params)),
-       ...);
+      (
+          [&](auto&& p) {
+            ptrs[i++] =
+                const_cast<void*>(static_cast<const void*>(std::addressof(p)));
+          }(std::forward<Params>(params)),
+          ...);
       add_kernel_node_raw(
           reinterpret_cast<void*>(func), grid_dim, block_dim, smem_bytes, ptrs);
       return;
     }
-    // Graph build: a HIP graph kernel node references its kernelParams until the
-    // node is instantiated/updated into the exec graph, which happens later in
-    // commit(). The caller's argument locals are gone by then, so copy the
+    // Graph build: a HIP graph kernel node references its kernelParams until
+    // the node is instantiated/updated into the exec graph, which happens later
+    // in commit(). The caller's argument locals are gone by then, so copy the
     // argument VALUES (and the pointer array) into a heap pack kept alive until
     // commit() finishes (cleared there).
     struct Pack {
@@ -107,7 +108,8 @@ class CommandEncoder {
     auto pack = std::make_shared<Pack>(Pack{
         std::tuple<std::decay_t<Params>...>(std::forward<Params>(params)...),
         {}});
-    fill_param_ptrs(pack->vals, pack->ptrs, std::index_sequence_for<Params...>{});
+    fill_param_ptrs(
+        pack->vals, pack->ptrs, std::index_sequence_for<Params...>{});
     graph_node_args_.push_back(pack);
     add_kernel_node_raw(
         reinterpret_cast<void*>(func),
@@ -140,8 +142,9 @@ class CommandEncoder {
   // Add a MODULE-function (hiprtc/JIT or CustomKernel) kernel as a graph node.
   // ROCm 7.13's hipGraphAddKernelNode accepts a hipFunction_t in
   // hipKernelNodeParams.func, so JIT-fused kernels need not graph-split. In the
-  // eager path this launches immediately. `args_keepalive` owns the storage that
-  // `params` points into; it is held until the graph is instantiated (commit).
+  // eager path this launches immediately. `args_keepalive` owns the storage
+  // that `params` points into; it is held until the graph is instantiated
+  // (commit).
   void add_module_kernel_node(
       void* func,
       dim3 grid_dim,
@@ -234,37 +237,45 @@ class CommandEncoder {
 
   // --- Build-once decode-graph replay ---
   // In decode mode the single-token forward has ONE stable topology (proven by
-  // ExecUpdate succeeding every token). After the first build caches an exec, we
-  // stop rebuilding the graph node-by-node: subsequent tokens buffer the kernel
-  // params and only re-point the cached exec's nodes (hipGraphExecKernelNodeSetParams)
-  // then relaunch. Eliminates ~1000 hipGraphAddKernelNode/token.
-  // Build-once decode replay via a PERSISTENT source graph: the decode topology
-  // is stable, so we build its source graph (build_graph_/build_nodes_) ONCE, then
-  // each token update the source nodes' params with hipGraphKernelNodeSetParams
-  // (no AddKernelNode rebuild) and hipGraphExecUpdate a drained pooled exec from
-  // it (the proven path).
-  std::string decode_key_;          // confirmed-stable decode topology key
-  std::string pending_decode_key_;  // last decode build's key (stability check)
-  std::string prefill_key_;         // confirmed-stable prefill-chunk topology key
-  std::string pending_prefill_key_; // last prefill chunk's key (stability check)
+  // ExecUpdate succeeding every token). After the first build caches an exec,
+  // we stop rebuilding the graph node-by-node: subsequent tokens buffer the
+  // kernel params and only re-point the cached exec's nodes
+  // (hipGraphExecKernelNodeSetParams) then relaunch. Eliminates ~1000
+  // hipGraphAddKernelNode/token. Build-once decode replay via a PERSISTENT
+  // source graph: the decode topology is stable, so we build its source graph
+  // (build_graph_/build_nodes_) ONCE, then each token update the source nodes'
+  // params with hipGraphKernelNodeSetParams (no AddKernelNode rebuild) and
+  // hipGraphExecUpdate a drained pooled exec from it (the proven path).
+  std::string decode_key_; // confirmed-stable decode topology key
+  std::string pending_decode_key_; // last decode build's key (stability check)
+  std::string prefill_key_; // confirmed-stable prefill-chunk topology key
+  std::string
+      pending_prefill_key_; // last prefill chunk's key (stability check)
   static std::string kernel_node_key(const hipKernelNodeParams& kp);
 
  public:
   // Full decode-step stream capture (build-once / replay). With graphs OFF the
   // whole call_fn launches eagerly on stream_; we capture it into ONE graph,
-  // instantiate ONE exec, then relaunch that exec verbatim every token. Captures
-  // EVERYTHING (manual kernels + library/JIT/memset), unlike the manual-node
-  // chain which drops the ~1.4k inline ops. Returns false on any failure so the
-  // engine falls back to eager.
-  bool decode_capture_begin();          // begin stream capture (graphs must be off)
-  bool decode_capture_end_record(int slot);  // end capture, instantiate slot, launch
-  bool decode_capture_replay(int slot);      // relaunch the captured exec in slot
-  void decode_capture_destroy();        // free both exec/graph slots
-  bool decode_captured(int slot) const { return decode_cap_exec_[slot & 1] != nullptr; }
+  // instantiate ONE exec, then relaunch that exec verbatim every token.
+  // Captures EVERYTHING (manual kernels + library/JIT/memset), unlike the
+  // manual-node chain which drops the ~1.4k inline ops. Returns false on any
+  // failure so the engine falls back to eager.
+  bool decode_capture_begin(); // begin stream capture (graphs must be off)
+  bool decode_capture_end_record(
+      int slot); // end capture, instantiate slot, launch
+  bool decode_capture_replay(int slot); // relaunch the captured exec in slot
+  void decode_capture_destroy(); // free both exec/graph slots
+  bool decode_captured(int slot) const {
+    return decode_cap_exec_[slot & 1] != nullptr;
+  }
 
  private:
-  hipGraphExec_t decode_cap_exec_[2]{nullptr, nullptr};  // per-parity captured exec
-  hipGraph_t decode_cap_graph_[2]{nullptr, nullptr};     // their source graphs (owned)
+  hipGraphExec_t decode_cap_exec_[2]{
+      nullptr,
+      nullptr}; // per-parity captured exec
+  hipGraph_t decode_cap_graph_[2]{
+      nullptr,
+      nullptr}; // their source graphs (owned)
 };
 
 class Device {
@@ -398,7 +409,8 @@ void set_stream_capturing(bool v);
 void set_graph_active(bool v);
 
 // True from capture start until the captured graph is destroyed. The allocator
-// defers all frees while set so graph-referenced buffers stay valid through replay.
+// defers all frees while set so graph-referenced buffers stay valid through
+// replay.
 bool graph_active();
 
 // Decode-mode: single-token forward = one graph, refreshed via ExecUpdate and
@@ -407,8 +419,8 @@ bool graph_active();
 bool graph_decode_mode();
 void set_graph_decode_mode(bool v);
 void flush_graph_deferred_frees();
-// Per-generation deferred-free lifetime: each graph chunk (commit) frees its own
-// buffers once its launch completes, instead of hoarding until synchronize.
+// Per-generation deferred-free lifetime: each graph chunk (commit) frees its
+// own buffers once its launch completes, instead of hoarding until synchronize.
 uint64_t graph_current_gen();
 void graph_advance_gen();
 void free_graph_generation(uint64_t gen);
@@ -432,9 +444,9 @@ template <typename F>
 void CommandEncoder::launch_kernel(F&& func) {
   device_.make_current();
   // Residual ops not migrated to add_kernel_node (library GEMM, JIT module
-  // kernels, memsets) can't be HIP graph kernel nodes. Graph-split: flush+launch
-  // the accumulated graph, run this op immediately on the same stream (ordered
-  // after the graph), and start the next graph fresh.
+  // kernels, memsets) can't be HIP graph kernel nodes. Graph-split:
+  // flush+launch the accumulated graph, run this op immediately on the same
+  // stream (ordered after the graph), and start the next graph fresh.
   if (use_hip_graphs()) {
     static const bool capture_lib = [] {
       const char* e = std::getenv("MLX_GRAPH_PREFILL_REPLAY");
@@ -442,21 +454,25 @@ void CommandEncoder::launch_kernel(F&& func) {
     }();
     auto hstream = static_cast<hipStream_t>(stream_);
     if (capture_lib && !graph_decode_mode()) {
-      hipError_t be = hipStreamBeginCapture(hstream, hipStreamCaptureModeThreadLocal);
+      hipError_t be =
+          hipStreamBeginCapture(hstream, hipStreamCaptureModeThreadLocal);
       if (be == hipSuccess) {
         func(hstream);
         hipGraph_t child = nullptr;
         hipError_t ee = hipStreamEndCapture(hstream, &child);
         if (ee == hipSuccess && child) {
-          size_t nn = 0; hipGraphGetNodes(child, nullptr, &nn);
+          size_t nn = 0;
+          hipGraphGetNodes(child, nullptr, &nn);
           if (nn > 0) {
             add_child_graph_node(child, "lib");
             hipGraphDestroy(child);
             return;
           }
           hipGraphDestroy(child);
-        } else if (child) hipGraphDestroy(child);
-        if (child) hipGraphDestroy(child);
+        } else if (child)
+          hipGraphDestroy(child);
+        if (child)
+          hipGraphDestroy(child);
         (void)hipGetLastError();
       } else {
         if (std::getenv("MLX_GRAPH_SPLIT_LOG"))

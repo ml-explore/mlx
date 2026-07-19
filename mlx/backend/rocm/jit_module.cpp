@@ -137,14 +137,14 @@ std::string get_gpu_arch();
 
 // Get the cache directory for storing compiled results. The GPU arch is part of
 // the path so that, on a multi-GPU host (e.g. an integrated gfx1151 APU + a
-// discrete gfx1201 R9700), kernels compiled for one arch are never loaded on the
-// other — which fails with "no kernel image" or, worse, silently hangs.
+// discrete gfx1201 R9700), kernels compiled for one arch are never loaded on
+// the other — which fails with "no kernel image" or, worse, silently hangs.
 //
 // Resolve per CURRENT-device arch and memoize per arch. A single static path
 // would freeze the arch to whatever device was current at the FIRST call (the
 // default device 0 / APU, e.g. from a load-time static initializer), then serve
-// that arch's cache dir to kernels compiled for the OTHER device — defeating the
-// whole purpose on a multi-GPU host.
+// that arch's cache dir to kernels compiled for the OTHER device — defeating
+// the whole purpose on a multi-GPU host.
 const std::filesystem::path& hsaco_cache_dir() {
   static std::mutex mtx;
   static std::map<std::string, std::filesystem::path> by_arch;
@@ -403,9 +403,9 @@ JitModule::JitModule(
     const KernelBuilder& builder,
     bool use_disk_cache) {
   // Bind the target device before compiling/loading: hipModuleLoadData and
-  // hipModuleGetFunction load into the CURRENT device's context, and the kernels
-  // are later launched on this device's stream. If the module loaded into device
-  // 0's context but launches on device 1, the queue wedges.
+  // hipModuleGetFunction load into the CURRENT device's context, and the
+  // kernels are later launched on this device's stream. If the module loaded
+  // into device 0's context but launches on device 1, the queue wedges.
   device.make_current();
   // Will hold the actual device executable source code and kernel names
   std::string hsaco;
@@ -505,9 +505,9 @@ JitModule& get_jit_module(
     const KernelBuilder& builder,
     bool cache) {
   auto& map = get_jit_module_cache();
-  // Key by device too: a module compiled/loaded into one device's context is not
-  // valid on another. Sharing by name across devices would hand a device-1 launch
-  // a hipFunction_t from device 0's context and wedge the queue.
+  // Key by device too: a module compiled/loaded into one device's context is
+  // not valid on another. Sharing by name across devices would hand a device-1
+  // launch a hipFunction_t from device 0's context and wedge the queue.
   auto key = std::to_string(mlx_device.index) + ":" + name;
   auto it = map.find(key);
   if (it == map.end()) {

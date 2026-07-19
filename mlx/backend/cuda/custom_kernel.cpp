@@ -284,7 +284,8 @@ void CustomKernel::eval_gpu(
   // Output index -> aliased input index (output reuses the input's buffer).
   std::vector<int> alias_of(outputs.size(), -1);
   for (auto& [oi, ii] : output_input_aliases_) {
-    if (oi >= 0 && oi < (int)outputs.size() && ii >= 0 && ii < (int)inputs.size())
+    if (oi >= 0 && oi < (int)outputs.size() && ii >= 0 &&
+        ii < (int)inputs.size())
       alias_of[oi] = ii;
   }
 

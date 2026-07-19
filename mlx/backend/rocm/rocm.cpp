@@ -24,7 +24,8 @@ bool train_arena_begin(size_t capacity_bytes) {
   }
   int dev = 0;
   (void)hipGetDevice(&dev);
-  // Use default stream null — arena is stream-agnostic for bump address stability.
+  // Use default stream null — arena is stream-agnostic for bump address
+  // stability.
   return allocator().train_arena_begin(capacity_bytes, dev, nullptr);
 }
 
