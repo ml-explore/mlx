@@ -1,0 +1,7 @@
+excl_chat_1 PASS rc=0
+excl_chat_2 PASS rc=0
+server_up
+dual_chat FAIL_SEGV rc=139
+Loading model: LemonMLXE/Qwen3.6-35B-A3B-MTP-mlx-4bit
+[mlx-rocm] bound HIP device 0: gfx1150 (AMD Radeon 890M Graphics) cus=8 warp=32 lds=64KB
+[MTP] skipping optional MTP head build (set MLX_LOAD_MTP_HEAD=1 to enable; not needed for eager/no-MTP)
