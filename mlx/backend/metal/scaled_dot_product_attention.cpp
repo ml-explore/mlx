@@ -475,7 +475,9 @@ void sdpa_vector_2pass(
     }
   }
   if (int blocks_env = env::get_var("MLX_SDPA_BLOCKS", 0); blocks_env > 0) {
-    blocks = blocks_env;
+    // The 2-pass reduction consumes the partials in simd-width (32) chunks
+    // and silently drops the tail otherwise, so round up to a multiple of 32.
+    blocks = ((blocks_env + 31) / 32) * 32;
   }
   size_t k_head_stride = k.shape(1) == 1 ? k.strides(0) : k.strides(1);
   size_t k_seq_stride = k.strides()[2];
