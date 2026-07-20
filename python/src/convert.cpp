@@ -268,7 +268,11 @@ mx::array nd_array_to_mlx(
             flags,
             offset,
             [owner = std::move(nd_array)](mx::allocator::Buffer b) {
-              mx::allocator::free(b);
+              // A make_buffer() buffer wraps caller-owned external memory, so
+              // release it (drop the wrapper) rather than returning it to the
+              // allocator's reuse pool — that pool must only recycle buffers it
+              // allocated itself.
+              mx::allocator::release(b);
             });
         out.set_status(mx::array::Status::available);
         return out;

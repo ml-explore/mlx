@@ -60,6 +60,21 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
         mx.eval(x + 1)
         self.assertAlmostEqual(float(x[10]), 10.5, places=5)
 
+    def test_adopt_in_loop_not_recycled(self):
+        # Regression: an adopted buffer must be released (not recycled into the
+        # allocator's reuse pool) when freed. Otherwise, over many iterations the
+        # pool hands a caller-owned buffer to an unrelated array and corrupts /
+        # crashes. Adopt fresh buffers in a loop and compute after each.
+        if not mx.metal.is_available():
+            self.skipTest("copy=False requires Metal")
+        w = mx.random.normal((64, 64))
+        for i in range(200):
+            a = (np.random.rand(256, 64).astype(np.float32))
+            x = mx.array(a, copy=False)  # adopt; x (and a) freed next iteration
+            r = mx.sum(x @ w)
+            mx.eval(r)
+        self.assertTrue(True)  # reaching here without crashing is the assertion
+
 
 if __name__ == "__main__":
     unittest.main()
