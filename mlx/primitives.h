@@ -1736,6 +1736,22 @@ class RandomBits : public UnaryPrimitive {
   int width_;
 };
 
+class CategoricalSearch : public UnaryPrimitive {
+ public:
+  explicit CategoricalSearch(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_NAME(CategoricalSearch)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    return {inputs[1].shape()};
+  }
+};
+
 class Real : public UnaryPrimitive {
  public:
   explicit Real(Stream stream) : UnaryPrimitive(stream) {}

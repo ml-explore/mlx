@@ -1,5 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
+import io
 import math
 import unittest
 
@@ -324,6 +325,310 @@ class TestRandom(mlx_tests.MLXTestCase):
 
         with self.assertRaises(ValueError):
             mx.random.categorical(logits, shape=[10, 5], num_samples=5)
+
+    def test_categorical_search_cpu_and_transforms(self):
+        cdf_values = [
+            [[10, 30, 100], [20, 20, 80]],
+            [[5, 25, 50], [1, 49, 100]],
+        ]
+        bits_values = [
+            [[0, 1 << 31, (1 << 32) - 1, 7], [0, 1 << 30, 1 << 31, 99]],
+            [[0, 1 << 30, 1 << 31, (1 << 32) - 1], [3, 17, 31, 127]],
+        ]
+        cdf = mx.array(cdf_values, dtype=mx.uint64)
+        random_bits = mx.array(bits_values, dtype=mx.uint32)
+
+        def reference_row(row_cdf, row_bits):
+            total = row_cdf[-1]
+            total_high = total >> 32
+            total_low = total & 0xFFFFFFFF
+            output = []
+            for word in row_bits:
+                target = word * total_high
+                target += (word * total_low) >> 32
+                index = 0
+                while index < len(row_cdf) and target >= row_cdf[index]:
+                    index += 1
+                output.append(min(index, len(row_cdf) - 1))
+            return output
+
+        expected = [
+            [
+                reference_row(row_cdf, row_bits)
+                for row_cdf, row_bits in zip(cdf_batch, bits_batch)
+            ]
+            for cdf_batch, bits_batch in zip(cdf_values, bits_values)
+        ]
+
+        def search(one_cdf, one_bits):
+            return mx.random._categorical_search(one_cdf, one_bits, stream=mx.cpu)
+
+        direct = search(cdf, random_bits)
+        mx.eval(direct)
+        self.assertEqual(direct.tolist(), expected)
+        self.assertEqual(direct.dtype, mx.uint32)
+
+        both_mapped = mx.vmap(search)(cdf, random_bits)
+        cdf_only = mx.vmap(search, in_axes=(0, None))(cdf, random_bits[0])
+        bits_only = mx.vmap(search, in_axes=(None, 0))(cdf[0], random_bits)
+        mx.eval(both_mapped, cdf_only, bits_only)
+        self.assertTrue(mx.array_equal(both_mapped, direct))
+        self.assertEqual(
+            cdf_only.tolist(),
+            [search(cdf[i], random_bits[0]).tolist() for i in range(2)],
+        )
+        self.assertEqual(
+            bits_only.tolist(),
+            [search(cdf[0], random_bits[i]).tolist() for i in range(2)],
+        )
+
+        compiled = mx.compile(search)(cdf, random_bits)
+        compiled_vmap = mx.compile(mx.vmap(search))(cdf, random_bits)
+        mx.eval(compiled, compiled_vmap)
+        self.assertTrue(mx.array_equal(compiled, direct))
+        self.assertTrue(mx.array_equal(compiled_vmap, direct))
+
+        if mx.metal.is_available():
+            metal = mx.random._categorical_search(cdf, random_bits, stream=mx.gpu)
+            metal_vmap = mx.vmap(
+                lambda one_cdf, one_bits: mx.random._categorical_search(
+                    one_cdf, one_bits, stream=mx.gpu
+                )
+            )(cdf, random_bits)
+            mx.eval(metal, metal_vmap)
+            self.assertTrue(mx.array_equal(metal, direct))
+            self.assertTrue(mx.array_equal(metal_vmap, direct))
+
+        one_dimensional = search(cdf[0, 0], random_bits[0, 0])
+        mx.eval(one_dimensional)
+        self.assertEqual(one_dimensional.tolist(), expected[0][0])
+
+        with self.assertRaises(ValueError):
+            search(cdf.astype(mx.uint32), random_bits)
+        with self.assertRaises(ValueError):
+            search(cdf, random_bits.astype(mx.uint64))
+        with self.assertRaises(ValueError):
+            search(cdf, random_bits[:, 0])
+
+    def test_categorical_fixed_source_candidate(self):
+        key = mx.random.key(17)
+        logits = mx.array([[-3.0, -1.0, 0.0, 2.0], [1.0, -2.0, 0.5, -0.5]])
+
+        def candidate(one_logits, one_key, stream=mx.cpu):
+            return mx.random._categorical_fixed(
+                one_logits,
+                num_samples=257,
+                axis=-1,
+                key=one_key,
+                stream=stream,
+            )
+
+        cpu = candidate(logits, key)
+        repeated = candidate(logits, key)
+        shifted = candidate(logits + mx.array([[7.0], [-9.0]]), key)
+        mx.eval(cpu, repeated, shifted)
+        self.assertEqual(cpu.shape, (2, 257))
+        self.assertEqual(cpu.dtype, mx.uint32)
+        self.assertTrue(mx.array_equal(cpu, repeated))
+        self.assertTrue(mx.array_equal(cpu, shifted))
+        self.assertTrue(mx.all(cpu < 4).item())
+
+        if mx.metal.is_available():
+            gpu = candidate(logits, key, mx.gpu)
+            mx.eval(gpu)
+            self.assertTrue(mx.array_equal(gpu, cpu))
+
+        for dtype in [mx.float16, mx.bfloat16, mx.int32, mx.bool_]:
+            typed = logits.astype(dtype)
+            actual = candidate(typed, key)
+            expected = candidate(typed.astype(mx.float32), key)
+            mx.eval(actual, expected)
+            self.assertTrue(mx.array_equal(actual, expected))
+
+        axis_logits = mx.arange(24).reshape(2, 3, 4) / 8
+        axis_zero = mx.random._categorical_fixed(
+            axis_logits,
+            num_samples=5,
+            axis=0,
+            key=key,
+            stream=mx.cpu,
+        )
+        axis_one = mx.random._categorical_fixed(
+            axis_logits,
+            num_samples=5,
+            axis=1,
+            key=key,
+            stream=mx.cpu,
+        )
+        axis_last = mx.random._categorical_fixed(
+            axis_logits,
+            num_samples=5,
+            axis=-1,
+            key=key,
+            stream=mx.cpu,
+        )
+        self.assertEqual(axis_zero.shape, (3, 4, 5))
+        self.assertEqual(axis_one.shape, (2, 4, 5))
+        self.assertEqual(axis_last.shape, (2, 3, 5))
+
+        masked = mx.random._categorical_fixed(
+            mx.array([[-math.inf, 0.0, -math.inf]]),
+            num_samples=100,
+            key=key,
+            stream=mx.cpu,
+        )
+        mx.eval(masked)
+        self.assertTrue(mx.all(masked == 1).item())
+
+        nonfinite_cases = [
+            ([0.0, math.inf, -1.0], 1),
+            ([math.inf, 0.0, math.inf], 0),
+            ([-math.inf, -math.inf, -math.inf], 0),
+            ([math.nan, math.nan, math.nan], 0),
+            ([-math.inf, math.nan, -math.inf], 0),
+            ([math.nan, math.inf, 0.0], 1),
+        ]
+        for values, expected_index in nonfinite_cases:
+            special_logits = mx.array([values])
+            special_cpu = mx.random._categorical_fixed(
+                special_logits, num_samples=100, key=key, stream=mx.cpu
+            )
+            mx.eval(special_cpu)
+            self.assertTrue(mx.all(special_cpu == expected_index).item())
+            if mx.metal.is_available():
+                special_gpu = mx.random._categorical_fixed(
+                    special_logits, num_samples=100, key=key, stream=mx.gpu
+                )
+                mx.eval(special_gpu)
+                self.assertTrue(mx.array_equal(special_gpu, special_cpu))
+
+        nan_masked = mx.random._categorical_fixed(
+            mx.array([[math.nan, 0.0, 1.0]]),
+            num_samples=1_000,
+            key=key,
+            stream=mx.cpu,
+        )
+        mx.eval(nan_masked)
+        self.assertTrue(mx.all(nan_masked != 0).item())
+
+        mapped_logits = mx.array([[-1.0, 0.0, 1.0], [1.0, -1.0, 0.0], [0.5, 1.5, -0.5]])
+        mapped_keys = mx.random.split(mx.random.key(3), num=3)
+        both = mx.vmap(candidate)(mapped_logits, mapped_keys)
+        logits_only = mx.vmap(candidate, in_axes=(0, None))(
+            mapped_logits, mapped_keys[0]
+        )
+        keys_only = mx.vmap(candidate, in_axes=(None, 0))(mapped_logits[0], mapped_keys)
+        both_expected = mx.stack(
+            [candidate(mapped_logits[i], mapped_keys[i]) for i in range(3)]
+        )
+        logits_expected = mx.stack(
+            [candidate(mapped_logits[i], mapped_keys[0]) for i in range(3)]
+        )
+        keys_expected = mx.stack(
+            [candidate(mapped_logits[0], mapped_keys[i]) for i in range(3)]
+        )
+        compiled = mx.compile(candidate)(mapped_logits[0], mapped_keys[0])
+        compiled_vmap = mx.compile(mx.vmap(candidate))(mapped_logits, mapped_keys)
+        mx.eval(
+            both,
+            logits_only,
+            keys_only,
+            both_expected,
+            logits_expected,
+            keys_expected,
+            compiled,
+            compiled_vmap,
+        )
+        self.assertTrue(mx.array_equal(both, both_expected))
+        self.assertTrue(mx.array_equal(logits_only, logits_expected))
+        self.assertTrue(mx.array_equal(keys_only, keys_expected))
+        self.assertTrue(mx.array_equal(compiled, both_expected[0]))
+        self.assertTrue(mx.array_equal(compiled_vmap, both_expected))
+
+    def test_categorical_source_dispatch_and_transforms(self):
+        def graph(array):
+            output = io.StringIO()
+            mx.export_to_dot(output, array)
+            return output.getvalue()
+
+        backend_stream = mx.gpu if mx.is_available(mx.gpu) else mx.cpu
+        expect_fixed = mx.metal.is_available()
+
+        outside_logits = mx.zeros((256,))
+        outside = mx.random.categorical(
+            outside_logits,
+            num_samples=256,
+            key=mx.random.key(0),
+            stream=backend_stream,
+        )
+        self.assertNotIn("CategoricalSearch", graph(outside))
+        self.assertIn("ArgReduce", graph(outside))
+
+        inside_logits = mx.zeros((8, 256))
+        inside = mx.random.categorical(
+            inside_logits,
+            num_samples=256,
+            key=mx.random.key(0),
+            stream=backend_stream,
+        )
+        if expect_fixed:
+            self.assertIn("CategoricalSearch", graph(inside))
+            self.assertNotIn("ArgReduce", graph(inside))
+        else:
+            self.assertNotIn("CategoricalSearch", graph(inside))
+            self.assertIn("ArgReduce", graph(inside))
+
+        complex_logits = mx.zeros((1024,), dtype=mx.complex64)
+        complex_sample = mx.random.categorical(
+            complex_logits,
+            num_samples=512,
+            key=mx.random.key(0),
+            stream=backend_stream,
+        )
+        self.assertNotIn("CategoricalSearch", graph(complex_sample))
+        self.assertIn("ArgReduce", graph(complex_sample))
+
+        cpu_fallback = mx.random.categorical(
+            inside_logits,
+            num_samples=256,
+            key=mx.random.key(0),
+            stream=mx.cpu,
+        )
+        self.assertNotIn("CategoricalSearch", graph(cpu_fallback))
+        self.assertIn("ArgReduce", graph(cpu_fallback))
+
+        mapped_logits = mx.zeros((3, 1024))
+        mapped_keys = mx.random.split(mx.random.key(1), num=3)
+
+        def sample(one_logits, one_key):
+            return mx.random.categorical(
+                one_logits,
+                num_samples=1024,
+                key=one_key,
+                stream=backend_stream,
+            )
+
+        mapped = mx.vmap(sample)(mapped_logits, mapped_keys)
+        compiled_mapped = mx.compile(mx.vmap(sample))(mapped_logits, mapped_keys)
+        nested_logits = mx.zeros((3, 2, 1024))
+        nested_mapped = mx.vmap(sample)(nested_logits, mapped_keys)
+        nested_compiled = mx.compile(mx.vmap(sample))(nested_logits, mapped_keys)
+        if expect_fixed:
+            self.assertIn("CategoricalSearch", graph(mapped))
+        else:
+            self.assertNotIn("CategoricalSearch", graph(mapped))
+        mx.eval(
+            inside,
+            cpu_fallback,
+            mapped,
+            compiled_mapped,
+            nested_mapped,
+            nested_compiled,
+        )
+        self.assertEqual(inside.shape, (8, 256))
+        self.assertTrue(mx.array_equal(mapped, compiled_mapped))
+        self.assertEqual(nested_mapped.shape, (3, 2, 1024))
+        self.assertTrue(mx.array_equal(nested_mapped, nested_compiled))
 
     def test_permutation(self):
         x = sorted(mx.random.permutation(4).tolist())

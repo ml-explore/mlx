@@ -197,4 +197,9 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void CategoricalSearch::eval_gpu(const std::vector<array>&, array&) {
+  throw std::runtime_error(
+      "[categorical_search] The CUDA backend is not implemented.");
+}
+
 } // namespace mlx::core

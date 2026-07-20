@@ -5,6 +5,7 @@
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
+#include "mlx/random_impl.h"
 
 using namespace mlx::core;
 
@@ -642,6 +643,21 @@ TEST_CASE("test categorical") {
   CHECK_EQ(categorical(logits, -1, 7).shape(), Shape{5, 4, 7});
   CHECK_EQ(categorical(logits, -2, 7).shape(), Shape{5, 3, 7});
   CHECK_EQ(categorical(logits, -3, 7).shape(), Shape{4, 3, 7});
+}
+
+TEST_CASE("test categorical search uint64 boundary") {
+  auto cdf = array(
+      {uint64_t(0), uint64_t(1) << 63, std::numeric_limits<uint64_t>::max()},
+      {1, 3});
+  auto random_bits = array(
+      {uint32_t(0),
+       uint32_t(1),
+       uint32_t(1) << 31,
+       std::numeric_limits<uint32_t>::max()},
+      {1, 4});
+  auto out = random::categorical_search(cdf, random_bits, Device::cpu);
+  auto expected = array({1u, 1u, 1u, 2u}, {1, 4});
+  CHECK(array_equal(out, expected).item<bool>());
 }
 
 TEST_CASE("test laplace") {

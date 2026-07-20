@@ -9,6 +9,7 @@
 
 #include "mlx/ops.h"
 #include "mlx/random.h"
+#include "mlx/random_impl.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
@@ -458,6 +459,33 @@ void init_random(nb::module_& parent_module) {
 
         Returns:
             array: The ``shape``-sized output array with type ``uint32``.
+      )pbdoc");
+  m.def(
+      "_categorical_search",
+      &mx::random::categorical_search,
+      "cdf"_a,
+      "random_bits"_a,
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Internal fixed-point CDF search primitive used by categorical tests.
+      )pbdoc");
+  m.def(
+      "_categorical_fixed",
+      [](const mx::array& logits,
+         int num_samples,
+         int axis,
+         const std::optional<mx::array>& key_,
+         mx::StreamOrDevice s) {
+        auto key = key_ ? key_.value() : default_key().next();
+        return mx::random::categorical_fixed(logits, axis, num_samples, key, s);
+      },
+      "logits"_a,
+      "num_samples"_a,
+      "axis"_a = -1,
+      "key"_a = nb::none(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Internal source-level fixed-point categorical candidate.
       )pbdoc");
   m.def(
       "laplace",
