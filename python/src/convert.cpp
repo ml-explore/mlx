@@ -232,8 +232,9 @@ mx::array nd_array_to_mlx(
       if (copy.has_value() && copy.value() == false) {
         // Zero-copy import of a CPU host buffer. On unified memory the host
         // pointer is GPU-addressable, so adopt it directly via the Metal
-        // allocator (newBufferWithBytesNoCopy) instead of copying. Requires a
-        // page-aligned pointer; make_buffer returns a null buffer otherwise.
+        // allocator (newBufferWithBytesNoCopy) instead of copying. If the
+        // pointer cannot be wrapped (e.g. an alignment the platform rejects),
+        // make_buffer returns a null buffer and we fall back to an error.
         // A dtype conversion has already been rejected above for copy==false.
         if (!mx::metal::is_available()) {
           throw std::invalid_argument(
@@ -256,8 +257,8 @@ mx::array nd_array_to_mlx(
             storage_size * mx::size_of(dst_dtype));
         if (buf.ptr() == nullptr) {
           throw std::invalid_argument(
-              "Cannot import a CPU DLPack array without a copy: the buffer is "
-              "not page-aligned.");
+              "Cannot import a CPU DLPack array without a copy: the host buffer "
+              "could not be adopted as a device buffer.");
         }
         mx::array out(shape, dst_dtype, nullptr, {});
         out.set_data(
