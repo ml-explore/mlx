@@ -216,6 +216,17 @@ TEST_CASE("test gguf metadata") {
     CHECK(array_equal(arr, loaded_arr).item<bool>());
   }
 
+  // 1D int64 array with negative values
+  {
+    std::unordered_map<std::string, GGUFMetaData> original_metadata;
+    auto arr = array({static_cast<int64_t>(-1)}, int64);
+    original_metadata.insert({"test_arr", arr});
+    save_gguf(file_path, original_weights, original_metadata);
+    auto [loaded_weights, loaded_metadata] = load_gguf(file_path);
+    CHECK(array_equal(arr, std::get<array>(loaded_metadata.at("test_arr")))
+              .item<bool>());
+  }
+
   // > 1D array throws
   {
     std::unordered_map<std::string, GGUFMetaData> original_metadata;
