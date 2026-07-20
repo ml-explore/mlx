@@ -69,7 +69,7 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
             self.skipTest("copy=False requires Metal")
         w = mx.random.normal((64, 64))
         for i in range(200):
-            a = (np.random.rand(256, 64).astype(np.float32))
+            a = np.random.rand(256, 64).astype(np.float32)
             x = mx.array(a, copy=False)  # adopt; x (and a) freed next iteration
             r = mx.sum(x @ w)
             mx.eval(r)
@@ -78,4 +78,3 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
