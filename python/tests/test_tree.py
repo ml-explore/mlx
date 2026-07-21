@@ -122,5 +122,20 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(vector3[1], mx.array(4)))
 
 
+    def test_tree_unflatten_integer_key_collision(self):
+        # Non-canonical integer-like keys (e.g. "01") must not silently
+        # collide with "1" and shift later values. Fall back to dict tree.
+        tree = mlx.utils.tree_unflatten([("01", "a"), ("1", "b"), ("2", "c")])
+        self.assertIsInstance(tree, dict)
+        self.assertEqual(tree["01"], "a")
+        self.assertEqual(tree["1"], "b")
+        self.assertEqual(tree["2"], "c")
+
+        # Canonical list keys still unflatten as a list
+        self.assertEqual(
+            mlx.utils.tree_unflatten([("0", "a"), ("1", "b"), ("2", "c")]),
+            ["a", "b", "c"],
+        )
+
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
