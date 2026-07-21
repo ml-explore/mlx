@@ -306,18 +306,13 @@ void init_array(nb::module_& m) {
       nb::pooled(/* capacity = */ 128))
       .def(
           "__init__",
-          [](mx::array* aptr,
-             nb::object v,
-             std::optional<mx::Dtype> t,
-             std::optional<bool> copy) {
-            new (aptr) mx::array(create_array(v, t, copy));
+          [](mx::array* aptr, nb::object v, std::optional<mx::Dtype> t) {
+            new (aptr) mx::array(create_array(v, t, true));
           },
           "val"_a,
           "dtype"_a = nb::none(),
-          nb::kw_only(),
-          "copy"_a = nb::none(),
           nb::sig(
-              "def __init__(self: array, val: Union[scalar, list, tuple, DLPackCompatible, array], dtype: Optional[Dtype] = None, *, copy: Optional[bool] = None)"))
+              "def __init__(self: array, val: Union[scalar, list, tuple, DLPackCompatible, array], dtype: Optional[Dtype] = None)"))
       .def_prop_ro(
           "size",
           &mx::array::size,

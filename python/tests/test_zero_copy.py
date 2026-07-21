@@ -9,16 +9,24 @@ import numpy as np
 
 
 class TestZeroCopy(mlx_tests.MLXTestCase):
-    """Tests for zero-copy CPU import: mx.array(host_buffer, copy=False).
+    """Tests for zero-copy CPU import: mx.asarray(host_buffer, copy=False).
 
-    On unified memory (Metal) a page-aligned CPU buffer is adopted via
-    newBufferWithBytesNoCopy instead of copied. On backends without Metal, or
-    for a non-page-aligned buffer / a dtype conversion, copy=False raises.
+    On unified memory (Metal) a page-aligned CPU buffer is adopted instead of
+    copied. On backends without Metal, or for a non-page-aligned buffer or a
+    dtype conversion, copy=False raises.
     """
 
-    def test_default_copies(self):
+    def test_default_shares_or_copies(self):
+        # With copy=None MLX adopts the buffer when it can and copies otherwise,
+        # so either way the values must match the source at import time.
         a = np.arange(1_000_000, dtype=np.int32)
-        x = mx.array(a)  # default: copy
+        x = mx.asarray(a)
+        mx.eval(x)
+        self.assertTrue(np.array_equal(np.array(x), a))
+
+    def test_copy_true_copies(self):
+        a = np.arange(1_000_000, dtype=np.int32)
+        x = mx.asarray(a, copy=True)
         a[0] = 12345
         mx.eval(x)
         self.assertNotEqual(int(x[0]), 12345)
@@ -27,11 +35,11 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
         a = np.arange(1_000_000, dtype=np.int32)
         if not mx.metal.is_available():
             with self.assertRaises(Exception):
-                mx.array(a, copy=False)
+                mx.asarray(a, copy=False)
             return
         if a.ctypes.data % 16384 != 0:
             self.skipTest("source buffer not page-aligned; adopt path not taken")
-        x = mx.array(a, copy=False)
+        x = mx.asarray(a, copy=False)
         self.assertTrue(np.array_equal(np.array(x), a))
         # Zero-copy adoption: a mutation of the source is visible in the array.
         a[1] = 999
@@ -41,7 +49,7 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
     def test_copy_false_dtype_conversion_raises(self):
         a = np.arange(16, dtype=np.float64)
         with self.assertRaises(Exception):
-            mx.array(a, dtype=mx.float32, copy=False)
+            mx.asarray(a, dtype=mx.float32, copy=False)
 
     def test_source_lifetime(self):
         if not mx.metal.is_available():
@@ -51,7 +59,7 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
             a = np.arange(1_000_000, dtype=np.float32) + 0.5
             if a.ctypes.data % 16384 != 0:
                 return None
-            return mx.array(a, copy=False)
+            return mx.asarray(a, copy=False)
 
         x = make()
         if x is None:
@@ -70,7 +78,7 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
         w = mx.random.normal((64, 64))
         for i in range(200):
             a = np.random.rand(256, 64).astype(np.float32)
-            x = mx.array(a, copy=False)  # adopt; x (and a) freed next iteration
+            x = mx.asarray(a, copy=False)  # adopt; x (and a) freed next iteration
             r = mx.sum(x @ w)
             mx.eval(r)
         self.assertTrue(True)  # reaching here without crashing is the assertion
