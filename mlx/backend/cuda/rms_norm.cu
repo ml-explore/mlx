@@ -753,9 +753,6 @@ void RMSNormVJP::eval_gpu(
             }
             int num_blocks = rmsnorm_vjp_num_blocks(
                 kernel, s, BLOCK_SIZE, smem_bytes, n_rows);
-
-            // fp32 partials (num_blocks, axis_size); narrowed to gw dtype
-            // below.
             array gw_temp({num_blocks, axis_size}, float32, nullptr, {});
             gw_temp.set_data(cu::malloc_async(gw_temp.nbytes(), encoder));
             encoder.add_temporary(gw_temp);
