@@ -232,6 +232,17 @@ def tree_unflatten(tree: Union[List[Tuple[str, Any]], Dict[str, Any]]) -> Any:
     # Assume they are a list and fail to dict if the keys are not all integers
     try:
         keys = sorted((int(idx), idx) for idx in children.keys())
+        # Reject integer-like keys that are not the canonical str(i) form, e.g.
+        # "01" and "1" both parse as 1 and would silently shift later values.
+        seen_indices = set()
+        for i, k in keys:
+            if str(i) != k:
+                raise ValueError(
+                    f"Non-canonical integer key {k!r} collides with index {i}"
+                )
+            if i in seen_indices:
+                raise ValueError(f"Duplicate integer key for index {i}")
+            seen_indices.add(i)
         l = []
         for i, k in keys:
             # if i <= len(l), no {} will be appended.
