@@ -392,9 +392,9 @@ void CommandEncoder::maybeInsertBarrier() {
   if (needs_barrier_) {
     get_command_encoder()->memoryBarrier(MTL::BarrierScopeBuffers);
     needs_barrier_ = false;
-    // Preserve both hash tables' buckets for reuse across barrier epochs.
+    // Preserve the hash tables' buckets for reuse across barrier epochs.
     prev_inputs_.swap(next_inputs_);
-    prev_outputs_ = std::move(next_outputs_);
+    prev_outputs_.swap(next_outputs_);
   } else {
     prev_inputs_.insert(next_inputs_.begin(), next_inputs_.end());
     prev_outputs_.insert(next_outputs_.begin(), next_outputs_.end());
