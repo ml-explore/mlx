@@ -302,10 +302,12 @@ auto* get_grouped_mm_funcion(Dtype dtype, int N, cu::Device& device) {
       using Arch = MLX_GET_TYPE(arch_tag);
       dispatch_bool(N % 8 == 0, [&](auto is_out_aligned) {
         constexpr int kAlignmentC = is_out_aligned ? 8 : 1;
-        dispatch_bool(env::enable_tf32(), [&](auto kEnableTF32) {
-          fun = grouped_gemm_v2<
-              GemmConfiguration<DataType, Arch, kAlignmentC, kEnableTF32>>;
-        });
+        dispatch_bool(
+            dtype == float32 ? env::tf32_active_for_fp32() : env::enable_tf32(),
+            [&](auto kEnableTF32) {
+              fun = grouped_gemm_v2<
+                  GemmConfiguration<DataType, Arch, kAlignmentC, kEnableTF32>>;
+            });
       });
     });
   });

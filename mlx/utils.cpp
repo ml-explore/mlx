@@ -301,6 +301,26 @@ std::string get_var(const char* name, const char* default_value) {
   }
 }
 
+bool tf32_active_for_fp32() {
+  if (!enable_tf32()) {
+    return false;
+  }
+  static bool warned = []() {
+    if (std::getenv("MLX_ENABLE_TF32") == nullptr) {
+      std::cerr
+          << "[mlx] float32 matmul-family ops are running at reduced (TF32) "
+             "precision, which is the default when MLX_ENABLE_TF32 is unset. "
+             "Set MLX_ENABLE_TF32=0 before the first operation for full "
+             "float32 precision, or set MLX_ENABLE_TF32=1 explicitly to "
+             "silence this warning."
+          << std::endl;
+    }
+    return true;
+  }();
+  (void)warned;
+  return true;
+}
+
 } // namespace env
 
 template <typename T>

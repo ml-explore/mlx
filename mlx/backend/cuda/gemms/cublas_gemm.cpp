@@ -19,8 +19,9 @@ cublasComputeType_t dtype_to_compute_type(Dtype dtype) {
     case bfloat16:
       return CUBLAS_COMPUTE_32F;
     case float32:
-      return mlx::core::env::enable_tf32() ? CUBLAS_COMPUTE_32F_FAST_TF32
-                                           : CUBLAS_COMPUTE_32F;
+      return mlx::core::env::tf32_active_for_fp32()
+          ? CUBLAS_COMPUTE_32F_FAST_TF32
+          : CUBLAS_COMPUTE_32F;
     case float64:
       return CUBLAS_COMPUTE_64F;
     case complex64:
