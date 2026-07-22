@@ -884,11 +884,15 @@ void qmm_splitk(
   int current_tgs = n_tiles * m_tiles;
   int split_k = std::max(1, 512 / current_tgs);
 
-  // Cap split_k by the number of quantization groups
-  split_k = std::min(split_k, K / group_size);
+  // Each K partition must be a whole number of BK-wide (32) K-tiles as well as
+  // whole quantization groups. The qmm_t_splitk kernels tile K by BK=32 and do
+  // not bound the K dimension, so a partition smaller than BK (e.g. nvfp4's
+  // group_size=16) would over-read into the next group's weights/scales.
+  int k_align = group_size > 32 ? group_size : 32;
+  split_k = std::min(split_k, K / k_align);
 
-  // Ensure K divides evenly by split_k * group_size
-  while (split_k > 1 && (K % (split_k * group_size) != 0)) {
+  // Ensure K divides evenly by split_k * k_align
+  while (split_k > 1 && (K % (split_k * k_align) != 0)) {
     split_k--;
   }
   if (split_k <= 1) {
