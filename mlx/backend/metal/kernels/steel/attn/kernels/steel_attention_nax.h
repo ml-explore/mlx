@@ -207,11 +207,10 @@ template <
     for (short iq = 0; iq < TQ; iq++) {
       STEEL_PRAGMA_UNROLL
       for (short ik = 0; ik < TK; ik += 2) {
-        // Unrolling the head-dim loop by 4 rather than fully lets the
-        // compiler interleave the next K-tile loads with the running mma
-        // chain instead of hoisting all TD loads up front; measures +11%
-        // at head_dim 128 on M5 Max and is a no-op at head_dim 64 (TD == 4,
-        // already a full unroll).
+        // Unrolling the head-dim loop by 4, rather than fully, potentially
+        // lets the compiler interleave the next K-tile loads with the running
+        // mma chain instead of hoisting all TD loads up front and is faster
+        // for head dim 128.
 #pragma clang loop unroll_count(4)
         for (short id = 0; id < TD; id++) {
           NAXTile<T, 1, 1> Qtile;
