@@ -33,7 +33,7 @@ class RNN(Module):
         hidden_size (int): Dimension of the hidden state, ``H``.
         bias (bool, optional): Whether to use a bias. Default: ``True``.
         nonlinearity (callable, optional): Non-linearity to use. If ``None``,
-            then func:`tanh` is used. Default: ``None``.
+            then :func:`tanh` is used. Default: ``None``.
     """
 
     def __init__(
