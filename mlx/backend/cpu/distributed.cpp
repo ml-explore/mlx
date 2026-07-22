@@ -98,6 +98,24 @@ void Recv::eval_cpu(
 void ReduceScatter::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  throw std::runtime_error("[ReduceScatter] Not implemented yet.");
+  assert(inputs.size() == 0);
+  assert(outputs.size() == 1);
+
+  auto [in, copied] = ensure_row_contiguous(inputs[0], stream());
+  outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
+
+  switch (reduce_type_) {
+    case Sum:
+      distributed::detail::sum_scatter(group(), in, outputs[0], stream());
+      break;
+    default:
+      throw std::runtime_error(
+          "Only all reduce sum, min and max are supported for now");
+  }
+  if (copied) {
+    auto& enc = cpu::get_command_encoder(stream());
+    enc.add_temporary(in);
+  }
 }
+
 } // namespace mlx::core::distributed
