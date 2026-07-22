@@ -165,7 +165,7 @@ class MultiOptimizer(Optimizer):
 
     Args:
         optimizers (list[Optimizer]): A list of optimizers to delegate to
-        filters (list[Callable[[str, array], bool]): A list of predicates that
+        filters (list[Callable[[str, array], bool]]): A list of predicates that
             should be one less than the provided optimizers.
     """
 
@@ -606,8 +606,9 @@ class Adamax(Adam):
     Args:
         learning_rate (float or callable): The learning rate :math:`\lambda`.
         betas (Tuple[float, float], optional): The coefficients
-          :math:`(\beta_1, \beta_2)` used for computing running averages of the
-          gradient and its square. Default: ``(0.9, 0.999)``
+          :math:`(\beta_1, \beta_2)` used for computing the running average of
+          the gradient and the exponentially weighted infinity norm.
+          Default: ``(0.9, 0.999)``
         eps (float, optional): The term :math:`\epsilon` added to the
           denominator to improve numerical stability. Default: ``1e-8``
     """
