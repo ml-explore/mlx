@@ -29,14 +29,6 @@ MeshGroup::MeshGroup(
 
   // Create the mesh implementation object
   mesh_ = MeshImpl(rank_, size_, connections_, buffers_, scatter_buffers_);
-  ring_ = RingImpl(
-      rank_,
-      size_,
-      &connections_[(rank_ + size_ - 1) % size_],
-      &connections_[(rank_ + 1) % size_],
-      1,
-      ring_send_buffers_,
-      ring_recv_buffers_);
 }
 
 void MeshGroup::initialize() {
@@ -84,8 +76,6 @@ void MeshGroup::allocate_buffers() {
   // Deregister any buffers and free the memory
   buffers_.clear();
   scatter_buffers_.clear();
-  ring_send_buffers_.clear();
-  ring_recv_buffers_.clear();
 
   // Allocate the memory
   for (int k = 0; k < BUFFER_SIZES; k++) {
@@ -97,11 +87,6 @@ void MeshGroup::allocate_buffers() {
       // Scatter buffers (size_ send slots followed by size_ recv slots)
       for (int j = 0; j < 2 * size_; j++) {
         scatter_buffers_.emplace_back(FRAME_SIZE * (1 << k));
-      }
-      // Ring buffers (1 for each direction)
-      for (int j = 0; j < 2; j++) {
-        ring_send_buffers_.emplace_back(FRAME_SIZE * (1 << k));
-        ring_recv_buffers_.emplace_back(FRAME_SIZE * (1 << k));
       }
     }
   }
@@ -140,19 +125,6 @@ void MeshGroup::allocate_buffers() {
         scatter_buffers_[scatter_base + size_ + j]
             .register_to_protection_domain(connections_[j].protection_domain);
       }
-
-      // Ring buffers (see ring group for the logic below)
-      int left = (rank_ + size_ - 1) % size_;
-      int right = (rank_ + 1) % size_;
-      // We register send buffers to both the right and the left.
-      ring_send_buffers_[k * NUM_BUFFERS * 2 + i * 2 + 0]
-          .register_to_protection_domain(connections_[right].protection_domain);
-      ring_recv_buffers_[k * NUM_BUFFERS * 2 + i * 2 + 0]
-          .register_to_protection_domain(connections_[left].protection_domain);
-      ring_send_buffers_[k * NUM_BUFFERS * 2 + i * 2 + 1]
-          .register_to_protection_domain(connections_[left].protection_domain);
-      ring_recv_buffers_[k * NUM_BUFFERS * 2 + i * 2 + 1]
-          .register_to_protection_domain(connections_[right].protection_domain);
     }
   }
 }
@@ -228,16 +200,14 @@ void MeshGroup::all_reduce(
   auto in_ptr = static_cast<const T*>(input);
   auto out_ptr = static_cast<T*>(output);
   int64_t count = n_bytes / sizeof(T);
-  if (size_ > 2 &&
-      ((std::is_same_v<T, bfloat16_t> && count > 256 * 1024) ||
-       count >= 8 * 1024 * 1024 / static_cast<int64_t>(sizeof(T)))) {
+  if (size_ > 2 && n_bytes > 32 * 1024) {
     // Large messages are bandwidth bound so use the reduce scatter + all gather
     // path which moves size_x less data per link than the fully connected
     // all_reduce.
     mesh_.all_reduce_scatter_gather(in_ptr, out_ptr, count, reduce_op);
   } else {
-    // Small/medium messages are latency bound so use the single phase fully
-    // connected all_reduce.
+    // Small messages are latency bound so use the single phase fully
+    // connected all_reduce cause it is a bit better.
     mesh_.all_reduce(in_ptr, out_ptr, count, reduce_op);
   }
 }
@@ -253,10 +223,6 @@ void MeshGroup::reduce_scatter(
   auto in_ptr = static_cast<const T*>(input);
   auto out_ptr = static_cast<T*>(output);
   int64_t count = n_bytes / sizeof(T);
-  if (size_ == 1) {
-    std::copy_n(in_ptr, count, out_ptr);
-    return;
-  }
   mesh_.sum_scatter(in_ptr, out_ptr, count, reduce_op);
 }
 
