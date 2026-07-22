@@ -28,7 +28,7 @@ MeshGroup::MeshGroup(
   side_channel_.barrier();
 
   // Create the mesh implementation object
-  mesh_ = MeshImpl(rank_, size_, connections_, buffers_);
+  mesh_ = MeshImpl(rank_, size_, connections_, buffers_, scatter_buffers_);
   ring_ = RingImpl(
       rank_,
       size_,
@@ -83,6 +83,7 @@ void MeshGroup::initialize() {
 void MeshGroup::allocate_buffers() {
   // Deregister any buffers and free the memory
   buffers_.clear();
+  scatter_buffers_.clear();
   ring_send_buffers_.clear();
   ring_recv_buffers_.clear();
 
@@ -92,6 +93,10 @@ void MeshGroup::allocate_buffers() {
       // Mesh buffers
       for (int j = 0; j < size_; j++) {
         buffers_.emplace_back(FRAME_SIZE * (1 << k));
+      }
+      // Scatter buffers (size_ send slots followed by size_ recv slots)
+      for (int j = 0; j < 2 * size_; j++) {
+        scatter_buffers_.emplace_back(FRAME_SIZE * (1 << k));
       }
       // Ring buffers (1 for each direction)
       for (int j = 0; j < 2; j++) {
@@ -120,6 +125,20 @@ void MeshGroup::allocate_buffers() {
           buffers_[k * NUM_BUFFERS * size_ + i * size_ + j]
               .register_to_protection_domain(connections_[j].protection_domain);
         }
+      }
+
+      // Scatter buffers. Slot p (send to peer p) and slot size_ + p (recv from
+      // peer p) are both registered to peer p's protection domain. The slots
+      // for our own rank are unused but kept for uniform indexing.
+      int scatter_base = k * NUM_BUFFERS * 2 * size_ + i * 2 * size_;
+      for (int j = 0; j < size_; j++) {
+        if (j == rank_) {
+          continue;
+        }
+        scatter_buffers_[scatter_base + j].register_to_protection_domain(
+            connections_[j].protection_domain);
+        scatter_buffers_[scatter_base + size_ + j]
+            .register_to_protection_domain(connections_[j].protection_domain);
       }
 
       // Ring buffers (see ring group for the logic below)
@@ -176,6 +195,17 @@ void MeshGroup::all_gather(const void* input, void* output, size_t n_bytes) {
       static_cast<const char*>(input), static_cast<char*>(output), n_bytes);
 }
 
+void MeshGroup::sum_scatter(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    reduce_scatter<T>(input, output, n_bytes, SumOp<T>{});
+  });
+}
+
 void MeshGroup::send(const void* input, size_t n_bytes, int dst) {
   mesh_.send(static_cast<const char*>(input), n_bytes, dst);
 }
@@ -205,6 +235,24 @@ void MeshGroup::all_reduce(
   } else {
     mesh_.all_reduce(in_ptr, out_ptr, count, reduce_op);
   }
+}
+
+template <typename T, typename ReduceOp>
+void MeshGroup::reduce_scatter(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    ReduceOp reduce_op) {
+  // n_bytes is the size of the output (one chunk). The input holds size_ such
+  // chunks laid out contiguously.
+  auto in_ptr = static_cast<const T*>(input);
+  auto out_ptr = static_cast<T*>(output);
+  int64_t count = n_bytes / sizeof(T);
+  if (size_ == 1) {
+    std::copy_n(in_ptr, count, out_ptr);
+    return;
+  }
+  mesh_.sum_scatter(in_ptr, out_ptr, count, reduce_op);
 }
 
 } // namespace jaccl
