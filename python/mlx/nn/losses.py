@@ -416,8 +416,9 @@ def triplet_loss(
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        array: Computed triplet loss. If reduction is "none", returns a tensor of the same shape as input;
-                  if reduction is "mean" or "sum", returns a scalar tensor.
+        array: Computed triplet loss. If reduction is ``"none"``, returns a tensor with the
+          same shape as the inputs but with the ``axis`` dimension removed; if reduction
+          is ``"mean"`` or ``"sum"``, returns a scalar tensor.
     """
     pos_dist = mx.power(
         mx.power(mx.abs(anchors - positives), p).sum(axis) + eps, 1.0 / p

@@ -1,10 +1,11 @@
 # Copyright © 2024 Apple Inc.
 
 import mlx.core as mx
-import mlx.optimizers as optim
+import mlx.nn as nn
 import mlx_distributed_tests
 import mlx_tests
-from mlx.nn.utils import average_gradients, fsdp_apply_gradients
+from mlx.nn.utils import average_gradients
+from mlx.utils import tree_flatten, tree_map
 
 
 class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
@@ -116,230 +117,66 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             self.assertEqual(y.shape, (sub.size() * 2, 2, 4))
             self.assertTrue(mx.all(y == 1))
 
-    def test_fsdp_apply_gradients(self):
+    def test_fully_shard_grads(self):
+        dtypes = [
+            (mx.float32, 1e-6, 1e-6),
+            (mx.bfloat16, 1e-3, 1e-3),
+        ]
+
         world = mx.distributed.init()
         N = world.size()
+        rank = world.rank()
+        dims = 8 * N
+        part = slice(rank * dims // N, (rank + 1) * dims // N)
 
-        params = {
-            "w1": mx.ones((N * 10, 8)),
-            "w2": mx.ones((N * 20,)),
-        }
-        grads = {
-            "w1": mx.ones((N * 10, 8)) * 0.1,
-            "w2": mx.ones((N * 20,)) * 0.1,
-        }
+        class MLP(nn.Module):
+            def __init__(self, dims):
+                super().__init__()
+                self.l1 = nn.Linear(dims, dims)
+                self.l2 = nn.Linear(dims, dims)
 
-        optimizer = optim.SGD(learning_rate=0.1)
-        updated_params_fsdp = fsdp_apply_gradients(grads, params, optimizer)
-        mx.eval(updated_params_fsdp)
+            def __call__(self, x):
+                return self.l2(nn.relu(self.l1(x)))
 
-        self.assertEqual(updated_params_fsdp["w1"].shape, (N * 10, 8))
-        self.assertEqual(updated_params_fsdp["w2"].shape, (N * 20,))
+        def loss_fn(model, x, y):
+            logits = model(x).astype(mx.float32)
+            return ((logits - y) ** 2).mean()
 
-        self.assertTrue(
-            mx.allclose(
-                updated_params_fsdp["w1"], mx.ones((N * 10, 8)) * 0.99, atol=1e-6
+        for dtype, atol, rtol in dtypes:
+
+            mx.random.seed(0xF0F0F0F0)
+
+            kx, ky = mx.random.split(mx.random.key(rank))
+            x = mx.random.normal((4, dims), dtype=dtype, key=kx)
+            y = mx.random.normal((4, dims), key=ky)
+
+            # DDP reference: replicated params, gradients averaged across ranks
+            model = MLP(dims)
+            params = model.trainable_parameters()
+
+            # Cast parameters to dtype for forward
+            model.update(tree_map(lambda p: p.astype(dtype), params))
+            loss, grads = mx.value_and_grad(loss_fn)(model, x, y)
+            grads = average_gradients(grads, group=world)
+            loss = mx.distributed.all_sum(loss, group=world) / N
+            mx.eval(loss, grads)
+
+            # Shard the model
+            model_sharded = MLP(dims)
+            model_sharded.update(params)
+            model_sharded = nn.fully_shard(model_sharded, compute_dtype=dtype)
+            loss_sharded, grads_sharded = mx.value_and_grad(loss_fn)(
+                model_sharded, x, y
             )
-        )
-        self.assertTrue(
-            mx.allclose(updated_params_fsdp["w2"], mx.ones((N * 20,)) * 0.99, atol=1e-6)
-        )
 
-        grads = {
-            "w1": mx.ones((N * 10, 8)) * 10.0,
-            "w2": mx.ones((N * 20,)) * 10.0,
-        }
-
-        new_params_clipped, grad_norm = fsdp_apply_gradients(
-            grads, params, optimizer, max_norm=1.0
-        )
-        mx.eval(new_params_clipped, grad_norm)
-
-        self.assertIsNotNone(grad_norm)
-        expected_norm = mx.sqrt((N * 10 * 8 + N * 20) * 100.0)
-        self.assertTrue(mx.allclose(grad_norm, expected_norm, atol=1e-4, rtol=1e-4))
-        self.assertEqual(new_params_clipped["w1"].shape, (N * 10, 8))
-        self.assertEqual(new_params_clipped["w2"].shape, (N * 20,))
-
-        scale = 1.0 / expected_norm
-        expected_update = 1.0 - 0.1 * 10.0 * scale
-        self.assertTrue(
-            mx.allclose(
-                new_params_clipped["w1"],
-                mx.ones((N * 10, 8)) * expected_update,
-                atol=1e-4,
-                rtol=1e-4,
-            )
-        )
-        self.assertTrue(
-            mx.allclose(
-                new_params_clipped["w2"],
-                mx.ones((N * 20,)) * expected_update,
-                atol=1e-4,
-                rtol=1e-4,
-            )
-        )
-        params = {"w": mx.ones((N * 4,))}
-        grads = {"w": mx.ones((N * 4,)) * 0.5}
-
-        optimizer_fsdp = optim.SGD(learning_rate=0.1)
-        updated_params_fsdp = fsdp_apply_gradients(grads, params, optimizer_fsdp)
-
-        optimizer_ddp = optim.SGD(learning_rate=0.1)
-        avg_grads = average_gradients(grads)
-        updated_params_ddp = optimizer_ddp.apply_gradients(avg_grads, params)
-        mx.eval(updated_params_ddp, updated_params_fsdp)
-
-        self.assertTrue(
-            mx.allclose(
-                updated_params_fsdp["w"], updated_params_ddp["w"], atol=1e-6, rtol=1e-4
-            ),
-        )
-
-    def test_fsdp_ddp_apply_gradients(self):
-        world = mx.distributed.init()
-        N = world.size()
-        S = 4
-        fsdp_group = world.split(world.rank() // S)
-        dp_group = world.split(world.rank() % S)
-
-        self.assertEqual(fsdp_group.size(), S)
-        self.assertEqual(dp_group.size(), N // S)
-
-        params = {
-            "w1": mx.ones((S * 10, 8)),
-            "w2": mx.ones((S * 20,)),
-        }
-        grads = {
-            "w1": mx.ones((S * 10, 8)) * 0.1,
-            "w2": mx.ones((S * 20,)) * 0.1,
-        }
-
-        optimizer = optim.SGD(learning_rate=0.1)
-        updated = fsdp_apply_gradients(
-            grads,
-            params,
-            optimizer,
-            fsdp_group=fsdp_group,
-            dp_group=dp_group,
-        )
-        mx.eval(updated)
-
-        self.assertEqual(updated["w1"].shape, (S * 10, 8))
-        self.assertEqual(updated["w2"].shape, (S * 20,))
-
-        self.assertTrue(
-            mx.allclose(updated["w1"], mx.ones((S * 10, 8)) * 0.99, atol=1e-6)
-        )
-        self.assertTrue(
-            mx.allclose(updated["w2"], mx.ones((S * 20,)) * 0.99, atol=1e-6)
-        )
-
-        grads_big = {
-            "w1": mx.ones((S * 10, 8)) * 10.0,
-            "w2": mx.ones((S * 20,)) * 10.0,
-        }
-
-        optimizer2 = optim.SGD(learning_rate=0.1)
-        clipped, grad_norm = fsdp_apply_gradients(
-            grads_big,
-            params,
-            optimizer2,
-            fsdp_group=fsdp_group,
-            dp_group=dp_group,
-            max_norm=1.0,
-        )
-        mx.eval(clipped, grad_norm)
-
-        self.assertIsNotNone(grad_norm)
-        expected_norm = mx.sqrt((S * 10 * 8 + S * 20) * 100.0)
-        self.assertTrue(mx.allclose(grad_norm, expected_norm, atol=1e-4, rtol=1e-4))
-        self.assertEqual(clipped["w1"].shape, (S * 10, 8))
-        self.assertEqual(clipped["w2"].shape, (S * 20,))
-
-        scale = 1.0 / expected_norm
-        expected_update = 1.0 - 0.1 * 10.0 * scale
-        self.assertTrue(
-            mx.allclose(
-                clipped["w1"],
-                mx.ones((S * 10, 8)) * expected_update,
-                atol=1e-4,
-                rtol=1e-4,
-            )
-        )
-        self.assertTrue(
-            mx.allclose(
-                clipped["w2"],
-                mx.ones((S * 20,)) * expected_update,
-                atol=1e-4,
-                rtol=1e-4,
-            )
-        )
-
-        params_eq = {"w": mx.ones((S * 4,))}
-        grads_eq = {"w": mx.ones((S * 4,)) * 0.5}
-
-        optimizer_hybrid = optim.SGD(learning_rate=0.1)
-        updated_hybrid = fsdp_apply_gradients(
-            grads_eq,
-            params_eq,
-            optimizer_hybrid,
-            fsdp_group=fsdp_group,
-            dp_group=dp_group,
-        )
-
-        optimizer_ddp = optim.SGD(learning_rate=0.1)
-        avg_grads = average_gradients(grads_eq)
-        updated_ddp = optimizer_ddp.apply_gradients(avg_grads, params_eq)
-        mx.eval(updated_hybrid, updated_ddp)
-
-        self.assertTrue(
-            mx.allclose(updated_hybrid["w"], updated_ddp["w"], atol=1e-6, rtol=1e-4),
-        )
-
-    def test_fsdp_peak_memory(self):
-        world = mx.distributed.init()
-        N = world.size()
-        mx.random.seed(42)
-        params = {
-            "w1": mx.random.normal((N * 1024, 1024)),
-            "w2": mx.random.normal((N * 2048, 512)),
-        }
-        grads = {
-            "w1": mx.random.normal((N * 1024, 1024)),
-            "w2": mx.random.normal((N * 2048, 512)),
-        }
-        mx.eval(params, grads)
-        optimizer_ddp = optim.Adam(learning_rate=0.01)
-        optimizer_fsdp = optim.Adam(learning_rate=0.01)
-
-        def pseudo_step_ddp(grads, params, optimizer):
-            grads = average_gradients(grads)
-            grads, grad_norm = optim.clip_grad_norm(grads, max_norm=1.0)
-            params = optimizer.apply_gradients(grads, params)
-            return grad_norm, params
-
-        def pseudo_step_fsdp(grads, params, optimizer):
-            params, grad_norm = fsdp_apply_gradients(
-                grads, params, optimizer, max_norm=1.0
-            )
-            return grad_norm, params
-
-        mx.reset_peak_memory()
-
-        for i in range(10):
-            grad_norm, params = pseudo_step_ddp(grads, params, optimizer_ddp)
-            mx.eval(grad_norm, params)
-
-        ddp_peak_memory = mx.get_peak_memory()
-        mx.reset_peak_memory()
-
-        for i in range(10):
-            grad_norm, params = pseudo_step_fsdp(grads, params, optimizer_fsdp)
-            mx.eval(grad_norm, params)
-
-        fsdp_peak_memory = mx.get_peak_memory()
-        self.assertTrue(fsdp_peak_memory < ddp_peak_memory)
+            loss_sharded = mx.distributed.all_sum(loss_sharded, group=world) / N
+            mx.eval(loss_sharded, grads_sharded)
+            grads_ref = dict(tree_flatten(grads))
+            self.assertTrue(mx.allclose(loss, loss_sharded, atol=1e-4, rtol=1e-4))
+            for k, gs in tree_flatten(grads_sharded["module"]):
+                self.assertTrue(
+                    mx.allclose(gs, grads_ref[k][part], atol=atol, rtol=rtol)
+                )
 
 
 if __name__ == "__main__":
