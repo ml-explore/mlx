@@ -541,6 +541,7 @@ class TestBlas(mlx_tests.MLXTestCase):
     def test_wide_matmul(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("requires GPU")
+
         # Eligible a @ b.T products of a few rows take the wide gemv route on metal;
         # cover numerical correctness across the routing boundaries: row tails,
         # K not divisible by 4, offset and sliced views, and batching.
@@ -823,6 +824,7 @@ class TestBlas(mlx_tests.MLXTestCase):
     def test_wide_addmm(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("requires GPU")
+
         # Eligible few-row addmm shapes take the wide gemv route on metal; cover
         # the axpby epilogue against bias shapes, scales, and batching.
         def run_test(dtype, B, M, K, N, c_shape, alpha, beta):
@@ -1337,6 +1339,7 @@ class TestBlas(mlx_tests.MLXTestCase):
     def test_gather_mm_blocks(self):
         if mx.default_device() == mx.cpu:
             self.skipTest("requires GPU")
+
         # Eligible gathered products with few-row blocks route to the wide
         # gather on metal; check block indexing against a per-entry reference.
         def run_test(dtype, G, M, K, N, E, idx_shape):
