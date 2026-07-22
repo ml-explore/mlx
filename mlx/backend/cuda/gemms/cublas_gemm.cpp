@@ -19,9 +19,11 @@ cublasComputeType_t dtype_to_compute_type(Dtype dtype) {
     case bfloat16:
       return CUBLAS_COMPUTE_32F;
     case float32:
-      return mlx::core::env::tf32_active_for_fp32()
-          ? CUBLAS_COMPUTE_32F_FAST_TF32
-          : CUBLAS_COMPUTE_32F;
+      // Compute-type selection only; the once-per-process TF32 warning is
+      // emitted from the CublasGemm constructor, where the shape is known and
+      // rank-1 (matvec) false positives can be suppressed.
+      return mlx::core::env::enable_tf32() ? CUBLAS_COMPUTE_32F_FAST_TF32
+                                           : CUBLAS_COMPUTE_32F;
     case float64:
       return CUBLAS_COMPUTE_64F;
     case complex64:
@@ -82,6 +84,18 @@ CublasGemm::CublasGemm(
       CUBLASLT_MATMUL_DESC_POINTER_MODE,
       &pointer_mode,
       sizeof(pointer_mode)));
+
+  // Warn once (see mlx/utils.h) that fp32 is running at reduced TF32 precision,
+  // but only for a genuine matrix-matrix product. cuBLASLt leaves rank-1 shapes
+  // (M == 1 || N == 1 -- e.g. a matvec whose layout missed the dedicated GEMV
+  // path and fell through to cuBLAS) numerically exact even when FAST_TF32 is
+  // requested, so warning on them is a false positive. Every cuBLAS fp32 entry
+  // -- plain matmul, AddMM (both constructors), and the GEMM-conv fallbacks --
+  // funnels through this constructor, so coverage matches the previous
+  // dtype-only gate in dtype_to_compute_type() while dropping the matvec noise.
+  if (dtype == float32 && M_ > 1 && N_ > 1) {
+    env::tf32_active_for_fp32();
+  }
 }
 
 CublasGemm::CublasGemm(
