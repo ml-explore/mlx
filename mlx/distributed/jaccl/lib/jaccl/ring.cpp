@@ -168,6 +168,14 @@ void RingGroup::all_gather(const void* input, void* output, size_t n_bytes) {
       n_conns_);
 }
 
+void RingGroup::sum_scatter(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  throw std::runtime_error("[jaccl] Ring sum_scatter not yet implemented.");
+}
+
 void RingGroup::send(const void* input, size_t n_bytes, int dst) {
   int right = (rank_ + 1) % size_;
   int left = (rank_ + size_ - 1) % size_;

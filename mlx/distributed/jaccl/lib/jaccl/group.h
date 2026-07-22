@@ -28,6 +28,16 @@ class Group {
 
   virtual void all_gather(const void* input, void* output, size_t n_bytes) = 0;
 
+  /**
+   * Reduce scatter with a sum reduction.
+   *
+   * The input holds size() contiguous chunks of n_bytes each (total
+   * size() * n_bytes bytes). After the call, output (n_bytes bytes) on rank r
+   * contains the elementwise sum over all ranks of the r-th input chunk.
+   */
+  virtual void
+  sum_scatter(const void* input, void* output, size_t n_bytes, int dtype) = 0;
+
   virtual void send(const void* input, size_t n_bytes, int dst) = 0;
   virtual void recv(void* output, size_t n_bytes, int src) = 0;
   virtual void barrier() = 0;

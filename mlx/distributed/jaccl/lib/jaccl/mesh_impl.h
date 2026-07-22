@@ -19,11 +19,13 @@ class MeshImpl {
       int rank,
       int size,
       std::vector<Connection>& conns,
-      std::vector<SharedBuffer>& buffers)
+      std::vector<SharedBuffer>& buffers,
+      std::vector<SharedBuffer>& scatter_buffers)
       : rank_(rank),
         size_(size),
         connections_(conns),
         buffers_(buffers),
+        scatter_buffers_(scatter_buffers),
         staging_mem_(
             std::make_unique<char[]>(MESH_PIPELINE * MAX_BUFFER_SIZE)) {}
 
@@ -279,6 +281,115 @@ class MeshImpl {
     }
   }
 
+  template <typename T, typename ReduceOp>
+  void sum_scatter(const T* in, T* out, int64_t count, ReduceOp reduce_op) {
+    // Fully connected reduce scatter.
+    //
+    // The input holds size_ contiguous chunks of `count` elements each. Every
+    // rank keeps chunk rank_ and needs the elementwise reduction of that chunk
+    // across all ranks. To that end each rank p sends its chunk j to rank j and
+    // receives every peer's chunk rank_. The output is seeded with this rank's
+    // own chunk rank_ and every received chunk is reduced into it.
+    //
+    // Unlike all_reduce/all_gather each peer receives a *different* chunk, so
+    // we use the dedicated scatter buffers: per (sz, buff) tile there are size_
+    // send slots (slot p -> peer p) and size_ recv slots (slot p <- peer p).
+
+    const T* our_chunk = in + static_cast<int64_t>(rank_) * count;
+
+    auto [sz, buffer_size] = buffer_size_from_message(count * sizeof(T));
+    int64_t N = buffer_size / sizeof(T);
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE * MESH_MAX_PEERS * 2;
+    int64_t total = static_cast<int64_t>(count);
+    int num_peers = size_ - 1;
+
+    // Seed the output with our own chunk.
+    std::copy_n(our_chunk, total, out);
+
+    // Counters to maintain the state of transfers
+    int in_flight = 0;
+    int64_t read_offset = 0;
+    int completed_send_count[PIPELINE] = {0};
+    int64_t write_offset[MESH_MAX_PEERS] = {0};
+
+    // Prefill the pipeline
+    int buff = 0;
+    while (read_offset < total && buff < PIPELINE) {
+      int64_t elems = std::min(N, total - read_offset);
+      scatter_post_recv_all(sz, buff);
+      // Stage the chunk destined for each peer p (our input chunk p) into that
+      // peer's send buffer.
+      for (int p = 0; p < size_; p++) {
+        if (p == rank_) {
+          continue;
+        }
+        const T* src = in + static_cast<int64_t>(p) * count + read_offset;
+        std::copy(
+            src, src + elems, scatter_send_buffer(sz, buff, p).begin<T>());
+      }
+      scatter_post_send_all(sz, buff);
+
+      buff++;
+      in_flight += 2 * num_peers;
+      read_offset += N;
+    }
+
+    // Main loop
+    //
+    // Keep going until we have no longer data in flight.
+    while (in_flight > 0) {
+      ibv_wc wc[WC_NUM];
+      int n = poll(connections_, WC_NUM, wc);
+      for (int i = 0; i < n; i++) {
+        int work_type = wc[i].wr_id >> 16;
+        int buff = (wc[i].wr_id >> 8) & 0xff;
+        int rank = wc[i].wr_id & 0xff;
+
+        in_flight--;
+
+        // Send completed. Once every peer received this buffer, refill it with
+        // the next slice of each peer's chunk and post the next sends.
+        if (work_type == SEND_WR && read_offset < total) {
+          completed_send_count[buff]++;
+          if (completed_send_count[buff] == num_peers) {
+            int64_t elems = std::min(N, total - read_offset);
+            for (int p = 0; p < size_; p++) {
+              if (p == rank_) {
+                continue;
+              }
+              const T* src = in + static_cast<int64_t>(p) * count + read_offset;
+              std::copy(
+                  src,
+                  src + elems,
+                  scatter_send_buffer(sz, buff, p).begin<T>());
+            }
+            scatter_post_send_all(sz, buff);
+
+            completed_send_count[buff] = 0;
+            in_flight += num_peers;
+            read_offset += N;
+          }
+        }
+
+        // Recv completed. Reduce the peer's contribution into our chunk and, if
+        // there is more data to fetch from that peer, post another recv.
+        else if (work_type == RECV_WR) {
+          int64_t elems = std::min(N, total - write_offset[rank]);
+          reduce_op(
+              scatter_recv_buffer(sz, buff, rank).begin<T>(),
+              out + write_offset[rank],
+              elems);
+          write_offset[rank] += N;
+          if (write_offset[rank] + N * (PIPELINE - 1) < total) {
+            scatter_recv_from(sz, rank, buff);
+            in_flight++;
+          }
+        }
+      }
+    }
+  }
+
   void send(const char* in_ptr, int64_t n_bytes, int dst) {
     constexpr int PIPELINE = 2;
     constexpr int WC_NUM = PIPELINE;
@@ -417,10 +528,52 @@ class MeshImpl {
     }
   }
 
+  // Scatter buffer helpers. Per (sz, buff) tile there are 2 * size_ slots: the
+  // first size_ are send buffers (slot p is sent to peer p) and the next size_
+  // are recv buffers (slot p receives from peer p).
+  SharedBuffer& scatter_send_buffer(int sz, int buff, int peer) {
+    return scatter_buffers_
+        [sz * NUM_BUFFERS * 2 * size_ + buff * 2 * size_ + peer];
+  }
+
+  SharedBuffer& scatter_recv_buffer(int sz, int buff, int peer) {
+    return scatter_buffers_
+        [sz * NUM_BUFFERS * 2 * size_ + buff * 2 * size_ + size_ + peer];
+  }
+
+  void scatter_send_to(int sz, int rank, int buff) {
+    connections_[rank].post_send(
+        scatter_send_buffer(sz, buff, rank), SEND_WR << 16 | buff << 8 | rank);
+  }
+
+  void scatter_recv_from(int sz, int rank, int buff) {
+    connections_[rank].post_recv(
+        scatter_recv_buffer(sz, buff, rank), RECV_WR << 16 | buff << 8 | rank);
+  }
+
+  void scatter_post_send_all(int sz, int buff) {
+    for (int i = 0; i < size_; i++) {
+      if (i == rank_) {
+        continue;
+      }
+      scatter_send_to(sz, i, buff);
+    }
+  }
+
+  void scatter_post_recv_all(int sz, int buff) {
+    for (int i = 0; i < size_; i++) {
+      if (i == rank_) {
+        continue;
+      }
+      scatter_recv_from(sz, i, buff);
+    }
+  }
+
   int rank_;
   int size_;
   std::span<Connection> connections_;
   std::span<SharedBuffer> buffers_;
+  std::span<SharedBuffer> scatter_buffers_;
   std::unique_ptr<char[]> staging_mem_;
 };
 
