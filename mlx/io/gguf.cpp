@@ -13,6 +13,30 @@ namespace mlx::core {
 // https://github.com/antirez/gguf-tools/blob/af7d88d808a7608a33723fba067036202910acb3/gguflib.h#L102-L108
 constexpr int gguf_array_header_size = 12;
 
+namespace {
+
+// GGUF metadata is byte-packed, so values need not satisfy host alignment.
+template <typename T>
+T read_unaligned(const void* src) {
+  T value;
+  std::memcpy(&value, src, sizeof(value));
+  return value;
+}
+
+template <typename T>
+void write_unaligned(void* dst, T value) {
+  std::memcpy(dst, &value, sizeof(value));
+}
+
+array array_from_bytes(const void* src, int size, Dtype dtype) {
+  auto nbytes = static_cast<size_t>(size) * size_of(dtype);
+  auto buffer = allocator::malloc(nbytes);
+  std::memcpy(buffer.raw_ptr(), src, nbytes);
+  return array(buffer, {size}, dtype);
+}
+
+} // namespace
+
 std::optional<uint32_t> dtype_to_gguf_tensor_type(const Dtype& dtype) {
   switch (dtype) {
     case float32:
@@ -94,95 +118,103 @@ void set_mx_value_from_gguf(
     GGUFMetaData& value) {
   switch (type) {
     case GGUF_VALUE_TYPE_UINT8:
-      value = array(val->uint8, uint8);
+      value = array(read_unaligned<uint8_t>(val), uint8);
       break;
     case GGUF_VALUE_TYPE_INT8:
-      value = array(val->int8, int8);
+      value = array(read_unaligned<int8_t>(val), int8);
       break;
     case GGUF_VALUE_TYPE_UINT16:
-      value = array(val->uint16, uint16);
+      value = array(read_unaligned<uint16_t>(val), uint16);
       break;
     case GGUF_VALUE_TYPE_INT16:
-      value = array(val->int16, int16);
+      value = array(read_unaligned<int16_t>(val), int16);
       break;
     case GGUF_VALUE_TYPE_UINT32:
-      value = array(val->uint32, uint32);
+      value = array(read_unaligned<uint32_t>(val), uint32);
       break;
     case GGUF_VALUE_TYPE_INT32:
-      value = array(val->int32, int32);
+      value = array(read_unaligned<int32_t>(val), int32);
       break;
     case GGUF_VALUE_TYPE_UINT64:
-      value = array(val->uint64, uint64);
+      value = array(read_unaligned<uint64_t>(val), uint64);
       break;
     case GGUF_VALUE_TYPE_INT64:
-      value = array(val->int64, int64);
+      value = array(read_unaligned<int64_t>(val), int64);
       break;
     case GGUF_VALUE_TYPE_FLOAT32:
-      value = array(val->float32, float32);
+      value = array(read_unaligned<float>(val), float32);
       break;
     case GGUF_VALUE_TYPE_BOOL:
-      value = array(val->boolval, bool_);
+      value = array(read_unaligned<uint8_t>(val), bool_);
       break;
-    case GGUF_VALUE_TYPE_STRING:
-      value =
-          std::string(val->string.string, static_cast<int>(val->string.len));
+    case GGUF_VALUE_TYPE_STRING: {
+      auto length = read_unaligned<uint64_t>(val);
+      auto data = reinterpret_cast<const char*>(val) + sizeof(length);
+      value = std::string(data, static_cast<size_t>(length));
       break;
+    }
     case GGUF_VALUE_TYPE_FLOAT64:
-      value = array(val->float64, float32);
+      value = array(read_unaligned<double>(val), float32);
       break;
     case GGUF_VALUE_TYPE_ARRAY: {
       ctx->off += gguf_array_header_size; // Skip header
-      char* data = reinterpret_cast<char*>(val) + gguf_array_header_size;
-      auto size = static_cast<int>(val->array.len);
-      if (val->array.type == GGUF_VALUE_TYPE_ARRAY) {
+      auto data = reinterpret_cast<const char*>(val) + gguf_array_header_size;
+      auto array_type = read_unaligned<uint32_t>(val);
+      auto size = static_cast<int>(read_unaligned<uint64_t>(
+          reinterpret_cast<const char*>(val) + sizeof(array_type)));
+      if (array_type == GGUF_VALUE_TYPE_ARRAY) {
         throw std::invalid_argument(
             "[load_gguf] Only supports loading 1-layer of nested arrays.");
       }
-      switch (val->array.type) {
+      switch (array_type) {
         case GGUF_VALUE_TYPE_UINT8:
-          value = array(reinterpret_cast<uint8_t*>(data), {size}, uint8);
+          value = array_from_bytes(data, size, uint8);
           break;
         case GGUF_VALUE_TYPE_INT8:
-          value = array(reinterpret_cast<int8_t*>(data), {size}, int8);
+          value = array_from_bytes(data, size, int8);
           break;
         case GGUF_VALUE_TYPE_UINT16:
-          value = array(reinterpret_cast<uint16_t*>(data), {size}, uint16);
+          value = array_from_bytes(data, size, uint16);
           break;
         case GGUF_VALUE_TYPE_INT16:
-          value = array(reinterpret_cast<int16_t*>(data), {size}, int16);
+          value = array_from_bytes(data, size, int16);
           break;
         case GGUF_VALUE_TYPE_UINT32:
-          value = array(reinterpret_cast<uint32_t*>(data), {size}, uint32);
+          value = array_from_bytes(data, size, uint32);
           break;
         case GGUF_VALUE_TYPE_INT32:
-          value = array(reinterpret_cast<int32_t*>(data), {size}, int32);
+          value = array_from_bytes(data, size, int32);
           break;
         case GGUF_VALUE_TYPE_UINT64:
-          value = array(reinterpret_cast<uint64_t*>(data), {size}, uint64);
+          value = array_from_bytes(data, size, uint64);
           break;
         case GGUF_VALUE_TYPE_INT64:
-          value = array(reinterpret_cast<int64_t*>(data), {size}, int64);
+          value = array_from_bytes(data, size, int64);
           break;
         case GGUF_VALUE_TYPE_FLOAT32:
-          value = array(reinterpret_cast<float*>(data), {size}, float32);
+          value = array_from_bytes(data, size, float32);
           break;
         case GGUF_VALUE_TYPE_BOOL:
-          value = array(reinterpret_cast<bool*>(data), {size}, bool_);
+          value = array_from_bytes(data, size, bool_);
           break;
         case GGUF_VALUE_TYPE_STRING: {
           std::vector<std::string> strs(size);
           for (auto& str : strs) {
-            auto str_val = reinterpret_cast<gguf_string*>(data);
-            data += (str_val->len + sizeof(gguf_string));
-            str = std::string(str_val->string, static_cast<int>(str_val->len));
-            ctx->off += (str_val->len + sizeof(gguf_string));
+            auto length = read_unaligned<uint64_t>(data);
+            data += sizeof(length);
+            str = std::string(data, static_cast<size_t>(length));
+            data += length;
+            ctx->off += (length + sizeof(gguf_string));
           }
           value = std::move(strs);
           break;
         }
-        case GGUF_VALUE_TYPE_FLOAT64:
-          value = array(reinterpret_cast<double*>(data), {size}, float32);
+        case GGUF_VALUE_TYPE_FLOAT64: {
+          std::vector<double> values(size);
+          std::memcpy(values.data(), data, values.size() * sizeof(double));
+          value = array(values.begin(), {size}, float32);
           break;
+        }
         default:
           throw std::runtime_error(
               "[load_gguf] Multiple levels of nested arrays are not supported.");
@@ -266,9 +298,9 @@ void append_kv_array(
   if (val.ndim() == 1) {
     size_t gguf_size = val.nbytes() + gguf_array_header_size;
     std::vector<char> val_vec(gguf_size);
-    gguf_value* gguf_val = reinterpret_cast<gguf_value*>(val_vec.data());
-    gguf_val->array.type = gguf_type;
-    gguf_val->array.len = val.size();
+    write_unaligned(val_vec.data(), gguf_type);
+    write_unaligned(
+        val_vec.data() + sizeof(gguf_type), static_cast<uint64_t>(val.size()));
     memcpy(
         val_vec.data() + gguf_array_header_size,
         val.data<char>(),
@@ -307,9 +339,8 @@ void save_gguf(
   }
 
   auto string_to_gguf = [](char* dst, const std::string& src) {
-    gguf_string* val = reinterpret_cast<gguf_string*>(dst);
-    val->len = src.length();
-    memcpy(val->string, src.c_str(), src.length());
+    write_unaligned(dst, static_cast<uint64_t>(src.length()));
+    memcpy(dst + sizeof(uint64_t), src.c_str(), src.length());
   };
 
   // Save any meta data
@@ -334,9 +365,11 @@ void save_gguf(
           });
       mem_size += str_vec.size() * sizeof(gguf_string) + gguf_array_header_size;
       std::vector<char> val_vec(mem_size);
-      gguf_value* val = reinterpret_cast<gguf_value*>(val_vec.data());
-      val->array.type = GGUF_VALUE_TYPE_STRING;
-      val->array.len = str_vec.size();
+      write_unaligned(
+          val_vec.data(), static_cast<uint32_t>(GGUF_VALUE_TYPE_STRING));
+      write_unaligned(
+          val_vec.data() + sizeof(uint32_t),
+          static_cast<uint64_t>(str_vec.size()));
       auto str_ptr = val_vec.data() + gguf_array_header_size;
       for (auto& str : str_vec) {
         string_to_gguf(str_ptr, str);
@@ -347,7 +380,7 @@ void save_gguf(
           key.c_str(),
           key.length(),
           GGUF_VALUE_TYPE_ARRAY,
-          static_cast<void*>(val),
+          static_cast<void*>(val_vec.data()),
           mem_size);
     } else if (auto pv = std::get_if<array>(&value); pv) {
       array v = *pv;
