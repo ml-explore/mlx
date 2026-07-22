@@ -172,6 +172,52 @@ mx::array cpu_nd_array_to_mlx(
   return out;
 }
 
+// Try to adopt a CPU host buffer as an mlx array without copying. On unified
+// memory the host pointer is GPU-addressable, so we wrap it directly via the
+// allocator instead of copying. The bytes are reinterpreted rather than
+// converted, so the source element width must already match the destination
+// dtype. The source ndarray is kept alive for the lifetime of the returned
+// array.
+//
+// Returns std::nullopt when the buffer cannot be adopted (no Metal backend,
+// dtype width mismatch, or a pointer the platform will not wrap), so the caller
+// can fall back to a copy or raise.
+std::optional<mx::array> cpu_nd_array_to_mlx_no_copy(
+    nb::ndarray<nb::ro> nd_array,
+    const mx::Shape& shape,
+    mx::Dtype dst_dtype) {
+  if (!mx::metal::is_available() ||
+      nd_array.itemsize() != mx::size_of(dst_dtype)) {
+    return std::nullopt;
+  }
+
+  auto [storage_size, strides, flags] = get_strided_layout(nd_array, shape);
+  auto buf = mx::allocator::make_buffer(
+      const_cast<void*>(nd_array.data()),
+      storage_size * mx::size_of(dst_dtype));
+  // make_buffer returns a null buffer when the pointer cannot be wrapped, e.g.
+  // when its alignment is not accepted by the platform.
+  if (buf.ptr() == nullptr) {
+    return std::nullopt;
+  }
+
+  mx::array out(shape, dst_dtype, nullptr, {});
+  out.set_data(
+      buf,
+      storage_size,
+      std::move(strides),
+      flags,
+      nd_array.byte_offset(),
+      // The buffer wraps caller-owned memory, so release the wrapper rather
+      // than returning it to the allocator's reuse pool, which must only
+      // recycle buffers it allocated itself.
+      [owner = std::move(nd_array)](mx::allocator::Buffer b) {
+        mx::allocator::release(b);
+      });
+  out.set_status(mx::array::Status::available);
+  return out;
+}
+
 mx::array metal_nd_array_to_mlx(
     nb::ndarray<nb::ro> nd_array,
     mx::Dtype src_dtype,
@@ -211,48 +257,63 @@ mx::array nd_array_to_mlx(
     std::optional<nb::dlpack::dtype> src_dlpack_dtype_override,
     std::optional<bool> copy) {
   auto src_dlpack_dtype = src_dlpack_dtype_override.value_or(nd_array.dtype());
-  auto src_mlx_dtype =
-      mlx_dtype_from_dlpack(src_dlpack_dtype, "Cannot convert array to mlx.");
+  auto src_mlx_dtype = mlx_dtype_from_dlpack(
+      src_dlpack_dtype, "[convert] Cannot convert array to mlx.");
   auto dst_dtype = requested_dtype.value_or(src_mlx_dtype);
   auto device_type = nd_array.device_type();
-  // CPU ndarrays are copied below, and their data_handle() is a host pointer,
-  // not a GPU buffer handle that can be queried by the active allocator.
-  bool can_reuse_buffer = device_type == nb::device::cpu::value
-      ? true
-      : mx::allocator::can_reuse_alien_buffer(nd_array.data_handle());
-  bool should_copy =
-      copy.value_or(false) || dst_dtype != src_mlx_dtype || !can_reuse_buffer;
-  if (copy.has_value() && copy.value() == false && dst_dtype != src_mlx_dtype) {
+
+  // A dtype change requires converting the elements, which cannot be done
+  // without a copy.
+  bool no_copy = copy.has_value() && !copy.value();
+  if (no_copy && dst_dtype != src_mlx_dtype) {
     throw std::invalid_argument(
-        "Cannot convert DLPack array to requested dtype without a copy.");
+        "[convert] Cannot convert array to the requested dtype without a "
+        "copy.");
   }
+
   switch (device_type) {
     case nb::device::cpu::value: {
-      if (copy.has_value() && copy.value() == false) {
-        throw std::invalid_argument(
-            "Cannot import a CPU DLPack array without a copy.");
-      }
       auto shape = get_shape(nd_array);
+      // For copy=None (try to share) and copy=False (must share), attempt a
+      // zero-copy adoption of the host buffer first. A copy is passed by value
+      // so the source is preserved for the fallback below.
+      if (!copy.value_or(false)) {
+        if (auto out =
+                cpu_nd_array_to_mlx_no_copy(nd_array, shape, dst_dtype)) {
+          return *out;
+        }
+        if (no_copy) {
+          throw std::invalid_argument(
+              "[convert] Cannot import a CPU array without a copy.");
+        }
+      }
+      // copy=True, or copy=None where adoption was not possible: copy.
       return dispatch_dlpack_dtype(
           src_dlpack_dtype,
-          [&]<typename T>(mx::Dtype src_dtype) {
+          [&]<typename T>(mx::Dtype) {
             return cpu_nd_array_to_mlx<T>(nd_array, shape, dst_dtype);
           },
-          "Cannot convert numpy array to mlx array.");
+          "[convert] Cannot convert array to mlx.");
     }
     case nb::device::metal::value: {
-      if (copy.has_value() && copy.value() == false && !can_reuse_buffer) {
+      // A Metal buffer can be adopted without a copy only if the active
+      // allocator recognizes it.
+      bool can_reuse_buffer =
+          mx::allocator::can_reuse_alien_buffer(nd_array.data_handle());
+      if (no_copy && !can_reuse_buffer) {
         throw std::invalid_argument(
-            "Cannot import a private Metal DLPack buffer without a copy.");
+            "[convert] Cannot import a private Metal buffer without a copy.");
       }
+      bool should_copy = copy.value_or(false) || dst_dtype != src_mlx_dtype ||
+          !can_reuse_buffer;
       return metal_nd_array_to_mlx(
           nd_array, src_mlx_dtype, dst_dtype, should_copy);
     }
     case nb::device::cuda::value:
     case nb::device::cuda_managed::value:
-      throw std::invalid_argument("CUDA DLPack import is not supported.");
+      throw std::invalid_argument("[convert] CUDA import is not supported.");
     default:
-      throw std::invalid_argument("Unsupported DLPack device.");
+      throw std::invalid_argument("[convert] Unsupported device.");
   }
 }
 
