@@ -231,8 +231,13 @@ void MeshGroup::all_reduce(
   if (size_ > 2 &&
       ((std::is_same_v<T, bfloat16_t> && count > 256 * 1024) ||
        count >= 8 * 1024 * 1024 / static_cast<int64_t>(sizeof(T)))) {
-    ring_.all_reduce<2>(in_ptr, out_ptr, count, 1, reduce_op);
+    // Large messages are bandwidth bound so use the reduce scatter + all gather
+    // path which moves size_x less data per link than the fully connected
+    // all_reduce.
+    mesh_.all_reduce_scatter_gather(in_ptr, out_ptr, count, reduce_op);
   } else {
+    // Small/medium messages are latency bound so use the single phase fully
+    // connected all_reduce.
     mesh_.all_reduce(in_ptr, out_ptr, count, reduce_op);
   }
 }

@@ -202,8 +202,12 @@ class MeshImpl {
   }
 
   void all_gather(const char* in_ptr, char* out_ptr, int64_t n_bytes) {
-    // Copy our data to the appropriate place
-    std::memcpy(out_ptr + rank_ * n_bytes, in_ptr, n_bytes);
+    // Copy our data to the appropriate place. Skip when in place (the scatter
+    // gather all reduce passes our own reduced shard which already lives at
+    // out_ptr + rank_ * n_bytes).
+    if (in_ptr != out_ptr + rank_ * n_bytes) {
+      std::memcpy(out_ptr + rank_ * n_bytes, in_ptr, n_bytes);
+    }
 
     // Fully connected all gather
     char* data = out_ptr;
@@ -387,6 +391,54 @@ class MeshImpl {
           }
         }
       }
+    }
+  }
+
+  template <typename T, typename ReduceOp>
+  void all_reduce_scatter_gather(
+      const T* in,
+      T* out,
+      int64_t count,
+      ReduceOp reduce_op) {
+    // Bandwidth optimal all reduce for large messages: a reduce scatter
+    // followed by an all gather. Compared to the fully connected all_reduce
+    // (which sends every rank's whole input to every peer) this moves size_x
+    // less data per link at the cost of an extra communication phase, so it is
+    // preferred for large messages where bandwidth dominates latency.
+    //
+    // The input is split into size_ equal chunks of `chunk` elements. The
+    // reduce scatter reduces chunk rank_ across all ranks and leaves it at
+    // out + rank_ * chunk. The all gather then reads that reduced shard in
+    // place and distributes every rank's reduced chunk into the output. No
+    // intermediate buffer is needed: the shard already lives where the all
+    // gather expects our contribution.
+    //
+    // Any trailing elements that do not divide evenly (fewer than size_) are
+    // handled with the fully connected all_reduce on the tail.
+
+    int64_t chunk = count / size_;
+    int64_t base = chunk * size_;
+
+    if (chunk > 0) {
+      // Reduce scatter our chunk directly into its final location in the
+      // output. sum_scatter only reads `in` and writes out + rank_ * chunk so
+      // this is safe even when in aliases out.
+      T* shard = out + static_cast<int64_t>(rank_) * chunk;
+      sum_scatter(in, shard, chunk, reduce_op);
+
+      // All gather every rank's reduced chunk into the output. Our own shard is
+      // already in place so all_gather skips the self copy and only fills the
+      // other ranks' slices, which held the (already sent) input chunks.
+      all_gather(
+          reinterpret_cast<const char*>(shard),
+          reinterpret_cast<char*>(out),
+          chunk * sizeof(T));
+    }
+
+    // Reduce the trailing elements (fewer than size_) with the fully connected
+    // all reduce so every rank ends up with the same tail.
+    if (base < count) {
+      all_reduce(in + base, out + base, count - base, reduce_op);
     }
   }
 
