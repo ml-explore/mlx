@@ -538,6 +538,94 @@ class TestBlas(mlx_tests.MLXTestCase):
                                     )
                                     self.assertTrue(np.array_equal(c_mlx, c_npy))
 
+    def test_wide_matmul(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("requires GPU")
+
+        # Eligible a @ b.T products of a few rows take the wide gemv route on metal;
+        # cover numerical correctness across the routing boundaries: row tails,
+        # K not divisible by 4, offset and sliced views, and batching.
+        # Inputs scale as K**-0.5 so outputs stay O(K**-0.5); atol scales
+        # with them, above output rounding for every dtype but below a
+        # dropped reduction block.
+        def run_test(dtype, shape_a, shape_b, f_np_b, f_mx_b):
+            with self.subTest(dtype=str(dtype), shape_a=shape_a, shape_b=shape_b):
+                np.random.seed(7)
+                scale = shape_a[-1] ** -0.5
+                a_mx = mx.array(
+                    np.random.normal(0.0, scale, shape_a).astype(np.float32)
+                ).astype(dtype)
+                b_mx = mx.array(
+                    np.random.normal(0.0, scale, shape_b).astype(np.float32)
+                ).astype(dtype)
+                a_np = np.array(a_mx.astype(mx.float32))
+                b_np = np.array(b_mx.astype(mx.float32))
+
+                out_np = a_np @ f_np_b(b_np)
+                out_mx = (a_mx @ f_mx_b(b_mx)).astype(mx.float32)
+
+                self.assertListEqual(list(out_np.shape), list(out_mx.shape))
+                self.assertTrue(np.allclose(out_mx, out_np, atol=0.05 * scale))
+
+        nt_np = lambda b: b.swapaxes(-1, -2)
+        nt_mx = lambda b: mx.swapaxes(b, -1, -2)
+
+        for dtype in (mx.float32, mx.float16, mx.bfloat16):
+            for M in (1, 2, 3, 5, 8, 11, 16):
+                for K, N in (
+                    (64, 128),
+                    (512, 128),
+                    (2048, 256),
+                    (2048, 32),
+                    (2052, 1000),
+                ):
+                    run_test(dtype, (M, K), (N, K), nt_np, nt_mx)
+
+            # K % 4 != 0 falls back to the general kernels
+            run_test(dtype, (5, 514), (333, 514), nt_np, nt_mx)
+
+            # sliced weights: leading dimension != K, plus offset views at 16-
+            # and 8-byte alignment, and a slice with an odd vec4 tail
+            run_test(
+                dtype,
+                (5, 512),
+                (333, 576),
+                lambda b: b[:, :512].swapaxes(-1, -2),
+                lambda b: mx.swapaxes(b[:, :512], -1, -2),
+            )
+            run_test(
+                dtype,
+                (5, 512),
+                (333, 512),
+                lambda b: b[7:, :].swapaxes(-1, -2),
+                lambda b: mx.swapaxes(b[7:, :], -1, -2),
+            )
+            run_test(
+                dtype,
+                (3, 512),
+                (333, 520),
+                lambda b: b[:, 4:516].swapaxes(-1, -2),
+                lambda b: mx.swapaxes(b[:, 4:516], -1, -2),
+            )
+            run_test(
+                dtype,
+                (3, 2052),
+                (129, 2056),
+                lambda b: b[:, :2052].swapaxes(-1, -2),
+                lambda b: mx.swapaxes(b[:, :2052], -1, -2),
+            )
+
+            # batched: regular, broadcast weights, and multi-dim batch
+            run_test(dtype, (4, 3, 512), (4, 257, 512), nt_np, nt_mx)
+            run_test(
+                dtype,
+                (4, 3, 512),
+                (1, 257, 512),
+                lambda b: np.broadcast_to(b, (4, 257, 512)).swapaxes(-1, -2),
+                lambda b: mx.swapaxes(mx.broadcast_to(b, (4, 257, 512)), -1, -2),
+            )
+            run_test(dtype, (2, 3, 5, 512), (2, 3, 129, 512), nt_np, nt_mx)
+
     def test_mismatch_stride_mm(self):
         np.random.seed(0)
         a_npy = np.random.normal(0.0, 1.0 / 128, (4, 16, 16)).astype(np.float32)
@@ -732,6 +820,61 @@ class TestBlas(mlx_tests.MLXTestCase):
             out = mx.addmm(c, a, b, alpha=0.5, beta=2.0)
             expected = 0.5 * (a @ b) + 2.0 * c
             self.assertTrue(mx.allclose(out, expected, rtol=tol, atol=tol))
+
+    def test_wide_addmm(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("requires GPU")
+
+        # Eligible few-row addmm shapes take the wide gemv route on metal; cover
+        # the axpby epilogue against bias shapes, scales, and batching.
+        def run_test(dtype, B, M, K, N, c_shape, alpha, beta):
+            with self.subTest(dtype=str(dtype), c_shape=c_shape, alpha=alpha):
+                np.random.seed(3)
+                shape_a = (M, K) if B is None else (B, M, K)
+                shape_b = (N, K) if B is None else (B, N, K)
+                scale = K**-0.5
+                a_mx = mx.array(
+                    np.random.normal(0.0, scale, shape_a).astype(np.float32)
+                ).astype(dtype)
+                b_mx = mx.array(
+                    np.random.normal(0.0, scale, shape_b).astype(np.float32)
+                ).astype(dtype)
+                c_mx = mx.array(
+                    np.random.normal(0.0, scale, c_shape).astype(np.float32)
+                ).astype(dtype)
+                a_np = np.array(a_mx.astype(mx.float32))
+                b_np = np.array(b_mx.astype(mx.float32))
+                c_np = np.array(c_mx.astype(mx.float32))
+
+                out_np = alpha * (a_np @ b_np.swapaxes(-1, -2)) + beta * c_np
+                out_mx = mx.addmm(
+                    c_mx,
+                    a_mx,
+                    mx.swapaxes(b_mx, -1, -2),
+                    alpha,
+                    beta,
+                ).astype(mx.float32)
+
+                self.assertListEqual(list(out_np.shape), list(out_mx.shape))
+                atol = 0.05 * (abs(alpha) + abs(beta)) * scale
+                self.assertTrue(np.allclose(out_mx, out_np, atol=atol))
+
+        for dtype in (mx.float32, mx.float16, mx.bfloat16):
+            for M in (2, 5, 12):
+                for c_shape in ((250,), (1, 250), (M, 250)):
+                    for alpha, beta in ((1.0, 1.0), (2.5, 0.5), (1.0, 0.0)):
+                        run_test(dtype, None, M, 512, 250, c_shape, alpha, beta)
+            run_test(dtype, 3, 4, 512, 250, (3, 4, 250), 1.0, 1.0)
+
+            # the epilogue must scale the accumulator before narrowing: a
+            # product past the fp16 max rescued by alpha stays finite (M = 4
+            # keeps the 2-byte shape routed on every supported generation)
+            with self.subTest(dtype=str(dtype), case="alpha rescue"):
+                a = mx.full((4, 512), 2.0, dtype=dtype)
+                b = mx.full((250, 512), 100.0, dtype=dtype)
+                c = mx.ones((4, 250), dtype=dtype)
+                out = mx.addmm(c, a, mx.swapaxes(b, -1, -2), 0.125, 0.0)
+                self.assertTrue(np.allclose(out.astype(mx.float32), 12800.0))
 
     def test_addmm_grad(self):
         def make_ref_addmm(alpha, beta):
@@ -1192,6 +1335,67 @@ class TestBlas(mlx_tests.MLXTestCase):
         out_mx = mx.gather_mm(a_mx, b_mx_t, lhs_indices_mx, rhs_indices_mx)
 
         self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
+
+    def test_gather_mm_blocks(self):
+        if mx.default_device() == mx.cpu:
+            self.skipTest("requires GPU")
+
+        # Eligible gathered products with few-row blocks route to the wide
+        # gather on metal; check block indexing against a per-entry reference.
+        def run_test(dtype, G, M, K, N, E, idx_shape):
+            with self.subTest(dtype=str(dtype), G=G, M=M, idx=idx_shape):
+                np.random.seed(11)
+                scale = K**-0.5
+                a_mx = mx.array(
+                    np.random.normal(0.0, scale, (G, M, K)).astype(np.float32)
+                ).astype(dtype)
+                w_mx = mx.array(
+                    np.random.normal(0.0, scale, (E, N, K)).astype(np.float32)
+                ).astype(dtype)
+                a_np = np.array(a_mx.astype(mx.float32))
+                w_np = np.array(w_mx.astype(mx.float32))
+                rhs = np.random.randint(0, E, size=idx_shape).astype(np.uint32)
+
+                out_np = np.stack(
+                    [a_np[i % G] @ w_np[r].T for i, r in enumerate(rhs.reshape(-1))]
+                ).reshape(*idx_shape, M, N)
+                out_mx = mx.gather_mm(
+                    a_mx.reshape(*idx_shape, M, K),
+                    mx.swapaxes(w_mx, -1, -2),
+                    None,
+                    mx.array(rhs),
+                ).astype(mx.float32)
+
+                self.assertListEqual(list(out_np.shape), list(out_mx.shape))
+                self.assertTrue(np.allclose(out_mx, out_np, atol=0.05 * scale))
+
+        for dtype in (mx.float32, mx.float16, mx.bfloat16):
+            for M in (2, 4, 5, 11):
+                run_test(dtype, 6, M, 2048, 1024, 8, (6,))
+            run_test(dtype, 6, 3, 2048, 1024, 8, (2, 3))
+
+            # scalar indices: batch_ndim == 0 must still bind index strides
+            with self.subTest(dtype=str(dtype), idx="scalar"):
+                np.random.seed(11)
+                scale = 512**-0.5
+                a_mx = mx.array(
+                    np.random.normal(0.0, scale, (4, 512)).astype(np.float32)
+                ).astype(dtype)
+                w_mx = mx.array(
+                    np.random.normal(0.0, scale, (8, 129, 512)).astype(np.float32)
+                ).astype(dtype)
+                out_np = (
+                    np.array(a_mx.astype(mx.float32))
+                    @ np.array(w_mx[3].astype(mx.float32)).T
+                )
+                out_mx = mx.gather_mm(
+                    a_mx,
+                    mx.swapaxes(w_mx, -1, -2),
+                    None,
+                    mx.array(3, dtype=mx.uint32),
+                ).astype(mx.float32)
+                self.assertListEqual(list(out_np.shape), list(out_mx.shape))
+                self.assertTrue(np.allclose(out_mx, out_np, atol=0.05 * scale))
 
     def test_gather_matmul_grad(self):
         lhs_indices = mx.array([[7, 6], [4, 1], [0, 2]], dtype=mx.uint32)
