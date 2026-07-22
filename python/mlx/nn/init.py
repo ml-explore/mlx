@@ -194,12 +194,13 @@ def glorot_uniform(
 ) -> Callable[[mx.array, float], mx.array]:
     r"""A Glorot uniform initializer.
 
-    This initializer samples from a uniform distribution with a range
-    computed from the number of input (``fan_in``) and output (``fan_out``)
+    This initializer samples from a uniform distribution on the interval
+    :math:`[-\text{limit}, \text{limit}]`, where the bound :math:`\text{limit}`
+    is computed from the number of input (``fan_in``) and output (``fan_out``)
     units according to:
 
     .. math::
-        \sigma = \gamma \sqrt{\frac{6.0}{\text{fan\_in} + \text{fan\_out}}}
+        \text{limit} = \gamma \sqrt{\frac{6.0}{\text{fan\_in} + \text{fan\_out}}}
 
     For more details see the original reference: `Understanding the difficulty
     of training deep feedforward neural networks
@@ -295,13 +296,14 @@ def he_uniform(
 ) -> Callable[[mx.array, Literal["fan_in", "fan_out"], float], mx.array]:
     r"""A He uniform (Kaiming uniform) initializer.
 
-    This initializer samples from a uniform distribution with a range
-    computed from the number of input (``fan_in``) or output (``fan_out``)
+    This initializer samples from a uniform distribution on the interval
+    :math:`[-\text{limit}, \text{limit}]`, where the bound :math:`\text{limit}`
+    is computed from the number of input (``fan_in``) or output (``fan_out``)
     units according to:
 
     .. math::
 
-        \sigma = \gamma \sqrt{\frac{3.0}{\text{fan}}}
+        \text{limit} = \gamma \sqrt{\frac{3.0}{\text{fan}}}
 
     where :math:`\text{fan}` is either the number of input units when the
     ``mode`` is ``"fan_in"`` or output units when the ``mode`` is
