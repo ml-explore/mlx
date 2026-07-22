@@ -201,7 +201,7 @@ inline bool enable_tf32() {
 // takes the reduced-precision route: warns once per process when TF32 is on
 // by default (i.e. MLX_ENABLE_TF32 is unset). Setting MLX_ENABLE_TF32=0 or =1
 // explicitly keeps it silent.
-bool tf32_active_for_fp32();
+bool tf32_active_for_fp32(const char* op_family = "matmul");
 
 inline int nccl_timeout(int default_value) {
   static int nccl_timeout = get_var("MLX_NCCL_TIMEOUT", default_value);

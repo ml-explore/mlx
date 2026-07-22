@@ -136,7 +136,7 @@ std::optional<DnnGraph> build_conv_graph(
     return std::nullopt;
   }
   graph.deselect_numeric_notes({fe::NumericalNote_t::DOWN_CONVERT_INPUTS});
-  if (dtype == float32 && !env::tf32_active_for_fp32()) {
+  if (dtype == float32 && !env::tf32_active_for_fp32("convolution")) {
     graph.deselect_numeric_notes({fe::NumericalNote_t::TENSOR_CORE});
   }
   CHECK_CUDNN_ERROR(graph.build());
