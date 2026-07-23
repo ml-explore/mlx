@@ -118,4 +118,19 @@ void ReduceScatter::eval_cpu(
   }
 }
 
+void AllToAll::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() == 1);
+  assert(outputs.size() == 1);
+
+  auto [in, copied] = ensure_row_contiguous(inputs[0], stream());
+  outputs[0].set_data(allocator::malloc(outputs[0].nbytes()));
+  distributed::detail::all_to_all(group(), in, outputs[0], stream());
+  if (copied) {
+    auto& enc = cpu::get_command_encoder(stream());
+    enc.add_temporary(in);
+  }
+}
+
 } // namespace mlx::core::distributed

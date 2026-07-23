@@ -579,6 +579,10 @@ class RingGroup : public GroupImpl {
     throw std::runtime_error("[ring] sum_scatter not supported.");
   }
 
+  void all_to_all(const array& input, array& output, Stream stream) override {
+    throw std::runtime_error("[ring] all_to_all not supported.");
+  }
+
  private:
   template <typename T, typename ReduceOp>
   void all_reduce(

@@ -476,6 +476,10 @@ class MPIGroup : public GroupImpl {
     throw std::runtime_error("[mpi] sum_scatter not yet implemented.");
   }
 
+  void all_to_all(const array& input, array& output, Stream stream) override {
+    throw std::runtime_error("[mpi] all_to_all not yet implemented.");
+  }
+
  private:
   MPI_Comm comm_;
   bool global_;

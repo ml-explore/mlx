@@ -9,6 +9,22 @@
 #include <cassert>
 
 namespace mlx::core::distributed {
+
+namespace {
+
+inline array
+ensure_contiguous(const array& x, cu::CommandEncoder& encoder, Stream s) {
+  if (x.flags().row_contiguous) {
+    return x;
+  } else {
+    array x_copy = contiguous_copy_gpu(x, s);
+    encoder.add_temporary(x_copy);
+    return x_copy;
+  }
+}
+
+} // namespace
+
 void AllReduce::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
@@ -63,17 +79,7 @@ void AllGather::eval_gpu(
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
-  auto ensure_contiguous = [&s, &encoder](const array& x) {
-    if (x.flags().row_contiguous) {
-      return x;
-    } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      encoder.add_temporary(x_copy);
-      return x_copy;
-    }
-  };
-
-  auto input = ensure_contiguous(inputs[0]);
+  auto input = ensure_contiguous(inputs[0], encoder, s);
   outputs[0].set_data(cu::malloc_async(outputs[0].nbytes(), encoder));
 
   encoder.set_input_array(input);
@@ -92,17 +98,7 @@ void ReduceScatter::eval_gpu(
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
-  auto ensure_contiguous = [&s, &encoder](const array& x) {
-    if (x.flags().row_contiguous) {
-      return x;
-    } else {
-      array x_copy = contiguous_copy_gpu(x, s);
-      encoder.add_temporary(x_copy);
-      return x_copy;
-    }
-  };
-
-  auto input = ensure_contiguous(inputs[0]);
+  auto input = ensure_contiguous(inputs[0], encoder, s);
   outputs[0].set_data(cu::malloc_async(outputs[0].nbytes(), encoder));
 
   encoder.set_input_array(input);
@@ -117,5 +113,24 @@ void ReduceScatter::eval_gpu(
     default:
       throw std::runtime_error("Only sum scatter is supported. ");
   }
+}
+
+void AllToAll::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() == 1);
+  assert(outputs.size() == 1);
+
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  auto input = ensure_contiguous(inputs[0], encoder, s);
+  outputs[0].set_data(cu::malloc_async(outputs[0].nbytes(), encoder));
+
+  encoder.set_input_array(input);
+  encoder.set_output_array(outputs[0]);
+
+  auto capture = encoder.capture_context();
+  distributed::detail::all_to_all(group(), input, outputs[0], s);
 }
 } // namespace mlx::core::distributed

@@ -386,6 +386,10 @@ class NCCLGroup : public GroupImpl {
     });
   }
 
+  void all_to_all(const array& input, array& output, Stream stream) override {
+    throw std::runtime_error("[nccl] all_to_all not yet implemented.");
+  }
+
   template <typename T>
   void all_reduce_impl(
       const array& input,
