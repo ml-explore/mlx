@@ -2,18 +2,39 @@
 
 #include "mlx/backend/metal/kernels/steel/attn/attn.h"
 
+// JIT-baked constants: when compiled via JIT, these are #defined as literals
+// before this header is included. For metallib builds, they fall back to
+// params-> reads at runtime (values) or function constants (booleans).
+#ifndef FWD_GQA_FACTOR
+  #define FWD_GQA_FACTOR (params->gqa_factor)
+  #define FWD_SCALE_LOG2 (params->scale * M_LOG2E_F)
+  #define FWD_UNDEF_DEFINES
+#endif
+
 using namespace mlx::steel;
 
 ///////////////////////////////////////////////////////////////////////////////
 // GEMM kernels
 ///////////////////////////////////////////////////////////////////////////////
 
+// When JIT-compiled, boolean flags are baked as constexpr booleans,
+// enabling full dead-code elimination. Metallib builds use function constants.
+#ifdef FWD_BAKED_FC
+constexpr constant bool align_Q = FWD_ALIGN_Q;
+constexpr constant bool align_K = FWD_ALIGN_K;
+constexpr constant bool has_mask = FWD_HAS_MASK;
+constexpr constant bool do_causal = FWD_DO_CAUSAL;
+constexpr constant bool has_sinks = FWD_HAS_SINKS;
+constexpr constant bool output_logsumexp = FWD_OUTPUT_LOGSUMEXP;
+#else
 constant bool align_Q [[function_constant(200)]];
 constant bool align_K [[function_constant(201)]];
 
 constant bool has_mask [[function_constant(300)]];
 constant bool do_causal [[function_constant(301)]];
 constant bool has_sinks [[function_constant(302)]];
+constant bool output_logsumexp [[function_constant(303)]];
+#endif
 
 struct MaxOp {
   template <typename T>
@@ -76,6 +97,7 @@ template <
     const constant AttnMaskParams* mask_params [[buffer(5), function_constant(has_mask)]],
     const device MaskType* mask [[buffer(6), function_constant(has_mask)]],
     const device T* sinks [[buffer(7), function_constant(has_sinks)]],
+    device float* LSE [[buffer(8), function_constant(output_logsumexp)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -91,7 +113,7 @@ template <
       tidl.y * params->Q_strides[1] + // Head
       tidl.x * BQ * params->Q_strides[2]; // Sequence
 
-  ulong kv_head_idx = int(tid.y) / params->gqa_factor;
+  ulong kv_head_idx = int(tid.y) / FWD_GQA_FACTOR;
   K += tidl.z * params->K_strides[0] + // Batch
       kv_head_idx * params->K_strides[1]; // Head
 
@@ -163,7 +185,7 @@ template <
   VBlockLoader loader_v(
       V, params->V_strides[2], Vs, simd_group_id, simd_lane_id);
 
-  const AccumType scale = params->scale * M_LOG2E_F;
+  const AccumType scale = FWD_SCALE_LOG2;
 
   // Prepare MMA tiles
   constexpr short kFragSize = 8; // MMAFrag size
@@ -460,6 +482,32 @@ template <
   Otile.template row_bin_op<DivOp>(sum_score);
   threadgroup_barrier(mem_flags::mem_none);
 
+  // Output logsumexp if requested for VJP backward pass
+  // LSE = max_score + log2(sum_score) in log2 domain (matches STEEL convention)
+  // Physical storage shape: [B*H, qL], laid out as linear array indexed by (B*H
+  // + head)*qL + query_pos LSE_strides[0] = qL (stride between (batch, head)
+  // rows) LSE_strides[1] = 1 (stride between query positions within a row)
+  if (output_logsumexp) {
+    // Compute linear index for (batch, head) combination
+    // This matches the VJP kernel's indexing: (tidl.z * H + tidl.y) *
+    // LSE_strides[0]
+    device float* lse_out =
+        LSE + (tidl.z * params->H + tidl.y) * params->LSE_strides[0];
+
+    // Write one logsumexp per query position in this tile
+    // Each thread handles kRowsPT query positions
+    // align_Q=true means query length is aligned (all blocks full), so always
+    // write align_Q=false means last block is partial, so check bounds
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kRowsPT; ++i) {
+      int row_pos = tid.x * BQ + tm + sm + (i * decltype(Stile)::kFragRows);
+      if (align_Q || row_pos < params->qL) {
+        AccumType lse_val = max_score[i] + fast::log2(sum_score[i]);
+        lse_out[row_pos * params->LSE_strides[1]] = static_cast<float>(lse_val);
+      }
+    }
+  }
+
   // Store results
   O += (tm + sm) * params->O_strides[2] + sn;
 
@@ -474,3 +522,9 @@ template <
     Otile.template store<T, 1, 1>(O, params->O_strides[2]);
   }
 }
+
+#ifdef FWD_UNDEF_DEFINES
+  #undef FWD_GQA_FACTOR
+  #undef FWD_SCALE_LOG2
+  #undef FWD_UNDEF_DEFINES
+#endif

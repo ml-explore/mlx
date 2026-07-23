@@ -822,9 +822,19 @@ array scaled_dot_product_attention(
     inputs.push_back(astype(*sinks, final_type, stream));
   }
 
-  bool is_training = detail::in_grad_tracing();
-  bool has_fast_vjp = !ScaledDotProductAttentionVJP::use_fallback(q, stream);
-  bool output_logsumexp = is_training && has_fast_vjp;
+  // Note: pass has_arr_mask (not has_mask) because the STEEL VJP kernels
+  // handle causal masking natively via function constants. Only array masks
+  // are unsupported by the fused backward path.
+  bool has_fast_vjp = !ScaledDotProductAttentionVJP::use_fallback(
+      q,
+      k,
+      stream,
+      do_causal,
+      has_arr_mask,
+      has_sinks,
+      static_cast<int>(n_kv_heads));
+  bool output_logsumexp = detail::in_grad_tracing() && has_fast_vjp;
+
   if (!ScaledDotProductAttention::use_fallback(
           q,
           k,
@@ -832,7 +842,6 @@ array scaled_dot_product_attention(
           has_mask,
           has_arr_mask,
           do_causal,
-          is_training,
           output_logsumexp,
           stream)) {
     if (has_bool_mask && !ScaledDotProductAttention::supports_bool_mask()) {
@@ -870,14 +879,41 @@ std::vector<array> ScaledDotProductAttention::vjp(
   assert(cotangents.size() == outputs.size());
 
   auto s = stream();
-  if (ScaledDotProductAttentionVJP::use_fallback(primals[0], s)) {
-    assert(outputs.size() == 1);
+
+  // Determine if mask is present: primals = [Q, K, V, (mask), (sinks)]
+  bool has_mask = primals.size() > static_cast<size_t>(3 + has_sinks_);
+  int n_kv_heads = primals[1].shape(1); // K is at index 1
+
+  // Check if we can use Flash Attention VJP
+  if (ScaledDotProductAttentionVJP::use_fallback(
+          primals[0],
+          primals[1],
+          s,
+          do_causal_,
+          has_mask,
+          has_sinks_,
+          n_kv_heads) ||
+      !output_logsumexp_) {
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
 
+  // When output_logsumexp_ is true, the forward pass creates 2 sibling arrays:
+  // outputs[0] = attention output, outputs[1] = logsumexp
+  // Even though only outputs[0] is returned to the user, the tape tracks both
+  // siblings.
+  assert(
+      outputs.size() >= 2 &&
+      "Expected logsumexp in outputs[1] when output_logsumexp_ is true");
+
+  // Fallback for higher-order gradients (e.g., Hessian-vector products).
+  // inputs = [Q, K, V, (mask), (sinks), O, LSE, dO, delta]
+  // The last 4 arrays (O, LSE, dO, delta) were appended below for eval_gpu;
+  // strip them to recover the original primals, and use dO as the cotangent.
   auto fallback = [sdpa = fallback_, s](const std::vector<array>& inputs) {
-    std::vector<array> primals(inputs.begin(), std::prev(inputs.end()));
-    auto [_, vjps] = mlx::core::vjp(sdpa, primals, {inputs.back()});
+    constexpr int n_extra = 4; // O, LSE, dO, delta
+    std::vector<array> primals(inputs.begin(), inputs.end() - n_extra);
+    auto& dO = inputs[inputs.size() - 2]; // dO is before delta
+    auto [_, vjps] = mlx::core::vjp(sdpa, primals, {dO});
     return vjps;
   };
 
@@ -890,9 +926,16 @@ std::vector<array> ScaledDotProductAttention::vjp(
   auto primitive = std::make_shared<ScaledDotProductAttentionVJP>(
       s, fallback, scale_, do_causal_, has_sinks_);
   std::vector<array> inputs = primals;
-  inputs.push_back(outputs[0]);
-  inputs.push_back(outputs[1]);
+  inputs.push_back(outputs[0]); // Attention output
+  inputs.push_back(outputs[1]); // Logsumexp
   inputs.push_back(cotangents[0]);
+  // Precompute delta = sum(dO * O, axis=-1) as a lazy graph op.
+  // This must be done here (not in eval_gpu) because eval_gpu cannot
+  // create new lazy ops — it runs during the evaluation pass.
+  auto O_f32 = astype(outputs[0], float32, s);
+  auto dO_f32 = astype(cotangents[0], float32, s);
+  auto delta = sum(multiply(dO_f32, O_f32, s), std::vector<int>{3}, false, s);
+  inputs.push_back(delta); // delta = sum(dO * O, axis=-1), shape [B, H, qL]
   auto vjps = array::make_arrays(std::move(shapes), dtypes, primitive, inputs);
 
   std::vector<array> returned_vjps;

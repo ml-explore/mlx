@@ -226,7 +226,6 @@ class ScaledDotProductAttention : public Custom {
       bool has_mask,
       bool has_arr_mask,
       bool do_causal,
-      bool is_training,
       bool output_logsumexp,
       Stream s);
   static bool supports_bool_mask();
@@ -274,7 +273,14 @@ class ScaledDotProductAttentionVJP : public Custom {
         do_causal_(do_causal),
         has_sinks_(has_sinks) {}
 
-  static bool use_fallback(const array& q, Stream s);
+  static bool use_fallback(
+      const array& q,
+      const array& k,
+      Stream s,
+      bool do_causal = false,
+      bool has_mask = false,
+      bool has_sinks = false,
+      int n_kv_heads = -1);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
