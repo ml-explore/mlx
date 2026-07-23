@@ -1202,6 +1202,18 @@ class TestConv(mlx_tests.MLXTestCase):
         y_hat = mx.conv2d(x, w)
         self.assertTrue(mx.allclose(y, y_hat))
 
+        x = mx.random.uniform(shape=(2, 16, 16, 24))
+        w = mx.random.uniform(shape=(32, 5, 5, 24))
+        y = mx.conv2d(x, w, padding=2, stream=mx.cpu)
+        y_hat = mx.conv2d(x, w, padding=2)
+        self.assertTrue(mx.allclose(y, y_hat))
+
+        x = mx.random.uniform(shape=(2, 16, 16, 24))
+        w = mx.random.uniform(shape=(32, 3, 3, 24))
+        y = mx.conv_transpose2d(x, w, stream=mx.cpu)
+        y_hat = mx.conv_transpose2d(x, w)
+        self.assertTrue(mx.allclose(y, y_hat))
+
     def test_conv2d_large_filter_small_channels(self):
         x = mx.random.normal(shape=(1, 181, 181, 1))
         w = mx.random.normal(shape=(1, 182, 182, 1))
