@@ -24,7 +24,7 @@ class RingGroup : public Group {
       int size,
       const std::vector<std::string>& left_devices,
       const std::vector<std::string>& right_devices,
-      const std::string& coordinator_addr);
+      SideChannel sc);
 
   int rank() override {
     return rank_;
@@ -78,6 +78,8 @@ class RingGroup : public Group {
   std::vector<Connection> right_;
   std::vector<SharedBuffer> send_buffers_;
   std::vector<SharedBuffer> recv_buffers_;
+  // Declared before ring_ so it outlives the RingImpl that points at it.
+  ThreadPool pool_;
   RingImpl ring_;
 };
 

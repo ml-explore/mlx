@@ -58,4 +58,7 @@ struct MLX_API Group {
  */
 MLX_API Group init(bool strict = false, const std::string& bk = "any");
 
+/** Clear the distributed backend cache. */
+MLX_API void clear_backends();
+
 } // namespace mlx::core::distributed
