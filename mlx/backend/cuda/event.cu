@@ -113,10 +113,7 @@ void CudaEvent::init_pool() {
   cuda_event_pool();
 }
 
-// Wraps CudaEvent with a few features:
-// 1. The class can be copied.
-// 2. Make wait/record work with CPU streams.
-// 3. Add checks for waiting on un-recorded event.
+// Wraps CudaEvent so it can be copied.
 class CopyableCudaEvent {
  public:
   explicit CopyableCudaEvent(Device& d)
@@ -126,32 +123,24 @@ class CopyableCudaEvent {
                 cudaEventDisableTiming | cudaEventBlockingSync)) {}
 
   void wait() {
+    check_recorded();
     event_->wait();
   }
 
   void wait(Stream s) {
-    if (s.device == mlx::core::Device::cpu) {
-      scheduler::enqueue(s, [*this]() mutable {
-        check_recorded();
-        event_->wait();
-      });
-    } else {
-      check_recorded();
-      auto& encoder = cu::get_command_encoder(s);
-      encoder.commit();
-      event_->wait(encoder.stream());
-    }
+    assert(s.device == mlx::core::Device::gpu);
+    check_recorded();
+    auto& encoder = cu::get_command_encoder(s);
+    encoder.commit();
+    event_->wait(encoder.stream());
   }
 
   void record(Stream s) {
-    if (s.device == mlx::core::Device::cpu) {
-      throw std::runtime_error("CudaEvent can not wait on CPU stream.");
-    } else {
-      auto& encoder = cu::get_command_encoder(s);
-      encoder.commit();
-      event_->record(encoder.stream());
-      recorded_ = true;
-    }
+    assert(s.device == mlx::core::Device::gpu);
+    auto& encoder = cu::get_command_encoder(s);
+    encoder.commit();
+    event_->record(encoder.stream());
+    recorded_ = true;
   }
 
   bool is_signaled() const {
@@ -213,6 +202,11 @@ auto check_gpu_coherency() {
   return coherency;
 }
 
+const CudaStream& signal_stream() {
+  static CudaStream stream(device(0));
+  return stream;
+}
+
 AtomicEvent::AtomicEvent(Device& d) {
   void* buf;
   cudaError_t (*cuda_free)(void*);
@@ -264,14 +258,11 @@ void AtomicEvent::wait(cudaStream_t stream, uint32_t value) {
 
 void AtomicEvent::wait(Stream s, uint32_t value) {
   nvtx3::scoped_range r("cu::AtomicEvent::wait(s)");
-  if (s.device == mlx::core::Device::cpu) {
-    scheduler::enqueue(s, [*this, value]() mutable { wait(value); });
-  } else {
-    auto& encoder = get_command_encoder(s);
-    encoder.commit();
-    wait(encoder.stream(), value);
-    encoder.add_completed_handler([buf = buf_]() {});
-  }
+  assert(s.device == mlx::core::Device::gpu);
+  auto& encoder = get_command_encoder(s);
+  encoder.commit();
+  wait(encoder.stream(), value);
+  encoder.add_completed_handler([buf = buf_]() {});
 }
 
 void AtomicEvent::signal(uint32_t value) {
@@ -289,17 +280,11 @@ void AtomicEvent::signal(cudaStream_t stream, uint32_t value) {
 
 void AtomicEvent::signal(Stream s, uint32_t value) {
   nvtx3::scoped_range r("cu::AtomicEvent::signal(s)");
-  if (s.device == mlx::core::Device::cpu) {
-    // Signal through a GPU stream so the atomic is updated in GPU - updating
-    // the atomic in CPU sometimes does not get GPU notified.
-    scheduler::enqueue(
-        s, [*this, value]() mutable { signal(signal_stream(), value); });
-  } else {
-    auto& encoder = get_command_encoder(s);
-    encoder.commit();
-    signal(encoder.stream(), value);
-    encoder.add_completed_handler([buf = buf_]() {});
-  }
+  assert(s.device == mlx::core::Device::gpu);
+  auto& encoder = get_command_encoder(s);
+  encoder.commit();
+  signal(encoder.stream(), value);
+  encoder.add_completed_handler([buf = buf_]() {});
 }
 
 bool AtomicEvent::is_signaled(uint32_t val) const {
@@ -319,9 +304,21 @@ uint32_t AtomicEvent::value() const {
   }
 }
 
-const CudaStream& AtomicEvent::signal_stream() {
-  static CudaStream stream(device(0));
-  return stream;
+///////////////////////////////////////////////////////////////////////////////
+// EventImpl implementations
+///////////////////////////////////////////////////////////////////////////////
+
+void EventImpl::ensure_created(Stream s, uint64_t signal_value) {
+  if (is_created()) {
+    return;
+  }
+  auto& d = cu::device(s.device);
+  if (s.device == mlx::core::Device::cpu || signal_value > 1) {
+    nvtx3::mark("Using slow AtomicEvent");
+    atomic = std::make_unique<cu::AtomicEvent>(d);
+  } else {
+    cuda = std::make_unique<cu::CopyableCudaEvent>(d);
+  }
 }
 
 } // namespace cu
@@ -330,86 +327,85 @@ const CudaStream& AtomicEvent::signal_stream() {
 // Event implementations
 ///////////////////////////////////////////////////////////////////////////////
 
-namespace {
-
-struct EventImpl {
-  // CudaEvent is preferred when possible because it is fast, however we have
-  // to fallback to AtomicEvent in following cases:
-  // 1. the event is used to wait/signal a cpu stream;
-  // 2. signal value other than 1 has been specified.
-  std::unique_ptr<cu::CopyableCudaEvent> cuda;
-  std::unique_ptr<cu::AtomicEvent> atomic;
-
-  bool is_created() const {
-    return cuda || atomic;
-  }
-
-  void ensure_created(Stream s, uint64_t signal_value) {
-    if (is_created()) {
-      return;
-    }
-    auto& d = cu::device(s.device);
-    if (s.device == mlx::core::Device::cpu || signal_value > 1) {
-      nvtx3::mark("Using slow AtomicEvent");
-      atomic = std::make_unique<cu::AtomicEvent>(d);
-    } else {
-      cuda = std::make_unique<cu::CopyableCudaEvent>(d);
-    }
-  }
-};
-
-} // namespace
-
 Event::Event(Stream s) : stream_(s) {
-  event_ = std::shared_ptr<void>(
-      new EventImpl(), [](void* ptr) { delete static_cast<EventImpl*>(ptr); });
+  event_ = std::make_shared<cu::EventImpl>();
 }
 
 void Event::wait() {
-  auto* event = static_cast<EventImpl*>(event_.get());
-  assert(event->is_created());
-  if (event->cuda) {
+  check_error();
+  auto& event = cast<cu::EventImpl>();
+  assert(event.is_created());
+  if (event.cuda) {
     assert(value() == 1);
-    event->cuda->wait();
+    event.cuda->wait();
   } else {
-    event->atomic->wait(value());
+    event.atomic->wait(value());
   }
   CHECK_CUDA_ERROR(cudaPeekAtLastError());
+  check_error();
 }
 
 void Event::wait(Stream s) {
-  auto* event = static_cast<EventImpl*>(event_.get());
-  assert(event->is_created());
-  if (event->cuda) {
+  auto& event = cast<cu::EventImpl>();
+  assert(event.is_created());
+  if (event.cuda) {
     assert(value() == 1);
-    event->cuda->wait(s);
+    if (s.device == mlx::core::Device::cpu) {
+      scheduler::wait_event(s, *this, [value = value()](Event& self) {
+        self.cast<cu::EventImpl>().cuda->wait();
+      });
+    } else {
+      event.cuda->wait(s);
+    }
   } else {
-    event->atomic->wait(s, value());
+    if (s.device == mlx::core::Device::cpu) {
+      scheduler::wait_event(s, *this, [value = value()](Event& self) {
+        self.cast<cu::EventImpl>().atomic->wait(value);
+      });
+    } else {
+      event.atomic->wait(s, value());
+    }
   }
 }
 
 void Event::signal(Stream s) {
-  auto* event = static_cast<EventImpl*>(event_.get());
-  event->ensure_created(s, value());
-  if (event->cuda) {
+  auto& event = cast<cu::EventImpl>();
+  event.ensure_created(s, value());
+  if (event.cuda) {
     assert(value() == 1);
-    event->cuda->record(s);
+    if (s.device == mlx::core::Device::cpu) {
+      throw std::runtime_error("CudaEvent can not wait on CPU stream.");
+    } else {
+      event.cuda->record(s);
+    }
   } else {
-    event->atomic->signal(s, value());
+    if (s.device == mlx::core::Device::cpu) {
+      // Signal through a GPU stream so the atomic is updated in GPU - updating
+      // the atomic in CPU sometimes does not get GPU notified.
+      scheduler::signal_event(s, *this, [value = value()](Event& self) {
+        self.cast<cu::EventImpl>().atomic->signal(cu::signal_stream(), value);
+      });
+    } else {
+      event.atomic->signal(s, value());
+    }
   }
 }
 
 bool Event::is_signaled() const {
-  auto* event = static_cast<EventImpl*>(event_.get());
-  if (!event->is_created()) {
+  auto& event = cast<cu::EventImpl>();
+  if (!event.is_created()) {
     return false;
   }
-  if (event->cuda) {
+  if (event.cuda) {
     assert(value() == 1);
-    return event->cuda->is_signaled();
+    return event.cuda->is_signaled();
   } else {
-    return event->atomic->is_signaled(value());
+    return event.atomic->is_signaled(value());
   }
+}
+
+Event::Error& Event::error() {
+  return cast<cu::EventImpl>().error;
 }
 
 } // namespace mlx::core

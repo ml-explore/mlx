@@ -41,8 +41,7 @@ struct FenceImpl {
 };
 
 Fence::Fence(Stream stream) {
-  auto dtor = [](void* ptr) { delete static_cast<FenceImpl*>(ptr); };
-  fence_ = std::shared_ptr<void>(new FenceImpl(stream), dtor);
+  fence_ = std::make_shared<FenceImpl>(stream);
 }
 
 void Fence::wait(Stream stream, const array& x) {
