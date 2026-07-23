@@ -61,6 +61,13 @@ class RingGroup : public Group {
       size_t n_bytes,
       ReduceOp reduce_op);
 
+  template <typename T, typename ReduceOp>
+  void reduce_scatter(
+      const void* input,
+      void* output,
+      size_t n_bytes,
+      ReduceOp reduce_op);
+
   /**
    * Performs the connection initialization. Namely, after this call all
    * Connection objects should have a queue pair in RTS state and all buffers
