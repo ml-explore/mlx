@@ -173,7 +173,10 @@ void RingGroup::sum_scatter(
     void* output,
     size_t n_bytes,
     int dtype) {
-  throw std::runtime_error("[jaccl] Ring sum_scatter not yet implemented.");
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    reduce_scatter<T>(input, output, n_bytes, SumOp<T>{});
+  });
 }
 
 void RingGroup::send(const void* input, size_t n_bytes, int dst) {
@@ -225,6 +228,35 @@ void RingGroup::all_reduce(
   }
 
   ring_.all_reduce<2, T, ReduceOp>(in_ptr, out_ptr, count, n_conns_, reduce_op);
+}
+
+template <typename T, typename ReduceOp>
+void RingGroup::reduce_scatter(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    ReduceOp reduce_op) {
+  // n_bytes is the size of the output (one chunk). The input holds size_ such
+  // chunks laid out contiguously so the full element count is size_ * count.
+  auto in_ptr = static_cast<const T*>(input);
+  auto out_ptr = static_cast<T*>(output);
+  int64_t count = n_bytes / sizeof(T);
+  if (size_ == 1) {
+    std::copy_n(in_ptr, count, out_ptr);
+    return;
+  }
+
+  int64_t total = static_cast<int64_t>(size_) * count;
+
+  // Mirror the all_reduce heuristics: use a single wire for small messages and
+  // scale up to n_conns_ wires for large ones where bandwidth dominates.
+  if (total < size_ * 2 * n_conns_ || n_bytes <= 65536) {
+    ring_.reduce_scatter<T, ReduceOp>(in_ptr, out_ptr, total, 1, reduce_op);
+    return;
+  }
+
+  ring_.reduce_scatter<T, ReduceOp>(
+      in_ptr, out_ptr, total, n_conns_, reduce_op);
 }
 
 } // namespace jaccl

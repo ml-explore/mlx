@@ -240,6 +240,199 @@ class RingImpl {
         CopyOp{});
   }
 
+  // Standalone ring reduce scatter.
+  //
+  // The input holds size_ contiguous chunks of `chunk = size / size_` elements
+  // (size is guaranteed divisible by size_ for a sum_scatter). Rank r produces
+  // the full reduction of chunk r in out_ptr (chunk elements). Compared to the
+  // reduce scatter phase embedded in the ring all_reduce this converges every
+  // rank on its *own* chunk index so it can be exposed directly, and it writes
+  // straight into the chunk sized output using it as the rolling accumulator.
+  template <typename T, typename ReduceOp>
+  void reduce_scatter(
+      const T* in_ptr,
+      T* out_ptr,
+      int64_t size,
+      int n_wires,
+      ReduceOp reduce_op) {
+    int64_t chunk = size / size_;
+    // Two directional regions, each split across the wires.
+    int64_t size_per_wire = (chunk + (2 * n_wires) - 1) / (2 * n_wires);
+
+    dispatch_wires(n_wires, [&](int lw) {
+      reduce_scatter_wire<T>(
+          in_ptr, out_ptr, chunk, size_per_wire, n_wires, lw, reduce_op);
+    });
+  }
+
+  // Perform the dual direction ring reduce scatter for a single wire lw.
+  //
+  // The output chunk is divided into 2 directional regions and each region is
+  // split into n_wires contiguous slices of size_per_wire elements. Direction 0
+  // flows left (send right / recv left), direction 1 flows right. Both
+  // directions converge on chunk rank_, so together they fill the whole output
+  // chunk. This wire owns slice lw of every region and only touches
+  // left_[lw] / right_[lw].
+  //
+  // The rolling partial for each direction lives in the chunk sized output
+  // itself: every step sends the partial produced by the previous step and the
+  // recv writes the next partial into the same location. To avoid clobbering a
+  // partial that is still being staged for sending, a recv slice is only
+  // reduced into the output once the matching send slice has been staged (i.e.
+  // recv_count[lr] < send_count[lr]).
+  template <typename T, typename ReduceOp>
+  void reduce_scatter_wire(
+      const T* in_ptr,
+      T* out_ptr,
+      int64_t chunk,
+      int64_t size_per_wire,
+      int n_wires,
+      int lw,
+      ReduceOp reduce_op) {
+    constexpr int MAX_DIR = 2;
+    constexpr int PIPELINE = 2;
+    constexpr int WC_NUM = PIPELINE * 2 * MAX_DIR;
+
+    auto [sz, buffer_bytes] =
+        buffer_size_from_message(size_per_wire * sizeof(T));
+    int64_t N = buffer_bytes / sizeof(T);
+    int64_t total = static_cast<int64_t>(size_) * chunk;
+
+    // This wire's element offset within the output chunk in each direction and
+    // the end of each direction's region.
+    int64_t wire_offset[MAX_DIR];
+    int64_t region_end[MAX_DIR];
+    for (int lr = 0; lr < MAX_DIR; lr++) {
+      wire_offset[lr] = lr * n_wires * size_per_wire +
+          static_cast<int64_t>(lw) * size_per_wire;
+      region_end[lr] = std::min(chunk, (lr + 1) * n_wires * size_per_wire);
+    }
+
+    // Input windows (count space, chunk aligned). Both directions converge on
+    // chunk rank_ (verified: rank r finishes chunk r). Direction 0 flows left
+    // and rotates backward; direction 1 flows right and rotates forward.
+    int64_t in_send_offset[MAX_DIR];
+    int64_t in_recv_offset[MAX_DIR];
+    in_send_offset[0] = ((rank_ - 1 + size_) % size_) * chunk;
+    in_recv_offset[0] = ((rank_ - 2 + 2 * size_) % size_) * chunk;
+    in_send_offset[1] = ((rank_ + 1) % size_) * chunk;
+    in_recv_offset[1] = ((rank_ + 2) % size_) * chunk;
+
+    int64_t n_steps = (size_per_wire + N - 1) / N;
+
+    int in_flight = 0;
+    int send_count[MAX_DIR] = {0};
+    int recv_count[MAX_DIR] = {0};
+    // Recv completions that arrived before their matching send slice was staged
+    // are deferred until the send catches up so we never overwrite a partial
+    // that is still being read for sending.
+    int deferred_recv[MAX_DIR] = {0};
+
+    // Apply as many deferred recv slices for direction lr as are now unblocked
+    // by staged sends. Recv completions arrive in FIFO order per queue pair, so
+    // recv slice recv_count[lr] lives in pipeline buffer recv_count[lr] %
+    // PIPELINE.
+    auto drain_deferred = [&](int lr) {
+      while (deferred_recv[lr] > 0 && recv_count[lr] < send_count[lr]) {
+        int slice = recv_count[lr];
+        int b = slice % PIPELINE;
+        int64_t offset = wire_offset[lr] + static_cast<int64_t>(slice) * N;
+        int64_t n = std::min(N, region_end[lr] - offset);
+        reduce_op(
+            recv_buffer(sz, b, lr, lw).template begin<T>(),
+            in_ptr + in_recv_offset[lr] + offset,
+            out_ptr + offset,
+            std::max<int64_t>(0, n));
+        recv_count[lr]++;
+        deferred_recv[lr]--;
+        if (recv_count[lr] + (PIPELINE - 1) < n_steps) {
+          recv_from(sz, b, lr, lw);
+          in_flight++;
+        }
+      }
+    };
+
+    for (int k = 0; k < size_ - 1; k++) {
+      // Step 0 forwards this rank's own input; later steps forward the partial
+      // accumulated in the output by the previous step.
+      const T* send_base = (k == 0) ? in_ptr : out_ptr;
+      // For step 0 the send window is in the input (count space); for later
+      // steps the partial lives at wire_offset in the chunk sized output.
+      int64_t send_base_offset[MAX_DIR];
+      for (int lr = 0; lr < MAX_DIR; lr++) {
+        send_base_offset[lr] = (k == 0) ? in_send_offset[lr] : 0;
+      }
+
+      // Prefill the pipeline
+      int buff = 0;
+      while (buff < n_steps && buff < PIPELINE) {
+        for (int lr = 0; lr < MAX_DIR; lr++) {
+          recv_from(sz, buff, lr, lw);
+        }
+        for (int lr = 0; lr < MAX_DIR; lr++) {
+          int64_t offset = wire_offset[lr] + send_count[lr] * N;
+          std::copy(
+              send_base + send_base_offset[lr] + offset,
+              send_base + send_base_offset[lr] +
+                  std::max(offset, std::min(offset + N, region_end[lr])),
+              send_buffer(sz, buff, lr, lw).template begin<T>());
+          send_count[lr]++;
+          send_to(sz, buff, lr, lw);
+        }
+
+        buff++;
+        in_flight += 2 * MAX_DIR;
+      }
+
+      // Main loop
+      while (in_flight > 0) {
+        ibv_wc wc[WC_NUM];
+        int n = poll_wire(lw, WC_NUM, wc);
+        for (int i = 0; i < n; i++) {
+          int work_type = wc[i].wr_id >> 16;
+          int buff = (wc[i].wr_id >> 8) & 0xff;
+          int lr = wc[i].wr_id & 0xff;
+
+          in_flight--;
+
+          if (work_type == SEND_WR) {
+            if (send_count[lr] < n_steps) {
+              int64_t offset = wire_offset[lr] + send_count[lr] * N;
+              std::copy(
+                  send_base + send_base_offset[lr] + offset,
+                  send_base + send_base_offset[lr] +
+                      std::max(offset, std::min(offset + N, region_end[lr])),
+                  send_buffer(sz, buff, lr, lw).template begin<T>());
+              send_count[lr]++;
+              send_to(sz, buff, lr, lw);
+              in_flight++;
+            }
+            // A newly staged send may unblock deferred recvs.
+            drain_deferred(lr);
+          }
+
+          else if (work_type == RECV_WR) {
+            // Only reduce into the output once the matching send slice has been
+            // staged; otherwise defer until send_count catches up.
+            deferred_recv[lr]++;
+            drain_deferred(lr);
+          }
+        }
+      }
+
+      // Advance the input windows around the ring for the next step and reset
+      // the per step counters.
+      in_send_offset[0] = (in_send_offset[0] + total - chunk) % total;
+      in_recv_offset[0] = (in_recv_offset[0] + total - chunk) % total;
+      in_send_offset[1] = (in_send_offset[1] + chunk) % total;
+      in_recv_offset[1] = (in_recv_offset[1] + chunk) % total;
+      for (int lr = 0; lr < MAX_DIR; lr++) {
+        send_count[lr] = recv_count[lr] = 0;
+        deferred_recv[lr] = 0;
+      }
+    }
+  }
+
   // Run size_ - 1 pipelined ring steps for a single wire in every direction.
   //
   // At every step each direction sends its current slice to a neighbor and
