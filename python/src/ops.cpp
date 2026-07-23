@@ -4802,6 +4802,58 @@ void init_ops(nb::module_& m) {
               after gathering using ``lhs_indices`` and ``rhs_indices``.
       )pbdoc");
   m.def(
+      "gather_qqmm",
+      &mx::gather_qqmm,
+      nb::arg(),
+      nb::arg(),
+      "scales"_a = nb::none(),
+      "lhs_indices"_a = nb::none(),
+      "rhs_indices"_a = nb::none(),
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "nvfp4",
+      "global_scale_x"_a = nb::none(),
+      "global_scale_w"_a = nb::none(),
+      nb::kw_only(),
+      "sorted_indices"_a = false,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def gather_qqmm(x: array, w: array, /, scales: Optional[array] = None, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', global_scale_x: Optional[array] = None, global_scale_w: Optional[array] = None, *, sorted_indices: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Fused :func:`qqmm` with matrix-level gather.
+
+        Similar to :func:`gather_mm`, the indices ``lhs_indices`` and
+        ``rhs_indices`` contain flat indices along the batch dimensions (i.e.
+        all but the last two dimensions) of ``x`` and ``w`` respectively.
+
+        Args:
+            x (array): Input array.
+            w (array): Weight matrix. If quantized, it is packed in unsigned integers.
+            scales (array, optional): The scales to use per ``group_size`` elements of
+              ``w`` if ``w`` is quantized. Default: ``None``.
+            lhs_indices (array, optional): Integer indices for ``x``. Default: ``None``.
+            rhs_indices (array, optional): Integer indices for ``w``. Default: ``None``.
+            group_size (int, optional): Number of elements in ``x`` and ``w`` that
+              share a scale. See supported values and defaults in the
+              :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+            bits (int, optional): Number of bits used to represent each element of
+              ``x`` and ``w``. See supported values and defaults in the
+              :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+            mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
+              Supported modes are ``nvfp4`` and ``mxfp8``. See the
+              :ref:`table of quantization modes <quantize-modes>` for details.
+            global_scale_x (array, optional): The per-input float32 scale used for x
+                with ``"nvfp4"`` quantization. Default: ``None``.
+            global_scale_w (array, optional): The per-input float32 scale used for w
+                with ``"nvfp4"`` quantization. Default: ``None``.
+            sorted_indices (bool, optional): May allow a faster implementation
+              if the passed indices are sorted. Default: ``False``.
+
+        Returns:
+            array: The result of the multiplication of quantized ``x`` with quantized ``w``.
+            needed).
+      )pbdoc");
+  m.def(
       "segmented_mm",
       &mx::segmented_mm,
       nb::arg(),

@@ -1716,6 +1716,41 @@ class GatherQMM : public UnaryPrimitive {
   bool right_sorted_;
 };
 
+class GatherQQMM : public UnaryPrimitive {
+ public:
+  explicit GatherQQMM(
+      Stream stream,
+      int group_size,
+      int bits,
+      QuantizationMode mode,
+      bool left_sorted = false,
+      bool right_sorted = false)
+      : UnaryPrimitive(stream),
+        group_size_(group_size),
+        bits_(bits),
+        mode_(mode),
+        left_sorted_(left_sorted),
+        right_sorted_(right_sorted) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_NAME(GatherQQMM)
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return std::make_tuple(
+        group_size_, bits_, mode_, left_sorted_, right_sorted_);
+  }
+
+ private:
+  int group_size_;
+  int bits_;
+  QuantizationMode mode_;
+  bool left_sorted_;
+  bool right_sorted_;
+};
+
 class RandomBits : public UnaryPrimitive {
  public:
   explicit RandomBits(Stream stream, const Shape& shape, int width)
