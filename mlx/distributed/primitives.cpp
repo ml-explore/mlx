@@ -92,4 +92,32 @@ std::pair<std::vector<array>, std::vector<int>> Send::vmap(
   return {{send(inputs[0], dst_, group(), stream())}, axes};
 }
 
+std::pair<std::vector<array>, std::vector<int>> AllToAll::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto& in = inputs[0];
+  auto ax = axes[0];
+  if (ax == 0) {
+    return {{all_to_all(moveaxis(in, 0, 1, stream()), group(), stream())}, {1}};
+  }
+  return {{all_to_all(in, group(), stream())}, axes};
+}
+
+std::vector<array> AllToAll::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>&) {
+  return {all_to_all(tangents[0], group(), stream())};
+}
+
+std::vector<array> AllToAll::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  // all_to_all is its own transpose: sending chunk j from rank i to rank j is
+  // reversed by sending chunk i from rank j back to rank i.
+  return {all_to_all(cotangents[0], group(), stream())};
+}
+
 } // namespace mlx::core::distributed
