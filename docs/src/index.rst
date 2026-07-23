@@ -43,6 +43,7 @@ are the CPU and GPU.
    usage/function_transforms
    usage/compile
    usage/numpy
+   usage/precision
    usage/distributed
    usage/using_streams
    usage/export
