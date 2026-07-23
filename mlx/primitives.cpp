@@ -2481,9 +2481,9 @@ std::vector<array> Gather::vjp(
   std::vector<array> vjps;
   for (int argnum : argnums) {
     if (argnum > 0) {
-      // Grads w.r.t. indices are zero
-      vjps.push_back(
-          zeros(primals[argnum].shape(), primals[argnum].dtype(), stream()));
+      throw std::invalid_argument(
+          "[gather] Cannot calculate VJP with respect to indices. "
+          "Use stop_gradient on indices to stop gradients from being computed.");
     } else {
       auto src = zeros_like(primals[0], stream());
       std::vector<array> inds(primals.begin() + 1, primals.end());
@@ -2499,7 +2499,8 @@ std::vector<array> Gather::jvp(
     const std::vector<int>& argnums) {
   if (argnums.size() > 1 || argnums[0] != 0) {
     throw std::invalid_argument(
-        "[gather] Cannot calculate JVP with respect to indices.");
+        "[gather] Cannot calculate JVP with respect to indices. "
+        "Use stop_gradient on indices to stop gradients from being computed.");
   }
   std::vector<array> inds(primals.begin() + 1, primals.end());
   return {gather(tangents[0], inds, axes_, slice_sizes_, stream())};
@@ -2546,9 +2547,9 @@ std::vector<array> GatherAxis::vjp(
   std::vector<array> vjps;
   for (int argnum : argnums) {
     if (argnum > 0) {
-      // Grads w.r.t. indices are zero
-      vjps.push_back(
-          zeros(primals[argnum].shape(), primals[argnum].dtype(), stream()));
+      throw std::invalid_argument(
+          "[gather_axis] Cannot calculate VJP with respect to indices. "
+          "Use stop_gradient on indices to stop gradients from being computed.");
     } else {
       auto src = zeros_like(primals[0], stream());
       vjps.push_back(array(
@@ -2567,7 +2568,8 @@ std::vector<array> GatherAxis::jvp(
     const std::vector<int>& argnums) {
   if (argnums.size() > 1 || argnums[0] != 0) {
     throw std::invalid_argument(
-        "[gather_axis] Cannot calculate JVP with respect to indices.");
+        "[gather_axis] Cannot calculate JVP with respect to indices. "
+        "Use stop_gradient on indices to stop gradients from being computed.");
   }
   return {take_along_axis(tangents[0], primals[1], axis_, stream())};
 }
@@ -4483,7 +4485,8 @@ std::vector<array> Scatter::vjp(
       }
     } else {
       throw std::invalid_argument(
-          "[scatter] Cannot calculate VJP with respect to indices.");
+          "[scatter] Cannot calculate VJP with respect to indices. "
+          "Use stop_gradient on indices to stop gradients from being computed.");
     }
   }
   return vjps;
@@ -4595,7 +4598,8 @@ std::vector<array> ScatterAxis::vjp(
       vjps.push_back(take_along_axis(cotangents[0], indices, axis_, stream()));
     } else {
       throw std::invalid_argument(
-          "[scatter_axis] Cannot calculate VJP with respect to indices.");
+          "[scatter_axis] Cannot calculate VJP with respect to indices. "
+          "Use stop_gradient on indices to stop gradients from being computed.");
     }
   }
   return vjps;
@@ -4608,7 +4612,8 @@ std::vector<array> ScatterAxis::jvp(
   for (auto arg : argnums) {
     if (arg == 1) {
       throw std::invalid_argument(
-          "[scatter_axis] Cannot calculate JVP with respect to indices.");
+          "[scatter_axis] Cannot calculate JVP with respect to indices. "
+          "Use stop_gradient on indices to stop gradients from being computed.");
     }
   }
   if (argnums.size() == 2) {
@@ -4716,7 +4721,8 @@ std::vector<array> MaskedScatter::vjp(
       vjps.push_back(reshape(gsrc_flat, src.shape(), s));
     } else {
       throw std::invalid_argument(
-          "[masked_scatter] Cannot calculate VJP with respect to mask.");
+          "[masked_scatter] Cannot calculate VJP with respect to mask. "
+          "Use stop_gradient on mask to stop gradients from being computed.");
     }
   }
   return vjps;
@@ -5748,7 +5754,8 @@ std::vector<array> BlockMaskedMM::vjp(
   if ((needs_lhs_mask_vjp && primals[op_mask_idx].dtype() == bool_) ||
       (needs_rhs_mask_vjp && primals[op_mask_idx + 1].dtype() == bool_)) {
     throw std::invalid_argument(
-        "[BlockMaskedMM] Cannot calculate VJP with respect to boolean masks.");
+        "[BlockMaskedMM] Cannot calculate VJP with respect to boolean masks. "
+        "Use stop_gradient on masks to stop gradients from being computed.");
   }
 
   auto expand_mask = [&](array mask, int Y, int X) {
@@ -5945,7 +5952,8 @@ std::vector<array> BlockMaskedMM::vjp(
 
     } else {
       throw std::invalid_argument(
-          "[BlockMaskedMM] Cannot calculate VJP with respect to masks.");
+          "[BlockMaskedMM] Cannot calculate VJP with respect to masks. "
+          "Use stop_gradient on masks to stop gradients from being computed.");
     }
   }
   return vjps;
@@ -6010,7 +6018,8 @@ std::vector<array> GatherMM::vjp(
           stream()));
     } else {
       throw std::invalid_argument(
-          "[GatherMM] Cannot calculate VJP with respect to indices.");
+          "[GatherMM] Cannot calculate VJP with respect to indices. "
+          "Use stop_gradient on indices to stop gradients from being computed.");
     }
   }
   return vjps;
