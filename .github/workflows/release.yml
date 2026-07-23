@@ -86,6 +86,7 @@ jobs:
         with:
           cmake-args: ${{ steps.setup.outputs.cmake-args }}
           build-backend: false
+      - run: unzip -l wheelhouse/*.whl
       - uses: actions/upload-artifact@v7
         with:
           name: frontend-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python-version }}
@@ -127,6 +128,7 @@ jobs:
         with:
           cmake-args: ${{ steps.setup.outputs.cmake-args }}
           build-frontend: false
+      - run: unzip -l wheelhouse/*.whl
       - uses: actions/upload-artifact@v7
         with:
           name: backend-${{ matrix.toolkit }}-${{ runner.os }}-${{ runner.arch }}
@@ -168,6 +170,8 @@ jobs:
           macos-target: '26.2'
           cmake-args: ${{ steps.setup.outputs.cmake-args }}
           build-backend: ${{ matrix.python-version == '3.10' }}
+      - name: Display content of the wheels
+        run: for WHEEL in wheelhouse/*.whl; do unzip -l $WHEEL; echo; done
       - name: Upload frontend packages
         uses: actions/upload-artifact@v7
         with:
