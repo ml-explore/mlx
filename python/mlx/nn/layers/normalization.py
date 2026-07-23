@@ -25,7 +25,8 @@ class InstanceNorm(Module):
         affine (bool): Default: ``False``.
 
     Shape:
-      - Input: :math:`(..., C)` where :math:`C` is equal to :attr:`dims`.
+      - Input: :math:`(N, ..., C)` where :math:`C` is equal to :attr:`dims`.
+        The input must have at least 3 dimensions.
       - Output: Same shape as the input.
 
     Examples:
