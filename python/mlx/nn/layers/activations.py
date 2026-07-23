@@ -225,7 +225,8 @@ def step(x: mx.array, threshold: float = 0.0):
     r"""Applies the Step Activation Function.
 
     This function implements a binary step activation, where the output is set
-    to 1 if the input is greater than a specified threshold, and 0 otherwise.
+    to 1 if the input is greater than or equal to a specified threshold, and 0
+    otherwise.
 
     .. math::
         \text{step}(x) = \begin{cases}
@@ -234,7 +235,7 @@ def step(x: mx.array, threshold: float = 0.0):
         \end{cases}
 
     Args:
-        threshold: The value to threshold at.
+        threshold: The value to threshold at. Default: ``0.0``.
     """
 
     return mx.where(x >= threshold, 1, 0)
@@ -606,7 +607,8 @@ class Step(Module):
     r"""Applies the Step Activation Function.
 
     This function implements a binary step activation, where the output is set
-    to 1 if the input is greater than a specified threshold, and 0 otherwise.
+    to 1 if the input is greater than or equal to a specified threshold, and 0
+    otherwise.
 
     .. math::
         \text{step}(x) = \begin{cases}
@@ -615,7 +617,7 @@ class Step(Module):
         \end{cases}
 
     Args:
-        threshold: The value to threshold at.
+        threshold: The value to threshold at. Default: ``0.0``.
     """
 
     def __init__(self, threshold: float = 0.0):
