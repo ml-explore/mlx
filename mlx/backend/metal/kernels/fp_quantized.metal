@@ -135,7 +135,9 @@
 
 #define instantiate_quantized_all_rhs(type, mode, group_size, bits) \
   instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, gather_qmm_rhs_nt, type, 16, 32, 32, 1, 2, true, mode, group_size, bits) \
-  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, gather_qmm_rhs_nn, type, 16, 32, 32, 1, 2, false, mode, group_size, bits)
+  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, gather_qmm_rhs_nn, type, 16, 32, 32, 1, 2, false, mode, group_size, bits) \
+  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, gather_qmm_rhs_nt, type, 32, 64, 32, 1, 2, true, mode, group_size, bits) \
+  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs, gather_qmm_rhs_nn, type, 32, 64, 32, 1, 2, false, mode, group_size, bits)
 
 #define instantiate_quantize_dequantize(type, mode, group_size, bits) \
   instantiate_kernel( \

@@ -1321,6 +1321,7 @@ void gather_qmm_rhs(
     int M,
     int N,
     int K,
+    int E,
     metal::Device& d,
     const Stream& s,
     const std::string mode) {
@@ -1369,9 +1370,16 @@ void gather_qmm_rhs(
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
 
-  // TODO: Tune the block sizes
+  // With sorted rhs indices, every distinct expert inside a tile costs a
+  // full K-loop, so the tile has to stay inside one expert's run of rows.
+  // Once runs reach 32 rows the wider 32x64 tile is the better trade.
+  // TODO: Tune bk, wm, wn.
   int bm = 16, bn = 32, bk = 32;
   int wm = 1, wn = 2;
+  if (M / E >= 32) {
+    bm = 32;
+    bn = 64;
+  }
 
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
@@ -1598,6 +1606,7 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         x.size() / K,
         N,
         K,
+        E,
         d,
         s,
         mode);
