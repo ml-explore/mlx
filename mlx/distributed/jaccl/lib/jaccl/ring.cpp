@@ -11,13 +11,14 @@ RingGroup::RingGroup(
     int size,
     const std::vector<std::string>& left_devices,
     const std::vector<std::string>& right_devices,
-    const std::string& coordinator_addr)
+    SideChannel sc)
     : rank_(rank),
       size_(size),
       n_conns_(left_devices.size()),
-      side_channel_(rank_, size_, coordinator_addr.c_str()),
+      side_channel_(std::move(sc)),
       left_(create_connections(left_devices)),
-      right_(create_connections(right_devices)) {
+      right_(create_connections(right_devices)),
+      pool_(n_conns_ > 0 ? n_conns_ - 1 : 0) {
   if (left_.size() > RING_MAX_CONNS || right_.size() > RING_MAX_CONNS) {
     std::ostringstream msg;
     msg << "[jaccl] Up to " << RING_MAX_CONNS << " per direction supported but "
@@ -32,7 +33,8 @@ RingGroup::RingGroup(
   side_channel_.barrier();
 
   // Create the ring implementation object
-  ring_ = RingImpl(rank_, size_, left_, right_, send_buffers_, recv_buffers_);
+  ring_ = RingImpl(
+      rank_, size_, left_, right_, send_buffers_, recv_buffers_, &pool_);
 }
 
 void RingGroup::initialize() {
@@ -166,6 +168,17 @@ void RingGroup::all_gather(const void* input, void* output, size_t n_bytes) {
       n_conns_);
 }
 
+void RingGroup::sum_scatter(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    int dtype) {
+  dispatch_all_types(dtype, [&](auto type_tag) {
+    using T = JACCL_GET_TYPE(type_tag);
+    reduce_scatter<T>(input, output, n_bytes, SumOp<T>{});
+  });
+}
+
 void RingGroup::send(const void* input, size_t n_bytes, int dst) {
   int right = (rank_ + 1) % size_;
   int left = (rank_ + size_ - 1) % size_;
@@ -215,6 +228,35 @@ void RingGroup::all_reduce(
   }
 
   ring_.all_reduce<2, T, ReduceOp>(in_ptr, out_ptr, count, n_conns_, reduce_op);
+}
+
+template <typename T, typename ReduceOp>
+void RingGroup::reduce_scatter(
+    const void* input,
+    void* output,
+    size_t n_bytes,
+    ReduceOp reduce_op) {
+  // n_bytes is the size of the output (one chunk). The input holds size_ such
+  // chunks laid out contiguously so the full element count is size_ * count.
+  auto in_ptr = static_cast<const T*>(input);
+  auto out_ptr = static_cast<T*>(output);
+  int64_t count = n_bytes / sizeof(T);
+  if (size_ == 1) {
+    std::copy_n(in_ptr, count, out_ptr);
+    return;
+  }
+
+  int64_t total = static_cast<int64_t>(size_) * count;
+
+  // Mirror the all_reduce heuristics: use a single wire for small messages and
+  // scale up to n_conns_ wires for large ones where bandwidth dominates.
+  if (total < size_ * 2 * n_conns_ || n_bytes <= 65536) {
+    ring_.reduce_scatter<T, ReduceOp>(in_ptr, out_ptr, total, 1, reduce_op);
+    return;
+  }
+
+  ring_.reduce_scatter<T, ReduceOp>(
+      in_ptr, out_ptr, total, n_conns_, reduce_op);
 }
 
 } // namespace jaccl
