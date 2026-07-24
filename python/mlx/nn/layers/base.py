@@ -255,13 +255,13 @@ class Module(dict):
         but it can also be used to extract any subset of the module's parameters.
 
         Args:
-            filter_fn (Callable): Given a value, the key in which it is found
-                and the containing module, decide whether to keep the value or
+            filter_fn (Callable): Given the containing module, the key in which
+                it is found and the value, decide whether to keep the value or
                 drop it.
             map_fn (Callable, optional): Optionally transform the value before
                 returning it.
-            is_leaf_fn (Callable, optional): Given a value, the key in which it
-                is found and the containing module decide if it is a leaf.
+            is_leaf_fn (Callable, optional): Given the containing module, the
+                key in which it is found and the value decide if it is a leaf.
 
         Returns:
             A dictionary containing the contents of the module recursively filtered
