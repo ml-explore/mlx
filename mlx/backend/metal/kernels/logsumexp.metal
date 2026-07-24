@@ -9,9 +9,10 @@ using namespace metal;
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/logsumexp.h"
 
-#define instantiate_logsumexp(name, itype)                               \
-  instantiate_kernel("block_logsumexp_" #name, logsumexp, itype)         \
-  instantiate_kernel("looped_logsumexp_" #name, logsumexp_looped, itype) \
+#define instantiate_logsumexp(name, itype)                                   \
+  instantiate_kernel("block_logsumexp_" #name, logsumexp, itype)             \
+  instantiate_kernel("simdrow_logsumexp_" #name, logsumexp_simd_row, itype)  \
+  instantiate_kernel("looped_logsumexp_" #name, logsumexp_looped, itype)     \
 
 instantiate_logsumexp(float32, float)
 instantiate_logsumexp(float16, half)

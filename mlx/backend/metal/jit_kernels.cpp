@@ -320,6 +320,8 @@ MTL::ComputePipelineState* get_logsumexp_kernel(
     kernel_source +=
         get_template_definition("block_" + lib_name, "logsumexp", t_str);
     kernel_source += get_template_definition(
+        "simdrow_" + lib_name, "logsumexp_simd_row", t_str);
+    kernel_source += get_template_definition(
         "looped_" + lib_name, "logsumexp_looped", t_str);
     return kernel_source;
   });

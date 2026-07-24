@@ -73,6 +73,58 @@ template <typename T, typename AccT = float, int N_READS = 4>
 }
 
 template <typename T, typename AccT = float, int N_READS = 4>
+[[kernel]] void logsumexp_simd_row(
+    const device T* in,
+    device T* out,
+    constant int& axis_size,
+    uint tid [[thread_position_in_grid]],
+    uint simd_lane_id [[thread_index_in_simdgroup]]) {
+  // One simdgroup per row: reductions stay within the simdgroup, so no
+  // threadgroup memory or barriers are needed (the block kernel uses 5).
+  // The grid has exactly n_rows * SIMD_SIZE threads, so every simdgroup is
+  // full and maps to one row.
+  constexpr int SIMD_SIZE = 32;
+
+  uint row = tid / SIMD_SIZE;
+  in += row * size_t(axis_size);
+
+  AccT prevmax;
+  AccT maxval = Limits<AccT>::finite_min;
+  AccT normalizer = 0;
+  for (int r = 0; r < static_cast<int>(ceildiv(axis_size, N_READS * SIMD_SIZE));
+       r++) {
+    int offset = r * SIMD_SIZE * N_READS + simd_lane_id * N_READS;
+    AccT vals[N_READS];
+    if (offset + N_READS <= axis_size) {
+      for (int i = 0; i < N_READS; i++) {
+        vals[i] = AccT(in[offset + i]);
+      }
+    } else {
+      for (int i = 0; i < N_READS; i++) {
+        vals[i] =
+            (offset + i < axis_size) ? AccT(in[offset + i]) : Limits<AccT>::min;
+      }
+    }
+    prevmax = maxval;
+    for (int i = 0; i < N_READS; i++) {
+      maxval = (maxval < vals[i]) ? vals[i] : maxval;
+    }
+    normalizer *= fast::exp(prevmax - maxval);
+    for (int i = 0; i < N_READS; i++) {
+      normalizer += fast::exp(vals[i] - maxval);
+    }
+  }
+  prevmax = maxval;
+  maxval = simd_max(maxval);
+  normalizer *= fast::exp(prevmax - maxval);
+  normalizer = simd_sum(normalizer);
+
+  if (simd_lane_id == 0) {
+    out[row] = isinf(maxval) ? T(maxval) : T(log(normalizer) + maxval);
+  }
+}
+
+template <typename T, typename AccT = float, int N_READS = 4>
 [[kernel]] void logsumexp_looped(
     const device T* in,
     device T* out,

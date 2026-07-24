@@ -10,6 +10,9 @@
 namespace mlx::core {
 
 constexpr int LOGSUMEXP_LOOPED_LIMIT = 4096;
+// Rows up to this size go to the simdgroup-per-row kernel; on M4 it wins
+// for short-to-medium rows while the block kernel stays ahead beyond it.
+constexpr int LOGSUMEXP_SIMD_ROW_LIMIT = 2048;
 
 void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
@@ -61,15 +64,27 @@ void LogSumExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   const int simd_size = 32;
   const int n_reads = 4;
   const int looped_limit = LOGSUMEXP_LOOPED_LIMIT;
+  const int simd_row_limit = LOGSUMEXP_SIMD_ROW_LIMIT;
 
-  std::string kernel_name = (axis_size > looped_limit) ? "looped_" : "block_";
+  std::string kernel_name = (axis_size > looped_limit) ? "looped_"
+      : (axis_size > simd_row_limit)                   ? "block_"
+                                                       : "simdrow_";
   kernel_name += "logsumexp_";
   kernel_name += type_to_name(out);
 
   auto kernel = get_logsumexp_kernel(d, kernel_name, out);
   {
     MTL::Size grid_dims, group_dims;
-    if (axis_size <= looped_limit) {
+    if (axis_size <= simd_row_limit) {
+      // One simdgroup per row, eight rows per threadgroup. The grid has
+      // exactly 32 threads per row so simdgroups never straddle rows.
+      constexpr int simds_per_group = 8;
+      size_t threadgroup_size = simd_size * simds_per_group;
+      assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
+      size_t n_threads = n_rows * size_t(simd_size);
+      grid_dims = MTL::Size(n_threads, 1, 1);
+      group_dims = MTL::Size(threadgroup_size, 1, 1);
+    } else if (axis_size <= looped_limit) {
       size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
       size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
       size_t threadgroup_size = simd_size * simds_needed;
