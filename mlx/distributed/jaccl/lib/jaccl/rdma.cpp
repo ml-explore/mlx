@@ -181,13 +181,61 @@ const Destination& Connection::info() {
 
   ibv_port_attr port_attr;
   ibv().query_port(ctx, 1, &port_attr);
-  ibv_gid gid;
-  for (int i = 0; i < port_attr.gid_tbl_len; i++) {
+  ibv_gid gid = {};
+
+  auto try_gid = [&](int i, bool require_ipv4_mapped) -> bool {
+    if (i < 0 || i >= port_attr.gid_tbl_len) {
+      return false;
+    }
     ibv_gid tmp;
-    if (ibv().query_gid(ctx, 1, i, &tmp) == 0) {
-      if (*(uint64_t*)&tmp.raw[0] == 0 && *(uint16_t*)&tmp.raw[8] == 0 &&
-          *(uint16_t*)&tmp.raw[10] == 0xffff) {
-        gid = tmp;
+    if (ibv().query_gid(ctx, 1, i, &tmp) != 0) {
+      return false;
+    }
+    if (require_ipv4_mapped) {
+      if (*(uint64_t*)&tmp.raw[0] != 0 || *(uint16_t*)&tmp.raw[8] != 0 ||
+          *(uint16_t*)&tmp.raw[10] != 0xffff) {
+        return false;
+      }
+    } else {
+      bool is_zero = true;
+      for (int j = 0; j < 16; j++) {
+        if (tmp.raw[j] != 0) {
+          is_zero = false;
+          break;
+        }
+      }
+      if (is_zero) {
+        return false;
+      }
+    }
+    gid = tmp;
+    return true;
+  };
+
+  // 1. Prefer IPv4-mapped IPv6 GID (RoCE v2 standard).
+  bool found = false;
+  for (int i = 0; i < port_attr.gid_tbl_len; i++) {
+    if (try_gid(i, /*require_ipv4_mapped=*/true)) {
+      found = true;
+      break;
+    }
+  }
+
+  // 2. Fallback for Apple Thunderbolt RDMA, which exposes only link-local
+  //    IPv6 (fe80::...) GIDs. Prefer index 1 (the actual rdma_enX port GID;
+  //    index 0 on Apple TB is typically derived from a non-RDMA interface
+  //    and routes elsewhere, surfacing as RTR errno 60 ETIMEDOUT).
+  if (!found) {
+    for (int i : {1, 0}) {
+      if (try_gid(i, /*require_ipv4_mapped=*/false)) {
+        found = true;
+        break;
+      }
+    }
+  }
+  if (!found) {
+    for (int i = 2; i < port_attr.gid_tbl_len; i++) {
+      if (try_gid(i, /*require_ipv4_mapped=*/false)) {
         break;
       }
     }
