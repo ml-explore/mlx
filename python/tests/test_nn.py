@@ -1524,6 +1524,28 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(out.shape, (1, 1, 1))
         self.assertTrue(np.allclose(out, x_1d[:, :1, :]))
 
+    def test_upsample_align_corners_false_fractional_scale(self):
+        # For a fractional scale factor, M = int(scale * N) is floored, and the
+        # align_corners=False grid used to be mis-centered onto the
+        # corner-aligned (align_corners=True) grid, making the flag a no-op.
+        # With the half-pixel convention the two must differ, and the
+        # align_corners=False sampling positions are (i + 0.5) / scale - 0.5.
+        x = mx.arange(5).reshape((1, 5, 1)).astype(mx.float32)
+        out_false = nn.Upsample(scale_factor=1.5, mode="linear", align_corners=False)(
+            x
+        ).reshape(-1)
+        out_true = nn.Upsample(scale_factor=1.5, mode="linear", align_corners=True)(
+            x
+        ).reshape(-1)
+
+        # x holds identity values, so a linear sample equals its clamped source
+        # coordinate: src_i = clip((i + 0.5) / 1.5 - 0.5, 0, 4).
+        expected = mx.array(
+            [0.0, 0.5, 7 / 6, 11 / 6, 2.5, 19 / 6, 23 / 6], dtype=mx.float32
+        )
+        self.assertTrue(np.allclose(out_false, expected))
+        self.assertFalse(np.allclose(out_false, out_true))
+
     def test_pooling(self):
         # Test 1d pooling
         x = mx.array(
