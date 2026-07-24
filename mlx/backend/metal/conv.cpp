@@ -977,6 +977,36 @@ void depthwise_conv_2D_gpu(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+void pad_in_channels_conv_2D_gpu(
+    const Stream& s,
+    metal::Device& d,
+    const array& in_pre,
+    const array& wt_pre,
+    array& out,
+    const MLXConvParams<2>& conv_params) {
+  // Only the input channels are padded, so the kernel writes straight into out
+  // and the output stays contiguous. Assumes conv_params.groups == 1.
+  int extra_c = ((conv_params.C + 15) / 16) * 16 - conv_params.C;
+
+  // Pad function
+  auto pad_array = [&](const array& x) {
+    auto xshape = x.shape();
+    xshape.back() += extra_c;
+    array x_copy(xshape, x.dtype(), nullptr, {});
+    array zero(0, x.dtype());
+    pad_gpu(x, zero, x_copy, {-1}, {0}, s);
+    metal::get_command_encoder(s).add_temporary(x_copy);
+
+    return x_copy;
+  };
+
+  array in = pad_array(in_pre);
+  array wt = pad_array(wt_pre);
+  auto new_params =
+      MLXConvParams<2>::with_padded_channels(conv_params, 0, extra_c);
+  implicit_gemm_conv_2D_gpu(s, d, in, wt, out, new_params);
+}
+
 void dispatch_conv_2D_gpu(
     const Stream& s,
     metal::Device& d,
@@ -1026,9 +1056,23 @@ void dispatch_conv_2D_gpu(
     return winograd_conv_2D_gpu(s, d, in, wt, out, conv_params, copies);
   }
 
+  // Whether the specialized implicit gemm kernel can take the channels as-is.
+  bool specialized_channels = (conv_params.C <= 4 || conv_params.C % 16 == 0) &&
+      (conv_params.O <= 16 || conv_params.O % 16 == 0);
+
+  // Pad the input channels up to a multiple of 16 to use the faster specialized
+  // kernel instead of the general one. Only worth the padded work for stride-1
+  // convs with a large enough output and kernel, and only when the output
+  // channels are already aligned so the kernel writes contiguously into out
+  // (padding those too needs a copy that can cost more than the kernel saves).
+  bool out_channels_aligned = conv_params.O <= 16 || conv_params.O % 16 == 0;
+  if (is_idil_one && is_stride_one && out_large && !specialized_channels &&
+      out_channels_aligned && (conv_params.wS[0] * conv_params.wS[1]) >= 9) {
+    return pad_in_channels_conv_2D_gpu(s, d, in, wt, out, conv_params);
+  }
+
   // Direct to implicit gemm conv
-  if (is_idil_one && (conv_params.C <= 4 || conv_params.C % 16 == 0) &&
-      (conv_params.O <= 16 || conv_params.O % 16 == 0)) {
+  if (is_idil_one && specialized_channels) {
     return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
   }
 
