@@ -12,6 +12,7 @@
   attention_nax, dtype, bq, bk, bd, wm, wn, mtype, float)
 
 #define instantiate_attn_shapes_helper(iname, itype, mname, mtype)  \
+    instantiate_attn(iname, itype, 64, 32, 256, 4, 2, mname, mtype) \
     instantiate_attn(iname, itype, 64, 32, 128, 4, 1, mname, mtype) \
     instantiate_attn(iname, itype, 64, 32,  64, 4, 1, mname, mtype) \
     instantiate_attn(iname, itype, 64, 64, 128, 4, 1, mname, mtype) \
