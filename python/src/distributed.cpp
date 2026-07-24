@@ -411,6 +411,41 @@ void init_distributed(nb::module_& parent_module) {
         array: The output array with shape ``[x.shape[0] // group.size(), *x.shape[1:]]``.
     )pbdoc");
 
+  m.def(
+      "all_to_all",
+      [](const ScalarOrArray& x,
+         std::optional<mx::distributed::Group> group,
+         mx::StreamOrDevice s) {
+        return mx::distributed::all_to_all(to_array(x), group, s);
+      },
+      "x"_a,
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def all_to_all(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Exchange chunks of ``x`` between all processes in the group.
+
+        The input ``x`` is split into ``group.size()`` equal chunks along the
+        first axis. Process ``r`` sends its ``j``-th chunk to process ``j`` and,
+        in return, places the chunk received from process ``i`` into the
+        ``i``-th slot of its output. Consequently the output has the same shape
+        as the input and ``x.shape[0]`` must be divisible by the group size.
+
+        Args:
+          x (array): Input array.
+          group (Group): The group of processes that will participate in the
+            exchange. If set to ``None`` the global group is used. Default:
+            ``None``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``
+            in which case the default stream of the default device is used.
+
+        Returns:
+          array: The output array with the same shape as ``x`` holding the
+          chunks received from every process.
+      )pbdoc");
+
   // Ensure the distributed backend cache is cleared before the interpreter
   // goes away, so that any Python objects held by cached groups are released
   // while Python is still alive.
