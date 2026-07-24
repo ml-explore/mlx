@@ -206,6 +206,14 @@ void svd_impl(
 
   using R = typename SVDWork<T>::R;
 
+  // Nothing to decompose for empty matrices; LAPACK rejects lda = 0.
+  if (M == 0 || N == 0) {
+    for (auto& o : outputs) {
+      o.set_data(allocator::malloc(o.nbytes()));
+    }
+    return;
+  }
+
   size_t num_matrices = a.size() / (M * N);
 
   // lapack clobbers the input, so we have to make a copy.

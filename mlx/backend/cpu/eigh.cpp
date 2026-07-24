@@ -155,10 +155,12 @@ void eigh_impl(
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_output_array(vectors);
   encoder.set_output_array(values);
+  // LAPACK reads the row-major input as its (conjugate) transpose, so the
+  // requested triangle is the opposite one in LAPACK's view.
   encoder.dispatch([vec_ptr,
                     eig_ptr,
                     jobz,
-                    uplo = uplo[0],
+                    uplo = uplo[0] == 'L' ? 'U' : 'L',
                     N = vectors.shape(-1),
                     size = vectors.size()]() mutable {
     // Work query
@@ -201,6 +203,15 @@ void Eigh::eval_cpu(
       vectors,
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
       stream());
+
+  // Nothing to decompose for n = 0; LAPACK rejects lda = 0.
+  if (a.shape(-1) == 0) {
+    if (!compute_eigenvectors_) {
+      auto& encoder = cpu::get_command_encoder(stream());
+      encoder.add_temporary(vectors);
+    }
+    return;
+  }
 
   if (compute_eigenvectors_) {
     // Set the strides and flags so the eigenvectors

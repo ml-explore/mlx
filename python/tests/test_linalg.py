@@ -188,6 +188,13 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 )
             )
 
+        # Zero-size inputs
+        for shape in [(0, 4, 4), (3, 0, 0)]:
+            U, S, Vt = mx.linalg.svd(mx.zeros(shape), stream=mx.cpu)
+            mx.eval(U, S, Vt)
+            self.assertEqual(S.shape, shape[:-1])
+            self.assertEqual(U.shape, shape)
+
         # Test float64 - use CPU stream since float64 is not supported on GPU
         with mx.stream(mx.cpu):
             A_f64 = mx.array(
@@ -492,6 +499,21 @@ class TestLinalg(mlx_tests.MLXTestCase):
         )
         A_np = A_np + A_np.T.conj()
         check_eigs_and_vecs(A_np)
+
+        # UPLO picks the triangle like numpy; only observable when the two
+        # triangles disagree
+        A_np = np.array([[1.0, 999.0], [2.0, 3.0]], dtype=np.float32)
+        for uplo in ("L", "U"):
+            w = mx.linalg.eigvalsh(mx.array(A_np), UPLO=uplo, stream=mx.cpu)
+            w_np = np.linalg.eigvalsh(A_np, UPLO=uplo)
+            self.assertTrue(np.allclose(w, w_np, atol=1e-5))
+
+        # Zero-size inputs
+        for shape in [(0, 4, 4), (3, 0, 0)]:
+            w, v = mx.linalg.eigh(mx.zeros(shape), stream=mx.cpu)
+            mx.eval(w, v)
+            self.assertEqual(w.shape, shape[:-1])
+            self.assertEqual(v.shape, shape)
 
         # Test error cases
         with self.assertRaises(ValueError):
