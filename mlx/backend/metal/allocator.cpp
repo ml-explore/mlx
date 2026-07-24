@@ -187,6 +187,14 @@ void MetalAllocator::free(Buffer buffer) {
   }
   std::unique_lock lk(mutex_);
   active_memory_ -= buf->length();
+  // Don't hand this buffer back out while a command buffer we haven't seen
+  // finish still uses it, or a concurrent (or cross-stream) allocation could
+  // grab it while a kernel is still reading or writing it. Hold it aside and
+  // let retire_in_flight recycle it once that work completes.
+  if (in_flight_.find(buf) != in_flight_.end()) {
+    deferred_recycle_.insert(buf);
+    return;
+  }
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
@@ -197,6 +205,55 @@ void MetalAllocator::free(Buffer buffer) {
     lk.unlock();
     auto pool = metal::new_scoped_memory_pool();
     buf->release();
+  }
+}
+
+void MetalAllocator::mark_in_flight(const std::vector<const void*>& buffers) {
+  std::unique_lock lk(mutex_);
+  for (const auto* ptr : buffers) {
+    if (ptr) {
+      in_flight_[static_cast<MTL::Buffer*>(const_cast<void*>(ptr))]++;
+    }
+  }
+}
+
+void MetalAllocator::retire_in_flight(const std::vector<const void*>& buffers) {
+  std::vector<MTL::Buffer*> to_release;
+  {
+    std::unique_lock lk(mutex_);
+    for (const auto* ptr : buffers) {
+      if (!ptr) {
+        continue;
+      }
+      auto buf = static_cast<MTL::Buffer*>(const_cast<void*>(ptr));
+      auto it = in_flight_.find(buf);
+      if (it == in_flight_.end()) {
+        continue;
+      }
+      if (--(it->second) > 0) {
+        continue;
+      }
+      in_flight_.erase(it);
+      // Only recycle now if it was freed while we were holding it back.
+      if (deferred_recycle_.erase(buf) == 0) {
+        continue;
+      }
+      if (get_cache_memory() < max_pool_size_) {
+        buffer_cache_.recycle_to_cache(buf);
+      } else {
+        num_resources_--;
+        if (!buf->heap()) {
+          residency_set_.erase(buf);
+        }
+        to_release.push_back(buf);
+      }
+    }
+  }
+  if (!to_release.empty()) {
+    auto pool = metal::new_scoped_memory_pool();
+    for (auto* buf : to_release) {
+      buf->release();
+    }
   }
 }
 
