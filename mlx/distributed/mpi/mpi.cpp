@@ -129,6 +129,7 @@ struct MPIWrapper {
     LOAD_SYMBOL(MPI_Comm_free, comm_free);
     LOAD_SYMBOL(MPI_Allreduce, all_reduce);
     LOAD_SYMBOL(MPI_Allgather, all_gather);
+    LOAD_SYMBOL(MPI_Alltoall, all_to_all);
     LOAD_SYMBOL(MPI_Send, send);
     LOAD_SYMBOL(MPI_Recv, recv);
     LOAD_SYMBOL(MPI_Type_contiguous, mpi_type_contiguous);
@@ -283,6 +284,14 @@ struct MPIWrapper {
   int (*size)(MPI_Comm, int*);
   int (*all_reduce)(const void*, void*, int, MPI_Datatype, MPI_Op, MPI_Comm);
   int (*all_gather)(
+      const void*,
+      int,
+      MPI_Datatype,
+      void*,
+      int,
+      MPI_Datatype,
+      MPI_Comm);
+  int (*all_to_all)(
       const void*,
       int,
       MPI_Datatype,
@@ -477,7 +486,18 @@ class MPIGroup : public GroupImpl {
   }
 
   void all_to_all(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[mpi] all_to_all not yet implemented.");
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch(
+        mpi().all_to_all,
+        input.data<void>(),
+        input.size() / size(),
+        mpi().datatype(input),
+        output.data<void>(),
+        output.size() / size(),
+        mpi().datatype(output),
+        comm_);
   }
 
  private:

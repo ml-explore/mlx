@@ -387,7 +387,10 @@ class NCCLGroup : public GroupImpl {
   }
 
   void all_to_all(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[nccl] all_to_all not yet implemented.");
+    detail::dispatch_dtype(input, [&](auto type_tag, ncclDataType_t dt) {
+      using T = typename decltype(type_tag)::type;
+      all_to_all_impl<T>(input, output, stream, dt);
+    });
   }
 
   template <typename T>
@@ -426,6 +429,38 @@ class NCCLGroup : public GroupImpl {
         op,
         comm_->comm,
         encoder.stream()));
+  }
+
+  template <typename T>
+  void all_to_all_impl(
+      const array& input,
+      array& output,
+      Stream stream,
+      ncclDataType_t dt) {
+    auto& encoder = cu::get_command_encoder(stream);
+
+    size_t chunk = input.size() / size_;
+    const T* send_ptr = gpu_ptr<T>(input);
+    T* recv_ptr = gpu_ptr<T>(output);
+
+#if defined(NCCL_VERSION_CODE) && NCCL_VERSION_CODE >= NCCL_VERSION(2, 28, 3)
+    // Native all-to-all collective (NCCL >= 2.28.3). Each rank sends `chunk`
+    // values to every peer, taken from send_ptr + r * chunk, and receives
+    // peer r's chunk into recv_ptr + r * chunk.
+    CHECK_NCCL(ncclAlltoAll(
+        send_ptr, recv_ptr, chunk, dt, comm_->comm, encoder.stream()));
+#else
+    // Fallback for older NCCL: express all-to-all as a group of paired
+    // send/recv operations, one per peer.
+    CHECK_NCCL(ncclGroupStart());
+    for (int r = 0; r < size_; r++) {
+      CHECK_NCCL(ncclSend(
+          send_ptr + r * chunk, chunk, dt, r, comm_->comm, encoder.stream()));
+      CHECK_NCCL(ncclRecv(
+          recv_ptr + r * chunk, chunk, dt, r, comm_->comm, encoder.stream()));
+    }
+    CHECK_NCCL(ncclGroupEnd());
+#endif
   }
 
   int rank_;
