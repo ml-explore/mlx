@@ -3352,9 +3352,14 @@ array matmul(
   }
 
   // We can batch the multiplication by reshaping a
-  if (in_a.ndim() > 2 && in_b.ndim() <= 2) {
+  bool flattened_a = false;
+
+  // Avoid flatten/unflatten during dynamic tracing because unflatten stores the
+  // trace-time shape, which breaks shapeless replay with dynamic batch sizes.
+  if (in_a.ndim() > 2 && in_b.ndim() <= 2 && !detail::in_dynamic_tracing()) {
     a = flatten(a, 0, -2, s);
-  } else if (in_b.ndim() > 2) {
+    flattened_a = true;
+  } else if (in_a.ndim() > 2 || in_b.ndim() > 2) {
     std::tie(a, b) = broadcast_arrays(a, b, {-2, -1}, s);
   }
 
@@ -3366,7 +3371,8 @@ array matmul(
       out_type,
       std::make_shared<Matmul>(to_stream(s)),
       {a, b});
-  if (in_a.ndim() > 2 && in_b.ndim() <= 2) {
+
+  if (flattened_a) {
     auto orig_shape = in_a.shape();
     orig_shape.pop_back();
     out = unflatten(out, 0, std::move(orig_shape), s);
