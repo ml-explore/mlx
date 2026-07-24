@@ -2290,6 +2290,22 @@ class TestOps(mlx_tests.MLXTestCase):
             expected = mx.repeat(expected[:, None], 2, axis=1)
             self.assertTrue(mx.array_equal(expected, out))
 
+        # Low-precision float scans must accumulate in higher precision so a long
+        # scan does not stall once the running value's ULP exceeds the increment.
+        # Pinned to the CPU stream (the accumulator widening lives there); on the
+        # unpatched CPU backend a float16 cumsum of ones saturates at 2048 and a
+        # bfloat16 one at 256.
+        for t, rtol in [(mx.float16, 3e-3), (mx.bfloat16, 1e-2)]:
+            for s in [4096, 5000, 20000]:
+                out = mx.cumsum(mx.ones((s,), t), stream=mx.cpu)
+                self.assertTrue(
+                    mx.allclose(out[-1], mx.array(s, t), rtol=rtol),
+                    msg=f"{t} cumsum of {s} ones stalled at {out[-1].item()}",
+                )
+                # non-contiguous (strided) scan over a non-last axis
+                out = mx.cumsum(mx.ones((s, 3), t), axis=0, stream=mx.cpu)
+                self.assertTrue(mx.allclose(out[-1], mx.full((3,), s, t), rtol=rtol))
+
         # Test donation
         def fn(its):
             x = mx.ones((32,))
