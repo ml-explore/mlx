@@ -335,7 +335,6 @@ array cholesky(
     const array& a,
     bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
-  check_cpu_stream(s, "[linalg::cholesky]");
   check_float(a.dtype(), "[linalg::cholesky]");
   if (a.ndim() < 2) {
     std::ostringstream msg;
@@ -350,6 +349,7 @@ array cholesky(
         "[linalg::cholesky] Cholesky decomposition is only defined for square "
         "matrices.");
   }
+
   return array(
       a.shape(),
       a.dtype(),

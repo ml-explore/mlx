@@ -276,6 +276,58 @@ class TestLinalg(mlx_tests.MLXTestCase):
         for M, L in zip(AB, Ls):
             self.assertTrue(mx.allclose(L @ L.T, M, rtol=1e-5, atol=1e-7))
 
+    def test_cholesky_gpu(self):
+        if not mx.is_available(mx.gpu):
+            return
+        mx.random.seed(7)
+
+        # Sizes cover the 32-column panel and 512-column strip boundaries of
+        # the blocked factorization (multiples, non-multiples, and sizes
+        # smaller than one panel), with single and batched inputs.
+        for batch, n in [
+            (8, 8),
+            (600, 32),
+            (600, 48),
+            (300, 96),
+            (150, 200),
+            (120, 256),
+            (1, 1024),
+            (2, 1300),
+            (1, 2048),
+        ]:
+            X = mx.random.normal((batch, n, n))
+            A = X @ X.swapaxes(-1, -2) + n * mx.eye(n)
+            for upper in (False, True):
+                L = mx.linalg.cholesky(A, upper=upper, stream=mx.gpu)
+                rec = L.swapaxes(-1, -2) @ L if upper else L @ L.swapaxes(-1, -2)
+                self.assertTrue(mx.allclose(rec, A, rtol=1e-4, atol=1e-4))
+                # The other triangle is exactly zero
+                if upper:
+                    self.assertTrue(mx.all(L == mx.triu(L)))
+                else:
+                    self.assertTrue(mx.all(L == mx.tril(L)))
+
+        # Non-contiguous input
+        X = mx.random.normal((2, 128, 128))
+        A = X @ X.swapaxes(-1, -2) + 128 * mx.eye(128)
+        At = mx.swapaxes(A, -1, -2)
+        L = mx.linalg.cholesky(At, stream=mx.gpu)
+        Lc = mx.linalg.cholesky(At, stream=mx.cpu)
+        self.assertTrue(mx.allclose(L, Lc, rtol=1e-4, atol=1e-4))
+
+        # float64 is not supported on the GPU; the op does not fall back to the
+        # CPU, so a GPU stream raises.
+        Ad = mx.eye(8, dtype=mx.float64, stream=mx.cpu)
+        with self.assertRaises(ValueError):
+            mx.eval(mx.linalg.cholesky(Ad, stream=mx.gpu))
+
+        # Zero-size inputs
+        for shape in [(0, 4, 4), (3, 0, 0)]:
+            for stream in (mx.cpu, mx.gpu):
+                L = mx.linalg.cholesky(mx.zeros(shape), stream=stream)
+                mx.eval(L)
+                self.assertEqual(L.shape, shape)
+
     def test_pseudo_inverse(self):
         A = mx.array([[1, 2, 3], [6, -5, 4], [-9, 8, 7]], dtype=mx.float32)
         A_plus = mx.linalg.pinv(A, stream=mx.cpu)

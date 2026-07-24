@@ -33,7 +33,7 @@ void cholesky_impl(const array& a, array& factor, bool upper, Stream stream) {
                     N = a.shape(-1),
                     size = a.size()]() mutable {
     char uplo = (upper) ? 'L' : 'U';
-    size_t num_matrices = size / (N * N);
+    size_t num_matrices = (N > 0) ? size / (size_t(N) * N) : 0;
     for (int i = 0; i < num_matrices; i++) {
       // Compute Cholesky factorization.
       int info;
