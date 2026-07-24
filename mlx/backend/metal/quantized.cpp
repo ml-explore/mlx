@@ -785,7 +785,7 @@ void qmm(
     const Stream& s,
     const std::string& mode) {
   if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
-      (env::enable_tf32() || x.dtype() != float32)) {
+      (x.dtype() != float32 || env::tf32_active_for_fp32("quantized matmul"))) {
     return qmm_nax(
         /* const array& x = */ x,
         /* const array& w = */ w,
@@ -980,7 +980,7 @@ void gather_qmm(
     const Stream& s,
     const std::string& mode) {
   if (metal::is_nax_available() && transpose && (K % 64 == 0) &&
-      (env::enable_tf32() || x.dtype() != float32)) {
+      (x.dtype() != float32 || env::tf32_active_for_fp32("quantized matmul"))) {
     return gather_qmm_nax(
         /* const array& x = */ x,
         /* const array& w = */ w,
@@ -1325,7 +1325,7 @@ void gather_qmm_rhs(
     const Stream& s,
     const std::string mode) {
   if (metal::is_nax_available() && transpose &&
-      (env::enable_tf32() || x_.dtype() != float32)) {
+      (x_.dtype() != float32 || env::tf32_active_for_fp32("quantized matmul"))) {
     return gather_qmm_rhs_nax(
         /* const array& x_ = */ x_,
         /* const array& w_ = */ w_,

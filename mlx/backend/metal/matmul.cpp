@@ -915,7 +915,7 @@ void steel_matmul_axpby(
   int64_t matrix_size = static_cast<int64_t>(M) * N;
   bool use_nax = metal::is_nax_available() &&
       !issubdtype(a.dtype(), complexfloating) &&
-      (env::enable_tf32() || a.dtype() != float32);
+      (a.dtype() != float32 || env::tf32_active_for_fp32());
   char devc = d.get_architecture().back();
   int min_tmn_threshold = (devc == 's' || devc == 'd') ? 2048 : 1024;
 
@@ -2777,7 +2777,7 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // matmuls and reuse reading a and b.
   if (M == 1 && right_sorted_ == true) {
     if (metal::is_nax_available() &&
-        (env::enable_tf32() || a.dtype() != float32)) {
+        (a.dtype() != float32 || env::tf32_active_for_fp32())) {
       return gather_mm_rhs_nax(a, b, rhs_indices, out, d, s);
     }
     gather_mm_rhs(a, b, rhs_indices, out, d, s);
@@ -2856,7 +2856,7 @@ void segmented_mm(
   GEMM_TPARAM_MACRO(devc)
 
   bool use_nax = metal::is_nax_available() &&
-      (env::enable_tf32() || out.dtype() != float32);
+      (out.dtype() != float32 || env::tf32_active_for_fp32());
 
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
