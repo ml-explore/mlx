@@ -84,6 +84,21 @@ inline array ensure_row_contiguous_matrix(
 inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
   auto arch_size = d.get_architecture().back();
   auto arch_gen = d.get_architecture_gen();
+  // M5-generation GPUs run the qmv_wide kernels efficiently at larger row
+  // counts than the generic fallback assumes. Measured on M5 Max (g17s),
+  // 4-bit and 8-bit affine weights (group_size 64), D=8192 with
+  // O in {1024, 8192, 28672, 250112}: qmv_wide is ~18% faster than the qmm
+  // path at M=12 and still ahead at M=16. This mostly benefits speculative
+  // decoding verification (see #3553 for the small-M step it mitigates).
+  if (arch_gen >= 17 && arch_size != 'd') {
+    if (D <= 2048 && O <= 2048) {
+      return 18;
+    } else if (D <= 4096 && O <= 4096) {
+      return 12;
+    } else {
+      return 16;
+    }
+  }
   if (arch_gen == 13 || arch_gen == 14) {
     switch (arch_size) {
       case 'd':
