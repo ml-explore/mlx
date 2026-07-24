@@ -807,7 +807,10 @@ void qmm(
 
   int wm = 2;
   int wn = 2;
-  int bm = 32;
+  // #3852: M past the qmv batch-limit falls into qmm's smallest (32-row) tile,
+  // so M=10..32 all pay the 32-row price. A 16-row tile recovers M in [limit,16].
+  bool small_bm = (mode == "affine") && (M <= 16);
+  int bm = small_bm ? 16 : 32;
   int bn = 32;
   MTL::Size group_dims(32, wn, wm);
   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
@@ -827,22 +830,30 @@ void qmm(
       bits,
       transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
       batched ? "_batch_1" : "_batch_0");
+  if (small_bm) {
+    concatenate(kname, "_bm_", bm);
+  }
   std::string template_def;
   MTL::ComputePipelineState* kernel;
   if (transpose) {
-    kernel = get_quantized_kernel_wrapped(
-        d,
-        kname,
-        "qmm_t",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        aligned,
-        batched);
+    if (small_bm) {
+      kernel = get_quantized_kernel_wrapped(
+          d, kname, "qmm_t", mode, type_string, group_size, bits, aligned,
+          batched, bm, 32, 32);
+    } else {
+      kernel = get_quantized_kernel_wrapped(
+          d, kname, "qmm_t", mode, type_string, group_size, bits, aligned,
+          batched);
+    }
   } else {
-    kernel = get_quantized_kernel_wrapped(
-        d, kname, "qmm_n", mode, type_string, group_size, bits, batched);
+    if (small_bm) {
+      kernel = get_quantized_kernel_wrapped(
+          d, kname, "qmm_n", mode, type_string, group_size, bits, batched, bm,
+          32, 32);
+    } else {
+      kernel = get_quantized_kernel_wrapped(
+          d, kname, "qmm_n", mode, type_string, group_size, bits, batched);
+    }
   }
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
