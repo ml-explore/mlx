@@ -9,7 +9,9 @@
 #include "mlx/backend/metal/kernels/steel/defines.h"
 #include "mlx/backend/metal/kernels/steel/utils/integral_constant.h"
 
+#if __has_include(<MetalPerformancePrimitives/MetalPerformancePrimitives.h>)
 #include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
+#endif
 
 using namespace metal;
 
