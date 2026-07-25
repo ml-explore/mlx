@@ -15,6 +15,11 @@ def _defaults_for_mode(mode, group_size, bits):
         "nvfp4": (16, 4),
         "mxfp8": (32, 8),
     }
+    if mode not in mode_defaults:
+        raise ValueError(
+            f"Invalid quantization mode '{mode}'. "
+            f"Valid modes are: {', '.join(mode_defaults)}."
+        )
     default_group_size, default_bits = mode_defaults[mode]
     return group_size or default_group_size, bits or default_bits
 
