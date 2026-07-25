@@ -214,9 +214,11 @@ class MeshImpl {
 
     // Counters to maintain the state of transfers
     int in_flight = 0;
-    int read_offset = 0;
+    // Byte offsets into a payload sized by the int64_t `total`, so they have
+    // to be 64-bit as well or they wrap past 2GB per rank.
+    int64_t read_offset = 0;
     int completed_send_count[PIPELINE] = {0};
-    int write_offset[MESH_MAX_PEERS] = {0};
+    int64_t write_offset[MESH_MAX_PEERS] = {0};
 
     // Prefill the pipeline
     int buff = 0;
