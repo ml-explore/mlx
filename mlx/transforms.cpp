@@ -1,5 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <algorithm>
+#include <bit>
+#include <cstdint>
 #include <deque>
 #include <future>
 #include <numeric>
@@ -58,6 +60,145 @@ class Synchronizer : public Primitive {
   DEFINE_NAME(Synchronize);
 };
 
+namespace {
+
+// Flat open-addressing id→degree map for the eval walk.
+// The DFS degree pass and BFS tape build below perform several map
+// operations per graph edge on every eval call; std::unordered_map's
+// node allocation and bucket indirection dominated that walk in
+// profiles. Linear probing over a power-of-two slot array keeps the
+// walk cache-resident. The map is only ever probed by key
+// (find/insert/erase), never iterated, so traversal order is unchanged.
+class EvalDegreeMap {
+ public:
+  EvalDegreeMap() : slots_(kInitialCapacity), mask_(kInitialCapacity - 1) {}
+
+  bool empty() const {
+    return size_ == 0;
+  }
+
+  int* find(std::uintptr_t key) {
+    size_t i = probe_start(key);
+    while (true) {
+      auto& slot = slots_[i & mask_];
+      if (slot.state == kEmpty) {
+        return nullptr;
+      }
+      if (slot.state == kFull && slot.key == key) {
+        return &slot.value;
+      }
+      ++i;
+    }
+  }
+
+  // Insert value only if key is absent (unordered_map::insert semantics).
+  void put_if_absent(std::uintptr_t key, int value) {
+    find_or_insert(key, value);
+  }
+
+  // Access-or-insert with a zero value (unordered_map::operator[]
+  // semantics).
+  int& operator[](std::uintptr_t key) {
+    return find_or_insert(key, 0);
+  }
+
+  void erase(std::uintptr_t key) {
+    size_t i = probe_start(key);
+    while (true) {
+      auto& slot = slots_[i & mask_];
+      if (slot.state == kEmpty) {
+        return;
+      }
+      if (slot.state == kFull && slot.key == key) {
+        slot.state = kTombstone;
+        --size_;
+        ++tombstones_;
+        return;
+      }
+      ++i;
+    }
+  }
+
+ private:
+  static constexpr size_t kInitialCapacity = 256;
+  static constexpr uint8_t kEmpty = 0;
+  static constexpr uint8_t kFull = 1;
+  static constexpr uint8_t kTombstone = 2;
+
+  struct Slot {
+    std::uintptr_t key{0};
+    int value{0};
+    uint8_t state{kEmpty};
+  };
+
+  // Shared probe loop for put_if_absent and operator[]: returns the value
+  // slot for key, inserting init if absent. Existing values are never
+  // overwritten.
+  int& find_or_insert(std::uintptr_t key, int init) {
+    if ((size_ + tombstones_) * 10 >= capacity() * 7) {
+      rehash(capacity() * 2);
+    }
+    size_t first_tombstone = SIZE_MAX;
+    size_t i = probe_start(key);
+    while (true) {
+      auto& slot = slots_[i & mask_];
+      if (slot.state == kEmpty) {
+        size_t at = first_tombstone != SIZE_MAX ? first_tombstone : (i & mask_);
+        auto& dst = slots_[at];
+        dst.state = kFull;
+        dst.key = key;
+        dst.value = init;
+        ++size_;
+        if (first_tombstone != SIZE_MAX) {
+          --tombstones_;
+        }
+        return dst.value;
+      }
+      if (slot.state == kTombstone) {
+        if (first_tombstone == SIZE_MAX) {
+          first_tombstone = i & mask_;
+        }
+      } else if (slot.key == key) {
+        return slot.value;
+      }
+      ++i;
+    }
+  }
+
+  size_t capacity() const {
+    return mask_ + 1;
+  }
+
+  size_t probe_start(std::uintptr_t key) const {
+    // Fibonacci hashing — array ids are 16-byte-aligned pointers.
+    return static_cast<size_t>(key * 0x9E3779B97F4A7C15ull) >>
+        std::countl_zero(mask_);
+  }
+
+  void rehash(size_t new_capacity) {
+    std::vector<Slot> old = std::move(slots_);
+    slots_ = std::vector<Slot>(new_capacity);
+    mask_ = new_capacity - 1;
+    tombstones_ = 0;
+    for (auto& slot : old) {
+      if (slot.state == kFull) {
+        size_t i = probe_start(slot.key);
+        while (slots_[i & mask_].state == kFull) {
+          ++i;
+        }
+        slots_[i & mask_] = slot;
+      }
+    }
+  }
+
+  std::vector<Slot> slots_;
+  size_t mask_{0};
+  size_t size_{0};
+  size_t tombstones_{0};
+};
+
+} // namespace
+
 // Initialize the static tracing members from transforms_impl.h
 //
 // These are used to implement the in_tracing() function the returns true if we
@@ -109,7 +250,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
 
   {
     // Record the degree of each input
-    std::unordered_map<std::uintptr_t, int> cache;
+    EvalDegreeMap cache;
 
     std::stack<std::pair<std::reference_wrapper<array>, int>> dfs;
     dfs.emplace(synchronizer, 0);
@@ -154,15 +295,15 @@ array eval_impl(std::vector<array> outputs, bool async) {
         }
 
         // All siblings have the same degree
-        auto cache_it = cache.find(in.id());
-        if (cache_it == cache.end()) {
+        auto* degree = cache.find(in.id());
+        if (degree == nullptr) {
           dfs.emplace(in, 0);
-          cache.insert({in.id(), 1});
+          cache.put_if_absent(in.id(), 1);
           for (auto& s : in.siblings()) {
-            cache.insert({s.id(), 1});
+            cache.put_if_absent(s.id(), 1);
           }
         } else {
-          cache_it->second++;
+          ++*degree;
           for (auto& s : in.siblings()) {
             cache[s.id()]++;
           }
@@ -203,10 +344,10 @@ array eval_impl(std::vector<array> outputs, bool async) {
           break;
         }
 
-        auto it = cache.find(in.id());
-        it->second -= 1;
+        auto* degree = cache.find(in.id());
+        *degree -= 1;
 
-        if (it->second != 0) {
+        if (*degree != 0) {
           for (auto& s : in.siblings()) {
             cache[s.id()] -= 1;
           }
@@ -214,7 +355,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
         }
 
         // Remove input and siblings from cache
-        cache.erase(it);
+        cache.erase(in.id());
         for (auto& s : in.siblings()) {
           cache.erase(s.id());
         }
@@ -225,32 +366,48 @@ array eval_impl(std::vector<array> outputs, bool async) {
   }
 
   std::set<Stream> open_streams;
+  // Per-stream set/map lookups hoisted out of the per-node path — decode
+  // evaluates hundreds of nodes back-to-back on a single stream. Stream
+  // indices are non-negative, so -1 is a safe "no stream yet" sentinel.
+  int last_stream_index = -1;
+  Event* cur_event = nullptr;
+  // needs_fence is fully built by the degree pass above and stays empty in
+  // the common single-stream case — skip the per-input hash lookups
+  // entirely then.
+  const bool check_fences = !needs_fence.empty();
   while (!tape.empty()) {
     auto arr = std::move(tape.back());
     tape.pop_back();
 
     auto stream = arr.primitive().stream();
-    open_streams.insert(stream);
+    if (stream.index != last_stream_index) {
+      last_stream_index = stream.index;
+      open_streams.insert(stream);
+      if (async) {
+        // Lookup corresponding event
+        auto e = events.find(stream.index);
+        if (e == events.end()) {
+          e = events.emplace(stream.index, Event{stream}).first;
+        }
+        cur_event = &e->second;
+      }
+    }
 
     if (async) {
-      // Lookup corresponding event
-      auto e = events.find(stream.index);
-      if (e == events.end()) {
-        e = events.emplace(stream.index, Event{stream}).first;
-      }
-      e->second.set_value(1);
-      arr.attach_event(e->second);
+      cur_event->set_value(1);
+      arr.attach_event(*cur_event);
       for (auto& s : arr.siblings()) {
-        s.attach_event(e->second);
+        s.attach_event(*cur_event);
       }
     }
 
     for (auto& in : arr.inputs()) {
-      if (auto it = needs_fence.find(in.id()); it != needs_fence.end()) {
+      auto nf_it = check_fences ? needs_fence.find(in.id()) : needs_fence.end();
+      if (nf_it != needs_fence.end()) {
         // Use fence to wait within a single eval
         // Get the input array's stream fence and wait on the
         // output arrays stream
-        fences[it->second.first].wait(stream, in);
+        fences[nf_it->second.first].wait(stream, in);
       } else if (in.event().valid()) {
         if (in.event().is_signaled()) {
           in.detach_event();
@@ -283,15 +440,19 @@ array eval_impl(std::vector<array> outputs, bool async) {
       }
     }
 
-    auto maybe_update_fence = [&fences, &needs_fence, stream](const array& a) {
-      if (auto nf = needs_fence.find(a.id()); nf != needs_fence.end()) {
-        auto it = fences.find(stream.index);
-        if (it == fences.end()) {
-          it = fences.emplace(stream.index, Fence{stream}).first;
-        }
-        it->second.update(stream, a, nf->second.second);
-      }
-    };
+    auto maybe_update_fence =
+        [&fences, &needs_fence, stream, check_fences](const array& a) {
+          if (!check_fences) {
+            return;
+          }
+          if (auto nf = needs_fence.find(a.id()); nf != needs_fence.end()) {
+            auto it = fences.find(stream.index);
+            if (it == fences.end()) {
+              it = fences.emplace(stream.index, Fence{stream}).first;
+            }
+            it->second.update(stream, a, nf->second.second);
+          }
+        };
 
     arr.set_status(array::Status::evaluated);
     // TODO Maybe always want the fence coherent kernel in the same cbuf
