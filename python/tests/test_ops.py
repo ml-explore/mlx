@@ -3298,6 +3298,104 @@ class TestOps(mlx_tests.MLXTestCase):
         expected[1:, 2:, 3:] = update
         self.assertTrue(mx.array_equal(expected, out))
 
+    def test_dynamic_slicing_start_is_clamped(self):
+        # A runtime (array) start is applied as sum(start[i] * stride[i]) with
+        # no bounds check, so an out of range start reads and writes outside
+        # the array: on CPU it faults, on Metal it silently touches whatever
+        # else is in the heap. Starts now clamp into range so the window stays
+        # inside the operand, matching XLA's dynamic-slice. Both backends are
+        # exercised explicitly because MLXTestCase only switches device via the
+        # DEVICE environment variable, and the signedness half of this lives in
+        # the CPU backend. The gpu leg covers whichever GPU backend is built,
+        # Metal or CUDA.
+        devices = [mx.cpu]
+        if mx.metal.is_available() or mx.cuda.is_available():
+            devices.append(mx.gpu)
+
+        big = 1 << 30
+        x = mx.arange(16).reshape(4, 4)
+        y = mx.arange(60).reshape(3, 4, 5)
+        z = mx.arange(42).reshape(6, 7)
+
+        for dev in devices:
+            # Read, window (2, 2): valid starts are 0..2 on both axes.
+            for start, lo in (
+                ([99, 99], [2, 2]),
+                ([4, 4], [2, 2]),
+                ([-1, -1], [0, 0]),
+                ([big, big], [2, 2]),
+                ([-big, 0], [0, 0]),
+            ):
+                with self.subTest(device=dev, op="slice", start=start):
+                    out = mx.slice(x, mx.array(start), (0, 1), (2, 2), stream=dev)
+                    self.assertTrue(
+                        mx.array_equal(out, x[lo[0] : lo[0] + 2, lo[1] : lo[1] + 2])
+                    )
+
+            # Only some axes carry a start; the rest stay at zero.
+            with self.subTest(device=dev, op="slice_partial_axes"):
+                out = mx.slice(y, mx.array([99, -1]), (0, 2), (2, 4, 3), stream=dev)
+                self.assertTrue(mx.array_equal(out, y[1:3, 0:4, 0:3]))
+
+            # Window covers the whole axis, so the only valid start is zero.
+            with self.subTest(device=dev, op="slice_full_window"):
+                for start in ([1, 1], [-1, -1], [big, big]):
+                    out = mx.slice(z, mx.array(start), (0, 1), (6, 7), stream=dev)
+                    self.assertTrue(mx.array_equal(out, z))
+
+            # The clamp must respect the start dtype's signedness: a negative
+            # signed start clamps to zero, a large unsigned one to the far end.
+            for dt in (mx.int8, mx.int16, mx.int32, mx.int64):
+                with self.subTest(device=dev, op="slice_signed", dtype=dt):
+                    out = mx.slice(
+                        x, mx.array([-1, -1], dtype=dt), (0, 1), (2, 2), stream=dev
+                    )
+                    self.assertTrue(mx.array_equal(out, x[0:2, 0:2]))
+            for dt in (mx.uint8, mx.uint16, mx.uint32, mx.uint64):
+                with self.subTest(device=dev, op="slice_unsigned", dtype=dt):
+                    out = mx.slice(
+                        x, mx.array([200, 200], dtype=dt), (0, 1), (2, 2), stream=dev
+                    )
+                    self.assertTrue(mx.array_equal(out, x[2:4, 2:4]))
+
+            # An out of range update lands at the clamped position and must not
+            # touch memory outside the destination.
+            neighbour = mx.full((1 << 14,), 12345, dtype=mx.int32)
+            dst = mx.zeros((8, 8), dtype=mx.int32)
+            mx.eval(neighbour, dst)
+            before = np.array(neighbour)
+            for start, lo in (
+                ([8, 8], [7, 7]),
+                ([100, 0], [7, 0]),
+                ([-1, -1], [0, 0]),
+                ([big, big], [7, 7]),
+                ([-big, -big], [0, 0]),
+            ):
+                with self.subTest(device=dev, op="slice_update", start=start):
+                    out = mx.slice_update(
+                        dst,
+                        mx.full((1, 1), 7, dtype=mx.int32),
+                        mx.array(start),
+                        (0, 1),
+                        stream=dev,
+                    )
+                    mx.eval(out)
+                    self.assertEqual(np.argwhere(np.array(out) == 7).tolist(), [lo])
+            self.assertTrue(np.array_equal(np.array(neighbour), before))
+
+            # The gradient has to land on the same clamped window as the
+            # forward pass; the vjp rebuilds a dynamic slice with that start.
+            with self.subTest(device=dev, op="grad"):
+                xf = x.astype(mx.float32)
+                g = mx.grad(
+                    lambda a: mx.sum(
+                        mx.slice(a, mx.array([99, 99]), (0, 1), (2, 2), stream=dev)
+                    )
+                )(xf)
+                expected = np.zeros((4, 4), dtype=np.float32)
+                expected[2:4, 2:4] = 1.0
+                self.assertTrue(np.array_equal(np.array(g), expected))
+
     def test_broadcast_arrays(self):
         a = mx.array(1)
         b = mx.array(1.0)

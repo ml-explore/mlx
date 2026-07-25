@@ -32,6 +32,7 @@ static std::pair<array, bool> compute_dynamic_offset(
     const array& indices,
     const Strides& strides,
     const std::vector<int>& axes,
+    const std::vector<int>& max_starts,
     Stream stream) {
   array offset({1}, int64, nullptr, {});
   bool donate = indices.is_donatable() &&
@@ -45,28 +46,56 @@ static std::pair<array, bool> compute_dynamic_offset(
   auto& encoder = cpu::get_command_encoder(stream);
   encoder.set_input_array(indices);
   encoder.set_output_array(offset);
-  auto compute_offset =
-      [strides, axes, offset = offset.data<int64_t>()](const auto* indices) {
-        int64_t offset_ = 0;
-        for (int i = 0; i < axes.size(); ++i) {
-          offset_ += indices[i] * strides[axes[i]];
-        }
-        offset[0] = offset_;
-      };
+  auto compute_offset = [strides, axes, max_starts,
+                         offset = offset.data<int64_t>()](const auto* indices) {
+    int64_t offset_ = 0;
+    for (int i = 0; i < axes.size(); ++i) {
+      // Clamp so the slice stays inside the operand, as XLA's dynamic-slice
+      // does. Unclamped this offset addresses memory outside the array. The
+      // comparison happens in the index's own type so that neither a negative
+      // signed start nor a large unsigned one clamps to the wrong end.
+      using T = std::decay_t<decltype(indices[i])>;
+      auto hi = static_cast<uint64_t>(max_starts[i]);
+      int64_t idx;
+      if constexpr (std::is_signed_v<T>) {
+        idx = indices[i] < 0 ? 0
+            : (static_cast<uint64_t>(indices[i]) > hi
+                   ? max_starts[i]
+                   : static_cast<int64_t>(indices[i]));
+      } else {
+        idx = static_cast<uint64_t>(indices[i]) > hi
+            ? max_starts[i]
+            : static_cast<int64_t>(indices[i]);
+      }
+      offset_ += idx * strides[axes[i]];
+    }
+    offset[0] = offset_;
+  };
+  // Read signed starts as signed. Reinterpreting them as unsigned turns a
+  // negative start into a large positive one, which clamps to the far end of
+  // the axis instead of to zero.
   switch (indices.dtype()) {
     case int8:
+      encoder.dispatch(compute_offset, indices.data<int8_t>());
+      break;
     case uint8:
       encoder.dispatch(compute_offset, indices.data<uint8_t>());
       break;
     case int16:
+      encoder.dispatch(compute_offset, indices.data<int16_t>());
+      break;
     case uint16:
       encoder.dispatch(compute_offset, indices.data<uint16_t>());
       break;
     case int32:
+      encoder.dispatch(compute_offset, indices.data<int32_t>());
+      break;
     case uint32:
       encoder.dispatch(compute_offset, indices.data<uint32_t>());
       break;
     case int64:
+      encoder.dispatch(compute_offset, indices.data<int64_t>());
+      break;
     case uint64:
       encoder.dispatch(compute_offset, indices.data<uint64_t>());
       break;
@@ -343,8 +372,12 @@ void DynamicSlice::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
   auto& in = inputs[0];
   out.set_data(allocator::malloc(out.nbytes()));
-  auto [in_offset, donated] =
-      compute_dynamic_offset(inputs[1], in.strides(), axes_, stream());
+  std::vector<int> max_starts;
+  for (auto ax : axes_) {
+    max_starts.push_back(in.shape(ax) - out.shape(ax));
+  }
+  auto [in_offset, donated] = compute_dynamic_offset(
+      inputs[1], in.strides(), axes_, max_starts, stream());
   copy_cpu_inplace(
       /* const array& src = */ in,
       /* array& dst = */ out,
@@ -379,8 +412,12 @@ void DynamicSliceUpdate::eval_cpu(
       : CopyType::General;
   copy_cpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
 
-  auto [out_offset, donated] =
-      compute_dynamic_offset(inputs[2], out.strides(), axes_, stream());
+  std::vector<int> max_starts;
+  for (auto ax : axes_) {
+    max_starts.push_back(out.shape(ax) - upd.shape(ax));
+  }
+  auto [out_offset, donated] = compute_dynamic_offset(
+      inputs[2], out.strides(), axes_, max_starts, stream());
   copy_cpu_inplace(
       /* const array& src = */ upd,
       /* array& dst = */ out,

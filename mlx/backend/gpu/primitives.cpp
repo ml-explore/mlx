@@ -92,7 +92,12 @@ void DynamicSlice::eval_gpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc(out.nbytes()));
 
   auto s = stream();
-  auto in_offset = compute_dynamic_offset(start, in.strides(), axes_, s);
+  std::vector<int> max_starts;
+  for (auto ax : axes_) {
+    max_starts.push_back(in.shape(ax) - out.shape(ax));
+  }
+  auto in_offset =
+      compute_dynamic_offset(start, in.strides(), axes_, max_starts, s);
   copy_gpu_inplace(
       /* const array& src = */ in,
       /* array& dst = */ out,
@@ -132,8 +137,12 @@ void DynamicSliceUpdate::eval_gpu(
       : CopyType::General;
   copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, s);
 
-  auto out_offset =
-      compute_dynamic_offset(start_indices, out.strides(), axes_, s);
+  std::vector<int> max_starts;
+  for (auto ax : axes_) {
+    max_starts.push_back(out.shape(ax) - upd.shape(ax));
+  }
+  auto out_offset = compute_dynamic_offset(
+      start_indices, out.strides(), axes_, max_starts, s);
   copy_gpu_inplace(
       /* const array& src = */ upd,
       /* array& dst = */ out,

@@ -49,6 +49,7 @@ array compute_dynamic_offset(
     const array& indices,
     const Strides& strides,
     const std::vector<int>& axes,
+    const std::vector<int>& max_starts,
     const Stream& s) {
   Dtype dtype = indices.dtype();
   int nidx = axes.size();
@@ -73,11 +74,26 @@ array compute_dynamic_offset(
             const T* indices,
             int64_t* offset,
             const __grid_constant__ Strides strides,
-            const __grid_constant__ cuda::std::array<int, NIDX> axes) {
+            const __grid_constant__ cuda::std::array<int, NIDX> axes,
+            const __grid_constant__ cuda::std::array<int, NIDX> max_starts) {
           int64_t acc = 0;
           #pragma unroll
           for (int i = 0; i < NIDX; ++i) {
-            acc += indices[i] * strides[axes[i]];
+            // Clamp so the slice stays inside the operand, as XLA's
+            // dynamic-slice does. Unclamped this offset addresses memory
+            // outside the array entirely. The comparison is done in the
+            // index's own signedness so that neither a negative signed start
+            // nor a large unsigned one clamps to the wrong end of the axis.
+            int64_t hi = static_cast<int64_t>(max_starts[i]);
+            int64_t idx;
+            if constexpr (cuda::std::numeric_limits<T>::is_signed) {
+              int64_t v = static_cast<int64_t>(indices[i]);
+              idx = v < 0 ? 0 : (v > hi ? hi : v);
+            } else {
+              uint64_t v = static_cast<uint64_t>(indices[i]);
+              idx = v > static_cast<uint64_t>(hi) ? hi : static_cast<int64_t>(v);
+            }
+            acc += idx * strides[axes[i]];
           }
           *offset = acc;
         }
@@ -106,6 +122,7 @@ array compute_dynamic_offset(
   args.append(offset);
   args.append_ndim(strides);
   args.append(axes);
+  args.append(max_starts);
 
   auto kernel = mod.get_kernel(kernel_name);
   encoder.add_kernel_node_raw(kernel, 1, 1, {}, 0, args.args());

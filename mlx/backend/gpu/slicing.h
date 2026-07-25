@@ -31,6 +31,7 @@ array compute_dynamic_offset(
     const array& indices,
     const Strides& strides,
     const std::vector<int>& axes,
+    const std::vector<int>& max_starts,
     const Stream& s);
 
 } // namespace mlx::core
