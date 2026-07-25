@@ -497,9 +497,13 @@ class RingGroup : public GroupImpl {
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_input_array(input);
     encoder.set_output_array(output);
+    // Retain both buffers for the lifetime of the queued task. See
+    // mlx/distributed/jaccl/jaccl.cpp for the rationale.
     encoder.dispatch([input_ptr = input.data<char>(),
                       nbytes = input.nbytes(),
                       output_ptr = output.data<char>(),
+                      in_buf = input.data_shared_ptr(),
+                      out_buf = output.data_shared_ptr(),
                       this]() {
       constexpr size_t min_send_size = 262144;
       size_t n_gathers = std::max(
@@ -533,46 +537,50 @@ class RingGroup : public GroupImpl {
   void send(const array& input, int dst, Stream stream) override {
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_input_array(input);
-    encoder.dispatch(
-        [input_ptr = input.data<char>(), nbytes = input.nbytes(), dst, this]() {
-          int right = (rank_ + 1) % size_;
-          int left = (rank_ + size_ - 1) % size_;
-          if (dst == right) {
-            send(sockets_right_, input_ptr, nbytes);
-          } else if (dst == left) {
-            send(sockets_left_, input_ptr, nbytes);
-          } else {
-            std::ostringstream msg;
-            msg << "[ring] Send only supported to direct neighbors "
-                << "but tried to send to " << dst << " from " << rank_
-                << std::endl;
-            throw std::runtime_error(msg.str());
-          }
-        });
+    encoder.dispatch([input_ptr = input.data<char>(),
+                      nbytes = input.nbytes(),
+                      dst,
+                      in_buf = input.data_shared_ptr(),
+                      this]() {
+      int right = (rank_ + 1) % size_;
+      int left = (rank_ + size_ - 1) % size_;
+      if (dst == right) {
+        send(sockets_right_, input_ptr, nbytes);
+      } else if (dst == left) {
+        send(sockets_left_, input_ptr, nbytes);
+      } else {
+        std::ostringstream msg;
+        msg << "[ring] Send only supported to direct neighbors "
+            << "but tried to send to " << dst << " from " << rank_ << std::endl;
+        throw std::runtime_error(msg.str());
+      }
+    });
   }
 
   void recv(array& out, int src, Stream stream) override {
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_output_array(out);
-    encoder.dispatch(
-        [out_ptr = out.data<char>(), nbytes = out.nbytes(), src, this]() {
-          // NOTE: We 'll check the sockets with the opposite order of send so
-          // that they work even with 2 nodes where left and right is the same
-          // neighbor.
-          int right = (rank_ + 1) % size_;
-          int left = (rank_ + size_ - 1) % size_;
-          if (src == left) {
-            recv(sockets_left_, out_ptr, nbytes);
-          } else if (src == right) {
-            recv(sockets_right_, out_ptr, nbytes);
-          } else {
-            std::ostringstream msg;
-            msg << "[ring] Recv only supported from direct neighbors "
-                << "but tried to recv from " << src << " to " << rank_
-                << std::endl;
-            throw std::runtime_error(msg.str());
-          }
-        });
+    encoder.dispatch([out_ptr = out.data<char>(),
+                      nbytes = out.nbytes(),
+                      src,
+                      out_buf = out.data_shared_ptr(),
+                      this]() {
+      // NOTE: We 'll check the sockets with the opposite order of send so
+      // that they work even with 2 nodes where left and right is the same
+      // neighbor.
+      int right = (rank_ + 1) % size_;
+      int left = (rank_ + size_ - 1) % size_;
+      if (src == left) {
+        recv(sockets_left_, out_ptr, nbytes);
+      } else if (src == right) {
+        recv(sockets_right_, out_ptr, nbytes);
+      } else {
+        std::ostringstream msg;
+        msg << "[ring] Recv only supported from direct neighbors "
+            << "but tried to recv from " << src << " to " << rank_ << std::endl;
+        throw std::runtime_error(msg.str());
+      }
+    });
   }
 
   void sum_scatter(const array& input, array& output, Stream stream) override {
@@ -590,7 +598,13 @@ class RingGroup : public GroupImpl {
     auto out_ptr = output.data<char>();
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_output_array(output);
-    encoder.dispatch([in_ptr, out_ptr, size = input.size(), this, reduce_op]() {
+    encoder.dispatch([in_ptr,
+                      out_ptr,
+                      size = input.size(),
+                      in_buf = input.data_shared_ptr(),
+                      out_buf = output.data_shared_ptr(),
+                      this,
+                      reduce_op]() {
       // If the input data cannot be split into size_ segments then copy it and
       // all reduce a local buffer prefilled with 0s.
       size_t nbytes = size * sizeof(T);

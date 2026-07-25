@@ -83,9 +83,16 @@ class JACCLGroup : public GroupImpl {
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_input_array(input);
     encoder.set_output_array(output);
-    encoder.dispatch([in_ptr, out_ptr, n_bytes, dtype, this]() {
-      group_->all_sum(in_ptr, out_ptr, n_bytes, dtype);
-    });
+    // Capture the buffers, not just the raw pointers, so they outlive the
+    // queued task. See all_gather below.
+    encoder.dispatch(
+        [in_ptr,
+         out_ptr,
+         n_bytes,
+         dtype,
+         in_buf = input.data_shared_ptr(),
+         out_buf = output.data_shared_ptr(),
+         this]() { group_->all_sum(in_ptr, out_ptr, n_bytes, dtype); });
   }
 
   void all_max(const array& input, array& output, Stream stream) override {
@@ -96,9 +103,14 @@ class JACCLGroup : public GroupImpl {
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_input_array(input);
     encoder.set_output_array(output);
-    encoder.dispatch([in_ptr, out_ptr, n_bytes, dtype, this]() {
-      group_->all_max(in_ptr, out_ptr, n_bytes, dtype);
-    });
+    encoder.dispatch(
+        [in_ptr,
+         out_ptr,
+         n_bytes,
+         dtype,
+         in_buf = input.data_shared_ptr(),
+         out_buf = output.data_shared_ptr(),
+         this]() { group_->all_max(in_ptr, out_ptr, n_bytes, dtype); });
   }
 
   void all_min(const array& input, array& output, Stream stream) override {
@@ -109,9 +121,14 @@ class JACCLGroup : public GroupImpl {
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_input_array(input);
     encoder.set_output_array(output);
-    encoder.dispatch([in_ptr, out_ptr, n_bytes, dtype, this]() {
-      group_->all_min(in_ptr, out_ptr, n_bytes, dtype);
-    });
+    encoder.dispatch(
+        [in_ptr,
+         out_ptr,
+         n_bytes,
+         dtype,
+         in_buf = input.data_shared_ptr(),
+         out_buf = output.data_shared_ptr(),
+         this]() { group_->all_min(in_ptr, out_ptr, n_bytes, dtype); });
   }
 
   void all_gather(const array& input, array& output, Stream stream) override {
@@ -121,9 +138,18 @@ class JACCLGroup : public GroupImpl {
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_input_array(input);
     encoder.set_output_array(output);
-    encoder.dispatch([in_ptr, out_ptr, n_bytes, this]() {
-      group_->all_gather(in_ptr, out_ptr, n_bytes);
-    });
+    // dispatch only enqueues the lambda, and nothing else keeps the buffers
+    // alive until it runs: set_input_array/set_output_array are no-ops on the
+    // CPU backend, and cpu::eval's keep-alive task holds the inputs but
+    // excludes the output, which the collective allocates here. Capturing the
+    // shared_ptr for both sides pins them for the task's lifetime.
+    encoder.dispatch(
+        [in_ptr,
+         out_ptr,
+         n_bytes,
+         in_buf = input.data_shared_ptr(),
+         out_buf = output.data_shared_ptr(),
+         this]() { group_->all_gather(in_ptr, out_ptr, n_bytes); });
   }
 
   void send(const array& input, int dst, Stream stream) override {
@@ -132,7 +158,9 @@ class JACCLGroup : public GroupImpl {
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_input_array(input);
     encoder.dispatch(
-        [data, n_bytes, dst, this]() { group_->send(data, n_bytes, dst); });
+        [data, n_bytes, dst, buf = input.data_shared_ptr(), this]() {
+          group_->send(data, n_bytes, dst);
+        });
   }
 
   void recv(array& out, int src, Stream stream) override {
@@ -140,8 +168,9 @@ class JACCLGroup : public GroupImpl {
     size_t n_bytes = out.nbytes();
     auto& encoder = cpu::get_command_encoder(stream);
     encoder.set_output_array(out);
-    encoder.dispatch(
-        [data, n_bytes, src, this]() { group_->recv(data, n_bytes, src); });
+    encoder.dispatch([data, n_bytes, src, buf = out.data_shared_ptr(), this]() {
+      group_->recv(data, n_bytes, src);
+    });
   }
 
   void sum_scatter(const array& input, array& output, Stream stream) override {
