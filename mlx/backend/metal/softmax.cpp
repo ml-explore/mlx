@@ -10,8 +10,6 @@
 
 namespace mlx::core {
 
-constexpr int SOFTMAX_LOOPED_LIMIT = 4096;
-
 void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   if (!issubdtype(out.dtype(), floating)) {

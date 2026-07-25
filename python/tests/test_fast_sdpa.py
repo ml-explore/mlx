@@ -500,6 +500,26 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 diff = mx.abs(out - ref) - atol * mx.abs(ref)
                 self.assertLessEqual(mx.max(diff).item(), atol)
 
+    def test_sdpa_ops_fallback_fused_causal_softmax(self):
+        # A bf16 causal mask above the looped-softmax limit, with a head dim
+        # the fast kernels don't cover, takes the fused causal softmax in the
+        # ops fallback. It must be bit-identical to the unfused chain.
+        D = 72
+        for qL, kL in [(4352, 4352), (128, 4480)]:
+            with self.subTest(qL=qL, kL=kL):
+                mx.random.seed(0)
+                q = mx.random.normal(shape=(1, 2, qL, D)).astype(mx.bfloat16)
+                k = mx.random.normal(shape=(1, 2, kL, D)).astype(mx.bfloat16)
+                v = mx.random.normal(shape=(1, 2, kL, D)).astype(mx.bfloat16)
+                scale = 1.0 / math.sqrt(D)
+
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask="causal"
+                )
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask="causal")
+
+                self.assertTrue(mx.array_equal(out, ref))
+
     def test_sdpa_broadcast_mask(self):
         mask = mx.array(True)
         D = 64
