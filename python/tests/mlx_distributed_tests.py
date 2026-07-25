@@ -1,10 +1,12 @@
 # Copyright © 2025 Apple Inc.
 
+import math
+
 import mlx.core as mx
 import mlx.nn as nn
 import mlx_tests
 from mlx.nn.layers.distributed import shard_inplace, shard_linear
-from mlx.nn.utils import average_gradients
+from mlx.nn.utils import average_gradients, clip_grad_norm_sharded
 
 
 class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
@@ -322,3 +324,39 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
             y = mx.distributed.all_gather(x)
             self.assertEqual(y.shape, (world.size() * 2, 2, 4))
             self.assertTrue(mx.all(y == 1))
+
+    def test_clip_grad_norm_sharded(self):
+        world = mx.distributed.init()
+        N = world.size()
+
+        value = 3.0
+        grads_slice = {"a": mx.ones((4, 3)) * value, "b": mx.ones((5,)) * value}
+        local_numel = 4 * 3 + 5
+        expected_norm = math.sqrt(N * local_numel) * value
+
+        clipped, grad_norm = clip_grad_norm_sharded(
+            grads_slice, max_norm=1e9, group=world
+        )
+        mx.eval(clipped, grad_norm)
+        self.assertTrue(
+            mx.allclose(
+                grad_norm, mx.array(expected_norm), atol=self.atol, rtol=self.rtol
+            )
+        )
+        for k in grads_slice:
+            self.assertTrue(
+                mx.allclose(clipped[k], grads_slice[k], atol=self.atol, rtol=self.rtol)
+            )
+
+        max_norm = 1.0
+        clipped, grad_norm = clip_grad_norm_sharded(
+            grads_slice, max_norm=max_norm, group=world
+        )
+        mx.eval(clipped, grad_norm)
+        scale = max_norm / (expected_norm + 1e-6)
+        for k in grads_slice:
+            self.assertTrue(
+                mx.allclose(
+                    clipped[k], grads_slice[k] * scale, atol=self.atol, rtol=self.rtol
+                )
+            )

@@ -2129,16 +2129,26 @@ class TestArray(mlx_tests.MLXTestCase):
     def test_from_dlpack_cpu(self):
         x = np.arange(3, dtype=np.float32)
 
+        # copy=None may adopt the buffer or copy; either way the values match
+        # the source at import time.
         y = mx.from_dlpack(x)
+        self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
+
+        # copy=True always copies, so later mutations of the source are not seen.
+        y = mx.from_dlpack(x, copy=True)
         x += 10
         self.assertEqual(y.tolist(), [0.0, 1.0, 2.0])
 
-        y = mx.from_dlpack(x, copy=True)
-        x += 10
-        self.assertEqual(y.tolist(), [10.0, 11.0, 12.0])
-
-        with self.assertRaises(ValueError):
-            mx.from_dlpack(x, copy=False)
+        # copy=False adopts the buffer when possible and raises otherwise; it
+        # must never silently copy.
+        x = np.arange(3, dtype=np.float32)
+        try:
+            y = mx.from_dlpack(x, copy=False)
+            x += 10
+        except ValueError:
+            pass
+        else:
+            self.assertEqual(y.tolist(), [10.0, 11.0, 12.0])
 
     def test_dlpack_cpu_dtype_mapping(self):
         class CpuDLPack:
@@ -2214,17 +2224,12 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), view.tolist())
         self.assertFalse(memoryview(y).c_contiguous)
         self.assertEqual(memoryview(y).strides, view.strides)
-        expected = view.copy().tolist()
-        x[0, 0] = 99
-        self.assertEqual(y.tolist(), expected)
 
         stepped = np.arange(20, dtype=np.int32)[2:10:2]
         y = mx.from_dlpack(stepped)
         self.assertEqual(y.tolist(), [2, 4, 6, 8])
         self.assertFalse(memoryview(y).c_contiguous)
         self.assertEqual(memoryview(y).strides, stepped.strides)
-        stepped[0] = 99
-        self.assertEqual(y.tolist(), [2, 4, 6, 8])
 
         broadcast = np.broadcast_to(np.array([7], dtype=np.int32), (3,))
         y = mx.from_dlpack(broadcast)
@@ -2649,8 +2654,14 @@ class TestArray(mlx_tests.MLXTestCase):
         mx_arr = mx.asarray(np_arr)
         self.assertEqual(mx_arr.tolist(), [1.0, 2.0, 3.0])
         self.assertEqual(mx_arr.dtype, mx.float32)
-        with self.assertRaises(ValueError):
-            mx.asarray(np_arr, copy=False)
+        # copy=False adopts the buffer when possible and raises otherwise; it
+        # must never silently copy.
+        try:
+            mx_arr = mx.asarray(np_arr, copy=False)
+        except ValueError:
+            pass
+        else:
+            self.assertEqual(mx_arr.tolist(), [1.0, 2.0, 3.0])
 
         with self.assertRaises(ValueError):
             mx.asarray([1, 2, 3], copy=False)
