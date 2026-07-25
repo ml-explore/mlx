@@ -444,20 +444,35 @@ class NCCLGroup : public GroupImpl {
     T* recv_ptr = gpu_ptr<T>(output);
 
 #if defined(NCCL_VERSION_CODE) && NCCL_VERSION_CODE >= NCCL_VERSION(2, 28, 3)
-    // Native all-to-all collective (NCCL >= 2.28.3). Each rank sends `chunk`
-    // values to every peer, taken from send_ptr + r * chunk, and receives
-    // peer r's chunk into recv_ptr + r * chunk.
+    // Native all-to-all collective (NCCL >= 2.28.3).
     CHECK_NCCL(ncclAlltoAll(
         send_ptr, recv_ptr, chunk, dt, comm_->comm, encoder.stream()));
 #else
-    // Fallback for older NCCL: express all-to-all as a group of paired
-    // send/recv operations, one per peer.
+    // Fallback for older NCCL
+    cudaMemcpyAsync(
+        recv_ptr + rank_ * chunk,
+        send_ptr + rank_ * chunk,
+        sizeof(T) * chunk,
+        cudaMemcpyDeviceToDevice,
+        encoder.stream());
     CHECK_NCCL(ncclGroupStart());
-    for (int r = 0; r < size_; r++) {
+    for (int d = 1; d < size_; d++) {
+      int dst = (rank_ + d) % size_;
+      int src = (rank_ + size_ - d) % size_;
       CHECK_NCCL(ncclSend(
-          send_ptr + r * chunk, chunk, dt, r, comm_->comm, encoder.stream()));
+          send_ptr + dst * chunk,
+          chunk,
+          dt,
+          dst,
+          comm_->comm,
+          encoder.stream()));
       CHECK_NCCL(ncclRecv(
-          recv_ptr + r * chunk, chunk, dt, r, comm_->comm, encoder.stream()));
+          recv_ptr + src * chunk,
+          chunk,
+          dt,
+          src,
+          comm_->comm,
+          encoder.stream()));
     }
     CHECK_NCCL(ncclGroupEnd());
 #endif
