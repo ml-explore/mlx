@@ -16,6 +16,7 @@ Layers
    AvgPool3d
    BatchNorm
    Bilinear
+   BitLinear
    CELU
    Conv1d
    Conv2d
