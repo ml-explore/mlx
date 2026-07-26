@@ -841,6 +841,15 @@ METAL_FUNC void tile_matmad_nax(
   constexpr short TK = transpose_b ? BTile::kTileCols : BTile::kTileRows;
   static_assert(TKa == TK, "MXU tile matmul: K dimensions do not match");
 
+  // The branches below cover TN % 2 == 0 and (TN == 1 && TM % 2 == 0) and
+  // nothing else. A tile shape outside both (e.g. TM == 1 && TN == 1) would
+  // discard every branch and compile to a no-op that leaves C untouched,
+  // returning zeros at full speed with no error.
+  static_assert(
+      (TN == 1 && TM % 2 == 0) || TN % 2 == 0,
+      "MXU tile matmul: no implementation for this tile shape; requires "
+      "TN % 2 == 0, or TN == 1 with TM % 2 == 0");
+
   constexpr auto ta = metal::bool_constant<transpose_a>{};
   constexpr auto tb = metal::bool_constant<transpose_b>{};
 
