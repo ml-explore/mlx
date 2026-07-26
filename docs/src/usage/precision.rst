@@ -58,4 +58,7 @@ A few details worth knowing:
   computation that falls back to a composition of ordinary matrix
   products (rather than a fused kernel) inherits the reduced precision
   and is likewise restored by ``MLX_ENABLE_TF32=0``.
-* ``float16`` and ``bfloat16`` inputs are not affected by this setting.
+* ``float16`` and ``bfloat16`` inputs are not affected by this setting:
+  it applies to ``float32`` only. Reduced-precision behaviour involving
+  ``float16`` or ``bfloat16`` inputs, where it exists, has other causes
+  and is not controlled by ``MLX_ENABLE_TF32``.
