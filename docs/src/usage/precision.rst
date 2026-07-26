@@ -10,10 +10,13 @@ matrix-multiplication units:
 
 * On the CUDA backend, cuBLAS and cuDNN are asked for TF32 tensor-core
   math.
-* On Apple silicon with a neural accelerator (the M5 generation), the
-  Metal backend dispatches these operations to accelerator kernels of
-  comparable precision. Earlier Apple silicon (M1–M4) runs them in full
-  ``float32``.
+* On Apple silicon with a neural accelerator (the M5 generation and
+  newer, on macOS 26.2 or later), the Metal backend dispatches these
+  operations to accelerator kernels of comparable precision. Earlier
+  Apple silicon (M1–M4) always runs them in full ``float32``: on those
+  machines ``MLX_ENABLE_TF32`` has no observable effect because the
+  reduced-precision path is never taken, not because the setting is
+  ignored.
 
 TF32-class math keeps the ``float32`` exponent range but rounds the
 significand to about 10 bits, so results carry roughly three decimal
@@ -50,4 +53,9 @@ A few details worth knowing:
 * On the CUDA backend, ``complex64`` matrix products use the same
   reduced-precision path and are likewise restored to full precision by
   ``MLX_ENABLE_TF32=0``.
+* The default applies to anything that lowers to these operations, not
+  only code that calls ``mx.matmul`` directly. For example, an attention
+  computation that falls back to a composition of ordinary matrix
+  products (rather than a fused kernel) inherits the reduced precision
+  and is likewise restored by ``MLX_ENABLE_TF32=0``.
 * ``float16`` and ``bfloat16`` inputs are not affected by this setting.
