@@ -52,6 +52,8 @@ MetalAllocator::MetalAllocator(Device& d)
             if (!buf->heap()) {
               residency_set_.erase(buf);
             }
+            // Called with mutex_ held by all paths that evict from the cache.
+            hist_sub(buf->length());
             auto pool = metal::new_scoped_memory_pool();
             buf->release();
           }) {
@@ -158,6 +160,7 @@ Buffer MetalAllocator::malloc(size_t size) {
     }
     lk.lock();
     num_resources_++;
+    hist_add(buf->length());
     if (!buf->heap()) {
       residency_set_.insert(buf);
     }
@@ -191,6 +194,7 @@ void MetalAllocator::free(Buffer buffer) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
     num_resources_--;
+    hist_sub(buf->length());
     if (!buf->heap()) {
       residency_set_.erase(buf);
     }
@@ -198,6 +202,17 @@ void MetalAllocator::free(Buffer buffer) {
     auto pool = metal::new_scoped_memory_pool();
     buf->release();
   }
+}
+
+std::vector<std::pair<size_t, size_t>> MetalAllocator::get_buffer_histogram() {
+  std::unique_lock lk(mutex_);
+  std::vector<std::pair<size_t, size_t>> out;
+  for (size_t i = 0; i < live_by_class_.size(); ++i) {
+    if (live_by_class_[i] > 0) {
+      out.emplace_back(size_t(1) << i, live_by_class_[i]);
+    }
+  }
+  return out;
 }
 
 size_t MetalAllocator::size(Buffer buffer) const {
@@ -214,6 +229,7 @@ Buffer MetalAllocator::make_buffer(void* ptr, size_t size) {
   active_memory_ += buf->length();
   peak_memory_ = std::max(peak_memory_, active_memory_);
   num_resources_++;
+  hist_add(buf->length());
   return Buffer{static_cast<void*>(buf)};
 }
 
@@ -225,6 +241,7 @@ void MetalAllocator::release(Buffer buffer) {
   std::unique_lock lk(mutex_);
   active_memory_ -= buf->length();
   num_resources_--;
+  hist_sub(buf->length());
   residency_set_.erase(buf);
   lk.unlock();
   auto pool = metal::new_scoped_memory_pool();
@@ -271,6 +288,15 @@ void reset_peak_memory() {
 }
 size_t get_cache_memory() {
   return metal::allocator().get_cache_memory();
+}
+size_t get_active_buffer_count() {
+  return metal::allocator().get_active_buffer_count();
+}
+size_t get_cache_buffer_count() {
+  return metal::allocator().get_cache_buffer_count();
+}
+std::vector<std::pair<size_t, size_t>> get_buffer_histogram() {
+  return metal::allocator().get_buffer_histogram();
 }
 void clear_cache() {
   return metal::allocator().clear_cache();

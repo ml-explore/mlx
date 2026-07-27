@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <array>
 #include <map>
 #include <mutex>
 #include <vector>
@@ -36,6 +37,15 @@ class MetalAllocator : public allocator::Allocator {
   size_t get_cache_memory() {
     return buffer_cache_.cache_size();
   };
+  size_t get_active_buffer_count() {
+    std::unique_lock lk(mutex_);
+    return num_resources_;
+  };
+  size_t get_cache_buffer_count() {
+    std::unique_lock lk(mutex_);
+    return buffer_cache_.count();
+  };
+  std::vector<std::pair<size_t, size_t>> get_buffer_histogram();
   size_t set_cache_limit(size_t limit);
   size_t set_memory_limit(size_t limit);
   size_t get_memory_limit();
@@ -71,6 +81,31 @@ class MetalAllocator : public allocator::Allocator {
   size_t wired_limit_{0};
   size_t num_resources_{0};
   size_t resource_limit_{0};
+
+  // Histogram of live buffer objects by power-of-two size class,
+  // indexed by class exponent (class = 1 << i). A fixed array so the
+  // hot-path update cannot allocate or throw -- a map node allocation
+  // here could fail after newBuffer()/num_resources_++ and desync the
+  // histogram. Tracks the same population as num_resources_. Guarded
+  // by mutex_.
+  std::array<size_t, 64> live_by_class_{};
+
+  static int size_class(size_t size) {
+    int c = 0;
+    while (c < 63 && (size_t(1) << c) < size) {
+      c++;
+    }
+    return c;
+  }
+  void hist_add(size_t size) noexcept {
+    live_by_class_[size_class(size)]++;
+  }
+  void hist_sub(size_t size) noexcept {
+    auto& n = live_by_class_[size_class(size)];
+    if (n > 0) {
+      n--;
+    }
+  }
 
   std::mutex mutex_;
 };

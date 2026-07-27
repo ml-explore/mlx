@@ -3,6 +3,8 @@
 #pragma once
 
 #include <cstdlib>
+#include <utility>
+#include <vector>
 
 #include "mlx/api.h"
 
@@ -32,6 +34,30 @@ MLX_API void reset_peak_memory();
  * to the system allocator.
  * */
 MLX_API size_t get_cache_memory();
+
+/* Get the number of live GPU buffer objects (active + cached).
+ *
+ * On Metal this counts the MTL::Buffer objects created through the allocator
+ * that have not yet been released. This count — not bytes — is what is
+ * checked against the per-process resource limit (~499k on Apple silicon)
+ * in the "[metal::malloc] Resource limit exceeded" error. Returns 0 on
+ * backends without a handle limit.
+ * */
+MLX_API size_t get_active_buffer_count();
+
+/* Get the number of buffer objects currently held by the buffer cache.
+ *
+ * These are included in get_active_buffer_count().
+ * */
+MLX_API size_t get_cache_buffer_count();
+
+/* Get a histogram of live GPU buffer objects bucketed by power-of-two
+ * size class.
+ *
+ * Returns (size_class_upper_bound_bytes, count) pairs sorted by size class.
+ * The counts sum to get_active_buffer_count().
+ * */
+MLX_API std::vector<std::pair<size_t, size_t>> get_buffer_histogram();
 
 /* Set the memory limit.
  * The memory limit is a guideline for the maximum amount of memory to use

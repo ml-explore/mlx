@@ -209,6 +209,15 @@ size_t set_cache_limit(size_t limit) {
 size_t set_wired_limit(size_t) {
   return 0;
 }
+size_t get_active_buffer_count() {
+  return 0;
+}
+size_t get_cache_buffer_count() {
+  return 0;
+}
+std::vector<std::pair<size_t, size_t>> get_buffer_histogram() {
+  return {};
+}
 void clear_cache() {
   allocator::common_allocator().clear_cache();
 }

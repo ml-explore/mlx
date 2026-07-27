@@ -2,6 +2,8 @@
 
 #include "mlx/memory.h"
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/pair.h>
+#include <nanobind/stl/vector.h>
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
@@ -40,6 +42,36 @@ void init_memory(nb::module_& m) {
 
       The cache includes memory not currently used that has not been returned
       to the system allocator.
+      )pbdoc");
+  m.def(
+      "get_active_buffer_count",
+      &mx::get_active_buffer_count,
+      R"pbdoc(
+      Get the number of live GPU buffer objects (active + cached).
+
+      On Metal this counts the ``MTL::Buffer`` objects created through the
+      allocator that have not yet been released. This count -- not bytes --
+      is what is checked against the per-process resource limit (~499k on
+      Apple silicon) in the ``[metal::malloc] Resource limit exceeded``
+      error. Returns 0 on backends without a handle limit.
+      )pbdoc");
+  m.def(
+      "get_cache_buffer_count",
+      &mx::get_cache_buffer_count,
+      R"pbdoc(
+      Get the number of buffer objects currently held by the buffer cache.
+
+      These are included in :func:`get_active_buffer_count`.
+      )pbdoc");
+  m.def(
+      "get_buffer_histogram",
+      &mx::get_buffer_histogram,
+      R"pbdoc(
+      Get a histogram of live GPU buffer objects by power-of-two size class.
+
+      Returns a list of ``(size_class_upper_bound_bytes, count)`` tuples
+      sorted by size class. The counts sum to
+      :func:`get_active_buffer_count`.
       )pbdoc");
   m.def(
       "set_memory_limit",
