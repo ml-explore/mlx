@@ -46,6 +46,11 @@ struct ReductionPlan {
   ReductionPlan(ReductionOpType type_) : type(type_) {}
 };
 
+inline size_t col_reduce_grid_size(size_t reduction_stride, size_t block_size) {
+  return reduction_stride / block_size +
+      static_cast<size_t>(reduction_stride % block_size != 0);
+}
+
 ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes);
 
 std::pair<Shape, Strides> shapes_without_reduction_axes(

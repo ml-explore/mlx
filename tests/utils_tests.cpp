@@ -1,10 +1,32 @@
 // Copyright © 2023 Apple Inc.
 
+#include <limits>
+
 #include "doctest/doctest.h"
 
+#include "mlx/backend/common/reduce.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
+
+TEST_CASE("test col reduce grid size") {
+  constexpr size_t block_size = 32;
+  CHECK_EQ(col_reduce_grid_size(0, block_size), 0);
+  CHECK_EQ(col_reduce_grid_size(1, block_size), 1);
+  CHECK_EQ(col_reduce_grid_size(31, block_size), 1);
+  CHECK_EQ(col_reduce_grid_size(32, block_size), 1);
+  CHECK_EQ(col_reduce_grid_size(33, block_size), 2);
+
+  constexpr size_t failing_reduction_stride = size_t{1} << 29;
+  constexpr size_t threadgroup_size = 256;
+  auto grid_size = col_reduce_grid_size(failing_reduction_stride, block_size);
+  CHECK_EQ(grid_size, size_t{1} << 24);
+  CHECK_EQ(grid_size * threadgroup_size, size_t{1} << 32);
+
+  CHECK_EQ(
+      col_reduce_grid_size(std::numeric_limits<size_t>::max(), block_size),
+      std::numeric_limits<size_t>::max() / block_size + 1);
+}
 
 TEST_CASE("test type promotion") {
   for (auto t : {bool_, uint32, int32, int64, float32}) {
