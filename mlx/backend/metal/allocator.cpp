@@ -7,6 +7,8 @@
 
 #include <mach/vm_page_size.h>
 #include <unistd.h>
+#include <algorithm>
+#include <bit>
 #include <cassert>
 #include <cstdlib>
 
@@ -14,6 +16,35 @@ namespace mlx::core {
 
 constexpr size_t resource_options =
     MTL::ResourceStorageModeShared | MTL::ResourceHazardTrackingModeUntracked;
+
+namespace {
+
+// Round `size` up to a coarse, scale-relative size class for large buffers,
+// so a monotonically GROWING allocation sequence (e.g. per-token KV-cache
+// append built on `concatenate`) reuses the same over-provisioned buffer
+// across several consecutive steps instead of missing BufferCache on every
+// single request. `BufferCache::reuse_from_cache` anchors on
+// `std::multimap::lower_bound(size)`, so it only ever returns a same-or-
+// larger cached buffer -- widening its acceptance window cannot help a
+// strictly growing query sequence, since every already-freed buffer is
+// smaller than the next request by construction. Over-provisioning the
+// actual allocation is the lever that works: within one octave
+// [2^k, 2^(k+1)), granularity is fixed at 2^k/16 (independent of the exact
+// query, so nearby sizes round to the same class), bounding internal
+// fragmentation to <= 1/16 (6.25%) of the class boundary. See
+// https://github.com/ml-explore/mlx/issues/3886.
+constexpr size_t kLargeSizeClassThreshold = 1 << 20; // 1 MiB
+
+size_t round_to_size_class(size_t size) {
+  if (size < kLargeSizeClassThreshold) {
+    return size;
+  }
+  int octave = std::bit_width(size) - 1; // 2^octave <= size < 2^(octave + 1)
+  size_t step = size_t(1) << (octave - 4); // octave width / 16
+  return step * ((size + step - 1) / step);
+}
+
+} // namespace
 
 namespace allocator {
 
@@ -124,6 +155,12 @@ Buffer MetalAllocator::malloc(size_t size) {
   if (size > vm_page_size) {
     size = vm_page_size * ((size + vm_page_size - 1) / vm_page_size);
   }
+  // Never round past the device's hard ceiling -- the size checked against
+  // it above is the pre-rounding value, so a request near the limit must be
+  // clamped rather than over-provisioned.
+  size = std::min(
+      round_to_size_class(size),
+      static_cast<size_t>(device_->maxBufferLength()));
 
   // Try the cache
   std::unique_lock lk(mutex_);
