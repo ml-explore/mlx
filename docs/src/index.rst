@@ -71,6 +71,7 @@ are the CPU and GPU.
    python/fast
    python/fft
    python/linalg
+   python/special
    python/metal
    python/cuda
    python/memory_management
