@@ -2,6 +2,7 @@
 
 #include "mlx/backend/cuda/jit_module.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/runtime_headers.h"
 #include "mlx/version.h"
 
 #include "cuda_jit_sources.h"
@@ -54,10 +55,7 @@ const std::vector<std::string>& include_path_args() {
   static std::vector<std::string> cached_args = []() {
     std::vector<std::string> args;
     // Add path to bundled headers.
-    auto root_dir = current_binary_dir();
-#if !defined(_WIN32)
-    root_dir = root_dir.parent_path();
-#endif
+    auto root_dir = detail::mlx_package_root(current_binary_dir());
     auto path = root_dir / "include";
     if (std::filesystem::exists(path)) {
       args.push_back(fmt::format("--include-path={}", path.string()));
@@ -72,17 +70,22 @@ const std::vector<std::string>& include_path_args() {
     }
     // Add path to CUDA runtime headers, try local-installed python package
     // first and then system-installed headers.
-    path = root_dir.parent_path() / "nvidia" / "cuda_runtime" / "include";
-    if (!std::filesystem::exists(path)) {
+    std::vector<std::filesystem::path> toolkit_roots;
+    path = detail::find_cuda_runtime_include_dir(
+        root_dir, CUDA_VERSION / 1000, toolkit_roots);
+    if (path.empty()) {
       const char* home = std::getenv("CUDA_HOME");
       if (!home) {
         home = std::getenv("CUDA_PATH");
       }
-      path = home ? std::filesystem::path(home) : default_cuda_toolkit_path();
-      if (!path.empty()) {
-        path = path / "include";
+      if (home) {
+        toolkit_roots.emplace_back(home);
+      } else if (!default_cuda_toolkit_path().empty()) {
+        toolkit_roots.push_back(default_cuda_toolkit_path());
       }
-      if (path.empty() || !std::filesystem::exists(path)) {
+      path = detail::find_cuda_runtime_include_dir(
+          root_dir, CUDA_VERSION / 1000, toolkit_roots);
+      if (path.empty()) {
         throw std::runtime_error(
             "Can not find locations of CUDA headers, please set environment "
             "variable CUDA_HOME or CUDA_PATH.");

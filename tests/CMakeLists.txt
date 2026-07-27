@@ -21,6 +21,7 @@ target_sources(
           blas_tests.cpp
           compile_tests.cpp
           custom_vjp_tests.cpp
+          cuda_runtime_headers_tests.cpp
           creations_tests.cpp
           device_tests.cpp
           einsum_tests.cpp

@@ -79,6 +79,71 @@ runs:
         echo "::group::Build backend package"
         python setup.py clean --all
         MLX_BUILD_STAGE=2 python -m build -w
+        python - <<'PY'
+        import os
+        import re
+        import subprocess
+        from email.parser import Parser
+        from pathlib import Path
+        from zipfile import ZipFile
+
+        from packaging.requirements import Requirement
+        from packaging.specifiers import SpecifierSet
+        from packaging.utils import canonicalize_name
+
+        wheels = list(Path("dist").glob("mlx_cuda_13-*.whl"))
+        build_cuda = "MLX_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
+        if build_cuda:
+            nvcc_version = subprocess.check_output(["nvcc", "--version"], text=True)
+            match = re.search(r"release (\d+)", nvcc_version)
+            if not match:
+                raise RuntimeError(
+                    f"Could not determine the CUDA version from: {nvcc_version}"
+                )
+            cuda_major = int(match.group(1))
+        else:
+            cuda_major = None
+
+        if cuda_major == 13 and len(wheels) != 1:
+            raise RuntimeError(f"Expected one CUDA 13 wheel, found: {wheels}")
+
+        for wheel in wheels:
+            with ZipFile(wheel) as archive:
+                metadata_files = [
+                    name for name in archive.namelist()
+                    if name.endswith(".dist-info/METADATA")
+                ]
+                if len(metadata_files) != 1:
+                    raise RuntimeError(
+                        f"Expected one METADATA file in {wheel}, "
+                        f"found: {metadata_files}"
+                    )
+                metadata = Parser().parsestr(
+                    archive.read(metadata_files[0]).decode()
+                )
+            requirements = [
+                Requirement(value)
+                for value in metadata.get_all("Requires-Dist", [])
+            ]
+            runtime_requirements = [
+                requirement
+                for requirement in requirements
+                if canonicalize_name(requirement.name)
+                == "nvidia-cuda-runtime"
+            ]
+            if (
+                len(runtime_requirements) != 1
+                or runtime_requirements[0].specifier
+                != SpecifierSet("==13.*")
+                or runtime_requirements[0].marker is not None
+                or runtime_requirements[0].extras
+                or runtime_requirements[0].url is not None
+            ):
+                raise RuntimeError(
+                    f"{wheel} is missing the CUDA 13 runtime dependency: "
+                    f"{requirements}"
+                )
+        PY
         echo "::endgroup::"
 
     - name: Post-process backend package

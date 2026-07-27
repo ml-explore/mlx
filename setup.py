@@ -323,6 +323,7 @@ if __name__ == "__main__":
                     "nvidia-cublas",
                     "nvidia-cufft",
                     "nvidia-cuda-nvrtc",
+                    "nvidia-cuda-runtime==13.*",
                 ]
             else:
                 raise ValueError(f"Unknown toolkit {toolkit}")
