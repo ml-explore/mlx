@@ -52,6 +52,37 @@ runs:
         echo "::group::Build frontend package"
         python setup.py clean --all
         MLX_BUILD_STAGE=1 python -m build -w
+        python - <<'PY'
+        from pathlib import Path
+        from zipfile import ZipFile
+
+        expected = {
+            "mlx/core/__init__.pyi",
+            "mlx/core/cuda.pyi",
+            "mlx/core/distributed.pyi",
+            "mlx/core/fast.pyi",
+            "mlx/core/fft.pyi",
+            "mlx/core/linalg.pyi",
+            "mlx/core/metal.pyi",
+            "mlx/core/random.pyi",
+        }
+        wheels = list(Path("dist").glob("mlx-*.whl"))
+        if len(wheels) != 1:
+            raise RuntimeError(f"Expected one frontend wheel, found: {wheels}")
+        wheel = wheels[0]
+        with ZipFile(wheel) as archive:
+            actual = {
+                name
+                for name in archive.namelist()
+                if name.startswith("mlx/core/") and name.endswith(".pyi")
+            }
+        if actual != expected:
+            raise RuntimeError(
+                f"{wheel} has unexpected type stubs: "
+                f"missing={sorted(expected - actual)}, "
+                f"extra={sorted(actual - expected)}"
+            )
+        PY
         echo "::endgroup::"
 
     - name: Post-process frontend package

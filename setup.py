@@ -8,6 +8,7 @@ import subprocess
 import sys
 from functools import partial
 from pathlib import Path
+from shutil import copy2
 
 from setuptools import Extension, find_namespace_packages, setup
 from setuptools.command.bdist_wheel import bdist_wheel
@@ -84,7 +85,7 @@ class CMakeBuild(build_ext):
         debug = int(os.environ.get("DEBUG", 0)) if self.debug is None else self.debug
         cfg = "Debug" if debug else "Release"
 
-        build_temp = Path(self.build_temp) / ext.name
+        build_temp = (Path(self.build_temp) / ext.name).resolve()
         if not build_temp.exists():
             build_temp.mkdir(parents=True)
 
@@ -168,11 +169,11 @@ class CMakeBuild(build_ext):
         super().run()
 
         ext = next(ext for ext in self.extensions if ext.name == "mlx.core")
+        build_py = self.get_finalized_command("build_py")
 
         # Based on https://github.com/pypa/setuptools/blob/main/setuptools/command/build_ext.py#L102
         if self.inplace:
             # Resolve inplace package dir
-            build_py = self.get_finalized_command("build_py")
             inplace_file, regular_file = self._get_inplace_equivalent(build_py, ext)
 
             inplace_dir = str(Path(inplace_file).parent.resolve())
@@ -180,12 +181,75 @@ class CMakeBuild(build_ext):
 
             self.copy_tree(regular_dir, inplace_dir)
 
+        if build_stage == 2:
+            return
+
         # Build type stubs.
-        build_temp = Path(self.build_temp) / ext.name
-        subprocess.run(
-            ["cmake", "--install", build_temp, "--component", "core_stub"],
-            check=True,
+        build_temp = (Path(self.build_temp) / ext.name).resolve()
+        stub_dir = Path("python/mlx/core")
+        build_stub_dir = Path(build_py.build_lib) / "mlx" / "core"
+        extdir = Path(self.get_ext_fullpath(ext.name)).parent.resolve()
+        expected_stubs = {
+            "__init__.pyi",
+            "cuda.pyi",
+            "distributed.pyi",
+            "fast.pyi",
+            "fft.pyi",
+            "linalg.pyi",
+            "metal.pyi",
+            "random.pyi",
+        }
+        for directory in (stub_dir, build_stub_dir):
+            for stub in directory.glob("*.pyi"):
+                stub.unlink()
+
+        temporary_libraries = []
+        if platform.system() == "Windows":
+            loader_var = "PATH"
+            library_dir = build_temp
+        elif platform.system() == "Darwin":
+            loader_var = "DYLD_LIBRARY_PATH"
+            library_dir = build_temp / "lib"
+        else:
+            loader_var = "LD_LIBRARY_PATH"
+            library_dir = build_temp / "lib"
+
+        env = os.environ.copy()
+        env[loader_var] = os.pathsep.join(
+            filter(None, [str(library_dir), env.get(loader_var)])
         )
+        try:
+            if platform.system() == "Windows" and build_stage == 1:
+                runtime_libraries = list(build_temp.glob("*.dll"))
+                if not runtime_libraries:
+                    raise RuntimeError("Failed to find MLX runtime libraries")
+                for library in runtime_libraries:
+                    target = extdir / library.name
+                    if target.exists():
+                        raise RuntimeError(f"Unexpected runtime library: {target}")
+                    temporary_libraries.append(target)
+                    copy2(library, target)
+            subprocess.run(
+                ["cmake", "--install", build_temp, "--component", "core_stub"],
+                check=True,
+                env=env,
+            )
+        finally:
+            for library in temporary_libraries:
+                library.unlink()
+
+        stubs = {stub.name: stub for stub in stub_dir.glob("*.pyi")}
+        if stubs.keys() != expected_stubs:
+            missing = sorted(expected_stubs.difference(stubs))
+            unexpected = sorted(stubs.keys() - expected_stubs)
+            raise RuntimeError(
+                f"Failed to generate MLX type stubs: "
+                f"missing={missing}, unexpected={unexpected}"
+            )
+
+        self.mkpath(str(build_stub_dir))
+        for name, stub in sorted(stubs.items()):
+            self.copy_file(str(stub), str(build_stub_dir / name))
 
 
 class MLXBdistWheel(bdist_wheel):
