@@ -4343,17 +4343,23 @@ array conv_transpose_general(
     StreamOrDevice s) {
   std::vector<int> padding_lo(padding.size());
   std::vector<int> padding_hi(padding.size());
+  // Computed in 64 bits: this runs before conv_general validates anything.
   for (int i = 0; i < padding.size(); ++i) {
-    int wt_size = 1 + dilation[i] * (weight.shape(1 + i) - 1);
-    padding_lo[i] = wt_size - padding[i] - 1;
+    int64_t wt_size =
+        1 + static_cast<int64_t>(dilation[i]) * (weight.shape(1 + i) - 1);
+    padding_lo[i] = safe_cast(wt_size - padding[i] - 1, "conv");
 
-    int conv_output_shape = (input.shape(i + 1) - 1) * stride[i] -
-        2 * padding[i] + dilation[i] * (weight.shape(i + 1) - 1) + 1;
+    int64_t conv_output_shape =
+        static_cast<int64_t>(input.shape(i + 1) - 1) * stride[i] -
+        2 * static_cast<int64_t>(padding[i]) +
+        static_cast<int64_t>(dilation[i]) * (weight.shape(i + 1) - 1) + 1;
 
-    int in_size = 1 + (conv_output_shape - 1);
-    int out_size = 1 + stride[i] * (input.shape(1 + i) - 1);
-    padding_hi[i] = in_size - out_size + padding[i] +
-        output_padding[i]; // Adjust with output_padding
+    int64_t in_size = 1 + (conv_output_shape - 1);
+    int64_t out_size =
+        1 + static_cast<int64_t>(stride[i]) * (input.shape(1 + i) - 1);
+    // Adjust with output_padding
+    padding_hi[i] =
+        safe_cast(in_size - out_size + padding[i] + output_padding[i], "conv");
   }
 
   auto ndim = stride.size();
@@ -4504,7 +4510,9 @@ array conv_general(
 
     for (int i = 0; i < spatial_dims; i++) {
       if (padding_lo[i] < 0) {
-        starts[i + 1] -= padding_lo[i];
+        // Negating a padding of INT_MIN overflows, so subtract in 64 bits.
+        starts[i + 1] = safe_cast(
+            starts[i + 1] - static_cast<int64_t>(padding_lo[i]), "conv");
         padding_lo[i] = 0;
       }
 
