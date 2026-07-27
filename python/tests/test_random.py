@@ -234,6 +234,43 @@ class TestRandom(mlx_tests.MLXTestCase):
             mx.random.randint(0, 1).dtype, mx.random.randint(0, 1, dtype=None).dtype
         )
 
+    def test_randint_beyond_float32_precision(self):
+        # Regression test: sampling used to go through a float32 `uniform()`
+        # draw, which is only exact for magnitudes below 2**24. Beyond that,
+        # rounding could return the excluded `high`, skip valid integers, or
+        # collapse the whole interval to a single constant -- independent of
+        # how narrow the requested interval was.
+        key = mx.random.key(42)
+
+        # int32, a narrow interval whose bounds sit just past 2**24.
+        base = 2**24
+        x = mx.random.randint(base, base + 2, (10_000,), dtype=mx.int32, key=key)
+        vals = set(x.tolist())
+        self.assertTrue(vals.issubset({base, base + 1}))
+        # both values must actually appear -- collapsing to one is the bug.
+        self.assertEqual(vals, {base, base + 1})
+
+        # int64, a narrow interval far past 2**24 -- exercises the 64-bit
+        # combine path, since one uint32 draw alone can't cover this range
+        # once combined with a base offset this large.
+        base = 2**40
+        y = mx.random.randint(base, base + 1024, (10_000,), dtype=mx.int64, key=key)
+        yv = y.tolist()
+        self.assertTrue(all(base <= v < base + 1024 for v in yv))
+        # a real spread, not a collapse to one or a handful of values.
+        self.assertGreater(len(set(yv)), 500)
+
+        # int64 range wide enough to need genuine 64 bits of entropy (well
+        # beyond 2**32), still same-key deterministic and in-bounds.
+        wide_lo, wide_hi = 0, 2**48
+        a = mx.random.randint(wide_lo, wide_hi, (256,), dtype=mx.int64, key=key)
+        b = mx.random.randint(wide_lo, wide_hi, (256,), dtype=mx.int64, key=key)
+        self.assertListEqual(a.tolist(), b.tolist())
+        self.assertTrue(mx.all(a >= wide_lo).item() and mx.all(a < wide_hi).item())
+        # with 256 draws over 2**48 values, a collapse to <10 unique values
+        # would indicate the entropy-combine path regressed.
+        self.assertGreater(len(set(a.tolist())), 200)
+
     def test_bernoulli(self):
         a = mx.random.bernoulli()
         self.assertEqual(a.shape, ())

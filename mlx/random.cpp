@@ -279,8 +279,63 @@ array randint(
     throw std::invalid_argument(
         "[randint] randint only accepts integer dtypes and bool.");
   }
-  auto u = uniform(low, high, shape, float32, key, s);
-  return astype(maximum(u, low, s), dtype, s);
+  auto stream = to_stream(s);
+
+  // Sampling through `uniform()` rounds a float32 draw to the target integer
+  // type. float32 has a 24-bit mantissa, so once |low| or |high| reaches 2^24
+  // the rounded value can land on the excluded `high`, skip valid integers
+  // entirely, or -- when the whole interval sits between two consecutive
+  // representable floats -- collapse every draw in the interval to a single
+  // constant, regardless of how narrow the interval is. Sample directly in
+  // integer space instead: draw raw random bits and reduce them modulo the
+  // (integer) range, which is exact for any low/high representable in int64,
+  // independent of magnitude.
+  auto lo = astype(low, int64, stream);
+  auto hi = astype(high, int64, stream);
+  auto range = subtract(hi, lo, stream);
+  auto out_shape = broadcast_shapes(shape, range.shape());
+  if (out_shape != shape) {
+    std::ostringstream msg;
+    msg << "[randint] Cannot generate random values of shape " << shape
+        << " from broadcasted shape " << out_shape << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  // An empty/invalid interval (`high <= low`) has no valid sample; matching
+  // the historical behavior, clamp so the modulo below is well defined and
+  // the result collapses to `low`.
+  auto safe_range = maximum(range, array(int64_t(1), int64), stream);
+
+  array raw(0);
+  if (dtype == int64 || dtype == uint64) {
+    // The output dtype can represent ranges beyond what one uint32 draw (32
+    // bits of entropy) can cover, so combine two independent draws into 64
+    // bits. Explicitly split any caller-provided key so the two draws don't
+    // repeat the same bits.
+    array lo_bits(0), hi_bits(0);
+    if (key) {
+      auto [k1, k2] = split(*key, stream);
+      lo_bits = bits(shape, 4, k1, stream);
+      hi_bits = bits(shape, 4, k2, stream);
+    } else {
+      lo_bits = bits(shape, 4, std::nullopt, stream);
+      hi_bits = bits(shape, 4, std::nullopt, stream);
+    }
+    raw = bitwise_or(
+        left_shift(
+            astype(hi_bits, int64, stream), array(int64_t(32), int64), stream),
+        astype(lo_bits, int64, stream),
+        stream);
+  } else {
+    // Every other supported dtype's own domain spans at most 2^32 values, so
+    // one uint32 draw (32 bits of entropy) always has enough range.
+    raw = astype(bits(shape, 4, key, stream), int64, stream);
+  }
+
+  // `remainder` is numpy-style (result takes the sign of, and lies in
+  // [0, b), the divisor), so this is exact even though `raw` can be negative
+  // once its top bit lands past int64's sign bit in the 64-bit-combine path.
+  auto offset = remainder(raw, safe_range, stream);
+  return astype(add(lo, offset, stream), dtype, stream);
 }
 
 array bernoulli(
