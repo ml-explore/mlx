@@ -162,6 +162,8 @@ NO_GPU(View)
 NO_GPU(MaskedScatter)
 
 namespace fast {
+NO_GPU_USE_FALLBACK(CrossEntropy)
+NO_GPU_MULTI(CrossEntropyVJP)
 NO_GPU_USE_FALLBACK(LayerNorm)
 NO_GPU_MULTI(LayerNormVJP)
 NO_GPU_USE_FALLBACK(RMSNorm)

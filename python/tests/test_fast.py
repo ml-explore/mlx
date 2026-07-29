@@ -525,6 +525,67 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
 
+    def test_cross_entropy(self):
+        def cross_entropy_ref(logits, targets):
+            score = mx.take_along_axis(logits, mx.expand_dims(targets, -1), -1).squeeze(
+                -1
+            )
+            return mx.logsumexp(logits.astype(mx.float32), axis=-1) - score.astype(
+                mx.float32
+            )
+
+        tolerances = {mx.float32: 1e-5, mx.float16: 5e-3, mx.bfloat16: 3e-2}
+
+        for V in [7, 32, 128, 255, 256, 1000, 4096, 8192]:
+            for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+                logits = (mx.random.normal(shape=(4, 7, V), scale=3.0) * 2).astype(
+                    dtype
+                )
+                targets = mx.random.randint(0, V, shape=(4, 7))
+                expected = cross_entropy_ref(logits, targets)
+                out = mx.fast.cross_entropy(logits, targets)
+                self.assertEqual(out.dtype, mx.float32)
+                self.assertEqual(out.shape, targets.shape)
+                self.assertLess(mx.abs(out - expected).max().item(), tolerances[dtype])
+
+    def test_cross_entropy_shape_checks(self):
+        logits = mx.random.normal(shape=(4, 16))
+        with self.assertRaises(ValueError):
+            mx.fast.cross_entropy(logits, mx.zeros((5,), mx.int32))
+        with self.assertRaises(ValueError):
+            # Probability targets are not supported by the fused op.
+            mx.fast.cross_entropy(logits, mx.zeros((4, 16), mx.int32))
+        with self.assertRaises(ValueError):
+            mx.fast.cross_entropy(logits, mx.zeros((4,), mx.float32))
+
+    def test_cross_entropy_grad(self):
+        def ref(logits, targets):
+            score = mx.take_along_axis(logits, mx.expand_dims(targets, -1), -1).squeeze(
+                -1
+            )
+            return mx.logsumexp(logits, axis=-1) - score
+
+        f1 = lambda x, y: ref(x, y).mean()
+        f2 = lambda x, y: mx.fast.cross_entropy(x, y).mean()
+
+        for V in [7, 128, 1000, 4096]:
+            logits = mx.random.normal(shape=(4, 7, V), scale=2.0)
+            targets = mx.random.randint(0, V, shape=(4, 7))
+            g1 = mx.grad(f1, argnums=0)(logits, targets)
+            g2 = mx.grad(f2, argnums=0)(logits, targets)
+            self.assertEqual(g2.shape, logits.shape)
+            self.assertLess(mx.abs(g1 - g2).max().item(), 1e-6)
+
+        w = mx.random.uniform(shape=(4, 7))
+        f3 = lambda x, y: (ref(x, y) * w).sum()
+        f4 = lambda x, y: (mx.fast.cross_entropy(x, y) * w).sum()
+        logits = mx.random.normal(shape=(4, 7, 512), scale=2.0)
+        targets = mx.random.randint(0, 512, shape=(4, 7))
+        g1 = mx.grad(f3, argnums=0)(logits, targets)
+        g2 = mx.grad(f4, argnums=0)(logits, targets)
+        self.assertEqual(g2.shape, logits.shape)
+        self.assertLess(mx.abs(g1 - g2).max().item(), 1e-6)
+
     def test_layer_norm_dim_check(self):
         with self.assertRaises(ValueError):
             weight = mx.ones((129,))

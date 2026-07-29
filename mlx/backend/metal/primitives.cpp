@@ -239,4 +239,25 @@ void LUF::eval_gpu(
   throw std::runtime_error("[LUF::eval_gpu] Metal LU factorization NYI.");
 }
 
+namespace fast {
+
+bool CrossEntropy::use_fallback(Stream s) {
+  return true;
+}
+
+void CrossEntropy::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("[CrossEntropy::eval_gpu] Metal cross entropy NYI.");
+}
+
+void CrossEntropyVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error(
+      "[CrossEntropyVJP::eval_gpu] Metal cross entropy NYI.");
+}
+
+} // namespace fast
+
 } // namespace mlx::core

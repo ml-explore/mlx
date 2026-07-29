@@ -22,14 +22,13 @@ namespace cg = cooperative_groups;
 // fused together logsumexp + gather
 // cast to float32 inside the kernel
 // to avoid logits.astype(mx.float32)
-// for each row: logsumexp(x) - x_t
+// for each row: loss = logsumexp(x) - x_t
 // first we accumulate logsumexp, then we do a gather
 template <typename T, int BLOCK_DIM, int N_READS = 4>
 __global__ void cross_entropy(
     const T* x, // [M, N]
     const int* y, // [M,]
     float* loss, // [M,] <- will be always in fp32 lse - x
-    float* lse, // logsumexp for backward [M,] in fp32
     int axis_size // N
 ) {
   cg::greater<float> max_op;
@@ -89,17 +88,16 @@ __global__ void cross_entropy(
   auto row = grid.block_rank();
   if (block.thread_rank() == 0) {
     float lse_val = isinf(curmax) ? curmax : log(normalizer) + curmax;
-    lse[row] = lse_val;
     loss[row] = lse_val - static_cast<float>(x[y[row]]);
   }
 }
 
-// get lse from the forward, i think we will assume non negative indc
+// get loss from the forward
 template <typename T, int BLOCK_DIM, int N_READS = 4>
 __global__ void cross_entropy_vjp(
     const T* x, // [M, N]
     const int* y, // [M,]
-    const float* lse, // [M,]
+    const float* loss, // [M,]
     const float* gy, // cotangent [M,]
     T* grads, // [M, N] lse is accumulated in float, x is casted to float
     int axis_size // N
@@ -110,9 +108,9 @@ __global__ void cross_entropy_vjp(
 
   x += row * axis_size; // offset input
   grads += row * axis_size; // offset output
-  auto lse_n = lse[row]; // logsumexp
   auto y_n = y[row]; // target index [0, N)
   auto g = gy[row]; // cotangent
+  auto lse_n = loss[row] + static_cast<float>(x[y_n]);
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); r++) {
     auto index = r * BLOCK_DIM + block.thread_rank(); // [0, N)
     auto vals = load_vector<N_READS>(x, index, axis_size, T{});
@@ -127,5 +125,107 @@ __global__ void cross_entropy_vjp(
   }
 }
 } // namespace cu
+
+namespace fast {
+
+bool CrossEntropy::use_fallback(Stream s) {
+  return s.device == Device::cpu;
+}
+
+void CrossEntropy::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  nvtx3::scoped_range r("CrossEntropy::eval_gpu");
+  assert(inputs.size() == 2); // logits and target
+  auto& s = stream();
+  auto& out = outputs[0];
+  auto& encoder = cu::get_command_encoder(s);
+  auto ensure_row_contiguous = [&s, &encoder](const array& x) {
+    if (x.flags().row_contiguous) {
+      return x;
+    } else {
+      array x_copy = contiguous_copy_gpu(x, s);
+      encoder.add_temporary(x_copy);
+      return x_copy;
+    }
+  };
+  auto in = ensure_row_contiguous(inputs[0]); // [n_rows, V]
+  auto target = ensure_row_contiguous(inputs[1]); // [n_rows,]
+  out.set_data(cu::malloc_async(out.nbytes(), encoder)); // [n_rows] in fp32
+
+  int axis_size = in.shape().back();
+  int n_rows = in.data_size() / axis_size;
+
+  encoder.set_input_array(in);
+  encoder.set_input_array(target);
+  encoder.set_output_array(out);
+  dispatch_float_types(in.dtype(), "cross_entropy", [&](auto type_tag) {
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    constexpr int N_READS = 16 / sizeof(DataType);
+    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+      auto kernel = cu::cross_entropy<DataType, block_dim(), N_READS>;
+      encoder.add_kernel_node(
+          kernel,
+          n_rows,
+          block_dim(),
+          gpu_ptr<DataType>(in),
+          gpu_ptr<int>(target),
+          gpu_ptr<float>(out),
+          axis_size);
+    });
+  });
+}
+
+void CrossEntropyVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  nvtx3::scoped_range r("CrossEntropyVJP::eval_gpu");
+  assert(inputs.size() == 4); // logits, target, loss, cotangent
+  auto& s = stream();
+  auto& out = outputs[0];
+  auto& encoder = cu::get_command_encoder(s);
+  auto ensure_row_contiguous = [&s, &encoder](const array& x) {
+    if (x.flags().row_contiguous) {
+      return x;
+    } else {
+      array x_copy = contiguous_copy_gpu(x, s);
+      encoder.add_temporary(x_copy);
+      return x_copy;
+    }
+  };
+  auto in = ensure_row_contiguous(inputs[0]); // [n_rows, V]
+  auto target = ensure_row_contiguous(inputs[1]); // [n_rows,]
+  auto loss = ensure_row_contiguous(inputs[2]); // [n_rows,] fp32
+  auto cotan = ensure_row_contiguous(inputs[3]); // [n_rows,] fp32
+  out.set_data(cu::malloc_async(out.nbytes(), encoder)); // [n_rows, V]
+
+  int axis_size = in.shape().back();
+  int n_rows = in.data_size() / axis_size;
+
+  encoder.set_input_array(in);
+  encoder.set_input_array(target);
+  encoder.set_input_array(loss);
+  encoder.set_input_array(cotan);
+  encoder.set_output_array(out);
+  dispatch_float_types(in.dtype(), "cross_entropy_vjp", [&](auto type_tag) {
+    using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
+    constexpr int N_READS = 16 / sizeof(DataType);
+    dispatch_block_dim(cuda::ceil_div(axis_size, N_READS), [&](auto block_dim) {
+      auto kernel = cu::cross_entropy_vjp<DataType, block_dim(), N_READS>;
+      encoder.add_kernel_node(
+          kernel,
+          n_rows,
+          block_dim(),
+          gpu_ptr<DataType>(in),
+          gpu_ptr<int>(target),
+          gpu_ptr<float>(loss),
+          gpu_ptr<float>(cotan),
+          gpu_ptr<DataType>(out),
+          axis_size);
+    });
+  });
+}
+
+} // namespace fast
 
 } // namespace mlx::core
