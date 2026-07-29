@@ -46,6 +46,40 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
         mx.eval(x)
         self.assertEqual(int(x[1]), 999)
 
+    def test_copy_false_buffer_counts(self):
+        """Adopted host buffers enter and leave the public live probes."""
+        if not mx.metal.is_available():
+            self.skipTest("copy=False requires Metal")
+        if mx.default_device() != mx.gpu:
+            self.skipTest("the probes track the Metal allocator")
+
+        nbytes = 4 * 1024 * 1024
+        raw = np.empty(nbytes + 16384, dtype=np.uint8)
+        offset = (-raw.ctypes.data) % 16384
+        aligned = raw[offset : offset + nbytes]
+        a = aligned.view(np.int32)
+        self.assertEqual(a.ctypes.data % 16384, 0)
+
+        gc.collect()
+        mx.synchronize()
+        baseline_count = mx.get_active_buffer_count()
+        baseline_hist = dict(mx.get_buffer_histogram())
+
+        x = mx.asarray(a, copy=False)
+        mx.synchronize()
+        self.assertEqual(mx.get_active_buffer_count(), baseline_count + 1)
+        histogram = dict(mx.get_buffer_histogram())
+        self.assertEqual(
+            histogram.get(nbytes, 0),
+            baseline_hist.get(nbytes, 0) + 1,
+        )
+
+        del x, a, aligned, raw
+        gc.collect()
+        mx.synchronize()
+        self.assertEqual(mx.get_active_buffer_count(), baseline_count)
+        self.assertEqual(dict(mx.get_buffer_histogram()), baseline_hist)
+
     def test_copy_false_dtype_conversion_raises(self):
         a = np.arange(16, dtype=np.float64)
         with self.assertRaises(Exception):
