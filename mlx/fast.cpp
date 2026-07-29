@@ -228,9 +228,6 @@ array cross_entropy(
     return std::vector<array>{astype(loss, float32, s)};
   };
 
-  // The kernel indexes the targets directly, so normalize them here to keep
-  // the fused path and the fallback (which goes through take_along_axis) in
-  // agreement on negative indices.
   auto passed_targets = astype(targets, int32, s);
 
   if (!CrossEntropy::use_fallback(s)) {
@@ -266,7 +263,6 @@ std::vector<array> CrossEntropy::vjp(
     auto& loss = inputs[2];
     auto& g = inputs[3];
 
-    // loss = lse - x_t, so lse is recovered without saving it.
     auto score =
         squeeze(take_along_axis(x, expand_dims(y, -1, s), -1, s), -1, s);
     auto lse = add(loss, astype(score, float32, s), s);

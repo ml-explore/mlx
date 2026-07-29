@@ -59,9 +59,6 @@ __global__ void cross_entropy(
       normalizer += __expf(static_cast<float>(vals[i]) - curmax);
     }
   }
-  // here every thread has it's own normiliser : N_READS values with stride 32
-  // and max for all this values we need to exchange it with other threads 1) in
-  // a warp 2) in a block first reduce in a warp
   prevmax = curmax;
   curmax = cg::reduce(warp, curmax, max_op);
   normalizer = normalizer * __expf(prevmax - curmax);
