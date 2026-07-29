@@ -189,6 +189,15 @@ if __name__ == "__main__":
           (  1,  2048,  32121,      80,   32,     8),
     )
 
+    shapes_96 = (
+        # (  B,   qsl,   ksl, head_dim, n_qh, n_kvh)
+          (  1,  1024,  1024,       96,   32,     8),
+          (  1,  2048,  2048,       96,   32,     8),
+          (  1,  4096,  4096,       96,   32,     8),
+          (  1,  4096,  5000,       96,   32,     8),
+          (  1,  2048,  32121,      96,   32,     8),
+    )
+
     shapes_128 = (
         # (  B,   qsl,   ksl, head_dim, n_qh, n_kvh)
           (  1,  1024,  1024,      128,   32,     8),
@@ -199,7 +208,7 @@ if __name__ == "__main__":
     )
     # fmt: on
 
-    shapes = shapes_64 + shapes_80 + shapes_128
+    shapes = shapes_64 + shapes_80 + shapes_96 + shapes_128
 
     masks = [None, "bool", "causal"]
 
