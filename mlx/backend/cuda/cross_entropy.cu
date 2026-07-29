@@ -108,6 +108,7 @@ __global__ void cross_entropy_vjp(
   auto y_n = y[row]; // target index [0, N)
   auto g = gy[row]; // cotangent
   auto lse_n = loss[row] + static_cast<float>(x[y_n]);
+  block.sync();
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); r++) {
     auto index = r * BLOCK_DIM + block.thread_rank(); // [0, N)
     auto vals = load_vector<N_READS>(x, index, axis_size, T{});
@@ -190,11 +191,27 @@ void CrossEntropyVJP::eval_gpu(
       return x_copy;
     }
   };
-  auto in = ensure_row_contiguous(inputs[0]); // [n_rows, V]
+
+  auto check_input = [&s](const array& x, bool& copied) {
+    if (x.flags().row_contiguous) {
+      copied = false;
+      return x;
+    }
+    copied = true;
+    return contiguous_copy_gpu(x, s);
+  };
+  bool donate_x = inputs[0].is_donatable();
+  bool copied;
+  auto in = check_input(inputs[0], copied); // [n_rows, V]
+  donate_x |= copied;
   auto target = ensure_row_contiguous(inputs[1]); // [n_rows,]
   auto loss = ensure_row_contiguous(inputs[2]); // [n_rows,] fp32
   auto cotan = ensure_row_contiguous(inputs[3]); // [n_rows,] fp32
-  out.set_data(cu::malloc_async(out.nbytes(), encoder)); // [n_rows, V]
+  if (donate_x) {
+    out.copy_shared_buffer(in);
+  } else {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder)); // [n_rows, V]
+  }
 
   int axis_size = in.shape().back();
   int n_rows = in.data_size() / axis_size;
