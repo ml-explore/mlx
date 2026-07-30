@@ -8,7 +8,6 @@
 #include <nanobind/stl/vector.h>
 
 #include "mlx/distributed/distributed.h"
-#include "mlx/distributed/jaccl/jaccl.h"
 #include "mlx/distributed/ops.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
@@ -93,9 +92,9 @@ void init_distributed(nb::module_& parent_module) {
         }
 
         auto py_factory = std::move(*all_gather_factory);
-        auto cpp_factory =
-            [py_factory = std::move(py_factory)](
-                int rank, int size) -> mx::distributed::jaccl::AllGatherFn {
+        auto cpp_factory = [py_factory = std::move(py_factory)](
+                               int rank,
+                               int size) -> mx::distributed::AllGatherFn {
           nb::gil_scoped_acquire gil;
           nb::object py_inner = py_factory(rank, size);
           if (!PyCallable_Check(py_inner.ptr())) {
@@ -119,13 +118,7 @@ void init_distributed(nb::module_& parent_module) {
           };
         };
 
-        auto group =
-            mx::distributed::jaccl::init(strict, std::move(cpp_factory));
-        if (group == nullptr) {
-          throw std::runtime_error(
-              "Failed to initialize the jaccl backend with a custom side channel.");
-        }
-        return mx::distributed::Group(std::move(group));
+        return mx::distributed::init(strict, backend, std::move(cpp_factory));
       },
       "strict"_a = false,
       "backend"_a = "any",
