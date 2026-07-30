@@ -206,13 +206,9 @@ void RingGroup::all_reduce(
   auto in_ptr = static_cast<const T*>(input);
   auto out_ptr = static_cast<T*>(output);
   int64_t count = n_bytes / sizeof(T);
-  if (count < size_ * 2 * n_conns_) {
-    ring_.all_reduce<1, T, ReduceOp>(in_ptr, out_ptr, count, 1, reduce_op);
-    return;
-  }
 
-  if (n_bytes <= 65536) {
-    ring_.all_reduce<2, T, ReduceOp>(in_ptr, out_ptr, count, 1, reduce_op);
+  if (n_bytes <= 32768 || count < size_ * 2 * n_conns_) {
+    ring_.all_reduce<1, T, ReduceOp>(in_ptr, out_ptr, count, 1, reduce_op);
     return;
   }
 
