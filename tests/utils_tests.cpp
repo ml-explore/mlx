@@ -2,9 +2,21 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
+
+TEST_CASE("test current binary dir is resolved") {
+  auto dir = current_binary_dir();
+  // Empty is a legal result: a PATH-launched executable gets a bare argv[0],
+  // which carries no location to resolve.
+  if (dir.empty()) {
+    return;
+  }
+  CHECK(dir.is_absolute());
+  CHECK_EQ(dir, dir.lexically_normal());
+}
 
 TEST_CASE("test type promotion") {
   for (auto t : {bool_, uint32, int32, int64, float32}) {
