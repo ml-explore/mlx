@@ -12,7 +12,10 @@ std::filesystem::path current_binary_dir() {
     if (!dladdr(reinterpret_cast<void*>(&current_binary_dir), &info)) {
       throw std::runtime_error("Unable to get current binary dir.");
     }
-    return std::filesystem::path(info.dli_fname).parent_path();
+    // dli_fname is the path the binary was loaded by, which may be relative,
+    // contain ".." or go through a symlink. Callers append relative paths to
+    // the result and check them for existence, so it has to be resolved.
+    return std::filesystem::weakly_canonical(info.dli_fname).parent_path();
   }();
   return binary_dir;
 }

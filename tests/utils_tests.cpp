@@ -2,9 +2,16 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
+
+TEST_CASE("test current binary dir is resolved") {
+  auto dir = current_binary_dir();
+  CHECK(dir.is_absolute());
+  CHECK_EQ(dir, std::filesystem::weakly_canonical(dir));
+}
 
 TEST_CASE("test type promotion") {
   for (auto t : {bool_, uint32, int32, int64, float32}) {
