@@ -2397,7 +2397,7 @@ array prod(
     out_type = int32;
   }
   auto out = (is_noop)
-      ? a
+      ? astype(a, out_type, s)
       : array(
             std::move(out_shape),
             out_type,
