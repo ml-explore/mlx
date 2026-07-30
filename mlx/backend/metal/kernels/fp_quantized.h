@@ -2002,7 +2002,8 @@ template <typename T, const int group_size, const int bits>
     device uint8_t* out [[buffer(1)]],
     device uint8_t* scales [[buffer(2)]],
     uint2 tidx [[thread_position_in_grid]],
-    uint2 grid_dim [[threads_per_grid]]) {
+    uint2 grid_dim [[threads_per_grid]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
   constexpr bool use_mx_scale = group_size == 32;
   size_t index = tidx.x + grid_dim.x * size_t(tidx.y);
 
@@ -2011,9 +2012,9 @@ template <typename T, const int group_size, const int bits>
   if (use_mx_scale) {
     scale = simd_max(abs(w_thread));
   } else {
-    float w_max_l = simd_max(tidx.x < 16 ? abs(w_thread) : 0.0);
-    float w_max_r = simd_max(tidx.x >= 16 ? abs(w_thread) : 0.0);
-    scale = tidx.x < 16 ? w_max_l : w_max_r;
+    float w_max_l = simd_max(simd_lid < 16 ? abs(w_thread) : 0.0);
+    float w_max_r = simd_max(simd_lid >= 16 ? abs(w_thread) : 0.0);
+    scale = simd_lid < 16 ? w_max_l : w_max_r;
   }
   scale /= bits == 4 ? 6.0f : 448.0f;
 
@@ -2075,7 +2076,8 @@ template <typename T, const int group_size, const int bits>
     const device T* w [[buffer(0)]],
     device T* out [[buffer(1)]],
     uint2 tidx [[thread_position_in_grid]],
-    uint2 grid_dim [[threads_per_grid]]) {
+    uint2 grid_dim [[threads_per_grid]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
   constexpr bool use_mx_scale = group_size == 32;
   size_t index = tidx.x + grid_dim.x * size_t(tidx.y);
 
@@ -2084,9 +2086,9 @@ template <typename T, const int group_size, const int bits>
   if (use_mx_scale) {
     scale = simd_max(abs(w_thread));
   } else {
-    float w_max_l = simd_max(tidx.x < 16 ? abs(w_thread) : 0.0);
-    float w_max_r = simd_max(tidx.x >= 16 ? abs(w_thread) : 0.0);
-    scale = tidx.x < 16 ? w_max_l : w_max_r;
+    float w_max_l = simd_max(simd_lid < 16 ? abs(w_thread) : 0.0);
+    float w_max_r = simd_max(simd_lid >= 16 ? abs(w_thread) : 0.0);
+    scale = simd_lid < 16 ? w_max_l : w_max_r;
   }
   scale /= bits == 4 ? 6.0f : 448.0f;
 
