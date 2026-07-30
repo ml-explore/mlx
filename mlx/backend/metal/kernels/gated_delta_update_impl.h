@@ -422,7 +422,6 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     KKtV_tile = KKt_tile;
 
     SCALE_TRIEQ_NAX1(KKtK_tile, beta_fm)
-    SCALE_TRIEQ_NAX(KKtV_tile, beta_fm, gamma)
 
     Tinv_tile = I_tile;
     STEEL_PRAGMA_UNROLL
@@ -466,24 +465,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     }
     SCALE_ROW_NAX(W_tile, gamma)
 
-    Tinv_tile = I_tile;
-    STEEL_PRAGMA_UNROLL
-    for (int step = 0; step < C - 1; step++) {
-      mlx::steel::mma<
-          float,
-          float,
-          float,
-          false,
-          false,
-          mpp::tensor_ops::matmul2d_descriptor::mode::multiply>(
-          TMP_tile.frag_at(0, 0),
-          KKtV_tile.frag_at(0, 0),
-          metal::bool_constant<false>{},
-          Tinv_tile.frag_at(0, 0),
-          metal::bool_constant<false>{});
-      SUB_NAX(Tinv_tile, I_tile, TMP_tile)
-    }
-
+    SCALE_TRI_NAX(Tinv_tile, gamma)
     V_tile.load(v_ + dv_idx, Dv * Hv);
     SCALE_BETA_NAX(V_tile, beta_fm)
     // U = Tinv @ diag(b)V
