@@ -236,12 +236,10 @@ install(DIRECTORY ${cccl_SOURCE_DIR}/include/cuda
 install(DIRECTORY ${cccl_SOURCE_DIR}/include/nv
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cccl)
 
-# The binary of C++ tests will not be installed so it can not find the CCCL
-# headers, and we have to hard-code the path.
-if(MLX_BUILD_TESTS)
-  target_compile_definitions(mlx_dirs
-                             PRIVATE MLX_CCCL_DIR="${cccl_SOURCE_DIR}/include")
-endif()
+# Binaries in the build tree are not installed, so they can not find the CCCL
+# headers next to them and have to fall back to this hard-coded path.
+target_compile_definitions(mlx_dirs
+                           PRIVATE MLX_CCCL_DIR="${cccl_SOURCE_DIR}/include")
 
 # Use fixed version of NVTX.
 FetchContent_Declare(
