@@ -323,6 +323,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     device StT* state_out [[buffer(7)]],
     constant int& T [[buffer(8)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
+    uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
   auto n = thread_position_in_grid.z; // 7
   auto b_idx = n / Hv;
@@ -330,6 +331,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   auto hk_idx = hv_idx / (Hv / Hk);
 
   auto dv_idx = thread_position_in_grid.y * 16;
+  const short sg_id = thread_position_in_threadgroup.y; // 0..3
 
   const ushort simd_lane_id = __metal_get_thread_index_in_simdgroup(ushort());
   const short qid = simd_lane_id >> 2;
@@ -352,7 +354,9 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   auto i_state = state_in + (n * Dv + dv_idx) * Dk;
   auto o_state = state_out + (n * Dv + dv_idx) * Dk;
 
-  threadgroup float gamma[C];
+  threadgroup float gamma_all[C * 4];
+  threadgroup float* gamma = gamma_all + sg_id * C;
+
   float beta_fm[2];
 
   mlx::steel::NAXTile<float, 1, Dk / 16> S_tile;
@@ -595,6 +599,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     device StT* state_out [[buffer(7)]],
     constant int& T [[buffer(8)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
+    uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
   auto n = thread_position_in_grid.z; // 7;
   auto b_idx = n / Hv;
@@ -608,6 +613,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
       (thread_index_in_simdgroup % 2) * 2; // column coordinate of the held tile
 
   auto dv_idx = thread_position_in_grid.y * 8;
+  const short sg_id = thread_position_in_threadgroup.y; // 0..3
 
 #define OUTPUT(T)          \
   if (true) {              \
@@ -646,7 +652,8 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   // tiles for WY form computation
   simdgroup_float8x8 KKtK_tile, KKtV_tile, KKt_tile;
 
-  threadgroup float gamma[C];
+  threadgroup float gamma_all[C * 4];
+  threadgroup float* gamma = gamma_all + sg_id * C;
 
   simdgroup_float8x8 I_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
   AT(I_tile, 0) = (fm == fn) ? 1.0f : 0.0f;
