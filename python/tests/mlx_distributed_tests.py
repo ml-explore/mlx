@@ -360,3 +360,15 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
                     clipped[k], grads_slice[k] * scale, atol=self.atol, rtol=self.rtol
                 )
             )
+
+    def test_jaccl_all_gather_factory_validation(self):
+        # A custom side-channel factory is only valid with the jaccl backend.
+        with self.assertRaises(ValueError):
+            mx.distributed.init(
+                backend="ring",
+                all_gather_factory=lambda rank, size: lambda src, n_bytes: b"",
+            )
+
+        # The factory must be callable.
+        with self.assertRaises(TypeError):
+            mx.distributed.init(backend="jaccl", all_gather_factory="not_callable")
