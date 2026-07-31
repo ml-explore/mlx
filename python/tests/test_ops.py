@@ -2513,8 +2513,12 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_eye(self):
         self.assertCmpNumpy([3], mx.eye, np.eye)
+        # Test for zero rows and columns
+        self.assertCmpNumpy([0], mx.eye, np.eye)
         # Test for non-square matrix
         self.assertCmpNumpy([3, 4], mx.eye, np.eye)
+        # Test for zero rows
+        self.assertCmpNumpy([0, 4], mx.eye, np.eye)
         # Test with positive k parameter
         self.assertCmpNumpy([3, 4], mx.eye, np.eye, k=1)
         # Test with negative k parameter

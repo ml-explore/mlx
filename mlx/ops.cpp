@@ -360,10 +360,15 @@ array ones_like(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
-  if (n <= 0 || m <= 0) {
+  if (n < 0 || m < 0) {
     throw std::invalid_argument("[eye] N and M must be positive integers.");
   }
   array result = zeros({n, m}, dtype, s);
+
+  if (n == 0 || m == 0) {
+    return result;
+  }
+
   if (k >= m || -k >= n) {
     return result;
   }
