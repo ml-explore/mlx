@@ -234,6 +234,41 @@ class TestRandom(mlx_tests.MLXTestCase):
             mx.random.randint(0, 1).dtype, mx.random.randint(0, 1, dtype=None).dtype
         )
 
+    def test_randint_exact_integer_range(self):
+        # Bounds that are not exactly representable in float32 must not make
+        # values unreachable, return `high`, or collapse the interval.
+        key = mx.random.key(42)
+
+        # At 2**24 adjacent float32 values are two integers apart.
+        a = mx.random.randint(2**24, 2**24 + 2, (10_000,), dtype=mx.int32, key=key)
+        values = set(a.tolist())
+        self.assertNotIn(2**24 + 2, values)  # `high` is exclusive
+        self.assertEqual(values, {2**24, 2**24 + 1})  # both are reachable
+
+        # At 2**40 the float32 spacing is 2**17, which collapsed this interval
+        # to a single value.
+        b = mx.random.randint(2**40, 2**40 + 1024, (20_000,), dtype=mx.int64, key=key)
+        self.assertTrue(mx.all(b >= 2**40).item())
+        self.assertTrue(mx.all(b < 2**40 + 1024).item())
+        self.assertEqual(len(set(b.tolist())), 1024)
+
+        # A width above 2**63 is representable only as unsigned.
+        c = mx.random.randint(-(2**62), 2**62, (10_000,), dtype=mx.int64, key=key)
+        self.assertTrue(mx.all(c >= -(2**62)).item())
+        self.assertTrue(mx.all(c < 2**62).item())
+        self.assertGreater(len(set(c.tolist())), 1)
+
+    def test_randint_uniform_coverage(self):
+        # Every value in a small interval should be reachable, with roughly
+        # equal probability.
+        n = 200_000
+        for low, high in [(0, 6), (-10, 10), (3, 15)]:
+            a = mx.random.randint(low, high, (n,), dtype=mx.int64)
+            counts = [mx.sum(a == v).item() for v in range(low, high)]
+            self.assertTrue(all(c > 0 for c in counts))
+            expected = n / (high - low)
+            self.assertLess(max(abs(c - expected) for c in counts) / expected, 0.1)
+
     def test_bernoulli(self):
         a = mx.random.bernoulli()
         self.assertEqual(a.shape, ())

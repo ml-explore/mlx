@@ -516,6 +516,36 @@ TEST_CASE("test random randint") {
   auto key = array({0, 0}, {1, 2});
   CHECK_THROWS_AS(
       random::randint(low, high, {}, float32, key), std::invalid_argument);
+
+  // Bounds that are not exactly representable in float32 must not make values
+  // unreachable, return `high`, or collapse the interval.
+
+  // At 2^24 adjacent float32 values are two integers apart.
+  auto lo24 = array(1 << 24, int32);
+  auto hi24 = array((1 << 24) + 2, int32);
+  x = random::randint(lo24, hi24, {10000}, int32);
+  CHECK(all(less(x, hi24)).item<bool>()); // `high` is exclusive
+  CHECK(any(equal(x, lo24)).item<bool>());
+  CHECK(any(equal(x, array((1 << 24) + 1, int32))).item<bool>());
+
+  // At 2^40 the float32 spacing is 2^17, which collapsed this interval to a
+  // single value.
+  auto lo40 = array(int64_t(1) << 40, int64);
+  auto hi40 = array((int64_t(1) << 40) + 1024, int64);
+  x = random::randint(lo40, hi40, {20000}, int64);
+  CHECK(
+      (all(less_equal(lo40, x)).item<bool>() &&
+       all(less(x, hi40)).item<bool>()));
+  CHECK_GT(max(x).item<int64_t>(), min(x).item<int64_t>());
+
+  // A width above 2^63 is representable only as unsigned.
+  auto lo62 = array(-(int64_t(1) << 62), int64);
+  auto hi62 = array(int64_t(1) << 62, int64);
+  x = random::randint(lo62, hi62, {10000}, int64);
+  CHECK(
+      (all(less_equal(lo62, x)).item<bool>() &&
+       all(less(x, hi62)).item<bool>()));
+  CHECK_GT(max(x).item<int64_t>(), min(x).item<int64_t>());
 }
 
 TEST_CASE("test random bernoulli") {

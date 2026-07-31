@@ -279,8 +279,49 @@ array randint(
     throw std::invalid_argument(
         "[randint] randint only accepts integer dtypes and bool.");
   }
-  auto u = uniform(low, high, shape, float32, key, s);
-  return astype(maximum(u, low, s), dtype, s);
+  auto stream = to_stream(s);
+
+  // Sample the integers directly rather than by casting a float32 uniform.
+  // Routing through float32 loses the integer interval whenever the bounds are
+  // not exactly representable: at 2^24 consecutive float32 values are already
+  // two apart, so values become unreachable, `high` itself can be returned,
+  // and a wide int64 interval can collapse to a single value.
+  auto lo = astype(low, int64, stream);
+  auto hi = astype(high, int64, stream);
+
+  // Width of the half-open interval, as uint64: an int64 interval can be up to
+  // 2^64 - 1 wide, which only uint64 holds. The subtraction is done in int64
+  // and reinterpreted, which is correct even when the difference overflows
+  // int64 — the wrapped bit pattern is the intended unsigned width. Note the
+  // clamp below therefore has to act on the *unsigned* value: clamping the
+  // signed difference would read a genuine width above 2^63 as negative and
+  // collapse the whole interval onto `low`.
+  //
+  // An empty interval (high <= low) is documented to return `low`, and a
+  // remainder by zero is undefined, so those entries get a divisor of 1, which
+  // yields an offset of 0.
+  auto empty = less_equal(hi, lo, stream);
+  auto range = where(
+      empty,
+      array(1, uint64),
+      astype(subtract(hi, lo, stream), uint64, stream),
+      stream);
+
+  // 64 uniform bits per sample, assembled from two 32-bit draws.
+  auto wide_shape = shape;
+  wide_shape.push_back(2);
+  auto words = astype(bits(wide_shape, 4, key, stream), uint64, stream);
+  auto halves = split(words, 2, -1, stream);
+  auto u = bitwise_or(
+      left_shift(squeeze(halves[0], -1, stream), array(32, uint64), stream),
+      squeeze(halves[1], -1, stream),
+      stream);
+
+  // Reduce onto [0, range). The residual modulo bias is bounded by
+  // range / 2^64: below 1e-9 for any range under 2^32, and exactly zero
+  // whenever range is a power of two.
+  auto offset = astype(remainder(u, range, stream), int64, stream);
+  return astype(add(lo, offset, stream), dtype, stream);
 }
 
 array bernoulli(
