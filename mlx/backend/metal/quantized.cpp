@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include "mlx/backend/common/quantized.h"
 #include "mlx/backend/common/broadcasting.h"
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/gpu/copy.h"
@@ -123,6 +124,12 @@ inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
         }
     }
   }
+}
+
+// Must match the K step in qmv_fast_impl (kernels/quantized.h):
+//   pack_factor<bits, 32>() * (bits == 2 ? 1 : 2) * SIMD_SIZE
+inline int qmv_fast_k_alignment(int bits) {
+  return get_pack_factor(bits, 32) * (bits == 2 ? 1 : 2) * 32;
 }
 
 inline int add_strides_and_shapes(
@@ -256,7 +263,7 @@ void qmv(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
-  bool fast = N % bn == 0 && K % 512 == 0;
+  bool fast = N % bn == 0 && K % qmv_fast_k_alignment(bits) == 0;
 
   concatenate(
       kname,
@@ -1079,7 +1086,7 @@ void gather_qmv(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
-  bool fast = N % bn == 0 && K % 512 == 0;
+  bool fast = N % bn == 0 && K % qmv_fast_k_alignment(bits) == 0;
   concatenate(
       kname,
       mode + (fast ? "_gather_qmv_fast_" : "_gather_qmv_"),
