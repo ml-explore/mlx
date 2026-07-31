@@ -12,6 +12,9 @@
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
+#include <cstring>
+#include <sstream>
+
 namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -75,10 +78,54 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "init",
-      &mx::distributed::init,
+      [](bool strict,
+         const std::string& backend,
+         std::optional<nb::callable> all_gather_factory)
+          -> mx::distributed::Group {
+        if (!all_gather_factory.has_value()) {
+          return mx::distributed::init(strict, backend);
+        }
+
+        if (backend != "jaccl") {
+          throw std::invalid_argument(
+              "all_gather_factory is only supported with backend='jaccl'.");
+        }
+
+        auto py_factory = std::move(*all_gather_factory);
+        auto cpp_factory = [py_factory = std::move(py_factory)](
+                               int rank,
+                               int size) -> mx::distributed::AllGatherFn {
+          nb::gil_scoped_acquire gil;
+          nb::object py_inner = py_factory(rank, size);
+          if (!PyCallable_Check(py_inner.ptr())) {
+            throw std::invalid_argument(
+                "all_gather_factory must return a callable");
+          }
+          return [py_inner = std::move(py_inner), size](
+                     const void* src, void* dst, size_t n_bytes) {
+            nb::gil_scoped_acquire gil;
+            nb::bytes src_bytes(src, n_bytes);
+            nb::object result_obj = py_inner(src_bytes, n_bytes);
+            nb::bytes result = nb::cast<nb::bytes>(result_obj);
+            size_t expected = static_cast<size_t>(size) * n_bytes;
+            if (result.size() != expected) {
+              std::ostringstream msg;
+              msg << "Custom all-gather returned " << result.size()
+                  << " bytes but expected " << expected;
+              throw std::runtime_error(msg.str());
+            }
+            std::memcpy(dst, result.data(), expected);
+          };
+        };
+
+        return mx::distributed::init(strict, backend, std::move(cpp_factory));
+      },
       "strict"_a = false,
       "backend"_a = "any",
-      nb::sig("def init(strict: bool = False, backend: str = 'any') -> Group"),
+      nb::kw_only(),
+      "all_gather_factory"_a = nb::none(),
+      nb::sig(
+          "def init(strict: bool = False, backend: str = 'any', *, all_gather_factory: Optional[Callable[[int, int], Callable[[bytes, int], bytes]]] = None) -> Group"),
       R"pbdoc(
         Initialize the communication backend and create the global communication group.
 
@@ -99,6 +146,13 @@ void init_distributed(nb::module_& parent_module) {
             set to ``any`` all available backends are tried and the first one
             that succeeds becomes the global group which will be returned in
             subsequent calls. Default: ``any``
+          all_gather_factory (Callable, optional): A factory used only with the
+            ``jaccl`` backend. It is called once per rank with ``(rank, size)``
+            and must return a callable with signature
+            ``f(src: bytes, n_bytes: int) -> bytes``. The returned callable
+            performs a byte-level all-gather used as the JACCL side channel
+            when exchanging RDMA connection metadata. The returned bytes must
+            have length ``size * n_bytes``.
 
         Returns:
           Group: The group representing all the launched processes.
@@ -349,4 +403,10 @@ void init_distributed(nb::module_& parent_module) {
       Returns:
         array: The output array with shape ``[x.shape[0] // group.size(), *x.shape[1:]]``.
     )pbdoc");
+
+  // Ensure the distributed backend cache is cleared before the interpreter
+  // goes away, so that any Python objects held by cached groups are released
+  // while Python is still alive.
+  auto atexit = nb::module_::import_("atexit");
+  atexit.attr("register")(nb::cpp_function(&mx::distributed::clear_backends));
 }
