@@ -67,6 +67,14 @@ using namespace mpp::tensor_ops;
     }                                                               \
   }
 
+#define ADD_NAX(TILE0, TILE1, TILE2)                                \
+  {                                                                 \
+    STEEL_PRAGMA_UNROLL                                             \
+    for (short _i = 0; _i < decltype(TILE0)::kElemsPerFrag; _i++) { \
+      AT_NAX(TILE0, _i) = AT_NAX(TILE1, _i) + AT_NAX(TILE2, _i);    \
+    }                                                               \
+  }
+
 #define FMA_NAX(TILE0, S, TILE1, TILE2)                                     \
   {                                                                         \
     STEEL_PRAGMA_UNROLL                                                     \
@@ -281,18 +289,8 @@ METAL_FUNC static constexpr void mman(
   STEEL_PRAGMA_UNROLL
   for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
     ct_a[i] = A[i];
-  }
-
-  // Load B into right operand registers
-  STEEL_PRAGMA_UNROLL
-  for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
     ct_b[i] = Bn0[i];
     ct_b[BaseNAXFrag::kElemsPerFrag + i] = Bn1[i];
-  }
-
-  // Load C into output registers (op handles accumulation)
-  STEEL_PRAGMA_UNROLL
-  for (short i = 0; i < BaseNAXFrag::kElemsPerFrag; i++) {
     ct_c[i] = Cn0[i];
     ct_c[BaseNAXFrag::kElemsPerFrag + i] = Cn1[i];
   }
@@ -310,6 +308,82 @@ METAL_FUNC static constexpr void mman(
 
 } // namespace steel
 } // namespace mlx
+
+#define MM16x16x16(C, CO, A, TA, AO, B, TB, BO)              \
+  mlx::steel::mma<                                           \
+      float,                                                 \
+      float,                                                 \
+      float,                                                 \
+      TA,                                                    \
+      TB,                                                    \
+      mpp::tensor_ops::matmul2d_descriptor::mode::multiply>( \
+      C.frag_at(0, (CO)),                                    \
+      A.frag_at(0, (AO)),                                    \
+      metal::bool_constant<TA>{},                            \
+      B.frag_at(0, (BO)),                                    \
+      metal::bool_constant<TB>{});
+
+#define MMA16x16x16(C, CO, A, TA, AO, B, TB, BO)                        \
+  mlx::steel::mma<                                                      \
+      float,                                                            \
+      float,                                                            \
+      float,                                                            \
+      TA,                                                               \
+      TB,                                                               \
+      mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate>( \
+      C.frag_at(0, (CO)),                                               \
+      A.frag_at(0, (AO)),                                               \
+      metal::bool_constant<TA>{},                                       \
+      B.frag_at(0, (BO)),                                               \
+      metal::bool_constant<TB>{});
+
+#define MMA16x16x32(C, CO, A, TA, AO, B, TB, BO)                        \
+  mlx::steel::mma<                                                      \
+      float,                                                            \
+      float,                                                            \
+      float,                                                            \
+      TA,                                                               \
+      TB,                                                               \
+      mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate>( \
+      C.frag_at(0, (CO)),                                               \
+      A.frag_at(0, (AO)),                                               \
+      A.frag_at(0, (AO) + 1),                                           \
+      metal::bool_constant<TA>{},                                       \
+      B.frag_at(0, (BO)),                                               \
+      B.frag_at(0, (BO) + 1),                                           \
+      metal::bool_constant<TB>{});
+
+#define MM16x32x16(C, CO, A, TA, AO, B, TB, BO)              \
+  mlx::steel::mman<                                          \
+      float,                                                 \
+      float,                                                 \
+      float,                                                 \
+      TA,                                                    \
+      TB,                                                    \
+      mpp::tensor_ops::matmul2d_descriptor::mode::multiply>( \
+      C.frag_at(0, (CO)),                                    \
+      C.frag_at(0, (CO) + 1),                                \
+      A.frag_at(0, (AO)),                                    \
+      metal::bool_constant<TA>{},                            \
+      B.frag_at(0, (BO)),                                    \
+      B.frag_at(0, (BO) + 1),                                \
+      metal::bool_constant<TB>{});
+
+#define MMA16x32x16(C, CO, A, TA, AO, B, TB, BO)                        \
+  mlx::steel::mman<                                                     \
+      float,                                                            \
+      float,                                                            \
+      float,                                                            \
+      TA,                                                               \
+      TB,                                                               \
+      mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate>( \
+      C.frag_at(0, (CO)),                                               \
+      C.frag_at(0, (CO) + 1),                                           \
+      A.frag_at(0, (AO)),                                               \
+      metal::bool_constant<TA>{},                                       \
+      B.frag_at(0, (BO)),                                               \
+      B.frag_at(0, (BO) + 1),                                           \
+      metal::bool_constant<TB>{});
 
 template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
 [[kernel]] void gated_delta_fused_nax(
@@ -372,7 +446,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   mlx::steel::NAXTile<float, 1, 1> tmp_tile;
   mlx::steel::NAXTile<float, 1, 1> QKt_tile;
   mlx::steel::NAXTile<float, 1, 1> out_tile;
-  mlx::steel::NAXTile<float, 1, 1> Tinv_tile;
+  mlx::steel::NAXTile<float, 1, 1> Tinv_tile, P;
 
   mlx::steel::NAXTile<float, 1, 1> KKtK_tile, KKtV_tile, KKt_tile;
 
@@ -407,61 +481,27 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     // KP_tile.load(k_, Dk * Hk);
     for (int kk = 0; kk < Dk; kk += 32) { // two 16-tiles per iter
       K_tile.load(k_ + kk, Dk * Hk);
-
-      mlx::steel::mma<float, float, float, false, true>(
-          KKt_tile.frag_at(0, 0),
-          K_tile.frag_at(0, 0),
-          K_tile.frag_at(0, 1),
-          metal::bool_constant<false>{},
-          K_tile.frag_at(0, 0),
-          K_tile.frag_at(0, 1),
-          metal::bool_constant<true>{});
+      MMA16x16x32(KKt_tile, 0, K_tile, false, 0, K_tile, true, 0)
     }
 
     KKtK_tile = KKt_tile;
     KKtV_tile = KKt_tile;
 
     SCALE_TRIEQ_NAX1(KKtK_tile, beta_fm)
+    MM16x16x16(P, 0, KKtK_tile, false, 0, KKtK_tile, false, 0)
 
-    Tinv_tile = I_tile;
-    STEEL_PRAGMA_UNROLL
-    for (int step = 0; step < C - 1; step++) {
-      // TMP = T_K · Tinv
-      mlx::steel::mma<
-          float,
-          float,
-          float,
-          false,
-          false,
-          mpp::tensor_ops::matmul2d_descriptor::mode::multiply>(
-          TMP_tile.frag_at(0, 0),
-          KKtK_tile.frag_at(0, 0),
-          metal::bool_constant<false>{},
-          Tinv_tile.frag_at(0, 0),
-          metal::bool_constant<false>{});
-      // Tinv = I - TMP
-      SUB_NAX(Tinv_tile, I_tile, TMP_tile)
-    }
+        ADD_NAX(Tinv_tile, I_tile, P)
+            STEEL_PRAGMA_UNROLL for (int step = 0; step < 6; step++){
+                MM16x16x16(TMP_tile, 0, P, false, 0, Tinv_tile, false, 0)
+                    ADD_NAX(Tinv_tile, I_tile, TMP_tile)}
 
-    STEEL_PRAGMA_UNROLL
-    for (short nn = 0; nn < Dk / 16; nn += 2) {
+    MM16x16x16(TMP_tile, 0, KKtK_tile, false, 0, Tinv_tile, false, 0)
+        SUB_NAX(Tinv_tile, Tinv_tile, TMP_tile)
+
+            STEEL_PRAGMA_UNROLL for (short nn = 0; nn < Dk / 16; nn += 2) {
       K_tile.load(k_ + nn * 16, Dk * Hk);
       SCALE_BETA_NAX(K_tile, beta_fm)
-
-      mlx::steel::mman<
-          float,
-          float,
-          float,
-          false,
-          false,
-          mpp::tensor_ops::matmul2d_descriptor::mode::multiply>(
-          W_tile.frag_at(0, nn),
-          W_tile.frag_at(0, nn + 1),
-          Tinv_tile.frag_at(0, 0), // A = Tinv (reused across N)
-          metal::bool_constant<false>{},
-          K_tile.frag_at(0, 0), // B = beta-scaled K
-          K_tile.frag_at(0, 1),
-          metal::bool_constant<false>{});
+      MM16x32x16(W_tile, nn, Tinv_tile, false, 0, K_tile, false, 0)
     }
     SCALE_ROW_NAX(W_tile, gamma)
 
@@ -469,30 +509,12 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     V_tile.load(v_ + dv_idx, Dv * Hv);
     SCALE_BETA_NAX(V_tile, beta_fm)
     // U = Tinv @ diag(b)V
-    mlx::steel::mma<
-        float,
-        float,
-        float,
-        false,
-        false,
-        mpp::tensor_ops::matmul2d_descriptor::mode::multiply>(
-        U_tile.frag_at(0, 0),
-        Tinv_tile.frag_at(0, 0),
-        metal::bool_constant<false>{},
-        V_tile.frag_at(0, 0),
-        metal::bool_constant<false>{});
+    MM16x16x16(U_tile, 0, Tinv_tile, false, 0, V_tile, false, 0)
 
-    WS_tile.clear();
+        WS_tile.clear();
     STEEL_PRAGMA_UNROLL
     for (short kk = 0; kk < Dk / 16; kk += 2) {
-      mlx::steel::mma<float, float, float, false, true>(
-          WS_tile.frag_at(0, 0),
-          W_tile.frag_at(0, kk),
-          W_tile.frag_at(0, kk + 1),
-          metal::bool_constant<false>{},
-          S_tile.frag_at(0, kk),
-          S_tile.frag_at(0, kk + 1),
-          metal::bool_constant<true>{});
+      MMA16x16x32(WS_tile, 0, W_tile, false, kk, S_tile, true, kk)
     }
 
     SUB_NAX(delta_tile, U_tile, WS_tile)
@@ -501,61 +523,28 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     QKt_tile.clear();
     for (int kk = 0; kk < Dk; kk += 32) {
       Q_tile.load(q_ + kk, Hk * Dk);
-      K_tile.load(k_ + kk, Hk * Dk); // this one is transposed
+      K_tile.load(k_ + kk, Hk * Dk);
 
       // Q @ K^T
-      mlx::steel::mma<float, float, float, false, true>(
-          QKt_tile.frag_at(0, 0),
-          Q_tile.frag_at(0, 0),
-          Q_tile.frag_at(0, 1),
-          metal::bool_constant<false>{},
-          K_tile.frag_at(0, 0),
-          K_tile.frag_at(0, 1),
-          metal::bool_constant<true>{});
+      MMA16x16x32(QKt_tile, 0, Q_tile, false, 0, K_tile, true, 0)
 
-      SCALE_ROW_NAX(Q_tile, gamma)
-      // Q_left @ S^T
-      mlx::steel::mma<float, InT, StT, false, true>(
-          tmp_tile.frag_at(0, 0),
-          Q_tile.frag_at(0, 0),
-          Q_tile.frag_at(0, 1),
-          metal::bool_constant<false>{},
-          S_tile.frag_at(0, kk / 16),
-          S_tile.frag_at(0, kk / 16 + 1),
-          metal::bool_constant<true>{});
+          // Q_left @ S^T
+          SCALE_ROW_NAX(Q_tile, gamma)
+              MMA16x16x32(tmp_tile, 0, Q_tile, false, 0, S_tile, true, kk / 16)
     }
 
     SCALE_TRI_NAX(QKt_tile, gamma)
 
     out_tile = tmp_tile;
-    mlx::steel::mma<float, float, float, false, false>(
-        out_tile.frag_at(0, 0),
-        QKt_tile.frag_at(0, 0),
-        metal::bool_constant<false>{},
-        delta_tile.frag_at(0, 0),
-        metal::bool_constant<false>{});
-
-    out_tile.store(y + dv_idx, Hv * Dv);
+    MMA16x16x16(out_tile, 0, QKt_tile, false, 0, delta_tile, false, 0)
+        out_tile.store(y + dv_idx, Hv * Dv);
 
     SCALE_NAX(S_tile, metal::exp(gamma[C - 1]))
 
     for (int kk = 0; kk < Dk; kk += 32) {
       K_tile.load(k_ + kk, Hk * Dk);
       SCALE2_NAX(K_tile, gamma)
-      mlx::steel::mman<
-          float,
-          float,
-          float,
-          true,
-          false,
-          mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate>(
-          S_tile.frag_at(0, kk / 16),
-          S_tile.frag_at(0, kk / 16 + 1),
-          delta_tile.frag_at(0, 0),
-          metal::bool_constant<true>{},
-          K_tile.frag_at(0, 0),
-          K_tile.frag_at(0, 1),
-          metal::bool_constant<false>{});
+      MMA16x32x16(S_tile, kk / 16, delta_tile, true, 0, K_tile, false, 0)
     }
 
     // advance pointers
@@ -703,13 +692,10 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
       simdgroup_multiply_accumulate(WS_tile, W_tile, S_tile[kk / 8], WS_tile);
     }
 
-    AT(P, 0) = AT(KKtV_tile, 0);
-    AT(P, 1) = AT(KKtV_tile, 1);
-    SUB(Tinv, I_tile, KKtV_tile)
-    for (int step = 1; (1 << step) < C; step++) {
-      simdgroup_multiply(P, P, P);
-      simdgroup_multiply_accumulate(Tinv, Tinv, P, Tinv);
-    }
+    SCALE_TRI(
+        Tinv,
+        metal::exp(gamma[fm] - gamma[fn]),
+        metal::exp(gamma[fm] - gamma[fn + 1]))
 
     // U = Tinv @ (beta * V)
     simdgroup_load(V_tile, v_ + dv_idx, Dv * Hv);
