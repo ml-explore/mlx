@@ -803,6 +803,52 @@ MTL::ComputePipelineState* get_gemv_masked_kernel(
   return d.get_kernel(kernel_name, lib);
 }
 
+MTL::ComputePipelineState* get_gemv_wide_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& out,
+    int vecs_per_tg,
+    int k_lanes) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::gemv()
+                  << get_template_definition(
+                         lib_name,
+                         "gemv_wide",
+                         get_type_string(out.dtype()),
+                         vecs_per_tg,
+                         k_lanes);
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_gemv_wide_gather_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& out,
+    int vecs_per_tg,
+    int k_lanes) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::gemv()
+                  << get_template_definition(
+                         lib_name,
+                         "gemv_wide_gather",
+                         get_type_string(out.dtype()),
+                         vecs_per_tg,
+                         k_lanes);
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
 MTL::ComputePipelineState* get_steel_conv_kernel(
     metal::Device& d,
     const std::string& kernel_name,

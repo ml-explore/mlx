@@ -23,7 +23,7 @@ class MeshGroup : public Group {
   MeshGroup(
       int rank,
       const std::vector<std::string>& device_names,
-      const std::string& coordinator_addr);
+      SideChannel sc);
 
   int rank() override {
     return rank_;

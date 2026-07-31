@@ -360,6 +360,24 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         ref = mlx_ref_attn(q, k, v, mask=mask)
         self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_sdpa_blocks_env_override(self):
+        # MLX_SDPA_BLOCKS used to be applied as-is, and values that are not
+        # a multiple of 32 silently corrupted the 2-pass vector output. The
+        # override is now rounded up to a multiple of 32.
+        D = 128
+        q = mx.random.normal(shape=(1, 32, 1, D), dtype=mx.float16)
+        k = mx.random.normal(shape=(1, 8, 8192, D), dtype=mx.float16)
+        v = mx.random.normal(shape=(1, 8, 8192, D), dtype=mx.float16)
+        ref = mx.fast.scaled_dot_product_attention(q, k, v, scale=D**-0.5)
+        try:
+            for blocks in (16, 33, 48, 100):
+                os.environ["MLX_SDPA_BLOCKS"] = str(blocks)
+                out = mx.fast.scaled_dot_product_attention(q, k, v, scale=D**-0.5)
+                self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+        finally:
+            del os.environ["MLX_SDPA_BLOCKS"]
+
     @unittest.skipIf(not mx.is_available(mx.gpu), "too slow on CPU")
     def test_sdpa(self):
         # fmt: off

@@ -8,6 +8,9 @@
 #include <jaccl/group.h>
 #include <jaccl/jaccl.h>
 
+#include <optional>
+#include <sstream>
+
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 
 namespace mlx::core::distributed::jaccl {
@@ -164,6 +167,14 @@ bool is_available() {
 
 std::shared_ptr<GroupImpl> init(bool strict /* = false */) {
   auto group = ::jaccl::init(strict);
+  if (group == nullptr) {
+    return nullptr;
+  }
+  return std::make_shared<JACCLGroup>(std::move(group));
+}
+
+std::shared_ptr<GroupImpl> init(bool strict, AllGatherFactory factory) {
+  auto group = ::jaccl::init(strict, factory);
   if (group == nullptr) {
     return nullptr;
   }

@@ -154,6 +154,15 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_hat = mx.dequantize(w_q, scales, mode="nvfp4")
         self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
 
+        # A scale shared across a 32-value SIMD group instead of computed
+        # per 16-value group cannot represent the low-magnitude groups.
+        alternating = mx.zeros((64, 16), dtype=mx.bfloat16)
+        alternating[::2] = 6 * 2**-9
+        alternating[1::2] = 6.0
+        w_q, scales = mx.quantize(alternating, mode="nvfp4")
+        w_hat = mx.dequantize(w_q, scales, mode="nvfp4", dtype=mx.bfloat16)
+        self.assertTrue(mx.allclose(alternating, w_hat, rtol=1e-5, atol=1e-6))
+
         # test quantize/dequantize 0s
         a = mx.zeros((256, 512))
         w_q, scales = mx.quantize(a, mode="nvfp4")
