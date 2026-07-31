@@ -241,7 +241,8 @@ struct MMATile {
     }
   }
 
-  METAL_FUNC constexpr thread frag_type& frag_at(const short i, const short j) thread {
+  METAL_FUNC constexpr thread frag_type& frag_at(const short i, const short j)
+      thread {
     return val_frags[i * kTileCols + j];
   }
 
@@ -333,8 +334,10 @@ struct MMATile {
   }
 
   template <typename U, int w_x, int w_y>
-  METAL_FUNC void
-  load_safe(const device U* src, const int ld, const short2 src_tile_dims) thread {
+  METAL_FUNC void load_safe(
+      const device U* src,
+      const int ld,
+      const short2 src_tile_dims) thread {
     STEEL_PRAGMA_UNROLL
     for (int i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
@@ -353,8 +356,10 @@ struct MMATile {
   }
 
   template <typename U, int w_x, int w_y>
-  METAL_FUNC void
-  store_safe(device U* dst, const int ld, const short2 dst_tile_dims) const thread {
+  METAL_FUNC void store_safe(
+      device U* dst,
+      const int ld,
+      const short2 dst_tile_dims) const thread {
     STEEL_PRAGMA_UNROLL
     for (int i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
