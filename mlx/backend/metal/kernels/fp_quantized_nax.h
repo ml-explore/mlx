@@ -39,7 +39,7 @@ static inline T dequantize_scale(uint8_t s) {
 
 template <int bits>
 struct Quantize {
-  uint8_t operator()(float x) {
+  uint8_t operator()(float x) thread {
     if (bits == 8) {
       return fp8_e4m3(x).bits;
     } else {
@@ -50,7 +50,7 @@ struct Quantize {
 
 template <int bits, typename U = float>
 struct Dequantize {
-  U operator()(uint8_t x) {
+  U operator()(uint8_t x) thread {
     if constexpr (bits == 8) {
       return U(*(thread fp8_e4m3*)(&x));
     } else {
@@ -112,7 +112,7 @@ struct QuantizedBlockLoader {
       const int src_ld_,
       threadgroup T* dst_,
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
-      ushort simd_lane_id [[thread_index_in_simdgroup]])
+      ushort simd_lane_id [[thread_index_in_simdgroup]]) thread
       : src_ld(src_ld_),
         tile_stride(
             reduction_dim ? BCOLS_PACKED * bytes_per_pack
@@ -127,7 +127,7 @@ struct QuantizedBlockLoader {
             bj * bytes_per_pack),
         scales(scales_ + bi * src_ld / group_size + group_id) {}
 
-  void load_unsafe() const {
+  void load_unsafe() const thread {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
       return;
     }
@@ -143,7 +143,7 @@ struct QuantizedBlockLoader {
     }
   }
 
-  void load_safe(short2 src_tile_dim) const {
+  void load_safe(short2 src_tile_dim) const thread {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
       return;
     }
@@ -173,7 +173,7 @@ struct QuantizedBlockLoader {
     }
   }
 
-  void next() {
+  void next() thread {
     src += tile_stride;
     if (reduction_dim == 1) {
       scales += n_groups;

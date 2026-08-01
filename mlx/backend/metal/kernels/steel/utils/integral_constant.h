@@ -20,7 +20,7 @@ struct integral_constant {
   using value_type = T;
   using type = integral_constant;
 
-  METAL_FUNC constexpr operator value_type() const noexcept {
+  METAL_FUNC constexpr operator value_type() const thread noexcept {
     return value;
   }
 };

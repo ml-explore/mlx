@@ -18,8 +18,7 @@ function(build_kernel_base TARGET SRCFILE DEPS)
       -fno-fast-math
       -Wno-c++17-extensions
       -Wno-c++20-extensions
-      -Wmetal-addr-spaces
-      -Xclang -fix-what-you-can)
+      -Wmetal-addr-spaces)
   if(MLX_METAL_DEBUG)
     set(METAL_FLAGS ${METAL_FLAGS} -gline-tables-only -frecord-sources)
   endif()

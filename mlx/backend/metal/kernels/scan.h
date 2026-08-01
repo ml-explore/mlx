@@ -38,15 +38,15 @@ struct CumSum {
   static constexpr constant U init = static_cast<U>(0);
 
   template <typename T>
-  U operator()(U a, T b) {
+  U operator()(U a, T b) thread {
     return a + b;
   }
 
-  U simd_scan_impl(U x) {
+  U simd_scan_impl(U x) thread {
     return simd_prefix_inclusive_sum(x);
   }
 
-  U simd_exclusive_scan_impl(U x) {
+  U simd_exclusive_scan_impl(U x) thread {
     return simd_prefix_exclusive_sum(x);
   }
 };
@@ -59,15 +59,15 @@ struct CumProd {
   static constexpr constant U init = static_cast<U>(1.0f);
 
   template <typename T>
-  U operator()(U a, T b) {
+  U operator()(U a, T b) thread {
     return a * b;
   }
 
-  U simd_scan_impl(U x) {
+  U simd_scan_impl(U x) thread {
     return simd_prefix_inclusive_product(x);
   }
 
-  U simd_exclusive_scan_impl(U x) {
+  U simd_exclusive_scan_impl(U x) thread {
     return simd_prefix_exclusive_product(x);
   }
 };
@@ -77,11 +77,11 @@ struct CumProd<bool> {
   static constexpr constant bool init = true;
 
   template <typename T>
-  bool operator()(bool a, T b) {
+  bool operator()(bool a, T b) thread {
     return a & static_cast<bool>(b);
   }
 
-  bool simd_scan(bool x) {
+  bool simd_scan(bool x) thread {
     for (int i = 1; i <= 16; i *= 2) {
       bool other = simd_shuffle_and_fill_up(x, init, i);
       x &= other;
@@ -89,7 +89,7 @@ struct CumProd<bool> {
     return x;
   }
 
-  bool simd_exclusive_scan(bool x) {
+  bool simd_exclusive_scan(bool x) thread {
     x = simd_scan(x);
     return simd_shuffle_and_fill_up(x, init, 1);
   }
@@ -100,11 +100,11 @@ struct CumMax {
   static constexpr constant U init = Limits<U>::min;
 
   template <typename T>
-  U operator()(U a, T b) {
+  U operator()(U a, T b) thread {
     return (a >= b) ? a : b;
   }
 
-  U simd_scan(U x) {
+  U simd_scan(U x) thread {
     for (int i = 1; i <= 16; i *= 2) {
       U other = simd_shuffle_and_fill_up(x, init, i);
       x = (x >= other) ? x : other;
@@ -112,7 +112,7 @@ struct CumMax {
     return x;
   }
 
-  U simd_exclusive_scan(U x) {
+  U simd_exclusive_scan(U x) thread {
     x = simd_scan(x);
     return simd_shuffle_and_fill_up(x, init, 1);
   }
@@ -123,11 +123,11 @@ struct CumMin {
   static constexpr constant U init = Limits<U>::max;
 
   template <typename T>
-  U operator()(U a, T b) {
+  U operator()(U a, T b) thread {
     return (a <= b) ? a : b;
   }
 
-  U simd_scan(U x) {
+  U simd_scan(U x) thread {
     for (int i = 1; i <= 16; i *= 2) {
       U other = simd_shuffle_and_fill_up(x, init, i);
       x = (x <= other) ? x : other;
@@ -135,7 +135,7 @@ struct CumMin {
     return x;
   }
 
-  U simd_exclusive_scan(U x) {
+  U simd_exclusive_scan(U x) thread {
     x = simd_scan(x);
     return simd_shuffle_and_fill_up(x, init, 1);
   }
@@ -146,11 +146,11 @@ struct CumLogaddexp {
   static constexpr constant U init = Limits<U>::min;
 
   template <typename T>
-  U operator()(U a, T b) {
+  U operator()(U a, T b) thread {
     return LogAddExp{}(a, static_cast<U>(b));
   }
 
-  U simd_scan(U x) {
+  U simd_scan(U x) thread {
     for (int i = 1; i <= 16; i *= 2) {
       U other = simd_shuffle_and_fill_up(x, init, i);
       x = LogAddExp{}(x, other);
@@ -158,7 +158,7 @@ struct CumLogaddexp {
     return x;
   }
 
-  U simd_exclusive_scan(U x) {
+  U simd_exclusive_scan(U x) thread {
     x = simd_scan(x);
     return simd_shuffle_and_fill_up(x, init, 1);
   }

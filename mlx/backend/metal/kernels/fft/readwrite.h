@@ -57,7 +57,7 @@ struct ReadWriter {
       const short elems_per_thread_,
       const uint3 elem_,
       const uint3 grid_,
-      const bool inv_)
+      const bool inv_) thread
       : in(in_),
         buf(buf_),
         out(out_),
@@ -74,30 +74,30 @@ struct ReadWriter {
   }
 
   // ifft(x) = 1/n * conj(fft(conj(x)))
-  METAL_FUNC float2 post_in(float2 elem) const {
+  METAL_FUNC float2 post_in(float2 elem) const thread {
     return inv ? float2(elem.x, -elem.y) : elem;
   }
 
   // Handle float case for generic RFFT alg
-  METAL_FUNC float2 post_in(float elem) const {
+  METAL_FUNC float2 post_in(float elem) const thread {
     return float2(elem, 0);
   }
 
-  METAL_FUNC float2 pre_out(float2 elem) const {
+  METAL_FUNC float2 pre_out(float2 elem) const thread {
     return inv ? float2(elem.x / n, -elem.y / n) : elem;
   }
 
-  METAL_FUNC float2 pre_out(float2 elem, int length) const {
+  METAL_FUNC float2 pre_out(float2 elem, int length) const thread {
     return inv ? float2(elem.x / length, -elem.y / length) : elem;
   }
 
-  METAL_FUNC bool out_of_bounds() const {
+  METAL_FUNC bool out_of_bounds() const thread {
     // Account for possible extra threadgroups
     int grid_index = elem.x * grid.y + elem.y;
     return grid_index >= batch_size;
   }
 
-  METAL_FUNC void load() const {
+  METAL_FUNC void load() const thread {
     size_t batch_idx = size_t(elem.x * grid.y) * n;
     short tg_idx = elem.y * grid.z + elem.z;
     short max_index = grid.y * n - 2;
@@ -120,7 +120,7 @@ struct ReadWriter {
     }
   }
 
-  METAL_FUNC void write() const {
+  METAL_FUNC void write() const thread {
     size_t batch_idx = size_t(elem.x * grid.y) * n;
     short tg_idx = elem.y * grid.z + elem.z;
     short max_index = grid.y * n - 2;
@@ -143,7 +143,7 @@ struct ReadWriter {
   }
 
   // Padded IO for Bluestein's algorithm
-  METAL_FUNC void load_padded(int length, const device float2* w_k) const {
+  METAL_FUNC void load_padded(int length, const device float2* w_k) const thread {
     size_t batch_idx = size_t(elem.x * grid.y) * length + elem.y * length;
     int fft_idx = elem.z;
     int m = grid.z;
@@ -160,7 +160,7 @@ struct ReadWriter {
     }
   }
 
-  METAL_FUNC void write_padded(int length, const device float2* w_k) const {
+  METAL_FUNC void write_padded(int length, const device float2* w_k) const thread {
     size_t batch_idx = size_t(elem.x * grid.y) * length + elem.y * length;
     int fft_idx = elem.z;
     int m = grid.z;
@@ -177,7 +177,7 @@ struct ReadWriter {
   }
 
   // Strided IO for four step FFT
-  METAL_FUNC void compute_strided_indices(int stride, int overall_n) {
+  METAL_FUNC void compute_strided_indices(int stride, int overall_n) thread {
     // Use the batch threadgroup dimension to coalesce memory accesses:
     // e.g. stride = 12
     // device      | shared mem
@@ -199,7 +199,7 @@ struct ReadWriter {
   }
 
   // Four Step FFT First Step
-  METAL_FUNC void load_strided(int stride, int overall_n) {
+  METAL_FUNC void load_strided(int stride, int overall_n) thread {
     compute_strided_indices(stride, overall_n);
     for (int e = 0; e < elems_per_thread; e++) {
       buf[strided_shared_idx + e] =
@@ -207,7 +207,7 @@ struct ReadWriter {
     }
   }
 
-  METAL_FUNC void write_strided(int stride, int overall_n) {
+  METAL_FUNC void write_strided(int stride, int overall_n) thread {
     for (int e = 0; e < elems_per_thread; e++) {
       float2 output = buf[strided_shared_idx + e];
       int combined_idx = (strided_device_idx + e * stride) % overall_n;
@@ -223,7 +223,7 @@ struct ReadWriter {
 template <>
 METAL_FUNC void ReadWriter<float2, float2, /*step=*/1>::load_strided(
     int stride,
-    int overall_n) {
+    int overall_n) thread {
   // Silence compiler warnings
   (void)stride;
   (void)overall_n;
@@ -237,7 +237,7 @@ METAL_FUNC void ReadWriter<float2, float2, /*step=*/1>::load_strided(
 template <>
 METAL_FUNC void ReadWriter<float2, float2, /*step=*/1>::write_strided(
     int stride,
-    int overall_n) {
+    int overall_n) thread {
   compute_strided_indices(stride, overall_n);
   for (int e = 0; e < elems_per_thread; e++) {
     float2 output = buf[strided_shared_idx + e];
@@ -253,14 +253,14 @@ METAL_FUNC void ReadWriter<float2, float2, /*step=*/1>::write_strided(
 //
 // This roughly doubles the throughput over the regular FFT.
 template <>
-METAL_FUNC bool ReadWriter<float, float2>::out_of_bounds() const {
+METAL_FUNC bool ReadWriter<float, float2>::out_of_bounds() const thread {
   int grid_index = elem.x * grid.y + elem.y;
   // We pack two sequences into one for RFFTs
   return grid_index * 2 >= batch_size;
 }
 
 template <>
-METAL_FUNC void ReadWriter<float, float2>::load() const {
+METAL_FUNC void ReadWriter<float, float2>::load() const thread {
   size_t batch_idx = size_t(elem.x * grid.y) * n * 2 + elem.y * n * 2;
   threadgroup float2* seq_buf = buf + elem.y * n;
 
@@ -280,7 +280,7 @@ METAL_FUNC void ReadWriter<float, float2>::load() const {
 }
 
 template <>
-METAL_FUNC void ReadWriter<float, float2>::write() const {
+METAL_FUNC void ReadWriter<float, float2>::write() const thread {
   short n_over_2 = (n / 2) + 1;
 
   size_t batch_idx =
@@ -317,7 +317,7 @@ METAL_FUNC void ReadWriter<float, float2>::write() const {
 template <>
 METAL_FUNC void ReadWriter<float, float2>::load_padded(
     int length,
-    const device float2* w_k) const {
+    const device float2* w_k) const thread {
   size_t batch_idx = size_t(elem.x * grid.y) * length * 2 + elem.y * length * 2;
   threadgroup float2* seq_buf = buf + elem.y * n;
 
@@ -344,7 +344,7 @@ METAL_FUNC void ReadWriter<float, float2>::load_padded(
 template <>
 METAL_FUNC void ReadWriter<float, float2>::write_padded(
     int length,
-    const device float2* w_k) const {
+    const device float2* w_k) const thread {
   int length_over_2 = (length / 2) + 1;
   size_t batch_idx =
       size_t(elem.x * grid.y) * length_over_2 * 2 + elem.y * length_over_2 * 2;
@@ -389,14 +389,14 @@ METAL_FUNC void ReadWriter<float, float2>::write_padded(
 // x_k = Re(Z_k)
 // Y_k = Imag(Z_k)
 template <>
-METAL_FUNC bool ReadWriter<float2, float>::out_of_bounds() const {
+METAL_FUNC bool ReadWriter<float2, float>::out_of_bounds() const thread {
   int grid_index = elem.x * grid.y + elem.y;
   // We pack two sequences into one for IRFFTs
   return grid_index * 2 >= batch_size;
 }
 
 template <>
-METAL_FUNC void ReadWriter<float2, float>::load() const {
+METAL_FUNC void ReadWriter<float2, float>::load() const thread {
   short n_over_2 = (n / 2) + 1;
   size_t batch_idx =
       size_t(elem.x * grid.y) * n_over_2 * 2 + elem.y * n_over_2 * 2;
@@ -435,7 +435,7 @@ METAL_FUNC void ReadWriter<float2, float>::load() const {
 }
 
 template <>
-METAL_FUNC void ReadWriter<float2, float>::write() const {
+METAL_FUNC void ReadWriter<float2, float>::write() const thread {
   int batch_idx = elem.x * grid.y * n * 2 + elem.y * n * 2;
   threadgroup float2* seq_buf = buf + elem.y * n;
 
@@ -456,7 +456,7 @@ METAL_FUNC void ReadWriter<float2, float>::write() const {
 template <>
 METAL_FUNC void ReadWriter<float2, float>::load_padded(
     int length,
-    const device float2* w_k) const {
+    const device float2* w_k) const thread {
   int n_over_2 = (n / 2) + 1;
   int length_over_2 = (length / 2) + 1;
 
@@ -504,7 +504,7 @@ METAL_FUNC void ReadWriter<float2, float>::load_padded(
 template <>
 METAL_FUNC void ReadWriter<float2, float>::write_padded(
     int length,
-    const device float2* w_k) const {
+    const device float2* w_k) const thread {
   size_t batch_idx = size_t(elem.x * grid.y) * length * 2 + elem.y * length * 2;
   threadgroup float2* seq_buf = buf + elem.y * n + length - 1;
 
@@ -531,7 +531,7 @@ template <>
 METAL_FUNC void
 ReadWriter<float2, float2, /*step=*/1, /*real=*/true>::load_strided(
     int stride,
-    int overall_n) {
+    int overall_n) thread {
   // Silence compiler warnings
   (void)stride;
   (void)overall_n;
@@ -546,7 +546,7 @@ template <>
 METAL_FUNC void
 ReadWriter<float2, float2, /*step=*/1, /*real=*/true>::write_strided(
     int stride,
-    int overall_n) {
+    int overall_n) thread {
   int overall_n_over_2 = overall_n / 2 + 1;
   int coalesce_width = grid.y;
   int tg_idx = elem.y * grid.z + elem.z;
@@ -575,7 +575,7 @@ template <>
 METAL_FUNC void
 ReadWriter<float2, float2, /*step=*/0, /*real=*/true>::load_strided(
     int stride,
-    int overall_n) {
+    int overall_n) thread {
   int overall_n_over_2 = overall_n / 2 + 1;
   auto conj = float2(1, -1);
 
@@ -600,7 +600,7 @@ template <>
 METAL_FUNC void
 ReadWriter<float2, float, /*step=*/1, /*real=*/true>::load_strided(
     int stride,
-    int overall_n) {
+    int overall_n) thread {
   // Silence compiler warnings
   (void)stride;
   (void)overall_n;
@@ -614,7 +614,7 @@ template <>
 METAL_FUNC void
 ReadWriter<float2, float, /*step=*/1, /*real=*/true>::write_strided(
     int stride,
-    int overall_n) {
+    int overall_n) thread {
   compute_strided_indices(stride, overall_n);
 
   for (int e = 0; e < elems_per_thread; e++) {
