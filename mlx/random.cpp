@@ -321,7 +321,15 @@ array randint(
   // since it only validates the output dtype, can then drive the range to 0
   // (remainder by 0 returns the dividend rather than raising). Compare in
   // the output domain, which is exact for the dtype the caller asked for.
-  auto cmp_dtype = issubdtype(dtype, unsignedinteger) ? uint64 : int64;
+  // Choose the comparison domain from the BOUNDS, not the output dtype: only
+  // when both bounds are themselves unsigned is uint64 safe. Picking it from
+  // the output dtype collapses `randint(-2, 2, dtype=uint8)`, because the
+  // negative `low` casts to a huge unsigned value and the interval reads as
+  // empty.
+  auto cmp_dtype = (issubdtype(low.dtype(), unsignedinteger) &&
+                    issubdtype(high.dtype(), unsignedinteger))
+      ? uint64
+      : int64;
   auto empty = less_equal(
       astype(high, cmp_dtype, stream), astype(low, cmp_dtype, stream), stream);
   auto safe_range = where(

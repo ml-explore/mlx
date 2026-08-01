@@ -365,6 +365,27 @@ class TestRandom(mlx_tests.MLXTestCase):
         y = mx.random.randint(0.5, 0.9, (1_000,), dtype=mx.int32, key=key)
         self.assertEqual(set(y.tolist()), {0})
 
+    def test_randint_negative_low_unsigned_dtype_does_not_collapse(self):
+        # The comparison domain for the empty-interval test has to come from
+        # the BOUNDS, not the output dtype. Deriving it from the output made
+        # `randint(-2, 2, dtype=uint8)` compare in uint64, where the negative
+        # `low` becomes a huge value, the interval reads as empty, and every
+        # draw collapses onto a single constant.
+        #
+        # A negative bound with an unsigned output is out of contract to begin
+        # with and its wrapping behaviour is unspecified, so this asserts only
+        # the property that regressed: the sample must not collapse.
+        key = mx.random.key(7)
+        for lo, hi, dt in [
+            (-2, 2, mx.uint8),
+            (-5, 5, mx.uint32),
+            (-2, 2, mx.uint64),
+        ]:
+            x = mx.random.randint(lo, hi, (20_000,), dtype=dt, key=key)
+            self.assertGreater(
+                len(set(x.tolist())), 1, f"collapsed for [{lo}, {hi}) -> {dt}"
+            )
+
     def test_bernoulli(self):
         a = mx.random.bernoulli()
         self.assertEqual(a.shape, ())
