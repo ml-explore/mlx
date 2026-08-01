@@ -2114,7 +2114,7 @@ void gather_mm_rhs(
   int K = a.shape(-1);
   int M = a.size() / K;
   int N = b.shape(-1);
-  int lda = a.strides()[a.ndim() - 2]; // should be K
+  int lda = K;
 
   // Define the dispatch blocks
   int bm = 16, bn = 64, bk = 16;
@@ -2247,7 +2247,7 @@ void gather_mm_rhs_nax(
   int K = a.shape(-1);
   int M = a.size() / K;
   int N = b.shape(-1);
-  int lda = a.strides()[a.ndim() - 2]; // should be K
+  int lda = K;
   int E = b.shape(0);
 
   // Define the dispatch blocks
