@@ -57,16 +57,15 @@ struct ReadWriter {
       const short elems_per_thread_,
       const uint3 elem_,
       const uint3 grid_,
-      const bool inv_) thread
-      : in(in_),
-        buf(buf_),
-        out(out_),
-        n(n_),
-        batch_size(batch_size_),
-        elems_per_thread(elems_per_thread_),
-        elem(elem_),
-        grid(grid_),
-        inv(inv_) {
+      const bool inv_) thread : in(in_),
+                                buf(buf_),
+                                out(out_),
+                                n(n_),
+                                batch_size(batch_size_),
+                                elems_per_thread(elems_per_thread_),
+                                elem(elem_),
+                                grid(grid_),
+                                inv(inv_) {
     // Account for padding on last threadgroup
     threads_per_tg = elem.x == grid.x - 1
         ? (batch_size - (grid.x - 1) * grid.y) * grid.z
@@ -143,7 +142,8 @@ struct ReadWriter {
   }
 
   // Padded IO for Bluestein's algorithm
-  METAL_FUNC void load_padded(int length, const device float2* w_k) const thread {
+  METAL_FUNC void load_padded(int length, const device float2* w_k)
+      const thread {
     size_t batch_idx = size_t(elem.x * grid.y) * length + elem.y * length;
     int fft_idx = elem.z;
     int m = grid.z;
@@ -160,7 +160,8 @@ struct ReadWriter {
     }
   }
 
-  METAL_FUNC void write_padded(int length, const device float2* w_k) const thread {
+  METAL_FUNC void write_padded(int length, const device float2* w_k)
+      const thread {
     size_t batch_idx = size_t(elem.x * grid.y) * length + elem.y * length;
     int fft_idx = elem.z;
     int m = grid.z;

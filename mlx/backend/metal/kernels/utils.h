@@ -220,7 +220,8 @@ struct LoopedElemToLoc {
     }
   }
 
-  void next(int n, const constant int* shape, const constant int64_t* strides) thread {
+  void next(int n, const constant int* shape, const constant int64_t* strides)
+      thread {
     if (dim == 0) {
       return;
     }
@@ -265,7 +266,8 @@ struct LoopedElemToLoc<1, OffsetT, true> {
     }
   }
 
-  void next(int n, const constant int* shape, const constant int64_t* strides) thread {
+  void next(int n, const constant int* shape, const constant int64_t* strides)
+      thread {
     index += n;
     if (dim > 1) {
       offset = elem_to_loc<OffsetT>(index, shape, strides, dim);
@@ -289,7 +291,8 @@ struct LoopedElemToLoc<1, OffsetT, false> {
     offset += OffsetT(strides[0]);
   }
 
-  void next(int n, const constant int*, const constant int64_t* strides) thread {
+  void next(int n, const constant int*, const constant int64_t* strides)
+      thread {
     offset += n * OffsetT(strides[0]);
   }
 

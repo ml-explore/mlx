@@ -550,8 +550,11 @@ struct BlockMMA {
     Ctile.template store<U, WM, WN>(D, ldd);
   }
 
-  METAL_FUNC void
-  store_result_slice(device U* D, const int ldd, short2 start, short2 stop) thread {
+  METAL_FUNC void store_result_slice(
+      device U* D,
+      const int ldd,
+      short2 start,
+      short2 stop) thread {
     // Apply epilogue
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < decltype(Ctile)::kElemsPerTile; i++) {
@@ -590,7 +593,8 @@ struct BlockMMA {
 
   /* Apply epilogue */
   template <typename UnaryEpilogue>
-  METAL_FUNC void apply_epilogue(thread const UnaryEpilogue& epilogue_op) thread {
+  METAL_FUNC void apply_epilogue(
+      thread const UnaryEpilogue& epilogue_op) thread {
     // Loop over all simdgroup tiles
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < decltype(Ctile)::kElemsPerTile; i++) {
@@ -921,8 +925,11 @@ struct BlockMMA<
     }
   }
 
-  METAL_FUNC void
-  store_result_slice(device U* D, const int ldd, short2 start, short2 stop) thread {
+  METAL_FUNC void store_result_slice(
+      device U* D,
+      const int ldd,
+      short2 start,
+      short2 stop) thread {
     D += sm * ldd + sn;
     start -= short2(sn, sm);
     stop -= short2(sn, sm);
@@ -979,7 +986,8 @@ struct BlockMMA<
 
   /* Apply epilogue */
   template <typename UnaryEpilogue>
-  METAL_FUNC void apply_epilogue(thread const UnaryEpilogue& epilogue_op) thread {
+  METAL_FUNC void apply_epilogue(
+      thread const UnaryEpilogue& epilogue_op) thread {
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < decltype(Ctile_r)::kElemsPerTile; i++) {
       complex64_t out = epilogue_op.apply(

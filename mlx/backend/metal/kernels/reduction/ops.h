@@ -28,7 +28,8 @@ union bool4_or_uint {
 
 struct None {
   template <typename T>
-  void atomic_update(device mlx_atomic<T>* out, T val, size_t offset = 0) thread {
+  void atomic_update(device mlx_atomic<T>* out, T val, size_t offset = 0)
+      thread {
     mlx_atomic_store_explicit(out, val, offset);
   }
 };
@@ -56,8 +57,8 @@ struct And {
     }
   }
 
-  void
-  atomic_update(device mlx_atomic<bool>* out, bool val, size_t offset = 0) thread {
+  void atomic_update(device mlx_atomic<bool>* out, bool val, size_t offset = 0)
+      thread {
     if (!val) {
       mlx_atomic_store_explicit(out, val, offset);
     }
@@ -97,8 +98,8 @@ struct Or {
     }
   }
 
-  void
-  atomic_update(device mlx_atomic<bool>* out, bool val, size_t offset = 0) thread {
+  void atomic_update(device mlx_atomic<bool>* out, bool val, size_t offset = 0)
+      thread {
     if (val) {
       mlx_atomic_store_explicit(out, val, offset);
     }
@@ -127,7 +128,8 @@ struct Sum {
   static constexpr constant U init = U(0);
 
   template <typename T>
-  void atomic_update(device mlx_atomic<T>* out, T val, size_t offset = 0) thread {
+  void atomic_update(device mlx_atomic<T>* out, T val, size_t offset = 0)
+      thread {
     mlx_atomic_fetch_add_explicit(out, val, offset);
   }
 
@@ -149,7 +151,8 @@ struct Prod {
   static constexpr constant U init = U(1);
 
   template <typename T>
-  void atomic_update(device mlx_atomic<T>* out, T val, size_t offset = 0) thread {
+  void atomic_update(device mlx_atomic<T>* out, T val, size_t offset = 0)
+      thread {
     mlx_atomic_fetch_mul_explicit(out, val, offset);
   }
 
@@ -164,12 +167,14 @@ struct Min {
   DEFINE_SIMD_REDUCE()
 
   template <typename T>
-  metal::enable_if_t<metal::is_integral_v<T>, T> simd_reduce_impl(T val) thread {
+  metal::enable_if_t<metal::is_integral_v<T>, T> simd_reduce_impl(
+      T val) thread {
     return simd_min(val);
   }
 
   template <typename T>
-  metal::enable_if_t<!metal::is_integral_v<T>, T> simd_reduce_impl(T val) thread {
+  metal::enable_if_t<!metal::is_integral_v<T>, T> simd_reduce_impl(
+      T val) thread {
     if (simd_any(val != val)) {
       return static_cast<T>(NAN);
     }
@@ -179,7 +184,8 @@ struct Min {
   static constexpr constant U init = Limits<U>::max;
 
   template <typename T>
-  void atomic_update(device mlx_atomic<T>* out, T val, size_t offset = 0) thread {
+  void atomic_update(device mlx_atomic<T>* out, T val, size_t offset = 0)
+      thread {
     mlx_atomic_fetch_min_explicit(out, val, offset);
   }
 
@@ -221,12 +227,14 @@ struct Max {
   DEFINE_SIMD_REDUCE()
 
   template <typename T>
-  metal::enable_if_t<metal::is_integral_v<T>, T> simd_reduce_impl(T val) thread {
+  metal::enable_if_t<metal::is_integral_v<T>, T> simd_reduce_impl(
+      T val) thread {
     return simd_max(val);
   }
 
   template <typename T>
-  metal::enable_if_t<!metal::is_integral_v<T>, T> simd_reduce_impl(T val) thread {
+  metal::enable_if_t<!metal::is_integral_v<T>, T> simd_reduce_impl(
+      T val) thread {
     if (simd_any(val != val)) {
       return static_cast<T>(NAN);
     }
@@ -236,7 +244,8 @@ struct Max {
   static constexpr constant U init = Limits<U>::min;
 
   template <typename T>
-  void atomic_update(device mlx_atomic<T>* out, T val, size_t offset = 0) thread {
+  void atomic_update(device mlx_atomic<T>* out, T val, size_t offset = 0)
+      thread {
     mlx_atomic_fetch_max_explicit(out, val, offset);
   }
 

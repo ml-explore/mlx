@@ -218,12 +218,14 @@ struct NotEqual {
 
 struct Power {
   template <typename T>
-  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T base, T exp) thread {
+  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T base, T exp)
+      thread {
     return metal::pow(base, exp);
   }
 
   template <typename T>
-  metal::enable_if_t<metal::is_integral_v<T>, T> operator()(T base, T exp) thread {
+  metal::enable_if_t<metal::is_integral_v<T>, T> operator()(T base, T exp)
+      thread {
     T res = 1;
     // Undefined to raise integer to negative power
     if (exp < 0) {

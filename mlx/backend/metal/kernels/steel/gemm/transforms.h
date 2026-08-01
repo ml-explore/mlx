@@ -40,8 +40,8 @@ struct TransformAxpby {
   const float alpha;
   const float beta;
 
-  TransformAxpby(const float alpha_, const float beta_) thread
-      : alpha(alpha_), beta(beta_) {}
+  TransformAxpby(const float alpha_, const float beta_) thread : alpha(alpha_),
+                                                                 beta(beta_) {}
 
   static METAL_FUNC OutT apply(InT x) {
     return static_cast<OutT>(x);
