@@ -546,6 +546,20 @@ TEST_CASE("test random randint") {
       (all(less_equal(lo62, x)).item<bool>() &&
        all(less(x, hi62)).item<bool>()));
   CHECK_GT(max(x).item<int64_t>(), min(x).item<int64_t>());
+
+  // A negative int64 low and a uint64 high above int64_max cannot be compared
+  // exactly by casting both bounds into either fixed integer domain.
+  auto lo_cross = array(int64_t(-1), int64);
+  auto hi_cross = array(uint64_t(1) << 63, uint64);
+  x = random::randint(lo_cross, hi_cross, {20000}, int64);
+  CHECK(all(less_equal(lo_cross, x)).item<bool>());
+  CHECK_GT(max(x).item<int64_t>(), min(x).item<int64_t>());
+
+  // Reversing the signs makes the interval necessarily empty.
+  auto lo_empty = array(uint64_t(0), uint64);
+  auto hi_empty = array(int64_t(-1), int64);
+  x = random::randint(lo_empty, hi_empty, {1000}, uint64);
+  CHECK(all(equal(x, lo_empty)).item<bool>());
 }
 
 TEST_CASE("test random bernoulli") {

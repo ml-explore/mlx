@@ -310,20 +310,24 @@ array randint(
   // Reported by @axiom-of-choice on #3936.
   //
   // The empty-interval comparison must also be exact. Neither a fixed int64
-  // nor a fixed uint64 domain works for every element: non-negative bounds
-  // compare exactly in uint64 (including mixed int64/uint64 bounds), while an
-  // interval with either bound negative must compare in int64. Comparing the
-  // original bounds directly is not exact either because signed/uint64 pairs
-  // promote to float32. Select the domain per element from the bound values.
-  auto both_non_negative = logical_and(
-      greater_equal(low, array(0, low.dtype()), stream),
-      greater_equal(high, array(0, high.dtype()), stream),
-      stream);
+  // nor a fixed uint64 domain works for every element, and comparing the raw
+  // bounds can promote a signed/uint64 pair to float32. Classify each bound by
+  // sign first. Same-sign negative bounds compare in int64, same-sign
+  // non-negative bounds compare in uint64, and unlike signs determine the
+  // ordering directly without a lossy cast.
+  auto low_negative = less(low, array(0, low.dtype()), stream);
+  auto high_negative = less(high, array(0, high.dtype()), stream);
   auto empty = where(
-      both_non_negative,
-      less_equal(
-          astype(high, uint64, stream), astype(low, uint64, stream), stream),
-      less_equal(hi, lo, stream),
+      not_equal(low_negative, high_negative, stream),
+      high_negative,
+      where(
+          low_negative,
+          less_equal(hi, lo, stream),
+          less_equal(
+              astype(high, uint64, stream),
+              astype(low, uint64, stream),
+              stream),
+          stream),
       stream);
 
   // Keep the divisor nonzero independently of the predicate. In particular,
@@ -339,37 +343,31 @@ array randint(
       array(uint64_t(1), uint64),
       stream);
 
-  array raw(0);
-  if (dtype == int64 || dtype == uint64) {
-    // The output dtype can represent ranges beyond what one uint32 draw (32
-    // bits of entropy) can cover, so combine two independent draws into 64
-    // bits. Explicitly split any caller-provided key so the two draws don't
-    // repeat the same bits.
-    array lo_bits(0), hi_bits(0);
-    if (key) {
-      auto [k1, k2] = split(*key, stream);
-      lo_bits = bits(shape, 4, k1, stream);
-      hi_bits = bits(shape, 4, k2, stream);
-    } else {
-      lo_bits = bits(shape, 4, std::nullopt, stream);
-      hi_bits = bits(shape, 4, std::nullopt, stream);
-    }
-    raw = bitwise_or(
-        left_shift(
-            astype(hi_bits, uint64, stream),
-            array(uint64_t(32), uint64),
-            stream),
-        astype(lo_bits, uint64, stream),
-        stream);
+  // Use 64 raw bits for every output dtype. A single uint32 draw can reach
+  // every value of a uint32 interval, but modulo reduction over a range above
+  // 2^31 can still give some buckets twice as many raw preimages as others.
+  // Combining two independent draws makes the remaining modulo bias tiny for
+  // <=32-bit output domains and is required to cover wider 64-bit domains.
+  array lo_bits(0), hi_bits(0);
+  if (key) {
+    auto [k1, k2] = split(*key, stream);
+    lo_bits = bits(shape, 4, k1, stream);
+    hi_bits = bits(shape, 4, k2, stream);
   } else {
-    // Every other supported dtype's own domain spans at most 2^32 values, so
-    // one uint32 draw (32 bits of entropy) always has enough range.
-    raw = astype(bits(shape, 4, key, stream), uint64, stream);
+    lo_bits = bits(shape, 4, std::nullopt, stream);
+    hi_bits = bits(shape, 4, std::nullopt, stream);
   }
+  auto raw = bitwise_or(
+      left_shift(
+          astype(hi_bits, uint64, stream), array(uint64_t(32), uint64), stream),
+      astype(lo_bits, uint64, stream),
+      stream);
 
   // Reducing unsigned avoids the asymmetric negative-dividend remainder path.
   // The usual modulo bias remains when the range does not divide 2^64, but
-  // each bucket differs by at most one of the 2^64 possible raw draws.
+  // each bucket differs by at most one of the 2^64 possible raw draws. That is
+  // negligible for <=32-bit ranges but can still be a 2x relative difference
+  // for near-full-width 64-bit ranges; exact uniformity needs rejection.
   auto offset = remainder(raw, safe_range, stream);
   // Add in uint64 so the wrap for full-width intervals is well defined rather
   // than signed overflow; the resulting bit pattern is the correct value once

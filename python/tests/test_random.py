@@ -376,6 +376,22 @@ class TestRandom(mlx_tests.MLXTestCase):
         self.assertGreater(len(set(x[:, 0].tolist())), 19_000)
         self.assertEqual(set(x[:, 1].tolist()), {9})
 
+        # Unlike signs determine the ordering without either bound being cast
+        # into the other's domain. The full output of [-1, 2**63) is valid
+        # int64, even though the uint64 high wraps to int64_min if cast.
+        low = mx.array([-1], mx.int64)
+        high = mx.array([2**63], mx.uint64)
+        x = mx.random.randint(low, high, (20_000,), dtype=mx.int64, key=key)
+        xv = x.tolist()
+        self.assertTrue(all(-1 <= value < 2**63 for value in xv))
+        self.assertGreater(len(set(xv)), 19_000)
+
+        # The opposite sign ordering is necessarily empty.
+        low = mx.array([0], mx.uint64)
+        high = mx.array([-1], mx.int64)
+        x = mx.random.randint(low, high, (1_000,), dtype=mx.uint64, key=key)
+        self.assertEqual(set(x.tolist()), {0})
+
         # randint validates only the output dtype, so float bounds reach the
         # sampler. Both truncate to 0 here, so the interval is empty and the
         # result must be the constant `low` -- not raw bits, which is what a
@@ -426,6 +442,14 @@ class TestRandom(mlx_tests.MLXTestCase):
                 max(abs(count - expected) for count in counts) / expected
             )
             self.assertLess(max_relative_deviation, 0.1)
+
+        # A single 32-bit raw draw makes this range severely lopsided: the
+        # lowest third gets two raw preimages per value and the others get one.
+        # The 64-bit reduction path should put about one third in each band.
+        third = 2**30
+        x = mx.random.randint(0, 3 * third, (n,), dtype=mx.uint32, key=key)
+        first_band_fraction = mx.sum(x < third).item() / n
+        self.assertAlmostEqual(first_band_fraction, 1 / 3, delta=0.02)
 
     def test_bernoulli(self):
         a = mx.random.bernoulli()
