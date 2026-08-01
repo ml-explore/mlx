@@ -309,33 +309,34 @@ array randint(
   // pattern IS the correct unsigned width, so reinterpret it as uint64.
   // Reported by @axiom-of-choice on #3936.
   //
-  // The empty-interval test needs its own exact domain, and neither obvious
-  // choice is exact. Testing the int64 casts above is wrong for a uint64
-  // interval that straddles 2^63: `high` wraps negative, the ordering
-  // inverts, and a valid interval reads as empty (its mirror image also
-  // bites -- a genuinely inverted interval reads as non-empty and returns a
-  // spread instead of `low`). Testing the original bounds is wrong too:
-  // MLX promotes a signed/uint64 pair to float32, so a 24-bit mantissa
-  // rounds widely-separated bounds together, reintroducing this patch's own
-  // bug inside the predicate -- and float bounds, which randint accepts
-  // since it only validates the output dtype, can then drive the range to 0
-  // (remainder by 0 returns the dividend rather than raising). Compare in
-  // the output domain, which is exact for the dtype the caller asked for.
-  // Choose the comparison domain from the BOUNDS, not the output dtype: only
-  // when both bounds are themselves unsigned is uint64 safe. Picking it from
-  // the output dtype collapses `randint(-2, 2, dtype=uint8)`, because the
-  // negative `low` casts to a huge unsigned value and the interval reads as
-  // empty.
-  auto cmp_dtype = (issubdtype(low.dtype(), unsignedinteger) &&
-                    issubdtype(high.dtype(), unsignedinteger))
-      ? uint64
-      : int64;
-  auto empty = less_equal(
-      astype(high, cmp_dtype, stream), astype(low, cmp_dtype, stream), stream);
-  auto safe_range = where(
-      empty,
+  // The empty-interval comparison must also be exact. Neither a fixed int64
+  // nor a fixed uint64 domain works for every element: non-negative bounds
+  // compare exactly in uint64 (including mixed int64/uint64 bounds), while an
+  // interval with either bound negative must compare in int64. Comparing the
+  // original bounds directly is not exact either because signed/uint64 pairs
+  // promote to float32. Select the domain per element from the bound values.
+  auto both_non_negative = logical_and(
+      greater_equal(low, array(0, low.dtype()), stream),
+      greater_equal(high, array(0, high.dtype()), stream),
+      stream);
+  auto empty = where(
+      both_non_negative,
+      less_equal(
+          astype(high, uint64, stream), astype(low, uint64, stream), stream),
+      less_equal(hi, lo, stream),
+      stream);
+
+  // Keep the divisor nonzero independently of the predicate. In particular,
+  // positive float bounds can both saturate to int64_max and produce a width
+  // of zero; clamping makes any predicate/range disagreement collapse safely
+  // to `low` instead of passing raw random bits through remainder(x, 0).
+  auto safe_range = maximum(
+      where(
+          empty,
+          array(uint64_t(1), uint64),
+          astype(range, uint64, stream),
+          stream),
       array(uint64_t(1), uint64),
-      astype(range, uint64, stream),
       stream);
 
   array raw(0);
@@ -366,15 +367,14 @@ array randint(
     raw = astype(bits(shape, 4, key, stream), uint64, stream);
   }
 
-  // Reducing unsigned avoids numpy's negative-dividend `remainder` (which
-  // returns `raw % r + r` and skews the low end of the interval by
-  // `2^63 mod r`); an unsigned reduction is uniform on [0, r) by construction.
+  // Reducing unsigned avoids the asymmetric negative-dividend remainder path.
+  // The usual modulo bias remains when the range does not divide 2^64, but
+  // each bucket differs by at most one of the 2^64 possible raw draws.
   auto offset = remainder(raw, safe_range, stream);
   // Add in uint64 so the wrap for full-width intervals is well defined rather
   // than signed overflow; the resulting bit pattern is the correct value once
   // reinterpreted as the (possibly signed) target dtype.
-  return astype(
-      add(astype(lo, uint64, stream), offset, stream), dtype, stream);
+  return astype(add(astype(lo, uint64, stream), offset, stream), dtype, stream);
 }
 
 array bernoulli(

@@ -295,9 +295,7 @@ class TestRandom(mlx_tests.MLXTestCase):
             )
             # The defect makes every draw equal `low`; over 20k draws from an
             # interval this wide, even a handful of repeats would be startling.
-            self.assertGreater(
-                len(set(xv)), 19_000, f"collapsed for [{lo}, {hi})"
-            )
+            self.assertGreater(len(set(xv)), 19_000, f"collapsed for [{lo}, {hi})")
             self.assertNotEqual(min(xv), max(xv), f"single value for [{lo}, {hi})")
 
     def test_randint_uint64_interval_straddling_int64_max(self):
@@ -317,23 +315,17 @@ class TestRandom(mlx_tests.MLXTestCase):
             (2**63, 2**64 - 1),  # control: both bounds above 2**63
             (0, 2**62),  # control: both bounds below 2**63
         ]:
-            x = mx.random.randint(
-                u64(lo), u64(hi), (20_000,), dtype=mx.uint64, key=key
-            )
+            x = mx.random.randint(u64(lo), u64(hi), (20_000,), dtype=mx.uint64, key=key)
             xv = x.tolist()
             self.assertTrue(
                 all(lo <= v < hi for v in xv), f"out of bounds for [{lo}, {hi})"
             )
-            self.assertGreater(
-                len(set(xv)), 19_000, f"collapsed for [{lo}, {hi})"
-            )
+            self.assertGreater(len(set(xv)), 19_000, f"collapsed for [{lo}, {hi})")
 
         # Mirror image of the same defect: a genuinely inverted (empty)
         # interval straddling 2**63 must still return `low`, not a spread.
         for lo, hi in [(2**63 + 2**40, 2**62), (2**64 - 1, 2**62)]:
-            x = mx.random.randint(
-                u64(lo), u64(hi), (1_000,), dtype=mx.uint64, key=key
-            )
+            x = mx.random.randint(u64(lo), u64(hi), (1_000,), dtype=mx.uint64, key=key)
             self.assertEqual(
                 set(x.tolist()), {lo}, f"empty interval [{lo}, {hi}) not `low`"
             )
@@ -358,12 +350,47 @@ class TestRandom(mlx_tests.MLXTestCase):
         self.assertTrue(all(lo <= v < hi for v in xv))
         self.assertGreater(len(set(xv)), 19_000, "mixed-dtype bounds collapsed")
 
+        # Non-negative int64 bounds are exactly representable in uint64. The
+        # predicate must use their values, not their dtypes, when the uint64
+        # high crosses 2**63.
+        for lo in [0, 2**62]:
+            hi = 2**64 - 1
+            x = mx.random.randint(
+                mx.array([lo], mx.int64),
+                mx.array([hi], mx.uint64),
+                (20_000,),
+                dtype=mx.uint64,
+                key=key,
+            )
+            xv = x.tolist()
+            self.assertTrue(all(lo <= v < hi for v in xv))
+            self.assertGreater(
+                len(set(xv)), 19_000, f"wide mixed interval [{lo}, {hi}) collapsed"
+            )
+
+        # Exercise the value-domain selection elementwise: one broadcast
+        # column is a full non-empty interval and the other is inverted.
+        lows = mx.array([0, 9], mx.int64)
+        highs = mx.array([2**64 - 1, 3], mx.uint64)
+        x = mx.random.randint(lows, highs, (20_000, 2), dtype=mx.uint64, key=key)
+        self.assertGreater(len(set(x[:, 0].tolist())), 19_000)
+        self.assertEqual(set(x[:, 1].tolist()), {9})
+
         # randint validates only the output dtype, so float bounds reach the
         # sampler. Both truncate to 0 here, so the interval is empty and the
         # result must be the constant `low` -- not raw bits, which is what a
         # range of 0 would produce (remainder by 0 returns the dividend).
         y = mx.random.randint(0.5, 0.9, (1_000,), dtype=mx.int32, key=key)
         self.assertEqual(set(y.tolist()), {0})
+
+        # Large positive float32 bounds both saturate when cast to int64. The
+        # structural range clamp must keep their zero width from exposing raw
+        # random bits even if the value predicate sees a non-empty interval.
+        low = mx.array([1e19], mx.float32)
+        high = mx.array([2e19], mx.float32)
+        expected = low.astype(mx.int64).item()
+        z = mx.random.randint(low, high, (1_000,), dtype=mx.int64, key=key)
+        self.assertEqual(set(z.tolist()), {expected})
 
     def test_randint_negative_low_unsigned_dtype_does_not_collapse(self):
         # The comparison domain for the empty-interval test has to come from
@@ -372,9 +399,8 @@ class TestRandom(mlx_tests.MLXTestCase):
         # `low` becomes a huge value, the interval reads as empty, and every
         # draw collapses onto a single constant.
         #
-        # A negative bound with an unsigned output is out of contract to begin
-        # with and its wrapping behaviour is unspecified, so this asserts only
-        # the property that regressed: the sample must not collapse.
+        # The documented contract has no bound/output dtype compatibility
+        # exception, so preserve the reachable values rather than collapsing.
         key = mx.random.key(7)
         for lo, hi, dt in [
             (-2, 2, mx.uint8),
@@ -385,6 +411,21 @@ class TestRandom(mlx_tests.MLXTestCase):
             self.assertGreater(
                 len(set(x.tolist())), 1, f"collapsed for [{lo}, {hi}) -> {dt}"
             )
+
+    def test_randint_uniform_coverage(self):
+        # Pin both reachability and a coarse distribution check. A distinct
+        # count alone can pass while a large part of the interval is biased.
+        key = mx.random.key(7)
+        n = 200_000
+        for low, high in [(0, 6), (-10, 10), (3, 15)]:
+            x = mx.random.randint(low, high, (n,), dtype=mx.int64, key=key)
+            counts = [mx.sum(x == value).item() for value in range(low, high)]
+            self.assertTrue(all(count > 0 for count in counts))
+            expected = n / (high - low)
+            max_relative_deviation = (
+                max(abs(count - expected) for count in counts) / expected
+            )
+            self.assertLess(max_relative_deviation, 0.1)
 
     def test_bernoulli(self):
         a = mx.random.bernoulli()
