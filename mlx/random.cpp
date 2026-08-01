@@ -300,10 +300,21 @@ array randint(
         << " from broadcasted shape " << out_shape << ".";
     throw std::invalid_argument(msg.str());
   }
-  // An empty/invalid interval (`high <= low`) has no valid sample; matching
-  // the historical behavior, clamp so the modulo below is well defined and
-  // the result collapses to `low`.
-  auto safe_range = maximum(range, array(int64_t(1), int64), stream);
+  // The width of an int64 interval does not itself fit in int64: `[-2^62,
+  // 2^62)` is 2^63 wide and `[int64_min, int64_max)` is 2^64 - 1 wide, so the
+  // subtraction above wraps negative for any interval wider than int64_max.
+  // Clamping that with a signed `maximum(range, 1)` reads the wrapped value as
+  // negative and yields 1, collapsing every draw onto `low` -- the same defect
+  // this patch fixes at 2^24, relocated to a wider magnitude. The wrapped bit
+  // pattern IS the correct unsigned width, so reinterpret it as uint64 and do
+  // the empty-interval test on the signed values, where the comparison is
+  // still meaningful. Reported by @axiom-of-choice on #3936.
+  auto empty = less_equal(hi, lo, stream);
+  auto safe_range = where(
+      empty,
+      array(uint64_t(1), uint64),
+      astype(range, uint64, stream),
+      stream);
 
   array raw(0);
   if (dtype == int64 || dtype == uint64) {
@@ -322,20 +333,26 @@ array randint(
     }
     raw = bitwise_or(
         left_shift(
-            astype(hi_bits, int64, stream), array(int64_t(32), int64), stream),
-        astype(lo_bits, int64, stream),
+            astype(hi_bits, uint64, stream),
+            array(uint64_t(32), uint64),
+            stream),
+        astype(lo_bits, uint64, stream),
         stream);
   } else {
     // Every other supported dtype's own domain spans at most 2^32 values, so
     // one uint32 draw (32 bits of entropy) always has enough range.
-    raw = astype(bits(shape, 4, key, stream), int64, stream);
+    raw = astype(bits(shape, 4, key, stream), uint64, stream);
   }
 
-  // `remainder` is numpy-style (result takes the sign of, and lies in
-  // [0, b), the divisor), so this is exact even though `raw` can be negative
-  // once its top bit lands past int64's sign bit in the 64-bit-combine path.
+  // Reducing unsigned avoids numpy's negative-dividend `remainder` (which
+  // returns `raw % r + r` and skews the low end of the interval by
+  // `2^63 mod r`); an unsigned reduction is uniform on [0, r) by construction.
   auto offset = remainder(raw, safe_range, stream);
-  return astype(add(lo, offset, stream), dtype, stream);
+  // Add in uint64 so the wrap for full-width intervals is well defined rather
+  // than signed overflow; the resulting bit pattern is the correct value once
+  // reinterpreted as the (possibly signed) target dtype.
+  return astype(
+      add(astype(lo, uint64, stream), offset, stream), dtype, stream);
 }
 
 array bernoulli(

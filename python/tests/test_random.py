@@ -257,8 +257,11 @@ class TestRandom(mlx_tests.MLXTestCase):
         y = mx.random.randint(base, base + 1024, (10_000,), dtype=mx.int64, key=key)
         yv = y.tolist()
         self.assertTrue(all(base <= v < base + 1024 for v in yv))
-        # a real spread, not a collapse to one or a handful of values.
-        self.assertGreater(len(set(yv)), 500)
+        # Full coverage, not merely "a lot of values": a threshold like
+        # `> 500` passes even when half the interval is unreachable, which is
+        # exactly the property that breaks. 10k draws over 1024 values leaves
+        # a vanishing chance of a legitimate miss (~1024*(1-1/1024)**10000).
+        self.assertEqual(len(set(yv)), 1024)
 
         # int64 range wide enough to need genuine 64 bits of entropy (well
         # beyond 2**32), still same-key deterministic and in-bounds.
@@ -270,6 +273,32 @@ class TestRandom(mlx_tests.MLXTestCase):
         # with 256 draws over 2**48 values, a collapse to <10 unique values
         # would indicate the entropy-combine path regressed.
         self.assertGreater(len(set(a.tolist())), 200)
+
+    def test_randint_interval_wider_than_int64_max(self):
+        # Regression test for the width-overflow case reported by
+        # @axiom-of-choice on #3936: the width of an int64 interval does not
+        # itself fit in int64. `[-2**62, 2**62)` is 2**63 wide and
+        # `[int64_min, int64_max)` is 2**64 - 1 wide, so computing the range as
+        # a signed subtraction wraps negative and a signed `maximum(range, 1)`
+        # clamps it to 1 -- collapsing every draw onto `low`.
+        key = mx.random.key(7)
+
+        for lo, hi in [
+            (-(2**62), 2**62),  # width 2**63, wraps to int64_min
+            (-(2**63), 2**63 - 1),  # width 2**64 - 1, wraps to -1
+        ]:
+            x = mx.random.randint(lo, hi, (20_000,), dtype=mx.int64, key=key)
+            xv = x.tolist()
+            self.assertTrue(
+                all(lo <= v < hi for v in xv),
+                f"out of bounds for [{lo}, {hi})",
+            )
+            # The defect makes every draw equal `low`; over 20k draws from an
+            # interval this wide, even a handful of repeats would be startling.
+            self.assertGreater(
+                len(set(xv)), 19_000, f"collapsed for [{lo}, {hi})"
+            )
+            self.assertNotEqual(min(xv), max(xv), f"single value for [{lo}, {hi})")
 
     def test_bernoulli(self):
         a = mx.random.bernoulli()
