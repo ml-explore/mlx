@@ -15,6 +15,7 @@ Devices and Streams
    default_stream
    new_stream
    new_thread_local_stream
+   new_thread_unsafe_stream
    set_default_stream
    stream
    synchronize
