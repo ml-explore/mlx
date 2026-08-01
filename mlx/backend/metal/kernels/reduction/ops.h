@@ -7,12 +7,12 @@
 
 #define DEFINE_SIMD_REDUCE()                                             \
   template <typename T, metal::enable_if_t<sizeof(T) < 8, bool> = true>  \
-  T simd_reduce(T val) {                                                 \
+  T simd_reduce(T val) thread {                                          \
     return simd_reduce_impl(val);                                        \
   }                                                                      \
                                                                          \
   template <typename T, metal::enable_if_t<sizeof(T) == 8, bool> = true> \
-  T simd_reduce(T val) {                                                 \
+  T simd_reduce(T val) thread {                                          \
     for (short i = simd_size / 2; i > 0; i /= 2) {                       \
       val = operator()(val, simd_shuffle_down(val, i));                  \
     }                                                                    \

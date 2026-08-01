@@ -6,12 +6,12 @@
 
 #define DEFINE_SIMD_SCAN()                                               \
   template <typename T, metal::enable_if_t<sizeof(T) < 8, bool> = true>  \
-  T simd_scan(T val) {                                                   \
+  T simd_scan(T val) thread {                                            \
     return simd_scan_impl(val);                                          \
   }                                                                      \
                                                                          \
   template <typename T, metal::enable_if_t<sizeof(T) == 8, bool> = true> \
-  T simd_scan(T val) {                                                   \
+  T simd_scan(T val) thread {                                            \
     for (int i = 1; i <= 16; i *= 2) {                                   \
       val = operator()(val, simd_shuffle_and_fill_up(val, init, i));     \
     }                                                                    \
@@ -20,12 +20,12 @@
 
 #define DEFINE_SIMD_EXCLUSIVE_SCAN()                                     \
   template <typename T, metal::enable_if_t<sizeof(T) < 8, bool> = true>  \
-  T simd_exclusive_scan(T val) {                                         \
+  T simd_exclusive_scan(T val) thread {                                  \
     return simd_exclusive_scan_impl(val);                                \
   }                                                                      \
                                                                          \
   template <typename T, metal::enable_if_t<sizeof(T) == 8, bool> = true> \
-  T simd_exclusive_scan(T val) {                                         \
+  T simd_exclusive_scan(T val) thread {                                  \
     val = simd_scan(val);                                                \
     return simd_shuffle_and_fill_up(val, init, 1);                       \
   }
