@@ -306,10 +306,24 @@ array randint(
   // Clamping that with a signed `maximum(range, 1)` reads the wrapped value as
   // negative and yields 1, collapsing every draw onto `low` -- the same defect
   // this patch fixes at 2^24, relocated to a wider magnitude. The wrapped bit
-  // pattern IS the correct unsigned width, so reinterpret it as uint64 and do
-  // the empty-interval test on the signed values, where the comparison is
-  // still meaningful. Reported by @axiom-of-choice on #3936.
-  auto empty = less_equal(hi, lo, stream);
+  // pattern IS the correct unsigned width, so reinterpret it as uint64.
+  // Reported by @axiom-of-choice on #3936.
+  //
+  // The empty-interval test needs its own exact domain, and neither obvious
+  // choice is exact. Testing the int64 casts above is wrong for a uint64
+  // interval that straddles 2^63: `high` wraps negative, the ordering
+  // inverts, and a valid interval reads as empty (its mirror image also
+  // bites -- a genuinely inverted interval reads as non-empty and returns a
+  // spread instead of `low`). Testing the original bounds is wrong too:
+  // MLX promotes a signed/uint64 pair to float32, so a 24-bit mantissa
+  // rounds widely-separated bounds together, reintroducing this patch's own
+  // bug inside the predicate -- and float bounds, which randint accepts
+  // since it only validates the output dtype, can then drive the range to 0
+  // (remainder by 0 returns the dividend rather than raising). Compare in
+  // the output domain, which is exact for the dtype the caller asked for.
+  auto cmp_dtype = issubdtype(dtype, unsignedinteger) ? uint64 : int64;
+  auto empty = less_equal(
+      astype(high, cmp_dtype, stream), astype(low, cmp_dtype, stream), stream);
   auto safe_range = where(
       empty,
       array(uint64_t(1), uint64),

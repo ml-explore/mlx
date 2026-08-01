@@ -300,6 +300,71 @@ class TestRandom(mlx_tests.MLXTestCase):
             )
             self.assertNotEqual(min(xv), max(xv), f"single value for [{lo}, {hi})")
 
+    def test_randint_uint64_interval_straddling_int64_max(self):
+        # The empty-interval predicate needs a domain that is exact for the
+        # requested dtype. Testing the int64 casts of the bounds is not: a
+        # uint64 interval with `low < 2**63 <= high` has its `high` wrap
+        # negative, so the ordering inverts and a perfectly valid interval
+        # reads as empty -- every draw then collapses onto `low`. Intervals
+        # with both bounds above 2**63 do not wrap and were never affected,
+        # so they are included here as controls.
+        key = mx.random.key(7)
+        u64 = lambda v: mx.array([v], mx.uint64)
+
+        for lo, hi in [
+            (0, 2**64 - 1),  # straddles 2**63
+            (2**62, 2**64 - 1),  # straddles 2**63
+            (2**63, 2**64 - 1),  # control: both bounds above 2**63
+            (0, 2**62),  # control: both bounds below 2**63
+        ]:
+            x = mx.random.randint(
+                u64(lo), u64(hi), (20_000,), dtype=mx.uint64, key=key
+            )
+            xv = x.tolist()
+            self.assertTrue(
+                all(lo <= v < hi for v in xv), f"out of bounds for [{lo}, {hi})"
+            )
+            self.assertGreater(
+                len(set(xv)), 19_000, f"collapsed for [{lo}, {hi})"
+            )
+
+        # Mirror image of the same defect: a genuinely inverted (empty)
+        # interval straddling 2**63 must still return `low`, not a spread.
+        for lo, hi in [(2**63 + 2**40, 2**62), (2**64 - 1, 2**62)]:
+            x = mx.random.randint(
+                u64(lo), u64(hi), (1_000,), dtype=mx.uint64, key=key
+            )
+            self.assertEqual(
+                set(x.tolist()), {lo}, f"empty interval [{lo}, {hi}) not `low`"
+            )
+
+    def test_randint_bounds_dtype_does_not_lose_precision(self):
+        # The predicate must not be evaluated in a promoted floating type.
+        # MLX promotes a signed/uint64 pair to float32, whose 24-bit mantissa
+        # rounds bounds closer than the ulp at that magnitude onto each other
+        # -- at 2**62 the ulp is 2**39, so a 2**38-wide interval would read as
+        # empty. Mixed-signedness bounds are accepted by the binding, so this
+        # is reachable.
+        key = mx.random.key(7)
+        lo, hi = 2**62, 2**62 + 2**38
+        x = mx.random.randint(
+            mx.array([lo], mx.int64),
+            mx.array([hi], mx.uint64),
+            (20_000,),
+            dtype=mx.uint64,
+            key=key,
+        )
+        xv = x.tolist()
+        self.assertTrue(all(lo <= v < hi for v in xv))
+        self.assertGreater(len(set(xv)), 19_000, "mixed-dtype bounds collapsed")
+
+        # randint validates only the output dtype, so float bounds reach the
+        # sampler. Both truncate to 0 here, so the interval is empty and the
+        # result must be the constant `low` -- not raw bits, which is what a
+        # range of 0 would produce (remainder by 0 returns the dividend).
+        y = mx.random.randint(0.5, 0.9, (1_000,), dtype=mx.int32, key=key)
+        self.assertEqual(set(y.tolist()), {0})
+
     def test_bernoulli(self):
         a = mx.random.bernoulli()
         self.assertEqual(a.shape, ())
