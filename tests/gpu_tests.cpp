@@ -452,6 +452,34 @@ TEST_CASE("test gpu matmul") {
     auto b = ones({31, 35});
     auto out = matmul(a, b, Device::gpu);
     CHECK(array_equal(out, full({33, 35}, 31.0f), Device::cpu).item<bool>());
+
+    auto c = ones({33, 35});
+    out = addmm(c, a, b, 2.0f, 3.0f, Device::gpu);
+    CHECK(array_equal(out, full({33, 35}, 65.0f), Device::cpu).item<bool>());
+  }
+
+  // Transposed non-aligned inputs.
+  {
+    auto a = transpose(ones({31, 33}));
+    auto b = transpose(ones({35, 31}));
+    auto out = matmul(a, b, Device::gpu);
+    CHECK(array_equal(out, full({33, 35}, 31.0f), Device::cpu).item<bool>());
+  }
+
+  // Batched non-aligned inputs.
+  {
+    auto a = ones({2, 33, 31});
+    auto b = ones({2, 31, 35});
+    auto out = matmul(a, b, Device::gpu);
+    CHECK(array_equal(out, full({2, 33, 35}, 31.0f), Device::cpu).item<bool>());
+  }
+
+  // Non-aligned M/N with a large K exercises the native Blackwell path.
+  {
+    auto a = ones({33, 64});
+    auto b = ones({64, 35});
+    auto out = matmul(a, b, Device::gpu);
+    CHECK(array_equal(out, full({33, 35}, 64.0f), Device::cpu).item<bool>());
   }
 }
 
