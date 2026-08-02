@@ -95,12 +95,11 @@ void gemm_and_bias(
   int Np = round_up_align(N);
 
   // Blackwell's cuBLASLt kernels do not exhibit the non-aligned-dimension
-  // regression that motivated this workaround for sufficiently large K.
-  // Avoiding the two input padding copies matters there because they cost
-  // more than the non-aligned GEMM itself.  Keep padding for small K values,
-  // where cuBLASLt may not find a native algorithm at all.
+  // regression that motivated this workaround.  Avoiding the two input
+  // padding copies matters there because they cost more than the non-aligned
+  // GEMM itself.
   bool needs_padding = ((Mp != M) || (Np != N)) &&
-      (encoder.device().compute_capability_major() < 12 || K < 64);
+      encoder.device().compute_capability_major() < 12;
 
   array a_work = a;
   array b_work = b;

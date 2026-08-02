@@ -446,7 +446,7 @@ TEST_CASE("test gpu matmul") {
     CHECK(array_equal(out, full({3, 3, 2, 2}, 2.0f), Device::cpu).item<bool>());
   }
 
-  // Non-aligned dimensions exercise the CUDA padding path.
+  // Non-aligned dimensions exercise the CUDA architecture policy.
   {
     auto a = multiply(
         reshape(arange(0, 33 * 31, 1.0f, float32), {33, 31}), array(0.01f));
