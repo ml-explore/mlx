@@ -1441,7 +1441,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto batch_size_out = out.size() / (size_t(M) * size_t(N));
 
   // Collapse batches into M if needed
-  if (batch_size_out > 1 && !a_transposed && batch_shape.size() == 1 &&
+  if (M > 1 && batch_size_out > 1 && !a_transposed && batch_shape.size() == 1 &&
       a.strides()[a.ndim() - 2] == K && A_batch_stride.back() == M * K &&
       B_batch_stride.back() == 0) {
     M *= batch_shape.back();

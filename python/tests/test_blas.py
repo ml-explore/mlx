@@ -1,6 +1,9 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
+import subprocess
+import sys
 import unittest
 from itertools import permutations
 
@@ -261,6 +264,40 @@ class TestBlas(mlx_tests.MLXTestCase):
         c_mlx = a_mlx @ mx.transpose(b_mlx, (0, 1, 3, 2))
         self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
         self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
+
+    def test_matmul_broadcast_rhs_k1_precision(self):
+        if not mx.is_available(mx.gpu):
+            self.skipTest("requires GPU")
+
+        code = """
+import mlx.core as mx
+
+mx.set_default_device(mx.gpu)
+
+rhs = mx.full((1, 1, 1, 512), 1.0 + 2**-12).astype(mx.float32)
+lhs = mx.ones((1, 16, 1, 1)).astype(mx.float32)
+
+out = lhs @ rhs
+error = mx.max(mx.abs(out - rhs)).item()
+
+assert error == 0.0, f"max error: {error}"
+"""
+
+        env = os.environ.copy()
+        env["MLX_ENABLE_TF32"] = "1"
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(
+            result.returncode,
+            0,
+            msg=result.stdout + result.stderr,
+        )
 
     def __gemv_test(
         self,
