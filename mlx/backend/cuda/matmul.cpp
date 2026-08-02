@@ -8,6 +8,7 @@
 #include "mlx/backend/cuda/gemms/gemv.h"
 #include "mlx/backend/cuda/gemms/grouped_gemm.h"
 #include "mlx/backend/gpu/copy.h"
+#include "mlx/backend/gpu/slicing.h"
 #include "mlx/primitives.h"
 
 #include <nvtx3/nvtx3.hpp>
@@ -64,8 +65,17 @@ array ensure_row_contiguous(
   }
 }
 
+// cublasLt selects significantly slower kernels when M or N are not
+// multiples of 32 (GitHub issue #2712).
+static constexpr int GEMM_ALIGN = 32;
+
+static inline int round_up_align(int v) {
+  return (v + GEMM_ALIGN - 1) / GEMM_ALIGN * GEMM_ALIGN;
+}
+
 void gemm_and_bias(
     cu::CommandEncoder& encoder,
+    const Stream& s,
     int M,
     int N,
     int K,
@@ -78,16 +88,83 @@ void gemm_and_bias(
     const array& b,
     const std::optional<array>& bias = std::nullopt,
     float alpha = 1.0f) {
-  // Check and collapse batch dimensions
-  auto [batch_shape, a_batch_strides, b_batch_strides] = collapse_batches(a, b);
+  // --- Align M/N to GEMM_ALIGN (32) if needed ---
+  // cublasLt selects significantly slower kernels for non-multiple dimensions.
+  // Safe fix: zero-pad inputs, run GEMM on aligned dimensions, slice back.
+  int Mp = round_up_align(M);
+  int Np = round_up_align(N);
+  bool needs_padding = (Mp != M) || (Np != N);
 
-  auto batch_count = out.size() / (M * N);
+  array a_work = a;
+  array b_work = b;
+  std::optional<array> bias_work = bias;
+
+  if (needs_padding) {
+    // Build padded shapes: preserve all batch dims, only change last two.
+    // A: (..., M, K) -> (..., Mp, K)  [pad axis -2]
+    // B: (..., K, N) -> (..., K, Np) [pad axis -1]
+    Shape a_pshape(a.shape().begin(), a.shape().end());
+    a_pshape[a_pshape.size() - 2] = Mp;
+
+    Shape b_pshape(b.shape().begin(), b.shape().end());
+    b_pshape[b_pshape.size() - 1] = Np;
+
+    // Zero-pad A using pad_gpu
+    array a_padded(a_pshape, a.dtype(), nullptr, {});
+    a_padded.set_data(cu::malloc_async(a_padded.nbytes(), encoder));
+    encoder.add_temporary(a_padded);
+    {
+      array zero(0, a.dtype());
+      encoder.add_temporary(zero);
+      pad_gpu(a, zero, a_padded, {-2}, {0}, s);
+    }
+    a_work = a_padded;
+
+    // Zero-pad B using pad_gpu
+    array b_padded(b_pshape, b.dtype(), nullptr, {});
+    b_padded.set_data(cu::malloc_async(b_padded.nbytes(), encoder));
+    encoder.add_temporary(b_padded);
+    {
+      array zero(0, b.dtype());
+      encoder.add_temporary(zero);
+      pad_gpu(b, zero, b_padded, {-1}, {0}, s);
+    }
+    b_work = b_padded;
+
+    // Pad bias last dimension if N was padded
+    if (bias_work.has_value() && Np != N) {
+      Shape bpshape(bias->shape().begin(), bias->shape().end());
+      bpshape[bpshape.size() - 1] = Np;
+      array bias_padded(bpshape, bias->dtype(), nullptr, {});
+      bias_padded.set_data(cu::malloc_async(bias_padded.nbytes(), encoder));
+      encoder.add_temporary(bias_padded);
+      {
+        array zero(0, bias->dtype());
+        encoder.add_temporary(zero);
+        pad_gpu(*bias, zero, bias_padded, {-1}, {0}, s);
+      }
+      bias_work = bias_padded;
+    }
+
+    // Recompute layout for padded arrays (they are row-contiguous).
+    std::tie(a_transposed, lda, a_work) = check_transpose(encoder, s, a_work);
+    std::tie(b_transposed, ldb, b_work) = check_transpose(encoder, s, b_work);
+  }
+
+  // Check and collapse batch dimensions
+  auto [batch_shape, a_batch_strides, b_batch_strides] =
+      collapse_batches(a_work, b_work);
+
+  int Mwork = Mp;
+  int Nwork = Np;
+  auto batch_count = (int)(out.size() / (M * N));
 
   // Collapse batches into M if needed
   if (batch_count > 1 && !a_transposed && batch_shape.size() == 1 &&
-      a.strides()[a.ndim() - 2] == K && a_batch_strides.back() == M * K &&
+      a_work.strides()[a_work.ndim() - 2] == K &&
+      a_batch_strides.back() == Mwork * K &&
       b_batch_strides.back() == 0) {
-    M *= batch_shape.back();
+    Mwork *= batch_shape.back();
     batch_count = 1;
 
     a_batch_strides = {0};
@@ -95,14 +172,29 @@ void gemm_and_bias(
     batch_shape = {1};
   }
 
-  // Use gemmv when possible
-  if (!bias && cu::can_use_gemv(M, N, K, a_transposed, b_transposed)) {
+  // --- Handle output for padded path ---
+  array* out_target = &out;
+  std::optional<array> out_padded_opt;
+  if (needs_padding) {
+    Shape opshape(out.shape().begin(), out.shape().end());
+    opshape[opshape.size() - 2] = Mp;
+    opshape[opshape.size() - 1] = Np;
+
+    out_padded_opt = array(opshape, out.dtype(), nullptr, {});
+    out_padded_opt->set_data(cu::malloc_async(out_padded_opt->nbytes(), encoder));
+    encoder.add_temporary(*out_padded_opt);
+    out_target = &(*out_padded_opt);
+  }
+
+  // Use gemmv when possible (only for unpadded path to keep logic simple)
+  if (!needs_padding && !bias_work &&
+      cu::can_use_gemv(Mwork, Nwork, K, a_transposed, b_transposed)) {
     cu::gemv(
-        a,
-        b,
-        out,
-        M,
-        N,
+        a_work,
+        b_work,
+        *out_target,
+        Mwork,
+        Nwork,
         K,
         batch_count,
         batch_shape,
@@ -115,27 +207,35 @@ void gemm_and_bias(
   // Invoke cublasLt
   CublasGemm gemm(
       encoder.device(),
-      a.dtype(),
+      a_work.dtype(),
       a_transposed,
-      M,
+      Mwork,
       K,
       lda,
       b_transposed,
       K,
-      N,
+      Nwork,
       ldb,
       batch_shape.back(),
       a_batch_strides.back(),
       b_batch_strides.back());
-  if (bias) {
-    if (a.dtype() == complex64) {
+  if (bias_work) {
+    if (a_work.dtype() == complex64) {
       throw std::runtime_error(
-          "[gemm_and_bias] complex64 bias epilogue isn’t supported in cublasLtMatmul.");
+          "[gemm_and_bias] complex64 bias epilogue isn't supported in cublasLtMatmul.");
     }
-    gemm.set_bias(encoder, *bias);
+    gemm.set_bias(encoder, *bias_work);
   }
   gemm.run(
-      encoder, out, a, b, batch_shape, a_batch_strides, b_batch_strides, alpha);
+      encoder, *out_target, a_work, b_work, batch_shape, a_batch_strides,
+      b_batch_strides, alpha);
+
+  // --- Slice padded output back to original M x N ---
+  if (needs_padding) {
+    copy_gpu_inplace(
+        *out_padded_opt, out, out.shape(), out_padded_opt->strides(),
+        out.strides(), 0, 0, CopyType::General, s);
+  }
 }
 
 } // namespace
@@ -168,7 +268,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [b_transposed, ldb, b] = check_transpose(encoder, s, b_pre);
 
   gemm_and_bias(
-      encoder, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b);
+      encoder, s, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b);
 }
 
 void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -238,7 +338,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Run GEMM.
   gemm_and_bias(
-      encoder, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b);
+      encoder, s, M, N, K, a_transposed, lda, b_transposed, ldb, out, a, b);
 
   // Apply output mask.
   if (has_out_mask) {
@@ -277,6 +377,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
     gemm_and_bias(
         encoder,
+        s,
         M,
         N,
         K,
