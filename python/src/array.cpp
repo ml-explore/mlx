@@ -1033,6 +1033,12 @@ void init_array(nb::module_& m) {
       .def("__int__", [](mx::array& a) { return nb::int_(to_scalar(a)); })
       .def("__float__", [](mx::array& a) { return nb::float_(to_scalar(a)); })
       .def(
+          "__complex__",
+          [](mx::array& a) {
+            auto value = PyComplex_AsCComplex(to_scalar(a).ptr());
+            return std::complex<double>(value.real, value.imag);
+          })
+      .def(
           "__format__",
           [](mx::array& a, nb::object format_spec) {
             if (nb::len(nb::str(format_spec)) > 0 && a.ndim() > 0) {
