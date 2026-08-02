@@ -504,6 +504,14 @@ TEST_CASE("test gpu matmul") {
     auto out = matmul(a, b, Device::gpu);
     CHECK(allclose(expected, out, 1e-3, 1e-3, false, Device::cpu).item<bool>());
   }
+
+  // Issue-sized non-aligned output dimensions exercise allocation and slicing.
+  {
+    auto a = ones({2047, 1});
+    auto b = ones({1, 4095});
+    auto out = matmul(a, b, Device::gpu);
+    CHECK(array_equal(out, ones({2047, 4095}), Device::cpu).item<bool>());
+  }
 }
 
 TEST_CASE("test gpu validation") {
