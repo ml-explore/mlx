@@ -445,6 +445,14 @@ TEST_CASE("test gpu matmul") {
     auto out = matmul(a, b, Device::gpu);
     CHECK(array_equal(out, full({3, 3, 2, 2}, 2.0f), Device::cpu).item<bool>());
   }
+
+  // Non-aligned dimensions exercise the CUDA padding path.
+  {
+    auto a = ones({33, 31});
+    auto b = ones({31, 35});
+    auto out = matmul(a, b, Device::gpu);
+    CHECK(array_equal(out, full({33, 35}, 31.0f), Device::cpu).item<bool>());
+  }
 }
 
 TEST_CASE("test gpu validation") {
