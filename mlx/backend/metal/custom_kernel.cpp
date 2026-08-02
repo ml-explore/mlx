@@ -45,13 +45,13 @@ void CustomKernel::eval_gpu(
 
   auto& d = metal::device(s.device);
 
-  // Key the library by (name, source, compile options) so kernels that differ
-  // in any of those coexist instead of thrashing a single cache slot within one
-  // eval batch (fixes #3832). The map key is never used as a Metal identifier,
-  // so the full source is a collision-free key (a content hash could alias
-  // distinct sources and silently reintroduce the bug).
-  std::string lib_name =
-      name_ + "\n" + source_ + "\n" + std::to_string(compile_options_);
+  // Key the library by (name, source hash, compile options) so kernels that
+  // differ in any of those coexist instead of thrashing a single cache slot
+  // within one eval batch (fixes #3832). The source is hashed to keep the key
+  // short.
+  std::string lib_name = name_ + "_" +
+      std::to_string(std::hash<std::string>{}(source_)) + "_" +
+      std::to_string(compile_options_);
   auto lib = d.get_library(
       lib_name, compile_options_, [this] { return metal::utils() + source_; });
   auto kernel = d.get_kernel(name_, lib);
