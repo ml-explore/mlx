@@ -515,10 +515,17 @@ TEST_CASE("test gpu matmul") {
 
   // Exercise dimensions immediately below, at, and above common GEMM
   // alignment boundaries, including asymmetric issue-scale dimensions.
-  const std::array<std::array<int, 3>, 14> cases = {{
+  const std::array<std::array<int, 3>, 28> cases = {{
+      {1, 31, 1},
+      {31, 1, 1},
+      {31, 33, 1},
+      {33, 31, 2},
+      {63, 65, 3},
+      {65, 63, 4},
       {31, 31, 31},
       {31, 32, 33},
       {32, 33, 31},
+      {32, 32, 32},
       {33, 35, 32},
       {33, 35, 33},
       {63, 65, 63},
@@ -528,8 +535,15 @@ TEST_CASE("test gpu matmul") {
       {127, 129, 65},
       {128, 127, 128},
       {129, 127, 129},
+      {129, 129, 255},
+      {255, 257, 31},
+      {257, 255, 64},
       {2047, 33, 31},
       {33, 4095, 31},
+      {2047, 2048, 1},
+      {2048, 2047, 1},
+      {4095, 4096, 1},
+      {4096, 4095, 1},
   }};
   for (const auto& dims : cases) {
     const auto [m, n, k] = dims;
@@ -537,6 +551,20 @@ TEST_CASE("test gpu matmul") {
         reshape(arange(0, m * k, 1.0f, float32), {m, k}), array(0.01f));
     auto b = multiply(
         reshape(arange(1, 1 + k * n, 1.0f, float32), {k, n}),
+        array(-0.02f));
+    auto expected = matmul(a, b, Device::cpu);
+    auto out = matmul(a, b, Device::gpu);
+    CHECK(
+        allclose(expected, out, 1e-3, 1e-3, false, Device::cpu).item<bool>());
+  }
+
+  // Broadcast the right-hand operand across non-aligned batches.
+  {
+    auto a = multiply(
+        reshape(arange(0, 2 * 33 * 31, 1.0f, float32), {2, 33, 31}),
+        array(0.01f));
+    auto b = multiply(
+        reshape(arange(1, 1 + 31 * 35, 1.0f, float32), {31, 35}),
         array(-0.02f));
     auto expected = matmul(a, b, Device::cpu);
     auto out = matmul(a, b, Device::gpu);
