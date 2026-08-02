@@ -162,8 +162,8 @@ void gemm_and_bias(
   auto [batch_shape, a_batch_strides, b_batch_strides] =
       collapse_batches(a_work, b_work);
 
-  int Mwork = Mp;
-  int Nwork = Np;
+  int Mwork = needs_padding ? Mp : M;
+  int Nwork = needs_padding ? Np : N;
   auto batch_count = (int)(out.size() / (M * N));
 
   // Collapse batches into M if needed
