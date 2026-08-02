@@ -1473,21 +1473,25 @@ void init_ops(nb::module_& m) {
   m.def(
       "arange",
       [](Scalar start,
-         Scalar stop,
+         std::optional<Scalar> stop,
          const std::optional<Scalar>& step,
          const std::optional<mx::Dtype>& dtype_,
          mx::StreamOrDevice s) {
+        if (!stop) {
+          stop = start;
+          start = 0;
+        }
         // Determine the final dtype based on input types
         mx::Dtype dtype = dtype_
             ? *dtype_
             : mx::promote_types(
                   scalar_to_dtype(start),
                   step ? mx::promote_types(
-                             scalar_to_dtype(stop), scalar_to_dtype(*step))
-                       : scalar_to_dtype(stop));
+                             scalar_to_dtype(*stop), scalar_to_dtype(*step))
+                       : scalar_to_dtype(*stop));
         return mx::arange(
             scalar_to_double(start),
-            scalar_to_double(stop),
+            scalar_to_double(*stop),
             step ? scalar_to_double(*step) : 1.0,
             dtype,
             s);
@@ -1499,7 +1503,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arange(start : Union[int, float], stop : Union[int, float], step : Union[None, int, float], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def arange(start : Union[int, float], stop : Union[None, int, float], step : Union[None, int, float], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
       Generates ranges of numbers.
 
@@ -1508,7 +1512,7 @@ void init_ops(nb::module_& m) {
 
       Args:
           start (float or int, optional): Starting value which defaults to ``0``.
-          stop (float or int): Stopping value.
+          stop (float or int, optional): Stopping value.
           step (float or int, optional): Increment which defaults to ``1``.
           dtype (Dtype, optional): Specifies the data type of the output. If unspecified will default to ``float32`` if any of ``start``, ``stop``, or ``step`` are ``float``. Otherwise will default to ``int32``.
 
