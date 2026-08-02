@@ -15,8 +15,6 @@ import mlx.core as mx
 import mlx_tests
 import numpy as np
 
-from examples.python.logistic_regression import w
-
 try:
     import tensorflow as tf
 
