@@ -1,10 +1,20 @@
 # Copyright © 2023 Apple Inc.
 
+import platform
+import subprocess
 import unittest
 from itertools import product
 
 import mlx.core as mx
 import mlx_tests
+
+
+def is_m1_mac():
+    if platform.system() != "Darwin":
+        return False
+    cmd = "sysctl -n machdep.cpu.brand_string"
+    cpu = subprocess.check_output(cmd, shell=True).decode().strip()
+    return cpu.startswith("Apple M1")
 
 
 class TestQuantized(mlx_tests.MLXTestCase):
@@ -1166,6 +1176,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-1)
 
+    @unittest.skipIf(
+        is_m1_mac() and not mx.metal.is_available(),
+        "Accelerate bug https://github.com/ml-explore/mlx/pull/3563",
+    )
     def test_gather_qmm_sorted(self):
         def quantize(w, transpose=True, group_size=None, mode="affine"):
             if mode == "affine":
