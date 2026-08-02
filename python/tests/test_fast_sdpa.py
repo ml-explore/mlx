@@ -27,7 +27,6 @@ def mlx_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):
     scores = q @ mx.swapaxes(k, -1, -2)
     is_causal = mask == "causal"
     if mask is not None:
-
         if is_causal:
             offset = kL - L
             q_indices = mx.arange(L) + offset
@@ -302,6 +301,63 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 mask=m,
             )
             self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
+    def test_sdpa_multirow_query(self):
+        # 8 < q_seq_len <= 16 routes to the multi-row vector kernel when the
+        # keys are long or the head dim is unsupported by the full kernel.
+        scale = 1.0
+        mx.random.seed(0)
+        for D, L, Lq, Nq, Nkv in [
+            (128, 4096, 9, 8, 1),
+            (128, 4096, 12, 8, 2),
+            (128, 4096, 16, 8, 1),
+            (128, 4096, 16, 8, 2),
+            (256, 4096, 12, 2, 1),
+            (96, 512, 12, 8, 2),
+        ]:
+            with self.subTest(D=D, L=L, Lq=Lq, Nq=Nq, Nkv=Nkv):
+                q = 5e-1 * mx.random.normal(shape=(1, Nq, Lq, D))
+                k = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
+                v = 5e-1 * mx.random.normal(shape=(1, Nkv, L, D))
+
+                masks = [
+                    None,
+                    mx.array(True),
+                    mx.array([True] * (L - 10) + [False] * 10),
+                    mx.random.uniform(shape=(Nq, 1, L)) > 0.2,
+                    mx.random.uniform(shape=(L, 1, Nq)).T > 0.2,
+                    mx.random.uniform(shape=(Nq, Lq, L)),
+                    "causal",
+                ]
+                for m in masks:
+                    ref = mlx_ref_attn(q, k, v, scale, mask=m)
+                    out = mx.fast.scaled_dot_product_attention(
+                        q,
+                        k,
+                        v,
+                        scale=scale,
+                        mask=m,
+                    )
+                    self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
+                # Transposed queries
+                qt = 5e-1 * mx.random.normal(shape=(1, Lq, Nq, D)).swapaxes(1, 2)
+                ref = mlx_ref_attn(qt, k, v, scale, mask="causal")
+                out = mx.fast.scaled_dot_product_attention(
+                    qt, k, v, scale=scale, mask="causal"
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
+        # With sinks
+        q = 5e-1 * mx.random.normal(shape=(1, 8, 12, 128))
+        k = 5e-1 * mx.random.normal(shape=(1, 2, 4096, 128))
+        v = 5e-1 * mx.random.normal(shape=(1, 2, 4096, 128))
+        sinks = mx.random.normal(shape=(8,))
+        ref = mlx_ref_attn(q, k, v, scale, mask="causal", sinks=sinks)
+        out = mx.fast.scaled_dot_product_attention(
+            q, k, v, scale=scale, mask="causal", sinks=sinks
+        )
+        self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
     @unittest.skip("Different head and value dims is not enabled")
     def test_sdpa_vector_value_dims(self):

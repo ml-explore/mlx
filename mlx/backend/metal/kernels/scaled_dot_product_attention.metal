@@ -42,4 +42,24 @@ using namespace metal;
 instantiate_sdpa_vector_heads(float)
 instantiate_sdpa_vector_heads(bfloat16_t)
 instantiate_sdpa_vector_heads(float16_t)
+
+// SDPA vector multi-row instantiations (8 < q_seq_len <= 16)
+#define instantiate_sdpa_vector_multirow(type, qk_dim, value_dim)       \
+  instantiate_kernel(                                                   \
+      "sdpa_vector_2pass_1_multirow_" #type "_" #qk_dim "_" #value_dim, \
+      sdpa_vector_2pass_1_multirow,                                     \
+      type,                                                             \
+      qk_dim,                                                           \
+      value_dim)
+
+#define instantiate_sdpa_vector_multirow_heads(type) \
+  instantiate_sdpa_vector_multirow(type, 64, 64)     \
+  instantiate_sdpa_vector_multirow(type, 96, 96)     \
+  instantiate_sdpa_vector_multirow(type, 128, 128)   \
+  instantiate_sdpa_vector_multirow(type, 192, 128)   \
+  instantiate_sdpa_vector_multirow(type, 256, 256)
+
+instantiate_sdpa_vector_multirow_heads(float)
+instantiate_sdpa_vector_multirow_heads(bfloat16_t)
+instantiate_sdpa_vector_multirow_heads(float16_t)
     // clang-format on
