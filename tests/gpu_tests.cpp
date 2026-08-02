@@ -512,6 +512,37 @@ TEST_CASE("test gpu matmul") {
     auto out = matmul(a, b, Device::gpu);
     CHECK(array_equal(out, ones({2047, 4095}), Device::cpu).item<bool>());
   }
+
+  // Exercise dimensions immediately below, at, and above common GEMM
+  // alignment boundaries, including asymmetric issue-scale dimensions.
+  const std::array<std::array<int, 3>, 14> cases = {{
+      {31, 31, 31},
+      {31, 32, 33},
+      {32, 33, 31},
+      {33, 35, 32},
+      {33, 35, 33},
+      {63, 65, 63},
+      {63, 65, 64},
+      {63, 65, 65},
+      {127, 129, 64},
+      {127, 129, 65},
+      {128, 127, 128},
+      {129, 127, 129},
+      {2047, 33, 31},
+      {33, 4095, 31},
+  }};
+  for (const auto& dims : cases) {
+    const auto [m, n, k] = dims;
+    auto a = multiply(
+        reshape(arange(0, m * k, 1.0f, float32), {m, k}), array(0.01f));
+    auto b = multiply(
+        reshape(arange(1, 1 + k * n, 1.0f, float32), {k, n}),
+        array(-0.02f));
+    auto expected = matmul(a, b, Device::cpu);
+    auto out = matmul(a, b, Device::gpu);
+    CHECK(
+        allclose(expected, out, 1e-3, 1e-3, false, Device::cpu).item<bool>());
+  }
 }
 
 TEST_CASE("test gpu validation") {
