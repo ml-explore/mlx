@@ -93,6 +93,53 @@ class TestStream(mlx_tests.MLXTestCase):
             with self.assertRaises(ValueError):
                 mx.new_stream(mx.gpu)
 
+    def test_stream_api(self):
+        stream = mx.Stream(mx.cpu)
+        self.assertEqual(stream.device, mx.cpu)
+        self.assertTrue(stream.query())
+        stream.synchronize()
+        self.assertTrue(stream.query())
+
+        default_stream = mx.Stream()
+        self.assertEqual(default_stream.device, mx.default_device())
+        with self.assertRaises(ValueError):
+            stream.record_event()
+
+        other = mx.Stream(mx.cpu)
+        stream.wait_stream(other)
+        stream.synchronize()
+
+        default_device = mx.default_device()
+        default_stream = mx.default_stream(default_device)
+        with stream as current:
+            self.assertIs(current, stream)
+            self.assertEqual(mx.default_device(), mx.cpu)
+            self.assertEqual(mx.default_stream(mx.cpu), stream)
+        self.assertEqual(mx.default_device(), default_device)
+        self.assertEqual(mx.default_stream(default_device), default_stream)
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    def test_gpu_stream_api(self):
+        producer = mx.Stream(mx.gpu)
+        consumer = mx.Stream(mx.gpu)
+        self.assertTrue(producer.query())
+        self.assertTrue(consumer.query())
+
+        event = producer.record_event()
+        self.assertIsInstance(event, mx.Event)
+        same_event = mx.Event()
+        self.assertIs(producer.record_event(same_event), same_event)
+
+        consumer.wait_event(event)
+        self.assertFalse(consumer.query())
+        consumer.synchronize()
+        self.assertTrue(consumer.query())
+
+        consumer.wait_stream(producer)
+        self.assertFalse(consumer.query())
+        consumer.synchronize()
+        self.assertTrue(consumer.query())
+
     def test_op_on_stream(self):
         x = mx.array(1.0)
         y = mx.array(1.0)
@@ -111,6 +158,70 @@ class TestStream(mlx_tests.MLXTestCase):
         s_cpu = mx.new_stream(mx.cpu)
         b = mx.add(x, y, stream=s_cpu)
         self.assertEqual(a.item(), b.item())
+
+
+class TestEvent(mlx_tests.MLXTestCase):
+    def test_event_requires_gpu(self):
+        with self.assertRaises(TypeError):
+            mx.Event(mx.gpu, True)
+        with self.assertRaises(ValueError):
+            mx.Event(mx.cpu)
+        with self.assertRaises(ValueError):
+            mx.Event(mx.cpu, enable_timing=True)
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    def test_event_synchronization(self):
+        record_stream = mx.new_stream(mx.gpu)
+        wait_stream = mx.new_stream(mx.gpu)
+        event = mx.Event()
+
+        self.assertTrue(event.query())
+        event.wait(wait_stream)
+        event.synchronize()
+
+        out = mx.exp(
+            mx.arange(1 << 20, dtype=mx.float32, stream=record_stream),
+            stream=record_stream,
+        )
+        mx.async_eval(out)
+        event.record(record_stream)
+        event.wait(wait_stream)
+        waited_out = mx.exp(
+            mx.arange(1 << 20, dtype=mx.float32, stream=wait_stream),
+            stream=wait_stream,
+        )
+        mx.async_eval(waited_out)
+        mx.synchronize(wait_stream)
+
+        self.assertTrue(event.query())
+        event.record(record_stream)
+        event.synchronize()
+        self.assertTrue(event.query())
+
+        end_event = mx.Event()
+        end_event.record(record_stream)
+        with self.assertRaises(RuntimeError):
+            event.elapsed_time(end_event)
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    def test_event(self):
+        start = mx.Event(mx.gpu, enable_timing=True)
+        end = mx.Event(mx.gpu, enable_timing=True)
+        start.record()
+        out = mx.exp(
+            mx.arange(1 << 20, dtype=mx.float32, stream=mx.gpu),
+            stream=mx.gpu,
+        )
+        mx.async_eval(out)
+        end.record()
+        self.assertGreater(start.elapsed_time(end), 0.0)
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    def test_unrecorded_event(self):
+        with self.assertRaises(RuntimeError):
+            mx.Event(mx.gpu, enable_timing=True).elapsed_time(
+                mx.Event(mx.gpu, enable_timing=True)
+            )
 
 
 class TestDeviceInfo(mlx_tests.MLXTestCase):

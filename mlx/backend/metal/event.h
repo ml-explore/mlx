@@ -12,6 +12,8 @@ class EventImpl {
 
   void wait(uint64_t value);
   void signal(uint64_t value);
+  void set_command_buffer(MTL::CommandBuffer* command_buffer);
+  double gpu_end_time();
   void set_error(std::shared_ptr<std::string> error);
   void check_error();
 
@@ -28,6 +30,7 @@ class EventImpl {
   std::shared_ptr<std::string> error_;
 
   NS::SharedPtr<MTL::SharedEvent> mtl_event_;
+  NS::SharedPtr<MTL::CommandBuffer> command_buffer_;
 };
 
 } // namespace mlx::core::metal

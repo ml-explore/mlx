@@ -60,6 +60,12 @@ void Scheduler::enqueue(Stream s, std::function<void()> task) {
   st->enqueue(std::move(task));
 }
 
+bool Scheduler::query(Stream s) {
+  std::shared_lock lock(threads_mtx_);
+  auto it = threads_.find(s.index);
+  return it == threads_.end() || it->second->query();
+}
+
 // Leak the scheduler singleton on all platforms. During static destruction,
 // worker threads may still be executing JIT-compiled code that has been
 // unmapped, causing SIGSEGV (macOS/Linux) or join() deadlocks (Windows/MSVC

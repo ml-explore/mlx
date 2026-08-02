@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Metal/Metal.hpp>
+#include <atomic>
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
@@ -94,7 +95,12 @@ class MLX_API CommandEncoder {
   void end_encoding();
   void wait_event(std::shared_ptr<EventImpl> event, uint64_t value);
   void signal_event(std::shared_ptr<EventImpl> event, uint64_t value);
+  void record_event(
+      std::shared_ptr<EventImpl> event,
+      uint64_t value,
+      bool enable_timing);
   bool needs_commit() const;
+  bool query() const;
   void commit(std::function<void()> completion = nullptr);
   void synchronize();
 
@@ -113,6 +119,8 @@ class MLX_API CommandEncoder {
   NS::SharedPtr<MTL::CommandBuffer> buffer_;
   int buffer_ops_{0};
   size_t buffer_sizes_{0};
+  bool has_pending_work_{false};
+  std::shared_ptr<std::atomic<bool>> last_submission_;
 
   // The events hooked to current command buffer.
   std::vector<std::shared_ptr<EventImpl>> wait_events_;

@@ -21,9 +21,11 @@ struct StreamThread {
   std::queue<std::function<void()>> q;
   std::condition_variable cond;
   bool stop;
+  bool running;
   std::thread thread;
 
-  StreamThread() : stop(false), thread(&StreamThread::thread_fn, this) {}
+  StreamThread()
+      : stop(false), running(false), thread(&StreamThread::thread_fn, this) {}
 
   ~StreamThread() {
     {
@@ -45,9 +47,15 @@ struct StreamThread {
         }
         task = std::move(q.front());
         q.pop();
+        running = true;
       }
 
       task();
+
+      {
+        std::lock_guard<std::mutex> lk(mtx);
+        running = false;
+      }
     }
   }
 
@@ -61,6 +69,11 @@ struct StreamThread {
       q.emplace(std::move(f));
     }
     cond.notify_one();
+  }
+
+  bool query() {
+    std::lock_guard<std::mutex> lk(mtx);
+    return q.empty() && !running;
   }
 };
 
@@ -76,6 +89,7 @@ class MLX_API Scheduler {
   Scheduler& operator=(Scheduler&&) = delete;
 
   void enqueue(Stream s, std::function<void()> task);
+  bool query(Stream s);
 
   void notify_new_task(const Stream& stream) {
     {
@@ -122,6 +136,10 @@ MLX_API Scheduler& scheduler();
 template <typename F>
 void enqueue(const Stream& stream, F&& f) {
   scheduler().enqueue(stream, std::forward<F>(f));
+}
+
+inline bool query(const Stream& stream) {
+  return scheduler().query(stream);
 }
 
 inline int n_active_tasks() {

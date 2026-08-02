@@ -76,6 +76,10 @@ void finalize(Stream s) {
   encoder.commit();
 }
 
+bool query(Stream s) {
+  return metal::get_command_encoder(s).query();
+}
+
 void synchronize(Stream s) {
   metal::get_command_encoder(s).synchronize();
 }

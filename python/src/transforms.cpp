@@ -1216,6 +1216,13 @@ void init_transforms(nb::module_& m) {
       R"pbdoc(
         Asynchronously evaluate an :class:`array` or tree of :class:`array`.
 
+        This function schedules the computations needed to produce its
+        arguments and returns without waiting for them to complete. On a GPU
+        stream, the corresponding command buffers are committed before this
+        function returns, so an :class:`Event` subsequently recorded on the
+        same stream is ordered after that work. Accessing an unfinished result
+        may wait for completion.
+
         .. note::
 
           This is an experimental API and may change in future versions.

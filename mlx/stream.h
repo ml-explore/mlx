@@ -46,6 +46,9 @@ MLX_API Stream stream_from_thread_local_stream(ThreadLocalStream tls);
 /** Get all available streams. */
 MLX_API std::vector<Stream> get_streams();
 
+/* Return whether all work on the provided stream has completed. */
+MLX_API bool query(Stream);
+
 /* Synchronize with the default stream. */
 MLX_API void synchronize();
 

@@ -10,6 +10,7 @@ Devices and Streams
 
    Device
    Stream
+   Event
    default_device
    set_default_device
    default_stream

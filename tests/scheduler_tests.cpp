@@ -196,6 +196,20 @@ TEST_CASE("test asynchronous launch") {
   CHECK_EQ(x, 10);
 }
 
+TEST_CASE("test cpu stream query") {
+  auto stream = new_stream(Device::cpu);
+  CHECK(query(stream));
+
+  auto release = std::make_shared<std::promise<void>>();
+  auto ready = release->get_future().share();
+  scheduler::enqueue(stream, [ready = std::move(ready)]() { ready.wait(); });
+
+  CHECK_FALSE(query(stream));
+  release->set_value();
+  synchronize(stream);
+  CHECK(query(stream));
+}
+
 TEST_CASE("test stream placement") {
   auto s1 = default_stream(Device::cpu);
   auto s2 = new_stream(Device::cpu);

@@ -5,6 +5,7 @@
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/gpu/device_info.h"
 #include "mlx/backend/gpu/eval.h"
+#include "mlx/scheduler.h"
 
 #include <array>
 #include <map>
@@ -104,6 +105,13 @@ Stream stream_from_thread_local_stream(ThreadLocalStream tls) {
     it = streams.emplace(tls, new_stream(tls.device)).first;
   }
   return it->second;
+}
+
+bool query(Stream s) {
+  if (s.device == Device::cpu) {
+    return scheduler::query(s);
+  }
+  return gpu::query(s);
 }
 
 } // namespace mlx::core

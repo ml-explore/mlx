@@ -19,7 +19,25 @@ Event::Event(Stream stream) : stream_(stream) {
   event_ = std::shared_ptr<void>(new EventCounter{}, dtor);
 }
 
+Event::Event(Stream stream, bool enable_timing)
+    : stream_(stream), enable_timing_(enable_timing) {
+  throw std::invalid_argument(
+      "[Event::Event] Events are only supported on GPU.");
+}
+
+void Event::record(Stream) {
+  throw std::runtime_error("[Event::record] Events are only supported on GPU.");
+}
+
+double Event::elapsed_time(const Event&) const {
+  throw std::runtime_error(
+      "[Event::elapsed_time] Event timing is only supported on GPU.");
+}
+
 void Event::wait() {
+  if (value() == 0) {
+    return;
+  }
   auto ec = static_cast<EventCounter*>(event_.get());
   std::unique_lock<std::mutex> lk(ec->mtx);
   if (ec->value >= value()) {
@@ -29,6 +47,9 @@ void Event::wait() {
 }
 
 void Event::wait(Stream stream) {
+  if (value() == 0) {
+    return;
+  }
   scheduler::enqueue(stream, [*this]() mutable { wait(); });
 }
 

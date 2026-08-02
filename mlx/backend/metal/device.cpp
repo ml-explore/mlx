@@ -497,14 +497,29 @@ void CommandEncoder::end_encoding() {
 void CommandEncoder::signal_event(
     std::shared_ptr<EventImpl> event,
     uint64_t value) {
+  has_pending_work_ = true;
   end_encoding();
   buffer_->encodeSignalEvent(event->mtl_event(), value);
+  signal_events_.push_back({std::move(event), value});
+}
+
+void CommandEncoder::record_event(
+    std::shared_ptr<EventImpl> event,
+    uint64_t value,
+    bool enable_timing) {
+  has_pending_work_ = true;
+  end_encoding();
+  buffer_->encodeSignalEvent(event->mtl_event(), value);
+  if (enable_timing) {
+    event->set_command_buffer(buffer_.get());
+  }
   signal_events_.push_back({std::move(event), value});
 }
 
 void CommandEncoder::wait_event(
     std::shared_ptr<EventImpl> event,
     uint64_t value) {
+  has_pending_work_ = true;
   end_encoding();
   buffer_->encodeWait(event->mtl_event(), value);
   wait_events_.push_back(std::move(event));
@@ -515,12 +530,26 @@ bool CommandEncoder::needs_commit() const {
   return (buffer_ops_ > max_ops) || ((buffer_sizes_ >> 20) > max_mb);
 }
 
+bool CommandEncoder::query() const {
+  return !has_pending_work_ &&
+      (!last_submission_ || last_submission_->load(std::memory_order_acquire));
+}
+
 void CommandEncoder::commit(std::function<void()> completion) {
+  auto submission =
+      has_pending_work_ ? std::make_shared<std::atomic<bool>>(false) : nullptr;
+  if (submission) {
+    last_submission_ = submission;
+  }
   buffer_->addCompletedHandler(
       [&error_ = error_,
        wait_events = std::move(wait_events_),
        signal_events = std::move(signal_events_),
+       submission = std::move(submission),
        completion = std::move(completion)](MTL::CommandBuffer* cbuf) {
+        if (submission) {
+          submission->store(true, std::memory_order_release);
+        }
         if (completion) {
           completion();
         }
@@ -556,6 +585,7 @@ void CommandEncoder::commit(std::function<void()> completion) {
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
   buffer_ops_ = 0;
   buffer_sizes_ = 0;
+  has_pending_work_ = false;
 }
 
 void CommandEncoder::synchronize() {
@@ -572,6 +602,7 @@ void CommandEncoder::synchronize() {
 }
 
 MTL::ComputeCommandEncoder* CommandEncoder::get_command_encoder() {
+  has_pending_work_ = true;
   if (!encoder_) {
     encoder_ = NS::RetainPtr(
         buffer_->computeCommandEncoder(MTL::DispatchTypeConcurrent));

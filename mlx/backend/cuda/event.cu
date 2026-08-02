@@ -365,7 +365,30 @@ Event::Event(Stream s) : stream_(s) {
       new EventImpl(), [](void* ptr) { delete static_cast<EventImpl*>(ptr); });
 }
 
+Event::Event(Stream s, bool enable_timing)
+    : stream_(s), enable_timing_(enable_timing) {
+  if (s.device != Device::gpu) {
+    throw std::invalid_argument(
+        "[Event::Event] Events are only supported on GPU.");
+  }
+  event_ = std::shared_ptr<void>(
+      new EventImpl(), [](void* ptr) { delete static_cast<EventImpl*>(ptr); });
+}
+
+void Event::record(Stream) {
+  throw std::runtime_error(
+      "[Event::record] Events are not supported by the CUDA backend.");
+}
+
+double Event::elapsed_time(const Event&) const {
+  throw std::runtime_error(
+      "[Event::elapsed_time] Event timing is not supported by the CUDA backend.");
+}
+
 void Event::wait() {
+  if (value() == 0) {
+    return;
+  }
   auto* event = static_cast<EventImpl*>(event_.get());
   assert(event->is_created());
   if (event->cuda) {
@@ -378,6 +401,9 @@ void Event::wait() {
 }
 
 void Event::wait(Stream s) {
+  if (value() == 0) {
+    return;
+  }
   auto* event = static_cast<EventImpl*>(event_.get());
   assert(event->is_created());
   if (event->cuda) {

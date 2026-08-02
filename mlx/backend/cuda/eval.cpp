@@ -81,6 +81,11 @@ void finalize(Stream s) {
   cu::get_command_encoder(s).commit();
 }
 
+bool query(Stream) {
+  throw std::runtime_error(
+      "[gpu::query] Stream query is not supported by the CUDA backend.");
+}
+
 void synchronize(Stream s) {
   nvtx3::scoped_range r("gpu::synchronize");
   cu::get_command_encoder(s).synchronize();
