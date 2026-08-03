@@ -1,10 +1,20 @@
 # Copyright © 2023 Apple Inc.
 
+import platform
+import subprocess
 import unittest
 from itertools import product
 
 import mlx.core as mx
 import mlx_tests
+
+
+def is_m1_mac():
+    if platform.system() != "Darwin":
+        return False
+    cmd = "sysctl -n machdep.cpu.brand_string"
+    cpu = subprocess.check_output(cmd, shell=True).decode().strip()
+    return cpu.startswith("Apple M1")
 
 
 class TestQuantized(mlx_tests.MLXTestCase):
@@ -153,6 +163,15 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
         w_hat = mx.dequantize(w_q, scales, mode="nvfp4")
         self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
+
+        # A scale shared across a 32-value SIMD group instead of computed
+        # per 16-value group cannot represent the low-magnitude groups.
+        alternating = mx.zeros((64, 16), dtype=mx.bfloat16)
+        alternating[::2] = 6 * 2**-9
+        alternating[1::2] = 6.0
+        w_q, scales = mx.quantize(alternating, mode="nvfp4")
+        w_hat = mx.dequantize(w_q, scales, mode="nvfp4", dtype=mx.bfloat16)
+        self.assertTrue(mx.allclose(alternating, w_hat, rtol=1e-5, atol=1e-6))
 
         # test quantize/dequantize 0s
         a = mx.zeros((256, 512))
@@ -1157,6 +1176,10 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-1)
 
+    @unittest.skipIf(
+        is_m1_mac() and not mx.metal.is_available(),
+        "Accelerate bug https://github.com/ml-explore/mlx/pull/3563",
+    )
     def test_gather_qmm_sorted(self):
         def quantize(w, transpose=True, group_size=None, mode="affine"):
             if mode == "affine":

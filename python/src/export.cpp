@@ -249,7 +249,7 @@ void init_export(nb::module_& m) {
        A context managing class for exporting multiple traces of the same
        function to a file.
 
-       Make an instance of this class by calling fun:`mx.exporter`.
+       Make an instance of this class by calling :func:`mx.exporter`.
       )pbdoc")
       .def("close", &PyFunctionExporter::close)
       .def("__enter__", [](PyFunctionExporter& exporter) { return &exporter; })

@@ -12,7 +12,7 @@ class Dropout(Module):
     expected value of a given element will remain the same.
 
     Args:
-        p (float): The probability to zero an element
+        p (float): The probability to zero an element. Default: ``0.5``.
     """
 
     def __init__(self, p: float = 0.5):
@@ -56,6 +56,7 @@ class Dropout2d(Module):
 
     Args:
         p (float): Probability of zeroing a channel during training.
+            Default: ``0.5``.
     """
 
     def __init__(self, p: float = 0.5):
@@ -105,6 +106,7 @@ class Dropout3d(Module):
 
     Args:
         p (float): Probability of zeroing a channel during training.
+            Default: ``0.5``.
     """
 
     def __init__(self, p: float = 0.5):

@@ -1,7 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
 #include <iostream>
-#include <regex>
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -197,6 +196,25 @@ std::string write_template(
   return template_def.str();
 }
 
+std::string make_template_hash(const std::string& template_def) {
+  std::string template_hash;
+  template_hash.reserve(template_def.size());
+  for (size_t i = 0; i < template_def.size(); ++i) {
+    auto c = template_def[i];
+    if (c == '<' || c == '>') {
+      template_hash += '_';
+    } else if (
+        c == ',' && i + 1 < template_def.size() && template_def[i + 1] == ' ') {
+      template_hash += '_';
+      ++i;
+    } else {
+      template_hash += c;
+    }
+  }
+  template_hash.pop_back();
+  return template_hash;
+}
+
 } // namespace
 
 CustomKernelFunction metal_kernel(
@@ -290,11 +308,8 @@ CustomKernelFunction metal_kernel(
     std::string kernel_name = "custom_kernel_" + name;
     std::string template_def = "";
     if (!template_args.empty()) {
-      std::regex disallowed_chars("\\<|\\>|(, )");
       template_def = write_template(template_args);
-      auto template_hash =
-          std::regex_replace(template_def, disallowed_chars, "_");
-      template_hash.pop_back();
+      auto template_hash = make_template_hash(template_def);
       kernel_name += "_";
       kernel_name += template_hash;
     }
