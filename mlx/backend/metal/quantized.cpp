@@ -92,17 +92,19 @@ get_qmv_batch_limit(int D, int O, const std::string& mode, metal::Device& d) {
   auto arch_gen = d.get_architecture_gen();
   // Measured on M3 Max (g15s) for affine mode with qmv_wide active: the
   // qmv_wide -> qmm crossover tracks D * O rather than the dims separately
-  // (4096x4096 and 2048x8192 cross at the same M), and sits well below the
-  // old tiers on MLP-sized layers. fp modes and the gen <= 14 tables are
-  // left unchanged pending measurements on those paths.
+  // (same-D*O shapes cross at the same M), falling from 17 at 2048x2048 to
+  // a floor of 13 that holds from ~12M elements through the largest shapes
+  // measured (5120x17408). fp modes and the gen <= 14 tables are left
+  // unchanged pending measurements on those paths (fp_qmv_wide's crossover
+  // is K-dependent, so it needs its own cell, not this one).
   if (mode == "affine" && arch_gen >= 15 && arch_size != 'd') {
     int64_t elements = int64_t(D) * O;
     if (elements <= int64_t(2048) * 2048) {
       return 17;
-    } else if (elements <= int64_t(4096) * 4096) {
-      return 13;
+    } else if (elements <= int64_t(2048) * 4096) {
+      return 16;
     } else {
-      return 7;
+      return 13;
     }
   }
   if (arch_gen == 13 || arch_gen == 14) {
