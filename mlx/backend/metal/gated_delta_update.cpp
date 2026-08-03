@@ -62,13 +62,6 @@ void GatedDeltaUpdate::eval_gpu(
   auto& s = stream();
   auto& d = metal::device(s.device);
 
-  // auto& q = inputs[0];
-  // auto& k = inputs[1];
-  // auto& v = inputs[2];
-  // auto& g = inputs[3];
-  // auto& beta = inputs[4];
-  // auto& h0 = inputs[5];
-
   auto q = ensure_row_contiguous(inputs[0], d, s);
   auto k = ensure_row_contiguous(inputs[1], d, s);
   auto v = ensure_row_contiguous(inputs[2], d, s);
@@ -86,15 +79,17 @@ void GatedDeltaUpdate::eval_gpu(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
-  // PRINT_ARR(q);
-  // PRINT_ARR(k);
-  // PRINT_ARR(v);
-  // PRINT_ARR(g);
-  // PRINT_ARR(beta);
-  // PRINT_ARR(h0);
-  // printf("%d %d %d %d %d %d\n",B,T,Hk,Hv,Dk,Dv);
-
-  int C = chunk_size;
+  int C = 1;
+  const char* threashold_env = std::getenv("GATED_DELTA_THRESH");
+  int threshold = threashold_env ? std::stoi(threashold_env) : 16;
+  if (T > threshold) {
+    if (metal::is_nax_available())
+      C = 16;
+    else
+      C = 8;
+  }
+  const char* chunk_env = std::getenv("GATED_DELTA_CHUNK");
+  C = chunk_env ? std::stoi(chunk_env) : C;
 
   std::string suffix = get_type_string(q.dtype()) // "float"
       + "_" + get_type_string(h0.dtype()) // "float"
@@ -111,8 +106,6 @@ void GatedDeltaUpdate::eval_gpu(
   switch (C) {
     case 16: {
       std::string kernel_name = "gated_delta_fused_nax_";
-
-      // printf("C: %d\nname: %s\n",C,kernel_name.c_str());
       std::string base_name = kernel_name + suffix;
 
       base_name += "_" + std::to_string(C);
@@ -142,8 +135,6 @@ void GatedDeltaUpdate::eval_gpu(
     }
     case 8: {
       std::string kernel_name = "gated_delta_fused_chunk_";
-
-      // printf("C: %d\nname: %s\n",C,kernel_name.c_str());
       std::string base_name = kernel_name + suffix;
 
       base_name += "_" + std::to_string(C);
