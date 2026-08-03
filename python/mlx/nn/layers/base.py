@@ -129,7 +129,7 @@ class Module(dict):
         Update the model's weights from a ``.npz``, a ``.safetensors`` file, or a list.
 
         Args:
-            file_or_weights (str or list(tuple(str, mx.array))): The path to
+            file_or_weights (str or list(tuple(str, array))): The path to
                 the weights ``.npz`` file (``.npz`` or ``.safetensors``) or a list
                 of pairs of parameter names and arrays.
             strict (bool, optional): If ``True`` then checks that the provided
