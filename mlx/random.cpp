@@ -279,8 +279,44 @@ array randint(
     throw std::invalid_argument(
         "[randint] randint only accepts integer dtypes and bool.");
   }
-  auto u = uniform(low, high, shape, float32, key, s);
-  return astype(maximum(u, low, s), dtype, s);
+
+  auto stream = to_stream(s);
+  auto keys = key ? *key : KeySequence::default_().next();
+
+  if (keys.dtype() != uint32) {
+    std::ostringstream msg;
+    msg << "[randint] Expected key type uint32 but received "
+        << keys.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (keys.shape().back() != 2) {
+    std::ostringstream msg;
+    msg << "[randint] Expected key shape ending in 2 but received "
+        << keys.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Broadcast low and high to output shape.
+  // Use uint64 for unsigned output (including bool) so values above
+  // INT64_MAX are preserved; use int64 for signed output.
+  auto out_shape = broadcast_shapes(low.shape(), high.shape());
+  out_shape = broadcast_shapes(out_shape, shape);
+
+  Dtype bounds_dtype = issubdtype(dtype, signedinteger) ? int64 : uint64;
+
+  auto low_b = astype(broadcast_to(low, out_shape, stream), bounds_dtype, stream);
+  auto high_b = astype(broadcast_to(high, out_shape, stream), bounds_dtype, stream);
+
+  std::vector<array> inputs;
+  inputs.reserve(3);
+  inputs.push_back(keys);
+  inputs.push_back(low_b);
+  inputs.push_back(high_b);
+  return array(
+      out_shape,
+      dtype,
+      std::make_shared<RandomInt>(stream, out_shape, dtype),
+      inputs);
 }
 
 array bernoulli(

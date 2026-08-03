@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <numeric>
+#include <set>
 
 #include "doctest/doctest.h"
 
@@ -516,6 +517,89 @@ TEST_CASE("test random randint") {
   auto key = array({0, 0}, {1, 2});
   CHECK_THROWS_AS(
       random::randint(low, high, {}, float32, key), std::invalid_argument);
+
+  // --- Issue #3926 regression tests ---
+
+  // Large int32 range must produce full precision (not truncated to 4 values)
+  {
+    auto key = random::key(42);
+    auto out = random::randint(
+        INT32_MIN, INT32_MAX, {4000}, int32, std::optional<array>(key));
+    out.eval();
+    std::set<int32_t> vals;
+    auto p = out.data<int32_t>();
+    for (size_t i = 0; i < 4000; ++i) {
+      vals.insert(p[i]);
+    }
+    CHECK_EQ(vals.size(), size_t(4000));  // all unique with full precision
+  }
+
+  // Large int64 range must produce full precision
+  {
+    auto key = random::key(42);
+    auto out = random::randint(
+        INT64_MIN, INT64_MAX, {4000}, int64, std::optional<array>(key));
+    out.eval();
+    std::set<int64_t> vals;
+    auto p = out.data<int64_t>();
+    for (size_t i = 0; i < 4000; ++i) {
+      vals.insert(p[i]);
+    }
+    CHECK_EQ(vals.size(), size_t(4000));  // all unique with full precision
+  }
+
+  // uint32 large range must produce full precision
+  {
+    auto key = random::key(42);
+    auto out = random::randint(
+        0u, UINT32_MAX, {4000}, uint32, std::optional<array>(key));
+    out.eval();
+    std::set<uint32_t> vals;
+    auto p = out.data<uint32_t>();
+    for (size_t i = 0; i < 4000; ++i) {
+      vals.insert(p[i]);
+    }
+    CHECK_EQ(vals.size(), size_t(4000));  // all unique with full precision
+  }
+
+  // Bool output — randint(0, 2, {...}, bool) must produce both 0 and 1
+  // The old code truncated high=2 to 1 (astype(bool)), giving only 0.
+  {
+    auto key = random::key(42);
+    auto out = random::randint(
+        0, 2, {2000}, bool_, std::optional<array>(key));
+    out.eval();
+    bool got_0 = false, got_1 = false;
+    auto p = out.data<bool>();
+    for (size_t i = 0; i < 2000; ++i) {
+      if (p[i]) got_1 = true;
+      else got_0 = true;
+    }
+    CHECK(got_0);
+    CHECK(got_1);
+  }
+
+  // Small int8 range — bounds must be read as int8, not int32
+  {
+    auto key = random::key(42);
+    auto out = random::randint(
+        -128, 127, {1000}, int8, std::optional<array>(key));
+    CHECK(all(greater_equal(out, array(int8_t(-128)))).item<bool>());
+    CHECK(all(less(out, array(int8_t(127)))).item<bool>());
+  }
+
+  // Narrow range {0, 1, 2} — all three values must appear
+  {
+    auto key = random::key(42);
+    auto out = random::randint(0, 3, {500}, int32, std::optional<array>(key));
+    out.eval();
+    std::set<int32_t> vals;
+    auto p = out.data<int32_t>();
+    for (size_t i = 0; i < 500; ++i) {
+      vals.insert(p[i]);
+    }
+    CHECK_EQ(vals.size(), size_t(3));
+  }
 }
 
 TEST_CASE("test random bernoulli") {

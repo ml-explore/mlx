@@ -3873,6 +3873,53 @@ bool RandomBits::is_equivalent(const Primitive& other) const {
   return shape_ == r_other.shape_ && width_ == r_other.width_;
 }
 
+std::pair<std::vector<array>, std::vector<int>> RandomInt::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 3);
+  assert(axes.size() == 3);
+
+  auto key = inputs[0];
+  auto low = inputs[1];
+  auto high = inputs[2];
+  auto kax = axes[0];
+  auto lax = axes[1];
+  auto hax = axes[2];
+
+  // Handle key axis (last dim is always 2 for key pairs)
+  if (kax == key.ndim() - 1) {
+    std::vector<int> reorder(key.ndim());
+    std::iota(reorder.begin(), reorder.end(), 0);
+    std::swap(reorder[kax], reorder[kax - 1]);
+    key = transpose(key, reorder, stream());
+    kax--;
+  }
+
+  // Broadcast low and high into output shape
+  auto shape = shape_;
+  if (kax >= 0) {
+    shape.insert(shape.begin() + kax, key.shape()[kax]);
+  }
+  if (lax >= 0) {
+    shape.insert(shape.begin() + lax, low.shape()[lax]);
+  }
+  if (hax >= 0) {
+    shape.insert(shape.begin() + hax, high.shape()[hax]);
+  }
+
+  auto out = array(
+      shape,
+      dtype_,
+      std::make_shared<RandomInt>(stream(), shape, dtype_),
+      {key, low, high});
+  return {{out}, {kax}};
+}
+
+bool RandomInt::is_equivalent(const Primitive& other) const {
+  const RandomInt& r_other = static_cast<const RandomInt&>(other);
+  return shape_ == r_other.shape_ && dtype_ == r_other.dtype_;
+}
+
 std::vector<array> Real::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

@@ -1736,6 +1736,39 @@ class RandomBits : public UnaryPrimitive {
   int width_;
 };
 
+/** Random integer sampling with exact rejection (no float32 path).
+ *
+ * Inputs: [keys, low, high]
+ *   keys – shape (..., 2), uint32 PRNG keys
+ *   low  – broadcastable to output shape
+ *   high – broadcastable to output shape
+ *
+ * The output dtype is determined by the primitive (constructor arg),
+ * and must be an integer or bool type.
+ */
+class RandomInt : public UnaryPrimitive {
+ public:
+  explicit RandomInt(
+      Stream stream,
+      const Shape& shape,
+      Dtype dtype)
+      : UnaryPrimitive(stream), shape_(shape), dtype_(dtype) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_NAME(RandomInt)
+  bool is_equivalent(const Primitive& other) const override;
+  std::pair<Shape, Dtype> state() const {
+    return {shape_, dtype_};
+  };
+
+ private:
+  Shape shape_;
+  Dtype dtype_;
+};
+
 class Real : public UnaryPrimitive {
  public:
   explicit Real(Stream stream) : UnaryPrimitive(stream) {}
