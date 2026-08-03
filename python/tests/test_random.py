@@ -234,6 +234,37 @@ class TestRandom(mlx_tests.MLXTestCase):
             mx.random.randint(0, 1).dtype, mx.random.randint(0, 1, dtype=None).dtype
         )
 
+    def test_randint_exact_integer_ranges(self):
+        key = mx.random.key(42)
+
+        # Float32 cannot represent the adjacent integers in this interval.
+        narrow = mx.random.randint(
+            2**24, 2**24 + 2, (10_000,), dtype=mx.int32, key=key
+        )
+        narrow_values = set(narrow.tolist())
+        self.assertEqual(narrow_values, {2**24, 2**24 + 1})
+
+        # The whole 1024-wide interval is below one float32 spacing at 2**40.
+        wide = mx.random.randint(
+            2**40, 2**40 + 1024, (10_000,), dtype=mx.int64, key=key
+        )
+        self.assertTrue(mx.all(wide >= 2**40).item())
+        self.assertTrue(mx.all(wide < 2**40 + 1024).item())
+        self.assertGreater(len(set(wide.tolist())), 1)
+
+        signed = mx.random.randint(
+            -(2**62), 2**62, (2_000,), dtype=mx.int64, key=key
+        )
+        self.assertTrue(mx.all(signed >= -(2**62)).item())
+        self.assertTrue(mx.all(signed < 2**62).item())
+        self.assertGreater(len(set(signed.tolist())), 1)
+
+        # Reusing a key must reproduce the complete result exactly.
+        repeat = mx.random.randint(
+            2**40, 2**40 + 1024, (10_000,), dtype=mx.int64, key=key
+        )
+        self.assertListEqual(wide.tolist(), repeat.tolist())
+
     def test_bernoulli(self):
         a = mx.random.bernoulli()
         self.assertEqual(a.shape, ())
