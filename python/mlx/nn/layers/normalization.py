@@ -336,13 +336,14 @@ class BatchNorm(Module):
             f"track_running_stats={self.track_running_stats}"
         )
 
-    def _calc_stats(self, x: mx.array) -> Tuple[mx.array, mx.array]:
+    def _calc_stats(self, x: mx.array, ddof: int = 0) -> Tuple[mx.array, mx.array]:
         """
         Calculate the mean and variance of the input tensor across the batch
         and spatial dimensions.
 
         Args:
             x (array): Input tensor.
+            ddof (int): Delta degrees of freedom for variance.
 
         Returns:
             tuple: Tuple containing mean and variance.
@@ -350,7 +351,7 @@ class BatchNorm(Module):
         reduction_axes = tuple(range(0, x.ndim - 1))
 
         mean = mx.mean(x, axis=reduction_axes)
-        var = mx.var(x, axis=reduction_axes)
+        var = mx.var(x, axis=reduction_axes, ddof=ddof)
 
         return mean, var
 
@@ -369,13 +370,23 @@ class BatchNorm(Module):
                 f"Expected input tensor to have 2, 3 or 4 dimensions, but got {x.ndim}"
             )
 
+        if self.training:
+            stats_size = 1
+            for size in x.shape[:-1]:
+                stats_size *= size
+            if stats_size == 1:
+                raise ValueError(
+                    "BatchNorm training requires more than one value per channel."
+                )
+
         # Calculate the mean and variance used to normalize the input x. If we
         # are in training mode update the running stats if needed.
         mean, var = self._calc_stats(x)
         if self.training and self.track_running_stats:
             mu = self.momentum
+            _, running_var = self._calc_stats(x, ddof=1)
             self.running_mean = (1 - mu) * self.running_mean + mu * mean
-            self.running_var = (1 - mu) * self.running_var + mu * var
+            self.running_var = (1 - mu) * self.running_var + mu * running_var
         elif self.track_running_stats:
             mean = self.running_mean
             var = self.running_var
