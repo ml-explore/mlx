@@ -518,6 +518,34 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = fun(x, y=y, z=z)
         self.assertEqual(out.item(), 6)
 
+    def test_compile_many_distinct_constants(self):
+        # Cache entries keyed on scalar arguments are bucketed by a hash of
+        # everything the lookup requires to be equal. A key that is too strict
+        # would re-trace an entry that should have been reused, and a re-trace
+        # is observable because it picks up the current value of a captured
+        # variable.
+        y = 1
+
+        @mx.compile
+        def fun(x, offset):
+            return x + offset + y
+
+        x = mx.array([1, 2])
+        self.assertTrue(mx.array_equal(fun(x, 0), mx.array([2, 3])))
+
+        # Accumulate many entries under the same function id
+        for i in range(1, 50):
+            self.assertTrue(mx.array_equal(fun(x, i), mx.array([2 + i, 3 + i])))
+
+        # Revisiting a constant must reuse its entry rather than re-trace, so
+        # the new y must not be reflected
+        y = 100
+        self.assertTrue(mx.array_equal(fun(x, 0), mx.array([2, 3])))
+        self.assertTrue(mx.array_equal(fun(x, 7), mx.array([9, 10])))
+
+        # A constant not seen before still traces, and does see the new y
+        self.assertTrue(mx.array_equal(fun(x, 50), mx.array([151, 152])))
+
     def test_shapeless_compile(self):
         y = 1
 

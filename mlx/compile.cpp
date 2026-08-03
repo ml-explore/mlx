@@ -320,8 +320,14 @@ class CompilerCache {
       const std::vector<array>& inputs,
       bool shapeless,
       const std::vector<uint64_t>& constants) {
-    // Find the cache entries for |fun_id|.
-    std::vector<CacheEntry>& entries = cache_[fun_id];
+    // Bucket the entries for |fun_id| by a hash of everything that has to
+    // match, so a lookup only compares against entries that can actually be
+    // equal. Without this, functions called with a per-call scalar (e.g. a
+    // KV-cache offset during decode) accumulate one entry per distinct value
+    // and every call scans all of them.
+    auto stream = default_stream(default_device());
+    std::vector<CacheEntry>& entries =
+        cache_[fun_id][hash_key(stream, inputs, shapeless, constants)];
 
     // Compare if 2 arrays have same shape and dtype.
     auto has_same_shape_and_dtype = [shapeless](
@@ -343,10 +349,11 @@ class CompilerCache {
       }
       return true;
     };
-    // Loop over entries and check:
+    // Loop over the entries in this bucket and check:
     // - Default stream and device match the entry's default stream
     // - Inputs match i.e. shapes and types must be equal.
-    auto stream = default_stream(default_device());
+    // The checks are kept in full so a hash collision cannot return a
+    // mismatched entry.
     for (CacheEntry& entry : entries) {
       // Check that the default stream and device match
       if (entry.stream != stream) {
@@ -386,8 +393,42 @@ class CompilerCache {
     allocator::allocator();
   }
 
+  // Hash of everything find() requires to be equal. Only used to pick a
+  // bucket; equality is still checked in full on the way out.
+  static size_t hash_key(
+      Stream stream,
+      const std::vector<array>& inputs,
+      bool shapeless,
+      const std::vector<uint64_t>& constants) {
+    auto combine = [](size_t seed, size_t value) {
+      return seed ^ (value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2));
+    };
+    size_t h = combine(0, static_cast<size_t>(stream.index));
+    h = combine(h, static_cast<size_t>(stream.device.type));
+    h = combine(h, static_cast<size_t>(stream.device.index));
+    h = combine(h, static_cast<size_t>(shapeless));
+    h = combine(h, inputs.size());
+    for (const auto& in : inputs) {
+      h = combine(h, in.ndim());
+      h = combine(h, static_cast<size_t>(in.dtype().val()));
+      // Shapes are only compared when not shapeless, so only hash them then.
+      if (!shapeless) {
+        for (auto d : in.shape()) {
+          h = combine(h, static_cast<size_t>(d));
+        }
+      }
+    }
+    for (auto c : constants) {
+      h = combine(h, static_cast<size_t>(c));
+    }
+    return h;
+  }
+
   friend CompilerCache& compiler_cache();
-  std::unordered_map<std::uintptr_t, std::vector<CacheEntry>> cache_;
+  std::unordered_map<
+      std::uintptr_t,
+      std::unordered_map<size_t, std::vector<CacheEntry>>>
+      cache_;
 };
 
 CompilerCache& compiler_cache() {
