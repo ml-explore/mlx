@@ -3479,7 +3479,7 @@ void init_ops(nb::module_& m) {
             mode: Padding mode. One of the following strings:
               "constant" (default): Pads with a constant value.
               "edge": Pads with the edge values of array.
-            constant_value (array or scalar, optional): Optional constant value
+            constant_values (array or scalar, optional): Optional constant value
               to pad the edges of the array with.
 
         Returns:
@@ -4724,13 +4724,13 @@ void init_ops(nb::module_& m) {
           bits (int, optional): The number of bits occupied by each element of
             ``w`` in the quantized array. See supported values and defaults in the
             :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+          mode (str, optional): The quantization mode. Default: ``"affine"``.
           global_scale (array, optional): The per-input float32 scale used for
             ``"nvfp4"`` quantization if provided. Default: ``None``.
           dtype (Dtype, optional): The data type of the dequantized output. If
             ``None`` the return type is inferred from the scales and biases
             when possible and otherwise defaults to ``bfloat16``.
             Default: ``None``.
-          mode (str, optional): The quantization mode. Default: ``"affine"``.
 
         Returns:
           array: The dequantized version of ``w``

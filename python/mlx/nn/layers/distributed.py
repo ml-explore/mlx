@@ -1,14 +1,14 @@
 # Copyright © 2024 Apple Inc.
 
 import math
-from functools import lru_cache
+from functools import lru_cache, reduce
 from typing import Callable, Optional, Union
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.linear import Linear
 from mlx.nn.layers.quantized import QuantizedLinear
-from mlx.utils import tree_map_with_path
+from mlx.utils import tree_flatten, tree_map_with_path, tree_unflatten
 
 
 @lru_cache
@@ -617,3 +617,147 @@ class QuantizedShardedToAllLinear(Module):
         )
 
         return sl
+
+
+def _make_gather_fn(group, full_shapes, shard_sizes, compute_dtype):
+    N = group.size()
+    indices = reduce(lambda acc, w: acc + [acc[-1] + w], shard_sizes, [0])
+    split_indices = indices[1:-1]
+    shard_shapes = [(shape[0] // N,) + tuple(shape[1:]) for shape in full_shapes]
+
+    def _maybe_cast(x, dtype):
+        if dtype is None or x.dtype == dtype:
+            return x
+        return x.astype(dtype)
+
+    @mx.custom_function
+    def gather(shards):
+        shard = mx.concatenate(
+            [_maybe_cast(s.reshape(1, -1), compute_dtype) for s in shards], axis=1
+        )
+        full = mx.distributed.all_gather(shard, group=group)
+        parts = mx.split(full, split_indices, axis=1)
+        return [p.reshape(shape) for p, shape in zip(parts, full_shapes)]
+
+    @gather.vjp
+    def gather_vjp(shards, cotangents, _):
+        local_full = mx.concatenate([c.reshape(N, -1) for c in cotangents], axis=1)
+        local_shard = mx.distributed.sum_scatter(local_full, group=group) / N
+        parts = mx.split(local_shard, split_indices, axis=1)
+        return [
+            _maybe_cast(p.reshape(shape), s.dtype)
+            for p, shape, s in zip(parts, shard_shapes, shards)
+        ]
+
+    return gather
+
+
+def _maybe_shard(m, k, v):
+    if isinstance(v, FullyShardedModule):
+        return False
+    return Module.valid_parameter_filter(m, k, v)
+
+
+class FullyShardedModule(Module):
+    """Wrap a module so each member of the group holds only a shard of its
+    parameters.
+
+    The full parameters are gathered for the forward pass and the gradients
+    are reduce-scattered in the backward pass, so during training
+    each member of the group stores and updates only its own shard.
+
+    Every parameter is sharded along axis 0, so each parameter's size along
+    that axis must be divisible by the size of ``group``.
+
+    Use :func:`fully_shard` to wrap a module.
+
+    Args:
+        module (mlx.nn.Module): The module whose parameters will be sharded.
+        group (mlx.core.distributed.Group, optional): The group to shard
+            across. If not set, the global group is used. Default: ``None``.
+        compute_dtype (mlx.core.Dtype, optional): If set, the gathered
+            parameters are cast to this dtype for the forward pass.
+            Default: ``None``.
+    """
+
+    def __init__(
+        self,
+        module: Module,
+        group: Optional[mx.distributed.Group] = None,
+        compute_dtype: Optional[mx.Dtype] = None,
+    ):
+        super().__init__()
+        group = group or mx.distributed.init()
+        N = group.size()
+
+        shard_params = module.filter_and_map(_maybe_shard)
+        flat = tree_flatten(shard_params)
+        for path, a in flat:
+            if a.ndim == 0:
+                raise ValueError(
+                    f"Cannot shard parameter '{path}' because it is a scalar."
+                )
+            if a.shape[0] % N != 0:
+                raise ValueError(
+                    f"Cannot shard parameter '{path}' with shape {a.shape} "
+                    f"across {N} devices: axis 0 must be divisible by {N}."
+                )
+
+        super(Module, self).__setattr__("_paths", [k for k, _ in flat])
+        full_shapes = [a.shape for _, a in flat]
+        shard_sizes = [a.size // N for _, a in flat]
+
+        module.update(_shard(shard_params, lambda p, w: 0, group))
+
+        self.module = module
+        self._gather_fn = _make_gather_fn(
+            group, full_shapes, shard_sizes, compute_dtype
+        )
+
+    def _extra_repr(self) -> str:
+        return f"num_sharded_params={len(self._paths)}"
+
+    def _gathered_call(self, fn, *args, **kwargs):
+        shard_tree = self.module.filter_and_map(_maybe_shard)
+        shards = [a for _, a in tree_flatten(shard_tree)]
+        fulls = self._gather_fn(shards)
+        self.module.update(tree_unflatten(list(zip(self._paths, fulls))))
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            self.module.update(shard_tree)
+
+    def __call__(self, *args, **kwargs):
+        return self._gathered_call(self.module, *args, **kwargs)
+
+    def as_linear(self, *args, **kwargs):
+        return self._gathered_call(self.module.as_linear, *args, **kwargs)
+
+
+def fully_shard(
+    module: Module,
+    *,
+    group: Optional[mx.distributed.Group] = None,
+    compute_dtype: Optional[mx.Dtype] = None,
+) -> Module:
+    """Wrap ``module`` in a :class:`FullyShardedModule`.
+
+    Args:
+        module (mlx.nn.Module): The module to wrap.
+        group (mlx.core.distributed.Group, optional): The group to shard
+            across. If not set, the global group is used. Default: ``None``.
+        compute_dtype (mlx.core.Dtype, optional): If set, the gathered
+            parameters are cast to this dtype for the forward pass.
+            Default: ``None``.
+
+    Returns:
+        The wrapped :class:`FullyShardedModule`, or ``module`` unchanged.
+    """
+    group = group or mx.distributed.init()
+    if group.size() == 1:
+        return module
+    if isinstance(module, FullyShardedModule):
+        return module
+
+    wrapped = FullyShardedModule(module, group=group, compute_dtype=compute_dtype)
+    return wrapped if wrapped._paths else module

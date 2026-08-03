@@ -724,6 +724,19 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.prod(x, axis=0).tolist(), [3, 6])
         self.assertEqual(mx.prod(x, axis=1).tolist(), [2, 9])
 
+        # dtype should not depend on the length of the reduced axis
+        for dtype, expected in (
+            (mx.bool_, mx.int32),
+            (mx.int8, mx.int32),
+            (mx.uint8, mx.uint32),
+        ):
+            self.assertEqual(
+                mx.prod(mx.array([2], dtype=dtype), axis=0).dtype, expected
+            )
+            self.assertEqual(
+                mx.prod(mx.array([2, 2], dtype=dtype), axis=0).dtype, expected
+            )
+
     def test_min_and_max(self):
         x = mx.array(
             [

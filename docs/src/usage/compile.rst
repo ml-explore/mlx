@@ -207,9 +207,9 @@ You have two options to deal with this. The first option is to simply return
       state.append(z)
       return mx.exp(z), state
 
-    _, state = fun(mx.array(1.0), mx.array(2.0))
-    # Prints [array(3, dtype=float32)]
-    print(state)
+   _, state = fun(mx.array(1.0), mx.array(2.0))
+   # Prints [array(3, dtype=float32)]
+   print(state)
 
 In some cases returning updated state can be pretty inconvenient. Hence,
 :func:`compile` has a parameter to capture implicit outputs:
@@ -464,7 +464,7 @@ recompiled.
   x = mx.array(1.0)
   y = mx.array(-2.0)
 
-  # Firt call compiles the function
+  # First call compiles the function
   print(compiled_fun(x, y))
 
   # Second call with different shapes

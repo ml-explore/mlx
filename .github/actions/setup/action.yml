@@ -52,6 +52,7 @@ runs:
       shell: bash
       run: |
         echo "::group::Install macOS dependencies"
+        brew update
         brew install openmpi
         xcodebuild -showComponent MetalToolchain
         echo "::endgroup::"
