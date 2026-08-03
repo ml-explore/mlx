@@ -81,9 +81,30 @@ inline array ensure_row_contiguous_matrix(
   return x_copy;
 }
 
-inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
+// First M routed to the matmul kernels; below it the vector family
+// (qmv / qmv_wide, see use_qmv_wide below) handles the product. The right
+// limit depends on which vector kernel is active: qmv_wide streams up to 5
+// rows per weight read, plain qmv re-reads the weights per row, and the
+// matmul tile amortizes them across 32 rows.
+inline int
+get_qmv_batch_limit(int D, int O, const std::string& mode, metal::Device& d) {
   auto arch_size = d.get_architecture().back();
   auto arch_gen = d.get_architecture_gen();
+  // Measured on M3 Max (g15s) for affine mode with qmv_wide active: the
+  // qmv_wide -> qmm crossover tracks D * O rather than the dims separately
+  // (4096x4096 and 2048x8192 cross at the same M), and sits well below the
+  // old tiers on MLP-sized layers. fp modes and the gen <= 14 tables are
+  // left unchanged pending measurements on those paths.
+  if (mode == "affine" && arch_gen >= 15 && arch_size != 'd') {
+    int64_t elements = int64_t(D) * O;
+    if (elements <= int64_t(2048) * 2048) {
+      return 17;
+    } else if (elements <= int64_t(4096) * 4096) {
+      return 13;
+    } else {
+      return 7;
+    }
+  }
   if (arch_gen == 13 || arch_gen == 14) {
     switch (arch_size) {
       case 'd':
@@ -1509,8 +1530,8 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int M = non_batched ? x.size() / K : x.shape(-2);
   int N = out.shape(-1);
 
-  int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
   auto mode = quantization_mode_to_string(mode_);
+  int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, mode, d) : 4;
   // It is a matrix matrix product.
   if (M >= vector_limit) {
     // Use split-K qmm for small M with transposed weights (non-batched only)
@@ -1577,8 +1598,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   int N = out.shape(-1);
   int B = out.size() / M / N;
   int E = w.size() / w.shape(-1) / w.shape(-2);
-  int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, d) : 4;
   auto mode = quantization_mode_to_string(mode_);
+  int vector_limit = transpose_ ? get_qmv_batch_limit(K, N, mode, d) : 4;
 
   // We are walking x in order and w is also in order so we can batch up the
   // matmuls and reuse reading x and w.
