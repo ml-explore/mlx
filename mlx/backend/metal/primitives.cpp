@@ -200,6 +200,71 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
+void RandomInt::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 3);
+  auto& keys = inputs[0];
+  auto& low = inputs[1];
+  auto& high = inputs[2];
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  size_t n = out.size();
+  size_t num_keys = keys.size() / 2;
+  size_t elems_per_key = n / num_keys;
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+  bool is_signed =
+      out.dtype().val() == Dtype::Val::int8 ||
+      out.dtype().val() == Dtype::Val::int16 ||
+      out.dtype().val() == Dtype::Val::int32 ||
+      out.dtype().val() == Dtype::Val::int64;
+  std::string kernel_name = is_signed ? "randint_signed" : "randint_unsigned";
+  auto kernel = d.get_kernel(kernel_name);
+  int dtype = 0;
+  if (is_signed) {
+    switch (out.dtype().val()) {
+      case Dtype::Val::int8: dtype = 0; break;
+      case Dtype::Val::int16: dtype = 1; break;
+      case Dtype::Val::int32: dtype = 2; break;
+      case Dtype::Val::int64: dtype = 3; break;
+      default: throw std::runtime_error("Unsupported signed randint dtype.");
+    }
+  } else {
+    switch (out.dtype().val()) {
+      case Dtype::Val::bool_: dtype = 0; break;
+      case Dtype::Val::uint8: dtype = 1; break;
+      case Dtype::Val::uint16: dtype = 2; break;
+      case Dtype::Val::uint32: dtype = 3; break;
+      case Dtype::Val::uint64: dtype = 4; break;
+      default: throw std::runtime_error("Unsupported unsigned randint dtype.");
+    }
+  }
+
+  MTL::Size grid_dims = MTL::Size(n, 1, 1);
+  auto group_dims = get_block_dims(n, 1, 1);
+  auto& enc = metal::get_command_encoder(s);
+  enc.set_compute_pipeline_state(kernel);
+  enc.set_input_array(keys, 0);
+  enc.set_input_array(low, 1);
+  enc.set_input_array(high, 2);
+  enc.set_output_array(out, 3);
+  enc.set_bytes(n, 4);
+  enc.set_bytes(elems_per_key, 5);
+  int bounds_ndim = low.ndim();
+  enc.set_bytes(bounds_ndim, 6);
+  enc.set_vector_bytes(low.shape(), 7);
+  enc.set_vector_bytes(low.strides(), 8);
+  enc.set_vector_bytes(high.strides(), 9);
+  int key_ndim = keys.ndim();
+  enc.set_bytes(key_ndim, 10);
+  enc.set_vector_bytes(keys.shape(), 11);
+  enc.set_vector_bytes(keys.strides(), 12);
+  enc.set_bytes(dtype, 13);
+  enc.dispatch_threads(grid_dims, group_dims);
+}
+
 void QRF::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
