@@ -285,8 +285,8 @@ array randint(
 
   if (keys.dtype() != uint32) {
     std::ostringstream msg;
-    msg << "[randint] Expected key type uint32 but received "
-        << keys.dtype() << ".";
+    msg << "[randint] Expected key type uint32 but received " << keys.dtype()
+        << ".";
     throw std::invalid_argument(msg.str());
   }
   if (keys.shape().back() != 2) {
@@ -304,8 +304,10 @@ array randint(
 
   Dtype bounds_dtype = issubdtype(dtype, signedinteger) ? int64 : uint64;
 
-  auto low_b = astype(broadcast_to(low, out_shape, stream), bounds_dtype, stream);
-  auto high_b = astype(broadcast_to(high, out_shape, stream), bounds_dtype, stream);
+  auto low_b =
+      astype(broadcast_to(low, out_shape, stream), bounds_dtype, stream);
+  auto high_b =
+      astype(broadcast_to(high, out_shape, stream), bounds_dtype, stream);
 
   std::vector<array> inputs;
   inputs.reserve(3);
