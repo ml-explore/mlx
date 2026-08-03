@@ -368,208 +368,215 @@ void RandomInt::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(high_in);
   encoder.set_output_array(out);
 
-  encoder.dispatch(
-      [kptr, lptr, hptr, optr,
-       kshape, kstrides,
-       lshape, lstrides,
-       hshape, hstrides,
-       oshape, ostrides,
-       dtype, n, num_keys,
-       out_itemsize, bounds_itemsize,
-       bounds_dtype_val, signed_output]() mutable {
-        /* Read bound at oidx as uint64. Bounds are always int64 or uint64. */
-        auto get_bound = [&](const char* ptr, const Shape& s,
-                             const Strides& st, uint64_t oidx) -> uint64_t {
-          auto byte_loc = elem_to_loc(static_cast<int>(oidx), s, st) * bounds_itemsize;
-          if (bounds_dtype_val == Dtype::Val::int64) {
-            return static_cast<uint64_t>(
-                *reinterpret_cast<const int64_t*>(ptr + byte_loc));
-          } else {
-            return *reinterpret_cast<const uint64_t*>(ptr + byte_loc);
+  encoder.dispatch([kptr,
+                    lptr,
+                    hptr,
+                    optr,
+                    kshape,
+                    kstrides,
+                    lshape,
+                    lstrides,
+                    hshape,
+                    hstrides,
+                    oshape,
+                    ostrides,
+                    dtype,
+                    n,
+                    num_keys,
+                    out_itemsize,
+                    bounds_itemsize,
+                    bounds_dtype_val,
+                    signed_output]() mutable {
+    /* Read bound at oidx as uint64. Bounds are always int64 or uint64. */
+    auto get_bound = [&](const char* ptr,
+                         const Shape& s,
+                         const Strides& st,
+                         uint64_t oidx) -> uint64_t {
+      auto byte_loc =
+          elem_to_loc(static_cast<int>(oidx), s, st) * bounds_itemsize;
+      if (bounds_dtype_val == Dtype::Val::int64) {
+        return static_cast<uint64_t>(
+            *reinterpret_cast<const int64_t*>(ptr + byte_loc));
+      } else {
+        return *reinterpret_cast<const uint64_t*>(ptr + byte_loc);
+      }
+    };
+
+    /* Store a value at oidx. For uint64 output we must NOT pass
+     * through int64_t as that truncates the top bit. */
+    auto store_signed = [&](uint64_t oidx, int64_t val) {
+      auto byte_loc = elem_to_loc(oidx, oshape, ostrides) * out_itemsize;
+      switch (dtype.val()) {
+        case Dtype::Val::int8:
+          reinterpret_cast<int8_t*>(optr + byte_loc)[0] =
+              static_cast<int8_t>(val);
+          break;
+        case Dtype::Val::int16:
+          reinterpret_cast<int16_t*>(optr + byte_loc)[0] =
+              static_cast<int16_t>(val);
+          break;
+        case Dtype::Val::int32:
+          reinterpret_cast<int32_t*>(optr + byte_loc)[0] =
+              static_cast<int32_t>(val);
+          break;
+        case Dtype::Val::int64:
+          reinterpret_cast<int64_t*>(optr + byte_loc)[0] = val;
+          break;
+        default:
+          break;
+      }
+    };
+    auto store_unsigned = [&](uint64_t oidx, uint64_t val) {
+      auto byte_loc = elem_to_loc(oidx, oshape, ostrides) * out_itemsize;
+      switch (dtype.val()) {
+        case Dtype::Val::bool_:
+          reinterpret_cast<bool*>(optr + byte_loc)[0] = static_cast<bool>(val);
+          break;
+        case Dtype::Val::uint8:
+          reinterpret_cast<uint8_t*>(optr + byte_loc)[0] =
+              static_cast<uint8_t>(val);
+          break;
+        case Dtype::Val::uint16:
+          reinterpret_cast<uint16_t*>(optr + byte_loc)[0] =
+              static_cast<uint16_t>(val);
+          break;
+        case Dtype::Val::uint32:
+          reinterpret_cast<uint32_t*>(optr + byte_loc)[0] =
+              static_cast<uint32_t>(val);
+          break;
+        case Dtype::Val::uint64:
+          reinterpret_cast<uint64_t*>(optr + byte_loc)[0] = val;
+          break;
+        default:
+          break;
+      }
+    };
+
+    for (uint64_t oidx = 0; oidx < n; ++oidx) {
+      /* Map output element to key index. */
+      size_t elems_per_key = n / num_keys;
+      size_t key_idx = oidx / elems_per_key;
+
+      auto k1_elem = elem_to_loc(2 * key_idx, kshape, kstrides);
+      auto k2_elem = elem_to_loc(2 * key_idx + 1, kshape, kstrides);
+      auto key = std::make_pair(kptr[k1_elem], kptr[k2_elem]);
+
+      uint64_t lo_u = get_bound(lptr, lshape, lstrides, oidx);
+      uint64_t hi_u = get_bound(hptr, hshape, hstrides, oidx);
+
+      /* Compute width. For signed output, reinterpret bounds as int64,
+       * then compute width as the unsigned distance. This works because
+       * in two's complement, reinterpret-casting int64 to uint64 and
+       * subtracting gives the correct element count even when the
+       * signed subtraction would overflow.
+       * Example: INT64_MIN..INT64_MAX:
+       *   lo_s = -2^63, hi_s = 2^63-1
+       *   lo_u = 2^63, hi_u = 2^63-1
+       *   width = hi_u - lo_u = (2^63-1) - 2^63 (mod 2^64) = 2^64-1
+       *   which equals INT64_MAX - INT64_MIN + 1 (the full count). */
+
+      if (signed_output) {
+        int64_t lo_s = static_cast<int64_t>(lo_u);
+        int64_t hi_s = static_cast<int64_t>(hi_u);
+        if (hi_s <= lo_s) {
+          store_signed(oidx, lo_s);
+          continue;
+        }
+        uint64_t width = hi_u - lo_u;
+        if (width == 1) {
+          store_signed(oidx, lo_s);
+          continue;
+        }
+
+        /* Generate random offset in [0, width). */
+        uint64_t result = 0;
+        auto count = std::make_pair<uint32_t, uint32_t>(
+            static_cast<uint32_t>(oidx), static_cast<uint32_t>(oidx >> 32));
+
+        if (width <= UINT32_MAX) {
+          uint32_t uwidth = static_cast<uint32_t>(width);
+          uint32_t remainder = -uwidth % uwidth;
+          while (true) {
+            auto rb = random::threefry2x32_hash(key, count);
+            count.first++;
+            count.second++;
+            if (rb.first >= remainder) {
+              result = rb.first % uwidth;
+              break;
+            }
           }
-        };
-
-        /* Store a value at oidx. For uint64 output we must NOT pass
-         * through int64_t as that truncates the top bit. */
-        auto store_signed = [&](uint64_t oidx, int64_t val) {
-          auto byte_loc = elem_to_loc(oidx, oshape, ostrides) * out_itemsize;
-          switch (dtype.val()) {
-            case Dtype::Val::int8:
-              reinterpret_cast<int8_t*>(optr + byte_loc)[0] =
-                  static_cast<int8_t>(val);
+        } else {
+          uint64_t uwidth = width;
+          uint64_t remainder = -uwidth % uwidth;
+          while (true) {
+            auto rb = random::threefry2x32_hash(key, count);
+            count.first++;
+            count.second++;
+            uint64_t sample = static_cast<uint64_t>(rb.first) |
+                (static_cast<uint64_t>(rb.second) << 32);
+            if (sample >= remainder) {
+              result = sample % uwidth;
               break;
-            case Dtype::Val::int16:
-              reinterpret_cast<int16_t*>(optr + byte_loc)[0] =
-                  static_cast<int16_t>(val);
-              break;
-            case Dtype::Val::int32:
-              reinterpret_cast<int32_t*>(optr + byte_loc)[0] =
-                  static_cast<int32_t>(val);
-              break;
-            case Dtype::Val::int64:
-              reinterpret_cast<int64_t*>(optr + byte_loc)[0] = val;
-              break;
-            default:
-              break;
-          }
-        };
-        auto store_unsigned = [&](uint64_t oidx, uint64_t val) {
-          auto byte_loc = elem_to_loc(oidx, oshape, ostrides) * out_itemsize;
-          switch (dtype.val()) {
-            case Dtype::Val::bool_:
-              reinterpret_cast<bool*>(optr + byte_loc)[0] =
-                  static_cast<bool>(val);
-              break;
-            case Dtype::Val::uint8:
-              reinterpret_cast<uint8_t*>(optr + byte_loc)[0] =
-                  static_cast<uint8_t>(val);
-              break;
-            case Dtype::Val::uint16:
-              reinterpret_cast<uint16_t*>(optr + byte_loc)[0] =
-                  static_cast<uint16_t>(val);
-              break;
-            case Dtype::Val::uint32:
-              reinterpret_cast<uint32_t*>(optr + byte_loc)[0] =
-                  static_cast<uint32_t>(val);
-              break;
-            case Dtype::Val::uint64:
-              reinterpret_cast<uint64_t*>(optr + byte_loc)[0] = val;
-              break;
-            default:
-              break;
-          }
-        };
-
-        for (uint64_t oidx = 0; oidx < n; ++oidx) {
-          /* Map output element to key index. */
-          size_t elems_per_key = n / num_keys;
-          size_t key_idx = oidx / elems_per_key;
-
-          auto k1_elem = elem_to_loc(2 * key_idx, kshape, kstrides);
-          auto k2_elem = elem_to_loc(2 * key_idx + 1, kshape, kstrides);
-          auto key =
-              std::make_pair(kptr[k1_elem], kptr[k2_elem]);
-
-          uint64_t lo_u = get_bound(lptr, lshape, lstrides, oidx);
-          uint64_t hi_u = get_bound(hptr, hshape, hstrides, oidx);
-
-          /* Compute width. For signed output, reinterpret bounds as int64,
-           * then compute width as the unsigned distance. This works because
-           * in two's complement, reinterpret-casting int64 to uint64 and
-           * subtracting gives the correct element count even when the
-           * signed subtraction would overflow.
-           * Example: INT64_MIN..INT64_MAX:
-           *   lo_s = -2^63, hi_s = 2^63-1
-           *   lo_u = 2^63, hi_u = 2^63-1
-           *   width = hi_u - lo_u = (2^63-1) - 2^63 (mod 2^64) = 2^64-1
-           *   which equals INT64_MAX - INT64_MIN + 1 (the full count). */
-
-          if (signed_output) {
-            int64_t lo_s = static_cast<int64_t>(lo_u);
-            int64_t hi_s = static_cast<int64_t>(hi_u);
-            if (hi_s <= lo_s) {
-              store_signed(oidx, lo_s);
-              continue;
             }
-            uint64_t width = hi_u - lo_u;
-            if (width == 1) {
-              store_signed(oidx, lo_s);
-              continue;
-            }
-
-            /* Generate random offset in [0, width). */
-            uint64_t result = 0;
-            auto count = std::make_pair<uint32_t, uint32_t>(
-                static_cast<uint32_t>(oidx),
-                static_cast<uint32_t>(oidx >> 32));
-
-            if (width <= UINT32_MAX) {
-              uint32_t uwidth = static_cast<uint32_t>(width);
-              uint32_t remainder = -uwidth % uwidth;
-              while (true) {
-                auto rb = random::threefry2x32_hash(key, count);
-                count.first++;
-                count.second++;
-                if (rb.first >= remainder) {
-                  result = rb.first % uwidth;
-                  break;
-                }
-              }
-            } else {
-              uint64_t uwidth = width;
-              uint64_t remainder = -uwidth % uwidth;
-              while (true) {
-                auto rb = random::threefry2x32_hash(key, count);
-                count.first++;
-                count.second++;
-                uint64_t sample =
-                    static_cast<uint64_t>(rb.first) |
-                    (static_cast<uint64_t>(rb.second) << 32);
-                if (sample >= remainder) {
-                  result = sample % uwidth;
-                  break;
-                }
-              }
-            }
-
-            /* Form result in uint64 to avoid signed overflow.
-             * lo_u + result wraps correctly in two's complement. */
-            uint64_t out_u = lo_u + result;
-            store_signed(oidx, static_cast<int64_t>(out_u));
-          } else {
-            /* Unsigned output. */
-            if (hi_u <= lo_u) {
-              store_unsigned(oidx, lo_u);
-              continue;
-            }
-            uint64_t width = hi_u - lo_u;
-            if (width == 1) {
-              store_unsigned(oidx, lo_u);
-              continue;
-            }
-
-            /* Generate random offset in [0, width). */
-            uint64_t result = 0;
-            auto count = std::make_pair<uint32_t, uint32_t>(
-                static_cast<uint32_t>(oidx),
-                static_cast<uint32_t>(oidx >> 32));
-
-            if (dtype.val() == Dtype::Val::bool_) {
-              auto rb = random::threefry2x32_hash(key, count);
-              result = rb.first & 1;
-            } else if (width <= UINT32_MAX) {
-              uint32_t uwidth = static_cast<uint32_t>(width);
-              uint32_t remainder = -uwidth % uwidth;
-              while (true) {
-                auto rb = random::threefry2x32_hash(key, count);
-                count.first++;
-                count.second++;
-                if (rb.first >= remainder) {
-                  result = rb.first % uwidth;
-                  break;
-                }
-              }
-            } else {
-              uint64_t uwidth = width;
-              uint64_t remainder = -uwidth % uwidth;
-              while (true) {
-                auto rb = random::threefry2x32_hash(key, count);
-                count.first++;
-                count.second++;
-                uint64_t sample =
-                    static_cast<uint64_t>(rb.first) |
-                    (static_cast<uint64_t>(rb.second) << 32);
-                if (sample >= remainder) {
-                  result = sample % uwidth;
-                  break;
-                }
-              }
-            }
-
-            store_unsigned(oidx, lo_u + result);
           }
         }
-      });
+
+        /* Form result in uint64 to avoid signed overflow.
+         * lo_u + result wraps correctly in two's complement. */
+        uint64_t out_u = lo_u + result;
+        store_signed(oidx, static_cast<int64_t>(out_u));
+      } else {
+        /* Unsigned output. */
+        if (hi_u <= lo_u) {
+          store_unsigned(oidx, lo_u);
+          continue;
+        }
+        uint64_t width = hi_u - lo_u;
+        if (width == 1) {
+          store_unsigned(oidx, lo_u);
+          continue;
+        }
+
+        /* Generate random offset in [0, width). */
+        uint64_t result = 0;
+        auto count = std::make_pair<uint32_t, uint32_t>(
+            static_cast<uint32_t>(oidx), static_cast<uint32_t>(oidx >> 32));
+
+        if (dtype.val() == Dtype::Val::bool_) {
+          auto rb = random::threefry2x32_hash(key, count);
+          result = rb.first & 1;
+        } else if (width <= UINT32_MAX) {
+          uint32_t uwidth = static_cast<uint32_t>(width);
+          uint32_t remainder = -uwidth % uwidth;
+          while (true) {
+            auto rb = random::threefry2x32_hash(key, count);
+            count.first++;
+            count.second++;
+            if (rb.first >= remainder) {
+              result = rb.first % uwidth;
+              break;
+            }
+          }
+        } else {
+          uint64_t uwidth = width;
+          uint64_t remainder = -uwidth % uwidth;
+          while (true) {
+            auto rb = random::threefry2x32_hash(key, count);
+            count.first++;
+            count.second++;
+            uint64_t sample = static_cast<uint64_t>(rb.first) |
+                (static_cast<uint64_t>(rb.second) << 32);
+            if (sample >= remainder) {
+              result = sample % uwidth;
+              break;
+            }
+          }
+        }
+
+        store_unsigned(oidx, lo_u + result);
+      }
+    }
+  });
 }
 
 void Reshape::eval_cpu(const std::vector<array>& inputs, array& out) {

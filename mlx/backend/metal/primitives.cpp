@@ -215,8 +215,7 @@ void RandomInt::eval_gpu(const std::vector<array>& inputs, array& out) {
   size_t elems_per_key = n / num_keys;
   auto& s = stream();
   auto& d = metal::device(s.device);
-  bool is_signed =
-      out.dtype().val() == Dtype::Val::int8 ||
+  bool is_signed = out.dtype().val() == Dtype::Val::int8 ||
       out.dtype().val() == Dtype::Val::int16 ||
       out.dtype().val() == Dtype::Val::int32 ||
       out.dtype().val() == Dtype::Val::int64;
@@ -225,20 +224,40 @@ void RandomInt::eval_gpu(const std::vector<array>& inputs, array& out) {
   int dtype = 0;
   if (is_signed) {
     switch (out.dtype().val()) {
-      case Dtype::Val::int8: dtype = 0; break;
-      case Dtype::Val::int16: dtype = 1; break;
-      case Dtype::Val::int32: dtype = 2; break;
-      case Dtype::Val::int64: dtype = 3; break;
-      default: throw std::runtime_error("Unsupported signed randint dtype.");
+      case Dtype::Val::int8:
+        dtype = 0;
+        break;
+      case Dtype::Val::int16:
+        dtype = 1;
+        break;
+      case Dtype::Val::int32:
+        dtype = 2;
+        break;
+      case Dtype::Val::int64:
+        dtype = 3;
+        break;
+      default:
+        throw std::runtime_error("Unsupported signed randint dtype.");
     }
   } else {
     switch (out.dtype().val()) {
-      case Dtype::Val::bool_: dtype = 0; break;
-      case Dtype::Val::uint8: dtype = 1; break;
-      case Dtype::Val::uint16: dtype = 2; break;
-      case Dtype::Val::uint32: dtype = 3; break;
-      case Dtype::Val::uint64: dtype = 4; break;
-      default: throw std::runtime_error("Unsupported unsigned randint dtype.");
+      case Dtype::Val::bool_:
+        dtype = 0;
+        break;
+      case Dtype::Val::uint8:
+        dtype = 1;
+        break;
+      case Dtype::Val::uint16:
+        dtype = 2;
+        break;
+      case Dtype::Val::uint32:
+        dtype = 3;
+        break;
+      case Dtype::Val::uint64:
+        dtype = 4;
+        break;
+      default:
+        throw std::runtime_error("Unsupported unsigned randint dtype.");
     }
   }
 

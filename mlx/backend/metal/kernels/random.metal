@@ -102,44 +102,64 @@ rbits threefry2x32_hash(const thread uint2& key, uint2 count) {
   }
 }
 
-METAL_FUNC void store_signed(device char* out, uint idx, int dtype, ulong value) {
+METAL_FUNC void
+store_signed(device char* out, uint idx, int dtype, ulong value) {
   switch (dtype) {
-    case 0: *reinterpret_cast<device char*>(out + idx) = char(value); break;
-    case 1: *reinterpret_cast<device short*>(out + idx * 2) = short(value); break;
-    case 2: *reinterpret_cast<device int*>(out + idx * 4) = int(value); break;
-    default: *reinterpret_cast<device long*>(out + idx * 8) = long(value); break;
+    case 0:
+      *reinterpret_cast<device char*>(out + idx) = char(value);
+      break;
+    case 1:
+      *reinterpret_cast<device short*>(out + idx * 2) = short(value);
+      break;
+    case 2:
+      *reinterpret_cast<device int*>(out + idx * 4) = int(value);
+      break;
+    default:
+      *reinterpret_cast<device long*>(out + idx * 8) = long(value);
+      break;
   }
 }
 
-METAL_FUNC void store_unsigned(device char* out, uint idx, int dtype, ulong value) {
+METAL_FUNC void
+store_unsigned(device char* out, uint idx, int dtype, ulong value) {
   switch (dtype) {
-    case 0: *reinterpret_cast<device bool*>(out + idx) = bool(value); break;
-    case 1: *reinterpret_cast<device uchar*>(out + idx) = uchar(value); break;
-    case 2: *reinterpret_cast<device ushort*>(out + idx * 2) = ushort(value); break;
-    case 3: *reinterpret_cast<device uint*>(out + idx * 4) = uint(value); break;
-    default: *reinterpret_cast<device ulong*>(out + idx * 8) = value; break;
+    case 0:
+      *reinterpret_cast<device bool*>(out + idx) = bool(value);
+      break;
+    case 1:
+      *reinterpret_cast<device uchar*>(out + idx) = uchar(value);
+      break;
+    case 2:
+      *reinterpret_cast<device ushort*>(out + idx * 2) = ushort(value);
+      break;
+    case 3:
+      *reinterpret_cast<device uint*>(out + idx * 4) = uint(value);
+      break;
+    default:
+      *reinterpret_cast<device ulong*>(out + idx * 8) = value;
+      break;
   }
 }
 
-#define RANDINT_ARGS \
-    device const uint32_t* keys [[buffer(0)]], \
-    device const long* low [[buffer(1)]], \
-    device const long* high [[buffer(2)]], \
-    device char* out [[buffer(3)]], \
-    constant const ulong& n [[buffer(4)]], \
-    constant const ulong& elems_per_key [[buffer(5)]], \
-    constant const int& bounds_ndim [[buffer(6)]], \
-    constant const int* bounds_shape [[buffer(7)]], \
-    constant const int64_t* low_strides [[buffer(8)]], \
-    constant const int64_t* high_strides [[buffer(9)]], \
-    constant const int& key_ndim [[buffer(10)]], \
-    constant const int* key_shape [[buffer(11)]], \
-    constant const int64_t* key_strides [[buffer(12)]], \
-    constant const int& dtype [[buffer(13)]], \
-    uint idx [[thread_position_in_grid]]
+#define RANDINT_ARGS                                                         \
+  device const uint32_t *keys [[buffer(0)]],                                 \
+      device const long *low [[buffer(1)]],                                  \
+      device const long *high [[buffer(2)]], device char *out [[buffer(3)]], \
+      constant const ulong &n [[buffer(4)]],                                 \
+      constant const ulong &elems_per_key [[buffer(5)]],                     \
+      constant const int &bounds_ndim [[buffer(6)]],                         \
+      constant const int *bounds_shape [[buffer(7)]],                        \
+      constant const int64_t *low_strides [[buffer(8)]],                     \
+      constant const int64_t *high_strides [[buffer(9)]],                    \
+      constant const int &key_ndim [[buffer(10)]],                           \
+      constant const int *key_shape [[buffer(11)]],                          \
+      constant const int64_t *key_strides [[buffer(12)]],                    \
+      constant const int &dtype [[buffer(13)]],                              \
+      uint idx [[thread_position_in_grid]]
 
 [[kernel]] void randint_signed(RANDINT_ARGS) {
-  if (idx >= n) return;
+  if (idx >= n)
+    return;
   auto li = elem_to_loc((long)idx, bounds_shape, low_strides, bounds_ndim);
   auto hi = elem_to_loc((long)idx, bounds_shape, high_strides, bounds_ndim);
   long lo = low[li];
@@ -155,8 +175,10 @@ METAL_FUNC void store_unsigned(device char* out, uint idx, int dtype, ulong valu
     return;
   }
   ulong key_index = idx / elems_per_key;
-  auto k1 = elem_to_loc((long)(2 * key_index), key_shape, key_strides, key_ndim);
-  auto k2 = elem_to_loc((long)(2 * key_index + 1), key_shape, key_strides, key_ndim);
+  auto k1 =
+      elem_to_loc((long)(2 * key_index), key_shape, key_strides, key_ndim);
+  auto k2 =
+      elem_to_loc((long)(2 * key_index + 1), key_shape, key_strides, key_ndim);
   uint2 key = uint2(keys[k1], keys[k2]);
   uint2 count = uint2(idx, 0);
   ulong result = 0;
@@ -200,7 +222,8 @@ METAL_FUNC void store_unsigned(device char* out, uint idx, int dtype, ulong valu
     constant const int64_t* key_strides [[buffer(12)]],
     constant const int& dtype [[buffer(13)]],
     uint idx [[thread_position_in_grid]]) {
-  if (idx >= n) return;
+  if (idx >= n)
+    return;
   auto li = elem_to_loc((long)idx, bounds_shape, low_strides, bounds_ndim);
   auto hi = elem_to_loc((long)idx, bounds_shape, high_strides, bounds_ndim);
   ulong lo = low[li];
@@ -215,8 +238,10 @@ METAL_FUNC void store_unsigned(device char* out, uint idx, int dtype, ulong valu
     return;
   }
   ulong key_index = idx / elems_per_key;
-  auto k1 = elem_to_loc((long)(2 * key_index), key_shape, key_strides, key_ndim);
-  auto k2 = elem_to_loc((long)(2 * key_index + 1), key_shape, key_strides, key_ndim);
+  auto k1 =
+      elem_to_loc((long)(2 * key_index), key_shape, key_strides, key_ndim);
+  auto k2 =
+      elem_to_loc((long)(2 * key_index + 1), key_shape, key_strides, key_ndim);
   uint2 key = uint2(keys[k1], keys[k2]);
   uint2 count = uint2(idx, 0);
   ulong result = 0;

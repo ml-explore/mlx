@@ -531,7 +531,7 @@ TEST_CASE("test random randint") {
     for (size_t i = 0; i < 4000; ++i) {
       vals.insert(p[i]);
     }
-    CHECK_EQ(vals.size(), size_t(4000));  // all unique with full precision
+    CHECK_EQ(vals.size(), size_t(4000)); // all unique with full precision
   }
 
   // Large int64 range must produce full precision
@@ -545,7 +545,7 @@ TEST_CASE("test random randint") {
     for (size_t i = 0; i < 4000; ++i) {
       vals.insert(p[i]);
     }
-    CHECK_EQ(vals.size(), size_t(4000));  // all unique with full precision
+    CHECK_EQ(vals.size(), size_t(4000)); // all unique with full precision
   }
 
   // uint32 large range must produce full precision
@@ -559,21 +559,22 @@ TEST_CASE("test random randint") {
     for (size_t i = 0; i < 4000; ++i) {
       vals.insert(p[i]);
     }
-    CHECK_EQ(vals.size(), size_t(4000));  // all unique with full precision
+    CHECK_EQ(vals.size(), size_t(4000)); // all unique with full precision
   }
 
   // Bool output — randint(0, 2, {...}, bool) must produce both 0 and 1
   // The old code truncated high=2 to 1 (astype(bool)), giving only 0.
   {
     auto key = random::key(42);
-    auto out = random::randint(
-        0, 2, {2000}, bool_, std::optional<array>(key));
+    auto out = random::randint(0, 2, {2000}, bool_, std::optional<array>(key));
     out.eval();
     bool got_0 = false, got_1 = false;
     auto p = out.data<bool>();
     for (size_t i = 0; i < 2000; ++i) {
-      if (p[i]) got_1 = true;
-      else got_0 = true;
+      if (p[i])
+        got_1 = true;
+      else
+        got_0 = true;
     }
     CHECK(got_0);
     CHECK(got_1);
@@ -582,8 +583,8 @@ TEST_CASE("test random randint") {
   // Small int8 range — bounds must be read as int8, not int32
   {
     auto key = random::key(42);
-    auto out = random::randint(
-        -128, 127, {1000}, int8, std::optional<array>(key));
+    auto out =
+        random::randint(-128, 127, {1000}, int8, std::optional<array>(key));
     CHECK(all(greater_equal(out, array(int8_t(-128)))).item<bool>());
     CHECK(all(less(out, array(int8_t(127)))).item<bool>());
   }

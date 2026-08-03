@@ -1748,10 +1748,7 @@ class RandomBits : public UnaryPrimitive {
  */
 class RandomInt : public UnaryPrimitive {
  public:
-  explicit RandomInt(
-      Stream stream,
-      const Shape& shape,
-      Dtype dtype)
+  explicit RandomInt(Stream stream, const Shape& shape, Dtype dtype)
       : UnaryPrimitive(stream), shape_(shape), dtype_(dtype) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;

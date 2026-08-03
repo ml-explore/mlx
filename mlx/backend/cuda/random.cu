@@ -132,7 +132,6 @@ __global__ void rbits(
 
 } // namespace cu
 
-
 namespace cu {
 
 /* RandomInt kernels — per-element bounds via elem_to_loc */
@@ -152,14 +151,17 @@ __global__ void randint_kernel_signed(
     const __grid_constant__ Shape key_shape,
     const __grid_constant__ Strides key_strides) {
   auto grid = cg::this_grid();
-  for (uint64_t idx = grid.thread_rank(); idx < n;
-       idx += grid.size()) {
+  for (uint64_t idx = grid.thread_rank(); idx < n; idx += grid.size()) {
     int64_t lo_idx = elem_to_loc(
-        static_cast<int64_t>(idx), bounds_shape.data(),
-        low_strides.data(), bounds_ndim);
+        static_cast<int64_t>(idx),
+        bounds_shape.data(),
+        low_strides.data(),
+        bounds_ndim);
     int64_t hi_idx = elem_to_loc(
-        static_cast<int64_t>(idx), bounds_shape.data(),
-        high_strides.data(), bounds_ndim);
+        static_cast<int64_t>(idx),
+        bounds_shape.data(),
+        high_strides.data(),
+        bounds_ndim);
     int64_t si_lo = low[lo_idx];
     int64_t si_hi = high[hi_idx];
 
@@ -183,8 +185,8 @@ __global__ void randint_kernel_signed(
     int64_t k2_loc = elem_to_loc(
         2 * key_idx + 1, key_shape.data(), key_strides.data(), key_ndim);
     auto key = uint2{keys[k1_loc], keys[k2_loc]};
-    uint2 count = {static_cast<uint32_t>(idx),
-                   static_cast<uint32_t>(idx >> 32)};
+    uint2 count = {
+        static_cast<uint32_t>(idx), static_cast<uint32_t>(idx >> 32)};
 
     uint64_t result = 0;
     if (width <= UINT32_MAX) {
@@ -207,7 +209,7 @@ __global__ void randint_kernel_signed(
         count.x++;
         count.y++;
         uint64_t sample = static_cast<uint64_t>(rb.val.x) |
-                          (static_cast<uint64_t>(rb.val.y) << 32);
+            (static_cast<uint64_t>(rb.val.y) << 32);
         if (sample >= remainder) {
           result = sample % uwidth;
           break;
@@ -236,14 +238,17 @@ __global__ void randint_kernel_unsigned(
     const __grid_constant__ Shape key_shape,
     const __grid_constant__ Strides key_strides) {
   auto grid = cg::this_grid();
-  for (uint64_t idx = grid.thread_rank(); idx < n;
-       idx += grid.size()) {
+  for (uint64_t idx = grid.thread_rank(); idx < n; idx += grid.size()) {
     int64_t lo_idx = elem_to_loc(
-        static_cast<int64_t>(idx), bounds_shape.data(),
-        low_strides.data(), bounds_ndim);
+        static_cast<int64_t>(idx),
+        bounds_shape.data(),
+        low_strides.data(),
+        bounds_ndim);
     int64_t hi_idx = elem_to_loc(
-        static_cast<int64_t>(idx), bounds_shape.data(),
-        high_strides.data(), bounds_ndim);
+        static_cast<int64_t>(idx),
+        bounds_shape.data(),
+        high_strides.data(),
+        bounds_ndim);
     uint64_t lo_val = low[lo_idx];
     uint64_t hi_val = high[hi_idx];
 
@@ -265,8 +270,8 @@ __global__ void randint_kernel_unsigned(
     int64_t k2_loc = elem_to_loc(
         2 * key_idx + 1, key_shape.data(), key_strides.data(), key_ndim);
     auto key = uint2{keys[k1_loc], keys[k2_loc]};
-    uint2 count = {static_cast<uint32_t>(idx),
-                   static_cast<uint32_t>(idx >> 32)};
+    uint2 count = {
+        static_cast<uint32_t>(idx), static_cast<uint32_t>(idx >> 32)};
 
     uint64_t result = 0;
     if (width <= UINT32_MAX) {
@@ -289,7 +294,7 @@ __global__ void randint_kernel_unsigned(
         count.x++;
         count.y++;
         uint64_t sample = static_cast<uint64_t>(rb.val.x) |
-                          (static_cast<uint64_t>(rb.val.y) << 32);
+            (static_cast<uint64_t>(rb.val.y) << 32);
         if (sample >= remainder) {
           result = sample % uwidth;
           break;
@@ -310,16 +315,15 @@ __global__ void randint_kernel_bool_unsigned(
     const __grid_constant__ Shape key_shape,
     const __grid_constant__ Strides key_strides) {
   auto grid = cg::this_grid();
-  for (uint64_t idx = grid.thread_rank(); idx < n;
-       idx += grid.size()) {
+  for (uint64_t idx = grid.thread_rank(); idx < n; idx += grid.size()) {
     int64_t key_idx = static_cast<int64_t>(idx / elems_per_key);
     int64_t k1_loc = elem_to_loc(
         2 * key_idx, key_shape.data(), key_strides.data(), key_ndim);
     int64_t k2_loc = elem_to_loc(
         2 * key_idx + 1, key_shape.data(), key_strides.data(), key_ndim);
     auto key = uint2{keys[k1_loc], keys[k2_loc]};
-    uint2 count = {static_cast<uint32_t>(idx),
-                   static_cast<uint32_t>(idx >> 32)};
+    uint2 count = {
+        static_cast<uint32_t>(idx), static_cast<uint32_t>(idx >> 32)};
     auto rb = threefry2x32_hash(key, count);
     out[idx] = static_cast<bool>(rb.val.x & 1);
   }
@@ -343,8 +347,7 @@ void RandomInt::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   size_t n = out.size();
-  int blocks = std::min(
-      static_cast<int>(cuda::ceil_div(n, 256)), 65536);
+  int blocks = std::min(static_cast<int>(cuda::ceil_div(n, 256)), 65536);
   dim3 grid(blocks);
   dim3 block(256);
 
@@ -372,35 +375,79 @@ void RandomInt::eval_gpu(const std::vector<array>& inputs, array& out) {
     switch (out.dtype().val()) {
       case Dtype::Val::int8:
         encoder.add_kernel_node(
-            cu::randint_kernel_signed<int8_t>, grid, block,
-            gpu_ptr<uint32_t>(keys), low_ptr, high_ptr, gpu_ptr<int8_t>(out),
-            static_cast<uint64_t>(n), elems_per_key,
-            bounds_ndim, bshape, low_strides, high_strides,
-            key_ndim, kshape, kstrides);
+            cu::randint_kernel_signed<int8_t>,
+            grid,
+            block,
+            gpu_ptr<uint32_t>(keys),
+            low_ptr,
+            high_ptr,
+            gpu_ptr<int8_t>(out),
+            static_cast<uint64_t>(n),
+            elems_per_key,
+            bounds_ndim,
+            bshape,
+            low_strides,
+            high_strides,
+            key_ndim,
+            kshape,
+            kstrides);
         break;
       case Dtype::Val::int16:
         encoder.add_kernel_node(
-            cu::randint_kernel_signed<int16_t>, grid, block,
-            gpu_ptr<uint32_t>(keys), low_ptr, high_ptr, gpu_ptr<int16_t>(out),
-            static_cast<uint64_t>(n), elems_per_key,
-            bounds_ndim, bshape, low_strides, high_strides,
-            key_ndim, kshape, kstrides);
+            cu::randint_kernel_signed<int16_t>,
+            grid,
+            block,
+            gpu_ptr<uint32_t>(keys),
+            low_ptr,
+            high_ptr,
+            gpu_ptr<int16_t>(out),
+            static_cast<uint64_t>(n),
+            elems_per_key,
+            bounds_ndim,
+            bshape,
+            low_strides,
+            high_strides,
+            key_ndim,
+            kshape,
+            kstrides);
         break;
       case Dtype::Val::int32:
         encoder.add_kernel_node(
-            cu::randint_kernel_signed<int32_t>, grid, block,
-            gpu_ptr<uint32_t>(keys), low_ptr, high_ptr, gpu_ptr<int32_t>(out),
-            static_cast<uint64_t>(n), elems_per_key,
-            bounds_ndim, bshape, low_strides, high_strides,
-            key_ndim, kshape, kstrides);
+            cu::randint_kernel_signed<int32_t>,
+            grid,
+            block,
+            gpu_ptr<uint32_t>(keys),
+            low_ptr,
+            high_ptr,
+            gpu_ptr<int32_t>(out),
+            static_cast<uint64_t>(n),
+            elems_per_key,
+            bounds_ndim,
+            bshape,
+            low_strides,
+            high_strides,
+            key_ndim,
+            kshape,
+            kstrides);
         break;
       case Dtype::Val::int64:
         encoder.add_kernel_node(
-            cu::randint_kernel_signed<int64_t>, grid, block,
-            gpu_ptr<uint32_t>(keys), low_ptr, high_ptr, gpu_ptr<int64_t>(out),
-            static_cast<uint64_t>(n), elems_per_key,
-            bounds_ndim, bshape, low_strides, high_strides,
-            key_ndim, kshape, kstrides);
+            cu::randint_kernel_signed<int64_t>,
+            grid,
+            block,
+            gpu_ptr<uint32_t>(keys),
+            low_ptr,
+            high_ptr,
+            gpu_ptr<int64_t>(out),
+            static_cast<uint64_t>(n),
+            elems_per_key,
+            bounds_ndim,
+            bshape,
+            low_strides,
+            high_strides,
+            key_ndim,
+            kshape,
+            kstrides);
         break;
       default:
         throw std::runtime_error(
@@ -412,42 +459,92 @@ void RandomInt::eval_gpu(const std::vector<array>& inputs, array& out) {
     switch (out.dtype().val()) {
       case Dtype::Val::bool_:
         encoder.add_kernel_node(
-            cu::randint_kernel_bool_unsigned, grid, block,
-            gpu_ptr<uint32_t>(keys), gpu_ptr<bool>(out),
-            static_cast<uint64_t>(n), elems_per_key,
-            key_ndim, kshape, kstrides);
+            cu::randint_kernel_bool_unsigned,
+            grid,
+            block,
+            gpu_ptr<uint32_t>(keys),
+            gpu_ptr<bool>(out),
+            static_cast<uint64_t>(n),
+            elems_per_key,
+            key_ndim,
+            kshape,
+            kstrides);
         break;
       case Dtype::Val::uint8:
         encoder.add_kernel_node(
-            cu::randint_kernel_unsigned<uint8_t>, grid, block,
-            gpu_ptr<uint32_t>(keys), low_ptr, high_ptr, gpu_ptr<uint8_t>(out),
-            static_cast<uint64_t>(n), elems_per_key,
-            bounds_ndim, bshape, low_strides, high_strides,
-            key_ndim, kshape, kstrides);
+            cu::randint_kernel_unsigned<uint8_t>,
+            grid,
+            block,
+            gpu_ptr<uint32_t>(keys),
+            low_ptr,
+            high_ptr,
+            gpu_ptr<uint8_t>(out),
+            static_cast<uint64_t>(n),
+            elems_per_key,
+            bounds_ndim,
+            bshape,
+            low_strides,
+            high_strides,
+            key_ndim,
+            kshape,
+            kstrides);
         break;
       case Dtype::Val::uint16:
         encoder.add_kernel_node(
-            cu::randint_kernel_unsigned<uint16_t>, grid, block,
-            gpu_ptr<uint32_t>(keys), low_ptr, high_ptr, gpu_ptr<uint16_t>(out),
-            static_cast<uint64_t>(n), elems_per_key,
-            bounds_ndim, bshape, low_strides, high_strides,
-            key_ndim, kshape, kstrides);
+            cu::randint_kernel_unsigned<uint16_t>,
+            grid,
+            block,
+            gpu_ptr<uint32_t>(keys),
+            low_ptr,
+            high_ptr,
+            gpu_ptr<uint16_t>(out),
+            static_cast<uint64_t>(n),
+            elems_per_key,
+            bounds_ndim,
+            bshape,
+            low_strides,
+            high_strides,
+            key_ndim,
+            kshape,
+            kstrides);
         break;
       case Dtype::Val::uint32:
         encoder.add_kernel_node(
-            cu::randint_kernel_unsigned<uint32_t>, grid, block,
-            gpu_ptr<uint32_t>(keys), low_ptr, high_ptr, gpu_ptr<uint32_t>(out),
-            static_cast<uint64_t>(n), elems_per_key,
-            bounds_ndim, bshape, low_strides, high_strides,
-            key_ndim, kshape, kstrides);
+            cu::randint_kernel_unsigned<uint32_t>,
+            grid,
+            block,
+            gpu_ptr<uint32_t>(keys),
+            low_ptr,
+            high_ptr,
+            gpu_ptr<uint32_t>(out),
+            static_cast<uint64_t>(n),
+            elems_per_key,
+            bounds_ndim,
+            bshape,
+            low_strides,
+            high_strides,
+            key_ndim,
+            kshape,
+            kstrides);
         break;
       case Dtype::Val::uint64:
         encoder.add_kernel_node(
-            cu::randint_kernel_unsigned<uint64_t>, grid, block,
-            gpu_ptr<uint32_t>(keys), low_ptr, high_ptr, gpu_ptr<uint64_t>(out),
-            static_cast<uint64_t>(n), elems_per_key,
-            bounds_ndim, bshape, low_strides, high_strides,
-            key_ndim, kshape, kstrides);
+            cu::randint_kernel_unsigned<uint64_t>,
+            grid,
+            block,
+            gpu_ptr<uint32_t>(keys),
+            low_ptr,
+            high_ptr,
+            gpu_ptr<uint64_t>(out),
+            static_cast<uint64_t>(n),
+            elems_per_key,
+            bounds_ndim,
+            bshape,
+            low_strides,
+            high_strides,
+            key_ndim,
+            kshape,
+            kstrides);
         break;
       default:
         throw std::runtime_error(
