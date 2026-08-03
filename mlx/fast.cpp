@@ -1039,13 +1039,13 @@ std::vector<array> gated_delta_update(
     const array& gates,
     const array& beta_,
     const std::optional<array>& initial_state, /* = std::nullopt */
-    const int C,
     StreamOrDevice s_ /* = {} */) {
   // determine output dtype
   auto s = to_stream(s_);
 
+  // TODO fix this
   auto promoted = promote_types(queries.dtype(), keys.dtype());
-  auto out_dtype = issubdtype(promoted, float32)
+  auto out_dtype = issubdtype(promoted, floating)
       ? promoted
       : promote_types(promoted, float32);
 
@@ -1072,20 +1072,8 @@ std::vector<array> gated_delta_update(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
-  int pad_size = (C != 0) ? (C - T % C) % C : 0;
-  int T_padded = T > 1 ? T + pad_size : T;
-
-  if (pad_size > 1) {
-    q = pad(q, {1}, {0}, {pad_size}, array(0.0f, out_dtype), "constant", s);
-    k = pad(k, {1}, {0}, {pad_size}, array(0.0f, out_dtype), "constant", s);
-    v = pad(v, {1}, {0}, {pad_size}, array(0.0f, out_dtype), "constant", s);
-    g = pad(g, {1}, {0}, {pad_size}, array(1.0f, out_dtype), "constant", s);
-    beta =
-        pad(beta, {1}, {0}, {pad_size}, array(0.0f, out_dtype), "constant", s);
-  }
-
-  auto h0 = initial_state.has_value() ? astype(*initial_state, out_dtype, s)
-                                      : zeros({B, Hv, Dv, Dk}, out_dtype, s);
+  auto h0 = initial_state.has_value() ? astype(*initial_state, float32, s)
+                                      : zeros({B, Hv, Dv, Dk}, float32, s);
 
   auto fallback = [B, T, Hk, Dk, Hv, Dv, s](std::vector<array> inputs) {
     auto q = astype(inputs[0], float32, s);
@@ -1153,24 +1141,16 @@ std::vector<array> gated_delta_update(
 
   if (!GatedDeltaUpdate::use_fallback(s)) {
     auto result = array::make_arrays(
-        /* output shapes */ {{B, T_padded, Hv, Dv}, {B, Hv, Dv, Dk}},
-        /* dtypes */ {out_dtype, out_dtype},
+        /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dv, Dk}},
+        /* dtypes */ {out_dtype, float32},
         /* primitive */
-        std::make_shared<GatedDeltaUpdate>(s, fallback, C),
+        std::make_shared<GatedDeltaUpdate>(s, fallback),
         /* inputs */ {q, k, v, g, beta, h0});
-
-    // slice output back to original T
-    if (pad_size > 0) {
-      result[0] = slice(result[0], {0, 0, 0, 0}, {B, T, Hv, Dv}, s);
-    }
 
     return result;
   }
 
   auto result = fallback({q, k, v, g, beta, h0});
-  if (pad_size > 0) {
-    result[0] = slice(result[0], {0, 0, 0, 0}, {B, T, Hv, Dv}, s);
-  }
   return result;
 }
 

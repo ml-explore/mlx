@@ -15,22 +15,13 @@ using namespace metal;
       hk,                                                                    \
       hv)
 
-#define instantiate_gated_delta_update_seq_dims(in_type, st_type)              \
-  instantiate_gated_delta_update_seq(in_type, st_type, 64, 64, 4, 4)           \
-      instantiate_gated_delta_update_seq(in_type, st_type, 64, 64, 8, 8)       \
-          instantiate_gated_delta_update_seq(in_type, st_type, 64, 64, 16, 16) \
-              instantiate_gated_delta_update_seq(                              \
-                  in_type, st_type, 64, 64, 24, 24)                            \
-                  instantiate_gated_delta_update_seq(                          \
-                      in_type, st_type, 64, 64, 32, 32)                        \
-                      instantiate_gated_delta_update_seq(                      \
-                          in_type, st_type, 128, 128, 16, 16)                  \
-                          instantiate_gated_delta_update_seq(                  \
-                              in_type, st_type, 128, 128, 24, 24)              \
-                              instantiate_gated_delta_update_seq(              \
-                                  in_type, st_type, 128, 128, 32, 32)          \
-                                  instantiate_gated_delta_update_seq(          \
-                                      in_type, st_type, 128, 128, 16, 32)
+#define instantiate_gated_delta_update_seq_dims(in_type, st_type)            \
+  instantiate_gated_delta_update_seq(in_type, st_type, 128, 128, 24, 24)     \
+      instantiate_gated_delta_update_seq(in_type, st_type, 128, 128, 32, 32) \
+          instantiate_gated_delta_update_seq(                                \
+              in_type, st_type, 128, 128, 16, 32)                            \
+              instantiate_gated_delta_update_seq(                            \
+                  in_type, st_type, 128, 128, 16, 48)
 
 #define instantiate_gated_delta_update_fused_chunk(                            \
     in_type, st_type, dk, dv, hk, hv, c)                                       \
@@ -46,43 +37,15 @@ using namespace metal;
       hv,                                                                      \
       c)
 
-#define instantiate_gated_delta_update_fused_chunk_dims(in_type, st_type)                 \
-  instantiate_gated_delta_update_fused_chunk(                                             \
-      in_type, st_type, 128, 128, 16, 16, 8)                                              \
-      instantiate_gated_delta_update_fused_chunk(                                         \
-          in_type, st_type, 128, 128, 24, 24, 8)                                          \
-          instantiate_gated_delta_update_fused_chunk(                                     \
-              in_type, st_type, 128, 128, 32, 32, 8)                                      \
-              instantiate_gated_delta_update_fused_chunk(                                 \
-                  in_type, st_type, 64, 64, 4, 4, 8)                                      \
-                  instantiate_gated_delta_update_fused_chunk(                             \
-                      in_type, st_type, 64, 64, 8, 8, 8)                                  \
-                      instantiate_gated_delta_update_fused_chunk(                         \
-                          in_type, st_type, 64, 64, 16, 16, 8)                            \
-                          instantiate_gated_delta_update_fused_chunk(                     \
-                              in_type, st_type, 64, 64, 24, 24, 8)                        \
-                              instantiate_gated_delta_update_fused_chunk(                 \
-                                  in_type, st_type, 64, 64, 32, 32, 8)                    \
-                                  instantiate_gated_delta_update_fused_chunk(             \
-                                      in_type, st_type, 128, 128, 16, 32, 8)              \
-                                      instantiate_gated_delta_update_fused_chunk(         \
-                                          in_type, st_type, 32, 32, 16, 32, 8)            \
-                                          instantiate_gated_delta_update_fused_chunk(     \
-                                              in_type,                                    \
-                                              st_type,                                    \
-                                              32,                                         \
-                                              32,                                         \
-                                              32,                                         \
-                                              32,                                         \
-                                              8)                                          \
-                                              instantiate_gated_delta_update_fused_chunk( \
-                                                  in_type,                                \
-                                                  st_type,                                \
-                                                  16,                                     \
-                                                  16,                                     \
-                                                  16,                                     \
-                                                  32,                                     \
-                                                  8)
+#define instantiate_gated_delta_update_fused_chunk_dims(in_type, st_type) \
+  instantiate_gated_delta_update_fused_chunk(                             \
+      in_type, st_type, 128, 128, 16, 32, 8)                              \
+      instantiate_gated_delta_update_fused_chunk(                         \
+          in_type, st_type, 128, 128, 16, 48, 8)                          \
+          instantiate_gated_delta_update_fused_chunk(                     \
+              in_type, st_type, 128, 128, 24, 24, 8)                      \
+              instantiate_gated_delta_update_fused_chunk(                 \
+                  in_type, st_type, 128, 128, 32, 32, 8)
 
 #define instantiate_gated_delta_update_fused_nax(                            \
     in_type, st_type, dk, dv, hk, hv, c)                                     \
@@ -98,50 +61,20 @@ using namespace metal;
       hv,                                                                    \
       c)
 
-#define instantiate_gated_delta_update_fused_nax_dims(in_type, st_type)                 \
-  instantiate_gated_delta_update_fused_nax(                                             \
-      in_type, st_type, 128, 128, 16, 16, 16)                                           \
-      instantiate_gated_delta_update_fused_nax(                                         \
-          in_type, st_type, 128, 128, 24, 24, 16)                                       \
-          instantiate_gated_delta_update_fused_nax(                                     \
-              in_type, st_type, 128, 128, 32, 32, 16)                                   \
-              instantiate_gated_delta_update_fused_nax(                                 \
-                  in_type, st_type, 64, 64, 4, 4, 16)                                   \
-                  instantiate_gated_delta_update_fused_nax(                             \
-                      in_type, st_type, 64, 64, 8, 8, 16)                               \
-                      instantiate_gated_delta_update_fused_nax(                         \
-                          in_type, st_type, 64, 64, 16, 16, 16)                         \
-                          instantiate_gated_delta_update_fused_nax(                     \
-                              in_type, st_type, 64, 64, 24, 24, 16)                     \
-                              instantiate_gated_delta_update_fused_nax(                 \
-                                  in_type, st_type, 64, 64, 32, 32, 16)                 \
-                                  instantiate_gated_delta_update_fused_nax(             \
-                                      in_type, st_type, 128, 128, 16, 32, 16)           \
-                                      instantiate_gated_delta_update_fused_nax(         \
-                                          in_type,                                      \
-                                          st_type,                                      \
-                                          32,                                           \
-                                          32,                                           \
-                                          16,                                           \
-                                          32,                                           \
-                                          16)                                           \
-                                          instantiate_gated_delta_update_fused_nax(     \
-                                              in_type,                                  \
-                                              st_type,                                  \
-                                              32,                                       \
-                                              32,                                       \
-                                              32,                                       \
-                                              32,                                       \
-                                              16)                                       \
-                                              instantiate_gated_delta_update_fused_nax( \
-                                                  in_type,                              \
-                                                  st_type,                              \
-                                                  16,                                   \
-                                                  16,                                   \
-                                                  16,                                   \
-                                                  32,                                   \
-                                                  16)
+#define instantiate_gated_delta_update_fused_nax_dims(in_type, st_type) \
+  instantiate_gated_delta_update_fused_nax(                             \
+      in_type, st_type, 128, 128, 16, 32, 16)                           \
+      instantiate_gated_delta_update_fused_nax(                         \
+          in_type, st_type, 128, 128, 16, 48, 16)                       \
+          instantiate_gated_delta_update_fused_nax(                     \
+              in_type, st_type, 128, 128, 24, 24, 16)                   \
+              instantiate_gated_delta_update_fused_nax(                 \
+                  in_type, st_type, 128, 128, 32, 32, 16)
 
-instantiate_gated_delta_update_seq_dims(float, float)
-    instantiate_gated_delta_update_fused_chunk_dims(float, float)
-        instantiate_gated_delta_update_fused_nax_dims(float, float)
+instantiate_gated_delta_update_seq_dims(float, float);
+instantiate_gated_delta_update_fused_chunk_dims(float, float);
+instantiate_gated_delta_update_fused_nax_dims(float, float);
+
+instantiate_gated_delta_update_seq_dims(bfloat16_t, float);
+// instantiate_gated_delta_update_fused_chunk_dims(bfloat16_t, float);
+instantiate_gated_delta_update_fused_nax_dims(bfloat16_t, float);
