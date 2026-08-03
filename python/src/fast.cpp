@@ -342,7 +342,6 @@ void init_fast(nb::module_& parent_module) {
       "gamma"_a,
       "beta"_a,
       "initial_state"_a = nb::none(), // optional, defaults to None
-      "C"_a = 0, // optional, defaults to 0
       "stream"_a = nb::none(), // optional, defaults to None
       R"(
             Chunked gated delta network forward pass.

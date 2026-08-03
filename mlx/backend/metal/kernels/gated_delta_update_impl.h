@@ -399,7 +399,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
-  auto n = thread_position_in_grid.z; // 7
+  auto n = thread_position_in_grid.z;
   auto b_idx = n / Hv;
   auto hv_idx = n % Hv;
   auto hk_idx = hv_idx / (Hv / Hk);
@@ -460,55 +460,64 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   }
   mlx::steel::NAXTile<float, 1, 1> TMP_tile;
 
-  for (int t = 0; t < T; t += C) {
-    float g_val = (thread_index_in_simdgroup < C)
+  auto process_chunk = [&](const short valid_rows, auto bounded_tag) {
+    constexpr bool B = decltype(bounded_tag)::value;
+
+    auto load_seq = [&](thread auto& tile, auto src, int ld) {
+      if constexpr (B) {
+        tile.load_rows(src, ld, valid_rows);
+      } else {
+        tile.load(src, ld);
+      }
+    };
+
+    auto g_val = (thread_index_in_simdgroup < (uint)valid_rows)
         ? metal::log(
               metal::clamp(
                   g_[thread_index_in_simdgroup * Hv + hv_idx], 1e-6f, 1.0f))
         : 0.0f;
-
-    float gamma_val = simd_prefix_inclusive_sum(g_val);
-
+    auto gamma_val = simd_prefix_inclusive_sum(g_val);
     if (thread_index_in_simdgroup < C) {
-      gamma[thread_index_in_simdgroup] = gamma_val;
+      gamma[thread_index_in_simdgroup] = static_cast<float>(gamma_val);
     }
 
-    beta_fm[0] = beta_[fm * Hv + hv_idx];
-    beta_fm[1] =
-        beta_[(fm + mlx::steel::BaseNAXFrag::kElemRowsJump) * Hv + hv_idx];
+    beta_fm[0] = (fm < valid_rows) ? beta_[fm * Hv + hv_idx] : 0.0f;
+    const short fm1 = fm + mlx::steel::BaseNAXFrag::kElemRowsJump;
+    beta_fm[1] = (fm1 < valid_rows) ? beta_[fm1 * Hv + hv_idx] : 0.0f;
 
     KKt_tile.clear();
-    // KP_tile.load(k_, Dk * Hk);
-    for (int kk = 0; kk < Dk; kk += 32) { // two 16-tiles per iter
-      K_tile.load(k_ + kk, Dk * Hk);
-      MMA16x16x32(KKt_tile, 0, K_tile, false, 0, K_tile, true, 0)
+    for (int kk = 0; kk < Dk; kk += 32) {
+      load_seq(K_tile, k_ + kk, Dk * Hk);
+      MMA16x16x32(KKt_tile, 0, K_tile, false, 0, K_tile, true, 0);
     }
 
     KKtK_tile = KKt_tile;
     KKtV_tile = KKt_tile;
 
-    SCALE_TRIEQ_NAX1(KKtK_tile, beta_fm)
-    MM16x16x16(P, 0, KKtK_tile, false, 0, KKtK_tile, false, 0)
+    SCALE_TRIEQ_NAX1(KKtK_tile, beta_fm);
+    MM16x16x16(P, 0, KKtK_tile, false, 0, KKtK_tile, false, 0);
 
-        ADD_NAX(Tinv_tile, I_tile, P)
-            STEEL_PRAGMA_UNROLL for (int step = 0; step < 6; step++){
-                MM16x16x16(TMP_tile, 0, P, false, 0, Tinv_tile, false, 0)
-                    ADD_NAX(Tinv_tile, I_tile, TMP_tile)}
+    ADD_NAX(Tinv_tile, I_tile, P);
+    STEEL_PRAGMA_UNROLL
+    for (int step = 0; step < 6; step++) {
+      MM16x16x16(TMP_tile, 0, P, false, 0, Tinv_tile, false, 0);
+      ADD_NAX(Tinv_tile, I_tile, TMP_tile);
+    }
 
-    MM16x16x16(TMP_tile, 0, KKtK_tile, false, 0, Tinv_tile, false, 0)
-        SUB_NAX(Tinv_tile, Tinv_tile, TMP_tile)
+    MM16x16x16(TMP_tile, 0, KKtK_tile, false, 0, Tinv_tile, false, 0);
+    SUB_NAX(Tinv_tile, Tinv_tile, TMP_tile);
 
-            STEEL_PRAGMA_UNROLL for (short nn = 0; nn < Dk / 16; nn += 2) {
-      K_tile.load(k_ + nn * 16, Dk * Hk);
-      SCALE_BETA_NAX(K_tile, beta_fm)
-      MM16x32x16(W_tile, nn, Tinv_tile, false, 0, K_tile, false, 0)
+    STEEL_PRAGMA_UNROLL
+    for (short nn = 0; nn < Dk / 16; nn += 2) {
+      load_seq(K_tile, k_ + nn * 16, Dk * Hk);
+      SCALE_BETA_NAX(K_tile, beta_fm);
+      MM16x32x16(W_tile, nn, Tinv_tile, false, 0, K_tile, false, 0);
     }
     SCALE_ROW_NAX(W_tile, gamma)
 
     SCALE_TRI_NAX(Tinv_tile, gamma)
-    V_tile.load(v_ + dv_idx, Dv * Hv);
-    SCALE_BETA_NAX(V_tile, beta_fm)
-    // U = Tinv @ diag(b)V
+    load_seq(V_tile, v_ + dv_idx, Dv * Hv);
+    SCALE_BETA_NAX(V_tile, beta_fm);
     MM16x16x16(U_tile, 0, Tinv_tile, false, 0, V_tile, false, 0)
 
         WS_tile.clear();
@@ -522,32 +531,43 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     tmp_tile.clear();
     QKt_tile.clear();
     for (int kk = 0; kk < Dk; kk += 32) {
-      Q_tile.load(q_ + kk, Hk * Dk);
-      K_tile.load(k_ + kk, Hk * Dk);
+      load_seq(Q_tile, q_ + kk, Hk * Dk);
+      load_seq(K_tile, k_ + kk, Hk * Dk);
 
-      // Q @ K^T
-      MMA16x16x32(QKt_tile, 0, Q_tile, false, 0, K_tile, true, 0)
+      MMA16x16x32(QKt_tile, 0, Q_tile, false, 0, K_tile, true, 0);
 
-          // Q_left @ S^T
-          SCALE_ROW_NAX(Q_tile, gamma)
-              MMA16x16x32(tmp_tile, 0, Q_tile, false, 0, S_tile, true, kk / 16)
+      SCALE_ROW_NAX(Q_tile, gamma);
+      MMA16x16x32(tmp_tile, 0, Q_tile, false, 0, S_tile, true, kk / 16);
     }
 
     SCALE_TRI_NAX(QKt_tile, gamma)
 
     out_tile = tmp_tile;
-    MMA16x16x16(out_tile, 0, QKt_tile, false, 0, delta_tile, false, 0)
-        out_tile.store(y + dv_idx, Hv * Dv);
+    MMA16x16x16(out_tile, 0, QKt_tile, false, 0, delta_tile, false, 0);
 
-    SCALE_NAX(S_tile, metal::exp(gamma[C - 1]))
-
-    for (int kk = 0; kk < Dk; kk += 32) {
-      K_tile.load(k_ + kk, Hk * Dk);
-      SCALE2_NAX(K_tile, gamma)
-      MMA16x32x16(S_tile, kk / 16, delta_tile, true, 0, K_tile, false, 0)
+    STEEL_PRAGMA_UNROLL
+    for (short _i = 0; _i < decltype(out_tile)::kElemsPerFrag; _i++) {
+      const short2 _c = mlx::steel::BaseNAXFrag::get_coord(_i); // {fn, fm}
+      const short _fn = _c.x;
+      const short _fm = _c.y;
+      if (_fm < valid_rows) {
+        y[_fm * Hv * Dv + dv_idx + _fn] =
+            static_cast<InT>(AT_NAX(out_tile, _i));
+      }
     }
 
-    // advance pointers
+    SCALE_NAX(S_tile, metal::exp(gamma[C - 1]));
+
+    for (int kk = 0; kk < Dk; kk += 32) {
+      load_seq(K_tile, k_ + kk, Hk * Dk);
+      SCALE2_NAX(K_tile, gamma);
+      MMA16x32x16(S_tile, kk / 16, delta_tile, true, 0, K_tile, false, 0);
+    }
+  };
+
+  int t = 0;
+  for (; t + C <= T; t += C) {
+    process_chunk(C, metal::false_type{});
     q_ += C * Hk * Dk;
     k_ += C * Hk * Dk;
     v_ += C * Hv * Dv;
@@ -555,6 +575,10 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     y += C * Hv * Dv;
     g_ += C * Hv;
   }
+  if (t < T) {
+    process_chunk(short(T - t), metal::true_type{});
+  }
+
   S_tile.store(o_state, Dk);
 }
 
@@ -572,7 +596,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
-  auto n = thread_position_in_grid.z; // 7;
+  auto n = thread_position_in_grid.z;
   auto b_idx = n / Hv;
   auto hv_idx = n % Hv;
   auto hk_idx = hv_idx / (Hv / Hk);
@@ -630,47 +654,62 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   AT(I_tile, 0) = (fm == fn) ? 1.0f : 0.0f;
   AT(I_tile, 1) = (fm == fn + 1) ? 1.0f : 0.0f;
 
-  // load initial state into threadgroup
+  // load initial state into registers
   for (int kk = 0; kk < Dk; kk += 8) {
     simdgroup_load(S_tile[kk / 8], i_state + kk, Dk, ulong2(0, 0), true);
   }
-  for (int t = 0; t < T; t += C) {
-    float g_val = (thread_index_in_simdgroup < C)
+
+  auto process_chunk = [&](const short valid_rows, auto bounded_tag) {
+    constexpr bool B = decltype(bounded_tag)::value;
+
+    // non-transposed load
+    auto load_M = [&](thread simdgroup_float8x8& M, auto src, int ld) {
+      if constexpr (B) {
+        AT(M, 0) = (fm < valid_rows) ? float(src[fm * ld + fn]) : 0.f;
+        AT(M, 1) = (fm < valid_rows) ? float(src[fm * ld + fn + 1]) : 0.f;
+      } else {
+        simdgroup_load(M, src, ld);
+      }
+    };
+
+    // transposed load
+    auto load_MT = [&](thread simdgroup_float8x8& M, auto src, int ld) {
+      if constexpr (B) {
+        AT(M, 0) = (fn < valid_rows) ? float(src[fn * ld + fm]) : 0.f;
+        AT(M, 1) = (fn + 1 < valid_rows) ? float(src[(fn + 1) * ld + fm]) : 0.f;
+      } else {
+        simdgroup_load(M, src, ld, ulong2(0, 0), true);
+      }
+    };
+
+    float g_val = (thread_index_in_simdgroup < (uint)valid_rows)
         ? metal::log(
               metal::max(g_[thread_index_in_simdgroup * Hv + hv_idx], 1e-6f))
         : 0.0f;
-
     float gamma_val = simd_prefix_inclusive_sum(g_val);
-
     if (thread_index_in_simdgroup < C) {
       gamma[thread_index_in_simdgroup] = gamma_val;
     }
 
-    float beta_fm = beta_[fm * Hv + hv_idx];
+    float beta_fm = (fm < valid_rows) ? beta_[fm * Hv + hv_idx] : 0.0f;
 
     KKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
     for (int kk = 0; kk < Dk; kk += 8) {
-      simdgroup_load(K_tile, k_ + kk, Dk * Hk);
-
-      simdgroup_load(KT_tile, k_ + kk, Dk * Hk, ulong2(0, 0), true);
+      load_M(K_tile, k_ + kk, Dk * Hk);
+      load_MT(KT_tile, k_ + kk, Dk * Hk);
       simdgroup_multiply_accumulate(KKt_tile, K_tile, KT_tile, KKt_tile);
     }
 
     KKtK_tile = KKt_tile;
     KKtV_tile = KKt_tile;
 
-    // elementwise multiplication by Gamma and beta (for V) and beta (for K)
     SCALE_TRIEQ(KKtK_tile, beta_fm, beta_fm)
     SCALE_TRIEQ(
         KKtV_tile,
         beta_fm * (metal::exp(gamma[fm] - gamma[fn])),
         beta_fm * (metal::exp(gamma[fm] - gamma[fn + 1])))
 
-    // Tinv = (I + L_W)^{-1} = sum -L_W_k
-    // T0 - T + T2 - T3 + T4 - T5 + T6 - T7 + T8
-    // I - T(I - T(I - T(I - T(I - T(I - T(I - T(I - T(I))))))))
-    simdgroup_float8x8 Tinv, P; //
-    // S = I + x = I - KKtK
+    simdgroup_float8x8 Tinv, P;
     AT(P, 0) = AT(KKtK_tile, 0);
     AT(P, 1) = AT(KKtK_tile, 1);
     SUB(Tinv, I_tile, KKtK_tile)
@@ -682,12 +721,9 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
 
     WS_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
     for (int kk = 0; kk < Dk; kk += 8) {
-      simdgroup_load(K_tile, k_ + kk, Dk * Hk);
+      load_M(K_tile, k_ + kk, Dk * Hk);
       SCALE(K_tile, beta_fm)
-
-      // W = Tinv @ (beta * K)
       simdgroup_multiply(W_tile, Tinv, K_tile);
-
       SCALE(W_tile, metal::exp(gamma[fm]))
       simdgroup_multiply_accumulate(WS_tile, W_tile, S_tile[kk / 8], WS_tile);
     }
@@ -697,27 +733,21 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
         metal::exp(gamma[fm] - gamma[fn]),
         metal::exp(gamma[fm] - gamma[fn + 1]))
 
-    // U = Tinv @ (beta * V)
-    simdgroup_load(V_tile, v_ + dv_idx, Dv * Hv);
+    load_M(V_tile, v_ + dv_idx, Dv * Hv);
     SCALE(V_tile, beta_fm)
     simdgroup_multiply(U_tile, Tinv, V_tile);
-    // delta = U - WS
     SUB(delta_tile, U_tile, WS_tile)
 
     tmp_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
     QKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
     for (int kk = 0; kk < Dk; kk += 8) {
-      simdgroup_load(Q_tile, q_ + kk, Hk * Dk);
-      simdgroup_load(K_tile, k_ + kk, Hk * Dk, ulong2(0, 0), true);
-
-      // SCALE(Q_tile, gamma[fm])
+      load_M(Q_tile, q_ + kk, Hk * Dk);
+      load_MT(K_tile, k_ + kk, Hk * Dk);
       simdgroup_multiply_accumulate(QKt_tile, Q_tile, K_tile, QKt_tile);
-      // Q_left @ S^T
       SCALE(Q_tile, metal::exp(gamma[fm]))
       simdgroup_multiply_accumulate(tmp_tile, Q_tile, S_tile[kk / 8], tmp_tile);
     }
 
-    // (Q @ K) * Gamma, in the paper they use M here but it's probably a typo.
     SCALE_TRI(
         QKt_tile,
         metal::exp(gamma[fm] - gamma[fn]),
@@ -725,30 +755,34 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
 
     simdgroup_multiply_accumulate(out_tile, QKt_tile, delta_tile, tmp_tile);
 
-    y[fm * Hv * Dv + dv_idx + fn] = static_cast<InT>(AT(out_tile, 0));
-    y[fm * Hv * Dv + dv_idx + fn + 1] = static_cast<InT>(AT(out_tile, 1));
+    if (fm < valid_rows) {
+      y[fm * Hv * Dv + dv_idx + fn] = static_cast<InT>(AT(out_tile, 0));
+      y[fm * Hv * Dv + dv_idx + fn + 1] = static_cast<InT>(AT(out_tile, 1));
+    }
 
     for (int kk = 0; kk < Dk; kk += 8) {
-      simdgroup_load(K_tile, k_ + kk, Hk * Dk, ulong2(0, 0), true);
+      load_MT(K_tile, k_ + kk, Hk * Dk);
       SCALE2(
           K_tile,
           metal::exp(gamma[C - 1] - gamma[fn]),
           metal::exp(gamma[C - 1] - gamma[fn + 1]))
-
       simdgroup_multiply(KD_tile, K_tile, delta_tile);
-      // SCALE(K_tile, 100000)
-
-      // FMA(S_tile[kk / 8], 1, S_tile[kk / 8], KD_tile)
       FMA(S_tile[kk / 8], metal::exp(gamma[C - 1]), S_tile[kk / 8], KD_tile)
     }
+  };
 
-    // advance pointers
+  int t = 0;
+  for (; t + C <= T; t += C) {
+    process_chunk(C, metal::false_type{});
     q_ += C * Hk * Dk;
     k_ += C * Hk * Dk;
     v_ += C * Hv * Dv;
     beta_ += C * Hv;
     y += C * Hv * Dv;
     g_ += C * Hv;
+  }
+  if (t < T) {
+    process_chunk(short(T - t), metal::true_type{});
   }
 
   for (int kk = 0; kk < Dk; kk += 8) {
