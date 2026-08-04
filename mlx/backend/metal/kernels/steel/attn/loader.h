@@ -197,11 +197,41 @@ struct BlockLoaderT {
 
   /* Load from device memory into threadgroup memory - without bound checking */
   METAL_FUNC void load_unsafe() const {
-    STEEL_PRAGMA_UNROLL
-    for (short i = 0; i < BROWS; i += TROWS) {
+    // Use vec<T,4> vectorized loads when destination is contiguous (row-major)
+    // and we have enough elements for 4-wide loads. This matches MFA's
+    // MFABlockLoaderT optimization for Q, dO, and K row-major loaders.
+    constexpr bool can_vectorize = (kDstStrCol == 1) && (vec_size % 4 == 0);
+    if constexpr (can_vectorize) {
+      // Runtime alignment check: vec4 cast requires src_ld to be a multiple
+      // of 4 so that src + i * src_ld + j stays 4-element aligned. This holds
+      // for contiguous tensors (src_ld = D ∈ {64, 96, 128}) but may not for
+      // sliced tensors that only satisfy is_matrix_contiguous (strides[-1]==1).
+      if (src_ld % 4 == 0) {
+        using vec4_t = vec<T, 4>;
+        STEEL_PRAGMA_UNROLL
+        for (short i = 0; i < BROWS; i += TROWS) {
+          STEEL_PRAGMA_UNROLL
+          for (short j = 0; j < vec_size; j += 4) {
+            *(threadgroup vec4_t*)(dst + i * kDstStrRow + j) =
+                *(const device vec4_t*)(src + i * src_ld + j);
+          }
+        }
+      } else {
+        STEEL_PRAGMA_UNROLL
+        for (short i = 0; i < BROWS; i += TROWS) {
+          STEEL_PRAGMA_UNROLL
+          for (short j = 0; j < vec_size; j++) {
+            dst[i * kDstStrRow + j] = src[i * src_ld + j];
+          }
+        }
+      }
+    } else {
       STEEL_PRAGMA_UNROLL
-      for (short j = 0; j < vec_size; j++) {
-        dst[i * kDstStrRow + j * kDstStrCol] = src[i * src_ld + j];
+      for (short i = 0; i < BROWS; i += TROWS) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < vec_size; j++) {
+          dst[i * kDstStrRow + j * kDstStrCol] = src[i * src_ld + j];
+        }
       }
     }
   }
