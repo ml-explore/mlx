@@ -1,14 +1,12 @@
 #pragma once
 
-#include <cuda.h>
-#include <cuda_runtime.h>
+#include <cute/arch/config.hpp>
 
 namespace mlx::core {
 
 namespace ptx {
 
-#if (CUDART_VERSION >= 12080) && (__CUDA_ARCH__ >= 1000) && \
-    defined(__CUDA_ARCH_SPECIFIC__)
+#if defined(CUTE_ARCH_TMA_SM90_ENABLED)
 
 __device__ __forceinline__ void mbarrier_init(uint64_t* mbar, uint32_t count) {
   uint32_t mbar_ptr = __cvta_generic_to_shared(mbar);
@@ -121,7 +119,7 @@ __device__ __forceinline__ void fence_proxy_async_shared_cta() {
   asm volatile("fence.proxy.async.shared::cta;");
 }
 
-#endif // (CUDART_VERSION >= 12080) && (__CUDA_ARCH__ >= 1000) &&
-       // (__CUDA_ARCH_FAMILY_SPECIFIC__ >= 1000)
+#endif // defined(CUTE_ARCH_TMA_SM90_ENABLED)
+
 } // namespace ptx
 } // namespace mlx::core

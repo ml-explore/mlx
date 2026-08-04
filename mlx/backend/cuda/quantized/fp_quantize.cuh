@@ -55,7 +55,7 @@ __device__ __forceinline__ void copy_2d_to_shared(
     uint32_t num_bytes,
     uint64_t* barrier,
     const bool is_master_thread) {
-#if (defined __CUDA_ARCH__) && (__CUDA_ARCH__ >= 1000)
+#if defined(CUTE_ARCH_TMA_SM90_ENABLED)
   if (is_master_thread) {
     // Arrive and tell how many bytes are expected
     ptx::mbarrier_arrive_expect_tx(barrier, num_bytes);
@@ -66,7 +66,7 @@ __device__ __forceinline__ void copy_2d_to_shared(
     // Other threads just arrive
     ptx::mbarrier_arrive(barrier);
   }
-#endif // #if (defined __CUDA_ARCH__) && (__CUDA_ARCH__ >= 1000)
+#endif // defined(CUTE_ARCH_TMA_SM90_ENABLED)
 }
 
 namespace cg = cooperative_groups;
@@ -228,7 +228,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
         uint8_t* __restrict__ scales,
         const size_t rows,
         const size_t cols) {
-#if (defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 1000)
+#if defined(CUTE_ARCH_TMA_SM90_ENABLED)
   using Tx2 = Vector2_t<T>;
   using Tx4 = Vector4_t<T>;
 
@@ -408,7 +408,7 @@ __global__ void __launch_bounds__(THREADS_PER_BLOCK)
       ptx::mbarrier_invalidate(&mbar[iter]);
     }
   }
-#endif // __CUDA_ARCH__ >= 1000
+#endif // defined(CUTE_ARCH_TMA_SM90_ENABLED)
 }
 
 // TODO: add kernel with tma instructions
