@@ -55,7 +55,7 @@ runs:
 
           if ${{ inputs.toolkit != 'cpu' }} ; then
             echo "::group::Build example extension"
-            pushd examples/extensions
+            pushd examples/cmake_extension
             uv pip install -r requirements.txt
             uv run setup.py build_ext --inplace
             uv run test.py
