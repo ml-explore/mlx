@@ -10,8 +10,8 @@ matrix-multiplication units. Inputs and outputs stay ``float32``, but
 results can differ from a full-precision reference by several orders of
 magnitude more than ``float32`` rounding alone would explain.
 
-To keep these operations in full ``float32``, set ``MLX_ENABLE_TF32=0``
-when launching the process:
+To keep these operations in full ``float32``, set
+:envvar:`MLX_ENABLE_TF32` to ``0`` when launching the process:
 
 .. code-block:: shell
 
