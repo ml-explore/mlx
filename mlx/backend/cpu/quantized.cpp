@@ -1359,4 +1359,9 @@ void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void QQAddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
+  // QQAddMM requires GPU support (CUDA CC 10.0+ or Metal qmv case)
+  throw std::runtime_error("[QQAddMM] Not implemented for CPU.");
+}
+
 } // namespace mlx::core

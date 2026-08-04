@@ -32,6 +32,7 @@ void qqmm_impl(
     const array& a_scale,
     const array& b_scale,
     QuantizationMode mode,
-    const GemmScalars& scalars = {});
+    const GemmScalars& scalars = {},
+    const std::optional<array>& bias = std::nullopt);
 
 } // namespace mlx::core
