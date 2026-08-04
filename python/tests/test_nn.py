@@ -2258,6 +2258,20 @@ class TestLayers(mlx_tests.MLXTestCase):
         out = model(src, tgt, src_mask=None, tgt_mask=None, memory_mask=None)
         self.assertEqual(out.shape, tgt.shape)
 
+    def test_transformer_custom_modules(self):
+        # A custom encoder or decoder without any parameters is still a
+        # module and should not be replaced by the default one.
+        model = nn.Transformer(
+            dims=32,
+            num_heads=4,
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+            custom_encoder=nn.Identity(),
+            custom_decoder=nn.Identity(),
+        )
+        self.assertTrue(isinstance(model.encoder, nn.Identity))
+        self.assertTrue(isinstance(model.decoder, nn.Identity))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

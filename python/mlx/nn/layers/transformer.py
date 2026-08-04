@@ -327,27 +327,33 @@ class Transformer(Module):
     ):
         super().__init__()
 
-        self.encoder = custom_encoder or TransformerEncoder(
-            num_encoder_layers,
-            dims,
-            num_heads,
-            mlp_dims,
-            dropout,
-            activation,
-            norm_first,
-            checkpoint,
-        )
+        if custom_encoder is not None:
+            self.encoder = custom_encoder
+        else:
+            self.encoder = TransformerEncoder(
+                num_encoder_layers,
+                dims,
+                num_heads,
+                mlp_dims,
+                dropout,
+                activation,
+                norm_first,
+                checkpoint,
+            )
 
-        self.decoder = custom_decoder or TransformerDecoder(
-            num_decoder_layers,
-            dims,
-            num_heads,
-            mlp_dims,
-            dropout,
-            activation,
-            norm_first,
-            checkpoint,
-        )
+        if custom_decoder is not None:
+            self.decoder = custom_decoder
+        else:
+            self.decoder = TransformerDecoder(
+                num_decoder_layers,
+                dims,
+                num_heads,
+                mlp_dims,
+                dropout,
+                activation,
+                norm_first,
+                checkpoint,
+            )
 
     def __call__(self, src, tgt, src_mask, tgt_mask, memory_mask):
         memory = self.encoder(src, src_mask)
