@@ -558,7 +558,11 @@ bool ScaledDotProductAttention::use_fallback(
     bool do_causal,
     bool is_training,
     bool output_logsumexp,
+    int window_size,
     Stream s) {
+  if (window_size > 0) {
+    return true;
+  }
   if (s.device == Device::cpu) {
     return true;
   }
