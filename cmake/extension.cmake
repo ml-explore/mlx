@@ -6,31 +6,34 @@ include(CMakeParseArguments)
 # Build metal library
 #
 # Adds a custom target ${TARGET} to build ${OUTPUT_DIRECTORY}/{TITLE}.metallib
-# from list ${SOURCES}, including list ${INCLUDE_DIRS}, depends on list ${DEPS}
+# from list ${SOURCES}, including list ${INCLUDE_DIRS}, depends on list ${DEPS},
+# and passes ${COMPILE_OPTIONS} to the Metal compiler.
 #
 # Args: TARGET: Custom target to be added for the metal library TITLE: Name of
 # the .metallib OUTPUT_DIRECTORY: Where to place ${TITLE}.metallib SOURCES: List
 # of source files INCLUDE_DIRS: List of include dirs DEPS: List of dependency
-# files (like headers) DEBUG: Boolean, if true, enables debug compile options
-# for this specific library. If not provided, uses global MLX_METAL_DEBUG.
+# files (like headers) COMPILE_OPTIONS: Additional Metal compiler options DEBUG:
+# Boolean, if true, enables debug compile options for this specific library. If
+# not provided, uses global MLX_METAL_DEBUG.
 #
 # clang format on
 
 macro(mlx_build_metallib)
   # Parse args
   set(oneValueArgs TARGET TITLE OUTPUT_DIRECTORY DEBUG)
-  set(multiValueArgs SOURCES INCLUDE_DIRS DEPS)
+  set(multiValueArgs SOURCES INCLUDE_DIRS DEPS COMPILE_OPTIONS)
   cmake_parse_arguments(MTLLIB "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   # Set output
   set(MTLLIB_BUILD_TARGET "${MTLLIB_OUTPUT_DIRECTORY}/${MTLLIB_TITLE}.metallib")
 
   # Collect compile options
-  set(MTLLIB_COMPILE_OPTIONS -Wall -Wextra -fno-fast-math -Wno-c++17-extensions
-                             -Wmetal-addr-spaces)
+  set(_MTLLIB_COMPILE_OPTIONS
+      -Wall -Wextra -fno-fast-math -Wno-c++17-extensions -Wno-c++20-extensions
+      -Wmetal-addr-spaces)
   if(MLX_METAL_DEBUG OR MTLLIB_DEBUG)
-    set(MTLLIB_COMPILE_OPTIONS ${MTLLIB_COMPILE_OPTIONS} -gline-tables-only
-                               -frecord-sources)
+    set(_MTLLIB_COMPILE_OPTIONS ${_MTLLIB_COMPILE_OPTIONS} -gline-tables-only
+                                -frecord-sources)
   endif()
 
   # Prepare metallib build command
@@ -39,7 +42,8 @@ macro(mlx_build_metallib)
     COMMAND
       xcrun -sdk macosx metal
       "$<LIST:TRANSFORM,${MTLLIB_INCLUDE_DIRS},PREPEND,-I>"
-      ${MTLLIB_COMPILE_OPTIONS} ${MTLLIB_SOURCES} -o ${MTLLIB_BUILD_TARGET}
+      ${_MTLLIB_COMPILE_OPTIONS} ${MTLLIB_COMPILE_OPTIONS} ${MTLLIB_SOURCES} -o
+      ${MTLLIB_BUILD_TARGET}
     DEPENDS ${MTLLIB_DEPS} ${MTLLIB_SOURCES}
     COMMAND_EXPAND_LISTS
     COMMENT "Building ${MTLLIB_TITLE}.metallib"

@@ -692,6 +692,9 @@ Finally, we build the nanobind_ bindings
 Building with ``setuptools``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Building with a ``CMakeLists.txt``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Once we have set out the CMake build rules as described above, we can use the
 build utilities defined in :mod:`mlx.extension`:
 
@@ -741,6 +744,60 @@ When you try to install using the command ``python -m pip install .`` (in
 ``cmake_extension/mlx_sample_extensions`` and the C++ and Metal library will be
 copied along with the Python binding since they are specified as
 ``package_data``.
+
+Building without a ``CMakeLists.txt``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For a source-list based build, use ``mlx.extension.MetalExtension`` with
+``mlx.extension.BuildExtension``. The helper builds the C++/nanobind module and
+a colocated Metal library without requiring a ``CMakeLists.txt`` in the
+extension project.
+
+.. code-block:: python
+
+    from mlx import extension
+    from setuptools import setup
+
+    setup(
+        name="mlx_sample_metal_extension",
+        ext_modules=[
+            extension.MetalExtension(
+                "mlx_sample_metal_extension._ext",
+                sources=[
+                    "activation.cpp",
+                    "silu_and_mul.metal",
+                    "gelu.metal",
+                    "fatrelu_and_mul.metal",
+                ],
+                extra_compile_args={
+                    "cxx": ["-O3"],
+                    "metal": ["-O3"],
+                },
+            )
+        ],
+        cmdclass={"build_ext": extension.BuildExtension},
+        packages=["mlx_sample_metal_extension"],
+        package_data={"mlx_sample_metal_extension": ["*.metallib", "*.pyi"]},
+    )
+
+The final component of the extension name is also the Metal library name. The
+example above produces ``_ext.metallib``, so its C++ primitive loads
+``device.get_library("_ext", current_binary_dir())``. A list passed as
+``extra_compile_args`` applies to C++; a dictionary can provide separate
+``cxx`` and ``metal`` options. The build also uses nanobind to generate
+``_ext.pyi`` next to the extension module. Include ``*.pyi`` in
+``package_data`` so that the stub is installed with the package. To disable
+stub generation, configure the command class with
+``BuildExtension.with_options(generate_stubs=False)``.
+
+``BuildExtension`` uses CMake's Ninja generator by default, so projects should
+include ``ninja`` in their build requirements. To use CMake's platform default
+generator instead, configure the command class with
+``BuildExtension.with_options(use_ninja=False)``. If Ninja is unavailable, the
+build emits a warning and falls back to the platform default generator.
+
+The complete standalone example is available in
+``examples/metal_extension/``.
 
 Usage
 -----

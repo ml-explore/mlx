@@ -1,0 +1,9 @@
+[build-system]
+requires = [
+  "setuptools>=42",
+  "cmake>=3.25",
+  "ninja",
+  "mlx>=0.31.2",
+  "nanobind==2.13.0",
+]
+build-backend = "setuptools.build_meta"
