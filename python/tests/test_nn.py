@@ -10,6 +10,13 @@ import mlx_tests
 import numpy as np
 from mlx.utils import tree_flatten, tree_map, tree_reduce
 
+try:
+    import torch
+
+    has_torch = True
+except ImportError:
+    has_torch = False
+
 
 class TestBase(mlx_tests.MLXTestCase):
     def test_module_utilities(self):
@@ -672,7 +679,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             ],
         )
         expected_mean = mx.array([0.008929, 0.005680, -0.016092, 0.027778])
-        expected_var = mx.array([0.928435, 1.00455, 1.04117, 0.94258])
+        expected_var = mx.array([0.935544, 1.030691, 1.076463, 0.953224])
         self.assertTrue(x.shape == y.shape)
         self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
         self.assertTrue(mx.allclose(bn.running_mean, expected_mean, atol=1e-5))
@@ -683,11 +690,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         y = bn(x)
         expected_y = mx.array(
             [
-                [-0.15984, 1.73159, -1.25456, 1.57891],
-                [-0.872193, -1.4281, -0.414439, -0.228678],
-                [0.602743, -0.30566, -0.554687, 0.139639],
-                [0.252199, 0.29066, -0.599572, -0.0512532],
-                [0.594096, -0.0334829, 2.11359, -0.151081],
+                [-0.159232, 1.70949, -1.23382, 1.57007],
+                [-0.868873, -1.40987, -0.407588, -0.227397],
+                [0.600449, -0.301759, -0.545518, 0.138857],
+                [0.251239, 0.286951, -0.589661, -0.0509662],
+                [0.591834, -0.0330556, 2.07865, -0.150235],
             ]
         )
 
@@ -740,9 +747,9 @@ class TestLayers(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
         expected_mean = mx.array(
-            [[[0.00207845, -5.3259e-05, 0.04755, -0.0697296, 0.0236228]]]
+            [0.00207845, -5.3259e-05, 0.04755, -0.0697296, 0.0236228]
         )
-        expected_var = mx.array([[[0.968415, 1.05322, 0.96913, 0.932305, 0.967224]]])
+        expected_var = mx.array([0.978188, 1.07511, 0.979006, 0.93692, 0.976827])
         self.assertTrue(mx.allclose(bn.running_mean, expected_mean, atol=1e-5))
         self.assertTrue(mx.allclose(bn.running_var, expected_var, atol=1e-5))
 
@@ -780,46 +787,104 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(y.mean(axis=(0, 1, 2)), mx.zeros((6,)), atol=1e-5))
         self.assertTrue(mx.allclose(y.var(axis=(0, 1, 2)), mx.ones((6,)), atol=1e-2))
 
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_batch_norm_matches_torch(self):
+        rng = np.random.default_rng(0)
+        momentum = 0.1
+        eps = 1e-5
+
+        def check_batch_norm(shape, torch_module, to_torch=None, from_torch=None):
+            features = shape[-1]
+            x_np = rng.normal(size=shape).astype(np.float32)
+            weight_np = rng.normal(size=(features,)).astype(np.float32)
+            bias_np = rng.normal(size=(features,)).astype(np.float32)
+
+            mlx_bn = nn.BatchNorm(features, eps=eps, momentum=momentum)
+            mlx_bn.weight = mx.array(weight_np)
+            mlx_bn.bias = mx.array(bias_np)
+            mlx_y = mlx_bn(mx.array(x_np))
+            mx.eval(mlx_y, mlx_bn.running_mean, mlx_bn.running_var)
+
+            torch_bn = torch_module(features, eps=eps, momentum=momentum)
+            with torch.no_grad():
+                torch_bn.weight.copy_(torch.from_numpy(weight_np))
+                torch_bn.bias.copy_(torch.from_numpy(bias_np))
+            x_torch_np = x_np.transpose(to_torch) if to_torch else x_np
+            torch_y = torch_bn(torch.from_numpy(x_torch_np)).detach().numpy()
+            if from_torch:
+                torch_y = torch_y.transpose(from_torch)
+
+            self.assertTrue(mx.allclose(mlx_y, mx.array(torch_y), rtol=1e-4, atol=1e-4))
+            self.assertTrue(
+                mx.allclose(
+                    mlx_bn.running_mean,
+                    mx.array(torch_bn.running_mean.detach().numpy()),
+                    rtol=1e-5,
+                    atol=1e-5,
+                )
+            )
+            self.assertTrue(
+                mx.allclose(
+                    mlx_bn.running_var,
+                    mx.array(torch_bn.running_var.detach().numpy()),
+                    rtol=1e-4,
+                    atol=1e-4,
+                )
+            )
+
+            mlx_bn.eval()
+            torch_bn.eval()
+            mlx_y = mlx_bn(mx.array(x_np))
+            mx.eval(mlx_y)
+            torch_y = torch_bn(torch.from_numpy(x_torch_np)).detach().numpy()
+            if from_torch:
+                torch_y = torch_y.transpose(from_torch)
+            self.assertTrue(mx.allclose(mlx_y, mx.array(torch_y), rtol=1e-4, atol=1e-4))
+
+        check_batch_norm((5, 4), torch.nn.BatchNorm1d)
+        check_batch_norm(
+            (2, 4, 5),
+            torch.nn.BatchNorm1d,
+            to_torch=(0, 2, 1),
+            from_torch=(0, 2, 1),
+        )
+        check_batch_norm(
+            (2, 3, 3, 6),
+            torch.nn.BatchNorm2d,
+            to_torch=(0, 3, 1, 2),
+            from_torch=(0, 2, 3, 1),
+        )
+
     def test_batch_norm_stats(self):
         batch_size = 2
         num_features = 4
         h = 3
         w = 3
-        momentum = 0.1
 
         batch_norm = nn.BatchNorm(num_features)
-
         batch_norm.train()
-        running_mean = batch_norm.running_mean
-        running_var = batch_norm.running_var
-
-        data = mx.random.normal((batch_size, num_features))
-
-        normalized_data = batch_norm(data)
-        means = mx.mean(data, axis=0)
-        variances = mx.var(data, axis=0)
-        running_mean = (1 - momentum) * running_mean + momentum * means
-        running_var = (1 - momentum) * running_var + momentum * variances
-        self.assertTrue(mx.allclose(batch_norm.running_mean, running_mean, atol=1e-5))
-        self.assertTrue(mx.allclose(batch_norm.running_var, running_var, atol=1e-5))
-
-        batch_norm = nn.BatchNorm(num_features)
-
-        batch_norm.train()
-        running_mean = batch_norm.running_mean
-        running_var = batch_norm.running_var
         data = mx.random.normal((batch_size, h, w, num_features))
 
         normalized_data = batch_norm(data)
-        means = mx.mean(data, axis=(0, 1, 2))
-        variances = mx.var(data, axis=(0, 1, 2))
-        running_mean = (1 - momentum) * running_mean + momentum * means
-        running_var = (1 - momentum) * running_var + momentum * variances
-        self.assertTrue(mx.allclose(batch_norm.running_mean, running_mean, atol=1e-5))
-        self.assertTrue(mx.allclose(batch_norm.running_var, running_var, atol=1e-5))
+        self.assertTrue(
+            mx.allclose(
+                mx.mean(normalized_data, axis=(0, 1, 2)), mx.zeros((4,)), atol=1e-5
+            )
+        )
+        self.assertTrue(
+            mx.allclose(
+                mx.var(normalized_data, axis=(0, 1, 2)), mx.ones((4,)), atol=1e-2
+            )
+        )
+        self.assertEqual(batch_norm.running_mean.shape, (num_features,))
+        self.assertEqual(batch_norm.running_var.shape, (num_features,))
 
-        self.assertEqual(batch_norm.running_mean.shape, running_mean.shape)
-        self.assertEqual(batch_norm.running_var.shape, running_var.shape)
+        batch_norm = nn.BatchNorm(num_features)
+        batch_norm.train()
+        data = mx.random.normal((1, num_features))
+
+        with self.assertRaises(ValueError):
+            batch_norm(data)
 
     def test_conv1d(self):
         N = 5

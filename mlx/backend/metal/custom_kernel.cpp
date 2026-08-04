@@ -6,17 +6,9 @@
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 
+#include <fmt/format.h>
+
 namespace mlx::core::fast {
-
-struct CustomKernelCache {
-  std::unordered_map<std::string, std::pair<std::string, CompileOptions::Data>>
-      libraries;
-};
-
-static CustomKernelCache& cache() {
-  static CustomKernelCache cache_;
-  return cache_;
-};
 
 void CustomKernel::eval_gpu(
     const std::vector<array>& inputs,
@@ -55,25 +47,10 @@ void CustomKernel::eval_gpu(
 
   auto& d = metal::device(s.device);
 
-  {
-    // Clear kernels from the device library cache if needed
-    auto& kernel_cache = cache();
-    if (auto it = kernel_cache.libraries.find(name_);
-        it != kernel_cache.libraries.end()) {
-      if (it->second.first != source_ ||
-          it->second.second != compile_options_) {
-        auto& d = metal::device(s.device);
-        d.clear_library(name_);
-        it->second = std::make_tuple(source_, compile_options_);
-      }
-    } else {
-      kernel_cache.libraries.emplace(
-          name_, std::make_tuple(source_, compile_options_));
-    }
-  }
-
+  std::string lib_name = fmt::format(
+      "{}_{:x}_{}", name_, std::hash<std::string>{}(source_), compile_options_);
   auto lib = d.get_library(
-      name_, compile_options_, [this] { return metal::utils() + source_; });
+      lib_name, compile_options_, [this] { return metal::utils() + source_; });
   auto kernel = d.get_kernel(name_, lib);
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
