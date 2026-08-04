@@ -207,6 +207,22 @@ inline const std::string& metal_gpu_arch() {
   return gpu_arch_;
 }
 
+/// Minimum number of gathered rows before `GatherQMM` uses the batched
+/// `gather_qmm_rhs` path. Default 16, matching the previous hard-coded value.
+inline int gather_qmm_rhs_min_rows() {
+  static int gather_qmm_rhs_min_rows_ =
+      get_var("MLX_GATHER_QMM_RHS_MIN_ROWS", 16);
+  return gather_qmm_rhs_min_rows_;
+}
+
+/// Minimum average rows per expert before `GatherQMM` uses the batched
+/// `gather_qmm_rhs` path. Default 4, matching the previous hard-coded value.
+inline int gather_qmm_rhs_min_rows_per_expert() {
+  static int gather_qmm_rhs_min_rows_per_expert_ =
+      get_var("MLX_GATHER_QMM_RHS_MIN_ROWS_PER_EXPERT", 4);
+  return gather_qmm_rhs_min_rows_per_expert_;
+}
+
 } // namespace env
 
 } // namespace mlx::core

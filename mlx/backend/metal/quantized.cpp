@@ -1583,8 +1583,16 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // We are walking x in order and w is also in order so we can batch up the
   // matmuls and reuse reading x and w.
   //
-  // TODO: Tune 16 and 4 here a bit better.
-  if (M == 1 && B >= 16 && right_sorted_ == true && B / E >= 4) {
+  // The two thresholds are overridable so they can be tuned, and so a
+  // configuration that never reaches this path can be measured against it
+  // without a rebuild. Defaults are the previous hard-coded 16 and 4, so
+  // behaviour is unchanged unless the environment says otherwise.
+  //
+  // Note `B / E` is an average: MoE decode at batch size 1 gathers
+  // `top_k` rows over `E` experts, so with a large expert count both
+  // conditions are unsatisfiable no matter how the routing is distributed.
+  if (M == 1 && B >= env::gather_qmm_rhs_min_rows() && right_sorted_ == true &&
+      B / E >= env::gather_qmm_rhs_min_rows_per_expert()) {
     gather_qmm_rhs(
         x,
         w,
