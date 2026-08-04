@@ -3008,6 +3008,13 @@ array floor_divide(
     StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
   if (issubdtype(dtype, inexact)) {
+    // fp16/bf16: divide in float so the quotient isn't narrowed before floor.
+    // narrow to the promoted dtype first so rounding matches divmod.
+    if (dtype == float16 || dtype == bfloat16) {
+      auto af = astype(astype(a, dtype, s), float32, s);
+      auto bf = astype(astype(b, dtype, s), float32, s);
+      return astype(floor(divide(af, bf, s), s), dtype, s);
+    }
     return floor(divide(a, b, s), s);
   }
 

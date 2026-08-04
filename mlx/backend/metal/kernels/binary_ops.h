@@ -25,11 +25,13 @@ struct FloorDivide {
   }
   template <>
   half operator()(half x, half y) thread {
-    return trunc(x / y);
+    return static_cast<half>(
+        trunc(static_cast<float>(x) / static_cast<float>(y)));
   }
   template <>
   bfloat16_t operator()(bfloat16_t x, bfloat16_t y) thread {
-    return trunc(x / y);
+    return static_cast<bfloat16_t>(
+        trunc(static_cast<float>(x) / static_cast<float>(y)));
   }
 };
 

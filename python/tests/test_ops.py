@@ -2763,6 +2763,26 @@ class TestOps(mlx_tests.MLXTestCase):
                     np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
                 )
 
+        # boundary case: a / b is just under 3, but narrowing the quotient to
+        # fp16/bf16 before trunc rounds it up to 3. divmod divides in float, so
+        # it stays 2.
+        for dt in (mx.float16, mx.bfloat16):
+            q = mx.divmod(
+                mx.array([86.5625], dtype=dt), mx.array([28.859375], dtype=dt)
+            )[0]
+            self.assertEqual(q.item(), 2.0)
+
+        # bfloat16 has no numpy dtype; compare the quotient against a float32
+        # reference over a seeded batch.
+        rng = np.random.default_rng(0)
+        a_np = rng.uniform(1, 100, size=(4096,)).astype(np.float32)
+        b_np = rng.uniform(1, 100, size=(4096,)).astype(np.float32)
+        a = mx.array(a_np).astype(mx.bfloat16)
+        b = mx.array(b_np).astype(mx.bfloat16)
+        q = mx.divmod(a, b)[0]
+        ref = mx.trunc(a.astype(mx.float32) / b.astype(mx.float32)).astype(mx.bfloat16)
+        self.assertTrue(mx.array_equal(q, ref))
+
     def test_tile(self):
         self.assertCmpNumpy([(2,), [2]], mx.tile, np.tile)
         self.assertCmpNumpy([(2, 3, 4), [2]], mx.tile, np.tile)

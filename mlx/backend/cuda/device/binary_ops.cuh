@@ -18,6 +18,10 @@ struct FloorDivide {
   __device__ T operator()(T x, T y) {
     if constexpr (cuda::std::is_integral_v<T>) {
       return x / y;
+    } else if constexpr (sizeof(T) == 2) {
+      // fp16/bf16: divide in float so the quotient isn't narrowed before trunc
+      return static_cast<T>(
+          cuda::std::trunc(static_cast<float>(x) / static_cast<float>(y)));
     } else {
       return cuda::std::trunc(x / y);
     }

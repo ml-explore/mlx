@@ -48,7 +48,14 @@ void DivMod::eval_cpu(
       return std::make_pair(x / y, x % y);
     };
     auto float_op = [](auto x, auto y) {
-      return std::make_pair(std::trunc(x / y), std::fmod(x, y));
+      // fp16/bf16: divide in float so the quotient isn't narrowed before trunc
+      using T = std::decay_t<decltype(x)>;
+      using C = std::conditional_t<sizeof(T) == 2, float, T>;
+      auto xc = static_cast<C>(x);
+      auto yc = static_cast<C>(y);
+      return std::make_pair(
+          static_cast<T>(std::trunc(xc / yc)),
+          static_cast<T>(std::fmod(xc, yc)));
     };
 
     switch (out_a.dtype()) {
