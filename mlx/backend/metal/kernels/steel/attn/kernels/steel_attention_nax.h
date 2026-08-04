@@ -21,9 +21,9 @@ constant bool has_sinks [[function_constant(302)]];
 template <typename T>
 struct TransformScale {
   T scale;
-  METAL_FUNC TransformScale(T scale_) : scale(scale_) {}
+  METAL_FUNC TransformScale(T scale_) thread : scale(scale_) {}
 
-  METAL_FUNC T apply(T x) const {
+  METAL_FUNC T apply(T x) const thread {
     return scale * x;
   }
 };

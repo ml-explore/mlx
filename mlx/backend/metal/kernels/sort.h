@@ -39,7 +39,7 @@ struct Init<complex64_t> {
 template <typename T>
 struct LessThan {
   static constexpr constant T init = Init<T>::v;
-  METAL_FUNC bool operator()(T a, T b) const {
+  METAL_FUNC bool operator()(T a, T b) const thread {
     if constexpr (metal::is_floating_point_v<T>) {
       bool an = metal::isnan(a);
       bool bn = metal::isnan(b);
