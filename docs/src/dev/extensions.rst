@@ -549,7 +549,7 @@ Building and Binding
 
 Let's look at the overall directory structure first.
 
-| extensions
+| cmake_extension
 | ├── axpby
 | │   ├── axpby.cpp
 | │   ├── axpby.h
@@ -560,13 +560,13 @@ Let's look at the overall directory structure first.
 | ├── CMakeLists.txt
 | └── setup.py
 
-* ``extensions/axpby/`` defines the C++ extension library
-* ``extensions/mlx_sample_extensions`` sets out the structure for the
+* ``cmake_extension/axpby/`` defines the C++ extension library
+* ``cmake_extension/mlx_sample_extensions`` sets out the structure for the
   associated Python package
-* ``extensions/bindings.cpp`` provides Python bindings for our operation
-* ``extensions/CMakeLists.txt`` holds CMake rules to build the library and
+* ``cmake_extension/bindings.cpp`` provides Python bindings for our operation
+* ``cmake_extension/CMakeLists.txt`` holds CMake rules to build the library and
   Python bindings
-* ``extensions/setup.py`` holds the ``setuptools`` rules to build and install
+* ``cmake_extension/setup.py`` holds the ``setuptools`` rules to build and install
   the Python package
 
 Binding to Python
@@ -715,7 +715,7 @@ build utilities defined in :mod:`mlx.extension`:
         )
 
 .. note::
-    We treat ``extensions/mlx_sample_extensions`` as the package directory
+    We treat ``cmake_extension/mlx_sample_extensions`` as the package directory
     even though it only contains a ``__init__.py`` to ensure the following:
 
     * :mod:`mlx.core` must be imported before importing :mod:`_ext`
@@ -724,11 +724,11 @@ build utilities defined in :mod:`mlx.extension`:
 
 To build the package, first install the build dependencies with ``pip install
 -r requirements.txt``.  You can then build inplace for development using
-``python setup.py build_ext -j8 --inplace`` (in ``extensions/``)
+``python setup.py build_ext -j8 --inplace`` (in ``cmake_extension/``)
 
 This results in the directory structure:
 
-| extensions
+| cmake_extension
 | ├── mlx_sample_extensions
 | │   ├── __init__.py
 | │   ├── libmlx_ext.dylib # C++ extension library
@@ -737,8 +737,8 @@ This results in the directory structure:
 | ...
 
 When you try to install using the command ``python -m pip install .`` (in
-``extensions/``), the package will be installed with the same structure as
-``extensions/mlx_sample_extensions`` and the C++ and Metal library will be
+``cmake_extension/``), the package will be installed with the same structure as
+``cmake_extension/mlx_sample_extensions`` and the C++ and Metal library will be
 copied along with the Python binding since they are specified as
 ``package_data``.
 
@@ -827,7 +827,7 @@ Scripts
 
 .. admonition:: Download the code
 
-   The full example code is available in `mlx <https://github.com/ml-explore/mlx/tree/main/examples/extensions/>`_.
+   The full example code is available in `mlx <https://github.com/ml-explore/mlx/tree/main/examples/cmake_extension/>`_.
 
 .. _Accelerate: https://developer.apple.com/documentation/accelerate/blas?language=objc
 .. _Metal: https://developer.apple.com/documentation/metal?language=objc
