@@ -539,6 +539,17 @@ void init_array(nb::module_& m) {
               return nb::make_tuple(1, 0);
             }
           })
+      .def(
+          "__array__",
+          [](const mx::array& self, nb::object dtype, nb::object copy) {
+            if (self.dtype() == mx::bfloat16) {
+              throw nb::type_error(
+                  "bfloat16 arrays cannot be converted to NumPy.");
+            }
+            return mlx_to_np_array(self);
+          },
+          "dtype"_a = nb::none(),
+          "copy"_a = nb::none())
       .def("__copy__", [](const mx::array& self) { return mx::array(self); })
       .def(
           "__deepcopy__",
