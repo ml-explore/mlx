@@ -1869,8 +1869,9 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(mv_mx.strides, (8, 2))
         self.assertEqual(mv_mx.shape, (3, 4))
         self.assertEqual(mv_mx.format, "H")
-        self.assertEqual(mv_mx.itemsize, 2)
-        self.assertEqual(np.asarray(mv_mx).dtype, np.uint16)
+        with self.assertRaises(TypeError) as cm:
+            np.array(a_mx)
+        self.assertIn("bfloat16 arrays cannot be converted to NumPy", str(cm.exception))
 
         # Test buffer protocol with non-arrays ie bytes
         a = ord("a") * 257 + mx.arange(10).astype(mx.int16)

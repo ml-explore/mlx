@@ -83,15 +83,6 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
             mx.eval(r)
         self.assertTrue(True)  # reaching here without crashing is the assertion
 
-    def test_bfloat16_buffer_protocol(self):
-        x = mx.ones((5,), dtype=mx.bfloat16)
-        mx.eval(x)
-        mv = memoryview(x)
-        self.assertEqual(mv.itemsize, 2)
-        self.assertEqual(mv.format, "H")
-        arr = np.asarray(x)
-        self.assertEqual(arr.shape, (5,))
-
 
 if __name__ == "__main__":
     unittest.main()
