@@ -1027,6 +1027,38 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(out, mx.ones_like(out)))
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_same_name_different_source_one_eval(self):
+        # Regression test for #3832: two kernels sharing a name but with
+        # different sources, dispatched in a SINGLE eval batch, must each run
+        # their own compiled code instead of silently reusing the first's.
+        def call_kernel(a, source):
+            kernel = mx.fast.metal_kernel(
+                name="dup_name",
+                input_names=["inp"],
+                output_names=["out"],
+                source=source,
+            )
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(a.size, 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        a = mx.arange(32, dtype=mx.float32)
+        out_a = call_kernel(
+            a, "uint e = thread_position_in_grid.x; out[e] = inp[e] * 2.0f;"
+        )
+        out_b = call_kernel(
+            a, "uint e = thread_position_in_grid.x; out[e] = inp[e] + 100.0f;"
+        )
+        mx.eval(out_a, out_b)  # one batch — the reported failure case
+        self.assertTrue(mx.array_equal(out_a, a * 2.0))
+        self.assertTrue(mx.array_equal(out_b, a + 100.0))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_metal_kernel_math_mode(self):
         with self.assertRaises(ValueError):
             mx.fast.metal_kernel(
