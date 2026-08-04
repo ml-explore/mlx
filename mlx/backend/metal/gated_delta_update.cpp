@@ -91,10 +91,9 @@ void GatedDeltaUpdate::eval_gpu(
   const char* chunk_env = std::getenv("GATED_DELTA_CHUNK");
   C = chunk_env ? std::stoi(chunk_env) : C;
 
-  std::string suffix = get_type_string(q.dtype()) // "float"
-      + "_" + get_type_string(h0.dtype()) // "float"
-      + "_" + std::to_string(Dk) + "_" + std::to_string(Dv) + "_" +
-      std::to_string(Hk) + "_" + std::to_string(Hv);
+  std::string suffix = get_type_string(q.dtype()) + "_" + std::to_string(Dk) +
+      "_" + std::to_string(Dv) + "_" + std::to_string(Hk) + "_" +
+      std::to_string(Hv);
 
   auto& compute_encoder = metal::get_command_encoder(s);
 

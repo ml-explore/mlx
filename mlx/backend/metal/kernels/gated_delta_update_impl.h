@@ -385,16 +385,16 @@ METAL_FUNC static constexpr void mman(
       B.frag_at(0, (BO) + 1),                                           \
       metal::bool_constant<TB>{});
 
-template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
+template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 [[kernel]] void gated_delta_fused_nax(
     const device InT* q [[buffer(0)]],
     const device InT* k [[buffer(1)]],
     const device InT* v [[buffer(2)]],
-    const device StT* state_in [[buffer(3)]],
+    const device float* state_in [[buffer(3)]],
     const device InT* g [[buffer(4)]],
     const device InT* beta [[buffer(5)]],
     device InT* y [[buffer(6)]],
-    device StT* state_out [[buffer(7)]],
+    device float* state_out [[buffer(7)]],
     constant int& T [[buffer(8)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
@@ -448,7 +448,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   mlx::steel::NAXTile<float, 1, 1> out_tile;
   mlx::steel::NAXTile<float, 1, 1> Tinv_tile, P;
 
-  mlx::steel::NAXTile<float, 1, 1> KKtK_tile, KKtV_tile, KKt_tile;
+  mlx::steel::NAXTile<float, 1, 1> KKtK_tile, KKt_tile;
 
   mlx::steel::NAXTile<float, 1, 1> I_tile;
   STEEL_PRAGMA_UNROLL
@@ -493,7 +493,6 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     }
 
     KKtK_tile = KKt_tile;
-    KKtV_tile = KKt_tile;
 
     SCALE_TRIEQ_NAX1(KKtK_tile, beta_fm);
     MM16x16x16(P, 0, KKtK_tile, false, 0, KKtK_tile, false, 0);
@@ -583,16 +582,16 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   S_tile.store(o_state, Dk);
 }
 
-template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
+template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 [[kernel]] void gated_delta_fused_chunk(
     const device InT* q [[buffer(0)]],
     const device InT* k [[buffer(1)]],
     const device InT* v [[buffer(2)]],
-    const device StT* state_in [[buffer(3)]],
+    const device float* state_in [[buffer(3)]],
     const device InT* g [[buffer(4)]],
     const device InT* beta [[buffer(5)]],
     device InT* y [[buffer(6)]],
-    device StT* state_out [[buffer(7)]],
+    device float* state_out [[buffer(7)]],
     constant int& T [[buffer(8)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
@@ -646,7 +645,7 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
   simdgroup_float8x8 KD_tile;
 
   // tiles for WY form computation
-  simdgroup_float8x8 KKtK_tile, KKtV_tile, KKt_tile;
+  simdgroup_float8x8 KKtK_tile, KKt_tile;
 
   threadgroup float gamma_all[C * 4];
   threadgroup float* gamma = gamma_all + sg_id * C;
@@ -668,34 +667,40 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
     // non-transposed load
     auto load_M = [&](thread simdgroup_float8x8& M, auto src, int ld) {
       if constexpr (B) {
-        AT(M, 0) = (fm < valid_rows) ? float(src[fm * ld + fn]) : 0.f;
-        AT(M, 1) = (fm < valid_rows) ? float(src[fm * ld + fn + 1]) : 0.f;
+        AT(M, 0) =
+            static_cast<float>((fm < valid_rows) ? (src[fm * ld + fn]) : 0.f);
+        AT(M, 1) = static_cast<float>(
+            (fm < valid_rows) ? (src[fm * ld + fn + 1]) : 0.f);
       } else {
-        simdgroup_load(M, src, ld);
+        // simdgroup_load(M, src, ld);
+        AT(M, 0) = static_cast<float>(src[fm * ld + fn]);
+        AT(M, 1) = static_cast<float>(src[fm * ld + fn + 1]);
       }
     };
 
     // transposed load
     auto load_MT = [&](thread simdgroup_float8x8& M, auto src, int ld) {
       if constexpr (B) {
-        AT(M, 0) = (fn < valid_rows) ? float(src[fn * ld + fm]) : 0.f;
-        AT(M, 1) = (fn + 1 < valid_rows) ? float(src[(fn + 1) * ld + fm]) : 0.f;
+        AT(M, 0) =
+            static_cast<float>((fn < valid_rows) ? (src[fn * ld + fm]) : 0.f);
+        AT(M, 1) = static_cast<float>(
+            (fn + 1 < valid_rows) ? (src[(fn + 1) * ld + fm]) : 0.f);
       } else {
-        simdgroup_load(M, src, ld, ulong2(0, 0), true);
+        // simdgroup_load(M, src, ld, ulong2(0, 0), true);
+        AT(M, 0) = static_cast<float>(src[fn * ld + fm]);
+        AT(M, 1) = static_cast<float>(src[(fn + 1) * ld + fm]);
       }
     };
 
-    float g_val = (thread_index_in_simdgroup < C)
+    float g_val = (thread_index_in_simdgroup < (uint)valid_rows)
         ? g_[thread_index_in_simdgroup * Hv + hv_idx]
         : 1.0f;
 
     float gamma_val = simd_prefix_inclusive_product(g_val);
 
-    if (thread_index_in_simdgroup < C) {
+    if (thread_index_in_simdgroup < (uint)valid_rows) {
       gamma[thread_index_in_simdgroup] = gamma_val;
     }
-
-    gamma[C - 1] = metal::max(gamma[C - 1], 1e-9f);
 
     float beta_fm = (fm < valid_rows) ? beta_[fm * Hv + hv_idx] : 0.0f;
 
@@ -793,17 +798,17 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv, int C>
         auto grid   = MTL::Size(32, Dv, B * Hv);
     auto threads = MTL::Size(32, 4, 1);
  */
-template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv>
+template <typename InT, int Dk, int Dv, int Hk, int Hv>
 [[kernel]] void gated_delta_seq(
     const device InT* q [[buffer(0)]],
     const device InT* k [[buffer(1)]],
     const device InT* v [[buffer(2)]],
     const device InT* g [[buffer(3)]], // [B, T, Hv] or [B, T, Hv, Dk]
     const device InT* beta [[buffer(4)]], // [B, T, Hv]
-    const device StT* state_in [[buffer(5)]], // [B, Hv, Dv, Dk]
+    const device float* state_in [[buffer(5)]], // [B, Hv, Dv, Dk]
     constant int& T [[buffer(6)]],
     device InT* y [[buffer(7)]], // [B, T, Hv, Dv]
-    device StT* state_out [[buffer(8)]], // [B, Hv, Dv, Dk]
+    device float* state_out [[buffer(8)]], // [B, Hv, Dv, Dk]
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
@@ -870,6 +875,6 @@ template <typename InT, typename StT, int Dk, int Dv, int Hk, int Hv>
   }
   for (int i = 0; i < n_per_t; ++i) {
     auto s_idx = n_per_t * dk_idx + i;
-    o_state[s_idx] = static_cast<StT>(state[i]);
+    o_state[s_idx] = static_cast<float>(state[i]);
   }
 }

@@ -3,78 +3,66 @@
 
 using namespace metal;
 
-#define instantiate_gated_delta_update_seq(in_type, st_type, dk, dv, hk, hv) \
-  instantiate_kernel(                                                        \
-      "seq_gated_delta_" #in_type "_" #st_type "_" #dk "_" #dv "_" #hk       \
-      "_" #hv,                                                               \
-      gated_delta_seq,                                                       \
-      in_type,                                                               \
-      st_type,                                                               \
-      dk,                                                                    \
-      dv,                                                                    \
-      hk,                                                                    \
+#define instantiate_gated_delta_update_seq(in_type, dk, dv, hk, hv) \
+  instantiate_kernel(                                               \
+      "seq_gated_delta_" #in_type "_" #dk "_" #dv "_" #hk "_" #hv,  \
+      gated_delta_seq,                                              \
+      in_type,                                                      \
+      dk,                                                           \
+      dv,                                                           \
+      hk,                                                           \
       hv)
 
-#define instantiate_gated_delta_update_seq_dims(in_type, st_type)            \
-  instantiate_gated_delta_update_seq(in_type, st_type, 128, 128, 24, 24)     \
-      instantiate_gated_delta_update_seq(in_type, st_type, 128, 128, 32, 32) \
-          instantiate_gated_delta_update_seq(                                \
-              in_type, st_type, 128, 128, 16, 32)                            \
-              instantiate_gated_delta_update_seq(                            \
-                  in_type, st_type, 128, 128, 16, 48)
+#define instantiate_gated_delta_update_seq_dims(in_type)                \
+  instantiate_gated_delta_update_seq(in_type, 128, 128, 24, 24)         \
+      instantiate_gated_delta_update_seq(in_type, 128, 128, 32, 32)     \
+          instantiate_gated_delta_update_seq(in_type, 128, 128, 16, 32) \
+              instantiate_gated_delta_update_seq(in_type, 128, 128, 16, 48)
 
-#define instantiate_gated_delta_update_fused_chunk(                            \
-    in_type, st_type, dk, dv, hk, hv, c)                                       \
+#define instantiate_gated_delta_update_fused_chunk(in_type, dk, dv, hk, hv, c) \
   instantiate_kernel(                                                          \
-      "gated_delta_fused_chunk_" #in_type "_" #st_type "_" #dk "_" #dv "_" #hk \
-      "_" #hv "_" #c,                                                          \
+      "gated_delta_fused_chunk_" #in_type "_" #dk "_" #dv "_" #hk "_" #hv      \
+      "_" #c,                                                                  \
       gated_delta_fused_chunk,                                                 \
       in_type,                                                                 \
-      st_type,                                                                 \
       dk,                                                                      \
       dv,                                                                      \
       hk,                                                                      \
       hv,                                                                      \
       c)
 
-#define instantiate_gated_delta_update_fused_chunk_dims(in_type, st_type) \
-  instantiate_gated_delta_update_fused_chunk(                             \
-      in_type, st_type, 128, 128, 16, 32, 8)                              \
-      instantiate_gated_delta_update_fused_chunk(                         \
-          in_type, st_type, 128, 128, 16, 48, 8)                          \
-          instantiate_gated_delta_update_fused_chunk(                     \
-              in_type, st_type, 128, 128, 24, 24, 8)                      \
-              instantiate_gated_delta_update_fused_chunk(                 \
-                  in_type, st_type, 128, 128, 32, 32, 8)
+#define instantiate_gated_delta_update_fused_chunk_dims(in_type)               \
+  instantiate_gated_delta_update_fused_chunk(in_type, 128, 128, 16, 32, 8)     \
+      instantiate_gated_delta_update_fused_chunk(in_type, 128, 128, 16, 48, 8) \
+          instantiate_gated_delta_update_fused_chunk(                          \
+              in_type, 128, 128, 24, 24, 8)                                    \
+              instantiate_gated_delta_update_fused_chunk(                      \
+                  in_type, 128, 128, 32, 32, 8)
 
-#define instantiate_gated_delta_update_fused_nax(                            \
-    in_type, st_type, dk, dv, hk, hv, c)                                     \
+#define instantiate_gated_delta_update_fused_nax(in_type, dk, dv, hk, hv, c) \
   instantiate_kernel(                                                        \
-      "gated_delta_fused_nax_" #in_type "_" #st_type "_" #dk "_" #dv "_" #hk \
-      "_" #hv "_" #c,                                                        \
+      "gated_delta_fused_nax_" #in_type "_" #dk "_" #dv "_" #hk "_" #hv      \
+      "_" #c,                                                                \
       gated_delta_fused_nax,                                                 \
       in_type,                                                               \
-      st_type,                                                               \
       dk,                                                                    \
       dv,                                                                    \
       hk,                                                                    \
       hv,                                                                    \
       c)
 
-#define instantiate_gated_delta_update_fused_nax_dims(in_type, st_type) \
-  instantiate_gated_delta_update_fused_nax(                             \
-      in_type, st_type, 128, 128, 16, 32, 16)                           \
-      instantiate_gated_delta_update_fused_nax(                         \
-          in_type, st_type, 128, 128, 16, 48, 16)                       \
-          instantiate_gated_delta_update_fused_nax(                     \
-              in_type, st_type, 128, 128, 24, 24, 16)                   \
-              instantiate_gated_delta_update_fused_nax(                 \
-                  in_type, st_type, 128, 128, 32, 32, 16)
+#define instantiate_gated_delta_update_fused_nax_dims(in_type)                \
+  instantiate_gated_delta_update_fused_nax(in_type, 128, 128, 16, 32, 16)     \
+      instantiate_gated_delta_update_fused_nax(in_type, 128, 128, 16, 48, 16) \
+          instantiate_gated_delta_update_fused_nax(                           \
+              in_type, 128, 128, 24, 24, 16)                                  \
+              instantiate_gated_delta_update_fused_nax(                       \
+                  in_type, 128, 128, 32, 32, 16)
 
-instantiate_gated_delta_update_seq_dims(float, float);
-instantiate_gated_delta_update_fused_chunk_dims(float, float);
-instantiate_gated_delta_update_fused_nax_dims(float, float);
+instantiate_gated_delta_update_seq_dims(float);
+instantiate_gated_delta_update_fused_chunk_dims(float);
+instantiate_gated_delta_update_fused_nax_dims(float);
 
-instantiate_gated_delta_update_seq_dims(bfloat16_t, float);
-// instantiate_gated_delta_update_fused_chunk_dims(bfloat16_t, float);
-instantiate_gated_delta_update_fused_nax_dims(bfloat16_t, float);
+instantiate_gated_delta_update_seq_dims(bfloat16_t);
+instantiate_gated_delta_update_fused_chunk_dims(bfloat16_t);
+instantiate_gated_delta_update_fused_nax_dims(bfloat16_t);
