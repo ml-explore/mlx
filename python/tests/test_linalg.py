@@ -188,12 +188,22 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 )
             )
 
-        # Zero-size inputs
-        for shape in [(0, 4, 4), (3, 0, 0)]:
-            U, S, Vt = mx.linalg.svd(mx.zeros(shape), stream=mx.cpu)
+        # Zero-size inputs. When only one of the dimensions is zero the
+        # factors are not empty and hold the identity, like numpy.
+        for shape in [(0, 4, 4), (3, 0, 0), (2, 5, 0), (2, 0, 5), (5, 0), (0, 5)]:
+            a_np = np.zeros(shape, dtype=np.float32)
+            U, S, Vt = mx.linalg.svd(mx.array(a_np), stream=mx.cpu)
             mx.eval(U, S, Vt)
-            self.assertEqual(S.shape, shape[:-1])
-            self.assertEqual(U.shape, shape)
+            U_np, S_np, Vt_np = np.linalg.svd(a_np)
+            self.assertEqual(U.shape, U_np.shape)
+            self.assertEqual(S.shape, S_np.shape)
+            self.assertEqual(Vt.shape, Vt_np.shape)
+            self.assertTrue(np.array_equal(np.array(U), U_np))
+            self.assertTrue(np.array_equal(np.array(Vt), Vt_np))
+
+            S_only = mx.linalg.svd(mx.array(a_np), compute_uv=False, stream=mx.cpu)
+            mx.eval(S_only)
+            self.assertEqual(S_only.shape, S_np.shape)
 
         # Test float64 - use CPU stream since float64 is not supported on GPU
         with mx.stream(mx.cpu):
@@ -509,11 +519,19 @@ class TestLinalg(mlx_tests.MLXTestCase):
             self.assertTrue(np.allclose(w, w_np, atol=1e-5))
 
         # Zero-size inputs
-        for shape in [(0, 4, 4), (3, 0, 0)]:
-            w, v = mx.linalg.eigh(mx.zeros(shape), stream=mx.cpu)
+        for shape in [(0, 4, 4), (3, 0, 0), (0, 0)]:
+            a_np = np.zeros(shape, dtype=np.float32)
+            w, v = mx.linalg.eigh(mx.array(a_np), stream=mx.cpu)
             mx.eval(w, v)
-            self.assertEqual(w.shape, shape[:-1])
-            self.assertEqual(v.shape, shape)
+            w_np, v_np = np.linalg.eigh(a_np)
+            self.assertEqual(w.shape, w_np.shape)
+            self.assertEqual(v.shape, v_np.shape)
+            self.assertTrue(np.array_equal(np.array(w), w_np))
+            self.assertTrue(np.array_equal(np.array(v), v_np))
+
+            w_only = mx.linalg.eigvalsh(mx.array(a_np), stream=mx.cpu)
+            mx.eval(w_only)
+            self.assertEqual(w_only.shape, w_np.shape)
 
         # Test error cases
         with self.assertRaises(ValueError):

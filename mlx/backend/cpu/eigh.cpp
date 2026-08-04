@@ -204,7 +204,9 @@ void Eigh::eval_cpu(
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
       stream());
 
-  // Nothing to decompose for n = 0; LAPACK rejects lda = 0.
+  // Nothing to decompose for n = 0; LAPACK rejects lda = 0. The input is
+  // square, so both outputs are empty here and the copy above has already
+  // initialized the eigenvectors.
   if (a.shape(-1) == 0) {
     if (!compute_eigenvectors_) {
       auto& encoder = cpu::get_command_encoder(stream());
