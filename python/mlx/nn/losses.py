@@ -505,8 +505,7 @@ def log_cosh_loss(
     .. math::
 
        \text{logcosh}(y_{\text{true}}, y_{\text{pred}}) =
-            \frac{1}{n} \sum_{i=1}^{n}
-            \log(\cosh(y_{\text{pred}}^{(i)} - y_{\text{true}}^{(i)}))
+            \log(\cosh(y_{\text{pred}} - y_{\text{true}}))
 
 
     Args:
