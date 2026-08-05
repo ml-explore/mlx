@@ -14,7 +14,7 @@ namespace cg = cooperative_groups;
 static constexpr int rows_per_block = 8;
 
 // Split batches across grid.y/z because both dimensions are capped at 65,535.
-static dim3 get_gemv_grid_dims(uint32_t num_blocks_x, uint32_t batch_size) {
+inline dim3 get_gemv_grid_dims(uint32_t num_blocks_x, uint32_t batch_size) {
   constexpr uint32_t max_grid_yz_dim = 65535;
   uint32_t num_blocks_z = cuda::ceil_div(batch_size, max_grid_yz_dim);
   uint32_t num_blocks_y = cuda::ceil_div(batch_size, num_blocks_z);

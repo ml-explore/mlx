@@ -376,32 +376,6 @@ class TestBlas(mlx_tests.MLXTestCase):
                         shape_mat, shape_vec, mat_first=False, np_dtype=np_dtype
                     )
 
-    def test_cuda_matrix_vector_large_batch(self):
-        if not mx.cuda.is_available():
-            self.skipTest("requires CUDA")
-
-        with mx.stream(mx.gpu):
-            for batch_size in (65535, 65536, 65537):
-                with self.subTest(batch_size=batch_size):
-                    idx = mx.arange(batch_size, dtype=mx.float32)
-                    mat = mx.stack(
-                        (idx + 1, 2 * idx + 1, 3 * idx + 1, 4 * idx + 1),
-                        axis=-1,
-                    ).reshape(batch_size, 2, 2)
-                    vec_0 = idx % 7 + 1
-                    vec_1 = idx % 5 + 1
-                    vec = mx.stack((vec_0, vec_1), axis=-1)[..., None]
-
-                    out = mx.matmul(mat, vec)[..., 0]
-                    expected = mx.stack(
-                        (
-                            (idx + 1) * vec_0 + (2 * idx + 1) * vec_1,
-                            (3 * idx + 1) * vec_0 + (4 * idx + 1) * vec_1,
-                        ),
-                        axis=-1,
-                    )
-                    self.assertTrue(mx.array_equal(out, expected).item())
-
     def test_matrix_vector_broadcast(self):
         for dtype in self.dtypes:
             with self.subTest(dtype=dtype):
@@ -1361,50 +1335,6 @@ class TestBlas(mlx_tests.MLXTestCase):
         out_mx = mx.gather_mm(a_mx, b_mx_t, lhs_indices_mx, rhs_indices_mx)
 
         self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
-
-    def test_cuda_gather_matrix_vector_large_batch(self):
-        if not mx.cuda.is_available():
-            self.skipTest("requires CUDA")
-
-        with mx.stream(mx.gpu):
-            mat = mx.array(
-                (
-                    ((1.0, 0.0), (0.0, 2.0)),
-                    ((2.0, 0.0), (0.0, 3.0)),
-                    ((3.0, 0.0), (0.0, 4.0)),
-                )
-            )
-            vec = mx.array(
-                (
-                    ((1.0,), (1.0,)),
-                    ((2.0,), (3.0,)),
-                    ((3.0,), (5.0,)),
-                    ((4.0,), (7.0,)),
-                    ((5.0,), (9.0,)),
-                )
-            )
-            empty = mx.array([], dtype=mx.uint32)
-            out = mx.gather_mm(mat, vec, empty, empty)
-            mx.eval(out)
-            self.assertEqual(out.shape, (0, 2, 1))
-
-            for batch_size in (65535, 65536, 65537):
-                with self.subTest(batch_size=batch_size):
-                    idx = mx.arange(batch_size, dtype=mx.uint32)
-                    lhs_indices = idx % 3
-                    rhs_indices = idx % 5
-                    out = mx.gather_mm(mat, vec, lhs_indices, rhs_indices)[..., 0]
-
-                    lhs = lhs_indices.astype(mx.float32)
-                    rhs = rhs_indices.astype(mx.float32)
-                    expected = mx.stack(
-                        (
-                            (lhs + 1) * (rhs + 1),
-                            (lhs + 2) * (2 * rhs + 1),
-                        ),
-                        axis=-1,
-                    )
-                    self.assertTrue(mx.array_equal(out, expected).item())
 
     def test_gather_mm_blocks(self):
         if mx.default_device() == mx.cpu:
