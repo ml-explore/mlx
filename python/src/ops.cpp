@@ -3146,6 +3146,42 @@ void init_ops(nb::module_& m) {
             array: The ``uint32`` array containing indices that partition the input.
       )pbdoc");
   m.def(
+      "searchsorted",
+      &mx::searchsorted,
+      nb::arg(),
+      nb::arg(),
+      "side"_a = "left",
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def searchsorted(sorted_sequence: array, values: array, /, side: str = 'left', *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Find the indices at which ``values`` would be inserted into
+        ``sorted_sequence`` to keep it sorted.
+
+        The returned index ``i`` for a value ``v`` satisfies:
+
+        * ``side="left"``: ``sorted_sequence[i-1] < v <= sorted_sequence[i]``
+        * ``side="right"``: ``sorted_sequence[i-1] <= v < sorted_sequence[i]``
+
+        Equivalently, the result counts how many elements of ``sorted_sequence``
+        are less than (``"left"``) or less than or equal to (``"right"``) each
+        value.
+
+        The behaviour is undefined if ``sorted_sequence`` is not sorted.
+
+        Args:
+            sorted_sequence (array): A 1-D array sorted in ascending order.
+            values (array): The values to insert. Can have any shape.
+            side (str, optional): Either ``"left"`` or ``"right"``. Determines
+              which index is returned when a value matches an entry of
+              ``sorted_sequence`` exactly. Default: ``"left"``.
+
+        Returns:
+            array: A ``uint32`` array of insertion indices with the same shape
+            as ``values``.
+      )pbdoc");
+  m.def(
       "topk",
       [](const mx::array& a,
          int k,

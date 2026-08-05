@@ -2509,6 +2509,61 @@ class TestOps(mlx_tests.MLXTestCase):
                             M = top_k_mx.shape[axis or 0]
                             self.assertEqual(M, (kth + N) % N)
 
+    def test_searchsorted(self):
+        # Cross-check against numpy over sizes that straddle the internal
+        # dispatch between the linear and binary search forms.
+        for n in [1, 2, 3, 7, 8, 9, 15, 16, 17, 1000, 4096]:
+            for m in [1, 5, 64, 257]:
+                for side in ["left", "right"]:
+                    with self.subTest(n=n, m=m, side=side):
+                        a_np = np.sort(np.random.randn(n).astype(np.float32))
+                        v_np = (np.random.randn(m) * 2).astype(np.float32)
+                        out = mx.searchsorted(mx.array(a_np), mx.array(v_np), side)
+                        expected = np.searchsorted(a_np, v_np, side=side)
+                        self.assertEqual(out.dtype, mx.uint32)
+                        self.assertEqual(out.shape, (m,))
+                        self.assertTrue(np.array_equal(np.array(out), expected))
+
+        # Duplicates, exact hits and out of range values, where left and right
+        # actually differ.
+        a = mx.array([1, 1, 1, 2, 2, 3], mx.float32)
+        v = mx.array([0, 1, 2, 3, 4], mx.float32)
+        self.assertTrue(
+            mx.array_equal(mx.searchsorted(a, v, "left"), mx.array([0, 0, 3, 5, 6]))
+        )
+        self.assertTrue(
+            mx.array_equal(mx.searchsorted(a, v, "right"), mx.array([0, 3, 5, 6, 6]))
+        )
+
+        # Values keep their shape
+        a = mx.arange(16, dtype=mx.float32)
+        v = mx.random.uniform(shape=(2, 3, 4)) * 20
+        self.assertEqual(mx.searchsorted(a, v).shape, (2, 3, 4))
+
+        # Integer inputs and mixed dtypes
+        a = mx.array([1, 3, 5, 7], mx.int32)
+        self.assertTrue(
+            mx.array_equal(
+                mx.searchsorted(a, mx.array([0, 1, 4, 8], mx.int32)),
+                mx.array([0, 0, 2, 4]),
+            )
+        )
+        self.assertTrue(
+            mx.array_equal(
+                mx.searchsorted(a, mx.array([2.5, 6.5], mx.float32)), mx.array([1, 3])
+            )
+        )
+
+        # Empty sorted sequence gives all zeros
+        out = mx.searchsorted(mx.array([], mx.float32), mx.array([1.0, 2.0]))
+        self.assertTrue(mx.array_equal(out, mx.array([0, 0])))
+
+        # Errors
+        with self.assertRaises(ValueError):
+            mx.searchsorted(mx.zeros((2, 2)), mx.array([1.0]))
+        with self.assertRaises(ValueError):
+            mx.searchsorted(mx.array([1.0, 2.0]), mx.array([1.0]), "middle")
+
     def test_argpartition(self):
         x = mx.broadcast_to(mx.array([1, 2, 3]), (2, 3))
         out = mx.argpartition(x, kth=1, axis=0)

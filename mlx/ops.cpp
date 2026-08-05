@@ -2706,6 +2706,73 @@ array argsort(const array& a, int axis, StreamOrDevice s /* = {} */) {
       a.shape(), uint32, std::make_shared<ArgSort>(to_stream(s), axis), {a});
 }
 
+array searchsorted(
+    const array& sorted_sequence,
+    const array& values,
+    const std::string& side /* = "left" */,
+    StreamOrDevice s /* = {} */) {
+  if (sorted_sequence.ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[searchsorted] Expected a 1D sorted sequence but got an array with "
+        << sorted_sequence.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (side != "left" && side != "right") {
+    std::ostringstream msg;
+    msg << "[searchsorted] Invalid side '" << side
+        << "', expected 'left' or 'right'.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto n = sorted_sequence.size();
+  if (n == 0) {
+    return zeros(values.shape(), uint32, s);
+  }
+
+  // Compare in a common type so mixed dtypes behave like the other binary ops.
+  auto dt = promote_types(sorted_sequence.dtype(), values.dtype());
+  auto a = astype(sorted_sequence, dt, s);
+  auto v = astype(values, dt, s);
+
+  auto compare = [&](const array& x, const array& y) {
+    return side == "left" ? less(x, y, s) : less_equal(x, y, s);
+  };
+
+  // Both branches compute the same thing: the number of elements of `a` that
+  // compare less than (or less than or equal to) each value.
+  //
+  // The linear form materializes an n x values.size() mask, so it is only worth
+  // it while that product stays small. Past roughly 4M elements the binary
+  // search wins and the mask becomes a memory problem. See the benchmark in the
+  // pull request for where this threshold comes from.
+  constexpr size_t kLinearMaxElements = 1 << 22;
+  if (n * values.size() <= kLinearMaxElements) {
+    auto flat_v = reshape(v, {-1, 1}, s);
+    auto row_a = reshape(a, {1, -1}, s);
+    auto counts = sum(compare(row_a, flat_v), -1, false, s);
+    return reshape(astype(counts, uint32, s), values.shape(), s);
+  }
+
+  // Branchless binary search. Accumulating into a single running result avoids
+  // the lower/upper bound pair converging and stepping past each other, and
+  // keeps every gather in range.
+  int steps = std::max(
+      1, static_cast<int>(std::ceil(std::log2(static_cast<double>(n) + 1.0))));
+  auto res = zeros(values.shape(), uint32, s);
+  auto n_arr = array(static_cast<uint32_t>(n), uint32);
+  auto one = array(1u, uint32);
+  auto last = array(static_cast<uint32_t>(n - 1), uint32);
+  for (int i = steps - 1; i >= 0; --i) {
+    auto step = array(static_cast<uint32_t>(1u) << i, uint32);
+    auto cand = add(res, step, s);
+    auto idx = minimum(subtract(cand, one, s), last, s);
+    auto ok =
+        logical_and(less_equal(cand, n_arr, s), compare(take(a, idx, s), v), s);
+    res = where(ok, cand, res, s);
+  }
+  return res;
+}
+
 /**
  * Returns a partitioned copy of the flattened array
  * such that the smaller kth elements are first.
