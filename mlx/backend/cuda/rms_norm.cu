@@ -3,13 +3,13 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernel_utils.cuh"
 #include "mlx/backend/cuda/reduce/reduce.cuh"
+#include "mlx/backend/cuda/steel/utils.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/fast_primitives.h"
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
-#include <cuda_pipeline.h>
 #include <nvtx3/nvtx3.hpp>
 
 namespace mlx::core {
@@ -277,6 +277,10 @@ __global__ void rms_norm_vjp_small(
   extern __shared__ char smem_raw[];
   T* smem_x = reinterpret_cast<T*>(smem_raw);
   T* smem_dy = smem_x + STAGES * buffer_size;
+  constexpr int BYTES_PER_READ = N_READS * static_cast<int>(sizeof(T));
+  constexpr int STAGE_BYTES = buffer_size * static_cast<int>(sizeof(T));
+  uint32_t smem_x_addr = __cvta_generic_to_shared(smem_x);
+  uint32_t smem_dy_addr = __cvta_generic_to_shared(smem_dy);
 
   AlignedVector<T, N_READS> wn[N_CHUNKS];
   AlignedVector<T, N_READS> xn[N_CHUNKS];
@@ -300,15 +304,16 @@ __global__ void rms_norm_vjp_small(
   for (int j = 0; j < N_CHUNKS; j++) {
     int offset = (j * BLOCK_SIZE + tid) * N_READS;
     if (bid < n_rows) {
-      __pipeline_memcpy_async(&smem_x[offset], &x[offset], sizeof(T) * N_READS);
-      __pipeline_memcpy_async(
-          &smem_dy[offset], &g[offset], sizeof(T) * N_READS);
+      cp_async<BYTES_PER_READ>(
+          smem_x_addr + BYTES_PER_READ * (j * BLOCK_SIZE + tid), &x[offset]);
+      cp_async<BYTES_PER_READ>(
+          smem_dy_addr + BYTES_PER_READ * (j * BLOCK_SIZE + tid), &g[offset]);
     }
     wn[j] = load_vector<N_READS>(
         w, j * BLOCK_SIZE + tid, axis_size, w_stride, T(0));
   }
   // commit all N_CHUNKS 128 byte loads for the first row
-  __pipeline_commit();
+  cp_async_commit();
   // pipelineing
   for (int tile = 0; tile < num_tiles; tile++) {
     x += axis_size * num_blocks;
@@ -322,18 +327,18 @@ __global__ void rms_norm_vjp_small(
     if (next < num_tiles && next_row < n_rows) {
       for (int j = 0; j < N_CHUNKS; j++) {
         int offset = (j * BLOCK_SIZE + tid) * N_READS;
-        __pipeline_memcpy_async(
-            &smem_x[index * buffer_size + offset],
-            &x[offset],
-            sizeof(T) * N_READS);
-        __pipeline_memcpy_async(
-            &smem_dy[index * buffer_size + offset],
-            &g[offset],
-            sizeof(T) * N_READS);
+        cp_async<BYTES_PER_READ>(
+            smem_x_addr + index * STAGE_BYTES +
+                BYTES_PER_READ * (j * BLOCK_SIZE + tid),
+            &x[offset]);
+        cp_async<BYTES_PER_READ>(
+            smem_dy_addr + index * STAGE_BYTES +
+                BYTES_PER_READ * (j * BLOCK_SIZE + tid),
+            &g[offset]);
       }
     }
-    __pipeline_commit(); // always commit, empty at the tail
-    __pipeline_wait_prior(1); // always wait for 1, the tail is empty
+    cp_async_commit(); // always commit, empty at the tail
+    cp_async_wait<1>(); // always wait for 1, the tail is empty
 
     int64_t cur_row =
         static_cast<int64_t>(bid) + static_cast<int64_t>(tile) * num_blocks;
@@ -716,7 +721,9 @@ void RMSNormVJP::eval_gpu(
   int64_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
 
   bool handled = false;
-  if (has_w) {
+  // cu::cp_async is a no-op before sm_80, so the pipelined kernel would read
+  // uninitialized shared memory there.
+  if (has_w && cu::device(s.device).compute_capability_major() >= 8) {
     dispatch_float_types(gx.dtype(), "rms_norm_vjp", [&](auto type_tag) {
       using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
       constexpr int N_READS = 16 / sizeof(DataType);
