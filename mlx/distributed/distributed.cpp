@@ -138,9 +138,30 @@ Group Group::split(int color, int key /* = -1 */) const {
   return Group(group_->split(color, key));
 }
 
-Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
+namespace {
+
+std::unordered_map<std::string, std::shared_ptr<detail::GroupImpl>>&
+get_backends() {
   static std::unordered_map<std::string, std::shared_ptr<detail::GroupImpl>>
       backends;
+  return backends;
+}
+
+Group register_group(std::shared_ptr<detail::GroupImpl> group, std::string bk) {
+  auto& backends = get_backends();
+  if (group == nullptr) {
+    group = std::make_shared<detail::EmptyGroup>();
+  } else {
+    backends.insert({"any", group});
+  }
+  backends.insert({std::move(bk), group});
+  return Group(group);
+}
+
+} // namespace
+
+Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
+  auto& backends = get_backends();
 
   // Already initialized so return the group.
   if (auto g = backends.find(bk); g != backends.end()) {
@@ -185,13 +206,31 @@ Group init(bool strict /* = false */, const std::string& bk /* = "any" */) {
     throw std::invalid_argument(msg.str());
   }
 
-  if (group == nullptr) {
-    group = std::make_shared<detail::EmptyGroup>();
-  } else {
-    backends.insert({"any", group});
+  return register_group(std::move(group), std::move(bk_));
+}
+
+Group init(bool strict, const std::string& bk, AllGatherFactory factory) {
+  if (bk != "jaccl") {
+    std::ostringstream msg;
+    msg << "[distributed] An all gather factory is only supported with the "
+        << "'jaccl' backend but '" << bk << "' was provided.";
+    throw std::invalid_argument(msg.str());
   }
-  backends.insert({std::move(bk_), group});
-  return Group(group);
+
+  auto& backends = get_backends();
+
+  // Already initialized so return the cached group. The factory is ignored in
+  // this case since the backend is already up.
+  if (auto g = backends.find(bk); g != backends.end()) {
+    return Group(g->second);
+  }
+
+  auto group = jaccl::init(strict, std::move(factory));
+  return register_group(std::move(group), bk);
+}
+
+void clear_backends() {
+  get_backends().clear();
 }
 
 } // namespace mlx::core::distributed

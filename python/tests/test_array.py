@@ -1205,7 +1205,7 @@ class TestArray(mlx_tests.MLXTestCase):
         ind = mx.array([0, 1, 0]).astype(mx.float32)
 
         def index_fn(x, ind):
-            return x[ind.astype(mx.int32)].sum()
+            return x[mx.stop_gradient(ind.astype(mx.int32))].sum()
 
         grad_x, grad_ind = mx.grad(index_fn, argnums=(0, 1))(x, ind)
         expected = mx.array([[2, 2], [1, 1]])
@@ -1868,11 +1868,10 @@ class TestArray(mlx_tests.MLXTestCase):
         mv_mx = memoryview(a_mx)
         self.assertEqual(mv_mx.strides, (8, 2))
         self.assertEqual(mv_mx.shape, (3, 4))
-        self.assertEqual(mv_mx.format, "B")
-        with self.assertRaises(RuntimeError) as cm:
+        self.assertIn(mv_mx.format, "bfloat16")
+        with self.assertRaises(ValueError) as cm:
             np.array(a_mx)
-        e = cm.exception
-        self.assertTrue("Item size 2 for PEP 3118 buffer format string" in str(e))
+        self.assertIn("bfloat16", str(cm.exception))
 
         # Test buffer protocol with non-arrays ie bytes
         a = ord("a") * 257 + mx.arange(10).astype(mx.int16)

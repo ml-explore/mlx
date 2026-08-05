@@ -612,15 +612,15 @@ struct QuantizedBlockLoader {
       const int src_ld_,
       threadgroup T* dst_,
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
-      ushort simd_lane_id [[thread_index_in_simdgroup]])
+      ushort simd_lane_id [[thread_index_in_simdgroup]]) thread
       : src_ld(src_ld_),
         tile_stride(
-            reduction_dim ? BCOLS_PACKED * bytes_per_pack
+            reduction_dim ? BCOLS_PACKED* bytes_per_pack
                           : BROWS * src_ld * bytes_per_pack / pack_factor),
         group_step_cnt(0),
-        group_stride(BROWS * src_ld / group_size),
+        group_stride(BROWS* src_ld / group_size),
         thread_idx(simd_group_id * 32 + simd_lane_id),
-        bi(n_reads * thread_idx / BCOLS_PACKED),
+        bi(n_reads* thread_idx / BCOLS_PACKED),
         bj((n_reads * thread_idx) % BCOLS_PACKED),
         dst(dst_ + bi * dst_ld + bj * pack_factor),
         src(src_ + bi * src_ld * bytes_per_pack / pack_factor +
@@ -628,7 +628,7 @@ struct QuantizedBlockLoader {
         scales(scales_ + bi * src_ld / group_size),
         biases(biases_ + bi * src_ld / group_size) {}
 
-  void load_unsafe() const {
+  void load_unsafe() const thread {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
       return;
     }
@@ -641,7 +641,7 @@ struct QuantizedBlockLoader {
     }
   }
 
-  void load_safe(short2 src_tile_dim) const {
+  void load_safe(short2 src_tile_dim) const thread {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
       return;
     }
@@ -671,7 +671,7 @@ struct QuantizedBlockLoader {
     }
   }
 
-  void next() {
+  void next() thread {
     src += tile_stride;
     if (reduction_dim == 1) {
       if (group_steps > 1) {
@@ -752,14 +752,14 @@ struct QuantizedBlockLoader<
       const int src_ld_,
       threadgroup T* dst_,
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
-      ushort simd_lane_id [[thread_index_in_simdgroup]])
+      ushort simd_lane_id [[thread_index_in_simdgroup]]) thread
       : src_ld(src_ld_),
         tile_stride(
-            reduction_dim ? BCOLS_PACKED * bytes_per_pack
+            reduction_dim ? BCOLS_PACKED* bytes_per_pack
                           : BROWS * src_ld * bytes_per_pack / pack_factor),
-        group_stride(BROWS * src_ld / group_size),
+        group_stride(BROWS* src_ld / group_size),
         thread_idx(simd_group_id * 32 + simd_lane_id),
-        bi(n_reads * thread_idx / BCOLS_PACKED),
+        bi(n_reads* thread_idx / BCOLS_PACKED),
         bj((n_reads * thread_idx) % BCOLS_PACKED),
         group_id((bj * pack_factor) / group_size),
         dst(dst_ + bi * dst_ld + bj * pack_factor),
@@ -768,7 +768,7 @@ struct QuantizedBlockLoader<
         scales(scales_ + bi * src_ld / group_size + group_id),
         biases(biases_ + bi * src_ld / group_size + group_id) {}
 
-  void load_unsafe() const {
+  void load_unsafe() const thread {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
       return;
     }
@@ -781,7 +781,7 @@ struct QuantizedBlockLoader<
     }
   }
 
-  void load_safe(short2 src_tile_dim) const {
+  void load_safe(short2 src_tile_dim) const thread {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
       return;
     }
@@ -811,7 +811,7 @@ struct QuantizedBlockLoader<
     }
   }
 
-  void next() {
+  void next() thread {
     src += tile_stride;
     if (reduction_dim == 1) {
       // if (group_steps > 1) {

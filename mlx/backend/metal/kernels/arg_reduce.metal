@@ -16,7 +16,7 @@ template <typename U>
 struct ArgMin {
   static constexpr constant U init = Limits<U>::max;
 
-  IndexValPair<U> reduce(IndexValPair<U> best, IndexValPair<U> current) {
+  IndexValPair<U> reduce(IndexValPair<U> best, IndexValPair<U> current) thread {
     if (best.val > current.val ||
         (best.val == current.val && best.index > current.index)) {
       return current;
@@ -27,7 +27,7 @@ struct ArgMin {
 
   template <int N>
   IndexValPair<U>
-  reduce_many(IndexValPair<U> best, thread U* vals, uint32_t offset) {
+  reduce_many(IndexValPair<U> best, thread U* vals, uint32_t offset) thread {
     for (int i = 0; i < N; i++) {
       if (vals[i] < best.val) {
         best.val = vals[i];
@@ -42,7 +42,7 @@ template <typename U>
 struct ArgMax {
   static constexpr constant U init = Limits<U>::min;
 
-  IndexValPair<U> reduce(IndexValPair<U> best, IndexValPair<U> current) {
+  IndexValPair<U> reduce(IndexValPair<U> best, IndexValPair<U> current) thread {
     if (best.val < current.val ||
         (best.val == current.val && best.index > current.index)) {
       return current;
@@ -53,7 +53,7 @@ struct ArgMax {
 
   template <int N>
   IndexValPair<U>
-  reduce_many(IndexValPair<U> best, thread U* vals, uint32_t offset) {
+  reduce_many(IndexValPair<U> best, thread U* vals, uint32_t offset) thread {
     for (int i = 0; i < N; i++) {
       if (vals[i] > best.val) {
         best.val = vals[i];

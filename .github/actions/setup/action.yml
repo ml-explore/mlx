@@ -52,8 +52,10 @@ runs:
       shell: bash
       run: |
         echo "::group::Install macOS dependencies"
+        brew update
         brew install openmpi
         xcodebuild -showComponent MetalToolchain
+        sysctl -a | grep machdep.cpu
         echo "::endgroup::"
 
     - name: Setup Windows environment
