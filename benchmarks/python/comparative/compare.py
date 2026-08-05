@@ -4,6 +4,7 @@
 
 import argparse
 import re
+import sys
 from pathlib import Path
 from subprocess import run
 
@@ -22,15 +23,15 @@ def run_or_raise(*args, **kwargs):
 
 
 def compare(args):
-    t_mlx = run_or_raise(["python", BENCH_MLX] + args)
-    t_torch = run_or_raise(["python", BENCH_TORCH] + args)
+    t_mlx = run_or_raise([sys.executable, BENCH_MLX] + args)
+    t_torch = run_or_raise([sys.executable, BENCH_TORCH] + args)
 
     print((t_torch - t_mlx) / t_torch, " ".join(args), sep="\t")
 
 
 def compare_mlx_dtypes(args, dt1, dt2):
-    t_mlx_dt1 = run_or_raise(["python", BENCH_MLX] + args + ["--dtype", dt1])
-    t_mlx_dt2 = run_or_raise(["python", BENCH_MLX] + args + ["--dtype", dt2])
+    t_mlx_dt1 = run_or_raise([sys.executable, BENCH_MLX] + args + ["--dtype", dt1])
+    t_mlx_dt2 = run_or_raise([sys.executable, BENCH_MLX] + args + ["--dtype", dt2])
 
     print((t_mlx_dt2 - t_mlx_dt1) / t_mlx_dt2, " ".join(args), sep="\t")
 
