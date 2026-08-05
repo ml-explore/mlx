@@ -469,10 +469,12 @@ struct BaseNAXFrag {
       metal::bool_constant<transpose_a>,
       const thread dtype_frag_t<BType>& B,
       metal::bool_constant<transpose_b>) {
-    // Create Matmul descriptor
+    // Create Matmul descriptor. This overload pairs two fragments along M and
+    // takes one fragment along N, so the problem shape is 32x16x16. The
+    // overload above pairs along N, and its problem shape is 16x32x16.
     constexpr auto desc = mpp::tensor_ops::matmul2d_descriptor(
-        16,
         32,
+        16,
         16,
         transpose_a,
         transpose_b,
@@ -524,6 +526,70 @@ struct BaseNAXFrag {
     for (short i = 0; i < kElemsPerFrag; i++) {
       Cm0[i] = ct_c[i];
       Cm1[i] = ct_c[kElemsPerFrag + i];
+    }
+  }
+
+  // Pairs along K, for tiles with odd TM and odd TN where a simdgroup holds
+  // one fragment each way. MPP needs 32 in M, N or K when both inputs are
+  // cooperative tensors, so 16x16x16 is not expressible and only K is left.
+  template <
+      typename CType,
+      typename AType,
+      typename BType,
+      bool transpose_a = false,
+      bool transpose_b = false>
+  METAL_FUNC static constexpr void mma(
+      thread dtype_frag_t<CType>& C,
+      const thread dtype_frag_t<AType>& Ak0,
+      const thread dtype_frag_t<AType>& Ak1,
+      metal::bool_constant<transpose_a>,
+      const thread dtype_frag_t<BType>& Bk0,
+      const thread dtype_frag_t<BType>& Bk1,
+      metal::bool_constant<transpose_b>) {
+    constexpr auto desc = mpp::tensor_ops::matmul2d_descriptor(
+        16,
+        16,
+        32,
+        transpose_a,
+        transpose_b,
+        true,
+        mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
+
+    mpp::tensor_ops::matmul2d<desc, metal::execution_simdgroup> gemm_op;
+
+    auto ct_a =
+        gemm_op
+            .template get_left_input_cooperative_tensor<AType, BType, CType>();
+    auto ct_b =
+        gemm_op
+            .template get_right_input_cooperative_tensor<AType, BType, CType>();
+    auto ct_c = gemm_op.template get_destination_cooperative_tensor<
+        decltype(ct_a),
+        decltype(ct_b),
+        CType>();
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kElemsPerFrag; i++) {
+      ct_a[i] = Ak0[i];
+      ct_a[kElemsPerFrag + i] = Ak1[i];
+    }
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kElemsPerFrag; i++) {
+      ct_b[i] = Bk0[i];
+      ct_b[kElemsPerFrag + i] = Bk1[i];
+    }
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kElemsPerFrag; i++) {
+      ct_c[i] = C[i];
+    }
+
+    gemm_op.run(ct_a, ct_b, ct_c);
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kElemsPerFrag; i++) {
+      C[i] = ct_c[i];
     }
   }
 };
@@ -887,6 +953,30 @@ METAL_FUNC void tile_matmad_nax(
               metal::bool_constant<transpose_a>{},
               B.frag_at(kk, nn, tb),
               B.frag_at(kk, nn + 1, tb),
+              metal::bool_constant<transpose_b>{});
+        }
+      }
+    }
+  } else {
+    // TM and TN both odd, so pair along K. Without this branch the matmul
+    // did not run at all and the tile kept its cleared value.
+    static_assert(
+        TK % 2 == 0,
+        "MXU tile matmul: a block tile with one fragment along M and one "
+        "fragment along N needs an even number of K fragments.");
+    STEEL_PRAGMA_UNROLL
+    for (short mm = 0; mm < TM; ++mm) {
+      STEEL_PRAGMA_UNROLL
+      for (short nn = 0; nn < TN; ++nn) {
+        STEEL_PRAGMA_UNROLL
+        for (short kk = 0; kk < TK; kk += 2) {
+          CTile::NAXFrag_t::mma(
+              C.frag_at(mm, nn),
+              A.frag_at(mm, kk, ta),
+              A.frag_at(mm, kk + 1, ta),
+              metal::bool_constant<transpose_a>{},
+              B.frag_at(kk, nn, tb),
+              B.frag_at(kk + 1, nn, tb),
               metal::bool_constant<transpose_b>{});
         }
       }
