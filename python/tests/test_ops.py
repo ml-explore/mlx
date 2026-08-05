@@ -1501,6 +1501,10 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [0, -1, -2]
         self.assertListEqual(a.tolist(), expected)
 
+        a = mx.arange(-3, None, -1)
+        expected = [0, -1, -2]
+        self.assertListEqual(a.tolist(), expected)
+
         a = mx.arange(stop=2, step=0.5)
         expected = [0, 0.5, 1.0, 1.5]
         self.assertListEqual(a.tolist(), expected)
