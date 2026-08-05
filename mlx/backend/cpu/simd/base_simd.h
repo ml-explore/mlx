@@ -13,6 +13,8 @@
 #include <intrin.h> // For _BitScanReverse
 #endif
 
+#include "mlx/types/half_types.h"
+
 namespace mlx::core::simd {
 template <typename T, int N>
 struct Simd;
@@ -60,6 +62,12 @@ constexpr bool is_complex = false;
 template <typename T>
 constexpr bool is_complex<T, std::void_t<decltype(std::declval<T>().real())>> =
     true;
+
+// std::is_signed_v is false for the custom float16_t/bfloat16_t types, so it
+// skips the floored-mod sign correction for them.
+template <typename T>
+inline constexpr bool is_signed_v = std::is_signed_v<T> ||
+    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
 
 template <typename T>
 Simd<T, 1> rint(Simd<T, 1> in) {
@@ -210,7 +218,7 @@ Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
   } else {
     r = std::remainder(a, b);
   }
-  if constexpr (std::is_signed_v<T>) {
+  if constexpr (is_signed_v<T>) {
     if (r != 0 && (r < 0 != b < 0)) {
       r += b;
     }

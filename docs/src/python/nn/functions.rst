@@ -36,5 +36,6 @@ simple functions.
    softmin
    softplus
    softshrink
+   softsign
    step
    tanh

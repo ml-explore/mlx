@@ -44,7 +44,6 @@ if (@MLX_BUILD_METAL@)
 endif()
 
 set_target_properties(mlx PROPERTIES
-    CXX_STANDARD 17
     INTERFACE_COMPILE_OPTIONS "${MLX_CXX_FLAGS}"
 )
 

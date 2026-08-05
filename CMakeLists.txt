@@ -151,6 +151,7 @@ cmake_policy(SET CMP0135 NEW)
 
 add_library(mlx)
 
+target_compile_features(mlx INTERFACE cxx_std_20)
 target_compile_options(mlx PUBLIC ${SANITIZER_COMPILE_FLAGS})
 target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
 
