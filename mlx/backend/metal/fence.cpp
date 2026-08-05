@@ -1,6 +1,8 @@
 // Copyright © 2024 Apple Inc.
-#include "mlx/fence.h"
+#include <iostream>
+
 #include "mlx/backend/metal/device.h"
+#include "mlx/fence.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
@@ -18,6 +20,15 @@ struct FenceImpl {
     if (!use_fast) {
       event = std::make_unique<Event>(stream);
     } else {
+      static bool warned = []() {
+        std::cerr << "[fence] MLX_METAL_FAST_SYNCH=1: the fast fence's GPU "
+                  << "spin-wait has no guaranteed CPU/GPU memory coherence and "
+                  << "can deadlock, leaving the GPU wedged until reboot (see "
+                  << "issues #3142 and #3830). Unset MLX_METAL_FAST_SYNCH if "
+                  << "you see hangs." << std::endl;
+        return true;
+      }();
+      (void)warned;
       auto buf = allocator::malloc(sizeof(uint32_t)).ptr();
       fence = static_cast<void*>(buf);
       cpu_value()[0] = 0;
