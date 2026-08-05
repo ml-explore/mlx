@@ -86,7 +86,7 @@ def benchmark_shape(B, T, Hk, Hv, Dk, Dv, chunk_sizes):
 def run_benchmark(run_full, to_csv=False, csv_path="benchmark_results.csv"):
     if run_full:
         Bs = [1, 4, 8, 16]
-        Ts = [1, 8, 16, 512, 2048, 4096]
+        Ts = [8, 64, 256, 512, 1024, 2048, 4096]
         Hks = [16]
         Hvs = [32]
         Dks = [128]

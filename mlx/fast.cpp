@@ -1039,11 +1039,11 @@ std::vector<array> gated_delta_update(
     const array& gates,
     const array& beta_,
     const std::optional<array>& initial_state, /* = std::nullopt */
+    const std::optional<array>& mask_, /* = std::nullopt */
     StreamOrDevice s_ /* = {} */) {
   // determine output dtype
   auto s = to_stream(s_);
 
-  // TODO fix this
   auto promoted = promote_types(queries.dtype(), keys.dtype());
   auto out_dtype = issubdtype(promoted, floating)
       ? promoted
@@ -1056,15 +1056,6 @@ std::vector<array> gated_delta_update(
   auto g = astype(gates, out_dtype, s);
   auto beta = astype(beta_, out_dtype, s);
 
-  // wrong, not as fast. This kind of operations need to be done in
-  // the eval gpu inside a function that checks for shapes and strides
-  // TODO: mode this
-  // q = contiguous(q, false, s);
-  // k = contiguous(k, false, s);
-  // v = contiguous(v, false, s);
-  // g = contiguous(g, false, s);
-  // beta = contiguous(beta, false, s);
-
   int B = q.shape(0);
   int T = q.shape(1);
   int Hk = q.shape(2);
@@ -1075,7 +1066,11 @@ std::vector<array> gated_delta_update(
   auto h0 = initial_state.has_value() ? astype(*initial_state, float32, s)
                                       : zeros({B, Hv, Dv, Dk}, float32, s);
 
-  auto fallback = [B, T, Hk, Dk, Hv, Dv, s](std::vector<array> inputs) {
+  bool has_mask = mask_.has_value();
+  auto mask = has_mask ? astype(*mask_, bool_, s) : array(false);
+
+  auto fallback = [B, T, Hk, Dk, Hv, Dv, has_mask, s](
+                      std::vector<array> inputs) {
     auto q = astype(inputs[0], float32, s);
     auto k = astype(inputs[1], float32, s);
     auto v = astype(inputs[2], float32, s);
@@ -1083,63 +1078,66 @@ std::vector<array> gated_delta_update(
     auto beta = astype(inputs[4], float32, s);
     auto state = astype(inputs[5], float32, s);
 
+    array mask = has_mask ? astype(inputs[6], bool_, s) : array(false);
+    const array zero = array(0.0f, float32);
+
     std::vector<array> outputs;
     for (int t = 0; t < T; t++) {
       auto get_t = [&](const array& a, int t) {
         Shape start(a.ndim(), 0), stop = a.shape();
         start[1] = t;
-        stop[1] = t + 1; // [:, t:t+1, ...]
-        return squeeze(slice(a, start, stop, s), 1, s); // drop the time axis
+        stop[1] = t + 1;
+        return squeeze(slice(a, start, stop, s), 1, s);
       };
-      // q_t = q[:, t]  # [B, H, Dk]
-      // k_t = k[:, t]  # [B, H, Dk]
-      // v_t = v[:, t]  # [B, H, Dv]
-      // g_t = g[:, t]  # [B, H] or [B, H, Dk]
-      // beta_t = beta[:, t]  # [B, H]
       auto q_t = get_t(q, t);
       auto k_t = get_t(k, t);
       auto v_t = get_t(v, t);
       auto g_t = get_t(g, t);
       auto beta_t = get_t(beta, t);
+      array mask_t = has_mask ? get_t(mask, t) : array(true);
 
-      // if g_t.ndim == 2:
-      //       decay = g_t[..., None, None]  # [B, H, 1, 1]
-      //   else:
-      //       decay = g_t[..., None, :]  # [B, H, 1, Dk]
+      auto state_prev = state;
+
       auto decay = (g_t.ndim() == 2)
           ? expand_dims(g_t, {-1, -2}, s) // [B,H,1,1]
           : expand_dims(g_t, -2, s); // [B,H,1,Dk]
 
-      // state = state * decay
-      state = multiply(state, decay, s);
+      auto state_next = multiply(state_prev, decay, s);
 
-      // kv_mem = (state * k_t[..., None, :]).sum(axis=-1)
       auto kv =
-          sum(multiply(state, expand_dims(k_t, -2, s), s),
+          sum(multiply(state_next, expand_dims(k_t, -2, s), s),
               -1,
               false,
               s); // [B,H,Dv]
 
-      // delta = (v_t - kv_mem) * beta_t[..., None]  # [B, H, Dv]
       auto delta = subtract(v_t, kv, s);
       delta = multiply(delta, expand_dims(beta_t, -1, s), s);
 
-      // state = state + delta[..., None] * k_t[..., None, :]  # [B, H, Dv, Dk]
-      state =
-          add(state,
+      state_next =
+          add(state_next,
               multiply(expand_dims(delta, -1, s), expand_dims(k_t, -2, s), s),
               s);
 
-      // o_t = (state * q_t[..., None, :]).sum(axis=-1)
+      if (has_mask) {
+        auto state_mask = expand_dims(mask_t, {-1, -2, -3}, s);
+        state = where(state_mask, state_next, state_prev, s);
+      } else {
+        state = state_next;
+      }
+
       auto o_t = sum(multiply(state, expand_dims(q_t, -2, s), s), -1, false, s);
+
+      if (has_mask) {
+        auto out_mask = expand_dims(mask_t, {-1, -2}, s);
+        o_t = where(out_mask, o_t, zero, s);
+      }
       outputs.push_back(o_t);
     }
-    // mx.stack(outputs, axis=1)
     auto out = stack(outputs, 1, s);
     return std::vector<array>{out, state};
   };
 
-  if (!GatedDeltaUpdate::use_fallback(s)) {
+  if (!GatedDeltaUpdate::use_fallback(Hk, Dk, Hv, Dv, has_mask, s)) {
     auto result = array::make_arrays(
         /* output shapes */ {{B, T, Hv, Dv}, {B, Hv, Dv, Dk}},
         /* dtypes */ {out_dtype, float32},
@@ -1150,7 +1148,7 @@ std::vector<array> gated_delta_update(
     return result;
   }
 
-  auto result = fallback({q, k, v, g, beta, h0});
+  auto result = fallback({q, k, v, g, beta, h0, mask});
   return result;
 }
 
