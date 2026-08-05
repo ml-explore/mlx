@@ -563,6 +563,15 @@ dequantize(const device uint8_t* w, U scale, U bias, threadgroup U* w_local) {
   }
 }
 
+// The loader indexes the scales in one of three ways, by where a thread's
+// n_reads packed words fall inside a quantization group:
+//  1. group_size >= BCOLS: a tile row sits in one group, so next() advances
+//     the scales every group_steps = group_size / BCOLS tiles.
+//  2. BCOLS > group_size, read inside one group: a tile row covers
+//     n_groups = BCOLS / group_size groups, group_id picks one, and each
+//     tile advances the scales by n_groups.
+//  3. The read covers whole groups: the thread walks groups_per_read of
+//     them, taking a scale and bias for each.
 template <
     typename T,
     short BROWS,
@@ -574,11 +583,8 @@ template <
     short bits>
 struct QuantizedBlockLoader {
   static_assert(
-      BCOLS <= group_size,
-      "The group size should be larger than the columns");
-  static_assert(
-      group_size % BCOLS == 0,
-      "The group size should be divisible by the columns");
+      BCOLS % group_size == 0 || group_size % BCOLS == 0,
+      "The tile columns and the group size must divide one another");
   static_assert(
       bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
           bits == 8,
@@ -589,7 +595,28 @@ struct QuantizedBlockLoader {
   MLX_MTL_CONST short BCOLS_PACKED = BCOLS / pack_factor;
   MLX_MTL_CONST short n_reads =
       (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
-  MLX_MTL_CONST short group_steps = group_size / BCOLS;
+
+  // Groups covered by one tile row.
+  MLX_MTL_CONST short n_groups = (BCOLS > group_size) ? BCOLS / group_size : 1;
+  // Tiles that share one group.
+  MLX_MTL_CONST short group_steps =
+      (group_size > BCOLS) ? group_size / BCOLS : 1;
+
+  // Values one thread reads.
+  MLX_MTL_CONST short n_elems = n_reads * pack_factor;
+  // Groups per read, and packed reads in each.
+  MLX_MTL_CONST short groups_per_read =
+      (n_elems > group_size) ? n_elems / group_size : 1;
+  MLX_MTL_CONST short reads_per_group = n_reads / groups_per_read;
+
+  static_assert(
+      BCOLS_PACKED % n_reads == 0,
+      "The packed columns of the block tile must be a multiple of the "
+      "reads of one thread.");
+  static_assert(
+      n_elems % group_size == 0 || group_size % n_elems == 0,
+      "The read of one thread must cover full quantization groups, or it "
+      "must divide one quantization group exactly.");
 
   const int src_ld;
   const int tile_stride;
@@ -599,6 +626,9 @@ struct QuantizedBlockLoader {
   const short thread_idx;
   const short bi;
   const short bj;
+
+  // First group this thread reads from.
+  const short group_id;
 
   threadgroup T* dst;
   const device uint8_t* src;
@@ -622,23 +652,40 @@ struct QuantizedBlockLoader {
         thread_idx(simd_group_id * 32 + simd_lane_id),
         bi(n_reads* thread_idx / BCOLS_PACKED),
         bj((n_reads * thread_idx) % BCOLS_PACKED),
+        group_id((bj * pack_factor) / group_size),
         dst(dst_ + bi * dst_ld + bj * pack_factor),
         src(src_ + bi * src_ld * bytes_per_pack / pack_factor +
             bj * bytes_per_pack),
-        scales(scales_ + bi * src_ld / group_size),
-        biases(biases_ + bi * src_ld / group_size) {}
+        scales(scales_ + bi * src_ld / group_size + group_id),
+        biases(biases_ + bi * src_ld / group_size + group_id) {}
+
+  void dequantize_reads() const thread {
+    if (groups_per_read == 1) {
+      T scale = *scales;
+      T bias = *biases;
+      for (int i = 0; i < n_reads; i++) {
+        dequantize<T, pack_factor, bits>(
+            src + i * bytes_per_pack, scale, bias, dst + i * pack_factor);
+      }
+    } else {
+      for (int g = 0; g < groups_per_read; g++) {
+        T scale = scales[g];
+        T bias = biases[g];
+        for (int i = 0; i < reads_per_group; i++) {
+          const int r = g * reads_per_group + i;
+          dequantize<T, pack_factor, bits>(
+              src + r * bytes_per_pack, scale, bias, dst + r * pack_factor);
+        }
+      }
+    }
+  }
 
   void load_unsafe() const thread {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
       return;
     }
 
-    T scale = *scales;
-    T bias = *biases;
-    for (int i = 0; i < n_reads; i++) {
-      dequantize<T, pack_factor, bits>(
-          src + i * bytes_per_pack, scale, bias, dst + i * pack_factor);
-    }
+    dequantize_reads();
   }
 
   void load_safe(short2 src_tile_dim) const thread {
@@ -660,15 +707,7 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    T scale = *scales;
-    T bias = *biases;
-    for (int i = 0; i < n_reads; i++) {
-      dequantize<T, pack_factor, bits>(
-          (device uint8_t*)(src + i * bytes_per_pack),
-          scale,
-          bias,
-          dst + i * pack_factor);
-    }
+    dequantize_reads();
   }
 
   void next() thread {
@@ -682,152 +721,12 @@ struct QuantizedBlockLoader {
           biases++;
         }
       } else {
-        scales++;
-        biases++;
+        scales += n_groups;
+        biases += n_groups;
       }
     } else {
       scales += group_stride;
       biases += group_stride;
-    }
-  }
-};
-
-template <
-    typename T,
-    short BROWS,
-    short BCOLS,
-    short dst_ld,
-    short reduction_dim,
-    short tgp_size,
-    short bits>
-struct QuantizedBlockLoader<
-    T,
-    BROWS,
-    BCOLS,
-    dst_ld,
-    reduction_dim,
-    tgp_size,
-    32,
-    bits> {
-  MLX_MTL_CONST short group_size = 32;
-
-  static_assert(
-      BCOLS % group_size == 0,
-      "The group size should be divisible by the columns");
-  static_assert(
-      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
-          bits == 8,
-      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
-
-  MLX_MTL_CONST short pack_factor = get_pack_factor<bits, 8>();
-  MLX_MTL_CONST short bytes_per_pack = get_bytes_per_pack<bits>();
-  MLX_MTL_CONST short BCOLS_PACKED = BCOLS / pack_factor;
-  MLX_MTL_CONST short n_reads =
-      (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
-  MLX_MTL_CONST short n_groups = BCOLS / group_size;
-
-  static_assert(
-      (BCOLS_PACKED / n_reads) == n_groups,
-      "Other configurations are not yet supported");
-
-  const int src_ld;
-  const int tile_stride;
-  const int group_stride;
-
-  const short thread_idx;
-  const short bi;
-  const short bj;
-
-  const short group_id;
-
-  threadgroup T* dst;
-  const device uint8_t* src;
-  const device T* scales;
-  const device T* biases;
-
-  QuantizedBlockLoader(
-      const device uint8_t* src_,
-      const device T* scales_,
-      const device T* biases_,
-      const int src_ld_,
-      threadgroup T* dst_,
-      ushort simd_group_id [[simdgroup_index_in_threadgroup]],
-      ushort simd_lane_id [[thread_index_in_simdgroup]]) thread
-      : src_ld(src_ld_),
-        tile_stride(
-            reduction_dim ? BCOLS_PACKED* bytes_per_pack
-                          : BROWS * src_ld * bytes_per_pack / pack_factor),
-        group_stride(BROWS* src_ld / group_size),
-        thread_idx(simd_group_id * 32 + simd_lane_id),
-        bi(n_reads* thread_idx / BCOLS_PACKED),
-        bj((n_reads * thread_idx) % BCOLS_PACKED),
-        group_id((bj * pack_factor) / group_size),
-        dst(dst_ + bi * dst_ld + bj * pack_factor),
-        src(src_ + bi * src_ld * bytes_per_pack / pack_factor +
-            bj * bytes_per_pack),
-        scales(scales_ + bi * src_ld / group_size + group_id),
-        biases(biases_ + bi * src_ld / group_size + group_id) {}
-
-  void load_unsafe() const thread {
-    if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
-      return;
-    }
-
-    T scale = *scales;
-    T bias = *biases;
-    for (int i = 0; i < n_reads; i++) {
-      dequantize<T, pack_factor, bits>(
-          src + i * bytes_per_pack, scale, bias, dst + i * pack_factor);
-    }
-  }
-
-  void load_safe(short2 src_tile_dim) const thread {
-    if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
-      return;
-    }
-
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
-      }
-      return;
-    }
-
-    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
-      }
-      return;
-    }
-
-    T scale = *scales;
-    T bias = *biases;
-    for (int i = 0; i < n_reads; i++) {
-      dequantize<T, pack_factor, bits>(
-          (device uint8_t*)(src + i * bytes_per_pack),
-          scale,
-          bias,
-          dst + i * pack_factor);
-    }
-  }
-
-  void next() thread {
-    src += tile_stride;
-    if (reduction_dim == 1) {
-      // if (group_steps > 1) {
-      //   group_step_cnt++;
-      //   if (group_step_cnt == group_steps) {
-      //     group_step_cnt = 0;
-      //     scales++;
-      //     biases++;
-      //   }
-      // } else {
-      scales += n_groups;
-      biases += n_groups;
-      // }
-    } else {
-      scales += n_groups * group_stride;
-      biases += n_groups * group_stride;
     }
   }
 };
