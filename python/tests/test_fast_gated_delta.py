@@ -73,7 +73,7 @@ def runner(dims, stream=mx.gpu, reference=True):
     v = mx.random.normal(shape=(B, T, Hv, Dv))
     g = mx.random.uniform(shape=(B, T, Hv))
     b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
-    h0 = mx.zeros((B, Hv, Dv, Dk), dtype=mx.float32)
+    h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
 
     if reference:
         # Prepare reference inputs
@@ -124,10 +124,51 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
     fallback_dims = [base_dims, unaligned_dims, big_batch_dims]
     gpu_dims = fallback_dims + [large_t_dims]
 
-    # base
     def test_gated_delta_fallback(self):
         for dims in self.fallback_dims:
             (out, hf), (out_ref, hf_ref) = runner(dims, mx.cpu)
+            msg = f"Failed on Dimensions: {dims}"
+            self.assertTrue(
+                mx.allclose(out_ref, out, atol=1e-4, rtol=1e-4), msg="Out " + msg
+            )
+            self.assertTrue(
+                mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
+            )
+
+    def test_gated_delta_fallback_masked(self):
+        for dims in self.fallback_dims:
+
+            B, Hk, Hv, T, Dk, Dv = dims
+
+            q = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+            v = mx.random.normal(shape=(B, T, Hv, Dv))
+            g = mx.random.uniform(shape=(B, T, Hv))
+            b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+            h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
+
+            # make a mask
+            lengths = mx.random.randint(1, T + 1, shape=(B,))
+            mask = mx.arange(T)[None, :] < lengths[:, None]
+            # mask one input in python
+            mask_float = mask.astype(q.dtype)
+            km = k * mask_float[..., None, None]
+            vm = v * mask_float[..., None, None]
+            qm = q * mask_float[..., None, None]
+            bm = b * mask_float[..., None]
+            gm = mx.where(mask[..., None], g, 1.0)
+
+            out_ref, hf_ref = mx.fast.gated_delta_update(
+                qm, km, vm, gm, bm, initial_state=h0, stream=mx.cpu
+            )
+
+            mx.eval(out_ref, hf_ref)
+            out, hf = mx.fast.gated_delta_update(
+                q, k, v, g, b, initial_state=h0, mask=mask, stream=mx.cpu
+            )
+            mx.eval(out, hf)
+
             msg = f"Failed on Dimensions: {dims}"
             self.assertTrue(
                 mx.allclose(out_ref, out, atol=1e-4, rtol=1e-4), msg="Out " + msg
