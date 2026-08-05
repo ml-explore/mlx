@@ -91,6 +91,9 @@ void GatedDeltaUpdate::eval_gpu(
   const char* chunk_env = std::getenv("GATED_DELTA_CHUNK");
   C = chunk_env ? std::stoi(chunk_env) : C;
 
+  if (!metal::is_nax_available())
+    C = std::min(C, 8); // override in case nax is not available.
+
   std::string suffix = get_type_string(q.dtype()) + "_" + std::to_string(Dk) +
       "_" + std::to_string(Dv) + "_" + std::to_string(Hk) + "_" +
       std::to_string(Hv);
