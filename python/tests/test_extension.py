@@ -1,6 +1,7 @@
 # Copyright © 2026 Apple Inc.
 
 import os
+import platform
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ from mlx.extension import BuildExtension, MetalExtension, _metal_extension_cmake
 from setuptools import Distribution
 
 
+@unittest.skipUnless(platform.system() == "Darwin", "MetalExtension requires macOS")
 class TestMetalExtension(unittest.TestCase):
     def _cmake_configure_command(self, command_type, cmake_args=""):
         extension = MetalExtension("sample._ext", ["bindings.cpp", "kernel.metal"])
