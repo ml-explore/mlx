@@ -713,7 +713,8 @@ bool ScaledDotProductAttention::use_fallback(
   const bool sdpa_full_supported_256 = takes_nax_full_path && do_causal &&
       !has_arr_mask && query_sequence_length >= 1024;
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128 ||
+      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 96 ||
+       query_head_dim == 128 ||
        (query_head_dim == 256 && sdpa_full_supported_256));
 
   const bool sdpa_full_supported_mask = !has_mask || has_arr_mask ||
