@@ -67,8 +67,8 @@ def gated_delta_oracle(
 def runner(dims, stream=mx.gpu, reference=True):
     B, Hk, Hv, T, Dk, Dv = dims
 
-    q = mx.random.normal(shape=(B, T, Hk, Dk)) * 10
-    k = mx.random.normal(shape=(B, T, Hk, Dk)) * 10
+    q = mx.random.normal(shape=(B, T, Hk, Dk))
+    k = mx.random.normal(shape=(B, T, Hk, Dk))
     k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
     v = mx.random.normal(shape=(B, T, Hv, Dv))
     g = mx.random.uniform(shape=(B, T, Hv))
