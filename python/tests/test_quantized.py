@@ -1403,6 +1403,36 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(y1, y3, atol=tol))
                 self.assertTrue(mx.allclose(y1, y4, atol=tol))
 
+    def test_gather_qmm_sorted_large_m(self):
+        # The sorted path bounded the per-simdgroup row count by narrowing to
+        # short before taking the min, which wraps negative once the row count
+        # passes the int16 range. The guard only runs when M % BM != 0, so both
+        # a large M and an unaligned M are needed to reach it. In a MoE this is
+        # tokens * experts_per_token, which passes 32767 at long context.
+        E, N, K = 2, 128, 256
+        key = mx.random.key(0)
+        k1, k2, k3 = mx.random.split(key, 3)
+        on_gpu = mx.default_device() == mx.gpu
+        dtype = mx.float16 if on_gpu else mx.float32
+
+        for M in (32704, 32800, 40001):
+            with self.subTest(M=M):
+                indices = mx.sort(
+                    (mx.random.uniform(shape=(M,), key=k1) * E).astype(mx.uint32)
+                )
+                x = (mx.random.normal((M, 1, K), key=k2) / K**0.5).astype(dtype)
+                w = (mx.random.normal((E, N, K), key=k3) / K**0.5).astype(dtype)
+                wq = mx.quantize(w, group_size=64, bits=8)
+
+                kwargs = dict(
+                    group_size=64, bits=8, transpose=True, rhs_indices=indices
+                )
+                y_sorted = mx.gather_qmm(x, *wq, sorted_indices=True, **kwargs)
+                y_unsorted = mx.gather_qmm(x, *wq, sorted_indices=False, **kwargs)
+
+                tol = 1e-3 if on_gpu else 1.5e-5
+                self.assertLess((y_sorted - y_unsorted).abs().max(), tol)
+
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
             if lhs is not None:

@@ -1529,10 +1529,10 @@ template <
   const short tm = SM * (simd_group_id / WN);
   const short tn = SN * (simd_group_id % WN);
 
-  const short sgp_sm =
-      align_M ? SM : min(SM, short(max(0, (M - (y_row + tm)))));
-  const short sgp_sn =
-      align_N ? SN : min(SN, short(max(0, (N - (y_col + tn)))));
+  // Take the min in int and narrow afterwards. Narrowing first overflows for
+  // M or N above the int16 range, which wraps the bound negative.
+  const short sgp_sm = align_M ? SM : min(int(SM), max(0, (M - (y_row + tm))));
+  const short sgp_sn = align_N ? SN : min(int(SN), max(0, (N - (y_col + tn))));
 
   const bool is_unaligned_sm = align_M ? false : (sgp_sm != SM);
   const bool is_unaligned_bn = align_N ? false : (tgp_bn != BN);
