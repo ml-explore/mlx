@@ -483,7 +483,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     KKtK_tile = KKt_tile;
 
     SCALE_TRIEQ_NAX1(KKtK_tile, beta_fm);
-    ADD_NAX(Tinv_tile, I_tile, KKtK_tile);
+    SUB_NAX(Tinv_tile, I_tile, KKtK_tile);
     STEEL_PRAGMA_UNROLL
     for (int step = 0; step < 15; step++) {
       MM16x16x16(TMP_tile, 0, KKtK_tile, false, 0, Tinv_tile, false, 0);
