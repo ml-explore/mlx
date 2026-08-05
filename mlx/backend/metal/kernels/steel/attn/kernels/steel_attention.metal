@@ -13,6 +13,7 @@
 
 #define instantiate_attn_shapes_helper(iname, itype, mname, mtype)  \
     instantiate_attn(iname, itype, 32, 16, 128, 4, 1, mname, mtype) \
+    instantiate_attn(iname, itype, 32, 32,  96, 4, 1, mname, mtype) \
     instantiate_attn(iname, itype, 32, 32,  80, 4, 1, mname, mtype) \
     instantiate_attn(iname, itype, 32, 32,  64, 4, 1, mname, mtype)
 
