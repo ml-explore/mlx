@@ -461,7 +461,8 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     };
 
     float g_val = (thread_index_in_simdgroup < (uint)valid_rows)
-        ? metal::fast::log(g_[thread_index_in_simdgroup * Hv + hv_idx])
+        ? metal::fast::log(
+              metal::max(g_[thread_index_in_simdgroup * Hv + hv_idx], 1e-6))
         : 0.0f;
 
     auto gamma_val = simd_prefix_inclusive_sum(g_val);
@@ -680,7 +681,8 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     };
 
     float g_val = (thread_index_in_simdgroup < (uint)valid_rows)
-        ? metal::fast::log(g_[thread_index_in_simdgroup * Hv + hv_idx])
+        ? metal::fast::log(
+              metal::max(g_[thread_index_in_simdgroup * Hv + hv_idx], 1e-6))
         : 0.0f;
 
     float gamma_val = simd_prefix_inclusive_sum(g_val);
