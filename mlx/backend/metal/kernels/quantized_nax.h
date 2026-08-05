@@ -646,14 +646,11 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
-      }
-      return;
-    }
-
-    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
+    // src_tile_dim.y bounds the rows of the tile and src_tile_dim.x bounds the
+    // columns, for both reduction dims. When the reduction axis runs along the
+    // columns (reduction_dim == 1), a partial tile needs the columns past the
+    // edge zeroed rather than the rows.
+    if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
@@ -786,14 +783,11 @@ struct QuantizedBlockLoader<
       return;
     }
 
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
-      }
-      return;
-    }
-
-    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
+    // src_tile_dim.y bounds the rows of the tile and src_tile_dim.x bounds the
+    // columns, for both reduction dims. When the reduction axis runs along the
+    // columns (reduction_dim == 1), a partial tile needs the columns past the
+    // edge zeroed rather than the rows.
+    if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
@@ -1635,7 +1629,7 @@ template <
 
             volatile int compiler_barrier;
 
-            const short psk = min(int(SK), max(0, (BK - kk1)));
+            const short psk = min(int(SK), max(0, (k_remain - kk1)));
             Atile.load_safe(xn + kk1, K, short2(psk, sgp_sm));
 
             if constexpr (transpose) {
