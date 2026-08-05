@@ -1035,11 +1035,7 @@ void init_array(nb::module_& m) {
       .def(
           "__complex__",
           [](mx::array& a) {
-            auto value = PyComplex_AsCComplex(to_scalar(a).ptr());
-            if (PyErr_Occurred()) {
-              throw nb::python_error();
-            }
-            return std::complex<double>(value.real, value.imag);
+            return nb::cast<std::complex<double>>(to_scalar(a));
           })
       .def(
           "__format__",
