@@ -7,6 +7,7 @@ import re
 import shlex
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 from typing import Sequence
 
@@ -19,6 +20,7 @@ _MLX_PATH = str(mlx.__path__[0])
 _MLX_PACKAGE_PATH = str(Path(__file__).resolve().parent)
 _HOST_SOURCE_SUFFIXES = {".cc", ".cpp", ".cxx"}
 _METAL_SOURCE_SUFFIX = ".metal"
+_MIN_MACOS_DEPLOYMENT_TARGET = "14.0"
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -40,6 +42,48 @@ def _cmake_quote(value: os.PathLike[str] | str) -> str:
 
 def _cmake_arguments(values: Sequence[os.PathLike[str] | str]) -> list[str]:
     return [f"  {_cmake_quote(value)}" for value in values]
+
+
+def _macos_deployment_target(target: str, *, explicit: bool) -> str:
+    if not re.fullmatch(r"\d+(?:\.\d+)*", target):
+        raise ValueError(f"Invalid macOS deployment target: {target!r}.")
+    if int(target.partition(".")[0]) < 14:
+        if explicit:
+            raise ValueError(
+                "macOS deployment target must be at least "
+                f"{_MIN_MACOS_DEPLOYMENT_TARGET}, got {target!r}."
+            )
+        return _MIN_MACOS_DEPLOYMENT_TARGET
+    return target
+
+
+def _cmake_generator(
+    extra_cmake_args: Sequence[str], use_ninja: bool
+) -> tuple[str, bool]:
+    generator = None
+    generator_is_configured = False
+    for index, argument in enumerate(extra_cmake_args):
+        if argument in ("-G", "--generator"):
+            generator_is_configured = True
+            if index + 1 < len(extra_cmake_args):
+                generator = extra_cmake_args[index + 1]
+        elif argument.startswith("-G") and argument != "-G":
+            generator_is_configured = True
+            generator = argument[2:]
+        elif argument.startswith("--generator="):
+            generator_is_configured = True
+            generator = argument.partition("=")[2]
+
+    if generator_is_configured:
+        return generator or "explicit", False
+    if use_ninja:
+        return "Ninja", True
+    return os.environ.get("CMAKE_GENERATOR") or "default", False
+
+
+def _cmake_generator_build_directory(generator: str) -> str:
+    generator = re.sub(r"[^a-z0-9]+", "_", generator.lower()).strip("_")
+    return f"build-{generator or 'default'}"
 
 
 class MetalExtension(Extension):
@@ -176,8 +220,12 @@ def _metal_extension_cmake(
         )
 
     definitions = [
-        name if value is None else f"{name}={value}"
-        for name, value in ext.define_macros
+        f"MLX_EXTENSION_NAME={ext.metal_library_name}",
+        f'MLX_METAL_LIBRARY_NAME="{ext.metal_library_name}"',
+        *(
+            name if value is None else f"{name}={value}"
+            for name, value in ext.define_macros
+        ),
     ]
     if definitions:
         lines.extend(
@@ -334,9 +382,13 @@ class BuildExtension(build_ext):
         output_dir = ext_fullpath.parent.resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        extra_cmake_args = shlex.split(os.environ.get("CMAKE_ARGS", ""))
+        generator, add_ninja_generator = _cmake_generator(
+            extra_cmake_args, self.use_ninja
+        )
         build_root = Path(self.build_temp) / ext.name
         source_dir = build_root / "source"
-        binary_dir = build_root / "build"
+        binary_dir = build_root / _cmake_generator_build_directory(generator)
         source_dir.mkdir(parents=True, exist_ok=True)
         binary_dir.mkdir(parents=True, exist_ok=True)
         (source_dir / "CMakeLists.txt").write_text(
@@ -354,15 +406,34 @@ class BuildExtension(build_ext):
             f"-DCMAKE_BUILD_TYPE={cfg}",
             f"-DPython_EXECUTABLE={sys.executable}",
             "-DBUILD_SHARED_LIBS=ON",
+            f"-DMLX_METAL_DEBUG={'ON' if debug else 'OFF'}",
         ]
-        extra_cmake_args = shlex.split(os.environ.get("CMAKE_ARGS", ""))
-        generator_is_configured = any(
-            argument.startswith("-G")
-            or argument == "--generator"
-            or argument.startswith("--generator=")
-            for argument in extra_cmake_args
-        )
-        if self.use_ninja and not generator_is_configured:
+
+        deployment_target = os.environ.get("MACOSX_DEPLOYMENT_TARGET")
+        if deployment_target is None:
+            deployment_target = _macos_deployment_target(
+                str(
+                    sysconfig.get_config_var("MACOSX_DEPLOYMENT_TARGET")
+                    or _MIN_MACOS_DEPLOYMENT_TARGET
+                ),
+                explicit=False,
+            )
+        else:
+            deployment_target = _macos_deployment_target(
+                deployment_target, explicit=True
+            )
+        cmake_args.append(f"-DCMAKE_OSX_DEPLOYMENT_TARGET={deployment_target}")
+
+        deployment_target_override = None
+        for argument in extra_cmake_args:
+            match = re.fullmatch(
+                r"(?:-D)?CMAKE_OSX_DEPLOYMENT_TARGET(?::[^=]+)?=(.*)", argument
+            )
+            if match:
+                deployment_target_override = match.group(1)
+        if deployment_target_override is not None:
+            _macos_deployment_target(deployment_target_override, explicit=True)
+        if add_ninja_generator:
             cmake_args.extend(["-G", "Ninja"])
         cmake_args.extend(extra_cmake_args)
 

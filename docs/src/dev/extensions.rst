@@ -781,14 +781,40 @@ extension project.
     )
 
 The final component of the extension name is also the Metal library name. The
-example above produces ``_ext.metallib``, so its C++ primitive loads
-``device.get_library("_ext", current_binary_dir())``. A list passed as
+example above produces ``_ext.metallib``. A list passed as
 ``extra_compile_args`` applies to C++; a dictionary can provide separate
 ``cxx`` and ``metal`` options. The build also uses nanobind to generate
 ``_ext.pyi`` next to the extension module. Include ``*.pyi`` in
 ``package_data`` so that the stub is installed with the package. To disable
 stub generation, configure the command class with
 ``BuildExtension.with_options(generate_stubs=False)``.
+
+The build defines ``MLX_EXTENSION_NAME`` as the final component of the
+extension name and ``MLX_METAL_LIBRARY_NAME`` as its string form. Use them so
+the binding does not hard-code either the module or Metal library name:
+
+.. code-block:: C++
+
+    auto library =
+        device.get_library(MLX_METAL_LIBRARY_NAME, current_binary_dir());
+
+    NB_MODULE(MLX_EXTENSION_NAME, m) {
+      // bindings
+    }
+
+Each Metal source is compiled independently to an AIR file before the AIR files
+are linked into the final metallib. Changing one Metal source therefore only
+recompiles its AIR file before relinking the metallib. Included headers are
+tracked automatically and rebuild only the AIR files that depend on them.
+
+Debug builds include Metal line tables and recorded sources. Metal logging is
+enabled when the current ``xcrun metal`` compiler advertises support. The
+effective Python
+``MACOSX_DEPLOYMENT_TARGET`` is forwarded to CMake and applied to both AIR
+compilation and metallib linking. The inferred target is never lower than macOS
+14. Set ``MACOSX_DEPLOYMENT_TARGET`` or pass ``CMAKE_OSX_DEPLOYMENT_TARGET``
+through ``CMAKE_ARGS`` to select a higher target. Explicit targets below macOS
+14 are rejected.
 
 ``BuildExtension`` uses CMake's Ninja generator by default, so projects should
 include ``ninja`` in their build requirements. To use CMake's platform default
