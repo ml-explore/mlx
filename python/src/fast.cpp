@@ -342,6 +342,7 @@ void init_fast(nb::module_& parent_module) {
       "gamma"_a,
       "beta"_a,
       "initial_state"_a = nb::none(), // optional, defaults to None
+      "mask"_a = nb::none(), // optional, defaults to None
       "stream"_a = nb::none(), // optional, defaults to None
       R"(
             Chunked gated delta network forward pass.
@@ -353,7 +354,7 @@ void init_fast(nb::module_& parent_module) {
                 gamma: 
                 beta: Delta update rates [B, H, T]
                 initial_state: Optional initial hidden state [B, H, Dk, Dv]
-
+                mask: Optional
             Returns:
                 Tuple of (output [B, H, T, Dv], final_state [B, H, Dk, Dv])
         )");

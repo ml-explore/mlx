@@ -333,9 +333,12 @@ class GatedDeltaUpdate : public Custom {
       : Custom(stream, std::move(fallback)) {}
 
   static bool use_fallback(
-      /* TODO */
+      const int Hk,
+      const int Dk,
+      const int Hv,
+      const int Dv,
+      const bool has_mask,
       Stream s);
-  static bool supports_bool_mask();
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {

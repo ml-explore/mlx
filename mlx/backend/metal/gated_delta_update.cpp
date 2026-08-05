@@ -12,11 +12,34 @@
 
 namespace mlx::core::fast {
 
-bool GatedDeltaUpdate::use_fallback(Stream s) {
-  // TODO: finish implementation. What else is needed?
+bool GatedDeltaUpdate::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
+    const bool has_mask,
+    Stream s) {
   if (s.device == Device::cpu) {
     return true;
   }
+
+  if (has_mask) {
+    return true;
+  }
+
+  if (Dk != 128 || Dv != 128) {
+    return true;
+  }
+
+  const bool supported_heads = (Hk == 24 && Hv == 24) ||
+      (Hk == 32 && Hv == 32) || (Hk == 16 && Hv == 32) ||
+      (Hk == 16 && Hv == 48);
+  if (!supported_heads) {
+    return true;
+  }
+
+  return false;
+
   return false;
 }
 
