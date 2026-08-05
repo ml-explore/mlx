@@ -542,10 +542,6 @@ void init_array(nb::module_& m) {
       .def(
           "__array__",
           [](const mx::array& self, nb::object dtype, nb::object copy) {
-            if (self.dtype() == mx::bfloat16) {
-              throw nb::type_error(
-                  "bfloat16 arrays cannot be converted to NumPy.");
-            }
             return mlx_to_np_array(self);
           },
           "dtype"_a = nb::none(),

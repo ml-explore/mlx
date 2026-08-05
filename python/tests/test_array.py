@@ -1868,10 +1868,10 @@ class TestArray(mlx_tests.MLXTestCase):
         mv_mx = memoryview(a_mx)
         self.assertEqual(mv_mx.strides, (8, 2))
         self.assertEqual(mv_mx.shape, (3, 4))
-        self.assertEqual(mv_mx.format, "H")
-        with self.assertRaises(TypeError) as cm:
+        self.assertIn(mv_mx.format, "bfloat16")
+        with self.assertRaises(ValueError) as cm:
             np.array(a_mx)
-        self.assertIn("bfloat16 arrays cannot be converted to NumPy", str(cm.exception))
+        self.assertIn("bfloat16", str(cm.exception))
 
         # Test buffer protocol with non-arrays ie bytes
         a = ord("a") * 257 + mx.arange(10).astype(mx.int16)
