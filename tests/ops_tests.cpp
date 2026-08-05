@@ -3140,6 +3140,11 @@ TEST_CASE("test eye") {
   CHECK_EQ(eye_3x2.shape(), Shape{3, 2});
   auto expected_eye_3x2 = array({1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f}, {3, 2});
   CHECK(array_equal(eye_3x2, expected_eye_3x2).item<bool>());
+
+  auto eye_0x0 = eye(0, 0);
+  CHECK_EQ(eye_0x0.shape(), Shape{0, 0});
+  CHECK_EQ(eye_0x0.size(), 0);
+  CHECK_EQ(eye_0x0.dtype(), float32);
 }
 
 TEST_CASE("test tri") {

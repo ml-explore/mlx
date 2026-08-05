@@ -1359,4 +1359,8 @@ void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void GatherQQMM::eval_cpu(const std::vector<array>& inputs, array& out) {
+  throw std::runtime_error("[GatherQQMM] NYI");
+}
+
 } // namespace mlx::core

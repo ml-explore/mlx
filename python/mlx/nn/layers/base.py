@@ -129,7 +129,7 @@ class Module(dict):
         Update the model's weights from a ``.npz``, a ``.safetensors`` file, or a list.
 
         Args:
-            file_or_weights (str or list(tuple(str, mx.array))): The path to
+            file_or_weights (str or list(tuple(str, array))): The path to
                 the weights ``.npz`` file (``.npz`` or ``.safetensors``) or a list
                 of pairs of parameter names and arrays.
             strict (bool, optional): If ``True`` then checks that the provided
@@ -255,13 +255,13 @@ class Module(dict):
         but it can also be used to extract any subset of the module's parameters.
 
         Args:
-            filter_fn (Callable): Given a value, the key in which it is found
-                and the containing module, decide whether to keep the value or
+            filter_fn (Callable): Given the containing module, the key in which
+                it is found and the value, decide whether to keep the value or
                 drop it.
             map_fn (Callable, optional): Optionally transform the value before
                 returning it.
-            is_leaf_fn (Callable, optional): Given a value, the key in which it
-                is found and the containing module decide if it is a leaf.
+            is_leaf_fn (Callable, optional): Given the containing module, the
+                key in which it is found and the value decide if it is a leaf.
 
         Returns:
             A dictionary containing the contents of the module recursively filtered
