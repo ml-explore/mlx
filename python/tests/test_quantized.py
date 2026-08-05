@@ -1,6 +1,8 @@
 # Copyright © 2023 Apple Inc.
 
+import os
 import platform
+import re
 import subprocess
 import unittest
 from itertools import product
@@ -15,6 +17,19 @@ def is_m1_mac():
     cmd = "sysctl -n machdep.cpu.brand_string"
     cpu = subprocess.check_output(cmd, shell=True).decode().strip()
     return cpu.startswith("Apple M1")
+
+
+def has_nax():
+    # The kernels for the matrix coprocessors need an Apple GPU of generation
+    # 17 or later, and macOS 26.2 or later.
+    if platform.system() != "Darwin" or not mx.metal.is_available():
+        return False
+    arch = mx.device_info(mx.gpu).get("architecture", "")
+    match = re.search(r"(\d+)[a-z]$", str(arch))
+    if match is None or int(match.group(1)) < 17:
+        return False
+    version = tuple(int(v) for v in platform.mac_ver()[0].split(".")[:2])
+    return version >= (26, 2)
 
 
 class TestQuantized(mlx_tests.MLXTestCase):
@@ -1402,6 +1417,86 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(y1, y2, atol=tol))
                 self.assertTrue(mx.allclose(y1, y3, atol=tol))
                 self.assertTrue(mx.allclose(y1, y4, atol=tol))
+
+    @unittest.skipUnless(has_nax(), "requires a GPU with matrix coprocessors")
+    def test_gather_qmm_rhs_nax_tiles(self):
+        # A mixture of experts layer uses the gather kernel, which MLX builds
+        # with several block tiles, and MLX_QMM_TILE_NAX selects one of them.
+        # Each block tile must give the same result as a plain gather_mm on
+        # the dequantized weights.
+        #
+        # The last two block tiles give each simdgroup one fragment of 16
+        # values along N. These block tiles use matmul paths that the default
+        # block tile does not use. A group size of 32 makes one row of the
+        # block tile cover more than one quantization group, and the block
+        # loader must handle this.
+        tiles = [
+            "64,64,64,2,2",
+            "32,64,64,2,2",
+            "16,64,64,1,2",
+            "128,64,64,2,2",
+            "64,32,64,2,2",
+            "32,32,64,2,2",
+        ]
+
+        E, K, N = 4, 512, 512
+        key = mx.random.key(0)
+        k1, k2, k3 = mx.random.split(key, 3)
+
+        for L, group_size in product([256, 133], [32, 64]):
+            indices = mx.sort(mx.random.randint(0, E, shape=(L,), key=k1)).astype(
+                mx.uint32
+            )
+            x = (mx.random.normal((L, 1, K), key=k2) / K**0.5).astype(mx.float16)
+            w = (mx.random.normal((E, N, K), key=k3) / K**0.5).astype(mx.float16)
+            wq, s, b = mx.quantize(w, group_size=group_size, bits=4)
+            w_hat = mx.dequantize(wq, s, b, group_size=group_size, bits=4)
+            expected = mx.gather_mm(
+                x, w_hat.swapaxes(-1, -2), rhs_indices=indices, sorted_indices=True
+            )
+            mx.eval(expected)
+
+            for tile in tiles:
+                with self.subTest(L=L, group_size=group_size, tile=tile):
+                    os.environ["MLX_QMM_TILE_NAX"] = tile
+                    try:
+                        y = mx.gather_qmm(
+                            x,
+                            wq,
+                            s,
+                            b,
+                            rhs_indices=indices,
+                            transpose=True,
+                            group_size=group_size,
+                            bits=4,
+                            sorted_indices=True,
+                        )
+                        mx.eval(y)
+                    finally:
+                        del os.environ["MLX_QMM_TILE_NAX"]
+                    self.assertEqual(y.shape, expected.shape)
+                    self.assertLess((y - expected).abs().max().item(), 2e-3)
+
+        # MLX must report an unknown block tile with an error, and it must not
+        # fail later when it looks for a kernel.
+        os.environ["MLX_QMM_TILE_NAX"] = "8,8,8,1,1"
+        try:
+            with self.assertRaises(ValueError):
+                mx.eval(
+                    mx.gather_qmm(
+                        x,
+                        wq,
+                        s,
+                        b,
+                        rhs_indices=indices,
+                        transpose=True,
+                        group_size=group_size,
+                        bits=4,
+                        sorted_indices=True,
+                    )
+                )
+        finally:
+            del os.environ["MLX_QMM_TILE_NAX"]
 
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):

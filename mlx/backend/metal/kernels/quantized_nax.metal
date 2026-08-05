@@ -76,9 +76,20 @@
   instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 64, 64, 64, 2, 2, false, 1) \
   instantiate_quantized_aligned_batched(affine_qmm_t_nax, type, group_size, bits, 64, 64, 64, 2, 2, false, 0)
 
+#define instantiate_gather_qmm_rhs_tile(type, group_size, bits, bm, bn, bk, wm, wn) \
+  instantiate_gather_qmm_rhs(affine_gather_qmm_rhs_nax, affine_gather_qmm_rhs_nax_nt, type, group_size, bits, bm, bn, bk, wm, wn, true) \
+  instantiate_gather_qmm_rhs(affine_gather_qmm_rhs_nax, affine_gather_qmm_rhs_nax_nn, type, group_size, bits, bm, bn, bk, wm, wn, false)
+
+// Block tiles for the gather kernel, default first. The rest are selected
+// with MLX_QMM_TILE_NAX. Keep in sync with gather_qmm_rhs_nax_tiles in
+// mlx/backend/metal/quantized.cpp.
 #define instantiate_quantized_all_rhs(type, group_size, bits) \
-  instantiate_gather_qmm_rhs(affine_gather_qmm_rhs_nax, affine_gather_qmm_rhs_nax_nt, type, group_size, bits, 64, 64, 64, 2, 2, true) \
-  instantiate_gather_qmm_rhs(affine_gather_qmm_rhs_nax, affine_gather_qmm_rhs_nax_nn, type, group_size, bits, 64, 64, 64, 2, 2, false)
+  instantiate_gather_qmm_rhs_tile(type, group_size, bits, 64, 64, 64, 2, 2) \
+  instantiate_gather_qmm_rhs_tile(type, group_size, bits, 32, 64, 64, 2, 2) \
+  instantiate_gather_qmm_rhs_tile(type, group_size, bits, 16, 64, 64, 1, 2) \
+  instantiate_gather_qmm_rhs_tile(type, group_size, bits, 128, 64, 64, 2, 2) \
+  instantiate_gather_qmm_rhs_tile(type, group_size, bits, 64, 32, 64, 2, 2) \
+  instantiate_gather_qmm_rhs_tile(type, group_size, bits, 32, 32, 64, 2, 2)
 
 #define instantiate_quantized_funcs(type, group_size, bits) \
   instantiate_quantized_all_batched(type, group_size, bits) \

@@ -4804,6 +4804,16 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The result of the multiplication of ``x`` with ``w``
               after gathering using ``lhs_indices`` and ``rhs_indices``.
+
+        .. note::
+           On hardware with matrix coprocessors, a sorted affine call runs a
+           special kernel. The environment variable ``MLX_QMM_TILE_NAX``
+           selects the block tile of this kernel, in the form
+           ``"BM,BN,BK,WM,WN"``. The best block tile depends on the shape of
+           the problem and on the distribution of the rows over the matrices.
+           Because of this, MLX keeps the default block tile. If you set a
+           block tile that MLX did not build, MLX raises an error that lists
+           the available block tiles.
       )pbdoc");
   m.def(
       "gather_qqmm",

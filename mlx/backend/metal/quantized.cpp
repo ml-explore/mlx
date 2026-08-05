@@ -375,6 +375,60 @@ array quantize_dequantize_input(
   return xhat;
 }
 
+struct GatherQmmNaxTile {
+  int bm;
+  int bn;
+  int bk;
+  int wm;
+  int wn;
+};
+
+// Block tiles the affine NAX gather kernel is built for, default first.
+// Keep in sync with instantiate_quantized_all_rhs in
+// mlx/backend/metal/kernels/quantized_nax.metal.
+constexpr GatherQmmNaxTile gather_qmm_rhs_nax_tiles[] = {
+    {64, 64, 64, 2, 2},
+    {32, 64, 64, 2, 2},
+    {16, 64, 64, 1, 2},
+    {128, 64, 64, 2, 2},
+    {64, 32, 64, 2, 2},
+    {32, 32, 64, 2, 2},
+};
+
+std::string tile_to_string(const GatherQmmNaxTile& tile) {
+  std::string s;
+  concatenate(
+      s, tile.bm, ",", tile.bn, ",", tile.bk, ",", tile.wm, ",", tile.wn);
+  return s;
+}
+
+// Picks the block tile for the NAX gather kernel. MLX_QMM_TILE_NAX names one
+// of the tiles above as "BM,BN,BK,WM,WN". Only the affine kernels are built
+// for the extra tiles, so other modes always use the default.
+GatherQmmNaxTile gather_qmm_rhs_nax_tile(const std::string& mode) {
+  if (mode != "affine") {
+    return gather_qmm_rhs_nax_tiles[0];
+  }
+  auto requested = env::get_var("MLX_QMM_TILE_NAX", "");
+  if (requested.empty()) {
+    return gather_qmm_rhs_nax_tiles[0];
+  }
+  for (const auto& tile : gather_qmm_rhs_nax_tiles) {
+    if (requested == tile_to_string(tile)) {
+      return tile;
+    }
+  }
+  std::ostringstream msg;
+  msg << "[gather_qmm] MLX_QMM_TILE_NAX is set to '" << requested
+      << "', but MLX did not build this block tile. These block "
+         "tiles are available:";
+  for (const auto& tile : gather_qmm_rhs_nax_tiles) {
+    msg << " " << tile_to_string(tile);
+  }
+  msg << ".";
+  throw std::invalid_argument(msg.str());
+}
+
 } // namespace
 
 void qmv_quad(
@@ -1454,9 +1508,12 @@ void gather_qmm_rhs_nax(
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
 
-  // TODO: Tune the block sizes
-  int bm = 64, bn = 64, bk = 64;
-  int wm = 2, wn = 2;
+  // TODO: Choose the block tile automatically from the shape of the problem.
+  // MLX now uses the default block tile, unless MLX_QMM_TILE_NAX selects a
+  // different one.
+  auto tile = gather_qmm_rhs_nax_tile(mode);
+  int bm = tile.bm, bn = tile.bn, bk = tile.bk;
+  int wm = tile.wm, wn = tile.wn;
 
   const bool align_M = (M % bm) == 0;
   const bool align_N = (N % bn) == 0;
