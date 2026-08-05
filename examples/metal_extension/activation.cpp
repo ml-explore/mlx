@@ -65,7 +65,8 @@ class Activation : public mx::UnaryPrimitive {
     const uint32_t num_chunks = (d + 7) / 8;
 
     auto& device = mx::metal::device(stream().device);
-    auto library = device.get_library("_ext", current_binary_dir());
+    auto library =
+        device.get_library(MLX_METAL_LIBRARY_NAME, current_binary_dir());
     auto kernel = device.get_kernel(kernel_name_ + "_f16", library);
 
     auto& encoder = mx::metal::get_command_encoder(stream());
@@ -149,7 +150,7 @@ mx::array gelu(const mx::array& input, mx::StreamOrDevice s = {}) {
 
 } // namespace
 
-NB_MODULE(_ext, m) {
+NB_MODULE(MLX_EXTENSION_NAME, m) {
   m.doc() = "Fused float16 activation kernels implemented with MLX and Metal.";
   m.def(
       "silu_and_mul",
