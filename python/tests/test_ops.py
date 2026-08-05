@@ -374,12 +374,11 @@ class TestOps(mlx_tests.MLXTestCase):
             # correction directions (positive and negative divisor).
             av = [-1.0, -1.0, -1.0, -3.0, 1.0, 1.0, 1.0, 3.0]
             bv = [3.0, 5.0, 7.0, 8.0, -3.0, -5.0, -7.0, -8.0]
-            with mx.stream(mx.cpu):
-                got = np.array(
-                    mx.remainder(mx.array(av, dtype=dt), mx.array(bv, dtype=dt)).astype(
-                        mx.float32
-                    )
+            got = np.array(
+                mx.remainder(mx.array(av, dtype=dt), mx.array(bv, dtype=dt)).astype(
+                    mx.float32
                 )
+            )
             expected = np.remainder(
                 np.array(av, dtype=np.float32), np.array(bv, dtype=np.float32)
             )
