@@ -721,8 +721,7 @@ void RMSNormVJP::eval_gpu(
   int64_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
 
   bool handled = false;
-  // cu::cp_async is a no-op before sm_80, so the pipelined kernel would read
-  // uninitialized shared memory there.
+
   if (has_w && cu::device(s.device).compute_capability_major() >= 8) {
     dispatch_float_types(gx.dtype(), "rms_norm_vjp", [&](auto type_tag) {
       using DataType = cuda_type_t<MLX_GET_TYPE(type_tag)>;
