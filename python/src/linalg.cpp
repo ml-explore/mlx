@@ -326,7 +326,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cholesky_inv(L: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cholesky_inv(a: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Compute the inverse of a real symmetric positive semi-definite matrix using it's Cholesky decomposition.
 
@@ -347,7 +347,8 @@ void init_linalg(nb::module_& parent_module) {
         If the input matrix is not a triangular matrix behaviour is undefined.
 
         Args:
-            L (array): Input array.
+            a (array): Input array. This is the Cholesky factor
+              :math:`\mathbf{L}`, not :math:`\mathbf{A}` itself.
             upper (bool, optional): If ``True``, return the upper triangular Cholesky factor.
               If ``False``, return the lower triangular Cholesky factor. Default: ``False``.
             stream (Stream, optional): Stream or device. Defaults to ``None``

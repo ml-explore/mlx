@@ -344,7 +344,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.item(), 2)
 
     def test_remainder(self):
-        for dt in [mx.int32, mx.float32]:
+        for dt in [mx.int32, mx.float32, mx.float16, mx.bfloat16]:
             x = mx.array(2, dtype=dt)
             y = mx.array(4, dtype=dt)
 
@@ -369,6 +369,20 @@ class TestOps(mlx_tests.MLXTestCase):
             z = -1 % -x
             self.assertEqual(z.dtype, dt)
             self.assertEqual(z.item(), -1)
+
+            # floored remainder takes the sign of the divisor; check both
+            # correction directions (positive and negative divisor).
+            av = [-1.0, -1.0, -1.0, -3.0, 1.0, 1.0, 1.0, 3.0]
+            bv = [3.0, 5.0, 7.0, 8.0, -3.0, -5.0, -7.0, -8.0]
+            got = np.array(
+                mx.remainder(mx.array(av, dtype=dt), mx.array(bv, dtype=dt)).astype(
+                    mx.float32
+                )
+            )
+            expected = np.remainder(
+                np.array(av, dtype=np.float32), np.array(bv, dtype=np.float32)
+            )
+            self.assertTrue(np.allclose(got, expected, atol=1e-2))
 
             x = mx.arange(10).astype(dt) - 5
             y = x % 5
@@ -1501,6 +1515,10 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [0, -1, -2]
         self.assertListEqual(a.tolist(), expected)
 
+        a = mx.arange(-3, None, -1)
+        expected = [0, -1, -2]
+        self.assertListEqual(a.tolist(), expected)
+
         a = mx.arange(stop=2, step=0.5)
         expected = [0, 0.5, 1.0, 1.5]
         self.assertListEqual(a.tolist(), expected)
@@ -2513,8 +2531,12 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_eye(self):
         self.assertCmpNumpy([3], mx.eye, np.eye)
+        # Test for zero rows and columns
+        self.assertCmpNumpy([0], mx.eye, np.eye)
         # Test for non-square matrix
         self.assertCmpNumpy([3, 4], mx.eye, np.eye)
+        # Test for zero rows
+        self.assertCmpNumpy([0, 4], mx.eye, np.eye)
         # Test with positive k parameter
         self.assertCmpNumpy([3, 4], mx.eye, np.eye, k=1)
         # Test with negative k parameter

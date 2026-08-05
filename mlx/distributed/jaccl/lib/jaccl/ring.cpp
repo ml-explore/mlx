@@ -17,7 +17,8 @@ RingGroup::RingGroup(
       n_conns_(left_devices.size()),
       side_channel_(std::move(sc)),
       left_(create_connections(left_devices)),
-      right_(create_connections(right_devices)) {
+      right_(create_connections(right_devices)),
+      pool_(n_conns_ > 0 ? n_conns_ - 1 : 0) {
   if (left_.size() > RING_MAX_CONNS || right_.size() > RING_MAX_CONNS) {
     std::ostringstream msg;
     msg << "[jaccl] Up to " << RING_MAX_CONNS << " per direction supported but "
@@ -32,7 +33,8 @@ RingGroup::RingGroup(
   side_channel_.barrier();
 
   // Create the ring implementation object
-  ring_ = RingImpl(rank_, size_, left_, right_, send_buffers_, recv_buffers_);
+  ring_ = RingImpl(
+      rank_, size_, left_, right_, send_buffers_, recv_buffers_, &pool_);
 }
 
 void RingGroup::initialize() {
@@ -204,13 +206,9 @@ void RingGroup::all_reduce(
   auto in_ptr = static_cast<const T*>(input);
   auto out_ptr = static_cast<T*>(output);
   int64_t count = n_bytes / sizeof(T);
-  if (count < size_ * 2 * n_conns_) {
-    ring_.all_reduce<1, T, ReduceOp>(in_ptr, out_ptr, count, 1, reduce_op);
-    return;
-  }
 
-  if (n_bytes <= 65536) {
-    ring_.all_reduce<2, T, ReduceOp>(in_ptr, out_ptr, count, 1, reduce_op);
+  if (n_bytes <= 32768 || count < size_ * 2 * n_conns_) {
+    ring_.all_reduce<1, T, ReduceOp>(in_ptr, out_ptr, count, 1, reduce_op);
     return;
   }
 
