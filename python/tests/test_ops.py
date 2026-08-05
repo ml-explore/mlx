@@ -2352,6 +2352,24 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.expand_dims(a, 0).shape, (1, 2, 2))
         self.assertEqual(mx.expand_dims(a, (0, 1)).shape, (1, 1, 2, 2))
         self.assertEqual(mx.expand_dims(a, [0, -1]).shape, (1, 2, 2, 1))
+        self.assertEqual(mx.expand_dims(a, [-1, -4]).shape, (1, 2, 2, 1))
+
+    def test_squeeze_expand_invalid_axes(self):
+        # Out of bounds negative axes must raise instead of wrapping around
+        a = mx.zeros(())
+        self.assertEqual(mx.expand_dims(a, (-2, -1)).shape, (1, 1))
+        with self.assertRaises(ValueError):
+            mx.expand_dims(a, (-3, -2))
+
+        a = mx.zeros((2, 2))
+        for axes in [(-5, -4), (-6, 0), (0, 5)]:
+            with self.assertRaises(ValueError):
+                mx.expand_dims(a, axes)
+
+        a = mx.zeros((1, 1, 1))
+        for axes in [(-4,), (-5, 0), (0, 4)]:
+            with self.assertRaises(ValueError):
+                mx.squeeze(a, axes)
 
     def test_sort(self):
         shape = (6, 4, 10)
