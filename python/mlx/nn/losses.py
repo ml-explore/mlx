@@ -540,8 +540,8 @@ def cosine_similarity_loss(
         \frac{x_1 \cdot x_2}{\max(\|x_1\|  \cdot \|x_2\|, \epsilon)}
 
     Args:
-        x1 (mx.array): The first set of inputs.
-        x2 (mx.array): The second set of inputs.
+        x1 (array): The first set of inputs.
+        x2 (array): The second set of inputs.
         axis (int, optional): The embedding axis. Default: ``1``.
         eps (float, optional): The minimum value of the denominator used for
           numerical stability. Default: ``1e-8``.
@@ -549,7 +549,7 @@ def cosine_similarity_loss(
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        mx.array: The computed cosine similarity loss.
+        array: The computed cosine similarity loss.
     """
     x1_norm = mx.linalg.norm(x1, axis=axis)
     x2_norm = mx.linalg.norm(x2, axis=axis)
