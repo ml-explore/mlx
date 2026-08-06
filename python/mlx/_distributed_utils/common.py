@@ -69,8 +69,8 @@ class Hostfile:
             envs = []
             hosts = []
             if isinstance(data, dict):
-                backend = data["backend"]
-                envs = data["envs"]
+                backend = data.get("backend", backend)
+                envs = data.get("envs", envs)
                 hosts = data["hosts"]
             elif isinstance(data, list):
                 hosts = data
