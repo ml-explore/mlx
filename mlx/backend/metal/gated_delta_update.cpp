@@ -144,7 +144,7 @@ void GatedDeltaUpdate::eval_gpu(
       metal::MTLFCList func_consts = {};
 
       auto delta_kernel =
-          get_gated_delta_kernel(d, base_name, hash_name, func_consts);
+          get_gated_delta_nax_kernel(d, base_name, hash_name, func_consts);
 
       compute_encoder.set_compute_pipeline_state(delta_kernel);
       compute_encoder.set_input_array(q, 0);
