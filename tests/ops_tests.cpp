@@ -195,7 +195,7 @@ TEST_CASE("test squeeze and expand") {
 
   // Out of bounds negative axes must throw and not wrap around
   x = zeros({1, 1, 1});
-  CHECK_THROWS(squeeze(x, {-4}));
+  CHECK_THROWS(squeeze(x, std::vector<int>{-4}));
   CHECK_THROWS(squeeze(x, {-5, 0}));
   CHECK_THROWS(squeeze(x, {0, 4}));
 
