@@ -2610,8 +2610,15 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(
             mx.asarray(existing, dtype=mx.float32, copy=True).dtype, mx.float32
         )
-        with self.assertRaises(ValueError):
-            mx.asarray(existing, copy=False)
+        # Same dtype does not require a copy.
+        result = mx.asarray(existing, copy=False)
+        self.assertEqual(result.tolist(), [1, 2, 3])
+        self.assertEqual(result.dtype, existing.dtype)
+
+        result = mx.asarray(existing, dtype=existing.dtype, copy=False)
+        self.assertEqual(result.tolist(), [1, 2, 3])
+        self.assertEqual(result.dtype, existing.dtype)
+
         with self.assertRaises(ValueError):
             mx.asarray(existing, dtype=mx.float32, copy=False)
 
@@ -2638,8 +2645,6 @@ class TestArray(mlx_tests.MLXTestCase):
         arr = mx.array([1, 2, 3])
         self.assertEqual(mx.asarray(arr).tolist(), [1, 2, 3])
         self.assertEqual(mx.asarray(arr, copy=True).tolist(), [1, 2, 3])
-        with self.assertRaises(ValueError):
-            mx.asarray(arr, copy=False)
 
         arr_int = mx.array([1, 2, 3], dtype=mx.int32)
         arr_float = mx.asarray(arr_int, dtype=mx.float32)
