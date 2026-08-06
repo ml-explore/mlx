@@ -3101,7 +3101,7 @@ array floor(const array& a, StreamOrDevice s /* = {} */) {
 
 array ceil(const array& a, StreamOrDevice s /* = {} */) {
   if (a.dtype() == complex64) {
-    throw std::invalid_argument("[floor] Not supported for complex64.");
+    throw std::invalid_argument("[ceil] Not supported for complex64.");
   }
   return array(a.shape(), a.dtype(), std::make_shared<Ceil>(to_stream(s)), {a});
 }
