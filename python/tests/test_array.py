@@ -2673,16 +2673,23 @@ class TestArray(mlx_tests.MLXTestCase):
         a = mx.array(1)
         self.assertEqual(int(a), 1)
         self.assertEqual(float(a), 1)
+        self.assertEqual(complex(a), 1 + 0j)
 
         a = mx.array(1.5)
         self.assertEqual(float(a), 1.5)
         self.assertEqual(int(a), 1)
+        self.assertEqual(complex(a), 1.5 + 0j)
+
+        a = mx.array(1 + 2j, dtype=mx.complex64)  # type: ignore
+        self.assertEqual(complex(a), 1 + 2j)
 
         a = mx.zeros((2, 1))
         with self.assertRaises(ValueError):
             float(a)
         with self.assertRaises(ValueError):
             int(a)
+        with self.assertRaises(ValueError):
+            complex(a)
 
     def test_format(self):
         a = mx.arange(3)
