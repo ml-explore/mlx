@@ -42,7 +42,6 @@ const char* steel_attention_nax() {
 const char* gated_delta_update_nax() {
   return "";
 }
-}
 } // namespace metal
 #endif // MLX_METAL_NO_NAX
 
@@ -1356,16 +1355,6 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     return kernel_source;
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
-}
-
-MTL::ComputePipelineState* get_gated_delta_kernel(
-    metal::Device& d,
-    const std::string& kernel_name,
-    const std::string& hash_name,
-    const metal::MTLFCList& func_consts
-    // TODO: need more parameters?
-) {
-  return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
 } // namespace mlx::core
