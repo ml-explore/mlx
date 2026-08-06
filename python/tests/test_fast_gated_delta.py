@@ -124,6 +124,7 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
     fallback_dims = [base_dims, unaligned_dims, big_batch_dims]
     gpu_dims = fallback_dims + [large_t_dims]
 
+    @unittest.skipIf(not has_torch, "requires Torch")
     def test_gated_delta_fallback(self):
         for dims in self.fallback_dims:
             (out, hf), (out_ref, hf_ref) = runner(dims, mx.cpu)
