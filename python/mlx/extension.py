@@ -113,6 +113,8 @@ class MetalExtension(Extension):
             raise ValueError("MetalExtension requires at least one C++ source file.")
         if _METAL_SOURCE_SUFFIX not in suffixes:
             raise ValueError("MetalExtension requires at least one Metal source file.")
+        if kwargs.get("py_limited_api", False):
+            raise ValueError("MetalExtension does not support py_limited_api.")
 
         compile_args = kwargs.get("extra_compile_args")
         if compile_args is None:
@@ -191,7 +193,6 @@ def _metal_extension_cmake(
         "nanobind_add_module(",
         "  mlx_extension",
         "  NB_STATIC",
-        "  STABLE_ABI",
         "  LTO",
         "  NOMINSIZE",
         "  NB_DOMAIN",

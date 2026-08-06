@@ -212,6 +212,7 @@ class TestMetalExtension(unittest.TestCase):
             ["bindings.cpp", "silu.metal", "gelu.metal"],
         )
         self.assertEqual(extension.language, "c++")
+        self.assertFalse(extension.py_limited_api)
         self.assertEqual(extension.metal_library_name, "_ext")
         self.assertEqual(
             extension.extra_compile_args,
@@ -265,6 +266,13 @@ class TestMetalExtension(unittest.TestCase):
         cmake = _metal_extension_cmake(extension, Path("/tmp/output"))
 
         self.assertIn("nanobind_add_module(", cmake)
+        self.assertIn("cmake_minimum_required(VERSION 3.25)", cmake)
+        self.assertIn(
+            "find_package(Python 3.10 COMPONENTS Interpreter Development.Module REQUIRED)",
+            cmake,
+        )
+        self.assertNotIn("Development.SABIModule", cmake)
+        self.assertNotIn("  STABLE_ABI", cmake)
         self.assertIn("TITLE [=[_ext]=]", cmake)
         self.assertIn("COMPILE_OPTIONS\n  [=[-O3]=]", cmake)
         self.assertIn(str(Path("silu.metal").resolve()), cmake)
@@ -277,6 +285,14 @@ class TestMetalExtension(unittest.TestCase):
         self.assertIn("import mlx.core", cmake)
         self.assertIn("OUTPUT [=[/tmp/output/_ext.pyi]=]", cmake)
         self.assertIn("DEPENDS mlx_extension", cmake)
+
+    def test_rejects_python_stable_abi(self):
+        with self.assertRaisesRegex(ValueError, "does not support py_limited_api"):
+            MetalExtension(
+                "sample._ext",
+                ["bindings.cpp", "kernel.metal"],
+                py_limited_api=True,
+            )
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # Copyright © 2026 Apple Inc.
 
+from importlib.metadata import version as package_version
+
 from setuptools import setup
 
 from mlx import extension
@@ -22,6 +24,7 @@ if __name__ == "__main__":
             )
         ],
         cmdclass={"build_ext": extension.BuildExtension},
+        install_requires=[f"mlx=={package_version('mlx')}"],
         packages=["mlx_sample_metal_extension"],
         package_data={"mlx_sample_metal_extension": ["*.metallib", "*.pyi"]},
         zip_safe=False,
