@@ -102,6 +102,10 @@ void GatedDeltaUpdate::eval_gpu(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
+#if __METAL_VERSION__ >= 400
+#error "NAX branch IS compiled, __METAL_VERSION__ >= 400"
+#endif
+
   int C = 1;
   const char* threashold_env = std::getenv("GATED_DELTA_THRESH");
   int threshold = threashold_env ? std::stoi(threashold_env) : 16;
@@ -220,15 +224,6 @@ void GatedDeltaUpdate::eval_gpu(
           "NYI: Only sequential and chunk size 8,16 are supported");
     }
   }
-}
-
-bool GatedDeltaUpdate::is_equivalent(const Primitive& other) const {
-  const auto* p = dynamic_cast<const GatedDeltaUpdate*>(&other);
-  if (p == nullptr) {
-    return false;
-  }
-  // TODO: finish implementation
-  return true;
 }
 
 } // namespace mlx::core::fast

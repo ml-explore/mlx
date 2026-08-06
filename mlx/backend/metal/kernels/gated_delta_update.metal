@@ -25,23 +25,9 @@ using namespace metal;
       hv,                                                                      \
       c)
 
-#define instantiate_gated_delta_update_fused_nax(in_type, dk, dv, hk, hv, c) \
-  instantiate_kernel(                                                        \
-      "gated_delta_fused_nax_" #in_type "_" #dk "_" #dv "_" #hk "_" #hv      \
-      "_" #c,                                                                \
-      gated_delta_fused_nax,                                                 \
-      in_type,                                                               \
-      dk,                                                                    \
-      dv,                                                                    \
-      hk,                                                                    \
-      hv,                                                                    \
-      c)
-
-#define instantiate_gated_delta_dims(in_type, dk, dv, hk, hv)                \
-  instantiate_gated_delta_update_seq(in_type, dk, dv, hk, hv)                \
-      instantiate_gated_delta_update_fused_chunk(in_type, dk, dv, hk, hv, 8) \
-          instantiate_gated_delta_update_fused_nax(                          \
-              in_type, dk, dv, hk, hv, 16)
+#define instantiate_gated_delta_dims(in_type, dk, dv, hk, hv) \
+  instantiate_gated_delta_update_seq(in_type, dk, dv, hk, hv) \
+      instantiate_gated_delta_update_fused_chunk(in_type, dk, dv, hk, hv, 8)
 
 #define instantiate_gated_delta(in_type)                          \
   instantiate_gated_delta_dims(in_type, 128, 128, 24, 24)         \
