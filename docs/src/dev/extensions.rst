@@ -700,6 +700,8 @@ build utilities defined in :mod:`mlx.extension`:
 
 .. code-block:: python
 
+    from importlib.metadata import version as package_version
+
     from mlx import extension
     from setuptools import setup
 
@@ -776,6 +778,7 @@ extension project.
             )
         ],
         cmdclass={"build_ext": extension.BuildExtension},
+        install_requires=[f"mlx=={package_version('mlx')}"],
         packages=["mlx_sample_metal_extension"],
         package_data={"mlx_sample_metal_extension": ["*.metallib", "*.pyi"]},
     )
@@ -788,6 +791,10 @@ example above produces ``_ext.metallib``. A list passed as
 ``package_data`` so that the stub is installed with the package. To disable
 stub generation, configure the command class with
 ``BuildExtension.with_options(generate_stubs=False)``.
+
+Pin the ``mlx`` install requirement to the version used for the build because
+MLX does not provide a stable C++ ABI across releases. Reading the version from
+the installed package metadata avoids importing ``mlx.core`` during setup.
 
 The build defines ``MLX_EXTENSION_NAME`` as the final component of the
 extension name and ``MLX_METAL_LIBRARY_NAME`` as its string form. Use them so
