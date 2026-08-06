@@ -76,8 +76,7 @@ void explicit_gemm_conv_ND_gpu(
   wt_reshaped.copy_shared_buffer(wt, wt_restride, wt_flags, wt.data_size());
 
   // 2D view of the output; each tile writes a row window of it.
-  Strides out_2d_strides{
-      out.strides()[out.ndim() - 2], out.strides()[out.ndim() - 1]};
+  Strides out_2d_strides{out.strides(-2), out.strides(-1)};
   array out_2d({implicit_M, implicit_N}, out.dtype(), nullptr, {});
   out_2d.copy_shared_buffer(out, out_2d_strides, out.flags(), out.data_size());
 
@@ -183,8 +182,7 @@ void explicit_gemm_conv_group_ND_gpu(
   array wt_transpose = contiguous_copy_gpu(wt_view, s);
 
   // 2D view of the output; each tile writes a row window of it.
-  Strides out_2d_strides{
-      out.strides()[out.ndim() - 2], out.strides()[out.ndim() - 1]};
+  Strides out_2d_strides{out.strides(-2), out.strides(-1)};
   array out_2d({implicit_M, conv_params.O}, out.dtype(), nullptr, {});
   out_2d.copy_shared_buffer(out, out_2d_strides, out.flags(), out.data_size());
 
