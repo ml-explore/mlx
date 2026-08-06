@@ -341,17 +341,15 @@ of a gigantic model using MLX LM.
 .. note::
 
    Defining the environment variable :envvar:`MLX_METAL_FAST_SYNCH` to ``1``
-   enables a different, faster way of synchronizing between the GPU and the
-   CPU. It is not specific to the JACCL backend and can be used in all cases
-   where the CPU and GPU need to collaborate for some computation, and it
-   matters for low-latency communication since the communication is done by
-   the CPU.
+   by passing ``--env MLX_METAL_FAST_SYNCH=1`` enables a different, faster way
+   of synchronizing between the GPU and the CPU. It is not specific to the
+   JACCL backend and can be used in all cases where the CPU and GPU need to
+   collaborate for some computation, and it matters for low-latency
+   communication since the communication is done by the CPU.
 
-   It is however not reliable. The fast synchronization can deadlock and leave
-   the GPU wedged, both in distributed runs and in any workload that crosses
-   streams (see `#3142 <https://github.com/ml-explore/mlx/issues/3142>`_ and
-   `#3830 <https://github.com/ml-explore/mlx/issues/3830>`_), so it is off by
-   default and best left unset.
+   It is however not reliable that can lead to deadlock and leave the GPU wedged
+   (see `#3142 <https://github.com/ml-explore/mlx/issues/3142>`_), so it is off
+   by default and best left unset.
 
 Custom side channel
 ^^^^^^^^^^^^^^^^^^^
