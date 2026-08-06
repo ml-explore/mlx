@@ -3560,6 +3560,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(o.dtype, mx.int32)
         e = mx.empty_like(x)
         self.assertEqual(e.dtype, mx.int32)
+        self.assertTrue(mx.array_equal(e, mx.zeros((3,), mx.int32)))
 
         # Positional dtype
         z = mx.zeros_like(x, mx.float16)
@@ -3572,6 +3573,7 @@ class TestOps(mlx_tests.MLXTestCase):
 
         e = mx.empty_like(x, mx.float16)
         self.assertEqual(e.dtype, mx.float16)
+        self.assertTrue(mx.array_equal(e, mx.zeros((3,), mx.float16)))
 
         # Keyword dtype
         z = mx.zeros_like(x, dtype=mx.float32)
@@ -3584,6 +3586,7 @@ class TestOps(mlx_tests.MLXTestCase):
 
         e = mx.empty_like(x, dtype=mx.float32)
         self.assertEqual(e.dtype, mx.float32)
+        self.assertTrue(mx.array_equal(e, mx.zeros((3,), mx.float32)))
 
 
 if __name__ == "__main__":

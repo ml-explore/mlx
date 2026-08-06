@@ -2031,6 +2031,31 @@ void init_ops(nb::module_& m) {
             array: The output array filled with ones.
       )pbdoc");
   m.def(
+      "empty_like",
+      [](const mx::array& a,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        return mx::zeros_like(a, dtype.value_or(a.dtype()), s);
+      },
+      nb::arg(),
+      "dtype"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def empty_like(a: array, /, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        An array of zeros like the input.
+
+        Args:
+            a (array): The input to take the shape from.
+            dtype (Dtype, optional): Output data type. If ``None``, the output
+              type defaults to the input array's data type.
+
+        Returns:
+            array: The output array, zero-filled to match MLX's ``empty``
+              semantics.
+      )pbdoc");
+  m.def(
       "eye",
       [](int n,
          std::optional<int> m,
@@ -6131,7 +6156,6 @@ void init_ops(nb::module_& m) {
   m.attr("cumulative_prod") = m.attr("cumprod");
   m.attr("cumulative_sum") = m.attr("cumsum");
   m.attr("empty") = m.attr("zeros");
-  m.attr("empty_like") = m.attr("zeros_like");
   m.attr("matrix_transpose") = m.attr("transpose");
   m.attr("pow") = m.attr("power");
 }
