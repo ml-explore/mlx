@@ -4343,7 +4343,6 @@ array conv_transpose_general(
     StreamOrDevice s) {
   std::vector<int> padding_lo(padding.size());
   std::vector<int> padding_hi(padding.size());
-  // Computed in 64 bits: this runs before conv_general validates anything.
   for (int i = 0; i < padding.size(); ++i) {
     int64_t wt_size =
         1 + static_cast<int64_t>(dilation[i]) * (weight.shape(1 + i) - 1);
@@ -4510,7 +4509,6 @@ array conv_general(
 
     for (int i = 0; i < spatial_dims; i++) {
       if (padding_lo[i] < 0) {
-        // Negating a padding of INT_MIN overflows, so subtract in 64 bits.
         starts[i + 1] = safe_cast(
             starts[i + 1] - static_cast<int64_t>(padding_lo[i]), "conv");
         padding_lo[i] = 0;

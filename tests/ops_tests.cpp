@@ -4342,72 +4342,7 @@ TEST_CASE("test conv_transpose3d with output_padding") {
   CHECK(array_equal(out, expected).item<bool>());
 }
 
-TEST_CASE("test fp8 conversion") {
-  for (auto t : {float32, float16, bfloat16}) {
-    array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0}, t);
-    auto in_fp8 = to_fp8(in);
-    auto out = from_fp8(in_fp8, t);
-    CHECK(array_equal(out, in).item<bool>());
-  }
-
-  array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0});
-  array noisy_in({-1.135, -1.01, 0.0001, 1.01, 1.135, 4.6, 447.0});
-  auto in_fp8 = to_fp8(noisy_in);
-  auto out = from_fp8(in_fp8, float32);
-  CHECK(array_equal(out, in).item<bool>());
-
-  // Overflow
-  in = array({-600.0, 600.0});
-  in_fp8 = to_fp8(in);
-  out = from_fp8(in_fp8, float32);
-
-  auto expected = array({-448.0f, 448.0f});
-  CHECK(array_equal(out, expected, true).item<bool>());
-}
-
-TEST_CASE("test max min with nan") {
-  // Test maximum and minimum with NaN values
-  auto x = array({0.0f, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
-  auto y = array({NAN, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
-  auto expected_max = array({NAN, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
-  auto expected_min = array({NAN, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
-  auto max_result = maximum(x, y);
-  auto min_result = minimum(x, y);
-  CHECK(array_equal(max_result, expected_max, true).item<bool>());
-  CHECK(array_equal(min_result, expected_min, true).item<bool>());
-
-  // Test with all NaN values
-  x = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
-  y = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
-  max_result = maximum(x, y);
-  min_result = minimum(x, y);
-  auto expected = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
-  CHECK(array_equal(max_result, expected, true).item<bool>());
-  CHECK(array_equal(min_result, expected, true).item<bool>());
-}
-
-TEST_CASE("roll and tile shape overflow") {
-  // Shape arithmetic must not overflow (signed-int UB) for large but otherwise
-  // valid int32 inputs; out-of-range results are rejected gracefully.
-  // https://github.com/ml-explore/mlx/issues/3601
-
-  // tile: reps * dim exceeding int32 raises instead of overflowing.
-  CHECK_THROWS_AS(tile(zeros({2}), {2147483647}), std::overflow_error);
-
-  // roll: a shift sum exceeding int32 raises instead of overflowing.
-  CHECK_THROWS_AS(
-      roll(zeros({4}), Shape{2147483647, 2147483647}), std::overflow_error);
-  CHECK_THROWS_AS(
-      roll(zeros({4}), Shape{2147483647, 2147483647}, 0), std::overflow_error);
-
-  // roll: a shift of INT_MIN must not negate-overflow. INT_MIN mod 4 == 0, so
-  // rolling a size-4 axis by INT_MIN is the identity.
-  auto x = array({1, 2, 3, 4});
-  auto rolled = roll(x, -2147483647 - 1);
-  CHECK(array_equal(rolled, x).item<bool>());
-}
-
-TEST_CASE("conv shape overflow") {
+TEST_CASE("test conv shape overflow") {
   // Conv shape arithmetic must not overflow (signed-int UB) for large but
   // otherwise valid int32 parameters; out-of-range results are rejected
   // gracefully. https://github.com/ml-explore/mlx/issues/3611
@@ -4477,4 +4412,69 @@ TEST_CASE("conv shape overflow") {
   CHECK_EQ(
       conv_transpose2d(in_t, wt, {2, 2}, {1, 1}, {1, 1}, {1, 1}).shape(),
       Shape{1, 8, 8, 1});
+}
+
+TEST_CASE("test fp8 conversion") {
+  for (auto t : {float32, float16, bfloat16}) {
+    array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0}, t);
+    auto in_fp8 = to_fp8(in);
+    auto out = from_fp8(in_fp8, t);
+    CHECK(array_equal(out, in).item<bool>());
+  }
+
+  array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0});
+  array noisy_in({-1.135, -1.01, 0.0001, 1.01, 1.135, 4.6, 447.0});
+  auto in_fp8 = to_fp8(noisy_in);
+  auto out = from_fp8(in_fp8, float32);
+  CHECK(array_equal(out, in).item<bool>());
+
+  // Overflow
+  in = array({-600.0, 600.0});
+  in_fp8 = to_fp8(in);
+  out = from_fp8(in_fp8, float32);
+
+  auto expected = array({-448.0f, 448.0f});
+  CHECK(array_equal(out, expected, true).item<bool>());
+}
+
+TEST_CASE("test max min with nan") {
+  // Test maximum and minimum with NaN values
+  auto x = array({0.0f, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
+  auto y = array({NAN, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
+  auto expected_max = array({NAN, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
+  auto expected_min = array({NAN, 1.0f, NAN, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
+  auto max_result = maximum(x, y);
+  auto min_result = minimum(x, y);
+  CHECK(array_equal(max_result, expected_max, true).item<bool>());
+  CHECK(array_equal(min_result, expected_min, true).item<bool>());
+
+  // Test with all NaN values
+  x = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
+  y = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
+  max_result = maximum(x, y);
+  min_result = minimum(x, y);
+  auto expected = array({NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN});
+  CHECK(array_equal(max_result, expected, true).item<bool>());
+  CHECK(array_equal(min_result, expected, true).item<bool>());
+}
+
+TEST_CASE("roll and tile shape overflow") {
+  // Shape arithmetic must not overflow (signed-int UB) for large but otherwise
+  // valid int32 inputs; out-of-range results are rejected gracefully.
+  // https://github.com/ml-explore/mlx/issues/3601
+
+  // tile: reps * dim exceeding int32 raises instead of overflowing.
+  CHECK_THROWS_AS(tile(zeros({2}), {2147483647}), std::overflow_error);
+
+  // roll: a shift sum exceeding int32 raises instead of overflowing.
+  CHECK_THROWS_AS(
+      roll(zeros({4}), Shape{2147483647, 2147483647}), std::overflow_error);
+  CHECK_THROWS_AS(
+      roll(zeros({4}), Shape{2147483647, 2147483647}, 0), std::overflow_error);
+
+  // roll: a shift of INT_MIN must not negate-overflow. INT_MIN mod 4 == 0, so
+  // rolling a size-4 axis by INT_MIN is the identity.
+  auto x = array({1, 2, 3, 4});
+  auto rolled = roll(x, -2147483647 - 1);
+  CHECK(array_equal(rolled, x).item<bool>());
 }
