@@ -281,10 +281,20 @@ class TestMetalExtension(unittest.TestCase):
         self.assertIn('[=[MLX_METAL_LIBRARY_NAME="_ext"]=]', cmake)
         self.assertIn("target_compile_options(mlx_extension PRIVATE", cmake)
         self.assertIn("[=[-Wall]=]", cmake)
+        self.assertIn("BUILD_WITH_INSTALL_RPATH TRUE", cmake)
+        self.assertIn("INSTALL_RPATH [=[@loader_path;@loader_path/../mlx/lib]=]", cmake)
+        self.assertNotIn("BUILD_RPATH", cmake)
         self.assertIn("from nanobind.stubgen import main", cmake)
         self.assertIn("import mlx.core", cmake)
         self.assertIn("OUTPUT [=[/tmp/output/_ext.pyi]=]", cmake)
         self.assertIn("DEPENDS mlx_extension", cmake)
+
+    def test_generated_cmake_uses_nested_package_mlx_rpath(self):
+        extension = MetalExtension("sample.ops._ext", ["bindings.cpp", "kernel.metal"])
+
+        cmake = _metal_extension_cmake(extension, Path("/tmp/output"))
+
+        self.assertIn("@loader_path/../../mlx/lib", cmake)
 
     def test_rejects_python_stable_abi(self):
         with self.assertRaisesRegex(ValueError, "does not support py_limited_api"):
