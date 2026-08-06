@@ -4,7 +4,13 @@ import unittest
 import mlx.core as mx
 import mlx_tests
 import numpy as np
-import torch
+
+try:
+    import torch
+
+    has_torch = True
+except ImportError as e:
+    has_torch = False
 
 
 def gated_delta_oracle(
