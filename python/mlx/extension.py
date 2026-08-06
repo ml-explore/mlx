@@ -276,13 +276,14 @@ def _metal_extension_cmake(
             ]
         )
 
-    rpaths = ["@loader_path", *ext.runtime_library_dirs]
+    mlx_rpath = "@loader_path/" + "../" * ext.name.count(".") + "mlx/lib"
+    rpaths = ["@loader_path", mlx_rpath, *ext.runtime_library_dirs]
     lines.extend(
         [
             "set_target_properties(",
             "  mlx_extension",
             "  PROPERTIES",
-            f"  BUILD_RPATH {_cmake_quote(';'.join(rpaths))}",
+            "  BUILD_WITH_INSTALL_RPATH TRUE",
             f"  INSTALL_RPATH {_cmake_quote(';'.join(rpaths))})",
             "",
             "mlx_build_metallib(",
@@ -500,6 +501,18 @@ class CMakeBuild(build_ext):
             "-DBUILD_SHARED_LIBS=ON",
         ]
         build_args = []
+        loader_path = None
+        if sys.platform.startswith("darwin"):
+            loader_path = "@loader_path"
+        elif sys.platform.startswith("linux"):
+            loader_path = "$ORIGIN"
+        if loader_path is not None:
+            mlx_rpath = loader_path + "/" + "../" * ext.name.count(".") + "mlx/lib"
+            cmake_args += [
+                "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+                f"-DCMAKE_INSTALL_RPATH={loader_path};{mlx_rpath}",
+            ]
+
         # Adding CMake arguments set as environment variable
         # (needed e.g. to build for ARM OSx on conda-forge)
         if "CMAKE_ARGS" in os.environ:

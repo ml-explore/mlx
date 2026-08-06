@@ -611,13 +611,6 @@ already provided, adding our :meth:`axpby` is simple.
 Most of the complexity in the above example comes from additional bells and
 whistles such as the literal names and doc-strings.
 
-.. warning::
-
-    :mod:`mlx.core` must be imported before importing
-    :mod:`mlx_sample_extensions` as defined by the nanobind module above to
-    ensure that the casters for :mod:`mlx.core` components like
-    :class:`mlx.core.array` are available.
-
 .. _Building with CMake:
 
 Building with CMake
@@ -685,10 +678,6 @@ Finally, we build the nanobind_ bindings
     )
     target_link_libraries(_ext PRIVATE mlx_ext)
 
-    if(BUILD_SHARED_LIBS)
-      target_link_options(_ext PRIVATE -Wl,-rpath,@loader_path)
-    endif()
-
 Building with ``setuptools``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -699,8 +688,6 @@ Once we have set out the CMake build rules as described above, we can use the
 build utilities defined in :mod:`mlx.extension`:
 
 .. code-block:: python
-
-    from importlib.metadata import version as package_version
 
     from mlx import extension
     from setuptools import setup
@@ -719,13 +706,17 @@ build utilities defined in :mod:`mlx.extension`:
             python_requires=">=3.8",
         )
 
+On macOS and Linux, ``CMakeBuild`` configures a relocatable runtime search path
+for all targets. It locates colocated libraries through ``@loader_path`` on
+macOS or ``$ORIGIN`` on Linux, and locates the MLX library under ``mlx/lib`` in
+the same ``site-packages`` directory. The extension module can therefore load
+without importing ``mlx.core`` first. Values provided through ``CMAKE_ARGS``
+can override this default.
+
 .. note::
     We treat ``cmake_extension/mlx_sample_extensions`` as the package directory
-    even though it only contains a ``__init__.py`` to ensure the following:
-
-    * :mod:`mlx.core` must be imported before importing :mod:`_ext`
-    * The C++ extension library and the metal library are co-located with the python
-      bindings and copied together if the package is installed
+    so the C++ extension library and the Metal library are colocated with the
+    Python bindings and copied together if the package is installed.
 
 To build the package, first install the build dependencies with ``pip install
 -r requirements.txt``.  You can then build inplace for development using
@@ -756,6 +747,8 @@ a colocated Metal library without requiring a ``CMakeLists.txt`` in the
 extension project.
 
 .. code-block:: python
+
+    from importlib.metadata import version as package_version
 
     from mlx import extension
     from setuptools import setup
@@ -795,6 +788,11 @@ stub generation, configure the command class with
 Pin the ``mlx`` install requirement to the version used for the build because
 MLX does not provide a stable C++ ABI across releases. Reading the version from
 the installed package metadata avoids importing ``mlx.core`` during setup.
+
+The generated extension uses a relocatable runtime search path to locate
+``libmlx.dylib`` under ``mlx/lib`` in the same ``site-packages`` directory. This
+avoids embedding the build machine's absolute MLX library path and lets the
+extension module load without importing ``mlx.core`` first.
 
 The build defines ``MLX_EXTENSION_NAME`` as the final component of the
 extension name and ``MLX_METAL_LIBRARY_NAME`` as its string form. Use them so
