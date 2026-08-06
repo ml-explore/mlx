@@ -24,6 +24,16 @@ namespace mlx::core {
     throw std::runtime_error(#func " has no CUDA implementation.");   \
   }
 
+bool fast::GatedDeltaUpdate::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
+    const bool has_mask,
+    Stream s) {
+  return true;
+}
+
 NO_GPU_MULTI(LUF)
 NO_GPU_MULTI(QRF)
 NO_GPU_MULTI(SVD)
@@ -31,6 +41,10 @@ NO_GPU(Inverse)
 NO_GPU(Cholesky)
 NO_GPU_MULTI(Eig)
 NO_GPU_MULTI(Eigh)
+
+namespace fast {
+NO_GPU_MULTI(GatedDeltaUpdate)
+}
 
 namespace distributed {
 NO_GPU_MULTI(Send)
