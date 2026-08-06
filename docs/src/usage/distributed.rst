@@ -341,11 +341,12 @@ of a gigantic model using MLX LM.
 
 .. note::
 
-   Defining the environment variable ``MLX_METAL_FAST_SYNCH=1`` enables a
-   different, faster way of synchronizing between the GPU and the CPU. It is
-   not specific to the JACCL backend and can be used in all cases where the CPU
-   and GPU need to collaborate for some computation and is pretty critical for
-   low-latency communication since the communication is done by the CPU.
+   Defining the environment variable :envvar:`MLX_METAL_FAST_SYNCH` to ``1``
+   enables a different, faster way of synchronizing between the GPU and the
+   CPU. It is not specific to the JACCL backend and can be used in all cases
+   where the CPU and GPU need to collaborate for some computation and is pretty
+   critical for low-latency communication since the communication is done by
+   the CPU.
 
 Custom side channel
 ^^^^^^^^^^^^^^^^^^^
@@ -506,10 +507,10 @@ Below we list the environment variables required to use each backend.
 Ring
 ^^^^^^
 
-**MLX_RANK** should contain a single 0-based integer that defines the rank of
+:envvar:`MLX_RANK` should contain a single 0-based integer that defines the rank of
 the process.
 
-**MLX_HOSTFILE** should contain the path to a json file that contains IPs and
+:envvar:`MLX_HOSTFILE` should contain the path to a json file that contains IPs and
 ports for each rank to listen to, something like the following:
 
 .. code-block:: json
@@ -521,19 +522,19 @@ ports for each rank to listen to, something like the following:
      ["123.123.4.1:5000", "123.123.4.2:5000"]
    ]
 
-**MLX_RING_VERBOSE** is optional and if set to 1 it enables some more logging
+:envvar:`MLX_RING_VERBOSE` is optional and if set to 1 it enables some more logging
 from the distributed backend.
 
 JACCL
 ^^^^^
 
-**MLX_RANK** should contain a single 0-based integer that defines the rank of
+:envvar:`MLX_RANK` should contain a single 0-based integer that defines the rank of
 the process.
 
-**MLX_JACCL_COORDINATOR** should contain the IP and port that rank 0 can listen
+:envvar:`MLX_JACCL_COORDINATOR` should contain the IP and port that rank 0 can listen
 to all the other ranks connect to in order to establish the RDMA connections.
 
-**MLX_IBV_DEVICES** should contain the path to a json file that contains the
+:envvar:`MLX_IBV_DEVICES` should contain the path to a json file that contains the
 ibverbs device names that connect each node to each other node, something like
 the following:
 
@@ -550,10 +551,10 @@ the following:
 NCCL
 ^^^^^
 
-**MLX_RANK** should contain a single 0-based integer that defines the rank of
+:envvar:`MLX_RANK` should contain a single 0-based integer that defines the rank of
 the process.
 
-**MLX_WORLD_SIZE** should contain the total number of processes that will be
+:envvar:`MLX_WORLD_SIZE` should contain the total number of processes that will be
 launched.
 
 **NCCL_HOST_IP** and **NCCL_PORT** should contain the IP and port that all
