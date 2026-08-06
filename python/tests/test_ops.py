@@ -2520,6 +2520,110 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array([[0, 0], [1, 1]])
         self.assertTrue(mx.array_equal(out, expected))
 
+    def test_searchsorted(self):
+        def expect(out, want):
+            self.assertTrue(mx.array_equal(out, mx.array(want)), f"got {out}")
+
+        a = mx.array([1, 2, 2, 4], mx.float32)
+        v = mx.array([0, 1, 2, 3, 5], mx.float32)
+        expect(mx.searchsorted(a, v), [0, 0, 1, 3, 4])
+        expect(mx.searchsorted(a, v, side="right"), [0, 1, 3, 3, 4])
+        self.assertEqual(mx.searchsorted(a, v).dtype, mx.uint32)
+
+        # a local generator, so this stays deterministic without shifting the
+        # global numpy stream that later tests draw from
+        rng = np.random.RandomState(0)
+        for n in (1, 2, 7, 8, 9, 33, 1000):
+            for m in (1, 5, 64, 257):
+                for side in ("left", "right"):
+                    a_np = np.sort(rng.randn(n).astype(np.float32))
+                    v_np = (rng.randn(m) * 2).astype(np.float32)
+                    out = mx.searchsorted(mx.array(a_np), mx.array(v_np), side=side)
+                    expected = np.searchsorted(a_np, v_np, side=side)
+                    self.assertTrue(np.array_equal(np.array(out), expected))
+
+        # output takes the shape of the values. Compare values too, since
+        # checking .shape alone never forces an eval, and the 0-d case is the
+        # one both GPU backends special case.
+        a = mx.arange(16, dtype=mx.float32)
+        for shape in [(), (1,), (3, 4), (2, 3, 4)]:
+            v_np = np.asarray(rng.rand(*shape) * 20, dtype=np.float32)
+            out = mx.searchsorted(a, mx.array(v_np))
+            self.assertEqual(out.shape, shape)
+            self.assertTrue(
+                np.array_equal(np.array(out), np.searchsorted(np.array(a), v_np))
+            )
+
+        # non row contiguous values: transposed, sliced and broadcast views all
+        # have to be read in the output's order rather than the buffer's
+        base_np = (rng.rand(4, 6) * 20).astype(np.float32)
+        base = mx.array(base_np)
+        for v_mx, v_np in [
+            (base.T, base_np.T),
+            (base[::2], base_np[::2]),
+            (base[:, ::3], base_np[:, ::3]),
+            (mx.broadcast_to(base[0], (3, 6)), np.broadcast_to(base_np[0], (3, 6))),
+        ]:
+            out = mx.searchsorted(a, v_mx)
+            expected = np.searchsorted(np.array(a), np.ascontiguousarray(v_np))
+            self.assertTrue(np.array_equal(np.array(out), expected))
+
+        # a strided sorted sequence, including a reversed view
+        wide = mx.array(np.repeat(np.arange(8, dtype=np.float32) * 3, 2))
+        v = mx.array([-1.0, 3.0, 7.0, 100.0])
+        for a_mx in [wide[::2], wide[1::2]]:
+            out = mx.searchsorted(a_mx, v)
+            expected = np.searchsorted(np.array(a_mx), np.array(v))
+            self.assertTrue(np.array_equal(np.array(out), expected))
+
+        desc = mx.array(np.arange(8, dtype=np.float32)[::-1].copy())
+        out = mx.searchsorted(desc[::-1], v)
+        self.assertTrue(
+            np.array_equal(np.array(out), np.searchsorted(np.arange(8), np.array(v)))
+        )
+
+        # integer and mixed dtypes
+        ai = mx.array([1, 3, 5, 7], mx.int32)
+        expect(mx.searchsorted(ai, mx.array([0, 4, 8], mx.int32)), [0, 2, 4])
+        # promoted, not truncated: the sequence has a 4, so 4.5 lands after it
+        # at 3 while a truncated 4 would land before it at 2
+        expect(
+            mx.searchsorted(
+                mx.array([1, 3, 4, 7], mx.int32), mx.array([4.5], mx.float32)
+            ),
+            [3],
+        )
+
+        # empty inputs on either side
+        empty = mx.array([], mx.float32)
+        expect(mx.searchsorted(empty, mx.array([1.0, -1.0])), [0, 0])
+        self.assertEqual(mx.searchsorted(mx.arange(4, dtype=mx.float32), empty).size, 0)
+
+        # ordering follows sort, so NaN compares greater than everything
+        nan = mx.array([float("nan")])
+        expect(mx.searchsorted(mx.array([1, 2, 3], mx.float32), nan), [3])
+        a = mx.array([1, 2, float("nan")], mx.float32)
+        expect(mx.searchsorted(a, nan), [2])
+        expect(mx.searchsorted(a, nan, side="right"), [3])
+
+        # vmap over the values, which is the elementwise argument
+        va = mx.arange(8, dtype=mx.float32)
+        vs = mx.random.uniform(0, 10, (3, 5))
+        out = mx.vmap(lambda x: mx.searchsorted(va, x))(vs)
+        self.assertTrue(mx.array_equal(out, mx.searchsorted(va, vs)))
+
+        with self.assertRaises(ValueError):
+            mx.vmap(lambda s: mx.searchsorted(s, mx.array([1.0])))(
+                mx.zeros((3, 4), mx.float32)
+            )
+
+        with self.assertRaises(ValueError):
+            mx.searchsorted(mx.zeros((3, 4)), mx.array([1.0]))
+        with self.assertRaises(ValueError):
+            mx.searchsorted(mx.array(1.0), mx.array([1.0]))
+        with self.assertRaises(ValueError):
+            mx.searchsorted(mx.array([1.0, 2.0]), mx.array([1.0]), side="middle")
+
     @unittest.skipIf(
         os.getenv("LOW_MEMORY", None) is not None,
         "This test requires a lot of memory",

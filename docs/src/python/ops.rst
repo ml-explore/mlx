@@ -168,6 +168,7 @@ Operations
    savez_compressed
    save_gguf
    save_safetensors
+   searchsorted
    sigmoid
    sign
    sin

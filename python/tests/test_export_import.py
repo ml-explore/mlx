@@ -313,6 +313,24 @@ class TestExportImport(mlx_tests.MLXTestCase):
         out = imported_fun(x, y, z)[0]
         self.assertTrue(mx.array_equal(expected, out))
 
+    def test_export_searchsorted(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        # both sides, since the side is the primitive's only state and a lost
+        # state would still round trip for the default
+        for side in ("left", "right"):
+
+            def fun(a, v):
+                return mx.searchsorted(a, v, side=side)
+
+            x = mx.sort(mx.random.uniform(shape=(32,)))
+            y = mx.random.uniform(shape=(3, 5))
+            mx.export_function(path, fun, (x, y))
+            imported_fun = mx.import_function(path)
+            expected = fun(x, y)
+            out = imported_fun(x, y)[0]
+            self.assertTrue(mx.array_equal(expected, out))
+
     def test_export_conv(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
 
