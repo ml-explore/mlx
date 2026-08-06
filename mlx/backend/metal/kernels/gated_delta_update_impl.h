@@ -46,6 +46,149 @@
     AT(TILE0, 1) *= fn + 1 >= fm ? 0.f : S1; \
   }
 
+// lambdas are not supported in metal 14 so porting to macros.
+
+// non transposed
+#define LOAD_M(M, SRC, LD, B)                                                  \
+  if constexpr (B) {                                                           \
+    AT(M, 0) =                                                                 \
+        static_cast<float>((fm < valid_rows) ? ((SRC)[fm * (LD) + fn]) : 0.f); \
+    AT(M, 1) = static_cast<float>(                                             \
+        (fm < valid_rows) ? ((SRC)[fm * (LD) + fn + 1]) : 0.f);                \
+  } else {                                                                     \
+    AT(M, 0) = static_cast<float>((SRC)[fm * (LD) + fn]);                      \
+    AT(M, 1) = static_cast<float>((SRC)[fm * (LD) + fn + 1]);                  \
+  }
+
+// transposed load: sequence is the column -> mask fn / fn+1
+#define LOAD_MT(M, SRC, LD, B)                                                 \
+  if constexpr (B) {                                                           \
+    AT(M, 0) =                                                                 \
+        static_cast<float>((fn < valid_rows) ? ((SRC)[fn * (LD) + fm]) : 0.f); \
+    AT(M, 1) = static_cast<float>(                                             \
+        (fn + 1 < valid_rows) ? ((SRC)[(fn + 1) * (LD) + fm]) : 0.f);          \
+  } else {                                                                     \
+    AT(M, 0) = static_cast<float>((SRC)[fn * (LD) + fm]);                      \
+    AT(M, 1) = static_cast<float>((SRC)[(fn + 1) * (LD) + fm]);                \
+  }
+
+// non-transposed load
+#define LOAD_M(M, SRC, LD, B)                                                  \
+  if constexpr (B) {                                                           \
+    AT(M, 0) =                                                                 \
+        static_cast<float>((fm < valid_rows) ? ((SRC)[fm * (LD) + fn]) : 0.f); \
+    AT(M, 1) = static_cast<float>(                                             \
+        (fm < valid_rows) ? ((SRC)[fm * (LD) + fn + 1]) : 0.f);                \
+  } else {                                                                     \
+    AT(M, 0) = static_cast<float>((SRC)[fm * (LD) + fn]);                      \
+    AT(M, 1) = static_cast<float>((SRC)[fm * (LD) + fn + 1]);                  \
+  }
+
+// transposed load
+#define LOAD_MT(M, SRC, LD, B)                                                 \
+  if constexpr (B) {                                                           \
+    AT(M, 0) =                                                                 \
+        static_cast<float>((fn < valid_rows) ? ((SRC)[fn * (LD) + fm]) : 0.f); \
+    AT(M, 1) = static_cast<float>(                                             \
+        (fn + 1 < valid_rows) ? ((SRC)[(fn + 1) * (LD) + fm]) : 0.f);          \
+  } else {                                                                     \
+    AT(M, 0) = static_cast<float>((SRC)[fn * (LD) + fm]);                      \
+    AT(M, 1) = static_cast<float>((SRC)[(fn + 1) * (LD) + fm]);                \
+  }
+
+#define PROCESS_CHUNK_SG(B, S_tile, VALID)                                     \
+  {                                                                            \
+    const short valid_rows = (VALID);                                          \
+                                                                               \
+    float g_val = (thread_index_in_simdgroup < (uint)valid_rows)               \
+        ? metal::fast::log(                                                    \
+              metal::max(g_[thread_index_in_simdgroup * Hv + hv_idx], 1e-6))   \
+        : 0.0f;                                                                \
+                                                                               \
+    float gamma_val = simd_prefix_inclusive_sum(g_val);                        \
+                                                                               \
+    if (thread_index_in_simdgroup < C) {                                       \
+      gamma[thread_index_in_simdgroup] = gamma_val;                            \
+    }                                                                          \
+                                                                               \
+    float gamma_fm = metal::fast::exp(gamma[fm]);                              \
+    float gamma_fmdfn = metal::fast::exp(gamma[fm] - gamma[fn]);               \
+    float gamma_fmdfn1 = metal::fast::exp(gamma[fm] - gamma[fn + 1]);          \
+    float gamma_Cdfn = metal::fast::exp(gamma[C - 1] - gamma[fn]);             \
+    float gamma_Cdfn1 = metal::fast::exp(gamma[C - 1] - gamma[fn + 1]);        \
+    float gamma_C = metal::fast::exp(gamma[C - 1]);                            \
+                                                                               \
+    float beta_fm = (fm < valid_rows) ? beta_[fm * Hv + hv_idx] : 0.0f;        \
+                                                                               \
+    KKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);                    \
+    FULL_UNROLL                                                                \
+    for (int kk = 0; kk < Dk; kk += 8) {                                       \
+      LOAD_M(K_tile, k_ + kk, Dk * Hk, B)                                      \
+      LOAD_MT(KT_tile, k_ + kk, Dk * Hk, B)                                    \
+      simdgroup_multiply_accumulate(KKt_tile, K_tile, KT_tile, KKt_tile);      \
+    }                                                                          \
+                                                                               \
+    KKtK_tile = KKt_tile;                                                      \
+    SCALE_TRIEQ(KKtK_tile, beta_fm, beta_fm)                                   \
+                                                                               \
+    simdgroup_float8x8 Tinv, P;                                                \
+    AT(P, 0) = AT(KKtK_tile, 0);                                               \
+    AT(P, 1) = AT(KKtK_tile, 1);                                               \
+    SUB(Tinv, I_tile, KKtK_tile)                                               \
+                                                                               \
+    FULL_UNROLL                                                                \
+    for (int step = 1; (1 << step) < C; step++) {                              \
+      simdgroup_multiply(P, P, P);                                             \
+      simdgroup_multiply_accumulate(Tinv, Tinv, P, Tinv);                      \
+    }                                                                          \
+                                                                               \
+    WS_tile = make_filled_simdgroup_matrix<float, 8>(0.f);                     \
+    FULL_UNROLL                                                                \
+    for (int kk = 0; kk < Dk; kk += 8) {                                       \
+      LOAD_M(K_tile, k_ + kk, Dk * Hk, B)                                      \
+      SCALE(K_tile, beta_fm)                                                   \
+      simdgroup_multiply(W_tile, Tinv, K_tile);                                \
+      SCALE(W_tile, gamma_fm)                                                  \
+      simdgroup_multiply_accumulate(WS_tile, W_tile, S_tile[kk / 8], WS_tile); \
+    }                                                                          \
+                                                                               \
+    SCALE_TRI(Tinv, gamma_fmdfn, gamma_fmdfn1)                                 \
+                                                                               \
+    LOAD_M(V_tile, v_ + dv_idx, Dv * Hv, B)                                    \
+    SCALE(V_tile, beta_fm)                                                     \
+    simdgroup_multiply(U_tile, Tinv, V_tile);                                  \
+    SUB(delta_tile, U_tile, WS_tile)                                           \
+                                                                               \
+    tmp_tile = make_filled_simdgroup_matrix<float, 8>(0.f);                    \
+    QKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);                    \
+    FULL_UNROLL                                                                \
+    for (int kk = 0; kk < Dk; kk += 8) {                                       \
+      LOAD_M(Q_tile, q_ + kk, Hk * Dk, B)                                      \
+      LOAD_MT(K_tile, k_ + kk, Hk * Dk, B)                                     \
+      simdgroup_multiply_accumulate(QKt_tile, Q_tile, K_tile, QKt_tile);       \
+      SCALE(Q_tile, gamma_fm)                                                  \
+      simdgroup_multiply_accumulate(                                           \
+          tmp_tile, Q_tile, S_tile[kk / 8], tmp_tile);                         \
+    }                                                                          \
+                                                                               \
+    SCALE_TRI(QKt_tile, gamma_fmdfn, gamma_fmdfn1)                             \
+                                                                               \
+    simdgroup_multiply_accumulate(out_tile, QKt_tile, delta_tile, tmp_tile);   \
+                                                                               \
+    if (fm < valid_rows) {                                                     \
+      y[fm * Hv * Dv + dv_idx + fn] = static_cast<InT>(AT(out_tile, 0));       \
+      y[fm * Hv * Dv + dv_idx + fn + 1] = static_cast<InT>(AT(out_tile, 1));   \
+    }                                                                          \
+                                                                               \
+    FULL_UNROLL                                                                \
+    for (int kk = 0; kk < Dk; kk += 8) {                                       \
+      LOAD_MT(K_tile, k_ + kk, Hk * Dk, B)                                     \
+      SCALE2(K_tile, gamma_Cdfn, gamma_Cdfn1)                                  \
+      simdgroup_multiply(KD_tile, K_tile, delta_tile);                         \
+      FMA(S_tile[kk / 8], gamma_C, S_tile[kk / 8], KD_tile)                    \
+    }                                                                          \
+  }
+
 template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 [[kernel]] void gated_delta_fused_chunk(
     const device InT* q [[buffer(0)]],
@@ -123,132 +266,10 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     simdgroup_load(S_tile[kk / 8], i_state + kk, Dk, ulong2(0, 0), true);
   }
 
-  auto process_chunk = [&](thread simdgroup_float8x8* S_tile,
-                           const short valid_rows,
-                           auto bounded_tag) __attribute__((always_inline)) {
-    constexpr bool B = decltype(bounded_tag)::value;
-
-    // non-transposed load
-    auto load_M = [&](thread simdgroup_float8x8& M, auto src, int ld) {
-      if constexpr (B) {
-        AT(M, 0) =
-            static_cast<float>((fm < valid_rows) ? (src[fm * ld + fn]) : 0.f);
-        AT(M, 1) = static_cast<float>(
-            (fm < valid_rows) ? (src[fm * ld + fn + 1]) : 0.f);
-      } else {
-        // simdgroup_load(M, src, ld);
-        AT(M, 0) = static_cast<float>(src[fm * ld + fn]);
-        AT(M, 1) = static_cast<float>(src[fm * ld + fn + 1]);
-      }
-    };
-
-    // transposed load
-    auto load_MT = [&](thread simdgroup_float8x8& M, auto src, int ld) {
-      if constexpr (B) {
-        AT(M, 0) =
-            static_cast<float>((fn < valid_rows) ? (src[fn * ld + fm]) : 0.f);
-        AT(M, 1) = static_cast<float>(
-            (fn + 1 < valid_rows) ? (src[(fn + 1) * ld + fm]) : 0.f);
-      } else {
-        // simdgroup_load(M, src, ld, ulong2(0, 0), true);
-        AT(M, 0) = static_cast<float>(src[fn * ld + fm]);
-        AT(M, 1) = static_cast<float>(src[(fn + 1) * ld + fm]);
-      }
-    };
-
-    float g_val = (thread_index_in_simdgroup < (uint)valid_rows)
-        ? metal::fast::log(
-              metal::max(g_[thread_index_in_simdgroup * Hv + hv_idx], 1e-6))
-        : 0.0f;
-
-    float gamma_val = simd_prefix_inclusive_sum(g_val);
-
-    if (thread_index_in_simdgroup < C) {
-      gamma[thread_index_in_simdgroup] = gamma_val;
-    }
-
-    float gamma_fm = metal::fast::exp(gamma[fm]);
-    float gamma_fmdfn = metal::fast::exp(gamma[fm] - gamma[fn]);
-    float gamma_fmdfn1 = metal::fast::exp(gamma[fm] - gamma[fn + 1]);
-    float gamma_Cdfn = metal::fast::exp(gamma[C - 1] - gamma[fn]);
-    float gamma_Cdfn1 = metal::fast::exp(gamma[C - 1] - gamma[fn + 1]);
-    float gamma_C = metal::fast::exp(gamma[C - 1]);
-
-    float beta_fm = (fm < valid_rows) ? beta_[fm * Hv + hv_idx] : 0.0f;
-
-    KKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
-    FULL_UNROLL
-    for (int kk = 0; kk < Dk; kk += 8) {
-      load_M(K_tile, k_ + kk, Dk * Hk);
-      load_MT(KT_tile, k_ + kk, Dk * Hk);
-      simdgroup_multiply_accumulate(KKt_tile, K_tile, KT_tile, KKt_tile);
-    }
-
-    KKtK_tile = KKt_tile;
-    SCALE_TRIEQ(KKtK_tile, beta_fm, beta_fm)
-
-    simdgroup_float8x8 Tinv, P;
-    AT(P, 0) = AT(KKtK_tile, 0);
-    AT(P, 1) = AT(KKtK_tile, 1);
-    SUB(Tinv, I_tile, KKtK_tile)
-
-    FULL_UNROLL
-    for (int step = 1; (1 << step) < C; step++) {
-      simdgroup_multiply(P, P, P);
-      simdgroup_multiply_accumulate(Tinv, Tinv, P, Tinv);
-    }
-
-    WS_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
-    FULL_UNROLL
-    for (int kk = 0; kk < Dk; kk += 8) {
-      load_M(K_tile, k_ + kk, Dk * Hk);
-      SCALE(K_tile, beta_fm)
-      simdgroup_multiply(W_tile, Tinv, K_tile);
-      SCALE(W_tile, gamma_fm)
-      simdgroup_multiply_accumulate(WS_tile, W_tile, S_tile[kk / 8], WS_tile);
-    }
-
-    SCALE_TRI(Tinv, gamma_fmdfn, gamma_fmdfn1)
-
-    load_M(V_tile, v_ + dv_idx, Dv * Hv);
-    SCALE(V_tile, beta_fm)
-    simdgroup_multiply(U_tile, Tinv, V_tile);
-    SUB(delta_tile, U_tile, WS_tile)
-
-    tmp_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
-    QKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);
-    FULL_UNROLL
-    for (int kk = 0; kk < Dk; kk += 8) {
-      load_M(Q_tile, q_ + kk, Hk * Dk);
-      load_MT(K_tile, k_ + kk, Hk * Dk);
-      simdgroup_multiply_accumulate(QKt_tile, Q_tile, K_tile, QKt_tile);
-      SCALE(Q_tile, gamma_fm)
-      simdgroup_multiply_accumulate(tmp_tile, Q_tile, S_tile[kk / 8], tmp_tile);
-    }
-
-    SCALE_TRI(QKt_tile, gamma_fmdfn, gamma_fmdfn1)
-
-    simdgroup_multiply_accumulate(out_tile, QKt_tile, delta_tile, tmp_tile);
-
-    if (fm < valid_rows) {
-      y[fm * Hv * Dv + dv_idx + fn] = static_cast<InT>(AT(out_tile, 0));
-      y[fm * Hv * Dv + dv_idx + fn + 1] = static_cast<InT>(AT(out_tile, 1));
-    }
-
-    FULL_UNROLL
-    for (int kk = 0; kk < Dk; kk += 8) {
-      load_MT(K_tile, k_ + kk, Hk * Dk);
-      SCALE2(K_tile, gamma_Cdfn, gamma_Cdfn1)
-
-      simdgroup_multiply(KD_tile, K_tile, delta_tile);
-      FMA(S_tile[kk / 8], gamma_C, S_tile[kk / 8], KD_tile)
-    }
-  };
-
   int t = 0;
   FULL_UNROLL
   for (; t + C <= T; t += C) {
-    process_chunk(S_tile, C, metal::false_type{});
+    PROCESS_CHUNK_SG(false, S_tile, C);
     q_ += C * Hk * Dk;
     k_ += C * Hk * Dk;
     v_ += C * Hv * Dv;
@@ -257,7 +278,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     g_ += C * Hv;
   }
   if (t < T) {
-    process_chunk(S_tile, short(T - t), metal::true_type{});
+    PROCESS_CHUNK_SG(true, S_tile, short(T - t));
   }
 
   FULL_UNROLL
