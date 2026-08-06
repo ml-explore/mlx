@@ -335,18 +335,21 @@ of a gigantic model using MLX LM.
 
 .. code-block::
 
-   mlx.launch --verbose --backend jaccl --hostfile m3-ultra-jaccl.json \
-        --env MLX_METAL_FAST_SYNCH=1 -- \  # <--- important
+   mlx.launch --verbose --backend jaccl --hostfile m3-ultra-jaccl.json -- \
         /path/to/remote/python -m mlx_lm chat --model mlx-community/DeepSeek-R1-0528-4bit
 
 .. note::
 
    Defining the environment variable :envvar:`MLX_METAL_FAST_SYNCH` to ``1``
-   enables a different, faster way of synchronizing between the GPU and the
-   CPU. It is not specific to the JACCL backend and can be used in all cases
-   where the CPU and GPU need to collaborate for some computation and is pretty
-   critical for low-latency communication since the communication is done by
-   the CPU.
+   by passing ``--env MLX_METAL_FAST_SYNCH=1`` enables a different, faster way
+   of synchronizing between the GPU and the CPU. It is not specific to the
+   JACCL backend and can be used in all cases where the CPU and GPU need to
+   collaborate for some computation, and it matters for low-latency
+   communication since the communication is done by the CPU.
+
+   It is however not reliable that can lead to deadlock and leave the GPU wedged
+   (see `#3142 <https://github.com/ml-explore/mlx/issues/3142>`_), so it is off
+   by default and best left unset.
 
 Custom side channel
 ^^^^^^^^^^^^^^^^^^^
