@@ -15,6 +15,7 @@
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/steel/gemm/params.h"
 #include "mlx/backend/metal/matmul.h"
+#include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -1050,8 +1051,17 @@ void dot_product(
     std::vector<array>& copies) {
   constexpr int thread_group_size = 512;
   constexpr int items_per_thread = 32;
+  constexpr int simd_groups = thread_group_size / 32;
   auto& compute_encoder = metal::get_command_encoder(s);
   std::string kname = "dot_product_" + type_to_name(a);
+  concatenate(
+      kname,
+      "_it",
+      items_per_thread,
+      "_tg",
+      thread_group_size,
+      "_sg",
+      simd_groups);
   auto kernel = d.get_kernel(kname);
 
   int n = K;
@@ -1070,16 +1080,11 @@ void dot_product(
       MTL::Size(size_t(blocks) * thread_group_size, 1, 1),
       MTL::Size(thread_group_size, 1, 1));
 
-  array current = partials;
-  kname = "dot_reduce_" + type_to_name(out);
-  kernel = d.get_kernel(kname);
-  compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(partials, 0);
-  compute_encoder.set_bytes(blocks, 2);
-  compute_encoder.set_output_array(out, 1);
-
-  compute_encoder.dispatch_threads(
-      MTL::Size(thread_group_size, 1, 1), MTL::Size(thread_group_size, 1, 1));
+  array tempResult({1}, float32, nullptr, {});
+  tempResult.set_data(allocator::malloc(tempResult.nbytes()));
+  copies.push_back(tempResult);
+  all_reduce_dispatch(partials, tempResult, "sum", compute_encoder, d, s);
+  copy_gpu(tempResult, out, CopyType::Scalar, s);
 
   compute_encoder.add_temporaries(std::move(copies));
 }
@@ -1509,6 +1514,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         /* array& out = */ out,
         /* int K = */ K,
         /* std::vector<array>& copies = */ copies);
+  }
   // The wide gemv route streams the weight matrix once per <= 5 input
   // vectors instead of running a row-padded GEMM tile.
   if (!a_transposed && b_transposed &&
