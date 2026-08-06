@@ -4342,6 +4342,78 @@ TEST_CASE("test conv_transpose3d with output_padding") {
   CHECK(array_equal(out, expected).item<bool>());
 }
 
+TEST_CASE("test conv shape overflow") {
+  // Conv shape arithmetic must not overflow (signed-int UB) for large but
+  // otherwise valid int32 parameters; out-of-range results are rejected
+  // gracefully. https://github.com/ml-explore/mlx/issues/3611
+  const int imax = 2147483647;
+  const int imin = -2147483647 - 1;
+  auto in = zeros({1, 8, 8, 1});
+  auto wt = zeros({1, 3, 3, 1});
+
+  // A kernel dilated past the input reports the spatial-size error.
+  CHECK_THROWS_AS(
+      conv_general(in, wt, {1, 1}, {0, 0}, {0, 0}, {imax, imax}, {1, 1}),
+      std::invalid_argument);
+
+  // Padding sums, input dilation, and negating a padding of INT_MIN raise.
+  CHECK_THROWS_AS(
+      conv_general(in, wt, {1, 1}, {imax, imax}, {imax, imax}, {1, 1}, {1, 1}),
+      std::overflow_error);
+  CHECK_THROWS_AS(
+      conv_general(in, wt, {1, 1}, {imax, 0}, {0, 0}, {1, 1}, {1, 1}),
+      std::overflow_error);
+  CHECK_THROWS_AS(
+      conv_general(in, wt, {1, 1}, {0, 0}, {0, 0}, {1, 1}, {imax, imax}),
+      std::overflow_error);
+  CHECK_THROWS_AS(
+      conv_general(in, wt, {1, 1}, {imin, imin}, {0, 0}, {1, 1}, {1, 1}),
+      std::overflow_error);
+
+  // The transposed padding setup runs before conv_general validates it.
+  auto in_t = zeros({1, 4, 4, 1});
+  CHECK_THROWS_AS(
+      conv_transpose2d(in_t, wt, {1, 1}, {0, 0}, {imax, imax}, {0, 0}),
+      std::overflow_error);
+  CHECK_THROWS_AS(
+      conv_transpose2d(in_t, wt, {1, 1}, {imin, imin}, {1, 1}, {0, 0}),
+      std::overflow_error);
+
+  // The dilated input and kernel are both near 4e9 and cancel in the forward
+  // output, so only the gradient's own recompute goes out of range.
+  auto in_g = zeros({1, 3, 1, 1});
+  auto wt_g = zeros({1, 200000, 1, 1});
+  auto conv_g = [](const std::vector<array>& primals) {
+    return std::vector<array>{conv_general(
+        primals[0],
+        primals[1],
+        {1, 1},
+        {0, 0},
+        {0, 0},
+        {20000, 1},
+        {2000000000, 1})};
+  };
+  auto cotan = ones(conv_g({in_g, wt_g})[0].shape());
+  CHECK_THROWS_AS(vjp(conv_g, {in_g, wt_g}, {cotan}), std::overflow_error);
+
+  // The weight gradient pads without dividing by the stride.
+  auto in_w = zeros({1, 8, 8, 1});
+  auto conv_w = [&in_w, imax](const std::vector<array>& primals) {
+    return std::vector<array>{conv_general(
+        in_w, primals[0], {imax, 1}, {imax, 0}, {imax, 0}, {1, 1}, {1, 1})};
+  };
+  auto cotan_w = ones(conv_w({wt})[0].shape());
+  CHECK_THROWS_AS(vjp(conv_w, {wt}, {cotan_w}), std::overflow_error);
+
+  // In-range parameters still give the same shapes.
+  CHECK_EQ(
+      conv_general(in, wt, {1, 1}, {1, 1}, {1, 1}, {2, 2}, {1, 1}).shape(),
+      Shape{1, 6, 6, 1});
+  CHECK_EQ(
+      conv_transpose2d(in_t, wt, {2, 2}, {1, 1}, {1, 1}, {1, 1}).shape(),
+      Shape{1, 8, 8, 1});
+}
+
 TEST_CASE("test fp8 conversion") {
   for (auto t : {float32, float16, bfloat16}) {
     array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0}, t);
