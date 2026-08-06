@@ -669,7 +669,7 @@ class FullyShardedModule(Module):
     Every parameter is sharded along axis 0, so each parameter's size along
     that axis must be divisible by the size of ``group``.
 
-    Use :func:`fully_shard` to wrap a module.
+    Use :func:`~mlx.nn.layers.distributed.fully_shard` to wrap a module.
 
     Args:
         module (mlx.nn.Module): The module whose parameters will be sharded.
