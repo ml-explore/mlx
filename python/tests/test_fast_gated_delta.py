@@ -14,14 +14,14 @@ except ImportError as e:
 
 
 def gated_delta_oracle(
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-    beta: torch.Tensor,
-    g: torch.Tensor,
-    scale: float = None,
-    initial_state: torch.Tensor = None,
-    output_final_state: bool = False,
+    q,
+    k,
+    v,
+    beta,
+    g,
+    scale=None,
+    initial_state=None,
+    output_final_state=False,
 ):
     """
     Reference PyTorch implementation of recurrent gated delta rule.

@@ -1333,4 +1333,18 @@ MTL::ComputePipelineState* get_gated_delta_kernel(
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_gated_delta_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::string kernel_source;
+    concatenate(kernel_source, metal::utils(), metal::gated_delta_update_nax());
+    return kernel_source;
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
 } // namespace mlx::core

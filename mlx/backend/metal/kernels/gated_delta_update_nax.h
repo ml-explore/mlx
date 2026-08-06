@@ -1,7 +1,6 @@
 #pragma once
 
 #include <metal_stdlib>
-#include "mlx/backend/metal/kernels/utils.h"
 
 #include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
 #include <metal_tensor>
