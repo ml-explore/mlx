@@ -417,7 +417,7 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     int wn,
     const array& m);
 
-MTL::ComputePipelineState* get_steel_gated_delta_forward_kernel(
+MTL::ComputePipelineState* get_gated_delta_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const std::string& hash_name,
