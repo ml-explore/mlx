@@ -707,37 +707,37 @@ mx::array create_array(
     return mx::astype(arr, dtype, copy);
   }
 
-  if (copy.has_value() && copy.value() == false)
+  if (copy.has_value() && copy.value() == false) {
     throw std::invalid_argument(
         "Unable to avoid copy while creating an array as requested.");
-}
-
-if (nb::isinstance<nb::bool_>(v)) {
-  return mx::array(nb::cast<bool>(v), t.value_or(mx::bool_));
-} else if (nb::isinstance<nb::int_>(v)) {
-  auto val = nb::cast<int64_t>(v);
-  auto default_type = (val > std::numeric_limits<int>::max() ||
-                       val < std::numeric_limits<int>::min())
-      ? mx::int64
-      : mx::int32;
-  return mx::array(val, t.value_or(default_type));
-} else if (nb::isinstance<nb::float_>(v)) {
-  auto out_type = t.value_or(mx::float32);
-  if (out_type == mx::float64) {
-    return mx::array(nb::cast<double>(v), out_type);
-  } else {
-    return mx::array(nb::cast<float>(v), out_type);
   }
-} else if (PyComplex_Check(v.ptr())) {
-  return mx::array(
-      static_cast<mx::complex64_t>(nb::cast<std::complex<float>>(v)),
-      t.value_or(mx::complex64));
-} else if (nb::isinstance<nb::list>(v)) {
-  return array_from_list(nb::cast<nb::list>(v), t);
-} else if (nb::isinstance<nb::tuple>(v)) {
-  return array_from_list(nb::cast<nb::tuple>(v), t);
-} else {
-  auto arr = to_array_with_accessor(v);
-  return mx::astype(arr, t.value_or(arr.dtype()), copy);
-}
+
+  if (nb::isinstance<nb::bool_>(v)) {
+    return mx::array(nb::cast<bool>(v), t.value_or(mx::bool_));
+  } else if (nb::isinstance<nb::int_>(v)) {
+    auto val = nb::cast<int64_t>(v);
+    auto default_type = (val > std::numeric_limits<int>::max() ||
+                         val < std::numeric_limits<int>::min())
+        ? mx::int64
+        : mx::int32;
+    return mx::array(val, t.value_or(default_type));
+  } else if (nb::isinstance<nb::float_>(v)) {
+    auto out_type = t.value_or(mx::float32);
+    if (out_type == mx::float64) {
+      return mx::array(nb::cast<double>(v), out_type);
+    } else {
+      return mx::array(nb::cast<float>(v), out_type);
+    }
+  } else if (PyComplex_Check(v.ptr())) {
+    return mx::array(
+        static_cast<mx::complex64_t>(nb::cast<std::complex<float>>(v)),
+        t.value_or(mx::complex64));
+  } else if (nb::isinstance<nb::list>(v)) {
+    return array_from_list(nb::cast<nb::list>(v), t);
+  } else if (nb::isinstance<nb::tuple>(v)) {
+    return array_from_list(nb::cast<nb::tuple>(v), t);
+  } else {
+    auto arr = to_array_with_accessor(v);
+    return mx::astype(arr, t.value_or(arr.dtype()), copy);
+  }
 }
