@@ -348,8 +348,6 @@ class GatedDeltaUpdate : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  bool is_equivalent(const Primitive& other) const override;
-
   DEFINE_NAME(GatedDeltaUpdate);
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
