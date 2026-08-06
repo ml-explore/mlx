@@ -1959,17 +1959,24 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "zeros_like",
-      &mx::zeros_like,
+      [](const mx::array& a,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        return mx::zeros_like(a, dtype.value_or(a.dtype()), s);
+      },
       nb::arg(),
+      "dtype"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def zeros_like(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def zeros_like(a: array, /, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         An array of zeros like the input.
 
         Args:
-            a (array): The input to take the shape and type from.
+            a (array): The input to take the shape from.
+            dtype (Dtype, optional): Output data type. If ``None``, the output
+              type defaults to the input array's data type.
 
         Returns:
             array: The output array filled with zeros.
@@ -2001,17 +2008,24 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "ones_like",
-      &mx::ones_like,
+      [](const mx::array& a,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        return mx::ones_like(a, dtype.value_or(a.dtype()), s);
+      },
       nb::arg(),
+      "dtype"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def ones_like(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def ones_like(a: array, /, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         An array of ones like the input.
 
         Args:
-            a (array): The input to take the shape and type from.
+            a (array): The input to take the shape from.
+            dtype (Dtype, optional): Output data type. If ``None``, the output
+              type defaults to the input array's data type.
 
         Returns:
             array: The output array filled with ones.

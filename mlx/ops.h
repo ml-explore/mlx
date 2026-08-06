@@ -94,6 +94,7 @@ inline array zeros(const Shape& shape, StreamOrDevice s = {}) {
   return zeros(shape, float32, s);
 }
 MLX_API array zeros_like(const array& a, StreamOrDevice s = {});
+MLX_API array zeros_like(const array& a, Dtype dtype, StreamOrDevice s = {});
 
 /** Fill an array of the given shape with ones. */
 MLX_API array ones(const Shape& shape, Dtype dtype, StreamOrDevice s = {});
@@ -101,6 +102,7 @@ inline array ones(const Shape& shape, StreamOrDevice s = {}) {
   return ones(shape, float32, s);
 }
 MLX_API array ones_like(const array& a, StreamOrDevice s = {});
+MLX_API array ones_like(const array& a, Dtype dtype, StreamOrDevice s = {});
 
 /** Fill an array of the given shape (n,m) with ones in the specified diagonal
  * k, and zeros everywhere else. */
