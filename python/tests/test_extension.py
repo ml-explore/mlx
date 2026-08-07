@@ -6,14 +6,36 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from mlx.extension import BuildExtension, MetalExtension, _metal_extension_cmake
+from mlx.extension import (
+    BuildExtension,
+    MetalExtension,
+    _extension_paths,
+    _metal_extension_cmake,
+)
 from setuptools import Distribution
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "MetalExtension requires macOS")
 class TestMetalExtension(unittest.TestCase):
+    def test_extension_paths_use_public_build_metadata(self):
+        extension = MetalExtension("sample._ext", ["bindings.cpp", "kernel.metal"])
+        command = Mock()
+        command.build_lib = "/tmp/build"
+        command.get_ext_fullname.return_value = extension.name
+        command.get_ext_filename.return_value = "sample/_ext.so"
+        build_py = Mock()
+        build_py.get_package_dir.return_value = "/tmp/source/sample"
+
+        inplace_file, regular_file = _extension_paths(command, build_py, extension)
+
+        self.assertEqual(inplace_file, Path("/tmp/source/sample/_ext.so"))
+        self.assertEqual(regular_file, Path("/tmp/build/sample/_ext.so"))
+        command.get_ext_fullname.assert_called_once_with(extension.name)
+        command.get_ext_filename.assert_called_once_with(extension.name)
+        build_py.get_package_dir.assert_called_once_with("sample")
+
     def _cmake_configure_command(self, command_type, cmake_args="", debug=False):
         extension = MetalExtension("sample._ext", ["bindings.cpp", "kernel.metal"])
         distribution = Distribution({"ext_modules": [extension]})
