@@ -54,31 +54,6 @@ ensure_row_contiguous(const array& x, metal::Device& d, const Stream& s) {
   }
 }
 
-#define PRINT_STRIDES(arr)                 \
-  printf(                                  \
-      "%s strides: %lld %lld %lld %lld\n", \
-      #arr,                                \
-      arr.strides()[0],                    \
-      arr.strides()[1],                    \
-      arr.strides()[2],                    \
-      arr.strides()[3])
-
-#define PRINT_SHAPES(arr)                 \
-  printf(                                 \
-      "%s shapes: %lld %lld %lld %lld\n", \
-      #arr,                               \
-      arr.shape()[0],                     \
-      arr.shape()[1],                     \
-      arr.shape()[2],                     \
-      arr.shape()[3])
-
-#define PRINT_ARR(arr)                      \
-  if (arr.flags().row_contiguous)           \
-    printf("%s is row contiguous\n", #arr); \
-  PRINT_SHAPES(arr);                        \
-  PRINT_STRIDES(arr);                       \
-  printf("\n");
-
 void GatedDeltaUpdate::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
@@ -101,10 +76,6 @@ void GatedDeltaUpdate::eval_gpu(
   int Dk = q.shape(3);
   int Hv = v.shape(2);
   int Dv = v.shape(3);
-
-#if __METAL_VERSION__ >= 400
-#error "NAX branch IS compiled, __METAL_VERSION__ >= 400"
-#endif
 
   int C = 1;
   const char* threashold_env = std::getenv("GATED_DELTA_THRESH");
