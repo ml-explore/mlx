@@ -103,6 +103,14 @@ void CudaEvent::record(cudaStream_t stream) {
   cudaEventRecord(event_, stream);
 }
 
+float CudaEvent::elapsed_time(const CudaEvent& end) {
+  end.event_.device.make_current();
+  CHECK_CUDA_ERROR(cudaEventSynchronize(end.event_));
+  float elapsed;
+  CHECK_CUDA_ERROR(cudaEventElapsedTime(&elapsed, event_, end.event_));
+  return elapsed;
+}
+
 bool CudaEvent::completed() const {
   // Note: cudaEventQuery can be safely called from any device.
   return cudaEventQuery(event_) == cudaSuccess;

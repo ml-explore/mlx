@@ -1,15 +1,39 @@
 mlx.core.__prefix__:
   from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence, Tuple, Union, ParamSpec, TypeVar
   import sys
-  if sys.version_info >= (3, 10):
-    from typing import TypeAlias
+  if sys.version_info >= (3, 11):
+    from typing import TypeAlias, TypeVarTuple, Unpack
   else:
-    from typing_extensions import TypeAlias
+    from typing import TypeAlias
+    from typing_extensions import TypeVarTuple, Unpack
   P = ParamSpec("P")
   R = TypeVar("R")
+  T = TypeVar("T")
+  U = TypeVar("U")
+  Ts = TypeVarTuple("Ts")
   class DLPackCompatible(Protocol):
     __dlpack__: Callable[..., Any]
     __dlpack_device__: Callable[..., Any]
+
+mlx.core.Timer.start:
+  @overload
+  def start(self, arg: T, /) -> T:
+    """Insert a start timing marker before one or more arrays."""
+
+  @overload
+  def start(
+    self, arg1: T, arg2: U, /, *args: Unpack[Ts]
+  ) -> tuple[T, U, Unpack[Ts]]: ...
+
+mlx.core.Timer.stop:
+  @overload
+  def stop(self, arg: T, /) -> T:
+    """Insert an end timing marker after one or more arrays."""
+
+  @overload
+  def stop(
+    self, arg1: T, arg2: U, /, *args: Unpack[Ts]
+  ) -> tuple[T, U, Unpack[Ts]]: ...
 
 mlx.core.__suffix__:
   from typing import Union

@@ -38,6 +38,11 @@ class CudaEvent {
   void wait();
   void wait(cudaStream_t stream);
   void record(cudaStream_t stream);
+  float elapsed_time(const CudaEvent& end);
+
+  cudaEvent_t handle() const {
+    return event_;
+  }
 
   // Return whether the recorded kernels have completed. Note that this method
   // returns true if record() has not been called.

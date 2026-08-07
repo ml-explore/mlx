@@ -15,6 +15,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/scheduler.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/stream.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/timer.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp

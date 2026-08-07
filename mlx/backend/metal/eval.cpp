@@ -44,6 +44,7 @@ void eval(array& arr) {
     debug_set_primitive_buffer_label(command_buffer, arr.primitive());
     arr.primitive().eval_gpu(arr.inputs(), outputs);
   }
+  command_buffer = encoder.get_command_buffer();
   std::unordered_set<std::shared_ptr<array::Data>> buffers;
   for (auto& in : arr.inputs()) {
     buffers.insert(in.data_shared_ptr());

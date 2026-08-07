@@ -47,6 +47,7 @@ are the CPU and GPU.
    usage/environment_variables
    usage/distributed
    usage/using_streams
+   usage/timing
    usage/export
 
 .. toctree::

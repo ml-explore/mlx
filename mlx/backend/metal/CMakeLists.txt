@@ -146,6 +146,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/sort.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/timer.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/resident.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp)
