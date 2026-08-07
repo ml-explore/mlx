@@ -69,9 +69,7 @@ void hadamard_mn_contiguous(
   int n = n1 * n2;
   int read_width_n1 = n1 == 2 ? 2 : 4;
   int read_width_n2 = n2 == 2 ? 2 : 4;
-  // n == 1 (m in (12, 20, 28) with no power-of-2 factor) leaves the m stage as
-  // the only transform, and it strides by n / read_width_m, so the read width
-  // cannot exceed n.
+  // The m stage strides by n / read_width_m, so cap the read width at n.
   int read_width_m = (n == 1) ? 1 : ((n == 2 || m == 28) ? 2 : 4);
   int max_radix_1 = std::min(n1, 16);
   int max_radix_2 = std::min(n2, 16);
@@ -158,8 +156,7 @@ void hadamard_mn_contiguous(
   if (m > 1) {
     auto kernel = d.get_kernel("m" + kname, lib);
     compute_encoder.set_compute_pipeline_state(kernel);
-    // n = 1 means neither power-of-2 stage ran, so x has not been copied into y
-    // yet and the only transform is this one; read straight from x.
+    // With n == 1 no earlier stage copied x into y, so read from x.
     compute_encoder.set_input_array(n > 1 ? y : x, 0);
     compute_encoder.set_output_array(y, 1);
     compute_encoder.set_bytes(scale_m, 2);
