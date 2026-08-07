@@ -1563,11 +1563,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc(out.nbytes()));
 
   array x = ensure_row_contiguous_matrix(inputs[0], d, s);
-  array w = ensure_row_contiguous_matrix(inputs[1], d, s);
-  array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
+  array w = ensure_row_contiguous(inputs[1], d, s);
+  array scales = ensure_row_contiguous(inputs[2], d, s);
   std::optional<array> biases = std::nullopt;
   if (inputs.size() == 6) {
-    biases = ensure_row_contiguous_matrix(inputs[3], d, s);
+    biases = ensure_row_contiguous(inputs[3], d, s);
   }
   const array& lhs_indices = inputs[inputs.size() - 2];
   const array& rhs_indices = inputs[inputs.size() - 1];
