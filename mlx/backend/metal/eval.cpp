@@ -1,6 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-#include <memory>
-
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
@@ -44,27 +42,23 @@ void eval(array& arr) {
     debug_set_primitive_buffer_label(command_buffer, arr.primitive());
     arr.primitive().eval_gpu(arr.inputs(), outputs);
   }
-  std::unordered_set<std::shared_ptr<array::Data>> buffers;
+  // Skip a donated output's buffer since holding it blocks allocator reuse.
+  const auto& out_data = arr.data_shared_ptr();
   for (auto& in : arr.inputs()) {
-    buffers.insert(in.data_shared_ptr());
+    if (in.data_shared_ptr() != out_data) {
+      encoder.hold_buffer(in.data_shared_ptr());
+    }
   }
-  for (auto& s : arr.siblings()) {
-    buffers.insert(s.data_shared_ptr());
-  }
-  // Remove the output if it was donated to by an input
-  if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
-    buffers.erase(it);
+  for (auto& sib : arr.siblings()) {
+    if (sib.data_shared_ptr() != out_data) {
+      encoder.hold_buffer(sib.data_shared_ptr());
+    }
   }
 
   if (encoder.needs_commit()) {
     encoder.end_encoding();
     scheduler::notify_new_task(s);
-    encoder.commit([s, buffers = std::move(buffers)]() {
-      scheduler::notify_task_completion(s);
-    });
-  } else {
-    command_buffer->addCompletedHandler(
-        [buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {});
+    encoder.commit([s]() { scheduler::notify_task_completion(s); });
   }
 }
 

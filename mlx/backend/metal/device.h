@@ -54,6 +54,14 @@ class MLX_API CommandEncoder {
   void add_temporary(array arr);
   void add_temporaries(std::vector<array> arrays);
 
+  // Keep a buffer alive until the current command buffer completes. Deduped
+  // because a primitive may bind the same array in several slots.
+  void hold_buffer(const std::shared_ptr<array::Data>& buf) {
+    if (buf && retained_ptrs_.insert(buf.get()).second) {
+      retained_buffers_.push_back(buf);
+    }
+  }
+
   void dispatch_threadgroups(MTL::Size grid_dims, MTL::Size group_dims);
   void dispatch_threads(MTL::Size grid_dims, MTL::Size group_dims);
   void maybeInsertBarrier();
@@ -129,6 +137,8 @@ class MLX_API CommandEncoder {
   bool needs_barrier_{false};
   bool concurrent_{false};
   std::vector<array> temporaries_;
+  std::vector<std::shared_ptr<array::Data>> retained_buffers_;
+  std::unordered_set<const array::Data*> retained_ptrs_;
   std::unordered_set<MTL::Resource*> prev_inputs_;
   std::unordered_set<MTL::Resource*> prev_outputs_;
   std::unordered_set<MTL::Resource*> next_inputs_;
