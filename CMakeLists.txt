@@ -262,15 +262,8 @@ if(WIN32)
   FetchContent_MakeAvailable(dlfcn-win32)
   endblock()
   target_include_directories(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src")
-  if(BUILD_SHARED_LIBS)
-    target_link_libraries(mlx PRIVATE dl)
-  else()
-    # A static MLX package must not expose the FetchContent-only dlfcn-win32::dl
-    # target to installed consumers. Compile the small Windows implementation
-    # directly into mlx.lib and propagate its system library.
-    target_sources(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src/dlfcn.c")
-    target_link_libraries(mlx PRIVATE Psapi.lib)
-  endif()
+  target_sources(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src/dlfcn.c")
+  target_link_libraries(mlx PRIVATE Psapi.lib)
 endif()
 
 if(MLX_BUILD_CPU)
@@ -305,14 +298,15 @@ if(MLX_BUILD_CPU)
       URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.33/${OPENBLAS_ZIP}"
     )
     FetchContent_MakeAvailable(openblas)
+    target_include_directories(mlx
+                               PRIVATE "${openblas_SOURCE_DIR}/${OPENBLAS_INC}")
+    # Make openblas importable by dependencies when built as static library.
     set(OPENBLAS_IMPORT_LIBRARY
         "${openblas_SOURCE_DIR}/lib/${OPENBLAS_LIB}.lib")
     add_library(MLX::OpenBLAS UNKNOWN IMPORTED GLOBAL)
     set_target_properties(MLX::OpenBLAS PROPERTIES IMPORTED_LOCATION
                                                    "${OPENBLAS_IMPORT_LIBRARY}")
     target_link_libraries(mlx PRIVATE MLX::OpenBLAS)
-    target_include_directories(mlx
-                               PRIVATE "${openblas_SOURCE_DIR}/${OPENBLAS_INC}")
     # Make sure the DLL file is placed in the same dir with executables.
     set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/${OPENBLAS_LIB}.dll")
     add_custom_command(
