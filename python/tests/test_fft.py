@@ -190,11 +190,13 @@ class TestFFT(mlx_tests.MLXTestCase):
         for k in range(20, 25):
             self._run_ffts((1, 2**k), atol=1e-2, rtol=1e-3)
 
+    @unittest.skipIf(
+        not mx.metal.is_available(), "the size limit is specific to the Metal FFT plan"
+    )
     def test_fft_too_large(self):
-        if mx.default_device() != mx.gpu:
-            return
         # Larger than the four step plan can decompose, so it has to throw
-        # rather than run a kernel that silently returns the wrong answer
+        # rather than run a kernel that silently returns the wrong answer.
+        # CUDA hands this to cuFFT instead and has no such limit.
         with self.assertRaises(RuntimeError):
             mx.eval(mx.fft.fft(mx.zeros(2**25)))
 
