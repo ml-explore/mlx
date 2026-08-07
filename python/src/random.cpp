@@ -322,6 +322,12 @@ void init_random(nb::module_& parent_module) {
         half-open interval ``[low, high)``. The lower and upper bound can be
         scalars or arrays and must be broadcastable to ``shape``.
 
+        .. note::
+           The samples are drawn from a ``float32`` uniform and clamped to
+           ``[low, high - 1]``, so not every integer in the range is reachable
+           once the bounds or the width of the interval go beyond the
+           ``2**24`` integer resolution of ``float32``.
+
         Args:
             low (scalar or array): Lower bound of the interval.
             high (scalar or array): Upper bound of the interval.

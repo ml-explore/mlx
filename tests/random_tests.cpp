@@ -512,6 +512,19 @@ TEST_CASE("test random randint") {
   x = random::randint(low, high, {3, 3});
   CHECK(all(equal(x, array(low))).item<bool>());
 
+  // Check bounds hold when the interval is not representable in float32
+  auto ilow = 1 << 24;
+  auto ihigh = ilow + 2;
+  x = random::randint(ilow, ihigh, {10000}, int32);
+  CHECK(
+      (all(array(ilow) <= x).item<bool>() &&
+       all(x < array(ihigh)).item<bool>()));
+
+  // Check the lower bound is reachable for intervals spanning negative values
+  x = random::randint(-5, 5, {20000}, int32);
+  CHECK_EQ(min(x).item<int>(), -5);
+  CHECK_EQ(max(x).item<int>(), 4);
+
   // Check wrong key type or shape
   auto key = array({0, 0}, {1, 2});
   CHECK_THROWS_AS(
