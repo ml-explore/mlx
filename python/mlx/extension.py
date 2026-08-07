@@ -44,6 +44,16 @@ def _cmake_arguments(values: Sequence[os.PathLike[str] | str]) -> list[str]:
     return [f"  {_cmake_quote(value)}" for value in values]
 
 
+def _extension_paths(command: build_ext, build_py, ext: Extension) -> tuple[Path, Path]:
+    fullname = command.get_ext_fullname(ext.name)
+    filename = command.get_ext_filename(fullname)
+    package = ".".join(fullname.split(".")[:-1])
+    package_dir = build_py.get_package_dir(package)
+    inplace_file = Path(package_dir) / Path(filename).name
+    regular_file = Path(command.build_lib) / filename
+    return inplace_file, regular_file
+
+
 def _macos_deployment_target(target: str, *, explicit: bool) -> str:
     if not re.fullmatch(r"\d+(?:\.\d+)*", target):
         raise ValueError(f"Invalid macOS deployment target: {target!r}.")
@@ -462,17 +472,15 @@ class BuildExtension(build_ext):
         for ext in self.extensions:
             if not isinstance(ext, MetalExtension):
                 continue
-            inplace_file, regular_file = self._get_inplace_equivalent(  # type: ignore
-                build_py, ext
-            )
+            inplace_file, regular_file = _extension_paths(self, build_py, ext)
             sidecar_suffixes = (
                 (".metallib", ".pyi") if self.generate_stubs else (".metallib",)
             )
             for suffix in sidecar_suffixes:
-                regular_sidecar = Path(regular_file).parent / (
+                regular_sidecar = regular_file.parent / (
                     ext.metal_library_name + suffix
                 )
-                inplace_sidecar = Path(inplace_file).parent / regular_sidecar.name
+                inplace_sidecar = inplace_file.parent / regular_sidecar.name
                 self.copy_file(str(regular_sidecar), str(inplace_sidecar))
 
 
@@ -553,11 +561,9 @@ class CMakeBuild(build_ext):
                 if isinstance(ext, CMakeExtension):
                     # Resolve inplace package dir
                     build_py = self.get_finalized_command("build_py")
-                    inplace_file, regular_file = self._get_inplace_equivalent(
-                        build_py, ext
-                    )
+                    inplace_file, regular_file = _extension_paths(self, build_py, ext)
 
-                    inplace_dir = str(Path(inplace_file).parent.resolve())
-                    regular_dir = str(Path(regular_file).parent.resolve())
+                    inplace_dir = str(inplace_file.parent.resolve())
+                    regular_dir = str(regular_file.parent.resolve())
 
                     self.copy_tree(regular_dir, inplace_dir)
