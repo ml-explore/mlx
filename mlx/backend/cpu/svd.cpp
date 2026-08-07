@@ -220,7 +220,10 @@ void svd_impl(
         continue;
       }
       encoder.set_output_array(o);
-      encoder.dispatch([ptr = o.data<T>(), size = o.size(), n = o.shape(-1)]() {
+      encoder.dispatch([o = array::unsafe_weak_copy(o)]() mutable {
+        auto ptr = o.data<T>();
+        const size_t size = o.size();
+        const int n = o.shape(-1);
         std::fill_n(ptr, size, T(0));
         for (size_t i = 0; i < size; i += static_cast<size_t>(n) * n) {
           for (int j = 0; j < n; ++j) {

@@ -192,28 +192,26 @@ void Eigh::eval_cpu(
   const auto& a = inputs[0];
   auto& values = outputs[0];
 
+  values.set_data(allocator::malloc(values.nbytes()));
+
+  // Nothing to decompose for n = 0; LAPACK rejects lda = 0. The input is
+  // square, so both outputs are empty and there is nothing to write.
+  if (a.shape(-1) == 0) {
+    if (compute_eigenvectors_) {
+      outputs[1].set_data(allocator::malloc(outputs[1].nbytes()));
+    }
+    return;
+  }
+
   auto vectors = compute_eigenvectors_
       ? outputs[1]
       : array(a.shape(), a.dtype(), nullptr, {});
-
-  values.set_data(allocator::malloc(values.nbytes()));
 
   copy_cpu(
       a,
       vectors,
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
       stream());
-
-  // Nothing to decompose for n = 0; LAPACK rejects lda = 0. The input is
-  // square, so both outputs are empty here and the copy above has already
-  // initialized the eigenvectors.
-  if (a.shape(-1) == 0) {
-    if (!compute_eigenvectors_) {
-      auto& encoder = cpu::get_command_encoder(stream());
-      encoder.add_temporary(vectors);
-    }
-    return;
-  }
 
   if (compute_eigenvectors_) {
     // Set the strides and flags so the eigenvectors
