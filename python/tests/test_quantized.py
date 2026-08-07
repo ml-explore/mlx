@@ -353,6 +353,53 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 tol = 1e-3 if dtype == mx.float32 else 1.5e-3
                 self.assertLess((y_q - y_hat).abs().max(), tol)
 
+    def test_qmm_non_transposed(self):
+        # The non-transposed matmul (w is [K, N]) is reachable mainly from the
+        # vjp of a quantized linear layer, so it gets much less coverage than
+        # the transposed one. Sweep it over transformer-sized K/N and over M
+        # values that leave a partial M-tile.
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
+        tol = 1e-3 if dtype == mx.float32 else 1.5e-3
+
+        def check(M, K, N, group_size, bits, batch=()):
+            x = mx.random.normal(shape=(*batch, M, K), key=k1) / K**0.5
+            w = mx.random.normal(shape=(K, N), key=k2) / K**0.5
+            x = x.astype(dtype)
+            w = w.astype(dtype)
+            w_q, scales, biases = mx.quantize(w, group_size, bits)
+            w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
+            y_q = mx.quantized_matmul(x, w_q, scales, biases, False, group_size, bits)
+            y_hat = x @ w_hat
+            self.assertEqual(y_q.shape, y_hat.shape)
+            self.assertLess((y_q - y_hat).abs().max(), tol)
+
+        # M sweep. 33..63 is the interesting range: a whole simdgroup of the
+        # threadgroup's M-tile falls past the end of the matrix.
+        for M in [1, 2, 31, 32, 33, 63, 64, 65, 96, 97, 100, 127, 128, 129]:
+            for group_size, bits in [(64, 4), (128, 4), (64, 8)]:
+                with self.subTest(M=M, group_size=group_size, bits=bits):
+                    check(M, 512, 1024, group_size, bits)
+
+        # Transformer-sized K/N, aligned and unaligned M.
+        for K, N in [(2048, 2048), (512, 2048), (2048, 512), (11008, 2048)]:
+            for M in [100, 256]:
+                with self.subTest(shape=(M, K, N)):
+                    check(M, K, N, 64, 4)
+
+        # Batched x, unaligned M.
+        for batch in [(2,), (2, 3)]:
+            for M in [33, 250]:
+                with self.subTest(batch=batch, M=M):
+                    check(M, 512, 1024, 64, 4, batch=batch)
+
+        # M > 2**15 with a partial M-tile, so the per-simdgroup row count is a
+        # distance that does not fit in an int16. Same failure mode as the one
+        # test_qmm_large_dims covers for the transposed kernel.
+        with self.subTest(shape=(33000, 128, 64)):
+            check(33000, 128, 64, 64, 4)
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
