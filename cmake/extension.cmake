@@ -77,6 +77,8 @@ macro(mlx_build_metallib)
 
   # Compile each Metal source separately for incremental builds
   set(_MTLLIB_AIR_TARGETS)
+  set(_MTLLIB_INCLUDE_OPTIONS ${MTLLIB_INCLUDE_DIRS})
+  list(TRANSFORM _MTLLIB_INCLUDE_OPTIONS PREPEND "-I")
   set(_MTLLIB_SOURCE_INDEX 0)
   foreach(_MTLLIB_SOURCE IN LISTS MTLLIB_SOURCES)
     get_filename_component(_MTLLIB_SOURCE_STEM "${_MTLLIB_SOURCE}" NAME_WE)
@@ -87,8 +89,7 @@ macro(mlx_build_metallib)
     add_custom_command(
       OUTPUT ${_MTLLIB_AIR_TARGET}
       COMMAND
-        xcrun -sdk macosx metal
-        "$<LIST:TRANSFORM,${MTLLIB_INCLUDE_DIRS},PREPEND,-I>"
+        xcrun -sdk macosx metal ${_MTLLIB_INCLUDE_OPTIONS}
         ${_MTLLIB_COMPILE_OPTIONS} ${MTLLIB_COMPILE_OPTIONS} -MMD -MF
         ${_MTLLIB_DEPFILE} -MT ${_MTLLIB_AIR_TARGET} -c ${_MTLLIB_SOURCE} -o
         ${_MTLLIB_AIR_TARGET}
