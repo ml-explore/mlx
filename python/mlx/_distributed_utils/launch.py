@@ -332,7 +332,7 @@ def launch_ring(parser, hosts, args, command):
 
 def launch_nccl(parser, hosts, args, command):
     if not hosts[0].ips:
-        raise ValueError("Rank 0 should have an IP reachable from all other ranks")
+        parser.error("Rank 0 should have an IP reachable from all other ranks")
 
     master_host = hosts[0].ips[0]
     master_port = args.nccl_port
@@ -371,13 +371,13 @@ def launch_nccl(parser, hosts, args, command):
 
 def launch_jaccl(parser, hosts, args, command):
     if not hosts[0].ips:
-        raise ValueError("Rank 0 should have an IP reachable from all other ranks")
+        parser.error("Rank 0 should have an IP reachable from all other ranks")
 
     jaccl_ring = args.backend == "jaccl-ring"
     have_rdmas = all(len(h.rdma) == len(hosts) for h in hosts)
     have_nulls = all(h.rdma[i] is None for i, h in enumerate(hosts))
     if not have_rdmas or not have_nulls:
-        raise ValueError("Malformed hostfile for jaccl backend")
+        parser.error("Malformed hostfile for jaccl backend")
 
     coordinator = hosts[0].ips[0]
     env = args.env
