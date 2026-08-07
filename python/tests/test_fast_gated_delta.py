@@ -73,6 +73,9 @@ def gated_delta_oracle(
 def runner(dims, stream=mx.gpu, reference=True):
     B, Hk, Hv, T, Dk, Dv = dims
 
+    assert Hv % Hk == 0
+    repeat_factor = Hv // Hk
+
     q = mx.random.normal(shape=(B, T, Hk, Dk))
     k = mx.random.normal(shape=(B, T, Hk, Dk))
     k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
@@ -89,6 +92,10 @@ def runner(dims, stream=mx.gpu, reference=True):
         bpt = torch.from_numpy(np.array(b))
         gpt = torch.from_numpy(np.array(g))
         h0pt = torch.from_numpy(np.array(h0)).transpose(-1, -2).contiguous()
+
+        if repeat_factor > 1:
+            qpt = qpt.repeat_interleave(repeat_factor, dim=2)
+            kpt = kpt.repeat_interleave(repeat_factor, dim=2)
 
         out_on_py, hf_on_py = gated_delta_oracle(
             qpt,
@@ -126,8 +133,10 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
     unaligned_dims = (1, 32, 32, 33, 128, 128)
     big_batch_dims = (128, 32, 32, 16, 128, 128)
     large_t_dims = (2, 32, 32, 1111, 128, 128)
+    diff_heads = (1, 16, 32, 33, 128, 128)
+    diff_heads2 = (1, 16, 48, 33, 128, 128)
 
-    fallback_dims = [base_dims, unaligned_dims, big_batch_dims]
+    fallback_dims = [base_dims, unaligned_dims, big_batch_dims, diff_heads, diff_heads2]
     gpu_dims = fallback_dims + [large_t_dims]
 
     @unittest.skipIf(not has_torch, "requires Torch")
