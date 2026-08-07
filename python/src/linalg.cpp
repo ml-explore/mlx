@@ -55,7 +55,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def norm(a: array, /, ord: Union[None, int, float, str] = None, axis: Union[None, int, list[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def norm(a: array, /, ord: Union[None, int, float, str] = None, axis: Union[None, int, list[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
       R"pbdoc(
         Matrix or vector norm.
 
@@ -177,7 +177,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def qr(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
+          "def qr(a: array, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> Tuple[array, array]"),
       R"pbdoc(
         The QR factorization of the input matrix.
 
@@ -220,7 +220,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def svd(a: array, compute_uv: bool = True, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]"),
+          "def svd(a: array, compute_uv: bool = True, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> Tuple[array, array, array]"),
       R"pbdoc(
         The Singular Value Decomposition (SVD) of the input matrix.
 
@@ -247,7 +247,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def inv(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def inv(a: array, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
       R"pbdoc(
         Compute the inverse of a square matrix.
 
@@ -271,7 +271,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def tri_inv(a: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def tri_inv(a: array, upper: bool = False, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
       R"pbdoc(
         Compute the inverse of a triangular square matrix.
 
@@ -296,7 +296,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cholesky(a: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cholesky(a: array, upper: bool = False, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
       R"pbdoc(
         Compute the Cholesky decomposition of a real symmetric positive semi-definite matrix.
 
@@ -326,7 +326,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cholesky_inv(a: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cholesky_inv(a: array, upper: bool = False, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
       R"pbdoc(
         Compute the inverse of a real symmetric positive semi-definite matrix using it's Cholesky decomposition.
 
@@ -364,7 +364,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def pinv(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def pinv(a: array, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
       R"pbdoc(
         Compute the (Moore-Penrose) pseudo-inverse of a matrix.
 
@@ -390,7 +390,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cross(a: array, b: array, axis: int = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cross(a: array, b: array, axis: int = -1, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
       R"pbdoc(
         Compute the cross product of two arrays along a specified axis.
 
@@ -449,7 +449,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def eig(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
+          "def eig(a: array, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> Tuple[array, array]"),
       R"pbdoc(
         Compute the eigenvalues and eigenvectors of a square matrix.
 
@@ -527,7 +527,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def eigh(a: array, UPLO: str = 'L', *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
+          "def eigh(a: array, UPLO: str = 'L', *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> Tuple[array, array]"),
       R"pbdoc(
         Compute the eigenvalues and eigenvectors of a complex Hermitian or
         real symmetric matrix.
@@ -573,7 +573,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def lu(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]"),
+          "def lu(a: array, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> Tuple[array, array, array]"),
       R"pbdoc(
         Compute the LU factorization of the given matrix ``A``.
 
@@ -604,7 +604,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def lu_factor(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
+          "def lu_factor(a: array, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> Tuple[array, array]"),
       R"pbdoc(
         Computes a compact representation of the LU factorization.
 
@@ -624,7 +624,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def solve(a: array, b: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def solve(a: array, b: array, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
       R"pbdoc(
         Compute the solution to a system of linear equations ``AX = B``.
 
@@ -646,7 +646,7 @@ void init_linalg(nb::module_& parent_module) {
       "upper"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def solve_triangular(a: array, b: array, *, upper: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+          "def solve_triangular(a: array, b: array, *, upper: bool = False, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
       R"pbdoc(
         Computes the solution of a triangular system of linear equations ``AX = B``.
 
@@ -669,7 +669,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def det(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def det(a: array, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
       R"pbdoc(
         Compute the determinant of a square matrix.
 
@@ -701,7 +701,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def slogdet(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
+          "def slogdet(a: array, *, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> Tuple[array, array]"),
       R"pbdoc(
         Compute the sign and natural log of the absolute value of the
         determinant of a square matrix.
