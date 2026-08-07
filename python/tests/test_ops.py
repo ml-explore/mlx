@@ -2365,6 +2365,86 @@ class TestOps(mlx_tests.MLXTestCase):
         mem4 = mx.get_peak_memory()
         self.assertEqual(mem2, mem4)
 
+    def test_cummax_cummin_nan(self):
+        nan = float("nan")
+        cases = [
+            [1.0, 3.0, nan, 5.0, 4.0],
+            [nan, 3.0, 2.0, 5.0, 4.0],
+            [1.0, 2.0, 3.0, nan, 4.0],
+            [nan, nan, 1.0],
+            [5.0, 4.0, nan, 1.0, 0.0],
+        ]
+        for op, npop, init in (
+            ("cummax", np.maximum, float("-inf")),
+            ("cummin", np.minimum, float("inf")),
+        ):
+            for arr in cases:
+                a_np = np.array(arr, dtype=np.float32)
+                a_mx = mx.array(a_np)
+                inc_fwd = npop.accumulate(a_np)
+                inc_rev = npop.accumulate(a_np[::-1])[::-1]
+                exc_fwd = np.concatenate([[init], inc_fwd[:-1]])
+                exc_rev = np.concatenate([inc_rev[1:], [init]])
+                refs = {
+                    (False, True): inc_fwd,
+                    (True, True): inc_rev,
+                    (False, False): exc_fwd,
+                    (True, False): exc_rev,
+                }
+                for (reverse, inclusive), expected in refs.items():
+                    got = np.array(
+                        getattr(mx, op)(a_mx, reverse=reverse, inclusive=inclusive)
+                    )
+                    self.assertTrue(
+                        np.array_equal(got, expected, equal_nan=True),
+                        msg=f"{op} reverse={reverse} inclusive={inclusive} "
+                        f"arr={arr}\ngot={got}\nexp={expected}",
+                    )
+
+        for dt in (mx.float16, mx.float32, mx.bfloat16):
+            a = mx.array([1.0, 3.0, nan, 5.0, 4.0], dt)
+            out_max = mx.cummax(a)
+            out_min = mx.cummin(a)
+            self.assertTrue(mx.isnan(out_max[2:]).all())
+            self.assertTrue(mx.isnan(out_min[2:]).all())
+
+        leading = mx.array([nan, 3.0, 2.0, 5.0, 4.0])
+        self.assertTrue(mx.isnan(mx.cummax(leading)).all())
+        self.assertTrue(mx.isnan(mx.cummin(leading)).all())
+        self.assertFalse(mx.any(mx.isinf(mx.cummax(leading))))
+        self.assertFalse(mx.any(mx.isinf(mx.cummin(leading))))
+
+        for n in (1, 2, 8, 32, 33, 64, 257, 1000):
+            x = np.arange(n, dtype=np.float32)
+            x[n // 2] = nan
+            for op, npop in (("cummax", np.maximum), ("cummin", np.minimum)):
+                got = np.array(getattr(mx, op)(mx.array(x)))
+                self.assertTrue(
+                    np.array_equal(got, npop.accumulate(x), equal_nan=True),
+                    msg=f"{op} failed for n={n}",
+                )
+
+        ints = mx.array([3, 1, 4, 1, 5, 9, 2, 6], mx.int32)
+        self.assertEqual(mx.cummax(ints).tolist(), [3, 3, 4, 4, 5, 9, 9, 9])
+        self.assertEqual(mx.cummin(ints).tolist(), [3, 1, 1, 1, 1, 1, 1, 1])
+
+        if mx.metal.is_available():
+            base = np.array(
+                [1.0, 5.0, 2.0, -3.0, 4.0, 0.0, 7.0, -1.0], dtype=np.float32
+            )
+            for op in ("cummax", "cummin"):
+                for pos in range(base.shape[0]):
+                    x = base.copy()
+                    x[pos] = nan
+                    with mx.stream(mx.gpu):
+                        g = np.array(getattr(mx, op)(mx.array(x)))
+                    with mx.stream(mx.cpu):
+                        c = np.array(getattr(mx, op)(mx.array(x)))
+                    self.assertTrue(
+                        np.array_equal(g, c, equal_nan=True),
+                        msg=f"{op} device mismatch at pos {pos}",
+                    )
+
     def test_diff(self):
         a = mx.array([1, 2, 4, 7, 0])
         self.assertEqual(mx.diff(a).tolist(), [1, 2, 3, -7])
