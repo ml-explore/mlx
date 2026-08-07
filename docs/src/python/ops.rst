@@ -76,8 +76,6 @@ Operations
    divmod
    einsum
    einsum_path
-   empty
-   empty_like
    equal
    erf
    erfinv
