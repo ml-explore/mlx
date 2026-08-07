@@ -2862,7 +2862,7 @@ array logsumexp(
         std::make_shared<LogSumExp>(to_stream(s)),
         {astype(a, dtype, s)});
     if (!keepdims) {
-      out = squeeze(out, -1, s);
+      out = squeeze(out, axes, s);
     }
     return out;
   }
