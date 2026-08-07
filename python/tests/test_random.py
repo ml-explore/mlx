@@ -64,6 +64,9 @@ class TestRandom(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.random.uniform().dtype, mx.random.uniform(dtype=None).dtype)
 
+        with self.assertRaises(ValueError):
+            mx.random.uniform(shape=(2, -3))
+
     def test_normal_and_laplace(self):
         # Same tests for normal and laplace.
         for distribution_sampler in [mx.random.normal, mx.random.laplace]:

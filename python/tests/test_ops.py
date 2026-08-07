@@ -810,6 +810,9 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertListEqual(list(b_npy.shape), list(b_mlx.shape))
         self.assertTrue(np.array_equal(b_npy, b_mlx))
 
+        with self.assertRaises(ValueError):
+            mx.broadcast_to(a_mlx, (-1, 10, 20))
+
     def test_logsumexp(self):
         def logsumexp(x, axes=None):
             maxs = mx.max(x, axis=axes, keepdims=True)

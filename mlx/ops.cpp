@@ -1692,6 +1692,11 @@ array broadcast_to(
     const array& a,
     const Shape& shape,
     StreamOrDevice s /* = {} */) {
+  if (std::any_of(shape.begin(), shape.end(), [](auto i) { return i < 0; })) {
+    throw std::invalid_argument(
+        "[broadcast_to] Negative dimensions not allowed.");
+  }
+
   if (a.shape() == shape) {
     return a;
   }
