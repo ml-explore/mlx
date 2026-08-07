@@ -193,6 +193,12 @@ TEST_CASE("test squeeze and expand") {
   CHECK_THROWS(squeeze(x, {1, 3, 1}));
   CHECK_THROWS(squeeze(x, {1, 3, -3}));
 
+  // Out of bounds negative axes must throw and not wrap around
+  x = zeros({1, 1, 1});
+  CHECK_THROWS(squeeze(x, std::vector<int>{-4}));
+  CHECK_THROWS(squeeze(x, {-5, 0}));
+  CHECK_THROWS(squeeze(x, {0, 4}));
+
   x = zeros({2, 2});
   CHECK_EQ(expand_dims(x, 0).shape(), Shape{1, 2, 2});
   CHECK_EQ(expand_dims(x, -1).shape(), Shape{2, 2, 1});
@@ -206,6 +212,18 @@ TEST_CASE("test squeeze and expand") {
   CHECK_THROWS(expand_dims(x, -4));
   CHECK_THROWS(expand_dims(x, {0, 1, 0}));
   CHECK_THROWS(expand_dims(x, {0, 1, -4}));
+
+  // Negative axes are resolved against the output shape and sorted
+  CHECK_EQ(expand_dims(x, {3, -4}).shape(), Shape{1, 2, 2, 1});
+  CHECK_EQ(expand_dims(x, {-1, -4}).shape(), Shape{1, 2, 2, 1});
+
+  // Out of bounds negative axes must throw and not wrap around
+  CHECK_THROWS(expand_dims(x, {-5, -4}));
+  CHECK_THROWS(expand_dims(x, {-6, 0}));
+
+  x = zeros({});
+  CHECK_EQ(expand_dims(x, {-2, -1}).shape(), Shape{1, 1});
+  CHECK_THROWS(expand_dims(x, {-3, -2}));
 }
 
 TEST_CASE("test slice") {
