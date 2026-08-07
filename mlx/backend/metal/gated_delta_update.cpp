@@ -197,4 +197,22 @@ void GatedDeltaUpdate::eval_gpu(
   }
 }
 
+/////////////////////////
+// BACKWARD PASS STUFF //
+/////////////////////////
+bool GatedDeltaUpdateVJP::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
+    Stream s) {
+  return true;
+}
+
+void GatedDeltaUpdateVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  std::runtime_error("GDN VJP NYI");
+}
+
 } // namespace mlx::core::fast

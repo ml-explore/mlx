@@ -232,6 +232,71 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 mx.allclose(hf_ref, hf, atol=1e-1, rtol=1e-4), msg="State " + msg
             )
 
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_gated_delta_grad(self):
+        for dims in [self.unaligned_dims]:
+            B, Hk, Hv, T, Dk, Dv = dims
+
+            q = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = mx.random.normal(shape=(B, T, Hk, Dk))
+            k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+            v = mx.random.normal(shape=(B, T, Hv, Dv))
+            g = mx.random.uniform(shape=(B, T, Hv))
+            b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv)))
+            h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
+
+            co_out = mx.random.normal(shape=(B, T, Hv, Dv))
+            co_state = mx.random.normal(shape=(B, Hv, Dv, Dk))
+            co_out_pt = torch.from_numpy(np.array(co_out))
+            co_state_pt = torch.from_numpy(np.array(co_state)).transpose(-1, -2)
+
+            def f(q, k, v, g, b, h0):
+                out, state = mx.fast.gated_delta_update(
+                    q, k, v, g, b, h0, stream=mx.gpu
+                )
+                return (out * co_out).sum() + (state * co_state).sum()
+
+            grads = mx.grad(f, argnums=(0, 1, 2, 3, 4, 5))(q, k, v, g, b, h0)
+            mx.eval(grads)
+
+            qpt = torch.from_numpy(np.array(q)).clone().requires_grad_()
+            kpt = torch.from_numpy(np.array(k)).clone().requires_grad_()
+            vpt = torch.from_numpy(np.array(v)).clone().requires_grad_()
+            bpt = torch.from_numpy(np.array(b)).clone().requires_grad_()
+            gpt = torch.from_numpy(np.array(g)).clone().requires_grad_()
+            h0pt = torch.from_numpy(np.array(h0)).transpose(-1, -2).contiguous()
+            h0pt.requires_grad_()
+
+            out_on_pt, hf_on_pt = gated_delta_oracle(
+                qpt,
+                kpt,
+                vpt,
+                bpt,
+                torch.log(gpt),
+                scale=1.0,
+                initial_state=h0pt,
+                output_final_state=True,
+            )
+
+            ((out_on_pt * co_out_pt).sum() + (hf_on_pt * co_state_pt).sum()).backward()
+
+            refs = [
+                qpt.grad,
+                kpt.grad,
+                vpt.grad,
+                gpt.grad,
+                bpt.grad,
+                h0pt.grad.transpose(-1, -2),
+            ]
+
+            for name, gm, gr in zip("q k v g beta h0".split(), grads, refs):
+                gr = mx.array(gr.contiguous().numpy())
+                self.assertTrue(
+                    mx.allclose(gm, gr, atol=2e-3, rtol=2e-3),
+                    msg=f"d{name} mismatch on {dims}: max err {mx.max(mx.abs(gm - gr)).item():.3e}",
+                )
+                # print(f"{name} is correct: max error {mx.max(mx.abs(gm - gr)).item():.3e}", flush=True)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)

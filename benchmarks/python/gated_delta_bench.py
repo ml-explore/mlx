@@ -43,7 +43,23 @@ def do_kernel_bench(f, *args):
     return ys
 
 
-def benchmark_shape(B, T, Hk, Hv, Dk, Dv, chunk_sizes):
+def make_grad_fn():
+    def f(q, k, v, g, b, h0):
+        out, state = mx.fast.gated_delta_update(q, k, v, g, b, h0)
+        return out.sum() + state.sum()
+
+    return mx.grad(f, argnums=(0, 1, 2, 3, 4, 5))
+
+
+def do_grad_bench(f, *args):
+    ys = []
+    for _ in range(N_iter_func):
+        ys.extend(f(*args))
+    mx.eval(ys)
+    return ys
+
+
+def benchmark_shape(B, T, Hk, Hv, Dk, Dv, chunk_sizes, do_backward):
     mx.random.seed(42)
     q = mx.random.normal(shape=(B, T, Hk, Dk))
     k = mx.random.normal(shape=(B, T, Hk, Dk))
@@ -55,26 +71,31 @@ def benchmark_shape(B, T, Hk, Hv, Dk, Dv, chunk_sizes):
     shape_str = f"B={B} T={T} Hk={Hk} Hv={Hv} Dk={Dk} Dv={Dv}"
     denom = N_iter_bench * N_iter_func
 
-    os.environ["GATED_DELTA_CHUNK"] = "0"
-    h0 = mx.zeros((B, Hv, Dv, Dk), dtype=mx.float32)
-    mx.eval(*mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0))
-    ms_seq = (
-        bench(do_kernel_bench, mx.fast.gated_delta_update, q, k, v, g, b, h0)
-        / denom
-        * 1e3
-    )
+    if do_backward:
+
+        def f(q, k, v, g, b, h0):
+            out, state = mx.fast.gated_delta_update(q, k, v, g, b, h0)
+            return out.sum() + state.sum()
+
+        fn = mx.grad(f, argnums=(0, 1, 2, 3, 4, 5))
+        runner = do_grad_bench
+
+    else:
+        fn = mx.fast.gated_delta_update
+        runner = do_kernel_bench
+
+    def time_one(C):
+        os.environ["GATED_DELTA_CHUNK"] = "0"
+        h0 = mx.zeros((B, Hv, Dv, Dk), dtype=mx.float32)
+        mx.eval(*fn(q, k, v, g, b, h0))
+        return bench(runner, fn, q, k, v, g, b, h0) / denom * 1e3
+
+    ms_seq = time_one(0)
 
     speedups = []
     for C in (c for c in chunk_sizes if c != 0):
         try:
-            os.environ["GATED_DELTA_CHUNK"] = str(C)
-            h0 = mx.zeros((B, Hv, Dv, Dk), dtype=mx.float32)
-            mx.eval(*mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0))
-            ms_c = (
-                bench(do_kernel_bench, mx.fast.gated_delta_update, q, k, v, g, b, h0)
-                / denom
-                * 1e3
-            )
+            ms_c = time_one(C)
             speedups.append(ms_seq / ms_c if ms_c > 0 else float("nan"))
         except Exception as ex:
             print(f"  chunk {C} failed: {ex}")
@@ -83,7 +104,9 @@ def benchmark_shape(B, T, Hk, Hv, Dk, Dv, chunk_sizes):
     return shape_str, f"{ms_seq:.3f}", speedups, ms_seq
 
 
-def run_benchmark(run_full, to_csv=False, csv_path="benchmark_results.csv"):
+def run_benchmark(
+    run_full, to_csv=False, csv_path="benchmark_results.csv", do_backward=False
+):
     if run_full:
         Bs = [1, 4, 8, 16]
         Ts = [8, 64, 256, 512, 1024, 2048, 4096]
@@ -116,7 +139,7 @@ def run_benchmark(run_full, to_csv=False, csv_path="benchmark_results.csv"):
 
     for B, T, Hk, Hv, Dk, Dv in itertools.product(Bs, Ts, Hks, Hvs, Dks, Dvs):
         shapes_s, base_time_s, speedups, base_time = benchmark_shape(
-            B, T, Hk, Hv, Dk, Dv, chunk_sizes
+            B, T, Hk, Hv, Dk, Dv, chunk_sizes, do_backward=do_backward
         )
         row = [f"{B}", f"{T}", f"{Hk}", f"{Hv}", f"{Dk}", f"{Dv}", base_time_s]
         for speed in speedups:
@@ -140,6 +163,9 @@ if __name__ == "__main__":
     parser.add_argument("--full", "-f", action="store_true")
     parser.add_argument("--csv", "-c", action="store_true")
     parser.add_argument("--csv_out", "-co", default="benchmark_results.csv")
+    parser.add_argument("--backward", "-bw", action="store_true")
     args = parser.parse_args()
 
-    run_benchmark(args.full, to_csv=args.csv, csv_path=args.csv_out)
+    run_benchmark(
+        args.full, to_csv=args.csv, csv_path=args.csv_out, do_backward=args.backward
+    )

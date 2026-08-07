@@ -1048,6 +1048,46 @@ std::vector<array> gated_delta_update(
   return result;
 }
 
+std::vector<array> GatedDeltaUpdate::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  // primals are q, k, v, g, b, (h?)
+  const int Hk = primals[0].shape(2);
+  const int Dk = primals[0].shape(3);
+  const int Hv = primals[2].shape(2);
+  const int Dv = primals[2].shape(3);
+
+  if (GatedDeltaUpdateVJP::use_fallback(Hk, Dk, Hv, Dv, stream())) {
+    return Custom::vjp(primals, cotangents, argnums, outputs);
+  }
+
+  std::vector<array> inputs = primals;
+  inputs.push_back(cotangents[0]); // cotangent of out
+  inputs.push_back(cotangents[1]); // cotangent of state
+
+  std::vector<Shape> shapes;
+  std::vector<Dtype> dtypes;
+  for (int i = 0; i < /* outputs size */ 6; ++i) {
+    shapes.push_back(primals[i].shape());
+    dtypes.push_back(
+        primals[i].dtype()); // Do i need to override some type with float?
+  }
+
+  auto vjps = array::make_arrays(
+      std::move(shapes),
+      std::move(dtypes),
+      std::make_shared<GatedDeltaUpdateVJP>(stream(), fallback_),
+      std::move(inputs));
+
+  std::vector<array> returned_vjps;
+  for (int arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
+  }
+  return returned_vjps;
+}
+
 bool Quantize::is_equivalent(const Primitive& other) const {
   const Quantize& p_other = static_cast<const Quantize&>(other);
   return (
