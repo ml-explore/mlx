@@ -276,6 +276,18 @@ class TestLinalg(mlx_tests.MLXTestCase):
         for M, L in zip(AB, Ls):
             self.assertTrue(mx.allclose(L @ L.T, M, rtol=1e-5, atol=1e-7))
 
+        # Single empty matrix
+        a = mx.zeros((0, 0), stream=mx.cpu)
+        r = mx.linalg.cholesky(a, stream=mx.cpu)
+        self.assertEqual(r.shape, (0, 0))
+        mx.eval(r)
+
+        # Batched empty matrices
+        a_batch = mx.zeros((3, 0, 0), stream=mx.cpu)
+        r_batch = mx.linalg.cholesky(a_batch, stream=mx.cpu)
+        self.assertEqual(r_batch.shape, (3, 0, 0))
+        mx.eval(r_batch)
+
     def test_pseudo_inverse(self):
         A = mx.array([[1, 2, 3], [6, -5, 4], [-9, 8, 7]], dtype=mx.float32)
         A_plus = mx.linalg.pinv(A, stream=mx.cpu)

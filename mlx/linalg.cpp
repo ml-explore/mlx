@@ -344,6 +344,11 @@ array cholesky(
         "[linalg::cholesky] Cholesky decomposition is only defined for square "
         "matrices.");
   }
+
+  if (a.shape(-1) == 0 || a.shape(-2) == 0) {
+    return zeros(a.shape(), a.dtype(), s);
+  }
+
   return array(
       a.shape(),
       a.dtype(),
