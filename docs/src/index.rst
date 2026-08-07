@@ -44,6 +44,7 @@ are the CPU and GPU.
    usage/compile
    usage/numpy
    usage/precision
+   usage/environment_variables
    usage/distributed
    usage/using_streams
    usage/export

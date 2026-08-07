@@ -361,7 +361,7 @@ def check_valid_ring(hosts, rings, strict=True):
         log_error("Try passing --dot to visualize the connectivity")
         if len(rings) > 0:
             log_error("Rings found:")
-            for r in rings:
+            for r, _ in rings:
                 log_error(f" - {','.join(hosts[i].ssh_hostname for i in r)}")
         sys.exit(1)
     return has_ring

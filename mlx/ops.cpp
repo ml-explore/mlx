@@ -363,7 +363,11 @@ array zeros(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
 }
 
 array zeros_like(const array& a, StreamOrDevice s /* = {} */) {
-  return full_like(a, 0, a.dtype(), to_stream(s));
+  return zeros_like(a, a.dtype(), s);
+}
+
+array zeros_like(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return full_like(a, 0, dtype, to_stream(s));
 }
 
 array ones(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
@@ -371,7 +375,11 @@ array ones(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
 }
 
 array ones_like(const array& a, StreamOrDevice s /* = {} */) {
-  return full_like(a, 1, a.dtype(), to_stream(s));
+  return ones_like(a, a.dtype(), s);
+}
+
+array ones_like(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return full_like(a, 1, dtype, to_stream(s));
 }
 
 array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
@@ -562,26 +570,50 @@ array hadamard_transform(
       {astype(a, dtype, s)});
 }
 
+namespace {
+
+std::vector<int> normalize_squeeze_axes(
+    const array& a,
+    const std::vector<int>& axes) {
+  int ndim = a.ndim();
+  std::set<int> unique_axes;
+  for (auto ax : axes) {
+    int new_ax = normalize_axis_index(ax, ndim, "[squeeze] ");
+    if (a.shape(new_ax) != 1) {
+      std::ostringstream msg;
+      msg << "[squeeze] Cannot squeeze axis " << ax << " with size "
+          << a.shape(new_ax) << " which is not equal to 1.";
+      throw std::invalid_argument(msg.str());
+    }
+    unique_axes.insert(new_ax);
+  }
+  if (unique_axes.size() != axes.size()) {
+    throw std::invalid_argument("[squeeze] Received duplicate axes.");
+  }
+  return std::vector<int>(unique_axes.begin(), unique_axes.end());
+}
+
+std::vector<int> normalize_expand_dims_axes(
+    const array& a,
+    const std::vector<int>& axes) {
+  int out_ndim = a.ndim() + axes.size();
+  std::set<int> unique_axes;
+  for (auto ax : axes) {
+    unique_axes.insert(normalize_axis_index(ax, out_ndim, "[expand_dims] "));
+  }
+  if (unique_axes.size() != axes.size()) {
+    throw std::invalid_argument("[expand_dims] Received duplicate axes.");
+  }
+  return std::vector<int>(unique_axes.begin(), unique_axes.end());
+}
+
+} // namespace
+
+// Assumes the axes are non-negative, sorted, unique, and valid for a.
 array squeeze_impl(
     const array& a,
     std::vector<int> axes,
     StreamOrDevice s /* = {} */) {
-  for (auto& ax : axes) {
-    auto new_ax = ax < 0 ? ax + a.ndim() : ax;
-    if (new_ax < 0 || new_ax >= a.ndim()) {
-      std::ostringstream msg;
-      msg << "[squeeze] Invalid axes " << ax << " for array with " << a.ndim()
-          << " dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
-    if (a.shape(new_ax) != 1) {
-      std::ostringstream msg;
-      msg << "[squeeze] Cannot squeeze axis " << ax << " with size "
-          << a.shape(ax) << " which is not equal to 1.";
-      throw std::invalid_argument(msg.str());
-    }
-    ax = new_ax;
-  }
   auto shape = Squeeze::output_shape(a, axes);
   return array(
       std::move(shape),
@@ -597,19 +629,11 @@ array squeeze(
   if (axes.empty()) {
     return a;
   }
-  std::set<int> unique_axes;
-  for (auto ax : axes) {
-    unique_axes.insert(ax < 0 ? ax + a.ndim() : ax);
-  }
-  if (unique_axes.size() != axes.size()) {
-    throw std::invalid_argument("[squeeze] Received duplicate axes.");
-  }
-  std::vector<int> sorted_axes(unique_axes.begin(), unique_axes.end());
-  return squeeze_impl(a, std::move(sorted_axes), s);
+  return squeeze_impl(a, normalize_squeeze_axes(a, axes), s);
 }
 
 array squeeze(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  return squeeze_impl(a, {axis}, s);
+  return squeeze_impl(a, normalize_squeeze_axes(a, {axis}), s);
 }
 
 array squeeze(const array& a, StreamOrDevice s /* = {} */) {
@@ -622,21 +646,11 @@ array squeeze(const array& a, StreamOrDevice s /* = {} */) {
   return squeeze_impl(a, std::move(axes), s);
 }
 
+// Assumes the axes are non-negative, sorted, unique and valid for the output.
 array expand_dims_impl(
     const array& a,
     std::vector<int> axes,
     StreamOrDevice s /* = {} */) {
-  auto out_ndim = a.ndim() + axes.size();
-  for (auto& ax : axes) {
-    auto new_ax = ax < 0 ? ax + out_ndim : ax;
-    if (new_ax < 0 || new_ax >= out_ndim) {
-      std::ostringstream msg;
-      msg << "[expand_dims] Invalid axis " << ax << " for output array with "
-          << a.ndim() << " dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
-    ax = new_ax;
-  }
   auto shape = ExpandDims::output_shape(a, axes);
   return array(
       std::move(shape),
@@ -646,7 +660,7 @@ array expand_dims_impl(
 }
 
 array expand_dims(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  return expand_dims_impl(a, {axis}, s);
+  return expand_dims_impl(a, normalize_expand_dims_axes(a, {axis}), s);
 }
 
 array expand_dims(
@@ -656,23 +670,7 @@ array expand_dims(
   if (axes.empty()) {
     return a;
   }
-  { // Check for repeats
-    std::set<int> unique_axes(axes.begin(), axes.end());
-    if (unique_axes.size() != axes.size()) {
-      throw std::invalid_argument("[expand_dims] Received duplicate axes.");
-    }
-  }
-  // Check for repeats again
-  auto out_ndim = a.ndim() + axes.size();
-  std::set<int> unique_axes;
-  for (auto ax : axes) {
-    unique_axes.insert(ax < 0 ? ax + out_ndim : ax);
-  }
-  if (unique_axes.size() != axes.size()) {
-    throw std::invalid_argument("[expand_dims] Received duplicate axes.");
-  }
-  std::vector<int> sorted_axes(unique_axes.begin(), unique_axes.end());
-  return expand_dims_impl(a, std::move(sorted_axes), s);
+  return expand_dims_impl(a, normalize_expand_dims_axes(a, axes), s);
 }
 
 array flip(
@@ -2864,7 +2862,7 @@ array logsumexp(
         std::make_shared<LogSumExp>(to_stream(s)),
         {astype(a, dtype, s)});
     if (!keepdims) {
-      out = squeeze(out, -1, s);
+      out = squeeze(out, axes, s);
     }
     return out;
   }
@@ -3101,7 +3099,7 @@ array floor(const array& a, StreamOrDevice s /* = {} */) {
 
 array ceil(const array& a, StreamOrDevice s /* = {} */) {
   if (a.dtype() == complex64) {
-    throw std::invalid_argument("[floor] Not supported for complex64.");
+    throw std::invalid_argument("[ceil] Not supported for complex64.");
   }
   return array(a.shape(), a.dtype(), std::make_shared<Ceil>(to_stream(s)), {a});
 }
@@ -4344,16 +4342,21 @@ array conv_transpose_general(
   std::vector<int> padding_lo(padding.size());
   std::vector<int> padding_hi(padding.size());
   for (int i = 0; i < padding.size(); ++i) {
-    int wt_size = 1 + dilation[i] * (weight.shape(1 + i) - 1);
-    padding_lo[i] = wt_size - padding[i] - 1;
+    int64_t wt_size =
+        1 + static_cast<int64_t>(dilation[i]) * (weight.shape(1 + i) - 1);
+    padding_lo[i] = safe_cast(wt_size - padding[i] - 1, "conv");
 
-    int conv_output_shape = (input.shape(i + 1) - 1) * stride[i] -
-        2 * padding[i] + dilation[i] * (weight.shape(i + 1) - 1) + 1;
+    int64_t conv_output_shape =
+        static_cast<int64_t>(input.shape(i + 1) - 1) * stride[i] -
+        2 * static_cast<int64_t>(padding[i]) +
+        static_cast<int64_t>(dilation[i]) * (weight.shape(i + 1) - 1) + 1;
 
-    int in_size = 1 + (conv_output_shape - 1);
-    int out_size = 1 + stride[i] * (input.shape(1 + i) - 1);
-    padding_hi[i] = in_size - out_size + padding[i] +
-        output_padding[i]; // Adjust with output_padding
+    int64_t in_size = 1 + (conv_output_shape - 1);
+    int64_t out_size =
+        1 + static_cast<int64_t>(stride[i]) * (input.shape(1 + i) - 1);
+    // Adjust with output_padding
+    padding_hi[i] =
+        safe_cast(in_size - out_size + padding[i] + output_padding[i], "conv");
   }
 
   auto ndim = stride.size();
@@ -4504,7 +4507,8 @@ array conv_general(
 
     for (int i = 0; i < spatial_dims; i++) {
       if (padding_lo[i] < 0) {
-        starts[i + 1] -= padding_lo[i];
+        starts[i + 1] = safe_cast(
+            starts[i + 1] - static_cast<int64_t>(padding_lo[i]), "conv");
         padding_lo[i] = 0;
       }
 
