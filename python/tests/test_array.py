@@ -1868,11 +1868,10 @@ class TestArray(mlx_tests.MLXTestCase):
         mv_mx = memoryview(a_mx)
         self.assertEqual(mv_mx.strides, (8, 2))
         self.assertEqual(mv_mx.shape, (3, 4))
-        self.assertEqual(mv_mx.format, "B")
-        with self.assertRaises(RuntimeError) as cm:
+        self.assertIn(mv_mx.format, "bfloat16")
+        with self.assertRaises(ValueError) as cm:
             np.array(a_mx)
-        e = cm.exception
-        self.assertTrue("Item size 2 for PEP 3118 buffer format string" in str(e))
+        self.assertIn("bfloat16", str(cm.exception))
 
         # Test buffer protocol with non-arrays ie bytes
         a = ord("a") * 257 + mx.arange(10).astype(mx.int16)
@@ -2674,16 +2673,23 @@ class TestArray(mlx_tests.MLXTestCase):
         a = mx.array(1)
         self.assertEqual(int(a), 1)
         self.assertEqual(float(a), 1)
+        self.assertEqual(complex(a), 1 + 0j)
 
         a = mx.array(1.5)
         self.assertEqual(float(a), 1.5)
         self.assertEqual(int(a), 1)
+        self.assertEqual(complex(a), 1.5 + 0j)
+
+        a = mx.array(1 + 2j, dtype=mx.complex64)  # type: ignore
+        self.assertEqual(complex(a), 1 + 2j)
 
         a = mx.zeros((2, 1))
         with self.assertRaises(ValueError):
             float(a)
         with self.assertRaises(ValueError):
             int(a)
+        with self.assertRaises(ValueError):
+            complex(a)
 
     def test_format(self):
         a = mx.arange(3)

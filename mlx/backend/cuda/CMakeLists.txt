@@ -277,7 +277,7 @@ set(CUDNN_FRONTEND_BUILD_SAMPLES OFF)
 set(CUDNN_FRONTEND_BUILD_TESTS OFF)
 set(CUDNN_FRONTEND_BUILD_PYTHON_BINDINGS OFF)
 FetchContent_MakeAvailable(cudnn)
-target_link_libraries(mlx PRIVATE cudnn_frontend)
+target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:cudnn_frontend>)
 # Link with the actual cuDNN libraries.
 target_link_libraries(mlx PRIVATE CUDNN::cudnn_all)
 

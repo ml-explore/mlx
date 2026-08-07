@@ -160,11 +160,6 @@ host and on the same path. A good checklist to debug errors is the following:
   ``mlx.launch --print-python`` to see what that path is.
 * the script you want to run is available on all hosts at the same path
 
-If you are launching from a node with a completely different setup than the
-nodes that the program will run on, you can specify ``--no-verify-script`` so
-that ``mlx.launch`` does not attempt to verify that the executable and script
-exist locally before launching the distributed job.
-
 .. _ring_specifics:
 
 Ring Specifics
@@ -207,7 +202,7 @@ multi-gpu jobs. For instance
 
 .. code-block::
 
-   mlx.launch --backend nccl --hosts linux-1,linux-2 -n 8 --no-verify-script -- ./my-job.sh
+   mlx.launch --backend nccl --hosts linux-1,linux-2 -n 8 -- ./my-job.sh
 
 will attempt to launch 16 processes, 8 on each node that will all run
 ``my-job.sh``.

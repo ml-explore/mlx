@@ -65,11 +65,26 @@ Dtype at_least_float(const Dtype& d) {
 }
 
 array indices_or_default(
-    std::optional<array> indices,
+    std::string_view tag,
+    const std::optional<array>& indices,
     const array& x,
     StreamOrDevice s) {
+  if (x.ndim() < 2) {
+    std::ostringstream msg;
+    msg << tag
+        << " Input must have at least two dimensions but got input with shape "
+        << x.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
   if (indices.has_value()) {
-    return indices.value();
+    if (!issubdtype(indices->dtype(), integer)) {
+      std::ostringstream msg;
+      msg << tag
+          << " Got indices with invalid dtype. Indices must be integral.";
+      throw std::invalid_argument(msg.str());
+    }
+    return astype(indices.value(), uint32);
   }
 
   Shape shape(x.shape().begin(), x.shape().end() - 2);
@@ -348,7 +363,11 @@ array zeros(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
 }
 
 array zeros_like(const array& a, StreamOrDevice s /* = {} */) {
-  return full_like(a, 0, a.dtype(), to_stream(s));
+  return zeros_like(a, a.dtype(), s);
+}
+
+array zeros_like(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return full_like(a, 0, dtype, to_stream(s));
 }
 
 array ones(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
@@ -356,14 +375,23 @@ array ones(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
 }
 
 array ones_like(const array& a, StreamOrDevice s /* = {} */) {
-  return full_like(a, 1, a.dtype(), to_stream(s));
+  return ones_like(a, a.dtype(), s);
+}
+
+array ones_like(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return full_like(a, 1, dtype, to_stream(s));
 }
 
 array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
-  if (n <= 0 || m <= 0) {
+  if (n < 0 || m < 0) {
     throw std::invalid_argument("[eye] N and M must be positive integers.");
   }
   array result = zeros({n, m}, dtype, s);
+
+  if (n == 0 || m == 0) {
+    return result;
+  }
+
   if (k >= m || -k >= n) {
     return result;
   }
@@ -542,26 +570,50 @@ array hadamard_transform(
       {astype(a, dtype, s)});
 }
 
+namespace {
+
+std::vector<int> normalize_squeeze_axes(
+    const array& a,
+    const std::vector<int>& axes) {
+  int ndim = a.ndim();
+  std::set<int> unique_axes;
+  for (auto ax : axes) {
+    int new_ax = normalize_axis_index(ax, ndim, "[squeeze] ");
+    if (a.shape(new_ax) != 1) {
+      std::ostringstream msg;
+      msg << "[squeeze] Cannot squeeze axis " << ax << " with size "
+          << a.shape(new_ax) << " which is not equal to 1.";
+      throw std::invalid_argument(msg.str());
+    }
+    unique_axes.insert(new_ax);
+  }
+  if (unique_axes.size() != axes.size()) {
+    throw std::invalid_argument("[squeeze] Received duplicate axes.");
+  }
+  return std::vector<int>(unique_axes.begin(), unique_axes.end());
+}
+
+std::vector<int> normalize_expand_dims_axes(
+    const array& a,
+    const std::vector<int>& axes) {
+  int out_ndim = a.ndim() + axes.size();
+  std::set<int> unique_axes;
+  for (auto ax : axes) {
+    unique_axes.insert(normalize_axis_index(ax, out_ndim, "[expand_dims] "));
+  }
+  if (unique_axes.size() != axes.size()) {
+    throw std::invalid_argument("[expand_dims] Received duplicate axes.");
+  }
+  return std::vector<int>(unique_axes.begin(), unique_axes.end());
+}
+
+} // namespace
+
+// Assumes the axes are non-negative, sorted, unique, and valid for a.
 array squeeze_impl(
     const array& a,
     std::vector<int> axes,
     StreamOrDevice s /* = {} */) {
-  for (auto& ax : axes) {
-    auto new_ax = ax < 0 ? ax + a.ndim() : ax;
-    if (new_ax < 0 || new_ax >= a.ndim()) {
-      std::ostringstream msg;
-      msg << "[squeeze] Invalid axes " << ax << " for array with " << a.ndim()
-          << " dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
-    if (a.shape(new_ax) != 1) {
-      std::ostringstream msg;
-      msg << "[squeeze] Cannot squeeze axis " << ax << " with size "
-          << a.shape(ax) << " which is not equal to 1.";
-      throw std::invalid_argument(msg.str());
-    }
-    ax = new_ax;
-  }
   auto shape = Squeeze::output_shape(a, axes);
   return array(
       std::move(shape),
@@ -577,19 +629,11 @@ array squeeze(
   if (axes.empty()) {
     return a;
   }
-  std::set<int> unique_axes;
-  for (auto ax : axes) {
-    unique_axes.insert(ax < 0 ? ax + a.ndim() : ax);
-  }
-  if (unique_axes.size() != axes.size()) {
-    throw std::invalid_argument("[squeeze] Received duplicate axes.");
-  }
-  std::vector<int> sorted_axes(unique_axes.begin(), unique_axes.end());
-  return squeeze_impl(a, std::move(sorted_axes), s);
+  return squeeze_impl(a, normalize_squeeze_axes(a, axes), s);
 }
 
 array squeeze(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  return squeeze_impl(a, {axis}, s);
+  return squeeze_impl(a, normalize_squeeze_axes(a, {axis}), s);
 }
 
 array squeeze(const array& a, StreamOrDevice s /* = {} */) {
@@ -602,21 +646,11 @@ array squeeze(const array& a, StreamOrDevice s /* = {} */) {
   return squeeze_impl(a, std::move(axes), s);
 }
 
+// Assumes the axes are non-negative, sorted, unique and valid for the output.
 array expand_dims_impl(
     const array& a,
     std::vector<int> axes,
     StreamOrDevice s /* = {} */) {
-  auto out_ndim = a.ndim() + axes.size();
-  for (auto& ax : axes) {
-    auto new_ax = ax < 0 ? ax + out_ndim : ax;
-    if (new_ax < 0 || new_ax >= out_ndim) {
-      std::ostringstream msg;
-      msg << "[expand_dims] Invalid axis " << ax << " for output array with "
-          << a.ndim() << " dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
-    ax = new_ax;
-  }
   auto shape = ExpandDims::output_shape(a, axes);
   return array(
       std::move(shape),
@@ -626,7 +660,7 @@ array expand_dims_impl(
 }
 
 array expand_dims(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  return expand_dims_impl(a, {axis}, s);
+  return expand_dims_impl(a, normalize_expand_dims_axes(a, {axis}), s);
 }
 
 array expand_dims(
@@ -636,23 +670,7 @@ array expand_dims(
   if (axes.empty()) {
     return a;
   }
-  { // Check for repeats
-    std::set<int> unique_axes(axes.begin(), axes.end());
-    if (unique_axes.size() != axes.size()) {
-      throw std::invalid_argument("[expand_dims] Received duplicate axes.");
-    }
-  }
-  // Check for repeats again
-  auto out_ndim = a.ndim() + axes.size();
-  std::set<int> unique_axes;
-  for (auto ax : axes) {
-    unique_axes.insert(ax < 0 ? ax + out_ndim : ax);
-  }
-  if (unique_axes.size() != axes.size()) {
-    throw std::invalid_argument("[expand_dims] Received duplicate axes.");
-  }
-  std::vector<int> sorted_axes(unique_axes.begin(), unique_axes.end());
-  return expand_dims_impl(a, std::move(sorted_axes), s);
+  return expand_dims_impl(a, normalize_expand_dims_axes(a, axes), s);
 }
 
 array flip(
@@ -2844,7 +2862,7 @@ array logsumexp(
         std::make_shared<LogSumExp>(to_stream(s)),
         {astype(a, dtype, s)});
     if (!keepdims) {
-      out = squeeze(out, -1, s);
+      out = squeeze(out, axes, s);
     }
     return out;
   }
@@ -3081,7 +3099,7 @@ array floor(const array& a, StreamOrDevice s /* = {} */) {
 
 array ceil(const array& a, StreamOrDevice s /* = {} */) {
   if (a.dtype() == complex64) {
-    throw std::invalid_argument("[floor] Not supported for complex64.");
+    throw std::invalid_argument("[ceil] Not supported for complex64.");
   }
   return array(a.shape(), a.dtype(), std::make_shared<Ceil>(to_stream(s)), {a});
 }
@@ -3352,9 +3370,14 @@ array matmul(
   }
 
   // We can batch the multiplication by reshaping a
-  if (in_a.ndim() > 2 && in_b.ndim() <= 2) {
+  bool flattened_a = false;
+
+  // Avoid flatten/unflatten during dynamic tracing because unflatten stores the
+  // trace-time shape, which breaks shapeless replay with dynamic batch sizes.
+  if (in_a.ndim() > 2 && in_b.ndim() <= 2 && !detail::in_dynamic_tracing()) {
     a = flatten(a, 0, -2, s);
-  } else if (in_b.ndim() > 2) {
+    flattened_a = true;
+  } else if (in_a.ndim() > 2 || in_b.ndim() > 2) {
     std::tie(a, b) = broadcast_arrays(a, b, {-2, -1}, s);
   }
 
@@ -3366,7 +3389,8 @@ array matmul(
       out_type,
       std::make_shared<Matmul>(to_stream(s)),
       {a, b});
-  if (in_a.ndim() > 2 && in_b.ndim() <= 2) {
+
+  if (flattened_a) {
     auto orig_shape = in_a.shape();
     orig_shape.pop_back();
     out = unflatten(out, 0, std::move(orig_shape), s);
@@ -4318,16 +4342,21 @@ array conv_transpose_general(
   std::vector<int> padding_lo(padding.size());
   std::vector<int> padding_hi(padding.size());
   for (int i = 0; i < padding.size(); ++i) {
-    int wt_size = 1 + dilation[i] * (weight.shape(1 + i) - 1);
-    padding_lo[i] = wt_size - padding[i] - 1;
+    int64_t wt_size =
+        1 + static_cast<int64_t>(dilation[i]) * (weight.shape(1 + i) - 1);
+    padding_lo[i] = safe_cast(wt_size - padding[i] - 1, "conv");
 
-    int conv_output_shape = (input.shape(i + 1) - 1) * stride[i] -
-        2 * padding[i] + dilation[i] * (weight.shape(i + 1) - 1) + 1;
+    int64_t conv_output_shape =
+        static_cast<int64_t>(input.shape(i + 1) - 1) * stride[i] -
+        2 * static_cast<int64_t>(padding[i]) +
+        static_cast<int64_t>(dilation[i]) * (weight.shape(i + 1) - 1) + 1;
 
-    int in_size = 1 + (conv_output_shape - 1);
-    int out_size = 1 + stride[i] * (input.shape(1 + i) - 1);
-    padding_hi[i] = in_size - out_size + padding[i] +
-        output_padding[i]; // Adjust with output_padding
+    int64_t in_size = 1 + (conv_output_shape - 1);
+    int64_t out_size =
+        1 + static_cast<int64_t>(stride[i]) * (input.shape(1 + i) - 1);
+    // Adjust with output_padding
+    padding_hi[i] =
+        safe_cast(in_size - out_size + padding[i] + output_padding[i], "conv");
   }
 
   auto ndim = stride.size();
@@ -4478,7 +4507,8 @@ array conv_general(
 
     for (int i = 0; i < spatial_dims; i++) {
       if (padding_lo[i] < 0) {
-        starts[i + 1] -= padding_lo[i];
+        starts[i + 1] = safe_cast(
+            starts[i + 1] - static_cast<int64_t>(padding_lo[i]), "conv");
         padding_lo[i] = 0;
       }
 
@@ -4626,10 +4656,10 @@ void validate_global_scale(
 }
 
 array quantized_matmul(
-    array x,
-    array w,
-    array scales,
-    std::optional<array> biases /* = std::nullopt */,
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases /* = std::nullopt */,
     bool transpose /* = true */,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
@@ -4678,13 +4708,13 @@ array quantized_matmul(
 }
 
 void validate_qqmm_inputs(
-    array x,
-    array w,
-    std::optional<array> scales_w,
+    const array& x,
+    const array& w,
+    const std::optional<array>& scales_w,
     int group_size,
     int bits,
-    std::optional<array> global_scale_x,
-    std::optional<array> global_scale_w,
+    const std::optional<array>& global_scale_x,
+    const std::optional<array>& global_scale_w,
     QuantizationMode qmode) {
   // check 2D (for now)
   if (x.ndim() > 2 || w.ndim() > 2) {
@@ -4738,9 +4768,9 @@ void validate_qqmm_inputs(
 }
 
 std::pair<int, int> extract_qqmm_dims(
-    array x,
-    array w,
-    std::optional<array> scales_w,
+    const array& x,
+    const array& w,
+    const std::optional<array>& scales_w,
     int group_size,
     int bits) {
   if (w.dtype() != uint32) {
@@ -4768,24 +4798,17 @@ std::pair<int, int> extract_qqmm_dims(
 }
 
 array qqmm(
-    array in_x,
-    array w,
-    std::optional<array> scales_w,
+    const array& in_x,
+    const array& w,
+    const std::optional<array>& scales_w,
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "nvfp4" */,
-    const std::optional<array> global_scale_x /* = std::nullopt */,
-    const std::optional<array> global_scale_w /* = std::nullopt */,
+    const std::optional<array>& global_scale_x /* = std::nullopt */,
+    const std::optional<array>& global_scale_w /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
   auto qmode = string_to_quantization_mode(mode, "qqmm");
-  // cuBLAS block scaled matmul only supports nvfp4 and mxfp8
-  if (qmode != QuantizationMode::Nvfp4 && qmode != QuantizationMode::Mxfp8) {
-    std::ostringstream msg;
-    msg << "[qqmm] Only 'nvfp4' and 'mxfp8' quantization modes are supported but '"
-        << mode << "' was provided.";
-    throw std::invalid_argument(msg.str());
-  }
   // we need to check 2 cases:
   // 1. w is quantized, scales is provided
   // 2. w is not quantized, scales is not provided
@@ -5088,12 +5111,6 @@ std::vector<array> quantize(
         << " matrix has shape " << w.shape();
     throw std::invalid_argument(msg.str());
   }
-  if (to_stream(s).device == Device::gpu && metal::is_available() &&
-      global_scale.has_value()) {
-    std::ostringstream msg;
-    msg << "[quantize] Global scale is not supported on the Metal backend.";
-    throw std::invalid_argument(msg.str());
-  }
   validate_global_scale("quantize", qmode, global_scale);
   if (qmode == QuantizationMode::Affine) {
     return affine_quantize(w, group_size, bits, s);
@@ -5353,13 +5370,6 @@ array dequantize(
         << "but it has only " << w.ndim() << ".";
     throw std::invalid_argument(msg.str());
   }
-  if (global_scale.has_value()) {
-    if (to_stream(s).device == Device::gpu && metal::is_available()) {
-      std::ostringstream msg;
-      msg << "[dequantize] Global scale is not supported on the Metal backend.";
-      throw std::invalid_argument(msg.str());
-    }
-  }
   validate_global_scale("dequantize", qmode, global_scale);
 
   if (qmode == QuantizationMode::Affine) {
@@ -5452,29 +5462,10 @@ array gather_qmm(
   }
 
   // Extract indices and broadcast them
-  array lhs_indices = indices_or_default(lhs_indices_, x, s);
-  array rhs_indices = indices_or_default(rhs_indices_, w, s);
+  array lhs_indices = indices_or_default("[gather_qmm]", lhs_indices_, x, s);
+  array rhs_indices = indices_or_default("[gather_qmm]", rhs_indices_, w, s);
   std::tie(lhs_indices, rhs_indices) =
       broadcast_arrays(lhs_indices, rhs_indices, s);
-
-  if (!issubdtype(lhs_indices.dtype(), integer)) {
-    throw std::invalid_argument(
-        "[gather_qmm] Got lhs_indices with invalid dtype. Indices must be integral.");
-  }
-
-  if (!issubdtype(rhs_indices.dtype(), integer)) {
-    throw std::invalid_argument(
-        "[gather_qmm] Got rhs_indices with invalid dtype. Indices must be integral.");
-  }
-  if (x.ndim() < 2) {
-    std::ostringstream msg;
-    msg << "[gather_qmm] Non-quantized input must have at least two"
-        << " dimensions but got input with shape " << x.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  lhs_indices = astype(lhs_indices, uint32, s);
-  rhs_indices = astype(rhs_indices, uint32, s);
 
   // Compute the full output shape
   auto out_shape = lhs_indices.shape();
@@ -5508,6 +5499,56 @@ array gather_qmm(
           transpose,
           sorted_indices && !rhs_indices_,
           sorted_indices && !lhs_indices_),
+      std::move(inputs));
+}
+
+array gather_qqmm(
+    const array& x,
+    const array& w,
+    const std::optional<array>& scales_w,
+    const std::optional<array>& lhs_indices_,
+    const std::optional<array>& rhs_indices_,
+    std::optional<int> group_size_,
+    std::optional<int> bits_,
+    const std::string& mode,
+    const std::optional<array>& global_scale_x,
+    const std::optional<array>& global_scale_w,
+    bool sorted_indices,
+    StreamOrDevice s) {
+  auto stream = to_stream(s);
+  auto qmode = string_to_quantization_mode(mode, "gather_qqmm");
+  auto [group_size, bits] =
+      quantization_params_from_mode(qmode, group_size_, bits_);
+
+  // Extract indices and broadcast them
+  array lhs_indices = indices_or_default("[gather_qqmm]", lhs_indices_, x, s);
+  array rhs_indices = indices_or_default("[gather_qqmm]", rhs_indices_, w, s);
+  std::tie(lhs_indices, rhs_indices) =
+      broadcast_arrays(lhs_indices, rhs_indices, s);
+
+  std::vector<array> inputs = {
+      x,
+      w,
+      lhs_indices,
+      rhs_indices,
+  };
+  if (scales_w.has_value()) {
+    inputs.push_back(*scales_w);
+  }
+  if (global_scale_x.has_value() && global_scale_w.has_value()) {
+    inputs.push_back(*global_scale_x);
+    inputs.push_back(*global_scale_w);
+  }
+
+  auto [w_inner_dims, w_outer_dims] =
+      extract_qqmm_dims(x, w, scales_w, group_size, bits);
+  auto out_shape = lhs_indices.shape();
+  out_shape.push_back(x.shape(-2));
+  out_shape.push_back(w_outer_dims);
+  return array(
+      std::move(out_shape),
+      x.dtype(),
+      std::make_shared<GatherQQMM>(stream, group_size, bits, qmode),
       std::move(inputs));
 }
 
@@ -6009,27 +6050,13 @@ array gather_mm(
   b = astype(b, out_type, s);
 
   // Handle broadcasting
-  array lhs_indices = indices_or_default(lhs_indices_, a, s);
-  array rhs_indices = indices_or_default(rhs_indices_, b, s);
-
-  if (!issubdtype(lhs_indices.dtype(), integer)) {
-    throw std::invalid_argument(
-        "[gather_mm] Got lhs_indices with invalid dtype. Indices must be integral.");
-  }
-
-  if (!issubdtype(rhs_indices.dtype(), integer)) {
-    throw std::invalid_argument(
-        "[gather_mm] Got rhs_indices with invalid dtype. Indices must be integral.");
-  }
-
-  lhs_indices = astype(lhs_indices, uint32, s);
-  rhs_indices = astype(rhs_indices, uint32, s);
+  array lhs_indices = indices_or_default("[gather_mm]", lhs_indices_, a, s);
+  array rhs_indices = indices_or_default("[gather_mm]", rhs_indices_, b, s);
+  std::tie(lhs_indices, rhs_indices) =
+      broadcast_arrays(lhs_indices, rhs_indices, s);
 
   int M = a.shape(-2);
   int N = b.shape(-1);
-
-  std::tie(lhs_indices, rhs_indices) =
-      broadcast_arrays(lhs_indices, rhs_indices, s);
 
   auto out_shape = lhs_indices.shape();
   out_shape.push_back(M);

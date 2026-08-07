@@ -77,7 +77,7 @@ class Optimizer:
         state initialization.
 
         Args:
-            parameter (mx.array): A single parameter that will be optimized.
+            parameter (array): A single parameter that will be optimized.
             state (dict): The optimizer's state.
         """
         raise NotImplementedError()
@@ -112,8 +112,8 @@ class Optimizer:
         """To be extended by derived classes to implement the optimizer's update.
 
         Args:
-            gradient (mx.array): The ``parameter`` gradient.
-            parameter (mx.array): The ``parameter`` to update.
+            gradient (array): The ``parameter`` gradient.
+            parameter (array): The ``parameter`` to update.
             state (dict): The optimizer's state.
         """
         raise NotImplementedError()

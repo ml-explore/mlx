@@ -1,7 +1,10 @@
 #pragma once
 
+constant constexpr float F8E4M3_MAX = 448.0f;
+constant constexpr float F4E2M1_MAX = 6.0f;
+
 struct fp4_e2m1 {
-  fp4_e2m1(float x) {
+  fp4_e2m1(float x) thread {
     if (metal::isnan(x)) {
       bits = 0x7;
       return;
@@ -30,17 +33,17 @@ struct fp4_e2m1 {
     bits |= sign_bit;
   }
 
-  operator float16_t() {
+  operator float16_t() thread {
     half converted = as_type<half>(ushort((bits & 7) << 9));
     converted *= 16384.0;
     return bits & 8 ? -converted : converted;
   }
 
-  operator float() {
+  operator float() thread {
     return static_cast<float>(this->operator float16_t());
   }
 
-  operator bfloat16_t() {
+  operator bfloat16_t() thread {
     return static_cast<bfloat16_t>(this->operator float16_t());
   }
 

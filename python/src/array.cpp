@@ -539,6 +539,13 @@ void init_array(nb::module_& m) {
               return nb::make_tuple(1, 0);
             }
           })
+      .def(
+          "__array__",
+          [](const mx::array& self, nb::object dtype, nb::object copy) {
+            return mlx_to_np_array(self);
+          },
+          "dtype"_a = nb::none(),
+          "copy"_a = nb::none())
       .def("__copy__", [](const mx::array& self) { return mx::array(self); })
       .def(
           "__deepcopy__",
@@ -1025,6 +1032,11 @@ void init_array(nb::module_& m) {
           nb::rv_policy::none)
       .def("__int__", [](mx::array& a) { return nb::int_(to_scalar(a)); })
       .def("__float__", [](mx::array& a) { return nb::float_(to_scalar(a)); })
+      .def(
+          "__complex__",
+          [](mx::array& a) {
+            return nb::cast<std::complex<double>>(to_scalar(a));
+          })
       .def(
           "__format__",
           [](mx::array& a, nb::object format_spec) {

@@ -241,7 +241,7 @@ Simd<T, N> remainder(Simd<T, N> a, Simd<T, N> b) {
   } else {
     r = a - b * (a / b);
   }
-  if constexpr (std::is_signed_v<T>) {
+  if constexpr (is_signed_v<T>) {
     auto mask = r != 0 && (r < 0 != b < 0);
     r = select(mask, r + b, r);
   }

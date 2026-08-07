@@ -1473,21 +1473,25 @@ void init_ops(nb::module_& m) {
   m.def(
       "arange",
       [](Scalar start,
-         Scalar stop,
+         std::optional<Scalar> stop,
          const std::optional<Scalar>& step,
          const std::optional<mx::Dtype>& dtype_,
          mx::StreamOrDevice s) {
+        if (!stop) {
+          stop = start;
+          start = 0;
+        }
         // Determine the final dtype based on input types
         mx::Dtype dtype = dtype_
             ? *dtype_
             : mx::promote_types(
                   scalar_to_dtype(start),
                   step ? mx::promote_types(
-                             scalar_to_dtype(stop), scalar_to_dtype(*step))
-                       : scalar_to_dtype(stop));
+                             scalar_to_dtype(*stop), scalar_to_dtype(*step))
+                       : scalar_to_dtype(*stop));
         return mx::arange(
             scalar_to_double(start),
-            scalar_to_double(stop),
+            scalar_to_double(*stop),
             step ? scalar_to_double(*step) : 1.0,
             dtype,
             s);
@@ -1499,7 +1503,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def arange(start : Union[int, float], stop : Union[int, float], step : Union[None, int, float], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def arange(start : Union[int, float], stop : Union[None, int, float], step : Union[None, int, float], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
       Generates ranges of numbers.
 
@@ -1508,7 +1512,7 @@ void init_ops(nb::module_& m) {
 
       Args:
           start (float or int, optional): Starting value which defaults to ``0``.
-          stop (float or int): Stopping value.
+          stop (float or int, optional): Stopping value.
           step (float or int, optional): Increment which defaults to ``1``.
           dtype (Dtype, optional): Specifies the data type of the output. If unspecified will default to ``float32`` if any of ``start``, ``stop``, or ``step`` are ``float``. Otherwise will default to ``int32``.
 
@@ -1955,17 +1959,24 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "zeros_like",
-      &mx::zeros_like,
+      [](const mx::array& a,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        return mx::zeros_like(a, dtype.value_or(a.dtype()), s);
+      },
       nb::arg(),
+      "dtype"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def zeros_like(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def zeros_like(a: array, /, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         An array of zeros like the input.
 
         Args:
-            a (array): The input to take the shape and type from.
+            a (array): The input to take the shape from.
+            dtype (Dtype, optional): Output data type. If ``None``, the output
+              type defaults to the input array's data type.
 
         Returns:
             array: The output array filled with zeros.
@@ -1997,17 +2008,24 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "ones_like",
-      &mx::ones_like,
+      [](const mx::array& a,
+         std::optional<mx::Dtype> dtype,
+         mx::StreamOrDevice s) {
+        return mx::ones_like(a, dtype.value_or(a.dtype()), s);
+      },
       nb::arg(),
+      "dtype"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def ones_like(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def ones_like(a: array, /, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         An array of ones like the input.
 
         Args:
-            a (array): The input to take the shape and type from.
+            a (array): The input to take the shape from.
+            dtype (Dtype, optional): Output data type. If ``None``, the output
+              type defaults to the input array's data type.
 
         Returns:
             array: The output array filled with ones.
@@ -4800,6 +4818,58 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The result of the multiplication of ``x`` with ``w``
               after gathering using ``lhs_indices`` and ``rhs_indices``.
+      )pbdoc");
+  m.def(
+      "gather_qqmm",
+      &mx::gather_qqmm,
+      nb::arg(),
+      nb::arg(),
+      "scales"_a = nb::none(),
+      "lhs_indices"_a = nb::none(),
+      "rhs_indices"_a = nb::none(),
+      "group_size"_a = nb::none(),
+      "bits"_a = nb::none(),
+      "mode"_a = "nvfp4",
+      "global_scale_x"_a = nb::none(),
+      "global_scale_w"_a = nb::none(),
+      nb::kw_only(),
+      "sorted_indices"_a = false,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def gather_qqmm(x: array, w: array, /, scales: Optional[array] = None, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, group_size: Optional[int] = None, bits: Optional[int] = None, mode: str = 'nvfp4', global_scale_x: Optional[array] = None, global_scale_w: Optional[array] = None, *, sorted_indices: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Fused :func:`qqmm` with matrix-level gather.
+
+        Similar to :func:`gather_mm`, the indices ``lhs_indices`` and
+        ``rhs_indices`` contain flat indices along the batch dimensions (i.e.
+        all but the last two dimensions) of ``x`` and ``w`` respectively.
+
+        Args:
+            x (array): Input array.
+            w (array): Weight matrix. If quantized, it is packed in unsigned integers.
+            scales (array, optional): The scales to use per ``group_size`` elements of
+              ``w`` if ``w`` is quantized. Default: ``None``.
+            lhs_indices (array, optional): Integer indices for ``x``. Default: ``None``.
+            rhs_indices (array, optional): Integer indices for ``w``. Default: ``None``.
+            group_size (int, optional): Number of elements in ``x`` and ``w`` that
+              share a scale. See supported values and defaults in the
+              :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+            bits (int, optional): Number of bits used to represent each element of
+              ``x`` and ``w``. See supported values and defaults in the
+              :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+            mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
+              Supported modes are ``nvfp4`` and ``mxfp8``. See the
+              :ref:`table of quantization modes <quantize-modes>` for details.
+            global_scale_x (array, optional): The per-input float32 scale used for x
+                with ``"nvfp4"`` quantization. Default: ``None``.
+            global_scale_w (array, optional): The per-input float32 scale used for w
+                with ``"nvfp4"`` quantization. Default: ``None``.
+            sorted_indices (bool, optional): May allow a faster implementation
+              if the passed indices are sorted. Default: ``False``.
+
+        Returns:
+            array: The result of the multiplication of quantized ``x`` with quantized ``w``.
+            needed).
       )pbdoc");
   m.def(
       "segmented_mm",
