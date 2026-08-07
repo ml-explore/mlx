@@ -2227,6 +2227,9 @@ class TestOps(mlx_tests.MLXTestCase):
         y = mx.as_strided(x, (x.size,), (-1,), x.size - 1)
         self.assertTrue(mx.array_equal(y, x[::-1]))
 
+        with self.assertRaises(ValueError):
+            mx.as_strided(x, (-2, 3), (3, 1), 0)
+
     def test_logcumsumexp(self):
         npop = np.logaddexp.accumulate
         mxop = mx.logcumsumexp
