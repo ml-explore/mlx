@@ -1080,7 +1080,7 @@ void dot_product(
       MTL::Size(size_t(blocks) * thread_group_size, 1, 1),
       MTL::Size(thread_group_size, 1, 1));
 
-  array tempResult({1}, float32, nullptr, {});
+  array tempResult(out.shape(), float32, nullptr, {});
   tempResult.set_data(allocator::malloc(tempResult.nbytes()));
   copies.push_back(tempResult);
   all_reduce_dispatch(partials, tempResult, "sum", compute_encoder, d, s);
