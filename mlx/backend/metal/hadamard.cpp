@@ -69,7 +69,10 @@ void hadamard_mn_contiguous(
   int n = n1 * n2;
   int read_width_n1 = n1 == 2 ? 2 : 4;
   int read_width_n2 = n2 == 2 ? 2 : 4;
-  int read_width_m = (n == 2 || m == 28) ? 2 : 4;
+  // n == 1 (m in (12, 20, 28) with no power-of-2 factor) leaves the m stage as
+  // the only transform, and it strides by n / read_width_m, so the read width
+  // cannot exceed n.
+  int read_width_m = (n == 1) ? 1 : ((n == 2 || m == 28) ? 2 : 4);
   int max_radix_1 = std::min(n1, 16);
   int max_radix_2 = std::min(n2, 16);
   float scale_n1 = 1.0;
@@ -97,17 +100,16 @@ void hadamard_mn_contiguous(
   auto lib = d.get_library(kname, [&]() {
     std::string kernel;
     concatenate(
-        kernel,
-        metal::utils(),
-        gen_hadamard_codelet(m),
-        metal::hadamard(),
-        get_template_definition(
-            "n2" + kname,
-            "hadamard_n",
-            get_type_string(x.dtype()),
-            n2,
-            max_radix_2,
-            read_width_n2));
+        kernel, metal::utils(), gen_hadamard_codelet(m), metal::hadamard());
+    if (n2 > 1) {
+      kernel += get_template_definition(
+          "n2" + kname,
+          "hadamard_n",
+          get_type_string(x.dtype()),
+          n2,
+          max_radix_2,
+          read_width_n2);
+    }
     if (n1 > 1) {
       kernel += get_template_definition(
           "n1" + kname,
@@ -143,18 +145,22 @@ void hadamard_mn_contiguous(
 
   // Launch the transform for n2
   auto& compute_encoder = metal::get_command_encoder(s);
-  auto kernel = d.get_kernel("n2" + kname, lib);
-  compute_encoder.set_compute_pipeline_state(kernel);
-  compute_encoder.set_input_array(n1 > 1 ? y : x, 0);
-  compute_encoder.set_output_array(y, 1);
-  compute_encoder.set_bytes(scale_n2, 2);
-  compute_encoder.dispatch_threads(grid_dims_n2, group_dims_n2);
+  if (n2 > 1) {
+    auto kernel = d.get_kernel("n2" + kname, lib);
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(n1 > 1 ? y : x, 0);
+    compute_encoder.set_output_array(y, 1);
+    compute_encoder.set_bytes(scale_n2, 2);
+    compute_encoder.dispatch_threads(grid_dims_n2, group_dims_n2);
+  }
 
   // Launch the strided transform for m
   if (m > 1) {
     auto kernel = d.get_kernel("m" + kname, lib);
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(y, 0);
+    // n = 1 means neither power-of-2 stage ran, so x has not been copied into y
+    // yet and the only transform is this one; read straight from x.
+    compute_encoder.set_input_array(n > 1 ? y : x, 0);
     compute_encoder.set_output_array(y, 1);
     compute_encoder.set_bytes(scale_m, 2);
     compute_encoder.dispatch_threads(grid_dims_m, group_dims_m);
