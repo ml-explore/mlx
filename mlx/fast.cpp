@@ -1078,6 +1078,12 @@ std::vector<array> gated_delta_update(
     auto beta = astype(inputs[4], float32, s);
     auto state = astype(inputs[5], float32, s);
 
+    if (Hv != Hk) {
+      int repeat_factor = Hv / Hk;
+      q = repeat(q, repeat_factor, 2, s);
+      k = repeat(k, repeat_factor, 2, s);
+    }
+
     array mask = has_mask ? astype(inputs[6], bool_, s) : array(false);
     const array zero = array(0.0f, float32);
 
