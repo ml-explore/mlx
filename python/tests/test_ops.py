@@ -3568,6 +3568,41 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
+    def test_zeros_ones_empty_like_dtype(self):
+        x = mx.array([1, 2, 3], dtype=mx.int32)
+
+        # Default dtype (should match x)
+        z = mx.zeros_like(x)
+        self.assertEqual(z.dtype, mx.int32)
+        o = mx.ones_like(x)
+        self.assertEqual(o.dtype, mx.int32)
+        e = mx.empty_like(x)
+        self.assertEqual(e.dtype, mx.int32)
+
+        # Positional dtype
+        z = mx.zeros_like(x, mx.float16)
+        self.assertEqual(z.dtype, mx.float16)
+        self.assertTrue(mx.array_equal(z, mx.zeros((3,), mx.float16)))
+
+        o = mx.ones_like(x, mx.float16)
+        self.assertEqual(o.dtype, mx.float16)
+        self.assertTrue(mx.array_equal(o, mx.ones((3,), mx.float16)))
+
+        e = mx.empty_like(x, mx.float16)
+        self.assertEqual(e.dtype, mx.float16)
+
+        # Keyword dtype
+        z = mx.zeros_like(x, dtype=mx.float32)
+        self.assertEqual(z.dtype, mx.float32)
+        self.assertTrue(mx.array_equal(z, mx.zeros((3,), mx.float32)))
+
+        o = mx.ones_like(x, dtype=mx.float32)
+        self.assertEqual(o.dtype, mx.float32)
+        self.assertTrue(mx.array_equal(o, mx.ones((3,), mx.float32)))
+
+        e = mx.empty_like(x, dtype=mx.float32)
+        self.assertEqual(e.dtype, mx.float32)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

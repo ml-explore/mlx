@@ -363,7 +363,11 @@ array zeros(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
 }
 
 array zeros_like(const array& a, StreamOrDevice s /* = {} */) {
-  return full_like(a, 0, a.dtype(), to_stream(s));
+  return zeros_like(a, a.dtype(), s);
+}
+
+array zeros_like(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return full_like(a, 0, dtype, to_stream(s));
 }
 
 array ones(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
@@ -371,7 +375,11 @@ array ones(const Shape& shape, Dtype dtype, StreamOrDevice s /* = {} */) {
 }
 
 array ones_like(const array& a, StreamOrDevice s /* = {} */) {
-  return full_like(a, 1, a.dtype(), to_stream(s));
+  return ones_like(a, a.dtype(), s);
+}
+
+array ones_like(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return full_like(a, 1, dtype, to_stream(s));
 }
 
 array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
