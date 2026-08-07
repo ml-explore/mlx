@@ -132,8 +132,6 @@ template <typename U>
 struct CumMin {
   static constexpr constant U init = Limits<U>::max;
 
-  // See CumMax: NaN-propagating combine (compiled out for integer/bool and
-  // complex64_t).
   static U combine(U a, U b) {
     if constexpr (
         !metal::is_integral_v<U> && !metal::is_same_v<U, complex64_t>) {
