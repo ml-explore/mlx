@@ -99,15 +99,25 @@ template <typename U>
 struct CumMax {
   static constexpr constant U init = Limits<U>::min;
 
+  static U combine(U a, U b) {
+    if constexpr (
+        !metal::is_integral_v<U> && !metal::is_same_v<U, complex64_t>) {
+      if (metal::isnan(a) || metal::isnan(b)) {
+        return static_cast<U>(NAN);
+      }
+    }
+    return (a >= b) ? a : b;
+  }
+
   template <typename T>
   U operator()(U a, T b) thread {
-    return (a >= b) ? a : b;
+    return combine(a, static_cast<U>(b));
   }
 
   U simd_scan(U x) thread {
     for (int i = 1; i <= 16; i *= 2) {
       U other = simd_shuffle_and_fill_up(x, init, i);
-      x = (x >= other) ? x : other;
+      x = combine(x, other);
     }
     return x;
   }
@@ -122,15 +132,27 @@ template <typename U>
 struct CumMin {
   static constexpr constant U init = Limits<U>::max;
 
+  // See CumMax: NaN-propagating combine (compiled out for integer/bool and
+  // complex64_t).
+  static U combine(U a, U b) {
+    if constexpr (
+        !metal::is_integral_v<U> && !metal::is_same_v<U, complex64_t>) {
+      if (metal::isnan(a) || metal::isnan(b)) {
+        return static_cast<U>(NAN);
+      }
+    }
+    return (a <= b) ? a : b;
+  }
+
   template <typename T>
   U operator()(U a, T b) thread {
-    return (a <= b) ? a : b;
+    return combine(a, static_cast<U>(b));
   }
 
   U simd_scan(U x) thread {
     for (int i = 1; i <= 16; i *= 2) {
       U other = simd_shuffle_and_fill_up(x, init, i);
-      x = (x <= other) ? x : other;
+      x = combine(x, other);
     }
     return x;
   }
