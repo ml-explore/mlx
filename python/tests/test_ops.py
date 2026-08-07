@@ -3482,14 +3482,8 @@ class TestOps(mlx_tests.MLXTestCase):
                     )
 
     def test_hadamard_m_only(self):
-        # n = m * 2^0 for m in (12, 20, 28): the power-of-2 factor is exactly 1,
-        # so only the m stage has work to do. test_hadamard sweeps k from 1, so
-        # these sizes were never exercised and used to fail to build the Metal
-        # library (num_steps = logN / logR with logR = 0).
+        # n = m * 2^0, so only the m stage runs. test_hadamard sweeps k from 1.
         for m in (12, 20, 28):
-            # a batch dimension matters here: the m stage strides by
-            # n / read_width_m, which silently dispatched zero threads (all-zero
-            # output) for n = 1 until read_width_m was capped at n
             for shape in ((m,), (4, m), (3, 5, m)):
                 for scale in (None, 0.25):
                     with self.subTest(m=m, shape=shape, scale=scale):
@@ -3504,8 +3498,7 @@ class TestOps(mlx_tests.MLXTestCase):
                         mx.eval(y_cpu, y_gpu)
                         self.assertEqual(y_gpu.shape, x.shape)
                         self.assertLess(mx.abs(y_cpu - y_gpu).max().item(), 1e-5)
-                        # a non-donatable input takes the malloc'd-output path,
-                        # where the m stage must read x, not the untouched output
+                        # non-donatable input: the malloc'd-output path
                         y_nd = mx.hadamard_transform(x + 0.0, stream=mx.gpu, **kwargs)
                         mx.eval(y_nd)
                         self.assertLess(mx.abs(y_cpu - y_nd).max().item(), 1e-5)
