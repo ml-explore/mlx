@@ -241,6 +241,15 @@ void Eig::eval_cpu(
 
   values.set_data(allocator::malloc(values.nbytes()));
 
+  // Nothing to decompose for n = 0; LAPACK rejects lda = 0. The input is
+  // square, so both outputs are empty and there is nothing to write.
+  if (a.shape(-1) == 0) {
+    if (compute_eigenvectors_) {
+      vectors.set_data(allocator::malloc(vectors.nbytes()));
+    }
+    return;
+  }
+
   if (compute_eigenvectors_) {
     // Set the strides and flags so the eigenvectors
     // are in the columns of the output
