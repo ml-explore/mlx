@@ -60,6 +60,23 @@ std::tuple<Shape, std::vector<int>, bool> compute_reduce_shape(
   return {out_shape, sorted_axes, is_noop};
 }
 
+// max and min have no identity element, so they are only undefined when an
+// axis being reduced over is itself empty. An array that is empty because of
+// some other axis still reduces fine, into an empty result.
+void check_reduce_axes_not_empty(
+    const array& a,
+    const std::vector<int>& sorted_axes,
+    std::string_view op) {
+  for (auto ax : sorted_axes) {
+    if (a.shape(ax) == 0) {
+      std::ostringstream msg;
+      msg << "[" << op << "] Cannot " << op << " reduce over axis " << ax
+          << " with size 0.";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+}
+
 Dtype at_least_float(const Dtype& d) {
   return issubdtype(d, inexact) ? d : promote_types(d, float32);
 }
@@ -2455,11 +2472,9 @@ array max(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
-  if (a.size() == 0) {
-    throw std::invalid_argument("[max] Cannot max reduce zero size array.");
-  }
   auto [out_shape, sorted_axes, is_noop] =
       compute_reduce_shape(axes, a.shape());
+  check_reduce_axes_not_empty(a, sorted_axes, "max");
   auto out = (is_noop)
       ? a
       : array(
@@ -2492,14 +2507,12 @@ array min(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
-  if (a.size() == 0) {
-    throw std::invalid_argument("[min] Cannot min reduce zero size array.");
-  }
   if (axes.empty()) {
     return a;
   }
   auto [out_shape, sorted_axes, is_noop] =
       compute_reduce_shape(axes, a.shape());
+  check_reduce_axes_not_empty(a, sorted_axes, "min");
   auto out = (is_noop)
       ? a
       : array(
