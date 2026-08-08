@@ -17,7 +17,7 @@ runs:
       shell: bash
       run: |
         echo "::group::Install dependencies"
-        uv pip install 'build<=1.4.2' setuptools
+        uv pip install build setuptools
         echo "::endgroup::"
 
     - name: Build wheel
