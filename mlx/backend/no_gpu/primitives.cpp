@@ -36,6 +36,16 @@ bool fast::ScaledDotProductAttention::use_fallback(
   return true;
 }
 
+bool fast::GatedDeltaUpdate::use_fallback(
+    const int Hk,
+    const int Dk,
+    const int Hv,
+    const int Dv,
+    const bool has_mask,
+    Stream s) {
+  return true;
+}
+
 bool fast::ScaledDotProductAttention::supports_bool_mask() {
   return false;
 }
@@ -170,6 +180,7 @@ NO_GPU_MULTI(RMSNormVJP)
 NO_GPU_USE_FALLBACK(RoPE)
 NO_GPU_MULTI(ScaledDotProductAttention)
 NO_GPU_MULTI(ScaledDotProductAttentionVJP)
+NO_GPU_MULTI(GatedDeltaUpdate)
 NO_GPU_MULTI(ConvertFP8)
 NO_GPU_MULTI(Quantize)
 NO_GPU_MULTI(CustomKernel)

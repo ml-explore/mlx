@@ -334,6 +334,32 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
+      "gated_delta_update",
+      &mlx::core::fast::gated_delta_update,
+      "q"_a,
+      "k"_a,
+      "v"_a,
+      "gamma"_a,
+      "beta"_a,
+      "initial_state"_a = nb::none(), // optional, defaults to None
+      "mask"_a = nb::none(), // optional, defaults to None
+      "stream"_a = nb::none(), // optional, defaults to None
+      R"(
+            Chunked gated delta network forward pass.
+
+            Args:
+                q: Queries [B, H, T, Dk]
+                k: Keys [B, H, T, Dk]
+                v: Values [B, H, T, Dv]
+                gamma: 
+                beta: Delta update rates [B, H, T]
+                initial_state: Optional initial hidden state [B, H, Dk, Dv]
+                mask: Optional
+            Returns:
+                Tuple of (output [B, H, T, Dv], final_state [B, H, Dk, Dv])
+        )");
+
+  m.def(
       "metal_kernel",
       [](const std::string& name,
          const std::vector<std::string>& input_names,
