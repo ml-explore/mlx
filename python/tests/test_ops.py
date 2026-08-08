@@ -810,6 +810,9 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertListEqual(list(b_npy.shape), list(b_mlx.shape))
         self.assertTrue(np.array_equal(b_npy, b_mlx))
 
+        with self.assertRaises(ValueError):
+            mx.broadcast_to(a_mlx, (-1, 10, 20))
+
     def test_logsumexp(self):
         def logsumexp(x, axes=None):
             maxs = mx.max(x, axis=axes, keepdims=True)
@@ -2223,6 +2226,9 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.random.uniform(shape=(32,))
         y = mx.as_strided(x, (x.size,), (-1,), x.size - 1)
         self.assertTrue(mx.array_equal(y, x[::-1]))
+
+        with self.assertRaises(ValueError):
+            mx.as_strided(x, (-2, 3), (3, 1), 0)
 
     def test_logcumsumexp(self):
         npop = np.logaddexp.accumulate
