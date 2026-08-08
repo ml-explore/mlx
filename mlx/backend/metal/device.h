@@ -64,6 +64,10 @@ class MLX_API CommandEncoder {
 
   template <typename Vec, typename = std::enable_if_t<is_vector_v<Vec>>>
   void set_vector_bytes(const Vec& vec, size_t nelems, int idx) {
+    if (nelems == 0) {
+      get_command_encoder()->setBytes((const void*)1, 0, idx);
+      return;
+    }
     get_command_encoder()->setBytes(
         vec.data(), nelems * sizeof(typename Vec::value_type), idx);
   }
