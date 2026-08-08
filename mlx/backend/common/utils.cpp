@@ -12,7 +12,19 @@ std::filesystem::path current_binary_dir() {
     if (!dladdr(reinterpret_cast<void*>(&current_binary_dir), &info)) {
       throw std::runtime_error("Unable to get current binary dir.");
     }
-    return std::filesystem::path(info.dli_fname).parent_path();
+    // glibc reports dli_fname for a main executable as argv[0] verbatim, so it
+    // may be relative or contain "."; resolve it so that parent_path() of the
+    // result names the real parent directory.
+    std::filesystem::path path(info.dli_fname);
+    if (!path.has_parent_path()) {
+      // A bare argv[0] carries no location, and the two standard libraries
+      // disagree about it: libc++ would resolve it against the current working
+      // directory, inventing an unrelated answer.
+      return path.parent_path();
+    }
+    std::error_code ec;
+    auto resolved = std::filesystem::weakly_canonical(path, ec);
+    return ec ? path.parent_path() : resolved.parent_path();
   }();
   return binary_dir;
 }

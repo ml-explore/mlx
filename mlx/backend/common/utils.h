@@ -6,12 +6,15 @@
 #include <tuple>
 #include <vector>
 
+#include "mlx/api.h"
 #include "mlx/array.h"
 
 namespace mlx::core {
 
-// Return the directory that contains current shared library.
-std::filesystem::path current_binary_dir();
+// Return the resolved directory that contains the current binary, with ".",
+// ".." and symlinks removed. Empty when the loader reports no location for
+// it, which glibc does for a PATH-launched executable.
+MLX_API std::filesystem::path current_binary_dir();
 
 inline int64_t
 elem_to_loc(int elem, const Shape& shape, const Strides& strides) {
