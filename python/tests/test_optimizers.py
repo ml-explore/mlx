@@ -562,6 +562,9 @@ class TestSchedulers(mlx_tests.MLXTestCase):
             "Gradients were not scaled correctly during clipping.",
         )
 
+        with self.assertRaises(ValueError):
+            opt.clip_grad_norm(small_grads, -1.0)
+
     def test_init_from_state(self):
         class Model(nn.Module):
             def __init__(self):
