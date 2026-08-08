@@ -312,7 +312,7 @@ void init_array(nb::module_& m) {
           "val"_a,
           "dtype"_a = nb::none(),
           nb::sig(
-              "def __init__(self: array, val: Union[scalar, list, tuple, DLPackCompatible, array], dtype: Optional[Dtype] = None)"))
+              "def __init__(self: array, val: scalar | list | tuple | DLPackCompatible | array, dtype: Dtype | None = None)"))
       .def_prop_ro(
           "size",
           &mx::array::size,

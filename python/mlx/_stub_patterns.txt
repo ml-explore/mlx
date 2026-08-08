@@ -1,10 +1,5 @@
 mlx.core.__prefix__:
-  from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence, Tuple, Union, ParamSpec, TypeVar
-  import sys
-  if sys.version_info >= (3, 10):
-    from typing import TypeAlias
-  else:
-    from typing_extensions import TypeAlias
+  from typing import Any, ParamSpec, Protocol, TypeAlias, TypeVar
   P = ParamSpec("P")
   R = TypeVar("R")
   class DLPackCompatible(Protocol):
@@ -12,28 +7,27 @@ mlx.core.__prefix__:
     __dlpack_device__: Callable[..., Any]
 
 mlx.core.__suffix__:
-  scalar: TypeAlias = Union[int, float, bool]
-  list_or_scalar: TypeAlias = Union[scalar, list["list_or_scalar"]]
-  StreamOrDevice: TypeAlias = Union[None, Stream, ThreadLocalStream, Device, DeviceType]
+  scalar: TypeAlias = int | float | bool
+  list_or_scalar: TypeAlias = scalar | list["list_or_scalar"]
+  StreamOrDevice: TypeAlias = Stream | ThreadLocalStream | Device | DeviceType | None
   bool_: Dtype = ...
 
 mlx.core.distributed.__prefix__:
   from mlx.core import array, Dtype, StreamOrDevice, scalar
   from mlx.core.distributed import Group
-  from typing import Sequence, Optional, Union
+  from collections.abc import Sequence
 
 mlx.core.fast.__prefix__:
   from mlx.core import array, Dtype, StreamOrDevice, scalar
-  from typing import Sequence, Optional, Union
 
 mlx.core.linalg.__prefix__:
   from mlx.core import array, Dtype, StreamOrDevice, scalar
-  from typing import Sequence, Optional, Tuple, Union
+  from collections.abc import Sequence
 
 mlx.core.metal.__prefix__:
   from mlx.core import array, Dtype, Device, Stream, scalar
-  from typing import Sequence, Optional, Union
+  from collections.abc import Sequence
 
 mlx.core.random.__prefix__:
   from mlx.core import array, Dtype, StreamOrDevice, scalar, float32, int32
-  from typing import Sequence, Optional, Union
+  from collections.abc import Sequence

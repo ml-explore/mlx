@@ -55,7 +55,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def norm(a: array, /, ord: Union[None, int, float, str] = None, axis: Union[None, int, list[int]] = None, keepdims: bool = False, *, stream: StreamOrDevice = None) -> array"),
+          "def norm(a: array, /, ord: None | int | float | str = None, axis: None | int | list[int] = None, keepdims: bool = False, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Matrix or vector norm.
 
@@ -177,7 +177,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def qr(a: array, *, stream: StreamOrDevice = None) -> Tuple[array, array]"),
+          "def qr(a: array, *, stream: StreamOrDevice = None) -> tuple[array, array]"),
       R"pbdoc(
         The QR factorization of the input matrix.
 
@@ -220,7 +220,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def svd(a: array, compute_uv: bool = True, *, stream: StreamOrDevice = None) -> Tuple[array, array, array]"),
+          "def svd(a: array, compute_uv: bool = True, *, stream: StreamOrDevice = None) -> tuple[array, array, array]"),
       R"pbdoc(
         The Singular Value Decomposition (SVD) of the input matrix.
 
@@ -447,7 +447,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def eig(a: array, *, stream: StreamOrDevice = None) -> Tuple[array, array]"),
+          "def eig(a: array, *, stream: StreamOrDevice = None) -> tuple[array, array]"),
       R"pbdoc(
         Compute the eigenvalues and eigenvectors of a square matrix.
 
@@ -525,7 +525,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def eigh(a: array, UPLO: str = 'L', *, stream: StreamOrDevice = None) -> Tuple[array, array]"),
+          "def eigh(a: array, UPLO: str = 'L', *, stream: StreamOrDevice = None) -> tuple[array, array]"),
       R"pbdoc(
         Compute the eigenvalues and eigenvectors of a complex Hermitian or
         real symmetric matrix.
@@ -571,7 +571,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def lu(a: array, *, stream: StreamOrDevice = None) -> Tuple[array, array, array]"),
+          "def lu(a: array, *, stream: StreamOrDevice = None) -> tuple[array, array, array]"),
       R"pbdoc(
         Compute the LU factorization of the given matrix ``A``.
 
@@ -602,7 +602,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def lu_factor(a: array, *, stream: StreamOrDevice = None) -> Tuple[array, array]"),
+          "def lu_factor(a: array, *, stream: StreamOrDevice = None) -> tuple[array, array]"),
       R"pbdoc(
         Computes a compact representation of the LU factorization.
 
@@ -698,7 +698,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def slogdet(a: array, *, stream: StreamOrDevice = None) -> Tuple[array, array]"),
+          "def slogdet(a: array, *, stream: StreamOrDevice = None) -> tuple[array, array]"),
       R"pbdoc(
         Compute the sign and natural log of the absolute value of the
         determinant of a square matrix.
