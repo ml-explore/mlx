@@ -378,6 +378,20 @@ void SearchSorted::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
+  // An empty sequence has nothing to compare against, so every value belongs at
+  // index 0. It also has no buffer to bind, and dispatching a kernel with an
+  // unbound argument trips Metal's argument validation:
+  //   failed assertion `Compute Function(searchsorted_v_float32_left):
+  //   missing Buffer binding at index 0 for a[0].'
+  // The CPU path reaches the same answer by walking a zero-length range.
+  if (a.size() == 0) {
+    auto& compute_encoder = metal::get_command_encoder(s);
+    array zero = array(0, out.dtype());
+    fill_gpu(zero, out, s);
+    compute_encoder.add_temporary(std::move(zero));
+    return;
+  }
+
   // The sequence is 1-D, so one stride covers every layout it can have,
   // including a reversed view where that stride is negative.
   int64_t a_stride = a.strides()[0];
