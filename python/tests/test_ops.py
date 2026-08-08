@@ -3285,6 +3285,28 @@ class TestOps(mlx_tests.MLXTestCase):
                         y_bf16.astype(mx.float16), y, atol=atol * 2
                     )
 
+    def test_hadamard_m_only(self):
+        # n = m * 2^0, so only the m stage runs. test_hadamard sweeps k from 1.
+        for m in (12, 20, 28):
+            for shape in ((m,), (4, m), (3, 5, m)):
+                for scale in (None, 0.25):
+                    with self.subTest(m=m, shape=shape, scale=scale):
+                        x = mx.array(
+                            np.random.RandomState(3)
+                            .normal(size=shape)
+                            .astype(np.float32)
+                        )
+                        kwargs = {} if scale is None else {"scale": scale}
+                        y_cpu = mx.hadamard_transform(x, stream=mx.cpu, **kwargs)
+                        y_gpu = mx.hadamard_transform(x, stream=mx.gpu, **kwargs)
+                        mx.eval(y_cpu, y_gpu)
+                        self.assertEqual(y_gpu.shape, x.shape)
+                        self.assertLess(mx.abs(y_cpu - y_gpu).max().item(), 1e-5)
+                        # non-donatable input: the malloc'd-output path
+                        y_nd = mx.hadamard_transform(x + 0.0, stream=mx.gpu, **kwargs)
+                        mx.eval(y_nd)
+                        self.assertLess(mx.abs(y_cpu - y_nd).max().item(), 1e-5)
+
     def test_hadamard_grad_vmap(self):
         np.random.seed(4)
 
