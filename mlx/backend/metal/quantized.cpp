@@ -1460,6 +1460,10 @@ void gather_qmm_rhs_nax(
   array x = broadcast_with_indices(x_);
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
+  std::optional<array> biases = std::nullopt;
+  if (biases_) {
+    biases = ensure_row_contiguous(*biases_, d, s);
+  }
 
   // TODO: Tune the block sizes
   int bm = 64, bn = 64, bk = 64;
@@ -1538,9 +1542,8 @@ void gather_qmm_rhs_nax(
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_input_array(w, c++);
   compute_encoder.set_input_array(scales, c++);
-  if (biases_) {
-    array biases = ensure_row_contiguous(*biases_, d, s);
-    compute_encoder.set_input_array(biases, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
   }
   compute_encoder.set_input_array(indices, c++);
   compute_encoder.set_output_array(out, c++);
@@ -1611,6 +1614,10 @@ void gather_qmm_rhs(
   array x = broadcast_with_indices(x_);
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
+  std::optional<array> biases = std::nullopt;
+  if (biases_) {
+    biases = ensure_row_contiguous(*biases_, d, s);
+  }
 
   // TODO: Tune the block sizes
   int bm = 16, bn = 32, bk = 32;
@@ -1688,9 +1695,8 @@ void gather_qmm_rhs(
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_input_array(w, c++);
   compute_encoder.set_input_array(scales, c++);
-  if (biases_) {
-    array biases = ensure_row_contiguous(*biases_, d, s);
-    compute_encoder.set_input_array(biases, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
   }
   compute_encoder.set_input_array(indices, c++);
   compute_encoder.set_output_array(out, c++);
@@ -1846,11 +1852,11 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc(out.nbytes()));
 
   array x = ensure_row_contiguous_matrix(inputs[0], d, s);
-  array w = ensure_row_contiguous(inputs[1], d, s);
-  array scales = ensure_row_contiguous(inputs[2], d, s);
+  array w = ensure_row_contiguous_matrix(inputs[1], d, s);
+  array scales = ensure_row_contiguous_matrix(inputs[2], d, s);
   std::optional<array> biases = std::nullopt;
   if (inputs.size() == 6) {
-    biases = ensure_row_contiguous(inputs[3], d, s);
+    biases = ensure_row_contiguous_matrix(inputs[3], d, s);
   }
   const array& lhs_indices = inputs[inputs.size() - 2];
   const array& rhs_indices = inputs[inputs.size() - 1];
