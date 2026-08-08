@@ -506,6 +506,53 @@ void sdpa_vector_2pass(
   compute_encoder.add_temporary(sums);
   compute_encoder.add_temporary(maxs);
 
+  if (!mask && !sinks && q.shape(2) == 1 && gqa_factor == 8 &&
+      q.shape(-1) == v.shape(-1) && (q.shape(-1) == 64 || q.shape(-1) == 128) &&
+      N >= 8192) {
+    std::string gname;
+    gname.reserve(64);
+    gname += "sdpa_vector_2pass_1_gqa_";
+    gname += get_type_string(q.dtype());
+    gname += "_";
+    gname += std::to_string(q.shape(-1));
+    gname += "_";
+    gname += std::to_string(v.shape(-1));
+    auto kernel = d.get_kernel(gname);
+    check_kernel_threadgroup_size(kernel, group_dims, gname);
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(q, 0);
+    compute_encoder.set_input_array(k, 1);
+    compute_encoder.set_input_array(v, 2);
+    compute_encoder.set_output_array(intermediate, 3);
+    compute_encoder.set_output_array(sums, 4);
+    compute_encoder.set_output_array(maxs, 5);
+    compute_encoder.set_bytes(N, 7);
+    compute_encoder.set_bytes(k_head_stride, 8);
+    compute_encoder.set_bytes(k_seq_stride, 9);
+    compute_encoder.set_bytes(v_head_stride, 10);
+    compute_encoder.set_bytes(v_seq_stride, 11);
+    compute_encoder.set_bytes(scale, 12);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+
+    kname.clear();
+    kname = "sdpa_vector_2pass_2_";
+    kname += get_type_string(q.dtype());
+    kname += "_";
+    kname += std::to_string(v.shape(-1));
+    kernel = d.get_kernel(kname);
+    compute_encoder.set_compute_pipeline_state(kernel);
+    compute_encoder.set_input_array(intermediate, 0);
+    compute_encoder.set_input_array(sums, 1);
+    compute_encoder.set_input_array(maxs, 2);
+    compute_encoder.set_output_array(out, 3);
+    compute_encoder.set_bytes(blocks, 4);
+    group_dims = MTL::Size(1024, 1, 1);
+    grid_dims = MTL::Size(q.shape(0) * q.shape(1), q.shape(2), 1);
+    check_kernel_threadgroup_size(kernel, group_dims, kname);
+    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+    return;
+  }
+
   bool has_mask = mask.has_value();
   bool bool_mask = has_mask && (*mask).dtype() == bool_;
   bool float_mask = has_mask && !bool_mask;
