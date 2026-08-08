@@ -4,6 +4,7 @@
 #include <map>
 #include <numeric>
 #include <set>
+#include <sstream>
 
 #include "mlx/3rdparty/pocketfft.h"
 #include "mlx/backend/common/utils.h"
@@ -127,6 +128,21 @@ FFTPlan plan_fft(int n) {
     // Rough heuristic for choosing faster powers of two when we can
     plan.n2 = n > 65536 ? 1024 : 64;
     plan.n1 = n / plan.n2;
+    // Each step is a single threadgroup FFT, so neither factor can be larger
+    // than the largest Stockham size. The no transpose kernels cannot
+    // decompose a step any further, so grow n2 instead of nesting four step.
+    if (plan.n1 > MAX_STOCKHAM_FFT_SIZE) {
+      plan.n1 = MAX_STOCKHAM_FFT_SIZE;
+      plan.n2 = n / plan.n1;
+    }
+    if (plan.n2 > MAX_STOCKHAM_FFT_SIZE) {
+      std::ostringstream msg;
+      msg << "[FFT] GPU FFT is not supported for size " << n
+          << ", the largest supported size is "
+          << MAX_STOCKHAM_FFT_SIZE * MAX_STOCKHAM_FFT_SIZE
+          << ". Run the FFT on the CPU stream instead.";
+      throw std::runtime_error(msg.str());
+    }
     return plan;
   } else if (n > MAX_STOCKHAM_FFT_SIZE) {
     // Otherwise we use a multi-upload Bluestein's
@@ -638,13 +654,14 @@ void fft_op(
   // We batch among threadgroups for improved efficiency when n is small
   int threadgroup_batch_size = std::max(MIN_THREADGROUP_MEM_SIZE / fft_size, 1);
   if (four_step_params.required) {
-    // Require a threadgroup batch size of at least 4 for four step FFT
-    // so we can coalesce the memory accesses.
-    threadgroup_batch_size =
-        std::max(threadgroup_batch_size, MIN_COALESCE_WIDTH);
+    // Batch the four step FFT so we can coalesce the memory accesses, but
+    // never past what fits in threadgroup memory.
+    threadgroup_batch_size = std::max(
+        threadgroup_batch_size,
+        std::min(MIN_COALESCE_WIDTH, MAX_STOCKHAM_FFT_SIZE / fft_size));
   }
   int threadgroup_mem_size = next_power_of_2(threadgroup_batch_size * fft_size);
-  // FFTs up to 2^20 are currently supported
+  // The plan keeps every step within the threadgroup memory limit
   assert(threadgroup_mem_size <= MAX_STOCKHAM_FFT_SIZE);
 
   // ceil divide
