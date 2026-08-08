@@ -1405,10 +1405,11 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
     def test_gather_qmm_sorted_sliced_weight(self):
         E, R, D, N = 8, 64, 256, 64
+        dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
         mx.random.seed(0)
-        w = mx.random.normal((E, 2 * R, D)) * 0.05
+        w = (mx.random.normal((E, 2 * R, D)) * 0.05).astype(dtype)
         qw, s, b = mx.quantize(w, group_size=64, bits=4)
-        x = mx.random.normal((N, 1, D)) * 0.5
+        x = (mx.random.normal((N, 1, D)) * 0.5).astype(dtype)
         indices = mx.sort(mx.random.randint(0, E, (N,)).astype(mx.uint32))
 
         for sl in (slice(0, R), slice(R, 2 * R)):
