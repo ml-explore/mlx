@@ -1548,6 +1548,37 @@ class TestArray(mlx_tests.MLXTestCase):
         a = a.at[1:3, :, 0].minimum(update)
         self.assertEqualArray(a[1:3, :, 0], mx.minimum(a[1:3, :, 0], update))
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    def test_array_at_complex_add_gpu(self):
+        n = 4096
+        base = [1 + 10j, 2 + 20j, 3 + 30j, 4 + 40j]
+
+        with mx.stream(mx.gpu):
+            a = mx.array(base, dtype=mx.complex64)
+            update_indices = mx.full((n,), 3, dtype=mx.int32)
+            updates = mx.full((n,), 1 + 3j, dtype=mx.complex64)
+            out = a.at[update_indices].add(updates)
+            mx.eval(out)
+
+            indices = mx.array([1, 1, 3])
+            x = mx.array([1 + 0j, 3 + 4j, 6 + 8j, 5 + 12j], dtype=mx.complex64)
+
+            def loss(z):
+                return mx.square(mx.abs(z[indices])).sum()
+
+            _, gradient = mx.value_and_grad(loss)(x)
+            mx.eval(gradient)
+
+        expected = base.copy()
+        expected[-1] += n * (1 + 3j)
+        self.assertEqual(out.tolist(), expected)
+        np.testing.assert_allclose(
+            np.array(gradient),
+            np.array([0, 12 + 16j, 0, 10 + 24j], dtype=np.complex64),
+            rtol=0,
+            atol=1e-5,
+        )
+
     def test_array_at_slice_update_extensive(self):
         # Test with transposed inputs
         a = mx.zeros((4, 5))
