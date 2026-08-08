@@ -229,9 +229,16 @@ def tree_unflatten(tree: Union[List[Tuple[str, Any]], Dict[str, Any]]) -> Any:
         next_idx = "" if not next_idx else next_idx[0]
         children[current_idx].append((next_idx, value))
 
-    # Assume they are a list and fail to dict if the keys are not all integers
+    # Assume they are a list and fail to dict if the keys are not all integers.
+    # Non-canonical integer-like keys (e.g. "01") also fall back to a dict:
+    # "01" and "1" both parse as 1 and would otherwise silently shift later
+    # list slots. Bare ValueError is intentional so the existing except path
+    # keeps the fall-back-to-dict contract for malformed external keys.
     try:
         keys = sorted((int(idx), idx) for idx in children.keys())
+        for i, k in keys:
+            if str(i) != k:
+                raise ValueError
         l = []
         for i, k in keys:
             # if i <= len(l), no {} will be appended.
