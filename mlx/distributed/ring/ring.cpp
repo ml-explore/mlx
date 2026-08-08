@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <future>
 #include <iostream>
@@ -238,6 +239,16 @@ class SocketThread {
           task.size -= r;
           delete_recv = task.size == 0;
           error_count = 0;
+        } else if (r == 0) {
+          // The peer closed the connection. recv() signals this by returning 0
+          // and leaves errno untouched, so the check below would test a stale
+          // value. That value is almost always EAGAIN, because a non-blocking
+          // socket with nothing to read sets it on every previous call, so the
+          // failure would be skipped entirely and this loop would spin on a
+          // dead socket forever without logging anything. Compare sendAll() and
+          // recvAll() in the nccl backend, which treat <= 0 as failure.
+          error_count++;
+          log_info(true, "Socket", fd_, "was closed by the peer");
         } else if (errno != EAGAIN) {
           error_count++;
           log_info(
@@ -252,6 +263,12 @@ class SocketThread {
           task.size -= r;
           delete_send = task.size == 0;
           error_count = 0;
+        } else if (r == 0) {
+          // Same stale-errno hazard as the recv path above. send_impl already
+          // short-circuits zero-length sends, so size is always positive here
+          // and a 0 return means no progress was made.
+          error_count++;
+          log_info(true, "Sending to socket", fd_, "made no progress");
         } else if (errno != EAGAIN) {
           error_count++;
           log_info(true, "Sending to socket", fd_, "failed with errno", errno);
@@ -259,8 +276,16 @@ class SocketThread {
       }
 
       if (error_count >= 10) {
+        // Returning here leaves every queued task's promise unsatisfied. This
+        // SocketThread outlives its worker, so those promises are not destroyed
+        // either and no broken_promise is ever delivered, which means the
+        // futures never become ready and every waiter blocks forever. The ring
+        // has no way to continue correctly without this peer, so stop the
+        // process rather than hang or, worse, complete collectives that are
+        // silently missing a rank's contribution. This matches how the nccl
+        // backend handles unrecoverable communication errors.
         log_info(true, "Too many send/recv errors. Aborting...");
-        return;
+        exit(1);
       }
     }
   }
