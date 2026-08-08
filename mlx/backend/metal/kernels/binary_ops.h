@@ -163,7 +163,7 @@ struct Maximum {
     if (metal::isnan(x)) {
       return x;
     }
-    return x > y ? x : y;
+    return (x > y || (x == y && !metal::signbit(x))) ? x : y;
   }
 
   template <>
@@ -186,7 +186,7 @@ struct Minimum {
     if (metal::isnan(x)) {
       return x;
     }
-    return x < y ? x : y;
+    return (x < y || (x == y && metal::signbit(x))) ? x : y;
   }
 
   template <>

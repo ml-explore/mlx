@@ -235,7 +235,11 @@ Simd<T, 1> maximum(Simd<T, 1> a_, Simd<T, 1> b_) {
       return a;
     }
   }
-  return (a > b) ? a : b;
+  if constexpr (std::is_floating_point_v<T>) {
+    return (a > b || (a == b && !std::signbit(a))) ? a : b;
+  } else {
+    return (a > b) ? a : b;
+  }
 }
 
 template <typename T>
@@ -247,7 +251,11 @@ Simd<T, 1> minimum(Simd<T, 1> a_, Simd<T, 1> b_) {
       return a;
     }
   }
-  return (a < b) ? a : b;
+  if constexpr (std::is_floating_point_v<T>) {
+    return (a < b || (a == b && std::signbit(a))) ? a : b;
+  } else {
+    return (a < b) ? a : b;
+  }
 }
 
 template <typename T>

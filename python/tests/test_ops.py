@@ -532,6 +532,21 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(math.isnan(mx.maximum(a, b).item()))
         self.assertTrue(math.isnan(mx.maximum(b, a).item()))
 
+    def test_maximum_minimum_signed_zero(self):
+        for dt in (mx.float32, mx.float16, mx.bfloat16):
+            pz = mx.array(0.0, dtype=dt)
+            nz = mx.array(-0.0, dtype=dt)
+
+            self.assertEqual(math.copysign(1.0, mx.maximum(pz, nz).item()), 1.0)
+            self.assertEqual(math.copysign(1.0, mx.maximum(nz, pz).item()), 1.0)
+            self.assertEqual(math.copysign(1.0, mx.minimum(pz, nz).item()), -1.0)
+            self.assertEqual(math.copysign(1.0, mx.minimum(nz, pz).item()), -1.0)
+
+            # Reductions: max of mixed signed zeros is +0, min is -0.
+            x = mx.array(np.array([-0.0, 0.0, -0.0], dtype=np.float32), dtype=dt)
+            self.assertEqual(math.copysign(1.0, mx.max(x).item()), 1.0)
+            self.assertEqual(math.copysign(1.0, mx.min(x).item()), -1.0)
+
     def test_floor(self):
         x = mx.array([-22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf])
         expected = [-23, 19, -27, 9, 0, -np.inf, np.inf]
