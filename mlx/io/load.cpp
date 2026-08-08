@@ -148,10 +148,6 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
   a = contiguous(a, true);
   a.eval();
 
-  if (a.nbytes() == 0) {
-    throw std::invalid_argument("[save] cannot serialize an empty array");
-  }
-
   ////////////////////////////////////////////////////////
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
