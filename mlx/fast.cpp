@@ -50,6 +50,83 @@ std::pair<std::vector<array>, std::vector<int>> Custom::vmap(
   return {outputs, out_axes};
 }
 
+std::pair<std::vector<array>, std::vector<int>> ScaledDotProductAttention::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto s = stream();
+
+  // Sinks require 1-D input; fall back to generic vmap for that case.
+  if (has_sinks_) {
+    return Custom::vmap(inputs, axes);
+  }
+
+  // Determine vmap size from the first mapped input.
+  int vmap_size = -1;
+  for (int i = 0; i < static_cast<int>(axes.size()); ++i) {
+    if (axes[i] != -1) {
+      vmap_size = inputs[i].shape(axes[i]);
+      break;
+    }
+  }
+
+  auto prepare = [&s, vmap_size](const array& x, int ax) -> array {
+    if (ax == -1) {
+      return repeat(expand_dims(x, 0, s), vmap_size, 0, s);
+    }
+    if (ax != 0) {
+      return moveaxis(x, ax, 0, s);
+    }
+    return x;
+  };
+
+  auto q = prepare(inputs[0], axes[0]);
+  auto k = prepare(inputs[1], axes[1]);
+  auto v = prepare(inputs[2], axes[2]);
+
+  // [V, B, H, L, D] -> [V*B, H, L, D]
+  auto merge_batch = [&s, vmap_size](const array& x) -> array {
+    auto shape = x.shape();
+    Shape new_shape = {vmap_size * shape[1]};
+    new_shape.insert(new_shape.end(), shape.begin() + 2, shape.end());
+    return reshape(x, std::move(new_shape), s);
+  };
+
+  q = merge_batch(q);
+  k = merge_batch(k);
+  v = merge_batch(v);
+
+  std::optional<array> mask_arr;
+  bool has_arr_mask = !do_causal_ && inputs.size() > 3;
+  if (has_arr_mask) {
+    mask_arr = merge_batch(prepare(inputs[3], axes[3]));
+  }
+  std::string mask_mode = do_causal_ ? "causal" : has_arr_mask ? "array" : "";
+
+  auto out = scaled_dot_product_attention(
+      q, k, v, scale_, mask_mode, mask_arr, std::nullopt, s);
+
+  // [V*B, H, L, D] -> [V, B, H, L, D]
+  auto split_batch = [&s, vmap_size](const array& x) -> array {
+    auto shape = x.shape();
+    Shape new_shape = {vmap_size, shape[0] / vmap_size};
+    new_shape.insert(new_shape.end(), shape.begin() + 1, shape.end());
+    return reshape(x, std::move(new_shape), s);
+  };
+
+  out = split_batch(out);
+
+  // The re-invoked SDPA may produce a logsumexp sibling when training.
+  if (output_logsumexp_) {
+    assert(
+        !out.siblings().empty() &&
+        "vmap'd SDPA expected logsumexp sibling output");
+    auto lse = split_batch(out.siblings()[0]);
+    return {{out, lse}, {0, 0}};
+  }
+
+  return {{out}, {0}};
+}
+
 array rms_norm(
     const array& x,
     const std::optional<array>& weight,
