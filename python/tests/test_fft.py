@@ -168,6 +168,26 @@ class TestFFT(mlx_tests.MLXTestCase):
                 atol = 1e-4 if num < 1025 else 1e-3
                 self._run_ffts((batch_size, num), atol=atol)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_batched_bluestein_twiddle_table(self):
+        batch, n = 1024, 1031
+
+        with mx.stream(mx.gpu):
+            impulse = (mx.arange(n) == 1).astype(mx.complex64)
+            expected_fft = mx.fft.fft(impulse)
+            expected_ifft = mx.fft.ifft(impulse)
+            signal = mx.broadcast_to(impulse, (batch, n))
+            output_fft = mx.fft.fft(signal)
+            output_ifft = mx.fft.ifft(signal)
+            mx.eval(expected_fft, expected_ifft, output_fft, output_ifft)
+
+        self.assertTrue(
+            mx.allclose(output_fft, expected_fft[None], atol=1e-3, rtol=1e-4)
+        )
+        self.assertTrue(
+            mx.allclose(output_ifft, expected_ifft[None], atol=1e-4, rtol=1e-4)
+        )
+
     @unittest.skip("Too slow for CI but useful for local testing.")
     def test_fft_exhaustive(self):
         nums = range(2, 4097)

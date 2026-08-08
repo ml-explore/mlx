@@ -2,6 +2,7 @@
 #include <cassert>
 #include <complex>
 #include <map>
+#include <numbers>
 #include <numeric>
 #include <set>
 #include <sstream>
@@ -27,6 +28,9 @@ using MTLFC = std::tuple<const void*, MTL::DataType, NS::UInteger>;
 #define MIN_THREADGROUP_MEM_SIZE 256
 // For strided reads/writes, coalesce at least this many complex64s
 #define MIN_COALESCE_WIDTH 4
+// Precomputed radix twiddles pay off for the largest batched fused plan.
+constexpr int BLUESTEIN_TWIDDLE_TABLE_FFT_SIZE = 4096;
+constexpr int MIN_BLUESTEIN_TWIDDLE_TABLE_BATCH = 1024;
 
 inline const std::vector<int> supported_radices() {
   // Ordered by preference in decomposition.
@@ -316,7 +320,10 @@ std::tuple<array, array, array> compute_raders_constants(
 }
 
 // Bluestein
-std::pair<array, array> compute_bluestein_constants(int n, int bluestein_n) {
+std::pair<array, array> compute_bluestein_constants(
+    int n,
+    int bluestein_n,
+    const std::vector<int>& stockham) {
   // We need to calculate the Bluestein twiddle factors
   // in double precision for the overall numerical stability
   // of Bluestein's FFT algorithm to be acceptable.
@@ -343,7 +350,33 @@ std::pair<array, array> compute_bluestein_constants(int n, int bluestein_n) {
   w_k.set_data(allocator::malloc(w_k.nbytes()));
   std::copy(w_k_vec.begin(), w_k_vec.end(), w_k.data<complex64_t>());
 
-  array w_q({bluestein_n}, complex64, nullptr, {});
+  std::vector<complex64_t> radix_twiddles;
+  int p = 1;
+  auto radices = supported_radices();
+  for (int i = static_cast<int>(stockham.size()) - 1; i >= 0; i--) {
+    int radix = radices[i];
+    for (int step = 0; step < stockham[i]; step++) {
+      if (p > 1) {
+        for (int k = 0; k < p; k++) {
+          double theta =
+              -2.0 * std::numbers::pi * static_cast<double>(k) / (radix * p);
+          radix_twiddles.emplace_back(
+              static_cast<float>(std::cos(theta)),
+              static_cast<float>(std::sin(theta)));
+        }
+      }
+      p *= radix;
+    }
+  }
+  if (!stockham.empty()) {
+    assert(p == bluestein_n);
+  }
+
+  array w_q(
+      {bluestein_n + static_cast<int>(radix_twiddles.size())},
+      complex64,
+      nullptr,
+      {});
   w_q.set_data(allocator::malloc(w_q.nbytes()));
   auto w_q_ptr =
       reinterpret_cast<std::complex<float>*>(w_q.data<complex64_t>());
@@ -359,7 +392,15 @@ std::pair<array, array> compute_bluestein_constants(int n, int bluestein_n) {
       /* data_in= */ w_q_vec.data(),
       /* data_out= */ w_q_ptr,
       /* scale= */ 1.0f);
+  std::copy(
+      radix_twiddles.begin(),
+      radix_twiddles.end(),
+      w_q.data<complex64_t>() + bluestein_n);
   return std::make_tuple(w_k, w_q);
+}
+
+std::pair<array, array> compute_bluestein_constants(int n, int bluestein_n) {
+  return compute_bluestein_constants(n, bluestein_n, {});
 }
 
 void multi_upload_bluestein_fft(
@@ -649,6 +690,12 @@ void fft_op(
     size = out.size();
   }
   int total_batch_size = size / n;
+  bool use_bluestein_twiddle_table = !real &&
+      plan.bluestein_n == BLUESTEIN_TWIDDLE_TABLE_FFT_SIZE &&
+      total_batch_size >= MIN_BLUESTEIN_TWIDDLE_TABLE_BATCH;
+  if (plan.bluestein_n > 0 && !real) {
+    func_consts.push_back(make_bool(&use_bluestein_twiddle_table, 22));
+  }
   int threads_per_fft = (fft_size + elems_per_thread - 1) / elems_per_thread;
 
   // We batch among threadgroups for improved efficiency when n is small
@@ -702,6 +749,9 @@ void fft_op(
     std::string base_name = kname.str();
     // We use a specialized kernel for each FFT size
     kname << "_n" << fft_size << "_inv_" << inverse;
+    if (use_bluestein_twiddle_table) {
+      kname << "_precomputed";
+    }
     std::string hash_name = kname.str();
     auto template_def = func_name == "four_step_fft" ? get_template_definition(
                                                            base_name,
@@ -726,7 +776,9 @@ void fft_op(
 
     if (plan.bluestein_n > 0) {
       // Precomputed twiddle factors for Bluestein's
-      auto [w_k, w_q] = compute_bluestein_constants(n, plan.bluestein_n);
+      auto [w_k, w_q] = use_bluestein_twiddle_table
+          ? compute_bluestein_constants(n, plan.bluestein_n, plan.stockham)
+          : compute_bluestein_constants(n, plan.bluestein_n);
       copies.push_back(w_q);
       copies.push_back(w_k);
 
