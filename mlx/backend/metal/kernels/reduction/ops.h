@@ -200,7 +200,7 @@ struct Min {
     if (metal::isnan(a) || metal::isnan(b)) {
       return static_cast<T>(NAN);
     } else {
-      return a < b ? a : b;
+      return (a < b || a == b && metal::signbit(a)) ? a : b;
     }
   }
 
@@ -260,7 +260,7 @@ struct Max {
     if (metal::isnan(a) || metal::isnan(b)) {
       return static_cast<T>(NAN);
     } else {
-      return a > b ? a : b;
+      return (a > b || (a == b && !metal::signbit(a))) ? a : b;
     }
   }
 
