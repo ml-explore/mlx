@@ -165,11 +165,11 @@ array sum_scatter(
   if (group.size() == 1) {
     return x;
   }
-  if (x.shape()[0] % group.size() != 0) {
+  if (x.ndim() == 0 || x.shape()[0] % group.size() != 0) {
     std::ostringstream msg;
     msg << "[sum_scatter] Invalid shape=" << x.shape()
         << " for a group of size " << group.size()
-        << ". The first dimension (axis 0) must be divisible by the group size.";
+        << ". The first dimension (axis 0) must be divisible by the group size and input mst have at least one.";
     throw std::invalid_argument(msg.str());
   }
 
