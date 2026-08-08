@@ -52,7 +52,13 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       broadcasted = in.strides(i) == 0;
     }
   }
-  if (plan.type == GeneralReduce || broadcasted || !in.flags().contiguous) {
+  // GeneralContiguousReduce computes offsets for the non-reduction axes. With
+  // enough output rows to occupy the GPU, reduce transposed inputs directly
+  // instead of allocating an O(in.size()) contiguous temporary.
+  const bool reduce_transposed =
+      plan.type == GeneralContiguousReduce && out.size() >= 1024;
+  const bool copy_noncontiguous = !in.flags().contiguous && !reduce_transposed;
+  if (plan.type == GeneralReduce || broadcasted || copy_noncontiguous) {
     array in_copy = contiguous_copy_gpu(in, s);
     encoder.add_temporary(in_copy);
     in = in_copy;
