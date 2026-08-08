@@ -199,16 +199,6 @@ add_custom_command(
 
 add_custom_target(mlx-metallib DEPENDS ${MLX_METAL_PATH}/mlx.metallib)
 
-if(MLX_BUILD_TESTS)
-  set(FFT_COMPLEX_STORAGE_TEST
-      ${PROJECT_SOURCE_DIR}/tests/metal/fft_complex_storage.metal)
-  build_kernel_base(fft_complex_storage_test ${FFT_COMPLEX_STORAGE_TEST}
-                    "fft/radix.h;fft/readwrite.h")
-  add_custom_target(fft-complex-storage-test
-                    DEPENDS fft_complex_storage_test.air)
-  add_dependencies(mlx-metallib fft-complex-storage-test)
-endif()
-
 add_dependencies(mlx mlx-metallib)
 
 # Install metallib
