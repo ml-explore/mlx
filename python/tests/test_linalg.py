@@ -310,6 +310,13 @@ class TestLinalg(mlx_tests.MLXTestCase):
         A_plus = mx.linalg.pinv(A, stream=mx.cpu)
         self.assertTrue(mx.allclose(A @ A_plus @ A, A))
 
+        # Zero-size inputs. The result takes the shape of the transposed input.
+        for shape in [(0, 0), (0, 3), (3, 0), (0, 2, 2), (2, 0, 0), (0, 4, 3)]:
+            A_np = np.zeros(shape, dtype=np.float32)
+            A_plus = mx.linalg.pinv(mx.array(A_np), stream=mx.cpu)
+            mx.eval(A_plus)
+            self.assertEqual(A_plus.shape, np.linalg.pinv(A_np).shape)
+
     def test_cholesky_inv(self):
         mx.random.seed(7)
 
