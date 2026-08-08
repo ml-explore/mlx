@@ -13,9 +13,7 @@ void qrf_impl(const array& a, array& q, array& r, Stream stream) {
   const int M = a.shape(-2);
   const int N = a.shape(-1);
 
-  // Nothing to factorize when either dimension is zero; LAPACK rejects
-  // lda = 0. Both outputs carry min(M, N) as one of their dimensions, so
-  // both are empty and there is nothing to write.
+  // Nothing to factorize when either dimension is zero; LAPACK rejects lda = 0.
   if (M == 0 || N == 0) {
     q.set_data(allocator::malloc(q.nbytes()));
     r.set_data(allocator::malloc(r.nbytes()));
