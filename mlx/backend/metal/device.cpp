@@ -886,9 +886,12 @@ MTL::ComputePipelineState* Device::get_kernel(
     std::shared_lock lock(kernel_mtx_);
 
     // Look for cached kernel
-    auto& kernel_map_ = library_kernels_[mtl_lib];
-    if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
-      return it->second.get();
+    auto library_it = library_kernels_.find(mtl_lib);
+    if (library_it != library_kernels_.end()) {
+      auto kernel_it = library_it->second.find(kname);
+      if (kernel_it != library_it->second.end()) {
+        return kernel_it->second.get();
+      }
     }
   }
   return get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);
