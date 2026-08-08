@@ -170,7 +170,7 @@ void init_distributed(nb::module_& parent_module) {
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def all_sum(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
+          "def all_sum(x: array, *, group: Optional[Group] = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         All reduce sum.
 
@@ -199,7 +199,7 @@ void init_distributed(nb::module_& parent_module) {
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def all_max(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
+          "def all_max(x: array, *, group: Optional[Group] = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         All reduce max.
 
@@ -228,7 +228,7 @@ void init_distributed(nb::module_& parent_module) {
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def all_min(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
+          "def all_min(x: array, *, group: Optional[Group] = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       All reduce min.
 
@@ -257,7 +257,7 @@ void init_distributed(nb::module_& parent_module) {
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def all_gather(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
+          "def all_gather(x: array, *, group: Optional[Group] = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Gather arrays from all processes.
 
@@ -290,7 +290,7 @@ void init_distributed(nb::module_& parent_module) {
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def send(x: array, dst: int, *, group: Optional[Group] = None, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
+          "def send(x: array, dst: int, *, group: Optional[Group] = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Send an array from the current process to the process that has rank
         ``dst`` in the group.
@@ -318,7 +318,7 @@ void init_distributed(nb::module_& parent_module) {
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def recv(shape: Sequence[int], dtype: Dtype, src: int, *, group: Optional[Group] = None, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
+          "def recv(shape: Sequence[int], dtype: Dtype, src: int, *, group: Optional[Group] = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Recv an array with shape ``shape`` and dtype ``dtype`` from process
         with rank ``src``.
@@ -351,7 +351,7 @@ void init_distributed(nb::module_& parent_module) {
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def recv_like(x: array, src: int, *, group: Optional[Group] = None, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
+          "def recv_like(x: array, src: int, *, group: Optional[Group] = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Recv an array with shape and type like ``x`` from process with rank
         ``src``.
@@ -384,7 +384,7 @@ void init_distributed(nb::module_& parent_module) {
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def sum_scatter(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, ThreadLocalStream, Device, DeviceType] = None) -> array"),
+          "def sum_scatter(x: array, *, group: Optional[Group] = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
       Sum ``x`` across all processes in the group and shard the result along the first axis across ranks.
       ``x.shape[0]`` must be divisible by the group size.
