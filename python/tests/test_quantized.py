@@ -1403,9 +1403,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(y1, y3, atol=tol))
                 self.assertTrue(mx.allclose(y1, y4, atol=tol))
 
+    @unittest.skipIf(mx.cuda.is_available(), "Not implemented for CUDA")
     def test_gather_qmm_sorted_sliced_weight(self):
-        if mx.default_device() == mx.gpu and not mx.metal.is_available():
-            self.skipTest("Not implemented for CUDA")
         E, R, D, N = 8, 64, 256, 64
         dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
         mx.random.seed(0)

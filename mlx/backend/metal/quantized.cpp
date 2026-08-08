@@ -1476,7 +1476,7 @@ void gather_qmm_rhs_nax(
   array x = broadcast_with_indices(x_);
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
-  std::optional<array> biases = std::nullopt;
+  std::optional<array> biases;
   if (biases_) {
     biases = ensure_row_contiguous(*biases_, d, s);
   }
@@ -1630,7 +1630,7 @@ void gather_qmm_rhs(
   array x = broadcast_with_indices(x_);
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
-  std::optional<array> biases = std::nullopt;
+  std::optional<array> biases;
   if (biases_) {
     biases = ensure_row_contiguous(*biases_, d, s);
   }
