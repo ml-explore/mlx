@@ -11,6 +11,7 @@ Devices and Streams
    Device
    Stream
    ThreadLocalStream
+   Timer
    default_device
    set_default_device
    default_stream

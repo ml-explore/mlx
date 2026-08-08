@@ -5,4 +5,5 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/eval.cpp
-          ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp)
+          ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/timer.cpp)

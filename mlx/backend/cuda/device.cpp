@@ -455,6 +455,19 @@ void CommandEncoder::add_graph_node(
   insert_graph_dependencies(GraphNode{node, subgraph_key});
 }
 
+void CommandEncoder::add_event_record_node(cudaEvent_t event) {
+  if (!use_cuda_graphs()) {
+    CHECK_CUDA_ERROR(cudaEventRecord(event, stream_));
+    return;
+  }
+
+  cudaGraphNode_t node;
+  CHECK_CUDA_ERROR(
+      cudaGraphAddEventRecordNode(&node, graph_, nullptr, 0, event));
+  insert_graph_dependencies(GraphNode{node, "R"});
+  is_graph_updatable_ = false;
+}
+
 bool CommandEncoder::needs_commit() {
   return (node_count_ > max_ops_per_graph_) ||
       ((bytes_in_graph_ >> 20) > max_mb_per_graph_);

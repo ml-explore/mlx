@@ -20,6 +20,7 @@
 #include "mlx/ops.h"
 #include "mlx/random.h"
 #include "mlx/stream.h"
+#include "mlx/timer.h"
 #include "mlx/transforms.h"
 #include "mlx/utils.h"
 #include "mlx/version.h"

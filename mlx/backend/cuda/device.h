@@ -104,6 +104,7 @@ class CommandEncoder {
       cudaGraph_t child,
       const std::string& subgraph_key,
       bool is_updatable);
+  void add_event_record_node(cudaEvent_t event);
 
   void add_temporary(const array& arr) {
     temporaries_.push_back(arr.data_shared_ptr());
