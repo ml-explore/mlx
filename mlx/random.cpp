@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 
@@ -38,6 +39,10 @@ array bits(
     int width /* 4 */,
     const std::optional<array>& key_ /*= nullopt */,
     StreamOrDevice s /* = {} */) {
+  if (std::any_of(shape.begin(), shape.end(), [](auto i) { return i < 0; })) {
+    throw std::invalid_argument("[bits] Negative dimensions not allowed.");
+  }
+
   auto key = key_ ? *key_ : KeySequence::default_().next();
   if (key.dtype() != uint32) {
     std::ostringstream msg;
