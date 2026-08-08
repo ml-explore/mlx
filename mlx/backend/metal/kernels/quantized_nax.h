@@ -591,6 +591,10 @@ struct QuantizedBlockLoader {
       (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
   MLX_MTL_CONST short group_steps = group_size / BCOLS;
 
+  static_assert(
+      group_size % (n_reads * pack_factor) == 0,
+      "The group size must be a multiple of the columns read per thread.");
+
   const int src_ld;
   const int tile_stride;
   short group_step_cnt;
@@ -646,14 +650,10 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
-      }
-      return;
-    }
-
-    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
+    // src_tile_dim is (valid columns, valid rows). Quantized dimensions are
+    // group-aligned, so each thread's packed column span is either fully in
+    // or fully out of bounds.
+    if (bi >= src_tile_dim.y || bj * pack_factor >= src_tile_dim.x) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
@@ -729,6 +729,9 @@ struct QuantizedBlockLoader<
   static_assert(
       (BCOLS_PACKED / n_reads) == n_groups,
       "Other configurations are not yet supported");
+  static_assert(
+      group_size % (n_reads * pack_factor) == 0,
+      "The group size must be a multiple of the columns read per thread.");
 
   const int src_ld;
   const int tile_stride;
@@ -786,14 +789,10 @@ struct QuantizedBlockLoader<
       return;
     }
 
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
-      }
-      return;
-    }
-
-    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
+    // src_tile_dim is (valid columns, valid rows). Quantized dimensions are
+    // group-aligned, so each thread's packed column span is either fully in
+    // or fully out of bounds.
+    if (bi >= src_tile_dim.y || bj * pack_factor >= src_tile_dim.x) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
@@ -1529,10 +1528,8 @@ template <
   const short tm = SM * (simd_group_id / WN);
   const short tn = SN * (simd_group_id % WN);
 
-  const short sgp_sm =
-      align_M ? SM : min(SM, short(max(0, (M - (y_row + tm)))));
-  const short sgp_sn =
-      align_N ? SN : min(SN, short(max(0, (N - (y_col + tn)))));
+  const short sgp_sm = align_M ? SM : min(int(SM), max(0, (M - (y_row + tm))));
+  const short sgp_sn = align_N ? SN : min(int(SN), max(0, (N - (y_col + tn))));
 
   const bool is_unaligned_sm = align_M ? false : (sgp_sm != SM);
   const bool is_unaligned_bn = align_N ? false : (tgp_bn != BN);
@@ -1635,7 +1632,7 @@ template <
 
             volatile int compiler_barrier;
 
-            const short psk = min(int(SK), max(0, (BK - kk1)));
+            const short psk = min(int(SK), max(0, (k_remain - kk1)));
             Atile.load_safe(xn + kk1, K, short2(psk, sgp_sm));
 
             if constexpr (transpose) {

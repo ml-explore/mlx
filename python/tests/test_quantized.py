@@ -1403,6 +1403,120 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(y1, y3, atol=tol))
                 self.assertTrue(mx.allclose(y1, y4, atol=tol))
 
+    def test_gather_qmm_sorted_nax_boundaries(self):
+        # Regression coverage for the two independent sorted gather_qmm NAX
+        # boundary bugs tracked in #3856 and #3887. These cases only dispatch
+        # to the affected kernel on gen-17+ Apple GPUs, but remain useful
+        # correctness checks on the fallback path used by older hardware.
+        def check(rows, K, mode, bits=None, N=64):
+            E = 16
+            group_size = 16 if mode == "nvfp4" else 32
+            mx.random.seed(rows + N + K + (bits or 0))
+            x = (mx.random.normal((rows, 1, K)) * 0.5).astype(mx.float16)
+            w = (mx.random.normal((E, N, K)) * 0.05).astype(mx.float16)
+
+            if mode == "affine":
+                wq = mx.quantize(w, group_size=group_size, bits=bits, mode=mode)
+                deq = mx.dequantize(*wq, group_size=group_size, bits=bits, mode=mode)
+            else:
+                wq = mx.quantize(w, group_size=group_size, mode=mode)
+                deq = mx.dequantize(*wq, group_size=group_size, mode=mode)
+
+            indices = mx.sort(mx.random.randint(0, E, (rows,)).astype(mx.uint32))
+            kwargs = {
+                "rhs_indices": indices,
+                "transpose": True,
+                "group_size": group_size,
+                "mode": mode,
+                "sorted_indices": True,
+            }
+            if bits is not None:
+                kwargs["bits"] = bits
+
+            reference = mx.gather_mm(
+                x.astype(mx.float32),
+                deq.swapaxes(-1, -2).astype(mx.float32),
+                rhs_indices=indices,
+                sorted_indices=True,
+            )
+
+            # The row-boundary defect leaves some output rows unwritten. Prime
+            # the allocator with conspicuous values before each call so a
+            # stale buffer cannot accidentally look like a clean zeroed one.
+            for poison in (-31.0, 47.0):
+                stale = mx.full((rows, 1, N), poison, dtype=mx.float16)
+                mx.eval(stale)
+                del stale
+
+                output = mx.gather_qmm(x, *wq, **kwargs)
+                max_error = mx.max(mx.abs(output.astype(mx.float32) - reference))
+                self.assertLess(float(max_error.item()), 5e-2)
+                del output, max_error
+
+        # #3856: the affine kernel cast the remaining row count to int16
+        # before clamping it. The first failing row count is 32769; 32800 and
+        # 32802 exercise different ragged tails, while aligned rows are
+        # controls.
+        for bits in (4, 8):
+            for rows in (32768, 32769, 32800, 32802, 32896):
+                with self.subTest(issue=3856, axis="M", bits=bits, rows=rows):
+                    check(rows, 64, "affine", bits=bits)
+
+        # #3887: the affine K-tail used BK instead of the true K remainder for
+        # the activation load, and its weight loader masked the wrong axes.
+        # Group-size-32 FP tails take the bounded fallback until their NAX
+        # loader can safely handle a partial tile. Cover both routes, with
+        # K=64 as the aligned control and three different non-zero remainders.
+        for mode, bits in (
+            ("affine", 4),
+            ("affine", 8),
+            ("mxfp4", None),
+            ("mxfp8", None),
+        ):
+            for K in (64, 32, 96, 160):
+                with self.subTest(issue=3887, mode=mode, bits=bits, K=K):
+                    check(8192, K, mode, bits=bits)
+
+        # Affine uses its corrected safe loader for ragged output tiles;
+        # group-size-32 FP modes use the bounded fallback. Preserve aligned
+        # NAX behavior for NVFP4 while covering both sides of the dispatch.
+        for mode, bits in (
+            ("affine", 8),
+            ("mxfp4", None),
+            ("mxfp8", None),
+            ("nvfp4", None),
+        ):
+            for N in (64, 65, 80, 95, 96, 97, 127, 128):
+                with self.subTest(issue=3887, mode=mode, bits=bits, N=N):
+                    check(64, 64, mode, bits=bits, N=N)
+
+    def test_gather_qmm_sorted_nax_tail_does_not_read_next_row(self):
+        # With K=32, the old safe-loader column check let the invalid second
+        # group of output row 0 consume output row 1's scale. A NaN there must
+        # affect row 1 only; 0 * NaN is still NaN, so zeroing the activation
+        # tail alone cannot hide an out-of-bounds weight load.
+        M, N, K = 64, 64, 32
+        x = mx.ones((M, 1, K), dtype=mx.float16)
+        w = mx.ones((1, N, K), dtype=mx.float16)
+        wq, scales, biases = mx.quantize(w, group_size=32, bits=8)
+        scales = scales.at[0, 1, 0].add(float("nan"))
+        indices = mx.zeros((M,), dtype=mx.uint32)
+
+        output = mx.gather_qmm(
+            x,
+            wq,
+            scales,
+            biases,
+            rhs_indices=indices,
+            transpose=True,
+            group_size=32,
+            bits=8,
+            sorted_indices=True,
+        )
+
+        self.assertFalse(bool(mx.any(mx.isnan(output[..., 0])).item()))
+        self.assertTrue(bool(mx.all(mx.isnan(output[..., 1])).item()))
+
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
             if lhs is not None:

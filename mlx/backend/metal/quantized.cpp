@@ -1567,7 +1567,12 @@ void gather_qmm_rhs(
     metal::Device& d,
     const Stream& s,
     const std::string mode) {
-  if (metal::is_nax_available() && transpose &&
+  // The affine NAX loader handles group-aligned tails below. Group-size-32 FP
+  // modes use the bounded fallback for partial 64-element N or K tiles.
+  // NVFP4's group-size-16 fallback requires separate plain-kernel changes.
+  const bool use_fp_tail_fallback =
+      mode != "affine" && group_size == 32 && ((N % 64 != 0) || (K % 64 != 0));
+  if (metal::is_nax_available() && transpose && !use_fp_tail_fallback &&
       (env::enable_tf32() || x_.dtype() != float32)) {
     return gather_qmm_rhs_nax(
         /* const array& x_ = */ x_,
