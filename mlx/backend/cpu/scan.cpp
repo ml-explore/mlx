@@ -212,7 +212,15 @@ void scan_dispatch(
       break;
     }
     case Scan::Min: {
-      auto op = [](U y, T x) { return x < y ? x : y; };
+      auto op = [](U y, T x) {
+        if constexpr (
+            !std::is_integral_v<U> && !std::is_same_v<U, complex64_t>) {
+          if (std::isnan(y) || std::isnan(static_cast<U>(x))) {
+            return static_cast<U>(std::numeric_limits<float>::quiet_NaN());
+          }
+        }
+        return x < y ? x : y;
+      };
       auto init = (issubdtype(in.dtype(), floating))
           ? static_cast<U>(std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::max();
@@ -220,7 +228,15 @@ void scan_dispatch(
       break;
     }
     case Scan::Max: {
-      auto op = [](U y, T x) { return x < y ? y : x; };
+      auto op = [](U y, T x) {
+        if constexpr (
+            !std::is_integral_v<U> && !std::is_same_v<U, complex64_t>) {
+          if (std::isnan(y) || std::isnan(static_cast<U>(x))) {
+            return static_cast<U>(std::numeric_limits<float>::quiet_NaN());
+          }
+        }
+        return x < y ? y : x;
+      };
       auto init = (issubdtype(in.dtype(), floating))
           ? static_cast<U>(-std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::min();
