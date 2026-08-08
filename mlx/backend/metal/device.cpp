@@ -64,7 +64,10 @@ void set_compile_options(
 
 auto get_metal_version() {
   auto get_metal_version_ = []() {
-    if (__builtin_available(macOS 26, iOS 26, tvOS 26, visionOS 26, *)) {
+    if (__builtin_available(macOS 27, iOS 27, tvOS 27, visionOS 27, *)) {
+      // TODO: Use MTL::LanguageVersion4_1 after metal-cpp_27 is released.
+      return static_cast<MTL::LanguageVersion>((4 << 16) + 1);
+    } else if (__builtin_available(macOS 26, iOS 26, tvOS 26, visionOS 26, *)) {
       return MTL::LanguageVersion4_0;
     } else if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
       return MTL::LanguageVersion3_2;
