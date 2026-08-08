@@ -124,21 +124,21 @@ Dims get_block_dims_common(int dim0, int dim1, int dim2, int pow2 /* = 10 */) {
       pows[0]++;
       sum++;
     }
-    if (sum == 10) {
+    if (sum >= pow2) {
       break;
     }
     if (dim1 >= (1 << (pows[1] + 1))) {
       pows[1]++;
       sum++;
     }
-    if (sum == 10) {
+    if (sum >= pow2) {
       break;
     }
     if (dim2 >= (1 << (pows[2] + 1))) {
       pows[2]++;
       sum++;
     }
-    if (sum == presum || sum == pow2) {
+    if (sum == presum || sum >= pow2) {
       break;
     }
   }
