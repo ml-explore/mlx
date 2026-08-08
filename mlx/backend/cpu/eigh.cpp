@@ -194,8 +194,7 @@ void Eigh::eval_cpu(
 
   values.set_data(allocator::malloc(values.nbytes()));
 
-  // Nothing to decompose for n = 0; LAPACK rejects lda = 0. The input is
-  // square, so both outputs are empty and there is nothing to write.
+  // Nothing to decompose for n = 0; LAPACK rejects lda = 0.
   if (a.shape(-1) == 0) {
     if (compute_eigenvectors_) {
       outputs[1].set_data(allocator::malloc(outputs[1].nbytes()));
