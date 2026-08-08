@@ -1461,8 +1461,13 @@ void gather_qmm_rhs_nax(
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
 
-  // TODO: Tune the block sizes
-  int bm = 64, bn = 64, bk = 64;
+  // The kernel re-runs the whole K loop for each distinct expert in a BM
+  // row block and keeps only that expert's rows, so a block taller than the
+  // average run throws away most of its arithmetic. Weight traffic does not
+  // depend on BM, so we use a shorter block when the runs are short.
+  int E = w.size() / w.shape(-1) / w.shape(-2);
+  int bm = M / E < 64 ? 32 : 64;
+  int bn = 64, bk = 64;
   int wm = 2, wn = 2;
 
   const bool align_M = (M % bm) == 0;
