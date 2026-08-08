@@ -250,13 +250,6 @@ void save_safetensors(
 
   size_t offset = 0;
   for (auto& [key, arr] : a) {
-    if (arr.nbytes() == 0) {
-      std::ostringstream msg;
-      msg << "[save_safetensors] Cannot serialize an empty array ('" << key
-          << "')";
-      throw std::invalid_argument(msg.str());
-    }
-
     json child;
     child["dtype"] = dtype_to_safetensor_str(arr.dtype());
     child["shape"] = arr.shape();
