@@ -589,6 +589,16 @@ struct QuantizedBlockLoader {
       (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
   MLX_MTL_CONST short group_steps = group_size / BCOLS;
 
+  // BCOLS tiles the quantized dim, which is always a multiple of group_size,
+  // so a partial column extent is only possible when BCOLS does not divide
+  // group_size. Every affine group size is a multiple of the block, so the
+  // column bound below is dropped at compile time for all of them.
+  MLX_MTL_CONST bool partial_cols = group_size % BCOLS != 0;
+
+  static_assert(
+      group_size % (n_reads * pack_factor) == 0,
+      "The group size must be a multiple of the columns read per thread.");
+
   const int src_ld;
   const int tile_stride;
   short group_step_cnt;
@@ -644,18 +654,28 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
+    // src_tile_dim is (valid columns, valid rows), the convention the steel
+    // BlockLoader uses. bi is a row index, so it bounds against .y for every
+    // reduction_dim; the previous compare against .x could never fire for
+    // reduction_dim == 1, which let a partial row tile read past the source.
+    if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
       return;
     }
 
-    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
+    // Each thread owns n_reads * pack_factor contiguous columns of one row,
+    // and a partial column extent is a whole number of quantization groups,
+    // hence a multiple of that span per the static_assert above, so a thread
+    // is either fully inside or fully outside the tile.
+    if constexpr (partial_cols) {
+      if (bj * pack_factor >= src_tile_dim.x) {
+        for (int i = 0; i < n_reads * pack_factor; i++) {
+          dst[i] = T(0);
+        }
+        return;
       }
-      return;
     }
 
     T scale = *scales;
