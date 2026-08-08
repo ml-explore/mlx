@@ -3160,6 +3160,53 @@ void init_ops(nb::module_& m) {
             array: The ``uint32`` array containing indices that partition the input.
       )pbdoc");
   m.def(
+      "searchsorted",
+      &mx::searchsorted,
+      nb::arg(),
+      nb::arg(),
+      "side"_a = "left",
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def searchsorted(sorted_sequence: array, values: array, /, side: str = 'left', *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Find the indices that keep ``sorted_sequence`` sorted when inserting ``values``.
+
+        Performs a binary search per element of ``values``, so the cost is
+        ``O(values.size * log(sorted_sequence.size))``.
+
+        The ordering matches :func:`sort`, which places ``NaN`` after every other
+        value. Searching a sequence that is not sorted is not an error, but the
+        result is unspecified.
+
+        When the two inputs have different types the search runs in the promoted
+        type, following MLX's promotion rules rather than NumPy's. Those rules
+        stay in the narrower float type, so an integer sequence searched with
+        float values is rounded first and large integers can end up comparing
+        equal to one another.
+
+        Args:
+            sorted_sequence (array): A 1-D array sorted in ascending order.
+            values (array): The values to insert. May have any shape.
+            side (str, optional): Either ``'left'`` or ``'right'``. With
+              ``'left'`` the first suitable index is returned, so the result is
+              the number of elements strictly less than the value. With
+              ``'right'`` the last is returned, so the result is the number of
+              elements less than or equal to it. The two differ only where a
+              value is already present. Default: ``'left'``.
+
+        Returns:
+            array: A ``uint32`` array with the same shape as ``values``, holding
+            indices in ``[0, sorted_sequence.size]``.
+
+        Example:
+            >>> a = mx.array([1, 2, 2, 4])
+            >>> mx.searchsorted(a, mx.array([0, 2, 3, 5]))
+            array([0, 1, 3, 4], dtype=uint32)
+            >>> mx.searchsorted(a, mx.array([0, 2, 3, 5]), side="right")
+            array([0, 3, 3, 4], dtype=uint32)
+      )pbdoc");
+  m.def(
       "topk",
       [](const mx::array& a,
          int k,

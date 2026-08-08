@@ -11,6 +11,7 @@
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
+#include <cooperative_groups.h>
 #include <nvtx3/nvtx3.hpp>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
@@ -20,6 +21,8 @@ namespace mlx::core {
 constexpr int N_PER_THREAD = 8;
 
 namespace cu {
+
+namespace cg = cooperative_groups;
 
 template <typename T>
 __device__ __forceinline__ T nan_value();
@@ -1051,6 +1054,112 @@ void gpu_sort(
 }
 
 } // namespace
+
+namespace cu {
+
+// One thread per element of the values input, each doing an independent binary
+// search. Comparing through LessThan, the same comparator the sort above uses,
+// is what keeps searchsorted consistent with sort for inputs containing NaN.
+template <typename T, bool Right>
+__device__ __forceinline__ uint32_t
+searchsorted_impl(const T* a, T v, uint32_t n, int64_t a_stride) {
+  LessThan<T> lt;
+  uint32_t lo = 0;
+  uint32_t hi = n;
+  while (lo < hi) {
+    uint32_t mid = lo + (hi - lo) / 2;
+    // signed index, so a reversed view with a negative stride walks the right
+    // way
+    T m = a[static_cast<int64_t>(mid) * a_stride];
+    // left advances on lt(a[mid], v), right on !lt(v, a[mid])
+    bool below = Right ? !lt(v, m) : lt(m, v);
+    if (below) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+template <typename T, typename IdxT, bool Right>
+__global__ void searchsorted(
+    const T* a,
+    const T* v,
+    uint32_t* out,
+    IdxT size,
+    uint32_t n,
+    int64_t a_stride,
+    const __grid_constant__ Shape v_shape,
+    const __grid_constant__ Strides v_strides,
+    int ndim,
+    bool contiguous) {
+  IdxT index = cg::this_grid().thread_rank();
+  if (index >= size) {
+    return;
+  }
+  IdxT loc = contiguous
+      ? index
+      : elem_to_loc<IdxT>(index, v_shape.data(), v_strides.data(), ndim);
+  out[index] = searchsorted_impl<T, Right>(a, v[loc], n, a_stride);
+}
+
+} // namespace cu
+
+void SearchSorted::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("SearchSorted::eval_gpu");
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& v = inputs[1];
+
+  auto& encoder = cu::get_command_encoder(stream());
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  if (out.size() == 0) {
+    return;
+  }
+  encoder.set_input_array(a);
+  encoder.set_input_array(v);
+  encoder.set_output_array(out);
+
+  // The sequence is 1-D, so one stride covers every layout it can have,
+  // including a reversed view where that stride is negative.
+  int64_t a_stride = a.strides()[0];
+  auto n = static_cast<uint32_t>(a.size());
+
+  // row_contiguous, not contiguous: the latter only promises the buffer has no
+  // gaps, which a transposed or broadcast view also satisfies while its
+  // elements sit in a different order than the output's. A 0-d input takes the
+  // contiguous path since elem_to_loc has no dimension to walk.
+  auto [shape, strides] = collapse_contiguous_dims(v);
+  int ndim = shape.size();
+  bool contiguous = v.flags().row_contiguous || ndim == 0;
+
+  dispatch_all_types(a.dtype(), [&](auto type_tag) {
+    using CTYPE = MLX_GET_TYPE(type_tag);
+    using T = cuda_type_t<CTYPE>;
+    dispatch_bool(right_, [&](auto right_tag) {
+      dispatch_bool(out.size() > INT32_MAX, [&](auto large) {
+        constexpr bool RIGHT = decltype(right_tag)::value;
+        using IdxT = std::conditional_t<large(), int64_t, int32_t>;
+        auto [num_blocks, block_dims] = get_launch_args(out, large());
+        encoder.add_kernel_node(
+            cu::searchsorted<T, IdxT, RIGHT>,
+            num_blocks,
+            block_dims,
+            gpu_ptr<T>(a),
+            gpu_ptr<T>(v),
+            gpu_ptr<uint32_t>(out),
+            static_cast<IdxT>(out.size()),
+            n,
+            a_stride,
+            const_param(shape),
+            const_param(strides),
+            ndim,
+            contiguous);
+      });
+    });
+  });
+}
 
 void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("ArgSort::eval_gpu");

@@ -365,4 +365,71 @@ void Partition::eval_gpu(const std::vector<array>& inputs, array& out) {
   gpu_merge_sort(s, d, in, out, axis_, false);
 }
 
+void SearchSorted::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& v = inputs[1];
+
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  // An empty sequence has nothing to compare against, so every value belongs at
+  // index 0. It also has no buffer to bind, and dispatching a kernel with an
+  // unbound argument trips Metal's argument validation:
+  //   failed assertion `Compute Function(searchsorted_v_float32_left):
+  //   missing Buffer binding at index 0 for a[0].'
+  // The CPU path reaches the same answer by walking a zero-length range.
+  if (a.size() == 0) {
+    auto& compute_encoder = metal::get_command_encoder(s);
+    array zero = array(0, out.dtype());
+    fill_gpu(zero, out, s);
+    compute_encoder.add_temporary(std::move(zero));
+    return;
+  }
+
+  // The sequence is 1-D, so one stride covers every layout it can have,
+  // including a reversed view where that stride is negative.
+  int64_t a_stride = a.strides()[0];
+  auto n = static_cast<uint32_t>(a.size());
+
+  // row_contiguous, not contiguous: the latter only promises the buffer has no
+  // gaps, which a transposed or broadcast view also satisfies while its
+  // elements sit in a different order than the output's. A 0-d input takes the
+  // contiguous path since elem_to_loc has no dimension to walk.
+  bool contiguous = v.flags().row_contiguous;
+  auto [shape, strides] = collapse_contiguous_dims(v);
+  int ndim = shape.size();
+  contiguous = contiguous || ndim == 0;
+
+  std::string kernel_name = contiguous ? "searchsorted_v_" : "searchsorted_g_";
+  concatenate(kernel_name, type_to_name(a), right_ ? "_right" : "_left");
+  auto kernel = get_searchsorted_kernel(d, kernel_name, a, contiguous, right_);
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(v, 1);
+  compute_encoder.set_output_array(out, 2);
+  compute_encoder.set_bytes(n, 3);
+  compute_encoder.set_bytes(a_stride, 4);
+  if (!contiguous) {
+    compute_encoder.set_vector_bytes(shape, 5);
+    compute_encoder.set_vector_bytes(strides, 6);
+    compute_encoder.set_bytes(ndim, 7);
+  }
+
+  // One thread per element of the values input, on a 2D grid so the count is
+  // not capped by the 1D grid limit.
+  size_t thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+  thread_group_size = std::min(thread_group_size, out.size());
+  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+  MTL::Size grid_dims = get_2d_grid_dims(out.shape(), out.strides());
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
 } // namespace mlx::core
