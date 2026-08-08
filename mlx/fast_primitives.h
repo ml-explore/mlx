@@ -97,6 +97,67 @@ class RMSNormVJP : public Custom {
   float eps_;
 };
 
+// loss is always fp32 and the logits never have to be upcast in the graph.
+class CrossEntropy : public Custom {
+ public:
+  CrossEntropy(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, std::move(fallback)) {}
+
+  static bool use_fallback(Stream stream);
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_NAME(CrossEntropy)
+  bool is_equivalent(const Primitive& other) const override {
+    return true;
+  }
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    return {inputs[1].shape()};
+  }
+
+  auto state() const {
+    return std::monostate{};
+  }
+};
+
+class CrossEntropyVJP : public Custom {
+ public:
+  CrossEntropyVJP(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, std::move(fallback)) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(CrossEntropyVJP)
+  bool is_equivalent(const Primitive& other) const override {
+    return true;
+  }
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+  auto state() const {
+    return std::monostate{};
+  }
+};
+
 class LayerNorm : public Custom {
  public:
   LayerNorm(

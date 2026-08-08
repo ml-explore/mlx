@@ -83,26 +83,34 @@ def cross_entropy(
             f"Targets shape {targets.shape} does not match logits shape {logits.shape}."
         )
 
-    if targets_as_probs:
-        score = mx.sum(logits * targets, axis=axis)
+    use_fast = (
+        not targets_as_probs
+        and label_smoothing == 0
+        and axis in (-1, logits.ndim - 1)
+        and mx.issubdtype(logits.dtype, mx.floating)
+        and mx.issubdtype(targets.dtype, mx.integer)
+    )
+
+    if use_fast:
+        loss = mx.fast.cross_entropy(logits, targets).astype(logits.dtype)
     else:
-        score = mx.take_along_axis(logits, mx.expand_dims(targets, axis), axis).squeeze(
-            axis
-        )
+        if targets_as_probs:
+            score = mx.sum(logits * targets, axis=axis)
+        else:
+            score = mx.take_along_axis(
+                logits, mx.expand_dims(targets, axis), axis
+            ).squeeze(axis)
 
-    logsumexp_logits = mx.logsumexp(logits, axis=axis)
-    if label_smoothing > 0:
-        # Adjust the true class score with label smoothing
-        adjusted_score = (1 - label_smoothing) * score
+        logsumexp_logits = mx.logsumexp(logits, axis=axis)
+        if label_smoothing > 0:
+            adjusted_score = (1 - label_smoothing) * score
 
-        # Calculate the mean logit across the classes for smoothed loss
-        mean_logits = logits.mean(axis=axis)
-        smoothed_loss = -mean_logits * label_smoothing
+            mean_logits = logits.mean(axis=axis)
+            smoothed_loss = -mean_logits * label_smoothing
 
-        # Combine the adjusted score and smoothed loss with the logsumexp logits
-        loss = logsumexp_logits - adjusted_score + smoothed_loss
-    else:
-        loss = logsumexp_logits - score
+            loss = logsumexp_logits - adjusted_score + smoothed_loss
+        else:
+            loss = logsumexp_logits - score
 
     # Apply weights if provided
     if weights is not None:

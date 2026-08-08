@@ -175,6 +175,35 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
+      "cross_entropy",
+      &mx::fast::cross_entropy,
+      "logits"_a,
+      "targets"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def cross_entropy(logits: array, targets: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Cross entropy loss with class indices as targets.
+
+        Computes ``logsumexp(logits, axis=-1) - logits[..., target]`` in a
+        single fused kernel. The log-sum-exp is accumulated in float32
+        regardless of the dtype of ``logits``, so the returned loss is always
+        float32 and the logits do not need to be upcast beforehand.
+
+        Args:
+            logits (array): The unnormalized logits. The loss is computed over
+              the last axis.
+            targets (array): Class indices. The shape should match the shape of
+              ``logits`` with the last axis removed. The indices must be in
+              ``[0, logits.shape[-1])``.
+
+        Returns:
+            array: The per-element loss in float32, with the shape of
+            ``targets``.
+      )pbdoc");
+
+  m.def(
       "rope",
       [](const mx::array& a,
          int dims,
