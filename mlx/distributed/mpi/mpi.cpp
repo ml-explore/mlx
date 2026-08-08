@@ -9,6 +9,7 @@
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/mpi/mpi.h"
 #include "mlx/distributed/mpi/mpi_declarations.h"
+#include "mlx/distributed/nan_ops.h"
 
 #define LOAD_SYMBOL(symbol, variable)                              \
   {                                                                \
@@ -68,7 +69,7 @@ void simple_max(
   int N = *len;
 
   while (N-- > 0) {
-    *acc = std::max(*acc, *in);
+    *acc = detail::nan_aware_max(*acc, *in);
     acc++;
     in++;
   }
@@ -88,7 +89,7 @@ void simple_min(
   int N = *len;
 
   while (N-- > 0) {
-    *acc = std::min(*acc, *in);
+    *acc = detail::nan_aware_min(*acc, *in);
     acc++;
     in++;
   }

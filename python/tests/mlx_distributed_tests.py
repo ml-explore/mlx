@@ -94,6 +94,33 @@ class MLXDistributedCommonTestCase(mlx_tests.MLXTestCase):
                 z = x.min(0)
                 self.assertTrue(mx.all(y == z))
 
+    def test_all_reduce_nan(self):
+        # all_max / all_min must propagate NaN to match local mx.max / mx.min.
+        # A plain std::max based reduction drops NaN in an order-dependent way,
+        # which can even make ranks disagree on the result.
+        g = mx.distributed.init()
+        if g.size() < 2:
+            return  # collectives are no-ops with a single rank
+
+        nan = float("nan")
+        for dt in (mx.float32, mx.float16, mx.bfloat16):
+            # Rank 0 contributes a NaN at index 0; every other rank a finite
+            # value, so the NaN must win at index 0 in the reduced result.
+            if g.rank() == 0:
+                x = mx.array([nan, 2.0, 3.0], dtype=dt)
+            else:
+                x = mx.array([1.0, 2.0, 3.0], dtype=dt)
+
+            y = mx.distributed.all_max(x, group=g)
+            self.assertTrue(mx.isnan(y[0]).item())
+            self.assertEqual(y[1].item(), 2.0)
+            self.assertEqual(y[2].item(), 3.0)
+
+            y = mx.distributed.all_min(x, group=g)
+            self.assertTrue(mx.isnan(y[0]).item())
+            self.assertEqual(y[1].item(), 2.0)
+            self.assertEqual(y[2].item(), 3.0)
+
     def test_donation(self):
         x = mx.random.normal((1024,))
         mx.eval(x)
