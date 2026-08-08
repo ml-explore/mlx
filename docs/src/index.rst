@@ -39,6 +39,7 @@ are the CPU and GPU.
    usage/lazy_evaluation
    usage/unified_memory
    usage/indexing
+   usage/growing_arrays
    usage/saving_and_loading
    usage/function_transforms
    usage/compile
