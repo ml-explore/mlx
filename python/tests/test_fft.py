@@ -185,6 +185,21 @@ class TestFFT(mlx_tests.MLXTestCase):
         for k in range(17, 20):
             self._run_ffts((3, 2**k), atol=1e-2)
 
+        # Past 2**20 the four step plan has to grow n2 to keep both factors
+        # inside threadgroup memory
+        for k in range(20, 25):
+            self._run_ffts((1, 2**k), atol=1e-2, rtol=1e-3)
+
+    @unittest.skipIf(
+        not mx.metal.is_available(), "the size limit is specific to the Metal FFT plan"
+    )
+    def test_fft_too_large(self):
+        # Larger than the four step plan can decompose, so it has to throw
+        # rather than run a kernel that silently returns the wrong answer.
+        # CUDA hands this to cuFFT instead and has no such limit.
+        with self.assertRaises(RuntimeError):
+            mx.eval(mx.fft.fft(mx.zeros(2**25)))
+
     def test_fft_large_numbers(self):
         numbers = [
             1037,  # prime > 2048

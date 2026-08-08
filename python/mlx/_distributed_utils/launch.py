@@ -537,10 +537,13 @@ def main():
         rest.pop(0)
 
     # Try to extract a list of hosts and corresponding ips
-    if args.hostfile is not None:
-        hostfile = Hostfile.from_file(args.hostfile)
-    else:
-        hostfile = Hostfile.from_list(args.hosts, args.repeat_hosts)
+    try:
+        if args.hostfile is not None:
+            hostfile = Hostfile.from_file(args.hostfile)
+        else:
+            hostfile = Hostfile.from_list(args.hosts, args.repeat_hosts)
+    except ValueError as e:
+        parser.error(str(e))
 
     # Extract extra arguments from the hostfile
     if hostfile.backend != "" and args.backend is None:

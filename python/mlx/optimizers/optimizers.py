@@ -968,6 +968,9 @@ def clip_grad_norm(grads, max_norm):
         (dict, float): The possibly rescaled gradients and the original
         gradient norm.
     """
+    if max_norm < 0:
+        raise ValueError(f"max_norm should be >=0, {max_norm} was provided instead")
+
     norm_squared = tree_reduce(lambda acc, g: acc + g.square().sum(), grads, 0.0)
     total_norm = mx.sqrt(norm_squared)
     normalizer = mx.minimum(max_norm / (total_norm + 1e-6), 1.0)
