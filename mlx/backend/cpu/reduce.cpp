@@ -410,21 +410,49 @@ void reduce_dispatch_and_or(
   }
 }
 
+// Reduce into a float32 accumulator and narrow back to the low-precision output
+// dtype. A float16/bfloat16 accumulator saturates on a long reduction the same
+// way a scalar chain would (e.g. a float16 sum of 70000 ones overflows to inf
+// and a bfloat16 one stalls at 256), which also propagates into mean/var. This
+// keeps the reduction in float32 and only narrows once at the end.
+template <typename InT, typename Op>
+void reduce_float_in_fp32(
+    const array& in,
+    array& out,
+    Op,
+    const std::vector<int>& axes,
+    float init) {
+  array acc(out.shape(), float32, nullptr, {});
+  acc.set_data(allocator::malloc(acc.nbytes()));
+  reduction_op<InT, float, Op>(in, acc, axes, init);
+  auto acc_ptr = acc.data<float>();
+  auto out_ptr = out.data<InT>();
+  for (size_t i = 0; i < out.size(); i++) {
+    out_ptr[i] = static_cast<InT>(acc_ptr[i]);
+  }
+}
+
 template <typename InT>
 void reduce_dispatch_sum_prod(
     const array& in,
     array& out,
     Reduce::ReduceType rtype,
     const std::vector<int>& axes) {
+  constexpr bool is_low_precision_float =
+      std::is_same_v<InT, float16_t> || std::is_same_v<InT, bfloat16_t>;
   if (rtype == Reduce::Sum) {
     if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
       reduction_op<InT, int32_t, SumReduce>(in, out, axes, 0);
+    } else if constexpr (is_low_precision_float) {
+      reduce_float_in_fp32<InT>(in, out, SumReduce{}, axes, 0.0f);
     } else {
       reduction_op<InT, InT, SumReduce>(in, out, axes, 0);
     }
   } else {
     if constexpr (std::is_integral_v<InT> && sizeof(InT) <= 4) {
       reduction_op<InT, int32_t, ProdReduce>(in, out, axes, 1);
+    } else if constexpr (is_low_precision_float) {
+      reduce_float_in_fp32<InT>(in, out, ProdReduce{}, axes, 1.0f);
     } else {
       reduction_op<InT, InT, ProdReduce>(in, out, axes, 1);
     }

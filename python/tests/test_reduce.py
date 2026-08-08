@@ -131,6 +131,37 @@ class TestReduce(mlx_tests.MLXTestCase):
         mxsum = y.sum().item()
         self.assertEqual(npsum, mxsum)
 
+    def test_low_precision_float_accumulation(self):
+        # Low-precision float reductions accumulate in float32 so a long sum
+        # does not saturate the accumulator. Pinned to the CPU stream (where the
+        # widening lives); on the unpatched backend a float16 sum of ones stalls
+        # (e.g. 20000 ones -> 16384) and a bfloat16 one saturates at 256, which
+        # then poisons mean/var.
+        with mx.stream(mx.cpu):
+            for t, rtol in [(mx.float16, 3e-3), (mx.bfloat16, 1e-2)]:
+                for n in [4096, 20000, 60000]:  # true sum stays within float16
+                    a = mx.ones((n,), t)
+                    self.assertTrue(
+                        mx.allclose(mx.sum(a), mx.array(n, t), rtol=rtol),
+                        msg=f"{t} sum of {n} ones = {mx.sum(a).item()}",
+                    )
+                    self.assertTrue(
+                        mx.allclose(mx.mean(a), mx.array(1.0, t), rtol=rtol)
+                    )
+                    self.assertTrue(mx.allclose(mx.var(a), mx.array(0.0, t), atol=1e-3))
+            # bfloat16 has the range to sum well past float16's max.
+            a = mx.ones((70000,), mx.bfloat16)
+            self.assertTrue(
+                mx.allclose(mx.sum(a), mx.array(70000, mx.bfloat16), rtol=1e-2)
+            )
+            # axis reduction (non-all-reduce) goes through the same path.
+            a = mx.ones((60000, 3), mx.float16)
+            self.assertTrue(
+                mx.allclose(
+                    mx.sum(a, axis=0), mx.full((3,), 60000, mx.float16), rtol=3e-3
+                )
+            )
+
     def test_many_reduction_axes(self):
 
         def check(x, axes):
