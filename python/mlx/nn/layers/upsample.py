@@ -14,8 +14,13 @@ def _scaled_indices(N, scale, align_corners, dim, ndims):
     if align_corners:
         indices = mx.arange(M, dtype=mx.float32) * ((N - 1) / max(M - 1, 1))
     else:
+        # Half-pixel convention: src = (i + 0.5) * step - 0.5, i.e. a constant
+        # offset of (1 - step) / 2. The previous ((M - 1) * step - N + 1) / 2
+        # only equals this when M == scale * N exactly; for a fractional scale
+        # M = int(scale * N) is floored, which re-centers the grid to the
+        # corner-aligned behavior and makes align_corners=False a no-op.
         step = 1 / scale
-        start = ((M - 1) * step - N + 1) / 2
+        start = (1 - step) / 2
         indices = mx.arange(M, dtype=mx.float32) * step - start
 
     shape = [1] * ndims
