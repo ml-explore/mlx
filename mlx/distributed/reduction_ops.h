@@ -1,5 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/distributed/nan_ops.h"
+
 namespace mlx::core::distributed::detail {
 
 template <typename T>
@@ -17,7 +19,7 @@ template <typename T>
 struct MaxOp {
   void operator()(const T* input, T* output, size_t N) const {
     while (N-- > 0) {
-      *output = std::max(*output, *input);
+      *output = nan_aware_max(*output, *input);
       input++;
       output++;
     }
@@ -28,7 +30,7 @@ template <typename T>
 struct MinOp {
   void operator()(const T* input, T* output, size_t N) const {
     while (N-- > 0) {
-      *output = std::min(*output, *input);
+      *output = nan_aware_min(*output, *input);
       input++;
       output++;
     }
