@@ -1403,6 +1403,34 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(y1, y3, atol=tol))
                 self.assertTrue(mx.allclose(y1, y4, atol=tol))
 
+    @unittest.skipIf(mx.cuda.is_available(), "Not implemented for CUDA")
+    def test_gather_qmm_sorted_sliced_weight(self):
+        E, R, D, N = 8, 64, 256, 64
+        dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
+        mx.random.seed(0)
+        w = (mx.random.normal((E, 2 * R, D)) * 0.05).astype(dtype)
+        qw, s, b = mx.quantize(w, group_size=64, bits=4)
+        x = (mx.random.normal((N, 1, D)) * 0.5).astype(dtype)
+        indices = mx.sort(mx.random.randint(0, E, (N,)).astype(mx.uint32))
+
+        for sl in (slice(0, R), slice(R, 2 * R)):
+            view = (qw[:, sl], s[:, sl], b[:, sl])
+            copy = tuple(mx.contiguous(a) for a in view)
+            kwargs = dict(
+                rhs_indices=indices,
+                transpose=True,
+                group_size=64,
+                bits=4,
+                sorted_indices=True,
+            )
+            self.assertTrue(
+                mx.allclose(
+                    mx.gather_qmm(x, *view, **kwargs),
+                    mx.gather_qmm(x, *copy, **kwargs),
+                    atol=1e-4,
+                )
+            )
+
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
             if lhs is not None:
