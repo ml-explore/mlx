@@ -1,0 +1,5 @@
+setuptools>=42
+cmake>=3.25
+ninja
+mlx>=0.32.0
+nanobind==2.13.0
