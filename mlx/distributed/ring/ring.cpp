@@ -11,6 +11,7 @@
 #include <iostream>
 #include <list>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 #include <unordered_map>
 
@@ -238,6 +239,9 @@ class SocketThread {
           task.size -= r;
           delete_recv = task.size == 0;
           error_count = 0;
+        } else if (r == 0) {
+          error_count++;
+          log_info(true, "Socket", fd_, "was closed by the peer");
         } else if (errno != EAGAIN) {
           error_count++;
           log_info(
@@ -252,6 +256,9 @@ class SocketThread {
           task.size -= r;
           delete_send = task.size == 0;
           error_count = 0;
+        } else if (r == 0) {
+          error_count++;
+          log_info(true, "Sending to socket", fd_, "made no progress");
         } else if (errno != EAGAIN) {
           error_count++;
           log_info(true, "Sending to socket", fd_, "failed with errno", errno);
@@ -259,7 +266,18 @@ class SocketThread {
       }
 
       if (error_count >= 10) {
-        log_info(true, "Too many send/recv errors. Aborting...");
+        log_info(true, "Too many send/recv errors. Failing pending tasks...");
+        // Throw exception in invoker's thread.
+        auto error = std::make_exception_ptr(
+            std::runtime_error("[ring] connection to a peer was lost"));
+        for (auto& task : recvs_) {
+          task.promise.set_exception(error);
+        }
+        for (auto& task : sends_) {
+          task.promise.set_exception(error);
+        }
+        recvs_.clear();
+        sends_.clear();
         return;
       }
     }
@@ -525,7 +543,7 @@ class RingGroup : public GroupImpl {
                 (i % 2) ? -1 : 1)));
       }
       for (auto& f : all_gathers) {
-        f.wait();
+        f.get();
       }
     });
   }
@@ -650,7 +668,7 @@ class RingGroup : public GroupImpl {
                 reduce_op)));
       }
       for (auto& f : all_sums) {
-        f.wait();
+        f.get();
       }
     });
   }
@@ -737,8 +755,8 @@ class RingGroup : public GroupImpl {
       }
 
       if (j >= 0) {
-        sends[b].wait();
-        recvs[b].wait();
+        sends[b].get();
+        recvs[b].get();
         if (2 * j < send_plan.size()) {
           reduce_op(
               recv_buffers[j % ALL_SUM_BUFFERS],
@@ -749,8 +767,13 @@ class RingGroup : public GroupImpl {
 
       std::swap(a, b);
     }
-    sends[b].wait();
-    recvs[b].wait();
+    // Check valid() to avoid consuming same future twice for single packet.
+    if (sends[b].valid()) {
+      sends[b].get();
+    }
+    if (recvs[b].valid()) {
+      recvs[b].get();
+    }
   }
 
   void all_gather_impl(
@@ -784,8 +807,8 @@ class RingGroup : public GroupImpl {
       send_segment = (send_segment + size_ + direction) % size_;
       recv_segment = (recv_segment + size_ + direction) % size_;
 
-      sent.wait();
-      recvd.wait();
+      sent.get();
+      recvd.get();
     }
   }
 
@@ -804,7 +827,7 @@ class RingGroup : public GroupImpl {
           std::min(data_size, (i + 1) * segment_size) - i * segment_size));
     }
     for (auto& f : sends) {
-      f.wait();
+      f.get();
     }
   }
 
@@ -822,7 +845,7 @@ class RingGroup : public GroupImpl {
           std::min(data_size, (i + 1) * segment_size) - i * segment_size));
     }
     for (auto& f : recvs) {
-      f.wait();
+      f.get();
     }
   }
 

@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 #include "mlx/backend/common/quantized.h"
 #include "mlx/backend/common/broadcasting.h"
@@ -477,13 +477,19 @@ void qmv(
 
   int bn = 8;
   int bk = 32;
-  MTL::Size group_dims(bk, 2, 1);
-  MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
 
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
   bool fast = N % bn == 0 && K % qmv_fast_k_alignment(bits) == 0;
+  // A narrower output tile reduces register pressure for large
+  // floating-point quantized matrix-vector products on M5 Max GPUs.
+  bool use_narrow_qmv = fast && N >= 4096 && d.get_architecture_gen() == 17 &&
+      d.get_architecture().back() == 's' && mode == "nvfp4";
+  int results_per_simdgroup = use_narrow_qmv ? 2 : 4;
+  bn = 2 * results_per_simdgroup;
+  MTL::Size group_dims(bk, 2, 1);
+  MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
 
   concatenate(
       kname,
@@ -493,6 +499,7 @@ void qmv(
       group_size,
       "_b_",
       bits,
+      use_narrow_qmv ? "_r_2" : "",
       B > 1 ? "_batch_1" : "_batch_0",
       global_scale ? "_hgs" : "");
   auto kernel = get_quantized_kernel_wrapped(
@@ -504,7 +511,8 @@ void qmv(
       group_size,
       bits,
       B > 1,
-      global_scale.has_value());
+      global_scale.has_value(),
+      results_per_simdgroup);
 
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
