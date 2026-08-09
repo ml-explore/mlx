@@ -502,27 +502,17 @@ void qmv(
       use_narrow_qmv ? "_r_2" : "",
       B > 1 ? "_batch_1" : "_batch_0",
       global_scale ? "_hgs" : "");
-  auto kernel = use_narrow_qmv ? get_quantized_kernel_wrapped(
-                                     d,
-                                     kname,
-                                     "qmv_fast",
-                                     mode,
-                                     type_string,
-                                     group_size,
-                                     bits,
-                                     B > 1,
-                                     global_scale.has_value(),
-                                     results_per_simdgroup)
-                               : get_quantized_kernel_wrapped(
-                                     d,
-                                     kname,
-                                     (fast ? "qmv_fast" : "qmv"),
-                                     mode,
-                                     type_string,
-                                     group_size,
-                                     bits,
-                                     B > 1,
-                                     global_scale.has_value());
+  auto kernel = get_quantized_kernel_wrapped(
+      d,
+      kname,
+      (fast ? "qmv_fast" : "qmv"),
+      mode,
+      type_string,
+      group_size,
+      bits,
+      B > 1,
+      global_scale.has_value(),
+      results_per_simdgroup);
 
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
