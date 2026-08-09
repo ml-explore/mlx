@@ -1467,6 +1467,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     atol=1e-4,
                 )
             )
+
     def test_gather_qmm_sorted_block_sizes(self):
         # The sorted-indices path picks its block height from the average
         # rows per expert: BM=32 below 64 rows per expert, BM=64 at or
@@ -1489,7 +1490,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
         E = 4
         K = 512
         D = 512
-        configs = [("affine", gs, b) for gs in (32, 64, 128) for b in (2, 3, 4, 5, 6, 8)]
+        configs = [
+            ("affine", gs, b) for gs in (32, 64, 128) for b in (2, 3, 4, 5, 6, 8)
+        ]
         configs += [("mxfp4", None, None), ("nvfp4", None, None), ("mxfp8", None, None)]
         # L * I tokens against E experts: 64 tokens give 16 rows per expert
         # (BM=32), 256 give 64 (BM=64), 78 give 19.5 and a batch that is not
@@ -1500,9 +1503,11 @@ class TestQuantized(mlx_tests.MLXTestCase):
         k1, k2, k3 = mx.random.split(key, 3)
 
         for mode, group_size, bits in configs:
-            dtypes = [mx.float16, mx.bfloat16, mx.float32]
-            if mx.default_device() == mx.cpu:
-                dtypes = [mx.float32]
+            dtypes = (
+                [mx.float16, mx.bfloat16, mx.float32]
+                if mx.default_device() == mx.gpu
+                else [mx.float32]
+            )
             for dtype in dtypes:
                 for L, I in regimes:
                     with self.subTest(
@@ -1525,7 +1530,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
                         ).swapaxes(-1, -2)
 
                         xs, idx, inv_order = gather_sort(x, indices)
-                        y1 = mx.gather_mm(xs, w_hat, rhs_indices=idx, sorted_indices=True)
+                        y1 = mx.gather_mm(
+                            xs, w_hat, rhs_indices=idx, sorted_indices=True
+                        )
                         y2 = mx.gather_qmm(
                             xs,
                             *wq,
