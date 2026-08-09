@@ -100,10 +100,9 @@ struct CumMax {
   static constexpr constant U init = Limits<U>::min;
 
   static U combine(U a, U b) {
-    if constexpr (
-        !metal::is_integral_v<U> && !metal::is_same_v<U, complex64_t>) {
+    if constexpr (metal::is_floating_point_v<U>) {
       if (metal::isnan(a) || metal::isnan(b)) {
-        return static_cast<U>(NAN);
+        return metal::numeric_limits<U>::quiet_NaN();
       }
     }
     return (a >= b) ? a : b;
@@ -133,10 +132,9 @@ struct CumMin {
   static constexpr constant U init = Limits<U>::max;
 
   static U combine(U a, U b) {
-    if constexpr (
-        !metal::is_integral_v<U> && !metal::is_same_v<U, complex64_t>) {
+    if constexpr (metal::is_floating_point_v<U>) {
       if (metal::isnan(a) || metal::isnan(b)) {
-        return static_cast<U>(NAN);
+        return metal::numeric_limits<U>::quiet_NaN();
       }
     }
     return (a <= b) ? a : b;
