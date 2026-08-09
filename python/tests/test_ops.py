@@ -3097,6 +3097,12 @@ class TestOps(mlx_tests.MLXTestCase):
                     np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
                 )
 
+        # The quotient and the remainder have to agree: q * b + r == a
+        a = mx.array([-7, 7, -7, 7, -1, 1, -5, 5])
+        b = mx.array([2, 2, -2, -2, 3, -3, 3, -3])
+        q, r = mx.divmod(a, b)
+        self.assertTrue(mx.array_equal(q * b + r, a))
+
     def test_tile(self):
         self.assertCmpNumpy([(2,), [2]], mx.tile, np.tile)
         self.assertCmpNumpy([(2, 3, 4), [2]], mx.tile, np.tile)

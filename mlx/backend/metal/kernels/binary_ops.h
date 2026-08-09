@@ -327,6 +327,9 @@ struct ArcTan2 {
 struct DivMod {
   template <typename T>
   metal::array<T, 2> operator()(T x, T y) thread {
-    return {FloorDivide{}(x, y), Remainder{}(x, y)};
+    // Remainder floors, FloorDivide truncates, so pairing them breaks
+    // quotient * y + remainder == x. Derive the remainder from the quotient.
+    auto quotient = FloorDivide{}(x, y);
+    return {quotient, x - quotient * y};
   };
 };
