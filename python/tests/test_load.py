@@ -524,6 +524,34 @@ class TestLoad(mlx_tests.MLXTestCase):
 
         self.assertEqual(load_only, load_with_binary)
 
+    def test_save_and_load_empty(self):
+        for i, shape in enumerate([(0,), (0, 3), (3, 0), (2, 0, 4)]):
+            with self.subTest(shape=shape):
+                save_arr = mx.zeros(shape)
+
+                npy_file = os.path.join(self.test_dir, f"empty_{i}.npy")
+                mx.save(npy_file, save_arr)
+                self.assertEqual(mx.load(npy_file).shape, shape)
+                # numpy can read what we wrote
+                self.assertEqual(np.load(npy_file).shape, shape)
+
+                st_file = os.path.join(self.test_dir, f"empty_{i}.safetensors")
+                mx.save_safetensors(st_file, {"x": save_arr})
+                self.assertEqual(mx.load(st_file)["x"].shape, shape)
+
+        # An empty array alongside a normal one round trips both
+        npz_file = os.path.join(self.test_dir, "empty.npz")
+        mx.savez(npz_file, x=mx.zeros((0, 3)), y=mx.ones((2, 2)))
+        loaded = mx.load(npz_file)
+        self.assertEqual(loaded["x"].shape, (0, 3))
+        self.assertTrue(mx.array_equal(loaded["y"], mx.ones((2, 2))))
+
+        st_file = os.path.join(self.test_dir, "empty_mixed.safetensors")
+        mx.save_safetensors(st_file, {"x": mx.zeros((0, 3)), "y": mx.ones((2, 2))})
+        loaded = mx.load(st_file)
+        self.assertEqual(loaded["x"].shape, (0, 3))
+        self.assertTrue(mx.array_equal(loaded["y"], mx.ones((2, 2))))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
