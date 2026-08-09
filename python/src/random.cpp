@@ -9,6 +9,7 @@
 
 #include "mlx/ops.h"
 #include "mlx/random.h"
+#include "python/src/gil.h"
 #include "python/src/random.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
@@ -20,10 +21,12 @@ using namespace nb::literals;
 class PyKeySequence {
  public:
   ~PyKeySequence() {
-    if (state_.has_value()) {
-      nb::gil_scoped_acquire gil;
-      state_.reset();
+    if (!state_.has_value()) {
+      return;
     }
+    // Runs from __call_tls_dtors(), where taking the GIL can be fatal (gil.h).
+    defer_release(std::move(*state_));
+    state_.reset();
   }
 
   void reset() {
@@ -41,6 +44,8 @@ class PyKeySequence {
   }
 
   nb::list& state() {
+    // GIL is held here: drain what exiting threads parked.
+    drain_deferred_releases();
     if (!state_) {
       static auto time_seed = []() {
         auto now = std::chrono::system_clock::now();

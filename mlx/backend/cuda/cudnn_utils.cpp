@@ -52,7 +52,8 @@ auto& cudnn_handles_cache() {
   struct CudnnHandle {
     ~CudnnHandle() {
       if (handle) {
-        CHECK_CUDNN_ERROR(cudnnDestroy(handle));
+        // Unchecked, as in CublasHandles: cudnnDestroy can fail at teardown.
+        cudnnDestroy(handle);
       }
     }
     cudnnHandle_t handle{nullptr};

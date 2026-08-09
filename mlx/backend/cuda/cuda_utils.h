@@ -30,7 +30,13 @@ class CudaHandle {
     if (cudaPeekAtLastError() != cudaSuccess) {
       return;
     }
-    reset();
+    // Not reset(): the check above only catches an already-pending error, so
+    // Destroy can still return cudaErrorCudartUnloading at teardown, which
+    // CHECK_CUDA_ERROR would throw out of this destructor.
+    if (handle_ != nullptr) {
+      Destroy(handle_);
+      handle_ = nullptr;
+    }
   }
 
   CudaHandle(const CudaHandle&) = delete;

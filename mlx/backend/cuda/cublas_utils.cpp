@@ -45,8 +45,10 @@ auto& cublas_handles_cache() {
   struct CublasHandles {
     ~CublasHandles() {
       if (handle) {
-        CHECK_CUBLAS_ERROR(cublasLtDestroy(handle));
-        CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceDestroy(pref));
+        // Unchecked: destroy can fail once the library is unloading, and
+        // throwing from this thread_local destructor would call std::terminate.
+        cublasLtDestroy(handle);
+        cublasLtMatmulPreferenceDestroy(pref);
       }
     }
     cublasLtHandle_t handle{nullptr};

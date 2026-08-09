@@ -19,6 +19,7 @@
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
+#include "python/src/gil.h"
 #include "python/src/mlx_func.h"
 #include "python/src/small_vector.h"
 #include "python/src/trees.h"
@@ -411,10 +412,15 @@ void ensure_compile_cache_cleanup() {
   // before python interpreter exits.
   struct ThreadCleanup {
     ~ThreadCleanup() {
-      if (!mx::detail::compile_cache_empty()) {
-        nb::gil_scoped_acquire gil;
-        mx::detail::compile_clear_cache();
+      if (mx::detail::compile_cache_empty()) {
+        return;
       }
+      // No GIL from a thread_local destructor (gil.h); the atexit hook below
+      // still clears with it held.
+      if (py_is_finalizing()) {
+        return;
+      }
+      mx::detail::compile_clear_cache();
     }
   };
   static thread_local auto clear_cache = []() {
@@ -438,6 +444,12 @@ struct PyCompiledFun {
 
     AttachedData(nb::object output_structure_, int num_outputs_)
         : output_structure(output_structure_), num_outputs(num_outputs_) {}
+
+    ~AttachedData() {
+      // Owned by the thread_local compile cache, so this can run without the
+      // GIL (gil.h); DECREF-ing there can race Python's GC.
+      defer_release(std::move(output_structure));
+    }
   };
 
   PyCompiledFun(
@@ -465,6 +477,8 @@ struct PyCompiledFun {
 
   nb::object call_impl(const nb::args& args, const nb::kwargs& kwargs) {
     ensure_compile_cache_cleanup();
+    // GIL is held here: drain what exiting threads parked.
+    drain_deferred_releases();
 
     // Flat array inputs
     std::vector<mx::array> inputs;

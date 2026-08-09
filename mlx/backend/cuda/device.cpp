@@ -213,7 +213,12 @@ CommandEncoder::CommandEncoder(Device& d)
 }
 
 CommandEncoder::~CommandEncoder() {
-  synchronize();
+  // Runs from __call_tls_dtors(), where synchronize() can fail and
+  // CHECK_CUDA_ERROR would throw out of a noexcept destructor.
+  try {
+    synchronize();
+  } catch (...) {
+  }
   worker_->stop();
 }
 
