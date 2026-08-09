@@ -710,17 +710,6 @@ std::vector<array> ArgSort::jvp(
   return {zeros(primals[0].shape(), uint32, stream())};
 }
 
-bool SearchSorted::is_equivalent(const Primitive& other) const {
-  const SearchSorted& r_other = static_cast<const SearchSorted&>(other);
-  return right_ == r_other.right_;
-}
-
-std::vector<Shape> SearchSorted::output_shapes(
-    const std::vector<array>& inputs) {
-  // One index per element of the values input, which is the second one.
-  return {inputs[1].shape()};
-}
-
 std::pair<std::vector<array>, std::vector<int>> SearchSorted::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -752,6 +741,17 @@ std::vector<array> SearchSorted::jvp(
     const std::vector<array>&,
     const std::vector<int>&) {
   return {zeros(primals[1].shape(), uint32, stream())};
+}
+
+bool SearchSorted::is_equivalent(const Primitive& other) const {
+  const SearchSorted& r_other = static_cast<const SearchSorted&>(other);
+  return right_ == r_other.right_;
+}
+
+std::vector<Shape> SearchSorted::output_shapes(
+    const std::vector<array>& inputs) {
+  // One index per element of the values input, which is the second one.
+  return {inputs[1].shape()};
 }
 
 std::vector<array> AsType::vjp(
