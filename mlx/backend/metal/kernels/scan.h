@@ -99,15 +99,24 @@ template <typename U>
 struct CumMax {
   static constexpr constant U init = Limits<U>::min;
 
+  static U combine(U a, U b) {
+    if constexpr (metal::is_floating_point_v<U>) {
+      if (metal::isnan(a) || metal::isnan(b)) {
+        return metal::numeric_limits<U>::quiet_NaN();
+      }
+    }
+    return (a >= b) ? a : b;
+  }
+
   template <typename T>
   U operator()(U a, T b) thread {
-    return (a >= b) ? a : b;
+    return combine(a, static_cast<U>(b));
   }
 
   U simd_scan(U x) thread {
     for (int i = 1; i <= 16; i *= 2) {
       U other = simd_shuffle_and_fill_up(x, init, i);
-      x = (x >= other) ? x : other;
+      x = combine(x, other);
     }
     return x;
   }
@@ -122,15 +131,24 @@ template <typename U>
 struct CumMin {
   static constexpr constant U init = Limits<U>::max;
 
+  static U combine(U a, U b) {
+    if constexpr (metal::is_floating_point_v<U>) {
+      if (metal::isnan(a) || metal::isnan(b)) {
+        return metal::numeric_limits<U>::quiet_NaN();
+      }
+    }
+    return (a <= b) ? a : b;
+  }
+
   template <typename T>
   U operator()(U a, T b) thread {
-    return (a <= b) ? a : b;
+    return combine(a, static_cast<U>(b));
   }
 
   U simd_scan(U x) thread {
     for (int i = 1; i <= 16; i *= 2) {
       U other = simd_shuffle_and_fill_up(x, init, i);
-      x = (x <= other) ? x : other;
+      x = combine(x, other);
     }
     return x;
   }
