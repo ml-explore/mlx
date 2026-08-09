@@ -208,7 +208,11 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
 
   out_stream->write(magic_ver_len.str().c_str(), magic_ver_len.str().length());
   out_stream->write(header.str().c_str(), header.str().length());
-  out_stream->write(a.data<char>(), a.nbytes());
+  // An empty array has no data to write, and asking for its pointer is not
+  // meaningful, so stop after the header.
+  if (a.nbytes() > 0) {
+    out_stream->write(a.data<char>(), a.nbytes());
+  }
 }
 
 /** Save array to file in .npy format */

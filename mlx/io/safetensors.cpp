@@ -263,7 +263,11 @@ void save_safetensors(
   out_stream->write(reinterpret_cast<char*>(&header_len), 8);
   out_stream->write(header.c_str(), header_len);
   for (auto& [key, arr] : a) {
-    out_stream->write(arr.data<char>(), arr.nbytes());
+    // An empty tensor contributes a zero length span and has no data pointer
+    // worth asking for.
+    if (arr.nbytes() > 0) {
+      out_stream->write(arr.data<char>(), arr.nbytes());
+    }
   }
 }
 
