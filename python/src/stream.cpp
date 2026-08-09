@@ -88,6 +88,7 @@ void init_stream(nb::module_& m) {
       "default_stream",
       &mx::default_stream,
       "device"_a,
+      nb::sig("def default_stream(device: Device | DeviceType) -> Stream"),
       R"pbdoc(Get the device's default stream.)pbdoc");
   m.def(
       "set_default_stream",
@@ -106,6 +107,7 @@ void init_stream(nb::module_& m) {
       "new_stream",
       &mx::new_stream,
       "device"_a,
+      nb::sig("def new_stream(device: Device | DeviceType) -> Stream"),
       R"pbdoc(
         Make a new stream on the given device.
 
@@ -116,6 +118,8 @@ void init_stream(nb::module_& m) {
       "new_thread_unsafe_stream",
       &mx::new_thread_unsafe_stream,
       "device"_a,
+      nb::sig(
+          "def new_thread_unsafe_stream(device: Device | DeviceType) -> Stream"),
       R"pbdoc(
         Make a new stream that can be used in any thread.
 
@@ -128,6 +132,8 @@ void init_stream(nb::module_& m) {
       "new_thread_local_stream",
       &mx::new_thread_local_stream,
       "device"_a,
+      nb::sig(
+          "def new_thread_local_stream(device: Device | DeviceType) -> ThreadLocalStream"),
       R"pbdoc(Make a new stream that will be unique per thread.)pbdoc");
   m.def(
       "clear_streams",
