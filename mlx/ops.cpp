@@ -51,6 +51,12 @@ std::tuple<Shape, std::vector<int>, bool> compute_reduce_shape(
     if (axes_set.count(i) == 0) {
       out_shape.push_back(shape[i]);
     } else {
+      if (!op_without_identity.empty() && shape[i] == 0) {
+        std::ostringstream msg;
+        msg << "[" << op_without_identity << "] Cannot " << op_without_identity
+            << " reduce over axis " << i << " with size 0.";
+        throw std::invalid_argument(msg.str());
+      }
       out_shape.push_back(1);
     }
     is_noop &= (out_shape.back() == shape[i]);
@@ -61,16 +67,6 @@ std::tuple<Shape, std::vector<int>, bool> compute_reduce_shape(
   // over no axes stay no-ops since they are shape independent.
   if (is_noop && !sorted_axes.empty() && detail::in_dynamic_tracing()) {
     is_noop = false;
-  }
-  if (!op_without_identity.empty()) {
-    for (auto ax : sorted_axes) {
-      if (shape[ax] == 0) {
-        std::ostringstream msg;
-        msg << "[" << op_without_identity << "] Cannot " << op_without_identity
-            << " reduce over axis " << ax << " with size 0.";
-        throw std::invalid_argument(msg.str());
-      }
-    }
   }
   return {out_shape, sorted_axes, is_noop};
 }
