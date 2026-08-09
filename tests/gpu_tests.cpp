@@ -6,6 +6,7 @@
 #include <future>
 
 #include "doctest/doctest.h"
+#include "mlx/backend/gpu/slicing.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -478,6 +479,25 @@ TEST_CASE("test gpu validation") {
   eval(argmax(x));
 
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
+}
+
+TEST_CASE("test donated dynamic offset is not a temporary") {
+  if (!metal::is_available()) {
+    return;
+  }
+
+  auto stream = default_stream(Device::gpu);
+  auto indices = array({1, 1});
+  REQUIRE(indices.is_donatable());
+
+  auto offset = compute_dynamic_offset(indices, Strides{4, 1}, {0, 1}, stream);
+  REQUIRE_EQ(offset.buffer().ptr(), indices.buffer().ptr());
+
+  indices = array(0);
+  CHECK(offset.is_donatable());
+
+  synchronize(stream);
+  CHECK_EQ(offset.data<int64_t>()[0], 5);
 }
 
 TEST_CASE("test gpu int32 shape overflow errors") {
