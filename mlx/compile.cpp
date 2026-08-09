@@ -314,9 +314,11 @@ class CompilerCache {
     std::shared_ptr<void> extra;
   };
 
-  // Returns a reference to a CacheEntry which can be updated
-  // by the caller to avoid copying large tapes / inputs / outputs
-  CacheEntry& find(
+  // Returns a CacheEntry which can be updated by the caller to avoid copying
+  // large tapes / inputs / outputs. The caller keeps it alive for the whole
+  // call, so an erase while the trace is running, from this thread or another
+  // one, only drops the cache slot and leaves the entry in use intact.
+  std::shared_ptr<CacheEntry> find(
       std::uintptr_t fun_id,
       const std::vector<array>& inputs,
       bool shapeless,
@@ -324,7 +326,7 @@ class CompilerCache {
     apply_pending_erases();
 
     // Find the cache entries for |fun_id|.
-    std::vector<CacheEntry>& entries = cache_[fun_id];
+    std::vector<std::shared_ptr<CacheEntry>>& entries = cache_[fun_id];
 
     // Compare if 2 arrays have same shape and dtype.
     auto has_same_shape_and_dtype = [shapeless](
@@ -350,23 +352,23 @@ class CompilerCache {
     // - Default stream and device match the entry's default stream
     // - Inputs match i.e. shapes and types must be equal.
     auto stream = default_stream(default_device());
-    for (CacheEntry& entry : entries) {
+    for (auto& entry : entries) {
       // Check that the default stream and device match
-      if (entry.stream != stream) {
+      if (entry->stream != stream) {
         continue;
       }
-      if (entry.shapeless != shapeless) {
+      if (entry->shapeless != shapeless) {
         continue;
       }
 
       // Check the inputs match and return if so
-      if (has_same_shape_and_dtype(inputs, entry.inputs) &&
-          constants == entry.constants) {
+      if (has_same_shape_and_dtype(inputs, entry->inputs) &&
+          constants == entry->constants) {
         return entry;
       }
     }
     // Otherwise append a new cache entry
-    entries.push_back(CacheEntry{stream, shapeless});
+    entries.push_back(std::make_shared<CacheEntry>(stream, shapeless));
     return entries.back();
   }
 
@@ -447,7 +449,8 @@ class CompilerCache {
   }
 
   friend CompilerCache& compiler_cache();
-  std::unordered_map<std::uintptr_t, std::vector<CacheEntry>> cache_;
+  std::unordered_map<std::uintptr_t, std::vector<std::shared_ptr<CacheEntry>>>
+      cache_;
 
   // Guarded by caches_mutex(), the flag allows checking it without the lock.
   std::vector<std::uintptr_t> pending_erases_;
@@ -1183,8 +1186,11 @@ ArrayFnWithExtra compile(
       return fun(inputs);
     }
 
-    // Find a cache entry with the correct inputs
-    auto& entry = compiler_cache().find(fun_id, inputs, shapeless, constants);
+    // Find a cache entry with the correct inputs, held for the whole call so
+    // that it survives an erase while the trace below is running
+    auto entry_ptr =
+        compiler_cache().find(fun_id, inputs, shapeless, constants);
+    auto& entry = *entry_ptr;
 
     // No matching cache entry existed, so compile
     if (entry.empty) {
