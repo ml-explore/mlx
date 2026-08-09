@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -320,6 +321,8 @@ class CompilerCache {
       const std::vector<array>& inputs,
       bool shapeless,
       const std::vector<uint64_t>& constants) {
+    apply_pending_erases();
+
     // Find the cache entries for |fun_id|.
     std::vector<CacheEntry>& entries = cache_[fun_id];
 
@@ -368,14 +371,32 @@ class CompilerCache {
   }
 
   void erase(std::uintptr_t fun_id) {
+    // The function may have been traced on other threads, and only the thread
+    // that owns a cache is allowed to touch it, so hand the id over and let
+    // them erase it the next time they use their cache.
+    {
+      std::lock_guard<std::mutex> lock(caches_mutex());
+      for (auto* cache : caches()) {
+        if (cache != this) {
+          cache->pending_erases_.push_back(fun_id);
+          cache->has_pending_erases_.store(true, std::memory_order_release);
+        }
+      }
+    }
     cache_.erase(fun_id);
   }
 
   void clear() {
+    {
+      std::lock_guard<std::mutex> lock(caches_mutex());
+      pending_erases_.clear();
+      has_pending_erases_.store(false, std::memory_order_release);
+    }
     cache_.clear();
   }
 
   bool empty() {
+    apply_pending_erases();
     return cache_.empty();
   }
 
@@ -384,10 +405,53 @@ class CompilerCache {
     // Make sure the allocator is fully
     // initialized before the compiler cache
     allocator::allocator();
+
+    std::lock_guard<std::mutex> lock(caches_mutex());
+    caches().insert(this);
+  }
+
+  ~CompilerCache() {
+    std::lock_guard<std::mutex> lock(caches_mutex());
+    caches().erase(this);
+  }
+
+  // Erase the ids handed over by other threads. Only the owning thread calls
+  // this so the common case of nothing pending takes no lock.
+  void apply_pending_erases() {
+    if (!has_pending_erases_.load(std::memory_order_acquire)) {
+      return;
+    }
+    std::vector<std::uintptr_t> fun_ids;
+    {
+      std::lock_guard<std::mutex> lock(caches_mutex());
+      fun_ids.swap(pending_erases_);
+      has_pending_erases_.store(false, std::memory_order_release);
+    }
+    for (auto fun_id : fun_ids) {
+      cache_.erase(fun_id);
+    }
+  }
+
+  // The caches are thread local, but a compiled function can be released on
+  // a thread other than the one that traced it. Registering them process wide
+  // lets such an erase reach the thread holding the entry. Both are used by
+  // the constructor so they outlive every cache.
+  static std::mutex& caches_mutex() {
+    static std::mutex mutex;
+    return mutex;
+  }
+
+  static std::unordered_set<CompilerCache*>& caches() {
+    static std::unordered_set<CompilerCache*> caches;
+    return caches;
   }
 
   friend CompilerCache& compiler_cache();
   std::unordered_map<std::uintptr_t, std::vector<CacheEntry>> cache_;
+
+  // Guarded by caches_mutex(), the flag allows checking it without the lock.
+  std::vector<std::uintptr_t> pending_erases_;
+  std::atomic<bool> has_pending_erases_{false};
 };
 
 CompilerCache& compiler_cache() {
