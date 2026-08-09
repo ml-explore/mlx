@@ -644,7 +644,31 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
+    // `bi` indexes BROWS. When reduction_dim == 1, K is BCOLS (the
+    // reduction axis) and BROWS is the *output* axis (M for the x loader,
+    // N for the w loader in qmm_t_impl/affine_gather_qmm_rhs's transpose
+    // path) -- so the valid-count to guard `bi` against is the caller's
+    // BROWS bound. Every call site already passes that bound as
+    // src_tile_dim.y by convention (qmm_t_impl: `short2(BK, num_outs)`;
+    // affine_gather_qmm_rhs: `short2(k_remain, tgp_bn)`), but this line
+    // compared `bi` against src_tile_dim.x instead -- the BCOLS/K count,
+    // not the BROWS/output count. Comparing against the wrong field means
+    // this early-return under-fires: whenever the true BROWS bound (.y) is
+    // smaller than the BCOLS one (.x), some `bi` in [.y, .x) fall through
+    // to the real dequantize-and-load below and read live weight memory
+    // past the valid output boundary, instead of being zero-filled here.
+    // In every kernel instantiation shipped to date BROWS == BK == 32, so
+    // .x (== BK == BROWS) is never smaller than the true bound and the
+    // bug was unreachable; the resulting rows -- always >= the true bound
+    // either way -- are outside `num_outs`/`tgp_bn` and get discarded by
+    // the caller's store_result_safe regardless of what garbage they read,
+    // so output was correct by luck, not by this check doing anything.
+    // Fixing the compared field to .y makes the guard actually fire (and
+    // is a strict no-op for every existing BROWS==BK instantiation, since
+    // .x == BROWS there too -- the two fields were interchangeable exactly
+    // in that one case). It matters once BROWS is parametrized
+    // independently of BK, e.g. qmm_t_impl's new large-M tile below.
+    if (reduction_dim == 1 && bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
