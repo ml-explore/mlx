@@ -85,7 +85,23 @@ inline array ensure_row_contiguous_matrix(
 inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
   auto arch_size = d.get_architecture().back();
   auto arch_gen = d.get_architecture_gen();
-  if (arch_gen == 13 || arch_gen == 14) {
+  if (arch_gen >= 17 && arch_size != 'd') {
+    if (D <= 2048 && O <= 2048) {
+      return 33;
+    } else if (D <= 4096 && O <= 4096) {
+      return 25;
+    } else {
+      return 13;
+    }
+  } else if (arch_gen >= 15 && arch_size != 'd') {
+    if (D <= 2048 && O <= 2048) {
+      return 13;
+    } else if (D <= 4096 && O <= 4096) {
+      return 15;
+    } else {
+      return 13;
+    }
+  } else if (arch_gen >= 13) {
     switch (arch_size) {
       case 'd':
         if (D <= 2048 && O <= 2048) {
@@ -1460,6 +1476,10 @@ void gather_qmm_rhs_nax(
   array x = broadcast_with_indices(x_);
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
+  std::optional<array> biases;
+  if (biases_) {
+    biases = ensure_row_contiguous(*biases_, d, s);
+  }
 
   // TODO: Tune the block sizes
   int bm = 64, bn = 64, bk = 64;
@@ -1538,9 +1558,8 @@ void gather_qmm_rhs_nax(
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_input_array(w, c++);
   compute_encoder.set_input_array(scales, c++);
-  if (biases_) {
-    array biases = ensure_row_contiguous(*biases_, d, s);
-    compute_encoder.set_input_array(biases, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
   }
   compute_encoder.set_input_array(indices, c++);
   compute_encoder.set_output_array(out, c++);
@@ -1611,6 +1630,10 @@ void gather_qmm_rhs(
   array x = broadcast_with_indices(x_);
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
+  std::optional<array> biases;
+  if (biases_) {
+    biases = ensure_row_contiguous(*biases_, d, s);
+  }
 
   // TODO: Tune the block sizes
   int bm = 16, bn = 32, bk = 32;
@@ -1688,9 +1711,8 @@ void gather_qmm_rhs(
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_input_array(w, c++);
   compute_encoder.set_input_array(scales, c++);
-  if (biases_) {
-    array biases = ensure_row_contiguous(*biases_, d, s);
-    compute_encoder.set_input_array(biases, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
   }
   compute_encoder.set_input_array(indices, c++);
   compute_encoder.set_output_array(out, c++);

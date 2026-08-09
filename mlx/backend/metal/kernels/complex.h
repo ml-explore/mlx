@@ -95,6 +95,28 @@ struct complex_t {
   constexpr complex_t(complex_t<U> x) constant : real(static_cast<T>(x.real)),
                                                  imag(static_cast<T>(x.imag)) {}
 
+  // Conversions to and from two-lane vectors (the FFT lane representation)
+  constexpr complex_t(vec<T, 2> v) thread : real(v.x), imag(v.y) {};
+  constexpr complex_t(vec<T, 2> v) threadgroup : real(v.x), imag(v.y) {};
+  constexpr complex_t(vec<T, 2> v) device : real(v.x), imag(v.y) {};
+  constexpr complex_t(vec<T, 2> v) constant : real(v.x), imag(v.y) {};
+
+  constexpr operator vec<T, 2>() const thread {
+    return vec<T, 2>(real, imag);
+  }
+
+  constexpr operator vec<T, 2>() const threadgroup {
+    return vec<T, 2>(real, imag);
+  }
+
+  constexpr operator vec<T, 2>() const device {
+    return vec<T, 2>(real, imag);
+  }
+
+  constexpr operator vec<T, 2>() const constant {
+    return vec<T, 2>(real, imag);
+  }
+
   // Conversions to scalar types
   template <
       typename U,
@@ -129,10 +151,11 @@ struct complex_t {
   }
 };
 
+using complex32_t = complex_t<half>;
 using complex64_t = complex_t<float>;
 
+static_assert(sizeof(complex32_t) == 2 * sizeof(half));
 static_assert(sizeof(complex64_t) == 2 * sizeof(float));
-static_assert(sizeof(complex_t<half>) == 2 * sizeof(half));
 static_assert(sizeof(complex_t<bfloat16_t>) == 2 * sizeof(bfloat16_t));
 
 template <typename T>

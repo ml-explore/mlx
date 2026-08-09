@@ -4,6 +4,7 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/encoder.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -74,50 +75,10 @@ void ArgReduce::eval_cpu(const std::vector<array>& inputs, array& out) {
                     out = array::unsafe_weak_copy(out),
                     reduce_type_ = reduce_type_,
                     axis_ = axis_]() mutable {
-    switch (in.dtype()) {
-      case bool_:
-        arg_reduce_dispatch<bool>(in, out, reduce_type_, axis_);
-        break;
-      case uint8:
-        arg_reduce_dispatch<uint8_t>(in, out, reduce_type_, axis_);
-        break;
-      case uint16:
-        arg_reduce_dispatch<uint16_t>(in, out, reduce_type_, axis_);
-        break;
-      case uint32:
-        arg_reduce_dispatch<uint32_t>(in, out, reduce_type_, axis_);
-        break;
-      case uint64:
-        arg_reduce_dispatch<uint64_t>(in, out, reduce_type_, axis_);
-        break;
-      case int8:
-        arg_reduce_dispatch<int8_t>(in, out, reduce_type_, axis_);
-        break;
-      case int16:
-        arg_reduce_dispatch<int16_t>(in, out, reduce_type_, axis_);
-        break;
-      case int32:
-        arg_reduce_dispatch<int32_t>(in, out, reduce_type_, axis_);
-        break;
-      case int64:
-        arg_reduce_dispatch<int64_t>(in, out, reduce_type_, axis_);
-        break;
-      case float16:
-        arg_reduce_dispatch<float16_t>(in, out, reduce_type_, axis_);
-        break;
-      case float32:
-        arg_reduce_dispatch<float>(in, out, reduce_type_, axis_);
-        break;
-      case bfloat16:
-        arg_reduce_dispatch<bfloat16_t>(in, out, reduce_type_, axis_);
-        break;
-      case float64:
-        arg_reduce_dispatch<double>(in, out, reduce_type_, axis_);
-        break;
-      case complex64:
-        arg_reduce_dispatch<complex64_t>(in, out, reduce_type_, axis_);
-        break;
-    }
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      arg_reduce_dispatch<T>(in, out, reduce_type_, axis_);
+    });
   });
 }
 

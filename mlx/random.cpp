@@ -285,7 +285,12 @@ array randint(
         "[randint] randint only accepts integer dtypes and bool.");
   }
   auto u = uniform(low, high, shape, float32, key, s);
-  return astype(maximum(u, low, s), dtype, s);
+  // astype truncates decimal parts so -1.7 becomes -1, use floor.
+  auto out = astype(floor(u, s), dtype, s);
+  // low/high may not be representable in float32 so actual range of uniform
+  // may be larger than [low, high) and we have to clamp to [low, high - 1].
+  auto hi = astype(subtract(high, array(1, high.dtype()), s), dtype, s);
+  return maximum(minimum(out, hi, s), astype(low, dtype, s), s);
 }
 
 array bernoulli(

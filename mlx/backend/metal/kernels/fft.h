@@ -325,7 +325,18 @@ template <int tg_mem_size, typename in_T, typename out_T>
   int x_sum_index = metal::min(fft_idx, rader_m - 1);
   buf[x_sum_index] = buf[rader_m + x_sum_index * (rader_n - 1)];
 
-  vec<scalar_T, 2> inv = {1.0f, -1.0f};
+  // The convolution is conjugated and scaled by 1/(rader_n - 1) exactly once
+  // each. Float lanes apply the scale after the inverse FFT, preserving the
+  // existing float code generation; reduced lanes apply it before, so the
+  // intermediates cannot overflow the narrow lane range.
+  scalar_T rader_inv_r = static_cast<scalar_T>(1.0f / (rader_n - 1));
+  vec<scalar_T, 2> convolution_factor = {1.0f, -1.0f};
+  vec<scalar_T, 2> convolution_inv_factor = {rader_inv_r, -rader_inv_r};
+  if constexpr (!metal::is_same_v<scalar_T, float>) {
+    convolution_factor = convolution_inv_factor;
+    convolution_inv_factor = {1.0f, -1.0f};
+  }
+
   for (int e = 0; e < elems_per_thread_; e++) {
     short index = metal::min(fft_idx * elems_per_thread_ + e, max_index);
     short interleaved_index =
@@ -339,7 +350,7 @@ template <int tg_mem_size, typename in_T, typename out_T>
 
   for (int e = 0; e < elems_per_thread_; e++) {
     short index = metal::min(fft_idx * elems_per_thread_ + e, max_index);
-    buf[rader_m + index] = temp[e] * inv;
+    buf[rader_m + index] = temp[e] * convolution_factor;
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -349,13 +360,10 @@ template <int tg_mem_size, typename in_T, typename out_T>
   perform_fft<scalar_T, /*rader=*/true>(
       fft_idx, &p, m, n - rader_m, buf + rader_m);
 
-  scalar_T rader_inv_r = static_cast<scalar_T>(1.0f / (rader_n - 1));
-  vec<scalar_T, 2> rader_inv_factor = {rader_inv_r, -rader_inv_r};
-
   for (int e = 0; e < elems_per_thread_; e++) {
     short index = metal::min(fft_idx * elems_per_thread_ + e, n - rader_m - 1);
     short diff_index = index / (rader_n - 1) - x_0_index;
-    temp[e] = buf[rader_m + index] * rader_inv_factor + x_0[diff_index];
+    temp[e] = buf[rader_m + index] * convolution_inv_factor + x_0[diff_index];
   }
 
   // Use the sum of elements that was computed in the first FFT
@@ -433,10 +441,17 @@ template <int tg_mem_size, typename in_T, typename out_T>
   // fft
   perform_fft<scalar_T>(fft_idx, &p, m, n, buf);
 
-  vec<scalar_T, 2> inv = {1.0f, -1.0f};
+  vec<scalar_T, 2> convolution_factor = {1.0f, -1.0f};
+  if constexpr (!metal::is_same_v<scalar_T, float>) {
+    // Reduced lanes normalize the convolution before the inverse FFT so the
+    // intermediates cannot overflow; the write path then only conjugates.
+    scalar_T inv_n = static_cast<scalar_T>(1.0f / n);
+    convolution_factor = {inv_n, -inv_n};
+  }
   for (int t = 0; t < elems_per_thread_; t++) {
     int index = fft_idx + t * m;
-    buf[index] = complex_mul<scalar_T>(buf[index], w_q[index]) * inv;
+    buf[index] =
+        complex_mul<scalar_T>(buf[index], w_q[index]) * convolution_factor;
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);

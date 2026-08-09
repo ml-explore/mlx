@@ -154,6 +154,16 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 mx.allclose(out, mx.eye(min(A.shape)), rtol=1e-4, atol=1e-6)
             )
 
+        # Zero-size inputs. Both factors carry min(M, N) as a dimension, so
+        # both are empty whichever dimension is zero.
+        for shape in [(0, 0), (3, 0, 0), (0, 4, 4), (5, 0), (0, 5)]:
+            A_np = np.zeros(shape, dtype=np.float32)
+            Q, R = mx.linalg.qr(mx.array(A_np), stream=mx.cpu)
+            mx.eval(Q, R)
+            Q_np, R_np = np.linalg.qr(A_np)
+            self.assertEqual(Q.shape, Q_np.shape)
+            self.assertEqual(R.shape, R_np.shape)
+
     def test_svd_decomposition(self):
         A = mx.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], dtype=mx.float32)
         U, S, Vt = mx.linalg.svd(A, compute_uv=True, stream=mx.cpu)
@@ -310,6 +320,13 @@ class TestLinalg(mlx_tests.MLXTestCase):
         A_plus = mx.linalg.pinv(A, stream=mx.cpu)
         self.assertTrue(mx.allclose(A @ A_plus @ A, A))
 
+        # Zero-size inputs. The result takes the shape of the transposed input.
+        for shape in [(0, 0), (0, 3), (3, 0), (0, 2, 2), (2, 0, 0), (0, 4, 3)]:
+            A_np = np.zeros(shape, dtype=np.float32)
+            A_plus = mx.linalg.pinv(mx.array(A_np), stream=mx.cpu)
+            mx.eval(A_plus)
+            self.assertEqual(A_plus.shape, np.linalg.pinv(A_np).shape)
+
     def test_cholesky_inv(self):
         mx.random.seed(7)
 
@@ -451,6 +468,19 @@ class TestLinalg(mlx_tests.MLXTestCase):
             )
             self.assertEqual(eig_vals_c64.dtype, mx.complex64)
             self.assertEqual(eig_vecs_c64.dtype, mx.complex64)
+
+        # Zero-size inputs. The input is square, so both outputs are empty.
+        for shape in [(0, 0), (3, 0, 0), (0, 4, 4)]:
+            A_np = np.zeros(shape, dtype=np.float32)
+            eig_vals, eig_vecs = mx.linalg.eig(mx.array(A_np), stream=mx.cpu)
+            mx.eval(eig_vals, eig_vecs)
+            vals_np, vecs_np = np.linalg.eig(A_np)
+            self.assertEqual(eig_vals.shape, vals_np.shape)
+            self.assertEqual(eig_vecs.shape, vecs_np.shape)
+
+            vals_only = mx.linalg.eigvals(mx.array(A_np), stream=mx.cpu)
+            mx.eval(vals_only)
+            self.assertEqual(vals_only.shape, vals_np.shape)
 
         # Test error cases
         with self.assertRaises(ValueError):
