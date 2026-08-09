@@ -460,6 +460,9 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
     switch (reduce_type_) {
       case Reduce::And:
       case Reduce::Or: {
+        // Integers can be reduced as whatever type has the same width, since
+        // only their bits matter. Floats cannot: -0.0 compares equal to zero
+        // but has a bit set, so it has to be tested as a float.
         switch (in.dtype()) {
           case bool_:
           case uint8:
@@ -468,20 +471,31 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
             break;
           case int16:
           case uint16:
-          case float16:
-          case bfloat16:
             reduce_dispatch_and_or<int16_t>(in, out, reduce_type_, axes_);
+            break;
+          case float16:
+            reduce_dispatch_and_or<float16_t>(in, out, reduce_type_, axes_);
+            break;
+          case bfloat16:
+            reduce_dispatch_and_or<bfloat16_t>(in, out, reduce_type_, axes_);
             break;
           case uint32:
           case int32:
-          case float32:
             reduce_dispatch_and_or<int32_t>(in, out, reduce_type_, axes_);
+            break;
+          case float32:
+            reduce_dispatch_and_or<float>(in, out, reduce_type_, axes_);
             break;
           case uint64:
           case int64:
-          case float64:
+          // complex64 stays on the integer path. Testing it as a complex
+          // would go through complex64_t's conversion to float and only look
+          // at the real part, which would miss 1j.
           case complex64:
             reduce_dispatch_and_or<int64_t>(in, out, reduce_type_, axes_);
+            break;
+          case float64:
+            reduce_dispatch_and_or<double>(in, out, reduce_type_, axes_);
             break;
         }
         break;

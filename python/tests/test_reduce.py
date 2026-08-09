@@ -218,6 +218,35 @@ class TestReduce(mlx_tests.MLXTestCase):
         c2 = b.sum(0)
         self.assertTrue(np.all(c1 == c2))
 
+    def test_and_or_negative_zero(self):
+        # -0.0 equals zero but has its sign bit set, so it must not be treated
+        # as truthy just because its bit pattern is nonzero
+        for dtype in ["float32", "float16", "float64"]:
+            with self.subTest(dtype=dtype):
+                for values in [
+                    [0.0, -0.0],
+                    [-0.0, -0.0],
+                    [-0.0] * 70,
+                    [-0.0, 0.0, 1.0],
+                    [0.5, 0.0],
+                ]:
+                    a_np = np.array(values, dtype=getattr(np, dtype))
+                    a_mx = mx.array(a_np)
+                    for op in ["any", "all"]:
+                        self.assertEqual(
+                            getattr(mx, op)(a_mx).item(),
+                            bool(getattr(np, op)(a_np)),
+                            msg=f"{op} {dtype} {values}",
+                        )
+
+        x_np = np.array([[0.0, -0.0], [1.0, 0.0], [-0.0, -0.0]], dtype=np.float32)
+        x_mx = mx.array(x_np)
+        for op in ["any", "all"]:
+            self.assertEqual(
+                getattr(mx, op)(x_mx, axis=1).tolist(),
+                getattr(np, op)(x_np, axis=1).tolist(),
+            )
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
