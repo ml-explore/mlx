@@ -31,6 +31,12 @@ void init_reduce(
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
   }
 
+  // An empty output has nothing to initialize, and the launch below would
+  // compute a zero-sized block.
+  if (out.size() == 0) {
+    return;
+  }
+
   encoder.set_output_array(out);
   dispatch_all_types(in.dtype(), [&](auto type_tag) {
     dispatch_reduce_ops(reduce_type, [&](auto reduce_type_tag) {

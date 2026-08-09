@@ -23,7 +23,11 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // When all the reduced axes have size 1 at runtime, which can happen with
   // shapeless compilation, the reduction is the identity so just cast-copy
   // the input to the output.
-  if (out.size() == in.size()) {
+  //
+  // An empty input is excluded: sizes are then equal at zero while the shapes
+  // need not be (reducing (0, 2) over the last axis gives (0,)), and the copy
+  // requires matching shapes. The empty case is handled just below.
+  if (in.size() > 0 && out.size() == in.size()) {
     CopyType ctype =
         in.flags().contiguous ? CopyType::Vector : CopyType::General;
     copy_gpu(in, out, ctype, s);
