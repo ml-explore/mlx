@@ -146,5 +146,52 @@ class TestDeviceInfo(mlx_tests.MLXTestCase):
         self.assertIn("device_name", info)
 
 
+class TestStrictWeakOrdering(mlx_tests.MLXTestCase):
+    """Regression tests for issue #4083: Device/Stream operator< strict weak ordering.
+
+    The C++ operator< is not directly exposed in Python, so we verify the fix
+    by exercising std::set<Stream> in eval_impl which is the real-world crash path.
+    """
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    def test_eval_multi_device_streams(self):
+        """eval() with ops on both CPU and GPU streams must not crash.
+
+        This exercises std::set<Stream> in eval_impl which would abort
+        under libc++ hardening mode with the old non-SWO comparator.
+        """
+        gpu_stream = mx.new_stream(mx.gpu)
+        cpu_stream = mx.new_stream(mx.cpu)
+
+        mx.set_default_stream(gpu_stream)
+        a = mx.array([1.0, 2.0, 3.0])
+        b = mx.array([4.0, 5.0, 6.0])
+
+        mx.set_default_stream(cpu_stream)
+        c = mx.array([7.0, 8.0, 9.0])
+
+        # This path uses std::set<Stream> internally — would crash before the fix
+        mx.eval(a, b, c)
+        self.assertEqual(a.tolist(), [1.0, 2.0, 3.0])
+        self.assertEqual(c.tolist(), [7.0, 8.0, 9.0])
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    def test_eval_many_streams_repeated(self):
+        """Repeated eval() with interleaved CPU/GPU streams (regression test)."""
+        for _ in range(50):
+            gpu_stream = mx.new_stream(mx.gpu)
+            cpu_stream = mx.new_stream(mx.cpu)
+
+            mx.set_default_stream(gpu_stream)
+            a = mx.array([1.0]) + mx.array([2.0])
+
+            mx.set_default_stream(cpu_stream)
+            b = mx.array([3.0]) + mx.array([4.0])
+
+            mx.eval(a, b)
+            self.assertEqual(a.tolist(), [3.0])
+            self.assertEqual(b.tolist(), [7.0])
+
+
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
