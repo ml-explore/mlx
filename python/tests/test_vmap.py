@@ -252,6 +252,85 @@ class TestVmap(mlx_tests.MLXTestCase):
         expected = mx.array([2, 1])
         self.assertTrue(mx.array_equal(out, expected))
 
+    def _unstack(self, x, axis):
+        return [s.squeeze(axis) for s in mx.split(x, x.shape[axis], axis=axis)]
+
+    def test_vmap_partition(self):
+        # Distinct values so each lane has a single valid kth element
+        a = mx.random.permutation(2 * 3 * 4).reshape(2, 3, 4).astype(mx.float32)
+
+        for in_axis in (0, 1, 2):
+            slices = self._unstack(a, in_axis)
+            # Axis of the batched output that the inner axis maps onto
+            out_axes_map = [d for d in range(a.ndim) if d != in_axis]
+            for axis in (0, 1, -1):
+                oaxis = out_axes_map[axis if axis >= 0 else axis + 2]
+                for kth in range(slices[0].shape[axis]):
+                    expected = mx.stack(
+                        [mx.partition(x, kth, axis=axis) for x in slices],
+                        axis=in_axis,
+                    )
+                    pivot = mx.take(expected, mx.array([kth]), axis=oaxis)
+
+                    out = mx.vmap(
+                        lambda x: mx.partition(x, kth, axis=axis),
+                        in_axes=in_axis,
+                        out_axes=in_axis,
+                    )(a)
+                    self.assertEqual(out.shape, expected.shape)
+                    # partition only pins the kth element; the two sides are
+                    # an arbitrary permutation, so compare against the sorted
+                    # input rather than element-wise.
+                    self.assertTrue(
+                        mx.array_equal(mx.sort(out, axis=oaxis), mx.sort(a, axis=oaxis))
+                    )
+                    self.assertTrue(
+                        mx.array_equal(mx.take(out, mx.array([kth]), axis=oaxis), pivot)
+                    )
+
+                    idx = mx.vmap(
+                        lambda x: mx.argpartition(x, kth, axis=axis),
+                        in_axes=in_axis,
+                        out_axes=in_axis,
+                    )(a)
+                    self.assertEqual(idx.shape, expected.shape)
+                    gathered = mx.take_along_axis(a, idx, axis=oaxis)
+                    self.assertTrue(
+                        mx.array_equal(
+                            mx.sort(gathered, axis=oaxis), mx.sort(a, axis=oaxis)
+                        )
+                    )
+                    self.assertTrue(
+                        mx.array_equal(
+                            mx.take(gathered, mx.array([kth]), axis=oaxis), pivot
+                        )
+                    )
+
+    def test_vmap_topk(self):
+        a = mx.random.permutation(2 * 3 * 4).reshape(2, 3, 4).astype(mx.float32)
+
+        for in_axis in (0, 1, 2):
+            slices = self._unstack(a, in_axis)
+            out_axes_map = [d for d in range(a.ndim) if d != in_axis]
+            for axis in (0, 1, -1):
+                oaxis = out_axes_map[axis if axis >= 0 else axis + 2]
+                for k in range(1, slices[0].shape[axis] + 1):
+                    out = mx.vmap(
+                        lambda x: mx.topk(x, k, axis=axis),
+                        in_axes=in_axis,
+                        out_axes=in_axis,
+                    )(a)
+                    expected = mx.stack(
+                        [mx.topk(x, k, axis=axis) for x in slices], axis=in_axis
+                    )
+                    self.assertEqual(out.shape, expected.shape)
+                    # topk does not promise an order within the k elements
+                    self.assertTrue(
+                        mx.array_equal(
+                            mx.sort(out, axis=oaxis), mx.sort(expected, axis=oaxis)
+                        )
+                    )
+
     def test_vmap_mean(self):
         a = mx.arange(8).reshape(2, 4)
         out = mx.vmap(mx.mean)(a)
