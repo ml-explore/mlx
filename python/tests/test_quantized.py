@@ -1,7 +1,9 @@
 # Copyright © 2023-2026 Apple Inc.
 
+import os
 import platform
 import subprocess
+import sys
 import unittest
 from itertools import product
 
@@ -1539,6 +1541,31 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
                         tol = 1.5e-5 if dtype == mx.float32 else 1e-3
                         self.assertLess((y1 - y2).abs().max(), tol)
+
+    def test_gather_qmm_sorted_float32_tf32(self):
+        # mlx_tests.py pins MLX_ENABLE_TF32=0 and the flag is cached on first
+        # read, so the float32 variants of the sorted-indices kernels can only
+        # run in a fresh process with TF32 enabled.
+        script = """
+import mlx.core as mx
+E, K, D = 4, 512, 512
+for B in (64, 256):
+    idx = mx.sort((mx.random.uniform(shape=(B,)) * E).astype(mx.uint32))
+    x = mx.random.normal((B, 1, K)) / K**0.5
+    w = mx.random.normal((E, D, K)) / K**0.5
+    wq = mx.quantize(w, group_size=64, bits=4)
+    w_hat = mx.dequantize(*wq, group_size=64, bits=4).swapaxes(-1, -2)
+    y1 = mx.gather_mm(x, w_hat, rhs_indices=idx, sorted_indices=True)
+    y2 = mx.gather_qmm(x, *wq, group_size=64, bits=4, rhs_indices=idx,
+                       transpose=True, sorted_indices=True)
+    assert (y1 - y2).abs().max().item() < 1e-3, B
+"""
+        env = os.environ.copy()
+        env["MLX_ENABLE_TF32"] = "1"
+        result = subprocess.run(
+            [sys.executable, "-c", script], env=env, capture_output=True, text=True
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
