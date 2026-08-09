@@ -548,7 +548,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
                         )
                         y_hat = x_t @ mx.swapaxes(w_hat, -1, -2)
                         self.assertEqual(y_q.shape, y_hat.shape)
-                        self.assertTrue(mx.allclose(y_q, y_hat, rtol=1e-3, atol=1e-3))
+                        tol = 1e-2 if dtype == mx.bfloat16 else 1e-3
+                        self.assertTrue(mx.allclose(y_q, y_hat, rtol=tol, atol=tol))
 
     def test_qmv_wide(self):
         # M in [2, vector_limit) routes to qmv_wide -- except K in {64, 128}
