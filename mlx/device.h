@@ -27,7 +27,10 @@ struct MLX_API Device {
   // TODO: Use default three-way comparison when it gets supported in XCode.
   bool operator==(const Device&) const = default;
   bool operator<(const Device& rhs) const {
-    return type < rhs.type || index < rhs.index;
+    if (type != rhs.type) {
+      return type < rhs.type;
+    }
+    return index < rhs.index;
   }
 };
 
