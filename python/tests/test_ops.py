@@ -3473,8 +3473,15 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.power(2, mx.array([8, 8, 8, 8, 8, 8, 8, 8]))
         self.assertTrue(mx.all(x == 256))
 
-        # Doesn't hang
+        # Doesn't hang. Needs the eval, otherwise nothing is computed.
         x = mx.power(2, -1)
+        mx.eval(x)
+        self.assertEqual(x.item(), 0)
+
+        for dtype in [mx.int8, mx.int16, mx.int32, mx.int64]:
+            x = mx.power(mx.array([2, -2, 1], dtype), mx.array([-1, -3, -9], dtype))
+            mx.eval(x)
+            self.assertEqual(x.tolist(), [0, 0, 0])
 
     def test_depends(self):
         a = mx.array([1.0, 2.0, 3.0])
