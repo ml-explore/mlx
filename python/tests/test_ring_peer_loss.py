@@ -1,13 +1,6 @@
 # Copyright © 2024 Apple Inc.
 
-"""Regression test for a ring group losing a peer.
-
-Deliberately named test_*.py rather than *_test_distributed.py: the files with the
-latter name are excluded from `unittest discover` so they only run under mpirun or
-mlx.launch. This one is the opposite. It runs as an ordinary single process test and
-spawns its own ranks, because the behaviour under test is what happens when a rank
-dies, and mlx.launch terminates the survivors itself when that happens, which hides it.
-"""
+"""Regression test for a ring group losing a peer."""
 
 import json
 import os

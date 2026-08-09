@@ -240,13 +240,6 @@ class SocketThread {
           delete_recv = task.size == 0;
           error_count = 0;
         } else if (r == 0) {
-          // The peer closed the connection. recv() signals this by returning 0
-          // and leaves errno untouched, so the check below would test a stale
-          // value. That value is almost always EAGAIN, because a non-blocking
-          // socket with nothing to read sets it on every previous call, so the
-          // failure would be skipped entirely and this loop would spin on a
-          // dead socket forever without logging anything. Compare sendAll() and
-          // recvAll() in the nccl backend, which treat <= 0 as failure.
           error_count++;
           log_info(true, "Socket", fd_, "was closed by the peer");
         } else if (errno != EAGAIN) {
@@ -264,9 +257,6 @@ class SocketThread {
           delete_send = task.size == 0;
           error_count = 0;
         } else if (r == 0) {
-          // Same stale-errno hazard as the recv path above. send_impl already
-          // short-circuits zero-length sends, so size is always positive here
-          // and a 0 return means no progress was made.
           error_count++;
           log_info(true, "Sending to socket", fd_, "made no progress");
         } else if (errno != EAGAIN) {
@@ -276,15 +266,8 @@ class SocketThread {
       }
 
       if (error_count >= 10) {
-        // Simply returning would leave every queued task's promise unsatisfied.
-        // This SocketThread outlives its worker, so those promises are not
-        // destroyed either and no broken_promise is ever delivered, which means
-        // the futures never become ready and every waiter blocks forever.
-        //
-        // Reject them instead, so the failure reaches whoever is waiting rather
-        // than the collective quietly completing without this peer's
-        // contribution.
         log_info(true, "Too many send/recv errors. Failing pending tasks...");
+        // Throw exception in invoker's thread.
         auto error = std::make_exception_ptr(
             std::runtime_error("[ring] connection to a peer was lost"));
         for (auto& task : recvs_) {
@@ -784,9 +767,7 @@ class RingGroup : public GroupImpl {
 
       std::swap(a, b);
     }
-    // With a single packet a and b are the same index, so these were already
-    // consumed inside the loop. get() invalidates a future where wait() does
-    // not, so guard against consuming them twice.
+    // Check valid() to avoid consuming same future twice for single packet.
     if (sends[b].valid()) {
       sends[b].get();
     }
