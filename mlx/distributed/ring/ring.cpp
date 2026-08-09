@@ -11,6 +11,7 @@
 #include <iostream>
 #include <list>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 #include <unordered_map>
 
@@ -238,6 +239,16 @@ class SocketThread {
           task.size -= r;
           delete_recv = task.size == 0;
           error_count = 0;
+        } else if (r == 0) {
+          // The peer closed the connection. recv() signals this by returning 0
+          // and leaves errno untouched, so the check below would test a stale
+          // value. That value is almost always EAGAIN, because a non-blocking
+          // socket with nothing to read sets it on every previous call, so the
+          // failure would be skipped entirely and this loop would spin on a
+          // dead socket forever without logging anything. Compare sendAll() and
+          // recvAll() in the nccl backend, which treat <= 0 as failure.
+          error_count++;
+          log_info(true, "Socket", fd_, "was closed by the peer");
         } else if (errno != EAGAIN) {
           error_count++;
           log_info(
@@ -252,6 +263,12 @@ class SocketThread {
           task.size -= r;
           delete_send = task.size == 0;
           error_count = 0;
+        } else if (r == 0) {
+          // Same stale-errno hazard as the recv path above. send_impl already
+          // short-circuits zero-length sends, so size is always positive here
+          // and a 0 return means no progress was made.
+          error_count++;
+          log_info(true, "Sending to socket", fd_, "made no progress");
         } else if (errno != EAGAIN) {
           error_count++;
           log_info(true, "Sending to socket", fd_, "failed with errno", errno);
@@ -259,7 +276,25 @@ class SocketThread {
       }
 
       if (error_count >= 10) {
-        log_info(true, "Too many send/recv errors. Aborting...");
+        // Simply returning would leave every queued task's promise unsatisfied.
+        // This SocketThread outlives its worker, so those promises are not
+        // destroyed either and no broken_promise is ever delivered, which means
+        // the futures never become ready and every waiter blocks forever.
+        //
+        // Reject them instead, so the failure reaches whoever is waiting rather
+        // than the collective quietly completing without this peer's
+        // contribution.
+        log_info(true, "Too many send/recv errors. Failing pending tasks...");
+        auto error = std::make_exception_ptr(
+            std::runtime_error("[ring] connection to a peer was lost"));
+        for (auto& task : recvs_) {
+          task.promise.set_exception(error);
+        }
+        for (auto& task : sends_) {
+          task.promise.set_exception(error);
+        }
+        recvs_.clear();
+        sends_.clear();
         return;
       }
     }
@@ -525,7 +560,7 @@ class RingGroup : public GroupImpl {
                 (i % 2) ? -1 : 1)));
       }
       for (auto& f : all_gathers) {
-        f.wait();
+        f.get();
       }
     });
   }
@@ -650,7 +685,7 @@ class RingGroup : public GroupImpl {
                 reduce_op)));
       }
       for (auto& f : all_sums) {
-        f.wait();
+        f.get();
       }
     });
   }
@@ -737,8 +772,8 @@ class RingGroup : public GroupImpl {
       }
 
       if (j >= 0) {
-        sends[b].wait();
-        recvs[b].wait();
+        sends[b].get();
+        recvs[b].get();
         if (2 * j < send_plan.size()) {
           reduce_op(
               recv_buffers[j % ALL_SUM_BUFFERS],
@@ -749,8 +784,15 @@ class RingGroup : public GroupImpl {
 
       std::swap(a, b);
     }
-    sends[b].wait();
-    recvs[b].wait();
+    // With a single packet a and b are the same index, so these were already
+    // consumed inside the loop. get() invalidates a future where wait() does
+    // not, so guard against consuming them twice.
+    if (sends[b].valid()) {
+      sends[b].get();
+    }
+    if (recvs[b].valid()) {
+      recvs[b].get();
+    }
   }
 
   void all_gather_impl(
@@ -784,8 +826,8 @@ class RingGroup : public GroupImpl {
       send_segment = (send_segment + size_ + direction) % size_;
       recv_segment = (recv_segment + size_ + direction) % size_;
 
-      sent.wait();
-      recvd.wait();
+      sent.get();
+      recvd.get();
     }
   }
 
@@ -804,7 +846,7 @@ class RingGroup : public GroupImpl {
           std::min(data_size, (i + 1) * segment_size) - i * segment_size));
     }
     for (auto& f : sends) {
-      f.wait();
+      f.get();
     }
   }
 
@@ -822,7 +864,7 @@ class RingGroup : public GroupImpl {
           std::min(data_size, (i + 1) * segment_size) - i * segment_size));
     }
     for (auto& f : recvs) {
-      f.wait();
+      f.get();
     }
   }
 
