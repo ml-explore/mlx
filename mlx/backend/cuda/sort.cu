@@ -1082,26 +1082,19 @@ searchsorted_impl(const T* a, T v, uint32_t n, int64_t a_stride) {
   return lo;
 }
 
-template <typename T, typename IdxT, bool Right>
+template <typename T, bool Right>
 __global__ void searchsorted(
     const T* a,
     const T* v,
     uint32_t* out,
-    IdxT size,
+    int64_t size,
     uint32_t n,
-    int64_t a_stride,
-    const __grid_constant__ Shape v_shape,
-    const __grid_constant__ Strides v_strides,
-    int ndim,
-    bool contiguous) {
-  IdxT index = cg::this_grid().thread_rank();
+    int64_t a_stride) {
+  int64_t index = cg::this_grid().thread_rank();
   if (index >= size) {
     return;
   }
-  IdxT loc = contiguous
-      ? index
-      : elem_to_loc<IdxT>(index, v_shape.data(), v_strides.data(), ndim);
-  out[index] = searchsorted_impl<T, Right>(a, v[loc], n, a_stride);
+  out[index] = searchsorted_impl<T, Right>(a, v[index], n, a_stride);
 }
 
 } // namespace cu
@@ -1109,14 +1102,23 @@ __global__ void searchsorted(
 void SearchSorted::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("SearchSorted::eval_gpu");
   assert(inputs.size() == 2);
+  auto& s = stream();
   auto& a = inputs[0];
-  auto& v = inputs[1];
+  auto v = inputs[1];
 
-  auto& encoder = cu::get_command_encoder(stream());
+  auto& encoder = cu::get_command_encoder(s);
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
   if (out.size() == 0) {
     return;
   }
+
+  // The kernel indexes the values contiguously, so copy anything else first.
+  if (!v.flags().row_contiguous) {
+    array v_copy = contiguous_copy_gpu(v, s);
+    encoder.add_temporary(v_copy);
+    v = v_copy;
+  }
+
   encoder.set_input_array(a);
   encoder.set_input_array(v);
   encoder.set_output_array(out);
@@ -1126,37 +1128,23 @@ void SearchSorted::eval_gpu(const std::vector<array>& inputs, array& out) {
   int64_t a_stride = a.strides()[0];
   auto n = static_cast<uint32_t>(a.size());
 
-  // row_contiguous, not contiguous: the latter only promises the buffer has no
-  // gaps, which a transposed or broadcast view also satisfies while its
-  // elements sit in a different order than the output's. A 0-d input takes the
-  // contiguous path since elem_to_loc has no dimension to walk.
-  auto [shape, strides] = collapse_contiguous_dims(v);
-  int ndim = shape.size();
-  bool contiguous = v.flags().row_contiguous || ndim == 0;
-
   dispatch_all_types(a.dtype(), [&](auto type_tag) {
     using CTYPE = MLX_GET_TYPE(type_tag);
     using T = cuda_type_t<CTYPE>;
     dispatch_bool(right_, [&](auto right_tag) {
-      dispatch_bool(out.size() > INT32_MAX, [&](auto large) {
-        constexpr bool RIGHT = decltype(right_tag)::value;
-        using IdxT = std::conditional_t<large(), int64_t, int32_t>;
-        auto [num_blocks, block_dims] = get_launch_args(out, large());
-        encoder.add_kernel_node(
-            cu::searchsorted<T, IdxT, RIGHT>,
-            num_blocks,
-            block_dims,
-            gpu_ptr<T>(a),
-            gpu_ptr<T>(v),
-            gpu_ptr<uint32_t>(out),
-            static_cast<IdxT>(out.size()),
-            n,
-            a_stride,
-            const_param(shape),
-            const_param(strides),
-            ndim,
-            contiguous);
-      });
+      constexpr bool RIGHT = decltype(right_tag)::value;
+      auto [num_blocks, block_dims] =
+          get_launch_args(out, out.size() > INT32_MAX);
+      encoder.add_kernel_node(
+          cu::searchsorted<T, RIGHT>,
+          num_blocks,
+          block_dims,
+          gpu_ptr<T>(a),
+          gpu_ptr<T>(v),
+          gpu_ptr<uint32_t>(out),
+          static_cast<int64_t>(out.size()),
+          n,
+          a_stride);
     });
   });
 }
