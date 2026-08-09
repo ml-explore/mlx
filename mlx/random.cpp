@@ -285,14 +285,10 @@ array randint(
         "[randint] randint only accepts integer dtypes and bool.");
   }
   auto u = uniform(low, high, shape, float32, key, s);
-  // Take the floor before casting: `astype` truncates towards zero, which
-  // makes `low` unreachable and doubles the weight of zero when the interval
-  // spans negative values.
+  // astype truncates decimal parts so -1.7 becomes -1, use floor.
   auto out = astype(floor(u, s), dtype, s);
-  // Rounding in the float32 domain can place a sample on `high` itself, so
-  // clamp to `high - 1`. The bound is computed in the integer domain since it
-  // is not always representable in float32. Clamping to `low` last keeps an
-  // empty interval collapsing to `low`.
+  // low/high may not be representable in float32 so actual range of uniform
+  // may be larger than [low, high) and we have to clamp to [low, high - 1].
   auto hi = astype(subtract(high, array(1, high.dtype()), s), dtype, s);
   return maximum(minimum(out, hi, s), astype(low, dtype, s), s);
 }
