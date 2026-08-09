@@ -1,4 +1,4 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2026 Apple Inc.
 
 import platform
 import subprocess
@@ -515,6 +515,41 @@ class TestQuantized(mlx_tests.MLXTestCase):
             y_hat = x @ mx.swapaxes(w_hat, -1, -2)
             self.assertEqual(y_q.shape, y_hat.shape)
             self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+    def test_fp_qmv_large_output(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        K = 512
+        N = 4096
+
+        for B in [1, 2]:
+            with self.subTest(B=B, N=N, K=K):
+                x_shape = (1, K) if B == 1 else (B, 1, K)
+                w_shape = (N, K) if B == 1 else (B, N, K)
+                x = mx.random.normal(shape=x_shape, key=k1) / K**0.5
+                w = mx.random.normal(shape=w_shape, key=k2)
+                w_q, scales = mx.quantize(w, mode="nvfp4")
+
+                dtypes = (
+                    [mx.float16, mx.bfloat16, mx.float32]
+                    if mx.default_device() == mx.gpu
+                    else [mx.float32]
+                )
+                for dtype in dtypes:
+                    with self.subTest(dtype=dtype):
+                        x_t = x.astype(dtype)
+                        w_hat = mx.dequantize(w_q, scales, mode="nvfp4", dtype=dtype)
+                        y_q = mx.quantized_matmul(
+                            x_t,
+                            w_q,
+                            scales,
+                            transpose=True,
+                            mode="nvfp4",
+                        )
+                        y_hat = x_t @ mx.swapaxes(w_hat, -1, -2)
+                        self.assertEqual(y_q.shape, y_hat.shape)
+                        tol = 1e-2 if dtype == mx.bfloat16 else 1e-3
+                        self.assertTrue(mx.allclose(y_q, y_hat, rtol=tol, atol=tol))
 
     def test_qmv_wide(self):
         # M in [2, vector_limit) routes to qmv_wide -- except K in {64, 128}
