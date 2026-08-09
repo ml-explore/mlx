@@ -1215,6 +1215,156 @@ class TestConv(mlx_tests.MLXTestCase):
         y_hat = mx.conv_transpose2d(x, w)
         self.assertTrue(mx.allclose(y, y_hat))
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_conv2d_winograd_batch_tiling(self):
+        # Winograd's scratch outgrows the GPU working set at large batch and
+        # silently produces zeros (issue #3979). Real repros need tens of GB,
+        # so shrink the budget the selector is handed instead.
+        tile_key = "MLX_CONV_WINOGRAD_TILE_BATCH"
+        ws_key = "MLX_CONV_WINOGRAD_WORKING_SET"
+        prev = {k: os.environ.get(k) for k in (tile_key, ws_key)}
+
+        # Winograd needs 3x3 stride-1, channels in multiples of 32,
+        # C + O >= 256 and N * iH * iW >= 4096.
+        cases = (
+            ((8, 48, 48, 64), (192, 3, 3, 64)),
+            ((5, 52, 44, 128), (128, 3, 3, 128)),
+            ((4, 48, 48, 192), (96, 3, 3, 192)),
+        )
+
+        def run(x, w, **env):
+            # Returns the result plus the bytes the conv itself allocated.
+            for k in (tile_key, ws_key):
+                os.environ.pop(k, None)
+            os.environ.update(env)
+            # Get the previous run's temporaries off the books first.
+            mx.synchronize()
+            mx.reset_peak_memory()
+            base = mx.get_active_memory()
+            y = mx.conv2d(x, w, padding=1)
+            mx.eval(y)
+            mx.synchronize()
+            return np.array(y), mx.get_peak_memory() - base
+
+        try:
+            for in_shape, wt_shape in cases:
+                np.random.seed(0)
+                x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
+                # Small weights keep the output near unit scale so the
+                # tolerance stays tight.
+                w = mx.array(
+                    (np.random.normal(size=wt_shape) * 0.05).astype(np.float32)
+                )
+                b = mx.zeros((wt_shape[0],))
+                mx.eval(x, w, b)
+                cpu_ref = np.array(mx.conv2d(x, w, padding=1, stream=mx.cpu))
+
+                untiled, untiled_bytes = run(x, w)
+                self.assertGreater(np.abs(untiled).max(), 0)
+                self.assertTrue(np.allclose(untiled, cpu_ref, atol=1e-3))
+
+                # 3 divides none of the batches, so it also covers a short
+                # final tile.
+                for tile in (1, 3):
+                    with self.subTest(in_shape=in_shape, tile=tile):
+                        tiled, tiled_bytes = run(x, w, **{tile_key: str(tile)})
+                        self.assertTrue(np.allclose(untiled, tiled, atol=1e-4))
+                        self.assertLess(tiled_bytes, untiled_bytes)
+
+                        # A consumer op checks the output is fenced across
+                        # command encoders.
+                        os.environ[tile_key] = str(tile)
+                        fused = mx.conv2d(x, w, padding=1) + b
+                        mx.eval(fused)
+                        self.assertTrue(np.allclose(untiled, fused, atol=1e-4))
+                        os.environ.pop(tile_key, None)
+
+                # Budget for ~2 batch elements so the selector itself must
+                # tile; mirrors the winograd_batch_step arithmetic.
+                n, iH, iW, C = in_shape
+                O = wt_shape[0]
+                pH = 6 * ((iH + 2 - 2 + 5) // 6) + 2
+                pW = 6 * ((iW + 2 - 2 + 5) // 6) + 2
+                per_n = (
+                    pH * pW * C * 4
+                    + 64 * ((iH + 5) // 6) * ((iW + 5) // 6) * (C + O) * 4
+                )
+                # Winograd allocates at least the output plus the transformed
+                # filter, the implicit gemm only the output; bracketing the
+                # allocation pins each run to the intended path.
+                winograd_floor = n * iH * iW * O * 4 + 64 * C * O * 4
+                used = mx.get_active_memory() + winograd_floor
+                with self.subTest(in_shape=in_shape, budget="tiled"):
+                    # Half an element of headroom: allocator rounding makes
+                    # the mirror undershoot.
+                    budget = str(int((used + 5 * per_n // 2) / 0.75))
+                    tiled, tiled_bytes = run(x, w, **{ws_key: budget})
+                    self.assertTrue(np.allclose(untiled, tiled, atol=1e-4))
+                    self.assertGreater(tiled_bytes, winograd_floor)
+                    self.assertLess(tiled_bytes, untiled_bytes)
+
+                # Too small for even one batch element: must fall back to the
+                # implicit gemm.
+                with self.subTest(in_shape=in_shape, budget="infeasible"):
+                    fallback, fallback_bytes = run(x, w, **{ws_key: "1"})
+                    self.assertGreater(np.abs(fallback).max(), 0)
+                    self.assertTrue(np.allclose(fallback, cpu_ref, atol=1e-3))
+                    self.assertLess(fallback_bytes, winograd_floor)
+
+                # A forced tile is capped by the budget, so this must still
+                # fall back.
+                with self.subTest(in_shape=in_shape, budget="forced+infeasible"):
+                    capped, capped_bytes = run(x, w, **{ws_key: "1", tile_key: "1"})
+                    self.assertTrue(np.allclose(capped, cpu_ref, atol=1e-3))
+                    self.assertLess(capped_bytes, winograd_floor)
+
+            with self.subTest(budget="malformed"):
+                with self.assertRaises(ValueError):
+                    run(x, w, **{ws_key: "not-a-number"})
+        finally:
+            for k, v in prev.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+    def test_conv2d_winograd_tile_work_floor(self):
+        # A spatially tiny conv reaches winograd on batch size alone, but its
+        # tiles carry almost no gemm work, so a small budget must fall back to
+        # the implicit gemm rather than tile.
+        tile_key = "MLX_CONV_WINOGRAD_TILE_BATCH"
+        ws_key = "MLX_CONV_WINOGRAD_WORKING_SET"
+        prev = {k: os.environ.pop(k, None) for k in (tile_key, ws_key)}
+        in_shape, wt_shape = (256, 4, 4, 64), (192, 3, 3, 64)
+        np.random.seed(0)
+        x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
+        w = mx.array((np.random.normal(size=wt_shape) * 0.05).astype(np.float32))
+        mx.eval(x, w)
+        cpu_ref = np.array(mx.conv2d(x, w, padding=1, stream=mx.cpu))
+        n, iH, iW, C = in_shape
+        O = wt_shape[0]
+        pH = 6 * ((iH + 2 - 2 + 5) // 6) + 2
+        pW = 6 * ((iW + 2 - 2 + 5) // 6) + 2
+        per_n = pH * pW * C * 4 + 64 * ((iH + 5) // 6) * ((iW + 5) // 6) * (C + O) * 4
+        winograd_floor = n * iH * iW * O * 4 + 64 * C * O * 4
+        try:
+            mx.synchronize()
+            mx.reset_peak_memory()
+            used = mx.get_active_memory() + winograd_floor
+            os.environ[ws_key] = str(int((used + 2 * per_n) / 0.75))
+            base = mx.get_active_memory()
+            y = mx.conv2d(x, w, padding=1)
+            mx.eval(y)
+            mx.synchronize()
+            self.assertGreater(np.abs(np.array(y)).max(), 0)
+            self.assertTrue(np.allclose(np.array(y), cpu_ref, atol=1e-3))
+            self.assertLess(mx.get_peak_memory() - base, winograd_floor)
+        finally:
+            os.environ.pop(ws_key, None)
+            for k, v in prev.items():
+                if v is not None:
+                    os.environ[k] = v
+
     def test_conv2d_large_filter_small_channels(self):
         x = mx.random.normal(shape=(1, 181, 181, 1))
         w = mx.random.normal(shape=(1, 182, 182, 1))
