@@ -18,6 +18,8 @@ Stream to_stream(StreamOrDevice s) {
     return default_stream(default_device());
   } else if (std::holds_alternative<Device>(s)) {
     return default_stream(std::get<Device>(s));
+  } else if (std::holds_alternative<Device::DeviceType>(s)) {
+    return default_stream(std::get<Device::DeviceType>(s));
   } else if (std::holds_alternative<ThreadLocalStream>(s)) {
     return stream_from_thread_local_stream(std::get<ThreadLocalStream>(s));
   } else {
@@ -30,6 +32,10 @@ Stream to_stream(StreamOrDevice s, Device default_) {
     return default_stream(default_);
   } else if (std::holds_alternative<Device>(s)) {
     return default_stream(std::get<Device>(s));
+  } else if (std::holds_alternative<Device::DeviceType>(s)) {
+    return default_stream(std::get<Device::DeviceType>(s));
+  } else if (std::holds_alternative<ThreadLocalStream>(s)) {
+    return stream_from_thread_local_stream(std::get<ThreadLocalStream>(s));
   } else {
     return std::get<Stream>(s);
   }

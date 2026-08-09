@@ -173,7 +173,7 @@ void init_export(nb::module_& m) {
       "metadata"_a = nb::none(),
       "kwargs"_a,
       nb::sig(
-          "def export_function(file_or_callback: Union[str, Callable], fun: Callable, *args, shapeless: bool = False, metadata: Optional[str] = None, **kwargs) -> None"),
+          "def export_function(file_or_callback: str | Callable, fun: Callable, *args, shapeless: bool = False, metadata: str | None = None, **kwargs) -> None"),
       R"pbdoc(
         Export an MLX function.
 
@@ -236,7 +236,7 @@ void init_export(nb::module_& m) {
       "file"_a,
       "return_metadata"_a = false,
       nb::sig(
-          "def import_function(file: str, return_metadata: bool = False) -> Union[Callable, tuple[Callable, str]]"),
+          "def import_function(file: str, return_metadata: bool = False) -> Callable | tuple[Callable, str]"),
       R"pbdoc(
         Import a function from a file.
 

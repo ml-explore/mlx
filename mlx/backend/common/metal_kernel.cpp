@@ -37,9 +37,11 @@ Stream resolve_metal_kernel_stream(StreamOrDevice s) {
   // recorded in the graph on a placeholder GPU stream. The importing process
   // remaps it to one of its own streams.
   auto* device = std::get_if<Device>(&s);
+  auto* device_type = std::get_if<Device::DeviceType>(&s);
   auto* stream = std::get_if<Stream>(&s);
   auto* tl_stream = std::get_if<ThreadLocalStream>(&s);
   if ((device && *device != Device::gpu) ||
+      (device_type && *device_type != Device::gpu) ||
       (stream && stream->device != Device::gpu) ||
       (tl_stream && tl_stream->device != Device::gpu)) {
     throw std::invalid_argument("[metal_kernel] Only supports the GPU.");
