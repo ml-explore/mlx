@@ -6,7 +6,6 @@
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/lapack.h"
-#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -675,13 +674,13 @@ template <typename F>
 void dispatch_slow_conv_type(Dtype dtype, F&& f) {
   switch (dtype) {
     case float32:
-      f(type_identity<float>{});
+      f.template operator()<float>();
       break;
     case float16:
-      f(type_identity<float16_t>{});
+      f.template operator()<float16_t>();
       break;
     case bfloat16:
-      f(type_identity<bfloat16_t>{});
+      f.template operator()<bfloat16_t>();
       break;
     default:
       throw std::invalid_argument(
@@ -700,8 +699,8 @@ void dispatch_slow_conv_1D(
     const std::vector<int>& in_dilation,
     bool flip,
     Stream stream) {
-  dispatch_slow_conv_type(in.dtype(), [&](auto type_tag) {
-    slow_conv_1D<MLX_GET_TYPE(type_tag)>(
+  dispatch_slow_conv_type(in.dtype(), [&]<typename T>() {
+    slow_conv_1D<T>(
         in,
         wt,
         out,
@@ -726,8 +725,8 @@ void dispatch_slow_conv_2D(
     const std::vector<int>& in_dilation,
     bool flip,
     Stream stream) {
-  dispatch_slow_conv_type(in.dtype(), [&](auto type_tag) {
-    slow_conv_2D<MLX_GET_TYPE(type_tag)>(
+  dispatch_slow_conv_type(in.dtype(), [&]<typename T>() {
+    slow_conv_2D<T>(
         in,
         wt,
         out,
@@ -752,8 +751,8 @@ void dispatch_slow_conv_3D(
     const std::vector<int>& in_dilation,
     bool flip,
     Stream stream) {
-  dispatch_slow_conv_type(in.dtype(), [&](auto type_tag) {
-    slow_conv_3D<MLX_GET_TYPE(type_tag)>(
+  dispatch_slow_conv_type(in.dtype(), [&]<typename T>() {
+    slow_conv_3D<T>(
         in,
         wt,
         out,
