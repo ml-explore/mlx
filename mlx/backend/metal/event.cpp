@@ -57,15 +57,32 @@ Event::Event(Stream stream) : stream_(stream) {
 }
 
 void Event::wait() {
-  static_cast<metal::EventImpl*>(event_.get())->wait(value());
+  try {
+    static_cast<metal::EventImpl*>(event_.get())->wait(value());
+  } catch (...) {
+    // Event already reported the failure; drop the sticky copy.
+    metal::clear_stream_error(stream_);
+    throw;
+  }
+  // Late attribution: a prior command buffer on this stream may have failed
+  // with no signal event, leaving only the sticky stream error.
+  metal::check_stream_error(stream_);
 }
 
 void Event::wait(Stream stream) {
   auto impl = std::static_pointer_cast<metal::EventImpl>(event_);
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [impl = std::move(impl), value = value()]() {
-      impl->wait(value);
-    });
+    scheduler::enqueue(
+        stream,
+        [impl = std::move(impl), value = value(), event_stream = stream_]() {
+          try {
+            impl->wait(value);
+          } catch (...) {
+            metal::clear_stream_error(event_stream);
+            throw;
+          }
+          metal::check_stream_error(event_stream);
+        });
   } else {
     auto& encoder = metal::get_command_encoder(stream);
     encoder.wait_event(std::move(impl), value());

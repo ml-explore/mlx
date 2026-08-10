@@ -23,6 +23,24 @@ using MTLFCList =
 class Device;
 class EventImpl;
 
+// Sticky per-stream GPU error. Lives by stream index so it outlives
+// CommandEncoder encode cycles and is visible from any thread that waits
+// on that stream. Cleared only when reported via synchronize() or Event::wait().
+struct StreamError {
+  void set_error(std::shared_ptr<std::string> error);
+  void check_error();
+  void clear_error();
+  std::shared_ptr<std::string> error() const;
+
+ private:
+  // TODO: Use std::atomic<std::shared_ptr> when it gets supported in Xcode.
+  mutable std::shared_ptr<std::string> error_;
+};
+
+MLX_API std::shared_ptr<StreamError> get_stream_error(int stream_index);
+MLX_API void check_stream_error(Stream s);
+MLX_API void clear_stream_error(Stream s);
+
 class MLX_API CommandEncoder {
  public:
   CommandEncoder(Device& d, int index, ResidencySet& residency_set);
@@ -118,8 +136,8 @@ class MLX_API CommandEncoder {
   std::vector<std::shared_ptr<EventImpl>> wait_events_;
   std::vector<std::tuple<std::shared_ptr<EventImpl>, uint64_t>> signal_events_;
 
-  // Error from previous commited command buffer.
-  std::shared_ptr<std::string> error_;
+  // Sticky error for this stream (shared by stream index).
+  std::shared_ptr<StreamError> stream_error_;
 
   // Encoder for issuing GPU commands.
   // The members are used within a single ComputeCommandEncoder and will be

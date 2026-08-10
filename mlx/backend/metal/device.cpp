@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <atomic>
 #include <cstdlib>
 #include <sstream>
 
@@ -306,11 +307,58 @@ MTL::Library* load_library(
 
 } // namespace
 
+void StreamError::set_error(std::shared_ptr<std::string> error) {
+  if (!error) {
+    return;
+  }
+  // Preserve the earliest error.
+  std::shared_ptr<std::string> expected{nullptr};
+  std::atomic_compare_exchange_strong(&error_, &expected, std::move(error));
+}
+
+void StreamError::check_error() {
+  auto error = std::atomic_exchange(&error_, {});
+  if (error) {
+    throw std::runtime_error(*error);
+  }
+}
+
+void StreamError::clear_error() {
+  std::atomic_store(&error_, std::shared_ptr<std::string>{});
+}
+
+std::shared_ptr<std::string> StreamError::error() const {
+  return std::atomic_load(&error_);
+}
+
+std::shared_ptr<StreamError> get_stream_error(int stream_index) {
+  static std::mutex mtx;
+  static std::unordered_map<int, std::shared_ptr<StreamError>> errors;
+  std::lock_guard<std::mutex> lk(mtx);
+  auto& slot = errors[stream_index];
+  if (!slot) {
+    slot = std::make_shared<StreamError>();
+  }
+  return slot;
+}
+
+void check_stream_error(Stream s) {
+  if (s.device == mlx::core::Device::gpu) {
+    get_stream_error(s.index)->check_error();
+  }
+}
+
+void clear_stream_error(Stream s) {
+  if (s.device == mlx::core::Device::gpu) {
+    get_stream_error(s.index)->clear_error();
+  }
+}
+
 CommandEncoder::CommandEncoder(
     Device& d,
     int index,
     ResidencySet& residency_set)
-    : device_(d) {
+    : device_(d), stream_error_(get_stream_error(index)) {
   auto pool = new_scoped_memory_pool();
   queue_ = NS::TransferPtr(device_.mtl_device()->newCommandQueue());
   if (!queue_) {
@@ -501,6 +549,12 @@ void CommandEncoder::signal_event(
     std::shared_ptr<EventImpl> event,
     uint64_t value) {
   end_encoding();
+  // If the stream already has a sticky error, poison the event on the CPU
+  // before the GPU signal so waiters observe it even when this buffer
+  // succeeds and signals on the GPU timeline.
+  if (auto error = stream_error_->error()) {
+    event->set_error(error);
+  }
   buffer_->encodeSignalEvent(event->mtl_event(), value);
   signal_events_.push_back({std::move(event), value});
 }
@@ -520,31 +574,30 @@ bool CommandEncoder::needs_commit() const {
 
 void CommandEncoder::commit(std::function<void()> completion) {
   buffer_->addCompletedHandler(
-      [&error_ = error_,
+      [stream_error = stream_error_,
        wait_events = std::move(wait_events_),
        signal_events = std::move(signal_events_),
        completion = std::move(completion)](MTL::CommandBuffer* cbuf) {
         if (completion) {
           completion();
         }
-        // If any of the waited event has error in it, poison the encoder.
+        // If any of the waited event has error in it, poison the stream.
         for (auto& event : wait_events) {
           if (event->error()) {
-            error_ = event->error();
+            stream_error->set_error(event->error());
             break;
           }
         }
-        // Set error only when no error happended before, to preserve the
-        // earliest error.
-        if (!error_ && cbuf->status() == MTL::CommandBufferStatusError) {
-          error_ = std::make_shared<std::string>(fmt::format(
+        // set_error preserves the earliest error.
+        if (cbuf->status() == MTL::CommandBufferStatusError) {
+          stream_error->set_error(std::make_shared<std::string>(fmt::format(
               "[METAL] Command buffer execution failed: {}.",
-              cbuf->error()->localizedDescription()->utf8String()));
+              cbuf->error()->localizedDescription()->utf8String())));
         }
         // Poison all the signaled events when error happened.
-        if (error_) {
+        if (auto error = stream_error->error()) {
           for (auto& [event, value] : signal_events) {
-            event->set_error(error_);
+            event->set_error(error);
           }
         }
         // Metal won't signal the events for us on error, manually signal them
@@ -568,9 +621,10 @@ void CommandEncoder::synchronize() {
   commit();
   cbuf->waitUntilCompleted();
 
-  if (error_ && !exiting_) {
-    auto error = std::move(error_);
-    throw std::runtime_error(*error);
+  if (exiting_) {
+    stream_error_->clear_error();
+  } else {
+    stream_error_->check_error();
   }
 }
 
@@ -579,9 +633,9 @@ MTL::ComputeCommandEncoder* CommandEncoder::get_command_encoder() {
     encoder_ = NS::RetainPtr(
         buffer_->computeCommandEncoder(MTL::DispatchTypeConcurrent));
     fence_ = NS::TransferPtr(device_.mtl_device()->newFence());
-    // Reset error when user starts to encode new commands, they are supposed to
-    // have handled the error in synchronize() or Event::wait().
-    error_.reset();
+    // Do not clear stream_error_ here. It is sticky until synchronize() or
+    // Event::wait() reports it — mid-eval commits may fail with no signal
+    // event attached, and resetting would silently drop the error.
   }
   return encoder_.get();
 }

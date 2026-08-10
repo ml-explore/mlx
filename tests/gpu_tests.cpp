@@ -4,9 +4,16 @@
 #include <chrono>
 #include <cmath>
 #include <future>
+#include <memory>
+#include <stdexcept>
+#include <string>
 
 #include "doctest/doctest.h"
 #include "mlx/mlx.h"
+
+#if defined(__APPLE__)
+#include "mlx/backend/metal/device.h"
+#endif
 
 using namespace mlx::core;
 
@@ -686,3 +693,36 @@ TEST_CASE("test layer norm vjp bias grad race") {
   }
   CHECK(worst <= 1e-5);
 }
+
+#if defined(__APPLE__)
+TEST_CASE("test sticky stream metal error") {
+  // Inject a stream error and ensure it survives until synchronize reports
+  // it (and is cleared afterwards). Covers the sticky-error contract without
+  // needing an over-budget command buffer.
+  auto s = default_stream(Device::gpu);
+  metal::get_stream_error(s.index)
+      ->set_error(std::make_shared<std::string>(
+          "[METAL] Command buffer execution failed: test sticky error."));
+
+  CHECK_THROWS_WITH_AS(
+      synchronize(s),
+      "[METAL] Command buffer execution failed: test sticky error.",
+      std::runtime_error);
+
+  // Cleared after being reported.
+  synchronize(s);
+
+  // signal_event should CPU-poison the event from a pre-existing sticky error.
+  metal::get_stream_error(s.index)
+      ->set_error(std::make_shared<std::string>(
+          "[METAL] Command buffer execution failed: test sticky error."));
+  Event e(s);
+  e.signal(s);
+  CHECK_THROWS_WITH_AS(
+      e.wait(),
+      "[METAL] Command buffer execution failed: test sticky error.",
+      std::runtime_error);
+  // Sticky cleared by Event::wait after the event reported it.
+  synchronize(s);
+}
+#endif
