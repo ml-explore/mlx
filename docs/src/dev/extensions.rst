@@ -816,10 +816,12 @@ Debug builds include Metal line tables and recorded sources. Metal logging is
 enabled when the current ``xcrun metal`` compiler advertises support. The
 effective Python
 ``MACOSX_DEPLOYMENT_TARGET`` is forwarded to CMake and applied to both AIR
-compilation and metallib linking. The inferred target is never lower than macOS
-14. Set ``MACOSX_DEPLOYMENT_TARGET`` or pass ``CMAKE_OSX_DEPLOYMENT_TARGET``
-through ``CMAKE_ARGS`` to select a higher target. Explicit targets below macOS
-14 are rejected.
+compilation and metallib linking. By default, the target recorded in the
+installed ``libmlx.dylib`` is used. Set ``MACOSX_DEPLOYMENT_TARGET`` or pass
+``CMAKE_OSX_DEPLOYMENT_TARGET`` through ``CMAKE_ARGS`` to override it. This can
+select a lower target for cross-building, provided the extension is used with
+an MLX build for that target at runtime. Explicit targets below macOS 14 are
+rejected.
 
 ``BuildExtension`` uses CMake's Ninja generator by default, so projects should
 include ``ninja`` in their build requirements. To use CMake's platform default

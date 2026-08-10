@@ -8,9 +8,6 @@ from mlx import extension
 
 if __name__ == "__main__":
     setup(
-        name="mlx_sample_metal_extension",
-        version="0.0.0",
-        description="Activation MetalExtension example for MLX.",
         ext_modules=[
             extension.MetalExtension(
                 "mlx_sample_metal_extension._ext",
@@ -25,8 +22,4 @@ if __name__ == "__main__":
         ],
         cmdclass={"build_ext": extension.BuildExtension},
         install_requires=[f"mlx=={package_version('mlx')}"],
-        packages=["mlx_sample_metal_extension"],
-        package_data={"mlx_sample_metal_extension": ["*.metallib", "*.pyi"]},
-        zip_safe=False,
-        python_requires=">=3.10",
     )
