@@ -2803,6 +2803,37 @@ array argpartition(
       {a});
 }
 
+array searchsorted(
+    const array& sorted_sequence,
+    const array& values,
+    const std::string& side /* = "left" */,
+    StreamOrDevice s /* = {} */) {
+  if (side != "left" && side != "right") {
+    std::ostringstream msg;
+    msg << "[searchsorted] Invalid side '" << side
+        << "'. Expected 'left' or 'right'.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (sorted_sequence.ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[searchsorted] The sorted sequence must be 1-D but has "
+        << sorted_sequence.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (sorted_sequence.size() > UINT32_MAX) {
+    std::ostringstream msg;
+    msg << "[searchsorted] The sorted sequence has " << sorted_sequence.size()
+        << " elements, more than the uint32 output can index.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto dtype = promote_types(sorted_sequence.dtype(), values.dtype());
+  return array(
+      values.shape(),
+      uint32,
+      std::make_shared<SearchSorted>(to_stream(s), side == "right"),
+      {astype(sorted_sequence, dtype, s), astype(values, dtype, s)});
+}
+
 /** Returns topk elements of the flattened array. */
 array topk(const array& a, int k, StreamOrDevice s /* = {}*/) {
   int size = a.size();

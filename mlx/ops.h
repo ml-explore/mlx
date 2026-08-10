@@ -857,6 +857,13 @@ MLX_API array argpartition(const array& a, int kth, StreamOrDevice s = {});
 MLX_API array
 argpartition(const array& a, int kth, int axis, StreamOrDevice s = {});
 
+/** Find the indices of `values` in `sorted_sequence`. */
+MLX_API array searchsorted(
+    const array& sorted_sequence,
+    const array& values,
+    const std::string& side = "left",
+    StreamOrDevice s = {});
+
 /** Returns topk elements of the flattened array. */
 MLX_API array topk(const array& a, int k, StreamOrDevice s = {});
 

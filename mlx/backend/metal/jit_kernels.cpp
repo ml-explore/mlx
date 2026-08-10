@@ -433,6 +433,25 @@ MTL::ComputePipelineState* get_sort_kernel(
   return d.get_kernel(kernel_name, lib);
 }
 
+MTL::ComputePipelineState* get_searchsorted_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    bool right) {
+  auto lib = d.get_library(kernel_name, [&]() {
+    std::ostringstream kernel_source;
+    // The kernel compares through LessThan, which lives in sort.h.
+    kernel_source << metal::utils() << metal::sort() << metal::searchsorted();
+    kernel_source << get_template_definition(
+        kernel_name,
+        "searchsorted",
+        get_type_string(in.dtype()),
+        right ? "true" : "false");
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
 MTL::ComputePipelineState* get_mb_sort_kernel(
     metal::Device& d,
     const std::string& kernel_name,
