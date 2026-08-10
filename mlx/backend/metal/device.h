@@ -34,7 +34,6 @@ struct MLX_API StreamError {
   std::shared_ptr<std::string> error() const;
 
  private:
-  // TODO: Use std::atomic<std::shared_ptr> when it gets supported in Xcode.
   std::shared_ptr<std::string> error_;
 };
 
