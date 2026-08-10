@@ -64,6 +64,9 @@ class TestRandom(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.random.uniform().dtype, mx.random.uniform(dtype=None).dtype)
 
+        with self.assertRaises(ValueError):
+            mx.random.uniform(shape=(2, -3))
+
     def test_normal_and_laplace(self):
         # Same tests for normal and laplace.
         for distribution_sampler in [mx.random.normal, mx.random.laplace]:
@@ -229,6 +232,26 @@ class TestRandom(mlx_tests.MLXTestCase):
 
         a = mx.random.randint(10, -10, [1000, 1000])
         self.assertTrue(mx.all(a == 10).item())
+
+        # Bounds hold when the interval is not exactly representable in float32
+        for dtype, low, high in [
+            (mx.int32, 2**24, 2**24 + 2),
+            (mx.uint32, 2**24, 2**24 + 2),
+            (mx.int64, 2**40, 2**40 + 1024),
+        ]:
+            a = mx.random.randint(low, high, [10000], dtype=dtype, key=key)
+            self.assertTrue(mx.all(a >= low).item())
+            self.assertTrue(mx.all(a < high).item())
+
+        # The lower bound is reachable when the interval spans negative values
+        a = mx.random.randint(-5, 5, [20000], key=key)
+        self.assertEqual(sorted(set(a.tolist())), list(range(-5, 5)))
+
+        # Booleans use the whole interval
+        a = mx.random.randint(0, 2, [1000], dtype=mx.bool_, key=key)
+        self.assertEqual(sorted(set(a.tolist())), [False, True])
+        a = mx.random.randint(0, 1, [1000], dtype=mx.bool_, key=key)
+        self.assertFalse(mx.any(a).item())
 
         self.assertEqual(
             mx.random.randint(0, 1).dtype, mx.random.randint(0, 1, dtype=None).dtype

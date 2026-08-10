@@ -1,4 +1,4 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2026 Apple Inc.
 
 import platform
 import subprocess
@@ -515,6 +515,41 @@ class TestQuantized(mlx_tests.MLXTestCase):
             y_hat = x @ mx.swapaxes(w_hat, -1, -2)
             self.assertEqual(y_q.shape, y_hat.shape)
             self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+    def test_fp_qmv_large_output(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        K = 512
+        N = 4096
+
+        for B in [1, 2]:
+            with self.subTest(B=B, N=N, K=K):
+                x_shape = (1, K) if B == 1 else (B, 1, K)
+                w_shape = (N, K) if B == 1 else (B, N, K)
+                x = mx.random.normal(shape=x_shape, key=k1) / K**0.5
+                w = mx.random.normal(shape=w_shape, key=k2)
+                w_q, scales = mx.quantize(w, mode="nvfp4")
+
+                dtypes = (
+                    [mx.float16, mx.bfloat16, mx.float32]
+                    if mx.default_device() == mx.gpu
+                    else [mx.float32]
+                )
+                for dtype in dtypes:
+                    with self.subTest(dtype=dtype):
+                        x_t = x.astype(dtype)
+                        w_hat = mx.dequantize(w_q, scales, mode="nvfp4", dtype=dtype)
+                        y_q = mx.quantized_matmul(
+                            x_t,
+                            w_q,
+                            scales,
+                            transpose=True,
+                            mode="nvfp4",
+                        )
+                        y_hat = x_t @ mx.swapaxes(w_hat, -1, -2)
+                        self.assertEqual(y_q.shape, y_hat.shape)
+                        tol = 1e-2 if dtype == mx.bfloat16 else 1e-3
+                        self.assertTrue(mx.allclose(y_q, y_hat, rtol=tol, atol=tol))
 
     def test_qmv_wide(self):
         # M in [2, vector_limit) routes to qmv_wide -- except K in {64, 128}
@@ -1321,6 +1356,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
             (32, 512, 544, 4, 2, True, "mxfp4"),
             (32, 512, 544, 4, 2, True, "nvfp4"),
             (32, 512, 544, 4, 2, True, "mxfp8"),
+            (39, 512, 512, 4, 2, True, "affine"),
+            (128, 512, 512, 4, 2, True, "affine"),
             (133, 512, 512, 4, 2, True, "affine"),
             (133, 512, 555, 4, 2, True, "affine"),
             (133, 512, 512, 4, 2, True, "affine"),
@@ -1402,6 +1439,34 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(y1, y2, atol=tol))
                 self.assertTrue(mx.allclose(y1, y3, atol=tol))
                 self.assertTrue(mx.allclose(y1, y4, atol=tol))
+
+    @unittest.skipIf(mx.cuda.is_available(), "Not implemented for CUDA")
+    def test_gather_qmm_sorted_sliced_weight(self):
+        E, R, D, N = 8, 64, 256, 64
+        dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
+        mx.random.seed(0)
+        w = (mx.random.normal((E, 2 * R, D)) * 0.05).astype(dtype)
+        qw, s, b = mx.quantize(w, group_size=64, bits=4)
+        x = (mx.random.normal((N, 1, D)) * 0.5).astype(dtype)
+        indices = mx.sort(mx.random.randint(0, E, (N,)).astype(mx.uint32))
+
+        for sl in (slice(0, R), slice(R, 2 * R)):
+            view = (qw[:, sl], s[:, sl], b[:, sl])
+            copy = tuple(mx.contiguous(a) for a in view)
+            kwargs = dict(
+                rhs_indices=indices,
+                transpose=True,
+                group_size=64,
+                bits=4,
+                sorted_indices=True,
+            )
+            self.assertTrue(
+                mx.allclose(
+                    mx.gather_qmm(x, *view, **kwargs),
+                    mx.gather_qmm(x, *copy, **kwargs),
+                    atol=1e-4,
+                )
+            )
 
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):

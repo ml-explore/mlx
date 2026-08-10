@@ -3,6 +3,7 @@
 #include <cassert>
 #include <numeric>
 #include <sstream>
+#include <type_traits>
 
 #include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
@@ -11,6 +12,7 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
@@ -40,45 +42,18 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
-  switch (out.dtype()) {
-    case bool_: // unsupported
+  dispatch_all_types(out.dtype(), [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    if constexpr (std::is_same_v<T, bool>) {
       throw std::runtime_error("[Arange::eval_gpu] Does not support bool");
-    case uint8:
-      arange_set_scalars<uint8_t>(start_, start_ + step_, compute_encoder);
-      break;
-    case uint16:
-      arange_set_scalars<uint16_t>(start_, start_ + step_, compute_encoder);
-      break;
-    case uint32:
-      arange_set_scalars<uint32_t>(start_, start_ + step_, compute_encoder);
-      break;
-    case uint64:
-      arange_set_scalars<uint64_t>(start_, start_ + step_, compute_encoder);
-      break;
-    case int8:
-      arange_set_scalars<int8_t>(start_, start_ + step_, compute_encoder);
-      break;
-    case int16:
-      arange_set_scalars<int16_t>(start_, start_ + step_, compute_encoder);
-      break;
-    case int32:
-      arange_set_scalars<int32_t>(start_, start_ + step_, compute_encoder);
-      break;
-    case int64:
-      arange_set_scalars<int64_t>(start_, start_ + step_, compute_encoder);
-      break;
-    case float16:
-      arange_set_scalars<float16_t>(start_, start_ + step_, compute_encoder);
-      break;
-    case float32:
-      arange_set_scalars<float>(start_, start_ + step_, compute_encoder);
-      break;
-    case bfloat16:
-      arange_set_scalars<bfloat16_t>(start_, start_ + step_, compute_encoder);
-      break;
-    default:
+    } else if constexpr (
+        std::is_integral_v<T> || std::is_same_v<T, float16_t> ||
+        std::is_same_v<T, float> || std::is_same_v<T, bfloat16_t>) {
+      arange_set_scalars<T>(start_, start_ + step_, compute_encoder);
+    } else {
       throw std::runtime_error("[Arange::eval_gpu] Does not support type.");
-  }
+    }
+  });
 
   compute_encoder.set_output_array(out, 2);
   compute_encoder.dispatch_threads(grid_dims, group_dims);

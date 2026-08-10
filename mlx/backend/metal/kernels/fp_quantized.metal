@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 // clang-format off
 #include "mlx/backend/metal/kernels/utils.h"
@@ -56,6 +56,30 @@
       bits,       \
       aligned, \
       batched)
+
+#define instantiate_quantized_qmv_fast(mode, type, results, batched, group_size, bits) \
+  instantiate_kernel( \
+      #mode "_qmv_fast_" #type "_gs_" #group_size "_b_" #bits "_r_" #results "_batch_" #batched, \
+      fp_qmv_fast, \
+      type, \
+      group_size, \
+      bits, \
+      batched, \
+      false, \
+      results) \
+  instantiate_kernel( \
+      #mode "_qmv_fast_" #type "_gs_" #group_size "_b_" #bits "_r_" #results "_batch_" #batched "_hgs", \
+      fp_qmv_fast, \
+      type, \
+      group_size, \
+      bits, \
+      batched, \
+      true, \
+      results)
+
+#define instantiate_quantized_qmv_fast_r2(mode, type, group_size, bits) \
+  instantiate_quantized_qmv_fast(mode, type, 2, 1, group_size, bits) \
+  instantiate_quantized_qmv_fast(mode, type, 2, 0, group_size, bits)
 
 #define instantiate_quantized_quad(mode, name, type, D, batched, group_size, bits) \
   instantiate_kernel( \
@@ -185,13 +209,14 @@
   instantiate_quantized_all_rhs(type, mode, group_size, bits)
 
 #define instantiate_quantized_types(type) \
-  instantiate_quantized_modes(type, nvfp4, 16, 4) \
-  instantiate_quantized_modes(type, mxfp8, 32, 8) \
-  instantiate_quantized_modes(type, mxfp4, 32, 4) \
-  instantiate_quantize_dequantize(type, nvfp4, 16, 4, false) \
-  instantiate_quantize_dequantize(type, nvfp4, 16, 4, true)  \
-  instantiate_quantize_dequantize(type, mxfp8, 32, 8, false) \
-  instantiate_quantize_dequantize(type, mxfp4, 32, 4, false) \
+ instantiate_quantized_modes(type, nvfp4, 16, 4) \
+ instantiate_quantized_modes(type, mxfp8, 32, 8) \
+ instantiate_quantized_modes(type, mxfp4, 32, 4) \
+ instantiate_quantize_dequantize(type, nvfp4, 16, 4, false) \
+ instantiate_quantize_dequantize(type, nvfp4, 16, 4, true)  \
+ instantiate_quantize_dequantize(type, mxfp8, 32, 8, false) \
+ instantiate_quantize_dequantize(type, mxfp4, 32, 4, false) \
+ instantiate_quantized_qmv_fast_r2(nvfp4, type, 16, 4)
 
 instantiate_quantized_types(float)
 instantiate_quantized_types(bfloat16_t)

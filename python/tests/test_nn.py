@@ -199,6 +199,23 @@ class TestBase(mlx_tests.MLXTestCase):
         m.state["hello"] = "world"
         self.assertEqual(m.state["hello"], "world")
 
+    def test_freeze_strict_keys(self):
+        # "bias" is present in the model but not in every submodule, so a
+        # recursive freeze should accept it rather than raising on the first
+        # submodule that happens not to have one.
+        m = nn.Sequential(nn.Linear(2, 2, bias=False), nn.Linear(2, 2))
+        m.freeze(keys="bias", strict=True)
+        trainable = dict(tree_flatten(m.trainable_parameters()))
+        self.assertFalse(any(k.endswith("bias") for k in trainable))
+
+        m.unfreeze(keys="bias", strict=True)
+        trainable = dict(tree_flatten(m.trainable_parameters()))
+        self.assertTrue(any(k.endswith("bias") for k in trainable))
+
+        # A key that is nowhere in the model is still an error.
+        with self.assertRaises(KeyError):
+            m.freeze(keys="not_a_member", strict=True)
+
     def test_chaining(self):
         m = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 1))
         pre_freeze_num_params = len(m.parameters())
@@ -1053,6 +1070,13 @@ class TestLayers(mlx_tests.MLXTestCase):
             with self.subTest(dims=dims):
                 with self.assertRaises(ValueError):
                     nn.SinusoidalPositionalEncoding(dims)
+
+        # An explicit scale=0.0 must be respected rather than falling back
+        # to the default, since 0.0 is falsy but a valid scale value.
+        m = nn.SinusoidalPositionalEncoding(16, scale=0.0)
+        self.assertEqual(m.scale, 0.0)
+        y = m(x)
+        self.assertTrue(mx.array_equal(y, mx.zeros_like(y)))
 
     def test_sigmoid(self):
         x = mx.array([1.0, 0.0, -1.0])

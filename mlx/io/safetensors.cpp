@@ -102,7 +102,7 @@ Dtype dtype_from_safetensor_str(std::string_view str) {
     return uint8;
   } else {
     std::ostringstream msg;
-    msg << "[safetensor] unsupported dtype" << str;
+    msg << "[safetensor] unsupported dtype " << str;
     throw std::runtime_error(msg.str());
   }
 }
@@ -250,13 +250,6 @@ void save_safetensors(
 
   size_t offset = 0;
   for (auto& [key, arr] : a) {
-    if (arr.nbytes() == 0) {
-      std::ostringstream msg;
-      msg << "[save_safetensors] Cannot serialize an empty array ('" << key
-          << "')";
-      throw std::invalid_argument(msg.str());
-    }
-
     json child;
     child["dtype"] = dtype_to_safetensor_str(arr.dtype());
     child["shape"] = arr.shape();
@@ -270,7 +263,11 @@ void save_safetensors(
   out_stream->write(reinterpret_cast<char*>(&header_len), 8);
   out_stream->write(header.c_str(), header_len);
   for (auto& [key, arr] : a) {
-    out_stream->write(arr.data<char>(), arr.nbytes());
+    // An empty tensor contributes a zero length span and has no data pointer
+    // worth asking for.
+    if (arr.nbytes() > 0) {
+      out_stream->write(arr.data<char>(), arr.nbytes());
+    }
   }
 }
 

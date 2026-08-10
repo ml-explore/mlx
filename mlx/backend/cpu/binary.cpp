@@ -3,12 +3,14 @@
 #include <cassert>
 #include <cmath>
 #include <sstream>
+#include <type_traits>
 
 #include "mlx/allocator.h"
 #include "mlx/backend/cpu/binary.h"
 #include "mlx/backend/cpu/binary_ops.h"
 #include "mlx/backend/cpu/binary_two.h"
 #include "mlx/backend/cpu/encoder.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -51,51 +53,16 @@ void DivMod::eval_cpu(
       return std::make_pair(std::trunc(x / y), std::fmod(x, y));
     };
 
-    switch (out_a.dtype()) {
-      case bool_:
-        binary_op<bool>(a, b, out_a, out_b, integral_op, bopt);
-        break;
-      case uint8:
-        binary_op<uint8_t>(a, b, out_a, out_b, integral_op, bopt);
-        break;
-      case uint16:
-        binary_op<uint16_t>(a, b, out_a, out_b, integral_op, bopt);
-        break;
-      case uint32:
-        binary_op<uint32_t>(a, b, out_a, out_b, integral_op, bopt);
-        break;
-      case uint64:
-        binary_op<uint64_t>(a, b, out_a, out_b, integral_op, bopt);
-        break;
-      case int8:
-        binary_op<int8_t>(a, b, out_a, out_b, integral_op, bopt);
-        break;
-      case int16:
-        binary_op<int16_t>(a, b, out_a, out_b, integral_op, bopt);
-        break;
-      case int32:
-        binary_op<int32_t>(a, b, out_a, out_b, integral_op, bopt);
-        break;
-      case int64:
-        binary_op<int64_t>(a, b, out_a, out_b, integral_op, bopt);
-        break;
-      case float16:
-        binary_op<float16_t>(a, b, out_a, out_b, float_op, bopt);
-        break;
-      case float32:
-        binary_op<float>(a, b, out_a, out_b, float_op, bopt);
-        break;
-      case float64:
-        binary_op<double>(a, b, out_a, out_b, float_op, bopt);
-        break;
-      case bfloat16:
-        binary_op<bfloat16_t>(a, b, out_a, out_b, float_op, bopt);
-        break;
-      case complex64:
-        // Should never get here
+    dispatch_all_types(out_a.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      if constexpr (std::is_same_v<T, complex64_t>) {
         throw std::runtime_error("[DivMod] Complex type not supported");
-        break;
-    }
+      } else if constexpr (std::is_integral_v<T>) {
+        binary_op<T>(a, b, out_a, out_b, integral_op, bopt);
+      } else {
+        binary_op<T>(a, b, out_a, out_b, float_op, bopt);
+      }
+    });
   });
 }
 
@@ -129,26 +96,11 @@ void Equal::eval_cpu(const std::vector<array>& inputs, array& out) {
                       b = array::unsafe_weak_copy(b),
                       out = array::unsafe_weak_copy(out),
                       bopt]() mutable {
-      switch (a.dtype()) {
-        case float16:
-          binary_op<float16_t, bool, detail::NaNEqual>(a, b, out, bopt);
-          break;
-        case float32:
-          binary_op<float, bool, detail::NaNEqual>(a, b, out, bopt);
-          break;
-        case float64:
-          binary_op<double, bool, detail::NaNEqual>(a, b, out, bopt);
-          break;
-        case bfloat16:
-          binary_op<bfloat16_t, bool, detail::NaNEqual>(a, b, out, bopt);
-          break;
-        case complex64:
-          binary_op<complex64_t, bool, detail::NaNEqual>(a, b, out, bopt);
-          break;
-        default:
-          throw std::runtime_error(
-              "[NanEqual::eval_cpu] Only for floating point types.");
-      }
+      dispatch_inexact_types(
+          a.dtype(), "[NanEqual::eval_cpu]", [&](auto type_tag) {
+            using T = MLX_GET_TYPE(type_tag);
+            binary_op<T, bool, detail::NaNEqual>(a, b, out, bopt);
+          });
     });
   } else {
     comparison_op_cpu(a, b, out, detail::Equal(), stream());

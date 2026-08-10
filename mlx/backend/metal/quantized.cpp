@@ -1,5 +1,6 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
+#include "mlx/backend/common/quantized.h"
 #include "mlx/backend/common/broadcasting.h"
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/gpu/copy.h"
@@ -84,7 +85,23 @@ inline array ensure_row_contiguous_matrix(
 inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
   auto arch_size = d.get_architecture().back();
   auto arch_gen = d.get_architecture_gen();
-  if (arch_gen == 13 || arch_gen == 14) {
+  if (arch_gen >= 17 && arch_size != 'd') {
+    if (D <= 2048 && O <= 2048) {
+      return 33;
+    } else if (D <= 4096 && O <= 4096) {
+      return 25;
+    } else {
+      return 13;
+    }
+  } else if (arch_gen >= 15 && arch_size != 'd') {
+    if (D <= 2048 && O <= 2048) {
+      return 13;
+    } else if (D <= 4096 && O <= 4096) {
+      return 15;
+    } else {
+      return 13;
+    }
+  } else if (arch_gen >= 13) {
     switch (arch_size) {
       case 'd':
         if (D <= 2048 && O <= 2048) {
@@ -123,6 +140,12 @@ inline int get_qmv_batch_limit(int D, int O, metal::Device& d) {
         }
     }
   }
+}
+
+// Must match the K step in qmv_fast_impl (kernels/quantized.h):
+//   pack_factor<bits, 32>() * (bits == 2 ? 1 : 2) * SIMD_SIZE
+inline int qmv_fast_k_alignment(int bits) {
+  return get_pack_factor(bits, 32) * (bits == 2 ? 1 : 2) * 32;
 }
 
 inline int add_strides_and_shapes(
@@ -454,13 +477,19 @@ void qmv(
 
   int bn = 8;
   int bk = 32;
-  MTL::Size group_dims(bk, 2, 1);
-  MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
 
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
-  bool fast = N % bn == 0 && K % 512 == 0;
+  bool fast = N % bn == 0 && K % qmv_fast_k_alignment(bits) == 0;
+  // A narrower output tile reduces register pressure for large
+  // floating-point quantized matrix-vector products on M5 Max GPUs.
+  bool use_narrow_qmv = fast && N >= 4096 && d.get_architecture_gen() == 17 &&
+      d.get_architecture().back() == 's' && mode == "nvfp4";
+  int results_per_simdgroup = use_narrow_qmv ? 2 : 4;
+  bn = 2 * results_per_simdgroup;
+  MTL::Size group_dims(bk, 2, 1);
+  MTL::Size grid_dims(M, (N + bn - 1) / bn, B);
 
   concatenate(
       kname,
@@ -470,6 +499,7 @@ void qmv(
       group_size,
       "_b_",
       bits,
+      use_narrow_qmv ? "_r_2" : "",
       B > 1 ? "_batch_1" : "_batch_0",
       global_scale ? "_hgs" : "");
   auto kernel = get_quantized_kernel_wrapped(
@@ -481,7 +511,8 @@ void qmv(
       group_size,
       bits,
       B > 1,
-      global_scale.has_value());
+      global_scale.has_value(),
+      results_per_simdgroup);
 
   auto& compute_encoder = metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
@@ -1300,7 +1331,7 @@ void gather_qmv(
   std::string kname;
   kname.reserve(64);
   std::string type_string = get_type_string(x.dtype());
-  bool fast = N % bn == 0 && K % 512 == 0;
+  bool fast = N % bn == 0 && K % qmv_fast_k_alignment(bits) == 0;
   concatenate(
       kname,
       mode + (fast ? "_gather_qmv_fast_" : "_gather_qmv_"),
@@ -1453,9 +1484,15 @@ void gather_qmm_rhs_nax(
   array x = broadcast_with_indices(x_);
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
+  std::optional<array> biases;
+  if (biases_) {
+    biases = ensure_row_contiguous(*biases_, d, s);
+  }
 
-  // TODO: Tune the block sizes
-  int bm = 64, bn = 64, bk = 64;
+  // Use smaller bm for many experts and few tokens.
+  int E = w.size() / w.shape(-1) / w.shape(-2);
+  int bm = (M / E < 64) ? 32 : 64;
+  int bn = 64, bk = 64;
   int wm = 2, wn = 2;
 
   const bool align_M = (M % bm) == 0;
@@ -1531,9 +1568,8 @@ void gather_qmm_rhs_nax(
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_input_array(w, c++);
   compute_encoder.set_input_array(scales, c++);
-  if (biases_) {
-    array biases = ensure_row_contiguous(*biases_, d, s);
-    compute_encoder.set_input_array(biases, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
   }
   compute_encoder.set_input_array(indices, c++);
   compute_encoder.set_output_array(out, c++);
@@ -1604,6 +1640,10 @@ void gather_qmm_rhs(
   array x = broadcast_with_indices(x_);
   array w = ensure_row_contiguous(w_, d, s);
   array scales = ensure_row_contiguous(scales_, d, s);
+  std::optional<array> biases;
+  if (biases_) {
+    biases = ensure_row_contiguous(*biases_, d, s);
+  }
 
   // TODO: Tune the block sizes
   int bm = 16, bn = 32, bk = 32;
@@ -1681,9 +1721,8 @@ void gather_qmm_rhs(
   compute_encoder.set_input_array(x, c++);
   compute_encoder.set_input_array(w, c++);
   compute_encoder.set_input_array(scales, c++);
-  if (biases_) {
-    array biases = ensure_row_contiguous(*biases_, d, s);
-    compute_encoder.set_input_array(biases, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
   }
   compute_encoder.set_input_array(indices, c++);
   compute_encoder.set_output_array(out, c++);
