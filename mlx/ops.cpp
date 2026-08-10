@@ -507,29 +507,15 @@ array flatten(
     int start_axis,
     int end_axis /* = -1 */,
     StreamOrDevice s /* = {} */) {
-  auto ndim = static_cast<int>(a.ndim());
-  auto start_ax = start_axis + (start_axis < 0 ? ndim : 0);
-  auto end_ax = end_axis + (end_axis < 0 ? ndim : 0);
-  start_ax = std::max(0, start_ax);
-  end_ax = std::min(ndim - 1, end_ax);
   if (a.ndim() == 0) {
     return reshape(a, {1}, s);
   }
+  auto ndim = static_cast<int>(a.ndim());
+  auto start_ax = normalize_axis_index(start_axis, ndim, "[flatten] ");
+  auto end_ax = normalize_axis_index(end_axis, ndim, "[flatten] ");
   if (end_ax < start_ax) {
     throw std::invalid_argument(
         "[flatten] start_axis must be less than or equal to end_axis");
-  }
-  if (start_ax >= ndim) {
-    std::ostringstream msg;
-    msg << "[flatten] Invalid start_axis " << start_axis << " for array with "
-        << ndim << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  if (end_ax < 0) {
-    std::ostringstream msg;
-    msg << "[flatten] Invalid end_axis " << end_axis << " for array with "
-        << ndim << " dimensions.";
-    throw std::invalid_argument(msg.str());
   }
   if (start_ax == end_ax) {
     return a;
@@ -2285,7 +2271,7 @@ array median(
 
   // Move all the median axes to the back and flatten
   auto flat_a =
-      flatten(transpose(a, transpose_axes, s), flat_start, a.ndim(), s);
+      flatten(transpose(a, transpose_axes, s), flat_start, a.ndim() - 1, s);
   int flat_size = flat_a.shape(-1);
   if (flat_size == 0) {
     throw std::invalid_argument(

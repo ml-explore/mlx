@@ -2647,6 +2647,23 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(x.flatten(start_axis=1).shape, (2, 3 * 4))
         self.assertEqual(x.flatten(end_axis=1).shape, (2 * 3, 4))
 
+        # Valid negative axes
+        self.assertEqual(mx.flatten(x, start_axis=-2).shape, (2, 3 * 4))
+        self.assertEqual(mx.flatten(x, end_axis=-2).shape, (2 * 3, 4))
+
+        # Scalars are flattened to a single element array
+        self.assertEqual(mx.flatten(mx.array(1.0)).shape, (1,))
+
+        # Out of bounds axes are rejected rather than silently clamped
+        for ax in [3, 4, 100, -4, -5, -100]:
+            with self.assertRaises(ValueError):
+                mx.flatten(x, start_axis=ax)
+            with self.assertRaises(ValueError):
+                mx.flatten(x, end_axis=ax)
+
+        with self.assertRaises(ValueError):
+            mx.flatten(x, start_axis=2, end_axis=1)
+
     def test_clip(self):
         a = np.array([1, 4, 3, 8, 5], np.int32)
         expected = np.clip(a, 2, 6)
