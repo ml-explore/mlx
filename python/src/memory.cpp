@@ -97,8 +97,8 @@ void init_memory(nb::module_& m) {
       The wired limit is the total size in bytes of memory that will be kept
       resident. The default value is ``0``.
 
-      Setting a wired limit larger than system wired limit is an error. You can
-      increase the system wired limit with:
+      Setting a wired limit larger than the system wired limit is an error.
+      You can increase the system wired limit with:
 
       .. code-block::
 
