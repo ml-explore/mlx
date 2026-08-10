@@ -519,24 +519,22 @@ class TestAutograd(mlx_tests.MLXTestCase):
         grad = mx.grad(scatter_axis_fun)(mx.ones((3, 3)))
         self.assertTrue(mx.array_equal(grad, mx.ones((3, 3))))
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
-    def test_take_along_axis_complex_vjp_metal(self):
-        with mx.stream(mx.gpu):
-            x = mx.zeros((4,), dtype=mx.complex64)
-            indices = mx.array([3, 3], dtype=mx.int32)
-            cotangent = mx.array([1 + 2j, 3 + 4j], dtype=mx.complex64)
-            _, (gradient,) = mx.vjp(
-                lambda z: mx.take_along_axis(z, indices, axis=0),
-                [x],
-                [cotangent],
-            )
-            mx.eval(gradient)
-            self.assertEqualArray(
-                gradient,
-                mx.array([0j, 0j, 0j, 4 + 6j], dtype=mx.complex64),
-                atol=0,
-                rtol=0,
-            )
+    def test_take_along_axis_complex_vjp(self):
+        x = mx.zeros((4,), dtype=mx.complex64)
+        indices = mx.array([3, 3], dtype=mx.int32)
+        cotangent = mx.array([1 + 2j, 3 + 4j], dtype=mx.complex64)
+        _, (gradient,) = mx.vjp(
+            lambda z: mx.take_along_axis(z, indices, axis=0),
+            [x],
+            [cotangent],
+        )
+        mx.eval(gradient)
+        self.assertEqualArray(
+            gradient,
+            mx.array([0j, 0j, 0j, 4 + 6j], dtype=mx.complex64),
+            atol=0,
+            rtol=0,
+        )
 
     def test_scatter_add_vjp(self):
         def fun(src, updates):
