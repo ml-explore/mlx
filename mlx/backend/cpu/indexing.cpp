@@ -128,50 +128,10 @@ void dispatch_gather(
     array& out,
     const std::vector<int>& axes,
     const Shape& size) {
-  switch (out.dtype()) {
-    case bool_:
-      gather<bool, IdxT>(src, inds, out, axes, size);
-      break;
-    case uint8:
-      gather<uint8_t, IdxT>(src, inds, out, axes, size);
-      break;
-    case uint16:
-      gather<uint16_t, IdxT>(src, inds, out, axes, size);
-      break;
-    case uint32:
-      gather<uint32_t, IdxT>(src, inds, out, axes, size);
-      break;
-    case uint64:
-      gather<uint64_t, IdxT>(src, inds, out, axes, size);
-      break;
-    case int8:
-      gather<int8_t, IdxT>(src, inds, out, axes, size);
-      break;
-    case int16:
-      gather<int16_t, IdxT>(src, inds, out, axes, size);
-      break;
-    case int32:
-      gather<int32_t, IdxT>(src, inds, out, axes, size);
-      break;
-    case int64:
-      gather<int64_t, IdxT>(src, inds, out, axes, size);
-      break;
-    case float16:
-      gather<float16_t, IdxT>(src, inds, out, axes, size);
-      break;
-    case float32:
-      gather<float, IdxT>(src, inds, out, axes, size);
-      break;
-    case float64:
-      gather<double, IdxT>(src, inds, out, axes, size);
-      break;
-    case bfloat16:
-      gather<bfloat16_t, IdxT>(src, inds, out, axes, size);
-      break;
-    case complex64:
-      gather<complex64_t, IdxT>(src, inds, out, axes, size);
-      break;
-  }
+  dispatch_all_types(out.dtype(), [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    gather<T, IdxT>(src, inds, out, axes, size);
+  });
 }
 
 void Gather::eval_cpu(const std::vector<array>& inputs, array& out) {

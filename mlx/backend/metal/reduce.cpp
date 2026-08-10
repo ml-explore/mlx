@@ -292,6 +292,9 @@ void init_reduce(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  if (out.size() == 0) {
+    return;
+  }
   auto [_, out_type] = remap_reduce_types(out, op_name);
   const std::string func_name = "init_reduce";
   std::string kname = func_name;
@@ -957,7 +960,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // When all the reduced axes have size 1 at runtime, which can happen with
   // shapeless compilation, the reduction is the identity so just cast-copy
   // the input to the output.
-  if (out.size() == in.size()) {
+  if (in.size() > 0 && out.size() == in.size()) {
     CopyType ctype =
         in.flags().contiguous ? CopyType::Vector : CopyType::General;
     copy_gpu(in, out, ctype, stream());

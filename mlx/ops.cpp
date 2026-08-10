@@ -22,9 +22,14 @@ namespace mlx::core {
 
 namespace {
 
+// Pass the reduction's name in `op_without_identity` when it has no identity
+// element, as max and min do not. Those are undefined over an empty axis, so
+// naming them here has that checked. Reductions with an identity, such as sum
+// and any, reduce an empty axis fine and leave it unset.
 std::tuple<Shape, std::vector<int>, bool> compute_reduce_shape(
     const std::vector<int>& axes,
-    const Shape& shape) {
+    const Shape& shape,
+    std::string_view op_without_identity = {}) {
   bool is_noop = true;
   std::set<int> axes_set;
   auto ndim = shape.size();
@@ -46,6 +51,12 @@ std::tuple<Shape, std::vector<int>, bool> compute_reduce_shape(
     if (axes_set.count(i) == 0) {
       out_shape.push_back(shape[i]);
     } else {
+      if (!op_without_identity.empty() && shape[i] == 0) {
+        std::ostringstream msg;
+        msg << "[" << op_without_identity << "] Cannot " << op_without_identity
+            << " reduce over axis " << i << " with size 0.";
+        throw std::invalid_argument(msg.str());
+      }
       out_shape.push_back(1);
     }
     is_noop &= (out_shape.back() == shape[i]);
@@ -2441,11 +2452,8 @@ array max(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
-  if (a.size() == 0) {
-    throw std::invalid_argument("[max] Cannot max reduce zero size array.");
-  }
   auto [out_shape, sorted_axes, is_noop] =
-      compute_reduce_shape(axes, a.shape());
+      compute_reduce_shape(axes, a.shape(), "max");
   auto out = (is_noop)
       ? a
       : array(
@@ -2478,14 +2486,11 @@ array min(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
-  if (a.size() == 0) {
-    throw std::invalid_argument("[min] Cannot min reduce zero size array.");
-  }
   if (axes.empty()) {
     return a;
   }
   auto [out_shape, sorted_axes, is_noop] =
-      compute_reduce_shape(axes, a.shape());
+      compute_reduce_shape(axes, a.shape(), "min");
   auto out = (is_noop)
       ? a
       : array(
