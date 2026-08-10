@@ -962,6 +962,38 @@ class TestOps(mlx_tests.MLXTestCase):
         out_np = np.median(x, axis=(0, 1, 3), keepdims=True)
         self.assertTrue(np.allclose(out, out_np))
 
+    def test_median_nan(self):
+        nan = float("nan")
+
+        # Odd and even lengths, with the NaN in a few different positions.
+        for vals in ([1.0, nan, 0.0], [nan, 1.0, 0.0], [1.0, 2.0, nan, 4.0]):
+            for dtype in (mx.float16, mx.bfloat16, mx.float32):
+                out = mx.median(mx.array(vals, dtype=dtype))
+                self.assertTrue(mx.isnan(out).item(), msg=f"{vals} {dtype}")
+
+        x = mx.array([[1.0, nan, 3.0], [4.0, 5.0, 6.0]])
+        self.assertTrue(
+            np.array_equal(
+                np.array(mx.median(x, axis=1)), np.median(x, axis=1), equal_nan=True
+            )
+        )
+        self.assertTrue(
+            np.array_equal(
+                np.array(mx.median(x, axis=0)), np.median(x, axis=0), equal_nan=True
+            )
+        )
+        self.assertTrue(mx.isnan(mx.median(x)).item())
+        self.assertEqual(mx.median(x, axis=1, keepdims=True).shape, (2, 1))
+
+        # Complex NaN propagates too, matching NumPy.
+        out = mx.median(mx.array([complex(1, 0), complex(nan, 0), complex(0, 0)]))
+        self.assertTrue(mx.isnan(out).item())
+
+        # A NaN-free array is unaffected, and integers are never NaN.
+        x = mx.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        self.assertTrue(np.allclose(mx.median(x, axis=1), np.median(x, axis=1)))
+        self.assertEqual(mx.median(mx.array([0, 1, 2, 3, 4])).item(), 2)
+
     def test_var(self):
         x = mx.array(
             [
