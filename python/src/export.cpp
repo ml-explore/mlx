@@ -124,8 +124,8 @@ auto wrap_export_function(nb::callable fun) {
           outputs_.push_back(nb::cast<mx::array>(outputs));
         } else if (!nb::try_cast(outputs, outputs_)) {
           throw std::invalid_argument(
-              "[export_function] Outputs can be either a single array "
-              "a tuple or list of arrays.");
+              "[export_function] Outputs can be either a single array, "
+              "a tuple, or a list of arrays.");
         }
         return outputs_;
       };
