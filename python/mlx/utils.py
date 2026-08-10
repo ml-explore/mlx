@@ -229,22 +229,25 @@ def tree_unflatten(tree: Union[List[Tuple[str, Any]], Dict[str, Any]]) -> Any:
         next_idx = "" if not next_idx else next_idx[0]
         children[current_idx].append((next_idx, value))
 
-    # Build a list only when every key is a canonical, non-negative index.
-    # Otherwise preserve the keys in a dict; for example, "01" and "1" must
-    # not both collapse to index 1.
-    all_keys_are_integer = all(
-        idx.isdecimal() and str(int(idx)) == idx for idx in children
-    )
-    if all_keys_are_integer:
-        keys = sorted((int(idx), idx) for idx in children)
-        result = []
-        for i, k in keys:
-            # if i <= len(result), no {} will be appended.
-            result.extend([{} for _ in range(i - len(result))])
-            result.append(tree_unflatten(children[k]))
-        return result
+    # Assume list when all keys are integers.
+    try:
+        keys = {}
+        for idx in children:
+            keys[int(idx)] = idx
+        # Guard against "01" and "1" treated as one key.
+        is_list = len(keys) == len(children)
+    except ValueError:
+        is_list = False
 
-    return {k: tree_unflatten(v) for k, v in children.items()}
+    if is_list:
+        l = []
+        for i, k in sorted(keys.items()):
+            # if i <= len(l), no {} will be appended.
+            l.extend([{} for _ in range(i - len(l))])
+            l.append(tree_unflatten(children[k]))
+        return l
+    else:
+        return {k: tree_unflatten(v) for k, v in children.items()}
 
 
 def tree_reduce(fn, tree, initializer=None, is_leaf=None):
