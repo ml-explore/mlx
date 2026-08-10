@@ -1491,6 +1491,50 @@ class TestAutograd(mlx_tests.MLXTestCase):
         _, (jvp,) = mx.jvp(mx.abs, [x], [t])
         self.assertTrue(mx.allclose(jvp, mx.sign(x) * t))
 
+    def test_second_order_permutation_ops(self):
+        # The permutation these ops apply is locally constant in the input, so
+        # the indices must not carry a gradient. Otherwise differentiating the
+        # vjp a second time fails with "Cannot calculate VJP with respect to
+        # indices".
+        def hvp(f, x, v):
+            return mx.grad(lambda a: mx.sum(mx.grad(f)(a) * v))(x)
+
+        def numerical_hvp(f, x, v, eps=1e-3):
+            # The values below are well separated, so the permutation does not
+            # change over this step and the difference is exact enough.
+            return (mx.grad(f)(x + eps * v) - mx.grad(f)(x - eps * v)) / (2 * eps)
+
+        x = mx.array([3.0, 1.0, 2.0, 5.0])
+        v = mx.array([1.0, -2.0, 0.5, 1.5])
+
+        for fn in (
+            lambda a: mx.sort(a),
+            lambda a: mx.partition(a, 2),
+            lambda a: mx.topk(a, 2),
+            lambda a: mx.cummax(a, axis=0),
+            lambda a: mx.cummin(a, axis=0),
+            lambda a: mx.cummax(a, axis=0, reverse=True),
+            lambda a: mx.cummax(a, axis=0, inclusive=False),
+            lambda a: mx.cummin(a, axis=0, reverse=True, inclusive=False),
+        ):
+            f = lambda a: mx.sum(fn(a) ** 2)
+            self.assertTrue(
+                mx.allclose(hvp(f, x, v), numerical_hvp(f, x, v), atol=1e-3)
+            )
+
+        # A non-trailing axis
+        y = mx.array([[3.0, 1.0], [2.0, 5.0]])
+        w = mx.array([[1.0, -2.0], [0.5, 1.5]])
+        for fn in (
+            lambda a: mx.sort(a, axis=0),
+            lambda a: mx.partition(a, 1, axis=0),
+            lambda a: mx.cummax(a, axis=0),
+        ):
+            f = lambda a: mx.sum(fn(a) ** 2)
+            self.assertTrue(
+                mx.allclose(hvp(f, y, w), numerical_hvp(f, y, w), atol=1e-3)
+            )
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
