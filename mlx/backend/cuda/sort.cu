@@ -744,7 +744,7 @@ void single_block_sort(
   int64_t in_stride_sorted_axis = in.strides()[axis];
   int64_t out_stride_sorted_axis = out.strides()[axis];
 
-  bool contiguous = in.flags().contiguous;
+  bool contiguous = in.flags().row_contiguous;
   auto check_strides = [](const array& x, int64_t sort_stride) {
     int64_t min_stride =
         *std::min_element(x.strides().begin(), x.strides().end());

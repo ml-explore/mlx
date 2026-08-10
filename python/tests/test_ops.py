@@ -3654,6 +3654,24 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.broadcast_shapes()
 
+    def test_sort_transposed(self):
+        # The sorted axis can keep the smallest or largest stride while the
+        # axes that are not sorted are no longer laid out row major.
+        np.random.seed(0)
+        a_np = np.random.uniform(0, 100, size=(3, 4, 8)).astype(np.float32)
+        a_mx = mx.array(a_np)
+        for perm in permutations(range(3)):
+            b_np = np.transpose(a_np, perm)
+            b_mx = mx.transpose(a_mx, perm)
+            for axis in range(3):
+                with self.subTest(perm=perm, axis=axis):
+                    s_np = np.sort(b_np, axis=axis)
+                    self.assertTrue(np.array_equal(s_np, mx.sort(b_mx, axis=axis)))
+                    idx = np.array(mx.argsort(b_mx, axis=axis))
+                    self.assertTrue(
+                        np.array_equal(s_np, np.take_along_axis(b_np, idx, axis=axis))
+                    )
+
     def test_sort_nan(self):
         for dtype in [mx.float32, mx.float16, mx.bfloat16]:
             with self.subTest(dtype=dtype):

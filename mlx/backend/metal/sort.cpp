@@ -41,8 +41,10 @@ void single_block_sort(
 
   // We can only use the contiguous kernel if the sorted axis
   // has the largest or smallest stride.
-  // We also need the input to be contiguous
-  bool contiguous = in.flags().contiguous;
+  // We also need the input to be row contiguous, since the kernel enumerates
+  // the rows with a single segment stride, which only holds when the axes
+  // that are not sorted are laid out row major.
+  bool contiguous = in.flags().row_contiguous;
   auto check_strides = [](array x, int sort_stride) {
     int min_stride = *std::min_element(x.strides().begin(), x.strides().end());
     int max_stride = *std::max_element(x.strides().begin(), x.strides().end());
