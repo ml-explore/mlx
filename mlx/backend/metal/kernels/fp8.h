@@ -33,6 +33,12 @@ struct fp8_e4m3 {
     uint16_t v = (bits & 127) << 7;
     half converted = as_type<half>(v);
     converted *= 256.0;
+    // 0x7f/0xff are e4m3's only NaN encodings. Shifted into half they land on a
+    // finite exponent (15, not 31), so the reinterpret above decodes them as
+    // 480.
+    if ((bits & 127) == 127) {
+      converted = NAN;
+    }
     auto sign = bits & 128;
     return (sign ? -converted : converted);
   }

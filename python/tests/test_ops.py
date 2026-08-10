@@ -3609,6 +3609,23 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
+    def test_from_fp8_nan(self):
+        # 0x7f/0xff are e4m3's only NaN encodings. Shifted into float16 they land on
+        # a finite exponent, so a plain reinterpret decodes them as +/-480.
+        nans = mx.array([0x7F, 0xFF], mx.uint8)
+        for dtype in [mx.float16, mx.bfloat16, mx.float32]:
+            for stream in [mx.cpu, mx.gpu]:
+                if stream == mx.gpu and not mx.metal.is_available():
+                    continue
+                out = mx.from_fp8(nans, dtype=dtype, stream=stream)
+                self.assertTrue(
+                    mx.all(mx.isnan(out)).item(), msg=f"{dtype} {stream}: {out}"
+                )
+
+        # the largest finite magnitude is 448 (0x7e), and must stay finite
+        finite = mx.from_fp8(mx.array([0x7E, 0xFE], mx.uint8), dtype=mx.float32)
+        self.assertTrue(mx.array_equal(finite, mx.array([448.0, -448.0])))
+
     def test_zeros_ones_empty_like_dtype(self):
         x = mx.array([1, 2, 3], dtype=mx.int32)
 

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <cmath>
 #include <complex>
+#include <limits>
 
 #include "mlx/backend/cpu/simd/simd.h"
 
@@ -165,6 +166,13 @@ struct FromFP8 {
         out[i] = converted * 256.0;
       }
     }
+    // 0x7f/0xff are e4m3's only NaN encodings. Shifted into float16 they land
+    // on a finite exponent (15, not 31), so the reinterpret above decodes them
+    // as 480.
+    out = select(
+        Simd<bool, N>((x & 127) == 127),
+        Simd<float, N>(std::numeric_limits<float>::quiet_NaN()),
+        out);
     auto sign = Simd<bool, N>(x & 128);
     return select(sign, -out, out);
   }
