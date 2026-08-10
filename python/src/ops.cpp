@@ -3161,22 +3161,9 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def searchsorted(sorted_sequence: array, values: array, /, side: str = 'left', *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def searchsorted(sorted_sequence: array, values: array, /, side: str = 'left', *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Find the indices that keep ``sorted_sequence`` sorted when inserting ``values``.
-
-        Performs a binary search per element of ``values``, so the cost is
-        ``O(values.size * log(sorted_sequence.size))``.
-
-        The ordering matches :func:`sort`, which places ``NaN`` after every other
-        value. Searching a sequence that is not sorted is not an error, but the
-        result is unspecified.
-
-        When the two inputs have different types the search runs in the promoted
-        type, following MLX's promotion rules rather than NumPy's. Those rules
-        stay in the narrower float type, so an integer sequence searched with
-        float values is rounded first and large integers can end up comparing
-        equal to one another.
 
         Args:
             sorted_sequence (array): A 1-D array sorted in ascending order.

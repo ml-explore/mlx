@@ -710,50 +710,6 @@ std::vector<array> ArgSort::jvp(
   return {zeros(primals[0].shape(), uint32, stream())};
 }
 
-std::pair<std::vector<array>, std::vector<int>> SearchSorted::vmap(
-    const std::vector<array>& inputs,
-    const std::vector<int>& axes) {
-  if (axes[0] != -1) {
-    throw std::invalid_argument(
-        "[searchsorted] Cannot vmap over the sorted sequence, only over the "
-        "values being searched for.");
-  }
-  // The op is elementwise in the values, so a batched values input needs no
-  // change beyond passing the batch axis through.
-  auto side = right_ ? "right" : "left";
-  return {{searchsorted(inputs[0], inputs[1], side, stream())}, {axes[1]}};
-}
-
-std::vector<array> SearchSorted::vjp(
-    const std::vector<array>& primals,
-    const std::vector<array>&,
-    const std::vector<int>& argnums,
-    const std::vector<array>&) {
-  std::vector<array> vjps;
-  for (auto arg : argnums) {
-    vjps.push_back(zeros_like(primals[arg], stream()));
-  }
-  return vjps;
-}
-
-std::vector<array> SearchSorted::jvp(
-    const std::vector<array>& primals,
-    const std::vector<array>&,
-    const std::vector<int>&) {
-  return {zeros(primals[1].shape(), uint32, stream())};
-}
-
-bool SearchSorted::is_equivalent(const Primitive& other) const {
-  const SearchSorted& r_other = static_cast<const SearchSorted&>(other);
-  return right_ == r_other.right_;
-}
-
-std::vector<Shape> SearchSorted::output_shapes(
-    const std::vector<array>& inputs) {
-  // One index per element of the values input, which is the second one.
-  return {inputs[1].shape()};
-}
-
 std::vector<array> AsType::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -5456,6 +5412,47 @@ std::vector<array> Softmax::jvp(
 bool Softmax::is_equivalent(const Primitive& other) const {
   const Softmax& s_other = static_cast<const Softmax&>(other);
   return precise_ == s_other.precise_;
+}
+
+std::pair<std::vector<array>, std::vector<int>> SearchSorted::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  if (axes[0] != -1) {
+    throw std::invalid_argument(
+        "[searchsorted] Cannot vmap over the sorted sequence, only over the "
+        "values being searched for.");
+  }
+  auto side = right_ ? "right" : "left";
+  return {{searchsorted(inputs[0], inputs[1], side, stream())}, {axes[1]}};
+}
+
+std::vector<array> SearchSorted::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    vjps.push_back(zeros_like(primals[arg], stream()));
+  }
+  return vjps;
+}
+
+std::vector<array> SearchSorted::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>&) {
+  return {zeros(primals[1].shape(), uint32, stream())};
+}
+
+bool SearchSorted::is_equivalent(const Primitive& other) const {
+  const SearchSorted& r_other = static_cast<const SearchSorted&>(other);
+  return right_ == r_other.right_;
+}
+
+std::vector<Shape> SearchSorted::output_shapes(
+    const std::vector<array>& inputs) {
+  return {inputs[1].shape()};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Sort::vmap(

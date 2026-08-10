@@ -2817,18 +2817,12 @@ array searchsorted(
         << sorted_sequence.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  // The returned indices go up to and including the length of the sequence, so
-  // a longer sequence than uint32 can index has no representable answer. Say so
-  // rather than silently truncating the length in the kernels.
   if (sorted_sequence.size() > UINT32_MAX) {
     std::ostringstream msg;
     msg << "[searchsorted] The sorted sequence has " << sorted_sequence.size()
         << " elements, more than the uint32 output can index.";
     throw std::invalid_argument(msg.str());
   }
-
-  // Search in the promoted type so the kernel only ever compares like with
-  // like, matching how the binary ops handle mixed inputs.
   auto dtype = promote_types(sorted_sequence.dtype(), values.dtype());
   return array(
       values.shape(),

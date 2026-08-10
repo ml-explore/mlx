@@ -719,6 +719,40 @@ __global__ void mb_block_merge_kernel(
   }
 }
 
+template <typename T, bool Right>
+__device__ __forceinline__ uint32_t
+searchsorted_impl(const T* a, T v, uint32_t n, int64_t a_stride) {
+  LessThan<T> lt;
+  uint32_t lo = 0;
+  uint32_t hi = n;
+  while (lo < hi) {
+    uint32_t mid = lo + (hi - lo) / 2;
+    T m = a[static_cast<int64_t>(mid) * a_stride];
+    bool below = Right ? !lt(v, m) : lt(m, v);
+    if (below) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+template <typename T, bool Right>
+__global__ void searchsorted(
+    const T* a,
+    const T* v,
+    uint32_t* out,
+    int64_t size,
+    uint32_t n,
+    int64_t a_stride) {
+  int64_t index = cg::this_grid().thread_rank();
+  if (index >= size) {
+    return;
+  }
+  out[index] = searchsorted_impl<T, Right>(a, v[index], n, a_stride);
+}
+
 } // namespace cu
 
 namespace {
@@ -1055,100 +1089,6 @@ void gpu_sort(
 
 } // namespace
 
-namespace cu {
-
-// One thread per element of the values input, each doing an independent binary
-// search. Comparing through LessThan, the same comparator the sort above uses,
-// is what keeps searchsorted consistent with sort for inputs containing NaN.
-template <typename T, bool Right>
-__device__ __forceinline__ uint32_t
-searchsorted_impl(const T* a, T v, uint32_t n, int64_t a_stride) {
-  LessThan<T> lt;
-  uint32_t lo = 0;
-  uint32_t hi = n;
-  while (lo < hi) {
-    uint32_t mid = lo + (hi - lo) / 2;
-    // signed index, so a reversed view with a negative stride walks the right
-    // way
-    T m = a[static_cast<int64_t>(mid) * a_stride];
-    // left advances on lt(a[mid], v), right on !lt(v, a[mid])
-    bool below = Right ? !lt(v, m) : lt(m, v);
-    if (below) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  return lo;
-}
-
-template <typename T, bool Right>
-__global__ void searchsorted(
-    const T* a,
-    const T* v,
-    uint32_t* out,
-    int64_t size,
-    uint32_t n,
-    int64_t a_stride) {
-  int64_t index = cg::this_grid().thread_rank();
-  if (index >= size) {
-    return;
-  }
-  out[index] = searchsorted_impl<T, Right>(a, v[index], n, a_stride);
-}
-
-} // namespace cu
-
-void SearchSorted::eval_gpu(const std::vector<array>& inputs, array& out) {
-  nvtx3::scoped_range r("SearchSorted::eval_gpu");
-  assert(inputs.size() == 2);
-  auto& s = stream();
-  auto& a = inputs[0];
-  auto v = inputs[1];
-
-  auto& encoder = cu::get_command_encoder(s);
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
-  if (out.size() == 0) {
-    return;
-  }
-
-  // The kernel indexes the values contiguously, so copy anything else first.
-  if (!v.flags().row_contiguous) {
-    array v_copy = contiguous_copy_gpu(v, s);
-    encoder.add_temporary(v_copy);
-    v = v_copy;
-  }
-
-  encoder.set_input_array(a);
-  encoder.set_input_array(v);
-  encoder.set_output_array(out);
-
-  // The sequence is 1-D, so one stride covers every layout it can have,
-  // including a reversed view where that stride is negative.
-  int64_t a_stride = a.strides()[0];
-  auto n = static_cast<uint32_t>(a.size());
-
-  dispatch_all_types(a.dtype(), [&](auto type_tag) {
-    using CTYPE = MLX_GET_TYPE(type_tag);
-    using T = cuda_type_t<CTYPE>;
-    dispatch_bool(right_, [&](auto right_tag) {
-      constexpr bool RIGHT = decltype(right_tag)::value;
-      auto [num_blocks, block_dims] =
-          get_launch_args(out, out.size() > INT32_MAX);
-      encoder.add_kernel_node(
-          cu::searchsorted<T, RIGHT>,
-          num_blocks,
-          block_dims,
-          gpu_ptr<T>(a),
-          gpu_ptr<T>(v),
-          gpu_ptr<uint32_t>(out),
-          static_cast<int64_t>(out.size()),
-          n,
-          a_stride);
-    });
-  });
-}
-
 void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("ArgSort::eval_gpu");
   assert(inputs.size() == 1);
@@ -1169,6 +1109,50 @@ void ArgPartition::eval_gpu(const std::vector<array>& inputs, array& out) {
 void Partition::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Partition::eval_gpu");
   gpu_sort(stream(), inputs[0], out, axis_, false);
+}
+
+void SearchSorted::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("SearchSorted::eval_gpu");
+  assert(inputs.size() == 2);
+  auto& s = stream();
+  auto& a = inputs[0];
+  auto v = inputs[1];
+
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  if (out.size() == 0) {
+    return;
+  }
+
+  if (!v.flags().row_contiguous) {
+    v = contiguous_copy_gpu(v, s);
+    encoder.add_temporary(v);
+  }
+
+  encoder.set_input_array(a);
+  encoder.set_input_array(v);
+  encoder.set_output_array(out);
+
+  int64_t a_stride = a.strides()[0]; // sequence is 1D
+
+  dispatch_all_types(a.dtype(), [&](auto type_tag) {
+    using CTYPE = MLX_GET_TYPE(type_tag);
+    using T = cuda_type_t<CTYPE>;
+    dispatch_bool(right_, [&](auto right) {
+      auto [num_blocks, block_dims] =
+          get_launch_args(out, out.size() > INT32_MAX);
+      encoder.add_kernel_node(
+          cu::searchsorted<T, right.value>,
+          num_blocks,
+          block_dims,
+          gpu_ptr<T>(a),
+          gpu_ptr<T>(v),
+          gpu_ptr<uint32_t>(out),
+          static_cast<int64_t>(out.size()),
+          static_cast<uint32_t>(a.size()),
+          a_stride);
+    });
+  });
 }
 
 } // namespace mlx::core

@@ -437,7 +437,6 @@ MTL::ComputePipelineState* get_searchsorted_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const array& in,
-    bool contiguous,
     bool right) {
   auto lib = d.get_library(kernel_name, [&]() {
     std::ostringstream kernel_source;
@@ -445,7 +444,7 @@ MTL::ComputePipelineState* get_searchsorted_kernel(
     kernel_source << metal::utils() << metal::sort() << metal::searchsorted();
     kernel_source << get_template_definition(
         kernel_name,
-        contiguous ? "searchsorted_v" : "searchsorted_g",
+        "searchsorted",
         get_type_string(in.dtype()),
         right ? "true" : "false");
     return kernel_source.str();

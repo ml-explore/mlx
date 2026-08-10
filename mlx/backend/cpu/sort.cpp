@@ -314,23 +314,16 @@ void argpartition(const array& in, array& out, int axis, int kth) {
 template <typename T, bool Right>
 void searchsorted(const array& a, const array& v, array& out) {
   auto n = static_cast<uint32_t>(a.size());
-  // The sequence is 1-D, so one stride covers every layout it can have,
-  // including a reversed view where that stride is negative.
-  auto a_stride = a.strides()[0];
+  auto a_stride = a.strides()[0]; // sequence is 1D
   const T* a_ptr = a.data<T>();
   const T* v_ptr = v.data<T>();
   uint32_t* out_ptr = out.data<uint32_t>();
 
-  // Both bounds are the same descent with a different predicate. Going through
-  // nan_aware_less rather than a raw < is what keeps this consistent with sort,
-  // which orders NaNs last.
   auto bound = [a_ptr, a_stride, n](T x) {
     uint32_t lo = 0;
     uint32_t hi = n;
     while (lo < hi) {
       uint32_t mid = lo + (hi - lo) / 2;
-      // signed index, so a reversed view with a negative stride walks the
-      // right way
       T m = a_ptr[static_cast<int64_t>(mid) * a_stride];
       bool below = Right ? !nan_aware_less(x, m) : nan_aware_less(m, x);
       if (below) {
@@ -342,9 +335,6 @@ void searchsorted(const array& a, const array& v, array& out) {
     return lo;
   };
 
-  // row_contiguous, not contiguous: the latter only promises the buffer has no
-  // gaps, which a transposed or broadcast view also satisfies while its
-  // elements sit in a different order than the output's.
   if (v.flags().row_contiguous) {
     for (size_t i = 0; i < v.size(); ++i) {
       out_ptr[i] = bound(v_ptr[i]);

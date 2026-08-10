@@ -85,7 +85,6 @@ MTL::ComputePipelineState* get_searchsorted_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const array& in,
-    bool contiguous,
     bool right);
 
 MTL::ComputePipelineState* get_mb_sort_kernel(

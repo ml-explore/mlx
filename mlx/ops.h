@@ -857,12 +857,7 @@ MLX_API array argpartition(const array& a, int kth, StreamOrDevice s = {});
 MLX_API array
 argpartition(const array& a, int kth, int axis, StreamOrDevice s = {});
 
-/**
- * Find the indices at which each element of `values` would be inserted into
- * the sorted 1-D array `sorted_sequence` to keep it sorted. With side "left"
- * the first such index is returned, with side "right" the last. The ordering
- * matches `sort`, so NaNs compare greater than every other value.
- **/
+/** Find the indices of `values` in `sorted_sequence`. */
 MLX_API array searchsorted(
     const array& sorted_sequence,
     const array& values,
