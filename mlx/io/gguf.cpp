@@ -211,6 +211,28 @@ std::unordered_map<std::string, GGUFMetaData> load_metadata(gguf_ctx* ctx) {
   return metadata;
 }
 
+// gguflib computes weights_data as ctx->data + ctx->data_off + the tensor's
+// offset field in unsigned arithmetic, without comparing the result against the
+// mapping, so a crafted offset can point outside the file or -- if the addition
+// wraps -- back inside it at the wrong bytes.
+void check_tensor_in_file(const gguf_ctx* ctx, const gguf_tensor& tensor) {
+  auto fail = [&tensor](const std::string& what) {
+    std::ostringstream msg;
+    msg << "[load_gguf] Tensor '" << std::string(tensor.name, tensor.namelen)
+        << "' " << what << ". Perhaps an incomplete download or corrupt file?";
+    throw std::runtime_error(msg.str());
+  };
+  if (tensor.offset < ctx->data_off) {
+    fail("has a data offset that overflows the data section");
+  }
+  if (tensor.offset > ctx->size) {
+    fail("has a data offset past the end of the file");
+  }
+  if (tensor.bsize > ctx->size - tensor.offset) {
+    fail("extends past the end of the file");
+  }
+}
+
 std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   std::unordered_map<std::string, array> array_map;
   gguf_tensor tensor;
@@ -225,6 +247,7 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   };
 
   while (gguf_get_tensor(ctx, &tensor)) {
+    check_tensor_in_file(ctx, tensor);
     if (tensor.type == GGUF_TYPE_Q4_0 || tensor.type == GGUF_TYPE_Q4_1 ||
         tensor.type == GGUF_TYPE_Q8_0) {
       gguf_load_quantized(array_map, tensor);
