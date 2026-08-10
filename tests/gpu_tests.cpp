@@ -695,34 +695,91 @@ TEST_CASE("test layer norm vjp bias grad race") {
 }
 
 #if defined(__APPLE__)
-TEST_CASE("test sticky stream metal error") {
-  // Inject a stream error and ensure it survives until synchronize reports
-  // it (and is cleared afterwards). Covers the sticky-error contract without
-  // needing an over-budget command buffer.
+// A command buffer that runs out of the working set is killed by the driver
+// without writing its outputs. Reproducing that needs more memory than a test
+// machine can be assumed to have, so these inject the error the completion
+// handler would have recorded and check that it reaches the user from there.
+namespace {
+
+constexpr const char* kInjected =
+    "[METAL] Command buffer execution failed: test sticky error.";
+
+void inject_stream_error(Stream s) {
+  metal::get_stream_error(s.index)->set_error(
+      std::make_shared<std::string>(kInjected));
+}
+
+// Drop anything left parked so one failing case cannot leak into the next.
+struct ClearStreamErrorOnExit {
+  Stream s;
+  ~ClearStreamErrorOnExit() {
+    metal::get_stream_error(s.index)->clear_error();
+  }
+};
+
+} // namespace
+
+TEST_CASE("test stream error reported by synchronize") {
   auto s = default_stream(Device::gpu);
-  metal::get_stream_error(s.index)
-      ->set_error(std::make_shared<std::string>(
-          "[METAL] Command buffer execution failed: test sticky error."));
+  ClearStreamErrorOnExit cleanup{s};
 
-  CHECK_THROWS_WITH_AS(
-      synchronize(s),
-      "[METAL] Command buffer execution failed: test sticky error.",
-      std::runtime_error);
-
-  // Cleared after being reported.
+  inject_stream_error(s);
+  CHECK_THROWS_WITH_AS(synchronize(s), kInjected, std::runtime_error);
+  // Consumed by the report, so the next one is clean.
   synchronize(s);
+}
 
-  // signal_event should CPU-poison the event from a pre-existing sticky error.
-  metal::get_stream_error(s.index)
-      ->set_error(std::make_shared<std::string>(
-          "[METAL] Command buffer execution failed: test sticky error."));
-  Event e(s);
-  e.signal(s);
-  CHECK_THROWS_WITH_AS(
-      e.wait(),
-      "[METAL] Command buffer execution failed: test sticky error.",
-      std::runtime_error);
-  // Sticky cleared by Event::wait after the event reported it.
+TEST_CASE("test stream error survives encoding more work") {
+  // The failing command buffer is committed mid-eval and signals no event, so
+  // the error is only on the stream. Encoding the next kernel must not drop it.
+  auto s = default_stream(Device::gpu);
+  ClearStreamErrorOnExit cleanup{s};
+
+  auto a = full({4, 4}, 1.0f, float32, s);
+  eval({a});
+
+  inject_stream_error(s);
+  auto b = add(a, a, s);
+  CHECK_THROWS_WITH_AS(eval({b}), kInjected, std::runtime_error);
   synchronize(s);
+}
+
+TEST_CASE("test stream error reported through an already signaled event") {
+  // Metal signals shared events on the GPU timeline, ahead of the completion
+  // handler that records the failure, so a waiter can find the event signaled
+  // and the error not yet posted. Reading the array must still report it.
+  auto s = default_stream(Device::gpu);
+  ClearStreamErrorOnExit cleanup{s};
+
+  auto a = full({4, 4}, 1.0f, float32, s);
+  auto x = add(a, a, s);
+  async_eval({x});
+  synchronize(s); // event is signaled and the work is done
+
+  inject_stream_error(s);
+  CHECK_THROWS_WITH_AS(eval({x}), kInjected, std::runtime_error);
+}
+
+TEST_CASE("test stream error does not escape a scheduler worker") {
+  // A cpu-stream consumer waits on the gpu event from a scheduler thread that
+  // has no handler above it. Reporting there would terminate the process, so
+  // the error has to stay parked for the next synchronization point.
+  auto gs = default_stream(Device::gpu);
+  auto cs = default_stream(Device::cpu);
+  ClearStreamErrorOnExit cleanup{gs};
+
+  auto a = full({512, 512}, 1.0f, float32, gs);
+  auto x = add(a, a, gs);
+  for (int i = 0; i < 32; ++i) {
+    x = add(x, a, gs); // keep the gpu busy so the event is still unsignaled
+  }
+  async_eval({x});
+
+  inject_stream_error(gs);
+  auto y = add(x, x, cs);
+  CHECK_NOTHROW(eval({y}));
+
+  // Still reportable on the stream that failed.
+  CHECK_THROWS_WITH_AS(synchronize(gs), kInjected, std::runtime_error);
 }
 #endif

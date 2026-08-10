@@ -10,10 +10,11 @@ class EventImpl {
   EventImpl(Device& d);
   ~EventImpl();
 
+  // Blocks until signaled. Does not throw: a failure that reaches this event
+  // was parked on its stream first, so the stream is where it gets reported.
   void wait(uint64_t value);
   void signal(uint64_t value);
   void set_error(std::shared_ptr<std::string> error);
-  void check_error();
 
   const auto& error() const {
     return error_;

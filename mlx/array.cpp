@@ -143,13 +143,18 @@ bool array::is_available() const {
 }
 
 void array::wait() {
-  if (!is_available()) {
-    if (event().valid()) {
-      event().wait();
-      detach_event();
-    }
-    set_status(Status::available);
+  if (status() == Status::available) {
+    return;
   }
+  // Wait on the event even when it is already signaled. Going through
+  // Event::wait is what reports an asynchronous backend failure, and taking
+  // the is_available() shortcut here would skip it in exactly the case the
+  // GPU raced ahead of the error being recorded.
+  if (event().valid()) {
+    event().wait();
+    detach_event();
+  }
+  set_status(Status::available);
 }
 
 void array::eval() {

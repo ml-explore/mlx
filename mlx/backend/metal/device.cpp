@@ -348,12 +348,6 @@ void check_stream_error(Stream s) {
   }
 }
 
-void clear_stream_error(Stream s) {
-  if (s.device == mlx::core::Device::gpu) {
-    get_stream_error(s.index)->clear_error();
-  }
-}
-
 CommandEncoder::CommandEncoder(
     Device& d,
     int index,
@@ -549,9 +543,10 @@ void CommandEncoder::signal_event(
     std::shared_ptr<EventImpl> event,
     uint64_t value) {
   end_encoding();
-  // If the stream already has a sticky error, poison the event on the CPU
-  // before the GPU signal so waiters observe it even when this buffer
-  // succeeds and signals on the GPU timeline.
+  // Carry a known failure onto the event as early as possible. Streams that
+  // wait on this event pick their error up from it (see wait_events_ in
+  // commit), and doing it here rather than in the completion handler narrows
+  // the window where a downstream buffer commits without seeing it.
   if (auto error = stream_error_->error()) {
     event->set_error(error);
   }
