@@ -2999,6 +2999,27 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array(np.diag(x, k=-1))
         self.assertTrue(mx.array_equal(result, expected))
 
+    def test_diag_zero_size(self):
+        # A zero-size 1-D input builds a |k| x |k| matrix of zeros. k = 0 makes
+        # that 0 x 0, which used to fail while every other k worked.
+        for k in (-2, -1, 0, 1, 2):
+            for dtype, nptype in (
+                (mx.float32, np.float32),
+                (mx.int32, np.int32),
+                (mx.complex64, np.complex64),
+            ):
+                result = mx.diag(mx.zeros((0,), dtype=dtype), k=k)
+                expected = np.diag(np.zeros((0,), dtype=nptype), k=k)
+                self.assertEqual(result.shape, expected.shape, msg=f"k={k} {dtype}")
+                self.assertEqual(result.dtype, dtype)
+                self.assertTrue(np.array_equal(np.array(result), expected))
+
+        # A zero-size 2-D input already worked; keep it covered.
+        for shape in ((0, 0), (0, 3), (3, 0)):
+            result = mx.diag(mx.zeros(shape))
+            expected = np.diag(np.zeros(shape, dtype=np.float32))
+            self.assertEqual(result.shape, expected.shape, msg=f"{shape}")
+
     def test_trace(self):
         a_mx = mx.arange(9, dtype=mx.int64).reshape((3, 3))
         a_np = np.arange(9, dtype=np.int64).reshape((3, 3))

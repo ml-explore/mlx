@@ -6210,6 +6210,11 @@ array diag(const array& a, int k /* = 0 */, StreamOrDevice s /* = {} */) {
     int a_size = a.size();
     int n = a_size + std::abs(k);
     auto res = zeros({n, n}, a.dtype(), s);
+    if (a_size == 0) {
+      // Nothing to place on the diagonal, and scattering into the 0x0 output
+      // produced when k is zero is an error.
+      return res;
+    }
 
     std::vector<array> indices;
     auto s1 = std::max(0, -k);
