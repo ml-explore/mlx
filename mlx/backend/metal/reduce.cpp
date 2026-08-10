@@ -292,8 +292,6 @@ void init_reduce(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
-  // An empty output has nothing to initialize, and dispatching zero threads
-  // with a zero-sized threadgroup is not a valid Metal dispatch.
   if (out.size() == 0) {
     return;
   }
@@ -962,11 +960,6 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // When all the reduced axes have size 1 at runtime, which can happen with
   // shapeless compilation, the reduction is the identity so just cast-copy
   // the input to the output.
-  //
-  // An empty input is excluded: sizes are then equal at zero while the shapes
-  // need not be (reducing (0, 2) over the last axis gives (0,)), and the copy
-  // requires matching shapes. Falling through initializes the output instead,
-  // which is what an empty reduction needs.
   if (in.size() > 0 && out.size() == in.size()) {
     CopyType ctype =
         in.flags().contiguous ? CopyType::Vector : CopyType::General;

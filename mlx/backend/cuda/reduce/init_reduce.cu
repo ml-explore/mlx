@@ -31,8 +31,6 @@ void init_reduce(
     out.set_data(cu::malloc_async(out.nbytes(), encoder));
   }
 
-  // An empty output has nothing to initialize, and the launch below would
-  // compute a zero-sized block.
   if (out.size() == 0) {
     return;
   }
