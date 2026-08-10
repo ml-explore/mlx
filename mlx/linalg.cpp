@@ -166,7 +166,14 @@ array norm(
     bool keepdims /* = false */,
     StreamOrDevice s /* = {} */) {
   if (!axis) {
-    return norm(flatten(a, s), std::vector<int>{0}, keepdims, s);
+    auto out = norm(flatten(a, s), std::vector<int>{0}, keepdims, s);
+    if (keepdims) {
+      // The flatten above collapses the input to one dimension, so keepdims
+      // has to restore the rank of the original array rather than the
+      // flattened one.
+      out = reshape(out, Shape(a.ndim(), 1), s);
+    }
+    return out;
   }
 
   if (axis.value().size() > 2) {
