@@ -295,8 +295,9 @@ struct DivMod {
   __device__ cuda::std::array<T, 2> operator()(T x, T y) {
     // Remainder floors, FloorDivide truncates, so pairing them breaks
     // quotient * y + remainder == x. Derive the remainder from the quotient.
-    auto quotient = FloorDivide{}(x, y);
-    return {quotient, x - quotient * y};
+    // The cast keeps the narrow types from widening to int in the initializer.
+    T quotient = FloorDivide{}(x, y);
+    return {quotient, T(x - quotient * y)};
   };
 };
 
