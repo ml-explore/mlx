@@ -241,50 +241,10 @@ void dispatch_gather_axis(
     const array& inds,
     array& out,
     const int axis) {
-  switch (out.dtype()) {
-    case bool_:
-      gather_axis<bool, IdxT>(src, inds, out, axis);
-      break;
-    case uint8:
-      gather_axis<uint8_t, IdxT>(src, inds, out, axis);
-      break;
-    case uint16:
-      gather_axis<uint16_t, IdxT>(src, inds, out, axis);
-      break;
-    case uint32:
-      gather_axis<uint32_t, IdxT>(src, inds, out, axis);
-      break;
-    case uint64:
-      gather_axis<uint64_t, IdxT>(src, inds, out, axis);
-      break;
-    case int8:
-      gather_axis<int8_t, IdxT>(src, inds, out, axis);
-      break;
-    case int16:
-      gather_axis<int16_t, IdxT>(src, inds, out, axis);
-      break;
-    case int32:
-      gather_axis<int32_t, IdxT>(src, inds, out, axis);
-      break;
-    case int64:
-      gather_axis<int64_t, IdxT>(src, inds, out, axis);
-      break;
-    case float16:
-      gather_axis<float16_t, IdxT>(src, inds, out, axis);
-      break;
-    case float32:
-      gather_axis<float, IdxT>(src, inds, out, axis);
-      break;
-    case float64:
-      gather_axis<double, IdxT>(src, inds, out, axis);
-      break;
-    case bfloat16:
-      gather_axis<bfloat16_t, IdxT>(src, inds, out, axis);
-      break;
-    case complex64:
-      gather_axis<complex64_t, IdxT>(src, inds, out, axis);
-      break;
-  }
+  dispatch_all_types(out.dtype(), [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    gather_axis<T, IdxT>(src, inds, out, axis);
+  });
 }
 
 void GatherAxis::eval_cpu(const std::vector<array>& inputs, array& out) {
