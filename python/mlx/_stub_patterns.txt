@@ -13,7 +13,7 @@ mlx.core.__prefix__:
 
 mlx.core.__suffix__:
   from typing import Union
-  scalar: TypeAlias = Union[int, float, bool]
+  scalar: TypeAlias = Union[int, float, bool, complex]
   list_or_scalar: TypeAlias = Union[scalar, list["list_or_scalar"]]
   bool_: Dtype = ...
 
