@@ -2251,11 +2251,12 @@ std::pair<std::vector<array>, std::vector<int>> FFT::vmap(
       if (fft_ax >= ax) {
         fft_ax++;
       }
-      if (real_) {
-        auto n = out_shape[fft_ax];
-        out_shape[fft_ax] = inverse_ ? 2 * (n - 1) : n / 2 + 1;
-      }
     }
+  }
+  // Only the last transformed axis changes size in a real transform
+  if (real_) {
+    auto n = out_shape[fft_axes.back()];
+    out_shape[fft_axes.back()] = inverse_ ? 2 * (n - 1) : n / 2 + 1;
   }
   return {
       {array(
@@ -2360,14 +2361,15 @@ std::vector<array> FFT::jvp(
   assert(primals.size() == 1);
   assert(argnums.size() == 1);
   auto& tan = tangents[0];
+  std::vector<int> axes(axes_.begin(), axes_.end());
   if (real_ & inverse_) {
-    return {fft::irfftn(tan, fft::FFTNorm::Backward, stream())};
+    return {fft::irfftn(tan, axes, fft::FFTNorm::Backward, stream())};
   } else if (real_) {
-    return {fft::rfftn(tan, fft::FFTNorm::Backward, stream())};
+    return {fft::rfftn(tan, axes, fft::FFTNorm::Backward, stream())};
   } else if (inverse_) {
-    return {fft::ifftn(tan, fft::FFTNorm::Backward, stream())};
+    return {fft::ifftn(tan, axes, fft::FFTNorm::Backward, stream())};
   } else {
-    return {fft::fftn(tan, fft::FFTNorm::Backward, stream())};
+    return {fft::fftn(tan, axes, fft::FFTNorm::Backward, stream())};
   }
 }
 
