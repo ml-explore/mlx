@@ -1957,6 +1957,9 @@ array isinf(const array& a, StreamOrDevice s /* = {} */) {
   if (issubdtype(a.dtype(), integer) || a.dtype() == bool_) {
     return full(a.shape(), false, bool_, s);
   }
+  if (issubdtype(a.dtype(), complexfloating)) {
+    return logical_or(isinf(real(a, s), s), isinf(imag(a, s), s), s);
+  }
   return logical_or(isposinf(a, s), isneginf(a, s), s);
 }
 
