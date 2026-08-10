@@ -326,36 +326,9 @@ void ArgSort::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.dispatch([in = array::unsafe_weak_copy(in),
                     out = array::unsafe_weak_copy(out),
                     axis_ = axis_]() mutable {
-    switch (in.dtype()) {
-      case bool_:
-        return argsort<bool>(in, out, axis_);
-      case uint8:
-        return argsort<uint8_t>(in, out, axis_);
-      case uint16:
-        return argsort<uint16_t>(in, out, axis_);
-      case uint32:
-        return argsort<uint32_t>(in, out, axis_);
-      case uint64:
-        return argsort<uint64_t>(in, out, axis_);
-      case int8:
-        return argsort<int8_t>(in, out, axis_);
-      case int16:
-        return argsort<int16_t>(in, out, axis_);
-      case int32:
-        return argsort<int32_t>(in, out, axis_);
-      case int64:
-        return argsort<int64_t>(in, out, axis_);
-      case float32:
-        return argsort<float>(in, out, axis_);
-      case float64:
-        return argsort<double>(in, out, axis_);
-      case float16:
-        return argsort<float16_t>(in, out, axis_);
-      case bfloat16:
-        return argsort<bfloat16_t>(in, out, axis_);
-      case complex64:
-        return argsort<complex64_t>(in, out, axis_);
-    }
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      argsort<MLX_GET_TYPE(type_tag)>(in, out, axis_);
+    });
   });
 }
 
