@@ -126,7 +126,7 @@ void init_stream(nb::module_& m) {
         Unlike :func:`new_stream` which can only work on the thread of creation,
         streams created by this API can be passed to and evaluated anywhere, but
         note that currently all nodes in a graph must be evaluated in sequence
-        and it is user's responsibilty to ensure there is no race condition.
+        and it is the user's responsibility to ensure there is no race condition.
       )pbdoc");
   m.def(
       "new_thread_local_stream",
