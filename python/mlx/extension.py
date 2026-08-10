@@ -7,7 +7,6 @@ import re
 import shlex
 import subprocess
 import sys
-import sysconfig
 from pathlib import Path
 from typing import Sequence
 
@@ -54,17 +53,41 @@ def _extension_paths(command: build_ext, build_py, ext: Extension) -> tuple[Path
     return inplace_file, regular_file
 
 
-def _macos_deployment_target(target: str, *, explicit: bool) -> str:
+def _macos_deployment_target(target: str) -> str:
     if not re.fullmatch(r"\d+(?:\.\d+)*", target):
         raise ValueError(f"Invalid macOS deployment target: {target!r}.")
     if int(target.partition(".")[0]) < 14:
-        if explicit:
-            raise ValueError(
-                "macOS deployment target must be at least "
-                f"{_MIN_MACOS_DEPLOYMENT_TARGET}, got {target!r}."
-            )
-        return _MIN_MACOS_DEPLOYMENT_TARGET
+        raise ValueError(
+            "macOS deployment target must be at least "
+            f"{_MIN_MACOS_DEPLOYMENT_TARGET}, got {target!r}."
+        )
     return target
+
+
+def _macos_deployment_target_key(target: str) -> tuple[int, ...]:
+    components = [int(component) for component in target.split(".")]
+    while len(components) > 1 and components[-1] == 0:
+        components.pop()
+    return tuple(components)
+
+
+def _mlx_macos_deployment_target() -> str:
+    libmlx = Path(_MLX_PACKAGE_PATH) / "lib" / "libmlx.dylib"
+    try:
+        output = subprocess.check_output(
+            ["xcrun", "vtool", "-show-build", str(libmlx)],
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError(
+            f"Failed to read the macOS deployment target from {libmlx}."
+        ) from error
+
+    targets = re.findall(r"^\s*minos\s+(\d+(?:\.\d+)*)\s*$", output, re.MULTILINE)
+    if not targets:
+        raise RuntimeError(f"Could not find a macOS deployment target in {libmlx}.")
+    return max(targets, key=_macos_deployment_target_key)
 
 
 def _cmake_generator(
@@ -423,17 +446,9 @@ class BuildExtension(build_ext):
 
         deployment_target = os.environ.get("MACOSX_DEPLOYMENT_TARGET")
         if deployment_target is None:
-            deployment_target = _macos_deployment_target(
-                str(
-                    sysconfig.get_config_var("MACOSX_DEPLOYMENT_TARGET")
-                    or _MIN_MACOS_DEPLOYMENT_TARGET
-                ),
-                explicit=False,
-            )
+            deployment_target = _mlx_macos_deployment_target()
         else:
-            deployment_target = _macos_deployment_target(
-                deployment_target, explicit=True
-            )
+            deployment_target = _macos_deployment_target(deployment_target)
         cmake_args.append(f"-DCMAKE_OSX_DEPLOYMENT_TARGET={deployment_target}")
 
         deployment_target_override = None
@@ -444,7 +459,7 @@ class BuildExtension(build_ext):
             if match:
                 deployment_target_override = match.group(1)
         if deployment_target_override is not None:
-            _macos_deployment_target(deployment_target_override, explicit=True)
+            _macos_deployment_target(deployment_target_override)
         if add_ninja_generator:
             cmake_args.extend(["-G", "Ninja"])
         cmake_args.extend(extra_cmake_args)
