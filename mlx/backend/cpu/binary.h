@@ -335,50 +335,10 @@ void comparison_op_cpu(
                     b = array::unsafe_weak_copy(b),
                     out = array::unsafe_weak_copy(out),
                     bopt]() mutable {
-    switch (a.dtype()) {
-      case bool_:
-        binary_op<bool, bool, Op>(a, b, out, bopt);
-        break;
-      case uint8:
-        binary_op<uint8_t, bool, Op>(a, b, out, bopt);
-        break;
-      case uint16:
-        binary_op<uint16_t, bool, Op>(a, b, out, bopt);
-        break;
-      case uint32:
-        binary_op<uint32_t, bool, Op>(a, b, out, bopt);
-        break;
-      case uint64:
-        binary_op<uint64_t, bool, Op>(a, b, out, bopt);
-        break;
-      case int8:
-        binary_op<int8_t, bool, Op>(a, b, out, bopt);
-        break;
-      case int16:
-        binary_op<int16_t, bool, Op>(a, b, out, bopt);
-        break;
-      case int32:
-        binary_op<int32_t, bool, Op>(a, b, out, bopt);
-        break;
-      case int64:
-        binary_op<int64_t, bool, Op>(a, b, out, bopt);
-        break;
-      case float16:
-        binary_op<float16_t, bool, Op>(a, b, out, bopt);
-        break;
-      case float32:
-        binary_op<float, bool, Op>(a, b, out, bopt);
-        break;
-      case float64:
-        binary_op<double, bool, Op>(a, b, out, bopt);
-        break;
-      case bfloat16:
-        binary_op<bfloat16_t, bool, Op>(a, b, out, bopt);
-        break;
-      case complex64:
-        binary_op<complex64_t, bool, Op>(a, b, out, bopt);
-        break;
-    }
+    dispatch_all_types(a.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      binary_op<T, bool, Op>(a, b, out, bopt);
+    });
   });
 }
 
