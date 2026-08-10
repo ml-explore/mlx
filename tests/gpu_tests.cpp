@@ -202,6 +202,9 @@ TEST_CASE("test gpu reduce with axes") {
     auto a = reshape(arange(8 * 256 * 1024, int32), {8, 256, 1024});
     a = slice(a, {0, 0, 0}, {8, 256, 1024}, {1, 2, 1});
     a = transpose(a, {0, 2, 1});
+    eval(a);
+    CHECK(!a.flags().contiguous);
+    CHECK_EQ(a.strides(1), 1);
     auto out_gpu = sum(a, 1, false, Device::gpu);
     auto out_cpu = sum(a, 1, false, Device::cpu);
     CHECK(array_equal(out_gpu, out_cpu, Device::cpu).item<bool>());
