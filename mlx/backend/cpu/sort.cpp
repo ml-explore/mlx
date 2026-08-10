@@ -370,36 +370,9 @@ void ArgPartition::eval_cpu(const std::vector<array>& inputs, array& out) {
                     out = array::unsafe_weak_copy(out),
                     axis_ = axis_,
                     kth_ = kth_]() mutable {
-    switch (in.dtype()) {
-      case bool_:
-        return argpartition<bool>(in, out, axis_, kth_);
-      case uint8:
-        return argpartition<uint8_t>(in, out, axis_, kth_);
-      case uint16:
-        return argpartition<uint16_t>(in, out, axis_, kth_);
-      case uint32:
-        return argpartition<uint32_t>(in, out, axis_, kth_);
-      case uint64:
-        return argpartition<uint64_t>(in, out, axis_, kth_);
-      case int8:
-        return argpartition<int8_t>(in, out, axis_, kth_);
-      case int16:
-        return argpartition<int16_t>(in, out, axis_, kth_);
-      case int32:
-        return argpartition<int32_t>(in, out, axis_, kth_);
-      case int64:
-        return argpartition<int64_t>(in, out, axis_, kth_);
-      case float32:
-        return argpartition<float>(in, out, axis_, kth_);
-      case float64:
-        return argpartition<double>(in, out, axis_, kth_);
-      case float16:
-        return argpartition<float16_t>(in, out, axis_, kth_);
-      case bfloat16:
-        return argpartition<bfloat16_t>(in, out, axis_, kth_);
-      case complex64:
-        return argpartition<complex64_t>(in, out, axis_, kth_);
-    }
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      argpartition<MLX_GET_TYPE(type_tag)>(in, out, axis_, kth_);
+    });
   });
 }
 
