@@ -6,7 +6,6 @@
 #include <future>
 
 #include "doctest/doctest.h"
-#include "mlx/backend/gpu/slicing.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -481,23 +480,34 @@ TEST_CASE("test gpu validation") {
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
 }
 
-TEST_CASE("test donated dynamic offset is not a temporary") {
+TEST_CASE("test dynamic slice update waits for its start") {
   if (!metal::is_available()) {
     return;
   }
 
-  auto stream = default_stream(Device::gpu);
-  auto indices = array({1, 1});
-  REQUIRE(indices.is_donatable());
+  // Regression for #3880: a donated array-valued start could be read
+  // stale when a command-buffer boundary lands between its producer
+  // and the dynamic slice. The boundary occurs when the buffer's op
+  // or memory limits split the graph (or with MLX_MAX_OPS_PER_BUFFER
+  // set low); without a split the checks still assert the correct
+  // update position.
+  auto source = ones({2, 1 << 26}, int32, Device::gpu);
+  auto target = zeros({4, 4}, int32, Device::gpu);
+  auto update = full({1, 1}, 7, int32, Device::gpu);
+  eval(source, target, update);
 
-  auto offset = compute_dynamic_offset(indices, Strides{4, 1}, {0, 1}, stream);
-  REQUIRE_EQ(offset.buffer().ptr(), indices.buffer().ptr());
+  {
+    auto recycled = zeros({2}, int32, Device::gpu);
+    eval(recycled);
+  }
 
-  indices = array(0);
-  CHECK(offset.is_donatable());
+  auto out = [&] {
+    auto start = max(source, 1, false, Device::gpu);
+    return slice_update(target, update, start, {0, 1}, Device::gpu);
+  }();
 
-  synchronize(stream);
-  CHECK_EQ(offset.data<int64_t>()[0], 5);
+  CHECK_EQ(slice(out, {1, 1}, {2, 2}, Device::gpu).item<int>(), 7);
+  CHECK_EQ(slice(out, {0, 0}, {1, 1}, Device::gpu).item<int>(), 0);
 }
 
 TEST_CASE("test gpu int32 shape overflow errors") {
