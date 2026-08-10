@@ -102,7 +102,7 @@ Dtype dtype_from_safetensor_str(std::string_view str) {
     return uint8;
   } else {
     std::ostringstream msg;
-    msg << "[safetensor] unsupported dtype" << str;
+    msg << "[safetensor] unsupported dtype " << str;
     throw std::runtime_error(msg.str());
   }
 }
