@@ -249,21 +249,16 @@ std::pair<Dtype, Dtype> remap_reduce_types(
     if (issubdtype(in.dtype(), integer)) {
       switch (in.dtype()) {
         case uint8:
-          return {uint8, uint32};
         case uint16:
-          return {uint16, uint32};
-        case uint32:
-          return {uint32, uint32};
-        case uint64:
-          return {uint64, uint64};
+          return {in.dtype(), uint32};
         case int8:
-          return {int8, int32};
         case int16:
-          return {int16, int32};
+          return {in.dtype(), int32};
+        case uint32:
+        case uint64:
         case int32:
-          return {int32, int32};
         case int64:
-          return {int64, int64};
+          return {in.dtype(), in.dtype()};
         default:
           throw std::runtime_error("Unsupported integer type");
       }
