@@ -244,7 +244,7 @@ void Eigh::eval_cpu(
       break;
     default:
       throw std::runtime_error(
-          "[Eigh::eval_cpu] only supports float32 or float64.");
+          "[Eigh::eval_cpu] only supports float32, float64, or complex64.");
   }
 }
 
