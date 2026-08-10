@@ -15,14 +15,10 @@ namespace mlx::core {
 
 namespace {
 
-template <typename T>
-inline constexpr bool is_floating_v = std::is_floating_point_v<T> ||
-    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
-
 // NaN-aware comparator that places NaNs at the end
 template <typename T>
 bool nan_aware_less(T a, T b) {
-  if constexpr (is_floating_v<T> || std::is_same_v<T, complex64_t>) {
+  if constexpr (is_floating_point_v<T> || std::is_same_v<T, complex64_t>) {
     if (std::isnan(a))
       return false;
     if (std::isnan(b))
@@ -202,7 +198,7 @@ void argsort(const array& in, array& out, int axis) {
       auto v2 = data_ptr[b * in_stride];
 
       // Handle NaNs (place them at the end)
-      if constexpr (is_floating_v<T>) {
+      if constexpr (is_floating_point_v<T>) {
         if (std::isnan(v1))
           return false;
         if (std::isnan(v2))
@@ -303,7 +299,7 @@ void argpartition(const array& in, array& out, int axis, int kth) {
       auto v2 = data_ptr[b * in_stride];
 
       // Handle NaNs (place them at the end)
-      if constexpr (is_floating_v<T>) {
+      if constexpr (is_floating_point_v<T>) {
         if (std::isnan(v1))
           return false;
         if (std::isnan(v2))
@@ -330,36 +326,9 @@ void ArgSort::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.dispatch([in = array::unsafe_weak_copy(in),
                     out = array::unsafe_weak_copy(out),
                     axis_ = axis_]() mutable {
-    switch (in.dtype()) {
-      case bool_:
-        return argsort<bool>(in, out, axis_);
-      case uint8:
-        return argsort<uint8_t>(in, out, axis_);
-      case uint16:
-        return argsort<uint16_t>(in, out, axis_);
-      case uint32:
-        return argsort<uint32_t>(in, out, axis_);
-      case uint64:
-        return argsort<uint64_t>(in, out, axis_);
-      case int8:
-        return argsort<int8_t>(in, out, axis_);
-      case int16:
-        return argsort<int16_t>(in, out, axis_);
-      case int32:
-        return argsort<int32_t>(in, out, axis_);
-      case int64:
-        return argsort<int64_t>(in, out, axis_);
-      case float32:
-        return argsort<float>(in, out, axis_);
-      case float64:
-        return argsort<double>(in, out, axis_);
-      case float16:
-        return argsort<float16_t>(in, out, axis_);
-      case bfloat16:
-        return argsort<bfloat16_t>(in, out, axis_);
-      case complex64:
-        return argsort<complex64_t>(in, out, axis_);
-    }
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      argsort<MLX_GET_TYPE(type_tag)>(in, out, axis_);
+    });
   });
 }
 

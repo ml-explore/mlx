@@ -124,6 +124,32 @@ class TestReduce(mlx_tests.MLXTestCase):
         z = np.array(x).sum((0, 2, 3))
         self.assertTrue(np.all(z == y))
 
+    def test_zero_size(self):
+        # max and min have no identity, so they are only undefined when an axis
+        # being reduced is itself empty. An array that is empty because of some
+        # other axis reduces into an empty result.
+        for shape, axis in [
+            ((0, 2), -1),
+            ((2, 0), 0),
+            ((3, 0, 2), -1),
+            ((0, 3, 2), (1, 2)),
+        ]:
+            a_np = np.zeros(shape, dtype=np.float32)
+            a_mx = mx.array(a_np)
+            for op in ["max", "min"]:
+                out = getattr(mx, op)(
+                    a_mx, axis=list(axis) if isinstance(axis, tuple) else axis
+                )
+                mx.eval(out)
+                self.assertEqual(out.shape, getattr(np, op)(a_np, axis=axis).shape)
+
+        # Reducing an empty axis still raises, like numpy
+        for shape, axis in [((2, 0), -1), ((0, 2), 0), ((0, 0), -1)]:
+            a_mx = mx.zeros(shape)
+            for op in ["max", "min"]:
+                with self.assertRaises(ValueError):
+                    getattr(mx, op)(a_mx, axis=axis)
+
     def test_sum_bool(self):
         x = np.random.uniform(0, 1, size=(10, 10, 10)) > 0.5
         y = mx.array(x)
@@ -217,6 +243,35 @@ class TestReduce(mlx_tests.MLXTestCase):
         c1 = a.sum(0)
         c2 = b.sum(0)
         self.assertTrue(np.all(c1 == c2))
+
+    def test_and_or_negative_zero(self):
+        # -0.0 equals zero but has its sign bit set, so it must not be treated
+        # as truthy just because its bit pattern is nonzero
+        for dtype in ["float32", "float16", "float64"]:
+            with self.subTest(dtype=dtype):
+                for values in [
+                    [0.0, -0.0],
+                    [-0.0, -0.0],
+                    [-0.0] * 70,
+                    [-0.0, 0.0, 1.0],
+                    [0.5, 0.0],
+                ]:
+                    a_np = np.array(values, dtype=getattr(np, dtype))
+                    a_mx = mx.array(a_np)
+                    for op in ["any", "all"]:
+                        self.assertEqual(
+                            getattr(mx, op)(a_mx).item(),
+                            bool(getattr(np, op)(a_np)),
+                            msg=f"{op} {dtype} {values}",
+                        )
+
+        x_np = np.array([[0.0, -0.0], [1.0, 0.0], [-0.0, -0.0]], dtype=np.float32)
+        x_mx = mx.array(x_np)
+        for op in ["any", "all"]:
+            self.assertEqual(
+                getattr(mx, op)(x_mx, axis=1).tolist(),
+                getattr(np, op)(x_np, axis=1).tolist(),
+            )
 
 
 if __name__ == "__main__":

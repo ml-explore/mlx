@@ -362,6 +362,15 @@ array pinv(const array& a, StreamOrDevice s /* = {} */) {
     throw std::invalid_argument(msg.str());
   }
 
+  // The cutoff below reduces over the singular values, which cannot run on an
+  // empty array. Nothing needs computing anyway, and the result is the shape
+  // of the transposed input, like numpy.
+  if (a.size() == 0) {
+    auto out_shape = a.shape();
+    std::swap(out_shape[a.ndim() - 1], out_shape[a.ndim() - 2]);
+    return zeros(std::move(out_shape), a.dtype(), s);
+  }
+
   int m = a.shape(-2);
   int n = a.shape(-1);
   int k = std::min(m, n);

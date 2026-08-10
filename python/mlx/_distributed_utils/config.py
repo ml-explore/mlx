@@ -615,10 +615,13 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.hostfile is not None:
-        hosts = Hostfile.from_file(args.hostfile).hosts
-    else:
-        hosts = Hostfile.from_list(args.hosts).hosts
+    try:
+        if args.hostfile is not None:
+            hosts = Hostfile.from_file(args.hostfile).hosts
+        else:
+            hosts = Hostfile.from_list(args.hosts).hosts
+    except ValueError as e:
+        parser.error(str(e))
 
     # Check that we can ssh
     log(

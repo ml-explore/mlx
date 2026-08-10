@@ -468,6 +468,26 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.array([0.0, float("inf")]).astype(mx.complex64)
         self.assertEqual(mx.isinf(x).tolist(), [False, True])
 
+        inf = float("inf")
+        x = mx.array(
+            [
+                complex(0.0, inf),
+                complex(inf, 0.0),
+                complex(inf, inf),
+                complex(0.0, -inf),
+                complex(-inf, 0.0),
+                complex(-inf, -inf),
+                complex(3.0, 4.0),
+                complex(0.0, 0.0),
+            ],
+            dtype=mx.complex64,
+        )
+        self.assertEqual(
+            mx.isinf(x).tolist(),
+            [True, True, True, True, True, True, False, False],
+        )
+        np.testing.assert_array_equal(np.isinf(np.array(x, copy=False)), mx.isinf(x))
+
         self.assertEqual(mx.isinf(0 * mx.array(float("inf"))).tolist(), False)
 
         x = mx.array([-2147483648, 0, 2147483647], dtype=mx.int32)
@@ -487,6 +507,16 @@ class TestOps(mlx_tests.MLXTestCase):
 
         x = x.astype(mx.bfloat16)
         self.assertEqual(mx.isfinite(x).tolist(), [True, False, False])
+
+        inf = float("inf")
+        x = mx.array(
+            [complex(0.0, inf), complex(inf, 0.0), complex(3.0, 4.0)],
+            dtype=mx.complex64,
+        )
+        self.assertEqual(mx.isfinite(x).tolist(), [False, False, True])
+        np.testing.assert_array_equal(
+            np.isfinite(np.array(x, copy=False)), mx.isfinite(x)
+        )
 
     def test_tri(self):
         for shape in [[4], [4, 4], [2, 10]]:
@@ -810,6 +840,9 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertListEqual(list(b_npy.shape), list(b_mlx.shape))
         self.assertTrue(np.array_equal(b_npy, b_mlx))
 
+        with self.assertRaises(ValueError):
+            mx.broadcast_to(a_mlx, (-1, 10, 20))
+
     def test_logsumexp(self):
         def logsumexp(x, axes=None):
             maxs = mx.max(x, axis=axes, keepdims=True)
@@ -839,6 +872,47 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.random.uniform(shape=(1025,))
         x = mx.broadcast_to(mx.random.uniform(shape=(2, 1, 8)), (2, 2, 8))
         self.assertTrue(mx.allclose(mx.logsumexp(x), logsumexp(x)))
+
+    def test_logsumexp_shape(self):
+        # A reduction over all axes with keepdims=False must yield a scalar
+        # array (), consistent with every other reduction (sum, prod, max, ...).
+        # Regression test: logsumexp's fast path used to squeeze only the last
+        # axis, so inputs with size-1 leading dims returned (1,) instead of ().
+        def logsumexp(x, axes=None):
+            maxs = mx.max(x, axis=axes, keepdims=True)
+            return mx.log(mx.sum(mx.exp(x - maxs), axis=axes, keepdims=True)) + maxs
+
+        # Full reduction on size-1-leading-dim inputs -> scalar ().
+        for shape in [(1, 2), (1, 1), (1, 5), (1, 1, 8), (1, 1, 1, 4)]:
+            x = mx.random.uniform(shape=shape)
+            out = mx.logsumexp(x)
+            self.assertEqual(out.shape, (), f"shape {shape}")
+            self.assertEqual(out.ndim, 0, f"shape {shape}")
+            # Same shape as mx.sum and same value as the decomposition.
+            self.assertEqual(out.shape, mx.sum(x).shape)
+            self.assertTrue(mx.allclose(out, logsumexp(x)))
+
+        # keepdims=True keeps every reduced axis as size 1.
+        self.assertEqual(
+            mx.logsumexp(mx.random.uniform(shape=(1, 5)), keepdims=True).shape, (1, 1)
+        )
+        self.assertEqual(
+            mx.logsumexp(mx.random.uniform(shape=(1, 1, 8)), keepdims=True).shape,
+            (1, 1, 1),
+        )
+
+        # Partial reductions over a contiguous suffix of axes with size-1
+        # leading dims must squeeze every reduced axis, not only the last one.
+        x = mx.random.uniform(shape=(5, 1, 8))
+        self.assertEqual(mx.logsumexp(x, axis=[1, 2]).shape, (5,))
+        self.assertEqual(mx.logsumexp(x, axis=[1, 2], keepdims=True).shape, (5, 1, 1))
+        ref = np.logaddexp.reduce(np.array(x), axis=(1, 2))
+        self.assertTrue(np.allclose(np.array(mx.logsumexp(x, axis=[1, 2])), ref))
+
+        self.assertEqual(
+            mx.logsumexp(mx.random.uniform(shape=(1, 1, 1, 8)), axis=[1, 2, 3]).shape,
+            (1,),
+        )
 
     def test_mean(self):
         x = mx.array(
@@ -2183,6 +2257,9 @@ class TestOps(mlx_tests.MLXTestCase):
         y = mx.as_strided(x, (x.size,), (-1,), x.size - 1)
         self.assertTrue(mx.array_equal(y, x[::-1]))
 
+        with self.assertRaises(ValueError):
+            mx.as_strided(x, (-2, 3), (3, 1), 0)
+
     def test_logcumsumexp(self):
         npop = np.logaddexp.accumulate
         mxop = mx.logcumsumexp
@@ -2324,6 +2401,42 @@ class TestOps(mlx_tests.MLXTestCase):
         mem4 = mx.get_peak_memory()
         self.assertEqual(mem2, mem4)
 
+    def test_cummax_cummin_nan(self):
+        nan = float("nan")
+        cases = [
+            [1.0, 3.0, nan, 5.0, 4.0],
+            [nan, 3.0, 2.0, 5.0, 4.0],
+            [1.0, 2.0, 3.0, nan, 4.0],
+            [nan, nan, 1.0],
+            [5.0, 4.0, nan, 1.0, 0.0],
+        ]
+        for op, npop, init in (
+            ("cummax", np.maximum, float("-inf")),
+            ("cummin", np.minimum, float("inf")),
+        ):
+            for arr in cases:
+                a_np = np.array(arr, dtype=np.float32)
+                a_mx = mx.array(a_np)
+                inc_fwd = npop.accumulate(a_np)
+                inc_rev = npop.accumulate(a_np[::-1])[::-1]
+                exc_fwd = np.concatenate([[init], inc_fwd[:-1]])
+                exc_rev = np.concatenate([inc_rev[1:], [init]])
+                refs = {
+                    (False, True): inc_fwd,
+                    (True, True): inc_rev,
+                    (False, False): exc_fwd,
+                    (True, False): exc_rev,
+                }
+                for (reverse, inclusive), expected in refs.items():
+                    got = np.array(
+                        getattr(mx, op)(a_mx, reverse=reverse, inclusive=inclusive)
+                    )
+                    self.assertTrue(
+                        np.array_equal(got, expected, equal_nan=True),
+                        msg=f"{op} reverse={reverse} inclusive={inclusive} "
+                        f"arr={arr}\ngot={got}\nexp={expected}",
+                    )
+
     def test_diff(self):
         a = mx.array([1, 2, 4, 7, 0])
         self.assertEqual(mx.diff(a).tolist(), [1, 2, 3, -7])
@@ -2352,6 +2465,24 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.expand_dims(a, 0).shape, (1, 2, 2))
         self.assertEqual(mx.expand_dims(a, (0, 1)).shape, (1, 1, 2, 2))
         self.assertEqual(mx.expand_dims(a, [0, -1]).shape, (1, 2, 2, 1))
+        self.assertEqual(mx.expand_dims(a, [-1, -4]).shape, (1, 2, 2, 1))
+
+    def test_squeeze_expand_invalid_axes(self):
+        # Out of bounds negative axes must raise instead of wrapping around
+        a = mx.zeros(())
+        self.assertEqual(mx.expand_dims(a, (-2, -1)).shape, (1, 1))
+        with self.assertRaises(ValueError):
+            mx.expand_dims(a, (-3, -2))
+
+        a = mx.zeros((2, 2))
+        for axes in [(-5, -4), (-6, 0), (0, 5)]:
+            with self.assertRaises(ValueError):
+                mx.expand_dims(a, axes)
+
+        a = mx.zeros((1, 1, 1))
+        for axes in [(-4,), (-5, 0), (0, 4)]:
+            with self.assertRaises(ValueError):
+                mx.squeeze(a, axes)
 
     def test_sort(self):
         shape = (6, 4, 10)
@@ -3549,6 +3680,41 @@ class TestOps(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
+
+    def test_zeros_ones_empty_like_dtype(self):
+        x = mx.array([1, 2, 3], dtype=mx.int32)
+
+        # Default dtype (should match x)
+        z = mx.zeros_like(x)
+        self.assertEqual(z.dtype, mx.int32)
+        o = mx.ones_like(x)
+        self.assertEqual(o.dtype, mx.int32)
+        e = mx.empty_like(x)
+        self.assertEqual(e.dtype, mx.int32)
+
+        # Positional dtype
+        z = mx.zeros_like(x, mx.float16)
+        self.assertEqual(z.dtype, mx.float16)
+        self.assertTrue(mx.array_equal(z, mx.zeros((3,), mx.float16)))
+
+        o = mx.ones_like(x, mx.float16)
+        self.assertEqual(o.dtype, mx.float16)
+        self.assertTrue(mx.array_equal(o, mx.ones((3,), mx.float16)))
+
+        e = mx.empty_like(x, mx.float16)
+        self.assertEqual(e.dtype, mx.float16)
+
+        # Keyword dtype
+        z = mx.zeros_like(x, dtype=mx.float32)
+        self.assertEqual(z.dtype, mx.float32)
+        self.assertTrue(mx.array_equal(z, mx.zeros((3,), mx.float32)))
+
+        o = mx.ones_like(x, dtype=mx.float32)
+        self.assertEqual(o.dtype, mx.float32)
+        self.assertTrue(mx.array_equal(o, mx.ones((3,), mx.float32)))
+
+        e = mx.empty_like(x, dtype=mx.float32)
+        self.assertEqual(e.dtype, mx.float32)
 
 
 if __name__ == "__main__":

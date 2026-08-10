@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 
@@ -38,6 +39,10 @@ array bits(
     int width /* 4 */,
     const std::optional<array>& key_ /*= nullopt */,
     StreamOrDevice s /* = {} */) {
+  if (std::any_of(shape.begin(), shape.end(), [](auto i) { return i < 0; })) {
+    throw std::invalid_argument("[bits] Negative dimensions not allowed.");
+  }
+
   auto key = key_ ? *key_ : KeySequence::default_().next();
   if (key.dtype() != uint32) {
     std::ostringstream msg;
@@ -182,8 +187,7 @@ array normal(
     return complex_normal(shape, loc, scale, key, s);
   } else if (!issubdtype(dtype, floating)) {
     throw std::invalid_argument(
-        "[normal] Can only generate uniform numbers with "
-        "floating point type.");
+        "[normal] Only floating point and complex64 types are supported.");
   }
 
   auto stream = to_stream(s);
@@ -280,7 +284,12 @@ array randint(
         "[randint] randint only accepts integer dtypes and bool.");
   }
   auto u = uniform(low, high, shape, float32, key, s);
-  return astype(maximum(u, low, s), dtype, s);
+  // astype truncates decimal parts so -1.7 becomes -1, use floor.
+  auto out = astype(floor(u, s), dtype, s);
+  // low/high may not be representable in float32 so actual range of uniform
+  // may be larger than [low, high) and we have to clamp to [low, high - 1].
+  auto hi = astype(subtract(high, array(1, high.dtype()), s), dtype, s);
+  return maximum(minimum(out, hi, s), astype(low, dtype, s), s);
 }
 
 array bernoulli(
@@ -449,8 +458,7 @@ array laplace(
     StreamOrDevice s /* = {} */) {
   if (!issubdtype(dtype, floating)) {
     throw std::invalid_argument(
-        "[laplace] Can only generate uniform numbers with real"
-        "floating point type.");
+        "[laplace] Only real floating point types are supported.");
   }
 
   auto stream = to_stream(s);

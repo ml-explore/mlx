@@ -1,4 +1,4 @@
-// Copyright © 2025 Apple Inc.
+// Copyright © 2025-2026 Apple Inc.
 
 #include <metal_simdgroup>
 #include <metal_stdlib>
@@ -321,7 +321,12 @@ METAL_FUNC void fp_qmv_quad_impl(
   }
 }
 
-template <typename T, int group_size, int bits, bool has_global_scale = false>
+template <
+    typename T,
+    int group_size,
+    int bits,
+    bool has_global_scale = false,
+    int results_per_simdgroup = 4>
 METAL_FUNC void fp_qmv_fast_impl(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -335,7 +340,6 @@ METAL_FUNC void fp_qmv_fast_impl(
     uint simd_lid [[thread_index_in_simdgroup]]) {
   constexpr int packs_per_thread = 2;
   constexpr int num_simdgroups = 2;
-  constexpr int results_per_simdgroup = 4;
   constexpr int pack_factor = get_pack_factor<32, bits>();
   constexpr int bytes_per_pack = get_bytes_per_pack<32>();
   constexpr int values_per_thread = pack_factor * packs_per_thread;
@@ -1167,7 +1171,8 @@ template <
     int group_size,
     int bits,
     bool batched,
-    bool has_global_scale = false>
+    bool has_global_scale = false,
+    int results_per_simdgroup = 4>
 [[kernel]] void fp_qmv_fast(
     const device uint32_t* w,
     const device uint8_t* scales,
@@ -1203,7 +1208,12 @@ template <
         s_strides,
         tid);
   }
-  fp_qmv_fast_impl<T, group_size, bits, has_global_scale>(
+  fp_qmv_fast_impl<
+      T,
+      group_size,
+      bits,
+      has_global_scale,
+      results_per_simdgroup>(
       w,
       scales,
       global_scale,

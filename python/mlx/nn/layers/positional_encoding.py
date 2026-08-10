@@ -107,7 +107,7 @@ class SinusoidalPositionalEncoding(Module):
             self._sigmas = self._sigmas * (2 * math.pi)
 
         # Save some constants that define the implementation
-        self.scale = scale or (2 / dims) ** 0.5
+        self.scale = scale if scale is not None else (2 / dims) ** 0.5
         self.cos_first = cos_first
 
     def __call__(self, x):
