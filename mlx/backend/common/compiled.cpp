@@ -8,9 +8,7 @@
 namespace mlx::core {
 
 void print_constant(std::ostream& os, const array& x) {
-  bool printed = false;
   dispatch_all_types(x.dtype(), [&](auto type_tag) {
-    printed = true;
     using T = MLX_GET_TYPE(type_tag);
     if constexpr (std::is_same_v<T, bool>) {
       os << std::boolalpha << x.item<bool>();
@@ -28,9 +26,6 @@ void print_constant(std::ostream& os, const array& x) {
       throw std::runtime_error("Unsupported constant type");
     }
   });
-  if (!printed) {
-    throw std::runtime_error("Unsupported constant type");
-  }
 }
 
 std::string get_type_string(Dtype d) {
