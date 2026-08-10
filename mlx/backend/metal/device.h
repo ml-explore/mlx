@@ -27,7 +27,7 @@ class EventImpl;
 // CommandEncoder encode cycles and is visible from any thread that waits on
 // that stream. Set from a command buffer completion handler, consumed by the
 // first synchronization point that reports it.
-struct StreamError {
+struct MLX_API StreamError {
   void set_error(std::shared_ptr<std::string> error);
   void check_error();
   void clear_error();
@@ -39,7 +39,7 @@ struct StreamError {
 };
 
 MLX_API std::shared_ptr<StreamError> get_stream_error(int stream_index);
-MLX_API void check_stream_error(Stream s);
+void check_stream_error(Stream s);
 
 class MLX_API CommandEncoder {
  public:

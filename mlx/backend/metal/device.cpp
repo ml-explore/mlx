@@ -307,6 +307,11 @@ MTL::Library* load_library(
 
 } // namespace
 
+// Whether any stream has ever parked an error. Errors are rare and terminal,
+// so waiters gate on this single flag instead of paying the registry mutex
+// and shared_ptr atomics on every wait. Monotonic: never cleared.
+static std::atomic<bool> any_stream_error{false};
+
 void StreamError::set_error(std::shared_ptr<std::string> error) {
   if (!error) {
     return;
@@ -314,6 +319,7 @@ void StreamError::set_error(std::shared_ptr<std::string> error) {
   // Preserve the earliest error.
   std::shared_ptr<std::string> expected{nullptr};
   std::atomic_compare_exchange_strong(&error_, &expected, std::move(error));
+  any_stream_error.store(true, std::memory_order_release);
 }
 
 void StreamError::check_error() {
@@ -343,9 +349,13 @@ std::shared_ptr<StreamError> get_stream_error(int stream_index) {
 }
 
 void check_stream_error(Stream s) {
-  if (s.device == mlx::core::Device::gpu) {
-    get_stream_error(s.index)->check_error();
+  if (s.device != mlx::core::Device::gpu) {
+    return;
   }
+  if (!any_stream_error.load(std::memory_order_acquire)) {
+    return;
+  }
+  get_stream_error(s.index)->check_error();
 }
 
 CommandEncoder::CommandEncoder(
@@ -577,11 +587,9 @@ void CommandEncoder::commit(std::function<void()> completion) {
           completion();
         }
         // If any of the waited event has error in it, poison the stream.
+        // set_error ignores null and keeps the earliest error.
         for (auto& event : wait_events) {
-          if (event->error()) {
-            stream_error->set_error(event->error());
-            break;
-          }
+          stream_error->set_error(event->error());
         }
         // set_error preserves the earliest error.
         if (cbuf->status() == MTL::CommandBufferStatusError) {
@@ -617,9 +625,9 @@ void CommandEncoder::synchronize() {
   commit();
   cbuf->waitUntilCompleted();
 
-  if (exiting_) {
-    stream_error_->clear_error();
-  } else {
+  // Don't throw during teardown, and don't clear either: the slot is shared
+  // by every user of this stream index, not owned by this encoder.
+  if (!exiting_) {
     stream_error_->check_error();
   }
 }
