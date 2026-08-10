@@ -199,7 +199,8 @@ TEST_CASE("test gpu reduce with axes") {
   // A transposed input with a contiguous reduction axis can be reduced
   // directly without materialising a contiguous copy of the full input.
   {
-    auto a = reshape(arange(8 * 128 * 1024, int32), {8, 128, 1024});
+    auto a = reshape(arange(8 * 256 * 1024, int32), {8, 256, 1024});
+    a = slice(a, {0, 0, 0}, {8, 256, 1024}, {1, 2, 1});
     a = transpose(a, {0, 2, 1});
     auto out_gpu = sum(a, 1, false, Device::gpu);
     auto out_cpu = sum(a, 1, false, Device::cpu);
