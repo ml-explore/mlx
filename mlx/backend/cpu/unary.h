@@ -106,27 +106,9 @@ void unary_fp(const array& a, array& out, Op op, Stream stream) {
   encoder.dispatch([a = array::unsafe_weak_copy(a),
                     out = array::unsafe_weak_copy(out),
                     op = op]() mutable {
-    switch (out.dtype()) {
-      case bfloat16:
-        unary_op<bfloat16_t>(a, out, op);
-        break;
-      case float16:
-        unary_op<float16_t>(a, out, op);
-        break;
-      case float32:
-        unary_op<float>(a, out, op);
-        break;
-      case float64:
-        unary_op<double>(a, out, op);
-        break;
-      case complex64:
-        unary_op<complex64_t>(a, out, op);
-        break;
-      default:
-        std::ostringstream err;
-        err << "[unary_fp] Does not support " << out.dtype();
-        throw std::runtime_error(err.str());
-    }
+    dispatch_inexact_types(out.dtype(), "[unary_fp]", [&](auto type_tag) {
+      unary_op<MLX_GET_TYPE(type_tag)>(a, out, op);
+    });
   });
 }
 
