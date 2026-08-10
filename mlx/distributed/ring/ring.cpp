@@ -22,71 +22,12 @@
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/reduction_ops.h"
 #include "mlx/distributed/utils.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/threadpool.h"
 
 #ifndef SOL_TCP
 #define SOL_TCP IPPROTO_TCP
 #endif
-
-#define SWITCH_TYPE(x, ...)  \
-  switch ((x).dtype()) {     \
-    case bool_: {            \
-      using T = bool;        \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int8: {             \
-      using T = int8_t;      \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int16: {            \
-      using T = int16_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int32: {            \
-      using T = int32_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int64: {            \
-      using T = int64_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint8: {            \
-      using T = uint8_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint16: {           \
-      using T = uint16_t;    \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint32: {           \
-      using T = uint32_t;    \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint64: {           \
-      using T = uint64_t;    \
-      __VA_ARGS__;           \
-    } break;                 \
-    case bfloat16: {         \
-      using T = bfloat16_t;  \
-      __VA_ARGS__;           \
-    } break;                 \
-    case float16: {          \
-      using T = float16_t;   \
-      __VA_ARGS__;           \
-    } break;                 \
-    case float32: {          \
-      using T = float;       \
-      __VA_ARGS__;           \
-    } break;                 \
-    case float64: {          \
-      using T = double;      \
-      __VA_ARGS__;           \
-    } break;                 \
-    case complex64: {        \
-      using T = complex64_t; \
-      __VA_ARGS__;           \
-    } break;                 \
-  }
 
 namespace mlx::core::distributed::ring {
 
@@ -493,18 +434,24 @@ class RingGroup : public GroupImpl {
   }
 
   void all_sum(const array& input, array& output, Stream stream) override {
-    SWITCH_TYPE(
-        output, all_reduce<T>(input, output, stream, detail::SumOp<T>()));
+    dispatch_all_types(output.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      all_reduce<T>(input, output, stream, detail::SumOp<T>());
+    });
   }
 
   void all_max(const array& input, array& output, Stream stream) override {
-    SWITCH_TYPE(
-        output, all_reduce<T>(input, output, stream, detail::MaxOp<T>()));
+    dispatch_all_types(output.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      all_reduce<T>(input, output, stream, detail::MaxOp<T>());
+    });
   }
 
   void all_min(const array& input, array& output, Stream stream) override {
-    SWITCH_TYPE(
-        output, all_reduce<T>(input, output, stream, detail::MinOp<T>()));
+    dispatch_all_types(output.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      all_reduce<T>(input, output, stream, detail::MinOp<T>());
+    });
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
