@@ -229,24 +229,22 @@ def tree_unflatten(tree: Union[List[Tuple[str, Any]], Dict[str, Any]]) -> Any:
         next_idx = "" if not next_idx else next_idx[0]
         children[current_idx].append((next_idx, value))
 
-    # Assume they are a list and fail to dict if the keys are not all integers.
-    # Non-canonical integer-like keys (e.g. "01") also fall back to a dict:
-    # "01" and "1" both parse as 1 and would otherwise silently shift later
-    # list slots. Bare ValueError is intentional so the existing except path
-    # keeps the fall-back-to-dict contract for malformed external keys.
-    try:
-        keys = sorted((int(idx), idx) for idx in children.keys())
+    # Build a list only when every key is a canonical, non-negative index.
+    # Otherwise preserve the keys in a dict; for example, "01" and "1" must
+    # not both collapse to index 1.
+    all_keys_are_integer = all(
+        idx.isdecimal() and str(int(idx)) == idx for idx in children
+    )
+    if all_keys_are_integer:
+        keys = sorted((int(idx), idx) for idx in children)
+        result = []
         for i, k in keys:
-            if str(i) != k:
-                raise ValueError
-        l = []
-        for i, k in keys:
-            # if i <= len(l), no {} will be appended.
-            l.extend([{} for _ in range(i - len(l))])
-            l.append(tree_unflatten(children[k]))
-        return l
-    except ValueError:
-        return {k: tree_unflatten(v) for k, v in children.items()}
+            # if i <= len(result), no {} will be appended.
+            result.extend([{} for _ in range(i - len(result))])
+            result.append(tree_unflatten(children[k]))
+        return result
+
+    return {k: tree_unflatten(v) for k, v in children.items()}
 
 
 def tree_reduce(fn, tree, initializer=None, is_leaf=None):
