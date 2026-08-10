@@ -258,9 +258,6 @@ Simd<T, 1> pow(Simd<T, 1> a, Simd<T, 1> b) {
     return std::pow(base, exp);
   } else {
     T res = 1;
-    // Raising an integer to a negative power is undefined, and shifting a
-    // negative exponent right never reaches zero, so the loop below would spin
-    // forever. Return 0 like the Metal and CUDA backends do.
     if constexpr (std::is_signed_v<T>) {
       if (exp < 0) {
         return 0;
