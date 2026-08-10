@@ -6,6 +6,7 @@
 #include "mlx/backend/cpu/copy.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/lapack.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -670,6 +671,24 @@ void slow_conv_3D(
   });
 }
 
+template <typename F>
+void dispatch_slow_conv_type(Dtype dtype, F&& f) {
+  switch (dtype) {
+    case float32:
+      f(type_identity<float>{});
+      break;
+    case float16:
+      f(type_identity<float16_t>{});
+      break;
+    case bfloat16:
+      f(type_identity<bfloat16_t>{});
+      break;
+    default:
+      throw std::invalid_argument(
+          "[Convolution::eval] got unsupported data type.");
+  }
+}
+
 void dispatch_slow_conv_1D(
     const array& in,
     const array& wt,
@@ -681,8 +700,8 @@ void dispatch_slow_conv_1D(
     const std::vector<int>& in_dilation,
     bool flip,
     Stream stream) {
-  if (in.dtype() == float32) {
-    return slow_conv_1D<float>(
+  dispatch_slow_conv_type(in.dtype(), [&](auto type_tag) {
+    slow_conv_1D<MLX_GET_TYPE(type_tag)>(
         in,
         wt,
         out,
@@ -693,34 +712,7 @@ void dispatch_slow_conv_1D(
         in_dilation,
         flip,
         stream);
-  } else if (in.dtype() == float16) {
-    return slow_conv_1D<float16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else if (in.dtype() == bfloat16) {
-    return slow_conv_1D<bfloat16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else {
-    throw std::invalid_argument(
-        "[Convolution::eval] got unsupported data type.");
-  }
+  });
 }
 
 void dispatch_slow_conv_2D(
@@ -734,8 +726,8 @@ void dispatch_slow_conv_2D(
     const std::vector<int>& in_dilation,
     bool flip,
     Stream stream) {
-  if (in.dtype() == float32) {
-    return slow_conv_2D<float>(
+  dispatch_slow_conv_type(in.dtype(), [&](auto type_tag) {
+    slow_conv_2D<MLX_GET_TYPE(type_tag)>(
         in,
         wt,
         out,
@@ -746,34 +738,7 @@ void dispatch_slow_conv_2D(
         in_dilation,
         flip,
         stream);
-  } else if (in.dtype() == float16) {
-    return slow_conv_2D<float16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else if (in.dtype() == bfloat16) {
-    return slow_conv_2D<bfloat16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else {
-    throw std::invalid_argument(
-        "[Convolution::eval] got unsupported data type.");
-  }
+  });
 }
 
 void dispatch_slow_conv_3D(
@@ -787,8 +752,8 @@ void dispatch_slow_conv_3D(
     const std::vector<int>& in_dilation,
     bool flip,
     Stream stream) {
-  if (in.dtype() == float32) {
-    return slow_conv_3D<float>(
+  dispatch_slow_conv_type(in.dtype(), [&](auto type_tag) {
+    slow_conv_3D<MLX_GET_TYPE(type_tag)>(
         in,
         wt,
         out,
@@ -799,34 +764,7 @@ void dispatch_slow_conv_3D(
         in_dilation,
         flip,
         stream);
-  } else if (in.dtype() == float16) {
-    return slow_conv_3D<float16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else if (in.dtype() == bfloat16) {
-    return slow_conv_3D<bfloat16_t>(
-        in,
-        wt,
-        out,
-        padding_lo,
-        padding_hi,
-        wt_strides,
-        wt_dilation,
-        in_dilation,
-        flip,
-        stream);
-  } else {
-    throw std::invalid_argument(
-        "[Convolution::eval] got unsupported data type.");
-  }
+  });
 }
 
 ///////////////////////////////////////////////////////////////////////////////
