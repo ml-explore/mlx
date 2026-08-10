@@ -47,27 +47,21 @@ inline void set_binary_op_output_data(
       out.set_data(mallocfn(out.itemsize()), 1, a.strides(), a.flags());
       break;
     case BinaryOpType::ScalarVector:
-      if (b_donatable) {
-        out.copy_shared_buffer(b);
+    case BinaryOpType::VectorScalar: {
+      const auto& x = bopt == BinaryOpType::ScalarVector ? b : a;
+      bool x_donatable =
+          bopt == BinaryOpType::ScalarVector ? b_donatable : a_donatable;
+      if (x_donatable) {
+        out.copy_shared_buffer(x);
       } else {
         out.set_data(
-            mallocfn(b.data_size() * out.itemsize()),
-            b.data_size(),
-            b.strides(),
-            b.flags());
+            mallocfn(x.data_size() * out.itemsize()),
+            x.data_size(),
+            x.strides(),
+            x.flags());
       }
       break;
-    case BinaryOpType::VectorScalar:
-      if (a_donatable) {
-        out.copy_shared_buffer(a);
-      } else {
-        out.set_data(
-            mallocfn(a.data_size() * out.itemsize()),
-            a.data_size(),
-            a.strides(),
-            a.flags());
-      }
-      break;
+    }
     case BinaryOpType::VectorVector:
       if (a_donatable) {
         out.copy_shared_buffer(a);
