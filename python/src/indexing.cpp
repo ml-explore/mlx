@@ -84,12 +84,16 @@ bool is_valid_index_type(const nb::object& obj) {
       nb::ellipsis().is(obj) || nb::isinstance<nb::list>(obj);
 }
 
-mx::array mlx_get_item_slice(const mx::array& src, const nb::slice& in_slice) {
-  // Check input and raise error if 0 dim for parity with np
+// Reject 0-dimensional inputs for parity with NumPy.
+void check_nonzero_dim(const mx::array& src) {
   if (src.ndim() == 0) {
     throw std::invalid_argument(
         "too many indices for array: array is 0-dimensional");
   }
+}
+
+mx::array mlx_get_item_slice(const mx::array& src, const nb::slice& in_slice) {
+  check_nonzero_dim(src);
 
   // Return a copy of the array if none slice is request
   if (is_none_slice(in_slice)) {
@@ -106,11 +110,7 @@ mx::array mlx_get_item_slice(const mx::array& src, const nb::slice& in_slice) {
 }
 
 mx::array mlx_get_item_array(const mx::array& src, const mx::array& indices) {
-  // Check input and raise error if 0 dim for parity with np
-  if (src.ndim() == 0) {
-    throw std::invalid_argument(
-        "too many indices for array: array is 0-dimensional");
-  }
+  check_nonzero_dim(src);
 
   if (indices.dtype() == mx::bool_) {
     throw std::invalid_argument("boolean indices are not yet supported");
@@ -122,11 +122,7 @@ mx::array mlx_get_item_array(const mx::array& src, const mx::array& indices) {
 }
 
 mx::array mlx_get_item_int(const mx::array& src, const nb::object& idx) {
-  // Check input and raise error if 0 dim for parity with np
-  if (src.ndim() == 0) {
-    throw std::invalid_argument(
-        "too many indices for array: array is 0-dimensional");
-  }
+  check_nonzero_dim(src);
 
   // If only one input idx is mentioned, we set axis=0 in take
   // for parity with np
@@ -478,10 +474,7 @@ mlx_scatter_args_int(
     const mx::array& src,
     const nb::object& idx,
     const mx::array& update) {
-  if (src.ndim() == 0) {
-    throw std::invalid_argument(
-        "too many indices for array: array is 0-dimensional");
-  }
+  check_nonzero_dim(src);
 
   // Remove any leading singleton dimensions from the update
   // and then broadcast update to shape of src[0, ...]
@@ -512,10 +505,7 @@ mlx_scatter_args_array(
     const mx::array& src,
     const mx::array& indices,
     const mx::array& update) {
-  if (src.ndim() == 0) {
-    throw std::invalid_argument(
-        "too many indices for array: array is 0-dimensional");
-  }
+  check_nonzero_dim(src);
 
   auto up = squeeze_leading_singletons(update);
 
@@ -534,11 +524,7 @@ mlx_scatter_args_slice(
     const mx::array& src,
     const nb::slice& in_slice,
     const mx::array& update) {
-  // Check input and raise error if 0 dim for parity with np
-  if (src.ndim() == 0) {
-    throw std::invalid_argument(
-        "too many indices for array: array is 0-dimensional");
-  }
+  check_nonzero_dim(src);
 
   // If none slice is requested broadcast the update
   // to the src size and return it.
