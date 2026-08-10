@@ -1489,12 +1489,9 @@ void gather_qmm_rhs_nax(
     biases = ensure_row_contiguous(*biases_, d, s);
   }
 
-  // The kernel re-runs the whole K loop for each distinct expert in a BM
-  // row block and keeps only that expert's rows, so a block taller than the
-  // average run throws away most of its arithmetic. Weight traffic does not
-  // depend on BM, so we use a shorter block when the runs are short.
+  // Use smaller bm for many experts and few tokens.
   int E = w.size() / w.shape(-1) / w.shape(-2);
-  int bm = M / E < 64 ? 32 : 64;
+  int bm = (M / E < 64) ? 32 : 64;
   int bn = 64, bk = 64;
   int wm = 2, wn = 2;
 

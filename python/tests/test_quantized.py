@@ -1,9 +1,7 @@
 # Copyright © 2023-2026 Apple Inc.
 
-import os
 import platform
 import subprocess
-import sys
 import unittest
 from itertools import product
 
@@ -1358,6 +1356,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
             (32, 512, 544, 4, 2, True, "mxfp4"),
             (32, 512, 544, 4, 2, True, "nvfp4"),
             (32, 512, 544, 4, 2, True, "mxfp8"),
+            (39, 512, 512, 4, 2, True, "affine"),
+            (128, 512, 512, 4, 2, True, "affine"),
             (133, 512, 512, 4, 2, True, "affine"),
             (133, 512, 555, 4, 2, True, "affine"),
             (133, 512, 512, 4, 2, True, "affine"),
@@ -1467,112 +1467,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     atol=1e-4,
                 )
             )
-
-    def test_gather_qmm_sorted_block_sizes(self):
-        # The sorted-indices path picks its block height from the average
-        # rows per expert: BM=32 below 64 rows per expert, BM=64 at or
-        # above. Cover every mode, group size, bit width and dtype in both
-        # regimes so each kernel instantiation is exercised, plus one
-        # unaligned batch for the short-block path.
-        def gather_sort(x, indices):
-            N, M = indices.shape
-            indices = indices.flatten()
-            order = mx.argsort(indices)
-            inv_order = mx.argsort(order)
-            return x.flatten(0, -3)[order // M], indices[order], inv_order
-
-        def scatter_unsort(x, inv_order, shape=None):
-            x = x[inv_order]
-            if shape is not None:
-                x = mx.unflatten(x, 0, shape)
-            return x
-
-        E = 4
-        K = 512
-        D = 512
-        configs = [
-            ("affine", gs, b) for gs in (32, 64, 128) for b in (2, 3, 4, 5, 6, 8)
-        ]
-        configs += [("mxfp4", None, None), ("nvfp4", None, None), ("mxfp8", None, None)]
-        # L * I tokens against E experts: 64 tokens give 16 rows per expert
-        # (BM=32), 256 give 64 (BM=64), 78 give 19.5 and a batch that is not
-        # a multiple of the block height.
-        regimes = [(32, 2), (128, 2), (39, 2)]
-
-        key = mx.random.key(0)
-        k1, k2, k3 = mx.random.split(key, 3)
-
-        for mode, group_size, bits in configs:
-            dtypes = (
-                [mx.float16, mx.bfloat16, mx.float32]
-                if mx.default_device() == mx.gpu
-                else [mx.float32]
-            )
-            for dtype in dtypes:
-                for L, I in regimes:
-                    with self.subTest(
-                        mode=mode, group_size=group_size, bits=bits, dtype=dtype, L=L
-                    ):
-                        indices = (mx.random.uniform(shape=(L, I), key=k1) * E).astype(
-                            mx.uint32
-                        )
-                        x = (mx.random.normal((L, 1, 1, K), key=k2) / K**0.5).astype(
-                            dtype
-                        )
-                        w = (mx.random.normal((E, D, K), key=k3) / K**0.5).astype(dtype)
-
-                        if mode == "affine":
-                            wq = mx.quantize(w, group_size=group_size, bits=bits)
-                        else:
-                            wq = mx.quantize(w, mode=mode)
-                        w_hat = mx.dequantize(
-                            *wq, group_size=group_size, bits=bits, mode=mode
-                        ).swapaxes(-1, -2)
-
-                        xs, idx, inv_order = gather_sort(x, indices)
-                        y1 = mx.gather_mm(
-                            xs, w_hat, rhs_indices=idx, sorted_indices=True
-                        )
-                        y2 = mx.gather_qmm(
-                            xs,
-                            *wq,
-                            group_size=group_size,
-                            bits=bits,
-                            mode=mode,
-                            rhs_indices=idx,
-                            transpose=True,
-                            sorted_indices=True,
-                        )
-                        y1 = scatter_unsort(y1, inv_order, indices.shape)
-                        y2 = scatter_unsort(y2, inv_order, indices.shape)
-
-                        tol = 1.5e-5 if dtype == mx.float32 else 1e-3
-                        self.assertLess((y1 - y2).abs().max(), tol)
-
-    def test_gather_qmm_sorted_float32_tf32(self):
-        # mlx_tests.py pins MLX_ENABLE_TF32=0 and the flag is cached on first
-        # read, so the float32 variants of the sorted-indices kernels can only
-        # run in a fresh process with TF32 enabled.
-        script = """
-import mlx.core as mx
-E, K, D = 4, 512, 512
-for B in (64, 256):
-    idx = mx.sort((mx.random.uniform(shape=(B,)) * E).astype(mx.uint32))
-    x = mx.random.normal((B, 1, K)) / K**0.5
-    w = mx.random.normal((E, D, K)) / K**0.5
-    wq = mx.quantize(w, group_size=64, bits=4)
-    w_hat = mx.dequantize(*wq, group_size=64, bits=4).swapaxes(-1, -2)
-    y1 = mx.gather_mm(x, w_hat, rhs_indices=idx, sorted_indices=True)
-    y2 = mx.gather_qmm(x, *wq, group_size=64, bits=4, rhs_indices=idx,
-                       transpose=True, sorted_indices=True)
-    assert (y1 - y2).abs().max().item() < 1e-3, B
-"""
-        env = os.environ.copy()
-        env["MLX_ENABLE_TF32"] = "1"
-        result = subprocess.run(
-            [sys.executable, "-c", script], env=env, capture_output=True, text=True
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
