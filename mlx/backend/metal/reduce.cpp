@@ -273,6 +273,21 @@ std::pair<Dtype, Dtype> remap_reduce_types(
     }
     return {in.dtype(), in.dtype()};
   } else if (op_name == "and" || op_name == "or") {
+    // Integers can be tested as whatever type has the same width, since only
+    // their bits matter. Floats cannot: -0.0 compares equal to zero but has a
+    // bit set, so it has to be tested as a float. complex64 stays on the
+    // integer path, since testing it as a complex would only look at the real
+    // part and miss 1j.
+    switch (in.dtype()) {
+      case float16:
+        return {float16, bool_};
+      case bfloat16:
+        return {bfloat16, bool_};
+      case float32:
+        return {float32, bool_};
+      default:
+        break;
+    }
     if (in.dtype().size() == 1) {
       return {bool_, bool_};
     } else if (in.dtype().size() == 2) {

@@ -187,8 +187,7 @@ array normal(
     return complex_normal(shape, loc, scale, key, s);
   } else if (!issubdtype(dtype, floating)) {
     throw std::invalid_argument(
-        "[normal] Can only generate uniform numbers with "
-        "floating point type.");
+        "[normal] Only floating point and complex64 types are supported.");
   }
 
   auto stream = to_stream(s);
@@ -459,8 +458,7 @@ array laplace(
     StreamOrDevice s /* = {} */) {
   if (!issubdtype(dtype, floating)) {
     throw std::invalid_argument(
-        "[laplace] Can only generate uniform numbers with real"
-        "floating point type.");
+        "[laplace] Only real floating point types are supported.");
   }
 
   auto stream = to_stream(s);

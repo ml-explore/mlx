@@ -468,6 +468,26 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.array([0.0, float("inf")]).astype(mx.complex64)
         self.assertEqual(mx.isinf(x).tolist(), [False, True])
 
+        inf = float("inf")
+        x = mx.array(
+            [
+                complex(0.0, inf),
+                complex(inf, 0.0),
+                complex(inf, inf),
+                complex(0.0, -inf),
+                complex(-inf, 0.0),
+                complex(-inf, -inf),
+                complex(3.0, 4.0),
+                complex(0.0, 0.0),
+            ],
+            dtype=mx.complex64,
+        )
+        self.assertEqual(
+            mx.isinf(x).tolist(),
+            [True, True, True, True, True, True, False, False],
+        )
+        np.testing.assert_array_equal(np.isinf(np.array(x, copy=False)), mx.isinf(x))
+
         self.assertEqual(mx.isinf(0 * mx.array(float("inf"))).tolist(), False)
 
         x = mx.array([-2147483648, 0, 2147483647], dtype=mx.int32)
@@ -487,6 +507,16 @@ class TestOps(mlx_tests.MLXTestCase):
 
         x = x.astype(mx.bfloat16)
         self.assertEqual(mx.isfinite(x).tolist(), [True, False, False])
+
+        inf = float("inf")
+        x = mx.array(
+            [complex(0.0, inf), complex(inf, 0.0), complex(3.0, 4.0)],
+            dtype=mx.complex64,
+        )
+        self.assertEqual(mx.isfinite(x).tolist(), [False, False, True])
+        np.testing.assert_array_equal(
+            np.isfinite(np.array(x, copy=False)), mx.isfinite(x)
+        )
 
     def test_tri(self):
         for shape in [[4], [4, 4], [2, 10]]:
