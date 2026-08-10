@@ -1071,6 +1071,13 @@ class TestLayers(mlx_tests.MLXTestCase):
                 with self.assertRaises(ValueError):
                     nn.SinusoidalPositionalEncoding(dims)
 
+        # An explicit scale=0.0 must be respected rather than falling back
+        # to the default, since 0.0 is falsy but a valid scale value.
+        m = nn.SinusoidalPositionalEncoding(16, scale=0.0)
+        self.assertEqual(m.scale, 0.0)
+        y = m(x)
+        self.assertTrue(mx.array_equal(y, mx.zeros_like(y)))
+
     def test_sigmoid(self):
         x = mx.array([1.0, 0.0, -1.0])
         y1 = mx.sigmoid(x)
