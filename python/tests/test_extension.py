@@ -13,6 +13,7 @@ from mlx.extension import (
     MetalExtension,
     _extension_paths,
     _metal_extension_cmake,
+    _mlx_macos_deployment_target,
 )
 from setuptools import Distribution
 
@@ -36,7 +37,9 @@ class TestMetalExtension(unittest.TestCase):
         command.get_ext_filename.assert_called_once_with(extension.name)
         build_py.get_package_dir.assert_called_once_with("sample")
 
-    def _cmake_configure_command(self, command_type, cmake_args="", debug=False):
+    def _cmake_configure_command(
+        self, command_type, cmake_args="", debug=False, mlx_target="14.0"
+    ):
         extension = MetalExtension("sample._ext", ["bindings.cpp", "kernel.metal"])
         distribution = Distribution({"ext_modules": [extension]})
         with tempfile.TemporaryDirectory() as directory:
@@ -45,10 +48,42 @@ class TestMetalExtension(unittest.TestCase):
             command.build_temp = str(Path(directory) / "temp")
             command.debug = debug
             command.parallel = 1
-            with patch("mlx.extension.subprocess.run") as run:
-                with patch.dict(os.environ, {"CMAKE_ARGS": cmake_args}):
-                    command.build_extension(extension)
+            with patch(
+                "mlx.extension._mlx_macos_deployment_target",
+                return_value=mlx_target,
+            ):
+                with patch("mlx.extension.subprocess.run") as run:
+                    with patch.dict(os.environ, {"CMAKE_ARGS": cmake_args}):
+                        command.build_extension(extension)
             return run.call_args_list[0].args[0]
+
+    def test_reads_mlx_macos_deployment_target(self):
+        vtool_output = """
+Load command 10
+      cmd LC_BUILD_VERSION
+ platform MACOS
+    minos 14.0
+Load command 10
+      cmd LC_BUILD_VERSION
+ platform MACOS
+    minos 15.2
+"""
+        with patch(
+            "mlx.extension.subprocess.check_output", return_value=vtool_output
+        ) as check_output:
+            deployment_target = _mlx_macos_deployment_target()
+
+        self.assertEqual(deployment_target, "15.2")
+        check_output.assert_called_once_with(
+            [
+                "xcrun",
+                "vtool",
+                "-show-build",
+                str(Path(__file__).resolve().parents[1] / "mlx/lib/libmlx.dylib"),
+            ],
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
 
     def test_build_extension_uses_ninja_by_default(self):
         with patch("mlx.extension._is_ninja_available", return_value=True):
@@ -108,22 +143,21 @@ class TestMetalExtension(unittest.TestCase):
 
                 self.assertEqual(result_file.read_text(encoding="utf-8"), expected)
 
-    def test_build_extension_sets_minimum_macos_deployment_target(self):
+    def test_build_extension_uses_mlx_macos_deployment_target(self):
         command_type = BuildExtension.with_options(use_ninja=False)
         with patch.dict(os.environ, {}, clear=True):
-            with patch(
-                "mlx.extension.sysconfig.get_config_var", return_value="11.0"
-            ) as get_config_var:
-                configure_command = self._cmake_configure_command(command_type)
+            configure_command = self._cmake_configure_command(
+                command_type, mlx_target="15.2"
+            )
 
-        get_config_var.assert_called_once_with("MACOSX_DEPLOYMENT_TARGET")
-        self.assertIn("-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0", configure_command)
+        self.assertIn("-DCMAKE_OSX_DEPLOYMENT_TARGET=15.2", configure_command)
 
     def test_environment_overrides_macos_deployment_target(self):
         command_type = BuildExtension.with_options(use_ninja=False)
         with patch.dict(os.environ, {"MACOSX_DEPLOYMENT_TARGET": "15.0"}):
-            with patch("mlx.extension.sysconfig.get_config_var", return_value="11.0"):
-                configure_command = self._cmake_configure_command(command_type)
+            configure_command = self._cmake_configure_command(
+                command_type, mlx_target="16.0"
+            )
 
         self.assertIn("-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0", configure_command)
 
@@ -136,25 +170,24 @@ class TestMetalExtension(unittest.TestCase):
     def test_cmake_args_overrides_macos_deployment_target(self):
         command_type = BuildExtension.with_options(use_ninja=False)
         with patch.dict(os.environ, {}, clear=True):
-            with patch("mlx.extension.sysconfig.get_config_var", return_value="11.0"):
-                configure_command = self._cmake_configure_command(
-                    command_type,
-                    cmake_args="-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0",
-                )
+            configure_command = self._cmake_configure_command(
+                command_type,
+                cmake_args="-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0",
+                mlx_target="16.0",
+            )
 
-        default_index = configure_command.index("-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0")
+        default_index = configure_command.index("-DCMAKE_OSX_DEPLOYMENT_TARGET=16.0")
         override_index = configure_command.index("-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0")
         self.assertLess(default_index, override_index)
 
     def test_cmake_args_rejects_macos_deployment_target_below_minimum(self):
         command_type = BuildExtension.with_options(use_ninja=False)
         with patch.dict(os.environ, {}, clear=True):
-            with patch("mlx.extension.sysconfig.get_config_var", return_value="14.0"):
-                with self.assertRaisesRegex(ValueError, "must be at least 14.0"):
-                    self._cmake_configure_command(
-                        command_type,
-                        cmake_args="-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0",
-                    )
+            with self.assertRaisesRegex(ValueError, "must be at least 14.0"):
+                self._cmake_configure_command(
+                    command_type,
+                    cmake_args="-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0",
+                )
 
     def test_build_extension_can_disable_ninja(self):
         command_type = BuildExtension.with_options(use_ninja=False)
