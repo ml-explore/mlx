@@ -585,9 +585,10 @@ void CommandEncoder::commit(std::function<void()> completion) {
         }
         // set_error preserves the earliest error.
         if (cbuf->status() == MTL::CommandBufferStatusError) {
-          stream_error->set_error(std::make_shared<std::string>(fmt::format(
-              "[METAL] Command buffer execution failed: {}.",
-              cbuf->error()->localizedDescription()->utf8String())));
+          stream_error->set_error(
+              std::make_shared<std::string>(fmt::format(
+                  "[METAL] Command buffer execution failed: {}.",
+                  cbuf->error()->localizedDescription()->utf8String())));
         }
         // Poison all the signaled events when error happened.
         if (auto error = stream_error->error()) {
