@@ -1145,7 +1145,6 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
   // load_safe/store_safe handle, as they already do for the transposed
   // kernel. N needs no equivalent: the dispatch guard keeps N % BN == 0.
   const short sgp_sm = min(int(SM), M - (y_row + tm));
-  const bool is_unaligned_sm = (sgp_sm != SM);
 
   const short ldb_tgp = BN_padded;
 
@@ -1159,50 +1158,48 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
 
   x += tm * K;
 
-  dispatch_bool(!is_unaligned_sm, [&](auto kAlignedM) {
-    for (int k = 0; k < K; k += BK) {
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      loader_w.load_unsafe();
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-
-      STEEL_PRAGMA_NO_UNROLL
-      for (int kk1 = 0; kk1 < BK; kk1 += SK) {
-        NAXTile<T, TM, TK> Atile;
-        NAXTile<T, TK, TN> Btile;
-
-        volatile int compiler_barrier;
-
-        if constexpr (kAlignedM.value) {
-          Atile.load(x + kk1, K);
-        } else {
-          Atile.load_safe(x + kk1, K, short2(SK, sgp_sm));
-        }
-
-        Btile.template load<T, BN_padded, 1>(Ws + tn + kk1 * ldb_tgp);
-
-        tile_matmad_nax(
-            Dtile,
-            Atile,
-            metal::bool_constant<transpose_a>{},
-            Btile,
-            metal::bool_constant<transpose_b>{});
-
-        (void)compiler_barrier;
-      }
-
-      x += BK;
-      loader_w.next();
-    }
-
-    // Store results to device memory
+  for (int k = 0; k < K; k += BK) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    loader_w.load_unsafe();
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    if constexpr (kAlignedM.value) {
-      Dtile.store(y + tm * N + tn, N);
-    } else {
-      Dtile.store_safe(y + tm * N + tn, N, short2(SN, sgp_sm));
+    STEEL_PRAGMA_NO_UNROLL
+    for (int kk1 = 0; kk1 < BK; kk1 += SK) {
+      NAXTile<T, TM, TK> Atile;
+      NAXTile<T, TK, TN> Btile;
+
+      volatile int compiler_barrier;
+
+      if (sgp_sm == SM) {
+        Atile.load(x + kk1, K);
+      } else {
+        Atile.load_safe(x + kk1, K, short2(SK, sgp_sm));
+      }
+
+      Btile.template load<T, BN_padded, 1>(Ws + tn + kk1 * ldb_tgp);
+
+      tile_matmad_nax(
+          Dtile,
+          Atile,
+          metal::bool_constant<transpose_a>{},
+          Btile,
+          metal::bool_constant<transpose_b>{});
+
+      (void)compiler_barrier;
     }
-  });
+
+    x += BK;
+    loader_w.next();
+  }
+
+  // Store results to device memory
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  if (sgp_sm == SM) {
+    Dtile.store(y + tm * N + tn, N);
+  } else {
+    Dtile.store_safe(y + tm * N + tn, N, short2(SN, sgp_sm));
+  }
 }
 
 template <
