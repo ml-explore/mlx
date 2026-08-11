@@ -209,50 +209,10 @@ inline void copy_inplace_dispatch(
     array& dst,
     CopyType ctype,
     Args&&... args) {
-  switch (src.dtype()) {
-    case bool_:
-      copy<bool>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case uint8:
-      copy<uint8_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case uint16:
-      copy<uint16_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case uint32:
-      copy<uint32_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case uint64:
-      copy<uint64_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case int8:
-      copy<int8_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case int16:
-      copy<int16_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case int32:
-      copy<int32_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case int64:
-      copy<int64_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case float16:
-      copy<float16_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case float32:
-      copy<float>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case float64:
-      copy<double>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case bfloat16:
-      copy<bfloat16_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-    case complex64:
-      copy<complex64_t>(src, dst, ctype, std::forward<Args>(args)...);
-      break;
-  }
+  dispatch_all_types(src.dtype(), [&](auto type_tag) {
+    using SrcT = MLX_GET_TYPE(type_tag);
+    copy<SrcT>(src, dst, ctype, std::forward<Args>(args)...);
+  });
 }
 
 } // namespace
