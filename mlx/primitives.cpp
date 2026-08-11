@@ -3390,7 +3390,10 @@ std::vector<array> Partition::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  auto sort_idx = argpartition(primals[0], kth_, axis_, stream());
+  // The permutation is locally constant in the input, so cut the gradient
+  // there to keep higher order derivatives working.
+  auto sort_idx =
+      stop_gradient(argpartition(primals[0], kth_, axis_, stream()), stream());
   return {put_along_axis(
       zeros_like(primals[0], stream()),
       sort_idx,
@@ -3405,7 +3408,8 @@ std::vector<array> Partition::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
-  auto sort_idx = argpartition(primals[0], kth_, axis_, stream());
+  auto sort_idx =
+      stop_gradient(argpartition(primals[0], kth_, axis_, stream()), stream());
   auto out = take_along_axis(tangents[0], sort_idx, axis_, stream());
   return {out};
 }
@@ -4390,10 +4394,14 @@ std::vector<array> Scan::vjp(
         iota,
         array(reverse_ ? n : -1, int32),
         s);
-    auto owner = astype(
-        reverse_ ? cummin(masked, axis_, /* reverse = */ true, true, s)
-                 : cummax(masked, axis_, /* reverse = */ false, true, s),
-        uint32,
+    // The owner indices are locally constant in the input, so cut the
+    // gradient there to keep higher order derivatives working.
+    auto owner = stop_gradient(
+        astype(
+            reverse_ ? cummin(masked, axis_, /* reverse = */ true, true, s)
+                     : cummax(masked, axis_, /* reverse = */ false, true, s),
+            uint32,
+            s),
         s);
 
     if (!inclusive_) {
@@ -5414,6 +5422,47 @@ bool Softmax::is_equivalent(const Primitive& other) const {
   return precise_ == s_other.precise_;
 }
 
+std::pair<std::vector<array>, std::vector<int>> SearchSorted::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  if (axes[0] != -1) {
+    throw std::invalid_argument(
+        "[searchsorted] Cannot vmap over the sorted sequence, only over the "
+        "values being searched for.");
+  }
+  auto side = right_ ? "right" : "left";
+  return {{searchsorted(inputs[0], inputs[1], side, stream())}, {axes[1]}};
+}
+
+std::vector<array> SearchSorted::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    vjps.push_back(zeros_like(primals[arg], stream()));
+  }
+  return vjps;
+}
+
+std::vector<array> SearchSorted::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>&) {
+  return {zeros(primals[1].shape(), uint32, stream())};
+}
+
+bool SearchSorted::is_equivalent(const Primitive& other) const {
+  const SearchSorted& r_other = static_cast<const SearchSorted&>(other);
+  return right_ == r_other.right_;
+}
+
+std::vector<Shape> SearchSorted::output_shapes(
+    const std::vector<array>& inputs) {
+  return {inputs[1].shape()};
+}
+
 std::pair<std::vector<array>, std::vector<int>> Sort::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -5432,7 +5481,9 @@ std::vector<array> Sort::vjp(
   // Sort applies a permutation to the input, so the cotangents must be
   // scattered back to the original positions (the transpose of the
   // permutation), not gathered forward as in the jvp.
-  auto sort_idx = argsort(primals[0], axis_, stream());
+  // The permutation is locally constant in the input, so cut the gradient
+  // there to keep higher order derivatives working.
+  auto sort_idx = stop_gradient(argsort(primals[0], axis_, stream()), stream());
   return {put_along_axis(
       zeros_like(primals[0], stream()),
       sort_idx,
@@ -5447,7 +5498,7 @@ std::vector<array> Sort::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
-  auto sort_idx = argsort(primals[0], axis_, stream());
+  auto sort_idx = stop_gradient(argsort(primals[0], axis_, stream()), stream());
   auto out = take_along_axis(tangents[0], sort_idx, axis_, stream());
   return {out};
 }

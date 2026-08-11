@@ -430,50 +430,10 @@ void Scatter::eval_cpu(const std::vector<array>& inputs, array& out) {
                     updates = array::unsafe_weak_copy(updates),
                     inds = std::move(inds),
                     out = array::unsafe_weak_copy(out)]() mutable {
-    switch (out.dtype()) {
-      case bool_:
-        dispatch_scatter<bool>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case uint8:
-        dispatch_scatter<uint8_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case uint16:
-        dispatch_scatter<uint16_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case uint32:
-        dispatch_scatter<uint32_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case uint64:
-        dispatch_scatter<uint64_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case int8:
-        dispatch_scatter<int8_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case int16:
-        dispatch_scatter<int16_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case int32:
-        dispatch_scatter<int32_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case int64:
-        dispatch_scatter<int64_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case float16:
-        dispatch_scatter<float16_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case float32:
-        dispatch_scatter<float>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case float64:
-        dispatch_scatter<double>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case bfloat16:
-        dispatch_scatter<bfloat16_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-      case complex64:
-        dispatch_scatter<complex64_t>(out, inds, updates, axes_, reduce_type_);
-        break;
-    }
+    dispatch_all_types(out.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      dispatch_scatter<T>(out, inds, updates, axes_, reduce_type_);
+    });
   });
 }
 

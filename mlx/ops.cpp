@@ -2803,6 +2803,37 @@ array argpartition(
       {a});
 }
 
+array searchsorted(
+    const array& sorted_sequence,
+    const array& values,
+    const std::string& side /* = "left" */,
+    StreamOrDevice s /* = {} */) {
+  if (side != "left" && side != "right") {
+    std::ostringstream msg;
+    msg << "[searchsorted] Invalid side '" << side
+        << "'. Expected 'left' or 'right'.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (sorted_sequence.ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[searchsorted] The sorted sequence must be 1-D but has "
+        << sorted_sequence.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (sorted_sequence.size() > UINT32_MAX) {
+    std::ostringstream msg;
+    msg << "[searchsorted] The sorted sequence has " << sorted_sequence.size()
+        << " elements, more than the uint32 output can index.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto dtype = promote_types(sorted_sequence.dtype(), values.dtype());
+  return array(
+      values.shape(),
+      uint32,
+      std::make_shared<SearchSorted>(to_stream(s), side == "right"),
+      {astype(sorted_sequence, dtype, s), astype(values, dtype, s)});
+}
+
 /** Returns topk elements of the flattened array. */
 array topk(const array& a, int k, StreamOrDevice s /* = {}*/) {
   int size = a.size();
@@ -3624,12 +3655,8 @@ array take_along_axis(
     const array& indices,
     int axis,
     StreamOrDevice s /* = {} */) {
-  if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << "[take_along_axis] Received invalid axis for array with " << a.ndim()
-        << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
+  // Normalizes and validates the axis, including negative out of bounds ones
+  axis = normalize_axis_index(axis, a.ndim(), "[take_along_axis] ");
 
   if (indices.ndim() != a.ndim()) {
     std::ostringstream msg;
@@ -3637,9 +3664,6 @@ array take_along_axis(
         << " does not match array of dimension " << a.ndim() << ".";
     throw std::invalid_argument(msg.str());
   }
-
-  // Allow negative axis
-  axis = axis < 0 ? a.ndim() + axis : axis;
 
   // Broadcast indices and input ignoring the take axis
   auto inputs =
@@ -3662,12 +3686,8 @@ array scatter_axis(
     StreamOrDevice s) {
   std::string prefix =
       (mode == ScatterAxis::None) ? "[put_along_axis]" : "[scatter_add_axis]";
-  if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << prefix << " Received invalid axis for array with " << a.ndim()
-        << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
+  // Normalizes and validates the axis, including negative out of bounds ones
+  axis = normalize_axis_index(axis, a.ndim(), prefix + " ");
 
   if (indices.ndim() != a.ndim()) {
     std::ostringstream msg;
@@ -3691,9 +3711,6 @@ array scatter_axis(
 
   auto inputs = broadcast_arrays({indices, upd}, s);
   inputs.insert(inputs.begin(), a);
-
-  // Allow negative axis
-  axis = axis < 0 ? a.ndim() + axis : axis;
 
   // Broadcast src, indices, values while ignoring the take axis
   inputs = broadcast_arrays(inputs, {axis - int(a.ndim())}, s);

@@ -58,8 +58,8 @@ array compute_dynamic_offset(
     offset.copy_shared_buffer(indices);
   } else {
     offset.set_data(allocator::malloc(offset.itemsize()));
+    compute_encoder.add_temporary(offset);
   }
-  compute_encoder.add_temporary(offset);
 
   auto dtype = indices.dtype();
   std::string lib_name = "compute_dynamic_offset_" + type_to_name(dtype);
