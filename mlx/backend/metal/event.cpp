@@ -26,24 +26,21 @@ EventImpl::~EventImpl() {
 }
 
 void EventImpl::wait(uint64_t value) {
-  check_error();
+  if (auto* p = error(); p) {
+    p->check();
+  }
   mtl_event_->waitUntilSignaledValue(value, -1); // never times out
-  check_error();
+  if (auto* p = error(); p) {
+    p->check();
+  }
 }
 
 void EventImpl::signal(uint64_t value) {
   mtl_event_->setSignaledValue(value);
 }
 
-void EventImpl::set_error(std::shared_ptr<std::string> error) {
-  std::atomic_store(&error_, std::move(error));
-}
-
-void EventImpl::check_error() {
-  auto error = std::atomic_exchange(&error_, {});
-  if (error) {
-    throw std::runtime_error(*error);
-  }
+void EventImpl::set_error(Error& error) {
+  error_.store(&error);
 }
 
 } // namespace metal
