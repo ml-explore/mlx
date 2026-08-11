@@ -1460,6 +1460,85 @@ array tile(
   return reshape(x, std::move(final_shape), s);
 }
 
+array reflect_pad(
+    const array& a,
+    const std::vector<int>& axes,
+    const Shape& low_pad_size,
+    const Shape& high_pad_size,
+    const Shape& out_shape,
+    bool include_edge,
+    StreamOrDevice s /* = {} */) {
+  array out = zeros(out_shape, a.dtype(), s);
+  Shape starts(a.ndim(), 0);
+  auto stops = a.shape();
+  for (size_t i = 0; i < axes.size(); i++) {
+    int ax = axes[i];
+    starts[ax] = low_pad_size[i];
+    stops[ax] += low_pad_size[i];
+  }
+  // Copy over values from the unpadded array
+  array padded = slice_update(out, a, starts, stops, s);
+
+  for (size_t i = 0; i < axes.size(); i++) {
+    int ax = axes[i];
+    int n = a.shape(ax);
+    int L = low_pad_size[i];
+    int H = high_pad_size[i];
+    if (L == 0 && H == 0) {
+      continue;
+    }
+    // reflect skips the edge value (period 2(n-1)); symmetric repeats it
+    // (period 2n).
+    int offset = (!include_edge && n > 1) ? 1 : 0;
+    int tile = n - offset;
+
+    if (L > 0) {
+      int filled_start = low_pad_size[i];
+      int remaining = L;
+      while (remaining > 0) {
+        int chunk = std::min(remaining, tile);
+        Shape src_starts(a.ndim(), 0);
+        Shape src_stops = out_shape;
+        src_starts[ax] = filled_start + offset;
+        src_stops[ax] = filled_start + offset + chunk;
+        array piece = flip(slice(padded, src_starts, src_stops, s), ax, s);
+
+        Shape dst_starts(a.ndim(), 0);
+        Shape dst_stops = out_shape;
+        dst_starts[ax] = filled_start - chunk;
+        dst_stops[ax] = filled_start;
+        padded = slice_update(padded, piece, dst_starts, dst_stops, s);
+
+        filled_start -= chunk;
+        remaining -= chunk;
+      }
+    }
+
+    if (H > 0) {
+      int filled_end = low_pad_size[i] + n;
+      int remaining = H;
+      while (remaining > 0) {
+        int chunk = std::min(remaining, tile);
+        Shape src_starts(a.ndim(), 0);
+        Shape src_stops = out_shape;
+        src_starts[ax] = filled_end - offset - chunk;
+        src_stops[ax] = filled_end - offset;
+        array piece = flip(slice(padded, src_starts, src_stops, s), ax, s);
+
+        Shape dst_starts(a.ndim(), 0);
+        Shape dst_stops = out_shape;
+        dst_starts[ax] = filled_end;
+        dst_stops[ax] = filled_end + chunk;
+        padded = slice_update(padded, piece, dst_starts, dst_stops, s);
+
+        filled_end += chunk;
+        remaining -= chunk;
+      }
+    }
+  }
+  return padded;
+}
+
 array edge_pad(
     const array& a,
     const std::vector<int>& axes,
@@ -1552,6 +1631,12 @@ array pad(
         {a, astype(pad_value, a.dtype(), s)});
   } else if (mode == "edge") {
     return edge_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
+  } else if (mode == "reflect") {
+    return reflect_pad(
+        a, axes, low_pad_size, high_pad_size, out_shape, false, s);
+  } else if (mode == "symmetric") {
+    return reflect_pad(
+        a, axes, low_pad_size, high_pad_size, out_shape, true, s);
   } else {
     std::ostringstream msg;
     msg << "Invalid padding mode (" << mode << ") passed to pad";
