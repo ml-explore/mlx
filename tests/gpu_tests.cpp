@@ -480,6 +480,32 @@ TEST_CASE("test gpu validation") {
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
 }
 
+TEST_CASE("test dynamic slice update waits for its start") {
+  // Regression for #3880: a donated array-valued start could be read
+  // stale when a command-buffer boundary lands between its producer
+  // and the dynamic slice. The boundary occurs when the buffer's op
+  // or memory limits split the graph (or with MLX_MAX_OPS_PER_BUFFER
+  // set low); without a split the checks still assert the correct
+  // update position.
+  auto source = ones({2, 1 << 26}, int32);
+  auto target = zeros({4, 4}, int32);
+  auto update = full({1, 1}, 7, int32);
+  eval(source, target, update);
+
+  {
+    auto recycled = zeros({2}, int32);
+    eval(recycled);
+  }
+
+  auto out = [&] {
+    auto start = max(source, 1, false);
+    return slice_update(target, update, start, {0, 1});
+  }();
+
+  CHECK_EQ(slice(out, {1, 1}, {2, 2}).item<int>(), 7);
+  CHECK_EQ(slice(out, {0, 0}, {1, 1}).item<int>(), 0);
+}
+
 TEST_CASE("test gpu int32 shape overflow errors") {
   // (2^30, 2).flatten() — product 2^31 doesn't fit in ShapeElem.
   // Issue #2681 reported wrapped shape (-2147483648,) and a

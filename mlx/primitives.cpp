@@ -3390,7 +3390,10 @@ std::vector<array> Partition::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  auto sort_idx = argpartition(primals[0], kth_, axis_, stream());
+  // The permutation is locally constant in the input, so cut the gradient
+  // there to keep higher order derivatives working.
+  auto sort_idx =
+      stop_gradient(argpartition(primals[0], kth_, axis_, stream()), stream());
   return {put_along_axis(
       zeros_like(primals[0], stream()),
       sort_idx,
@@ -3405,7 +3408,8 @@ std::vector<array> Partition::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
-  auto sort_idx = argpartition(primals[0], kth_, axis_, stream());
+  auto sort_idx =
+      stop_gradient(argpartition(primals[0], kth_, axis_, stream()), stream());
   auto out = take_along_axis(tangents[0], sort_idx, axis_, stream());
   return {out};
 }
@@ -4390,10 +4394,14 @@ std::vector<array> Scan::vjp(
         iota,
         array(reverse_ ? n : -1, int32),
         s);
-    auto owner = astype(
-        reverse_ ? cummin(masked, axis_, /* reverse = */ true, true, s)
-                 : cummax(masked, axis_, /* reverse = */ false, true, s),
-        uint32,
+    // The owner indices are locally constant in the input, so cut the
+    // gradient there to keep higher order derivatives working.
+    auto owner = stop_gradient(
+        astype(
+            reverse_ ? cummin(masked, axis_, /* reverse = */ true, true, s)
+                     : cummax(masked, axis_, /* reverse = */ false, true, s),
+            uint32,
+            s),
         s);
 
     if (!inclusive_) {
@@ -5473,7 +5481,9 @@ std::vector<array> Sort::vjp(
   // Sort applies a permutation to the input, so the cotangents must be
   // scattered back to the original positions (the transpose of the
   // permutation), not gathered forward as in the jvp.
-  auto sort_idx = argsort(primals[0], axis_, stream());
+  // The permutation is locally constant in the input, so cut the gradient
+  // there to keep higher order derivatives working.
+  auto sort_idx = stop_gradient(argsort(primals[0], axis_, stream()), stream());
   return {put_along_axis(
       zeros_like(primals[0], stream()),
       sort_idx,
@@ -5488,7 +5498,7 @@ std::vector<array> Sort::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
-  auto sort_idx = argsort(primals[0], axis_, stream());
+  auto sort_idx = stop_gradient(argsort(primals[0], axis_, stream()), stream());
   auto out = take_along_axis(tangents[0], sort_idx, axis_, stream());
   return {out};
 }

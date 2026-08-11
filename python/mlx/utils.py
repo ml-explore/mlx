@@ -229,16 +229,24 @@ def tree_unflatten(tree: Union[List[Tuple[str, Any]], Dict[str, Any]]) -> Any:
         next_idx = "" if not next_idx else next_idx[0]
         children[current_idx].append((next_idx, value))
 
-    # Assume they are a list and fail to dict if the keys are not all integers
+    # Assume list when all keys are integers.
     try:
-        keys = sorted((int(idx), idx) for idx in children.keys())
+        keys = {}
+        for idx in children:
+            keys[int(idx)] = idx
+        # Guard against "01" and "1" treated as one key.
+        is_list = len(keys) == len(children)
+    except ValueError:
+        is_list = False
+
+    if is_list:
         l = []
-        for i, k in keys:
+        for i, k in sorted(keys.items()):
             # if i <= len(l), no {} will be appended.
             l.extend([{} for _ in range(i - len(l))])
             l.append(tree_unflatten(children[k]))
         return l
-    except ValueError:
+    else:
         return {k: tree_unflatten(v) for k, v in children.items()}
 
 
