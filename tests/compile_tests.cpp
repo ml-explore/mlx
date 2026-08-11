@@ -6,8 +6,12 @@
 #include "doctest/doctest.h"
 
 #include <cmath>
+#include <condition_variable>
 #include <limits>
+#include <mutex>
+#include <thread>
 
+#include "mlx/compile_impl.h"
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
 
@@ -874,4 +878,130 @@ TEST_CASE("test compile throwing first trace does not poison cache") {
   auto out = cfun({});
   REQUIRE_EQ(out.size(), 1);
   CHECK_EQ(out[0].item<float>(), 3.0f);
+}
+
+TEST_CASE("test compile erase while a trace is in flight") {
+  // An entry handed to a caller must outlive an erase that lands while the
+  // caller is still filling it in. Here a second thread erases the outer id
+  // while the worker is inside its trace, and the traced body then invokes an
+  // already-compiled helper on a fresh (non-tracer) constant. That helper's
+  // find() drains the pending erase on the worker's own cache, which frees the
+  // outer entry unless the caller is holding it.
+  auto x = zeros({1}, float32);
+  eval(x);
+
+  constexpr std::uintptr_t nested_id = 0xf00d;
+  constexpr std::uintptr_t outer_id = 0xbeef;
+
+  auto nested = detail::compile(
+      [](const std::vector<array>& in) {
+        return std::vector<array>{in[0] + 2.0f};
+      },
+      nested_id);
+  eval(nested({zeros({1}, float32)}));
+
+  std::mutex mtx;
+  std::condition_variable cv;
+  int stage = 0;
+
+  auto traced = [&](const std::vector<array>& inputs) {
+    {
+      std::lock_guard<std::mutex> lk(mtx);
+      stage = 1;
+    }
+    cv.notify_one();
+    {
+      std::unique_lock<std::mutex> lk(mtx);
+      cv.wait(lk, [&stage] { return stage == 2; });
+    }
+    // Non-tracer input, so the compiled helper runs find() here and drains the
+    // erase queued for the outer id above.
+    auto tmp = nested({zeros({1}, float32)});
+    return std::vector<array>{inputs[0] + tmp[0]};
+  };
+
+  float result = 0.0f;
+  std::thread worker([&]() {
+    auto compiled = detail::compile(traced, outer_id);
+    auto outputs = compiled({x});
+    eval(outputs);
+    result = outputs[0].item<float>();
+  });
+
+  {
+    std::unique_lock<std::mutex> lk(mtx);
+    cv.wait(lk, [&stage] { return stage == 1; });
+  }
+  detail::compile_erase(outer_id);
+  {
+    std::lock_guard<std::mutex> lk(mtx);
+    stage = 2;
+  }
+  cv.notify_one();
+  worker.join();
+
+  CHECK_EQ(result, 2.0f);
+}
+
+TEST_CASE("test compile erase from another thread") {
+  // The compile cache is thread local, so an erase that reaches only the
+  // calling thread leaves behind the entry of a function traced elsewhere.
+  // Since |fun_id| is a reused address, the next compile on that id would then
+  // be handed the dead function's tape. Trace on a worker thread which stays
+  // alive, erase from this one, then reuse the id for a different function.
+  auto x = zeros({1}, float32);
+  eval(x);
+
+  constexpr std::uintptr_t fun_id = 0xc0ffee;
+  auto add_one = [](const std::vector<array>& inputs) {
+    return std::vector<array>{inputs[0] + 1.0f};
+  };
+  auto add_two = [](const std::vector<array>& inputs) {
+    return std::vector<array>{inputs[0] + 2.0f};
+  };
+
+  std::mutex mtx;
+  std::condition_variable cv;
+  int stage = 0;
+  float before = 0.0f;
+  float after = 0.0f;
+
+  std::thread worker([&]() {
+    {
+      auto compiled = detail::compile(add_one, fun_id);
+      auto outputs = compiled({x});
+      eval(outputs);
+      before = outputs[0].item<float>();
+    }
+    {
+      std::lock_guard<std::mutex> lk(mtx);
+      stage = 1;
+    }
+    cv.notify_one();
+    {
+      std::unique_lock<std::mutex> lk(mtx);
+      cv.wait(lk, [&stage] { return stage == 2; });
+    }
+    // Same id, different function. Without the erase reaching this thread the
+    // cached tape still adds one.
+    auto compiled = detail::compile(add_two, fun_id);
+    auto outputs = compiled({x});
+    eval(outputs);
+    after = outputs[0].item<float>();
+  });
+
+  {
+    std::unique_lock<std::mutex> lk(mtx);
+    cv.wait(lk, [&stage] { return stage == 1; });
+  }
+  detail::compile_erase(fun_id);
+  {
+    std::lock_guard<std::mutex> lk(mtx);
+    stage = 2;
+  }
+  cv.notify_one();
+  worker.join();
+
+  CHECK_EQ(before, 1.0f);
+  CHECK_EQ(after, 2.0f);
 }
