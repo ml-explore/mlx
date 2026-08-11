@@ -555,53 +555,10 @@ void ScatterAxis::eval_cpu(const std::vector<array>& inputs, array& out) {
                     idx = array::unsafe_weak_copy(idx),
                     updates = array::unsafe_weak_copy(updates),
                     out = array::unsafe_weak_copy(out)]() mutable {
-    switch (out.dtype()) {
-      case bool_:
-        dispatch_scatter_axis<bool>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case uint8:
-        dispatch_scatter_axis<uint8_t>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case uint16:
-        dispatch_scatter_axis<uint16_t>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case uint32:
-        dispatch_scatter_axis<uint32_t>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case uint64:
-        dispatch_scatter_axis<uint64_t>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case int8:
-        dispatch_scatter_axis<int8_t>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case int16:
-        dispatch_scatter_axis<int16_t>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case int32:
-        dispatch_scatter_axis<int32_t>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case int64:
-        dispatch_scatter_axis<int64_t>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case float16:
-        dispatch_scatter_axis<float16_t>(
-            out, idx, updates, axis_, reduce_type_);
-        break;
-      case float32:
-        dispatch_scatter_axis<float>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case float64:
-        dispatch_scatter_axis<double>(out, idx, updates, axis_, reduce_type_);
-        break;
-      case bfloat16:
-        dispatch_scatter_axis<bfloat16_t>(
-            out, idx, updates, axis_, reduce_type_);
-        break;
-      case complex64:
-        dispatch_scatter_axis<complex64_t>(
-            out, idx, updates, axis_, reduce_type_);
-        break;
-    }
+    dispatch_all_types(out.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      dispatch_scatter_axis<T>(out, idx, updates, axis_, reduce_type_);
+    });
   });
 }
 
@@ -662,50 +619,10 @@ void MaskedScatter::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.dispatch([mask = array::unsafe_weak_copy(mask),
                     src = array::unsafe_weak_copy(src),
                     out = array::unsafe_weak_copy(out)]() mutable {
-    switch (out.dtype()) {
-      case bool_:
-        masked_scatter_impl<bool>(mask, src, out);
-        break;
-      case uint8:
-        masked_scatter_impl<uint8_t>(mask, src, out);
-        break;
-      case uint16:
-        masked_scatter_impl<uint16_t>(mask, src, out);
-        break;
-      case uint32:
-        masked_scatter_impl<uint32_t>(mask, src, out);
-        break;
-      case uint64:
-        masked_scatter_impl<uint64_t>(mask, src, out);
-        break;
-      case int8:
-        masked_scatter_impl<int8_t>(mask, src, out);
-        break;
-      case int16:
-        masked_scatter_impl<int16_t>(mask, src, out);
-        break;
-      case int32:
-        masked_scatter_impl<int32_t>(mask, src, out);
-        break;
-      case int64:
-        masked_scatter_impl<int64_t>(mask, src, out);
-        break;
-      case float16:
-        masked_scatter_impl<float16_t>(mask, src, out);
-        break;
-      case float32:
-        masked_scatter_impl<float>(mask, src, out);
-        break;
-      case float64:
-        masked_scatter_impl<double>(mask, src, out);
-        break;
-      case bfloat16:
-        masked_scatter_impl<bfloat16_t>(mask, src, out);
-        break;
-      case complex64:
-        masked_scatter_impl<complex64_t>(mask, src, out);
-        break;
-    }
+    dispatch_all_types(out.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      masked_scatter_impl<T>(mask, src, out);
+    });
   });
 }
 
