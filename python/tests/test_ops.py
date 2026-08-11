@@ -2266,8 +2266,9 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertTrue(np.allclose(out_mx, out_np))
 
     def test_pad_reflect_symmetric(self):
-        # mx.pad reflect/symmetric must match numpy.pad exactly (it is a gather).
-        # Covers in-bounds, multi-reflect (pad larger than the axis), asymmetric
+        # mx.pad reflect/symmetric must match numpy.pad exactly. Covers
+        # in-bounds, multi-reflect (pad larger than the axis, exercising the
+        # tiling loop), asymmetric
         # per-axis widths, zero-width sides, and degenerate axes (n == 1, n == 2).
         cases = [
             ((8,), [(2, 3)]),

@@ -1465,46 +1465,85 @@ array reflect_pad(
     const std::vector<int>& axes,
     const Shape& low_pad_size,
     const Shape& high_pad_size,
+    const Shape& out_shape,
     bool include_edge,
     StreamOrDevice s /* = {} */) {
-  // Reflect (include_edge=false) or symmetric (include_edge=true) padding.
-  // Matches numpy.pad for arbitrary pad sizes (the reflection repeats as
-  // needed). For an out-of-range coordinate r (relative to the original axis
-  // [0, n)), map it back into [0, n) by reflection:
-  //   reflect   -> period 2(n-1), edge NOT repeated
-  //   symmetric -> period 2n,     edge repeated
-  auto reflect_coord = [](int r, int n, bool include_edge) -> int {
-    if (n == 1) {
-      return 0;
-    }
-    if (include_edge) {
-      int period = 2 * n;
-      int m = ((r % period) + period) % period;
-      return m < n ? m : (2 * n - 1 - m);
-    } else {
-      int period = 2 * (n - 1);
-      int m = ((r % period) + period) % period;
-      return m < n ? m : (period - m);
-    }
-  };
-  array out = a;
+  // Reflect (include_edge=false) or symmetric (include_edge=true) padding,
+  // built the same way as edge_pad: place the input into a zero-filled
+  // output with slice_update, then extend each axis outward by
+  // slicing-and-flipping already-filled data (no host-side index array).
+  // A pad width larger than the axis needs more than one tile; each
+  // iteration re-slices the data it just wrote, continuing the periodic
+  // reflect/symmetric pattern exactly like numpy.pad.
+  array out = zeros(out_shape, a.dtype(), s);
+  Shape starts(a.ndim(), 0);
+  auto stops = a.shape();
   for (size_t i = 0; i < axes.size(); i++) {
     int ax = axes[i];
+    starts[ax] = low_pad_size[i];
+    stops[ax] += low_pad_size[i];
+  }
+  array padded = slice_update(out, a, starts, stops, s);
+
+  for (size_t i = 0; i < axes.size(); i++) {
+    int ax = axes[i];
+    int n = a.shape(ax);
     int L = low_pad_size[i];
     int H = high_pad_size[i];
     if (L == 0 && H == 0) {
       continue;
     }
-    int n = out.shape(ax);
-    int total = L + n + H;
-    std::vector<int32_t> idx_vec(total);
-    for (int p = 0; p < total; p++) {
-      idx_vec[p] = reflect_coord(p - L, n, include_edge);
+    // reflect skips the edge value (period 2(n-1)); symmetric repeats it
+    // (period 2n). A single-element axis has nothing to reflect off of,
+    // so it just repeats, same as the edge case.
+    int offset = (!include_edge && n > 1) ? 1 : 0;
+    int tile = n - offset;
+
+    if (L > 0) {
+      int filled_start = low_pad_size[i];
+      int remaining = L;
+      while (remaining > 0) {
+        int chunk = std::min(remaining, tile);
+        Shape src_starts(a.ndim(), 0);
+        Shape src_stops = out_shape;
+        src_starts[ax] = filled_start + offset;
+        src_stops[ax] = filled_start + offset + chunk;
+        array piece = flip(slice(padded, src_starts, src_stops, s), ax, s);
+
+        Shape dst_starts(a.ndim(), 0);
+        Shape dst_stops = out_shape;
+        dst_starts[ax] = filled_start - chunk;
+        dst_stops[ax] = filled_start;
+        padded = slice_update(padded, piece, dst_starts, dst_stops, s);
+
+        filled_start -= chunk;
+        remaining -= chunk;
+      }
     }
-    array idx = array(idx_vec.begin(), {total}, int32);
-    out = take(out, idx, ax, s);
+
+    if (H > 0) {
+      int filled_end = low_pad_size[i] + n;
+      int remaining = H;
+      while (remaining > 0) {
+        int chunk = std::min(remaining, tile);
+        Shape src_starts(a.ndim(), 0);
+        Shape src_stops = out_shape;
+        src_starts[ax] = filled_end - offset - chunk;
+        src_stops[ax] = filled_end - offset;
+        array piece = flip(slice(padded, src_starts, src_stops, s), ax, s);
+
+        Shape dst_starts(a.ndim(), 0);
+        Shape dst_stops = out_shape;
+        dst_starts[ax] = filled_end;
+        dst_stops[ax] = filled_end + chunk;
+        padded = slice_update(padded, piece, dst_starts, dst_stops, s);
+
+        filled_end += chunk;
+        remaining -= chunk;
+      }
+    }
   }
-  return out;
+  return padded;
 }
 
 array edge_pad(
@@ -1600,9 +1639,9 @@ array pad(
   } else if (mode == "edge") {
     return edge_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
   } else if (mode == "reflect") {
-    return reflect_pad(a, axes, low_pad_size, high_pad_size, false, s);
+    return reflect_pad(a, axes, low_pad_size, high_pad_size, out_shape, false, s);
   } else if (mode == "symmetric") {
-    return reflect_pad(a, axes, low_pad_size, high_pad_size, true, s);
+    return reflect_pad(a, axes, low_pad_size, high_pad_size, out_shape, true, s);
   } else {
     std::ostringstream msg;
     msg << "Invalid padding mode (" << mode << ") passed to pad";
