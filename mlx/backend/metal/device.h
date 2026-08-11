@@ -6,11 +6,11 @@
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
-#include <string>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "mlx/array.h"
+#include "mlx/backend/common/error.h"
 #include "mlx/backend/common/metal_kernel.h"
 #include "mlx/backend/metal/resident.h"
 #include "mlx/device.h"
@@ -123,7 +123,7 @@ class MLX_API CommandEncoder {
   std::vector<std::tuple<std::shared_ptr<EventImpl>, uint64_t>> signal_events_;
 
   // Error from previous commited command buffer.
-  std::shared_ptr<std::string> error_;
+  Error error_;
 
   // Encoder for issuing GPU commands.
   // The members are used within a single ComputeCommandEncoder and will be
