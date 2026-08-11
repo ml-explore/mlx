@@ -514,6 +514,18 @@ class TestArray(mlx_tests.MLXTestCase):
         out = mx.array([x], dtype=mx.float64).item()
         self.assertEqual(out, x)
 
+        with mx.stream(mx.cpu):
+            # A python float operand must not round through float32 before it
+            # is promoted to the float64 dtype of the other operand.
+            a = mx.array([1.0], dtype=mx.float64)
+            self.assertEqual((a * x).item(), x)
+            self.assertEqual((a + x).item(), 1.0 + x)
+            self.assertEqual(mx.maximum(a, x).item(), x)
+
+            # The fill value of full and full_like goes through the same path.
+            self.assertEqual(mx.full((2,), x, dtype=mx.float64)[0].item(), x)
+            self.assertEqual(mx.full_like(a, x).item(), x)
+
     def test_construction_from_lists_of_mlx_arrays(self):
         dtypes = [
             mx.bool_,
