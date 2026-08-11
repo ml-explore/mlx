@@ -235,7 +235,7 @@ BINARY_GPU(Power)
 BINARY_GPU(Subtract)
 
 void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
-  return binary_op_gpu(inputs, out, name());
+  binary_op_gpu(inputs, out, name());
 }
 
 } // namespace mlx::core
