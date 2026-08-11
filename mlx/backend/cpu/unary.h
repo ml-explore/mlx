@@ -57,11 +57,10 @@ void unary_op(const array& a, array& out, Op) {
       src += N;
       dst += N;
     }
-    while (size > 0) {
-      *dst = Op{}(*src);
-      size--;
-      dst++;
-      src++;
+    // Residual via the shared SIMD kernel (padded gather) so results do
+    // not depend on lane index / Accelerate vs libm (#4161).
+    if (size > 0) {
+      unary_op<T, U, Op>(src, dst, size, /*stride=*/1);
     }
   } else {
     size_t shape = ndim > 0 ? a.shape().back() : 1;
