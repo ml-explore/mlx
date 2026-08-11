@@ -248,7 +248,7 @@ std::string JitCompiler::build_command(
   return fmt::format(
       "\""
       "cd /D \"{0}\" && "
-      "\"{1}\" /LD /EHsc /MD /Ox /nologo /std:c++17{2} \"{3}\" "
+      "\"{1}\" /LD /EHsc /MD /Ox /nologo /std:c++20{2} \"{3}\" "
       "/link /out:\"{4}\" {5} 2>&1"
       "\"",
       dir.string(),
@@ -271,7 +271,7 @@ std::string JitCompiler::build_command(
   }
 #endif
   return fmt::format(
-      "g++ -std=c++17 -O3 -Wall -fPIC -shared {} \"{}\" -o \"{}\" 2>&1",
+      "g++ -std=c++20 -O3 -Wall -fPIC -shared {} \"{}\" -o \"{}\" 2>&1",
       extra_flags,
       (dir / source_file_name).string(),
       (dir / shared_lib_name).string());

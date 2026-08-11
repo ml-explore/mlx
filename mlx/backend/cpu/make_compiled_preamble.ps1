@@ -20,10 +20,10 @@ $IS_MSVC_LIKE = ($CL_NAME -eq 'cl') -or ($CL_NAME -eq 'clang-cl')
 # (splatting a single-element array can degrade to char-by-char expansion).
 $CL_ARGS = [System.Collections.ArrayList]::new()
 if ($IS_MSVC_LIKE) {
-  [void]$CL_ARGS.Add('/std:c++17')
+  [void]$CL_ARGS.Add('/std:c++20')
   [void]$CL_ARGS.Add('/EP')
 } else {
-  [void]$CL_ARGS.Add('-std=c++17')
+  [void]$CL_ARGS.Add('-std=c++20')
   [void]$CL_ARGS.Add('-E')
   [void]$CL_ARGS.Add('-P')
 }

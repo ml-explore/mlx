@@ -25,7 +25,7 @@ if [ "$CLANG" = "TRUE" ]; then
 EOM
 CC_FLAGS="-arch ${ARCH} -nobuiltininc -nostdinc"
 else
-CC_FLAGS="-std=c++17"
+CC_FLAGS="-std=c++20"
 fi
 
 CONTENT=$("$GCC" $CC_FLAGS $SIMD_FLAGS -I "$SRCDIR" -E -P "$SRCDIR/mlx/backend/cpu/compiled_preamble.h" 2>/dev/null)

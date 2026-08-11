@@ -36,6 +36,10 @@ target_sources(
           linalg_tests.cpp
           ${METAL_TEST_SOURCES})
 
+if(MLX_BUILD_CPU AND NOT IOS)
+  target_sources(tests PRIVATE jit_compiler_tests.cpp)
+endif()
+
 target_link_libraries(tests PRIVATE mlx doctest)
 target_compile_options(tests PRIVATE ${SANITIZER_COMPILE_FLAGS})
 target_link_options(tests PRIVATE ${SANITIZER_LINK_FLAGS})
