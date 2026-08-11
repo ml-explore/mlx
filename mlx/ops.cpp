@@ -1468,13 +1468,6 @@ array reflect_pad(
     const Shape& out_shape,
     bool include_edge,
     StreamOrDevice s /* = {} */) {
-  // Reflect (include_edge=false) or symmetric (include_edge=true) padding,
-  // built the same way as edge_pad: place the input into a zero-filled
-  // output with slice_update, then extend each axis outward by
-  // slicing-and-flipping already-filled data (no host-side index array).
-  // A pad width larger than the axis needs more than one tile; each
-  // iteration re-slices the data it just wrote, continuing the periodic
-  // reflect/symmetric pattern exactly like numpy.pad.
   array out = zeros(out_shape, a.dtype(), s);
   Shape starts(a.ndim(), 0);
   auto stops = a.shape();
@@ -1483,6 +1476,7 @@ array reflect_pad(
     starts[ax] = low_pad_size[i];
     stops[ax] += low_pad_size[i];
   }
+  // Copy over values from the unpadded array
   array padded = slice_update(out, a, starts, stops, s);
 
   for (size_t i = 0; i < axes.size(); i++) {
@@ -1494,8 +1488,7 @@ array reflect_pad(
       continue;
     }
     // reflect skips the edge value (period 2(n-1)); symmetric repeats it
-    // (period 2n). A single-element axis has nothing to reflect off of,
-    // so it just repeats, same as the edge case.
+    // (period 2n).
     int offset = (!include_edge && n > 1) ? 1 : 0;
     int tile = n - offset;
 
