@@ -490,6 +490,12 @@ void init_random(nb::module_& parent_module) {
         or ``num_samples`` can be specified. If both are ``None``, the output
         has the same shape as ``logits`` with the ``axis`` dimension removed.
 
+        When ``logits`` holds a single distribution and more than one sample is
+        requested, the memory used is proportional to the number of categories
+        plus the number of samples rather than to their product. Sampling then
+        accumulates in ``float32``, so a category holding less than roughly
+        ``1e-7`` of the total mass may be drawn with a distorted probability.
+
         Args:
             logits (array): The *unnormalized* categorical distribution(s).
             axis (int, optional): The axis which specifies the distribution.

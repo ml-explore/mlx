@@ -642,6 +642,26 @@ TEST_CASE("test categorical") {
   CHECK_EQ(categorical(logits, -1, 7).shape(), Shape{5, 4, 7});
   CHECK_EQ(categorical(logits, -2, 7).shape(), Shape{5, 3, 7});
   CHECK_EQ(categorical(logits, -3, 7).shape(), Shape{4, 3, 7});
+
+  // Infinities mean the same thing when several samples are drawn
+  logits = array({1.0f, -2.0f, inf, 4.0f, 3.0f});
+  CHECK(all(equal(categorical(logits, 0, 5), array(2u))).item<bool>());
+
+  logits = array({-inf, -2.0f, -inf, -inf});
+  CHECK(all(equal(categorical(logits, 0, 5), array(1u))).item<bool>());
+
+  // A -inf category carries no mass and is never drawn
+  logits = array({-inf, 0.0f, -inf, 0.0f});
+  out = categorical(logits, 0, 100);
+  CHECK(all(logical_or(equal(out, array(1u)), equal(out, array(3u))))
+            .item<bool>());
+
+  out = categorical(zeros({20}), 0, 7);
+  CHECK_EQ(out.shape(), Shape{7});
+  CHECK_EQ(out.dtype(), uint32);
+  CHECK(max(out).item<uint32_t>() < 20);
+
+  CHECK_THROWS(categorical(zeros({0}), 0, 4));
 }
 
 TEST_CASE("test laplace") {

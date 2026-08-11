@@ -348,6 +348,110 @@ class TestRandom(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.random.categorical(logits, shape=[10, 5], num_samples=5)
 
+    def test_categorical_single_distribution(self):
+        logits = mx.zeros((20,))
+
+        out = mx.random.categorical(logits, num_samples=7)
+        self.assertEqual(out.shape, (7,))
+        self.assertEqual(out.dtype, mx.uint32)
+        self.assertTrue(mx.max(out).item() < 20)
+
+        out = mx.random.categorical(logits, 0, [5, 3])
+        self.assertEqual(out.shape, (5, 3))
+        self.assertTrue(mx.max(out).item() < 20)
+
+        self.assertEqual(mx.random.categorical(logits, num_samples=1).shape, (1,))
+        self.assertEqual(mx.random.categorical(logits, num_samples=0).shape, (0,))
+
+        with self.assertRaises(ValueError):
+            mx.random.categorical(mx.zeros((0,)), num_samples=4)
+
+        # float64 is only available on the CPU stream
+        wide = mx.zeros((20,), dtype=mx.float64, stream=mx.cpu)
+        out = mx.random.categorical(wide, 0, [7], stream=mx.cpu)
+        self.assertEqual(out.dtype, mx.uint32)
+        self.assertTrue(mx.max(out).item() < 20)
+
+    def test_categorical_zero_probability(self):
+        # -inf logits carry no mass, so their categories are never drawn
+        logits = mx.array([-float("inf"), 0.0, -float("inf"), 0.0, -float("inf")])
+        out = mx.random.categorical(logits, num_samples=10000)
+        self.assertTrue(mx.all((out == 1) | (out == 3)).item())
+        self.assertTrue(mx.any(out == 1).item())
+        self.assertTrue(mx.any(out == 3).item())
+
+    def test_categorical_inf_logits(self):
+        inf = float("inf")
+
+        # A +inf logit takes every sample
+        out = mx.random.categorical(
+            mx.array([1.0, -2.0, inf, 4.0, 3.0]), num_samples=100
+        )
+        self.assertTrue(mx.all(out == 2).item())
+
+        # Ties among +inf entries split the samples between them
+        out = mx.random.categorical(mx.array([inf, 1.0, inf]), num_samples=10000)
+        self.assertTrue(mx.all((out == 0) | (out == 2)).item())
+        self.assertTrue(mx.any(out == 0).item())
+        self.assertTrue(mx.any(out == 2).item())
+
+        # A single finite entry takes every sample
+        out = mx.random.categorical(mx.array([-inf, -2.0, -inf, -inf]), num_samples=100)
+        self.assertTrue(mx.all(out == 1).item())
+
+    def test_categorical_distribution(self):
+        # Std deviation of the frequencies is under 0.002 at 100k draws,
+        # so a 0.01 tolerance is about 5 sigma
+        p = mx.array([0.1, 0.2, 0.3, 0.4])
+        logits = mx.log(p)
+        num_samples = 100000
+
+        def frequencies(out, n):
+            counts = mx.sum(out.reshape(-1, 1) == mx.arange(n), axis=0)
+            return counts / out.size
+
+        out = mx.random.categorical(
+            logits, num_samples=num_samples, key=mx.random.key(0)
+        )
+        self.assertTrue(mx.max(mx.abs(frequencies(out, 4) - p)).item() < 0.01)
+
+        batched = mx.stack([logits, logits[::-1]])
+        out = mx.random.categorical(
+            batched, num_samples=num_samples, key=mx.random.key(0)
+        )
+        self.assertTrue(mx.max(mx.abs(frequencies(out[0], 4) - p)).item() < 0.01)
+        self.assertTrue(mx.max(mx.abs(frequencies(out[1], 4) - p[::-1])).item() < 0.01)
+
+    def test_categorical_key_determinism(self):
+        logits = mx.zeros((32,))
+        key = mx.random.key(0)
+        a = mx.random.categorical(logits, num_samples=64, key=key)
+        b = mx.random.categorical(logits, num_samples=64, key=key)
+        self.assertTrue(mx.array_equal(a, b))
+        c = mx.random.categorical(logits, num_samples=64, key=mx.random.key(1))
+        self.assertFalse(mx.array_equal(a, c))
+
+    def test_categorical_compile(self):
+        logits = mx.log(mx.array([0.1, 0.2, 0.3, 0.4]))
+        key = mx.random.key(0)
+
+        def sample(logits, key):
+            return mx.random.categorical(logits, num_samples=128, key=key)
+
+        expected = sample(logits, key)
+        out = mx.compile(sample)(logits, key)
+        self.assertTrue(mx.array_equal(out, expected))
+        self.assertEqual(out.dtype, mx.uint32)
+        self.assertTrue(mx.max(out).item() < 4)
+
+    def test_categorical_large_num_samples(self):
+        # A perturbation per category per sample would be 160GB here
+        n = 200000
+        out = mx.random.categorical(mx.zeros((n,)), num_samples=n)
+        mx.eval(out)
+        self.assertEqual(out.shape, (n,))
+        self.assertTrue(mx.max(out).item() < n)
+
     def test_permutation(self):
         x = sorted(mx.random.permutation(4).tolist())
         self.assertEqual([0, 1, 2, 3], x)
