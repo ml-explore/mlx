@@ -234,6 +234,7 @@ void init_fast(nb::module_& parent_module) {
          const float scale,
          const std::variant<std::monostate, std::string, mx::array>& mask,
          const std::optional<mx::array>& sinks,
+         bool force_fused,
          mx::StreamOrDevice s) {
         bool has_mask = !std::holds_alternative<std::monostate>(mask);
         bool has_str_mask =
@@ -250,16 +251,32 @@ void init_fast(nb::module_& parent_module) {
               throw std::invalid_argument(msg.str());
             }
             return mx::fast::scaled_dot_product_attention(
-                queries, keys, values, scale, mask_str, std::nullopt, sinks, s);
+                queries,
+                keys,
+                values,
+                scale,
+                mask_str,
+                std::nullopt,
+                sinks,
+                force_fused,
+                s);
           } else {
             auto mask_arr = std::get<mx::array>(mask);
             return mx::fast::scaled_dot_product_attention(
-                queries, keys, values, scale, "", mask_arr, sinks, s);
+                queries,
+                keys,
+                values,
+                scale,
+                "",
+                mask_arr,
+                sinks,
+                force_fused,
+                s);
           }
 
         } else {
           return mx::fast::scaled_dot_product_attention(
-              queries, keys, values, scale, "", {}, sinks, s);
+              queries, keys, values, scale, "", {}, sinks, force_fused, s);
         }
       },
       "q"_a,
@@ -269,9 +286,10 @@ void init_fast(nb::module_& parent_module) {
       "scale"_a,
       "mask"_a = nb::none(),
       "sinks"_a = nb::none(),
+      "force_fused"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: None | str | array = None, sinks: array | None = None, stream: StreamOrDevice = None) -> array"),
+          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: None | str | array = None, sinks: array | None = None, force_fused: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         A fast implementation of multi-head attention: ``O = softmax(Q @ K.T, dim=-1) @ V``.
 
@@ -313,6 +331,13 @@ void init_fast(nb::module_& parent_module) {
                last query aligns with the last key.
             sinks (array, optional): An optional array of attention sinks.
                Default: ``None``.
+            force_fused (bool, optional): If ``True``, bypass the routing
+               heuristics and always use the fused kernel, raising an error
+               when no fused kernel supports the given configuration
+               (unsupported head dims, mask constraints, or a CPU stream).
+               Whether the single-query (vector) or the full attention kernel
+               runs still follows the query length as with default routing.
+               Default: ``False``.
 
         Returns:
             array: The output array.

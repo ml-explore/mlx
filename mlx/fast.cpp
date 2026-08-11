@@ -618,6 +618,7 @@ array scaled_dot_product_attention(
     const std::string& mask_mode /* = "" */,
     std::optional<array> mask_arr /* = {} */,
     const std::optional<array>& sinks /* = {} */,
+    bool force_fused /* = false */,
     StreamOrDevice s /* = {}*/) {
   for (const auto& tensor : {queries, keys, values}) {
     if (tensor.ndim() != 4) {
@@ -825,7 +826,18 @@ array scaled_dot_product_attention(
   bool is_training = detail::in_grad_tracing();
   bool has_fast_vjp = !ScaledDotProductAttentionVJP::use_fallback(q, stream);
   bool output_logsumexp = is_training && has_fast_vjp;
-  if (!ScaledDotProductAttention::use_fallback(
+  if (force_fused) {
+    auto reason = ScaledDotProductAttention::fused_unsupported_reason(
+        q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp, stream);
+    if (!reason.empty()) {
+      std::ostringstream msg;
+      msg << "[scaled_dot_product_attention] force_fused=true but no fused "
+          << "kernel is available: " << reason;
+      throw std::invalid_argument(msg.str());
+    }
+  }
+  if (force_fused ||
+      !ScaledDotProductAttention::use_fallback(
           q,
           k,
           v,

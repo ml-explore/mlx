@@ -231,6 +231,20 @@ class ScaledDotProductAttention : public Custom {
       Stream s);
   static bool supports_bool_mask();
 
+  // Returns an empty string when a fused kernel can handle the given
+  // configuration on `s`, and otherwise a human readable reason why the
+  // fused path is unavailable. Capability only — routing heuristics (such
+  // as preferring the unfused path while training) do not produce a reason.
+  static std::string fused_unsupported_reason(
+      const array& q,
+      const array& k,
+      const array& v,
+      bool has_mask,
+      bool has_arr_mask,
+      bool do_causal,
+      bool output_logsumexp,
+      Stream s);
+
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
     throw std::runtime_error("NYI");

@@ -36,6 +36,18 @@ bool fast::ScaledDotProductAttention::use_fallback(
   return true;
 }
 
+std::string fast::ScaledDotProductAttention::fused_unsupported_reason(
+    const array& q,
+    const array& k,
+    const array& v,
+    bool has_mask,
+    bool has_arr_mask,
+    bool do_causal,
+    bool output_logsumexp,
+    Stream s) {
+  return "there is no GPU backend in this build of MLX.";
+}
+
 bool fast::ScaledDotProductAttention::supports_bool_mask() {
   return false;
 }

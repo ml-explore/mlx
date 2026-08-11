@@ -8,6 +8,8 @@
 
 #include <nvtx3/nvtx3.hpp>
 
+#include <sstream>
+
 namespace mlx::core {
 
 namespace {
@@ -565,6 +567,30 @@ bool ScaledDotProductAttention::use_fallback(
 
   return !supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal, s) &&
       !supports_sdpa_vector(q, k, v, has_arr_mask, output_logsumexp);
+}
+
+std::string ScaledDotProductAttention::fused_unsupported_reason(
+    const array& q,
+    const array& k,
+    const array& v,
+    bool has_mask,
+    bool has_arr_mask,
+    bool do_causal,
+    bool output_logsumexp,
+    Stream s) {
+  if (s.device == Device::cpu) {
+    return "the fused kernels require a GPU stream.";
+  }
+  if (supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal, s) ||
+      supports_sdpa_vector(q, k, v, has_arr_mask, output_logsumexp)) {
+    return "";
+  }
+  std::ostringstream msg;
+  msg << "neither the cuDNN attention nor the vector attention kernel "
+      << "supports this configuration; got query shape " << q.shape()
+      << ", key shape " << k.shape() << ", value shape " << v.shape()
+      << " with dtype " << q.dtype() << ".";
+  return msg.str();
 }
 
 bool ScaledDotProductAttention::supports_bool_mask() {

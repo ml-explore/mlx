@@ -728,5 +728,68 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     self.assertTrue(mx.allclose(ref, out, **tolerance))
 
 
+class TestSDPAForceFused(mlx_tests.MLXTestCase):
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_force_fused_matches_reference(self):
+        mx.random.seed(0)
+        # Vector kernel (qL 1) and full kernel (qL 32) shapes, with GQA
+        for B, qL, kL, D, qH, kH in [
+            (1, 1, 128, 64, 8, 8),
+            (1, 1, 128, 128, 8, 2),
+            (1, 32, 128, 64, 8, 8),
+            (1, 32, 128, 128, 8, 2),
+        ]:
+            q = mx.random.normal((B, qH, qL, D), mx.float16)
+            k = mx.random.normal((B, kH, kL, D), mx.float16)
+            v = mx.random.normal((B, kH, kL, D), mx.float16)
+            scale = D**-0.5
+            for mask in (None, "causal"):
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask, force_fused=True
+                )
+                self.assertTrue(mx.allclose(ref, out, rtol=1e-2, atol=1e-2))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal support matrix")
+    def test_force_fused_unsupported_raises(self):
+        def make(qL, kL, D, qH=8, kH=8):
+            q = mx.random.normal((1, qH, qL, D), mx.float16)
+            k = mx.random.normal((1, kH, kL, D), mx.float16)
+            v = mx.random.normal((1, kH, kL, D), mx.float16)
+            return q, k, v
+
+        # Head dim unsupported by the full kernel
+        q, k, v = make(32, 128, 72)
+        with self.assertRaises(ValueError):
+            mx.fast.scaled_dot_product_attention(q, k, v, scale=1.0, force_fused=True)
+        # Head dim unsupported by the vector kernel
+        q, k, v = make(1, 128, 72)
+        with self.assertRaises(ValueError):
+            mx.fast.scaled_dot_product_attention(q, k, v, scale=1.0, force_fused=True)
+        # Vector kernel: query length times GQA factor over 32
+        q, k, v = make(8, 128, 64, qH=8, kH=1)
+        with self.assertRaises(ValueError):
+            mx.fast.scaled_dot_product_attention(q, k, v, scale=1.0, force_fused=True)
+        # Full kernel: causal mask with more queries than keys
+        q, k, v = make(32, 16, 64)
+        with self.assertRaises(ValueError):
+            mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=1.0, mask="causal", force_fused=True
+            )
+        # The same shapes still run on the default (fallback) path
+        q, k, v = make(32, 128, 72)
+        mx.eval(mx.fast.scaled_dot_product_attention(q, k, v, scale=1.0))
+
+    def test_force_fused_raises_on_cpu(self):
+        q = mx.random.normal((1, 8, 1, 64))
+        k = mx.random.normal((1, 8, 128, 64))
+        v = mx.random.normal((1, 8, 128, 64))
+        with mx.stream(mx.cpu):
+            with self.assertRaises(ValueError):
+                mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=1.0, force_fused=True
+                )
+
+
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)
