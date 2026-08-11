@@ -12,7 +12,13 @@ namespace mlx::core::distributed {
 
 namespace {
 
-Group to_group(std::optional<Group> group);
+Group to_group(std::optional<Group> group) {
+  if (group.has_value()) {
+    return group.value();
+  } else {
+    return distributed::init();
+  }
+}
 
 array all_reduce(
     const array& x,
@@ -29,14 +35,6 @@ array all_reduce(
       x.dtype(),
       std::make_shared<AllReduce>(stream, group, reduce_type),
       {x});
-}
-
-Group to_group(std::optional<Group> group) {
-  if (group.has_value()) {
-    return group.value();
-  } else {
-    return distributed::init();
-  }
 }
 
 } // namespace
