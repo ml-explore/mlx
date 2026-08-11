@@ -1639,9 +1639,11 @@ array pad(
   } else if (mode == "edge") {
     return edge_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
   } else if (mode == "reflect") {
-    return reflect_pad(a, axes, low_pad_size, high_pad_size, out_shape, false, s);
+    return reflect_pad(
+        a, axes, low_pad_size, high_pad_size, out_shape, false, s);
   } else if (mode == "symmetric") {
-    return reflect_pad(a, axes, low_pad_size, high_pad_size, out_shape, true, s);
+    return reflect_pad(
+        a, axes, low_pad_size, high_pad_size, out_shape, true, s);
   } else {
     std::ostringstream msg;
     msg << "Invalid padding mode (" << mode << ") passed to pad";
