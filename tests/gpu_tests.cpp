@@ -481,33 +481,29 @@ TEST_CASE("test gpu validation") {
 }
 
 TEST_CASE("test dynamic slice update waits for its start") {
-  if (!metal::is_available()) {
-    return;
-  }
-
   // Regression for #3880: a donated array-valued start could be read
   // stale when a command-buffer boundary lands between its producer
   // and the dynamic slice. The boundary occurs when the buffer's op
   // or memory limits split the graph (or with MLX_MAX_OPS_PER_BUFFER
   // set low); without a split the checks still assert the correct
   // update position.
-  auto source = ones({2, 1 << 26}, int32, Device::gpu);
-  auto target = zeros({4, 4}, int32, Device::gpu);
-  auto update = full({1, 1}, 7, int32, Device::gpu);
+  auto source = ones({2, 1 << 26}, int32);
+  auto target = zeros({4, 4}, int32);
+  auto update = full({1, 1}, 7, int32);
   eval(source, target, update);
 
   {
-    auto recycled = zeros({2}, int32, Device::gpu);
+    auto recycled = zeros({2}, int32);
     eval(recycled);
   }
 
   auto out = [&] {
-    auto start = max(source, 1, false, Device::gpu);
-    return slice_update(target, update, start, {0, 1}, Device::gpu);
+    auto start = max(source, 1, false);
+    return slice_update(target, update, start, {0, 1});
   }();
 
-  CHECK_EQ(slice(out, {1, 1}, {2, 2}, Device::gpu).item<int>(), 7);
-  CHECK_EQ(slice(out, {0, 0}, {1, 1}, Device::gpu).item<int>(), 0);
+  CHECK_EQ(slice(out, {1, 1}, {2, 2}).item<int>(), 7);
+  CHECK_EQ(slice(out, {0, 0}, {1, 1}).item<int>(), 0);
 }
 
 TEST_CASE("test gpu int32 shape overflow errors") {
