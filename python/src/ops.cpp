@@ -1645,21 +1645,24 @@ void init_ops(nb::module_& m) {
          Scalar stop,
          int num,
          std::optional<mx::Dtype> dtype,
+         bool endpoint,
          mx::StreamOrDevice s) {
         return mx::linspace(
             scalar_to_double(start),
             scalar_to_double(stop),
             num,
             dtype.value_or(mx::float32),
+            endpoint,
             s);
       },
       "start"_a,
       "stop"_a,
       "num"_a = 50,
       "dtype"_a.none() = mx::float32,
+      "endpoint"_a = true,
       "stream"_a = nb::none(),
       nb::sig(
-          "def linspace(start: scalar, stop: scalar, num: int | None = 50, dtype: Dtype | None = float32, stream: StreamOrDevice = None) -> array"),
+          "def linspace(start: scalar, stop: scalar, num: int | None = 50, dtype: Dtype | None = float32, endpoint: bool = True, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Generate ``num`` evenly spaced numbers over interval ``[start, stop]``.
 
@@ -1669,6 +1672,9 @@ void init_ops(nb::module_& m) {
             num (int, optional): Number of samples, defaults to ``50``.
             dtype (Dtype, optional): Specifies the data type of the output,
               default to ``float32``.
+            endpoint (bool, optional): If ``True``, ``stop`` is the last
+              sample. Otherwise it is not included and the samples are spaced
+              over the half-open interval ``[start, stop)``. Default: ``True``.
 
         Returns:
             array: The range of values.

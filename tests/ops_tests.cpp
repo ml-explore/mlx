@@ -3355,6 +3355,22 @@ TEST_CASE("test linspace") {
   x = linspace(0, 1, 0);
   expected = array(std::initializer_list<float>{}, {0});
   CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 10, 5, float32, false);
+  expected = array({0.0f, 2.0f, 4.0f, 6.0f, 8.0f}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 10, 5, int32, false);
+  expected = array({0, 2, 4, 6, 8}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(1, 10, 1, float32, false);
+  expected = array({1.0f}, {1});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 1, 0, float32, false);
+  expected = array(std::initializer_list<float>{}, {0});
+  CHECK(array_equal(x, expected).item<bool>());
 }
 
 TEST_CASE("test quantize dequantize") {

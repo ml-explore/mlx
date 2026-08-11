@@ -2972,6 +2972,34 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(d[0], a)
             self.assertEqual(d[-1], b)
 
+    def test_linspace_endpoint(self):
+        # endpoint=True is the default and matches the old behaviour
+        a = mx.linspace(0, 1, 5, endpoint=True)
+        self.assertEqualArray(a, mx.array(np.linspace(0, 1, 5, endpoint=True)))
+        self.assertEqualArray(a, mx.linspace(0, 1, 5))
+
+        # endpoint=False drops the stop value and uses a step of
+        # (stop - start) / num instead of (stop - start) / (num - 1)
+        for num in [0, 1, 2, 5, 50]:
+            b = mx.linspace(0, 10, num, endpoint=False)
+            expected = mx.array(np.linspace(0, 10, num, endpoint=False))
+            self.assertEqualArray(b, expected)
+
+        c = mx.linspace(-2.7, -0.7, 7, endpoint=False)
+        self.assertEqualArray(c, mx.array(np.linspace(-2.7, -0.7, 7, endpoint=False)))
+
+        # dtype still applies
+        d = mx.linspace(0, 10, 5, mx.int64, endpoint=False)
+        self.assertEqual(d.dtype, mx.int64)
+        self.assertEqualArray(
+            d, mx.array(np.linspace(0, 10, 5, endpoint=False, dtype=int))
+        )
+
+        # the start is kept and the stop is excluded
+        e = mx.linspace(3.0, 4.0, 4, endpoint=False).tolist()
+        self.assertEqual(e[0], 3.0)
+        self.assertNotIn(4.0, e)
+
     def test_repeat(self):
         # Setup data for the tests
         data = mx.array([[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]])

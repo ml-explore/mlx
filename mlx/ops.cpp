@@ -272,6 +272,7 @@ array linspace(
     double stop,
     int num /* = 50 */,
     Dtype dtype /* = float32 */,
+    bool endpoint /* = true */,
     StreamOrDevice s /* = {} */) {
   if (num < 0) {
     std::ostringstream msg;
@@ -282,8 +283,11 @@ array linspace(
     return astype(array({start}), dtype, s);
   }
   auto inner_type = dtype == float64 ? float64 : float32;
+  // Without the endpoint the samples are spaced so that `stop` would be the
+  // next one after the last, i.e. the step is (stop - start) / num.
+  auto denominator = endpoint ? num - 1 : num;
   array t =
-      divide(arange(0, num, inner_type, s), array(num - 1, inner_type), s);
+      divide(arange(0, num, inner_type, s), array(denominator, inner_type), s);
   array t_bar = subtract(array(1, inner_type), t, s);
   return astype(
       add(multiply(t_bar, array(start, inner_type), s),
