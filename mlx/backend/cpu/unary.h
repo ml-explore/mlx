@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/cpu/encoder.h"
 #include "mlx/backend/cpu/simd/simd.h"
@@ -10,11 +12,34 @@
 
 namespace mlx::core {
 
+// Apply Op to `shape` elements read with `stride`, always through the
+// simd kernel so results are bit-identical to the contiguous fast path.
+// The tail (and any block when N == 1) is padded by repeating the last
+// element; only the first `rem` lanes are stored.
 template <typename T, typename U = T, typename Op>
 void unary_op(const T* a, U* out, size_t shape, size_t stride) {
-  for (size_t i = 0; i < shape; i += 1) {
-    out[i] = Op{}(*a);
-    a += stride;
+  constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
+  if constexpr (N == 1) {
+    for (size_t i = 0; i < shape; ++i) {
+      out[i] = Op{}(a[i * stride]);
+    }
+    return;
+  }
+  T buf[N];
+  size_t i = 0;
+  for (; i + N <= shape; i += N) {
+    for (int k = 0; k < N; ++k) {
+      buf[k] = a[(i + k) * stride];
+    }
+    simd::store(out + i, simd::Simd<U, N>(Op{}(simd::load<T, N>(buf))));
+  }
+  if (size_t rem = shape - i; rem > 0) {
+    for (size_t k = 0; k < static_cast<size_t>(N); ++k) {
+      buf[k] = a[(i + std::min(k, rem - 1)) * stride];
+    }
+    U tmp[N];
+    simd::store(tmp, simd::Simd<U, N>(Op{}(simd::load<T, N>(buf))));
+    std::copy(tmp, tmp + rem, out + i);
   }
 }
 
