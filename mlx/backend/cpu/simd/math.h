@@ -9,6 +9,21 @@ namespace mlx::core::simd {
 constexpr float inf = std::numeric_limits<float>::infinity();
 
 /**
+ * Evaluate a scalar function on each lane.
+ *
+ * The approximations in this file are tuned for float32. They are not accurate
+ * enough for float64, so double precision falls back to libm through here.
+ */
+template <typename T, int N, typename Op>
+Simd<T, N> lanewise(Simd<T, N> in, Op op) {
+  Simd<T, N> out;
+  for (int i = 0; i < N; ++i) {
+    out[i] = op(in[i]);
+  }
+  return out;
+}
+
+/**
  * Compute exp(x) in an optimizer friendly way as follows:
  *
  * First change the problem to computing 2**y where y = x / ln(2).
@@ -28,6 +43,10 @@ template <typename T, int N>
 Simd<T, N> exp(Simd<T, N> in) {
   if constexpr (is_complex<T>) {
     return Simd<T, 1>{std::exp(in.value)};
+  } else if constexpr (std::is_same_v<T, double>) {
+    // The polynomial below also saturates outside of float's range, which
+    // would clamp double results to zero or infinity beyond +-88.
+    return lanewise(in, [](double v) { return std::exp(v); });
   } else {
     Simd<float, N> x_init = in;
     auto x = x_init * 1.442695f; // multiply with log_2(e)
@@ -119,6 +138,8 @@ template <typename T, int N>
 Simd<T, N> sin(Simd<T, N> x) {
   if constexpr (is_complex<T>) {
     return std::sin(x.value);
+  } else if constexpr (std::is_same_v<T, double>) {
+    return lanewise(x, [](double v) { return std::sin(v); });
   } else {
     return sincos<true>(x);
   }
@@ -128,6 +149,8 @@ template <typename T, int N>
 Simd<T, N> cos(Simd<T, N> x) {
   if constexpr (is_complex<T>) {
     return std::cos(x.value);
+  } else if constexpr (std::is_same_v<T, double>) {
+    return lanewise(x, [](double v) { return std::cos(v); });
   } else {
     return sincos<false>(x);
   }
@@ -135,16 +158,20 @@ Simd<T, N> cos(Simd<T, N> x) {
 
 template <typename T, int N>
 Simd<T, N> erf(Simd<T, N> x) {
-  // https://github.com/pytorch/pytorch/blob/abf28982a8cb43342e7669d859de9543fd804cc9/aten/src/ATen/cpu/vec/vec256/vec256_float.h#L175
-  Simd<float, N> v = x;
-  auto t = recip(fma(Simd<float, N>(0.3275911f), abs(v), 1.0f));
-  auto r = fma(Simd<float, N>(1.061405429f), t, -1.453152027f);
-  r = fma(r, t, 1.421413741f);
-  r = fma(r, t, -0.284496736f);
-  r = fma(r, t, 0.254829592f);
-  auto e = -exp(-v * v);
-  auto result = Simd<T, N>(fma(e * t, r, 1.0f));
-  return select(x > 0, result, -result);
+  if constexpr (std::is_same_v<T, double>) {
+    return lanewise(x, [](double v) { return std::erf(v); });
+  } else {
+    // https://github.com/pytorch/pytorch/blob/abf28982a8cb43342e7669d859de9543fd804cc9/aten/src/ATen/cpu/vec/vec256/vec256_float.h#L175
+    Simd<float, N> v = x;
+    auto t = recip(fma(Simd<float, N>(0.3275911f), abs(v), 1.0f));
+    auto r = fma(Simd<float, N>(1.061405429f), t, -1.453152027f);
+    r = fma(r, t, 1.421413741f);
+    r = fma(r, t, -0.284496736f);
+    r = fma(r, t, 0.254829592f);
+    auto e = -exp(-v * v);
+    auto result = Simd<T, N>(fma(e * t, r, 1.0f));
+    return select(x > 0, result, -result);
+  }
 }
 
 template <typename T, int N>

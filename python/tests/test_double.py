@@ -301,6 +301,42 @@ class TestDouble(mlx_tests.MLXTestCase):
             vals = mx.linspace(0, math.pi, 2, mx.float64)
             self.assertEqual(vals.tolist()[1], math.pi)
 
+    def test_transcendental_precision(self):
+        # exp, sin, cos and erf use a fast float32 polynomial on the CPU. For
+        # float64 inputs they must be evaluated in double precision, otherwise
+        # the result silently carries only float32 accuracy.
+        with mx.stream(mx.cpu):
+            x_np = np.linspace(-3.0, 3.0, 257, dtype=np.float64)
+            x = mx.array(x_np, dtype=mx.float64)
+
+            erf_np = np.vectorize(math.erf, otypes=[np.float64])
+            for mx_op, np_op in [
+                (mx.exp, np.exp),
+                (mx.sin, np.sin),
+                (mx.cos, np.cos),
+                (mx.erf, erf_np),
+            ]:
+                y = np.array(mx_op(x), copy=False)
+                self.assertEqual(y.dtype, np.float64)
+                self.assertTrue(
+                    np.allclose(y, np_op(x_np), rtol=1e-14, atol=1e-300),
+                    msg=f"{mx_op.__name__} on float64 is not double precision",
+                )
+
+    def test_exp_range(self):
+        # The float32 implementation saturates outside [-88, 88]. A float64
+        # exp must cover the whole double range instead.
+        with mx.stream(mx.cpu):
+            x_np = np.array([-700.0, -200.0, -89.0, 89.0, 200.0, 700.0])
+            y = np.array(mx.exp(mx.array(x_np, dtype=mx.float64)), copy=False)
+            self.assertTrue(np.all(np.isfinite(y)))
+            self.assertTrue(np.all(y > 0))
+            self.assertTrue(np.allclose(y, np.exp(x_np), rtol=1e-14))
+
+            # float32 keeps saturating, as before.
+            y32 = np.array(mx.exp(mx.array(x_np, dtype=mx.float32)), copy=False)
+            self.assertTrue(np.isinf(y32[-1]))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
