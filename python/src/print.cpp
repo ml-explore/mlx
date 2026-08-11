@@ -44,7 +44,7 @@ void init_print(nb::module_& m) {
 
         Example:
             >>> print(x)  # Uses default precision
-            >>> mx.set_printoptions(precision=3):
+            >>> mx.set_printoptions(precision=3)
             >>> print(x)  # Uses precision of 3
             >>> print(x)  # Uses precision of 3 (again)
 
