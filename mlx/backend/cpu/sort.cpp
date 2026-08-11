@@ -311,6 +311,43 @@ void argpartition(const array& in, array& out, int axis, int kth) {
   }
 }
 
+template <typename T, bool Right>
+void searchsorted(const array& a, const array& v, array& out) {
+  auto n = static_cast<uint32_t>(a.size());
+  auto a_stride = a.strides()[0]; // sequence is 1D
+  const T* a_ptr = a.data<T>();
+  const T* v_ptr = v.data<T>();
+  uint32_t* out_ptr = out.data<uint32_t>();
+
+  auto bound = [a_ptr, a_stride, n](T x) {
+    uint32_t lo = 0;
+    uint32_t hi = n;
+    while (lo < hi) {
+      uint32_t mid = lo + (hi - lo) / 2;
+      T m = a_ptr[static_cast<int64_t>(mid) * a_stride];
+      bool below = Right ? !nan_aware_less(x, m) : nan_aware_less(m, x);
+      if (below) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  };
+
+  if (v.flags().row_contiguous) {
+    for (size_t i = 0; i < v.size(); ++i) {
+      out_ptr[i] = bound(v_ptr[i]);
+    }
+  } else {
+    ContiguousIterator it(v);
+    for (size_t i = 0; i < v.size(); ++i) {
+      out_ptr[i] = bound(v_ptr[it.loc]);
+      it.step();
+    }
+  }
+}
+
 } // namespace
 
 void ArgSort::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -448,6 +485,35 @@ void Partition::eval_cpu(const std::vector<array>& inputs, array& out) {
       case complex64:
         return partition<complex64_t>(out, axis_, kth_);
     }
+  });
+}
+
+void SearchSorted::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& v = inputs[1];
+
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_input_array(a);
+  encoder.set_input_array(v);
+  encoder.set_output_array(out);
+  encoder.dispatch([a = array::unsafe_weak_copy(a),
+                    v = array::unsafe_weak_copy(v),
+                    out = array::unsafe_weak_copy(out),
+                    right = right_]() mutable {
+    dispatch_all_types(a.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      if (right) {
+        searchsorted<T, true>(a, v, out);
+      } else {
+        searchsorted<T, false>(a, v, out);
+      }
+    });
   });
 }
 

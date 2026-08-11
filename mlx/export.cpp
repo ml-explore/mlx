@@ -430,6 +430,7 @@ struct PrimitiveFactory {
           "CumLogaddexp"),
       SERIALIZE_PRIMITIVE(Scatter),
       SERIALIZE_PRIMITIVE(ScatterAxis),
+      SERIALIZE_PRIMITIVE(SearchSorted),
       SERIALIZE_PRIMITIVE(Select),
       SERIALIZE_PRIMITIVE(Sigmoid),
       SERIALIZE_PRIMITIVE(Sign),

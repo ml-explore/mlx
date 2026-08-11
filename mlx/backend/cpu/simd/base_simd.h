@@ -245,6 +245,11 @@ Simd<T, 1> pow(Simd<T, 1> a, Simd<T, 1> b) {
     return std::pow(base, exp);
   } else {
     T res = 1;
+    if constexpr (std::is_signed_v<T>) {
+      if (exp < 0) {
+        return 0;
+      }
+    }
     while (exp) {
       if (exp & 1) {
         res *= base;
