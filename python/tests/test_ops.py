@@ -1192,6 +1192,13 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(result, expected))
 
+        # Large arguments still have to land in [-1, 1]
+        big = np.array([1e8, 1e9, 1e10, 1e20, 1e30], dtype=np.float32)
+        for op, npop in [(mx.sin, np.sin), (mx.cos, np.cos)]:
+            out = np.array(op(mx.array(big)))
+            self.assertTrue(np.all(np.abs(out) <= 1.0))
+            self.assertTrue(np.allclose(out, npop(big), atol=1e-6))
+
     def test_cos(self):
         a = mx.array(
             [0, math.pi / 4, math.pi / 2, math.pi, 3 * math.pi / 4, 2 * math.pi]
