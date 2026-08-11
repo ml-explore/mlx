@@ -276,6 +276,7 @@ std::vector<Connection> create_connections(
     }
 
     // Search for the name and try to open the device
+    bool found = false;
     for (int i = 0; i < num_devices; i++) {
       if (name == ibv().get_device_name(devices[i])) {
         auto ctx = ibv().open_device(devices[i]);
@@ -285,8 +286,18 @@ std::vector<Connection> create_connections(
           throw std::runtime_error(msg.str());
         }
         connections.emplace_back(ctx);
+        found = true;
         break;
       }
+    }
+
+    // Returning a shorter vector than device_names would leave the callers,
+    // which size themselves from device_names, indexing past its end.
+    if (!found) {
+      std::ostringstream msg;
+      msg << "[jaccl] Could not find device " << name << " (" << num_devices
+          << " available)";
+      throw std::runtime_error(msg.str());
     }
   }
   ibv().free_device_list(devices);
