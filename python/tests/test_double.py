@@ -301,6 +301,52 @@ class TestDouble(mlx_tests.MLXTestCase):
             vals = mx.linspace(0, math.pi, 2, mx.float64)
             self.assertEqual(vals.tolist()[1], math.pi)
 
+    def test_strided_matches_contiguous_elementwise(self):
+        # Regression for #4163 / #4161: f(view) must be bit-identical to
+        # f(contiguous_copy) for elementwise unary ops, and results must
+        # not depend on element position (simd body vs residual path).
+        # Binary/ternary ops share the same Accelerate-vs-libm pattern
+        # (e.g. x**2) and are left for a follow-up.
+        ops = [
+            ("tan", mx.tan),
+            ("sin", mx.sin),
+            ("cos", mx.cos),
+            ("exp", mx.exp),
+            ("log1p", mx.log1p),
+            ("sqrt", mx.sqrt),
+        ]
+        dtypes = [mx.float32, mx.float64]
+        rng = np.random.default_rng(0)
+        with mx.stream(mx.cpu):
+            for dtype in dtypes:
+                for n in [1, 3, 4, 5, 7, 8, 16, 33]:
+                    v = rng.uniform(0.1, 1.4, n)
+                    M = mx.array(np.stack([v, v], 1), dtype=dtype)
+                    strided = M[:, 0]
+                    contig = mx.array(np.ascontiguousarray(v), dtype=dtype)
+                    for name, op in ops:
+                        t1, t2 = op(strided), op(contig)
+                        mx.eval(t1, t2)
+                        self.assertTrue(
+                            np.array_equal(np.asarray(t1), np.asarray(t2)),
+                            msg=f"{name} dtype={dtype} n={n}: strided != contiguous",
+                        )
+                        full_arr = op(contig)
+                        mx.eval(full_arr)
+                        full = np.asarray(full_arr)
+                        for i in range(n):
+                            single_arr = op(contig[i : i + 1])
+                            mx.eval(single_arr)
+                            single = np.asarray(single_arr)[0]
+                            self.assertEqual(
+                                full[i].tobytes(),
+                                np.asarray(single).tobytes(),
+                                msg=(
+                                    f"{name} dtype={dtype} n={n} pos={i}: "
+                                    f"position-dependent result"
+                                ),
+                            )
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
