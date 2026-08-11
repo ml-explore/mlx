@@ -91,7 +91,7 @@ struct SVDWork<
 
     if (info != 0) {
       std::stringstream ss;
-      ss << "svd_impl: sgesvdx_ failed with code " << info;
+      ss << "[SVD::eval_cpu] SVD failed with error code " << info;
       throw std::runtime_error(ss.str());
     }
   }
@@ -181,7 +181,7 @@ struct SVDWork<std::complex<float>> {
 
     if (info != 0) {
       std::stringstream ss;
-      ss << "svd_impl: sgesvdx_ failed with code " << info;
+      ss << "[SVD::eval_cpu] SVD failed with error code " << info;
       throw std::runtime_error(ss.str());
     }
   }

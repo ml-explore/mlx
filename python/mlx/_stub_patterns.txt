@@ -7,7 +7,7 @@ mlx.core.__prefix__:
     __dlpack_device__: Callable[..., Any]
 
 mlx.core.__suffix__:
-  scalar: TypeAlias = int | float | bool
+  scalar: TypeAlias = int | float | bool | complex
   list_or_scalar: TypeAlias = scalar | list["list_or_scalar"]
   StreamOrDevice: TypeAlias = Stream | ThreadLocalStream | Device | DeviceType | None
   bool_: Dtype = ...
