@@ -1244,6 +1244,41 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertEqual(mem_pre, mem_post)
 
+    def test_multi_output_leak(self):
+        # A multi-output primitive inside a compiled function used to leave the
+        # traced arrays orphaned in their sibling reference cycle, which pinned
+        # every array they had captured.
+        dim, blocks = 128, 4
+        x = mx.random.normal((2, dim))
+        mx.eval(x)
+
+        def run():
+            weights = [mx.random.normal((dim, dim)) for _ in range(blocks)]
+            mx.eval(weights)
+
+            def forward(y):
+                for w in weights:
+                    a, b = mx.split(y @ w, 2, axis=-1)
+                    y = mx.concatenate([b, a], axis=-1)
+                return y
+
+            fn = mx.compile(forward)
+            mx.eval(fn(x))
+            del fn, forward, weights
+
+        # Warm up so the allocator is not growing for unrelated reasons
+        run()
+        gc.collect()
+        mx.synchronize()
+        mem_pre = mx.get_active_memory()
+
+        for _ in range(10):
+            run()
+            gc.collect()
+        mx.synchronize()
+
+        self.assertEqual(mx.get_active_memory(), mem_pre)
+
     def test_double_constant(self):
         with mx.stream(mx.cpu):
             x = mx.array(1.0, dtype=mx.float64)

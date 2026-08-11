@@ -469,6 +469,9 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
 
   // Deep copy the tape and parents map while preserving inputs and outputs
   std::vector<array> new_tape;
+  // One member of each multi-output group that gets replaced below, see the
+  // comment where this is cleared
+  std::vector<array> replaced_multi_outputs;
   std::unordered_set<uintptr_t> io_set;
   std::unordered_map<uintptr_t, array> old_to_new;
   for (auto& o : outputs) {
@@ -510,6 +513,7 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
         old_to_new.insert({out[i].id(), as[i]});
       }
       new_tape.push_back(as[arr.sibling_position()]);
+      replaced_multi_outputs.push_back(arr);
     } else {
       auto a = array(
           arr.shape(), arr.dtype(), arr.primitive_ptr(), std::move(inputs));
@@ -543,6 +547,15 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
     new_parents_map[old_to_new.find(id)->second.id()] = std::move(vec);
   }
   parents_map = std::move(new_parents_map);
+
+  // The replaced multi-output arrays reference each other through their
+  // siblings, so they only go away when array::~array() breaks that cycle, and
+  // it does so only for the last external reference. Both the tape and the
+  // parents map still held them until just above, so drop them here instead.
+  // Any group the caller still holds is left alone, since the reference count
+  // stays above the threshold and nothing is detached.
+  replaced_multi_outputs.clear();
+
   return {tape, parents_map};
 }
 
