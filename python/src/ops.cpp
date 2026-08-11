@@ -3278,7 +3278,7 @@ void init_ops(nb::module_& m) {
       "precise"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def softmax(a: array, /, axis: None | int | Sequence[int] = None, *, stream: StreamOrDevice = None) -> array"),
+          "def softmax(a: array, /, axis: None | int | Sequence[int] = None, *, precise: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Perform the softmax along the given axis.
 
@@ -3293,6 +3293,10 @@ void init_ops(nb::module_& m) {
             axis (int or list(int), optional): Optional axis or axes to compute
              the softmax over. If unspecified this performs the softmax over
              the full array.
+            precise (bool, optional): Accumulate in ``float32`` for inputs of
+              lower precision. Otherwise the accumulation type matches the
+              input, which can lose precision over long reduction axes.
+              Default: ``False``.
 
         Returns:
             array: The output of the softmax.
