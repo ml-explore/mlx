@@ -1429,6 +1429,32 @@ class TestOps(mlx_tests.MLXTestCase):
             out_mlx = mx.take_along_axis(a_mlx, mx.reshape(idx_mlx, shape), axis=ax)
             self.assertTrue(np.array_equal(out_np, np.array(out_mlx)))
 
+    def test_along_axis_invalid_axis(self):
+        # Negative out of bounds axes used to slip past the bounds check
+        # (unsigned arithmetic made it dead code) and either raise an internal
+        # error or segfault. See also expand_dims in test_expand_dims.
+        a = mx.arange(24).reshape(2, 3, 4)
+        idx = mx.zeros(a.shape, dtype=mx.int32)
+        values = mx.ones(a.shape, dtype=a.dtype)
+
+        for ax in [3, 4, 100, -4, -5, -100]:
+            with self.assertRaises(ValueError):
+                mx.take_along_axis(a, idx, axis=ax)
+            with self.assertRaises(ValueError):
+                mx.put_along_axis(a, idx, values, axis=ax)
+
+        # Valid negative axes still work
+        for ax in [-1, -2, -3]:
+            self.assertEqual(mx.take_along_axis(a, idx, axis=ax).shape, a.shape)
+            self.assertEqual(mx.put_along_axis(a, idx, values, axis=ax).shape, a.shape)
+
+    def test_cross_invalid_axis(self):
+        a = mx.array([1.0, 2.0, 3.0])
+        b = mx.array([4.0, 5.0, 6.0])
+        for ax in [1, 2, -2, -50]:
+            with self.assertRaises(ValueError):
+                mx.linalg.cross(a, b, axis=ax)
+
     def test_put_along_axis(self):
         for ax in [None, 0, 1, 2]:
             a_np = np.arange(16).reshape(2, 2, 4).astype(np.int32)

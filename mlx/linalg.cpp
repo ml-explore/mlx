@@ -440,12 +440,8 @@ array cross(
     int axis /* = -1 */,
     StreamOrDevice s /* = {} */) {
   auto check_ax = [axis](const array& arr) {
-    if (axis >= static_cast<int>(arr.ndim()) || axis + arr.ndim() < 0) {
-      std::ostringstream msg;
-      msg << "[linalg::cross] axis " << axis << " invalid for array with "
-          << arr.ndim() << " dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
+    // Normalizes and validates the axis, including negative out of bounds ones
+    normalize_axis_index(axis, arr.ndim(), "[linalg::cross] ");
     if (arr.shape(axis) < 2 || arr.shape(axis) > 3) {
       throw std::invalid_argument(
           "[linalg::cross] The specified axis must have size 2 or 3.");
