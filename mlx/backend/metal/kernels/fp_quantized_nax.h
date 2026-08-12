@@ -178,9 +178,6 @@ struct QuantizedBlockLoader {
     if (reduction_dim == 1) {
       scales += n_groups;
     } else {
-      // Advance from one BROWS-row reduction tile to the next in a
-      // [K, N / group_size] scale plane; see the identical fix in
-      // quantized_nax.h (QuantizedBlockLoader<..., 32, bits>).
       scales += group_stride;
     }
   }
