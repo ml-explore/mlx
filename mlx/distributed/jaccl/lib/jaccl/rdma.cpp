@@ -2,6 +2,7 @@
 
 #include <dlfcn.h>
 #include <unistd.h>
+#include <cerrno>
 #include <iostream>
 #include <sstream>
 
@@ -170,7 +171,12 @@ void Connection::create_queue_pair() {
   queue_pair = ibv().create_qp(protection_domain, &init_attr);
 
   if (queue_pair == nullptr) {
-    throw std::runtime_error("[jaccl] Couldn't create queue pair");
+    int err = errno;
+    std::ostringstream msg;
+    msg << "[jaccl] Creating the queue pair failed with errno " << err
+        << ". Thunderbolt RDMA devices support a limited number of queue "
+        << "pairs per device and fail here once they are exhausted.";
+    throw std::runtime_error(msg.str());
   }
 }
 
