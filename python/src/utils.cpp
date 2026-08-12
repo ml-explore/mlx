@@ -31,9 +31,15 @@ mx::array to_array(
     return mx::array(val, (out_t == mx::bool_) ? mx::int32 : out_t);
   } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
     auto out_t = dtype.value_or(mx::float32);
-    return mx::array(
-        nb::cast<float>(*pv),
-        mx::issubdtype(out_t, mx::floating) ? out_t : mx::float32);
+    if (!mx::issubdtype(out_t, mx::floating)) {
+      out_t = mx::float32;
+    }
+    if (out_t == mx::float64) {
+      // Cast straight to double: going through float would round the value
+      // to float32 precision while the result still advertises float64.
+      return mx::array(nb::cast<double>(*pv), out_t);
+    }
+    return mx::array(nb::cast<float>(*pv), out_t);
   } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
     return mx::array(static_cast<mx::complex64_t>(*pv), mx::complex64);
   } else if (auto pv = std::get_if<mx::array>(&v); pv) {
