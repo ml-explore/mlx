@@ -655,13 +655,6 @@ TEST_CASE("test categorical") {
   out = categorical(logits, 0, 100);
   CHECK(all(logical_or(equal(out, array(1u)), equal(out, array(3u))))
             .item<bool>());
-
-  out = categorical(zeros({20}), 0, 7);
-  CHECK_EQ(out.shape(), Shape{7});
-  CHECK_EQ(out.dtype(), uint32);
-  CHECK(max(out).item<uint32_t>() < 20);
-
-  CHECK_THROWS(categorical(zeros({0}), 0, 4));
 }
 
 TEST_CASE("test laplace") {

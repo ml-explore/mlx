@@ -394,7 +394,6 @@ array categorical_inverse_cdf(
     const Shape& shape,
     const std::optional<array>& key,
     StreamOrDevice s) {
-  // Same promotion the Gumbel-max path gets from adding its float32 noise
   auto dtype = promote_types(logits.dtype(), float32);
   auto x = astype(logits, dtype, s);
   auto m = max(x, s);
@@ -407,12 +406,9 @@ array categorical_inverse_cdf(
       exp(subtract(x, m, s), s),
       s);
 
-  // An exclusive scan starts at the identity, so cdf[0] is exactly 0
   auto cdf = cumsum(w, 0, /* reverse = */ false, /* inclusive = */ false, s);
   auto u = multiply(uniform(shape, float32, key, s), sum(w, s), s);
 
-  // The count of entries at or below u is in [1, n] since cdf[0] is 0. Zero
-  // weight entries repeat the cumulative value, so the count steps past them.
   return subtract(searchsorted(cdf, u, "right", s), array(1u, uint32), s);
 }
 
@@ -422,8 +418,7 @@ array categorical_impl(
     const Shape& shape,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s) {
-  // searchsorted takes a 1D sequence, so only a single distribution drawn
-  // more than once qualifies. An empty axis is left below for argmax to reject.
+  // searchsorted only takes 1D sequence.
   auto n = logits.shape(axis);
   if (n > 0 && logits.size() == static_cast<size_t>(n) && !shape.empty()) {
     return categorical_inverse_cdf(reshape(logits, {n}, s), shape, key, s);
