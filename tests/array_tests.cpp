@@ -10,6 +10,30 @@
 
 using namespace mlx::core;
 
+namespace {
+
+struct ComplexLike {
+  double real() const {
+    return 1.25;
+  }
+  double imag() const {
+    return -2.5;
+  }
+  operator float() const {
+    return 99.0f;
+  }
+};
+
+struct NonConvertibleLane {};
+
+struct UnsupportedComplexLike {
+  NonConvertibleLane real() const;
+  NonConvertibleLane imag() const;
+  operator float() const;
+};
+
+} // namespace
+
 TEST_CASE("test array basics") {
   // Scalar
   array x(1.0);
@@ -115,6 +139,49 @@ TEST_CASE("test array basics") {
     auto fp = array(data.begin(), {3}, float16);
     CHECK(array_equal(fp, array({1.0f, 0.0f, 1.0f}, float16)).item<bool>());
   }
+}
+
+TEST_CASE("test complex-like conversions") {
+  static_assert(can_convert_to_complex64<ComplexLike>);
+  static_assert(can_convert_to_complex128<ComplexLike>);
+  static_assert(can_convert_to_complex64<UnsupportedComplexLike>);
+  static_assert(can_convert_to_complex128<UnsupportedComplexLike>);
+  static_assert(can_convert_to_complex64<complex128_t>);
+  static_assert(can_convert_to_complex128<complex64_t>);
+  static_assert(!can_convert_to_complex64<complex64_t>);
+  static_assert(!can_convert_to_complex128<complex128_t>);
+  static_assert(!std::constructible_from<complex64_t, UnsupportedComplexLike>);
+  static_assert(!std::constructible_from<complex128_t, UnsupportedComplexLike>);
+  static_assert(sizeof(complex64_t) == sizeof(std::complex<float>));
+  static_assert(alignof(complex64_t) == alignof(std::complex<float>));
+  static_assert(sizeof(complex128_t) == sizeof(std::complex<double>));
+  static_assert(alignof(complex128_t) == alignof(std::complex<double>));
+
+  const complex64_t custom64 = ComplexLike{};
+  CHECK_EQ(custom64.real(), 1.25f);
+  CHECK_EQ(custom64.imag(), -2.5f);
+  const complex128_t custom128 = ComplexLike{};
+  CHECK_EQ(custom128.real(), 1.25);
+  CHECK_EQ(custom128.imag(), -2.5);
+
+  const array custom_array(ComplexLike{}, complex64);
+  CHECK_EQ(custom_array.dtype(), complex64);
+  CHECK_EQ(custom_array.item<complex64_t>(), complex64_t{1.25f, -2.5f});
+
+  const complex64_t from128 = complex128_t{3.5, -4.25};
+  const complex128_t from64 = complex64_t{5.5f, -6.75f};
+  CHECK_EQ(from128, complex64_t{3.5f, -4.25f});
+  CHECK_EQ(from64, complex128_t{5.5, -6.75});
+
+  const complex64_t cross64 = std::complex<double>{7.0, -8.0};
+  const complex128_t cross128 = std::complex<float>{9.0f, -10.0f};
+  CHECK_EQ(cross64, complex64_t{7.0f, -8.0f});
+  CHECK_EQ(cross128, complex128_t{9.0, -10.0});
+
+  const complex64_t scalar64 = 11;
+  const complex128_t scalar128 = 12;
+  CHECK_EQ(scalar64, complex64_t{11.0f, 0.0f});
+  CHECK_EQ(scalar128, complex128_t{12.0, 0.0});
 }
 
 TEST_CASE("test array types") {

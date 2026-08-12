@@ -2,12 +2,31 @@
 
 #pragma once
 #include <complex>
+#include <concepts>
+#include <type_traits>
+
 #include "mlx/types/half_types.h"
 
 namespace mlx::core {
 
 struct complex64_t;
 struct complex128_t;
+
+namespace detail {
+
+template <typename T>
+concept complex_like = requires(T& value) {
+  value.real();
+  value.imag();
+};
+
+template <typename T, typename Scalar>
+concept convertible_complex_like = complex_like<T> && requires(const T& value) {
+  { value.real() } -> std::convertible_to<Scalar>;
+  { value.imag() } -> std::convertible_to<Scalar>;
+};
+
+} // namespace detail
 
 template <typename T>
 inline constexpr bool can_convert_to_complex128 =
@@ -18,9 +37,14 @@ struct complex128_t : public std::complex<double> {
   complex128_t(double v, double u) : std::complex<double>(v, u) {};
   complex128_t(std::complex<double> v) : std::complex<double>(v) {};
 
-  template <
-      typename T,
-      typename = typename std::enable_if<can_convert_to_complex128<T>>::type>
+  template <typename T>
+    requires(
+        !std::same_as<std::remove_cvref_t<T>, complex128_t> &&
+        detail::convertible_complex_like<T, double>)
+  complex128_t(const T& x) : std::complex<double>(x.real(), x.imag()){};
+
+  template <typename T>
+    requires(can_convert_to_complex128<T> && !detail::complex_like<T>)
   complex128_t(T x) : std::complex<double>(x){};
 
   operator float() const {
@@ -37,9 +61,14 @@ struct complex64_t : public std::complex<float> {
   complex64_t(float v, float u) : std::complex<float>(v, u) {};
   complex64_t(std::complex<float> v) : std::complex<float>(v) {};
 
-  template <
-      typename T,
-      typename = typename std::enable_if<can_convert_to_complex64<T>>::type>
+  template <typename T>
+    requires(
+        !std::same_as<std::remove_cvref_t<T>, complex64_t> &&
+        detail::convertible_complex_like<T, float>)
+  complex64_t(const T& x) : std::complex<float>(x.real(), x.imag()){};
+
+  template <typename T>
+    requires(can_convert_to_complex64<T> && !detail::complex_like<T>)
   complex64_t(T x) : std::complex<float>(x){};
 
   operator float() const {
