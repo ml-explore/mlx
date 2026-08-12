@@ -20,8 +20,33 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         self.assertEqual(world.size(), world2.size())
         self.assertEqual(world.rank(), world2.rank())
 
-        with self.assertRaises(RuntimeError):
-            sub = world.split(world.rank() % 2)
+        n = world.size()
+        r = world.rank()
+
+        sub = world.split(r % 2)
+        members = [x for x in range(n) if x % 2 == r % 2]
+        self.assertEqual(sub.size(), len(members))
+        self.assertEqual(sub.rank(), members.index(r))
+        self.assertEqual(
+            mx.distributed.all_sum(mx.array(r), group=sub).item(), sum(members)
+        )
+
+        # The key decides the order within the subgroup.
+        sub = world.split(r % 2, key=n - r)
+        self.assertEqual(sub.rank(), list(reversed(members)).index(r))
+
+        # A color nobody shares gives a group of one.
+        solo = world.split(r)
+        self.assertEqual(solo.size(), 1)
+        self.assertEqual(solo.rank(), 0)
+
+        # Subgroups split again.
+        half = world.split(r < n // 2)
+        members = [x for x in range(n) if (x < n // 2) == (r < n // 2)]
+        self.assertEqual(half.size(), len(members))
+        self.assertEqual(
+            mx.distributed.all_sum(mx.array(r), group=half).item(), sum(members)
+        )
 
     def test_all_reduce_extra(self):
         world = mx.distributed.init()

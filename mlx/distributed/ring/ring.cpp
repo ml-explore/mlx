@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <fstream>
 #include <future>
@@ -357,20 +358,28 @@ class RingGroup : public GroupImpl {
     }
 
     size_ = nodes.size();
+    nodes_ = std::move(nodes);
+
+    // A ring of one has no neighbors to connect to. Collectives over a group
+    // this size are resolved before they reach a backend.
+    if (size_ == 1) {
+      return;
+    }
+
     int connect_to = (rank_ + 1) % size_;
 
     // We define the connection order by having the rank_ == size_ - 1 connect
     // first and accept after.
     if (rank_ < connect_to) {
       log_info(verbose_, "Rank", rank_, "accepting");
-      sockets_left_ = accept_connections(nodes[rank_]);
+      sockets_left_ = accept_connections(nodes_[rank_]);
       log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
-      sockets_right_ = make_connections(nodes[connect_to], verbose);
+      sockets_right_ = make_connections(nodes_[connect_to], verbose);
     } else {
       log_info(verbose_, "Rank", rank_, "connecting to", connect_to);
-      sockets_right_ = make_connections(nodes[connect_to], verbose);
+      sockets_right_ = make_connections(nodes_[connect_to], verbose);
       log_info(verbose_, "Rank", rank_, "accepting");
-      sockets_left_ = accept_connections(nodes[rank_]);
+      sockets_left_ = accept_connections(nodes_[rank_]);
     }
 
     // Failure if we couldn't make right or left sockets
@@ -462,7 +471,47 @@ class RingGroup : public GroupImpl {
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
-    throw std::runtime_error("[ring] Group split not supported.");
+    key = (key < 0) ? rank_ : key;
+
+    // Rotate every rank's color and key around the ring so that each one can
+    // work out the subgroups on its own.
+    std::vector<std::array<int, 2>> colors_keys(size_);
+    colors_keys[rank_] = {color, key};
+    constexpr size_t nbytes = 2 * sizeof(int);
+    for (int i = 1; i < size_; i++) {
+      int send_from = (rank_ - i + 1 + size_) % size_;
+      int recv_into = (rank_ - i + size_) % size_;
+      send(
+          sockets_right_,
+          reinterpret_cast<const char*>(colors_keys[send_from].data()),
+          nbytes);
+      recv(
+          sockets_left_,
+          reinterpret_cast<char*>(colors_keys[recv_into].data()),
+          nbytes);
+    }
+
+    // Ranks sharing our color, ordered by key with the parent rank breaking
+    // ties.
+    std::vector<int> members;
+    for (int r = 0; r < size_; r++) {
+      if (colors_keys[r][0] == color) {
+        members.push_back(r);
+      }
+    }
+    std::stable_sort(members.begin(), members.end(), [&](int a, int b) {
+      return colors_keys[a][1] < colors_keys[b][1];
+    });
+
+    std::vector<std::vector<detail::address_t>> nodes;
+    nodes.reserve(members.size());
+    for (int r : members) {
+      nodes.push_back(nodes_[r]);
+    }
+    int rank =
+        std::find(members.begin(), members.end(), rank_) - members.begin();
+
+    return std::make_shared<RingGroup>(rank, std::move(nodes), verbose_);
   }
 
   void all_gather(const array& input, array& output, Stream stream) override {
@@ -805,6 +854,7 @@ class RingGroup : public GroupImpl {
 
   int rank_;
   int size_;
+  std::vector<std::vector<detail::address_t>> nodes_;
 
   bool verbose_;
 
