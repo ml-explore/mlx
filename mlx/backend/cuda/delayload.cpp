@@ -24,6 +24,24 @@ inline fs::path cublas_dir() {
                         : relative_to_current_binary("../nvidia/cublas/bin");
 }
 
+inline fs::path cusolver_dir() {
+  return cuda_bin_dir() ? fs::path(cuda_bin_dir())
+                        : relative_to_current_binary("../nvidia/cusolver/bin");
+}
+
+fs::path load_cusolver() {
+  fs::path dir = cusolver_dir();
+  // cusolver resolves cusparse, nvjitlink and cublas at load time, add their
+  // wheel dirs to the search path.
+  ::AddDllDirectory(dir.c_str());
+  ::AddDllDirectory(cublas_dir().c_str());
+  ::AddDllDirectory(
+      relative_to_current_binary("../nvidia/cusparse/bin").c_str());
+  ::AddDllDirectory(
+      relative_to_current_binary("../nvidia/nvjitlink/bin").c_str());
+  return dir;
+}
+
 fs::path load_nvrtc() {
   fs::path nvrtc_dir = cuda_bin_dir()
       ? fs::path(cuda_bin_dir())
@@ -63,6 +81,9 @@ FARPROC WINAPI delayload_helper(unsigned dliNotify, PDelayLoadInfo pdli) {
       mod = ::LoadLibraryW((cudnn_dir / dll).c_str());
     } else if (dll.starts_with("cublas")) {
       mod = ::LoadLibraryW((cublas_dir() / dll).c_str());
+    } else if (dll.starts_with("cusolver")) {
+      static auto cusolver_dir = load_cusolver();
+      mod = ::LoadLibraryW((cusolver_dir / dll).c_str());
     } else if (dll.starts_with("nvrtc")) {
       static auto nvrtc_dir = load_nvrtc();
       mod = ::LoadLibraryW((nvrtc_dir / dll).c_str());
