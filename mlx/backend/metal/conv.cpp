@@ -1138,6 +1138,14 @@ void dispatch_conv_2D_gpu(
     return pad_in_channels_conv_2D_gpu(s, d, in, wt, out, conv_params);
   }
 
+  // Unfolding costs a pass over the input that the implicit gemm avoids. The
+  // neural accelerators pay that back once there are enough output channels,
+  // and they only run the reduced precision types.
+  if (metal::is_nax_available() && conv_params.O >= 512 &&
+      (out.dtype() == float16 || out.dtype() == bfloat16)) {
+    return explicit_gemm_conv_ND_gpu(s, d, in, wt, out, conv_params);
+  }
+
   // Direct to implicit gemm conv
   if (is_idil_one && specialized_channels) {
     return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
