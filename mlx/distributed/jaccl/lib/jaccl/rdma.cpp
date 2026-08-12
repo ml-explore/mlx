@@ -5,6 +5,7 @@
 #include <cerrno>
 #include <iostream>
 #include <sstream>
+#include <system_error>
 
 #include "jaccl/rdma.h"
 
@@ -172,10 +173,10 @@ void Connection::create_queue_pair() {
 
   if (queue_pair == nullptr) {
     int err = errno;
+    std::string error_message = std::generic_category().message(err);
     std::ostringstream msg;
-    msg << "[jaccl] Creating the queue pair failed with errno " << err
-        << ". Thunderbolt RDMA devices support a limited number of queue "
-        << "pairs per device and fail here once they are exhausted.";
+    msg << "[jaccl] Creating the queue pair failed with '" << error_message
+        << " (" << errno << ")'.";
     throw std::runtime_error(msg.str());
   }
 }
