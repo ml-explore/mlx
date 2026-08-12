@@ -348,6 +348,21 @@ class TestRandom(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.random.categorical(logits, shape=[10, 5], num_samples=5)
 
+        # Single distribution.
+        logits = mx.zeros((20,))
+
+        out = mx.random.categorical(logits, num_samples=7)
+        self.assertEqual(out.shape, (7,))
+        self.assertEqual(out.dtype, mx.uint32)
+        self.assertTrue(mx.max(out).item() < 20)
+
+        out = mx.random.categorical(logits, 0, [5, 3])
+        self.assertEqual(out.shape, (5, 3))
+        self.assertTrue(mx.max(out).item() < 20)
+
+        self.assertEqual(mx.random.categorical(logits, num_samples=1).shape, (1,))
+        self.assertEqual(mx.random.categorical(logits, num_samples=0).shape, (0,))
+
     def test_permutation(self):
         x = sorted(mx.random.permutation(4).tolist())
         self.assertEqual([0, 1, 2, 3], x)

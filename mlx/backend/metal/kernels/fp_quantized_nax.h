@@ -178,7 +178,7 @@ struct QuantizedBlockLoader {
     if (reduction_dim == 1) {
       scales += n_groups;
     } else {
-      scales += n_groups * group_stride;
+      scales += group_stride;
     }
   }
 };

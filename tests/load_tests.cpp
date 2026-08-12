@@ -168,6 +168,95 @@ TEST_CASE("test gguf") {
   }
 }
 
+// Writes a one-tensor GGUF (name "t", ndim 1, dim 4, type F32) whose tensor
+// data offset field is set verbatim to `tensor_data_offset`. Writes
+// `data_bytes` bytes of tensor data, defaulting to the full four floats.
+void write_raw_gguf(
+    const std::string& path,
+    uint64_t tensor_data_offset,
+    size_t data_bytes = 4 * sizeof(float)) {
+  std::ofstream out(path, std::ios::binary);
+  auto u32 = [&out](uint32_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 4);
+  };
+  auto u64 = [&out](uint64_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 8);
+  };
+  out.write("GGUF", 4);
+  u32(3); // version
+  u64(1); // tensor_count
+  u64(0); // metadata_kv_count
+  u64(1); // tensor name length
+  out.write("t", 1);
+  u32(1); // ndim
+  u64(4); // dim[0]
+  u32(0); // GGUF_TYPE_F32
+  u64(tensor_data_offset);
+  while (out.tellp() % 32 != 0) { // default GGUF alignment
+    out.put(0);
+  }
+  std::vector<char> data(data_bytes, 0);
+  out.write(data.data(), data.size());
+}
+
+TEST_CASE("test gguf tensor data offset validation") {
+  // A crafted tensor data offset must be rejected rather than turned into a
+  // pointer outside the mapping. See ml-explore/mlx#4136.
+  SUBCASE("valid offset loads") {
+    std::string file_path = get_temp_file("test_gguf_offset_ok.gguf");
+    write_raw_gguf(file_path, 0);
+    auto [weights, metadata] = load_gguf(file_path);
+    CHECK_EQ(weights.size(), 1);
+    CHECK(array_equal(weights.at("t"), zeros({4}, float32)).item<bool>());
+  }
+
+  SUBCASE("offset past the end of the file") {
+    std::string file_path = get_temp_file("test_gguf_offset_past_end.gguf");
+    write_raw_gguf(file_path, 1ull << 20);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("offset far past the end of the file") {
+    std::string file_path = get_temp_file("test_gguf_offset_far_past.gguf");
+    write_raw_gguf(file_path, 1ull << 40);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("offset that overflows the data section base") {
+    // Wraps back to an in-mapping address, so an end-pointer-only check would
+    // silently read the wrong bytes instead of reading out of bounds.
+    std::string file_path = get_temp_file("test_gguf_offset_wrap.gguf");
+    write_raw_gguf(file_path, ~0ull - 8);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("tensor extends past the end of the file") {
+    // In-range offset, but the data is truncated: only the extent check
+    // catches this.
+    std::string file_path = get_temp_file("test_gguf_truncated.gguf");
+    write_raw_gguf(file_path, 0, 4 * sizeof(float) - 1);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("tensor starts inside the file but ends past it") {
+    // A small offset, so the start is in range and only the extent decides.
+    // Pins the extent check to the tensor's own start rather than to the
+    // start of the data section.
+    std::string file_path = get_temp_file("test_gguf_partial_overrun.gguf");
+    write_raw_gguf(file_path, 8);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("offset just past the end of the file") {
+    // Only a few bytes past the end rather than far outside it, so the
+    // resulting pointer is still in the mapped page and reads succeed
+    // silently. Pins the offset bound to the file size exactly.
+    std::string file_path = get_temp_file("test_gguf_offset_just_past.gguf");
+    write_raw_gguf(file_path, 20);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+}
+
 TEST_CASE("test gguf metadata") {
   std::string file_path = get_temp_file("test_arr.gguf");
   using dict = std::unordered_map<std::string, array>;
