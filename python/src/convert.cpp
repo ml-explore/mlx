@@ -19,6 +19,11 @@
 #include "mlx/ops.h"
 #include "mlx/utils.h"
 
+// Defined in ops.cpp.
+namespace mlx::core {
+array astype(array a, Dtype dtype, bool force_copy, StreamOrDevice s = {});
+}
+
 enum PyScalarT {
   pybool = 0,
   pyint = 1,
@@ -374,7 +379,11 @@ nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a) {
 
 nb::ndarray<> mlx_to_dlpack(
     const mx::array& a,
+    bool force_copy,
     std::optional<std::tuple<int, int>> dl_device) {
+  if (force_copy) {
+    return mlx_to_nd_array<>(mx::astype(a, a.dtype(), true), dl_device);
+  }
   return mlx_to_nd_array<>(a, dl_device);
 }
 
@@ -728,9 +737,9 @@ mx::array create_array(
   } else if (nb::isinstance<mx::array>(v)) {
     auto arr = nb::cast<mx::array>(v);
     auto dtype = t.value_or(arr.dtype());
-    return mx::astype(arr, dtype, copy);
+    return mx::astype(arr, dtype, copy.value_or(false));
   } else {
     auto arr = to_array_with_accessor(v);
-    return mx::astype(arr, t.value_or(arr.dtype()), copy);
+    return mx::astype(arr, t.value_or(arr.dtype()), copy.value_or(false));
   }
 }
