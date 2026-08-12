@@ -306,6 +306,35 @@ class TestLinalg(mlx_tests.MLXTestCase):
         for M, L in zip(AB, Ls):
             self.assertTrue(mx.allclose(L @ L.T, M, rtol=1e-5, atol=1e-7))
 
+        if mx.cuda.is_available():
+            # The matrix above is singular, so its factor is undefined past the
+            # rank boundary and the GPU need not match the CPU there. Use
+            # positive definite inputs, sized to hit both cuSOLVER paths.
+            mx.random.seed(7)
+            for batch, n in [((), 3), ((16,), 8), ((2,), 512)]:
+                x = mx.random.normal(batch + (n, n))
+                A = x @ mx.swapaxes(x, -1, -2) + n * mx.eye(n)
+                for upper in [False, True]:
+                    G = mx.linalg.cholesky(A, upper=upper, stream=mx.gpu)
+                    C = mx.linalg.cholesky(A, upper=upper, stream=mx.cpu)
+                    self.assertTrue(mx.allclose(G, C, rtol=1e-4, atol=1e-5))
+                    tri = mx.tril(G, k=-1) if upper else mx.triu(G, k=1)
+                    self.assertTrue(mx.all(tri == 0))
+
+            # Empty and non contiguous inputs
+            self.assertEqual(
+                mx.linalg.cholesky(mx.zeros((0, 0)), stream=mx.gpu).shape, (0, 0)
+            )
+            At = mx.swapaxes(A, -1, -2)
+            self.assertTrue(
+                mx.allclose(
+                    mx.linalg.cholesky(At, stream=mx.gpu),
+                    mx.linalg.cholesky(At, stream=mx.cpu),
+                    rtol=1e-4,
+                    atol=1e-5,
+                )
+            )
+
     def test_pseudo_inverse(self):
         A = mx.array([[1, 2, 3], [6, -5, 4], [-9, 8, 7]], dtype=mx.float32)
         A_plus = mx.linalg.pinv(A, stream=mx.cpu)
