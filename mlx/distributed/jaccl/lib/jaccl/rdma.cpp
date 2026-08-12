@@ -2,8 +2,10 @@
 
 #include <dlfcn.h>
 #include <unistd.h>
+#include <cerrno>
 #include <iostream>
 #include <sstream>
+#include <system_error>
 
 #include "jaccl/rdma.h"
 
@@ -170,7 +172,12 @@ void Connection::create_queue_pair() {
   queue_pair = ibv().create_qp(protection_domain, &init_attr);
 
   if (queue_pair == nullptr) {
-    throw std::runtime_error("[jaccl] Couldn't create queue pair");
+    int err = errno;
+    std::string error_message = std::generic_category().message(err);
+    std::ostringstream msg;
+    msg << "[jaccl] Creating the queue pair failed with '" << error_message
+        << " (" << errno << ")'.";
+    throw std::runtime_error(msg.str());
   }
 }
 
