@@ -1094,7 +1094,6 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   (void)lid;
-  (void)M;
 
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
@@ -1115,23 +1114,20 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
       bits>;
 
   // Set the block
-  const int K_w = K * bytes_per_pack / pack_factor;
-  const int K_g = K / group_size;
   const int y_row = tid.y * BM;
   const int y_col = tid.x * BN;
 
   auto wl = (const device uint8_t*)w;
 
+  // Here w is [K, N]: packed and group-quantized along N, with row stride N.
   x += y_row * static_cast<int64_t>(K);
-  wl += y_col * K_w;
-  scales += y_col * K_g;
-  biases += y_col * K_g;
+  wl += y_col * bytes_per_pack / pack_factor;
+  scales += y_col / group_size;
+  biases += y_col / group_size;
   y += y_row * static_cast<int64_t>(N) + y_col;
 
-  // Make the x loader and mma operation
-  // const short num_els = min(BM, M - y_row);
-  // const short num_outs = min(BN, N - y_col);
-  loader_w_t loader_w(wl, scales, biases, K, Ws, simd_gid, simd_lid);
+  // Make the weight loader
+  loader_w_t loader_w(wl, scales, biases, N, Ws, simd_gid, simd_lid);
 
   constexpr short SM = BM / WM;
   constexpr short SN = BN / WN;
@@ -1143,6 +1139,8 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
 
   const short tm = SM * (simd_gid / WN);
   const short tn = SN * (simd_gid % WN);
+
+  const short sgp_sm = min(int(SM), M - (y_row + tm));
 
   const short ldb_tgp = BN_padded;
 
@@ -1168,7 +1166,12 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
 
       volatile int compiler_barrier;
 
-      Atile.load(x + kk1, K);
+      if (sgp_sm == SM) {
+        Atile.load(x + kk1, K);
+      } else {
+        Atile.load_safe(x + kk1, K, short2(SK, sgp_sm));
+      }
+
       Btile.template load<T, BN_padded, 1>(Ws + tn + kk1 * ldb_tgp);
 
       tile_matmad_nax(
@@ -1188,7 +1191,11 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
   // Store results to device memory
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  Dtile.store(y + tm * N + tn, N);
+  if (sgp_sm == SM) {
+    Dtile.store(y + tm * N + tn, N);
+  } else {
+    Dtile.store_safe(y + tm * N + tn, N, short2(SN, sgp_sm));
+  }
 }
 
 template <
