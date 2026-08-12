@@ -4,10 +4,9 @@ Writing a Fast KV Cache
 =======================
 
 Autoregressive generation appends one position to the key and value arrays for
-every token it produces. How that append is written dominates the cost of the
-cache.
+each generated token. The append strategy can dominate KV-cache performance.
 
-The direct way is :func:`concatenate`:
+Avoid appending naively with :func:`concatenate`:
 
 .. code-block:: python
 
@@ -17,7 +16,7 @@ The direct way is :func:`concatenate`:
       cache = mx.concatenate([cache, x], axis=1)
       mx.eval(cache)
 
-Prefer preallocating storage in fixed-size chunks and updating it in place:
+Instead, preallocate fixed-size chunks and update the cache in place:
 
 .. code-block:: python
 
@@ -33,11 +32,11 @@ Prefer preallocating storage in fixed-size chunks and updating it in place:
 
   keys = cache[:, :offset]
 
-Indexed assignment ``cache[:, offset : offset + 1, :] = x`` is equivalent and
-reads more naturally.
+You can also use indexed assignment, which may read more naturally:
+``cache[:, offset : offset + 1, :] = x``.
 
-Appending one position per step to 20 caches of shape ``[1, 4, N, 512]`` in
-``bfloat16``, measured on an M4 Max:
+The following measurements append one position per step to 20 ``bfloat16``
+caches of shape ``[1, 4, N, 512]`` on an M4 Max:
 
 .. list-table::
    :widths: 20 30 30
@@ -56,42 +55,37 @@ Appending one position per step to 20 caches of shape ``[1, 4, N, 512]`` in
      - 3.73 ms / step
      - 0.22 ms / step
 
-The preallocated version is flat in context length. The concatenating version
-is not.
+With preallocation, step time remains nearly constant as context length grows.
+Concatenation becomes progressively slower.
 
 Why Concatenating Is Slow
 -------------------------
 
-There are two costs, one obvious and one not.
+Concatenation has two costs: copying data and preventing buffer reuse.
 
-The obvious one is copying. :func:`concatenate` makes a new array and copies
-the entire contents on every step, so appending ``n`` positions copies on the
-order of ``n^2`` elements.
+:func:`concatenate` creates a new array and copies the existing cache at every
+step. Appending ``n`` positions therefore copies on the order of ``n^2``
+elements.
 
-The less visible one is that growing defeats buffer reuse. MLX pools freed
-device buffers, but a pooled buffer is only taken back by a request that
-closely matches its size: the pool does not split a buffer to serve a smaller
-request, nor combine buffers to serve a larger one. A loop that grows every
-step never produces a match, so every step allocates from the driver while the
-freed buffers collect at sizes nothing will ask for again. That cost is paid on
-the CPU, and in a profile it appears as GPU idle time between kernels rather
-than as a slow kernel, which makes it easy to misread as a problem with the
-model.
+Growing the cache also prevents buffer reuse. MLX pools freed device buffers,
+but reuses a buffer only for a similarly sized request. It does not split a
+larger buffer for a smaller request or combine smaller buffers for a larger
+one. Because a growing cache has a new size at every step, each allocation
+typically comes from the driver while freed buffers remain unused.
 
-Allocation sizes are rounded up to the page size, so while each step adds less
-than a page some steps do reuse a pooled buffer. Once the per-step growth
-reaches the page size, every step misses.
+This allocation work occurs on the CPU. In profiles, it appears as GPU idle
+time between kernels rather than as a slow kernel, which can make the model
+appear to be the bottleneck.
 
-Preallocating avoids both costs: the shape stops changing, so there is nothing
-to copy and nothing to allocate.
+Preallocation avoids both costs. The cache shape remains fixed, eliminating
+both repeated copies and per-step allocations.
 
 Choosing a Chunk Size
 ---------------------
 
-Use a multiple of 256.
+Use a chunk size that is a multiple of 256.
 
-Besides amortizing the growth step, this matters for attention routing on CUDA.
-Sending single-token attention to the fused cuDNN kernel requires the key and
-value arrays to be slices of a contiguous cache whose capacity is a multiple of
-256, with at least 256 positions in use. A cache grown by any other increment
-silently takes a slower path.
+This both amortizes growth and enables the fused cuDNN attention kernel on
+CUDA. For single-token attention, the key and value arrays must be slices of a
+contiguous cache with a capacity that is a multiple of 256, and at least 256
+positions must be in use. Other chunk sizes silently use a slower path.
