@@ -1216,6 +1216,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
+        # Equal logits normalize to log(1/n) whatever their magnitude
+        for v in [1e0, 1e4, 1e8, 1e20, 1e36]:
+            y = nn.log_softmax(mx.array([[v, v]]))
+            self.assertTrue(mx.allclose(y, mx.full((1, 2), -0.6931472), atol=1e-5))
+
     def test_log_sigmoid(self):
         x = mx.array([1.0, -1.0, 0.0])
         y = nn.log_sigmoid(x)

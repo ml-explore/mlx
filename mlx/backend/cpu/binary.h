@@ -360,26 +360,9 @@ void binary_float_op_cpu(
                     b = array::unsafe_weak_copy(b),
                     out = array::unsafe_weak_copy(out),
                     bopt]() mutable {
-    switch (out.dtype()) {
-      case float16:
-        binary_op<float16_t, Op>(a, b, out, bopt);
-        break;
-      case float32:
-        binary_op<float, Op>(a, b, out, bopt);
-        break;
-      case float64:
-        binary_op<double, Op>(a, b, out, bopt);
-        break;
-      case bfloat16:
-        binary_op<bfloat16_t, Op>(a, b, out, bopt);
-        break;
-      case complex64:
-        binary_op<complex64_t, Op>(a, b, out, bopt);
-        break;
-      default:
-        throw std::runtime_error(
-            "[binary_float] Only supports floating point types.");
-    }
+    dispatch_inexact_types(out.dtype(), "[binary_float]", [&](auto type_tag) {
+      binary_op<MLX_GET_TYPE(type_tag), Op>(a, b, out, bopt);
+    });
   });
 }
 
