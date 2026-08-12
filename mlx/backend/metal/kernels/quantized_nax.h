@@ -826,8 +826,8 @@ struct QuantizedBlockLoader<
       biases += n_groups;
       // }
     } else {
-      scales += n_groups * group_stride;
-      biases += n_groups * group_stride;
+      scales += group_stride;
+      biases += group_stride;
     }
   }
 };
