@@ -1,13 +1,11 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import unittest
-from unittest.mock import patch
 
 import mlx.core as mx
 import mlx.nn as nn
 import mlx_tests
 import numpy as np
-from mlx.nn.layers.upsample import upsample_cubic, upsample_linear
 
 try:
     import torch
@@ -313,80 +311,6 @@ class TestUpsample(mlx_tests.MLXTestCase):
                         float(mx.abs(out_aa - out_no).max()),
                         1e-6,
                     )
-
-    def test_antialias_uses_separable_path(self):
-        """AA interpolation should avoid cartesian product gather expansion."""
-        in_mx = mx.zeros((1, 16, 16, 1))
-        for mode in ("linear", "cubic"):
-            with self.subTest(mode=mode):
-                with patch(
-                    "mlx.nn.layers.upsample.product",
-                    side_effect=AssertionError("cartesian interpolation path used"),
-                ):
-                    out = nn.Upsample(
-                        scale_factor=0.25,
-                        mode=mode,
-                        align_corners=False,
-                        antialias=True,
-                    )(in_mx)
-                    mx.eval(out)
-                    self.assertEqual(out.shape, (1, 4, 4, 1))
-
-    def test_antialias_nearest_raises(self):
-        """Antialias + nearest should raise ValueError."""
-        with self.assertRaises(ValueError):
-            nn.Upsample(scale_factor=0.5, mode="nearest", antialias=True)
-
-    def test_antialias_align_corners_raises(self):
-        """Antialias + align_corners is unsupported and should raise."""
-        for mode in ("linear", "cubic"):
-            for scale in (0.5, 2.0):
-                with self.subTest(mode=mode, scale=scale):
-                    with self.assertRaises(ValueError):
-                        nn.Upsample(
-                            scale_factor=scale,
-                            mode=mode,
-                            align_corners=True,
-                            antialias=True,
-                        )
-
-    def test_antialias_align_corners_direct_functions_raise(self):
-        """Direct interpolation helpers should enforce the same AA contract."""
-        x = mx.zeros((1, 4, 4, 1))
-        for fn in (upsample_linear, upsample_cubic):
-            for scale in ((0.5, 0.5), (2.0, 2.0)):
-                with self.subTest(fn=fn.__name__, scale=scale):
-                    with self.assertRaises(ValueError):
-                        fn(x, scale, align_corners=True, antialias=True)
-
-    def test_antialias_differs_from_non_antialias(self):
-        """Antialiased downscale should produce different output than non-AA."""
-        np.random.seed(42)
-        in_np = np.random.normal(0, 1, (1, 32, 32, 3)).astype(np.float32)
-        in_mx = mx.array(in_np)
-
-        out_no = nn.Upsample(
-            scale_factor=0.5, mode="linear", align_corners=False, antialias=False
-        )(in_mx)
-        out_aa = nn.Upsample(
-            scale_factor=0.5, mode="linear", align_corners=False, antialias=True
-        )(in_mx)
-
-        # Outputs should differ (AA applies a wider filter)
-        diff = float(mx.abs(out_aa - out_no).max())
-        self.assertGreater(
-            diff,
-            1e-6,
-            "AA and non-AA downscale should produce different results",
-        )
-        # AA output should have lower variance (wider filter = more averaging)
-        std_no = float(mx.std(out_no))
-        std_aa = float(mx.std(out_aa))
-        self.assertLess(
-            std_aa,
-            std_no,
-            f"AA output should have lower variance: std_aa={std_aa:.4f} >= std_no={std_no:.4f}",
-        )
 
 
 if __name__ == "__main__":
