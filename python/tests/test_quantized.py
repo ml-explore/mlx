@@ -400,6 +400,39 @@ class TestQuantized(mlx_tests.MLXTestCase):
         with self.subTest(shape=(33000, 128, 64)):
             check(33000, 128, 64, 64, 4)
 
+    def test_qmm_non_transposed_group_size_lt_64(self):
+        # Regression for the non-transposed NAX loader with group_size < 64.
+        # A 64-wide weight tile holds multiple 32-value groups, and the gs=32
+        # loader advanced the scale pointer by n_groups * group_stride per
+        # reduction tile, reading out of bounds from the second K-tile on
+        # (garbage, and NaN under some inputs, at K > 64).
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        dtype = mx.float16 if (mx.default_device() == mx.gpu) else mx.float32
+        tol = 1e-3 if dtype == mx.float32 else 1.5e-3
+
+        def check(M, K, N, group_size, bits):
+            x = mx.random.normal(shape=(M, K), key=k1) / K**0.5
+            w = mx.random.normal(shape=(K, N), key=k2) / K**0.5
+            x = x.astype(dtype)
+            w = w.astype(dtype)
+            w_q, scales, biases = mx.quantize(w, group_size, bits)
+            w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
+            y_q = mx.quantized_matmul(
+                x, w_q, scales, biases, False, group_size, bits
+            )
+            y_hat = x @ w_hat
+            self.assertEqual(y_q.shape, y_hat.shape)
+            self.assertLess((y_q - y_hat).abs().max(), tol)
+
+        # K=64 is the single reduction-tile control; K > 64 spans two or more
+        # tiles, which exposed the over-advanced scale pointer.
+        for bits in [2, 4, 8]:
+            for M in [8, 33, 65]:
+                for K in [64, 128, 256]:
+                    with self.subTest(M=M, K=K, bits=bits):
+                        check(M, K, 128, 32, bits)
+
     def test_qmm_vjp(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

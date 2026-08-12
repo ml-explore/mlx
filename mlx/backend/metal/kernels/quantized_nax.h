@@ -826,8 +826,14 @@ struct QuantizedBlockLoader<
       biases += n_groups;
       // }
     } else {
-      scales += n_groups * group_stride;
-      biases += n_groups * group_stride;
+      // Advance from one BROWS-row reduction tile to the next. The scale
+      // plane is [K, N / group_size], so the step is BROWS rows of N/gs
+      // entries = group_stride. Advancing by n_groups * group_stride skips
+      // past n_groups weight tiles of scales, reading out of bounds from the
+      // second reduction tile on (visible at group_size=32 where one 64-wide
+      // tile contains two 32-value groups).
+      scales += group_stride;
+      biases += group_stride;
     }
   }
 };
