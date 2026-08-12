@@ -34,6 +34,12 @@ load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
 /** Load array from file in .npy format */
 MLX_API array load(std::string file, StreamOrDevice s = {});
 
+/** Zero-copy view of a tensor stored in a file: the data is an mmap'd,
+ * page-cache-backed region wrapped via the allocator's no-copy path
+ * (Metal only). The returned array is read-only by contract. */
+MLX_API array
+mmap_weights(const std::string& file, int64_t byte_offset, Shape shape, Dtype dtype);
+
 /** Load array map from .safetensors file format */
 MLX_API SafetensorsLoad
 load_safetensors(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});

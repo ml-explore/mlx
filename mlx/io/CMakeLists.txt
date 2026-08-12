@@ -1,4 +1,5 @@
-target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp)
+target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
+                           ${CMAKE_CURRENT_SOURCE_DIR}/mmap.cpp)
 
 if(MLX_BUILD_SAFETENSORS)
   target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/safetensors.cpp)

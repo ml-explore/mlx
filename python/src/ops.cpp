@@ -4430,6 +4430,32 @@ void init_ops(nb::module_& m) {
               with the associated keyword as the output file name.
       )pbdoc");
   m.def(
+      "mmap_weights",
+      [](const std::string& file,
+         int64_t offset,
+         const nb::object& shape,
+         const mx::Dtype& dtype) {
+        return mx::mmap_weights(file, offset, to_shape(shape), dtype);
+      },
+      "file"_a,
+      "offset"_a,
+      "shape"_a,
+      "dtype"_a,
+      R"pbdoc(
+        Zero-copy view of a tensor stored in a file (Metal only).
+
+        The array's data is an mmap'd, page-cache-backed region wrapped via
+        newBufferWithBytesNoCopy: no bytes are copied at creation, pages are
+        faulted in by first access (CPU or GPU) and stay wired while any
+        reference to the array lives. Read-only by contract.
+
+        Args:
+            file (str): Path to the file.
+            offset (int): Byte offset of the tensor data (4-byte aligned).
+            shape (list(int)): Tensor shape (row-major, contiguous).
+            dtype (Dtype): Element type.
+      )pbdoc");
+  m.def(
       "load",
       &mlx_load_helper,
       nb::arg(),
