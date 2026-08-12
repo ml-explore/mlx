@@ -109,8 +109,7 @@ void ReduceScatter::eval_cpu(
       distributed::detail::sum_scatter(group(), in, outputs[0], stream());
       break;
     default:
-      throw std::runtime_error(
-          "Only scatter sum is supported for now");
+      throw std::runtime_error("Only scatter sum is supported for now");
   }
   if (copied) {
     auto& enc = cpu::get_command_encoder(stream());
