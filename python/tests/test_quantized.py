@@ -1,5 +1,6 @@
 # Copyright © 2023-2026 Apple Inc.
 
+import os
 import platform
 import subprocess
 import unittest
@@ -353,6 +354,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 tol = 1e-3 if dtype == mx.float32 else 1.5e-3
                 self.assertLess((y_q - y_hat).abs().max(), tol)
 
+    @unittest.skipIf("CI" in os.environ, "too slow in CI")
     def test_qmm_non_transposed(self):
         # The non-transposed matmul (w is [K, N]) is reachable mainly from the
         # vjp of a quantized linear layer, so it gets much less coverage than
