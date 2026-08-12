@@ -690,6 +690,263 @@ struct QuantizedBlockLoader {
   }
 };
 
+// Experimental variant of QuantizedBlockLoader used by the
+// MLX_BF16_QMM_FP16 path (see mlx/backend/metal/quantized.cpp). The
+// device-resident scales/biases are TExt (bfloat16_t) while the
+// dequantized weights are written into TTile (float16_t) threadgroup
+// memory so that the per-element dequantize math and the downstream
+// simdgroup MMA both run in (fast, hardware accelerated) fp16 instead of
+// the software-emulated bf16 arithmetic. Only the load path differs from
+// QuantizedBlockLoader; the tiling/group-stride bookkeeping is identical.
+template <
+    typename TExt,
+    typename TTile,
+    short BROWS,
+    short BCOLS,
+    short dst_ld,
+    short reduction_dim,
+    short tgp_size,
+    short group_size,
+    short bits>
+struct QuantizedBlockLoaderCast {
+  static_assert(
+      BCOLS <= group_size,
+      "The group size should be larger than the columns");
+  static_assert(
+      group_size % BCOLS == 0,
+      "The group size should be divisible by the columns");
+  static_assert(
+      bits == 2 || bits == 3 || bits == 4 || bits == 5 || bits == 6 ||
+          bits == 8,
+      "Template undefined for bits not in {2, 3, 4, 5, 6, 8}");
+
+  MLX_MTL_CONST short pack_factor = get_pack_factor<bits, 8>();
+  MLX_MTL_CONST short bytes_per_pack = get_bytes_per_pack<bits>();
+  MLX_MTL_CONST short BCOLS_PACKED = BCOLS / pack_factor;
+  MLX_MTL_CONST short n_reads =
+      (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
+  MLX_MTL_CONST short group_steps = group_size / BCOLS;
+
+  const int src_ld;
+  const int tile_stride;
+  short group_step_cnt;
+  const int group_stride;
+
+  const short thread_idx;
+  const short bi;
+  const short bj;
+
+  threadgroup TTile* dst;
+  const device uint8_t* src;
+  const device TExt* scales;
+  const device TExt* biases;
+
+  QuantizedBlockLoaderCast(
+      const device uint8_t* src_,
+      const device TExt* scales_,
+      const device TExt* biases_,
+      const int src_ld_,
+      threadgroup TTile* dst_,
+      ushort simd_group_id [[simdgroup_index_in_threadgroup]],
+      ushort simd_lane_id [[thread_index_in_simdgroup]])
+      : src_ld(src_ld_),
+        tile_stride(
+            reduction_dim ? BCOLS_PACKED * bytes_per_pack
+                          : BROWS * src_ld * bytes_per_pack / pack_factor),
+        group_step_cnt(0),
+        group_stride(BROWS * src_ld / group_size),
+        thread_idx(simd_group_id * 32 + simd_lane_id),
+        bi(n_reads * thread_idx / BCOLS_PACKED),
+        bj((n_reads * thread_idx) % BCOLS_PACKED),
+        dst(dst_ + bi * dst_ld + bj * pack_factor),
+        src(src_ + bi * src_ld * bytes_per_pack / pack_factor +
+            bj * bytes_per_pack),
+        scales(scales_ + bi * src_ld / group_size),
+        biases(biases_ + bi * src_ld / group_size) {}
+
+  void load_unsafe() const {
+    if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
+      return;
+    }
+
+    TTile scale = static_cast<TTile>(*scales);
+    TTile bias = static_cast<TTile>(*biases);
+    for (int i = 0; i < n_reads; i++) {
+      dequantize<TTile, pack_factor, bits>(
+          src + i * bytes_per_pack, scale, bias, dst + i * pack_factor);
+    }
+  }
+
+  void load_safe(short2 src_tile_dim) const {
+    if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
+      return;
+    }
+
+    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
+      for (int i = 0; i < n_reads * pack_factor; i++) {
+        dst[i] = TTile(0);
+      }
+      return;
+    }
+
+    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
+      for (int i = 0; i < n_reads * pack_factor; i++) {
+        dst[i] = TTile(0);
+      }
+      return;
+    }
+
+    TTile scale = static_cast<TTile>(*scales);
+    TTile bias = static_cast<TTile>(*biases);
+    for (int i = 0; i < n_reads; i++) {
+      dequantize<TTile, pack_factor, bits>(
+          (device uint8_t*)(src + i * bytes_per_pack),
+          scale,
+          bias,
+          dst + i * pack_factor);
+    }
+  }
+
+  void next() {
+    src += tile_stride;
+    if (reduction_dim == 1) {
+      if (group_steps > 1) {
+        group_step_cnt++;
+        if (group_step_cnt == group_steps) {
+          group_step_cnt = 0;
+          scales++;
+          biases++;
+        }
+      } else {
+        scales++;
+        biases++;
+      }
+    } else {
+      scales += group_stride;
+      biases += group_stride;
+    }
+  }
+};
+
+// Experimental BlockLoader variant used by the MLX_BF16_QMM_FP16 path: reads
+// device-resident TExt (bfloat16_t) activations and casts them into TTile
+// (float16_t) threadgroup memory. Unlike mlx::steel::BlockLoader this cannot
+// rely on a vectorized same-width memcpy since the source and destination
+// element types differ (even though they happen to share the same byte
+// width), so every element is read and cast individually.
+template <
+    typename TExt,
+    typename TTile,
+    short BROWS,
+    short BCOLS,
+    short dst_ld,
+    short reduction_dim,
+    short tgp_size,
+    short alignment = 1,
+    short n_reads = (BCOLS * BROWS) / (tgp_size),
+    short TCOLS = BCOLS / n_reads,
+    short TROWS = tgp_size / TCOLS>
+struct BlockLoaderCast {
+  STEEL_CONST short n_rows = (BROWS + TROWS - 1) / TROWS;
+  STEEL_CONST short vec_size = n_reads;
+  // bf16 and fp16 are both 16-bit scalar types, so a run of `vec_size`
+  // contiguous per-thread elements can be read/cast/written using Metal's
+  // native `vec<T, W>` types instead of `vec_size` scalar loads + casts.
+  // This turns e.g. 8 scalar 16-bit loads + 8 scalar casts + 8 scalar
+  // stores into 2 vectorized 64-bit loads + 2 vectorized casts + 2
+  // vectorized stores (W=4), which is both fewer instructions and fewer,
+  // wider memory transactions. Fall back to W=2 or W=1 when vec_size does
+  // not divide evenly (e.g. small/unaligned tail configurations).
+  STEEL_CONST short cast_vec_width =
+      (vec_size % 4 == 0) ? 4 : ((vec_size % 2 == 0) ? 2 : 1);
+
+  const int src_ld;
+  const int tile_stride;
+
+  const short thread_idx;
+  const short bi;
+  const short bj;
+
+  threadgroup TTile* dst;
+  const device TExt* src;
+
+  METAL_FUNC BlockLoaderCast(
+      const device TExt* src_,
+      const int src_ld_,
+      threadgroup TTile* dst_,
+      ushort simd_group_id [[simdgroup_index_in_threadgroup]],
+      ushort simd_lane_id [[thread_index_in_simdgroup]])
+      : src_ld(src_ld_),
+        tile_stride(reduction_dim ? BCOLS : BROWS * src_ld),
+        thread_idx(simd_group_id * 32 + simd_lane_id),
+        bi(thread_idx / TCOLS),
+        bj(vec_size * (thread_idx % TCOLS)),
+        dst(dst_ + bi * dst_ld + bj),
+        src(src_ + bi * src_ld + bj) {}
+
+  METAL_FUNC void load_unsafe() const {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BROWS; i += TROWS) {
+      if constexpr (cast_vec_width > 1) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < vec_size; j += cast_vec_width) {
+          auto v = *((const device metal::vec<TExt, cast_vec_width>*)(
+              &src[i * src_ld + j]));
+          *((threadgroup metal::vec<TTile, cast_vec_width>*)(
+              &dst[i * dst_ld + j])) =
+              static_cast<metal::vec<TTile, cast_vec_width>>(v);
+        }
+      } else {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < vec_size; j++) {
+          dst[i * dst_ld + j] = static_cast<TTile>(src[i * src_ld + j]);
+        }
+      }
+    }
+  }
+
+  METAL_FUNC void load_safe(short2 src_tile_dim) const {
+    src_tile_dim = src_tile_dim - short2(bj, bi);
+
+    if (src_tile_dim.x <= 0 || src_tile_dim.y <= 0) {
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < BROWS; i += TROWS) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < vec_size; j++) {
+          dst[i * dst_ld + j] = TTile(0);
+        }
+      }
+      return;
+    }
+
+    bool tmp_idx[vec_size];
+    TExt tmp_val[vec_size];
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BROWS; i += TROWS) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < vec_size; j++) {
+        tmp_idx[j] = (i < src_tile_dim.y) && (j < src_tile_dim.x);
+      }
+
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < vec_size; j++) {
+        tmp_val[j] = src[(tmp_idx[j] ? i * src_ld + j : 0)];
+      }
+
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < vec_size; j++) {
+        dst[i * dst_ld + j] =
+            tmp_idx[j] ? static_cast<TTile>(tmp_val[j]) : TTile(0);
+      }
+    }
+  }
+
+  METAL_FUNC void next() {
+    src += tile_stride;
+  }
+};
+
 template <typename T, int group_size, int bits, int D>
 METAL_FUNC void qmv_quad_impl(
     const device uint32_t* w,
@@ -1225,6 +1482,153 @@ METAL_FUNC void qmm_t_impl(
       mlx::steel::BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE>;
   using loader_w_t = QuantizedBlockLoader<
       T,
+      BN,
+      BK,
+      BK_padded,
+      1,
+      WM * WN * SIMD_SIZE,
+      group_size,
+      bits>;
+
+  // Set the block
+  const int K_w = K * bytes_per_pack / pack_factor;
+  const int K_g = K / group_size;
+  const int y_row = tid.y * BM;
+  const int y_col = tid.x * BN;
+
+  auto wl = (const device uint8_t*)w;
+
+  x += y_row * static_cast<int64_t>(K);
+  wl += y_col * K_w;
+  scales += y_col * K_g;
+  biases += y_col * K_g;
+  y += y_row * static_cast<int64_t>(N) + y_col;
+
+  // Make the x loader and mma operation
+  const short num_els = min(BM, M - y_row);
+  const short num_outs = min(BN, N - y_col);
+  loader_x_t loader_x(x, K, Xs, simd_gid, simd_lid);
+  loader_w_t loader_w(wl, scales, biases, K, Ws, simd_gid, simd_lid);
+  mma_t mma_op(simd_gid, simd_lid);
+
+  if (num_els < BM) {
+    if (!aligned_N && num_outs < BN) {
+      for (int k = 0; k < K_eff; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(BK, num_els));
+        loader_w.load_safe(short2(BK, num_outs));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+    } else {
+      for (int k = 0; k < K_eff; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(BK, num_els));
+        loader_w.load_unsafe();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+    }
+  } else {
+    if (!aligned_N && num_outs < BN) {
+      for (int k = 0; k < K_eff; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_unsafe();
+        loader_w.load_safe(short2(BK, num_outs));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+    } else {
+      for (int k = 0; k < K_eff; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_unsafe();
+        loader_w.load_unsafe();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+    }
+  }
+
+  // Store results to device memory
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (num_els < BM || num_outs < BN) {
+    mma_op.store_result_safe(y, N, short2(num_outs, num_els));
+  } else {
+    mma_op.store_result(y, N);
+  }
+}
+
+// Experimental MLX_BF16_QMM_FP16 variant of qmm_t_impl. External
+// x/scales/biases/y buffers remain bfloat16_t (TExt) but the threadgroup
+// tiles (Xs, Ws) and the simdgroup MMA operands are float16_t (TTile); the
+// simdgroup accumulator stays float (BlockMMA's default AccumType), and the
+// float/fp16 result is cast back to bfloat16_t only at the final store. This
+// avoids doing the per-weight dequantize arithmetic and the tiled load casts
+// in software-emulated bf16 while keeping the externally visible dtype
+// unchanged.
+template <
+    typename TExt,
+    typename TTile,
+    const int group_size,
+    const int bits,
+    const bool aligned_N,
+    const int BM = 32,
+    const int BK = 32,
+    const int BN = 32>
+METAL_FUNC void qmm_t_impl_bf16fp16(
+    const device uint32_t* w,
+    const device TExt* scales,
+    const device TExt* biases,
+    const device TExt* x,
+    device TExt* y,
+    threadgroup TTile* Xs,
+    threadgroup TTile* Ws,
+    const constant int& K,
+    const constant int& N,
+    const constant int& M,
+    const constant int& K_eff,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
+  static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
+
+  (void)lid;
+
+  constexpr int WM = 2;
+  constexpr int WN = 2;
+  constexpr int pack_factor = get_pack_factor<bits, 8>();
+  constexpr int bytes_per_pack = get_bytes_per_pack<bits>();
+
+  constexpr int BK_padded = (BK + 16 / sizeof(TTile));
+
+  // Instantiate the appropriate BlockMMA and Loader. The MMA tile type is
+  // TTile (float16_t); the output type is TExt (bfloat16_t) and is only
+  // used by BlockMMA at the final (device-memory) store, where the float
+  // accumulator is cast down to bfloat16_t.
+  using mma_t = mlx::steel::
+      BlockMMA<TTile, TExt, BM, BN, BK, WM, WN, false, true, BK_padded, BK_padded>;
+  using loader_x_t = BlockLoaderCast<
+      TExt,
+      TTile,
+      BM,
+      BK,
+      BK_padded,
+      1,
+      WM * WN * SIMD_SIZE>;
+  using loader_w_t = QuantizedBlockLoaderCast<
+      TExt,
+      TTile,
       BN,
       BK,
       BK_padded,
@@ -1938,6 +2342,83 @@ template <
         tid);
   }
   qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
+      w,
+      scales,
+      biases,
+      x,
+      y,
+      Xs,
+      Ws,
+      K,
+      N,
+      M,
+      K,
+      tid,
+      lid,
+      simd_gid,
+      simd_lid);
+}
+
+// Experimental MLX_BF16_QMM_FP16 kernel: external buffers stay bfloat16_t
+// (matching affine_qmm_t's ABI), but the threadgroup tiles and simdgroup MMA
+// run in float16_t. See qmm_t_impl_bf16fp16 for details. Only instantiated
+// for group_size=32, bits=4 (see quantized.metal) and dispatched from
+// mlx::qmm() when MLX_BF16_QMM_FP16=1.
+template <
+    const int group_size,
+    const int bits,
+    const bool aligned_N,
+    const bool batched,
+    const int BM = 32,
+    const int BK = 32,
+    const int BN = 32>
+[[kernel]] void affine_qmm_t_bf16fp16(
+    const device uint32_t* w [[buffer(0)]],
+    const device bfloat16_t* scales [[buffer(1)]],
+    const device bfloat16_t* biases [[buffer(2)]],
+    const device bfloat16_t* x [[buffer(3)]],
+    device bfloat16_t* y [[buffer(4)]],
+    const constant int& K [[buffer(5)]],
+    const constant int& N [[buffer(6)]],
+    const constant int& M [[buffer(7)]],
+    const constant int& x_batch_ndims [[buffer(8)]],
+    const constant int* x_shape [[buffer(9)]],
+    const constant int64_t* x_strides [[buffer(10)]],
+    const constant int& w_batch_ndims [[buffer(11)]],
+    const constant int* w_shape [[buffer(12)]],
+    const constant int64_t* w_strides [[buffer(13)]],
+    const constant int64_t* s_strides [[buffer(14)]],
+    const constant int64_t* b_strides [[buffer(15)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  (void)lid;
+
+  constexpr int BK_padded = (BK + 16 / sizeof(float16_t));
+
+  threadgroup float16_t Xs[BM * BK_padded];
+  threadgroup float16_t Ws[BN * BK_padded];
+
+  if (batched) {
+    adjust_matrix_offsets<bfloat16_t>(
+        x,
+        w,
+        scales,
+        biases,
+        y,
+        M * N,
+        x_batch_ndims,
+        x_shape,
+        x_strides,
+        w_batch_ndims,
+        w_shape,
+        w_strides,
+        s_strides,
+        b_strides,
+        tid);
+  }
+  qmm_t_impl_bf16fp16<bfloat16_t, float16_t, group_size, bits, aligned_N, BM, BK, BN>(
       w,
       scales,
       biases,

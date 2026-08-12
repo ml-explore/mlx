@@ -3,6 +3,7 @@
 import os
 import platform
 import subprocess
+import sys
 import unittest
 from itertools import product
 
@@ -284,6 +285,100 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y_hat = x_hat @ mx.swapaxes(w_hat, -1, -2)
                 self.assertEqual(y_q.shape, y_hat.shape)
                 self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+    def test_qmm_bf16_fp16_experimental(self):
+        # Regression test for the experimental MLX_BF16_QMM_FP16 transposed
+        # affine int4/group_size=32 qmm kernel (see
+        # mlx/backend/metal/quantized.cpp's qmm_bf16_fp16()). The kernel
+        # keeps bfloat16_t at the device I/O boundary but runs threadgroup
+        # tiles / simdgroup MMA in float16_t, and is dispatched with either
+        # a BM=64/BN=64 ("wide", default) or BM=32/BN=32 ("narrow",
+        # MLX_BF16_QMM_FP16_TILE=32) threadgroup tiling.
+        #
+        # This guards specifically against a JIT-mode bug where the host
+        # dispatch's grid/threadgroup-relative addressing (computed from
+        # `bm`/`bn`) disagreed with the *compiled* kernel's BM/BN template
+        # arguments: get_template_definition() must be given the exact same
+        # BM/BK/BN used to size the host-side grid, or -- only under
+        # MLX_METAL_JIT=ON, since the default non-JIT build looks up a
+        # statically pre-instantiated kernel purely by name -- the JIT
+        # compiler silently falls back to the template's default (32,32,32)
+        # arguments regardless of the requested tiling, corrupting results
+        # (observed max abs error ~468 instead of ~1.5-2.7 for these
+        # shapes/seeds when the bug is present).
+        #
+        # env::bf16_qmm_fp16()/bf16_qmm_fp16_tile() cache the env var value
+        # for the lifetime of the process, so each tile/dtype configuration
+        # below must run in its own subprocess to take effect.
+        if not mx.metal.is_available():
+            return
+
+        group_size = 32
+        bits = 4
+        # (M, K, N, B) shapes: the Muse-style aligned matrix-matrix case,
+        # small-M (vector/"safe" load path), and a non-64-aligned N (only
+        # a multiple of 32) that exercises the wide tile's aligned_N=false
+        # branch specifically.
+        shapes = [
+            (512, 6656, 19968, 1),
+            (17, 6656, 19968, 1),
+            (512, 6656, 96, 1),
+            (512, 6656, 256, 3),
+        ]
+
+        script = (
+            "import sys, mlx.core as mx\n"
+            "M, K, N, B = map(int, sys.argv[1:5])\n"
+            "group_size, bits = 32, 4\n"
+            "mx.random.seed(1)\n"
+            "shape_x = (B, M, K) if B > 1 else (M, K)\n"
+            "x32 = mx.random.normal(shape_x)\n"
+            "w32 = mx.random.normal((N, K))\n"
+            "x = x32.astype(mx.bfloat16)\n"
+            "w_full = w32.astype(mx.bfloat16)\n"
+            "w, scales, biases = mx.quantize(w_full, group_size=group_size, bits=bits)\n"
+            "y = mx.quantized_matmul(x, w, scales, biases, transpose=True, "
+            "group_size=group_size, bits=bits)\n"
+            "mx.eval(y)\n"
+            "yref = x32.astype(mx.float32) @ mx.dequantize(w, scales, biases, "
+            "group_size=group_size, bits=bits).astype(mx.float32).T\n"
+            "err = (y.astype(mx.float32) - yref).abs()\n"
+            "print(float(err.max()))\n"
+        )
+
+        for M, K, N, B in shapes:
+            for tile_env in (None, "64", "32"):
+                env = os.environ.copy()
+                env["MLX_BF16_QMM_FP16"] = "1"
+                if tile_env is None:
+                    env.pop("MLX_BF16_QMM_FP16_TILE", None)
+                else:
+                    env["MLX_BF16_QMM_FP16_TILE"] = tile_env
+                out = subprocess.run(
+                    [sys.executable, "-c", script, str(M), str(K), str(N), str(B)],
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(
+                    out.returncode,
+                    0,
+                    msg=f"subprocess failed for shape={(M, K, N, B)} "
+                    f"tile={tile_env}: {out.stderr}",
+                )
+                max_abs_err = float(out.stdout.strip().splitlines()[-1])
+                # Correct fp16-tile rounding noise for these shapes/seed is
+                # ~1.3-2.7; a tile-size/JIT-template mismatch blows this up
+                # by two orders of magnitude (observed ~468), so 10.0 gives
+                # ample margin against false positives while still catching
+                # the regression.
+                self.assertLess(
+                    max_abs_err,
+                    10.0,
+                    msg=f"MLX_BF16_QMM_FP16 experimental kernel produced "
+                    f"excessive error for shape={(M, K, N, B)} "
+                    f"tile={tile_env}: max_abs_err={max_abs_err}",
+                )
 
     def test_qmm(self):
         key = mx.random.key(0)

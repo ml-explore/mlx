@@ -134,6 +134,53 @@
   instantiate_quantized_split_k(affine_qvm_split_k, type, group_size, bits, 8)   \
   instantiate_quantized_split_k(affine_qvm_split_k, type, group_size, bits, 32)  \
 
+// Experimental MLX_BF16_QMM_FP16 kernel (bfloat16_t external I/O, float16_t
+// threadgroup tiles / simdgroup MMA). Fixed-type kernel, no `type` template
+// parameter. Only instantiated for the affine int4, group_size=32 case
+// targeted by mlx/backend/metal/quantized.cpp's env-gated dispatch.
+#define instantiate_quantized_bf16fp16_aligned_batched(group_size, bits, aligned, batched)     \
+  instantiate_kernel(                                                                     \
+      "affine_qmm_t_bf16fp16_gs_" #group_size "_b_" #bits "_alN_" #aligned "_batch_" #batched, \
+      affine_qmm_t_bf16fp16,                                                                  \
+      group_size,                                                            \
+      bits,                                                                  \
+      aligned,                                                               \
+      batched)
+
+#define instantiate_quantized_bf16fp16(group_size, bits) \
+  instantiate_quantized_bf16fp16_aligned_batched(group_size, bits, true, 1) \
+  instantiate_quantized_bf16fp16_aligned_batched(group_size, bits, true, 0) \
+  instantiate_quantized_bf16fp16_aligned_batched(group_size, bits, false, 1) \
+  instantiate_quantized_bf16fp16_aligned_batched(group_size, bits, false, 0)
+
+instantiate_quantized_bf16fp16(32, 4)
+
+// Wider-tile variant (BM=64, BN=64, BK stays 32 since BK is capped by
+// group_size for the quantized-weight loader) used to explore tiling
+// tradeoffs for the MLX_BF16_QMM_FP16 kernel. Selected at runtime via
+// MLX_BF16_QMM_FP16_TILE=64 (see qmm_bf16_fp16() in quantized.cpp).
+#define instantiate_quantized_bf16fp16_wide_aligned_batched(          \
+    group_size, bits, aligned, batched)                               \
+  instantiate_kernel(                                                 \
+      "affine_qmm_t_bf16fp16_wide_gs_" #group_size "_b_" #bits         \
+      "_alN_" #aligned "_batch_" #batched,                            \
+      affine_qmm_t_bf16fp16,                                          \
+      group_size,                                                     \
+      bits,                                                           \
+      aligned,                                                        \
+      batched,                                                        \
+      64,                                                             \
+      32,                                                             \
+      64)
+
+#define instantiate_quantized_bf16fp16_wide(group_size, bits) \
+  instantiate_quantized_bf16fp16_wide_aligned_batched(group_size, bits, true, 1) \
+  instantiate_quantized_bf16fp16_wide_aligned_batched(group_size, bits, true, 0) \
+  instantiate_quantized_bf16fp16_wide_aligned_batched(group_size, bits, false, 1) \
+  instantiate_quantized_bf16fp16_wide_aligned_batched(group_size, bits, false, 0)
+
+instantiate_quantized_bf16fp16_wide(32, 4)
+
 #define instantiate_quantized_splitk_qmm(name, type, group_size, bits, aligned) \
   instantiate_kernel(                                                           \
       #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned,         \

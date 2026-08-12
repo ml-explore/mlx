@@ -201,6 +201,29 @@ inline bool enable_tf32() {
   return enable_tf32_;
 }
 
+// Experimental: route affine int4/group_size=32 transposed quantized
+// matrix-matrix multiplies (bfloat16_t activations/output) through a Metal
+// kernel whose threadgroup tiles and simdgroup MMA use float16_t (with float
+// accumulation) instead of bfloat16_t, casting at load/store time. Disabled
+// by default; see mlx/backend/metal/quantized.cpp.
+inline bool bf16_qmm_fp16() {
+  static bool bf16_qmm_fp16_ = get_var("MLX_BF16_QMM_FP16", 0);
+  return bf16_qmm_fp16_;
+}
+
+// Experimental: select the threadgroup tile size used by the
+// MLX_BF16_QMM_FP16 kernel. Defaults to 64, using a wider BM=64/BN=64
+// (BK=32, capped by group_size) tiling that benchmarks ~14% faster than the
+// BM=32/BN=32 tiling (matching the stock qmm_t kernels) for the target
+// M=512/K=6656/N=19968 Muse shape, at identical numerical results (bit-
+// identical to the BM=32/BN=32 path). Set MLX_BF16_QMM_FP16_TILE=32 to force
+// the narrower tiling for comparison; see qmm_bf16_fp16() in
+// mlx/backend/metal/quantized.cpp.
+inline int bf16_qmm_fp16_tile() {
+  static int bf16_qmm_fp16_tile_ = get_var("MLX_BF16_QMM_FP16_TILE", 64);
+  return bf16_qmm_fp16_tile_;
+}
+
 inline int nccl_timeout(int default_value) {
   static int nccl_timeout = get_var("MLX_NCCL_TIMEOUT", default_value);
   return nccl_timeout;

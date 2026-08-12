@@ -1020,6 +1020,95 @@ void gather_qmm_nax(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+// Experimental MLX_BF16_QMM_FP16 kernel dispatch. Same grid/threadgroup
+// layout as qmm()'s transposed path, but routes to affine_qmm_t_bf16fp16,
+// which keeps bfloat16_t at the device I/O boundary while running the
+// threadgroup tiles and simdgroup MMA in float16_t (float accumulation).
+// Only affine_qmm_t_bf16fp16 with group_size=32, bits=4 is instantiated in
+// quantized.metal, so this must only be called for that exact combination
+// (see the guard in qmm() below).
+void qmm_bf16_fp16(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases,
+    array& out,
+    int group_size,
+    int bits,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  int B = out.size() / M / N;
+
+  // Experimental tiling selection for the MLX_BF16_QMM_FP16 kernel.
+  // Defaults (MLX_BF16_QMM_FP16_TILE unset or 64) to a wider BM=64/BN=64
+  // tiling (BK stays 32, capped by group_size) instantiated as
+  // affine_qmm_t_bf16fp16_wide_* in quantized.metal, which benchmarks
+  // faster than the BM=32/BN=32 tiling (matching the stock qmm_t kernels)
+  // for the target Muse shapes. Set MLX_BF16_QMM_FP16_TILE=32 to force the
+  // narrower tiling (affine_qmm_t_bf16fp16_*) for comparison.
+  bool wide_tile = env::bf16_qmm_fp16_tile() != 32;
+
+  int wm = 2;
+  int wn = 2;
+  int bm = wide_tile ? 64 : 32;
+  int bn = wide_tile ? 64 : 32;
+  int bk = 32;
+  MTL::Size group_dims(32, wn, wm);
+  MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
+
+  bool aligned = N % bn == 0;
+  bool batched = B > 1;
+
+  std::string kname;
+  kname.reserve(64);
+  concatenate(
+      kname,
+      wide_tile ? "affine_qmm_t_bf16fp16_wide_gs_" : "affine_qmm_t_bf16fp16_gs_",
+      group_size,
+      "_b_",
+      bits,
+      aligned ? "_alN_true" : "_alN_false",
+      batched ? "_batch_1" : "_batch_0");
+  // IMPORTANT: BM/BK/BN must be passed here explicitly and must match the
+  // exact tiling encoded in `kname`/`bm`/`bn` above and the static
+  // instantiations in quantized.metal (affine_qmm_t_bf16fp16_wide_* uses
+  // 64,32,64; affine_qmm_t_bf16fp16_* uses the 32,32,32 defaults). In the
+  // default (non-JIT) build, get_quantized_kernel() ignores template_def
+  // and looks up the pre-compiled kernel purely by `kname`, so this
+  // omission was previously harmless there. But with MLX_METAL_JIT=ON,
+  // get_quantized_kernel() JIT-compiles `template_def` at runtime -- if
+  // BM/BK/BN are omitted, the kernel silently falls back to its *default*
+  // template arguments (32,32,32) regardless of `kname`/`wide_tile`, which
+  // would compile a 32x32-tiled kernel while the host still dispatches a
+  // grid and threadgroup-relative addressing computed for 64x64 tiles,
+  // producing wrong results.
+  std::string template_def = get_template_definition(
+      kname, "affine_qmm_t_bf16fp16", group_size, bits, aligned, batched, bm, bk, bn);
+  MTL::ComputePipelineState* kernel =
+      get_quantized_kernel(d, kname, template_def, "affine");
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  int c = 0;
+  compute_encoder.set_input_array(w, c++);
+  compute_encoder.set_input_array(scales, c++);
+  if (biases) {
+    compute_encoder.set_input_array(*biases, c++);
+  }
+  compute_encoder.set_input_array(x, c++);
+  compute_encoder.set_output_array(out, c++);
+  compute_encoder.set_bytes(K, c++);
+  compute_encoder.set_bytes(N, c++);
+  compute_encoder.set_bytes(M, c++);
+  add_strides_and_shapes(compute_encoder, B <= 1, x, w, scales, biases, c);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+}
+
 void qmm(
     const array& x,
     const array& w,
@@ -1035,6 +1124,17 @@ void qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
+  // Experimental: MLX_BF16_QMM_FP16=1 opts in to running the transposed
+  // affine int4/group_size=32 bfloat16_t qmm through a kernel whose
+  // threadgroup tiles and simdgroup MMA are float16_t instead of
+  // bfloat16_t. Restricted to the exact instantiation compiled into
+  // quantized.metal; falls through to the default kernels otherwise.
+  if (env::bf16_qmm_fp16() && transpose && mode == "affine" &&
+      x.dtype() == bfloat16 && group_size == 32 && bits == 4) {
+    return qmm_bf16_fp16(
+        x, w, scales, biases, out, group_size, bits, M, N, K, d, s);
+  }
+
   bool has_nax_kernel =
       metal::is_nax_available() && (transpose || mode == "affine");
   if (has_nax_kernel && transpose && (K % 64 == 0) &&
