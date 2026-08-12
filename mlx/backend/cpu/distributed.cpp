@@ -110,7 +110,7 @@ void ReduceScatter::eval_cpu(
       break;
     default:
       throw std::runtime_error(
-          "Only all reduce sum, min and max are supported for now");
+          "Only scatter sum is supported for now");
   }
   if (copied) {
     auto& enc = cpu::get_command_encoder(stream());
