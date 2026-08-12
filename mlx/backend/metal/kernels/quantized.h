@@ -1213,7 +1213,9 @@ template <
     const bool aligned_N,
     const int BM = 32,
     const int BK = 32,
-    const int BN = 32>
+    const int BN = 32,
+    const int WM = 2,
+    const int WN = 2>
 METAL_FUNC void qmm_t_impl(
     const device uint32_t* w,
     const device T* scales,
@@ -1235,8 +1237,6 @@ METAL_FUNC void qmm_t_impl(
 
   (void)lid;
 
-  constexpr int WM = 2;
-  constexpr int WN = 2;
   constexpr int pack_factor = get_pack_factor<bits, 8>();
   constexpr int bytes_per_pack = get_bytes_per_pack<bits>();
 
@@ -1914,7 +1914,9 @@ template <
     const bool batched,
     const int BM = 32,
     const int BK = 32,
-    const int BN = 32>
+    const int BN = 32,
+    const int WM = 2,
+    const int WN = 2>
 [[kernel]] void affine_qmm_t(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1961,7 +1963,7 @@ template <
         b_strides,
         tid);
   }
-  qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
+  qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN, WM, WN>(
       w,
       scales,
       biases,

@@ -42,6 +42,25 @@
       aligned,                                                               \
       batched)
 
+// Like instantiate_quantized_aligned_batched, but also pins BM/BK/BN (the
+// qmm_t tile size), for kernels that need a non-default tile ahead-of-time
+// compiled. Name must match quantized.cpp's qmm() kname exactly ("_bmX_bnY"
+// suffix, no separate "_bk" component since BK is always 32 here).
+#define instantiate_quantized_aligned_batched_tile(                          \
+    name, type, group_size, bits, aligned, batched, bm, bk, bn)              \
+  instantiate_kernel(                                                        \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned        \
+            "_batch_" #batched "_bm" #bm "_bn" #bn,                          \
+      name,                                                                  \
+      type,                                                                  \
+      group_size,                                                            \
+      bits,                                                                  \
+      aligned,                                                               \
+      batched,                                                               \
+      bm,                                                                    \
+      bk,                                                                    \
+      bn)
+
 #define instantiate_quantized_quad(name, type, group_size, bits, D, batched)     \
   instantiate_kernel(                                                            \
       #name "_" #type "_gs_" #group_size "_b_" #bits "_d_" #D "_batch_" #batched, \
@@ -179,4 +198,36 @@
   instantiate_quantized_groups(6) \
   instantiate_quantized_groups(8)
 
-instantiate_quantized_all() // clang-format on
+instantiate_quantized_all()
+
+// Large-M tile (BM=128, BN=64, BK=32) for affine_qmm_t, ahead-of-time
+// compiled so the default (MLX_METAL_JIT=OFF) build -- what `pip install
+// mlx` actually ships -- has this kernel available without falling back to
+// runtime JIT compilation. See qmm()'s large-M dispatch branch in
+// quantized.cpp: it only takes this path for the (group_size, bits)
+// combos instantiated here, so a shape that lands outside this set at
+// large M safely falls through to the original 32x32x32 tile instead of
+// hitting a missing kernel. Scoped to bf16/fp16 x {gs=32,64} x {bits=4,8}
+// -- the combo this fork's actual workload (evidence/2026-08-09-mlx-fork/)
+// uses -- rather than instantiated across the full type/group_size/bits
+// matrix above, to keep this addition's compile-time and binary-size cost
+// bounded until a wider need is demonstrated. Naming must exactly match
+// the kname built in quantized.cpp's qmm().
+#define instantiate_quantized_large_m_tile(type, group_size, bits)          \
+  instantiate_quantized_aligned_batched_tile(                               \
+      affine_qmm_t, type, group_size, bits, true, 1, 128, 32, 64)           \
+  instantiate_quantized_aligned_batched_tile(                               \
+      affine_qmm_t, type, group_size, bits, true, 0, 128, 32, 64)           \
+  instantiate_quantized_aligned_batched_tile(                               \
+      affine_qmm_t, type, group_size, bits, false, 1, 128, 32, 64)          \
+  instantiate_quantized_aligned_batched_tile(                               \
+      affine_qmm_t, type, group_size, bits, false, 0, 128, 32, 64)
+
+#define instantiate_quantized_large_m_tile_types(group_size, bits)  \
+  instantiate_quantized_large_m_tile(float16_t, group_size, bits)   \
+  instantiate_quantized_large_m_tile(bfloat16_t, group_size, bits)
+
+instantiate_quantized_large_m_tile_types(32, 4)
+instantiate_quantized_large_m_tile_types(32, 8)
+instantiate_quantized_large_m_tile_types(64, 4)
+instantiate_quantized_large_m_tile_types(64, 8) // clang-format on

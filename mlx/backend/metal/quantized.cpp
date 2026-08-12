@@ -1048,16 +1048,73 @@ void qmm(
 
   int B = out.size() / M / N;
 
+  // qmm_t's tile is fixed at 32x32x32 regardless of M/N/K/device, which is
+  // sized for small-M (decode) calls. At large M (prefill-shaped calls)
+  // this dispatches far more threadgroups than the dense steel GEMM path
+  // takes at the same shape, and each one re-reads a larger share of both
+  // operand matrices from device memory -- see
+  // evidence/2026-08-09-mlx-fork/ in the minimax-h3-mlx repo for the
+  // measured gap, dispatch trace, and tile-size sweep that motivated this
+  // branch and this specific 128x64 choice (64x64 got partway there;
+  // 128x64 landed closest to the dense baseline of the sizes tried;
+  // 128x128 was a large regression, likely too few threadgroups per core
+  // to hide memory latency once M/BM * N/BN drops far enough. See
+  // fix-report.md's config table for the full sweep).
+  //
+  // affine_qmm_t / qmm_t_impl (kernels/quantized.h) already accept
+  // BM/BK/BN (and, after this change, WM/WN) as template parameters with
+  // defaults matching the old fixed 32x32x32/WM=2/WN=2 config -- this
+  // dispatch layer simply never varied them. This branch opts large-M,
+  // transpose=true calls into a 128x64 output tile (BK stays 32:
+  // QuantizedBlockLoader requires BK <= group_size, and group_size can be
+  // as small as 32, so BK can't grow without also constraining
+  // group_size). wm/wn are left at their existing defaults (2, 2) --
+  // varying them (tried wm=1,wn=2, mirroring dense's simdgroup config) made
+  // no measurable difference at this tile size, so there was no reason to
+  // deviate from the existing default. Every other call -- small M,
+  // transpose=false, or M below the threshold -- takes the exact same path
+  // and kernel as before.
+  //
+  // kLargeMTileThreshold is intentionally a compile-time constant (not a
+  // runtime knob) to keep this a pure, auditable tuning branch; bump it
+  // temporarily to force the old 32x32 tile at a given M for A/B
+  // benchmarking.
+  //
+  // The (type, group_size, bits) guard below matters because this same
+  // qmm() is linked into both the JIT build (jit_kernels.cpp, compiles any
+  // template instantiation on demand at runtime -- would work for any
+  // combo unguarded) and the default, non-JIT build (nojit_kernels.cpp,
+  // `pip install mlx`'s actual configuration -- looks up a *fixed* set of
+  // ahead-of-time-compiled kernel names and throws if the name it computes
+  // isn't in that set). The 128x64 tile is only ahead-of-time instantiated
+  // for {float16_t, bfloat16_t} x {group_size 32, 64} x {bits 4, 8} (see
+  // quantized.metal's instantiate_quantized_large_m_tile_types calls) --
+  // this fork's actual workload (evidence/2026-08-09-mlx-fork/) -- so this
+  // guard keeps behavior identical across both builds: every combo outside
+  // this scoped set falls through to the original 32x32x32 path at every M,
+  // whether or not the running build happens to have JIT available to
+  // synthesize it on demand. Widening this list is a matter of adding the
+  // corresponding instantiate_quantized_large_m_tile_types(...) call.
+  constexpr int kLargeMTileThreshold = 4096;
+  constexpr int kLargeMBlockDimM = 128;
+  constexpr int kLargeMBlockDimN = 64;
+  bool large_m_tile_dtype_supported =
+      x.dtype() == float16 || x.dtype() == bfloat16;
+  bool large_m_tile_quant_supported =
+      (group_size == 32 || group_size == 64) && (bits == 4 || bits == 8);
+  bool large_m_tile = transpose && M >= kLargeMTileThreshold &&
+      large_m_tile_dtype_supported && large_m_tile_quant_supported;
+
   int wm = 2;
   int wn = 2;
-  int bm = 32;
-  int bn = 32;
+  int bm = large_m_tile ? kLargeMBlockDimM : 32;
+  int bn = large_m_tile ? kLargeMBlockDimN : 32;
   MTL::Size group_dims(32, wn, wm);
   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
 
   std::string kname;
   kname.reserve(64);
-  bool aligned = N % 32 == 0;
+  bool aligned = N % bn == 0;
   bool batched = B > 1;
   std::string type_string = get_type_string(x.dtype());
   concatenate(
@@ -1069,20 +1126,38 @@ void qmm(
       "_b_",
       bits,
       transpose ? (aligned ? "_alN_true" : "_alN_false") : "",
-      batched ? "_batch_1" : "_batch_0");
+      batched ? "_batch_1" : "_batch_0",
+      large_m_tile ? "_bm" + std::to_string(bm) + "_bn" + std::to_string(bn)
+                   : "");
   std::string template_def;
   MTL::ComputePipelineState* kernel;
   if (transpose) {
-    kernel = get_quantized_kernel_wrapped(
-        d,
-        kname,
-        "qmm_t",
-        mode,
-        type_string,
-        group_size,
-        bits,
-        aligned,
-        batched);
+    if (large_m_tile) {
+      kernel = get_quantized_kernel_wrapped(
+          d,
+          kname,
+          "qmm_t",
+          mode,
+          type_string,
+          group_size,
+          bits,
+          aligned,
+          batched,
+          bm,
+          /* BK = */ 32,
+          bn);
+    } else {
+      kernel = get_quantized_kernel_wrapped(
+          d,
+          kname,
+          "qmm_t",
+          mode,
+          type_string,
+          group_size,
+          bits,
+          aligned,
+          batched);
+    }
   } else {
     kernel = get_quantized_kernel_wrapped(
         d, kname, "qmm_n", mode, type_string, group_size, bits, batched);
