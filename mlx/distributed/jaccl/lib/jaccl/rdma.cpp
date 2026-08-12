@@ -181,16 +181,28 @@ const Destination& Connection::info() {
 
   ibv_port_attr port_attr;
   ibv().query_port(ctx, 1, &port_attr);
-  ibv_gid gid;
+  ibv_gid gid = {};
+  bool found_gid = false;
   for (int i = 0; i < port_attr.gid_tbl_len; i++) {
     ibv_gid tmp;
     if (ibv().query_gid(ctx, 1, i, &tmp) == 0) {
       if (*(uint64_t*)&tmp.raw[0] == 0 && *(uint16_t*)&tmp.raw[8] == 0 &&
           *(uint16_t*)&tmp.raw[10] == 0xffff) {
         gid = tmp;
+        found_gid = true;
         break;
       }
     }
+  }
+
+  // Fail here rather than hand an unset GID to the queue pair.
+  if (!found_gid) {
+    std::ostringstream msg;
+    msg << "[jaccl] No IPv4-mapped GID for this device. Thunderbolt RDMA ports "
+        << "only publish one once the interface has an IPv4 address; assign a "
+        << "link-local address to it, for example: ifconfig <interface> inet "
+        << "169.254.0.1 netmask 255.255.0.0 alias";
+    throw std::runtime_error(msg.str());
   }
 
   src.local_id = port_attr.lid;
