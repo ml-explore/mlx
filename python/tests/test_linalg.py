@@ -38,6 +38,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
                             with self.subTest(
                                 shape=shape, ord=o, axis=axis, keepdims=keepdims
                             ):
+                                self.assertEqual(out_mx.shape, out_np.shape)
                                 self.assertTrue(
                                     np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6)
                                 )
@@ -51,6 +52,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
                     out_np = np.linalg.norm(x_np, ord=o, keepdims=keepdims)
                     out_mx = mx.linalg.norm(x_mx, ord=o, keepdims=keepdims)
                     with self.subTest(shape=shape, ord=o, keepdims=keepdims):
+                        self.assertEqual(out_mx.shape, out_np.shape)
                         self.assertTrue(
                             np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6)
                         )
@@ -63,6 +65,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 out_np = np.linalg.norm(x_np, keepdims=keepdims)
                 out_mx = mx.linalg.norm(x_mx, keepdims=keepdims)
                 with self.subTest(shape=shape, keepdims=keepdims):
+                    self.assertEqual(out_mx.shape, out_np.shape)
                     self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
 
         # tests for negative indexing: -1/1/inf/-inf/

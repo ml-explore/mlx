@@ -388,12 +388,42 @@ int get_valid_axis(int axis, int ndim) {
   return ax;
 }
 
+// O(N + M) in memory, where the Gumbel-max trick needs O(N * M)
+array categorical_inverse_cdf(
+    const array& logits,
+    const Shape& shape,
+    const std::optional<array>& key,
+    StreamOrDevice s) {
+  auto dtype = promote_types(logits.dtype(), float32);
+  auto x = astype(logits, dtype, s);
+  auto m = max(x, s);
+
+  // exp(x - m) is NaN when m is infinite, where the distribution is uniform
+  // over the maximal entries
+  auto w = where(
+      isinf(m, s),
+      astype(equal(x, m, s), dtype, s),
+      exp(subtract(x, m, s), s),
+      s);
+
+  auto cdf = cumsum(w, 0, /* reverse = */ false, /* inclusive = */ false, s);
+  auto u = multiply(uniform(shape, float32, key, s), sum(w, s), s);
+
+  return subtract(searchsorted(cdf, u, "right", s), array(1u, uint32), s);
+}
+
 array categorical_impl(
     const array& logits,
     int axis,
     const Shape& shape,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s) {
+  // searchsorted only takes 1D sequence.
+  auto n = logits.shape(axis);
+  if (n > 0 && logits.size() == static_cast<size_t>(n) && !shape.empty()) {
+    return categorical_inverse_cdf(reshape(logits, {n}, s), shape, key, s);
+  }
+
   auto gumbel_shape = shape;
   auto offset = axis + shape.size() - logits.ndim() + 1;
   gumbel_shape.insert(gumbel_shape.begin() + offset, logits.shape(axis));
