@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <numeric>
 
 #include "mlx/io/gguf.h"
@@ -87,6 +88,29 @@ std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   return {buffer, float16};
 }
 
+// gguf_get_key() returns a pointer (val) into the mmap'd file but performs no
+// bounds checking, and the metadata value lengths are read straight from the
+// file. Without this guard a crafted STRING/ARRAY metadata value can claim a
+// length far larger than the file and force std::string / array construction to
+// read past the mapping (out-of-bounds read). The tensor path is bounded by
+// check_tensor_in_file(); the metadata path needs the same invariant.
+//
+// `value_bytes` is the number of bytes the value occupies in the mapping
+// (header + payload, computed per branch below). We ensure the whole region
+// lies within [0, ctx->size).
+void check_metadata_value_in_file(
+    const gguf_ctx* ctx,
+    const gguf_value* val,
+    size_t value_bytes) {
+  auto base = reinterpret_cast<const uint8_t*>(val);
+  auto end = ctx->data + ctx->size;
+  if (base < ctx->data || base > end || value_bytes > static_cast<size_t>(end - base)) {
+    throw std::runtime_error(
+        "[load_gguf] Metadata value extends past the end of the file. "
+        "Perhaps an incomplete download or corrupt file?");
+  }
+}
+
 void set_mx_value_from_gguf(
     gguf_ctx* ctx,
     uint32_t type,
@@ -123,21 +147,76 @@ void set_mx_value_from_gguf(
     case GGUF_VALUE_TYPE_BOOL:
       value = array(val->boolval, bool_);
       break;
-    case GGUF_VALUE_TYPE_STRING:
-      value =
-          std::string(val->string.string, static_cast<int>(val->string.len));
+    case GGUF_VALUE_TYPE_STRING: {
+      // Guard against an attacker-controlled length that exceeds the mapping.
+      // gguf_string is { uint64_t len; char string[] }; the static_cast<int>
+      // below also narrows, so reject lengths that do not fit in an int.
+      uint64_t len = val->string.len;
+      if (len > static_cast<uint64_t>(std::numeric_limits<int>::max()) ||
+          len > static_cast<uint64_t>(ctx->size)) {
+        throw std::runtime_error(
+            "[load_gguf] String metadata value length exceeds file size.");
+      }
+      check_metadata_value_in_file(
+          ctx, val, sizeof(gguf_string) + static_cast<size_t>(len));
+      value = std::string(val->string.string, static_cast<int>(len));
       break;
+    }
     case GGUF_VALUE_TYPE_FLOAT64:
       value = array(val->float64, float32);
       break;
     case GGUF_VALUE_TYPE_ARRAY: {
       ctx->off += gguf_array_header_size; // Skip header
       char* data = reinterpret_cast<char*>(val) + gguf_array_header_size;
-      auto size = static_cast<int>(val->array.len);
+      // The array length and element type are attacker-controlled. Bound the
+      // element count and the payload region against the file mapping before
+      // any array/string construction reads from `data`.
+      uint64_t arr_len = val->array.len;
       if (val->array.type == GGUF_VALUE_TYPE_ARRAY) {
         throw std::invalid_argument(
             "[load_gguf] Only supports loading 1-layer of nested arrays.");
       }
+      // Element byte size for the declared element type (0 = string/unknown,
+      // handled per-branch below). Avoids narrowing uint64 length to int
+      // before checking it fits the mapping.
+      size_t elt_size = 0;
+      switch (val->array.type) {
+        case GGUF_VALUE_TYPE_UINT8:
+        case GGUF_VALUE_TYPE_INT8:
+        case GGUF_VALUE_TYPE_BOOL:
+          elt_size = 1;
+          break;
+        case GGUF_VALUE_TYPE_UINT16:
+        case GGUF_VALUE_TYPE_INT16:
+          elt_size = 2;
+          break;
+        case GGUF_VALUE_TYPE_UINT32:
+        case GGUF_VALUE_TYPE_INT32:
+        case GGUF_VALUE_TYPE_FLOAT32:
+          elt_size = 4;
+          break;
+        case GGUF_VALUE_TYPE_UINT64:
+        case GGUF_VALUE_TYPE_INT64:
+        case GGUF_VALUE_TYPE_FLOAT64:
+          elt_size = 8;
+          break;
+        default: // GGUF_VALUE_TYPE_STRING and anything else: handled below
+          break;
+      }
+      if (elt_size > 0) {
+        // Overflow-safe payload size check: arr_len * elt_size <= remaining.
+        uint64_t remaining = static_cast<uint64_t>(ctx->size) -
+            static_cast<uint64_t>(reinterpret_cast<const uint8_t*>(data) - ctx->data);
+        if (arr_len > remaining / elt_size) {
+          throw std::runtime_error(
+              "[load_gguf] Array metadata value extends past the end of the file.");
+        }
+        if (arr_len > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
+          throw std::runtime_error(
+              "[load_gguf] Array metadata value length is too large.");
+        }
+      }
+      auto size = static_cast<int>(arr_len);
       switch (val->array.type) {
         case GGUF_VALUE_TYPE_UINT8:
           value = array(reinterpret_cast<uint8_t*>(data), {size}, uint8);
@@ -172,7 +251,18 @@ void set_mx_value_from_gguf(
         case GGUF_VALUE_TYPE_STRING: {
           std::vector<std::string> strs(size);
           for (auto& str : strs) {
+            // Each element's length is attacker-controlled; bound it against
+            // the mapping before reading.
+            check_metadata_value_in_file(ctx, reinterpret_cast<gguf_value*>(data), 0);
             auto str_val = reinterpret_cast<gguf_string*>(data);
+            uint64_t slen = str_val->len;
+            if (slen > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
+              throw std::runtime_error(
+                  "[load_gguf] String array element length is too large.");
+            }
+            check_metadata_value_in_file(
+                ctx, reinterpret_cast<gguf_value*>(data),
+                sizeof(gguf_string) + static_cast<size_t>(slen));
             data += (str_val->len + sizeof(gguf_string));
             str = std::string(str_val->string, static_cast<int>(str_val->len));
             ctx->off += (str_val->len + sizeof(gguf_string));
