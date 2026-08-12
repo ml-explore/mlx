@@ -309,17 +309,16 @@ MTL::Library* load_library(
 CommandEncoder::CommandEncoder(
     Device& d,
     int index,
-    ResidencySet& residency_set)
-    : device_(d) {
+    ResidencySets& residency_sets)
+    : device_(d), residency_sets_(residency_sets) {
   auto pool = new_scoped_memory_pool();
   queue_ = NS::TransferPtr(device_.mtl_device()->newCommandQueue());
   if (!queue_) {
     throw std::runtime_error(
         "[metal::CommandEncoder] Failed to make new command queue.");
   }
-  if (residency_set.mtl_residency_set()) {
-    queue_->addResidencySet(residency_set.mtl_residency_set());
-  }
+  // Sets created later are attached in commit().
+  residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
   debug_set_stream_queue_label(queue_.get(), index);
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
 }
@@ -519,6 +518,9 @@ bool CommandEncoder::needs_commit() const {
 }
 
 void CommandEncoder::commit(std::function<void()> completion) {
+  // Metal locks a command buffer's residency at commit time, so attach any
+  // sets created since the last commit first.
+  residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
   buffer_->addCompletedHandler(
       [&error_ = error_,
        wait_events = std::move(wait_events_),
@@ -586,7 +588,7 @@ MTL::ComputeCommandEncoder* CommandEncoder::get_command_encoder() {
   return encoder_.get();
 }
 
-Device::Device() : device_(load_device()), residency_set_(device_.get()) {
+Device::Device() : device_(load_device()), residency_sets_(device_.get()) {
   auto pool = new_scoped_memory_pool();
   default_library_ = NS::TransferPtr(load_default_library(device_.get()));
   arch_ = env::metal_gpu_arch();
