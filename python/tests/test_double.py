@@ -320,7 +320,9 @@ class TestDouble(mlx_tests.MLXTestCase):
             self.assertEqual(mx.minimum(a, 0.1).tolist(), [0.1])
             self.assertEqual(mx.clip(a, None, 0.1).tolist(), [0.1])
             self.assertEqual(mx.where(mx.array([False]), zero, 0.1).tolist(), [0.1])
-            self.assertEqual(mx.pad(a, 1, constant_values=0.1).tolist(), [0.1, 1.0, 0.1])
+            self.assertEqual(
+                mx.pad(a, 1, constant_values=0.1).tolist(), [0.1, 1.0, 0.1]
+            )
 
             # the python float is still weak: it does not widen the array
             for dtype in (mx.float16, mx.bfloat16, mx.float32):

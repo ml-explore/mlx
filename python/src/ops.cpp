@@ -3494,13 +3494,18 @@ void init_ops(nb::module_& m) {
           return mx::pad(a, *pv, to_array(constant_value, a.dtype()), mode, s);
         } else if (auto pv = std::get_if<std::tuple<int>>(&pad_width); pv) {
           return mx::pad(
-              a, std::get<0>(*pv), to_array(constant_value, a.dtype()), mode, s);
+              a,
+              std::get<0>(*pv),
+              to_array(constant_value, a.dtype()),
+              mode,
+              s);
         } else if (auto pv = std::get_if<std::pair<int, int>>(&pad_width); pv) {
           return mx::pad(a, *pv, to_array(constant_value, a.dtype()), mode, s);
         } else {
           auto v = std::get<std::vector<std::pair<int, int>>>(pad_width);
           if (v.size() == 1) {
-            return mx::pad(a, v[0], to_array(constant_value, a.dtype()), mode, s);
+            return mx::pad(
+                a, v[0], to_array(constant_value, a.dtype()), mode, s);
           } else {
             return mx::pad(a, v, to_array(constant_value, a.dtype()), mode, s);
           }
