@@ -1011,10 +1011,7 @@ void qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-  // The non-transposed kernel loads a BK x BN tile of w = [K, N] without
-  // clamping in N, so it additionally requires N % 64 == 0. Affine
-  // quantization with group_size >= 64 satisfies that structurally, since
-  // the groups run along N.
+  // The non-transposed kernel requires N % 64 == 0.
   if (metal::is_nax_available() && (transpose || (N % 64 == 0)) &&
       (K % 64 == 0) && (env::enable_tf32() || x.dtype() != float32)) {
     return qmm_nax(

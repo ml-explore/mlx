@@ -1140,10 +1140,6 @@ METAL_FUNC void qmm_n_nax_tgp_impl(
   const short tm = SM * (simd_gid / WN);
   const short tn = SN * (simd_gid % WN);
 
-  // Rows of this simdgroup's SM-row slice that actually exist. This can go
-  // <= 0 when a whole simdgroup sits past the end of the matrix, which
-  // load_safe/store_safe handle, as they already do for the transposed
-  // kernel. N needs no equivalent: the dispatch guard keeps N % BN == 0.
   const short sgp_sm = min(int(SM), M - (y_row + tm));
 
   const short ldb_tgp = BN_padded;
