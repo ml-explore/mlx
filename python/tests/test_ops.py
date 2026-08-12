@@ -3097,11 +3097,23 @@ class TestOps(mlx_tests.MLXTestCase):
                     np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
                 )
 
-        # The quotient and the remainder have to agree: q * b + r == a
-        a = mx.array([-7, 7, -7, 7, -1, 1, -5, 5])
-        b = mx.array([2, 2, -2, -2, 3, -3, 3, -3])
+        # Mixed signs floor, like python and numpy, so divmod agrees with
+        # (a // b, a % b) and q * b + r == a
+        av = [-7, 7, -7, 7, -1, 1, -5, 5, 6, -6]
+        bv = [2, 2, -2, -2, 3, -3, 3, -3, 3, 3]
+        a, b = mx.array(av), mx.array(bv)
         q, r = mx.divmod(a, b)
+        self.assertEqual(q.tolist(), [x // y for x, y in zip(av, bv)])
+        self.assertEqual(r.tolist(), [x % y for x, y in zip(av, bv)])
         self.assertTrue(mx.array_equal(q * b + r, a))
+        self.assertTrue(mx.array_equal(a // b, q))
+        self.assertTrue(mx.array_equal(a % b, r))
+
+        af = mx.array([-7.0, 7.0, -7.5, 7.5])
+        bf = mx.array([2.0, -2.0, 2.0, -2.0])
+        q, r = mx.divmod(af, bf)
+        self.assertTrue(mx.array_equal(q, mx.array([-4.0, -4.0, -4.0, -4.0])))
+        self.assertTrue(mx.array_equal(q * bf + r, af))
 
     def test_tile(self):
         self.assertCmpNumpy([(2,), [2]], mx.tile, np.tile)

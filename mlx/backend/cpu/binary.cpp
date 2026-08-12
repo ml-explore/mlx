@@ -46,11 +46,25 @@ void DivMod::eval_cpu(
                     out_a = array::unsafe_weak_copy(out_a),
                     out_b = array::unsafe_weak_copy(out_b),
                     bopt]() mutable {
+    // Both halves floor, so quotient * y + remainder == x and the remainder
+    // agrees with mx.remainder.
     auto integral_op = [](auto x, auto y) {
-      return std::make_pair(x / y, x % y);
+      auto q = x / y;
+      auto r = x % y;
+      if constexpr (std::is_signed_v<decltype(x)>) {
+        if (r != 0 && (r < 0) != (y < 0)) {
+          q -= 1;
+          r += y;
+        }
+      }
+      return std::make_pair(q, r);
     };
     auto float_op = [](auto x, auto y) {
-      return std::make_pair(std::trunc(x / y), std::fmod(x, y));
+      auto r = std::fmod(x, y);
+      if (r != 0 && (r < 0) != (y < 0)) {
+        r += y;
+      }
+      return std::make_pair(std::floor(x / y), r);
     };
 
     dispatch_all_types(out_a.dtype(), [&](auto type_tag) {

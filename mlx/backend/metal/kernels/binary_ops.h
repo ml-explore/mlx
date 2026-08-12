@@ -16,20 +16,31 @@ struct Add {
 
 struct FloorDivide {
   template <typename T>
-  T operator()(T x, T y) thread {
+  metal::enable_if_t<!metal::is_signed_v<T>, T> operator()(T x, T y) thread {
     return x / y;
+  }
+  template <typename T>
+  metal::enable_if_t<metal::is_integral_v<T> && metal::is_signed_v<T>, T>
+  operator()(T x, T y) thread {
+    // Integer division truncates, so step the quotient down when the operands
+    // have opposite signs and the division was not exact.
+    auto q = x / y;
+    if (x % y != 0 && (x < 0) != (y < 0)) {
+      q -= 1;
+    }
+    return q;
   }
   template <>
   float operator()(float x, float y) thread {
-    return trunc(x / y);
+    return metal::floor(x / y);
   }
   template <>
   half operator()(half x, half y) thread {
-    return trunc(x / y);
+    return metal::floor(x / y);
   }
   template <>
   bfloat16_t operator()(bfloat16_t x, bfloat16_t y) thread {
-    return trunc(x / y);
+    return static_cast<bfloat16_t>(metal::floor(static_cast<float>(x / y)));
   }
 };
 
@@ -327,10 +338,6 @@ struct ArcTan2 {
 struct DivMod {
   template <typename T>
   metal::array<T, 2> operator()(T x, T y) thread {
-    // Remainder floors, FloorDivide truncates, so pairing them breaks
-    // quotient * y + remainder == x. Derive the remainder from the quotient.
-    // The cast keeps the narrow types from widening to int in the initializer.
-    T quotient = FloorDivide{}(x, y);
-    return {quotient, T(x - quotient * y)};
+    return {FloorDivide{}(x, y), Remainder{}(x, y)};
   };
 };

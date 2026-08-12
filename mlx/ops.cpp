@@ -3170,10 +3170,9 @@ array floor_divide(
     return floor(divide(a, b, s), s);
   }
 
-  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
-  auto shape = inputs[0].shape();
-  return array(
-      shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
+  // Integer division truncates, so take the floored quotient from divmod
+  // rather than reimplementing the correction here.
+  return divmod(a, b, s)[0];
 }
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {

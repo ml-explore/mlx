@@ -17,9 +17,17 @@ struct FloorDivide {
   template <typename T>
   __device__ T operator()(T x, T y) {
     if constexpr (cuda::std::is_integral_v<T>) {
-      return x / y;
+      auto q = x / y;
+      // Integer division truncates, so step the quotient down when the
+      // operands have opposite signs and the division was not exact.
+      if constexpr (cuda::std::is_signed_v<T>) {
+        if (x % y != 0 && (x < 0) != (y < 0)) {
+          q -= 1;
+        }
+      }
+      return q;
     } else {
-      return cuda::std::trunc(x / y);
+      return cuda::std::floor(x / y);
     }
   }
 };
@@ -293,11 +301,7 @@ struct ArcTan2 {
 struct DivMod {
   template <typename T>
   __device__ cuda::std::array<T, 2> operator()(T x, T y) {
-    // Remainder floors, FloorDivide truncates, so pairing them breaks
-    // quotient * y + remainder == x. Derive the remainder from the quotient.
-    // The cast keeps the narrow types from widening to int in the initializer.
-    T quotient = FloorDivide{}(x, y);
-    return {quotient, T(x - quotient * y)};
+    return {FloorDivide{}(x, y), Remainder{}(x, y)};
   };
 };
 
