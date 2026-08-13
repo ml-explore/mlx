@@ -862,7 +862,8 @@ void steel_matmul_axpby(
     Strides B_batch_stride /* = {} */,
     Strides C_batch_stride /* = {} */,
     float alpha /* = 1.0f */,
-    float beta /* = 0.0f */) {
+    float beta /* = 0.0f */,
+    bool allow_tf32 /* = true */) {
   if (batch_shape.empty()) {
     /////////////////////////////////////////////////////////////////////////////
     // Check and collapse batch dimensions
@@ -916,7 +917,7 @@ void steel_matmul_axpby(
   int64_t matrix_size = static_cast<int64_t>(M) * N;
   bool use_nax = metal::is_nax_available() &&
       !issubdtype(a.dtype(), complexfloating) &&
-      (env::enable_tf32() || a.dtype() != float32);
+      ((allow_tf32 && env::enable_tf32()) || a.dtype() != float32);
   char devc = d.get_architecture().back();
   int min_tmn_threshold = (devc == 's' || devc == 'd') ? 2048 : 1024;
 

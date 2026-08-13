@@ -2,6 +2,9 @@
 
 import math
 import os
+import subprocess
+import sys
+import textwrap
 import unittest
 from itertools import permutations
 
@@ -47,6 +50,34 @@ class TestConv(mlx_tests.MLXTestCase):
 
                     self.assertEqual(c_mx.shape, c_np.shape)
                     self.assertTrue(np.allclose(c_mx, c_np, atol=atol))
+
+    def test_conv_2d_winograd_float32_precision(self):
+        # The aligned conv takes winograd and the unaligned one does not, so
+        # the two have to agree to float32 precision.
+        script = textwrap.dedent("""
+            import mlx.core as mx
+
+            # Winograd also wants N * iH * iW >= 4096 and C + O >= 256.
+            N, S, K, C = 4, 32, 3, 128
+            x = mx.random.normal((N, S, S, C))
+            w = mx.random.normal((C, K, K, C))
+            aligned = mx.conv2d(x, w, padding=1)
+
+            # The same conv with an input channel count winograd declines.
+            xu = mx.pad(x, [(0, 0), (0, 0), (0, 0), (0, 16)])
+            wu = mx.pad(w, [(0, 0), (0, 0), (0, 0), (0, 16)])
+            unaligned = mx.conv2d(xu, wu, padding=1)
+
+            mx.eval(aligned, unaligned)
+            print(mx.abs(aligned - unaligned).max().item())
+            """)
+        # tf32 is off for the whole suite and enable_tf32() caches the read.
+        env = dict(os.environ, MLX_ENABLE_TF32="1")
+        out = subprocess.check_output(
+            [sys.executable, "-c", script], env=env, text=True
+        )
+        gap = float(out.strip())
+        self.assertLess(gap, 1e-2, f"winograd and gemm disagree by {gap}")
 
     def test_conv_1d_groups_flipped(self):
         x = mx.broadcast_to(mx.arange(5).astype(mx.float32), (2, 5)).T

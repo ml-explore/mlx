@@ -948,7 +948,13 @@ void winograd_conv_2D_gpu(
         /*b_cols = */ conv_params.O,
         /*a_transposed = */ false,
         /*b_transposed = */ false,
-        /*copies = */ empty_copies);
+        /*copies = */ empty_copies,
+        /*batch_shape = */ {},
+        /*A_batch_stride = */ {},
+        /*B_batch_stride = */ {},
+        // The winograd transforms amplify whatever the gemm rounds away, so
+        // this one stays at full float32 even when tf32 is allowed elsewhere.
+        /*allow_tf32 = */ false);
   }
 
   // Do output transform

@@ -100,7 +100,8 @@ void steel_matmul_axpby(
     Strides B_batch_stride = {},
     Strides C_batch_stride = {},
     float alpha = 1.0f,
-    float beta = 0.0f);
+    float beta = 0.0f,
+    bool allow_tf32 = true);
 
 inline void steel_matmul(
     const Stream& s,
@@ -119,7 +120,8 @@ inline void steel_matmul(
     std::vector<array>& copies,
     Shape batch_shape = {},
     Strides A_batch_stride = {},
-    Strides B_batch_stride = {}) {
+    Strides B_batch_stride = {},
+    bool allow_tf32 = true) {
   return steel_matmul_axpby<false>(
       /* const Stream& s = */ s,
       /* metal::Device& d = */ d,
@@ -138,7 +140,11 @@ inline void steel_matmul(
       /* std::vector<array>& copies = */ copies,
       /* Shape batch_shape = */ batch_shape,
       /* Strides A_batch_stride = */ A_batch_stride,
-      /* Strides B_batch_stride = */ B_batch_stride);
+      /* Strides B_batch_stride = */ B_batch_stride,
+      /* Strides C_batch_stride = */ {},
+      /* float alpha = */ 1.0f,
+      /* float beta = */ 0.0f,
+      /* bool allow_tf32 = */ allow_tf32);
 }
 
 } // namespace mlx::core
