@@ -446,3 +446,32 @@ template <typename T, typename U>
 struct ConditionalType<true, T, U> {
   using type = T;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+// Type casting utils
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename U, typename T>
+inline U mlx_cast(T val) {
+  return static_cast<U>(val);
+}
+
+template <>
+inline bool mlx_cast<bool, float>(float val) {
+  return (as_type<uint32_t>(val) & 0x7FFFFFFF) != 0;
+}
+
+template <>
+inline bool mlx_cast<bool, bfloat16_t>(bfloat16_t val) {
+  return (as_type<uint16_t>(val) & 0x7FFF) != 0;
+}
+
+template <>
+inline bool mlx_cast<bool, half>(half val) {
+  return (as_type<uint16_t>(val) & 0x7FFF) != 0;
+}
+
+template <>
+inline bool mlx_cast<bool, complex64_t>(complex64_t val) {
+  return mlx_cast<bool, float>(val.real) || mlx_cast<bool, float>(val.imag);
+}

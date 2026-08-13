@@ -1299,6 +1299,17 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.any(a, axis=0).tolist(), [True, False])
         self.assertEqual(mx.any(a, axis=1).tolist(), [True, False])
 
+    def test_subnormal_bool_cast(self):
+        f32_sub = mx.array(np.array([0x00000001], dtype=np.uint32)).view(mx.float32)
+        bf16_sub = mx.array(np.array([0x0001], dtype=np.uint16)).view(mx.bfloat16)
+
+        self.assertTrue(f32_sub.astype(mx.bool_).item())
+        self.assertTrue(bf16_sub.astype(mx.bool_).item())
+        self.assertTrue(mx.any(f32_sub).item())
+        self.assertTrue(mx.any(bf16_sub).item())
+        self.assertTrue(mx.all(f32_sub).item())
+        self.assertTrue(mx.all(bf16_sub).item())
+
     def test_stop_gradient(self):
         def func(x):
             return mx.sum(2 * x + mx.stop_gradient(3 * x))
