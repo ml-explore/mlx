@@ -1489,6 +1489,12 @@ array reflect_pad(
     if (L == 0 && H == 0) {
       continue;
     }
+    if (n == 0) {
+      std::ostringstream msg;
+      msg << "[pad] Cannot pad empty axis " << ax << " using mode '"
+          << (include_edge ? "symmetric" : "reflect") << "'.";
+      throw std::invalid_argument(msg.str());
+    }
     // reflect skips the edge value (period 2(n-1)); symmetric repeats it
     // (period 2n).
     int offset = (!include_edge && n > 1) ? 1 : 0;
