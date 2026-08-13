@@ -3386,14 +3386,14 @@ void init_ops(nb::module_& m) {
          mx::StreamOrDevice s) {
         std::vector<mx::array> arrays =
             nb::cast<std::vector<mx::array>>(arrays_);
-        return mx::meshgrid(arrays, sparse, indexing, s);
+        return nb::tuple(nb::cast(mx::meshgrid(arrays, sparse, indexing, s)));
       },
       "arrays"_a,
       "sparse"_a = false,
       "indexing"_a = "xy",
       "stream"_a = nb::none(),
       nb::sig(
-          "def meshgrid(*arrays: array, sparse: bool | None = False, indexing: str | None = 'xy', stream: StreamOrDevice = None) -> array"),
+          "def meshgrid(*arrays: array, sparse: bool | None = False, indexing: str | None = 'xy', stream: StreamOrDevice = None) -> tuple[array, ...]"),
       R"pbdoc(
         Generate multidimensional coordinate grids from 1-D coordinate arrays
 
@@ -3406,7 +3406,7 @@ void init_ops(nb::module_& m) {
               Defaults to ``'xy'``.
 
         Returns:
-            list(array): The output arrays.
+            tuple(array): The output arrays.
       )pbdoc");
   m.def(
       "repeat",

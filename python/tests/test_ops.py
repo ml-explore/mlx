@@ -2132,6 +2132,11 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.array([1, 2, 3], dtype=mx.int32)
         y = np.array([1, 2, 3], dtype=np.int32)
 
+        # Test return type is a tuple
+        self.assertIsInstance(mx.meshgrid(x), tuple)
+        self.assertIsInstance(mx.meshgrid(x, x), tuple)
+        self.assertIsInstance(mx.meshgrid(x, x, x, sparse=True), tuple)
+
         # Test single input
         a_mlx = mx.meshgrid(x)
         a_np = np.meshgrid(y)
