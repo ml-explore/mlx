@@ -23,6 +23,38 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         with self.assertRaises(RuntimeError):
             sub = world.split(world.rank() % 2)
 
+    def test_sum_scatter(self):
+        world = mx.distributed.init()
+        dtypes = [
+            (mx.float32, 1e-6),
+            (mx.float16, 5e-3),
+            (mx.bfloat16, 1e-1),
+        ]
+        sizes = [
+            (8,),
+            (64,),
+            (1024,),
+            (1024, 1024),
+        ]
+        key = mx.random.key(world.rank())
+
+        for dt, rtol in dtypes:
+            for sh in sizes:
+                x = (mx.random.uniform(shape=sh, key=key) * 10).astype(dt)
+
+                # Each rank keeps the chunk of the total that belongs to it.
+                y = mx.distributed.sum_scatter(x)
+                z = mx.distributed.all_sum(x)
+                chunk = sh[0] // world.size()
+                start = world.rank() * chunk
+                z_ref = z[start : start + chunk]
+
+                self.assertEqual(y.shape, z_ref.shape)
+                maxrelerror = (y - z_ref).abs()
+                if rtol > 0:
+                    maxrelerror = maxrelerror / z_ref.abs()
+                self.assertLessEqual(maxrelerror.max(), rtol)
+
     def test_all_reduce_extra(self):
         world = mx.distributed.init()
         dtypes = [

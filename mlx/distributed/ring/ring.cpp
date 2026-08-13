@@ -541,7 +541,10 @@ class RingGroup : public GroupImpl {
   }
 
   void sum_scatter(const array& input, array& output, Stream stream) override {
-    throw std::runtime_error("[ring] sum_scatter not supported.");
+    dispatch_all_types(output.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      sum_scatter_impl<T>(input, output, stream, detail::SumOp<T>());
+    });
   }
 
  private:
@@ -612,11 +615,84 @@ class RingGroup : public GroupImpl {
                 sockets_right_[i / 2],
                 sockets_left_[i / 2],
                 (i % 2) ? -1 : 1,
-                reduce_op)));
+                reduce_op,
+                2,
+                -1,
+                0,
+                0)));
       }
       for (auto& f : all_sums) {
         f.get();
       }
+    });
+  }
+
+  template <typename T, typename ReduceOp>
+  void sum_scatter_impl(
+      const array& input,
+      array& output,
+      Stream stream,
+      ReduceOp reduce_op) {
+    auto in_ptr = input.data<char>();
+    auto out_ptr = output.data<char>();
+    auto& encoder = cpu::get_command_encoder(stream);
+    encoder.set_input_array(input);
+    encoder.set_output_array(output);
+    encoder.dispatch([in_ptr,
+                      out_ptr,
+                      size = input.size(),
+                      out_size = output.size(),
+                      this,
+                      reduce_op]() {
+      // The reduction accumulates in place, so it needs a copy of the input to
+      // work over.
+      std::vector<char> scratch(size * sizeof(T));
+      T* data = reinterpret_cast<T*>(scratch.data());
+      std::memcpy(data, in_ptr, size * sizeof(T));
+
+      // Split each segment over the sockets so that every wire carries a part
+      // of it. Splitting the data instead, the way the all reduce does, would
+      // leave each rank owning a piece of every part rather than one segment.
+      constexpr size_t min_send_size = 262144;
+      size_t n_scatters = std::max(
+          std::min(
+              sockets_right_.size() + sockets_left_.size(),
+              (size * sizeof(T)) / (size_ * min_send_size)),
+          size_t(1));
+      size_t part = ceildiv(out_size, n_scatters);
+
+      std::vector<std::future<void>> scatters;
+      for (int i = 0; i < n_scatters; i++) {
+        size_t offset = i * part;
+        if (offset >= out_size) {
+          break;
+        }
+
+        // Starting a segment ahead leaves each rank holding its own segment
+        // once the scatter reduce is done, which is the one it returns.
+        int direction = (i % 2) ? -1 : 1;
+        scatters.emplace_back(pool_.enqueue(
+            std::bind(
+                &RingGroup::all_reduce_impl<T, ReduceOp>,
+                this,
+                reinterpret_cast<T*>(
+                    buffers_.data() + i * ALL_SUM_SIZE * ALL_SUM_BUFFERS),
+                data,
+                size,
+                sockets_right_[i / 2],
+                sockets_left_[i / 2],
+                direction,
+                reduce_op,
+                1,
+                (rank_ + direction + size_) % size_,
+                offset,
+                std::min(part, out_size - offset))));
+      }
+      for (auto& f : scatters) {
+        f.get();
+      }
+
+      std::memcpy(out_ptr, data + rank_ * out_size, out_size * sizeof(T));
     });
   }
 
@@ -628,7 +704,11 @@ class RingGroup : public GroupImpl {
       int socket_right,
       int socket_left,
       int direction,
-      ReduceOp reduce_op) {
+      ReduceOp reduce_op,
+      int phases = 2,
+      int first_segment = -1,
+      size_t part_offset = 0,
+      size_t part_size = 0) {
     // Choose which socket we send to and recv from
     int socket_send = (direction < 0) ? socket_right : socket_left;
     int socket_recv = (direction < 0) ? socket_left : socket_right;
@@ -636,13 +716,20 @@ class RingGroup : public GroupImpl {
     // We split the data into `size_` segments of size `segment_size` and each
     // of these in smaller segments of ALL_SUM_SIZE which we 'll call packets.
     size_t segment_size = ceildiv(data_size, size_);
+
+    // Only part of each segment when several of these run side by side over
+    // different sockets, all of it otherwise.
+    if (part_size == 0) {
+      part_size = segment_size;
+    }
+
     size_t BUFFER_SIZE = std::max(
-        size_t(32768), std::min(ALL_SUM_SIZE / sizeof(T), segment_size / 2));
-    size_t n_packets = ceildiv(segment_size, BUFFER_SIZE);
+        size_t(32768), std::min(ALL_SUM_SIZE / sizeof(T), part_size / 2));
+    size_t n_packets = ceildiv(part_size, BUFFER_SIZE);
 
     // Initial segments
-    int send_segment = rank_;
-    int recv_segment = (rank_ + direction + size_) % size_;
+    int send_segment = (first_segment < 0) ? rank_ : first_segment;
+    int recv_segment = (send_segment + direction + size_) % size_;
 
     // Plan the whole reduce in terms of sends and recvs as indices in data.
     // It makes the actual async send and recv a bit simpler to follow when
@@ -651,15 +738,13 @@ class RingGroup : public GroupImpl {
     std::vector<std::pair<size_t, size_t>> recv_plan;
 
     // Two times the same send/recv operations, first scatter reduce and then
-    // gather.
-    for (int k = 0; k < 2; k++) {
+    // gather. A reduce scatter stops after the first.
+    for (int k = 0; k < phases; k++) {
       for (int i = 0; i < size_ - 1; i++) {
-        size_t send_start = send_segment * segment_size;
-        size_t send_stop =
-            std::min((send_segment + 1) * segment_size, data_size);
-        size_t recv_start = recv_segment * segment_size;
-        size_t recv_stop =
-            std::min((recv_segment + 1) * segment_size, data_size);
+        size_t send_start = send_segment * segment_size + part_offset;
+        size_t send_stop = std::min(send_start + part_size, data_size);
+        size_t recv_start = recv_segment * segment_size + part_offset;
+        size_t recv_stop = std::min(recv_start + part_size, data_size);
 
         for (size_t j = 0; j < n_packets; j++) {
           send_plan.emplace_back(
@@ -681,30 +766,40 @@ class RingGroup : public GroupImpl {
     for (int i = 0; i < ALL_SUM_BUFFERS; i++) {
       recv_buffers[i] = buffer + i * BUFFER_SIZE;
     }
+    // The steps that reduce into the data, the rest gather over it. A reduce
+    // scatter only has the former.
+    size_t reduce_steps =
+        (phases == 1) ? send_plan.size() : send_plan.size() / 2;
+
     std::future<void> sends[2], recvs[2];
     int a = 0;
     int b = (n_packets > 1) ? 1 : 0;
-    for (int i = 0, j = -b; i < send_plan.size(); j++, i++) {
-      sends[a] = comm_.send(
-          socket_send,
-          data + send_plan[i].first,
-          send_plan[i].second - send_plan[i].first);
-      if (2 * i < send_plan.size()) {
-        recvs[a] = comm_.recv(
-            socket_recv,
-            recv_buffers[i % ALL_SUM_BUFFERS],
-            recv_plan[i].second - recv_plan[i].first);
-      } else {
-        recvs[a] = comm_.recv(
-            socket_recv,
-            data + recv_plan[i].first,
-            recv_plan[i].second - recv_plan[i].first);
+    // There is a send and a recv in flight, so the loop runs b steps past the
+    // plan to drain and reduce the last packet.
+    int steps = send_plan.size();
+    for (int i = 0, j = -b; j < steps; j++, i++) {
+      if (i < steps) {
+        sends[a] = comm_.send(
+            socket_send,
+            data + send_plan[i].first,
+            send_plan[i].second - send_plan[i].first);
+        if (i < reduce_steps) {
+          recvs[a] = comm_.recv(
+              socket_recv,
+              recv_buffers[i % ALL_SUM_BUFFERS],
+              recv_plan[i].second - recv_plan[i].first);
+        } else {
+          recvs[a] = comm_.recv(
+              socket_recv,
+              data + recv_plan[i].first,
+              recv_plan[i].second - recv_plan[i].first);
+        }
       }
 
       if (j >= 0) {
         sends[b].get();
         recvs[b].get();
-        if (2 * j < send_plan.size()) {
+        if (j < reduce_steps) {
           reduce_op(
               recv_buffers[j % ALL_SUM_BUFFERS],
               data + recv_plan[j].first,
@@ -713,13 +808,6 @@ class RingGroup : public GroupImpl {
       }
 
       std::swap(a, b);
-    }
-    // Check valid() to avoid consuming same future twice for single packet.
-    if (sends[b].valid()) {
-      sends[b].get();
-    }
-    if (recvs[b].valid()) {
-      recvs[b].get();
     }
   }
 
