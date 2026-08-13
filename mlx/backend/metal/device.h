@@ -25,7 +25,7 @@ class EventImpl;
 
 class MLX_API CommandEncoder {
  public:
-  CommandEncoder(Device& d, int index, ResidencySet& residency_set);
+  CommandEncoder(Device& d, int index, ResidencySets& residency_sets);
   ~CommandEncoder();
 
   CommandEncoder(const CommandEncoder&) = delete;
@@ -114,6 +114,10 @@ class MLX_API CommandEncoder {
   int buffer_ops_{0};
   size_t buffer_sizes_{0};
 
+  // The residency set and how many of its sets this queue has attached.
+  ResidencySets& residency_sets_;
+  uint64_t sets_attached_{0};
+
   // The events hooked to current command buffer.
   std::vector<std::shared_ptr<EventImpl>> wait_events_;
   std::vector<std::tuple<std::shared_ptr<EventImpl>, uint64_t>> signal_events_;
@@ -193,8 +197,8 @@ class MLX_API Device {
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
 
-  ResidencySet& residency_set() {
-    return residency_set_;
+  ResidencySets& residency_sets() {
+    return residency_sets_;
   }
 
  private:
@@ -230,7 +234,7 @@ class MLX_API Device {
       const std::vector<MTL::Function*>& linked_functions = {});
 
   NS::SharedPtr<MTL::Device> device_;
-  ResidencySet residency_set_;
+  ResidencySets residency_sets_;
 
   std::shared_mutex kernel_mtx_;
   std::shared_mutex library_mtx_;

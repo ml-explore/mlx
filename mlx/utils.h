@@ -191,6 +191,21 @@ inline int max_mb_per_buffer(int default_value) {
   return max_mb_per_buffer_;
 }
 
+// Per-set residency-set size, as a percentage of the device's recommended
+// max working-set size. Controls only how wired memory is distributed across
+// residency sets, never how much is wired; see metal::ResidencySets. A value
+// <= 0 or >= 100 puts everything in a single set.
+inline int residency_set_max_pct() {
+  static int residency_set_max_pct_ = get_var("MLX_RESIDENCY_SET_MAX_PCT", 5);
+  return residency_set_max_pct_;
+}
+
+// Log each residency set as it is created.
+inline bool residency_debug() {
+  static bool residency_debug_ = get_var("MLX_RESIDENCY_DEBUG", 0);
+  return residency_debug_;
+}
+
 inline bool metal_fast_synch() {
   static bool metal_fast_synch = get_var("MLX_METAL_FAST_SYNCH", 0);
   return metal_fast_synch;
