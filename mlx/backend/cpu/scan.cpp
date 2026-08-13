@@ -163,7 +163,11 @@ void scan_op(
     const Op& op,
     U init) {
   if (in.flags().row_contiguous) {
-    if (in.strides()[axis] == 1) {
+    // A size one axis can carry any stride and still be row contiguous, so
+    // the strided count below would come out zero. The scan is elementwise
+    // in that case, which is what the contiguous path with a stride of one
+    // computes.
+    if (in.strides()[axis] == 1 || in.shape(axis) == 1) {
       contiguous_scan(
           in.data<T>(),
           out.data<U>(),
