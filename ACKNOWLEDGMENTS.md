@@ -22,7 +22,6 @@ MLX was developed with contributions from the following individuals:
 - Gökdeniz Gülmez: Added the `Muon (MomentUm Orthogonalized by Newton-schulz)` optimizer, and the `ReLU²` activation function.
 - katlun-lgtm: Added `reflect` and `symmetric` padding modes.
 - Erwin Zhang: Added `searchsorted`. Fixed the ring backend hanging when a peer disconnects. Improved JACCL error reporting.
-- Eren Menges: Fixed `MultiOptimizer` not working on models with parameter-free layers (like `ReLU`).
 
 <a href="https://github.com/ml-explore/mlx/graphs/contributors">
   <img class="dark-light" src="https://contrib.rocks/image?repo=ml-explore/mlx&anon=0&columns=20&max=100&r=true" />
