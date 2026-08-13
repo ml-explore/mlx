@@ -290,6 +290,11 @@ MTL::ComputePipelineState* get_fft_kernel(
     const metal::MTLFCList& func_consts,
     const std::string& template_def);
 
+MTL::ComputePipelineState* get_fft_twiddle_kernel(
+    metal::Device& d,
+    const std::string& library_name,
+    const std::string& template_def);
+
 MTL::ComputePipelineState* get_quantized_kernel(
     metal::Device& d,
     const std::string& kernel_name,

@@ -47,6 +47,27 @@ STEEL_CONST int rader_3_steps_ [[function_constant(20)]];
 STEEL_CONST int rader_2_steps_ [[function_constant(21)]];
 STEEL_CONST bool use_bluestein_twiddle_table_ [[function_constant(22)]];
 
+// Generate the compact radix-8 Stockham twiddle table used by the fused
+// 4096-point Bluestein convolution. The first p=1 stage needs no twiddles;
+// the remaining stages contribute 8, 64, and 512 entries.
+[[kernel]] void generate_bluestein_twiddles(
+    device float2* twiddles [[buffer(0)]],
+    uint index [[thread_position_in_grid]]) {
+  uint p;
+  uint k;
+  if (index < 8) {
+    p = 8;
+    k = index;
+  } else if (index < 72) {
+    p = 64;
+    k = index - 8;
+  } else {
+    p = 512;
+    k = index - 72;
+  }
+  twiddles[index] = get_twiddle<float>(k, 8 * p);
+}
+
 // See "radix.h" for radix codelets.
 template <typename T>
 using RadixFunc = void (*)(thread vec<T, 2>*, thread vec<T, 2>*);

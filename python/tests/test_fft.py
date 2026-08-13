@@ -170,23 +170,26 @@ class TestFFT(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_batched_bluestein_twiddle_table(self):
-        batch, n = 1024, 1031
+        for batch, n in ((1023, 1031), (1024, 1031), (1024, 1531)):
+            with self.subTest(batch=batch, n=n), mx.stream(mx.gpu):
+                index = mx.arange(n, dtype=mx.float32)
+                base = mx.cos(index * 0.017) + 0.25 * mx.sin(index * 0.031)
+                base = base + 1j * (
+                    mx.sin(index * 0.023) - 0.125 * mx.cos(index * 0.047)
+                )
+                scale_index = mx.arange(batch, dtype=mx.float32)
+                scales = (0.75 + 0.25 * mx.cos(scale_index * 0.013)) * (
+                    mx.cos(scale_index * 0.019) + 1j * mx.sin(scale_index * 0.019)
+                )
+                signal = scales[:, None] * base[None, :]
 
-        with mx.stream(mx.gpu):
-            impulse = (mx.arange(n) == 1).astype(mx.complex64)
-            expected_fft = mx.fft.fft(impulse)
-            expected_ifft = mx.fft.ifft(impulse)
-            signal = mx.broadcast_to(impulse, (batch, n))
-            output_fft = mx.fft.fft(signal)
-            output_ifft = mx.fft.ifft(signal)
-            mx.eval(expected_fft, expected_ifft, output_fft, output_ifft)
-
-        self.assertTrue(
-            mx.allclose(output_fft, expected_fft[None], atol=1e-3, rtol=1e-4)
-        )
-        self.assertTrue(
-            mx.allclose(output_ifft, expected_ifft[None], atol=1e-4, rtol=1e-4)
-        )
+                for transform, atol in ((mx.fft.fft, 1e-3), (mx.fft.ifft, 1e-4)):
+                    expected = scales[:, None] * transform(base)[None, :]
+                    output = transform(signal)
+                    mx.eval(expected, output)
+                    self.assertTrue(
+                        mx.allclose(output, expected, atol=atol, rtol=1e-4).item()
+                    )
 
     @unittest.skip("Too slow for CI but useful for local testing.")
     def test_fft_exhaustive(self):
