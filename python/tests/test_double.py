@@ -336,8 +336,14 @@ class TestDouble(mlx_tests.MLXTestCase):
 
     def test_linspace(self):
         with mx.stream(mx.cpu):
-            vals = mx.linspace(0, math.pi, 2, mx.float64)
+            vals = mx.linspace(0, math.pi, 2, dtype=mx.float64)
             self.assertEqual(vals.tolist()[1], math.pi)
+
+            vals = mx.linspace(0, math.pi, 4, endpoint=False, dtype=mx.float64)
+            self.assertEqual(vals.dtype, mx.float64)
+            self.assertTrue(
+                np.allclose(vals.tolist(), np.linspace(0, math.pi, 4, endpoint=False))
+            )
 
 
 if __name__ == "__main__":

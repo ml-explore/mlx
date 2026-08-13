@@ -271,8 +271,8 @@ array linspace(
     double start,
     double stop,
     int num /* = 50 */,
-    Dtype dtype /* = float32 */,
     bool endpoint /* = true */,
+    Dtype dtype /* = float32 */,
     StreamOrDevice s /* = {} */) {
   if (num < 0) {
     std::ostringstream msg;

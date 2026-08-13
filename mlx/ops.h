@@ -46,8 +46,8 @@ MLX_API array linspace(
     double start,
     double stop,
     int num = 50,
-    Dtype dtype = float32,
     bool endpoint = true,
+    Dtype dtype = float32,
     StreamOrDevice s = {});
 
 /** Convert an array to the given data type. */
