@@ -6,6 +6,7 @@
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
+#include "mlx/backend/metal/quantized_dispatch.h"
 #include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/unary.h"
 #include "mlx/backend/metal/utils.h"
@@ -1020,6 +1021,17 @@ void gather_qmm_nax(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+bool qmm_nax_eligible(
+    const array& x,
+    bool transpose,
+    int K,
+    const std::string& mode) {
+  bool has_nax_kernel =
+      metal::is_nax_available() && (transpose || mode == "affine");
+  return has_nax_kernel && transpose && (K % 64 == 0) &&
+      (env::enable_tf32() || x.dtype() != float32);
+}
+
 void qmm(
     const array& x,
     const array& w,
@@ -1035,10 +1047,7 @@ void qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-  bool has_nax_kernel =
-      metal::is_nax_available() && (transpose || mode == "affine");
-  if (has_nax_kernel && transpose && (K % 64 == 0) &&
-      (env::enable_tf32() || x.dtype() != float32)) {
+  if (qmm_nax_eligible(x, transpose, K, mode)) {
     return qmm_nax(
         /* const array& x = */ x,
         /* const array& w = */ w,
@@ -1129,7 +1138,8 @@ void qmm_splitk(
     int K,
     metal::Device& d,
     const Stream& s,
-    const std::string& mode) {
+    const std::string& mode,
+    bool fallback_qmm_is_nax_eligible) {
   // Choose split_k to target ~512 threadgroups
   int bm = 32, bn = 32;
   int n_tiles = (N + bn - 1) / bn;
@@ -1147,6 +1157,22 @@ void qmm_splitk(
   // Ensure K divides evenly by split_k * k_align
   while (split_k > 1 && (K % (split_k * k_align) != 0)) {
     split_k--;
+  }
+  if (metal::qmm_t_splitk_should_use_nax(
+          fallback_qmm_is_nax_eligible,
+          d.get_architecture_gen(),
+          d.get_architecture().back(),
+          /* transpose = */ true,
+          /* single_batch = */ true,
+          /* affine = */ mode == "affine",
+          group_size,
+          bits,
+          m_tiles,
+          N,
+          K,
+          split_k)) {
+    return qmm(
+        x, w, scales, biases, out, true, group_size, bits, M, N, K, d, s, mode);
   }
   if (split_k <= 1) {
     return qmm(
@@ -1807,8 +1833,22 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Use split-K qmm for small M with transposed weights (non-batched only)
     int B = out.size() / M / N;
     if (transpose_ && B == 1) {
+      bool fallback_qmm_is_nax_eligible = qmm_nax_eligible(x, true, K, mode);
       qmm_splitk(
-          x, w, scales, biases, out, group_size_, bits_, M, N, K, d, s, mode);
+          x,
+          w,
+          scales,
+          biases,
+          out,
+          group_size_,
+          bits_,
+          M,
+          N,
+          K,
+          d,
+          s,
+          mode,
+          fallback_qmm_is_nax_eligible);
       return;
     }
     qmm(x,

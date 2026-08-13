@@ -354,6 +354,39 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 tol = 1e-3 if dtype == mx.float32 else 1.5e-3
                 self.assertLess((y_q - y_hat).abs().max(), tol)
 
+    def test_qmm_t_splitk_nax_boundaries(self):
+        # #4198: on M5, affine 4-bit gs64 qmm_t may bypass the two-way split-K
+        # path only for the measured one-M-tile N=6656..8192 band. This checks
+        # numerical correctness at both affected endpoints and adjacent tails;
+        # dispatch selection itself is covered by the pure C++ policy test.
+        if not self.is_apple_silicon or mx.default_device() != mx.gpu:
+            self.skipTest("requires an Apple Silicon Metal GPU")
+
+        key = mx.random.key(4198)
+        group_size, bits = 64, 4
+        dtype = mx.bfloat16
+        # K=6656 is the reported decoder-shaped case. The surrounding cheap
+        # cases retain the N/M tails without making the regression too heavy.
+        for M, N, K in (
+            (32, 6655, 128),
+            (32, 6656, 6656),
+            (32, 8192, 128),
+            (32, 8193, 128),
+            (33, 6656, 128),
+        ):
+            with self.subTest(shape=(M, N, K)):
+                key, k1, k2 = mx.random.split(key, 3)
+                x = (mx.random.normal(shape=(M, K), key=k1) / K**0.5).astype(dtype)
+                w = (mx.random.normal(shape=(N, K), key=k2) / K**0.5).astype(dtype)
+                w_q, scales, biases = mx.quantize(w, group_size, bits)
+                w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
+                y_q = mx.quantized_matmul(
+                    x, w_q, scales, biases, True, group_size, bits
+                )
+                # The unchanged split-K tail can differ by one bfloat16
+                # quantum from the dequantized reference.
+                self.assertLess((y_q - x @ w_hat.T).abs().max(), 2e-3)
+
     @unittest.skipIf("CI" in os.environ, "too slow in CI")
     def test_qmm_non_transposed(self):
         # The non-transposed matmul (w is [K, N]) is reachable mainly from the

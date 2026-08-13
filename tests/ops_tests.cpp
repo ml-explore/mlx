@@ -8,9 +8,63 @@
 #include "doctest/doctest.h"
 
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/backend/metal/quantized_dispatch.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
+
+TEST_CASE("test qmm_t split-K NAX policy") {
+  auto use_nax = [](int architecture_generation,
+                    char architecture_size,
+                    bool fallback_qmm_is_nax_eligible,
+                    bool transpose,
+                    bool single_batch,
+                    bool affine,
+                    int group_size,
+                    int bits,
+                    int m_tiles,
+                    int N,
+                    int K,
+                    int split_k) {
+    return metal::qmm_t_splitk_should_use_nax(
+        fallback_qmm_is_nax_eligible,
+        architecture_generation,
+        architecture_size,
+        transpose,
+        single_batch,
+        affine,
+        group_size,
+        bits,
+        m_tiles,
+        N,
+        K,
+        split_k);
+  };
+
+  CHECK(use_nax(17, 's', true, true, true, true, 64, 4, 1, 6656, 128, 2));
+  CHECK(use_nax(17, 's', true, true, true, true, 64, 4, 1, 8192, 128, 2));
+
+  CHECK_FALSE(use_nax(16, 's', true, true, true, true, 64, 4, 1, 6656, 128, 2));
+  CHECK_FALSE(use_nax(18, 's', true, true, true, true, 64, 4, 1, 6656, 128, 2));
+  CHECK_FALSE(use_nax(17, 'g', true, true, true, true, 64, 4, 1, 6656, 128, 2));
+  CHECK_FALSE(use_nax(17, 'd', true, true, true, true, 64, 4, 1, 6656, 128, 2));
+  CHECK_FALSE(use_nax(17, 'p', true, true, true, true, 64, 4, 1, 6656, 128, 2));
+  CHECK_FALSE(
+      use_nax(17, 's', false, true, true, true, 64, 4, 1, 6656, 128, 2));
+  CHECK_FALSE(
+      use_nax(17, 's', true, false, true, true, 64, 4, 1, 6656, 128, 2));
+  CHECK_FALSE(
+      use_nax(17, 's', true, true, false, true, 64, 4, 1, 6656, 128, 2));
+  CHECK_FALSE(
+      use_nax(17, 's', true, true, true, false, 64, 4, 1, 6656, 128, 2));
+  CHECK_FALSE(use_nax(17, 's', true, true, true, true, 32, 4, 1, 6656, 128, 2));
+  CHECK_FALSE(use_nax(17, 's', true, true, true, true, 64, 8, 1, 6656, 128, 2));
+  CHECK_FALSE(use_nax(17, 's', true, true, true, true, 64, 4, 2, 6656, 128, 2));
+  CHECK_FALSE(use_nax(17, 's', true, true, true, true, 64, 4, 1, 6655, 128, 2));
+  CHECK_FALSE(use_nax(17, 's', true, true, true, true, 64, 4, 1, 8193, 128, 2));
+  CHECK_FALSE(use_nax(17, 's', true, true, true, true, 64, 4, 1, 6656, 64, 2));
+  CHECK_FALSE(use_nax(17, 's', true, true, true, true, 64, 4, 1, 6656, 128, 3));
+}
 
 TEST_CASE("test copy") {
   array x(1.0);
