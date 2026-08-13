@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include <algorithm>
+#include <cassert>
 #include <cstdio>
 #include <sstream>
 #include <stdexcept>
@@ -141,7 +142,8 @@ void ResidencySets::insert(MTL::Allocation* buf) {
 
   auto [it, inserted] = buf_to_set_.try_emplace(buf, Placement{kNoSet, bytes});
   if (!inserted) {
-    return; // already tracked
+    assert(false && "allocation is already tracked");
+    return;
   }
   // Stay within the wired limit. The excess is tracked but left out of any
   // set, and is added to one by resize() if the limit is raised later.
@@ -159,7 +161,8 @@ void ResidencySets::erase(MTL::Allocation* buf) {
   std::lock_guard<std::mutex> lk(mtx_);
   auto it = buf_to_set_.find(buf);
   if (it == buf_to_set_.end()) {
-    return; // a heap child, or never inserted
+    assert(false && "erasing an allocation that was never inserted");
+    return;
   }
   if (it->second.set_id != kNoSet) {
     const uint32_t idx = it->second.set_id;
