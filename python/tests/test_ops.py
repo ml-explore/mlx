@@ -1161,6 +1161,13 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.array([math.erf(i) for i in inputs])
         self.assertTrue(np.allclose(mx.erf(x), expected))
 
+        # Complex is not supported and has to say so rather than abort
+        z = mx.array([1 + 2j], mx.complex64)
+        with self.assertRaises(ValueError):
+            mx.erf(z)
+        with self.assertRaises(ValueError):
+            mx.erfinv(z)
+
     def test_erfinv(self):
         inputs = [-5.0, -1.0, 0.5, 0.0, 0.5, 1.0, 5.0]
         x = mx.array(inputs)
