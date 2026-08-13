@@ -2102,11 +2102,11 @@ array nan_to_num(
 
   auto type_to_max = [](const auto& dtype) -> float {
     if (dtype == float32) {
-      return std::numeric_limits<float>::max();
+      return numeric_limits<float>::max();
     } else if (dtype == bfloat16) {
-      return static_cast<float>(numeric_limits<bfloat16_t>::max());
+      return numeric_limits<bfloat16_t>::max();
     } else if (dtype == float16) {
-      return static_cast<float>(numeric_limits<float16_t>::max());
+      return numeric_limits<float16_t>::max();
     } else {
       std::ostringstream msg;
       msg << "[nan_to_num] Does not yet support given type: " << dtype << ".";
