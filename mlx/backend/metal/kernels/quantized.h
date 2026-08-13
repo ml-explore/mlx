@@ -509,10 +509,12 @@ inline void dequantize(const device uint8_t* w, U scale, U bias, W w_local) {
 
       w_local[0] = static_cast<U>((w[0] & 0x7) * s + b);
       w_local[1] = static_cast<U>(((w[0] & 0x38) >> 3) * s + b);
-      w_local[2] = static_cast<U>((((w[0] & 0xc0) >> 6) + ((w[1] & 0x1) << 2)) * s + b);
+      w_local[2] =
+          static_cast<U>((((w[0] & 0xc0) >> 6) + ((w[1] & 0x1) << 2)) * s + b);
       w_local[3] = static_cast<U>(((w[1] & 0xe) >> 1) * s + b);
       w_local[4] = static_cast<U>(((w[1] & 0x70) >> 4) * s + b);
-      w_local[5] = static_cast<U>((((w[1] & 0x80) >> 7) + ((w[2] & 0x3) << 1)) * s + b);
+      w_local[5] =
+          static_cast<U>((((w[1] & 0x80) >> 7) + ((w[2] & 0x3) << 1)) * s + b);
       w_local[6] = static_cast<U>(((w[2] & 0x1c) >> 2) * s + b);
       w_local[7] = static_cast<U>(((w[2] & 0xe0) >> 5) * s + b);
     }
@@ -532,12 +534,16 @@ inline void dequantize(const device uint8_t* w, U scale, U bias, W w_local) {
       w += 5 * i;
 
       w_local[0] = static_cast<U>((w[0] & 0x1f) * s + b);
-      w_local[1] = static_cast<U>((((w[0] & 0xe0) >> 5) + ((w[1] & 0x3) << 3)) * s + b);
+      w_local[1] =
+          static_cast<U>((((w[0] & 0xe0) >> 5) + ((w[1] & 0x3) << 3)) * s + b);
       w_local[2] = static_cast<U>(((w[1] & 0x7c) >> 2) * s + b);
-      w_local[3] = static_cast<U>((((w[1] & 0x80) >> 7) + ((w[2] & 0xf) << 1)) * s + b);
-      w_local[4] = static_cast<U>((((w[2] & 0xf0) >> 4) + ((w[3] & 0x1) << 4)) * s + b);
+      w_local[3] =
+          static_cast<U>((((w[1] & 0x80) >> 7) + ((w[2] & 0xf) << 1)) * s + b);
+      w_local[4] =
+          static_cast<U>((((w[2] & 0xf0) >> 4) + ((w[3] & 0x1) << 4)) * s + b);
       w_local[5] = static_cast<U>(((w[3] & 0x3e) >> 1) * s + b);
-      w_local[6] = static_cast<U>((((w[3] & 0xc0) >> 6) + ((w[4] & 0x7) << 2)) * s + b);
+      w_local[6] =
+          static_cast<U>((((w[3] & 0xc0) >> 6) + ((w[4] & 0x7) << 2)) * s + b);
       w_local[7] = static_cast<U>(((w[4] & 0xf8) >> 3) * s + b);
     }
   }
@@ -547,8 +553,10 @@ inline void dequantize(const device uint8_t* w, U scale, U bias, W w_local) {
       w_local += 4 * i;
       w += 3 * i;
       w_local[0] = static_cast<U>((w[0] & 0x3f) * s + b);
-      w_local[1] = static_cast<U>((((w[0] >> 6) & 0x03) + ((w[1] & 0x0f) << 2)) * s + b);
-      w_local[2] = static_cast<U>((((w[1] >> 4) & 0x0f) + ((w[2] & 0x03) << 4)) * s + b);
+      w_local[1] =
+          static_cast<U>((((w[0] >> 6) & 0x03) + ((w[1] & 0x0f) << 2)) * s + b);
+      w_local[2] =
+          static_cast<U>((((w[1] >> 4) & 0x0f) + ((w[2] & 0x03) << 4)) * s + b);
       w_local[3] = static_cast<U>(((w[2] >> 2) & 0x3f) * s + b);
     }
   }
@@ -559,7 +567,6 @@ inline void dequantize(const device uint8_t* w, U scale, U bias, W w_local) {
     }
   }
 }
-
 
 template <
     typename T,
