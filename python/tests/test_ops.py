@@ -2675,6 +2675,27 @@ class TestOps(mlx_tests.MLXTestCase):
         y_np = np.sort(np.array(a), axis=-1)
         self.assertTrue(np.array_equal(y_np, y_mx))
 
+        # Negative stride on an axis that is not sorted, single and multi block
+        np.random.seed(0)
+        for dtype in ("int32", "float32"):
+            for size in (4, 32769):
+                with self.subTest(dtype=dtype, size=size):
+                    a_np = np.random.uniform(0, 100, size=(3, size))
+                    a_np = a_np.astype(getattr(np, dtype))
+                    a_mx = mx.array(a_np)[::-1, :]
+                    a_np = a_np[::-1, :]
+
+                    b_np = np.sort(a_np, axis=-1)
+                    self.assertTrue(np.array_equal(b_np, mx.sort(a_mx, axis=-1)))
+
+                    idx = mx.argsort(a_mx, axis=-1)
+                    self.assertTrue(
+                        np.array_equal(b_np, mx.take_along_axis(a_mx, idx, axis=-1))
+                    )
+
+                    b_mx = mx.partition(a_mx, 1, axis=-1)
+                    self.assertTrue(np.array_equal(b_np[:, 1], np.array(b_mx)[:, 1]))
+
     def test_partition(self):
         shape = (3, 4, 5)
         for dtype in ("int32", "float32"):
