@@ -3170,9 +3170,15 @@ array floor_divide(
     return floor(divide(a, b, s), s);
   }
 
-  // Integer division truncates, so take the floored quotient from divmod
-  // rather than reimplementing the correction here.
-  return divmod(a, b, s)[0];
+  // Integer division truncates, so subtract the floored remainder first. That
+  // makes the division exact, which keeps the result right no matter which way
+  // the division rounds.
+  auto num = subtract(a, remainder(a, b, s), s);
+  auto inputs =
+      broadcast_arrays({astype(num, dtype, s), astype(b, dtype, s)}, s);
+  auto shape = inputs[0].shape();
+  return array(
+      shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
 }
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
