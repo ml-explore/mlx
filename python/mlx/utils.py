@@ -294,7 +294,8 @@ def tree_reduce(fn, tree, initializer=None, is_leaf=None):
 
 def tree_merge(tree_a, tree_b, merge_fn=None):
     """Merge two Python trees in one containing the values of both. It can be
-    thought of as a deep dict.update method.
+    thought of as a deep dict.update method. Empty containers are treated as
+    empty subtrees.
 
     Args:
         tree_a (Any): The first Python tree.
@@ -305,9 +306,19 @@ def tree_merge(tree_a, tree_b, merge_fn=None):
         The Python tree containing the values of both ``tree_a`` and
         ``tree_b``.
     """
-    if isinstance(tree_a, (dict, list, tuple)) and len(tree_a) == 0:
+    empty_a = isinstance(tree_a, (dict, list, tuple)) and len(tree_a) == 0
+    empty_b = isinstance(tree_b, (dict, list, tuple)) and len(tree_b) == 0
+
+    if empty_a and empty_b:
+        if type(tree_a) is not type(tree_b):
+            raise ValueError(
+                f"Cannot merge {type(tree_a).__name__} with {type(tree_b).__name__}"
+            )
+        return type(tree_a)()
+
+    if empty_a:
         tree_a = None
-    if isinstance(tree_b, (dict, list, tuple)) and len(tree_b) == 0:
+    if empty_b:
         tree_b = None
     if tree_a is None and tree_b is not None:
         return tree_b
