@@ -890,10 +890,11 @@ struct BlockLoaderCast {
       if constexpr (cast_vec_width > 1) {
         STEEL_PRAGMA_UNROLL
         for (short j = 0; j < vec_size; j += cast_vec_width) {
-          auto v = *((const device metal::vec<TExt, cast_vec_width>*)(
-              &src[i * src_ld + j]));
-          *((threadgroup metal::vec<TTile, cast_vec_width>*)(
-              &dst[i * dst_ld + j])) =
+          auto v =
+              *((const device
+                     metal::vec<TExt, cast_vec_width>*)(&src[i * src_ld + j]));
+          *((threadgroup
+                 metal::vec<TTile, cast_vec_width>*)(&dst[i * dst_ld + j])) =
               static_cast<metal::vec<TTile, cast_vec_width>>(v);
         }
       } else {
@@ -1616,16 +1617,20 @@ METAL_FUNC void qmm_t_impl_bf16fp16(
   // TTile (float16_t); the output type is TExt (bfloat16_t) and is only
   // used by BlockMMA at the final (device-memory) store, where the float
   // accumulator is cast down to bfloat16_t.
-  using mma_t = mlx::steel::
-      BlockMMA<TTile, TExt, BM, BN, BK, WM, WN, false, true, BK_padded, BK_padded>;
-  using loader_x_t = BlockLoaderCast<
-      TExt,
+  using mma_t = mlx::steel::BlockMMA<
       TTile,
+      TExt,
       BM,
+      BN,
       BK,
+      WM,
+      WN,
+      false,
+      true,
       BK_padded,
-      1,
-      WM * WN * SIMD_SIZE>;
+      BK_padded>;
+  using loader_x_t =
+      BlockLoaderCast<TExt, TTile, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE>;
   using loader_w_t = QuantizedBlockLoaderCast<
       TExt,
       TTile,
@@ -2418,7 +2423,15 @@ template <
         b_strides,
         tid);
   }
-  qmm_t_impl_bf16fp16<bfloat16_t, float16_t, group_size, bits, aligned_N, BM, BK, BN>(
+  qmm_t_impl_bf16fp16<
+      bfloat16_t,
+      float16_t,
+      group_size,
+      bits,
+      aligned_N,
+      BM,
+      BK,
+      BN>(
       w,
       scales,
       biases,

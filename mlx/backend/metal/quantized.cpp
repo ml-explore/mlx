@@ -1066,7 +1066,8 @@ void qmm_bf16_fp16(
   kname.reserve(64);
   concatenate(
       kname,
-      wide_tile ? "affine_qmm_t_bf16fp16_wide_gs_" : "affine_qmm_t_bf16fp16_gs_",
+      wide_tile ? "affine_qmm_t_bf16fp16_wide_gs_"
+                : "affine_qmm_t_bf16fp16_gs_",
       group_size,
       "_b_",
       bits,
@@ -1086,7 +1087,15 @@ void qmm_bf16_fp16(
   // grid and threadgroup-relative addressing computed for 64x64 tiles,
   // producing wrong results.
   std::string template_def = get_template_definition(
-      kname, "affine_qmm_t_bf16fp16", group_size, bits, aligned, batched, bm, bk, bn);
+      kname,
+      "affine_qmm_t_bf16fp16",
+      group_size,
+      bits,
+      aligned,
+      batched,
+      bm,
+      bk,
+      bn);
   MTL::ComputePipelineState* kernel =
       get_quantized_kernel(d, kname, template_def, "affine");
 
