@@ -84,7 +84,18 @@ Simd<T, 1> recip(Simd<T, 1> in) {
 
 DEFAULT_UNARY(operator-, std::negate{})
 DEFAULT_UNARY(operator!, std::logical_not{})
-DEFAULT_UNARY(abs, std::abs)
+// std::abs has no overload for the wider unsigned types, so calling it is
+// ambiguous rather than a no-op. Abs::eval_cpu already skips unsigned inputs,
+// but the compiled kernels reach this directly.
+template <typename T>
+Simd<T, 1> abs(Simd<T, 1> in) {
+  if constexpr (std::is_unsigned_v<T>) {
+    return in;
+  } else {
+    return std::abs(in.value);
+  }
+}
+
 DEFAULT_UNARY(acos, std::acos)
 DEFAULT_UNARY(acosh, std::acosh)
 DEFAULT_UNARY(asin, std::asin)
