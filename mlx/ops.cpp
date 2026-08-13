@@ -293,12 +293,10 @@ array linspace(
       s);
 }
 
-array astype(
-    array a,
-    Dtype dtype,
-    std::optional<bool> copy,
-    StreamOrDevice s /* = {} */) {
-  if (dtype == a.dtype() && !copy.value_or(false)) {
+// Private API used by python bindings.
+MLX_API array
+astype(array a, Dtype dtype, bool force_copy, StreamOrDevice s = {}) {
+  if (dtype == a.dtype() && !force_copy) {
     return a;
   }
   auto copied_shape = a.shape(); // |a| will be moved
@@ -307,6 +305,10 @@ array astype(
       dtype,
       std::make_shared<AsType>(to_stream(s), dtype),
       {std::move(a)});
+}
+
+array astype(array a, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return astype(std::move(a), dtype, false, s);
 }
 
 array as_strided(
@@ -1486,6 +1488,12 @@ array reflect_pad(
     int H = high_pad_size[i];
     if (L == 0 && H == 0) {
       continue;
+    }
+    if (n == 0) {
+      std::ostringstream msg;
+      msg << "[pad] Cannot pad empty axis " << ax << " using mode '"
+          << (include_edge ? "symmetric" : "reflect") << "'.";
+      throw std::invalid_argument(msg.str());
     }
     // reflect skips the edge value (period 2(n-1)); symmetric repeats it
     // (period 2n).
