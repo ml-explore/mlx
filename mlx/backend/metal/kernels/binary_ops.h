@@ -35,6 +35,12 @@ struct FloorDivide {
   metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) thread {
     return floor(x / y);
   }
+  template <>
+  complex64_t operator()(complex64_t x, complex64_t y) thread {
+    // Only here because the kernels are instantiated for every type. divmod
+    // rejects complex before it reaches this.
+    return x / y;
+  }
 };
 
 struct Divide {

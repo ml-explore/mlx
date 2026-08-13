@@ -26,6 +26,10 @@ struct FloorDivide {
         }
       }
       return q;
+    } else if constexpr (is_complex_v<T>) {
+      // Only here because the kernels are instantiated for every type. divmod
+      // rejects complex before it reaches this.
+      return x / y;
     } else {
       return cuda::std::floor(x / y);
     }
