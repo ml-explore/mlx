@@ -16,6 +16,7 @@
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
+#include "mlx/types/limits.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -2103,9 +2104,9 @@ array nan_to_num(
     if (dtype == float32) {
       return std::numeric_limits<float>::max();
     } else if (dtype == bfloat16) {
-      return std::numeric_limits<bfloat16_t>::max();
+      return static_cast<float>(numeric_limits<bfloat16_t>::max());
     } else if (dtype == float16) {
-      return std::numeric_limits<float16_t>::max();
+      return static_cast<float>(numeric_limits<float16_t>::max());
     } else {
       std::ostringstream msg;
       msg << "[nan_to_num] Does not yet support given type: " << dtype << ".";
