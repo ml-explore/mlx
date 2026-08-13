@@ -3939,6 +3939,20 @@ class TestOps(mlx_tests.MLXTestCase):
         e = mx.empty_like(x, dtype=mx.float32)
         self.assertEqual(e.dtype, mx.float32)
 
+    def test_strided_negative_stride_sort(self):
+        a_np = np.arange(12, dtype=np.float32).reshape(3, 4)
+        a_mx = mx.array(a_np)[::-1, :]
+        a_np_strided = a_np[::-1, :]
+
+        expected_sort = np.sort(a_np_strided, axis=-1)
+        expected_topk = np.sort(a_np_strided, axis=-1)[:, -2:]
+
+        self.assertTrue(np.allclose(np.array(mx.sort(a_mx, axis=-1)), expected_sort))
+        self.assertTrue(np.allclose(np.array(mx.topk(a_mx, 2, axis=-1)), expected_topk))
+        self.assertTrue(
+            np.allclose(np.array(mx.partition(a_mx, 2, axis=-1)), expected_sort)
+        )
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

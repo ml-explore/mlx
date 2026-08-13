@@ -278,9 +278,27 @@ void gpu_merge_sort(
     array& out,
     int axis_,
     bool argsort) {
+  // Negative strides cause MSL elem_to_loc to compute negative relative pointer
+  // offsets, attempting to read memory prior to Metal's bound buffer window
+  // (a_buf + in.offset()). To prevent GPU memory protection traps while
+  // matching NumPy behavior, we create a temporary contiguous copy for negative
+  // strides.
+  bool has_negative_stride = false;
+  for (auto st : in.strides()) {
+    if (st < 0) {
+      has_negative_stride = true;
+      break;
+    }
+  }
+
+  array in_dense = in;
+  if (has_negative_stride) {
+    in_dense = contiguous_copy_gpu(in, s);
+  }
+
   // Get size info
-  int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
-  int size_sorted_axis = in.shape(axis);
+  int axis = axis_ < 0 ? axis_ + in_dense.ndim() : axis_;
+  int size_sorted_axis = in_dense.shape(axis);
 
   // Get kernel size
   int tn = 4;
@@ -299,7 +317,7 @@ void gpu_merge_sort(
     bn = 32;
   }
 
-  if (bn == 512 && size_of(in.dtype()) > 4) {
+  if (bn == 512 && size_of(in_dense.dtype()) > 4) {
     bn = 256;
   }
 
@@ -307,9 +325,10 @@ void gpu_merge_sort(
   int n_blocks = (size_sorted_axis + n_per_block - 1) / n_per_block;
 
   if (n_blocks > 1) {
-    return multi_block_sort(s, d, in, out, axis, bn, tn, n_blocks, argsort);
+    return multi_block_sort(
+        s, d, in_dense, out, axis, bn, tn, n_blocks, argsort);
   } else {
-    return single_block_sort(s, d, in, out, axis, bn, tn, argsort);
+    return single_block_sort(s, d, in_dense, out, axis, bn, tn, argsort);
   }
 }
 
