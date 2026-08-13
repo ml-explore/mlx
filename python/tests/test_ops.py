@@ -2305,6 +2305,17 @@ class TestOps(mlx_tests.MLXTestCase):
                 )
                 self.assertEqual(b_mlx.dtype, mx.float32)
 
+        # An empty axis cannot be extended; numpy raises for these too.
+        # Used to hang in an infinite loop rather than raise.
+        for mode in ("reflect", "symmetric"):
+            with self.assertRaises(ValueError):
+                mx.pad(mx.array([]), 2, mode=mode)
+            with self.assertRaises(ValueError):
+                mx.pad(mx.zeros((0, 3)), [(1, 1), (0, 0)], mode=mode)
+            # A zero-width pad on the empty axis stays allowed
+            out = mx.pad(mx.zeros((0, 3)), [(0, 0), (2, 1)], mode=mode)
+            self.assertEqual(out.shape, (0, 6))
+
     def test_as_strided(self):
         x_npy = np.random.randn(128).astype(np.float32)
         x_mlx = mx.array(x_npy)
