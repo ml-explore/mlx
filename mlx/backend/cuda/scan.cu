@@ -458,7 +458,10 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& encoder = cu::get_command_encoder(s);
 
-  if (in.flags().contiguous && in.strides()[axis_] != 0) {
+  // The strided kernel writes out[i * stride + j] for i < shape[axis] and
+  // j < stride, so the scanned axis has to fit inside the allocation.
+  if (in.flags().contiguous && in.strides()[axis_] != 0 &&
+      in.shape(axis_) * in.strides()[axis_] <= in.data_size()) {
     if (in.is_donatable() && in.itemsize() == out.itemsize()) {
       out.copy_shared_buffer(in);
     } else {
