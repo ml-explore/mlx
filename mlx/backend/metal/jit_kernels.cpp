@@ -1008,6 +1008,18 @@ MTL::ComputePipelineState* get_fft_kernel(
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_fft_twiddle_kernel(
+    metal::Device& d,
+    const std::string& library_name,
+    const std::string& template_def) {
+  auto lib = d.get_library(library_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::fft() << template_def;
+    return kernel_source.str();
+  });
+  return d.get_kernel("generate_bluestein_twiddles", lib);
+}
+
 MTL::ComputePipelineState* get_quantized_kernel(
     metal::Device& d,
     const std::string& kernel_name,
