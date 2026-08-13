@@ -320,8 +320,10 @@ std::tuple<array, array, array> compute_raders_constants(
 }
 
 // Bluestein
-std::pair<array, array>
-compute_bluestein_constants(int n, int bluestein_n, int radix_twiddle_size) {
+std::pair<array, array> compute_bluestein_constants(
+    int n,
+    int bluestein_n,
+    int radix_twiddle_size = 0) {
   // We need to calculate the Bluestein twiddle factors
   // in double precision for the overall numerical stability
   // of Bluestein's FFT algorithm to be acceptable.
@@ -365,10 +367,6 @@ compute_bluestein_constants(int n, int bluestein_n, int radix_twiddle_size) {
       /* data_out= */ w_q_ptr,
       /* scale= */ 1.0f);
   return std::make_tuple(w_k, w_q);
-}
-
-std::pair<array, array> compute_bluestein_constants(int n, int bluestein_n) {
-  return compute_bluestein_constants(n, bluestein_n, 0);
 }
 
 void multi_upload_bluestein_fft(

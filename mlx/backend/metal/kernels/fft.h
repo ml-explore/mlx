@@ -215,14 +215,14 @@ METAL_FUNC void radix_n_steps(
       buf,                                                   \
       twiddles);
 
-template <typename T, bool rader, bool use_twiddle_table>
+template <typename T, bool rader = false, bool use_twiddle_table = false>
 METAL_FUNC void perform_fft(
     int fft_idx,
     thread int* p,
     int m,
     int n,
     threadgroup vec<T, 2>* buf,
-    const device vec<T, 2>* twiddles) {
+    const device vec<T, 2>* twiddles = nullptr) {
   vec<T, 2> inputs[MAX_RADIX];
   short indices[MAX_OUTPUT_SIZE];
   vec<T, 2> values[MAX_OUTPUT_SIZE];
@@ -237,16 +237,6 @@ METAL_FUNC void perform_fft(
   RADIX_STEP(8, radix8, rader ? rader_8_steps_ : radix_8_steps_);
   RADIX_STEP(11, radix11, rader ? rader_11_steps_ : radix_11_steps_);
   RADIX_STEP(13, radix13, rader ? rader_13_steps_ : radix_13_steps_);
-}
-
-template <typename T, bool rader = false>
-METAL_FUNC void perform_fft(
-    int fft_idx,
-    thread int* p,
-    int m,
-    int n,
-    threadgroup vec<T, 2>* buf) {
-  perform_fft<T, rader, false>(fft_idx, p, m, n, buf, nullptr);
 }
 
 // Each FFT is computed entirely in shared GPU memory.
