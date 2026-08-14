@@ -6,6 +6,16 @@
 #include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
 #include <metal_tensor>
 
+///////////////////////////////////////////////////////////////////////////////
+// Function constants
+///////////////////////////////////////////////////////////////////////////////
+
+constant bool save_state_cache [[function_constant(200)]];
+
+///////////////////////////////////////////////////////////////////////////////
+// Helper Macros
+///////////////////////////////////////////////////////////////////////////////
+
 #define FULL_UNROLL _Pragma("clang loop unroll(full)")
 
 #define AT(TILE, IDX) TILE.thread_elements()[IDX]
@@ -288,7 +298,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 }
 
 /*
-        auto grid   = MTL::Size(32, Dv, B * Hv);
+    auto grid   = MTL::Size(32, Dv, B * Hv);
     auto threads = MTL::Size(32, 4, 1);
  */
 template <typename InT, int Dk, int Dv, int Hk, int Hv>
@@ -302,6 +312,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv>
     constant int& T [[buffer(6)]],
     device InT* y [[buffer(7)]], // [B, T, Hv, Dv]
     device float* state_out [[buffer(8)]], // [B, Hv, Dv, Dk]
+    device float* state_cache [[buffer(9)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
@@ -327,6 +338,9 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv>
   auto i_state = state_in + (n * Dv + dv_idx) * Dk;
   auto o_state = state_out + (n * Dv + dv_idx) * Dk;
 
+  // state cache, only for backward
+  auto c_state = state_cache + (n * T * Dv + dv_idx) * Dk;
+
   float state[n_per_t];
   for (int i = 0; i < n_per_t; ++i) {
     auto s_idx = n_per_t * dk_idx + i;
@@ -338,6 +352,13 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv>
   auto beta_ = beta + b_idx * T * Hv;
 
   for (int t = 0; t < T; ++t) {
+    if (save_state_cache) {
+      for (int i = 0; i < n_per_t; ++i) {
+        c_state[n_per_t * dk_idx + i] = state[i];
+      }
+      c_state += Dv * Dk;
+    }
+
     float kv_mem = 0.0f;
     for (int i = 0; i < n_per_t; ++i) {
       auto s_idx = n_per_t * dk_idx + i;
@@ -354,9 +375,11 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv>
       state[i] = state[i] + k_[s_idx] * delta;
       out += state[i] * q_[s_idx];
     }
-    out = simd_sum(out);
-    if (thread_index_in_simdgroup == 0) {
-      y[dv_idx] = static_cast<InT>(out);
+    if (!save_state_cache) {
+      out = simd_sum(out);
+      if (thread_index_in_simdgroup == 0) {
+        y[dv_idx] = static_cast<InT>(out);
+      }
     }
     // Increment data pointers to next time step
     q_ += Hk * Dk;
@@ -366,8 +389,10 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv>
     g_ += Hv;
     beta_ += Hv;
   }
-  for (int i = 0; i < n_per_t; ++i) {
-    auto s_idx = n_per_t * dk_idx + i;
-    o_state[s_idx] = static_cast<float>(state[i]);
+  if (!save_state_cache) {
+    for (int i = 0; i < n_per_t; ++i) {
+      auto s_idx = n_per_t * dk_idx + i;
+      o_state[s_idx] = static_cast<float>(state[i]);
+    }
   }
 }

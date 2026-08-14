@@ -1333,6 +1333,14 @@ MTL::ComputePipelineState* get_gated_delta_kernel(
   return d.get_kernel(kernel_name, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_gated_delta_vjp_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts) {
+  return d.get_kernel(kernel_name, hash_name, func_consts);
+}
+
 MTL::ComputePipelineState* get_gated_delta_nax_kernel(
     metal::Device& d,
     const std::string& kernel_name,

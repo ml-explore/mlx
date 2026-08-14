@@ -1053,7 +1053,6 @@ std::vector<array> GatedDeltaUpdate::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
-  // primals are q, k, v, g, b, (h?)
   const int Hk = primals[0].shape(2);
   const int Dk = primals[0].shape(3);
   const int Hv = primals[2].shape(2);
@@ -1063,16 +1062,27 @@ std::vector<array> GatedDeltaUpdate::vjp(
     return Custom::vjp(primals, cotangents, argnums, outputs);
   }
 
-  std::vector<array> inputs = primals;
-  inputs.push_back(cotangents[0]); // cotangent of out
-  inputs.push_back(cotangents[1]); // cotangent of state
+  // The VJP kernel requires an explicit initial state.
+  if (primals.size() != 6) {
+    throw std::runtime_error(
+        "[GatedDeltaUpdate::vjp] expected 6 primals (q,k,v,g,beta,h0), got " +
+        std::to_string(primals.size()));
+  }
+  if (cotangents.size() != 2) {
+    throw std::runtime_error(
+        "[GatedDeltaUpdate::vjp] expected 2 cotangents (out, state), got " +
+        std::to_string(cotangents.size()));
+  }
+
+  std::vector<array> inputs = primals; // q,k,v,g,beta,h0  (indices 0..5)
+  inputs.push_back(cotangents[0]); // cot_o -> index 6
+  inputs.push_back(cotangents[1]); // cot_h -> index 7
 
   std::vector<Shape> shapes;
   std::vector<Dtype> dtypes;
-  for (int i = 0; i < /* outputs size */ 6; ++i) {
+  for (int i = 0; i < 6; ++i) {
     shapes.push_back(primals[i].shape());
-    dtypes.push_back(
-        primals[i].dtype()); // Do i need to override some type with float?
+    dtypes.push_back(i == 5 ? float32 : primals[i].dtype()); // dh is float32
   }
 
   auto vjps = array::make_arrays(
