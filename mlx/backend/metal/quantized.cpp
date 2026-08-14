@@ -1035,9 +1035,10 @@ void qmm(
     metal::Device& d,
     const Stream& s,
     const std::string& mode) {
-  // The non-transposed kernel requires N % 64 == 0.
-  if (metal::is_nax_available() && (transpose || (N % 64 == 0)) &&
-      (K % 64 == 0) && (env::enable_tf32() || x.dtype() != float32)) {
+  bool has_nax_kernel =
+      metal::is_nax_available() && (transpose || mode == "affine");
+  if (has_nax_kernel && transpose && (K % 64 == 0) &&
+      (env::enable_tf32() || x.dtype() != float32)) {
     return qmm_nax(
         /* const array& x = */ x,
         /* const array& w = */ w,

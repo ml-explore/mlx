@@ -22,10 +22,19 @@ try:
 except ImportError:
     has_tf = False
 
+
 try:
     import torch
 
-    has_torch_mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+    torch_version = [int(v) for v in torch.__version__.split("+")[0].split(".")]
+    is_torch_212 = torch_version[0] > 2 or (
+        torch_version[0] == 2 and torch_version[1] >= 12
+    )
+    has_torch_mps = (
+        is_torch_212
+        and hasattr(torch.backends, "mps")
+        and torch.backends.mps.is_available()
+    )
 except ImportError:
     torch = None
     has_torch_mps = False

@@ -121,11 +121,12 @@ class RemoteProcess(CommandProcess):
         # Change the working directory if one was requested. Otherwise attempt to
         # change to the current one but don't fail if it wasn't possible.
         d = cwd or os.getcwd()
-        script += f"if [[ -d {repr(d)} ]]; then "
-        script += f"  cd {repr(d)}; "
+        qd = shlex.quote(d)
+        script += f"if [[ -d {qd} ]]; then "
+        script += f"  cd {qd}; "
         if cwd is not None:
             script += "else "
-            script += f" echo 'Failed to change directory to' {repr(d)} >2; "
+            script += f" echo 'Failed to change directory to' {qd} >&2; "
         script += "fi; "
 
         # Add the environment variables that were requested

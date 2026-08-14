@@ -3348,11 +3348,27 @@ TEST_CASE("test linspace") {
   auto expected = array({0.0f, 2.5f, 5.0f, 7.5f, 10.0f}, {5});
   CHECK(array_equal(x, expected).item<bool>());
 
-  x = linspace(0, 10, 5, int32);
+  x = linspace(0, 10, 5, true, int32);
   expected = array({0, 2, 5, 7, 10}, {5});
   CHECK(array_equal(x, expected).item<bool>());
 
   x = linspace(0, 1, 0);
+  expected = array(std::initializer_list<float>{}, {0});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 10, 5, false);
+  expected = array({0.0f, 2.0f, 4.0f, 6.0f, 8.0f}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 10, 5, false, int32);
+  expected = array({0, 2, 4, 6, 8}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(1, 10, 1, false);
+  expected = array({1.0f}, {1});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 1, 0, false);
   expected = array(std::initializer_list<float>{}, {0});
   CHECK(array_equal(x, expected).item<bool>());
 }

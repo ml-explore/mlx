@@ -849,6 +849,30 @@ TEST_CASE("test slice grads") {
   CHECK_EQ(out.size(), 0);
 }
 
+TEST_CASE("test slice update jvp with one tangent") {
+  auto src = array({1.0f, 2.0f, 3.0f, 4.0f});
+  auto update = array({5.0f, 6.0f});
+  auto src_tan = array({1.0f, 2.0f, 3.0f, 4.0f});
+  auto update_tan = array({7.0f, 8.0f});
+
+  for (bool add : {false, true}) {
+    auto update_fn = [&src, add](array x) {
+      return add ? slice_update_add(src, x, Shape{1}, Shape{3})
+                 : slice_update(src, x, Shape{1}, Shape{3});
+    };
+    auto out = jvp(update_fn, update, update_tan).second;
+    CHECK(array_equal(out, array({0.0f, 7.0f, 8.0f, 0.0f})).item<bool>());
+
+    auto src_fn = [&update, add](array x) {
+      return add ? slice_update_add(x, update, Shape{1}, Shape{3})
+                 : slice_update(x, update, Shape{1}, Shape{3});
+    };
+    out = jvp(src_fn, src, src_tan).second;
+    auto expected = add ? src_tan : array({1.0f, 0.0f, 0.0f, 4.0f});
+    CHECK(array_equal(out, expected).item<bool>());
+  }
+}
+
 TEST_CASE("test min and max vjp") {
   // Test min
   {

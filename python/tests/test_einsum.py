@@ -188,7 +188,6 @@ class TestEinsum(mlx_tests.MLXTestCase):
         a = mx.full((5, 1), 1.0)
         b = mx.full((8, 2), 1.0)
         a_mx = mx.einsum("ab,bc->c", a, b)
-        return
         a_np = np.einsum("ab,bc->c", a, b)
         self.assertTrue(np.array_equal(a_mx, a_np))
 
@@ -357,6 +356,40 @@ class TestEinsum(mlx_tests.MLXTestCase):
             inputs = inputs_for_case(test_case[0])
             with self.assertRaises(ValueError):
                 mx.einsum(test_case[1], *inputs)
+
+    def test_ellipses_broadcast(self):
+        # Size 1 batch dimensions covered by an ellipsis have to broadcast
+        # against the other operands, including when the smaller operand
+        # comes first.
+        shape_pairs = [
+            ((1, 3, 4), (2, 4, 5)),
+            ((2, 3, 4), (1, 4, 5)),
+            ((1, 1, 3, 4), (5, 2, 4, 5)),
+            ((5, 1, 3, 4), (1, 2, 4, 5)),
+        ]
+        for sa, sb in shape_pairs:
+            a = mx.random.uniform(shape=sa)
+            b = mx.random.uniform(shape=sb)
+            mx_out = mx.einsum("...ij,...jk->...ik", a, b)
+            np_out = np.einsum("...ij,...jk->...ik", np.array(a), np.array(b))
+            self.assertEqual(mx_out.shape, np_out.shape)
+            self.assertTrue(np.allclose(mx_out, np_out, rtol=1e-4, atol=1e-4))
+
+        for sa, sb in [((1, 4), (5, 4)), ((5, 4), (1, 4))]:
+            a = mx.random.uniform(shape=sa)
+            b = mx.random.uniform(shape=sb)
+            mx_out = mx.einsum("...i,...i->...", a, b)
+            np_out = np.einsum("...i,...i->...", np.array(a), np.array(b))
+            self.assertEqual(mx_out.shape, np_out.shape)
+            self.assertTrue(np.allclose(mx_out, np_out, rtol=1e-4, atol=1e-4))
+
+        # Same thing with explicit labels rather than an ellipsis
+        a = mx.random.uniform(shape=(1, 3, 4))
+        b = mx.random.uniform(shape=(2, 4, 5))
+        mx_out = mx.einsum("bij,bjk->bik", a, b)
+        np_out = np.einsum("bij,bjk->bik", np.array(a), np.array(b))
+        self.assertEqual(mx_out.shape, np_out.shape)
+        self.assertTrue(np.allclose(mx_out, np_out, rtol=1e-4, atol=1e-4))
 
 
 if __name__ == "__main__":

@@ -27,6 +27,10 @@ using MTLFC = std::tuple<const void*, MTL::DataType, NS::UInteger>;
 #define MIN_THREADGROUP_MEM_SIZE 256
 // For strided reads/writes, coalesce at least this many complex64s
 #define MIN_COALESCE_WIDTH 4
+// Precomputed radix twiddles pay off for the largest batched fused plan.
+constexpr int BLUESTEIN_TWIDDLE_TABLE_FFT_SIZE = 4096;
+constexpr int BLUESTEIN_TWIDDLE_TABLE_SIZE = 584;
+constexpr int MIN_BLUESTEIN_TWIDDLE_TABLE_BATCH = 1024;
 
 inline const std::vector<int> supported_radices() {
   // Ordered by preference in decomposition.
@@ -316,7 +320,10 @@ std::tuple<array, array, array> compute_raders_constants(
 }
 
 // Bluestein
-std::pair<array, array> compute_bluestein_constants(int n, int bluestein_n) {
+std::pair<array, array> compute_bluestein_constants(
+    int n,
+    int bluestein_n,
+    int radix_twiddle_size = 0) {
   // We need to calculate the Bluestein twiddle factors
   // in double precision for the overall numerical stability
   // of Bluestein's FFT algorithm to be acceptable.
@@ -343,7 +350,7 @@ std::pair<array, array> compute_bluestein_constants(int n, int bluestein_n) {
   w_k.set_data(allocator::malloc(w_k.nbytes()));
   std::copy(w_k_vec.begin(), w_k_vec.end(), w_k.data<complex64_t>());
 
-  array w_q({bluestein_n}, complex64, nullptr, {});
+  array w_q({bluestein_n + radix_twiddle_size}, complex64, nullptr, {});
   w_q.set_data(allocator::malloc(w_q.nbytes()));
   auto w_q_ptr =
       reinterpret_cast<std::complex<float>*>(w_q.data<complex64_t>());
@@ -649,6 +656,15 @@ void fft_op(
     size = out.size();
   }
   int total_batch_size = size / n;
+  static const std::vector<int> bluestein_twiddle_table_plan = {
+      0, 0, 4, 0, 0, 0, 0, 0, 0};
+  bool use_bluestein_twiddle_table = !real &&
+      plan.bluestein_n == BLUESTEIN_TWIDDLE_TABLE_FFT_SIZE &&
+      plan.stockham == bluestein_twiddle_table_plan &&
+      total_batch_size >= MIN_BLUESTEIN_TWIDDLE_TABLE_BATCH;
+  if (plan.bluestein_n > 0 && !real) {
+    func_consts.push_back(make_bool(&use_bluestein_twiddle_table, 22));
+  }
   int threads_per_fft = (fft_size + elems_per_thread - 1) / elems_per_thread;
 
   // We batch among threadgroups for improved efficiency when n is small
@@ -702,6 +718,9 @@ void fft_op(
     std::string base_name = kname.str();
     // We use a specialized kernel for each FFT size
     kname << "_n" << fft_size << "_inv_" << inverse;
+    if (use_bluestein_twiddle_table) {
+      kname << "_precomputed";
+    }
     std::string hash_name = kname.str();
     auto template_def = func_name == "four_step_fft" ? get_template_definition(
                                                            base_name,
@@ -720,15 +739,34 @@ void fft_op(
     auto kernel =
         get_fft_kernel(d, base_name, hash_name, func_consts, template_def);
 
-    compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(in_contiguous, 0);
-    compute_encoder.set_output_array(out, 1);
-
     if (plan.bluestein_n > 0) {
       // Precomputed twiddle factors for Bluestein's
-      auto [w_k, w_q] = compute_bluestein_constants(n, plan.bluestein_n);
+      auto [w_k, w_q] = use_bluestein_twiddle_table
+          ? compute_bluestein_constants(
+                n, plan.bluestein_n, BLUESTEIN_TWIDDLE_TABLE_SIZE)
+          : compute_bluestein_constants(n, plan.bluestein_n);
       copies.push_back(w_q);
       copies.push_back(w_k);
+
+      if (use_bluestein_twiddle_table) {
+        auto twiddle_kernel =
+            get_fft_twiddle_kernel(d, base_name, template_def);
+        compute_encoder.set_compute_pipeline_state(twiddle_kernel);
+        compute_encoder.set_output_array(
+            w_q,
+            0,
+            plan.bluestein_n * static_cast<int64_t>(sizeof(complex64_t)));
+        auto twiddle_group_size = std::min(
+            static_cast<NS::UInteger>(BLUESTEIN_TWIDDLE_TABLE_SIZE),
+            twiddle_kernel->maxTotalThreadsPerThreadgroup());
+        compute_encoder.dispatch_threads(
+            MTL::Size(BLUESTEIN_TWIDDLE_TABLE_SIZE, 1, 1),
+            MTL::Size(twiddle_group_size, 1, 1));
+      }
+
+      compute_encoder.set_compute_pipeline_state(kernel);
+      compute_encoder.set_input_array(in_contiguous, 0);
+      compute_encoder.set_output_array(out, 1);
 
       compute_encoder.set_input_array(w_q, 2); // w_q
       compute_encoder.set_input_array(w_k, 3); // w_k
@@ -736,6 +774,10 @@ void fft_op(
       compute_encoder.set_bytes(plan.bluestein_n, 5);
       compute_encoder.set_bytes(total_batch_size, 6);
     } else if (plan.rader_n > 1) {
+      compute_encoder.set_compute_pipeline_state(kernel);
+      compute_encoder.set_input_array(in_contiguous, 0);
+      compute_encoder.set_output_array(out, 1);
+
       auto [b_q, g_q, g_minus_q] = compute_raders_constants(plan.rader_n, s);
       copies.push_back(b_q);
       copies.push_back(g_q);
@@ -748,10 +790,18 @@ void fft_op(
       compute_encoder.set_bytes(total_batch_size, 6);
       compute_encoder.set_bytes(plan.rader_n, 7);
     } else if (four_step_params.required) {
+      compute_encoder.set_compute_pipeline_state(kernel);
+      compute_encoder.set_input_array(in_contiguous, 0);
+      compute_encoder.set_output_array(out, 1);
+
       compute_encoder.set_bytes(four_step_params.n1, 2);
       compute_encoder.set_bytes(four_step_params.n2, 3);
       compute_encoder.set_bytes(total_batch_size, 4);
     } else {
+      compute_encoder.set_compute_pipeline_state(kernel);
+      compute_encoder.set_input_array(in_contiguous, 0);
+      compute_encoder.set_output_array(out, 1);
+
       compute_encoder.set_bytes(n, 2);
       compute_encoder.set_bytes(total_batch_size, 3);
     }

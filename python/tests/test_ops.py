@@ -1161,6 +1161,13 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.array([math.erf(i) for i in inputs])
         self.assertTrue(np.allclose(mx.erf(x), expected))
 
+        # Complex is not supported and has to say so rather than abort
+        z = mx.array([1 + 2j], mx.complex64)
+        with self.assertRaises(ValueError):
+            mx.erf(z)
+        with self.assertRaises(ValueError):
+            mx.erfinv(z)
+
     def test_erfinv(self):
         inputs = [-5.0, -1.0, 0.5, 0.0, 0.5, 1.0, 5.0]
         x = mx.array(inputs)
@@ -2132,6 +2139,11 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.array([1, 2, 3], dtype=mx.int32)
         y = np.array([1, 2, 3], dtype=np.int32)
 
+        # Test return type is a tuple
+        self.assertIsInstance(mx.meshgrid(x), tuple)
+        self.assertIsInstance(mx.meshgrid(x, x), tuple)
+        self.assertIsInstance(mx.meshgrid(x, x, x, sparse=True), tuple)
+
         # Test single input
         a_mlx = mx.meshgrid(x)
         a_np = np.meshgrid(y)
@@ -2262,7 +2274,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(out_mx, out_np))
 
         for t in [mx.float32, mx.float16]:
-            a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")])
+            a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")]).astype(t)
             out_mx = mx.nan_to_num(a)
             out_np = np.nan_to_num(a)
             self.assertTrue(np.allclose(out_mx, out_np))
@@ -2271,6 +2283,16 @@ class TestOps(mlx_tests.MLXTestCase):
             out_np = np.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
             out_mx = mx.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
             self.assertTrue(np.allclose(out_mx, out_np))
+
+        # bfloat16 has no numpy analogue; infinities should clamp to the
+        # dtype's largest finite value, not 0
+        a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")]).astype(
+            mx.bfloat16
+        )
+        out_mx = mx.nan_to_num(a)
+        bf_max = mx.finfo(mx.bfloat16).max
+        expected = mx.array([bf_max, 6.9, 0.0, -bf_max]).astype(mx.bfloat16)
+        self.assertTrue(mx.array_equal(out_mx, expected))
 
     def test_pad_reflect_symmetric(self):
         # mx.pad reflect/symmetric must match numpy.pad exactly. Covers
@@ -2304,6 +2326,17 @@ class TestOps(mlx_tests.MLXTestCase):
                     msg=f"mismatch mode={mode} shape={shape} pad={pw}",
                 )
                 self.assertEqual(b_mlx.dtype, mx.float32)
+
+        # An empty axis cannot be extended; numpy raises for these too.
+        # Used to hang in an infinite loop rather than raise.
+        for mode in ("reflect", "symmetric"):
+            with self.assertRaises(ValueError):
+                mx.pad(mx.array([]), 2, mode=mode)
+            with self.assertRaises(ValueError):
+                mx.pad(mx.zeros((0, 3)), [(1, 1), (0, 0)], mode=mode)
+            # A zero-width pad on the empty axis stays allowed
+            out = mx.pad(mx.zeros((0, 3)), [(0, 0), (2, 1)], mode=mode)
+            self.assertEqual(out.shape, (0, 6))
 
     def test_as_strided(self):
         x_npy = np.random.randn(128).astype(np.float32)
@@ -2934,7 +2967,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqualArray(a, expected)
 
         # Test int64 dtype
-        b = mx.linspace(0, 10, 5, mx.int64)
+        b = mx.linspace(0, 10, 5, dtype=mx.int64)
         expected = mx.array(np.linspace(0, 10, 5, dtype=int))
         self.assertEqualArray(b, expected)
 
@@ -2960,6 +2993,57 @@ class TestOps(mlx_tests.MLXTestCase):
             d = mx.linspace(a, b, n).tolist()
             self.assertEqual(d[0], a)
             self.assertEqual(d[-1], b)
+
+    def test_linspace_endpoint(self):
+        # endpoint=True is the default and matches the old behaviour
+        a = mx.linspace(0, 1, 5, endpoint=True)
+        self.assertEqualArray(a, mx.array(np.linspace(0, 1, 5, endpoint=True)))
+        self.assertEqualArray(a, mx.linspace(0, 1, 5))
+
+        # endpoint=False drops the stop value and uses a step of
+        # (stop - start) / num instead of (stop - start) / (num - 1)
+        for num in [0, 1, 2, 5, 50]:
+            b = mx.linspace(0, 10, num, endpoint=False)
+            expected = mx.array(np.linspace(0, 10, num, endpoint=False))
+            self.assertEqualArray(b, expected)
+
+        c = mx.linspace(-2.7, -0.7, 7, endpoint=False)
+        self.assertEqualArray(c, mx.array(np.linspace(-2.7, -0.7, 7, endpoint=False)))
+
+        # endpoint is the fourth positional argument, before dtype, as in numpy
+        self.assertEqualArray(
+            mx.linspace(0, 10, 5, False), mx.array(np.linspace(0, 10, 5, False))
+        )
+
+        # dtype still applies
+        d = mx.linspace(0, 10, 5, False, mx.int64)
+        self.assertEqual(d.dtype, mx.int64)
+        self.assertEqualArray(
+            d, mx.array(np.linspace(0, 10, 5, endpoint=False, dtype=int))
+        )
+
+        # the start is kept and the stop is excluded
+        e = mx.linspace(3.0, 4.0, 4, endpoint=False).tolist()
+        self.assertEqual(e[0], 3.0)
+        self.assertNotIn(4.0, e)
+
+        # decreasing ranges drop the stop value too
+        f = mx.linspace(10, 0, 5, endpoint=False)
+        self.assertEqualArray(f, mx.array(np.linspace(10, 0, 5, endpoint=False)))
+
+        # start == stop keeps every sample at that value
+        g = mx.linspace(5, 5, 4, endpoint=False)
+        self.assertEqualArray(g, mx.array(np.linspace(5, 5, 4, endpoint=False)))
+
+        # integer dtype truncates fractional steps, as in numpy
+        h = mx.linspace(0, 10, 3, endpoint=False, dtype=mx.int32)
+        self.assertEqualArray(
+            h, mx.array(np.linspace(0, 10, 3, endpoint=False, dtype=np.int32))
+        )
+
+        # num must still be non-negative
+        with self.assertRaises(ValueError):
+            mx.linspace(0, 1, -1, endpoint=False)
 
     def test_repeat(self):
         # Setup data for the tests

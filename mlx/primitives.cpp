@@ -616,7 +616,7 @@ std::pair<std::vector<array>, std::vector<int>> ArgPartition::vmap(
   assert(axes.size() == 1);
 
   int axis_left = axes[0] >= 0 && axes[0] <= axis_;
-  return {{argpartition(inputs[0], axis_ + axis_left, stream())}, axes};
+  return {{argpartition(inputs[0], kth_, axis_ + axis_left, stream())}, axes};
 }
 
 std::vector<array> ArgPartition::vjp(
@@ -3421,7 +3421,7 @@ std::pair<std::vector<array>, std::vector<int>> Partition::vmap(
   assert(axes.size() == 1);
 
   int axis_left = axes[0] >= 0 && axes[0] <= axis_;
-  return {{partition(inputs[0], axis_ + axis_left, stream())}, axes};
+  return {{partition(inputs[0], kth_, axis_ + axis_left, stream())}, axes};
 }
 
 bool Partition::is_equivalent(const Primitive& other) const {
@@ -5177,12 +5177,15 @@ std::vector<array> SliceUpdate::jvp(
   // Check inputs
   assert(primals.size() == 2);
 
-  if (argnums.size() != 2) {
-    throw std::runtime_error(
-        "[SliceUpdate] JVP for one argument not implemented yet.");
+  array result_tan = zeros_like(primals[0], stream());
+  array update_tan = zeros_like(primals[1], stream());
+  for (int i = 0; i < argnums.size(); ++i) {
+    if (argnums[i] == 0) {
+      result_tan = tangents[i];
+    } else if (argnums[i] == 1) {
+      update_tan = tangents[i];
+    }
   }
-
-  auto result_tan = tangents[0];
 
   switch (reduce_type_) {
     case SliceUpdate::None:
@@ -5191,14 +5194,14 @@ std::vector<array> SliceUpdate::jvp(
           result_tan.dtype(),
           std::make_shared<SliceUpdate>(
               stream(), reduce_type_, start_indices_, end_indices_, strides_),
-          {result_tan, tangents[1]})};
+          {result_tan, update_tan})};
     case SliceUpdate::Sum:
       return {array(
           result_tan.shape(),
           result_tan.dtype(),
           std::make_shared<SliceUpdate>(
               stream(), reduce_type_, start_indices_, end_indices_, strides_),
-          {result_tan, tangents[1]})};
+          {result_tan, update_tan})};
     case SliceUpdate::Prod:
     case SliceUpdate::Max:
     case SliceUpdate::Min: {

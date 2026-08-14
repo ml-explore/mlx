@@ -16,6 +16,7 @@
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
+#include "mlx/types/limits.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -271,6 +272,7 @@ array linspace(
     double start,
     double stop,
     int num /* = 50 */,
+    bool endpoint /* = true */,
     Dtype dtype /* = float32 */,
     StreamOrDevice s /* = {} */) {
   if (num < 0) {
@@ -282,8 +284,11 @@ array linspace(
     return astype(array({start}), dtype, s);
   }
   auto inner_type = dtype == float64 ? float64 : float32;
+  // Without the endpoint the samples are spaced so that `stop` would be the
+  // next one after the last, i.e. the step is (stop - start) / num.
+  auto denominator = endpoint ? num - 1 : num;
   array t =
-      divide(arange(0, num, inner_type, s), array(num - 1, inner_type), s);
+      divide(arange(0, num, inner_type, s), array(denominator, inner_type), s);
   array t_bar = subtract(array(1, inner_type), t, s);
   return astype(
       add(multiply(t_bar, array(start, inner_type), s),
@@ -293,12 +298,10 @@ array linspace(
       s);
 }
 
-array astype(
-    array a,
-    Dtype dtype,
-    std::optional<bool> copy,
-    StreamOrDevice s /* = {} */) {
-  if (dtype == a.dtype() && !copy.value_or(false)) {
+// Private API used by python bindings.
+MLX_API array
+astype(array a, Dtype dtype, bool force_copy, StreamOrDevice s = {}) {
+  if (dtype == a.dtype() && !force_copy) {
     return a;
   }
   auto copied_shape = a.shape(); // |a| will be moved
@@ -307,6 +310,10 @@ array astype(
       dtype,
       std::make_shared<AsType>(to_stream(s), dtype),
       {std::move(a)});
+}
+
+array astype(array a, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return astype(std::move(a), dtype, false, s);
 }
 
 array as_strided(
@@ -1487,6 +1494,12 @@ array reflect_pad(
     if (L == 0 && H == 0) {
       continue;
     }
+    if (n == 0) {
+      std::ostringstream msg;
+      msg << "[pad] Cannot pad empty axis " << ax << " using mode '"
+          << (include_edge ? "symmetric" : "reflect") << "'.";
+      throw std::invalid_argument(msg.str());
+    }
     // reflect skips the edge value (period 2(n-1)); symmetric repeats it
     // (period 2n).
     int offset = (!include_edge && n > 1) ? 1 : 0;
@@ -2099,11 +2112,11 @@ array nan_to_num(
 
   auto type_to_max = [](const auto& dtype) -> float {
     if (dtype == float32) {
-      return std::numeric_limits<float>::max();
+      return numeric_limits<float>::max();
     } else if (dtype == bfloat16) {
-      return std::numeric_limits<bfloat16_t>::max();
+      return numeric_limits<bfloat16_t>::max();
     } else if (dtype == float16) {
-      return std::numeric_limits<float16_t>::max();
+      return numeric_limits<float16_t>::max();
     } else {
       std::ostringstream msg;
       msg << "[nan_to_num] Does not yet support given type: " << dtype << ".";
@@ -3420,6 +3433,9 @@ array sigmoid(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array erf(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[erf] Not supported for complex64.");
+  }
   auto dtype = at_least_float(a.dtype());
   return array(
       a.shape(),
@@ -3429,6 +3445,9 @@ array erf(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array erfinv(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[erfinv] Not supported for complex64.");
+  }
   auto dtype = at_least_float(a.dtype());
   return array(
       a.shape(),

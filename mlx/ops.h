@@ -38,20 +38,28 @@ MLX_API array arange(int start, int stop, int step, StreamOrDevice s = {});
 MLX_API array arange(int start, int stop, StreamOrDevice s = {});
 MLX_API array arange(int stop, StreamOrDevice s = {});
 
-/** A 1D array of `num` evenly spaced numbers in the range `[start, stop]` */
+/**
+ * A 1D array of `num` evenly spaced numbers in the range `[start, stop]`, or
+ * in the half-open range `[start, stop)` when `endpoint` is false.
+ */
 MLX_API array linspace(
+    double start,
+    double stop,
+    int num,
+    bool endpoint,
+    Dtype dtype = float32,
+    StreamOrDevice s = {});
+inline array linspace(
     double start,
     double stop,
     int num = 50,
     Dtype dtype = float32,
-    StreamOrDevice s = {});
+    StreamOrDevice s = {}) {
+  return linspace(start, stop, num, true, dtype, s);
+}
 
 /** Convert an array to the given data type. */
-MLX_API array
-astype(array a, Dtype dtype, std::optional<bool> copy, StreamOrDevice s = {});
-inline array astype(array a, Dtype dtype, StreamOrDevice s = {}) {
-  return astype(std::move(a), dtype, std::nullopt, s);
-}
+MLX_API array astype(array a, Dtype dtype, StreamOrDevice s = {});
 
 /** Create a view of an array with the given shape and strides. */
 MLX_API array as_strided(

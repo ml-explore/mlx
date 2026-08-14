@@ -1644,22 +1644,25 @@ void init_ops(nb::module_& m) {
       [](Scalar start,
          Scalar stop,
          int num,
+         bool endpoint,
          std::optional<mx::Dtype> dtype,
          mx::StreamOrDevice s) {
         return mx::linspace(
             scalar_to_double(start),
             scalar_to_double(stop),
             num,
+            endpoint,
             dtype.value_or(mx::float32),
             s);
       },
       "start"_a,
       "stop"_a,
       "num"_a = 50,
+      "endpoint"_a = true,
       "dtype"_a.none() = mx::float32,
       "stream"_a = nb::none(),
       nb::sig(
-          "def linspace(start: scalar, stop: scalar, num: int | None = 50, dtype: Dtype | None = float32, stream: StreamOrDevice = None) -> array"),
+          "def linspace(start: scalar, stop: scalar, num: int | None = 50, endpoint: bool = True, dtype: Dtype | None = float32, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Generate ``num`` evenly spaced numbers over interval ``[start, stop]``.
 
@@ -1667,6 +1670,9 @@ void init_ops(nb::module_& m) {
             start (scalar): Starting value.
             stop (scalar): Stopping value.
             num (int, optional): Number of samples, defaults to ``50``.
+            endpoint (bool, optional): If ``True``, ``stop`` is the last
+              sample. Otherwise it is not included and the samples are spaced
+              over the half-open interval ``[start, stop)``. Default: ``True``.
             dtype (Dtype, optional): Specifies the data type of the output,
               default to ``float32``.
 
@@ -3386,14 +3392,14 @@ void init_ops(nb::module_& m) {
          mx::StreamOrDevice s) {
         std::vector<mx::array> arrays =
             nb::cast<std::vector<mx::array>>(arrays_);
-        return mx::meshgrid(arrays, sparse, indexing, s);
+        return nb::tuple(nb::cast(mx::meshgrid(arrays, sparse, indexing, s)));
       },
       "arrays"_a,
       "sparse"_a = false,
       "indexing"_a = "xy",
       "stream"_a = nb::none(),
       nb::sig(
-          "def meshgrid(*arrays: array, sparse: bool | None = False, indexing: str | None = 'xy', stream: StreamOrDevice = None) -> array"),
+          "def meshgrid(*arrays: array, sparse: bool | None = False, indexing: str | None = 'xy', stream: StreamOrDevice = None) -> tuple[array, ...]"),
       R"pbdoc(
         Generate multidimensional coordinate grids from 1-D coordinate arrays
 
@@ -3406,7 +3412,7 @@ void init_ops(nb::module_& m) {
               Defaults to ``'xy'``.
 
         Returns:
-            list(array): The output arrays.
+            tuple(array): The output arrays.
       )pbdoc");
   m.def(
       "repeat",
@@ -3491,18 +3497,23 @@ void init_ops(nb::module_& m) {
          const ScalarOrArray& constant_value,
          mx::StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&pad_width); pv) {
-          return mx::pad(a, *pv, to_array(constant_value), mode, s);
+          return mx::pad(a, *pv, to_array(constant_value, a.dtype()), mode, s);
         } else if (auto pv = std::get_if<std::tuple<int>>(&pad_width); pv) {
           return mx::pad(
-              a, std::get<0>(*pv), to_array(constant_value), mode, s);
+              a,
+              std::get<0>(*pv),
+              to_array(constant_value, a.dtype()),
+              mode,
+              s);
         } else if (auto pv = std::get_if<std::pair<int, int>>(&pad_width); pv) {
-          return mx::pad(a, *pv, to_array(constant_value), mode, s);
+          return mx::pad(a, *pv, to_array(constant_value, a.dtype()), mode, s);
         } else {
           auto v = std::get<std::vector<std::pair<int, int>>>(pad_width);
           if (v.size() == 1) {
-            return mx::pad(a, v[0], to_array(constant_value), mode, s);
+            return mx::pad(
+                a, v[0], to_array(constant_value, a.dtype()), mode, s);
           } else {
-            return mx::pad(a, v, to_array(constant_value), mode, s);
+            return mx::pad(a, v, to_array(constant_value, a.dtype()), mode, s);
           }
         }
       },
