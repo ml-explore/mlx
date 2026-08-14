@@ -306,6 +306,66 @@ class TestLinalg(mlx_tests.MLXTestCase):
         for M, L in zip(AB, Ls):
             self.assertTrue(mx.allclose(L @ L.T, M, rtol=1e-5, atol=1e-7))
 
+    @unittest.skipIf(not mx.cuda.is_available(), "requires CUDA")
+    def test_cholesky_gpu(self):
+        mx.random.seed(7)
+
+        def spd(shape):
+            # Scaled to O(1) entries so a fixed atol stays meaningful as n grows.
+            n = shape[-1]
+            a = mx.random.uniform(shape=shape)
+            return a @ mx.swapaxes(a, -1, -2) / n + mx.eye(n)
+
+        def check(A, upper, msg):
+            expected = mx.linalg.cholesky(A, upper=upper, stream=mx.cpu)
+            out = mx.linalg.cholesky(A, upper=upper, stream=mx.gpu)
+            self.assertEqual(out.dtype, expected.dtype)
+            self.assertEqual(tuple(out.shape), tuple(expected.shape))
+
+            recon = (
+                mx.swapaxes(out, -1, -2) @ out
+                if upper
+                else out @ mx.swapaxes(out, -1, -2)
+            )
+            self.assertTrue(
+                mx.allclose(recon, A, rtol=1e-5, atol=1e-5), msg=f"{msg} reconstruct"
+            )
+            self.assertTrue(
+                mx.allclose(out, expected, rtol=1e-4, atol=1e-5), msg=f"{msg} vs cpu"
+            )
+            # Exactly zero, not merely small: catches a mis-ordered zeroing kernel.
+            other = mx.tril(out, k=-1) if upper else mx.triu(out, k=1)
+            self.assertTrue(mx.all(other == 0), msg=f"{msg} triangle")
+
+        for shape in [(1, 1), (3, 3), (32, 32), (129, 129), (4, 16, 16)]:
+            for upper in (False, True):
+                check(spd(shape), upper, f"shape={shape} upper={upper}")
+
+        # Batched with n == 1 still goes through potrfBatched.
+        check(spd((4, 1, 1)), False, "shape=(4, 1, 1)")
+
+        A = spd((5, 24, 24))
+        batched = mx.linalg.cholesky(A, stream=mx.gpu)
+        for i in range(A.shape[0]):
+            single = mx.linalg.cholesky(A[i], stream=mx.gpu)
+            self.assertTrue(
+                mx.allclose(batched[i], single, rtol=1e-4, atol=1e-5), msg=f"batch {i}"
+            )
+
+        # Not compared against the CPU path: LAPACK rejects n == 0 and the CPU
+        # backend aborts rather than raising (see ml-explore/mlx#3834).
+        for shape in [(0, 0), (0, 2, 2)]:
+            out = mx.linalg.cholesky(mx.zeros(shape), stream=mx.gpu)
+            mx.eval(out)
+            self.assertEqual(tuple(out.shape), shape)
+
+        # Non-contiguous: a transposed view is still symmetric.
+        At = mx.swapaxes(spd((3, 8, 8)), -1, -2)
+        check(At, False, "transposed view")
+
+        with self.assertRaises(ValueError):
+            mx.linalg.cholesky(mx.zeros((4, 4), dtype=mx.int32), stream=mx.gpu)
+
     def test_pseudo_inverse(self):
         A = mx.array([[1, 2, 3], [6, -5, 4], [-9, 8, 7]], dtype=mx.float32)
         A_plus = mx.linalg.pinv(A, stream=mx.cpu)

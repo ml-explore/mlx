@@ -9,6 +9,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/arange.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/binary_two.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/cholesky.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/copy.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/copy/copy_contiguous.cu
@@ -20,6 +21,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/conv/gemm_grouped_conv.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/cublas_utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/cudnn_utils.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/cusolver_utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device_info.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
@@ -217,6 +219,7 @@ else()
                "$ORIGIN/../../nvidia/cuda_nvrtc/lib"
                "$ORIGIN/../../nvidia/cudnn/lib"
                "$ORIGIN/../../nvidia/cufft/lib"
+               "$ORIGIN/../../nvidia/cusolver/lib"
                "$ORIGIN/../../nvidia/nccl/lib")
   endif()
 endif()
@@ -261,6 +264,9 @@ target_link_libraries(mlx PRIVATE CUDA::cublasLt)
 
 # Use cuFFT.
 target_link_libraries(mlx PRIVATE CUDA::cufft)
+
+# Use cuSOLVER for dense linear algebra.
+target_link_libraries(mlx PRIVATE CUDA::cusolver)
 
 # Use NVRTC and driver APIs.
 target_link_libraries(mlx PRIVATE CUDA::nvrtc CUDA::cuda_driver)
