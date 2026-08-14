@@ -3433,6 +3433,9 @@ array sigmoid(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array erf(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[erf] Not supported for complex64.");
+  }
   auto dtype = at_least_float(a.dtype());
   return array(
       a.shape(),
@@ -3442,6 +3445,9 @@ array erf(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array erfinv(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[erfinv] Not supported for complex64.");
+  }
   auto dtype = at_least_float(a.dtype());
   return array(
       a.shape(),
