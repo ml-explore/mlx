@@ -898,14 +898,19 @@ void winograd_conv_2D_gpu(
     array& out,
     const MLXConvParams<2>& conv_params,
     std::vector<array>& copies_w) {
+  // Round the padded spatial dims up to the Winograd tile in int64 so the
+  // rounding cannot overflow int32 just below the limit.
+  int64_t pad_h = static_cast<int64_t>(conv_params.iS[0]) +
+      2 * static_cast<int64_t>(conv_params.pad[0]);
+  int64_t pad_w = static_cast<int64_t>(conv_params.iS[1]) +
+      2 * static_cast<int64_t>(conv_params.pad[1]);
+  pad_h = 6 * ((pad_h - 2 + 5) / 6) + 2;
+  pad_w = 6 * ((pad_w - 2 + 5) / 6) + 2;
   Shape padded_shape = {
       conv_params.N,
-      conv_params.iS[0] + 2 * conv_params.pad[0],
-      conv_params.iS[1] + 2 * conv_params.pad[1],
+      safe_cast(pad_h, "conv"),
+      safe_cast(pad_w, "conv"),
       conv_params.C};
-
-  padded_shape[1] = 6 * ((padded_shape[1] - 2 + 5) / 6) + 2;
-  padded_shape[2] = 6 * ((padded_shape[2] - 2 + 5) / 6) + 2;
 
   array in_padded(std::move(padded_shape), in.dtype(), nullptr, {});
 
