@@ -1155,6 +1155,14 @@ class TestOps(mlx_tests.MLXTestCase):
         np.seterr(over=errs["over"])
         self.assertTrue(np.allclose(result, expected, rtol=1e-3, atol=1e-4))
 
+        # Complex is not supported and has to say so rather than quietly
+        # computing on the real part
+        z = mx.array([1 + 2j], mx.complex64)
+        with self.assertRaises(ValueError):
+            mx.expm1(z)
+        with self.assertRaises(ValueError):
+            mx.sigmoid(z)
+
     def test_erf(self):
         inputs = [-5, 0.0, 0.5, 1.0, 2.0, 10.0]
         x = mx.array(inputs)

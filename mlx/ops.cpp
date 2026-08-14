@@ -3273,6 +3273,9 @@ array exp(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array expm1(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[expm1] Not supported for complex64.");
+  }
   auto dtype = at_least_float(a.dtype());
   auto input = astype(a, dtype, s);
   return array(
@@ -3426,6 +3429,9 @@ array logaddexp(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 }
 
 array sigmoid(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[sigmoid] Not supported for complex64.");
+  }
   auto dtype = at_least_float(a.dtype());
   auto input = astype(a, dtype, s);
   return array(
