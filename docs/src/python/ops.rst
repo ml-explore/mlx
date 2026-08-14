@@ -132,6 +132,7 @@ Operations
    mean
    median
    meshgrid
+   mmap_weights
    min
    minimum
    moveaxis
