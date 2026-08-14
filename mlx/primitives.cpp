@@ -616,7 +616,7 @@ std::pair<std::vector<array>, std::vector<int>> ArgPartition::vmap(
   assert(axes.size() == 1);
 
   int axis_left = axes[0] >= 0 && axes[0] <= axis_;
-  return {{argpartition(inputs[0], axis_ + axis_left, stream())}, axes};
+  return {{argpartition(inputs[0], kth_, axis_ + axis_left, stream())}, axes};
 }
 
 std::vector<array> ArgPartition::vjp(
@@ -3421,7 +3421,7 @@ std::pair<std::vector<array>, std::vector<int>> Partition::vmap(
   assert(axes.size() == 1);
 
   int axis_left = axes[0] >= 0 && axes[0] <= axis_;
-  return {{partition(inputs[0], axis_ + axis_left, stream())}, axes};
+  return {{partition(inputs[0], kth_, axis_ + axis_left, stream())}, axes};
 }
 
 bool Partition::is_equivalent(const Primitive& other) const {
