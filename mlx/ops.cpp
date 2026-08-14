@@ -2455,7 +2455,15 @@ array var(
     StreamOrDevice s /* = {}*/) {
   auto dtype = at_least_float(a.dtype());
   auto mu = mean(a, axes, /* keepdims= */ true, s);
-  auto v = sum(square(subtract(a, mu, s), s), axes, keepdims, s);
+  auto d = subtract(a, mu, s);
+  if (issubdtype(dtype, complexfloating)) {
+    // The variance of complex values is the mean squared magnitude. Squaring
+    // the deviations directly gives a complex result which can even be
+    // negative, so take the magnitude first.
+    d = abs(d, s);
+    dtype = float32;
+  }
+  auto v = sum(square(d, s), axes, keepdims, s);
 
   if (ddof != 0) {
     auto normalizer = maximum(
