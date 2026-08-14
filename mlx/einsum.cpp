@@ -356,9 +356,7 @@ array batch_tensordot(
     std::vector<int> b_batch,
     std::vector<int> b_concat,
     StreamOrDevice s) {
-  // Broadcast contracting and batch dimensions. The batch dimensions have to
-  // be broadcast as well, otherwise out_shape below is taken from ``a`` alone
-  // and does not match the batch size matmul produces.
+  // Broadcast contracting and batch dimensions.
   {
     auto a_shape = a.shape();
     auto b_shape = b.shape();
