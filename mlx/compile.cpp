@@ -319,21 +319,22 @@ class CompileCache {
     allocator::allocator();
   }
 
-  // Returns a reference to a CacheEntry which can be updated
-  // by the caller to avoid copying large tapes / inputs / outputs
-  CacheEntry& find(
+  // Returns a reference to a CacheEntry which can be updated by the caller to
+  // avoid copying large tapes / inputs / outputs, with the shared_ptr of
+  // entries to avoid getting erased during compilation.
+  std::tuple<CacheEntry&, std::shared_ptr<std::vector<CacheEntry>>> find(
       std::uintptr_t fun_id,
       const std::vector<array>& inputs,
       bool shapeless,
       const std::vector<uint64_t>& constants) {
     // Find the cache entries for |fun_id| in a thread-safe way.
-    auto& entries = [&]() -> std::vector<CacheEntry>& {
+    auto entries_ptr = [&]() {
       // Lookup with shared lock.
       {
         std::shared_lock lock(mutex_);
         auto it = cache_.find(fun_id);
         if (it != cache_.end()) {
-          return *(it->second);
+          return it->second;
         }
       }
       // Insertion with exclusive lock.
@@ -342,8 +343,9 @@ class CompileCache {
       if (!ptr) {
         ptr = std::make_shared<std::vector<CacheEntry>>();
       }
-      return *ptr;
+      return ptr;
     }();
+    auto& entries = *entries_ptr;
 
     // Compare if 2 arrays have same shape and dtype.
     auto has_same_shape_and_dtype = [shapeless](
@@ -381,12 +383,12 @@ class CompileCache {
       // Check the inputs match and return if so
       if (has_same_shape_and_dtype(inputs, entry.inputs) &&
           constants == entry.constants) {
-        return entry;
+        return {entry, std::move(entries_ptr)};
       }
     }
     // Otherwise append a new cache entry
     entries.push_back(CacheEntry{stream, shapeless});
-    return entries.back();
+    return {entries.back(), std::move(entries_ptr)};
   }
 
   void erase(std::uintptr_t fun_id) {
@@ -402,8 +404,8 @@ class CompileCache {
  private:
   // The cache may get its key erased from a separate thread, but its value is
   // only added and modified in the thread of creation.
-  // Put value in a shared_ptr to avoid entries getting invalidated during
-  // compilation while erasing happened.
+  // Put value in a shared_ptr to avoid race condition when erasing happened
+  // during compilation for the same function.
   std::unordered_map<std::uintptr_t, std::shared_ptr<std::vector<CacheEntry>>>
       cache_;
   std::shared_mutex mutex_;
@@ -1139,8 +1141,9 @@ ArrayFnWithExtra compile(
     }
 
     // Find a cache entry with the correct inputs
-    auto& entry =
+    auto [entry, entries_ptr] =
         compile_cache_unsafe()->find(fun_id, inputs, shapeless, constants);
+    static_assert(std::is_reference_v<decltype(entry)>);
 
     // No matching cache entry existed, so compile
     if (entry.empty) {
