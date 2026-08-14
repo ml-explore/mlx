@@ -1162,6 +1162,8 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.expm1(z)
         with self.assertRaises(ValueError):
             mx.sigmoid(z)
+        with self.assertRaises(ValueError):
+            mx.arctan2(z, z)
 
     def test_erf(self):
         inputs = [-5, 0.0, 0.5, 1.0, 2.0, 10.0]

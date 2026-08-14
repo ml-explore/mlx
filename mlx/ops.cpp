@@ -3322,6 +3322,9 @@ array arctan(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array arctan2(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64 || b.dtype() == complex64) {
+    throw std::invalid_argument("[arctan2] Not supported for complex64.");
+  }
   auto dtype = at_least_float(promote_types(a.dtype(), b.dtype()));
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
