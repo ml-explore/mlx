@@ -2267,7 +2267,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(out_mx, out_np))
 
         for t in [mx.float32, mx.float16]:
-            a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")])
+            a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")]).astype(t)
             out_mx = mx.nan_to_num(a)
             out_np = np.nan_to_num(a)
             self.assertTrue(np.allclose(out_mx, out_np))
@@ -2276,6 +2276,16 @@ class TestOps(mlx_tests.MLXTestCase):
             out_np = np.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
             out_mx = mx.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
             self.assertTrue(np.allclose(out_mx, out_np))
+
+        # bfloat16 has no numpy analogue; infinities should clamp to the
+        # dtype's largest finite value, not 0
+        a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")]).astype(
+            mx.bfloat16
+        )
+        out_mx = mx.nan_to_num(a)
+        bf_max = mx.finfo(mx.bfloat16).max
+        expected = mx.array([bf_max, 6.9, 0.0, -bf_max]).astype(mx.bfloat16)
+        self.assertTrue(mx.array_equal(out_mx, expected))
 
     def test_pad_reflect_symmetric(self):
         # mx.pad reflect/symmetric must match numpy.pad exactly. Covers
