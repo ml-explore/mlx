@@ -35,11 +35,13 @@ using namespace metal;
   instantiate_sdpa_vector(type, 192, 128)        \
   instantiate_sdpa_vector(type, 192, 192)        \
   instantiate_sdpa_vector(type, 256, 256)        \
+  instantiate_sdpa_vector(type, 512, 512)        \
   instantiate_sdpa_vector_aggregation(type, 64)  \
   instantiate_sdpa_vector_aggregation(type, 96)  \
   instantiate_sdpa_vector_aggregation(type, 128) \
   instantiate_sdpa_vector_aggregation(type, 192) \
-  instantiate_sdpa_vector_aggregation(type, 256)
+  instantiate_sdpa_vector_aggregation(type, 256) \
+  instantiate_sdpa_vector_aggregation(type, 512)
 
 instantiate_sdpa_vector_heads(float)
 instantiate_sdpa_vector_heads(bfloat16_t)

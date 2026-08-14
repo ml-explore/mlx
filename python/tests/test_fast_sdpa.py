@@ -745,13 +745,26 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
 
         # Vector attention kernel.
-        for D in (192, 256):
+        for D in (192, 256, 512):
             with self.subTest(head_dim=D):
                 q, k, v = make_qkv(4, 16385, D, 4, 2)
                 scale = D**-0.5
                 ref = mlx_ref_attn(q, k, v, scale=scale)
                 out = mx.fast.scaled_dot_product_attention(
                     q, k, v, scale=scale, force_fused=True
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
+        # Short key sequences select the 1-pass kernel, which runs d=512 with
+        # a reduced simdgroup count to stay under register-limited pipeline
+        # caps (see #3885); check it against the reference in that regime.
+        for mask in (None, "causal"):
+            with self.subTest(head_dim=512, kernel="1pass", mask=mask):
+                q, k, v = make_qkv(1, 512, 512, 8, 4)
+                scale = 512**-0.5
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask, force_fused=True
                 )
                 self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
 

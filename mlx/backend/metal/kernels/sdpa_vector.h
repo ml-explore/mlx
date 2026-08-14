@@ -40,7 +40,10 @@ template <typename T, int D, int V = D>
     uint3 tpg [[threadgroups_per_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
-  constexpr int BN = 32;
+  // D >= 512 needs too many registers for 32 simdgroups on some GPUs (e.g.
+  // M1-class caps these pipelines below 1024 threads, and the cap shifts with
+  // compiler version and specialization); halve the simdgroup count instead.
+  constexpr int BN = D >= 512 ? 16 : 32;
   constexpr int BD = 32;
   constexpr int qk_per_thread = D / BD;
   constexpr int v_per_thread = V / BD;
@@ -53,7 +56,7 @@ template <typename T, int D, int V = D>
   thread U k[qk_per_thread];
   thread U o[v_per_thread];
 
-  threadgroup U outputs[BN * BD];
+  threadgroup U outputs[BD * BD];
   threadgroup U max_scores[BN];
   threadgroup U sum_exp_scores[BN];
 
@@ -78,7 +81,7 @@ template <typename T, int D, int V = D>
         simd_gid * mask_kv_seq_stride + q_seq_idx * mask_q_seq_stride;
   }
 
-  out += o_offset * V + simd_gid * v_per_thread;
+  out += o_offset * V;
 
   // Read the query and 0 the output accumulator
   for (int i = 0; i < qk_per_thread; i++) {
@@ -154,25 +157,27 @@ template <typename T, int D, int V = D>
     sum_exp_scores[simd_gid] = sum_exp_score;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  max_score = max_scores[simd_lid];
+  max_score = simd_lid < BN ? max_scores[simd_lid] : Limits<U>::finite_min;
   U new_max = simd_max(max_score);
   U factor = fast::exp(max_score - new_max);
-  sum_exp_score = simd_sum(sum_exp_scores[simd_lid] * factor);
+  sum_exp_score =
+      simd_sum(simd_lid < BN ? sum_exp_scores[simd_lid] * factor : 0);
 
-  // Now we need to aggregate all the outputs
+  // Now we need to aggregate all the outputs. There are BD output slices of
+  // v_per_thread elements but only BN simdgroups, so when BN < BD each
+  // simdgroup aggregates and writes BD / BN slices.
   for (int i = 0; i < v_per_thread; i++) {
     outputs[simd_lid * BD + simd_gid] = o[i];
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    o[i] = simd_sum(outputs[simd_gid * BD + simd_lid] * factor);
-    o[i] = sum_exp_score == 0 ? o[i] : (o[i] / sum_exp_score);
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-  }
-
-  // And write the output
-  if (simd_lid == 0) {
-    for (int i = 0; i < v_per_thread; i++) {
-      out[i] = static_cast<T>(o[i]);
+    for (int s = simd_gid; s < BD; s += BN) {
+      U agg =
+          simd_sum(simd_lid < BN ? outputs[s * BD + simd_lid] * factor : 0);
+      agg = sum_exp_score == 0 ? agg : (agg / sum_exp_score);
+      if (simd_lid == 0) {
+        out[s * v_per_thread + i] = static_cast<T>(agg);
+      }
     }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 }
 

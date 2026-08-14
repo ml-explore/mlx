@@ -358,7 +358,9 @@ void sdpa_vector(
   size_t v_head_stride = v.shape(1) == 1 ? v.strides(0) : v.strides(1);
   size_t v_seq_stride = v.strides()[2];
 
-  MTL::Size group_dims(1024, 1, 1);
+  // Must match BN in sdpa_vector: 16 simdgroups for D >= 512 (register
+  // pressure caps these pipelines below 1024 threads on some GPUs).
+  MTL::Size group_dims(q.shape(-1) >= 512 ? 512 : 1024, 1, 1);
   MTL::Size grid_dims(q.shape(0) * q.shape(1), q.shape(2), 1);
 
   bool has_mask = mask.has_value();
@@ -645,13 +647,13 @@ std::tuple<bool, std::string> has_fused_kernel(
         (query_head_dim == value_head_dim &&
          (query_head_dim == 64 || query_head_dim == 96 ||
           query_head_dim == 128 || query_head_dim == 192 ||
-          query_head_dim == 256)) ||
+          query_head_dim == 256 || query_head_dim == 512)) ||
         (query_head_dim == 192 && value_head_dim == 128);
     if (!supported_head_dim) {
       msg << "the vector attention kernel supports head dims "
-          << "{64, 96, 128, 192, 256} with matching query/value head dims, "
-          << "or query head dim 192 with value head dim 128; got query head "
-          << "dim " << query_head_dim << " and value head dim "
+          << "{64, 96, 128, 192, 256, 512} with matching query/value head "
+          << "dims, or query head dim 192 with value head dim 128; got query "
+          << "head dim " << query_head_dim << " and value head dim "
           << value_head_dim << ".";
       return {false, msg.str()};
     }
@@ -714,7 +716,12 @@ bool ScaledDotProductAttention::use_fallback(
   if (query_sequence_length > 8) {
     return query_head_dim == 192 || query_head_dim == 256;
   } else {
-    return query_head_dim == value_head_dim && query_head_dim == 192;
+    // d=512 decode is a mixed bag under automatic routing (it wins on some
+    // device/shape/depth combinations and loses on others — see
+    // ml-explore/mlx#3885 for three-device sweeps), so like d=192 it is
+    // reachable only via force_fused.
+    return query_head_dim == value_head_dim &&
+        (query_head_dim == 192 || query_head_dim == 512);
   }
 }
 
