@@ -299,7 +299,7 @@ std::uintptr_t get_function_address(const std::function<T(U...)>& fun) {
   return reinterpret_cast<std::uintptr_t>(*fun_ptr);
 }
 
-class CompilerCache {
+class CompileCache {
  public:
   struct CacheEntry {
     CacheEntry(Stream stream, bool shapeless)
@@ -314,7 +314,7 @@ class CompilerCache {
     std::shared_ptr<void> extra;
   };
 
-  CompilerCache() {
+  CompileCache() {
     // Make sure the allocator is fully initialized before the compiler cache.
     allocator::allocator();
   }
@@ -409,8 +409,8 @@ class CompilerCache {
   std::shared_mutex mutex_;
 };
 
-std::shared_ptr<CompilerCache>& compiler_cache_unsafe() {
-  static thread_local auto cache = std::make_shared<CompilerCache>();
+std::shared_ptr<CompileCache>& compile_cache_unsafe() {
+  static thread_local auto cache = std::make_shared<CompileCache>();
   return cache;
 }
 
@@ -1140,7 +1140,7 @@ ArrayFnWithExtra compile(
 
     // Find a cache entry with the correct inputs
     auto& entry =
-        compiler_cache_unsafe()->find(fun_id, inputs, shapeless, constants);
+        compile_cache_unsafe()->find(fun_id, inputs, shapeless, constants);
 
     // No matching cache entry existed, so compile
     if (entry.empty) {
@@ -1212,17 +1212,17 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
   };
 }
 
-CompilerCacheWeakPtr compiler_cache() {
-  return compiler_cache_unsafe();
+CompileCacheWeakPtr compile_cache() {
+  return compile_cache_unsafe();
 }
 
-void compile_erase(const CompilerCacheWeakPtr& cache, std::uintptr_t fun_id) {
+void compile_erase(const CompileCacheWeakPtr& cache, std::uintptr_t fun_id) {
   if (auto p = cache.lock()) {
     p->erase(fun_id);
   }
 }
 
-void compile_clear_cache(const CompilerCacheWeakPtr& cache) {
+void compile_clear_cache(const CompileCacheWeakPtr& cache) {
   if (auto p = cache.lock()) {
     p->clear();
   }
@@ -1245,7 +1245,7 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
     auto pfun = std::shared_ptr<
         std::function<std::vector<array>(const std::vector<array>&)>>(
         new std::function<std::vector<array>(const std::vector<array>&)>{fun},
-        [cache = detail::compiler_cache()](auto* p) {
+        [cache = detail::compile_cache()](auto* p) {
           detail::compile_erase(cache, reinterpret_cast<std::uintptr_t>(p));
           delete p;
         });

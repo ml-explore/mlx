@@ -406,26 +406,13 @@ auto py_vmap(
   };
 }
 
-void ensure_compile_cache_cleanup(mx::detail::CompilerCacheWeakPtr cache) {
-  // Make sure each thread using mx.compile would clear its compile cache
-  // before python interpreter exits.
-  struct ThreadCleanup {
-    mx::detail::CompilerCacheWeakPtr cache;
-    ~ThreadCleanup() {
-      nb::gil_scoped_acquire gil;
-      mx::detail::compile_clear_cache(cache);
-    }
-  };
-  static thread_local ThreadCleanup clear_cache{std::move(cache)};
-}
-
 struct PyCompiledFun {
   nb::callable fun;
   std::uintptr_t fun_id;
   nb::object captured_inputs;
   nb::object captured_outputs;
   bool shapeless;
-  mx::detail::CompilerCacheWeakPtr cache;
+  mx::detail::CompileCacheWeakPtr cache;
 
   // Data to attach to the compiled function that contains the python output
   // structure and the number of arrays in said structure.
@@ -462,8 +449,7 @@ struct PyCompiledFun {
   };
 
   nb::object call_impl(const nb::args& args, const nb::kwargs& kwargs) {
-    cache = mx::detail::compiler_cache();
-    ensure_compile_cache_cleanup(cache);
+    cache = mx::detail::compile_cache();
 
     // Flat array inputs
     std::vector<mx::array> inputs;
@@ -1552,13 +1538,4 @@ void init_transforms(nb::module_& m) {
           A callable that recomputes intermediate states during gradient
           computation.
       )pbdoc");
-
-  // Ensure the main thread cleanup will happen before the interpreter goes
-  // away. As a result if the other threads join the main thread we should have
-  // a clean tear-down.
-  auto atexit = nb::module_::import_("atexit");
-  atexit.attr("register")(
-      nb::cpp_function([cache = mx::detail::compiler_cache()]() {
-        mx::detail::compile_clear_cache(cache);
-      }));
 }

@@ -87,6 +87,7 @@ class TestCompile(mlx_tests.MLXTestCase):
                 results.append((y.item(), z.item()))
             except Exception as e:
                 errors.append(e)
+            mx.clear_streams()
 
         for _ in range(3):
             thread = threading.Thread(target=worker)
@@ -126,6 +127,7 @@ class TestCompile(mlx_tests.MLXTestCase):
                 errors.append(e)
             finally:
                 traced.set()
+            mx.clear_streams()
 
         # The tracing thread has to outlive the release, on exit it would tear
         # down its cache anyway.
@@ -492,6 +494,7 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         def grab():
             state_from_thread["s"] = mx.random.state
+            mx.clear_streams()
 
         t = threading.Thread(target=grab)
         t.start()
@@ -525,6 +528,7 @@ class TestCompile(mlx_tests.MLXTestCase):
                     results["seed_changes"] = not bool(
                         mx.allclose(c, e, 1e-2, 1e-2).item()
                     )
+                mx.clear_streams()
 
             t = threading.Thread(target=worker)
             t.start()
