@@ -477,6 +477,32 @@ class TestFast(mlx_tests.MLXTestCase):
         rx_fast = mx.fast.rms_norm(x, weight, eps)
         self.assertLess(mx.abs(rx - rx_fast).max(), 1e-6)
 
+    def test_fused_rms_silu(self):
+        def ref_fused_rms_silu(x, weight, eps):
+            w = weight if weight is not None else mx.ones((x.shape[-1],), dtype=x.dtype)
+            h = rms_norm(x, w, eps)
+            return h * mx.sigmoid(h)
+
+        tolerances = {mx.float32: 1e-5, mx.float16: 5e-3, mx.bfloat16: 5e-2}
+        dtypes = [mx.float32, mx.float16, mx.bfloat16]
+        epss = [1e-3, 1e-5]
+        dimss = [31, 32, 4096]
+
+        for dtype in dtypes:
+            for eps in epss:
+                for dims in dimss:
+                    x = mx.random.uniform(shape=(2, dims)).astype(dtype)
+                    weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+                    expected = ref_fused_rms_silu(x, weight, eps)
+                    actual = mx.fast.fused_rms_silu(x, weight, eps)
+                    self.assertLess(mx.abs(expected - actual).max(), tolerances[dtype])
+
+                    expected_now = ref_fused_rms_silu(x, None, eps)
+                    actual_now = mx.fast.fused_rms_silu(x, None, eps)
+                    self.assertLess(
+                        mx.abs(expected_now - actual_now).max(), tolerances[dtype]
+                    )
+
         # Wrong size w raises
         with self.assertRaises(ValueError):
             x = mx.random.uniform(shape=(1, 5))

@@ -120,6 +120,76 @@ array rms_norm(
   return fallback({x, passed_weight})[0];
 }
 
+array fused_rms_silu(
+    const array& x,
+    const std::optional<array>& weight,
+    float eps,
+    StreamOrDevice s_ /* = {} */) {
+  bool has_weight = weight.has_value();
+
+  if (x.ndim() == 0) {
+    std::ostringstream msg;
+    msg << "[fused_rms_silu] Input must have at least 1 dimension but got input with "
+           "0 dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (has_weight) {
+    if ((*weight).ndim() != 1) {
+      std::ostringstream msg;
+      msg << "[fused_rms_silu] (*weight) must have 1 dimension but has "
+          << (*weight).ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    if ((*weight).size() != x.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[fused_rms_silu] (*weight) must have the same size as the last dimension of"
+             " x but has "
+          << (*weight).size() << " elements.";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+
+  auto out_type = (weight.has_value()) ? result_type(x, (*weight)) : x.dtype();
+  if (!issubdtype(out_type, floating)) {
+    std::ostringstream msg;
+    msg << "[fused_rms_silu] Received unsupported type " << out_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto s = to_stream(s_);
+  auto fallback =
+      [has_weight, eps, out_type, s](const std::vector<array>& inputs) {
+        auto x = astype(inputs[0], float32, s);
+        x = multiply(
+            x,
+            rsqrt(
+                add(mean(square(x, s), -1, /* keepdims */ true, s),
+                    array(eps, float32),
+                    s),
+                s),
+            s);
+
+        if (has_weight) {
+          x = multiply(x, inputs[1], s);
+        }
+        x = multiply(x, sigmoid(x, s), s);
+
+        return std::vector<array>{astype(x, out_type, s)};
+      };
+
+  auto passed_weight =
+      (has_weight) ? astype(*weight, out_type, s) : array(1, out_type);
+
+  if (!FusedRMSSiLU::use_fallback(s)) {
+    return array(
+        x.shape(),
+        out_type,
+        std::make_shared<FusedRMSSiLU>(s, fallback, eps),
+        {astype(x, out_type, s), passed_weight});
+  }
+  return fallback({x, passed_weight})[0];
+}
+
 std::vector<array> RMSNorm::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -179,6 +249,11 @@ std::vector<array> RMSNorm::vjp(
 
 bool RMSNorm::is_equivalent(const Primitive& other) const {
   const RMSNorm& a_other = static_cast<const RMSNorm&>(other);
+  return eps_ == a_other.eps_;
+}
+
+bool FusedRMSSiLU::is_equivalent(const Primitive& other) const {
+  const FusedRMSSiLU& a_other = static_cast<const FusedRMSSiLU&>(other);
   return eps_ == a_other.eps_;
 }
 

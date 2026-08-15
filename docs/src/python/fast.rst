@@ -9,6 +9,7 @@ Fast
   :toctree: _autosummary
 
   rms_norm
+  fused_rms_silu
   layer_norm
   rope
   scaled_dot_product_attention

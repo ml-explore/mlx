@@ -17,6 +17,12 @@ MLX_API array rms_norm(
     float eps,
     StreamOrDevice s = {});
 
+MLX_API array fused_rms_silu(
+    const array& x,
+    const std::optional<array>& weight,
+    float eps,
+    StreamOrDevice s = {});
+
 MLX_API array layer_norm(
     const array& x,
     const std::optional<array>& weight,

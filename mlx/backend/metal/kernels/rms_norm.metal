@@ -8,6 +8,7 @@
 using namespace metal;
 
 constant bool has_w [[function_constant(20)]];
+constant bool has_silu [[function_constant(21)]];
 
 template <typename T, int N_READS = RMS_N_READS>
 [[kernel]] void rms_single_row(
@@ -67,14 +68,22 @@ template <typename T, int N_READS = RMS_N_READS>
   out += gid * size_t(axis_size) + lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
     for (int i = 0; i < N_READS; i++) {
-      out[i] =
-          w[w_stride * i] * static_cast<T>(thread_x[i] * local_inv_mean[0]);
+      float norm_val = (has_w ? static_cast<float>(w[w_stride * i]) : 1.0f) *
+          (thread_x[i] * local_inv_mean[0]);
+      if (has_silu) {
+        norm_val = norm_val / (1.0f + metal::fast::exp(-norm_val));
+      }
+      out[i] = static_cast<T>(norm_val);
     }
   } else {
     for (int i = 0; i < N_READS; i++) {
       if ((lid * N_READS + i) < axis_size) {
-        out[i] =
-            w[w_stride * i] * static_cast<T>(thread_x[i] * local_inv_mean[0]);
+        float norm_val = (has_w ? static_cast<float>(w[w_stride * i]) : 1.0f) *
+            (thread_x[i] * local_inv_mean[0]);
+        if (has_silu) {
+          norm_val = norm_val / (1.0f + metal::fast::exp(-norm_val));
+        }
+        out[i] = static_cast<T>(norm_val);
       }
     }
   }
@@ -142,14 +151,24 @@ template <typename T, int N_READS = RMS_N_READS>
   for (uint r = 0; r < axis_size; r += lsize * N_READS) {
     if (r + lid * N_READS + N_READS <= axis_size) {
       for (int i = 0; i < N_READS; i++) {
-        out[r + i] = w[w_stride * (i + r)] *
-            static_cast<T>(x[r + i] * local_inv_mean[0]);
+        float norm_val =
+            (has_w ? static_cast<float>(w[w_stride * (i + r)]) : 1.0f) *
+            (x[r + i] * local_inv_mean[0]);
+        if (has_silu) {
+          norm_val = norm_val / (1.0f + metal::fast::exp(-norm_val));
+        }
+        out[r + i] = static_cast<T>(norm_val);
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
         if ((r + lid * N_READS + i) < axis_size) {
-          out[r + i] = w[w_stride * (i + r)] *
-              static_cast<T>(x[r + i] * local_inv_mean[0]);
+          float norm_val =
+              (has_w ? static_cast<float>(w[w_stride * (i + r)]) : 1.0f) *
+              (x[r + i] * local_inv_mean[0]);
+          if (has_silu) {
+            norm_val = norm_val / (1.0f + metal::fast::exp(-norm_val));
+          }
+          out[r + i] = static_cast<T>(norm_val);
         }
       }
     }

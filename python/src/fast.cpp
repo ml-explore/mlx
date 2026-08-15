@@ -145,6 +145,30 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
+      "fused_rms_silu",
+      &mx::fast::fused_rms_silu,
+      "x"_a,
+      "weight"_a.none(),
+      "eps"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def fused_rms_silu(x: array, weight: array | None, eps: float, *, stream: StreamOrDevice = None) -> array"),
+      R"pbdoc(
+        Fused Root Mean Square normalization (RMS norm) and SiLU (Swish) activation.
+
+        Applies RMSNorm followed immediately by SiLU activation in a single GPU pass.
+
+        Args:
+            x (array): Input array.
+            weight (array, optional): A multiplicative weight to scale the result by.
+            eps (float): A small additive constant for numerical stability.
+
+        Returns:
+            array: The output array.
+      )pbdoc");
+
+  m.def(
       "layer_norm",
       &mx::fast::layer_norm,
       "x"_a,
