@@ -14,7 +14,7 @@ try:
     import torch.nn.functional as F
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -309,9 +309,11 @@ class TestConv(mlx_tests.MLXTestCase):
                     lambda x: mx.array(x).astype(mx_dtype), (in_np, wt_np)
                 )
                 in_pt, wt_pt = map(
-                    lambda x: torch.from_numpy(x.transpose(0, 3, 1, 2))
-                    .to("cpu")
-                    .to(torch_dtype),
+                    lambda x: (
+                        torch.from_numpy(x.transpose(0, 3, 1, 2))
+                        .to("cpu")
+                        .to(torch_dtype)
+                    ),
                     (in_np, wt_np),
                 )
 
@@ -1069,7 +1071,6 @@ class TestConv(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_depthwise(self):
-
         # fmt: off
         shapes = (
             # N,   H,   W,    C   kH,  kW,   O, strides, padding,  groups
@@ -1220,6 +1221,27 @@ class TestConv(mlx_tests.MLXTestCase):
         y = mx.conv2d(x, w, (1, 1), (1, 1), stream=mx.cpu)
         y_hat = mx.conv2d(x, w, (1, 1), (1, 1))
         self.assertTrue(mx.allclose(y, y_hat, rtol=1e-3, atol=1e-3))
+
+    def test_conv_3D_small_kd_decomposition(self):
+        # Exercises the small kernel-depth 3D -> KD x 2D decomposition (#3625):
+        # N=1, small KD, depth stride/dilation 1, no depth padding, mod16 channels.
+        # Validated against the CPU reference, which uses a different code path.
+        for T, H, W, Cin, Cout, kd, kh, kw in [
+            (5, 16, 16, 32, 32, 3, 3, 3),  # canonical 3x3x3 (2D hits Winograd)
+            (4, 12, 10, 16, 48, 3, 3, 3),  # Cout != Cin
+            (6, 14, 14, 32, 32, 1, 3, 3),  # KD = 1
+            (5, 12, 12, 16, 16, 5, 1, 1),  # larger KD, 1x1 spatial
+            (4, 10, 10, 32, 16, 2, 3, 3),  # KD = 2
+        ]:
+            x = mx.random.normal((1, T, H, W, Cin))
+            w = mx.random.normal((Cout, kd, kh, kw, Cin))
+            y_gpu = mx.conv_general(x, w, stride=(1, 1, 1))
+            y_cpu = mx.conv_general(x, w, stride=(1, 1, 1), stream=mx.cpu)
+            mx.eval(y_gpu, y_cpu)
+            self.assertTrue(
+                mx.allclose(y_gpu, y_cpu, rtol=1e-4, atol=1e-4),
+                f"3D small-kd mismatch T{T} H{H} W{W} C{Cin}->{Cout} k{kd}{kh}{kw}",
+            )
 
 
 if __name__ == "__main__":
