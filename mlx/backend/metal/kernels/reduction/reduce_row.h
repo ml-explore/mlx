@@ -337,7 +337,8 @@ template <
 
   // lid.x * N_READS breaks the per_thread_row_reduce interface a bit. Maybe it
   // needs a small refactor.
-  in += elem_to_loc<IdxT>(out_idx, shape, strides, ndim) + lid.x * N_READS;
+  in +=
+      elem_to_loc<IdxT>(out_idx, shape, strides, ndim) + IdxT(lid.x) * N_READS;
 
   LoopedElemToLoc<NDIMS, IdxT, (NDIMS > 2)> loop(reduce_ndim);
   const device T* row;
