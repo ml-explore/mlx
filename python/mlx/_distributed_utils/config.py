@@ -483,26 +483,47 @@ def configure_jaccl(args, hosts, ips, sshinfo):
     save_hostfile(args, hostfile)
 
 
+def jaccl_ring_devices(ring, count, ips):
+    """The device matrix for a jaccl-ring hostfile, in ring order.
+
+    Every cabled pair is recorded, not only the ring neighbours. The ring
+    neighbours are what the data plane uses, and `MLX_JACCL_RING` is what
+    selects the ring, so the extra entries change nothing about how the group
+    runs. They are the links a subgroup would need: a child can only contain
+    members that are directly connected, and a pair dropped here cannot be
+    recovered later because the hostfile is all the runtime ever sees.
+
+    `ips` is keyed by every physically connected pair, so this is a matter of
+    writing down what has already been discovered.
+    """
+    n = len(ring)
+    matrix = []
+    for i, node in enumerate(ring):
+        peers = {ring[i - 1], ring[(i + 1) % n]}
+        rdmas = []
+        for other in ring:
+            devices = [] if node == other else ips.get((node, other), [])
+            if not devices:
+                rdmas.append(None)
+                continue
+            # A ring neighbour keeps the width the ring was built with. Any
+            # other pair reports the cables it actually has.
+            width = count if other in peers else len(devices)
+            rdma = [f"rdma_{devices[c][0]}" for c in range(min(width, len(devices)))]
+            rdmas.append(rdma[0] if len(rdma) == 1 else rdma)
+        matrix.append(rdmas)
+    return matrix
+
+
 def configure_jaccl_ring(args, hosts, ips, ring, sshinfo):
     log(args.verbose, "Prepare a jaccl-ring hostfile")
     add_ips(hosts, args.verbose)
 
     jaccl_hosts = []
-    num_nodes = len(hosts)
     ring, count = ring
-    for i, node in enumerate(ring):
+    matrix = jaccl_ring_devices(ring, count, ips.ips)
+    for i, (node, rdmas) in enumerate(zip(ring, matrix)):
         h = hosts[node]
-        peer_left = ring[i - 1]
-        peer_right = ring[(i + 1) % num_nodes]
-        rdmas = []
-        for other in ring:
-            if other not in (peer_left, peer_right):
-                rdmas.append(None)
-            else:
-                rdma = []
-                for c in range(count):
-                    rdma.append(f"rdma_{ips.ips[node, other][c][0]}")
-                rdmas.append(rdma[0] if count == 1 else rdma)
         jaccl_hosts.append(Host(i, h.ssh_hostname, h.ips, rdmas))
     hostfile = Hostfile(jaccl_hosts, "jaccl-ring", args.env)
 
