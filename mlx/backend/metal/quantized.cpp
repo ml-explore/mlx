@@ -1470,7 +1470,7 @@ void gather_qmm_rhs_nax(
   // with rhs_indices. We need only broadcast x and copy it as if applying the
   // lhs_indices.
   auto broadcast_with_indices = [&d, &s, &indices](const array& x) {
-    if (x.size() / x.shape(-2) / x.shape(-1) == indices.size()) {
+    if (x.size() / x.shape(-1) == indices.size()) {
       return ensure_row_contiguous(x, d, s);
     }
 
@@ -1626,7 +1626,7 @@ void gather_qmm_rhs(
   // with rhs_indices. We need only broadcast x and copy it as if applying the
   // lhs_indices.
   auto broadcast_with_indices = [&d, &s, &indices](const array& x) {
-    if (x.size() / x.shape(-2) / x.shape(-1) == indices.size()) {
+    if (x.size() / x.shape(-1) == indices.size()) {
       return ensure_row_contiguous(x, d, s);
     }
 
