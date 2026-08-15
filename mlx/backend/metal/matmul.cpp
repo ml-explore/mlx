@@ -2158,7 +2158,10 @@ void gather_mm_rhs(
   // lhs_indices.
   auto broadcast_with_indices = [&d, &s, &indices](const array& x) {
     if (x.size() / x.shape(-1) == indices.size()) {
-      return ensure_row_contiguous(x, d, s);
+      // Flatten to 2D so the kernel sees (M, K) not (M, 1, K)
+      std::vector<int> new_shape = {
+          static_cast<int>(indices.size()), x.shape(-1)};
+      return ensure_row_contiguous(reshape(x, new_shape, s), d, s);
     }
 
     auto x_shape = indices.shape();
@@ -2291,7 +2294,10 @@ void gather_mm_rhs_nax(
   // lhs_indices.
   auto broadcast_with_indices = [&d, &s, &indices](const array& x) {
     if (x.size() / x.shape(-1) == indices.size()) {
-      return ensure_row_contiguous(x, d, s);
+      // Flatten to 2D so the kernel sees (M, K) not (M, 1, K)
+      std::vector<int> new_shape = {
+          static_cast<int>(indices.size()), x.shape(-1)};
+      return ensure_row_contiguous(reshape(x, new_shape, s), d, s);
     }
 
     auto x_shape = indices.shape();
