@@ -744,7 +744,6 @@ void pad_and_slice_conv_3D_gpu(
       intermediate, intermediate.strides(), {0}, intermediate.data_size());
 }
 
-// Forward declaration; conv_2D_gpu is defined later in this file.
 void conv_2D_gpu(
     const Stream& s,
     metal::Device& d,
@@ -759,18 +758,6 @@ void conv_2D_gpu(
     bool flip,
     std::vector<array>& copies);
 
-// Small kernel-depth 3D conv via per-depth-tap 2D convs (#3625).
-//
-// The 3D implicit-gemm path has no Winograd / 3x3-specialized kernel, so a
-// (small KD) 3D conv is 2-5x slower than decomposing it into KD 2D convs, each
-// of which hits the tuned 2D dispatch (Winograd for 3x3 stride-1). For each
-// depth tap kd we run a 2D conv over the OD output frames (a zero-copy strided
-// view of the input at depth offset kd) with the weight's depth slice, and
-// accumulate.
-//
-// Preconditions (enforced by the dispatch guard): input dilation 1, depth
-// stride and depth kernel-dilation 1, no depth padding, groups == 1, N == 1,
-// mod16 channels, and KD small. Other cases fall through to the implicit gemm.
 void small_kd_conv_3D_gpu(
     const Stream& s,
     metal::Device& d,
@@ -790,12 +777,8 @@ void small_kd_conv_3D_gpu(
   const int OH = conv_params.oS[1];
   const int OW = conv_params.oS[2];
 
-  // Accumulate the KD per-depth-tap 2D convs into `acc`, then repoint `out`.
   array acc({OD, OH, OW, O}, out.dtype(), nullptr, {});
   for (int kd = 0; kd < KD; ++kd) {
-    // Input frames for this depth tap: [OD, H, W, C] view of `in` at depth kd.
-    // With depth stride/dilation 1 and no depth padding these OD frames are the
-    // contiguous slab in[kd : kd + OD], so a plain strided view suffices.
     array in_2d({OD, H, W, C}, in.dtype(), nullptr, {});
     in_2d.copy_shared_buffer(
         in,
@@ -807,7 +790,6 @@ void small_kd_conv_3D_gpu(
         static_cast<size_t>(OD) * H * W * C,
         static_cast<int64_t>(kd) * H * W * C);
 
-    // Weight depth slice wt[:, kd] -> [O, KH, KW, C], strided over O.
     array wt_2d({O, KH, KW, C}, wt.dtype(), nullptr, {});
     wt_2d.copy_shared_buffer(
         wt,
@@ -820,8 +802,6 @@ void small_kd_conv_3D_gpu(
             static_cast<size_t>(KH) * KW * C,
         static_cast<int64_t>(kd) * KH * KW * C);
 
-    // 2D conv into a fresh output; conv_2D_gpu allocates and dispatches
-    // (Winograd etc.). Spatial params come from dims 1,2 of the 3D params.
     array conv_out({OD, OH, OW, O}, out.dtype(), nullptr, {});
     conv_2D_gpu(
         s,
@@ -834,22 +814,18 @@ void small_kd_conv_3D_gpu(
         {conv_params.kdil[1], conv_params.kdil[2]},
         {conv_params.idil[1], conv_params.idil[2]},
         /* groups = */ 1,
-        /* flip = */ conv_params.flip,
+        conv_params.flip,
         copies);
 
     if (kd == 0) {
-      // First tap owns the accumulator buffer.
       acc = conv_out;
     } else {
-      // Elementwise in-place accumulate (safe: add is per-element).
       binary_op_gpu_inplace({acc, conv_out}, acc, "Add", s);
       copies.push_back(conv_out);
     }
   }
 
-  // Repoint the [1, OD, OH, OW, O] output at the contiguous [OD, OH, OW, O]
-  // accumulator buffer (same element count). No temporary needed for `acc`
-  // since `out` shares its buffer.
+  // Output shape is [1, OD, OH, OW, O].
   out.copy_shared_buffer(
       acc,
       {static_cast<int64_t>(OD) * OH * OW * O,
@@ -892,16 +868,12 @@ void dispatch_conv_3D_gpu(
   auto in = ensure_row_contiguous(in_pre, d, s);
   auto wt = ensure_row_contiguous(wt_pre, d, s);
 
-  // Small kernel-depth 3D conv: decompose into KD 2D convs, which hit the tuned
-  // 2D path (Winograd for 3x3 stride-1) that the 3D implicit gemm lacks. Only
-  // valid for depth stride/dilation 1, no depth padding, groups == 1, N == 1.
-  // (#3625)
+  // Decompose 3D conv to per-frame 2D convs
   constexpr int kSmallKdLimit3D = 7;
-  bool small_kd_ok = is_idil_one && mod16_channels && conv_params.groups == 1 &&
+  if (is_idil_one && mod16_channels && conv_params.groups == 1 &&
       conv_params.N == 1 && conv_params.wS[0] <= kSmallKdLimit3D &&
       conv_params.str[0] == 1 && conv_params.kdil[0] == 1 &&
-      conv_params.pad[0] == 0;
-  if (small_kd_ok) {
+      conv_params.pad[0] == 0) {
     return small_kd_conv_3D_gpu(s, d, in, wt, out, conv_params, copies);
   }
 

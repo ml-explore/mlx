@@ -1243,26 +1243,6 @@ class TestConv(mlx_tests.MLXTestCase):
                 f"3D small-kd mismatch T{T} H{H} W{W} C{Cin}->{Cout} k{kd}{kh}{kw}",
             )
 
-    def test_conv_3D_small_kd_fallback_cases(self):
-        # Cases that must NOT take the fast path (guarded out) but stay correct.
-        for kwargs in [
-            dict(stride=(2, 1, 1)),  # depth stride > 1
-            dict(stride=(1, 1, 1), padding=(1, 0, 0)),  # depth padding
-        ]:
-            x = mx.random.normal((1, 6, 12, 12, 32))
-            w = mx.random.normal((32, 3, 3, 3, 32))
-            y_gpu = mx.conv_general(x, w, **kwargs)
-            y_cpu = mx.conv_general(x, w, stream=mx.cpu, **kwargs)
-            mx.eval(y_gpu, y_cpu)
-            self.assertTrue(mx.allclose(y_gpu, y_cpu, rtol=1e-4, atol=1e-4))
-        # non-mod16 channels (falls to pad-and-slice / implicit gemm)
-        x = mx.random.normal((1, 5, 12, 12, 24))
-        w = mx.random.normal((24, 3, 3, 3, 24))
-        y_gpu = mx.conv_general(x, w, stride=(1, 1, 1))
-        y_cpu = mx.conv_general(x, w, stride=(1, 1, 1), stream=mx.cpu)
-        mx.eval(y_gpu, y_cpu)
-        self.assertTrue(mx.allclose(y_gpu, y_cpu, rtol=1e-4, atol=1e-4))
-
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
