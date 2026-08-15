@@ -193,8 +193,8 @@ void scan_op(
 
 // The identity an exclusive min or max scan starts from. std::numeric_limits
 // is not specialized for complex64_t, so complex used to start from zero,
-// which then won every comparison against a negative real part. The CUDA
-// backend already uses an infinite pair here.
+// which then won every comparison against a negative real part. The Metal and
+// CUDA backends already use an infinite pair here.
 template <typename U>
 U scan_extreme(const Dtype& dtype, bool maximum) {
   constexpr auto inf = std::numeric_limits<float>::infinity();
