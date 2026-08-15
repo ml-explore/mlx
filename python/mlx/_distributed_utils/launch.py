@@ -370,6 +370,29 @@ def launch_nccl(parser, hosts, args, command):
     )
 
 
+def missing_jaccl_links(hosts, jaccl_ring):
+    """Pairs the backend will use that the hostfile has no device for.
+
+    The shape checks in `launch_jaccl` cover the size of the matrix and its null
+    diagonal, but not whether the links about to be used are in it. A hostfile
+    whose rank order puts unconnected nodes next to each other passes both, and
+    then fails in the worst way available: every rank ends up alone in a group
+    of size one, reports success, and the job computes N separate wrong answers
+    at full speed with nothing on stderr.
+
+    A ring only uses each rank's two neighbours; a mesh uses every pair. With
+    two ranks the previous and next neighbour are the same node, which is
+    harmless here because the same pair is simply examined twice.
+    """
+    n = len(hosts)
+    return [
+        (i, j)
+        for i, h in enumerate(hosts)
+        for j in (((i - 1) % n, (i + 1) % n) if jaccl_ring else range(n))
+        if i != j and h.rdma[j] is None
+    ]
+
+
 def launch_jaccl(parser, hosts, args, command):
     if not hosts[0].ips:
         parser.error("Rank 0 should have an IP reachable from all other ranks")
@@ -379,6 +402,21 @@ def launch_jaccl(parser, hosts, args, command):
     have_nulls = all(h.rdma[i] is None for i, h in enumerate(hosts))
     if not have_rdmas or not have_nulls:
         parser.error("Malformed hostfile for jaccl backend")
+
+    missing = missing_jaccl_links(hosts, jaccl_ring)
+    if missing:
+        shape = "ring neighbours" if jaccl_ring else "a full mesh"
+        detail = ", ".join(
+            f"{hosts[i].ssh_hostname} to {hosts[j].ssh_hostname}"
+            for i, j in missing[:3]
+        )
+        more = f" and {len(missing) - 3} more" if len(missing) > 3 else ""
+        parser.error(
+            f"The hostfile does not describe {shape}. No RDMA device is listed "
+            f"for {detail}{more}. Regenerate it with mlx.distributed_config; "
+            "note that for jaccl-ring the order of the hosts is the order of "
+            "the ring."
+        )
 
     coordinator = hosts[0].ips[0]
     env = args.env
