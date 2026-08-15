@@ -29,11 +29,13 @@ void sdpa_full_self_attention_nax(
   using namespace mlx::steel;
 
   int bd = q_in.shape(-1);
+  // bd=256 runs the head-dim split kernel (attention_nax_dsplit): the two
+  // simdgroups along the second warp dimension each own half of the head
+  // dim, which halves the per-simdgroup accumulator working set that gates
+  // tensor-unit throughput at this head width.
+  const bool split_d = bd == 256;
   int wm = 4;
-  // bd=256 uses the head-dim-split kernel (wn=2): halving the per-simdgroup
-  // accumulator working set is what recovers tensor-unit throughput at this
-  // head width.
-  int wn = bd == 256 ? 2 : 1;
+  int wn = split_d ? 2 : 1;
 
   int bq = 64;
   // bk=32 everywhere: with the head-dim split at bd=256 this puts the
@@ -63,8 +65,7 @@ void sdpa_full_self_attention_nax(
   // back into o. The pads are zero-filled so the padded value rows cannot
   // poison P @ V with NaNs (their probabilities are exactly zero).
   std::optional<array> q_pad, k_pad, v_pad, o_pad;
-  if (bd == 256 && do_causal_ && !mask.has_value() &&
-      ((qL % bq) || (kL % bk))) {
+  if (split_d && do_causal_ && !mask.has_value() && ((qL % bq) || (kL % bk))) {
     auto& enc = metal::get_command_encoder(s);
     auto pad_seq = [&](const array& src, int Lp) {
       array dst(
@@ -121,7 +122,7 @@ void sdpa_full_self_attention_nax(
   std::string base_name;
   concatenate(
       base_name,
-      "steel_attention_",
+      split_d ? "steel_attention_dsplit_" : "steel_attention_",
       type_to_name(q),
       "_bq",
       bq,
@@ -164,7 +165,8 @@ void sdpa_full_self_attention_nax(
       bd,
       wm,
       wn,
-      (has_mask ? *mask : q));
+      (has_mask ? *mask : q),
+      split_d);
 
   compute_encoder.set_compute_pipeline_state(kernel);
 

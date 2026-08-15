@@ -426,7 +426,8 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     int bd,
     int wm,
     int wn,
-    const array& m);
+    const array& m,
+    bool split_d);
 
 // Create a GPU kernel template definition for JIT compilation
 template <typename... Args>
