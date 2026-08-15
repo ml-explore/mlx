@@ -2677,6 +2677,22 @@ class TestOps(mlx_tests.MLXTestCase):
                     out = getattr(mx, op)(a, axis=0)
                     self.assertTrue(np.array_equal(np.array(out), expected))
 
+    def test_scans_complex_exclusive(self):
+        # An exclusive scan starts from the identity of its operation, and
+        # numeric_limits has none for complex, so it used to start from zero
+        # and swallow every negative real part.
+        a = mx.array([-3 + 1j, -1 + 2j, -4 + 0j, 0 + 5j, 2 - 1j])
+        for op in ("cummax", "cummin", "logcumsumexp"):
+            mxop = getattr(mx, op)
+            for reverse in (False, True):
+                inclusive = mxop(a, axis=0, inclusive=True, reverse=reverse)
+                exclusive = mxop(a, axis=0, inclusive=False, reverse=reverse)
+                if reverse:
+                    got, want = exclusive[:-1], inclusive[1:]
+                else:
+                    got, want = exclusive[1:], inclusive[:-1]
+                self.assertTrue(mx.allclose(got, want), msg=f"{op} reverse={reverse}")
+
     def test_cummax_cummin_nan(self):
         nan = float("nan")
         cases = [
