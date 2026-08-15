@@ -311,7 +311,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
             # rank boundary and the GPU need not match the CPU there. Use
             # positive definite inputs, sized to hit both cuSOLVER paths.
             mx.random.seed(7)
-            for batch, n in [((), 3), ((16,), 8), ((2,), 512)]:
+            for batch, n in [((), 3), ((2,), 2048), ((16,), 8)]:
                 x = mx.random.normal(batch + (n, n))
                 A = x @ mx.swapaxes(x, -1, -2) + n * mx.eye(n)
                 for upper in [False, True]:

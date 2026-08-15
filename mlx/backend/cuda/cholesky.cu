@@ -81,9 +81,12 @@ void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto* info = static_cast<int*>(
       allocate_workspace(encoder, num_matrices * sizeof(int)));
 
-  // A loop of single factorizations beats the batched kernels once the
-  // matrices are large enough to fill the device (measured on sm_120).
-  if (num_matrices > 1 && num_matrices <= INT32_MAX && n <= 256) {
+  // potrfBatched parallelizes across the batch, so it wins until the batch is
+  // too small to keep the device busy at that size. A loop of single
+  // factorizations only catches up for large matrices in small batches. No
+  // constant fits every measured shape, so 1024 is a compromise.
+  if (num_matrices > 1 && num_matrices <= INT32_MAX &&
+      num_matrices * 1024 > n) {
     auto** ptrs = static_cast<void**>(
         allocate_workspace(encoder, num_matrices * sizeof(void*)));
     auto capture = encoder.capture_context();
