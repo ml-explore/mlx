@@ -344,6 +344,14 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.item(), 2)
 
     def test_remainder(self):
+        # Complex is not supported and has to say so rather than quietly
+        # computing a componentwise remainder, which no other library defines
+        z = mx.array([7 + 3j], mx.complex64)
+        with self.assertRaises(ValueError):
+            mx.remainder(z, z)
+        with self.assertRaises(ValueError):
+            z % z
+
         for dt in [mx.int32, mx.float32, mx.float16, mx.bfloat16]:
             x = mx.array(2, dtype=dt)
             y = mx.array(4, dtype=dt)
