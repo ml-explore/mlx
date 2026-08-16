@@ -39,9 +39,7 @@ constexpr const int CONN_WAIT = 1000;
 constexpr const char* RING_TAG = "[ring]";
 // send(2) and recv(2) reject a length above INT_MAX with EINVAL, so a single
 // transfer of 2 GiB or more fails outright rather than being carried in
-// pieces. Clamping every syscall keeps each one well inside that limit; the
-// loop below already advances the buffer and shrinks the remaining size on a
-// short transfer, so nothing else has to change.
+// pieces.
 constexpr const size_t MAX_IO_BYTES = 1024 * 1024 * 1024;
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
