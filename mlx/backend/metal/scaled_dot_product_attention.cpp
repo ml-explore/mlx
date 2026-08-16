@@ -458,16 +458,11 @@ void sdpa_vector_2pass(
       }
     }
   } else if (devc == 'd') {
-    blocks = 128;
-    if (n_simds <= 2 && N > 8192) {
-      blocks = 256;
-    } else if (n_simds >= 6) {
-      if (N >= 16384 && N < 65536) {
-        blocks = 512;
-      } else if (N >= 65536) {
-        blocks = 1024;
-      }
-    }
+    // Split the KV sequence so that each threadgroup processes a contiguous
+    // chunk of ~256 keys, while keeping at least 32-64 blocks for parallelism
+    // and capping at 256 to bound the partials traffic. Tuned on M3 Ultra.
+    int b = (((N + 255) / 256 + 31) / 32) * 32;
+    blocks = std::min(256, std::max(N >= 4096 ? 64 : 32, b));
   } else {
     if (n_simds >= 4) {
       blocks = 64;
@@ -487,14 +482,16 @@ void sdpa_vector_2pass(
   MTL::Size group_dims(32, gqa_factor, q.shape(2));
   MTL::Size grid_dims(k.shape(1), q.shape(0), blocks);
 
-  // Allocate the intermediates
+  // Allocate the intermediates. The partials are stored in float32 (rather
+  // than the query dtype) for accuracy: the extra traffic is negligible since
+  // they are tiny compared to the KV read.
   Shape intermediate_shape;
   intermediate_shape.reserve(out.ndim() + 1);
   intermediate_shape.insert(
       intermediate_shape.end(), out.shape().begin(), out.shape().end() - 1);
   intermediate_shape.push_back(blocks);
   intermediate_shape.push_back(out.shape().back());
-  array intermediate(intermediate_shape, q.dtype(), nullptr, {});
+  array intermediate(intermediate_shape, float32, nullptr, {});
   intermediate_shape.pop_back();
   array sums(intermediate_shape, float32, nullptr, {});
   array maxs(std::move(intermediate_shape), float32, nullptr, {});
@@ -708,9 +705,17 @@ void ScaledDotProductAttention::eval_gpu(
       // keys and values should be copied if:
       // - the last dimension is not contiguous
       // - the batch and head dim are not contiguous
+      // - the seq or head strides are not multiples of the per-thread load
+      //   width (head_dim / 32 elements), which the vectorized loads in the
+      //   sdpa vector kernels require for alignment
       auto& strides = arr.strides();
       auto& shape = arr.shape();
       if (strides.back() != 1) {
+        return false;
+      }
+      auto per_thread = shape[3] / 32;
+      if ((shape[2] > 1 && strides[2] % per_thread != 0) ||
+          (shape[1] > 1 && strides[1] % per_thread != 0)) {
         return false;
       }
       if (shape[0] == 1 || shape[1] == 1) {
@@ -748,10 +753,20 @@ void ScaledDotProductAttention::eval_gpu(
     // We route to the 2 pass fused attention if
     // - The device is large and the sequence length long
     // - The sequence length is even longer and we have gqa
+    // On 'd' class GPUs (e.g. M3 Ultra) the retuned 2-pass kernels win for
+    // GQA from 1024 keys and for MHA / small head counts from 32768 keys;
+    // the (also retuned) 1-pass kernel wins everywhere below that.
     bool do_causal = do_causal_ && q.shape(2) > 1;
     char devc = d.get_architecture().back();
-    if (((devc == 'd' || devc == 's') && k.shape(2) >= 1024) ||
-        (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
+    bool gqa = k.shape(1) < q.shape(1);
+    bool use_2pass;
+    if (devc == 'd') {
+      use_2pass = gqa ? (k.shape(2) >= 1024) : (k.shape(2) >= 32768);
+    } else {
+      use_2pass =
+          (devc == 's' && k.shape(2) >= 1024) || (gqa && k.shape(2) >= 4096);
+    }
+    if (use_2pass) {
       sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
     } else {
       sdpa_vector(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
