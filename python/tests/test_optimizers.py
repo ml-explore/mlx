@@ -180,6 +180,19 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             with self.assertRaisesRegex(ValueError, ">0"):
                 optimizer(learning_rate=1e-2, eps=0.0)
 
+    def test_betas_validation(self):
+        # An exponential moving average needs 0 <= beta < 1. beta == 1 freezes the
+        # average and makes the bias correction divide by 1 - beta**t == 0, and a
+        # beta outside the range just diverges: Adam with betas (0.9, 1.0) drives
+        # a parameter to -1.3e6 in five steps with no warning.
+        for optimizer in (opt.Adam, opt.AdamW, opt.Adamax, opt.Lion):
+            for betas in ([1.5, 0.999], [-0.5, 0.999], [0.9, 1.0], [0.9, -0.1]):
+                with self.assertRaisesRegex(ValueError, r"\[0, 1\)"):
+                    optimizer(learning_rate=1e-2, betas=betas)
+            # Valid values, including the endpoints that are allowed.
+            for betas in ([0.0, 0.0], [0.9, 0.999], [0.999, 0.9999]):
+                optimizer(learning_rate=1e-2, betas=betas)
+
     def test_adam(self):
         params = {
             "first": [mx.zeros((10,)), mx.zeros((1,))],
