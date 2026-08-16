@@ -2931,6 +2931,31 @@ class TestOps(mlx_tests.MLXTestCase):
         # Test with negative k parameter
         self.assertCmpNumpy([5, 6], mx.eye, np.eye, k=-2)
 
+    def test_diag_8_byte_dtypes(self):
+        # diag places its values with a scatter, and the Metal scatter has no
+        # 8-byte output path, so a 1-D int64, uint64 or complex64 input failed
+        # on the GPU while working on the CPU.
+        for dtype, np_dtype in (
+            (mx.int64, np.int64),
+            (mx.uint64, np.uint64),
+            (mx.complex64, np.complex64),
+        ):
+            for k in (0, 2, -3):
+                vals = np.array([1, 2, 3], dtype=np_dtype)
+                out = mx.diag(mx.array(vals, dtype=dtype), k)
+                self.assertEqual(out.dtype, dtype)
+                self.assertTrue(np.array_equal(np.array(out), np.diag(vals, k)))
+
+        # These values are not representable in float32, so a fix that built
+        # the diagonal in a narrower type and cast would return them changed.
+        big = np.array([(1 << 53) + 1, (1 << 62) - 1], dtype=np.int64)
+        out = mx.diag(mx.array(big, dtype=mx.int64))
+        self.assertTrue(np.array_equal(np.array(out).diagonal(), big))
+
+        top = np.array([(1 << 64) - 1, (1 << 63) + 5], dtype=np.uint64)
+        out = mx.diag(mx.array(top, dtype=mx.uint64))
+        self.assertTrue(np.array_equal(np.array(out).diagonal(), top))
+
     def test_stack(self):
         a = mx.ones((2,))
         np_a = np.ones((2,))

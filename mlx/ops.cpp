@@ -6362,9 +6362,26 @@ array diag(const array& a, int k /* = 0 */, StreamOrDevice s /* = {} */) {
       return res;
     }
 
-    std::vector<array> indices;
     auto s1 = std::max(0, -k);
     auto s2 = std::max(0, k);
+
+    if (size_of(a.dtype()) == 8) {
+      // The Metal scatter has no 8-byte output path, so placing the values
+      // with one refuses int64, uint64 and complex64. eye can sidestep that by
+      // building in a narrower type and casting, because the only values it
+      // writes are 0 and 1. These are the caller's values, and an int64 past
+      // float32's exact range would come back changed, so instead of casting
+      // the diagonal is selected out of a broadcast, which never leaves the
+      // dtype. Only the types that currently throw take this path.
+      auto vals =
+          pad(a, {s1, n - s1 - a_size}, array(0, a.dtype()), "constant", s);
+      auto rows = expand_dims(arange(n, s), 1, s);
+      auto cols = expand_dims(arange(n, s), 0, s);
+      auto on_diagonal = equal(cols, add(rows, array(k), s), s);
+      return where(on_diagonal, expand_dims(vals, 1, s), res, s);
+    }
+
+    std::vector<array> indices;
     indices.push_back(arange(s1, a_size + s1, uint32, s));
     indices.push_back(arange(s2, a_size + s2, uint32, s));
 
