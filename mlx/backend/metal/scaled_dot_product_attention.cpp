@@ -18,17 +18,17 @@ namespace {
 void sdpa_full_self_attention_nax(
     const Stream& s,
     metal::Device& d,
-    const array& q_in,
-    const array& k_in,
-    const array& v_in,
+    const array& q,
+    const array& k,
+    const array& v,
     const float scale,
-    array& o_in,
+    array& o,
     bool do_causal_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
   using namespace mlx::steel;
 
-  int bd = q_in.shape(-1);
+  int bd = q.shape(-1);
   // bd=256 runs the head-dim split kernel (attention_nax_dsplit): the two
   // simdgroups along the second warp dimension each own half of the head
   // dim, which halves the per-simdgroup accumulator working set that gates
@@ -44,67 +44,52 @@ void sdpa_full_self_attention_nax(
   // 47.7 TF at 8192^2).
   int bk = 32;
 
-  int B = q_in.shape(0);
-  int H = q_in.shape(1);
-  int D = q_in.shape(3);
-  int gqa_factor = q_in.shape(1) / k_in.shape(1);
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int D = q.shape(3);
+  int gqa_factor = q.shape(1) / k.shape(1);
 
-  int qL = q_in.shape(2);
-  int kL = k_in.shape(2);
+  int qL = q.shape(2);
+  int kL = k.shape(2);
 
-  // The causal offset must keep describing the true diagonal even when the
-  // inputs get padded below.
+  // The causal offset describes the true diagonal even if kL is widened
+  // below.
   const int qL_off = kL - qL;
 
-  // For head_dim 256 the unaligned pipelines (align_Q/align_K = false)
-  // spill registers and slow every block down ~3x, not just the ragged edge
-  // ones. Pad ragged causal inputs up to the tile sizes and take the
-  // aligned pipeline instead: with qL_off computed from the true lengths,
-  // the causal bound c <= r + qL_off never reaches a padded key column for
-  // any true query row, and the padded query rows are dropped by the copy
-  // back into o. The pads are zero-filled so the padded value rows cannot
-  // poison P @ V with NaNs (their probabilities are exactly zero).
-  std::optional<array> q_pad, k_pad, v_pad, o_pad;
-  if (split_d && do_causal_ && !mask.has_value() && ((qL % bq) || (kL % bk))) {
-    auto& enc = metal::get_command_encoder(s);
-    auto pad_seq = [&](const array& src, int Lp) {
-      array dst(
-          {src.shape(0), src.shape(1), Lp, src.shape(3)},
-          src.dtype(),
-          nullptr,
-          {});
-      array zero(0, src.dtype());
-      fill_gpu(zero, dst, s);
-      array dst_slice(src.shape(), dst.dtype(), nullptr, {});
-      dst_slice.copy_shared_buffer(
-          dst, dst.strides(), dst.flags(), dst_slice.size(), 0);
-      copy_gpu_inplace(src, dst_slice, CopyType::GeneralGeneral, s);
-      enc.add_temporary(std::move(zero));
-      enc.add_temporary(std::move(dst_slice));
-      enc.add_temporary(dst);
-      return dst;
-    };
-
-    if (qL % bq) {
-      int qLp = bq * ((qL + bq - 1) / bq);
-      q_pad = pad_seq(q_in, qLp);
-      o_pad = array({B, H, qLp, D}, o_in.dtype(), nullptr, {});
-      o_pad->set_data(allocator::malloc(o_pad->nbytes()));
-      enc.add_temporary(*o_pad);
-      qL = qLp;
+  // K/V that come out of a preallocated KV cache (mlx-lm grows it 256
+  // positions at a time) are slices of a longer buffer, keys[..., :kL, :].
+  // Reading such a slice past its end up to the next bk multiple keeps the
+  // head-dim split kernel on the aligned K pipeline, which is ~13% faster
+  // over the whole KV loop than the unaligned one at bd=256. It is safe
+  // under causal masking with qL_off taken from the true lengths: every
+  // extra key column lies beyond the diagonal of every true query row, so
+  // it is masked to zero probability and its (finite) V row never reaches
+  // the output. Ragged Q needs no such treatment: the kernel loads Q once,
+  // outside the KV loop.
+  auto has_backing_rows = [](const array& kv, int rows) {
+    const auto& st = kv.strides();
+    if (st[0] < 0 || st[1] <= 0 || st[2] <= 0 || st[1] % st[2] != 0) {
+      return false;
     }
-    if (kL % bk) {
-      int kLp = bk * ((kL + bk - 1) / bk);
-      k_pad = pad_seq(k_in, kLp);
-      v_pad = pad_seq(v_in, kLp);
+    const int64_t itemsize = kv.itemsize();
+    // The rows must stay inside the head's row pitch (so they belong to the
+    // cache the slice was taken from) ...
+    const int64_t pitch = st[1] / st[2];
+    const int64_t row0 = ((kv.offset() / itemsize) % st[1]) / st[2];
+    if (row0 + rows > pitch) {
+      return false;
+    }
+    // ... and inside the buffer.
+    const int64_t end = (kv.shape(0) - 1) * st[0] + (kv.shape(1) - 1) * st[1] +
+        (rows - 1) * st[2] + kv.shape(3);
+    return kv.offset() + end * itemsize <= int64_t(kv.buffer_size());
+  };
+  if (split_d && do_causal_ && !mask.has_value() && (kL % bk)) {
+    int kLp = bk * ((kL + bk - 1) / bk);
+    if (has_backing_rows(k, kLp) && has_backing_rows(v, kLp)) {
       kL = kLp;
     }
   }
-
-  const array& q = q_pad ? *q_pad : q_in;
-  const array& k = k_pad ? *k_pad : k_in;
-  const array& v = v_pad ? *v_pad : v_in;
-  array& o = o_pad ? *o_pad : o_in;
 
   const bool align_Q = (qL % bq) == 0;
   const bool align_K = (kL % bk) == 0;
@@ -226,15 +211,6 @@ void sdpa_full_self_attention_nax(
 
   check_kernel_threadgroup_size(kernel, group_dims, hash_name);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-
-  // Drop the padded query rows.
-  if (o_pad) {
-    array o_slice(o_in.shape(), o_pad->dtype(), nullptr, {});
-    o_slice.copy_shared_buffer(
-        *o_pad, o_pad->strides(), o_pad->flags(), o_slice.size(), 0);
-    copy_gpu_inplace(o_slice, o_in, CopyType::GeneralGeneral, s);
-    compute_encoder.add_temporary(std::move(o_slice));
-  }
 }
 
 void sdpa_full_self_attention_metal(

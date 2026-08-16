@@ -492,7 +492,7 @@ template <
 // Variant of attention_nax for wide heads (bd = 256). There, the per-simdgroup
 // accumulator working set of attention_nax (TD output fragments plus the S
 // fragments) is what gates tensor-unit throughput, so this kernel splits the
-// head dim across the two simdgroups of the second warp dimension: each
+// head dim across the WN = 2 simdgroups of the second warp dimension: each
 // simdgroup of a pair owns one half of D for Q@K.T and one half of Dv for P@V,
 // halving its accumulator set. The pair exchanges its partial Q@K.T sums
 // through threadgroup memory, then both simdgroups run softmax redundantly on
@@ -555,8 +555,9 @@ template <
   // Prepare MMA tiles
   constexpr short kU = 16;
 
-  // Only the WM simdgroups along the first warp dimension split the Q
-  // sequence; the WN == 2 simdgroups along the second split the head dim.
+  // The WM simdgroups along the first warp dimension split the Q sequence;
+  // the WN simdgroups along the second split the head dim. The exchange
+  // below reduces exactly one peer, so WN is fixed at 2.
   static_assert(WN == 2, "The head-dim split kernel needs WN == 2");
   constexpr int kNWarps = WM;
   static_assert(
@@ -571,15 +572,17 @@ template <
   constexpr short TK = BK / kU;
 
   static_assert(TQ == 1, "Check TQ");
+  static_assert(TD % WN == 0, "The head dim must split evenly across WN");
+
+  // HeadDim frags / columns owned by each of the WN simdgroups of a row group
+  constexpr int TDh = TD / WN;
+  constexpr int BDh = BD / WN;
+
+  static_assert(TDh % 2 == 0, "P@V accumulates output fragments in pairs");
   static_assert(TK % 2 == 0, "S fragments are exchanged pair by pair");
-  static_assert(TD % 4 == 0, "Each head-dim half must hold fragment pairs");
 
-  // HeadDim frags / columns owned by each simdgroup of a pair
-  constexpr int TDh = TD / 2;
-  constexpr int BDh = BD / 2;
-
-  const short row_group = simd_group_id / 2;
-  const short d_half = simd_group_id & 1;
+  const short row_group = simd_group_id / WN;
+  const short d_half = simd_group_id % WN;
 
   using otile_t = NAXTile<AccumType, TQ, TDh>;
   otile_t Otile;
@@ -632,7 +635,7 @@ template <
   // One slot per (row group, half): a fragment pair in per-lane-linear
   // layout. Both halves share the fragment-to-lane mapping, so the
   // exchange needs no coordinate math.
-  threadgroup AccumType s_xchg[WM][2][2 * kEPF * 32];
+  threadgroup AccumType s_xchg[WM][WN][2 * kEPF * 32];
 
   // Keep the simdgroup's Q half resident in registers for the whole KV
   // loop: TDh fragments of T are cheap next to the accumulators.
