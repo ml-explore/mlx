@@ -1235,13 +1235,18 @@ class TestConv(mlx_tests.MLXTestCase):
         ]:
             x = mx.random.normal((1, T, H, W, Cin))
             w = mx.random.normal((Cout, kd, kh, kw, Cin))
-            y_gpu = mx.conv_general(x, w, stride=(1, 1, 1))
-            y_cpu = mx.conv_general(x, w, stride=(1, 1, 1), stream=mx.cpu)
-            mx.eval(y_gpu, y_cpu)
-            self.assertTrue(
-                mx.allclose(y_gpu, y_cpu, rtol=1e-4, atol=1e-4),
-                f"3D small-kd mismatch T{T} H{H} W{W} C{Cin}->{Cout} k{kd}{kh}{kw}",
-            )
+            # flip mirrors every kernel axis, including the decomposed depth
+            for flip in (False, True):
+                y_gpu = mx.conv_general(x, w, stride=(1, 1, 1), flip=flip)
+                y_cpu = mx.conv_general(
+                    x, w, stride=(1, 1, 1), flip=flip, stream=mx.cpu
+                )
+                mx.eval(y_gpu, y_cpu)
+                self.assertTrue(
+                    mx.allclose(y_gpu, y_cpu, rtol=1e-4, atol=1e-4),
+                    f"3D small-kd mismatch T{T} H{H} W{W} "
+                    f"C{Cin}->{Cout} k{kd}{kh}{kw} flip={flip}",
+                )
 
 
 if __name__ == "__main__":
