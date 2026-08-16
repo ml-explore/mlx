@@ -1633,7 +1633,10 @@ array pad(
     }
 
     auto ax = axes[i] < 0 ? a.ndim() + axes[i] : axes[i];
-    out_shape[ax] += low_pad_size[i] + high_pad_size[i];
+    out_shape[ax] = safe_cast(
+        static_cast<int64_t>(out_shape[ax]) + low_pad_size[i] +
+            high_pad_size[i],
+        "pad");
   }
 
   if (mode == "constant") {
