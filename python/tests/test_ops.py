@@ -1743,6 +1743,12 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [0]
         self.assertListEqual(a.tolist(), expected)
 
+        n = mx.iinfo(mx.int32).max
+        result = mx.arange(n - 1, n + 3)
+        self.assertEqual(result.shape, (4,))
+        self.assertEqual(result.dtype, mx.int32)
+        self.assertEqual(result.tolist(), [n - 1, n, -2147483648, -2147483647])
+
     def test_hanning_general(self):
         a = mx.hanning(10)
         expected = np.hanning(10)
