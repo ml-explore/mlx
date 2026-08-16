@@ -13,17 +13,6 @@ struct Add {
   }
 };
 
-struct FloorDivide {
-  template <typename T>
-  __device__ T operator()(T x, T y) {
-    if constexpr (cuda::std::is_integral_v<T>) {
-      return x / y;
-    } else {
-      return cuda::std::trunc(x / y);
-    }
-  }
-};
-
 struct Divide {
   template <typename T>
   __device__ T operator()(T x, T y) {
@@ -293,7 +282,43 @@ struct ArcTan2 {
 struct DivMod {
   template <typename T>
   __device__ cuda::std::array<T, 2> operator()(T x, T y) {
-    return {FloorDivide{}(x, y), Remainder{}(x, y)};
+    if constexpr (cuda::std::is_integral_v<T>) {
+      // Integer floor-divmod without overflow: start from the truncating
+      // quotient/remainder and shift both down by one when the signs differ.
+      // This avoids computing (a - r), which can overflow signed integers at
+      // the extremes (e.g. INT_MAX / -2).
+      auto q = x / y;
+      auto r = x % y;
+      if (r != 0 && ((r < 0) != (y < 0))) {
+        q -= 1;
+        r += y;
+      }
+      return {q, r};
+    } else if constexpr (is_complex_v<T>) {
+      auto r = Remainder{}(x, y);
+      return {(x - r) / y, r};
+    } else {
+      // numpy semantics: the quotient is floor(a / b) and the remainder
+      // carries the divisor's sign, so q * b + r == a holds for every sign
+      // combination. b == 0 yields a / b; nan inputs and an infinite dividend
+      // yield nan, matching numpy's floor_divide. floor(a / b) matches numpy
+      // bit for bit (deriving the quotient from the remainder can differ by
+      // one ulp).
+      auto r = cuda::std::fmod(x, y);
+      T q;
+      if (y == 0) {
+        q = x / y;
+      } else if (cuda::std::isnan(x) || cuda::std::isnan(y) ||
+                 cuda::std::isinf(x)) {
+        q = cuda::std::numeric_limits<T>::quiet_NaN();
+      } else {
+        q = cuda::std::floor(x / y);
+      }
+      if (r != 0 && ((r < 0) != (y < 0))) {
+        r += y;
+      }
+      return {q, r};
+    }
   };
 };
 

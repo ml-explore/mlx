@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <type_traits>
 
@@ -46,11 +47,41 @@ void DivMod::eval_cpu(
                     out_a = array::unsafe_weak_copy(out_a),
                     out_b = array::unsafe_weak_copy(out_b),
                     bopt]() mutable {
+    // Match numpy's semantics: the quotient is floor(a / b) and the remainder
+    // carries the divisor's sign, so q * b + r == a holds for every sign
+    // combination.
     auto integral_op = [](auto x, auto y) {
-      return std::make_pair(x / y, x % y);
+      // Start from the truncating quotient/remainder and shift both down by
+      // one when the signs differ. This avoids (a - r), which can overflow
+      // signed integers at the extremes (e.g. INT_MAX / -2).
+      auto q = x / y;
+      auto r = x % y;
+      if (r != 0 && ((r < 0) != (y < 0))) {
+        q -= 1;
+        r += y;
+      }
+      return std::make_pair(q, r);
     };
     auto float_op = [](auto x, auto y) {
-      return std::make_pair(std::trunc(x / y), std::fmod(x, y));
+      auto r = std::fmod(x, y);
+      decltype(r) q;
+      if (y == 0) {
+        // numpy treats b == 0 specially: the quotient is a / b (which yields
+        // +/-inf for a nonzero) and the remainder is fmod(a, b) (nan).
+        q = static_cast<decltype(r)>(x / y);
+      } else if (std::isnan(x) || std::isnan(y) || std::isinf(x)) {
+        // numpy's floor_divide returns nan for nan inputs and for an infinite
+        // dividend (but keeps +/-inf when a finite dividend overflows).
+        q = std::numeric_limits<decltype(r)>::quiet_NaN();
+      } else {
+        // floor(a / b) matches numpy bit for bit; deriving the quotient from
+        // the remainder instead can differ by one ulp.
+        q = std::floor(x / y);
+      }
+      if (r != 0 && ((r < 0) != (y < 0))) {
+        r += y;
+      }
+      return std::make_pair(q, r);
     };
 
     dispatch_all_types(out_a.dtype(), [&](auto type_tag) {

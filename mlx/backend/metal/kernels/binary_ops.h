@@ -14,25 +14,6 @@ struct Add {
   }
 };
 
-struct FloorDivide {
-  template <typename T>
-  T operator()(T x, T y) thread {
-    return x / y;
-  }
-  template <>
-  float operator()(float x, float y) thread {
-    return trunc(x / y);
-  }
-  template <>
-  half operator()(half x, half y) thread {
-    return trunc(x / y);
-  }
-  template <>
-  bfloat16_t operator()(bfloat16_t x, bfloat16_t y) thread {
-    return trunc(x / y);
-  }
-};
-
 struct Divide {
   template <typename T>
   T operator()(T x, T y) thread {
@@ -326,7 +307,47 @@ struct ArcTan2 {
 
 struct DivMod {
   template <typename T>
-  metal::array<T, 2> operator()(T x, T y) thread {
-    return {FloorDivide{}(x, y), Remainder{}(x, y)};
+  metal::enable_if_t<metal::is_integral_v<T>, metal::array<T, 2>> operator()(
+      T x,
+      T y) thread {
+    // Integer floor-divmod without overflow: start from the truncating
+    // quotient/remainder and shift both down by one when the signs differ.
+    // This avoids computing (a - r), which can overflow signed integers at
+    // the extremes (e.g. INT_MAX / -2).
+    auto q = x / y;
+    auto r = x % y;
+    if (r != 0 && ((r < 0) != (y < 0))) {
+      q -= 1;
+      r += y;
+    }
+    return {q, r};
+  }
+  template <typename T>
+  metal::enable_if_t<!metal::is_integral_v<T>, metal::array<T, 2>> operator()(
+      T x,
+      T y) thread {
+    // numpy semantics: the quotient is floor(a / b) and the remainder carries
+    // the divisor's sign, so q * b + r == a holds for every sign combination.
+    // b == 0 yields a / b; nan inputs and an infinite dividend yield nan,
+    // matching numpy's floor_divide. floor(a / b) matches numpy bit for bit
+    // (deriving the quotient from the remainder can differ by one ulp).
+    T r = fmod(x, y);
+    T q;
+    if (y == 0) {
+      q = x / y;
+    } else if (x != x || y != y || (T(1) / x == T(0))) {
+      q = T(0) / T(0);  // nan
+    } else {
+      q = floor(x / y);
+    }
+    if (r != 0 && ((r < 0) != (y < 0))) {
+      r += y;
+    }
+    return {q, r};
+  }
+  template <>
+  metal::array<complex64_t, 2> operator()(complex64_t x, complex64_t y) thread {
+    auto r = Remainder{}(x, y);
+    return {(x - r) / y, r};
   };
 };

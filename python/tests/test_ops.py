@@ -3217,13 +3217,45 @@ class TestOps(mlx_tests.MLXTestCase):
         types = [np.uint16, np.uint32, np.int32, np.float16, np.float32]
         for s1, s2 in sizes:
             for t in types:
-                a_np = np.random.uniform(1, 100, size=s1).astype(t)
-                b_np = np.random.uniform(1, 100, size=s2).astype(t)
+                if np.issubdtype(t, np.unsignedinteger):
+                    a_np = np.random.uniform(1, 100, size=s1).astype(t)
+                    b_np = np.random.uniform(1, 100, size=s2).astype(t)
+                else:
+                    # Cover negative operands: the quotient must floor toward
+                    # -inf and the remainder must carry the divisor's sign.
+                    a_np = np.random.uniform(-100, 100, size=s1).astype(t)
+                    b_np = np.random.uniform(-100, 100, size=s2).astype(t)
+                    b_np[b_np == 0] = 1
                 np_out = np.divmod(a_np, b_np)
                 mx_out = mx.divmod(mx.array(a_np), mx.array(b_np))
                 self.assertTrue(
                     np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
                 )
+                self.assertTrue(
+                    np.allclose(np_out[1], mx_out[1]), msg=f"Shapes {s1} {s2}, Type {t}"
+                )
+
+        # Regression: negative operands used to truncate the quotient toward
+        # zero, which broke q * b + r == a and disagreed with numpy.
+        for a_np, b_np in [(-7, 2), (7, -2), (-7, -2), (7, 2)]:
+            for t in [np.int32, np.float32]:
+                a = np.array(a_np, dtype=t)
+                b = np.array(b_np, dtype=t)
+                q, r = mx.divmod(mx.array(a), mx.array(b))
+                np_q, np_r = np.divmod(a, b)
+                self.assertEqual(np.array(q).item(), np_q.item())
+                self.assertEqual(np.array(r).item(), np_r.item())
+
+        # Signed integer extremes: the naive (a - r) construction overflows
+        # here (e.g. INT_MAX - (-1)), so the quotient must come from shifting
+        # the truncating result instead.
+        for t, maxv in [(np.int32, 2**31 - 1), (np.int64, 2**63 - 1)]:
+            a = np.array(maxv, dtype=t)
+            b = np.array(-2, dtype=t)
+            q, r = mx.divmod(mx.array(a), mx.array(b))
+            np_q, np_r = np.divmod(a, b)
+            self.assertEqual(np.array(q).item(), np_q.item())
+            self.assertEqual(np.array(r).item(), np_r.item())
 
     def test_tile(self):
         self.assertCmpNumpy([(2,), [2]], mx.tile, np.tile)

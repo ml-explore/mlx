@@ -3572,6 +3572,38 @@ TEST_CASE("test divmod") {
   CHECK(array_equal(out[0], array({2.0, 3.0, 3.0})).item<bool>());
   CHECK(array_equal(out[1], array({1.0, 0.0, 1.0})).item<bool>());
 
+  // Negative operands: the quotient must floor toward -inf and the remainder
+  // must carry the divisor's sign, matching numpy (q * b + r == a).
+  x = array({-7, 7, -7, 7});
+  y = array({2, -2, -2, 2});
+  out = divmod(x, y);
+  CHECK(array_equal(out[0], array({-4, -4, 3, 3})).item<bool>());
+  CHECK(array_equal(out[1], array({1, -1, -1, 1})).item<bool>());
+
+  x = array({-7.0, 7.0, -7.0, 7.0});
+  y = array({2.0, -2.0, -2.0, 2.0});
+  out = divmod(x, y);
+  CHECK(array_equal(out[0], array({-4.0, -4.0, 3.0, 3.0})).item<bool>());
+  CHECK(array_equal(out[1], array({1.0, -1.0, -1.0, 1.0})).item<bool>());
+
+  // Signed integer extremes: the naive (a - r) construction overflows here
+  // (e.g. INT_MAX - (-1)), so the quotient must come from shifting the
+  // truncating result instead.
+  x = array({2147483647, -2147483647}, int32);
+  y = array({-2, 2}, int32);
+  out = divmod(x, y);
+  CHECK(array_equal(out[0], array({-1073741824, -1073741824}, int32)).item<bool>());
+  CHECK(array_equal(out[1], array({-1, 1}, int32)).item<bool>());
+
+  x = array({int64_t(9223372036854775807LL), int64_t(-9223372036854775807LL)}, int64);
+  y = array({int64_t(-2), int64_t(2)}, int64);
+  out = divmod(x, y);
+  CHECK(
+      array_equal(out[0], array({int64_t(-4611686018427387904LL),
+                                 int64_t(-4611686018427387904LL)}, int64))
+          .item<bool>());
+  CHECK(array_equal(out[1], array({int64_t(-1), int64_t(1)}, int64)).item<bool>());
+
   x = array({1.0}, complex64);
   y = array({2.0}, complex64);
   CHECK_THROWS(divmod(x, y));
