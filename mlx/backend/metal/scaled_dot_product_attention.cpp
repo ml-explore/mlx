@@ -6,8 +6,8 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
-#include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/kernels/steel/attn/params.h"
+#include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/utils.h"
@@ -445,8 +445,7 @@ void sdpa_vector_2pass(
   // single-query decode so a row produces the same result alone or inside a
   // short causal verification block.
   int invariant_limit = metal::get_batch_invariant_limit();
-  int n_simds =
-      gqa_factor * (q.shape(2) <= invariant_limit ? 1 : q.shape(2));
+  int n_simds = gqa_factor * (q.shape(2) <= invariant_limit ? 1 : q.shape(2));
 
   char devc = d.get_architecture().back();
   int N = k.shape(2);

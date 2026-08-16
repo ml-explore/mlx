@@ -77,10 +77,10 @@ TEST_CASE("test gpu batch invariant sdpa") {
     }
   }
 
-  auto q_block = astype(
-      array(q_block_data.data(), {B, Hq, Lq, D}), bfloat16, Device::gpu);
-  auto q_single = astype(
-      array(q_single_data.data(), {B, Hq, 1, D}), bfloat16, Device::gpu);
+  auto q_block =
+      astype(array(q_block_data.data(), {B, Hq, Lq, D}), bfloat16, Device::gpu);
+  auto q_single =
+      astype(array(q_single_data.data(), {B, Hq, 1, D}), bfloat16, Device::gpu);
   auto k = astype(array(k_data.data(), {B, Hkv, Lk, D}), bfloat16, Device::gpu);
   auto v = astype(array(v_data.data(), {B, Hkv, Lk, D}), bfloat16, Device::gpu);
 
@@ -90,11 +90,10 @@ TEST_CASE("test gpu batch invariant sdpa") {
       q_single, k, v, 1.0f / std::sqrt(D), "", {}, {}, Device::gpu);
   auto block_last = slice(block, {0, 0, Lq - 1, 0}, {B, Hq, Lq, D});
 
-  auto max_diff = max(
-      abs(
-          astype(block_last, float32, Device::gpu) -
-          astype(single, float32, Device::gpu)),
-      Device::gpu);
+  auto max_diff =
+      max(abs(astype(block_last, float32, Device::gpu) -
+              astype(single, float32, Device::gpu)),
+          Device::gpu);
   MESSAGE("max SDPA query-shape difference: ", max_diff.item<float>());
   CHECK(array_equal(block_last, single, Device::cpu).item<bool>());
 }
@@ -123,20 +122,19 @@ TEST_CASE("test gpu batch invariant matmul") {
     }
   }
 
-  auto x_block = astype(
-      array(x_block_data.data(), {M, K}), bfloat16, Device::gpu);
-  auto x_single = astype(
-      array(x_single_data.data(), {1, K}), bfloat16, Device::gpu);
+  auto x_block =
+      astype(array(x_block_data.data(), {M, K}), bfloat16, Device::gpu);
+  auto x_single =
+      astype(array(x_single_data.data(), {1, K}), bfloat16, Device::gpu);
   auto w = astype(array(w_data.data(), {N, K}), bfloat16, Device::gpu);
 
   auto block = matmul(x_block, transpose(w), Device::gpu);
   auto single = matmul(x_single, transpose(w), Device::gpu);
   auto block_last = slice(block, {M - 1, 0}, {M, N});
-  auto max_diff = max(
-      abs(
-          astype(block_last, float32, Device::gpu) -
-          astype(single, float32, Device::gpu)),
-      Device::gpu);
+  auto max_diff =
+      max(abs(astype(block_last, float32, Device::gpu) -
+              astype(single, float32, Device::gpu)),
+          Device::gpu);
   MESSAGE("max matmul row-shape difference: ", max_diff.item<float>());
   CHECK(array_equal(block_last, single, Device::cpu).item<bool>());
 }
