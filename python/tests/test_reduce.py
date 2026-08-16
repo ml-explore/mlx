@@ -1,6 +1,5 @@
 # Copyright © 2023 Apple Inc.
 
-import unittest
 from itertools import combinations, permutations
 
 import mlx.core as mx
@@ -47,7 +46,6 @@ class TestReduce(mlx_tests.MLXTestCase):
                                     np.allclose(z_npy, np.array(z_mlx), atol=1e-4)
                                 )
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_row_reduce_negative_stride(self):
         x_npy = np.arange(1, 131).reshape(2, 65)[::-1]
         x_mlx = mx.arange(1, 131).reshape(2, 65)[::-1]
@@ -55,7 +53,7 @@ class TestReduce(mlx_tests.MLXTestCase):
         for op in ["sum", "max", "min", "mean", "var"]:
             with self.subTest(op=op):
                 expected = getattr(np, op)(x_npy, axis=-1)
-                actual = getattr(mx, op)(x_mlx, axis=-1, stream=mx.gpu)
+                actual = getattr(mx, op)(x_mlx, axis=-1)
                 self.assertTrue(np.allclose(expected, actual))
 
     def test_dtypes(self):
