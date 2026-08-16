@@ -92,6 +92,16 @@ Metal
    Enable the faster Metal CPU/GPU synchronization path. The default is ``0``.
    This requires Metal 3.2 or later (macOS 15 or later, or iOS 18 or later).
 
+.. envvar:: MLX_METAL_BATCH_INVARIANT_LIMIT
+
+   Select Metal kernels whose reductions are invariant to leading matrix and
+   attention query dimensions up to this limit. This makes token-by-token and
+   short-block inference use the same reduction order, which is useful for
+   greedy speculative decoding and reproducibility. The default is ``0``
+   (disabled). Increasing the limit can reduce performance. The setting can
+   also be changed at runtime with
+   :func:`mlx.core.metal.set_batch_invariant_limit`.
+
 Advanced tuning
 ---------------
 

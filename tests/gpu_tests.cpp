@@ -28,6 +28,119 @@ TEST_CASE("test gpu arange") {
   }
 }
 
+class BatchInvariantGuard {
+ public:
+  BatchInvariantGuard() : previous_(metal::get_batch_invariant_limit()) {
+    metal::set_batch_invariant_limit(4);
+  }
+
+  ~BatchInvariantGuard() {
+    metal::set_batch_invariant_limit(previous_);
+  }
+
+ private:
+  int previous_;
+};
+
+TEST_CASE("test gpu batch invariant sdpa") {
+  BatchInvariantGuard guard;
+  constexpr int B = 1;
+  constexpr int Hq = 8;
+  constexpr int Hkv = 4;
+  constexpr int Lq = 4;
+  constexpr int Lk = 16384;
+  constexpr int D = 128;
+
+  std::vector<float> q_block_data(B * Hq * Lq * D);
+  std::vector<float> q_single_data(B * Hq * D);
+  std::vector<float> k_data(B * Hkv * Lk * D);
+  std::vector<float> v_data(B * Hkv * Lk * D);
+
+  for (int h = 0; h < Hq; ++h) {
+    for (int l = 0; l < Lq; ++l) {
+      for (int d = 0; d < D; ++d) {
+        auto value = std::sin(0.017f * (h * D + d) + 0.13f * l);
+        q_block_data[(h * Lq + l) * D + d] = value;
+        if (l == Lq - 1) {
+          q_single_data[h * D + d] = value;
+        }
+      }
+    }
+  }
+  for (int h = 0; h < Hkv; ++h) {
+    for (int l = 0; l < Lk; ++l) {
+      for (int d = 0; d < D; ++d) {
+        auto offset = (h * Lk + l) * D + d;
+        k_data[offset] = std::cos(0.011f * d + 0.003f * l + 0.2f * h);
+        v_data[offset] = std::sin(0.007f * d - 0.002f * l + 0.3f * h);
+      }
+    }
+  }
+
+  auto q_block = astype(
+      array(q_block_data.data(), {B, Hq, Lq, D}), bfloat16, Device::gpu);
+  auto q_single = astype(
+      array(q_single_data.data(), {B, Hq, 1, D}), bfloat16, Device::gpu);
+  auto k = astype(array(k_data.data(), {B, Hkv, Lk, D}), bfloat16, Device::gpu);
+  auto v = astype(array(v_data.data(), {B, Hkv, Lk, D}), bfloat16, Device::gpu);
+
+  auto block = fast::scaled_dot_product_attention(
+      q_block, k, v, 1.0f / std::sqrt(D), "causal", {}, {}, Device::gpu);
+  auto single = fast::scaled_dot_product_attention(
+      q_single, k, v, 1.0f / std::sqrt(D), "", {}, {}, Device::gpu);
+  auto block_last = slice(block, {0, 0, Lq - 1, 0}, {B, Hq, Lq, D});
+
+  auto max_diff = max(
+      abs(
+          astype(block_last, float32, Device::gpu) -
+          astype(single, float32, Device::gpu)),
+      Device::gpu);
+  MESSAGE("max SDPA query-shape difference: ", max_diff.item<float>());
+  CHECK(array_equal(block_last, single, Device::cpu).item<bool>());
+}
+
+TEST_CASE("test gpu batch invariant matmul") {
+  BatchInvariantGuard guard;
+  constexpr int M = 4;
+  constexpr int K = 4096;
+  constexpr int N = 4096;
+
+  std::vector<float> x_block_data(M * K);
+  std::vector<float> x_single_data(K);
+  std::vector<float> w_data(N * K);
+  for (int m = 0; m < M; ++m) {
+    for (int k = 0; k < K; ++k) {
+      auto value = std::sin(0.013f * k + 0.17f * m);
+      x_block_data[m * K + k] = value;
+      if (m == M - 1) {
+        x_single_data[k] = value;
+      }
+    }
+  }
+  for (int n = 0; n < N; ++n) {
+    for (int k = 0; k < K; ++k) {
+      w_data[n * K + k] = std::cos(0.009f * k - 0.015f * n);
+    }
+  }
+
+  auto x_block = astype(
+      array(x_block_data.data(), {M, K}), bfloat16, Device::gpu);
+  auto x_single = astype(
+      array(x_single_data.data(), {1, K}), bfloat16, Device::gpu);
+  auto w = astype(array(w_data.data(), {N, K}), bfloat16, Device::gpu);
+
+  auto block = matmul(x_block, transpose(w), Device::gpu);
+  auto single = matmul(x_single, transpose(w), Device::gpu);
+  auto block_last = slice(block, {M - 1, 0}, {M, N});
+  auto max_diff = max(
+      abs(
+          astype(block_last, float32, Device::gpu) -
+          astype(single, float32, Device::gpu)),
+      Device::gpu);
+  MESSAGE("max matmul row-shape difference: ", max_diff.item<float>());
+  CHECK(array_equal(block_last, single, Device::cpu).item<bool>());
+}
+
 TEST_CASE("test gpu full") {
   for (auto t : types) {
     auto out_cpu = full({4, 4}, 2, t, Device::cpu);

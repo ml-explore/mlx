@@ -13,6 +13,7 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
+#include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/kernels/steel/gemm/params.h"
 #include "mlx/backend/metal/matmul.h"
 #include "mlx/backend/metal/reduce.h"
@@ -1514,6 +1515,30 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         /* array& out = */ out,
         /* int K = */ K,
         /* std::vector<array>& copies = */ copies);
+  }
+  // In batch-invariant mode, treat each short matrix row as a batch of
+  // single-row GEMVs. The rows still execute in parallel, but use the same
+  // reduction kernel and order as token-by-token inference.
+  if (M > 1 && M <= metal::get_batch_invariant_limit() &&
+      batch_size_out == 1 && !a_transposed && b_transposed) {
+    return gemv(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ a,
+        /* const array& b = */ b,
+        /* array& out = */ out,
+        /* int M = */ 1,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* int batch_size_out = */ M,
+        /* int lda = */ a_cols,
+        /* int ldb = */ b_cols,
+        /* bool transpose_a = */ false,
+        /* bool transpose_b = */ true,
+        /* std::vector<array>& copies = */ copies,
+        /* Shape batch_shape = */ {M},
+        /* Strides A_batch_stride = */ {a_cols},
+        /* Strides B_batch_stride = */ {0});
   }
   // The wide gemv route streams the weight matrix once per <= 5 input
   // vectors instead of running a row-padded GEMM tile.

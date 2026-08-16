@@ -13,6 +13,19 @@ namespace mlx::core::metal {
 /* Check if the Metal backend is available. */
 MLX_API bool is_available();
 
+/**
+ * Select kernels whose reductions are invariant to leading matrix and
+ * attention query dimensions up to `limit`. This is useful when an application
+ * requires token-by-token and short-block inference to produce identical
+ * results. Set to zero to disable.
+ *
+ * Increasing the limit can reduce performance. The default is controlled by
+ * the ``MLX_METAL_BATCH_INVARIANT_LIMIT`` environment variable and is zero
+ * when the variable is unset.
+ */
+MLX_API void set_batch_invariant_limit(int limit);
+MLX_API int get_batch_invariant_limit();
+
 /** Capture a GPU trace, saving it to an absolute file `path` */
 MLX_API void start_capture(std::string path = "");
 MLX_API void stop_capture();

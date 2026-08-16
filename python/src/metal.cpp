@@ -33,6 +33,25 @@ void init_metal(nb::module_& m) {
       R"pbdoc(
       Check if the Metal back-end is available.
       )pbdoc");
+  metal.def(
+      "set_batch_invariant_limit",
+      &mx::metal::set_batch_invariant_limit,
+      "limit"_a,
+      R"pbdoc(
+      Select Metal kernels whose reductions are invariant to leading matrix
+      and attention query dimensions up to ``limit``. Set to zero to disable.
+
+      This is useful when token-by-token and short-block inference must
+      produce identical results, for example during greedy speculative
+      decoding. Increasing the limit can reduce performance.
+      )pbdoc");
+  metal.def(
+      "get_batch_invariant_limit",
+      &mx::metal::get_batch_invariant_limit,
+      R"pbdoc(
+      Return the maximum leading dimension covered by batch-invariant Metal
+      inference kernels, or zero when disabled.
+      )pbdoc");
   metal.def("get_active_memory", []() {
     DEPRECATE("mx.metal.get_active_memory", "mx.get_active_memory");
     return mx::get_active_memory();

@@ -6,6 +6,7 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
+#include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/kernels/steel/attn/params.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
@@ -439,7 +440,13 @@ void sdpa_vector_2pass(
 
   // Compute the necessary sizes
   int gqa_factor = q.shape(1) / k.shape(1);
-  int n_simds = gqa_factor * q.shape(2);
+  // A query-length-dependent split count changes the order of the two-pass
+  // softmax reduction. In batch-invariant mode, tune as if this were a
+  // single-query decode so a row produces the same result alone or inside a
+  // short causal verification block.
+  int invariant_limit = metal::get_batch_invariant_limit();
+  int n_simds =
+      gqa_factor * (q.shape(2) <= invariant_limit ? 1 : q.shape(2));
 
   char devc = d.get_architecture().back();
   int N = k.shape(2);

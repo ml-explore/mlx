@@ -1,9 +1,11 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <atomic>
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/utils.h"
 
 namespace mlx::core::metal {
 
@@ -11,10 +13,26 @@ namespace {
 
 std::string g_metallib_path;
 
+int initial_batch_invariant_limit() {
+  int limit = env::get_var("MLX_METAL_BATCH_INVARIANT_LIMIT", 0);
+  return limit > 0 ? limit : 0;
+}
+
+std::atomic<int> g_batch_invariant_limit{initial_batch_invariant_limit()};
+
 } // namespace
 
 bool is_available() {
   return true;
+}
+
+void set_batch_invariant_limit(int limit) {
+  g_batch_invariant_limit.store(
+      limit > 0 ? limit : 0, std::memory_order_relaxed);
+}
+
+int get_batch_invariant_limit() {
+  return g_batch_invariant_limit.load(std::memory_order_relaxed);
 }
 
 void start_capture(std::string path, NS::Object* object) {
