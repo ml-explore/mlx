@@ -1623,7 +1623,7 @@ class TestOps(mlx_tests.MLXTestCase):
             a = mx.arange(float("inf"), 1, float("inf"))
         with self.assertRaises(ValueError):
             a = mx.arange(float("inf"), 1, 5)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             INT_MAX = 2147483647
             a = mx.arange(0, INT_MAX + 1, 1)
 
@@ -1742,6 +1742,12 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.arange(0, -10, float("-inf"))
         expected = [0]
         self.assertListEqual(a.tolist(), expected)
+
+        n = mx.iinfo(mx.int32).max
+        result = mx.arange(n - 1, n + 3)
+        self.assertEqual(result.shape, (4,))
+        self.assertEqual(result.dtype, mx.int32)
+        self.assertEqual(result.tolist(), [n - 1, n, -2147483648, -2147483647])
 
     def test_hanning_general(self):
         a = mx.hanning(10)
