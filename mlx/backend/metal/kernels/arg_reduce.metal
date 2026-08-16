@@ -13,12 +13,23 @@ struct IndexValPair {
 };
 
 template <typename U>
+bool is_nan(U x) {
+  if constexpr (metal::is_floating_point_v<U>) {
+    return isnan(x);
+  }
+  return false;
+}
+
+template <typename U>
 struct ArgMin {
   static constexpr constant U init = Limits<U>::max;
 
   IndexValPair<U> reduce(IndexValPair<U> best, IndexValPair<U> current) thread {
-    if (best.val > current.val ||
-        (best.val == current.val && best.index > current.index)) {
+    if ((is_nan(current.val) &&
+         (!is_nan(best.val) || best.index > current.index)) ||
+        (!is_nan(best.val) &&
+         (best.val > current.val ||
+          (best.val == current.val && best.index > current.index)))) {
       return current;
     } else {
       return best;
@@ -29,7 +40,7 @@ struct ArgMin {
   IndexValPair<U>
   reduce_many(IndexValPair<U> best, thread U* vals, uint32_t offset) thread {
     for (int i = 0; i < N; i++) {
-      if (vals[i] < best.val) {
+      if ((!is_nan(best.val) && is_nan(vals[i])) || vals[i] < best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }
@@ -43,8 +54,11 @@ struct ArgMax {
   static constexpr constant U init = Limits<U>::min;
 
   IndexValPair<U> reduce(IndexValPair<U> best, IndexValPair<U> current) thread {
-    if (best.val < current.val ||
-        (best.val == current.val && best.index > current.index)) {
+    if ((is_nan(current.val) &&
+         (!is_nan(best.val) || best.index > current.index)) ||
+        (!is_nan(best.val) &&
+         (best.val < current.val ||
+          (best.val == current.val && best.index > current.index)))) {
       return current;
     } else {
       return best;
@@ -55,7 +69,7 @@ struct ArgMax {
   IndexValPair<U>
   reduce_many(IndexValPair<U> best, thread U* vals, uint32_t offset) thread {
     for (int i = 0; i < N; i++) {
-      if (vals[i] > best.val) {
+      if ((!is_nan(best.val) && is_nan(vals[i])) || vals[i] > best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }
