@@ -214,8 +214,15 @@ Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
     r = std::remainder(a, b);
   }
   if constexpr (is_signed_v<T>) {
-    if (r != 0 && (r < 0 != b < 0)) {
-      r += b;
+    if (r != 0) {
+      if (r < 0 != b < 0) {
+        r += b;
+      }
+    } else if constexpr (is_floating_point_v<T>) {
+      // A zero remainder takes the sign of the divisor. `r += b` cannot do it,
+      // since adding to a zero would return `b` itself, so set the sign
+      // directly. Integers have no signed zero and need nothing here.
+      r = static_cast<T>(std::copysign(0.0f, static_cast<float>(b)));
     }
   }
   return r;

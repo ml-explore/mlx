@@ -58,8 +58,14 @@ struct Remainder {
   template <typename T>
   metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) thread {
     T r = fmod(x, y);
-    if (r != 0 && (r < 0 != y < 0)) {
-      r += y;
+    if (r != 0) {
+      if (r < 0 != y < 0) {
+        r += y;
+      }
+    } else {
+      // A zero remainder takes the sign of the divisor. `r += y` cannot give it
+      // that sign, since adding to a zero returns `y` itself.
+      r = metal::copysign(T(0), y);
     }
     return r;
   }

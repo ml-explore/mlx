@@ -242,8 +242,17 @@ Simd<T, N> remainder(Simd<T, N> a, Simd<T, N> b) {
     r = a - b * (a / b);
   }
   if constexpr (is_signed_v<T>) {
-    auto mask = r != 0 && (r < 0 != b < 0);
+    auto nonzero = r != 0;
+    auto mask = nonzero && (r < 0 != b < 0);
     r = select(mask, r + b, r);
+    if constexpr (!std::is_integral_v<T>) {
+      // A zero remainder takes the sign of the divisor, which `r + b` cannot
+      // give it: adding to a zero would return `b` itself. See base_simd.h.
+      // Selecting on `b < 0` rather than multiplying by zero keeps an infinite
+      // divisor working, since `inf * 0` is NaN but `remainder(0, inf)` is 0.
+      Simd<T, N> zero = static_cast<T>(0);
+      r = select(nonzero, r, select(b < 0, -zero, zero));
+    }
   }
   return r;
 }

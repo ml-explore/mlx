@@ -401,6 +401,50 @@ class TestOps(mlx_tests.MLXTestCase):
         z = -mx.ones(64) % mx.full(64, 2)
         self.assertTrue(mx.array_equal(z, mx.ones(64)))
 
+    def test_remainder_signed_zero(self):
+        # A zero remainder takes the sign of the divisor. `==` cannot check this,
+        # since 0.0 == -0.0, so every assertion here goes through signbit.
+        for dt in [mx.float32, mx.float16, mx.bfloat16]:
+            # Length 9 puts the first 8 elements in the vectorized body and the
+            # last one in the scalar residual. All nine inputs are the same, so
+            # all nine signs have to be.
+            got = np.array(
+                mx.remainder(
+                    mx.full((9,), -0.0, dtype=dt), mx.full((9,), 3.0, dtype=dt)
+                ).astype(mx.float32)
+            )
+            self.assertEqual(np.signbit(got).tolist(), [False] * 9)
+
+            # A strided view has to agree with a contiguous array of the same
+            # values, since the layout carries no numerical information.
+            a = mx.full((16,), -0.0, dtype=dt)
+            b = mx.full((16,), 3.0, dtype=dt)
+            strided = np.array(mx.remainder(a[::2], b[::2]).astype(mx.float32))
+            self.assertEqual(np.signbit(strided).tolist(), [False] * 8)
+
+            av = [5.0, -5.0, 6.0, -6.0, 0.0, -0.0, 7.0, -7.0]
+            bv = [-5.0, 5.0, -3.0, 3.0, -1.0, 3.0, -7.0, 7.0]
+            got = np.array(
+                mx.remainder(mx.array(av, dtype=dt), mx.array(bv, dtype=dt)).astype(
+                    mx.float32
+                )
+            )
+            expected = np.remainder(
+                np.array(av, dtype=np.float32), np.array(bv, dtype=np.float32)
+            )
+            self.assertTrue(np.array_equal(got, expected))
+            self.assertEqual(np.signbit(got).tolist(), np.signbit(expected).tolist())
+
+            # The operator goes through the same kernel. mx.divmod does not; it
+            # truncates, which is #4119.
+            r = mx.array([5.0], dtype=dt) % mx.array([-5.0], dtype=dt)
+            self.assertTrue(np.signbit(np.array(r.astype(mx.float32))).item())
+
+        # Integers have no signed zero, so the correction must not touch them.
+        for dt in [mx.int32, mx.int64]:
+            z = mx.remainder(mx.array([5, -5, 6], dtype=dt), mx.array([-5, 5, -3], dt))
+            self.assertEqual(z.tolist(), [0, 0, 0])
+
     def test_comparisons(self):
         a = mx.array([0.0, 1.0, 5.0])
         b = mx.array([-1.0, 2.0, 5.0])

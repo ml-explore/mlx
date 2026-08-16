@@ -48,8 +48,16 @@ struct Remainder {
       return x % y;
     } else {
       T r = cuda::std::fmod(x, y);
-      if (r != 0 && (r < 0 != y < 0)) {
-        r = r + y;
+      if (r != 0) {
+        if (r < 0 != y < 0) {
+          r = r + y;
+        }
+      } else {
+        // A zero remainder takes the sign of the divisor. `r + y` cannot give
+        // it that sign, since adding to a zero returns `y` itself. Written as a
+        // comparison rather than copysign because the half types do not have a
+        // copysign overload. A divisor of zero cannot reach here: fmod is NaN.
+        r = y < T(0) ? T(-0.0f) : T(0.0f);
       }
       return r;
     }
