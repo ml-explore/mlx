@@ -1243,6 +1243,28 @@ class TestArray(mlx_tests.MLXTestCase):
         a[0:2] = 3
         self.assertEqual(a.tolist(), [3, 3, 1])
 
+        # Assigning through a bare Ellipsis, like a[:] and a[None]
+        e = mx.zeros((2, 3), mx.int32)
+        e[...] = 5
+        self.assertEqual(e.tolist(), [[5, 5, 5], [5, 5, 5]])
+
+        # Broadcasting an array update through Ellipsis
+        e[...] = mx.array([1, 2, 3])
+        self.assertEqual(e.tolist(), [[1, 2, 3], [1, 2, 3]])
+
+        e[...] = mx.zeros((2, 3), mx.int32)
+        self.assertEqual(e.tolist(), [[0, 0, 0], [0, 0, 0]])
+
+        # Scalar array
+        e = mx.array(0)
+        e[...] = 7
+        self.assertEqual(e.item(), 7)
+
+        # Shapes that cannot broadcast are still rejected
+        e = mx.zeros((2, 3), mx.int32)
+        with self.assertRaises(ValueError):
+            e[...] = mx.array([1, 2])
+
         a[0:3] = 4
         self.assertEqual(a.tolist(), [4, 4, 4])
 
