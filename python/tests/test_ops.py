@@ -2931,6 +2931,10 @@ class TestOps(mlx_tests.MLXTestCase):
         # Test with negative k parameter
         self.assertCmpNumpy([5, 6], mx.eye, np.eye, k=-2)
 
+        # Test with 64 bit dtype
+        self.assertEqual(mx.eye(3, dtype=mx.int64).dtype, mx.int64)
+        self.assertEqual(mx.eye(3, dtype=mx.uint64).dtype, mx.uint64)
+
     def test_stack(self):
         a = mx.ones((2,))
         np_a = np.ones((2,))

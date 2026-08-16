@@ -408,6 +408,11 @@ array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (n < 0 || m < 0) {
     throw std::invalid_argument("[eye] N and M must be positive integers.");
   }
+
+  if (dtype.size() == 8) {
+    return astype(eye(n, m, k, float32, s), dtype, s);
+  }
+
   array result = zeros({n, m}, dtype, s);
 
   if (n == 0 || m == 0) {
