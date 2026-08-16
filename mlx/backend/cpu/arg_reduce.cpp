@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <cassert>
+#include <cmath>
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/encoder.h"
@@ -10,6 +11,14 @@
 namespace mlx::core {
 
 namespace {
+
+template <typename T>
+bool is_nan(T x) {
+  if constexpr (is_floating_point_v<T>) {
+    return std::isnan(x);
+  }
+  return false;
+}
 
 template <typename InT, typename OpT>
 void arg_reduce(const array& in, array& out, const OpT& op, int axis) {
@@ -41,7 +50,7 @@ void arg_reduce_dispatch(
   switch (rtype) {
     case ArgReduce::ArgMin: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
-        if (x < (*y)) {
+        if ((!is_nan(*y) && is_nan(x)) || x < (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
         }
@@ -51,7 +60,7 @@ void arg_reduce_dispatch(
     }
     case ArgReduce::ArgMax: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
-        if (x > (*y)) {
+        if ((!is_nan(*y) && is_nan(x)) || x > (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
         }
