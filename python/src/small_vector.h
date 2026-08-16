@@ -9,7 +9,10 @@
 
 #include "mlx/small_vector.h"
 
+#include <optional>
+
 #include <nanobind/stl/detail/nb_list.h>
+#include <nanobind/stl/detail/nb_optional.h>
 
 NAMESPACE_BEGIN(NB_NAMESPACE)
 NAMESPACE_BEGIN(detail)
@@ -102,6 +105,32 @@ struct type_caster<::mlx::core::SmallVector<Type, Size, Alloc>> {
     }
 
     return ret.release();
+  }
+};
+
+// nanobind's optional caster is noexcept, so the OverflowError the caster above
+// raises for an out of range dimension would terminate the process instead of
+// reaching the dispatcher. Forward to the same caster from a context that is
+// allowed to throw, so an optional shape reports the error like a plain one.
+template <typename Type, size_t Size, typename Alloc>
+struct type_caster<std::optional<::mlx::core::SmallVector<Type, Size, Alloc>>>
+    : optional_caster<
+          std::optional<::mlx::core::SmallVector<Type, Size, Alloc>>> {
+  using List = ::mlx::core::SmallVector<Type, Size, Alloc>;
+
+  bool from_python(handle src, uint8_t flags, cleanup_list* cleanup) {
+    if (src.is_none()) {
+      this->value.reset();
+      return true;
+    }
+    make_caster<List> caster;
+    if (!caster.from_python(
+            src, flags_for_local_caster<List>(flags), cleanup) ||
+        !caster.template can_cast<List>()) {
+      return false;
+    }
+    this->value.emplace(caster.operator cast_t<List>());
+    return true;
   }
 };
 

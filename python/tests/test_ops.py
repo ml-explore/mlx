@@ -126,6 +126,21 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.broadcast_to(a, [too_big, 1])
         self.assertIn(str(too_big), str(cm.exception))
 
+        # Ops that take the shape as an optional go through nanobind's
+        # optional caster, which is noexcept, so the overflow used to abort the
+        # process instead of raising. See issue #2681 for the original report.
+        with self.assertRaises(OverflowError) as cm:
+            mx.as_strided(a, [too_big], [0])
+        self.assertIn(str(too_big), str(cm.exception))
+
+        with self.assertRaises(OverflowError) as cm:
+            mx.fft.fftn(a, s=[too_big], axes=[0])
+        self.assertIn(str(too_big), str(cm.exception))
+
+        with self.assertRaises(OverflowError) as cm:
+            mx.random.bernoulli(0.5, [too_big])
+        self.assertIn(str(too_big), str(cm.exception))
+
         # Negative overflow (< int32 min) is caught too.
         too_negative = -(2**31) - 1
         with self.assertRaises(OverflowError) as cm:
