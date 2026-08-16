@@ -46,11 +46,30 @@ void DivMod::eval_cpu(
                     out_a = array::unsafe_weak_copy(out_a),
                     out_b = array::unsafe_weak_copy(out_b),
                     bopt]() mutable {
+    // Match numpy's semantics: the quotient is floor(a / b) and the remainder
+    // carries the divisor's sign, so q * b + r == a holds for every sign
+    // combination. The remainder is C++ fmod / % adjusted to the divisor's
+    // sign, and the quotient is derived from it as (a - r) / b — the same
+    // construction numpy uses, which is exact and matches numpy's inf/nan
+    // behavior for edge inputs.
     auto integral_op = [](auto x, auto y) {
-      return std::make_pair(x / y, x % y);
+      auto r = x % y;
+      if (r != 0 && ((r < 0) != (y < 0))) {
+        r += y;
+      }
+      return std::make_pair((x - r) / y, r);
     };
     auto float_op = [](auto x, auto y) {
-      return std::make_pair(std::trunc(x / y), std::fmod(x, y));
+      auto r = std::fmod(x, y);
+      // numpy treats b == 0 specially: the quotient is a / b (which yields
+      // +/-inf for a nonzero) and the remainder is fmod(a, b) (nan).
+      if (y == 0) {
+        return std::make_pair(static_cast<decltype(r)>(x / y), r);
+      }
+      if (r != 0 && ((r < 0) != (y < 0))) {
+        r += y;
+      }
+      return std::make_pair((x - r) / y, r);
     };
 
     dispatch_all_types(out_a.dtype(), [&](auto type_tag) {

@@ -13,17 +13,6 @@ struct Add {
   }
 };
 
-struct FloorDivide {
-  template <typename T>
-  __device__ T operator()(T x, T y) {
-    if constexpr (cuda::std::is_integral_v<T>) {
-      return x / y;
-    } else {
-      return cuda::std::trunc(x / y);
-    }
-  }
-};
-
 struct Divide {
   template <typename T>
   __device__ T operator()(T x, T y) {
@@ -293,7 +282,18 @@ struct ArcTan2 {
 struct DivMod {
   template <typename T>
   __device__ cuda::std::array<T, 2> operator()(T x, T y) {
-    return {FloorDivide{}(x, y), Remainder{}(x, y)};
+    // numpy semantics: the quotient is floor(a / b) and the remainder carries
+    // the divisor's sign, so q * b + r == a holds for every sign combination.
+    // Deriving the quotient from the remainder, (a - r) / b, matches numpy
+    // exactly (including its inf/nan behavior) and keeps the two outputs
+    // consistent with each other. b == 0 is special-cased like numpy: the
+    // quotient is a / b and the remainder is nan.
+    auto r = Remainder{}(x, y);
+    if constexpr (!is_complex_v<T>) {
+      return {(y == 0) ? x / y : (x - r) / y, r};
+    } else {
+      return {(x - r) / y, r};
+    }
   };
 };
 

@@ -14,25 +14,6 @@ struct Add {
   }
 };
 
-struct FloorDivide {
-  template <typename T>
-  T operator()(T x, T y) thread {
-    return x / y;
-  }
-  template <>
-  float operator()(float x, float y) thread {
-    return trunc(x / y);
-  }
-  template <>
-  half operator()(half x, half y) thread {
-    return trunc(x / y);
-  }
-  template <>
-  bfloat16_t operator()(bfloat16_t x, bfloat16_t y) thread {
-    return trunc(x / y);
-  }
-};
-
 struct Divide {
   template <typename T>
   T operator()(T x, T y) thread {
@@ -327,6 +308,18 @@ struct ArcTan2 {
 struct DivMod {
   template <typename T>
   metal::array<T, 2> operator()(T x, T y) thread {
-    return {FloorDivide{}(x, y), Remainder{}(x, y)};
+    // numpy semantics: the quotient is floor(a / b) and the remainder carries
+    // the divisor's sign, so q * b + r == a holds for every sign combination.
+    // Deriving the quotient from the remainder, (a - r) / b, matches numpy
+    // exactly (including its inf/nan behavior) and keeps the two outputs
+    // consistent with each other. b == 0 is special-cased like numpy: the
+    // quotient is a / b and the remainder is nan.
+    auto r = Remainder{}(x, y);
+    return {(y == 0) ? x / y : (x - r) / y, r};
+  }
+  template <>
+  metal::array<complex64_t, 2> operator()(complex64_t x, complex64_t y) thread {
+    auto r = Remainder{}(x, y);
+    return {(x - r) / y, r};
   };
 };

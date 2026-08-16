@@ -3572,6 +3572,20 @@ TEST_CASE("test divmod") {
   CHECK(array_equal(out[0], array({2.0, 3.0, 3.0})).item<bool>());
   CHECK(array_equal(out[1], array({1.0, 0.0, 1.0})).item<bool>());
 
+  // Negative operands: the quotient must floor toward -inf and the remainder
+  // must carry the divisor's sign, matching numpy (q * b + r == a).
+  x = array({-7, 7, -7, 7});
+  y = array({2, -2, -2, 2});
+  out = divmod(x, y);
+  CHECK(array_equal(out[0], array({-4, -4, 3, 3})).item<bool>());
+  CHECK(array_equal(out[1], array({1, -1, -1, 1})).item<bool>());
+
+  x = array({-7.0, 7.0, -7.0, 7.0});
+  y = array({2.0, -2.0, -2.0, 2.0});
+  out = divmod(x, y);
+  CHECK(array_equal(out[0], array({-4.0, -4.0, 3.0, 3.0})).item<bool>());
+  CHECK(array_equal(out[1], array({1.0, -1.0, -1.0, 1.0})).item<bool>());
+
   x = array({1.0}, complex64);
   y = array({2.0}, complex64);
   CHECK_THROWS(divmod(x, y));
