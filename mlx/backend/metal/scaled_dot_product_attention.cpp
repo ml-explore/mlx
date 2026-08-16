@@ -445,12 +445,26 @@ void sdpa_vector_2pass(
   // single-query decode so a row produces the same result alone or inside a
   // short causal verification block.
   int invariant_limit = metal::get_batch_invariant_limit();
-  int n_simds = gqa_factor * (q.shape(2) <= invariant_limit ? 1 : q.shape(2));
+  bool invariant = q.shape(2) <= invariant_limit;
+  int n_simds = gqa_factor * (invariant ? 1 : q.shape(2));
 
   char devc = d.get_architecture().back();
   int N = k.shape(2);
   int blocks;
-  if (devc == 's') {
+  // The causal block contains more physical K/V rows than its early queries
+  // can see. A split count selected from that full length can therefore differ
+  // from singleton decoding at the effective prefix length. Use an
+  // N-independent canonical plan in invariant mode so valid keys keep the same
+  // modulo partition for every query row.
+  if (invariant) {
+    if (devc == 's') {
+      blocks = 64;
+    } else if (devc == 'd') {
+      blocks = 128;
+    } else {
+      blocks = gqa_factor >= 4 ? 64 : 32;
+    }
+  } else if (devc == 's') {
     blocks = 64;
     if (N > 1024 && n_simds > 4) {
       if (N <= 8192) {
@@ -756,7 +770,8 @@ void ScaledDotProductAttention::eval_gpu(
     // - The sequence length is even longer and we have gqa
     bool do_causal = do_causal_ && q.shape(2) > 1;
     char devc = d.get_architecture().back();
-    if (((devc == 'd' || devc == 's') && k.shape(2) >= 1024) ||
+    bool invariant = q.shape(2) <= metal::get_batch_invariant_limit();
+    if (invariant || ((devc == 'd' || devc == 's') && k.shape(2) >= 1024) ||
         (k.shape(1) < q.shape(1) && k.shape(2) >= 4096)) {
       sdpa_vector_2pass(s, d, q, k, v, o, scale_, do_causal, mask, sinks);
     } else {

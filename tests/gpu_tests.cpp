@@ -30,8 +30,9 @@ TEST_CASE("test gpu arange") {
 
 class BatchInvariantGuard {
  public:
-  BatchInvariantGuard() : previous_(metal::get_batch_invariant_limit()) {
-    metal::set_batch_invariant_limit(4);
+  explicit BatchInvariantGuard(int limit = 4)
+      : previous_(metal::get_batch_invariant_limit()) {
+    metal::set_batch_invariant_limit(limit);
   }
 
   ~BatchInvariantGuard() {
@@ -43,77 +44,72 @@ class BatchInvariantGuard {
 };
 
 TEST_CASE("test gpu batch invariant sdpa") {
-  BatchInvariantGuard guard;
+  BatchInvariantGuard guard(8);
   constexpr int B = 1;
-  constexpr int Hq = 8;
-  constexpr int Hkv = 4;
-  constexpr int Lq = 4;
-  constexpr int Lk = 16384;
-  constexpr int D = 128;
+  constexpr int Hq = 2;
+  constexpr int Hkv = 1;
+  constexpr int Lq = 8;
+  constexpr int D = 64;
 
-  std::vector<float> q_block_data(B * Hq * Lq * D);
-  std::vector<float> q_single_data(B * Hq * D);
-  std::vector<float> k_data(B * Hkv * Lk * D);
-  std::vector<float> v_data(B * Hkv * Lk * D);
+  auto q_block = astype(
+      reshape(
+          sin(arange(B * Hq * Lq * D, float32, Device::gpu) * 0.017f),
+          {B, Hq, Lq, D}),
+      bfloat16,
+      Device::gpu);
 
-  for (int h = 0; h < Hq; ++h) {
-    for (int l = 0; l < Lq; ++l) {
-      for (int d = 0; d < D; ++d) {
-        auto value = std::sin(0.017f * (h * D + d) + 0.13f * l);
-        q_block_data[(h * Lq + l) * D + d] = value;
-        if (l == Lq - 1) {
-          q_single_data[h * D + d] = value;
-        }
-      }
-    }
-  }
-  for (int h = 0; h < Hkv; ++h) {
-    for (int l = 0; l < Lk; ++l) {
-      for (int d = 0; d < D; ++d) {
-        auto offset = (h * Lk + l) * D + d;
-        k_data[offset] = std::cos(0.011f * d + 0.003f * l + 0.2f * h);
-        v_data[offset] = std::sin(0.007f * d - 0.002f * l + 0.3f * h);
-      }
-    }
-  }
+  // Full K/V lengths are selected so the effective causal prefixes span each
+  // dispatch boundary: threshold - 3 through threshold + 4.
+  for (int Lk : {1028, 8196, 16388, 65540}) {
+    auto k = astype(
+        reshape(
+            cos(arange(B * Hkv * Lk * D, float32, Device::gpu) * 0.011f),
+            {B, Hkv, Lk, D}),
+        bfloat16,
+        Device::gpu);
+    auto v = astype(
+        reshape(
+            sin(arange(B * Hkv * Lk * D, float32, Device::gpu) * 0.007f),
+            {B, Hkv, Lk, D}),
+        bfloat16,
+        Device::gpu);
+    auto block = fast::scaled_dot_product_attention(
+        q_block, k, v, 1.0f / std::sqrt(D), "causal", {}, {}, Device::gpu);
 
-  auto q_block =
-      astype(array(q_block_data.data(), {B, Hq, Lq, D}), bfloat16, Device::gpu);
-  auto q_single =
-      astype(array(q_single_data.data(), {B, Hq, 1, D}), bfloat16, Device::gpu);
-  auto k = astype(array(k_data.data(), {B, Hkv, Lk, D}), bfloat16, Device::gpu);
-  auto v = astype(array(v_data.data(), {B, Hkv, Lk, D}), bfloat16, Device::gpu);
-
-  auto block = fast::scaled_dot_product_attention(
-      q_block, k, v, 1.0f / std::sqrt(D), "causal", {}, {}, Device::gpu);
-  auto single = fast::scaled_dot_product_attention(
-      q_single, k, v, 1.0f / std::sqrt(D), "", {}, {}, Device::gpu);
-  auto block_last = slice(block, {0, 0, Lq - 1, 0}, {B, Hq, Lq, D});
-
-  auto max_diff =
-      max(abs(astype(block_last, float32, Device::gpu) -
-              astype(single, float32, Device::gpu)),
+    for (int row = 0; row < Lq; ++row) {
+      int prefix = Lk - Lq + row + 1;
+      auto q_single = slice(q_block, {0, 0, row, 0}, {B, Hq, row + 1, D});
+      auto k_prefix = slice(k, {0, 0, 0, 0}, {B, Hkv, prefix, D});
+      auto v_prefix = slice(v, {0, 0, 0, 0}, {B, Hkv, prefix, D});
+      auto single = fast::scaled_dot_product_attention(
+          q_single,
+          k_prefix,
+          v_prefix,
+          1.0f / std::sqrt(D),
+          "",
+          {},
+          {},
           Device::gpu);
-  MESSAGE("max SDPA query-shape difference: ", max_diff.item<float>());
-  CHECK(array_equal(block_last, single, Device::cpu).item<bool>());
+      auto block_row = slice(block, {0, 0, row, 0}, {B, Hq, row + 1, D});
+      CAPTURE(Lk);
+      CAPTURE(row);
+      CAPTURE(prefix);
+      CHECK(array_equal(block_row, single, Device::cpu).item<bool>());
+    }
+  }
 }
 
 TEST_CASE("test gpu batch invariant matmul") {
   BatchInvariantGuard guard;
   constexpr int M = 4;
   constexpr int K = 4096;
-  constexpr int N = 4096;
+  constexpr int N = 512;
 
   std::vector<float> x_block_data(M * K);
-  std::vector<float> x_single_data(K);
   std::vector<float> w_data(N * K);
   for (int m = 0; m < M; ++m) {
     for (int k = 0; k < K; ++k) {
-      auto value = std::sin(0.013f * k + 0.17f * m);
-      x_block_data[m * K + k] = value;
-      if (m == M - 1) {
-        x_single_data[k] = value;
-      }
+      x_block_data[m * K + k] = std::sin(0.013f * k + 0.17f * m);
     }
   }
   for (int n = 0; n < N; ++n) {
@@ -122,21 +118,110 @@ TEST_CASE("test gpu batch invariant matmul") {
     }
   }
 
-  auto x_block =
-      astype(array(x_block_data.data(), {M, K}), bfloat16, Device::gpu);
-  auto x_single =
-      astype(array(x_single_data.data(), {1, K}), bfloat16, Device::gpu);
-  auto w = astype(array(w_data.data(), {N, K}), bfloat16, Device::gpu);
+  for (auto dtype : {float16, bfloat16, float32, complex64}) {
+    auto x_block =
+        astype(array(x_block_data.data(), {M, K}), dtype, Device::gpu);
+    auto w = astype(array(w_data.data(), {N, K}), dtype, Device::gpu);
+    auto block = matmul(x_block, transpose(w), Device::gpu);
 
-  auto block = matmul(x_block, transpose(w), Device::gpu);
-  auto single = matmul(x_single, transpose(w), Device::gpu);
-  auto block_last = slice(block, {M - 1, 0}, {M, N});
-  auto max_diff =
-      max(abs(astype(block_last, float32, Device::gpu) -
-              astype(single, float32, Device::gpu)),
+    for (int row = 0; row < M; ++row) {
+      auto x_single = slice(x_block, {row, 0}, {row + 1, K});
+      auto single = matmul(x_single, transpose(w), Device::gpu);
+      auto block_row = slice(block, {row, 0}, {row + 1, N});
+      CAPTURE(dtype);
+      CAPTURE(row);
+      CHECK(array_equal(block_row, single, Device::cpu).item<bool>());
+    }
+  }
+}
+
+TEST_CASE("test gpu batch invariant quantized matmul") {
+  BatchInvariantGuard guard;
+  constexpr int limit = 4;
+  constexpr int K = 4096;
+  constexpr int N = 512;
+
+  auto x_base = reshape(
+      sin(arange((limit + 1) * K, float32, Device::gpu) * 0.013f),
+      {limit + 1, K});
+  auto w_base =
+      reshape(cos(arange(N * K, float32, Device::gpu) * 0.009f), {N, K});
+
+  struct QuantizationConfig {
+    int group_size;
+    int bits;
+    const char* mode;
+  };
+  const QuantizationConfig configs[] = {
+      {32, 4, "affine"},
+      {64, 4, "affine"},
+      {128, 4, "affine"},
+      {32, 4, "mxfp4"},
+      {32, 8, "mxfp8"},
+      {16, 4, "nvfp4"},
+  };
+
+  for (auto dtype : {float32, bfloat16}) {
+    auto x = astype(x_base, dtype, Device::gpu);
+    auto w = astype(w_base, dtype, Device::gpu);
+    for (const auto& config : configs) {
+      std::string mode(config.mode);
+      auto quantized = quantize(
+          w, config.group_size, config.bits, mode, std::nullopt, Device::gpu);
+      std::optional<array> biases =
+          mode == "affine" ? std::optional<array>{quantized[2]} : std::nullopt;
+
+      for (int M = 1; M <= limit; ++M) {
+        auto x_block = slice(x, {0, 0}, {M, K});
+        auto block = quantized_matmul(
+            x_block,
+            quantized[0],
+            quantized[1],
+            biases,
+            true,
+            config.group_size,
+            config.bits,
+            mode,
+            Device::gpu);
+        for (int row = 0; row < M; ++row) {
+          auto x_single = slice(x, {row, 0}, {row + 1, K});
+          auto single = quantized_matmul(
+              x_single,
+              quantized[0],
+              quantized[1],
+              biases,
+              true,
+              config.group_size,
+              config.bits,
+              mode,
+              Device::gpu);
+          auto block_row = slice(block, {row, 0}, {row + 1, N});
+          CAPTURE(dtype);
+          CAPTURE(mode);
+          CAPTURE(config.group_size);
+          CAPTURE(config.bits);
+          CAPTURE(M);
+          CAPTURE(row);
+          CHECK(array_equal(block_row, single, Device::cpu).item<bool>());
+        }
+      }
+
+      // The first shape above the configured limit remains on the normal fast
+      // dispatch path.
+      auto above_limit = quantized_matmul(
+          x,
+          quantized[0],
+          quantized[1],
+          biases,
+          true,
+          config.group_size,
+          config.bits,
+          mode,
           Device::gpu);
-  MESSAGE("max matmul row-shape difference: ", max_diff.item<float>());
-  CHECK(array_equal(block_last, single, Device::cpu).item<bool>());
+      CHECK_EQ(above_limit.shape(), Shape{limit + 1, N});
+      eval(above_limit);
+    }
+  }
 }
 
 TEST_CASE("test gpu full") {

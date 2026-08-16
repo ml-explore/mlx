@@ -94,12 +94,14 @@ Metal
 
 .. envvar:: MLX_METAL_BATCH_INVARIANT_LIMIT
 
-   Select Metal kernels whose reductions are invariant to leading matrix and
-   attention query dimensions up to this limit. This makes token-by-token and
-   short-block inference use the same reduction order, which is useful for
+   Select canonical reduction plans for supported short-block Metal inference
+   kernels up to this limit. This covers dense matmul, transposed-weight
+   quantized matmul, and vector SDPA queries up to length eight; it does not
+   make every MLX operation batch invariant. The setting is process-wide and
+   should remain stable while concurrent work is executing. It is useful for
    greedy speculative decoding and reproducibility. The default is ``0``
-   (disabled). Increasing the limit can reduce performance. The setting can
-   also be changed at runtime with
+   (disabled), and increasing the limit can reduce performance. The setting
+   can also be changed at runtime with
    :func:`mlx.core.metal.set_batch_invariant_limit`.
 
 Advanced tuning

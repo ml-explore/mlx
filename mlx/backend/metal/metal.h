@@ -14,14 +14,15 @@ namespace mlx::core::metal {
 MLX_API bool is_available();
 
 /**
- * Select kernels whose reductions are invariant to leading matrix and
- * attention query dimensions up to `limit`. This is useful when an application
- * requires token-by-token and short-block inference to produce identical
- * results. Set to zero to disable.
+ * Select canonical reduction plans for supported short-block Metal inference
+ * kernels up to `limit`. This covers dense matmul, transposed-weight quantized
+ * matmul, and the vector SDPA path (whose query-length cap is eight). It does
+ * not make every MLX operation batch invariant. Set to zero to disable.
  *
- * Increasing the limit can reduce performance. The default is controlled by
- * the ``MLX_METAL_BATCH_INVARIANT_LIMIT`` environment variable and is zero
- * when the variable is unset.
+ * The setting is process-wide and should remain stable while concurrent work
+ * is executing. Increasing the limit can reduce performance. The default is
+ * controlled by the ``MLX_METAL_BATCH_INVARIANT_LIMIT`` environment variable
+ * and is zero when the variable is unset.
  */
 MLX_API void set_batch_invariant_limit(int limit);
 MLX_API int get_batch_invariant_limit();

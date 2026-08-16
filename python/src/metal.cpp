@@ -38,18 +38,23 @@ void init_metal(nb::module_& m) {
       &mx::metal::set_batch_invariant_limit,
       "limit"_a,
       R"pbdoc(
-      Select Metal kernels whose reductions are invariant to leading matrix
-      and attention query dimensions up to ``limit``. Set to zero to disable.
+      Select canonical reduction plans for supported short-block Metal
+      inference kernels up to ``limit``. This covers dense matmul,
+      transposed-weight quantized matmul, and vector SDPA queries up to length
+      eight; it does not make every MLX operation batch invariant. Set to zero
+      to disable.
 
       This is useful when token-by-token and short-block inference must
       produce identical results, for example during greedy speculative
-      decoding. Increasing the limit can reduce performance.
+      decoding. The setting is process-wide and should remain stable while
+      concurrent work is executing. Increasing the limit can reduce
+      performance.
       )pbdoc");
   metal.def(
       "get_batch_invariant_limit",
       &mx::metal::get_batch_invariant_limit,
       R"pbdoc(
-      Return the maximum leading dimension covered by batch-invariant Metal
+      Return the configured short-block limit for supported canonical Metal
       inference kernels, or zero when disabled.
       )pbdoc");
   metal.def("get_active_memory", []() {
