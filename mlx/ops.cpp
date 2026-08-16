@@ -1331,6 +1331,9 @@ array concatenate(
 
   auto shape = arrays[0].shape();
   shape[ax] = 0;
+  // Accumulate the concatenation axis in 64 bits so a total that does not fit
+  // in a shape dimension is reported rather than silently wrapping.
+  int64_t concat_size = 0;
   // Make the output shape and validate that all arrays have the same shape
   // except for the concatenation axis.
   for (auto& a : arrays) {
@@ -1349,8 +1352,9 @@ array concatenate(
         throw_invalid_shapes();
       }
     }
-    shape[ax] += a.shape(ax);
+    concat_size += a.shape(ax);
   }
+  shape[ax] = safe_cast(concat_size, "concatenate");
 
   // Promote all the arrays to the same type
   auto dtype = result_type(arrays);
