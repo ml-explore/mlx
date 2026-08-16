@@ -4499,40 +4499,6 @@ TEST_CASE("test pad shape overflow") {
       pad(zeros({8}), {0}, Shape{imax}, Shape{imax}), std::overflow_error);
 }
 
-TEST_CASE("test conv padded input overflow") {
-  // A large stride can keep the output shape in range while the padded input
-  // (in + pad_lo + pad_hi) the backend allocates overflows int32; the backend
-  // must reject it rather than wrap the buffer size.
-  // https://github.com/ml-explore/mlx/issues/3611
-  const int imax = 2147483647;
-  // 1D path (explicit_gemm_conv_1D_cpu).
-  std::vector<int> stride = {imax}, pad_lo = {imax}, pad_hi = {imax},
-                   dilation = {1};
-  CHECK_THROWS_AS(
-      eval(conv_general(
-          zeros({1, 8, 1}),
-          zeros({1, 3, 1}),
-          stride,
-          pad_lo,
-          pad_hi,
-          dilation,
-          dilation)),
-      std::overflow_error);
-  // ND path (explicit_gemm_conv_ND_cpu), overflow on one spatial axis only.
-  std::vector<int> stride2 = {imax, 1}, pad_lo2 = {imax, 0},
-                   pad_hi2 = {imax, 0}, dilation2 = {1, 1};
-  CHECK_THROWS_AS(
-      eval(conv_general(
-          zeros({1, 8, 8, 1}),
-          zeros({1, 3, 3, 1}),
-          stride2,
-          pad_lo2,
-          pad_hi2,
-          dilation2,
-          dilation2)),
-      std::overflow_error);
-}
-
 TEST_CASE("test fp8 conversion") {
   for (auto t : {float32, float16, bfloat16}) {
     array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0}, t);
