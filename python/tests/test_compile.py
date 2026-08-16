@@ -1086,6 +1086,114 @@ class TestCompile(mlx_tests.MLXTestCase):
         a = mx.array([0.0, 1.0, 2.0, 3.0, 4.0])
         self.assertTrue(mx.allclose(cfun(a), fun(a)))
 
+    def test_shapeless_compile_slice(self):
+        y = 1
+
+        def fun(x):
+            return x[1:-1:2] + y
+
+        cfun = mx.compile(fun, shapeless=True)
+
+        a = mx.arange(10)
+        self.assertTrue(mx.array_equal(cfun(a), fun(a)))
+
+        # Different shape, same computation: no recompile, so the change
+        # to y is not reflected in the output
+        y = 2
+        a = mx.arange(20)
+        self.assertTrue(mx.array_equal(cfun(a), mx.arange(20)[1:-1:2] + 1))
+
+        # Slicing a leading axis. Note: the stop is explicit — python's
+        # default stop for `x[2:]` is resolved to the trace-time axis size
+        # and would not track the input shape across replays.
+        def fun2(x):
+            return x[2:5, 1:3]
+
+        cfun2 = mx.compile(fun2, shapeless=True)
+        a = mx.arange(24).reshape(4, 6)
+        self.assertTrue(mx.array_equal(cfun2(a), fun2(a)))
+        a = mx.arange(30).reshape(5, 6)
+        self.assertTrue(mx.array_equal(cfun2(a), fun2(a)))
+
+        # Empty slice
+        def fun3(x):
+            return x[3:3]
+
+        cfun3 = mx.compile(fun3, shapeless=True)
+        a = mx.arange(5)
+        self.assertTrue(mx.array_equal(cfun3(a), fun3(a)))
+        a = mx.arange(9)
+        self.assertTrue(mx.array_equal(cfun3(a), fun3(a)))
+
+    def test_shapeless_compile_slice_negative_stride(self):
+        def fun(x):
+            return x[5:1:-2]
+
+        cfun = mx.compile(fun, shapeless=True)
+
+        a = mx.arange(8)
+        self.assertTrue(mx.array_equal(cfun(a), fun(a)))
+
+        # The positive start index stays valid at a larger shape
+        a = mx.arange(12)
+        self.assertTrue(mx.array_equal(cfun(a), fun(a)))
+
+    def test_shapeless_compile_cumsum(self):
+        def fun(x):
+            return mx.cumsum(x, axis=1)
+
+        cfun = mx.compile(fun, shapeless=True)
+
+        a = mx.arange(8).reshape(2, 4)
+        self.assertTrue(mx.array_equal(cfun(a), fun(a)))
+
+        a = mx.arange(12).reshape(2, 6)
+        self.assertTrue(mx.array_equal(cfun(a), fun(a)))
+
+    def test_shapeless_compile_decode_mask(self):
+        # The compile-safe KV-cache mask used by shapeless decode steps:
+        # positions 1..S from a cumsum over a dynamic slice, compared
+        # against an array offset. No shape may be baked at trace time, so
+        # the sequence-axis slice uses an explicit stop (python's `x[:]`
+        # default stop is resolved to the trace-time axis size).
+        def fun(keys, offset):
+            ks = keys[0:1, 0:1, 0 : 2**31 - 1, 0:1]
+            pos = mx.cumsum(mx.equal(ks, ks), axis=2)
+            return (pos <= (offset + 1)).transpose(0, 1, 3, 2)
+
+        cfun = mx.compile(fun, shapeless=True)
+
+        keys = mx.zeros((1, 2, 8, 4))
+        offset = mx.array(3, mx.int32)
+        self.assertTrue(mx.array_equal(cfun(keys, offset), fun(keys, offset)))
+
+        # Cache growth: the sequence axis doubles without a recompile
+        keys = mx.zeros((1, 2, 16, 4))
+        offset = mx.array(11, mx.int32)
+        self.assertTrue(mx.array_equal(cfun(keys, offset), fun(keys, offset)))
+
+    def test_shapeless_compile_sdpa(self):
+        def fun(q, k, v):
+            return mx.fast.scaled_dot_product_attention(q, k, v, scale=1.0)
+
+        cfun = mx.compile(fun, shapeless=True)
+
+        q = mx.random.normal((1, 2, 3, 16))
+        k = mx.random.normal((1, 2, 5, 16))
+        v = mx.random.normal((1, 2, 5, 16))
+        self.assertTrue(mx.allclose(cfun(q, k, v), fun(q, k, v)))
+
+        # Different sequence lengths, same ranks: no recompile
+        q = mx.random.normal((1, 2, 1, 16))
+        k = mx.random.normal((1, 2, 9, 16))
+        v = mx.random.normal((1, 2, 9, 16))
+        self.assertTrue(mx.allclose(cfun(q, k, v), fun(q, k, v)))
+
+        # The values' head dimension may differ from the queries'
+        v = mx.random.normal((1, 2, 9, 8))
+        self.assertEqual(cfun(q, k, v).shape, fun(q, k, v).shape)
+        self.assertTrue(mx.allclose(cfun(q, k, v), fun(q, k, v)))
+
     def test_shapeless_compile_with_reshape(self):
         def fun(x):
             return x.reshape(x.shape[0] * x.shape[1], -1)

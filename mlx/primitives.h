@@ -1906,6 +1906,7 @@ class Scan : public UnaryPrimitive {
   }
 
   bool is_equivalent(const Primitive& other) const override;
+  DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
     return std::make_tuple(reduce_type_, axis_, reverse_, inclusive_);
   }
@@ -2082,6 +2083,7 @@ class Slice : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_NAME(Slice)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
     return std::make_tuple(start_indices_, end_indices_, strides_);
   }

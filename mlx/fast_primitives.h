@@ -248,7 +248,7 @@ class ScaledDotProductAttention : public Custom {
   bool is_equivalent(const Primitive& other) const override;
 
   DEFINE_NAME(ScaledDotProductAttention);
-  DEFINE_INPUT_OUTPUT_SHAPE()
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
     return std::make_tuple(
         nullptr, scale_, do_causal_, has_sinks_, output_logsumexp_);
