@@ -790,6 +790,10 @@ void small_kd_conv_3D_gpu(
         static_cast<size_t>(OD) * H * W * C,
         static_cast<int64_t>(kd) * H * W * C);
 
+    // The 2D conv only flips the last two kernel axes, so mirror the depth
+    // axis here when the convolution is flipped.
+    const int kd_wt = conv_params.flip ? KD - 1 - kd : kd;
+
     array wt_2d({O, KH, KW, C}, wt.dtype(), nullptr, {});
     wt_2d.copy_shared_buffer(
         wt,
@@ -800,7 +804,7 @@ void small_kd_conv_3D_gpu(
         {false, false, false},
         static_cast<size_t>(O - 1) * KD * KH * KW * C +
             static_cast<size_t>(KH) * KW * C,
-        static_cast<int64_t>(kd) * KH * KW * C);
+        static_cast<int64_t>(kd_wt) * KH * KW * C);
 
     array conv_out({OD, OH, OW, O}, out.dtype(), nullptr, {});
     conv_2D_gpu(
