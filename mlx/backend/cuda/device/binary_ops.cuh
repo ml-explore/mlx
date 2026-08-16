@@ -269,17 +269,38 @@ struct BitwiseXor {
   };
 };
 
+// A shift amount that is negative or at least the operand width is undefined,
+// so clamp it to what numpy and pytorch return: zero for a left shift, and the
+// sign bit for a right shift.
+template <typename T>
+__device__ bool shift_in_range(T y) {
+  bool in_range = y < static_cast<T>(sizeof(T) * 8);
+  if constexpr (cuda::std::is_signed_v<T>) {
+    in_range = in_range && y >= 0;
+  }
+  return in_range;
+}
+
 struct LeftShift {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x << y;
+    T amount = y & static_cast<T>(sizeof(T) * 8 - 1);
+    return shift_in_range(y) ? static_cast<T>(x << amount) : static_cast<T>(0);
   };
 };
 
 struct RightShift {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    return x >> y;
+    bool in_range = shift_in_range(y);
+    T amount = in_range ? y : static_cast<T>(sizeof(T) * 8 - 1);
+    T shifted = x >> amount;
+    if constexpr (cuda::std::is_signed_v<T>) {
+      // Shifting a negative value past the width leaves the sign bit behind.
+      return shifted;
+    } else {
+      return in_range ? shifted : static_cast<T>(0);
+    }
   };
 };
 
