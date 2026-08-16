@@ -1520,6 +1520,19 @@ MLX_API array conv2d(
     int groups = 1,
     StreamOrDevice s = {});
 
+/** 2D convolution with a per-output-channel bias add and SiLU activation fused
+ * into the conv epilogue. CUDA-only fast path; unimplemented on other backends
+ * (inference-only). |bias| is 1-D of length C_out. */
+MLX_API array conv2d_bias_silu(
+    const array& input,
+    const array& weight,
+    const array& bias,
+    const std::pair<int, int>& stride = {1, 1},
+    const std::pair<int, int>& padding = {0, 0},
+    const std::pair<int, int>& dilation = {1, 1},
+    int groups = 1,
+    StreamOrDevice s = {});
+
 /** 3D convolution with a filter */
 MLX_API array conv3d(
     const array& input,

@@ -4469,6 +4469,37 @@ array conv2d(
       s);
 }
 
+array conv2d_bias_silu(
+    const array& in_,
+    const array& wt_,
+    const array& bias,
+    const std::pair<int, int>& stride /* = {1, 1} */,
+    const std::pair<int, int>& padding /* = {0, 0} */,
+    const std::pair<int, int>& dilation /* = {1, 1} */,
+    int groups /* = 1 */,
+    StreamOrDevice s /* = {} */) {
+  // Promote inputs to a common dtype (matches conv_general's handling).
+  auto dtype = promote_types(in_.dtype(), wt_.dtype());
+  auto in = astype(in_, dtype, s);
+  auto wt = astype(wt_, dtype, s);
+  auto b = astype(bias, dtype, s);
+
+  std::vector<int> stride_v = {stride.first, stride.second};
+  std::vector<int> pad_v = {padding.first, padding.second};
+  std::vector<int> dil_v = {dilation.first, dilation.second};
+  std::vector<int> in_dil_v = {1, 1};
+
+  auto out_shape = Convolution::conv_out_shape(
+      in.shape(), wt.shape(), stride_v, pad_v, pad_v, dil_v, in_dil_v);
+
+  return array(
+      std::move(out_shape),
+      dtype,
+      std::make_shared<FusedConvBiasActivation>(
+          to_stream(s), stride_v, pad_v, pad_v, dil_v, in_dil_v, groups),
+      {in, wt, b});
+}
+
 /** 3D convolution with a filter */
 array conv3d(
     const array& in_,

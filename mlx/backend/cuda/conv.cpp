@@ -46,6 +46,16 @@ auto& conv_cache() {
   return cache;
 }
 
+// Separate cache for the fused conv+bias+silu graphs so their (forward-only)
+// epilogue graphs never collide with the plain conv graphs above (same key).
+auto& fused_conv_cache() {
+  static thread_local LRUBytesKeyCache<
+      ConvCacheKey,
+      std::pair<ConvBackendType, std::optional<DnnGraph>>>
+      cache("MLX_CUDA_CONV_CACHE_SIZE", /* default_capacity */ 128);
+  return cache;
+}
+
 auto get_conv_settings(
     ConvBackendType backend_type,
     array& x,
@@ -100,7 +110,9 @@ std::optional<DnnGraph> build_conv_graph(
     const std::vector<int64_t>& stride,
     const std::vector<int64_t>& padding_lo,
     const std::vector<int64_t>& padding_hi,
-    const std::vector<int64_t>& dilation) {
+    const std::vector<int64_t>& dilation,
+    const array* bias = nullptr,
+    bool apply_silu = false) {
   auto compute_dtype =
       (dtype == float16 || dtype == bfloat16) ? float32 : dtype;
   DnnGraph graph(get_cudnn_handle(encoder.device()), dtype, compute_dtype);
@@ -130,7 +142,29 @@ std::optional<DnnGraph> build_conv_graph(
     set_options(options);
     y_ = graph.conv_wgrad(w_, x_, options);
   }
-  graph.tensor_nchw(y_, 'y', y)->set_output(true);
+
+  // Optional fused epilogue: bias add (+ SiLU), computed in fp32 and folded into
+  // the same cuDNN graph so the conv output never round-trips through HBM. bias
+  // is per-output-channel, broadcast as [1, C_out, 1, 1] on the NCHW channel dim.
+  auto out_ = y_;
+  if (bias != nullptr) {
+    auto b_ = graph.tensor_4d("B", 'b', *bias, /* axis (NCHW channel) */ 1);
+    out_ = graph.pointwise(
+        out_,
+        b_,
+        fe::graph::Pointwise_attributes()
+            .set_mode(fe::PointwiseMode_t::ADD)
+            .set_compute_data_type(dtype_to_cudnn_type(compute_dtype)));
+  }
+  if (apply_silu) {
+    // SWISH_FWD with the default beta=1 is SiLU: x * sigmoid(x).
+    out_ = graph.pointwise(
+        out_,
+        fe::graph::Pointwise_attributes()
+            .set_mode(fe::PointwiseMode_t::SWISH_FWD)
+            .set_compute_data_type(dtype_to_cudnn_type(compute_dtype)));
+  }
+  graph.tensor_nchw(out_, 'y', y)->set_output(true);
 
   if (graph.prepare().is_bad()) {
     return std::nullopt;
@@ -401,6 +435,121 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
       flip_,
       s);
   conv_cache().emplace(cache_key, std::make_pair(CONV_FALLBACK, std::nullopt));
+}
+
+void FusedConvBiasActivation::eval_gpu(
+    const std::vector<array>& inputs,
+    array& out_) {
+  nvtx3::scoped_range r("FusedConvBiasActivation::eval_gpu");
+  if (out_.size() == 0) {
+    return;
+  }
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+
+  assert(inputs.size() == 3);
+  array in = inputs[0];
+  array wt = inputs[1];
+  array bias = inputs[2];
+  array out = out_;
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  Dtype dtype = out.dtype();
+
+  // The bias feeds a cuDNN pointwise node; it must be contiguous.
+  if (!bias.flags().row_contiguous) {
+    bias = contiguous_copy_gpu(bias, s);
+    encoder.add_temporary(bias);
+  }
+
+  BytesKey<ConvCacheKey> cache_key;
+  cache_key.pod = {
+      encoder.device().cuda_device(),
+      dtype_to_cudnn_type(dtype),
+      vector_key(in.shape()),
+      vector_key(wt.shape()),
+      vector_key(kernel_strides_),
+      vector_key(padding_lo_),
+      vector_key(padding_hi_),
+      vector_key(kernel_dilation_),
+      groups_,
+      /* flip */ false,
+      get_alignment(in),
+      get_alignment(wt),
+      get_alignment(out)};
+
+  auto register_and_encode = [&](DnnGraph& graph, array& x, array& w, array& y) {
+    encoder.set_input_array(x);
+    encoder.set_input_array(w);
+    encoder.set_input_array(bias);
+    encoder.set_output_array(out_);
+    return graph.encode_capturing(
+        encoder,
+        {
+            {'x', gpu_ptr<void>(x)},
+            {'w', gpu_ptr<void>(w)},
+            {'b', gpu_ptr<void>(bias)},
+            {'y', gpu_ptr<void>(y)},
+        });
+  };
+
+  // Cached graph.
+  if (auto it = fused_conv_cache().find(cache_key);
+      it != fused_conv_cache().end()) {
+    auto& graph = it->second.second;
+    std::tie(in, wt, out) =
+        prepare_args(encoder, CONV_FORWARD, in, wt, out, groups_, s);
+    CHECK_CUDNN_ERROR(register_and_encode(*graph, in, wt, out));
+    return;
+  }
+
+  // First time we see this shape: bias+SiLU only make sense as a forward
+  // convolution, so we don't guess backward backends like the plain path does.
+  auto [x, w, y] =
+      prepare_args(encoder, CONV_FORWARD, in, wt, out, groups_, s);
+  auto [stride, padding_lo, padding_hi, dilation] = get_conv_settings(
+      CONV_FORWARD,
+      x,
+      w,
+      y,
+      kernel_strides_,
+      padding_lo_,
+      padding_hi_,
+      kernel_dilation_,
+      input_dilation_);
+  auto graph = build_conv_graph(
+      encoder,
+      CONV_FORWARD,
+      dtype,
+      x,
+      w,
+      y,
+      stride,
+      padding_lo,
+      padding_hi,
+      dilation,
+      &bias,
+      /* apply_silu */ true);
+  if (!graph) {
+    // Standard YOLOv9 convs always build a conv+bias+swish graph on cuDNN 9.x;
+    // if a future shape doesn't, add a decomposed fallback here.
+    throw std::runtime_error(
+        "[FusedConvBiasActivation] cuDNN could not build a fused "
+        "conv+bias+SiLU graph for this shape.");
+  }
+  encoder.set_input_array(x);
+  encoder.set_input_array(w);
+  encoder.set_input_array(bias);
+  encoder.set_output_array(out_);
+  CHECK_CUDNN_ERROR(graph->encode_capturing(
+      encoder,
+      {
+          {'x', gpu_ptr<void>(x)},
+          {'w', gpu_ptr<void>(w)},
+          {'b', gpu_ptr<void>(bias)},
+          {'y', gpu_ptr<void>(y)},
+      }));
+  fused_conv_cache().emplace(
+      cache_key, std::make_pair(CONV_FORWARD, std::move(*graph)));
 }
 
 } // namespace mlx::core

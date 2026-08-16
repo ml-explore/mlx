@@ -1589,4 +1589,11 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void FusedConvBiasActivation::eval_gpu(
+    const std::vector<array>&,
+    array&) {
+  throw std::runtime_error(
+      "[FusedConvBiasActivation] no Metal implementation (CUDA inference only).");
+}
+
 } // namespace mlx::core

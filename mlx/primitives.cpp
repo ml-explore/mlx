@@ -1659,6 +1659,28 @@ std::vector<Shape> Convolution::output_shapes(
       input_dilation_)};
 }
 
+bool FusedConvBiasActivation::is_equivalent(const Primitive& other) const {
+  const FusedConvBiasActivation& c_other =
+      static_cast<const FusedConvBiasActivation&>(other);
+  return padding_lo_ == c_other.padding_lo_ &&
+      padding_hi_ == c_other.padding_hi_ &&
+      kernel_strides_ == c_other.kernel_strides_ &&
+      kernel_dilation_ == c_other.kernel_dilation_ &&
+      input_dilation_ == c_other.input_dilation_ && groups_ == c_other.groups_;
+}
+
+std::vector<Shape> FusedConvBiasActivation::output_shapes(
+    const std::vector<array>& inputs) {
+  return {Convolution::conv_out_shape(
+      inputs[0].shape(), // in_shape
+      inputs[1].shape(), // wt_shape
+      kernel_strides_,
+      padding_lo_,
+      padding_hi_,
+      kernel_dilation_,
+      input_dilation_)};
+}
+
 std::vector<array> Copy::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

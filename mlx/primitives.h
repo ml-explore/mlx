@@ -787,6 +787,54 @@ class Convolution : public UnaryPrimitive {
   bool flip_;
 };
 
+// Forward convolution with a per-output-channel bias add and SiLU activation
+// folded into the cuDNN conv epilogue (one graph, one HBM round-trip) instead of
+// three separate kernels. Inputs are {x, w, bias}. CUDA-only fast path; other
+// backends have no implementation (inference-only, never invoked there — the
+// model routes to the plain conv+bias+silu ops off CUDA). No autograd.
+class FusedConvBiasActivation : public UnaryPrimitive {
+ public:
+  explicit FusedConvBiasActivation(
+      Stream stream,
+      const std::vector<int>& kernel_strides,
+      const std::vector<int>& padding_lo,
+      const std::vector<int>& padding_hi,
+      const std::vector<int>& kernel_dilation,
+      const std::vector<int>& input_dilation,
+      const int groups = 1)
+      : UnaryPrimitive(stream),
+        padding_lo_(padding_lo),
+        padding_hi_(padding_hi),
+        kernel_strides_(kernel_strides),
+        kernel_dilation_(kernel_dilation),
+        input_dilation_(input_dilation),
+        groups_(groups) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_NAME(FusedConvBiasActivation)
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
+  auto state() const {
+    return std::make_tuple(
+        kernel_strides_,
+        padding_lo_,
+        padding_hi_,
+        kernel_dilation_,
+        input_dilation_,
+        groups_);
+  }
+
+ private:
+  std::vector<int> padding_lo_;
+  std::vector<int> padding_hi_;
+  std::vector<int> kernel_strides_;
+  std::vector<int> kernel_dilation_;
+  std::vector<int> input_dilation_;
+  int groups_;
+};
+
 class Copy : public UnaryPrimitive {
  public:
   explicit Copy(Stream stream) : UnaryPrimitive(stream) {}
