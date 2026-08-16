@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <cassert>
+#include <cmath>
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/encoder.h"
@@ -41,6 +42,21 @@ void arg_reduce_dispatch(
   switch (rtype) {
     case ArgReduce::ArgMin: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
+        // Every comparison against a NaN is false, so a bare `x < *y` steps
+        // over NaNs entirely and returns the index of the smallest real value
+        // while `mx.min` returns NaN for the same input. Propagate instead,
+        // and keep the first NaN so the index is stable, which is what numpy
+        // and torch return.
+        if constexpr (is_floating_point_v<InT>) {
+          if (std::isnan(*y)) {
+            return;
+          }
+          if (std::isnan(x)) {
+            (*y) = x;
+            (*ind_y) = ind_x;
+            return;
+          }
+        }
         if (x < (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
@@ -51,6 +67,17 @@ void arg_reduce_dispatch(
     }
     case ArgReduce::ArgMax: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
+        // See ArgMin above: NaN wins, and the first one keeps the index.
+        if constexpr (is_floating_point_v<InT>) {
+          if (std::isnan(*y)) {
+            return;
+          }
+          if (std::isnan(x)) {
+            (*y) = x;
+            (*ind_y) = ind_x;
+            return;
+          }
+        }
         if (x > (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;

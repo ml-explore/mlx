@@ -273,6 +273,45 @@ class TestReduce(mlx_tests.MLXTestCase):
                 getattr(np, op)(x_np, axis=1).tolist(),
             )
 
+    def test_arg_reduce_nan(self):
+        # argmax/argmin used to walk past NaN and return the index of the
+        # largest or smallest real value, while max/min return NaN for the
+        # same input. numpy and torch both return the index of the first NaN.
+        cases = [
+            ([3.0, float("nan"), 1.0, 5.0], 1),
+            ([float("nan"), 1.0, 2.0], 0),
+            ([1.0, 2.0, float("nan")], 2),
+            ([float("inf"), float("nan"), float("-inf")], 1),
+            ([-1.0, -2.0, float("nan")], 2),
+        ]
+        for vals, want in cases:
+            a = mx.array(vals)
+            self.assertEqual(mx.argmax(a).item(), want)
+            self.assertEqual(mx.argmin(a).item(), want)
+
+        # Not a short-array or tail effect, and the same for the half types.
+        for n in [8, 33, 1000, 5000]:
+            vals = [float(i) for i in range(n)]
+            vals[5] = float("nan")
+            a = mx.array(vals)
+            self.assertEqual(mx.argmax(a).item(), 5)
+            self.assertEqual(mx.argmin(a).item(), 5)
+        for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+            a = mx.array([3.0, float("nan"), 1.0, 5.0], dtype=dtype)
+            self.assertEqual(mx.argmax(a).item(), 1)
+            self.assertEqual(mx.argmin(a).item(), 1)
+
+        # The first NaN wins, so the index does not depend on how the
+        # reduction happens to associate.
+        a = mx.array([1.0, float("nan"), 3.0, float("nan")])
+        self.assertEqual(mx.argmax(a).item(), 1)
+        self.assertEqual(mx.argmin(a).item(), 1)
+
+        # Without a NaN nothing changes, including the lowest-index tie break.
+        a = mx.array([1.0, 5.0, 5.0, 1.0])
+        self.assertEqual(mx.argmax(a).item(), 1)
+        self.assertEqual(mx.argmin(a).item(), 0)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner(failfast=True)

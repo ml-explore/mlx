@@ -26,6 +26,19 @@ struct IndexValPair {
   T val;
 };
 
+// Every comparison against a NaN is false, so a plain `<` or `>` walks past
+// NaNs and argmin/argmax return the index of the smallest or largest real
+// value while min/max return NaN for the same input. Prefer the NaN, and keep
+// the first one so the index is stable, matching numpy and torch.
+template <typename T>
+__device__ inline bool arg_is_nan(T x) {
+  if constexpr (cuda::std::is_floating_point_v<T> || is_floating_point_v<T>) {
+    return cuda::std::isnan(x);
+  } else {
+    return false;
+  }
+}
+
 template <typename T>
 struct ArgMin {
   constexpr __device__ T init() {
@@ -35,6 +48,14 @@ struct ArgMin {
   __device__ IndexValPair<T> operator()(
       const IndexValPair<T>& best,
       const IndexValPair<T>& current) {
+    bool bn = arg_is_nan(best.val);
+    bool cn = arg_is_nan(current.val);
+    if (bn || cn) {
+      if (bn && cn) {
+        return best.index <= current.index ? best : current;
+      }
+      return bn ? best : current;
+    }
     if (best.val > current.val ||
         (best.val == current.val && best.index > current.index)) {
       return current;
@@ -50,7 +71,10 @@ struct ArgMin {
       uint32_t offset) {
 #pragma unroll
     for (int i = 0; i < N; i++) {
-      if (vals[i] < best.val) {
+      if (arg_is_nan(best.val)) {
+        break;
+      }
+      if (arg_is_nan(vals[i]) || vals[i] < best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }
@@ -68,6 +92,14 @@ struct ArgMax {
   __device__ IndexValPair<T> operator()(
       const IndexValPair<T>& best,
       const IndexValPair<T>& current) {
+    bool bn = arg_is_nan(best.val);
+    bool cn = arg_is_nan(current.val);
+    if (bn || cn) {
+      if (bn && cn) {
+        return best.index <= current.index ? best : current;
+      }
+      return bn ? best : current;
+    }
     if (best.val < current.val ||
         (best.val == current.val && best.index > current.index)) {
       return current;
@@ -83,7 +115,10 @@ struct ArgMax {
       uint32_t offset) {
 #pragma unroll
     for (int i = 0; i < N; i++) {
-      if (vals[i] > best.val) {
+      if (arg_is_nan(best.val)) {
+        break;
+      }
+      if (arg_is_nan(vals[i]) || vals[i] > best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }

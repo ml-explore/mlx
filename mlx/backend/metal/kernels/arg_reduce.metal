@@ -6,6 +6,19 @@
 
 using namespace metal;
 
+// Every comparison against a NaN is false, so a plain `<` or `>` walks past
+// NaNs and argmin/argmax return the index of the smallest or largest real
+// value while min/max return NaN for the same input. Prefer the NaN, and keep
+// the first one so the index is stable, matching numpy and torch.
+template <typename U>
+METAL_FUNC bool arg_is_nan(U x) {
+  if constexpr (metal::is_floating_point_v<U>) {
+    return metal::isnan(x);
+  } else {
+    return false;
+  }
+}
+
 template <typename U>
 struct IndexValPair {
   uint32_t index;
@@ -17,6 +30,14 @@ struct ArgMin {
   static constexpr constant U init = Limits<U>::max;
 
   IndexValPair<U> reduce(IndexValPair<U> best, IndexValPair<U> current) thread {
+    bool bn = arg_is_nan(best.val);
+    bool cn = arg_is_nan(current.val);
+    if (bn || cn) {
+      if (bn && cn) {
+        return best.index <= current.index ? best : current;
+      }
+      return bn ? best : current;
+    }
     if (best.val > current.val ||
         (best.val == current.val && best.index > current.index)) {
       return current;
@@ -29,7 +50,10 @@ struct ArgMin {
   IndexValPair<U>
   reduce_many(IndexValPair<U> best, thread U* vals, uint32_t offset) thread {
     for (int i = 0; i < N; i++) {
-      if (vals[i] < best.val) {
+      if (arg_is_nan(best.val)) {
+        break;
+      }
+      if (arg_is_nan(vals[i]) || vals[i] < best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }
@@ -43,6 +67,14 @@ struct ArgMax {
   static constexpr constant U init = Limits<U>::min;
 
   IndexValPair<U> reduce(IndexValPair<U> best, IndexValPair<U> current) thread {
+    bool bn = arg_is_nan(best.val);
+    bool cn = arg_is_nan(current.val);
+    if (bn || cn) {
+      if (bn && cn) {
+        return best.index <= current.index ? best : current;
+      }
+      return bn ? best : current;
+    }
     if (best.val < current.val ||
         (best.val == current.val && best.index > current.index)) {
       return current;
@@ -55,7 +87,10 @@ struct ArgMax {
   IndexValPair<U>
   reduce_many(IndexValPair<U> best, thread U* vals, uint32_t offset) thread {
     for (int i = 0; i < N; i++) {
-      if (vals[i] > best.val) {
+      if (arg_is_nan(best.val)) {
+        break;
+      }
+      if (arg_is_nan(vals[i]) || vals[i] > best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }
