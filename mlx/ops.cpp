@@ -3196,6 +3196,9 @@ array floor_divide(
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
+  if (issubdtype(dtype, complexfloating)) {
+    throw std::invalid_argument("[remainder] Complex type not supported.");
+  }
   auto inputs = broadcast_arrays(
       {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
   auto shape = inputs[0].shape();
