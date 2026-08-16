@@ -227,6 +227,83 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
+      "rope_kv_append",
+      [](const mx::array& keys,
+         const mx::array& values,
+         const mx::array& key_cache,
+         const mx::array& value_cache,
+         int offset,
+         int dims,
+         bool traditional,
+         std::optional<float> base,
+         float scale,
+         const std::optional<mx::array>& freqs,
+         mx::StreamOrDevice s) {
+        auto out = mx::fast::rope_kv_append(
+            keys,
+            values,
+            key_cache,
+            value_cache,
+            offset,
+            dims,
+            traditional,
+            base,
+            scale,
+            freqs,
+            s);
+        return nb::make_tuple(nb::cast(out[0]), nb::cast(out[1]));
+      },
+      "keys"_a,
+      "values"_a,
+      "key_cache"_a,
+      "value_cache"_a,
+      "offset"_a,
+      "dims"_a,
+      nb::kw_only(),
+      "traditional"_a,
+      "base"_a.none(),
+      "scale"_a,
+      "freqs"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def rope_kv_append(keys: array, values: array, key_cache: array, value_cache: array, offset: int, dims: int, *, traditional: bool, base: float | None, scale: float, freqs: array | None = None, stream: StreamOrDevice = None) -> tuple[array, array]"),
+      R"pbdoc(
+        Apply rotary positional encoding to keys and append keys and values
+        to the KV caches in a single operation.
+
+        The rotated keys and the (unmodified) values are written to the cache
+        slice ``[..., offset:offset + T, :]``. The updated caches are
+        returned; they share storage with the input caches when the inputs
+        are uniquely referenced (the same in-place semantics as a slice
+        update), so the input caches should be treated as consumed.
+
+        All inputs are expected to have the same rank with shape
+        ``(B, *, T, D)`` where the caches' sequence dimension ``T_cache``
+        covers ``offset + T``.
+
+        Args:
+            keys (array): The unrotated keys.
+            values (array): The values to append.
+            key_cache (array): The keys cache to append to.
+            value_cache (array): The values cache to append to.
+            offset (int): The sequence position to append at.
+            dims (int): The feature dimensions of the keys to be rotated. If
+              the keys' feature dimension is larger than dims then the rest
+              is left unchanged.
+            traditional (bool): If set to ``True`` choose the traditional
+              implementation which rotates consecutive dimensions.
+            base (float, optional): The base used to compute angular frequency
+              for each dimension in the positional encodings. Exactly one of
+              ``base`` and ``freqs`` must be ``None``.
+            scale (float): The scale used to scale the positions.
+            freqs (array, optional): Optional frequencies to use with RoPE.
+              If set, the ``base`` parameter must be ``None``. Default: ``None``.
+
+        Returns:
+            tuple(array, array): The updated key and value caches.
+      )pbdoc");
+
+  m.def(
       "scaled_dot_product_attention",
       [](const mx::array& queries,
          const mx::array& keys,

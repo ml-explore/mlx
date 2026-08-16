@@ -422,6 +422,202 @@ class TestFast(mlx_tests.MLXTestCase):
         )
         self.assertLess((rx_fp32 - rx_bf16).abs().max(), 1e-1)
 
+    def test_rope_kv_append(self):
+        def make_inputs(seed, dtype, B, H, T_max, D, Dv):
+            mx.random.seed(seed)
+            k = mx.random.normal((B, H, 1, D)).astype(dtype)
+            v = mx.random.normal((B, H, 1, Dv)).astype(dtype)
+            kc = mx.random.normal((B, H, T_max, D)).astype(dtype)
+            vc = mx.random.normal((B, H, T_max, Dv)).astype(dtype)
+            mx.eval(k, v, kc, vc)
+            return k, v, kc, vc
+
+        def composed(k, v, kc, vc, offset, dims, traditional, base, scale):
+            kr = mx.fast.rope(
+                k,
+                dims,
+                traditional=traditional,
+                base=base,
+                scale=scale,
+                offset=offset,
+            )
+            kc[..., offset : offset + 1, :] = kr
+            vc[..., offset : offset + 1, :] = v
+            return kc, vc
+
+        seed = 0
+        for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+            for traditional in [True, False]:
+                for D in [64, 128, 256]:
+                    for dims in [D, D // 2]:
+                        for offset in [0, 255, 256]:
+                            seed += 1
+                            args = (seed, dtype, 2, 4, 512, D, D)
+                            k, v, kc, vc = make_inputs(*args)
+                            kc_f, vc_f = mx.fast.rope_kv_append(
+                                k,
+                                v,
+                                kc,
+                                vc,
+                                offset,
+                                dims,
+                                traditional=traditional,
+                                base=10000.0,
+                                scale=1.0,
+                            )
+                            # The still-referenced input caches must be
+                            # untouched (the outputs are fresh copies)
+                            _, _, kc_p, vc_p = make_inputs(*args)
+                            self.assertTrue(mx.array_equal(kc, kc_p).item())
+                            self.assertTrue(mx.array_equal(vc, vc_p).item())
+                            # Bit-identical to the composed ops
+                            k, v, kc, vc = make_inputs(*args)
+                            kc_e, vc_e = composed(
+                                k, v, kc, vc, offset, dims, traditional,
+                                10000.0, 1.0,
+                            )
+                            self.assertTrue(mx.array_equal(kc_f, kc_e).item())
+                            self.assertTrue(mx.array_equal(vc_f, vc_e).item())
+
+        # freqs variant
+        dims = 64
+        freqs = 1.0 / (10000.0 ** (mx.arange(0, dims // 2) / (dims // 2)))
+        k, v, kc, vc = make_inputs(99, mx.float32, 1, 2, 256, dims, dims)
+        kc_f, vc_f = mx.fast.rope_kv_append(
+            k, v, kc, vc, 5, dims,
+            traditional=False, base=None, scale=1.0, freqs=freqs,
+        )
+        k, v, kc, vc = make_inputs(99, mx.float32, 1, 2, 256, dims, dims)
+        kr = mx.fast.rope(
+            k, dims, traditional=False, base=None, scale=1.0, offset=5,
+            freqs=freqs,
+        )
+        kc[..., 5:6, :] = kr
+        vc[..., 5:6, :] = v
+        self.assertTrue(mx.array_equal(kc_f, kc).item())
+        self.assertTrue(mx.array_equal(vc_f, vc).item())
+
+        # V head dim different from K head dim
+        k, v, kc, vc = make_inputs(7, mx.float32, 1, 2, 256, 128, 64)
+        kc_f, vc_f = mx.fast.rope_kv_append(
+            k, v, kc, vc, 3, 128,
+            traditional=False, base=10000.0, scale=1.0,
+        )
+        k, v, kc, vc = make_inputs(7, mx.float32, 1, 2, 256, 128, 64)
+        kc_e, vc_e = composed(k, v, kc, vc, 3, 128, False, 10000.0, 1.0)
+        self.assertTrue(mx.array_equal(kc_f, kc_e).item())
+        self.assertTrue(mx.array_equal(vc_f, vc_e).item())
+
+        # Multi-token append (T > 1) and 3D inputs use the composed fallback
+        # even on GPU; results must still match the composed ops exactly.
+        for T, ndim in [(3, 4), (1, 3), (5, 3)]:
+            dims = 64
+            mx.random.seed(5)
+            shape = (2, 4, T, dims) if ndim == 4 else (2, T, dims)
+            cshape = (2, 4, 32, dims) if ndim == 4 else (2, 32, dims)
+            k = mx.random.normal(shape)
+            v = mx.random.normal(shape)
+            kc = mx.random.normal(cshape)
+            vc = mx.random.normal(cshape)
+            mx.eval(k, v, kc, vc)
+            kc_f, vc_f = mx.fast.rope_kv_append(
+                k, v, kc, vc, 7, dims,
+                traditional=True, base=10000.0, scale=1.0,
+            )
+            kr = mx.fast.rope(
+                k, dims, traditional=True, base=10000.0, scale=1.0, offset=7)
+            kc[..., 7:7 + T, :] = kr
+            vc[..., 7:7 + T, :] = v
+            self.assertTrue(mx.array_equal(kc_f, kc).item())
+            self.assertTrue(mx.array_equal(vc_f, vc).item())
+
+        # Non-contiguous keys also take the composed fallback
+        dims = 64
+        mx.random.seed(6)
+        k = mx.random.normal((2, 4, 2, dims))[..., 1:, :]
+        v = mx.random.normal((2, 4, 2, dims))[..., 1:, :]
+        kc = mx.random.normal((2, 4, 32, dims))
+        vc = mx.random.normal((2, 4, 32, dims))
+        mx.eval(k, v, kc, vc)
+        kc_f, vc_f = mx.fast.rope_kv_append(
+            k, v, kc, vc, 3, dims, traditional=False, base=10000.0, scale=1.0)
+        kr = mx.fast.rope(
+            k, dims, traditional=False, base=10000.0, scale=1.0, offset=3)
+        kc[..., 3:4, :] = kr
+        vc[..., 3:4, :] = v
+        self.assertTrue(mx.array_equal(kc_f, kc).item())
+        self.assertTrue(mx.array_equal(vc_f, vc).item())
+
+        # Error cases
+        k, v, kc, vc = make_inputs(0, mx.float32, 1, 2, 256, 64, 64)
+        with self.assertRaises(ValueError):
+            # offset out of range
+            mx.fast.rope_kv_append(
+                k, v, kc, vc, 256, 64,
+                traditional=False, base=10000.0, scale=1.0,
+            )
+        with self.assertRaises(ValueError):
+            # odd dims
+            mx.fast.rope_kv_append(
+                k, v, kc, vc, 0, 63,
+                traditional=False, base=10000.0, scale=1.0,
+            )
+        with self.assertRaises(ValueError):
+            # both base and freqs
+            mx.fast.rope_kv_append(
+                k, v, kc, vc, 0, 64,
+                traditional=False, base=10000.0, scale=1.0,
+                freqs=mx.ones((32,)),
+            )
+        with self.assertRaises(ValueError):
+            # cache/head mismatch
+            mx.fast.rope_kv_append(
+                k, v, kc[:, :1], vc, 0, 64,
+                traditional=False, base=10000.0, scale=1.0,
+            )
+        with self.assertRaises(ValueError):
+            # non-floating input
+            mx.fast.rope_kv_append(
+                k.astype(mx.int32), v, kc, vc, 0, 64,
+                traditional=False, base=10000.0, scale=1.0,
+            )
+
+    def test_rope_kv_append_grad(self):
+        dims = 64
+        offset = 3
+
+        def f_composed(k, v, kc, vc, wk, wv):
+            kr = mx.fast.rope(
+                k, dims, traditional=False, base=10000.0, scale=1.0,
+                offset=offset,
+            )
+            kc = mx.concatenate(
+                [kc[..., :offset, :], kr, kc[..., offset + 1 :, :]], axis=2)
+            vc = mx.concatenate(
+                [vc[..., :offset, :], v, vc[..., offset + 1 :, :]], axis=2)
+            return (kc * wk).sum() + (vc * wv).sum()
+
+        def f_fused(k, v, kc, vc, wk, wv):
+            kc, vc = mx.fast.rope_kv_append(
+                k, v, kc, vc, offset, dims,
+                traditional=False, base=10000.0, scale=1.0,
+            )
+            return (kc * wk).sum() + (vc * wv).sum()
+
+        mx.random.seed(0)
+        k = mx.random.normal((1, 2, 1, dims))
+        v = mx.random.normal((1, 2, 1, dims))
+        kc = mx.random.normal((1, 2, 16, dims))
+        vc = mx.random.normal((1, 2, 16, dims))
+        wk = mx.random.normal((1, 2, 16, dims))
+        wv = mx.random.normal((1, 2, 16, dims))
+        g_comp = mx.grad(f_composed, argnums=(0, 1))(k, v, kc, vc, wk, wv)
+        g_fused = mx.grad(f_fused, argnums=(0, 1))(k, v, kc, vc, wk, wv)
+        self.assertLess(
+            mx.abs(g_comp[0] - g_fused[0]).max().item(), 1e-6)
+        self.assertLess(
+            mx.abs(g_comp[1] - g_fused[1]).max().item(), 1e-6)
+
     def test_rms_norm(self):
         # Per dtype absolute tolerance
         tolerances = {mx.float32: 1e-6, mx.float16: 1e-3, mx.bfloat16: 1e-2}

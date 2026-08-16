@@ -204,6 +204,54 @@ class RoPE : public Custom {
   bool forward_;
 };
 
+class RoPEAppend : public Custom {
+ public:
+  RoPEAppend(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      int dims,
+      bool traditional,
+      float base,
+      float scale,
+      int offset)
+      : Custom(stream, std::move(fallback)),
+        dims_(dims),
+        traditional_(traditional),
+        base_(base),
+        scale_(scale),
+        offset_(offset) {}
+
+  static bool use_fallback(Stream s);
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_NAME(RoPEAppend)
+  bool is_equivalent(const Primitive& other) const override;
+  // The primitive takes {keys, key_cache[, freqs]} and produces the updated
+  // key cache. It is deliberately single-output: the inputs of multi-output
+  // primitives are referenced once per output descriptor and can therefore
+  // never be donated for in-place updates.
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    return {inputs[1].shape()};
+  }
+  auto state() const {
+    return std::make_tuple(
+        nullptr, dims_, traditional_, base_, scale_, offset_);
+  }
+
+ private:
+  int dims_;
+  bool traditional_;
+  float base_;
+  float scale_;
+  int offset_;
+};
+
 class ScaledDotProductAttention : public Custom {
  public:
   ScaledDotProductAttention(

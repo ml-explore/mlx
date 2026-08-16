@@ -609,6 +609,185 @@ bool RoPE::is_equivalent(const Primitive& other) const {
       forward_ == a_other.forward_);
 }
 
+std::vector<array> rope_kv_append(
+    const array& keys,
+    const array& values,
+    const array& key_cache,
+    const array& value_cache,
+    int offset,
+    int dims,
+    bool traditional,
+    std::optional<float> base,
+    float scale,
+    const std::optional<array>& freqs /* = std::nullopt */,
+    StreamOrDevice s_ /* = {} */) {
+  if (keys.ndim() < 3 || keys.ndim() != values.ndim() ||
+      keys.ndim() != key_cache.ndim() || keys.ndim() != value_cache.ndim()) {
+    std::ostringstream msg;
+    msg << "[rope_kv_append] All inputs must have the same rank of at least 3"
+        << " but got ranks " << keys.ndim() << ", " << values.ndim() << ", "
+        << key_cache.ndim() << " and " << value_cache.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  int ndim = keys.ndim();
+  int T = keys.shape(-2);
+  for (int i = 0; i < ndim; ++i) {
+    if (i == ndim - 2 || i == ndim - 1) {
+      continue;
+    }
+    if (keys.shape(i) != key_cache.shape(i) ||
+        values.shape(i) != value_cache.shape(i) ||
+        keys.shape(i) != values.shape(i)) {
+      std::ostringstream msg;
+      msg << "[rope_kv_append] Input and cache shapes must match in all"
+          << " dimensions but the sequence and feature dimensions but got"
+          << " keys " << keys.shape() << ", values " << values.shape()
+          << ", key_cache " << key_cache.shape() << " and value_cache "
+          << value_cache.shape() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+  if (key_cache.shape(-1) != keys.shape(-1) ||
+      value_cache.shape(-1) != values.shape(-1)) {
+    std::ostringstream msg;
+    msg << "[rope_kv_append] The caches' feature dimension must match the"
+        << " inputs' but got keys " << keys.shape() << ", values "
+        << values.shape() << ", key_cache " << key_cache.shape()
+        << " and value_cache " << value_cache.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (values.shape(-2) != T) {
+    std::ostringstream msg;
+    msg << "[rope_kv_append] keys and values must have the same sequence"
+        << " length but got " << T << " and " << values.shape(-2) << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (offset < 0 || offset + T > key_cache.shape(-2) ||
+      offset + T > value_cache.shape(-2)) {
+    std::ostringstream msg;
+    msg << "[rope_kv_append] Cannot append " << T << " tokens at offset "
+        << offset << " to caches with sequence dimensions "
+        << key_cache.shape(-2) << " and " << value_cache.shape(-2) << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  auto dtype = keys.dtype();
+  if (!issubdtype(dtype, floating) || values.dtype() != dtype ||
+      key_cache.dtype() != dtype || value_cache.dtype() != dtype) {
+    std::ostringstream msg;
+    msg << "[rope_kv_append] All inputs must have the same floating type but"
+        << " got " << dtype << ", " << values.dtype() << ", "
+        << key_cache.dtype() << " and " << value_cache.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (dims <= 0) {
+    std::ostringstream msg;
+    msg << "[rope_kv_append] dims must be positive but got " << dims << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (dims % 2 != 0) {
+    std::ostringstream msg;
+    msg << "[rope_kv_append] dims must be even but got " << dims << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (dims > keys.shape(-1)) {
+    std::ostringstream msg;
+    msg << "[rope_kv_append] dims must not exceed the keys' last dimension ("
+        << keys.shape(-1) << ") but got " << dims << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (freqs.has_value() &&
+      ((*freqs).ndim() != 1 || (*freqs).shape(0) != dims / 2)) {
+    std::ostringstream msg;
+    msg << "[rope_kv_append] freqs must be one dimensional with size "
+        << dims / 2 << " but got shape " << (*freqs).shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (freqs.has_value() && base.has_value()) {
+    throw std::invalid_argument(
+        "[rope_kv_append] Only one of base or freqs can have a value.");
+  }
+  if (!freqs.has_value() && !base.has_value()) {
+    throw std::invalid_argument(
+        "[rope_kv_append] Neither base nor freqs has a value.");
+  }
+
+  auto s = to_stream(s_);
+  int T_dim = ndim - 2;
+  Shape starts(ndim, 0);
+  Shape k_stops(key_cache.shape());
+  starts[T_dim] = offset;
+  k_stops[T_dim] = offset + T;
+  Shape v_stops(value_cache.shape());
+  v_stops[T_dim] = offset + T;
+
+  auto fallback =
+      [dims, traditional, base, scale, offset, starts, k_stops, v_stops, s](
+          const std::vector<array>& inputs) {
+        std::optional<array> freqs = std::nullopt;
+        if (inputs.size() == 5) {
+          freqs = inputs[4];
+        }
+        auto k_rot =
+            rope(inputs[0], dims, traditional, base, scale, offset, freqs, s);
+        return std::vector<array>{
+            slice_update(inputs[2], k_rot, starts, k_stops, s),
+            slice_update(inputs[3], inputs[1], starts, v_stops, s)};
+      };
+
+  // The fused kernel handles the single-token decode case: 4D dense inputs,
+  // one offset for the whole batch. Everything else falls back to the
+  // composed ops. The key cache update is a single-output primitive so the
+  // cache buffer can be donated and updated in place; the value cache update
+  // is a plain slice update, which donates in place as well.
+  bool fused = !RoPEAppend::use_fallback(s) && ndim == 4 && T == 1 &&
+      keys.flags().row_contiguous && key_cache.flags().row_contiguous;
+  if (fused) {
+    std::vector<array> inputs{keys, key_cache};
+    if (freqs.has_value()) {
+      inputs.push_back(astype(*freqs, float32, s));
+    }
+    auto k_fallback =
+        [dims, traditional, base, scale, offset, starts, k_stops, s](
+            const std::vector<array>& inputs) {
+          std::optional<array> freqs = std::nullopt;
+          if (inputs.size() == 3) {
+            freqs = inputs[2];
+          }
+          auto k_rot =
+              rope(inputs[0], dims, traditional, base, scale, offset, freqs, s);
+          return std::vector<array>{
+              slice_update(inputs[1], k_rot, starts, k_stops, s)};
+        };
+    auto k_updated = array(
+        key_cache.shape(),
+        dtype,
+        std::make_shared<RoPEAppend>(
+            s,
+            k_fallback,
+            dims,
+            traditional,
+            base.value_or(1.0),
+            scale,
+            offset),
+        std::move(inputs));
+    return std::vector<array>{
+        k_updated, slice_update(value_cache, values, starts, v_stops, s)};
+  }
+  std::vector<array> inputs{keys, values, key_cache, value_cache};
+  if (freqs.has_value()) {
+    inputs.push_back(astype(*freqs, float32, s));
+  }
+  return fallback(std::move(inputs));
+}
+
+bool RoPEAppend::is_equivalent(const Primitive& other) const {
+  const RoPEAppend& a_other = static_cast<const RoPEAppend&>(other);
+  return (
+      dims_ == a_other.dims_ && base_ == a_other.base_ &&
+      scale_ == a_other.scale_ && traditional_ == a_other.traditional_ &&
+      offset_ == a_other.offset_);
+}
+
 /** Computes: O = softmax(Q @ K.T) @ V **/
 array scaled_dot_product_attention(
     const array& queries,

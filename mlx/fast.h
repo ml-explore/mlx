@@ -44,6 +44,30 @@ MLX_API array rope(
     const std::optional<array>& freqs = std::nullopt,
     StreamOrDevice s = {});
 
+/**
+ * Fused RoPE on keys plus KV cache append: applies rotary positional encoding
+ * to ``keys`` at position ``offset`` and writes the result, together with
+ * ``values``, into the cache slice ``[..., offset:offset+T, :]``. Returns the
+ * updated ``(key_cache, value_cache)`` which share storage with the inputs
+ * when they are uniquely referenced (same in-place semantics as a slice
+ * update), so callers should treat the input caches as consumed.
+ *
+ * All inputs must have the same rank ``(B, ..., T, D)`` with the caches'
+ * sequence dimension covering ``offset + T``.
+ */
+MLX_API std::vector<array> rope_kv_append(
+    const array& keys,
+    const array& values,
+    const array& key_cache,
+    const array& value_cache,
+    int offset,
+    int dims,
+    bool traditional,
+    std::optional<float> base,
+    float scale,
+    const std::optional<array>& freqs = std::nullopt,
+    StreamOrDevice s = {});
+
 /** Computes: O = softmax(Q @ K.T) @ V **/
 MLX_API array scaled_dot_product_attention(
     const array& queries,

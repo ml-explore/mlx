@@ -11,6 +11,74 @@ bool RoPE::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
 
+bool RoPEAppend::use_fallback(Stream s) {
+  return s.device == Device::cpu;
+}
+
+void RoPEAppend::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() == 2 || inputs.size() == 3);
+  assert(outputs.size() == 1);
+  auto& k = inputs[0];
+  auto& k_cache = outputs[0];
+
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  // Share the cache buffer when it is uniquely referenced and copy it
+  // otherwise (the same in-place semantics as a slice update).
+  copy_gpu(inputs[1], k_cache, CopyType::Vector, s);
+
+  int ndim = k.ndim();
+  int k_dims = k.shape(-1);
+  // Rows are densely packed (checked when the primitive is built)
+  int64_t rows = k.size() / (k.shape(-2) * k_dims);
+  int64_t k_cache_mat_stride = inputs[1].strides()[ndim - 3];
+
+  bool with_freqs = inputs.size() == 3;
+  bool large = k_cache.data_size() > INT32_MAX || k_cache.size() > INT32_MAX;
+
+  std::string kname;
+  concatenate(
+      kname,
+      "rope_append_",
+      with_freqs ? "freqs_" : "",
+      large ? "large_" : "",
+      type_to_name(k));
+  std::string hash_name;
+  concatenate(hash_name, kname, traditional_ ? "_traditional" : "");
+  metal::MTLFCList func_consts = {
+      {&traditional_, MTL::DataType::DataTypeBool, 2}};
+
+  auto kernel = d.get_kernel(kname, hash_name, func_consts);
+  auto& compute_encoder = metal::get_command_encoder(s);
+
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(k, 0);
+  compute_encoder.set_output_array(k_cache, 1);
+  compute_encoder.set_bytes(offset_, 2);
+  compute_encoder.set_bytes(scale_, 3);
+  compute_encoder.set_bytes(dims_, 4);
+  compute_encoder.set_bytes(k_dims, 5);
+  compute_encoder.set_bytes(k_cache_mat_stride, 6);
+  if (with_freqs) {
+    auto& freqs = inputs[2];
+    compute_encoder.set_input_array(freqs, 7);
+    auto freq_stride = freqs.strides()[0];
+    compute_encoder.set_bytes(freq_stride, 8);
+  } else {
+    float base = std::log2(base_);
+    compute_encoder.set_bytes(base, 7);
+  }
+
+  uint32_t dim0 = k_dims / 2;
+  uint32_t dim1 = rows;
+  auto group_dims = get_block_dims(dim0, dim1, 1);
+  MTL::Size grid_dims(dim0, dim1, 1);
+  compute_encoder.dispatch_threads(grid_dims, group_dims);
+}
+
 void RoPE::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {

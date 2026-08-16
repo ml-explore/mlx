@@ -246,6 +246,18 @@ bool RoPE::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
 
+bool RoPEAppend::use_fallback(Stream s) {
+  // The fused kernel is only implemented on metal for now; the composed
+  // fallback is used instead.
+  return true;
+}
+
+void RoPEAppend::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("RoPEAppend has no CUDA implementation.");
+}
+
 void RoPE::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
