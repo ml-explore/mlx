@@ -2456,14 +2456,16 @@ array var(
   auto dtype = at_least_float(a.dtype());
   auto mu = mean(a, axes, /* keepdims= */ true, s);
   auto d = subtract(a, mu, s);
+  // The variance of complex values is the mean squared magnitude. Squaring the
+  // deviations directly gives a complex result which can even be negative, so
+  // multiply by the conjugate instead.
+  auto sq = issubdtype(dtype, complexfloating)
+      ? real(multiply(d, conjugate(d, s), s), s)
+      : square(d, s);
   if (issubdtype(dtype, complexfloating)) {
-    // The variance of complex values is the mean squared magnitude. Squaring
-    // the deviations directly gives a complex result which can even be
-    // negative, so take the magnitude first.
-    d = abs(d, s);
     dtype = float32;
   }
-  auto v = sum(square(d, s), axes, keepdims, s);
+  auto v = sum(sq, axes, keepdims, s);
 
   if (ddof != 0) {
     auto normalizer = maximum(
