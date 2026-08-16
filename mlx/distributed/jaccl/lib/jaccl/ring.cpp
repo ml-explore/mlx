@@ -1,6 +1,8 @@
 // Copyright © 2026 Apple Inc.
 
 #include "jaccl/ring.h"
+
+#include <stdexcept>
 #include "jaccl/reduction_ops.h"
 #include "jaccl/types.h"
 
@@ -253,6 +255,14 @@ void RingGroup::reduce_scatter(
 
   ring_.reduce_scatter<T, ReduceOp>(
       in_ptr, out_ptr, total, n_conns_, reduce_op);
+}
+
+std::shared_ptr<Group> RingGroup::split(int color, int key) {
+  throw std::runtime_error(
+      "[jaccl] Group split is not supported for a ring. A subset of a ring is "
+      "only a ring when its members are contiguous in ring order, and there is "
+      "no path around the gap when they are not. Configure the group as a mesh "
+      "to split it.");
 }
 
 } // namespace jaccl

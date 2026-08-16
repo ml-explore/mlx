@@ -161,7 +161,14 @@ class JACCLGroup : public GroupImpl {
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
-    throw std::runtime_error("[jaccl] Group split not supported.");
+    // MPI's convention, which mlx.distributed follows: a negative key means
+    // order the child by the parent's rank.
+    auto child = group_->split(color, (key < 0) ? group_->rank() : key);
+    if (child == nullptr) {
+      throw std::runtime_error(
+          "[jaccl] A negative color leaves this rank in no group.");
+    }
+    return std::make_shared<JACCLGroup>(std::move(child));
   }
 
  private:

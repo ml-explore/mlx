@@ -4,7 +4,85 @@
 #include "jaccl/reduction_ops.h"
 #include "jaccl/types.h"
 
+#include <algorithm>
+#include <sstream>
+
 namespace jaccl {
+
+std::shared_ptr<Group> MeshGroup::split(int color, int key) {
+  // Everybody learns everybody's colour and key, so each rank can work out the
+  // membership of its own child with no further agreement.
+  auto colors = side_channel_.all_gather<int>(color);
+  auto keys = side_channel_.all_gather<int>(key);
+
+  std::vector<int> members;
+  for (int r = 0; r < size_; r++) {
+    if (color >= 0 && colors[r] == color) {
+      members.push_back(r);
+    }
+  }
+  // MPI's ordering: by key, ties broken by rank in the parent.
+  std::stable_sort(members.begin(), members.end(), [&](int a, int b) {
+    return keys[a] != keys[b] ? keys[a] < keys[b] : a < b;
+  });
+
+  // A negative colour means take part but join no child. The two all_gathers
+  // above have already run, which is the point: this rank has done its share
+  // of the collective and can leave.
+  if (color < 0) {
+    return nullptr;
+  }
+
+  int child_rank =
+      std::find(members.begin(), members.end(), rank_) - members.begin();
+
+  // A child can only be built from members this rank can already reach. The
+  // hostfile is the only description of connectivity the runtime ever sees, so
+  // a pair missing there cannot be recovered here.
+  std::vector<std::string> child_devices(members.size());
+  for (size_t i = 0; i < members.size(); i++) {
+    int m = members[i];
+    if (m == rank_) {
+      continue;
+    }
+    if (device_names_[m].empty()) {
+      std::ostringstream msg;
+      msg << "[jaccl] Cannot split: rank " << rank_ << " has no device to rank "
+          << m
+          << ", which shares its colour. A child group can only contain "
+             "directly connected members.";
+      throw std::runtime_error(msg.str());
+    }
+    child_devices[i] = device_names_[m];
+  }
+
+  // The child bootstraps over the parent, so the parent has to outlive it, and
+  // holding a shared_ptr in the closure is what guarantees that.
+  //
+  // Every rank of the parent runs this on every child round, including ranks
+  // in a different child or in none, because the all_gather below is
+  // parent-wide. That is what keeps differently sized children in step: the
+  // length negotiation inside the parent's container all_gather covers the
+  // whole parent at once, so two children can never disagree about how many
+  // bytes are in flight.
+  auto self = std::static_pointer_cast<MeshGroup>(shared_from_this());
+  AllGatherFn child_all_gather =
+      [self, members](const char* src, char* dst, size_t n_bytes) {
+        auto all = self->side_channel_.all_gather(
+            std::vector<char>(src, src + n_bytes));
+        for (size_t i = 0; i < members.size(); i++) {
+          std::copy(
+              all[members[i]].begin(),
+              all[members[i]].begin() + n_bytes,
+              dst + i * n_bytes);
+        }
+      };
+
+  return std::make_shared<MeshGroup>(
+      child_rank,
+      child_devices,
+      SideChannel(child_rank, members.size(), std::move(child_all_gather)));
+}
 
 MeshGroup::MeshGroup(
     int rank,
@@ -12,6 +90,7 @@ MeshGroup::MeshGroup(
     SideChannel sc)
     : rank_(rank),
       size_(device_names.size()),
+      device_names_(device_names),
       side_channel_(std::move(sc)),
       connections_(create_connections(device_names)) {
   if (size_ > MESH_MAX_PEERS) {

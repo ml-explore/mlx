@@ -53,6 +53,14 @@ class RingGroup : public Group {
 
   void barrier() override;
 
+  /**
+   * A ring child is only a ring when its members are contiguous in ring order,
+   * and JACCL has no way to route around the gap when they are not, so this
+   * stays unimplemented rather than silently building something that is not a
+   * ring. Configure the group as a mesh if you need to split it.
+   */
+  std::shared_ptr<Group> split(int color, int key) override;
+
  private:
   template <typename T, typename ReduceOp>
   void all_reduce(

@@ -51,6 +51,8 @@ class MeshGroup : public Group {
 
   void barrier() override;
 
+  std::shared_ptr<Group> split(int color, int key) override;
+
  private:
   template <typename T, typename ReduceOp>
   void all_reduce(
@@ -80,6 +82,9 @@ class MeshGroup : public Group {
 
   int rank_;
   int size_;
+  // Kept so that `split` can build a child's row from it. Entry i is the
+  // device reaching rank i, empty for this rank itself.
+  std::vector<std::string> device_names_;
   SideChannel side_channel_;
   std::vector<Connection> connections_;
   std::vector<SharedBuffer> buffers_;

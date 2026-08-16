@@ -4,18 +4,35 @@
 
 #include <cstddef>
 #include <memory>
+#include <stdexcept>
 
 namespace jaccl {
 
 /**
  * Abstract base class for a JACCL communication group.
+ *
+ * Groups are created and held through shared_ptr. A group made by `split`
+ * bootstraps over its parent's side channel and so keeps the parent alive,
+ * which is why `shared_from_this` has to be available here.
  */
-class Group {
+class Group : public std::enable_shared_from_this<Group> {
  public:
   virtual ~Group() {}
 
   virtual int rank() = 0;
   virtual int size() = 0;
+
+  /**
+   * Build a new group from the members of this one that pass the same color,
+   * ordered by key and then by rank in the parent, which is the rule MPI uses.
+   *
+   * Collective over this group: every member has to call it, including a
+   * member that ends up in no child, because the colors are exchanged over
+   * this group. Pass a negative color to take part without joining a child.
+   */
+  virtual std::shared_ptr<Group> split(int color, int key) {
+    throw std::runtime_error("[jaccl] Group split not supported.");
+  }
 
   virtual void
   all_sum(const void* input, void* output, size_t n_bytes, int dtype) = 0;
