@@ -168,6 +168,9 @@ NO_GPU_USE_FALLBACK(LayerNorm)
 NO_GPU_MULTI(LayerNormVJP)
 NO_GPU_USE_FALLBACK(RMSNorm)
 NO_GPU_MULTI(RMSNormVJP)
+bool RMSNorm::use_fallback(Stream, bool) {
+  return true;
+}
 NO_GPU_USE_FALLBACK(RoPE)
 NO_GPU_MULTI(ScaledDotProductAttention)
 NO_GPU_MULTI(ScaledDotProductAttentionVJP)

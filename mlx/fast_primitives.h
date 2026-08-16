@@ -46,6 +46,9 @@ class RMSNorm : public Custom {
       : Custom(stream, std::move(fallback)), eps_(eps) {}
 
   static bool use_fallback(Stream stream);
+  // Whether the primitive falls back to composed ops when a residual input
+  // is provided. Backends without a fused kernel fall back.
+  static bool use_fallback(Stream stream, bool has_residual);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -62,7 +65,11 @@ class RMSNorm : public Custom {
 
   DEFINE_NAME(RMSNorm)
   bool is_equivalent(const Primitive& other) const override;
-  DEFINE_INPUT_OUTPUT_SHAPE()
+  // The primitive takes {x, w} or {x, w, residual} and produces one output
+  // per non-weight input, each with the shape of x.
+  std::vector<Shape> output_shapes(const std::vector<array>& inputs) override {
+    return std::vector<Shape>(inputs.size() - 1, inputs[0].shape());
+  }
 
   auto state() const {
     return std::make_pair(nullptr, eps_);

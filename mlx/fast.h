@@ -17,6 +17,15 @@ MLX_API array rms_norm(
     float eps,
     StreamOrDevice s = {});
 
+/** Fused residual add + RMS norm: returns {rms_norm(x + residual) * weight,
+ * x + residual}. Without a residual this is equivalent to the above. */
+MLX_API std::vector<array> rms_norm(
+    const array& x,
+    const std::optional<array>& weight,
+    const std::optional<array>& residual,
+    float eps,
+    StreamOrDevice s = {});
+
 MLX_API array layer_norm(
     const array& x,
     const std::optional<array>& weight,

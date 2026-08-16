@@ -120,14 +120,25 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "rms_norm",
-      &mx::fast::rms_norm,
+      [](const mx::array& x,
+         std::optional<mx::array> weight,
+         float eps,
+         const std::optional<mx::array>& residual,
+         mx::StreamOrDevice s) -> nb::object {
+        if (residual.has_value()) {
+          auto out = mx::fast::rms_norm(x, weight, residual, eps, s);
+          return nb::make_tuple(nb::cast(out[0]), nb::cast(out[1]));
+        }
+        return nb::cast(mx::fast::rms_norm(x, weight, eps, s));
+      },
       "x"_a,
       "weight"_a.none(),
       "eps"_a,
       nb::kw_only(),
+      "residual"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def rms_norm(x: array, weight: array | None, eps: float, *, stream: StreamOrDevice = None) -> array"),
+          "def rms_norm(x: array, weight: array | None, eps: float, *, residual: array | None = None, stream: StreamOrDevice = None) -> array | tuple[array, array]"),
       R"pbdoc(
         Root Mean Square normalization (RMS norm).
 
@@ -139,9 +150,14 @@ void init_fast(nb::module_& parent_module) {
               The ``weight`` should be one-dimensional with the same size
               as the last axis of ``x``. If set to ``None`` then no scaling happens.
             eps (float): A small additive constant for numerical stability.
+            residual (array, optional): An optional residual to add to ``x``
+              before normalizing. When given, the normalized output and the sum
+              ``x + residual`` are computed with a single fused kernel.
 
         Returns:
-            array: The output array.
+            array or tuple(array, array): The normalized output, or when
+              ``residual`` is provided a tuple ``(normed, summed)`` with the
+              normalized output and the sum ``x + residual``.
       )pbdoc");
 
   m.def(

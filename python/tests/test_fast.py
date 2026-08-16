@@ -525,6 +525,90 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
 
+    def test_rms_norm_residual(self):
+        # Per dtype absolute tolerance. The fused kernel uses 16 reads per
+        # thread for axis sizes <= 3072 which regroups the fp32 reduction, so
+        # unlike plain rms_norm the output can differ from the composed ops by
+        # an ulp; the sum output is always exact.
+        tolerances = {mx.float32: 1e-6, mx.float16: 2e-3, mx.bfloat16: 2e-2}
+
+        eps = 1e-5
+        dimss = [31, 256, 512, 2560, 4099, 5120, 8192]
+        for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+            for dims in dimss:
+                for shape in [(dims,), (1, 1, dims), (1, 8, dims), (4, 32, dims)]:
+                    x = mx.random.uniform(shape=shape).astype(dtype)
+                    r = mx.random.uniform(shape=shape).astype(dtype)
+                    weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+                    for w in (weight, None):
+                        out, summed = mx.fast.rms_norm(x, w, eps, residual=r)
+                        expected_sum = x + r
+                        expected_out = mx.fast.rms_norm(expected_sum, w, eps)
+                        self.assertLess(
+                            mx.abs(out - expected_out).max(), tolerances[dtype]
+                        )
+                        # The sum output must be exact
+                        self.assertEqual(
+                            mx.abs(summed - expected_sum).max().item(), 0.0
+                        )
+
+        # Non-contiguous inputs
+        dims = 128
+        x = mx.random.uniform(shape=(4, 64, dims)).transpose(0, 2, 1)
+        r = mx.random.uniform(shape=(4, 64, dims)).transpose(0, 2, 1)
+        weight = mx.random.uniform(shape=(64,))
+        out, summed = mx.fast.rms_norm(x, weight, eps, residual=r)
+        expected_sum = x + r
+        expected_out = mx.fast.rms_norm(expected_sum, weight, eps)
+        self.assertLess(mx.abs(out - expected_out).max(), 1e-6)
+        self.assertEqual(mx.abs(summed - expected_sum).max().item(), 0.0)
+
+        # Shape mismatch raises
+        with self.assertRaises(ValueError):
+            x = mx.random.uniform(shape=(1, 5))
+            mx.fast.rms_norm(x, None, 1e-5, residual=mx.ones((1, 4)))
+
+        # vmap
+        x = mx.random.uniform(shape=(4, 256))
+        r = mx.random.uniform(shape=(4, 256))
+        weight = mx.random.uniform(shape=(256,))
+        vf = mx.vmap(lambda a, b: mx.fast.rms_norm(a, weight, eps, residual=b))
+        out, summed = vf(x, r)
+        self.assertLess(mx.abs(summed - (x + r)).max().item(), 1e-6)
+        self.assertLess(
+            mx.abs(out - mx.fast.rms_norm(x + r, weight, eps)).max(), 1e-6
+        )
+
+    def test_rms_norm_residual_grad(self):
+        eps = 1e-5
+
+        def f_comp(x, r, w, y, z):
+            s = x + r
+            return (mx.fast.rms_norm(s, w, eps) * y).sum() + (s * z).sum()
+
+        def f_fused(x, r, w, y, z):
+            out, s = mx.fast.rms_norm(x, w, eps, residual=r)
+            return (out * y).sum() + (s * z).sum()
+
+        for D in [256, 2560, 8192]:
+            x = mx.random.uniform(shape=(4, 32, D))
+            r = mx.random.uniform(shape=(4, 32, D))
+            w = mx.random.uniform(shape=(D,))
+            y = mx.random.uniform(shape=(4, 32, D))
+            z = mx.random.uniform(shape=(4, 32, D))
+            g_comp = mx.grad(f_comp, argnums=(0, 1, 2))(x, r, w, y, z)
+            g_fused = mx.grad(f_fused, argnums=(0, 1, 2))(x, r, w, y, z)
+            for gc, gf in zip(g_comp, g_fused):
+                self.assertLess(
+                    mx.abs(gc - gf).max() / mx.abs(gc).mean(), 1e-5
+                )
+            # Partial argnums
+            gr_comp = mx.grad(f_comp, argnums=(1,))(x, r, w, y, z)
+            gr_fused = mx.grad(f_fused, argnums=(1,))(x, r, w, y, z)
+            self.assertLess(
+                mx.abs(gr_comp - gr_fused).max() / mx.abs(gr_comp).mean(), 1e-5
+            )
+
     def test_layer_norm_dim_check(self):
         with self.assertRaises(ValueError):
             weight = mx.ones((129,))

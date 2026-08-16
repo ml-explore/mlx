@@ -120,14 +120,100 @@ array rms_norm(
   return fallback({x, passed_weight})[0];
 }
 
+std::vector<array> rms_norm(
+    const array& x,
+    const std::optional<array>& weight,
+    const std::optional<array>& residual,
+    float eps,
+    StreamOrDevice s_ /* = {} */) {
+  if (!residual.has_value()) {
+    return {rms_norm(x, weight, eps, s_)};
+  }
+  bool has_weight = weight.has_value();
+
+  if (x.ndim() == 0) {
+    std::ostringstream msg;
+    msg << "[rms_norm] Input must have at least 1 dimension but got input with "
+           "0 dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if ((*residual).shape() != x.shape()) {
+    std::ostringstream msg;
+    msg << "[rms_norm] (*residual) must have the same shape as x but has shape "
+        << (*residual).shape() << " while x has shape " << x.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (has_weight) {
+    if ((*weight).ndim() != 1) {
+      std::ostringstream msg;
+      msg << "[rms_norm] (*weight) must have 1 dimension but has "
+          << (*weight).ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    if ((*weight).size() != x.shape(-1)) {
+      std::ostringstream msg;
+      msg << "[rms_norm] (*weight) must have the same size as the last dimension of"
+             " x but has "
+          << (*weight).size() << " elements.";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+
+  auto out_type = has_weight ? result_type(x, (*residual), (*weight))
+                             : result_type(x, (*residual));
+  if (!issubdtype(out_type, floating)) {
+    std::ostringstream msg;
+    msg << "[rms_norm] Received unsupported type " << out_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto s = to_stream(s_);
+  // The sum is computed in the output type (matching a composed
+  // ``add`` followed by ``rms_norm``) and the normalization accumulates in
+  // float32.
+  auto fallback =
+      [has_weight, eps, out_type, s](const std::vector<array>& inputs) {
+        auto summed = add(inputs[0], inputs[2], s);
+        auto xf = astype(summed, float32, s);
+        auto out = multiply(
+            xf,
+            rsqrt(
+                add(mean(square(xf, s), -1, /* keepdims */ true, s),
+                    array(eps, float32),
+                    s),
+                s),
+            s);
+        out = astype(out, out_type, s);
+        if (has_weight) {
+          out = multiply(out, inputs[1], s);
+        }
+        return std::vector<array>{out, summed};
+      };
+
+  auto passed_weight =
+      (has_weight) ? astype(*weight, out_type, s) : array(1, out_type);
+
+  if (!RMSNorm::use_fallback(s, /* has_residual */ true)) {
+    return array::make_arrays(
+        {x.shape(), x.shape()},
+        {out_type, out_type},
+        std::make_shared<RMSNorm>(s, fallback, eps),
+        {astype(x, out_type, s),
+         passed_weight,
+         astype(*residual, out_type, s)});
+  }
+  return fallback({x, passed_weight, *residual});
+}
+
 std::vector<array> RMSNorm::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
-  assert(primals.size() == 2);
-  assert(outputs.size() == 1);
-  assert(cotangents.size() == 1);
+  bool has_residual = primals.size() == 3;
+  assert(primals.size() == 2 || has_residual);
+  assert(outputs.size() == (has_residual ? 2 : 1));
+  assert(cotangents.size() == outputs.size());
 
   auto s = stream();
   auto fallback = [eps = eps_, s](const std::vector<array>& inputs) {
@@ -162,6 +248,25 @@ std::vector<array> RMSNorm::vjp(
 
     return vjps;
   };
+
+  if (has_residual) {
+    // The forward is out = rms_norm(summed) * w, out_sum = summed with
+    // summed = x + residual. The gradient w.r.t. both x and residual is the
+    // norm's vjp w.r.t. summed plus the cotangent of the sum output.
+    auto vjps = array::make_arrays(
+        {primals[0].shape(), primals[1].shape()},
+        {primals[0].dtype(), primals[1].dtype()},
+        std::make_shared<RMSNormVJP>(s, fallback, eps_),
+        {outputs[1], primals[1], cotangents[0]});
+    auto gx = add(vjps[0], cotangents[1], s);
+    std::vector<array> all_vjps{gx, vjps[1], gx};
+
+    std::vector<array> returned_vjps;
+    for (auto& arg : argnums) {
+      returned_vjps.push_back(all_vjps[arg]);
+    }
+    return returned_vjps;
+  }
 
   auto vjps = array::make_arrays(
       {primals[0].shape(), primals[1].shape()},

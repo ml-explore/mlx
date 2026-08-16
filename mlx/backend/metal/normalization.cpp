@@ -14,15 +14,21 @@ bool RMSNorm::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
 
+bool RMSNorm::use_fallback(Stream s, bool /* has_residual */) {
+  // The metal backend implements the fused residual kernels.
+  return use_fallback(s);
+}
+
 void RMSNorm::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   auto& s = stream();
   auto& d = metal::device(s.device);
+  bool has_residual = inputs.size() == 3;
   auto& out = outputs[0];
 
   // Make sure that the last dimension is contiguous
-  auto set_output = [&s, &out](const array& x) {
+  auto set_output = [&s](const array& x, array& out) {
     bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
     if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
@@ -46,16 +52,32 @@ void RMSNorm::eval_gpu(
     }
   };
 
-  const array x = set_output(inputs[0]);
+  const array x = set_output(inputs[0], out);
   const array& w = inputs[1];
+  // The residual input gets the same treatment and donates its buffer to the
+  // sum output when possible. Buffers can only be donated when solely owned
+  // so x and the residual can never alias the same donated buffer.
+  array r = x;
+  if (has_residual) {
+    r = set_output(inputs[2], outputs[1]);
+  }
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
 
   const int simd_size = 32;
-  const int n_reads = RMS_N_READS;
   const int looped_limit = RMS_LOOPED_LIMIT;
+  int n_reads = RMS_N_READS;
   std::string op_name = "rms";
+  if (has_residual) {
+    op_name += "_residual";
+    if (axis_size <= 3072) {
+      // More reads per thread keep the threadgroup small which leaves room
+      // for more resident threadgroups per SM at small axis sizes.
+      op_name += "16";
+      n_reads = 16;
+    }
+  }
   if (axis_size > looped_limit) {
     op_name += "_looped";
   }
@@ -82,12 +104,23 @@ void RMSNorm::eval_gpu(
 
     uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     compute_encoder.set_compute_pipeline_state(kernel);
-    compute_encoder.set_input_array(x, 0);
-    compute_encoder.set_input_array(w, 1);
-    compute_encoder.set_output_array(out, 2);
-    compute_encoder.set_bytes(eps_, 3);
-    compute_encoder.set_bytes(axis_size, 4);
-    compute_encoder.set_bytes(w_stride, 5);
+    if (has_residual) {
+      compute_encoder.set_input_array(x, 0);
+      compute_encoder.set_input_array(r, 1);
+      compute_encoder.set_input_array(w, 2);
+      compute_encoder.set_output_array(out, 3);
+      compute_encoder.set_output_array(outputs[1], 4);
+      compute_encoder.set_bytes(eps_, 5);
+      compute_encoder.set_bytes(axis_size, 6);
+      compute_encoder.set_bytes(w_stride, 7);
+    } else {
+      compute_encoder.set_input_array(x, 0);
+      compute_encoder.set_input_array(w, 1);
+      compute_encoder.set_output_array(out, 2);
+      compute_encoder.set_bytes(eps_, 3);
+      compute_encoder.set_bytes(axis_size, 4);
+      compute_encoder.set_bytes(w_stride, 5);
+    }
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
 }

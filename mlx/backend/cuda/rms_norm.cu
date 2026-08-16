@@ -462,6 +462,11 @@ bool RMSNorm::use_fallback(Stream s) {
   return s.device == Device::cpu;
 }
 
+bool RMSNorm::use_fallback(Stream s, bool has_residual) {
+  // The fused residual kernel is only implemented on metal for now.
+  return has_residual || use_fallback(s);
+}
+
 template <int n_per_thread, typename F>
 void dispatch_group_dim(int axis_size, F&& f) {
   if (axis_size <= n_per_thread * 8) {
