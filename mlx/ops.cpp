@@ -1633,7 +1633,10 @@ array pad(
     }
 
     auto ax = axes[i] < 0 ? a.ndim() + axes[i] : axes[i];
-    out_shape[ax] += low_pad_size[i] + high_pad_size[i];
+    out_shape[ax] = safe_cast(
+        static_cast<int64_t>(out_shape[ax]) + low_pad_size[i] +
+            high_pad_size[i],
+        "pad");
   }
 
   if (mode == "constant") {
@@ -2455,7 +2458,17 @@ array var(
     StreamOrDevice s /* = {}*/) {
   auto dtype = at_least_float(a.dtype());
   auto mu = mean(a, axes, /* keepdims= */ true, s);
-  auto v = sum(square(subtract(a, mu, s), s), axes, keepdims, s);
+  auto d = subtract(a, mu, s);
+  // The variance of complex values is the mean squared magnitude. Squaring the
+  // deviations directly gives a complex result which can even be negative, so
+  // multiply by the conjugate instead.
+  auto sq = issubdtype(dtype, complexfloating)
+      ? real(multiply(d, conjugate(d, s), s), s)
+      : square(d, s);
+  if (issubdtype(dtype, complexfloating)) {
+    dtype = float32;
+  }
+  auto v = sum(sq, axes, keepdims, s);
 
   if (ddof != 0) {
     auto normalizer = maximum(
@@ -3183,6 +3196,9 @@ array floor_divide(
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
+  if (issubdtype(dtype, complexfloating)) {
+    throw std::invalid_argument("[remainder] Complex type not supported.");
+  }
   auto inputs = broadcast_arrays(
       {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
   auto shape = inputs[0].shape();

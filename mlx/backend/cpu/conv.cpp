@@ -814,7 +814,11 @@ void explicit_gemm_conv_1D_cpu(
   auto& encoder = cpu::get_command_encoder(stream);
 
   // Pad input
-  Shape padded_shape = {N, iH + padding_lo[0] + padding_hi[0], C};
+  Shape padded_shape = {
+      N,
+      safe_cast(
+          static_cast<int64_t>(iH) + padding_lo[0] + padding_hi[0], "conv"),
+      C};
   array in_padded(padded_shape, conv_dtype, nullptr, {});
 
   // Fill with zeros
@@ -961,7 +965,8 @@ void explicit_gemm_conv_ND_cpu(
   Shape padded_shape(in.shape().size());
   padded_shape.front() = N;
   for (size_t i = 0; i < iDim.size(); i++) {
-    padded_shape[i + 1] = iDim[i] + padding_lo[i] + padding_hi[i];
+    padded_shape[i + 1] = safe_cast(
+        static_cast<int64_t>(iDim[i]) + padding_lo[i] + padding_hi[i], "conv");
   }
   padded_shape.back() = C;
   array in_padded(padded_shape, conv_dtype, nullptr, {});
