@@ -52,6 +52,10 @@ class InstanceNorm(Module):
             self.bias = mx.zeros((dims,))
         self.dims = dims
         self.eps = eps
+        if eps < 0.0:
+            raise ValueError(
+                f"[InstanceNorm] 'eps' must be non-negative but got {eps}."
+            )
 
     def _extra_repr(self):
         return f"{self.dims}, eps={self.eps}, affine={'weight' in self}"
@@ -106,6 +110,8 @@ class LayerNorm(Module):
             if bias:
                 self.bias = mx.zeros((dims,))
         self.eps = eps
+        if eps < 0.0:
+            raise ValueError(f"[LayerNorm] 'eps' must be non-negative but got {eps}.")
         self.dims = dims
 
     def _extra_repr(self):
@@ -143,6 +149,8 @@ class RMSNorm(Module):
         super().__init__()
         self.weight = mx.ones((dims,))
         self.eps = eps
+        if eps < 0.0:
+            raise ValueError(f"[RMSNorm] 'eps' must be non-negative but got {eps}.")
 
     def _extra_repr(self):
         return f"{self.weight.shape[0]}, eps={self.eps}"
@@ -210,6 +218,8 @@ class GroupNorm(Module):
         self.num_groups = num_groups
         self.dims = dims
         self.eps = eps
+        if eps < 0.0:
+            raise ValueError(f"[GroupNorm] 'eps' must be non-negative but got {eps}.")
         self.pytorch_compatible = pytorch_compatible
 
     def _extra_repr(self):
@@ -312,6 +322,8 @@ class BatchNorm(Module):
 
         self.num_features = num_features
         self.eps = eps
+        if eps < 0.0:
+            raise ValueError(f"[BatchNorm] 'eps' must be non-negative but got {eps}.")
         self.momentum = momentum
         self.track_running_stats = track_running_stats
 
