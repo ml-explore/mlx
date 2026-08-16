@@ -61,8 +61,7 @@ struct ArgMin {
       uint32_t offset) {
 #pragma unroll
     for (int i = 0; i < N; i++) {
-      if ((!is_nan(best.val) && is_nan(vals[i])) ||
-          vals[i] < best.val) {
+      if ((!is_nan(best.val) && is_nan(vals[i])) || vals[i] < best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }
@@ -98,8 +97,7 @@ struct ArgMax {
       uint32_t offset) {
 #pragma unroll
     for (int i = 0; i < N; i++) {
-      if ((!is_nan(best.val) && is_nan(vals[i])) ||
-          vals[i] > best.val) {
+      if ((!is_nan(best.val) && is_nan(vals[i])) || vals[i] > best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }
