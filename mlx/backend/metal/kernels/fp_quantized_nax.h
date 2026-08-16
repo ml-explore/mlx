@@ -61,11 +61,12 @@ struct Dequantize {
 
 template <typename U, int bits>
 inline void dequantize(uint8_t w, U scale, threadgroup U* w_local) {
+  const float s = float(scale);
   if constexpr (bits == 4) {
-    w_local[0] = scale * Dequantize<4, U>{}(w);
-    w_local[1] = scale * Dequantize<4, U>{}(w >> 4);
+    w_local[0] = static_cast<U>(s * Dequantize<4, float>{}(w));
+    w_local[1] = static_cast<U>(s * Dequantize<4, float>{}(w >> 4));
   } else {
-    w_local[0] = scale * Dequantize<8, U>{}(w);
+    w_local[0] = static_cast<U>(s * Dequantize<8, float>{}(w));
   }
 }
 

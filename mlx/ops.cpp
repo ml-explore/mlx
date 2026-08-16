@@ -16,6 +16,7 @@
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
+#include "mlx/types/limits.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -2111,11 +2112,11 @@ array nan_to_num(
 
   auto type_to_max = [](const auto& dtype) -> float {
     if (dtype == float32) {
-      return std::numeric_limits<float>::max();
+      return numeric_limits<float>::max();
     } else if (dtype == bfloat16) {
-      return std::numeric_limits<bfloat16_t>::max();
+      return numeric_limits<bfloat16_t>::max();
     } else if (dtype == float16) {
-      return std::numeric_limits<float16_t>::max();
+      return numeric_limits<float16_t>::max();
     } else {
       std::ostringstream msg;
       msg << "[nan_to_num] Does not yet support given type: " << dtype << ".";
@@ -3272,6 +3273,9 @@ array exp(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array expm1(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[expm1] Not supported for complex64.");
+  }
   auto dtype = at_least_float(a.dtype());
   auto input = astype(a, dtype, s);
   return array(
@@ -3318,6 +3322,9 @@ array arctan(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array arctan2(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64 || b.dtype() == complex64) {
+    throw std::invalid_argument("[arctan2] Not supported for complex64.");
+  }
   auto dtype = at_least_float(promote_types(a.dtype(), b.dtype()));
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
@@ -3425,6 +3432,9 @@ array logaddexp(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 }
 
 array sigmoid(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[sigmoid] Not supported for complex64.");
+  }
   auto dtype = at_least_float(a.dtype());
   auto input = astype(a, dtype, s);
   return array(
@@ -3432,6 +3442,9 @@ array sigmoid(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array erf(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[erf] Not supported for complex64.");
+  }
   auto dtype = at_least_float(a.dtype());
   return array(
       a.shape(),
@@ -3441,6 +3454,9 @@ array erf(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array erfinv(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == complex64) {
+    throw std::invalid_argument("[erfinv] Not supported for complex64.");
+  }
   auto dtype = at_least_float(a.dtype());
   return array(
       a.shape(),

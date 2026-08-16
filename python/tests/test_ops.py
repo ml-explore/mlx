@@ -1155,11 +1155,28 @@ class TestOps(mlx_tests.MLXTestCase):
         np.seterr(over=errs["over"])
         self.assertTrue(np.allclose(result, expected, rtol=1e-3, atol=1e-4))
 
+        # Complex is not supported and has to say so rather than quietly
+        # computing on the real part
+        z = mx.array([1 + 2j], mx.complex64)
+        with self.assertRaises(ValueError):
+            mx.expm1(z)
+        with self.assertRaises(ValueError):
+            mx.sigmoid(z)
+        with self.assertRaises(ValueError):
+            mx.arctan2(z, z)
+
     def test_erf(self):
         inputs = [-5, 0.0, 0.5, 1.0, 2.0, 10.0]
         x = mx.array(inputs)
         expected = np.array([math.erf(i) for i in inputs])
         self.assertTrue(np.allclose(mx.erf(x), expected))
+
+        # Complex is not supported and has to say so rather than abort
+        z = mx.array([1 + 2j], mx.complex64)
+        with self.assertRaises(ValueError):
+            mx.erf(z)
+        with self.assertRaises(ValueError):
+            mx.erfinv(z)
 
     def test_erfinv(self):
         inputs = [-5.0, -1.0, 0.5, 0.0, 0.5, 1.0, 5.0]
@@ -2267,7 +2284,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(out_mx, out_np))
 
         for t in [mx.float32, mx.float16]:
-            a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")])
+            a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")]).astype(t)
             out_mx = mx.nan_to_num(a)
             out_np = np.nan_to_num(a)
             self.assertTrue(np.allclose(out_mx, out_np))
@@ -2276,6 +2293,16 @@ class TestOps(mlx_tests.MLXTestCase):
             out_np = np.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
             out_mx = mx.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
             self.assertTrue(np.allclose(out_mx, out_np))
+
+        # bfloat16 has no numpy analogue; infinities should clamp to the
+        # dtype's largest finite value, not 0
+        a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")]).astype(
+            mx.bfloat16
+        )
+        out_mx = mx.nan_to_num(a)
+        bf_max = mx.finfo(mx.bfloat16).max
+        expected = mx.array([bf_max, 6.9, 0.0, -bf_max]).astype(mx.bfloat16)
+        self.assertTrue(mx.array_equal(out_mx, expected))
 
     def test_pad_reflect_symmetric(self):
         # mx.pad reflect/symmetric must match numpy.pad exactly. Covers
@@ -2690,6 +2717,27 @@ class TestOps(mlx_tests.MLXTestCase):
         y_mx = mx.sort(a, axis=-1)
         y_np = np.sort(np.array(a), axis=-1)
         self.assertTrue(np.array_equal(y_np, y_mx))
+
+        # Negative stride on an axis that is not sorted, single and multi block
+        np.random.seed(0)
+        for dtype in ("int32", "float32"):
+            for size in (4, 32769):
+                with self.subTest(dtype=dtype, size=size):
+                    a_np = np.random.uniform(0, 100, size=(3, size))
+                    a_np = a_np.astype(getattr(np, dtype))
+                    a_mx = mx.array(a_np)[::-1, :]
+                    a_np = a_np[::-1, :]
+
+                    b_np = np.sort(a_np, axis=-1)
+                    self.assertTrue(np.array_equal(b_np, mx.sort(a_mx, axis=-1)))
+
+                    idx = mx.argsort(a_mx, axis=-1)
+                    self.assertTrue(
+                        np.array_equal(b_np, mx.take_along_axis(a_mx, idx, axis=-1))
+                    )
+
+                    b_mx = mx.partition(a_mx, 1, axis=-1)
+                    self.assertTrue(np.array_equal(b_np[:, 1], np.array(b_mx)[:, 1]))
 
     def test_partition(self):
         shape = (3, 4, 5)

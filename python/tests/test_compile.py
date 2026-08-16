@@ -1569,6 +1569,13 @@ class TestCompile(mlx_tests.MLXTestCase):
         expected = w[::-1, :, ::-1, :] + 1.0
         self.assertTrue(mx.array_equal(p(w[::-1, :, ::-1, :]), expected))
 
+    def test_compile_abs_unsigned(self):
+        # abs has to compile for the wider unsigned types too
+        fun = lambda x: mx.abs(x) + 1
+        for dtype in [mx.uint8, mx.uint16, mx.uint32, mx.uint64]:
+            x = mx.array([1, 2, 3], dtype)
+            self.assertTrue(mx.array_equal(mx.compile(fun)(x), fun(x)))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
