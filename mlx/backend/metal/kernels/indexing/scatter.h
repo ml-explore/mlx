@@ -11,10 +11,11 @@ template <
     int NIDX,
     bool UPD_ROW_CONTIG,
     int NWORK,
-    typename LocT>
+    typename LocT,
+    typename OutT>
 METAL_FUNC void scatter_impl(
     const device T* updates,
-    device mlx_atomic<T>* out,
+    device OutT* out,
     const constant int* upd_shape,
     const constant int64_t* upd_strides,
     const constant size_t& upd_ndim,

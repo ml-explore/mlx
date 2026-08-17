@@ -36,7 +36,7 @@ constexpr std::string_view gather_kernels = R"(
 constexpr std::string_view scatter_kernels = R"(
 [[kernel]] void scatter{0}_{4}_updc_{7}_nwork{8}_{9}(
     const device {1}* updates [[buffer(1)]],
-    device mlx_atomic<{1}>* out [[buffer(2)]],
+    device {10}* out [[buffer(2)]],
     const constant int* upd_shape [[buffer(3)]],
     const constant int64_t* upd_strides [[buffer(4)]],
     const constant size_t& upd_ndim [[buffer(5)]],

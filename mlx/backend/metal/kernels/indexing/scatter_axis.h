@@ -8,11 +8,12 @@ template <
     typename LocT,
     typename Op,
     bool UpdC,
-    bool IdxC>
+    bool IdxC,
+    typename OutT>
 [[kernel]] void scatter_axis(
     const device T* upd [[buffer(0)]],
     const device IdxT* indices [[buffer(1)]],
-    device mlx_atomic<T>* out [[buffer(2)]],
+    device OutT* out [[buffer(2)]],
     const constant int* shape [[buffer(3)]],
     const constant int64_t* upd_strides [[buffer(4)]],
     const constant int64_t* idx_strides [[buffer(5)]],

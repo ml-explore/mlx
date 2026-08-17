@@ -1538,19 +1538,20 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(b.size, 0)
         self.assertEqual(b.shape, a.shape)
 
-        # 64-bit outputs are not supported by the Metal scatter and should
-        # raise a clean error rather than failing the Metal JIT build. The CPU
-        # and CUDA backends handle them fine.
+        # Assignment needs no atomic, so 8-byte outputs work on every backend.
         idx = mx.array([[0], [1], [2], [3]])
+        expected = np.zeros((4, 8))
+        expected[np.arange(4), np.arange(4)] = 1
         for dt in (mx.int64, mx.uint64):
             x = mx.zeros((4, 8), dtype=dt)
             upd = mx.ones((4, 1), dtype=dt)
-            if mx.metal.is_available():
-                with self.assertRaises(ValueError):
-                    mx.eval(mx.put_along_axis(x, idx, upd, axis=1, stream=mx.gpu))
-            out = mx.put_along_axis(x, idx, upd, axis=1, stream=mx.cpu)
-            self.assertEqual(out.dtype, dt)
-            mx.eval(out)
+            for stream in (mx.cpu, mx.gpu):
+                if stream == mx.gpu and not mx.metal.is_available():
+                    continue
+                out = mx.put_along_axis(x, idx, upd, axis=1, stream=stream)
+                self.assertEqual(out.dtype, dt)
+                mx.eval(out)
+                self.assertTrue(np.array_equal(np.array(out), expected))
 
     def test_split(self):
         a = mx.array([1, 2, 3])
@@ -2930,6 +2931,43 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertCmpNumpy([3, 4], mx.eye, np.eye, k=1)
         # Test with negative k parameter
         self.assertCmpNumpy([5, 6], mx.eye, np.eye, k=-2)
+
+    def test_scatter_8_byte_types(self):
+        # eye and diag build their result with an assignment scatter, which used
+        # to reject 8-byte output types on the GPU.
+        for dt in (mx.int64, mx.uint64, mx.complex64):
+            for stream in (mx.cpu, mx.gpu):
+                if stream == mx.gpu and not mx.metal.is_available():
+                    continue
+                d = mx.diag(mx.arange(5).astype(dt), stream=stream)
+                mx.eval(d)
+                self.assertEqual(d.dtype, dt)
+                self.assertTrue(np.array_equal(np.array(d), np.diag(np.arange(5))))
+
+                if dt != mx.complex64:
+                    e = mx.eye(4, dtype=dt, stream=stream)
+                    mx.eval(e)
+                    self.assertEqual(e.dtype, dt)
+                    self.assertTrue(np.array_equal(np.array(e), np.eye(4)))
+
+                # Unique indices: a repeated one is a race by definition, so
+                # the GPU and the CPU need not agree.
+                base = mx.zeros((10,), dtype=dt)
+                idx = mx.array([7, 1, 4])
+                upd = mx.array([30, 10, 20]).astype(dt)
+                out = base
+                out[idx] = upd
+                mx.eval(out)
+                want = np.zeros(10)
+                want[[7, 1, 4]] = [30, 10, 20]
+                self.assertTrue(np.array_equal(np.array(out), want))
+
+        # The reducing scatters still have no atomic to use.
+        if mx.metal.is_available():
+            for dt in (mx.int64, mx.uint64):
+                x = mx.zeros((8,), dtype=dt, stream=mx.gpu)
+                with self.assertRaises(ValueError):
+                    mx.eval(x.at[mx.array([0, 1, 1])].add(mx.ones((3,), dtype=dt)))
 
     def test_stack(self):
         a = mx.ones((2,))

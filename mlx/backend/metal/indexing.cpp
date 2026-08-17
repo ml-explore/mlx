@@ -230,10 +230,12 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
-  if (size_of(out.dtype()) == 8 &&
+  // Assignment is dispatched non-atomically below and has no size limit.
+  if (size_of(out.dtype()) == 8 && reduce_type_ != Scatter::None &&
       !(out.dtype() == complex64 && reduce_type_ == Scatter::Sum)) {
     std::ostringstream msg;
-    msg << "[Scatter::eval_gpu] Does not support " << out.dtype();
+    msg << "[Scatter::eval_gpu] Does not support " << out.dtype()
+        << " with a reducing scatter";
     throw std::invalid_argument(msg.str());
   }
 
@@ -328,6 +330,10 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         nidx ? get_type_string(inputs[1].dtype()) : "bool";
     std::string op_type = make_op<Scatter>(reduce_type_, out_type_str);
     auto [idx_args, idx_arr] = make_index_args(idx_type_str, nidx);
+    // Kernel names carry the op, so the two pointer forms cannot collide.
+    std::string out_ptr_type = reduce_type_ == Scatter::None
+        ? out_type_str
+        : "mlx_atomic<" + out_type_str + ">";
 
     kernel_source += fmt::format(
         scatter_kernels,
@@ -340,7 +346,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         idx_arr,
         upd_contig,
         nwork,
-        large ? "int64_t" : "int");
+        large ? "int64_t" : "int",
+        out_ptr_type);
     return kernel_source;
   });
 
@@ -520,10 +527,11 @@ void GatherAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
-  if (size_of(out.dtype()) == 8 &&
+  if (size_of(out.dtype()) == 8 && reduce_type_ != ScatterAxis::None &&
       !(out.dtype() == complex64 && reduce_type_ == ScatterAxis::Sum)) {
     std::ostringstream msg;
-    msg << "[ScatterAxis::eval_gpu] Does not support " << out.dtype();
+    msg << "[ScatterAxis::eval_gpu] Does not support " << out.dtype()
+        << " with a reducing scatter";
     throw std::invalid_argument(msg.str());
   }
 
@@ -590,6 +598,10 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
         break;
     }
 
+    std::string out_ptr_type = reduce_type_ == ScatterAxis::None
+        ? out_type_str
+        : "mlx_atomic<" + out_type_str + ">";
+
     for (int i = 0; i < 4; ++i) {
       bool uc = i & 1;
       bool ic = i & 2;
@@ -601,7 +613,8 @@ void ScatterAxis::eval_gpu(const std::vector<array>& inputs, array& out) {
           large ? "int64_t" : "int",
           op_type,
           uc ? "true" : "false",
-          ic ? "true" : "false");
+          ic ? "true" : "false",
+          out_ptr_type);
     }
     return kernel_source;
   });

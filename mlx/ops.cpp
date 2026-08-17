@@ -3909,12 +3909,13 @@ array scatter(
     idx = astype(idx, dtype, s);
   }
 
-  // TODO, remove when scatter supports 64-bit outputs
+  // Only the reducing modes need an atomic, which the GPU lacks at 8 bytes.
   if (to_stream(s).device == Device::gpu && size_of(a.dtype()) == 8 &&
+      mode != Scatter::None &&
       !(a.dtype() == complex64 && mode == Scatter::Sum)) {
     std::ostringstream msg;
-    msg << "[scatter] GPU scatter does not yet support " << a.dtype()
-        << " for the input or updates.";
+    msg << "[scatter] GPU scatter does not support " << a.dtype()
+        << " for a reducing scatter.";
     throw std::invalid_argument(msg.str());
   }
 

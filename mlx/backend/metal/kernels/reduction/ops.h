@@ -32,6 +32,14 @@ struct None {
       thread {
     mlx_atomic_store_explicit(out, val, offset);
   }
+
+  // Non-atomic overload, used for types with no atomic representation such as
+  // the 8-byte ones. Duplicate indices already race under assignment and the
+  // last write wins, which is what a plain store does.
+  template <typename T>
+  void atomic_update(device T* out, T val, size_t offset = 0) thread {
+    out[offset] = val;
+  }
 };
 
 template <typename U = bool>
