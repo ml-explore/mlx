@@ -87,6 +87,7 @@ class TestCompile(mlx_tests.MLXTestCase):
                 results.append((y.item(), z.item()))
             except Exception as e:
                 errors.append(e)
+            mx.clear_streams()
 
         for _ in range(3):
             thread = threading.Thread(target=worker)
@@ -97,6 +98,50 @@ class TestCompile(mlx_tests.MLXTestCase):
         if errors:
             raise errors[0]
         self.assertEqual(results, [(2.0, 2.0)] * 3)
+
+    def test_compile_release_on_another_thread(self):
+        # A function traced on one thread but released on another must still
+        # drop its cache entry, otherwise a later compile of the same id gets
+        # handed the dead function's tape instead of being traced again.
+        traces = []
+
+        def fun(x):
+            traces.append(1)
+            return x + 1
+
+        holder = {}
+        traced = threading.Event()
+        released = threading.Event()
+        errors = []
+
+        def worker():
+            try:
+                holder["fn"] = mx.compile(fun)
+                mx.eval(holder["fn"](mx.array([1.0])))
+                traced.set()
+                self.assertTrue(released.wait(10))
+                # The same callable, so the same id.
+                fn = mx.compile(fun)
+                mx.eval(fn(mx.array([1.0])))
+            except Exception as e:
+                errors.append(e)
+            finally:
+                traced.set()
+            mx.clear_streams()
+
+        # The tracing thread has to outlive the release, on exit it would tear
+        # down its cache anyway.
+        thread = threading.Thread(target=worker)
+        thread.start()
+        self.assertTrue(traced.wait(10))
+        holder.clear()
+        gc.collect()
+        released.set()
+        thread.join()
+
+        if errors:
+            raise errors[0]
+        self.assertEqual(len(traces), 2)
 
     def test_compile_grad(self):
         def loss_fn(x):
@@ -449,6 +494,7 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         def grab():
             state_from_thread["s"] = mx.random.state
+            mx.clear_streams()
 
         t = threading.Thread(target=grab)
         t.start()
@@ -482,6 +528,7 @@ class TestCompile(mlx_tests.MLXTestCase):
                     results["seed_changes"] = not bool(
                         mx.allclose(c, e, 1e-2, 1e-2).item()
                     )
+                mx.clear_streams()
 
             t = threading.Thread(target=worker)
             t.start()
