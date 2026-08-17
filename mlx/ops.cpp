@@ -1312,7 +1312,9 @@ array concatenate(
   };
 
   auto shape = arrays[0].shape();
-  shape[ax] = 0;
+  // Accumulate the concatenation axis in 64 bits so a total that does not fit
+  // in a shape dimension is reported rather than silently wrapping.
+  int64_t concat_size = 0;
   // Make the output shape and validate that all arrays have the same shape
   // except for the concatenation axis.
   for (auto& a : arrays) {
@@ -1331,8 +1333,9 @@ array concatenate(
         throw_invalid_shapes();
       }
     }
-    shape[ax] += a.shape(ax);
+    concat_size += a.shape(ax);
   }
+  shape[ax] = safe_cast(concat_size, "concatenate");
 
   // Promote all the arrays to the same type
   auto dtype = result_type(arrays);
@@ -1408,7 +1411,8 @@ array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
 
   // Reshape back into a contiguous array where S_axis is now S_axis * repeats
   shape.erase(shape.begin() + axis + 1);
-  shape[axis] *= repeats;
+  shape[axis] =
+      safe_cast(static_cast<int64_t>(shape[axis]) * repeats, "repeat");
   out = reshape(out, shape, s);
 
   return out;
@@ -3646,11 +3650,13 @@ array kron(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 
   for (int i = ndim - 1, j = a.ndim() - 1; j >= 0; j--, i--) {
     a_shape[2 * i] = a.shape(j);
-    out_shape[i] *= a.shape(j);
+    out_shape[i] =
+        safe_cast(static_cast<int64_t>(out_shape[i]) * a.shape(j), "kron");
   }
   for (int i = ndim - 1, j = b.ndim() - 1; j >= 0; j--, i--) {
     b_shape[2 * i + 1] = b.shape(j);
-    out_shape[i] *= b.shape(j);
+    out_shape[i] =
+        safe_cast(static_cast<int64_t>(out_shape[i]) * b.shape(j), "kron");
   }
 
   return reshape(

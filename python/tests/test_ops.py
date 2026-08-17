@@ -126,6 +126,27 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.broadcast_to(a, [too_big, 1])
         self.assertIn(str(too_big), str(cm.exception))
 
+        # A concatenation axis that does not fit is computed rather than given,
+        # so it has to be reported instead of wrapping into a bogus dimension.
+        # These stay lazy, so nothing near this size is allocated.
+        big = mx.zeros(2**30)
+        for parts in (3, 4, 5):
+            with self.assertRaises(OverflowError) as cm:
+                mx.concatenate([big] * parts)
+            self.assertIn(str(2**30 * parts), str(cm.exception))
+
+        # repeat and kron multiply a dimension, and used to wrap into a
+        # negative or zero one that only surfaced later as a confusing reshape
+        # error naming a shape the caller never asked for.
+        for parts in (2, 3, 4):
+            with self.assertRaises(OverflowError) as cm:
+                mx.repeat(big, parts)
+            self.assertIn(str(2**30 * parts), str(cm.exception))
+
+        with self.assertRaises(OverflowError) as cm:
+            mx.kron(mx.zeros(2**16), mx.zeros(2**16))
+        self.assertIn(str(2**32), str(cm.exception))
+
         # Negative overflow (< int32 min) is caught too.
         too_negative = -(2**31) - 1
         with self.assertRaises(OverflowError) as cm:
