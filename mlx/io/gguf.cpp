@@ -88,12 +88,34 @@ std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   return {buffer, float16};
 }
 
-// Mirror check_tensor_in_file(): gguf_get_key() leaves key.val / ctx->off
-// pointing at the value but performs no bounds checking, and the value lengths
-// are read straight from the file. Bound the whole value (and, for arrays,
-// every element) against the mmap'd file once per key in load_metadata(),
-// before set_mx_value_from_gguf consumes it. Lengths that would not fit in the
-// int the downstream array() / std::string constructors take are rejected here.
+// gguf_get_key() leaves key.val / ctx->off pointing at the value but performs
+// no bounds checking, and the value lengths are read straight from the file.
+// Bound the whole value (and, for arrays, every element) against the mmap'd
+// file once per key in load_metadata(), before set_mx_value_from_gguf
+// consumes it. Array lengths are also capped at int max because the
+// downstream array() shape is int-valued.
+size_t gguf_value_type_size(uint32_t type) {
+  switch (type) {
+    case GGUF_VALUE_TYPE_BOOL:
+    case GGUF_VALUE_TYPE_UINT8:
+    case GGUF_VALUE_TYPE_INT8:
+      return 1;
+    case GGUF_VALUE_TYPE_UINT16:
+    case GGUF_VALUE_TYPE_INT16:
+      return 2;
+    case GGUF_VALUE_TYPE_UINT32:
+    case GGUF_VALUE_TYPE_INT32:
+    case GGUF_VALUE_TYPE_FLOAT32:
+      return 4;
+    case GGUF_VALUE_TYPE_UINT64:
+    case GGUF_VALUE_TYPE_INT64:
+    case GGUF_VALUE_TYPE_FLOAT64:
+      return 8;
+    default:
+      return 0;
+  }
+}
+
 void check_metadata_value_in_file(
     const gguf_ctx* ctx,
     uint32_t type,
@@ -105,48 +127,34 @@ void check_metadata_value_in_file(
     return (p < ctx->data || p > end) ? 0 : static_cast<size_t>(end - p);
   };
   auto base = reinterpret_cast<const uint8_t*>(val);
+  auto fail = [](const char* what) {
+    throw std::runtime_error(std::string("[load_gguf] ") + what +
+                             " Perhaps an incomplete download or corrupt file?");
+  };
 
-  size_t fixed = 0;
-  switch (type) {
-    case GGUF_VALUE_TYPE_BOOL:
-    case GGUF_VALUE_TYPE_UINT8:
-    case GGUF_VALUE_TYPE_INT8:
-      fixed = 1;
-      break;
-    case GGUF_VALUE_TYPE_UINT16:
-    case GGUF_VALUE_TYPE_INT16:
-      fixed = 2;
-      break;
-    case GGUF_VALUE_TYPE_UINT32:
-    case GGUF_VALUE_TYPE_INT32:
-    case GGUF_VALUE_TYPE_FLOAT32:
-      fixed = 4;
-      break;
-    case GGUF_VALUE_TYPE_UINT64:
-    case GGUF_VALUE_TYPE_INT64:
-    case GGUF_VALUE_TYPE_FLOAT64:
-      fixed = 8;
-      break;
-    default:
-      break;
-  }
+  size_t fixed = gguf_value_type_size(type);
   if (fixed) {
     if (fixed > avail(base)) {
-      throw std::runtime_error(
-          "[load_gguf] Metadata value extends past the end of the file. "
-          "Perhaps an incomplete download or corrupt file?");
+      fail("Metadata value extends past the end of the file.");
     }
     return;
   }
 
-  // gguf_string = { uint64_t len; char string[] }.
-  if (type == GGUF_VALUE_TYPE_STRING) {
-    if (sizeof(uint64_t) > avail(base) ||
-        val->string.len > static_cast<uint64_t>(std::numeric_limits<int>::max()) ||
-        sizeof(uint64_t) + val->string.len > avail(base)) {
-      throw std::runtime_error(
-          "[load_gguf] String metadata value extends past the end of the file.");
+  // gguf_string = { uint64_t len; char string[] }. Validate and return a
+  // pointer past the string.
+  auto check_string = [&](const uint8_t* p) -> const uint8_t* {
+    uint64_t len = reinterpret_cast<const gguf_string*>(p)->len;
+    if (sizeof(uint64_t) + len > avail(p)) {
+      fail("String metadata value extends past the end of the file.");
     }
+    return p + sizeof(uint64_t) + len;
+  };
+
+  if (type == GGUF_VALUE_TYPE_STRING) {
+    if (sizeof(uint64_t) > avail(base)) {
+      fail("String metadata value extends past the end of the file.");
+    }
+    check_string(base);
     return;
   }
 
@@ -154,44 +162,16 @@ void check_metadata_value_in_file(
   // followed by the elements.
   if (type == GGUF_VALUE_TYPE_ARRAY) {
     if (gguf_array_header_size > avail(base)) {
-      throw std::runtime_error(
-          "[load_gguf] Metadata value extends past the end of the file. "
-          "Perhaps an incomplete download or corrupt file?");
+      fail("Metadata value extends past the end of the file.");
     }
     if (val->array.len > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
-      throw std::runtime_error(
-          "[load_gguf] Array metadata value length is too large.");
-    }
-
-    size_t elt_size = 0;
-    switch (val->array.type) {
-      case GGUF_VALUE_TYPE_BOOL:
-      case GGUF_VALUE_TYPE_UINT8:
-      case GGUF_VALUE_TYPE_INT8:
-        elt_size = 1;
-        break;
-      case GGUF_VALUE_TYPE_UINT16:
-      case GGUF_VALUE_TYPE_INT16:
-        elt_size = 2;
-        break;
-      case GGUF_VALUE_TYPE_UINT32:
-      case GGUF_VALUE_TYPE_INT32:
-      case GGUF_VALUE_TYPE_FLOAT32:
-        elt_size = 4;
-        break;
-      case GGUF_VALUE_TYPE_UINT64:
-      case GGUF_VALUE_TYPE_INT64:
-      case GGUF_VALUE_TYPE_FLOAT64:
-        elt_size = 8;
-        break;
-      default:
-        break;
+      fail("Array metadata value length is too large.");
     }
     const uint8_t* elt = base + gguf_array_header_size;
+    size_t elt_size = gguf_value_type_size(val->array.type);
     if (elt_size) {
       if (val->array.len > avail(elt) / elt_size) {
-        throw std::runtime_error(
-            "[load_gguf] Array metadata value extends past the end of the file.");
+        fail("Array metadata value extends past the end of the file.");
       }
       return;
     }
@@ -200,18 +180,10 @@ void check_metadata_value_in_file(
       const uint8_t* p = elt;
       for (uint64_t i = 0; i < val->array.len; i++) {
         if (sizeof(uint64_t) > avail(p)) {
-          throw std::runtime_error(
-              "[load_gguf] Array metadata value extends past the end of the file.");
+          fail("Array metadata value extends past the end of the file.");
         }
-        uint64_t slen = reinterpret_cast<const gguf_string*>(p)->len;
-        if (slen > static_cast<uint64_t>(std::numeric_limits<int>::max()) ||
-            sizeof(uint64_t) + slen > avail(p)) {
-          throw std::runtime_error(
-              "[load_gguf] Array metadata value extends past the end of the file.");
-        }
-        p += sizeof(uint64_t) + slen;
+        p = check_string(p);
       }
-      return;
     }
     // Unsupported element type (e.g. nested array): header is bounded; the
     // consumer rejects the format without reading the payload.
@@ -258,8 +230,7 @@ void set_mx_value_from_gguf(
       value = array(val->boolval, bool_);
       break;
     case GGUF_VALUE_TYPE_STRING:
-      value =
-          std::string(val->string.string, static_cast<int>(val->string.len));
+      value = std::string(val->string.string, val->string.len);
       break;
     case GGUF_VALUE_TYPE_FLOAT64:
       value = array(val->float64, float32);
@@ -308,7 +279,7 @@ void set_mx_value_from_gguf(
           for (auto& str : strs) {
             auto str_val = reinterpret_cast<gguf_string*>(data);
             data += (str_val->len + sizeof(gguf_string));
-            str = std::string(str_val->string, static_cast<int>(str_val->len));
+            str = std::string(str_val->string, str_val->len);
             ctx->off += (str_val->len + sizeof(gguf_string));
           }
           value = std::move(strs);
