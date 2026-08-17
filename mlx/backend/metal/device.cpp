@@ -496,19 +496,15 @@ void CommandEncoder::end_encoding() {
   all_inputs_.clear();
 }
 
-void CommandEncoder::signal_event(
-    std::shared_ptr<EventImpl> event,
-    uint64_t value) {
+void CommandEncoder::signal_event(Event event, uint64_t value) {
   end_encoding();
-  buffer_->encodeSignalEvent(event->mtl_event(), value);
+  buffer_->encodeSignalEvent(event.cast<EventImpl>().mtl_event(), value);
   signal_events_.push_back({std::move(event), value});
 }
 
-void CommandEncoder::wait_event(
-    std::shared_ptr<EventImpl> event,
-    uint64_t value) {
+void CommandEncoder::wait_event(Event event, uint64_t value) {
   end_encoding();
-  buffer_->encodeWait(event->mtl_event(), value);
+  buffer_->encodeWait(event.cast<EventImpl>().mtl_event(), value);
   wait_events_.push_back(std::move(event));
 }
 
@@ -525,35 +521,37 @@ void CommandEncoder::commit(std::function<void()> completion) {
       [&error_ = error_,
        wait_events = std::move(wait_events_),
        signal_events = std::move(signal_events_),
-       completion = std::move(completion)](MTL::CommandBuffer* cbuf) {
+       completion = std::move(completion)](MTL::CommandBuffer* cbuf) mutable {
         if (completion) {
           completion();
         }
         // If any of the waited event has error in it, poison the encoder.
         for (auto& event : wait_events) {
-          if (event->error()) {
-            error_ = event->error();
+          if (error_.store_if_valid(event.load_error())) {
             break;
           }
         }
         // Set error only when no error happended before, to preserve the
         // earliest error.
-        if (!error_ && cbuf->status() == MTL::CommandBufferStatusError) {
-          error_ = std::make_shared<std::string>(fmt::format(
-              "[METAL] Command buffer execution failed: {}.",
-              cbuf->error()->localizedDescription()->utf8String()));
+        bool has_error = error_.valid();
+        if (!has_error && cbuf->status() == MTL::CommandBufferStatusError) {
+          error_.set_message(
+              std::make_shared<std::string>(fmt::format(
+                  "[METAL] Command buffer execution failed: {}.",
+                  cbuf->error()->localizedDescription()->utf8String())));
+          has_error = true;
         }
         // Poison all the signaled events when error happened.
-        if (error_) {
+        if (has_error) {
           for (auto& [event, value] : signal_events) {
-            event->set_error(error_);
+            event.set_error(error_);
           }
         }
         // Metal won't signal the events for us on error, manually signal them
         // to avoid infinite waiting.
         if (cbuf->status() == MTL::CommandBufferStatusError) {
           for (auto& [event, value] : signal_events) {
-            event->signal(value);
+            event.cast<EventImpl>().signal(value);
           }
         }
       });
@@ -570,20 +568,17 @@ void CommandEncoder::synchronize() {
   commit();
   cbuf->waitUntilCompleted();
 
-  if (error_ && !exiting_) {
-    auto error = std::move(error_);
-    throw std::runtime_error(*error);
+  if (!exiting_) {
+    error_.check();
   }
 }
 
 MTL::ComputeCommandEncoder* CommandEncoder::get_command_encoder() {
   if (!encoder_) {
+    error_.check();
     encoder_ = NS::RetainPtr(
         buffer_->computeCommandEncoder(MTL::DispatchTypeConcurrent));
     fence_ = NS::TransferPtr(device_.mtl_device()->newFence());
-    // Reset error when user starts to encode new commands, they are supposed to
-    // have handled the error in synchronize() or Event::wait().
-    error_.reset();
   }
   return encoder_.get();
 }
