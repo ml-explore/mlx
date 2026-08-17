@@ -182,7 +182,6 @@ SafetensorsLoad load_safetensors(
     {
       size_t expected_nbytes = type.size();
       for (auto dim : shape) {
-        // Reject negative dimensions before casting to size_t
         if (dim < 0) {
           std::ostringstream msg;
           msg << "[load_safetensors] Tensor '" << item.key()

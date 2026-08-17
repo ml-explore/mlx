@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
-#include <limits>
 #include <numeric>
 
 #include "mlx/io/gguf.h"
@@ -54,7 +53,7 @@ Shape get_shape(const gguf_tensor& tensor) {
   for (int i = tensor.ndim - 1; i >= 0; i--) {
     uint64_t dim = tensor.dim[i];
     // Reject dimensions that exceed int32 range (ShapeElem is int32_t)
-    if (dim > static_cast<uint64_t>(std::numeric_limits<int32_t>::max())) {
+    if (dim > static_cast<uint64_t>(INT32_MAX)) {
       std::ostringstream msg;
       msg << "[load_gguf] tensor dimension " << i << " value " << dim
           << " exceeds int32 range";

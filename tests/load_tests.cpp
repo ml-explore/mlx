@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
+#include <cstdint>
 #include <vector>
 
 #include "doctest/doctest.h"
@@ -514,7 +515,7 @@ TEST_CASE("test gguf quantized tensor security") {
 
   SUBCASE("dimension exceeding int32 rejected") {
     std::string file_path = get_temp_file("test_gguf_qbigdim.gguf");
-    uint64_t big_dim = static_cast<uint64_t>(std::numeric_limits<int32_t>::max()) + 1;
+    uint64_t big_dim = static_cast<uint64_t>(INT32_MAX) + 1;
     write_raw_quantized_gguf(file_path, {big_dim}, 8 /* Q8_0 */, big_dim);
     CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
   }
