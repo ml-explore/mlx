@@ -1517,8 +1517,7 @@ void init_ops(nb::module_& m) {
           start (float or int, optional): Starting value which defaults to ``0``.
           stop (float or int, optional): Stopping value.
           step (float or int, optional): Increment which defaults to ``1``.
-          dtype (Dtype, optional): Specifies the data type of the output. If unspecified will default to ``float32`` if any of ``start``, ``stop``, or ``step`` are ``float``. Otherwise will default to ``int32``, or ``int64``
-            when any of them does not fit in ``int32``.
+          dtype (Dtype, optional): Specifies the data type of the output. If unspecified will default to ``float32`` if any of ``start``, ``stop``, or ``step`` are ``float``. Otherwise will default to ``int32``, or ``int64`` if any of ``start``, ``stop``, or ``step`` does not fit in ``int32``.
 
       Returns:
           array: The range of values.
