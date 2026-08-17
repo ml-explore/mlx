@@ -39,30 +39,26 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        echo "::group::Install common dependencies"
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
-            gdb g++ ninja-build zip \
+            gdb g++ ninja-build unzip \
             libblas-dev liblapack-dev liblapacke-dev \
             openmpi-bin openmpi-common libopenmpi-dev
-        echo "::endgroup::"
 
     - name: Install macOS dependencies
       if: runner.os == 'macOS'
       shell: bash
       run: |
-        echo "::group::Install macOS dependencies"
         brew update
+        brew trust aws/tap # suppress warning in github actions
         brew install openmpi
         xcodebuild -showComponent MetalToolchain
         sysctl -a | grep machdep.cpu
-        echo "::endgroup::"
 
     - name: Setup Windows environment
       if: runner.os == 'Windows'
       shell: cmd
       run: |
-        echo "::group::Setup environment"
         :: Find out path to Visual Studio.
         pushd "C:\Program Files (x86)\Microsoft Visual Studio\Installer\"
         for /f "delims=" %%x in ('.\vswhere.exe -latest -property InstallationPath') do set VSPATH=%%x
@@ -78,7 +74,6 @@ runs:
         set CCACHE_SLOPPINESS=include_file_ctime,include_file_mtime
         :: Export to all steps.
         >>%GITHUB_ENV% set
-        echo "::endgroup::"
 
     - uses: astral-sh/setup-uv@v8.2.0
       with:
@@ -120,7 +115,6 @@ runs:
       if: runner.os != 'Windows'
       shell: bash
       run: |
-        echo "::group::Setup Python venv"
         uv venv --python ${{ inputs.python-version }} --managed-python
         # Make sure all builds use the same cmake binary.
         uv pip install cmake
@@ -132,18 +126,15 @@ runs:
         if ${{ startsWith(inputs.toolkit, 'cuda') }} ; then
           echo MLX_PTX_CACHE_DIR=/tmp/mlx-ptx-cache >> $GITHUB_ENV
         fi
-        echo "::endgroup::"
 
     - name: Setup Python venv (Windows)
       if: runner.os == 'Windows'
       shell: cmd
       run: |
-        echo "::group::Setup Python venv"
         uv venv --python ${{ inputs.python-version }}${{ runner.arch == 'arm64' && '-arm64' || ''}} || exit /b
         uv pip install cmake
         call ".venv/Scripts/activate.bat"
         >>%GITHUB_ENV% set
-        echo "::endgroup::"
 
     - name: Install CUDA toolkit (Linux)
       if: runner.os == 'Linux' && startsWith(inputs.toolkit, 'cuda')
@@ -156,7 +147,6 @@ runs:
             "cuda-13.0": "libcudnn9-dev-cuda-13 cuda-compiler-13-0 cuda-libraries-dev-13-0"
           }
       run: |
-        echo "::group::Install CUDA toolkit"
         # The CUDA binaries are hosted in the "sbsa" repo, the "arm64" repo is
         # Jetson specific. SBSA means Arm Server Base System Architecture.
         ARCH=${{ runner.arch == 'arm64' && 'sbsa' || 'x86_64' }}
@@ -167,7 +157,6 @@ runs:
             libnccl2 libnccl-dev \
             ${{ fromJson(env.PACKAGES)[inputs.toolkit] }}
         echo "/usr/local/${{ inputs.toolkit }}/bin" >> $GITHUB_PATH
-        echo "::endgroup::"
 
     - name: Install CUDA Toolkit (Windows)
       if: runner.os == 'Windows' && startsWith(inputs.toolkit, 'cuda')
@@ -186,7 +175,6 @@ runs:
             "cuda-13.0": ["cudart_13.0", "nvcc_13.0", "cublas_13.0", "cublas_dev_13.0", "cufft_13.0", "cufft_dev_13.0", "nvrtc_13.0", "nvrtc_dev_13.0", "crt_13.0", "nvvm_13.0", "nvptxcompiler_13.0"],
           }
       run: |
-        echo "::group::Install CUDA toolkit"
         $ErrorActionPreference = "Stop"
         $cudaUrl = "${{ fromJson(env.INSTALLERS)[inputs.toolkit] }}"
         $cudaInstaller = "./install.exe"
@@ -201,7 +189,6 @@ runs:
         Start-Process -FilePath $cudaInstaller -ArgumentList "$args" -NoNewWindow -Wait
         $cudaPath = (Resolve-Path "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\*").path
         echo "$cudaPath\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        echo "::endgroup::"
 
     - name: Install cuDNN (Windows)
       if: runner.os == 'Windows' && startsWith(inputs.toolkit, 'cuda')
@@ -215,7 +202,6 @@ runs:
             "cuda-13.0": "https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-9.23.2.1_cuda13-archive.zip"
           }
       run: |
-        echo "::group::Install cuDNN"
         $ErrorActionPreference = "Stop"
         $cudnnUrl = "${{ fromJson(env.ARCHIVES)[inputs.toolkit] }}"
         $cudnnZip = "cudnn.zip"
@@ -229,13 +215,11 @@ runs:
         Expand-Archive -Path $cudnnZip -DestinationPath cudnn-extracted
         $cudnnDir = (Get-ChildItem -Path cudnn-extracted -Directory)[0].FullName
         echo "cudnnDir=$($cudnnDir -replace '\\', '/')" | Out-File -FilePath $env:GITHUB_OUTPUT
-        echo "::endgroup::"
 
     - name: Generate CMake args
       id: cmake-args
       shell: bash
       run: |
-        echo "::group::Generate CMake args"
         cmakeArgs=(
           "-G Ninja"
         )
@@ -292,4 +276,3 @@ runs:
         IFS=" "
         echo ${cmakeArgs[*]}
         echo "cmakeArgs=${cmakeArgs[*]}" >> $GITHUB_OUTPUT
-        echo "::endgroup::"

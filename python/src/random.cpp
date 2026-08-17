@@ -64,6 +64,10 @@ PyKeySequence& default_key() {
   return ks;
 }
 
+void reset_random_state() {
+  default_key().reset();
+}
+
 // A process-global sentinel for `mx.random.state`. Since it is the same object
 // on every thread, capturing it (e.g. with `mx.compile`) is thread-independent;
 // the pytree traversal in trees.cpp resolves it to the calling thread's key.

@@ -1058,6 +1058,35 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(out_a, a * 2.0))
         self.assertTrue(mx.array_equal(out_b, a + 100.0))
 
+    @unittest.skipIf(not mx.cuda.is_available(), "CUDA is not available")
+    def test_cuda_kernel_same_name_different_source(self):
+        # The CUDA module cache was keyed on the kernel name alone, so the
+        # second kernel here silently ran the first one's code. Metal had the
+        # same bug, fixed in #3833.
+        def call_kernel(a, source):
+            kernel = mx.fast.cuda_kernel(
+                name="dup_name",
+                input_names=["inp"],
+                output_names=["out"],
+                source=source,
+            )
+            return kernel(
+                inputs=[a],
+                grid=(a.size, 1, 1),
+                threadgroup=(a.size, 1, 1),
+                output_shapes=[a.shape],
+                output_dtypes=[a.dtype],
+                stream=mx.gpu,
+            )[0]
+
+        a = mx.arange(32, dtype=mx.float32)
+        elem = "auto e = cooperative_groups::this_grid().thread_rank();"
+        out_a = call_kernel(a, f"{elem} out[e] = inp[e] * 2.0f;")
+        out_b = call_kernel(a, f"{elem} out[e] = inp[e] + 100.0f;")
+        mx.eval(out_a, out_b)
+        self.assertTrue(mx.array_equal(out_a, a * 2.0))
+        self.assertTrue(mx.array_equal(out_b, a + 100.0))
+
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_metal_kernel_math_mode(self):
         with self.assertRaises(ValueError):

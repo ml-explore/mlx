@@ -1143,13 +1143,7 @@ std::vector<array> split(
     const Shape& indices,
     int axis,
     StreamOrDevice s /* = {} */) {
-  auto ax = axis < 0 ? axis + a.ndim() : axis;
-  if (ax < 0 || ax >= a.ndim()) {
-    std::ostringstream msg;
-    msg << "Invalid axis (" << axis << ") passed to split"
-        << " for array with shape " << a.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
+  auto ax = normalize_axis_index(axis, a.ndim(), "[split] ");
 
   if (indices.empty()) {
     return {a};
@@ -1191,20 +1185,14 @@ split(const array& a, const Shape& indices, StreamOrDevice s /* = {} */) {
 
 std::vector<array>
 split(const array& a, int num_splits, int axis, StreamOrDevice s /* = {} */) {
-  auto ax = axis < 0 ? axis + a.ndim() : axis;
-  if (ax < 0 || ax >= a.ndim()) {
-    std::ostringstream msg;
-    msg << "Invalid axis " << axis << " passed to split"
-        << " for array with shape " << a.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
+  auto ax = normalize_axis_index(axis, a.ndim(), "[split] ");
   if (num_splits <= 0) {
     std::ostringstream msg;
     msg << "[split] num_splits must be positive and non-zero but got "
         << num_splits << ".";
     throw std::invalid_argument(msg.str());
   }
-  auto q_and_r = std::ldiv(a.shape(axis), num_splits);
+  auto q_and_r = std::ldiv(a.shape(ax), num_splits);
   if (q_and_r.rem) {
     std::ostringstream msg;
     msg << "Array split does not result in sub arrays with equal size:"
@@ -1217,7 +1205,7 @@ split(const array& a, int num_splits, int axis, StreamOrDevice s /* = {} */) {
   for (int i = 0; i < indices.size(); ++i) {
     indices[i] = (i + 1) * split_size;
   }
-  return split(a, indices, axis, s);
+  return split(a, indices, ax, s);
 }
 
 std::vector<array>
@@ -1228,13 +1216,7 @@ split(const array& a, int num_splits, StreamOrDevice s /* = {} */) {
 std::vector<array>
 unstack(const array& a, int axis, StreamOrDevice s /* = {} */) {
   auto ndim = static_cast<int>(a.ndim());
-  auto ax = axis < 0 ? axis + ndim : axis;
-  if (ax < 0 || ax >= ndim) {
-    std::ostringstream msg;
-    msg << "[unstack] Invalid axis " << axis << " for array with " << ndim
-        << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
+  auto ax = normalize_axis_index(axis, ndim, "[unstack] ");
   auto n = a.shape(ax);
   std::vector<array> res;
   res.reserve(n);
@@ -1633,7 +1615,10 @@ array pad(
     }
 
     auto ax = axes[i] < 0 ? a.ndim() + axes[i] : axes[i];
-    out_shape[ax] += low_pad_size[i] + high_pad_size[i];
+    out_shape[ax] = safe_cast(
+        static_cast<int64_t>(out_shape[ax]) + low_pad_size[i] +
+            high_pad_size[i],
+        "pad");
   }
 
   if (mode == "constant") {
@@ -2455,7 +2440,17 @@ array var(
     StreamOrDevice s /* = {}*/) {
   auto dtype = at_least_float(a.dtype());
   auto mu = mean(a, axes, /* keepdims= */ true, s);
-  auto v = sum(square(subtract(a, mu, s), s), axes, keepdims, s);
+  auto d = subtract(a, mu, s);
+  // The variance of complex values is the mean squared magnitude. Squaring the
+  // deviations directly gives a complex result which can even be negative, so
+  // multiply by the conjugate instead.
+  auto sq = issubdtype(dtype, complexfloating)
+      ? real(multiply(d, conjugate(d, s), s), s)
+      : square(d, s);
+  if (issubdtype(dtype, complexfloating)) {
+    dtype = float32;
+  }
+  auto v = sum(sq, axes, keepdims, s);
 
   if (ddof != 0) {
     auto normalizer = maximum(
@@ -2838,14 +2833,7 @@ array partition(
     int axis,
     StreamOrDevice s /* = {} */) {
   // Check for valid axis
-  if (axis + static_cast<int>(a.ndim()) < 0 ||
-      axis >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << "[partition] Received invalid axis " << axis << " for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  int axis_ = axis < 0 ? axis + a.ndim() : axis;
+  int axis_ = normalize_axis_index(axis, a.ndim(), "[partition] ");
   int kth_ = kth < 0 ? kth + a.shape(axis) : kth;
   if (kth_ < 0 || kth_ >= a.shape(axis_)) {
     std::ostringstream msg;
@@ -2879,14 +2867,7 @@ array argpartition(
     int axis,
     StreamOrDevice s /* = {} */) {
   // Check for valid axis
-  if (axis + static_cast<int>(a.ndim()) < 0 ||
-      axis >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << "[argpartition] Received invalid axis " << axis << " for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  int axis_ = axis < 0 ? axis + a.ndim() : axis;
+  int axis_ = normalize_axis_index(axis, a.ndim(), "[argpartition] ");
   int kth_ = kth < 0 ? kth + a.shape(axis) : kth;
   if (kth_ < 0 || kth_ >= a.shape(axis_)) {
     std::ostringstream msg;
@@ -2941,13 +2922,7 @@ array topk(const array& a, int k, StreamOrDevice s /* = {}*/) {
 /** Returns topk elements of the array along a given axis. */
 array topk(const array& a, int k, int axis, StreamOrDevice s /* = {}*/) {
   // Check for valid axis
-  int axis_ = axis < 0 ? axis + a.ndim() : axis;
-  if (axis_ < 0 || axis_ >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << "[topk] Received invalid axis " << axis << " for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
+  int axis_ = normalize_axis_index(axis, a.ndim(), "[topk] ");
   if (k < 0 || k > a.shape(axis_)) {
     std::ostringstream msg;
     msg << "[topk] Received invalid k=" << k << " along axis " << axis
@@ -3183,6 +3158,9 @@ array floor_divide(
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
+  if (issubdtype(dtype, complexfloating)) {
+    throw std::invalid_argument("[remainder] Complex type not supported.");
+  }
   auto inputs = broadcast_arrays(
       {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
   auto shape = inputs[0].shape();

@@ -344,6 +344,14 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.item(), 2)
 
     def test_remainder(self):
+        # Complex is not supported and has to say so rather than quietly
+        # computing a componentwise remainder, which no other library defines
+        z = mx.array([7 + 3j], mx.complex64)
+        with self.assertRaises(ValueError):
+            mx.remainder(z, z)
+        with self.assertRaises(ValueError):
+            z % z
+
         for dt in [mx.int32, mx.float32, mx.float16, mx.bfloat16]:
             x = mx.array(2, dtype=dt)
             y = mx.array(4, dtype=dt)
@@ -985,10 +993,20 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.var(x, ddof=3)
         self.assertEqual(out.item(), float("inf"))
 
+        x = mx.array([1 + 2j, -3 - 4j, 0.5 - 0.25j])
+        x_np = np.array(x)
+        self.assertEqual(mx.var(x).dtype, mx.float32)
+        self.assertAlmostEqual(mx.var(x).item(), x_np.var().item(), places=5)
+
     def test_std(self):
         x = mx.random.uniform(shape=(5, 5))
         x_np = np.array(x)
         self.assertAlmostEqual(mx.std(x).item(), x_np.std().item(), places=6)
+
+        x = mx.array([1 + 2j, -3 - 4j, 0.5 - 0.25j])
+        x_np = np.array(x)
+        self.assertEqual(mx.std(x).dtype, mx.float32)
+        self.assertAlmostEqual(mx.std(x).item(), x_np.std().item(), places=5)
 
     def test_abs(self):
         a = mx.array([-1.0, 1.0, -2.0, 3.0])
@@ -1623,7 +1641,7 @@ class TestOps(mlx_tests.MLXTestCase):
             a = mx.arange(float("inf"), 1, float("inf"))
         with self.assertRaises(ValueError):
             a = mx.arange(float("inf"), 1, 5)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             INT_MAX = 2147483647
             a = mx.arange(0, INT_MAX + 1, 1)
 
@@ -1742,6 +1760,12 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.arange(0, -10, float("-inf"))
         expected = [0]
         self.assertListEqual(a.tolist(), expected)
+
+        n = mx.iinfo(mx.int32).max
+        result = mx.arange(n - 1, n + 3)
+        self.assertEqual(result.shape, (4,))
+        self.assertEqual(result.dtype, mx.int32)
+        self.assertEqual(result.tolist(), [n - 1, n, -2147483648, -2147483647])
 
     def test_hanning_general(self):
         a = mx.hanning(10)
@@ -2717,6 +2741,27 @@ class TestOps(mlx_tests.MLXTestCase):
         y_mx = mx.sort(a, axis=-1)
         y_np = np.sort(np.array(a), axis=-1)
         self.assertTrue(np.array_equal(y_np, y_mx))
+
+        # Negative stride on an axis that is not sorted, single and multi block
+        np.random.seed(0)
+        for dtype in ("int32", "float32"):
+            for size in (4, 32769):
+                with self.subTest(dtype=dtype, size=size):
+                    a_np = np.random.uniform(0, 100, size=(3, size))
+                    a_np = a_np.astype(getattr(np, dtype))
+                    a_mx = mx.array(a_np)[::-1, :]
+                    a_np = a_np[::-1, :]
+
+                    b_np = np.sort(a_np, axis=-1)
+                    self.assertTrue(np.array_equal(b_np, mx.sort(a_mx, axis=-1)))
+
+                    idx = mx.argsort(a_mx, axis=-1)
+                    self.assertTrue(
+                        np.array_equal(b_np, mx.take_along_axis(a_mx, idx, axis=-1))
+                    )
+
+                    b_mx = mx.partition(a_mx, 1, axis=-1)
+                    self.assertTrue(np.array_equal(b_np[:, 1], np.array(b_mx)[:, 1]))
 
     def test_partition(self):
         shape = (3, 4, 5)

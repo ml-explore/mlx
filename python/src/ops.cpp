@@ -24,10 +24,10 @@ namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
-using Scalar = std::variant<bool, int, double>;
+using Scalar = std::variant<bool, int64_t, double>;
 
 mx::Dtype scalar_to_dtype(Scalar s) {
-  if (std::holds_alternative<int>(s)) {
+  if (std::holds_alternative<int64_t>(s)) {
     return mx::int32;
   } else if (std::holds_alternative<double>(s)) {
     return mx::float32;
@@ -37,7 +37,7 @@ mx::Dtype scalar_to_dtype(Scalar s) {
 }
 
 double scalar_to_double(Scalar s) {
-  if (auto pv = std::get_if<int>(&s); pv) {
+  if (auto pv = std::get_if<int64_t>(&s); pv) {
     return static_cast<double>(*pv);
   } else if (auto pv = std::get_if<double>(&s); pv) {
     return *pv;

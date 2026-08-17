@@ -9,6 +9,7 @@
 
 #include "mlx/stream.h"
 #include "mlx/utils.h"
+#include "python/src/random.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
@@ -137,7 +138,10 @@ void init_stream(nb::module_& m) {
       R"pbdoc(Make a new stream that will be unique per thread.)pbdoc");
   m.def(
       "clear_streams",
-      &mx::clear_streams,
+      []() {
+        reset_random_state();
+        mx::clear_streams();
+      },
       R"pbdoc(Destroy all streams created in current thread.)pbdoc");
 
   nb::class_<PyStreamContext>(m, "StreamContext", R"pbdoc(
