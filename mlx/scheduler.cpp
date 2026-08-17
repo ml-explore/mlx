@@ -3,6 +3,7 @@
 #include "mlx/scheduler.h"
 #include "mlx/backend/cpu/eval.h"
 #include "mlx/backend/gpu/eval.h"
+#include "mlx/compile_impl.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -27,6 +28,7 @@ void synchronize() {
 }
 
 void clear_streams() {
+  detail::compile_clear_cache(detail::compile_cache());
   cpu::clear_streams();
   gpu::clear_streams();
 }
