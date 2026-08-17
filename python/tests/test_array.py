@@ -523,6 +523,33 @@ class TestArray(mlx_tests.MLXTestCase):
         out = mx.array([x], dtype=mx.float64).item()
         self.assertEqual(out, x)
 
+    def test_construction_from_lists_wide_ints(self):
+        # A python int that does not fit in int32 widens to int64, the same
+        # rule the scalar path already uses. It used to raise std::bad_cast.
+        for value in (2**31, 2**40, -(2**31) - 1, -(2**40)):
+            for make in (
+                lambda v: [v],
+                lambda v: (v,),
+                lambda v: [[v]],
+                lambda v: [v, 1],
+            ):
+                x = mx.array(make(value))
+                self.assertEqual(x.dtype, mx.int64, msg=f"{value} {make(value)}")
+                self.assertEqual(x.flatten()[0].item(), value)
+                self.assertEqual(mx.array(value).dtype, mx.int64)
+
+        # Values that still fit keep int32, including both boundaries.
+        for value in (0, 1, 2**31 - 1, -(2**31)):
+            x = mx.array([value])
+            self.assertEqual(x.dtype, mx.int32, msg=str(value))
+            self.assertEqual(x[0].item(), value)
+
+        # An explicit dtype still wins.
+        self.assertEqual(mx.array([2**40], mx.int64).dtype, mx.int64)
+        self.assertEqual(mx.array([1, 2], mx.int64).dtype, mx.int64)
+        # A float in the list still makes it float, not int64.
+        self.assertEqual(mx.array([2**40, 1.5]).dtype, mx.float32)
+
     def test_construction_from_lists_of_mlx_arrays(self):
         dtypes = [
             mx.bool_,
