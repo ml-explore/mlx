@@ -18,11 +18,9 @@ runs:
         DEBUG: ${{ inputs.debug == 'true' && 1 || 0 }}
         CMAKE_ARGS: ${{ inputs.cmake-args }}
       run: |
-        echo "::group::Install Python package"
         # Install cpu-only torch to save space.
         uv pip install torch --torch-backend=cpu
         uv pip install --no-build-isolation -e ".[dev]" -v
-        echo "::endgroup::"
 
     - name: Build CPP only
       shell: bash
@@ -35,10 +33,8 @@ runs:
         CCACHE_BASEDIR: ${{ github.workspace }}/build/cpp/mlx
         CCACHE_NOHASHDIR: true
       run: |
-        echo "::group::Build CPP only"
         cmake . -B build/cpp/mlx ${{ inputs.cmake-args }} \
           -DBUILD_SHARED_LIBS=ON \
           -DCMAKE_BUILD_TYPE=${{ inputs.debug == 'true' && 'Debug' || 'Release' }}
         cmake --build build/cpp/mlx \
           -j ${{ runner.os == 'Windows' && '$NUMBER_OF_PROCESSORS' || '$(nproc)' }}
-        echo "::endgroup::"
