@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <numeric>
 
 #include "mlx/io/gguf.h"
@@ -51,7 +52,15 @@ Shape get_shape(const gguf_tensor& tensor) {
   Shape shape;
   // The dimension order in GGML is the reverse of the order used in MLX.
   for (int i = tensor.ndim - 1; i >= 0; i--) {
-    shape.push_back(tensor.dim[i]);
+    uint64_t dim = tensor.dim[i];
+    // Reject dimensions that exceed int32 range (ShapeElem is int32_t)
+    if (dim > static_cast<uint64_t>(std::numeric_limits<int32_t>::max())) {
+      std::ostringstream msg;
+      msg << "[load_gguf] tensor dimension " << i << " value " << dim
+          << " exceeds int32 range";
+      throw std::runtime_error(msg.str());
+    }
+    shape.push_back(static_cast<ShapeElem>(dim));
   }
   return shape;
 }

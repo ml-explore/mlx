@@ -442,3 +442,101 @@ TEST_CASE("test single array serialization") {
     CHECK(array_equal(a, b).item<bool>());
   }
 }
+
+// Helper to write a raw GGUF file with quantized tensor type.
+// dims: tensor dimensions in GGML order (last dimension first in file)
+// ttype: GGUF quantized type (Q4_0=1, Q4_1=2, Q8_0=8)
+// num_weights: the num_weights field from the GGUF header
+// data_len: bytes of filler data after the tensor header
+void write_raw_quantized_gguf(
+    const std::string& path,
+    const std::vector<uint64_t>& dims,
+    uint32_t ttype,
+    uint64_t num_weights,
+    size_t data_len = 0) {
+  std::ofstream out(path, std::ios::binary);
+  auto u32 = [&out](uint32_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 4);
+  };
+  auto u64 = [&out](uint64_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 8);
+  };
+  out.write("GGUF", 4);
+  u32(3); // version
+  u64(1); // tensor_count
+  u64(0); // metadata_kv_count
+  // Tensor name: "w"
+  u64(1); // tensor name length
+  out.write("w", 1);
+  u32(static_cast<uint32_t>(dims.size())); // ndim
+  for (auto d : dims) {
+    u64(d); // dim (GGML order)
+  }
+  u32(ttype); // type
+  u64(num_weights); // num_weights
+  u64(0); // offset (relative to data section)
+  // Align to 32 bytes
+  while (out.tellp() % 32 != 0) {
+    out.put(0);
+  }
+  // Write filler data - always write at least 1KB
+  size_t min_data = std::max(data_len, (size_t)1024);
+  std::vector<char> buf(min_data, 0x41);
+  out.write(buf.data(), min_data);
+}
+
+TEST_CASE("test gguf quantized tensor security") {
+  // Test that crafted quantized GGUF files are rejected rather than causing
+  // heap buffer overflows. See ml-explore/mlx#4244.
+
+  SUBCASE("zero num_weights rejected") {
+    std::string file_path = get_temp_file("test_gguf_qzero.gguf");
+    write_raw_quantized_gguf(file_path, {32, 32}, 8 /* Q8_0 */, 0);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("shape element count mismatch rejected (Q8_0)") {
+    // num_weights doesn't match the shape-derived element count.
+    // dims in GGML order: [32, 64] -> MLX shape [64, 32], element count = 2048
+    // But we pass num_weights = 1, which doesn't match.
+    std::string file_path = get_temp_file("test_gguf_qmismatch.gguf");
+    write_raw_quantized_gguf(file_path, {32, 64}, 8 /* Q8_0 */, 1);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("shape element count mismatch rejected (Q4_0)") {
+    // dims in GGML order: [32, 32] -> MLX shape [32, 32], element count = 1024
+    // But we pass num_weights = 100, which doesn't match.
+    std::string file_path = get_temp_file("test_gguf_qmismatch2.gguf");
+    write_raw_quantized_gguf(file_path, {32, 32}, 1 /* Q4_0 */, 100);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("dimension exceeding int32 rejected") {
+    std::string file_path = get_temp_file("test_gguf_qbigdim.gguf");
+    uint64_t big_dim = static_cast<uint64_t>(std::numeric_limits<int32_t>::max()) + 1;
+    write_raw_quantized_gguf(file_path, {big_dim}, 8 /* Q8_0 */, big_dim);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+}
+
+TEST_CASE("test safetensors security") {
+  SUBCASE("negative dimension rejected") {
+    std::string file_path = get_temp_file("test_neg_dim.safetensors");
+    std::string json_header =
+        R"({"tensor":{"dtype":"F32","shape":[-1,10],"data_offsets":[0,40]}})";
+    std::vector<char> data(40, 0);
+    write_raw_safetensors(file_path, json_header, data);
+    CHECK_THROWS_AS(load_safetensors(file_path), std::runtime_error);
+  }
+
+  SUBCASE("negative dimension with offset wrap rejected") {
+    std::string file_path = get_temp_file("test_neg_dim_wrap.safetensors");
+    // shape:[-82] with large data_offsets would cause offset+data_offsets[1] to wrap
+    std::string json_header =
+        R"({"tensor":{"dtype":"U8","shape":[-82],"data_offsets":[0,18446744073709551534]}})";
+    std::vector<char> data(100, 0);
+    write_raw_safetensors(file_path, json_header, data);
+    CHECK_THROWS_AS(load_safetensors(file_path), std::runtime_error);
+  }
+}
