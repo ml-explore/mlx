@@ -1,5 +1,6 @@
 # Copyright © 2023-2026 Apple Inc.
 
+import math
 import os
 import platform
 import subprocess
@@ -120,6 +121,28 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_q, scales = mx.quantize(a, mode="mxfp8")
         w_hat = mx.dequantize(w_q, scales, mode="mxfp8")
         self.assertTrue(mx.all(w_hat == 0))
+
+    def test_mxfp8_block_scale_does_not_saturate(self):
+        # E4M3 has three mantissa bits, so an in-range element loses at most
+        # half a step, 6.25%. More than that means the block scale rounded
+        # below amax/448 and the block maximum saturated.
+        mx.random.seed(0)
+        group_size = 32
+        n_blocks = 512
+
+        # Sweep the block magnitude across one binade so both scale rounding
+        # directions are covered.
+        w = mx.random.normal(shape=(n_blocks, group_size))
+        w = w * mx.exp(mx.arange(n_blocks) / n_blocks * math.log(2.0)).reshape(-1, 1)
+
+        w_q, scales = mx.quantize(w, group_size=group_size, mode="mxfp8")
+        w_hat = mx.dequantize(w_q, scales, group_size=group_size, mode="mxfp8")
+
+        # Quantization is monotone in |w|, so a block's largest output is the
+        # reconstruction of its largest input.
+        amax = mx.max(mx.abs(w), axis=1)
+        rel = mx.abs(amax - mx.max(mx.abs(w_hat), axis=1)) / amax
+        self.assertLess(mx.max(rel).item(), 0.0626)
 
     def test_nvfp4_quantize_dequantize(self):
         lut = mx.array(
