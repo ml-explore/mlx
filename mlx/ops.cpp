@@ -4839,15 +4839,39 @@ array quantized_matmul(
       std::move(inputs));
 }
 
+void validate_qqmm_operand(
+    std::string_view name,
+    const array& x,
+    const std::optional<array>& scales,
+    QuantizationMode qmode,
+    const std::optional<array>& global_scale) {
+  if (x.dtype() != uint32) {
+    if (!issubdtype(x.dtype(), floating) || x.dtype() == float64) {
+      std::ostringstream msg;
+      msg << "[" << tag
+          << "] Only real floating types except float64 are supported but "
+          << name << ".dtype() == " << x.dtype() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (scales.has_value()) {
+      std::ostringstream msg;
+      msg << "[qqmm] Scales for " << name << " must not be provided "
+          << "when " << name << " is not quantized.";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+  validate_global_scale(tag, qmode, global_scale);
+}
+
 void validate_qqmm_inputs(
     const array& x,
     const array& w,
+    const std::optional<array>& scales_x,
     const std::optional<array>& scales_w,
-    int group_size,
-    int bits,
+    QuantizationMode qmode_x,
+    QuantizationMode qmode_w,
     const std::optional<array>& global_scale_x,
-    const std::optional<array>& global_scale_w,
-    QuantizationMode qmode) {
+    const std::optional<array>& global_scale_w) {
   // check 2D (for now)
   if (x.ndim() > 2 || w.ndim() > 2) {
     std::ostringstream msg;
@@ -4856,130 +4880,161 @@ void validate_qqmm_inputs(
         << "w.ndim() == " << w.ndim() << ".";
     throw std::invalid_argument(msg.str());
   }
-  if (w.dtype() == uint32) {
-    // if w is quantized, scales are provided
-    if (!scales_w.has_value()) {
-      std::ostringstream msg;
-      throw std::invalid_argument(
-          "[qqmm] Scales must be provided if second argument is quantized.");
-    }
-    // if scales are provided, check compatibility with quantized w
-    else {
-      validate_quantized_input("qqmm", w, *scales_w, group_size, bits);
-    }
-  }
-  // if w is not quantized, dtype must be in {f16, bf16, fp32}
-  else {
-    if (!issubdtype(w.dtype(), floating) || w.dtype() == float64) {
-      std::ostringstream msg;
-      msg << "[qqmm] Only real floating types except float64 are supported but "
-          << "second argument dtype == " << w.dtype() << ".";
-      throw std::invalid_argument(msg.str());
-    }
-  }
-  // x dtype must be in {f16, bf16, fp32}
-  if (!issubdtype(x.dtype(), floating) || x.dtype() == float64) {
+  validate_qqmm_operand("x", x, scales_x, qmode_x, global_scale_x);
+  validate_qqmm_operand("w", w, scales_w, qmode_w, global_scale_w);
+  // When both operands are in nvfp4 the two global scales are folded in a
+  // single scalar so they must be provided together or not at all
+  if (qmode_x == QuantizationMode::Nvfp4 &&
+      qmode_w == QuantizationMode::Nvfp4 &&
+      global_scale_x.has_value() != global_scale_w.has_value()) {
     std::ostringstream msg;
-    msg << "[qqmm] Only real floating types except float64 are supported but "
-        << "first argument dtype == " << x.dtype() << ".";
+    msg << "[" << tag << "] For nvfp4 mode, either both global_scale_x and "
+        << "global_scale_w must be provided, or neither.";
     throw std::invalid_argument(msg.str());
-  }
-  // validate global scales
-  validate_global_scale("qqmm", qmode, global_scale_x);
-  validate_global_scale("qqmm", qmode, global_scale_w);
-  // For nvfp4 mode, both global scales must be provided together or neither
-  if (qmode == QuantizationMode::Nvfp4) {
-    bool has_x = global_scale_x.has_value();
-    bool has_w = global_scale_w.has_value();
-    if (has_x != has_w) {
-      throw std::invalid_argument(
-          "[qqmm] For nvfp4 mode, either both global_scale_x and "
-          "global_scale_w must be provided, or neither.");
-    }
   }
 }
 
-std::pair<int, int> extract_qqmm_dims(
+// Validate a possibly quantized operand against its scales and return the size
+// of its last axis once dequantized.
+int extract_qqmm_inner_dims(
+    std::string_view tag,
+    std::string_view name,
     const array& x,
-    const array& w,
-    const std::optional<array>& scales_w,
+    const std::optional<array>& scales,
     int group_size,
     int bits) {
-  if (w.dtype() != uint32) {
-    // if w is not quantized, check that last dims match
-    if (x.shape(-1) != w.shape(-1)) {
-      std::ostringstream msg;
-      msg << "[qqmm] Last dimension of first input with shape " << x.shape()
-          << " must match last dimension of"
-          << " second input with shape " << w.shape() << ".";
-      throw std::invalid_argument(msg.str());
-    }
-    return std::make_pair(w.shape(-1), w.shape(-2));
-  } else {
-    // if w is quantized, extract dims from quantized w
-    return extract_quantized_matmul_dims(
-        "qqmm",
-        x,
-        w,
-        *scales_w,
-        std::nullopt,
-        /* transpose = */ true,
-        group_size,
-        bits);
+  if (x.dtype() != uint32) {
+    return x.shape(-1);
   }
+  if (!scales.has_value()) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Scales must be provided if " << name
+        << " is quantized.";
+    throw std::invalid_argument(msg.str());
+  }
+  validate_quantized_input(tag, x, *scales, group_size, bits);
+  return x.shape(-1) * 32 / bits;
+}
+
+std::pair<int, int> extract_qqmm_dims(
+    std::string_view tag,
+    const array& x,
+    const array& w,
+    const std::optional<array>& scales_x,
+    const std::optional<array>& scales_w,
+    int group_size_x,
+    int bits_x,
+    int group_size_w,
+    int bits_w) {
+  int x_inner_dims =
+      extract_qqmm_inner_dims(tag, "x", x, scales_x, group_size_x, bits_x);
+  int w_inner_dims =
+      extract_qqmm_inner_dims(tag, "w", w, scales_w, group_size_w, bits_w);
+  if (x_inner_dims != w_inner_dims) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Last dimension of first input with shape "
+        << x.shape() << " must match last dimension of"
+        << " second input with shape " << w.shape() << " but " << x_inner_dims
+        << " != " << w_inner_dims << " once dequantized.";
+    throw std::invalid_argument(msg.str());
+  }
+  return std::make_pair(w_inner_dims, w.shape(-2));
 }
 
 array qqmm(
     const array& in_x,
     const array& w,
-    const std::optional<array>& scales_w,
-    std::optional<int> group_size_ /* = std::nullopt */,
-    std::optional<int> bits_ /* = std::nullopt */,
-    const std::string& mode /* = "nvfp4" */,
+    const std::optional<array>& in_scales_x /* = std::nullopt */,
+    const std::optional<array>& scales_w /* = std::nullopt */,
+    std::optional<int> group_size_x_ /* = std::nullopt */,
+    std::optional<int> bits_x_ /* = std::nullopt */,
+    const std::string& mode_x /* = "nvfp4" */,
+    std::optional<int> group_size_w_ /* = std::nullopt */,
+    std::optional<int> bits_w_ /* = std::nullopt */,
+    const std::string& mode_w /* = "nvfp4" */,
     const std::optional<array>& global_scale_x /* = std::nullopt */,
     const std::optional<array>& global_scale_w /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
-  auto qmode = string_to_quantization_mode(mode, "qqmm");
-  // we need to check 2 cases:
-  // 1. w is quantized, scales is provided
-  // 2. w is not quantized, scales is not provided
-  auto [group_size, bits] =
-      quantization_params_from_mode(qmode, group_size_, bits_);
+  // x and w are quantized independently, each one is either quantized on the
+  // fly or passed already quantized together with its scales.
+  auto qmode_x = string_to_quantization_mode(mode_x, "qqmm");
+  auto qmode_w = string_to_quantization_mode(mode_w, "qqmm");
+  auto [group_size_x, bits_x] =
+      quantization_params_from_mode(qmode_x, group_size_x_, bits_x_);
+  auto [group_size_w, bits_w] =
+      quantization_params_from_mode(qmode_w, group_size_w_, bits_w_);
 
-  // Allow gemv
+  // Allow gemv. If x is quantized its scales are collapsed the same way.
   auto x = in_x;
+  auto scales_x = in_scales_x;
   if (x.ndim() == 1) {
     // Insert a singleton dim in the beginning
     x = expand_dims(x, 0, s);
+    if (scales_x.has_value()) {
+      scales_x = expand_dims(*scales_x, 0, s);
+    }
   } else if (w.ndim() == 2 && x.ndim() > 2) {
     x = flatten(x, 0, -2, s);
+    if (scales_x.has_value()) {
+      scales_x = flatten(*scales_x, 0, -2, s);
+    }
   }
 
   // validate inputs
   validate_qqmm_inputs(
-      x, w, scales_w, group_size, bits, global_scale_x, global_scale_w, qmode);
+      "qqmm",
+      x,
+      w,
+      scales_x,
+      scales_w,
+      qmode_x,
+      qmode_w,
+      global_scale_x,
+      global_scale_w);
   // validate and extract shapes
-  auto [w_inner_dims, w_outer_dims] =
-      extract_qqmm_dims(x, w, scales_w, group_size, bits);
+  auto [w_inner_dims, w_outer_dims] = extract_qqmm_dims(
+      "qqmm",
+      x,
+      w,
+      scales_x,
+      scales_w,
+      group_size_x,
+      bits_x,
+      group_size_w,
+      bits_w);
+
   std::vector<array> inputs = {
       x,
       w,
   };
+  if (scales_x.has_value()) {
+    inputs.push_back(*scales_x);
+  }
   if (scales_w.has_value()) {
     inputs.push_back(*scales_w);
   }
-  if (global_scale_x.has_value() && global_scale_w.has_value()) {
+  if (global_scale_x.has_value()) {
     inputs.push_back(*global_scale_x);
+  }
+  if (global_scale_w.has_value()) {
     inputs.push_back(*global_scale_w);
+  }
+
+  auto out_type = bfloat16;
+  if (issubdtype(x.dtype(), floating)) {
+    out_type = x.dtype();
+  } else if (issubdtype(w.dtype(), floating)) {
+    out_type = w.dtype();
   }
 
   auto out_shape = inputs[0].shape();
   out_shape.back() = w_outer_dims;
   auto out = array(
       std::move(out_shape),
-      x.dtype(), // output dtype is the same as x dtype
-      std::make_shared<QQMatmul>(stream, group_size, bits, qmode),
+      out_type,
+      std::make_shared<QQMatmul>(
+          stream, group_size_x, bits_x, qmode_x, group_size_w, bits_w, qmode_w),
       std::move(inputs));
   if (in_x.ndim() > 2) {
     auto orig_shape = in_x.shape();
@@ -5672,8 +5727,17 @@ array gather_qqmm(
     inputs.push_back(*global_scale_w);
   }
 
-  auto [w_inner_dims, w_outer_dims] =
-      extract_qqmm_dims(x, w, scales_w, group_size, bits);
+  // todo: make gather_qqmm accept quantized x
+  auto [w_inner_dims, w_outer_dims] = extract_qqmm_dims(
+      "gather_qqmm",
+      x,
+      w,
+      /* scales_x = */ std::nullopt,
+      scales_w,
+      group_size,
+      bits,
+      group_size,
+      bits);
   auto out_shape = lhs_indices.shape();
   out_shape.push_back(x.shape(-2));
   out_shape.push_back(w_outer_dims);

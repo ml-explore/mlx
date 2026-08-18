@@ -1989,7 +1989,19 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   const array& x_pre = inputs[0];
   const array& w_pre = inputs[1];
-  auto mode = quantization_mode_to_string(mode_);
+
+  // TODO: Support an already quantized x and different quantization
+  // parameters for x and w.
+  if (x_pre.dtype() == uint32 || mode_x_ != mode_w_ || bits_x_ != bits_w_ ||
+      group_size_x_ != group_size_w_) {
+    throw std::runtime_error(
+        "[QQMatmul] A quantized x and different quantization parameters for x "
+        "and w are not supported yet.");
+  }
+  auto qmode = mode_w_;
+  auto bits = bits_w_;
+  auto group_size = group_size_w_;
+  auto mode = quantization_mode_to_string(qmode);
 
   out.set_data(allocator::malloc(out.nbytes()));
 
@@ -2000,7 +2012,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // For nvfp4, global scales are optional but must be both present or both
   // absent If present, they add 2 more inputs (global_scale_x, global_scale_w)
   bool has_global_scales =
-      mode_ == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2;
+      qmode == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2;
   assert(inputs.size() == base_size || has_global_scales);
 
   std::optional<array> global_scale_x;
@@ -2012,14 +2024,14 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Quantize weights.
   auto [w_q, scales_w] = !w_quantized
-      ? quantize_input(w_pre, global_scale_w, mode_, group_size_, bits_, d, s)
+      ? quantize_input(w_pre, global_scale_w, qmode, group_size, bits, d, s)
       : std::make_tuple(
             ensure_row_contiguous_matrix(w_pre, d, s),
             ensure_row_contiguous_matrix(inputs[base_size - 1], d, s));
 
   // Quantize activation.
   array x = quantize_dequantize_input(
-      x_pre, global_scale_x, mode, group_size_, bits_, d, s);
+      x_pre, global_scale_x, mode, group_size, bits, d, s);
 
   bool non_batched = w_q.ndim() == 2;
   int K = x.shape(-1);
@@ -2032,8 +2044,8 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       std::nullopt,
       global_scale_w,
       out,
-      group_size_,
-      bits_,
+      group_size,
+      bits,
       M,
       N,
       K,

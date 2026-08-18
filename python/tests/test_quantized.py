@@ -227,8 +227,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y_q = mx.qqmm(
                     x,
                     w_q,
-                    scales,
-                    mode=mode,
+                    scales_w=scales,
+                    mode_x=mode,
+                    mode_w=mode,
                     global_scale_x=global_scale_x,
                     global_scale_w=global_scale_w,
                 )
@@ -276,8 +277,9 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 y_q = mx.qqmm(
                     x,
                     w_q,
-                    scales,
-                    mode=mode,
+                    scales_w=scales,
+                    mode_x=mode,
+                    mode_w=mode,
                     global_scale_x=global_scale_x,
                     global_scale_w=global_scale_w,
                 )

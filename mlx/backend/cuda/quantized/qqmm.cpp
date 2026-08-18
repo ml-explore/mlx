@@ -100,6 +100,18 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   const array& x_pre = inputs[0];
   const array& w_pre = inputs[1];
 
+  // TODO: Support an already quantized x and different quantization
+  // parameters for x and w.
+  if (x_pre.dtype() == uint32 || mode_x_ != mode_w_ || bits_x_ != bits_w_ ||
+      group_size_x_ != group_size_w_) {
+    throw std::runtime_error(
+        "[QQMatmul] A quantized x and different quantization parameters for x "
+        "and w are not supported yet.");
+  }
+  auto mode = mode_w_;
+  auto bits = bits_w_;
+  auto group_size = group_size_w_;
+
   out.set_data(cu::malloc_async(out.nbytes(), encoder));
 
   // - 2 inputs: x, w (non-quantized w)
@@ -109,7 +121,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // For nvfp4, global scales are optional but must be both present or both
   // absent If present, they add 2 more inputs (global_scale_x, global_scale_w)
   bool has_global_scales =
-      mode_ == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2;
+      mode == QuantizationMode::Nvfp4 && inputs.size() == base_size + 2;
   assert(inputs.size() == base_size || has_global_scales);
 
   std::optional<array> global_scale_x;
@@ -122,21 +134,21 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Quantize weights.
   auto [w_q, scales_w] = !w_quantized
       ? quantize_input(
-            w_pre, encoder, s, mode_, bits_, group_size_, global_scale_w)
+            w_pre, encoder, s, mode, bits, group_size, global_scale_w)
       : std::make_tuple(
             ensure_contiguous(w_pre, encoder, s),
             ensure_contiguous(inputs[base_size - 1], encoder, s));
 
   // Reroute to qmm when: no support in cuBLAS, or doing GEMV.
   bool can_use_cublas =
-      (mode_ == QuantizationMode::Nvfp4 || mode_ == QuantizationMode::Mxfp8) &&
+      (mode == QuantizationMode::Nvfp4 || mode == QuantizationMode::Mxfp8) &&
       (device.compute_capability_major() >= 10);
   int M = x_pre.shape(-2);
   bool use_qmm = (!can_use_cublas) || (M == 1);
 
   if (use_qmm) {
     array x = quantize_dequantize_input(
-        x_pre, global_scale_x, bits_, group_size_, encoder, s);
+        x_pre, global_scale_x, bits, group_size, encoder, s);
     if (M < 8) {
       qmv(x,
           w_q,
@@ -144,9 +156,9 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
           std::nullopt,
           global_scale_w,
           out,
-          bits_,
-          group_size_,
-          mode_,
+          bits,
+          group_size,
+          mode,
           encoder);
     } else {
       qmm_naive(
@@ -159,20 +171,20 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
           std::nullopt,
           out,
           true, // transpose
-          bits_,
-          group_size_,
-          mode_,
+          bits,
+          group_size,
+          mode,
           encoder);
     }
     return;
   }
 
   // Quantize activation.
-  auto [x_q, scales_x] = quantize_input(
-      x_pre, encoder, s, mode_, bits_, group_size_, global_scale_x);
+  auto [x_q, scales_x] =
+      quantize_input(x_pre, encoder, s, mode, bits, group_size, global_scale_x);
 
   int N = w_q.shape(-2); // transposed
-  int K = x_q.shape(-1) * (32 / bits_);
+  int K = x_q.shape(-1) * (32 / bits);
 
   bool x_transposed = false;
   bool w_transposed = true; // always transposed
@@ -202,7 +214,7 @@ void QQMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       w_q,
       scales_x,
       scales_w,
-      mode_,
+      mode,
       scalars);
 }
 

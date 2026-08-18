@@ -1596,14 +1596,25 @@ MLX_API array dequantize(
     std::optional<Dtype> dtype = std::nullopt,
     StreamOrDevice s = {});
 
+/** Matrix multiplication of two possibly quantized matrices.
+ *
+ * Each operand is either a floating point matrix, in which case it is
+ * quantized on the fly, or an already quantized matrix in which case its
+ * scales must be provided. The two operands can be quantized with different
+ * modes and quantization parameters. */
 MLX_API array qqmm(
-    const array& x, // input activations
+    const array& x, // maybe quantized input activations
     const array& w, // maybe quantized weights
-    const std::optional<array>& w_scales = std::nullopt, // optional scales if w
-                                                         // is quantized
-    std::optional<int> group_size = std::nullopt,
-    std::optional<int> bits = std::nullopt,
-    const std::string& mode = "nvfp4",
+    const std::optional<array>& scales_x = std::nullopt, // scales if x is
+                                                         // quantized
+    const std::optional<array>& scales_w = std::nullopt, // scales if w is
+                                                         // quantized
+    std::optional<int> group_size_x = std::nullopt,
+    std::optional<int> bits_x = std::nullopt,
+    const std::string& mode_x = "nvfp4",
+    std::optional<int> group_size_w = std::nullopt,
+    std::optional<int> bits_w = std::nullopt,
+    const std::string& mode_w = "nvfp4",
     const std::optional<array>& global_scale_x = std::nullopt,
     const std::optional<array>& global_scale_w = std::nullopt,
     StreamOrDevice s = {});

@@ -1646,17 +1646,27 @@ class QuantizedMatmul : public UnaryPrimitive {
   bool transpose_;
 };
 
+// Matmul of two possibly quantized matrices. The inputs are x, w followed by
+// the optional scales_x, scales_w, global_scale_x and global_scale_w in that
+// order. A quantized operand has dtype uint32 and comes with its scales, an
+// operand that is quantized on the fly is a floating point matrix.
 class QQMatmul : public UnaryPrimitive {
  public:
   explicit QQMatmul(
       Stream stream,
-      int group_size,
-      int bits,
-      QuantizationMode mode)
+      int group_size_x,
+      int bits_x,
+      QuantizationMode mode_x,
+      int group_size_w,
+      int bits_w,
+      QuantizationMode mode_w)
       : UnaryPrimitive(stream),
-        group_size_(group_size),
-        bits_(bits),
-        mode_(mode) {}
+        group_size_x_(group_size_x),
+        bits_x_(bits_x),
+        mode_x_(mode_x),
+        group_size_w_(group_size_w),
+        bits_w_(bits_w),
+        mode_w_(mode_w) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1667,13 +1677,17 @@ class QQMatmul : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   std::vector<Shape> output_shapes(const std::vector<array>& inputs) override;
   auto state() const {
-    return std::make_tuple(group_size_, bits_, mode_);
+    return std::make_tuple(
+        group_size_x_, bits_x_, mode_x_, group_size_w_, bits_w_, mode_w_);
   }
 
  private:
-  int group_size_;
-  int bits_;
-  QuantizationMode mode_;
+  int group_size_x_;
+  int bits_x_;
+  QuantizationMode mode_x_;
+  int group_size_w_;
+  int bits_w_;
+  QuantizationMode mode_w_;
 };
 
 class GatherQMM : public UnaryPrimitive {

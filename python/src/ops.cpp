@@ -6070,51 +6070,72 @@ void init_ops(nb::module_& m) {
       "qqmm",
       &mx::qqmm,
       nb::arg(), // x
-      nb::arg(), // w_q
-      "scales"_a = nb::none(), // scales w
-      "group_size"_a = nb::none(),
-      "bits"_a = nb::none(),
-      "mode"_a = "nvfp4",
+      nb::arg(), // w
+      "scales_x"_a = nb::none(),
+      "scales_w"_a = nb::none(),
+      "group_size_x"_a = nb::none(),
+      "bits_x"_a = nb::none(),
+      "mode_x"_a = "nvfp4",
+      "group_size_w"_a = nb::none(),
+      "bits_w"_a = nb::none(),
+      "mode_w"_a = "nvfp4",
       "global_scale_x"_a = nb::none(),
       "global_scale_w"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def qqmm(x: array, w: array, scales: array | None = None, group_size: int | None = None, bits: int | None = None, mode: str = 'nvfp4', global_scale_x: array | None = None, global_scale_w: array | None = None, *, stream: StreamOrDevice = None) -> array"),
+          "def qqmm(x: array, w: array, scales_x: array | None = None, scales_w: array | None = None, group_size_x: int | None = None, bits_x: int | None = None, mode_x: str = 'nvfp4', group_size_w: int | None = None, bits_w: int | None = None, mode_w: str = 'nvfp4', global_scale_x: array | None = None, global_scale_w: array | None = None, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
-      Perform a matrix multiplication using a possibly quantized weight matrix
-      ``w`` and a non-quantized input ``x``. The input ``x`` is quantized on the
-      fly. The weight matrix ``w`` is used as-is if it is already quantized;
-      otherwise, it is quantized on the fly.
+      Perform a matrix multiplication of the possibly quantized input ``x`` with
+      the possibly quantized weight matrix ``w``. Each of the two matrices is
+      used as-is if it is already quantized; otherwise it is quantized on the
+      fly.
 
-      If ``w`` is quantized, ``scales`` must be provided, and ``group_size``,
-      ``bits``, and ``mode`` must match the parameters that were used to quantize
-      ``w``.
+      If ``x`` is quantized, ``scales_x`` must be provided and ``group_size_x``,
+      ``bits_x`` and ``mode_x`` must match the parameters that were used to
+      quantize it. Similarly for ``w`` with ``scales_w``, ``group_size_w``,
+      ``bits_w`` and ``mode_w``. The two matrices can be quantized with
+      different modes and quantization parameters.
 
       Notes:
-        If ``w`` is expected to receive gradients, it must be provided in
-        non-quantized form.
+        If ``x`` or ``w`` are expected to receive gradients, they must be
+        provided in non-quantized form.
 
-        If ``x`` and `w`` are not quantized, their data types must be ``float32``,
-        ``float16``, or ``bfloat16``.
-        If ``w`` is quantized, it must be packed in unsigned integers.
-        ``global_scale_x`` and ``global_scale_w`` are only used for ``nvfp4`` quantization.
+        If ``x`` and ``w`` are not quantized, their data types must be
+        ``float32``, ``float16``, or ``bfloat16``. If they are quantized, they
+        must be packed in unsigned integers. The output type follows the
+        non-quantized matrices and defaults to ``bfloat16`` if both of them are
+        quantized.
+
+        ``global_scale_x`` and ``global_scale_w`` are only used for ``nvfp4``
+        quantization.
 
       Args:
-        x (array): Input array.
+        x (array): Input array. If quantized, it is packed in unsigned integers.
         w (array): Weight matrix. If quantized, it is packed in unsigned integers.
-        scales (array, optional): The scales to use per ``group_size`` elements of
-          ``w`` if ``w`` is quantized. Default: ``None``.
-        group_size (int, optional): Number of elements in ``x`` and ``w`` that
-          share a scale. See supported values and defaults in the
+        scales_x (array, optional): The scales to use per ``group_size_x`` elements
+          of ``x`` if ``x`` is quantized. Default: ``None``.
+        scales_w (array, optional): The scales to use per ``group_size_w`` elements
+          of ``w`` if ``w`` is quantized. Default: ``None``.
+        group_size_x (int, optional): Number of elements in ``x`` that share a
+          scale. See supported values and defaults in the
           :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
-        bits (int, optional): Number of bits used to represent each element of
-          ``x`` and ``w``. See supported values and defaults in the
+        bits_x (int, optional): Number of bits used to represent each element of
+          ``x``. See supported values and defaults in the
           :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
-        mode (str, optional): The quantization mode. Default: ``"nvfp4"``.
+        mode_x (str, optional): The quantization mode of ``x``. Default: ``"nvfp4"``.
           Supported modes are ``nvfp4`` and ``mxfp8``. See the
           :ref:`table of quantization modes <quantize-modes>` for details.
-        global_scale (array, optional): The per-input float32 scale used for x
+        group_size_w (int, optional): Number of elements in ``w`` that share a
+          scale. See supported values and defaults in the
+          :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+        bits_w (int, optional): Number of bits used to represent each element of
+          ``w``. See supported values and defaults in the
+          :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
+        mode_w (str, optional): The quantization mode of ``w``. Default: ``"nvfp4"``.
+          Supported modes are ``nvfp4`` and ``mxfp8``. See the
+          :ref:`table of quantization modes <quantize-modes>` for details.
+        global_scale_x (array, optional): The per-input float32 scale used for x
             with ``"nvfp4"`` quantization. Default: ``None``.
         global_scale_w (array, optional): The per-input float32 scale used for w
             with ``"nvfp4"`` quantization. Default: ``None``.

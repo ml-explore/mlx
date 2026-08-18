@@ -1322,6 +1322,15 @@ void fast::ConvertFP8::eval_cpu(
 void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& encoder = cpu::get_command_encoder(stream());
 
+  // TODO: Support an already quantized x and different quantization
+  // parameters for x and w.
+  if (inputs[0].dtype() == uint32 || mode_x_ != mode_w_ || bits_x_ != bits_w_ ||
+      group_size_x_ != group_size_w_) {
+    throw std::runtime_error(
+        "[QQMatmul] A quantized x and different quantization parameters for x "
+        "and w are not supported yet.");
+  }
+
   bool w_quantized = (inputs[1].dtype() == uint32);
   if (w_quantized && inputs[0].shape(-2) == 1) {
     bool donate_x = inputs[0].is_donatable();
@@ -1348,8 +1357,8 @@ void QQMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
                       xhat = array::unsafe_weak_copy(xhat),
                       w = array::unsafe_weak_copy(w),
                       scales = array::unsafe_weak_copy(scales),
-                      group_size_ = group_size_,
-                      bits_ = bits_]() mutable {
+                      group_size_ = group_size_w_,
+                      bits_ = bits_w_]() mutable {
       dispatch_quantize_dequantize(x, xhat, bits_, group_size_);
       fp_qmm_dispatch(out, xhat, w, scales, group_size_, bits_, true);
     });

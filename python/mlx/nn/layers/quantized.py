@@ -405,10 +405,13 @@ class QQLinear(Module):
         x = mx.qqmm(
             x,
             self["weight"],
-            scales=self.get("scales"),
-            group_size=self.group_size,
-            bits=self.bits,
-            mode=self.mode,
+            scales_w=self.get("scales"),
+            group_size_x=self.group_size,
+            bits_x=self.bits,
+            mode_x=self.mode,
+            group_size_w=self.group_size,
+            bits_w=self.bits,
+            mode_w=self.mode,
         )
         return x
 

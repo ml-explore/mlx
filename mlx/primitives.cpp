@@ -3623,8 +3623,10 @@ std::vector<Shape> QuantizedMatmul::output_shapes(
 
 bool QQMatmul::is_equivalent(const Primitive& other) const {
   const QQMatmul& qm_other = static_cast<const QQMatmul&>(other);
-  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
-      mode_ == qm_other.mode_;
+  return group_size_x_ == qm_other.group_size_x_ &&
+      bits_x_ == qm_other.bits_x_ && mode_x_ == qm_other.mode_x_ &&
+      group_size_w_ == qm_other.group_size_w_ && bits_w_ == qm_other.bits_w_ &&
+      mode_w_ == qm_other.mode_w_;
 }
 
 std::vector<Shape> QQMatmul::output_shapes(const std::vector<array>& inputs) {
@@ -3640,7 +3642,9 @@ std::vector<array> QQMatmul::vjp(
     const std::vector<array>& cotangents, // non quantized upstream grads
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  bool is_nvfp4 = mode_ == QuantizationMode::Nvfp4;
+  // TODO: Handle quantized primals and per operand quantization modes.
+  bool is_nvfp4 =
+      mode_x_ == QuantizationMode::Nvfp4 && mode_w_ == QuantizationMode::Nvfp4;
   assert(primals.size() == 2 || (is_nvfp4 && primals.size() == 4));
 
   std::vector<array> vjps;
@@ -3649,7 +3653,8 @@ std::vector<array> QQMatmul::vjp(
   // primal[1] -- non quantized w (N, K)
   // primal[0] -- non quantized activations (M, K)
   // cotan -- non quantized grads (M, N)
-  auto qmode = quantization_mode_to_string(mode_);
+  auto qmode_x = quantization_mode_to_string(mode_x_);
+  auto qmode_w = quantization_mode_to_string(mode_w_);
   std::optional<array> cotan_amax = (primals.size() == 4)
       ? std::make_optional(astype(max(abs(cotan, s), s), float32, s))
       : std::nullopt;
@@ -3665,10 +3670,14 @@ std::vector<array> QQMatmul::vjp(
       vjps.push_back(qqmm(
           cotan, //  M X N
           swapaxes(primals[1], -1, -2, s), // assuming that w is 2D
-          {},
-          group_size_,
-          bits_,
-          qmode,
+          std::nullopt, // scales_x
+          std::nullopt, // scales_w
+          group_size_x_,
+          bits_x_,
+          qmode_x,
+          group_size_w_,
+          bits_w_,
+          qmode_w,
           cotan_amax,
           get_primal_scale(3), // global_scale_w (for w.T)
           s));
@@ -3676,10 +3685,14 @@ std::vector<array> QQMatmul::vjp(
       vjps.push_back(qqmm(
           swapaxes(cotan, -1, -2, s), // (N, M)
           swapaxes(primals[0], -1, -2, s), // (K, M)
-          {},
-          group_size_,
-          bits_,
-          qmode,
+          std::nullopt, // scales_x
+          std::nullopt, // scales_w
+          group_size_x_,
+          bits_x_,
+          qmode_x,
+          group_size_w_,
+          bits_w_,
+          qmode_w,
           cotan_amax,
           get_primal_scale(2), // global_scale_x (for x.T)
           s));

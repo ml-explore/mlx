@@ -65,9 +65,12 @@ def test_qqmm():
                     y_q = mx.qqmm(
                         x,
                         w,
-                        group_size=group_size,
-                        bits=bits,
-                        mode=mode,
+                        group_size_x=group_size,
+                        bits_x=bits,
+                        mode_x=mode,
+                        group_size_w=group_size,
+                        bits_w=bits,
+                        mode_w=mode,
                     )
                     w_q, scales_w = mx.quantize(w, group_size, bits, mode=mode)
                     w_dq = mx.dequantize(
@@ -117,14 +120,31 @@ def test_qqmm_vjp():
         w = mx.random.normal(shape=(N, K), key=k2)
 
         def fn(x):
-            return mx.qqmm(x, w, group_size=group_size, bits=bits, mode=mode)
+            return mx.qqmm(
+                x,
+                w,
+                group_size_x=group_size,
+                bits_x=bits,
+                mode_x=mode,
+                group_size_w=group_size,
+                bits_w=bits,
+                mode_w=mode,
+            )
 
         _, vjp_out = mx.vjp(fn, primals=(x,), cotangents=(c,))
         w_tq, scales_wt = mx.quantize(
             mx.transpose(w), group_size=group_size, bits=bits, mode=mode
         )
         expected_out = mx.qqmm(
-            c, w_tq, scales_wt, group_size=group_size, bits=bits, mode=mode
+            c,
+            w_tq,
+            scales_w=scales_wt,
+            group_size_x=group_size,
+            bits_x=bits,
+            mode_x=mode,
+            group_size_w=group_size,
+            bits_w=bits,
+            mode_w=mode,
         )
         ulp = ulp_bf16_at(expected_out)
         error = (vjp_out[0] - expected_out).abs()
