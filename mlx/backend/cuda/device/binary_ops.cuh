@@ -28,7 +28,15 @@ struct FloorDivide {
       // Complex is not supported, simply make compiler happy.
       return x / y;
     } else {
-      return cuda::std::floor(x / y);
+      auto quotient = x / y;
+      if (cuda::std::isinf(x) && !cuda::std::isinf(y) && y != 0) {
+        return quotient - quotient;
+      }
+      if (!cuda::std::isinf(x) && !cuda::std::isnan(x) &&
+          cuda::std::isinf(y) && x != 0 && (x < 0) != (y < 0)) {
+        return T(-1);
+      }
+      return cuda::std::floor(quotient);
     }
   }
 };

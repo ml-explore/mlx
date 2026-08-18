@@ -31,7 +31,15 @@ struct FloorDivide {
   }
   template <typename T>
   metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) thread {
-    return floor(x / y);
+    auto quotient = x / y;
+    if (metal::isinf(float(x)) && !metal::isinf(float(y)) && y != 0) {
+      return quotient - quotient;
+    }
+    if (!metal::isinf(float(x)) && !metal::isnan(float(x)) &&
+        metal::isinf(float(y)) && x != 0 && (x < 0 != y < 0)) {
+      return T(-1);
+    }
+    return floor(quotient);
   }
   template <>
   complex64_t operator()(complex64_t x, complex64_t y) thread {

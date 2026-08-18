@@ -3398,6 +3398,43 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(q, mx.array([-4.0, -4.0, -4.0, -4.0])))
         self.assertTrue(mx.array_equal(q * bf + r, af))
 
+    def test_floor_divide_special_values(self):
+        with self.assertRaises(ValueError):
+            mx.floor_divide(mx.array([3 + 2j]), mx.array([1 + 1j]))
+
+        for dtype in [np.float16, np.float32]:
+            a = np.array(
+                [1.0, -1.0, np.inf, np.inf, -np.inf, 0.0, -0.0, 1.0, -1.0],
+                dtype=dtype,
+            )
+            b = np.array(
+                [-np.inf, np.inf, 3.0, -3.0, 3.0, 3.0, 3.0, 0.0, 0.0],
+                dtype=dtype,
+            )
+            with np.errstate(all="ignore"):
+                expected_q = np.floor_divide(a, b)
+                expected_divmod = np.divmod(a, b)
+
+            q = np.array(mx.floor_divide(mx.array(a), mx.array(b)))
+            compiled_q = np.array(mx.compile(mx.floor_divide)(mx.array(a), mx.array(b)))
+            actual_divmod = tuple(
+                np.array(x) for x in mx.divmod(mx.array(a), mx.array(b))
+            )
+
+            np.testing.assert_allclose(q, expected_q, rtol=0, atol=0, equal_nan=True)
+            np.testing.assert_array_equal(np.signbit(q), np.signbit(expected_q))
+            np.testing.assert_allclose(
+                compiled_q, expected_q, rtol=0, atol=0, equal_nan=True
+            )
+            for i, (actual, expected) in enumerate(zip(actual_divmod, expected_divmod)):
+                np.testing.assert_allclose(
+                    actual, expected, rtol=0, atol=0, equal_nan=True
+                )
+                if i == 0:
+                    np.testing.assert_array_equal(
+                        np.signbit(actual), np.signbit(expected)
+                    )
+
     def test_tile(self):
         self.assertCmpNumpy([(2,), [2]], mx.tile, np.tile)
         self.assertCmpNumpy([(2, 3, 4), [2]], mx.tile, np.tile)
