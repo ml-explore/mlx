@@ -42,6 +42,16 @@ bool fast::ScaledDotProductAttention::use_fallback(
   return true;
 }
 
+bool fast::ScaledDotProductAttentionVJP::use_fallback(
+    const array& q,
+    Stream s) {
+  return true;
+}
+
+bool fast::ScaledDotProductAttention::supports_bool_mask() {
+  return false;
+}
+
 bool fast::GatedDeltaUpdate::use_fallback(
     const int Hk,
     const int Dk,
@@ -52,15 +62,6 @@ bool fast::GatedDeltaUpdate::use_fallback(
   return true;
 }
 
-bool fast::ScaledDotProductAttentionVJP::use_fallback(
-    const array& q,
-    Stream s) {
-  return true;
-}
-
-bool fast::ScaledDotProductAttention::supports_bool_mask() {
-  return false;
-}
 
 NO_GPU(Abs)
 NO_GPU(Add)
