@@ -124,8 +124,7 @@ void set_mx_value_from_gguf(
       value = array(val->boolval, bool_);
       break;
     case GGUF_VALUE_TYPE_STRING:
-      value =
-          std::string(val->string.string, static_cast<int>(val->string.len));
+      value = std::string(val->string.string, val->string.len);
       break;
     case GGUF_VALUE_TYPE_FLOAT64:
       value = array(val->float64, float32);
@@ -174,7 +173,7 @@ void set_mx_value_from_gguf(
           for (auto& str : strs) {
             auto str_val = reinterpret_cast<gguf_string*>(data);
             data += (str_val->len + sizeof(gguf_string));
-            str = std::string(str_val->string, static_cast<int>(str_val->len));
+            str = std::string(str_val->string, str_val->len);
             ctx->off += (str_val->len + sizeof(gguf_string));
           }
           value = std::move(strs);
@@ -200,10 +199,102 @@ void set_mx_value_from_gguf(
   }
 }
 
+inline size_t gguf_value_type_size(uint32_t type) {
+  switch (type) {
+    case GGUF_VALUE_TYPE_BOOL:
+    case GGUF_VALUE_TYPE_UINT8:
+    case GGUF_VALUE_TYPE_INT8:
+      return 1;
+    case GGUF_VALUE_TYPE_UINT16:
+    case GGUF_VALUE_TYPE_INT16:
+      return 2;
+    case GGUF_VALUE_TYPE_UINT32:
+    case GGUF_VALUE_TYPE_INT32:
+    case GGUF_VALUE_TYPE_FLOAT32:
+      return 4;
+    case GGUF_VALUE_TYPE_UINT64:
+    case GGUF_VALUE_TYPE_INT64:
+    case GGUF_VALUE_TYPE_FLOAT64:
+      return 8;
+    default:
+      return 0;
+  }
+}
+
+void check_metadata_value_in_file(
+    const gguf_ctx* ctx,
+    uint32_t type,
+    const gguf_value* val) {
+  auto end = ctx->data + ctx->size;
+  // Bytes available from a pointer up to the end of the mapping; 0 if the
+  // pointer lies outside [ctx->data, end].
+  auto avail = [&](const uint8_t* p) -> size_t {
+    return (p < ctx->data || p > end) ? 0 : static_cast<size_t>(end - p);
+  };
+  auto base = reinterpret_cast<const uint8_t*>(val);
+  auto fail = [](const char* what) {
+    std::ostringstream msg;
+    msg << "[load_gguf] " << what
+        << " Perhaps an incomplete download or corrupt file?";
+    throw std::runtime_error(msg.str());
+  };
+
+  size_t fixed = gguf_value_type_size(type);
+  if (fixed) {
+    if (fixed > avail(base)) {
+      fail("Metadata value extends past the end of the file.");
+    }
+    return;
+  }
+
+  auto check_string = [&](const uint8_t* p) -> const uint8_t* {
+    uint64_t len = reinterpret_cast<const gguf_string*>(p)->len;
+    if (sizeof(uint64_t) + len > avail(p)) {
+      fail("String metadata value extends past the end of the file.");
+    }
+    return p + sizeof(uint64_t) + len;
+  };
+
+  if (type == GGUF_VALUE_TYPE_STRING) {
+    if (sizeof(uint64_t) > avail(base)) {
+      fail("String metadata value extends past the end of the file.");
+    }
+    check_string(base);
+    return;
+  }
+
+  if (type == GGUF_VALUE_TYPE_ARRAY) {
+    if (gguf_array_header_size > avail(base)) {
+      fail("Metadata value extends past the end of the file.");
+    }
+    const uint8_t* elt = base + gguf_array_header_size;
+    size_t elt_size = gguf_value_type_size(val->array.type);
+    if (elt_size) {
+      if (val->array.len > avail(elt) / elt_size) {
+        fail("Array metadata value extends past the end of the file.");
+      }
+      return;
+    }
+    if (val->array.type == GGUF_VALUE_TYPE_STRING) {
+      const uint8_t* p = elt;
+      for (uint64_t i = 0; i < val->array.len; i++) {
+        if (sizeof(uint64_t) > avail(p)) {
+          fail("Array metadata value extends past the end of the file.");
+        }
+        p = check_string(p);
+      }
+    }
+    return;
+  }
+
+  throw std::runtime_error("[load_gguf] Received unexpected type.");
+}
+
 std::unordered_map<std::string, GGUFMetaData> load_metadata(gguf_ctx* ctx) {
   std::unordered_map<std::string, GGUFMetaData> metadata;
   gguf_key key;
   while (gguf_get_key(ctx, &key)) {
+    check_metadata_value_in_file(ctx, key.type, key.val);
     std::string key_name = std::string(key.name, key.namelen);
     auto& val = metadata.insert({key_name, GGUFMetaData{}}).first->second;
     set_mx_value_from_gguf(ctx, key.type, key.val, val);
@@ -211,10 +302,6 @@ std::unordered_map<std::string, GGUFMetaData> load_metadata(gguf_ctx* ctx) {
   return metadata;
 }
 
-// gguflib computes weights_data as ctx->data + ctx->data_off + the tensor's
-// offset field in unsigned arithmetic, without comparing the result against the
-// mapping, so a crafted offset can point outside the file or -- if the addition
-// wraps -- back inside it at the wrong bytes.
 void check_tensor_in_file(const gguf_ctx* ctx, const gguf_tensor& tensor) {
   auto fail = [&tensor](const std::string& what) {
     std::ostringstream msg;
