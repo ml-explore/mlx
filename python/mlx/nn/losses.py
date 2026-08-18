@@ -63,6 +63,20 @@ def cross_entropy(
         >>> targets = mx.array([[0.9, 0.1], [0.1, 0.9]])
         >>> nn.losses.cross_entropy(logits, targets)
         array([0.348587, 0.348587], dtype=float32)
+        >>>
+        >>> # Half precision logits with class indices as targets. On CUDA a
+        >>> # fused kernel accumulates the reduction in float32:
+        >>> logits = mx.array([[2.0, -1.0], [-1.0, 2.0]], mx.bfloat16)
+        >>> targets = mx.array([0, 1])
+        >>> nn.losses.cross_entropy(logits, targets)
+        array([0.048584, 0.048584], dtype=bfloat16)
+        >>>
+        >>> # Metal and the CPU reduce in the dtype of the logits, so upcast
+        >>> # them to get the same accuracy:
+        >>> nn.losses.cross_entropy(logits, targets)
+        array([0.046875, 0.046875], dtype=bfloat16)
+        >>> nn.losses.cross_entropy(logits.astype(mx.float32), targets)
+        array([0.0485873, 0.0485873], dtype=float32)
     """
     if label_smoothing < 0 or label_smoothing >= 1:
         raise ValueError(f"Label smoothing must be in [0, 1), got {label_smoothing}.")

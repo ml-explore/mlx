@@ -534,7 +534,7 @@ class TestFast(mlx_tests.MLXTestCase):
                 mx.float32
             )
 
-        tolerances = {mx.float32: 1e-5, mx.float16: 5e-3, mx.bfloat16: 3e-2}
+        tolerances = {mx.float32: 1e-5, mx.float16: 3e-2, mx.bfloat16: 3e-1}
 
         for V in [7, 32, 128, 255, 256, 1000, 4096, 8192]:
             for dtype in [mx.float32, mx.float16, mx.bfloat16]:

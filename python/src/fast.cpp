@@ -187,9 +187,10 @@ void init_fast(nb::module_& parent_module) {
         Cross entropy loss with class indices as targets.
 
         Computes ``logsumexp(logits, axis=-1) - logits[..., target]`` in a
-        single fused kernel. The log-sum-exp is accumulated in float32
-        regardless of the dtype of ``logits``, so the returned loss is always
-        float32 and the logits do not need to be upcast beforehand.
+        fused kernel with accumulation in float32. 
+
+        Note: Currently is implemented only on CUDA, fallback to unfused version with 
+        manual casting on Metal and CPU.
 
         Args:
             logits (array): The unnormalized logits. The loss is computed over
