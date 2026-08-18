@@ -29,20 +29,12 @@ void sdpa_full_self_attention_nax(
   using namespace mlx::steel;
 
   int bd = q.shape(-1);
-  // bd=256 runs the head-dim split kernel (attention_nax_dsplit): the two
-  // simdgroups along the second warp dimension each own half of the head
-  // dim, which halves the per-simdgroup accumulator working set that gates
-  // tensor-unit throughput at this head width.
-  const bool split_d = bd == 256;
+  int bq = 64;
+  int bk = 32;
+
+  bool split_d = bd == 256;
   int wm = 4;
   int wn = split_d ? 2 : 1;
-
-  int bq = 64;
-  // bk=32 everywhere: with the head-dim split at bd=256 this puts the
-  // per-simdgroup accumulator set (S 2 + O 8 fragments) at exact bd=128
-  // parity, which is what restores tensor-unit throughput (42.8 vs
-  // 47.7 TF at 8192^2).
-  int bk = 32;
 
   int B = q.shape(0);
   int H = q.shape(1);
@@ -54,33 +46,24 @@ void sdpa_full_self_attention_nax(
 
   // The causal offset describes the true diagonal even if kL is widened
   // below.
-  const int qL_off = kL - qL;
+  int qL_off = kL - qL;
 
-  // K/V that come out of a preallocated KV cache (mlx-lm grows it 256
-  // positions at a time) are slices of a longer buffer, keys[..., :kL, :].
-  // Reading such a slice past its end up to the next bk multiple keeps the
-  // head-dim split kernel on the aligned K pipeline, which is ~13% faster
-  // over the whole KV loop than the unaligned one at bd=256. It is safe
-  // under causal masking with qL_off taken from the true lengths: every
-  // extra key column lies beyond the diagonal of every true query row, so
-  // it is masked to zero probability and its (finite) V row never reaches
-  // the output. Ragged Q needs no such treatment: the kernel loads Q once,
-  // outside the KV loop.
+  // Check if K/V are from chunked KV cache, and assume aligned K/V if so.
   auto has_backing_rows = [](const array& kv, int rows) {
-    const auto& st = kv.strides();
-    if (st[0] < 0 || st[1] <= 0 || st[2] <= 0 || st[1] % st[2] != 0) {
+    auto& st = kv.strides();
+    if ((st[0] < 0) || (st[1] <= 0) || (st[2] <= 0) || (st[1] % st[2] != 0)) {
       return false;
     }
-    const int64_t itemsize = kv.itemsize();
+    int64_t itemsize = kv.itemsize();
     // The rows must stay inside the head's row pitch (so they belong to the
     // cache the slice was taken from) ...
-    const int64_t pitch = st[1] / st[2];
-    const int64_t row0 = ((kv.offset() / itemsize) % st[1]) / st[2];
+    int64_t pitch = st[1] / st[2];
+    int64_t row0 = ((kv.offset() / itemsize) % st[1]) / st[2];
     if (row0 + rows > pitch) {
       return false;
     }
     // ... and inside the buffer.
-    const int64_t end = (kv.shape(0) - 1) * st[0] + (kv.shape(1) - 1) * st[1] +
+    int64_t end = (kv.shape(0) - 1) * st[0] + (kv.shape(1) - 1) * st[1] +
         (rows - 1) * st[2] + kv.shape(3);
     return kv.offset() + end * itemsize <= int64_t(kv.buffer_size());
   };
