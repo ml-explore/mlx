@@ -29,7 +29,7 @@ class ArrayNamespaceInfo:
             }
         return {
             "real floating": mx.float64,
-            "complex floating": mx.complex128,
+            "complex floating": mx.complex64,
             "integral": mx.int64,
             "indexing": mx.uint64,
         }
