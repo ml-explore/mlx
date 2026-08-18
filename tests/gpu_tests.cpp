@@ -712,3 +712,15 @@ TEST_CASE("test layer norm vjp bias grad race") {
   }
   CHECK(worst <= 1e-5);
 }
+
+TEST_CASE("test scan output holds the strided kernel writes") {
+  // A size one axis can carry a padded stride. The strided scan addresses
+  // out[i * stride + j] for i < shape[axis] and j < stride, so the output has
+  // to hold shape[axis] * stride elements. This slice overruns by one element,
+  // the tightest case.
+  auto a = slice(reshape(arange(64.0, float32), {1, 64}), {0, 1}, {1, 64});
+  eval(a);
+  auto out = cumsum(a, 0);
+  eval(out);
+  CHECK_LE(out.shape(0) * out.strides()[0], out.data_size());
+}
