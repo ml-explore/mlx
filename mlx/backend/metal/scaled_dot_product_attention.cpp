@@ -433,7 +433,13 @@ void sdpa_vector_2pass(
   // Set the kernel name
   std::string kname;
   kname.reserve(64);
-  kname += "sdpa_vector_2pass_1_";
+  kname += "sdpa_vector_2pass_1";
+  if (!mask && !sinks && q.shape(2) == 1 && q.shape(1) == 8 * k.shape(1) &&
+      q.shape(-1) == v.shape(-1) && (q.shape(-1) == 64 || q.shape(-1) == 128) &&
+      k.shape(2) >= 8192) {
+    kname += "_gqa";
+  }
+  kname += "_";
   kname += get_type_string(q.dtype());
   kname += "_";
   kname += std::to_string(q.shape(-1));

@@ -275,6 +275,20 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    def test_sdpa_vector_gqa_long(self):
+        scale = 1.0
+        mx.random.seed(0)
+        for Nq, Nkv, D in [(32, 4, 128), (64, 8, 64)]:
+            for L in [8192, 8201]:
+                q = 5e-1 * mx.random.normal(shape=(1, Nq, 1, D))
+                k = 5e-1 * mx.random.normal(shape=(1, Nkv, L + 32, D))[:, :, :L]
+                v = 5e-1 * mx.random.normal(shape=(1, Nkv, L + 32, D))[:, :, :L]
+                kr = mx.repeat(k, Nq // Nkv, axis=1)
+                vr = mx.repeat(v, Nq // Nkv, axis=1)
+                ref = mlx_primitives_sdpa(q, kr, vr, scale)
+                out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+                self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
     def test_sdpa_fully_masked(self):
         Lkv = 8
         mask = mx.array(False)
