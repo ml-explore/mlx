@@ -2794,17 +2794,9 @@ array sort(const array& a, StreamOrDevice s /* = {} */) {
 
 /** Returns a sorted copy of the array along a given axis. */
 array sort(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  // Check for valid axis
-  if (axis + static_cast<int>(a.ndim()) < 0 ||
-      axis >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << "[sort] Received invalid axis " << axis << " for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-
+  auto ax = normalize_axis_index(axis, a.ndim(), "[sort] ");
   return array(
-      a.shape(), a.dtype(), std::make_shared<Sort>(to_stream(s), axis), {a});
+      a.shape(), a.dtype(), std::make_shared<Sort>(to_stream(s), ax), {a});
 }
 
 /** Returns indices that sort the flattened array. */
@@ -2815,17 +2807,9 @@ array argsort(const array& a, StreamOrDevice s /* = {} */) {
 
 /** Returns indices that sort the array along a given axis. */
 array argsort(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  // Check for valid axis
-  if (axis + static_cast<int>(a.ndim()) < 0 ||
-      axis >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << "[argsort] Received invalid axis " << axis << " for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-
+  auto ax = normalize_axis_index(axis, a.ndim(), "[argsort] ");
   return array(
-      a.shape(), uint32, std::make_shared<ArgSort>(to_stream(s), axis), {a});
+      a.shape(), uint32, std::make_shared<ArgSort>(to_stream(s), ax), {a});
 }
 
 /**
