@@ -174,7 +174,9 @@ void sdpa_full_self_attention_metal(
     bool do_causal_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
-  if (metal::is_nax_available() && q.shape(3) != 80 &&
+  // NAX tiles the head dim in units of kU=16 and steps TD by 2, so it needs
+  // a multiple of 32; 72 and 80 take the classic steel kernel.
+  if (metal::is_nax_available() && q.shape(3) != 80 && q.shape(3) != 72 &&
       (env::enable_tf32() || q.dtype() != float32)) {
     return sdpa_full_self_attention_nax(
         /* const Stream& s = */ s,
@@ -627,8 +629,8 @@ bool ScaledDotProductAttention::use_fallback(
         query_head_dim == 256)) ||
       (query_head_dim == 192 && value_head_dim == 128);
   const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 96 ||
-       query_head_dim == 128);
+      (query_head_dim == 64 || query_head_dim == 72 || query_head_dim == 80 ||
+       query_head_dim == 96 || query_head_dim == 128);
 
   const bool sdpa_full_supported_mask = !has_mask || has_arr_mask ||
       (query_sequence_length <= key_sequence_length && do_causal);

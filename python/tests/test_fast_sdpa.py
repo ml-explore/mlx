@@ -118,6 +118,33 @@ def mlx_primitives_sdpa(q, k, v, scale, mask=None):
 
 class TestFastSDPA(mlx_tests.MLXTestCase):
     @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_sdpa_head_dim_72(self):
+        B, D, qH, kH = (1, 72, 8, 2)
+        for qL, kL, dtype, mask_str in product(
+            (64, 65),
+            (128, 127),
+            (mx.float16, mx.bfloat16, mx.float32),
+            (None, "additive", "bool", "causal"),
+        ):
+            with self.subTest(qL=qL, kL=kL, dtype=dtype, mask=mask_str):
+                q, k, v, scale, mask = prepare_inputs(
+                    B, qL, kL, D, qH, kH, mask_str, False, dtype
+                )
+                ref = mlx_ref_attn(q, k, v, scale, mask)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask
+                )
+
+                if dtype == mx.float32:
+                    atol = 1e-5
+                elif dtype == mx.bfloat16:
+                    atol = 5e-3
+                else:
+                    atol = 3e-4
+                diff = mx.abs(out - ref) - atol * mx.abs(ref)
+                self.assertLessEqual(mx.max(diff).item(), atol)
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
     def test_sdpa_head_dim_96(self):
         B, D, qH, kH = (1, 96, 8, 2)
         for qL, kL, dtype, mask_str in product(
