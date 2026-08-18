@@ -288,7 +288,10 @@ TEST_CASE("test gguf metadata value validation") {
                              uint64_t claimed_len,
                              bool write_payload) {
     auto put = [&](const void* p, size_t n) {
-      b.insert(b.end(), static_cast<const char*>(p), static_cast<const char*>(p) + n);
+      b.insert(
+          b.end(),
+          static_cast<const char*>(p),
+          static_cast<const char*>(p) + n);
     };
     uint64_t klen = key.size();
     put(&klen, 8);
@@ -306,7 +309,10 @@ TEST_CASE("test gguf metadata value validation") {
                             uint32_t elt_type,
                             uint64_t claimed_len) {
     auto put = [&](const void* p, size_t n) {
-      b.insert(b.end(), static_cast<const char*>(p), static_cast<const char*>(p) + n);
+      b.insert(
+          b.end(),
+          static_cast<const char*>(p),
+          static_cast<const char*>(p) + n);
     };
     uint64_t klen = key.size();
     put(&klen, 8);
