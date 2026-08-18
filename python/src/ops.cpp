@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <limits>
 #include <numeric>
 #include <ostream>
 #include <variant>
@@ -27,8 +28,11 @@ using namespace nb::literals;
 using Scalar = std::variant<bool, int64_t, double>;
 
 mx::Dtype scalar_to_dtype(Scalar s) {
-  if (std::holds_alternative<int64_t>(s)) {
-    return mx::int32;
+  if (auto pv = std::get_if<int64_t>(&s); pv) {
+    return (*pv > std::numeric_limits<int>::max() ||
+            *pv < std::numeric_limits<int>::min())
+        ? mx::int64
+        : mx::int32;
   } else if (std::holds_alternative<double>(s)) {
     return mx::float32;
   } else {
@@ -1513,7 +1517,7 @@ void init_ops(nb::module_& m) {
           start (float or int, optional): Starting value which defaults to ``0``.
           stop (float or int, optional): Stopping value.
           step (float or int, optional): Increment which defaults to ``1``.
-          dtype (Dtype, optional): Specifies the data type of the output. If unspecified will default to ``float32`` if any of ``start``, ``stop``, or ``step`` are ``float``. Otherwise will default to ``int32``.
+          dtype (Dtype, optional): Specifies the data type of the output. If unspecified will default to ``float32`` if any of ``start``, ``stop``, or ``step`` are ``float``. Otherwise will default to ``int32``, or ``int64`` if any of ``start``, ``stop``, or ``step`` does not fit in ``int32``.
 
       Returns:
           array: The range of values.
