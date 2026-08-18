@@ -207,16 +207,8 @@ void sdpa_full_self_attention_metal(
     bool do_causal_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
-  int B = q.shape(0);
-  int H = q.shape(1);
-  int D = q.shape(3);
-  int gqa_factor = q.shape(1) / k.shape(1);
-
-  int qL = q.shape(2);
-  int kL = k.shape(2);
-
   if (metal::is_nax_available() &&
-      (D == 64 || D == 96 || D == 128 || D == 256) &&
+      (q.shape(3) == 64 || q.shape(3) == 96 || q.shape(3) == 128) &&
       (env::enable_tf32() || q.dtype() != float32)) {
     return sdpa_full_self_attention_nax(
         /* const Stream& s = */ s,
@@ -745,20 +737,10 @@ bool ScaledDotProductAttention::use_fallback(
     return true;
   }
 
+  // Unfused path is faster for following shapes.
   const int query_sequence_length = q.shape(2);
   const int query_head_dim = q.shape(-1);
   const int value_head_dim = v.shape(-1);
-
-  // Use headdim-split kernel when NAX is enabled and there are enough query
-  // blocks to fill the machine.
-  if (metal::is_nax_available() &&
-      (env::enable_tf32() || q.dtype() != float32) &&
-      query_sequence_length >= 1024 && query_head_dim == 256 && do_causal &&
-      !has_arr_mask) {
-    return false;
-  }
-
-  // Unfused path is faster for following shapes.
   if (query_sequence_length > 8) {
     return query_head_dim == 192 || query_head_dim == 256;
   } else {
