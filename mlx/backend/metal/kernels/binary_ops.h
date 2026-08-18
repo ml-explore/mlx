@@ -23,8 +23,6 @@ struct FloorDivide {
   template <typename T>
   metal::enable_if_t<metal::is_integral_v<T> & metal::is_signed_v<T>, T>
   operator()(T x, T y) thread {
-    // Integer division truncates, so step the quotient down when the operands
-    // have opposite signs and the division was not exact.
     auto q = x / y;
     if (x % y != 0 && (x < 0) != (y < 0)) {
       q -= 1;
@@ -37,8 +35,7 @@ struct FloorDivide {
   }
   template <>
   complex64_t operator()(complex64_t x, complex64_t y) thread {
-    // Only here because the kernels are instantiated for every type. divmod
-    // rejects complex before it reaches this.
+    // Complex is not supported, simply make compiler happy.
     return x / y;
   }
 };

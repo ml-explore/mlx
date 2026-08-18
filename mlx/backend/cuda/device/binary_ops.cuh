@@ -18,8 +18,6 @@ struct FloorDivide {
   __device__ T operator()(T x, T y) {
     if constexpr (cuda::std::is_integral_v<T>) {
       auto q = x / y;
-      // Integer division truncates, so step the quotient down when the
-      // operands have opposite signs and the division was not exact.
       if constexpr (cuda::std::is_signed_v<T>) {
         if (x % y != 0 && (x < 0) != (y < 0)) {
           q -= 1;
@@ -27,8 +25,7 @@ struct FloorDivide {
       }
       return q;
     } else if constexpr (is_complex_v<T>) {
-      // Only here because the kernels are instantiated for every type. divmod
-      // rejects complex before it reaches this.
+      // Complex is not supported, simply make compiler happy.
       return x / y;
     } else {
       return cuda::std::floor(x / y);

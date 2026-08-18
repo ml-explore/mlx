@@ -46,10 +46,6 @@ void DivMod::eval_cpu(
                     out_a = array::unsafe_weak_copy(out_a),
                     out_b = array::unsafe_weak_copy(out_b),
                     bopt]() mutable {
-    // Both halves floor, so the remainder agrees with mx.remainder. For
-    // integers that also makes quotient * y + remainder == x. It does not for
-    // floats, where flooring a quotient that was already rounded cannot
-    // recover the exact one, so that identity is not claimed here.
     auto integral_op = [](auto x, auto y) {
       auto q = x / y;
       auto r = x % y;
