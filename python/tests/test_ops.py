@@ -159,6 +159,20 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.ones([2, 3]).shape, (2, 3))
         self.assertEqual(mx.full((2, 3), 1.5).tolist(), [[1.5] * 3] * 2)
 
+    def test_integer_index_protocol(self):
+        a = mx.arange(4)
+
+        index = np.int32(2)
+        self.assertEqual(mx.topk(a, index).shape, (2,))
+        self.assertEqual(mx.reshape(a, [index, 2]).shape, (2, 2))
+
+        for value in (np.float32(2), "2"):
+            with self.subTest(value=value):
+                with self.assertRaises(TypeError):
+                    mx.topk(a, value)
+                with self.assertRaises(TypeError):
+                    mx.reshape(a, [value, 2])
+
     def test_scalar_inputs(self):
         # Check combinations of python types
         a = mx.add(False, True)
