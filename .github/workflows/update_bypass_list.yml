@@ -1,0 +1,21 @@
+name: 'Update bypass list'
+description: 'Update interaction-limits bypass list with eligible contributors'
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: 0 * * * *
+
+permissions:
+  contents: write
+
+jobs:
+  update_bypass_list:
+    name: 'Update bypass list'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          # Can only use PAT with permissions: admin:org_hook, public_repo
+          GITHUB_TOKEN: ${{ secrets.ZCBENZ_TOKEN_UPDATE_BYPASS_LIST }}
+        run: node .github/scripts/update-bypass-list.js ml-explore mlx
