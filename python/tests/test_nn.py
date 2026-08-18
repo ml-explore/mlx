@@ -411,10 +411,12 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(outputs.shape, (10, 6))
 
     def test_norm_eps_validation(self):
-        # eps is added under a square root, so a negative one makes rsqrt take
-        # the root of a negative number and the layer emits NaN for whichever
-        # elements happen to have a small enough variance. That is only a
-        # partial NaN, so it is easy to miss. Reject it up front instead.
+        # eps is added under a square root. A negative one makes rsqrt take the
+        # root of a negative number, so the layer emits NaN for whichever
+        # elements have a small enough variance, which is only a partial NaN and
+        # easy to miss. Zero is rejected too: it leaves rsqrt(0) for any input
+        # whose variance is zero, which is a whole NaN row. This matches the eps
+        # guards the optimizers already carry.
         builders = (
             ("LayerNorm", lambda eps: nn.LayerNorm(16, eps=eps)),
             ("RMSNorm", lambda eps: nn.RMSNorm(16, eps=eps)),
@@ -423,11 +425,11 @@ class TestLayers(mlx_tests.MLXTestCase):
             ("BatchNorm", lambda eps: nn.BatchNorm(16, eps=eps)),
         )
         for name, build in builders:
-            for eps in (-1.0, -1e-30):
-                with self.assertRaisesRegex(ValueError, "non-negative"):
+            for eps in (-1.0, -1e-30, 0.0):
+                with self.assertRaisesRegex(ValueError, "must be positive"):
                     build(eps)
-            # Zero is a legitimate choice and still constructs.
-            for eps in (0.0, 1e-5):
+            # Anything positive still constructs, including a very small eps.
+            for eps in (1e-30, 1e-5, 1.0):
                 build(eps)
 
     def test_group_norm(self):
