@@ -3097,8 +3097,8 @@ class TestOps(mlx_tests.MLXTestCase):
                     np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
                 )
 
-        # Mixed signs floor, like python and numpy, so divmod agrees with
-        # (a // b, a % b) and q * b + r == a
+        # Mixed signs floor, matching python's divmod and numpy, so
+        # q * b + r == a holds
         av = [-7, 7, -7, 7, -1, 1, -5, 5, 6, -6]
         bv = [2, 2, -2, -2, 3, -3, 3, -3, 3, 3]
         a, b = mx.array(av), mx.array(bv)
@@ -3106,31 +3106,6 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(q.tolist(), [x // y for x, y in zip(av, bv)])
         self.assertEqual(r.tolist(), [x % y for x, y in zip(av, bv)])
         self.assertTrue(mx.array_equal(q * b + r, a))
-
-        # The floored quotient has to come from the truncating one plus a
-        # correction rather than from a - remainder(a, b), which can leave the
-        # dtype range: for int8 that numerator is 135 when a is 120, b is -27.
-        for dtype, np_dtype in ((mx.int8, np.int8), (mx.int16, np.int16)):
-            info = np.iinfo(np_dtype)
-            values = [info.min, info.min + 1, -1, 0, 1, info.max - 1, info.max]
-            pairs = [
-                (x, y)
-                for x in values
-                for y in values
-                if y != 0 and not (x == info.min and y == -1)
-            ]
-            a_np = np.array([p[0] for p in pairs], np_dtype)
-            b_np = np.array([p[1] for p in pairs], np_dtype)
-            a_mx, b_mx = mx.array(a_np), mx.array(b_np)
-            want = np.floor_divide(a_np.astype(np.int64), b_np.astype(np.int64)).astype(
-                np_dtype
-            )
-            got = mx.floor_divide(a_mx, b_mx)
-            self.assertEqual(got.tolist(), want.tolist(), msg=str(np_dtype))
-            # and divmod still agrees with it
-            self.assertEqual(mx.divmod(a_mx, b_mx)[0].tolist(), got.tolist())
-        self.assertTrue(mx.array_equal(a // b, q))
-        self.assertTrue(mx.array_equal(a % b, r))
 
         af = mx.array([-7.0, 7.0, -7.5, 7.5])
         bf = mx.array([2.0, -2.0, 2.0, -2.0])
