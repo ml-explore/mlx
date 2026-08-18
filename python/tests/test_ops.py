@@ -1665,6 +1665,8 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             INT_MAX = 2147483647
             a = mx.arange(0, INT_MAX + 1, 1)
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, 2**40)
 
         a = mx.arange(5)
         expected = [0, 1, 2, 3, 4]
@@ -1728,6 +1730,57 @@ class TestOps(mlx_tests.MLXTestCase):
         a = mx.arange(1.0, 3.0, 0.2, dtype=mx.int32)
         self.assertEqual(a.dtype, mx.int32)
 
+        # Integers that do not fit in int32 widen the inferred dtype to int64,
+        # matching the scalar inference of mx.array and numpy.
+        a = mx.arange(2**40, 2**40 + 3)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [2**40, 2**40 + 1, 2**40 + 2])
+
+        a = mx.arange(-(2**40), -(2**40) + 3)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [-(2**40), -(2**40) + 1, -(2**40) + 2])
+
+        # int32 boundaries themselves still infer int32.
+        a = mx.arange(2**31 - 3, 2**31 - 1)
+        self.assertEqual(a.dtype, mx.int32)
+        self.assertListEqual(a.tolist(), [2**31 - 3, 2**31 - 2])
+
+        a = mx.arange(-(2**31), -(2**31) + 2)
+        self.assertEqual(a.dtype, mx.int32)
+        self.assertListEqual(a.tolist(), [-(2**31), -(2**31) + 1])
+
+        # The first values that no longer fit widen as well.
+        a = mx.arange(-(2**31) - 1, -(2**31) + 1)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [-(2**31) - 1, -(2**31)])
+
+        # A large step also widens the inferred dtype.
+        a = mx.arange(2**40, 2**40 + 3, 2**40)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [2**40])
+
+        a = mx.arange(stop=2, step=2**40)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [0])
+
+        # A negative step with widened values.
+        a = mx.arange(2**40 + 3, 2**40, -1)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertListEqual(a.tolist(), [2**40 + 3, 2**40 + 2, 2**40 + 1])
+
+        # The stop-only overload widens too, even for an empty result.
+        a = mx.arange(stop=2**40, step=-1)
+        self.assertEqual(a.dtype, mx.int64)
+        self.assertEqual(a.shape, (0,))
+
+        # An explicit dtype takes precedence over the widened inference.
+        a = mx.arange(2**40, 2**40 + 3, dtype=mx.int32)
+        self.assertEqual(a.dtype, mx.int32)
+
+        # A float in the mix still infers float32.
+        a = mx.arange(0.5, 2**40, 2**39)
+        self.assertEqual(a.dtype, mx.float32)
+
     def test_arange_corner_cases_cast(self):
         a = mx.arange(0, 3, 0.2, dtype=mx.int32)
         expected = [0] * 15
@@ -1782,8 +1835,16 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [0]
         self.assertListEqual(a.tolist(), expected)
 
+        # The range crossing the int32 limit widens the dtype to int64 instead
+        # of saturating or wrapping.
         n = mx.iinfo(mx.int32).max
         result = mx.arange(n - 1, n + 3)
+        self.assertEqual(result.shape, (4,))
+        self.assertEqual(result.dtype, mx.int64)
+        self.assertEqual(result.tolist(), [n - 1, n, n + 1, n + 2])
+
+        # An explicit dtype keeps the previous wrapping behaviour.
+        result = mx.arange(n - 1, n + 3, dtype=mx.int32)
         self.assertEqual(result.shape, (4,))
         self.assertEqual(result.dtype, mx.int32)
         self.assertEqual(result.tolist(), [n - 1, n, -2147483648, -2147483647])
