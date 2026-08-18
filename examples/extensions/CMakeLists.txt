@@ -11,7 +11,7 @@ option(BUILD_SHARED_LIBS "Build extensions as a shared library" ON)
 
 # ----------------------------- Dependencies -----------------------------
 find_package(
-  Python 3.8
+  Python 3.10
   COMPONENTS Interpreter Development.Module
   REQUIRED)
 execute_process(

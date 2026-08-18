@@ -395,9 +395,16 @@ if(MLX_BUILD_PYTHON_BINDINGS)
   FetchContent_Declare(
     nanobind
     GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-    GIT_TAG v2.15.0
+    GIT_TAG v3.0.0-dev1
     GIT_SHALLOW TRUE
-    EXCLUDE_FROM_ALL)
+    EXCLUDE_FROM_ALL
+    # v3.0.0-dev1 mistakes a non-null CPython < 3.13 thread state for GIL
+    # ownership. Drop this patch once the fix is included in the pinned nanobind
+    # tag.
+    PATCH_COMMAND
+      ${CMAKE_COMMAND} "-DNANOBIND_SOURCE_DIR=<SOURCE_DIR>" -P
+      ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/apply-nanobind-v3.0.0-dev1-gil.cmake
+  )
   FetchContent_MakeAvailable(nanobind)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/python/src)
 endif()
