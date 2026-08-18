@@ -842,6 +842,115 @@ void small_kd_conv_3D_gpu(
       0);
 }
 
+// A stride-2, kernel-2 transposed convolution has exactly one valid kernel
+// phase for every output coordinate. The explicit unfold path nevertheless
+// materializes all eight phases and fills seven of them with zeros. Compute
+// each phase as a small regular GEMM instead. This path is intentionally
+// narrow: other transposed-convolution configurations retain the general
+// implementation below.
+bool is_stride_two_conv_transpose_3D(const MLXConvParams<3>& p) {
+  return p.groups == 1 && p.flip && p.str[0] == 1 && p.str[1] == 1 &&
+      p.str[2] == 1 && p.idil[0] == 2 && p.idil[1] == 2 && p.idil[2] == 2 &&
+      p.kdil[0] == 1 && p.kdil[1] == 1 && p.kdil[2] == 1 && p.wS[0] == 2 &&
+      p.wS[1] == 2 && p.wS[2] == 2 && p.pad[0] == 1 && p.pad[1] == 1 &&
+      p.pad[2] == 1 && static_cast<int64_t>(p.oS[0]) == 2LL * p.iS[0] &&
+      static_cast<int64_t>(p.oS[1]) == 2LL * p.iS[1] &&
+      static_cast<int64_t>(p.oS[2]) == 2LL * p.iS[2];
+}
+
+void stride_two_conv_transpose_3D_gpu(
+    const Stream& s,
+    metal::Device& d,
+    const array& in,
+    const array& wt,
+    array& out,
+    const MLXConvParams<3>& p,
+    std::vector<array>& copies) {
+  constexpr int kernel_volume = 8;
+  const int C = p.C;
+  const int O = p.O;
+
+  // The input and weight are contiguous by the time this helper is called.
+  // Every phase covers the complete input volume; the phase bit only selects
+  // the interleaved output coordinates and the corresponding weight slice.
+  for (int phase = 0; phase < kernel_volume; ++phase) {
+    const int pd = (phase >> 2) & 1;
+    const int ph = (phase >> 1) & 1;
+    const int pw = phase & 1;
+    const int D = p.iS[0];
+    const int H = p.iS[1];
+    const int W = p.iS[2];
+
+    const int M = safe_cast(static_cast<int64_t>(p.N) * D * H * W, "conv");
+
+    // The weight is [O, 2, 2, 2, C]. Present one spatial phase as a [C, O]
+    // matrix with the layout expected by a transposed Steel GEMM.
+    array wt_phase({C, O}, wt.dtype(), nullptr, {});
+    array::Flags wt_flags = wt.flags();
+    wt_flags.contiguous = false;
+    wt_flags.row_contiguous = false;
+    wt_flags.col_contiguous = true;
+    wt_phase.copy_shared_buffer(
+        wt,
+        {1, wt.strides(0)},
+        wt_flags,
+        wt.data_size(),
+        static_cast<int64_t>(pd * 4 + ph * 2 + pw) * C);
+
+    array in_matrix({M, C}, in.dtype(), nullptr, {});
+    in_matrix.copy_shared_buffer(in, {C, 1}, in.flags(), in.data_size());
+
+    array phase_out({M, O}, out.dtype(), nullptr, {});
+    phase_out.set_data(allocator::malloc(phase_out.nbytes()));
+
+    std::vector<array> gemm_copies = {in_matrix, wt_phase};
+    steel_matmul(
+        s,
+        d,
+        /* a = */ in_matrix,
+        /* b = */ wt_phase,
+        /* out = */ phase_out,
+        /* M = */ M,
+        /* N = */ O,
+        /* K = */ C,
+        /* batch_size_out = */ 1,
+        /* lda = */ C,
+        /* ldb = */ kernel_volume * C,
+        /* a_transposed = */ false,
+        /* b_transposed = */ true,
+        /* copies = */ gemm_copies);
+
+    Shape phase_out_shape{p.N, D, H, W, O};
+    array phase_out_nd(phase_out_shape, out.dtype(), nullptr, {});
+    phase_out_nd.copy_shared_buffer(
+        phase_out,
+        make_contiguous_strides(phase_out_shape),
+        phase_out.flags(),
+        phase_out.data_size());
+
+    Strides out_phase_strides = out.strides();
+    out_phase_strides[1] *= 2;
+    out_phase_strides[2] *= 2;
+    out_phase_strides[3] *= 2;
+    array::Flags out_phase_flags = out.flags();
+    out_phase_flags.contiguous = false;
+    out_phase_flags.row_contiguous = false;
+    out_phase_flags.col_contiguous = false;
+    array out_phase_view(phase_out_shape, out.dtype(), nullptr, {});
+    out_phase_view.copy_shared_buffer(
+        out,
+        out_phase_strides,
+        out_phase_flags,
+        out.data_size(),
+        pd * out.strides(1) + ph * out.strides(2) + pw * out.strides(3));
+
+    copy_gpu_inplace(phase_out_nd, out_phase_view, CopyType::GeneralGeneral, s);
+    copies.push_back(phase_out);
+    copies.push_back(phase_out_nd);
+    copies.push_back(out_phase_view);
+  }
+}
+
 void dispatch_conv_3D_gpu(
     const Stream& s,
     metal::Device& d,
@@ -871,6 +980,11 @@ void dispatch_conv_3D_gpu(
   out.set_data(allocator::malloc(out.nbytes()));
   auto in = ensure_row_contiguous(in_pre, d, s);
   auto wt = ensure_row_contiguous(wt_pre, d, s);
+
+  if (is_stride_two_conv_transpose_3D(conv_params)) {
+    return stride_two_conv_transpose_3D_gpu(
+        s, d, in, wt, out, conv_params, copies);
+  }
 
   // Decompose 3D conv to per-frame 2D convs
   constexpr int kSmallKdLimit3D = 7;
