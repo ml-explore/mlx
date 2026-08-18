@@ -49,6 +49,11 @@ class TestVersion(mlx_tests.MLXTestCase):
         self.assertEqual(v, mx.__version__[: len(v)])
 
 
+class TestArrayNamespsceInfo(mlx_tests.MLXTestCase):
+    def test(self):
+        namespace = mx.__array_namespace_info__()
+
+
 class TestDtypes(mlx_tests.MLXTestCase):
     def test_dtypes(self):
         self.assertEqual(mx.bool_.size, 1)
