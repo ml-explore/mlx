@@ -1352,14 +1352,22 @@ void init_array(nb::module_& m) {
              const IntOrVec& axis,
              bool keepdims,
              int ddof,
+             std::optional<float> correction,
              mx::StreamOrDevice s) {
+            int dof = correction ? static_cast<int>(*correction) : ddof;
+            if (correction && ddof != 0 &&
+                static_cast<int>(*correction) != ddof) {
+              throw std::invalid_argument(
+                  "[std] At most one of ddof or correction can be specified.");
+            }
             return mx::std(
-                a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
+                a, get_reduce_axes(axis, a.ndim()), keepdims, dof, s);
           },
           "axis"_a = nb::none(),
           "keepdims"_a = false,
           "ddof"_a = 0,
           nb::kw_only(),
+          "correction"_a = nb::none(),
           "stream"_a = nb::none(),
           "See :func:`std`.")
       .def(
@@ -1368,14 +1376,22 @@ void init_array(nb::module_& m) {
              const IntOrVec& axis,
              bool keepdims,
              int ddof,
+             std::optional<float> correction,
              mx::StreamOrDevice s) {
+            int dof = correction ? static_cast<int>(*correction) : ddof;
+            if (correction && ddof != 0 &&
+                static_cast<int>(*correction) != ddof) {
+              throw std::invalid_argument(
+                  "[var] At most one of ddof or correction can be specified.");
+            }
             return mx::var(
-                a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
+                a, get_reduce_axes(axis, a.ndim()), keepdims, dof, s);
           },
           "axis"_a = nb::none(),
           "keepdims"_a = false,
           "ddof"_a = 0,
           nb::kw_only(),
+          "correction"_a = nb::none(),
           "stream"_a = nb::none(),
           "See :func:`var`.")
       .def(
