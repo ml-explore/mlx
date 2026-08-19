@@ -19,9 +19,38 @@ void set_env(const char* name, const char* value) {
 #if defined(_WIN32)
   _putenv_s(name, value);
 #else
-  setenv(name, value, 1);
+  if (value[0] == '\0') {
+    unsetenv(name);
+  } else {
+    setenv(name, value, 1);
+  }
 #endif
 }
+
+// Restores the previous value on destruction so the rest of the suite is not
+// left running with a one-entry graph cache.
+class ScopedEnv {
+ public:
+  ScopedEnv(const char* name, const char* value) : name_(name) {
+    if (const char* previous = std::getenv(name)) {
+      had_previous_ = true;
+      previous_ = previous;
+    }
+    set_env(name, value);
+  }
+
+  ~ScopedEnv() {
+    set_env(name_, had_previous_ ? previous_.c_str() : "");
+  }
+
+  ScopedEnv(const ScopedEnv&) = delete;
+  ScopedEnv& operator=(const ScopedEnv&) = delete;
+
+ private:
+  const char* name_;
+  bool had_previous_{false};
+  std::string previous_;
+};
 
 } // namespace
 
@@ -29,12 +58,16 @@ TEST_CASE("cuda graph cache thrashing keeps the encoder usable") {
   if (!is_available(Device::gpu)) {
     return;
   }
+  // MLX_USE_CUDA_GRAPHS is cached on first use, so it cannot be turned on from
+  // here. Without graphs there is no cache to thrash and nothing to check.
+  if (!env::get_var("MLX_USE_CUDA_GRAPHS", true)) {
+    return;
+  }
 
   // The graph cache capacity is read when the CommandEncoder of a stream is
   // constructed, so shrink it before creating the stream this test runs on.
-  set_env("MLX_CUDA_GRAPH_CACHE_SIZE", "1");
-  set_env("MLX_ENABLE_CACHE_THRASHING_CHECK", "1");
-  set_env("MLX_USE_CUDA_GRAPHS", "1");
+  ScopedEnv cache_size("MLX_CUDA_GRAPH_CACHE_SIZE", "1");
+  ScopedEnv thrashing_check("MLX_ENABLE_CACHE_THRASHING_CHECK", "1");
 
   auto s = new_stream(Device::gpu);
 
@@ -78,6 +111,4 @@ TEST_CASE("cuda graph cache thrashing keeps the encoder usable") {
   // so every commit after the first thrashing exception failed here instead of
   // reporting the thrashing error again.
   CHECK(corrupted == 0);
-
-  set_env("MLX_ENABLE_CACHE_THRASHING_CHECK", "0");
 }
