@@ -16,7 +16,7 @@ on:
         required: false
         type: boolean
   schedule:
-    - cron: 33 6 * * 1-5
+    - cron: 33 6 * * *
 
 # In jobs we must use |*publish| instead of |inputs.publish| because we can not
 # set default value for workflow_dispatch inputs reliably.

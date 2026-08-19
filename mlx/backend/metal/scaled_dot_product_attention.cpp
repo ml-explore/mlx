@@ -160,6 +160,7 @@ void sdpa_full_self_attention_nax(
   MTL::Size grid_dims = MTL::Size(NQ, H, B);
   MTL::Size group_dims = MTL::Size(32, wm, wn);
 
+  check_kernel_threadgroup_size(kernel, group_dims, hash_name);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
@@ -174,7 +175,8 @@ void sdpa_full_self_attention_metal(
     bool do_causal_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
-  if (metal::is_nax_available() && q.shape(3) != 80 &&
+  if (metal::is_nax_available() &&
+      (q.shape(3) == 64 || q.shape(3) == 96 || q.shape(3) == 128) &&
       (env::enable_tf32() || q.dtype() != float32)) {
     return sdpa_full_self_attention_nax(
         /* const Stream& s = */ s,
@@ -323,6 +325,7 @@ void sdpa_full_self_attention_metal(
   MTL::Size grid_dims = MTL::Size(NQ, H, B);
   MTL::Size group_dims = MTL::Size(32, wm, wn);
 
+  check_kernel_threadgroup_size(kernel, group_dims, hash_name);
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
@@ -430,7 +433,13 @@ void sdpa_vector_2pass(
   // Set the kernel name
   std::string kname;
   kname.reserve(64);
-  kname += "sdpa_vector_2pass_1_";
+  kname += "sdpa_vector_2pass_1";
+  if (!mask && !sinks && q.shape(2) == 1 && q.shape(1) == 8 * k.shape(1) &&
+      q.shape(-1) == v.shape(-1) && (q.shape(-1) == 64 || q.shape(-1) == 128) &&
+      k.shape(2) >= 8192) {
+    kname += "_gqa";
+  }
+  kname += "_";
   kname += get_type_string(q.dtype());
   kname += "_";
   kname += std::to_string(q.shape(-1));
@@ -589,6 +598,86 @@ void sdpa_vector_2pass(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+std::tuple<bool, std::string> has_fused_kernel(
+    const array& q,
+    const array& k,
+    const array& v,
+    bool has_mask,
+    bool has_arr_mask,
+    bool do_causal,
+    bool output_logsumexp,
+    Stream s) {
+  if (s.device != Device::gpu) {
+    return {false, "the fused kernels require a GPU (Metal) stream."};
+  }
+  if (output_logsumexp) {
+    return {
+        false,
+        "the fused forward does not produce the logsumexp required for "
+        "the fused VJP; use default routing when training."};
+  }
+
+  const int value_head_dim = v.shape(-1);
+  const int query_head_dim = q.shape(-1);
+  const int query_sequence_length = q.shape(2);
+  const int key_sequence_length = k.shape(2);
+  const int num_query_heads = q.shape(1);
+  const int num_kv_heads = k.shape(1);
+  const int gqa_factor = num_query_heads / num_kv_heads;
+
+  std::ostringstream msg;
+  if (query_sequence_length > 8) {
+    const bool supported_head_dim = query_head_dim == value_head_dim &&
+        (query_head_dim == 64 || query_head_dim == 72 || query_head_dim == 80 ||
+         query_head_dim == 96 || query_head_dim == 128 ||
+         query_head_dim == 192 || query_head_dim == 256);
+    if (!supported_head_dim) {
+      msg << "the full attention kernel supports head dims "
+          << "{64, 72, 80, 96, 128, 192, 256} with matching query/value head "
+          << "dims; got query head dim " << query_head_dim
+          << " and value head dim " << value_head_dim << ".";
+      return {false, msg.str()};
+    }
+    if (has_mask && !has_arr_mask &&
+        !(query_sequence_length <= key_sequence_length && do_causal)) {
+      msg << "the full attention kernel with a causal mask requires the "
+          << "query sequence to be no longer than the key sequence; got "
+          << "query length " << query_sequence_length << " and key length "
+          << key_sequence_length << ".";
+      return {false, msg.str()};
+    }
+  } else {
+    const bool supported_head_dim =
+        (query_head_dim == value_head_dim &&
+         (query_head_dim == 64 || query_head_dim == 96 ||
+          query_head_dim == 128 || query_head_dim == 192 ||
+          query_head_dim == 256)) ||
+        (query_head_dim == 192 && value_head_dim == 128);
+    if (!supported_head_dim) {
+      msg << "the vector attention kernel supports head dims "
+          << "{64, 96, 128, 192, 256} with matching query/value head dims, "
+          << "or query head dim 192 with value head dim 128; got query head "
+          << "dim " << query_head_dim << " and value head dim "
+          << value_head_dim << ".";
+      return {false, msg.str()};
+    }
+    if (query_sequence_length > key_sequence_length) {
+      msg << "the vector attention kernel requires the query sequence to be "
+          << "no longer than the key sequence; got query length "
+          << query_sequence_length << " and key length " << key_sequence_length
+          << ".";
+      return {false, msg.str()};
+    }
+    if (query_sequence_length * gqa_factor > 32) {
+      msg << "the vector attention kernel requires the query length times "
+          << "the GQA factor to be at most 32; got query length "
+          << query_sequence_length << " and GQA factor " << gqa_factor << ".";
+      return {false, msg.str()};
+    }
+  }
+  return {true, ""};
+}
+
 } // namespace
 
 bool ScaledDotProductAttention::use_fallback(
@@ -600,48 +689,39 @@ bool ScaledDotProductAttention::use_fallback(
     bool do_causal,
     bool is_training,
     bool output_logsumexp,
+    bool force_fused,
     Stream s) {
+  auto [has_fused, reason] = has_fused_kernel(
+      q, k, v, has_mask, has_arr_mask, do_causal, output_logsumexp, s);
+  if (force_fused) {
+    if (!has_fused) {
+      std::ostringstream msg;
+      msg << "[scaled_dot_product_attention] force_fused=True but no fused "
+             "kernel is available: "
+          << reason;
+      throw std::invalid_argument(msg.str());
+    }
+    return false;
+  }
+
   if (is_training) {
     // It's faster for training on Metal to use the unfused SDPA for both
     // forward and backward.
     return true;
   }
-  if (output_logsumexp) {
-    return true;
-  }
-  if (s.device == Device::cpu) {
+  if (!has_fused) {
     return true;
   }
 
-  const int value_head_dim = v.shape(-1);
-  const int query_head_dim = q.shape(-1);
+  // Unfused path is faster for following shapes.
   const int query_sequence_length = q.shape(2);
-  const int key_sequence_length = k.shape(2);
-  const int num_query_heads = q.shape(1);
-  const int num_kv_heads = k.shape(1);
-  const int gqa_factor = num_query_heads / num_kv_heads;
-
-  const bool sdpa_vector_supported_head_dim =
-      (query_head_dim == value_head_dim &&
-       (query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128 ||
-        query_head_dim == 256)) ||
-      (query_head_dim == 192 && value_head_dim == 128);
-  const bool sdpa_full_supported_head_dim = query_head_dim == value_head_dim &&
-      (query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 96 ||
-       query_head_dim == 128);
-
-  const bool sdpa_full_supported_mask = !has_mask || has_arr_mask ||
-      (query_sequence_length <= key_sequence_length && do_causal);
-
-  const bool supports_sdpa_full = query_sequence_length > 8 &&
-      sdpa_full_supported_mask && sdpa_full_supported_head_dim;
-
-  const bool supports_sdpa_vector = (query_sequence_length <= 8) &&
-      (query_sequence_length <= key_sequence_length) &&
-      sdpa_vector_supported_head_dim &&
-      (query_sequence_length * gqa_factor) <= 32;
-
-  return !(supports_sdpa_full || supports_sdpa_vector);
+  const int query_head_dim = q.shape(-1);
+  const int value_head_dim = v.shape(-1);
+  if (query_sequence_length > 8) {
+    return query_head_dim == 192 || query_head_dim == 256;
+  } else {
+    return query_head_dim == value_head_dim && query_head_dim == 192;
+  }
 }
 
 bool ScaledDotProductAttention::supports_bool_mask() {

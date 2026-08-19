@@ -47,6 +47,8 @@ class InstanceNorm(Module):
         affine: bool = False,
     ):
         super().__init__()
+        if eps <= 0.0:
+            raise ValueError(f"[InstanceNorm] 'eps' must be positive but got {eps}.")
         if affine:
             self.weight = mx.ones((dims,))
             self.bias = mx.zeros((dims,))
@@ -101,6 +103,8 @@ class LayerNorm(Module):
         self, dims: int, eps: float = 1e-5, affine: bool = True, bias: bool = True
     ):
         super().__init__()
+        if eps <= 0.0:
+            raise ValueError(f"[LayerNorm] 'eps' must be positive but got {eps}.")
         if affine:
             self.weight = mx.ones((dims,))
             if bias:
@@ -141,6 +145,8 @@ class RMSNorm(Module):
 
     def __init__(self, dims: int, eps: float = 1e-5):
         super().__init__()
+        if eps <= 0.0:
+            raise ValueError(f"[RMSNorm] 'eps' must be positive but got {eps}.")
         self.weight = mx.ones((dims,))
         self.eps = eps
 
@@ -191,6 +197,8 @@ class GroupNorm(Module):
         pytorch_compatible: bool = False,
     ):
         super().__init__()
+        if eps <= 0.0:
+            raise ValueError(f"[GroupNorm] 'eps' must be positive but got {eps}.")
         if num_groups <= 0:
             raise ValueError(
                 f"The number of groups ({num_groups}) must be a positive integer."
@@ -309,6 +317,8 @@ class BatchNorm(Module):
         track_running_stats: bool = True,
     ):
         super().__init__()
+        if eps <= 0.0:
+            raise ValueError(f"[BatchNorm] 'eps' must be positive but got {eps}.")
 
         self.num_features = num_features
         self.eps = eps
