@@ -499,17 +499,17 @@ class Adam(Optimizer):
     ):
         super().__init__()
 
-        self._maybe_schedule("learning_rate", learning_rate)
-        self.betas = betas
-        self.eps = eps
-        self.bias_correction = bias_correction
-
-        for i, beta in enumerate(self.betas):
+        for i, beta in enumerate(betas):
             if not 0.0 <= beta < 1.0:
                 raise ValueError(
                     f"Adam beta{i + 1} should be in [0, 1), {beta} was provided "
                     "instead"
                 )
+
+        self._maybe_schedule("learning_rate", learning_rate)
+        self.betas = betas
+        self.eps = eps
+        self.bias_correction = bias_correction
 
     def init_single(self, parameter: mx.array, state: dict):
         """Initialize optimizer state"""
@@ -690,16 +690,16 @@ class Lion(Optimizer):
     ):
         super().__init__()
 
-        self._maybe_schedule("learning_rate", learning_rate)
-        self.betas = betas
-        self.weight_decay = weight_decay
-
-        for i, beta in enumerate(self.betas):
+        for i, beta in enumerate(betas):
             if not 0.0 <= beta < 1.0:
                 raise ValueError(
                     f"Lion beta{i + 1} should be in [0, 1), {beta} was provided "
                     "instead"
                 )
+
+        self._maybe_schedule("learning_rate", learning_rate)
+        self.betas = betas
+        self.weight_decay = weight_decay
 
     def init_single(self, parameter: mx.array, state: dict):
         """Initialize optimizer state"""
