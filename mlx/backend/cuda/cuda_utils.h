@@ -50,6 +50,15 @@ class CudaHandle {
     }
   }
 
+  // Give up ownership without destroying. Only useful while recovering from a
+  // CUDA error, where destroying throws but keeping the handle is worse than
+  // leaking it.
+  Handle release() {
+    Handle handle = handle_;
+    handle_ = nullptr;
+    return handle;
+  }
+
   operator Handle() const {
     return handle_;
   }
