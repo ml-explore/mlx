@@ -1555,6 +1555,47 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 )
             )
 
+    def test_gather_qmm_sorted_unaligned_k(self):
+        # Every case in test_gather_qmm_sorted uses K % 64 == 0, so the tail of
+        # the K loop is never exercised. When K is not a multiple of the block
+        # size the sorted path has to zero the partial tile correctly, otherwise
+        # it silently drops the tail contribution for part of the output.
+        L, D, E = 128, 256, 4
+        key = mx.random.key(0)
+        k1, k2, k3 = mx.random.split(key, 3)
+        on_gpu = mx.default_device() == mx.gpu
+
+        for mode, group_size in (("affine", 32), ("mxfp4", None)):
+            for K in (160, 288, 544):
+                with self.subTest(mode=mode, K=K):
+                    if mode == "affine":
+                        dtype = mx.float16 if on_gpu else mx.float32
+                    else:
+                        dtype = mx.bfloat16 if on_gpu else mx.float32
+
+                    indices = mx.sort(
+                        (mx.random.uniform(shape=(L,), key=k1) * E).astype(mx.uint32)
+                    )
+                    x = (mx.random.normal((L, 1, K), key=k2) / K**0.5).astype(dtype)
+                    w = (mx.random.normal((E, D, K), key=k3) / K**0.5).astype(dtype)
+
+                    if mode == "affine":
+                        wq = mx.quantize(w, group_size=group_size, mode=mode)
+                    else:
+                        wq = mx.quantize(w, mode=mode)
+
+                    kwargs = dict(
+                        group_size=group_size,
+                        mode=mode,
+                        transpose=True,
+                        rhs_indices=indices,
+                    )
+                    y_sorted = mx.gather_qmm(x, *wq, sorted_indices=True, **kwargs)
+                    y_unsorted = mx.gather_qmm(x, *wq, sorted_indices=False, **kwargs)
+
+                    tol = 1e-3 if on_gpu else 1.5e-5
+                    self.assertLess((y_sorted - y_unsorted).abs().max(), tol)
+
     def test_gather_qmm_grad(self):
         def gather_qmm_ref(x, w, s, b, lhs, rhs, trans, sort):
             if lhs is not None:
