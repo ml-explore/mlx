@@ -144,6 +144,34 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 diff = mx.abs(out - ref) - atol * mx.abs(ref)
                 self.assertLessEqual(mx.max(diff).item(), atol)
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_sdpa_head_dim_96(self):
+        B, D, qH, kH = (1, 96, 8, 2)
+        for qL, kL, dtype, mask_str in product(
+            (64, 65),
+            (128, 127),
+            (mx.float16, mx.bfloat16, mx.float32),
+            (None, "additive", "bool", "causal"),
+        ):
+            with self.subTest(qL=qL, kL=kL, dtype=dtype, mask=mask_str):
+                q, k, v, scale, mask = prepare_inputs(
+                    B, qL, kL, D, qH, kH, mask_str, False, dtype
+                )
+                ref = mlx_ref_attn(q, k, v, scale, mask)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask
+                )
+
+                if dtype == mx.float32:
+                    atol = 1e-5
+                elif dtype == mx.bfloat16:
+                    atol = 5e-3
+                else:
+                    atol = 3e-4
+                diff = mx.abs(out - ref) - atol * mx.abs(ref)
+                self.assertLessEqual(mx.max(diff).item(), atol)
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
     def test_sdpa_full_head_dim_256(self):
         # On NAX devices, large nearly-square causal blocks take the fused
         # path; everything else takes the unfused fallback. Ragged lengths
@@ -209,33 +237,6 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     else:
                         tol = 5e-3
                     self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
-
-    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
-    def test_sdpa_head_dim_96(self):
-        B, D, qH, kH = (1, 96, 8, 2)
-        for qL, kL, dtype, mask_str in product(
-            (64, 65),
-            (128, 127),
-            (mx.float16, mx.bfloat16, mx.float32),
-            (None, "additive", "bool", "causal"),
-        ):
-            with self.subTest(qL=qL, kL=kL, dtype=dtype, mask=mask_str):
-                q, k, v, scale, mask = prepare_inputs(
-                    B, qL, kL, D, qH, kH, mask_str, False, dtype
-                )
-                ref = mlx_ref_attn(q, k, v, scale, mask)
-                out = mx.fast.scaled_dot_product_attention(
-                    q, k, v, scale=scale, mask=mask
-                )
-
-                if dtype == mx.float32:
-                    atol = 1e-5
-                elif dtype == mx.bfloat16:
-                    atol = 5e-3
-                else:
-                    atol = 3e-4
-                diff = mx.abs(out - ref) - atol * mx.abs(ref)
-                self.assertLessEqual(mx.max(diff).item(), atol)
 
     def test_sdpa_vector_kv_transposed_head_seq(self):
         D = 64

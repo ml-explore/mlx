@@ -207,8 +207,16 @@ void sdpa_full_self_attention_metal(
     bool do_causal_,
     const std::optional<array>& mask,
     const std::optional<array>& sinks) {
+  int B = q.shape(0);
+  int H = q.shape(1);
+  int D = q.shape(3);
+  int gqa_factor = q.shape(1) / k.shape(1);
+
+  int qL = q.shape(2);
+  int kL = k.shape(2);
+
   if (metal::is_nax_available() &&
-      (q.shape(3) == 64 || q.shape(3) == 96 || q.shape(3) == 128) &&
+      (D == 64 || D == 96 || D == 128 || D == 256) &&
       (env::enable_tf32() || q.dtype() != float32)) {
     return sdpa_full_self_attention_nax(
         /* const Stream& s = */ s,
@@ -231,14 +239,6 @@ void sdpa_full_self_attention_metal(
   int bd = q.shape(-1);
   int bq = 32;
   int bk = bd < 128 ? 32 : 16;
-
-  int B = q.shape(0);
-  int H = q.shape(1);
-  int D = q.shape(3);
-  int gqa_factor = q.shape(1) / k.shape(1);
-
-  int qL = q.shape(2);
-  int kL = k.shape(2);
 
   const bool align_Q = (qL % bq) == 0;
   const bool align_K = (kL % bk) == 0;
