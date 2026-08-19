@@ -460,7 +460,57 @@ bool CommandEncoder::needs_commit() {
       ((bytes_in_graph_ >> 20) > max_mb_per_graph_);
 }
 
+void CommandEncoder::reset_graph_state_after_error() {
+  // The failed call left an error pending on the runtime. Clear it first:
+  // ~CudaHandle() skips its destroy while an error is pending, so every handle
+  // released from here on would leak, and the graph below would fail to be
+  // recreated because of an error that has already been reported.
+  cudaGetLastError();
+
+  // Mirrors the state reset on the successful path of commit_impl(). None of
+  // these can throw, so they are cleared before touching the graph.
+  from_nodes_.clear();
+  to_nodes_.clear();
+  graph_deps_key_.clear();
+  graph_nodes_key_.clear();
+  node_map_.clear();
+  active_deps_.clear();
+  active_outputs_.clear();
+  concurrent_nodes_.clear();
+  is_graph_updatable_ = true;
+  node_count_ = 0;
+  bytes_in_graph_ = 0;
+
+  // Keeping the old graph would be worse than having none: its nodes stay in
+  // it and would run again on the next launch, silently, because the fresh
+  // dependencies only reference the new nodes. Make sure the handle is gone
+  // even when destroying it fails.
+  try {
+    graph_.reset();
+  } catch (...) {
+    graph_.release();
+  }
+  graph_ = CudaGraph(device_);
+}
+
 void CommandEncoder::commit() {
+  try {
+    commit_impl();
+  } catch (...) {
+    // Without this the encoder keeps the nodes and dependencies of the failed
+    // graph. The next commit then mixes them into a fresh graph and fails in
+    // cudaGraphAddDependencies with cudaErrorInvalidValue, and every later
+    // commit keeps failing until the process is restarted.
+    try {
+      reset_graph_state_after_error();
+    } catch (...) {
+      // Recovery is best effort: never let it replace the error being thrown.
+    }
+    throw;
+  }
+}
+
+void CommandEncoder::commit_impl() {
   nvtx3::scoped_range r("CommandEncoder::commit");
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
