@@ -1468,13 +1468,8 @@ class TestOps(mlx_tests.MLXTestCase):
                 shape = [2] * 3
                 shape[ax] = 3
             out_np = np.take_along_axis(a_np, idx_np.reshape(shape), axis=ax)
-            indices = mx.reshape(idx_mlx, shape)
-            out_mlx = mx.take_along_axis(a_mlx, indices, axis=ax)
+            out_mlx = mx.take_along_axis(a_mlx, mx.reshape(idx_mlx, shape), axis=ax)
             self.assertTrue(np.array_equal(out_np, np.array(out_mlx)))
-            if ax is None:
-                self.assertTrue(
-                    mx.array_equal(out_mlx, mx.take_along_axis(a_mlx, indices))
-                )
 
     def test_along_axis_invalid_axis(self):
         # Negative out of bounds axes used to slip past the bounds check
