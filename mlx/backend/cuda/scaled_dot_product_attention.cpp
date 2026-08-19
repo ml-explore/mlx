@@ -549,6 +549,33 @@ void sdpa_vector(
 
 namespace fast {
 
+namespace {
+
+std::tuple<bool, std::string> has_fused_kernel(
+    const array& q,
+    const array& k,
+    const array& v,
+    bool has_arr_mask,
+    bool do_causal,
+    bool output_logsumexp,
+    Stream s) {
+  if (s.device != Device::gpu) {
+    return {false, "the fused kernels require a GPU stream."};
+  }
+  if (!supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal, s) &&
+      !supports_sdpa_vector(q, k, v, has_arr_mask, output_logsumexp)) {
+    std::ostringstream msg;
+    msg << "neither the cuDNN attention nor the vector attention kernel "
+        << "supports this configuration; got query shape " << q.shape()
+        << ", key shape " << k.shape() << ", value shape " << v.shape()
+        << " with dtype " << q.dtype() << ".";
+    return {false, msg.str()};
+  }
+  return {true, ""};
+}
+
+} // namespace
+
 bool ScaledDotProductAttention::use_fallback(
     const array& q,
     const array& k,
@@ -558,13 +585,21 @@ bool ScaledDotProductAttention::use_fallback(
     bool do_causal,
     bool is_training,
     bool output_logsumexp,
+    bool force_fused,
     Stream s) {
-  if (s.device == Device::cpu) {
-    return true;
+  auto [has_fused, reason] =
+      has_fused_kernel(q, k, v, has_arr_mask, do_causal, output_logsumexp, s);
+  if (force_fused) {
+    if (!has_fused) {
+      std::ostringstream msg;
+      msg << "[scaled_dot_product_attention] force_fused=True but no fused "
+             "kernel is available: "
+          << reason;
+      throw std::invalid_argument(msg.str());
+    }
+    return false;
   }
-
-  return !supports_sdpa_cudnn(q, k, v, has_arr_mask, do_causal, s) &&
-      !supports_sdpa_vector(q, k, v, has_arr_mask, output_logsumexp);
+  return !has_fused;
 }
 
 bool ScaledDotProductAttention::supports_bool_mask() {

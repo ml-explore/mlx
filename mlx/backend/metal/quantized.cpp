@@ -649,7 +649,7 @@ void qvm_split_k(
   constexpr int bk = 32;
   int bn = std::min(group_size, 32) * num_simdgroups;
   MTL::Size group_dims = MTL::Size(bk, num_simdgroups, 1);
-  MTL::Size grid_dims = MTL::Size(M, N / bn, B);
+  MTL::Size grid_dims = MTL::Size(M, (N + bn - 1) / bn, B);
 
   auto x_shape = x.shape();
   auto x_strides = x.strides();

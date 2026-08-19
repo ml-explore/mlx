@@ -4491,6 +4491,14 @@ TEST_CASE("test conv shape overflow") {
       Shape{1, 8, 8, 1});
 }
 
+TEST_CASE("test pad shape overflow") {
+  // A padding sum that overflows int32 is rejected, not wrapped.
+  // https://github.com/ml-explore/mlx/issues/3611
+  const int imax = 2147483647;
+  CHECK_THROWS_AS(
+      pad(zeros({8}), {0}, Shape{imax}, Shape{imax}), std::overflow_error);
+}
+
 TEST_CASE("test fp8 conversion") {
   for (auto t : {float32, float16, bfloat16}) {
     array in({-1.125, -1.0, 0.0, 1.0, 1.125, 4.5, 448.0}, t);

@@ -49,6 +49,20 @@ const std::filesystem::path& default_cuda_toolkit_path() {
   return cached_path;
 }
 
+// Get the dirname of nvidia python package that contains CUDA headers.
+inline const char* cudart_dirname() {
+#if CUDART_VERSION < 13000
+  return "cuda_runtime";
+#elif CUDART_VERSION < 14000
+  return "cu13";
+#else
+  static_assert(
+      false,
+      "Please find out the newest dirname under site-packages/nvidia "
+      "and add it in this function.");
+#endif
+}
+
 // Return the --include-path args used for invoking NVRTC.
 const std::vector<std::string>& include_path_args() {
   static std::vector<std::string> cached_args = []() {
@@ -72,7 +86,7 @@ const std::vector<std::string>& include_path_args() {
     }
     // Add path to CUDA runtime headers, try local-installed python package
     // first and then system-installed headers.
-    path = root_dir.parent_path() / "nvidia" / "cuda_runtime" / "include";
+    path = root_dir.parent_path() / "nvidia" / cudart_dirname() / "include";
     if (!std::filesystem::exists(path)) {
       const char* home = std::getenv("CUDA_HOME");
       if (!home) {

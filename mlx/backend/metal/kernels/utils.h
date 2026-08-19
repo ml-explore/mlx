@@ -446,3 +446,27 @@ template <typename T, typename U>
 struct ConditionalType<true, T, U> {
   using type = T;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+// Type casting utils
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename U, typename T>
+inline U cast_to(T val) {
+  return static_cast<U>(val);
+}
+
+template <>
+inline bool cast_to<bool, float>(float val) {
+  return (as_type<uint32_t>(val) & 0x7FFFFFFF) != 0;
+}
+
+template <>
+inline bool cast_to<bool, bfloat16_t>(bfloat16_t val) {
+  return (as_type<uint16_t>(val) & 0x7FFF) != 0;
+}
+
+template <>
+inline bool cast_to<bool, complex64_t>(complex64_t val) {
+  return cast_to<bool, float>(val.real) || cast_to<bool, float>(val.imag);
+}

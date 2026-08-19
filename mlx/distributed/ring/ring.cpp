@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <future>
@@ -36,6 +37,10 @@ constexpr const size_t ALL_SUM_BUFFERS = 2;
 constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
 constexpr const char* RING_TAG = "[ring]";
+// send(2) and recv(2) reject a length above INT_MAX with EINVAL, so a single
+// transfer of 2 GiB or more fails outright rather than being carried in
+// pieces.
+constexpr const size_t MAX_IO_BYTES = 1024 * 1024 * 1024;
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 using json = nlohmann::json;
@@ -174,7 +179,8 @@ class SocketThread {
 
       if (!recvs_.empty()) {
         auto& task = recvs_.front();
-        ssize_t r = ::recv(fd_, task.buffer, task.size, 0);
+        ssize_t r =
+            ::recv(fd_, task.buffer, std::min(task.size, MAX_IO_BYTES), 0);
         if (r > 0) {
           task.buffer = static_cast<char*>(task.buffer) + r;
           task.size -= r;
@@ -191,7 +197,8 @@ class SocketThread {
       }
       if (!sends_.empty()) {
         auto& task = sends_.front();
-        ssize_t r = ::send(fd_, task.buffer, task.size, 0);
+        ssize_t r =
+            ::send(fd_, task.buffer, std::min(task.size, MAX_IO_BYTES), 0);
         if (r > 0) {
           task.buffer = static_cast<char*>(task.buffer) + r;
           task.size -= r;

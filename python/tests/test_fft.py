@@ -446,6 +446,41 @@ class TestFFT(mlx_tests.MLXTestCase):
             dgdx = torch.func.grad(g)(x_torch)
             self.assertLess((dfdx - dgdx).abs().max() / dgdx.abs().mean(), 1e-4)
 
+    def make_ffts(self):
+        mxffts = {
+            (True, True): mx.fft.irfftn,
+            (True, False): mx.fft.rfftn,
+            (False, True): mx.fft.ifftn,
+            (False, False): mx.fft.fftn,
+        }
+        shape = (3, 8, 6)
+        r = np.random.rand(*shape).astype(np.float32)
+        i = np.random.rand(*shape).astype(np.float32)
+        for (real, inverse), fftn in mxffts.items():
+            a_np = r if real and not inverse else r + 1j * i
+            for axes in [(-1,), (0,), (-2, -1), (-1, -2), (0, 1)]:
+                yield fftn, a_np, axes
+
+    def test_fft_vmap(self):
+        for fftn, a_np, axes in self.make_ffts():
+            a = mx.array(a_np)
+            f = lambda x: fftn(x, axes=axes)
+            expected = mx.stack([f(a[i]) for i in range(a.shape[0])])
+            out = mx.vmap(f)(a)
+            self.assertEqual(tuple(out.shape), tuple(expected.shape))
+            np.testing.assert_allclose(out, expected, atol=1e-5, rtol=1e-5)
+
+    def test_fft_jvp(self):
+        # The fft is linear so the jvp is the fft of the tangent
+        for fftn, a_np, axes in self.make_ffts():
+            a = mx.array(a_np)
+            t = mx.array(np.random.rand(*a_np.shape).astype(a_np.dtype))
+            f = lambda x: fftn(x, axes=axes)
+            expected = f(t)
+            out = mx.jvp(f, [a], [t])[1][0]
+            self.assertEqual(tuple(out.shape), tuple(expected.shape))
+            np.testing.assert_allclose(out, expected, atol=1e-5, rtol=1e-5)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

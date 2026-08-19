@@ -778,6 +778,8 @@ mlx_compute_scatter_args(
     return mlx_scatter_args_int(src, obj, vals);
   } else if (nb::isinstance<nb::tuple>(obj)) {
     return mlx_scatter_args_nd(src, nb::cast<nb::tuple>(obj), vals);
+  } else if (nb::isinstance<nb::ellipsis>(obj)) {
+    return {{}, broadcast_to(vals, src.shape()), {}};
   } else if (obj.is_none()) {
     return {{}, broadcast_to(vals, src.shape()), {}};
   } else if (nb::isinstance<nb::list>(obj)) {

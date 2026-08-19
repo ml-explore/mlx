@@ -5,6 +5,7 @@
 
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/gpu/slicing.h"
+#include "mlx/backend/metal/binary.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
@@ -743,6 +744,104 @@ void pad_and_slice_conv_3D_gpu(
       intermediate, intermediate.strides(), {0}, intermediate.data_size());
 }
 
+void conv_2D_gpu(
+    const Stream& s,
+    metal::Device& d,
+    const array& in_pre,
+    const array& wt_pre,
+    array& out,
+    const std::vector<int>& padding,
+    const std::vector<int>& wt_strides,
+    const std::vector<int>& wt_dilation,
+    const std::vector<int>& in_dilation,
+    const int groups,
+    bool flip,
+    std::vector<array>& copies);
+
+void small_kd_conv_3D_gpu(
+    const Stream& s,
+    metal::Device& d,
+    const array& in,
+    const array& wt,
+    array& out,
+    const MLXConvParams<3>& conv_params,
+    std::vector<array>& copies) {
+  const int H = conv_params.iS[1];
+  const int W = conv_params.iS[2];
+  const int C = conv_params.C;
+  const int O = conv_params.O;
+  const int KD = conv_params.wS[0];
+  const int KH = conv_params.wS[1];
+  const int KW = conv_params.wS[2];
+  const int OD = conv_params.oS[0];
+  const int OH = conv_params.oS[1];
+  const int OW = conv_params.oS[2];
+
+  array acc({OD, OH, OW, O}, out.dtype(), nullptr, {});
+  for (int kd = 0; kd < KD; ++kd) {
+    array in_2d({OD, H, W, C}, in.dtype(), nullptr, {});
+    in_2d.copy_shared_buffer(
+        in,
+        {static_cast<int64_t>(H) * W * C,
+         static_cast<int64_t>(W) * C,
+         static_cast<int64_t>(C),
+         1},
+        {true, true, false},
+        static_cast<size_t>(OD) * H * W * C,
+        static_cast<int64_t>(kd) * H * W * C);
+
+    // The 2D conv only flips the last two kernel axes, so mirror the depth
+    // axis here when the convolution is flipped.
+    const int kd_wt = conv_params.flip ? KD - 1 - kd : kd;
+
+    array wt_2d({O, KH, KW, C}, wt.dtype(), nullptr, {});
+    wt_2d.copy_shared_buffer(
+        wt,
+        {static_cast<int64_t>(KD) * KH * KW * C,
+         static_cast<int64_t>(KW) * C,
+         static_cast<int64_t>(C),
+         1},
+        {false, false, false},
+        static_cast<size_t>(O - 1) * KD * KH * KW * C +
+            static_cast<size_t>(KH) * KW * C,
+        static_cast<int64_t>(kd_wt) * KH * KW * C);
+
+    array conv_out({OD, OH, OW, O}, out.dtype(), nullptr, {});
+    conv_2D_gpu(
+        s,
+        d,
+        in_2d,
+        wt_2d,
+        conv_out,
+        {conv_params.pad[1], conv_params.pad[2]},
+        {conv_params.str[1], conv_params.str[2]},
+        {conv_params.kdil[1], conv_params.kdil[2]},
+        {conv_params.idil[1], conv_params.idil[2]},
+        /* groups = */ 1,
+        conv_params.flip,
+        copies);
+
+    if (kd == 0) {
+      acc = conv_out;
+    } else {
+      binary_op_gpu_inplace({acc, conv_out}, acc, "Add", s);
+      copies.push_back(conv_out);
+    }
+  }
+
+  // Output shape is [1, OD, OH, OW, O].
+  out.copy_shared_buffer(
+      acc,
+      {static_cast<int64_t>(OD) * OH * OW * O,
+       static_cast<int64_t>(OH) * OW * O,
+       static_cast<int64_t>(OW) * O,
+       static_cast<int64_t>(O),
+       1},
+      {true, true, false},
+      static_cast<size_t>(OD) * OH * OW * O,
+      0);
+}
+
 void dispatch_conv_3D_gpu(
     const Stream& s,
     metal::Device& d,
@@ -773,6 +872,15 @@ void dispatch_conv_3D_gpu(
   auto in = ensure_row_contiguous(in_pre, d, s);
   auto wt = ensure_row_contiguous(wt_pre, d, s);
 
+  // Decompose 3D conv to per-frame 2D convs
+  constexpr int kSmallKdLimit3D = 7;
+  if (is_idil_one && mod16_channels && conv_params.groups == 1 &&
+      conv_params.N == 1 && conv_params.wS[0] <= kSmallKdLimit3D &&
+      conv_params.str[0] == 1 && conv_params.kdil[0] == 1 &&
+      conv_params.pad[0] == 0) {
+    return small_kd_conv_3D_gpu(s, d, in, wt, out, conv_params, copies);
+  }
+
   // Perform the implicit gemm
   if (is_idil_one && mod16_channels) {
     return implicit_gemm_conv_3D_gpu(s, d, in, wt, out, conv_params);
@@ -794,14 +902,19 @@ void winograd_conv_2D_gpu(
     array& out,
     const MLXConvParams<2>& conv_params,
     std::vector<array>& copies_w) {
+  // Round the padded spatial dims up to the Winograd tile in int64 so the
+  // rounding cannot overflow int32 just below the limit.
+  int64_t pad_h = static_cast<int64_t>(conv_params.iS[0]) +
+      2 * static_cast<int64_t>(conv_params.pad[0]);
+  int64_t pad_w = static_cast<int64_t>(conv_params.iS[1]) +
+      2 * static_cast<int64_t>(conv_params.pad[1]);
+  pad_h = 6 * ((pad_h - 2 + 5) / 6) + 2;
+  pad_w = 6 * ((pad_w - 2 + 5) / 6) + 2;
   Shape padded_shape = {
       conv_params.N,
-      conv_params.iS[0] + 2 * conv_params.pad[0],
-      conv_params.iS[1] + 2 * conv_params.pad[1],
+      safe_cast(pad_h, "conv"),
+      safe_cast(pad_w, "conv"),
       conv_params.C};
-
-  padded_shape[1] = 6 * ((padded_shape[1] - 2 + 5) / 6) + 2;
-  padded_shape[2] = 6 * ((padded_shape[2] - 2 + 5) / 6) + 2;
 
   array in_padded(std::move(padded_shape), in.dtype(), nullptr, {});
 
