@@ -37,7 +37,7 @@ struct type_caster<::mlx::core::SmallVector<Type, Size, Alloc>> {
 
     // Will initialize 'size' and 'temp'. All return values and
     // return parameters are zero/NULL in the case of a failure.
-    PyObject** o = seq_get(src.ptr(), &size, &temp);
+    PyObject** o = NB_CALL(seq_get)(src.ptr(), &size, &temp);
 
     value.clear();
     value.reserve(size);

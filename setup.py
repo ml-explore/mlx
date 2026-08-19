@@ -6,6 +6,7 @@ import platform
 import re
 import subprocess
 import sys
+import sysconfig
 from functools import partial
 from pathlib import Path
 
@@ -71,6 +72,8 @@ build_frontend = int(os.environ.get("MLX_BUILD_FRONTEND_PACKAGE", 0))
 build_backend = int(os.environ.get("MLX_BUILD_BACKEND_PACKAGE", 0))
 build_macos = platform.system() == "Darwin"
 build_cuda = "MLX_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
+# Free-threaded wheels use the interpreter-specific linked ABI.
+free_threaded = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
 
 
 # A CMakeExtension needs a sourcedir instead of a file list.
@@ -78,7 +81,7 @@ build_cuda = "MLX_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
 # If you need multiple extensions, see scikit-build.
 class CMakeExtension(Extension):
     def __init__(self, name: str, sourcedir: str = "") -> None:
-        super().__init__(name, sources=[])
+        super().__init__(name, sources=[], py_limited_api=not free_threaded)
         self.sourcedir = os.fspath(Path(sourcedir).resolve())
 
 
@@ -208,6 +211,12 @@ class MLXBdistWheel(bdist_wheel):
         if build_backend:
             impl = self.python_tag
             abi = "none"
+        elif not free_threaded:
+            # nanobind split mode targets the Python 3.10 Stable ABI. The
+            # official backend has no CPython 3.10 wheel for Windows ARM64, so
+            # that platform starts at CPython 3.11 instead.
+            impl = "cp311" if plat_name == "win_arm64" else "cp310"
+            abi = "abi3"
         return (impl, abi, plat_name)
 
     def write_wheelfile(self, *args, **kwargs) -> None:
@@ -299,6 +308,8 @@ if __name__ == "__main__":
     install_requires = []
 
     if not build_backend:
+        if not free_threaded:
+            install_requires.append("nanobind-backend>=1.0.0.dev2")
         if build_frontend:
             install_requires.append(
                 f'mlx-metal=={version}; platform_system == "Darwin"'

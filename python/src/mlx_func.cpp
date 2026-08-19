@@ -49,7 +49,11 @@ PyObject* gc_func_vectorcall(
     PyObject* const* args,
     size_t nargs,
     PyObject* kwnames) {
-  return PyObject_Vectorcall(((gc_func*)self)->func, args, nargs, kwnames);
+  return nb::detail::vectorcall(((gc_func*)self)->func, args, nargs, kwnames);
+}
+
+PyObject* gc_func_call(PyObject* self, PyObject* args, PyObject* kwargs) {
+  return PyObject_Call(((gc_func*)self)->func, args, kwargs);
 }
 
 void gc_func_dealloc(PyObject* self) {
@@ -83,16 +87,22 @@ PyType_Slot gc_func_slots[] = {
     {Py_tp_getset, (void*)gc_func_getset},
     {Py_tp_getattro, (void*)gc_func_getattro},
     {Py_tp_members, (void*)gc_func_members},
-    {Py_tp_call, (void*)PyVectorcall_Call},
+    {Py_tp_call, (void*)gc_func_call},
     {Py_tp_dealloc, (void*)gc_func_dealloc},
     {0, 0}};
+
+#if defined(Py_TPFLAGS_HAVE_VECTORCALL)
+constexpr auto gc_func_vectorcall_flag = Py_TPFLAGS_HAVE_VECTORCALL;
+#else
+constexpr unsigned long gc_func_vectorcall_flag = 1UL << 11;
+#endif
 
 static PyType_Spec gc_func_spec = {
     /* .name = */ "mlx.gc_func",
     /* .basicsize = */ (int)sizeof(gc_func),
     /* .itemsize = */ 0,
     /* .flags = */ Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-        Py_TPFLAGS_HAVE_VECTORCALL,
+        gc_func_vectorcall_flag,
     /* .slots = */ gc_func_slots};
 
 static PyTypeObject* gc_func_tp = nullptr;

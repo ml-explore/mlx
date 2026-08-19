@@ -1,8 +1,14 @@
+# Python 3.13t and 3.14t have no free-threaded Stable ABI, so they must use
+# linked mode instead of the regular split-mode build.
+if(MLX_PYTHON_FREE_THREADED)
+  set(MLX_NANOBIND_MODE NB_STATIC FREE_THREADED)
+else()
+  set(MLX_NANOBIND_MODE BACKEND_MODULE nanobind_backend)
+endif()
+
 nanobind_add_module(
   core
-  NB_STATIC
-  STABLE_ABI
-  FREE_THREADED
+  ${MLX_NANOBIND_MODE}
   LTO
   NOMINSIZE
   NB_DOMAIN

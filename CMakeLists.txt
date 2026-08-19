@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.26)
 
 if(NOT MLX_VERSION)
   file(STRINGS "mlx/version.h" _mlx_h_version REGEX "^#define MLX_VERSION_.*$")
@@ -392,19 +392,28 @@ if(MLX_BUILD_PYTHON_BINDINGS)
     Python 3.10
     COMPONENTS Interpreter Development.Module
     REQUIRED)
+  execute_process(
+    COMMAND
+      "${Python_EXECUTABLE}" -c
+      "import sysconfig; print('ON' if sysconfig.get_config_var('Py_GIL_DISABLED') else 'OFF')"
+    RESULT_VARIABLE _mlx_python_gil_result
+    OUTPUT_VARIABLE MLX_PYTHON_FREE_THREADED
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT _mlx_python_gil_result EQUAL 0)
+    message(FATAL_ERROR "Failed to determine whether Python is free-threaded.")
+  endif()
+  if(NOT MLX_PYTHON_FREE_THREADED)
+    find_package(
+      Python 3.10
+      COMPONENTS Development.SABIModule
+      REQUIRED)
+  endif()
   FetchContent_Declare(
     nanobind
     GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-    GIT_TAG v3.0.0-dev1
+    GIT_TAG v3.0.0-dev2
     GIT_SHALLOW TRUE
-    EXCLUDE_FROM_ALL
-    # v3.0.0-dev1 mistakes a non-null CPython < 3.13 thread state for GIL
-    # ownership. Drop this patch once the fix is included in the pinned nanobind
-    # tag.
-    PATCH_COMMAND
-      ${CMAKE_COMMAND} "-DNANOBIND_SOURCE_DIR=<SOURCE_DIR>" -P
-      ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/apply-nanobind-v3.0.0-dev1-gil.cmake
-  )
+    EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(nanobind)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/python/src)
 endif()

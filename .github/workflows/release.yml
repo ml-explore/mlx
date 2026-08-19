@@ -58,12 +58,18 @@ jobs:
       matrix:
         os: ['Linux', 'Windows']
         arch: ['x86_64', 'aarch64']
-        python-version: &pyver ['3.10', '3.11', '3.12', '3.13', '3.13t', '3.14', '3.14t']
-        # There is no cp310 binary for Windows on arm.
+        # One Stable ABI frontend wheel covers all supported regular CPython
+        # versions on a platform. Python 3.13t and 3.14t do not have a
+        # free-threaded Stable ABI and require version-specific linked wheels.
+        python-version: &pyver ['3.10', '3.13t', '3.14t']
         exclude:
           - os: 'Windows'
             arch: 'aarch64'
             python-version: '3.10'
+        include:
+          - os: 'Windows'
+            arch: 'aarch64'
+            python-version: '3.11'
     runs-on: |-
       ${{ case(matrix.os == 'Windows',
                case(matrix.arch == 'aarch64', 'windows-11-arm',
@@ -89,7 +95,7 @@ jobs:
       - run: unzip -l wheelhouse/*.whl
       - uses: actions/upload-artifact@v7
         with:
-          name: frontend-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python-version }}
+          name: frontend-${{ runner.os }}-${{ runner.arch }}-${{ contains(matrix.python-version, 't') && format('py{0}', matrix.python-version) || 'abi3' }}
           path: wheelhouse/mlx-*.whl
           if-no-files-found: error
 
@@ -175,7 +181,7 @@ jobs:
       - name: Upload frontend packages
         uses: actions/upload-artifact@v7
         with:
-          name: frontend-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python-version }}
+          name: frontend-${{ runner.os }}-${{ runner.arch }}-${{ contains(matrix.python-version, 't') && format('py{0}', matrix.python-version) || 'abi3' }}
           path: wheelhouse/mlx-*.whl
           if-no-files-found: error
       - name: Upload backend packages
@@ -187,30 +193,36 @@ jobs:
           if-no-files-found: error
 
   test_wheel:
-    name: Test (${{ matrix.os }}, ${{ matrix.toolkit }}, ${{ matrix.arch }})
+    name: Test (${{ matrix.os }}, python-${{ matrix.python-version }}, ${{ matrix.toolkit }}, ${{ matrix.arch }})
     if: github.repository == 'ml-explore/mlx'
     needs: [build_frontend, build_backend, build_mac_wheels]
     strategy:
       matrix:
         os: ['Linux', 'Windows']
-        arch: ['aarch64']
+        arch: ['x86_64', 'aarch64']
         toolkit: ['cpu']
+        python-version: ['3.12', '3.13t', '3.14t']
         include:
           - os: 'Linux'
             arch: 'x86_64'
-            toolkit: 'cpu'
-          - os: 'Linux'
-            arch: 'x86_64'
             toolkit: 'cuda-12.9'
+            python-version: '3.12'
           - os: 'Linux'
             arch: 'x86_64'
             toolkit: 'cuda-13.0'
-          - os: 'Windows'
-            arch: 'x86_64'
-            toolkit: 'cpu'
+            python-version: '3.12'
           - os: 'macOS'
             arch: 'aarch64'
             toolkit: 'metal'
+            python-version: '3.12'
+          - os: 'macOS'
+            arch: 'aarch64'
+            toolkit: 'metal'
+            python-version: '3.13t'
+          - os: 'macOS'
+            arch: 'aarch64'
+            toolkit: 'metal'
+            python-version: '3.14t'
     runs-on: |-
       ${{ case(matrix.os == 'Windows', case(matrix.arch == 'aarch64', 'windows-11-arm',
                                             'windows-2022'),
@@ -224,6 +236,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           toolkit: ${{ matrix.toolkit }}
+          python-version: ${{ matrix.python-version }}
           use-ccache: false
       - uses: ./.github/actions/test-wheel
         with:
