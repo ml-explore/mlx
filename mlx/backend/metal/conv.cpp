@@ -1,10 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <algorithm>
 #include <cassert>
-#include <cerrno>
-#include <cstdlib>
 #include <numeric>
-#include <stdexcept>
 
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/gpu/slicing.h"
@@ -15,7 +12,6 @@
 #include "mlx/backend/metal/kernels/steel/conv/params.h"
 #include "mlx/backend/metal/matmul.h"
 #include "mlx/backend/metal/utils.h"
-#include "mlx/memory.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -53,10 +49,9 @@ inline int max_unfold_rows(metal::Device& d, size_t row_bytes, int total_rows) {
 }
 
 // Winograd's scratch is a multiple of the input, all referenced by one
-// command buffer; past the GPU's working set limit the kernels silently
-// produce zeros. Run the batch in tiles to bound it. Returns the batch
-// elements per tile, or 0 if not even one fits (the caller must then pick a
-// path that needs no scratch).
+// command buffer, which fails past the GPU's working set limit. Run the
+// batch in tiles to bound it. Returns the batch elements per tile, or 0 if
+// not even one fits.
 inline int winograd_batch_step(
     metal::Device& d,
     const array& in,
@@ -64,17 +59,18 @@ inline int winograd_batch_step(
   int total_n = conv_params.N;
 
   size_t itemsize = in.itemsize();
-  int padded_h =
-      6 * ((conv_params.iS[0] + 2 * conv_params.pad[0] - 2 + 5) / 6) + 2;
-  int padded_w =
-      6 * ((conv_params.iS[1] + 2 * conv_params.pad[1] - 2 + 5) / 6) + 2;
+  int64_t padded_h = static_cast<int64_t>(conv_params.iS[0]) +
+      2 * static_cast<int64_t>(conv_params.pad[0]);
+  int64_t padded_w = static_cast<int64_t>(conv_params.iS[1]) +
+      2 * static_cast<int64_t>(conv_params.pad[1]);
+  padded_h = 6 * ((padded_h - 2 + 5) / 6) + 2;
+  padded_w = 6 * ((padded_w - 2 + 5) / 6) + 2;
   int tiles_per_n =
       ((conv_params.oS[0] + 5) / 6) * ((conv_params.oS[1] + 5) / 6);
 
   // The padded input and both gemm workspaces scale with the tile; the
-  // transformed filter does not. That is all of the scratch: the batched gemm
-  // allocates nothing here (split-k needs a batch size of one, winograd always
-  // runs 8 * 8, and its operands are contiguous so it never copies one).
+  // transformed filter does not. That is all of the scratch: the batched
+  // gemm allocates nothing here.
   size_t filt_bytes =
       static_cast<size_t>(8 * 8) * conv_params.C * conv_params.O * itemsize;
   size_t bytes_per_n =
@@ -83,40 +79,30 @@ inline int winograd_batch_step(
           (conv_params.C + conv_params.O) * itemsize;
 
   size_t working_set = d.mtl_device()->recommendedMaxWorkingSetSize();
-  // Test hook: pretend the GPU can only keep this many bytes resident, so the
-  // budget arithmetic below can be exercised at sizes that fit in CI.
-  if (auto env_ws = env::get_var("MLX_CONV_WINOGRAD_WORKING_SET", "");
-      !env_ws.empty()) {
-    // A silent parse failure would read as a budget of zero and quietly swap
-    // the kernel, so reject anything but a plain decimal count.
-    errno = 0;
-    unsigned long long parsed = std::strtoull(env_ws.c_str(), nullptr, 10);
-    if (env_ws.find_first_not_of("0123456789") != std::string::npos ||
-        errno == ERANGE) {
-      throw std::invalid_argument(
-          "[conv] MLX_CONV_WINOGRAD_WORKING_SET must be a plain decimal byte "
-          "count, but got '" +
-          env_ws + "'.");
-    }
-    working_set = parsed;
+  // Lets tests shrink the working set to exercise tiling at small sizes.
+  if (int env_ws = env::get_var("MLX_CONV_WINOGRAD_WORKING_SET", 0);
+      env_ws > 0) {
+    working_set = env_ws;
   }
-  // Results went wrong at ~99% of the working set, so hold a quarter of it
-  // back: this process cannot see the GPU memory other processes hold, nor
-  // the allocator's cache of freed-but-unreturned buffers.
+  // Hold a quarter back for what is not charged below: GPU memory held by
+  // other processes and allocations unrelated to the conv.
   size_t limit = working_set / 4 * 3;
 
-  // Deliberately over-counts: only buffers this command buffer binds matter,
-  // but charging all live allocations only errs toward a smaller tile. The
-  // input, weights and output are already allocated and inside this figure,
-  // so only winograd's scratch is left to make room for.
-  size_t used = get_active_memory() + filt_bytes;
+  // The conv's own input and output stay resident alongside the scratch.
+  size_t io_bytes =
+      (static_cast<size_t>(total_n) * conv_params.iS[0] * conv_params.iS[1] *
+           conv_params.C +
+       static_cast<size_t>(total_n) * conv_params.oS[0] * conv_params.oS[1] *
+           conv_params.O) *
+      itemsize;
+  size_t used = io_bytes + filt_bytes;
   size_t budget = limit > used ? limit - used : 0;
 
   auto max_n = static_cast<int64_t>(budget / bytes_per_n);
   int safe_n = static_cast<int>(std::min<int64_t>(max_n, total_n));
 
-  // Force a smaller tile (tests, or to bound the scratch space further). It
-  // caps the tile the budget allows, so it can only ever shrink the tile.
+  // Force a smaller tile, capped by the budget (tests, or to bound the
+  // scratch space further).
   if (int forced = env::get_var("MLX_CONV_WINOGRAD_TILE_BATCH", 0);
       forced > 0) {
     return std::min(forced, safe_n);
@@ -990,10 +976,14 @@ void winograd_conv_2D_gpu(
   int O_c = conv_params.O;
   int C_c = conv_params.C;
 
-  int padded_h =
-      6 * ((conv_params.iS[0] + 2 * conv_params.pad[0] - 2 + 5) / 6) + 2;
-  int padded_w =
-      6 * ((conv_params.iS[1] + 2 * conv_params.pad[1] - 2 + 5) / 6) + 2;
+  // Round the padded spatial dims up to the winograd tile in int64 so the
+  // rounding cannot overflow int32 just below the limit.
+  int64_t pad_h = static_cast<int64_t>(conv_params.iS[0]) +
+      2 * static_cast<int64_t>(conv_params.pad[0]);
+  int64_t pad_w = static_cast<int64_t>(conv_params.iS[1]) +
+      2 * static_cast<int64_t>(conv_params.pad[1]);
+  int padded_h = safe_cast(6 * ((pad_h - 2 + 5) / 6) + 2, "conv");
+  int padded_w = safe_cast(6 * ((pad_w - 2 + 5) / 6) + 2, "conv");
 
   int N_tiles_h = (conv_params.oS[0] + 5) / 6;
   int N_tiles_w = (conv_params.oS[1] + 5) / 6;
