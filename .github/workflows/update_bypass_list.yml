@@ -3,8 +3,11 @@ description: 'Update interaction-limits bypass list with eligible contributors'
 
 on:
   workflow_dispatch:
+  pull_request_target:
+    types:
+      - closed
   schedule:
-    - cron: 0 * * * *
+    - cron: 33 6 * * *
 
 permissions:
   contents: write

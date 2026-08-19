@@ -2411,6 +2411,16 @@ array median(
         array(0.5, dtype),
         s);
   }
+  // Sorting moves NaN to the end, so the midpoint slice never selects it.
+  // Propagate it explicitly to stay consistent with max, min and mean.
+  if (issubdtype(a.dtype(), inexact)) {
+    median_a = where(
+        any(isnan(flat_a, s), -1, /* keepdims = */ true, s),
+        array(std::numeric_limits<float>::quiet_NaN(), dtype),
+        median_a,
+        s);
+  }
+
   median_a = squeeze(median_a, -1, s);
   if (keepdims) {
     median_a = expand_dims(median_a, sorted_axes, s);

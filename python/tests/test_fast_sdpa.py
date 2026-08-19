@@ -275,6 +275,20 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    def test_sdpa_vector_gqa_long(self):
+        scale = 1.0
+        mx.random.seed(0)
+        for Nq, Nkv, D in [(32, 4, 128), (64, 8, 64)]:
+            for L in [8192, 8201]:
+                q = 5e-1 * mx.random.normal(shape=(1, Nq, 1, D))
+                k = 5e-1 * mx.random.normal(shape=(1, Nkv, L + 32, D))[:, :, :L]
+                v = 5e-1 * mx.random.normal(shape=(1, Nkv, L + 32, D))[:, :, :L]
+                kr = mx.repeat(k, Nq // Nkv, axis=1)
+                vr = mx.repeat(v, Nq // Nkv, axis=1)
+                ref = mlx_primitives_sdpa(q, kr, vr, scale)
+                out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+                self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
     def test_sdpa_fully_masked(self):
         Lkv = 8
         mask = mx.array(False)
@@ -721,6 +735,100 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                     q, k, v, scale=scale, mask=mask
                 ).sum()
                 test_grad(loss_slow, loss_fast, [q, k, v])
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal kernel path only")
+    def test_sdpa_force_fused_metal(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+
+        def make_qkv(qL, kL, D, qH=8, kH=8):
+            q = mx.random.normal((1, qH, qL, D), mx.float16)
+            k = mx.random.normal((1, kH, kL, D), mx.float16)
+            v = mx.random.normal((1, kH, kL, D), mx.float16)
+            return q, k, v
+
+        # Full attention kernel.
+        for D, qL, mask in product((192, 256), (9, 16), (None, "causal")):
+            with self.subTest(head_dim=D, qL=qL, mask=mask):
+                q, k, v = make_qkv(qL, 512, D, 8, 4)
+                scale = D**-0.5
+                ref = mlx_ref_attn(q, k, v, scale=scale, mask=mask)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, mask=mask, force_fused=True
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
+        # Vector attention kernel.
+        for D in (192, 256):
+            with self.subTest(head_dim=D):
+                q, k, v = make_qkv(4, 16385, D, 4, 2)
+                scale = D**-0.5
+                ref = mlx_ref_attn(q, k, v, scale=scale)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, force_fused=True
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
+
+        # No full attention fused kernels.
+        with self.assertRaisesRegex(ValueError, "supports head dims"):
+            q, k, v = make_qkv(16, 512, 512)
+            mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=512**-0.5, force_fused=True
+            )
+        with self.assertRaisesRegex(
+            ValueError, "query sequence to be no longer than the key sequence"
+        ):
+            q, k, v = make_qkv(32, 16, 64)
+            mx.fast.scaled_dot_product_attention(
+                q,
+                k,
+                v,
+                scale=64**-0.5,
+                mask="causal",
+                force_fused=True,
+            )
+
+        # No vector attention fused kernels.
+        with self.assertRaisesRegex(ValueError, "supports head dims"):
+            q, k, v = make_qkv(1, 128, 72)
+            mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=72**-0.5, force_fused=True
+            )
+        with self.assertRaisesRegex(ValueError, "GQA factor to be at most 32"):
+            q, k, v = make_qkv(8, 128, 64, qH=8, kH=1)
+            mx.fast.scaled_dot_product_attention(
+                q, k, v, scale=64**-0.5, force_fused=True
+            )
+
+        # No CPU fused kernel.
+        with mx.stream(mx.cpu):
+            q, k, v = make_qkv(8, 128, 8)
+            with self.assertRaisesRegex(ValueError, "require a GPU"):
+                mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=64**-0.5, force_fused=True
+                )
+
+    @unittest.skipIf(not mx.cuda.is_available(), "CUDA kernel path only")
+    def test_sdpa_force_fused_cuda(self):
+        if mx.default_device() != mx.gpu:
+            self.skipTest("requires GPU")
+
+        def make_qkv(qL, kL, D, qH=8, kH=8):
+            q = mx.random.normal((1, qH, qL, D), mx.float16)
+            k = mx.random.normal((1, kH, kL, D), mx.float16)
+            v = mx.random.normal((1, kH, kL, D), mx.float16)
+            return q, k, v
+
+        # Vector attention kernel.
+        for D in (64, 96, 128):
+            with self.subTest(head_dim=D):
+                q, k, v = make_qkv(3, 128, D, 4, 2)
+                scale = D**-0.5
+                ref = mlx_ref_attn(q, k, v, scale=scale)
+                out = mx.fast.scaled_dot_product_attention(
+                    q, k, v, scale=scale, force_fused=True
+                )
+                self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
 
     def test_sdpa_sliced(self):
         N = 8
