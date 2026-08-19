@@ -2642,7 +2642,7 @@ class TestOps(mlx_tests.MLXTestCase):
                     mx.eval(a)
                     # The axis has size one, so an inclusive scan is the identity
                     expected = np.array(a).copy()
-                    out = getattr(mx, op)(a, axis=0, stream=mx.cpu)
+                    out = getattr(mx, op)(a, axis=0)
                     self.assertTrue(np.array_equal(np.array(out), expected))
 
     def test_cummax_cummin_nan(self):
