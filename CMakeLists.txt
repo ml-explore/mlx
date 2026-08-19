@@ -411,7 +411,7 @@ if(MLX_BUILD_PYTHON_BINDINGS)
   FetchContent_Declare(
     nanobind
     GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-    GIT_TAG v3.0.0-dev2
+    GIT_TAG v3.0.0-dev3
     GIT_SHALLOW TRUE
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(nanobind)
