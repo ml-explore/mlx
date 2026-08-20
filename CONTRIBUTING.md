@@ -3,29 +3,30 @@
 We want to make contributing to this project as easy and transparent as
 possible.
 
+## AI Usage Policy
+
+AI-generated code is allowed. What is not allowed is submitting code you do not
+understand. You are 100% responsible for every line, however it was produced,
+and must explicitly disclose the manner in which AI was employed.
+
+It is strictly prohibited to use AI to write your posts for you (bug reports,
+feature requests, pull request descriptions, Github discussions, responding to
+humans, ...).
+
 ## Pull Requests
 
-1. Fork and submit pull requests to the repo.
-2. If you've added code that should be tested, add tests.
-3. If a change is likely to impact efficiency, run some of the benchmarks before
-   and after the change. Examples of benchmarks can be found in `benchmarks/python/`.
-4. If you've changed APIs, update the documentation.
-5. Every PR should have passing tests and at least one review.
-6. For code formatting install `pre-commit` using something like `pip install pre-commit` and run `pre-commit install`.
-   This should install hooks for running `black` and `clang-format` to ensure
-   consistent style for C++ and python code.
+- Make sure new code is covered by tests. Add new tests if not, and confirm
+  the new tests fail in the main branch.
+- If performance may be impacted, run benchmarks for both the main branch and
+  the pull request.
+- When providing benchmarking results, include scripts and reproduction steps.
+- Format the code with `uvx pre-commit run --all` before submitting a pull
+  request. You can also install git hooks to run it automatically:
 
-   You can also run the formatters manually as follows:
-
-   ```shell
-   clang-format -i file.cpp
-   ```
-
-   ```shell
-   black file.py
-   ```
-
-   or run `pre-commit run --all-files` to check all files in the repo.
+  ```shell
+  pip install pre-commit
+  pre-commit install
+  ```
 
 ## Issues
 
