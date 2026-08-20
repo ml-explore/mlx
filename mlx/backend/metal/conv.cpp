@@ -48,10 +48,17 @@ inline int max_unfold_rows(metal::Device& d, size_t row_bytes, int total_rows) {
   return static_cast<int>(std::min(max_rows, static_cast<size_t>(total_rows)));
 }
 
-// Winograd's scratch is a multiple of the input, all referenced by one
-// command buffer, which fails past the GPU's working set limit. Run the
-// batch in tiles to bound it. Returns the batch elements per tile, or 0 if
-// not even one fits.
+inline auto winograd_padded_size(const MLXConvParams<2>& conv_params) {
+  int64_t pad_h = static_cast<int64_t>(conv_params.iS[0]) +
+      2 * static_cast<int64_t>(conv_params.pad[0]);
+  int64_t pad_w = static_cast<int64_t>(conv_params.iS[1]) +
+      2 * static_cast<int64_t>(conv_params.pad[1]);
+  int padded_h = safe_cast(6 * ceildiv(pad_h - 2, 6) + 2, "conv");
+  int padded_w = safe_cast(6 * ceildiv(pad_w - 2, 6) + 2, "conv");
+  return std::make_tuple(padded_h, padded_w);
+}
+
+// Return how many rows to compute per each step.
 inline int winograd_batch_step(
     metal::Device& d,
     const array& in,
@@ -59,60 +66,45 @@ inline int winograd_batch_step(
   int total_n = conv_params.N;
 
   size_t itemsize = in.itemsize();
-  int64_t padded_h = static_cast<int64_t>(conv_params.iS[0]) +
-      2 * static_cast<int64_t>(conv_params.pad[0]);
-  int64_t padded_w = static_cast<int64_t>(conv_params.iS[1]) +
-      2 * static_cast<int64_t>(conv_params.pad[1]);
-  padded_h = 6 * ((padded_h - 2 + 5) / 6) + 2;
-  padded_w = 6 * ((padded_w - 2 + 5) / 6) + 2;
+  auto [padded_h, padded_w] = winograd_padded_size(conv_params);
   int tiles_per_n =
-      ((conv_params.oS[0] + 5) / 6) * ((conv_params.oS[1] + 5) / 6);
+      ceildiv(conv_params.oS[0], 6) * ceildiv(conv_params.oS[1], 6);
 
-  // The padded input and both gemm workspaces scale with the tile; the
-  // transformed filter does not. That is all of the scratch: the batched
-  // gemm allocates nothing here.
-  size_t filt_bytes =
-      static_cast<size_t>(8 * 8) * conv_params.C * conv_params.O * itemsize;
-  size_t bytes_per_n =
-      static_cast<size_t>(padded_h) * padded_w * conv_params.C * itemsize +
-      static_cast<size_t>(8 * 8) * tiles_per_n *
-          (conv_params.C + conv_params.O) * itemsize;
-
+  // Limit of maximum memory can be used for the step.
   size_t working_set = d.mtl_device()->recommendedMaxWorkingSetSize();
-  // Lets tests shrink the working set to exercise tiling at small sizes.
   if (int env_ws = env::get_var("MLX_CONV_WINOGRAD_WORKING_SET", 0);
       env_ws > 0) {
     working_set = env_ws;
   }
-  // Hold a quarter back for what is not charged below: GPU memory held by
-  // other processes and allocations unrelated to the conv.
   size_t limit = working_set / 4 * 3;
 
-  // The conv's own input and output stay resident alongside the scratch.
-  size_t io_bytes =
+  // Memory used by inputs.
+  size_t filt_bytes =
+      static_cast<size_t>(8 * 8) * conv_params.C * conv_params.O * itemsize;
+  size_t io_bytes = itemsize *
       (static_cast<size_t>(total_n) * conv_params.iS[0] * conv_params.iS[1] *
            conv_params.C +
        static_cast<size_t>(total_n) * conv_params.oS[0] * conv_params.oS[1] *
-           conv_params.O) *
-      itemsize;
+           conv_params.O);
   size_t used = io_bytes + filt_bytes;
   size_t budget = limit > used ? limit - used : 0;
 
+  // How many rows to use per step to avoid running over limit.
+  size_t bytes_per_n =
+      static_cast<size_t>(padded_h) * padded_w * conv_params.C * itemsize +
+      static_cast<size_t>(8 * 8) * tiles_per_n *
+          (conv_params.C + conv_params.O) * itemsize;
   auto max_n = static_cast<int64_t>(budget / bytes_per_n);
   int safe_n = static_cast<int>(std::min<int64_t>(max_n, total_n));
-
-  // Force a smaller tile, capped by the budget (tests, or to bound the
-  // scratch space further).
   if (int forced = env::get_var("MLX_CONV_WINOGRAD_TILE_BATCH", 0);
       forced > 0) {
     return std::min(forced, safe_n);
   }
+
   // When the budget forces tiling, each tile must carry enough gemm rows to
-  // amortize its fixed cost (dispatches plus the input and output
-  // transforms); below that the implicit gemm fallback is much faster.
+  // amortize fixed cost, below that the implicit gemm fallback is much faster.
   constexpr int min_rows_per_tile = 32;
-  if (safe_n < total_n &&
-      static_cast<int64_t>(safe_n) * tiles_per_n < min_rows_per_tile) {
+  if ((safe_n < total_n) && (safe_n * tiles_per_n < min_rows_per_tile)) {
     return 0;
   }
   return safe_n;
@@ -975,21 +967,13 @@ void winograd_conv_2D_gpu(
     int n_step) {
   int O_c = conv_params.O;
   int C_c = conv_params.C;
+  auto [padded_h, padded_w] = winograd_padded_size(conv_params);
 
-  // Round the padded spatial dims up to the winograd tile in int64 so the
-  // rounding cannot overflow int32 just below the limit.
-  int64_t pad_h = static_cast<int64_t>(conv_params.iS[0]) +
-      2 * static_cast<int64_t>(conv_params.pad[0]);
-  int64_t pad_w = static_cast<int64_t>(conv_params.iS[1]) +
-      2 * static_cast<int64_t>(conv_params.pad[1]);
-  int padded_h = safe_cast(6 * ((pad_h - 2 + 5) / 6) + 2, "conv");
-  int padded_w = safe_cast(6 * ((pad_w - 2 + 5) / 6) + 2, "conv");
-
-  int N_tiles_h = (conv_params.oS[0] + 5) / 6;
-  int N_tiles_w = (conv_params.oS[1] + 5) / 6;
+  int N_tiles_h = ceildiv(conv_params.oS[0], 6);
+  int N_tiles_w = ceildiv(conv_params.oS[1], 6);
   int tiles_per_n = N_tiles_h * N_tiles_w;
 
-  // Do filter transform
+  // Do filter transform.
   Shape filt_wg_shape = {8 * 8, conv_params.C, conv_params.O};
   array filt_wg(std::move(filt_wg_shape), wt.dtype(), nullptr, {});
   filt_wg.set_data(allocator::malloc(filt_wg.nbytes()));
@@ -1021,11 +1005,7 @@ void winograd_conv_2D_gpu(
     compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
   }
 
-  // Scratch space, reused by every batch tile. in_padded's buffer is
-  // allocated by fill_gpu below.
-  array in_padded({n_step, padded_h, padded_w, C_c}, in.dtype(), nullptr, {});
-  copies_w.push_back(in_padded);
-
+  // Scratch space reused by every batch tile.
   array inp_wg({8 * 8, n_step * tiles_per_n, C_c}, in.dtype(), nullptr, {});
   inp_wg.set_data(allocator::malloc(inp_wg.nbytes()));
   copies_w.push_back(inp_wg);
@@ -1034,20 +1014,24 @@ void winograd_conv_2D_gpu(
   out_wg.set_data(allocator::malloc(out_wg.nbytes()));
   copies_w.push_back(out_wg);
 
-  // Every tile overwrites the same interior window, so the padding only has to
-  // be zeroed once.
+  array in_padded({n_step, padded_h, padded_w, C_c}, in.dtype(), nullptr, {});
+  copies_w.push_back(in_padded);
+
+  // Fill padding with zeros.
   array zero_arr = array(0, in.dtype());
   fill_gpu(zero_arr, in_padded, s);
   copies_w.push_back(zero_arr);
 
-  int64_t pad_offset = conv_params.pad[0] * in_padded.strides()[1] +
-      conv_params.pad[1] * in_padded.strides()[2];
+  int64_t pad_offset =
+      static_cast<int64_t>(conv_params.pad[0]) * in_padded.strides()[1] +
+      static_cast<int64_t>(conv_params.pad[1]) * in_padded.strides()[2];
 
+  // Loop over all rows.
   for (int n_offset = 0; n_offset < conv_params.N; n_offset += n_step) {
     int tile_n = std::min(n_step, conv_params.N - n_offset);
     int N_tiles = tile_n * tiles_per_n;
 
-    // Copy this tile's inputs into the interior of the padded scratch buffer
+    // Views for current step.
     array in_tile(
         {tile_n, conv_params.iS[0], conv_params.iS[1], C_c},
         in.dtype(),
@@ -1060,21 +1044,6 @@ void winograd_conv_2D_gpu(
         in_tile.size(),
         n_offset * in.strides()[0]);
 
-    array in_padded_slice(in_tile.shape(), in_padded.dtype(), nullptr, {});
-    in_padded_slice.copy_shared_buffer(
-        in_padded,
-        in_padded.strides(),
-        in_padded.flags(),
-        in_padded_slice.size(),
-        pad_offset);
-
-    copy_gpu_inplace(in_tile, in_padded_slice, CopyType::GeneralGeneral, s);
-    copies_w.push_back(in_padded_slice);
-
-    // The tile writes into its own batch window of the output. Views of the
-    // input and the output must not be registered as temporaries: temporaries
-    // are dropped from the encoder's cross-encoder fence bookkeeping, which
-    // would let a later kernel read the output before this one has written it.
     array out_tile(
         {tile_n, conv_params.oS[0], conv_params.oS[1], O_c},
         out.dtype(),
@@ -1086,6 +1055,18 @@ void winograd_conv_2D_gpu(
         out.flags(),
         out_tile.size(),
         n_offset * out.strides()[0]);
+
+    array in_padded_slice(in_tile.shape(), in_padded.dtype(), nullptr, {});
+    in_padded_slice.copy_shared_buffer(
+        in_padded,
+        in_padded.strides(),
+        in_padded.flags(),
+        in_padded_slice.size(),
+        pad_offset);
+
+    // Copy input values into the slice.
+    copy_gpu_inplace(in_tile, in_padded_slice, CopyType::GeneralGeneral, s);
+    copies_w.push_back(in_padded_slice);
 
     MLXConvParams<2> conv_params_updated{
         /* const int  N = */ tile_n,
@@ -1116,9 +1097,7 @@ void winograd_conv_2D_gpu(
         /* const bool flip = */ false,
     };
 
-    // Do input transform. The transforms lay their result out as
-    // (8 x 8 x N_tiles x channels), so a short tile writes a compacted prefix
-    // of the scratch buffer and the gemm reads it back the same way.
+    // Do input transform, result layout is (8 x 8 x N_tiles x channels).
     {
       int bc = 32;
       int wm = 2;
@@ -1146,7 +1125,7 @@ void winograd_conv_2D_gpu(
       compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
     }
 
-    // Do batched gemm
+    // Do batched gemm.
     {
       array inp_wg_tile({8 * 8, N_tiles, C_c}, inp_wg.dtype(), nullptr, {});
       inp_wg_tile.copy_shared_buffer(
@@ -1180,7 +1159,7 @@ void winograd_conv_2D_gpu(
           /*copies = */ empty_copies);
     }
 
-    // Do output transform
+    // Do output transform.
     {
       int bc = 32;
       int wm = 2;
@@ -1350,8 +1329,7 @@ void dispatch_conv_2D_gpu(
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && inp_large &&
       channels_large) {
-    // Falls through to the scratch-free implicit gemm when winograd's scratch
-    // does not fit in the working set.
+    // Only use winograd conv when having enough memory.
     if (int n_step = winograd_batch_step(d, in, conv_params); n_step > 0) {
       return winograd_conv_2D_gpu(
           s, d, in, wt, out, conv_params, copies, n_step);

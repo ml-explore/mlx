@@ -1217,9 +1217,7 @@ class TestConv(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_conv2d_winograd_batch_tiling(self):
-        # Winograd's scratch used to outgrow the GPU working set at large
-        # batch and silently produce zeros (issue #3979). Real repros need
-        # tens of GB, so shrink the budget the selector is handed instead.
+        # Use envs to test tiling without allocating large buffers.
         tile_key = "MLX_CONV_WINOGRAD_TILE_BATCH"
         ws_key = "MLX_CONV_WINOGRAD_WORKING_SET"
         prev = {k: os.environ.get(k) for k in (tile_key, ws_key)}
@@ -1232,7 +1230,7 @@ class TestConv(mlx_tests.MLXTestCase):
             ((4, 48, 48, 192), (96, 3, 3, 192)),
         )
 
-        def run(x, w, **env):
+        def run(x, w, env={}):
             for k in (tile_key, ws_key):
                 os.environ.pop(k, None)
             os.environ.update(env)
@@ -1263,7 +1261,7 @@ class TestConv(mlx_tests.MLXTestCase):
                 # final tile.
                 for tile in (1, 3):
                     with self.subTest(in_shape=in_shape, tile=tile):
-                        tiled = run(x, w, **{tile_key: str(tile)})
+                        tiled = run(x, w, {tile_key: str(tile)})
                         self.assertTrue(np.array_equal(untiled, tiled))
 
                         # A consumer op checks the output is fenced across
@@ -1287,19 +1285,19 @@ class TestConv(mlx_tests.MLXTestCase):
                 used = (n * iH * iW * (C + O) + 64 * C * O) * 4
                 with self.subTest(in_shape=in_shape, budget="tiled"):
                     budget = str(int((used + 5 * per_n // 2) / 0.75))
-                    tiled = run(x, w, **{ws_key: budget})
+                    tiled = run(x, w, {ws_key: budget})
                     self.assertTrue(np.array_equal(untiled, tiled))
 
                 # Too small for even one batch element: must fall back.
                 with self.subTest(in_shape=in_shape, budget="infeasible"):
-                    fallback = run(x, w, **{ws_key: "1"})
+                    fallback = run(x, w, {ws_key: "1"})
                     self.assertFalse(np.array_equal(untiled, fallback))
                     self.assertTrue(np.allclose(fallback, cpu_ref, atol=1e-3))
 
                 # A forced tile is capped by the budget, so this must still
                 # fall back.
                 with self.subTest(in_shape=in_shape, budget="forced+infeasible"):
-                    capped = run(x, w, **{ws_key: "1", tile_key: "1"})
+                    capped = run(x, w, {ws_key: "1", tile_key: "1"})
                     self.assertFalse(np.array_equal(untiled, capped))
                     self.assertTrue(np.allclose(capped, cpu_ref, atol=1e-3))
         finally:
