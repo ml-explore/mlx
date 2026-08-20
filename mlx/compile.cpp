@@ -72,7 +72,8 @@ bool is_noop(const Primitive& p) {
 }
 
 bool is_reduction(const Primitive& p) {
-  return typeid(p) == typeid(Reduce) || typeid(p) == typeid(ArgReduce);
+  // TODO: Add fused-prefix support for ArgReduce.
+  return typeid(p) == typeid(Reduce);
 }
 
 bool is_fusable(const Primitive& p) {

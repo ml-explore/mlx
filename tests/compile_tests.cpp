@@ -880,22 +880,24 @@ TEST_CASE("test compile throwing first trace does not poison cache") {
 TEST_CASE("test compile unary reduction one pass") {
   auto fun = [](const std::vector<array>& inputs) {
     auto x = inputs[0];
-    return std::vector<array>{sum(abs(x))};
+    return std::vector<array>{max(abs(x))};
   };
-  auto in = ones({128, 128});
+  auto in = reshape(arange(-8192, 8192, float32), {128, 128});
+  eval(in);
   auto expected = fun({in})[0];
-  auto out = compile(fun)({ones({128, 128})})[0];
+  auto out = compile(fun)({in})[0];
   CHECK(array_equal(out, expected).item<bool>());
 }
 
 TEST_CASE("test compile unary reduction two passes") {
   auto fun = [](const std::vector<array>& inputs) {
     auto x = inputs[0];
-    return std::vector<array>{sum(abs(x))};
+    return std::vector<array>{max(abs(x))};
   };
-  auto in = ones({1024, 1024});
+  auto in = reshape(arange(-524288, 524288, float32), {1024, 1024});
+  eval(in);
   auto expected = fun({in})[0];
-  auto out = compile(fun)({ones({1024, 1024})})[0];
+  auto out = compile(fun)({in})[0];
   CHECK(array_equal(out, expected).item<bool>());
 }
 
