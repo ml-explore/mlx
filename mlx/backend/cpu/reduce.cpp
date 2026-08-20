@@ -448,9 +448,24 @@ void reduce_dispatch_min_max(
 
 void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
-  auto& in = inputs[0];
-  out.set_data(allocator::malloc(out.nbytes()));
   auto& encoder = cpu::get_command_encoder(stream());
+  auto in = inputs[0];
+
+  if (has_fused_prefix()) {
+    array prefix_out(in.shape(), prefix_tape().back().dtype(), nullptr, {});
+    std::vector<array> prefix_outputs{std::move(prefix_out)};
+    Compiled prefix(
+        stream(),
+        prefix_inputs(),
+        {prefix_tape().back()},
+        prefix_tape(),
+        prefix_constant_ids());
+    prefix.eval_cpu(inputs, prefix_outputs);
+    in = std::move(prefix_outputs[0]);
+    encoder.add_temporary(in);
+  }
+
+  out.set_data(allocator::malloc(out.nbytes()));
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.dispatch([in = array::unsafe_weak_copy(in),
