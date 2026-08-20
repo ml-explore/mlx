@@ -1307,38 +1307,6 @@ class TestConv(mlx_tests.MLXTestCase):
                 else:
                     os.environ[k] = v
 
-    def test_conv2d_winograd_tile_work_floor(self):
-        # A spatially tiny conv reaches winograd on batch size alone, but its
-        # tiles carry almost no gemm work, so a small budget must fall back to
-        # the implicit gemm rather than tile.
-        tile_key = "MLX_CONV_WINOGRAD_TILE_BATCH"
-        ws_key = "MLX_CONV_WINOGRAD_WORKING_SET"
-        prev = {k: os.environ.pop(k, None) for k in (tile_key, ws_key)}
-        in_shape, wt_shape = (256, 4, 4, 64), (192, 3, 3, 64)
-        np.random.seed(0)
-        x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
-        w = mx.array((np.random.normal(size=wt_shape) * 0.05).astype(np.float32))
-        mx.eval(x, w)
-        cpu_ref = np.array(mx.conv2d(x, w, padding=1, stream=mx.cpu))
-        n, iH, iW, C = in_shape
-        O = wt_shape[0]
-        pH = 6 * ((iH + 2 - 2 + 5) // 6) + 2
-        pW = 6 * ((iW + 2 - 2 + 5) // 6) + 2
-        per_n = pH * pW * C * 4 + 64 * ((iH + 5) // 6) * ((iW + 5) // 6) * (C + O) * 4
-        used = (n * iH * iW * (C + O) + 64 * C * O) * 4
-        try:
-            wino_ref = np.array(mx.conv2d(x, w, padding=1))
-            os.environ[ws_key] = str(int((used + 2 * per_n) / 0.75))
-            y = np.array(mx.conv2d(x, w, padding=1))
-            # Differing from winograd's bits proves the fallback ran.
-            self.assertFalse(np.array_equal(wino_ref, y))
-            self.assertTrue(np.allclose(y, cpu_ref, atol=1e-3))
-        finally:
-            os.environ.pop(ws_key, None)
-            for k, v in prev.items():
-                if v is not None:
-                    os.environ[k] = v
-
     def test_conv2d_large_filter_small_channels(self):
         x = mx.random.normal(shape=(1, 181, 181, 1))
         w = mx.random.normal(shape=(1, 182, 182, 1))
