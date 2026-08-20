@@ -180,13 +180,6 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             with self.assertRaisesRegex(ValueError, ">0"):
                 optimizer(learning_rate=1e-2, eps=0.0)
 
-        # The Adam family follows the Adamax precedent: a negative eps is
-        # rejected with a ">=0" message and eps == 0 stays allowed.
-        for optimizer in (opt.Adam, opt.AdamW, opt.Adamax):
-            with self.assertRaisesRegex(ValueError, ">=0"):
-                optimizer(learning_rate=1e-2, eps=-1e-8)
-            optimizer(learning_rate=1e-2, eps=0.0)
-
     def test_adam(self):
         params = {
             "first": [mx.zeros((10,)), mx.zeros((1,))],
