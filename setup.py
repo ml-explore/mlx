@@ -309,7 +309,7 @@ if __name__ == "__main__":
 
     if not build_backend:
         if not free_threaded:
-            install_requires.append("nanobind-backend>=1.0.0.dev3")
+            install_requires.append("nanobind-backend>=1.0.0.dev4")
         if build_frontend:
             install_requires.append(
                 f'mlx-metal=={version}; platform_system == "Darwin"'

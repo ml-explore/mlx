@@ -710,7 +710,7 @@ build utilities defined in :mod:`mlx.extension`:
             cmdclass={"build_ext": extension.CMakeBuild},
             packages=["mlx_sample_extensions"],
             package_data={"mlx_sample_extensions": ["*.so", "*.dylib", "*.metallib"]},
-            install_requires=["nanobind-backend>=1.0.0.dev3"],
+            install_requires=["nanobind-backend>=1.0.0.dev4"],
             options={"bdist_wheel": {"py_limited_api": "cp310"}},
             extras_require={"dev":[]},
             zip_safe=False,
