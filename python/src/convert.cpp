@@ -190,8 +190,10 @@ mx::array cpu_nd_array_to_mlx(
 std::optional<mx::array> cpu_nd_array_to_mlx_no_copy(
     nb::ndarray<nb::ro> nd_array,
     const mx::Shape& shape,
+    mx::Dtype src_dtype,
     mx::Dtype dst_dtype) {
   if (!mx::metal::is_available() ||
+      src_dtype != dst_dtype ||
       nd_array.itemsize() != mx::size_of(dst_dtype)) {
     return std::nullopt;
   }
@@ -284,7 +286,8 @@ mx::array nd_array_to_mlx(
       // so the source is preserved for the fallback below.
       if (!copy.value_or(false)) {
         if (auto out =
-                cpu_nd_array_to_mlx_no_copy(nd_array, shape, dst_dtype)) {
+                cpu_nd_array_to_mlx_no_copy(
+                    nd_array, shape, src_mlx_dtype, dst_dtype)) {
           return *out;
         }
         if (no_copy) {

@@ -51,6 +51,12 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
         with self.assertRaises(Exception):
             mx.asarray(a, dtype=mx.float32, copy=False)
 
+    def test_dtype_conversion_preserves_values(self):
+        a = np.arange(16, dtype=np.float64)
+        x = mx.asarray(a, dtype=mx.complex64)
+        mx.eval(x)
+        self.assertTrue(np.array_equal(np.array(x), a.astype(np.complex64)))
+
     def test_source_lifetime(self):
         if not mx.metal.is_available():
             self.skipTest("copy=False requires Metal")
