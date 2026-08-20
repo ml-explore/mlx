@@ -35,7 +35,8 @@ endfunction()
 # Args: TARGET: Custom target to be added for the metal library TITLE: Name of
 # the .metallib OUTPUT_DIRECTORY: Where to place ${TITLE}.metallib SOURCES: List
 # of source files INCLUDE_DIRS: List of include dirs DEPS: List of dependency
-# files (like headers) COMPILE_OPTIONS: Additional Metal compiler options DEBUG:
+# files (like headers) COMPILE_OPTIONS: Additional Metal compiler options
+# DEPLOYMENT_TARGET: Optional macOS deployment target for this library DEBUG:
 # Boolean, if true, enables debug compile options for this specific library. If
 # not provided, uses global MLX_METAL_DEBUG.
 #
@@ -43,7 +44,7 @@ endfunction()
 
 macro(mlx_build_metallib)
   # Parse args
-  set(oneValueArgs TARGET TITLE OUTPUT_DIRECTORY DEBUG)
+  set(oneValueArgs TARGET TITLE OUTPUT_DIRECTORY DEBUG DEPLOYMENT_TARGET)
   set(multiValueArgs SOURCES INCLUDE_DIRS DEPS COMPILE_OPTIONS)
   cmake_parse_arguments(MTLLIB "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -68,7 +69,12 @@ macro(mlx_build_metallib)
   endif()
 
   set(_MTLLIB_LINK_OPTIONS)
-  if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
+  if(MTLLIB_DEPLOYMENT_TARGET)
+    set(_MTLLIB_DEPLOYMENT_OPTION
+        "-mmacosx-version-min=${MTLLIB_DEPLOYMENT_TARGET}")
+    list(APPEND _MTLLIB_COMPILE_OPTIONS ${_MTLLIB_DEPLOYMENT_OPTION})
+    list(APPEND _MTLLIB_LINK_OPTIONS ${_MTLLIB_DEPLOYMENT_OPTION})
+  elseif(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
     set(_MTLLIB_DEPLOYMENT_OPTION
         "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
     list(APPEND _MTLLIB_COMPILE_OPTIONS ${_MTLLIB_DEPLOYMENT_OPTION})

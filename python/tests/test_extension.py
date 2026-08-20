@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 from mlx.extension import (
     BuildExtension,
     MetalExtension,
+    MetalLibrary,
     _extension_paths,
     _metal_extension_cmake,
     _mlx_macos_deployment_target,
@@ -269,6 +270,12 @@ Load command 10
         self.assertEqual(extension.language, "c++")
         self.assertFalse(extension.py_limited_api)
         self.assertEqual(extension.metal_library_name, "_ext")
+        self.assertEqual(len(extension.metal_libraries), 1)
+        self.assertEqual(extension.metal_libraries[0].name, "_ext")
+        self.assertEqual(
+            extension.metal_libraries[0].sources,
+            ["silu.metal", "gelu.metal"],
+        )
         self.assertEqual(
             extension.extra_compile_args,
             {"cxx": ["-O2"], "metal": ["-O3"]},
@@ -293,6 +300,58 @@ Load command 10
     def test_requires_metal_source(self):
         with self.assertRaisesRegex(ValueError, "Metal source"):
             MetalExtension("sample._ext", ["bindings.cpp"])
+
+    def test_explicit_metal_libraries(self):
+        extension = MetalExtension(
+            "sample._ext",
+            ["bindings.cpp"],
+            metal_libraries=[
+                MetalLibrary("first", ["first.metal"]),
+                MetalLibrary(
+                    "second",
+                    ["second.metal"],
+                    extra_compile_args=["-O3"],
+                    deployment_target="26.2",
+                ),
+            ],
+            extra_compile_args={"metal": ["-Wno-unused"]},
+        )
+
+        self.assertEqual(
+            [library.name for library in extension.metal_libraries],
+            ["first", "second"],
+        )
+        cmake = _metal_extension_cmake(extension, Path("/tmp/output"))
+        self.assertIn("TITLE [=[first]=]", cmake)
+        self.assertIn("TITLE [=[second]=]", cmake)
+        self.assertIn("TARGET mlx_extension_metallib_0", cmake)
+        self.assertIn("TARGET mlx_extension_metallib_1", cmake)
+        self.assertIn("DEPLOYMENT_TARGET [=[26.2]=]", cmake)
+        self.assertIn("[=[-Wno-unused]=]\n  [=[-O3]=]", cmake)
+        self.assertIn(
+            "add_dependencies(mlx_extension mlx_extension_metallib_0 "
+            "mlx_extension_metallib_1)",
+            cmake,
+        )
+
+    def test_rejects_mixed_metal_source_forms(self):
+        with self.assertRaisesRegex(ValueError, "specified in metal_libraries"):
+            MetalExtension(
+                "sample._ext",
+                ["bindings.cpp", "kernel.metal"],
+                metal_libraries=[MetalLibrary("kernels", ["other.metal"])],
+            )
+
+    def test_rejects_duplicate_metal_library_names(self):
+        with self.assertRaisesRegex(ValueError, "must be unique"):
+            MetalExtension(
+                "sample._ext",
+                ["bindings.cpp"],
+                metal_libraries=[
+                    MetalLibrary("kernels", ["first.metal"]),
+                    MetalLibrary("kernels", ["second.metal"]),
+                ],
+            )
 
     def test_rejects_unknown_compile_argument_group(self):
         with self.assertRaisesRegex(ValueError, "cxx.*metal"):
