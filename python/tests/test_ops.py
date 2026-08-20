@@ -159,6 +159,20 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.ones([2, 3]).shape, (2, 3))
         self.assertEqual(mx.full((2, 3), 1.5).tolist(), [[1.5] * 3] * 2)
 
+    def test_integer_index_protocol(self):
+        a = mx.arange(4)
+
+        index = np.int32(2)
+        self.assertEqual(mx.topk(a, index).shape, (2,))
+        self.assertEqual(mx.reshape(a, [index, 2]).shape, (2, 2))
+
+        for value in (np.float32(2), "2"):
+            with self.subTest(value=value):
+                with self.assertRaises(TypeError):
+                    mx.topk(a, value)
+                with self.assertRaises(TypeError):
+                    mx.reshape(a, [value, 2])
+
     def test_scalar_inputs(self):
         # Check combinations of python types
         a = mx.add(False, True)
@@ -990,6 +1004,38 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.median(x, axis=(0, 1, 3), keepdims=True)
         out_np = np.median(x, axis=(0, 1, 3), keepdims=True)
         self.assertTrue(np.allclose(out, out_np))
+
+    def test_median_nan(self):
+        nan = float("nan")
+
+        # Odd and even lengths, with the NaN in a few different positions.
+        for vals in ([1.0, nan, 0.0], [nan, 1.0, 0.0], [1.0, 2.0, nan, 4.0]):
+            for dtype in (mx.float16, mx.bfloat16, mx.float32):
+                out = mx.median(mx.array(vals, dtype=dtype))
+                self.assertTrue(mx.isnan(out).item(), msg=f"{vals} {dtype}")
+
+        x = mx.array([[1.0, nan, 3.0], [4.0, 5.0, 6.0]])
+        self.assertTrue(
+            np.array_equal(
+                np.array(mx.median(x, axis=1)), np.median(x, axis=1), equal_nan=True
+            )
+        )
+        self.assertTrue(
+            np.array_equal(
+                np.array(mx.median(x, axis=0)), np.median(x, axis=0), equal_nan=True
+            )
+        )
+        self.assertTrue(mx.isnan(mx.median(x)).item())
+        self.assertEqual(mx.median(x, axis=1, keepdims=True).shape, (2, 1))
+
+        # Complex NaN propagates too, matching NumPy.
+        out = mx.median(mx.array([complex(1, 0), complex(nan, 0), complex(0, 0)]))
+        self.assertTrue(mx.isnan(out).item())
+
+        # A NaN-free array is unaffected, and integers are never NaN.
+        x = mx.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        self.assertTrue(np.allclose(mx.median(x, axis=1), np.median(x, axis=1)))
+        self.assertEqual(mx.median(mx.array([0, 1, 2, 3, 4])).item(), 2)
 
     def test_var(self):
         x = mx.array(
@@ -2630,6 +2676,20 @@ class TestOps(mlx_tests.MLXTestCase):
         mx.synchronize()
         mem4 = mx.get_peak_memory()
         self.assertEqual(mem2, mem4)
+
+    def test_scan_size_one_axis(self):
+        # A size one axis can carry any stride and still be row contiguous, so
+        # the scan must not take its row count from that stride.
+        for op in ["cumsum", "cumprod", "cummax", "cummin"]:
+            for start in (1, 2, 3):
+                with self.subTest(op=op, start=start):
+                    base = mx.arange(1, 11, dtype=mx.float32).reshape(1, 10)
+                    a = base[:, start:]
+                    mx.eval(a)
+                    # The axis has size one, so an inclusive scan is the identity
+                    expected = np.array(a).copy()
+                    out = getattr(mx, op)(a, axis=0)
+                    self.assertTrue(np.array_equal(np.array(out), expected))
 
     def test_cummax_cummin_nan(self):
         nan = float("nan")

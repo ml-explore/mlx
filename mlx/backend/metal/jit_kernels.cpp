@@ -1330,7 +1330,8 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     int bd,
     int wm,
     int wn,
-    const array& m) {
+    const array& m,
+    bool split_d) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
@@ -1340,7 +1341,7 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
         metal::steel_attention_nax(),
         get_template_definition(
             lib_name,
-            "attention_nax",
+            split_d ? "attention_nax_dsplit" : "attention_nax",
             get_type_string(q.dtype()),
             bq,
             bk,

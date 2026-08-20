@@ -499,6 +499,13 @@ class Adam(Optimizer):
     ):
         super().__init__()
 
+        for i, beta in enumerate(betas):
+            if not 0.0 <= beta < 1.0:
+                raise ValueError(
+                    f"Adam beta{i + 1} should be in [0, 1), {beta} was provided "
+                    "instead"
+                )
+
         self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
         self.eps = eps
@@ -682,6 +689,13 @@ class Lion(Optimizer):
         weight_decay: float = 0.0,
     ):
         super().__init__()
+
+        for i, beta in enumerate(betas):
+            if not 0.0 <= beta < 1.0:
+                raise ValueError(
+                    f"Lion beta{i + 1} should be in [0, 1), {beta} was provided "
+                    "instead"
+                )
 
         self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
