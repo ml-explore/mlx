@@ -31,6 +31,7 @@ class MLX_API Scheduler {
   void enqueue(Stream s, std::function<void()> task);
   void wait_event(Stream s, Event event, std::function<void(Event&)> task);
   void signal_event(Stream s, Event event, std::function<void(Event&)> task);
+  void check_error(Stream s);
 
   void notify_new_task(const Stream& stream) {
     {
@@ -90,6 +91,11 @@ inline void wait_event(Stream s, Event event, F&& f) {
 template <typename F>
 inline void signal_event(Stream s, Event event, F&& f) {
   scheduler().signal_event(s, std::move(event), std::forward<F>(f));
+}
+
+// Throw and clear the error stored in the stream, if any.
+inline void check_error(Stream s) {
+  scheduler().check_error(s);
 }
 
 inline int n_active_tasks() {
