@@ -227,6 +227,15 @@ class TestEval(mlx_tests.MLXTestCase):
         x = mx.full((512,), 2.0)
         self.assertEqual((x + 1.0).sum().item(), 512.0 * 3.0)
 
+    @unittest.skipIf(
+        mx.cuda.is_available(), "CUDA backend waits cpu stream synchronously"
+    )
+    def test_async_eval_error_in_synchronize(self):
+        a = mx.linalg.inv(mx.array([[1.0, 2.0], [2.0, 4.0]]), stream=mx.cpu)
+        mx.async_eval(a)
+        with self.assertRaises(RuntimeError):
+            mx.synchronize(mx.cpu)
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
