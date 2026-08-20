@@ -257,6 +257,120 @@ TEST_CASE("test gguf tensor data offset validation") {
   }
 }
 
+// Writes a metadata-only GGUF (no tensors) whose metadata KV section is
+// `kv_section` verbatim, so a caller can encode values whose lengths exceed the
+// file to exercise check_metadata_value_in_file(). `kv_count` must match the
+// number of KV pairs encoded in `kv_section`.
+void write_raw_gguf_metadata(
+    const std::string& path,
+    uint64_t kv_count,
+    const std::vector<char>& kv_section) {
+  std::ofstream out(path, std::ios::binary);
+  auto u32 = [&out](uint32_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 4);
+  };
+  auto u64 = [&out](uint64_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 8);
+  };
+  out.write("GGUF", 4);
+  u32(3); // version
+  u64(0); // tensor_count
+  u64(kv_count); // metadata_kv_count
+  out.write(kv_section.data(), kv_section.size());
+}
+
+TEST_CASE("test gguf metadata value validation") {
+  // A STRING/ARRAY metadata value claiming a length larger than the file must
+  // be rejected rather than read past the end of the mapping. See PR #4212.
+
+  auto append_string_kv = [](std::vector<char>& b,
+                             const std::string& key,
+                             uint64_t claimed_len,
+                             bool write_payload) {
+    auto put = [&](const void* p, size_t n) {
+      b.insert(
+          b.end(),
+          static_cast<const char*>(p),
+          static_cast<const char*>(p) + n);
+    };
+    uint64_t klen = key.size();
+    put(&klen, 8);
+    put(key.data(), key.size());
+    uint32_t vt = 8; // GGUF_VALUE_TYPE_STRING
+    put(&vt, 4);
+    put(&claimed_len, 8);
+    if (write_payload) {
+      b.insert(b.end(), claimed_len, '\0');
+    }
+  };
+
+  auto append_array_kv = [](std::vector<char>& b,
+                            const std::string& key,
+                            uint32_t elt_type,
+                            uint64_t claimed_len) {
+    auto put = [&](const void* p, size_t n) {
+      b.insert(
+          b.end(),
+          static_cast<const char*>(p),
+          static_cast<const char*>(p) + n);
+    };
+    uint64_t klen = key.size();
+    put(&klen, 8);
+    put(key.data(), key.size());
+    uint32_t vt = 9; // GGUF_VALUE_TYPE_ARRAY
+    put(&vt, 4);
+    put(&elt_type, 4);
+    put(&claimed_len, 8);
+  };
+
+  SUBCASE("valid empty and small strings load") {
+    std::vector<char> kv;
+    append_string_kv(kv, "empty", 0, false);
+    append_string_kv(kv, "small", 5, true);
+    std::string file_path = get_temp_file("test_gguf_meta_ok.gguf");
+    write_raw_gguf_metadata(file_path, 2, kv);
+    auto [weights, metadata] = load_gguf(file_path);
+    CHECK(weights.empty());
+    CHECK(std::get<std::string>(metadata.at("empty")) == "");
+    CHECK(std::get<std::string>(metadata.at("small")) == std::string(5, '\0'));
+  }
+
+  SUBCASE("string length extends past the end of the file") {
+    // Claims 100 bytes of payload, none of which are present.
+    std::vector<char> kv;
+    append_string_kv(kv, "s", 100, false);
+    std::string file_path = get_temp_file("test_gguf_meta_str_past.gguf");
+    write_raw_gguf_metadata(file_path, 1, kv);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("string length far past the end of the file") {
+    std::vector<char> kv;
+    append_string_kv(kv, "s", 1ull << 40, false);
+    std::string file_path = get_temp_file("test_gguf_meta_str_far.gguf");
+    write_raw_gguf_metadata(file_path, 1, kv);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("fixed-size array length extends past the end of the file") {
+    // GGUF_VALUE_TYPE_UINT8 = 0; claims 2^40 elements, none present.
+    std::vector<char> kv;
+    append_array_kv(kv, "a", 0, 1ull << 40);
+    std::string file_path = get_temp_file("test_gguf_meta_arr_past.gguf");
+    write_raw_gguf_metadata(file_path, 1, kv);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("string array element length extends past the end of the file") {
+    // GGUF_VALUE_TYPE_STRING = 8; two elements, neither present.
+    std::vector<char> kv;
+    append_array_kv(kv, "a", 8, 2);
+    std::string file_path = get_temp_file("test_gguf_meta_strarr_past.gguf");
+    write_raw_gguf_metadata(file_path, 1, kv);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+}
+
 TEST_CASE("test gguf metadata") {
   std::string file_path = get_temp_file("test_arr.gguf");
   using dict = std::unordered_map<std::string, array>;
