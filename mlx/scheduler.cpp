@@ -17,8 +17,6 @@ void synchronize(Stream s) {
     std::future<void> f = p->get_future();
     scheduler::enqueue(s, [p = std::move(p)]() { p->set_value(); });
     f.wait();
-    // enqueue() checks the error before the queued work runs, so an error from
-    // the work waited on above is only visible here.
     scheduler::check_error(s);
   } else {
     gpu::synchronize(s);
