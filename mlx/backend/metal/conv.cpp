@@ -47,6 +47,22 @@ inline int max_unfold_rows(metal::Device& d, size_t row_bytes, int total_rows) {
   return static_cast<int>(std::min(max_rows, static_cast<size_t>(total_rows)));
 }
 
+// The unfold is implicit_M x implicit_K, unrelated in size to the input or the
+// output and often larger than both. Keep it from pushing the device past what
+// it can hold resident.
+inline bool
+nax_unfold_fits(metal::Device& d, size_t row_bytes, int total_rows) {
+  auto* device = d.mtl_device();
+  size_t working_set = device->recommendedMaxWorkingSetSize();
+  if (working_set == 0 || row_bytes == 0) {
+    return true;
+  }
+  size_t max_buffer = device->maxBufferLength();
+  size_t rows =
+      std::min(static_cast<size_t>(total_rows), max_buffer / row_bytes);
+  return device->currentAllocatedSize() + rows * row_bytes <= working_set;
+}
+
 template <int N>
 void explicit_gemm_conv_ND_gpu(
     const Stream& s,
@@ -1142,7 +1158,11 @@ void dispatch_conv_2D_gpu(
   // neural accelerators pay that back once there are enough output channels,
   // and they only run the reduced precision types.
   if (metal::is_nax_available() && conv_params.O >= 512 &&
-      (out.dtype() == float16 || out.dtype() == bfloat16)) {
+      (out.dtype() == float16 || out.dtype() == bfloat16) &&
+      nax_unfold_fits(
+          d,
+          static_cast<size_t>(wt.size() / conv_params.O) * in.itemsize(),
+          safe_cast(out.size() / conv_params.O, "conv"))) {
     return explicit_gemm_conv_ND_gpu(s, d, in, wt, out, conv_params);
   }
 
