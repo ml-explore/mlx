@@ -460,15 +460,9 @@ bool CommandEncoder::needs_commit() {
       ((bytes_in_graph_ >> 20) > max_mb_per_graph_);
 }
 
-void CommandEncoder::reset_graph_state_after_error() {
-  // The failed call left an error pending on the runtime. Clear it first:
-  // ~CudaHandle() skips its destroy while an error is pending, so every handle
-  // released from here on would leak, and the graph below would fail to be
-  // recreated because of an error that has already been reported.
-  cudaGetLastError();
-
-  // Mirrors the state reset on the successful path of commit_impl(). None of
-  // these can throw, so they are cleared before touching the graph.
+// Bookkeeping for the graph being built. None of it can throw, so it is safe
+// to run while unwinding.
+void CommandEncoder::clear_graph_state() {
   from_nodes_.clear();
   to_nodes_.clear();
   graph_deps_key_.clear();
@@ -478,6 +472,16 @@ void CommandEncoder::reset_graph_state_after_error() {
   active_outputs_.clear();
   concurrent_nodes_.clear();
   is_graph_updatable_ = true;
+}
+
+void CommandEncoder::reset_graph_state_after_error() {
+  // The failed call left an error pending on the runtime. Clear it first:
+  // ~CudaHandle() skips its destroy while an error is pending, so every handle
+  // released from here on would leak, and the graph below would fail to be
+  // recreated because of an error that has already been reported.
+  cudaGetLastError();
+
+  clear_graph_state();
   node_count_ = 0;
   bytes_in_graph_ = 0;
 
@@ -570,13 +574,8 @@ void CommandEncoder::commit_impl() {
     }
 
     // Reset state
-    from_nodes_.clear();
-    to_nodes_.clear();
-    graph_deps_key_.clear();
-    graph_nodes_key_.clear();
-    node_map_.clear();
+    clear_graph_state();
     graph_ = CudaGraph(device_);
-    is_graph_updatable_ = true;
   }
 
   // Put completion handlers in a batch.
