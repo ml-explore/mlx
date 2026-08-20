@@ -119,6 +119,40 @@ def _cmake_generator_build_directory(generator: str) -> str:
     return f"build-{generator or 'default'}"
 
 
+class MetalLibrary:
+    """A named Metal library built as part of a :class:`MetalExtension`."""
+
+    def __init__(
+        self,
+        name: str,
+        sources: Sequence[os.PathLike[str] | str],
+        *,
+        extra_compile_args: Sequence[str] = (),
+        deployment_target: str | None = None,
+    ) -> None:
+        if not name or Path(name).name != name:
+            raise ValueError(f"Invalid Metal library name: {name!r}.")
+        source_strings = [os.fspath(source) for source in sources]
+        if not source_strings:
+            raise ValueError("MetalLibrary requires at least one Metal source file.")
+        if any(
+            Path(source).suffix.lower() != _METAL_SOURCE_SUFFIX
+            for source in source_strings
+        ):
+            raise ValueError("MetalLibrary sources must be Metal source files.")
+        if isinstance(extra_compile_args, (str, bytes)):
+            raise TypeError("MetalLibrary extra_compile_args must be a sequence.")
+
+        self.name = name
+        self.sources = source_strings
+        self.extra_compile_args = list(extra_compile_args)
+        self.deployment_target = (
+            _macos_deployment_target(deployment_target)
+            if deployment_target is not None
+            else None
+        )
+
+
 class MetalExtension(Extension):
     """A setuptools extension built from C++ and Metal sources."""
 
@@ -127,6 +161,7 @@ class MetalExtension(Extension):
         name: str,
         sources: Sequence[os.PathLike[str] | str],
         *args,
+        metal_libraries: Sequence[MetalLibrary] | None = None,
         **kwargs,
     ) -> None:
         source_strings = [os.fspath(source) for source in sources]
@@ -144,8 +179,12 @@ class MetalExtension(Extension):
             )
         if not suffixes.intersection(_HOST_SOURCE_SUFFIXES):
             raise ValueError("MetalExtension requires at least one C++ source file.")
-        if _METAL_SOURCE_SUFFIX not in suffixes:
+        if metal_libraries is None and _METAL_SOURCE_SUFFIX not in suffixes:
             raise ValueError("MetalExtension requires at least one Metal source file.")
+        if metal_libraries is not None and _METAL_SOURCE_SUFFIX in suffixes:
+            raise ValueError(
+                "Metal sources must be specified in metal_libraries when it is used."
+            )
         if kwargs.get("py_limited_api", False):
             raise ValueError("MetalExtension does not support py_limited_api.")
 
@@ -176,6 +215,28 @@ class MetalExtension(Extension):
         kwargs.setdefault("language", "c++")
         super().__init__(name, sources, *args, **kwargs)
         self.metal_library_name = name.rsplit(".", 1)[-1]
+        if metal_libraries is None:
+            self.metal_libraries = [
+                MetalLibrary(
+                    self.metal_library_name,
+                    [
+                        source
+                        for source in source_strings
+                        if Path(source).suffix.lower() == _METAL_SOURCE_SUFFIX
+                    ],
+                )
+            ]
+        else:
+            self.metal_libraries = list(metal_libraries)
+            if not self.metal_libraries:
+                raise ValueError("metal_libraries must contain at least one library.")
+            if not all(
+                isinstance(library, MetalLibrary) for library in self.metal_libraries
+            ):
+                raise TypeError("metal_libraries must contain MetalLibrary objects.")
+            names = [library.name for library in self.metal_libraries]
+            if len(names) != len(set(names)):
+                raise ValueError("Metal library names must be unique.")
 
 
 def _metal_extension_cmake(
@@ -185,11 +246,6 @@ def _metal_extension_cmake(
         str(Path(source).resolve())
         for source in ext.sources
         if Path(source).suffix.lower() in _HOST_SOURCE_SUFFIXES
-    ]
-    metal_sources = [
-        str(Path(source).resolve())
-        for source in ext.sources
-        if Path(source).suffix.lower() == _METAL_SOURCE_SUFFIX
     ]
     include_dirs = [str(Path(path).resolve()) for path in ext.include_dirs]
     depends = [str(Path(path).resolve()) for path in ext.depends]
@@ -319,29 +375,56 @@ def _metal_extension_cmake(
             "  BUILD_WITH_INSTALL_RPATH TRUE",
             f"  INSTALL_RPATH {_cmake_quote(';'.join(rpaths))})",
             "",
-            "mlx_build_metallib(",
-            "  TARGET mlx_extension_metallib",
-            f"  TITLE {_cmake_quote(ext.metal_library_name)}",
-            "  SOURCES",
-            *_cmake_arguments(metal_sources),
-            "  INCLUDE_DIRS",
-            *_cmake_arguments(include_dirs),
-            "  ${MLX_INCLUDE_DIRS}",
-            "  DEPS",
-            *_cmake_arguments(depends),
         ]
     )
-    if ext.extra_compile_args["metal"]:  # type: ignore
+    metallib_targets = []
+    for index, library in enumerate(ext.metal_libraries):
+        target = (
+            "mlx_extension_metallib"
+            if len(ext.metal_libraries) == 1
+            else f"mlx_extension_metallib_{index}"
+        )
+        metallib_targets.append(target)
         lines.extend(
             [
-                "  COMPILE_OPTIONS",
-                *_cmake_arguments(ext.extra_compile_args["metal"]),  # type: ignore
+                "mlx_build_metallib(",
+                f"  TARGET {target}",
+                f"  TITLE {_cmake_quote(library.name)}",
+                "  SOURCES",
+                *_cmake_arguments(
+                    list(str(Path(source).resolve()) for source in library.sources)
+                ),
+                "  INCLUDE_DIRS",
+                *_cmake_arguments(include_dirs),
+                "  ${MLX_INCLUDE_DIRS}",
+                "  DEPS",
+                *_cmake_arguments(depends),
+            ]
+        )
+        compile_options = [
+            *ext.extra_compile_args["metal"],  # type: ignore
+            *library.extra_compile_args,
+        ]
+        if compile_options:
+            lines.extend(
+                [
+                    "  COMPILE_OPTIONS",
+                    *_cmake_arguments(compile_options),
+                ]
+            )
+        if library.deployment_target is not None:
+            lines.append(
+                f"  DEPLOYMENT_TARGET {_cmake_quote(library.deployment_target)}"
+            )
+        lines.extend(
+            [
+                f"  OUTPUT_DIRECTORY {_cmake_quote(output_dir)})",
+                "",
             ]
         )
     lines.extend(
         [
-            f"  OUTPUT_DIRECTORY {_cmake_quote(output_dir)})",
-            "add_dependencies(mlx_extension mlx_extension_metallib)",
+            f"add_dependencies(mlx_extension {' '.join(metallib_targets)})",
             "",
         ]
     )
@@ -488,13 +571,13 @@ class BuildExtension(build_ext):
             if not isinstance(ext, MetalExtension):
                 continue
             inplace_file, regular_file = _extension_paths(self, build_py, ext)
-            sidecar_suffixes = (
-                (".metallib", ".pyi") if self.generate_stubs else (".metallib",)
-            )
-            for suffix in sidecar_suffixes:
-                regular_sidecar = regular_file.parent / (
-                    ext.metal_library_name + suffix
-                )
+            sidecar_names = [
+                f"{library.name}.metallib" for library in ext.metal_libraries
+            ]
+            if self.generate_stubs:
+                sidecar_names.append(f"{ext.metal_library_name}.pyi")
+            for name in sidecar_names:
+                regular_sidecar = regular_file.parent / name
                 inplace_sidecar = inplace_file.parent / regular_sidecar.name
                 self.copy_file(str(regular_sidecar), str(inplace_sidecar))
 
