@@ -3164,10 +3164,23 @@ array floor_divide(
     return floor(divide(a, b, s), s);
   }
 
+  // Integer division truncates toward zero, so take that quotient and step it
+  // down when the result was negative and did not divide evenly. Deriving the
+  // quotient from a - remainder(a, b) instead would leave the dtype range: for
+  // int8 that numerator is 135 when a is 120 and b is -27.
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
   auto shape = inputs[0].shape();
-  return array(
-      shape, dtype, std::make_shared<Divide>(to_stream(s)), std::move(inputs));
+  auto quotient =
+      array(shape, dtype, std::make_shared<Divide>(to_stream(s)), inputs);
+  // quotient * b has the sign of a and is no larger in magnitude, so this
+  // truncated remainder is exact for every input the division itself accepts.
+  auto zero = array(0, dtype);
+  auto rem = subtract(inputs[0], multiply(quotient, inputs[1], s), s);
+  auto step = logical_and(
+      not_equal(rem, zero, s),
+      not_equal(less(rem, zero, s), less(inputs[1], zero, s), s),
+      s);
+  return subtract(quotient, astype(step, dtype, s), s);
 }
 
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
