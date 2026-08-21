@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
@@ -50,6 +51,20 @@ void single_block_sort(
   };
   contiguous &= check_strides(in, in_stride_sorted_axis);
   contiguous &= check_strides(out, out_stride_sorted_axis);
+  // The contiguous kernel walks the rows with a single stride, so the axes
+  // that are not sorted have to collapse to a single dimension.
+  auto single_run =
+      [](const Shape& shape, const Strides& strides, int64_t& stride) {
+        auto [cshape, cstrides] = collapse_contiguous_dims(shape, strides);
+        stride = cstrides.empty() ? 0 : cstrides.back();
+        return std::count_if(cshape.begin(), cshape.end(), [](auto d) {
+                 return d != 1;
+               }) <= 1;
+      };
+  int64_t in_seg = 0;
+  int64_t out_seg = 0;
+  contiguous &= single_run(nc_shape, in_nc_str, in_seg);
+  contiguous &= single_run(nc_shape, out_nc_str, out_seg);
 
   // Prepare kernel name
   std::ostringstream kname;
@@ -74,20 +89,11 @@ void single_block_sort(
   compute_encoder.set_bytes(out_stride_sorted_axis, 4);
 
   if (contiguous) {
-    int in_stride_segment_axis = INT32_MAX;
-    int out_stride_segment_axis = INT32_MAX;
-    for (int i = 0; i < in_nc_str.size(); i++) {
-      if (nc_shape[i] == 1) {
-        continue;
-      }
-      if (in_nc_str[i] > INT32_MAX || out_nc_str[i] > INT32_MAX) {
-        throw std::runtime_error("[Sort::eval_gpu] Stride too large.");
-      }
-      in_stride_segment_axis =
-          std::min(in_stride_segment_axis, static_cast<int>(in_nc_str[i]));
-      out_stride_segment_axis =
-          std::min(out_stride_segment_axis, static_cast<int>(out_nc_str[i]));
+    if (in_seg > INT32_MAX || out_seg > INT32_MAX) {
+      throw std::runtime_error("[Sort::eval_gpu] Stride too large.");
     }
+    int in_stride_segment_axis = static_cast<int>(in_seg);
+    int out_stride_segment_axis = static_cast<int>(out_seg);
     compute_encoder.set_bytes(in_stride_segment_axis, 5);
     compute_encoder.set_bytes(out_stride_segment_axis, 6);
   } else {
