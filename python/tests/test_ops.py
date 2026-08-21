@@ -3666,6 +3666,34 @@ class TestOps(mlx_tests.MLXTestCase):
                 out_np = getattr(np, op)(a_np, b_np)
                 self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
+        # A shift amount that is negative or at least the operand width is
+        # undefined in C++, so the scalar and vectorized paths disagreed and
+        # the answer depended on the length of the array.
+        for t in types:
+            nt = np.array(mx.zeros(1, dtype=t)).dtype
+            info = np.iinfo(nt)
+            width = t.size * 8
+            amounts = [0, 1, width - 1, width, width + 3]
+            values = [1, 16, info.max]
+            if info.min < 0:
+                amounts += [-1, -width]
+                values += [-16, info.min]
+            for n in (1, 7, 8, 100):
+                for v in values:
+                    for sh in amounts:
+                        a_np = np.full(n, v, nt)
+                        b_np = np.full(n, sh, nt)
+                        a_mlx = mx.array(a_np)
+                        b_mlx = mx.array(b_np)
+                        for op in ("left_shift", "right_shift"):
+                            self.assertTrue(
+                                np.array_equal(
+                                    np.array(getattr(mx, op)(a_mlx, b_mlx)),
+                                    getattr(np, op)(a_np, b_np),
+                                ),
+                                msg=f"{op} {t} n={n} {v} by {sh}",
+                            )
+
         for t in types:
             a_mlx = a.astype(t)
             a_np = np.array(a_mlx)
