@@ -2856,17 +2856,24 @@ void init_ops(nb::module_& m) {
          const IntOrVec& axis,
          bool keepdims,
          int ddof,
+         std::optional<float> correction,
          mx::StreamOrDevice s) {
-        return mx::var(a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
+        int dof = correction ? static_cast<int>(*correction) : ddof;
+        if (correction && ddof != 0 && static_cast<int>(*correction) != ddof) {
+          throw std::invalid_argument(
+              "[var] At most one of ddof or correction can be specified.");
+        }
+        return mx::var(a, get_reduce_axes(axis, a.ndim()), keepdims, dof, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
       "keepdims"_a = false,
       "ddof"_a = 0,
       nb::kw_only(),
+      "correction"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def var(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, stream: StreamOrDevice = None) -> array"),
+          "def var(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, correction: float | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Compute the variance(s) over the given axes.
 
@@ -2879,6 +2886,9 @@ void init_ops(nb::module_& m) {
               singleton dimensions, defaults to `False`.
             ddof (int, optional): The divisor to compute the variance
               is ``N - ddof``, defaults to 0.
+            correction (float, optional): Array API compatible alias for
+              ``ddof``. At most one of ``ddof`` or ``correction`` may be
+              given a non-default value.
 
         Returns:
             array: The output array of variances.
@@ -2889,17 +2899,24 @@ void init_ops(nb::module_& m) {
          const IntOrVec& axis,
          bool keepdims,
          int ddof,
+         std::optional<float> correction,
          mx::StreamOrDevice s) {
-        return mx::std(a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
+        int dof = correction ? static_cast<int>(*correction) : ddof;
+        if (correction && ddof != 0 && static_cast<int>(*correction) != ddof) {
+          throw std::invalid_argument(
+              "[std] At most one of ddof or correction can be specified.");
+        }
+        return mx::std(a, get_reduce_axes(axis, a.ndim()), keepdims, dof, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
       "keepdims"_a = false,
       "ddof"_a = 0,
       nb::kw_only(),
+      "correction"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def std(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, stream: StreamOrDevice = None) -> array"),
+          "def std(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, correction: float | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Compute the standard deviation(s) over the given axes.
 
@@ -2912,6 +2929,9 @@ void init_ops(nb::module_& m) {
               singleton dimensions, defaults to `False`.
             ddof (int, optional): The divisor to compute the variance
               is ``N - ddof``, defaults to 0.
+            correction (float, optional): Array API compatible alias for
+              ``ddof``. At most one of ``ddof`` or ``correction`` may be
+              given a non-default value.
 
         Returns:
             array: The output array of standard deviations.

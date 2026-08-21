@@ -1065,6 +1065,10 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.var(x).dtype, mx.float32)
         self.assertAlmostEqual(mx.var(x).item(), x_np.var().item(), places=5)
 
+        self.assertEqual(mx.var(x, correction=1.0).item(), mx.var(x, ddof=1).item())
+        with self.assertRaises(ValueError):
+            mx.var(x, ddof=1, correction=2.0)
+
     def test_std(self):
         x = mx.random.uniform(shape=(5, 5))
         x_np = np.array(x)
@@ -1074,6 +1078,10 @@ class TestOps(mlx_tests.MLXTestCase):
         x_np = np.array(x)
         self.assertEqual(mx.std(x).dtype, mx.float32)
         self.assertAlmostEqual(mx.std(x).item(), x_np.std().item(), places=5)
+
+        self.assertEqual(mx.std(x, correction=1.0).item(), mx.std(x, ddof=1).item())
+        with self.assertRaises(ValueError):
+            mx.std(x, ddof=1, correction=2.0)
 
     def test_abs(self):
         a = mx.array([-1.0, 1.0, -2.0, 3.0])
