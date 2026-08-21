@@ -208,7 +208,7 @@ inline void build_kernel(
         "  {0} tmp_{1} = ", get_type_string(x.dtype()), namer.get_name(x));
     if (is_static_cast(x.primitive())) {
       os += fmt::format(
-          "static_cast<{0}>(tmp_{1});\n",
+          "cast_to<{0}>(tmp_{1});\n",
           get_type_string(x.dtype()),
           namer.get_name(x.inputs()[0]));
     } else {
