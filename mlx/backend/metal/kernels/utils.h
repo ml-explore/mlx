@@ -336,6 +336,24 @@ inline bfloat16_t log1p(bfloat16_t x) {
   return bfloat16_t(x * (metal::log(xp1) / (xp1 - 1.0f)));
 }
 
+inline float complex_abs(float x, float y) {
+  float ax = metal::fabs(x);
+  float ay = metal::fabs(y);
+  if (metal::isinf(ax) || metal::isinf(ay)) {
+    return metal::numeric_limits<float>::infinity();
+  }
+  if (metal::isnan(ax) || metal::isnan(ay)) {
+    return metal::numeric_limits<float>::quiet_NaN();
+  }
+  float lo = metal::fmin(ax, ay);
+  float hi = metal::fmax(ax, ay);
+  if (hi == 0.0f) {
+    return 0.0f;
+  }
+  float t = lo / hi;
+  return hi * metal::precise::sqrt(1.0f + t * t);
+}
+
 inline complex64_t log1p(complex64_t in) {
   float x = in.real;
   float y = in.imag;

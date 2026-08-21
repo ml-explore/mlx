@@ -9,6 +9,7 @@
 #include "mlx/backend/metal/kernels/erf.h"
 #include "mlx/backend/metal/kernels/expm1f.h"
 #include "mlx/backend/metal/kernels/fp8.h"
+#include "mlx/backend/metal/kernels/utils.h"
 
 namespace {
 constant float inf = metal::numeric_limits<float>::infinity();
@@ -35,7 +36,7 @@ struct Abs {
     return x;
   };
   complex64_t operator()(complex64_t x) thread {
-    return {metal::precise::sqrt(x.real * x.real + x.imag * x.imag), 0};
+    return {complex_abs(x.real, x.imag), 0};
   };
 };
 
@@ -374,11 +375,11 @@ struct Sqrt {
       return {0.0, 0.0};
     }
     auto r = Abs{}(x).real;
-    auto a = metal::precise::sqrt((r + x.real) / 2.0);
-    auto b_abs = metal::precise::sqrt((r - x.real) / 2.0);
+    auto a = metal::precise::sqrt(0.5f * r + 0.5f * x.real);
+    auto b_abs = metal::precise::sqrt(0.5f * r - 0.5f * x.real);
     auto b = metal::copysign(b_abs, x.imag);
     return {a, b};
-  }
+  };
 };
 
 struct Rsqrt {
