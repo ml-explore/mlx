@@ -1807,7 +1807,7 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       "indices"_a,
       "values"_a,
-      "axis"_a.none(),
+      "axis"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
