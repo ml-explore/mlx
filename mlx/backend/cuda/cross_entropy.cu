@@ -84,8 +84,8 @@ __global__ void cross_entropy(
   // gather and writing the output:
   auto row = grid.block_rank();
   if (block.thread_rank() == 0) {
-    float lse_val = isinf(curmax) ? curmax : log(normalizer) + curmax;
-    loss[row] = lse_val - static_cast<float>(x[y[row]]);
+    float gap = curmax - static_cast<float>(x[y[row]]);
+    loss[row] = isinf(curmax) ? gap : log(normalizer) + gap;
   }
 }
 
@@ -107,16 +107,16 @@ __global__ void cross_entropy_vjp(
   grads += row * axis_size; // offset output
   auto y_n = y[row]; // target index [0, N)
   auto g = gy[row]; // cotangent
-  auto lse_n = loss[row] + static_cast<float>(x[y_n]);
+  auto loss_n = loss[row];
+  auto x_t = static_cast<float>(x[y_n]);
   block.sync();
   for (int r = 0; r < cuda::ceil_div(axis_size, BLOCK_DIM * N_READS); r++) {
     auto index = r * BLOCK_DIM + block.thread_rank(); // [0, N)
     auto vals = load_vector<N_READS>(x, index, axis_size, T{});
 #pragma unroll
     for (int i = 0; i < N_READS; ++i) {
-      // lse(x) >= max(x), so the exponent is <= 0 and __expf is safe
       int col = index * N_READS + i;
-      float val = __expf(static_cast<float>(vals[i]) - lse_n);
+      float val = __expf((static_cast<float>(vals[i]) - x_t) - loss_n);
       vals[i] = static_cast<T>(g * (val - (col == y_n ? 1.0f : 0.0f)));
     }
     store_vector<N_READS>(grads, index, vals, axis_size);

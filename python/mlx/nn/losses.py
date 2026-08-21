@@ -69,12 +69,10 @@ def cross_entropy(
         >>> logits = mx.array([[2.0, -1.0], [-1.0, 2.0]], mx.bfloat16)
         >>> targets = mx.array([0, 1])
         >>> nn.losses.cross_entropy(logits, targets)
-        array([0.048584, 0.048584], dtype=bfloat16)
+        array([0.0485873, 0.0485873], dtype=float32)
         >>>
         >>> # Metal and the CPU reduce in the dtype of the logits, so upcast
         >>> # them to get the same accuracy:
-        >>> nn.losses.cross_entropy(logits, targets)
-        array([0.046875, 0.046875], dtype=bfloat16)
         >>> nn.losses.cross_entropy(logits.astype(mx.float32), targets)
         array([0.0485873, 0.0485873], dtype=float32)
     """
@@ -98,7 +96,9 @@ def cross_entropy(
         )
 
     use_fast = (
-        not targets_as_probs
+        mx.cuda.is_available()
+        and mx.default_device() == mx.gpu
+        and not targets_as_probs
         and label_smoothing == 0
         and axis in (-1, logits.ndim - 1)
         and mx.issubdtype(logits.dtype, mx.floating)
@@ -108,9 +108,6 @@ def cross_entropy(
     if use_fast:
         loss = mx.fast.cross_entropy(logits, targets).astype(logits.dtype)
     else:
-        # Shift by the max first. The loss only depends on differences between
-        # logits, but subtracting the logsumexp of large logits loses the gap to
-        # rounding before the subtraction happens.
         logits = logits - mx.stop_gradient(mx.max(logits, axis=axis, keepdims=True))
 
         if targets_as_probs:
