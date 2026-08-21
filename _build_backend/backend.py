@@ -9,7 +9,7 @@ def _with_nanobind_backend(requires):
     build_backend = int(os.environ.get("MLX_BUILD_BACKEND_PACKAGE", 0))
     free_threaded = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
     if not build_backend and not free_threaded:
-        requires.append("nanobind-backend>=1.0.0.dev4")
+        requires.append("nanobind-backend>=1.0.0.dev5")
     return requires
 
 
