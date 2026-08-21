@@ -182,14 +182,14 @@ void init_fast(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cross_entropy(logits: array, targets: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cross_entropy(logits: array, targets: array, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Cross entropy loss with class indices as targets.
 
         Computes ``logsumexp(logits, axis=-1) - logits[..., target]`` in a
-        fused kernel with accumulation in float32. 
+        fused kernel with accumulation in float32.
 
-        Note: Currently is implemented only on CUDA, fallback to unfused version with 
+        Note: Currently is implemented only on CUDA, fallback to unfused version with
         manual casting on Metal and CPU.
 
         Args:
