@@ -17,6 +17,7 @@ void synchronize(Stream s) {
     std::future<void> f = p->get_future();
     scheduler::enqueue(s, [p = std::move(p)]() { p->set_value(); });
     f.wait();
+    scheduler::check_error(s);
   } else {
     gpu::synchronize(s);
   }
@@ -138,6 +139,10 @@ void Scheduler::signal_event(
     }
     task(event);
   });
+}
+
+void Scheduler::check_error(Stream s) {
+  get_thread(s).error.check();
 }
 
 StreamThread& Scheduler::get_thread(Stream s) {
