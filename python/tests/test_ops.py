@@ -2677,6 +2677,14 @@ class TestOps(mlx_tests.MLXTestCase):
         mem4 = mx.get_peak_memory()
         self.assertEqual(mem2, mem4)
 
+        # Scanning an empty axis is a no-op
+        for a in (mx.array([]), mx.zeros((2, 0)), mx.zeros((0, 2))):
+            for op in ("cumsum", "cumprod", "cummax", "cummin", "logcumsumexp"):
+                for axis in range(a.ndim):
+                    out = getattr(mx, op)(a, axis=axis)
+                    mx.eval(out)
+                    self.assertEqual(out.shape, a.shape)
+
     def test_scan_size_one_axis(self):
         # A size one axis can carry any stride and still be row contiguous, so
         # the scan must not take its row count from that stride.
@@ -2919,6 +2927,16 @@ class TestOps(mlx_tests.MLXTestCase):
 
                     b_mx = mx.partition(a_mx, 1, axis=-1)
                     self.assertTrue(np.array_equal(b_np[:, 1], np.array(b_mx)[:, 1]))
+
+        # Sorting an empty axis is a no-op
+        for a in (mx.array([]), mx.zeros((2, 0)), mx.zeros((0, 2))):
+            for axis in range(a.ndim):
+                out = mx.sort(a, axis=axis)
+                mx.eval(out)
+                self.assertEqual(out.shape, a.shape)
+                out = mx.argsort(a, axis=axis)
+                mx.eval(out)
+                self.assertEqual(out.shape, a.shape)
 
     def test_partition(self):
         shape = (3, 4, 5)

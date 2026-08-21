@@ -116,6 +116,11 @@ void scan_gpu_inplace(
 void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
+  if (out.size() == 0) {
+    out.set_data(allocator::malloc(0));
+    return;
+  }
+
   auto in = inputs[0];
   if (in.flags().contiguous && in.strides()[axis_] != 0) {
     if (in.is_donatable() && in.itemsize() == out.itemsize()) {
