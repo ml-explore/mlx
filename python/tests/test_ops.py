@@ -2691,6 +2691,35 @@ class TestOps(mlx_tests.MLXTestCase):
                     out = getattr(mx, op)(a, axis=0)
                     self.assertTrue(np.array_equal(np.array(out), expected))
 
+    def test_scans_complex_exclusive(self):
+        # An exclusive scan starts from the identity of its operation, and
+        # numeric_limits has none for complex, so it used to start from zero
+        # and swallow every negative real part. Only the exclusive form reads
+        # the identity at all; the inclusive one starts from element 0.
+        #
+        # The cpu stream is pinned because the identity being fixed lives in
+        # mlx/backend/cpu/scan.cpp and the default stream is the gpu, which has
+        # its own. Both are checked so neither backend can regress.
+        a = mx.array([-3 + 1j, -1 + 2j, -4 + 0j, 0 + 5j, 2 - 1j])
+        devices = [mx.cpu]
+        if mx.default_device() != mx.cpu:
+            devices.append(mx.default_device())
+        for device in devices:
+            with mx.stream(device):
+                for op in ("cummax", "cummin", "logcumsumexp"):
+                    mxop = getattr(mx, op)
+                    for reverse in (False, True):
+                        inclusive = mxop(a, axis=0, inclusive=True, reverse=reverse)
+                        exclusive = mxop(a, axis=0, inclusive=False, reverse=reverse)
+                        if reverse:
+                            got, want = exclusive[:-1], inclusive[1:]
+                        else:
+                            got, want = exclusive[1:], inclusive[:-1]
+                        self.assertTrue(
+                            mx.allclose(got, want),
+                            msg=f"{op} reverse={reverse} device={device}",
+                        )
+
     def test_cummax_cummin_nan(self):
         nan = float("nan")
         cases = [
