@@ -830,7 +830,8 @@ void qmm_nax(
 
   int wm = 2;
   int wn = 2;
-  int bm = 64;
+  // Use smaller bm when one block covers all of M.
+  int bm = (M <= 32) ? 32 : 64;
   int bn = 64;
   int bk = 64;
   MTL::Size group_dims(32, wn, wm);
