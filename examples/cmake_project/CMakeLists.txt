@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Comment the following two commands only the MLX C++ library is installed and
 # set(MLX_ROOT "/path/to/mlx") directly if needed.
 find_package(
-  Python 3.9
+  Python 3.10
   COMPONENTS Interpreter Development.Module
   REQUIRED)
 execute_process(

@@ -296,10 +296,54 @@ class TestDouble(mlx_tests.MLXTestCase):
         b = a.tolist()
         self.assertEqual(b, [1.0, 2.0])
 
+    def test_python_float_keeps_double_precision(self):
+        with mx.stream(mx.cpu):
+            # https://github.com/ml-explore/mlx/issues/4160
+            for v in (0.37, 0.1, math.pi):
+                self.assertEqual(mx.full((3,), v, dtype=mx.float64).tolist(), [v] * 3)
+
+            # https://github.com/ml-explore/mlx/issues/4159
+            a = mx.array([1.0], dtype=mx.float64)
+            for v in (0.1, 1e-4, math.pi):
+                out = a * v
+                self.assertEqual(out.dtype, mx.float64)
+                self.assertEqual(out.tolist(), [v])
+
+            # values outside the float32 range used to saturate to inf or zero
+            self.assertEqual((a * 1e300).tolist(), [1e300])
+            self.assertEqual((a * 1e-300).tolist(), [1e-300])
+
+            # every op that pairs a scalar with an array goes through the same
+            # conversion
+            zero = mx.array([0.0], dtype=mx.float64)
+            self.assertEqual(mx.maximum(zero, 0.1).tolist(), [0.1])
+            self.assertEqual(mx.minimum(a, 0.1).tolist(), [0.1])
+            self.assertEqual(mx.clip(a, None, 0.1).tolist(), [0.1])
+            self.assertEqual(mx.where(mx.array([False]), zero, 0.1).tolist(), [0.1])
+            self.assertEqual(
+                mx.pad(a, 1, constant_values=0.1).tolist(), [0.1, 1.0, 0.1]
+            )
+
+            # the python float is still weak: it does not widen the array
+            for dtype in (mx.float16, mx.bfloat16, mx.float32):
+                self.assertEqual((mx.array([1.0], dtype=dtype) * 0.1).dtype, dtype)
+            self.assertEqual((mx.array([1], dtype=mx.int32) * 0.1).dtype, mx.float32)
+
+            # pad() keeps returning the input's dtype for every input type
+            for dtype in (mx.int32, mx.float16, mx.bfloat16, mx.float32):
+                padded = mx.pad(mx.array([1.0], dtype=dtype), 1, constant_values=0.5)
+                self.assertEqual(padded.dtype, dtype)
+
     def test_linspace(self):
         with mx.stream(mx.cpu):
-            vals = mx.linspace(0, math.pi, 2, mx.float64)
+            vals = mx.linspace(0, math.pi, 2, dtype=mx.float64)
             self.assertEqual(vals.tolist()[1], math.pi)
+
+            vals = mx.linspace(0, math.pi, 4, endpoint=False, dtype=mx.float64)
+            self.assertEqual(vals.dtype, mx.float64)
+            self.assertTrue(
+                np.allclose(vals.tolist(), np.linspace(0, math.pi, 4, endpoint=False))
+            )
 
 
 if __name__ == "__main__":

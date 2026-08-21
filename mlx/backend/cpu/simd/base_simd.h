@@ -56,19 +56,6 @@ void store(T* dst, Simd<T, N> x) {
   *(Simd<T, N>*)dst = x;
 }
 
-template <typename, typename = void>
-constexpr bool is_complex = false;
-
-template <typename T>
-constexpr bool is_complex<T, std::void_t<decltype(std::declval<T>().real())>> =
-    true;
-
-// std::is_signed_v is false for the custom float16_t/bfloat16_t types, so it
-// skips the floored-mod sign correction for them.
-template <typename T>
-inline constexpr bool is_signed_v = std::is_signed_v<T> ||
-    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
-
 template <typename T>
 Simd<T, 1> rint(Simd<T, 1> in) {
   if constexpr (is_complex<T>) {
@@ -97,7 +84,6 @@ Simd<T, 1> recip(Simd<T, 1> in) {
 
 DEFAULT_UNARY(operator-, std::negate{})
 DEFAULT_UNARY(operator!, std::logical_not{})
-DEFAULT_UNARY(abs, std::abs)
 DEFAULT_UNARY(acos, std::acos)
 DEFAULT_UNARY(acosh, std::acosh)
 DEFAULT_UNARY(asin, std::asin)
@@ -115,6 +101,15 @@ DEFAULT_UNARY(sinh, std::sinh)
 DEFAULT_UNARY(sqrt, std::sqrt)
 DEFAULT_UNARY(tan, std::tan)
 DEFAULT_UNARY(tanh, std::tanh)
+
+template <typename T>
+Simd<T, 1> abs(Simd<T, 1> in) {
+  if constexpr (std::is_unsigned_v<T>) {
+    return in;
+  } else {
+    return std::abs(in.value);
+  }
+}
 
 template <typename T>
 Simd<T, 1> log1p(Simd<T, 1> in) {
@@ -258,6 +253,11 @@ Simd<T, 1> pow(Simd<T, 1> a, Simd<T, 1> b) {
     return std::pow(base, exp);
   } else {
     T res = 1;
+    if constexpr (std::is_signed_v<T>) {
+      if (exp < 0) {
+        return 0;
+      }
+    }
     while (exp) {
       if (exp & 1) {
         res *= base;

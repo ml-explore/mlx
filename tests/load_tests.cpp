@@ -168,6 +168,209 @@ TEST_CASE("test gguf") {
   }
 }
 
+// Writes a one-tensor GGUF (name "t", ndim 1, dim 4, type F32) whose tensor
+// data offset field is set verbatim to `tensor_data_offset`. Writes
+// `data_bytes` bytes of tensor data, defaulting to the full four floats.
+void write_raw_gguf(
+    const std::string& path,
+    uint64_t tensor_data_offset,
+    size_t data_bytes = 4 * sizeof(float)) {
+  std::ofstream out(path, std::ios::binary);
+  auto u32 = [&out](uint32_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 4);
+  };
+  auto u64 = [&out](uint64_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 8);
+  };
+  out.write("GGUF", 4);
+  u32(3); // version
+  u64(1); // tensor_count
+  u64(0); // metadata_kv_count
+  u64(1); // tensor name length
+  out.write("t", 1);
+  u32(1); // ndim
+  u64(4); // dim[0]
+  u32(0); // GGUF_TYPE_F32
+  u64(tensor_data_offset);
+  while (out.tellp() % 32 != 0) { // default GGUF alignment
+    out.put(0);
+  }
+  std::vector<char> data(data_bytes, 0);
+  out.write(data.data(), data.size());
+}
+
+TEST_CASE("test gguf tensor data offset validation") {
+  // A crafted tensor data offset must be rejected rather than turned into a
+  // pointer outside the mapping. See ml-explore/mlx#4136.
+  SUBCASE("valid offset loads") {
+    std::string file_path = get_temp_file("test_gguf_offset_ok.gguf");
+    write_raw_gguf(file_path, 0);
+    auto [weights, metadata] = load_gguf(file_path);
+    CHECK_EQ(weights.size(), 1);
+    CHECK(array_equal(weights.at("t"), zeros({4}, float32)).item<bool>());
+  }
+
+  SUBCASE("offset past the end of the file") {
+    std::string file_path = get_temp_file("test_gguf_offset_past_end.gguf");
+    write_raw_gguf(file_path, 1ull << 20);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("offset far past the end of the file") {
+    std::string file_path = get_temp_file("test_gguf_offset_far_past.gguf");
+    write_raw_gguf(file_path, 1ull << 40);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("offset that overflows the data section base") {
+    // Wraps back to an in-mapping address, so an end-pointer-only check would
+    // silently read the wrong bytes instead of reading out of bounds.
+    std::string file_path = get_temp_file("test_gguf_offset_wrap.gguf");
+    write_raw_gguf(file_path, ~0ull - 8);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("tensor extends past the end of the file") {
+    // In-range offset, but the data is truncated: only the extent check
+    // catches this.
+    std::string file_path = get_temp_file("test_gguf_truncated.gguf");
+    write_raw_gguf(file_path, 0, 4 * sizeof(float) - 1);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("tensor starts inside the file but ends past it") {
+    // A small offset, so the start is in range and only the extent decides.
+    // Pins the extent check to the tensor's own start rather than to the
+    // start of the data section.
+    std::string file_path = get_temp_file("test_gguf_partial_overrun.gguf");
+    write_raw_gguf(file_path, 8);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("offset just past the end of the file") {
+    // Only a few bytes past the end rather than far outside it, so the
+    // resulting pointer is still in the mapped page and reads succeed
+    // silently. Pins the offset bound to the file size exactly.
+    std::string file_path = get_temp_file("test_gguf_offset_just_past.gguf");
+    write_raw_gguf(file_path, 20);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+}
+
+// Writes a metadata-only GGUF (no tensors) whose metadata KV section is
+// `kv_section` verbatim, so a caller can encode values whose lengths exceed the
+// file to exercise check_metadata_value_in_file(). `kv_count` must match the
+// number of KV pairs encoded in `kv_section`.
+void write_raw_gguf_metadata(
+    const std::string& path,
+    uint64_t kv_count,
+    const std::vector<char>& kv_section) {
+  std::ofstream out(path, std::ios::binary);
+  auto u32 = [&out](uint32_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 4);
+  };
+  auto u64 = [&out](uint64_t v) {
+    out.write(reinterpret_cast<const char*>(&v), 8);
+  };
+  out.write("GGUF", 4);
+  u32(3); // version
+  u64(0); // tensor_count
+  u64(kv_count); // metadata_kv_count
+  out.write(kv_section.data(), kv_section.size());
+}
+
+TEST_CASE("test gguf metadata value validation") {
+  // A STRING/ARRAY metadata value claiming a length larger than the file must
+  // be rejected rather than read past the end of the mapping. See PR #4212.
+
+  auto append_string_kv = [](std::vector<char>& b,
+                             const std::string& key,
+                             uint64_t claimed_len,
+                             bool write_payload) {
+    auto put = [&](const void* p, size_t n) {
+      b.insert(
+          b.end(),
+          static_cast<const char*>(p),
+          static_cast<const char*>(p) + n);
+    };
+    uint64_t klen = key.size();
+    put(&klen, 8);
+    put(key.data(), key.size());
+    uint32_t vt = 8; // GGUF_VALUE_TYPE_STRING
+    put(&vt, 4);
+    put(&claimed_len, 8);
+    if (write_payload) {
+      b.insert(b.end(), claimed_len, '\0');
+    }
+  };
+
+  auto append_array_kv = [](std::vector<char>& b,
+                            const std::string& key,
+                            uint32_t elt_type,
+                            uint64_t claimed_len) {
+    auto put = [&](const void* p, size_t n) {
+      b.insert(
+          b.end(),
+          static_cast<const char*>(p),
+          static_cast<const char*>(p) + n);
+    };
+    uint64_t klen = key.size();
+    put(&klen, 8);
+    put(key.data(), key.size());
+    uint32_t vt = 9; // GGUF_VALUE_TYPE_ARRAY
+    put(&vt, 4);
+    put(&elt_type, 4);
+    put(&claimed_len, 8);
+  };
+
+  SUBCASE("valid empty and small strings load") {
+    std::vector<char> kv;
+    append_string_kv(kv, "empty", 0, false);
+    append_string_kv(kv, "small", 5, true);
+    std::string file_path = get_temp_file("test_gguf_meta_ok.gguf");
+    write_raw_gguf_metadata(file_path, 2, kv);
+    auto [weights, metadata] = load_gguf(file_path);
+    CHECK(weights.empty());
+    CHECK(std::get<std::string>(metadata.at("empty")) == "");
+    CHECK(std::get<std::string>(metadata.at("small")) == std::string(5, '\0'));
+  }
+
+  SUBCASE("string length extends past the end of the file") {
+    // Claims 100 bytes of payload, none of which are present.
+    std::vector<char> kv;
+    append_string_kv(kv, "s", 100, false);
+    std::string file_path = get_temp_file("test_gguf_meta_str_past.gguf");
+    write_raw_gguf_metadata(file_path, 1, kv);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("string length far past the end of the file") {
+    std::vector<char> kv;
+    append_string_kv(kv, "s", 1ull << 40, false);
+    std::string file_path = get_temp_file("test_gguf_meta_str_far.gguf");
+    write_raw_gguf_metadata(file_path, 1, kv);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("fixed-size array length extends past the end of the file") {
+    // GGUF_VALUE_TYPE_UINT8 = 0; claims 2^40 elements, none present.
+    std::vector<char> kv;
+    append_array_kv(kv, "a", 0, 1ull << 40);
+    std::string file_path = get_temp_file("test_gguf_meta_arr_past.gguf");
+    write_raw_gguf_metadata(file_path, 1, kv);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+
+  SUBCASE("string array element length extends past the end of the file") {
+    // GGUF_VALUE_TYPE_STRING = 8; two elements, neither present.
+    std::vector<char> kv;
+    append_array_kv(kv, "a", 8, 2);
+    std::string file_path = get_temp_file("test_gguf_meta_strarr_past.gguf");
+    write_raw_gguf_metadata(file_path, 1, kv);
+    CHECK_THROWS_AS(load_gguf(file_path), std::runtime_error);
+  }
+}
+
 TEST_CASE("test gguf metadata") {
   std::string file_path = get_temp_file("test_arr.gguf");
   using dict = std::unordered_map<std::string, array>;

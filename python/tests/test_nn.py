@@ -199,6 +199,23 @@ class TestBase(mlx_tests.MLXTestCase):
         m.state["hello"] = "world"
         self.assertEqual(m.state["hello"], "world")
 
+    def test_freeze_strict_keys(self):
+        # "bias" is present in the model but not in every submodule, so a
+        # recursive freeze should accept it rather than raising on the first
+        # submodule that happens not to have one.
+        m = nn.Sequential(nn.Linear(2, 2, bias=False), nn.Linear(2, 2))
+        m.freeze(keys="bias", strict=True)
+        trainable = dict(tree_flatten(m.trainable_parameters()))
+        self.assertFalse(any(k.endswith("bias") for k in trainable))
+
+        m.unfreeze(keys="bias", strict=True)
+        trainable = dict(tree_flatten(m.trainable_parameters()))
+        self.assertTrue(any(k.endswith("bias") for k in trainable))
+
+        # A key that is nowhere in the model is still an error.
+        with self.assertRaises(KeyError):
+            m.freeze(keys="not_a_member", strict=True)
+
     def test_chaining(self):
         m = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 1))
         pre_freeze_num_params = len(m.parameters())
@@ -392,6 +409,28 @@ class TestLayers(mlx_tests.MLXTestCase):
         layer = nn.Bilinear(input1_dims=2, input2_dims=4, output_dims=6)
         outputs = layer(inputs1, inputs2)
         self.assertEqual(outputs.shape, (10, 6))
+
+    def test_norm_eps_validation(self):
+        # eps is added under a square root. A negative one makes rsqrt take the
+        # root of a negative number, so the layer emits NaN for whichever
+        # elements have a small enough variance, which is only a partial NaN and
+        # easy to miss. Zero is rejected too: it leaves rsqrt(0) for any input
+        # whose variance is zero, which is a whole NaN row. This matches the eps
+        # guards the optimizers already carry.
+        builders = (
+            ("LayerNorm", lambda eps: nn.LayerNorm(16, eps=eps)),
+            ("RMSNorm", lambda eps: nn.RMSNorm(16, eps=eps)),
+            ("GroupNorm", lambda eps: nn.GroupNorm(4, 16, eps=eps)),
+            ("InstanceNorm", lambda eps: nn.InstanceNorm(16, eps=eps)),
+            ("BatchNorm", lambda eps: nn.BatchNorm(16, eps=eps)),
+        )
+        for name, build in builders:
+            for eps in (-1.0, -1e-30, 0.0):
+                with self.assertRaisesRegex(ValueError, "must be positive"):
+                    build(eps)
+            # Anything positive still constructs, including a very small eps.
+            for eps in (1e-30, 1e-5, 1.0):
+                build(eps)
 
     def test_group_norm(self):
         x = mx.arange(100, dtype=mx.float32)
@@ -1054,6 +1093,13 @@ class TestLayers(mlx_tests.MLXTestCase):
                 with self.assertRaises(ValueError):
                     nn.SinusoidalPositionalEncoding(dims)
 
+        # An explicit scale=0.0 must be respected rather than falling back
+        # to the default, since 0.0 is falsy but a valid scale value.
+        m = nn.SinusoidalPositionalEncoding(16, scale=0.0)
+        self.assertEqual(m.scale, 0.0)
+        y = m(x)
+        self.assertTrue(mx.array_equal(y, mx.zeros_like(y)))
+
     def test_sigmoid(self):
         x = mx.array([1.0, 0.0, -1.0])
         y1 = mx.sigmoid(x)
@@ -1191,6 +1237,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
+
+        # Equal logits normalize to log(1/n) whatever their magnitude
+        for v in [1e0, 1e4, 1e8, 1e20, 1e36]:
+            y = nn.log_softmax(mx.array([[v, v]]))
+            self.assertTrue(mx.allclose(y, mx.full((1, 2), -0.6931472), atol=1e-5))
 
     def test_log_sigmoid(self):
         x = mx.array([1.0, -1.0, 0.0])

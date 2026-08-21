@@ -68,6 +68,9 @@ jobs:
           cmake-args: ${{ steps.setup.outputs.cmake-args }}
           # For MSVC, Ninja/Release is the only config supported by ccache.
           debug: ${{ matrix.os != 'Windows' }}
+      - name: Check generated Python stubs with ty
+        if: matrix.os == 'Linux' && matrix.arch == 'x86_64' && matrix.toolkit == 'cpu'
+        run: uvx ty check python/mlx/core
       - uses: ./.github/actions/test-linux
         if: matrix.os == 'Linux' && (matrix.toolkit == 'cpu' || matrix.arch == 'x86_64')
       - uses: ./.github/actions/test-windows
@@ -77,6 +80,7 @@ jobs:
     name: macOS (${{ matrix.macos-target }}, ${{ matrix.toolkit }})
     if: github.repository == 'ml-explore/mlx'
     strategy:
+      fail-fast: false
       matrix:
         macos-target: ['14.0', '15.0', '26.2']
         toolkit: ['cpu', 'metal', 'jit']

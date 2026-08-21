@@ -8,16 +8,10 @@ runs:
       shell: bash
       env:
         DEVICE: cpu
-      run: |
-        echo "::group::Python tests - CPU"
-        python -m unittest discover python/tests -v
-        echo "::endgroup::"
+      run: python -m unittest discover python/tests -v
 
     - name: Run CPP tests - CPU
       shell: bash
       env:
         DEVICE: cpu
-      run: |
-        echo "::group::CPP tests - CPU"
-        ./build/cpp/mlx/tests.exe -tce="*gguf*"
-        echo "::endgroup::"
+      run: ./build/cpp/mlx/tests.exe -tce="*gguf*"

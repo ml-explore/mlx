@@ -22,10 +22,19 @@ try:
 except ImportError:
     has_tf = False
 
+
 try:
     import torch
 
-    has_torch_mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+    torch_version = [int(v) for v in torch.__version__.split("+")[0].split(".")]
+    is_torch_212 = torch_version[0] > 2 or (
+        torch_version[0] == 2 and torch_version[1] >= 12
+    )
+    has_torch_mps = (
+        is_torch_212
+        and hasattr(torch.backends, "mps")
+        and torch.backends.mps.is_available()
+    )
 except ImportError:
     torch = None
     has_torch_mps = False
@@ -513,6 +522,33 @@ class TestArray(mlx_tests.MLXTestCase):
 
         out = mx.array([x], dtype=mx.float64).item()
         self.assertEqual(out, x)
+
+    def test_construction_from_lists_wide_ints(self):
+        # A python int that does not fit in int32 widens to int64, the same
+        # rule the scalar path already uses. It used to raise std::bad_cast.
+        for value in (2**31, 2**40, -(2**31) - 1, -(2**40)):
+            for make in (
+                lambda v: [v],
+                lambda v: (v,),
+                lambda v: [[v]],
+                lambda v: [v, 1],
+            ):
+                x = mx.array(make(value))
+                self.assertEqual(x.dtype, mx.int64, msg=f"{value} {make(value)}")
+                self.assertEqual(x.flatten()[0].item(), value)
+                self.assertEqual(mx.array(value).dtype, mx.int64)
+
+        # Values that still fit keep int32, including both boundaries.
+        for value in (0, 1, 2**31 - 1, -(2**31)):
+            x = mx.array([value])
+            self.assertEqual(x.dtype, mx.int32, msg=str(value))
+            self.assertEqual(x[0].item(), value)
+
+        # An explicit dtype still wins.
+        self.assertEqual(mx.array([2**40], mx.int64).dtype, mx.int64)
+        self.assertEqual(mx.array([1, 2], mx.int64).dtype, mx.int64)
+        # A float in the list still makes it float, not int64.
+        self.assertEqual(mx.array([2**40, 1.5]).dtype, mx.float32)
 
     def test_construction_from_lists_of_mlx_arrays(self):
         dtypes = [
@@ -1243,6 +1279,28 @@ class TestArray(mlx_tests.MLXTestCase):
         a[0:2] = 3
         self.assertEqual(a.tolist(), [3, 3, 1])
 
+        # Assigning through a bare Ellipsis, like a[:] and a[None]
+        e = mx.zeros((2, 3), mx.int32)
+        e[...] = 5
+        self.assertEqual(e.tolist(), [[5, 5, 5], [5, 5, 5]])
+
+        # Broadcasting an array update through Ellipsis
+        e[...] = mx.array([1, 2, 3])
+        self.assertEqual(e.tolist(), [[1, 2, 3], [1, 2, 3]])
+
+        e[...] = mx.zeros((2, 3), mx.int32)
+        self.assertEqual(e.tolist(), [[0, 0, 0], [0, 0, 0]])
+
+        # Scalar array
+        e = mx.array(0)
+        e[...] = 7
+        self.assertEqual(e.item(), 7)
+
+        # Shapes that cannot broadcast are still rejected
+        e = mx.zeros((2, 3), mx.int32)
+        with self.assertRaises(ValueError):
+            e[...] = mx.array([1, 2])
+
         a[0:3] = 4
         self.assertEqual(a.tolist(), [4, 4, 4])
 
@@ -1547,6 +1605,37 @@ class TestArray(mlx_tests.MLXTestCase):
         a[1:3, :, 0] = 5
         a = a.at[1:3, :, 0].minimum(update)
         self.assertEqualArray(a[1:3, :, 0], mx.minimum(a[1:3, :, 0], update))
+
+    @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
+    def test_array_at_complex_add_gpu(self):
+        n = 4096
+        base = [1 + 10j, 2 + 20j, 3 + 30j, 4 + 40j]
+
+        with mx.stream(mx.gpu):
+            a = mx.array(base, dtype=mx.complex64)
+            update_indices = mx.full((n,), 3, dtype=mx.int32)
+            updates = mx.full((n,), 1 + 3j, dtype=mx.complex64)
+            out = a.at[update_indices].add(updates)
+            mx.eval(out)
+
+            indices = mx.array([1, 1, 3])
+            x = mx.array([1 + 0j, 3 + 4j, 6 + 8j, 5 + 12j], dtype=mx.complex64)
+
+            def loss(z):
+                return mx.square(mx.abs(z[indices])).sum()
+
+            _, gradient = mx.value_and_grad(loss)(x)
+            mx.eval(gradient)
+
+        expected = base.copy()
+        expected[-1] += n * (1 + 3j)
+        self.assertEqual(out.tolist(), expected)
+        np.testing.assert_allclose(
+            np.array(gradient),
+            np.array([0, 12 + 16j, 0, 10 + 24j], dtype=np.complex64),
+            rtol=0,
+            atol=1e-5,
+        )
 
     def test_array_at_slice_update_extensive(self):
         # Test with transposed inputs
@@ -2673,16 +2762,23 @@ class TestArray(mlx_tests.MLXTestCase):
         a = mx.array(1)
         self.assertEqual(int(a), 1)
         self.assertEqual(float(a), 1)
+        self.assertEqual(complex(a), 1 + 0j)
 
         a = mx.array(1.5)
         self.assertEqual(float(a), 1.5)
         self.assertEqual(int(a), 1)
+        self.assertEqual(complex(a), 1.5 + 0j)
+
+        a = mx.array(1 + 2j, dtype=mx.complex64)  # type: ignore
+        self.assertEqual(complex(a), 1 + 2j)
 
         a = mx.zeros((2, 1))
         with self.assertRaises(ValueError):
             float(a)
         with self.assertRaises(ValueError):
             int(a)
+        with self.assertRaises(ValueError):
+            complex(a)
 
     def test_format(self):
         a = mx.arange(3)

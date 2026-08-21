@@ -193,6 +193,12 @@ TEST_CASE("test squeeze and expand") {
   CHECK_THROWS(squeeze(x, {1, 3, 1}));
   CHECK_THROWS(squeeze(x, {1, 3, -3}));
 
+  // Out of bounds negative axes must throw and not wrap around
+  x = zeros({1, 1, 1});
+  CHECK_THROWS(squeeze(x, std::vector<int>{-4}));
+  CHECK_THROWS(squeeze(x, {-5, 0}));
+  CHECK_THROWS(squeeze(x, {0, 4}));
+
   x = zeros({2, 2});
   CHECK_EQ(expand_dims(x, 0).shape(), Shape{1, 2, 2});
   CHECK_EQ(expand_dims(x, -1).shape(), Shape{2, 2, 1});
@@ -206,6 +212,18 @@ TEST_CASE("test squeeze and expand") {
   CHECK_THROWS(expand_dims(x, -4));
   CHECK_THROWS(expand_dims(x, {0, 1, 0}));
   CHECK_THROWS(expand_dims(x, {0, 1, -4}));
+
+  // Negative axes are resolved against the output shape and sorted
+  CHECK_EQ(expand_dims(x, {3, -4}).shape(), Shape{1, 2, 2, 1});
+  CHECK_EQ(expand_dims(x, {-1, -4}).shape(), Shape{1, 2, 2, 1});
+
+  // Out of bounds negative axes must throw and not wrap around
+  CHECK_THROWS(expand_dims(x, {-5, -4}));
+  CHECK_THROWS(expand_dims(x, {-6, 0}));
+
+  x = zeros({});
+  CHECK_EQ(expand_dims(x, {-2, -1}).shape(), Shape{1, 1});
+  CHECK_THROWS(expand_dims(x, {-3, -2}));
 }
 
 TEST_CASE("test slice") {
@@ -2960,6 +2978,49 @@ TEST_CASE("test pad") {
        0.0f},
       {4, 4});
   CHECK(array_equal(padded_x, expected).item<bool>());
+
+  // reflect padding (mirror without repeating the edge value)
+  x = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, {5});
+  CHECK(array_equal(
+            pad(x, {{2, 2}}, array(0.0f), "reflect"),
+            array({3.0f, 2.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f, 3.0f}, {9}))
+            .item<bool>());
+  CHECK(array_equal(
+            pad(x, {{0, 3}}, array(0.0f), "reflect"),
+            array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 4.0f, 3.0f, 2.0f}, {8}))
+            .item<bool>());
+
+  // symmetric padding (mirror repeating the edge value)
+  CHECK(array_equal(
+            pad(x, {{2, 2}}, array(0.0f), "symmetric"),
+            array({2.0f, 1.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 5.0f, 4.0f}, {9}))
+            .item<bool>());
+  CHECK(array_equal(
+            pad(x, {{3, 0}}, array(0.0f), "symmetric"),
+            array({3.0f, 2.0f, 1.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, {8}))
+            .item<bool>());
+
+  // multi-reflect: pad larger than the axis repeats the reflection (numpy
+  // parity)
+  x = array({1.0f, 2.0f, 3.0f}, {3});
+  CHECK(array_equal(
+            pad(x, {{5, 5}}, array(0.0f), "reflect"),
+            array(
+                {2.0f,
+                 1.0f,
+                 2.0f,
+                 3.0f,
+                 2.0f,
+                 1.0f,
+                 2.0f,
+                 3.0f,
+                 2.0f,
+                 1.0f,
+                 2.0f,
+                 3.0f,
+                 2.0f},
+                {13}))
+            .item<bool>());
 }
 
 TEST_CASE("test power") {
@@ -3287,11 +3348,27 @@ TEST_CASE("test linspace") {
   auto expected = array({0.0f, 2.5f, 5.0f, 7.5f, 10.0f}, {5});
   CHECK(array_equal(x, expected).item<bool>());
 
-  x = linspace(0, 10, 5, int32);
+  x = linspace(0, 10, 5, true, int32);
   expected = array({0, 2, 5, 7, 10}, {5});
   CHECK(array_equal(x, expected).item<bool>());
 
   x = linspace(0, 1, 0);
+  expected = array(std::initializer_list<float>{}, {0});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 10, 5, false);
+  expected = array({0.0f, 2.0f, 4.0f, 6.0f, 8.0f}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 10, 5, false, int32);
+  expected = array({0, 2, 4, 6, 8}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(1, 10, 1, false);
+  expected = array({1.0f}, {1});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 1, 0, false);
   expected = array(std::initializer_list<float>{}, {0});
   CHECK(array_equal(x, expected).item<bool>());
 }
@@ -4340,6 +4417,86 @@ TEST_CASE("test conv_transpose3d with output_padding") {
        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  0.0},
       {1, 2, 4, 4, 1});
   CHECK(array_equal(out, expected).item<bool>());
+}
+
+TEST_CASE("test conv shape overflow") {
+  // Conv shape arithmetic must not overflow (signed-int UB) for large but
+  // otherwise valid int32 parameters; out-of-range results are rejected
+  // gracefully. https://github.com/ml-explore/mlx/issues/3611
+  const int imax = 2147483647;
+  const int imin = -2147483647 - 1;
+  auto in = zeros({1, 8, 8, 1});
+  auto wt = zeros({1, 3, 3, 1});
+
+  // A kernel dilated past the input reports the spatial-size error.
+  CHECK_THROWS_AS(
+      conv_general(in, wt, {1, 1}, {0, 0}, {0, 0}, {imax, imax}, {1, 1}),
+      std::invalid_argument);
+
+  // Padding sums, input dilation, and negating a padding of INT_MIN raise.
+  CHECK_THROWS_AS(
+      conv_general(in, wt, {1, 1}, {imax, imax}, {imax, imax}, {1, 1}, {1, 1}),
+      std::overflow_error);
+  CHECK_THROWS_AS(
+      conv_general(in, wt, {1, 1}, {imax, 0}, {0, 0}, {1, 1}, {1, 1}),
+      std::overflow_error);
+  CHECK_THROWS_AS(
+      conv_general(in, wt, {1, 1}, {0, 0}, {0, 0}, {1, 1}, {imax, imax}),
+      std::overflow_error);
+  CHECK_THROWS_AS(
+      conv_general(in, wt, {1, 1}, {imin, imin}, {0, 0}, {1, 1}, {1, 1}),
+      std::overflow_error);
+
+  // The transposed padding setup runs before conv_general validates it.
+  auto in_t = zeros({1, 4, 4, 1});
+  CHECK_THROWS_AS(
+      conv_transpose2d(in_t, wt, {1, 1}, {0, 0}, {imax, imax}, {0, 0}),
+      std::overflow_error);
+  CHECK_THROWS_AS(
+      conv_transpose2d(in_t, wt, {1, 1}, {imin, imin}, {1, 1}, {0, 0}),
+      std::overflow_error);
+
+  // The dilated input and kernel are both near 4e9 and cancel in the forward
+  // output, so only the gradient's own recompute goes out of range.
+  auto in_g = zeros({1, 3, 1, 1});
+  auto wt_g = zeros({1, 200000, 1, 1});
+  auto conv_g = [](const std::vector<array>& primals) {
+    return std::vector<array>{conv_general(
+        primals[0],
+        primals[1],
+        {1, 1},
+        {0, 0},
+        {0, 0},
+        {20000, 1},
+        {2000000000, 1})};
+  };
+  auto cotan = ones(conv_g({in_g, wt_g})[0].shape());
+  CHECK_THROWS_AS(vjp(conv_g, {in_g, wt_g}, {cotan}), std::overflow_error);
+
+  // The weight gradient pads without dividing by the stride.
+  auto in_w = zeros({1, 8, 8, 1});
+  auto conv_w = [&in_w, imax](const std::vector<array>& primals) {
+    return std::vector<array>{conv_general(
+        in_w, primals[0], {imax, 1}, {imax, 0}, {imax, 0}, {1, 1}, {1, 1})};
+  };
+  auto cotan_w = ones(conv_w({wt})[0].shape());
+  CHECK_THROWS_AS(vjp(conv_w, {wt}, {cotan_w}), std::overflow_error);
+
+  // In-range parameters still give the same shapes.
+  CHECK_EQ(
+      conv_general(in, wt, {1, 1}, {1, 1}, {1, 1}, {2, 2}, {1, 1}).shape(),
+      Shape{1, 6, 6, 1});
+  CHECK_EQ(
+      conv_transpose2d(in_t, wt, {2, 2}, {1, 1}, {1, 1}, {1, 1}).shape(),
+      Shape{1, 8, 8, 1});
+}
+
+TEST_CASE("test pad shape overflow") {
+  // A padding sum that overflows int32 is rejected, not wrapped.
+  // https://github.com/ml-explore/mlx/issues/3611
+  const int imax = 2147483647;
+  CHECK_THROWS_AS(
+      pad(zeros({8}), {0}, Shape{imax}, Shape{imax}), std::overflow_error);
 }
 
 TEST_CASE("test fp8 conversion") {

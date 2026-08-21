@@ -155,7 +155,7 @@ contents) inside compiled functions.
 
 For debugging, inspecting arrays can be helpful. One way to do that is to
 globally disable compilation using the :func:`disable_compile` function or
-``MLX_DISABLE_COMPILE`` flag. For example the following is okay even though
+:envvar:`MLX_DISABLE_COMPILE` flag. For example the following is okay even though
 ``fun`` is compiled:
 
 .. code-block:: python

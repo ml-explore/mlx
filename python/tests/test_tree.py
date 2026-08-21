@@ -46,6 +46,40 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
             self.assertEqual(k1, k2)
             self.assertTrue(mx.array_equal(v1, v2))
 
+    def test_empty_subtree_merge(self):
+        # make sure mlx pytrees treat empty dict {} as an empty node
+        self.assertEqual([], mlx.utils.tree_flatten({"a": {}}))
+
+        # empty dict merging
+        self.assertEqual({}, mlx.utils.tree_merge({}, {}))
+        self.assertEqual(
+            [{"a": 1, "b": 2}, {}], mlx.utils.tree_merge([{"a": 1}, {}], [{"b": 2}, {}])
+        )
+        self.assertEqual({"a": {}}, mlx.utils.tree_merge({"a": {}}, {"a": {}}))
+        self.assertEqual(
+            {"a": 1, "b": {}, "c": 2},
+            mlx.utils.tree_merge(
+                {"a": 1, "b": {}, "c": {}}, {"a": {}, "b": {}, "c": 2}
+            ),
+        )
+
+        # empty list merging
+        self.assertEqual({"a": []}, mlx.utils.tree_merge({"a": []}, {"a": []}))
+
+        # empty tuple merging
+        self.assertEqual({"a": ()}, mlx.utils.tree_merge({"a": ()}, {"a": ()}))
+
+        # merging different empty structures
+        with self.assertRaises(ValueError):
+            mlx.utils.tree_merge({}, [])
+
+        def merge_called(a, b):
+            raise AssertionError("merge_fn called on empty subtrees")
+
+        self.assertEqual(
+            {"a": {}}, mlx.utils.tree_merge({"a": {}}, {"a": {}}, merge_called)
+        )
+
     def test_supported_trees(self):
 
         from typing import NamedTuple
@@ -120,6 +154,21 @@ class TestTreeUtils(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(vector3, Vector))
         self.assertTrue(mx.array_equal(vector3[0], mx.array([0, 2])))
         self.assertTrue(mx.array_equal(vector3[1], mx.array(4)))
+
+    def test_tree_unflatten_integer_key_collision(self):
+        # Non-canonical integer-like keys (e.g. "01") must not silently
+        # collide with "1" and shift later values. Fall back to dict tree.
+        tree = mlx.utils.tree_unflatten([("01", "a"), ("1", "b"), ("2", "c")])
+        self.assertIsInstance(tree, dict)
+        self.assertEqual(tree["01"], "a")
+        self.assertEqual(tree["1"], "b")
+        self.assertEqual(tree["2"], "c")
+
+        # Canonical list keys still unflatten as a list
+        self.assertEqual(
+            mlx.utils.tree_unflatten([("0", "a"), ("1", "b"), ("2", "c")]),
+            ["a", "b", "c"],
+        )
 
 
 if __name__ == "__main__":

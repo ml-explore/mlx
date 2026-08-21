@@ -262,7 +262,8 @@ if(WIN32)
   FetchContent_MakeAvailable(dlfcn-win32)
   endblock()
   target_include_directories(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src")
-  target_link_libraries(mlx PRIVATE dl)
+  target_sources(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src/dlfcn.c")
+  target_link_libraries(mlx PRIVATE Psapi.lib)
 endif()
 
 if(MLX_BUILD_CPU)
@@ -297,10 +298,15 @@ if(MLX_BUILD_CPU)
       URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.33/${OPENBLAS_ZIP}"
     )
     FetchContent_MakeAvailable(openblas)
-    target_link_libraries(
-      mlx PRIVATE "${openblas_SOURCE_DIR}/lib/${OPENBLAS_LIB}.lib")
     target_include_directories(mlx
                                PRIVATE "${openblas_SOURCE_DIR}/${OPENBLAS_INC}")
+    # Make openblas importable by dependencies when built as static library.
+    set(OPENBLAS_IMPORT_LIBRARY
+        "${openblas_SOURCE_DIR}/lib/${OPENBLAS_LIB}.lib")
+    add_library(MLX::OpenBLAS UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(MLX::OpenBLAS PROPERTIES IMPORTED_LOCATION
+                                                   "${OPENBLAS_IMPORT_LIBRARY}")
+    target_link_libraries(mlx PRIVATE MLX::OpenBLAS)
     # Make sure the DLL file is placed in the same dir with executables.
     set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/${OPENBLAS_LIB}.dll")
     add_custom_command(
@@ -357,7 +363,7 @@ target_include_directories(
 if(MLX_BUILD_CPU
    AND ${CMAKE_SYSTEM_NAME} MATCHES "Darwin"
    AND DEFINED MACOS_SDK_VERSION
-   AND MACOS_SDK_VERSION GREATER_EQUAL 26.2)
+   AND MACOS_SDK_VERSION VERSION_GREATER_EQUAL 26.2)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx/distributed/jaccl/lib
                    ${CMAKE_BINARY_DIR}/jaccl)
 endif()
@@ -389,7 +395,7 @@ if(MLX_BUILD_PYTHON_BINDINGS)
   FetchContent_Declare(
     nanobind
     GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-    GIT_TAG v2.13.0
+    GIT_TAG v2.15.0
     GIT_SHALLOW TRUE
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(nanobind)
@@ -418,6 +424,8 @@ if(WIN32)
   if(MLX_BUILD_CPU)
     # Install OpenBLAS.
     install(FILES ${OPENBLAS_DLL_FILE} TYPE BIN)
+    install(FILES ${OPENBLAS_IMPORT_LIBRARY}
+            DESTINATION ${CMAKE_INSTALL_LIBDIR})
   endif()
 endif()
 

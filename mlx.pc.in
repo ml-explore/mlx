@@ -11,6 +11,25 @@
 
 @PACKAGE_INIT@
 
+include(CMakeFindDependencyMacro)
+
+if(WIN32 AND @MLX_BUILD_CPU@ AND NOT TARGET MLX::OpenBLAS)
+    add_library(MLX::OpenBLAS UNKNOWN IMPORTED)
+    set_target_properties(MLX::OpenBLAS PROPERTIES
+        IMPORTED_LOCATION "@PACKAGE_CMAKE_INSTALL_LIBDIR@/@OPENBLAS_LIB@.lib"
+    )
+endif()
+
+if(@MLX_BUILD_CUDA@)
+    find_dependency(CUDAToolkit REQUIRED)
+
+    set(_MLX_SAVED_CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}")
+    list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+    find_dependency(CUDNN REQUIRED)
+    set(CMAKE_MODULE_PATH "${_MLX_SAVED_CMAKE_MODULE_PATH}")
+    unset(_MLX_SAVED_CMAKE_MODULE_PATH)
+endif()
+
 include(@PACKAGE_MLX_CMAKE_INSTALL_MODULE_DIR@/MLXTargets.cmake)
 include(@PACKAGE_MLX_CMAKE_INSTALL_MODULE_DIR@/extension.cmake)
 

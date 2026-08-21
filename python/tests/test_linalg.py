@@ -38,6 +38,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
                             with self.subTest(
                                 shape=shape, ord=o, axis=axis, keepdims=keepdims
                             ):
+                                self.assertEqual(out_mx.shape, out_np.shape)
                                 self.assertTrue(
                                     np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6)
                                 )
@@ -51,6 +52,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
                     out_np = np.linalg.norm(x_np, ord=o, keepdims=keepdims)
                     out_mx = mx.linalg.norm(x_mx, ord=o, keepdims=keepdims)
                     with self.subTest(shape=shape, ord=o, keepdims=keepdims):
+                        self.assertEqual(out_mx.shape, out_np.shape)
                         self.assertTrue(
                             np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6)
                         )
@@ -63,6 +65,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 out_np = np.linalg.norm(x_np, keepdims=keepdims)
                 out_mx = mx.linalg.norm(x_mx, keepdims=keepdims)
                 with self.subTest(shape=shape, keepdims=keepdims):
+                    self.assertEqual(out_mx.shape, out_np.shape)
                     self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
 
         # tests for negative indexing: -1/1/inf/-inf/
@@ -154,6 +157,16 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 mx.allclose(out, mx.eye(min(A.shape)), rtol=1e-4, atol=1e-6)
             )
 
+        # Zero-size inputs. Both factors carry min(M, N) as a dimension, so
+        # both are empty whichever dimension is zero.
+        for shape in [(0, 0), (3, 0, 0), (0, 4, 4), (5, 0), (0, 5)]:
+            A_np = np.zeros(shape, dtype=np.float32)
+            Q, R = mx.linalg.qr(mx.array(A_np), stream=mx.cpu)
+            mx.eval(Q, R)
+            Q_np, R_np = np.linalg.qr(A_np)
+            self.assertEqual(Q.shape, Q_np.shape)
+            self.assertEqual(R.shape, R_np.shape)
+
     def test_svd_decomposition(self):
         A = mx.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], dtype=mx.float32)
         U, S, Vt = mx.linalg.svd(A, compute_uv=True, stream=mx.cpu)
@@ -187,6 +200,23 @@ class TestLinalg(mlx_tests.MLXTestCase):
                     atol=1e-7,
                 )
             )
+
+        # Zero-size inputs. When only one of the dimensions is zero the
+        # factors are not empty and hold the identity, like numpy.
+        for shape in [(0, 4, 4), (3, 0, 0), (2, 5, 0), (2, 0, 5), (5, 0), (0, 5)]:
+            a_np = np.zeros(shape, dtype=np.float32)
+            U, S, Vt = mx.linalg.svd(mx.array(a_np), stream=mx.cpu)
+            mx.eval(U, S, Vt)
+            U_np, S_np, Vt_np = np.linalg.svd(a_np)
+            self.assertEqual(U.shape, U_np.shape)
+            self.assertEqual(S.shape, S_np.shape)
+            self.assertEqual(Vt.shape, Vt_np.shape)
+            self.assertTrue(np.array_equal(np.array(U), U_np))
+            self.assertTrue(np.array_equal(np.array(Vt), Vt_np))
+
+            S_only = mx.linalg.svd(mx.array(a_np), compute_uv=False, stream=mx.cpu)
+            mx.eval(S_only)
+            self.assertEqual(S_only.shape, S_np.shape)
 
         # Test float64 - use CPU stream since float64 is not supported on GPU
         with mx.stream(mx.cpu):
@@ -292,6 +322,13 @@ class TestLinalg(mlx_tests.MLXTestCase):
         A = mx.array([[4.0, 1.0], [4.0, 1.0]])
         A_plus = mx.linalg.pinv(A, stream=mx.cpu)
         self.assertTrue(mx.allclose(A @ A_plus @ A, A))
+
+        # Zero-size inputs. The result takes the shape of the transposed input.
+        for shape in [(0, 0), (0, 3), (3, 0), (0, 2, 2), (2, 0, 0), (0, 4, 3)]:
+            A_np = np.zeros(shape, dtype=np.float32)
+            A_plus = mx.linalg.pinv(mx.array(A_np), stream=mx.cpu)
+            mx.eval(A_plus)
+            self.assertEqual(A_plus.shape, np.linalg.pinv(A_np).shape)
 
     def test_cholesky_inv(self):
         mx.random.seed(7)
@@ -435,6 +472,19 @@ class TestLinalg(mlx_tests.MLXTestCase):
             self.assertEqual(eig_vals_c64.dtype, mx.complex64)
             self.assertEqual(eig_vecs_c64.dtype, mx.complex64)
 
+        # Zero-size inputs. The input is square, so both outputs are empty.
+        for shape in [(0, 0), (3, 0, 0), (0, 4, 4)]:
+            A_np = np.zeros(shape, dtype=np.float32)
+            eig_vals, eig_vecs = mx.linalg.eig(mx.array(A_np), stream=mx.cpu)
+            mx.eval(eig_vals, eig_vecs)
+            vals_np, vecs_np = np.linalg.eig(A_np)
+            self.assertEqual(eig_vals.shape, vals_np.shape)
+            self.assertEqual(eig_vecs.shape, vecs_np.shape)
+
+            vals_only = mx.linalg.eigvals(mx.array(A_np), stream=mx.cpu)
+            mx.eval(vals_only)
+            self.assertEqual(vals_only.shape, vals_np.shape)
+
         # Test error cases
         with self.assertRaises(ValueError):
             mx.linalg.eig(mx.array([1.0, 2.0]))  # 1D array
@@ -492,6 +542,29 @@ class TestLinalg(mlx_tests.MLXTestCase):
         )
         A_np = A_np + A_np.T.conj()
         check_eigs_and_vecs(A_np)
+
+        # UPLO picks the triangle like numpy; only observable when the two
+        # triangles disagree
+        A_np = np.array([[1.0, 999.0], [2.0, 3.0]], dtype=np.float32)
+        for uplo in ("L", "U"):
+            w = mx.linalg.eigvalsh(mx.array(A_np), UPLO=uplo, stream=mx.cpu)
+            w_np = np.linalg.eigvalsh(A_np, UPLO=uplo)
+            self.assertTrue(np.allclose(w, w_np, atol=1e-5))
+
+        # Zero-size inputs
+        for shape in [(0, 4, 4), (3, 0, 0), (0, 0)]:
+            a_np = np.zeros(shape, dtype=np.float32)
+            w, v = mx.linalg.eigh(mx.array(a_np), stream=mx.cpu)
+            mx.eval(w, v)
+            w_np, v_np = np.linalg.eigh(a_np)
+            self.assertEqual(w.shape, w_np.shape)
+            self.assertEqual(v.shape, v_np.shape)
+            self.assertTrue(np.array_equal(np.array(w), w_np))
+            self.assertTrue(np.array_equal(np.array(v), v_np))
+
+            w_only = mx.linalg.eigvalsh(mx.array(a_np), stream=mx.cpu)
+            mx.eval(w_only)
+            self.assertEqual(w_only.shape, w_np.shape)
 
         # Test error cases
         with self.assertRaises(ValueError):

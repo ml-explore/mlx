@@ -163,7 +163,8 @@ void scan_op(
     const Op& op,
     U init) {
   if (in.flags().row_contiguous) {
-    if (in.strides()[axis] == 1) {
+    // A size-one axis can carry any stride and still be row contiguous.
+    if (in.strides()[axis] == 1 || in.shape(axis) == 1) {
       contiguous_scan(
           in.data<T>(),
           out.data<U>(),
@@ -212,7 +213,14 @@ void scan_dispatch(
       break;
     }
     case Scan::Min: {
-      auto op = [](U y, T x) { return x < y ? x : y; };
+      auto op = [](U y, T x) {
+        if constexpr (is_floating_point_v<U>) {
+          if (std::isnan(y) || std::isnan(static_cast<U>(x))) {
+            return std::numeric_limits<U>::quiet_NaN();
+          }
+        }
+        return x < y ? x : y;
+      };
       auto init = (issubdtype(in.dtype(), floating))
           ? static_cast<U>(std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::max();
@@ -220,7 +228,14 @@ void scan_dispatch(
       break;
     }
     case Scan::Max: {
-      auto op = [](U y, T x) { return x < y ? y : x; };
+      auto op = [](U y, T x) {
+        if constexpr (is_floating_point_v<U>) {
+          if (std::isnan(y) || std::isnan(static_cast<U>(x))) {
+            return std::numeric_limits<U>::quiet_NaN();
+          }
+        }
+        return x < y ? y : x;
+      };
       auto init = (issubdtype(in.dtype(), floating))
           ? static_cast<U>(-std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::min();

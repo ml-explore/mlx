@@ -1,6 +1,7 @@
 # Copyright © 2024 Apple Inc.
 
 import gc
+import json
 import os
 import tempfile
 import unittest
@@ -312,6 +313,24 @@ class TestExportImport(mlx_tests.MLXTestCase):
         expected = fun(x, y, z)
         out = imported_fun(x, y, z)[0]
         self.assertTrue(mx.array_equal(expected, out))
+
+    def test_export_searchsorted(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        # both sides, since the side is the primitive's only state and a lost
+        # state would still round trip for the default
+        for side in ("left", "right"):
+
+            def fun(a, v):
+                return mx.searchsorted(a, v, side=side)
+
+            x = mx.sort(mx.random.uniform(shape=(32,)))
+            y = mx.random.uniform(shape=(3, 5))
+            mx.export_function(path, fun, (x, y))
+            imported_fun = mx.import_function(path)
+            expected = fun(x, y)
+            out = imported_fun(x, y)[0]
+            self.assertTrue(mx.array_equal(expected, out))
 
     def test_export_conv(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
@@ -747,6 +766,42 @@ class TestExportImport(mlx_tests.MLXTestCase):
                 (y,) = imported(x)
                 self.assertEqual(y.shape, (B, seq_len, H))
                 self.assertTrue(mx.allclose(y, expected))
+
+    def test_export_import_metadata(self):
+        path = os.path.join(self.test_dir, "fn.mlxfn")
+
+        def fun(x):
+            return mx.abs(x)
+
+        x = mx.array([1.0, -2.0, 3.0])
+        metadata = json.dumps({"name": "model", "params": 7_000_000_000, "lr": 0.1})
+
+        mx.export_function(path, fun, x, metadata=metadata)
+
+        imported = mx.import_function(path)
+        self.assertTrue(mx.array_equal(imported(x)[0], fun(x)))
+
+        imported, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, metadata)
+        self.assertEqual(json.loads(imported_metadata)["params"], 7_000_000_000)
+        self.assertTrue(mx.array_equal(imported(x)[0], fun(x)))
+
+        mx.export_function(path, fun, x)
+        _, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, "")
+
+        # Metadata survives the per-trace header rewrite of a multi-trace export
+        with mx.exporter(path, fun, metadata=metadata) as exporter:
+            exporter(mx.array([1.0]))
+            exporter(mx.array([1.0, 2.0]))
+        _, imported_metadata = mx.import_function(path, return_metadata=True)
+        self.assertEqual(imported_metadata, metadata)
+
+        with self.assertRaises(TypeError):
+            mx.export_function(path, fun, x, metadata={"name": "model"})
+
+        with self.assertRaises(ValueError):
+            mx.export_function(lambda x: None, fun, x, metadata=metadata)
 
 
 if __name__ == "__main__":

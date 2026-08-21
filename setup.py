@@ -53,7 +53,22 @@ def get_version():
     return version
 
 
-build_stage = int(os.environ.get("MLX_BUILD_STAGE", 0))
+# Release builds for PyPi are separated into 2 packages:
+#
+# Frontend package:
+#  - Triggered with `MLX_BUILD_FRONTEND_PACKAGE=1`
+#  - Include everything except backend-specific binaries (e.g. libmlx.so, mlx.metallib, etc)
+#  - Wheel has Python ABI and platform tags
+#  - Wheel should be built for the cross-product of python version and platforms
+#  - Package name is "mlx" and it depends on backend packages (e.g. mlx-metal, mlx-cuda)
+# Backend package:
+#  - Triggered with `MLX_BUILD_BACKEND_PACKAGE=1`
+#  - Include headers and backend binaries.
+#  - Wheel has only platform tags
+#  - Wheel should be built only for different platforms
+#  - Package name is back-end specific, e.g mlx-metal, mlx-cuda
+build_frontend = int(os.environ.get("MLX_BUILD_FRONTEND_PACKAGE", 0))
+build_backend = int(os.environ.get("MLX_BUILD_BACKEND_PACKAGE", 0))
 build_macos = platform.system() == "Darwin"
 build_cuda = "MLX_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
 
@@ -77,9 +92,7 @@ class CMakeBuild(build_ext):
             self.build_temp = os.path.dirname(self.build_temp)
 
     def build_extension(self, ext: CMakeExtension) -> None:
-        # Must be in this form due to bug in .resolve() only fixed in Python 3.10+
-        ext_fullpath = Path.cwd() / self.get_ext_fullpath(ext.name)  # type: ignore[no-untyped-call]
-        extdir = ext_fullpath.parent.resolve()
+        extdir = self._get_ext_dir(ext)
 
         debug = int(os.environ.get("DEBUG", 0)) if self.debug is None else self.debug
         cfg = "Debug" if debug else "Release"
@@ -88,17 +101,9 @@ class CMakeBuild(build_ext):
         if not build_temp.exists():
             build_temp.mkdir(parents=True)
 
-        install_prefix = extdir
-        pybind_out_dir = extdir
-        if build_stage == 1:
-            # Don't include MLX libraries in the wheel
-            install_prefix = build_temp
-        elif build_stage == 2:
-            # Don't include Python bindings in the wheel
-            pybind_out_dir = build_temp
         cmake_args = [
-            f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
-            f"-DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY={pybind_out_dir}",
+            f"-DCMAKE_INSTALL_PREFIX={extdir}",
+            f"-DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY={extdir}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
             f"-DPython_EXECUTABLE={sys.executable}",
             "-DMLX_BUILD_PYTHON_BINDINGS=ON",
@@ -113,8 +118,7 @@ class CMakeBuild(build_ext):
         if "CMAKE_ARGS" in os.environ:
             cmake_args += [item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
 
-        # For release wheel force building for all supported arches.
-        if build_stage == 2 and build_cuda:
+        if build_backend and build_cuda:
             # Last arch is always real and virtual for forward-compatibility
             cuda_archs = [
                 "75-real",
@@ -186,15 +190,49 @@ class CMakeBuild(build_ext):
             ["cmake", "--install", build_temp, "--component", "core_stub"],
             check=True,
         )
+        # Copy the type stubs to extdir so they are included in wheels.
+        stubs_dir = Path("python/mlx/core")
+        if stubs_dir.exists():
+            extdir = self._get_ext_dir(ext)
+            self.copy_tree(stubs_dir, extdir / "core")
+
+    def _get_ext_dir(self, ext):
+        # Must be in this form due to bug in .resolve() only fixed in Python 3.10+
+        ext_fullpath = Path.cwd() / self.get_ext_fullpath(ext.name)  # type: ignore[no-untyped-call]
+        return ext_fullpath.parent.resolve()
 
 
 class MLXBdistWheel(bdist_wheel):
     def get_tag(self) -> tuple[str, str, str]:
         impl, abi, plat_name = super().get_tag()
-        if build_stage == 2:
+        if build_backend:
             impl = self.python_tag
             abi = "none"
         return (impl, abi, plat_name)
+
+    def write_wheelfile(self, *args, **kwargs) -> None:
+        super().write_wheelfile(*args, **kwargs)
+
+        mlx_dir = Path(self.bdist_dir, "mlx")
+
+        def is_backend_file(file):
+            if file.is_relative_to(Path(mlx_dir, "lib")):
+                return True
+            if file.is_relative_to(Path(mlx_dir, "include")):
+                return True
+            if file.is_relative_to(Path(mlx_dir, "share")):
+                return True
+            if file.suffix == ".dll":
+                return True
+            return False
+
+        if build_frontend or build_backend:
+            for file in Path(self.bdist_dir).rglob("*"):
+                if not file.is_relative_to(mlx_dir) or not file.is_file():
+                    continue
+                bf = is_backend_file(file)
+                if (build_frontend and bf) or (build_backend and not bf):
+                    file.unlink()
 
 
 # Read the content of README.md
@@ -260,24 +298,8 @@ if __name__ == "__main__":
     }
     install_requires = []
 
-    # Release builds for PyPi are in two stages.
-    # Each stage should be run from a clean build:
-    #   python setup.py clean --all
-    #
-    # Stage 1:
-    #  - Triggered with `MLX_BUILD_STAGE=1`
-    #  - Include everything except backend-specific binaries (e.g. libmlx.so, mlx.metallib, etc)
-    #  - Wheel has Python ABI and platform tags
-    #  - Wheel should be built for the cross-product of python version and platforms
-    #  - Package name is mlx and it depends on subpackage in stage 2 (e.g. mlx-metal)
-    # Stage 2:
-    #  - Triggered with `MLX_BUILD_STAGE=2`
-    #  - Includes only backend-specific binaries (e.g. libmlx.so, mlx.metallib, etc)
-    #  - Wheel has only platform tags
-    #  - Wheel should be built only for different platforms
-    #  - Package name is back-end specific, e.g mlx-metal
-    if build_stage != 2:
-        if build_stage == 1:
+    if not build_backend:
+        if build_frontend:
             install_requires.append(
                 f'mlx-metal=={version}; platform_system == "Darwin"'
             )
@@ -320,9 +342,10 @@ if __name__ == "__main__":
                 ]
             elif toolkit == 13:
                 install_requires += [
-                    "nvidia-cublas",
-                    "nvidia-cufft",
-                    "nvidia-cuda-nvrtc",
+                    "nvidia-cublas==13.*",
+                    "nvidia-cufft==12.*",
+                    "nvidia-cuda-nvrtc==13.*",
+                    "nvidia-cuda-runtime==13.*",
                 ]
             else:
                 raise ValueError(f"Unknown toolkit {toolkit}")

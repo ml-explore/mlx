@@ -108,6 +108,11 @@ def cross_entropy(
     if use_fast:
         loss = mx.fast.cross_entropy(logits, targets).astype(logits.dtype)
     else:
+        # Shift by the max first. The loss only depends on differences between
+        # logits, but subtracting the logsumexp of large logits loses the gap to
+        # rounding before the subtraction happens.
+        logits = logits - mx.stop_gradient(mx.max(logits, axis=axis, keepdims=True))
+
         if targets_as_probs:
             score = mx.sum(logits * targets, axis=axis)
         else:

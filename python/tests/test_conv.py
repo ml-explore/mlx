@@ -14,7 +14,7 @@ try:
     import torch.nn.functional as F
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 
@@ -309,9 +309,11 @@ class TestConv(mlx_tests.MLXTestCase):
                     lambda x: mx.array(x).astype(mx_dtype), (in_np, wt_np)
                 )
                 in_pt, wt_pt = map(
-                    lambda x: torch.from_numpy(x.transpose(0, 3, 1, 2))
-                    .to("cpu")
-                    .to(torch_dtype),
+                    lambda x: (
+                        torch.from_numpy(x.transpose(0, 3, 1, 2))
+                        .to("cpu")
+                        .to(torch_dtype)
+                    ),
                     (in_np, wt_np),
                 )
 
@@ -1069,7 +1071,6 @@ class TestConv(mlx_tests.MLXTestCase):
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_depthwise(self):
-
         # fmt: off
         shapes = (
             # N,   H,   W,    C   kH,  kW,   O, strides, padding,  groups
@@ -1214,12 +1215,130 @@ class TestConv(mlx_tests.MLXTestCase):
         y_hat = mx.conv_transpose2d(x, w)
         self.assertTrue(mx.allclose(y, y_hat))
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_conv2d_winograd_batch_tiling(self):
+        # Use envs to test tiling without allocating large buffers.
+        tile_key = "MLX_CONV_WINOGRAD_TILE_BATCH"
+        ws_key = "MLX_CONV_WINOGRAD_WORKING_SET"
+        prev = {k: os.environ.get(k) for k in (tile_key, ws_key)}
+
+        # Winograd needs 3x3 stride-1, channels in multiples of 32,
+        # C + O >= 256 and N * iH * iW >= 4096.
+        cases = (
+            ((8, 48, 48, 64), (192, 3, 3, 64)),
+            ((5, 52, 44, 128), (128, 3, 3, 128)),
+            ((4, 48, 48, 192), (96, 3, 3, 192)),
+        )
+
+        def run(x, w, env={}):
+            for k in (tile_key, ws_key):
+                os.environ.pop(k, None)
+            os.environ.update(env)
+            y = mx.conv2d(x, w, padding=1)
+            mx.eval(y)
+            return np.array(y)
+
+        try:
+            for in_shape, wt_shape in cases:
+                np.random.seed(0)
+                x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
+                # Small weights keep the output near unit scale.
+                w = mx.array(
+                    (np.random.normal(size=wt_shape) * 0.05).astype(np.float32)
+                )
+                b = mx.zeros((wt_shape[0],))
+                mx.eval(x, w, b)
+                cpu_ref = np.array(mx.conv2d(x, w, padding=1, stream=mx.cpu))
+
+                untiled = run(x, w)
+                self.assertGreater(np.abs(untiled).max(), 0)
+                self.assertTrue(np.allclose(untiled, cpu_ref, atol=1e-3))
+
+                # Tiled winograd keeps the same per-element reduction order,
+                # so it is bit-identical to untiled; the implicit gemm
+                # fallback never is. Exact equality pins each run to its path.
+                # 3 divides none of the batches, so it also covers a short
+                # final tile.
+                for tile in (1, 3):
+                    with self.subTest(in_shape=in_shape, tile=tile):
+                        tiled = run(x, w, {tile_key: str(tile)})
+                        self.assertTrue(np.array_equal(untiled, tiled))
+
+                        # A consumer op checks the output is fenced across
+                        # command encoders.
+                        os.environ[tile_key] = str(tile)
+                        fused = mx.conv2d(x, w, padding=1) + b
+                        mx.eval(fused)
+                        self.assertTrue(np.allclose(untiled, fused, atol=1e-4))
+                        os.environ.pop(tile_key, None)
+
+                # Budget for ~2 batch elements so the selector itself must
+                # tile; mirrors the winograd_batch_step arithmetic.
+                n, iH, iW, C = in_shape
+                O = wt_shape[0]
+                pH = 6 * ((iH + 2 - 2 + 5) // 6) + 2
+                pW = 6 * ((iW + 2 - 2 + 5) // 6) + 2
+                per_n = (
+                    pH * pW * C * 4
+                    + 64 * ((iH + 5) // 6) * ((iW + 5) // 6) * (C + O) * 4
+                )
+                used = (n * iH * iW * (C + O) + 64 * C * O) * 4
+                with self.subTest(in_shape=in_shape, budget="tiled"):
+                    budget = str(int((used + 5 * per_n // 2) / 0.75))
+                    tiled = run(x, w, {ws_key: budget})
+                    self.assertTrue(np.array_equal(untiled, tiled))
+
+                # Too small for even one batch element: must fall back.
+                with self.subTest(in_shape=in_shape, budget="infeasible"):
+                    fallback = run(x, w, {ws_key: "1"})
+                    self.assertFalse(np.array_equal(untiled, fallback))
+                    self.assertTrue(np.allclose(fallback, cpu_ref, atol=1e-3))
+
+                # A forced tile is capped by the budget, so this must still
+                # fall back.
+                with self.subTest(in_shape=in_shape, budget="forced+infeasible"):
+                    capped = run(x, w, {ws_key: "1", tile_key: "1"})
+                    self.assertFalse(np.array_equal(untiled, capped))
+                    self.assertTrue(np.allclose(capped, cpu_ref, atol=1e-3))
+        finally:
+            for k, v in prev.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
     def test_conv2d_large_filter_small_channels(self):
         x = mx.random.normal(shape=(1, 181, 181, 1))
         w = mx.random.normal(shape=(1, 182, 182, 1))
         y = mx.conv2d(x, w, (1, 1), (1, 1), stream=mx.cpu)
         y_hat = mx.conv2d(x, w, (1, 1), (1, 1))
         self.assertTrue(mx.allclose(y, y_hat, rtol=1e-3, atol=1e-3))
+
+    def test_conv_3D_small_kd_decomposition(self):
+        # Exercises the small kernel-depth 3D -> KD x 2D decomposition (#3625):
+        # N=1, small KD, depth stride/dilation 1, no depth padding, mod16 channels.
+        # Validated against the CPU reference, which uses a different code path.
+        for T, H, W, Cin, Cout, kd, kh, kw in [
+            (5, 16, 16, 32, 32, 3, 3, 3),  # canonical 3x3x3 (2D hits Winograd)
+            (4, 12, 10, 16, 48, 3, 3, 3),  # Cout != Cin
+            (6, 14, 14, 32, 32, 1, 3, 3),  # KD = 1
+            (5, 12, 12, 16, 16, 5, 1, 1),  # larger KD, 1x1 spatial
+            (4, 10, 10, 32, 16, 2, 3, 3),  # KD = 2
+        ]:
+            x = mx.random.normal((1, T, H, W, Cin))
+            w = mx.random.normal((Cout, kd, kh, kw, Cin))
+            # flip mirrors every kernel axis, including the decomposed depth
+            for flip in (False, True):
+                y_gpu = mx.conv_general(x, w, stride=(1, 1, 1), flip=flip)
+                y_cpu = mx.conv_general(
+                    x, w, stride=(1, 1, 1), flip=flip, stream=mx.cpu
+                )
+                mx.eval(y_gpu, y_cpu)
+                self.assertTrue(
+                    mx.allclose(y_gpu, y_cpu, rtol=1e-4, atol=1e-4),
+                    f"3D small-kd mismatch T{T} H{H} W{W} "
+                    f"C{Cin}->{Cout} k{kd}{kh}{kw} flip={flip}",
+                )
 
 
 if __name__ == "__main__":

@@ -406,29 +406,13 @@ auto py_vmap(
   };
 }
 
-void ensure_compile_cache_cleanup() {
-  // Make sure each thread using mx.compile would clear its compile cache
-  // before python interpreter exits.
-  struct ThreadCleanup {
-    ~ThreadCleanup() {
-      if (!mx::detail::compile_cache_empty()) {
-        nb::gil_scoped_acquire gil;
-        mx::detail::compile_clear_cache();
-      }
-    }
-  };
-  static thread_local auto clear_cache = []() {
-    mx::detail::compile_clear_cache();
-    return ThreadCleanup{};
-  }();
-}
-
 struct PyCompiledFun {
   nb::callable fun;
   std::uintptr_t fun_id;
   nb::object captured_inputs;
   nb::object captured_outputs;
   bool shapeless;
+  mx::detail::CompileCacheWeakPtr cache;
 
   // Data to attach to the compiled function that contains the python output
   // structure and the number of arrays in said structure.
@@ -456,15 +440,16 @@ struct PyCompiledFun {
   PyCompiledFun& operator=(PyCompiledFun&& other) = delete;
   PyCompiledFun(PyCompiledFun&& other)
       : fun(std::move(other.fun)),
-        fun_id(reinterpret_cast<std::uintptr_t>(fun.ptr())) {
+        fun_id(reinterpret_cast<std::uintptr_t>(fun.ptr())),
+        captured_inputs(std::move(other.captured_inputs)),
+        captured_outputs(std::move(other.captured_outputs)),
+        shapeless(other.shapeless),
+        cache(other.cache) {
     other.fun_id = 0;
-    captured_inputs = std::move(other.captured_inputs);
-    captured_outputs = std::move(other.captured_outputs);
-    shapeless = other.shapeless;
   };
 
   nb::object call_impl(const nb::args& args, const nb::kwargs& kwargs) {
-    ensure_compile_cache_cleanup();
+    cache = mx::detail::compile_cache();
 
     // Flat array inputs
     std::vector<mx::array> inputs;
@@ -599,7 +584,7 @@ struct PyCompiledFun {
   ~PyCompiledFun() {
     nb::gil_scoped_acquire gil;
 
-    mx::detail::compile_erase(fun_id);
+    mx::detail::compile_erase(cache, fun_id);
     fun.reset();
     captured_inputs.reset();
     captured_outputs.reset();
@@ -1352,7 +1337,7 @@ void init_transforms(nb::module_& m) {
       "argnums"_a = nb::none(),
       "argnames"_a = std::vector<std::string>{},
       nb::sig(
-          "def value_and_grad(fun: Callable[P, R], argnums: Optional[Union[int, Sequence[int]]] = None, argnames: Union[str, Sequence[str]] = []) -> Callable[P, Tuple[R, Any]]"),
+          "def value_and_grad(fun: Callable[P, R], argnums: int | Sequence[int] | None = None, argnames: str | Sequence[str] = []) -> Callable[P, tuple[R, Any]]"),
       R"pbdoc(
         Returns a function which computes the value and gradient of ``fun``.
 
@@ -1421,7 +1406,7 @@ void init_transforms(nb::module_& m) {
       "argnums"_a = nb::none(),
       "argnames"_a = std::vector<std::string>{},
       nb::sig(
-          "def grad(fun: Callable[P, R], argnums: Optional[Union[int, Sequence[int]]] = None, argnames: Union[str, Sequence[str]] = []) -> Callable[P, Any]"),
+          "def grad(fun: Callable[P, R], argnums: int | Sequence[int] | None = None, argnames: str | Sequence[str] = []) -> Callable[P, Any]"),
       R"pbdoc(
         Returns a function which computes the gradient of ``fun``.
 
@@ -1491,7 +1476,7 @@ void init_transforms(nb::module_& m) {
       "outputs"_a = nb::none(),
       "shapeless"_a = false,
       nb::sig(
-          "def compile(fun: Callable[P, R], inputs: Optional[object] = None, outputs: Optional[object] = None, shapeless: bool = False) -> Callable[P, R]"),
+          "def compile(fun: Callable[P, R], inputs: object | None = None, outputs: object | None = None, shapeless: bool = False) -> Callable[P, R]"),
       R"pbdoc(
         Returns a compiled function which produces the same output as ``fun``.
 
@@ -1553,10 +1538,4 @@ void init_transforms(nb::module_& m) {
           A callable that recomputes intermediate states during gradient
           computation.
       )pbdoc");
-
-  // Ensure the main thread cleanup will happen before the interpreter goes
-  // away. As a result if the other threads join the main thread we should have
-  // a clean tear-down.
-  auto atexit = nb::module_::import_("atexit");
-  atexit.attr("register")(nb::cpp_function(&mx::detail::compile_clear_cache));
 }

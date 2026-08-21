@@ -19,6 +19,11 @@
 #include "mlx/ops.h"
 #include "mlx/utils.h"
 
+// Defined in ops.cpp.
+namespace mlx::core {
+array astype(array a, Dtype dtype, bool force_copy, StreamOrDevice s = {});
+}
+
 enum PyScalarT {
   pybool = 0,
   pyint = 1,
@@ -374,7 +379,11 @@ nb::ndarray<nb::numpy> mlx_to_np_array(const mx::array& a) {
 
 nb::ndarray<> mlx_to_dlpack(
     const mx::array& a,
+    bool force_copy,
     std::optional<std::tuple<int, int>> dl_device) {
+  if (force_copy) {
+    return mlx_to_nd_array<>(mx::astype(a, a.dtype(), true), dl_device);
+  }
   return mlx_to_nd_array<>(a, dl_device);
 }
 
@@ -496,7 +505,8 @@ PyScalarT validate_shape(
     T list,
     const mx::Shape& shape,
     int idx,
-    bool& all_python_primitive_elements) {
+    bool& all_python_primitive_elements,
+    bool& has_wide_int) {
   if (idx >= shape.size()) {
     throw std::invalid_argument("Initialization encountered extra dimension.");
   }
@@ -515,13 +525,18 @@ PyScalarT validate_shape(
     PyScalarT t;
     if (nb::isinstance<nb::list>(l)) {
       t = validate_shape(
-          nb::cast<nb::list>(l), shape, idx + 1, all_python_primitive_elements);
+          nb::cast<nb::list>(l),
+          shape,
+          idx + 1,
+          all_python_primitive_elements,
+          has_wide_int);
     } else if (nb::isinstance<nb::tuple>(*list.begin())) {
       t = validate_shape(
           nb::cast<nb::tuple>(l),
           shape,
           idx + 1,
-          all_python_primitive_elements);
+          all_python_primitive_elements,
+          has_wide_int);
     } else if (nb::isinstance<mx::array>(l)) {
       all_python_primitive_elements = false;
       auto arr = nb::cast<mx::array>(l);
@@ -540,6 +555,13 @@ PyScalarT validate_shape(
         t = pybool;
       } else if (nb::isinstance<nb::int_>(l)) {
         t = pyint;
+        // Match the scalar path, which widens to int64 rather than failing
+        // when a python int does not fit in int32.
+        auto val = nb::cast<int64_t>(l);
+        if (val > std::numeric_limits<int>::max() ||
+            val < std::numeric_limits<int>::min()) {
+          has_wide_int = true;
+        }
       } else if (nb::isinstance<nb::float_>(l)) {
         t = pyfloat;
       } else if (PyComplex_Check(l.ptr())) {
@@ -585,7 +607,8 @@ mx::array array_from_list_impl(
     T pl,
     const PyScalarT& inferred_type,
     std::optional<mx::Dtype> specified_type,
-    const mx::Shape& shape) {
+    const mx::Shape& shape,
+    bool has_wide_int) {
   // Make the array
   switch (inferred_type) {
     case pybool: {
@@ -594,7 +617,8 @@ mx::array array_from_list_impl(
       return mx::array(vals.begin(), shape, specified_type.value_or(mx::bool_));
     }
     case pyint: {
-      auto dtype = specified_type.value_or(mx::int32);
+      auto dtype =
+          specified_type.value_or(has_wide_int ? mx::int64 : mx::int32);
       if (dtype == mx::int64) {
         std::vector<int64_t> vals;
         fill_vector(pl, vals);
@@ -654,11 +678,13 @@ mx::array array_from_list_impl(T pl, std::optional<mx::Dtype> dtype) {
 
   // Validate the shape and type
   bool all_python_primitive_elements = true;
-  auto type = validate_shape(pl, shape, 0, all_python_primitive_elements);
+  bool has_wide_int = false;
+  auto type =
+      validate_shape(pl, shape, 0, all_python_primitive_elements, has_wide_int);
 
   if (all_python_primitive_elements) {
     // `pl` does not contain mlx arrays
-    return array_from_list_impl(pl, type, dtype, shape);
+    return array_from_list_impl(pl, type, dtype, shape, has_wide_int);
   }
 
   // `pl` contains mlx arrays
@@ -728,9 +754,9 @@ mx::array create_array(
   } else if (nb::isinstance<mx::array>(v)) {
     auto arr = nb::cast<mx::array>(v);
     auto dtype = t.value_or(arr.dtype());
-    return mx::astype(arr, dtype, copy);
+    return mx::astype(arr, dtype, copy.value_or(false));
   } else {
     auto arr = to_array_with_accessor(v);
-    return mx::astype(arr, t.value_or(arr.dtype()), copy);
+    return mx::astype(arr, t.value_or(arr.dtype()), copy.value_or(false));
   }
 }

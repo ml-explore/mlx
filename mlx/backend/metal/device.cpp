@@ -64,7 +64,10 @@ void set_compile_options(
 
 auto get_metal_version() {
   auto get_metal_version_ = []() {
-    if (__builtin_available(macOS 26, iOS 26, tvOS 26, visionOS 26, *)) {
+    if (__builtin_available(macOS 27, iOS 27, tvOS 27, visionOS 27, *)) {
+      // TODO: Use MTL::LanguageVersion4_1 after metal-cpp_27 is released.
+      return static_cast<MTL::LanguageVersion>((4 << 16) + 1);
+    } else if (__builtin_available(macOS 26, iOS 26, tvOS 26, visionOS 26, *)) {
       return MTL::LanguageVersion4_0;
     } else if (__builtin_available(macOS 15, iOS 18, tvOS 18, visionOS 2, *)) {
       return MTL::LanguageVersion3_2;
@@ -306,17 +309,16 @@ MTL::Library* load_library(
 CommandEncoder::CommandEncoder(
     Device& d,
     int index,
-    ResidencySet& residency_set)
-    : device_(d) {
+    ResidencySets& residency_sets)
+    : device_(d), residency_sets_(residency_sets) {
   auto pool = new_scoped_memory_pool();
   queue_ = NS::TransferPtr(device_.mtl_device()->newCommandQueue());
   if (!queue_) {
     throw std::runtime_error(
         "[metal::CommandEncoder] Failed to make new command queue.");
   }
-  if (residency_set.mtl_residency_set()) {
-    queue_->addResidencySet(residency_set.mtl_residency_set());
-  }
+  // Sets created later are attached in commit().
+  residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
   debug_set_stream_queue_label(queue_.get(), index);
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
 }
@@ -494,19 +496,15 @@ void CommandEncoder::end_encoding() {
   all_inputs_.clear();
 }
 
-void CommandEncoder::signal_event(
-    std::shared_ptr<EventImpl> event,
-    uint64_t value) {
+void CommandEncoder::signal_event(Event event, uint64_t value) {
   end_encoding();
-  buffer_->encodeSignalEvent(event->mtl_event(), value);
+  buffer_->encodeSignalEvent(event.cast<EventImpl>().mtl_event(), value);
   signal_events_.push_back({std::move(event), value});
 }
 
-void CommandEncoder::wait_event(
-    std::shared_ptr<EventImpl> event,
-    uint64_t value) {
+void CommandEncoder::wait_event(Event event, uint64_t value) {
   end_encoding();
-  buffer_->encodeWait(event->mtl_event(), value);
+  buffer_->encodeWait(event.cast<EventImpl>().mtl_event(), value);
   wait_events_.push_back(std::move(event));
 }
 
@@ -516,39 +514,44 @@ bool CommandEncoder::needs_commit() const {
 }
 
 void CommandEncoder::commit(std::function<void()> completion) {
+  // Metal locks a command buffer's residency at commit time, so attach any
+  // sets created since the last commit first.
+  residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
   buffer_->addCompletedHandler(
       [&error_ = error_,
        wait_events = std::move(wait_events_),
        signal_events = std::move(signal_events_),
-       completion = std::move(completion)](MTL::CommandBuffer* cbuf) {
+       completion = std::move(completion)](MTL::CommandBuffer* cbuf) mutable {
         if (completion) {
           completion();
         }
         // If any of the waited event has error in it, poison the encoder.
         for (auto& event : wait_events) {
-          if (event->error()) {
-            error_ = event->error();
+          if (error_.store_if_valid(event.load_error())) {
             break;
           }
         }
         // Set error only when no error happended before, to preserve the
         // earliest error.
-        if (!error_ && cbuf->status() == MTL::CommandBufferStatusError) {
-          error_ = std::make_shared<std::string>(fmt::format(
-              "[METAL] Command buffer execution failed: {}.",
-              cbuf->error()->localizedDescription()->utf8String()));
+        bool has_error = error_.valid();
+        if (!has_error && cbuf->status() == MTL::CommandBufferStatusError) {
+          error_.set_message(
+              std::make_shared<std::string>(fmt::format(
+                  "[METAL] Command buffer execution failed: {}.",
+                  cbuf->error()->localizedDescription()->utf8String())));
+          has_error = true;
         }
         // Poison all the signaled events when error happened.
-        if (error_) {
+        if (has_error) {
           for (auto& [event, value] : signal_events) {
-            event->set_error(error_);
+            event.set_error(error_);
           }
         }
         // Metal won't signal the events for us on error, manually signal them
         // to avoid infinite waiting.
         if (cbuf->status() == MTL::CommandBufferStatusError) {
           for (auto& [event, value] : signal_events) {
-            event->signal(value);
+            event.cast<EventImpl>().signal(value);
           }
         }
       });
@@ -565,25 +568,22 @@ void CommandEncoder::synchronize() {
   commit();
   cbuf->waitUntilCompleted();
 
-  if (error_ && !exiting_) {
-    auto error = std::move(error_);
-    throw std::runtime_error(*error);
+  if (!exiting_) {
+    error_.check();
   }
 }
 
 MTL::ComputeCommandEncoder* CommandEncoder::get_command_encoder() {
   if (!encoder_) {
+    error_.check();
     encoder_ = NS::RetainPtr(
         buffer_->computeCommandEncoder(MTL::DispatchTypeConcurrent));
     fence_ = NS::TransferPtr(device_.mtl_device()->newFence());
-    // Reset error when user starts to encode new commands, they are supposed to
-    // have handled the error in synchronize() or Event::wait().
-    error_.reset();
   }
   return encoder_.get();
 }
 
-Device::Device() : device_(load_device()), residency_set_(device_.get()) {
+Device::Device() : device_(load_device()), residency_sets_(device_.get()) {
   auto pool = new_scoped_memory_pool();
   default_library_ = NS::TransferPtr(load_default_library(device_.get()));
   arch_ = env::metal_gpu_arch();
@@ -883,9 +883,12 @@ MTL::ComputePipelineState* Device::get_kernel(
     std::shared_lock lock(kernel_mtx_);
 
     // Look for cached kernel
-    auto& kernel_map_ = library_kernels_[mtl_lib];
-    if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
-      return it->second.get();
+    auto library_it = library_kernels_.find(mtl_lib);
+    if (library_it != library_kernels_.end()) {
+      auto kernel_it = library_it->second.find(kname);
+      if (kernel_it != library_it->second.end()) {
+        return kernel_it->second.get();
+      }
     }
   }
   return get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);

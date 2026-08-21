@@ -127,7 +127,7 @@ void init_fast(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def rms_norm(x: array, weight: Optional[array], eps: float, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def rms_norm(x: array, weight: array | None, eps: float, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Root Mean Square normalization (RMS norm).
 
@@ -154,7 +154,7 @@ void init_fast(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def layer_norm(x: array, weight: Optional[array], bias: Optional[array], eps: float, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def layer_norm(x: array, weight: array | None, bias: array | None, eps: float, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Layer normalization.
 
@@ -227,7 +227,7 @@ void init_fast(nb::module_& parent_module) {
       "freqs"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def rope(a: array, dims: int, *, traditional: bool, base: Optional[float], scale: float, offset: Union[int, array], freqs: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def rope(a: array, dims: int, *, traditional: bool, base: float | None, scale: float, offset: int | array, freqs: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Apply rotary positional encoding to the input.
 
@@ -264,6 +264,7 @@ void init_fast(nb::module_& parent_module) {
          const float scale,
          const std::variant<std::monostate, std::string, mx::array>& mask,
          const std::optional<mx::array>& sinks,
+         bool force_fused,
          mx::StreamOrDevice s) {
         bool has_mask = !std::holds_alternative<std::monostate>(mask);
         bool has_str_mask =
@@ -280,16 +281,32 @@ void init_fast(nb::module_& parent_module) {
               throw std::invalid_argument(msg.str());
             }
             return mx::fast::scaled_dot_product_attention(
-                queries, keys, values, scale, mask_str, std::nullopt, sinks, s);
+                queries,
+                keys,
+                values,
+                scale,
+                mask_str,
+                std::nullopt,
+                sinks,
+                force_fused,
+                s);
           } else {
             auto mask_arr = std::get<mx::array>(mask);
             return mx::fast::scaled_dot_product_attention(
-                queries, keys, values, scale, "", mask_arr, sinks, s);
+                queries,
+                keys,
+                values,
+                scale,
+                "",
+                mask_arr,
+                sinks,
+                force_fused,
+                s);
           }
 
         } else {
           return mx::fast::scaled_dot_product_attention(
-              queries, keys, values, scale, "", {}, sinks, s);
+              queries, keys, values, scale, "", {}, sinks, force_fused, s);
         }
       },
       "q"_a,
@@ -299,9 +316,10 @@ void init_fast(nb::module_& parent_module) {
       "scale"_a,
       "mask"_a = nb::none(),
       "sinks"_a = nb::none(),
+      "force_fused"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, str, array] = None, sinks: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: None | str | array = None, sinks: array | None = None, force_fused: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         A fast implementation of multi-head attention: ``O = softmax(Q @ K.T, dim=-1) @ V``.
 
@@ -343,6 +361,11 @@ void init_fast(nb::module_& parent_module) {
                last query aligns with the last key.
             sinks (array, optional): An optional array of attention sinks.
                Default: ``None``.
+            force_fused (bool, optional): If ``True``, use a fused kernel
+               regardless of the builtin heuristics and raise error when no
+               fused kernel is available. For certain configurations this would
+               result in slower kernel getting used but can reduce memory
+               consumption. Default: ``False``.
 
         Returns:
             array: The output array.
@@ -395,7 +418,7 @@ void init_fast(nb::module_& parent_module) {
             "verbose"_a = false,
             "stream"_a = nb::none(),
             nb::sig(
-                "def __call__(self, *, inputs: List[Union[scalar, array]], output_shapes: List[Sequence[int]], output_dtypes: List[Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: Optional[List[Tuple[str, Union[bool, int, Dtype]]]] = None, init_value: Optional[float] = None, verbose: bool = false, stream: Union[None, Stream, Device] = None)"),
+                "def __call__(self, *, inputs: list[scalar | array], output_shapes: list[Sequence[int]], output_dtypes: list[Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: list[tuple[str, bool | int | Dtype]] | None = None, init_value: float | None = None, verbose: bool = false, stream: StreamOrDevice = None)"),
             R"pbdoc(
             Run the kernel.
 
@@ -519,7 +542,7 @@ void init_fast(nb::module_& parent_module) {
             "verbose"_a = false,
             "stream"_a = nb::none(),
             nb::sig(
-                "def __call__(self, *, inputs: List[Union[scalar, array]], output_shapes: List[Sequence[int]], output_dtypes: List[Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: Optional[List[Tuple[str, Union[bool, int, Dtype]]]] = None, init_value: Optional[float] = None, verbose: bool = false, stream: Union[None, Stream, Device] = None)"),
+                "def __call__(self, *, inputs: list[scalar | array], output_shapes: list[Sequence[int]], output_dtypes: list[Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: list[tuple[str, bool | int | Dtype]] | None = None, init_value: float | None = None, verbose: bool = false, stream: StreamOrDevice = None)"),
             R"pbdoc(
             Run the kernel.
 

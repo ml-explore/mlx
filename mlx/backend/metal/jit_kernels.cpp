@@ -433,6 +433,25 @@ MTL::ComputePipelineState* get_sort_kernel(
   return d.get_kernel(kernel_name, lib);
 }
 
+MTL::ComputePipelineState* get_searchsorted_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    bool right) {
+  auto lib = d.get_library(kernel_name, [&]() {
+    std::ostringstream kernel_source;
+    // The kernel compares through LessThan, which lives in sort.h.
+    kernel_source << metal::utils() << metal::sort() << metal::searchsorted();
+    kernel_source << get_template_definition(
+        kernel_name,
+        "searchsorted",
+        get_type_string(in.dtype()),
+        right ? "true" : "false");
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
 MTL::ComputePipelineState* get_mb_sort_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -989,6 +1008,18 @@ MTL::ComputePipelineState* get_fft_kernel(
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
+MTL::ComputePipelineState* get_fft_twiddle_kernel(
+    metal::Device& d,
+    const std::string& library_name,
+    const std::string& template_def) {
+  auto lib = d.get_library(library_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::fft() << template_def;
+    return kernel_source.str();
+  });
+  return d.get_kernel("generate_bluestein_twiddles", lib);
+}
+
 MTL::ComputePipelineState* get_quantized_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -1299,7 +1330,8 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     int bd,
     int wm,
     int wn,
-    const array& m) {
+    const array& m,
+    bool split_d) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
@@ -1309,7 +1341,7 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
         metal::steel_attention_nax(),
         get_template_definition(
             lib_name,
-            "attention_nax",
+            split_d ? "attention_nax_dsplit" : "attention_nax",
             get_type_string(q.dtype()),
             bq,
             bk,

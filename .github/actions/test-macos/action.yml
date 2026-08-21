@@ -12,12 +12,9 @@ runs:
   steps:
     - name: Install tests dependencies
       shell: bash
-      run: |
-        echo "::group::Install tests dependencies"
-        uv pip install tensorflow
-        echo "::endgroup::"
+      run: uv pip install tensorflow
 
-    - name: Run Python tests
+    - name: Run tests
       shell: bash
       env:
         METAL_DEBUG_ERROR_MODE: 0

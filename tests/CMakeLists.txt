@@ -10,6 +10,10 @@ if(MLX_BUILD_METAL OR MLX_BUILD_CUDA)
   set(METAL_TEST_SOURCES gpu_tests.cpp)
 endif()
 
+if(MLX_BUILD_METAL)
+  list(APPEND METAL_TEST_SOURCES residency_tests.cpp)
+endif()
+
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 
 target_sources(
