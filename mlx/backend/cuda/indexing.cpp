@@ -81,6 +81,67 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   uint32_t slice_size = std::accumulate(
       slice_sizes_.begin(), slice_sizes_.end(), 1, std::multiplies<uint32_t>());
 
+  if (nidx == 1 && axes_[0] == 0 && src.flags().row_contiguous &&
+      inputs[1].flags().row_contiguous && slice_size == src.strides()[0] &&
+      inputs[1].size() <= static_cast<size_t>(INT32_MAX)) {
+    constexpr int vec_bytes = 16;
+    int vec_size = vec_bytes / out.dtype().size();
+    if (vec_size < 1) {
+      vec_size = 1;
+    }
+
+    std::string module_name = fmt::format(
+        "gather_front_{}_{}",
+        dtype_to_string(out.dtype()),
+        dtype_to_string(idx_dtype));
+
+    cu::JitModule& mod =
+        cu::get_jit_module(encoder.device(), module_name, [&]() {
+          std::vector<std::string> kernel_names;
+          for (int l = 0; l <= 1; ++l) {
+            kernel_names.push_back(
+                fmt::format(
+                    "mlx::core::cu::gather_front<{}, {}, {}, {}>",
+                    dtype_to_cuda_type(out.dtype()),
+                    dtype_to_cuda_type(idx_dtype),
+                    l ? "int64_t" : "int32_t",
+                    vec_size));
+          }
+          return std::make_tuple(
+              false, jit_source_gather_front, std::move(kernel_names));
+        });
+
+    cu::KernelArgs args;
+    args.append(src);
+    args.append(inputs[1]);
+    args.append(out);
+    args.append<int64_t>(slice_size);
+    args.append<int32_t>(src.shape(0));
+
+    encoder.set_input_array(src);
+    encoder.set_input_array(inputs[1]);
+    encoder.set_output_array(out);
+
+    std::string kernel_name = fmt::format(
+        "mlx::core::cu::gather_front<{}, {}, {}, {}>",
+        dtype_to_cuda_type(out.dtype()),
+        dtype_to_cuda_type(idx_dtype),
+        large ? "int64_t" : "int32_t",
+        vec_size);
+    auto kernel = mod.get_kernel(kernel_name);
+
+    uint32_t n_vec = (slice_size + vec_size - 1) / vec_size;
+    uint32_t max_block_dim = 256;
+    uint32_t block_dim = n_vec < max_block_dim ? n_vec : max_block_dim;
+    dim3 block(block_dim, 1, 1);
+    dim3 grid(
+        static_cast<uint32_t>(inputs[1].size()),
+        (n_vec + block_dim - 1) / block_dim,
+        1);
+    encoder.add_kernel_node_raw(kernel, grid, block, {}, 0, args.args());
+    return;
+  }
+
   std::string module_name = fmt::format(
       "gather_{}_{}_{}",
       dtype_to_string(out.dtype()),
