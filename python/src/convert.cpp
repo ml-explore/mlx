@@ -557,7 +557,12 @@ PyScalarT validate_shape(
         t = pyint;
         // Match the scalar path, which widens to int64 rather than failing
         // when a python int does not fit in int32.
-        auto val = nb::cast<int64_t>(l);
+        auto [val, is_uint64] = to_int64_or_uint64(l);
+        if (is_uint64) {
+          throw std::invalid_argument(
+              "Python ints larger than int64 are not supported in list "
+              "initialization.");
+        }
         if (val > std::numeric_limits<int>::max() ||
             val < std::numeric_limits<int>::min()) {
           has_wide_int = true;
@@ -730,7 +735,10 @@ mx::array create_array(
   if (nb::isinstance<nb::bool_>(v)) {
     return mx::array(nb::cast<bool>(v), t.value_or(mx::bool_));
   } else if (nb::isinstance<nb::int_>(v)) {
-    auto val = nb::cast<int64_t>(v);
+    auto [val, is_uint64] = to_int64_or_uint64(v);
+    if (is_uint64) {
+      return mx::array(static_cast<uint64_t>(val), t.value_or(mx::uint64));
+    }
     auto default_type = (val > std::numeric_limits<int>::max() ||
                          val < std::numeric_limits<int>::min())
         ? mx::int64

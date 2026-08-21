@@ -67,6 +67,24 @@ inline void throw_invalid_operation(
   throw std::invalid_argument(msg.str());
 }
 
+// Parse a python int as int64, or as uint64 (flagged true) when it only
+// fits there. Raise a clean error when neither type can hold it.
+inline std::pair<int64_t, bool> to_int64_or_uint64(nb::handle h) {
+  int64_t val;
+  if (nb::try_cast<int64_t>(h, val)) {
+    return {val, false};
+  }
+  uint64_t uval = PyLong_AsUnsignedLongLong(h.ptr());
+  if (!PyErr_Occurred()) {
+    return {static_cast<int64_t>(uval), true};
+  }
+  PyErr_Clear();
+  std::ostringstream msg;
+  msg << "Python int " << nb::str(h).c_str()
+      << " does not fit in int64 or uint64.";
+  throw std::invalid_argument(msg.str());
+}
+
 mx::array to_array(
     const ScalarOrArray& v,
     std::optional<mx::Dtype> dtype = std::nullopt);

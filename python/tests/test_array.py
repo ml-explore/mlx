@@ -550,6 +550,29 @@ class TestArray(mlx_tests.MLXTestCase):
         # A float in the list still makes it float, not int64.
         self.assertEqual(mx.array([2**40, 1.5]).dtype, mx.float32)
 
+    def test_construction_from_python_ints_above_int64(self):
+        # Ints in (int64_max, uint64_max] widen to uint64, the same rule
+        # numpy uses. They used to raise std::bad_cast.
+        for value in (2**63, 2**64 - 1):
+            a = mx.array(value)
+            self.assertEqual(a.dtype, mx.uint64, msg=str(value))
+            self.assertEqual(a.item(), value)
+            self.assertEqual(mx.array(value, mx.uint64).item(), value)
+            self.assertEqual(mx.full((2,), value).tolist(), [value, value])
+        self.assertEqual(
+            (mx.zeros((2,), dtype=mx.uint64) + 2**63).tolist(), [2**63, 2**63]
+        )
+        # Both int64 boundaries keep int64.
+        self.assertEqual(mx.array(2**63 - 1).dtype, mx.int64)
+        self.assertEqual(mx.array(-(2**63)).dtype, mx.int64)
+        # Values outside both ranges raise a clean error, not std::bad_cast.
+        for value in (2**64, -(2**63) - 1):
+            with self.assertRaises(ValueError):
+                mx.array(value)
+        # Lists do not widen to uint64, but the error is clean.
+        with self.assertRaises(ValueError):
+            mx.array([2**63])
+
     def test_construction_from_lists_of_mlx_arrays(self):
         dtypes = [
             mx.bool_,

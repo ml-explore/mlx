@@ -11,7 +11,18 @@ mx::array to_array(
   if (auto pv = std::get_if<nb::bool_>(&v); pv) {
     return mx::array(nb::cast<bool>(*pv), dtype.value_or(mx::bool_));
   } else if (auto pv = std::get_if<nb::int_>(&v); pv) {
-    auto val = nb::cast<int64_t>(*pv);
+    auto [val, is_uint64] = to_int64_or_uint64(*pv);
+    if (is_uint64) {
+      auto out_t = dtype.value_or(mx::uint64);
+      if (mx::issubdtype(out_t, mx::integer) && out_t != mx::uint64) {
+        std::ostringstream msg;
+        msg << "Converting " << static_cast<uint64_t>(val) << " to " << out_t
+            << " would result in overflow.";
+        throw std::invalid_argument(msg.str());
+      }
+      return mx::array(
+          static_cast<uint64_t>(val), (out_t == mx::bool_) ? mx::int32 : out_t);
+    }
     auto default_type = (val > std::numeric_limits<int>::max() ||
                          val < std::numeric_limits<int>::min())
         ? mx::int64
