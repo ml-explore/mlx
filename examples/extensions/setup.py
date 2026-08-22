@@ -13,6 +13,8 @@ if __name__ == "__main__":
         cmdclass={"build_ext": extension.CMakeBuild},
         packages=["mlx_sample_extensions"],
         package_data={"mlx_sample_extensions": ["*.so", "*.dylib", "*.metallib"]},
+        install_requires=["nanobind-backend>=1.0.0.dev5"],
+        options={"bdist_wheel": {"py_limited_api": "cp310"}},
         zip_safe=False,
         python_requires=">=3.10",
     )

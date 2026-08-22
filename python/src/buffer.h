@@ -7,6 +7,28 @@
 #include "mlx/array.h"
 #include "mlx/utils.h"
 
+// Py_buffer became part of the Stable ABI in Python 3.11. CPython 3.10 uses
+// the same layout, which split-mode extensions targeting cp310 must declare.
+#if defined(Py_LIMITED_API) && Py_LIMITED_API + 0 < 0x030B0000
+typedef struct {
+  void* buf;
+  PyObject* obj;
+  Py_ssize_t len;
+  Py_ssize_t itemsize;
+  int readonly;
+  int ndim;
+  char* format;
+  Py_ssize_t* shape;
+  Py_ssize_t* strides;
+  Py_ssize_t* suboffsets;
+  void* internal;
+} Py_buffer;
+
+#define PyBUF_FORMAT 0x0004
+#define PyBUF_ND 0x0008
+#define PyBUF_STRIDES (0x0010 | PyBUF_ND)
+#endif
+
 // Only defined in >= Python 3.9
 // https://github.com/python/cpython/blob/f6cdc6b4a191b75027de342aa8b5d344fb31313e/Include/typeslots.h#L2-L3
 #ifndef Py_bf_getbuffer

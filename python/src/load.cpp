@@ -15,6 +15,12 @@
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
+// These flags became part of the Stable ABI together with Py_buffer in 3.11.
+#if defined(Py_LIMITED_API) && Py_LIMITED_API + 0 < 0x030B0000
+#define PyBUF_READ 0x100
+#define PyBUF_WRITE 0x200
+#endif
+
 namespace mx = mlx::core;
 namespace nb = nanobind;
 using namespace nb::literals;

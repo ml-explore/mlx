@@ -11,8 +11,8 @@ option(BUILD_SHARED_LIBS "Build extensions as a shared library" ON)
 
 # ----------------------------- Dependencies -----------------------------
 find_package(
-  Python 3.8
-  COMPONENTS Interpreter Development.Module
+  Python 3.10
+  COMPONENTS Interpreter Development.Module Development.SABIModule
   REQUIRED)
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
@@ -64,8 +64,8 @@ endif()
 # ----------------------------- Python Bindings -----------------------------
 nanobind_add_module(
   _ext
-  NB_STATIC
-  STABLE_ABI
+  BACKEND_MODULE
+  nanobind_backend
   LTO
   NOMINSIZE
   NB_DOMAIN
