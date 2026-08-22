@@ -1564,6 +1564,49 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(y1, y3, atol=tol))
                 self.assertTrue(mx.allclose(y1, y4, atol=tol))
 
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_gather_qmm_sorted_nax_large_m(self):
+        E, N, K, group_size = 16, 64, 64, 32
+        dtype = mx.float16
+        mx.random.seed(0)
+        w = (mx.random.normal((E, N, K)) * 0.1).astype(dtype)
+        w_q, scales, biases = mx.quantize(w, group_size=group_size, bits=4)
+        w_hat = mx.dequantize(w_q, scales, biases, group_size=group_size, bits=4)
+
+        for M in (32767, 32768, 32769, 32832):
+            with self.subTest(M=M):
+                x = (mx.random.normal((M, 1, K)) * 0.1).astype(dtype)
+                rhs_indices = (mx.arange(M) * E // M).astype(mx.uint32)
+                y_hat = mx.gather_mm(
+                    x.astype(mx.float32),
+                    mx.swapaxes(w_hat, -1, -2).astype(mx.float32),
+                    rhs_indices=rhs_indices,
+                    sorted_indices=True,
+                )
+                mx.eval(y_hat)
+                mx.synchronize()
+
+                for value in (-31.0, 47.0):
+                    poison = mx.full(y_hat.shape, value, dtype=mx.float16)
+                    mx.eval(poison)
+                    mx.synchronize()
+                    del poison
+
+                    y_q = mx.gather_qmm(
+                        x,
+                        w_q,
+                        scales,
+                        biases,
+                        rhs_indices=rhs_indices,
+                        transpose=True,
+                        group_size=group_size,
+                        bits=4,
+                        sorted_indices=True,
+                    )
+                    max_error = (y_q.astype(mx.float32) - y_hat).abs().max()
+                    self.assertLess(float(max_error.item()), 5e-2)
+                    del y_q, max_error
+
     @unittest.skipIf(mx.cuda.is_available(), "Not implemented for CUDA")
     def test_gather_qmm_sorted_sliced_weight(self):
         E, R, D, N = 8, 64, 256, 64
