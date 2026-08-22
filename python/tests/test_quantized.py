@@ -335,6 +335,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         K = 128
         tests = [
             (16, 32840),  # unaligned N > 2**15, M < 32: partial M-tile
+            (32, 32840),  # M at the small-block dispatch boundary
             (33, 32840),  # unaligned N > 2**15, M % 32 != 0
             (33000, 64),  # M > 2**15: row distance overflows (aligned N)
         ]
@@ -439,6 +440,42 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     for mode in modes:
                         with self.subTest(M=M, K=K, mode=mode, dtype=dtype):
                             check_fp(M, K, 128, mode, dtype)
+
+    def test_qmm_small_m_block(self):
+        # The batched and fp-mode variants of the small-M block, which the
+        # test_qmm_large_dims shapes cannot reach.
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        K = 1024
+        tests = [
+            # mode, group_size, bits, M, N, batch
+            ("affine", 64, 4, 14, 8256, (2,)),  # batched w
+            ("mxfp4", None, None, 14, 8256, ()),
+        ]
+        for mode, group_size, bits, M, N, batch in tests:
+            dtype = mx.float16 if mode == "affine" else mx.bfloat16
+            with self.subTest(
+                mode=mode, group_size=group_size, bits=bits, M=M, N=N, batch=batch
+            ):
+                x = (mx.random.normal(batch + (M, K), key=k1) / K**0.5).astype(dtype)
+                w = (mx.random.normal(batch + (N, K), key=k2) / K**0.5).astype(dtype)
+                if mode == "affine":
+                    wq = mx.quantize(w, group_size=group_size, bits=bits)
+                else:
+                    wq = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(*wq, group_size=group_size, bits=bits, mode=mode)
+                y_ref = x @ w_hat.swapaxes(-1, -2)
+                y = mx.quantized_matmul(
+                    x,
+                    *wq,
+                    transpose=True,
+                    group_size=group_size,
+                    bits=bits,
+                    mode=mode,
+                )
+                self.assertLess((y_ref - y).abs().max(), 1e-3)
 
     def test_qmm_vjp(self):
         key = mx.random.key(0)

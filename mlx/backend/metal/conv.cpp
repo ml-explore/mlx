@@ -48,6 +48,68 @@ inline int max_unfold_rows(metal::Device& d, size_t row_bytes, int total_rows) {
   return static_cast<int>(std::min(max_rows, static_cast<size_t>(total_rows)));
 }
 
+inline auto winograd_padded_size(const MLXConvParams<2>& conv_params) {
+  int64_t pad_h = static_cast<int64_t>(conv_params.iS[0]) +
+      2 * static_cast<int64_t>(conv_params.pad[0]);
+  int64_t pad_w = static_cast<int64_t>(conv_params.iS[1]) +
+      2 * static_cast<int64_t>(conv_params.pad[1]);
+  int padded_h = safe_cast(6 * ceildiv(pad_h - 2, 6) + 2, "conv");
+  int padded_w = safe_cast(6 * ceildiv(pad_w - 2, 6) + 2, "conv");
+  return std::make_tuple(padded_h, padded_w);
+}
+
+// Return how many rows to compute per each step.
+inline int winograd_batch_step(
+    metal::Device& d,
+    const array& in,
+    const MLXConvParams<2>& conv_params) {
+  int total_n = conv_params.N;
+
+  size_t itemsize = in.itemsize();
+  auto [padded_h, padded_w] = winograd_padded_size(conv_params);
+  int tiles_per_n =
+      ceildiv(conv_params.oS[0], 6) * ceildiv(conv_params.oS[1], 6);
+
+  // Limit of maximum memory can be used for the step.
+  size_t working_set = d.mtl_device()->recommendedMaxWorkingSetSize();
+  if (int env_ws = env::get_var("MLX_CONV_WINOGRAD_WORKING_SET", 0);
+      env_ws > 0) {
+    working_set = env_ws;
+  }
+  size_t limit = working_set / 4 * 3;
+
+  // Memory used by inputs.
+  size_t filt_bytes =
+      static_cast<size_t>(8 * 8) * conv_params.C * conv_params.O * itemsize;
+  size_t io_bytes = itemsize *
+      (static_cast<size_t>(total_n) * conv_params.iS[0] * conv_params.iS[1] *
+           conv_params.C +
+       static_cast<size_t>(total_n) * conv_params.oS[0] * conv_params.oS[1] *
+           conv_params.O);
+  size_t used = io_bytes + filt_bytes;
+  size_t budget = limit > used ? limit - used : 0;
+
+  // How many rows to use per step to avoid running over limit.
+  size_t bytes_per_n =
+      static_cast<size_t>(padded_h) * padded_w * conv_params.C * itemsize +
+      static_cast<size_t>(8 * 8) * tiles_per_n *
+          (conv_params.C + conv_params.O) * itemsize;
+  auto max_n = static_cast<int64_t>(budget / bytes_per_n);
+  int safe_n = static_cast<int>(std::min<int64_t>(max_n, total_n));
+  if (int forced = env::get_var("MLX_CONV_WINOGRAD_TILE_BATCH", 0);
+      forced > 0) {
+    return std::min(forced, safe_n);
+  }
+
+  // When the budget forces tiling, each tile must carry enough gemm rows to
+  // amortize fixed cost, below that the implicit gemm fallback is much faster.
+  constexpr int min_rows_per_tile = 32;
+  if ((safe_n < total_n) && (safe_n * tiles_per_n < min_rows_per_tile)) {
+    return 0;
+  }
+  return safe_n;
+}
+
 template <int N>
 void explicit_gemm_conv_ND_gpu(
     const Stream& s,
@@ -901,82 +963,17 @@ void winograd_conv_2D_gpu(
     const array& wt,
     array& out,
     const MLXConvParams<2>& conv_params,
-    std::vector<array>& copies_w) {
-  // Round the padded spatial dims up to the Winograd tile in int64 so the
-  // rounding cannot overflow int32 just below the limit.
-  int64_t pad_h = static_cast<int64_t>(conv_params.iS[0]) +
-      2 * static_cast<int64_t>(conv_params.pad[0]);
-  int64_t pad_w = static_cast<int64_t>(conv_params.iS[1]) +
-      2 * static_cast<int64_t>(conv_params.pad[1]);
-  pad_h = 6 * ((pad_h - 2 + 5) / 6) + 2;
-  pad_w = 6 * ((pad_w - 2 + 5) / 6) + 2;
-  Shape padded_shape = {
-      conv_params.N,
-      safe_cast(pad_h, "conv"),
-      safe_cast(pad_w, "conv"),
-      conv_params.C};
-
-  array in_padded(std::move(padded_shape), in.dtype(), nullptr, {});
-
-  // Fill with zeros
-  array zero_arr = array(0, in.dtype());
-  fill_gpu(zero_arr, in_padded, s);
-  copies_w.push_back(zero_arr);
-
-  // Pick input slice from padded
-  size_t data_offset = conv_params.pad[0] * in_padded.strides()[1] +
-      conv_params.pad[1] * in_padded.strides()[2];
-  array in_padded_slice(in.shape(), in_padded.dtype(), nullptr, {});
-  in_padded_slice.copy_shared_buffer(
-      in_padded,
-      in_padded.strides(),
-      in_padded.flags(),
-      in_padded_slice.size(),
-      data_offset);
-
-  // Copy input values into the slice
-  copy_gpu_inplace(in, in_padded_slice, CopyType::GeneralGeneral, s);
-
-  copies_w.push_back(in_padded_slice);
-  copies_w.push_back(in_padded);
-
-  MLXConvParams<2> conv_params_updated{
-      /* const int  N = */ static_cast<int>(in_padded.shape(0)),
-      /* const int  C = */ static_cast<int>(in_padded.shape(3)),
-      /* const int  O = */ static_cast<int>(wt.shape(0)),
-      /* const int iS[NDIM] = */
-      {static_cast<int>(in_padded.shape(1)),
-       static_cast<int>(in_padded.shape(2))},
-      /* const int wS[NDIM] = */
-      {static_cast<int>(wt.shape(1)), static_cast<int>(wt.shape(2))},
-      /* const int oS[NDIM] = */
-      {static_cast<int>(out.shape(1)), static_cast<int>(out.shape(2))},
-      /* const int str[NDIM] = */ {1, 1},
-      /* const int pad[NDIM] = */ {0, 0},
-      /* const int kdil[NDIM] = */ {1, 1},
-      /* const int idil[NDIM] = */ {1, 1},
-      /* const size_t in_strides[NDIM + 2] = */
-      {in_padded.strides()[0],
-       in_padded.strides()[1],
-       in_padded.strides()[2],
-       in_padded.strides()[3]},
-      /* const size_t wt_strides[NDIM + 2] = */
-      {wt.strides()[0], wt.strides()[1], wt.strides()[2], wt.strides()[3]},
-      /* const size_t out_strides[NDIM + 2] = */
-      {out.strides()[0], out.strides()[1], out.strides()[2], out.strides()[3]},
-      /* const int groups = */ 1,
-      /* const bool flip = */ false,
-  };
-
+    std::vector<array>& copies_w,
+    int n_step) {
   int O_c = conv_params.O;
   int C_c = conv_params.C;
+  auto [padded_h, padded_w] = winograd_padded_size(conv_params);
 
-  int N_tiles_n = conv_params.N;
-  int N_tiles_h = (conv_params.oS[0] + 5) / 6;
-  int N_tiles_w = (conv_params.oS[1] + 5) / 6;
-  int N_tiles = N_tiles_n * N_tiles_h * N_tiles_w;
+  int N_tiles_h = ceildiv(conv_params.oS[0], 6);
+  int N_tiles_w = ceildiv(conv_params.oS[1], 6);
+  int tiles_per_n = N_tiles_h * N_tiles_w;
 
-  // Do filter transform
+  // Do filter transform.
   Shape filt_wg_shape = {8 * 8, conv_params.C, conv_params.O};
   array filt_wg(std::move(filt_wg_shape), wt.dtype(), nullptr, {});
   filt_wg.set_data(allocator::malloc(filt_wg.nbytes()));
@@ -1008,88 +1005,187 @@ void winograd_conv_2D_gpu(
     compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
   }
 
-  // Do input transform
-  Shape inp_wg_shape = {8 * 8, N_tiles, conv_params.C};
-  array inp_wg(std::move(inp_wg_shape), in.dtype(), nullptr, {});
+  // Scratch space reused by every batch tile.
+  array inp_wg({8 * 8, n_step * tiles_per_n, C_c}, in.dtype(), nullptr, {});
   inp_wg.set_data(allocator::malloc(inp_wg.nbytes()));
   copies_w.push_back(inp_wg);
-  {
-    int bc = 32;
-    int wm = 2;
-    int wn = 2;
-    std::string kname;
-    kname.reserve(32);
-    concatenate(
-        kname,
-        "winograd_conv_2d_input_transform_",
-        type_to_name(out),
-        "_bc",
-        bc);
-    auto& compute_encoder = metal::get_command_encoder(s);
-    auto kernel = d.get_kernel(kname);
-    compute_encoder.set_compute_pipeline_state(kernel);
 
-    compute_encoder.set_input_array(in_padded, 0);
-    compute_encoder.set_output_array(inp_wg, 1);
-
-    compute_encoder.set_bytes(conv_params_updated, 2);
-
-    MTL::Size group_dims = MTL::Size(32, wn, wm);
-    MTL::Size grid_dims = MTL::Size(N_tiles_w, N_tiles_h, N_tiles_n);
-
-    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
-  }
-
-  // Do batched gemm
-  Shape out_wg_shape = {8 * 8, N_tiles, conv_params.O};
-  array out_wg(std::move(out_wg_shape), in.dtype(), nullptr, {});
+  array out_wg({8 * 8, n_step * tiles_per_n, O_c}, in.dtype(), nullptr, {});
   out_wg.set_data(allocator::malloc(out_wg.nbytes()));
   copies_w.push_back(out_wg);
-  {
-    std::vector<array> empty_copies;
-    steel_matmul(
-        s,
-        d,
-        /*a = */ inp_wg,
-        /*b = */ filt_wg,
-        /*c = */ out_wg,
-        /*M = */ N_tiles,
-        /*N = */ conv_params.O,
-        /*K = */ conv_params.C,
-        /*batch_size_out = */ 8 * 8,
-        /*a_cols = */ conv_params.C,
-        /*b_cols = */ conv_params.O,
-        /*a_transposed = */ false,
-        /*b_transposed = */ false,
-        /*copies = */ empty_copies);
-  }
 
-  // Do output transform
-  {
-    int bc = 32;
-    int wm = 2;
-    int wn = 2;
-    std::string kname;
-    kname.reserve(32);
-    concatenate(
-        kname,
-        "winograd_conv_2d_output_transform_",
-        type_to_name(out),
-        "_bo",
-        bc);
-    auto& compute_encoder = metal::get_command_encoder(s);
-    auto kernel = d.get_kernel(kname);
-    compute_encoder.set_compute_pipeline_state(kernel);
+  array in_padded({n_step, padded_h, padded_w, C_c}, in.dtype(), nullptr, {});
+  copies_w.push_back(in_padded);
 
-    compute_encoder.set_input_array(out_wg, 0);
-    compute_encoder.set_output_array(out, 1);
+  // Fill padding with zeros.
+  array zero_arr = array(0, in.dtype());
+  fill_gpu(zero_arr, in_padded, s);
+  copies_w.push_back(zero_arr);
 
-    compute_encoder.set_bytes(conv_params_updated, 2);
+  int64_t pad_offset =
+      static_cast<int64_t>(conv_params.pad[0]) * in_padded.strides()[1] +
+      static_cast<int64_t>(conv_params.pad[1]) * in_padded.strides()[2];
 
-    MTL::Size group_dims = MTL::Size(32, wn, wm);
-    MTL::Size grid_dims = MTL::Size(N_tiles_w, N_tiles_h, N_tiles_n);
+  // Loop over all rows.
+  for (int n_offset = 0; n_offset < conv_params.N; n_offset += n_step) {
+    int tile_n = std::min(n_step, conv_params.N - n_offset);
+    int N_tiles = tile_n * tiles_per_n;
 
-    compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+    // Views for current step.
+    array in_tile(
+        {tile_n, conv_params.iS[0], conv_params.iS[1], C_c},
+        in.dtype(),
+        nullptr,
+        {});
+    in_tile.copy_shared_buffer(
+        in,
+        in.strides(),
+        in.flags(),
+        in_tile.size(),
+        n_offset * in.strides()[0]);
+
+    array out_tile(
+        {tile_n, conv_params.oS[0], conv_params.oS[1], O_c},
+        out.dtype(),
+        nullptr,
+        {});
+    out_tile.copy_shared_buffer(
+        out,
+        out.strides(),
+        out.flags(),
+        out_tile.size(),
+        n_offset * out.strides()[0]);
+
+    array in_padded_slice(in_tile.shape(), in_padded.dtype(), nullptr, {});
+    in_padded_slice.copy_shared_buffer(
+        in_padded,
+        in_padded.strides(),
+        in_padded.flags(),
+        in_padded_slice.size(),
+        pad_offset);
+
+    // Copy input values into the slice.
+    copy_gpu_inplace(in_tile, in_padded_slice, CopyType::GeneralGeneral, s);
+    copies_w.push_back(in_padded_slice);
+
+    MLXConvParams<2> conv_params_updated{
+        /* const int  N = */ tile_n,
+        /* const int  C = */ C_c,
+        /* const int  O = */ O_c,
+        /* const int iS[NDIM] = */ {padded_h, padded_w},
+        /* const int wS[NDIM] = */
+        {static_cast<int>(wt.shape(1)), static_cast<int>(wt.shape(2))},
+        /* const int oS[NDIM] = */
+        {static_cast<int>(out.shape(1)), static_cast<int>(out.shape(2))},
+        /* const int str[NDIM] = */ {1, 1},
+        /* const int pad[NDIM] = */ {0, 0},
+        /* const int kdil[NDIM] = */ {1, 1},
+        /* const int idil[NDIM] = */ {1, 1},
+        /* const size_t in_strides[NDIM + 2] = */
+        {in_padded.strides()[0],
+         in_padded.strides()[1],
+         in_padded.strides()[2],
+         in_padded.strides()[3]},
+        /* const size_t wt_strides[NDIM + 2] = */
+        {wt.strides()[0], wt.strides()[1], wt.strides()[2], wt.strides()[3]},
+        /* const size_t out_strides[NDIM + 2] = */
+        {out.strides()[0],
+         out.strides()[1],
+         out.strides()[2],
+         out.strides()[3]},
+        /* const int groups = */ 1,
+        /* const bool flip = */ false,
+    };
+
+    // Do input transform, result layout is (8 x 8 x N_tiles x channels).
+    {
+      int bc = 32;
+      int wm = 2;
+      int wn = 2;
+      std::string kname;
+      kname.reserve(32);
+      concatenate(
+          kname,
+          "winograd_conv_2d_input_transform_",
+          type_to_name(out),
+          "_bc",
+          bc);
+      auto& compute_encoder = metal::get_command_encoder(s);
+      auto kernel = d.get_kernel(kname);
+      compute_encoder.set_compute_pipeline_state(kernel);
+
+      compute_encoder.set_input_array(in_padded, 0);
+      compute_encoder.set_output_array(inp_wg, 1);
+
+      compute_encoder.set_bytes(conv_params_updated, 2);
+
+      MTL::Size group_dims = MTL::Size(32, wn, wm);
+      MTL::Size grid_dims = MTL::Size(N_tiles_w, N_tiles_h, tile_n);
+
+      compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+    }
+
+    // Do batched gemm.
+    {
+      array inp_wg_tile({8 * 8, N_tiles, C_c}, inp_wg.dtype(), nullptr, {});
+      inp_wg_tile.copy_shared_buffer(
+          inp_wg,
+          {static_cast<int64_t>(N_tiles) * C_c, C_c, 1},
+          inp_wg.flags(),
+          inp_wg_tile.size());
+
+      array out_wg_tile({8 * 8, N_tiles, O_c}, out_wg.dtype(), nullptr, {});
+      out_wg_tile.copy_shared_buffer(
+          out_wg,
+          {static_cast<int64_t>(N_tiles) * O_c, O_c, 1},
+          out_wg.flags(),
+          out_wg_tile.size());
+
+      std::vector<array> empty_copies;
+      steel_matmul(
+          s,
+          d,
+          /*a = */ inp_wg_tile,
+          /*b = */ filt_wg,
+          /*c = */ out_wg_tile,
+          /*M = */ N_tiles,
+          /*N = */ O_c,
+          /*K = */ C_c,
+          /*batch_size_out = */ 8 * 8,
+          /*a_cols = */ C_c,
+          /*b_cols = */ O_c,
+          /*a_transposed = */ false,
+          /*b_transposed = */ false,
+          /*copies = */ empty_copies);
+    }
+
+    // Do output transform.
+    {
+      int bc = 32;
+      int wm = 2;
+      int wn = 2;
+      std::string kname;
+      kname.reserve(32);
+      concatenate(
+          kname,
+          "winograd_conv_2d_output_transform_",
+          type_to_name(out),
+          "_bo",
+          bc);
+      auto& compute_encoder = metal::get_command_encoder(s);
+      auto kernel = d.get_kernel(kname);
+      compute_encoder.set_compute_pipeline_state(kernel);
+
+      compute_encoder.set_input_array(out_wg, 0);
+      compute_encoder.set_output_array(out_tile, 1);
+
+      compute_encoder.set_bytes(conv_params_updated, 2);
+
+      MTL::Size group_dims = MTL::Size(32, wn, wm);
+      MTL::Size grid_dims = MTL::Size(N_tiles_w, N_tiles_h, tile_n);
+
+      compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+    }
   }
 }
 
@@ -1233,7 +1329,11 @@ void dispatch_conv_2D_gpu(
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && inp_large &&
       channels_large) {
-    return winograd_conv_2D_gpu(s, d, in, wt, out, conv_params, copies);
+    // Only use winograd conv when having enough memory.
+    if (int n_step = winograd_batch_step(d, in, conv_params); n_step > 0) {
+      return winograd_conv_2D_gpu(
+          s, d, in, wt, out, conv_params, copies, n_step);
+    }
   }
 
   // Whether the specialized implicit gemm kernel can take the channels as-is.

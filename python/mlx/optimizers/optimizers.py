@@ -506,6 +506,9 @@ class Adam(Optimizer):
                     "instead"
                 )
 
+        if not 0.0 <= eps:
+            raise ValueError(f"Adam epsilon should be >=0, {eps} was provided instead")
+
         self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
         self.eps = eps
@@ -627,10 +630,6 @@ class Adamax(Adam):
         eps: float = 1e-8,
     ):
         super().__init__(learning_rate, betas, eps)
-        if not 0.0 <= eps:
-            raise ValueError(
-                f"Epsilon value should be >=0, {self.eps} was provided instead"
-            )
 
     def init_single(self, parameter: mx.array, state: dict):
         """Initialize optimizer state"""

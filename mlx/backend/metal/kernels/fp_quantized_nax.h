@@ -897,6 +897,10 @@ template <
     threadgroup_barrier(mem_flags::mem_none);
 
     // Prepare threadgroup mma operation
+    const short m_lo_lim = min(int(sgp_sm), max(0, offset - tm));
+    const short m_hi_lim = min(int(sgp_sm), max(0, offset_next - tm));
+    const bool sg_active = m_hi_lim > m_lo_lim;
+
     NAXTile<AccumType, TM, TN> Dtile;
     Dtile.clear();
 
@@ -926,33 +930,35 @@ template <
 
           STEEL_PRAGMA_NO_UNROLL
           for (int kk1 = 0; kk1 < BK; kk1 += SK) {
-            NAXTile<T, TM, TK> Atile;
-            NAXTile<Wtype, BR, BC> Btile;
+            if (sg_active) {
+              NAXTile<T, TM, TK> Atile;
+              NAXTile<Wtype, BR, BC> Btile;
 
-            volatile int compiler_barrier;
+              volatile int compiler_barrier;
 
-            if constexpr (kAlignedM.value) {
-              Atile.load(xn + kk1, K);
-            } else {
-              Atile.load_safe(xn + kk1, K, short2(SK, sgp_sm));
+              if constexpr (kAlignedM.value) {
+                Atile.load(xn + kk1, K);
+              } else {
+                Atile.load_safe(xn + kk1, K, short2(SK, sgp_sm));
+              }
+
+              if constexpr (transpose) {
+                Btile.template load<Wtype, BK_padded, 1>(
+                    Ws + tn * BK_padded + kk1);
+              } else {
+                Btile.template load<Wtype, BN_padded, 1>(
+                    Ws + tn + kk1 * BN_padded);
+              }
+
+              tile_matmad_nax(
+                  Dtile,
+                  Atile,
+                  metal::bool_constant<false>{},
+                  Btile,
+                  metal::bool_constant<transpose>{});
+
+              (void)compiler_barrier;
             }
-
-            if constexpr (transpose) {
-              Btile.template load<Wtype, BK_padded, 1>(
-                  Ws + tn * BK_padded + kk1);
-            } else {
-              Btile.template load<Wtype, BN_padded, 1>(
-                  Ws + tn + kk1 * BN_padded);
-            }
-
-            tile_matmad_nax(
-                Dtile,
-                Atile,
-                metal::bool_constant<false>{},
-                Btile,
-                metal::bool_constant<transpose>{});
-
-            (void)compiler_barrier;
           }
 
           xn += BK;
@@ -966,37 +972,36 @@ template <
 
           STEEL_PRAGMA_NO_UNROLL
           for (int kk1 = 0; kk1 < BK; kk1 += SK) {
-            NAXTile<T, TM, TK> Atile;
-            NAXTile<Wtype, BR, BC> Btile;
+            if (sg_active) {
+              NAXTile<T, TM, TK> Atile;
+              NAXTile<Wtype, BR, BC> Btile;
 
-            volatile int compiler_barrier;
+              volatile int compiler_barrier;
 
-            const short psk = min(int(SK), max(0, (BK - kk1)));
-            Atile.load_safe(xn + kk1, K, short2(psk, sgp_sm));
+              const short psk = min(int(SK), max(0, (BK - kk1)));
+              Atile.load_safe(xn + kk1, K, short2(psk, sgp_sm));
 
-            if constexpr (transpose) {
-              Btile.template load<Wtype, BK_padded, 1>(
-                  Ws + tn * BK_padded + kk1);
-            } else {
-              Btile.template load<Wtype, BN_padded, 1>(
-                  Ws + tn + kk1 * BN_padded);
+              if constexpr (transpose) {
+                Btile.template load<Wtype, BK_padded, 1>(
+                    Ws + tn * BK_padded + kk1);
+              } else {
+                Btile.template load<Wtype, BN_padded, 1>(
+                    Ws + tn + kk1 * BN_padded);
+              }
+
+              tile_matmad_nax(
+                  Dtile,
+                  Atile,
+                  metal::bool_constant<false>{},
+                  Btile,
+                  metal::bool_constant<transpose>{});
+
+              (void)compiler_barrier;
             }
-
-            tile_matmad_nax(
-                Dtile,
-                Atile,
-                metal::bool_constant<false>{},
-                Btile,
-                metal::bool_constant<transpose>{});
-
-            (void)compiler_barrier;
           }
         }
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
-
-        const short m_lo_lim = min(int(sgp_sm), max(0, offset - tm));
-        const short m_hi_lim = min(int(sgp_sm), max(0, offset_next - tm));
 
         // Store results to device memory
         if constexpr (kAlignedN.value) {
