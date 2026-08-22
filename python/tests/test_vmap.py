@@ -547,6 +547,41 @@ class TestVmap(mlx_tests.MLXTestCase):
         expected = mx.array([[2.0, 3.0, 4.0], [2.0, 3.0, 4.0]])
         self.assertTrue(mx.allclose(out, expected))
 
+    def test_vmap_scatter_higher_rank(self):
+        # The vmap axis becomes an extra scattered source axis, so the
+        # singleton added to the updates has to land at that axis rather than
+        # at the front of the source dims. Only shows up for a vmap axis >= 2,
+        # where the misplaced singleton actually reorders a non-unit dim.
+        def unstack(x, axis):
+            return [s.squeeze(axis) for s in mx.split(x, x.shape[axis], axis=axis)]
+
+        for shape in [(2, 3), (2, 3, 4), (2, 3, 4, 5)]:
+            n = 1
+            for d in shape:
+                n *= d
+            a = mx.arange(n, dtype=mx.float32).reshape(shape)
+
+            fns = {
+                "add_derived": lambda x: x.at[mx.array([0])].add(x[:1]),
+                "add_const": lambda x: x.at[mx.array([0])].add(
+                    mx.ones((1,) + tuple(x.shape[1:]), dtype=x.dtype)
+                ),
+                "add_dup": lambda x: x.at[mx.array([0, 0])].add(
+                    mx.ones((2,) + tuple(x.shape[1:]), dtype=x.dtype)
+                ),
+                "maximum": lambda x: x.at[mx.array([0])].maximum(x[:1] + 1.0),
+            }
+            for name, fn in fns.items():
+                for ax in range(len(shape)):
+                    out = mx.vmap(fn, in_axes=ax, out_axes=ax)(a)
+                    expected = mx.stack([fn(s) for s in unstack(a, ax)], axis=ax)
+                    self.assertEqual(
+                        out.shape, expected.shape, f"{name} ax{ax} {shape}"
+                    )
+                    self.assertTrue(
+                        mx.array_equal(out, expected), f"{name} ax{ax} {shape}"
+                    )
+
         # Multiple indices
         def scatter(a):
             a[mx.array([0, 1]), mx.array([0, 1])] = mx.array((1.0, 1.0))
