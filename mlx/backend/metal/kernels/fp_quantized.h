@@ -164,9 +164,18 @@ struct QuantizedBlockLoader {
   MLX_MTL_CONST short group_steps = group_size < BCOLS ? 1 : group_size / BCOLS;
   MLX_MTL_CONST short scale_step = group_size < BCOLS ? BCOLS / group_size : 1;
 
+  // BCOLS tiles the quantized dim, which is always a multiple of group_size,
+  // so a partial column extent is only possible when BCOLS does not divide
+  // group_size. That is nvfp4 (16 against a 32-wide block) alone; for every
+  // other mode the column bound below is dropped at compile time.
+  MLX_MTL_CONST bool partial_cols = group_size % BCOLS != 0;
+
   static_assert(
       (n_reads * pack_factor) <= group_size,
       "The number of reads per thread must be less than the group size.");
+  static_assert(
+      group_size % (n_reads * pack_factor) == 0,
+      "The group size must be a multiple of the columns read per thread.");
 
   const int src_ld;
   const int tile_stride;
@@ -221,18 +230,28 @@ struct QuantizedBlockLoader {
       return;
     }
 
-    if (reduction_dim == 1 && bi >= src_tile_dim.x) {
+    // src_tile_dim is (valid columns, valid rows), the convention the steel
+    // BlockLoader uses. bi is a row index, so it bounds against .y for every
+    // reduction_dim; the previous compare against .x could never fire for
+    // reduction_dim == 1, which let a partial row tile read past the source.
+    if (bi >= src_tile_dim.y) {
       for (int i = 0; i < n_reads * pack_factor; i++) {
         dst[i] = T(0);
       }
       return;
     }
 
-    if (reduction_dim == 0 && bi >= src_tile_dim.y) {
-      for (int i = 0; i < n_reads * pack_factor; i++) {
-        dst[i] = T(0);
+    // Each thread owns n_reads * pack_factor contiguous columns of one row,
+    // and a partial column extent is a whole number of quantization groups,
+    // hence a multiple of that span per the static_assert above, so a thread
+    // is either fully inside or fully outside the tile.
+    if constexpr (partial_cols) {
+      if (bj * pack_factor >= src_tile_dim.x) {
+        for (int i = 0; i < n_reads * pack_factor; i++) {
+          dst[i] = T(0);
+        }
+        return;
       }
-      return;
     }
 
     T scale = dequantize_scale<T, group_size>(*scales);
@@ -853,9 +872,16 @@ METAL_FUNC void fp_qmm_t_impl(
   loader_w_t loader_w(wl, scales, K, Ws, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
+  // K is a multiple of group_size, so it can only end in a partial tile when
+  // group_size does not divide BK. That is nvfp4 (group_size 16) alone; the
+  // other fp modes have group_size == BK, so the remainder tile below is
+  // discarded at compile time for them.
+  constexpr bool partial_k = group_size % BK != 0;
+  const int k_blocks = K_eff / BK;
+  const short num_k = partial_k ? short(K_eff - k_blocks * BK) : short(0);
   if (num_els < BM) {
     if (!aligned_N && num_outs < BN) {
-      for (int k = 0; k < K_eff; k += BK) {
+      for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_safe(short2(BK, num_els));
         loader_w.load_safe(short2(BK, num_outs));
@@ -865,7 +891,7 @@ METAL_FUNC void fp_qmm_t_impl(
         loader_w.next();
       }
     } else {
-      for (int k = 0; k < K_eff; k += BK) {
+      for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_safe(short2(BK, num_els));
         loader_w.load_unsafe();
@@ -875,9 +901,18 @@ METAL_FUNC void fp_qmm_t_impl(
         loader_w.next();
       }
     }
+    if constexpr (partial_k) {
+      if (num_k > 0) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(num_k, num_els));
+        loader_w.load_safe(short2(num_k, num_outs));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+      }
+    }
   } else {
     if (!aligned_N && num_outs < BN) {
-      for (int k = 0; k < K_eff; k += BK) {
+      for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_unsafe();
         loader_w.load_safe(short2(BK, num_outs));
@@ -887,7 +922,7 @@ METAL_FUNC void fp_qmm_t_impl(
         loader_w.next();
       }
     } else {
-      for (int k = 0; k < K_eff; k += BK) {
+      for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_unsafe();
         loader_w.load_unsafe();
@@ -896,6 +931,15 @@ METAL_FUNC void fp_qmm_t_impl(
         mma_op.mma(Xs, Ws);
         loader_x.next();
         loader_w.next();
+      }
+    }
+    if constexpr (partial_k) {
+      if (num_k > 0) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(num_k, BM));
+        loader_w.load_safe(short2(num_k, num_outs));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
       }
     }
   }
@@ -974,13 +1018,24 @@ METAL_FUNC void fp_qmm_n_impl(
   loader_w_t loader_w(wl, scales, N, Ws, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
+  // N is a multiple of group_size, so it can only end in a partial tile when
+  // group_size does not divide BN. That is nvfp4 (group_size 16) alone; for
+  // the other fp modes num_outs is always BN and the bounded loads below are
+  // discarded at compile time.
+  constexpr bool partial_n = group_size % BN != 0;
+  const short num_outs = partial_n ? short(min(BN, N - y_col)) : short(BN);
+
   if (num_els < BM) {
     if ((K % BK) != 0) {
       const int k_blocks = K / BK;
       for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_safe(short2(BK, num_els));
-        loader_w.load_unsafe();
+        if constexpr (partial_n) {
+          loader_w.load_safe(short2(num_outs, BK));
+        } else {
+          loader_w.load_unsafe();
+        }
         threadgroup_barrier(mem_flags::mem_threadgroup);
         mma_op.mma(Xs, Ws);
         loader_x.next();
@@ -989,9 +1044,19 @@ METAL_FUNC void fp_qmm_n_impl(
       const short num_k = K - k_blocks * BK;
       threadgroup_barrier(mem_flags::mem_threadgroup);
       loader_x.load_safe(short2(num_k, num_els));
-      loader_w.load_safe(short2(BN, num_k));
+      loader_w.load_safe(short2(num_outs, num_k));
       threadgroup_barrier(mem_flags::mem_threadgroup);
       mma_op.mma(Xs, Ws);
+    } else if (num_outs < BN) {
+      for (int k = 0; k < K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(BK, num_els));
+        loader_w.load_safe(short2(num_outs, BK));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
     } else {
       for (int k = 0; k < K; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -1009,7 +1074,11 @@ METAL_FUNC void fp_qmm_n_impl(
       for (int k = 0; k < k_blocks; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         loader_x.load_unsafe();
-        loader_w.load_unsafe();
+        if constexpr (partial_n) {
+          loader_w.load_safe(short2(num_outs, BK));
+        } else {
+          loader_w.load_unsafe();
+        }
         threadgroup_barrier(mem_flags::mem_threadgroup);
         mma_op.mma(Xs, Ws);
         loader_x.next();
@@ -1018,9 +1087,19 @@ METAL_FUNC void fp_qmm_n_impl(
       const short num_k = K - k_blocks * BK;
       threadgroup_barrier(mem_flags::mem_threadgroup);
       loader_x.load_safe(short2(num_k, BM));
-      loader_w.load_safe(short2(BN, num_k));
+      loader_w.load_safe(short2(num_outs, num_k));
       threadgroup_barrier(mem_flags::mem_threadgroup);
       mma_op.mma(Xs, Ws);
+    } else if (num_outs < BN) {
+      for (int k = 0; k < K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_unsafe();
+        loader_w.load_safe(short2(num_outs, BK));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
     } else {
       for (int k = 0; k < K; k += BK) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -1036,8 +1115,8 @@ METAL_FUNC void fp_qmm_n_impl(
 
   // Store results to device memory
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (num_els < BM) {
-    mma_op.store_result_safe(y, N, short2(BN, num_els));
+  if (num_els < BM || num_outs < BN) {
+    mma_op.store_result_safe(y, N, short2(num_outs, num_els));
   } else {
     mma_op.store_result(y, N);
   }
