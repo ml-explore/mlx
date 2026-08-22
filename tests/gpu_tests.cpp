@@ -100,14 +100,14 @@ TEST_CASE("test gpu batch invariant sdpa") {
 }
 
 TEST_CASE("test gpu batch invariant matmul") {
-  BatchInvariantGuard guard;
-  constexpr int M = 4;
+  constexpr int limit = 8;
+  BatchInvariantGuard guard(limit);
   constexpr int K = 4096;
   constexpr int N = 512;
 
-  std::vector<float> x_block_data(M * K);
+  std::vector<float> x_block_data(limit * K);
   std::vector<float> w_data(N * K);
-  for (int m = 0; m < M; ++m) {
+  for (int m = 0; m < limit; ++m) {
     for (int k = 0; k < K; ++k) {
       x_block_data[m * K + k] = std::sin(0.013f * k + 0.17f * m);
     }
@@ -119,18 +119,28 @@ TEST_CASE("test gpu batch invariant matmul") {
   }
 
   for (auto dtype : {float16, bfloat16, float32, complex64}) {
-    auto x_block =
-        astype(array(x_block_data.data(), {M, K}), dtype, Device::gpu);
+    auto x = astype(array(x_block_data.data(), {limit, K}), dtype, Device::gpu);
     auto w = astype(array(w_data.data(), {N, K}), dtype, Device::gpu);
-    auto block = matmul(x_block, transpose(w), Device::gpu);
+    auto b_transposed = transpose(w);
+    auto b_natural = contiguous(b_transposed, false, Device::gpu);
 
-    for (int row = 0; row < M; ++row) {
-      auto x_single = slice(x_block, {row, 0}, {row + 1, K});
-      auto single = matmul(x_single, transpose(w), Device::gpu);
-      auto block_row = slice(block, {row, 0}, {row + 1, N});
-      CAPTURE(dtype);
-      CAPTURE(row);
-      CHECK(array_equal(block_row, single, Device::cpu).item<bool>());
+    for (int M = 2; M <= limit; ++M) {
+      auto x_block = slice(x, {0, 0}, {M, K});
+      auto check_layout = [&](const std::string& layout, const array& b) {
+        auto block = matmul(x_block, b, Device::gpu);
+        for (int row = 0; row < M; ++row) {
+          auto x_single = slice(x_block, {row, 0}, {row + 1, K});
+          auto single = matmul(x_single, b, Device::gpu);
+          auto block_row = slice(block, {row, 0}, {row + 1, N});
+          CAPTURE(dtype);
+          CAPTURE(layout);
+          CAPTURE(M);
+          CAPTURE(row);
+          CHECK(array_equal(block_row, single, Device::cpu).item<bool>());
+        }
+      };
+      check_layout("transposed", b_transposed);
+      check_layout("natural", b_natural);
     }
   }
 }

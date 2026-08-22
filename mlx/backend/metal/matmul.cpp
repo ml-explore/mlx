@@ -1520,7 +1520,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // single-row GEMVs. The rows still execute in parallel, but use the same
   // reduction kernel and order as token-by-token inference.
   if (M > 1 && M <= metal::get_batch_invariant_limit() && batch_size_out == 1 &&
-      !a_transposed && b_transposed) {
+      !a_transposed) {
     return gemv(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,
@@ -1534,7 +1534,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         /* int lda = */ a_cols,
         /* int ldb = */ b_cols,
         /* bool transpose_a = */ false,
-        /* bool transpose_b = */ true,
+        /* bool transpose_b = */ b_transposed,
         /* std::vector<array>& copies = */ copies,
         /* Shape batch_shape = */ {M},
         /* Strides A_batch_stride = */ {a_cols},
