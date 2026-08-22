@@ -5034,6 +5034,36 @@ bool Slice::is_equivalent(const Primitive& other) const {
       end_indices_ == s_other.end_indices_ && strides_ == s_other.strides_);
 }
 
+std::vector<Shape> Slice::output_shapes(const std::vector<array>& inputs) {
+  // Recompute the output shape the same way slice() does (see
+  // normalize_slice in ops.cpp). The start indices and strides were
+  // normalized when the primitive was created while the end indices were
+  // stored unnormalized, so this is exact for any input shape when the
+  // start indices are non-negative.
+  const auto& shape = inputs[0].shape();
+  Shape out_shape(shape.size());
+  for (int i = 0; i < shape.size(); ++i) {
+    auto n = shape[i];
+    auto s = start_indices_[i];
+    s = s < 0 ? s + n : s;
+    auto e = end_indices_[i];
+    e = e < 0 ? e + n : e;
+    if (strides_[i] < 0) {
+      auto st = std::min(s, n - 1);
+      auto ed = e > -1 ? e : -1;
+      ed = ed > st ? st : ed;
+      auto str = -strides_[i];
+      out_shape[i] = (st - ed + str - 1) / str;
+    } else {
+      auto st = std::max(static_cast<ShapeElem>(0), std::min(s, n));
+      auto ed = std::max(static_cast<ShapeElem>(0), std::min(e, n));
+      ed = ed < st ? st : ed;
+      out_shape[i] = (ed - st + strides_[i] - 1) / strides_[i];
+    }
+  }
+  return {out_shape};
+}
+
 std::pair<std::vector<array>, std::vector<int>> SliceUpdate::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

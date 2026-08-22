@@ -924,6 +924,19 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
       force_fused_ == a_other.force_fused_;
 }
 
+std::vector<Shape> ScaledDotProductAttention::output_shapes(
+    const std::vector<array>& inputs) {
+  // The output has the shape of the queries with the values' head dimension.
+  auto out = inputs[0].shape();
+  out.back() = inputs[2].shape(-1);
+  if (output_logsumexp_) {
+    auto lse_shape = inputs[0].shape();
+    lse_shape.back() = 1;
+    return {std::move(out), std::move(lse_shape)};
+  }
+  return {out};
+}
+
 bool ScaledDotProductAttentionVJP::is_equivalent(const Primitive& other) const {
   const ScaledDotProductAttentionVJP& a_other =
       static_cast<const ScaledDotProductAttentionVJP&>(other);
