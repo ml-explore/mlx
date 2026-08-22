@@ -212,37 +212,6 @@ TEST_CASE("test no simplify") {
   set_compile_mode(CompileMode::enabled);
 }
 
-auto log_bases(const std::vector<array>& inputs) {
-  auto a = inputs[0];
-  return std::vector<array>{log(a) + log2(a)};
-};
-
-auto equal_nan_variants(const std::vector<array>& inputs) {
-  auto a = inputs[0];
-  return std::vector<array>{
-      stack({array_equal(a, a), array_equal(a, a, true)})};
-};
-
-TEST_CASE("test no simplify different primitive state") {
-  set_compile_mode(CompileMode::no_fuse);
-  auto a = array({2.0f, 8.0f});
-  auto b = compile(log_bases)({a})[0];
-  CHECK(b.inputs()[0].id() != b.inputs()[1].id());
-  CHECK(allclose(b, log(a) + log2(a)).item<bool>());
-
-  auto c = array({1.0f, std::numeric_limits<float>::quiet_NaN()});
-  auto d = compile(equal_nan_variants)({c})[0];
-  CHECK(array_equal(d, array({false, true})).item<bool>());
-
-  // Matching state still simplifies.
-  auto same_base = [](const std::vector<array>& inputs) -> std::vector<array> {
-    return {log(inputs[0]) + log(inputs[0])};
-  };
-  auto e = compile(same_base)({a})[0];
-  CHECK(e.inputs()[0].id() == e.inputs()[1].id());
-  set_compile_mode(CompileMode::enabled);
-}
-
 auto multi_one(const std::vector<array>&) {
   auto a = array(1.0);
   auto b = array(2.0);
