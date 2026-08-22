@@ -39,7 +39,7 @@ void init_metal(nb::module_& m) {
       "limit"_a,
       R"pbdoc(
       Select canonical reduction plans for supported short-block Metal
-      inference kernels up to ``limit``. This covers dense matmul,
+      inference kernels up to ``limit``. This covers dense matmul and addmm,
       transposed-weight quantized matmul, and vector SDPA queries up to length
       eight; it does not make every MLX operation batch invariant. Set to zero
       to disable.

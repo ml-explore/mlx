@@ -15,9 +15,10 @@ MLX_API bool is_available();
 
 /**
  * Select canonical reduction plans for supported short-block Metal inference
- * kernels up to `limit`. This covers dense matmul, transposed-weight quantized
- * matmul, and the vector SDPA path (whose query-length cap is eight). It does
- * not make every MLX operation batch invariant. Set to zero to disable.
+ * kernels up to `limit`. This covers dense matmul and addmm,
+ * transposed-weight quantized matmul, and the vector SDPA path (whose
+ * query-length cap is eight). It does not make every MLX operation batch
+ * invariant. Set to zero to disable.
  *
  * The setting is process-wide and should remain stable while concurrent work
  * is executing. Increasing the limit can reduce performance. The default is
