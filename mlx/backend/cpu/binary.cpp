@@ -62,7 +62,16 @@ void DivMod::eval_cpu(
       if (r != 0 && (r < 0) != (y < 0)) {
         r += y;
       }
-      return std::make_pair(std::floor(x / y), r);
+      auto quotient = x / y;
+      auto q = std::floor(quotient);
+      if (std::isinf(x) && !std::isinf(y) && y != 0) {
+        q = quotient - quotient;
+      } else if (
+          !std::isinf(x) && !std::isnan(x) && std::isinf(y) && x != 0 &&
+          (x < 0) != (y < 0)) {
+        q = -1;
+      }
+      return std::make_pair(q, r);
     };
 
     dispatch_all_types(out_a.dtype(), [&](auto type_tag) {
@@ -83,6 +92,13 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& a = inputs[0];
   auto& b = inputs[1];
   binary_op_cpu(a, b, out, detail::Divide(), stream());
+}
+
+void FloorDivide::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  binary_op_cpu(a, b, out, detail::FloorDivide(), stream());
 }
 
 void Remainder::eval_cpu(const std::vector<array>& inputs, array& out) {

@@ -1887,6 +1887,33 @@ std::pair<std::vector<array>, std::vector<int>> Divide::vmap(
   return {{out}, {to_ax}};
 }
 
+std::vector<array> FloorDivide::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    vjps.push_back(zeros_like(primals[arg], stream()));
+  }
+  return vjps;
+}
+
+std::vector<array> FloorDivide::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>&) {
+  auto shape = broadcast_shapes(primals[0].shape(), primals[1].shape());
+  return {zeros(shape, primals[0].dtype(), stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> FloorDivide::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
+  return {{floor_divide(a, b, stream())}, {to_ax}};
+}
+
 std::vector<array> Remainder::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

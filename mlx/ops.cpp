@@ -3160,8 +3160,18 @@ array floor_divide(
     const array& b,
     StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  if (issubdtype(dtype, inexact)) {
-    return floor(divide(a, b, s), s);
+  if (issubdtype(dtype, complexfloating)) {
+    throw std::invalid_argument("[floor_divide] Complex type not supported.");
+  }
+  if (issubdtype(dtype, floating)) {
+    auto inputs = broadcast_arrays(
+        {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
+    auto shape = inputs[0].shape();
+    return array(
+        shape,
+        dtype,
+        std::make_shared<FloorDivide>(to_stream(s)),
+        std::move(inputs));
   }
 
   auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);

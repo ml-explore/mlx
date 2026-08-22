@@ -48,15 +48,15 @@ bool is_unary(const Primitive& p) {
 bool is_binary(const Primitive& p) {
   return (
       typeid(p) == typeid(Add) || typeid(p) == typeid(Divide) ||
-      typeid(p) == typeid(Equal) || typeid(p) == typeid(Greater) ||
-      typeid(p) == typeid(GreaterEqual) || typeid(p) == typeid(Less) ||
-      typeid(p) == typeid(LessEqual) || typeid(p) == typeid(LogicalNot) ||
-      typeid(p) == typeid(LogicalAnd) || typeid(p) == typeid(LogicalOr) ||
-      typeid(p) == typeid(LogAddExp) || typeid(p) == typeid(Maximum) ||
-      typeid(p) == typeid(Minimum) || typeid(p) == typeid(Multiply) ||
-      typeid(p) == typeid(NotEqual) || typeid(p) == typeid(Power) ||
-      typeid(p) == typeid(Subtract) || typeid(p) == typeid(BitwiseBinary) ||
-      typeid(p) == typeid(ArcTan2));
+      typeid(p) == typeid(FloorDivide) || typeid(p) == typeid(Equal) ||
+      typeid(p) == typeid(Greater) || typeid(p) == typeid(GreaterEqual) ||
+      typeid(p) == typeid(Less) || typeid(p) == typeid(LessEqual) ||
+      typeid(p) == typeid(LogicalNot) || typeid(p) == typeid(LogicalAnd) ||
+      typeid(p) == typeid(LogicalOr) || typeid(p) == typeid(LogAddExp) ||
+      typeid(p) == typeid(Maximum) || typeid(p) == typeid(Minimum) ||
+      typeid(p) == typeid(Multiply) || typeid(p) == typeid(NotEqual) ||
+      typeid(p) == typeid(Power) || typeid(p) == typeid(Subtract) ||
+      typeid(p) == typeid(BitwiseBinary) || typeid(p) == typeid(ArcTan2));
 }
 
 bool is_ternary(const Primitive& p) {

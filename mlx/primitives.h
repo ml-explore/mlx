@@ -919,6 +919,20 @@ class Divide : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
+class FloorDivide : public UnaryPrimitive {
+ public:
+  explicit FloorDivide(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_NAME(FloorDivide)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
 class DivMod : public Primitive {
  public:
   explicit DivMod(Stream stream) : Primitive(stream) {}

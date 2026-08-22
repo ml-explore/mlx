@@ -40,6 +40,46 @@ DEFAULT_BINARY_OP(Maximum, maximum)
 DEFAULT_BINARY_OP(Minimum, minimum)
 DEFAULT_BINARY_OP(Power, pow)
 
+struct FloorDivide {
+  template <int N, typename T>
+  Simd<T, N> operator()(Simd<T, N> x, Simd<T, N> y) {
+    if constexpr (!is_floating_point_v<T>) {
+      return x / y;
+    } else if constexpr (N > 1) {
+      auto quotient = x / y;
+      auto out = Simd<T, N>(floor(quotient));
+      auto x_is_inf = abs(x) == inf;
+      auto y_is_inf = abs(y) == inf;
+      if (!any(x_is_inf || y_is_inf)) {
+        return out;
+      }
+      out = select(
+          x_is_inf && !y_is_inf && y != 0,
+          Simd<T, N>(quotient - quotient),
+          out);
+      auto needs_fix =
+          !x_is_inf && !isnan(x) && y_is_inf && x != 0 && (x < 0 != y < 0);
+      return select(needs_fix, Simd<T, N>(T(-1)), out);
+    } else {
+      Simd<T, N> out;
+      auto quotient = x[0] / y[0];
+      auto x_is_inf = std::isinf(static_cast<double>(x[0]));
+      auto y_is_inf = std::isinf(static_cast<double>(y[0]));
+      if (x_is_inf && !y_is_inf && y[0] != 0) {
+        out[0] = quotient - quotient;
+      } else if (
+          !x_is_inf && !std::isnan(static_cast<double>(x[0])) && y_is_inf &&
+          x[0] != 0 && (x[0] < 0) != (y[0] < 0)) {
+        out[0] = T(-1);
+      } else {
+        out[0] = std::floor(quotient);
+      }
+      return out;
+    }
+  }
+  BINARY_SINGLE()
+};
+
 #define DEFAULT_BOOL_OP(Op, op)                            \
   struct Op {                                              \
     template <int N, typename T>                           \
