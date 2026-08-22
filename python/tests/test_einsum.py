@@ -65,6 +65,39 @@ class TestEinsum(mlx_tests.MLXTestCase):
             mx_path = mx.einsum_path(case, *inputs)
             self.assertEqual(np_path[0][1:], mx_path[0])
 
+    def test_scalar_operands(self):
+        # An empty subscript is a scalar operand. A trailing one used to be
+        # dropped by the parser, so "i,->i" looked like a single input.
+        s1 = mx.array(2.0)
+        s2 = mx.array(3.0)
+        v = mx.random.uniform(shape=(3,))
+        m = mx.random.uniform(shape=(2, 3))
+
+        cases = [
+            ("->", (s1,)),
+            (",->", (s1, s2)),
+            (",,->", (s1, s2, s1)),
+            ("i,->i", (v, s1)),
+            (",i->i", (s1, v)),
+            ("ij,->ij", (m, s1)),
+            (",ij->ij", (s1, m)),
+            ("i,,->i", (v, s1, s2)),
+        ]
+        for spec, operands in cases:
+            mx_out = mx.einsum(spec, *operands)
+            np_out = np.einsum(spec, *[np.array(o) for o in operands])
+            self.assertEqual(mx_out.shape, np_out.shape)
+            self.assertTrue(np.allclose(mx_out, np_out, rtol=1e-4, atol=1e-4))
+
+        # Operand count still has to match the number of subscripts
+        with self.assertRaises(ValueError):
+            mx.einsum(",->", s1)
+        with self.assertRaises(ValueError):
+            mx.einsum("i,->i", v)
+        # An empty subscript requires a 0-d operand
+        with self.assertRaises(ValueError):
+            mx.einsum(",->", v, s1)
+
     def test_simple_einsum(self):
         a = mx.arange(4 * 4).reshape(4, 4)
         a_mx = mx.einsum("ii->i", a)
