@@ -15,6 +15,7 @@
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/steel/gemm/params.h"
 #include "mlx/backend/metal/matmul.h"
+#include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
@@ -1489,6 +1490,50 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto batch_size_out = out.size() / (size_t(M) * size_t(N));
 
+  // In batch-invariant mode, expose every short matrix row as an independent
+  // GEMV batch item. Preserve outer batch addressing, and materialize unusual
+  // activation layouts so each row matches token-by-token inference.
+  if (M > 1 && M <= metal::get_batch_invariant_limit()) {
+    array invariant_a = a;
+    int invariant_lda = a_cols;
+    if (a_transposed) {
+      invariant_a = contiguous_copy_gpu(a, s);
+      copies.push_back(invariant_a);
+      invariant_lda = K;
+      std::tie(batch_shape, A_batch_stride, B_batch_stride) =
+          collapse_batches(invariant_a, b);
+    }
+
+    if (batch_size_out == 1) {
+      batch_shape = {M};
+      A_batch_stride = {invariant_lda};
+      B_batch_stride = {0};
+    } else {
+      batch_shape.push_back(M);
+      A_batch_stride.push_back(invariant_lda);
+      B_batch_stride.push_back(0);
+    }
+
+    return gemv(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ invariant_a,
+        /* const array& b = */ b,
+        /* array& out = */ out,
+        /* int M = */ 1,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* int batch_size_out = */ static_cast<int>(batch_size_out * M),
+        /* int lda = */ invariant_lda,
+        /* int ldb = */ b_cols,
+        /* bool transpose_a = */ false,
+        /* bool transpose_b = */ b_transposed,
+        /* std::vector<array>& copies = */ copies,
+        /* Shape batch_shape = */ std::move(batch_shape),
+        /* Strides A_batch_stride = */ std::move(A_batch_stride),
+        /* Strides B_batch_stride = */ std::move(B_batch_stride));
+  }
+
   // Collapse batches into M if needed
   if (batch_size_out > 1 && !a_transposed && batch_shape.size() == 1 &&
       a.strides()[a.ndim() - 2] == K && A_batch_stride.back() == M * K &&
@@ -1505,7 +1550,8 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Gemv specialization
 
   if (M == 1 && N == 1 && batch_size_out == 1 && a.flags().row_contiguous &&
-      b.flags().row_contiguous && a.dtype() != complex64) {
+      b.flags().row_contiguous && a.dtype() != complex64 &&
+      metal::get_batch_invariant_limit() == 0) {
     return dot_product(
         /* const Stream& s = */ s,
         /* metal::Device& d = */ d,
@@ -1655,6 +1701,56 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   int64_t matrix_stride_out = M * static_cast<int64_t>(N);
   auto batch_size_out = out.size() / (matrix_stride_out);
+
+  // Match the single-row GEMV and epilogue for short matrices in
+  // batch-invariant mode. Preserve outer batch addressing; the broadcasted C
+  // row either advances with each matrix row or has a zero stride.
+  if (M > 1 && M <= metal::get_batch_invariant_limit()) {
+    array invariant_a = a;
+    int invariant_lda = lda;
+    if (transpose_a) {
+      invariant_a = contiguous_copy_gpu(a, s);
+      copies.push_back(invariant_a);
+      invariant_lda = K;
+      std::tie(batch_shape, A_batch_stride, B_batch_stride, C_batch_stride) =
+          collapse_batches(invariant_a, b, c);
+    }
+
+    if (batch_size_out == 1) {
+      batch_shape = {M};
+      A_batch_stride = {invariant_lda};
+      B_batch_stride = {0};
+      C_batch_stride = {c.strides()[c.ndim() - 2]};
+    } else {
+      batch_shape.push_back(M);
+      A_batch_stride.push_back(invariant_lda);
+      B_batch_stride.push_back(0);
+      C_batch_stride.push_back(c.strides()[c.ndim() - 2]);
+    }
+
+    return gemv_axbpy(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ invariant_a,
+        /* const array& b = */ b,
+        /* const array& c = */ c,
+        /* array& out = */ out,
+        /* int M = */ 1,
+        /* int N = */ N,
+        /* int K = */ K,
+        /* int batch_size_out = */ static_cast<int>(batch_size_out * M),
+        /* int lda = */ invariant_lda,
+        /* int ldb = */ ldb,
+        /* bool transpose_a = */ false,
+        /* bool transpose_b = */ transpose_b,
+        /* std::vector<array>& copies = */ copies,
+        /* Shape batch_shape = */ std::move(batch_shape),
+        /* Strides A_batch_stride = */ std::move(A_batch_stride),
+        /* Strides B_batch_stride = */ std::move(B_batch_stride),
+        /* Strides C_batch_stride = */ std::move(C_batch_stride),
+        /* float alpha = */ alpha_,
+        /* float beta = */ beta_);
+  }
 
   // Collapse batches into M if needed
   if (batch_size_out > 1 && !transpose_a && batch_shape.size() == 1 &&

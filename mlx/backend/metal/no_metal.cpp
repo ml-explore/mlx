@@ -12,6 +12,12 @@ bool is_available() {
   return false;
 }
 
+void set_batch_invariant_limit(int) {}
+
+int get_batch_invariant_limit() {
+  return 0;
+}
+
 void start_capture(std::string) {}
 void stop_capture() {}
 
