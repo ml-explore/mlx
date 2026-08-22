@@ -1538,4 +1538,11 @@ void init_transforms(nb::module_& m) {
           A callable that recomputes intermediate states during gradient
           computation.
       )pbdoc");
+
+  // Clean up main thread compile cache before python interpreter shuts down.
+  auto atexit = nb::module_::import_("atexit");
+  atexit.attr("register")(
+      nb::cpp_function([cache = mx::detail::compile_cache()]() {
+        mx::detail::compile_clear_cache(cache);
+      }));
 }
