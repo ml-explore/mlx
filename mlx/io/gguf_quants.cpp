@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <numeric>
 
 #include "mlx/io/gguf.h"
 
@@ -121,27 +122,28 @@ void gguf_load_quantized(
   if (shape[shape.size() - 1] % weights_per_block != 0) {
     std::ostringstream msg;
     msg << "[load_gguf] tensor " << name
-        << " has incompatible last dim shape: " << shape[shape.size() - 1];
+        << "has incompatible last dim shape: " << shape[shape.size() - 1];
     throw std::runtime_error(msg.str());
   }
 
   auto weights_shape = shape;
   weights_shape.back() /= (weights_per_byte * 4);
 
-  auto checked_product = [&](const Shape& dims) {
-    size_t product = 1;
-    for (auto dim : dims) {
-      if (__builtin_mul_overflow(product, static_cast<size_t>(dim), &product)) {
-        std::ostringstream msg;
-        msg << "[load_gguf] tensor " << name << " shape size overflow";
-        throw std::runtime_error(msg.str());
-      }
+  auto checked_product = [&](size_t product, ShapeElem dim) {
+    if (__builtin_mul_overflow(product, static_cast<size_t>(dim), &product)) {
+      std::ostringstream msg;
+      msg << "[load_gguf] tensor " << name << " shape size overflow";
+      throw std::runtime_error(msg.str());
     }
     return product;
   };
 
+  const size_t weights_count = std::accumulate(
+      weights_shape.begin(), weights_shape.end(), size_t{1}, checked_product);
+
   shape[shape.size() - 1] = shape[shape.size() - 1] / weights_per_block;
-  const size_t block_count = checked_product(shape);
+  const size_t block_count =
+      std::accumulate(shape.begin(), shape.end(), size_t{1}, checked_product);
 
   const uint64_t bytes_per_block = tensor.type == GGUF_TYPE_Q4_0
       ? 18
@@ -158,22 +160,26 @@ void gguf_load_quantized(
     throw std::runtime_error(msg.str());
   }
 
-  const size_t weights_bytes_per_block =
-      tensor.type == GGUF_TYPE_Q8_0 ? 32 : 16;
   size_t w_nbytes;
-  if (__builtin_mul_overflow(block_count, weights_bytes_per_block, &w_nbytes)) {
+  if (__builtin_mul_overflow(uint32.size(), weights_count, &w_nbytes)) {
     std::ostringstream msg;
     msg << "[load_gguf] tensor " << name << " weights size overflow";
     throw std::runtime_error(msg.str());
   }
 
-  auto weights_buffer = allocator::malloc(w_nbytes);
-  if (!weights_buffer.raw_ptr()) {
-    std::ostringstream msg;
-    msg << "[load_gguf] tensor " << name << " allocation failed";
-    throw std::runtime_error(msg.str());
-  }
-  array weights(weights_buffer, std::move(weights_shape), uint32);
+  auto checked_malloc = [&](size_t size, const char* what) {
+    auto buffer = allocator::malloc(size);
+    if (!buffer.raw_ptr()) {
+      std::ostringstream msg;
+      msg << "[load_gguf] tensor " << name << " " << what
+          << " allocation failed";
+      throw std::runtime_error(msg.str());
+    }
+    return buffer;
+  };
+
+  array weights(
+      checked_malloc(w_nbytes, "weights"), std::move(weights_shape), uint32);
 
   size_t sb_nbytes;
   if (__builtin_mul_overflow(float16.size(), block_count, &sb_nbytes)) {
@@ -181,22 +187,8 @@ void gguf_load_quantized(
     msg << "[load_gguf] tensor " << name << " scales/biases size overflow";
     throw std::runtime_error(msg.str());
   }
-
-  auto scales_buffer = allocator::malloc(sb_nbytes);
-  if (!scales_buffer.raw_ptr()) {
-    std::ostringstream msg;
-    msg << "[load_gguf] tensor " << name << " scales/biases allocation failed";
-    throw std::runtime_error(msg.str());
-  }
-  array scales(scales_buffer, shape, float16);
-
-  auto biases_buffer = allocator::malloc(sb_nbytes);
-  if (!biases_buffer.raw_ptr()) {
-    std::ostringstream msg;
-    msg << "[load_gguf] tensor " << name << " biases allocation failed";
-    throw std::runtime_error(msg.str());
-  }
-  array biases(biases_buffer, std::move(shape), float16);
+  array scales(checked_malloc(sb_nbytes, "scales"), shape, float16);
+  array biases(checked_malloc(sb_nbytes, "biases"), std::move(shape), float16);
 
   if (tensor.type == GGUF_TYPE_Q4_0) {
     extract_q4_0_data(tensor, weights, scales, biases);
