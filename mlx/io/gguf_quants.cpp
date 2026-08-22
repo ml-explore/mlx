@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <cstring>
-#include <numeric>
 
 #include "mlx/io/gguf.h"
 
@@ -111,8 +110,6 @@ void gguf_load_quantized(
 
   std::string name(tensor.name, tensor.namelen);
 
-  // Issue #4244 fix (2): reject ndim == 0. gguflib permits ndim == 0 but the
-  // code below indexes shape[shape.size()-1].
   if (tensor.ndim == 0) {
     std::ostringstream msg;
     msg << "[load_gguf] tensor " << name << " has zero dimensions";
@@ -128,125 +125,78 @@ void gguf_load_quantized(
     throw std::runtime_error(msg.str());
   }
 
-  // Issue #4244 fix (4): cross-check shape-derived element count against the
-  // GGUF-supplied num_weights using checked 64-bit multiplication.  Without
-  // this the two widths can diverge when the 64-bit product wraps but the
-  // 32-bit Shape still describes billions of elements.
-  uint64_t shape_elem_count = 1;
-  for (auto dim : shape) {
-    if (__builtin_mul_overflow(
-            shape_elem_count, static_cast<uint64_t>(dim), &shape_elem_count)) {
-      std::ostringstream msg;
-      msg << "[load_gguf] tensor " << name << " element count overflow";
-      throw std::runtime_error(msg.str());
-    }
-  }
-  if (shape_elem_count != tensor.num_weights) {
-    std::ostringstream msg;
-    msg << "[load_gguf] tensor " << name
-        << " shape element count (" << shape_elem_count
-        << ") does not match GGUF num_weights (" << tensor.num_weights << ")";
-    throw std::runtime_error(msg.str());
-  }
-
-  // Issue #4244 PoC drives num_weights to exactly 0 (via wrapping dims), which
-  // yields a zero-byte allocation against a multi-billion-iteration loop.
-  // Reject explicitly so we never malloc(0) and enter the extractors.
-  if (tensor.num_weights == 0) {
-    std::ostringstream msg;
-    msg << "[load_gguf] tensor " << name << " has zero num_weights";
-    throw std::runtime_error(msg.str());
-  }
-
   auto weights_shape = shape;
   weights_shape.back() /= (weights_per_byte * 4);
 
-  // Issue #4244 fix (1): std::accumulate init must be size_t{1} (not int
-  // literal 1) otherwise the 64-bit product from multiplies<size_t> is
-  // truncated back to int on each intermediate assignment.  We also guard the
-  // final element-size multiplication with __builtin_mul_overflow.
-  size_t w_nbytes;
+  auto checked_product = [&](const Shape& dims) {
+    size_t product = 1;
+    for (auto dim : dims) {
+      if (__builtin_mul_overflow(product, static_cast<size_t>(dim), &product)) {
+        std::ostringstream msg;
+        msg << "[load_gguf] tensor " << name << " shape size overflow";
+        throw std::runtime_error(msg.str());
+      }
+    }
+    return product;
+  };
+
+  shape[shape.size() - 1] = shape[shape.size() - 1] / weights_per_block;
+  const size_t block_count = checked_product(shape);
+
+  const uint64_t bytes_per_block = tensor.type == GGUF_TYPE_Q4_0
+      ? 18
+      : (tensor.type == GGUF_TYPE_Q4_1 ? 20 : 34);
+  uint64_t total_data_needed;
   if (__builtin_mul_overflow(
-          uint32.size(),
-          static_cast<size_t>(std::accumulate(
-              weights_shape.begin(),
-              weights_shape.end(),
-              size_t{1},
-              std::multiplies<size_t>())),
-          &w_nbytes)) {
+          static_cast<uint64_t>(block_count),
+          bytes_per_block,
+          &total_data_needed) ||
+      total_data_needed > tensor.bsize) {
+    std::ostringstream msg;
+    msg << "[load_gguf] tensor " << name
+        << " quantized data exceeds the tensor data size";
+    throw std::runtime_error(msg.str());
+  }
+
+  const size_t weights_bytes_per_block =
+      tensor.type == GGUF_TYPE_Q8_0 ? 32 : 16;
+  size_t w_nbytes;
+  if (__builtin_mul_overflow(block_count, weights_bytes_per_block, &w_nbytes)) {
     std::ostringstream msg;
     msg << "[load_gguf] tensor " << name << " weights size overflow";
     throw std::runtime_error(msg.str());
   }
 
-  // Issue #4244 fix (5): check allocator results before use.  Without this,
-  // applying only the accumulate fix above turns the heap overflow into a
-  // null-pointer dereference SEGV when malloc returns nullptr for huge sizes.
-  void* w_ptr = allocator::malloc(w_nbytes).raw_ptr();
-  if (!w_ptr) {
+  auto weights_buffer = allocator::malloc(w_nbytes);
+  if (!weights_buffer.raw_ptr()) {
     std::ostringstream msg;
     msg << "[load_gguf] tensor " << name << " allocation failed";
     throw std::runtime_error(msg.str());
   }
-  array weights(allocator::Buffer(w_ptr), std::move(weights_shape), uint32);
-
-  // For scales and bias
-  shape[shape.size() - 1] = shape[shape.size() - 1] / weights_per_block;
+  array weights(weights_buffer, std::move(weights_shape), uint32);
 
   size_t sb_nbytes;
-  if (__builtin_mul_overflow(
-          float16.size(),
-          static_cast<size_t>(std::accumulate(
-              shape.begin(), shape.end(), size_t{1}, std::multiplies<size_t>())),
-          &sb_nbytes)) {
+  if (__builtin_mul_overflow(float16.size(), block_count, &sb_nbytes)) {
     std::ostringstream msg;
     msg << "[load_gguf] tensor " << name << " scales/biases size overflow";
     throw std::runtime_error(msg.str());
   }
 
-  void* sb_ptr = allocator::malloc(sb_nbytes).raw_ptr();
-  if (!sb_ptr) {
+  auto scales_buffer = allocator::malloc(sb_nbytes);
+  if (!scales_buffer.raw_ptr()) {
     std::ostringstream msg;
     msg << "[load_gguf] tensor " << name << " scales/biases allocation failed";
     throw std::runtime_error(msg.str());
   }
-  array scales(allocator::Buffer(sb_ptr), shape, float16);
+  array scales(scales_buffer, shape, float16);
 
-  void* b_ptr = allocator::malloc(sb_nbytes).raw_ptr();
-  if (!b_ptr) {
+  auto biases_buffer = allocator::malloc(sb_nbytes);
+  if (!biases_buffer.raw_ptr()) {
     std::ostringstream msg;
     msg << "[load_gguf] tensor " << name << " biases allocation failed";
     throw std::runtime_error(msg.str());
   }
-  array biases(allocator::Buffer(b_ptr), std::move(shape), float16);
-
-  // Issue #4244 fix (4): the extractors loop on scales_arr.size() (the true
-  // shape-derived count) and read `bytes_per_block` per iteration.  Verify
-  // that the total read span fits within the header-declared bsize so we
-  // can't have a small bsize that passed check_tensor_in_file() paired with
-  // a large Shape that would otherwise drive reads past the mapping.
-  uint64_t bytes_per_block;
-  if (tensor.type == GGUF_TYPE_Q4_0) {
-    bytes_per_block = 18;
-  } else if (tensor.type == GGUF_TYPE_Q4_1) {
-    bytes_per_block = 20;
-  } else {
-    bytes_per_block = 34;
-  }
-  uint64_t total_data_needed;
-  if (__builtin_mul_overflow(
-          scales.size(), bytes_per_block, &total_data_needed)) {
-    std::ostringstream msg;
-    msg << "[load_gguf] tensor " << name << " data size overflow";
-    throw std::runtime_error(msg.str());
-  }
-  if (total_data_needed > tensor.bsize) {
-    std::ostringstream msg;
-    msg << "[load_gguf] tensor " << name
-        << " requires " << total_data_needed
-        << " bytes but GGUF header declares " << tensor.bsize;
-    throw std::runtime_error(msg.str());
-  }
+  array biases(biases_buffer, std::move(shape), float16);
 
   if (tensor.type == GGUF_TYPE_Q4_0) {
     extract_q4_0_data(tensor, weights, scales, biases);

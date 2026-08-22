@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 
-#include <climits>
 #include <json.hpp>
 #include <memory>
 #include <sstream>
@@ -182,21 +181,7 @@ SafetensorsLoad load_safetensors(
     {
       size_t expected_nbytes = type.size();
       for (auto dim : shape) {
-        if (dim < 0) {
-          std::ostringstream msg;
-          msg << "[load_safetensors] Tensor '" << item.key()
-              << "' has negative dimension " << dim;
-          throw std::runtime_error(msg.str());
-        }
-        if (__builtin_mul_overflow(
-                expected_nbytes,
-                static_cast<size_t>(dim),
-                &expected_nbytes)) {
-          std::ostringstream msg;
-          msg << "[load_safetensors] Tensor '" << item.key()
-              << "' element count overflow";
-          throw std::runtime_error(msg.str());
-        }
+        expected_nbytes *= static_cast<size_t>(dim);
       }
       if (data_offsets[1] < data_offsets[0] ||
           data_offsets[1] - data_offsets[0] != expected_nbytes) {
@@ -208,8 +193,7 @@ SafetensorsLoad load_safetensors(
         throw std::runtime_error(msg.str());
       }
     }
-    // Use subtraction instead of addition to avoid overflow wrap
-    if (data_offsets[1] > file_size - offset) {
+    if (offset + data_offsets[1] > file_size) {
       std::ostringstream msg;
       msg << "[load_safetensors] Tensor '" << item.key()
           << "' invalid data offsets (" << data_offsets[0] << ", "
