@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 // Required for using M_PI in MSVC.
 #define _USE_MATH_DEFINES
@@ -5148,11 +5148,17 @@ std::vector<array> fp_quantize(
     } else {
       // convert to e8m0
       auto z = array(0, scales.dtype());
-      scales = where(
-          equal(scales, z, s),
-          z,
-          astype(round(log2(scales, s), s), int32, s),
+      // Round the scale up so the block maximum stays representable,
+      // matching the CUDA backend.
+      auto exponent = astype(round(log2(scales, s), s), int32, s);
+      auto decoded =
+          power(array(2.0f, float32), astype(exponent, float32, s), s);
+      exponent = where(
+          less(decoded, astype(scales, float32, s), s),
+          add(exponent, array(1, int32), s),
+          exponent,
           s);
+      scales = where(equal(scales, z, s), z, exponent, s);
 
       wq = divide(wq, power(array(2.0f, w.dtype()), scales, s), s);
       scales = astype(add(scales, array(127, int32), s), uint8, s);

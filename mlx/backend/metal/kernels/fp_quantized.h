@@ -2133,6 +2133,9 @@ template <typename T, int group_size, int bits, bool has_global_scale>
   if constexpr (has_global_scale) {
     scale_dec_b *= scale_enc;
   }
+  if (use_mx_scale) {
+    scale_dec_b = mx_scale_round_up(scale_dec_b);
+  }
 
   using ScaleType = metal::conditional_t<use_mx_scale, fp8_e8m0, fp8_e4m3>;
   auto s = ScaleType(scale_dec_b);
@@ -2224,6 +2227,9 @@ template <typename T, int group_size, int bits, bool has_global_scale>
   scale_dec_b /= bits == 4 ? F4E2M1_MAX : F8E4M3_MAX;
   if constexpr (has_global_scale) {
     scale_dec_b *= scale_enc;
+  }
+  if (use_mx_scale) {
+    scale_dec_b = mx_scale_round_up(scale_dec_b);
   }
 
   using ScaleType = metal::conditional_t<use_mx_scale, fp8_e8m0, fp8_e4m3>;
