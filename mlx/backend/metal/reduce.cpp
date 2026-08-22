@@ -2,13 +2,17 @@
 
 #include <algorithm>
 #include <cassert>
+#include <sstream>
 
+#include "mlx/backend/common/compiled.h"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -301,6 +305,119 @@ std::pair<Dtype, Dtype> remap_reduce_types(
   return {in.dtype(), in.dtype()};
 }
 
+MTL::ComputePipelineState* get_fused_all_reduce_kernel(
+    metal::Device& d,
+    const Reduce& reduce,
+    const array& in,
+    const array& out,
+    const std::string& op_name) {
+  const auto& prefix_inputs = reduce.prefix_inputs();
+  const auto& prefix_tape = reduce.prefix_tape();
+  const auto& constant_ids = reduce.prefix_constant_ids();
+
+  if (prefix_inputs.size() != 1 || prefix_tape.empty()) {
+    throw std::runtime_error(
+        "Fused Metal all-reduce currently requires one prefix input");
+  }
+
+  auto is_constant = [&](size_t i) {
+    return constant_ids.count(prefix_inputs[i].id()) > 0;
+  };
+
+  NodeNamer namer;
+  std::ostringstream signature;
+  for (const auto& x : prefix_inputs) {
+    namer.get_name(x);
+  }
+  for (const auto& x : prefix_tape) {
+    signature << namer.get_name(x) << kindof(x.dtype()) << x.itemsize();
+    signature << x.primitive().name();
+    for (const auto& input : x.inputs()) {
+      signature << namer.get_name(input);
+    }
+  }
+  for (size_t i = 0; i < prefix_inputs.size(); ++i) {
+    const auto& x = prefix_inputs[i];
+    if (is_constant(i)) {
+      signature << "C";
+      print_constant(signature, x);
+    } else {
+      signature << (is_scalar(x) ? "S" : "V");
+    }
+    signature << kindof(x.dtype()) << x.itemsize();
+  }
+  signature << op_name << kindof(out.dtype()) << out.itemsize();
+
+  std::ostringstream name;
+  name << "fused_all_reduce_" << std::hex
+       << std::hash<std::string>{}(signature.str());
+  const std::string kernel_name = name.str();
+  const std::string prefix_name = kernel_name + "_prefix";
+
+  auto lib = d.get_library(kernel_name, [&]() {
+    std::string source = metal::utils();
+    concatenate(
+        source,
+        metal::unary_ops(),
+        metal::reduce_utils(),
+        metal::fused_reduce());
+
+    NodeNamer source_namer;
+    source += "struct " + prefix_name + " {\n";
+    source += "  " + get_type_string(prefix_tape.back().dtype()) +
+        " operator()(" + get_type_string(prefix_inputs[0].dtype()) +
+        " val) thread {\n";
+
+    for (size_t i = 0; i < prefix_inputs.size(); ++i) {
+      const auto& x = prefix_inputs[i];
+      const auto& xname = source_namer.get_name(x);
+      const auto type = get_type_string(x.dtype());
+      if (is_constant(i)) {
+        std::ostringstream value;
+        print_constant(value, x);
+        source += "    " + type + " tmp_" + xname + " = static_cast<" + type +
+            ">(" + value.str() + ");\n";
+      } else {
+        source += "    " + type + " tmp_" + xname + " = static_cast<" + type +
+            ">(val);\n";
+      }
+    }
+
+    for (const auto& x : prefix_tape) {
+      const auto& xname = source_namer.get_name(x);
+      source += "    " + get_type_string(x.dtype()) + " tmp_" + xname + " = ";
+      if (is_static_cast(x.primitive())) {
+        source += "static_cast<" + get_type_string(x.dtype()) + ">(";
+        source += "tmp_" + source_namer.get_name(x.inputs()[0]) + ");\n";
+      } else {
+        source += x.primitive().name();
+        source += "()(";
+        for (size_t i = 0; i + 1 < x.inputs().size(); ++i) {
+          source += "tmp_" + source_namer.get_name(x.inputs()[i]) + ", ";
+        }
+        source += "tmp_" + source_namer.get_name(x.inputs().back()) + ");\n";
+      }
+    }
+
+    source += "    return tmp_" + source_namer.get_name(prefix_tape.back()) +
+        ";\n  }\n};\n";
+
+    std::string op_type = op_name;
+    op_type[0] = std::toupper(op_type[0]);
+    const auto out_type = get_type_string(out.dtype());
+    source += get_template_definition(
+        kernel_name,
+        "fused_all_reduce",
+        get_type_string(in.dtype()),
+        out_type,
+        op_type + "<" + out_type + ">",
+        prefix_name,
+        "int64_t");
+    return source;
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
 void init_reduce(
     array& out,
     const std::string& op_name,
@@ -327,20 +444,16 @@ void init_reduce(
   compute_encoder.dispatch_threads(grid_dims, group_dims);
 }
 
-void all_reduce_dispatch(
+void all_reduce_dispatch_impl(
     const array& in,
     array& out,
     const std::string& op_name,
+    const Dtype& out_type,
+    MTL::ComputePipelineState* kernel,
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
-  // Set the kernel
-  auto [in_type, out_type] = remap_reduce_types(in, op_name);
   const std::string func_name = "all_reduce";
-  std::string kname = func_name;
-  concatenate(kname, "_", op_name, type_to_name(in_type));
-  auto kernel = get_reduce_kernel(
-      d, kname, func_name, op_name, in_type, out_type, "int64_t");
   compute_encoder.set_compute_pipeline_state(kernel);
 
   size_t in_size = in.size();
@@ -406,6 +519,36 @@ void all_reduce_dispatch(
     compute_encoder.set_bytes(intermediate_size, 3);
     compute_encoder.dispatch_threads(grid_dims, group_dims);
   }
+}
+
+void all_reduce_dispatch(
+    const array& in,
+    array& out,
+    const std::string& op_name,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s) {
+  auto [in_type, out_type] = remap_reduce_types(in, op_name);
+  const std::string func_name = "all_reduce";
+  std::string kname = func_name;
+  concatenate(kname, "_", op_name, type_to_name(in_type));
+  auto kernel = get_reduce_kernel(
+      d, kname, func_name, op_name, in_type, out_type, "int64_t");
+  all_reduce_dispatch_impl(
+      in, out, op_name, out_type, kernel, compute_encoder, d, s);
+}
+
+void fused_all_reduce_dispatch(
+    const array& in,
+    array& out,
+    const std::string& op_name,
+    const Reduce& reduce,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s) {
+  auto kernel = get_fused_all_reduce_kernel(d, reduce, in, out, op_name);
+  all_reduce_dispatch_impl(
+      in, out, op_name, out.dtype(), kernel, compute_encoder, d, s);
 }
 
 void row_reduce_small(
@@ -975,7 +1118,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // When all the reduced axes have size 1 at runtime, which can happen with
   // shapeless compilation, the reduction is the identity so just cast-copy
   // the input to the output.
-  if (in.size() > 0 && out.size() == in.size()) {
+  if (!has_fused_prefix() && in.size() > 0 && out.size() == in.size()) {
     CopyType ctype =
         in.flags().contiguous ? CopyType::Vector : CopyType::General;
     copy_gpu(in, out, ctype, stream());
@@ -1029,6 +1172,18 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder.add_temporary(in_copy);
       in = in_copy;
       plan = get_reduction_plan(in, axes_);
+    }
+
+    if (has_fused_prefix()) {
+      if (plan.type == ContiguousAllReduce) {
+        fused_all_reduce_dispatch(
+            in, out, op_name, *this, compute_encoder, d, s);
+        return;
+      }
+
+      // TODO: Add fused prefix support to Metal row and strided reductions.
+      throw std::runtime_error(
+          "Fused Metal reduce is only implemented for contiguous all-reduce");
     }
 
     // Reducing over everything and the data is all there no broadcasting or

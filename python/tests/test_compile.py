@@ -1616,6 +1616,27 @@ class TestCompile(mlx_tests.MLXTestCase):
         expected = w[::-1, :, ::-1, :] + 1.0
         self.assertTrue(mx.array_equal(p(w[::-1, :, ::-1, :]), expected))
 
+    def test_compile_unary_reduction(self):
+
+        x = mx.ones(shape=(4096, 4096))
+        y = mx.ones(shape=(4096, 4096))
+
+        @mx.compile
+        def abs_max(x):
+            return mx.max(mx.abs(x))
+
+        # Metal all-reduce uses one pass up to 4096 elements and two passes
+        # above that threshold. Negative endpoints ensure that skipping abs
+        # changes the maximum by one.
+        for shape in ((32, 32), (128, 128)):
+            size = math.prod(shape)
+            x = mx.arange(-size // 2, size // 2, dtype=mx.float32).reshape(shape)
+            mx.eval(x)
+
+            out = abs_max(x)
+            expected = mx.max(mx.abs(x))
+            self.assertTrue(mx.array_equal(out, expected))
+
     def test_compile_abs_unsigned(self):
         # abs has to compile for the wider unsigned types too
         fun = lambda x: mx.abs(x) + 1
