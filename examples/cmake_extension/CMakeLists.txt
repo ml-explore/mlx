@@ -72,7 +72,3 @@ nanobind_add_module(
   mlx
   ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp)
 target_link_libraries(_ext PRIVATE mlx_ext)
-
-if(BUILD_SHARED_LIBS)
-  target_link_options(_ext PRIVATE -Wl,-rpath,@loader_path)
-endif()

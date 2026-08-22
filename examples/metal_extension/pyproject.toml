@@ -1,0 +1,23 @@
+[build-system]
+requires = [
+  "setuptools>=80",
+  "cmake>=3.25",
+  "ninja",
+  "mlx>=0.32.0",
+  "nanobind==2.13.0",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlx_sample_metal_extension"
+version = "0.0.0"
+description = "Activation MetalExtension example for MLX."
+requires-python = ">=3.10"
+dynamic = ["dependencies"]
+
+[tool.setuptools]
+packages = ["mlx_sample_metal_extension"]
+zip-safe = false
+
+[tool.setuptools.package-data]
+mlx_sample_metal_extension = ["*.metallib", "*.pyi"]
