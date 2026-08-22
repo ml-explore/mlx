@@ -1267,6 +1267,26 @@ class TestArray(mlx_tests.MLXTestCase):
         a_mlx = mx.array(a_np)
         self.assertTrue(np.array_equal(a_np[2:-1, 0], np.array(a_mlx[2:-1, 0])))
 
+    def test_indexing_too_many_after_ellipsis(self):
+        # Regression test: indexing with an ellipsis followed by more
+        # non-None indices than the array has dimensions used to compute an
+        # unsigned (size_t) underflow in the ellipsis-expansion loop bound,
+        # causing an out-of-bounds read / crash instead of raising.
+        a = mx.array([1, 2, 3])
+        with self.assertRaises(ValueError):
+            a[..., 0, 0]
+        with self.assertRaises(ValueError):
+            a[..., 0, 0, 0]
+        with self.assertRaises(ValueError):
+            a[..., 0:1, 0:1]
+
+        a2 = mx.zeros((2, 2))
+        with self.assertRaises(ValueError):
+            a2[..., 0, 0, 0]
+
+        with self.assertRaises(ValueError):
+            a[..., 0, 0] = 5
+
     def test_indexing_grad(self):
         x = mx.array([[1, 2], [3, 4]]).astype(mx.float32)
         ind = mx.array([0, 1, 0]).astype(mx.float32)
