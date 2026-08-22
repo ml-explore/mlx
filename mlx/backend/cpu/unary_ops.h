@@ -154,14 +154,15 @@ struct ToFP8 {
 struct FromFP8 {
   template <int N>
   Simd<float, N> operator()(Simd<uint8_t, N> x) {
-    auto v = Simd<uint16_t, N>(x & 127) << 7;
+    auto v = Simd<uint16_t, N>(x & 127);
+    auto u = (v << 7) | (((v + 1) >> 7) << 14);
     Simd<float, N> out;
     if constexpr (simd::max_size<float16_t> >= N) {
-      auto converted = *(Simd<float16_t, N>*)(&v);
+      auto converted = *(Simd<float16_t, N>*)(&u);
       out = converted * 256.0;
     } else {
       for (int i = 0; i < N; ++i) {
-        auto converted = *(float16_t*)(&v[i]);
+        auto converted = *(float16_t*)(&u[i]);
         out[i] = converted * 256.0;
       }
     }

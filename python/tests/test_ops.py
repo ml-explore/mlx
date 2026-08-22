@@ -4258,6 +4258,21 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
+        # Test NaN handling: 0x7f encodes +nan, 0xff encodes -nan
+        nan_encodings = mx.array([0x7f, 0xff], dtype=mx.uint8)
+        decoded_np = np.array(mx.from_fp8(nan_encodings))
+        self.assertTrue(np.isnan(decoded_np[0]).item())
+        self.assertFalse(np.signbit(decoded_np[0]).item())  # positive sign bit
+        self.assertTrue(np.isnan(decoded_np[1]).item())
+        self.assertTrue(np.signbit(decoded_np[1]).item())  # negative sign bit
+
+        # Test max finite values stay finite: 0x7e -> +448, 0xfe -> -448
+        finite_encodings = mx.array([0x7e, 0xfe], dtype=mx.uint8)
+        decoded = mx.from_fp8(finite_encodings)
+        self.assertTrue(mx.allclose(decoded, mx.array([448.0, -448.0])))
+        self.assertFalse(mx.isnan(decoded[0]).item())
+        self.assertFalse(mx.isnan(decoded[1]).item())
+
     def test_zeros_ones_empty_like_dtype(self):
         x = mx.array([1, 2, 3], dtype=mx.int32)
 
