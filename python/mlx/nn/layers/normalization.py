@@ -64,12 +64,19 @@ class InstanceNorm(Module):
                 f"InstanceNorm expects inputs with at least 3 dimensions"
                 f" (N, ..., C) but the input has {x.ndim} dimensions."
             )
-        reduction_axes = tuple(range(1, x.ndim - 1))
-        # Compute stats
-        mean = mx.mean(x, axis=reduction_axes, keepdims=True)
-        var = mx.var(x, axis=reduction_axes, keepdims=True)
-        # Normalize
-        x = (x - mean) * mx.rsqrt(var + self.eps)
+        batch_size, features = x.shape[0], x.shape[-1]
+        spatial_shape = x.shape[1:-1]
+        channels_first = mx.transpose(x, (0, x.ndim - 1, *range(1, x.ndim - 1)))
+        x = mx.fast.layer_norm(
+            channels_first.reshape(batch_size, features, -1),
+            None,
+            None,
+            self.eps,
+        )
+        x = mx.transpose(
+            x.reshape(batch_size, features, *spatial_shape),
+            (0, *range(2, len(spatial_shape) + 2), 1),
+        )
         # Scale and shift if necessary
         return (self.weight * x + self.bias) if "weight" in self else x
 
