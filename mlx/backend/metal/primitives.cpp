@@ -187,10 +187,6 @@ void SVD::eval_gpu(
   throw std::runtime_error("[SVD::eval_gpu] Metal SVD NYI.");
 }
 
-void Inverse::eval_gpu(const std::vector<array>& inputs, array& output) {
-  throw std::runtime_error("[Inverse::eval_gpu] Metal inversion NYI.");
-}
-
 void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
   throw std::runtime_error(
       "[Cholesky::eval_gpu] Metal Cholesky decomposition NYI.");

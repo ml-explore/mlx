@@ -289,6 +289,19 @@ class TestLinalg(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(y1 == mx.triu(y1)))
         self.assertTrue(mx.all(y2 == mx.tril(y2)))
 
+    def test_inverse_generic_matrices(self):
+        rng = np.random.default_rng(0)
+        matrices = rng.normal(size=(2, 7, 7)).astype(np.float32)
+        matrices += 7 * np.eye(7, dtype=np.float32)
+
+        expected = matrices[:, :, ::-1]
+        inverse = mx.linalg.inv(mx.array(matrices)[:, :, ::-1])
+
+        self.assertEqual(inverse.shape, expected.shape)
+        self.assertTrue(
+            np.allclose(inverse, np.linalg.inv(expected), rtol=1e-5, atol=1e-5)
+        )
+
     def test_cholesky(self):
         sqrtA = mx.array(
             [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], dtype=mx.float32

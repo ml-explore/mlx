@@ -299,7 +299,9 @@ svd(const array& a, bool compute_uv, StreamOrDevice s /* = {} */) {
 }
 
 array inv_impl(const array& a, bool tri, bool upper, StreamOrDevice s) {
-  check_cpu_stream(s, "[linalg::inv]");
+  if (tri) {
+    check_cpu_stream(s, "[linalg::inv]");
+  }
   check_float(a.dtype(), "[linalg::inv]");
 
   if (a.ndim() < 2) {
@@ -314,11 +316,21 @@ array inv_impl(const array& a, bool tri, bool upper, StreamOrDevice s) {
         "[linalg::inv] Inverses are only defined for square matrices.");
   }
 
+  auto stream = to_stream(s);
+  if (stream.device == Device::gpu && !tri) {
+    auto input = contiguous(a, false, stream);
+    auto identity = contiguous(
+        broadcast_to(eye(a.shape(-1), a.dtype(), stream), a.shape(), stream),
+        false,
+        stream);
+    return array(
+        a.shape(),
+        a.dtype(),
+        std::make_shared<Inverse>(stream, tri, upper),
+        {input, identity});
+  }
   return array(
-      a.shape(),
-      a.dtype(),
-      std::make_shared<Inverse>(to_stream(s), tri, upper),
-      {a});
+      a.shape(), a.dtype(), std::make_shared<Inverse>(stream, tri, upper), {a});
 }
 
 array inv(const array& a, StreamOrDevice s /* = {} */) {

@@ -133,6 +133,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/inverse.mm
           ${CMAKE_CURRENT_SOURCE_DIR}/logsumexp.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp
@@ -150,6 +151,8 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/resident.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp)
+
+target_link_libraries(mlx PRIVATE ${METAL_PERFORMANCE_SHADERS_LIB})
 
 if(NOT MLX_METAL_PATH)
   set(MLX_METAL_PATH ${CMAKE_CURRENT_BINARY_DIR}/kernels/)

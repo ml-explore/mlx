@@ -63,7 +63,7 @@ void eval(array& arr) {
       scheduler::notify_task_completion(s);
     });
   } else {
-    command_buffer->addCompletedHandler(
+    encoder.get_command_buffer()->addCompletedHandler(
         [buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {});
   }
 }
