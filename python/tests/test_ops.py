@@ -2568,6 +2568,21 @@ class TestOps(mlx_tests.MLXTestCase):
         c_mlx = mxop(a_mlx, axis=-1)
         self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
 
+    def test_scan_invalid_axis(self):
+        a = mx.arange(24).reshape(2, 3, 4)
+
+        for op in ["cumsum", "cumprod", "cummax", "cummin", "logcumsumexp"]:
+            mxop = getattr(mx, op)
+            for ax in [3, 4, 100, -4, -5, -100]:
+                with self.assertRaises(ValueError):
+                    mxop(a, axis=ax)
+
+            # Valid negative axes still work and agree with the positive one
+            for ax in [-1, -2, -3]:
+                out_neg = mxop(a, axis=ax)
+                out_pos = mxop(a, axis=ax + a.ndim)
+                self.assertTrue(mx.array_equal(out_neg, out_pos))
+
     def test_scans(self):
         a_npy = np.random.randn(32, 32, 32).astype(np.float32)
         a_mlx = mx.array(a_npy)
