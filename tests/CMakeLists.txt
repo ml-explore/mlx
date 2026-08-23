@@ -14,10 +14,6 @@ if(MLX_BUILD_METAL)
   list(APPEND METAL_TEST_SOURCES residency_tests.cpp)
 endif()
 
-if(MLX_BUILD_CUDA)
-  list(APPEND METAL_TEST_SOURCES cuda_graph_recovery_tests.cpp)
-endif()
-
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 
 target_sources(

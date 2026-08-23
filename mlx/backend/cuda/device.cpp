@@ -460,62 +460,44 @@ bool CommandEncoder::needs_commit() {
       ((bytes_in_graph_ >> 20) > max_mb_per_graph_);
 }
 
-// Bookkeeping for the graph being built. None of it can throw, so it is safe
-// to run while unwinding.
-void CommandEncoder::clear_graph_state() {
-  from_nodes_.clear();
-  to_nodes_.clear();
-  graph_deps_key_.clear();
-  graph_nodes_key_.clear();
-  node_map_.clear();
-  active_deps_.clear();
-  active_outputs_.clear();
-  concurrent_nodes_.clear();
-  is_graph_updatable_ = true;
-}
-
-void CommandEncoder::reset_graph_state_after_error() {
-  // The failed call left an error pending on the runtime. Clear it first:
-  // ~CudaHandle() skips its destroy while an error is pending, so every handle
-  // released from here on would leak, and the graph below would fail to be
-  // recreated because of an error that has already been reported.
-  cudaGetLastError();
-
-  clear_graph_state();
-  node_count_ = 0;
-  bytes_in_graph_ = 0;
-
-  // Keeping the old graph would be worse than having none: its nodes stay in
-  // it and would run again on the next launch, silently, because the fresh
-  // dependencies only reference the new nodes. Make sure the handle is gone
-  // even when destroying it fails.
-  try {
-    graph_.reset();
-  } catch (...) {
-    graph_.release();
-  }
-  graph_ = CudaGraph(device_);
-}
-
 void CommandEncoder::commit() {
+  nvtx3::scoped_range r("CommandEncoder::commit");
   try {
     commit_impl();
   } catch (...) {
-    // Without this the encoder keeps the nodes and dependencies of the failed
-    // graph. The next commit then mixes them into a fresh graph and fails in
-    // cudaGraphAddDependencies with cudaErrorInvalidValue, and every later
-    // commit keeps failing until the process is restarted.
+    // Clear pending CUDA error first.
+    cudaGetLastError();
+    // Clear states.
+    clear_graph_state();
+    node_count_ = 0;
+    bytes_in_graph_ = 0;
+    // Clear graph.
     try {
-      reset_graph_state_after_error();
+      graph_.reset();
     } catch (...) {
-      // Recovery is best effort: never let it replace the error being thrown.
+      // Destroying could fail.
+      graph_.release();
     }
+    try {
+      graph_ = CudaGraph(device_);
+    } catch (...) {
+      // Keep the original error.
+    }
+    // Re-throw the error.
     throw;
   }
 }
 
+void CommandEncoder::synchronize() {
+  CHECK_CUDA_ERROR(cudaStreamSynchronize(stream_));
+  auto p = std::make_shared<std::promise<void>>();
+  std::future<void> f = p->get_future();
+  add_completed_handler([p = std::move(p)]() { p->set_value(); });
+  commit();
+  f.wait();
+}
+
 void CommandEncoder::commit_impl() {
-  nvtx3::scoped_range r("CommandEncoder::commit");
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
@@ -584,13 +566,16 @@ void CommandEncoder::commit_impl() {
   bytes_in_graph_ = 0;
 }
 
-void CommandEncoder::synchronize() {
-  CHECK_CUDA_ERROR(cudaStreamSynchronize(stream_));
-  auto p = std::make_shared<std::promise<void>>();
-  std::future<void> f = p->get_future();
-  add_completed_handler([p = std::move(p)]() { p->set_value(); });
-  commit();
-  f.wait();
+void CommandEncoder::clear_graph_state() {
+  from_nodes_.clear();
+  to_nodes_.clear();
+  graph_deps_key_.clear();
+  graph_nodes_key_.clear();
+  node_map_.clear();
+  active_deps_.clear();
+  active_outputs_.clear();
+  concurrent_nodes_.clear();
+  is_graph_updatable_ = true;
 }
 
 Device& device(int cuda_device) {

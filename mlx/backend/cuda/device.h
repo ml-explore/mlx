@@ -138,11 +138,10 @@ class CommandEncoder {
     std::string id;
   };
 
-  void insert_graph_dependencies(GraphNode node);
-  void insert_graph_dependencies(std::vector<GraphNode> nodes);
   void commit_impl();
   void clear_graph_state();
-  void reset_graph_state_after_error();
+  void insert_graph_dependencies(GraphNode node);
+  void insert_graph_dependencies(std::vector<GraphNode> nodes);
 
   Device& device_;
   CudaStream stream_;
