@@ -2122,7 +2122,7 @@ template <typename T, int group_size, int bits, bool has_global_scale>
 
   float scale_dec_b;
   float w_thread = w[index];
-  if (use_mx_scale) {
+  if constexpr (use_mx_scale) {
     scale_dec_b = simd_max(abs(w_thread));
   } else {
     float w_max_l = simd_max(simd_lid < 16 ? abs(w_thread) : 0.0);
@@ -2132,8 +2132,7 @@ template <typename T, int group_size, int bits, bool has_global_scale>
   scale_dec_b /= bits == 4 ? F4E2M1_MAX : F8E4M3_MAX;
   if constexpr (has_global_scale) {
     scale_dec_b *= scale_enc;
-  }
-  if (use_mx_scale) {
+  } else if constexpr (use_mx_scale) {
     scale_dec_b = mx_scale_round_up(scale_dec_b);
   }
 
@@ -2217,7 +2216,7 @@ template <typename T, int group_size, int bits, bool has_global_scale>
 
   float scale_dec_b;
   float w_thread = w[index];
-  if (use_mx_scale) {
+  if constexpr (use_mx_scale) {
     scale_dec_b = simd_max(abs(w_thread));
   } else {
     float w_max_l = simd_max(simd_lid < 16 ? abs(w_thread) : 0.0);
@@ -2227,8 +2226,7 @@ template <typename T, int group_size, int bits, bool has_global_scale>
   scale_dec_b /= bits == 4 ? F4E2M1_MAX : F8E4M3_MAX;
   if constexpr (has_global_scale) {
     scale_dec_b *= scale_enc;
-  }
-  if (use_mx_scale) {
+  } else if constexpr (use_mx_scale) {
     scale_dec_b = mx_scale_round_up(scale_dec_b);
   }
 
