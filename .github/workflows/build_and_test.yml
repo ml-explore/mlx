@@ -105,7 +105,7 @@ jobs:
         with:
           toolkit: 'cpu'
       - uses: actions/upload-artifact@v7
-        if: matrix.toolkit == 'metal'
+        if: matrix.toolkit != 'cpu'
         with:
           name: mlx-${{ matrix.toolkit }}-macos${{ matrix.macos-target }}
           path: |
@@ -115,24 +115,28 @@ jobs:
           if-no-files-found: error
 
   mac_test:
-    name: Test macOS
+    name: Test macOS (${{ matrix.toolkit }})
     if: github.repository == 'ml-explore/mlx'
     runs-on: [self-hosted, macos]
     needs: mac_build
+    strategy:
+      fail-fast: false
+      matrix:
+        toolkit: ['metal', 'jit']
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
         with:
-          toolkit: 'metal'
+          toolkit: ${{ matrix.toolkit }}
           use-ccache: false
       - uses: actions/download-artifact@v8
         with:
           path: artifact
-          pattern: mlx-metal-*
+          pattern: mlx-${{ matrix.toolkit }}-*
       - run: ls -lhR artifact
       - uses: ./.github/actions/test-macos
         with:
-          toolkit: 'metal'
+          toolkit: ${{ matrix.toolkit }}
 
   build_documentation:
     name: Build Documentation
