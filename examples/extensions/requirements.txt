@@ -1,5 +1,5 @@
 setuptools>=42
 cmake>=3.27
 mlx>=0.31.2
-nanobind==3.0.0.dev5
-nanobind-backend>=1.0.0.dev5
+nanobind==3.0.0
+nanobind-backend>=1.0.0
