@@ -1232,7 +1232,8 @@ template <
     int group_size,
     int bits,
     bool batched,
-    bool has_global_scale = false>
+    bool has_global_scale = false,
+    int results_per_simdgroup = 4>
 [[kernel]] void fp_qmv(
     const device uint32_t* w,
     const device uint8_t* scales,

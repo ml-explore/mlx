@@ -1603,7 +1603,8 @@ template <
     int group_size,
     int bits,
     bool batched,
-    bool has_global_scale = false>
+    bool has_global_scale = false,
+    int results_per_simdgroup = 4>
 [[kernel]] void affine_qmv_fast(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1660,7 +1661,8 @@ template <
     int group_size,
     const int bits,
     bool batched,
-    bool has_global_scale = false>
+    bool has_global_scale = false,
+    int results_per_simdgroup = 4>
 [[kernel]] void affine_qmv(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],

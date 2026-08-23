@@ -462,6 +462,42 @@ bool CommandEncoder::needs_commit() {
 
 void CommandEncoder::commit() {
   nvtx3::scoped_range r("CommandEncoder::commit");
+  try {
+    commit_impl();
+  } catch (...) {
+    // Clear pending CUDA error first.
+    cudaGetLastError();
+    // Clear states.
+    clear_graph_state();
+    node_count_ = 0;
+    bytes_in_graph_ = 0;
+    // Clear graph.
+    try {
+      graph_.reset();
+    } catch (...) {
+      // Destroying could fail.
+      graph_.release();
+    }
+    try {
+      graph_ = CudaGraph(device_);
+    } catch (...) {
+      // Keep the original error.
+    }
+    // Re-throw the error.
+    throw;
+  }
+}
+
+void CommandEncoder::synchronize() {
+  CHECK_CUDA_ERROR(cudaStreamSynchronize(stream_));
+  auto p = std::make_shared<std::promise<void>>();
+  std::future<void> f = p->get_future();
+  add_completed_handler([p = std::move(p)]() { p->set_value(); });
+  commit();
+  f.wait();
+}
+
+void CommandEncoder::commit_impl() {
   if (!temporaries_.empty()) {
     add_completed_handler([temporaries = std::move(temporaries_)]() {});
   }
@@ -520,13 +556,8 @@ void CommandEncoder::commit() {
     }
 
     // Reset state
-    from_nodes_.clear();
-    to_nodes_.clear();
-    graph_deps_key_.clear();
-    graph_nodes_key_.clear();
-    node_map_.clear();
+    clear_graph_state();
     graph_ = CudaGraph(device_);
-    is_graph_updatable_ = true;
   }
 
   // Put completion handlers in a batch.
@@ -535,13 +566,16 @@ void CommandEncoder::commit() {
   bytes_in_graph_ = 0;
 }
 
-void CommandEncoder::synchronize() {
-  CHECK_CUDA_ERROR(cudaStreamSynchronize(stream_));
-  auto p = std::make_shared<std::promise<void>>();
-  std::future<void> f = p->get_future();
-  add_completed_handler([p = std::move(p)]() { p->set_value(); });
-  commit();
-  f.wait();
+void CommandEncoder::clear_graph_state() {
+  from_nodes_.clear();
+  to_nodes_.clear();
+  graph_deps_key_.clear();
+  graph_nodes_key_.clear();
+  node_map_.clear();
+  active_deps_.clear();
+  active_outputs_.clear();
+  concurrent_nodes_.clear();
+  is_graph_updatable_ = true;
 }
 
 Device& device(int cuda_device) {
