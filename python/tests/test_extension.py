@@ -69,7 +69,7 @@ Load command 10
  platform MACOS
     minos 15.2
 """
-        with patch(
+        with patch("mlx.extension._MLX_PACKAGE_PATH", "/tmp/mlx"), patch(
             "mlx.extension.subprocess.check_output", return_value=vtool_output
         ) as check_output:
             deployment_target = _mlx_macos_deployment_target()
@@ -80,7 +80,7 @@ Load command 10
                 "xcrun",
                 "vtool",
                 "-show-build",
-                str(Path(__file__).resolve().parents[1] / "mlx/lib/libmlx.dylib"),
+                "/tmp/mlx/lib/libmlx.dylib",
             ],
             stderr=subprocess.STDOUT,
             text=True,
