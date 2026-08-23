@@ -1023,6 +1023,20 @@ class TestVmap(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(expected, out))
         self.assertEqual(6, counter[0])
 
+    def test_vmap_sort(self):
+        a = mx.random.uniform(shape=(3, 5))
+        expected = mx.stack([mx.sort(a[:, i]) for i in range(a.shape[1])], axis=1)
+        for axis in (0, -1):
+            out = mx.vmap(lambda x: mx.sort(x, axis=axis), in_axes=1, out_axes=1)(a)
+            self.assertTrue(mx.array_equal(out, expected))
+
+    def test_vmap_argsort(self):
+        a = mx.random.uniform(shape=(3, 5))
+        expected = mx.stack([mx.argsort(a[:, i]) for i in range(a.shape[1])], axis=1)
+        for axis in (0, -1):
+            out = mx.vmap(lambda x: mx.argsort(x, axis=axis), in_axes=1, out_axes=1)(a)
+            self.assertTrue(mx.array_equal(out, expected))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()
