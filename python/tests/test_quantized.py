@@ -212,6 +212,33 @@ class TestQuantized(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(w, w_hat, rtol=1e-5, atol=1e-5))
 
+    def test_nvfp4_element_count_alignment(self):
+        # nvfp4 is the only mode with group size 16, so it is the only one
+        # whose element count can be a multiple of 16 but not of 32. The last
+        # two shapes have a count of 32 and are controls.
+        lut = mx.array([0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0])
+        lut = mx.concatenate([lut, -lut[1:]])
+        shapes = [(1, 16), (3, 16), (33, 16), (5, 80), (7, 112), (1, 1, 16)]
+        shapes += [(2, 16), (1, 32)]
+        dtypes = [mx.float32, mx.float16, mx.bfloat16]
+        for shape, dtype in product(shapes, dtypes):
+            with self.subTest(shape=shape, dtype=dtype):
+                w = lut[mx.random.randint(0, lut.size, shape=shape)]
+                w = w.reshape(-1, 16)
+                w[:, 0] = 6
+                w = w.reshape(shape).astype(dtype)
+
+                w_q, scales = mx.quantize(w, mode="nvfp4", stream=mx.cpu)
+                w_hat = mx.dequantize(w_q, scales, mode="nvfp4", stream=mx.cpu)
+                self.assertEqual(w_hat.shape, w.shape)
+                self.assertTrue(mx.array_equal(w, w_hat))
+
+                if mx.is_available(mx.gpu):
+                    g_q, g_scales = mx.quantize(w, mode="nvfp4", stream=mx.gpu)
+                    g_hat = mx.dequantize(g_q, g_scales, mode="nvfp4", stream=mx.gpu)
+                    self.assertTrue(mx.array_equal(scales, g_scales))
+                    self.assertTrue(mx.array_equal(w_hat, g_hat))
+
     def test_qqmv(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)

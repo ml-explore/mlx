@@ -5186,7 +5186,9 @@ std::vector<array> fp_quantize(
       wq = argmin(
           abs(subtract(expand_dims(wq, -1, s), lut, s), s), -1, false, s);
       auto shifts = power(array(2, uint32), arange(0, 32, 4, uint32, s), s);
-      wq = reshape(wq, {-1, 4, 8}, s);
+      // Group only by the 8 nibbles that share a uint32. nvfp4 has group size
+      // 16, so the element count is not always a multiple of 32.
+      wq = reshape(wq, {-1, 8}, s);
       wq = sum(multiply(wq, shifts, s), -1, false, s);
     } else {
       wq = view(to_fp8(wq, s), uint32, s);
@@ -5432,7 +5434,9 @@ array fp_dequantize(
               -6.0f,
           },
           out_type);
-      out = view(reshape(out, {-1, 4}, s), int8, s);
+      // The packed word count is not always a multiple of 4 for nvfp4, so
+      // view the words as bytes without grouping them first.
+      out = view(out, int8, s);
       auto idx_lo = bitwise_and(out, array(0x0F, int8), s);
       auto idx_hi = right_shift(out, array(4, int8), s);
       auto lo = gather(lut, idx_lo, 0, {1}, s);
