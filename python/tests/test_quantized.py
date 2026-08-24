@@ -39,6 +39,18 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 a_hat = mx.dequantize(w_q, scales, biases, gs, b)
                 self.assertTrue(mx.all(a_hat == 0))
 
+        # slices
+        if mx.default_device() == mx.gpu:
+            w = mx.random.normal(shape=(2, 256, 32))
+            quant = {"group_size": 32, "bits": 4}
+            wq, scales, biases = mx.quantize(w, **quant)
+            wq_s = wq[:, :16, :]
+            scales_s = scales[:, :16, :]
+            biases_s = biases[:, :16, :]
+            dq_cpu = mx.dequantize(wq_s, scales_s, biases_s, **quant, stream=mx.cpu)
+            dq_gpu = mx.dequantize(wq_s, scales_s, biases_s, **quant, stream=mx.gpu)
+            self.assertTrue(mx.abs(dq_cpu - dq_gpu).max().item() < 1e-6)
+
     def test_mxfp4_quantize_dequantize(self):
         lut = mx.array(
             [
