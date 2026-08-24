@@ -95,10 +95,14 @@ std::pair<std::vector<std::string>, std::string> parse(std::string subscripts) {
     std::sort(rhs.begin(), rhs.end());
   }
   std::vector<std::string> input_list;
-  std::stringstream ss(lhs);
-  std::string token;
-  while (getline(ss, token, ',')) {
-    input_list.push_back(token);
+  for (size_t start = 0;;) {
+    auto pos = lhs.find(',', start);
+    if (pos == std::string::npos) {
+      input_list.push_back(lhs.substr(start));
+      break;
+    }
+    input_list.push_back(lhs.substr(start, pos - start));
+    start = pos + 1;
   }
   return {input_list, rhs};
 }
