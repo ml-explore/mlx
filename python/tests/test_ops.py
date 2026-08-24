@@ -4259,8 +4259,9 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
         # Test NaN handling: 0x7f encodes +nan, 0xff encodes -nan
+        # Decode to float32 since bfloat16 has no numpy analogue
         nan_encodings = mx.array([0x7F, 0xFF], dtype=mx.uint8)
-        decoded_np = np.array(mx.from_fp8(nan_encodings))
+        decoded_np = np.array(mx.from_fp8(nan_encodings, mx.float32))
         self.assertTrue(np.isnan(decoded_np[0]).item())
         self.assertFalse(np.signbit(decoded_np[0]).item())  # positive sign bit
         self.assertTrue(np.isnan(decoded_np[1]).item())
