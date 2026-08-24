@@ -1633,6 +1633,29 @@ class TestCompile(mlx_tests.MLXTestCase):
         for sub in (f32_sub, f16_sub, bf16_sub):
             self.assertTrue(mx.all(fn(sub)).item())
 
+    def test_compile_different_log_bases(self):
+        # The logs are intermediates, since outputs are not simplified.
+        def entropies(p):
+            nats = -mx.sum(p * mx.log(p))
+            bits = -mx.sum(p * mx.log2(p))
+            return mx.stack([nats, bits])
+
+        p = np.array([0.1, 0.2, 0.3, 0.4], dtype=np.float32)
+        expected = np.array(
+            [-(p * np.log(p)).sum(), -(p * np.log2(p)).sum()], dtype=np.float32
+        )
+        out = mx.compile(entropies)(mx.array(p))
+        self.assertTrue(np.allclose(out, expected, atol=1e-5))
+
+    def test_compile_equal_nan(self):
+        def fun(x):
+            return mx.stack(
+                [mx.array_equal(x, x), mx.array_equal(x, x, equal_nan=True)]
+            )
+
+        x = mx.array([1.0, float("nan"), 3.0])
+        self.assertTrue(mx.array_equal(mx.compile(fun)(x), mx.array([False, True])))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

@@ -31,6 +31,10 @@ NB_MODULE(core, m) {
   auto reprlib_fix = nb::module_::import_("mlx._reprlib_fix");
   nb::set_leak_warnings(false);
 
+  auto array_namespace_info = nb::module_::import_("mlx.__array_api_info");
+  m.attr("__array_namespace_info__") =
+      array_namespace_info.attr("__array_namespace_info__");
+
   init_mlx_func(m);
   init_device(m);
   init_stream(m);

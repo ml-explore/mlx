@@ -376,9 +376,31 @@ def launch_jaccl(parser, hosts, args, command):
 
     jaccl_ring = args.backend == "jaccl-ring"
     have_rdmas = all(len(h.rdma) == len(hosts) for h in hosts)
+    if not have_rdmas:
+        parser.error(
+            "The hostfile is malformed: number of RDMA devices does not match hosts"
+        )
     have_nulls = all(h.rdma[i] is None for i, h in enumerate(hosts))
-    if not have_rdmas or not have_nulls:
-        parser.error("Malformed hostfile for jaccl backend")
+    if not have_nulls:
+        parser.error("The hostfile is malformed: RDMA device of self should be null")
+
+    # Find pairs that miss rmda in hostfile.
+    n = len(hosts)
+    missing_rdma = [
+        (i, j)
+        for i, h in enumerate(hosts)
+        for j in (((i - 1) % n, (i + 1) % n) if jaccl_ring else range(n))
+        if i != j and h.rdma[j] is None
+    ]
+
+    if missing_rdma:
+        pairs = ", ".join(
+            f"{hosts[i].ssh_hostname} to {hosts[j].ssh_hostname}"
+            for i, j in missing_rdma[:3]
+        )
+        if len(missing_rdma) > 3:
+            pairs += f" and {len(missing_rdma) - 3} more"
+        parser.error(f"The hostfile is malformed: no RDMA device is listed for {pairs}")
 
     coordinator = hosts[0].ips[0]
     env = args.env

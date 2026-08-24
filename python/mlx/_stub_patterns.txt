@@ -1,5 +1,5 @@
 mlx.core.__prefix__:
-  from typing import Any, ParamSpec, Protocol, TypeAlias, TypeVar
+  from typing import Any, BinaryIO as file, Literal, ParamSpec, Protocol, TypeAlias, TypeVar
   P = ParamSpec("P")
   R = TypeVar("R")
   class DLPackCompatible(Protocol):
@@ -12,21 +12,32 @@ mlx.core.__suffix__:
   StreamOrDevice: TypeAlias = Stream | ThreadLocalStream | Device | DeviceType | None
   bool_: Dtype = ...
 
+mlx.core.matrix_norm:
+  matrix_norm = linalg.norm
+
+mlx.core.array.__(eq|ne)__:
+  @overload
+  def __\1__(self, other: bool | int | float | array | Annotated[NDArray, dict(writable=False)] | complex) -> array: ...
+  @overload
+  def __\1__(self, other: ArrayLike) -> array | bool: ...
+  @overload
+  def __\1__(self, other: object) -> Any: ...
+
+mlx.core._PrintOptionsContext:
+  class _PrintOptionsContext:
+    def __init__(self, arg: PrintOptions, /) -> None: ...
+    def __enter__(self) -> _PrintOptionsContext: ...
+    def __exit__(self, *args) -> None: ...
+
 mlx.core.distributed.__prefix__:
-  from mlx.core import array, Dtype, StreamOrDevice, scalar
-  from mlx.core.distributed import Group
-  from collections.abc import Sequence
+  from mlx.core import array, Dtype, StreamOrDevice
+  from collections.abc import Callable, Sequence
 
 mlx.core.fast.__prefix__:
-  from mlx.core import array, Dtype, StreamOrDevice, scalar
+  from mlx.core import array, StreamOrDevice
 
 mlx.core.linalg.__prefix__:
-  from mlx.core import array, Dtype, StreamOrDevice, scalar
-  from collections.abc import Sequence
-
-mlx.core.metal.__prefix__:
-  from mlx.core import array, Dtype, Device, Stream, scalar
-  from collections.abc import Sequence
+  from mlx.core import array, StreamOrDevice
 
 mlx.core.random.__prefix__:
   from mlx.core import array, Dtype, StreamOrDevice, scalar, float32, int32

@@ -830,7 +830,8 @@ void qmm_nax(
 
   int wm = 2;
   int wn = 2;
-  int bm = 64;
+  // Use smaller bm when one block covers all of M.
+  int bm = (M <= 32) ? 32 : 64;
   int bn = 64;
   int bk = 64;
   MTL::Size group_dims(32, wn, wm);
@@ -971,7 +972,7 @@ void gather_qmm_nax(
     kernel = get_qmm_nax_kernel_wrapped(
         d,
         kname,
-        "gather_qmm_t_nax_",
+        "gather_qmm_t_nax",
         mode,
         type_string,
         group_size,
@@ -986,7 +987,7 @@ void gather_qmm_nax(
     kernel = get_qmm_nax_kernel_wrapped(
         d,
         kname,
-        "gather_qmm_n_nax_",
+        "gather_qmm_n_nax",
         mode,
         type_string,
         group_size,

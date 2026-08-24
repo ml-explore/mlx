@@ -229,14 +229,7 @@ runs:
           else
             cmakeArgs+=("-DMLX_BUILD_METAL=ON")
             if ${{ inputs.toolkit == 'jit' }} ; then
-              cmakeArgs+=(
-                "-DBUILD_SHARED_LIBS=ON"
-                "-DCMAKE_BUILD_TYPE=MinSizeRel"
-                "-DMLX_BUILD_CPU=OFF"
-                "-DMLX_BUILD_SAFETENSORS=OFF"
-                "-DMLX_BUILD_GGUF=OFF"
-                "-DMLX_METAL_JIT=ON"
-              )
+              cmakeArgs+=("-DMLX_METAL_JIT=ON")
             fi
           fi
         fi

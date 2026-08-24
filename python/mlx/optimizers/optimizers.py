@@ -499,6 +499,16 @@ class Adam(Optimizer):
     ):
         super().__init__()
 
+        for i, beta in enumerate(betas):
+            if not 0.0 <= beta < 1.0:
+                raise ValueError(
+                    f"Adam beta{i + 1} should be in [0, 1), {beta} was provided "
+                    "instead"
+                )
+
+        if not 0.0 <= eps:
+            raise ValueError(f"Adam epsilon should be >=0, {eps} was provided instead")
+
         self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
         self.eps = eps
@@ -620,10 +630,6 @@ class Adamax(Adam):
         eps: float = 1e-8,
     ):
         super().__init__(learning_rate, betas, eps)
-        if not 0.0 <= eps:
-            raise ValueError(
-                f"Epsilon value should be >=0, {self.eps} was provided instead"
-            )
 
     def init_single(self, parameter: mx.array, state: dict):
         """Initialize optimizer state"""
@@ -682,6 +688,13 @@ class Lion(Optimizer):
         weight_decay: float = 0.0,
     ):
         super().__init__()
+
+        for i, beta in enumerate(betas):
+            if not 0.0 <= beta < 1.0:
+                raise ValueError(
+                    f"Lion beta{i + 1} should be in [0, 1), {beta} was provided "
+                    "instead"
+                )
 
         self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas

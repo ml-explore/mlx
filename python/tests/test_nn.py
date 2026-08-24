@@ -693,6 +693,21 @@ class TestLayers(mlx_tests.MLXTestCase):
         ]
         self.assertTrue(x.shape == y.shape)
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
+        # Reduced-precision statistics must not overflow for finite feature maps.
+        checkerboard = np.indices((4, 4, 4)).sum(axis=0) % 2
+        x = mx.array(
+            np.stack(
+                [
+                    np.where(checkerboard, -512, 512),
+                    np.where(checkerboard, -256, 256),
+                ],
+                axis=-1,
+            ).astype(np.float16)
+        )[None]
+        y = nn.InstanceNorm(dims=2)(x)
+        self.assertEqual(y.dtype, mx.float16)
+        self.assertTrue(mx.allclose(y.min(), mx.array(-1.0, dtype=mx.float16)))
+        self.assertTrue(mx.allclose(y.max(), mx.array(1.0, dtype=mx.float16)))
         # Test repr
         self.assertTrue(str(inorm) == "InstanceNorm(3, eps=1e-05, affine=False)")
         # Raise for inputs without spatial dimensions

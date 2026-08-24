@@ -1,5 +1,6 @@
 # Copyright © 2023-2026 Apple Inc.
 
+import math
 import os
 import platform
 import subprocess
@@ -120,6 +121,28 @@ class TestQuantized(mlx_tests.MLXTestCase):
         w_q, scales = mx.quantize(a, mode="mxfp8")
         w_hat = mx.dequantize(w_q, scales, mode="mxfp8")
         self.assertTrue(mx.all(w_hat == 0))
+
+    def test_mxfp8_block_scale_does_not_saturate(self):
+        # E4M3 has three mantissa bits, so an in-range element loses at most
+        # half a step, 6.25%. More than that means the block scale rounded
+        # below amax/448 and the block maximum saturated.
+        mx.random.seed(0)
+        group_size = 32
+        n_blocks = 512
+
+        # Sweep the block magnitude across one binade so both scale rounding
+        # directions are covered.
+        w = mx.random.normal(shape=(n_blocks, group_size))
+        w = w * mx.exp(mx.arange(n_blocks) / n_blocks * math.log(2.0)).reshape(-1, 1)
+
+        w_q, scales = mx.quantize(w, group_size=group_size, mode="mxfp8")
+        w_hat = mx.dequantize(w_q, scales, group_size=group_size, mode="mxfp8")
+
+        # Quantization is monotone in |w|, so a block's largest output is the
+        # reconstruction of its largest input.
+        amax = mx.max(mx.abs(w), axis=1)
+        rel = mx.abs(amax - mx.max(mx.abs(w_hat), axis=1)) / amax
+        self.assertLess(mx.max(rel).item(), 0.0626)
 
     def test_nvfp4_quantize_dequantize(self):
         lut = mx.array(
@@ -335,6 +358,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         K = 128
         tests = [
             (16, 32840),  # unaligned N > 2**15, M < 32: partial M-tile
+            (32, 32840),  # M at the small-block dispatch boundary
             (33, 32840),  # unaligned N > 2**15, M % 32 != 0
             (33000, 64),  # M > 2**15: row distance overflows (aligned N)
         ]
@@ -439,6 +463,42 @@ class TestQuantized(mlx_tests.MLXTestCase):
                     for mode in modes:
                         with self.subTest(M=M, K=K, mode=mode, dtype=dtype):
                             check_fp(M, K, 128, mode, dtype)
+
+    def test_qmm_small_m_block(self):
+        # The batched and fp-mode variants of the small-M block, which the
+        # test_qmm_large_dims shapes cannot reach.
+        if mx.default_device() == mx.cpu:
+            self.skipTest("Covers GPU kernels only")
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        K = 1024
+        tests = [
+            # mode, group_size, bits, M, N, batch
+            ("affine", 64, 4, 14, 8256, (2,)),  # batched w
+            ("mxfp4", None, None, 14, 8256, ()),
+        ]
+        for mode, group_size, bits, M, N, batch in tests:
+            dtype = mx.float16 if mode == "affine" else mx.bfloat16
+            with self.subTest(
+                mode=mode, group_size=group_size, bits=bits, M=M, N=N, batch=batch
+            ):
+                x = (mx.random.normal(batch + (M, K), key=k1) / K**0.5).astype(dtype)
+                w = (mx.random.normal(batch + (N, K), key=k2) / K**0.5).astype(dtype)
+                if mode == "affine":
+                    wq = mx.quantize(w, group_size=group_size, bits=bits)
+                else:
+                    wq = mx.quantize(w, mode=mode)
+                w_hat = mx.dequantize(*wq, group_size=group_size, bits=bits, mode=mode)
+                y_ref = x @ w_hat.swapaxes(-1, -2)
+                y = mx.quantized_matmul(
+                    x,
+                    *wq,
+                    transpose=True,
+                    group_size=group_size,
+                    bits=bits,
+                    mode=mode,
+                )
+                self.assertLess((y_ref - y).abs().max(), 1e-3)
 
     def test_qmm_vjp(self):
         key = mx.random.key(0)
