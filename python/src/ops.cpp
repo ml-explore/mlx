@@ -4947,7 +4947,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def grouped_mm(a: array, b: array, /, *, token_offsets: array, stream: Union[None, Stream, Device] = None) -> array"),
+          "def grouped_mm(a: array, b: array, /, *, token_offsets: array, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Perform a matrix multiplication but segment the inner dimension and
         save the result for each segment separately.
