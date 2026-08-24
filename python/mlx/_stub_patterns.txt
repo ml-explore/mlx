@@ -3,8 +3,8 @@ mlx.core.__prefix__:
   P = ParamSpec("P")
   R = TypeVar("R")
   class DLPackCompatible(Protocol):
-    __dlpack__: Callable[..., Any]
-    __dlpack_device__: Callable[..., Any]
+    def __dlpack__(self, *args: Any, **kwargs: Any) -> Any: ...
+    def __dlpack_device__(self, *args: Any, **kwargs: Any) -> Any: ...
 
 mlx.core.__suffix__:
   scalar: TypeAlias = int | float | bool | complex
