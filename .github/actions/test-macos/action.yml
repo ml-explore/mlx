@@ -62,8 +62,8 @@ runs:
             echo "::group::Build Metal extension example"
             pushd examples/metal_extension
             uv pip install -r requirements.txt
-            uv run setup.py build_ext --inplace
-            uv run test.py
+            uv run --no-project --python python setup.py build_ext --inplace
+            uv run --no-project --python python test.py
             popd
             echo "::endgroup::"
           fi
