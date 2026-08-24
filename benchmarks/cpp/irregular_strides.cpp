@@ -9,6 +9,12 @@
 
 namespace mx = mlx::core;
 
+// mx::astype is overloaded, so it cannot be passed directly to the timing
+// helpers. Wrap the three argument form instead.
+auto astype = [](const mx::array& a, mx::Dtype dtype, mx::StreamOrDevice s) {
+  return mx::astype(a, dtype, s);
+};
+
 void time_irregular_binary_ops_1D() {
   auto device = mx::default_device();
   int size = 1000000;
@@ -164,7 +170,7 @@ void time_irregular_astype_1D() {
   int step = 2;
   auto a = mx::random::uniform({size});
   a = slice(a, {0}, {size}, {step});
-  TIMEM("1D strided", mx::astype, a, mx::int32, device);
+  TIMEM("1D strided", astype, a, mx::int32, device);
 }
 
 void time_irregular_astype_2D() {
@@ -173,16 +179,16 @@ void time_irregular_astype_2D() {
   mx::Shape shape = {size, size};
 
   auto a = mx::random::uniform(shape);
-  TIMEM("2D regular", mx::astype, a, mx::int32, device);
+  TIMEM("2D regular", astype, a, mx::int32, device);
 
   a = mx::transpose(a);
-  TIMEM("2D mx::transpose", mx::astype, a, mx::int32, device);
+  TIMEM("2D mx::transpose", astype, a, mx::int32, device);
 
   a = mx::broadcast_to(mx::random::uniform({size}), shape);
-  TIMEM("2D broadcast dim 0", mx::astype, a, mx::int32, device);
+  TIMEM("2D broadcast dim 0", astype, a, mx::int32, device);
 
   a = mx::broadcast_to(mx::random::uniform({size, 1}), shape);
-  TIMEM("2D broadcast dim 1", mx::astype, a, mx::int32, device);
+  TIMEM("2D broadcast dim 1", astype, a, mx::int32, device);
 }
 
 int main(int argc, char** argv) {

@@ -38,20 +38,28 @@ MLX_API array arange(int start, int stop, int step, StreamOrDevice s = {});
 MLX_API array arange(int start, int stop, StreamOrDevice s = {});
 MLX_API array arange(int stop, StreamOrDevice s = {});
 
-/** A 1D array of `num` evenly spaced numbers in the range `[start, stop]` */
+/**
+ * A 1D array of `num` evenly spaced numbers in the range `[start, stop]`, or
+ * in the half-open range `[start, stop)` when `endpoint` is false.
+ */
 MLX_API array linspace(
+    double start,
+    double stop,
+    int num,
+    bool endpoint,
+    Dtype dtype = float32,
+    StreamOrDevice s = {});
+inline array linspace(
     double start,
     double stop,
     int num = 50,
     Dtype dtype = float32,
-    StreamOrDevice s = {});
+    StreamOrDevice s = {}) {
+  return linspace(start, stop, num, true, dtype, s);
+}
 
 /** Convert an array to the given data type. */
-MLX_API array
-astype(array a, Dtype dtype, std::optional<bool> copy, StreamOrDevice s = {});
-inline array astype(array a, Dtype dtype, StreamOrDevice s = {}) {
-  return astype(std::move(a), dtype, std::nullopt, s);
-}
+MLX_API array astype(array a, Dtype dtype, StreamOrDevice s = {});
 
 /** Create a view of an array with the given shape and strides. */
 MLX_API array as_strided(
@@ -93,14 +101,18 @@ MLX_API array zeros(const Shape& shape, Dtype dtype, StreamOrDevice s = {});
 inline array zeros(const Shape& shape, StreamOrDevice s = {}) {
   return zeros(shape, float32, s);
 }
+/** Create an array of zeros with the shape of `a`. */
 MLX_API array zeros_like(const array& a, StreamOrDevice s = {});
+MLX_API array zeros_like(const array& a, Dtype dtype, StreamOrDevice s = {});
 
 /** Fill an array of the given shape with ones. */
 MLX_API array ones(const Shape& shape, Dtype dtype, StreamOrDevice s = {});
 inline array ones(const Shape& shape, StreamOrDevice s = {}) {
   return ones(shape, float32, s);
 }
+/** Create an array of ones with the shape of `a`. */
 MLX_API array ones_like(const array& a, StreamOrDevice s = {});
+MLX_API array ones_like(const array& a, Dtype dtype, StreamOrDevice s = {});
 
 /** Fill an array of the given shape (n,m) with ones in the specified diagonal
  * k, and zeros everywhere else. */
@@ -853,6 +865,13 @@ MLX_API array argpartition(const array& a, int kth, StreamOrDevice s = {});
 MLX_API array
 argpartition(const array& a, int kth, int axis, StreamOrDevice s = {});
 
+/** Find the indices of `values` in `sorted_sequence`. */
+MLX_API array searchsorted(
+    const array& sorted_sequence,
+    const array& values,
+    const std::string& side = "left",
+    StreamOrDevice s = {});
+
 /** Returns topk elements of the flattened array. */
 MLX_API array topk(const array& a, int k, StreamOrDevice s = {});
 
@@ -1546,10 +1565,10 @@ MLX_API array conv_transpose3d(
 
 /** Quantized matmul multiplies x with a quantized matrix w*/
 MLX_API array quantized_matmul(
-    array x,
-    array w,
-    array scales,
-    std::optional<array> biases = std::nullopt,
+    const array& x,
+    const array& w,
+    const array& scales,
+    const std::optional<array>& biases = std::nullopt,
     bool transpose = true,
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
@@ -1578,15 +1597,15 @@ MLX_API array dequantize(
     StreamOrDevice s = {});
 
 MLX_API array qqmm(
-    array x, // input activations
-    array w, // maybe quantized weights
-    const std::optional<array> w_scales = std::nullopt, // optional scales if w
-                                                        // is quantized
+    const array& x, // input activations
+    const array& w, // maybe quantized weights
+    const std::optional<array>& w_scales = std::nullopt, // optional scales if w
+                                                         // is quantized
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "nvfp4",
-    const std::optional<array> global_scale_x = std::nullopt,
-    const std::optional<array> global_scale_w = std::nullopt,
+    const std::optional<array>& global_scale_x = std::nullopt,
+    const std::optional<array>& global_scale_w = std::nullopt,
     StreamOrDevice s = {});
 
 /** Convert an E4M3 float8 to the given floating point dtype. */
@@ -1607,6 +1626,20 @@ MLX_API array gather_qmm(
     std::optional<int> group_size = std::nullopt,
     std::optional<int> bits = std::nullopt,
     const std::string& mode = "affine",
+    bool sorted_indices = false,
+    StreamOrDevice s = {});
+
+MLX_API array gather_qqmm(
+    const array& x,
+    const array& w,
+    const std::optional<array>& scales_w = std::nullopt,
+    const std::optional<array>& lhs_indices = std::nullopt,
+    const std::optional<array>& rhs_indices = std::nullopt,
+    std::optional<int> group_size = std::nullopt,
+    std::optional<int> bits = std::nullopt,
+    const std::string& mode = "nvfp4",
+    const std::optional<array>& global_scale_x = std::nullopt,
+    const std::optional<array>& global_scale_w = std::nullopt,
     bool sorted_indices = false,
     StreamOrDevice s = {});
 

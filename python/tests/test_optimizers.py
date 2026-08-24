@@ -562,6 +562,9 @@ class TestSchedulers(mlx_tests.MLXTestCase):
             "Gradients were not scaled correctly during clipping.",
         )
 
+        with self.assertRaises(ValueError):
+            opt.clip_grad_norm(small_grads, -1.0)
+
     def test_init_from_state(self):
         class Model(nn.Module):
             def __init__(self):
@@ -609,6 +612,27 @@ class TestSchedulers(mlx_tests.MLXTestCase):
         self.assertEqual((len(sgd_states) - 2) * 2, len(adam_states) - 2)
         self.assertFalse(any("bias" in k for k, v in adam_states))
         self.assertFalse(any("weight" in k for k, v in sgd_states))
+
+    def test_multi_optimizer_with_parameterless_layers(self):
+        mx.random.seed(0)
+        # test a sequential that has a no parameter module like ReLU
+        model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
+        mx.eval(model.parameters())
+
+        optimizer = opt.MultiOptimizer(
+            [opt.Muon(learning_rate=0.01), opt.AdamW(learning_rate=0.01)],
+            [lambda _, w: w.ndim >= 2],
+        )
+
+        loss_and_grad = nn.value_and_grad(model, lambda m, x: m(x).sum())
+        _, grads = loss_and_grad(model, mx.ones((1, 4)))
+        optimizer.update(model, grads)
+
+        w, b = model.layers[0].weight, model.layers[0].bias
+        optimizer.update(model, grads)
+        mx.eval(model.parameters())
+        self.assertFalse(mx.array_equal(w, model.layers[0].weight))
+        self.assertFalse(mx.array_equal(b, model.layers[0].bias))
 
 
 if __name__ == "__main__":

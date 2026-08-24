@@ -330,6 +330,32 @@ GPU kernels in MLX are written using Metal.
     * Documentation for metal shading language: `Metal Specification`_
     * Using metal from C++: `Metal-cpp`_
 
+.. note::
+
+    As of Metal 4.1, the implicit address space of ``this`` in a member function
+    is ``__metal_generic`` rather than ``thread``. Member functions in Metal
+    shading code should therefore carry an explicit address space qualifier,
+    written after the parameter list:
+
+    .. code-block:: C++
+
+        struct Accumulator {
+            float vals[4];
+            thread float& at(short i) thread {
+                return vals[i];
+            }
+        };
+
+    Without the trailing ``thread``, returning a ``thread``-qualified reference
+    to a member no longer compiles::
+
+        error: reference to type 'thread float' could not bind to an lvalue
+        of type '__metal_generic float'
+
+    Metal libraries built with ``mlx_build_metallib`` are compiled with
+    ``-Wmetal-addr-spaces``, which reports a missing qualifier as a warning on
+    toolchains where it is not yet an error.
+
 Let's keep the GPU kernel simple. We will launch exactly as many threads as
 there are elements in the output. Each thread will pick the element it needs
 from ``x`` and ``y``, do the point-wise operation, and update its assigned

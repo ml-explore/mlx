@@ -43,7 +43,7 @@ std::string buffer_format(const mx::array& a) {
     case mx::float32:
       return "f";
     case mx::bfloat16:
-      return "B";
+      return "bfloat16";
     case mx::float64:
       return "d";
     case mx::complex64:

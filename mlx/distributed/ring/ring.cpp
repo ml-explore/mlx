@@ -5,12 +5,14 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <future>
 #include <iostream>
 #include <list>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 #include <unordered_map>
 
@@ -21,71 +23,12 @@
 #include "mlx/distributed/distributed_impl.h"
 #include "mlx/distributed/reduction_ops.h"
 #include "mlx/distributed/utils.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/threadpool.h"
 
 #ifndef SOL_TCP
 #define SOL_TCP IPPROTO_TCP
 #endif
-
-#define SWITCH_TYPE(x, ...)  \
-  switch ((x).dtype()) {     \
-    case bool_: {            \
-      using T = bool;        \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int8: {             \
-      using T = int8_t;      \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int16: {            \
-      using T = int16_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int32: {            \
-      using T = int32_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case int64: {            \
-      using T = int64_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint8: {            \
-      using T = uint8_t;     \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint16: {           \
-      using T = uint16_t;    \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint32: {           \
-      using T = uint32_t;    \
-      __VA_ARGS__;           \
-    } break;                 \
-    case uint64: {           \
-      using T = uint64_t;    \
-      __VA_ARGS__;           \
-    } break;                 \
-    case bfloat16: {         \
-      using T = bfloat16_t;  \
-      __VA_ARGS__;           \
-    } break;                 \
-    case float16: {          \
-      using T = float16_t;   \
-      __VA_ARGS__;           \
-    } break;                 \
-    case float32: {          \
-      using T = float;       \
-      __VA_ARGS__;           \
-    } break;                 \
-    case float64: {          \
-      using T = double;      \
-      __VA_ARGS__;           \
-    } break;                 \
-    case complex64: {        \
-      using T = complex64_t; \
-      __VA_ARGS__;           \
-    } break;                 \
-  }
 
 namespace mlx::core::distributed::ring {
 
@@ -94,6 +37,10 @@ constexpr const size_t ALL_SUM_BUFFERS = 2;
 constexpr const int CONN_ATTEMPTS = 5;
 constexpr const int CONN_WAIT = 1000;
 constexpr const char* RING_TAG = "[ring]";
+// send(2) and recv(2) reject a length above INT_MAX with EINVAL, so a single
+// transfer of 2 GiB or more fails outright rather than being carried in
+// pieces.
+constexpr const size_t MAX_IO_BYTES = 1024 * 1024 * 1024;
 
 using GroupImpl = mlx::core::distributed::detail::GroupImpl;
 using json = nlohmann::json;
@@ -232,12 +179,16 @@ class SocketThread {
 
       if (!recvs_.empty()) {
         auto& task = recvs_.front();
-        ssize_t r = ::recv(fd_, task.buffer, task.size, 0);
+        ssize_t r =
+            ::recv(fd_, task.buffer, std::min(task.size, MAX_IO_BYTES), 0);
         if (r > 0) {
           task.buffer = static_cast<char*>(task.buffer) + r;
           task.size -= r;
           delete_recv = task.size == 0;
           error_count = 0;
+        } else if (r == 0) {
+          error_count++;
+          log_info(true, "Socket", fd_, "was closed by the peer");
         } else if (errno != EAGAIN) {
           error_count++;
           log_info(
@@ -246,12 +197,16 @@ class SocketThread {
       }
       if (!sends_.empty()) {
         auto& task = sends_.front();
-        ssize_t r = ::send(fd_, task.buffer, task.size, 0);
+        ssize_t r =
+            ::send(fd_, task.buffer, std::min(task.size, MAX_IO_BYTES), 0);
         if (r > 0) {
           task.buffer = static_cast<char*>(task.buffer) + r;
           task.size -= r;
           delete_send = task.size == 0;
           error_count = 0;
+        } else if (r == 0) {
+          error_count++;
+          log_info(true, "Sending to socket", fd_, "made no progress");
         } else if (errno != EAGAIN) {
           error_count++;
           log_info(true, "Sending to socket", fd_, "failed with errno", errno);
@@ -259,7 +214,18 @@ class SocketThread {
       }
 
       if (error_count >= 10) {
-        log_info(true, "Too many send/recv errors. Aborting...");
+        log_info(true, "Too many send/recv errors. Failing pending tasks...");
+        // Throw exception in invoker's thread.
+        auto error = std::make_exception_ptr(
+            std::runtime_error("[ring] connection to a peer was lost"));
+        for (auto& task : recvs_) {
+          task.promise.set_exception(error);
+        }
+        for (auto& task : sends_) {
+          task.promise.set_exception(error);
+        }
+        recvs_.clear();
+        sends_.clear();
         return;
       }
     }
@@ -475,18 +441,24 @@ class RingGroup : public GroupImpl {
   }
 
   void all_sum(const array& input, array& output, Stream stream) override {
-    SWITCH_TYPE(
-        output, all_reduce<T>(input, output, stream, detail::SumOp<T>()));
+    dispatch_all_types(output.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      all_reduce<T>(input, output, stream, detail::SumOp<T>());
+    });
   }
 
   void all_max(const array& input, array& output, Stream stream) override {
-    SWITCH_TYPE(
-        output, all_reduce<T>(input, output, stream, detail::MaxOp<T>()));
+    dispatch_all_types(output.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      all_reduce<T>(input, output, stream, detail::MaxOp<T>());
+    });
   }
 
   void all_min(const array& input, array& output, Stream stream) override {
-    SWITCH_TYPE(
-        output, all_reduce<T>(input, output, stream, detail::MinOp<T>()));
+    dispatch_all_types(output.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      all_reduce<T>(input, output, stream, detail::MinOp<T>());
+    });
   }
 
   std::shared_ptr<GroupImpl> split(int color, int key = -1) override {
@@ -525,7 +497,7 @@ class RingGroup : public GroupImpl {
                 (i % 2) ? -1 : 1)));
       }
       for (auto& f : all_gathers) {
-        f.wait();
+        f.get();
       }
     });
   }
@@ -650,7 +622,7 @@ class RingGroup : public GroupImpl {
                 reduce_op)));
       }
       for (auto& f : all_sums) {
-        f.wait();
+        f.get();
       }
     });
   }
@@ -737,8 +709,8 @@ class RingGroup : public GroupImpl {
       }
 
       if (j >= 0) {
-        sends[b].wait();
-        recvs[b].wait();
+        sends[b].get();
+        recvs[b].get();
         if (2 * j < send_plan.size()) {
           reduce_op(
               recv_buffers[j % ALL_SUM_BUFFERS],
@@ -749,8 +721,13 @@ class RingGroup : public GroupImpl {
 
       std::swap(a, b);
     }
-    sends[b].wait();
-    recvs[b].wait();
+    // Check valid() to avoid consuming same future twice for single packet.
+    if (sends[b].valid()) {
+      sends[b].get();
+    }
+    if (recvs[b].valid()) {
+      recvs[b].get();
+    }
   }
 
   void all_gather_impl(
@@ -784,8 +761,8 @@ class RingGroup : public GroupImpl {
       send_segment = (send_segment + size_ + direction) % size_;
       recv_segment = (recv_segment + size_ + direction) % size_;
 
-      sent.wait();
-      recvd.wait();
+      sent.get();
+      recvd.get();
     }
   }
 
@@ -804,7 +781,7 @@ class RingGroup : public GroupImpl {
           std::min(data_size, (i + 1) * segment_size) - i * segment_size));
     }
     for (auto& f : sends) {
-      f.wait();
+      f.get();
     }
   }
 
@@ -822,7 +799,7 @@ class RingGroup : public GroupImpl {
           std::min(data_size, (i + 1) * segment_size) - i * segment_size));
     }
     for (auto& f : recvs) {
-      f.wait();
+      f.get();
     }
   }
 

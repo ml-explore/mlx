@@ -25,6 +25,7 @@ class Conv1d(Module):
         padding (int, optional): How many positions to 0-pad the input with.
             Default: ``0``.
         dilation (int, optional): The dilation of the convolution.
+            Default: ``1``.
         groups (int, optional): The number of groups for the convolution.
             Default: ``1``.
         bias (bool, optional): If ``True`` add a learnable bias to the output.
@@ -101,6 +102,7 @@ class Conv2d(Module):
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
         dilation (int or tuple, optional): The dilation of the convolution.
+            Default: ``1``.
         groups (int, optional): The number of groups for the convolution.
             Default: ``1``.
         bias (bool, optional): If ``True`` add a learnable bias to the
@@ -179,9 +181,10 @@ class Conv3d(Module):
         kernel_size (int or tuple): The size of the convolution filters.
         stride (int or tuple, optional): The size of the stride when
             applying the filter. Default: ``1``.
-        dilation (int or tuple, optional): The dilation of the convolution.
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
+        dilation (int or tuple, optional): The dilation of the convolution.
+            Default: ``1``.
         bias (bool, optional): If ``True`` add a learnable bias to the
             output. Default: ``True``
     """

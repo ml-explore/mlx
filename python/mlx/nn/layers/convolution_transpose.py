@@ -25,6 +25,7 @@ class ConvTranspose1d(Module):
         padding (int, optional): How many positions to 0-pad the input with.
             Default: ``0``.
         dilation (int, optional): The dilation of the convolution.
+            Default: ``1``.
         output_padding(int, optional): Additional size added to one side of the
             output shape. Default: ``0``.
         bias (bool, optional): If ``True`` add a learnable bias to the output.
@@ -100,6 +101,7 @@ class ConvTranspose2d(Module):
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
         dilation (int or tuple, optional): The dilation of the convolution.
+            Default: ``1``.
         output_padding(int or tuple, optional): Additional size added to one
             side of the output shape. Default: ``0``.
         bias (bool, optional): If ``True`` add a learnable bias to the
@@ -180,6 +182,7 @@ class ConvTranspose3d(Module):
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: ``0``.
         dilation (int or tuple, optional): The dilation of the convolution.
+            Default: ``1``.
         output_padding(int or tuple, optional): Additional size added to one
             side of the output shape. Default: ``0``.
         bias (bool, optional): If ``True`` add a learnable bias to the

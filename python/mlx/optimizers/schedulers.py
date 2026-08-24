@@ -51,6 +51,8 @@ def step_decay(init: float, decay_rate: float, step_size: int) -> Callable:
         >>> optimizer.learning_rate
         array(0.081, dtype=float32)
     """
+    if step_size < 1:
+        raise ValueError(f"step_size must be greater than 0, but got {step_size}.")
 
     def schedule(step):
         return init * (decay_rate ** (step // step_size))
@@ -79,6 +81,8 @@ def cosine_decay(init: float, decay_steps: int, end: float = 0.0) -> Callable:
         >>> optimizer.learning_rate
         array(0.0999961, dtype=float32)
     """
+    if decay_steps < 1:
+        raise ValueError(f"decay_steps must be greater than 0, but got {decay_steps}.")
 
     def schedule(step):
         s = mx.minimum(step, decay_steps)

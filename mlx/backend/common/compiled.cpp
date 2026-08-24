@@ -2,46 +2,30 @@
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/dtype_utils.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
 
 void print_constant(std::ostream& os, const array& x) {
-  switch (x.dtype()) {
-    case float32:
-      return print_float_constant<float>(os, x);
-    case float16:
-      return print_float_constant<float16_t>(os, x);
-    case bfloat16:
-      return print_float_constant<bfloat16_t>(os, x);
-    case float64:
-      return print_float_constant<double>(os, x);
-    case complex64:
-      return print_complex_constant<complex64_t>(os, x);
-    case int8:
-      os << static_cast<int32_t>(x.item<int8_t>());
-      return;
-    case int16:
-      return print_int_constant<int16_t>(os, x);
-    case int32:
-      return print_int_constant<int32_t>(os, x);
-    case int64:
-      return print_int_constant<int64_t>(os, x);
-    case uint8:
-      os << static_cast<uint32_t>(x.item<uint8_t>());
-      return;
-    case uint16:
-      return print_int_constant<uint16_t>(os, x);
-    case uint32:
-      return print_int_constant<uint32_t>(os, x);
-    case uint64:
-      return print_int_constant<uint64_t>(os, x);
-    case bool_:
+  dispatch_all_types(x.dtype(), [&](auto type_tag) {
+    using T = MLX_GET_TYPE(type_tag);
+    if constexpr (std::is_same_v<T, bool>) {
       os << std::boolalpha << x.item<bool>();
-      return;
-    default:
+    } else if constexpr (std::is_same_v<T, int8_t>) {
+      os << static_cast<int32_t>(x.item<int8_t>());
+    } else if constexpr (std::is_same_v<T, uint8_t>) {
+      os << static_cast<uint32_t>(x.item<uint8_t>());
+    } else if constexpr (is_complex<T>) {
+      print_complex_constant<T>(os, x);
+    } else if constexpr (is_floating_point_v<T>) {
+      print_float_constant<T>(os, x);
+    } else if constexpr (std::is_integral_v<T>) {
+      print_int_constant<T>(os, x);
+    } else {
       throw std::runtime_error("Unsupported constant type");
-  }
+    }
+  });
 }
 
 std::string get_type_string(Dtype d) {
@@ -82,7 +66,16 @@ std::string get_type_string(Dtype d) {
   }
 }
 
-bool compiled_check_contiguity(
+bool has_negative_strides(const array& x) {
+  for (auto s : x.strides()) {
+    if (s < 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::pair<bool, bool> compiled_check_contiguity(
     const std::vector<array>& inputs,
     const Shape& shape) {
   bool contiguous = true;
@@ -90,6 +83,7 @@ bool compiled_check_contiguity(
   bool all_row_contig = true;
   bool all_col_contig = true;
   int non_scalar_inputs = 0;
+  bool negative_strides = false;
   for (const auto& x : inputs) {
     if (is_scalar(x)) {
       continue;
@@ -99,6 +93,7 @@ bool compiled_check_contiguity(
     all_contig &= (x.flags().contiguous && shape_eq);
     all_row_contig &= (x.flags().row_contiguous && shape_eq);
     all_col_contig &= (x.flags().col_contiguous && shape_eq);
+    negative_strides |= has_negative_strides(x);
   }
   if (non_scalar_inputs > 1 && !all_row_contig && !all_col_contig) {
     contiguous = false;
@@ -107,7 +102,7 @@ bool compiled_check_contiguity(
   } else if (non_scalar_inputs == 0 && !shape.empty()) {
     contiguous = false;
   }
-  return contiguous;
+  return {contiguous, negative_strides};
 }
 
 void compiled_allocate_outputs(
@@ -170,14 +165,16 @@ void compiled_allocate_outputs(
   }
 }
 
-std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
+std::tuple<bool, bool, Shape, std::vector<Strides>>
+compiled_collapse_contiguous_dims(
     const std::vector<array>& inputs,
     const array& out,
     const std::function<bool(size_t)>& is_constant) {
   const Shape& shape = out.shape();
-  bool contiguous = compiled_check_contiguity(inputs, shape);
-  if (contiguous) {
-    return {true, shape, {}};
+  auto [contiguous, negative_strides] =
+      compiled_check_contiguity(inputs, shape);
+  if (contiguous && !negative_strides) {
+    return {true, false, shape, {}};
   }
 
   std::vector<Strides> strides_vec{out.strides()};
@@ -218,7 +215,11 @@ std::tuple<bool, Shape, std::vector<Strides>> compiled_collapse_contiguous_dims(
   }
 
   auto tup = collapse_contiguous_dims(shape, strides_vec, INT32_MAX);
-  return {false, std::move(std::get<0>(tup)), std::move(std::get<1>(tup))};
+  return {
+      false,
+      negative_strides,
+      std::move(std::get<0>(tup)),
+      std::move(std::get<1>(tup))};
 }
 
 bool compiled_use_large_index(

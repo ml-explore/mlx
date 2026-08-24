@@ -5,7 +5,6 @@
 #include "jaccl/group.h"
 #include "jaccl/mesh_impl.h"
 #include "jaccl/rdma.h"
-#include "jaccl/ring_impl.h"
 
 namespace jaccl {
 
@@ -23,7 +22,7 @@ class MeshGroup : public Group {
   MeshGroup(
       int rank,
       const std::vector<std::string>& device_names,
-      const std::string& coordinator_addr);
+      SideChannel sc);
 
   int rank() override {
     return rank_;
@@ -44,6 +43,9 @@ class MeshGroup : public Group {
 
   void all_gather(const void* input, void* output, size_t n_bytes) override;
 
+  void sum_scatter(const void* input, void* output, size_t n_bytes, int dtype)
+      override;
+
   void send(const void* input, size_t n_bytes, int dst) override;
   void recv(void* output, size_t n_bytes, int src) override;
 
@@ -52,6 +54,13 @@ class MeshGroup : public Group {
  private:
   template <typename T, typename ReduceOp>
   void all_reduce(
+      const void* input,
+      void* output,
+      size_t n_bytes,
+      ReduceOp reduce_op);
+
+  template <typename T, typename ReduceOp>
+  void reduce_scatter(
       const void* input,
       void* output,
       size_t n_bytes,
@@ -74,11 +83,9 @@ class MeshGroup : public Group {
   SideChannel side_channel_;
   std::vector<Connection> connections_;
   std::vector<SharedBuffer> buffers_;
-  std::vector<SharedBuffer> ring_send_buffers_;
-  std::vector<SharedBuffer> ring_recv_buffers_;
+  std::vector<SharedBuffer> scatter_buffers_;
 
   MeshImpl mesh_;
-  RingImpl ring_;
 };
 
 } // namespace jaccl

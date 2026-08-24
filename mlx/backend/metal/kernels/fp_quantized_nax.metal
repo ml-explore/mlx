@@ -24,7 +24,7 @@
       type,        \
       group_size,          \
       bits,           \
-      aligned)
+      aligned, bm, bk, bn, wm, wn)
 
 #define instantiate_quantized_aligned_batched(mode, name, type, bm, bn, bk, wm, wn, aligned, batched, group_size, bits) \
   instantiate_kernel( \
@@ -34,7 +34,7 @@
       group_size,      \
       bits,       \
       aligned, \
-      batched)
+      batched, bm, bk, bn, wm, wn)
 
 #define instantiate_gather_qmm_rhs(func, name, type, bm, bn, bk, wm, wn, transpose, mode, group_size, bits) \
   instantiate_kernel( \
@@ -57,12 +57,18 @@
   instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 64, 64, 64, 2, 2, true, 1, group_size, bits)  \
   instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 64, 64, 64, 2, 2, true, 0, group_size, bits)  \
   instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 64, 64, 64, 2, 2, false, 1, group_size, bits) \
-  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 64, 64, 64, 2, 2, false, 0, group_size, bits)
+  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 64, 64, 64, 2, 2, false, 0, group_size, bits) \
+  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 32, 64, 64, 2, 2, true, 1, group_size, bits)  \
+  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 32, 64, 64, 2, 2, true, 0, group_size, bits)  \
+  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 32, 64, 64, 2, 2, false, 1, group_size, bits) \
+  instantiate_quantized_aligned_batched(mode, qmm_t_nax, type, 32, 64, 64, 2, 2, false, 0, group_size, bits)
 
 
 #define instantiate_quantized_all_rhs(type, mode, group_size, bits) \
   instantiate_gather_qmm_rhs(fp_gather_qmm_rhs_nax, gather_qmm_rhs_nax_nt, type, 64, 64, 64, 2, 2, true, mode, group_size, bits) \
-  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs_nax, gather_qmm_rhs_nax_nn, type, 64, 64, 64, 2, 2, false, mode, group_size, bits)
+  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs_nax, gather_qmm_rhs_nax_nn, type, 64, 64, 64, 2, 2, false, mode, group_size, bits) \
+  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs_nax, gather_qmm_rhs_nax_nt, type, 32, 64, 64, 2, 2, true, mode, group_size, bits) \
+  instantiate_gather_qmm_rhs(fp_gather_qmm_rhs_nax, gather_qmm_rhs_nax_nn, type, 32, 64, 64, 2, 2, false, mode, group_size, bits)
 
 #define instantiate_quantized_modes(type, mode, group_size, bits) \
   instantiate_quantized_all_aligned(type, mode, group_size, bits) \

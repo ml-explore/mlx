@@ -1,7 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
 #include <iostream>
-#include <regex>
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
@@ -38,9 +37,11 @@ Stream resolve_metal_kernel_stream(StreamOrDevice s) {
   // recorded in the graph on a placeholder GPU stream. The importing process
   // remaps it to one of its own streams.
   auto* device = std::get_if<Device>(&s);
+  auto* device_type = std::get_if<Device::DeviceType>(&s);
   auto* stream = std::get_if<Stream>(&s);
   auto* tl_stream = std::get_if<ThreadLocalStream>(&s);
   if ((device && *device != Device::gpu) ||
+      (device_type && *device_type != Device::gpu) ||
       (stream && stream->device != Device::gpu) ||
       (tl_stream && tl_stream->device != Device::gpu)) {
     throw std::invalid_argument("[metal_kernel] Only supports the GPU.");
@@ -197,6 +198,25 @@ std::string write_template(
   return template_def.str();
 }
 
+std::string make_template_hash(const std::string& template_def) {
+  std::string template_hash;
+  template_hash.reserve(template_def.size());
+  for (size_t i = 0; i < template_def.size(); ++i) {
+    auto c = template_def[i];
+    if (c == '<' || c == '>') {
+      template_hash += '_';
+    } else if (
+        c == ',' && i + 1 < template_def.size() && template_def[i + 1] == ' ') {
+      template_hash += '_';
+      ++i;
+    } else {
+      template_hash += c;
+    }
+  }
+  template_hash.pop_back();
+  return template_hash;
+}
+
 } // namespace
 
 CustomKernelFunction metal_kernel(
@@ -206,7 +226,8 @@ CustomKernelFunction metal_kernel(
     const std::string& source,
     const std::string& header /* = "" */,
     bool ensure_row_contiguous /* = true */,
-    bool atomic_outputs /* = false */) {
+    bool atomic_outputs /* = false */,
+    const CompileOptions& compile_options /* = {} */) {
   if (output_names.empty()) {
     throw std::invalid_argument(
         "[metal_kernel] Must specify at least one output.");
@@ -262,38 +283,26 @@ CustomKernelFunction metal_kernel(
              std::optional<float> init_value = std::nullopt,
              bool verbose = false,
              StreamOrDevice s_ = {}) {
-    if (inputs.size() != input_names.size()) {
+    auto check_size = [](size_t actual, size_t expected, const char* name) {
+      if (actual == expected) {
+        return;
+      }
       std::ostringstream msg;
-      msg << "[metal_kernel] Expected `inputs` to have size "
-          << input_names.size() << " but got size " << inputs.size() << "."
-          << std::endl;
+      msg << "[metal_kernel] Expected `" << name << "` to have size "
+          << expected << " but got size " << actual << "." << std::endl;
       throw std::invalid_argument(msg.str());
-    }
-    if (output_shapes.size() != output_names.size()) {
-      std::ostringstream msg;
-      msg << "[metal_kernel] Expected `output_shapes` to have size "
-          << output_names.size() << " but got size " << output_shapes.size()
-          << "." << std::endl;
-      throw std::invalid_argument(msg.str());
-    }
-    if (output_dtypes.size() != output_names.size()) {
-      std::ostringstream msg;
-      msg << "[metal_kernel] Expected `output_dtypes` to have size "
-          << output_names.size() << " but got size " << output_dtypes.size()
-          << "." << std::endl;
-      throw std::invalid_argument(msg.str());
-    }
+    };
+    check_size(inputs.size(), input_names.size(), "inputs");
+    check_size(output_shapes.size(), output_names.size(), "output_shapes");
+    check_size(output_dtypes.size(), output_names.size(), "output_dtypes");
 
     auto s = resolve_metal_kernel_stream(s_);
 
     std::string kernel_name = "custom_kernel_" + name;
     std::string template_def = "";
     if (!template_args.empty()) {
-      std::regex disallowed_chars("\\<|\\>|(, )");
       template_def = write_template(template_args);
-      auto template_hash =
-          std::regex_replace(template_def, disallowed_chars, "_");
-      template_hash.pop_back();
+      auto template_hash = make_template_hash(template_def);
       kernel_name += "_";
       kernel_name += template_hash;
     }
@@ -360,7 +369,8 @@ CustomKernelFunction metal_kernel(
             init_value,
             std::vector<ScalarArg>{},
             false,
-            0),
+            0,
+            compile_options.serialize()),
         std::move(inputs));
   };
 }

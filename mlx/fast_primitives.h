@@ -3,6 +3,7 @@
 #include <optional>
 #include <variant>
 
+#include "mlx/backend/common/metal_kernel.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core::fast {
@@ -211,12 +212,14 @@ class ScaledDotProductAttention : public Custom {
       float scale,
       bool do_causal,
       bool has_sinks,
-      bool output_logsumexp)
+      bool output_logsumexp,
+      bool force_fused)
       : Custom(stream, std::move(fallback)),
         scale_(scale),
         do_causal_(do_causal),
         has_sinks_(has_sinks),
-        output_logsumexp_(output_logsumexp) {}
+        output_logsumexp_(output_logsumexp),
+        force_fused_(force_fused) {}
 
   static bool use_fallback(
       const array& q,
@@ -227,6 +230,7 @@ class ScaledDotProductAttention : public Custom {
       bool do_causal,
       bool is_training,
       bool output_logsumexp,
+      bool force_fused,
       Stream s);
   static bool supports_bool_mask();
 
@@ -250,7 +254,12 @@ class ScaledDotProductAttention : public Custom {
   DEFINE_INPUT_OUTPUT_SHAPE()
   auto state() const {
     return std::make_tuple(
-        nullptr, scale_, do_causal_, has_sinks_, output_logsumexp_);
+        nullptr,
+        scale_,
+        do_causal_,
+        has_sinks_,
+        output_logsumexp_,
+        force_fused_);
   }
 
  private:
@@ -258,6 +267,7 @@ class ScaledDotProductAttention : public Custom {
   bool do_causal_;
   bool has_sinks_;
   bool output_logsumexp_;
+  bool force_fused_;
 };
 
 class ScaledDotProductAttentionVJP : public Custom {
@@ -375,7 +385,8 @@ class CustomKernel : public Primitive {
       std::optional<float> init_value,
       std::vector<ScalarArg> scalar_arguments,
       bool is_precompiled,
-      int shared_memory)
+      int shared_memory,
+      CompileOptions::Data compile_options = {})
       : Primitive(stream),
         name_(std::move(name)),
         source_(std::move(source)),
@@ -386,7 +397,8 @@ class CustomKernel : public Primitive {
         init_value_(init_value),
         scalar_arguments_(std::move(scalar_arguments)),
         is_precompiled_(is_precompiled),
-        shared_memory_(shared_memory) {}
+        shared_memory_(shared_memory),
+        compile_options_(compile_options) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -408,7 +420,8 @@ class CustomKernel : public Primitive {
         init_value_,
         scalar_arguments_,
         is_precompiled_,
-        shared_memory_);
+        shared_memory_,
+        compile_options_);
   }
 
  private:
@@ -422,6 +435,7 @@ class CustomKernel : public Primitive {
   std::vector<ScalarArg> scalar_arguments_;
   bool is_precompiled_;
   int shared_memory_;
+  CompileOptions::Data compile_options_;
 };
 
 } // namespace mlx::core::fast

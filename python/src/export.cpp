@@ -124,8 +124,8 @@ auto wrap_export_function(nb::callable fun) {
           outputs_.push_back(nb::cast<mx::array>(outputs));
         } else if (!nb::try_cast(outputs, outputs_)) {
           throw std::invalid_argument(
-              "[export_function] Outputs can be either a single array "
-              "a tuple or list of arrays.");
+              "[export_function] Outputs can be either a single array, "
+              "a tuple, or a list of arrays.");
         }
         return outputs_;
       };
@@ -138,6 +138,7 @@ void init_export(nb::module_& m) {
          const nb::callable& fun,
          const nb::args& args,
          bool shapeless,
+         const std::optional<std::string>& metadata,
          const nb::kwargs& kwargs) {
         auto [args_, kwargs_] =
             validate_and_extract_inputs(args, kwargs, "[export_function]");
@@ -147,8 +148,14 @@ void init_export(nb::module_& m) {
               wrap_export_function(fun),
               args_,
               kwargs_,
-              shapeless);
+              shapeless,
+              metadata.value_or(""));
         } else {
+          if (metadata && !metadata->empty()) {
+            throw std::invalid_argument(
+                "[export_function] The metadata argument is only supported "
+                "when exporting to a file, not when using a callback.");
+          }
           auto callback = nb::cast<nb::callable>(file_or_callback);
           auto wrapped_callback =
               [callback](const mx::ExportCallbackInput& input) {
@@ -163,9 +170,10 @@ void init_export(nb::module_& m) {
       "args"_a,
       nb::kw_only(),
       "shapeless"_a = false,
+      "metadata"_a = nb::none(),
       "kwargs"_a,
       nb::sig(
-          "def export_function(file_or_callback: Union[str, Callable], fun: Callable, *args, shapeless: bool = False, **kwargs) -> None"),
+          "def export_function(file_or_callback: str | Callable, fun: Callable, *args, shapeless: bool = False, metadata: str | None = None, **kwargs) -> None"),
       R"pbdoc(
         Export an MLX function.
 
@@ -187,8 +195,15 @@ void init_export(nb::module_& m) {
             *args (array): Example array inputs to the function.
             shapeless (bool, optional): Whether or not the function allows
               inputs with variable shapes. Default: ``False``.
+            metadata (str, optional): A string to save alongside the
+              function, for example a JSON encoded model configuration. Only
+              supported when exporting to a file. Read it back with
+              :func:`import_function`. Default: ``None``.
             **kwargs (array): Additional example keyword array inputs to the
               function.
+
+        Raises:
+            ValueError: If ``metadata`` is given when exporting with a callback.
 
         Example:
 
@@ -203,17 +218,25 @@ void init_export(nb::module_& m) {
       )pbdoc");
   m.def(
       "import_function",
-      [](const std::string& file) {
-        return nb::cpp_function(
-            [fn = mx::import_function(file)](
+      [](const std::string& file, bool return_metadata) -> nb::object {
+        auto imported = mx::import_function(file);
+        auto metadata = imported.metadata();
+        auto fn = nb::cpp_function(
+            [imported = std::move(imported)](
                 const nb::args& args, const nb::kwargs& kwargs) {
               auto [args_, kwargs_] = validate_and_extract_inputs(
                   args, kwargs, "[import_function::call]");
-              return nb::tuple(nb::cast(fn(args_, kwargs_)));
+              return nb::tuple(nb::cast(imported(args_, kwargs_)));
             });
+        if (return_metadata) {
+          return nb::make_tuple(fn, nb::cast(metadata));
+        }
+        return fn;
       },
       "file"_a,
-      nb::sig("def import_function(file: str) -> Callable"),
+      "return_metadata"_a = false,
+      nb::sig(
+          "def import_function(file: str, return_metadata: bool = False) -> Callable | tuple[Callable, str]"),
       R"pbdoc(
         Import a function from a file.
 
@@ -230,15 +253,20 @@ void init_export(nb::module_& m) {
 
         Args:
             file (str): The file path to import the function from.
+            return_metadata (bool, optional): If ``True`` also return the
+              metadata string saved with the function. Default: ``False``.
 
         Returns:
-            Callable: The imported function.
+            Callable or tuple:
+                The imported function. If ``return_metadata`` is ``True`` a
+                tuple of the imported function and the metadata string is
+                returned instead.
 
         Example:
           >>> fn = mx.import_function("function.mlxfn")
           >>> out = fn(a, b, x=x, y=y)[0]
           >>>
-          >>> out = fn((a, b), {"x": x, "y": y}[0]
+          >>> out = fn((a, b), {"x": x, "y": y})[0]
       )pbdoc");
 
   nb::class_<PyFunctionExporter>(
@@ -249,7 +277,7 @@ void init_export(nb::module_& m) {
        A context managing class for exporting multiple traces of the same
        function to a file.
 
-       Make an instance of this class by calling fun:`mx.exporter`.
+       Make an instance of this class by calling :func:`mx.exporter`.
       )pbdoc")
       .def("close", &PyFunctionExporter::close)
       .def("__enter__", [](PyFunctionExporter& exporter) { return &exporter; })
@@ -274,14 +302,23 @@ void init_export(nb::module_& m) {
 
   m.def(
       "exporter",
-      [](const std::string& file, nb::callable fun, bool shapeless) {
+      [](const std::string& file,
+         nb::callable fun,
+         bool shapeless,
+         const std::optional<std::string>& metadata) {
         return PyFunctionExporter{
-            mx::exporter(file, wrap_export_function(fun), shapeless), fun};
+            mx::exporter(
+                file,
+                wrap_export_function(fun),
+                shapeless,
+                metadata.value_or("")),
+            fun};
       },
       "file"_a,
       "fun"_a,
       nb::kw_only(),
       "shapeless"_a = false,
+      "metadata"_a = nb::none(),
       R"pbdoc(
         Make a callable object to export multiple traces of a function to a file.
 
@@ -295,6 +332,9 @@ void init_export(nb::module_& m) {
             file (str): File path to export the function to.
             shapeless (bool, optional): Whether or not the function allows
               inputs with variable shapes. Default: ``False``.
+            metadata (str, optional): A string to save alongside the
+              function, for example a JSON encoded model configuration. Read
+              it back with :func:`import_function`. Default: ``None``.
 
         Example:
 

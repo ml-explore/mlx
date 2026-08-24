@@ -8,6 +8,40 @@ using namespace fmt::literals;
 
 namespace mlx::core {
 
+#ifdef MLX_METAL_NO_NAX
+// NAX JIT preambles are only generated (via make_jit_source) when the SDK
+// requirement is met. On older SDKs they are skipped and MLX_METAL_NO_NAX is
+// defined, so is_nax_available() returns false and the get_*_nax_kernel entry
+// points below are never reached. These empty definitions only exist to satisfy
+// the linker for this translation unit.
+namespace metal {
+const char* gemm_nax() {
+  return "";
+}
+const char* steel_gemm_fused_nax() {
+  return "";
+}
+const char* steel_gemm_gather_nax() {
+  return "";
+}
+const char* steel_gemm_splitk_nax() {
+  return "";
+}
+const char* steel_gemm_segmented_nax() {
+  return "";
+}
+const char* quantized_nax() {
+  return "";
+}
+const char* fp_quantized_nax() {
+  return "";
+}
+const char* steel_attention_nax() {
+  return "";
+}
+} // namespace metal
+#endif // MLX_METAL_NO_NAX
+
 MTL::ComputePipelineState* get_arange_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -394,6 +428,25 @@ MTL::ComputePipelineState* get_sort_kernel(
           bn,
           tn);
     }
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib);
+}
+
+MTL::ComputePipelineState* get_searchsorted_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    bool right) {
+  auto lib = d.get_library(kernel_name, [&]() {
+    std::ostringstream kernel_source;
+    // The kernel compares through LessThan, which lives in sort.h.
+    kernel_source << metal::utils() << metal::sort() << metal::searchsorted();
+    kernel_source << get_template_definition(
+        kernel_name,
+        "searchsorted",
+        get_type_string(in.dtype()),
+        right ? "true" : "false");
     return kernel_source.str();
   });
   return d.get_kernel(kernel_name, lib);
@@ -803,6 +856,52 @@ MTL::ComputePipelineState* get_gemv_masked_kernel(
   return d.get_kernel(kernel_name, lib);
 }
 
+MTL::ComputePipelineState* get_gemv_wide_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& out,
+    int vecs_per_tg,
+    int k_lanes) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::gemv()
+                  << get_template_definition(
+                         lib_name,
+                         "gemv_wide",
+                         get_type_string(out.dtype()),
+                         vecs_per_tg,
+                         k_lanes);
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_gemv_wide_gather_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& out,
+    int vecs_per_tg,
+    int k_lanes) {
+  const auto& lib_name = kernel_name;
+  auto lib = d.get_library(lib_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::gemv()
+                  << get_template_definition(
+                         lib_name,
+                         "gemv_wide_gather",
+                         get_type_string(out.dtype()),
+                         vecs_per_tg,
+                         k_lanes);
+    return kernel_source.str();
+  });
+  return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
 MTL::ComputePipelineState* get_steel_conv_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -907,6 +1006,18 @@ MTL::ComputePipelineState* get_fft_kernel(
     return kernel_source.str();
   });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_fft_twiddle_kernel(
+    metal::Device& d,
+    const std::string& library_name,
+    const std::string& template_def) {
+  auto lib = d.get_library(library_name, [&]() {
+    std::ostringstream kernel_source;
+    kernel_source << metal::fft() << template_def;
+    return kernel_source.str();
+  });
+  return d.get_kernel("generate_bluestein_twiddles", lib);
 }
 
 MTL::ComputePipelineState* get_quantized_kernel(
@@ -1047,7 +1158,7 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_nax_kernel(
     const std::string& kernel_name,
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
-    const array& out,
+    const array& in,
     bool transpose_a,
     bool transpose_b,
     int bm,
@@ -1063,7 +1174,7 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_nax_kernel(
                   << get_template_definition(
                          lib_name,
                          "gemm_splitk_nax",
-                         get_type_string(out.dtype()),
+                         get_type_string(in.dtype()),
                          bm,
                          bn,
                          bk,
@@ -1219,7 +1330,8 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     int bd,
     int wm,
     int wn,
-    const array& m) {
+    const array& m,
+    bool split_d) {
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name, [&]() {
     std::string kernel_source;
@@ -1229,7 +1341,7 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
         metal::steel_attention_nax(),
         get_template_definition(
             lib_name,
-            "attention_nax",
+            split_d ? "attention_nax_dsplit" : "attention_nax",
             get_type_string(q.dtype()),
             bq,
             bk,

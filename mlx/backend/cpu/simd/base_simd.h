@@ -13,6 +13,8 @@
 #include <intrin.h> // For _BitScanReverse
 #endif
 
+#include "mlx/types/half_types.h"
+
 namespace mlx::core::simd {
 template <typename T, int N>
 struct Simd;
@@ -54,13 +56,6 @@ void store(T* dst, Simd<T, N> x) {
   *(Simd<T, N>*)dst = x;
 }
 
-template <typename, typename = void>
-constexpr bool is_complex = false;
-
-template <typename T>
-constexpr bool is_complex<T, std::void_t<decltype(std::declval<T>().real())>> =
-    true;
-
 template <typename T>
 Simd<T, 1> rint(Simd<T, 1> in) {
   if constexpr (is_complex<T>) {
@@ -89,7 +84,6 @@ Simd<T, 1> recip(Simd<T, 1> in) {
 
 DEFAULT_UNARY(operator-, std::negate{})
 DEFAULT_UNARY(operator!, std::logical_not{})
-DEFAULT_UNARY(abs, std::abs)
 DEFAULT_UNARY(acos, std::acos)
 DEFAULT_UNARY(acosh, std::acosh)
 DEFAULT_UNARY(asin, std::asin)
@@ -107,6 +101,15 @@ DEFAULT_UNARY(sinh, std::sinh)
 DEFAULT_UNARY(sqrt, std::sqrt)
 DEFAULT_UNARY(tan, std::tan)
 DEFAULT_UNARY(tanh, std::tanh)
+
+template <typename T>
+Simd<T, 1> abs(Simd<T, 1> in) {
+  if constexpr (std::is_unsigned_v<T>) {
+    return in;
+  } else {
+    return std::abs(in.value);
+  }
+}
 
 template <typename T>
 Simd<T, 1> log1p(Simd<T, 1> in) {
@@ -210,7 +213,7 @@ Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
   } else {
     r = std::remainder(a, b);
   }
-  if constexpr (std::is_signed_v<T>) {
+  if constexpr (is_signed_v<T>) {
     if (r != 0 && (r < 0 != b < 0)) {
       r += b;
     }
@@ -250,6 +253,11 @@ Simd<T, 1> pow(Simd<T, 1> a, Simd<T, 1> b) {
     return std::pow(base, exp);
   } else {
     T res = 1;
+    if constexpr (std::is_signed_v<T>) {
+      if (exp < 0) {
+        return 0;
+      }
+    }
     while (exp) {
       if (exp & 1) {
         res *= base;

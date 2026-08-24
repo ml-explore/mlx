@@ -9,6 +9,7 @@
 
 #include "mlx/ops.h"
 #include "mlx/random.h"
+#include "python/src/random.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
@@ -63,15 +64,58 @@ PyKeySequence& default_key() {
   return ks;
 }
 
+void reset_random_state() {
+  default_key().reset();
+}
+
+// A process-global sentinel for `mx.random.state`. Since it is the same object
+// on every thread, capturing it (e.g. with `mx.compile`) is thread-independent;
+// the pytree traversal in trees.cpp resolves it to the calling thread's key.
+class RandomState {};
+
+nb::object random_state_sentinel() {
+  static nb::object sentinel = []() {
+    auto sentinel = nb::cast(RandomState{});
+    sentinel.inc_ref();
+    return sentinel;
+  }();
+
+  return sentinel;
+}
+
+mx::array random_state_key() {
+  return nb::cast<mx::array>(default_key().state()[0]);
+}
+
+void set_random_state_key(const mx::array& key) {
+  default_key().state()[0] = nb::cast(key);
+}
+
 void init_random(nb::module_& parent_module) {
   auto m = parent_module.def_submodule(
       "random",
       "mlx.core.random: functionality related to random number generation");
 
+  nb::class_<RandomState>(m, "_RandomState")
+      .def("__len__", [](const RandomState&) { return 1; })
+      .def(
+          "__getitem__",
+          [](const RandomState&, int i) -> nb::object {
+            if (i != 0 && i != -1) {
+              throw nb::index_error("random state index out of range");
+            }
+            return default_key().state()[0];
+          },
+          "index"_a)
+      .def("__iter__", [](const RandomState&) {
+        return nb::iter(default_key().state());
+      });
+
   m.def("__getattr__", [&](nb::handle key) -> nb::object {
     // Create random.state lazily to avoid initializing device during import.
     if (nb::isinstance<nb::str>(key) && nb::cast<std::string>(key) == "state") {
-      return default_key().state();
+      default_key().state();
+      return random_state_sentinel();
     }
     return nb::steal(PyErr_Format(
         PyExc_AttributeError,
@@ -109,7 +153,7 @@ void init_random(nb::module_& parent_module) {
       "num"_a = 2,
       "stream"_a = nb::none(),
       nb::sig(
-          "def split(key: array, num: int = 2, stream: Union[None, Stream, Device] = None) -> array"),
+          "def split(key: array, num: int = 2, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Split a PRNG key into sub keys.
 
@@ -144,7 +188,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def uniform(low: Union[scalar, array] = 0, high: Union[scalar, array] = 1, shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def uniform(low: scalar | array = 0, high: scalar | array = 1, shape: Sequence[int] = [], dtype: Dtype | None = float32, key: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Generate uniformly distributed random numbers.
 
@@ -187,7 +231,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def normal(shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, loc: Union[scalar, array, None] = None, scale: Union[scalar, array, None] = None, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def normal(shape: Sequence[int] = [], dtype: Dtype | None = float32, loc: scalar | array | None = None, scale: scalar | array | None = None, key: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Generate normally distributed random numbers.
 
@@ -227,7 +271,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def multivariate_normal(mean: array, cov: array, shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def multivariate_normal(mean: array, cov: array, shape: Sequence[int] = [], dtype: Dtype | None = float32, key: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Generate jointly-normal random samples given a mean and covariance.
 
@@ -274,13 +318,19 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def randint(low: Union[scalar, array], high: Union[scalar, array], shape: Sequence[int] = [], dtype: Optional[Dtype] = int32, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def randint(low: scalar | array, high: scalar | array, shape: Sequence[int] = [], dtype: Dtype | None = int32, key: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Generate random integers from the given interval.
 
         The values are sampled with equal probability from the integers in
         half-open interval ``[low, high)``. The lower and upper bound can be
         scalars or arrays and must be broadcastable to ``shape``.
+
+        .. note::
+           The samples are drawn from a ``float32`` uniform and clamped to
+           ``[low, high - 1]``, so not every integer in the range is reachable
+           once the bounds or the width of the interval go beyond the
+           ``2**24`` integer resolution of ``float32``.
 
         Args:
             low (scalar or array): Lower bound of the interval.
@@ -311,7 +361,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def bernoulli(p: Union[scalar, array] = 0.5, shape: Optional[Sequence[int]] = None, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def bernoulli(p: scalar | array = 0.5, shape: Sequence[int] | None = None, key: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Generate Bernoulli random values.
 
@@ -355,7 +405,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def truncated_normal(lower: Union[scalar, array], upper: Union[scalar, array], shape: Optional[Sequence[int]] = None, dtype: Optional[Dtype] = float32, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def truncated_normal(lower: scalar | array, upper: scalar | array, shape: Sequence[int] | None = None, dtype: Dtype | None = float32, key: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Generate values from a truncated normal distribution.
 
@@ -389,7 +439,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def gumbel(shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def gumbel(shape: Sequence[int] = [], dtype: Dtype | None = float32, key: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Sample from the standard Gumbel distribution.
 
@@ -435,7 +485,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def categorical(logits: array, axis: int = -1, shape: Optional[Sequence[int]] = None, num_samples: Optional[int] = None, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def categorical(logits: array, axis: int = -1, shape: Sequence[int] | None = None, num_samples: int | None = None, key: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Sample from a categorical distribution.
 
@@ -478,7 +528,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def laplace(shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, loc: float = 0.0, scale: float = 1.0, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def laplace(shape: Sequence[int] = [], dtype: Dtype | None = float32, loc: float = 0.0, scale: float = 1.0, key: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Sample numbers from a Laplace distribution.
 
@@ -511,7 +561,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def permutation(x: Union[int, array], axis: int = 0, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def permutation(x: int | array, axis: int = 0, key: array | None = None, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Generate a random permutation or permute the entries of an array.
 

@@ -15,14 +15,10 @@ namespace mlx::core {
 
 namespace {
 
-template <typename T>
-inline constexpr bool is_floating_v = std::is_floating_point_v<T> ||
-    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
-
 // NaN-aware comparator that places NaNs at the end
 template <typename T>
 bool nan_aware_less(T a, T b) {
-  if constexpr (is_floating_v<T> || std::is_same_v<T, complex64_t>) {
+  if constexpr (is_floating_point_v<T> || std::is_same_v<T, complex64_t>) {
     if (std::isnan(a))
       return false;
     if (std::isnan(b))
@@ -202,7 +198,7 @@ void argsort(const array& in, array& out, int axis) {
       auto v2 = data_ptr[b * in_stride];
 
       // Handle NaNs (place them at the end)
-      if constexpr (is_floating_v<T>) {
+      if constexpr (is_floating_point_v<T>) {
         if (std::isnan(v1))
           return false;
         if (std::isnan(v2))
@@ -303,7 +299,7 @@ void argpartition(const array& in, array& out, int axis, int kth) {
       auto v2 = data_ptr[b * in_stride];
 
       // Handle NaNs (place them at the end)
-      if constexpr (is_floating_v<T>) {
+      if constexpr (is_floating_point_v<T>) {
         if (std::isnan(v1))
           return false;
         if (std::isnan(v2))
@@ -312,6 +308,43 @@ void argpartition(const array& in, array& out, int axis, int kth) {
 
       return v1 < v2 || (v1 == v2 && a < b);
     });
+  }
+}
+
+template <typename T, bool Right>
+void searchsorted(const array& a, const array& v, array& out) {
+  auto n = static_cast<uint32_t>(a.size());
+  auto a_stride = a.strides()[0]; // sequence is 1D
+  const T* a_ptr = a.data<T>();
+  const T* v_ptr = v.data<T>();
+  uint32_t* out_ptr = out.data<uint32_t>();
+
+  auto bound = [a_ptr, a_stride, n](T x) {
+    uint32_t lo = 0;
+    uint32_t hi = n;
+    while (lo < hi) {
+      uint32_t mid = lo + (hi - lo) / 2;
+      T m = a_ptr[static_cast<int64_t>(mid) * a_stride];
+      bool below = Right ? !nan_aware_less(x, m) : nan_aware_less(m, x);
+      if (below) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  };
+
+  if (v.flags().row_contiguous) {
+    for (size_t i = 0; i < v.size(); ++i) {
+      out_ptr[i] = bound(v_ptr[i]);
+    }
+  } else {
+    ContiguousIterator it(v);
+    for (size_t i = 0; i < v.size(); ++i) {
+      out_ptr[i] = bound(v_ptr[it.loc]);
+      it.step();
+    }
   }
 }
 
@@ -330,36 +363,9 @@ void ArgSort::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.dispatch([in = array::unsafe_weak_copy(in),
                     out = array::unsafe_weak_copy(out),
                     axis_ = axis_]() mutable {
-    switch (in.dtype()) {
-      case bool_:
-        return argsort<bool>(in, out, axis_);
-      case uint8:
-        return argsort<uint8_t>(in, out, axis_);
-      case uint16:
-        return argsort<uint16_t>(in, out, axis_);
-      case uint32:
-        return argsort<uint32_t>(in, out, axis_);
-      case uint64:
-        return argsort<uint64_t>(in, out, axis_);
-      case int8:
-        return argsort<int8_t>(in, out, axis_);
-      case int16:
-        return argsort<int16_t>(in, out, axis_);
-      case int32:
-        return argsort<int32_t>(in, out, axis_);
-      case int64:
-        return argsort<int64_t>(in, out, axis_);
-      case float32:
-        return argsort<float>(in, out, axis_);
-      case float64:
-        return argsort<double>(in, out, axis_);
-      case float16:
-        return argsort<float16_t>(in, out, axis_);
-      case bfloat16:
-        return argsort<bfloat16_t>(in, out, axis_);
-      case complex64:
-        return argsort<complex64_t>(in, out, axis_);
-    }
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      argsort<MLX_GET_TYPE(type_tag)>(in, out, axis_);
+    });
   });
 }
 
@@ -401,36 +407,9 @@ void ArgPartition::eval_cpu(const std::vector<array>& inputs, array& out) {
                     out = array::unsafe_weak_copy(out),
                     axis_ = axis_,
                     kth_ = kth_]() mutable {
-    switch (in.dtype()) {
-      case bool_:
-        return argpartition<bool>(in, out, axis_, kth_);
-      case uint8:
-        return argpartition<uint8_t>(in, out, axis_, kth_);
-      case uint16:
-        return argpartition<uint16_t>(in, out, axis_, kth_);
-      case uint32:
-        return argpartition<uint32_t>(in, out, axis_, kth_);
-      case uint64:
-        return argpartition<uint64_t>(in, out, axis_, kth_);
-      case int8:
-        return argpartition<int8_t>(in, out, axis_, kth_);
-      case int16:
-        return argpartition<int16_t>(in, out, axis_, kth_);
-      case int32:
-        return argpartition<int32_t>(in, out, axis_, kth_);
-      case int64:
-        return argpartition<int64_t>(in, out, axis_, kth_);
-      case float32:
-        return argpartition<float>(in, out, axis_, kth_);
-      case float64:
-        return argpartition<double>(in, out, axis_, kth_);
-      case float16:
-        return argpartition<float16_t>(in, out, axis_, kth_);
-      case bfloat16:
-        return argpartition<bfloat16_t>(in, out, axis_, kth_);
-      case complex64:
-        return argpartition<complex64_t>(in, out, axis_, kth_);
-    }
+    dispatch_all_types(in.dtype(), [&](auto type_tag) {
+      argpartition<MLX_GET_TYPE(type_tag)>(in, out, axis_, kth_);
+    });
   });
 }
 
@@ -449,36 +428,38 @@ void Partition::eval_cpu(const std::vector<array>& inputs, array& out) {
   encoder.dispatch([out = array::unsafe_weak_copy(out),
                     axis_ = axis_,
                     kth_ = kth_]() mutable {
-    switch (out.dtype()) {
-      case bool_:
-        return partition<bool>(out, axis_, kth_);
-      case uint8:
-        return partition<uint8_t>(out, axis_, kth_);
-      case uint16:
-        return partition<uint16_t>(out, axis_, kth_);
-      case uint32:
-        return partition<uint32_t>(out, axis_, kth_);
-      case uint64:
-        return partition<uint64_t>(out, axis_, kth_);
-      case int8:
-        return partition<int8_t>(out, axis_, kth_);
-      case int16:
-        return partition<int16_t>(out, axis_, kth_);
-      case int32:
-        return partition<int32_t>(out, axis_, kth_);
-      case int64:
-        return partition<int64_t>(out, axis_, kth_);
-      case float32:
-        return partition<float>(out, axis_, kth_);
-      case float64:
-        return partition<double>(out, axis_, kth_);
-      case float16:
-        return partition<float16_t>(out, axis_, kth_);
-      case bfloat16:
-        return partition<bfloat16_t>(out, axis_, kth_);
-      case complex64:
-        return partition<complex64_t>(out, axis_, kth_);
-    }
+    dispatch_all_types(out.dtype(), [&](auto type_tag) {
+      partition<MLX_GET_TYPE(type_tag)>(out, axis_, kth_);
+    });
+  });
+}
+
+void SearchSorted::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& v = inputs[1];
+
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  auto& encoder = cpu::get_command_encoder(stream());
+  encoder.set_input_array(a);
+  encoder.set_input_array(v);
+  encoder.set_output_array(out);
+  encoder.dispatch([a = array::unsafe_weak_copy(a),
+                    v = array::unsafe_weak_copy(v),
+                    out = array::unsafe_weak_copy(out),
+                    right = right_]() mutable {
+    dispatch_all_types(a.dtype(), [&](auto type_tag) {
+      using T = MLX_GET_TYPE(type_tag);
+      if (right) {
+        searchsorted<T, true>(a, v, out);
+      } else {
+        searchsorted<T, false>(a, v, out);
+      }
+    });
   });
 }
 

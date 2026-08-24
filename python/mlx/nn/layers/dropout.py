@@ -12,7 +12,7 @@ class Dropout(Module):
     expected value of a given element will remain the same.
 
     Args:
-        p (float): The probability to zero an element
+        p (float): The probability to zero an element. Default: ``0.5``.
     """
 
     def __init__(self, p: float = 0.5):
@@ -40,7 +40,7 @@ class Dropout2d(Module):
 
     Randomly zero out entire channels independently with probability :math:`p`.
     This layer expects the channels to be last, i.e. the input shape should be
-    ``NWHC`` or ``WHC`` where:``N`` is the batch dimension,``H`` is the input
+    ``NHWC`` or ``HWC`` where:``N`` is the batch dimension,``H`` is the input
     image height,``W`` is the input image width, and``C`` is the number of
     input channels
 
@@ -56,6 +56,7 @@ class Dropout2d(Module):
 
     Args:
         p (float): Probability of zeroing a channel during training.
+            Default: ``0.5``.
     """
 
     def __init__(self, p: float = 0.5):
@@ -105,6 +106,7 @@ class Dropout3d(Module):
 
     Args:
         p (float): Probability of zeroing a channel during training.
+            Default: ``0.5``.
     """
 
     def __init__(self, p: float = 0.5):

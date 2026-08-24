@@ -17,6 +17,22 @@ class TestLosses(mlx_tests.MLXTestCase):
         loss = nn.losses.cross_entropy(logits, indices, reduction="none")
         self.assertTrue(mx.allclose(loss, expected))
 
+        # The loss only depends on the gaps between logits, so a large shared
+        # offset must not change it
+        indices = mx.array([0])
+        base = mx.array([[2.0, -1.0]])
+        expected = nn.losses.cross_entropy(base, indices, reduction="none")
+        for offset in [1e4, 1e6]:
+            loss = nn.losses.cross_entropy(base + offset, indices, reduction="none")
+            self.assertTrue(mx.allclose(loss, expected, atol=1e-5))
+
+        # Equal logits give log(n) whatever their magnitude
+        for v in [1e0, 1e4, 1e8, 1e20]:
+            loss = nn.losses.cross_entropy(
+                mx.array([[v, v]]), indices, reduction="none"
+            )
+            self.assertTrue(mx.allclose(loss, mx.array([0.6931472]), atol=1e-5))
+
         probs = mx.array([[1.0, 0.0], [0.0, 1.0]])
         loss = nn.losses.cross_entropy(logits, probs, reduction="none")
         self.assertTrue(mx.isnan(loss).all())  # produce NaNs, like PyTorch
@@ -349,6 +365,12 @@ class TestLosses(mlx_tests.MLXTestCase):
         losses_none = nn.losses.kl_div_loss(p_logits, q_logits, reduction="none")
         expected_none = mx.array([0.0, 0.831777])
         self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # The documented formula must match the implementation: the sum reduces
+        # the elementwise product over `axis`, so the multiply has to be inside
+        # the sum (parenthesization matters).
+        documented = (mx.exp(q_logits) * (q_logits - p_logits)).sum(axis=-1)
+        self.assertTrue(mx.allclose(losses_none, documented))
 
         # Test with reduction 'mean'
         losses_mean = nn.losses.kl_div_loss(p_logits, q_logits, reduction="mean")

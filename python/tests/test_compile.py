@@ -87,6 +87,7 @@ class TestCompile(mlx_tests.MLXTestCase):
                 results.append((y.item(), z.item()))
             except Exception as e:
                 errors.append(e)
+            mx.clear_streams()
 
         for _ in range(3):
             thread = threading.Thread(target=worker)
@@ -97,6 +98,50 @@ class TestCompile(mlx_tests.MLXTestCase):
         if errors:
             raise errors[0]
         self.assertEqual(results, [(2.0, 2.0)] * 3)
+
+    def test_compile_release_on_another_thread(self):
+        # A function traced on one thread but released on another must still
+        # drop its cache entry, otherwise a later compile of the same id gets
+        # handed the dead function's tape instead of being traced again.
+        traces = []
+
+        def fun(x):
+            traces.append(1)
+            return x + 1
+
+        holder = {}
+        traced = threading.Event()
+        released = threading.Event()
+        errors = []
+
+        def worker():
+            try:
+                holder["fn"] = mx.compile(fun)
+                mx.eval(holder["fn"](mx.array([1.0])))
+                traced.set()
+                self.assertTrue(released.wait(10))
+                # The same callable, so the same id.
+                fn = mx.compile(fun)
+                mx.eval(fn(mx.array([1.0])))
+            except Exception as e:
+                errors.append(e)
+            finally:
+                traced.set()
+            mx.clear_streams()
+
+        # The tracing thread has to outlive the release, on exit it would tear
+        # down its cache anyway.
+        thread = threading.Thread(target=worker)
+        thread.start()
+        self.assertTrue(traced.wait(10))
+        holder.clear()
+        gc.collect()
+        released.set()
+        thread.join()
+
+        if errors:
+            raise errors[0]
+        self.assertEqual(len(traces), 2)
 
     def test_compile_grad(self):
         def loss_fn(x):
@@ -438,6 +483,76 @@ class TestCompile(mlx_tests.MLXTestCase):
             return mx.random.uniform(shape=(10, 10))
 
         self.assertFalse(mx.allclose(fun(), fun(), 1e-2, 1e-2))
+
+    def test_compile_rng_across_threads(self):
+        # A function compiled with inputs/outputs=mx.random.state on one thread
+        # must still use (and advance/seed) the calling thread's RNG state when
+        # invoked from another thread, whether captured directly or nested.
+
+        # The state sentinel is a single global object shared across threads.
+        state_from_thread = {}
+
+        def grab():
+            state_from_thread["s"] = mx.random.state
+            mx.clear_streams()
+
+        t = threading.Thread(target=grab)
+        t.start()
+        t.join()
+        self.assertIs(mx.random.state, state_from_thread["s"])
+
+        direct = partial(mx.compile, inputs=mx.random.state, outputs=mx.random.state)(
+            lambda: mx.random.uniform(shape=(10, 10))
+        )
+
+        nested_state = [{"unused": mx.array(0.0)}, mx.random.state]
+        nested = partial(mx.compile, inputs=nested_state, outputs=nested_state)(
+            lambda: mx.random.uniform(shape=(10, 10))
+        )
+
+        for fun in (direct, nested):
+            results = {}
+
+            def worker():
+                with mx.stream(mx.cpu):
+                    a = fun()
+                    b = fun()
+                    results["advances"] = not bool(mx.allclose(a, b, 1e-2, 1e-2).item())
+                    mx.random.seed(42)
+                    c = fun()
+                    mx.random.seed(42)
+                    d = fun()
+                    results["seed_reproducible"] = bool(mx.allclose(c, d).item())
+                    mx.random.seed(1234)
+                    e = fun()
+                    results["seed_changes"] = not bool(
+                        mx.allclose(c, e, 1e-2, 1e-2).item()
+                    )
+                mx.clear_streams()
+
+            t = threading.Thread(target=worker)
+            t.start()
+            t.join()
+
+            self.assertTrue(results["advances"])
+            self.assertTrue(results["seed_reproducible"])
+            self.assertTrue(results["seed_changes"])
+
+    def test_compile_state_capture_with_rng_updates_in_place(self):
+        # Capturing mx.random.state alongside other state via outputs= must not
+        # break in-place updates of the other captured containers.
+        counter = {"v": mx.array(0.0)}
+        state = [counter, mx.random.state]
+
+        @partial(mx.compile, inputs=state, outputs=state)
+        def step():
+            counter["v"] = counter["v"] + 1.0
+            return mx.random.uniform(shape=(2,))
+
+        for _ in range(3):
+            step()
+        mx.eval(counter["v"])
+        self.assertEqual(counter["v"].item(), 3.0)
 
     def test_compile_kwargs(self):
         @mx.compile
@@ -1453,6 +1568,60 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertEqual(
             np.asarray(out, copy=False).__array_interface__["data"][0], in_ptr
         )
+
+    def test_compile_negative_strides(self):
+        # 1D negative stride with elementwise expression
+        @mx.compile
+        def f(x):
+            return 2.0 * x[::-1]
+
+        x = mx.arange(8, dtype=mx.float32)
+        expected = 2.0 * x[::-1]
+        self.assertTrue(mx.array_equal(f(x), expected))
+
+        # 1D negative stride with slice update
+        def g_eager(x):
+            base = mx.zeros_like(x)
+            base[::-1] += 2.0 * x[::-1]
+            return base
+
+        g_compiled = mx.compile(g_eager)
+        expected = g_eager(x)
+        self.assertTrue(mx.array_equal(g_compiled(x), expected))
+
+        # 2D negative stride
+        @mx.compile
+        def h(x):
+            return x[::-1] + 1.0
+
+        y = mx.arange(12, dtype=mx.float32).reshape(3, 4)
+        expected = y[::-1] + 1.0
+        self.assertTrue(mx.array_equal(h(y), expected))
+
+        # Mixed positive and negative strides
+        @mx.compile
+        def m(x):
+            return x[::-1, ::2] * 3.0
+
+        z = mx.arange(24, dtype=mx.float32).reshape(4, 6)
+        expected = z[::-1, ::2] * 3.0
+        self.assertTrue(mx.array_equal(m(z), expected))
+
+        # 4D negative stride (exercises work_per_thread > 1 path)
+        @mx.compile
+        def p(x):
+            return x + 1.0
+
+        w = mx.arange(120, dtype=mx.float32).reshape(2, 3, 4, 5)
+        expected = w[::-1, :, ::-1, :] + 1.0
+        self.assertTrue(mx.array_equal(p(w[::-1, :, ::-1, :]), expected))
+
+    def test_compile_abs_unsigned(self):
+        # abs has to compile for the wider unsigned types too
+        fun = lambda x: mx.abs(x) + 1
+        for dtype in [mx.uint8, mx.uint16, mx.uint32, mx.uint64]:
+            x = mx.array([1, 2, 3], dtype)
+            self.assertTrue(mx.array_equal(mx.compile(fun)(x), fun(x)))
 
 
 if __name__ == "__main__":

@@ -32,18 +32,24 @@ bool fast::ScaledDotProductAttention::use_fallback(
     bool do_causal,
     bool is_training,
     bool output_logsumexp,
+    bool force_fused,
     Stream s) {
+  if (force_fused) {
+    throw std::invalid_argument(
+        "[scaled_dot_product_attention] force_fused=True but no fused "
+        "kernel is available in CPU backend.");
+  }
   return true;
-}
-
-bool fast::ScaledDotProductAttention::supports_bool_mask() {
-  return false;
 }
 
 bool fast::ScaledDotProductAttentionVJP::use_fallback(
     const array& q,
     Stream s) {
   return true;
+}
+
+bool fast::ScaledDotProductAttention::supports_bool_mask() {
+  return false;
 }
 
 NO_GPU(Abs)
@@ -98,6 +104,7 @@ NO_GPU(Gather)
 NO_GPU(GatherAxis)
 NO_GPU(GatherMM)
 NO_GPU(GatherQMM)
+NO_GPU(GatherQQMM)
 NO_GPU(Greater)
 NO_GPU(GreaterEqual)
 NO_GPU(GroupedMM)
@@ -134,6 +141,7 @@ NO_GPU(Round)
 NO_GPU(Scan)
 NO_GPU(Scatter)
 NO_GPU(ScatterAxis)
+NO_GPU(SearchSorted)
 NO_GPU(Select)
 NO_GPU(SegmentedMM)
 NO_GPU(Sigmoid)

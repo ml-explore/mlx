@@ -39,7 +39,7 @@ static inline T dequantize_scale(uint8_t s) {
 
 template <int bits>
 struct Quantize {
-  uint8_t operator()(float x) {
+  uint8_t operator()(float x) thread {
     if (bits == 8) {
       return fp8_e4m3(x).bits;
     } else {
@@ -50,7 +50,7 @@ struct Quantize {
 
 template <int bits, typename U = float>
 struct Dequantize {
-  U operator()(uint8_t x) {
+  U operator()(uint8_t x) thread {
     if constexpr (bits == 8) {
       return U(*(thread fp8_e4m3*)(&x));
     } else {
@@ -61,11 +61,12 @@ struct Dequantize {
 
 template <typename U, int bits>
 inline void dequantize(uint8_t w, U scale, threadgroup U* w_local) {
+  const float s = float(scale);
   if constexpr (bits == 4) {
-    w_local[0] = scale * Dequantize<4, U>{}(w);
-    w_local[1] = scale * Dequantize<4, U>{}(w >> 4);
+    w_local[0] = static_cast<U>(s * Dequantize<4, float>{}(w));
+    w_local[1] = static_cast<U>(s * Dequantize<4, float>{}(w >> 4));
   } else {
-    w_local[0] = scale * Dequantize<8, U>{}(w);
+    w_local[0] = static_cast<U>(s * Dequantize<8, float>{}(w));
   }
 }
 
@@ -112,14 +113,14 @@ struct QuantizedBlockLoader {
       const int src_ld_,
       threadgroup T* dst_,
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
-      ushort simd_lane_id [[thread_index_in_simdgroup]])
+      ushort simd_lane_id [[thread_index_in_simdgroup]]) thread
       : src_ld(src_ld_),
         tile_stride(
-            reduction_dim ? BCOLS_PACKED * bytes_per_pack
+            reduction_dim ? BCOLS_PACKED* bytes_per_pack
                           : BROWS * src_ld * bytes_per_pack / pack_factor),
-        group_stride(BROWS * src_ld / group_size),
+        group_stride(BROWS* src_ld / group_size),
         thread_idx(simd_group_id * 32 + simd_lane_id),
-        bi(n_reads * thread_idx / BCOLS_PACKED),
+        bi(n_reads* thread_idx / BCOLS_PACKED),
         bj((n_reads * thread_idx) % BCOLS_PACKED),
         group_id((bj * pack_factor) / group_size),
         dst(dst_ + bi * dst_ld + bj * pack_factor),
@@ -127,7 +128,7 @@ struct QuantizedBlockLoader {
             bj * bytes_per_pack),
         scales(scales_ + bi * src_ld / group_size + group_id) {}
 
-  void load_unsafe() const {
+  void load_unsafe() const thread {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
       return;
     }
@@ -143,7 +144,7 @@ struct QuantizedBlockLoader {
     }
   }
 
-  void load_safe(short2 src_tile_dim) const {
+  void load_safe(short2 src_tile_dim) const thread {
     if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
       return;
     }
@@ -173,12 +174,12 @@ struct QuantizedBlockLoader {
     }
   }
 
-  void next() {
+  void next() thread {
     src += tile_stride;
     if (reduction_dim == 1) {
       scales += n_groups;
     } else {
-      scales += n_groups * group_stride;
+      scales += group_stride;
     }
   }
 };
@@ -896,6 +897,10 @@ template <
     threadgroup_barrier(mem_flags::mem_none);
 
     // Prepare threadgroup mma operation
+    const short m_lo_lim = min(int(sgp_sm), max(0, offset - tm));
+    const short m_hi_lim = min(int(sgp_sm), max(0, offset_next - tm));
+    const bool sg_active = m_hi_lim > m_lo_lim;
+
     NAXTile<AccumType, TM, TN> Dtile;
     Dtile.clear();
 
@@ -925,33 +930,35 @@ template <
 
           STEEL_PRAGMA_NO_UNROLL
           for (int kk1 = 0; kk1 < BK; kk1 += SK) {
-            NAXTile<T, TM, TK> Atile;
-            NAXTile<Wtype, BR, BC> Btile;
+            if (sg_active) {
+              NAXTile<T, TM, TK> Atile;
+              NAXTile<Wtype, BR, BC> Btile;
 
-            volatile int compiler_barrier;
+              volatile int compiler_barrier;
 
-            if constexpr (kAlignedM.value) {
-              Atile.load(xn + kk1, K);
-            } else {
-              Atile.load_safe(xn + kk1, K, short2(SK, sgp_sm));
+              if constexpr (kAlignedM.value) {
+                Atile.load(xn + kk1, K);
+              } else {
+                Atile.load_safe(xn + kk1, K, short2(SK, sgp_sm));
+              }
+
+              if constexpr (transpose) {
+                Btile.template load<Wtype, BK_padded, 1>(
+                    Ws + tn * BK_padded + kk1);
+              } else {
+                Btile.template load<Wtype, BN_padded, 1>(
+                    Ws + tn + kk1 * BN_padded);
+              }
+
+              tile_matmad_nax(
+                  Dtile,
+                  Atile,
+                  metal::bool_constant<false>{},
+                  Btile,
+                  metal::bool_constant<transpose>{});
+
+              (void)compiler_barrier;
             }
-
-            if constexpr (transpose) {
-              Btile.template load<Wtype, BK_padded, 1>(
-                  Ws + tn * BK_padded + kk1);
-            } else {
-              Btile.template load<Wtype, BN_padded, 1>(
-                  Ws + tn + kk1 * BN_padded);
-            }
-
-            tile_matmad_nax(
-                Dtile,
-                Atile,
-                metal::bool_constant<false>{},
-                Btile,
-                metal::bool_constant<transpose>{});
-
-            (void)compiler_barrier;
           }
 
           xn += BK;
@@ -965,37 +972,36 @@ template <
 
           STEEL_PRAGMA_NO_UNROLL
           for (int kk1 = 0; kk1 < BK; kk1 += SK) {
-            NAXTile<T, TM, TK> Atile;
-            NAXTile<Wtype, BR, BC> Btile;
+            if (sg_active) {
+              NAXTile<T, TM, TK> Atile;
+              NAXTile<Wtype, BR, BC> Btile;
 
-            volatile int compiler_barrier;
+              volatile int compiler_barrier;
 
-            const short psk = min(int(SK), max(0, (BK - kk1)));
-            Atile.load_safe(xn + kk1, K, short2(psk, sgp_sm));
+              const short psk = min(int(SK), max(0, (BK - kk1)));
+              Atile.load_safe(xn + kk1, K, short2(psk, sgp_sm));
 
-            if constexpr (transpose) {
-              Btile.template load<Wtype, BK_padded, 1>(
-                  Ws + tn * BK_padded + kk1);
-            } else {
-              Btile.template load<Wtype, BN_padded, 1>(
-                  Ws + tn + kk1 * BN_padded);
+              if constexpr (transpose) {
+                Btile.template load<Wtype, BK_padded, 1>(
+                    Ws + tn * BK_padded + kk1);
+              } else {
+                Btile.template load<Wtype, BN_padded, 1>(
+                    Ws + tn + kk1 * BN_padded);
+              }
+
+              tile_matmad_nax(
+                  Dtile,
+                  Atile,
+                  metal::bool_constant<false>{},
+                  Btile,
+                  metal::bool_constant<transpose>{});
+
+              (void)compiler_barrier;
             }
-
-            tile_matmad_nax(
-                Dtile,
-                Atile,
-                metal::bool_constant<false>{},
-                Btile,
-                metal::bool_constant<transpose>{});
-
-            (void)compiler_barrier;
           }
         }
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
-
-        const short m_lo_lim = min(int(sgp_sm), max(0, offset - tm));
-        const short m_hi_lim = min(int(sgp_sm), max(0, offset_next - tm));
 
         // Store results to device memory
         if constexpr (kAlignedN.value) {

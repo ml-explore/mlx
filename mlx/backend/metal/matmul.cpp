@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <numeric>
+#include <optional>
 #include <sstream>
 
 #include "mlx/backend/common/broadcasting.h"
@@ -14,6 +15,7 @@
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/steel/gemm/params.h"
 #include "mlx/backend/metal/matmul.h"
+#include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -737,7 +739,7 @@ void steel_gemm_splitk_axpby_nax(
       /* const std::string& kernel_name = */ base_name,
       /* const std::string& hash_name = */ hash_name,
       /* const metal::MTLFCList& func_consts = */ func_consts,
-      /* const array& out = */ C_split,
+      /* const array& in = */ a,
       /* bool transpose_a = */ transpose_a,
       /* bool transpose_b = */ transpose_b,
       /* int bm = */ bm,
@@ -1039,6 +1041,54 @@ void steel_matmul_axpby(
 // GEMV dispatch
 ///////////////////////////////////////////////////////////////////////////////
 
+void dot_product(
+    const Stream& s,
+    metal::Device& d,
+    const array& a,
+    const array& b,
+    array& out,
+    int K,
+    std::vector<array>& copies) {
+  constexpr int thread_group_size = 512;
+  constexpr int items_per_thread = 32;
+  constexpr int simd_groups = thread_group_size / 32;
+  auto& compute_encoder = metal::get_command_encoder(s);
+  std::string kname = "dot_product_" + type_to_name(a);
+  concatenate(
+      kname,
+      "_it",
+      items_per_thread,
+      "_tg",
+      thread_group_size,
+      "_sg",
+      simd_groups);
+  auto kernel = d.get_kernel(kname);
+
+  int n = K;
+  int threads = (n + items_per_thread - 1) / items_per_thread;
+  int blocks = (threads + thread_group_size - 1) / thread_group_size;
+
+  array partials({blocks}, float32, nullptr, {});
+  partials.set_data(allocator::malloc(partials.nbytes()));
+  copies.push_back(partials);
+  compute_encoder.set_compute_pipeline_state(kernel);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(partials, 2);
+  compute_encoder.set_bytes(n, 3);
+  compute_encoder.dispatch_threads(
+      MTL::Size(size_t(blocks) * thread_group_size, 1, 1),
+      MTL::Size(thread_group_size, 1, 1));
+
+  array tempResult(out.shape(), float32, nullptr, {});
+  tempResult.set_data(allocator::malloc(tempResult.nbytes()));
+  copies.push_back(tempResult);
+  all_reduce_dispatch(partials, tempResult, "sum", compute_encoder, d, s);
+  copy_gpu(tempResult, out, CopyType::Scalar, s);
+
+  compute_encoder.add_temporaries(std::move(copies));
+}
+
 template <bool CHECK_AB = true>
 void gemv_axbpy(
     const Stream& s,
@@ -1230,6 +1280,170 @@ inline void gemv(
       /* Strides B_batch_stride = */ B_batch_stride);
 }
 
+struct GemvWideConfig {
+  int vecs_per_tg;
+  int k_lanes;
+  int grid_x;
+};
+
+std::string gemv_wide_kernel_name(
+    const char* prefix,
+    const array& out,
+    const GemvWideConfig& config) {
+  std::ostringstream kname;
+  kname << prefix << type_to_name(out) << "_nv" << config.vecs_per_tg << "_kl"
+        << config.k_lanes;
+  return kname.str();
+}
+
+inline std::optional<GemvWideConfig> gemv_wide_config(
+    metal::Device& d,
+    const array& out,
+    int M,
+    int N,
+    int K,
+    int mat_ld,
+    int vec_ld,
+    int64_t mat_offset,
+    int64_t vec_offset,
+    const Strides& mat_batch_stride,
+    const Strides& vec_batch_stride) {
+  // Pre-M3 generations are limited by load issue rate rather than
+  // bandwidth and do not profit from the amortized stream; they keep the
+  // existing kernels.
+  if (d.get_architecture_gen() < 15) {
+    return std::nullopt;
+  }
+
+  auto all_aligned = [](const Strides& strides, int alignment) {
+    return std::all_of(
+        strides.begin(), strides.end(), [alignment](int64_t stride) {
+          return stride % alignment == 0;
+        });
+  };
+
+  bool vec4_aligned = mat_offset % 8 == 0 && vec_offset % 8 == 0 &&
+      mat_ld % 4 == 0 && vec_ld % 4 == 0 && all_aligned(mat_batch_stride, 4) &&
+      all_aligned(vec_batch_stride, 4);
+
+  // Wide amortizes one matrix stream over several vectors; M == 1 has
+  // nothing to amortize and stays with gemv.
+  if (M <= 1 || N <= 1 || K % 4 != 0 ||
+      (out.dtype() != float16 && out.dtype() != bfloat16) || !vec4_aligned) {
+    return std::nullopt;
+  }
+
+  // A register tile holds at most five vectors (wider collapses occupancy);
+  // M balances across passes that each re-stream the matrix, and a fourth
+  // pass no longer pays.
+  int passes = (M + 4) / 5;
+  if (passes > 3) {
+    return std::nullopt;
+  }
+
+  // Wide enough that the row grid alone saturates the GPU: N/4 threadgroups,
+  // orders of magnitude beyond concurrent execution capacity.
+  bool vocab_wide = N >= 65536;
+
+  // Full rows double the threads per group and halve each lane's K share
+  // — more in flight where the grid is thinnest: one-pass tiles have a
+  // single grid column, and tiny outputs starve every column.
+  bool full_simd = passes == 1 || N <= 64;
+  int grid_x = vocab_wide ? 1 : passes;
+  return GemvWideConfig{(M + passes - 1) / passes, full_simd ? 32 : 16, grid_x};
+}
+
+bool gemv_wide(
+    const Stream& s,
+    metal::Device& d,
+    const array& mat,
+    const array& in_vec,
+    const array* bias,
+    array& out,
+    int M,
+    int N,
+    int K,
+    int mat_ld,
+    int vec_ld,
+    int batch_size_out,
+    const Shape& batch_shape,
+    const Strides& mat_batch_stride,
+    const Strides& vec_batch_stride,
+    std::vector<array>& copies,
+    const Strides* bias_batch_stride,
+    float alpha,
+    float beta) {
+  auto plan = gemv_wide_config(
+      d,
+      out,
+      M,
+      N,
+      K,
+      mat_ld,
+      vec_ld,
+      mat.offset(),
+      in_vec.offset(),
+      mat_batch_stride,
+      vec_batch_stride);
+  if (!plan) {
+    return false;
+  }
+
+  const bool has_batch = batch_shape.size() != 1;
+  const bool do_axpby = bias != nullptr;
+  int batch_ndim = batch_shape.size();
+
+  MTL::Size group_dims(32, plan->k_lanes / 8, 1);
+  MTL::Size grid_dims(plan->grid_x, (N + 3) / 4, batch_size_out);
+
+  std::string base_name = gemv_wide_kernel_name("gemv_wide_", out, *plan);
+  std::ostringstream hash_name;
+  hash_name << base_name << "_nc" << has_batch << "_axpby" << do_axpby;
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 0},
+      {&do_axpby, MTL::DataType::DataTypeBool, 1},
+  };
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  auto kernel = get_gemv_wide_kernel(
+      d,
+      base_name,
+      hash_name.str(),
+      func_consts,
+      out,
+      plan->vecs_per_tg,
+      plan->k_lanes);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(mat, 0);
+  compute_encoder.set_input_array(in_vec, 1);
+  compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(K, 4);
+  compute_encoder.set_bytes(N, 5);
+  compute_encoder.set_bytes(M, 6);
+  compute_encoder.set_bytes(mat_ld, 7);
+  compute_encoder.set_bytes(vec_ld, 8);
+  compute_encoder.set_bytes(batch_ndim, 11);
+  compute_encoder.set_vector_bytes(batch_shape, 12);
+  compute_encoder.set_vector_bytes(vec_batch_stride, 13);
+  compute_encoder.set_vector_bytes(mat_batch_stride, 14);
+
+  if (do_axpby) {
+    compute_encoder.set_input_array(*bias, 2);
+    compute_encoder.set_bytes(alpha, 9);
+    compute_encoder.set_bytes(beta, 10);
+    compute_encoder.set_vector_bytes(*bias_batch_stride, 15);
+    int bias_ld = bias->strides()[bias->ndim() - 2];
+    int bias_fd = bias->strides()[bias->ndim() - 1];
+    compute_encoder.set_bytes(bias_ld, 16);
+    compute_encoder.set_bytes(bias_fd, 17);
+  }
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+  compute_encoder.add_temporaries(std::move(copies));
+  return true;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Matmul implementation
 ///////////////////////////////////////////////////////////////////////////////
@@ -1289,6 +1503,43 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
+
+  if (M == 1 && N == 1 && batch_size_out == 1 && a.flags().row_contiguous &&
+      b.flags().row_contiguous && a.dtype() != complex64) {
+    return dot_product(
+        /* const Stream& s = */ s,
+        /* metal::Device& d = */ d,
+        /* const array& a = */ a,
+        /* const array& b = */ b,
+        /* array& out = */ out,
+        /* int K = */ K,
+        /* std::vector<array>& copies = */ copies);
+  }
+  // The wide gemv route streams the weight matrix once per <= 5 input
+  // vectors instead of running a row-padded GEMM tile.
+  if (!a_transposed && b_transposed &&
+      gemv_wide(
+          /* const Stream& s = */ s,
+          /* metal::Device& d = */ d,
+          /* const array& mat = */ b,
+          /* const array& in_vec = */ a,
+          /* const array* bias = */ nullptr,
+          /* array& out = */ out,
+          /* int M = */ M,
+          /* int N = */ N,
+          /* int K = */ K,
+          /* int mat_ld = */ b_cols,
+          /* int vec_ld = */ a_cols,
+          /* int batch_size_out = */ static_cast<int>(batch_size_out),
+          /* const Shape& batch_shape = */ batch_shape,
+          /* const Strides& mat_batch_stride = */ B_batch_stride,
+          /* const Strides& vec_batch_stride = */ A_batch_stride,
+          /* std::vector<array>& copies = */ copies,
+          /* const Strides* bias_batch_stride = */ nullptr,
+          /* float alpha = */ 1.0f,
+          /* float beta = */ 0.0f)) {
+    return;
+  }
 
   // Route to gemv if needed
   if (std::min(M, N) == 1) {
@@ -1421,6 +1672,32 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
+
+  // The wide gemv route streams the weight matrix once per <= 5 input
+  // vectors instead of running a row-padded GEMM tile.
+  if (!transpose_a && transpose_b &&
+      gemv_wide(
+          /* const Stream& s = */ s,
+          /* metal::Device& d = */ d,
+          /* const array& mat = */ b,
+          /* const array& in_vec = */ a,
+          /* const array* bias = */ &c,
+          /* array& out = */ out,
+          /* int M = */ M,
+          /* int N = */ N,
+          /* int K = */ K,
+          /* int mat_ld = */ ldb,
+          /* int vec_ld = */ lda,
+          /* int batch_size_out = */ static_cast<int>(batch_size_out),
+          /* const Shape& batch_shape = */ batch_shape,
+          /* const Strides& mat_batch_stride = */ B_batch_stride,
+          /* const Strides& vec_batch_stride = */ A_batch_stride,
+          /* std::vector<array>& copies = */ copies,
+          /* const Strides* bias_batch_stride = */ &C_batch_stride,
+          /* float alpha = */ alpha_,
+          /* float beta = */ beta_)) {
+    return;
+  }
 
   // Route to gemv if needed
   if (std::min(M, N) == 1) {
@@ -1897,7 +2174,7 @@ void gather_mm_rhs(
   int K = a.shape(-1);
   int M = a.size() / K;
   int N = b.shape(-1);
-  int lda = a.strides()[a.ndim() - 2]; // should be K
+  int lda = K;
 
   // Define the dispatch blocks
   int bm = 16, bn = 64, bk = 16;
@@ -2030,7 +2307,7 @@ void gather_mm_rhs_nax(
   int K = a.shape(-1);
   int M = a.size() / K;
   int N = b.shape(-1);
-  int lda = a.strides()[a.ndim() - 2]; // should be K
+  int lda = K;
   int E = b.shape(0);
 
   // Define the dispatch blocks
@@ -2260,6 +2537,138 @@ void gather_mv(
   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
 }
 
+// Dispatches gathers whose b is a transposed view (x @ W.T layouts) onto
+// gemv_wide_gather; returns false when the layout or shape wants the existing
+// routes instead. The route is decided from raw strides so no copy is encoded
+// unless it will be dispatched.
+bool gather_mm_wide(
+    const array& a_,
+    const array& b_,
+    const array& vec_indices,
+    const array& mat_indices,
+    array& out,
+    int M,
+    int N,
+    int K,
+    metal::Device& d,
+    const Stream& s) {
+  // b must already be a transposed view (second-to-last dim contiguous,
+  // inner stride != 1). check_transpose can't decide this: it copies any
+  // other layout to row-contiguous and reports it as non-transposed.
+  if (b_.strides()[b_.ndim() - 1] == 1 || b_.strides()[b_.ndim() - 2] != 1) {
+    return false;
+  }
+  int ldb = b_.strides()[b_.ndim() - 1];
+  // a is served directly when row-contiguous, by a contiguous copy when
+  // neither layout matches, and declines when transposed.
+  bool a_direct = a_.strides()[a_.ndim() - 1] == 1;
+  if (!a_direct && a_.strides()[a_.ndim() - 2] == 1) {
+    return false;
+  }
+  int lda;
+  int64_t vec_offset;
+  Strides vec_batch_stride;
+  if (a_direct) {
+    lda = a_.strides()[a_.ndim() - 2];
+    vec_offset = a_.offset();
+    vec_batch_stride = Strides(a_.strides().begin(), a_.strides().end() - 2);
+  } else {
+    lda = a_.shape(-1);
+    vec_offset = 0;
+    vec_batch_stride = Strides(a_.ndim() - 2);
+    int64_t stride = int64_t(a_.shape(-2)) * a_.shape(-1);
+    for (int i = a_.ndim() - 3; i >= 0; --i) {
+      vec_batch_stride[i] = stride;
+      stride *= a_.shape(i);
+    }
+  }
+  Strides mat_batch_stride(b_.strides().begin(), b_.strides().end() - 2);
+
+  auto cfg = gemv_wide_config(
+      d,
+      out,
+      M,
+      N,
+      K,
+      ldb,
+      lda,
+      b_.offset(),
+      vec_offset,
+      mat_batch_stride,
+      vec_batch_stride);
+  if (!cfg) {
+    return false;
+  }
+
+  std::vector<array> copies;
+  array a = a_;
+  if (!a_direct) {
+    a = contiguous_copy_gpu(a_, s);
+    copies.push_back(a);
+  }
+  const array& b = b_;
+
+  int batch_size_out = out.size() / M / N;
+  int batch_ndim = out.ndim() - 2;
+  int batch_ndim_vec = a.ndim() - 2;
+  int batch_ndim_mat = b.ndim() - 2;
+  Strides index_strides = vec_indices.strides();
+  index_strides.insert(
+      index_strides.end(),
+      mat_indices.strides().begin(),
+      mat_indices.strides().end());
+  if (index_strides.empty()) {
+    // Scalar indices: the kernel still loads a stride (scaled by tid.z == 0).
+    index_strides = {0, 0};
+  }
+
+  MTL::Size group_dims(32, cfg->k_lanes / 8, 1);
+  MTL::Size grid_dims(cfg->grid_x, (N + 3) / 4, batch_size_out);
+
+  const bool do_axpby = false;
+  std::string base_name = gemv_wide_kernel_name("gemv_wide_gather_", out, *cfg);
+  std::ostringstream hash_name;
+  hash_name << base_name << "_axpby0";
+  metal::MTLFCList func_consts = {
+      {&do_axpby, MTL::DataType::DataTypeBool, 1},
+  };
+
+  auto& compute_encoder = metal::get_command_encoder(s);
+  auto kernel = get_gemv_wide_gather_kernel(
+      d,
+      base_name,
+      hash_name.str(),
+      func_consts,
+      out,
+      cfg->vecs_per_tg,
+      cfg->k_lanes);
+  compute_encoder.set_compute_pipeline_state(kernel);
+
+  compute_encoder.set_input_array(b, 0);
+  compute_encoder.set_input_array(a, 1);
+  compute_encoder.set_output_array(out, 3);
+  compute_encoder.set_bytes(K, 4);
+  compute_encoder.set_bytes(N, 5);
+  compute_encoder.set_bytes(M, 6);
+  compute_encoder.set_bytes(ldb, 7);
+  compute_encoder.set_bytes(lda, 8);
+  compute_encoder.set_bytes(batch_ndim, 11);
+  compute_encoder.set_vector_bytes(out.shape(), 12);
+  compute_encoder.set_vector_bytes(index_strides, 13);
+  compute_encoder.set_bytes(batch_ndim_vec, 14);
+  compute_encoder.set_vector_bytes(a.shape(), 15);
+  compute_encoder.set_vector_bytes(a.strides(), 16);
+  compute_encoder.set_bytes(batch_ndim_mat, 17);
+  compute_encoder.set_vector_bytes(b.shape(), 18);
+  compute_encoder.set_vector_bytes(b.strides(), 19);
+  compute_encoder.set_input_array(vec_indices, 20);
+  compute_encoder.set_input_array(mat_indices, 21);
+
+  compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+  compute_encoder.add_temporaries(std::move(copies));
+  return true;
+}
+
 void gather_mm(
     const array& a_,
     const array& b_,
@@ -2442,6 +2851,11 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   if (N == 1) {
     gather_mv(a, b, lhs_indices, rhs_indices, out, M, K, true, d, s);
+    return;
+  }
+
+  // The wide gather route streams each gathered matrix once per <= 5 rows.
+  if (gather_mm_wide(a, b, lhs_indices, rhs_indices, out, M, N, K, d, s)) {
     return;
   }
 

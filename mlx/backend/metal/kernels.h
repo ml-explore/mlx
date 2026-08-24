@@ -81,6 +81,12 @@ MTL::ComputePipelineState* get_sort_kernel(
     int bn,
     int tn);
 
+MTL::ComputePipelineState* get_searchsorted_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    bool right);
+
 MTL::ComputePipelineState* get_mb_sort_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -253,6 +259,24 @@ MTL::ComputePipelineState* get_gemv_masked_kernel(
     int tn,
     bool contiguous);
 
+MTL::ComputePipelineState* get_gemv_wide_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& out,
+    int vecs_per_tg,
+    int k_lanes);
+
+MTL::ComputePipelineState* get_gemv_wide_gather_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& out,
+    int vecs_per_tg,
+    int k_lanes);
+
 MTL::ComputePipelineState* get_steel_conv_general_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -270,6 +294,11 @@ MTL::ComputePipelineState* get_fft_kernel(
     const std::string& kernel_name,
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
+    const std::string& template_def);
+
+MTL::ComputePipelineState* get_fft_twiddle_kernel(
+    metal::Device& d,
+    const std::string& library_name,
     const std::string& template_def);
 
 MTL::ComputePipelineState* get_quantized_kernel(
@@ -328,7 +357,7 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_nax_kernel(
     const std::string& kernel_name,
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
-    const array& out,
+    const array& in,
     bool transpose_a,
     bool transpose_b,
     int bm,
@@ -397,7 +426,8 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
     int bd,
     int wm,
     int wn,
-    const array& m);
+    const array& m,
+    bool split_d);
 
 // Create a GPU kernel template definition for JIT compilation
 template <typename... Args>

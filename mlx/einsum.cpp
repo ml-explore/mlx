@@ -356,7 +356,7 @@ array batch_tensordot(
     std::vector<int> b_batch,
     std::vector<int> b_concat,
     StreamOrDevice s) {
-  // Broadcast contracting dimensions
+  // Broadcast contracting and batch dimensions.
   {
     auto a_shape = a.shape();
     auto b_shape = b.shape();
@@ -364,6 +364,11 @@ array batch_tensordot(
       auto d = std::max(a.shape(a_contract[i]), b.shape(b_contract[i]));
       a_shape[a_contract[i]] = d;
       b_shape[b_contract[i]] = d;
+    }
+    for (int i = 0; i < a_batch.size(); ++i) {
+      auto d = std::max(a.shape(a_batch[i]), b.shape(b_batch[i]));
+      a_shape[a_batch[i]] = d;
+      b_shape[b_batch[i]] = d;
     }
     a = broadcast_to(a, a_shape, s);
     b = broadcast_to(b, b_shape, s);

@@ -85,6 +85,19 @@ class _Pool(Module):
     def __init__(self, pooling_function, kernel_size, stride, padding, padding_value):
         super().__init__()
 
+        class_name = type(self).__name__
+        for name, values in (("kernel_size", kernel_size), ("stride", stride)):
+            if any(v <= 0 for v in values):
+                raise ValueError(
+                    f"[{class_name}] '{name}' must be positive but got "
+                    f"{tuple(values)}."
+                )
+        if any(p[0] < 0 for p in padding):
+            raise ValueError(
+                f"[{class_name}] 'padding' must be non-negative but got "
+                f"{tuple(p[0] for p in padding)}."
+            )
+
         self._pooling_function = pooling_function
         self._kernel_size = kernel_size
         self._stride = stride

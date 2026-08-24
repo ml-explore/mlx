@@ -9,33 +9,40 @@ constant mlx::os_log logger("mlx", "binary_ops");
 
 struct Add {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x + y;
   }
 };
 
 struct FloorDivide {
   template <typename T>
-  T operator()(T x, T y) {
+  metal::enable_if_t<metal::is_integral_v<T> & !metal::is_signed_v<T>, T>
+  operator()(T x, T y) thread {
     return x / y;
   }
-  template <>
-  float operator()(float x, float y) {
-    return trunc(x / y);
+  template <typename T>
+  metal::enable_if_t<metal::is_integral_v<T> & metal::is_signed_v<T>, T>
+  operator()(T x, T y) thread {
+    auto q = x / y;
+    if (x % y != 0 && (x < 0) != (y < 0)) {
+      q -= 1;
+    }
+    return q;
+  }
+  template <typename T>
+  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) thread {
+    return floor(x / y);
   }
   template <>
-  half operator()(half x, half y) {
-    return trunc(x / y);
-  }
-  template <>
-  bfloat16_t operator()(bfloat16_t x, bfloat16_t y) {
-    return trunc(x / y);
+  complex64_t operator()(complex64_t x, complex64_t y) thread {
+    // Complex is not supported, simply make compiler happy.
+    return x / y;
   }
 };
 
 struct Divide {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x / y;
   }
 };
@@ -43,12 +50,12 @@ struct Divide {
 struct Remainder {
   template <typename T>
   metal::enable_if_t<metal::is_integral_v<T> & !metal::is_signed_v<T>, T>
-  operator()(T x, T y) {
+  operator()(T x, T y) thread {
     return x % y;
   }
   template <typename T>
   metal::enable_if_t<metal::is_integral_v<T> & metal::is_signed_v<T>, T>
-  operator()(T x, T y) {
+  operator()(T x, T y) thread {
     auto r = x % y;
     if (r != 0 && (r < 0 != y < 0)) {
       r += y;
@@ -56,7 +63,7 @@ struct Remainder {
     return r;
   }
   template <typename T>
-  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) {
+  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) thread {
     T r = fmod(x, y);
     if (r != 0 && (r < 0 != y < 0)) {
       r += y;
@@ -64,25 +71,25 @@ struct Remainder {
     return r;
   }
   template <>
-  complex64_t operator()(complex64_t x, complex64_t y) {
+  complex64_t operator()(complex64_t x, complex64_t y) thread {
     return x % y;
   }
 };
 
 struct Equal {
   template <typename T>
-  bool operator()(T x, T y) {
+  bool operator()(T x, T y) thread {
     return x == y;
   }
 };
 
 struct NaNEqual {
   template <typename T>
-  bool operator()(T x, T y) {
+  bool operator()(T x, T y) thread {
     return x == y || (metal::isnan(x) && metal::isnan(y));
   }
   template <>
-  bool operator()(complex64_t x, complex64_t y) {
+  bool operator()(complex64_t x, complex64_t y) thread {
     return x == y ||
         (metal::isnan(x.real) && metal::isnan(y.real) && metal::isnan(x.imag) &&
          metal::isnan(y.imag)) ||
@@ -93,35 +100,35 @@ struct NaNEqual {
 
 struct Greater {
   template <typename T>
-  bool operator()(T x, T y) {
+  bool operator()(T x, T y) thread {
     return x > y;
   }
 };
 
 struct GreaterEqual {
   template <typename T>
-  bool operator()(T x, T y) {
+  bool operator()(T x, T y) thread {
     return x >= y;
   }
 };
 
 struct Less {
   template <typename T>
-  bool operator()(T x, T y) {
+  bool operator()(T x, T y) thread {
     return x < y;
   }
 };
 
 struct LessEqual {
   template <typename T>
-  bool operator()(T x, T y) {
+  bool operator()(T x, T y) thread {
     return x <= y;
   }
 };
 
 struct LogAddExp {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     if (metal::isnan(x) || metal::isnan(y)) {
       return metal::numeric_limits<T>::quiet_NaN();
     }
@@ -133,7 +140,7 @@ struct LogAddExp {
         : (maxval + log1p(metal::exp(minval - maxval)));
   };
 
-  complex64_t operator()(complex64_t x, complex64_t y) {
+  complex64_t operator()(complex64_t x, complex64_t y) thread {
     if (metal::isnan(x.real) || metal::isnan(x.imag) || metal::isnan(y.real) ||
         metal::isnan(y.imag)) {
       return metal::numeric_limits<float>::quiet_NaN();
@@ -154,12 +161,12 @@ struct LogAddExp {
 
 struct Maximum {
   template <typename T>
-  metal::enable_if_t<metal::is_integral_v<T>, T> operator()(T x, T y) {
+  metal::enable_if_t<metal::is_integral_v<T>, T> operator()(T x, T y) thread {
     return metal::max(x, y);
   }
 
   template <typename T>
-  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) {
+  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) thread {
     if (metal::isnan(x)) {
       return x;
     }
@@ -167,7 +174,7 @@ struct Maximum {
   }
 
   template <>
-  complex64_t operator()(complex64_t x, complex64_t y) {
+  complex64_t operator()(complex64_t x, complex64_t y) thread {
     if (metal::isnan(x.real) || metal::isnan(x.imag)) {
       return x;
     }
@@ -177,12 +184,12 @@ struct Maximum {
 
 struct Minimum {
   template <typename T>
-  metal::enable_if_t<metal::is_integral_v<T>, T> operator()(T x, T y) {
+  metal::enable_if_t<metal::is_integral_v<T>, T> operator()(T x, T y) thread {
     return metal::min(x, y);
   }
 
   template <typename T>
-  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) {
+  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) thread {
     if (metal::isnan(x)) {
       return x;
     }
@@ -190,7 +197,7 @@ struct Minimum {
   }
 
   template <>
-  complex64_t operator()(complex64_t x, complex64_t y) {
+  complex64_t operator()(complex64_t x, complex64_t y) thread {
     if (metal::isnan(x.real) || metal::isnan(x.imag)) {
       return x;
     }
@@ -200,30 +207,32 @@ struct Minimum {
 
 struct Multiply {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x * y;
   }
 };
 
 struct NotEqual {
   template <typename T>
-  bool operator()(T x, T y) {
+  bool operator()(T x, T y) thread {
     return x != y;
   }
   template <>
-  bool operator()(complex64_t x, complex64_t y) {
+  bool operator()(complex64_t x, complex64_t y) thread {
     return x.real != y.real || x.imag != y.imag;
   }
 };
 
 struct Power {
   template <typename T>
-  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T base, T exp) {
+  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T base, T exp)
+      thread {
     return metal::pow(base, exp);
   }
 
   template <typename T>
-  metal::enable_if_t<metal::is_integral_v<T>, T> operator()(T base, T exp) {
+  metal::enable_if_t<metal::is_integral_v<T>, T> operator()(T base, T exp)
+      thread {
     T res = 1;
     // Undefined to raise integer to negative power
     if (exp < 0) {
@@ -243,7 +252,7 @@ struct Power {
   }
 
   template <>
-  complex64_t operator()(complex64_t x, complex64_t y) {
+  complex64_t operator()(complex64_t x, complex64_t y) thread {
     if (x.real == 0 && x.imag == 0) {
       if (metal::isnan(y.real) || metal::isnan(y.imag)) {
         auto nan = metal::numeric_limits<float>::quiet_NaN();
@@ -261,70 +270,70 @@ struct Power {
 
 struct Subtract {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x - y;
   }
 };
 
 struct LogicalAnd {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x && y;
   };
 };
 
 struct LogicalOr {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x || y;
   };
 };
 
 struct BitwiseAnd {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x & y;
   };
 };
 
 struct BitwiseOr {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x | y;
   };
 };
 
 struct BitwiseXor {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x ^ y;
   };
 };
 
 struct LeftShift {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x << y;
   };
 };
 
 struct RightShift {
   template <typename T>
-  T operator()(T x, T y) {
+  T operator()(T x, T y) thread {
     return x >> y;
   };
 };
 
 struct ArcTan2 {
   template <typename T>
-  T operator()(T y, T x) {
+  T operator()(T y, T x) thread {
     return metal::precise::atan2(y, x);
   }
 };
 
 struct DivMod {
   template <typename T>
-  metal::array<T, 2> operator()(T x, T y) {
+  metal::array<T, 2> operator()(T x, T y) thread {
     return {FloorDivide{}(x, y), Remainder{}(x, y)};
   };
 };

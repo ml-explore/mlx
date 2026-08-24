@@ -34,7 +34,7 @@ METAL_FUNC void per_thread_row_reduce(
   for (int i = 0; i < blocks; i++) {
     for (int j = 0; j < N_WRITES; j++) {
       for (int i = 0; i < N_READS; i++) {
-        totals[j] = op(static_cast<U>(inputs[j][i]), totals[j]);
+        totals[j] = op(cast_to<U>(inputs[j][i]), totals[j]);
       }
 
       inputs[j] += lsize_x * N_READS;
@@ -46,13 +46,13 @@ METAL_FUNC void per_thread_row_reduce(
   if (index + N_READS <= extra) {
     for (int j = 0; j < N_WRITES; j++) {
       for (int i = 0; i < N_READS; i++) {
-        totals[j] = op(static_cast<U>(inputs[j][i]), totals[j]);
+        totals[j] = op(cast_to<U>(inputs[j][i]), totals[j]);
       }
     }
   } else {
     for (int j = 0; j < N_WRITES; j++) {
       for (int i = 0; index + i < extra; i++) {
-        totals[j] = op(static_cast<U>(inputs[j][i]), totals[j]);
+        totals[j] = op(cast_to<U>(inputs[j][i]), totals[j]);
       }
     }
   }
@@ -337,7 +337,8 @@ template <
 
   // lid.x * N_READS breaks the per_thread_row_reduce interface a bit. Maybe it
   // needs a small refactor.
-  in += elem_to_loc<IdxT>(out_idx, shape, strides, ndim) + lid.x * N_READS;
+  in +=
+      elem_to_loc<IdxT>(out_idx, shape, strides, ndim) + IdxT(lid.x) * N_READS;
 
   LoopedElemToLoc<NDIMS, IdxT, (NDIMS > 2)> loop(reduce_ndim);
   const device T* row;

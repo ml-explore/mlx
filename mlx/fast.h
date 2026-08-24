@@ -6,6 +6,7 @@
 #include <variant>
 
 #include "mlx/api.h"
+#include "mlx/backend/common/metal_kernel.h"
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {
@@ -52,6 +53,7 @@ MLX_API array scaled_dot_product_attention(
     const std::string& mask_mode = "",
     std::optional<array> mask_arr = {},
     const std::optional<array>& sinks = {},
+    bool force_fused = false,
     StreamOrDevice s = {});
 
 using TemplateArg = std::variant<int, bool, Dtype>;
@@ -75,7 +77,8 @@ MLX_API CustomKernelFunction metal_kernel(
     const std::string& source,
     const std::string& header = "",
     bool ensure_row_contiguous = true,
-    bool atomic_outputs = false);
+    bool atomic_outputs = false,
+    const CompileOptions& compile_options = {});
 
 MLX_API CustomKernelFunction cuda_kernel(
     const std::string& name,
