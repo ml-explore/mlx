@@ -4259,7 +4259,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
         # Test NaN handling: 0x7f encodes +nan, 0xff encodes -nan
-        nan_encodings = mx.array([0x7f, 0xff], dtype=mx.uint8)
+        nan_encodings = mx.array([0x7F, 0xFF], dtype=mx.uint8)
         decoded_np = np.array(mx.from_fp8(nan_encodings))
         self.assertTrue(np.isnan(decoded_np[0]).item())
         self.assertFalse(np.signbit(decoded_np[0]).item())  # positive sign bit
@@ -4267,7 +4267,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.signbit(decoded_np[1]).item())  # negative sign bit
 
         # Test max finite values stay finite: 0x7e -> +448, 0xfe -> -448
-        finite_encodings = mx.array([0x7e, 0xfe], dtype=mx.uint8)
+        finite_encodings = mx.array([0x7E, 0xFE], dtype=mx.uint8)
         decoded = mx.from_fp8(finite_encodings)
         self.assertTrue(mx.allclose(decoded, mx.array([448.0, -448.0])))
         self.assertFalse(mx.isnan(decoded[0]).item())
