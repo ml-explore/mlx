@@ -94,9 +94,6 @@ std::pair<std::vector<std::string>, std::string> parse(std::string subscripts) {
     }
     std::sort(rhs.begin(), rhs.end());
   }
-  // Split on commas keeping empty subscripts. An empty subscript is the
-  // scalar operand, so "i,->i" has two inputs and getline would drop the
-  // trailing one.
   std::vector<std::string> input_list;
   for (size_t start = 0;;) {
     auto pos = lhs.find(',', start);
