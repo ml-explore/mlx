@@ -20,23 +20,31 @@ inline fs::path relative_to_current_binary(const char* relative) {
 }
 
 inline fs::path cublas_dir() {
-  return cuda_bin_dir() ? fs::path(cuda_bin_dir())
-                        : relative_to_current_binary("../nvidia/cublas/bin");
+  if (const char* dir = cuda_bin_dir()) {
+    return fs::path(dir);
+  }
+  return relative_to_current_binary("../nvidia/cublas/bin");
 }
 
 fs::path load_nvrtc() {
-  fs::path nvrtc_dir = cuda_bin_dir()
-      ? fs::path(cuda_bin_dir())
-      : relative_to_current_binary("../nvidia/cuda_nvrtc/bin");
+  fs::path nvrtc_dir;
+  if (const char* dir = cuda_bin_dir()) {
+    nvrtc_dir = fs::path(dir);
+  } else {
+    nvrtc_dir = relative_to_current_binary("../nvidia/cuda_nvrtc/bin");
+  }
   // Internally nvrtc loads some libs dynamically, add to search dirs.
   ::AddDllDirectory(nvrtc_dir.c_str());
   return nvrtc_dir;
 }
 
 fs::path load_cudnn() {
-  fs::path cudnn_dir = cudnn_bin_dir()
-      ? fs::path(cudnn_bin_dir())
-      : relative_to_current_binary("../nvidia/cudnn/bin");
+  fs::path cudnn_dir;
+  if (const char* dir = cudnn_bin_dir()) {
+    cudnn_dir = fs::path(dir);
+  } else {
+    cudnn_dir = relative_to_current_binary("../nvidia/cudnn/bin");
+  }
   // Must load cudnn_graph64_9.dll before locating symbols, otherwise We would
   // get errors like "Invalid handle. Cannot load symbol cudnnCreate".
   for (const auto& dll : fs::directory_iterator(cudnn_dir)) {
@@ -66,6 +74,8 @@ FARPROC WINAPI delayload_helper(unsigned dliNotify, PDelayLoadInfo pdli) {
     } else if (dll.starts_with("nvrtc")) {
       static auto nvrtc_dir = load_nvrtc();
       mod = ::LoadLibraryW((nvrtc_dir / dll).c_str());
+    } else if (const char* dir = cuda_bin_dir()) {
+      mod = ::LoadLibraryW((fs::path(dir) / dll).c_str());
     }
   }
   return reinterpret_cast<FARPROC>(mod);
