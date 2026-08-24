@@ -140,6 +140,21 @@ class TestDtypes(mlx_tests.MLXTestCase):
                 self.assertListEqual(list(z.shape), list(x.shape))
                 self.assertListEqual(list(z.shape), list(y.shape))
 
+    def test_index_conversion(self):
+        for dtype in [
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+        ]:
+            with self.subTest(dtype=dtype):
+                self.assertEqual(operator.index(mx.array(2, dtype)), 2)
+                self.assertEqual(list(range(mx.array(3, dtype))), [0, 1, 2])
+
     def test_finfo(self):
         with self.assertRaises(ValueError):
             mx.finfo(mx.int32)
