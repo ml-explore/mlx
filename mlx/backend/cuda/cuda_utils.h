@@ -50,6 +50,12 @@ class CudaHandle {
     }
   }
 
+  Handle release() {
+    Handle handle = handle_;
+    handle_ = nullptr;
+    return handle;
+  }
+
   operator Handle() const {
     return handle_;
   }

@@ -13,6 +13,7 @@
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/dtype_utils.h"
+#include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 #include "mlx/utils.h"
@@ -213,5 +214,27 @@ void LUF::eval_gpu(
     std::vector<array>& outputs) {
   throw std::runtime_error("[LUF::eval_gpu] Metal LU factorization NYI.");
 }
+
+namespace fast {
+
+// There is no fused Metal cross entropy kernel yet
+bool CrossEntropy::use_fallback(Stream s) {
+  return true;
+}
+
+void CrossEntropy::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("[CrossEntropy::eval_gpu] Metal cross entropy NYI.");
+}
+
+void CrossEntropyVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error(
+      "[CrossEntropyVJP::eval_gpu] Metal cross entropy NYI.");
+}
+
+} // namespace fast
 
 } // namespace mlx::core

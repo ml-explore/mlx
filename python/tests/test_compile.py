@@ -1623,6 +1623,39 @@ class TestCompile(mlx_tests.MLXTestCase):
             x = mx.array([1, 2, 3], dtype)
             self.assertTrue(mx.array_equal(mx.compile(fun)(x), fun(x)))
 
+    def test_compiled_subnormal_bool_cast(self):
+        f32_sub = mx.array(np.array([0x00000001] * 4, dtype=np.uint32)).view(mx.float32)
+        f16_sub = mx.array(np.array([0x0001] * 4, dtype=np.uint16)).view(mx.float16)
+        bf16_sub = mx.array(np.array([0x0001] * 4, dtype=np.uint16)).view(mx.bfloat16)
+
+        # A single-op compile does not fuse; the fused path needs >= 2 ops.
+        fn = mx.compile(lambda x: mx.broadcast_to(x, (2, 4)).astype(mx.bool_))
+        for sub in (f32_sub, f16_sub, bf16_sub):
+            self.assertTrue(mx.all(fn(sub)).item())
+
+    def test_compile_different_log_bases(self):
+        # The logs are intermediates, since outputs are not simplified.
+        def entropies(p):
+            nats = -mx.sum(p * mx.log(p))
+            bits = -mx.sum(p * mx.log2(p))
+            return mx.stack([nats, bits])
+
+        p = np.array([0.1, 0.2, 0.3, 0.4], dtype=np.float32)
+        expected = np.array(
+            [-(p * np.log(p)).sum(), -(p * np.log2(p)).sum()], dtype=np.float32
+        )
+        out = mx.compile(entropies)(mx.array(p))
+        self.assertTrue(np.allclose(out, expected, atol=1e-5))
+
+    def test_compile_equal_nan(self):
+        def fun(x):
+            return mx.stack(
+                [mx.array_equal(x, x), mx.array_equal(x, x, equal_nan=True)]
+            )
+
+        x = mx.array([1.0, float("nan"), 3.0])
+        self.assertTrue(mx.array_equal(mx.compile(fun)(x), mx.array([False, True])))
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

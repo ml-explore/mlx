@@ -985,9 +985,9 @@ class Equal : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
 
+  bool is_equivalent(const Primitive& other) const override;
   const char* name() const override {
     if (equal_nan_) {
       return "NaNEqual";
@@ -1335,9 +1335,9 @@ class Log : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
 
+  bool is_equivalent(const Primitive& other) const override;
   Base state() const {
     return base_;
   };

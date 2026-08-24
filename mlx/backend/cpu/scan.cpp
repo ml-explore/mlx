@@ -191,6 +191,19 @@ void scan_op(
   }
 }
 
+template <typename U>
+U scan_init(const Dtype& dtype, bool maximum) {
+  constexpr auto inf = std::numeric_limits<float>::infinity();
+  if constexpr (std::is_same_v<U, complex64_t>) {
+    return maximum ? complex64_t{inf, inf} : complex64_t{-inf, -inf};
+  } else if (issubdtype(dtype, floating)) {
+    return maximum ? static_cast<U>(inf) : static_cast<U>(-inf);
+  } else {
+    return maximum ? std::numeric_limits<U>::max()
+                   : std::numeric_limits<U>::min();
+  }
+}
+
 template <typename T, typename U>
 void scan_dispatch(
     Scan::ReduceType rtype,
@@ -221,9 +234,7 @@ void scan_dispatch(
         }
         return x < y ? x : y;
       };
-      auto init = (issubdtype(in.dtype(), floating))
-          ? static_cast<U>(std::numeric_limits<float>::infinity())
-          : std::numeric_limits<U>::max();
+      auto init = scan_init<U>(in.dtype(), /* maximum = */ true);
       scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
       break;
     }
@@ -236,9 +247,7 @@ void scan_dispatch(
         }
         return x < y ? y : x;
       };
-      auto init = (issubdtype(in.dtype(), floating))
-          ? static_cast<U>(-std::numeric_limits<float>::infinity())
-          : std::numeric_limits<U>::min();
+      auto init = scan_init<U>(in.dtype(), /* maximum = */ false);
       scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
       break;
     }
@@ -246,7 +255,7 @@ void scan_dispatch(
       auto op = [](U a, T b) {
         return detail::LogAddExp{}(a, static_cast<U>(b));
       };
-      auto init = (issubdtype(in.dtype(), floating))
+      auto init = (issubdtype(in.dtype(), inexact))
           ? static_cast<U>(-std::numeric_limits<float>::infinity())
           : std::numeric_limits<U>::min();
       scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);

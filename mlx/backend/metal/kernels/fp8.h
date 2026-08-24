@@ -78,3 +78,14 @@ struct fp8_e8m0 {
 
   uint8_t bits;
 };
+
+// Smallest E8M0 >= x. Scales are amax/max_element, so rounding one down
+// leaves the block's largest elements outside the element range, where they
+// saturate. Matches the CUDA backend, which rounds up via cutlass ue8m0.
+inline float mx_scale_round_up(float x) {
+  fp8_e8m0 s(x);
+  if (s.bits < 0xFE && float(s) < x) {
+    s.bits += 1;
+  }
+  return float(s);
+}
