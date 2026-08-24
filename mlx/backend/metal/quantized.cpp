@@ -830,8 +830,9 @@ void qmm_nax(
 
   int wm = 2;
   int wn = 2;
-  // Use smaller bm when one block covers all of M.
-  int bm = (M <= 32) ? 32 : 64;
+  // Use smaller bm when one block covers all of M. Only qmm_t_nax has a 32-row
+  // instantiation.
+  int bm = (transpose && M <= 32) ? 32 : 64;
   int bn = 64;
   int bk = 64;
   MTL::Size group_dims(32, wn, wm);
@@ -1038,7 +1039,8 @@ void qmm(
     const std::string& mode) {
   bool has_nax_kernel =
       metal::is_nax_available() && (transpose || mode == "affine");
-  if (has_nax_kernel && transpose && (K % 64 == 0) &&
+  bool nax_aligned = (K % 64 == 0) && (transpose || N % 64 == 0);
+  if (has_nax_kernel && nax_aligned &&
       (env::enable_tf32() || x.dtype() != float32)) {
     return qmm_nax(
         /* const array& x = */ x,
