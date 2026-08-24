@@ -4,7 +4,7 @@ requires = [
   "cmake>=3.25",
   "ninja",
   "mlx>=0.32.0",
-  "nanobind==2.13.0",
+  "nanobind==2.15.0",
 ]
 build-backend = "setuptools.build_meta"
 
