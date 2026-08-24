@@ -191,12 +191,8 @@ void scan_op(
   }
 }
 
-// The identity an exclusive min or max scan starts from. std::numeric_limits
-// is not specialized for complex64_t, so complex used to start from zero,
-// which then won every comparison against a negative real part. The Metal and
-// CUDA backends already use an infinite pair here.
 template <typename U>
-U scan_extreme(const Dtype& dtype, bool maximum) {
+U scan_init(const Dtype& dtype, bool maximum) {
   constexpr auto inf = std::numeric_limits<float>::infinity();
   if constexpr (std::is_same_v<U, complex64_t>) {
     return maximum ? complex64_t{inf, inf} : complex64_t{-inf, -inf};
@@ -238,7 +234,7 @@ void scan_dispatch(
         }
         return x < y ? x : y;
       };
-      auto init = scan_extreme<U>(in.dtype(), /* maximum = */ true);
+      auto init = scan_init<U>(in.dtype(), /* maximum = */ true);
       scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
       break;
     }
@@ -251,7 +247,7 @@ void scan_dispatch(
         }
         return x < y ? y : x;
       };
-      auto init = scan_extreme<U>(in.dtype(), /* maximum = */ false);
+      auto init = scan_init<U>(in.dtype(), /* maximum = */ false);
       scan_op<T, U>(in, out, axis, reverse, inclusive, op, init);
       break;
     }
