@@ -286,20 +286,24 @@ void GatedDeltaUpdateVJP::eval_gpu(
   int Hv = v.shape(2);
   int Dv = v.shape(3);
 
+  // VJP implementation: 16 = chunked NAX, anything else = sequential.
+  const char* vjp_chunk_env = std::getenv("GATED_DELTA_VJP_CHUNK");
+  int C = vjp_chunk_env ? std::stoi(vjp_chunk_env) : 0;
+  if (C == 16 && !metal::is_nax_available()) {
+    C = 0;
+  }
+
+  // No checkpoint interval: the chunked path stores one state per chunk, the
+  // sequential path one state per timestep.
+  int n_chunks = (T + 15) / 16;
+  int n_states = (C == 16) ? n_chunks : T;
+
   auto& dq = outputs[0];
   auto& dk = outputs[1];
   auto& dv = outputs[2];
   auto& dg = outputs[3];
   auto& db = outputs[4];
   auto& dh = outputs[5];
-
-  // PRINT_ARR(q)
-  // PRINT_ARR(dq)
-  // PRINT_ARR(dk)
-  // PRINT_ARR(dv)
-  // PRINT_ARR(dg)
-  // PRINT_ARR(db)
-  // PRINT_ARR(dh)
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -317,95 +321,182 @@ void GatedDeltaUpdateVJP::eval_gpu(
   fill_gpu(array(0, db.dtype()), db, s);
   fill_gpu(array(0, dh.dtype()), dh, s);
 
-  array state_cache(
-      {B, Hv, T, Dv, Dk},
-      float32,
-      nullptr,
-      {}); // store intermidiate state values. For now *ALL* of them
+  array state_cache({B, Hv, n_states, Dv, Dk}, float32, nullptr, {});
   state_cache.set_data(allocator::malloc(state_cache.nbytes()));
   fill_gpu(array(0, state_cache.dtype()), state_cache, s);
-
   compute_encoder.add_temporary(state_cache);
 
-  array scratch(
-      {1},
-      float32,
-      nullptr,
-      {}); // store intermidiate state values. For now *ALL* of them
+  array scratch({1}, float32, nullptr, {});
   scratch.set_data(allocator::malloc(scratch.nbytes()));
   fill_gpu(array(0, scratch.dtype()), scratch, s);
-
   compute_encoder.add_temporary(scratch);
 
-  // First pass: Compute the state again
   std::string suffix = get_type_string(q.dtype()) + "_" + std::to_string(Dk) +
       "_" + std::to_string(Dv) + "_" + std::to_string(Hk) + "_" +
       std::to_string(Hv);
 
-  {
-    std::string kernel_name = "seq_gated_delta_";
-    std::string base_name = kernel_name + suffix;
-    std::string hash_name = base_name + "_save";
+  switch (C) {
+    case 16: {
+      // Forward save pass: NAX chunked kernel, one checkpoint per chunk.
+      {
+        std::string base_name =
+            "gated_delta_fused_nax_" + suffix + "_" + std::to_string(C);
+        std::string hash_name = base_name + "_save";
 
-    bool save_state = true;
-    metal::MTLFCList func_consts = {
-        {&save_state, MTL::DataType::DataTypeBool, 200},
-    };
+        bool save_state = true;
+        metal::MTLFCList func_consts = {
+            {&save_state, MTL::DataType::DataTypeBool, 200},
+        };
 
-    auto delta_kernel =
-        get_gated_delta_kernel(d, base_name, hash_name, func_consts);
+        auto delta_kernel =
+            get_gated_delta_nax_kernel(d, base_name, hash_name, func_consts);
 
-    compute_encoder.set_compute_pipeline_state(delta_kernel);
+        compute_encoder.set_compute_pipeline_state(delta_kernel);
+        compute_encoder.set_input_array(q, 0);
+        compute_encoder.set_input_array(k, 1);
+        compute_encoder.set_input_array(v, 2);
+        compute_encoder.set_input_array(h0, 3);
+        compute_encoder.set_input_array(g, 4);
+        compute_encoder.set_input_array(beta, 5);
+        compute_encoder.set_output_array(scratch, 6);
+        compute_encoder.set_output_array(scratch, 7);
+        compute_encoder.set_bytes(T, 8);
+        compute_encoder.set_output_array(state_cache, 9);
 
-    compute_encoder.set_input_array(q, 0);
-    compute_encoder.set_input_array(k, 1);
-    compute_encoder.set_input_array(v, 2);
-    compute_encoder.set_input_array(g, 3);
-    compute_encoder.set_input_array(beta, 4);
-    compute_encoder.set_input_array(h0, 5);
-    compute_encoder.set_bytes(T, 6);
-    compute_encoder.set_output_array(scratch, 7);
-    compute_encoder.set_output_array(scratch, 8);
-    compute_encoder.set_output_array(state_cache, 9);
+        auto grid = MTL::Size(32, Dv / 16, B * Hv);
+        auto threads = MTL::Size(32, 4, 1);
+        compute_encoder.dispatch_threads(grid, threads);
+      }
 
-    auto grid = MTL::Size(32, Dv, B * Hv);
-    auto threads = MTL::Size(32, 4, 1);
-    compute_encoder.dispatch_threads(grid, threads);
-  }
+      // Backward pass: NAX chunked VJP.
+      {
+        std::string base_name =
+            "gated_delta_vjp_fused_nax_" + suffix + "_" + std::to_string(C);
+        std::string hash_name = base_name;
 
-  // Backward pass
+        metal::MTLFCList func_consts = {};
 
-  {
-    std::string kernel_name = "seq_gated_delta_vjp_";
-    std::string base_name = kernel_name + suffix;
-    std::string hash_name = base_name;
+        auto delta_kernel = get_gated_delta_vjp_nax_kernel(
+            d, base_name, hash_name, func_consts);
 
-    metal::MTLFCList func_consts = {};
+        compute_encoder.set_compute_pipeline_state(delta_kernel);
+        compute_encoder.set_input_array(q, 0);
+        compute_encoder.set_input_array(k, 1);
+        compute_encoder.set_input_array(v, 2);
+        compute_encoder.set_input_array(g, 3);
+        compute_encoder.set_input_array(beta, 4);
+        compute_encoder.set_input_array(cot_o, 5);
+        compute_encoder.set_input_array(cot_h, 6);
+        compute_encoder.set_input_array(state_cache, 7);
+        compute_encoder.set_bytes(T, 8);
+        compute_encoder.set_output_array(dq, 9);
+        compute_encoder.set_output_array(dk, 10);
+        compute_encoder.set_output_array(dv, 11);
+        compute_encoder.set_output_array(dg, 12);
+        compute_encoder.set_output_array(db, 13);
+        compute_encoder.set_output_array(dh, 14);
 
-    auto delta_kernel =
-        get_gated_delta_vjp_kernel(d, base_name, hash_name, func_consts);
+        auto grid = MTL::Size(32, Dv / 16, B * Hv);
+        auto threads = MTL::Size(32, 4, 1);
+        compute_encoder.dispatch_threads(grid, threads);
+      }
 
-    compute_encoder.set_compute_pipeline_state(delta_kernel);
+      // The chunked kernel leaves dL/dgamma in dg. Convert it to dL/dg with a
+      // per-chunk reverse cumulative sum followed by the 1/g factor.
+      {
+        int n_total = B * Hv;
 
-    compute_encoder.set_input_array(q, 0);
-    compute_encoder.set_input_array(k, 1);
-    compute_encoder.set_input_array(v, 2);
-    compute_encoder.set_input_array(g, 3);
-    compute_encoder.set_input_array(beta, 4);
-    compute_encoder.set_input_array(cot_o, 5);
-    compute_encoder.set_input_array(cot_h, 6);
-    compute_encoder.set_input_array(state_cache, 7);
-    compute_encoder.set_bytes(T, 8);
-    compute_encoder.set_output_array(dq, 9);
-    compute_encoder.set_output_array(dk, 10);
-    compute_encoder.set_output_array(dv, 11);
-    compute_encoder.set_output_array(dg, 12);
-    compute_encoder.set_output_array(db, 13);
-    compute_encoder.set_output_array(dh, 14);
+        std::string base_name = "gated_delta_dgamma_to_dg_" +
+            get_type_string(q.dtype()) + "_" + std::to_string(C);
+        std::string hash_name = base_name;
 
-    auto grid = MTL::Size(32, Dv, B * Hv);
-    auto threads = MTL::Size(32, 4, 1);
-    compute_encoder.dispatch_threads(grid, threads);
+        metal::MTLFCList func_consts = {};
+
+        auto dgamma_kernel = get_gated_delta_vjp_nax_kernel(
+            d, base_name, hash_name, func_consts);
+
+        compute_encoder.set_compute_pipeline_state(dgamma_kernel);
+        compute_encoder.set_input_array(g, 0);
+        compute_encoder.set_output_array(dg, 1);
+        compute_encoder.set_bytes(T, 2);
+        compute_encoder.set_bytes(Hv, 3);
+        compute_encoder.set_bytes(n_total, 4);
+
+        auto grid = MTL::Size(n_total, n_chunks, 1);
+        auto threads = MTL::Size(std::min(n_total, 32), 1, 1);
+        compute_encoder.dispatch_threads(grid, threads);
+      }
+      break;
+    }
+    case 1:
+    case 0: {
+      // Forward save pass: sequential kernel, one state per timestep.
+      {
+        std::string base_name = "seq_gated_delta_" + suffix;
+        std::string hash_name = base_name + "_save";
+
+        bool save_state = true;
+        metal::MTLFCList func_consts = {
+            {&save_state, MTL::DataType::DataTypeBool, 200},
+        };
+
+        auto delta_kernel =
+            get_gated_delta_kernel(d, base_name, hash_name, func_consts);
+
+        compute_encoder.set_compute_pipeline_state(delta_kernel);
+        compute_encoder.set_input_array(q, 0);
+        compute_encoder.set_input_array(k, 1);
+        compute_encoder.set_input_array(v, 2);
+        compute_encoder.set_input_array(g, 3);
+        compute_encoder.set_input_array(beta, 4);
+        compute_encoder.set_input_array(h0, 5);
+        compute_encoder.set_bytes(T, 6);
+        compute_encoder.set_output_array(scratch, 7);
+        compute_encoder.set_output_array(scratch, 8);
+        compute_encoder.set_output_array(state_cache, 9);
+
+        auto grid = MTL::Size(32, Dv, B * Hv);
+        auto threads = MTL::Size(32, 4, 1);
+        compute_encoder.dispatch_threads(grid, threads);
+      }
+
+      // Backward pass: sequential VJP.
+      {
+        std::string base_name = "seq_gated_delta_vjp_" + suffix;
+        std::string hash_name = base_name;
+
+        metal::MTLFCList func_consts = {};
+
+        auto delta_kernel =
+            get_gated_delta_vjp_kernel(d, base_name, hash_name, func_consts);
+
+        compute_encoder.set_compute_pipeline_state(delta_kernel);
+        compute_encoder.set_input_array(q, 0);
+        compute_encoder.set_input_array(k, 1);
+        compute_encoder.set_input_array(v, 2);
+        compute_encoder.set_input_array(g, 3);
+        compute_encoder.set_input_array(beta, 4);
+        compute_encoder.set_input_array(cot_o, 5);
+        compute_encoder.set_input_array(cot_h, 6);
+        compute_encoder.set_input_array(state_cache, 7);
+        compute_encoder.set_bytes(T, 8);
+        compute_encoder.set_output_array(dq, 9);
+        compute_encoder.set_output_array(dk, 10);
+        compute_encoder.set_output_array(dv, 11);
+        compute_encoder.set_output_array(dg, 12);
+        compute_encoder.set_output_array(db, 13);
+        compute_encoder.set_output_array(dh, 14);
+
+        auto grid = MTL::Size(32, Dv, B * Hv);
+        auto threads = MTL::Size(32, 4, 1);
+        compute_encoder.dispatch_threads(grid, threads);
+      }
+      break;
+    }
+    default: {
+      throw std::runtime_error(
+          "NYI: Only sequential and chunk size 16 are supported for vjp");
+    }
   }
 }
 

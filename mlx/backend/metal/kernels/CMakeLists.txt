@@ -171,6 +171,8 @@ if(NOT MLX_METAL_JIT)
     build_kernel(quantized_nax quantized_nax.h ${STEEL_NAX_HEADERS})
     build_kernel(gated_delta_update_nax gated_delta_update_nax.h
                  ${STEEL_NAX_HEADERS})
+    build_kernel(gated_delta_update_nax_vjp gated_delta_update_nax_vjp.h
+                 ${STEEL_NAX_HEADERS})
     build_kernel(fp_quantized_nax fp4.h fp8.h fp_quantized_nax.h
                  ${STEEL_NAX_HEADERS})
 

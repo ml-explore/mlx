@@ -102,6 +102,7 @@ if(MLX_METAL_JIT)
 
     make_jit_source(steel/attn/kernels/steel_attention_nax)
     make_jit_source(gated_delta_update_nax)
+    make_jit_source(gated_delta_update_nax_vjp)
 
   else()
     message(

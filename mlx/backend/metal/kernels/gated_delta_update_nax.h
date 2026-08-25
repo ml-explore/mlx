@@ -19,7 +19,7 @@ using namespace mpp::tensor_ops;
 #define SUB_NAX(TILE0, TILE1, TILE2)                                \
   {                                                                 \
     STEEL_PRAGMA_UNROLL                                             \
-    for (short _i = 0; _i < decltype(TILE0)::kElemsPerFrag; _i++) { \
+    for (short _i = 0; _i < decltype(TILE0)::kElemsPerTile; _i++) { \
       AT_NAX(TILE0, _i) = AT_NAX(TILE1, _i) - AT_NAX(TILE2, _i);    \
     }                                                               \
   }
@@ -27,7 +27,7 @@ using namespace mpp::tensor_ops;
 #define ADD_NAX(TILE0, TILE1, TILE2)                                \
   {                                                                 \
     STEEL_PRAGMA_UNROLL                                             \
-    for (short _i = 0; _i < decltype(TILE0)::kElemsPerFrag; _i++) { \
+    for (short _i = 0; _i < decltype(TILE0)::kElemsPerTile; _i++) { \
       AT_NAX(TILE0, _i) = AT_NAX(TILE1, _i) + AT_NAX(TILE2, _i);    \
     }                                                               \
   }
@@ -56,6 +56,15 @@ using namespace mpp::tensor_ops;
       AT_NAX(TILE0, _i) *=                                                 \
           metal::fast::exp((S)[mlx::steel::BaseNAXFrag::get_coord(_w).y]); \
     }                                                                      \
+  }
+
+#define TRIL_NAX(TILE0, TILE1)                                                 \
+  {                                                                            \
+    STEEL_PRAGMA_UNROLL                                                        \
+    for (short _i = 0; _i < decltype(TILE0)::kElemsPerFrag; _i++) {            \
+      const short2 _c = mlx::steel::BaseNAXFrag::get_coord(_i); /* {fn, fm} */ \
+      AT_NAX(TILE0, _i) = (_c.x >= _c.y) ? 0.f : AT_NAX(TILE1, _i);            \
+    }                                                                          \
   }
 
 #define SCALE_BETA_NAX(TILE0, BETA2)                                \
@@ -329,6 +338,11 @@ METAL_FUNC static constexpr void mman(
       B.frag_at(0, (BO)),                                               \
       B.frag_at(0, (BO) + 1),                                           \
       metal::bool_constant<TB>{});
+///////////////////////////////////////////////////////////////////////////////
+// Function constants
+///////////////////////////////////////////////////////////////////////////////
+
+constant bool save_state_cache [[function_constant(200)]];
 
 template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 [[kernel]] void gated_delta_fused_nax(
@@ -341,6 +355,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     device InT* y [[buffer(6)]],
     device float* state_out [[buffer(7)]],
     constant int& T [[buffer(8)]],
+    device float* state_cache [[buffer(9)]], // [B, Hv, n_chunks, Dv, Dk]
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
@@ -372,6 +387,10 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
   // state_in, state_out: [B, Hv, Dv, Dk]
   auto i_state = state_in + (n * Dv + dv_idx) * Dk;
   auto o_state = state_out + (n * Dv + dv_idx) * Dk;
+
+  // state cache, only for backward: one checkpoint per chunk
+  const int n_chunks = (T + C - 1) / C;
+  auto c_state = state_cache + (n * n_chunks * Dv + dv_idx) * Dk;
 
   threadgroup float gamma_all[C * 4];
   threadgroup float* gamma = gamma_all + sg_id * C;
@@ -416,6 +435,12 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
         tile.load(src, ld);
       }
     };
+
+    // Checkpoint the state entering this chunk before anything mutates it.
+    if (save_state_cache) {
+      S_tile.store(c_state, Dk);
+      c_state += Dv * Dk;
+    }
 
     float g_val = (thread_index_in_simdgroup < (uint)valid_rows)
         ? metal::fast::log(
@@ -485,14 +510,16 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     out_tile = tmp_tile;
     MMA16x16x16(out_tile, 0, QKt_tile, false, 0, delta_tile, false, 0);
 
-    STEEL_PRAGMA_UNROLL
-    for (short _i = 0; _i < decltype(out_tile)::kElemsPerFrag; _i++) {
-      const short2 _c = mlx::steel::BaseNAXFrag::get_coord(_i); // {fn, fm}
-      const short _fn = _c.x;
-      const short _fm = _c.y;
-      if (_fm < valid_rows) {
-        y[_fm * Hv * Dv + dv_idx + _fn] =
-            static_cast<InT>(AT_NAX(out_tile, _i));
+    if (!save_state_cache) {
+      STEEL_PRAGMA_UNROLL
+      for (short _i = 0; _i < decltype(out_tile)::kElemsPerFrag; _i++) {
+        const short2 _c = mlx::steel::BaseNAXFrag::get_coord(_i); // {fn, fm}
+        const short _fn = _c.x;
+        const short _fm = _c.y;
+        if (_fm < valid_rows) {
+          y[_fm * Hv * Dv + dv_idx + _fn] =
+              static_cast<InT>(AT_NAX(out_tile, _i));
+        }
       }
     }
 
@@ -519,5 +546,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     process_chunk(short(T - t), metal::true_type{});
   }
 
-  S_tile.store(o_state, Dk);
+  if (!save_state_cache) {
+    S_tile.store(o_state, Dk);
+  }
 }

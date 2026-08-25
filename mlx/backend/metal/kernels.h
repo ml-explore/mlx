@@ -435,6 +435,12 @@ MTL::ComputePipelineState* get_gated_delta_vjp_kernel(
     const std::string& hash_name,
     const metal::MTLFCList& func_consts);
 
+MTL::ComputePipelineState* get_gated_delta_vjp_nax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts);
+
 // Create a GPU kernel template definition for JIT compilation
 template <typename... Args>
 std::string get_template_definition(
