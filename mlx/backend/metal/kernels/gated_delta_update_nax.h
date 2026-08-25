@@ -419,13 +419,17 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
 
     float g_val = (thread_index_in_simdgroup < (uint)valid_rows)
         ? metal::fast::log(
-              metal::max(g_[thread_index_in_simdgroup * Hv + hv_idx], 1e-6))
+              metal::max(
+                  static_cast<float>(
+                      g_[thread_index_in_simdgroup * Hv + hv_idx]),
+                  1e-6f))
         : 0.0f;
 
     auto gamma_val = simd_prefix_inclusive_sum(g_val);
     if (thread_index_in_simdgroup < C) {
       gamma[thread_index_in_simdgroup] = static_cast<float>(gamma_val);
     }
+    simdgroup_barrier(mem_flags::mem_threadgroup);
 
     beta_fm[0] = (fm < valid_rows) ? beta_[fm * Hv + hv_idx] : 0.0f;
     const short fm1 = fm + mlx::steel::BaseNAXFrag::kElemRowsJump;

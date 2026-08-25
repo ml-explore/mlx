@@ -401,15 +401,15 @@ void init_fast(nb::module_& parent_module) {
             Chunked gated delta network forward pass.
 
             Args:
-                q: Queries [B, H, T, Dk]
-                k: Keys [B, H, T, Dk]
-                v: Values [B, H, T, Dv]
-                gamma: 
-                beta: Delta update rates [B, H, T]
-                initial_state: Optional initial hidden state [B, H, Dk, Dv]
+                q: Queries [B, T, Hk, Dk]
+                k: Keys [B, T, Hk, Dk]
+                v: Values [B, T, Hv, Dv]
+                gamma: Decay rate in linear space [B, T, Hv]
+                beta: Delta update rates [B, T, Hv]
+                initial_state: Optional initial hidden state [B, T, Hk, Dv]
                 mask: Optional
             Returns:
-                Tuple of (output [B, H, T, Dv], final_state [B, H, Dk, Dv])
+                Tuple of (output [B, T, Hv, Dv], final_state [B, T, Hk, Dv])
         )");
 
   m.def(

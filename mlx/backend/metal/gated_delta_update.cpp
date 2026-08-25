@@ -39,8 +39,6 @@ bool GatedDeltaUpdate::use_fallback(
   }
 
   return false;
-
-  return false;
 }
 
 inline array
@@ -100,8 +98,6 @@ void GatedDeltaUpdate::eval_gpu(
 
   out.set_data(allocator::malloc(out.nbytes()));
   hf.set_data(allocator::malloc(hf.nbytes()));
-
-  fill_gpu(array(0, out.dtype()), out, s);
 
   switch (C) {
     case 16: {
