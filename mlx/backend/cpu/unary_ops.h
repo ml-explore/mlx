@@ -155,7 +155,8 @@ struct FromFP8 {
   template <int N>
   Simd<float, N> operator()(Simd<uint8_t, N> x) {
     auto v = Simd<uint16_t, N>(x & 127);
-    auto u = (v << 7) | (((v + 1) >> 7) << 14);
+    auto sign_bit = Simd<uint16_t, N>((x & 128)) << 8;
+    auto u = (v << 7) | (((v + 1) >> 7) << 14) | sign_bit;
     Simd<float, N> out;
     if constexpr (simd::max_size<float16_t> >= N) {
       auto converted = *(Simd<float16_t, N>*)(&u);
@@ -166,8 +167,7 @@ struct FromFP8 {
         out[i] = converted * 256.0;
       }
     }
-    auto sign = Simd<bool, N>(x & 128);
-    return select(sign, -out, out);
+    return out;
   }
   float operator()(uint8_t x) {
     return (*this)(Simd<uint8_t, 1>(x)).value;
