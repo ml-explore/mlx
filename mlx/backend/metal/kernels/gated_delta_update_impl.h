@@ -72,37 +72,16 @@
     AT(M, 1) = static_cast<float>((SRC)[(fn + 1) * (LD) + fm]);                \
   }
 
-// non-transposed load
-#define LOAD_M(M, SRC, LD, B)                                                  \
-  if constexpr (B) {                                                           \
-    AT(M, 0) =                                                                 \
-        static_cast<float>((fm < valid_rows) ? ((SRC)[fm * (LD) + fn]) : 0.f); \
-    AT(M, 1) = static_cast<float>(                                             \
-        (fm < valid_rows) ? ((SRC)[fm * (LD) + fn + 1]) : 0.f);                \
-  } else {                                                                     \
-    AT(M, 0) = static_cast<float>((SRC)[fm * (LD) + fn]);                      \
-    AT(M, 1) = static_cast<float>((SRC)[fm * (LD) + fn + 1]);                  \
-  }
-
-// transposed load
-#define LOAD_MT(M, SRC, LD, B)                                                 \
-  if constexpr (B) {                                                           \
-    AT(M, 0) =                                                                 \
-        static_cast<float>((fn < valid_rows) ? ((SRC)[fn * (LD) + fm]) : 0.f); \
-    AT(M, 1) = static_cast<float>(                                             \
-        (fn + 1 < valid_rows) ? ((SRC)[(fn + 1) * (LD) + fm]) : 0.f);          \
-  } else {                                                                     \
-    AT(M, 0) = static_cast<float>((SRC)[fn * (LD) + fm]);                      \
-    AT(M, 1) = static_cast<float>((SRC)[(fn + 1) * (LD) + fm]);                \
-  }
-
 #define PROCESS_CHUNK_SG(B, S_tile, VALID)                                     \
   {                                                                            \
     const short valid_rows = (VALID);                                          \
                                                                                \
     float g_val = (thread_index_in_simdgroup < (uint)valid_rows)               \
         ? metal::fast::log(                                                    \
-              metal::max(g_[thread_index_in_simdgroup * Hv + hv_idx], 1e-6))   \
+              metal::max(                                                      \
+                  static_cast<float>(                                          \
+                      g_[thread_index_in_simdgroup * Hv + hv_idx]),            \
+                  1e-6f))                                                      \
         : 0.0f;                                                                \
                                                                                \
     float gamma_val = simd_prefix_inclusive_sum(g_val);                        \
@@ -110,6 +89,7 @@
     if (thread_index_in_simdgroup < C) {                                       \
       gamma[thread_index_in_simdgroup] = gamma_val;                            \
     }                                                                          \
+    simdgroup_barrier(mem_flags::mem_threadgroup);                             \
                                                                                \
     float gamma_fm = metal::fast::exp(gamma[fm]);                              \
     float gamma_fmdfn = metal::fast::exp(gamma[fm] - gamma[fn]);               \
