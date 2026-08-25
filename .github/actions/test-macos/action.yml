@@ -47,7 +47,7 @@ runs:
           echo "::endgroup::"
 
           echo "::group::Run Python tests"
-          python -m unittest discover -v python/tests
+          uv run python/tests/run.py -v
           echo "::endgroup::"
 
           if ${{ inputs.toolkit != 'cpu' }} ; then
