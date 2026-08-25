@@ -193,6 +193,31 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
                 mx.allclose(hf_ref, hf, atol=1e-4, rtol=1e-4), msg="State " + msg
             )
 
+    def test_gated_delta_dtypes(self):
+        dtypes = [mx.bfloat16, mx.float32]
+        streams = [mx.cpu, mx.gpu] if mx.is_available(mx.gpu) else [mx.cpu]
+        for stream in streams:
+            for dtype in dtypes:
+                for dims in [self.base_dims]:
+
+                    B, Hk, Hv, T, Dk, Dv = dims
+
+                    q = mx.random.normal(shape=(B, T, Hk, Dk), dtype=dtype)
+                    k = mx.random.normal(shape=(B, T, Hk, Dk), dtype=dtype)
+                    k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+                    v = mx.random.normal(shape=(B, T, Hv, Dv), dtype=dtype)
+                    g = mx.random.uniform(shape=(B, T, Hv), dtype=dtype)
+                    b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv), dtype=dtype))
+                    h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
+
+                    out, hf = mx.fast.gated_delta_update(
+                        q, k, v, g, b, initial_state=h0, stream=stream
+                    )
+                    mx.eval(out, hf)
+                    msg = f"Output dtype mismatch on Dimensions: {dims}"
+                    self.assertTrue(dtype == out.dtype, msg="Out " + msg)
+                    self.assertTrue(hf.dtype == mx.float32, msg="State " + msg)
+
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_gated_delta_sequential(self):
         os.environ["GATED_DELTA_CHUNK"] = "0"
