@@ -155,7 +155,7 @@ struct FromFP8 {
   template <int N>
   Simd<float, N> operator()(Simd<uint8_t, N> x) {
     auto v = Simd<uint16_t, N>(x & 127);
-    auto sign_bit = Simd<uint16_t, N>((x & 128)) << 8;
+    auto sign_bit = Simd<uint16_t, N>((x >> 7) & 1) << 15;
     auto u = (v << 7) | (((v + 1) >> 7) << 14) | sign_bit;
     Simd<float, N> out;
     if constexpr (simd::max_size<float16_t> >= N) {
