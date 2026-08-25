@@ -422,6 +422,11 @@ struct PyCompiledFun {
 
     AttachedData(nb::object output_structure_, int num_outputs_)
         : output_structure(output_structure_), num_outputs(num_outputs_) {}
+
+    ~AttachedData() {
+      nb::gil_scoped_acquire gil;
+      output_structure.reset();
+    }
   };
 
   PyCompiledFun(
