@@ -468,6 +468,15 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.dtype, mx.int32)
         self.assertEqual(x.tolist(), [1, 2, 3])
 
+    def test_matrix_transpose(self):
+        x = mx.array([[1, 2], [3, 4]])
+        self.assertEqual(x.mT.tolist(), [[1, 3], [2, 4]])
+
+        x = mx.arange(24).reshape((2, 3, 4))
+        self.assertEqual(x.mT.shape, (2, 4, 3))
+        self.assertEqualArray(x.mT, x.transpose((0, 2, 1)))
+        self.assertEqualArray(x.mT.mT, x)
+
     def test_bool_conversion(self):
         x = mx.array(True)
         self.assertTrue(x)
