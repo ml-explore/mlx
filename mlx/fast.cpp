@@ -1071,11 +1071,12 @@ std::vector<array> gated_delta_update(
 
   auto fallback = [B, T, Hk, Dk, Hv, Dv, has_mask, s](
                       std::vector<array> inputs) {
-    auto q = astype(inputs[0], float32, s);
-    auto k = astype(inputs[1], float32, s);
-    auto v = astype(inputs[2], float32, s);
-    auto g = astype(inputs[3], float32, s);
-    auto beta = astype(inputs[4], float32, s);
+    auto out_dtype = inputs[0].dtype();
+    auto q = inputs[0];
+    auto k = inputs[1];
+    auto v = inputs[2];
+    auto g = inputs[3];
+    auto beta = inputs[4];
     auto state = astype(inputs[5], float32, s);
 
     if (Hv != Hk) {
@@ -1137,7 +1138,7 @@ std::vector<array> gated_delta_update(
         auto out_mask = expand_dims(mask_t, {-1, -2}, s);
         o_t = where(out_mask, o_t, zero, s);
       }
-      outputs.push_back(o_t);
+      outputs.push_back(astype(o_t, out_dtype, s));
     }
     auto out = stack(outputs, 1, s);
     return std::vector<array>{out, state};
