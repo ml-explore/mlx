@@ -259,7 +259,8 @@ auto mlx_expand_ellipsis(const mx::Shape& shape, const nb::tuple& entries) {
       msg << "Too many indices for array with " << ndim << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
-    for (int axis = non_none_indices_before; axis < ndim - non_none_indices_after;
+    for (int axis = non_none_indices_before;
+         axis < ndim - non_none_indices_after;
          axis++) {
       indices.push_back(
           nb::slice(mx::ShapeElem{0}, shape[axis], mx::ShapeElem{1}));
