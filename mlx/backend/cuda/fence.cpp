@@ -36,7 +36,9 @@ void Fence::wait(Stream s, const array&) {
   if (f.producer.device == Device::gpu && s.device == Device::gpu) {
     f.gpu_event.wait(s);
   } else {
-    f.cpu_event.wait(s);
+    // AtomicEvent can not reliably notify a GPU stream, so a dependency that
+    // involves the CPU keeps the synchronous wait.
+    f.cpu_event.wait();
   }
 }
 

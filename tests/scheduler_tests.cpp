@@ -1,5 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
+#include <chrono>
+
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
@@ -248,4 +250,79 @@ TEST_CASE("test scheduler races") {
     y = exp(y);
   }
   eval(a, y);
+}
+
+// A GPU to GPU dependency must be resolved in the consumer stream. If the
+// fence waits on the host instead, async_eval can not return until the
+// producer kernels have run.
+TEST_CASE("test cross stream async eval does not block") {
+  if (!gpu::is_available()) {
+    return;
+  }
+  using clk = std::chrono::steady_clock;
+  auto ms_since = [](clk::time_point t) {
+    return std::chrono::duration<double, std::milli>(clk::now() - t).count();
+  };
+
+  auto producer = new_stream(Device::gpu);
+  auto consumer = new_stream(Device::gpu);
+
+  int n = 2048;
+  int iters = 100;
+  array seed = full({n, n}, 1.0f / n, float32, producer);
+  eval(seed);
+
+  // Work that is long enough to measure on any GPU.
+  auto chain = [&]() {
+    array a = seed;
+    for (int i = 0; i < iters; ++i) {
+      a = matmul(a, seed, producer);
+    }
+    return a;
+  };
+
+  // Compile the kernels so the timed runs do not pay for the JIT.
+  eval(abs(matmul(seed, seed, producer), consumer));
+
+  auto t = clk::now();
+  eval(chain());
+  double compute_ms = ms_since(t);
+
+  array out = abs(chain(), consumer);
+  t = clk::now();
+  async_eval(out);
+  double submit_ms = ms_since(t);
+
+  // Submission enqueues the work, it must not wait for it.
+  CHECK_LT(submit_ms, 0.5 * compute_ms);
+
+  eval(out);
+  synchronize(producer);
+  synchronize(consumer);
+}
+
+// The fence orders work between two streams. Check that the consumer sees the
+// producer result for every combination of producer and consumer device.
+TEST_CASE("test cross stream fence ordering") {
+  if (!gpu::is_available()) {
+    return;
+  }
+  std::vector<Device::DeviceType> devices = {Device::cpu, Device::gpu};
+
+  for (auto pd : devices) {
+    for (auto cd : devices) {
+      auto ps = new_stream(pd);
+      auto cs = new_stream(cd);
+
+      array one = full({1}, 1.0f, float32, ps);
+      array x = full({64, 64}, 1.0f, float32, ps);
+      for (int i = 0; i < 20; ++i) {
+        x = add(x, one, ps);
+      }
+
+      // The consumer is on the other stream, so eval builds a fence.
+      array y = sum(x, cs);
+      CHECK_EQ(y.item<float>(), doctest::Approx(64 * 64 * 21.0f));
+    }
+  }
 }
