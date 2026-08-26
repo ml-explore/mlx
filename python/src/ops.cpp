@@ -2856,7 +2856,9 @@ void init_ops(nb::module_& m) {
          const IntOrVec& axis,
          bool keepdims,
          int ddof,
+         std::optional<int> correction,
          mx::StreamOrDevice s) {
+        ddof = correction.value_or(ddof);
         return mx::var(a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
       },
       nb::arg(),
@@ -2864,6 +2866,7 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       "ddof"_a = 0,
       nb::kw_only(),
+      "correction"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
           "def var(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, stream: StreamOrDevice = None) -> array"),
@@ -2889,7 +2892,9 @@ void init_ops(nb::module_& m) {
          const IntOrVec& axis,
          bool keepdims,
          int ddof,
+         std::optional<int> correction,
          mx::StreamOrDevice s) {
+        ddof = correction.value_or(ddof);
         return mx::std(a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
       },
       nb::arg(),
@@ -2897,6 +2902,7 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       "ddof"_a = 0,
       nb::kw_only(),
+      "correction"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
           "def std(a: array, /, axis: None | int | Sequence[int] = None, keepdims: bool = False, ddof: int = 0, *, stream: StreamOrDevice = None) -> array"),
