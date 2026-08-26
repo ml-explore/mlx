@@ -62,7 +62,6 @@ bool fast::GatedDeltaUpdate::use_fallback(
   return true;
 }
 
-
 NO_GPU(Abs)
 NO_GPU(Add)
 NO_GPU(AddMM)
