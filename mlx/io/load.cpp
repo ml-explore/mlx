@@ -334,15 +334,25 @@ array load(std::string file, StreamOrDevice s) {
 
 namespace io {
 
+namespace {
+
+// Scale I/O threads with the core count to saturate fast SSDs.
+size_t io_thread_count() {
+  size_t n_cores = std::thread::hardware_concurrency();
+  return std::clamp<size_t>(n_cores / 2, 4, 16);
+}
+
+} // namespace
+
 ThreadPool& thread_pool() {
   // Leak - see Scheduler singleton comment in scheduler.cpp.
-  static ThreadPool* pool_ = new ThreadPool{4};
+  static ThreadPool* pool_ = new ThreadPool{io_thread_count()};
   return *pool_;
 }
 
 ThreadPool& ParallelFileReader::thread_pool() {
   // Leak - see Scheduler singleton comment in scheduler.cpp.
-  static ThreadPool* thread_pool = new ThreadPool{4};
+  static ThreadPool* thread_pool = new ThreadPool{io_thread_count()};
   return *thread_pool;
 }
 
