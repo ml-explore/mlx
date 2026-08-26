@@ -1,7 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
 #include <cassert>
-#include <cmath>
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/encoder.h"
@@ -42,7 +41,7 @@ void arg_reduce_dispatch(
   switch (rtype) {
     case ArgReduce::ArgMin: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
-        if ((!std::isnan(*y) && std::isnan(x)) || x < (*y)) {
+        if ((*y == *y && x != x) || x < (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
         }
@@ -52,7 +51,7 @@ void arg_reduce_dispatch(
     }
     case ArgReduce::ArgMax: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
-        if ((!std::isnan(*y) && std::isnan(x)) || x > (*y)) {
+        if ((*y == *y && x != x) || x > (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
         }

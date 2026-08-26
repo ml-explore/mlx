@@ -196,6 +196,10 @@ TEST_CASE("test arg reduce NaN") {
   test_arg_reduce_small(Device::cpu, x, ArgReduce::ArgMin, {2}, 1, {1, 1});
   test_arg_reduce_small(Device::cpu, x, ArgReduce::ArgMax, {2}, 1, {1, 1});
 
+  auto z = array({complex64_t{1.0f, 0.0f}, complex64_t{1.0f, nan}}, {2});
+  test_arg_reduce_small(Device::cpu, z, ArgReduce::ArgMin, {}, 0, {1});
+  test_arg_reduce_small(Device::cpu, z, ArgReduce::ArgMax, {}, 0, {1});
+
   if (!metal::is_available()) {
     INFO("Skipping arg reduction gpu tests");
     return;
