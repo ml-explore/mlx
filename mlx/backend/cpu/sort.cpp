@@ -357,6 +357,10 @@ void ArgSort::eval_cpu(const std::vector<array>& inputs, array& out) {
   // Allocate output
   out.set_data(allocator::malloc(out.nbytes()));
 
+  if (out.size() == 0) {
+    return;
+  }
+
   auto& encoder = cpu::get_command_encoder(stream());
   encoder.set_input_array(in);
   encoder.set_input_array(out);
@@ -383,6 +387,10 @@ void Sort::eval_cpu(const std::vector<array>& inputs, array& out) {
       ? CopyType::Vector
       : CopyType::General;
   copy_cpu(in, out, ctype, stream());
+
+  if (out.size() == 0) {
+    return;
+  }
 
   auto& encoder = cpu::get_command_encoder(stream());
   encoder.set_output_array(out);

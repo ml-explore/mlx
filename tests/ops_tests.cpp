@@ -2949,6 +2949,40 @@ TEST_CASE("test scan op") {
   y = vmap(fun, 1, 1)(x);
   expected = array({1.0f, 2.0f, 4.0f, 6.0f, 9.0f, 12.0f, 16.0f, 20.0f}, {4, 2});
   CHECK(array_equal(y, expected).item<bool>());
+
+  // Scanning an empty axis is a no-op
+  x = zeros({2, 0});
+  y = cumsum(x, 1);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{2, 0});
+  y = cummax(x, 1);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{2, 0});
+  x = zeros({0, 2});
+  y = cumsum(x, 0);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{0, 2});
+  y = cummin(x, 0);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{0, 2});
+}
+
+TEST_CASE("test sort op") {
+  // Sorting an empty axis is a no-op
+  auto x = zeros({2, 0});
+  auto y = sort(x, 1);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{2, 0});
+  y = argsort(x, 1);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{2, 0});
+  x = zeros({0, 2});
+  y = sort(x, 0);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{0, 2});
+  y = argsort(x, 0);
+  eval(y);
+  CHECK_EQ(y.shape(), Shape{0, 2});
 }
 
 TEST_CASE("test pad") {
