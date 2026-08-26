@@ -12,14 +12,6 @@ namespace mlx::core {
 
 namespace {
 
-template <typename T>
-bool is_nan(T x) {
-  if constexpr (is_floating_point_v<T>) {
-    return std::isnan(x);
-  }
-  return false;
-}
-
 template <typename InT, typename OpT>
 void arg_reduce(const array& in, array& out, const OpT& op, int axis) {
   auto axis_size = in.shape()[axis];
@@ -50,7 +42,7 @@ void arg_reduce_dispatch(
   switch (rtype) {
     case ArgReduce::ArgMin: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
-        if ((!is_nan(*y) && is_nan(x)) || x < (*y)) {
+        if ((!std::isnan(*y) && std::isnan(x)) || x < (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
         }
@@ -60,7 +52,7 @@ void arg_reduce_dispatch(
     }
     case ArgReduce::ArgMax: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
-        if ((!is_nan(*y) && is_nan(x)) || x > (*y)) {
+        if ((!std::isnan(*y) && std::isnan(x)) || x > (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
         }

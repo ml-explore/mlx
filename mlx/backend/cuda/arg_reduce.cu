@@ -27,14 +27,6 @@ struct IndexValPair {
 };
 
 template <typename T>
-__device__ bool is_nan(T x) {
-  if constexpr (is_floating_v<T>) {
-    return cuda::std::isnan(x);
-  }
-  return false;
-}
-
-template <typename T>
 struct ArgMin {
   constexpr __device__ T init() {
     return Limits<T>::max();
@@ -43,9 +35,9 @@ struct ArgMin {
   __device__ IndexValPair<T> operator()(
       const IndexValPair<T>& best,
       const IndexValPair<T>& current) {
-    if ((is_nan(current.val) &&
-         (!is_nan(best.val) || best.index > current.index)) ||
-        (!is_nan(best.val) &&
+    if ((cuda::std::isnan(current.val) &&
+         (!cuda::std::isnan(best.val) || best.index > current.index)) ||
+        (!cuda::std::isnan(best.val) &&
          (best.val > current.val ||
           (best.val == current.val && best.index > current.index)))) {
       return current;
@@ -61,7 +53,8 @@ struct ArgMin {
       uint32_t offset) {
 #pragma unroll
     for (int i = 0; i < N; i++) {
-      if ((!is_nan(best.val) && is_nan(vals[i])) || vals[i] < best.val) {
+      if ((!cuda::std::isnan(best.val) && cuda::std::isnan(vals[i])) ||
+          vals[i] < best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }
@@ -79,9 +72,9 @@ struct ArgMax {
   __device__ IndexValPair<T> operator()(
       const IndexValPair<T>& best,
       const IndexValPair<T>& current) {
-    if ((is_nan(current.val) &&
-         (!is_nan(best.val) || best.index > current.index)) ||
-        (!is_nan(best.val) &&
+    if ((cuda::std::isnan(current.val) &&
+         (!cuda::std::isnan(best.val) || best.index > current.index)) ||
+        (!cuda::std::isnan(best.val) &&
          (best.val < current.val ||
           (best.val == current.val && best.index > current.index)))) {
       return current;
@@ -97,7 +90,8 @@ struct ArgMax {
       uint32_t offset) {
 #pragma unroll
     for (int i = 0; i < N; i++) {
-      if ((!is_nan(best.val) && is_nan(vals[i])) || vals[i] > best.val) {
+      if ((!cuda::std::isnan(best.val) && cuda::std::isnan(vals[i])) ||
+          vals[i] > best.val) {
         best.val = vals[i];
         best.index = offset + i;
       }
