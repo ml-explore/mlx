@@ -46,9 +46,4 @@ runs:
           echo "No matching backend wheel to install"
           exit 1
         fi
-        if ${{ runner.os == 'macOS' }} ; then
-          # FIXME: run.py does not quit in macOS CI.
-          python -m unittest discover -v python/tests
-        else
-          uv run python/tests/run.py -v --failfast
-        fi
+        python python/tests/run.py -v --failfast

@@ -12,13 +12,14 @@ import numpy as np
 
 class MLXTestRunner(unittest.TestProgram):
     def __init__(self, *args, **kwargs):
+        print("==============MLXTestRunner")
         # Do not exit in runTests
         kwargs["exit"] = False
         super().__init__(*args, **kwargs)
-
-    def runTests(self):
-        super().runTests()
+        # Do cleanup before exiting
+        print("==============clear_streams")
         mx.clear_streams()
+        print("==============sys.ext")
         sys.exit(0 if self.result.wasSuccessful() else 1)
 
 

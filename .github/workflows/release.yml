@@ -28,121 +28,15 @@ permissions:
   contents: read
 
 jobs:
-  build_documentation:
-    name: Build documentation
-    if: github.repository == 'ml-explore/mlx'
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/build-docs
-
-  deploy_documentation:
-    name: Deploy documentation
-    if: *publish
-    needs: build_documentation
-    permissions:
-      pages: write
-      id-token: write
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
-
-  build_frontend:
-    name: ${{ matrix.os }} (python-${{ matrix.python-version }}, ${{ matrix.arch }})
-    strategy:
-      matrix:
-        os: ['Linux', 'Windows']
-        arch: ['x86_64', 'aarch64']
-        python-version: &pyver ['3.10', '3.11', '3.12', '3.13', '3.13t', '3.14', '3.14t']
-        # There is no cp310 binary for Windows on arm.
-        exclude:
-          - os: 'Windows'
-            arch: 'aarch64'
-            python-version: '3.10'
-    runs-on: |-
-      ${{ case(matrix.os == 'Windows',
-               case(matrix.arch == 'aarch64', 'windows-11-arm',
-                    'windows-2022'),
-               case(matrix.arch == 'aarch64', 'ubuntu-22.04-arm',
-                    'ubuntu-22.04'))
-      }}
-    env: &build-env
-      PYPI_RELEASE: 1
-      DEV_RELEASE: ${{ inputs.dev-release && 1 || 0 }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-        id: setup
-        with:
-          python-version: ${{ matrix.python-version }}
-          ccache-key: 'release'
-          ccache-save: false
-      - uses: ./.github/actions/build-wheel
-        with:
-          cmake-args: ${{ steps.setup.outputs.cmake-args }}
-          build-backend: false
-      - run: unzip -l wheelhouse/*.whl
-      - uses: actions/upload-artifact@v7
-        with:
-          name: frontend-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python-version }}
-          path: wheelhouse/mlx-*.whl
-          if-no-files-found: error
-
-  build_backend:
-    name: ${{ matrix.os }} (${{ matrix.toolkit }}, ${{ matrix.arch }})
-    if: github.repository == 'ml-explore/mlx'
-    strategy:
-      matrix:
-        os: ['Linux', 'Windows']
-        arch: ['x86_64', 'aarch64']
-        toolkit: ['cpu', 'cuda-12.9', 'cuda-13.0']
-        exclude:
-          # CUDA does not support Windows on arm.
-          - os: 'Windows'
-            arch: 'aarch64'
-            toolkit: 'cuda-12.9'
-          - os: 'Windows'
-            arch: 'aarch64'
-            toolkit: 'cuda-13.0'
-    runs-on: |-
-      ${{ case(matrix.os == 'Windows',
-               case(matrix.arch == 'aarch64', 'windows-11-arm',
-                    'windows-2022-large'),
-               case(matrix.arch == 'aarch64', 'ubuntu-22-large-arm',
-                    'ubuntu-22-large'))
-      }}
-    env: *build-env
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-        id: setup
-        with:
-          toolkit: ${{ matrix.toolkit }}
-          ccache-key: 'release'
-      - uses: ./.github/actions/build-wheel
-        with:
-          cmake-args: ${{ steps.setup.outputs.cmake-args }}
-          build-frontend: false
-      - run: unzip -l wheelhouse/*.whl
-      - uses: actions/upload-artifact@v7
-        with:
-          name: backend-${{ matrix.toolkit }}-${{ runner.os }}-${{ runner.arch }}
-          path: wheelhouse/*.whl
-          if-no-files-found: ignore
-
   build_mac_wheels:
     name: macOS (python-${{ matrix.python-version }})
     if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
-        python-version: *pyver
-    runs-on: 'macos-26'
-    env: *build-env
+        python-version: ['3.12']
+    runs-on: 'macos-26-xlarge'
+    env:
+      PYPI_RELEASE: 1
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -157,19 +51,16 @@ jobs:
         with:
           macos-target: '14.0'
           cmake-args: ${{ steps.setup.outputs.cmake-args }}
-          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Build macOS 15 package
         uses: ./.github/actions/build-wheel
         with:
           macos-target: '15.0'
           cmake-args: ${{ steps.setup.outputs.cmake-args }}
-          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Build macOS 26 package
         uses: ./.github/actions/build-wheel
         with:
           macos-target: '26.2'
           cmake-args: ${{ steps.setup.outputs.cmake-args }}
-          build-backend: ${{ matrix.python-version == '3.10' }}
       - name: Display content of the wheels
         run: for WHEEL in wheelhouse/*.whl; do unzip -l $WHEEL; echo; done
       - name: Upload frontend packages
@@ -179,7 +70,6 @@ jobs:
           path: wheelhouse/mlx-*.whl
           if-no-files-found: error
       - name: Upload backend packages
-        if: matrix.python-version == '3.10'
         uses: actions/upload-artifact@v7
         with:
           name: backend-metal-${{ runner.os }}-${{ runner.arch }}
@@ -189,28 +79,12 @@ jobs:
   test_wheel:
     name: Test (${{ matrix.os }}, ${{ matrix.toolkit }}, ${{ matrix.arch }})
     if: github.repository == 'ml-explore/mlx'
-    needs: [build_frontend, build_backend, build_mac_wheels]
+    needs: [build_mac_wheels]
     strategy:
       matrix:
-        os: ['Linux', 'Windows']
+        os: ['macOS']
         arch: ['aarch64']
-        toolkit: ['cpu']
-        include:
-          - os: 'Linux'
-            arch: 'x86_64'
-            toolkit: 'cpu'
-          - os: 'Linux'
-            arch: 'x86_64'
-            toolkit: 'cuda-12.9'
-          - os: 'Linux'
-            arch: 'x86_64'
-            toolkit: 'cuda-13.0'
-          - os: 'Windows'
-            arch: 'x86_64'
-            toolkit: 'cpu'
-          - os: 'macOS'
-            arch: 'aarch64'
-            toolkit: 'metal'
+        toolkit: ['metal']
     runs-on: |-
       ${{ case(matrix.os == 'Windows', case(matrix.arch == 'aarch64', 'windows-11-arm',
                                             'windows-2022'),
@@ -228,94 +102,3 @@ jobs:
       - uses: ./.github/actions/test-wheel
         with:
           toolkit: ${{ matrix.toolkit }}
-
-  pypi-publish-frontend:
-    name: Publish mlx to PyPI
-    runs-on: ubuntu-latest
-    needs: [test_wheel]
-    permissions:
-      id-token: write
-    environment:
-      name: *pypi-env
-      url: https://pypi.org/p/mlx
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: frontend-*
-          merge-multiple: true
-          path: dist
-      - name: Display structure of downloaded files
-        run: du -ah dist
-      - name: Publish package distributions to PyPI
-        if: *publish
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://upload.pypi.org/legacy/
-
-  pypi-publish-cuda:
-    name: Publish mlx-cuda to PyPI
-    runs-on: ubuntu-latest
-    needs: [test_wheel]
-    permissions:
-      id-token: write
-    environment:
-      name: *pypi-env
-      url: https://pypi.org/p/mlx-cuda
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: backend-cuda*
-          merge-multiple: true
-          path: dist
-      - name: Display structure of downloaded files
-        run: du -ah dist
-      - name: Publish package distributions to PyPI
-        if: *publish
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://upload.pypi.org/legacy/
-
-  pypi-publish-cpu:
-    name: Publish mlx-cpu to PyPI
-    runs-on: ubuntu-latest
-    needs: [test_wheel]
-    permissions:
-      id-token: write
-    environment:
-      name: *pypi-env
-      url: https://pypi.org/p/mlx-cpu
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: backend-cpu-*
-          merge-multiple: true
-          path: dist
-      - name: Display structure of downloaded files
-        run: du -ah dist
-      - name: Publish package distributions to PyPI
-        if: *publish
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://upload.pypi.org/legacy/
-
-  pypi-publish-metal:
-    name: Publish mlx-metal to PyPI
-    runs-on: ubuntu-latest
-    needs: [test_wheel]
-    permissions:
-      id-token: write
-    environment:
-      name: *pypi-env
-      url: https://pypi.org/p/mlx-metal
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: backend-metal-*
-          path: dist
-      - name: Display structure of downloaded files
-        run: du -ah dist
-      - name: Publish package distributions to PyPI
-        if: *publish
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://upload.pypi.org/legacy/
