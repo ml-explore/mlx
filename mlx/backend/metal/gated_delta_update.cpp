@@ -159,8 +159,9 @@ void GatedDeltaUpdate::eval_gpu(
   compute_encoder.set_output_array(hf, 7); // final state out
   compute_encoder.set_bytes(T, 8);
 
-  auto grid = MTL::Size(32, Dv / C, B * Hv);
-  auto threads = MTL::Size(32, 4, 1);
+  // C == 1 runs the packed sequential kernel: 8 value rows per SIMD-group.
+  auto grid = MTL::Size(32, Dv / (C == 1 ? 8 : C), B * Hv);
+  auto threads = MTL::Size(32, C == 1 ? 2 : 4, 1);
   compute_encoder.dispatch_threads(grid, threads);
 }
 
