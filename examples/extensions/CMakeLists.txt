@@ -10,15 +10,23 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(BUILD_SHARED_LIBS "Build extensions as a shared library" ON)
 
 # ----------------------------- Dependencies -----------------------------
+
+include(FetchContent)
+
+# Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
+cmake_policy(SET CMP0135 NEW)
+
 find_package(
-  Python 3.8
+  Python 3.10
   COMPONENTS Interpreter Development.Module
   REQUIRED)
-execute_process(
-  COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  OUTPUT_VARIABLE nanobind_ROOT)
-find_package(nanobind CONFIG REQUIRED)
+FetchContent_Declare(
+  nanobind
+  GIT_REPOSITORY https://github.com/wjakob/nanobind.git
+  GIT_TAG v2.15.0
+  GIT_SHALLOW TRUE
+  EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(nanobind)
 
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -m mlx --cmake-dir
