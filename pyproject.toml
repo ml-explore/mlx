@@ -1,7 +1,8 @@
 [build-system]
 requires = [
   "setuptools>=80",
-  "cmake>=3.25",
+  "cmake>=3.26",
   "typing_extensions",
 ]
-build-backend = "setuptools.build_meta"
+build-backend = "backend"
+backend-path = ["_build_backend"]
