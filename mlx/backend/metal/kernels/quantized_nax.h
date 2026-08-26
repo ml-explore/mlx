@@ -1543,8 +1543,7 @@ template <
   const short tm = SM * (simd_group_id / WN);
   const short tn = SN * (simd_group_id % WN);
 
-  const short sgp_sm =
-      align_M ? SM : min(SM, short(max(0, (M - (y_row + tm)))));
+  const short sgp_sm = align_M ? SM : min(int(SM), max(0, M - (y_row + tm)));
   const short sgp_sn =
       align_N ? SN : min(SN, short(max(0, (N - (y_col + tn)))));
 
