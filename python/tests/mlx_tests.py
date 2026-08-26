@@ -15,9 +15,7 @@ class MLXTestRunner(unittest.TestProgram):
         # Do not exit in runTests
         kwargs["exit"] = False
         super().__init__(*args, **kwargs)
-
-    def runTests(self):
-        super().runTests()
+        # Do cleanup before exiting
         mx.clear_streams()
         sys.exit(0 if self.result.wasSuccessful() else 1)
 
