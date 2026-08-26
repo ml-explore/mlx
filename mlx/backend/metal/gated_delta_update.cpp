@@ -33,7 +33,8 @@ bool GatedDeltaUpdate::use_fallback(
 
   const bool supported_heads = (Hk == 24 && Hv == 24) ||
       (Hk == 32 && Hv == 32) || (Hk == 16 && Hv == 32) ||
-      (Hk == 16 && Hv == 48);
+      (Hk == 16 && Hv == 48) || (Hk == 16 && Hv == 16) ||
+      (Hk == 16 && Hv == 64);
   if (!supported_heads) {
     return true;
   }
