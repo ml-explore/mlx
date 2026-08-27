@@ -85,7 +85,7 @@ jobs:
       matrix:
         macos-target: ['14.0', '15.0', '26.2']
         toolkit: ['cpu', 'metal', 'jit']
-    runs-on: 'macos-26'
+    runs-on: 'macos-26-xlarge'
     needs: check_lint
     steps:
       - uses: actions/checkout@v7
