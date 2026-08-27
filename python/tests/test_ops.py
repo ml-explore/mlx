@@ -4111,6 +4111,14 @@ class TestOps(mlx_tests.MLXTestCase):
             x = mx.power(mx.array([2, -2, 1], dtype), mx.array([-1, -3, -9], dtype))
             self.assertEqual(x.tolist(), [0, 0, 0])
 
+        # A single negative exponent must only zero its own element, not the
+        # whole SIMD vector. Use enough elements to span a vector lane.
+        with mx.stream(mx.cpu):
+            base = mx.array([2] * 16, mx.int32)
+            exp = mx.array([3] * 3 + [-1] + [3] * 12, mx.int32)
+            expected = [8] * 3 + [0] + [8] * 12
+            self.assertEqual(mx.power(base, exp).tolist(), expected)
+
     def test_depends(self):
         a = mx.array([1.0, 2.0, 3.0])
         b = mx.exp(a)
