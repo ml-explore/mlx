@@ -3,6 +3,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <sstream>
 
 #include <fcntl.h>
@@ -102,10 +103,18 @@ class ParallelFileReader : public Reader {
   }
 
  private:
+  // Reads larger than this are split in batches and read in parallel.
   static constexpr size_t batch_size_ = 1 << 25;
-  static ThreadPool& thread_pool();
+
+  // The pool that reads the batches, held from the first batched read until
+  // the reader is destroyed. It cannot be io::thread_pool(), the tasks that
+  // run there wait for these batches and would deadlock in the same pool.
+  ThreadPool& thread_pool();
+
   int fd_;
   std::string label_;
+  std::once_flag pool_once_;
+  std::shared_ptr<ThreadPool> pool_;
 };
 
 class FileWriter : public Writer {
