@@ -2578,9 +2578,11 @@ class TestOps(mlx_tests.MLXTestCase):
                     mxop(a, axis=ax)
 
             # Valid negative axes still work and agree with the positive one
+            # logcumsumexp has no integer kernel, so use a float input
+            a_ = a.astype(mx.float32) if op == "logcumsumexp" else a
             for ax in [-1, -2, -3]:
-                out_neg = mxop(a, axis=ax)
-                out_pos = mxop(a, axis=ax + a.ndim)
+                out_neg = mxop(a_, axis=ax)
+                out_pos = mxop(a_, axis=ax + a_.ndim)
                 self.assertTrue(mx.array_equal(out_neg, out_pos))
 
     def test_scans(self):
