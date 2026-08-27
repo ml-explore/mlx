@@ -6,8 +6,6 @@
 #include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
 #include <metal_tensor>
 
-#define FULL_UNROLL _Pragma("clang loop unroll(full)")
-
 #define AT(TILE, IDX) TILE.thread_elements()[IDX]
 #define SUB(TILE0, TILE1, TILE2)                \
   {                                             \
@@ -101,7 +99,7 @@
     float beta_fm = (fm < valid_rows) ? beta_[fm * Hv + hv_idx] : 0.0f;        \
                                                                                \
     KKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);                    \
-    FULL_UNROLL                                                                \
+    MLX_MTL_PRAGMA_UNROLL                                                      \
     for (int kk = 0; kk < Dk; kk += 8) {                                       \
       LOAD_M(K_tile, k_ + kk, Dk * Hk, B)                                      \
       LOAD_MT(KT_tile, k_ + kk, Dk * Hk, B)                                    \
@@ -116,14 +114,14 @@
     AT(P, 1) = AT(KKtK_tile, 1);                                               \
     SUB(Tinv, I_tile, KKtK_tile)                                               \
                                                                                \
-    FULL_UNROLL                                                                \
+    MLX_MTL_PRAGMA_UNROLL                                                      \
     for (int step = 1; (1 << step) < C; step++) {                              \
       simdgroup_multiply(P, P, P);                                             \
       simdgroup_multiply_accumulate(Tinv, Tinv, P, Tinv);                      \
     }                                                                          \
                                                                                \
     WS_tile = make_filled_simdgroup_matrix<float, 8>(0.f);                     \
-    FULL_UNROLL                                                                \
+    MLX_MTL_PRAGMA_UNROLL                                                      \
     for (int kk = 0; kk < Dk; kk += 8) {                                       \
       LOAD_M(K_tile, k_ + kk, Dk * Hk, B)                                      \
       SCALE(K_tile, beta_fm)                                                   \
@@ -141,7 +139,7 @@
                                                                                \
     tmp_tile = make_filled_simdgroup_matrix<float, 8>(0.f);                    \
     QKt_tile = make_filled_simdgroup_matrix<float, 8>(0.f);                    \
-    FULL_UNROLL                                                                \
+    MLX_MTL_PRAGMA_UNROLL                                                      \
     for (int kk = 0; kk < Dk; kk += 8) {                                       \
       LOAD_M(Q_tile, q_ + kk, Hk * Dk, B)                                      \
       LOAD_MT(K_tile, k_ + kk, Hk * Dk, B)                                     \
@@ -160,7 +158,7 @@
       y[fm * Hv * Dv + dv_idx + fn + 1] = static_cast<InT>(AT(out_tile, 1));   \
     }                                                                          \
                                                                                \
-    FULL_UNROLL                                                                \
+    MLX_MTL_PRAGMA_UNROLL                                                      \
     for (int kk = 0; kk < Dk; kk += 8) {                                       \
       LOAD_MT(K_tile, k_ + kk, Hk * Dk, B)                                     \
       SCALE2(K_tile, gamma_Cdfn, gamma_Cdfn1)                                  \
@@ -247,7 +245,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
   }
 
   int t = 0;
-  FULL_UNROLL
+  MLX_MTL_PRAGMA_UNROLL
   for (; t + C <= T; t += C) {
     PROCESS_CHUNK_SG(false, S_tile, C);
     q_ += C * Hk * Dk;
@@ -261,7 +259,7 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv, int C>
     PROCESS_CHUNK_SG(true, S_tile, short(T - t));
   }
 
-  FULL_UNROLL
+  MLX_MTL_PRAGMA_UNROLL
   for (int kk = 0; kk < Dk; kk += 8) {
     simdgroup_store(S_tile[kk / 8], o_state + kk, Dk, ulong2(0, 0), true);
   }
@@ -276,12 +274,13 @@ template <typename InT, int Dk, int Dv, int Hk, int Hv>
     const device InT* q [[buffer(0)]],
     const device InT* k [[buffer(1)]],
     const device InT* v [[buffer(2)]],
-    const device InT* g [[buffer(3)]], // [B, T, Hv] or [B, T, Hv, Dk]
-    const device InT* beta [[buffer(4)]], // [B, T, Hv]
-    const device float* state_in [[buffer(5)]], // [B, Hv, Dv, Dk]
-    constant int& T [[buffer(6)]],
-    device InT* y [[buffer(7)]], // [B, T, Hv, Dv]
-    device float* state_out [[buffer(8)]], // [B, Hv, Dv, Dk]
+    const device float* state_in [[buffer(3)]],
+    const device InT* g [[buffer(4)]], // [B, T, Hv] or [B, T, Hv, Dk]
+    const device InT* beta [[buffer(5)]], // [B, T, Hv]
+                                          // [B, Hv, Dv, Dk]
+    device InT* y [[buffer(6)]], // [B, T, Hv, Dv]
+    device float* state_out [[buffer(7)]], // [B, Hv, Dv, Dk]
+    constant int& T [[buffer(8)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 thread_position_in_threadgroup [[thread_position_in_threadgroup]],
     uint thread_index_in_simdgroup [[thread_index_in_simdgroup]]) {
