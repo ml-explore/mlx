@@ -141,7 +141,7 @@ jobs:
     strategy:
       matrix:
         python-version: *pyver
-    runs-on: 'macos-26-xlarge'
+    runs-on: 'macos-26'
     env: *build-env
     steps:
       - uses: actions/checkout@v7
