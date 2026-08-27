@@ -753,8 +753,8 @@ bool ScaledDotProductAttention::use_fallback(
   // blocks to fill the machine.
   if (metal::is_nax_available() &&
       (env::enable_tf32() || q.dtype() != float32) &&
-      query_sequence_length >= 1024 && query_head_dim == 256 && do_causal &&
-      !has_arr_mask) {
+      query_sequence_length >= 1024 && query_head_dim == 256 &&
+      (do_causal || has_arr_mask)) {
     return false;
   }
 
