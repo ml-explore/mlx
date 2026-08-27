@@ -115,9 +115,17 @@ def runner(dims, stream=mx.gpu, reference=True):
         out_ref = mx.array(out_on)
         hf_ref = mx.array(hf_on)
     else:
-        # use fallback for tests once fallback is validated
+        # use fallback for tests once fallback is validated by setting a mask instead of using the cpu
+        mask = mx.ones((B, T))
+
         out_ref, hf_ref = mx.fast.gated_delta_update(
-            q, k, v, g, b, initial_state=h0, stream=mx.cpu
+            q,
+            k,
+            v,
+            g,
+            b,
+            initial_state=h0,
+            mask=mask,
         )
 
     mx.eval(out_ref, hf_ref)
@@ -135,9 +143,18 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
     large_t_dims = (2, 32, 32, 1111, 128, 128)
     diff_heads = (1, 16, 32, 33, 128, 128)
     diff_heads2 = (1, 16, 48, 33, 128, 128)
+    unsupported_heads1 = (1, 8, 32, 33, 128, 128)
+    unsupported_heads2 = (1, 24, 48, 33, 128, 128)
 
-    fallback_dims = [base_dims, unaligned_dims, big_batch_dims, diff_heads, diff_heads2]
-    gpu_dims = fallback_dims + [large_t_dims]
+    fallback_dims = [unsupported_heads1, unsupported_heads2]
+    gpu_dims = [
+        base_dims,
+        unaligned_dims,
+        big_batch_dims,
+        diff_heads,
+        diff_heads2,
+        large_t_dims,
+    ]
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_gated_delta_fallback(self):
@@ -176,12 +193,23 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
             gm = mx.where(mask[..., None], g, 1.0)
 
             out_ref, hf_ref = mx.fast.gated_delta_update(
-                qm, km, vm, gm, bm, initial_state=h0, stream=mx.cpu
+                qm,
+                km,
+                vm,
+                gm,
+                bm,
+                initial_state=h0,
             )
 
             mx.eval(out_ref, hf_ref)
             out, hf = mx.fast.gated_delta_update(
-                q, k, v, g, b, initial_state=h0, mask=mask, stream=mx.cpu
+                q,
+                k,
+                v,
+                g,
+                b,
+                initial_state=h0,
+                mask=mask,
             )
             mx.eval(out, hf)
 
@@ -195,28 +223,24 @@ class TestGatedDelta(mlx_tests.MLXTestCase):
 
     def test_gated_delta_dtypes(self):
         dtypes = [mx.bfloat16, mx.float32]
-        streams = [mx.cpu, mx.gpu] if mx.is_available(mx.gpu) else [mx.cpu]
-        for stream in streams:
-            for dtype in dtypes:
-                for dims in [self.base_dims]:
+        for dtype in dtypes:
+            for dims in [self.base_dims]:
 
-                    B, Hk, Hv, T, Dk, Dv = dims
+                B, Hk, Hv, T, Dk, Dv = dims
 
-                    q = mx.random.normal(shape=(B, T, Hk, Dk), dtype=dtype)
-                    k = mx.random.normal(shape=(B, T, Hk, Dk), dtype=dtype)
-                    k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
-                    v = mx.random.normal(shape=(B, T, Hv, Dv), dtype=dtype)
-                    g = mx.random.uniform(shape=(B, T, Hv), dtype=dtype)
-                    b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv), dtype=dtype))
-                    h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
+                q = mx.random.normal(shape=(B, T, Hk, Dk), dtype=dtype)
+                k = mx.random.normal(shape=(B, T, Hk, Dk), dtype=dtype)
+                k = k / (mx.linalg.norm(k, axis=-1, keepdims=True) + 1e-6)
+                v = mx.random.normal(shape=(B, T, Hv, Dv), dtype=dtype)
+                g = mx.random.uniform(shape=(B, T, Hv), dtype=dtype)
+                b = mx.sigmoid(mx.random.normal(shape=(B, T, Hv), dtype=dtype))
+                h0 = mx.random.normal((B, Hv, Dv, Dk), dtype=mx.float32)
 
-                    out, hf = mx.fast.gated_delta_update(
-                        q, k, v, g, b, initial_state=h0, stream=stream
-                    )
-                    mx.eval(out, hf)
-                    msg = f"Output dtype mismatch on Dimensions: {dims}"
-                    self.assertTrue(dtype == out.dtype, msg="Out " + msg)
-                    self.assertTrue(hf.dtype == mx.float32, msg="State " + msg)
+                out, hf = mx.fast.gated_delta_update(q, k, v, g, b, initial_state=h0)
+
+                msg = f"Output dtype mismatch on Dimensions: {dims}"
+                self.assertTrue(dtype == out.dtype, msg="Out " + msg)
+                self.assertTrue(hf.dtype == mx.float32, msg="State " + msg)
 
     @unittest.skipIf(not mx.is_available(mx.gpu), "No GPU available")
     def test_gated_delta_sequential(self):

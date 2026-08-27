@@ -77,23 +77,27 @@ void GatedDeltaUpdate::eval_gpu(
   int Dv = v.shape(3);
 
   int C = 1;
-  const char* threashold_env = std::getenv("GATED_DELTA_THRESH");
-  int threshold = threashold_env ? std::stoi(threashold_env) : 16;
-  if (T > threshold) {
-    if (metal::is_nax_available())
-      C = 16;
-    else
-      C = 8;
-  }
-  const char* chunk_env = std::getenv("GATED_DELTA_CHUNK");
-  C = chunk_env ? std::stoi(chunk_env) : C;
+  int threshold = env::get_var("GATED_DELTA_THRESH", 16);
+  if (T >= threshold)
+    C = metal::is_nax_available() ? 16 : 8;
+
+  C = env::get_var("GATED_DELTA_CHUNK", C);
 
   if (!metal::is_nax_available())
     C = std::min(C, 8); // override in case nax is not available.
 
-  std::string suffix = get_type_string(q.dtype()) + "_" + std::to_string(Dk) +
-      "_" + std::to_string(Dv) + "_" + std::to_string(Hk) + "_" +
-      std::to_string(Hv);
+  std::string suffix;
+  concatenate(
+      suffix,
+      get_type_string(q.dtype()),
+      "_",
+      std::to_string(Dk),
+      "_",
+      std::to_string(Dv),
+      "_",
+      std::to_string(Hk),
+      "_",
+      std::to_string(Hv));
 
   auto& compute_encoder = metal::get_command_encoder(s);
 
@@ -103,95 +107,61 @@ void GatedDeltaUpdate::eval_gpu(
   switch (C) {
     case 16: {
       std::string kernel_name = "gated_delta_fused_nax_";
-      std::string base_name = kernel_name + suffix;
-
-      base_name += "_" + std::to_string(C);
-
+      std::string base_name;
+      concatenate(base_name, kernel_name, suffix, "_16");
       std::string hash_name = base_name;
-
       metal::MTLFCList func_consts = {};
 
       auto delta_kernel =
           get_gated_delta_nax_kernel(d, base_name, hash_name, func_consts);
-
       compute_encoder.set_compute_pipeline_state(delta_kernel);
-      compute_encoder.set_input_array(q, 0);
-      compute_encoder.set_input_array(k, 1);
-      compute_encoder.set_input_array(v, 2);
-      compute_encoder.set_input_array(h0, 3); // initial state in
-      compute_encoder.set_input_array(g, 4);
-      compute_encoder.set_input_array(beta, 5);
-      compute_encoder.set_output_array(out, 6);
-      compute_encoder.set_output_array(hf, 7); // final state out
-      compute_encoder.set_bytes(T, 8);
-
-      auto grid = MTL::Size(32, Dv / 16, B * Hv);
-      auto threads = MTL::Size(32, 4, 1);
-      compute_encoder.dispatch_threads(grid, threads);
       break;
     }
     case 8: {
       std::string kernel_name = "gated_delta_fused_chunk_";
-      std::string base_name = kernel_name + suffix;
-
-      base_name += "_" + std::to_string(C);
-
+      std::string base_name;
+      concatenate(base_name, kernel_name, suffix, "_8");
       std::string hash_name = base_name;
-
       metal::MTLFCList func_consts = {};
 
       auto delta_kernel =
           get_gated_delta_kernel(d, base_name, hash_name, func_consts);
-
       compute_encoder.set_compute_pipeline_state(delta_kernel);
-      compute_encoder.set_input_array(q, 0);
-      compute_encoder.set_input_array(k, 1);
-      compute_encoder.set_input_array(v, 2);
-      compute_encoder.set_input_array(h0, 3); // initial state in
-      compute_encoder.set_input_array(g, 4);
-      compute_encoder.set_input_array(beta, 5);
-      compute_encoder.set_output_array(out, 6);
-      compute_encoder.set_output_array(hf, 7); // final state out
-      compute_encoder.set_bytes(T, 8);
-
-      auto grid = MTL::Size(32, Dv / 8, B * Hv);
-      auto threads = MTL::Size(32, 4, 1);
-      compute_encoder.dispatch_threads(grid, threads);
       break;
     }
-    case 1:
-    case 0: {
+    case 0:
+      C = 1; // avoiding a div by zero on the grid.
+    case 1: {
       std::string kernel_name = "seq_gated_delta_";
-      std::string base_name = kernel_name + suffix;
+      std::string base_name;
+      concatenate(base_name, kernel_name, suffix);
       std::string hash_name = base_name;
-
       metal::MTLFCList func_consts = {};
 
       auto delta_kernel =
           get_gated_delta_kernel(d, base_name, hash_name, func_consts);
 
       compute_encoder.set_compute_pipeline_state(delta_kernel);
-
-      compute_encoder.set_input_array(q, 0);
-      compute_encoder.set_input_array(k, 1);
-      compute_encoder.set_input_array(v, 2);
-      compute_encoder.set_input_array(g, 3);
-      compute_encoder.set_input_array(beta, 4);
-      compute_encoder.set_input_array(h0, 5);
-      compute_encoder.set_bytes(T, 6);
-      compute_encoder.set_output_array(out, 7);
-      compute_encoder.set_output_array(hf, 8);
-
-      auto grid = MTL::Size(32, Dv, B * Hv);
-      auto threads = MTL::Size(32, 4, 1);
-      compute_encoder.dispatch_threads(grid, threads);
       break;
     }
     default: {
       throw std::runtime_error(
-          "NYI: Only sequential and chunk size 8,16 are supported");
+          "NYI: Only sequential (C=1) and chunk size 8,16 are supported");
     }
   }
+  compute_encoder.set_input_array(q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(v, 2);
+  compute_encoder.set_input_array(h0, 3); // initial state in
+  compute_encoder.set_input_array(g, 4);
+  compute_encoder.set_input_array(beta, 5);
+  compute_encoder.set_output_array(out, 6);
+  compute_encoder.set_output_array(hf, 7); // final state out
+  compute_encoder.set_bytes(T, 8);
+
+  auto grid = MTL::Size(32, Dv / C, B * Hv);
+  auto threads = MTL::Size(32, 4, 1);
+  compute_encoder.dispatch_threads(grid, threads);
 }
 
 } // namespace mlx::core::fast
