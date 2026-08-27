@@ -140,6 +140,7 @@ void init_stream(nb::module_& m) {
       "clear_streams",
       []() {
         reset_random_state();
+        nb::gil_scoped_release nogil;
         mx::clear_streams();
       },
       R"pbdoc(Destroy all streams created in current thread.)pbdoc");
@@ -190,6 +191,7 @@ void init_stream(nb::module_& m) {
   m.def(
       "synchronize",
       [](mx::StreamOrDevice s) {
+        nb::gil_scoped_release nogil;
         if (std::holds_alternative<std::monostate>(s)) {
           mx::synchronize();
         } else {
