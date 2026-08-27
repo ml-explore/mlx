@@ -113,7 +113,7 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
     # in Python would never run.
     def test_synchronize_releases_gil(self):
         a = self._adopted_source(1024)
-        faulthandler.dump_traceback_later(120, exit=True)
+        faulthandler.dump_traceback_later(30, exit=True)
         try:
             for _ in range(4):
                 y = self._submit_work(a)
@@ -136,7 +136,7 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
             except Exception as e:
                 errors.append(e)
 
-        faulthandler.dump_traceback_later(120, exit=True)
+        faulthandler.dump_traceback_later(30, exit=True)
         try:
             thread = threading.Thread(target=worker)
             thread.start()
