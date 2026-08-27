@@ -2120,6 +2120,62 @@ class TestOps(mlx_tests.MLXTestCase):
                     mx_vjp = lambda x: mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
                     test_ops(np_vjp, mx_vjp, x_, y_, 1e-5, 1e-5)
 
+    def test_array_api_aliases(self):
+        x = mx.array([0.3, -0.5, 0.9])
+        # arccosh is only real valued for x >= 1.
+        x_ge_one = mx.array([1.5, 2.0, 3.0])
+        ints = mx.array([1, 2, 4])
+        mat = mx.arange(6).reshape(2, 3)
+
+        for alias, canonical, arg in (
+            ("acos", "arccos", x),
+            ("acosh", "arccosh", x_ge_one),
+            ("asinh", "arcsinh", x),
+            ("atanh", "arctanh", x),
+        ):
+            with self.subTest(alias=alias):
+                self.assertTrue(
+                    mx.allclose(
+                        getattr(mx, alias)(arg), getattr(mx, canonical)(arg)
+                    ).item()
+                )
+
+        for alias, canonical in (
+            ("bitwise_left_shift", "left_shift"),
+            ("bitwise_right_shift", "right_shift"),
+        ):
+            with self.subTest(alias=alias):
+                self.assertTrue(
+                    mx.array_equal(
+                        getattr(mx, alias)(ints, 1), getattr(mx, canonical)(ints, 1)
+                    ).item()
+                )
+
+        for alias, canonical in (
+            ("cumulative_sum", "cumsum"),
+            ("cumulative_prod", "cumprod"),
+        ):
+            with self.subTest(alias=alias):
+                self.assertTrue(
+                    mx.array_equal(
+                        getattr(mx, alias)(ints), getattr(mx, canonical)(ints)
+                    ).item()
+                )
+
+        with self.subTest(alias="matrix_transpose"):
+            self.assertTrue(
+                mx.array_equal(
+                    mx.matrix_transpose(mat), mx.swapaxes(mat, -1, -2)
+                ).item()
+            )
+
+        with self.subTest(alias="permute_dims"):
+            self.assertTrue(
+                mx.array_equal(
+                    mx.permute_dims(mat, (1, 0)), mx.transpose(mat, (1, 0))
+                ).item()
+            )
+
     def test_binary_ops(self):
         def test_ops(npop, mlxop, x1, x2, y1, y2, atol):
             r_np = npop(x1, x2)
