@@ -151,9 +151,23 @@ mx::array mlx_gather_nd(
       get_slice_params(
           start, end, stride, nb::cast<nb::slice>(idx), src.shape(i));
 
+      auto axis_size = src.shape(i);
       // Handle negative indices
-      start = (start < 0) ? start + src.shape(i) : start;
-      end = (end < 0) ? end + src.shape(i) : end;
+      start = (start < 0) ? start + axis_size : start;
+      end = (end < 0) ? end + axis_size : end;
+
+      // Clamp to the valid range for this axis, matching the behavior of
+      // mlx::core::slice / normalize_slice, so out-of-range or heavily
+      // negative bounds don't produce an incorrectly sized/valued gather.
+      if (stride < 0) {
+        start = std::min(start, axis_size - 1);
+        end = std::max(end, mx::ShapeElem{-1});
+        end = std::min(end, start);
+      } else {
+        start = std::max(mx::ShapeElem{0}, std::min(start, axis_size));
+        end = std::max(mx::ShapeElem{0}, std::min(end, axis_size));
+        end = std::max(end, start);
+      }
 
       gather_indices.push_back(arange(start, end, stride, mx::uint32));
       num_slices++;

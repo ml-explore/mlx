@@ -1267,6 +1267,37 @@ class TestArray(mlx_tests.MLXTestCase):
         a_mlx = mx.array(a_np)
         self.assertTrue(np.array_equal(a_np[2:-1, 0], np.array(a_mlx[2:-1, 0])))
 
+    def test_indexing_mixed_slice_array_out_of_bounds(self):
+        # Regression test: when a slice is combined with an array/int index
+        # (e.g. a[start:stop, idx_array]), the slice bounds were adjusted for
+        # negative indices but never clamped into the valid [0, axis_size]
+        # range before being passed to arange(). Out-of-range or heavily
+        # negative slice bounds therefore produced arrays of the wrong shape
+        # containing bogus repeated/garbage data instead of matching NumPy's
+        # clamping behavior.
+        a_npy = np.arange(20, dtype=np.int32).reshape(4, 5)
+        a_mlx = mx.array(a_npy)
+        idx_npy = np.array([0, 1], dtype=np.uint32)
+        idx_mlx = mx.array(idx_npy)
+
+        # Large negative start, in-range stop
+        out_mlx = a_mlx[-100:4, idx_mlx]
+        out_npy = a_npy[-100:4, idx_npy]
+        self.assertEqual(out_mlx.shape, out_npy.shape)
+        self.assertTrue(np.array_equal(np.asarray(out_mlx), out_npy))
+
+        # Out-of-range stop
+        out_mlx = a_mlx[0:200, idx_mlx]
+        out_npy = a_npy[0:200, idx_npy]
+        self.assertEqual(out_mlx.shape, out_npy.shape)
+        self.assertTrue(np.array_equal(np.asarray(out_mlx), out_npy))
+
+        # Very large negative start (would previously allocate a huge array)
+        out_mlx = a_mlx[-(10**9) : 4, idx_mlx]
+        out_npy = a_npy[-(10**9) : 4, idx_npy]
+        self.assertEqual(out_mlx.shape, out_npy.shape)
+        self.assertTrue(np.array_equal(np.asarray(out_mlx), out_npy))
+
     def test_indexing_grad(self):
         x = mx.array([[1, 2], [3, 4]]).astype(mx.float32)
         ind = mx.array([0, 1, 0]).astype(mx.float32)
