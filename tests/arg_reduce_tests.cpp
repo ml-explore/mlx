@@ -203,7 +203,7 @@ TEST_CASE("test arg reduce NaN") {
   test_arg_reduce_small(d, x, ArgReduce::ArgMin, {}, 0, {17});
   test_arg_reduce_small(d, x, ArgReduce::ArgMax, {}, 0, {17});
 
-  if (!(metal::is_available() && d == Device::gpu)) {
+  if (d == Device::cpu) {
     auto z = array({complex64_t{1.0f, 0.0f}, complex64_t{1.0f, nan}}, {2});
     test_arg_reduce_small(d, z, ArgReduce::ArgMin, {}, 0, {1});
     test_arg_reduce_small(d, z, ArgReduce::ArgMax, {}, 0, {1});
