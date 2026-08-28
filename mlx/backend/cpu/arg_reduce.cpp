@@ -41,7 +41,7 @@ void arg_reduce_dispatch(
   switch (rtype) {
     case ArgReduce::ArgMin: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
-        if ((*y == *y && x != x) || x < (*y)) {
+        if ((!isnan(*y) && isnan(x)) || x < (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
         }
@@ -51,7 +51,7 @@ void arg_reduce_dispatch(
     }
     case ArgReduce::ArgMax: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
-        if ((*y == *y && x != x) || x > (*y)) {
+        if ((!isnan(*y) && isnan(x)) || x > (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
         }

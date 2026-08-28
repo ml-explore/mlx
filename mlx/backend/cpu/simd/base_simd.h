@@ -13,6 +13,7 @@
 #include <intrin.h> // For _BitScanReverse
 #endif
 
+#include "mlx/types/complex.h"
 #include "mlx/types/half_types.h"
 
 namespace mlx::core::simd {

@@ -106,8 +106,23 @@ inline complex64_t operator-(const complex64_t& v) {
   complex_binop_helper(_op_, _operator_, float16_t)                                   \
   complex_binop_helper(_op_, _operator_, bfloat16_t)                                  \
   complex_binop_helper(_op_, _operator_, float)
-// clang-format on
 
 complex_binop(+, operator+)
+
+template <typename, typename = void>
+constexpr bool is_complex = false;
+
+template <typename T>
+constexpr bool is_complex<T, std::void_t<decltype(std::declval<T>().real())>> = true;
+// clang-format on
+
+template <typename T>
+inline bool isnan(T v) {
+  if constexpr (is_complex<T>) {
+    return std::isnan(std::real(v)) || std::isnan(std::imag(v));
+  } else {
+    return std::isnan(v);
+  }
+}
 
 } // namespace mlx::core

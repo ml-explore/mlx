@@ -190,32 +190,24 @@ TEST_CASE("test arg reduce edge cases") {
 }
 
 TEST_CASE("test arg reduce NaN") {
+  auto d = default_device();
   auto nan = std::numeric_limits<float>::quiet_NaN();
   auto x = array({3.0f, nan, 1.0f, 5.0f, nan, -1.0f}, {2, 3});
-
-  test_arg_reduce_small(Device::cpu, x, ArgReduce::ArgMin, {2}, 1, {1, 1});
-  test_arg_reduce_small(Device::cpu, x, ArgReduce::ArgMax, {2}, 1, {1, 1});
-
-  auto z = array({complex64_t{1.0f, 0.0f}, complex64_t{1.0f, nan}}, {2});
-  test_arg_reduce_small(Device::cpu, z, ArgReduce::ArgMin, {}, 0, {1});
-  test_arg_reduce_small(Device::cpu, z, ArgReduce::ArgMax, {}, 0, {1});
-
-  if (!metal::is_available()) {
-    INFO("Skipping arg reduction gpu tests");
-    return;
-  }
-
-  test_arg_reduce_small(Device::gpu, x, ArgReduce::ArgMin, {2}, 1, {1, 1});
-  test_arg_reduce_small(Device::gpu, x, ArgReduce::ArgMax, {2}, 1, {1, 1});
+  test_arg_reduce_small(d, x, ArgReduce::ArgMin, {2}, 1, {1, 1});
+  test_arg_reduce_small(d, x, ArgReduce::ArgMax, {2}, 1, {1, 1});
 
   std::vector<float> wide(1024, 0.0f);
   wide[17] = nan;
   wide[529] = nan;
   x = array(wide.data(), {1024});
-  test_arg_reduce_small(Device::cpu, x, ArgReduce::ArgMin, {}, 0, {17});
-  test_arg_reduce_small(Device::cpu, x, ArgReduce::ArgMax, {}, 0, {17});
-  test_arg_reduce_small(Device::gpu, x, ArgReduce::ArgMin, {}, 0, {17});
-  test_arg_reduce_small(Device::gpu, x, ArgReduce::ArgMax, {}, 0, {17});
+  test_arg_reduce_small(d, x, ArgReduce::ArgMin, {}, 0, {17});
+  test_arg_reduce_small(d, x, ArgReduce::ArgMax, {}, 0, {17});
+
+  if (!(metal::is_available() && d == Device::gpu)) {
+    auto z = array({complex64_t{1.0f, 0.0f}, complex64_t{1.0f, nan}}, {2});
+    test_arg_reduce_small(d, z, ArgReduce::ArgMin, {}, 0, {1});
+    test_arg_reduce_small(d, z, ArgReduce::ArgMax, {}, 0, {1});
+  }
 }
 
 TEST_CASE("test arg reduce irregular strides") {
