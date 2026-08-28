@@ -88,8 +88,7 @@ runs:
         max-size: |-
           ${{ case(inputs.ccache-key == 'release',
                    case(startsWith(inputs.toolkit, 'cuda'),
-                        case(runner.os == 'Linux', '300MB',
-                             '160MB'),
+                        '300MB',
                         '60MB'),
                    case(startsWith(inputs.toolkit, 'cuda'),
                         case(runner.os == 'Linux' && runner.arch == 'x64', '600MB',
