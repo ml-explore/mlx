@@ -65,16 +65,15 @@ fs::path load_cusolver() {
   fs::path cusolver_dir;
   if (const char* dir = cuda_bin_dir()) {
     cusolver_dir = dir;
-    ::AddDllDirectory(dir.c_str());
   } else {
     cusolver_dir = relative_to_current_binary("../nvidia/cusolver/bin");
-    ::AddDllDirectory(cusolver_dir.c_str());
     ::AddDllDirectory(cublas_dir().c_str());
     ::AddDllDirectory(
         relative_to_current_binary("../nvidia/cusparse/bin").c_str());
     ::AddDllDirectory(
         relative_to_current_binary("../nvidia/nvjitlink/bin").c_str());
   }
+  ::AddDllDirectory(cusolver_dir.c_str());
   return cusolver_dir;
 }
 
