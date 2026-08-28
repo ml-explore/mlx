@@ -249,3 +249,29 @@ TEST_CASE("test scheduler races") {
   }
   eval(a, y);
 }
+
+// The fence orders work between two streams. Check that the consumer sees the
+// producer result for every combination of producer and consumer device.
+TEST_CASE("test cross stream fence ordering") {
+  if (!gpu::is_available()) {
+    return;
+  }
+  std::vector<Device::DeviceType> devices = {Device::cpu, Device::gpu};
+
+  for (auto pd : devices) {
+    for (auto cd : devices) {
+      auto ps = new_stream(pd);
+      auto cs = new_stream(cd);
+
+      array one = full({1}, 1.0f, float32, ps);
+      array x = full({64, 64}, 1.0f, float32, ps);
+      for (int i = 0; i < 20; ++i) {
+        x = add(x, one, ps);
+      }
+
+      // The consumer is on the other stream, so eval builds a fence.
+      array y = sum(x, cs);
+      CHECK_EQ(y.item<float>(), doctest::Approx(64 * 64 * 21.0f));
+    }
+  }
+}
