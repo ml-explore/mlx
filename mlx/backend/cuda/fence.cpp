@@ -14,15 +14,18 @@ struct FenceImpl {
   Event cpu_event;
 
   FenceImpl(uint32_t count, Stream s)
-      : count(count), producer(s), gpu_event(s), cpu_event(s) {}
+      : count(count), producer(s), cpu_event(s) {
+    if (s.device == Device::gpu) {
+      gpu_event = Event(s);
+      // A value of one selects a native CUDA event.
+      gpu_event.set_value(1);
+    }
+  }
 };
 
 Fence::Fence(Stream s) {
   fence_ = std::make_shared<FenceImpl>(0, s);
   auto& f = cast<FenceImpl>();
-  // A signal value of one selects the native CUDA event, so a GPU consumer
-  // waits in its own stream instead of on the host.
-  f.gpu_event.set_value(1);
   // Ensure that we use AtomicEvent, it is the only event that can order a CPU
   // stream against the GPU.
   f.cpu_event.cast<cu::EventImpl>().ensure_created(s, 2);
