@@ -1768,11 +1768,11 @@ void init_ops(nb::module_& m) {
       },
       nb::arg(),
       "indices"_a,
-      "axis"_a = nb::none(),
+      "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def take_along_axis(a: array, /, indices: array, axis: int | None = None, *, stream: StreamOrDevice = None) -> array"),
+          "def take_along_axis(a: array, /, indices: array, axis: int | None = -1, *, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Take values along an axis at the specified indices.
 
@@ -1782,7 +1782,7 @@ void init_ops(nb::module_& m) {
               the input array excluding the `axis` dimension.
             axis (int or None): Axis in the input to take the values from. If
               ``axis == None`` the array is flattened to 1D prior to the indexing
-              operation.
+              operation. Defaults to ``-1``.
 
         Returns:
             array: The output array.
