@@ -68,12 +68,11 @@ const complex64_t Limits<complex64_t>::max =
 const complex64_t Limits<complex64_t>::min =
     -std::numeric_limits<float>::infinity();
 
-struct SumReduce;
-struct ProdReduce;
-
 template <typename T, typename U, typename Op>
 struct ReductionAccumulator {
   static constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
+  // Widen to float32 only if the input is float16 (with N=1) or bfloat16 as it
+  // improves performance.
   static constexpr bool widen_to_float =
       (std::is_same_v<T, bfloat16_t> ||
        (N == 1 && std::is_same_v<T, float16_t>));
