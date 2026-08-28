@@ -21,8 +21,7 @@ bool is_index_scalar(const nb::object& obj) {
   if (nb::isinstance<nb::bool_>(obj)) {
     return false;
   }
-  if (nb::isinstance<mx::array>(obj) &&
-      nb::cast<mx::array>(obj).dtype() == mx::bool_) {
+  if (nb::isinstance<mx::array>(obj)) {
     return false;
   }
   if (!PyIndex_Check(obj.ptr())) {

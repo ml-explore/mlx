@@ -1034,7 +1034,15 @@ void init_array(nb::module_& m) {
           [](mx::array& a) {
             return nb::cast<std::complex<double>>(to_scalar(a));
           })
-      .def("__index__", [](mx::array& a) { return nb::int_(to_scalar(a)); })
+      .def(
+          "__index__",
+          [](mx::array& a) {
+            if (!mx::issubdtype(a.dtype(), mx::integer) || a.ndim() != 0) {
+              throw nb::type_error(
+                  "Only 0-dimensional integer arrays can be converted to an index.");
+            }
+            return nb::int_(to_scalar(a));
+          })
       .def(
           "__bytes__",
           [](mx::array& a) {
