@@ -169,9 +169,9 @@ runs:
           }
         PACKAGES: |
           {
-            "cuda-12.6": ["cudart_12.6", "nvcc_12.6", "cublas_12.6", "cublas_dev_12.6", "cufft_12.6", "cufft_dev_12.6", "nvrtc_12.6", "nvrtc_dev_12.6"],
-            "cuda-12.9": ["cudart_12.9", "nvcc_12.9", "cublas_12.9", "cublas_dev_12.9", "cufft_12.9", "cufft_dev_12.9", "nvrtc_12.9", "nvrtc_dev_12.9"],
-            "cuda-13.0": ["cudart_13.0", "nvcc_13.0", "cublas_13.0", "cublas_dev_13.0", "cufft_13.0", "cufft_dev_13.0", "nvrtc_13.0", "nvrtc_dev_13.0", "crt_13.0", "nvvm_13.0", "nvptxcompiler_13.0"],
+            "cuda-12.6": ["cudart_12.6", "nvcc_12.6", "cublas_12.6", "cublas_dev_12.6", "cufft_12.6", "cufft_dev_12.6", "cusolver_12.6", "cusolver_dev_12.6", "nvrtc_12.6", "nvrtc_dev_12.6"],
+            "cuda-12.9": ["cudart_12.9", "nvcc_12.9", "cublas_12.9", "cublas_dev_12.9", "cufft_12.9", "cufft_dev_12.9", "cusolver_12.9", "cusolver_dev_12.9", "nvrtc_12.9", "nvrtc_dev_12.9"],
+            "cuda-13.0": ["cudart_13.0", "nvcc_13.0", "cublas_13.0", "cublas_dev_13.0", "cufft_13.0", "cufft_dev_13.0", "cusolver_13.0", "cusolver_dev_13.0", "nvrtc_13.0", "nvrtc_dev_13.0", "crt_13.0", "nvvm_13.0", "nvptxcompiler_13.0"],
           }
       run: |
         $ErrorActionPreference = "Stop"

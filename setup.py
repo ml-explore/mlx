@@ -339,6 +339,7 @@ if __name__ == "__main__":
                     "nvidia-cublas-cu12==12.9.*",
                     "nvidia-cufft-cu12==11.4.*",
                     "nvidia-cuda-nvrtc-cu12==12.9.*",
+                    "nvidia-cusolver-cu12==11.7.*",
                 ]
             elif toolkit == 13:
                 install_requires += [
@@ -346,6 +347,7 @@ if __name__ == "__main__":
                     "nvidia-cufft==12.*",
                     "nvidia-cuda-nvrtc==13.*",
                     "nvidia-cuda-runtime==13.*",
+                    "nvidia-cusolver==12.*",
                 ]
             else:
                 raise ValueError(f"Unknown toolkit {toolkit}")

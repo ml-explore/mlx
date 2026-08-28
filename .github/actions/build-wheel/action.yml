@@ -89,6 +89,7 @@ runs:
               --exclude libcuda* \
               --exclude libcudnn* \
               --exclude libcufft* \
+              --exclude libcusolver* \
               --exclude libnccl* \
               --exclude libnvrtc*
           fi

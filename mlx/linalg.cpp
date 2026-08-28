@@ -4,6 +4,7 @@
 #include <ostream>
 #include <vector>
 
+#include "mlx/backend/cuda/cuda.h"
 #include "mlx/linalg.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -12,6 +13,18 @@ namespace mlx::core::linalg {
 
 void check_cpu_stream(const StreamOrDevice& s, const std::string& prefix) {
   if (to_stream(s).device == Device::gpu) {
+    throw std::invalid_argument(
+        prefix +
+        " This op is not yet supported on the GPU. "
+        "Explicitly pass a CPU stream to run it.");
+  }
+}
+
+// For ops that have a CUDA implementation but no Metal one yet.
+void check_cpu_or_cuda_stream(
+    const StreamOrDevice& s,
+    const std::string& prefix) {
+  if (to_stream(s).device == Device::gpu && !cu::is_available()) {
     throw std::invalid_argument(
         prefix +
         " This op is not yet supported on the GPU. "
@@ -336,7 +349,7 @@ array cholesky(
     const array& a,
     bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
-  check_cpu_stream(s, "[linalg::cholesky]");
+  check_cpu_or_cuda_stream(s, "[linalg::cholesky]");
   check_float(a.dtype(), "[linalg::cholesky]");
   if (a.ndim() < 2) {
     std::ostringstream msg;
