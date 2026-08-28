@@ -9,26 +9,23 @@ namespace mlx::core {
 
 struct FenceImpl {
   uint32_t count;
-  Stream producer;
   Event gpu_event;
   Event cpu_event;
 
-  FenceImpl(uint32_t count, Stream s)
-      : count(count), producer(s), cpu_event(s) {
+  FenceImpl(uint32_t count, Stream s) : count(count), cpu_event(s) {
     if (s.device == Device::gpu) {
       gpu_event = Event(s);
       // A value of one selects a native CUDA event.
       gpu_event.set_value(1);
     }
+    // Ensure that we use AtomicEvent, it is the only event that can order a CPU
+    // stream against the GPU.
+    cpu_event.cast<cu::EventImpl>().ensure_created(s, 2);
   }
 };
 
 Fence::Fence(Stream s) {
   fence_ = std::make_shared<FenceImpl>(0, s);
-  auto& f = cast<FenceImpl>();
-  // Ensure that we use AtomicEvent, it is the only event that can order a CPU
-  // stream against the GPU.
-  f.cpu_event.cast<cu::EventImpl>().ensure_created(s, 2);
 }
 
 void Fence::wait(Stream s, const array&) {
@@ -36,7 +33,7 @@ void Fence::wait(Stream s, const array&) {
   if (f.count == 0) {
     return;
   }
-  if (f.producer.device == Device::gpu && s.device == Device::gpu) {
+  if (f.gpu_event.valid() && s.device == Device::gpu) {
     f.gpu_event.wait(s);
   } else {
     // AtomicEvent can not reliably notify a GPU stream, so a dependency that
