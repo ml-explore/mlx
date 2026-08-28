@@ -30,11 +30,11 @@ struct fp8_e4m3 {
   }
 
   operator float16_t() thread {
-    uint16_t v = (bits & 127) << 7;
-    half converted = as_type<half>(v);
-    converted *= 256.0;
-    auto sign = bits & 128;
-    return (sign ? -converted : converted);
+    uint16_t v = bits & 127;
+    uint16_t sign_bit = ((uint16_t)((bits >> 7) & 1)) << 15;
+    uint16_t u = (v << 7) | (((v + 1) >> 7) << 14) | sign_bit;
+    half converted = as_type<half>(u);
+    return converted * 256.0;
   }
 
   operator bfloat16_t() thread {

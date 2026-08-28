@@ -56,13 +56,6 @@ fp16_bf16_binop_helper(/, operator/)
 
 #endif
 
-template <typename, typename = void>
-constexpr bool is_complex = false;
-
-template <typename T>
-constexpr bool is_complex<T, std::void_t<decltype(std::declval<T>().real())>> =
-    true;
-
 template <typename T>
 constexpr bool is_signed_v = std::is_signed_v<T> ||
     std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;

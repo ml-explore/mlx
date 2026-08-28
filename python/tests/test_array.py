@@ -1267,6 +1267,13 @@ class TestArray(mlx_tests.MLXTestCase):
         a_mlx = mx.array(a_np)
         self.assertTrue(np.array_equal(a_np[2:-1, 0], np.array(a_mlx[2:-1, 0])))
 
+        # Ellipsis with more trailing indices than dimensions
+        a_mlx = mx.array([1, 2, 3])
+        with self.assertRaises(ValueError):
+            a_mlx[..., 0, 0]
+        with self.assertRaises(ValueError):
+            a_mlx[..., 0, 0] = 5
+
     def test_indexing_grad(self):
         x = mx.array([[1, 2], [3, 4]]).astype(mx.float32)
         ind = mx.array([0, 1, 0]).astype(mx.float32)

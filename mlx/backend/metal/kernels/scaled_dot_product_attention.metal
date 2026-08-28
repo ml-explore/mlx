@@ -28,14 +28,14 @@ using namespace metal;
       qk_dim,                                                  \
       value_dim)
 
-#define instantiate_sdpa_vector_gqa(type, qk_dim, value_dim, hpt)  \
-  instantiate_kernel(                                              \
-      "sdpa_vector_2pass_1_gqa_" #type "_" #qk_dim "_" #value_dim, \
-      sdpa_vector_2pass_1_gqa,                                     \
-      type,                                                        \
-      qk_dim,                                                      \
-      value_dim,                                                   \
-      8,                                                           \
+#define instantiate_sdpa_vector_gqa(type, qk_dim, value_dim, g, hpt)      \
+  instantiate_kernel(                                                     \
+      "sdpa_vector_2pass_1_gqa_" #g "_" #type "_" #qk_dim "_" #value_dim, \
+      sdpa_vector_2pass_1_gqa,                                            \
+      type,                                                               \
+      qk_dim,                                                             \
+      value_dim,                                                          \
+      g,                                                                  \
       hpt)
 
 #define instantiate_sdpa_vector_heads(type)      \
@@ -45,8 +45,10 @@ using namespace metal;
   instantiate_sdpa_vector(type, 192, 128)        \
   instantiate_sdpa_vector(type, 192, 192)        \
   instantiate_sdpa_vector(type, 256, 256)        \
-  instantiate_sdpa_vector_gqa(type, 64, 64, 8)   \
-  instantiate_sdpa_vector_gqa(type, 128, 128, 4) \
+  instantiate_sdpa_vector_gqa(type, 64, 64, 8, 8)     \
+  instantiate_sdpa_vector_gqa(type, 128, 128, 8, 4)   \
+  instantiate_sdpa_vector_gqa(type, 128, 128, 12, 4)  \
+  instantiate_sdpa_vector_gqa(type, 128, 128, 16, 2)  \
   instantiate_sdpa_vector_aggregation(type, 64)  \
   instantiate_sdpa_vector_aggregation(type, 96)  \
   instantiate_sdpa_vector_aggregation(type, 128) \

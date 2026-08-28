@@ -268,14 +268,16 @@ Simd<T, N> pow(Simd<T, N> base, Simd<T, N> exp) {
     return asd::pow(base.value, exp.value);
   } else {
     Simd<T, N> res = 1;
-    // Raising an integer to a negative power is undefined
-    if (any(exp < 0)) {
-      return 0;
-    }
     while (any(exp > 0)) {
       res = select((exp & 1) != 0, res * base, res);
       base = select(exp > 0, base * base, base);
       exp = exp >> 1;
+    }
+    if constexpr (std::is_signed_v<T>) {
+      // Raising an integer to a negative power is undefined, so return 0 for
+      // those lanes. Select per lane: a single negative exponent must not zero
+      // the whole vector. exp stays negative through the shifts above.
+      res = select(exp < 0, Simd<T, N>(0), res);
     }
     return res;
   }
