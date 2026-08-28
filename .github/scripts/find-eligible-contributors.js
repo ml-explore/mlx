@@ -8,6 +8,7 @@
  *   - fewer than 5 currently open PRs
  *   - more than 2 merged PRs
  *   - merge rate (merged / closed) > 50%
+ *   - "low priority" PRs < 50%
  *
  * Usage:
  *   GITHUB_TOKEN=xxxx node find-eligible-contributors.js <owner> <repo>
@@ -95,6 +96,8 @@ async function fetchCollaborators(owner, repo, token) {
  *   open: number,
  *   closed: number,
  *   merged: number,
+ *   total: number,
+ *   lowPriority: number,
  *   mostRecentCreatedAt: Date
  * }>
  */
@@ -110,10 +113,17 @@ function aggregateUserStats(pullRequests) {
         open: 0,
         closed: 0,
         merged: 0,
+        total: 0,
+        lowPriority: 0,
         mostRecentCreatedAt: null,
       });
     }
     const s = stats.get(login);
+
+    s.total += 1;
+    if (pr.labels?.some((label) => label.name === 'low priority')) {
+      s.lowPriority += 1;
+    }
 
     if (pr.state === 'open') {
       s.open += 1;
@@ -138,6 +148,7 @@ function aggregateUserStats(pullRequests) {
  *   - fewer than 5 currently open PRs
  *   - more than 2 merged PRs
  *   - merge rate (merged / closed) > 50%
+ *   - "low priority" PRs < 50%
  *   - not a collaborator
  *   - has an open PR or at least one PR within the past 6 weeks
  */
@@ -152,6 +163,7 @@ function filterEligibleUsers(stats, collaboratorLogins) {
     if (collaboratorLogins.has(login)) continue;
     if (s.open == 0 && s.mostRecentCreatedAt < cutoff) continue;
     if ((s.merged / s.closed) < 0.5) continue;
+    if ((s.lowPriority / s.total) > 0.5) continue;
 
     eligible.push(login);
   }
