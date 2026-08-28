@@ -57,6 +57,23 @@ TEST_CASE("test gpu full") {
   }
 }
 
+TEST_CASE("test gpu strided scan grid") {
+  std::vector<float> values(72, 1.0f);
+  auto x = array(values.data(), {72});
+  x = transpose(reshape(x, {2, 9, 4}, Device::gpu), {0, 2, 1}, Device::gpu);
+  x = cumsum(x, -1, false, true, Device::gpu);
+
+  auto causal = tril(ones({9, 9}, float32, Device::gpu), 0, Device::gpu);
+  auto relative = subtract(
+      expand_dims(x, -1, Device::gpu),
+      expand_dims(x, -2, Device::gpu),
+      Device::gpu);
+  eval(relative, causal);
+
+  auto expected = tri(9, 9, 0, float32, Device::cpu);
+  CHECK(array_equal(causal, expected, Device::cpu).item<bool>());
+}
+
 TEST_CASE("test gpu astype") {
   array x = array({-4, -3, -2, -1, 0, 1, 2, 3});
   // Check all types work
