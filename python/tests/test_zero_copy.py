@@ -1,6 +1,8 @@
 # Copyright © 2024 Apple Inc.
 
+import faulthandler
 import gc
+import threading
 import unittest
 
 import mlx.core as mx
@@ -82,6 +84,66 @@ class TestZeroCopy(mlx_tests.MLXTestCase):
             r = mx.sum(x @ w)
             mx.eval(r)
         self.assertTrue(True)  # reaching here without crashing is the assertion
+
+    def _adopted_source(self, n):
+        # A square source buffer that mx.asarray can adopt, else a skip.
+        if not mx.metal.is_available():
+            self.skipTest("copy=False requires Metal")
+        a = np.zeros((n, n), dtype=np.float32)
+        if a.ctypes.data % 16384 != 0:
+            self.skipTest("source buffer not page-aligned; adopt path not taken")
+        return a
+
+    @staticmethod
+    def _submit_work(a):
+        # The adopted array is an input of the first matmul and is dropped here,
+        # so only the completion handler of the command buffer that is in flight
+        # keeps its Python owner. The caller must keep the output until the end.
+        n = a.shape[0]
+        w = mx.ones((n, n))
+        y = mx.asarray(a, copy=False) @ w
+        for _ in range(4):
+            y = y @ w
+        mx.async_eval(y)
+        return y
+
+    # A stream callback can free an adopted buffer, which takes the GIL. A call
+    # that waits for a stream must release the GIL, else the two deadlock.
+    # faulthandler reports such a deadlock, its timer is a C thread. A watchdog
+    # in Python would never run.
+    def test_synchronize_releases_gil(self):
+        a = self._adopted_source(1024)
+        faulthandler.dump_traceback_later(30, exit=True)
+        try:
+            for _ in range(4):
+                y = self._submit_work(a)
+                mx.synchronize()
+                del y
+        finally:
+            faulthandler.cancel_dump_traceback_later()
+
+    def test_clear_streams_releases_gil(self):
+        a = self._adopted_source(1024)
+        errors = []
+
+        # clear_streams destroys the streams of the calling thread, so it runs
+        # in a thread that ends right after.
+        def worker():
+            try:
+                y = self._submit_work(a)
+                mx.clear_streams()
+                del y
+            except Exception as e:
+                errors.append(e)
+
+        faulthandler.dump_traceback_later(30, exit=True)
+        try:
+            thread = threading.Thread(target=worker)
+            thread.start()
+            thread.join()
+        finally:
+            faulthandler.cancel_dump_traceback_later()
+        self.assertEqual(errors, [])
 
 
 if __name__ == "__main__":
