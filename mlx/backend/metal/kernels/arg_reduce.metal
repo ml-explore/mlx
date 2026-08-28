@@ -8,7 +8,7 @@
 using namespace metal;
 
 template <typename T, metal::enable_if_t<metal::is_integral_v<T>, bool> = true>
-bool isnan(T) {
+inline bool isnan(T) {
   return false;
 }
 
