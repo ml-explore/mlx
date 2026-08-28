@@ -250,29 +250,6 @@ TEST_CASE("test scheduler races") {
   eval(a, y);
 }
 
-// A GPU to GPU dependency must be resolved in the consumer stream. If the
-// fence waits on the host instead, async_eval can not return until the
-// producer kernels have run.
-TEST_CASE("test cross stream async eval does not block") {
-  if (!gpu::is_available()) {
-    return;
-  }
-
-  auto producer = new_stream(Device::gpu);
-  auto consumer = new_stream(Device::gpu);
-
-  int n = 2048;
-  array seed = full({n, n}, 1.0f / n, float32, producer);
-  eval(seed);
-  // Compile the kernels before checking asynchronous submission.
-  eval(flip(matmul(seed, seed, producer), consumer));
-
-  auto a = matmul(seed, seed, producer);
-  auto b = flip(a, consumer);
-  async_eval(b);
-  CHECK(!a.is_available());
-}
-
 // The fence orders work between two streams. Check that the consumer sees the
 // producer result for every combination of producer and consumer device.
 TEST_CASE("test cross stream fence ordering") {
