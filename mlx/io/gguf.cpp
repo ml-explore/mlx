@@ -59,9 +59,6 @@ std::optional<Dtype> gguf_type_to_dtype(const uint32_t& gguf_type) {
 
 Shape get_shape(const gguf_tensor& tensor) {
   Shape shape;
-  // Only the byte size is checked against the file, so a dimension that does
-  // not survive the narrowing to ShapeElem, or a product that wraps, would let
-  // the shape and tensor.num_weights describe different sizes.
   uint64_t num_weights = 1;
   // The dimension order in GGML is the reverse of the order used in MLX.
   for (int i = tensor.ndim - 1; i >= 0; i--) {
