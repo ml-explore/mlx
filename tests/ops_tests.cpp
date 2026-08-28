@@ -4525,6 +4525,68 @@ TEST_CASE("test conv shape overflow") {
       Shape{1, 8, 8, 1});
 }
 
+TEST_CASE("test pad with an axes subset") {
+  // edge_pad ignored `axes` and indexed the pad sizes by array axis, so it
+  // read past the end of those vectors and placed the input on the wrong
+  // axes. reflect and symmetric indexed by position but did not normalize a
+  // negative axis.
+  auto x = reshape(arange(24.0f), {2, 3, 4});
+  auto all = {"constant", "edge", "reflect", "symmetric"};
+
+  // Padding a subset of the axes matches the equivalent all-axes spelling.
+  for (auto mode : all) {
+    CHECK(array_equal(
+              pad(x, {1}, Shape{1}, Shape{2}, array(0.0f), mode),
+              pad(x,
+                  {0, 1, 2},
+                  Shape{0, 1, 0},
+                  Shape{0, 2, 0},
+                  array(0.0f),
+                  mode))
+              .item<bool>());
+  }
+
+  // A negative axis matches its non-negative spelling.
+  for (auto mode : all) {
+    CHECK(array_equal(
+              pad(x, {-2}, Shape{1}, Shape{2}, array(0.0f), mode),
+              pad(x, {1}, Shape{1}, Shape{2}, array(0.0f), mode))
+              .item<bool>());
+  }
+
+  // The order of `axes` does not change the result.
+  auto y = reshape(arange(25.0f), {5, 5});
+  for (auto mode : all) {
+    CHECK(array_equal(
+              pad(y, {1, 0}, Shape{1, 2}, Shape{1, 2}, array(0.0f), mode),
+              pad(y, {0, 1}, Shape{2, 1}, Shape{2, 1}, array(0.0f), mode))
+              .item<bool>());
+  }
+
+  // An ndim past SmallVector's inline capacity puts the pad sizes on the heap,
+  // where the old read ran off the end of the allocation.
+  std::vector<int> wide_axes(11);
+  std::iota(wide_axes.begin(), wide_axes.end(), 0);
+  auto wide =
+      pad(zeros(Shape(34, 1)),
+          wide_axes,
+          Shape(11, 1),
+          Shape(11, 0),
+          array(0.0f),
+          "edge");
+  CHECK_EQ(wide.size(), 2048);
+
+  // An axis outside the array is rejected rather than indexed.
+  for (auto mode : all) {
+    CHECK_THROWS_AS(
+        pad(x, {5}, Shape{1}, Shape{1}, array(0.0f), mode),
+        std::invalid_argument);
+    CHECK_THROWS_AS(
+        pad(x, {-5}, Shape{1}, Shape{1}, array(0.0f), mode),
+        std::invalid_argument);
+  }
+}
+
 TEST_CASE("test pad shape overflow") {
   // A padding sum that overflows int32 is rejected, not wrapped.
   // https://github.com/ml-explore/mlx/issues/3611
