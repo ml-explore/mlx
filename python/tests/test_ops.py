@@ -4258,6 +4258,17 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
 
+        # 0x7f and 0xff are NaN in E4M3FN. Arithmetic does not keep the sign of
+        # a NaN, so only test for NaN. Use float32, numpy has no bfloat16.
+        nan_encodings = mx.array([0x7F, 0xFF], dtype=mx.uint8)
+        decoded_np = np.array(mx.from_fp8(nan_encodings, mx.float32))
+        self.assertTrue(np.isnan(decoded_np[0]).item())
+        self.assertTrue(np.isnan(decoded_np[1]).item())
+
+        # The carry must not fire one byte early: 0x7e/0xfe stay finite
+        finite = mx.from_fp8(mx.array([0x7E, 0xFE], dtype=mx.uint8), mx.float32)
+        self.assertTrue(mx.array_equal(finite, mx.array([448.0, -448.0])))
+
     def test_zeros_ones_empty_like_dtype(self):
         x = mx.array([1, 2, 3], dtype=mx.int32)
 
