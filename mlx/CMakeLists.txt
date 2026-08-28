@@ -54,6 +54,10 @@ endif()
 if(WIN32)
   # windows.h defines min/max macros that conflict with std::min/std::max.
   target_compile_definitions(mlx PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  # TODO: Remove after removing std::atomic_store/load.
+  target_compile_definitions(
+    mlx
+    PRIVATE _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING)
 endif()
 if(MSVC)
   # Unicode support in fmt does not compile in .cu files.

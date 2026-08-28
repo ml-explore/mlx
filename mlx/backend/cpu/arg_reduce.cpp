@@ -41,7 +41,7 @@ void arg_reduce_dispatch(
   switch (rtype) {
     case ArgReduce::ArgMin: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
-        if ((!isnan(*y) && isnan(x)) || x < (*y)) {
+        if ((!mlx::core::isnan(*y) && mlx::core::isnan(x)) || x < (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
         }
@@ -51,7 +51,7 @@ void arg_reduce_dispatch(
     }
     case ArgReduce::ArgMax: {
       auto op = [](auto ind_x, auto x, auto ind_y, auto y) {
-        if ((!isnan(*y) && isnan(x)) || x > (*y)) {
+        if ((!mlx::core::isnan(*y) && mlx::core::isnan(x)) || x > (*y)) {
           (*y) = x;
           (*ind_y) = ind_x;
         }

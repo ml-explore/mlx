@@ -160,7 +160,7 @@ auto imag(Simd<T, 1> in) -> Simd<decltype(std::imag(in.value)), 1> {
 }
 template <typename T>
 Simd<bool, 1> isnan(Simd<T, 1> in) {
-  return std::isnan(in.value);
+  return mlx::core::isnan(in.value);
 }
 
 #define DEFAULT_BINARY(OP)                                                 \
