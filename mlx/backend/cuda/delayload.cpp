@@ -26,24 +26,6 @@ inline fs::path cublas_dir() {
   return relative_to_current_binary("../nvidia/cublas/bin");
 }
 
-inline fs::path cusolver_dir() {
-  return cuda_bin_dir() ? fs::path(cuda_bin_dir())
-                        : relative_to_current_binary("../nvidia/cusolver/bin");
-}
-
-fs::path load_cusolver() {
-  fs::path dir = cusolver_dir();
-  // cusolver resolves cusparse, nvjitlink and cublas at load time, add their
-  // wheel dirs to the search path.
-  ::AddDllDirectory(dir.c_str());
-  ::AddDllDirectory(cublas_dir().c_str());
-  ::AddDllDirectory(
-      relative_to_current_binary("../nvidia/cusparse/bin").c_str());
-  ::AddDllDirectory(
-      relative_to_current_binary("../nvidia/nvjitlink/bin").c_str());
-  return dir;
-}
-
 fs::path load_nvrtc() {
   fs::path nvrtc_dir;
   if (const char* dir = cuda_bin_dir()) {
@@ -77,6 +59,23 @@ fs::path load_cudnn() {
   ::AddDllDirectory(cudnn_dir.c_str());
   ::AddDllDirectory(cublas_dir().c_str());
   return cudnn_dir;
+}
+
+fs::path load_cusolver() {
+  fs::path cusolver_dir;
+  if (const char* dir = cuda_bin_dir()) {
+    cusolver_dir = dir;
+    ::AddDllDirectory(dir.c_str());
+  } else {
+    cusolver_dir = relative_to_current_binary("../nvidia/cusolver/bin");
+    ::AddDllDirectory(cusolver_dir.c_str());
+    ::AddDllDirectory(cublas_dir().c_str());
+    ::AddDllDirectory(
+        relative_to_current_binary("../nvidia/cusparse/bin").c_str());
+    ::AddDllDirectory(
+        relative_to_current_binary("../nvidia/nvjitlink/bin").c_str());
+  }
+  return cusolver_dir;
 }
 
 // Called by system when failed to locate a lazy-loaded DLL.

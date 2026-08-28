@@ -32,10 +32,10 @@ __global__ void zero_triangle(T* out, IdxT size, int32_t n, bool zero_below) {
 
 // potrfBatched wants a device array of per matrix pointers.
 __global__ void
-fill_matrix_pointers(void** ptrs, char* base, size_t stride, int32_t count) {
-  int32_t i = cg::this_grid().thread_rank();
-  if (i < count) {
-    ptrs[i] = base + i * stride;
+fill_matrix_pointers(void** ptrs, float* base, int64_t n2, int64_t batch) {
+  int64_t i = cg::this_grid().thread_rank();
+  if (i < batch) {
+    ptrs[i] = base + i * n2;
   }
 }
 
@@ -53,14 +53,11 @@ void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
       a.flags().row_contiguous ? CopyType::Vector : CopyType::General,
       s);
 
-  int64_t n = a.shape(-1);
   if (a.size() == 0) {
     return;
   }
-  int64_t num_matrices = a.size() / (n * n);
 
   auto& encoder = cu::get_command_encoder(s);
-  encoder.set_output_array(out);
 
   auto handle = get_cusolver_handle(encoder.device());
   CHECK_CUSOLVER_ERROR(cusolverDnSetStream(handle, encoder.stream()));
@@ -70,75 +67,60 @@ void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
   // upper_, same as the CPU op.
   cublasFillMode_t uplo =
       upper_ ? CUBLAS_FILL_MODE_LOWER : CUBLAS_FILL_MODE_UPPER;
+
   // Only float32 reaches eval_gpu: float64 is rejected on GPU streams at
   // array construction.
   auto type = CUDA_R_32F;
-  auto* out_ptr = gpu_ptr<char>(out);
-  size_t matrix_bytes = n * n * out.itemsize();
+  auto* out_ptr = gpu_ptr<float>(out);
+
+  int64_t n = a.shape(-1);
+  int64_t batch = a.size() / (n * n);
 
   // Matching the CPU op, info is never read back: a non positive definite
   // input gives an undefined factor rather than an error.
   auto* info = static_cast<int*>(
-      allocate_workspace(encoder, num_matrices * sizeof(int)));
+      allocate_workspace(encoder, batch * sizeof(int)));
 
-  // potrfBatched parallelizes across the batch, so it wins until the batch is
-  // too small to keep the device busy at that size. A loop of single
-  // factorizations only catches up for large matrices in small batches. No
-  // constant fits every measured shape, so 1024 is a compromise.
-  if (num_matrices > 1 && num_matrices <= INT32_MAX &&
-      num_matrices * 1024 > n) {
-    auto** ptrs = static_cast<void**>(
-        allocate_workspace(encoder, num_matrices * sizeof(void*)));
+  // TODO: For some consumer cards serialized loop might be faster.
+  if (batch > 1) {
+    array ptrs(
+        cu::malloc_async(batch * sizeof(void*), encoder),
+        {static_cast<int>(batch)},
+        uint64);
+    encoder.add_temporary(ptrs);
+    encoder.set_output_array(ptrs);
+    encoder.add_kernel_node(
+        &cu::fill_matrix_pointers,
+        cuda::ceil_div(batch, 256),
+        256,
+        gpu_ptr<void*>(ptrs),
+        out_ptr,
+        n * n,
+        batch);
+
+    encoder.set_input_array(ptrs);
+    encoder.set_output_array(out);
     auto capture = encoder.capture_context();
-    int32_t count = num_matrices;
-    cu::fill_matrix_pointers<<<(count + 255) / 256, 256, 0, encoder.stream()>>>(
-        ptrs, out_ptr, matrix_bytes, count);
     CHECK_CUSOLVER_ERROR(cusolverDnSpotrfBatched(
         handle,
         uplo,
         n,
-        reinterpret_cast<float**>(ptrs),
+        gpu_ptr<float*>(ptrs),
         /* lda */ n,
         info,
-        count));
+        batch));
   } else {
-    size_t device_bytes = 0;
-    size_t host_bytes = 0;
-    CHECK_CUSOLVER_ERROR(cusolverDnXpotrf_bufferSize(
-        handle,
-        /* params */ nullptr,
-        uplo,
-        n,
-        type,
-        out_ptr,
-        /* lda */ n,
-        type,
-        &device_bytes,
-        &host_bytes));
+    int lwork = 0;
+    CHECK_CUSOLVER_ERROR(cusolverDnSpotrf_bufferSize(
+        handle, uplo, n, out_ptr, n, &lwork));
+    auto* workspace = static_cast<float*>(
+        allocate_workspace(encoder, lwork * sizeof(float)));
 
-    auto* device_ws = allocate_workspace(encoder, device_bytes);
-    auto host_ws = std::make_shared<std::vector<char>>(host_bytes);
-    if (host_bytes > 0) {
-      encoder.add_completed_handler([host_ws]() {});
-    }
-
+    encoder.set_input_array(out);
+    encoder.set_output_array(out);
     auto capture = encoder.capture_context();
-    for (int64_t i = 0; i < num_matrices; ++i) {
-      CHECK_CUSOLVER_ERROR(cusolverDnXpotrf(
-          handle,
-          /* params */ nullptr,
-          uplo,
-          n,
-          type,
-          out_ptr + i * matrix_bytes,
-          /* lda */ n,
-          type,
-          device_ws,
-          device_bytes,
-          host_ws->data(),
-          host_bytes,
-          info + i));
-    }
+    CHECK_CUSOLVER_ERROR(cusolverDnSpotrf(
+        handle, uplo, n, out_ptr, n, workspace, lwork, info));
   }
 
   encoder.set_output_array(out);
@@ -149,9 +131,9 @@ void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
         cu::zero_triangle<float, IdxT>,
         num_blocks,
         block_dims,
-        gpu_ptr<float>(out),
-        out.size(),
-        n,
+        out_ptr,
+        static_cast<IdxT>(out.size()),
+        static_cast<int32_t>(n),
         upper_);
   });
 }
