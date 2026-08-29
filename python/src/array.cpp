@@ -76,6 +76,9 @@ class ArrayAt {
 class ArrayPythonIterator {
  public:
   ArrayPythonIterator(mx::array x) : idx_(0), x_(std::move(x)) {
+    if (x_.ndim() == 0) {
+      throw nb::type_error("iter() / list() 0-dimensional array.");
+    }
     if (x_.shape(0) > 0 && x_.shape(0) < 10) {
       splits_ = mx::split(x_, x_.shape(0));
     }
