@@ -175,8 +175,8 @@ Dims get_2d_grid_dims_common(
     const Shape& shape,
     const Strides& strides,
     size_t divisor) {
-  // Compute the 2d grid dimensions such that the total size of the grid is
-  // divided by divisor.
+  // Non-broadcast dimensions multiply to the grid size, so factors with product
+  // divisor divide it by divisor. For 36: {2 / 2, 4 / 2, 9 / 9} = {1, 2, 1}.
   Shape divided_shape = shape;
   size_t remaining_divisor = divisor;
   for (int i = 0; i < shape.size(); ++i) {
