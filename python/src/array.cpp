@@ -1038,6 +1038,22 @@ void init_array(nb::module_& m) {
             return nb::cast<std::complex<double>>(to_scalar(a));
           })
       .def(
+          "__index__",
+          [](mx::array& a) {
+            if (!mx::issubdtype(a.dtype(), mx::integer) || a.ndim() != 0) {
+              throw nb::type_error(
+                  "Only 0-dimensional integer arrays can be converted to an index.");
+            }
+            return nb::int_(to_scalar(a));
+          })
+      .def(
+          "__bytes__",
+          [](mx::array& a) {
+            a.eval();
+            return nb::bytes(
+                reinterpret_cast<const char*>(a.data<void>()), a.nbytes());
+          })
+      .def(
           "__format__",
           [](mx::array& a, nb::object format_spec) {
             if (nb::len(nb::str(format_spec)) > 0 && a.ndim() > 0) {

@@ -5,6 +5,7 @@
 
 #include <nanobind/ndarray.h>
 
+#include "mlx/dtype.h"
 #include "mlx/ops.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
@@ -18,6 +19,9 @@ bool is_none_slice(const nb::slice& in_slice) {
 
 bool is_index_scalar(const nb::object& obj) {
   if (nb::isinstance<nb::bool_>(obj)) {
+    return false;
+  }
+  if (nb::isinstance<mx::array>(obj)) {
     return false;
   }
   if (!PyIndex_Check(obj.ptr())) {
