@@ -146,8 +146,6 @@ jobs:
     needs: mac_build
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-linux
-      - uses: ./.github/actions/build-linux
       - name: Checkout array-api-tests
         uses: actions/checkout@v7
         with:
