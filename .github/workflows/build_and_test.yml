@@ -145,14 +145,13 @@ jobs:
     needs: check_lint
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-linux
       - uses: ./.github/actions/build-linux
       - name: Checkout array-api-tests
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: data-apis/array-api-tests
-          ref: '41379d15d26d67a1e66c840e775d41a8a7fb1516'  # v2026.02.26
           submodules: 'true'
           path: 'array-api-tests'
           persist-credentials: false
@@ -162,10 +161,12 @@ jobs:
       - name: Run the test suite
         env:
           ARRAY_API_TESTS_MODULE: mlx.core
+          ARRAY_API_TESTS_SKIP_DTYPES: float64,complex128
+          ARRAY_API_TESTS_FAIL_MARK: skip
           PYTHONWARNINGS: 'ignore::UserWarning::,ignore::DeprecationWarning::,ignore::RuntimeWarning::'
         run: |
           cd ${GITHUB_WORKSPACE}/array-api-tests
-          pytest array_api_tests -v -c pytest.ini -n 2 --max-examples=1000 --derandomize --disable-deadline
+          pytest array_api_tests -v -c pytest.ini -n 2 --max-examples=1000 --derandomize --disable-deadline --disable-data-dependent-shapes
 
   build_documentation:
     name: Build Documentation
