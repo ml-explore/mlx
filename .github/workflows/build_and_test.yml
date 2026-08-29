@@ -141,7 +141,7 @@ jobs:
 
   array_api_tests:
     name: Array API Tests
-    if: github.repository == 'ml-explore/mlx'
+  ####  if: github.repository == 'ml-explore/mlx'
     needs: check_lint
     runs-on: ubuntu-22.04
     steps:
