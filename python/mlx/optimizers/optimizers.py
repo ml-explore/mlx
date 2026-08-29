@@ -274,7 +274,7 @@ class SGD(Optimizer):
         optimizer state."""
 
         if self.weight_decay != 0:
-            gradient += self.weight_decay * parameter
+            gradient = gradient + self.weight_decay * parameter
 
         if self.momentum <= 0:
             return parameter - self.learning_rate.astype(gradient.dtype) * gradient
@@ -856,7 +856,7 @@ class Adafactor(Optimizer):
             update = exp_avg
 
         if self.weight_decay != 0:
-            parameter += parameter * (-self.weight_decay * learning_rate)
+            parameter = parameter + parameter * (-self.weight_decay * learning_rate)
         return parameter - update
 
 
