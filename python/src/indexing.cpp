@@ -913,7 +913,7 @@ mlx_compute_slice_update_args(
       upd_ax--;
     } else if (is_index_scalar(pyidx)) {
       int st = safe_to_int32(pyidx);
-      st = (st < 0) ? st + src.shape(i) : st;
+      st = (st < 0) ? st + src.shape(ax) : st;
       starts[ax] = st;
       stops[ax] = st + 1;
       if (upd_ax >= 0) {

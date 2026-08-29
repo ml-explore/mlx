@@ -1348,6 +1348,13 @@ class TestArray(mlx_tests.MLXTestCase):
         a[0:1] = mx.array([1])
         self.assertEqual(a.tolist(), [1, 4, 4])
 
+        # Regression test: a negative integer index after a None
+        # (newaxis) used to be normalized against the wrong axis size,
+        # silently writing nothing instead of updating the last row.
+        b = mx.zeros((3, 4))
+        b[None, -1] = 9
+        self.assertEqual(b.tolist(), [[0, 0, 0, 0], [0, 0, 0, 0], [9, 9, 9, 9]])
+
         with self.assertRaises(ValueError):
             a[0:1] = mx.array([2, 3])
 
