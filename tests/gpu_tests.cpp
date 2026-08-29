@@ -58,6 +58,7 @@ TEST_CASE("test gpu full") {
 }
 
 TEST_CASE("test gpu strided scan grid") {
+  // Regression for #4419 strided_scan writes out of bounds.
   std::vector<float> values(72, 1.0f);
   auto x = array(values.data(), {72});
   x = transpose(reshape(x, {2, 9, 4}, Device::gpu), {0, 2, 1}, Device::gpu);
