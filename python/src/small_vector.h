@@ -31,7 +31,7 @@ struct type_caster<::mlx::core::SmallVector<Type, Size, Alloc>> {
 
   // Not noexcept: on overflow of a narrow integer element we raise
   // OverflowError so nanobind surfaces a clean error to the user.
-  bool from_python(handle src, uint8_t flags, cleanup_list* cleanup) {
+  bool from_python(handle src, uint32_t flags, cleanup_list* cleanup) {
     size_t size;
     PyObject* temp;
 

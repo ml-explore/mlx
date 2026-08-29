@@ -23,7 +23,7 @@ find_package(
 FetchContent_Declare(
   nanobind
   GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-  GIT_TAG v2.15.0
+  GIT_TAG v3.0.1
   GIT_SHALLOW TRUE
   EXCLUDE_FROM_ALL)
 FetchContent_MakeAvailable(nanobind)
