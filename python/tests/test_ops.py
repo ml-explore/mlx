@@ -1109,8 +1109,6 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = c / np.abs(c)
         self.assertTrue(np.allclose(result, expected))
 
-        # Extreme magnitudes (issue #4344), reference computed in double
-        # precision to avoid range issues in the complex division itself
         c = mx.array([1e20 + 1e20j, 2.5e-20 - 3e-20j, 3e38 + 0j], mx.complex64)
         c_np = np.array(c, copy=False).astype(np.complex128)
         expected = (c_np / np.abs(c_np)).astype(np.complex64)
