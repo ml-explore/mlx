@@ -283,10 +283,7 @@ void float_reduction(
   if constexpr (std::is_same_v<AccT, U>) {
     reduction_op<T, U, Op>(x, out, axes, init);
   } else {
-    auto acc_dtype = ReductionAccumulator<T, U, Op>::widen_to_double
-        ? float64
-        : TypeToDtype<AccT>();
-    array temp(out.shape(), acc_dtype, nullptr, {});
+    array temp(out.shape(), TypeToDtype<AccT>(), nullptr, {});
     temp.set_data(allocator::malloc(temp.nbytes()));
     reduction_op<T, AccT, Op>(x, temp, axes, static_cast<AccT>(init));
     std::copy_n(temp.data<AccT>(), out.size(), out.data<U>());
