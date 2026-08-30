@@ -18,6 +18,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/memory.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/backend/metal/metal.h)
 
 # Define MLX_VERSION only in the version.cpp file.

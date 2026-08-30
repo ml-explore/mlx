@@ -7,6 +7,7 @@ Memory Management
   :toctree: _autosummary
 
   get_active_memory
+  get_array_buffer_size
   get_peak_memory
   reset_peak_memory
   get_cache_memory
