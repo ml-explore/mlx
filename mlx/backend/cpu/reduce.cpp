@@ -76,12 +76,8 @@ struct ReductionAccumulator {
   static constexpr bool widen_to_float =
       (std::is_same_v<T, bfloat16_t> ||
        (N == 1 && std::is_same_v<T, float16_t>));
-  static constexpr bool widen_to_double = N == 1 && std::is_same_v<T, float>;
 
-  using type = std::conditional_t<
-      widen_to_double,
-      double,
-      std::conditional_t<widen_to_float, float, U>>;
+  using type = std::conditional_t<widen_to_float, float, U>;
 };
 
 template <typename T, typename U, typename Op>
