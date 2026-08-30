@@ -336,22 +336,27 @@ inline bfloat16_t log1p(bfloat16_t x) {
   return bfloat16_t(x * (metal::log(xp1) / (xp1 - 1.0f)));
 }
 
-inline float complex_abs(float x, float y) {
-  float ax = metal::fabs(x);
-  float ay = metal::fabs(y);
-  if (metal::isinf(ax) || metal::isinf(ay)) {
+// https://github.com/pytorch/pytorch/blob/a82aae9d4a7827849ce50f31c4c7ee8f278d05f5/c10/metal/utils.h#L554
+inline float hypot(float x, float y) {
+  if (metal::isinf(x) || metal::isinf(y)) {
     return metal::numeric_limits<float>::infinity();
   }
-  if (metal::isnan(ax) || metal::isnan(ay)) {
+  if (metal::isnan(x) || metal::isnan(y)) {
     return metal::numeric_limits<float>::quiet_NaN();
   }
-  float lo = metal::fmin(ax, ay);
-  float hi = metal::fmax(ax, ay);
-  if (hi == 0.0f) {
+  float a = metal::fmax(metal::fabs(x), metal::fabs(y));
+  float b = metal::fmin(metal::fabs(x), metal::fabs(y));
+  if (a == 0.0f) {
     return 0.0f;
   }
-  float t = lo / hi;
-  return hi * metal::precise::sqrt(1.0f + t * t);
+  float r = (b / a) * (b / a);
+  float sqrt_1_plus_r = metal::precise::sqrt(1.0f + r);
+  float h1 = metal::sqrt(2.0f) * a;
+  float h2 = a + a * r / 2.0f;
+  float h3 = a * sqrt_1_plus_r;
+  bool is_h1 = (a == b);
+  bool is_h2 = ((sqrt_1_plus_r == 1.0f) && (r > 0.0f));
+  return metal::select(metal::select(h3, h2, is_h2), h1, is_h1);
 }
 
 inline complex64_t log1p(complex64_t in) {

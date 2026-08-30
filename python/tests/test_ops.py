@@ -1083,6 +1083,11 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(a.abs(), abs(a)))
 
+        z = mx.array([1e20 + 1e20j, 2.5e-20 - 3e-20j, 3e38 + 0j, -1e-19j], mx.complex64)
+        np.testing.assert_allclose(
+            mx.abs(z), np.abs(np.array(z, copy=False)), rtol=1e-6
+        )
+
     def test_negative(self):
         a = mx.array([-1.0, 1.0, -2.0, 3.0])
         result = mx.negative(a)
@@ -1103,6 +1108,15 @@ class TestOps(mlx_tests.MLXTestCase):
         # we manually implement the NumPy 2 version here.
         expected = c / np.abs(c)
         self.assertTrue(np.allclose(result, expected))
+
+        # Extreme magnitudes (issue #4344), reference computed in double
+        # precision to avoid range issues in the complex division itself
+        c = mx.array([1e20 + 1e20j, 2.5e-20 - 3e-20j, 3e38 + 0j], mx.complex64)
+        c_np = np.array(c, copy=False).astype(np.complex128)
+        expected = (c_np / np.abs(c_np)).astype(np.complex64)
+        np.testing.assert_allclose(
+            np.array(mx.sign(c), copy=False), expected, rtol=1e-6
+        )
 
     def test_logical_not(self):
         a = mx.array([-1.0, 1.0, 0.0, 1.0, -2.0, 3.0])
@@ -4079,6 +4093,13 @@ class TestOps(mlx_tests.MLXTestCase):
                 mx_op = getattr(mx, op)
                 self.assertTrue(np.allclose(mx_op(x), np_op(x)))
 
+        x = mx.array([1e20 + 1e20j, 2.5e-20 - 3e-20j, 3e38 + 0j, 1e-19j], mx.complex64)
+        for op in ["abs", "sqrt", "log"]:
+            with self.subTest(op=op):
+                np_op = getattr(np, op)
+                mx_op = getattr(mx, op)
+                self.assertTrue(np.allclose(mx_op(x), np_op(x), rtol=1e-5))
+
         x = mx.array(
             [
                 3.0 + 4.0j,
@@ -4096,6 +4117,15 @@ class TestOps(mlx_tests.MLXTestCase):
 
         out = mx.power(mx.array(0j), float("nan"))
         self.assertTrue(mx.isnan(out))
+
+        z = mx.array([1e20 + 1e20j, 2.5e-20 - 3e-20j], mx.complex64)
+        expected = np.array(z, copy=False).astype(np.complex128) ** 0.5
+        self.assertTrue(np.allclose(mx.power(z, 0.5), expected, rtol=1e-5))
+
+        np.testing.assert_array_equal(
+            np.array(mx.power(z[0], 2), copy=False),
+            np.array(mx.power(z[0], 2, stream=mx.cpu), copy=False),
+        )
 
     def test_irregular_alignments(self):
         # Unaligned unary op
