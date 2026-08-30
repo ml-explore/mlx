@@ -172,6 +172,7 @@ template <
     const constant int64_t* reduce_strides [[buffer(8)]],
     const constant int& reduce_ndim [[buffer(9)]],
     const constant size_t& non_col_reductions [[buffer(10)]],
+    const constant int64_t& column_offset [[buffer(11)]],
     uint3 gid [[threadgroup_position_in_grid]],
     uint3 gsize [[threadgroups_per_grid]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
@@ -193,7 +194,7 @@ template <
 
   short lid = simd_group_id * simd_size + simd_lane_id;
   short2 offset((lid % n_read_blocks) * n_reads, lid / n_read_blocks);
-  IdxT column = BN * gid.x + offset.x;
+  IdxT column = IdxT(BN) * gid.x + IdxT(column_offset) + offset.x;
   bool safe = column + n_reads <= reduction_stride;
 
   IdxT out_idx = gid.y + gsize.y * IdxT(gid.z);
@@ -243,7 +244,7 @@ template <
 
     // Write the output.
     if (simd_lane_id == 0) {
-      IdxT out_column = BN * gid.x + out_offset.x;
+      IdxT out_column = IdxT(BN) * gid.x + IdxT(column_offset) + out_offset.x;
       out += out_idx * IdxT(reduction_stride) + out_column;
       if (out_column + n_outputs <= reduction_stride) {
         for (int i = 0; i < n_outputs; i++) {
@@ -311,7 +312,8 @@ template <
     const constant int64_t* reduce_strides [[buffer(8)]],
     const constant int& reduce_ndim [[buffer(9)]],
     const constant size_t& non_col_reductions [[buffer(10)]],
-    const constant size_t& out_size [[buffer(11)]],
+    const constant int64_t& column_offset [[buffer(11)]],
+    const constant size_t& out_size [[buffer(12)]],
     uint3 gid [[threadgroup_position_in_grid]],
     uint3 gsize [[threadgroups_per_grid]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
@@ -336,7 +338,7 @@ template <
 
   short lid = simd_group_id * simd_size + simd_lane_id;
   short2 offset((lid % n_read_blocks) * n_reads, lid / n_read_blocks);
-  IdxT column = BN * gid.x + offset.x;
+  IdxT column = IdxT(BN) * gid.x + IdxT(column_offset) + offset.x;
   bool safe = column + n_reads <= reduction_stride;
 
   IdxT full_idx = gid.y + gsize.y * IdxT(gid.z);
@@ -383,7 +385,7 @@ template <
 
   // Write the output.
   if (simd_lane_id == 0) {
-    IdxT out_column = BN * gid.x + out_offset.x;
+    IdxT out_column = IdxT(BN) * gid.x + IdxT(column_offset) + out_offset.x;
     out += full_idx * IdxT(reduction_stride) + out_column;
     if (out_column + n_outputs <= reduction_stride) {
       for (int i = 0; i < n_outputs; i++) {
