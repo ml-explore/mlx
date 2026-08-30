@@ -222,6 +222,11 @@ void save(std::string file, array a) {
   if (file.length() < 4 || file.substr(file.length() - 4, 4) != ".npy")
     file += ".npy";
 
+  // Materialize the array before opening the file. Opening truncates it and
+  // a lazily loaded input may still read from it.
+  a = contiguous(a, true);
+  a.eval();
+
   // Serialize array
   save(std::make_shared<io::FileWriter>(std::move(file)), a);
 }

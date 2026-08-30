@@ -280,6 +280,18 @@ void save_safetensors(
       file.substr(file.length() - 12, 12) != ".safetensors")
     file += ".safetensors";
 
+  // Materialize the arrays before opening the file. Opening truncates it and
+  // a lazily loaded input may still read from it.
+  {
+    std::vector<array> to_eval;
+    to_eval.reserve(a.size());
+    for (auto& p : a) {
+      p.second = contiguous(p.second);
+      to_eval.push_back(p.second);
+    }
+    eval(std::move(to_eval));
+  }
+
   // Serialize array
   save_safetensors(
       std::make_shared<io::FileWriter>(std::move(file)), a, metadata);
