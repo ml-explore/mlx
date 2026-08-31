@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include <filesystem>
+#include <memory>
 #include <stdexcept>
 #include <vector>
 
@@ -75,6 +76,25 @@ TEST_CASE("test export multi output primitives") {
   auto out = imported_fun(inputs);
   CHECK(allclose(expected[0], out[0]).item<bool>());
   CHECK(allclose(expected[1], out[1]).item<bool>());
+}
+
+TEST_CASE("test export releases replaced multi-output trace nodes") {
+  std::weak_ptr<array::Data> tracker;
+  {
+    auto weight = array({1.0f, 2.0f, 3.0f, 4.0f});
+    eval(weight);
+    tracker = weight.data_shared_ptr();
+
+    auto fun = [weight](const std::vector<array>& inputs) {
+      auto hidden = multiply(inputs[0], weight);
+      auto parts = split(hidden, 2);
+      return std::vector<array>{concatenate({parts[1], parts[0]})};
+    };
+    auto callback = [](const ExportCallbackInput&) {};
+
+    export_function(callback, fun, {array({1.0f, 1.0f, 1.0f, 1.0f})});
+  }
+  CHECK(tracker.expired());
 }
 
 TEST_CASE("test export primitives with state") {

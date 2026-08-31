@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <limits>
+#include <memory>
 
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
@@ -874,4 +875,38 @@ TEST_CASE("test compile throwing first trace does not poison cache") {
   auto out = cfun({});
   REQUIRE_EQ(out.size(), 1);
   CHECK_EQ(out[0].item<float>(), 3.0f);
+}
+
+TEST_CASE("test compile releases replaced multi-output trace nodes") {
+  std::weak_ptr<array::Data> tracker;
+  {
+    auto weight = array({1.0f, 2.0f, 3.0f, 4.0f});
+    eval(weight);
+    tracker = weight.data_shared_ptr();
+
+    auto fun = [weight](const std::vector<array>& inputs) {
+      auto hidden = multiply(inputs[0], weight);
+      auto parts = split(hidden, 2);
+      return std::vector<array>{concatenate({parts[1], parts[0]})};
+    };
+
+    auto out = compile(fun)({array({1.0f, 1.0f, 1.0f, 1.0f})})[0];
+    eval(out);
+    CHECK(array_equal(out, array({3.0f, 4.0f, 1.0f, 2.0f})).item<bool>());
+  }
+  CHECK(tracker.expired());
+}
+
+TEST_CASE("test compile preserves externally owned multi-output graphs") {
+  auto parts = split(array({1.0f, 2.0f, 3.0f, 4.0f}), 2);
+  auto fun = [parts](const std::vector<array>& inputs) {
+    return std::vector<array>{add(add(inputs[0], parts[0]), parts[1])};
+  };
+
+  auto out = compile(fun)({array({10.0f, 20.0f})})[0];
+  eval(out);
+  CHECK(array_equal(out, array({14.0f, 26.0f})).item<bool>());
+
+  eval(parts[0]);
+  CHECK(array_equal(parts[0], array({1.0f, 2.0f})).item<bool>());
 }

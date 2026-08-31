@@ -553,8 +553,6 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
       }
     }
   }
-  tape = std::move(new_tape);
-
   std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>
       new_parents_map;
   for (auto& [id, vec] : parents_map) {
@@ -564,6 +562,12 @@ std::pair<std::vector<array>, ParentsMap> compile_dfs(
     new_parents_map[old_to_new.find(id)->second.id()] = std::move(vec);
   }
   parents_map = std::move(new_parents_map);
+
+  // Release temporary parent references to the old tape before destroying it.
+  // This lets the existing array destructor break otherwise-unreachable
+  // multi-output sibling cycles. Externally owned arrays retain their extra
+  // references and are left intact.
+  tape = std::move(new_tape);
   return {tape, parents_map};
 }
 
