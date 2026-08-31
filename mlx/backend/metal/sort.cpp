@@ -278,6 +278,10 @@ void gpu_merge_sort(
     array& out,
     int axis_,
     bool argsort) {
+  if (out.size() == 0) {
+    return;
+  }
+
   // Get size info
   int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
   int size_sorted_axis = in.shape(axis);

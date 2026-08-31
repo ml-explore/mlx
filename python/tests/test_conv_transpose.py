@@ -486,6 +486,8 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     ((1, 1, 1), (1, 1, 1), (1, 1, 1), (0, 0, 0)),
                     ((3, 3, 3), (3, 1, 1), (1, 1, 1), (0, 0, 0)),
                     ((15, 15, 15), (3, 3, 3), (3, 3, 3), (2, 2, 2)),
+                    # Exercises the Metal phase-aware stride-2/kernel-2 path.
+                    ((3, 4, 5), (2, 2, 2), (2, 2, 2), (0, 0, 0)),
                 ):
                     run_conv_transpose3D(
                         N, C, O, idim, kdim, stride, padding, dtype=dtype

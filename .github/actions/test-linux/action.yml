@@ -36,14 +36,14 @@ runs:
       shell: bash
       env:
         DEVICE: cpu
-      run: python -m unittest discover python/tests -v
+      run: python python/tests/run.py -v
 
     - name: Run Python tests - GPU
       if: steps.gpu-check.outputs.good == 'true'
       shell: bash
       env:
         DEVICE: gpu
-      run: python -m tests discover python/tests -v
+      run: python python/tests/run.py -v
 
     - name: Run CPP tests - CPU
       shell: bash

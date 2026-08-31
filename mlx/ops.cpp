@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2023-2026 Apple Inc.
 
 // Required for using M_PI in MSVC.
 #define _USE_MATH_DEFINES
@@ -1465,7 +1465,7 @@ array reflect_pad(
   Shape starts(a.ndim(), 0);
   auto stops = a.shape();
   for (size_t i = 0; i < axes.size(); i++) {
-    int ax = axes[i];
+    int ax = normalize_axis_index(axes[i], a.ndim(), "[pad] ");
     starts[ax] = low_pad_size[i];
     stops[ax] += low_pad_size[i];
   }
@@ -1473,7 +1473,7 @@ array reflect_pad(
   array padded = slice_update(out, a, starts, stops, s);
 
   for (size_t i = 0; i < axes.size(); i++) {
-    int ax = axes[i];
+    int ax = normalize_axis_index(axes[i], a.ndim(), "[pad] ");
     int n = a.shape(ax);
     int L = low_pad_size[i];
     int H = high_pad_size[i];
@@ -1546,37 +1546,41 @@ array edge_pad(
     const Shape& out_shape,
     StreamOrDevice s /* = {}*/) {
   array out = zeros(out_shape, a.dtype(), s);
-  auto stops = a.shape();
-  for (int i = 0; i < stops.size(); i++) {
-    stops[i] += low_pad_size[i];
+  Shape in_starts(a.ndim(), 0);
+  auto in_stops = a.shape();
+  for (size_t i = 0; i < axes.size(); i++) {
+    int ax = normalize_axis_index(axes[i], a.ndim(), "[pad] ");
+    in_starts[ax] = low_pad_size[i];
+    in_stops[ax] += low_pad_size[i];
   }
   // Copy over values from the unpadded array
-  array padded = slice_update(out, a, low_pad_size, stops, s);
+  array padded = slice_update(out, a, in_starts, in_stops, s);
 
-  for (int axis = 0; axis < a.ndim(); axis++) {
-    if (low_pad_size[axis] > 0) {
+  for (size_t i = 0; i < axes.size(); i++) {
+    int ax = normalize_axis_index(axes[i], a.ndim(), "[pad] ");
+    if (low_pad_size[i] > 0) {
       Shape starts(a.ndim(), 0);
-      starts[axis] = low_pad_size[axis];
+      starts[ax] = low_pad_size[i];
       auto stops = out.shape();
-      stops[axis] = low_pad_size[axis] + 1;
+      stops[ax] = low_pad_size[i] + 1;
       // Fetch edge values
       array edge_value = slice(padded, starts, stops, s);
 
-      starts[axis] = 0;
-      stops[axis] = low_pad_size[axis];
+      starts[ax] = 0;
+      stops[ax] = low_pad_size[i];
       // Update edge values in the padded array
       padded = slice_update(padded, edge_value, starts, stops, s);
     }
 
-    if (high_pad_size[axis] > 0) {
+    if (high_pad_size[i] > 0) {
       Shape starts(a.ndim(), 0);
-      starts[axis] = -high_pad_size[axis] - 1;
+      starts[ax] = -high_pad_size[i] - 1;
       auto stops = out.shape();
-      stops[axis] = -high_pad_size[axis];
+      stops[ax] = -high_pad_size[i];
       array edge_value = slice(padded, starts, stops, s);
 
-      starts[axis] = -high_pad_size[axis];
-      stops[axis] = out.shape(axis);
+      starts[ax] = -high_pad_size[i];
+      stops[ax] = out.shape(ax);
       padded = slice_update(padded, edge_value, starts, stops, s);
     }
   }
@@ -1618,7 +1622,7 @@ array pad(
       throw std::invalid_argument(msg.str());
     }
 
-    auto ax = axes[i] < 0 ? a.ndim() + axes[i] : axes[i];
+    auto ax = normalize_axis_index(axes[i], a.ndim(), "[pad] ");
     out_shape[ax] = safe_cast(
         static_cast<int64_t>(out_shape[ax]) + low_pad_size[i] +
             high_pad_size[i],
@@ -1754,7 +1758,7 @@ array transpose(
   }
   if (axes.size() != a.ndim()) {
     std::ostringstream msg;
-    msg << "[transpose] Recived " << axes.size() << " axes for array with "
+    msg << "[transpose] Received " << axes.size() << " axes for array with "
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
@@ -2794,17 +2798,9 @@ array sort(const array& a, StreamOrDevice s /* = {} */) {
 
 /** Returns a sorted copy of the array along a given axis. */
 array sort(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  // Check for valid axis
-  if (axis + static_cast<int>(a.ndim()) < 0 ||
-      axis >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << "[sort] Received invalid axis " << axis << " for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-
+  auto ax = normalize_axis_index(axis, a.ndim(), "[sort] ");
   return array(
-      a.shape(), a.dtype(), std::make_shared<Sort>(to_stream(s), axis), {a});
+      a.shape(), a.dtype(), std::make_shared<Sort>(to_stream(s), ax), {a});
 }
 
 /** Returns indices that sort the flattened array. */
@@ -2815,17 +2811,9 @@ array argsort(const array& a, StreamOrDevice s /* = {} */) {
 
 /** Returns indices that sort the array along a given axis. */
 array argsort(const array& a, int axis, StreamOrDevice s /* = {} */) {
-  // Check for valid axis
-  if (axis + static_cast<int>(a.ndim()) < 0 ||
-      axis >= static_cast<int>(a.ndim())) {
-    std::ostringstream msg;
-    msg << "[argsort] Received invalid axis " << axis << " for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-
+  auto ax = normalize_axis_index(axis, a.ndim(), "[argsort] ");
   return array(
-      a.shape(), uint32, std::make_shared<ArgSort>(to_stream(s), axis), {a});
+      a.shape(), uint32, std::make_shared<ArgSort>(to_stream(s), ax), {a});
 }
 
 /**
@@ -4160,14 +4148,7 @@ array cumsum(
     bool inclusive /* = true*/,
     std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
-  int ndim = a.ndim();
-  if (axis >= ndim || axis < -ndim) {
-    std::ostringstream msg;
-    msg << "[cumsum] Axis " << axis << " is out of bounds for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  axis = (axis + a.ndim()) % a.ndim();
+  axis = normalize_axis_index(axis, a.ndim(), "[cumsum] ");
   auto x = dtype ? astype(a, *dtype, s) : a;
   auto out_type = x.dtype() == bool_ ? int32 : x.dtype();
   return array(
@@ -4195,14 +4176,7 @@ array cumprod(
     bool inclusive /* = true*/,
     std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
-  int ndim = a.ndim();
-  if (axis >= ndim || axis < -ndim) {
-    std::ostringstream msg;
-    msg << "[cumprod] Axis " << axis << " is out of bounds for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  axis = (axis + a.ndim()) % a.ndim();
+  axis = normalize_axis_index(axis, a.ndim(), "[cumprod] ");
   auto x = dtype ? astype(a, *dtype, s) : a;
   return array(
       x.shape(),
@@ -4227,14 +4201,7 @@ array cummax(
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
-  int ndim = a.ndim();
-  if (axis >= ndim || axis < -ndim) {
-    std::ostringstream msg;
-    msg << "[cummax] Axis " << axis << " is out of bounds for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  axis = (axis + a.ndim()) % a.ndim();
+  axis = normalize_axis_index(axis, a.ndim(), "[cummax] ");
   return array(
       a.shape(),
       a.dtype(),
@@ -4257,14 +4224,7 @@ array cummin(
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
-  int ndim = a.ndim();
-  if (axis >= ndim || axis < -ndim) {
-    std::ostringstream msg;
-    msg << "[cummin] Axis " << axis << " is out of bounds for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  axis = (axis + a.ndim()) % a.ndim();
+  axis = normalize_axis_index(axis, a.ndim(), "[cummin] ");
   return array(
       a.shape(),
       a.dtype(),
@@ -4314,14 +4274,7 @@ array logcumsumexp(
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
-  int ndim = a.ndim();
-  if (axis >= ndim || axis < -ndim) {
-    std::ostringstream msg;
-    msg << "[logcumsumexp] Axis " << axis << " is out of bounds for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  axis = (axis + a.ndim()) % a.ndim();
+  axis = normalize_axis_index(axis, a.ndim(), "[logcumsumexp] ");
   return array(
       a.shape(),
       a.dtype(),
@@ -5164,11 +5117,17 @@ std::vector<array> fp_quantize(
     } else {
       // convert to e8m0
       auto z = array(0, scales.dtype());
-      scales = where(
-          equal(scales, z, s),
-          z,
-          astype(round(log2(scales, s), s), int32, s),
+      // Round the scale up so the block maximum stays representable,
+      // matching the CUDA backend.
+      auto exponent = astype(round(log2(scales, s), s), int32, s);
+      auto decoded =
+          power(array(2.0f, float32), astype(exponent, float32, s), s);
+      exponent = where(
+          less(decoded, astype(scales, float32, s), s),
+          add(exponent, array(1, int32), s),
+          exponent,
           s);
+      scales = where(equal(scales, z, s), z, exponent, s);
 
       wq = divide(wq, power(array(2.0f, w.dtype()), scales, s), s);
       scales = astype(add(scales, array(127, int32), s), uint8, s);

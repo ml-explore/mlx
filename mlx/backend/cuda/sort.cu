@@ -1084,6 +1084,10 @@ void gpu_sort(
     int axis,
     bool argsort) {
   auto& encoder = cu::get_command_encoder(s);
+  if (out.size() == 0) {
+    out.set_data(cu::malloc_async(out.nbytes(), encoder));
+    return;
+  }
   gpu_merge_sort(s, in, out, axis, argsort);
 }
 

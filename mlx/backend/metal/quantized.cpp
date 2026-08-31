@@ -249,21 +249,18 @@ void quantize_impl(
   auto w = ensure_row_contiguous(w_pre, d, s);
   if (dequantize) {
     auto scales = ensure_row_contiguous(inputs[1], d, s);
-    compute_encoder.set_input_array(w, 0);
-    compute_encoder.set_input_array(scales, 1);
     if (has_biases) {
       auto biases = ensure_row_contiguous(inputs[2], d, s);
       compute_encoder.set_input_array(biases, 2);
     } else if (has_global_scale) {
       compute_encoder.set_input_array(inputs[2], 2);
     }
+    compute_encoder.set_input_array(w, 0);
+    compute_encoder.set_input_array(scales, 1);
     compute_encoder.set_output_array(out, 3);
   } else {
     auto& scales = outputs[1];
     scales.set_data(allocator::malloc(scales.nbytes()));
-    compute_encoder.set_input_array(w, 0);
-    compute_encoder.set_output_array(out, 1);
-    compute_encoder.set_output_array(scales, 2);
     if (has_biases) {
       auto& biases = outputs[2];
       biases.set_data(allocator::malloc(biases.nbytes()));
@@ -271,6 +268,9 @@ void quantize_impl(
     } else if (has_global_scale) {
       compute_encoder.set_input_array(inputs[1], 3);
     }
+    compute_encoder.set_input_array(w, 0);
+    compute_encoder.set_output_array(out, 1);
+    compute_encoder.set_output_array(scales, 2);
   }
 
   auto type_string = dequantize ? get_type_string(out.dtype())
@@ -830,7 +830,8 @@ void qmm_nax(
 
   int wm = 2;
   int wn = 2;
-  int bm = 64;
+  // Use smaller bm when one block covers all of M.
+  int bm = (M <= 32) ? 32 : 64;
   int bn = 64;
   int bk = 64;
   MTL::Size group_dims(32, wn, wm);
@@ -971,7 +972,7 @@ void gather_qmm_nax(
     kernel = get_qmm_nax_kernel_wrapped(
         d,
         kname,
-        "gather_qmm_t_nax_",
+        "gather_qmm_t_nax",
         mode,
         type_string,
         group_size,
@@ -986,7 +987,7 @@ void gather_qmm_nax(
     kernel = get_qmm_nax_kernel_wrapped(
         d,
         kname,
-        "gather_qmm_n_nax_",
+        "gather_qmm_n_nax",
         mode,
         type_string,
         group_size,
