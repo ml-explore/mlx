@@ -203,12 +203,29 @@ Simd<T, 1> clz(Simd<T, 1> x_) {
 #endif
 }
 
+// Integer division by zero traps on x86 and returns 0 on arm64. Define the
+// quotient as 0 on all platforms, which keeps a == (a / b) * b + (a % b).
+template <typename T>
+Simd<T, 1> divide(Simd<T, 1> a_, Simd<T, 1> b_) {
+  T a = a_.value;
+  T b = b_.value;
+  if constexpr (std::is_integral_v<T>) {
+    if (b == 0) {
+      return T(0);
+    }
+  }
+  return a / b;
+}
+
 template <typename T>
 Simd<T, 1> remainder(Simd<T, 1> a_, Simd<T, 1> b_) {
   T a = a_.value;
   T b = b_.value;
   T r;
   if constexpr (std::is_integral_v<T>) {
+    if (b == 0) {
+      return a;
+    }
     r = a % b;
   } else {
     r = std::remainder(a, b);
