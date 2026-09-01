@@ -57,14 +57,18 @@ void Worker::commit(cudaStream_t stream) {
 }
 
 void Worker::thread_fn() {
-  while (!stop_) {
-    uint64_t current_batch = 0;
+  // Keep the consumed batch count across iterations so the wait predicate
+  // becomes false again after a completed batch.
+  uint64_t current_batch = 0;
+  bool stop = false;
+  while (!stop) {
     Tasks tasks;
     {
       std::unique_lock<std::mutex> lk(mtx_);
-      cond_.wait(lk, [this, &current_batch] {
+      cond_.wait(lk, [this, current_batch] {
         return this->signaled_batch_ > current_batch || this->stop_;
       });
+      stop = stop_;
       current_batch = signaled_batch_;
       auto end = worker_tasks_.upper_bound(current_batch);
       for (auto it = worker_tasks_.begin(); it != end; ++it) {

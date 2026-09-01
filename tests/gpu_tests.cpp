@@ -3,15 +3,65 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <ctime>
 #include <future>
+#include <thread>
 
 #include "doctest/doctest.h"
 #include "mlx/mlx.h"
+
+#if defined(MLX_TEST_CUDA) && defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 using namespace mlx::core;
 
 static const std::array<Dtype, 5> types =
     {bool_, uint32, int32, int64, float32};
+
+#ifdef MLX_TEST_CUDA
+namespace {
+double process_cpu_seconds() {
+#ifdef _WIN32
+  FILETIME creation;
+  FILETIME exit;
+  FILETIME kernel;
+  FILETIME user;
+  if (!GetProcessTimes(GetCurrentProcess(), &creation, &exit, &kernel, &user)) {
+    return -1.0;
+  }
+  ULARGE_INTEGER kernel_ticks;
+  kernel_ticks.LowPart = kernel.dwLowDateTime;
+  kernel_ticks.HighPart = kernel.dwHighDateTime;
+  ULARGE_INTEGER user_ticks;
+  user_ticks.LowPart = user.dwLowDateTime;
+  user_ticks.HighPart = user.dwHighDateTime;
+  return static_cast<double>(kernel_ticks.QuadPart + user_ticks.QuadPart) / 1e7;
+#else
+  return static_cast<double>(std::clock()) / CLOCKS_PER_SEC;
+#endif
+}
+} // namespace
+
+TEST_CASE("test cuda workers do not consume cpu while idle") {
+  std::vector<Stream> streams;
+  for (int i = 0; i < 8; ++i) {
+    streams.push_back(new_stream(Device::gpu));
+    synchronize(streams.back());
+  }
+
+  auto before = process_cpu_seconds();
+  REQUIRE(before >= 0.0);
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  auto cpu_seconds = process_cpu_seconds() - before;
+
+  INFO("process CPU seconds during 250 ms idle wait: " << cpu_seconds);
+  CHECK(cpu_seconds < 0.1);
+}
+#endif
 
 TEST_CASE("test gpu arange") {
   for (auto t : types) {
