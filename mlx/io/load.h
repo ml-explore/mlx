@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <utility>
 
 #include <fcntl.h>
 #ifdef _MSC_VER
@@ -120,27 +121,23 @@ class ParallelFileReader : public Reader {
 class FileWriter : public Writer {
  public:
   explicit FileWriter() {}
-  explicit FileWriter(std::string file_path)
-      : fd_(open(
-            file_path.c_str(),
-            O_CREAT | O_WRONLY | O_TRUNC | O_BINARY,
-            0644)),
-        label_(std::move(file_path)) {}
+  explicit FileWriter(std::string file_path) : label_(std::move(file_path)) {}
 
   FileWriter(const FileWriter&) = delete;
   FileWriter& operator=(const FileWriter&) = delete;
-  FileWriter(FileWriter&& other) {
-    std::swap(fd_, other.fd_);
-  }
+  FileWriter(FileWriter&& other)
+      : fd_(std::exchange(other.fd_, -1)),
+        label_(std::move(other.label_)),
+        attempted_(std::exchange(other.attempted_, true)) {}
 
   ~FileWriter() override {
-    if (fd_ != 0) {
+    if (fd_ >= 0) {
       close(fd_);
     }
   }
 
   bool is_open() const override {
-    return fd_ >= 0;
+    return ensure_open();
   }
 
   bool good() const override {
@@ -148,11 +145,13 @@ class FileWriter : public Writer {
   }
 
   size_t tell() override {
+    check_open();
     return lseek(fd_, 0, SEEK_CUR);
   }
 
   void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
       override {
+    check_open();
     if (way == std::ios_base::beg) {
       lseek(fd_, off, SEEK_SET);
     } else if (way == std::ios_base::end) {
@@ -163,6 +162,7 @@ class FileWriter : public Writer {
   }
 
   void write(const char* data, size_t n) override {
+    check_open();
     while (n != 0) {
       auto m = ::write(fd_, data, std::min(n, static_cast<size_t>(INT32_MAX)));
       if (m <= 0) {
@@ -180,8 +180,28 @@ class FileWriter : public Writer {
   }
 
  private:
-  int fd_{0};
+  // Not thread-safe. The file is opened on first use, not at construction:
+  // opening truncates it and lazy inputs may still read from it.
+  bool ensure_open() const {
+    if (!attempted_) {
+      attempted_ = true;
+      if (!label_.empty()) {
+        fd_ =
+            open(label_.c_str(), O_CREAT | O_WRONLY | O_TRUNC | O_BINARY, 0644);
+      }
+    }
+    return fd_ >= 0;
+  }
+
+  void check_open() const {
+    if (!ensure_open()) {
+      throw std::runtime_error("[write] Failed to open " + label());
+    }
+  }
+
+  mutable int fd_{-1};
   std::string label_;
+  mutable bool attempted_{false};
 };
 
 } // namespace io

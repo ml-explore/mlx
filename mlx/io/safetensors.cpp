@@ -221,6 +221,18 @@ void save_safetensors(
     std::shared_ptr<io::Writer> out_stream,
     std::unordered_map<std::string, array> a,
     std::unordered_map<std::string, std::string> metadata /* = {} */) {
+  // Materialize the arrays before the lazy FileWriter opens and truncates
+  // the file during the file check. Lazy inputs may still read from it.
+  {
+    std::vector<array> to_eval;
+    to_eval.reserve(a.size());
+    for (auto& p : a) {
+      p.second = contiguous(p.second);
+      to_eval.push_back(p.second);
+    }
+    eval(std::move(to_eval));
+  }
+
   ////////////////////////////////////////////////////////
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
@@ -237,16 +249,6 @@ void save_safetensors(
     _metadata[key] = value;
   }
   parent["__metadata__"] = _metadata;
-
-  {
-    std::vector<array> to_eval;
-    to_eval.reserve(a.size());
-    for (auto& p : a) {
-      p.second = contiguous(p.second);
-      to_eval.push_back(p.second);
-    }
-    eval(std::move(to_eval));
-  }
 
   size_t offset = 0;
   for (auto& [key, arr] : a) {
@@ -279,18 +281,6 @@ void save_safetensors(
   if (file.length() < 12 ||
       file.substr(file.length() - 12, 12) != ".safetensors")
     file += ".safetensors";
-
-  // Materialize the arrays before opening the file. Opening truncates it and
-  // a lazily loaded input may still read from it.
-  {
-    std::vector<array> to_eval;
-    to_eval.reserve(a.size());
-    for (auto& p : a) {
-      p.second = contiguous(p.second);
-      to_eval.push_back(p.second);
-    }
-    eval(std::move(to_eval));
-  }
 
   // Serialize array
   save_safetensors(
