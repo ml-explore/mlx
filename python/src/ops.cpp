@@ -213,14 +213,14 @@ void init_ops(nb::module_& m) {
   m.def(
       "unstack",
       [](const mx::array& a, int axis, mx::StreamOrDevice s) {
-        return mx::unstack(a, axis, s);
+        return nb::tuple(nb::cast(mx::unstack(a, axis, s)));
       },
       nb::arg(),
       nb::kw_only(),
       "axis"_a = 0,
       "stream"_a = nb::none(),
       nb::sig(
-          "def unstack(x: array, /, *, axis: int = 0, stream: StreamOrDevice = None) -> list[array]"),
+          "def unstack(x: array, /, *, axis: int = 0, stream: StreamOrDevice = None) -> tuple[array, ...]"),
       R"pbdoc(
         Split an array into a sequence of arrays along the given axis.
 
@@ -232,7 +232,7 @@ void init_ops(nb::module_& m) {
             axis (int, optional): Axis along which to unstack. Default: ``0``.
 
         Returns:
-            list(array): A list of arrays, one for each index along ``axis``.
+            tuple(array): A tuple of arrays, one for each index along ``axis``.
       )pbdoc");
   m.def(
       "expand_dims",
