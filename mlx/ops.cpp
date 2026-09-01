@@ -1758,7 +1758,7 @@ array transpose(
   }
   if (axes.size() != a.ndim()) {
     std::ostringstream msg;
-    msg << "[transpose] Recived " << axes.size() << " axes for array with "
+    msg << "[transpose] Received " << axes.size() << " axes for array with "
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
@@ -4148,14 +4148,7 @@ array cumsum(
     bool inclusive /* = true*/,
     std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
-  int ndim = a.ndim();
-  if (axis >= ndim || axis < -ndim) {
-    std::ostringstream msg;
-    msg << "[cumsum] Axis " << axis << " is out of bounds for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  axis = (axis + a.ndim()) % a.ndim();
+  axis = normalize_axis_index(axis, a.ndim(), "[cumsum] ");
   auto x = dtype ? astype(a, *dtype, s) : a;
   auto out_type = x.dtype() == bool_ ? int32 : x.dtype();
   return array(
@@ -4183,14 +4176,7 @@ array cumprod(
     bool inclusive /* = true*/,
     std::optional<Dtype> dtype /* = std::nullopt*/,
     StreamOrDevice s /* = {}*/) {
-  int ndim = a.ndim();
-  if (axis >= ndim || axis < -ndim) {
-    std::ostringstream msg;
-    msg << "[cumprod] Axis " << axis << " is out of bounds for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  axis = (axis + a.ndim()) % a.ndim();
+  axis = normalize_axis_index(axis, a.ndim(), "[cumprod] ");
   auto x = dtype ? astype(a, *dtype, s) : a;
   return array(
       x.shape(),
@@ -4215,14 +4201,7 @@ array cummax(
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
-  int ndim = a.ndim();
-  if (axis >= ndim || axis < -ndim) {
-    std::ostringstream msg;
-    msg << "[cummax] Axis " << axis << " is out of bounds for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  axis = (axis + a.ndim()) % a.ndim();
+  axis = normalize_axis_index(axis, a.ndim(), "[cummax] ");
   return array(
       a.shape(),
       a.dtype(),
@@ -4245,14 +4224,7 @@ array cummin(
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
-  int ndim = a.ndim();
-  if (axis >= ndim || axis < -ndim) {
-    std::ostringstream msg;
-    msg << "[cummin] Axis " << axis << " is out of bounds for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  axis = (axis + a.ndim()) % a.ndim();
+  axis = normalize_axis_index(axis, a.ndim(), "[cummin] ");
   return array(
       a.shape(),
       a.dtype(),
@@ -4302,14 +4274,7 @@ array logcumsumexp(
     bool reverse /* = false*/,
     bool inclusive /* = true*/,
     StreamOrDevice s /* = {}*/) {
-  int ndim = a.ndim();
-  if (axis >= ndim || axis < -ndim) {
-    std::ostringstream msg;
-    msg << "[logcumsumexp] Axis " << axis << " is out of bounds for array with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-  axis = (axis + a.ndim()) % a.ndim();
+  axis = normalize_axis_index(axis, a.ndim(), "[logcumsumexp] ");
   return array(
       a.shape(),
       a.dtype(),

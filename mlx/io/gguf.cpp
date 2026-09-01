@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <numeric>
 
 #include "mlx/io/gguf.h"
@@ -47,11 +48,30 @@ std::optional<Dtype> gguf_type_to_dtype(const uint32_t& gguf_type) {
   }
 }
 
+[[noreturn]] void tensor_error(
+    const gguf_tensor& tensor,
+    const std::string& what) {
+  std::ostringstream msg;
+  msg << "[load_gguf] Tensor '" << std::string(tensor.name, tensor.namelen)
+      << "' " << what << ". Perhaps an incomplete download or corrupt file?";
+  throw std::runtime_error(msg.str());
+}
+
 Shape get_shape(const gguf_tensor& tensor) {
   Shape shape;
+  uint64_t num_weights = 1;
   // The dimension order in GGML is the reverse of the order used in MLX.
   for (int i = tensor.ndim - 1; i >= 0; i--) {
-    shape.push_back(tensor.dim[i]);
+    auto dim = tensor.dim[i];
+    if (dim > std::numeric_limits<ShapeElem>::max()) {
+      tensor_error(tensor, "has a dimension that is too large");
+    }
+    if (dim != 0 && num_weights > std::numeric_limits<uint64_t>::max() / dim) {
+      tensor_error(
+          tensor, "has a dimension product that does not fit in 64 bits");
+    }
+    num_weights *= dim;
+    shape.push_back(dim);
   }
   return shape;
 }
@@ -303,20 +323,14 @@ std::unordered_map<std::string, GGUFMetaData> load_metadata(gguf_ctx* ctx) {
 }
 
 void check_tensor_in_file(const gguf_ctx* ctx, const gguf_tensor& tensor) {
-  auto fail = [&tensor](const std::string& what) {
-    std::ostringstream msg;
-    msg << "[load_gguf] Tensor '" << std::string(tensor.name, tensor.namelen)
-        << "' " << what << ". Perhaps an incomplete download or corrupt file?";
-    throw std::runtime_error(msg.str());
-  };
   if (tensor.offset < ctx->data_off) {
-    fail("has a data offset that overflows the data section");
+    tensor_error(tensor, "has a data offset that overflows the data section");
   }
   if (tensor.offset > ctx->size) {
-    fail("has a data offset past the end of the file");
+    tensor_error(tensor, "has a data offset past the end of the file");
   }
   if (tensor.bsize > ctx->size - tensor.offset) {
-    fail("extends past the end of the file");
+    tensor_error(tensor, "extends past the end of the file");
   }
 }
 

@@ -2568,6 +2568,23 @@ class TestOps(mlx_tests.MLXTestCase):
         c_mlx = mxop(a_mlx, axis=-1)
         self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
 
+    def test_scan_invalid_axis(self):
+        a = mx.arange(24).reshape(2, 3, 4)
+
+        for op in ["cumsum", "cumprod", "cummax", "cummin", "logcumsumexp"]:
+            mxop = getattr(mx, op)
+            for ax in [3, 4, 100, -4, -5, -100]:
+                with self.assertRaises(ValueError):
+                    mxop(a, axis=ax)
+
+            # Valid negative axes still work and agree with the positive one
+            # logcumsumexp has no integer kernel, so use a float input
+            a_ = a.astype(mx.float32) if op == "logcumsumexp" else a
+            for ax in [-1, -2, -3]:
+                out_neg = mxop(a_, axis=ax)
+                out_pos = mxop(a_, axis=ax + a_.ndim)
+                self.assertTrue(mx.array_equal(out_neg, out_pos))
+
     def test_scans(self):
         a_npy = np.random.randn(32, 32, 32).astype(np.float32)
         a_mlx = mx.array(a_npy)
@@ -4257,6 +4274,17 @@ class TestOps(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(vals)), vals))
         self.assertTrue(mx.array_equal(mx.from_fp8(mx.to_fp8(-vals)), -vals))
+
+        # 0x7f and 0xff are NaN in E4M3FN. Arithmetic does not keep the sign of
+        # a NaN, so only test for NaN. Use float32, numpy has no bfloat16.
+        nan_encodings = mx.array([0x7F, 0xFF], dtype=mx.uint8)
+        decoded_np = np.array(mx.from_fp8(nan_encodings, mx.float32))
+        self.assertTrue(np.isnan(decoded_np[0]).item())
+        self.assertTrue(np.isnan(decoded_np[1]).item())
+
+        # The carry must not fire one byte early: 0x7e/0xfe stay finite
+        finite = mx.from_fp8(mx.array([0x7E, 0xFE], dtype=mx.uint8), mx.float32)
+        self.assertTrue(mx.array_equal(finite, mx.array([448.0, -448.0])))
 
     def test_zeros_ones_empty_like_dtype(self):
         x = mx.array([1, 2, 3], dtype=mx.int32)

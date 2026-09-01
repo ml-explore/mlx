@@ -140,6 +140,30 @@ class TestDtypes(mlx_tests.MLXTestCase):
                 self.assertListEqual(list(z.shape), list(x.shape))
                 self.assertListEqual(list(z.shape), list(y.shape))
 
+    def test_index_conversion(self):
+        for dtype in [
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+        ]:
+            with self.subTest(dtype=dtype):
+                self.assertEqual(operator.index(mx.array(2, dtype)), 2)
+                self.assertEqual(list(range(mx.array(3, dtype))), [0, 1, 2])
+
+    def test_index_conversion_invalid(self):
+        for dtype in [mx.float16, mx.float32, mx.bfloat16, mx.complex64, mx.bool_]:
+            with self.subTest(dtype=dtype):
+                with self.assertRaises(TypeError):
+                    operator.index(mx.array(2, dtype))
+
+                with self.assertRaises(TypeError):
+                    list(range(mx.array(3, dtype)))
+
     def test_finfo(self):
         with self.assertRaises(ValueError):
             mx.finfo(mx.int32)
@@ -1267,6 +1291,13 @@ class TestArray(mlx_tests.MLXTestCase):
         a_mlx = mx.array(a_np)
         self.assertTrue(np.array_equal(a_np[2:-1, 0], np.array(a_mlx[2:-1, 0])))
 
+        # Ellipsis with more trailing indices than dimensions
+        a_mlx = mx.array([1, 2, 3])
+        with self.assertRaises(ValueError):
+            a_mlx[..., 0, 0]
+        with self.assertRaises(ValueError):
+            a_mlx[..., 0, 0] = 5
+
     def test_indexing_grad(self):
         x = mx.array([[1, 2], [3, 4]]).astype(mx.float32)
         ind = mx.array([0, 1, 0]).astype(mx.float32)
@@ -1340,6 +1371,13 @@ class TestArray(mlx_tests.MLXTestCase):
 
         a[0:1] = mx.array([1])
         self.assertEqual(a.tolist(), [1, 4, 4])
+
+        # Regression test: a negative integer index after a None
+        # (newaxis) used to be normalized against the wrong axis size,
+        # silently writing nothing instead of updating the last row.
+        b = mx.zeros((3, 4))
+        b[None, -1] = 9
+        self.assertEqual(b.tolist(), [[0, 0, 0, 0], [0, 0, 0, 0], [9, 9, 9, 9]])
 
         with self.assertRaises(ValueError):
             a[0:1] = mx.array([2, 3])

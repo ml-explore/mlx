@@ -61,6 +61,22 @@ fs::path load_cudnn() {
   return cudnn_dir;
 }
 
+fs::path load_cusolver() {
+  fs::path cusolver_dir;
+  if (const char* dir = cuda_bin_dir()) {
+    cusolver_dir = dir;
+  } else {
+    cusolver_dir = relative_to_current_binary("../nvidia/cusolver/bin");
+    ::AddDllDirectory(cublas_dir().c_str());
+    ::AddDllDirectory(
+        relative_to_current_binary("../nvidia/cusparse/bin").c_str());
+    ::AddDllDirectory(
+        relative_to_current_binary("../nvidia/nvjitlink/bin").c_str());
+  }
+  ::AddDllDirectory(cusolver_dir.c_str());
+  return cusolver_dir;
+}
+
 // Called by system when failed to locate a lazy-loaded DLL.
 FARPROC WINAPI delayload_helper(unsigned dliNotify, PDelayLoadInfo pdli) {
   HMODULE mod = NULL;
@@ -71,6 +87,9 @@ FARPROC WINAPI delayload_helper(unsigned dliNotify, PDelayLoadInfo pdli) {
       mod = ::LoadLibraryW((cudnn_dir / dll).c_str());
     } else if (dll.starts_with("cublas")) {
       mod = ::LoadLibraryW((cublas_dir() / dll).c_str());
+    } else if (dll.starts_with("cusolver")) {
+      static auto cusolver_dir = load_cusolver();
+      mod = ::LoadLibraryW((cusolver_dir / dll).c_str());
     } else if (dll.starts_with("nvrtc")) {
       static auto nvrtc_dir = load_nvrtc();
       mod = ::LoadLibraryW((nvrtc_dir / dll).c_str());
