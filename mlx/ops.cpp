@@ -726,12 +726,13 @@ array flip(const array& a, StreamOrDevice s /* = {} */) {
 namespace {
 
 inline auto
-normalize_slice(const Shape& shape, Shape& start, Shape stop, Shape& strides) {
+normalize_slice(const Shape& shape, Shape& start, Shape& stop, Shape& strides) {
   // - Start indices are normalized
   // - End indices are unchanged as -1 means something different
   //   pre-normalization (the end of the axis) versus post normalization (the
   //   position left of 0).
-  // - Any strides corresponding to singleton dimension are set to 1
+  // - Any strides corresponding to singleton dimension are set to 1 (and
+  //   stop is narrowed so the stored triple still round-trips)
 
   Shape out_shape(shape.size());
   bool has_neg_strides = false;
@@ -772,9 +773,25 @@ normalize_slice(const Shape& shape, Shape& start, Shape stop, Shape& strides) {
 
       out_shape[i] = (ed - start[i] + strides[i] - 1) / strides[i];
     }
-    // Simplify the stride if it's unused
+    // Simplify the stride if it's unused. Keep the stored triple
+    // round-tripping so consumers that re-derive the region from it
+    // (Slice's vjp and vmap) select the same single element the forward
+    // pass read, instead of the whole half-open span or an empty region.
     if (out_shape[i] == 1) {
-      strides[i] = 1;
+      if (strides[i] < 0) {
+        if (start[i] > 0) {
+          strides[i] = -1;
+          stop[i] = start[i] - 1;
+        } else {
+          // start == 0 cannot be expressed as a single-element
+          // negative-stride span, use the equivalent unit stride.
+          strides[i] = 1;
+          stop[i] = 1;
+        }
+      } else {
+        strides[i] = 1;
+        stop[i] = start[i] + 1;
+      }
     }
   }
 
