@@ -208,11 +208,25 @@ void steel_matmul_regular_axpby_nax(
 
   // Temp routing for larger devices
   char devc = d.get_architecture().back();
-  if (devc == 's' || devc == 'c' || devc == 'd') {
+  if (devc == 's' || devc == 'c') {
     bk = (K >= 8192 && K > (M + N)) ? 64 : 256;
 
     bm = 64;
     wm = 2;
+  } else if (devc == 'd') {
+    if (N > M) {
+      bm = 128;
+      bn = 64;
+
+      wm = 4;
+      wn = 2;
+    } else {
+      bm = 64;
+      bn = 128;
+
+      wm = 2;
+      wn = 4;
+    }
   }
 
   // Prepare kernel name
@@ -279,8 +293,10 @@ void steel_matmul_regular_axpby_nax(
 
   // TODO: Explore device-based tuning for swizzle
   int swizzle_log = tm <= 3 ? 0 : 1;
-  if (devc == 's' || devc == 'c' || devc == 'd') {
+  if (devc == 's' || devc == 'c') {
     swizzle_log = 2;
+  } else if (devc == 'd') {
+    swizzle_log = (M > N) ? 0 : 2;
   }
 
   // Prepare steel matmul params
@@ -681,6 +697,33 @@ void steel_gemm_splitk_axpby_nax(
   int wm = 4, wn = 4;
   int split_k_partition_size = 4096;
 
+  // Temp routing for larger devices
+  char devc = d.get_architecture().back();
+  if (devc == 'd') {
+    if (M <= 2048 && N <= 2048) {
+      bm = 64;
+      bn = 64;
+
+      wm = 2;
+      wn = 2;
+
+      split_k_partition_size = 2048;
+      bk = 256;
+    } else if (N > M) {
+      bm = 128;
+      bn = 64;
+
+      wm = 4;
+      wn = 2;
+    } else {
+      bm = 64;
+      bn = 128;
+
+      wm = 2;
+      wn = 4;
+    }
+  }
+
   if ((M + N) / 2 < 512 || K <= 4096) {
     bm = bn = 64;
     bk = 256;
@@ -754,6 +797,9 @@ void steel_gemm_splitk_axpby_nax(
   int tm = (M + bm - 1) / bm;
 
   int swizzle_log = tm <= 3 ? 0 : 1;
+  if (devc == 'd') {
+    swizzle_log = (M > N) ? 0 : 1;
+  }
 
   // Compute swizzled tile counts
   int tile = 1 << swizzle_log;
