@@ -41,9 +41,9 @@ option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(MLX_BUILD_PYTHON_STUBS "Build stub files for python bindings" ON)
-option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
+option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" ON)
 option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
-option(MLX_EXPORT_ALL_SYMBOLS "Export all symbols in the library" OFF)
+option(MLX_EXPORT_ALL_SYMBOLS "Export all symbols in the library" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 option(USE_SYSTEM_FMT "Use system's provided fmt library" OFF)
 option(USE_ASAN "Enable AddressSanitizer (ASan)" OFF)
@@ -385,7 +385,7 @@ else()
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(fmt)
 endif()
-target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:fmt::fmt-header-only>)
+target_link_libraries(mlx PUBLIC $<BUILD_INTERFACE:fmt::fmt-header-only>)
 
 if(MLX_BUILD_PYTHON_BINDINGS)
   message(STATUS "Building Python bindings.")
@@ -446,8 +446,7 @@ install(
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   COMPONENT headers
   FILES_MATCHING
-  PATTERN "*.h"
-  PATTERN "backend/metal/kernels.h" EXCLUDE)
+  PATTERN "*.h")
 
 # Install metal dependencies
 if(MLX_BUILD_METAL)
