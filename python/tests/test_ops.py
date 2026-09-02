@@ -1674,6 +1674,11 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_unstack(self):
         a_np = np.arange(6).reshape(3, 2)
         a = mx.array(a_np)
+
+        self.assertIsInstance(mx.unstack(a), tuple)
+        self.assertIsInstance(mx.unstack(a, axis=1), tuple)
+        self.assertEqual(mx.unstack(mx.zeros((0, 2)), axis=0), ())
+
         for axis in [0, 1, -1]:
             parts = mx.unstack(a, axis=axis)
             expected = np.unstack(a_np, axis=axis)

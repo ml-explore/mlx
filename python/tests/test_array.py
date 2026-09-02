@@ -1068,6 +1068,10 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [3.0, 4.0])
         self.assertEqual(z.tolist(), [5.0, 6.0])
 
+        a = mx.array(3)
+        with self.assertRaises(TypeError):
+            list(a)
+
     def test_array_pickle(self):
         dtypes = [
             mx.int8,
