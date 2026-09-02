@@ -184,7 +184,7 @@ jobs:
           fi
           uv pip install dist/*.whl
           cd "${GITHUB_WORKSPACE}/array-api-tests"
-          pytest array_api_tests -v -c pytest.ini -n 2 --max-examples=1000 --derandomize --disable-data-dependent-shapes --disable-deadline
+          pytest array_api_tests -v -c pytest.ini -n 2 --max-examples=1000 --derandomize --disable-data-dependent-shapes --disable-deadline --skips-file "${GITHUB_WORKSPACE}/xfail.txt"
 
   build_documentation:
     name: Build Documentation

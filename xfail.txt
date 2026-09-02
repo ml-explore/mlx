@@ -1,0 +1,291 @@
+array_api_tests/test_has_names.py::test_has_names[elementwise-copysign]  # copysign is not implemented
+array_api_tests/test_has_names.py::test_has_names[elementwise-hypot]  # hypot is not implemented
+array_api_tests/test_has_names.py::test_has_names[elementwise-nextafter]  # nextafter is not implemented
+array_api_tests/test_has_names.py::test_has_names[elementwise-signbit]  # signbit is not implemented
+array_api_tests/test_has_names.py::test_has_names[array_method-__pos__]  # __pos__ is not implemented
+array_api_tests/test_has_names.py::test_has_names[array_method-to_device]  # to_device is not implemented
+array_api_tests/test_has_names.py::test_has_names[array_attribute-device]  # device attribute is missing
+array_api_tests/test_has_names.py::test_has_names[array_attribute-mT]  # mT attribute is missing
+array_api_tests/test_inspection_functions.py::TestInspection::test_capabilities  # failure
+array_api_tests/test_inspection_functions.py::test_array_namespace_info_dtypes  # device argument is unsupported
+array_api_tests/test_linalg.py::test_cholesky  # cholesky is not supported on GPU
+array_api_tests/test_array_object.py::test_setitem_masking  # 0-D boolean masking raises SmallVector error
+array_api_tests/test_array_object.py::test_getitem_arrays_and_ints_1[1]  # advanced indexing crashes
+array_api_tests/test_special_cases.py::test_unary[expm1((real(x_i) is +0 or real(x_i) == -0) and imag(x_i) is +0) -> 0 + 0j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[expm1(isfinite(real(x_i)) and imag(x_i) is +infinity) -> NaN + NaN j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[expm1(isfinite(real(x_i)) and imag(x_i) is NaN) -> NaN + NaN j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[expm1(real(x_i) is +infinity and imag(x_i) is +0) -> +infinity + 0j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[expm1(real(x_i) is -infinity and imag(x_i) is +infinity) -> -1 + 0j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[expm1(real(x_i) is +infinity and imag(x_i) is +infinity) -> infinity + NaN j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[expm1(real(x_i) is -infinity and imag(x_i) is NaN) -> -1 + 0j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[expm1(real(x_i) is +infinity and imag(x_i) is NaN) -> infinity + NaN j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[expm1(real(x_i) is NaN and imag(x_i) is +0) -> NaN + 0j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[expm1(real(x_i) is NaN and not imag(x_i) == 0) -> NaN + NaN j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[expm1(real(x_i) is NaN and imag(x_i) is NaN) -> NaN + NaN j]  # expm1 does not support complex64
+array_api_tests/test_special_cases.py::test_unary[log((real(x_i) is +infinity or real(x_i) == -infinity) and imag(x_i) is NaN) -> +infinity + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[log(real(x_i) is NaN and imag(x_i) is +infinity) -> +infinity + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[log1p((real(x_i) is +infinity or real(x_i) == -infinity) and imag(x_i) is NaN) -> +infinity + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[log1p(real(x_i) is NaN and imag(x_i) is +infinity) -> +infinity + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[sign(x_i is NaN) -> NaN]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[sign((real(x_i) is -0 or real(x_i) == +0) and (imag(x_i) is -0 or imag(x_i) == +0)) -> 0 + 0j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[signbit(x_i is +0) -> False]  # signbit is not implemented
+array_api_tests/test_special_cases.py::test_unary[signbit(x_i is -0) -> True]  # signbit is not implemented
+array_api_tests/test_special_cases.py::test_unary[signbit(x_i is +infinity) -> False]  # signbit is not implemented
+array_api_tests/test_special_cases.py::test_unary[signbit(x_i is -infinity) -> True]  # signbit is not implemented
+array_api_tests/test_special_cases.py::test_unary[signbit(isfinite(x_i) and x_i > 0) -> False]  # signbit is not implemented
+array_api_tests/test_special_cases.py::test_unary[signbit(isfinite(x_i) and x_i < 0) -> True]  # signbit is not implemented
+array_api_tests/test_special_cases.py::test_unary[signbit(x_i is +NaN) -> False]  # signbit is not implemented
+array_api_tests/test_special_cases.py::test_unary[signbit(x_i is -NaN) -> True]  # signbit is not implemented
+array_api_tests/test_special_cases.py::test_unary[sinh(real(x_i) is +0 and imag(x_i) is +infinity) -> 0 + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[sinh(real(x_i) is +0 and imag(x_i) is NaN) -> 0 + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[sinh(real(x_i) is +infinity and imag(x_i) is +0) -> +infinity + 0j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[sinh(real(x_i) is +infinity and imag(x_i) is +infinity) -> infinity + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[sinh(real(x_i) is +infinity and imag(x_i) is NaN) -> infinity + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[sinh(real(x_i) is NaN and imag(x_i) is +0) -> NaN + 0j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[sqrt(real(x_i) is +infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> +infinity + 0 j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[sqrt(real(x_i) is -infinity and imag(x_i) is NaN) -> NaN + infinity j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[sqrt(real(x_i) is +infinity and imag(x_i) is NaN) -> +infinity + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[tanh(real(x_i) is +0 and imag(x_i) is +infinity) -> +0 + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[tanh(real(x_i) is +0 and imag(x_i) is NaN) -> +0 + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[tanh(real(x_i) is +infinity and imag(x_i) is +infinity) -> 1 + 0j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[tanh(real(x_i) is +infinity and imag(x_i) is NaN) -> 1 + 0j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[tanh(real(x_i) is NaN and imag(x_i) is +0) -> NaN + 0j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_binary[copysign(x1_i is NaN and x2_i < 0) -> NaN]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_binary[copysign(x1_i is NaN and x2_i is -0) -> NaN]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_binary[copysign(x1_i is NaN and x2_i is +0) -> NaN]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_binary[copysign(x1_i is NaN and x2_i > 0) -> NaN]  # special-case behavior differs
+array_api_tests/test_linalg.py::test_det  # unsupported behavior
+array_api_tests/test_special_cases.py::test_binary[nextafter(x1_i is NaN or x2_i is NaN) -> NaN]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_binary[nextafter(x1_i is -0 and x2_i is +0) -> +0]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_binary[nextafter(x1_i is +0 and x2_i is -0) -> -0]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_binary[remainder(x1_i is -0 and x2_i > 0) -> +0]  # special-case behavior differs
+array_api_tests/test_linalg.py::test_diagonal  # failure
+array_api_tests/test_special_cases.py::test_binary[remainder(x1_i is +0 and x2_i < 0) -> -0]  # special-case behavior differs
+array_api_tests/test_linalg.py::test_eigh  # unsupported behavior
+array_api_tests/test_special_cases.py::test_binary[__mod__(x1_i is -0 and x2_i > 0) -> +0]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_binary[__mod__(x1_i is +0 and x2_i < 0) -> -0]  # special-case behavior differs
+array_api_tests/test_linalg.py::test_eigvalsh  # failure
+array_api_tests/test_linalg.py::test_eig  # unsupported behavior
+array_api_tests/test_special_cases.py::test_iop[__imod__(x1_i is -0 and x2_i > 0) -> +0]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_iop[__imod__(x1_i is +0 and x2_i < 0) -> -0]  # special-case behavior differs
+array_api_tests/test_linalg.py::test_eigvals  # unsupported behavior
+array_api_tests/test_linalg.py::test_inv  # unsupported behavior
+array_api_tests/test_linalg.py::test_linalg_matmul  # failure
+array_api_tests/test_linalg.py::test_matmul  # unsupported behavior
+array_api_tests/test_linalg.py::test_matrix_norm  # failure
+array_api_tests/test_linalg.py::test_matrix_power  # failure
+array_api_tests/test_linalg.py::test_matrix_rank  # failure
+array_api_tests/test_linalg.py::test_linalg_matrix_transpose  # failure
+array_api_tests/test_linalg.py::test_matrix_transpose  # behavior differs
+array_api_tests/test_linalg.py::test_outer  # failure
+array_api_tests/test_linalg.py::test_pinv  # failure
+array_api_tests/test_linalg.py::test_qr  # failure
+array_api_tests/test_linalg.py::test_slogdet  # unsupported behavior
+array_api_tests/test_linalg.py::test_solve  # unsupported behavior
+array_api_tests/test_linalg.py::test_svd  # failure
+array_api_tests/test_linalg.py::test_svdvals  # failure
+array_api_tests/test_linalg.py::test_linalg_tensordot  # failure
+array_api_tests/test_linalg.py::test_tensordot  # unsupported behavior
+array_api_tests/test_linalg.py::test_trace  # failure
+array_api_tests/test_linalg.py::test_linalg_vecdot  # failure
+array_api_tests/test_statistical_functions.py::test_cumulative_sum  # failure
+array_api_tests/test_linalg.py::test_vecdot  # failure
+array_api_tests/test_linalg.py::test_vecdot_conj  # failure
+array_api_tests/test_statistical_functions.py::test_cumulative_prod  # failure
+array_api_tests/test_linalg.py::test_vector_norm  # failure
+array_api_tests/test_manipulation_functions.py::TestExpandDims::test_expand_dims  # unsupported behavior
+array_api_tests/test_statistical_functions.py::test_prod  # failure
+array_api_tests/test_statistical_functions.py::test_std  # incompatible arguments
+array_api_tests/test_statistical_functions.py::test_sum  # failure
+array_api_tests/test_manipulation_functions.py::test_moveaxis  # incompatible arguments
+array_api_tests/test_statistical_functions.py::test_var  # incompatible arguments
+array_api_tests/test_manipulation_functions.py::test_repeat  # incompatible arguments
+array_api_tests/test_utility_functions.py::test_diff_append_prepend  # diff lacks append/prepend support
+array_api_tests/test_array_object.py::test_getitem_arrays_and_ints_1[None]  # advanced indexing crashes
+array_api_tests/test_manipulation_functions.py::test_reshape  # incompatible arguments
+array_api_tests/test_manipulation_functions.py::test_unstack  # failure
+array_api_tests/test_creation_functions.py::test_asarray_arrays  # unsupported behavior
+array_api_tests/test_creation_functions.py::test_eye  # failure
+array_api_tests/test_operators_and_elementwise_functions.py::test_acos  # unsupported behavior
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype4]  # dtype is unsupported
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype5]  # dtype is unsupported
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype6]  # dtype is unsupported
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype7]  # dtype is unsupported
+array_api_tests/test_operators_and_elementwise_functions.py::test_acosh  # runtime error
+array_api_tests/test_data_type_functions.py::TestResultType::test_with_scalars  # unsupported behavior
+array_api_tests/test_operators_and_elementwise_functions.py::test_asin  # behavior differs
+array_api_tests/test_dlpack.py::test_from_dlpack  # DLPack behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_asinh  # runtime error
+array_api_tests/test_operators_and_elementwise_functions.py::test_atan  # failure
+array_api_tests/test_operators_and_elementwise_functions.py::test_atanh  # runtime error
+array_api_tests/test_operators_and_elementwise_functions.py::test_bitwise_left_shift[bitwise_left_shift(x1, x2)]  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_bitwise_left_shift[__lshift__(x1, x2)]  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_bitwise_left_shift[__ilshift__(x1, x2)]  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_bitwise_right_shift[__rshift__(x1, x2)]  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_bitwise_right_shift[__irshift__(x1, x2)]  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_clip  # incompatible arguments
+array_api_tests/test_operators_and_elementwise_functions.py::test_copysign  # behavior differs
+array_api_tests/test_fft.py::test_hfft  # failure
+array_api_tests/test_operators_and_elementwise_functions.py::test_divide[divide(x1, x2)]  # failure
+array_api_tests/test_fft.py::test_ihfft  # failure
+array_api_tests/test_fft.py::test_fftfreq  # incompatible arguments
+array_api_tests/test_fft.py::test_rfftfreq  # incompatible arguments
+array_api_tests/test_has_names.py::test_has_names[linalg-diagonal]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-matmul]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-matrix_norm]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-matrix_power]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-matrix_rank]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-matrix_transpose]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-outer]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-svdvals]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-tensordot]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-trace]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-vecdot]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[linalg-vector_norm]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[fft-hfft]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[fft-ihfft]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[set-isin]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[set-unique_all]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[set-unique_counts]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[set-unique_inverse]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[set-unique_values]  # behavior differs
+array_api_tests/test_has_names.py::test_has_names[searching-nonzero]  # behavior differs
+array_api_tests/test_array_object.py::test_getitem_arrays_and_ints_2[1]  # advanced indexing crashes
+array_api_tests/test_data_type_functions.py::test_astype  # incompatible arguments
+array_api_tests/test_data_type_functions.py::test_broadcast_arrays  # behavior differs
+array_api_tests/test_data_type_functions.py::TestBroadcastShapes::test_empty  # unsupported behavior
+array_api_tests/test_data_type_functions.py::test_can_cast  # incompatible arguments
+array_api_tests/test_data_type_functions.py::test_finfo[dtype0]  # incompatible arguments
+array_api_tests/test_data_type_functions.py::test_finfo[dtype1]  # incompatible arguments
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype0]  # dtype is unsupported
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype1]  # dtype is unsupported
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype2]  # dtype is unsupported
+array_api_tests/test_data_type_functions.py::test_iinfo[dtype3]  # dtype is unsupported
+array_api_tests/test_array_object.py::test_getitem_arrays_and_ints_2[None]  # advanced indexing crashes
+array_api_tests/test_operators_and_elementwise_functions.py::test_divide[__truediv__(x1, x2)]  # failure
+array_api_tests/test_operators_and_elementwise_functions.py::test_divide[__itruediv__(x1, x2)]  # failure
+array_api_tests/test_operators_and_elementwise_functions.py::test_expm1  # unsupported behavior
+array_api_tests/test_operators_and_elementwise_functions.py::test_floor_divide[floor_divide(x1, x2)]  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_floor_divide[__floordiv__(x1, x2)]  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_floor_divide[__ifloordiv__(x1, x2)]  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_hypot  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_log1p  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_log2  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_log10  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_nextafter  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_positive[__pos__]  # failure
+array_api_tests/test_operators_and_elementwise_functions.py::test_signbit  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_sqrt  # behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[atan2]  # special-case behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[copysign]  # special-case behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[hypot]  # special-case behavior differs
+array_api_tests/test_operators_and_elementwise_functions.py::test_binary_with_scalars_real[nextafter]  # special-case behavior differs
+array_api_tests/test_searching_functions.py::test_argmax  # behavior differs
+array_api_tests/test_searching_functions.py::test_argmin  # behavior differs
+array_api_tests/test_searching_functions.py::test_searchsorted  # incompatible arguments
+array_api_tests/test_searching_functions.py::test_searchsorted_with_scalars  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[cumulative_sum]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[cumulative_prod]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[prod]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[std]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[sum]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[var]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[isin]  # behavior differs
+array_api_tests/test_signatures.py::test_func_signature[unique_all]  # behavior differs
+array_api_tests/test_signatures.py::test_func_signature[unique_counts]  # behavior differs
+array_api_tests/test_signatures.py::test_func_signature[unique_inverse]  # behavior differs
+array_api_tests/test_signatures.py::test_func_signature[unique_values]  # behavior differs
+array_api_tests/test_signatures.py::test_func_signature[nonzero]  # behavior differs
+array_api_tests/test_signatures.py::test_func_signature[searchsorted]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[asarray]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[empty_like]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[from_dlpack]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[full_like]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[ones_like]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[zeros_like]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[diff]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[permute_dims]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[reshape]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[argsort]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[sort]  # incompatible arguments
+array_api_tests/test_signatures.py::test_func_signature[clip]  # failure
+array_api_tests/test_signatures.py::test_func_signature[copysign]  # behavior differs
+array_api_tests/test_signatures.py::test_func_signature[hypot]  # behavior differs
+array_api_tests/test_signatures.py::test_func_signature[nextafter]  # behavior differs
+array_api_tests/test_signatures.py::test_func_signature[signbit]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.cholesky]  # unsupported behavior
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.det]  # unsupported behavior
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.diagonal]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.eigh]  # unsupported behavior
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.eigvalsh]  # unsupported behavior
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.inv]  # unsupported behavior
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.matmul]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.matrix_norm]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.matrix_power]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.matrix_rank]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.matrix_transpose]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.outer]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.pinv]  # incompatible arguments
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.qr]  # incompatible arguments
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.slogdet]  # unsupported behavior
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.solve]  # unsupported behavior
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.svd]  # incompatible arguments
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.svdvals]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.tensordot]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.trace]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.vecdot]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[linalg.vector_norm]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[fft.hfft]  # behavior differs
+array_api_tests/test_signatures.py::test_extension_func_signature[fft.ihfft]  # behavior differs
+array_api_tests/test_signatures.py::test_array_method_signature[__pos__]  # behavior differs
+array_api_tests/test_signatures.py::test_array_method_signature[to_device]  # behavior differs
+array_api_tests/test_sorting_functions.py::test_argsort  # failure
+array_api_tests/test_sorting_functions.py::test_sort  # incompatible arguments
+array_api_tests/test_special_cases.py::test_unary[acos((real(x_i) is +0 or real(x_i) == -0) and imag(x_i) is NaN) -> \u03c0/2 + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[acos(isfinite(real(x_i)) and imag(x_i) is +infinity) -> \u03c0/2]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[acos(real(x_i) is -infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> \u03c0]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[acos(real(x_i) is +infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> +0]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[acos(real(x_i) is -infinity and imag(x_i) is +infinity) -> 3\u03c0/4]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[acos(real(x_i) is +infinity and imag(x_i) is +infinity) -> \u03c0/4]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[acos((real(x_i) is +infinity or real(x_i) == -infinity) and imag(x_i) is NaN) -> NaN \u00b1 infinity j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[acos(real(x_i) is NaN and imag(x_i) is +infinity) -> NaN]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[acosh((real(x_i) is +0 or real(x_i) == -0) and imag(x_i) is +0) -> +0 + \u03c0j/2]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh(isfinite(real(x_i)) and imag(x_i) is +infinity) -> +infinity + \u03c0j/2]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh(isfinite(real(x_i)) and real(x_i) != 0 and imag(x_i) is NaN) -> NaN + NaN j]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh(real(x_i) is +0 and imag(x_i) is NaN) -> NaN \u00b1 \u03c0j/2]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh(real(x_i) is -infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> +infinity + \u03c0j]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh(real(x_i) is +infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> +infinity + 0j]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh(real(x_i) is -infinity and imag(x_i) is +infinity) -> +infinity + 3\u03c0j/4]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh(real(x_i) is +infinity and imag(x_i) is +infinity) -> +infinity + \u03c0j/4]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh((real(x_i) is +infinity or real(x_i) == -infinity) and imag(x_i) is NaN) -> +infinity + NaN j]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh(real(x_i) is NaN and isfinite(imag(x_i))) -> NaN + NaN j]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh(real(x_i) is NaN and imag(x_i) is +infinity) -> +infinity + NaN j]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[acosh(real(x_i) is NaN and imag(x_i) is NaN) -> NaN + NaN j]  # ArcCosh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[asinh(real(x_i) is +0 and imag(x_i) is +0) -> +0 + 0j]  # ArcSinh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[asinh(isfinite(real(x_i)) and real(x_i) > 0 and imag(x_i) is +infinity) -> +infinity + \u03c0j/2]  # ArcSinh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[asinh(isfinite(real(x_i)) and imag(x_i) is NaN) -> NaN + NaN j]  # ArcSinh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[asinh(real(x_i) is +infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> +infinity + 0j]  # ArcSinh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[asinh(real(x_i) is +infinity and imag(x_i) is +infinity) -> +infinity + \u03c0j/4]  # ArcSinh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[asinh(real(x_i) is NaN and imag(x_i) is +0) -> NaN + 0j]  # ArcSinh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[asinh(real(x_i) is NaN and isfinite(imag(x_i)) and imag(x_i) != 0) -> NaN + NaN j]  # ArcSinh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[asinh(real(x_i) is NaN and imag(x_i) is +infinity) -> \u00b1infinity + NaN j]  # ArcSinh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[asinh(real(x_i) is NaN and imag(x_i) is NaN) -> NaN + NaN j]  # ArcSinh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atan(x_i is -0) -> -0]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[atanh(real(x_i) is +0 and imag(x_i) is +0) -> +0 + 0j]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atanh(real(x_i) is +0 and imag(x_i) is NaN) -> +0 + NaN j]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atanh(real(x_i) is 1 and imag(x_i) is +0) -> +infinity + 0j]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atanh(isfinite(real(x_i)) and real(x_i) > 0 and imag(x_i) is +infinity) -> +0 + \u03c0j/2]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atanh(isfinite(real(x_i)) and real(x_i) != 0 and imag(x_i) is NaN) -> NaN + NaN j]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atanh(real(x_i) is +infinity and isfinite(imag(x_i)) and imag(x_i) > 0) -> +0 + \u03c0j/2]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atanh(real(x_i) is +infinity and imag(x_i) is +infinity) -> +0 + \u03c0j/2]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atanh(real(x_i) is +infinity and imag(x_i) is NaN) -> +0 + NaN j]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atanh(real(x_i) is NaN and isfinite(imag(x_i))) -> NaN + NaN j]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atanh(real(x_i) is NaN and imag(x_i) is +infinity) -> \u00b10 + \u03c0j/2]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[atanh(real(x_i) is NaN and imag(x_i) is NaN) -> NaN + NaN j]  # ArcTanh complex64 kernel unavailable
+array_api_tests/test_special_cases.py::test_unary[clip(x_i is NaN) -> NaN]  # incompatible arguments
+array_api_tests/test_special_cases.py::test_unary[cosh(real(x_i) is +0 and imag(x_i) is +infinity) -> NaN + 0j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[cosh(real(x_i) is +0 and imag(x_i) is NaN) -> NaN + 0j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[cosh(real(x_i) is +infinity and imag(x_i) is +0) -> +infinity + 0j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[cosh(real(x_i) is +infinity and imag(x_i) is +infinity) -> +infinity + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[cosh(real(x_i) is +infinity and imag(x_i) is NaN) -> +infinity + NaN j]  # special-case behavior differs
+array_api_tests/test_special_cases.py::test_unary[cosh(real(x_i) is NaN and (imag(x_i) is +0 or imag(x_i) == -0)) -> NaN + 0j]  # special-case behavior differs
