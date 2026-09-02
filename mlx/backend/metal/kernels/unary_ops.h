@@ -35,7 +35,7 @@ struct Abs {
     return x;
   };
   complex64_t operator()(complex64_t x) thread {
-    return {metal::precise::sqrt(x.real * x.real + x.imag * x.imag), 0};
+    return {hypot(x.real, x.imag), 0};
   };
 };
 
@@ -325,8 +325,8 @@ struct Sign {
     if (x == complex64_t(0)) {
       return x;
     }
-    return x /
-        (complex64_t)metal::precise::sqrt(x.real * x.real + x.imag * x.imag);
+    auto r = hypot(x.real, x.imag);
+    return {x.real / r, x.imag / r};
   };
 };
 
@@ -378,7 +378,7 @@ struct Sqrt {
     auto b_abs = metal::precise::sqrt((r - x.real) / 2.0);
     auto b = metal::copysign(b_abs, x.imag);
     return {a, b};
-  }
+  };
 };
 
 struct Rsqrt {
