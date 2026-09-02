@@ -80,12 +80,27 @@ class MLX_API array {
   array& operator=(array&& other) && = delete;
 
   /** Default copy and move constructors otherwise. */
-  array& operator=(array&& other) & = default;
   array(const array& other) = default;
   array(array&& other) = default;
 
+  /**
+   * Assignment releases the previous descriptor through the destructor so
+   * that the sibling reference cycle of a multi-output primitive is broken
+   * when the last external reference to it goes away by assignment rather
+   * than by destruction. Otherwise a cycle can outlive everything that used
+   * it and keep its inputs (including captured constants) alive forever.
+   */
+  array& operator=(array&& other) & noexcept {
+    if (this != &other) {
+      array previous(std::move(*this));
+      this->array_desc_ = std::move(other.array_desc_);
+    }
+    return *this;
+  }
+
   array& operator=(const array& other) & {
     if (this->id() != other.id()) {
+      array previous(std::move(*this));
       this->array_desc_ = other.array_desc_;
     }
     return *this;
@@ -466,6 +481,7 @@ class MLX_API array {
   void copy_shared_buffer(const array& other);
 
   void overwrite_descriptor(const array& other) {
+    array previous(std::move(*this));
     array_desc_ = other.array_desc_;
   }
 
