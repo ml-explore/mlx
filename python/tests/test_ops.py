@@ -1148,6 +1148,84 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(result, expected))
 
+    def test_power_two_matches_square(self):
+        # `x ** 2` must be bit-identical to `x * x` / `mx.square`: the
+        # general power kernel computes exp(b * log(a)) and loses up to
+        # ~1 ULP over a multiply (see #4162). Contiguous inputs exercise
+        # the SIMD path, strided ones the scalar fallback.
+        rng = np.random.default_rng(42)
+        xs = rng.uniform(-3, 3, 4096)
+        for dtype in (mx.float32, mx.float64):
+            a = mx.array(xs, dtype=dtype)
+            sq, mul, pw = mx.square(a), a * a, a**2
+            mx.eval(sq, mul, pw)
+            self.assertTrue(
+                np.array_equal(np.asarray(pw), np.asarray(mul)),
+                f"power(x, 2) != x*x for {dtype}",
+            )
+            # contiguous vs strided must agree with each other too
+            strided = pw[::2]
+            self.assertTrue(
+                np.array_equal(
+                    np.asarray(strided), np.asarray(mx.square(a[::2]))
+                ),
+                f"power(x, 2) SIMD/scalar mismatch for {dtype}",
+            )
+
+        # The shortcut preserves power's output dtype rule:
+        # promote_types(a, b). Integer base with integer exponent stays
+        # integer and stays exact, including values beyond float32.
+        for dtype in (
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+            mx.float16,
+            mx.bfloat16,
+            mx.float32,
+            mx.float64,
+        ):
+            a = mx.array([3, 7], dtype=dtype)
+            out = a**2
+            self.assertEqual(out.dtype, mx.square(a).dtype, f"{dtype}")
+            self.assertEqual(
+                out.tolist(), [9, 49], f"value mismatch for {dtype}"
+            )
+        big = mx.array([3_000_000_007], dtype=mx.int64)
+        self.assertEqual((big**2).dtype, mx.int64)
+        self.assertEqual((big**2).item(), 9000000042000000049)
+
+        # complex keeps its dtype and its value
+        c = mx.array(np.array([1 + 2j], dtype=np.complex64))
+        self.assertEqual((c**2).dtype, mx.complex64)
+        self.assertEqual((c**2).item(), -3 + 4j)
+
+        # gradient of power(x, 2) matches the square gradient, 2 * x
+        xg = mx.array([1.5, -2.0, 0.5])
+        g_pw = mx.grad(lambda x: mx.sum(mx.power(x, 2)))(xg)
+        g_sq = mx.grad(lambda x: mx.sum(mx.square(x)))(xg)
+        self.assertTrue(np.array_equal(np.asarray(g_pw), np.asarray(g_sq)))
+
+        # exponent gradient equals x^b * ln(x): bases 2 and 3, one 0-dim
+        # exponent of 2 (the only shape the shortcut guards on)
+        x = mx.array([2.0, 3.0])
+        g_b = mx.grad(lambda b: mx.sum(mx.power(x, b)))(mx.array(2.0))
+        self.assertTrue(
+            np.allclose(
+                np.asarray(g_b),
+                4.0 * np.log(2.0) + 9.0 * np.log(3.0),
+                rtol=1e-5,
+            )
+        )
+
+        # mx.compile agrees with eager
+        comp = mx.compile(lambda x: x**2)
+        self.assertTrue(np.array_equal(np.asarray(comp(xg)), np.asarray(xg**2)))
+
     def test_sqrt(self):
         a = mx.array([0.1, 0.5, 1.0, 10.0])
         result = mx.sqrt(a)

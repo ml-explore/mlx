@@ -4132,6 +4132,69 @@ array softmax(
 }
 
 array power(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  // Exponent 2 lowers to square(): the general Power kernel computes
+  // exp(b * log(a)), which loses up to ~1 ULP over a plain multiply
+  // (see #4162). mx.square is bit-identical to x * x, so for a scalar
+  // exponent of exactly 2 we route through square() — on CPU, Metal and
+  // CUDA alike. Only taken when the scalar is already available (i.e. it
+  // can be read without scheduling work); otherwise the graph stays lazy.
+  // The scalar is read with the C++ type that matches its storage —
+  // item<T>() reinterprets the buffer, so reading it with the wrong type
+  // would be OOB for narrower dtypes.
+  // Scope note: this only fires for 0-dim scalars. A size-1 array with
+  // ndim > 0 still goes through the general power kernel.
+  if (b.ndim() == 0 && b.size() == 1 && b.is_available() &&
+      (issubdtype(b.dtype(), integer) || issubdtype(b.dtype(), floating) ||
+       issubdtype(b.dtype(), complexfloating))) {
+    bool is_two = false;
+    switch (b.dtype().val()) {
+      case Dtype::Val::uint8:
+        is_two = b.item<uint8_t>() == 2;
+        break;
+      case Dtype::Val::uint16:
+        is_two = b.item<uint16_t>() == 2;
+        break;
+      case Dtype::Val::uint32:
+        is_two = b.item<uint32_t>() == 2;
+        break;
+      case Dtype::Val::uint64:
+        is_two = b.item<uint64_t>() == 2;
+        break;
+      case Dtype::Val::int8:
+        is_two = b.item<int8_t>() == 2;
+        break;
+      case Dtype::Val::int16:
+        is_two = b.item<int16_t>() == 2;
+        break;
+      case Dtype::Val::int32:
+        is_two = b.item<int32_t>() == 2;
+        break;
+      case Dtype::Val::int64:
+        is_two = b.item<int64_t>() == 2;
+        break;
+      case Dtype::Val::float16:
+        is_two = b.item<float16_t>() == float16_t(2.0f);
+        break;
+      case Dtype::Val::bfloat16:
+        is_two = b.item<bfloat16_t>() == bfloat16_t(2.0f);
+        break;
+      case Dtype::Val::float32:
+        is_two = b.item<float>() == 2.0f;
+        break;
+      case Dtype::Val::float64:
+        is_two = b.item<double>() == 2.0;
+        break;
+      case Dtype::Val::complex64:
+        is_two = b.item<complex64_t>() == complex64_t(2, 0);
+        break;
+      default:
+        break;
+    }
+    if (is_two) {
+      auto dtype = promote_types(a.dtype(), b.dtype());
+      return square(astype(a, dtype, s), s);
+    }
+  }
   auto dtype = promote_types(a.dtype(), b.dtype());
   std::vector<array> inputs = {astype(a, dtype, s), astype(b, dtype, s)};
   if (a.shape() != b.shape()) {
