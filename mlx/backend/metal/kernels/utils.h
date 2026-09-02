@@ -336,6 +336,23 @@ inline bfloat16_t log1p(bfloat16_t x) {
   return bfloat16_t(x * (metal::log(xp1) / (xp1 - 1.0f)));
 }
 
+inline complex64_t log1p(complex64_t in) {
+  float x = in.real;
+  float y = in.imag;
+  float zabs = metal::precise::sqrt(x * x + y * y);
+  float theta = metal::atan2(y, x + 1);
+  if (zabs < 0.5f) {
+    float r = x * (2 + x) + y * y;
+    if (r == 0) { // handle underflow
+      return {x, theta};
+    }
+    return {0.5f * log1p(r), theta};
+  } else {
+    auto z0 = metal::sqrt((x + 1) * (x + 1) + y * y);
+    return {metal::log(z0), theta};
+  }
+}
+
 // https://github.com/pytorch/pytorch/blob/a82aae9d4a7827849ce50f31c4c7ee8f278d05f5/c10/metal/utils.h#L554
 inline float hypot(float x, float y) {
   if (metal::isinf(x) || metal::isinf(y)) {
@@ -357,23 +374,6 @@ inline float hypot(float x, float y) {
   bool is_h1 = (a == b);
   bool is_h2 = ((sqrt_1_plus_r == 1.0f) && (r > 0.0f));
   return metal::select(metal::select(h3, h2, is_h2), h1, is_h1);
-}
-
-inline complex64_t log1p(complex64_t in) {
-  float x = in.real;
-  float y = in.imag;
-  float zabs = metal::precise::sqrt(x * x + y * y);
-  float theta = metal::atan2(y, x + 1);
-  if (zabs < 0.5f) {
-    float r = x * (2 + x) + y * y;
-    if (r == 0) { // handle underflow
-      return {x, theta};
-    }
-    return {0.5f * log1p(r), theta};
-  } else {
-    auto z0 = metal::sqrt((x + 1) * (x + 1) + y * y);
-    return {metal::log(z0), theta};
-  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
