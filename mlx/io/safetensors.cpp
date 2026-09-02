@@ -221,8 +221,6 @@ void save_safetensors(
     std::shared_ptr<io::Writer> out_stream,
     std::unordered_map<std::string, array> a,
     std::unordered_map<std::string, std::string> metadata /* = {} */) {
-  // Materialize the arrays before the lazy FileWriter opens and truncates
-  // the file during the file check. Lazy inputs may still read from it.
   {
     std::vector<array> to_eval;
     to_eval.reserve(a.size());
@@ -232,6 +230,10 @@ void save_safetensors(
     }
     eval(std::move(to_eval));
   }
+
+  // Open only after the inputs are evaluated: opening a FileWriter
+  // truncates the file and lazy inputs may still read from it.
+  out_stream->open();
 
   ////////////////////////////////////////////////////////
   // Check file
