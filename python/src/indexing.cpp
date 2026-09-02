@@ -5,6 +5,7 @@
 
 #include <nanobind/ndarray.h>
 
+#include "mlx/dtype.h"
 #include "mlx/ops.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
@@ -18,6 +19,9 @@ bool is_none_slice(const nb::slice& in_slice) {
 
 bool is_index_scalar(const nb::object& obj) {
   if (nb::isinstance<nb::bool_>(obj)) {
+    return false;
+  }
+  if (nb::isinstance<mx::array>(obj)) {
     return false;
   }
   if (!PyIndex_Check(obj.ptr())) {
@@ -253,8 +257,14 @@ auto mlx_expand_ellipsis(const mx::Shape& shape, const nb::tuple& entries) {
 
   // Expand ellipsis
   if (has_ellipsis) {
+    int ndim = static_cast<int>(shape.size());
+    if (non_none_indices > ndim) {
+      std::ostringstream msg;
+      msg << "Too many indices for array with " << ndim << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
     for (int axis = non_none_indices_before;
-         axis < shape.size() - non_none_indices_after;
+         axis < ndim - non_none_indices_after;
          axis++) {
       indices.push_back(
           nb::slice(mx::ShapeElem{0}, shape[axis], mx::ShapeElem{1}));
@@ -907,7 +917,7 @@ mlx_compute_slice_update_args(
       upd_ax--;
     } else if (is_index_scalar(pyidx)) {
       int st = safe_to_int32(pyidx);
-      st = (st < 0) ? st + src.shape(i) : st;
+      st = (st < 0) ? st + src.shape(ax) : st;
       starts[ax] = st;
       stops[ax] = st + 1;
       if (upd_ax >= 0) {

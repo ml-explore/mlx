@@ -46,4 +46,4 @@ runs:
           echo "No matching backend wheel to install"
           exit 1
         fi
-        python -m tests discover -v python/tests
+        uv run python/tests/run.py -v --failfast

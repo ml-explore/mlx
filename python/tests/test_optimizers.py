@@ -364,6 +364,29 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         optim_no_momentum = opt.Muon(learning_rate=1e-2, momentum=0.0)
         optim_no_momentum.apply_gradients(grads, params)
 
+    def test_weight_decay_keeps_inputs_unchanged(self):
+        # Weight decay must not write into the gradients or the parameters
+        # that the caller passed in.
+        params = {"w": mx.ones((3, 3))}
+        grads = {"w": mx.full((3, 3), 2.0)}
+
+        optimizer = opt.SGD(learning_rate=1e-2, weight_decay=0.1)
+        optimizer.apply_gradients(grads, params)
+        self.assertTrue(mx.array_equal(grads["w"], mx.full((3, 3), 2.0)))
+        self.assertTrue(mx.array_equal(params["w"], mx.ones((3, 3))))
+
+        optimizer = opt.Adafactor(learning_rate=1e-2, weight_decay=0.1)
+        optimizer.apply_gradients(grads, params)
+        self.assertTrue(mx.array_equal(grads["w"], mx.full((3, 3), 2.0)))
+        self.assertTrue(mx.array_equal(params["w"], mx.ones((3, 3))))
+
+        # The same gradients applied twice give the same update
+        optimizer = opt.SGD(learning_rate=1e-2, weight_decay=0.1)
+        first = optimizer.apply_gradients(grads, params)
+        optimizer = opt.SGD(learning_rate=1e-2, weight_decay=0.1)
+        second = optimizer.apply_gradients(grads, params)
+        self.assertTrue(mx.array_equal(first["w"], second["w"]))
+
     def test_compiled_optimizer(self):
         model = nn.Linear(10, 10)
         x = mx.random.uniform(shape=(2, 10))

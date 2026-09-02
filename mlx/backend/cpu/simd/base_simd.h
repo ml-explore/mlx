@@ -13,6 +13,7 @@
 #include <intrin.h> // For _BitScanReverse
 #endif
 
+#include "mlx/types/complex.h"
 #include "mlx/types/half_types.h"
 
 namespace mlx::core::simd {
@@ -159,7 +160,7 @@ auto imag(Simd<T, 1> in) -> Simd<decltype(std::imag(in.value)), 1> {
 }
 template <typename T>
 Simd<bool, 1> isnan(Simd<T, 1> in) {
-  return std::isnan(in.value);
+  return mlx::core::isnan(in.value);
 }
 
 #define DEFAULT_BINARY(OP)                                                 \

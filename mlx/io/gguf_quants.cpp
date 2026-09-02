@@ -112,6 +112,11 @@ void gguf_load_quantized(
   std::string name(tensor.name, tensor.namelen);
 
   auto shape = get_shape(tensor);
+  if (shape.empty()) {
+    std::ostringstream msg;
+    msg << "[load_gguf] quantized tensor " << name << " has no dimensions";
+    throw std::runtime_error(msg.str());
+  }
   const uint64_t weights_per_block = 32;
   if (shape[shape.size() - 1] % weights_per_block != 0) {
     std::ostringstream msg;
@@ -125,15 +130,17 @@ void gguf_load_quantized(
   auto w_nbytes = uint32.size() *
       std::accumulate(weights_shape.begin(),
                       weights_shape.end(),
-                      1,
+                      size_t{1},
                       std::multiplies<size_t>());
 
   array weights(allocator::malloc(w_nbytes), std::move(weights_shape), uint32);
 
   // For scales and bias
   shape[shape.size() - 1] = shape[shape.size() - 1] / weights_per_block;
-  auto sb_nbytes = float16.size() *
-      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+  auto sb_nbytes =
+      float16.size() *
+      std::accumulate(
+          shape.begin(), shape.end(), size_t{1}, std::multiplies<size_t>());
 
   array scales(allocator::malloc(sb_nbytes), shape, float16);
   array biases(allocator::malloc(sb_nbytes), std::move(shape), float16);

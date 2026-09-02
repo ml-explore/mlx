@@ -422,6 +422,11 @@ struct PyCompiledFun {
 
     AttachedData(nb::object output_structure_, int num_outputs_)
         : output_structure(output_structure_), num_outputs(num_outputs_) {}
+
+    ~AttachedData() {
+      nb::gil_scoped_acquire gil;
+      output_structure.reset();
+    }
   };
 
   PyCompiledFun(
@@ -809,8 +814,8 @@ class PyCustomFunction {
       }
       int array_index = 0;
       int tangent_index = 0;
-      auto new_tangents =
-          nb::cast<nb::tuple>(tree_map(args, [&](nb::handle element) {
+      auto new_tangents = nb::cast<nb::tuple>(
+          tree_map(args, [&](nb::handle element) -> nb::object {
             if (nb::isinstance<mx::array>(element) &&
                 have_tangents[array_index++]) {
               return nb::cast(tangents[tangent_index++]);
@@ -856,8 +861,8 @@ class PyCustomFunction {
       }
 
       int arr_index = 0;
-      auto new_axes =
-          nb::cast<nb::tuple>(tree_map(args, [&](nb::handle element) {
+      auto new_axes = nb::cast<nb::tuple>(
+          tree_map(args, [&](nb::handle element) -> nb::object {
             int axis = axes[arr_index++];
             if (nb::isinstance<mx::array>(element) && axis >= 0) {
               return nb::cast(axis);
