@@ -356,6 +356,71 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
                 self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
 
+    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU kernel path only")
+    def test_sdpa_vector_head_dim_512(self):
+        # gemma-4 global attention: 32 query heads over 4 key/value heads.
+        D = 512
+        Nq, Nkv = 32, 4
+        scale = D**-0.5
+        mx.random.seed(0)
+
+        # L = 128 takes the 1-pass kernel, 8192 and 8201 the 2-pass one.
+        for L, dtype in product(
+            (128, 8192, 8201), (mx.float32, mx.float16, mx.bfloat16)
+        ):
+            with self.subTest(L=L, dtype=dtype):
+                q = mx.random.normal(shape=(1, Nq, 1, D), dtype=dtype)
+                k = mx.random.normal(shape=(1, Nkv, L, D), dtype=dtype)
+                v = mx.random.normal(shape=(1, Nkv, L, D), dtype=dtype)
+                ref = mlx_ref_attn(q, k, v, scale)
+                out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale)
+                atol = 1e-5 if dtype == mx.float32 else 2e-2
+                self.assertTrue(mx.allclose(ref, out, atol=atol))
+
+        # The vector kernel fuses while query length * GQA factor is at most
+        # 32, so with 8 repeats the query length can be up to 4.
+        L = 1024
+        k = mx.random.normal(shape=(1, Nkv, L, D))
+        v = mx.random.normal(shape=(1, Nkv, L, D))
+        for qL in (1, 4):
+            q = mx.random.normal(shape=(1, Nq, qL, D))
+            masks = [
+                None,
+                mx.array(True),
+                mx.array([True] * (L - 10) + [False] * 10),
+                mx.random.uniform(shape=(Nq, qL, L)) > 0.2,
+                mx.random.uniform(shape=(L, qL, Nq)).T > 0.2,
+                mx.random.uniform(shape=(Nq, qL, L)),
+                mx.random.uniform(shape=(L, qL, Nq)).T,
+                "causal",
+            ]
+            # The reference does the multi-query scores as a GEMM, which is
+            # the less accurate arm at qL > 1, so use the same tolerance as
+            # the other multi-query tests.
+            tol = 1e-4 if qL == 1 else 1e-3
+            for i, m in enumerate(masks):
+                with self.subTest(qL=qL, mask=i):
+                    ref = mlx_ref_attn(q, k, v, scale, mask=m)
+                    out = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, mask=m
+                    )
+                    self.assertTrue(mx.allclose(ref, out, atol=tol, rtol=tol))
+
+        # Batched, with and without attention sinks, over both kernels.
+        B = 2
+        sinks = 10 * mx.random.normal(shape=(Nq,))
+        q = mx.random.normal(shape=(B, Nq, 1, D))
+        for L in (256, 8192):
+            k = mx.random.normal(shape=(B, Nkv, L, D))
+            v = mx.random.normal(shape=(B, Nkv, L, D))
+            for s_in in (None, sinks):
+                with self.subTest(L=L, sinks=s_in is not None):
+                    ref = mlx_ref_attn(q, k, v, scale, sinks=s_in)
+                    out = mx.fast.scaled_dot_product_attention(
+                        q, k, v, scale=scale, sinks=s_in
+                    )
+                    self.assertTrue(mx.allclose(ref, out, atol=1e-4, rtol=1e-4))
+
     def test_sdpa_fully_masked(self):
         Lkv = 8
         mask = mx.array(False)
@@ -826,7 +891,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.allclose(ref, out, atol=1e-3, rtol=1e-3))
 
         # Vector attention kernel.
-        for D in (192, 256):
+        for D in (192, 256, 512):
             with self.subTest(head_dim=D):
                 q, k, v = make_qkv(4, 16385, D, 4, 2)
                 scale = D**-0.5

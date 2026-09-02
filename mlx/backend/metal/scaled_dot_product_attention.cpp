@@ -687,13 +687,13 @@ std::tuple<bool, std::string> has_fused_kernel(
         (query_head_dim == value_head_dim &&
          (query_head_dim == 64 || query_head_dim == 96 ||
           query_head_dim == 128 || query_head_dim == 192 ||
-          query_head_dim == 256)) ||
+          query_head_dim == 256 || query_head_dim == 512)) ||
         (query_head_dim == 192 && value_head_dim == 128);
     if (!supported_head_dim) {
       msg << "the vector attention kernel supports head dims "
-          << "{64, 96, 128, 192, 256} with matching query/value head dims, "
-          << "or query head dim 192 with value head dim 128; got query head "
-          << "dim " << query_head_dim << " and value head dim "
+          << "{64, 96, 128, 192, 256, 512} with matching query/value head "
+          << "dims, or query head dim 192 with value head dim 128; got "
+          << "query head dim " << query_head_dim << " and value head dim "
           << value_head_dim << ".";
       return {false, msg.str()};
     }
