@@ -2737,6 +2737,18 @@ class TestOps(mlx_tests.MLXTestCase):
                     msg=f"{op} reverse={reverse}",
                 )
 
+    def test_scan_does_not_write_past_the_output(self):
+        for n, off in ((64, 63), (512, 400)):
+            with self.subTest(n=n, off=off):
+                base = mx.arange(1, n + 1, dtype=mx.float32).reshape(1, n)
+                canaries = [mx.zeros((16,)) + i for i in range(12)]
+                mx.eval(base, *canaries)
+                before = [np.array(x) for x in [base] + canaries]
+                mx.eval(mx.cumsum(base[:, off:], axis=0))
+                after = [np.array(x) for x in [base] + canaries]
+                for b, a in zip(before, after):
+                    self.assertTrue(np.array_equal(b, a))
+
     def test_cummax_cummin_nan(self):
         nan = float("nan")
         cases = [

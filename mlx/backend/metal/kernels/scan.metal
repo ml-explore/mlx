@@ -32,8 +32,9 @@ using namespace metal;
       const device itype* in [[buffer(0)]],                          \
       device otype* out [[buffer(1)]],                               \
       const constant size_t& axis_size [[buffer(2)]],                \
-      const constant size_t& stride [[buffer(3)]],                   \
-      const constant size_t& stride_blocks [[buffer(4)]],            \
+      const constant int64_t& stride [[buffer(3)]],                  \
+      const constant int64_t& stride_blocks [[buffer(4)]],           \
+      const constant int64_t& data_size [[buffer(5)]],               \
       uint3 gid [[threadgroup_position_in_grid]],                    \
       uint3 gsize [[threadgroups_per_grid]],                         \
       uint3 lid [[thread_position_in_threadgroup]],                  \
