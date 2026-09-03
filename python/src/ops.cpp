@@ -4823,11 +4823,12 @@ void init_ops(nb::module_& m) {
       "group_size"_a = nb::none(),
       "bits"_a = nb::none(),
       "mode"_a = "affine",
+      "global_scale"_a = nb::none(),
       nb::kw_only(),
       "sorted_indices"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
-          "def gather_qmm(x: array, w: array, /, scales: array, biases: array | None = None, lhs_indices: array | None = None, rhs_indices: array | None = None, transpose: bool = True, group_size: int | None = None, bits: int | None = None, mode: str = 'affine', *, sorted_indices: bool = False, stream: StreamOrDevice = None) -> array"),
+          "def gather_qmm(x: array, w: array, /, scales: array, biases: array | None = None, lhs_indices: array | None = None, rhs_indices: array | None = None, transpose: bool = True, group_size: int | None = None, bits: int | None = None, mode: str = 'affine', global_scale: array | None = None, *, sorted_indices: bool = False, stream: StreamOrDevice = None) -> array"),
       R"pbdoc(
         Perform quantized matrix multiplication with matrix-level gather.
 
@@ -4857,6 +4858,9 @@ void init_ops(nb::module_& m) {
               ``w`` in the quantized array. See supported values and defaults in the
               :ref:`table of quantization modes <quantize-modes>`. Default: ``None``.
             mode (str, optional): The quantization mode. Default: ``"affine"``.
+            global_scale (array, optional): The per-input float32 scale used for
+              ``nvfp4`` quantization of ``w``. Only supported on Metal.
+              Default: ``None``.
             sorted_indices (bool, optional): May allow a faster implementation
               if the passed indices are sorted. Default: ``False``.
 

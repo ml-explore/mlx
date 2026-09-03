@@ -5577,9 +5577,14 @@ array gather_qmm(
     std::optional<int> group_size_ /* = std::nullopt */,
     std::optional<int> bits_ /* = std::nullopt */,
     const std::string& mode /* = "affine" */,
+    const std::optional<array>& global_scale /* = std::nullopt */,
     bool sorted_indices /* = false */,
     StreamOrDevice s /* = {} */) {
   if (!lhs_indices_ && !rhs_indices_) {
+    if (global_scale) {
+      throw std::invalid_argument(
+          "[gather_qmm] Global scale is not supported without indices.");
+    }
     return quantized_matmul(
         x, w, scales, biases, transpose, group_size_, bits_, mode, s);
   }
@@ -5590,6 +5595,32 @@ array gather_qmm(
       quantization_params_from_mode(qmode, group_size_, bits_);
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "gather_qmm", x, w, scales, biases, transpose, group_size, bits);
+  if (global_scale) {
+    if (qmode != QuantizationMode::Nvfp4) {
+      throw std::invalid_argument(
+          "[gather_qmm] Global scale is only supported for 'nvfp4' "
+          "quantization mode.");
+    }
+    if (global_scale->dtype() != float32) {
+      std::ostringstream msg;
+      msg << "[gather_qmm] Global scale must have dtype float32 but got "
+          << global_scale->dtype() << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    // One scale per expert, so it matches the batch dimensions of w.
+    Shape expected(w.shape().begin(), w.shape().end() - 2);
+    if (global_scale->shape() != expected) {
+      std::ostringstream msg;
+      msg << "[gather_qmm] Global scale must have one entry per expert with "
+          << "shape " << expected << " but got " << global_scale->shape()
+          << ".";
+      throw std::invalid_argument(msg.str());
+    }
+    if (!mx::metal::is_available) {
+      throw std::invalid_argument(
+          "[gather_qmm] Global scale is not supported on Metal Backend.");
+    }
+  }
   if (qmode == QuantizationMode::Affine) {
     out_type = promote_types(x.dtype(), out_type);
   } else {
@@ -5623,12 +5654,12 @@ array gather_qmm(
         std::move(lhs_indices),
         std::move(rhs_indices)};
   } else {
-    inputs = {
-        astype(x, out_type, s),
-        std::move(w),
-        std::move(scales),
-        std::move(lhs_indices),
-        std::move(rhs_indices)};
+    inputs = {astype(x, out_type, s), std::move(w), std::move(scales)};
+    if (global_scale) {
+      inputs.push_back(*global_scale);
+    }
+    inputs.push_back(std::move(lhs_indices));
+    inputs.push_back(std::move(rhs_indices));
   }
   return array(
       std::move(out_shape),

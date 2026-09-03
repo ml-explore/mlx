@@ -3722,6 +3722,9 @@ std::vector<array> GatherQMM::vjp(
   auto biases = (mode_ == QuantizationMode::Affine)
       ? std::optional<array>(primals[3])
       : std::nullopt;
+  auto global_scale = (mode_ != QuantizationMode::Affine && primals.size() == 6)
+      ? std::optional<array>(primals[3])
+      : std::nullopt;
 
   int M = cotan.shape(-2);
   int K = x.shape(-1);
@@ -3744,6 +3747,7 @@ std::vector<array> GatherQMM::vjp(
           group_size_,
           bits_,
           quantization_mode_to_string(mode_),
+          global_scale,
           sorted,
           stream());
       if (sorted && no_broadcast) {

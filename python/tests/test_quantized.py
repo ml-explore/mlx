@@ -1693,6 +1693,83 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
                 ds = mx.grad(gmm)(s, x, wq)
 
+    @unittest.skipIf(
+        not mx.metal.is_available(), "Global scale is only supported on Metal backend"
+    )
+    def test_gather_qmm_global_scale(self):
+        mx.random.seed(0)
+        N, K = 128, 256
+
+        def rel_err(got, expected):
+            # Per row
+            d = mx.abs(got.astype(mx.float32) - expected.astype(mx.float32))
+            scale = mx.abs(expected.astype(mx.float32))
+            axes = tuple(range(1, d.ndim))
+            return (d.max(axis=axes) / mx.maximum(scale.max(axis=axes), 1e-20)).max()
+
+        def quantize_experts(w):
+            """One tensor scale per expert."""
+            E = w.shape[0]
+            gs = mx.stack([mx.abs(w[e]).max().astype(mx.float32) for e in range(E)])
+            qs = [mx.quantize(w[e], mode="nvfp4", global_scale=gs[e]) for e in range(E)]
+            w_hat = mx.stack(
+                [
+                    mx.dequantize(
+                        q, sc, mode="nvfp4", global_scale=gs[e], dtype=w.dtype
+                    )
+                    for e, (q, sc) in enumerate(qs)
+                ]
+            )
+            return (
+                mx.stack([q for q, _ in qs]),
+                mx.stack([sc for _, sc in qs]),
+                gs,
+                w_hat,
+            )
+
+        for E in [4, 128, 234]:
+            # Each expert has a different scale, so we multiply by a factor
+            # to make the experts have different magnitudes.
+            factors = mx.array(
+                [[1, 2, 4, 8][e % 4] for e in range(E)], mx.float32
+            ).reshape((E, 1, 1))
+
+            for dtype in [mx.float32, mx.float16, mx.bfloat16]:
+                for transpose in [True, False]:
+                    wshape = (E, N, K) if transpose else (E, K, N)
+                    w = (mx.random.normal(wshape) * factors).astype(dtype)
+                    wq, s, gs, w_hat = quantize_experts(w)
+                    self.assertEqual(gs.shape, (E,))
+
+                    for M, B, sort in [(32, 2, False), (1, 2, False), (256, 4, True)]:
+                        with self.subTest(
+                            E=E, dtype=dtype, transpose=transpose, M=M, B=B
+                        ):
+                            x = mx.random.normal((B, M, K)).astype(dtype)
+                            indices = mx.random.randint(0, E, (B,))
+                            if sort:
+                                indices = mx.sort(indices)
+
+                            wg = w_hat[indices]
+                            expected = x @ (wg.swapaxes(-1, -2) if transpose else wg)
+                            kwargs = dict(
+                                rhs_indices=indices,
+                                transpose=transpose,
+                                mode="nvfp4",
+                                sorted_indices=sort,
+                            )
+
+                            out = mx.gather_qmm(x, wq, s, global_scale=gs, **kwargs)
+                            tol = 1e-5 if dtype == mx.float32 else 3e-2
+                            self.assertLess(rel_err(out, expected), tol)
+
+                            # Each expert uses its own scale, not a neighbour's
+                            rotated = mx.concatenate([gs[1:], gs[:1]])
+                            wrong = mx.gather_qmm(
+                                x, wq, s, global_scale=rotated, **kwargs
+                            )
+                            self.assertGreater(rel_err(wrong, expected), 0.5)
+
     def test_quantize_strided(self):
         N = 64
         mode = "nvfp4"
