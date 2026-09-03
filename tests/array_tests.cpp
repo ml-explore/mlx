@@ -733,3 +733,19 @@ TEST_CASE("test siblings circular references released by overwrite") {
   fun();
   CHECK(tracker.expired());
 }
+
+// https://github.com/ml-explore/mlx/pull/4453
+TEST_CASE("test assigning a sibling over the last reference keeps the cycle") {
+  array key({1, 2});
+  auto splits = split(key, 2);
+  // Leave one output as the last outside reference to the pair, then assign
+  // its sibling over it. The sibling is reachable only through the array
+  // being replaced, so it has to be held before the old descriptor is
+  // checked: checked first, the pair looks unreferenced, its cycle is broken
+  // and the sibling list the new value lives in is freed before it is read.
+  array last = splits[0];
+  splits.clear();
+  last = last.siblings()[0];
+  REQUIRE_EQ(last.siblings().size(), 1);
+  CHECK(array_equal(last, array({2})).item<bool>());
+}
