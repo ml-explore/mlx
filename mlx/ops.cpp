@@ -5616,7 +5616,7 @@ array gather_qmm(
           << ".";
       throw std::invalid_argument(msg.str());
     }
-    if (!mx::metal::is_available) {
+    if (!metal::is_available) {
       throw std::invalid_argument(
           "[gather_qmm] Global scale is not supported on Metal Backend.");
     }
