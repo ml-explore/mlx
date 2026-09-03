@@ -183,6 +183,8 @@ set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
 
 # Configure Windows CUDA DLL loading.
 if(WIN32)
+  target_sources(mlx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/windows_memory.cpp)
+  target_link_libraries(mlx PRIVATE dxgi)
   set(MLX_CUDA_BIN_DIR
       ""
       CACHE STRING "Directory containing CUDA DLLs for Windows delay-loading")
