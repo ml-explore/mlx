@@ -208,33 +208,38 @@ void array::copy_shared_buffer(const array& other) {
   copy_shared_buffer(other, other.strides(), other.flags(), other.data_size());
 }
 
-array::~array() {
-  if (array_desc_ == nullptr) {
+void array::reset(std::shared_ptr<ArrayDesc> desc) {
+  // Hold the new descriptor first, so that a cycle it belongs to has an
+  // outside reference while the old one is checked below
+  auto previous = std::move(array_desc_);
+  array_desc_ = std::move(desc);
+
+  if (previous == nullptr) {
     return;
   }
 
   // Detached/detaching
-  if (array_desc_->primitive == nullptr) {
+  if (previous->primitive == nullptr) {
     return;
   }
 
   // Break circular reference for non-detached arrays with siblings
-  if (auto n = siblings().size(); n > 0) {
+  if (auto n = previous->siblings.size(); n > 0) {
     bool do_detach = true;
     // If all siblings have siblings.size() references except
-    // the one we are currently destroying (which has siblings.size() + 1)
+    // the one we are currently releasing (which has siblings.size() + 1)
     // then there are no more external references
-    do_detach &= (array_desc_.use_count() == (n + 1));
-    for (auto& s : siblings()) {
+    do_detach &= (previous.use_count() == (n + 1));
+    for (auto& s : previous->siblings) {
       do_detach &= (s.array_desc_.use_count() == n);
       if (!do_detach) {
         break;
       }
     }
     if (do_detach) {
-      for (auto& s : siblings()) {
+      for (auto& s : previous->siblings) {
         for (auto& ss : s.siblings()) {
-          // Set to null here to avoid descending into array destructor
+          // Set to null here to avoid descending into reset()
           // for siblings
           ss.array_desc_ = nullptr;
         }
