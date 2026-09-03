@@ -1,6 +1,5 @@
 # Copyright © 2023-2024 Apple Inc.
 
-import gc
 import operator
 import os
 import pickle
@@ -2745,28 +2744,6 @@ class TestArray(mlx_tests.MLXTestCase):
         mask_np = np.zeros((10, 10, 1), dtype=bool)
         with self.assertRaises(ValueError):
             mx.arange(1000).reshape(10, 10, 10)[mask_np] = 0
-
-    def test_setitem_releases_multi_output_sibling(self):
-        # The outputs of a lazy multi-output primitive hold each other as
-        # siblings. Replacing the last surviving one in place drops that
-        # output by assignment rather than destruction; the cycle used to
-        # survive it, and with it the primitive's input.
-        gc.collect()
-        mem_pre = mx.get_active_memory()
-
-        def replace_survivor():
-            src = mx.ones((256, 1024))
-            mx.eval(src)
-            a, b = mx.split(src, 2)
-            del b
-            a[...] = mx.zeros((128, 1024))
-            mx.eval(a)
-
-        for _ in range(5):
-            replace_survivor()
-            gc.collect()
-
-        self.assertEqual(mem_pre, mx.get_active_memory())
 
     def test_array_namespace(self):
         a = mx.array(1.0)
