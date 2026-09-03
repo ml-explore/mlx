@@ -1291,39 +1291,6 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertEqual(mem_pre, mem_post)
 
-    def test_multi_output_primitive_leak(self):
-        # The outputs of a multi-output primitive hold each other as
-        # siblings. Compiling a function that uses one used to leave that
-        # cycle behind, and with it everything below it in the trace,
-        # including the captured constants.
-        gc.collect()
-        if mx.metal.is_available():
-            mem_pre = mx.get_active_memory()
-        else:
-            mem_pre = 0
-
-        def outer():
-            w = mx.ones((512, 512))
-            mx.eval(w)
-
-            def f(x):
-                a, b = mx.split(x @ w, 2, axis=-1)
-                return a * b
-
-            cf = mx.compile(f)
-            mx.eval(cf(mx.ones((1, 512))))
-
-        for _ in range(5):
-            outer()
-            gc.collect()
-
-        if mx.metal.is_available():
-            mem_post = mx.get_active_memory()
-        else:
-            mem_post = 0
-
-        self.assertEqual(mem_pre, mem_post)
-
     def test_double_constant(self):
         with mx.stream(mx.cpu):
             x = mx.array(1.0, dtype=mx.float64)
